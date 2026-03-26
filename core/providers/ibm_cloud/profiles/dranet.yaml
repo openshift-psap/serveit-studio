@@ -1,0 +1,107 @@
+# IBM Cloud - DRANET Profile
+# DRANET bypasses the 1 pod per node limit using network virtualization
+
+name: dranet
+description: "IBM Cloud with DRANET (bypasses pod-per-node limit)"
+
+# Pod scheduling constraints - DRANET removes limits
+constraints:
+  max_prefill_pods_per_node: null  # No limit with DRANET
+  max_decode_pods_per_node: null   # No limit with DRANET
+  max_total_pods_per_node: null    # No limit with DRANET
+  supports_rdma: true
+  supports_pod_affinity: true
+  supports_node_affinity: true
+  supports_multi_pod_per_node: true  # DRANET enables this
+
+# Network configuration - DRANET requires CNI
+network:
+  rdma_type: virtio-roce
+  rdma_device_plugin: nvidia.com/roce
+  requires_cni: true
+  cni_type: multus
+  max_bandwidth_gbps: 400
+  expected_latency_us: 2.0
+  config:
+    network_attachment_definition: dranet-nad
+
+# Template overrides for PD deployments
+template_overrides:
+  pd:
+    # DRANET-specific pod annotations
+    pod_annotations:
+      ibm.io/rdma-enabled: "true"
+      k8s.v1.cni.cncf.io/networks: dranet-nad
+
+    # No anti-affinity needed with DRANET (can co-locate)
+    anti_affinity_required: false
+
+    # DRANET network attachment
+    network_attachments:
+      - name: dranet-nad
+        interface: net1
+        ips: []  # Dynamic allocation
+
+    # Resource limits (fallback defaults; overridden by dynamic calculation)
+    resources:
+      requests:
+        memory: "64Gi"
+      limits:
+        memory: "64Gi"
+
+# Enabled architectures
+enabled_architectures:
+  - aggregated
+  - pd
+  - ep
+
+# Provider-specific configuration
+config:
+  dranet_enabled: true
+  dranet_namespace: llm-d
+  dranet_network_name: dranet-nad
+
+  # All PD ratios work with DRANET
+  recommended_ratios:
+    - "1:1"
+    - "1:2"
+    - "1:4"
+    - "2:1"
+
+  # DRANET notes
+  notes: |
+    DRANET (Disaggregated RDMA Network) bypasses IBM Cloud's 1 pod per node
+    limit by using network virtualization. This allows:
+    - Multiple prefill/decode pods on the same node
+    - All PD ratios (1:1, 1:2, 1:4, 2:1) to work efficiently
+    - More flexible resource allocation
+
+    Prerequisites:
+    - Multus CNI installed
+    - DRANET NetworkAttachmentDefinition deployed
+    - Sufficient node resources for multiple pods
+
+# FUTURE: Metrics configuration
+# metrics:
+#   endpoint_url: https://thanos-query.openshift-monitoring.svc:9090
+#   custom_queries:
+#     gpu_utilization: 'avg(DCGM_FI_DEV_GPU_UTIL{namespace="llm-d"})'
+#     rdma_throughput: 'rate(node_network_receive_bytes_total{device="net1"}[5m])'
+#     dranet_bandwidth: 'rate(container_network_receive_bytes_total{interface="net1"}[5m])'
+#   scrape_interval_seconds: 15
+
+# FUTURE: Cost model (same as default)
+# cost_model:
+#   gpu_cost_per_hour: 8.50
+#   network_cost_per_gb: 0.01
+
+# FUTURE: Search space
+# search_space:
+#   allowed_pd_ratios:
+#     - "1:1"
+#     - "1:2"
+#     - "1:4"
+#     - "2:1"
+#   allowed_tp_values: [1, 2, 4, 8]
+#   min_batch_size: 1
+#   max_batch_size: 512

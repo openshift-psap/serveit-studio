@@ -1,0 +1,34 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ gaie_name | default('gaie-ep-epp') }}
+  namespace: {{ namespace }}
+  labels:
+    app.kubernetes.io/name: {{ gaie_name | default('gaie-ep-epp') }}
+    component: in-s8-prereq
+    architecture: ep
+data:
+  ep-config.yaml: |
+    # EP (Exact Prefix) architecture - PD with random/prefix routing
+    apiVersion: inference.networking.x-k8s.io/v1alpha1
+    kind: EndpointPickerConfig
+    plugins:
+      - type: prefill-header-handler
+      - type: prefill-filter
+      - type: decode-filter
+      - type: random-picker
+        parameters:
+          maxNumOfEndpoints: 1
+      - type: pd-profile-handler
+        parameters:
+          threshold: 0
+          hashBlockSize: 5
+    schedulingProfiles:
+      - name: prefill
+        plugins:
+          - pluginRef: prefill-filter
+          - pluginRef: random-picker
+      - name: decode
+        plugins:
+          - pluginRef: decode-filter
+          - pluginRef: random-picker

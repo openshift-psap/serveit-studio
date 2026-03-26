@@ -1,0 +1,22 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ gaie_name | default('gaie-pd-epp') }}
+  namespace: {{ namespace }}
+  labels:
+    app.kubernetes.io/name: {{ gaie_name | default('gaie-pd-epp') }}
+    app.kubernetes.io/version: v1.3.0
+    component: in-s8-prereq
+spec:
+  type: ClusterIP
+  selector:
+    inferencepool: {{ gaie_name | default('gaie-pd-epp') }}
+  ports:
+    - name: grpc-ext-proc
+      port: 9002
+      protocol: TCP
+      targetPort: 9002
+    - name: http-metrics
+      port: 9090
+      protocol: TCP
+      targetPort: 9090

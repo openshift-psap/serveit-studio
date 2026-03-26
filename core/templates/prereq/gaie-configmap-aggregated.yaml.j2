@@ -1,0 +1,33 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ gaie_name | default('gaie-aggregated-epp') }}
+  namespace: {{ namespace }}
+  labels:
+    app.kubernetes.io/name: {{ gaie_name | default('gaie-aggregated-epp') }}
+    component: in-s8-prereq
+    architecture: aggregated
+data:
+  aggregated-config.yaml: |
+    # Aggregated architecture - simple load balancing with prefix cache awareness
+    apiVersion: inference.networking.x-k8s.io/v1alpha1
+    kind: EndpointPickerConfig
+    plugins:
+      - type: single-profile-handler
+      - type: prefix-cache-scorer
+        parameters:
+          maxPrefixBlocksToMatch: 256
+          lruCapacityPerServer: 31250
+      - type: kv-cache-utilization-scorer
+      - type: queue-scorer
+      - type: max-score-picker
+    schedulingProfiles:
+      - name: default
+        plugins:
+          - pluginRef: prefix-cache-scorer
+            weight: 3.0
+          - pluginRef: kv-cache-utilization-scorer
+            weight: 2.0
+          - pluginRef: queue-scorer
+            weight: 2.0
+          - pluginRef: max-score-picker

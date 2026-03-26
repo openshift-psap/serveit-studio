@@ -1,0 +1,289 @@
+                    <div class="step-section" id="step6-section">
+                        <h3>Review & Start Optimization</h3>
+                        <p class="description">Review your configuration and start the intelligent optimization process.</p>
+
+                        <!-- Configuration Summary -->
+                        <div class="info-box">
+                            <h4>📋 Configuration Summary</h4>
+                            <div class="config-grid">
+                                <div class="config-item">
+                                    <div class="config-label">Optimization Goal</div>
+                                    <div class="config-value"><span id="config-summary-goal">-</span></div>
+                                </div>
+                                <div class="config-item">
+                                    <div class="config-label">Model</div>
+                                    <div class="config-value"><span id="config-summary-model">-</span></div>
+                                </div>
+                                <div class="config-item">
+                                    <div class="config-label">Workload</div>
+                                    <div class="config-value">ISL: <span id="config-summary-isl">-</span>, OSL: <span id="config-summary-osl">-</span></div>
+                                </div>
+                                <div class="config-item">
+                                    <div class="config-label">Test Configuration</div>
+                                    <div class="config-value"><span id="config-summary-users">-</span> users, <span id="config-summary-duration">-</span></div>
+                                </div>
+                                <div class="config-item">
+                                    <div class="config-label">Load Mode</div>
+                                    <div class="config-value"><span id="config-summary-qps-mode">User-defined Concurrent Users</span></div>
+                                </div>
+                                <div class="config-item">
+                                    <div class="config-label">Max GPUs to Use</div>
+                                    <div class="config-value"><span id="config-summary-gpus">-</span> GPUs</div>
+                                </div>
+                                <div class="config-item">
+                                    <div class="config-label">Scale to Sustainable Load</div>
+                                    <div class="config-value"><span id="config-summary-achievable-qps">Off</span></div>
+                                </div>
+                                <div class="config-item">
+                                    <div class="config-label">Latency Constraint</div>
+                                    <div class="config-value"><span id="config-summary-latency-constraint">Disabled</span></div>
+                                </div>
+                                <div class="config-item">
+                                    <div class="config-label">TP Search Depth</div>
+                                    <div class="config-value"><span id="config-summary-tp-depth">2</span></div>
+                                </div>
+                                <div class="config-item">
+                                    <div class="config-label">PVC</div>
+                                    <div class="config-value"><span id="config-summary-pvc">-</span></div>
+                                </div>
+                                <div class="config-item">
+                                    <div class="config-label">Namespace</div>
+                                    <div class="config-value"><span id="config-summary-namespace">-</span></div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Recipe-Based Methodology -->
+                        <div class="info-box" style="margin-top: 20px;">
+                            <h4>🚀 What Happens When You Click "Start"</h4>
+
+                            <div class="steps-container">
+                                <!-- Step 0 -->
+                                <div class="step-card">
+                                    <div class="step-header">
+                                        <div class="step-number">0</div>
+                                        <div class="step-title-wrapper">
+                                            <h4>Infrastructure Setup</h4>
+                                            <span class="step-badge badge-planning">Automated</span>
+                                        </div>
+                                    </div>
+                                    <div class="step-content">
+                                        <p style="font-size: 14px; color: #4b5563;">
+                                            • Create persistent storage (PVC) or use existing PVC<br>
+                                            • Download model to shared storage (one-time download, skipped if already cached)
+                                        </p>
+                                    </div>
+                                </div>
+
+                                <!-- Step 1 -->
+                                <div class="step-card">
+                                    <div class="step-header">
+                                        <div class="step-number">1</div>
+                                        <div class="step-title-wrapper">
+                                            <h4>Define Objective & Guardrails</h4>
+                                            <span class="step-badge badge-planning">Planning - No Tests</span>
+                                        </div>
+                                    </div>
+                                    <div class="step-content">
+                                        <p><strong>Your Configuration:</strong></p>
+                                        <p style="font-size: 14px; color: #4b5563;">
+                                            • Objective: <span id="recipe-objective">-</span><br>
+                                            • Workload: ISL=<span id="recipe-isl">-</span><span id="recipe-isl-stdev"></span> tokens, OSL=<span id="recipe-osl">-</span><span id="recipe-osl-stdev"></span> tokens<span id="recipe-turns"></span><br>
+                                            • Users: <span id="recipe-users">-</span> concurrent, <span id="recipe-duration">-</span><br>
+                                            • Resources: <span id="recipe-gpus">-</span> GPUs available<br>
+                                            • Headroom: 1.3x overhead for production stability<br>
+                                            • Model: <span id="recipe-model">-</span>
+                                        </p>
+                                        <p style="color: #059669; font-weight: 600;">No deployments - pure planning phase</p>
+                                    </div>
+                                </div>
+
+                                <!-- Step 2 -->
+                                <div class="step-card">
+                                    <div class="step-header">
+                                        <div class="step-number">2</div>
+                                        <div class="step-title-wrapper">
+                                            <h4>Decode TP Sweep</h4>
+                                            <span class="step-badge badge-adaptive">Exhaustive Search</span>
+                                        </div>
+                                    </div>
+                                    <div class="step-content">
+                                        <p><strong>What runs:</strong> Decode-focused tests (aggregated architecture, ISL=1, OSL=target) at full user concurrency</p>
+                                        <p><strong>Tests all valid TP values:</strong> Filtered by model size and GPUs per node (e.g., TP=1, 2, 4, 8)</p>
+                                        <p><strong>Objective:</strong> Maximize TPSG (tokens/sec/GPU) for decode workload</p>
+                                        <p><strong>Result:</strong> All TP values ranked by TPSG — the top-2 feed into Step 5's TP pair selection</p>
+                                    </div>
+                                </div>
+
+                                <!-- Step 3 -->
+                                <div class="step-card">
+                                    <div class="step-header">
+                                        <div class="step-number">3</div>
+                                        <div class="step-title-wrapper">
+                                            <h4>Prefill TP Sweep</h4>
+                                            <span class="step-badge badge-adaptive">Exhaustive Search</span>
+                                        </div>
+                                    </div>
+                                    <div class="step-content">
+                                        <p><strong>What runs:</strong> Prefill-focused tests (aggregated architecture, ISL=target, OSL=1) at full user concurrency</p>
+                                        <p><strong>Tests all valid TP values:</strong> Same set as Step 2</p>
+                                        <p><strong>Objective:</strong> Ranked by TTFT p90 (lower is better) when objective is "Response Time Priority", or by TPSG when objective is "Max Throughput"</p>
+                                        <p><strong>Result:</strong> All TP values ranked — the top-2 feed into Step 5's TP pair selection. Prefill optimal TP often differs from decode optimal TP</p>
+                                    </div>
+                                </div>
+
+                                <!-- Step 4 -->
+                                <div class="step-card">
+                                    <div class="step-header">
+                                        <div class="step-number">4</div>
+                                        <div class="step-title-wrapper">
+                                            <h4>Cluster Capacity Analysis</h4>
+                                            <span class="step-badge badge-math">Math - No Tests</span>
+                                        </div>
+                                    </div>
+                                    <div class="step-content">
+                                        <p><strong>Calculates GPU cost per request from TPSG measurements:</strong></p>
+                                        <p style="font-size: 14px; color: #4b5563;">
+                                            • Cost<sub>prefill</sub> = ISL ÷ TPSG<sub>prefill</sub> (GPU-seconds)<br>
+                                            • Cost<sub>decode</sub> = OSL ÷ TPSG<sub>decode</sub> (GPU-seconds)
+                                        </p>
+                                        <p style="color: #059669; font-weight: 600;">Pure math - instant results</p>
+                                    </div>
+                                </div>
+
+                                <!-- Step 5 -->
+                                <div class="step-card">
+                                    <div class="step-header">
+                                        <div class="step-number">5</div>
+                                        <div class="step-title-wrapper">
+                                            <h4>Sustainable Throughput & Enumerate Splits</h4>
+                                            <span class="step-badge badge-math">Math - No Tests</span>
+                                        </div>
+                                    </div>
+                                    <div class="step-content">
+                                        <p><strong>Derives cluster capacity and ideal P/D ratio:</strong></p>
+                                        <p style="font-size: 14px; color: #4b5563;">
+                                            • Ideal prefill % = Cost<sub>prefill</sub> ÷ (Cost<sub>prefill</sub> + Cost<sub>decode</sub>)<br>
+                                            • Sustainable QPS = Total GPUs ÷ Total Cost ÷ 1.3 headroom<br>
+                                            • Detects if concurrency implies load beyond sustainable capacity
+                                        </p>
+                                        <p><strong>TP pair selection (cross-product):</strong></p>
+                                        <p style="font-size: 14px; color: #4b5563;">
+                                            • Takes the top-2 prefill TPs from Step 3 and top-2 decode TPs from Step 2<br>
+                                            • Builds a cross-product of all combinations (up to 4 pairs)<br>
+                                            • Supports asymmetric TP — prefill and decode can use different TP values (e.g., PTP=8, DTP=1)<br>
+                                            • Example: if top prefill = [TP4, TP8] and top decode = [TP8, TP4], tests pairs: (4,8), (4,4), (8,8), (8,4)
+                                        </p>
+                                        <p><strong>Split enumeration and trimming:</strong></p>
+                                        <p style="font-size: 14px; color: #4b5563;">
+                                            • Generates all valid P/D splits for each TP pair, respecting TP granularity<br>
+                                            • If total splits exceed the budget, trims with fairness: at least one split per TP pair is guaranteed (closest to ideal ratio), then remaining slots filled by proximity to ideal<br>
+                                            • This means splits far from the ideal ratio (e.g., 75%+ prefill) may be excluded when budget is tight
+                                        </p>
+                                        <p style="color: #059669; font-weight: 600;">Pure math - instant results</p>
+                                    </div>
+                                </div>
+
+                                <!-- Step 6 -->
+                                <div class="step-card">
+                                    <div class="step-header">
+                                        <div class="step-number">6</div>
+                                        <div class="step-title-wrapper">
+                                            <h4>Aggregated Configuration Search</h4>
+                                            <span class="step-badge badge-adaptive">Exhaustive Search</span>
+                                        </div>
+                                    </div>
+                                    <div class="step-content">
+                                        <p><strong>What runs:</strong> Full ISL/OSL workload tests using aggregated architecture at each valid TP value</p>
+                                        <p><strong>Uses all available GPUs</strong> at full user concurrency (same search space as Steps 2-3 but with realistic mixed workload)</p>
+                                        <p><strong>Objective:</strong> Find the best aggregated configuration before PD/EP testing</p>
+                                        <p><strong>Result:</strong> Best aggregated TP and performance baseline for architecture comparison</p>
+                                    </div>
+                                </div>
+
+                                <!-- Step 7 -->
+                                <div class="step-card">
+                                    <div class="step-header">
+                                        <div class="step-number">7</div>
+                                        <div class="step-title-wrapper">
+                                            <h4>P/D Split Validation</h4>
+                                            <span class="step-badge badge-adaptive">Exhaustive Search</span>
+                                        </div>
+                                    </div>
+                                    <div class="step-content">
+                                        <p><strong>What runs:</strong> Full P/D disaggregated tests with target ISL/OSL workload at full user concurrency</p>
+                                        <p><strong>Tests all feasible splits</strong> from Step 5 — includes both symmetric (same TP) and asymmetric (different TP for prefill vs decode) configurations</p>
+                                        <p><strong>Asymmetric TP:</strong> Prefill pods can use a different TP than decode pods (e.g., 1P×TP8 + 6D×TP4), allowing each phase to use its optimal parallelism</p>
+                                        <p><strong>Objective:</strong> Find the Pareto front — configurations where no other is better in both TTFT and throughput</p>
+                                        <p><strong>Result:</strong> Best P/D configuration by optimization objective, with Pareto-optimal alternatives</p>
+                                    </div>
+                                </div>
+
+                                <!-- Step 8 -->
+                                <div class="step-card">
+                                    <div class="step-header">
+                                        <div class="step-number">8</div>
+                                        <div class="step-title-wrapper">
+                                            <h4>Architecture Comparison</h4>
+                                            <span class="step-badge badge-math">Comparison - No Tests</span>
+                                        </div>
+                                    </div>
+                                    <div class="step-content">
+                                        <p><strong>Compares:</strong> Best PD configuration (Step 7) vs best Aggregated (Step 6)</p>
+                                        <p><strong>No new tests</strong> - uses results already collected in Steps 6 and 7</p>
+                                        <p><strong>Objective:</strong> Determine whether PD disaggregation actually improves performance over a simpler aggregated deployment</p>
+                                        <p><strong>Result:</strong> Final recommendation with architecture comparison</p>
+                                    </div>
+                                </div>
+
+                                <!-- Step 9 (Conditional) -->
+                                <div class="step-card" style="border-left: 3px solid #7c3aed;">
+                                    <div class="step-header">
+                                        <div class="step-number" style="background: linear-gradient(135deg, #7c3aed, #a78bfa);">9</div>
+                                        <div class="step-title-wrapper">
+                                            <h4>Latency-Bounded Throughput Maximization</h4>
+                                            <span class="step-badge" style="background: #f5f3ff; color: #7c3aed;">Conditional</span>
+                                        </div>
+                                    </div>
+                                    <div class="step-content">
+                                        <p><strong>Triggers when:</strong> "Maximize Throughput under Latency SLA" is enabled in Test Configuration</p>
+                                        <p><strong>What runs:</strong> Binary search over concurrency levels for both the best PD and best Aggregated configurations independently</p>
+                                        <p><strong>Why:</strong> Finds the maximum throughput your cluster can deliver while keeping TTFT under your latency target at the specified percentile</p>
+                                        <p><strong>Search algorithm:</strong></p>
+                                        <p style="font-size: 14px; color: #4b5563;">
+                                            • <strong>Phase 1 — Ramp-up:</strong> Starts at the calibrated sustainable QPS from Step 4. If TTFT is well below the target, scales concurrency proportionally; otherwise doubles it each step. Continues until TTFT exceeds the SLA, establishing an upper bound<br>
+                                            • <strong>Phase 2 — Bisection:</strong> Binary search between the highest passing concurrency (low) and the lowest failing concurrency (high). Each step tests the midpoint and narrows the bracket<br>
+                                            • <strong>Stopping condition:</strong> Converges when the highest passing and lowest failing concurrency are close enough that further testing would not meaningfully improve throughput. Example: low=200 (passes), high=208 (fails) → the gap is negligible, search stops at c=200<br>
+                                            • <strong>Decision metric:</strong> Only TTFT at the user-selected percentile (e.g., P99) is used for pass/fail decisions. All other percentiles (P50, P90, P95) are recorded for analysis
+                                        </p>
+                                        <p><strong>Runs for both:</strong> Best PD config and best Aggregated config — picks the winner by highest throughput that meets the SLA</p>
+                                        <p><strong>Result:</strong> Optimal concurrency per architecture, with full percentile data at every tested concurrency level (enables cost-of-latency analysis)</p>
+                                    </div>
+                                </div>
+
+                                <!-- Step 10 (Conditional) -->
+                                <div class="step-card" style="border-left: 3px solid #059669;">
+                                    <div class="step-header">
+                                        <div class="step-number" style="background: linear-gradient(135deg, #059669, #10b981);">10</div>
+                                        <div class="step-title-wrapper">
+                                            <h4>Calibrated Load Validation</h4>
+                                            <span class="step-badge" style="background: #ecfdf5; color: #059669;">Conditional</span>
+                                        </div>
+                                    </div>
+                                    <div class="step-content">
+                                        <p><strong>Triggers when:</strong> The user's concurrency implies load beyond sustainable cluster capacity AND "Scale to Sustainable Load" is disabled</p>
+                                        <p><strong>What runs:</strong> Re-tests the best PD and Aggregated configs at a sustainable concurrency level</p>
+                                        <p><strong>Why:</strong> Steps 7-8 ran under overload, inflating latency. This step shows realistic performance at a load the cluster can actually handle</p>
+                                        <p><strong>Result:</strong> Separate comparison showing calibrated vs overloaded metrics, with TTFT improvement percentage</p>
+                                    </div>
+                                </div>
+                            </div>
+
+                        </div>
+
+
+                        <div style="display: flex; gap: 10px; margin-top: 20px;">
+                            <button class="action-button" id="start-optimization" style="background: #059669; flex: 1;">Start Optimization</button>
+                            <button class="action-button" id="stop-optimization" style="background: #dc2626; flex: 1; display: none;">Stop Optimization</button>
+                        </div>
+                    </div>

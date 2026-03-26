@@ -1,0 +1,113 @@
+                    <div class="step-section" id="step3-section">
+                        <h3>Workload Configuration</h3>
+                        <p class="description">Define your typical workload characteristics.</p>
+
+                        <!-- Full-card flip: Synthetic ↔ Dataset -->
+                        <div class="workload-flip-wrapper">
+
+                                <!-- Synthetic Workload (front) -->
+                                <div id="synthetic-workload-panel">
+                                    <div style="border:2px solid #22c55e;border-radius:12px;overflow:hidden;">
+                                        <div style="background:linear-gradient(135deg,#f0fdf4,#dcfce7);padding:16px 20px;cursor:pointer;" onclick="toggleWorkloadMode()">
+                                            <div style="display:flex;align-items:center;justify-content:space-between;">
+                                                <div>
+                                                    <div style="font-weight:700;color:#15803d;font-size:1.05em;">⚡ Synthetic Workload</div>
+                                                    <div style="color:#166534;font-size:0.92em;margin-top:4px;">Generate synthetic prompts with configurable sequence lengths and distribution.</div>
+                                                </div>
+                                                <div style="color:#15803d;font-size:0.8em;font-weight:600;padding:4px 12px;border:1px solid #86efac;border-radius:20px;white-space:nowrap;">Click to switch to Dataset →</div>
+                                            </div>
+                                        </div>
+                                        <div style="padding:16px 20px;">
+                                            <div class="input-grid">
+                                                <div class="input-group">
+                                                    <label>Input Sequence Length (ISL)</label>
+                                                    <input type="number" id="isl-input" value="3000" min="1" max="32000">
+                                                    <div class="help-text">Average prompt size in tokens</div>
+                                                </div>
+                                                <div class="input-group">
+                                                    <label>Output Sequence Length (OSL)</label>
+                                                    <input type="number" id="osl-input" value="100" min="1" max="8000">
+                                                    <div class="help-text">Average completion size in tokens</div>
+                                                </div>
+                                                <div class="input-group">
+                                                    <label>ISL Std Dev (optional)</label>
+                                                    <input type="number" id="isl-stdev-input" value="" min="0" max="32000" placeholder="e.g. 3000">
+                                                    <div class="help-text">Standard deviation for input length variation. Leave empty for fixed-length prompts.</div>
+                                                </div>
+                                                <div class="input-group">
+                                                    <label>OSL Std Dev (optional)</label>
+                                                    <input type="number" id="osl-stdev-input" value="" min="0" max="8000" placeholder="e.g. 64">
+                                                    <div class="help-text">Standard deviation for output length variation. Leave empty for fixed-length completions.</div>
+                                                </div>
+                                            </div>
+
+                                            <div class="input-group" style="border: 2px solid #e2e8f0; border-radius: 8px; padding: 20px; margin-top: 16px;">
+                                                <div style="display: flex; align-items: center; gap: 12px; cursor: pointer;" onclick="document.getElementById('multi-turn-enabled').click();">
+                                                    <input type="checkbox" id="multi-turn-enabled" style="width: 22px; height: 22px; cursor: pointer; accent-color: var(--rh-red-primary); flex-shrink: 0;" onclick="event.stopPropagation(); toggleMultiTurn();">
+                                                    <label style="cursor: pointer; margin: 0; font-weight: 700; font-size: 0.95em;">Multi-Turn Conversation</label>
+                                                </div>
+                                                <div id="multi-turn-options" style="opacity: 0.4; pointer-events: none; margin-top: 16px; padding-top: 16px; border-top: 1px solid #e2e8f0;">
+                                                    <div class="input-grid" style="grid-template-columns: 1fr 1fr;">
+                                                        <div class="input-group">
+                                                            <label style="font-size: 0.85em; margin-bottom: 6px; display: block;">Number of Turns</label>
+                                                            <input type="number" id="turns-input" value="3" min="2" max="20">
+                                                            <div class="help-text">User/assistant exchanges per conversation</div>
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                                <div class="help-text" style="margin-top: 12px;">Simulate real chat workloads where each turn sends the full conversation history, increasing context with every exchange.</div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <!-- Dataset Workload (back, hidden by default) -->
+                                <div id="dataset-workload-panel" style="display:none;">
+                                    <div style="border:2px solid #8b5cf6;border-radius:12px;overflow:hidden;">
+                                        <div style="background:linear-gradient(135deg,#f5f3ff,#ede9fe);padding:16px 20px;cursor:pointer;" onclick="toggleWorkloadMode()">
+                                            <div style="display:flex;align-items:center;justify-content:space-between;">
+                                                <div>
+                                                    <div style="font-weight:700;color:#5b21b6;font-size:1.05em;">📊 Custom Dataset</div>
+                                                    <div style="color:#6d28d9;font-size:0.92em;margin-top:4px;">Use real prompts from a HuggingFace dataset or uploaded file instead of synthetic workload generation.</div>
+                                                </div>
+                                                <div style="color:#5b21b6;font-size:0.8em;font-weight:600;padding:4px 12px;border:1px solid #c4b5fd;border-radius:20px;white-space:nowrap;">Click to switch to Synthetic →</div>
+                                            </div>
+                                        </div>
+                                        <div style="padding:16px 20px;">
+                                            <div class="input-group" style="margin-bottom:16px;">
+                                                <label>Dataset Source</label>
+                                                <input type="text" id="dataset-source-input" placeholder="e.g. openai/gsm8k or /path/to/data.jsonl" style="width:100%;padding:12px 16px;border:2px solid #d1d5db;border-radius:8px;font-size:15px;">
+                                                <div class="help-text">HuggingFace dataset ID, URL, or path to a CSV/JSON/JSONL/TXT file on the pod.</div>
+                                            </div>
+
+                                            <div class="input-grid">
+                                                <div class="input-group">
+                                                    <label>Text Column (optional)</label>
+                                                    <input type="text" id="dataset-column-input" placeholder="e.g. prompt, text, question" style="padding:12px 16px;border:2px solid #d1d5db;border-radius:8px;font-size:15px;">
+                                                    <div class="help-text">Column name containing the prompt text. Leave empty for auto-detect.</div>
+                                                </div>
+                                                <div class="input-group">
+                                                    <label>Max Output Tokens</label>
+                                                    <input type="number" id="dataset-max-output-input" value="256" min="1" max="8000" style="padding:12px 16px;border:2px solid #d1d5db;border-radius:8px;font-size:15px;">
+                                                    <div class="help-text">Maximum tokens to generate per prompt.</div>
+                                                </div>
+                                            </div>
+
+                                            <div class="input-group" style="margin-top:16px;">
+                                                <label>Dataset File Upload (optional)</label>
+                                                <div style="border:2px dashed #d1d5db;border-radius:8px;padding:24px;text-align:center;cursor:pointer;transition:border-color 0.2s;" id="dataset-upload-zone" onclick="document.getElementById('dataset-file-input').click();">
+                                                    <div style="font-size:2em;margin-bottom:8px;">📁</div>
+                                                    <div style="font-weight:600;color:#374151;">Drop file here or click to upload</div>
+                                                    <div style="font-size:0.85em;color:#6b7280;margin-top:4px;">Supports CSV, JSON, JSONL, TXT</div>
+                                                    <div id="dataset-upload-status" style="margin-top:8px;font-size:0.9em;color:#059669;display:none;"></div>
+                                                </div>
+                                                <input type="file" id="dataset-file-input" accept=".csv,.json,.jsonl,.txt" style="display:none;" onchange="handleDatasetUpload(this)">
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+
+                        </div>
+
+                        <button class="action-button" id="next-step3">Continue to Test Config →</button>
+                    </div>

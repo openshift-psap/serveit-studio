@@ -1,0 +1,66 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ gaie_name | default('gaie-pd-epp') }}
+  namespace: {{ namespace }}
+  labels:
+    app.kubernetes.io/name: {{ gaie_name | default('gaie-pd-epp') }}
+    app.kubernetes.io/version: v1.3.0
+    component: in-s8-prereq
+spec:
+  replicas: {{ gaie_replicas | default(1) }}
+  selector:
+    matchLabels:
+      inferencepool: {{ gaie_name | default('gaie-pd-epp') }}
+  strategy:
+    type: Recreate
+  template:
+    metadata:
+      labels:
+        inferencepool: {{ gaie_name | default('gaie-pd-epp') }}
+    spec:
+      serviceAccountName: {{ gaie_name | default('gaie-pd-epp') }}
+      terminationGracePeriodSeconds: 130
+      containers:
+        - name: epp
+          image: {{ gaie_image | default('ghcr.io/llm-d/llm-d-inference-scheduler:v0.6.0') }}
+          imagePullPolicy: Always
+          args:
+            - --pool-name
+            - {{ gaie_pool_name | default('gaie-pd') }}
+            - --pool-namespace
+            - {{ namespace }}
+            - --pool-group
+            - inference.networking.k8s.io
+            - --zap-encoder
+            - json
+            - --config-file
+            - /config/{{ config_file | default('pd-config.yaml') }}
+            - --kv-cache-usage-percentage-metric
+            - "vllm:kv_cache_usage_perc"
+            - --v
+            - "1"
+            - --tracing=false
+          env:
+            - name: NAMESPACE
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.namespace
+            - name: POD_NAME
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.name
+          ports:
+            - containerPort: 9002
+              name: grpc
+            - containerPort: 9003
+              name: grpc-health
+            - containerPort: 9090
+              name: metrics
+          volumeMounts:
+            - name: plugins-config-volume
+              mountPath: /config
+      volumes:
+        - name: plugins-config-volume
+          configMap:
+            name: {{ gaie_name | default('gaie-pd-epp') }}

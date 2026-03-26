@@ -1,0 +1,42 @@
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: in-s8-optimizer-reader
+  namespace: {{ namespace }}
+  labels:
+    app.kubernetes.io/name: in-s8-optimizer
+    component: in-s8-prereq
+rules:
+  # Read InferencePool CRDs for prerequisite checks
+  - apiGroups: ["inference.networking.k8s.io"]
+    resources: ["inferencepools"]
+    verbs: ["get", "list"]
+  # Read Gateway resources for prerequisite checks
+  - apiGroups: ["gateway.networking.k8s.io"]
+    resources: ["gateways"]
+    verbs: ["get", "list"]
+  # Read standard resources for prerequisite checks
+  - apiGroups: ["apps"]
+    resources: ["deployments"]
+    verbs: ["get", "list"]
+  - apiGroups: [""]
+    resources: ["services"]
+    verbs: ["get", "list"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: in-s8-optimizer-reader
+  namespace: {{ namespace }}
+  labels:
+    app.kubernetes.io/name: in-s8-optimizer
+    component: in-s8-prereq
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: in-s8-optimizer-reader
+subjects:
+  - kind: ServiceAccount
+    name: default
+    namespace: {{ namespace }}

@@ -1,0 +1,68 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+
+# Virtual environments
+venv/
+ENV/
+env/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Test results and data
+/mnt/storage/
+optimization-runs/
+test-results/
+*.log
+
+# Configuration
+*.local.yaml
+secrets/
+.env
+
+# Temporary files
+tmp/
+temp/
+*.tmp
+
+# Local-only directories
+working/
+scripts/
+tests/
+
+# Deployment artifacts (deploy.sh is the source of truth)
+deployment/README.md
+deployment/*.yaml
+deployment/rdma-discovery-dranet.sh
+
+# Claude Code
+.agents/
+.claude/
+skills-lock.json

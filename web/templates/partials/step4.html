@@ -1,0 +1,100 @@
+                    <div class="step-section" id="step4-section">
+                        <h3>Test Configuration</h3>
+                        <p class="description">Configure how the optimization tests will run.</p>
+
+                        <!-- Benchmark Settings -->
+                        <div style="border:2px solid #0ea5e9;border-radius:12px;overflow:hidden;margin-bottom:20px;">
+                            <div style="background:linear-gradient(135deg,#f0f9ff,#e0f2fe);padding:16px 20px;">
+                                <div style="font-weight:700;color:#0c4a6e;font-size:1.05em;">🎯 Benchmark Settings</div>
+                                <div style="color:#075985;font-size:0.92em;margin-top:4px;">Set the load level, test duration, and scaling behavior for each benchmark run.</div>
+                            </div>
+                            <div style="padding:16px 20px;">
+                                <div class="input-grid" style="grid-template-columns: 1fr 1fr 1fr;">
+                                    <div class="input-group">
+                                        <label>Concurrent Users</label>
+                                        <input type="number" id="users-input" value="100" min="1" max="10000">
+                                        <div class="help-text">Number of simultaneous requests</div>
+                                    </div>
+                                    <div class="input-group">
+                                        <label>Test Stop Condition</label>
+                                        <div style="display: flex; gap: 8px; margin-bottom: 8px;">
+                                            <button type="button" class="stop-mode-btn selected" id="stop-mode-duration" onclick="setStopMode('duration')" style="flex:1; padding:8px 12px; border:2px solid var(--rh-red-primary); border-radius:6px; background:var(--rh-red-primary); color:white; font-weight:600; cursor:pointer; font-size:0.85em;">Duration (seconds)</button>
+                                            <button type="button" class="stop-mode-btn" id="stop-mode-requests" onclick="setStopMode('max_requests')" style="flex:1; padding:8px 12px; border:2px solid #cbd5e1; border-radius:6px; background:white; color:#475569; font-weight:600; cursor:pointer; font-size:0.85em;">Max Requests</button>
+                                        </div>
+                                        <div id="duration-wrapper">
+                                            <input type="number" id="duration-input" value="300" min="60" max="3600">
+                                            <div class="help-text">Duration per configuration test. For best results, we recommend a minimum of 5 minutes (300 seconds) per test.</div>
+                                        </div>
+                                        <div id="max-requests-wrapper" style="display:none;">
+                                            <input type="number" id="max-requests-input" value="100" min="1" max="100000" placeholder="e.g. 100">
+                                            <div class="help-text">Stop after this many requests complete. Useful for quick validation or cost-controlled runs.</div>
+                                        </div>
+                                    </div>
+                                    <div class="input-group" style="cursor: pointer;" onclick="document.getElementById('use-achievable-qps').click();">
+                                        <label>Scale to Sustainable Load</label>
+                                        <div style="display: flex; justify-content: center;">
+                                            <input type="checkbox" id="use-achievable-qps" style="width: 32px; height: 32px; cursor: pointer; accent-color: var(--rh-red-primary);" onclick="event.stopPropagation();">
+                                        </div>
+                                        <div class="help-text">Steps 2-3 measure per-GPU capacity, then the optimizer auto-scales concurrent users to match your cluster's sustainable throughput.</div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- TP Search Depth -->
+                        <div style="border:2px solid #8b5cf6;border-radius:12px;overflow:hidden;margin-bottom:20px;">
+                            <div style="background:linear-gradient(135deg,#f5f3ff,#ede9fe);padding:16px 20px;">
+                                <div style="font-weight:700;color:#5b21b6;font-size:1.05em;">🔍 TP Search Depth</div>
+                                <div style="color:#6d28d9;font-size:0.92em;margin-top:4px;">How many Tensor Parallelism combinations to test for prefill/decode splits. Higher values test more combinations but take longer.</div>
+                            </div>
+                            <div style="padding:16px 20px;">
+                                <div style="display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; margin-bottom: 12px;">
+                                    <button type="button" class="stop-mode-btn" id="tp-depth-1" onclick="setTpPairTopN(1)" style="padding:12px 0; border:2px solid #cbd5e1; border-radius:6px; background:#FAFAFA; color:#475569; font-weight:700; cursor:pointer; font-size:0.9em; text-align:center;">1 - Fast</button>
+                                    <button type="button" class="stop-mode-btn selected" id="tp-depth-2" onclick="setTpPairTopN(2)" style="padding:12px 0; border:2px solid var(--rh-red-primary); border-radius:6px; background:var(--rh-red-primary); color:white; font-weight:700; cursor:pointer; font-size:0.9em; text-align:center;">2 - Default</button>
+                                    <button type="button" class="stop-mode-btn" id="tp-depth-3" onclick="setTpPairTopN(3)" style="padding:12px 0; border:2px solid #cbd5e1; border-radius:6px; background:#FAFAFA; color:#475569; font-weight:700; cursor:pointer; font-size:0.9em; text-align:center;">3 - Deep</button>
+                                    <button type="button" class="stop-mode-btn" id="tp-depth-4" onclick="setTpPairTopN(4)" style="padding:12px 0; border:2px solid #cbd5e1; border-radius:6px; background:#FAFAFA; color:#475569; font-weight:700; cursor:pointer; font-size:0.9em; text-align:center;">4 - Full</button>
+                                </div>
+                                <div style="background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 6px; padding: 12px; font-size: 0.8em; color: #475569; line-height: 1.6;">
+                                    <strong>Example with TP options [1, 2, 4, 8]:</strong><br>
+                                    If calibration finds prefill is fastest at TP=8 and decode is most efficient at TP=1:<br>
+                                    <span style="font-family: var(--font-mono); color: #0369a1;">Depth 1</span> &rarr; tests only (PTP=8, DTP=1) &rarr; <strong>3 splits</strong><br>
+                                    <span style="font-family: var(--font-mono); color: #0369a1;">Depth 2</span> &rarr; adds 2nd-best TPs, cross-product &rarr; 4 pairs &rarr; <strong>~20 splits</strong><br>
+                                    <span style="font-family: var(--font-mono); color: #0369a1;">Depth 4</span> &rarr; all TP combinations &rarr; up to 10 pairs &rarr; <strong>~40+ splits</strong><br>
+                                    More splits = longer total runtime. Depth 2 is recommended for most workloads.
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Latency-Bounded Throughput Maximization -->
+                        <div style="border:2px solid #d97706;border-radius:12px;overflow:hidden;margin-bottom:20px;">
+                            <div style="background:linear-gradient(135deg,#fffbeb,#fef3c7);padding:16px 20px;">
+                                <div style="font-weight:700;color:#92400e;font-size:1.05em;">⚡ Latency SLA Constraint</div>
+                                <div style="color:#a16207;font-size:0.92em;margin-top:4px;">After finding the best configuration, maximize throughput while keeping latency under your target.</div>
+                            </div>
+                            <div style="padding:16px 20px;">
+                                <div style="display: flex; align-items: center; gap: 12px; cursor: pointer; margin-bottom: 12px;" onclick="document.getElementById('latency-constraint-enabled').click();">
+                                    <input type="checkbox" id="latency-constraint-enabled" style="width: 22px; height: 22px; cursor: pointer; accent-color: var(--rh-red-primary); flex-shrink: 0;" onclick="event.stopPropagation(); toggleLatencyConstraint();">
+                                    <label style="cursor: pointer; margin: 0; font-weight: 700; font-size: 0.95em;">Enable Latency-Bounded Throughput Maximization</label>
+                                </div>
+                                <div id="latency-sla-options" class="input-grid" style="opacity: 0.4; pointer-events: none; padding-top: 16px; border-top: 1px solid #e2e8f0; margin-bottom: 0;">
+                                    <div class="input-group" id="latency-target-group">
+                                        <label>Latency Target (ms)</label>
+                                        <input type="number" id="latency-target-input" value="500" min="1" max="60000">
+                                        <div class="help-text">Maximum acceptable latency in milliseconds</div>
+                                    </div>
+                                    <div class="input-group" id="latency-percentile-group">
+                                        <label>Enforce at Percentile</label>
+                                        <div style="display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px;">
+                                            <button type="button" class="stop-mode-btn" id="pctl-p50" onclick="setLatencyPercentile('p50')" style="padding:16px 0; border:2px solid #cbd5e1; border-radius:6px; background:#FAFAFA; color:#475569; font-weight:700; cursor:pointer; font-size:0.9em; text-align:center;">P50</button>
+                                            <button type="button" class="stop-mode-btn selected" id="pctl-p90" onclick="setLatencyPercentile('p90')" style="padding:16px 0; border:2px solid var(--rh-red-primary); border-radius:6px; background:var(--rh-red-primary); color:white; font-weight:700; cursor:pointer; font-size:0.9em; text-align:center;">P90</button>
+                                            <button type="button" class="stop-mode-btn" id="pctl-p95" onclick="setLatencyPercentile('p95')" style="padding:16px 0; border:2px solid #cbd5e1; border-radius:6px; background:#FAFAFA; color:#475569; font-weight:700; cursor:pointer; font-size:0.9em; text-align:center;">P95</button>
+                                            <button type="button" class="stop-mode-btn" id="pctl-p99" onclick="setLatencyPercentile('p99')" style="padding:16px 0; border:2px solid #cbd5e1; border-radius:6px; background:#FAFAFA; color:#475569; font-weight:700; cursor:pointer; font-size:0.9em; text-align:center;">P99</button>
+                                        </div>
+                                        <div class="help-text">Which percentile to enforce the latency target on</div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <button class="action-button" id="next-step4">Continue to Setup →</button>
+                    </div>

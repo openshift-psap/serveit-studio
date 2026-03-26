@@ -1,0 +1,213 @@
+    <!-- Session Lock Overlay -->
+    <div class="modal-overlay" id="session-lock-modal" style="z-index:10000;">
+        <div class="modal-content">
+            <div class="modal-header" style="background: linear-gradient(135deg, #d97706 0%, #b45309 100%);">
+                <div class="modal-header-icon">🔒</div>
+                <div class="modal-header-text">
+                    <h3>UI In Use</h3>
+                    <p>Another user is currently active</p>
+                </div>
+            </div>
+            <div class="modal-body">
+                <div class="modal-warning" style="background: linear-gradient(135deg, #fef3c7 0%, #fde68a 100%); border-left-color: #d97706;">
+                    <div class="modal-warning-title" style="color: #92400e;">This UI is currently being used by <strong id="session-lock-user">—</strong></div>
+                    <p style="color: #78350f; font-size: 14px; margin: 8px 0 0 0;">
+                        Connected since <strong id="session-lock-time">—</strong>. Taking over will disconnect their session but will <strong>not</strong> stop any running optimization.
+                    </p>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="modal-button" style="background: linear-gradient(135deg, #d97706 0%, #b45309 100%); color: white; box-shadow: 0 4px 12px rgba(217, 119, 6, 0.3);" onclick="takeOverSession()">Take Over</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Session Kicked Overlay -->
+    <div class="modal-overlay" id="session-kicked-modal" style="z-index:10000;">
+        <div class="modal-content">
+            <div class="modal-header" style="background: linear-gradient(135deg, #dc2626 0%, #b91c1c 100%);">
+                <div class="modal-header-icon">🚫</div>
+                <div class="modal-header-text">
+                    <h3>Session Ended</h3>
+                    <p>Another user took over</p>
+                </div>
+            </div>
+            <div class="modal-body">
+                <div class="modal-warning" style="background: linear-gradient(135deg, #fef2f2 0%, #fecaca 100%); border-left-color: #dc2626;">
+                    <div class="modal-warning-title" style="color: #991b1b;">Your session was taken over by <strong id="session-kicked-by">—</strong></div>
+                    <p style="color: #7f1d1d; font-size: 14px; margin: 8px 0 0 0;">
+                        Any running optimization will continue uninterrupted. You can reconnect by refreshing this page.
+                    </p>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="modal-button" style="background: linear-gradient(135deg, #3b82f6 0%, #2563eb 100%); color: white;" onclick="location.reload()">Reconnect</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Reset Confirmation Modal -->
+    <div class="modal-overlay" id="reset-modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <div class="modal-header-icon">⚠️</div>
+                <div class="modal-header-text">
+                    <h3>Reset Database & Settings</h3>
+                    <p>This action cannot be undone</p>
+                </div>
+            </div>
+            <div class="modal-body">
+                <div class="modal-warning">
+                    <div class="modal-warning-title">This will permanently delete:</div>
+                    <ul class="modal-warning-list">
+                        <li>All optimization runs and test results</li>
+                        <li>All saved configurations and test plans</li>
+                        <li>All console logs and history</li>
+                        <li>All deployment templates</li>
+                    </ul>
+                </div>
+                <p style="color: #6b7280; font-size: 14px; margin: 0;">
+                    The application will reset to Step 1 and reload automatically.
+                </p>
+            </div>
+            <div class="modal-footer">
+                <button class="modal-button modal-button-cancel" id="reset-cancel">Cancel</button>
+                <button class="modal-button modal-button-confirm" id="reset-confirm">Reset Everything</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Stop Optimization Confirmation Modal -->
+    <div class="modal-overlay" id="stop-modal">
+        <div class="modal-content">
+            <div class="modal-header" style="background: linear-gradient(135deg, #ef4444 0%, #dc2626 100%);">
+                <div class="modal-header-icon">🛑</div>
+                <div class="modal-header-text">
+                    <h3>Stop Optimization Process</h3>
+                    <p>Halt all running tests immediately</p>
+                </div>
+            </div>
+            <div class="modal-body">
+                <div class="modal-warning" style="background: linear-gradient(135deg, #fee2e2 0%, #fecaca 100%); border-left-color: #ef4444;">
+                    <div class="modal-warning-title" style="color: #991b1b;">This will:</div>
+                    <ul class="modal-warning-list">
+                        <li style="color: #7f1d1d;">Stop any currently running tests</li>
+                        <li style="color: #7f1d1d;">Keep deployed resources (clean up manually if needed)</li>
+                        <li style="color: #7f1d1d;">Not save incomplete test results</li>
+                        <li style="color: #7f1d1d;">Allow you to resume or restart later</li>
+                    </ul>
+                </div>
+                <p style="color: #6b7280; font-size: 14px; margin: 0;">
+                    Deployed pods and services will remain running until manually cleaned up.
+                </p>
+            </div>
+            <div class="modal-footer">
+                <button class="modal-button modal-button-cancel" id="stop-cancel">Cancel</button>
+                <button class="modal-button modal-button-confirm" id="stop-confirm">Stop Optimization</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Already Running Info Modal -->
+    <div class="modal-overlay" id="running-modal">
+        <div class="modal-content">
+            <div class="modal-header" style="background: linear-gradient(135deg, #3b82f6 0%, #2563eb 100%);">
+                <div class="modal-header-icon">ℹ️</div>
+                <div class="modal-header-text">
+                    <h3>Optimization In Progress</h3>
+                    <p>A test is currently running</p>
+                </div>
+            </div>
+            <div class="modal-body">
+                <div class="modal-warning" style="background: linear-gradient(135deg, #dbeafe 0%, #bfdbfe 100%); border-left-color: #3b82f6;">
+                    <div class="modal-warning-title" style="color: #1e3a8a;">An optimization is currently running.</div>
+                    <p style="color: #1e40af; font-size: 14px; margin: 8px 0 0 0;">
+                        Stop the current optimization before making any changes.
+                    </p>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="modal-button" style="background: linear-gradient(135deg, #3b82f6 0%, #2563eb 100%); color: white; box-shadow: 0 4px 12px rgba(59, 130, 246, 0.3);" onclick="document.getElementById('running-modal').classList.remove('active')">OK</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Restart Run Confirmation Modal -->
+    <div class="modal-overlay" id="restart-run-modal">
+        <div class="modal-content">
+            <div class="modal-header" style="background: linear-gradient(135deg, #d97706 0%, #b45309 100%);">
+                <div class="modal-header-icon">🔄</div>
+                <div class="modal-header-text">
+                    <h3>Restart Run #<span id="restart-run-id"></span></h3>
+                    <p>This will delete all existing results</p>
+                </div>
+            </div>
+            <div class="modal-body">
+                <div class="modal-warning">
+                    <div class="modal-warning-title">This will:</div>
+                    <ul class="modal-warning-list">
+                        <li>Delete all test results and metrics for this run</li>
+                        <li>Delete all console logs for this run</li>
+                        <li>Keep the original configuration (model, workload, GPUs)</li>
+                        <li>Re-run the optimization from Step 1</li>
+                    </ul>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="modal-button modal-button-cancel" id="restart-run-cancel">Cancel</button>
+                <button class="modal-button modal-button-confirm" id="restart-run-confirm" style="background: linear-gradient(135deg, #d97706, #b45309);">Restart Run</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Database Compression Progress Modal -->
+    <div class="modal-overlay" id="compress-modal">
+        <div class="modal-content">
+            <div class="modal-header" style="background: linear-gradient(135deg, #0ea5e9 0%, #0284c7 100%);">
+                <div class="modal-header-icon">💾</div>
+                <div class="modal-header-text">
+                    <h3>Preparing Download</h3>
+                    <p>Compressing database for download</p>
+                </div>
+            </div>
+            <div class="modal-body">
+                <div style="margin-bottom: 16px;">
+                    <div style="display: flex; justify-content: space-between; margin-bottom: 8px;">
+                        <span id="compress-status" style="font-weight: 600; color: #1e293b;">Compressing...</span>
+                        <span id="compress-percent" style="font-weight: 700; color: #0284c7;">0%</span>
+                    </div>
+                    <div style="background: #e2e8f0; border-radius: 8px; height: 24px; overflow: hidden;">
+                        <div id="compress-bar" style="background: linear-gradient(90deg, #0ea5e9, #0284c7); height: 100%; width: 0%; border-radius: 8px; transition: width 0.3s ease;"></div>
+                    </div>
+                </div>
+                <div id="compress-size-info" style="color: #64748b; font-size: 0.85em; text-align: center;"></div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Delete Run Confirmation Modal -->
+    <div class="modal-overlay" id="delete-run-modal">
+        <div class="modal-content">
+            <div class="modal-header" style="background: linear-gradient(135deg, #ef4444 0%, #dc2626 100%);">
+                <div class="modal-header-icon">🗑</div>
+                <div class="modal-header-text">
+                    <h3>Delete Run #<span id="delete-run-id"></span></h3>
+                    <p>This action cannot be undone</p>
+                </div>
+            </div>
+            <div class="modal-body">
+                <div class="modal-warning">
+                    <div class="modal-warning-title">This will permanently delete:</div>
+                    <ul class="modal-warning-list">
+                        <li>The optimization run record</li>
+                        <li>All test results and configurations</li>
+                        <li>All console logs for this run</li>
+                    </ul>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="modal-button modal-button-cancel" id="delete-run-cancel">Cancel</button>
+                <button class="modal-button modal-button-confirm" id="delete-run-confirm">Delete Run</button>
+            </div>
+        </div>
+    </div>

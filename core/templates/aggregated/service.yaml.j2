@@ -1,0 +1,19 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ test_id }}-aggregated
+  namespace: {{ namespace }}
+  labels:
+    app: llm-d
+    component: in-s8-test
+    test-id: {{ test_id }}
+    architecture: aggregated
+spec:
+  selector:
+    llm-d.ai/test-id: {{ test_id }}
+  ports:
+    - name: http
+      port: 8000
+      protocol: TCP
+      targetPort: 8000
+  type: ClusterIP

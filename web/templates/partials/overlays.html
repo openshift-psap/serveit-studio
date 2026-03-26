@@ -1,0 +1,42 @@
+    <!-- Charts Report Overlay -->
+    <div class="charts-overlay" id="charts-overlay">
+        <div class="charts-container">
+            <div class="charts-header">
+                <div>
+                    <h2>Optimization Report</h2>
+                    <p>Performance charts, Pareto analysis, and recommendations</p>
+                </div>
+                <button class="charts-close" id="charts-close">&#x2715; Close</button>
+            </div>
+
+            <div class="charts-run-selector">
+                <label for="chart-run-select">Optimization Run:</label>
+                <select id="chart-run-select"></select>
+                <button class="charts-close" id="chart-add-btn" style="background: #059669; border-color: #059669;">+ Add</button>
+                <button class="charts-close" id="chart-compare-btn" style="background: #6366f1; border-color: #6366f1; display: none;">Compare</button>
+                <a id="chart-download-link" style="display:none; margin-left: auto; color: #059669; font-weight: 700; text-decoration: none; white-space: nowrap;" href="#">Download HTML Report</a>
+            </div>
+
+            <div class="report-tab-bar" id="report-tab-bar" style="display:none;"></div>
+
+            <div id="charts-content">
+                <div class="charts-loading">Select a run and click + Add to view results</div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Resume Testing Overlay -->
+    <div class="resume-overlay" id="resume-overlay">
+        <div class="resume-container">
+            <div class="resume-header">
+                <div>
+                    <h2>Resume Testing</h2>
+                    <p>Select an optimization run to resume from the last completed test</p>
+                </div>
+                <button class="charts-close" id="resume-close">&#x2715; Close</button>
+            </div>
+            <div class="resume-table-wrap" id="resume-table-content">
+                <div class="resume-empty">Loading runs...</div>
+            </div>
+        </div>
+    </div>

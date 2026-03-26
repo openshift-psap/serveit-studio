@@ -1,0 +1,167 @@
+apiVersion: leaderworkerset.x-k8s.io/v1
+kind: LeaderWorkerSet
+metadata:
+  name: {{ test_id }}-ep
+  namespace: {{ namespace }}
+  labels:
+    app: llm-d
+    component: in-s8-test
+    test-id: {{ test_id }}
+    architecture: ep
+spec:
+  replicas: {{ replicas }}
+  leaderWorkerTemplate:
+    size: 1
+    workerTemplate:
+      metadata:
+        labels:
+          llm-d.ai/inferenceServing: "true"
+          llm-d.ai/inference-serving: "true"
+          llm-d.ai/model: {{ model_name_label }}
+          llm-d.ai/role: ep
+          llm-d.ai/guide: in-s8-ep
+          llm-d.ai/test-id: {{ test_id }}
+      spec:
+        serviceAccountName: llm-d-modelserver
+        tolerations:
+          - key: node.kubernetes.io/disk-pressure
+            operator: Exists
+            effect: NoSchedule
+          - key: node.kubernetes.io/memory-pressure
+            operator: Exists
+            effect: NoSchedule
+        volumes:
+          - name: dshm
+            emptyDir:
+              medium: Memory
+              sizeLimit: 2Gi
+          - name: hf-cache
+            persistentVolumeClaim:
+              claimName: {{ pvc_name }}
+          - name: jit-cache
+            emptyDir: {}
+          - name: discovery-script
+            configMap:
+              name: rdma-discovery-script
+              defaultMode: 0755
+        containers:
+          - name: vllm
+            image: {{ image }}
+            securityContext:
+              capabilities:
+                add:
+                  - IPC_LOCK
+                  - SYS_RAWIO
+                  - SYS_RESOURCE
+              runAsGroup: 0
+              runAsUser: 0
+            imagePullPolicy: Always
+            command:
+              - /bin/bash
+              - -c
+            args:
+              - |-
+                # Clear /dev/shm on start to prevent running out of space when crashes occur
+                find /dev/shm -type f -delete
+
+                # Pin to allocated GPUs (privileged pods see all host GPUs)
+                if [ -d /var/run/nvidia-container-devices ]; then
+                  GPU_INDICES=""
+                  for uuid in $(ls /var/run/nvidia-container-devices/); do
+                    idx=$(nvidia-smi --query-gpu=index,uuid --format=csv,noheader | grep "$uuid" | cut -d',' -f1 | tr -d ' ')
+                    [ -n "$idx" ] && GPU_INDICES="${GPU_INDICES:+$GPU_INDICES,}$idx"
+                  done
+                  if [ -n "$GPU_INDICES" ]; then
+                    export CUDA_VISIBLE_DEVICES="$GPU_INDICES"
+                    echo "--- CUDA_VISIBLE_DEVICES=$CUDA_VISIBLE_DEVICES ---"
+                  fi
+                fi
+
+                # Source RDMA discovery script if available
+                if [ -f /scripts/discover_ib_hca.sh ]; then
+                  source /scripts/discover_ib_hca.sh
+                  echo "--- Loaded RDMA environment ---"
+                fi
+
+                echo "========================================="
+                echo "In-S8 Test: {{ test_id }}"
+                echo "Architecture: EP (Eager Prefill)"
+                echo "Model: {{ model_name }}"
+                echo "TP: {{ tensor_parallelism }}"
+                echo "Max Model Len: {{ max_model_len }}"
+                echo "========================================="
+
+                # Set unlimited locked memory for RDMA/NVSHMEM
+                ulimit -l unlimited || true
+
+                #################
+                # RUN vLLM with Eager Prefill (EP)
+                #################
+                exec vllm serve \
+                  {{ model_name }} \
+                  --port 8000 \
+                  --trust-remote-code \
+                  --disable-uvicorn-access-log \
+                  --disable-log-requests \
+                  --tensor-parallel-size {{ tensor_parallelism }} \
+                  --kv_transfer_config '{"kv_connector":"NixlConnector","kv_role":"kv_both"}' \
+                  --async-scheduling \
+                  --enable-eplb \
+                  --max-model-len {{ max_model_len }} \
+                  --gpu-memory-utilization {{ gpu_memory_utilization }} \
+                  --enable-prefix-caching{% if max_num_batched_tokens %} \
+                  --max-num-batched-tokens {{ max_num_batched_tokens }}{% endif %}{% if max_num_seqs %} \
+                  --max-num-seqs {{ max_num_seqs }}{% endif %}
+
+            env:
+              - name: HF_TOKEN
+                valueFrom:
+                  secretKeyRef:
+                    name: llm-d-hf-token
+                    key: HF_TOKEN
+                    optional: false
+              - name: HF_HOME
+                value: "/model-cache/huggingface"
+              - name: HF_HUB_CACHE
+                value: "/model-cache/huggingface"
+              - name: NCCL_IB_HCA
+                value: "{{ nccl_ib_hca }}"
+              - name: NCCL_SOCKET_IFNAME
+                value: "eth0"
+              - name: GLOO_SOCKET_IFNAME
+                value: "eth0"
+              - name: VLLM_SKIP_P2P_CHECK
+                value: "1"
+              - name: NVIDIA_GDRCOPY
+                value: "enabled"
+              - name: TRITON_LIBCUDA_PATH
+                value: /usr/lib64
+              - name: VLLM_LOGGING_LEVEL
+                value: ERROR
+              - name: CUDA_CACHE_PATH
+                value: /var/cache/vllm/cuda
+              - name: CCACHE_DIR
+                value: /var/cache/vllm/ccache
+              - name: VLLM_CACHE_ROOT
+                value: /var/cache/vllm/vllm
+              - name: FLASHINFER_WORKSPACE_BASE
+                value: /var/cache/vllm/flashinfer
+            ports:
+              - containerPort: 8000
+                name: http
+                protocol: TCP
+            resources:
+              limits:
+                {{ gpu_resource_key }}: "{{ gpu_count }}"
+                {% for r in extra_device_resources %}
+                {{ r.key }}: "{{ r.value }}"
+                {% endfor %}
+            volumeMounts:
+              - name: dshm
+                mountPath: /dev/shm
+              - name: hf-cache
+                mountPath: /model-cache
+              - name: jit-cache
+                mountPath: /var/cache/vllm
+              - name: discovery-script
+                mountPath: /scripts

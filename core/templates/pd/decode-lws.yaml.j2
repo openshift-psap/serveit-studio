@@ -1,0 +1,230 @@
+apiVersion: leaderworkerset.x-k8s.io/v1
+kind: LeaderWorkerSet
+metadata:
+  name: {{ test_id }}-decode
+  namespace: {{ namespace }}
+  labels:
+    app: llm-d
+    component: in-s8-test
+    test-id: {{ test_id }}
+    architecture: pd
+    role: decode
+spec:
+  replicas: {{ decode_replicas }}
+  leaderWorkerTemplate:
+    size: 1
+    leaderTemplate:
+      metadata:
+        labels:
+          llm-d.ai/inferenceServing: "true"
+          llm-d.ai/inference-serving: "true"
+          llm-d.ai/model: {{ model_name_label }}
+          llm-d.ai/role: decode
+          llm-d.ai/guide: in-s8-pd
+          llm-d.ai/test-id: {{ test_id }}
+      spec:
+        serviceAccountName: llm-d-modelserver
+        {% if use_anti_affinity or selected_nodes %}
+        affinity:
+          {% if use_anti_affinity %}
+          podAntiAffinity:
+            requiredDuringSchedulingIgnoredDuringExecution:
+              - labelSelector:
+                  matchExpressions:
+                  - key: llm-d.ai/inference-serving
+                    operator: In
+                    values:
+                    - "true"
+                  - key: llm-d.ai/role
+                    operator: In
+                    values:
+                    - prefill
+                topologyKey: kubernetes.io/hostname
+          {% endif %}
+          {% if selected_nodes %}
+          nodeAffinity:
+            requiredDuringSchedulingIgnoredDuringExecution:
+              nodeSelectorTerms:
+              - matchExpressions:
+                - key: kubernetes.io/hostname
+                  operator: In
+                  values:
+                  {% for node in selected_nodes %}
+                  - "{{ node }}"
+                  {% endfor %}
+          {% endif %}
+        {% endif %}
+        tolerations:
+          - key: node.kubernetes.io/disk-pressure
+            operator: Exists
+            effect: NoSchedule
+          - key: node.kubernetes.io/memory-pressure
+            operator: Exists
+            effect: NoSchedule
+        volumes:
+          - name: dshm
+            emptyDir:
+              medium: Memory
+              sizeLimit: 2Gi
+          - name: hf-cache
+            persistentVolumeClaim:
+              claimName: {{ pvc_name }}
+          - name: rdma-script
+            configMap:
+              name: rdma-discovery-script
+              defaultMode: 0755
+          - name: dev-infiniband
+            hostPath:
+              path: /dev/infiniband
+        initContainers:
+          - name: routing-proxy
+            image: {{ routing_proxy_image }}
+            imagePullPolicy: Always
+            args:
+              - --port=8000
+              - --vllm-port=8200
+              - --connector=nixlv2
+              - --zap-encoder=json
+              - --zap-log-level=debug
+              - --secure-proxy=false
+            ports:
+              - containerPort: 8000
+                name: http
+                protocol: TCP
+            restartPolicy: Always
+            securityContext:
+              allowPrivilegeEscalation: false
+              runAsNonRoot: true
+        containers:
+          - name: vllm
+            image: {{ image }}
+            command:
+              - /bin/bash
+              - -c
+            args:
+              - |
+                ulimit -l unlimited || true
+
+                # Pin to allocated GPUs (privileged pods see all host GPUs)
+                if [ -d /var/run/nvidia-container-devices ]; then
+                  GPU_INDICES=""
+                  for uuid in $(ls /var/run/nvidia-container-devices/); do
+                    idx=$(nvidia-smi --query-gpu=index,uuid --format=csv,noheader | grep "$uuid" | cut -d',' -f1 | tr -d ' ')
+                    [ -n "$idx" ] && GPU_INDICES="${GPU_INDICES:+$GPU_INDICES,}$idx"
+                  done
+                  if [ -n "$GPU_INDICES" ]; then
+                    export CUDA_VISIBLE_DEVICES="$GPU_INDICES"
+                    echo "--- CUDA_VISIBLE_DEVICES=$CUDA_VISIBLE_DEVICES ---"
+                  fi
+                fi
+
+                # Source RDMA discovery script if available
+                if [ -f /scripts/discover_ib_hca.sh ]; then
+                  source /scripts/discover_ib_hca.sh
+                  echo "--- Loaded RDMA environment ---"
+                fi
+
+                echo "========================================="
+                echo "In-S8 Test: {{ test_id }}"
+                echo "Architecture: PD (Decode)"
+                echo "Model: {{ model_name }}"
+                echo "TP: {{ decode_tp }}"
+                echo "NCCL_IB_HCA: ${NCCL_IB_HCA}"
+                echo "UCX_NET_DEVICES: ${UCX_NET_DEVICES:-not set}"
+                echo "NCCL_SOCKET_IFNAME: ${NCCL_SOCKET_IFNAME:-not set}"
+                echo "========================================="
+
+                if [ -z "${UCX_NET_DEVICES:-}" ] || [ -z "${NCCL_IB_HCA:-}" ]; then
+                  echo "FATAL: RDMA env vars not set (UCX_NET_DEVICES=${UCX_NET_DEVICES:-}, NCCL_IB_HCA=${NCCL_IB_HCA:-}). Sleeping to prevent node crash."
+                  sleep infinity
+                fi
+
+                vllm serve {{ model_name }} \
+                  --port 8200 \
+                  --tensor-parallel-size ${TP_SIZE} \
+                  --data-parallel-size ${DP_SIZE} \
+                  --block-size 128 \
+                  --kv-transfer-config '{"kv_connector":"{{ kv_connector }}", "kv_role":"kv_both"}' \
+                  --disable-uvicorn-access-log \
+                  --disable-log-requests \
+                  --max-model-len {{ max_model_len }} \
+                  --gpu-memory-utilization {{ decode_gpu_memory_utilization }} \
+                  --enable-prefix-caching \
+{% if max_num_batched_tokens %}                  --max-num-batched-tokens {{ max_num_batched_tokens }} \
+{% endif %}{% if decode_max_num_seqs %}                  --max-num-seqs {{ decode_max_num_seqs }} \
+{% endif %}                  --trust-remote-code || sleep infinity
+            env:
+              - name: VLLM_NIXL_SIDE_CHANNEL_HOST
+                valueFrom:
+                  fieldRef:
+                    fieldPath: status.podIP
+              - name: NCCL_IB_HCA
+                value: "{{ nccl_ib_hca }}"
+              - name: HF_TOKEN
+                valueFrom:
+                  secretKeyRef:
+                    name: llm-d-hf-token
+                    key: HF_TOKEN
+                    optional: true
+              - name: HF_HOME
+                value: "/model-cache/huggingface"
+              - name: HF_HUB_CACHE
+                value: "/model-cache/huggingface"
+              - name: VLLM_SKIP_P2P_CHECK
+                value: "1"
+              - name: NVIDIA_GDRCOPY
+                value: "enabled"
+              - name: VLLM_LOGGING_LEVEL
+                value: "ERROR"
+              - name: NCCL_DEBUG
+                value: "ERROR"
+              - name: VLLM_NIXL_ABORT_REQUEST_TIMEOUT
+                value: "600"
+              - name: SHARED_STORAGE_PATH
+                value: "/data"
+              - name: TP_SIZE
+                value: "{{ decode_tp }}"
+              - name: DP_SIZE
+                value: "{{ data_parallelism }}"
+              - name: DP_SIZE_LOCAL
+                value: "1"
+            ports:
+              - containerPort: 8200
+                name: vllm
+              - containerPort: 5600
+                name: nixl
+            securityContext:
+              runAsUser: 0
+              privileged: true
+              capabilities:
+                add:
+                  - "IPC_LOCK"
+                  - "SYS_RAWIO"
+                  - "SYS_RESOURCE"
+            resources:
+              limits:
+                cpu: "{{ cpu_limit }}"
+                memory: "{{ memory_limit }}"
+                {{ gpu_resource_key }}: "{{ decode_gpu_count }}"
+                {% for r in decode_extra_device_resources %}
+                {{ r.key }}: "{{ r.value }}"
+                {% endfor %}
+              requests:
+                cpu: "{{ cpu_request }}"
+                memory: "{{ memory_request }}"
+                {{ gpu_resource_key }}: "{{ decode_gpu_count }}"
+                {% for r in decode_extra_device_resources %}
+                {{ r.key }}: "{{ r.value }}"
+                {% endfor %}
+            volumeMounts:
+              - name: dshm
+                mountPath: /dev/shm
+              - name: hf-cache
+                mountPath: /model-cache
+              - name: rdma-script
+                mountPath: /scripts
+              - name: dev-infiniband
+                mountPath: /dev/infiniband
+    workerTemplate:
+      spec:
+        containers: []

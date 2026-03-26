@@ -1,0 +1,829 @@
+"""
+Optimization strategies for different goals.
+
+Each strategy implements Steps 4-10 of the recipe-based optimization,
+tailored to its specific optimization goal:
+- TTFTStrategy: Response Time Priority (Aggregated search + PD splits)
+- ThroughputStrategy: Throughput Priority (Aggregated search + EP configs)
+- BalancedStrategy: Balanced Performance (Aggregated search + PD + EP)
+
+Step 6 (Aggregated Configuration Search) runs before architecture-specific
+testing, so that Step 8 comparisons require no additional tests.
+"""
+
+import logging
+from abc import ABC, abstractmethod
+from typing import List, Tuple, TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from .recipe_optimizer import RecipeOptimizer
+
+logger = logging.getLogger(__name__)
+
+
+class OptimizationStrategy(ABC):
+    """Base class for optimization strategies.
+
+    Each strategy receives a reference to the RecipeOptimizer and
+    orchestrates Steps 4-9 for its specific optimization goal.
+    """
+
+    def __init__(self, optimizer: 'RecipeOptimizer'):
+        self.opt = optimizer
+
+    @abstractmethod
+    def execute(self):
+        """Execute Steps 4-9 for this optimization goal."""
+        pass
+
+
+class TTFTStrategy(OptimizationStrategy):
+    """Response Time Priority: Aggregated search + PD disaggregation.
+
+    Steps 4-5: Calculate feasible P/D splits from TP calibration data
+    Step 6: Search for best aggregated configuration
+    Step 7: Test all feasible PD splits, find Pareto front
+    Step 8: Compare PD vs Aggregated (no new tests)
+    Step 9: Latency-bounded throughput maximization (Optuna, conditional)
+    Step 10: Re-test at calibrated load if overloaded
+    """
+
+    def execute(self):
+        # Select TP pairs to test (supports asymmetric prefill/decode TP)
+        self.opt._select_tp_pairs()
+
+        # Steps 4-5: Calculate feasible splits
+        self.opt.log("STEPS 4-5: Resource Sizing & Feasible Splits", 'decision')
+        self.opt.log("-" * 80, 'info')
+        self.opt._calculate_feasible_splits()
+        self.opt.log("", 'info')
+        if self.opt._should_stop():
+            return
+
+        # Step 6: Aggregated configuration search
+        self.opt.log("STEP 6: Aggregated Configuration Search", 'decision')
+        self.opt.log("-" * 80, 'info')
+        self.opt._search_aggregated_configs()
+        self.opt.log("", 'info')
+        if self.opt._should_stop():
+            return
+
+        # Step 7: Find optimal P/D split
+        self.opt.log("STEP 7: P/D Split Optimization (Pareto Front)", 'decision')
+        self.opt.log("-" * 80, 'info')
+        self.opt._optimize_pd_splits()
+        self.opt.log("", 'info')
+        if self.opt._should_stop():
+            return
+
+        # Step 8: Compare PD vs Aggregated (no new tests)
+        self.opt.log("STEP 8: PD vs Aggregated Comparison", 'decision')
+        self.opt.log("-" * 80, 'info')
+        self.opt._validate_pd_vs_aggregated()
+        self.opt.log("", 'info')
+        if self.opt._should_stop():
+            return
+
+        # Step 9: Latency-bounded throughput maximization (only if enabled)
+        if self.opt._should_run_latency_bounded_search():
+            self.opt._run_latency_bounded_search()
+            self.opt.log("", 'info')
+
+        # Step 10: Re-test at calibrated load (only if overloaded)
+        if self.opt._should_run_step10():
+            self.opt.log("STEP 10: Calibrated Load Validation", 'decision')
+            self.opt.log("-" * 80, 'info')
+            self.opt._validate_at_calibrated_load()
+            self.opt.log("", 'info')
+
+
+class ThroughputStrategy(OptimizationStrategy):
+    """Throughput Priority: Aggregated search + EP (Expert Parallelism).
+
+    Steps 4-5: Enumerate EP configurations (TP x replicas)
+    Step 6: Search for best aggregated configuration
+    Step 7: Test EP configs at full workload, find best by throughput
+    Step 8: Compare EP vs Aggregated (no new tests)
+    Step 9: Latency-bounded throughput maximization (Optuna, conditional)
+    Step 10: Re-test at calibrated load if overloaded
+    """
+
+    def execute(self):
+        # Steps 4-5: Calculate EP configurations
+        self.opt.log("STEPS 4-5: EP Configuration Space", 'decision')
+        self.opt.log("-" * 80, 'info')
+        self._calculate_ep_configs()
+        self.opt.log("", 'info')
+        if self.opt._should_stop():
+            return
+
+        # Step 6: Aggregated configuration search
+        self.opt.log("STEP 6: Aggregated Configuration Search", 'decision')
+        self.opt.log("-" * 80, 'info')
+        self.opt._search_aggregated_configs()
+        self.opt.log("", 'info')
+        if self.opt._should_stop():
+            return
+
+        # Step 7: Test EP configurations
+        self.opt.log("STEP 7: EP Configuration Testing (Throughput Optimization)", 'decision')
+        self.opt.log("-" * 80, 'info')
+        self._test_ep_configs()
+        self.opt.log("", 'info')
+        if self.opt._should_stop():
+            return
+
+        # Step 8: Compare EP vs Aggregated (no new tests)
+        self.opt.log("STEP 8: EP vs Aggregated Comparison", 'decision')
+        self.opt.log("-" * 80, 'info')
+        self._validate_ep_vs_aggregated()
+        self.opt.log("", 'info')
+        if self.opt._should_stop():
+            return
+
+        # Step 9: Latency-bounded throughput maximization (only if enabled)
+        if self.opt._should_run_latency_bounded_search():
+            self.opt._run_latency_bounded_search()
+            self.opt.log("", 'info')
+
+        # Step 10: Re-test at calibrated load (only if overloaded)
+        if self._should_run_step10():
+            self.opt.log("STEP 10: Calibrated Load Validation", 'decision')
+            self.opt.log("-" * 80, 'info')
+            self._validate_ep_at_calibrated_load()
+            self.opt.log("", 'info')
+
+    def _calculate_ep_configs(self):
+        """Steps 4-5: Calculate EP configuration space.
+
+        For EP, the variable is TP value. Each TP determines:
+        - replicas = total_gpus / tp
+        - Higher TP = fewer but more powerful pods
+        - Lower TP = more pods with EPLB distributing work
+
+        Each EP pod is independent — TP selection is unconstrained.
+        """
+        from .recipe_optimizer import EPConfig
+
+        total_gpus = self.opt.config.total_gpus
+        valid_tp = self.opt._get_valid_tp_options()
+
+        # Step 4: Cluster capacity analysis for EP
+        best_tpsg = max(
+            (r['tpsg'] for r in self.opt.decode_tp_results),
+            default=0
+        )
+        if best_tpsg > 0:
+            total_cost = (self.opt.config.isl + self.opt.config.osl) / best_tpsg
+            sustainable_qps = total_gpus / total_cost / self.opt.config.headroom
+            sustainable_concurrency = max(1, int(total_gpus / self.opt.config.headroom))
+            concurrency = int(self.opt.config.qps)
+
+            self.opt.log("Step 4: Cluster Capacity Analysis (EP)", 'info')
+            self.opt.log(f"  Concurrency (simultaneous requests): {concurrency}", 'info')
+            self.opt.log(f"  Best TPSG from calibration: {best_tpsg:.0f} tokens/s/GPU", 'info')
+            self.opt.log(f"  GPU cost per request: ({self.opt.config.isl} + {self.opt.config.osl}) ÷ {best_tpsg:.0f} = {total_cost:.2f} GPU-sec", 'info')
+            self.opt.log("", 'info')
+
+            self.opt.log(f"Step 5: Sustainable Throughput & EP Configurations", 'info')
+            self.opt.log(f"  Available: {total_gpus} GPUs", 'info')
+            self.opt.log(f"  Sustainable: {sustainable_concurrency} users ({sustainable_qps:.2f} req/s)", 'info')
+
+            if concurrency > sustainable_concurrency:
+                self.opt.sustainable_throughput_rps = sustainable_qps
+                self.opt.achievable_concurrency = sustainable_concurrency
+                self.opt.log(f"  ⚠️  Load exceeds capacity ({concurrency} > {sustainable_concurrency} users)", 'warning')
+                if self.opt.config.use_achievable_qps:
+                    self.opt.effective_concurrency = sustainable_concurrency
+                    self.opt.log(f"  ✅ Scaling down to {sustainable_concurrency} concurrent users for benchmarks", 'success')
+                else:
+                    self.opt.effective_concurrency = concurrency
+                    self.opt.log(f"  ℹ️  Using original concurrency ({concurrency}) — expect overload", 'info')
+                    if self.opt.config.latency_constraint_enabled:
+                        self.opt.log(f"  ℹ️  Step 9 will find max throughput under latency SLA", 'info')
+                    else:
+                        self.opt.log(f"  ℹ️  Step 10 will re-test at sustainable load ({sustainable_concurrency} users)", 'info')
+            else:
+                self.opt.effective_concurrency = concurrency
+                self.opt.log(f"  ✅ Cluster can handle the load ({concurrency} users, capacity: {sustainable_concurrency} users)", 'success')
+        self.opt.log("", 'info')
+
+        # EP configuration space
+        self.opt.log("EP Configurations:", 'info')
+        self.opt.log(f"  Valid TP values: {valid_tp}", 'info')
+        self.opt.log(f"  Total GPUs: {total_gpus}", 'info')
+
+        ep_configs = []
+        for tp in valid_tp:
+            replicas = total_gpus // tp
+            if replicas < 1:
+                continue
+            actual_gpus = tp * replicas
+            ep_configs.append(EPConfig(tp=tp, replicas=replicas, total_gpus=actual_gpus))
+            self.opt.log(f"  ✓ TP={tp}: {replicas} replicas × {tp} GPUs/pod = {actual_gpus} GPUs", 'info')
+
+        # On resume: check for completed step7-ep tests and add any missing configs
+        import re
+        resumed_ep = {name: row for name, row in self.opt.completed_tests.items()
+                      if name.startswith('step7-ep-')}
+        if resumed_ep:
+            self.opt.log(f"  Resuming: found {len(resumed_ep)} completed EP tests", 'info')
+            # Ensure all resumed configs are in the list
+            existing_tps = {c.tp for c in ep_configs}
+            for name in resumed_ep:
+                m = re.match(r'step7-ep-tp(\d+)-(\d+)r', name)
+                if m and int(m.group(1)) not in existing_tps:
+                    tp_val = int(m.group(1))
+                    rep_val = int(m.group(2))
+                    ep_configs.append(EPConfig(tp=tp_val, replicas=rep_val, total_gpus=tp_val * rep_val))
+
+        self.opt.ep_configs = ep_configs
+        self.opt.log(f"\n  EP configs to test: {len(ep_configs)}", 'success')
+
+    def _test_ep_configs(self):
+        """Step 7: Test all EP configurations at full workload.
+
+        Tests each EP config and finds the best by throughput.
+        """
+        if not self.opt.ep_configs:
+            self.opt.log("❌ No EP configs to test!", 'error')
+            return
+
+        self.opt.log(f"Testing all {len(self.opt.ep_configs)} EP configurations...", 'info')
+        self.opt.log(f"Workload: ISL={self.opt.config.isl}, OSL={self.opt.config.osl}, "
+                     f"Concurrency={int(self.opt.effective_concurrency)}", 'info')
+
+        for i, ep_cfg in enumerate(self.opt.ep_configs):
+            if self.opt._should_stop():
+                break
+
+            test_id = f"step7-ep-tp{ep_cfg.tp}-{ep_cfg.replicas}r"
+            self.opt.log(f"  Test {i + 1}/{len(self.opt.ep_configs)}: "
+                         f"TP={ep_cfg.tp}, {ep_cfg.replicas} replicas ({ep_cfg.total_gpus} GPUs)", 'info')
+
+            # Check for completed test from previous run
+            if test_id in self.opt.completed_tests:
+                row = self.opt.completed_tests[test_id]
+                result = self.opt._make_test_result_from_db(row)
+                self.opt.log("    ⏩ Resuming from DB (already completed)", 'info')
+            else:
+                test_config = self.opt._create_ep_config(
+                    tp=ep_cfg.tp,
+                    num_gpus=ep_cfg.total_gpus,
+                    test_id=test_id,
+                    use_concurrency=True
+                )
+
+                result = self.opt.orchestrator.run_test(
+                    test_config,
+                    cleanup=True,
+                    log_callback=lambda msg: self.opt.log(msg, 'info'),
+                    stop_check=self.opt._should_stop
+                )
+
+                self.opt.all_test_results.append((test_config, result))
+                self.opt._save_test_to_database(test_config, result)
+                self.opt._check_pod_errors(test_config, result)
+
+                if not result or not result.guidellm_success:
+                    self.opt.log("    ❌ Test failed - STOPPING optimization", 'error')
+                    self.opt.log(f"    🔍 Debug: kubectl get pods -n {self.opt.config.namespace} "
+                                 f"-l test-id={test_id}", 'error')
+                    raise RuntimeError(f"Test {test_id} failed - stopping optimization")
+
+            ttft = result.ttft_p90 if result.ttft_p90 else result.ttft_p50 if result.ttft_p50 else 1000000.0
+            throughput = result.throughput_p90 if result.throughput_p90 else result.throughput_p50 if result.throughput_p50 else 0.0
+
+            self.opt.log(f"    ✅ TTFT p90: {ttft:.1f}ms, Throughput p90: {throughput:.2f} req/s", 'success')
+            self.opt.ep_results.append((ep_cfg, result))
+
+        # Find best EP config by throughput
+        if self.opt.ep_results:
+            best_cfg, best_result = max(
+                self.opt.ep_results,
+                key=lambda x: x[1].throughput_p90 if x[1].throughput_p90 else 0.0
+            )
+            self.opt.best_ep_config = best_cfg
+            self.opt.best_ep_result = best_result
+
+            best_ttft = best_result.ttft_p90 or best_result.ttft_p50 or 0
+            best_tput = best_result.throughput_p90 or best_result.throughput_p50 or 0
+
+            self.opt.log("", 'info')
+            self.opt.log(f"✅ Best EP Configuration (by throughput):", 'success')
+            self.opt.log(f"  TP={best_cfg.tp}, {best_cfg.replicas} replicas ({best_cfg.total_gpus} GPUs)", 'info')
+            self.opt.log(f"  TTFT p90: {best_ttft:.1f}ms, Throughput p90: {best_tput:.2f} req/s", 'info')
+
+    def _validate_ep_vs_aggregated(self):
+        """Step 8: Compare best EP config against best Aggregated from Step 6.
+
+        No new tests — uses the best aggregated result already found in Step 6.
+        """
+        if not self.opt.best_ep_result or not self.opt.best_ep_config:
+            self.opt.log("⚠️  No EP results to compare — skipping Step 8", 'warning')
+            return
+
+        if not self.opt.aggregated_result:
+            self.opt.log("⚠️  No aggregated results to compare — skipping Step 8", 'warning')
+            return
+
+        best_cfg = self.opt.best_ep_config
+        best_ep_ttft = self.opt.best_ep_result.ttft_p90 or self.opt.best_ep_result.ttft_p50 or 0
+        best_ep_tput = self.opt.best_ep_result.throughput_p90 or self.opt.best_ep_result.throughput_p50 or 0
+
+        agg_ttft = self.opt.aggregated_result.ttft_p90 or self.opt.aggregated_result.ttft_p50 or 1000000.0
+        agg_tput = self.opt.aggregated_result.throughput_p90 or self.opt.aggregated_result.throughput_p50 or 0.0
+
+        self.opt.log(f"Best EP: TP={best_cfg.tp}, {best_cfg.replicas} replicas ({best_cfg.total_gpus} GPUs)", 'info')
+        self.opt.log(f"  TTFT p90: {best_ep_ttft:.1f}ms, Throughput p90: {best_ep_tput:.2f} req/s", 'info')
+        self.opt.log(f"Best Aggregated: TP={self.opt.aggregated_tp}, "
+                     f"{self.opt.aggregated_gpus // self.opt.aggregated_tp} replicas", 'info')
+        self.opt.log(f"  TTFT p90: {agg_ttft:.1f}ms, Throughput p90: {agg_tput:.2f} req/s", 'info')
+        self.opt.log("", 'info')
+
+        # Compare
+        ttft_diff = best_ep_ttft - agg_ttft
+        ttft_pct = (ttft_diff / agg_ttft * 100) if agg_ttft > 0 else 0
+        tput_diff = best_ep_tput - agg_tput
+        tput_pct = (tput_diff / agg_tput * 100) if agg_tput > 0 else 0
+
+        self.opt.log("📊 EP vs Aggregated Comparison:", 'decision')
+        self.opt.log(f"  TTFT p90:       EP={best_ep_ttft:.1f}ms vs Agg={agg_ttft:.1f}ms "
+                     f"({'EP wins by' if ttft_diff < 0 else 'Agg wins by'} {abs(ttft_pct):.1f}%)", 'info')
+        self.opt.log(f"  Throughput p90:  EP={best_ep_tput:.2f} vs Agg={agg_tput:.2f} req/s "
+                     f"({'EP wins by' if tput_diff > 0 else 'Agg wins by'} {abs(tput_pct):.1f}%)", 'info')
+
+        if agg_tput > best_ep_tput and agg_ttft <= best_ep_ttft:
+            self.opt.log("", 'info')
+            self.opt.log("⚡ AGGREGATED IS BETTER — higher throughput and equal/lower TTFT", 'decision')
+        elif agg_tput > best_ep_tput:
+            self.opt.log("", 'info')
+            self.opt.log("⚡ AGGREGATED HAS BETTER THROUGHPUT but higher TTFT — check trade-offs", 'decision')
+        else:
+            self.opt.log("", 'info')
+            self.opt.log("✅ EP CONFIRMED — EP has equal or better throughput than Aggregated", 'decision')
+
+    def _should_run_step10(self) -> bool:
+        """Check if Step 10 should run for EP."""
+        return (
+            self.opt.achievable_concurrency is not None
+            and not self.opt.config.use_achievable_qps
+            and not self.opt.config.latency_constraint_enabled
+            and len(self.opt.ep_results) > 0
+        )
+
+    def _validate_ep_at_calibrated_load(self):
+        """Step 10: Re-test best EP and Aggregated at calibrated load.
+
+        Steps 7-8 ran at the original QPS which may overload the cluster.
+        This step re-runs at a sustainable rate for realistic numbers.
+        """
+        calibrated_concurrency = self.opt.achievable_concurrency
+        best_cfg = self.opt.best_ep_config
+        best_ep_result = self.opt.best_ep_result
+
+        overloaded_ttft = best_ep_result.ttft_p90 or best_ep_result.ttft_p50 or 0
+        overloaded_tput = best_ep_result.throughput_p90 or best_ep_result.throughput_p50 or 0
+
+        self.opt.log(f"Re-testing best EP config at calibrated load ({calibrated_concurrency:.0f} users "
+                     f"vs original {self.opt.config.qps:.0f} users)", 'info')
+        self.opt.log(f"Best EP: TP={best_cfg.tp}, {best_cfg.replicas} replicas", 'info')
+        self.opt.log(f"  Step 7 results (overloaded): TTFT={overloaded_ttft:.1f}ms, "
+                     f"Throughput={overloaded_tput:.2f} req/s", 'info')
+        self.opt.log("", 'info')
+
+        # --- Test best EP at calibrated load ---
+        test_id = f"step9-ep-tp{best_cfg.tp}-{best_cfg.replicas}r"
+
+        if test_id in self.opt.completed_tests:
+            row = self.opt.completed_tests[test_id]
+            ep_result = self.opt._make_test_result_from_db(row)
+            self.opt.log("  ⏩ EP test: resuming from DB (already completed)", 'info')
+        else:
+            ep_config = self.opt._create_ep_config(
+                tp=best_cfg.tp,
+                num_gpus=best_cfg.total_gpus,
+                test_id=test_id,
+                use_concurrency=True
+            )
+            ep_config.num_users = int(calibrated_concurrency)
+            ep_config.request_rate = int(calibrated_concurrency)
+
+            ep_result = self.opt.orchestrator.run_test(
+                ep_config,
+                cleanup=True,
+                log_callback=lambda msg: self.opt.log(msg, 'info')
+            )
+
+            self.opt.all_test_results.append((ep_config, ep_result))
+            self.opt._save_test_to_database(ep_config, ep_result)
+            self.opt._check_pod_errors(ep_config, ep_result)
+
+            if not ep_result or not ep_result.guidellm_success:
+                self.opt.log("❌ EP calibrated load test failed", 'error')
+                return
+
+        cal_ep_ttft = ep_result.ttft_p90 or ep_result.ttft_p50 or 0
+        cal_ep_tput = ep_result.throughput_p90 or ep_result.throughput_p50 or 0
+        self.opt.calibrated_ep_result = ep_result
+
+        self.opt.log(f"  ✅ EP at calibrated load: TTFT={cal_ep_ttft:.1f}ms, "
+                     f"Throughput={cal_ep_tput:.2f} req/s", 'success')
+
+        # --- Test Aggregated at calibrated load ---
+        if not self.opt.aggregated_tp:
+            self.opt.log("⚠️  No aggregated baseline — skipping aggregated re-test", 'warning')
+            return
+        agg_tp = self.opt.aggregated_tp
+        total_gpus = self.opt.aggregated_gpus
+        agg_test_id = f"step9-aggregated-tp{agg_tp}"
+        # Backwards compat: check old ID format with total_gpus embedded
+        if agg_test_id not in self.opt.completed_tests:
+            old_id = f"step9-aggregated-{total_gpus}gpu-tp{agg_tp}"
+            if old_id in self.opt.completed_tests:
+                agg_test_id = old_id
+
+        if agg_test_id in self.opt.completed_tests:
+            row = self.opt.completed_tests[agg_test_id]
+            agg_result = self.opt._make_test_result_from_db(row)
+            self.opt.log("  ⏩ Aggregated test: resuming from DB (already completed)", 'info')
+        else:
+            agg_config = self.opt._create_aggregated_config(
+                tp=agg_tp,
+                num_gpus=total_gpus,
+                isl=self.opt.config.isl,
+                osl=self.opt.config.osl,
+                test_id=agg_test_id,
+                use_concurrency=True
+            )
+            agg_config.num_users = int(calibrated_concurrency)
+            agg_config.request_rate = int(calibrated_concurrency)
+
+            agg_result = self.opt.orchestrator.run_test(
+                agg_config,
+                cleanup=True,
+                log_callback=lambda msg: self.opt.log(msg, 'info')
+            )
+
+            self.opt.all_test_results.append((agg_config, agg_result))
+            self.opt._save_test_to_database(agg_config, agg_result)
+            self.opt._check_pod_errors(agg_config, agg_result)
+
+            if not agg_result or not agg_result.guidellm_success:
+                self.opt.log("❌ Aggregated calibrated load test failed", 'error')
+                self.opt.log("   EP calibrated results stand", 'warning')
+                return
+
+        cal_agg_ttft = agg_result.ttft_p90 or agg_result.ttft_p50 or 0
+        cal_agg_tput = agg_result.throughput_p90 or agg_result.throughput_p50 or 0
+        self.opt.calibrated_agg_result = agg_result
+
+        self.opt.log(f"  ✅ Aggregated at calibrated load: TTFT={cal_agg_ttft:.1f}ms, "
+                     f"Throughput={cal_agg_tput:.2f} req/s", 'success')
+        self.opt.log("", 'info')
+
+        # --- Compare ---
+        self.opt.log(f"📊 Calibrated Load Results ({int(calibrated_concurrency)} users):", 'decision')
+
+        ttft_diff = cal_ep_ttft - cal_agg_ttft
+        ttft_pct = (ttft_diff / cal_agg_ttft * 100) if cal_agg_ttft > 0 else 0
+        tput_diff = cal_ep_tput - cal_agg_tput
+        tput_pct = (tput_diff / cal_agg_tput * 100) if cal_agg_tput > 0 else 0
+
+        self.opt.log(f"  TTFT p90:       EP={cal_ep_ttft:.1f}ms vs Agg={cal_agg_ttft:.1f}ms "
+                     f"({'EP wins by' if ttft_diff < 0 else 'Agg wins by'} {abs(ttft_pct):.1f}%)", 'info')
+        self.opt.log(f"  Throughput p90:  EP={cal_ep_tput:.2f} vs Agg={cal_agg_tput:.2f} req/s "
+                     f"({'EP wins by' if tput_diff > 0 else 'Agg wins by'} {abs(tput_pct):.1f}%)", 'info')
+        self.opt.log("", 'info')
+
+        # Compare with overloaded results
+        if overloaded_ttft > 0:
+            ttft_improvement = ((overloaded_ttft - cal_ep_ttft) / overloaded_ttft) * 100
+            self.opt.log("📉 Impact of load reduction on best EP config:", 'info')
+            self.opt.log(f"  TTFT:       {overloaded_ttft:.1f}ms → {cal_ep_ttft:.1f}ms "
+                         f"({ttft_improvement:+.1f}%)", 'info')
+            self.opt.log(f"  Throughput: {overloaded_tput:.2f} → {cal_ep_tput:.2f} req/s", 'info')
+
+
+class BalancedStrategy(OptimizationStrategy):
+    """Balanced Performance: Aggregated search + PD + EP (three-way comparison).
+
+    Runs aggregated search first, then both PD and EP optimization paths,
+    followed by a three-way comparison using stored results.
+    """
+
+    def execute(self):
+        # === Planning: Steps 4-5 ===
+        self.opt.log("=" * 80, 'info')
+        self.opt.log("BALANCED OPTIMIZATION — Planning", 'success')
+        self.opt.log("=" * 80, 'info')
+        self.opt.log("", 'info')
+
+        # Select TP pairs for PD (supports asymmetric prefill/decode TP)
+        self.opt._select_tp_pairs()
+
+        # Steps 4-5 for PD: Calculate feasible splits
+        self.opt.log("STEPS 4-5: PD Resource Sizing & Feasible Splits", 'decision')
+        self.opt.log("-" * 80, 'info')
+        self.opt._calculate_feasible_splits()
+        self.opt.log("", 'info')
+        if self.opt._should_stop():
+            return
+
+        ep_strategy = ThroughputStrategy(self.opt)
+
+        # Steps 4-5 for EP: Calculate EP configs
+        self.opt.log("STEPS 4-5: EP Configuration Space", 'decision')
+        self.opt.log("-" * 80, 'info')
+        ep_strategy._calculate_ep_configs()
+        self.opt.log("", 'info')
+        if self.opt._should_stop():
+            return
+
+        # === Step 6: Aggregated Search (shared baseline) ===
+        self.opt.log("=" * 80, 'info')
+        self.opt.log("BALANCED OPTIMIZATION — Aggregated Search", 'success')
+        self.opt.log("=" * 80, 'info')
+        self.opt.log("", 'info')
+
+        self.opt.log("STEP 6: Aggregated Configuration Search", 'decision')
+        self.opt.log("-" * 80, 'info')
+        self.opt._search_aggregated_configs()
+        self.opt.log("", 'info')
+        if self.opt._should_stop():
+            return
+
+        # === Step 7: Architecture-Specific Testing ===
+        self.opt.log("=" * 80, 'info')
+        self.opt.log("BALANCED OPTIMIZATION — Architecture Testing", 'success')
+        self.opt.log("=" * 80, 'info')
+        self.opt.log("", 'info')
+
+        # Step 7a for PD: Test P/D splits
+        self.opt.log("STEP 7a: P/D Split Optimization (Pareto Front)", 'decision')
+        self.opt.log("-" * 80, 'info')
+        self.opt._optimize_pd_splits()
+        self.opt.log("", 'info')
+        if self.opt._should_stop():
+            return
+
+        # Step 7b for EP: Test EP configs
+        self.opt.log("STEP 7b: EP Configuration Testing", 'decision')
+        self.opt.log("-" * 80, 'info')
+        ep_strategy._test_ep_configs()
+        self.opt.log("", 'info')
+        if self.opt._should_stop():
+            return
+
+        # === Step 8: Three-way Comparison (no new tests) ===
+        self.opt.log("=" * 80, 'info')
+        self.opt.log("BALANCED OPTIMIZATION — Architecture Comparison", 'success')
+        self.opt.log("=" * 80, 'info')
+        self.opt.log("", 'info')
+
+        self.opt.log("STEP 8: PD vs EP vs Aggregated Comparison", 'decision')
+        self.opt.log("-" * 80, 'info')
+        self._validate_three_way()
+        self.opt.log("", 'info')
+        if self.opt._should_stop():
+            return
+
+        # Step 9: Latency-bounded throughput maximization (only if enabled)
+        if self.opt._should_run_latency_bounded_search():
+            self.opt._run_latency_bounded_search()
+            self.opt.log("", 'info')
+
+        # Step 10: Calibrated load for all architectures
+        if self._should_run_step10():
+            self.opt.log("STEP 10: Calibrated Load Validation (All Architectures)", 'decision')
+            self.opt.log("-" * 80, 'info')
+            self._validate_all_at_calibrated_load()
+            self.opt.log("", 'info')
+
+    def _validate_three_way(self):
+        """Step 8: Three-way comparison — best PD vs best EP vs Aggregated.
+
+        No new tests — uses the best aggregated result from Step 6,
+        the best PD from Step 7a, and the best EP from Step 7b.
+        """
+        has_pd = len(self.opt.pareto_results) > 0
+        has_ep = self.opt.best_ep_result is not None
+        has_agg = self.opt.aggregated_result is not None
+
+        if not has_pd and not has_ep:
+            self.opt.log("⚠️  No PD or EP results — skipping Step 8", 'warning')
+            return
+
+        if not has_agg:
+            self.opt.log("⚠️  No aggregated results — skipping Step 8", 'warning')
+            return
+
+        # Get best PD config
+        best_pd_split = None
+        if has_pd:
+            best_pd_split, best_pd_result = min(
+                self.opt.pareto_results,
+                key=lambda x: x[1].ttft_p90 if x[1].ttft_p90 else 1000000.0
+            )
+            pd_ttft = best_pd_result.ttft_p90 or best_pd_result.ttft_p50 or 0
+            pd_tput = best_pd_result.throughput_p90 or best_pd_result.throughput_p50 or 0
+            self.opt.log(f"Best PD: {best_pd_split.prefill_pods}P×TP{best_pd_split.prefill_tp} + "
+                         f"{best_pd_split.decode_pods}D×TP{best_pd_split.decode_tp}", 'info')
+            self.opt.log(f"  TTFT p90: {pd_ttft:.1f}ms, Throughput p90: {pd_tput:.2f} req/s", 'info')
+
+        # Get best EP config
+        if has_ep:
+            ep_cfg = self.opt.best_ep_config
+            ep_ttft = self.opt.best_ep_result.ttft_p90 or self.opt.best_ep_result.ttft_p50 or 0
+            ep_tput = self.opt.best_ep_result.throughput_p90 or self.opt.best_ep_result.throughput_p50 or 0
+            self.opt.log(f"Best EP: TP={ep_cfg.tp}, {ep_cfg.replicas} replicas ({ep_cfg.total_gpus} GPUs)", 'info')
+            self.opt.log(f"  TTFT p90: {ep_ttft:.1f}ms, Throughput p90: {ep_tput:.2f} req/s", 'info')
+
+        agg_ttft = self.opt.aggregated_result.ttft_p90 or self.opt.aggregated_result.ttft_p50 or 1000000.0
+        agg_tput = self.opt.aggregated_result.throughput_p90 or self.opt.aggregated_result.throughput_p50 or 0.0
+        self.opt.log(f"Best Aggregated: TP={self.opt.aggregated_tp}, "
+                     f"{self.opt.aggregated_gpus // self.opt.aggregated_tp} replicas", 'info')
+        self.opt.log(f"  TTFT p90: {agg_ttft:.1f}ms, Throughput p90: {agg_tput:.2f} req/s", 'info')
+        self.opt.log("", 'info')
+
+        # Three-way comparison
+        self.opt.log("📊 Three-Way Architecture Comparison:", 'decision')
+        self.opt.log(f"  {'Architecture':<25} {'TTFT p90':>12} {'Throughput p90':>16}", 'info')
+        self.opt.log(f"  {'-'*25} {'-'*12} {'-'*16}", 'info')
+        self.opt.log(f"  {'Aggregated':<25} {agg_ttft:>10.1f}ms {agg_tput:>14.2f} req/s", 'info')
+
+        if has_pd:
+            pd_label = (f"PD ({best_pd_split.prefill_pods}P+"
+                        f"{best_pd_split.decode_pods}D)")
+            self.opt.log(f"  {pd_label:<25} {pd_ttft:>10.1f}ms {pd_tput:>14.2f} req/s", 'info')
+
+        if has_ep:
+            ep_label = f"EP (TP{ep_cfg.tp}×{ep_cfg.replicas}r)"
+            self.opt.log(f"  {ep_label:<25} {ep_ttft:>10.1f}ms {ep_tput:>14.2f} req/s", 'info')
+
+        # Determine winners
+        self.opt.log("", 'info')
+        candidates = [('Aggregated', agg_ttft, agg_tput)]
+        if has_pd:
+            candidates.append(('PD', pd_ttft, pd_tput))
+        if has_ep:
+            candidates.append(('EP', ep_ttft, ep_tput))
+
+        ttft_winner = min(candidates, key=lambda x: x[1])
+        tput_winner = max(candidates, key=lambda x: x[2])
+
+        self.opt.log(f"  🏆 Lowest TTFT: {ttft_winner[0]} ({ttft_winner[1]:.1f}ms)", 'success')
+        self.opt.log(f"  🏆 Highest Throughput: {tput_winner[0]} ({tput_winner[2]:.2f} req/s)", 'success')
+
+    def _should_run_step10(self) -> bool:
+        """Check if Step 10 should run for balanced mode."""
+        return (
+            self.opt.achievable_concurrency is not None
+            and not self.opt.config.use_achievable_qps
+            and not self.opt.config.latency_constraint_enabled
+            and (len(self.opt.pareto_results) > 0 or len(self.opt.ep_results) > 0)
+        )
+
+    def _validate_all_at_calibrated_load(self):
+        """Step 10: Re-test all architectures at calibrated load."""
+        calibrated_concurrency = self.opt.achievable_concurrency
+
+        self.opt.log(f"Re-testing all architectures at calibrated load ({calibrated_concurrency:.0f} users)", 'info')
+        self.opt.log("", 'info')
+
+        # --- PD at calibrated load ---
+        if self.opt.pareto_results:
+            best_split, best_pd_result = min(
+                self.opt.pareto_results,
+                key=lambda x: x[1].ttft_p90 if x[1].ttft_p90 else 1000000.0
+            )
+            test_id = (f"step9-{best_split.prefill_pods}p{best_split.decode_pods}d"
+                       f"-ptp{best_split.prefill_tp}-dtp{best_split.decode_tp}")
+
+            if test_id in self.opt.completed_tests:
+                row = self.opt.completed_tests[test_id]
+                pd_result = self.opt._make_test_result_from_db(row)
+                self.opt.log("  ⏩ PD test: resuming from DB", 'info')
+            else:
+                pd_config = self.opt._create_pd_config(best_split)
+                pd_config.test_id = test_id
+                pd_config.num_users = int(calibrated_concurrency)
+                pd_config.request_rate = int(calibrated_concurrency)
+
+                pd_result = self.opt.orchestrator.run_test(
+                    pd_config, cleanup=True,
+                    log_callback=lambda msg: self.opt.log(msg, 'info')
+                )
+                self.opt.all_test_results.append((pd_config, pd_result))
+                self.opt._save_test_to_database(pd_config, pd_result)
+                self.opt._check_pod_errors(pd_config, pd_result)
+
+                if not pd_result or not pd_result.guidellm_success:
+                    self.opt.log("❌ PD calibrated load test failed", 'error')
+                    pd_result = None
+
+            if pd_result:
+                self.opt.calibrated_pd_result = pd_result
+                cal_ttft = pd_result.ttft_p90 or pd_result.ttft_p50 or 0
+                cal_tput = pd_result.throughput_p90 or pd_result.throughput_p50 or 0
+                self.opt.log(f"  ✅ PD at calibrated load: TTFT={cal_ttft:.1f}ms, "
+                             f"Throughput={cal_tput:.2f} req/s", 'success')
+
+        # --- EP at calibrated load ---
+        if self.opt.best_ep_config:
+            ep_cfg = self.opt.best_ep_config
+            test_id = f"step9-ep-tp{ep_cfg.tp}-{ep_cfg.replicas}r"
+
+            if test_id in self.opt.completed_tests:
+                row = self.opt.completed_tests[test_id]
+                ep_result = self.opt._make_test_result_from_db(row)
+                self.opt.log("  ⏩ EP test: resuming from DB", 'info')
+            else:
+                ep_config = self.opt._create_ep_config(
+                    tp=ep_cfg.tp, num_gpus=ep_cfg.total_gpus,
+                    test_id=test_id, use_concurrency=True
+                )
+                ep_config.num_users = int(calibrated_concurrency)
+                ep_config.request_rate = int(calibrated_concurrency)
+
+                ep_result = self.opt.orchestrator.run_test(
+                    ep_config, cleanup=True,
+                    log_callback=lambda msg: self.opt.log(msg, 'info')
+                )
+                self.opt.all_test_results.append((ep_config, ep_result))
+                self.opt._save_test_to_database(ep_config, ep_result)
+                self.opt._check_pod_errors(ep_config, ep_result)
+
+                if not ep_result or not ep_result.guidellm_success:
+                    self.opt.log("❌ EP calibrated load test failed", 'error')
+                    ep_result = None
+
+            if ep_result:
+                self.opt.calibrated_ep_result = ep_result
+                cal_ttft = ep_result.ttft_p90 or ep_result.ttft_p50 or 0
+                cal_tput = ep_result.throughput_p90 or ep_result.throughput_p50 or 0
+                self.opt.log(f"  ✅ EP at calibrated load: TTFT={cal_ttft:.1f}ms, "
+                             f"Throughput={cal_tput:.2f} req/s", 'success')
+
+        # --- Aggregated at calibrated load ---
+        if self.opt.aggregated_tp:
+            agg_tp = self.opt.aggregated_tp
+            total_gpus = self.opt.aggregated_gpus
+            agg_test_id = f"step9-aggregated-tp{agg_tp}"
+            # Backwards compat: check old ID format with total_gpus embedded
+            if agg_test_id not in self.opt.completed_tests:
+                old_id = f"step9-aggregated-{total_gpus}gpu-tp{agg_tp}"
+                if old_id in self.opt.completed_tests:
+                    agg_test_id = old_id
+
+            if agg_test_id in self.opt.completed_tests:
+                row = self.opt.completed_tests[agg_test_id]
+                agg_result = self.opt._make_test_result_from_db(row)
+                self.opt.log("  ⏩ Aggregated test: resuming from DB", 'info')
+            else:
+                agg_config = self.opt._create_aggregated_config(
+                    tp=agg_tp, num_gpus=total_gpus,
+                    isl=self.opt.config.isl, osl=self.opt.config.osl,
+                    test_id=agg_test_id, use_concurrency=True
+                )
+                agg_config.num_users = int(calibrated_concurrency)
+                agg_config.request_rate = int(calibrated_concurrency)
+
+                agg_result = self.opt.orchestrator.run_test(
+                    agg_config, cleanup=True,
+                    log_callback=lambda msg: self.opt.log(msg, 'info')
+                )
+                self.opt.all_test_results.append((agg_config, agg_result))
+                self.opt._save_test_to_database(agg_config, agg_result)
+                self.opt._check_pod_errors(agg_config, agg_result)
+
+                if not agg_result or not agg_result.guidellm_success:
+                    self.opt.log("❌ Aggregated calibrated load test failed", 'error')
+                    agg_result = None
+
+            if agg_result:
+                self.opt.calibrated_agg_result = agg_result
+                cal_ttft = agg_result.ttft_p90 or agg_result.ttft_p50 or 0
+                cal_tput = agg_result.throughput_p90 or agg_result.throughput_p50 or 0
+                self.opt.log(f"  ✅ Aggregated at calibrated load: TTFT={cal_ttft:.1f}ms, "
+                             f"Throughput={cal_tput:.2f} req/s", 'success')
+
+        self.opt.log("", 'info')
+
+        # Summary table
+        self.opt.log(f"📊 Calibrated Load Results ({int(calibrated_concurrency)} users):", 'decision')
+        self.opt.log(f"  {'Architecture':<25} {'TTFT p90':>12} {'Throughput p90':>16}", 'info')
+        self.opt.log(f"  {'-'*25} {'-'*12} {'-'*16}", 'info')
+
+        if self.opt.calibrated_agg_result:
+            t = self.opt.calibrated_agg_result.ttft_p90 or 0
+            p = self.opt.calibrated_agg_result.throughput_p90 or 0
+            self.opt.log(f"  {'Aggregated':<25} {t:>10.1f}ms {p:>14.2f} req/s", 'info')
+        if self.opt.calibrated_pd_result:
+            t = self.opt.calibrated_pd_result.ttft_p90 or 0
+            p = self.opt.calibrated_pd_result.throughput_p90 or 0
+            self.opt.log(f"  {'PD (best)':<25} {t:>10.1f}ms {p:>14.2f} req/s", 'info')
+        if self.opt.calibrated_ep_result:
+            t = self.opt.calibrated_ep_result.ttft_p90 or 0
+            p = self.opt.calibrated_ep_result.throughput_p90 or 0
+            self.opt.log(f"  {'EP (best)':<25} {t:>10.1f}ms {p:>14.2f} req/s", 'info')

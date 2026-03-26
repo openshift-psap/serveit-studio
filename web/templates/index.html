@@ -1,0 +1,129 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>In-S8 - llm-d optimizer</title>
+    <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='14' fill='%23EE0000'/%3E%3Ctext x='32' y='44' font-family='Arial,sans-serif' font-weight='900' font-size='28' fill='white' text-anchor='middle'%3ES8%3C/text%3E%3C/svg%3E">
+    <script src="https://cdn.socket.io/4.5.4/socket.io.min.js"></script>
+    <script src="https://cdn.plot.ly/plotly-2.35.2.min.js" charset="utf-8"></script>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Red+Hat+Display:wght@400;500;600;700;800;900&family=Red+Hat+Mono:wght@400;500;600;700&family=Syne:wght@700;800;900&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}?v={{ range(10000,99999) | random }}">
+</head>
+<body>
+    {% include 'partials/modals.html' %}
+
+    <button class="sidebar-toggle" id="sidebar-toggle">☰</button>
+    <div class="sidebar-backdrop" id="sidebar-backdrop"></div>
+
+    <div class="main-container">
+        <!-- Sidebar -->
+        <aside class="sidebar" id="sidebar">
+            <div class="sidebar-header">
+                <h1>🔍 In-S8</h1>
+                <p>llm-d optimizer</p>
+            </div>
+            <nav class="sidebar-nav">
+                <div class="sidebar-section-label">Wizard Steps</div>
+                <div class="step-indicators">
+                    <div class="step-indicator active" id="step1-indicator">
+                        <div class="step-number">1</div>
+                        <div class="step-label">Goal</div>
+                        <div class="step-sublabel" id="step1-value">Select</div>
+                    </div>
+                    <div class="step-indicator" id="step2-indicator">
+                        <div class="step-number">2</div>
+                        <div class="step-label">Model</div>
+                        <div class="step-sublabel" id="step2-value">Choose</div>
+                    </div>
+                    <div class="step-indicator" id="step3-indicator">
+                        <div class="step-number">3</div>
+                        <div class="step-label">Workload</div>
+                        <div class="step-sublabel" id="step3-value">ISL/OSL</div>
+                    </div>
+                    <div class="step-indicator" id="step4-indicator">
+                        <div class="step-number">4</div>
+                        <div class="step-label">Test Config</div>
+                        <div class="step-sublabel" id="step4-value">Settings</div>
+                    </div>
+                    <div class="step-indicator" id="step5-indicator">
+                        <div class="step-number">5</div>
+                        <div class="step-label">Setup</div>
+                        <div class="step-sublabel" id="step5-value">Resources</div>
+                    </div>
+                    <div class="step-indicator" id="step6-indicator">
+                        <div class="step-number">6</div>
+                        <div class="step-label">Review & Run</div>
+                        <div class="step-sublabel" id="step6-value">Summary</div>
+                    </div>
+                </div>
+
+                <div class="sidebar-separator"></div>
+                <div class="sidebar-section-label">Actions</div>
+
+                <div class="step-indicator reset-indicator" id="reset-indicator">
+                    <div class="reset-icon">🔄</div>
+                    <div class="step-label">Reset</div>
+                </div>
+                <div class="step-indicator download-indicator" id="download-indicator">
+                    <div class="download-icon">💾</div>
+                    <div class="step-label">Download</div>
+                </div>
+                <div class="step-indicator upload-indicator" id="upload-indicator">
+                    <div class="upload-icon">📤</div>
+                    <div class="step-label">Upload</div>
+                </div>
+                <input type="file" id="upload-db-input" accept=".db,.sqlite,.sqlite3,.gz" style="display: none;">
+                <div class="step-indicator report-indicator" id="report-indicator">
+                    <div class="report-icon">📊</div>
+                    <div class="step-label">Report</div>
+                </div>
+                <div class="step-indicator resume-indicator" id="resume-indicator">
+                    <div class="resume-icon">▶</div>
+                    <div class="step-label">Resume</div>
+                </div>
+            </nav>
+            <div class="sidebar-footer">In-S8 v1.0</div>
+        </aside>
+
+        <!-- Main Area -->
+        <div class="main-area">
+            <div class="header-row">
+                <div class="breadcrumb-bar">
+                    <span class="breadcrumb-step">In-S8</span>
+                    <span style="color: var(--rh-gray-400);">›</span>
+                    <span class="breadcrumb-current" id="breadcrumb-title">Step 1: Goal</span>
+                </div>
+                <div class="console-toolbar">
+                    <span>💻 Console</span>
+                    <button id="save-console">💾 Save</button>
+                    <button id="clear-console" style="background: #374151;">🗑️ Clear</button>
+                </div>
+            </div>
+
+            <div class="content-area">
+                <!-- Wizard Panel (left) -->
+                <div class="panel wizard-panel">
+                    <div class="panel-content">
+                        {% include 'partials/step1.html' %}
+                        {% include 'partials/step2.html' %}
+                        {% include 'partials/step3.html' %}
+                        {% include 'partials/step4.html' %}
+                        {% include 'partials/step5.html' %}
+                        {% include 'partials/step6.html' %}
+                    </div>
+                </div>
+
+                <!-- Console Panel (right, fills remaining space) -->
+                {% include 'partials/console.html' %}
+            </div>
+        </div>
+    </div>
+
+    {% include 'partials/overlays.html' %}
+
+    <script src="{{ url_for('static', filename='js/app.js') }}?v={{ range(10000,99999) | random }}"></script>
+</body>
+</html>

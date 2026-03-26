@@ -1,0 +1,20 @@
+apiVersion: inference.networking.k8s.io/v1
+kind: InferencePool
+metadata:
+  name: {{ gaie_pool_name | default('gaie-pd') }}
+  namespace: {{ namespace }}
+  labels:
+    app.kubernetes.io/name: {{ gaie_name | default('gaie-pd-epp') }}
+    app.kubernetes.io/version: v1.3.0
+    component: in-s8-prereq
+spec:
+  selector:
+    matchLabels:
+      llm-d.ai/inferenceServing: "true"
+  endpointPickerRef:
+    name: {{ gaie_name | default('gaie-pd-epp') }}
+    failureMode: FailOpen
+    port:
+      number: 9002
+  targetPorts:
+    - number: 8000
