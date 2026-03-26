@@ -1,0 +1,214 @@
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: {{ job_name | default('serveit-model-download') }}
+  namespace: {{ namespace }}
+  labels:
+    app: llm-d
+    component: serveit-benchmark
+    test-id: {{ test_id }}
+  annotations:
+    description: "Model download job for {{ model_name }}"
+spec:
+  backoffLimit: 3
+  ttlSecondsAfterFinished: 10  # Auto-cleanup after 10 seconds
+  template:
+    metadata:
+      labels:
+        app: llm-d
+        component: serveit-benchmark
+        job: model-download
+        test-id: {{ test_id }}
+    spec:
+      restartPolicy: OnFailure
+{% if local_disk_path is defined and local_disk_path %}
+      serviceAccountName: llm-d-modelserver
+{% if target_node is defined and target_node %}
+      nodeSelector:
+        kubernetes.io/hostname: {{ target_node }}
+{% endif %}
+{% endif %}
+      containers:
+        - name: model-downloader
+          image: {{ image | default('registry.access.redhat.com/ubi9/python-311:latest') }}
+          imagePullPolicy: Always
+{% if local_disk_path is defined and local_disk_path %}
+          securityContext:
+            privileged: true
+            runAsUser: 0
+            runAsGroup: 0
+{% endif %}
+          command:
+            - /bin/bash
+            - -c
+          args:
+            - |
+              set -e
+              echo "========================================="
+              echo "ServeIt Studio Model Download Job"
+              echo "Model: {{ model_name }}"
+              echo "Cache Directory: /model-cache"
+              echo "========================================="
+
+              # Install huggingface_hub if not present
+              pip3 install --quiet huggingface_hub
+
+              # Use Python to download the model via huggingface_hub with progress tracking
+              # Disable tqdm to prevent stderr output
+              export HF_HUB_DISABLE_PROGRESS_BARS=1
+
+              python3 -u <<'PYTHON_EOF'
+              from huggingface_hub import snapshot_download, HfApi
+              import os
+              import sys
+              import time
+              import threading
+              from pathlib import Path
+
+              # Unbuffer output
+              sys.stdout.reconfigure(line_buffering=True)
+              sys.stderr.reconfigure(line_buffering=True)
+
+              model_id = '{{ model_name }}'
+              cache_dir = '/model-cache'
+              token = os.getenv('HF_TOKEN')
+
+              # Use None if token is empty or whitespace
+              if not token or not token.strip():
+                  token = None
+
+              print(f'\n🔄 Downloading model: {model_id}', flush=True)
+              print(f'📁 Cache directory: {cache_dir}\n', flush=True)
+
+              try:
+                  # Get model info to show file count
+                  print('📊 Fetching model metadata...', flush=True)
+                  api = HfApi(token=token)
+                  try:
+                      model_info = api.model_info(model_id)
+                      files = [f for f in model_info.siblings if f.rfilename]
+                      print(f'📦 Model contains {len(files)} files', flush=True)
+
+                      # Show file list and calculate total size
+                      total_size = 0
+                      files_with_size = 0
+                      for f in files:
+                          if f.size:
+                              total_size += f.size
+                              files_with_size += 1
+
+                      if files_with_size > 0:
+                          total_size_gb = total_size / (1024**3)
+                          print(f'💾 Total size: ~{total_size_gb:.2f} GB ({files_with_size}/{len(files)} files have size info)\n', flush=True)
+                      else:
+                          print(f'💾 Total size: Unknown (HuggingFace did not provide size metadata)\n', flush=True)
+                          print(f'ℹ️  Progress below is based on file count, not bytes. Large weight shards may take much longer than small config files — 100% file count does not mean the download is fully written to disk.\n', flush=True)
+                  except Exception as e:
+                      print(f'⚠️ Could not fetch metadata: {e}', flush=True)
+
+                  start_time = time.time()
+                  print('📥 Starting download...\n', flush=True)
+
+                  # Progress tracker - runs in background and counts downloaded files
+                  download_complete = threading.Event()
+                  expected_files = len(files) if 'files' in locals() else 0
+
+                  # Convert model ID to cache directory name (e.g., RedHatAI/model -> models--RedHatAI--model)
+                  model_cache_name = 'models--' + model_id.replace('/', '--')
+
+                  def track_progress():
+                      last_count = 0
+                      while not download_complete.is_set():
+                          time.sleep(3)
+                          # Count files in model-specific cache directory only
+                          try:
+                              # HuggingFace cache structure: /model-cache/models--{owner}--{model}/blobs/
+                              model_path = Path(cache_dir) / model_cache_name
+                              if model_path.exists():
+                                  # Count actual model files (blobs directory contains the downloaded files)
+                                  blobs_path = model_path / 'blobs'
+                                  if blobs_path.exists():
+                                      file_count = sum(1 for _ in blobs_path.iterdir() if _.is_file())
+                                      if file_count > last_count and expected_files > 0:
+                                          percent = min(100, int(100 * file_count / expected_files))
+                                          print(f'📥 Downloaded: {file_count}/{expected_files} files ({percent}%)', flush=True)
+                                          last_count = file_count
+                          except Exception:
+                              pass
+
+                  # Start progress tracker
+                  if expected_files > 0:
+                      progress_thread = threading.Thread(target=track_progress, daemon=True)
+                      progress_thread.start()
+
+                  # Download with progress disabled (we track manually)
+                  snapshot_download(
+                      repo_id=model_id,
+                      cache_dir=cache_dir,
+                      token=token if token else None,
+                      max_workers=4,
+                      local_files_only=False
+                  )
+
+                  # Stop progress tracker
+                  download_complete.set()
+
+                  elapsed = int(time.time() - start_time)
+                  print(f'\n✅ Model download complete! (took {elapsed}s)', flush=True)
+
+              except Exception as e:
+                  print(f'\n❌ Error downloading model: {e}', flush=True)
+                  import traceback
+                  traceback.print_exc()
+                  sys.exit(1)
+              PYTHON_EOF
+
+              echo ""
+              echo "📊 Cache directory size:"
+              du -sh /model-cache
+              echo ""
+              echo "✅ Download job completed successfully"
+          env:
+            {% if hf_token %}
+            - name: HF_TOKEN
+              value: "{{ hf_token }}"
+            {% else %}
+            - name: HF_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: llm-d-hf-token
+                  key: HF_TOKEN
+                  optional: true
+            {% endif %}
+            - name: HF_HUB_OFFLINE
+              value: "0"
+            - name: HF_HUB_CACHE
+              value: /model-cache/huggingface
+            - name: HF_HOME
+              value: /model-cache/huggingface
+          volumeMounts:
+            - name: model-cache
+              mountPath: /model-cache
+            - name: tmp-mem
+              mountPath: /tmp
+          resources:
+            requests:
+              cpu: {{ cpu_request | default(4) | tojson }}
+              memory: {{ memory_request | default('16Gi') }}
+            limits:
+              cpu: {{ cpu_limit | default(8) | tojson }}
+              memory: {{ memory_limit | default('32Gi') }}
+      volumes:
+        - name: model-cache
+{% if local_disk_path is defined and local_disk_path %}
+          hostPath:
+            path: {{ local_disk_path }}/model-cache
+            type: DirectoryOrCreate
+{% else %}
+          persistentVolumeClaim:
+            claimName: {{ pvc_name | default('serveit-cache') }}
+{% endif %}
+        - name: tmp-mem
+          emptyDir:
+            medium: Memory
+            sizeLimit: 8Gi

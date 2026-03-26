@@ -1,0 +1,251 @@
+                    <div class="step-section" id="step5-section">
+                        <div style="display: flex; justify-content: space-between; align-items: center;">
+                            <h3>Infrastructure & Deployment</h3>
+                            <button id="rescan-cluster-btn" onclick="rescanCluster()" style="display: none; padding: 6px 14px; background: #0ea5e9; color: white; border: none; border-radius: 6px; font-size: 13px; font-weight: 600; cursor: pointer; transition: background 0.2s;">
+                                Re-scan Hardware
+                            </button>
+                        </div>
+                        <p class="description">Select which llm-d version to deploy, configure cluster hardware, and set up model storage.</p>
+
+                        <!-- Container Image Selection (collapsible) -->
+                        <div style="border:2px solid #0ea5e9;border-radius:12px;overflow:hidden;margin-bottom:20px;">
+                            <div style="background:linear-gradient(135deg,#f0f9ff,#e0f2fe);padding:14px 20px;cursor:pointer;display:flex;align-items:center;justify-content:space-between;" onclick="var b=document.getElementById('image-select-body');var a=document.getElementById('image-select-arrow');if(b.style.display==='none'){b.style.display='block';a.textContent='▾';}else{b.style.display='none';a.textContent='▸';}">
+                                <div>
+                                    <div style="font-weight:700;color:#0c4a6e;font-size:1.05em;">📦 Inference Engine Image</div>
+                                    <div style="color:#0369a1;font-size:0.92em;margin-top:4px;">Select which llm-d / vLLM version to use for inference pods.</div>
+                                </div>
+                                <div id="image-select-arrow" style="font-size:1.4em;color:#0c4a6e;font-weight:700;">▾</div>
+                            </div>
+                            <div id="image-select-body" style="padding:16px 20px;">
+                                <!-- RHAIIS Version Preset -->
+                                <div style="margin-bottom:16px;">
+                                    <label style="display:block;font-weight:600;margin-bottom:6px;color:#374151;font-size:0.9em;">RHAIIS Version</label>
+                                    <select id="rhaiis-version-select" style="width:100%;padding:10px 14px;border:2px solid #d1d5db;border-radius:8px;font-size:14px;background:white;" onchange="applyRhaiisVersion(this.value)">
+                                        <option value="3.5.1">3.5.1 GA (default) — llm-d 0.9.0 / vLLM 0.24.0</option>
+                                        <option value="3.5.0">3.5.0 — llm-d 0.8.0 / vLLM 0.24.0</option>
+                                        <option value="3.4.0">3.4.0 — llm-d 0.6.0 / vLLM 0.17.1</option>
+                                        <option value="3.3.4">3.3.4 — llm-d 0.4.0 / vLLM 0.13.0</option>
+                                        <option value="custom">Custom</option>
+                                    </select>
+                                </div>
+
+                                <div style="margin-bottom:16px;">
+                                    <label style="display:block;font-weight:600;margin-bottom:6px;color:#374151;font-size:0.9em;">Inference Engine Image</label>
+                                    <div style="display:flex;gap:8px;">
+                                        <input type="text" id="image-repo-input" value="ghcr.io/llm-d/llm-d-cuda:v0.9.0" placeholder="ghcr.io/llm-d/llm-d-cuda:v0.9.0" style="flex:1;padding:10px 14px;border:2px solid #d1d5db;border-radius:8px;font-size:14px;font-family:monospace;" onchange="config.image=this.value;markImagesCustom();saveConfig();">
+                                        <button type="button" onclick="fetchImageTags()" style="padding:10px 16px;background:#0ea5e9;color:white;border:none;border-radius:8px;font-weight:600;font-size:0.85em;cursor:pointer;white-space:nowrap;">Fetch Tags</button>
+                                    </div>
+                                    <div style="margin-top:6px;font-size:0.8em;color:#64748b;">For air-gapped clusters, enter your internal registry (e.g., <code style="background:#f1f5f9;padding:1px 4px;border-radius:3px;">registry.internal.company.com/llm-d/llm-d-cuda:v0.9.0</code>)</div>
+                                    <select id="image-tag-select" style="display:none;width:100%;padding:10px 14px;border:2px solid #d1d5db;border-radius:8px;font-size:14px;font-family:monospace;background:white;margin-top:8px;" onchange="updateSelectedImage();markImagesCustom();">
+                                    </select>
+                                    <div id="image-tag-status" style="margin-top:6px;font-size:0.8em;color:#64748b;"></div>
+                                </div>
+
+                                <div style="border-top:1px solid #e2e8f0;margin-top:16px;padding-top:16px;">
+                                    <label style="display:block;font-weight:600;margin-bottom:6px;color:#374151;font-size:0.9em;">EPP Scheduler Image</label>
+                                    <div style="display:flex;gap:8px;">
+                                        <input type="text" id="scheduler-image-input" value="ghcr.io/llm-d/llm-d-router-endpoint-picker:v0.9.0" placeholder="ghcr.io/llm-d/llm-d-router-endpoint-picker:v0.9.0" style="flex:1;padding:10px 14px;border:2px solid #d1d5db;border-radius:8px;font-size:14px;font-family:monospace;" onchange="config.scheduler_image=this.value;markImagesCustom();saveConfig();">
+                                        <button type="button" onclick="fetchSchedulerTags()" style="padding:10px 16px;background:#0ea5e9;color:white;border:none;border-radius:8px;font-weight:600;font-size:0.85em;cursor:pointer;white-space:nowrap;">Fetch Tags</button>
+                                    </div>
+                                    <div style="margin-top:6px;font-size:0.8em;color:#64748b;">The EPP (Endpoint Picker) routes requests to inference pods. Should match the llm-d release version.</div>
+                                    <select id="scheduler-tag-select" style="display:none;width:100%;padding:10px 14px;border:2px solid #d1d5db;border-radius:8px;font-size:14px;font-family:monospace;background:white;margin-top:8px;" onchange="updateSelectedScheduler();markImagesCustom();">
+                                    </select>
+                                    <div id="scheduler-tag-status" style="margin-top:6px;font-size:0.8em;color:#64748b;"></div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Scanning Status (shown during scan) -->
+                        <div id="scanning-status" style="display: none; margin-bottom: 24px;">
+                            <div style="background: linear-gradient(135deg, #f0f9ff 0%, #e0f2fe 100%); border: 2px solid #0ea5e9; border-radius: 12px; padding: 20px; text-align: center;">
+                                <div style="font-size: 18px; font-weight: 600; color: #0c4a6e; margin-bottom: 8px;">
+                                    🔍 Scanning Cluster Resources...
+                                </div>
+                                <div style="font-size: 14px; color: #075985;">
+                                    Discovering GPUs, CPUs, RAM, RDMA NICs, and Storage Classes
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Cluster Resources Display -->
+                        <div id="cluster-resources" style="display: none;">
+                            <!-- Provider + Network Selection -->
+                            <div style="border:2px solid #0ea5e9;border-radius:12px;overflow:hidden;margin-bottom:20px;">
+                                <div style="background:linear-gradient(135deg,#f0f9ff,#e0f2fe);padding:16px 20px;">
+                                    <div style="font-weight:700;color:#0c4a6e;font-size:1.05em;">🌐 Network</div>
+                                    <div style="color:#075985;font-size:0.92em;margin-top:4px;">Select how GPU nodes communicate. RDMA options are faster for multi-node workloads.</div>
+                                </div>
+                                <div style="padding:16px 20px;">
+                                    <div id="detected-config-summary" style="margin-bottom:12px"></div>
+                                    <div id="network-select-cards" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:10px;"></div>
+                                    <input type="hidden" id="selected-network-type" value="">
+                                </div>
+                            </div>
+
+                            <!-- Hardware Resources Section -->
+                            <div style="border:2px solid #6366f1;border-radius:12px;overflow:hidden;margin-bottom:20px;">
+                                <div style="background:linear-gradient(135deg,#eef2ff,#e0e7ff);padding:16px 20px;">
+                                    <div style="font-weight:700;color:#3730a3;font-size:1.05em;">🖥️ Hardware Resources</div>
+                                    <div style="color:#4338ca;font-size:0.92em;margin-top:4px;">GPUs, CPUs, memory, and network interfaces detected across cluster nodes.</div>
+                                </div>
+                                <div style="padding:16px 20px;">
+                                    <div id="resources-summary"></div>
+                                </div>
+                            </div>
+
+                            <!-- GPU Allocation & Node Selection Section -->
+                            <div style="border:2px solid #d97706;border-radius:12px;overflow:hidden;margin-bottom:20px;">
+                                <div style="background:linear-gradient(135deg,#fffbeb,#fef3c7);padding:16px 20px;">
+                                    <div style="font-weight:700;color:#92400e;font-size:1.05em;">⚡ GPU Allocation & Node Selection</div>
+                                    <div style="color:#a16207;font-size:0.92em;margin-top:4px;">Choose how many GPUs to use and optionally limit tests to specific machines.</div>
+                                </div>
+                                <div style="padding:16px 20px;">
+                                    <!-- GPU Limit Selection -->
+                                    <div class="info-box" id="max-gpu-group" style="margin-bottom: 16px; display: none;">
+                                        <h4>GPU Limit</h4>
+                                        <div style="margin-bottom: 12px; color: #4b5563;">
+                                            Set the max GPUs the optimizer can use. Fewer = smaller tests; more = the optimizer can try larger configurations.
+                                        </div>
+                                        <select id="max-gpu-select" style="width: 100%; padding: 12px 16px; border: 2px solid #d1d5db; border-radius: 8px; font-size: 15px; background: white; cursor: pointer; transition: border-color 0.2s;">
+                                            <option value="">-- Select GPU Limit --</option>
+                                        </select>
+                                        <div id="gpu-usage-info" style="margin-top: 12px; padding: 12px; background: #fef3c7; border-left: 4px solid #f59e0b; border-radius: 6px; display: none; font-size: 14px; color: #92400e;"></div>
+                                    </div>
+
+                                    <!-- Node Selection toggle -->
+                                    <div id="node-select-group" style="margin-bottom: 0; display: none; border-top: 1px solid #e2e8f0; margin-top: 12px; padding-top:12px;">
+                                        <div class="vllm-toggle" id="node-select-toggle" onclick="var t=this;var on=!t.classList.contains('active');if(on)t.classList.add('active');else t.classList.remove('active');var cb=document.getElementById('enable-node-select');cb.checked=on;cb.dispatchEvent(new Event('change'));var inner=document.getElementById('node-select-list');inner.style.opacity=on?'1':'0.5';inner.style.pointerEvents=on?'auto':'none';document.getElementById('node-select-body').style.display=on?'block':'none';">
+                                            <div style="font-size:1.5em;flex-shrink:0;">📍</div>
+                                            <div>
+                                                <div style="font-weight:600;color:#1e293b;font-size:0.95em;">Node Selection (Optional)</div>
+                                                <div style="color:#64748b;font-size:0.82em;margin-top:2px;">Pin tests to specific machines in your cluster</div>
+                                            </div>
+                                            <input type="checkbox" id="enable-node-select" style="display:none;">
+                                            <div class="tgl-sw"></div>
+                                        </div>
+                                        <div id="node-select-body" style="display:none;padding-bottom:12px;">
+                                            <div id="node-select-content" style="border:2px solid #e2e8f0;border-radius:8px;padding:12px 16px;background:#fafafa;">
+                                                <div id="node-select-list" style="opacity:0.5;pointer-events:none;transition:all 0.2s;"></div>
+                                                <div id="node-select-warning" style="display:none;margin-top:12px;padding:12px;background:#fef2f2;border-left:4px solid #ef4444;border-radius:6px;font-size:14px;color:#991b1b;"></div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- Storage Section -->
+                            <div style="border:2px solid #22c55e;border-radius:12px;overflow:hidden;margin-bottom:20px;">
+                                <div style="background:linear-gradient(135deg,#f0fdf4,#dcfce7);padding:16px 20px;">
+                                    <div style="font-weight:700;color:#15803d;font-size:1.05em;">💾 Storage Configuration</div>
+                                    <div style="color:#166534;font-size:0.92em;margin-top:4px;">Configure model storage. Use an existing PVC for air-gapped environments or create a new one.</div>
+                                </div>
+                                <div style="padding:16px 20px;">
+                                    <!-- Use Existing PVC toggle -->
+                                    <div class="vllm-toggle" id="existing-pvc-toggle" onclick="var t=this;var on=!t.classList.contains('active');if(on)t.classList.add('active');else t.classList.remove('active');var cb=document.getElementById('use-existing-pvc');cb.checked=on;cb.dispatchEvent(new Event('change'));" style="margin-bottom:16px;">
+                                        <div style="font-size:1.5em;flex-shrink:0;">🔒</div>
+                                        <div>
+                                            <div style="font-weight:600;color:#1e293b;font-size:0.95em;">Use Pre-Downloaded Model (Offline Mode)</div>
+                                            <div style="color:#64748b;font-size:0.82em;margin-top:2px;">Use if model files are already on a storage volume</div>
+                                        </div>
+                                        <input type="checkbox" id="use-existing-pvc" style="display:none;">
+                                        <div class="tgl-sw"></div>
+                                    </div>
+
+                                    <!-- Existing PVC Selection -->
+                                    <div id="existing-pvc-group" style="display: none; margin-bottom: 20px;">
+                                        <label style="display: block; font-weight: 600; margin-bottom: 8px; color: #374151;">
+                                            📦 Existing PVC Name
+                                        </label>
+                                        <select id="existing-pvc-select" style="width: 100%; padding: 12px 16px; border: 2px solid #d1d5db; border-radius: 8px; font-size: 15px; background: white; cursor: pointer; transition: border-color 0.2s;">
+                                            <option value="">-- Loading PVCs... --</option>
+                                        </select>
+                                        <div style="margin-top: 8px; font-size: 13px; color: #6b7280;">
+                                            Pick the storage volume that already has the model files saved on it.
+                                        </div>
+                                    </div>
+
+                                    <!-- New PVC Configuration -->
+                                    <div id="new-pvc-config">
+                                        <div id="storage-class-group" style="margin-bottom: 20px;">
+                                            <label style="display: block; font-weight: 600; margin-bottom: 8px; color: #374151;">
+                                                🗄️ Storage Class
+                                            </label>
+                                            <select id="storage-class-select" onchange="config.storage_class=this.value;var sel=this.options[this.selectedIndex];config.storage_access_mode=sel.dataset.accessMode||'ReadWriteOnce';window.handleStorageClassChange&&window.handleStorageClassChange(sel);saveConfig();" style="width: 100%; padding: 12px 16px; border: 2px solid #d1d5db; border-radius: 8px; font-size: 15px; background: white; cursor: pointer; transition: border-color 0.2s;">
+                                                <option value="">-- Select a Storage Class --</option>
+                                            </select>
+                                            <div style="margin-top: 8px; font-size: 13px; color: #6b7280;">
+                                                Choose what type of storage to use for saving the model files. If unsure, pick the default.
+                                            </div>
+                                        </div>
+
+                                        <div id="pvc-size-group">
+                                            <label style="display: block; font-weight: 600; margin-bottom: 8px; color: #374151;">
+                                                📏 PVC Size (GB)
+                                            </label>
+                                            <input type="number" id="pvc-size-input" value="50" min="10" max="10000" style="width: 100%; padding: 12px 16px; border: 2px solid #d1d5db; border-radius: 8px; font-size: 15px; transition: border-color 0.2s;">
+                                            <div style="margin-top: 8px; font-size: 13px; color: #6b7280;">
+                                                Disk space to reserve for model files. The system will automatically increase this if the model needs more. Only used when creating new storage.
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    <!-- Per-Node Storage toggle -->
+                                    <div id="per-node-storage-group" style="margin-top:16px; border-top:1px solid #e2e8f0; padding-top:12px;">
+                                        <div class="vllm-toggle" id="per-node-storage-toggle" onclick="if(this.parentElement.style.pointerEvents==='none')return;var t=this;var on=!t.classList.contains('active');if(on)t.classList.add('active');else t.classList.remove('active');config.per_node_storage=on;saveConfig();">
+                                            <div style="font-size:1.5em;flex-shrink:0;">📦</div>
+                                            <div>
+                                                <div style="font-weight:600;color:#1e293b;font-size:0.95em;">Per-Node Storage</div>
+                                                <div style="color:#64748b;font-size:0.82em;margin-top:2px;">Each node gets its own NFS-backed PVC for model caching. Pods are automatically linked to their node's local NFS share via symlink. The model is downloaded once per node and shared by all pods on that node.</div>
+                                            </div>
+                                            <input type="checkbox" id="enable-per-node-storage" style="display:none;">
+                                            <div class="tgl-sw"></div>
+                                        </div>
+                                    </div>
+
+                                    <!-- Info Boxes -->
+                                    <div id="storage-note" style="padding: 16px 0; margin-top: 12px; border-top: 1px solid #e2e8f0;">
+                                        <div style="display: flex; align-items: flex-start; gap: 12px;">
+                                            <div style="font-size: 24px; flex-shrink: 0;">ℹ️</div>
+                                            <div>
+                                                <div style="font-weight: 700; font-size: 15px; color: #374151; margin-bottom: 8px;">
+                                                    Automatic Storage Setup
+                                                </div>
+                                                <div style="font-size: 14px; color: #6b7280; line-height: 1.6;">
+                                                    Storage setup and model download will begin automatically when you start the optimization in the next step. The system will:
+                                                </div>
+                                                <ul style="margin: 8px 0 0 20px; font-size: 14px; color: #6b7280; line-height: 1.8;">
+                                                    <li>Create PVC if it doesn't exist</li>
+                                                    <li>Download model from HuggingFace (if not using existing PVC)</li>
+                                                    <li>Validate model architecture and configuration</li>
+                                                </ul>
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    <div id="existing-pvc-note" style="background: linear-gradient(135deg, #fef3c7 0%, #fde68a 100%); border: 2px solid #f59e0b; border-radius: 12px; padding: 20px; display: none; margin-top: 20px;">
+                                        <div style="display: flex; align-items: flex-start; gap: 12px;">
+                                            <div style="font-size: 24px; flex-shrink: 0;">📦</div>
+                                            <div>
+                                                <div style="font-weight: 700; font-size: 16px; color: #92400e; margin-bottom: 8px;">
+                                                    Using Existing PVC
+                                                </div>
+                                                <div style="font-size: 14px; color: #78350f; line-height: 1.6;">
+                                                    When you generate the test plan, ServeIt Studio will:
+                                                </div>
+                                                <ul style="margin: 8px 0 0 20px; font-size: 14px; color: #78350f; line-height: 1.8;">
+                                                    <li>Read model config.json from the PVC</li>
+                                                    <li>Determine architecture (layers, KV heads, etc.)</li>
+                                                    <li>Calculate accurate VRAM requirements</li>
+                                                    <li>Skip model download (assumes model is already present)</li>
+                                                </ul>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <button class="action-button" id="next-step5" style="background: linear-gradient(135deg, #ee0000 0%, #c00000 100%); font-size: 16px; padding: 16px 32px; box-shadow: 0 4px 12px rgba(238, 0, 0, 0.3);" disabled>
+                            Continue to Review → (Scanning...)
+                        </button>
+                    </div>

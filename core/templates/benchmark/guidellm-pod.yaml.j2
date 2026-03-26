@@ -1,0 +1,58 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: serveit-workload
+  namespace: {{ namespace }}
+  labels:
+    component: serveit-benchmark
+    app: serveit-workload
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: serveit-workload
+  template:
+    metadata:
+      labels:
+        component: serveit-benchmark
+        app: serveit-workload
+    spec:
+      serviceAccountName: llm-d-modelserver
+      containers:
+      - name: guidellm
+        image: {{ image }}
+        imagePullPolicy: IfNotPresent
+        command: ["sleep", "infinity"]
+        env:
+        - name: TMPDIR
+          value: "/mnt/storage/tmp"
+        - name: HF_HOME
+          value: "/mnt/storage/.cache/huggingface"
+        - name: HF_DATASETS_CACHE
+          value: "/mnt/storage/.cache/huggingface/datasets"
+        - name: TRANSFORMERS_CACHE
+          value: "/mnt/storage/.cache/huggingface/transformers"
+        - name: HF_TOKEN
+{% if hf_token %}
+          value: "{{ hf_token }}"
+{% else %}
+          valueFrom:
+            secretKeyRef:
+              name: llm-d-hf-token
+              key: HF_TOKEN
+              optional: true
+{% endif %}
+        resources:
+          requests:
+            cpu: "2"
+            memory: "4Gi"
+          limits:
+            cpu: "8"
+            memory: "24Gi"
+        volumeMounts:
+        - name: storage
+          mountPath: /mnt/storage
+      volumes:
+      - name: storage
+        persistentVolumeClaim:
+          claimName: {{ pvc_name }}

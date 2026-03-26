@@ -1,0 +1,105 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ name }}
+  namespace: {{ namespace }}
+  labels:
+    app: {{ name }}
+    component: serveit-instance
+spec:
+  replicas: 1
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      app: {{ name }}
+  template:
+    metadata:
+      labels:
+        app: {{ name }}
+        component: serveit-instance
+    spec:
+      serviceAccountName: default
+      volumes:
+        - name: storage-volume
+          persistentVolumeClaim:
+            claimName: {{ pvc_name }}
+        - name: tmp-mem
+          emptyDir:
+            medium: Memory
+            sizeLimit: 4Gi
+{% if has_kubeconfig == 'true' %}
+        - name: kubeconfig
+          secret:
+            secretName: {{ kubeconfig_secret }}
+{% endif %}
+      containers:
+        - name: runner
+          image: {{ image }}
+          imagePullPolicy: Always
+          command: ["/usr/local/bin/entrypoint.sh"]
+          env:
+            - name: INFTUNE_PATH
+              value: "/mnt/storage/app"
+            - name: HOME
+              value: "/mnt/storage"
+            - name: OPTIMIZATION_OUTPUT_DIR
+              value: "/mnt/storage/optimization-runs"
+            - name: HOME_STORAGE_DIR
+              value: "/mnt/storage"
+            - name: TARGET_NAMESPACE
+              value: "{{ workload_namespace }}"
+            - name: DB_PATH
+              value: "/mnt/storage/serveit.db"
+            - name: INSTANCE_NAME
+              value: "{{ name }}"
+            - name: AUTH_DISABLED
+              value: "{{ auth_disabled }}"
+            - name: INFTUNE_FORCE_NAD
+              value: "{{ force_nad }}"
+            - name: DEV_MODE
+              value: "{{ dev_mode }}"
+{% if auto_login_token %}
+            - name: AUTO_LOGIN_TOKEN
+              value: "{{ auto_login_token }}"
+{% endif %}
+{% if preset_gpus %}
+            - name: PRESET_MAX_GPUS
+              value: "{{ preset_gpus }}"
+{% endif %}
+{% if preset_nodes %}
+            - name: PRESET_NODES
+              value: "{{ preset_nodes }}"
+{% endif %}
+{% if has_kubeconfig == 'true' %}
+            - name: KUBECONFIG
+              value: "/etc/kubeconfig/kubeconfig"
+{% endif %}
+{% if https_proxy %}
+            - name: HTTPS_PROXY
+              value: "{{ https_proxy }}"
+            - name: https_proxy
+              value: "{{ https_proxy }}"
+{% endif %}
+            - name: HF_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: serveit-optimizer-hf-token
+                  key: HF_TOKEN
+                  optional: true
+          volumeMounts:
+            - name: storage-volume
+              mountPath: /mnt/storage
+            - name: tmp-mem
+              mountPath: /tmp
+{% if has_kubeconfig == 'true' %}
+            - name: kubeconfig
+              mountPath: /etc/kubeconfig
+              readOnly: true
+{% endif %}
+          ports:
+            - containerPort: 5000
+          resources:
+            requests:
+              memory: "2Gi"
+              cpu: "1000m"

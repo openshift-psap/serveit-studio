@@ -1,0 +1,24 @@
+target-version = "py311"
+line-length = 120
+
+[lint]
+select = [
+    "F",   # pyflakes — real bugs (undefined names, unused imports, etc.)
+    "E9",  # runtime errors (syntax errors, indentation)
+    "B",   # flake8-bugbear — common gotchas
+]
+ignore = [
+    "B008",  # do not perform function calls in argument defaults
+    "B905",  # zip without strict=
+    "B007",  # unused loop variable
+    "B006",  # mutable default argument
+    "B023",  # function binding loop variable
+    "B904",  # raise from in except (too noisy for existing codebase)
+]
+
+[lint.per-file-ignores]
+"__init__.py" = ["F401"]
+"core/test_orchestrator.py" = ["F401"]
+"scripts/*" = ["F401", "E402"]
+"AI-assistance/*" = ["F401"]
+"deployment/deploy.py" = ["F401"]

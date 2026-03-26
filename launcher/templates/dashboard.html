@@ -1,0 +1,1920 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="theme-color" content="#1A1A1A">
+    <link rel="icon" type="image/png" sizes="32x32" href="{{ url_for('static', filename='img/favicon.png') }}">
+    <link rel="apple-touch-icon" sizes="180x180" href="{{ url_for('static', filename='img/apple-touch-icon.png') }}">
+    <title>ServeIt Studio Launcher</title>
+    <style>
+        *{box-sizing:border-box;margin:0;padding:0}
+        body{font-family:'Red Hat Display','Segoe UI',Roboto,sans-serif;background:#F8F8F8;color:#1A1A1A;min-height:100vh}
+
+        /* ── Sidebar ── */
+        body::before{content:'';position:fixed;top:0;left:0;right:0;height:4px;background:linear-gradient(90deg,#164E58,#2A7B88,#164E58);z-index:100}
+        .sidebar{position:fixed;top:0;left:0;width:250px;height:100vh;background:#fff;border-right:1px solid #E0E0E0;display:flex;flex-direction:column;z-index:50;padding-top:4px}
+        .sidebar-brand{padding:14px 12px;border-bottom:1px solid #E0E0E0;display:flex;align-items:center;justify-content:center;height:80px}
+        .sidebar-brand img{max-height:60px;width:auto;max-width:100%;display:block}
+        .sidebar-section{padding:12px 12px 8px;display:flex;align-items:center;justify-content:space-between}
+        .sidebar-section span{font-size:0.72em;font-weight:700;text-transform:uppercase;letter-spacing:0.08em;color:#999}
+        .sidebar-section button{width:24px;height:24px;border:none;background:#F8F8F8;border-radius:6px;cursor:pointer;display:flex;align-items:center;justify-content:center;color:#999;transition:background-color 0.12s,color 0.12s}
+        .sidebar-section button:hover{background:#2A7B88;color:white}
+        .sidebar-section button:focus-visible{outline:2px solid #2A7B88;outline-offset:1px}
+        .cluster-list{flex:1;overflow-y:auto;padding:0 8px 8px}
+        .cluster-item{display:flex;align-items:center;gap:8px;padding:9px 10px;border-radius:8px;cursor:pointer;transition:background-color 0.12s;font-size:0.88em;color:#4A4A4A;border:none;background:none;width:100%;text-align:left;border-bottom:1px solid #EBEBEB}
+        .cluster-item:hover{background:#F8F8F8}
+        .cluster-item.active{background:#F0F9FA;color:#1B5E6B;font-weight:600}
+        .cluster-item .icon{font-size:1.1em;flex-shrink:0}
+        .cluster-item .name{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;line-height:1.2}
+        .cluster-item .target{font-size:0.72em;color:#999;font-weight:400;display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-height:1.1em}
+        .cluster-item .count{font-size:0.75em;color:#999;background:#F0F0F0;padding:2px 7px;border-radius:10px;flex-shrink:0}
+        .cluster-item.active .count{background:#E0F2F4;color:#1B5E6B}
+        .cluster-item .cluster-actions{display:none;flex-shrink:0;gap:2px}
+        .cluster-item:hover .cluster-actions{display:flex}
+        .cluster-item:hover .count{display:none}
+        .cluster-item .cl-btn{border:none;background:none;color:#CCC;cursor:pointer;padding:2px;border-radius:4px;font-size:0.85em;line-height:1}
+        .cluster-item .cl-btn:hover{color:#2A7B88}
+        .cluster-item .cl-btn.cl-del:hover{color:#dc2626}
+        .sidebar-footer{padding:12px;border-top:1px solid #E0E0E0}
+        .user-pill{display:flex;align-items:center;gap:10px;padding:8px 10px;border-radius:8px}
+        .user-avatar{width:32px;height:32px;background:#2A7B88;border-radius:8px;display:flex;align-items:center;justify-content:center;color:white;font-weight:700;font-size:0.85em;flex-shrink:0}
+        .user-info{flex:1;min-width:0}
+        .user-info .uname{color:#1A1A1A;font-size:0.85em;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+        .logout-btn{color:#999;text-decoration:none;font-size:0.78em;padding:4px 8px;border-radius:4px;transition:color 0.12s}
+        .logout-btn:hover{color:#2A7B88}
+        .logout-btn:focus-visible{outline:2px solid #2A7B88;outline-offset:2px}
+
+        /* ── Create cluster modal ── */
+        .icon-grid{display:grid;grid-template-columns:repeat(10,1fr);gap:6px;margin-bottom:16px}
+        .icon-opt{border:2px solid transparent;background:none;width:48px;height:48px;font-size:1.7em;cursor:pointer;border-radius:8px;transition:background-color 0.1s,border-color 0.1s;display:flex;align-items:center;justify-content:center}
+        .icon-opt:hover{background:#F0F0F0}
+        .icon-opt.selected{background:#E0F2F4;border-color:#2A7B88}
+
+        /* ── Main ── */
+        .main{margin-left:250px;min-height:100vh;padding-top:4px}
+        .topbar{padding:0 32px;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:12px;border-bottom:1px solid #E0E0E0;background:white;height:80px}
+        .topbar h2{font-size:1.3em;font-weight:700;color:#1A1A1A;display:flex;align-items:center;gap:10px}
+        .topbar h2 .g-icon{font-size:1.1em}
+        .topbar .count{color:#999;font-weight:400;font-size:0.6em;margin-left:4px}
+        .btn{padding:10px 20px;border:none;border-radius:8px;font-weight:600;font-size:0.88em;cursor:pointer;transition:background-color 0.12s,transform 0.1s;text-decoration:none;display:inline-flex;align-items:center;gap:6px}
+        .btn:focus-visible{outline:none;box-shadow:0 0 0 3px rgba(42,123,136,0.25)}
+        .btn:active{transform:scale(0.97)}
+        .btn-primary{background:#2A7B88;color:white}
+        .btn-primary:hover{background:#1B5E6B}
+        .btn-danger{background:#dc2626;color:white;font-size:0.85em;padding:8px 18px}
+        .btn-danger:hover{background:#b91c1c}
+        .btn-open{background:#3BAA3B;color:white;font-size:0.85em;padding:8px 18px}
+        .btn-open:hover{background:#2d8a2d}
+
+        /* ── Instance Grid ── */
+        .grid{padding:24px 32px;display:grid;grid-template-columns:repeat(auto-fill,minmax(320px,1fr));gap:16px}
+        .card{background:white;border-radius:12px;border:2px solid #E0E0E0;overflow:hidden;transition:border-color 0.15s,box-shadow 0.15s,transform 0.15s;position:relative;display:flex;flex-direction:column;min-height:340px}
+        .card:hover{border-color:#2A7B88;box-shadow:0 6px 20px rgba(42,123,136,0.12);transform:translateY(-2px)}
+        .card-body{padding:20px;flex:1;display:flex;flex-direction:column}
+        .card-header{display:flex;flex-direction:column;align-items:center;gap:8px;margin-bottom:10px}
+        .card-icon{width:56px;height:56px;border-radius:14px;display:flex;align-items:center;justify-content:center;flex-shrink:0}
+        .card-name{font-size:1.1em;font-weight:700;color:#1A1A1A;word-break:break-word}
+        .card-details{margin-top:12px;font-size:0.78em;color:#4A4A4A;width:100%}
+        .card-details span{display:block;padding:6px 16px;border-bottom:1px solid #E0E0E0;text-align:center}
+        .card-details span:last-child{border-bottom:none}
+        .card-actions{display:flex;gap:8px;justify-content:center;padding:0 20px 16px}
+        .status{display:inline-block;padding:3px 10px;border-radius:20px;font-size:0.78em;font-weight:600}
+        .status-running{background:#f0fdf4;color:#3BAA3B}
+        .status-creating{background:#eff6ff;color:#3b82f6}
+        .status-error{background:#fef2f2;color:#dc2626}
+        .status-unknown{background:#F0F0F0;color:#999}
+        .connect-bar{background:#F8F8F8;border-top:1px solid #E0E0E0;padding:8px 14px;display:flex;align-items:center;gap:6px;flex-wrap:wrap}
+        .connect-bar .label{font-size:0.7em;color:#1A1A1A;font-weight:600;white-space:nowrap}
+        .connect-bar code{background:#1A1A1A;color:#ffffff;padding:4px 8px;border-radius:4px;font-size:0.65em;flex:1;min-width:0;overflow-x:auto;white-space:nowrap;font-family:'Red Hat Mono',monospace;user-select:all}
+        .copy-btn{border:1px solid #E0E0E0;background:white;color:#4A4A4A;padding:3px 8px;border-radius:4px;font-size:0.7em;font-weight:600;cursor:pointer;white-space:nowrap;transition:background-color 0.12s,border-color 0.12s}
+        .copy-btn:hover{background:#F0F0F0;border-color:#CCC}
+        .copy-btn.copied{background:#f0fdf4;border-color:#3BAA3B;color:#3BAA3B}
+        .connect-bar a{color:#2A7B88;font-size:0.7em;text-decoration:none;white-space:nowrap;font-weight:600}
+        .connect-bar a:hover{color:#1B5E6B}
+
+        /* ── Cluster Visualization ── */
+        .viz-summary{display:flex;flex-wrap:wrap;margin-bottom:20px;background:white;border-radius:10px;border:1px solid #E0E0E0;overflow:hidden;box-shadow:0 1px 3px rgba(0,0,0,0.04)}
+        .viz-stat{text-align:center;flex:1;min-width:80px;padding:14px 8px;border-right:1px solid #f0f0f0}
+        .viz-stat:last-child{border-right:none}
+        .viz-stat-value{font-size:1.5em;font-weight:800;color:#2A7B88}
+        .viz-stat-label{font-size:0.7em;color:#64748b;text-transform:uppercase;letter-spacing:0.06em;margin-top:4px;font-weight:600}
+        .viz-section-title{font-size:1em;font-weight:700;color:#1B5E6B;letter-spacing:0.02em;margin-bottom:12px;padding-left:10px;padding-bottom:10px;border-left:3px solid #2A7B88;border-bottom:2px solid #E0F2F4}
+        .viz-nodes{display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:12px}
+        .viz-node{background:white;border-radius:10px;overflow:hidden;transition:box-shadow 0.15s,border-color 0.15s,transform 0.15s;border:1.5px solid #E0E0E0}
+        .viz-node:hover{box-shadow:0 6px 16px rgba(42,123,136,0.14);border-color:#2A7B88;transform:translateY(-2px)}
+        .viz-server-top{display:flex;align-items:center;gap:6px;padding:8px 12px;background:linear-gradient(135deg,#E0F2F4,#d4ecf0);border-bottom:1px solid #c7e3e7}
+        .viz-led{width:7px;height:7px;border-radius:50%;flex-shrink:0}
+        .viz-led.viz-status-ready{background:#3BAA3B;box-shadow:0 0 4px rgba(59,170,59,0.5)}
+        .viz-led.viz-status-notready{background:#dc2626;box-shadow:0 0 4px rgba(220,38,38,0.5)}
+        .viz-led.viz-status-unknown{background:#F0AB00;box-shadow:0 0 4px rgba(240,171,0,0.5)}
+        .viz-led-activity{background:#2A7B88;box-shadow:0 0 3px rgba(42,123,136,0.5);opacity:0.7}
+        .viz-node-name{font-size:0.72em;font-weight:600;color:#1B5E6B;flex:1;word-break:break-all}
+        .viz-server-body{padding:10px 12px}
+        .viz-gpu-bay{display:flex;gap:3px;justify-content:center;margin-bottom:8px;background:linear-gradient(135deg,#eef2f7,#e8ecf1);border:1.5px solid #cbd5e1;border-radius:8px;padding:10px}
+        .viz-gpu-slot{width:20px;height:34px;background:linear-gradient(180deg,#2A7B88,#164E58);border-radius:3px;border:1px solid #164E58;cursor:default;transition:opacity 0.15s}
+        .viz-gpu-slot:hover{opacity:0.8}
+        .viz-server-specs{font-size:0.7em;color:#1A1A1A;display:flex;gap:8px}
+        .viz-server-bottom{display:flex;align-items:center;gap:8px;padding:6px 12px;background:linear-gradient(135deg,#F0F9FA,#e8f4f6);border-top:1px solid #E0E0E0;font-size:0.7em;color:#1A1A1A}
+        .viz-rdma-badge{display:inline-block;background:#164E58;color:white;padding:1px 6px;border-radius:3px;font-size:0.85em;font-weight:600}
+        .viz-other-nodes{display:flex;flex-wrap:wrap;gap:6px}
+        .viz-other-node{padding:4px 10px;border-radius:6px;font-size:0.75em;background:white;color:#4A4A4A;cursor:default;border:1px solid #E0E0E0;transition:border-color 0.12s}
+        .viz-other-node:hover{border-color:#2A7B88}
+        .viz-other-node.viz-status-ready{border-left:3px solid #3BAA3B}
+        .viz-other-node.viz-status-notready{border-left:3px solid #dc2626}
+        .cluster-viz-panel{padding:24px 32px;margin:0 32px 0;background:white;border-radius:12px;border:1px solid #E0E0E0;box-shadow:0 2px 8px rgba(0,0,0,0.04)}
+        .cluster-viz-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:18px;padding-bottom:12px;border-bottom:2px solid #E0F2F4}
+        .cluster-viz-header h3{font-size:1em;color:#1B5E6B;font-weight:700;display:flex;align-items:center;gap:8px}
+        .cluster-viz-header h3::before{content:'';display:inline-block;width:4px;height:18px;background:#2A7B88;border-radius:2px}
+        .cluster-viz-header button{border:1.5px solid #2A7B88;background:white;color:#2A7B88;padding:6px 14px;border-radius:6px;font-size:0.78em;font-weight:600;cursor:pointer;transition:background-color 0.12s,color 0.12s}
+        .cluster-viz-header button:hover{background:#2A7B88;color:white}
+
+        /* ── Empty States ── */
+        .empty{text-align:center;padding:80px 24px;color:#999;grid-column:1/-1}
+        .empty-icon{width:80px;height:80px;margin:0 auto 20px;background:#F8F8F8;border-radius:18px;display:flex;align-items:center;justify-content:center}
+        .empty h3{color:#4A4A4A;margin-bottom:8px;font-size:1.1em}
+        .empty p{color:#999;font-size:0.9em;margin-bottom:24px}
+
+        /* ── Modal ── */
+        .modal-overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,0.4);z-index:100;align-items:center;justify-content:center;overscroll-behavior:contain}
+        .modal-overlay.active{display:flex}
+        .modal{background:white;border-radius:14px;padding:28px;width:450px;max-width:90vw;max-height:90vh;overflow-y:auto;box-shadow:0 25px 60px rgba(0,0,0,0.15)}
+        .modal h2{color:#1A1A1A;font-size:1.15em;margin-bottom:4px}
+        .modal .modal-sub{color:#999;font-size:0.85em;margin-bottom:24px}
+        .modal label{display:block;font-weight:600;font-size:0.8em;color:#4A4A4A;text-transform:uppercase;letter-spacing:0.05em;margin-bottom:6px;cursor:pointer}
+        .modal input[type=text],.modal input[type=password],.modal select{width:100%;padding:10px 12px;border:1.5px solid #E0E0E0;border-radius:8px;font-size:0.95em;margin-bottom:16px;background:#F8F8F8;color:#1A1A1A}
+        .modal input:focus-visible,.modal select:focus-visible{border-color:#2A7B88;outline:none;box-shadow:0 0 0 3px rgba(42,123,136,0.1);background:white}
+        .modal input[type=password]::placeholder{color:#999}
+        .modal .file-upload{border:2px dashed #E0E0E0;border-radius:8px;padding:24px;text-align:center;cursor:pointer;margin-bottom:16px;color:#999;font-size:0.85em;transition:border-color 0.15s}
+        .modal .file-upload:hover{border-color:#2A7B88;color:#2A7B88}
+        .modal .file-upload:focus-visible{outline:none;box-shadow:0 0 0 3px rgba(42,123,136,0.15)}
+        .modal .file-upload.has-file{border-color:#3BAA3B;color:#3BAA3B;background:#f0fdf4}
+        .modal .actions{display:flex;gap:10px;justify-content:flex-end;margin-top:8px}
+        .btn-cancel{background:#F0F0F0;color:#4A4A4A}
+        .btn-cancel:hover{background:#E0E0E0}
+        .toggle-row{display:flex !important;flex-direction:row !important;align-items:center;gap:12px;margin-bottom:16px;padding:12px 14px;background:#F8F8F8;border:1.5px solid #E0E0E0;border-radius:10px;cursor:pointer;transition:border-color 0.15s,background-color 0.15s}
+        .toggle-row:hover{border-color:#2A7B88;background:#F0F9FA}
+        .toggle-row input{display:none}
+        .toggle-row .toggle-switch{width:40px;height:22px;background:#ccc;border-radius:11px;position:relative;transition:background-color 0.2s;flex-shrink:0;margin-left:auto}
+        .toggle-row .toggle-switch::after{content:'';position:absolute;top:2px;left:2px;width:18px;height:18px;background:white;border-radius:50%;transition:transform 0.2s;box-shadow:0 1px 3px rgba(0,0,0,0.2)}
+        .toggle-row.active .toggle-switch{background:#2A7B88}
+        .toggle-row.active .toggle-switch::after{transform:translateX(18px)}
+        .toggle-row.active{border-color:#2A7B88;background:#F0F9FA}
+        .toggle-row .toggle-icon{font-size:2em;flex-shrink:0;line-height:1}
+        .toggle-row .toggle-text{font-size:0.88em;color:#4A4A4A;font-weight:500;text-transform:none;letter-spacing:0}
+        .toggle-row .toggle-desc{font-size:0.75em;color:#999;font-weight:400;margin-top:2px}
+        .create-error{display:none;background:#fef2f2;border:1px solid #fecaca;border-left:4px solid #dc2626;border-radius:8px;padding:14px 16px;margin-bottom:16px;max-height:200px;overflow-y:auto}
+        .create-error .error-title{font-weight:700;color:#dc2626;font-size:0.9em;margin-bottom:4px}
+        .create-error .error-text{color:#7f1d1d;font-size:0.8em;line-height:1.6;word-break:break-word}
+        .delete-overlay{position:absolute;inset:0;background:rgba(255,255,255,0.85);display:flex;align-items:center;justify-content:center;border-radius:10px;z-index:5}
+        .warn-overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,0.4);z-index:200;align-items:center;justify-content:center}
+        .warn-overlay.active{display:flex}
+        .warn-box{background:white;border-radius:14px;padding:0;width:440px;max-width:90vw;box-shadow:0 25px 60px rgba(0,0,0,0.15);overflow:hidden}
+        .warn-banner{background:linear-gradient(135deg,#fef3c7,#fde68a);border-left:4px solid #f59e0b;padding:18px 22px}
+        .warn-banner .warn-icon{display:flex;align-items:center;gap:10px;font-weight:700;color:#92400e;font-size:0.95em;margin-bottom:6px}
+        .warn-banner .warn-msg{color:#78350f;font-size:0.88em;line-height:1.6}
+        .warn-banner code{background:#92400e;color:#fef3c7;padding:3px 8px;border-radius:4px;font-size:0.85em;font-family:'Red Hat Mono',monospace;word-break:break-all}
+        .warn-actions{padding:14px 22px;display:flex;justify-content:flex-end;gap:8px}
+        .confirm-overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,0.4);z-index:200;align-items:center;justify-content:center}
+        .confirm-overlay.active{display:flex}
+        .confirm-box{background:white;border-radius:14px;width:420px;max-width:90vw;box-shadow:0 25px 60px rgba(0,0,0,0.15);overflow:hidden}
+        .confirm-header{padding:22px 24px 0}
+        .confirm-header h3{color:#1A1A1A;font-size:1.05em;margin-bottom:6px}
+        .confirm-header p{color:#4A4A4A;font-size:0.88em;line-height:1.6}
+        .confirm-header .confirm-warn{background:#F0F9FA;border-left:3px solid #2A7B88;border-radius:6px;padding:10px 14px;margin-top:12px;color:#1B5E6B;font-size:0.82em}
+        .confirm-actions{padding:18px 24px;display:flex;justify-content:flex-end;gap:8px}
+        /* ── Admin ── */
+        .nav-item{display:flex;align-items:center;gap:8px;padding:9px 10px;margin:0 8px;border-radius:8px;cursor:pointer;font-size:0.88em;color:#4A4A4A;border:none;background:none;width:calc(100% - 16px);text-align:left;text-decoration:none;transition:background-color 0.12s}
+        .nav-item:hover{background:#F8F8F8}
+        .nav-item.active{background:#F0F9FA;color:#1B5E6B;font-weight:600}
+        .nav-item svg{opacity:0.5;flex-shrink:0}
+        .nav-item.active svg{opacity:1}
+        .user-list{display:flex;flex-direction:column;gap:1px;background:#e5e7eb;border-radius:10px;overflow:hidden;border:1px solid #e5e7eb}
+        .user-row{display:flex;align-items:center;padding:10px 16px;background:white;gap:12px;transition:background 0.1s;flex-wrap:nowrap}
+        .user-row:hover{background:#f8fafc}
+        .user-row .user-avatar{width:32px;height:32px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:0.8em;color:white;flex-shrink:0}
+        .user-row .user-info{flex:1;min-width:120px;overflow:hidden}
+        .user-row .user-name{font-weight:600;font-size:0.88em;color:#1e293b;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+        .user-row .user-meta{font-size:0.72em;color:#94a3b8;margin-top:1px;white-space:nowrap}
+        .user-row .user-stats{display:flex;gap:16px;flex-shrink:0}
+        .user-row .user-stat{text-align:center;min-width:44px}
+        .user-row .user-stat-val{font-weight:700;font-size:0.9em;color:#1e293b}
+        .user-row .user-stat-lbl{font-size:0.65em;color:#94a3b8;text-transform:uppercase;letter-spacing:0.03em}
+        .user-row .user-actions{display:flex;gap:4px;flex-shrink:0;margin-left:auto}
+        .badge-admin{background:#E0F2F4;color:#2A7B88;padding:2px 8px;border-radius:10px;font-size:0.72em;font-weight:600}
+        .badge-user{background:#F0F0F0;color:#999;padding:2px 8px;border-radius:10px;font-size:0.72em;font-weight:600}
+        .viewing-banner{background:linear-gradient(135deg,#eff6ff,#dbeafe);border-left:4px solid #3b82f6;padding:10px 20px;margin:0 32px 16px;border-radius:8px;font-size:0.88em;color:#1e40af;display:flex;align-items:center;justify-content:space-between}
+        .viewing-banner button{border:none;background:#3b82f6;color:white;padding:5px 14px;border-radius:6px;font-size:0.82em;font-weight:600;cursor:pointer}
+        @keyframes spin{from{transform:rotate(0deg)}to{transform:rotate(360deg)}}
+        @media(prefers-reduced-motion:reduce){*{transition:none !important;animation:none !important}}
+        @media(max-width:768px){.sidebar{display:none}.main{margin-left:0}}
+    </style>
+</head>
+<body>
+
+<aside class="sidebar">
+    <div class="sidebar-brand">
+        <img src="{{ url_for('static', filename='img/serveit-logo-horizontal.png') }}" alt="ServeIt Studio">
+    </div>
+    <div class="sidebar-section">
+        <span>Clusters</span>
+        <button onclick="showClusterModal()" title="Create cluster" aria-label="Create cluster">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M12 5v14M5 12h14"/></svg>
+        </button>
+    </div>
+    <div class="cluster-list" id="cluster-list">
+        {% for g in clusters %}
+        <button class="cluster-item" data-id="{{ g.id }}" onclick="selectCluster({{ g.id }})">
+            <span class="icon">{{ g.icon }}</span>
+            <span class="name">{{ g.name }}<span class="target">{{ g.description or '' }}</span></span>
+            <span class="count">{{ g.instance_count }}</span>
+            <span class="cluster-actions">
+                <span class="cl-btn" onclick="event.stopPropagation();editCluster({{ g.id }},'{{ g.name }}','{{ g.icon }}','{{ g.description or '' }}')" title="Edit">✏️</span>
+                <span class="cl-btn cl-del" onclick="event.stopPropagation();deleteCluster({{ g.id }},'{{ g.name }}')" title="Delete">&times;</span>
+            </span>
+        </button>
+        {% endfor %}
+    </div>
+    {% if is_admin %}
+    <div style="padding:8px 8px 0;border-top:1px solid #E0E0E0;">
+        <button class="nav-item" id="nav-restore" onclick="showRestore()">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/><path d="M12 7v5l4 2"/></svg>
+            Restore Data
+        </button>
+        <button class="nav-item" id="nav-users" onclick="showUsers()">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75"/></svg>
+            Users
+        </button>
+        <button class="nav-item" id="nav-settings" onclick="showSettings()">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
+            Settings
+        </button>
+    </div>
+    {% endif %}
+    <div class="sidebar-footer">
+        <div class="user-pill">
+            <div class="user-avatar">{{ username[0]|upper }}</div>
+            <div class="user-info"><div class="uname">{{ username }}{% if is_admin %} <span style="font-size:0.7em;color:#2A7B88">(admin)</span>{% endif %}</div></div>
+            <a href="/logout" class="logout-btn" title="Logout"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg></a>
+        </div>
+    </div>
+</aside>
+
+<div class="main">
+    <div class="topbar" id="topbar">
+        <h2 id="topbar-title">
+            {% if clusters %}
+            <span class="g-icon">{{ clusters[0].icon }}</span>{{ clusters[0].name }}{% if clusters[0].target_cluster and clusters[0].target_cluster != 'local' %}<span style="font-size:0.55em;color:#999;margin-left:8px;font-weight:400">{{ clusters[0].target_cluster }}</span>{% endif %}<span class="count">({{ clusters[0].instance_count }})</span>
+            {% else %}
+            Instances
+            {% endif %}
+        </h2>
+    </div>
+
+    <div class="cluster-viz-panel" id="cluster-viz-panel" {% if not clusters %}style="display:none"{% endif %}>
+        <div class="cluster-viz-header">
+            <h3>Cluster Resources</h3>
+            <button onclick="scanAndRenderCluster(currentClusterId, document.getElementById('cluster-viz'), true)">Cluster Rescan</button>
+        </div>
+        <div id="cluster-viz"></div>
+    </div>
+
+    <div class="cluster-viz-panel" id="instances-panel" style="margin-top:16px;">
+        <div class="cluster-viz-header">
+            <h3>Instances</h3>
+            <div style="display:flex;gap:8px;align-items:center">
+                <button onclick="if(currentClusterId) loadInstances(currentClusterId, false, null, true);">Instance Rescan</button>
+                <button class="btn btn-primary" id="new-instance-btn" onclick="showCreateModal()" {% if not clusters %}style="display:none"{% endif %} style="font-size:0.85em;padding:6px 14px;">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>
+                    New Instance
+                </button>
+            </div>
+        </div>
+        <div class="grid" id="instance-list">
+        {% if not clusters %}
+        <div class="empty">
+            <div class="empty-icon">
+                <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="#2A7B88" stroke-width="1.5" aria-hidden="true"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>
+            </div>
+            <h3>Create your first cluster</h3>
+            <p>Add a local or remote cluster to start deploying instances. Click the + button in the sidebar.</p>
+        </div>
+        {% endif %}
+    </div>
+    </div>
+</div>
+
+<!-- Create Instance Modal (simplified — cluster provides kubeconfig) -->
+<div class="modal-overlay" id="create-modal" onclick="if(event.target===this)hideCreateModal()">
+    <div class="modal" role="dialog" aria-labelledby="modal-title" style="width:550px">
+        <h2 id="modal-title">New Instance</h2>
+        <p class="modal-sub">Deploy an ServeIt Studio optimizer instance</p>
+        <form id="create-form" onsubmit="return createInstance(event)">
+            <label for="instance-name">Instance Name</label>
+            <input type="text" id="instance-name" name="name" placeholder="my-optimization" autocomplete="off" required>
+
+            <label for="instance-gpu-select">GPU Limit</label>
+            <select id="instance-gpu-select" style="width:100%;padding:10px 12px;border:1.5px solid #E0E0E0;border-radius:8px;font-size:0.95em;margin-bottom:16px;background:#F8F8F8;color:#1A1A1A">
+                <option value="">All GPUs (default)</option>
+            </select>
+
+            <label for="instance-storage-size">Storage Size <span style="font-weight:400;color:#999;text-transform:none">(for optimization database)</span></label>
+            <select id="instance-storage-size" style="width:100%;padding:10px 12px;border:1.5px solid #E0E0E0;border-radius:8px;font-size:0.95em;margin-bottom:16px;background:#F8F8F8;color:#1A1A1A">
+                <option value="1">1 GB</option>
+                <option value="2">2 GB</option>
+                <option value="5" selected>5 GB (default)</option>
+                <option value="10">10 GB</option>
+                <option value="20">20 GB</option>
+                <option value="50">50 GB</option>
+                <option value="100">100 GB</option>
+                <option value="200">200 GB</option>
+                <option value="500">500 GB</option>
+            </select>
+
+            <label for="instance-storage-class">Storage Class</label>
+            <select id="instance-storage-class" style="width:100%;padding:10px 12px;border:1.5px solid #E0E0E0;border-radius:8px;font-size:0.95em;margin-bottom:16px;background:#F8F8F8;color:#1A1A1A">
+                <option value="">Loading...</option>
+            </select>
+
+            <label>Node Selection <span style="font-weight:400;color:#999;text-transform:none">(optional — pin to specific nodes)</span></label>
+            <div id="instance-node-list" style="max-height:200px;overflow-y:auto;margin-bottom:16px;display:flex;flex-direction:column;gap:4px"></div>
+
+            <div class="create-error" id="create-error" role="alert" aria-live="polite">
+                <div class="error-title">Failed to create instance</div>
+                <div class="error-text" id="create-error-text"></div>
+            </div>
+            <div class="actions">
+                <button type="button" class="btn btn-cancel" onclick="hideCreateModal()">Cancel</button>
+                <button type="submit" class="btn btn-primary" id="create-btn">Create</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<!-- Create Cluster Modal -->
+<div class="modal-overlay" id="cluster-modal" onclick="if(event.target===this)hideClusterModal()">
+    <div class="modal" role="dialog" aria-labelledby="cluster-modal-title" style="width:600px">
+        <h2 id="cluster-modal-title">New Cluster</h2>
+        <p class="modal-sub">Add a local or remote cluster</p>
+        <label for="new-cluster-name">Cluster Name</label>
+        <input type="text" id="new-cluster-name" placeholder="My Cluster" autocomplete="off">
+        <label for="new-cluster-description">Description <span style="color:#999;font-weight:400;">(optional)</span></label>
+        <input type="text" id="new-cluster-description" placeholder="e.g. 8x H100, IBM Cloud VPC" autocomplete="off">
+        <label>Icon</label>
+        <div class="icon-grid" id="icon-grid"></div>
+        <label class="toggle-row" id="remote-toggle-row" onclick="toggleRemote()">
+            <input type="checkbox" id="remote-toggle">
+            <span class="toggle-icon">🌐</span>
+            <div>
+                <div class="toggle-text">Remote Cluster</div>
+                <div class="toggle-desc">Upload a kubeconfig to target a remote cluster</div>
+            </div>
+            <span class="toggle-switch"></span>
+        </label>
+        <div id="kubeconfig-section" style="display:none;">
+            <label>Kubeconfig File</label>
+            <div class="file-upload" id="file-drop" tabindex="0" role="button" aria-label="Upload kubeconfig file">Drop kubeconfig file here or click to browse</div>
+            <input type="file" id="kubeconfig-input" accept=".yaml,.yml,.conf,.config,.kubeconfig,*" style="display:none" aria-hidden="true">
+            <label for="cluster-proxy" style="margin-top:10px;">HTTPS Proxy <span style="color:#999;font-weight:400;">(optional)</span></label>
+            <input type="text" id="cluster-proxy" placeholder="http://proxy.example.com:3128" autocomplete="off" style="margin-bottom:0;">
+            <div style="font-size:0.8em;color:#999;margin-bottom:16px;">Required if the cluster API is only reachable through a proxy</div>
+            <label for="cluster-api-ip" style="margin-top:10px;">API Server IP <span style="color:#999;font-weight:400;">(optional)</span></label>
+            <input type="text" id="cluster-api-ip" placeholder="10.0.0.1" autocomplete="off" style="margin-bottom:0;">
+            <div style="font-size:0.8em;color:#999;margin-bottom:16px;">Override if the API hostname in the kubeconfig doesn't resolve from this network</div>
+        </div>
+        <label for="storage-class-select">Storage Class</label>
+        <div style="display:flex;gap:8px;margin-bottom:16px;align-items:stretch;">
+            <select id="storage-class-select" name="storage_class" style="flex:1;margin-bottom:0"><option value="">Loading&hellip;</option></select>
+            <button type="button" class="btn btn-cancel" onclick="loadStorageClasses()" style="white-space:nowrap;padding:0 14px;font-size:0.85em" aria-label="Refresh">Refresh</button>
+        </div>
+        <div class="create-error" id="cluster-error" role="alert" aria-live="polite" style="display:none">
+            <div class="error-title">Failed to create cluster</div>
+            <div class="error-text" id="cluster-error-text"></div>
+        </div>
+        <div class="actions">
+            <button type="button" class="btn btn-cancel" onclick="hideClusterModal()">Cancel</button>
+            <button type="button" class="btn btn-primary" id="cluster-create-btn" onclick="saveCluster()">Create</button>
+        </div>
+    </div>
+</div>
+
+<!-- Warning Modal -->
+<div class="warn-overlay" id="warn-modal" onclick="if(event.target===this)hideWarn()">
+    <div class="warn-box">
+        <div class="warn-banner">
+            <div class="warn-icon">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#92400e" stroke-width="2"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><path d="M12 9v4m0 4h.01"/></svg>
+                <span id="warn-title">Cannot connect</span>
+            </div>
+            <div class="warn-msg" id="warn-msg"></div>
+        </div>
+        <div class="warn-actions">
+            <button class="btn btn-cancel" onclick="hideWarn()">Close</button>
+            <button class="btn btn-primary" id="warn-action-btn" style="display:none" onclick="hideWarn()">Open Anyway</button>
+        </div>
+    </div>
+</div>
+
+<!-- Edit Cluster Modal -->
+<div class="modal-overlay" id="edit-cluster-modal" onclick="if(event.target===this)hideEditCluster()">
+    <div class="modal" role="dialog" style="width:580px;max-height:none;overflow:visible">
+        <h2>Edit Cluster</h2>
+        <input type="hidden" id="edit-cluster-id">
+        <label for="edit-cluster-name">Cluster Name</label>
+        <input type="text" id="edit-cluster-name" autocomplete="off">
+        <label for="edit-cluster-description">Description</label>
+        <input type="text" id="edit-cluster-description" placeholder="e.g. 8x H100, IBM Cloud VPC" autocomplete="off">
+        <label>Icon</label>
+        <div class="icon-grid" id="edit-icon-grid"></div>
+        <div class="actions">
+            <button type="button" class="btn btn-cancel" onclick="hideEditCluster()">Cancel</button>
+            <button type="button" class="btn btn-primary" onclick="saveEditCluster()">Save</button>
+        </div>
+    </div>
+</div>
+
+<!-- Confirm Dialog -->
+<div class="confirm-overlay" id="confirm-modal">
+    <div class="confirm-box">
+        <div class="confirm-header">
+            <h3 id="confirm-title">Are you sure?</h3>
+            <p id="confirm-msg"></p>
+            <div class="confirm-warn" id="confirm-warn"></div>
+            <div id="confirm-backup-option" style="display:none;margin-top:14px;">
+                <label style="display:flex;align-items:center;gap:10px;cursor:pointer;padding:10px 14px;background:#f0fdf4;border:1.5px solid #22c55e;border-radius:8px;">
+                    <input type="checkbox" id="confirm-backup-cb" checked style="width:18px;height:18px;accent-color:#22c55e;">
+                    <div>
+                        <div style="font-weight:600;color:#15803d;font-size:0.88em;">💾 Backup optimization data</div>
+                        <div style="font-size:0.78em;color:#166534;">Save the results database before deleting</div>
+                    </div>
+                </label>
+            </div>
+        </div>
+        <div class="confirm-actions">
+            <button class="btn btn-cancel" onclick="hideConfirm()">Cancel</button>
+            <button class="btn btn-danger" id="confirm-action-btn">Delete</button>
+        </div>
+    </div>
+</div>
+
+<!-- Backup Progress Modal -->
+<div class="modal-overlay" id="backup-modal">
+    <div class="modal" role="dialog" style="width:420px;text-align:center;padding:32px">
+        <div id="backup-modal-content">
+            <svg width="40" height="40" viewBox="0 0 24 24" aria-hidden="true" style="animation:spin 1.2s linear infinite;margin-bottom:16px"><circle cx="12" cy="12" r="10" stroke="#2A7B88" stroke-width="3" fill="none" stroke-dasharray="31.4 31.4" stroke-linecap="round"/></svg>
+            <div style="font-weight:700;font-size:1.1em;color:#1e293b;margin-bottom:6px" id="backup-modal-title">Backing up...</div>
+            <div style="color:#64748b;font-size:0.88em" id="backup-modal-status">Compressing and downloading database and artifacts. This may take a few minutes.</div>
+        </div>
+    </div>
+</div>
+
+{% if is_admin %}
+<!-- Add User Modal -->
+<div class="modal-overlay" id="add-user-modal" onclick="if(event.target===this)hideAddUserModal()">
+    <div class="modal" role="dialog" style="width:400px">
+        <h2>Add User</h2>
+        <p class="modal-sub">Create a new launcher account</p>
+        <label for="new-username">Username</label>
+        <input type="text" id="new-username" placeholder="username" autocomplete="off">
+        <label for="new-user-password">Password</label>
+        <input type="text" id="new-user-password" placeholder="min 6 characters" autocomplete="off" style="-webkit-text-security:disc;">
+        <label for="new-user-password-confirm">Confirm Password</label>
+        <input type="text" id="new-user-password-confirm" placeholder="re-enter password" autocomplete="off" style="-webkit-text-security:disc;">
+        <div id="add-user-error" style="display:none;color:#dc2626;font-size:0.85em;margin-bottom:12px;padding:8px 12px;background:#fef2f2;border-radius:6px;border-left:3px solid #dc2626;"></div>
+        <div class="actions">
+            <button type="button" class="btn btn-cancel" onclick="hideAddUserModal()">Cancel</button>
+            <button type="button" class="btn btn-primary" onclick="addUser()">Create</button>
+        </div>
+    </div>
+</div>
+{% endif %}
+
+<!-- Instance Info Modal -->
+<div class="modal-overlay" id="info-modal" onclick="if(event.target===this)this.classList.remove('active')">
+    <div class="modal" role="dialog" style="width:480px">
+        <h2 id="info-modal-title" style="margin-bottom:4px">Instance Properties</h2>
+        <p class="modal-sub" style="margin-bottom:16px">Details and resource configuration</p>
+        <div id="info-modal-body" style="max-height:400px;overflow-y:auto;"></div>
+        <div style="text-align:right;margin-top:16px;"><button class="btn" style="background:#2A7B88;color:white;padding:8px 24px;" onclick="document.getElementById('info-modal').classList.remove('active')">Close</button></div>
+    </div>
+</div>
+
+{% if is_admin %}
+<!-- Instance User Assignment Modal -->
+<div class="modal-overlay" id="assign-modal" onclick="if(event.target===this)hideAssignModal()">
+    <div class="modal" role="dialog" style="width:500px;padding:0;overflow:hidden;">
+        <div style="background:linear-gradient(135deg,#0f172a,#1e293b);padding:20px 24px;color:white;">
+            <h2 id="assign-modal-title" style="color:white;font-size:1.1em;margin:0 0 4px;">Manage Access</h2>
+            <p style="color:#94a3b8;font-size:0.82em;margin:0;">Control which users can access this instance</p>
+        </div>
+        <div style="padding:20px 24px;">
+            <div style="display:flex;gap:8px;margin-bottom:20px;">
+                <select id="assign-user-select" style="flex:1;padding:9px 12px;border:1.5px solid #e2e8f0;border-radius:8px;background:white;font-size:0.88em;color:#334155;">
+                    <option value="">Select user to add...</option>
+                </select>
+                <button class="btn btn-primary" style="padding:0 16px;font-size:0.85em;height:38px;" onclick="assignUser()">+ Add</button>
+            </div>
+            <div id="assign-current-users"></div>
+            <div style="text-align:right;margin-top:16px;padding-top:16px;border-top:1px solid #f1f5f9;">
+                <button class="btn btn-cancel" style="padding:8px 20px;" onclick="hideAssignModal()">Done</button>
+            </div>
+        </div>
+    </div>
+</div>
+{% endif %}
+
+<script>
+var _clusterIds = [{% for g in clusters %}{{ g.id }}{% if not loop.last %},{% endif %}{% endfor %}];
+var _saved = localStorage.getItem('selectedClusterId');
+var currentClusterId = (_saved && _clusterIds.indexOf(parseInt(_saved)) !== -1) ? parseInt(_saved) : {{ clusters[0].id if clusters else 'null' }};
+var IS_ADMIN = {{ 'true' if is_admin else 'false' }};
+var viewingUserId = null;
+var ICONS = ['📦','🔬','🌐','🏢','🔧','☁️','🖥️','🧪','🚀','💻','🔒','⚡','🏗️','📊','🎯','🔥','💡','🛠️','📡','🗄️','🐳','🤖','🧠','💎','🔮','🌊','🏔️','🛡️','⚙️','🔗','📈','🧬','🎛️','💾','🔑','🌍','🏭','📐','🧊','🪐'];
+var selectedIcon = '📦';
+
+// Icon grid
+(function(){
+    var grid = document.getElementById('icon-grid');
+    ICONS.forEach(function(ic){
+        var b = document.createElement('button');
+        b.type='button'; b.className='icon-opt' + (ic==='📦'?' selected':'');
+        b.textContent = ic;
+        b.onclick = function(){ grid.querySelectorAll('.icon-opt').forEach(function(x){x.classList.remove('selected')}); b.classList.add('selected'); selectedIcon=ic; };
+        grid.appendChild(b);
+    });
+})();
+
+function showClusterModal(){
+    document.getElementById('cluster-modal').classList.add('active');
+    document.getElementById('new-cluster-name').value='';
+    document.getElementById('new-cluster-description').value='';
+    document.getElementById('remote-toggle').checked=false;
+    document.getElementById('kubeconfig-section').style.display='none';
+    kubeconfigContent=null;
+    var drop=document.getElementById('file-drop');
+    drop.textContent='Drop kubeconfig file here or click to browse';
+    drop.classList.remove('has-file');
+    document.getElementById('cluster-error').style.display='none';
+    document.getElementById('new-cluster-name').focus();
+    loadStorageClasses();
+}
+function hideClusterModal(){
+    document.getElementById('cluster-modal').classList.remove('active');
+}
+
+function saveCluster(){
+    var name = document.getElementById('new-cluster-name').value.trim();
+    if(!name){
+        var inp = document.getElementById('new-cluster-name');
+        inp.style.borderColor = '#dc2626';
+        inp.placeholder = 'Cluster name is required';
+        inp.focus();
+        setTimeout(function(){ inp.style.borderColor = ''; inp.placeholder = 'My Cluster'; }, 3000);
+        return;
+    }
+    var btn = document.getElementById('cluster-create-btn');
+    var modal = document.querySelector('#cluster-modal .modal');
+    btn.disabled=true;
+
+    var overlay=document.createElement('div');
+    overlay.id='cluster-create-overlay';
+    overlay.style.cssText='position:absolute;inset:0;background:rgba(255,255,255,0.9);display:flex;align-items:center;justify-content:center;border-radius:14px;z-index:10;';
+    var msg = document.getElementById('remote-toggle').checked ? 'Validating kubeconfig and creating cluster…' : 'Creating cluster…';
+    overlay.innerHTML='<div style="display:flex;flex-direction:column;align-items:center;gap:12px"><svg width="32" height="32" viewBox="0 0 24 24" style="animation:spin 1s linear infinite"><circle cx="12" cy="12" r="10" stroke="#2A7B88" stroke-width="3" fill="none" stroke-dasharray="31.4 31.4" stroke-linecap="round"/></svg><span style="color:#4A4A4A;font-weight:600;font-size:1.05em">'+msg+'</span><span style="color:#999;font-size:0.85em">This may take a moment</span></div>';
+    modal.style.position='relative';
+    modal.style.overflow='hidden';
+    modal.appendChild(overlay);
+
+    var body = {name:name, icon:selectedIcon,
+        description: document.getElementById('new-cluster-description').value.trim() || null,
+        kubeconfig: document.getElementById('remote-toggle').checked ? kubeconfigContent : null,
+        proxy: document.getElementById('remote-toggle').checked ? (document.getElementById('cluster-proxy').value.trim() || null) : null,
+        api_server_ip: document.getElementById('cluster-api-ip').value.trim() || null,
+        storage_class: document.getElementById('storage-class-select').value || null};
+    fetch('/api/clusters',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)})
+    .then(function(r){return r.json()})
+    .then(function(data){
+        var ov=document.getElementById('cluster-create-overlay');
+        if(ov)ov.remove();
+        btn.disabled=false;
+        if(data.error){
+            document.getElementById('cluster-error-text').textContent=data.error;
+            document.getElementById('cluster-error').style.display='block';
+            return;
+        }
+        hideClusterModal();
+        loadClusters();
+        currentClusterId = data.id;
+        setTimeout(function(){ selectCluster(data.id); }, 300);
+    })
+    .catch(function(err){
+        var ov=document.getElementById('cluster-create-overlay');
+        if(ov)ov.remove();
+        btn.disabled=false;
+        document.getElementById('cluster-error-text').textContent='Network error: '+err.message;
+        document.getElementById('cluster-error').style.display='block';
+    });
+}
+
+function showConfirm(title, msg, warn, btnText, onConfirm, showBackup){
+    document.getElementById('confirm-backup-option').style.display = showBackup ? 'block' : 'none';
+    if(showBackup) document.getElementById('confirm-backup-cb').checked = false;
+    document.getElementById('confirm-title').textContent = title;
+    document.getElementById('confirm-msg').textContent = msg;
+    document.getElementById('confirm-warn').innerHTML = warn;
+    var btn = document.getElementById('confirm-action-btn');
+    btn.textContent = btnText || 'Delete';
+    btn.onclick = function(){ hideConfirm(); onConfirm(); };
+    document.getElementById('confirm-modal').classList.add('active');
+}
+function hideConfirm(){document.getElementById('confirm-modal').classList.remove('active');}
+
+var editSelectedIcon = '';
+
+// Build edit icon grid
+(function(){
+    var grid = document.getElementById('edit-icon-grid');
+    ICONS.forEach(function(ic){
+        var b = document.createElement('button');
+        b.type='button'; b.className='icon-opt';
+        b.textContent = ic;
+        b.onclick = function(){ grid.querySelectorAll('.icon-opt').forEach(function(x){x.classList.remove('selected')}); b.classList.add('selected'); editSelectedIcon=ic; };
+        grid.appendChild(b);
+    });
+})();
+
+function editCluster(id, name, icon, description) {
+    document.getElementById('edit-cluster-id').value = id;
+    document.getElementById('edit-cluster-name').value = name;
+    document.getElementById('edit-cluster-description').value = description || '';
+    editSelectedIcon = icon;
+    var grid = document.getElementById('edit-icon-grid');
+    grid.querySelectorAll('.icon-opt').forEach(function(b){ b.classList.toggle('selected', b.textContent === icon); });
+    document.getElementById('edit-cluster-modal').classList.add('active');
+    document.getElementById('edit-cluster-name').focus();
+}
+
+function hideEditCluster() {
+    document.getElementById('edit-cluster-modal').classList.remove('active');
+}
+
+function saveEditCluster() {
+    var id = document.getElementById('edit-cluster-id').value;
+    var name = document.getElementById('edit-cluster-name').value.trim();
+    var description = document.getElementById('edit-cluster-description').value.trim();
+    if (!name) return;
+    fetch('/api/clusters/' + id, {
+        method: 'PUT',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({name: name, icon: editSelectedIcon, description: description})
+    })
+    .then(function(r) { return r.json(); })
+    .then(function(data) {
+        if (data.error) { showWarn('Error', data.error); return; }
+        hideEditCluster();
+        loadClusters();
+        if (parseInt(id) === currentClusterId) {
+            selectCluster(currentClusterId);
+        }
+    });
+}
+
+var _deleteQueue = [];
+var _deleteRunning = false;
+
+function deleteCluster(id, name){
+    showConfirm('Delete Cluster', 'Delete cluster "'+name+'"?', 'This will also delete ALL instances in this cluster and their data.', 'Delete Cluster', function(){
+        var btn=document.querySelector('.cluster-item[data-id="'+id+'"]');
+        if(btn){
+            btn.style.opacity='0.5';btn.style.pointerEvents='none';
+            btn.querySelector('.name').innerHTML='<span style="color:#888">Queued for deletion…</span>';
+        }
+        _deleteQueue.push({id:id, name:name});
+        _processDeleteQueue();
+    });
+}
+
+function _processDeleteQueue(){
+    if(_deleteRunning || _deleteQueue.length===0) return;
+    _deleteRunning = true;
+    var item = _deleteQueue.shift();
+    var btn = document.querySelector('.cluster-item[data-id="'+item.id+'"]');
+    if(btn){btn.style.opacity='0.4';btn.querySelector('.name').innerHTML='<span style="color:#c00">Deleting…</span>';}
+    fetch('/api/clusters/'+item.id,{method:'DELETE'})
+    .then(function(r){return r.json()})
+    .then(function(data){
+        if(data.ok){
+            if(item.id===currentClusterId){
+                localStorage.removeItem('selectedClusterId');
+                currentClusterId = null;
+                _lastLoadedClusterId = null;
+            }
+            if(btn){btn.style.transition='opacity 0.3s';btn.style.opacity='0';setTimeout(function(){btn.remove()},300);}
+        } else {
+            showWarn('Error', 'Failed to delete "'+item.name+'": '+(data.error||'unknown'));
+            if(btn){btn.style.opacity='';btn.style.pointerEvents='';btn.querySelector('.name').textContent=item.name;}
+        }
+        _deleteRunning = false;
+        if(_deleteQueue.length > 0) setTimeout(_processDeleteQueue, 500);
+        else loadClusters();
+    }).catch(function(){
+        _deleteRunning = false;
+        if(btn){btn.style.opacity='';btn.style.pointerEvents='';}
+        _processDeleteQueue();
+    });
+}
+
+function selectCluster(id){
+    currentClusterId = id;
+    localStorage.setItem('selectedClusterId', id);
+    viewingUserId = null;
+    var navUsers = document.getElementById('nav-users');
+    if(navUsers) navUsers.classList.remove('active');
+    var navRestore = document.getElementById('nav-restore');
+    if(navRestore) navRestore.classList.remove('active');
+    var navSettings = document.getElementById('nav-settings');
+    if(navSettings) navSettings.classList.remove('active');
+    document.querySelectorAll('.cluster-item').forEach(function(el){ el.classList.toggle('active', parseInt(el.dataset.id)===id); });
+    var active = document.querySelector('.cluster-item.active');
+    if(active){
+        var icon = active.querySelector('.icon').textContent;
+        var nameEl = active.querySelector('.name');
+        var name = nameEl.childNodes[0].textContent.trim();
+        var target = nameEl.querySelector('.target');
+        var targetText = target ? target.textContent.trim() : '';
+        var targetHtml = (targetText && targetText !== 'local') ? '<span style="font-size:0.55em;color:#999;margin-left:8px;font-weight:400">'+targetText+'</span>' : '';
+        document.getElementById('topbar-title').innerHTML = '<span class="g-icon">'+icon+'</span>'+name+targetHtml+'<span class="count"></span>';
+    }
+    var _nib=document.getElementById('new-instance-btn');if(_nib)_nib.style.display='';
+    var vizPanel = document.getElementById('cluster-viz-panel');
+    if(vizPanel) vizPanel.style.display='';
+    var instPanel = document.getElementById('instances-panel');
+    if(instPanel){instPanel.style.display='';instPanel.querySelector('.cluster-viz-header').style.display='';}
+    loadInstances(id);
+    var vizContainer = document.getElementById('cluster-viz');
+    if(vizContainer && typeof scanAndRenderCluster === 'function') scanAndRenderCluster(id, vizContainer);
+}
+
+var _lastLoadedClusterId = null;
+var _instancesAbort = null;
+var _instancesLoading = false;
+var _instancesHtmlCache = {};
+function loadInstances(clusterId, isRefresh, userId, forceRefresh){
+    if(!clusterId) return;
+    var list = document.getElementById('instance-list');
+    if(!list) return;
+    // Don't load instances when an admin panel is active (they reuse instance-list)
+    if(document.querySelector('#nav-users.active, #nav-restore.active, #nav-settings.active')) return;
+    // Skip refresh if a full load is already in progress
+    if(isRefresh && _instancesLoading) return;
+    // Cancel any previous in-flight request
+    if(_instancesAbort) { try { _instancesAbort.abort(); } catch(e){} }
+    _instancesAbort = new AbortController();
+    var myAbort = _instancesAbort;
+    list.style.display = '';
+    if(!isRefresh && _lastLoadedClusterId !== clusterId) {
+        if(_lastLoadedClusterId) _instancesHtmlCache[_lastLoadedClusterId] = list.innerHTML;
+        if(_instancesHtmlCache[clusterId]) {
+            list.innerHTML = _instancesHtmlCache[clusterId];
+        } else {
+            list.innerHTML = '<div style="text-align:center;padding:40px;color:#999">Loading&hellip;</div>';
+        }
+    }
+    if(!isRefresh) {
+        _lastLoadedClusterId = clusterId;
+        _instancesLoading = true;
+    }
+    var url = '/api/instances?cluster_id='+clusterId;
+    if(userId) url += '&user_id='+userId;
+    if(forceRefresh) url += '&nocache=1';
+    var timeoutId = setTimeout(function(){ myAbort.abort(); }, 30000);
+    fetch(url, {signal: myAbort.signal})
+    .then(function(r){
+        clearTimeout(timeoutId);
+        if(r.status === 401) { _showSessionExpiredOverlay(); throw new Error('Session expired'); }
+        if(!r.ok) throw new Error('HTTP ' + r.status);
+        var ct = r.headers.get('content-type') || '';
+        if(ct.indexOf('application/json') === -1) throw new Error('Not JSON');
+        return r.json();
+    })
+    .then(function(instances){
+        _instancesLoading = false;
+        if(myAbort !== _instancesAbort) return;
+        if(!Array.isArray(instances)) throw new Error('Invalid response');
+        var countEl = document.querySelector('.cluster-item.active .count');
+        if(countEl) countEl.textContent = instances.length;
+        var topCount = document.querySelector('#topbar-title .count');
+        if(topCount) topCount.textContent = '('+instances.length+')';
+
+        if(isRefresh && list.querySelector('.card')){
+            instances.forEach(function(inst){
+                var card = document.getElementById('instance-'+inst.id);
+                if(card){
+                    var status = card.querySelector('.status');
+                    if(status){
+                        var ps = inst.pod_status || inst.status;
+                        var cls = ps==='Running'?'running':(ps==='Pending'||ps==='Creating'||ps==='Starting'?'creating':(ps==='Error'||ps==='CrashLoopBackOff'||ps==='Failed'||ps==='Deleted'?'error':'unknown'));
+                        status.textContent = ps;
+                        status.className = 'status status-'+cls;
+                    }
+                }
+            });
+            return;
+        }
+
+        if(!instances.length){
+            list.innerHTML = '<div class="empty"><div class="empty-icon"><svg width="42" height="42" viewBox="0 0 24 24" fill="none" stroke="#2A7B88" stroke-width="1.5"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/><path d="M3.27 6.96 12 12.01l8.73-5.05M12 22.08V12"/></svg></div><h3>No instances yet</h3><p>Create your first instance in this cluster.</p><button class="btn btn-primary" onclick="showCreateModal()" style="margin-top:16px;"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg> New Instance</button></div>';
+            return;
+        }
+        list.innerHTML = '';
+        instances.forEach(function(inst){
+            if(inst.status === 'deleting') return;
+            var ps = inst.pod_status || inst.status;
+            var cls = ps==='Running'?'running':(ps==='Pending'||ps==='Creating'||ps==='Starting'?'creating':(ps==='Error'||ps==='CrashLoopBackOff'||ps==='Failed'||ps==='Deleted'?'error':'unknown'));
+            var hasHttps = inst.service_url && inst.service_url.indexOf('https://')===0;
+            var localPort = 8080 + inst.id;
+            var baseUrl = hasHttps ? inst.service_url : 'http://localhost:'+localPort;
+            var openUrl = inst.auto_login_token ? baseUrl + '/auto-login?token=' + inst.auto_login_token : baseUrl;
+            var isRunning = ps === 'Running';
+            var openBtn = '<button class="btn btn-open" onclick="openInstance(\''+openUrl.replace(/'/g,"\\'")+'\','+inst.id+','+localPort+','+hasHttps+')"'+(isRunning?'':' disabled style="opacity:0.4;cursor:not-allowed"')+'>Open</button>';
+            var connectBar;
+            if (hasHttps) {
+                connectBar = '<div class="connect-bar" style="justify-content:center"><button class="btn" style="background:#2A7B88;color:white;font-size:0.78em;padding:8px 16px;" onclick="copyCmd(this,\''+inst.service_url.replace(/'/g,"\\'")+'\')">📋 Copy instance URL</button></div>';
+            } else {
+                var pfCmd = 'kubectl port-forward -n '+inst.namespace+' svc/'+inst.service_name+' '+localPort+':5000';
+                connectBar = '<div class="connect-bar" style="justify-content:center"><button class="btn" style="background:#2A7B88;color:white;font-size:0.78em;padding:8px 16px;" onclick="copyCmd(this,\''+pfCmd.replace(/'/g,"\\'")+'\')">📋 Copy portforward cli</button></div>';
+            }
+            var card = document.createElement('div');
+            card.className='card';card.id='instance-'+inst.id;card.style.position='relative';
+            var iconColor = cls==='running' ? '#2A7B88' : (cls==='error' ? '#dc2626' : '#999');
+            var iconBg = 'white';
+            var infoData = JSON.stringify({
+                name: inst.display_name||inst.name,
+                namespace: inst.namespace,
+                workload_ns: inst.workload_namespace||'',
+                cluster: inst.target_cluster==='local'?'Local':'Remote',
+                storage_class: inst.storage_class||'Default',
+                storage_size: inst.storage_size||'',
+                gpus: inst.preset_gpus||'All',
+                nodes: inst.preset_nodes||'All nodes',
+                pvc: inst.pvc_name||'',
+                deployment: inst.deployment_name||'',
+                service: inst.service_name||'',
+                created: inst.created_at||'',
+                status: ps
+            }).replace(/'/g,'&#39;').replace(/"/g,'&quot;');
+            card.innerHTML = '<div class="card-body">' +
+                '<button onclick="showInstanceInfo(this)" data-info="'+infoData+'" title="Instance properties" style="position:absolute;top:8px;right:8px;background:none;border:none;cursor:pointer;font-size:16px;color:#94a3b8;padding:4px;border-radius:4px;line-height:1;z-index:1;" onmouseover="this.style.color=\'#2A7B88\';this.style.background=\'#f0fdfa\'" onmouseout="this.style.color=\'#94a3b8\';this.style.background=\'none\'">&#9432;</button>' +
+                '<div class="card-header">' +
+                '<div class="card-icon" style="background:'+iconBg+'"><svg width="34" height="34" viewBox="0 0 24 24" fill="none" stroke="'+iconColor+'" stroke-width="1.5"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/><path d="M3.27 6.96 12 12.01l8.73-5.05M12 22.08V12"/></svg></div>' +
+                '<div style="text-align:center"><div class="card-name">'+(inst.display_name||inst.name)+'</div><span class="status status-'+cls+'">'+ps+'</span></div>' +
+                '</div>' +
+                '<div class="card-details">' +
+                '<span>🌐 '+(inst.target_cluster==='local'?'Local cluster':'Remote cluster')+'</span>' +
+                '<span>🎛️ '+(inst.preset_gpus ? inst.preset_gpus+' GPUs' : 'All GPUs')+'</span>' +
+                '<span>📍 '+(inst.preset_nodes ? inst.preset_nodes.split(',').length+' node'+(inst.preset_nodes.split(',').length>1?'s':'') : 'All nodes')+'</span>' +
+                '<span>📅 '+inst.created_at.slice(0,10)+'</span>' +
+                '</div>' +
+                '</div>' +
+                '<div class="card-actions" style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:6px;">'+openBtn+
+                (inst.is_owner === 0 ? '<span style="font-size:0.75em;background:#eff6ff;color:#3b82f6;padding:3px 8px;border-radius:10px;font-weight:600;text-align:center">Shared</span><span></span>' :
+                '<button class="btn" style="background:#475569;color:white;font-size:0.75em;padding:5px 8px;width:100%" onclick="event.stopPropagation();backupInstance('+inst.id+',\''+((inst.display_name||inst.name).replace(/'/g,"\\'"))+'\')">&#128190; Backup</button>' +
+                '<button class="btn" style="background:#f59e0b;color:white;font-size:0.75em;padding:5px 8px;width:100%" onclick="event.stopPropagation();cleanupInstance('+inst.id+',\''+((inst.display_name||inst.name).replace(/'/g,"\\'"))+'\')">&#128465; Cleanup</button>' +
+                '<button class="btn btn-danger" style="font-size:0.75em;padding:5px 8px;width:100%;display:flex;align-items:center;justify-content:center;gap:3px" onclick="deleteInstance('+inst.id+',\''+((inst.display_name||inst.name).replace(/'/g,"\\'"))+'\')">&#9888; Delete</button>' +
+                (IS_ADMIN ? '<button class="btn btn-cancel" style="font-size:0.75em;padding:5px 8px;width:100%;display:flex;align-items:center;justify-content:center;gap:3px" onclick="showAssignModal('+inst.id+',\''+((inst.display_name||inst.name).replace(/'/g,"\\'"))+'\')">&#128101; Users</button>' : '')) +
+                '</div>' +
+                connectBar;
+            list.appendChild(card);
+        });
+    }).catch(function(err){
+        _instancesLoading = false;
+        if(myAbort !== _instancesAbort) return;
+        if(err && err.name === 'AbortError'){
+            if(!isRefresh) list.innerHTML = '<div style="text-align:center;padding:40px;color:#f59e0b">Request timed out — click Instance Rescan to retry</div>';
+        } else if(err && err.message === 'Not JSON'){
+            _showSessionExpiredOverlay();
+        } else {
+            if(!isRefresh) list.innerHTML = '<div style="text-align:center;padding:40px;color:#dc2626">Failed to load instances: '+(err&&err.message||err)+'</div>';
+        }
+    });
+}
+
+function showCreateModal(){
+    if(!currentClusterId){showWarn('No Cluster','Create a cluster first before adding instances.');return;}
+    document.getElementById('create-modal').classList.add('active');
+    document.getElementById('instance-name').value='';
+    document.getElementById('instance-gpu-select').value='';
+    document.getElementById('create-error').style.display='none';
+    // Reset Create button state
+    var btn = document.getElementById('create-btn');
+    btn.disabled = false;
+    btn.textContent = 'Create';
+
+    var scSel = document.getElementById('instance-storage-class');
+    fetch('/api/storage_classes')
+    .then(function(r){return r.json()})
+    .then(function(classes){
+        scSel.innerHTML = '<option value="">-- Select a Storage Class --</option>';
+        (classes || []).forEach(function(sc){
+            var o = document.createElement('option');
+            o.value = sc.name;
+            var label = sc.is_default ? ' (default)' : '';
+            o.textContent = sc.name + label;
+            scSel.appendChild(o);
+        });
+    });
+
+    // Populate GPU and node options from cached scan
+    var gpuSel = document.getElementById('instance-gpu-select');
+    var nodeList = document.getElementById('instance-node-list');
+    fetch('/api/clusters/' + currentClusterId + '/scan')
+    .then(function(r){return r.json()})
+    .then(function(scan){
+        if(!scan.nodes) return;
+        var gpuNodes = scan.nodes.filter(function(n){return n.gpus > 0});
+        var totalGpus = scan.summary ? scan.summary.total_gpus : 0;
+
+        // GPU select
+        gpuSel.innerHTML = '<option value="">All (' + totalGpus + ' GPUs)</option>';
+        var opts = [];
+        for(var i=1;i<totalGpus;i++) opts.push(i);
+        opts.forEach(function(v){
+            var o=document.createElement('option');o.value=v;o.textContent=v+' GPU'+(v>1?'s':'');
+            gpuSel.appendChild(o);
+        });
+
+        // Node checkboxes
+        nodeList.innerHTML='';
+        gpuNodes.forEach(function(n){
+            var label = document.createElement('label');
+            label.style.cssText='display:flex;align-items:center;gap:8px;padding:8px 10px;background:#F8F8F8;border:1.5px solid #E0E0E0;border-radius:8px;cursor:pointer;font-size:0.85em;transition:border-color 0.12s';
+            label.innerHTML = '<input type="checkbox" class="inst-node-cb" value="'+n.name+'" data-gpus="'+n.gpus+'" style="accent-color:#2A7B88;width:16px;height:16px" onchange="this.closest(\'label\').style.borderColor=this.checked?\'#2A7B88\':\'#E0E0E0\';updateGpuFromNodes()">' +
+                '<div style="flex:1"><strong style="color:#1A1A1A">'+n.name+'</strong>' +
+                '<div style="font-size:0.85em;color:#999">'+n.gpus+' GPUs · '+(n.gpu_model||'GPU')+' · '+n.memory_gb+' GB RAM</div></div>' +
+                '<span style="font-size:0.75em;padding:2px 6px;border-radius:4px;background:'+(n.status==='Ready'?'#f0fdf4':'#fef2f2')+';color:'+(n.status==='Ready'?'#3BAA3B':'#dc2626')+'">'+n.status+'</span>';
+            nodeList.appendChild(label);
+        });
+        if(!gpuNodes.length) nodeList.innerHTML='<span style="color:#999;font-size:0.85em">No GPU nodes found</span>';
+    });
+
+    document.getElementById('instance-name').focus();
+}
+function updateGpuFromNodes(){
+    var checked = document.querySelectorAll('.inst-node-cb:checked');
+    var gpuSel = document.getElementById('instance-gpu-select');
+
+    if(checked.length === 0){
+        // Restore full GPU options
+        if(gpuSel._allOptions) gpuSel.innerHTML = gpuSel._allOptions;
+        return;
+    }
+
+    // Save original options on first call
+    if(!gpuSel._allOptions) gpuSel._allOptions = gpuSel.innerHTML;
+
+    var totalSelectedGpus = 0;
+    checked.forEach(function(cb){ totalSelectedGpus += parseInt(cb.dataset.gpus || 0); });
+
+    var currentVal = parseInt(gpuSel.value) || 0;
+
+    // Rebuild options capped to selected nodes' total
+    gpuSel.innerHTML = '<option value="">All (' + totalSelectedGpus + ' GPUs from selected nodes)</option>';
+    for(var i=1;i<=totalSelectedGpus;i++){
+        var o=document.createElement('option');o.value=i;o.textContent=i+' GPU'+(i>1?'s':'');
+        gpuSel.appendChild(o);
+    }
+
+    // Keep current selection if still valid
+    if(currentVal > 0 && currentVal <= totalSelectedGpus){
+        gpuSel.value = String(currentVal);
+    }
+}
+
+function loadStorageClasses(){
+    var sel = document.getElementById('storage-class-select');
+    sel.innerHTML = '<option value="">Loading…</option>';
+    fetch('/api/storage_classes').then(function(r){return r.json()}).then(function(classes){
+        sel.innerHTML='<option value="">-- Select a Storage Class --</option>';
+        if(!classes.length){sel.innerHTML='<option value="">(none found)</option>';return;}
+        classes.forEach(function(sc){ var o=document.createElement('option');o.value=sc.name;o.textContent=sc.name+(sc.is_default?' (default)':'');sel.appendChild(o);});
+    }).catch(function(){sel.innerHTML='<option value="">Failed</option>';});
+}
+function hideCreateModal(){document.getElementById('create-modal').classList.remove('active');document.getElementById('create-error').style.display='none';}
+function showCreateError(msg){var b=document.getElementById('create-error');document.getElementById('create-error-text').textContent=msg;b.style.display='block';}
+function toggleRemote(){
+    var cb=document.getElementById('remote-toggle');
+    cb.checked=!cb.checked;
+    document.getElementById('kubeconfig-section').style.display=cb.checked?'block':'none';
+    document.getElementById('remote-toggle-row').classList.toggle('active',cb.checked);
+}
+
+var kubeconfigContent=null;
+(function(){
+    var drop=document.getElementById('file-drop'),input=document.getElementById('kubeconfig-input');
+    drop.addEventListener('click',function(e){e.preventDefault();input.click();});
+    drop.addEventListener('keydown',function(e){if(e.key==='Enter'||e.key===' '){e.preventDefault();input.click();}});
+    input.addEventListener('change',function(){if(this.files[0])readF(this.files[0]);});
+    drop.addEventListener('dragover',function(e){e.preventDefault();drop.style.borderColor='#2A7B88';});
+    drop.addEventListener('dragleave',function(){drop.style.borderColor='';});
+    drop.addEventListener('drop',function(e){e.preventDefault();drop.style.borderColor='';if(e.dataTransfer.files[0])readF(e.dataTransfer.files[0]);});
+    function readF(f){var r=new FileReader();r.onload=function(ev){kubeconfigContent=ev.target.result;drop.textContent=f.name;drop.classList.add('has-file');};r.readAsText(f);}
+})();
+
+function createInstance(e){
+    e.preventDefault();
+    var nameInput=document.getElementById('instance-name');
+    var name=nameInput.value.trim();
+    if(!name){
+        nameInput.style.borderColor='#dc2626';nameInput.placeholder='Instance name is required';nameInput.focus();
+        setTimeout(function(){nameInput.style.borderColor='';nameInput.placeholder='my-optimization';},3000);return;
+    }
+    if(/[^a-zA-Z0-9 ._-]/.test(name)){
+        var errEl=document.getElementById('create-error');
+        document.getElementById('create-error-text').textContent='Name can only contain letters, numbers, spaces, dots, hyphens, and underscores.';
+        errEl.style.display='block';nameInput.focus();return;
+    }
+    var modal=document.querySelector('#create-modal .modal');
+    var btn=document.getElementById('create-btn');
+
+    // Gray out modal with overlay
+    var overlay=document.createElement('div');
+    overlay.style.cssText='position:absolute;inset:0;background:rgba(255,255,255,0.9);display:flex;align-items:center;justify-content:center;border-radius:14px;z-index:10;';
+    overlay.innerHTML='<div style="display:flex;flex-direction:column;align-items:center;gap:12px"><svg width="32" height="32" viewBox="0 0 24 24" style="animation:spin 1s linear infinite"><circle cx="12" cy="12" r="10" stroke="#2A7B88" stroke-width="3" fill="none" stroke-dasharray="31.4 31.4" stroke-linecap="round"/></svg><span style="color:#4A4A4A;font-weight:600;font-size:1.05em">Creating instance…</span><span style="color:#999;font-size:0.85em">This may take a minute</span></div>';
+    modal.style.position='relative';
+    modal.style.overflow='hidden';
+    modal.appendChild(overlay);
+    btn.disabled=true;
+
+    var gpuVal = document.getElementById('instance-gpu-select').value;
+    var selectedNodes = [];
+    document.querySelectorAll('.inst-node-cb:checked').forEach(function(cb){selectedNodes.push(cb.value)});
+    var body = {name:name, cluster_id:currentClusterId};
+    if(gpuVal) {
+        body.preset_gpus = parseInt(gpuVal);
+    } else if(selectedNodes.length) {
+        var totalGpus = 0;
+        document.querySelectorAll('.inst-node-cb:checked').forEach(function(cb){ totalGpus += parseInt(cb.dataset.gpus) || 0; });
+        if(totalGpus) body.preset_gpus = totalGpus;
+    }
+    if(selectedNodes.length) body.preset_nodes = selectedNodes;
+    var storageSize = document.getElementById('instance-storage-size').value;
+    if(storageSize) body.storage_size = parseInt(storageSize);
+    var storageClass = document.getElementById('instance-storage-class').value;
+    if(storageClass) body.storage_class = storageClass;
+    fetch('/api/instances',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)})
+    .then(function(r){return r.json()})
+    .then(function(data){
+        if(data.error){
+            overlay.remove();showCreateError(data.error);btn.disabled=false;btn.textContent='Create';
+            return;
+        }
+        // Update overlay text
+        overlay.querySelector('span:first-of-type').textContent = 'Deploying instance…';
+        overlay.querySelector('span:last-of-type').textContent = 'Cloning code and starting server';
+
+        // Poll until instance is running or error
+        var pollCount = 0;
+        var pollClusterId = currentClusterId;
+        var pollInterval = setInterval(function(){
+            pollCount++;
+            fetch('/api/instances?cluster_id=' + pollClusterId)
+            .then(function(r){
+                if(!r.ok) throw new Error('HTTP ' + r.status);
+                var ct = r.headers.get('content-type') || '';
+                if(ct.indexOf('application/json') === -1) throw new Error('Not JSON');
+                return r.json();
+            })
+            .then(function(instances){
+                if(!Array.isArray(instances)) return;
+                var inst = instances.find(function(i){return i.status !== 'deleting' && (i.display_name === name || i.name === name || i.name.indexOf(name) !== -1)});
+                if(inst){
+                    var ps = inst.pod_status || inst.status;
+                    if(ps === 'Running'){
+                        clearInterval(pollInterval);
+                        overlay.remove();
+                        hideCreateModal();
+                        if(currentClusterId === pollClusterId) loadInstances(pollClusterId, false, null, true);
+                        loadClusters();
+                    } else if(ps === 'Error' || ps === 'CrashLoopBackOff' || ps === 'Failed' || inst.status === 'error'){
+                        clearInterval(pollInterval);
+                        overlay.remove();
+                        showCreateError('Instance failed to start: ' + ps);
+                        btn.disabled=false;btn.textContent='Create';
+                    } else {
+                        overlay.querySelector('span:last-of-type').textContent = 'Status: ' + ps + '…';
+                    }
+                } else if(pollCount > 3) {
+                    clearInterval(pollInterval);
+                    overlay.remove();
+                    hideCreateModal();
+                    if(currentClusterId === pollClusterId) loadInstances(pollClusterId, false, null, true);
+                    loadClusters();
+                }
+                if(pollCount > 120){
+                    clearInterval(pollInterval);
+                    overlay.remove();
+                    hideCreateModal();
+                    if(currentClusterId === pollClusterId) loadInstances(pollClusterId, false, null, true);
+                    loadClusters();
+                }
+            }).catch(function(){
+                if(pollCount > 10){
+                    clearInterval(pollInterval);
+                    overlay.remove();
+                    hideCreateModal();
+                    if(currentClusterId === pollClusterId) loadInstances(pollClusterId, false, null, true);
+                }
+            });
+        }, 3000);
+    })
+    .catch(function(err){overlay.remove();showCreateError(err.message||err);btn.disabled=false;btn.textContent='Create';});
+    return false;
+}
+
+function backupInstance(id,name){
+    var modal = document.getElementById('backup-modal');
+    document.getElementById('backup-modal-title').textContent = 'Backing up ' + name + '...';
+    document.getElementById('backup-modal-status').textContent = 'Compressing and downloading database and artifacts. This may take a few minutes.';
+    document.getElementById('backup-modal-content').innerHTML =
+        '<svg width="40" height="40" viewBox="0 0 24 24" aria-hidden="true" style="animation:spin 1.2s linear infinite;margin-bottom:16px"><circle cx="12" cy="12" r="10" stroke="#2A7B88" stroke-width="3" fill="none" stroke-dasharray="31.4 31.4" stroke-linecap="round"/></svg>' +
+        '<div style="font-weight:700;font-size:1.1em;color:#1e293b;margin-bottom:6px">Backing up ' + name + '...</div>' +
+        '<div style="color:#64748b;font-size:0.88em">Compressing and downloading database and artifacts.<br>This may take a few minutes.</div>' +
+        '<div style="margin-top:16px;background:#f1f5f9;border-radius:8px;height:6px;overflow:hidden"><div id="backup-progress-bar" style="height:100%;background:#2A7B88;width:0%;transition:width 0.5s;border-radius:8px"></div></div>';
+    modal.classList.add('active');
+
+    var bar = document.getElementById('backup-progress-bar');
+    var progress = 0;
+    var progressTimer = setInterval(function(){
+        progress = Math.min(progress + 2, 90);
+        if(bar) bar.style.width = progress + '%';
+    }, 1000);
+
+    fetch('/api/instances/'+id+'/backup',{method:'POST'}).then(function(r){return r.json()}).then(function(data){
+        clearInterval(progressTimer);
+        if(data.ok){
+            var warnings = data.warnings && data.warnings.length ? '<div style="margin-top:8px;font-size:0.8em;color:#d97706">'+data.warnings.join('<br>')+'</div>' : '';
+            document.getElementById('backup-modal-content').innerHTML =
+                '<div style="font-size:2.5em;margin-bottom:12px">&#9989;</div>' +
+                '<div style="font-weight:700;font-size:1.1em;color:#065f46;margin-bottom:6px">Backup Complete</div>' +
+                '<div style="color:#64748b;font-size:0.88em">'+data.size_mb+' MB saved<br><span style="font-size:0.85em;color:#94a3b8">'+data.path+'</span></div>' +
+                warnings +
+                '<button class="btn" style="margin-top:16px;background:#2A7B88;color:white;padding:8px 24px" onclick="document.getElementById(\'backup-modal\').classList.remove(\'active\')">Done</button>';
+        }else{
+            document.getElementById('backup-modal-content').innerHTML =
+                '<div style="font-size:2.5em;margin-bottom:12px">&#10060;</div>' +
+                '<div style="font-weight:700;font-size:1.1em;color:#dc2626;margin-bottom:6px">Backup Failed</div>' +
+                '<div style="color:#64748b;font-size:0.88em">'+(data.error||'Unknown error')+'</div>' +
+                '<button class="btn" style="margin-top:16px;background:#64748b;color:white;padding:8px 24px" onclick="document.getElementById(\'backup-modal\').classList.remove(\'active\')">Close</button>';
+        }
+    }).catch(function(e){
+        clearInterval(progressTimer);
+        document.getElementById('backup-modal-content').innerHTML =
+            '<div style="font-size:2.5em;margin-bottom:12px">&#10060;</div>' +
+            '<div style="font-weight:700;font-size:1.1em;color:#dc2626;margin-bottom:6px">Backup Failed</div>' +
+            '<div style="color:#64748b;font-size:0.88em">'+e.message+'</div>' +
+            '<button class="btn" style="margin-top:16px;background:#64748b;color:white;padding:8px 24px" onclick="document.getElementById(\'backup-modal\').classList.remove(\'active\')">Close</button>';
+    });
+}
+
+function cleanupInstance(id,name){
+    showConfirm('Cleanup Workloads', 'Clean up all workloads for "'+name+'"?', 'This deletes all inference pods, gateways, EPP, and test deployments in the workload namespace. The instance itself and its data are kept.', 'Cleanup', function(){
+        var card=document.getElementById('instance-'+id);
+        if(card){
+            var ov=document.createElement('div');ov.className='delete-overlay';
+            ov.innerHTML='<div style="display:flex;align-items:center;gap:10px"><svg width="20" height="20" viewBox="0 0 24 24" aria-hidden="true" style="animation:spin 1s linear infinite"><circle cx="12" cy="12" r="10" stroke="#2A7B88" stroke-width="3" fill="none" stroke-dasharray="31.4 31.4" stroke-linecap="round"/></svg><span style="color:#4A4A4A;font-weight:600;font-size:0.9em">Cleaning up…</span></div>';
+            card.appendChild(ov);
+        }
+        fetch('/api/instances/'+id+'/cleanup',{method:'POST'}).then(function(r){return r.json()}).then(function(data){
+            if(card){var o=card.querySelector('.delete-overlay');if(o)o.remove();}
+            if(data.ok){
+                showWarn('Cleanup Complete', '<strong>'+name+'</strong>: '+data.message);
+            } else {
+                showWarn('Cleanup Failed', data.error||'Unknown error');
+            }
+        }).catch(function(e){
+            if(card){var o=card.querySelector('.delete-overlay');if(o)o.remove();}
+            showWarn('Cleanup Failed', e.message);
+        });
+    });
+}
+
+function deleteInstance(id,name){
+    showConfirm('Delete Instance', 'Delete instance "'+name+'"?', 'This removes the deployment, PVC, and all data. This cannot be undone.', 'Delete Instance', function(){
+        var backup = document.getElementById('confirm-backup-cb').checked;
+        _doDeleteInstance(id, name, backup);
+    }, true);
+}
+function _doDeleteInstance(id, name, backup){
+    var card=document.getElementById('instance-'+id);
+    if(card){card.style.transition='opacity 0.3s';card.style.opacity='0';setTimeout(function(){card.remove()},300);}
+    fetch('/api/instances/'+id+'?backup='+(backup?'1':'0'),{method:'DELETE'}).then(function(r){return r.json()}).then(function(data){
+        if(data.ok){loadClusters();if(currentClusterId)loadInstances(currentClusterId);}
+        else{showCreateError(data.error||'Failed');}
+    });
+}
+
+function loadClusters(){
+    fetch('/api/clusters').then(function(r){return r.json()}).then(function(clusters){
+        var list=document.getElementById('cluster-list');list.innerHTML='';
+        clusters.forEach(function(g){
+            var b=document.createElement('button');
+            b.className='cluster-item'+(g.id===currentClusterId?' active':'');
+            b.dataset.id=g.id;
+            b.onclick=function(){selectCluster(g.id)};
+            var esc = g.name.replace(/'/g,"\\'");
+            var escDesc = (g.description||'').replace(/'/g,"\\'");
+            var canManage = g.is_cluster_owner || IS_ADMIN;
+            var actions = canManage ? '<span class="cluster-actions"><span class="cl-btn" onclick="event.stopPropagation();editCluster('+g.id+',\''+esc+'\',\''+g.icon+'\',\''+escDesc+'\')" title="Edit">✏️</span><span class="cl-btn cl-del" onclick="event.stopPropagation();deleteCluster('+g.id+',\''+esc+'\')" title="Delete">&times;</span></span>' : '';
+            b.innerHTML='<span class="icon">'+g.icon+'</span><span class="name">'+g.name+'<span class="target">'+(g.description||'')+'</span></span><span class="count">'+g.instance_count+'</span>'+actions;
+            list.appendChild(b);
+        });
+        // Auto-select first cluster if current was deleted
+        if(!currentClusterId && clusters.length > 0) {
+            selectCluster(clusters[0].id);
+        }
+    }).catch(function(){});
+}
+
+function openInstance(url, instId, localPort, isHttps){
+    if(isHttps){
+        window.open(url, '_blank');
+        return;
+    }
+    var btn = event.target;
+    btn.disabled = true;
+    btn.textContent = 'Checking…';
+    fetch(url, {method:'HEAD', mode:'no-cors', signal:AbortSignal.timeout(3000)})
+    .then(function(){
+        btn.disabled = false;
+        btn.textContent = 'Open';
+        window.open(url, '_blank');
+    })
+    .catch(function(){
+        btn.disabled = false;
+        btn.textContent = 'Open';
+        var card = document.getElementById('instance-'+instId);
+        var bar = card ? card.querySelector('.connect-bar') : null;
+        if(bar) bar.style.background = '#fef3c7';
+        showWarn('Port-forward required',
+            'Cannot reach <code>localhost:'+localPort+'</code>.<br><br>Did you enable port-forward? Copy the command below and run it first.');
+        setTimeout(function(){ if(bar) bar.style.background=''; }, 4000);
+    });
+}
+function showWarn(title, msg, actionFn){
+    document.getElementById('warn-title').textContent = title;
+    document.getElementById('warn-msg').innerHTML = msg;
+    var banner = document.querySelector('#warn-modal .warn-banner');
+    var isError = /error|fail|invalid|cannot/i.test(title);
+    if (isError) {
+        banner.style.background = 'linear-gradient(135deg,#fef2f2,#fecaca)';
+        banner.style.borderLeftColor = '#dc2626';
+        banner.querySelector('.warn-icon').style.color = '#dc2626';
+        banner.querySelector('.warn-msg').style.color = '#7f1d1d';
+    } else {
+        banner.style.background = '';
+        banner.style.borderLeftColor = '';
+        banner.querySelector('.warn-icon').style.color = '';
+        banner.querySelector('.warn-msg').style.color = '';
+    }
+    var actionBtn = document.getElementById('warn-action-btn');
+    if(actionFn){
+        actionBtn.style.display = '';
+        actionBtn.onclick = function(){ hideWarn(); actionFn(); };
+    } else {
+        actionBtn.style.display = 'none';
+    }
+    document.getElementById('warn-modal').classList.add('active');
+}
+function hideWarn(){
+    document.getElementById('warn-modal').classList.remove('active');
+}
+
+function copyCmd(btn, cmd){
+    var original = btn.textContent;
+    navigator.clipboard.writeText(cmd).then(function(){
+        btn.classList.add('copied');
+        btn.textContent = 'Copied!';
+        setTimeout(function(){ btn.textContent = original; btn.classList.remove('copied'); }, 1500);
+    });
+}
+
+function downloadBackup(path){
+    window.location.href = '/api/backups/download?path=' + encodeURIComponent(path);
+}
+
+function deleteBackup(path){
+    if(!confirm('Delete this backup? This cannot be undone.')) return;
+    fetch('/api/backups/delete', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({path:path})})
+        .then(function(r){return r.json()})
+        .then(function(data){
+            if(data.ok) showRestore();
+            else showCreateError(data.error||'Delete failed');
+        });
+}
+
+// ── Admin: Restore Data ──
+function showRestore(){
+    currentClusterId = null;
+    viewingUserId = null;
+    _lastLoadedClusterId = null;
+    if(_instancesAbort) { try { _instancesAbort.abort(); } catch(e){} }
+    document.querySelectorAll('.cluster-item').forEach(function(el){el.classList.remove('active')});
+    var navUsers = document.getElementById('nav-users');
+    if(navUsers) navUsers.classList.remove('active');
+    var navSettings = document.getElementById('nav-settings');
+    if(navSettings) navSettings.classList.remove('active');
+    var navRestore = document.getElementById('nav-restore');
+    if(navRestore) navRestore.classList.add('active');
+    document.getElementById('topbar-title').innerHTML = '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="opacity:0.5"><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/></svg> Restore Data';
+    var _nib=document.getElementById('new-instance-btn');if(_nib)_nib.style.display='none';
+    var _vp=document.getElementById('cluster-viz-panel');if(_vp)_vp.style.display='none';var _ip=document.getElementById('instances-panel');if(_ip){_ip.style.display='';_ip.querySelector('.cluster-viz-header').style.display='none';}
+    var list = document.getElementById('instance-list');
+    list.style.display = 'block';
+    list.innerHTML = '<div style="text-align:center;padding:40px;color:#999">Loading backups&hellip;</div>';
+
+    fetch('/api/backups').then(function(r){return r.json()}).then(function(backups){
+        backups = backups.filter(function(b){ return b.size_mb > 0.1; });
+        if(!backups.length){
+            list.innerHTML = '<div style="text-align:center;padding:60px;color:#999"><div style="font-size:2em;margin-bottom:12px">&#128190;</div><div style="font-size:1.1em;font-weight:600;margin-bottom:6px">No Backups Found</div><div style="font-size:0.85em">Use the &#128190; Backup button on any instance to create one.</div></div>';
+            return;
+        }
+
+        var html = '<div style="padding:20px">';
+        html += '<h3 style="margin:0 0 16px;color:#1e293b">Available Backups</h3>';
+        html += '<div style="display:flex;flex-direction:column;gap:12px">';
+
+        backups.forEach(function(b){
+            var badges = '';
+            if(b.has_db) badges += '<span style="background:#ecfdf5;color:#065f46;font-size:0.72em;padding:2px 6px;border-radius:4px;font-weight:600">Database</span> ';
+            if(b.has_artifacts) badges += '<span style="background:#eff6ff;color:#1d4ed8;font-size:0.72em;padding:2px 6px;border-radius:4px;font-weight:600">Artifacts</span> ';
+            var dateStr = b.backup_time || b.timestamp;
+            try { if(dateStr.length===15) dateStr = dateStr.substring(0,4)+'-'+dateStr.substring(4,6)+'-'+dateStr.substring(6,8)+' '+dateStr.substring(9,11)+':'+dateStr.substring(11,13)+':'+dateStr.substring(13,15); } catch(e){}
+
+            var details = [];
+            if(b.cluster_details) {
+                var cd = b.cluster_details;
+                if(cd.gpu_node_count) details.push(cd.gpu_node_count+' GPU nodes');
+                if(cd.total_gpus) details.push(cd.total_gpus+' GPUs');
+                if(cd.gpu_model) details.push(cd.gpu_model);
+                if(cd.ocp_version) details.push('OCP '+cd.ocp_version);
+            }
+            var detailStr = details.length ? details.join(' · ') : '';
+
+            html += '<div style="background:white;border:1px solid #e2e8f0;border-radius:10px;padding:14px 18px;display:flex;align-items:center;justify-content:space-between;gap:12px">';
+            html += '<div style="flex:1;min-width:0">';
+            html += '<div style="font-weight:600;color:#1e293b;font-size:0.95em">Instance: '+b.instance+'</div>';
+            if(b.cluster) html += '<div style="font-weight:500;color:#6d28d9;font-size:0.85em;margin-top:1px">Cluster: '+b.cluster+'</div>';
+            html += '<div style="font-size:0.78em;color:#64748b;margin-top:3px">'+dateStr+' &middot; '+b.size_mb+' MB &middot; '+badges+(detailStr?' &middot; '+detailStr:'')+'</div>';
+            html += '</div>';
+            html += '<div style="display:flex;gap:6px;flex-shrink:0">';
+            html += '<button class="btn" style="background:#475569;color:white;font-size:0.78em;padding:6px 10px" onclick="downloadBackup(\''+b.path.replace(/'/g,"\\'")+'\')">&#11015; Download</button>';
+            html += '<button class="btn" style="background:#2A7B88;color:white;font-size:0.78em;padding:6px 12px" onclick="restoreBackup(\''+b.path.replace(/'/g,"\\'")+'\',\''+b.instance.replace(/'/g,"\\'")+'\','+b.has_db+','+b.has_artifacts+')">Restore to&hellip;</button>';
+            html += '<button class="btn" style="background:#dc2626;color:white;font-size:0.78em;padding:6px 10px" onclick="deleteBackup(\''+b.path.replace(/'/g,"\\'")+'\')">&#128465;</button>';
+            html += '</div>';
+            html += '</div>';
+        });
+
+        html += '</div></div>';
+        list.innerHTML = html;
+    });
+}
+
+function restoreBackup(path, instanceName, hasDb, hasArtifacts){
+    // Fetch all instances to let user pick target
+    fetch('/api/instances').then(function(r){return r.json()}).then(function(instances){
+        var running = instances.filter(function(i){return i.pod_status==='Running'});
+        if(!running.length){
+            showCreateError('No running instances found to restore to');
+            return;
+        }
+
+        var optionsHtml = running.map(function(i){
+            return '<option value="'+i.id+'">'+((i.display_name||i.name))+' ('+i.cluster_name+')</option>';
+        }).join('');
+
+        var body = '<div style="margin-bottom:12px">Restore backup from <strong>'+instanceName+'</strong> to:</div>';
+        body += '<select id="restore-target" style="width:100%;padding:8px;border:1px solid #d1d5db;border-radius:6px;font-size:0.9em;margin-bottom:12px">'+optionsHtml+'</select>';
+        body += '<div style="display:flex;flex-direction:column;gap:6px;margin-bottom:12px">';
+        if(hasDb) body += '<label style="display:flex;align-items:center;gap:6px;font-size:0.9em"><input type="checkbox" id="restore-db" checked> Restore Database</label>';
+        if(hasArtifacts) body += '<label style="display:flex;align-items:center;gap:6px;font-size:0.9em"><input type="checkbox" id="restore-artifacts" checked> Restore Artifacts</label>';
+        body += '</div>';
+
+        showConfirm('Restore Backup', 'Select target instance', body, 'Restore', function(){
+            var targetId = parseInt(document.getElementById('restore-target').value);
+            var targetName = document.getElementById('restore-target').selectedOptions[0].text;
+            var restoreDb = document.getElementById('restore-db') ? document.getElementById('restore-db').checked : false;
+            var restoreArt = document.getElementById('restore-artifacts') ? document.getElementById('restore-artifacts').checked : false;
+
+            var modal = document.getElementById('backup-modal');
+            document.getElementById('backup-modal-content').innerHTML =
+                '<svg width="40" height="40" viewBox="0 0 24 24" aria-hidden="true" style="animation:spin 1.2s linear infinite;margin-bottom:16px"><circle cx="12" cy="12" r="10" stroke="#2A7B88" stroke-width="3" fill="none" stroke-dasharray="31.4 31.4" stroke-linecap="round"/></svg>' +
+                '<div style="font-weight:700;font-size:1.1em;color:#1e293b;margin-bottom:6px">Restoring to ' + targetName + '...</div>' +
+                '<div style="color:#64748b;font-size:0.88em">Uploading database and artifacts to the target instance.<br>This may take a few minutes.</div>' +
+                '<div style="margin-top:16px;background:#f1f5f9;border-radius:8px;height:6px;overflow:hidden"><div id="backup-progress-bar" style="height:100%;background:#2A7B88;width:0%;transition:width 0.5s;border-radius:8px"></div></div>';
+            modal.classList.add('active');
+
+            var bar = document.getElementById('backup-progress-bar');
+            var progress = 0;
+            var progressTimer = setInterval(function(){
+                progress = Math.min(progress + 1.5, 90);
+                if(bar) bar.style.width = progress + '%';
+            }, 1000);
+
+            fetch('/api/backups/restore', {
+                method:'POST',
+                headers:{'Content-Type':'application/json'},
+                body:JSON.stringify({backup_path:path, target_instance_id:targetId, restore_db:restoreDb, restore_artifacts:restoreArt})
+            }).then(function(r){return r.json()}).then(function(data){
+                clearInterval(progressTimer);
+                if(data.ok){
+                    document.getElementById('backup-modal-content').innerHTML =
+                        '<div style="font-size:2.5em;margin-bottom:12px">&#9989;</div>' +
+                        '<div style="font-weight:700;font-size:1.1em;color:#065f46;margin-bottom:6px">Restore Complete</div>' +
+                        '<div style="color:#64748b;font-size:0.88em">' + data.results.join('<br>') + '</div>' +
+                        '<button class="btn" style="margin-top:16px;background:#2A7B88;color:white;padding:8px 24px" onclick="document.getElementById(\'backup-modal\').classList.remove(\'active\')">Done</button>';
+                }else{
+                    document.getElementById('backup-modal-content').innerHTML =
+                        '<div style="font-size:2.5em;margin-bottom:12px">&#10060;</div>' +
+                        '<div style="font-weight:700;font-size:1.1em;color:#dc2626;margin-bottom:6px">Restore Failed</div>' +
+                        '<div style="color:#64748b;font-size:0.88em">'+(data.error||'Unknown error')+'</div>' +
+                        '<button class="btn" style="margin-top:16px;background:#64748b;color:white;padding:8px 24px" onclick="document.getElementById(\'backup-modal\').classList.remove(\'active\')">Close</button>';
+                }
+            }).catch(function(e){
+                clearInterval(progressTimer);
+                document.getElementById('backup-modal-content').innerHTML =
+                    '<div style="font-size:2.5em;margin-bottom:12px">&#10060;</div>' +
+                    '<div style="font-weight:700;font-size:1.1em;color:#dc2626;margin-bottom:6px">Restore Failed</div>' +
+                    '<div style="color:#64748b;font-size:0.88em">'+e.message+'</div>' +
+                    '<button class="btn" style="margin-top:16px;background:#64748b;color:white;padding:8px 24px" onclick="document.getElementById(\'backup-modal\').classList.remove(\'active\')">Close</button>';
+            });
+        });
+    });
+}
+
+// ── Admin: User Management ──
+function showUsers(){
+    currentClusterId = null;
+    viewingUserId = null;
+    _lastLoadedClusterId = null;
+    if(_instancesAbort) { try { _instancesAbort.abort(); } catch(e){} }
+    document.querySelectorAll('.cluster-item').forEach(function(el){el.classList.remove('active')});
+    var navSettings = document.getElementById('nav-settings');
+    if(navSettings) navSettings.classList.remove('active');
+    var navRestore = document.getElementById('nav-restore');
+    if(navRestore) navRestore.classList.remove('active');
+    var navUsers = document.getElementById('nav-users');
+    if(navUsers) navUsers.classList.add('active');
+    document.getElementById('topbar-title').innerHTML = '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="opacity:0.5"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75"/></svg> User Management';
+    var _nib=document.getElementById('new-instance-btn');if(_nib)_nib.style.display='none';var _vp=document.getElementById('cluster-viz-panel');if(_vp)_vp.style.display='none';var _ip=document.getElementById('instances-panel');if(_ip){_ip.style.display='';_ip.querySelector('.cluster-viz-header').style.display='none';}
+    var list = document.getElementById('instance-list');
+    list.style.display = 'block';
+    list.innerHTML = '<div style="text-align:center;padding:40px;color:#999">Loading&hellip;</div>';
+    fetch('/api/users').then(function(r){return r.json()}).then(function(users){
+        var colors = ['#2A7B88','#6366f1','#f59e0b','#ef4444','#10b981','#8b5cf6','#ec4899','#0ea5e9','#14b8a6'];
+        var html = '<div style="padding:0">';
+        html += '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px">';
+        html += '<div><h3 style="color:#1e293b;font-size:1em;margin:0">All Users</h3><p style="color:#94a3b8;font-size:0.82em;margin:2px 0 0">'+users.length+' user'+(users.length!==1?'s':'')+'</p></div>';
+        html += '<button class="btn btn-primary" onclick="showAddUserModal()" style="font-size:0.85em;padding:8px 16px"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M12 5v14M5 12h14"/></svg> Add User</button></div>';
+        html += '<div class="user-list">';
+        users.forEach(function(u, idx){
+            var initial = u.username.charAt(0).toUpperCase();
+            var bg = colors[idx % colors.length];
+            var esc = u.username.replace(/'/g,"\\'");
+            html += '<div class="user-row">';
+            html += '<div class="user-avatar" style="background:'+bg+'">'+initial+'</div>';
+            html += '<div class="user-info"><div class="user-name">'+u.username+' '+(u.is_admin?'<span class="badge-admin">Admin</span>':'<span class="badge-user">User</span>')+'</div>';
+            html += '<div class="user-meta">Joined '+u.created_at.slice(0,10)+'</div></div>';
+            html += '<div class="user-stats">';
+            html += '<div class="user-stat"><div class="user-stat-val">'+u.cluster_count+'</div><div class="user-stat-lbl">Clusters</div></div>';
+            html += '<div class="user-stat"><div class="user-stat-val">'+u.instance_count+'</div><div class="user-stat-lbl">Owned</div></div>';
+            html += '<div class="user-stat"><div class="user-stat-val">'+(u.assigned_count||0)+'</div><div class="user-stat-lbl">Shared</div></div>';
+            html += '</div>';
+            html += '<div class="user-actions">';
+            if(!u.is_admin){
+                html += '<button class="btn btn-open" style="font-size:0.75em;padding:5px 10px" onclick="viewUserClusters('+u.id+',\''+esc+'\')">View</button>';
+                html += '<button class="btn btn-cancel" style="font-size:0.75em;padding:5px 10px" onclick="resetUserPassword('+u.id+',\''+esc+'\')">Reset</button>';
+                html += '<button class="btn btn-danger" style="font-size:0.75em;padding:5px 10px" onclick="deleteUser('+u.id+',\''+esc+'\')">Delete</button>';
+            }
+            html += '</div></div>';
+        });
+        html += '</div></div>';
+        list.innerHTML = html;
+    });
+}
+
+function showSettings(){
+    currentClusterId = null;
+    viewingUserId = null;
+    _lastLoadedClusterId = null;
+    if(_instancesAbort) { try { _instancesAbort.abort(); } catch(e){} }
+    document.querySelectorAll('.cluster-item').forEach(function(el){el.classList.remove('active')});
+    var navUsers = document.getElementById('nav-users');
+    if(navUsers) navUsers.classList.remove('active');
+    var navRestore = document.getElementById('nav-restore');
+    if(navRestore) navRestore.classList.remove('active');
+    var navSettings = document.getElementById('nav-settings');
+    if(navSettings) navSettings.classList.add('active');
+    document.getElementById('topbar-title').innerHTML = '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="opacity:0.5"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09"/></svg> Settings';
+    var _nib=document.getElementById('new-instance-btn');if(_nib)_nib.style.display='none';
+    var _vp=document.getElementById('cluster-viz-panel');if(_vp)_vp.style.display='none';var _ip=document.getElementById('instances-panel');if(_ip){_ip.style.display='';_ip.querySelector('.cluster-viz-header').style.display='none';}
+    var list = document.getElementById('instance-list');
+    list.style.display = 'block';
+    list.innerHTML = '<div style="text-align:center;padding:40px;color:#999">Loading settings&hellip;</div>';
+
+    fetch('/api/settings').then(function(r){return r.json()}).then(function(settings){
+        var autoRescan = (settings.auto_rescan || 'true') === 'true';
+        var interval = parseInt(settings.rescan_interval_min || '10');
+        var html = '<div style="padding:0;max-width:500px;">';
+        html += '<h3 style="color:#1e293b;font-size:1em;margin:0 0 20px">Settings</h3>';
+
+        html += '<div style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:10px;padding:20px;margin-bottom:16px;">';
+        html += '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;">';
+        html += '<div><div style="font-weight:600;font-size:0.95em;color:#1e293b;">Auto Rescan Clusters</div>';
+        html += '<div style="font-size:0.8em;color:#64748b;margin-top:2px;">Periodically rescan all clusters for GPU availability changes</div></div>';
+        html += '<label style="position:relative;display:inline-block;width:44px;height:24px;cursor:pointer;">';
+        html += '<input type="checkbox" id="settings-auto-rescan" '+(autoRescan?'checked':'')+' onchange="saveSettings()" style="opacity:0;width:0;height:0;">';
+        html += '<span style="position:absolute;top:0;left:0;right:0;bottom:0;background:'+(autoRescan?'#2A7B88':'#cbd5e1')+';border-radius:24px;transition:0.2s;" onclick="this.previousElementSibling.click();"></span>';
+        html += '<span style="position:absolute;left:'+(autoRescan?'22':'2')+'px;top:2px;width:20px;height:20px;background:#fff;border-radius:50%;transition:0.2s;box-shadow:0 1px 3px rgba(0,0,0,0.2);" onclick="this.previousElementSibling.previousElementSibling.click();"></span>';
+        html += '</label></div>';
+
+        html += '<div style="display:flex;align-items:center;gap:10px;">';
+        html += '<label style="font-size:0.85em;color:#475569;white-space:nowrap;">Interval:</label>';
+        html += '<input type="number" id="settings-rescan-interval" value="'+interval+'" min="1" max="60" style="width:70px;padding:6px 10px;border:1px solid #d1d5db;border-radius:6px;font-size:0.9em;" onchange="saveSettings()">';
+        html += '<span style="font-size:0.85em;color:#64748b;">minutes</span>';
+        html += '</div></div>';
+
+        var statusEnabled = (settings.status_refresh_enabled || 'true') === 'true';
+        var statusInterval = parseInt(settings.status_refresh_sec || '60');
+        html += '<div style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:10px;padding:20px;margin-bottom:16px;">';
+        html += '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;">';
+        html += '<div><div style="font-weight:600;font-size:0.95em;color:#1e293b;">Instance Status Refresh</div>';
+        html += '<div style="font-size:0.8em;color:#64748b;margin-top:2px;">Periodically refresh instance status (Running/Pending/Error)</div></div>';
+        html += '<label style="position:relative;display:inline-block;width:44px;height:24px;cursor:pointer;">';
+        html += '<input type="checkbox" id="settings-status-enabled" '+(statusEnabled?'checked':'')+' onchange="saveSettings()" style="opacity:0;width:0;height:0;">';
+        html += '<span style="position:absolute;top:0;left:0;right:0;bottom:0;background:'+(statusEnabled?'#2A7B88':'#cbd5e1')+';border-radius:24px;transition:0.2s;" onclick="this.previousElementSibling.click();"></span>';
+        html += '<span style="position:absolute;left:'+(statusEnabled?'22':'2')+'px;top:2px;width:20px;height:20px;background:#fff;border-radius:50%;transition:0.2s;box-shadow:0 1px 3px rgba(0,0,0,0.2);" onclick="this.previousElementSibling.previousElementSibling.click();"></span>';
+        html += '</label></div>';
+        html += '<div style="display:flex;align-items:center;gap:10px;">';
+        html += '<label style="font-size:0.85em;color:#475569;white-space:nowrap;">Interval:</label>';
+        html += '<input type="number" id="settings-status-interval" value="'+statusInterval+'" min="60" style="width:70px;padding:6px 10px;border:1px solid #d1d5db;border-radius:6px;font-size:0.9em;" onchange="saveSettings()">';
+        html += '<span style="font-size:0.85em;color:#64748b;">seconds</span>';
+        html += '</div></div>';
+
+        html += '</div>';
+        list.innerHTML = html;
+    });
+}
+
+function saveSettings(){
+    var autoRescan = document.getElementById('settings-auto-rescan').checked;
+    var interval = parseInt(document.getElementById('settings-rescan-interval').value) || 10;
+    var statusEnabled = document.getElementById('settings-status-enabled').checked;
+    var statusInterval = parseInt(document.getElementById('settings-status-interval').value) || 60;
+    fetch('/api/settings', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({auto_rescan: autoRescan ? 'true' : 'false', rescan_interval_min: String(interval), status_refresh_enabled: statusEnabled ? 'true' : 'false', status_refresh_sec: String(statusInterval)})
+    }).then(function(r){return r.json()}).then(function(){
+        showSettings();
+        _applyStatusInterval(statusEnabled ? statusInterval : 0);
+    });
+}
+
+var _statusIntervalId = null;
+function _applyStatusInterval(sec){
+    if(_statusIntervalId) clearInterval(_statusIntervalId);
+    _statusIntervalId = null;
+    if(!sec || sec <= 0) return;
+    sec = Math.max(60, sec);
+    _statusIntervalId = setInterval(function(){
+        if(document.getElementById('session-expired-overlay')) return;
+        if(currentClusterId && !document.querySelector('#nav-users.active, #nav-restore.active, #nav-settings.active')) {
+            loadInstances(currentClusterId, true, viewingUserId);
+        }
+        fetch('/api/clusters')
+        .then(function(r){
+            if(r.status === 401 || r.status === 302 || r.type === 'opaqueredirect'){
+                _showSessionExpiredOverlay();
+            }
+        })
+        .catch(function(){});
+    }, sec * 1000);
+}
+
+function showAddUserModal(){
+    document.getElementById('add-user-modal').classList.add('active');
+    document.getElementById('new-username').value='';
+    document.getElementById('new-user-password').value='';
+    document.getElementById('new-user-password-confirm').value='';
+    document.getElementById('add-user-error').style.display='none';
+    document.getElementById('new-username').focus();
+}
+function hideAddUserModal(){document.getElementById('add-user-modal').classList.remove('active');}
+
+function addUser(){
+    var errEl = document.getElementById('add-user-error');
+    errEl.style.display='none';
+    var username = document.getElementById('new-username').value.trim();
+    var password = document.getElementById('new-user-password').value;
+    var confirm = document.getElementById('new-user-password-confirm').value;
+    if(!username){
+        errEl.textContent='Username is required.';errEl.style.display='block';
+        document.getElementById('new-username').focus();return;
+    }
+    if(password.length < 6){
+        errEl.textContent='Password must be at least 6 characters.';errEl.style.display='block';
+        document.getElementById('new-user-password').focus();return;
+    }
+    if(password !== confirm){
+        errEl.textContent='Passwords do not match.';errEl.style.display='block';
+        document.getElementById('new-user-password-confirm').focus();return;
+    }
+    fetch('/api/users',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({username:username,password:password})})
+    .then(function(r){return r.json()})
+    .then(function(data){
+        if(data.error){errEl.textContent=data.error;errEl.style.display='block';return;}
+        hideAddUserModal();
+        showUsers();
+    });
+}
+
+function resetUserPassword(id, name){
+    var pwd = prompt('Set new temporary password for "'+name+'" (min 6 characters):');
+    if(!pwd) return;
+    if(pwd.length < 6){showWarn('Invalid Password', 'Password must be at least 6 characters.');return;}
+    fetch('/api/users/'+id+'/reset-password',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({password:pwd})})
+    .then(function(r){return r.json()})
+    .then(function(data){
+        if(data.ok) showWarn('Password Reset', 'Password for <strong>'+name+'</strong> has been reset. They will be asked to change it on next login.');
+        else showWarn('Error', data.error||'Password reset failed.');
+    });
+}
+
+function deleteUser(id, name){
+    showConfirm('Delete User', 'Delete user "'+name+'"?', 'This will delete ALL their clusters, instances, and data. This cannot be undone.', 'Delete User', function(){
+        fetch('/api/users/'+id,{method:'DELETE'}).then(function(r){return r.json()}).then(function(data){
+            if(data.ok) showUsers();
+            else showWarn('Error', data.error||'Failed');
+        });
+    });
+}
+
+function viewUserClusters(uid, uname){
+    viewingUserId = uid;
+    _lastLoadedClusterId = null;
+    currentClusterId = null;
+    if(_instancesAbort) { try { _instancesAbort.abort(); } catch(e){} }
+    var navUsers = document.getElementById('nav-users');
+    if(navUsers) navUsers.classList.remove('active');
+    document.getElementById('topbar-title').innerHTML = 'Viewing: <strong>'+uname+'</strong>';
+    var _nib=document.getElementById('new-instance-btn');if(_nib)_nib.style.display='none';var _vp=document.getElementById('cluster-viz-panel');if(_vp)_vp.style.display='none';var _ip=document.getElementById('instances-panel');if(_ip){_ip.style.display='';_ip.querySelector('.cluster-viz-header').style.display='none';}
+    // Load that user's clusters into sidebar
+    fetch('/api/clusters?user_id='+uid).then(function(r){return r.json()}).then(function(clusters){
+        var glist = document.getElementById('cluster-list');
+        glist.innerHTML = '';
+        clusters.forEach(function(g){
+            var b = document.createElement('button');
+            b.className='cluster-item';b.dataset.id=g.id;
+            b.onclick=function(){
+                currentClusterId=g.id;
+                document.querySelectorAll('.cluster-item').forEach(function(el){el.classList.remove('active')});
+                b.classList.add('active');
+                document.getElementById('topbar-title').innerHTML = '<span class="g-icon">'+g.icon+'</span>'+g.name+' <span style="font-size:0.7em;color:#3b82f6">('+uname+')</span><span class="count"></span>';
+                loadInstances(g.id, false, uid);
+            };
+            b.innerHTML='<span class="icon">'+g.icon+'</span><span class="name">'+g.name+'</span><span class="count">'+g.instance_count+'</span>';
+            glist.appendChild(b);
+        });
+        if(!clusters.length){
+            var list = document.getElementById('instance-list');
+            list.innerHTML = '<div class="empty"><h3>No clusters</h3><p>This user has no clusters yet.</p></div>';
+        }
+    });
+}
+
+function backToMyClusters(){
+    viewingUserId = null;
+    location.reload();
+}
+
+// ── Instance User Assignment ──
+var assignInstanceId = null;
+function showAssignModal(instId, instName){
+    assignInstanceId = instId;
+    document.getElementById('assign-modal-title').textContent = 'Manage Access: ' + instName;
+    document.getElementById('assign-modal').classList.add('active');
+    loadAssignedUsers(instId);
+    loadAvailableUsers(instId);
+}
+function hideAssignModal(){
+    document.getElementById('assign-modal').classList.remove('active');
+    assignInstanceId = null;
+    if(currentClusterId) loadInstances(currentClusterId, false, viewingUserId);
+}
+function loadAssignedUsers(instId){
+    var colors = ['#6366f1','#f59e0b','#ef4444','#10b981','#8b5cf6','#ec4899','#0ea5e9','#14b8a6','#2A7B88'];
+    fetch('/api/instances/'+instId+'/users').then(function(r){return r.json()}).then(function(users){
+        var div = document.getElementById('assign-current-users');
+        if(!users.length){ div.innerHTML='<div style="color:#94a3b8;font-size:0.85em;text-align:center;padding:24px 12px;background:#f8fafc;border-radius:8px;border:1px dashed #e2e8f0;">No users assigned yet</div>'; return; }
+        var html = '<div style="font-size:0.7em;font-weight:600;color:#94a3b8;text-transform:uppercase;letter-spacing:0.05em;margin-bottom:8px;">'+users.length+' user'+(users.length!==1?'s':'')+' with access</div>';
+        html += '<div style="display:flex;flex-direction:column;gap:1px;background:#e5e7eb;border-radius:8px;overflow:hidden;border:1px solid #e5e7eb;">';
+        users.forEach(function(u, idx){
+            var bg = colors[idx % colors.length];
+            var initial = u.username.charAt(0).toUpperCase();
+            html += '<div style="display:flex;align-items:center;gap:10px;padding:8px 12px;background:white;">' +
+                '<div style="width:28px;height:28px;border-radius:50%;background:'+bg+';display:flex;align-items:center;justify-content:center;color:white;font-weight:700;font-size:0.72em;flex-shrink:0;">'+initial+'</div>' +
+                '<span style="font-weight:600;font-size:0.88em;flex:1;">'+u.username+'</span>' +
+                '<span style="color:#94a3b8;font-size:0.75em;">'+u.granted_at.slice(0,10)+'</span>' +
+                '<button style="background:none;border:1px solid #fca5a5;color:#dc2626;font-size:0.72em;padding:3px 10px;border-radius:6px;cursor:pointer;font-weight:600;" onmouseover="this.style.background=\'#fef2f2\'" onmouseout="this.style.background=\'none\'" onclick="revokeUser('+instId+','+u.id+')">Remove</button>' +
+                '</div>';
+        });
+        html += '</div>';
+        div.innerHTML = html;
+    });
+}
+function loadAvailableUsers(instId){
+    Promise.all([
+        fetch('/api/users').then(function(r){return r.json()}),
+        fetch('/api/instances/'+instId+'/users').then(function(r){return r.json()})
+    ]).then(function(results){
+        var allUsers = results[0], assignedUsers = results[1];
+        var assignedIds = {};
+        assignedUsers.forEach(function(u){ assignedIds[u.id] = true; });
+        var sel = document.getElementById('assign-user-select');
+        sel.innerHTML = '<option value="">Select user to add...</option>';
+        allUsers.forEach(function(u){
+            if(!assignedIds[u.id] && !u.is_admin){
+                var o = document.createElement('option');
+                o.value = u.id; o.textContent = u.username;
+                sel.appendChild(o);
+            }
+        });
+    });
+}
+function assignUser(){
+    var sel = document.getElementById('assign-user-select');
+    var uid = parseInt(sel.value);
+    if(!uid) return;
+    fetch('/api/instances/'+assignInstanceId+'/users',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({user_ids:[uid]})})
+    .then(function(r){return r.json()}).then(function(data){
+        if(data.ok){ loadAssignedUsers(assignInstanceId); loadAvailableUsers(assignInstanceId); }
+    });
+}
+function revokeUser(instId, userId){
+    fetch('/api/instances/'+instId+'/users/'+userId,{method:'DELETE'})
+    .then(function(r){return r.json()}).then(function(data){
+        if(data.ok){ loadAssignedUsers(instId); loadAvailableUsers(instId); }
+    });
+}
+
+// Auto-refresh (status only, no flicker) + session health check
+// Load saved interval from settings, fallback to 60s
+fetch('/api/settings').then(function(r){return r.json()}).then(function(s){
+    var enabled = (s.status_refresh_enabled || 'true') === 'true';
+    _applyStatusInterval(enabled ? parseInt(s.status_refresh_sec || '60') : 0);
+}).catch(function(){ _applyStatusInterval(60); });
+
+function _showSessionExpiredOverlay(){
+    if(document.getElementById('session-expired-overlay')) return;
+    var ov = document.createElement('div');
+    ov.id = 'session-expired-overlay';
+    ov.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.6);z-index:1000;display:flex;align-items:center;justify-content:center;backdrop-filter:blur(4px)';
+    ov.innerHTML = '<div style="background:white;border-radius:14px;padding:40px;text-align:center;max-width:400px;box-shadow:0 25px 60px rgba(0,0,0,0.3)">' +
+        '<div style="font-size:3em;margin-bottom:16px">🔒</div>' +
+        '<h2 style="color:#1A1A1A;margin-bottom:8px">Session Expired</h2>' +
+        '<p style="color:#999;margin-bottom:24px">Your session has timed out. Please log in again to continue.</p>' +
+        '<a href="/login" class="btn btn-primary" style="text-decoration:none;padding:12px 32px;font-size:1em">Log In</a>' +
+        '</div>';
+    document.body.appendChild(ov);
+}
+
+// Initial load — select saved cluster (updates topbar, highlights sidebar, loads instances)
+if(currentClusterId) {
+    selectCluster(currentClusterId);
+}
+
+function showInstanceInfo(btn) {
+    var info = JSON.parse(btn.getAttribute('data-info'));
+    var rows = [
+        ['Instance Name', info.name],
+        ['Status', info.status],
+        ['Namespace', info.namespace],
+        ['Workload Namespace', info.workload_ns || 'Same as instance'],
+        ['Cluster', info.cluster],
+        ['Storage Class', info.storage_class],
+        ['Storage Size', info.storage_size],
+        ['GPU Limit', info.gpus === 'All' ? 'All available' : info.gpus + ' GPUs'],
+        ['Pinned Nodes', info.nodes === 'All nodes' ? 'None (all nodes)' : info.nodes],
+        ['PVC', info.pvc],
+        ['Deployment', info.deployment],
+        ['Service', info.service],
+        ['Created', info.created],
+    ];
+    var html = '<table style="width:100%;border-collapse:collapse;font-size:0.9em;">';
+    rows.forEach(function(r) {
+        if (!r[1] && r[1] !== 0) return;
+        html += '<tr><td style="padding:8px 12px;color:#64748b;font-weight:600;white-space:nowrap;border-bottom:1px solid #f1f5f9;">' + r[0] + '</td>';
+        html += '<td style="padding:8px 12px;color:#1e293b;border-bottom:1px solid #f1f5f9;word-break:break-all;">' + r[1] + '</td></tr>';
+    });
+    html += '</table>';
+    document.getElementById('info-modal-title').textContent = info.name;
+    document.getElementById('info-modal-body').innerHTML = html;
+    document.getElementById('info-modal').classList.add('active');
+}
+</script>
+<script src="{{ url_for('static', filename='js/cluster-viz.js') }}?v={{ range(10000,99999) | random }}"></script>
+<script>
+// Load cluster viz after cluster-viz.js is loaded
+if(currentClusterId) {
+    var _cachedScans = { {% for g in clusters %}{% if g.scan_data %}{{ g.id }}: {{ g.scan_data | safe }}{% if not loop.last %},{% endif %}{% endif %}{% endfor %} };
+    if(_cachedScans[currentClusterId]) {
+        renderClusterDiagram(document.getElementById('cluster-viz'), _cachedScans[currentClusterId]);
+    } else {
+        scanAndRenderCluster(currentClusterId, document.getElementById('cluster-viz'), true);
+    }
+}
+</script>
+<!-- Help Button -->
+<button id="help-fab" onclick="document.getElementById('help-modal').classList.add('active')" title="Help" aria-label="Help" style="position:fixed;bottom:24px;right:24px;width:48px;height:48px;border-radius:50%;background:#2A7B88;color:white;border:none;cursor:pointer;box-shadow:0 4px 14px rgba(42,123,136,0.35);font-size:24px;font-weight:800;display:flex;align-items:center;justify-content:center;font-family:serif;z-index:90;transition:background-color 0.15s,transform 0.15s;" onmouseover="this.style.background='#1B5E6B';this.style.transform='scale(1.1)'" onmouseout="this.style.background='#2A7B88';this.style.transform=''">
+?</button>
+
+<!-- Help Modal -->
+<div class="modal-overlay" id="help-modal" onclick="if(event.target===this)document.getElementById('help-modal').classList.remove('active')">
+    <div class="modal" style="width:560px;max-height:80vh;overflow-y:auto;">
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;">
+            <h2 style="margin:0;display:flex;align-items:center;gap:8px;"><span style="width:28px;height:28px;background:#2A7B88;color:white;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:16px;font-weight:800;font-family:serif;flex-shrink:0;">?</span> Help</h2>
+            <button onclick="document.getElementById('help-modal').classList.remove('active')" style="border:none;background:none;cursor:pointer;color:#999;font-size:1.4em;padding:4px;">&times;</button>
+        </div>
+
+        <div style="font-size:0.9em;color:#4A4A4A;line-height:1.7;">
+
+            <div style="font-weight:700;color:#1B5E6B;font-size:1.05em;margin-bottom:6px;">Getting Started</div>
+            <p>ServeIt Studio is a multi-cluster LLM inference optimization platform. Use this dashboard to manage clusters, create instances, and run optimizations.</p>
+
+            <div style="font-weight:700;color:#1B5E6B;font-size:1.05em;margin:16px 0 6px;">Clusters</div>
+            <p><strong>Local cluster</strong> uses your current Kubernetes context. <strong>Remote clusters</strong> require a kubeconfig file — upload it when creating the cluster and the system will validate connectivity and store it securely as a K8s Secret.</p>
+            <p>Click <strong>Rescan</strong> to refresh GPU, CPU, memory, and RDMA information from the cluster.</p>
+
+            <div style="font-weight:700;color:#1B5E6B;font-size:1.05em;margin:16px 0 6px;">Instances</div>
+            <p>Each instance is an isolated ServeIt Studio deployment with its own database and optimization runs. Click <strong>+ New Instance</strong> to create one.</p>
+            <ul style="padding-left:20px;margin:8px 0;">
+                <li><strong>GPU Allocation</strong> — Limit how many GPUs an instance can use. Leave empty for full cluster access.</li>
+                <li><strong>Node Pinning</strong> — Restrict tests to specific machines. Useful for shared clusters or specific hardware.</li>
+            </ul>
+
+            <div style="font-weight:700;color:#1B5E6B;font-size:1.05em;margin:16px 0 6px;">Connecting to an Instance</div>
+            <div style="background:#f8fafc;border:1.5px solid #E0E0E0;border-radius:8px;padding:12px;margin:8px 0;">
+                <p style="margin:0 0 8px;"><strong>OpenShift</strong> — Instances get a Route URL automatically. Click <strong>Open</strong> to access directly.</p>
+                <p style="margin:0;"><strong>Vanilla Kubernetes</strong> — No built-in ingress. Use the <strong>"📋 Copy portforward cli"</strong> button to copy a <code style="background:#1A1A1A;color:#fff;padding:2px 6px;border-radius:3px;font-size:0.9em;">kubectl port-forward</code> command. Paste it in your terminal to create a local tunnel, then click <strong>Open</strong>.</p>
+            </div>
+
+            <div style="font-weight:700;color:#1B5E6B;font-size:1.05em;margin:16px 0 6px;">GPU Node Visualization</div>
+            <p>The <strong>Cluster Resources</strong> panel shows detected hardware. Each node card displays:</p>
+            <ul style="padding-left:20px;margin:8px 0;">
+                <li><span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:#3BAA3B;margin-right:4px;"></span> <strong>Green LEDs</strong> — Node is Ready</li>
+                <li><span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:#dc2626;margin-right:4px;"></span> <strong>Red LEDs</strong> — Node is Not Ready</li>
+                <li><strong>Teal bars</strong> — Individual GPU slots</li>
+                <li><span style="background:#164E58;color:white;padding:1px 5px;border-radius:3px;font-size:0.8em;">RDMA</span> — Node has InfiniBand/RoCE for fast GPU-to-GPU networking</li>
+            </ul>
+
+            <div style="font-weight:700;color:#1B5E6B;font-size:1.05em;margin:16px 0 6px;">Instance Actions</div>
+            <p>Each instance card has the following action buttons:</p>
+            <div style="background:#f8fafc;border:1.5px solid #E0E0E0;border-radius:8px;padding:12px;margin:8px 0;display:flex;flex-direction:column;gap:10px;">
+                <div style="display:flex;align-items:center;gap:10px;">
+                    <span style="background:#2A7B88;color:white;padding:4px 12px;border-radius:6px;font-size:0.8em;font-weight:600;white-space:nowrap;">Open</span>
+                    <span style="font-size:0.9em;">Opens the ServeIt Studio wizard UI for this instance. On OpenShift, connects via Route URL. On vanilla K8s, requires port-forward first.</span>
+                </div>
+                <div style="display:flex;align-items:center;gap:10px;">
+                    <span style="background:#475569;color:white;padding:4px 12px;border-radius:6px;font-size:0.8em;font-weight:600;white-space:nowrap;">&#128190; Backup</span>
+                    <span style="font-size:0.9em;">Compresses and downloads the instance's optimization database to the launcher's backup storage at <code style="background:#f1f5f9;padding:1px 4px;border-radius:3px;font-size:0.85em;">/mnt/storage/backups/</code>.</span>
+                </div>
+                <div style="display:flex;align-items:center;gap:10px;">
+                    <span style="background:#f59e0b;color:white;padding:4px 12px;border-radius:6px;font-size:0.8em;font-weight:600;white-space:nowrap;">&#128465; Cleanup</span>
+                    <span style="font-size:0.9em;">Deletes all workload resources (inference pods, EPP, gateways, LWS) in the instance's namespace. Keeps the instance pod, PVC, and database intact. Use this to free GPUs after a test run.</span>
+                </div>
+                <div style="display:flex;align-items:center;gap:10px;">
+                    <span style="background:#dc2626;color:white;padding:4px 12px;border-radius:6px;font-size:0.8em;font-weight:600;white-space:nowrap;">Delete</span>
+                    <span style="font-size:0.9em;">Permanently removes the instance — deployment, PVC, and all data. Optionally backs up the database before deletion.</span>
+                </div>
+                {% if is_admin %}
+                <div style="display:flex;align-items:center;gap:10px;">
+                    <span style="background:#64748b;color:white;padding:4px 12px;border-radius:6px;font-size:0.8em;font-weight:600;white-space:nowrap;">&#128101;</span>
+                    <span style="font-size:0.9em;">Manage user access — share this instance with other users or revoke access. Admin only.</span>
+                </div>
+                {% endif %}
+            </div>
+
+            {% if is_admin %}
+            <div style="font-weight:700;color:#1B5E6B;font-size:1.05em;margin:16px 0 6px;">Admin: User Management</div>
+            <p>As an admin, you can create users, reset passwords, and view their clusters. Each user's clusters and instances are isolated — deleting a user removes all their resources.</p>
+            {% endif %}
+        </div>
+
+        <div style="margin-top:20px;text-align:right;">
+            <button class="btn btn-primary" onclick="document.getElementById('help-modal').classList.remove('active')">Got it</button>
+        </div>
+    </div>
+</div>
+
+</body>
+</html>

@@ -1,0 +1,217 @@
+/**
+ * Cluster Visualization — renders a visual diagram of cluster nodes and GPUs.
+ * Separate module for modularity.
+ */
+
+function renderClusterDiagram(container, data) {
+    if (!data || !data.nodes) {
+        container.innerHTML = '<div style="text-align:center;padding:40px;color:#999">No cluster data available</div>';
+        return;
+    }
+
+    var s = data.summary;
+
+    // Show warning if scan had limited permissions
+    if (data.scan_warning) {
+        container.innerHTML = '<div style="padding:24px;text-align:center;">' +
+            '<div style="background:#fffbeb;border:1.5px solid #f59e0b;border-radius:10px;padding:16px 20px;margin-bottom:16px;text-align:left;">' +
+            '<div style="font-weight:700;color:#92400e;font-size:0.95em;margin-bottom:4px;">⚠️ Limited Cluster Access</div>' +
+            '<div style="color:#78350f;font-size:0.85em;line-height:1.6;">Could not scan cluster resources — the service account may lack node-level permissions. ' +
+            'This is normal for launcher-only clusters without GPUs. Instance creation and remote cluster management will still work.</div>' +
+            '</div>' +
+            '<div style="color:#999;font-size:0.85em;">Tip: Add remote clusters with GPU access to run optimizations.</div>' +
+            '</div>';
+        return;
+    }
+
+    if (s.total_gpus === 0 && data.nodes.length === 0) {
+        container.innerHTML = '<div style="padding:24px;text-align:center;">' +
+            '<div style="color:#999;font-size:0.95em;">No GPU nodes detected on this cluster.</div>' +
+            '<div style="color:#999;font-size:0.85em;margin-top:8px;">Add a remote cluster with GPUs to run optimizations.</div>' +
+            '</div>';
+        return;
+    }
+
+    var gpuNodes = data.nodes.filter(function(n) { return n.gpus > 0; });
+    var nonGpuNodes = data.nodes.filter(function(n) { return n.gpus === 0; });
+
+    var html = '';
+
+    // Summary bar
+    html += '<div class="viz-summary">';
+    if (s.gpu_warning) {
+        html += '<div class="viz-stat"><div class="viz-stat-value" style="color:#dc2626">0</div><div class="viz-stat-label">Total GPUs</div></div>';
+    } else {
+        html += '<div class="viz-stat"><div class="viz-stat-value">' + s.total_gpus + '</div><div class="viz-stat-label">Total GPUs</div></div>';
+    }
+    var inUse = s.gpus_in_use || 0;
+    var avail = s.gpus_available != null ? s.gpus_available : s.total_gpus;
+    var usageColor = inUse > 0 ? (avail > 0 ? '#F0AB00' : '#dc2626') : '#3BAA3B';
+    html += '<div class="viz-stat"><div class="viz-stat-value" style="color:' + usageColor + '">' + avail + ' / ' + s.total_gpus + '</div><div class="viz-stat-label">Available GPUs</div></div>';
+    html += '<div class="viz-stat"><div class="viz-stat-value">' + s.gpu_node_count + '</div><div class="viz-stat-label">GPU Nodes</div></div>';
+    html += '<div class="viz-stat"><div class="viz-stat-value">' + (s.gpu_model || 'N/A') + '</div><div class="viz-stat-label">GPU Model</div></div>';
+    html += '<div class="viz-stat"><div class="viz-stat-value">' + Math.round((s.gpu_memory_per_gpu_mb || 0) / 1024) + ' GB</div><div class="viz-stat-label">VRAM / GPU</div></div>';
+    html += '<div class="viz-stat"><div class="viz-stat-value">' + (s.has_rdma ? 'Yes' : 'No') + '</div><div class="viz-stat-label">RDMA</div></div>';
+    html += '<div class="viz-stat"><div class="viz-stat-value">' + (s.cloud_provider || 'unknown') + '</div><div class="viz-stat-label">Provider</div></div>';
+    html += '</div>';
+
+    // GPU warning banner
+    if (s.gpu_warning) {
+        html += '<div style="background:#fef3c7;border:1px solid #f59e0b;border-radius:8px;padding:10px 14px;margin:10px 0;font-size:0.85em;color:#92400e;">⚠️ ' + s.gpu_warning + '</div>';
+    }
+
+    // Infrastructure component versions — same viz-summary/viz-stat style
+    if (data.infra_versions && Object.keys(data.infra_versions).length > 0) {
+        var iv = data.infra_versions;
+        var versionItems = [
+            {key: 'openshift', label: 'OpenShift'},
+            {key: 'gpu_operator', label: 'GPU Operator'},
+            {key: 'gpu_driver', label: 'GPU Driver'},
+            {key: 'network_operator', label: 'Network Operator'},
+            {key: 'mofed', label: 'MOFED/DOCA', wide: true},
+            {key: 'istio', label: 'Istio'},
+            {key: 'service_mesh', label: 'Service Mesh'},
+            {key: 'epp', label: 'EPP'},
+            {key: 'lws', label: 'LWS'},
+        ];
+        html += '<div class="viz-section-title">Cluster Versions</div>';
+        html += '<div class="viz-summary">';
+        versionItems.forEach(function(item) {
+            if (iv[item.key]) {
+                var val = iv[item.key];
+                var displayVal = val.length > 16 ? val.substring(0, 14) + '…' : val;
+                var style = item.wide ? 'flex:2;min-width:160px;' : 'flex:0.8;min-width:60px;';
+                var titleAttr = val.length > 16 ? ' title="' + val + '"' : '';
+                html += '<div class="viz-stat" style="' + style + '"><div class="viz-stat-value" style="font-size:1.1em;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:100%;"' + titleAttr + '>' + displayVal + '</div><div class="viz-stat-label">' + item.label + '</div></div>';
+            }
+        });
+        html += '</div>';
+    }
+
+    // Infrastructure warnings (missing LWS, Istio, etc.)
+    if (data.infra_warnings && data.infra_warnings.length > 0) {
+        html += '<div style="background:#fef2f2;border:1.5px solid #dc2626;border-radius:10px;padding:14px 18px;margin-bottom:16px;">';
+        html += '<div style="font-weight:700;color:#dc2626;font-size:0.9em;margin-bottom:6px;">⚠️ Missing Infrastructure</div>';
+        data.infra_warnings.forEach(function(w) {
+            html += '<div style="color:#7f1d1d;font-size:0.82em;line-height:1.6;padding:2px 0;">• ' + w + '</div>';
+        });
+        html += '</div>';
+    }
+
+    // GPU Nodes grid
+    if (gpuNodes.length > 0) {
+        html += '<div class="viz-section-title">GPU Nodes</div>';
+        html += '<div class="viz-nodes">';
+        gpuNodes.forEach(function(node) {
+            var statusClass = node.status === 'Ready' ? 'viz-status-ready' : (node.status === 'NotReady' ? 'viz-status-notready' : 'viz-status-unknown');
+            var vram = node.gpu_memory_gb ? node.gpu_memory_gb + ' GB' : '';
+
+            html += '<div class="viz-node">';
+            // Server chassis top — status LED + name
+            html += '<div class="viz-server-top">';
+            html += '<span class="viz-led ' + statusClass + '"></span>';
+            html += '<span class="viz-led ' + (node.status === 'Ready' ? 'viz-led-activity' : statusClass) + '"></span>';
+            html += '<span class="viz-node-name">' + _shortName(node.name) + '</span>';
+            html += '</div>';
+
+            // Server chassis body — GPU slots
+            html += '<div class="viz-server-body">';
+            html += '<div class="viz-gpu-bay">';
+            for (var i = 0; i < node.gpus; i++) {
+                html += '<div class="viz-gpu-slot" title="' + (node.gpu_model || 'GPU') + ' #' + (i+1) + ' ' + vram + '"></div>';
+            }
+            html += '</div>';
+            html += '<div class="viz-server-specs">';
+            html += '<span>' + node.gpus + '× ' + (node.gpu_model || 'GPU') + '</span>';
+            if (vram) html += '<span>' + vram + ' ea</span>';
+            html += '</div>';
+            html += '</div>';
+
+            // Server chassis bottom — CPU/RAM/RDMA
+            html += '<div class="viz-server-bottom">';
+            html += '<span>' + node.cpu_cores + ' CPUs</span>';
+            html += '<span>' + node.memory_gb + ' GB</span>';
+            if (node.has_rdma) html += '<span class="viz-rdma-badge">RDMA</span>';
+            html += '</div>';
+            html += '</div>';
+        });
+        html += '</div>';
+    }
+
+    // Non-GPU nodes (compact)
+    if (nonGpuNodes.length > 0) {
+        html += '<div class="viz-section-title" style="margin-top:16px">Other Nodes (' + nonGpuNodes.length + ')</div>';
+        html += '<div class="viz-other-nodes">';
+        nonGpuNodes.forEach(function(node) {
+            var statusClass = node.status === 'Ready' ? 'viz-status-ready' : 'viz-status-notready';
+            html += '<span class="viz-other-node ' + statusClass + '" title="' + node.name + ' — ' + node.cpu_cores + ' CPUs, ' + node.memory_gb + ' GB RAM">';
+            html += _shortName(node.name);
+            html += '</span>';
+        });
+        html += '</div>';
+    }
+
+    container.innerHTML = html;
+}
+
+function _shortName(name) {
+    return name;
+}
+
+function _handleScanResponse(r) {
+    if (r.redirected || r.status === 302 || r.status === 401 || r.status === 403) {
+        return Promise.reject('session_expired');
+    }
+    var ct = r.headers.get('content-type') || '';
+    if (ct.indexOf('application/json') === -1) {
+        return Promise.reject('session_expired');
+    }
+    return r.json();
+}
+
+function _showSessionExpired(container) {
+    container.innerHTML = '<div style="text-align:center;padding:40px;"><div style="font-size:2em;margin-bottom:12px">🔒</div><div style="color:#4A4A4A;font-weight:600;margin-bottom:8px">Session expired</div><div style="color:#999;font-size:0.9em">Please <a href="/logout" style="color:#2A7B88;font-weight:600">log in again</a> to continue.</div></div>';
+}
+
+var _vizCache = {};
+var _VIZ_COOLDOWN = 30000;
+function scanAndRenderCluster(clusterId, container, forceRescan) {
+    if (!forceRescan && _vizCache[clusterId] && Date.now() - _vizCache[clusterId].ts < _VIZ_COOLDOWN) {
+        renderClusterDiagram(container, _vizCache[clusterId].data);
+        return;
+    }
+    if (forceRescan) {
+        container.innerHTML = '<div style="text-align:center;padding:40px;color:#999"><div style="margin-bottom:12px">🔍</div>Scanning cluster resources…</div>';
+        fetch('/api/clusters/' + clusterId + '/scan', { method: 'POST' })
+        .then(_handleScanResponse)
+        .then(function(data) {
+            if (data.error) { container.innerHTML = '<div style="text-align:center;padding:40px;color:#dc2626">Scan failed: ' + data.error + '</div>'; return; }
+            _vizCache[clusterId] = {ts: Date.now(), data: data};
+            renderClusterDiagram(container, data);
+        })
+        .catch(function(err) {
+            if (err === 'session_expired') { _showSessionExpired(container); return; }
+            container.innerHTML = '<div style="text-align:center;padding:40px;color:#dc2626">Scan error: ' + err + '</div>';
+        });
+        return;
+    }
+    // Try cached from DB first
+    fetch('/api/clusters/' + clusterId + '/scan')
+    .then(_handleScanResponse)
+    .then(function(data) {
+        if (data.not_scanned) {
+            container.innerHTML = '<div style="text-align:center;padding:40px;color:#94a3b8"><div style="margin-bottom:8px;font-size:1.2em;">📡</div>Cluster not scanned yet. Click <strong>Rescan</strong> above.</div>';
+            return;
+        }
+        if (data.error) {
+            container.innerHTML = '<div style="text-align:center;padding:40px;color:#dc2626">Scan failed: ' + data.error + '</div>';
+            return;
+        }
+        _vizCache[clusterId] = {ts: Date.now(), data: data};
+        renderClusterDiagram(container, data);
+    })
+    .catch(function(err) {
+        if (err === 'session_expired') { _showSessionExpired(container); return; }
+        container.innerHTML = '<div style="text-align:center;padding:40px;color:#94a3b8">Could not load cluster data</div>';
+    });
+}

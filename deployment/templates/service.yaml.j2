@@ -1,0 +1,40 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ name }}-ui
+  namespace: {{ namespace }}
+  labels:
+    app: {{ name }}
+spec:
+  ports:
+  - name: http
+    port: 5000
+    protocol: TCP
+    targetPort: 5000
+  selector:
+    app: {{ name }}
+{% if is_openshift %}
+  type: ClusterIP
+---
+apiVersion: route.openshift.io/v1
+kind: Route
+metadata:
+  name: {{ name }}-ui
+  namespace: {{ namespace }}
+  labels:
+    app: {{ name }}
+  annotations:
+    haproxy.router.openshift.io/timeout: 300s
+spec:
+  port:
+    targetPort: 5000
+  to:
+    kind: Service
+    name: {{ name }}-ui
+    weight: 100
+  tls:
+    termination: edge
+    insecureEdgeTerminationPolicy: Redirect
+{% else %}
+  type: LoadBalancer
+{% endif %}

@@ -1,0 +1,25 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ test_id }}-prefill
+  namespace: {{ namespace }}
+  labels:
+    app: llm-d
+    component: serveit-test
+    test-id: {{ test_id }}
+    architecture: pd
+    role: prefill
+spec:
+  selector:
+    llm-d.ai/role: prefill
+    llm-d.ai/test-id: {{ test_id }}
+  ports:
+    - name: http
+      port: 8000
+      protocol: TCP
+      targetPort: 8000
+    - name: kv-transfer
+      port: 9988
+      protocol: TCP
+      targetPort: 9988
+  type: ClusterIP

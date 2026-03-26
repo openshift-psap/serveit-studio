@@ -1,0 +1,443 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: rdma-discovery-script
+  namespace: {{ namespace }}
+data:
+  discover_ib_hca.sh: |
+    #!/bin/bash
+    # NOTE: Do NOT use set -e here — this script is sourced by pod entrypoints,
+    # and set -e would kill the parent shell on any command failure.
+
+    # --- SCRIPT CONFIGURATION ---
+    ulimit -l unlimited || true
+
+    WAIT_TIMEOUT="${WAIT_TIMEOUT:-300}"
+    WAIT_INTERVAL="${WAIT_INTERVAL:-5}"
+
+    echo "--- Running InfiniBand HCA discovery script (DRA-NET aware) ---" >&2
+
+    # --- VALIDATE PREREQUISITES ---
+    if [[ ! -d "/sys/class/infiniband" ]]; then
+        echo "Warning: /sys/class/infiniband directory not found, skipping RDMA discovery." >&2
+        return 0 2>/dev/null || exit 0
+    fi
+
+    # --- STEP 1: DETECT NETWORK MODE ---
+    NETWORK_MODE="nad"  # Default to NAD
+    SOCKET_IFNAME="eth0"  # Default management interface
+
+    # Count Multus secondary interfaces (net0, net1, net1-0, net1-1, etc.)
+    NET_COUNT=$(ls -1 /sys/class/net/ 2>/dev/null | grep -c '^net[0-9]')
+
+    # Check for multi-nic-cni pattern: net1-0, net1-1, ... net1-15
+    MULTINIC_COUNT=$(ls -1 /sys/class/net/ 2>/dev/null | grep -c '^net1-[0-9]')
+
+    # Template-injected network mode takes priority over auto-detection.
+    # This avoids misdetecting DRA (8x net0-net7) as SR-IOV multinic.
+    if [[ -n "${RDMA_NETWORK_MODE:-}" ]]; then
+        NETWORK_MODE="$RDMA_NETWORK_MODE"
+        if [[ "$NETWORK_MODE" == "dra-net" ]]; then
+            SOCKET_IFNAME="net0"
+        fi
+        echo "--- Network mode from pod env: $NETWORK_MODE (interface: $SOCKET_IFNAME) ---" >&2
+    elif [ "$MULTINIC_COUNT" -gt 4 ]; then
+        NETWORK_MODE="sriov_multinic"
+        SOCKET_IFNAME="eth0"
+        echo "--- SR-IOV multi-nic mode detected ($MULTINIC_COUNT net1-X interfaces) ---" >&2
+    elif ip link show net0 &>/dev/null; then
+        NETWORK_MODE="dra-net"
+        SOCKET_IFNAME="net0"
+        echo "--- DRA-NET mode detected (interface: net0) ---" >&2
+    elif ls /sys/class/infiniband/* &>/dev/null && \
+         [ "$NET_COUNT" -eq 0 ]; then
+        NETWORK_MODE="shared_device"
+        SOCKET_IFNAME="eth0"
+        echo "--- NVIDIA shared device plugin mode detected (interface: eth0) ---" >&2
+    else
+        echo "--- NAD/Traditional mode detected (interface: eth0) ---" >&2
+    fi
+
+    # --- STEP 2: DISCOVER INFINIBAND HCAs ---
+    declare -a requested_hcas=()
+    while getopts "i:" opt; do
+      case $opt in
+        i) IFS=',' read -r -a requested_hcas <<< "$OPTARG"; echo "Info: Filtering for requested HCAs: ${requested_hcas[*]}" >&2 ;;
+        \?) echo "Error: Invalid option: -$OPTARG" >&2; return 1 2>/dev/null || exit 1 ;;
+      esac
+    done
+
+    declare -a all_hcas
+    declare -A hca_to_ifname
+    declare -a data_ips
+
+    echo "--- Discovering active InfiniBand HCAs (using sysfs)... ---" >&2
+
+    # Get all RDMA devices from sysfs (ibp*, mlx5_*, etc.)
+    for hca_path in /sys/class/infiniband/*; do
+        if [[ ! -d "$hca_path" ]]; then
+            continue
+        fi
+
+        hca=$(basename "$hca_path")
+
+        # Check if port 1 is active
+        port_state=""
+        if [[ -f "$hca_path/ports/1/state" ]]; then
+            port_state=$(cat "$hca_path/ports/1/state" 2>/dev/null | grep -o "ACTIVE" || true)
+        fi
+
+        if [[ "$port_state" == "ACTIVE" ]]; then
+
+            # Get interface name from sysfs
+            ifname=""
+            if [[ -d "$hca_path/device/net" ]]; then
+                ifname=$(ls "$hca_path/device/net/" 2>/dev/null | head -1)
+            fi
+
+            # For DRA-NET mode, check if this HCA has netdev association
+            # Only HCAs with netdev will have valid RoCE GIDs
+            if [[ "$NETWORK_MODE" == "dra-net" ]]; then
+                # Check rdma link to see if this HCA has netdev
+                rdma_link=$(rdma link show "$hca"/1 2>/dev/null | grep "netdev" || true)
+                if [[ -n "$rdma_link" ]]; then
+                    # Extract netdev name from rdma link output
+                    rdma_netdev=$(echo "$rdma_link" | grep -oP 'netdev \K\S+' || true)
+                    if [[ -n "$rdma_netdev" ]]; then
+                        ifname="$rdma_netdev"
+                        echo "✓ HCA=$hca has netdev association: $ifname" >&2
+                    else
+                        echo "✗ Skipping $hca (no netdev in rdma link)" >&2
+                        continue
+                    fi
+                else
+                    echo "✗ Skipping $hca (no netdev association - GIDs will be empty)" >&2
+                    continue
+                fi
+            fi
+
+            # Filter by requested HCAs if -i flag was used
+            if [[ "{{ '${#' }}requested_hcas[@]}" -gt 0 ]]; then
+                is_requested=false
+                for requested_hca in "${requested_hcas[@]}"; do
+                    if [[ "$hca" == "$requested_hca" ]]; then
+                        is_requested=true
+                        break
+                    fi
+                done
+
+                if [[ "$is_requested" == false ]]; then
+                    echo "Skipping $hca (not in requested list)" >&2
+                    continue
+                fi
+            fi
+
+            # For RoCE: verify this HCA has at least one valid IPv4 GID.
+            # Shared RDMA pools expose all host HCAs, but only the ones
+            # with GIDs can actually carry traffic from this pod.
+            link_layer=$(cat "$hca_path/ports/1/link_layer" 2>/dev/null || true)
+            if [[ "$link_layer" == "Ethernet" ]]; then
+                has_valid_gid=false
+                gid_ip=""
+                for gid_file in "$hca_path"/ports/1/gids/*; do
+                    gid_val=$(cat "$gid_file" 2>/dev/null || true)
+                    if echo "$gid_val" | grep -q 'ffff:'; then
+                        gid_type_file="${gid_file%/*}/gid_attrs/types/$(basename "$gid_file")"
+                        gid_type=$(cat "$gid_type_file" 2>/dev/null || true)
+                        if [[ "$gid_type" == *"RoCE v2"* ]] || [[ -z "$gid_type" ]]; then
+                            has_valid_gid=true
+                            # Extract IPv4 from GID (last 4 bytes: ffff:AABB:CCDD)
+                            hex=$(echo "$gid_val" | grep -oP 'ffff:\K[0-9a-f:]+' || true)
+                            if [[ -n "$hex" ]]; then
+                                hi=$(echo "$hex" | cut -d: -f1)
+                                lo=$(echo "$hex" | cut -d: -f2)
+                                if [[ -n "$hi" && -n "$lo" ]]; then
+                                    gid_ip="$((16#${hi:0:2})).$((16#${hi:2:2})).$((16#${lo:0:2})).$((16#${lo:2:2}))"
+                                fi
+                            fi
+                            break
+                        fi
+                    fi
+                done
+
+                if [[ "$has_valid_gid" == false ]]; then
+                    echo "Skipping $hca (RoCE HCA with no valid GIDs)" >&2
+                    continue
+                fi
+            fi
+
+            all_hcas+=("$hca")
+
+            # Get IP if interface name exists
+            if [[ -n "$ifname" ]]; then
+                hca_to_ifname["$hca"]="$ifname"
+                # Try to get IP from the interface
+                ip_addr=$(ip -4 addr show "$ifname" 2>/dev/null | grep -oP '(?<=inet\s)\d+(\.\d+){3}' | head -n 1 || true)
+                if [[ -n "$ip_addr" ]]; then
+                    # Only add IP once for DRA-NET (all HCAs share net0)
+                    if [[ "$NETWORK_MODE" != "dra-net" ]] || [[ "{{ '${#' }}data_ips[@]}" -eq 0 ]]; then
+                        data_ips+=("$ip_addr")
+                    fi
+                    echo "Discovered: HCA=$hca, Interface=$ifname, IP=$ip_addr, Status=ACTIVE" >&2
+                else
+                    echo "Discovered: HCA=$hca, Interface=$ifname, Status=ACTIVE (no IP)" >&2
+                fi
+            elif [[ -n "${gid_ip:-}" ]]; then
+                # sriov_multinic: sysfs has no netdev, but GID table has the IP
+                data_ips+=("$gid_ip")
+                echo "Discovered: HCA=$hca, GID-IP=$gid_ip, Status=ACTIVE (IP from GID table)" >&2
+            else
+                echo "Discovered: HCA=$hca, Status=ACTIVE (no interface name)" >&2
+            fi
+        else
+            echo "Skipping $hca (port not active)" >&2
+        fi
+    done
+
+    if [[ "{{ '${#' }}all_hcas[@]}" -eq 0 ]]; then
+        echo "Warning: No active InfiniBand HCAs found, skipping RDMA configuration." >&2
+        return 0 2>/dev/null || exit 0
+    fi
+
+    # --- In shared_device mode, prefer native IB over RoCE if both exist ---
+    # Only prefer IB if the IB devices have valid GIDs (are actually usable).
+    # On some systems (e.g., Dell XE9680L), IB devices are NVLink management
+    # NICs with no GIDs, while RoCE SuperNICs have valid GIDs for compute.
+    if [[ "$NETWORK_MODE" == "shared_device" && "{{ '${#' }}all_hcas[@]}" -gt 0 ]]; then
+        ib_with_gids=()
+        roce_with_gids=()
+        for hca in "${all_hcas[@]}"; do
+            ll=$(cat "/sys/class/infiniband/$hca/ports/1/link_layer" 2>/dev/null || true)
+            has_gid=false
+            for gid_file in /sys/class/infiniband/$hca/ports/1/gids/*; do
+                gid=$(cat "$gid_file" 2>/dev/null || true)
+                if [[ -n "$gid" && "$gid" != "0000:0000:0000:0000:0000:0000:0000:0000" && "$gid" != "fe80:"* ]]; then
+                    has_gid=true; break
+                fi
+            done
+            if [[ "$ll" == "InfiniBand" ]]; then
+                if [[ "$has_gid" == true ]]; then ib_with_gids+=("$hca"); fi
+            else
+                if [[ "$has_gid" == true ]]; then roce_with_gids+=("$hca"); fi
+            fi
+        done
+        if [[ "{{ '${#' }}ib_with_gids[@]}" -gt 0 ]]; then
+            all_hcas=("${ib_with_gids[@]}")
+            echo "--- Prefer IB: {{ '${#' }}ib_with_gids[@]} IB HCAs with valid GIDs ---" >&2
+        elif [[ "{{ '${#' }}roce_with_gids[@]}" -gt 0 ]]; then
+            all_hcas=("${roce_with_gids[@]}")
+            echo "--- No usable IB HCAs, using {{ '${#' }}roce_with_gids[@]} RoCE HCAs with valid GIDs ---" >&2
+        else
+            echo "--- Warning: no HCAs with valid GIDs found, keeping all ---" >&2
+        fi
+    fi
+
+    # --- Filter HCAs by GPU affinity (topology-aware) ---
+    if [[ "$NETWORK_MODE" == "shared_device" && -n "${CUDA_VISIBLE_DEVICES:-}" ]]; then
+        # Use nvidia-smi topo to find the closest NIC for each allocated GPU.
+        # Connection types ranked by proximity: PIX > PXB > PHB > NODE > SYS
+        TOPO_OUTPUT=$(nvidia-smi topo -m 2>/dev/null | sed 's/\x1b\[[0-9;]*m//g' || true)
+        if [[ -n "$TOPO_OUTPUT" ]]; then
+            declare -A affinity_score
+            affinity_score["PIX"]=1
+            affinity_score["PXB"]=2
+            affinity_score["PHB"]=3
+            affinity_score["NODE"]=4
+            affinity_score["SYS"]=5
+
+            # Parse NIC legend (e.g., "NIC0: ibp0" or "NIC8: mlx5_0") to map column names to devices
+            declare -A nic_to_dev
+            while IFS= read -r line; do
+                if [[ "$line" =~ ^[[:space:]]*(NIC[0-9]+):[[:space:]]*([^ ]+) ]]; then
+                    dev="${BASH_REMATCH[2]}"
+                    # Only map devices that are in our discovered all_hcas list
+                    for discovered in "${all_hcas[@]}"; do
+                        if [[ "$dev" == "$discovered" ]]; then
+                            nic_to_dev["${BASH_REMATCH[1]}"]="$dev"
+                            break
+                        fi
+                    done
+                fi
+            done <<< "$TOPO_OUTPUT"
+
+            # Parse header to get column positions for each NIC that maps to a discovered HCA
+            HEADER=$(echo "$TOPO_OUTPUT" | head -1)
+            declare -A col_to_hca
+            col_idx=0
+            for token in $HEADER; do
+                dev="${nic_to_dev[$token]:-}"
+                if [[ -n "$dev" ]]; then
+                    col_to_hca[$col_idx]="$dev"
+                fi
+                col_idx=$((col_idx + 1))
+            done
+
+            # For each GPU in CUDA_VISIBLE_DEVICES, find the closest NIC
+            IFS=',' read -ra gpu_indices <<< "$CUDA_VISIBLE_DEVICES"
+            declare -A best_hca_set
+            for gpu_idx in "${gpu_indices[@]}"; do
+                gpu_row=$(echo "$TOPO_OUTPUT" | grep -E "^GPU${gpu_idx}[[:space:]]" || true)
+                if [[ -z "$gpu_row" ]]; then
+                    echo "--- Warning: GPU${gpu_idx} not found in topo matrix ---" >&2
+                    continue
+                fi
+
+                best_score=99
+                best_hca=""
+                row_col=-1  # Row starts with label (GPU5), header starts with data (GPU0)
+                for token in $gpu_row; do
+                    hca="${col_to_hca[$row_col]:-}"
+                    if [[ -n "$hca" ]]; then
+                        score="${affinity_score[$token]:-99}"
+                        if [[ "$score" -lt "$best_score" ]]; then
+                            best_score=$score
+                            best_hca=$hca
+                        fi
+                    fi
+                    row_col=$((row_col + 1))
+                done
+
+                if [[ -n "$best_hca" ]]; then
+                    best_hca_set["$best_hca"]=1
+                    echo "--- GPU${gpu_idx} → closest NIC: $best_hca ---" >&2
+                fi
+            done
+
+            if [[ "{{ '${#' }}best_hca_set[@]}" -gt 0 ]]; then
+                all_hcas=()
+                for hca in "${!best_hca_set[@]}"; do
+                    all_hcas+=("$hca")
+                done
+                echo "--- Topology-filtered HCAs: ${all_hcas[*]} ---" >&2
+            else
+                echo "--- Warning: topo matching found no NICs, using all discovered HCAs ---" >&2
+            fi
+        else
+            echo "--- nvidia-smi topo not available, using all discovered HCAs ---" >&2
+        fi
+    fi
+
+    # --- Sort HCAs by device number ---
+    sorted_hcas=($(for hca in "${all_hcas[@]}"; do echo "$hca"; done | sort -V))
+    echo "--- Discovery complete: {{ '${#' }}sorted_hcas[@]} active HCAs found. ---" >&2
+
+    # --- STEP 3: DEFINE NETWORK SPLIT ---
+
+    # Management IP (eth0 for NAD, net0 for DRA-NET)
+    MGMT_IP=$(ip -4 addr show "$SOCKET_IFNAME" | grep -oP '(?<=inet\s)\d+(\.\d+){3}' | head -n 1 || true)
+
+    # Data IPs (From InfiniBand interfaces, if they have IPs)
+    ALL_DATA_IPS=""
+    i=0
+    for ip in "${data_ips[@]}"; do
+        if [[ -z "$ALL_DATA_IPS" ]]; then ALL_DATA_IPS="$ip"; else ALL_DATA_IPS="$ALL_DATA_IPS,$ip"; fi
+        declare "DATA_IP_$i"="$ip"
+        i=$((i+1))
+    done
+
+    echo "--- Network Configuration ---" >&2
+    echo "Network Mode: $NETWORK_MODE" >&2
+    echo "Management Interface ($SOCKET_IFNAME): $MGMT_IP" >&2
+    if [[ -n "$ALL_DATA_IPS" ]]; then
+        echo "Detected Data IPs: $ALL_DATA_IPS" >&2
+    else
+        echo "Note: No Data IPs found (pure RDMA mode - no IP addressing)" >&2
+    fi
+
+    # --- STEP 4: EXPORT VARIABLES ---
+    declare -A env_vars
+
+    # RDMA Hardware Config - Points to ALL detected HCAs
+    declare -a hcas_with_port;
+    for hca in "${sorted_hcas[@]}"; do hcas_with_port+=("${hca}:1"); done;
+
+    env_vars["NCCL_IB_HCA"]="$(IFS=','; echo "${hcas_with_port[*]}")"
+    env_vars["NVSHMEM_HCA_LIST"]="$(IFS=','; echo "${hcas_with_port[*]}")"
+
+    # Detect link layer type from the first HCA (Ethernet = RoCE, InfiniBand = IB)
+    LINK_LAYER=$(cat "/sys/class/infiniband/${sorted_hcas[0]}/ports/1/link_layer" 2>/dev/null || echo "unknown")
+    echo "--- Link layer: $LINK_LAYER ---" >&2
+
+    # UCX_NET_DEVICES:
+    #   shared_device: use topology-matched IB HCAs (ibp0, ibp1, ...) so NIXL
+    #   KV transfers use the NIC closest to the pod's GPU(s).
+    #   sriov_multinic: use HCA verbs device names (no sysfs netdev mapping)
+    #   RoCE (Ethernet link layer): use netdev interface names with IPs
+    #   InfiniBand: use HCA verbs device names (ibp0:1, mlx5_0:1, ...)
+    if [[ "$NETWORK_MODE" == "shared_device" ]]; then
+        env_vars["UCX_NET_DEVICES"]="$(IFS=','; echo "${hcas_with_port[*]}")"
+        echo "--- shared_device mode: UCX_NET_DEVICES=${env_vars[UCX_NET_DEVICES]} ---" >&2
+    elif [[ "$NETWORK_MODE" == "sriov_multinic" ]]; then
+        env_vars["UCX_NET_DEVICES"]="$(IFS=','; echo "${hcas_with_port[*]}")"
+        echo "--- sriov_multinic mode: UCX_NET_DEVICES=${env_vars[UCX_NET_DEVICES]} ---" >&2
+    elif [[ "$LINK_LAYER" == "Ethernet" ]]; then
+        declare -a ucx_devices;
+        for hca in "${sorted_hcas[@]}"; do
+            netdev="${hca_to_ifname[$hca]:-}"
+            if [[ -n "$netdev" ]]; then
+                has_ip=$(ip -4 addr show "$netdev" 2>/dev/null | grep -oP '(?<=inet\s)\d+(\.\d+){3}' | head -1 || true)
+                if [[ -n "$has_ip" ]]; then
+                    ucx_devices+=("$netdev")
+                else
+                    echo "--- Skipping $netdev for UCX (no IP, RoCE needs IPs) ---" >&2
+                fi
+            fi
+        done
+        if [[ "{{ '${#' }}ucx_devices[@]}" -gt 0 ]]; then
+            env_vars["UCX_NET_DEVICES"]="$(IFS=','; echo "${ucx_devices[*]}")"
+            echo "--- RoCE detected: UCX_NET_DEVICES set to netdev names ---" >&2
+        else
+            echo "--- RoCE detected but no interfaces with IPs: skipping UCX_NET_DEVICES ---" >&2
+        fi
+    else
+        env_vars["UCX_NET_DEVICES"]="$(IFS=','; echo "${hcas_with_port[*]}")"
+        echo "--- InfiniBand detected: UCX_NET_DEVICES set to HCA names ---" >&2
+    fi
+
+    # Socket/Bootstrap Config - only set if not already defined by template env vars
+    if [[ -z "${NCCL_SOCKET_IFNAME:-}" ]]; then
+        env_vars["NCCL_SOCKET_IFNAME"]="$SOCKET_IFNAME"
+    fi
+    if [[ -z "${GLOO_SOCKET_IFNAME:-}" ]]; then
+        env_vars["GLOO_SOCKET_IFNAME"]="$SOCKET_IFNAME"
+    fi
+    env_vars["NVSHMEM_BOOTSTRAP_UID_SOCK_IFNAME"]="$SOCKET_IFNAME"
+
+    # Explicit Split Variables
+    env_vars["MGMT_IP"]="${MGMT_IP}"
+    env_vars["NETWORK_MODE"]="${NETWORK_MODE}"
+    if [[ -n "${DATA_IP_0:-}" ]]; then
+        env_vars["DATA_IP_0"]="${DATA_IP_0}"
+    fi
+    if [[ -n "$ALL_DATA_IPS" ]]; then
+        env_vars["ALL_DATA_IPS"]="${ALL_DATA_IPS}"
+    fi
+
+    # Side channel — only set if not already defined (template sets it from status.podIP)
+    if [[ -z "${VLLM_NIXL_SIDE_CHANNEL_HOST:-}" ]]; then
+        env_vars["VLLM_NIXL_SIDE_CHANNEL_HOST"]="${MGMT_IP}"
+    fi
+
+    # LWS Leader logic (Default to self/mgmt if not set)
+    if [[ -z "${LWS_LEADER_ADDRESS:-}" ]]; then
+       env_vars["FINAL_LEADER_IP"]="${MGMT_IP}"
+    else
+       env_vars["FINAL_LEADER_IP"]="${LWS_LEADER_ADDRESS}"
+    fi
+
+    EXPORT_FILE="/tmp/vllm_env.sh"
+    echo "#!/bin/bash" > "$EXPORT_FILE"
+    while IFS= read -r key; do
+        value="${env_vars[$key]}"
+        export "$key"="$value"
+        printf "export %s='%s'\n" "$key" "$value" >> "$EXPORT_FILE"
+    done < <(printf "%s\n" "${!env_vars[@]}")
+
+    echo "--- Discovery script finished. Config saved to $EXPORT_FILE ---" >&2
+    echo "--- NCCL_IB_HCA: ${env_vars[NCCL_IB_HCA]:-${NCCL_IB_HCA:-unset}} ---" >&2
+    echo "--- NCCL_SOCKET_IFNAME: ${env_vars[NCCL_SOCKET_IFNAME]:-${NCCL_SOCKET_IFNAME:-unset}} ---" >&2
+    if [[ -n "${env_vars[UCX_NET_DEVICES]:-}" ]]; then
+        echo "--- UCX_NET_DEVICES: ${env_vars[UCX_NET_DEVICES]} ---" >&2
+    else
+        echo "--- UCX_NET_DEVICES: not set (auto-detect) ---" >&2
+    fi

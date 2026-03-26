@@ -1,0 +1,4340 @@
+[
+  {
+    "id": "RedHatAI/gemma-3-4b-it-FP8-dynamic",
+    "name": "Gemma 3 4B FP8 Dynamic",
+    "description": "Google Gemma 3 4B, dynamic FP8",
+    "category": "Small (1B-3B)"
+  },
+  {
+    "id": "RedHatAI/granite-3.0-2b-base",
+    "name": "Granite 3.0 2B Base",
+    "description": "IBM Granite 3.0 2B base model",
+    "category": "Small (1B-3B)"
+  },
+  {
+    "id": "RedHatAI/granite-3.0-2b-instruct",
+    "name": "Granite 3.0 2B Instruct",
+    "description": "IBM Granite 3.0 2B instruction model",
+    "category": "Small (1B-3B)"
+  },
+  {
+    "id": "RedHatAI/granite-3.1-2b-base",
+    "name": "Granite 3.1 2B Base",
+    "description": "IBM Granite 2B base model",
+    "category": "Small (1B-3B)"
+  },
+  {
+    "id": "RedHatAI/granite-3.1-2b-instruct",
+    "name": "Granite 3.1 2B Instruct",
+    "description": "IBM Granite 2B instruction model",
+    "category": "Small (1B-3B)"
+  },
+  {
+    "id": "RedHatAI/Llama-3.2-1B-Instruct-FP8",
+    "name": "Llama 3.2 1B FP8",
+    "description": "Tiny model with static FP8 quantization",
+    "category": "Small (1B-3B)"
+  },
+  {
+    "id": "RedHatAI/Llama-3.2-1B-Instruct-FP8-dynamic",
+    "name": "Llama 3.2 1B FP8 Dynamic",
+    "description": "Tiny model with dynamic FP8 quantization",
+    "category": "Small (1B-3B)"
+  },
+  {
+    "id": "RedHatAI/Llama-3.2-3B-Instruct-FP8",
+    "name": "Llama 3.2 3B FP8",
+    "description": "Small multilingual model with FP8",
+    "category": "Small (1B-3B)"
+  },
+  {
+    "id": "RedHatAI/Llama-3.2-3B-Instruct-FP8-dynamic",
+    "name": "Llama 3.2 3B FP8 Dynamic",
+    "description": "3B model with dynamic FP8 quantization",
+    "category": "Small (1B-3B)"
+  },
+  {
+    "id": "RedHatAI/Phi-3-mini-128k-instruct-FP8",
+    "name": "Phi 3 Mini 128k FP8",
+    "description": "Microsoft Phi 3 with 128k context",
+    "category": "Small (1B-3B)"
+  },
+  {
+    "id": "RedHatAI/Phi-3.5-mini-instruct-FP8",
+    "name": "Phi 3.5 Mini FP8",
+    "description": "Microsoft Phi 3.5 mini with FP8",
+    "category": "Small (1B-3B)"
+  },
+  {
+    "id": "RedHatAI/Qwen2-1.5B-Instruct-FP8",
+    "name": "Qwen 2 1.5B FP8",
+    "description": "Compact Qwen model with FP8 quantization",
+    "category": "Small (1B-3B)"
+  },
+  {
+    "id": "RedHatAI/Qwen2.5-1.5B-quantized.w8a8",
+    "name": "Qwen 2.5 1.5B w8a8",
+    "description": "Small multilingual w8a8 quantized",
+    "category": "Small (1B-3B)"
+  },
+  {
+    "id": "RedHatAI/Qwen2.5-3B-Instruct-FP8",
+    "name": "Qwen 2.5 3B FP8",
+    "description": "Qwen 2.5 3B with FP8 quantization",
+    "category": "Small (1B-3B)"
+  },
+  {
+    "id": "RedHatAI/Qwen3-1.7B-FP8-dynamic",
+    "name": "Qwen 3 1.7B FP8 Dynamic",
+    "description": "1.7B model with dynamic FP8",
+    "category": "Small (1B-3B)"
+  },
+  {
+    "id": "RedHatAI/Qwen3-4B-FP8-dynamic",
+    "name": "Qwen 3 4B FP8 Dynamic",
+    "description": "4B model with dynamic FP8",
+    "category": "Small (1B-3B)"
+  },
+  {
+    "id": "RedHatAI/Qwen3.5-4B-FP8-dynamic",
+    "name": "Qwen 3.5 4B FP8 Dynamic",
+    "description": "4B model with dynamic FP8",
+    "category": "Small (1B-3B)"
+  },
+  {
+    "id": "RedHatAI/SmolLM2-1.7B-Instruct-FP8",
+    "name": "SmolLM2 1.7B FP8",
+    "description": "Compact SmolLM2 1.7B model",
+    "category": "Small (1B-3B)"
+  },
+  {
+    "id": "RedHatAI/SmolLM3-3B-FP8-dynamic",
+    "name": "SmolLM3 3B FP8 Dynamic",
+    "description": "SmolLM3 3B, dynamic FP8",
+    "category": "Small (1B-3B)"
+  },
+  {
+    "id": "RedHatAI/aya-expanse-8b-FP8",
+    "name": "Aya Expanse 8B FP8",
+    "description": "Multilingual Aya Expanse 8B",
+    "category": "Medium (8B)"
+  },
+  {
+    "id": "RedHatAI/gemma-2-9b-it-FP8",
+    "name": "Gemma 2 9B FP8",
+    "description": "Google Gemma 2 9B instruction model",
+    "category": "Medium (8B)"
+  },
+  {
+    "id": "RedHatAI/gemma-2-9b-it-quantized.w4a16",
+    "name": "Gemma 2 9B w4a16",
+    "description": "Google Gemma 2 9B with 4-bit quantization",
+    "category": "Medium (8B)"
+  },
+  {
+    "id": "RedHatAI/granite-3.0-8b-base",
+    "name": "Granite 3.0 8B Base",
+    "description": "IBM Granite 3.0 8B base model",
+    "category": "Medium (8B)"
+  },
+  {
+    "id": "RedHatAI/granite-3.0-8b-instruct",
+    "name": "Granite 3.0 8B Instruct",
+    "description": "IBM Granite 3.0 8B instruction model",
+    "category": "Medium (8B)"
+  },
+  {
+    "id": "RedHatAI/granite-3.1-8b-base",
+    "name": "Granite 3.1 8B Base",
+    "description": "IBM Granite 8B base model",
+    "category": "Medium (8B)"
+  },
+  {
+    "id": "RedHatAI/granite-3.1-8b-instruct",
+    "name": "Granite 3.1 8B Instruct",
+    "description": "IBM Granite 8B instruction model",
+    "category": "Medium (8B)"
+  },
+  {
+    "id": "RedHatAI/Meta-Llama-3.1-8B-Instruct-FP8",
+    "name": "Llama 3.1 8B FP8",
+    "description": "Popular 8B model with FP8 quantization",
+    "category": "Medium (8B)"
+  },
+  {
+    "id": "RedHatAI/Meta-Llama-3.1-8B-FP8",
+    "name": "Llama 3.1 8B FP8 Base",
+    "description": "Base 8B model (not instruct-tuned)",
+    "category": "Medium (8B)"
+  },
+  {
+    "id": "RedHatAI/Meta-Llama-3.1-8B-Instruct-FP8-dynamic",
+    "name": "Llama 3.1 8B FP8 Dynamic",
+    "description": "8B model with dynamic FP8 quantization",
+    "category": "Medium (8B)"
+  },
+  {
+    "id": "RedHatAI/Llama-3.1-8B-Instruct-NVFP4",
+    "name": "Llama 3.1 8B NVFP4",
+    "description": "8B model with NVIDIA FP4 quantization",
+    "category": "Medium (8B)"
+  },
+  {
+    "id": "RedHatAI/Meta-Llama-3.1-8B-Instruct-quantized.w4a16",
+    "name": "Llama 3.1 8B w4a16",
+    "description": "8B model with aggressive 4-bit weight quantization",
+    "category": "Medium (8B)"
+  },
+  {
+    "id": "RedHatAI/Ministral-8B-Instruct-2410-FP8",
+    "name": "Ministral 8B FP8",
+    "description": "Mistral mini 8B instruction model",
+    "category": "Medium (8B)"
+  },
+  {
+    "id": "RedHatAI/Mistral-7B-Instruct-v0.3-FP8",
+    "name": "Mistral 7B v0.3 FP8",
+    "description": "Mistral 7B instruction model",
+    "category": "Medium (8B)"
+  },
+  {
+    "id": "RedHatAI/Qwen2.5-7B-Instruct-FP8",
+    "name": "Qwen 2.5 7B FP8",
+    "description": "Qwen 2.5 7B with FP8 quantization",
+    "category": "Medium (8B)"
+  },
+  {
+    "id": "RedHatAI/Qwen3-8B-FP8-dynamic",
+    "name": "Qwen 3 8B FP8 Dynamic",
+    "description": "Qwen 3 8B with dynamic FP8",
+    "category": "Medium (8B)"
+  },
+  {
+    "id": "RedHatAI/gemma-3-12b-it-FP8-dynamic",
+    "name": "Gemma 3 12B FP8 Dynamic",
+    "description": "Google Gemma 3 12B, dynamic FP8",
+    "category": "Medium (8B-14B)"
+  },
+  {
+    "id": "RedHatAI/granite-3.1-8b-instruct-FP8-dynamic",
+    "name": "Granite 3.1 8B FP8 Dynamic",
+    "description": "IBM Granite 3.1 8B, dynamic FP8",
+    "category": "Medium (8B-14B)"
+  },
+  {
+    "id": "RedHatAI/Mistral-Nemo-Instruct-2407-FP8",
+    "name": "Mistral Nemo 12B FP8",
+    "description": "Mistral Nemo 12B with FP8",
+    "category": "Medium (8B-14B)"
+  },
+  {
+    "id": "RedHatAI/Mistral-Nemo-Instruct-2407-quantized.w4a16",
+    "name": "Mistral Nemo 12B w4a16",
+    "description": "Mistral Nemo 12B with 4-bit quantization",
+    "category": "Medium (8B-14B)"
+  },
+  {
+    "id": "RedHatAI/NVIDIA-Nemotron-Nano-9B-v2-FP8-dynamic",
+    "name": "Nemotron Nano 9B v2 FP8",
+    "description": "NVIDIA Nemotron Nano 9B, dynamic FP8",
+    "category": "Medium (8B-14B)"
+  },
+  {
+    "id": "RedHatAI/phi-4-FP8-dynamic",
+    "name": "Phi-4 FP8 Dynamic",
+    "description": "Microsoft Phi-4, dynamic FP8",
+    "category": "Medium (8B-14B)"
+  },
+  {
+    "id": "RedHatAI/Phi-4-reasoning-FP8-dynamic",
+    "name": "Phi-4 Reasoning FP8 Dynamic",
+    "description": "Phi-4 reasoning variant, dynamic FP8",
+    "category": "Medium (8B-14B)"
+  },
+  {
+    "id": "RedHatAI/pixtral-12b-FP8-dynamic",
+    "name": "Pixtral 12B FP8 Dynamic",
+    "description": "Mistral Pixtral 12B vision model",
+    "category": "Medium (8B-14B)"
+  },
+  {
+    "id": "RedHatAI/Qwen2.5-14B-Instruct-FP8",
+    "name": "Qwen 2.5 14B FP8",
+    "description": "Qwen 2.5 14B with FP8 quantization",
+    "category": "Medium (8B-14B)"
+  },
+  {
+    "id": "RedHatAI/Qwen3-14B-FP8-dynamic",
+    "name": "Qwen 3 14B FP8 Dynamic",
+    "description": "14B model with dynamic FP8",
+    "category": "Medium (8B-14B)"
+  },
+  {
+    "id": "RedHatAI/Qwen3-14B-NVFP4",
+    "name": "Qwen 3 14B NVFP4",
+    "description": "14B model with NVIDIA FP4 quantization",
+    "category": "Medium (8B-14B)"
+  },
+  {
+    "id": "RedHatAI/Qwen3.5-9B-FP8-dynamic",
+    "name": "Qwen 3.5 9B FP8 Dynamic",
+    "description": "9B model with dynamic FP8",
+    "category": "Medium (8B-14B)"
+  },
+  {
+    "id": "RedHatAI/aya-expanse-32b-FP8",
+    "name": "Aya Expanse 32B FP8",
+    "description": "Multilingual Aya Expanse 32B",
+    "category": "Large (32B-70B)"
+  },
+  {
+    "id": "RedHatAI/c4ai-command-r-08-2024-FP8",
+    "name": "Command R 08-2024 FP8",
+    "description": "Cohere Command R model",
+    "category": "Large (32B-70B)"
+  },
+  {
+    "id": "RedHatAI/c4ai-command-r-08-2024-quantized.w4a16",
+    "name": "Command R 08-2024 w4a16",
+    "description": "Cohere Command R with 4-bit quantization",
+    "category": "Large (32B-70B)"
+  },
+  {
+    "id": "RedHatAI/DeepSeek-R1-Distill-Qwen-32B-FP8-dynamic",
+    "name": "DeepSeek R1 Distill Qwen 32B FP8",
+    "description": "DeepSeek R1 distilled to Qwen 32B",
+    "category": "Large (32B-70B)"
+  },
+  {
+    "id": "RedHatAI/gpt-oss-20b",
+    "name": "GPT OSS 20B",
+    "description": "Open-source GPT 20B model",
+    "category": "Large (32B-70B)"
+  },
+  {
+    "id": "RedHatAI/gemma-2-27b-it-FP8",
+    "name": "Gemma 2 27B FP8",
+    "description": "Google Gemma 2 27B instruction model",
+    "category": "Large (32B-70B)"
+  },
+  {
+    "id": "RedHatAI/gemma-2-27b-it-quantized.w4a16",
+    "name": "Gemma 2 27B w4a16",
+    "description": "Google Gemma 2 27B with 4-bit quantization",
+    "category": "Large (32B-70B)"
+  },
+  {
+    "id": "RedHatAI/gemma-3-27b-it-FP8-dynamic",
+    "name": "Gemma 3 27B FP8 Dynamic",
+    "description": "Google Gemma 3 27B, dynamic FP8",
+    "category": "Large (32B-70B)"
+  },
+  {
+    "id": "RedHatAI/gemma-4-26B-A4B-it-FP8-Dynamic",
+    "name": "Gemma 4 26B A4B FP8 Dynamic",
+    "description": "Google Gemma 4 26B MoE (4B active)",
+    "category": "Large (32B-70B)"
+  },
+  {
+    "id": "RedHatAI/gemma-4-26B-A4B-it-NVFP4",
+    "name": "Gemma 4 26B A4B NVFP4",
+    "description": "Google Gemma 4 26B MoE, NVIDIA FP4",
+    "category": "Large (32B-70B)"
+  },
+  {
+    "id": "RedHatAI/gemma-4-31B-it-FP8-Dynamic",
+    "name": "Gemma 4 31B FP8 Dynamic",
+    "description": "Google Gemma 4 31B, dynamic FP8",
+    "category": "Large (32B-70B)"
+  },
+  {
+    "id": "RedHatAI/gemma-4-31B-it-NVFP4",
+    "name": "Gemma 4 31B NVFP4",
+    "description": "Google Gemma 4 31B, NVIDIA FP4",
+    "category": "Large (32B-70B)"
+  },
+  {
+    "id": "RedHatAI/Magistral-Small-2506-FP8",
+    "name": "Magistral Small FP8",
+    "description": "Magistral Small reasoning model, FP8",
+    "category": "Large (32B-70B)"
+  },
+  {
+    "id": "RedHatAI/Mistral-Small-24B-Instruct-2501-FP8-dynamic",
+    "name": "Mistral Small 24B FP8 Dynamic",
+    "description": "Mistral 24B with dynamic FP8",
+    "category": "Large (32B-70B)"
+  },
+  {
+    "id": "RedHatAI/Mistral-Small-24B-Instruct-2501-quantized.w8a8",
+    "name": "Mistral Small 24B w8a8",
+    "description": "Mistral 24B with 8-bit quantization",
+    "category": "Large (32B-70B)"
+  },
+  {
+    "id": "RedHatAI/Mistral-Small-3.1-24B-Instruct-2503-FP8-dynamic",
+    "name": "Mistral Small 3.1 24B FP8",
+    "description": "Mistral Small 24B, dynamic FP8",
+    "category": "Large (32B-70B)"
+  },
+  {
+    "id": "RedHatAI/Mistral-Small-3.2-24B-Instruct-2506-FP8",
+    "name": "Mistral Small 3.2 24B FP8",
+    "description": "Mistral Small 3.2 24B, FP8",
+    "category": "Large (32B-70B)"
+  },
+  {
+    "id": "RedHatAI/QwQ-32B-FP8-dynamic",
+    "name": "QwQ 32B FP8 Dynamic",
+    "description": "QwQ reasoning model, dynamic FP8",
+    "category": "Large (32B-70B)"
+  },
+  {
+    "id": "RedHatAI/Qwen2.5-32B-Instruct-FP8",
+    "name": "Qwen 2.5 32B FP8",
+    "description": "Qwen 2.5 32B with FP8 quantization",
+    "category": "Large (32B-70B)"
+  },
+  {
+    "id": "RedHatAI/Qwen3-30B-A3B-FP8-block",
+    "name": "Qwen 3 30B A3B FP8 Block",
+    "description": "30B model with block-wise FP8",
+    "category": "Large (32B-70B)"
+  },
+  {
+    "id": "RedHatAI/Qwen3-30B-A3B-NVFP4",
+    "name": "Qwen 3 30B A3B NVFP4",
+    "description": "30B model with NVIDIA FP4",
+    "category": "Large (32B-70B)"
+  },
+  {
+    "id": "RedHatAI/Qwen3-32B-FP8-dynamic",
+    "name": "Qwen 3 32B FP8 Dynamic",
+    "description": "32B model with dynamic FP8",
+    "category": "Large (32B-70B)"
+  },
+  {
+    "id": "RedHatAI/Qwen3-32B-NVFP4",
+    "name": "Qwen 3 32B NVFP4",
+    "description": "32B model with NVIDIA FP4 quantization",
+    "category": "Large (32B-70B)"
+  },
+  {
+    "id": "RedHatAI/Qwen3-32B-quantized.w4a16",
+    "name": "Qwen 3 32B w4a16",
+    "description": "32B model with 4-bit weight quantization",
+    "category": "Large (32B-70B)"
+  },
+  {
+    "id": "RedHatAI/Qwen3.6-27B-FP8",
+    "name": "Qwen 3.6 27B FP8",
+    "description": "27B model with FP8",
+    "category": "Large (32B-70B)"
+  },
+  {
+    "id": "RedHatAI/Apertus-70B-Instruct-2509-FP8-dynamic",
+    "name": "Apertus 70B FP8 Dynamic",
+    "description": "Apertus 70B instruction model",
+    "category": "Large (70B+)"
+  },
+  {
+    "id": "RedHatAI/c4ai-command-r-plus-08-2024-FP8",
+    "name": "Command R Plus 08-2024 FP8",
+    "description": "Cohere Command R Plus model",
+    "category": "Large (70B+)"
+  },
+  {
+    "id": "RedHatAI/c4ai-command-r-plus-08-2024-quantized.w4a16",
+    "name": "Command R Plus 08-2024 w4a16",
+    "description": "Cohere Command R Plus with 4-bit quantization",
+    "category": "Large (70B+)"
+  },
+  {
+    "id": "RedHatAI/DeepSeek-V2.5-1210-FP8",
+    "name": "DeepSeek V2.5 FP8",
+    "description": "DeepSeek V2.5 with FP8 quantization",
+    "category": "Large (70B+)"
+  },
+  {
+    "id": "RedHatAI/Meta-Llama-3.1-405B-Instruct-FP8",
+    "name": "Llama 3.1 405B FP8",
+    "description": "Largest Llama, 405B with FP8",
+    "category": "Large (70B+)"
+  },
+  {
+    "id": "RedHatAI/Meta-Llama-3.1-405B-Instruct-FP8-dynamic",
+    "name": "Llama 3.1 405B FP8 Dynamic",
+    "description": "Largest Llama, 405B with dynamic FP8",
+    "category": "Large (70B+)"
+  },
+  {
+    "id": "RedHatAI/Meta-Llama-3.1-70B-Instruct-FP8",
+    "name": "Llama 3.1 70B FP8",
+    "description": "Large 70B model with FP8 quantization",
+    "category": "Large (70B+)"
+  },
+  {
+    "id": "RedHatAI/Meta-Llama-3.1-70B-Instruct-FP8-dynamic",
+    "name": "Llama 3.1 70B FP8 Dynamic",
+    "description": "70B model with dynamic FP8",
+    "category": "Large (70B+)"
+  },
+  {
+    "id": "RedHatAI/Meta-Llama-3.1-70B-Instruct-quantized.w4a16",
+    "name": "Llama 3.1 70B w4a16",
+    "description": "70B model with 4-bit weight quantization",
+    "category": "Large (70B+)"
+  },
+  {
+    "id": "RedHatAI/Llama-3.1-Nemotron-70B-Instruct-HF-FP8",
+    "name": "Llama 3.1 Nemotron 70B FP8",
+    "description": "NVIDIA Nemotron 70B with FP8",
+    "category": "Large (70B+)"
+  },
+  {
+    "id": "RedHatAI/Llama-3.1-Nemotron-70B-Instruct-HF-quantized.w4a16",
+    "name": "Llama 3.1 Nemotron 70B w4a16",
+    "description": "NVIDIA Nemotron 70B with 4-bit quantization",
+    "category": "Large (70B+)"
+  },
+  {
+    "id": "RedHatAI/Llama-3.3-70B-Instruct-FP8-block",
+    "name": "Llama 3.3 70B FP8 Block",
+    "description": "70B model with block FP8",
+    "category": "Large (70B+)"
+  },
+  {
+    "id": "RedHatAI/Llama-3.3-70B-Instruct-FP8-dynamic",
+    "name": "Llama 3.3 70B FP8 Dynamic",
+    "description": "Latest 70B model with dynamic FP8",
+    "category": "Large (70B+)"
+  },
+  {
+    "id": "RedHatAI/Llama-3.3-70B-Instruct-NVFP4",
+    "name": "Llama 3.3 70B NVFP4",
+    "description": "70B model with NVIDIA FP4",
+    "category": "Large (70B+)"
+  },
+  {
+    "id": "RedHatAI/Meta-Llama-3.3-70B-Instruct-quantized.w4a16",
+    "name": "Llama 3.3 70B w4a16",
+    "description": "Latest Llama 70B with 4-bit quantization",
+    "category": "Large (70B+)"
+  },
+  {
+    "id": "RedHatAI/Llama-3.1-Nemotron-70B-Instruct-HF-FP8-dynamic",
+    "name": "Nemotron 70B FP8 Dynamic",
+    "description": "NVIDIA Nemotron 70B reward model",
+    "category": "Large (70B+)"
+  },
+  {
+    "id": "RedHatAI/Qwen2.5-72B-Instruct-FP8",
+    "name": "Qwen 2.5 72B FP8",
+    "description": "Qwen 2.5 72B with FP8 quantization",
+    "category": "Large (70B+)"
+  },
+  {
+    "id": "RedHatAI/Qwen2.5-72B-Instruct-FP8-dynamic",
+    "name": "Qwen 2.5 72B FP8 Dynamic",
+    "description": "72B model with dynamic FP8",
+    "category": "Large (70B+)"
+  },
+  {
+    "id": "RedHatAI/DeepSeek-V4-Flash-NVFP4-FP8",
+    "name": "DeepSeek V4 Flash NVFP4-FP8",
+    "description": "DeepSeek V4 Flash MoE",
+    "category": "MoE (Mixture of Experts)"
+  },
+  {
+    "id": "RedHatAI/Kimi-K2.6-FP8-BLOCK",
+    "name": "Kimi K2.6 FP8 Block",
+    "description": "Kimi K2.6 MoE, block FP8",
+    "category": "MoE (Mixture of Experts)"
+  },
+  {
+    "id": "RedHatAI/Kimi-K2.6-NVFP4",
+    "name": "Kimi K2.6 NVFP4",
+    "description": "Kimi K2.6 MoE, NVIDIA FP4",
+    "category": "MoE (Mixture of Experts)"
+  },
+  {
+    "id": "RedHatAI/Llama-4-Maverick-17B-128E-Instruct-FP8",
+    "name": "Llama 4 Maverick 17B 128E FP8",
+    "description": "17B with 128 experts, FP8",
+    "category": "MoE (Mixture of Experts)"
+  },
+  {
+    "id": "RedHatAI/Llama-4-Maverick-17B-128E-Instruct-NVFP4",
+    "name": "Llama 4 Maverick 17B 128E NVFP4",
+    "description": "17B with 128 experts, NVIDIA FP4",
+    "category": "MoE (Mixture of Experts)"
+  },
+  {
+    "id": "RedHatAI/Llama-4-Scout-17B-16E-Instruct-FP8-dynamic",
+    "name": "Llama 4 Scout 17B 16E FP8 Dynamic",
+    "description": "17B with 16 experts, dynamic FP8",
+    "category": "MoE (Mixture of Experts)"
+  },
+  {
+    "id": "RedHatAI/Llama-4-Scout-17B-16E-Instruct-NVFP4",
+    "name": "Llama 4 Scout 17B 16E NVFP4",
+    "description": "17B with 16 experts, NVIDIA FP4",
+    "category": "MoE (Mixture of Experts)"
+  },
+  {
+    "id": "RedHatAI/Mistral-Small-4-119B-2603-NVFP4",
+    "name": "Mistral Small 4 119B NVFP4",
+    "description": "119B MoE, NVIDIA FP4",
+    "category": "MoE (Mixture of Experts)"
+  },
+  {
+    "id": "RedHatAI/Mixtral-8x22B-Instruct-v0.1-FP8",
+    "name": "Mixtral 8x22B FP8",
+    "description": "8x22B MoE with FP8",
+    "category": "MoE (Mixture of Experts)"
+  },
+  {
+    "id": "RedHatAI/Mixtral-8x7B-Instruct-v0.1-FP8",
+    "name": "Mixtral 8x7B FP8",
+    "description": "8x7B MoE with FP8",
+    "category": "MoE (Mixture of Experts)"
+  },
+  {
+    "id": "RedHatAI/Mixtral-8x7B-Instruct-v0.1",
+    "name": "Mixtral 8x7B Instruct",
+    "description": "Mixture of experts 8x7B model",
+    "category": "MoE (Mixture of Experts)"
+  },
+  {
+    "id": "RedHatAI/NVIDIA-Nemotron-3-Nano-30B-A3B-FP8",
+    "name": "Nemotron 3 Nano 30B A3B FP8",
+    "description": "30B MoE (3B active), FP8",
+    "category": "MoE (Mixture of Experts)"
+  },
+  {
+    "id": "RedHatAI/NVIDIA-Nemotron-3-Super-120B-A12B-FP8",
+    "name": "Nemotron 3 Super 120B A12B FP8",
+    "description": "120B MoE (12B active), FP8",
+    "category": "MoE (Mixture of Experts)"
+  },
+  {
+    "id": "RedHatAI/NVIDIA-Nemotron-3-Super-120B-A12B-NVFP4",
+    "name": "Nemotron 3 Super 120B A12B NVFP4",
+    "description": "120B MoE (12B active), NVIDIA FP4",
+    "category": "MoE (Mixture of Experts)"
+  },
+  {
+    "id": "RedHatAI/OLMoE-1B-7B-0924-Instruct-FP8",
+    "name": "OLMoE 1B-7B FP8",
+    "description": "Open Language MoE 1B-7B model",
+    "category": "MoE (Mixture of Experts)"
+  },
+  {
+    "id": "RedHatAI/Qwen3-235B-A22B-FP8-dynamic",
+    "name": "Qwen 3 235B A22B FP8 Dynamic",
+    "description": "235B MoE model (22B active), dynamic FP8 quantization",
+    "category": "MoE (Mixture of Experts)"
+  },
+  {
+    "id": "RedHatAI/Qwen3-235B-A22B-NVFP4",
+    "name": "Qwen 3 235B A22B NVFP4",
+    "description": "235B MoE (22B active), NVIDIA FP4",
+    "category": "MoE (Mixture of Experts)"
+  },
+  {
+    "id": "RedHatAI/Qwen3-30B-A3B-FP8-dynamic",
+    "name": "Qwen 3 30B A3B FP8 Dynamic",
+    "description": "30B MoE model (3B active), dynamic FP8 quantization",
+    "category": "MoE (Mixture of Experts)"
+  },
+  {
+    "id": "RedHatAI/Qwen3-Coder-480B-A35B-Instruct-FP8",
+    "name": "Qwen 3 Coder 480B A35B FP8",
+    "description": "480B MoE code model (35B active), FP8",
+    "category": "MoE (Mixture of Experts)"
+  },
+  {
+    "id": "RedHatAI/Qwen3-Next-80B-A3B-Instruct-FP8-dynamic",
+    "name": "Qwen 3 Next 80B A3B FP8 Dynamic",
+    "description": "80B MoE (3B active), dynamic FP8",
+    "category": "MoE (Mixture of Experts)"
+  },
+  {
+    "id": "RedHatAI/Qwen3-Next-80B-A3B-Instruct-NVFP4",
+    "name": "Qwen 3 Next 80B A3B NVFP4",
+    "description": "80B MoE (3B active), NVIDIA FP4",
+    "category": "MoE (Mixture of Experts)"
+  },
+  {
+    "id": "RedHatAI/Qwen3.5-122B-A10B-FP8-dynamic",
+    "name": "Qwen 3.5 122B A10B FP8 Dynamic",
+    "description": "122B MoE (10B active), dynamic FP8",
+    "category": "MoE (Mixture of Experts)"
+  },
+  {
+    "id": "RedHatAI/Qwen3.5-122B-A10B-NVFP4",
+    "name": "Qwen 3.5 122B A10B NVFP4",
+    "description": "122B MoE (10B active), NVIDIA FP4",
+    "category": "MoE (Mixture of Experts)"
+  },
+  {
+    "id": "RedHatAI/Qwen3.5-35B-A3B-FP8-dynamic",
+    "name": "Qwen 3.5 35B A3B FP8 Dynamic",
+    "description": "35B MoE (3B active), dynamic FP8",
+    "category": "MoE (Mixture of Experts)"
+  },
+  {
+    "id": "RedHatAI/Qwen3.5-397B-A17B-FP8-dynamic",
+    "name": "Qwen 3.5 397B A17B FP8 Dynamic",
+    "description": "397B MoE (17B active), dynamic FP8",
+    "category": "MoE (Mixture of Experts)"
+  },
+  {
+    "id": "RedHatAI/Qwen3.6-35B-A3B-FP8-dynamic",
+    "name": "Qwen 3.6 35B A3B FP8 Dynamic",
+    "description": "35B MoE (3B active), dynamic FP8",
+    "category": "MoE (Mixture of Experts)"
+  },
+  {
+    "id": "RedHatAI/DeepSeek-R1-Distill-Llama-70B-FP8-dynamic",
+    "name": "DeepSeek R1 Distill Llama 70B",
+    "description": "DeepSeek R1 distilled to Llama 70B",
+    "category": "DeepSeek R1"
+  },
+  {
+    "id": "RedHatAI/DeepSeek-R1-Distill-Llama-8B-FP8-dynamic",
+    "name": "DeepSeek R1 Distill Llama 8B",
+    "description": "DeepSeek R1 distilled to Llama 8B",
+    "category": "DeepSeek R1"
+  },
+  {
+    "id": "RedHatAI/DeepSeek-R1-Distill-Qwen-1.5B-FP8-dynamic",
+    "name": "DeepSeek R1 Distill Qwen 1.5B FP8",
+    "description": "R1 distilled to Qwen 1.5B",
+    "category": "DeepSeek R1"
+  },
+  {
+    "id": "RedHatAI/DeepSeek-R1-Distill-Qwen-14B-FP8-dynamic",
+    "name": "DeepSeek R1 Distill Qwen 14B",
+    "description": "DeepSeek R1 distilled to Qwen 14B",
+    "category": "DeepSeek R1"
+  },
+  {
+    "id": "RedHatAI/DeepSeek-R1-Distill-Qwen-7B-FP8-dynamic",
+    "name": "DeepSeek R1 Distill Qwen 7B FP8",
+    "description": "R1 distilled to Qwen 7B",
+    "category": "DeepSeek R1"
+  },
+  {
+    "id": "RedHatAI/Codestral-22B-v0.1-FP8",
+    "name": "Codestral 22B FP8",
+    "description": "Mistral code-specialized 22B model",
+    "category": "Code Specialists"
+  },
+  {
+    "id": "RedHatAI/Codestral-22B-v0.1-quantized.w4a16",
+    "name": "Codestral 22B w4a16",
+    "description": "Code-specialized 22B with 4-bit quantization",
+    "category": "Code Specialists"
+  },
+  {
+    "id": "RedHatAI/DeepSeek-Coder-V2-Lite-Instruct-FP8",
+    "name": "DeepSeek Coder V2 Lite FP8",
+    "description": "Code-specialized DeepSeek model",
+    "category": "Code Specialists"
+  },
+  {
+    "id": "RedHatAI/Qwen2.5-Coder-14B-Instruct-FP8",
+    "name": "Qwen 2.5 Coder 14B FP8",
+    "description": "Code-specialized Qwen 2.5 14B",
+    "category": "Code Specialists"
+  },
+  {
+    "id": "RedHatAI/Qwen2.5-Coder-14B-Instruct-FP8-dynamic",
+    "name": "Qwen 2.5 Coder 14B FP8",
+    "description": "14B code model, dynamic FP8",
+    "category": "Code Specialists"
+  },
+  {
+    "id": "RedHatAI/Qwen2.5-Coder-32B-Instruct-FP8",
+    "name": "Qwen 2.5 Coder 32B FP8",
+    "description": "Code-specialized Qwen 2.5 32B",
+    "category": "Code Specialists"
+  },
+  {
+    "id": "RedHatAI/Qwen2.5-Coder-32B-Instruct-FP8-dynamic",
+    "name": "Qwen 2.5 Coder 32B FP8",
+    "description": "32B code model, dynamic FP8",
+    "category": "Code Specialists"
+  },
+  {
+    "id": "RedHatAI/Qwen2.5-Coder-7B-Instruct-FP8",
+    "name": "Qwen 2.5 Coder 7B FP8",
+    "description": "Code-specialized Qwen 2.5 7B",
+    "category": "Code Specialists"
+  },
+  {
+    "id": "RedHatAI/Qwen2.5-Coder-7B-Instruct-FP8-dynamic",
+    "name": "Qwen 2.5 Coder 7B FP8",
+    "description": "7B code model, dynamic FP8",
+    "category": "Code Specialists"
+  },
+  {
+    "id": "RedHatAI/Qwen3-Coder-Next-FP8-dynamic",
+    "name": "Qwen 3 Coder Next FP8 Dynamic",
+    "description": "Qwen 3 code generation model",
+    "category": "Code Specialists"
+  },
+  {
+    "id": "RedHatAI/Qwen3-Coder-Next-NVFP4",
+    "name": "Qwen 3 Coder Next NVFP4",
+    "description": "Code-specialized Qwen 3 with FP4",
+    "category": "Code Specialists"
+  },
+  {
+    "id": "RedHatAI/gpt-oss-20b-speculator.eagle3",
+    "name": "GPT OSS 20B Speculator",
+    "description": "20B speculative decoding model",
+    "category": "Speculative Decoding"
+  },
+  {
+    "id": "RedHatAI/gemma-4-26B-A4B-it-speculator.eagle3",
+    "name": "Gemma 4 26B A4B EAGLE3 Speculator",
+    "description": "EAGLE3 speculator for Gemma 4 26B",
+    "category": "Speculative Decoding"
+  },
+  {
+    "id": "RedHatAI/gemma-4-31B-it-speculator.eagle3",
+    "name": "Gemma 4 31B EAGLE3 Speculator",
+    "description": "EAGLE3 speculator for Gemma 4 31B",
+    "category": "Speculative Decoding"
+  },
+  {
+    "id": "RedHatAI/Llama-3.1-8B-Instruct-speculator.eagle3",
+    "name": "Llama 3.1 8B Speculator",
+    "description": "8B Llama speculative decoding model",
+    "category": "Speculative Decoding"
+  },
+  {
+    "id": "RedHatAI/Llama-3.3-70B-Instruct-speculator.eagle3",
+    "name": "Llama 3.3 70B EAGLE3 Speculator",
+    "description": "EAGLE3 speculator for Llama 3.3 70B",
+    "category": "Speculative Decoding"
+  },
+  {
+    "id": "RedHatAI/Qwen3-14B-speculator.eagle3",
+    "name": "Qwen 3 14B EAGLE3 Speculator",
+    "description": "EAGLE3 speculator for Qwen 3 14B",
+    "category": "Speculative Decoding"
+  },
+  {
+    "id": "RedHatAI/Qwen3-32B-speculator.eagle3",
+    "name": "Qwen 3 32B EAGLE3 Speculator",
+    "description": "EAGLE3 speculator for Qwen 3 32B",
+    "category": "Speculative Decoding"
+  },
+  {
+    "id": "RedHatAI/Qwen3-8B-speculator.eagle3",
+    "name": "Qwen 3 8B Speculator",
+    "description": "8B speculative decoding model",
+    "category": "Speculative Decoding"
+  },
+  {
+    "id": "RedHatAI/Apertus-70B-Instruct-2509-quantized.w4a16",
+    "name": "Apertus-70B-Instruct-2509-quantized.w4a16",
+    "description": "Red Hat AI optimized W4A16 quantized, instruction-tuned",
+    "category": "Other"
+  },
+  {
+    "id": "RedHatAI/Apertus-8B-Instruct-2509-FP8-dynamic",
+    "name": "Apertus-8B-Instruct-2509-FP8-dynamic",
+    "description": "Red Hat AI optimized FP8 quantized, instruction-tuned",
+    "category": "Other"
+  },
+  {
+    "id": "RedHatAI/CLIP-ViT-B-32-256x256-DataComp-s34B-b86K-ds",
+    "name": "CLIP-ViT-B-32-256x256-DataComp-s34B-b86K-ds",
+    "description": "Red Hat AI optimized base model",
+    "category": "Other"
+  },
+  {
+    "id": "RedHatAI/CLIP-ViT-B-32-256x256-DataComp-s34B-b86K-quant-ds",
+    "name": "CLIP-ViT-B-32-256x256-DataComp-s34B-b86K-quant-ds",
+    "description": "Red Hat AI optimized base model",
+    "category": "Other"
+  },
+  {
+    "id": "RedHatAI/DeepSeek-Coder-V2-Base-FP8",
+    "name": "DeepSeek-Coder-V2-Base-FP8",
+    "description": "Red Hat AI optimized FP8 quantized, code generation",
+    "category": "DeepSeek"
+  },
+  {
+    "id": "RedHatAI/DeepSeek-Coder-V2-Instruct-0724-FP8",
+    "name": "DeepSeek-Coder-V2-Instruct-0724-FP8",
+    "description": "Red Hat AI optimized FP8 quantized, instruction-tuned, code generation",
+    "category": "DeepSeek"
+  },
+  {
+    "id": "RedHatAI/DeepSeek-Coder-V2-Instruct-0724-quantized.w4a16",
+    "name": "DeepSeek-Coder-V2-Instruct-0724-quantized.w4a16",
+    "description": "Red Hat AI optimized W4A16 quantized, instruction-tuned, code generation",
+    "category": "DeepSeek"
+  },
+  {
+    "id": "RedHatAI/DeepSeek-Coder-V2-Instruct-FP8",
+    "name": "DeepSeek-Coder-V2-Instruct-FP8",
+    "description": "Red Hat AI optimized FP8 quantized, instruction-tuned, code generation",
+    "category": "DeepSeek"
+  },
+  {
+    "id": "RedHatAI/DeepSeek-Coder-V2-Lite-Base-FP8",
+    "name": "DeepSeek-Coder-V2-Lite-Base-FP8",
+    "description": "Red Hat AI optimized FP8 quantized, code generation",
+    "category": "DeepSeek"
+  },
+  {
+    "id": "RedHatAI/DeepSeek-R1-0528-quantized.w4a16",
+    "name": "DeepSeek-R1-0528-quantized.w4a16",
+    "description": "Red Hat AI optimized W4A16 quantized",
+    "category": "DeepSeek"
+  },
+  {
+    "id": "RedHatAI/DeepSeek-R1-Distill-Llama-70B-quantized.w4a16",
+    "name": "DeepSeek-R1-Distill-Llama-70B-quantized.w4a16",
+    "description": "Red Hat AI optimized W4A16 quantized",
+    "category": "Llama"
+  },
+  {
+    "id": "RedHatAI/DeepSeek-R1-Distill-Llama-70B-quantized.w8a8",
+    "name": "DeepSeek-R1-Distill-Llama-70B-quantized.w8a8",
+    "description": "Red Hat AI optimized W8A8 quantized",
+    "category": "Llama"
+  },
+  {
+    "id": "RedHatAI/DeepSeek-R1-Distill-Llama-8B-quantized.w4a16",
+    "name": "DeepSeek-R1-Distill-Llama-8B-quantized.w4a16",
+    "description": "Red Hat AI optimized W4A16 quantized",
+    "category": "Llama"
+  },
+  {
+    "id": "RedHatAI/DeepSeek-R1-Distill-Llama-8B-quantized.w8a8",
+    "name": "DeepSeek-R1-Distill-Llama-8B-quantized.w8a8",
+    "description": "Red Hat AI optimized W8A8 quantized",
+    "category": "Llama"
+  },
+  {
+    "id": "RedHatAI/DeepSeek-R1-Distill-Qwen-1.5B-quantized.w4a16",
+    "name": "DeepSeek-R1-Distill-Qwen-1.5B-quantized.w4a16",
+    "description": "Red Hat AI optimized W4A16 quantized",
+    "category": "Qwen"
+  },
+  {
+    "id": "RedHatAI/DeepSeek-R1-Distill-Qwen-1.5B-quantized.w8a8",
+    "name": "DeepSeek-R1-Distill-Qwen-1.5B-quantized.w8a8",
+    "description": "Red Hat AI optimized W8A8 quantized",
+    "category": "Qwen"
+  },
+  {
+    "id": "RedHatAI/DeepSeek-R1-Distill-Qwen-14B-quantized.w4a16",
+    "name": "DeepSeek-R1-Distill-Qwen-14B-quantized.w4a16",
+    "description": "Red Hat AI optimized W4A16 quantized",
+    "category": "Qwen"
+  },
+  {
+    "id": "RedHatAI/DeepSeek-R1-Distill-Qwen-14B-quantized.w8a8",
+    "name": "DeepSeek-R1-Distill-Qwen-14B-quantized.w8a8",
+    "description": "Red Hat AI optimized W8A8 quantized",
+    "category": "Qwen"
+  },
+  {
+    "id": "RedHatAI/DeepSeek-R1-Distill-Qwen-32B-quantized.w4a16",
+    "name": "DeepSeek-R1-Distill-Qwen-32B-quantized.w4a16",
+    "description": "Red Hat AI optimized W4A16 quantized",
+    "category": "Qwen"
+  },
+  {
+    "id": "RedHatAI/DeepSeek-R1-Distill-Qwen-32B-quantized.w8a8",
+    "name": "DeepSeek-R1-Distill-Qwen-32B-quantized.w8a8",
+    "description": "Red Hat AI optimized W8A8 quantized",
+    "category": "Qwen"
+  },
+  {
+    "id": "RedHatAI/DeepSeek-R1-Distill-Qwen-7B-quantized.w4a16",
+    "name": "DeepSeek-R1-Distill-Qwen-7B-quantized.w4a16",
+    "description": "Red Hat AI optimized W4A16 quantized",
+    "category": "Qwen"
+  },
+  {
+    "id": "RedHatAI/DeepSeek-R1-Distill-Qwen-7B-quantized.w8a8",
+    "name": "DeepSeek-R1-Distill-Qwen-7B-quantized.w8a8",
+    "description": "Red Hat AI optimized W8A8 quantized",
+    "category": "Qwen"
+  },
+  {
+    "id": "RedHatAI/DeepSeek-R1-Llama-70B-quantized.w8a8",
+    "name": "DeepSeek-R1-Llama-70B-quantized.w8a8",
+    "description": "Red Hat AI optimized W8A8 quantized",
+    "category": "Llama"
+  },
+  {
+    "id": "RedHatAI/DeepSeek-R1-NVFP4-FP8-BLOCK",
+    "name": "DeepSeek-R1-NVFP4-FP8-BLOCK",
+    "description": "Red Hat AI optimized FP8 quantized",
+    "category": "DeepSeek"
+  },
+  {
+    "id": "RedHatAI/DeepSeek-R1-quantized.w4a16",
+    "name": "DeepSeek-R1-quantized.w4a16",
+    "description": "Red Hat AI optimized W4A16 quantized",
+    "category": "DeepSeek"
+  },
+  {
+    "id": "RedHatAI/DeepSeek-V2.5-1210-quantized.w4a16",
+    "name": "DeepSeek-V2.5-1210-quantized.w4a16",
+    "description": "Red Hat AI optimized W4A16 quantized",
+    "category": "DeepSeek"
+  },
+  {
+    "id": "RedHatAI/DeepSeek-V3-BF16",
+    "name": "DeepSeek-V3-BF16",
+    "description": "Red Hat AI optimized BF16 precision",
+    "category": "DeepSeek"
+  },
+  {
+    "id": "RedHatAI/DeepSeek-V3.2-NVFP4-FP8-BLOCK",
+    "name": "DeepSeek-V3.2-NVFP4-FP8-BLOCK",
+    "description": "Red Hat AI optimized FP8 quantized",
+    "category": "DeepSeek"
+  },
+  {
+    "id": "RedHatAI/DeepSeek-V4-Flash-BF16",
+    "name": "DeepSeek-V4-Flash-BF16",
+    "description": "Red Hat AI optimized BF16 precision",
+    "category": "DeepSeek"
+  },
+  {
+    "id": "RedHatAI/DeepSeek-V4-Pro",
+    "name": "DeepSeek-V4-Pro",
+    "description": "Red Hat AI optimized base model",
+    "category": "DeepSeek"
+  },
+  {
+    "id": "RedHatAI/Devstral-Small-2-24B-Instruct-2512",
+    "name": "Devstral-Small-2-24B-Instruct-2512",
+    "description": "Red Hat AI optimized instruction-tuned",
+    "category": "Mistral"
+  },
+  {
+    "id": "RedHatAI/Devstral-Small-2507-FP8-Dynamic",
+    "name": "Devstral-Small-2507-FP8-Dynamic",
+    "description": "Red Hat AI optimized FP8 quantized",
+    "category": "Mistral"
+  },
+  {
+    "id": "RedHatAI/Devstral-Small-2507-quantized.w4a16",
+    "name": "Devstral-Small-2507-quantized.w4a16",
+    "description": "Red Hat AI optimized W4A16 quantized",
+    "category": "Mistral"
+  },
+  {
+    "id": "RedHatAI/Devstral-Small-2507-quantized.w8a8",
+    "name": "Devstral-Small-2507-quantized.w8a8",
+    "description": "Red Hat AI optimized W8A8 quantized",
+    "category": "Mistral"
+  },
+  {
+    "id": "RedHatAI/Foundation-Sec-8B",
+    "name": "Foundation-Sec-8B",
+    "description": "Red Hat AI optimized base model",
+    "category": "Other"
+  },
+  {
+    "id": "RedHatAI/Foundation-Sec-8B-Instruct",
+    "name": "Foundation-Sec-8B-Instruct",
+    "description": "Red Hat AI optimized instruction-tuned",
+    "category": "Other"
+  },
+  {
+    "id": "RedHatAI/GLM-4.6-FP8",
+    "name": "GLM-4.6-FP8",
+    "description": "Red Hat AI optimized FP8 quantized",
+    "category": "GLM"
+  },
+  {
+    "id": "RedHatAI/GLM-4.6-FP8-dynamic",
+    "name": "GLM-4.6-FP8-dynamic",
+    "description": "Red Hat AI optimized FP8 quantized",
+    "category": "GLM"
+  },
+  {
+    "id": "RedHatAI/GLM-4.6-NVFP4",
+    "name": "GLM-4.6-NVFP4",
+    "description": "Red Hat AI optimized NVFP4 quantized",
+    "category": "GLM"
+  },
+  {
+    "id": "RedHatAI/GLM-4.6-quantized.w4a16",
+    "name": "GLM-4.6-quantized.w4a16",
+    "description": "Red Hat AI optimized W4A16 quantized",
+    "category": "GLM"
+  },
+  {
+    "id": "RedHatAI/GLM-4.6-quantized.w8a8",
+    "name": "GLM-4.6-quantized.w8a8",
+    "description": "Red Hat AI optimized W8A8 quantized",
+    "category": "GLM"
+  },
+  {
+    "id": "RedHatAI/GLM-5.1",
+    "name": "GLM-5.1",
+    "description": "Red Hat AI optimized base model",
+    "category": "GLM"
+  },
+  {
+    "id": "RedHatAI/GLM-5.2",
+    "name": "GLM-5.2",
+    "description": "Red Hat AI optimized base model",
+    "category": "GLM"
+  },
+  {
+    "id": "RedHatAI/GLM-5.2-FP8",
+    "name": "GLM-5.2-FP8",
+    "description": "Red Hat AI optimized FP8 quantized",
+    "category": "GLM"
+  },
+  {
+    "id": "RedHatAI/Kimi-K2-Instruct-quantized.w4a16",
+    "name": "Kimi-K2-Instruct-quantized.w4a16",
+    "description": "Red Hat AI optimized W4A16 quantized, instruction-tuned",
+    "category": "Kimi"
+  },
+  {
+    "id": "RedHatAI/Kimi-K2-Thinking",
+    "name": "Kimi-K2-Thinking",
+    "description": "Red Hat AI optimized reasoning",
+    "category": "Kimi"
+  },
+  {
+    "id": "RedHatAI/Kimi-K2-Thinking-FP8-Block",
+    "name": "Kimi-K2-Thinking-FP8-Block",
+    "description": "Red Hat AI optimized FP8 quantized, reasoning",
+    "category": "Kimi"
+  },
+  {
+    "id": "RedHatAI/Kimi-K2.7-Code",
+    "name": "Kimi-K2.7-Code",
+    "description": "Red Hat AI optimized code generation",
+    "category": "Kimi"
+  },
+  {
+    "id": "RedHatAI/Laguna-XS.2-FP8",
+    "name": "Laguna-XS.2-FP8",
+    "description": "Red Hat AI optimized FP8 quantized",
+    "category": "Other"
+  },
+  {
+    "id": "RedHatAI/Laguna-XS.2-NVFP4",
+    "name": "Laguna-XS.2-NVFP4",
+    "description": "Red Hat AI optimized NVFP4 quantized",
+    "category": "Other"
+  },
+  {
+    "id": "RedHatAI/Llama-2-7b-chat-hf-FP8",
+    "name": "Llama-2-7b-chat-hf-FP8",
+    "description": "Red Hat AI optimized FP8 quantized",
+    "category": "Llama"
+  },
+  {
+    "id": "RedHatAI/Llama-2-7b-chat-quantized.w4a16",
+    "name": "Llama-2-7b-chat-quantized.w4a16",
+    "description": "Red Hat AI optimized W4A16 quantized",
+    "category": "Llama"
+  },
+  {
+    "id": "RedHatAI/Llama-2-7b-chat-quantized.w8a16",
+    "name": "Llama-2-7b-chat-quantized.w8a16",
+    "description": "Red Hat AI optimized W8A16 quantized",
+    "category": "Llama"
+  },
+  {
+    "id": "RedHatAI/Llama-2-7b-chat-quantized.w8a8",
+    "name": "Llama-2-7b-chat-quantized.w8a8",
+    "description": "Red Hat AI optimized W8A8 quantized",
+    "category": "Llama"
+  },
+  {
+    "id": "RedHatAI/Llama-2-7b-cnn-daily-mail",
+    "name": "Llama-2-7b-cnn-daily-mail",
+    "description": "Red Hat AI optimized base model",
+    "category": "Llama"
+  },
+  {
+    "id": "RedHatAI/Llama-2-7b-cnn-daily-mail-pruned_50",
+    "name": "Llama-2-7b-cnn-daily-mail-pruned_50",
+    "description": "Red Hat AI optimized base model",
+    "category": "Llama"
+  },
+  {
+    "id": "RedHatAI/Llama-2-7b-cnn-daily-mail-pruned_50-quantized-deepsparse",
+    "name": "Llama-2-7b-cnn-daily-mail-pruned_50-quantized-deepsparse",
+    "description": "Red Hat AI optimized base model",
+    "category": "Llama"
+  },
+  {
+    "id": "RedHatAI/Llama-2-7b-cnn-daily-mail-pruned_70",
+    "name": "Llama-2-7b-cnn-daily-mail-pruned_70",
+    "description": "Red Hat AI optimized base model",
+    "category": "Llama"
+  },
+  {
+    "id": "RedHatAI/Llama-2-7b-cnn-daily-mail-pruned_70-quantized-deepsparse",
+    "name": "Llama-2-7b-cnn-daily-mail-pruned_70-quantized-deepsparse",
+    "description": "Red Hat AI optimized base model",
+    "category": "Llama"
+  },
+  {
+    "id": "RedHatAI/Llama-2-7b-dolphin-open_platypus",
+    "name": "Llama-2-7b-dolphin-open_platypus",
+    "description": "Red Hat AI optimized base model",
+    "category": "Llama"
+  },
+  {
+    "id": "RedHatAI/Llama-2-7b-dolphin-open_platypus-pruned_50",
+    "name": "Llama-2-7b-dolphin-open_platypus-pruned_50",
+    "description": "Red Hat AI optimized base model",
+    "category": "Llama"
+  },
+  {
+    "id": "RedHatAI/Llama-2-7b-dolphin-open_platypus-pruned_50-quantized-deepsparse",
+    "name": "Llama-2-7b-dolphin-open_platypus-pruned_50-quantized-deepsparse",
+    "description": "Red Hat AI optimized base model",
+    "category": "Llama"
+  },
+  {
+    "id": "RedHatAI/Llama-2-7b-dolphin-open_platypus-pruned_70",
+    "name": "Llama-2-7b-dolphin-open_platypus-pruned_70",
+    "description": "Red Hat AI optimized base model",
+    "category": "Llama"
+  },
+  {
+    "id": "RedHatAI/Llama-2-7b-dolphin-open_platypus-pruned_70-quantized-deepsparse",
+    "name": "Llama-2-7b-dolphin-open_platypus-pruned_70-quantized-deepsparse",
+    "description": "Red Hat AI optimized base model",
+    "category": "Llama"
+  },
+  {
+    "id": "RedHatAI/Llama-2-7b-evol-code-alpaca-pruned_50",
+    "name": "Llama-2-7b-evol-code-alpaca-pruned_50",
+    "description": "Red Hat AI optimized base model",
+    "category": "Llama"
+  },
+  {
+    "id": "RedHatAI/Llama-2-7b-evol-code-alpaca-pruned_50-quantized-deepsparse",
+    "name": "Llama-2-7b-evol-code-alpaca-pruned_50-quantized-deepsparse",
+    "description": "Red Hat AI optimized base model",
+    "category": "Llama"
+  },
+  {
+    "id": "RedHatAI/Llama-2-7b-evol-code-alpaca-pruned_70",
+    "name": "Llama-2-7b-evol-code-alpaca-pruned_70",
+    "description": "Red Hat AI optimized base model",
+    "category": "Llama"
+  },
+  {
+    "id": "RedHatAI/Llama-2-7b-evol-code-alpaca-pruned_70-quantized-deepsparse",
+    "name": "Llama-2-7b-evol-code-alpaca-pruned_70-quantized-deepsparse",
+    "description": "Red Hat AI optimized base model",
+    "category": "Llama"
+  },
+  {
+    "id": "RedHatAI/Llama-2-7b-evolcodealpaca",
+    "name": "Llama-2-7b-evolcodealpaca",
+    "description": "Red Hat AI optimized base model",
+    "category": "Llama"
+  },
+  {
+    "id": "RedHatAI/Llama-2-7b-gsm8k",
+    "name": "Llama-2-7b-gsm8k",
+    "description": "Red Hat AI optimized base model",
+    "category": "Llama"
+  },
+  {
+    "id": "RedHatAI/Llama-2-7b-gsm8k-pruned_50",
+    "name": "Llama-2-7b-gsm8k-pruned_50",
+    "description": "Red Hat AI optimized base model",
+    "category": "Llama"
+  },
+  {
+    "id": "RedHatAI/Llama-2-7b-gsm8k-pruned_70",
+    "name": "Llama-2-7b-gsm8k-pruned_70",
+    "description": "Red Hat AI optimized base model",
+    "category": "Llama"
+  },
+  {
+    "id": "RedHatAI/Llama-2-7b-pruned50-retrained",
+    "name": "Llama-2-7b-pruned50-retrained",
+    "description": "Red Hat AI optimized base model",
+    "category": "Llama"
+  },
+  {
+    "id": "RedHatAI/Llama-2-7b-pruned70-retrained",
+    "name": "Llama-2-7b-pruned70-retrained",
+    "description": "Red Hat AI optimized base model",
+    "category": "Llama"
+  },
+  {
+    "id": "RedHatAI/Llama-2-7b-ultrachat200k",
+    "name": "Llama-2-7b-ultrachat200k",
+    "description": "Red Hat AI optimized base model",
+    "category": "Llama"
+  },
+  {
+    "id": "RedHatAI/Llama-2-7b-ultrachat200k-pruned_50",
+    "name": "Llama-2-7b-ultrachat200k-pruned_50",
+    "description": "Red Hat AI optimized base model",
+    "category": "Llama"
+  },
+  {
+    "id": "RedHatAI/Llama-2-7b-ultrachat200k-pruned_50-quantized-deepsparse",
+    "name": "Llama-2-7b-ultrachat200k-pruned_50-quantized-deepsparse",
+    "description": "Red Hat AI optimized base model",
+    "category": "Llama"
+  },
+  {
+    "id": "RedHatAI/Llama-2-7b-ultrachat200k-pruned_70",
+    "name": "Llama-2-7b-ultrachat200k-pruned_70",
+    "description": "Red Hat AI optimized base model",
+    "category": "Llama"
+  },
+  {
+    "id": "RedHatAI/Llama-2-7b-ultrachat200k-pruned_70-quantized-deepsparse",
+    "name": "Llama-2-7b-ultrachat200k-pruned_70-quantized-deepsparse",
+    "description": "Red Hat AI optimized base model",
+    "category": "Llama"
+  },
+  {
+    "id": "RedHatAI/Llama-2-7b_oneshot-pruned50_C4_10k",
+    "name": "Llama-2-7b_oneshot-pruned50_C4_10k",
+    "description": "Red Hat AI optimized base model",
+    "category": "Llama"
+  },
+  {
+    "id": "RedHatAI/Llama-2-7b_oneshot-pruned70_C4_10k",
+    "name": "Llama-2-7b_oneshot-pruned70_C4_10k",
+    "description": "Red Hat AI optimized base model",
+    "category": "Llama"
+  },
+  {
+    "id": "RedHatAI/Llama-3.1-70B-Instruct-NVFP4",
+    "name": "Llama-3.1-70B-Instruct-NVFP4",
+    "description": "Red Hat AI optimized NVFP4 quantized, instruction-tuned",
+    "category": "Llama"
+  },
+  {
+    "id": "RedHatAI/Llama-3.1-70B-Instruct-NVFP4A16",
+    "name": "Llama-3.1-70B-Instruct-NVFP4A16",
+    "description": "Red Hat AI optimized NVFP4 quantized, instruction-tuned",
+    "category": "Llama"
+  },
+  {
+    "id": "RedHatAI/Llama-3.1-8B-Instruct",
+    "name": "Llama-3.1-8B-Instruct",
+    "description": "Red Hat AI optimized instruction-tuned",
+    "category": "Llama"
+  },
+  {
+    "id": "RedHatAI/Llama-3.1-8B-Instruct-FP8-block",
+    "name": "Llama-3.1-8B-Instruct-FP8-block",
+    "description": "Red Hat AI optimized FP8 quantized, instruction-tuned",
+    "category": "Llama"
+  },
+  {
+    "id": "RedHatAI/Llama-3.1-8B-evolcodealpaca",
+    "name": "Llama-3.1-8B-evolcodealpaca",
+    "description": "Red Hat AI optimized base model",
+    "category": "Llama"
+  },
+  {
+    "id": "RedHatAI/Llama-3.1-8B-gsm8k",
+    "name": "Llama-3.1-8B-gsm8k",
+    "description": "Red Hat AI optimized base model",
+    "category": "Llama"
+  },
+  {
+    "id": "RedHatAI/Llama-3.1-8B-tldr",
+    "name": "Llama-3.1-8B-tldr",
+    "description": "Red Hat AI optimized base model",
+    "category": "Llama"
+  },
+  {
+    "id": "RedHatAI/Llama-3.1-8B-tldr-FP8-dynamic",
+    "name": "Llama-3.1-8B-tldr-FP8-dynamic",
+    "description": "Red Hat AI optimized FP8 quantized",
+    "category": "Llama"
+  },
+  {
+    "id": "RedHatAI/Llama-3.1-8B-ultrachat_200k",
+    "name": "Llama-3.1-8B-ultrachat_200k",
+    "description": "Red Hat AI optimized base model",
+    "category": "Llama"
+  },
+  {
+    "id": "RedHatAI/Llama-3.1-Nemotron-70B-Instruct-HF",
+    "name": "Llama-3.1-Nemotron-70B-Instruct-HF",
+    "description": "Red Hat AI optimized instruction-tuned",
+    "category": "Llama"
+  },
+  {
+    "id": "RedHatAI/Llama-3.1-Nemotron-70B-Instruct-HF-quantized.w8a8",
+    "name": "Llama-3.1-Nemotron-70B-Instruct-HF-quantized.w8a8",
+    "description": "Red Hat AI optimized W8A8 quantized, instruction-tuned",
+    "category": "Llama"
+  },
+  {
+    "id": "RedHatAI/Llama-3.2-1B-FP8",
+    "name": "Llama-3.2-1B-FP8",
+    "description": "Red Hat AI optimized FP8 quantized",
+    "category": "Llama"
+  },
+  {
+    "id": "RedHatAI/Llama-3.2-1B-Instruct-quantized.w8a8",
+    "name": "Llama-3.2-1B-Instruct-quantized.w8a8",
+    "description": "Red Hat AI optimized W8A8 quantized, instruction-tuned",
+    "category": "Llama"
+  },
+  {
+    "id": "RedHatAI/Llama-3.2-1B-quantized.w8a8",
+    "name": "Llama-3.2-1B-quantized.w8a8",
+    "description": "Red Hat AI optimized W8A8 quantized",
+    "category": "Llama"
+  },
+  {
+    "id": "RedHatAI/Llama-3.2-3B-Instruct-quantized.w8a8",
+    "name": "Llama-3.2-3B-Instruct-quantized.w8a8",
+    "description": "Red Hat AI optimized W8A8 quantized, instruction-tuned",
+    "category": "Llama"
+  },
+  {
+    "id": "RedHatAI/Llama-3.2-3B-quantized.w8a8",
+    "name": "Llama-3.2-3B-quantized.w8a8",
+    "description": "Red Hat AI optimized W8A8 quantized",
+    "category": "Llama"
+  },
+  {
+    "id": "RedHatAI/Llama-3.2-90B-Vision-Instruct-FP8-dynamic",
+    "name": "Llama-3.2-90B-Vision-Instruct-FP8-dynamic",
+    "description": "Red Hat AI optimized FP8 quantized, instruction-tuned, vision-language",
+    "category": "Llama"
+  },
+  {
+    "id": "RedHatAI/Llama-3.3-70B-Instruct",
+    "name": "Llama-3.3-70B-Instruct",
+    "description": "Red Hat AI optimized instruction-tuned",
+    "category": "Llama"
+  },
+  {
+    "id": "RedHatAI/Llama-3.3-70B-Instruct-quantized.w4a16",
+    "name": "Llama-3.3-70B-Instruct-quantized.w4a16",
+    "description": "Red Hat AI optimized W4A16 quantized, instruction-tuned",
+    "category": "Llama"
+  },
+  {
+    "id": "RedHatAI/Llama-3.3-70B-Instruct-quantized.w8a8",
+    "name": "Llama-3.3-70B-Instruct-quantized.w8a8",
+    "description": "Red Hat AI optimized W8A8 quantized, instruction-tuned",
+    "category": "Llama"
+  },
+  {
+    "id": "RedHatAI/Llama-4-Maverick-17B-128E-Instruct",
+    "name": "Llama-4-Maverick-17B-128E-Instruct",
+    "description": "Red Hat AI optimized instruction-tuned",
+    "category": "Llama"
+  },
+  {
+    "id": "RedHatAI/Llama-4-Maverick-17B-128E-Instruct-FP8-block",
+    "name": "Llama-4-Maverick-17B-128E-Instruct-FP8-block",
+    "description": "Red Hat AI optimized FP8 quantized, instruction-tuned",
+    "category": "Llama"
+  },
+  {
+    "id": "RedHatAI/Llama-4-Maverick-17B-128E-Instruct-quantized.w4a16",
+    "name": "Llama-4-Maverick-17B-128E-Instruct-quantized.w4a16",
+    "description": "Red Hat AI optimized W4A16 quantized, instruction-tuned",
+    "category": "Llama"
+  },
+  {
+    "id": "RedHatAI/Llama-4-Maverick-17B-128E-Instruct-speculator.eagle3",
+    "name": "Llama-4-Maverick-17B-128E-Instruct-speculator.eagle3",
+    "description": "Red Hat AI optimized instruction-tuned, speculative decoding",
+    "category": "Llama"
+  },
+  {
+    "id": "RedHatAI/Llama-4-Scout-17B-16E-Instruct",
+    "name": "Llama-4-Scout-17B-16E-Instruct",
+    "description": "Red Hat AI optimized instruction-tuned",
+    "category": "Llama"
+  },
+  {
+    "id": "RedHatAI/Llama-4-Scout-17B-16E-Instruct-FP8-block",
+    "name": "Llama-4-Scout-17B-16E-Instruct-FP8-block",
+    "description": "Red Hat AI optimized FP8 quantized, instruction-tuned",
+    "category": "Llama"
+  },
+  {
+    "id": "RedHatAI/Llama-4-Scout-17B-16E-Instruct-quantized.w4a16",
+    "name": "Llama-4-Scout-17B-16E-Instruct-quantized.w4a16",
+    "description": "Red Hat AI optimized W4A16 quantized, instruction-tuned",
+    "category": "Llama"
+  },
+  {
+    "id": "RedHatAI/Llama-Guard-4-12B",
+    "name": "Llama-Guard-4-12B",
+    "description": "Red Hat AI optimized base model",
+    "category": "Llama"
+  },
+  {
+    "id": "RedHatAI/Llama-Guard-4-12B-FP8-dynamic",
+    "name": "Llama-Guard-4-12B-FP8-dynamic",
+    "description": "Red Hat AI optimized FP8 quantized",
+    "category": "Llama"
+  },
+  {
+    "id": "RedHatAI/Llama-Guard-4-12B-quantized.w4a16",
+    "name": "Llama-Guard-4-12B-quantized.w4a16",
+    "description": "Red Hat AI optimized W4A16 quantized",
+    "category": "Llama"
+  },
+  {
+    "id": "RedHatAI/Llama-Guard-4-12B-quantized.w8a8",
+    "name": "Llama-Guard-4-12B-quantized.w8a8",
+    "description": "Red Hat AI optimized W8A8 quantized",
+    "category": "Llama"
+  },
+  {
+    "id": "RedHatAI/Llama2-7b-chat-pruned50-quant-ds",
+    "name": "Llama2-7b-chat-pruned50-quant-ds",
+    "description": "Red Hat AI optimized base model",
+    "category": "Llama"
+  },
+  {
+    "id": "RedHatAI/Meta-Llama-3-70B-Instruct-FP8",
+    "name": "Meta-Llama-3-70B-Instruct-FP8",
+    "description": "Red Hat AI optimized FP8 quantized, instruction-tuned",
+    "category": "Llama"
+  },
+  {
+    "id": "RedHatAI/Meta-Llama-3-70B-Instruct-FP8-KV",
+    "name": "Meta-Llama-3-70B-Instruct-FP8-KV",
+    "description": "Red Hat AI optimized FP8 quantized, instruction-tuned",
+    "category": "Llama"
+  },
+  {
+    "id": "RedHatAI/Meta-Llama-3-70B-Instruct-quantized.w4a16",
+    "name": "Meta-Llama-3-70B-Instruct-quantized.w4a16",
+    "description": "Red Hat AI optimized W4A16 quantized, instruction-tuned",
+    "category": "Llama"
+  },
+  {
+    "id": "RedHatAI/Meta-Llama-3-70B-Instruct-quantized.w8a16",
+    "name": "Meta-Llama-3-70B-Instruct-quantized.w8a16",
+    "description": "Red Hat AI optimized W8A16 quantized, instruction-tuned",
+    "category": "Llama"
+  },
+  {
+    "id": "RedHatAI/Meta-Llama-3-70B-Instruct-quantized.w8a8",
+    "name": "Meta-Llama-3-70B-Instruct-quantized.w8a8",
+    "description": "Red Hat AI optimized W8A8 quantized, instruction-tuned",
+    "category": "Llama"
+  },
+  {
+    "id": "RedHatAI/Meta-Llama-3-8B-Instruct-FP8",
+    "name": "Meta-Llama-3-8B-Instruct-FP8",
+    "description": "Red Hat AI optimized FP8 quantized, instruction-tuned",
+    "category": "Llama"
+  },
+  {
+    "id": "RedHatAI/Meta-Llama-3-8B-Instruct-FP8-KV",
+    "name": "Meta-Llama-3-8B-Instruct-FP8-KV",
+    "description": "Red Hat AI optimized FP8 quantized, instruction-tuned",
+    "category": "Llama"
+  },
+  {
+    "id": "RedHatAI/Meta-Llama-3-8B-Instruct-quantized.w4a16",
+    "name": "Meta-Llama-3-8B-Instruct-quantized.w4a16",
+    "description": "Red Hat AI optimized W4A16 quantized, instruction-tuned",
+    "category": "Llama"
+  },
+  {
+    "id": "RedHatAI/Meta-Llama-3-8B-Instruct-quantized.w8a16",
+    "name": "Meta-Llama-3-8B-Instruct-quantized.w8a16",
+    "description": "Red Hat AI optimized W8A16 quantized, instruction-tuned",
+    "category": "Llama"
+  },
+  {
+    "id": "RedHatAI/Meta-Llama-3-8B-Instruct-quantized.w8a8",
+    "name": "Meta-Llama-3-8B-Instruct-quantized.w8a8",
+    "description": "Red Hat AI optimized W8A8 quantized, instruction-tuned",
+    "category": "Llama"
+  },
+  {
+    "id": "RedHatAI/Meta-Llama-3.1-405B-FP8",
+    "name": "Meta-Llama-3.1-405B-FP8",
+    "description": "Red Hat AI optimized FP8 quantized",
+    "category": "Llama"
+  },
+  {
+    "id": "RedHatAI/Meta-Llama-3.1-405B-Instruct-quantized.w4a16",
+    "name": "Meta-Llama-3.1-405B-Instruct-quantized.w4a16",
+    "description": "Red Hat AI optimized W4A16 quantized, instruction-tuned",
+    "category": "Llama"
+  },
+  {
+    "id": "RedHatAI/Meta-Llama-3.1-405B-Instruct-quantized.w8a16",
+    "name": "Meta-Llama-3.1-405B-Instruct-quantized.w8a16",
+    "description": "Red Hat AI optimized W8A16 quantized, instruction-tuned",
+    "category": "Llama"
+  },
+  {
+    "id": "RedHatAI/Meta-Llama-3.1-405B-Instruct-quantized.w8a8",
+    "name": "Meta-Llama-3.1-405B-Instruct-quantized.w8a8",
+    "description": "Red Hat AI optimized W8A8 quantized, instruction-tuned",
+    "category": "Llama"
+  },
+  {
+    "id": "RedHatAI/Meta-Llama-3.1-70B-FP8",
+    "name": "Meta-Llama-3.1-70B-FP8",
+    "description": "Red Hat AI optimized FP8 quantized",
+    "category": "Llama"
+  },
+  {
+    "id": "RedHatAI/Meta-Llama-3.1-70B-Instruct-quantized.w8a16",
+    "name": "Meta-Llama-3.1-70B-Instruct-quantized.w8a16",
+    "description": "Red Hat AI optimized W8A16 quantized, instruction-tuned",
+    "category": "Llama"
+  },
+  {
+    "id": "RedHatAI/Meta-Llama-3.1-70B-Instruct-quantized.w8a8",
+    "name": "Meta-Llama-3.1-70B-Instruct-quantized.w8a8",
+    "description": "Red Hat AI optimized W8A8 quantized, instruction-tuned",
+    "category": "Llama"
+  },
+  {
+    "id": "RedHatAI/Meta-Llama-3.1-70B-quantized.w8a16",
+    "name": "Meta-Llama-3.1-70B-quantized.w8a16",
+    "description": "Red Hat AI optimized W8A16 quantized",
+    "category": "Llama"
+  },
+  {
+    "id": "RedHatAI/Meta-Llama-3.1-70B-quantized.w8a8",
+    "name": "Meta-Llama-3.1-70B-quantized.w8a8",
+    "description": "Red Hat AI optimized W8A8 quantized",
+    "category": "Llama"
+  },
+  {
+    "id": "RedHatAI/Meta-Llama-3.1-8B-Instruct-quantized.w8a16",
+    "name": "Meta-Llama-3.1-8B-Instruct-quantized.w8a16",
+    "description": "Red Hat AI optimized W8A16 quantized, instruction-tuned",
+    "category": "Llama"
+  },
+  {
+    "id": "RedHatAI/Meta-Llama-3.1-8B-Instruct-quantized.w8a8",
+    "name": "Meta-Llama-3.1-8B-Instruct-quantized.w8a8",
+    "description": "Red Hat AI optimized W8A8 quantized, instruction-tuned",
+    "category": "Llama"
+  },
+  {
+    "id": "RedHatAI/Meta-Llama-3.1-8B-quantized.w8a16",
+    "name": "Meta-Llama-3.1-8B-quantized.w8a16",
+    "description": "Red Hat AI optimized W8A16 quantized",
+    "category": "Llama"
+  },
+  {
+    "id": "RedHatAI/Meta-Llama-3.1-8B-quantized.w8a8",
+    "name": "Meta-Llama-3.1-8B-quantized.w8a8",
+    "description": "Red Hat AI optimized W8A8 quantized",
+    "category": "Llama"
+  },
+  {
+    "id": "RedHatAI/MiniChat-1.5-3B-pruned50-quant-ds",
+    "name": "MiniChat-1.5-3B-pruned50-quant-ds",
+    "description": "Red Hat AI optimized base model",
+    "category": "Other"
+  },
+  {
+    "id": "RedHatAI/MiniChat-2-3B-pruned2.4",
+    "name": "MiniChat-2-3B-pruned2.4",
+    "description": "Red Hat AI optimized base model",
+    "category": "Other"
+  },
+  {
+    "id": "RedHatAI/MiniChat-3B-pruned50-quant-ds",
+    "name": "MiniChat-3B-pruned50-quant-ds",
+    "description": "Red Hat AI optimized base model",
+    "category": "Other"
+  },
+  {
+    "id": "RedHatAI/MiniMax-M2.5",
+    "name": "MiniMax-M2.5",
+    "description": "Red Hat AI optimized base model",
+    "category": "Other"
+  },
+  {
+    "id": "RedHatAI/MiniMax-M2.5-NVFP4",
+    "name": "MiniMax-M2.5-NVFP4",
+    "description": "Red Hat AI optimized NVFP4 quantized",
+    "category": "Other"
+  },
+  {
+    "id": "RedHatAI/MiniMax-M2.5-quantized.w4a16",
+    "name": "MiniMax-M2.5-quantized.w4a16",
+    "description": "Red Hat AI optimized W4A16 quantized",
+    "category": "Other"
+  },
+  {
+    "id": "RedHatAI/MiniMax-M2.5-quantized.w8a8",
+    "name": "MiniMax-M2.5-quantized.w8a8",
+    "description": "Red Hat AI optimized W8A8 quantized",
+    "category": "Other"
+  },
+  {
+    "id": "RedHatAI/Ministral-3-14B-Instruct-2512",
+    "name": "Ministral-3-14B-Instruct-2512",
+    "description": "Red Hat AI optimized instruction-tuned",
+    "category": "Mistral"
+  },
+  {
+    "id": "RedHatAI/Ministral-3-14B-Instruct-2512-FP8-dynamic",
+    "name": "Ministral-3-14B-Instruct-2512-FP8-dynamic",
+    "description": "Red Hat AI optimized FP8 quantized, instruction-tuned",
+    "category": "Mistral"
+  },
+  {
+    "id": "RedHatAI/Ministral-3-14B-Instruct-2512-NVFP4",
+    "name": "Ministral-3-14B-Instruct-2512-NVFP4",
+    "description": "Red Hat AI optimized NVFP4 quantized, instruction-tuned",
+    "category": "Mistral"
+  },
+  {
+    "id": "RedHatAI/Ministral-3-3B-Instruct-2512",
+    "name": "Ministral-3-3B-Instruct-2512",
+    "description": "Red Hat AI optimized instruction-tuned",
+    "category": "Mistral"
+  },
+  {
+    "id": "RedHatAI/Mistral-7B-Instruct-v0.3-GPTQ-4bit",
+    "name": "Mistral-7B-Instruct-v0.3-GPTQ-4bit",
+    "description": "Red Hat AI optimized instruction-tuned",
+    "category": "Mistral"
+  },
+  {
+    "id": "RedHatAI/Mistral-7B-Instruct-v0.3-quantized.w4a16",
+    "name": "Mistral-7B-Instruct-v0.3-quantized.w4a16",
+    "description": "Red Hat AI optimized W4A16 quantized, instruction-tuned",
+    "category": "Mistral"
+  },
+  {
+    "id": "RedHatAI/Mistral-7B-Instruct-v0.3-quantized.w8a16",
+    "name": "Mistral-7B-Instruct-v0.3-quantized.w8a16",
+    "description": "Red Hat AI optimized W8A16 quantized, instruction-tuned",
+    "category": "Mistral"
+  },
+  {
+    "id": "RedHatAI/Mistral-7B-Instruct-v0.3-quantized.w8a8",
+    "name": "Mistral-7B-Instruct-v0.3-quantized.w8a8",
+    "description": "Red Hat AI optimized W8A8 quantized, instruction-tuned",
+    "category": "Mistral"
+  },
+  {
+    "id": "RedHatAI/Mistral-Large-3-675B-Instruct-2512",
+    "name": "Mistral-Large-3-675B-Instruct-2512",
+    "description": "Red Hat AI optimized instruction-tuned",
+    "category": "Mistral"
+  },
+  {
+    "id": "RedHatAI/Mistral-Large-3-675B-Instruct-2512-NVFP4",
+    "name": "Mistral-Large-3-675B-Instruct-2512-NVFP4",
+    "description": "Red Hat AI optimized NVFP4 quantized, instruction-tuned",
+    "category": "Mistral"
+  },
+  {
+    "id": "RedHatAI/Mistral-Large-Instruct-2407-FP8",
+    "name": "Mistral-Large-Instruct-2407-FP8",
+    "description": "Red Hat AI optimized FP8 quantized, instruction-tuned",
+    "category": "Mistral"
+  },
+  {
+    "id": "RedHatAI/Mistral-Nemo-Instruct-2407-quantized.w8a16",
+    "name": "Mistral-Nemo-Instruct-2407-quantized.w8a16",
+    "description": "Red Hat AI optimized W8A16 quantized, instruction-tuned",
+    "category": "Mistral"
+  },
+  {
+    "id": "RedHatAI/Mistral-Small-24B-Instruct-2501",
+    "name": "Mistral-Small-24B-Instruct-2501",
+    "description": "Red Hat AI optimized instruction-tuned",
+    "category": "Mistral"
+  },
+  {
+    "id": "RedHatAI/Mistral-Small-24B-Instruct-2501-quantized.w4a16",
+    "name": "Mistral-Small-24B-Instruct-2501-quantized.w4a16",
+    "description": "Red Hat AI optimized W4A16 quantized, instruction-tuned",
+    "category": "Mistral"
+  },
+  {
+    "id": "RedHatAI/Mistral-Small-3.1-24B-Instruct-2503",
+    "name": "Mistral-Small-3.1-24B-Instruct-2503",
+    "description": "Red Hat AI optimized instruction-tuned",
+    "category": "Mistral"
+  },
+  {
+    "id": "RedHatAI/Mistral-Small-3.1-24B-Instruct-2503-quantized.w4a16",
+    "name": "Mistral-Small-3.1-24B-Instruct-2503-quantized.w4a16",
+    "description": "Red Hat AI optimized W4A16 quantized, instruction-tuned",
+    "category": "Mistral"
+  },
+  {
+    "id": "RedHatAI/Mistral-Small-3.1-24B-Instruct-2503-quantized.w8a8",
+    "name": "Mistral-Small-3.1-24B-Instruct-2503-quantized.w8a8",
+    "description": "Red Hat AI optimized W8A8 quantized, instruction-tuned",
+    "category": "Mistral"
+  },
+  {
+    "id": "RedHatAI/Mistral-Small-3.2-24B-Instruct-2506-NVFP4",
+    "name": "Mistral-Small-3.2-24B-Instruct-2506-NVFP4",
+    "description": "Red Hat AI optimized NVFP4 quantized, instruction-tuned",
+    "category": "Mistral"
+  },
+  {
+    "id": "RedHatAI/Mistral-Small-4-119B-2603",
+    "name": "Mistral-Small-4-119B-2603",
+    "description": "Red Hat AI optimized base model",
+    "category": "Mistral"
+  },
+  {
+    "id": "RedHatAI/Mixtral-8x22B-Instruct-v0.1-AutoFP8",
+    "name": "Mixtral-8x22B-Instruct-v0.1-AutoFP8",
+    "description": "Red Hat AI optimized FP8 quantized, instruction-tuned",
+    "category": "Mistral"
+  },
+  {
+    "id": "RedHatAI/Mixtral-8x22B-v0.1-quantized.w4a16",
+    "name": "Mixtral-8x22B-v0.1-quantized.w4a16",
+    "description": "Red Hat AI optimized W4A16 quantized",
+    "category": "Mistral"
+  },
+  {
+    "id": "RedHatAI/Mixtral-8x7B-Instruct-v0.1-AutoFP8",
+    "name": "Mixtral-8x7B-Instruct-v0.1-AutoFP8",
+    "description": "Red Hat AI optimized FP8 quantized, instruction-tuned",
+    "category": "Mistral"
+  },
+  {
+    "id": "RedHatAI/Mixtral-8x7B-v0.1-quantized.w4a16",
+    "name": "Mixtral-8x7B-v0.1-quantized.w4a16",
+    "description": "Red Hat AI optimized W4A16 quantized",
+    "category": "Mistral"
+  },
+  {
+    "id": "RedHatAI/NVIDIA-Nemotron-3-Super-120B-A12B-BF16",
+    "name": "NVIDIA-Nemotron-3-Super-120B-A12B-BF16",
+    "description": "Red Hat AI optimized BF16 precision",
+    "category": "Nemotron"
+  },
+  {
+    "id": "RedHatAI/NVIDIA-Nemotron-3-Ultra-550B-A55B-BF16",
+    "name": "NVIDIA-Nemotron-3-Ultra-550B-A55B-BF16",
+    "description": "Red Hat AI optimized BF16 precision",
+    "category": "Nemotron"
+  },
+  {
+    "id": "RedHatAI/NVIDIA-Nemotron-3-Ultra-550B-A55B-FP8-block",
+    "name": "NVIDIA-Nemotron-3-Ultra-550B-A55B-FP8-block",
+    "description": "Red Hat AI optimized FP8 quantized",
+    "category": "Nemotron"
+  },
+  {
+    "id": "RedHatAI/NVIDIA-Nemotron-3-Ultra-550B-A55B-FP8-dynamic",
+    "name": "NVIDIA-Nemotron-3-Ultra-550B-A55B-FP8-dynamic",
+    "description": "Red Hat AI optimized FP8 quantized",
+    "category": "Nemotron"
+  },
+  {
+    "id": "RedHatAI/NVIDIA-Nemotron-3-Ultra-550B-A55B-NVFP4",
+    "name": "NVIDIA-Nemotron-3-Ultra-550B-A55B-NVFP4",
+    "description": "Red Hat AI optimized NVFP4 quantized",
+    "category": "Nemotron"
+  },
+  {
+    "id": "RedHatAI/NVIDIA-Nemotron-3-Ultra-550B-A55B-quantized.w4a16",
+    "name": "NVIDIA-Nemotron-3-Ultra-550B-A55B-quantized.w4a16",
+    "description": "Red Hat AI optimized W4A16 quantized",
+    "category": "Nemotron"
+  },
+  {
+    "id": "RedHatAI/NVIDIA-Nemotron-Nano-9B-v2-quantized.w4a16",
+    "name": "NVIDIA-Nemotron-Nano-9B-v2-quantized.w4a16",
+    "description": "Red Hat AI optimized W4A16 quantized",
+    "category": "Nemotron"
+  },
+  {
+    "id": "RedHatAI/North-Mini-Code-1.0",
+    "name": "North-Mini-Code-1.0",
+    "description": "Red Hat AI optimized code generation",
+    "category": "Other"
+  },
+  {
+    "id": "RedHatAI/Nous-Hermes-2-SOLAR-10.7B-pruned2.4",
+    "name": "Nous-Hermes-2-SOLAR-10.7B-pruned2.4",
+    "description": "Red Hat AI optimized base model",
+    "category": "Other"
+  },
+  {
+    "id": "RedHatAI/Nous-Hermes-2-SOLAR-10.7B-pruned50-quant-ds",
+    "name": "Nous-Hermes-2-SOLAR-10.7B-pruned50-quant-ds",
+    "description": "Red Hat AI optimized base model",
+    "category": "Other"
+  },
+  {
+    "id": "RedHatAI/Nous-Hermes-2-Yi-34B-marlin",
+    "name": "Nous-Hermes-2-Yi-34B-marlin",
+    "description": "Red Hat AI optimized base model",
+    "category": "Other"
+  },
+  {
+    "id": "RedHatAI/Nous-Hermes-2-Yi-34B-pruned2.4",
+    "name": "Nous-Hermes-2-Yi-34B-pruned2.4",
+    "description": "Red Hat AI optimized base model",
+    "category": "Other"
+  },
+  {
+    "id": "RedHatAI/Nous-Hermes-2-Yi-34B-pruned50",
+    "name": "Nous-Hermes-2-Yi-34B-pruned50",
+    "description": "Red Hat AI optimized base model",
+    "category": "Other"
+  },
+  {
+    "id": "RedHatAI/Nous-Hermes-llama-2-7b-pruned50-quant-ds",
+    "name": "Nous-Hermes-llama-2-7b-pruned50-quant-ds",
+    "description": "Red Hat AI optimized base model",
+    "category": "Llama"
+  },
+  {
+    "id": "RedHatAI/OmniCoder-9B-FP8-Dynamic",
+    "name": "OmniCoder-9B-FP8-Dynamic",
+    "description": "Red Hat AI optimized FP8 quantized, code generation",
+    "category": "Other"
+  },
+  {
+    "id": "RedHatAI/OpenHermes-2.5-Mistral-7B-marlin",
+    "name": "OpenHermes-2.5-Mistral-7B-marlin",
+    "description": "Red Hat AI optimized base model",
+    "category": "Mistral"
+  },
+  {
+    "id": "RedHatAI/OpenHermes-2.5-Mistral-7B-pruned2.4",
+    "name": "OpenHermes-2.5-Mistral-7B-pruned2.4",
+    "description": "Red Hat AI optimized base model",
+    "category": "Mistral"
+  },
+  {
+    "id": "RedHatAI/OpenHermes-2.5-Mistral-7B-pruned50",
+    "name": "OpenHermes-2.5-Mistral-7B-pruned50",
+    "description": "Red Hat AI optimized base model",
+    "category": "Mistral"
+  },
+  {
+    "id": "RedHatAI/OpenHermes-2.5-Mistral-7B-pruned50-quant-ds",
+    "name": "OpenHermes-2.5-Mistral-7B-pruned50-quant-ds",
+    "description": "Red Hat AI optimized base model",
+    "category": "Mistral"
+  },
+  {
+    "id": "RedHatAI/Phi-3-medium-128k-instruct-FP8",
+    "name": "Phi-3-medium-128k-instruct-FP8",
+    "description": "Red Hat AI optimized FP8 quantized",
+    "category": "Phi"
+  },
+  {
+    "id": "RedHatAI/Phi-3-medium-128k-instruct-quantized.w4a16",
+    "name": "Phi-3-medium-128k-instruct-quantized.w4a16",
+    "description": "Red Hat AI optimized W4A16 quantized",
+    "category": "Phi"
+  },
+  {
+    "id": "RedHatAI/Phi-3-medium-128k-instruct-quantized.w8a16",
+    "name": "Phi-3-medium-128k-instruct-quantized.w8a16",
+    "description": "Red Hat AI optimized W8A16 quantized",
+    "category": "Phi"
+  },
+  {
+    "id": "RedHatAI/Phi-3-medium-128k-instruct-quantized.w8a8",
+    "name": "Phi-3-medium-128k-instruct-quantized.w8a8",
+    "description": "Red Hat AI optimized W8A8 quantized",
+    "category": "Phi"
+  },
+  {
+    "id": "RedHatAI/Phi-3-mini-128k-instruct-quantized.w4a16",
+    "name": "Phi-3-mini-128k-instruct-quantized.w4a16",
+    "description": "Red Hat AI optimized W4A16 quantized",
+    "category": "Phi"
+  },
+  {
+    "id": "RedHatAI/Phi-3-mini-128k-instruct-quantized.w8a16",
+    "name": "Phi-3-mini-128k-instruct-quantized.w8a16",
+    "description": "Red Hat AI optimized W8A16 quantized",
+    "category": "Phi"
+  },
+  {
+    "id": "RedHatAI/Phi-3-mini-128k-instruct-quantized.w8a8",
+    "name": "Phi-3-mini-128k-instruct-quantized.w8a8",
+    "description": "Red Hat AI optimized W8A8 quantized",
+    "category": "Phi"
+  },
+  {
+    "id": "RedHatAI/Phi-3-small-128k-instruct-quantized.w8a16",
+    "name": "Phi-3-small-128k-instruct-quantized.w8a16",
+    "description": "Red Hat AI optimized W8A16 quantized",
+    "category": "Phi"
+  },
+  {
+    "id": "RedHatAI/Phi-3-vision-128k-instruct-W4A16-G128",
+    "name": "Phi-3-vision-128k-instruct-W4A16-G128",
+    "description": "Red Hat AI optimized base model",
+    "category": "Phi"
+  },
+  {
+    "id": "RedHatAI/Phi-3.5-mini-instruct-FP8-KV",
+    "name": "Phi-3.5-mini-instruct-FP8-KV",
+    "description": "Red Hat AI optimized FP8 quantized",
+    "category": "Phi"
+  },
+  {
+    "id": "RedHatAI/Phi-4-mini-instruct-FP8-dynamic",
+    "name": "Phi-4-mini-instruct-FP8-dynamic",
+    "description": "Red Hat AI optimized FP8 quantized",
+    "category": "Phi"
+  },
+  {
+    "id": "RedHatAI/Phi-4-mini-instruct-quantized.w8a8",
+    "name": "Phi-4-mini-instruct-quantized.w8a8",
+    "description": "Red Hat AI optimized W8A8 quantized",
+    "category": "Phi"
+  },
+  {
+    "id": "RedHatAI/Phi-4-reasoning",
+    "name": "Phi-4-reasoning",
+    "description": "Red Hat AI optimized base model",
+    "category": "Phi"
+  },
+  {
+    "id": "RedHatAI/Phi-4-reasoning-vision-15B",
+    "name": "Phi-4-reasoning-vision-15B",
+    "description": "Red Hat AI optimized base model",
+    "category": "Phi"
+  },
+  {
+    "id": "RedHatAI/Pixtral-Large-Instruct-2411-hf-FP8-dynamic",
+    "name": "Pixtral-Large-Instruct-2411-hf-FP8-dynamic",
+    "description": "Red Hat AI optimized FP8 quantized, instruction-tuned",
+    "category": "Mistral"
+  },
+  {
+    "id": "RedHatAI/Pixtral-Large-Instruct-2411-hf-quantized.w4a16",
+    "name": "Pixtral-Large-Instruct-2411-hf-quantized.w4a16",
+    "description": "Red Hat AI optimized W4A16 quantized, instruction-tuned",
+    "category": "Mistral"
+  },
+  {
+    "id": "RedHatAI/Pixtral-Large-Instruct-2411-hf-quantized.w8a8",
+    "name": "Pixtral-Large-Instruct-2411-hf-quantized.w8a8",
+    "description": "Red Hat AI optimized W8A8 quantized, instruction-tuned",
+    "category": "Mistral"
+  },
+  {
+    "id": "RedHatAI/Prithvi-EO-2.0-300M-BurnScars",
+    "name": "Prithvi-EO-2.0-300M-BurnScars",
+    "description": "Red Hat AI optimized base model",
+    "category": "Other"
+  },
+  {
+    "id": "RedHatAI/Prithvi-EO-2.0-300M-TL-Sen1Floods11",
+    "name": "Prithvi-EO-2.0-300M-TL-Sen1Floods11",
+    "description": "Red Hat AI optimized base model",
+    "category": "Other"
+  },
+  {
+    "id": "RedHatAI/QwQ-32B-Preview-FP8-dynamic",
+    "name": "QwQ-32B-Preview-FP8-dynamic",
+    "description": "Red Hat AI optimized FP8 quantized",
+    "category": "Qwen"
+  },
+  {
+    "id": "RedHatAI/QwQ-32B-Preview-quantized.w4a16",
+    "name": "QwQ-32B-Preview-quantized.w4a16",
+    "description": "Red Hat AI optimized W4A16 quantized",
+    "category": "Qwen"
+  },
+  {
+    "id": "RedHatAI/QwQ-32B-Preview-quantized.w8a8",
+    "name": "QwQ-32B-Preview-quantized.w8a8",
+    "description": "Red Hat AI optimized W8A8 quantized",
+    "category": "Qwen"
+  },
+  {
+    "id": "RedHatAI/QwQ-32B-quantized.w8a8",
+    "name": "QwQ-32B-quantized.w8a8",
+    "description": "Red Hat AI optimized W8A8 quantized",
+    "category": "Qwen"
+  },
+  {
+    "id": "RedHatAI/Qwen2-0.5B-Instruct-FP8",
+    "name": "Qwen2-0.5B-Instruct-FP8",
+    "description": "Red Hat AI optimized FP8 quantized, instruction-tuned",
+    "category": "Qwen"
+  },
+  {
+    "id": "RedHatAI/Qwen2-0.5B-Instruct-quantized.w4a16",
+    "name": "Qwen2-0.5B-Instruct-quantized.w4a16",
+    "description": "Red Hat AI optimized W4A16 quantized, instruction-tuned",
+    "category": "Qwen"
+  },
+  {
+    "id": "RedHatAI/Qwen2-0.5B-Instruct-quantized.w8a16",
+    "name": "Qwen2-0.5B-Instruct-quantized.w8a16",
+    "description": "Red Hat AI optimized W8A16 quantized, instruction-tuned",
+    "category": "Qwen"
+  },
+  {
+    "id": "RedHatAI/Qwen2-0.5B-Instruct-quantized.w8a8",
+    "name": "Qwen2-0.5B-Instruct-quantized.w8a8",
+    "description": "Red Hat AI optimized W8A8 quantized, instruction-tuned",
+    "category": "Qwen"
+  },
+  {
+    "id": "RedHatAI/Qwen2-1.5B-Instruct-quantized.w4a16",
+    "name": "Qwen2-1.5B-Instruct-quantized.w4a16",
+    "description": "Red Hat AI optimized W4A16 quantized, instruction-tuned",
+    "category": "Qwen"
+  },
+  {
+    "id": "RedHatAI/Qwen2-1.5B-Instruct-quantized.w8a16",
+    "name": "Qwen2-1.5B-Instruct-quantized.w8a16",
+    "description": "Red Hat AI optimized W8A16 quantized, instruction-tuned",
+    "category": "Qwen"
+  },
+  {
+    "id": "RedHatAI/Qwen2-1.5B-Instruct-quantized.w8a8",
+    "name": "Qwen2-1.5B-Instruct-quantized.w8a8",
+    "description": "Red Hat AI optimized W8A8 quantized, instruction-tuned",
+    "category": "Qwen"
+  },
+  {
+    "id": "RedHatAI/Qwen2-57B-A14B-Instruct-FP8",
+    "name": "Qwen2-57B-A14B-Instruct-FP8",
+    "description": "Red Hat AI optimized FP8 quantized, instruction-tuned",
+    "category": "Qwen"
+  },
+  {
+    "id": "RedHatAI/Qwen2-72B-Instruct-FP8",
+    "name": "Qwen2-72B-Instruct-FP8",
+    "description": "Red Hat AI optimized FP8 quantized, instruction-tuned",
+    "category": "Qwen"
+  },
+  {
+    "id": "RedHatAI/Qwen2-72B-Instruct-quantized.w4a16",
+    "name": "Qwen2-72B-Instruct-quantized.w4a16",
+    "description": "Red Hat AI optimized W4A16 quantized, instruction-tuned",
+    "category": "Qwen"
+  },
+  {
+    "id": "RedHatAI/Qwen2-72B-Instruct-quantized.w8a16",
+    "name": "Qwen2-72B-Instruct-quantized.w8a16",
+    "description": "Red Hat AI optimized W8A16 quantized, instruction-tuned",
+    "category": "Qwen"
+  },
+  {
+    "id": "RedHatAI/Qwen2-72B-Instruct-quantized.w8a8",
+    "name": "Qwen2-72B-Instruct-quantized.w8a8",
+    "description": "Red Hat AI optimized W8A8 quantized, instruction-tuned",
+    "category": "Qwen"
+  },
+  {
+    "id": "RedHatAI/Qwen2-7B-Instruct-FP8",
+    "name": "Qwen2-7B-Instruct-FP8",
+    "description": "Red Hat AI optimized FP8 quantized, instruction-tuned",
+    "category": "Qwen"
+  },
+  {
+    "id": "RedHatAI/Qwen2-7B-Instruct-quantized.w4a16",
+    "name": "Qwen2-7B-Instruct-quantized.w4a16",
+    "description": "Red Hat AI optimized W4A16 quantized, instruction-tuned",
+    "category": "Qwen"
+  },
+  {
+    "id": "RedHatAI/Qwen2-7B-Instruct-quantized.w8a16",
+    "name": "Qwen2-7B-Instruct-quantized.w8a16",
+    "description": "Red Hat AI optimized W8A16 quantized, instruction-tuned",
+    "category": "Qwen"
+  },
+  {
+    "id": "RedHatAI/Qwen2-7B-Instruct-quantized.w8a8",
+    "name": "Qwen2-7B-Instruct-quantized.w8a8",
+    "description": "Red Hat AI optimized W8A8 quantized, instruction-tuned",
+    "category": "Qwen"
+  },
+  {
+    "id": "RedHatAI/Qwen2-VL-72B-Instruct-FP8-dynamic",
+    "name": "Qwen2-VL-72B-Instruct-FP8-dynamic",
+    "description": "Red Hat AI optimized FP8 quantized, instruction-tuned, vision-language",
+    "category": "Qwen"
+  },
+  {
+    "id": "RedHatAI/Qwen2-VL-72B-Instruct-quantized.w4a16",
+    "name": "Qwen2-VL-72B-Instruct-quantized.w4a16",
+    "description": "Red Hat AI optimized W4A16 quantized, instruction-tuned, vision-language",
+    "category": "Qwen"
+  },
+  {
+    "id": "RedHatAI/Qwen2-VL-72B-Instruct-quantized.w8a8",
+    "name": "Qwen2-VL-72B-Instruct-quantized.w8a8",
+    "description": "Red Hat AI optimized W8A8 quantized, instruction-tuned, vision-language",
+    "category": "Qwen"
+  },
+  {
+    "id": "RedHatAI/Qwen2.5-0.5B-FP8-dynamic",
+    "name": "Qwen2.5-0.5B-FP8-dynamic",
+    "description": "Red Hat AI optimized FP8 quantized",
+    "category": "Qwen"
+  },
+  {
+    "id": "RedHatAI/Qwen2.5-0.5B-Instruct-FP8-dynamic",
+    "name": "Qwen2.5-0.5B-Instruct-FP8-dynamic",
+    "description": "Red Hat AI optimized FP8 quantized, instruction-tuned",
+    "category": "Qwen"
+  },
+  {
+    "id": "RedHatAI/Qwen2.5-0.5B-Instruct-quantized.w8a16",
+    "name": "Qwen2.5-0.5B-Instruct-quantized.w8a16",
+    "description": "Red Hat AI optimized W8A16 quantized, instruction-tuned",
+    "category": "Qwen"
+  },
+  {
+    "id": "RedHatAI/Qwen2.5-0.5B-Instruct-quantized.w8a8",
+    "name": "Qwen2.5-0.5B-Instruct-quantized.w8a8",
+    "description": "Red Hat AI optimized W8A8 quantized, instruction-tuned",
+    "category": "Qwen"
+  },
+  {
+    "id": "RedHatAI/Qwen2.5-0.5B-quantized.w4a16",
+    "name": "Qwen2.5-0.5B-quantized.w4a16",
+    "description": "Red Hat AI optimized W4A16 quantized",
+    "category": "Qwen"
+  },
+  {
+    "id": "RedHatAI/Qwen2.5-0.5B-quantized.w8a16",
+    "name": "Qwen2.5-0.5B-quantized.w8a16",
+    "description": "Red Hat AI optimized W8A16 quantized",
+    "category": "Qwen"
+  },
+  {
+    "id": "RedHatAI/Qwen2.5-0.5B-quantized.w8a8",
+    "name": "Qwen2.5-0.5B-quantized.w8a8",
+    "description": "Red Hat AI optimized W8A8 quantized",
+    "category": "Qwen"
+  },
+  {
+    "id": "RedHatAI/Qwen2.5-1.5B-FP8-dynamic",
+    "name": "Qwen2.5-1.5B-FP8-dynamic",
+    "description": "Red Hat AI optimized FP8 quantized",
+    "category": "Qwen"
+  },
+  {
+    "id": "RedHatAI/Qwen2.5-1.5B-Instruct-FP8-dynamic",
+    "name": "Qwen2.5-1.5B-Instruct-FP8-dynamic",
+    "description": "Red Hat AI optimized FP8 quantized, instruction-tuned",
+    "category": "Qwen"
+  },
+  {
+    "id": "RedHatAI/Qwen2.5-1.5B-Instruct-quantized.w8a16",
+    "name": "Qwen2.5-1.5B-Instruct-quantized.w8a16",
+    "description": "Red Hat AI optimized W8A16 quantized, instruction-tuned",
+    "category": "Qwen"
+  },
+  {
+    "id": "RedHatAI/Qwen2.5-1.5B-Instruct-quantized.w8a8",
+    "name": "Qwen2.5-1.5B-Instruct-quantized.w8a8",
+    "description": "Red Hat AI optimized W8A8 quantized, instruction-tuned",
+    "category": "Qwen"
+  },
+  {
+    "id": "RedHatAI/Qwen2.5-1.5B-quantized.w4a16",
+    "name": "Qwen2.5-1.5B-quantized.w4a16",
+    "description": "Red Hat AI optimized W4A16 quantized",
+    "category": "Qwen"
+  },
+  {
+    "id": "RedHatAI/Qwen2.5-1.5B-quantized.w8a16",
+    "name": "Qwen2.5-1.5B-quantized.w8a16",
+    "description": "Red Hat AI optimized W8A16 quantized",
+    "category": "Qwen"
+  },
+  {
+    "id": "RedHatAI/Qwen2.5-14B-FP8-dynamic",
+    "name": "Qwen2.5-14B-FP8-dynamic",
+    "description": "Red Hat AI optimized FP8 quantized",
+    "category": "Qwen"
+  },
+  {
+    "id": "RedHatAI/Qwen2.5-14B-Instruct-FP8-dynamic",
+    "name": "Qwen2.5-14B-Instruct-FP8-dynamic",
+    "description": "Red Hat AI optimized FP8 quantized, instruction-tuned",
+    "category": "Qwen"
+  },
+  {
+    "id": "RedHatAI/Qwen2.5-14B-Instruct-quantized.w8a8",
+    "name": "Qwen2.5-14B-Instruct-quantized.w8a8",
+    "description": "Red Hat AI optimized W8A8 quantized, instruction-tuned",
+    "category": "Qwen"
+  },
+  {
+    "id": "RedHatAI/Qwen2.5-14B-quantized.w8a8",
+    "name": "Qwen2.5-14B-quantized.w8a8",
+    "description": "Red Hat AI optimized W8A8 quantized",
+    "category": "Qwen"
+  },
+  {
+    "id": "RedHatAI/Qwen2.5-32B-FP8-dynamic",
+    "name": "Qwen2.5-32B-FP8-dynamic",
+    "description": "Red Hat AI optimized FP8 quantized",
+    "category": "Qwen"
+  },
+  {
+    "id": "RedHatAI/Qwen2.5-32B-Instruct-FP8-dynamic",
+    "name": "Qwen2.5-32B-Instruct-FP8-dynamic",
+    "description": "Red Hat AI optimized FP8 quantized, instruction-tuned",
+    "category": "Qwen"
+  },
+  {
+    "id": "RedHatAI/Qwen2.5-32B-Instruct-quantized.w4a16",
+    "name": "Qwen2.5-32B-Instruct-quantized.w4a16",
+    "description": "Red Hat AI optimized W4A16 quantized, instruction-tuned",
+    "category": "Qwen"
+  },
+  {
+    "id": "RedHatAI/Qwen2.5-32B-Instruct-quantized.w8a16",
+    "name": "Qwen2.5-32B-Instruct-quantized.w8a16",
+    "description": "Red Hat AI optimized W8A16 quantized, instruction-tuned",
+    "category": "Qwen"
+  },
+  {
+    "id": "RedHatAI/Qwen2.5-32B-Instruct-quantized.w8a8",
+    "name": "Qwen2.5-32B-Instruct-quantized.w8a8",
+    "description": "Red Hat AI optimized W8A8 quantized, instruction-tuned",
+    "category": "Qwen"
+  },
+  {
+    "id": "RedHatAI/Qwen2.5-32B-quantized.w4a16",
+    "name": "Qwen2.5-32B-quantized.w4a16",
+    "description": "Red Hat AI optimized W4A16 quantized",
+    "category": "Qwen"
+  },
+  {
+    "id": "RedHatAI/Qwen2.5-32B-quantized.w8a16",
+    "name": "Qwen2.5-32B-quantized.w8a16",
+    "description": "Red Hat AI optimized W8A16 quantized",
+    "category": "Qwen"
+  },
+  {
+    "id": "RedHatAI/Qwen2.5-32B-quantized.w8a8",
+    "name": "Qwen2.5-32B-quantized.w8a8",
+    "description": "Red Hat AI optimized W8A8 quantized",
+    "category": "Qwen"
+  },
+  {
+    "id": "RedHatAI/Qwen2.5-3B-FP8-dynamic",
+    "name": "Qwen2.5-3B-FP8-dynamic",
+    "description": "Red Hat AI optimized FP8 quantized",
+    "category": "Qwen"
+  },
+  {
+    "id": "RedHatAI/Qwen2.5-3B-Instruct-FP8-dynamic",
+    "name": "Qwen2.5-3B-Instruct-FP8-dynamic",
+    "description": "Red Hat AI optimized FP8 quantized, instruction-tuned",
+    "category": "Qwen"
+  },
+  {
+    "id": "RedHatAI/Qwen2.5-3B-Instruct-quantized.w8a16",
+    "name": "Qwen2.5-3B-Instruct-quantized.w8a16",
+    "description": "Red Hat AI optimized W8A16 quantized, instruction-tuned",
+    "category": "Qwen"
+  },
+  {
+    "id": "RedHatAI/Qwen2.5-3B-Instruct-quantized.w8a8",
+    "name": "Qwen2.5-3B-Instruct-quantized.w8a8",
+    "description": "Red Hat AI optimized W8A8 quantized, instruction-tuned",
+    "category": "Qwen"
+  },
+  {
+    "id": "RedHatAI/Qwen2.5-3B-quantized.w4a16",
+    "name": "Qwen2.5-3B-quantized.w4a16",
+    "description": "Red Hat AI optimized W4A16 quantized",
+    "category": "Qwen"
+  },
+  {
+    "id": "RedHatAI/Qwen2.5-3B-quantized.w8a16",
+    "name": "Qwen2.5-3B-quantized.w8a16",
+    "description": "Red Hat AI optimized W8A16 quantized",
+    "category": "Qwen"
+  },
+  {
+    "id": "RedHatAI/Qwen2.5-3B-quantized.w8a8",
+    "name": "Qwen2.5-3B-quantized.w8a8",
+    "description": "Red Hat AI optimized W8A8 quantized",
+    "category": "Qwen"
+  },
+  {
+    "id": "RedHatAI/Qwen2.5-72B-FP8-dynamic",
+    "name": "Qwen2.5-72B-FP8-dynamic",
+    "description": "Red Hat AI optimized FP8 quantized",
+    "category": "Qwen"
+  },
+  {
+    "id": "RedHatAI/Qwen2.5-72B-Instruct-quantized.w4a16",
+    "name": "Qwen2.5-72B-Instruct-quantized.w4a16",
+    "description": "Red Hat AI optimized W4A16 quantized, instruction-tuned",
+    "category": "Qwen"
+  },
+  {
+    "id": "RedHatAI/Qwen2.5-72B-Instruct-quantized.w8a16",
+    "name": "Qwen2.5-72B-Instruct-quantized.w8a16",
+    "description": "Red Hat AI optimized W8A16 quantized, instruction-tuned",
+    "category": "Qwen"
+  },
+  {
+    "id": "RedHatAI/Qwen2.5-72B-Instruct-quantized.w8a8",
+    "name": "Qwen2.5-72B-Instruct-quantized.w8a8",
+    "description": "Red Hat AI optimized W8A8 quantized, instruction-tuned",
+    "category": "Qwen"
+  },
+  {
+    "id": "RedHatAI/Qwen2.5-72B-quantized.w4a16",
+    "name": "Qwen2.5-72B-quantized.w4a16",
+    "description": "Red Hat AI optimized W4A16 quantized",
+    "category": "Qwen"
+  },
+  {
+    "id": "RedHatAI/Qwen2.5-72B-quantized.w8a16",
+    "name": "Qwen2.5-72B-quantized.w8a16",
+    "description": "Red Hat AI optimized W8A16 quantized",
+    "category": "Qwen"
+  },
+  {
+    "id": "RedHatAI/Qwen2.5-72B-quantized.w8a8",
+    "name": "Qwen2.5-72B-quantized.w8a8",
+    "description": "Red Hat AI optimized W8A8 quantized",
+    "category": "Qwen"
+  },
+  {
+    "id": "RedHatAI/Qwen2.5-7B-FP8-dynamic",
+    "name": "Qwen2.5-7B-FP8-dynamic",
+    "description": "Red Hat AI optimized FP8 quantized",
+    "category": "Qwen"
+  },
+  {
+    "id": "RedHatAI/Qwen2.5-7B-Instruct",
+    "name": "Qwen2.5-7B-Instruct",
+    "description": "Red Hat AI optimized instruction-tuned",
+    "category": "Qwen"
+  },
+  {
+    "id": "RedHatAI/Qwen2.5-7B-Instruct-FP8-dynamic",
+    "name": "Qwen2.5-7B-Instruct-FP8-dynamic",
+    "description": "Red Hat AI optimized FP8 quantized, instruction-tuned",
+    "category": "Qwen"
+  },
+  {
+    "id": "RedHatAI/Qwen2.5-7B-Instruct-quantized.w4a16",
+    "name": "Qwen2.5-7B-Instruct-quantized.w4a16",
+    "description": "Red Hat AI optimized W4A16 quantized, instruction-tuned",
+    "category": "Qwen"
+  },
+  {
+    "id": "RedHatAI/Qwen2.5-7B-Instruct-quantized.w8a16",
+    "name": "Qwen2.5-7B-Instruct-quantized.w8a16",
+    "description": "Red Hat AI optimized W8A16 quantized, instruction-tuned",
+    "category": "Qwen"
+  },
+  {
+    "id": "RedHatAI/Qwen2.5-7B-Instruct-quantized.w8a8",
+    "name": "Qwen2.5-7B-Instruct-quantized.w8a8",
+    "description": "Red Hat AI optimized W8A8 quantized, instruction-tuned",
+    "category": "Qwen"
+  },
+  {
+    "id": "RedHatAI/Qwen2.5-7B-quantized.w4a16",
+    "name": "Qwen2.5-7B-quantized.w4a16",
+    "description": "Red Hat AI optimized W4A16 quantized",
+    "category": "Qwen"
+  },
+  {
+    "id": "RedHatAI/Qwen2.5-7B-quantized.w8a16",
+    "name": "Qwen2.5-7B-quantized.w8a16",
+    "description": "Red Hat AI optimized W8A16 quantized",
+    "category": "Qwen"
+  },
+  {
+    "id": "RedHatAI/Qwen2.5-7B-quantized.w8a8",
+    "name": "Qwen2.5-7B-quantized.w8a8",
+    "description": "Red Hat AI optimized W8A8 quantized",
+    "category": "Qwen"
+  },
+  {
+    "id": "RedHatAI/Qwen2.5-Coder-14B-FP8-dynamic",
+    "name": "Qwen2.5-Coder-14B-FP8-dynamic",
+    "description": "Red Hat AI optimized FP8 quantized, code generation",
+    "category": "Qwen"
+  },
+  {
+    "id": "RedHatAI/Qwen2.5-Coder-32B-FP8-dynamic",
+    "name": "Qwen2.5-Coder-32B-FP8-dynamic",
+    "description": "Red Hat AI optimized FP8 quantized, code generation",
+    "category": "Qwen"
+  },
+  {
+    "id": "RedHatAI/Qwen2.5-Coder-7B-FP8-dynamic",
+    "name": "Qwen2.5-Coder-7B-FP8-dynamic",
+    "description": "Red Hat AI optimized FP8 quantized, code generation",
+    "category": "Qwen"
+  },
+  {
+    "id": "RedHatAI/Qwen2.5-Math-72B-FP8-dynamic",
+    "name": "Qwen2.5-Math-72B-FP8-dynamic",
+    "description": "Red Hat AI optimized FP8 quantized",
+    "category": "Qwen"
+  },
+  {
+    "id": "RedHatAI/Qwen2.5-Math-72B-Instruct-FP8-dynamic",
+    "name": "Qwen2.5-Math-72B-Instruct-FP8-dynamic",
+    "description": "Red Hat AI optimized FP8 quantized, instruction-tuned",
+    "category": "Qwen"
+  },
+  {
+    "id": "RedHatAI/Qwen2.5-Math-7B-FP8-dynamic",
+    "name": "Qwen2.5-Math-7B-FP8-dynamic",
+    "description": "Red Hat AI optimized FP8 quantized",
+    "category": "Qwen"
+  },
+  {
+    "id": "RedHatAI/Qwen2.5-Math-7B-Instruct-FP8-dynamic",
+    "name": "Qwen2.5-Math-7B-Instruct-FP8-dynamic",
+    "description": "Red Hat AI optimized FP8 quantized, instruction-tuned",
+    "category": "Qwen"
+  },
+  {
+    "id": "RedHatAI/Qwen2.5-VL-3B-Instruct-FP8-dynamic",
+    "name": "Qwen2.5-VL-3B-Instruct-FP8-dynamic",
+    "description": "Red Hat AI optimized FP8 quantized, instruction-tuned, vision-language",
+    "category": "Qwen"
+  },
+  {
+    "id": "RedHatAI/Qwen2.5-VL-3B-Instruct-quantized.w4a16",
+    "name": "Qwen2.5-VL-3B-Instruct-quantized.w4a16",
+    "description": "Red Hat AI optimized W4A16 quantized, instruction-tuned, vision-language",
+    "category": "Qwen"
+  },
+  {
+    "id": "RedHatAI/Qwen2.5-VL-3B-Instruct-quantized.w8a8",
+    "name": "Qwen2.5-VL-3B-Instruct-quantized.w8a8",
+    "description": "Red Hat AI optimized W8A8 quantized, instruction-tuned, vision-language",
+    "category": "Qwen"
+  },
+  {
+    "id": "RedHatAI/Qwen2.5-VL-72B-Instruct-FP8-dynamic",
+    "name": "Qwen2.5-VL-72B-Instruct-FP8-dynamic",
+    "description": "Red Hat AI optimized FP8 quantized, instruction-tuned, vision-language",
+    "category": "Qwen"
+  },
+  {
+    "id": "RedHatAI/Qwen2.5-VL-72B-Instruct-quantized.w4a16",
+    "name": "Qwen2.5-VL-72B-Instruct-quantized.w4a16",
+    "description": "Red Hat AI optimized W4A16 quantized, instruction-tuned, vision-language",
+    "category": "Qwen"
+  },
+  {
+    "id": "RedHatAI/Qwen2.5-VL-72B-Instruct-quantized.w8a8",
+    "name": "Qwen2.5-VL-72B-Instruct-quantized.w8a8",
+    "description": "Red Hat AI optimized W8A8 quantized, instruction-tuned, vision-language",
+    "category": "Qwen"
+  },
+  {
+    "id": "RedHatAI/Qwen2.5-VL-7B-Instruct-FP8-Dynamic",
+    "name": "Qwen2.5-VL-7B-Instruct-FP8-Dynamic",
+    "description": "Red Hat AI optimized FP8 quantized, instruction-tuned, vision-language",
+    "category": "Qwen"
+  },
+  {
+    "id": "RedHatAI/Qwen2.5-VL-7B-Instruct-quantized.w4a16",
+    "name": "Qwen2.5-VL-7B-Instruct-quantized.w4a16",
+    "description": "Red Hat AI optimized W4A16 quantized, instruction-tuned, vision-language",
+    "category": "Qwen"
+  },
+  {
+    "id": "RedHatAI/Qwen2.5-VL-7B-Instruct-quantized.w8a8",
+    "name": "Qwen2.5-VL-7B-Instruct-quantized.w8a8",
+    "description": "Red Hat AI optimized W8A8 quantized, instruction-tuned, vision-language",
+    "category": "Qwen"
+  },
+  {
+    "id": "RedHatAI/Qwen3-0.6B-FP8-BLOCK",
+    "name": "Qwen3-0.6B-FP8-BLOCK",
+    "description": "Red Hat AI optimized FP8 quantized",
+    "category": "Qwen"
+  },
+  {
+    "id": "RedHatAI/Qwen3-0.6B-FP8-dynamic",
+    "name": "Qwen3-0.6B-FP8-dynamic",
+    "description": "Red Hat AI optimized FP8 quantized",
+    "category": "Qwen"
+  },
+  {
+    "id": "RedHatAI/Qwen3-0.6B-quantized.w4a16",
+    "name": "Qwen3-0.6B-quantized.w4a16",
+    "description": "Red Hat AI optimized W4A16 quantized",
+    "category": "Qwen"
+  },
+  {
+    "id": "RedHatAI/Qwen3-1.7B-quantized.w4a16",
+    "name": "Qwen3-1.7B-quantized.w4a16",
+    "description": "Red Hat AI optimized W4A16 quantized",
+    "category": "Qwen"
+  },
+  {
+    "id": "RedHatAI/Qwen3-14B-FP8-block",
+    "name": "Qwen3-14B-FP8-block",
+    "description": "Red Hat AI optimized FP8 quantized",
+    "category": "Qwen"
+  },
+  {
+    "id": "RedHatAI/Qwen3-14B-quantized.w4a16",
+    "name": "Qwen3-14B-quantized.w4a16",
+    "description": "Red Hat AI optimized W4A16 quantized",
+    "category": "Qwen"
+  },
+  {
+    "id": "RedHatAI/Qwen3-235B-A22B-Instruct-2507-NVFP4",
+    "name": "Qwen3-235B-A22B-Instruct-2507-NVFP4",
+    "description": "Red Hat AI optimized NVFP4 quantized, instruction-tuned",
+    "category": "Qwen"
+  },
+  {
+    "id": "RedHatAI/Qwen3-235B-A22B-Instruct-2507-quantized.w8a8",
+    "name": "Qwen3-235B-A22B-Instruct-2507-quantized.w8a8",
+    "description": "Red Hat AI optimized W8A8 quantized, instruction-tuned",
+    "category": "Qwen"
+  },
+  {
+    "id": "RedHatAI/Qwen3-235B-A22B-Instruct-2507-speculator.eagle3",
+    "name": "Qwen3-235B-A22B-Instruct-2507-speculator.eagle3",
+    "description": "Red Hat AI optimized instruction-tuned, speculative decoding",
+    "category": "Qwen"
+  },
+  {
+    "id": "RedHatAI/Qwen3-235B-A22B-Thinking-2507-speculator.eagle3",
+    "name": "Qwen3-235B-A22B-Thinking-2507-speculator.eagle3",
+    "description": "Red Hat AI optimized speculative decoding, reasoning",
+    "category": "Qwen"
+  },
+  {
+    "id": "RedHatAI/Qwen3-235B-A22B-speculator.eagle3",
+    "name": "Qwen3-235B-A22B-speculator.eagle3",
+    "description": "Red Hat AI optimized speculative decoding",
+    "category": "Qwen"
+  },
+  {
+    "id": "RedHatAI/Qwen3-30B-A3B-Instruct-2507-quantized.w4a16",
+    "name": "Qwen3-30B-A3B-Instruct-2507-quantized.w4a16",
+    "description": "Red Hat AI optimized W4A16 quantized, instruction-tuned",
+    "category": "Qwen"
+  },
+  {
+    "id": "RedHatAI/Qwen3-30B-A3B-Instruct-2507-quantized.w8a8",
+    "name": "Qwen3-30B-A3B-Instruct-2507-quantized.w8a8",
+    "description": "Red Hat AI optimized W8A8 quantized, instruction-tuned",
+    "category": "Qwen"
+  },
+  {
+    "id": "RedHatAI/Qwen3-30B-A3B-Instruct-2507-speculator.eagle3",
+    "name": "Qwen3-30B-A3B-Instruct-2507-speculator.eagle3",
+    "description": "Red Hat AI optimized instruction-tuned, speculative decoding",
+    "category": "Qwen"
+  },
+  {
+    "id": "RedHatAI/Qwen3-30B-A3B-Thinking-2507-quantized.w4a16",
+    "name": "Qwen3-30B-A3B-Thinking-2507-quantized.w4a16",
+    "description": "Red Hat AI optimized W4A16 quantized, reasoning",
+    "category": "Qwen"
+  },
+  {
+    "id": "RedHatAI/Qwen3-30B-A3B-Thinking-2507-quantized.w8a8",
+    "name": "Qwen3-30B-A3B-Thinking-2507-quantized.w8a8",
+    "description": "Red Hat AI optimized W8A8 quantized, reasoning",
+    "category": "Qwen"
+  },
+  {
+    "id": "RedHatAI/Qwen3-30B-A3B-Thinking-2507-speculator.eagle3",
+    "name": "Qwen3-30B-A3B-Thinking-2507-speculator.eagle3",
+    "description": "Red Hat AI optimized speculative decoding, reasoning",
+    "category": "Qwen"
+  },
+  {
+    "id": "RedHatAI/Qwen3-30B-A3B-quantized.w4a16",
+    "name": "Qwen3-30B-A3B-quantized.w4a16",
+    "description": "Red Hat AI optimized W4A16 quantized",
+    "category": "Qwen"
+  },
+  {
+    "id": "RedHatAI/Qwen3-30B-A3B-speculator.eagle3",
+    "name": "Qwen3-30B-A3B-speculator.eagle3",
+    "description": "Red Hat AI optimized speculative decoding",
+    "category": "Qwen"
+  },
+  {
+    "id": "RedHatAI/Qwen3-32B-FP8-block",
+    "name": "Qwen3-32B-FP8-block",
+    "description": "Red Hat AI optimized FP8 quantized",
+    "category": "Qwen"
+  },
+  {
+    "id": "RedHatAI/Qwen3-32B-NVFP4A16",
+    "name": "Qwen3-32B-NVFP4A16",
+    "description": "Red Hat AI optimized NVFP4 quantized",
+    "category": "Qwen"
+  },
+  {
+    "id": "RedHatAI/Qwen3-32B-Thinking-speculator.eagle3",
+    "name": "Qwen3-32B-Thinking-speculator.eagle3",
+    "description": "Red Hat AI optimized speculative decoding, reasoning",
+    "category": "Qwen"
+  },
+  {
+    "id": "RedHatAI/Qwen3-4B-Instruct-2507-quantized.w4a16",
+    "name": "Qwen3-4B-Instruct-2507-quantized.w4a16",
+    "description": "Red Hat AI optimized W4A16 quantized, instruction-tuned",
+    "category": "Qwen"
+  },
+  {
+    "id": "RedHatAI/Qwen3-4B-Instruct-2507-quantized.w8a8",
+    "name": "Qwen3-4B-Instruct-2507-quantized.w8a8",
+    "description": "Red Hat AI optimized W8A8 quantized, instruction-tuned",
+    "category": "Qwen"
+  },
+  {
+    "id": "RedHatAI/Qwen3-4B-Thinking-2507-quantized.w4a16",
+    "name": "Qwen3-4B-Thinking-2507-quantized.w4a16",
+    "description": "Red Hat AI optimized W4A16 quantized, reasoning",
+    "category": "Qwen"
+  },
+  {
+    "id": "RedHatAI/Qwen3-4B-Thinking-2507-quantized.w8a8",
+    "name": "Qwen3-4B-Thinking-2507-quantized.w8a8",
+    "description": "Red Hat AI optimized W8A8 quantized, reasoning",
+    "category": "Qwen"
+  },
+  {
+    "id": "RedHatAI/Qwen3-4B-quantized.w4a16",
+    "name": "Qwen3-4B-quantized.w4a16",
+    "description": "Red Hat AI optimized W4A16 quantized",
+    "category": "Qwen"
+  },
+  {
+    "id": "RedHatAI/Qwen3-8B-FP8-block",
+    "name": "Qwen3-8B-FP8-block",
+    "description": "Red Hat AI optimized FP8 quantized",
+    "category": "Qwen"
+  },
+  {
+    "id": "RedHatAI/Qwen3-8B-NVFP4",
+    "name": "Qwen3-8B-NVFP4",
+    "description": "Red Hat AI optimized NVFP4 quantized",
+    "category": "Qwen"
+  },
+  {
+    "id": "RedHatAI/Qwen3-8B-Thinking-speculator.eagle3",
+    "name": "Qwen3-8B-Thinking-speculator.eagle3",
+    "description": "Red Hat AI optimized speculative decoding, reasoning",
+    "category": "Qwen"
+  },
+  {
+    "id": "RedHatAI/Qwen3-8B-quantized.w4a16",
+    "name": "Qwen3-8B-quantized.w4a16",
+    "description": "Red Hat AI optimized W4A16 quantized",
+    "category": "Qwen"
+  },
+  {
+    "id": "RedHatAI/Qwen3-8B-speculator.dflash",
+    "name": "Qwen3-8B-speculator.dflash",
+    "description": "Red Hat AI optimized speculative decoding",
+    "category": "Qwen"
+  },
+  {
+    "id": "RedHatAI/Qwen3-8B-speculator.peagle",
+    "name": "Qwen3-8B-speculator.peagle",
+    "description": "Red Hat AI optimized speculative decoding",
+    "category": "Qwen"
+  },
+  {
+    "id": "RedHatAI/Qwen3-Embedding-8B",
+    "name": "Qwen3-Embedding-8B",
+    "description": "Red Hat AI optimized base model",
+    "category": "Qwen"
+  },
+  {
+    "id": "RedHatAI/Qwen3-Next-80B-A3B-Instruct-FP8",
+    "name": "Qwen3-Next-80B-A3B-Instruct-FP8",
+    "description": "Red Hat AI optimized FP8 quantized, instruction-tuned",
+    "category": "Qwen"
+  },
+  {
+    "id": "RedHatAI/Qwen3-Next-80B-A3B-Instruct-FP8-block",
+    "name": "Qwen3-Next-80B-A3B-Instruct-FP8-block",
+    "description": "Red Hat AI optimized FP8 quantized, instruction-tuned",
+    "category": "Qwen"
+  },
+  {
+    "id": "RedHatAI/Qwen3-Next-80B-A3B-Instruct-quantized.w4a16",
+    "name": "Qwen3-Next-80B-A3B-Instruct-quantized.w4a16",
+    "description": "Red Hat AI optimized W4A16 quantized, instruction-tuned",
+    "category": "Qwen"
+  },
+  {
+    "id": "RedHatAI/Qwen3-Next-80B-A3B-Instruct-quantized.w8a8",
+    "name": "Qwen3-Next-80B-A3B-Instruct-quantized.w8a8",
+    "description": "Red Hat AI optimized W8A8 quantized, instruction-tuned",
+    "category": "Qwen"
+  },
+  {
+    "id": "RedHatAI/Qwen3-Next-80B-A3B-Thinking-FP8-block",
+    "name": "Qwen3-Next-80B-A3B-Thinking-FP8-block",
+    "description": "Red Hat AI optimized FP8 quantized, reasoning",
+    "category": "Qwen"
+  },
+  {
+    "id": "RedHatAI/Qwen3-Next-80B-A3B-Thinking-FP8-dynamic",
+    "name": "Qwen3-Next-80B-A3B-Thinking-FP8-dynamic",
+    "description": "Red Hat AI optimized FP8 quantized, reasoning",
+    "category": "Qwen"
+  },
+  {
+    "id": "RedHatAI/Qwen3-Next-80B-A3B-Thinking-NVFP4",
+    "name": "Qwen3-Next-80B-A3B-Thinking-NVFP4",
+    "description": "Red Hat AI optimized NVFP4 quantized, reasoning",
+    "category": "Qwen"
+  },
+  {
+    "id": "RedHatAI/Qwen3-Next-80B-A3B-Thinking-quantized.w4a16",
+    "name": "Qwen3-Next-80B-A3B-Thinking-quantized.w4a16",
+    "description": "Red Hat AI optimized W4A16 quantized, reasoning",
+    "category": "Qwen"
+  },
+  {
+    "id": "RedHatAI/Qwen3-VL-235B-A22B-Instruct-FP8-block",
+    "name": "Qwen3-VL-235B-A22B-Instruct-FP8-block",
+    "description": "Red Hat AI optimized FP8 quantized, instruction-tuned, vision-language",
+    "category": "Qwen"
+  },
+  {
+    "id": "RedHatAI/Qwen3-VL-235B-A22B-Instruct-FP8-dynamic",
+    "name": "Qwen3-VL-235B-A22B-Instruct-FP8-dynamic",
+    "description": "Red Hat AI optimized FP8 quantized, instruction-tuned, vision-language",
+    "category": "Qwen"
+  },
+  {
+    "id": "RedHatAI/Qwen3-VL-235B-A22B-Instruct-NVFP4",
+    "name": "Qwen3-VL-235B-A22B-Instruct-NVFP4",
+    "description": "Red Hat AI optimized NVFP4 quantized, instruction-tuned, vision-language",
+    "category": "Qwen"
+  },
+  {
+    "id": "RedHatAI/Qwen3-VL-235B-A22B-Instruct-speculator.eagle3",
+    "name": "Qwen3-VL-235B-A22B-Instruct-speculator.eagle3",
+    "description": "Red Hat AI optimized instruction-tuned, speculative decoding, vision-language",
+    "category": "Qwen"
+  },
+  {
+    "id": "RedHatAI/Qwen3-VL-30B-A3B-Instruct",
+    "name": "Qwen3-VL-30B-A3B-Instruct",
+    "description": "Red Hat AI optimized instruction-tuned, vision-language",
+    "category": "Qwen"
+  },
+  {
+    "id": "RedHatAI/Qwen3-VL-32B-Instruct-FP8-block",
+    "name": "Qwen3-VL-32B-Instruct-FP8-block",
+    "description": "Red Hat AI optimized FP8 quantized, instruction-tuned, vision-language",
+    "category": "Qwen"
+  },
+  {
+    "id": "RedHatAI/Qwen3-VL-32B-Instruct-FP8-dynamic",
+    "name": "Qwen3-VL-32B-Instruct-FP8-dynamic",
+    "description": "Red Hat AI optimized FP8 quantized, instruction-tuned, vision-language",
+    "category": "Qwen"
+  },
+  {
+    "id": "RedHatAI/Qwen3-VL-32B-Instruct-NVFP4",
+    "name": "Qwen3-VL-32B-Instruct-NVFP4",
+    "description": "Red Hat AI optimized NVFP4 quantized, instruction-tuned, vision-language",
+    "category": "Qwen"
+  },
+  {
+    "id": "RedHatAI/Qwen3.5-4B-quantized.w4a16",
+    "name": "Qwen3.5-4B-quantized.w4a16",
+    "description": "Red Hat AI optimized W4A16 quantized",
+    "category": "Qwen"
+  },
+  {
+    "id": "RedHatAI/Qwen3.5-4B-quantized.w8a8",
+    "name": "Qwen3.5-4B-quantized.w8a8",
+    "description": "Red Hat AI optimized W8A8 quantized",
+    "category": "Qwen"
+  },
+  {
+    "id": "RedHatAI/Qwen3.5-9B-quantized.w4a16",
+    "name": "Qwen3.5-9B-quantized.w4a16",
+    "description": "Red Hat AI optimized W4A16 quantized",
+    "category": "Qwen"
+  },
+  {
+    "id": "RedHatAI/Qwen3.5-9B-quantized.w8a8",
+    "name": "Qwen3.5-9B-quantized.w8a8",
+    "description": "Red Hat AI optimized W8A8 quantized",
+    "category": "Qwen"
+  },
+  {
+    "id": "RedHatAI/Qwen3.6-35B-A3B",
+    "name": "Qwen3.6-35B-A3B",
+    "description": "Red Hat AI optimized base model",
+    "category": "Qwen"
+  },
+  {
+    "id": "RedHatAI/Qwen3.6-35B-A3B-FP8",
+    "name": "Qwen3.6-35B-A3B-FP8",
+    "description": "Red Hat AI optimized FP8 quantized",
+    "category": "Qwen"
+  },
+  {
+    "id": "RedHatAI/Qwen3.6-35B-A3B-NVFP4",
+    "name": "Qwen3.6-35B-A3B-NVFP4",
+    "description": "Red Hat AI optimized NVFP4 quantized",
+    "category": "Qwen"
+  },
+  {
+    "id": "RedHatAI/SOLAR-10.7B-Instruct-v1.0-pruned50-quant-ds",
+    "name": "SOLAR-10.7B-Instruct-v1.0-pruned50-quant-ds",
+    "description": "Red Hat AI optimized instruction-tuned",
+    "category": "Other"
+  },
+  {
+    "id": "RedHatAI/SmolLM-1.7B-Instruct-quantized.w8a16",
+    "name": "SmolLM-1.7B-Instruct-quantized.w8a16",
+    "description": "Red Hat AI optimized W8A16 quantized, instruction-tuned",
+    "category": "Other"
+  },
+  {
+    "id": "RedHatAI/SmolLM-1.7B-Instruct-quantized.w8a8",
+    "name": "SmolLM-1.7B-Instruct-quantized.w8a8",
+    "description": "Red Hat AI optimized W8A8 quantized, instruction-tuned",
+    "category": "Other"
+  },
+  {
+    "id": "RedHatAI/SmolLM-135M-Instruct-quantized.w8a16",
+    "name": "SmolLM-135M-Instruct-quantized.w8a16",
+    "description": "Red Hat AI optimized W8A16 quantized, instruction-tuned",
+    "category": "Other"
+  },
+  {
+    "id": "RedHatAI/SmolLM-135M-Instruct-quantized.w8a8",
+    "name": "SmolLM-135M-Instruct-quantized.w8a8",
+    "description": "Red Hat AI optimized W8A8 quantized, instruction-tuned",
+    "category": "Other"
+  },
+  {
+    "id": "RedHatAI/SmolLM-135M-q",
+    "name": "SmolLM-135M-q",
+    "description": "Red Hat AI optimized base model",
+    "category": "Other"
+  },
+  {
+    "id": "RedHatAI/SmolLM-360M-Instruct-quantized.w8a8",
+    "name": "SmolLM-360M-Instruct-quantized.w8a8",
+    "description": "Red Hat AI optimized W8A8 quantized, instruction-tuned",
+    "category": "Other"
+  },
+  {
+    "id": "RedHatAI/SmolLM3-3B-quantized.w4a16",
+    "name": "SmolLM3-3B-quantized.w4a16",
+    "description": "Red Hat AI optimized W4A16 quantized",
+    "category": "Other"
+  },
+  {
+    "id": "RedHatAI/Sparse-Llama-3.1-8B-2of4",
+    "name": "Sparse-Llama-3.1-8B-2of4",
+    "description": "Red Hat AI optimized base model",
+    "category": "Llama"
+  },
+  {
+    "id": "RedHatAI/Sparse-Llama-3.1-8B-evolcodealpaca-2of4",
+    "name": "Sparse-Llama-3.1-8B-evolcodealpaca-2of4",
+    "description": "Red Hat AI optimized base model",
+    "category": "Llama"
+  },
+  {
+    "id": "RedHatAI/Sparse-Llama-3.1-8B-evolcodealpaca-2of4-FP8-dynamic",
+    "name": "Sparse-Llama-3.1-8B-evolcodealpaca-2of4-FP8-dynamic",
+    "description": "Red Hat AI optimized FP8 quantized",
+    "category": "Llama"
+  },
+  {
+    "id": "RedHatAI/Sparse-Llama-3.1-8B-evolcodealpaca-2of4-quantized.w4a16",
+    "name": "Sparse-Llama-3.1-8B-evolcodealpaca-2of4-quantized.w4a16",
+    "description": "Red Hat AI optimized W4A16 quantized",
+    "category": "Llama"
+  },
+  {
+    "id": "RedHatAI/Sparse-Llama-3.1-8B-gsm8k-2of4",
+    "name": "Sparse-Llama-3.1-8B-gsm8k-2of4",
+    "description": "Red Hat AI optimized base model",
+    "category": "Llama"
+  },
+  {
+    "id": "RedHatAI/Sparse-Llama-3.1-8B-gsm8k-2of4-FP8-dynamic",
+    "name": "Sparse-Llama-3.1-8B-gsm8k-2of4-FP8-dynamic",
+    "description": "Red Hat AI optimized FP8 quantized",
+    "category": "Llama"
+  },
+  {
+    "id": "RedHatAI/Sparse-Llama-3.1-8B-gsm8k-2of4-quantized.w4a16",
+    "name": "Sparse-Llama-3.1-8B-gsm8k-2of4-quantized.w4a16",
+    "description": "Red Hat AI optimized W4A16 quantized",
+    "category": "Llama"
+  },
+  {
+    "id": "RedHatAI/Sparse-Llama-3.1-8B-tldr-2of4",
+    "name": "Sparse-Llama-3.1-8B-tldr-2of4",
+    "description": "Red Hat AI optimized base model",
+    "category": "Llama"
+  },
+  {
+    "id": "RedHatAI/Sparse-Llama-3.1-8B-tldr-2of4-FP8-dynamic",
+    "name": "Sparse-Llama-3.1-8B-tldr-2of4-FP8-dynamic",
+    "description": "Red Hat AI optimized FP8 quantized",
+    "category": "Llama"
+  },
+  {
+    "id": "RedHatAI/Sparse-Llama-3.1-8B-ultrachat_200k-2of4",
+    "name": "Sparse-Llama-3.1-8B-ultrachat_200k-2of4",
+    "description": "Red Hat AI optimized base model",
+    "category": "Llama"
+  },
+  {
+    "id": "RedHatAI/Sparse-Llama-3.1-8B-ultrachat_200k-2of4-FP8-dynamic",
+    "name": "Sparse-Llama-3.1-8B-ultrachat_200k-2of4-FP8-dynamic",
+    "description": "Red Hat AI optimized FP8 quantized",
+    "category": "Llama"
+  },
+  {
+    "id": "RedHatAI/Sparse-Llama-3.1-8B-ultrachat_200k-2of4-quantized.w4a16",
+    "name": "Sparse-Llama-3.1-8B-ultrachat_200k-2of4-quantized.w4a16",
+    "description": "Red Hat AI optimized W4A16 quantized",
+    "category": "Llama"
+  },
+  {
+    "id": "RedHatAI/SparseLLama-2-7b-ultrachat_200k-pruned_50.2of4",
+    "name": "SparseLLama-2-7b-ultrachat_200k-pruned_50.2of4",
+    "description": "Red Hat AI optimized base model",
+    "category": "Llama"
+  },
+  {
+    "id": "RedHatAI/SparseLlama-2-7b-cnn-daily-mail-pruned_50.2of4",
+    "name": "SparseLlama-2-7b-cnn-daily-mail-pruned_50.2of4",
+    "description": "Red Hat AI optimized base model",
+    "category": "Llama"
+  },
+  {
+    "id": "RedHatAI/SparseLlama-2-7b-cnn-daily-mail-pruned_70",
+    "name": "SparseLlama-2-7b-cnn-daily-mail-pruned_70",
+    "description": "Red Hat AI optimized base model",
+    "category": "Llama"
+  },
+  {
+    "id": "RedHatAI/SparseLlama-2-7b-evolcodealpaca-pruned_50.2of4",
+    "name": "SparseLlama-2-7b-evolcodealpaca-pruned_50.2of4",
+    "description": "Red Hat AI optimized base model",
+    "category": "Llama"
+  },
+  {
+    "id": "RedHatAI/SparseLlama-3-8B-pruned_50.2of4",
+    "name": "SparseLlama-3-8B-pruned_50.2of4",
+    "description": "Red Hat AI optimized base model",
+    "category": "Llama"
+  },
+  {
+    "id": "RedHatAI/TinyLlama-1.1B-Chat-v0.3-pruned50-quant-ds",
+    "name": "TinyLlama-1.1B-Chat-v0.3-pruned50-quant-ds",
+    "description": "Red Hat AI optimized base model",
+    "category": "Llama"
+  },
+  {
+    "id": "RedHatAI/TinyLlama-1.1B-Chat-v0.4-pruned50-quant-ds",
+    "name": "TinyLlama-1.1B-Chat-v0.4-pruned50-quant-ds",
+    "description": "Red Hat AI optimized base model",
+    "category": "Llama"
+  },
+  {
+    "id": "RedHatAI/TinyLlama-1.1B-Chat-v1.0",
+    "name": "TinyLlama-1.1B-Chat-v1.0",
+    "description": "Red Hat AI optimized base model",
+    "category": "Llama"
+  },
+  {
+    "id": "RedHatAI/TinyLlama-1.1B-Chat-v1.0-marlin",
+    "name": "TinyLlama-1.1B-Chat-v1.0-marlin",
+    "description": "Red Hat AI optimized base model",
+    "category": "Llama"
+  },
+  {
+    "id": "RedHatAI/TinyLlama-1.1B-Chat-v1.0-pruned2.4",
+    "name": "TinyLlama-1.1B-Chat-v1.0-pruned2.4",
+    "description": "Red Hat AI optimized base model",
+    "category": "Llama"
+  },
+  {
+    "id": "RedHatAI/ToolACE-2-Llama-3.1-8B-FP8-dynamic",
+    "name": "ToolACE-2-Llama-3.1-8B-FP8-dynamic",
+    "description": "Red Hat AI optimized FP8 quantized",
+    "category": "Llama"
+  },
+  {
+    "id": "RedHatAI/Trinity-Large-Thinking-NVFP4",
+    "name": "Trinity-Large-Thinking-NVFP4",
+    "description": "Red Hat AI optimized NVFP4 quantized, reasoning",
+    "category": "Other"
+  },
+  {
+    "id": "RedHatAI/Voxtral-Mini-3B-2507-FP8-dynamic",
+    "name": "Voxtral-Mini-3B-2507-FP8-dynamic",
+    "description": "Red Hat AI optimized FP8 quantized",
+    "category": "Audio"
+  },
+  {
+    "id": "RedHatAI/Voxtral-Mini-4B-Realtime-2602",
+    "name": "Voxtral-Mini-4B-Realtime-2602",
+    "description": "Red Hat AI optimized base model",
+    "category": "Audio"
+  },
+  {
+    "id": "RedHatAI/Voxtral-Small-24B-2507-FP8-dynamic",
+    "name": "Voxtral-Small-24B-2507-FP8-dynamic",
+    "description": "Red Hat AI optimized FP8 quantized",
+    "category": "Audio"
+  },
+  {
+    "id": "RedHatAI/all-MiniLM-L6-v2",
+    "name": "all-MiniLM-L6-v2",
+    "description": "Red Hat AI optimized base model",
+    "category": "Other"
+  },
+  {
+    "id": "RedHatAI/bert-large-uncased-finetuned-squadv1",
+    "name": "bert-large-uncased-finetuned-squadv1",
+    "description": "Red Hat AI optimized base model",
+    "category": "BERT"
+  },
+  {
+    "id": "RedHatAI/bge-base-en-v1.5-dense",
+    "name": "bge-base-en-v1.5-dense",
+    "description": "Red Hat AI optimized base model",
+    "category": "Embedding"
+  },
+  {
+    "id": "RedHatAI/bge-base-en-v1.5-quant",
+    "name": "bge-base-en-v1.5-quant",
+    "description": "Red Hat AI optimized base model",
+    "category": "Embedding"
+  },
+  {
+    "id": "RedHatAI/bge-base-en-v1.5-sparse",
+    "name": "bge-base-en-v1.5-sparse",
+    "description": "Red Hat AI optimized base model",
+    "category": "Embedding"
+  },
+  {
+    "id": "RedHatAI/bge-large-en-v1.5-dense",
+    "name": "bge-large-en-v1.5-dense",
+    "description": "Red Hat AI optimized base model",
+    "category": "Embedding"
+  },
+  {
+    "id": "RedHatAI/bge-large-en-v1.5-quant",
+    "name": "bge-large-en-v1.5-quant",
+    "description": "Red Hat AI optimized base model",
+    "category": "Embedding"
+  },
+  {
+    "id": "RedHatAI/bge-large-en-v1.5-sparse",
+    "name": "bge-large-en-v1.5-sparse",
+    "description": "Red Hat AI optimized base model",
+    "category": "Embedding"
+  },
+  {
+    "id": "RedHatAI/bge-m3",
+    "name": "bge-m3",
+    "description": "Red Hat AI optimized base model",
+    "category": "Embedding"
+  },
+  {
+    "id": "RedHatAI/bge-small-en-v1.5-dense",
+    "name": "bge-small-en-v1.5-dense",
+    "description": "Red Hat AI optimized base model",
+    "category": "Embedding"
+  },
+  {
+    "id": "RedHatAI/bge-small-en-v1.5-quant",
+    "name": "bge-small-en-v1.5-quant",
+    "description": "Red Hat AI optimized base model",
+    "category": "Embedding"
+  },
+  {
+    "id": "RedHatAI/bge-small-en-v1.5-sparse",
+    "name": "bge-small-en-v1.5-sparse",
+    "description": "Red Hat AI optimized base model",
+    "category": "Embedding"
+  },
+  {
+    "id": "RedHatAI/command-a-plus-05-2026-fp8",
+    "name": "command-a-plus-05-2026-fp8",
+    "description": "Red Hat AI optimized base model",
+    "category": "Other"
+  },
+  {
+    "id": "RedHatAI/command-a-plus-05-2026-w4a4",
+    "name": "command-a-plus-05-2026-w4a4",
+    "description": "Red Hat AI optimized base model",
+    "category": "Other"
+  },
+  {
+    "id": "RedHatAI/diffusiongemma-26B-A4B-it-FP8-dynamic",
+    "name": "diffusiongemma-26B-A4B-it-FP8-dynamic",
+    "description": "Red Hat AI optimized FP8 quantized",
+    "category": "Gemma"
+  },
+  {
+    "id": "RedHatAI/diffusiongemma-26B-A4B-it-NVFP4",
+    "name": "diffusiongemma-26B-A4B-it-NVFP4",
+    "description": "Red Hat AI optimized NVFP4 quantized",
+    "category": "Gemma"
+  },
+  {
+    "id": "RedHatAI/docling-layout-heron",
+    "name": "docling-layout-heron",
+    "description": "Red Hat AI optimized base model",
+    "category": "Other"
+  },
+  {
+    "id": "RedHatAI/embeddinggemma-300m",
+    "name": "embeddinggemma-300m",
+    "description": "Red Hat AI optimized base model",
+    "category": "Gemma"
+  },
+  {
+    "id": "RedHatAI/gemma-2-27b-it-quantized.w8a16",
+    "name": "gemma-2-27b-it-quantized.w8a16",
+    "description": "Red Hat AI optimized W8A16 quantized",
+    "category": "Gemma"
+  },
+  {
+    "id": "RedHatAI/gemma-2-2b-it-FP8",
+    "name": "gemma-2-2b-it-FP8",
+    "description": "Red Hat AI optimized FP8 quantized",
+    "category": "Gemma"
+  },
+  {
+    "id": "RedHatAI/gemma-2-2b-it-quantized.w4a16",
+    "name": "gemma-2-2b-it-quantized.w4a16",
+    "description": "Red Hat AI optimized W4A16 quantized",
+    "category": "Gemma"
+  },
+  {
+    "id": "RedHatAI/gemma-2-2b-it-quantized.w8a16",
+    "name": "gemma-2-2b-it-quantized.w8a16",
+    "description": "Red Hat AI optimized W8A16 quantized",
+    "category": "Gemma"
+  },
+  {
+    "id": "RedHatAI/gemma-2-2b-it-quantized.w8a8",
+    "name": "gemma-2-2b-it-quantized.w8a8",
+    "description": "Red Hat AI optimized W8A8 quantized",
+    "category": "Gemma"
+  },
+  {
+    "id": "RedHatAI/gemma-2-2b-quantized.w8a16",
+    "name": "gemma-2-2b-quantized.w8a16",
+    "description": "Red Hat AI optimized W8A16 quantized",
+    "category": "Gemma"
+  },
+  {
+    "id": "RedHatAI/gemma-2-9b-it",
+    "name": "gemma-2-9b-it",
+    "description": "Red Hat AI optimized base model",
+    "category": "Gemma"
+  },
+  {
+    "id": "RedHatAI/gemma-2-9b-it-quantized.w8a16",
+    "name": "gemma-2-9b-it-quantized.w8a16",
+    "description": "Red Hat AI optimized W8A16 quantized",
+    "category": "Gemma"
+  },
+  {
+    "id": "RedHatAI/gemma-2-9b-it-quantized.w8a8",
+    "name": "gemma-2-9b-it-quantized.w8a8",
+    "description": "Red Hat AI optimized W8A8 quantized",
+    "category": "Gemma"
+  },
+  {
+    "id": "RedHatAI/gemma-3-12b-it",
+    "name": "gemma-3-12b-it",
+    "description": "Red Hat AI optimized base model",
+    "category": "Gemma"
+  },
+  {
+    "id": "RedHatAI/gemma-3-12b-it-quantized.w4a16",
+    "name": "gemma-3-12b-it-quantized.w4a16",
+    "description": "Red Hat AI optimized W4A16 quantized",
+    "category": "Gemma"
+  },
+  {
+    "id": "RedHatAI/gemma-3-12b-it-quantized.w8a8",
+    "name": "gemma-3-12b-it-quantized.w8a8",
+    "description": "Red Hat AI optimized W8A8 quantized",
+    "category": "Gemma"
+  },
+  {
+    "id": "RedHatAI/gemma-3-1b-it-FP8-dynamic",
+    "name": "gemma-3-1b-it-FP8-dynamic",
+    "description": "Red Hat AI optimized FP8 quantized",
+    "category": "Gemma"
+  },
+  {
+    "id": "RedHatAI/gemma-3-1b-it-quantized.w4a16",
+    "name": "gemma-3-1b-it-quantized.w4a16",
+    "description": "Red Hat AI optimized W4A16 quantized",
+    "category": "Gemma"
+  },
+  {
+    "id": "RedHatAI/gemma-3-1b-it-quantized.w8a8",
+    "name": "gemma-3-1b-it-quantized.w8a8",
+    "description": "Red Hat AI optimized W8A8 quantized",
+    "category": "Gemma"
+  },
+  {
+    "id": "RedHatAI/gemma-3-27b-it-quantized.w4a16",
+    "name": "gemma-3-27b-it-quantized.w4a16",
+    "description": "Red Hat AI optimized W4A16 quantized",
+    "category": "Gemma"
+  },
+  {
+    "id": "RedHatAI/gemma-3-27b-it-quantized.w8a8",
+    "name": "gemma-3-27b-it-quantized.w8a8",
+    "description": "Red Hat AI optimized W8A8 quantized",
+    "category": "Gemma"
+  },
+  {
+    "id": "RedHatAI/gemma-3-4b-it-quantized.w4a16",
+    "name": "gemma-3-4b-it-quantized.w4a16",
+    "description": "Red Hat AI optimized W4A16 quantized",
+    "category": "Gemma"
+  },
+  {
+    "id": "RedHatAI/gemma-3-4b-it-quantized.w8a8",
+    "name": "gemma-3-4b-it-quantized.w8a8",
+    "description": "Red Hat AI optimized W8A8 quantized",
+    "category": "Gemma"
+  },
+  {
+    "id": "RedHatAI/gemma-3n-E2B-it-FP8-dynamic",
+    "name": "gemma-3n-E2B-it-FP8-dynamic",
+    "description": "Red Hat AI optimized FP8 quantized",
+    "category": "Gemma"
+  },
+  {
+    "id": "RedHatAI/gemma-3n-E2B-it-quantized.w4a16",
+    "name": "gemma-3n-E2B-it-quantized.w4a16",
+    "description": "Red Hat AI optimized W4A16 quantized",
+    "category": "Gemma"
+  },
+  {
+    "id": "RedHatAI/gemma-3n-E2B-it-quantized.w8a8",
+    "name": "gemma-3n-E2B-it-quantized.w8a8",
+    "description": "Red Hat AI optimized W8A8 quantized",
+    "category": "Gemma"
+  },
+  {
+    "id": "RedHatAI/gemma-3n-E4B-it-FP8-dynamic",
+    "name": "gemma-3n-E4B-it-FP8-dynamic",
+    "description": "Red Hat AI optimized FP8 quantized",
+    "category": "Gemma"
+  },
+  {
+    "id": "RedHatAI/gemma-3n-E4B-it-quantized.w4a16",
+    "name": "gemma-3n-E4B-it-quantized.w4a16",
+    "description": "Red Hat AI optimized W4A16 quantized",
+    "category": "Gemma"
+  },
+  {
+    "id": "RedHatAI/gemma-3n-E4B-it-quantized.w8a8",
+    "name": "gemma-3n-E4B-it-quantized.w8a8",
+    "description": "Red Hat AI optimized W8A8 quantized",
+    "category": "Gemma"
+  },
+  {
+    "id": "RedHatAI/gemma-4-12B-it",
+    "name": "gemma-4-12B-it",
+    "description": "Red Hat AI optimized base model",
+    "category": "Gemma"
+  },
+  {
+    "id": "RedHatAI/gemma-4-12B-it-FP8-Dynamic",
+    "name": "gemma-4-12B-it-FP8-Dynamic",
+    "description": "Red Hat AI optimized FP8 quantized",
+    "category": "Gemma"
+  },
+  {
+    "id": "RedHatAI/gemma-4-12B-it-NVFP4",
+    "name": "gemma-4-12B-it-NVFP4",
+    "description": "Red Hat AI optimized NVFP4 quantized",
+    "category": "Gemma"
+  },
+  {
+    "id": "RedHatAI/gemma-4-26B-A4B-it",
+    "name": "gemma-4-26B-A4B-it",
+    "description": "Red Hat AI optimized base model",
+    "category": "Gemma"
+  },
+  {
+    "id": "RedHatAI/gemma-4-31B-it",
+    "name": "gemma-4-31B-it",
+    "description": "Red Hat AI optimized base model",
+    "category": "Gemma"
+  },
+  {
+    "id": "RedHatAI/gemma-4-31B-it-FP8-block",
+    "name": "gemma-4-31B-it-FP8-block",
+    "description": "Red Hat AI optimized FP8 quantized",
+    "category": "Gemma"
+  },
+  {
+    "id": "RedHatAI/gemma-4-31B-it-speculator.dflash",
+    "name": "gemma-4-31B-it-speculator.dflash",
+    "description": "Red Hat AI optimized speculative decoding",
+    "category": "Gemma"
+  },
+  {
+    "id": "RedHatAI/gemma-4-E2B-it",
+    "name": "gemma-4-E2B-it",
+    "description": "Red Hat AI optimized base model",
+    "category": "Gemma"
+  },
+  {
+    "id": "RedHatAI/gemma-4-E4B-it",
+    "name": "gemma-4-E4B-it",
+    "description": "Red Hat AI optimized base model",
+    "category": "Gemma"
+  },
+  {
+    "id": "RedHatAI/gpt-oss-120b",
+    "name": "gpt-oss-120b",
+    "description": "Red Hat AI optimized base model",
+    "category": "GPT-OSS"
+  },
+  {
+    "id": "RedHatAI/gpt-oss-120b-essential",
+    "name": "gpt-oss-120b-essential",
+    "description": "Red Hat AI optimized base model",
+    "category": "GPT-OSS"
+  },
+  {
+    "id": "RedHatAI/gpt-oss-120b-speculator.eagle3",
+    "name": "gpt-oss-120b-speculator.eagle3",
+    "description": "Red Hat AI optimized speculative decoding",
+    "category": "GPT-OSS"
+  },
+  {
+    "id": "RedHatAI/gpt-oss-20b-essential",
+    "name": "gpt-oss-20b-essential",
+    "description": "Red Hat AI optimized base model",
+    "category": "GPT-OSS"
+  },
+  {
+    "id": "RedHatAI/granite-3.0-1b-a400m-instruct-GGUF",
+    "name": "granite-3.0-1b-a400m-instruct-GGUF",
+    "description": "Red Hat AI optimized base model",
+    "category": "Granite"
+  },
+  {
+    "id": "RedHatAI/granite-3.0-2b-instruct-GGUF",
+    "name": "granite-3.0-2b-instruct-GGUF",
+    "description": "Red Hat AI optimized base model",
+    "category": "Granite"
+  },
+  {
+    "id": "RedHatAI/granite-3.0-3b-a800m-instruct-GGUF",
+    "name": "granite-3.0-3b-a800m-instruct-GGUF",
+    "description": "Red Hat AI optimized base model",
+    "category": "Granite"
+  },
+  {
+    "id": "RedHatAI/granite-3.0-8b-instruct-GGUF",
+    "name": "granite-3.0-8b-instruct-GGUF",
+    "description": "Red Hat AI optimized base model",
+    "category": "Granite"
+  },
+  {
+    "id": "RedHatAI/granite-3.1-2b-base-FP8-dynamic",
+    "name": "granite-3.1-2b-base-FP8-dynamic",
+    "description": "Red Hat AI optimized FP8 quantized",
+    "category": "Granite"
+  },
+  {
+    "id": "RedHatAI/granite-3.1-2b-base-quantized.w4a16",
+    "name": "granite-3.1-2b-base-quantized.w4a16",
+    "description": "Red Hat AI optimized W4A16 quantized",
+    "category": "Granite"
+  },
+  {
+    "id": "RedHatAI/granite-3.1-2b-base-quantized.w8a8",
+    "name": "granite-3.1-2b-base-quantized.w8a8",
+    "description": "Red Hat AI optimized W8A8 quantized",
+    "category": "Granite"
+  },
+  {
+    "id": "RedHatAI/granite-3.1-2b-instruct-FP8-dynamic",
+    "name": "granite-3.1-2b-instruct-FP8-dynamic",
+    "description": "Red Hat AI optimized FP8 quantized",
+    "category": "Granite"
+  },
+  {
+    "id": "RedHatAI/granite-3.1-2b-instruct-quantized.w4a16",
+    "name": "granite-3.1-2b-instruct-quantized.w4a16",
+    "description": "Red Hat AI optimized W4A16 quantized",
+    "category": "Granite"
+  },
+  {
+    "id": "RedHatAI/granite-3.1-2b-instruct-quantized.w8a8",
+    "name": "granite-3.1-2b-instruct-quantized.w8a8",
+    "description": "Red Hat AI optimized W8A8 quantized",
+    "category": "Granite"
+  },
+  {
+    "id": "RedHatAI/granite-3.1-8b-base-FP8-dynamic",
+    "name": "granite-3.1-8b-base-FP8-dynamic",
+    "description": "Red Hat AI optimized FP8 quantized",
+    "category": "Granite"
+  },
+  {
+    "id": "RedHatAI/granite-3.1-8b-base-quantized.w4a16",
+    "name": "granite-3.1-8b-base-quantized.w4a16",
+    "description": "Red Hat AI optimized W4A16 quantized",
+    "category": "Granite"
+  },
+  {
+    "id": "RedHatAI/granite-3.1-8b-base-quantized.w8a8",
+    "name": "granite-3.1-8b-base-quantized.w8a8",
+    "description": "Red Hat AI optimized W8A8 quantized",
+    "category": "Granite"
+  },
+  {
+    "id": "RedHatAI/granite-3.1-8b-instruct-GGUF",
+    "name": "granite-3.1-8b-instruct-GGUF",
+    "description": "Red Hat AI optimized base model",
+    "category": "Granite"
+  },
+  {
+    "id": "RedHatAI/granite-3.1-8b-instruct-quantized.w4a16",
+    "name": "granite-3.1-8b-instruct-quantized.w4a16",
+    "description": "Red Hat AI optimized W4A16 quantized",
+    "category": "Granite"
+  },
+  {
+    "id": "RedHatAI/granite-3.1-8b-instruct-quantized.w8a8",
+    "name": "granite-3.1-8b-instruct-quantized.w8a8",
+    "description": "Red Hat AI optimized W8A8 quantized",
+    "category": "Granite"
+  },
+  {
+    "id": "RedHatAI/granite-3.1-8b-lab-v2",
+    "name": "granite-3.1-8b-lab-v2",
+    "description": "Red Hat AI optimized base model",
+    "category": "Granite"
+  },
+  {
+    "id": "RedHatAI/granite-3.3-8b-instruct",
+    "name": "granite-3.3-8b-instruct",
+    "description": "Red Hat AI optimized base model",
+    "category": "Granite"
+  },
+  {
+    "id": "RedHatAI/granite-4.0-h-small",
+    "name": "granite-4.0-h-small",
+    "description": "Red Hat AI optimized base model",
+    "category": "Granite"
+  },
+  {
+    "id": "RedHatAI/granite-4.0-h-small-FP8-block",
+    "name": "granite-4.0-h-small-FP8-block",
+    "description": "Red Hat AI optimized FP8 quantized",
+    "category": "Granite"
+  },
+  {
+    "id": "RedHatAI/granite-4.0-h-small-FP8-dynamic",
+    "name": "granite-4.0-h-small-FP8-dynamic",
+    "description": "Red Hat AI optimized FP8 quantized",
+    "category": "Granite"
+  },
+  {
+    "id": "RedHatAI/granite-4.0-h-tiny",
+    "name": "granite-4.0-h-tiny",
+    "description": "Red Hat AI optimized base model",
+    "category": "Granite"
+  },
+  {
+    "id": "RedHatAI/granite-4.0-h-tiny-FP8-dynamic",
+    "name": "granite-4.0-h-tiny-FP8-dynamic",
+    "description": "Red Hat AI optimized FP8 quantized",
+    "category": "Granite"
+  },
+  {
+    "id": "RedHatAI/granite-embedding-english-r2",
+    "name": "granite-embedding-english-r2",
+    "description": "Red Hat AI optimized base model",
+    "category": "Granite"
+  },
+  {
+    "id": "RedHatAI/gte-Qwen2-7B-instruct",
+    "name": "gte-Qwen2-7B-instruct",
+    "description": "Red Hat AI optimized base model",
+    "category": "Qwen"
+  },
+  {
+    "id": "RedHatAI/llama-2-7b-chat-marlin",
+    "name": "llama-2-7b-chat-marlin",
+    "description": "Red Hat AI optimized base model",
+    "category": "Llama"
+  },
+  {
+    "id": "RedHatAI/llama-2-7b-gsm8k-pruned60-quant-ds",
+    "name": "llama-2-7b-gsm8k-pruned60-quant-ds",
+    "description": "Red Hat AI optimized base model",
+    "category": "Llama"
+  },
+  {
+    "id": "RedHatAI/llama2-7b_ultrachat200k_transfer.oneshot-pruned70.iterative",
+    "name": "llama2-7b_ultrachat200k_transfer.oneshot-pruned70.iterative",
+    "description": "Red Hat AI optimized base model",
+    "category": "Llama"
+  },
+  {
+    "id": "RedHatAI/llama2.c-stories110M-pruned2.4",
+    "name": "llama2.c-stories110M-pruned2.4",
+    "description": "Red Hat AI optimized base model",
+    "category": "Llama"
+  },
+  {
+    "id": "RedHatAI/llama2.c-stories110M-pruned50",
+    "name": "llama2.c-stories110M-pruned50",
+    "description": "Red Hat AI optimized base model",
+    "category": "Llama"
+  },
+  {
+    "id": "RedHatAI/mobilebert-uncased-finetuned-squadv1",
+    "name": "mobilebert-uncased-finetuned-squadv1",
+    "description": "Red Hat AI optimized base model",
+    "category": "BERT"
+  },
+  {
+    "id": "RedHatAI/moe",
+    "name": "moe",
+    "description": "Red Hat AI optimized base model",
+    "category": "Other"
+  },
+  {
+    "id": "RedHatAI/mpt-7b-chat-pruned50-quant-ds",
+    "name": "mpt-7b-chat-pruned50-quant-ds",
+    "description": "Red Hat AI optimized base model",
+    "category": "Other"
+  },
+  {
+    "id": "RedHatAI/mpt-7b-gsm8k-pruned40-quant-ds",
+    "name": "mpt-7b-gsm8k-pruned40-quant-ds",
+    "description": "Red Hat AI optimized base model",
+    "category": "Other"
+  },
+  {
+    "id": "RedHatAI/mpt-7b-gsm8k-pruned50-quant-ds",
+    "name": "mpt-7b-gsm8k-pruned50-quant-ds",
+    "description": "Red Hat AI optimized base model",
+    "category": "Other"
+  },
+  {
+    "id": "RedHatAI/mpt-7b-gsm8k-pruned60-pt",
+    "name": "mpt-7b-gsm8k-pruned60-pt",
+    "description": "Red Hat AI optimized base model",
+    "category": "Other"
+  },
+  {
+    "id": "RedHatAI/mpt-7b-gsm8k-pruned60-quant-ds",
+    "name": "mpt-7b-gsm8k-pruned60-quant-ds",
+    "description": "Red Hat AI optimized base model",
+    "category": "Other"
+  },
+  {
+    "id": "RedHatAI/mpt-7b-gsm8k-pruned70-quant-ds",
+    "name": "mpt-7b-gsm8k-pruned70-quant-ds",
+    "description": "Red Hat AI optimized base model",
+    "category": "Other"
+  },
+  {
+    "id": "RedHatAI/mpt-7b-gsm8k-pruned75-quant-ds",
+    "name": "mpt-7b-gsm8k-pruned75-quant-ds",
+    "description": "Red Hat AI optimized base model",
+    "category": "Other"
+  },
+  {
+    "id": "RedHatAI/mpt-7b-gsm8k-pruned80-quant-ds",
+    "name": "mpt-7b-gsm8k-pruned80-quant-ds",
+    "description": "Red Hat AI optimized base model",
+    "category": "Other"
+  },
+  {
+    "id": "RedHatAI/mpt-7b-gsm8k-pt",
+    "name": "mpt-7b-gsm8k-pt",
+    "description": "Red Hat AI optimized base model",
+    "category": "Other"
+  },
+  {
+    "id": "RedHatAI/mpt-7b-gsm8k-quant-ds",
+    "name": "mpt-7b-gsm8k-quant-ds",
+    "description": "Red Hat AI optimized base model",
+    "category": "Other"
+  },
+  {
+    "id": "RedHatAI/multilingual-e5-large",
+    "name": "multilingual-e5-large",
+    "description": "Red Hat AI optimized base model",
+    "category": "Other"
+  },
+  {
+    "id": "RedHatAI/nemotron-speech-streaming-en-0.6b",
+    "name": "nemotron-speech-streaming-en-0.6b",
+    "description": "Red Hat AI optimized base model",
+    "category": "Nemotron"
+  },
+  {
+    "id": "RedHatAI/nomic-embed-text-v1.5",
+    "name": "nomic-embed-text-v1.5",
+    "description": "Red Hat AI optimized base model",
+    "category": "Embedding"
+  },
+  {
+    "id": "RedHatAI/oBERT-12-downstream-dense-QAT-squadv1",
+    "name": "oBERT-12-downstream-dense-QAT-squadv1",
+    "description": "Red Hat AI optimized base model",
+    "category": "BERT"
+  },
+  {
+    "id": "RedHatAI/oBERT-12-downstream-dense-squadv1",
+    "name": "oBERT-12-downstream-dense-squadv1",
+    "description": "Red Hat AI optimized base model",
+    "category": "BERT"
+  },
+  {
+    "id": "RedHatAI/oBERT-12-downstream-pruned-block4-80-QAT-squadv1",
+    "name": "oBERT-12-downstream-pruned-block4-80-QAT-squadv1",
+    "description": "Red Hat AI optimized base model",
+    "category": "BERT"
+  },
+  {
+    "id": "RedHatAI/oBERT-12-downstream-pruned-block4-80-squadv1",
+    "name": "oBERT-12-downstream-pruned-block4-80-squadv1",
+    "description": "Red Hat AI optimized base model",
+    "category": "BERT"
+  },
+  {
+    "id": "RedHatAI/oBERT-12-downstream-pruned-block4-90-QAT-squadv1",
+    "name": "oBERT-12-downstream-pruned-block4-90-QAT-squadv1",
+    "description": "Red Hat AI optimized base model",
+    "category": "BERT"
+  },
+  {
+    "id": "RedHatAI/oBERT-12-downstream-pruned-block4-90-squadv1",
+    "name": "oBERT-12-downstream-pruned-block4-90-squadv1",
+    "description": "Red Hat AI optimized base model",
+    "category": "BERT"
+  },
+  {
+    "id": "RedHatAI/oBERT-12-downstream-pruned-unstructured-80-mnli",
+    "name": "oBERT-12-downstream-pruned-unstructured-80-mnli",
+    "description": "Red Hat AI optimized base model",
+    "category": "BERT"
+  },
+  {
+    "id": "RedHatAI/oBERT-12-downstream-pruned-unstructured-80-qqp",
+    "name": "oBERT-12-downstream-pruned-unstructured-80-qqp",
+    "description": "Red Hat AI optimized base model",
+    "category": "BERT"
+  },
+  {
+    "id": "RedHatAI/oBERT-12-downstream-pruned-unstructured-80-squadv1",
+    "name": "oBERT-12-downstream-pruned-unstructured-80-squadv1",
+    "description": "Red Hat AI optimized base model",
+    "category": "BERT"
+  },
+  {
+    "id": "RedHatAI/oBERT-12-downstream-pruned-unstructured-90-mnli",
+    "name": "oBERT-12-downstream-pruned-unstructured-90-mnli",
+    "description": "Red Hat AI optimized base model",
+    "category": "BERT"
+  },
+  {
+    "id": "RedHatAI/oBERT-12-downstream-pruned-unstructured-90-qqp",
+    "name": "oBERT-12-downstream-pruned-unstructured-90-qqp",
+    "description": "Red Hat AI optimized base model",
+    "category": "BERT"
+  },
+  {
+    "id": "RedHatAI/oBERT-12-downstream-pruned-unstructured-90-squadv1",
+    "name": "oBERT-12-downstream-pruned-unstructured-90-squadv1",
+    "description": "Red Hat AI optimized base model",
+    "category": "BERT"
+  },
+  {
+    "id": "RedHatAI/oBERT-12-downstream-pruned-unstructured-97-mnli",
+    "name": "oBERT-12-downstream-pruned-unstructured-97-mnli",
+    "description": "Red Hat AI optimized base model",
+    "category": "BERT"
+  },
+  {
+    "id": "RedHatAI/oBERT-12-downstream-pruned-unstructured-97-qqp",
+    "name": "oBERT-12-downstream-pruned-unstructured-97-qqp",
+    "description": "Red Hat AI optimized base model",
+    "category": "BERT"
+  },
+  {
+    "id": "RedHatAI/oBERT-12-downstream-pruned-unstructured-97-squadv1",
+    "name": "oBERT-12-downstream-pruned-unstructured-97-squadv1",
+    "description": "Red Hat AI optimized base model",
+    "category": "BERT"
+  },
+  {
+    "id": "RedHatAI/oBERT-12-upstream-pretrained-dense",
+    "name": "oBERT-12-upstream-pretrained-dense",
+    "description": "Red Hat AI optimized base model",
+    "category": "BERT"
+  },
+  {
+    "id": "RedHatAI/oBERT-12-upstream-pruned-unstructured-90",
+    "name": "oBERT-12-upstream-pruned-unstructured-90",
+    "description": "Red Hat AI optimized base model",
+    "category": "BERT"
+  },
+  {
+    "id": "RedHatAI/oBERT-12-upstream-pruned-unstructured-90-finetuned-mnli",
+    "name": "oBERT-12-upstream-pruned-unstructured-90-finetuned-mnli",
+    "description": "Red Hat AI optimized base model",
+    "category": "BERT"
+  },
+  {
+    "id": "RedHatAI/oBERT-12-upstream-pruned-unstructured-90-finetuned-mnli-v2",
+    "name": "oBERT-12-upstream-pruned-unstructured-90-finetuned-mnli-v2",
+    "description": "Red Hat AI optimized base model",
+    "category": "BERT"
+  },
+  {
+    "id": "RedHatAI/oBERT-12-upstream-pruned-unstructured-90-finetuned-qqp",
+    "name": "oBERT-12-upstream-pruned-unstructured-90-finetuned-qqp",
+    "description": "Red Hat AI optimized base model",
+    "category": "BERT"
+  },
+  {
+    "id": "RedHatAI/oBERT-12-upstream-pruned-unstructured-90-finetuned-qqp-v2",
+    "name": "oBERT-12-upstream-pruned-unstructured-90-finetuned-qqp-v2",
+    "description": "Red Hat AI optimized base model",
+    "category": "BERT"
+  },
+  {
+    "id": "RedHatAI/oBERT-12-upstream-pruned-unstructured-90-finetuned-squadv1",
+    "name": "oBERT-12-upstream-pruned-unstructured-90-finetuned-squadv1",
+    "description": "Red Hat AI optimized base model",
+    "category": "BERT"
+  },
+  {
+    "id": "RedHatAI/oBERT-12-upstream-pruned-unstructured-90-finetuned-squadv1-v2",
+    "name": "oBERT-12-upstream-pruned-unstructured-90-finetuned-squadv1-v2",
+    "description": "Red Hat AI optimized base model",
+    "category": "BERT"
+  },
+  {
+    "id": "RedHatAI/oBERT-12-upstream-pruned-unstructured-90-v2",
+    "name": "oBERT-12-upstream-pruned-unstructured-90-v2",
+    "description": "Red Hat AI optimized base model",
+    "category": "BERT"
+  },
+  {
+    "id": "RedHatAI/oBERT-12-upstream-pruned-unstructured-97",
+    "name": "oBERT-12-upstream-pruned-unstructured-97",
+    "description": "Red Hat AI optimized base model",
+    "category": "BERT"
+  },
+  {
+    "id": "RedHatAI/oBERT-12-upstream-pruned-unstructured-97-finetuned-mnli",
+    "name": "oBERT-12-upstream-pruned-unstructured-97-finetuned-mnli",
+    "description": "Red Hat AI optimized base model",
+    "category": "BERT"
+  },
+  {
+    "id": "RedHatAI/oBERT-12-upstream-pruned-unstructured-97-finetuned-mnli-v2",
+    "name": "oBERT-12-upstream-pruned-unstructured-97-finetuned-mnli-v2",
+    "description": "Red Hat AI optimized base model",
+    "category": "BERT"
+  },
+  {
+    "id": "RedHatAI/oBERT-12-upstream-pruned-unstructured-97-finetuned-qqp",
+    "name": "oBERT-12-upstream-pruned-unstructured-97-finetuned-qqp",
+    "description": "Red Hat AI optimized base model",
+    "category": "BERT"
+  },
+  {
+    "id": "RedHatAI/oBERT-12-upstream-pruned-unstructured-97-finetuned-qqp-v2",
+    "name": "oBERT-12-upstream-pruned-unstructured-97-finetuned-qqp-v2",
+    "description": "Red Hat AI optimized base model",
+    "category": "BERT"
+  },
+  {
+    "id": "RedHatAI/oBERT-12-upstream-pruned-unstructured-97-finetuned-squadv1",
+    "name": "oBERT-12-upstream-pruned-unstructured-97-finetuned-squadv1",
+    "description": "Red Hat AI optimized base model",
+    "category": "BERT"
+  },
+  {
+    "id": "RedHatAI/oBERT-12-upstream-pruned-unstructured-97-finetuned-squadv1-v2",
+    "name": "oBERT-12-upstream-pruned-unstructured-97-finetuned-squadv1-v2",
+    "description": "Red Hat AI optimized base model",
+    "category": "BERT"
+  },
+  {
+    "id": "RedHatAI/oBERT-12-upstream-pruned-unstructured-97-v2",
+    "name": "oBERT-12-upstream-pruned-unstructured-97-v2",
+    "description": "Red Hat AI optimized base model",
+    "category": "BERT"
+  },
+  {
+    "id": "RedHatAI/oBERT-3-downstream-dense-QAT-squadv1",
+    "name": "oBERT-3-downstream-dense-QAT-squadv1",
+    "description": "Red Hat AI optimized base model",
+    "category": "BERT"
+  },
+  {
+    "id": "RedHatAI/oBERT-3-downstream-dense-squadv1",
+    "name": "oBERT-3-downstream-dense-squadv1",
+    "description": "Red Hat AI optimized base model",
+    "category": "BERT"
+  },
+  {
+    "id": "RedHatAI/oBERT-3-downstream-pruned-block4-80-QAT-squadv1",
+    "name": "oBERT-3-downstream-pruned-block4-80-QAT-squadv1",
+    "description": "Red Hat AI optimized base model",
+    "category": "BERT"
+  },
+  {
+    "id": "RedHatAI/oBERT-3-downstream-pruned-block4-80-squadv1",
+    "name": "oBERT-3-downstream-pruned-block4-80-squadv1",
+    "description": "Red Hat AI optimized base model",
+    "category": "BERT"
+  },
+  {
+    "id": "RedHatAI/oBERT-3-downstream-pruned-block4-90-QAT-squadv1",
+    "name": "oBERT-3-downstream-pruned-block4-90-QAT-squadv1",
+    "description": "Red Hat AI optimized base model",
+    "category": "BERT"
+  },
+  {
+    "id": "RedHatAI/oBERT-3-downstream-pruned-block4-90-squadv1",
+    "name": "oBERT-3-downstream-pruned-block4-90-squadv1",
+    "description": "Red Hat AI optimized base model",
+    "category": "BERT"
+  },
+  {
+    "id": "RedHatAI/oBERT-3-downstream-pruned-unstructured-80-squadv1",
+    "name": "oBERT-3-downstream-pruned-unstructured-80-squadv1",
+    "description": "Red Hat AI optimized base model",
+    "category": "BERT"
+  },
+  {
+    "id": "RedHatAI/oBERT-3-downstream-pruned-unstructured-90-squadv1",
+    "name": "oBERT-3-downstream-pruned-unstructured-90-squadv1",
+    "description": "Red Hat AI optimized base model",
+    "category": "BERT"
+  },
+  {
+    "id": "RedHatAI/oBERT-3-upstream-pretrained-dense",
+    "name": "oBERT-3-upstream-pretrained-dense",
+    "description": "Red Hat AI optimized base model",
+    "category": "BERT"
+  },
+  {
+    "id": "RedHatAI/oBERT-6-downstream-dense-QAT-squadv1",
+    "name": "oBERT-6-downstream-dense-QAT-squadv1",
+    "description": "Red Hat AI optimized base model",
+    "category": "BERT"
+  },
+  {
+    "id": "RedHatAI/oBERT-6-downstream-dense-squadv1",
+    "name": "oBERT-6-downstream-dense-squadv1",
+    "description": "Red Hat AI optimized base model",
+    "category": "BERT"
+  },
+  {
+    "id": "RedHatAI/oBERT-6-downstream-pruned-block4-80-QAT-squadv1",
+    "name": "oBERT-6-downstream-pruned-block4-80-QAT-squadv1",
+    "description": "Red Hat AI optimized base model",
+    "category": "BERT"
+  },
+  {
+    "id": "RedHatAI/oBERT-6-downstream-pruned-block4-80-squadv1",
+    "name": "oBERT-6-downstream-pruned-block4-80-squadv1",
+    "description": "Red Hat AI optimized base model",
+    "category": "BERT"
+  },
+  {
+    "id": "RedHatAI/oBERT-6-downstream-pruned-block4-90-QAT-squadv1",
+    "name": "oBERT-6-downstream-pruned-block4-90-QAT-squadv1",
+    "description": "Red Hat AI optimized base model",
+    "category": "BERT"
+  },
+  {
+    "id": "RedHatAI/oBERT-6-downstream-pruned-block4-90-squadv1",
+    "name": "oBERT-6-downstream-pruned-block4-90-squadv1",
+    "description": "Red Hat AI optimized base model",
+    "category": "BERT"
+  },
+  {
+    "id": "RedHatAI/oBERT-6-downstream-pruned-unstructured-80-squadv1",
+    "name": "oBERT-6-downstream-pruned-unstructured-80-squadv1",
+    "description": "Red Hat AI optimized base model",
+    "category": "BERT"
+  },
+  {
+    "id": "RedHatAI/oBERT-6-downstream-pruned-unstructured-90-squadv1",
+    "name": "oBERT-6-downstream-pruned-unstructured-90-squadv1",
+    "description": "Red Hat AI optimized base model",
+    "category": "BERT"
+  },
+  {
+    "id": "RedHatAI/oBERT-6-upstream-pretrained-dense",
+    "name": "oBERT-6-upstream-pretrained-dense",
+    "description": "Red Hat AI optimized base model",
+    "category": "BERT"
+  },
+  {
+    "id": "RedHatAI/oBERT-teacher-mnli",
+    "name": "oBERT-teacher-mnli",
+    "description": "Red Hat AI optimized base model",
+    "category": "BERT"
+  },
+  {
+    "id": "RedHatAI/oBERT-teacher-qqp",
+    "name": "oBERT-teacher-qqp",
+    "description": "Red Hat AI optimized base model",
+    "category": "BERT"
+  },
+  {
+    "id": "RedHatAI/oBERT-teacher-squadv1",
+    "name": "oBERT-teacher-squadv1",
+    "description": "Red Hat AI optimized base model",
+    "category": "BERT"
+  },
+  {
+    "id": "RedHatAI/phi-2-pruned50",
+    "name": "phi-2-pruned50",
+    "description": "Red Hat AI optimized base model",
+    "category": "Phi"
+  },
+  {
+    "id": "RedHatAI/phi-2-super-marlin",
+    "name": "phi-2-super-marlin",
+    "description": "Red Hat AI optimized base model",
+    "category": "Phi"
+  },
+  {
+    "id": "RedHatAI/phi-4",
+    "name": "phi-4",
+    "description": "Red Hat AI optimized base model",
+    "category": "Phi"
+  },
+  {
+    "id": "RedHatAI/phi-4-quantized.w4a16",
+    "name": "phi-4-quantized.w4a16",
+    "description": "Red Hat AI optimized W4A16 quantized",
+    "category": "Phi"
+  },
+  {
+    "id": "RedHatAI/phi-4-quantized.w8a8",
+    "name": "phi-4-quantized.w8a8",
+    "description": "Red Hat AI optimized W8A8 quantized",
+    "category": "Phi"
+  },
+  {
+    "id": "RedHatAI/pixtral-12b-quantized.w4a16",
+    "name": "pixtral-12b-quantized.w4a16",
+    "description": "Red Hat AI optimized W4A16 quantized",
+    "category": "Mistral"
+  },
+  {
+    "id": "RedHatAI/pixtral-12b-quantized.w8a8",
+    "name": "pixtral-12b-quantized.w8a8",
+    "description": "Red Hat AI optimized W8A8 quantized",
+    "category": "Mistral"
+  },
+  {
+    "id": "RedHatAI/quantization",
+    "name": "quantization",
+    "description": "Red Hat AI optimized base model",
+    "category": "Other"
+  },
+  {
+    "id": "RedHatAI/sarvam-105b-FP8-dynamic",
+    "name": "sarvam-105b-FP8-dynamic",
+    "description": "Red Hat AI optimized FP8 quantized",
+    "category": "Other"
+  },
+  {
+    "id": "RedHatAI/sarvam-30b-FP8-dynamic",
+    "name": "sarvam-30b-FP8-dynamic",
+    "description": "Red Hat AI optimized FP8 quantized",
+    "category": "Other"
+  },
+  {
+    "id": "RedHatAI/snowflake-arctic-embed-l-v2.0",
+    "name": "snowflake-arctic-embed-l-v2.0",
+    "description": "Red Hat AI optimized base model",
+    "category": "Embedding"
+  },
+  {
+    "id": "RedHatAI/sst2-distilbert-sparse-blog",
+    "name": "sst2-distilbert-sparse-blog",
+    "description": "Red Hat AI optimized base model",
+    "category": "BERT"
+  },
+  {
+    "id": "RedHatAI/starcoder2-15b-FP8",
+    "name": "starcoder2-15b-FP8",
+    "description": "Red Hat AI optimized FP8 quantized",
+    "category": "Code"
+  },
+  {
+    "id": "RedHatAI/starcoder2-15b-quantized.w8a16",
+    "name": "starcoder2-15b-quantized.w8a16",
+    "description": "Red Hat AI optimized W8A16 quantized",
+    "category": "Code"
+  },
+  {
+    "id": "RedHatAI/starcoder2-15b-quantized.w8a8",
+    "name": "starcoder2-15b-quantized.w8a8",
+    "description": "Red Hat AI optimized W8A8 quantized",
+    "category": "Code"
+  },
+  {
+    "id": "RedHatAI/starcoder2-3b-FP8",
+    "name": "starcoder2-3b-FP8",
+    "description": "Red Hat AI optimized FP8 quantized",
+    "category": "Code"
+  },
+  {
+    "id": "RedHatAI/starcoder2-3b-quantized.w8a16",
+    "name": "starcoder2-3b-quantized.w8a16",
+    "description": "Red Hat AI optimized W8A16 quantized",
+    "category": "Code"
+  },
+  {
+    "id": "RedHatAI/starcoder2-3b-quantized.w8a8",
+    "name": "starcoder2-3b-quantized.w8a8",
+    "description": "Red Hat AI optimized W8A8 quantized",
+    "category": "Code"
+  },
+  {
+    "id": "RedHatAI/starcoder2-7b-FP8",
+    "name": "starcoder2-7b-FP8",
+    "description": "Red Hat AI optimized FP8 quantized",
+    "category": "Code"
+  },
+  {
+    "id": "RedHatAI/starcoder2-7b-quantized.w8a16",
+    "name": "starcoder2-7b-quantized.w8a16",
+    "description": "Red Hat AI optimized W8A16 quantized",
+    "category": "Code"
+  },
+  {
+    "id": "RedHatAI/starcoder2-7b-quantized.w8a8",
+    "name": "starcoder2-7b-quantized.w8a8",
+    "description": "Red Hat AI optimized W8A8 quantized",
+    "category": "Code"
+  },
+  {
+    "id": "RedHatAI/translategemma-4b-it",
+    "name": "translategemma-4b-it",
+    "description": "Red Hat AI optimized base model",
+    "category": "Gemma"
+  },
+  {
+    "id": "RedHatAI/watt-tool-8B-FP8-dynamic",
+    "name": "watt-tool-8B-FP8-dynamic",
+    "description": "Red Hat AI optimized FP8 quantized",
+    "category": "Other"
+  },
+  {
+    "id": "RedHatAI/whisper-large-v2-FP8-Dynamic",
+    "name": "whisper-large-v2-FP8-Dynamic",
+    "description": "Red Hat AI optimized FP8 quantized",
+    "category": "Audio"
+  },
+  {
+    "id": "RedHatAI/whisper-large-v2-W4A16-G128",
+    "name": "whisper-large-v2-W4A16-G128",
+    "description": "Red Hat AI optimized base model",
+    "category": "Audio"
+  },
+  {
+    "id": "RedHatAI/whisper-large-v2-quantized.w4a16",
+    "name": "whisper-large-v2-quantized.w4a16",
+    "description": "Red Hat AI optimized W4A16 quantized",
+    "category": "Audio"
+  },
+  {
+    "id": "RedHatAI/whisper-large-v2-quantized.w8a8",
+    "name": "whisper-large-v2-quantized.w8a8",
+    "description": "Red Hat AI optimized W8A8 quantized",
+    "category": "Audio"
+  },
+  {
+    "id": "RedHatAI/whisper-large-v3-FP8-dynamic",
+    "name": "whisper-large-v3-FP8-dynamic",
+    "description": "Red Hat AI optimized FP8 quantized",
+    "category": "Audio"
+  },
+  {
+    "id": "RedHatAI/whisper-large-v3-quantized.w4a16",
+    "name": "whisper-large-v3-quantized.w4a16",
+    "description": "Red Hat AI optimized W4A16 quantized",
+    "category": "Audio"
+  },
+  {
+    "id": "RedHatAI/whisper-large-v3-quantized.w8a8",
+    "name": "whisper-large-v3-quantized.w8a8",
+    "description": "Red Hat AI optimized W8A8 quantized",
+    "category": "Audio"
+  },
+  {
+    "id": "RedHatAI/whisper-large-v3-turbo-FP8-dynamic",
+    "name": "whisper-large-v3-turbo-FP8-dynamic",
+    "description": "Red Hat AI optimized FP8 quantized",
+    "category": "Audio"
+  },
+  {
+    "id": "RedHatAI/whisper-large-v3-turbo-quantized.w4a16",
+    "name": "whisper-large-v3-turbo-quantized.w4a16",
+    "description": "Red Hat AI optimized W4A16 quantized",
+    "category": "Audio"
+  },
+  {
+    "id": "RedHatAI/whisper-large-v3-turbo-quantized.w8a8",
+    "name": "whisper-large-v3-turbo-quantized.w8a8",
+    "description": "Red Hat AI optimized W8A8 quantized",
+    "category": "Audio"
+  },
+  {
+    "id": "RedHatAI/whisper-medium-FP8-dynamic",
+    "name": "whisper-medium-FP8-dynamic",
+    "description": "Red Hat AI optimized FP8 quantized",
+    "category": "Audio"
+  },
+  {
+    "id": "RedHatAI/whisper-medium-quantized.w4a16",
+    "name": "whisper-medium-quantized.w4a16",
+    "description": "Red Hat AI optimized W4A16 quantized",
+    "category": "Audio"
+  },
+  {
+    "id": "RedHatAI/whisper-medium-quantized.w8a8",
+    "name": "whisper-medium-quantized.w8a8",
+    "description": "Red Hat AI optimized W8A8 quantized",
+    "category": "Audio"
+  },
+  {
+    "id": "RedHatAI/whisper-small-FP8-Dynamic",
+    "name": "whisper-small-FP8-Dynamic",
+    "description": "Red Hat AI optimized FP8 quantized",
+    "category": "Audio"
+  },
+  {
+    "id": "RedHatAI/whisper-small-quantized.w4a16",
+    "name": "whisper-small-quantized.w4a16",
+    "description": "Red Hat AI optimized W4A16 quantized",
+    "category": "Audio"
+  },
+  {
+    "id": "RedHatAI/whisper-small-quantized.w8a8",
+    "name": "whisper-small-quantized.w8a8",
+    "description": "Red Hat AI optimized W8A8 quantized",
+    "category": "Audio"
+  },
+  {
+    "id": "RedHatAI/whisper-tiny-FP8-Dynamic",
+    "name": "whisper-tiny-FP8-Dynamic",
+    "description": "Red Hat AI optimized FP8 quantized",
+    "category": "Audio"
+  },
+  {
+    "id": "RedHatAI/whisper-tiny-quantized.w4a16",
+    "name": "whisper-tiny-quantized.w4a16",
+    "description": "Red Hat AI optimized W4A16 quantized",
+    "category": "Audio"
+  },
+  {
+    "id": "RedHatAI/whisper-tiny-quantized.w8a8",
+    "name": "whisper-tiny-quantized.w8a8",
+    "description": "Red Hat AI optimized W8A8 quantized",
+    "category": "Audio"
+  },
+  {
+    "id": "RedHatAI/yi-34b-chat-marlin",
+    "name": "yi-34b-chat-marlin",
+    "description": "Red Hat AI optimized base model",
+    "category": "Other"
+  },
+  {
+    "id": "RedHatAI/zephyr-7b-beta-marlin",
+    "name": "zephyr-7b-beta-marlin",
+    "description": "Red Hat AI optimized base model",
+    "category": "Other"
+  },
+  {
+    "id": "RedHatAI/zephyr-7b-beta-pruned50-quant-ds",
+    "name": "zephyr-7b-beta-pruned50-quant-ds",
+    "description": "Red Hat AI optimized base model",
+    "category": "Other"
+  },
+  {
+    "id": "RedHatAI/zephyr-beta-7b-marlin",
+    "name": "zephyr-beta-7b-marlin",
+    "description": "Red Hat AI optimized base model",
+    "category": "Other"
+  }
+]

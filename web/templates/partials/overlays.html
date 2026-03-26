@@ -1,0 +1,103 @@
+    <!-- Charts Report Overlay -->
+    <div class="charts-overlay" id="charts-overlay">
+        <div class="charts-container">
+            <div class="charts-header">
+                <div>
+                    <h2>Optimization Report</h2>
+                    <p>Performance charts, Pareto analysis, and recommendations</p>
+                </div>
+                <button class="charts-close" id="charts-close">&#x2715; Close</button>
+            </div>
+
+            <div class="charts-run-selector">
+                <label for="chart-run-select">Optimization Run:</label>
+                <select id="chart-run-select"></select>
+                <button class="charts-close" id="chart-add-btn" style="background: #059669; border-color: #059669;">+ Add</button>
+                <button class="charts-close" id="chart-compare-btn" style="background: #6366f1; border-color: #6366f1; display: none;">Compare</button>
+                <a id="chart-download-link" style="display:none; margin-left: auto; color: #059669; font-weight: 700; text-decoration: none; white-space: nowrap;" href="#">Download HTML Report</a>
+            </div>
+
+            <div class="report-tab-bar" id="report-tab-bar" style="display:none;"></div>
+
+            <div id="charts-content">
+                <div class="charts-loading">Select a run and click + Add to view results</div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Resume Testing Overlay -->
+    <div class="resume-overlay" id="resume-overlay">
+        <div class="resume-container">
+            <div class="resume-header">
+                <div>
+                    <h2>Resume Testing</h2>
+                    <p>Select an optimization run to resume from the last completed test</p>
+                </div>
+                <button class="charts-close" id="resume-close">&#x2715; Close</button>
+            </div>
+            <div class="resume-table-wrap" id="resume-table-content">
+                <div class="resume-empty">Loading runs...</div>
+            </div>
+        </div>
+    </div>
+
+    <!-- MLflow Export Dialog -->
+    <div id="mlflow-overlay" style="display:none;position:fixed;top:0;left:0;right:0;bottom:0;z-index:9999;background:rgba(0,0,0,0.6);align-items:center;justify-content:center;">
+        <div style="width:calc(100vw - 120px);max-height:85vh;background:white;border-radius:12px;box-shadow:0 20px 60px rgba(0,0,0,0.3);overflow:hidden;display:flex;flex-direction:column;margin-left:60px;">
+            <div class="charts-header">
+                <div>
+                    <h2>🔬 MLflow Export</h2>
+                    <p>Push test results to MLflow for experiment tracking</p>
+                </div>
+                <button class="charts-close" onclick="closeMlflowDialog()">&#x2715; Close</button>
+            </div>
+            <div style="display:flex;gap:0;flex:1;overflow:hidden;">
+                <!-- Left: Config -->
+                <div style="flex:0 0 340px;padding:20px;border-right:1px solid #e2e8f0;">
+                    <h3 style="margin:0 0 12px;color:#1e293b;font-size:0.95em;">Server Configuration</h3>
+                    <div style="display:flex;flex-direction:column;gap:8px;">
+                        <div>
+                            <label style="font-size:0.8em;font-weight:600;color:#475569;">Tracking URI</label>
+                            <input type="text" id="mlflow-uri" placeholder="https://mlflow.example.com" style="width:100%;padding:7px 10px;border:1px solid #cbd5e1;border-radius:5px;margin-top:3px;font-size:0.85em;box-sizing:border-box;">
+                        </div>
+                        <div style="display:flex;gap:8px;">
+                            <div style="flex:1;">
+                                <label style="font-size:0.8em;font-weight:600;color:#475569;">Username</label>
+                                <input type="text" id="mlflow-user" placeholder="optional" style="width:100%;padding:7px 10px;border:1px solid #cbd5e1;border-radius:5px;margin-top:3px;font-size:0.85em;box-sizing:border-box;">
+                            </div>
+                            <div style="flex:1;">
+                                <label style="font-size:0.8em;font-weight:600;color:#475569;">Password</label>
+                                <input type="text" id="mlflow-pass" placeholder="optional" autocomplete="off" style="width:100%;padding:7px 10px;border:1px solid #cbd5e1;border-radius:5px;margin-top:3px;font-size:0.85em;box-sizing:border-box;-webkit-text-security:disc;">
+                            </div>
+                        </div>
+                        <div>
+                            <label style="font-size:0.8em;font-weight:600;color:#475569;">Experiment Name</label>
+                            <input type="text" id="mlflow-experiment" placeholder="serveit-studio" style="width:100%;padding:7px 10px;border:1px solid #cbd5e1;border-radius:5px;margin-top:3px;font-size:0.85em;box-sizing:border-box;">
+                        </div>
+                        <div style="display:flex;align-items:center;justify-content:space-between;">
+                            <label style="font-size:0.8em;cursor:pointer;color:#475569;display:flex;align-items:center;gap:4px;">
+                                <input type="checkbox" id="mlflow-insecure-tls" checked style="width:14px;height:14px;"> Skip TLS verification
+                            </label>
+                            <button onclick="saveMlflowConfig()" style="padding:5px 14px;background:#0ea5e9;color:white;border:none;border-radius:5px;cursor:pointer;font-weight:600;font-size:0.85em;">Save Config</button>
+                        </div>
+                    </div>
+                    <div style="margin-top:16px;">
+                        <button id="mlflow-export-btn" onclick="exportAllMlflow()" style="width:100%;padding:10px;background:#16a34a;color:white;border:none;border-radius:6px;cursor:pointer;font-weight:600;font-size:0.95em;">Export Selected to MLflow</button>
+                        <div id="mlflow-status" style="font-size:0.82em;color:#64748b;margin-top:6px;text-align:center;"></div>
+                    </div>
+                </div>
+                <!-- Right: Test list -->
+                <div style="flex:1;padding:20px;display:flex;flex-direction:column;overflow:hidden;">
+                    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;">
+                        <h3 style="margin:0;color:#1e293b;font-size:0.95em;">Runs &amp; Tests</h3>
+                        <div style="display:flex;gap:8px;align-items:center;">
+                            <label style="font-size:0.82em;cursor:pointer;color:#475569;"><input type="checkbox" id="mlflow-select-all" checked onchange="toggleMlflowAll(this.checked)"> Select All</label>
+                        </div>
+                    </div>
+                    <div id="mlflow-runs-list" style="flex:1;overflow-y:auto;border:1px solid #e2e8f0;border-radius:6px;padding:6px;background:#f8fafc;">
+                        <div style="color:#94a3b8;font-size:0.85em;padding:20px;text-align:center;">Loading runs...</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>

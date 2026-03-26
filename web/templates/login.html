@@ -1,0 +1,166 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ServeIt Studio - Login</title>
+    <link rel="icon" type="image/png" href="{{ url_for('static', filename='img/serveit-logo.png') }}">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Red+Hat+Display:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: 'Red Hat Display', sans-serif;
+            background: #F5F5F5;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            min-height: 100vh;
+        }
+        .login-card {
+            background: #fff;
+            border-radius: 12px;
+            box-shadow: 0 4px 24px rgba(0,0,0,0.10);
+            width: 400px;
+            overflow: hidden;
+        }
+        .login-header {
+            background: linear-gradient(135deg, #2A7B88, #1B5E6B);
+            padding: 40px 32px 32px;
+            text-align: center;
+        }
+        .login-header h1 { color: white; font-size: 2em; font-weight: 800; letter-spacing: -0.02em; margin-bottom: 4px; }
+        .login-header p {
+            color: #999;
+            font-size: 0.85em;
+            font-weight: 500;
+        }
+        .login-body { padding: 32px; }
+        .form-group { margin-bottom: 20px; }
+        .form-group label {
+            display: block;
+            font-weight: 700;
+            font-size: 0.8em;
+            color: #4A4A4A;
+            margin-bottom: 6px;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+        }
+        .form-group input[type=text],
+        .form-group input[type=password] {
+            width: 100%;
+            padding: 10px 14px;
+            border: 1.5px solid #E0E0E0;
+            border-radius: 8px;
+            font-size: 0.95em;
+            font-family: 'Red Hat Display', sans-serif;
+            background: #F8F8F8;
+            transition: border-color 0.15s, box-shadow 0.15s, background-color 0.15s;
+        }
+        .form-group input:hover { border-color: #CCC; }
+        .form-group input:focus {
+            outline: none;
+            border-color: #2A7B88;
+            box-shadow: 0 0 0 3px rgba(42,123,136,0.1);
+            background: white;
+        }
+        .save-options { margin-bottom: 20px; display: flex; flex-direction: column; gap: 10px; }
+        .remember {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            cursor: pointer;
+            font-size: 0.88em;
+            color: #4A4A4A;
+        }
+        .remember input { width: 16px; height: 16px; accent-color: #2A7B88; }
+        .login-button {
+            width: 100%;
+            padding: 13px;
+            background: #2A7B88;
+            color: #fff;
+            border: none;
+            border-radius: 8px;
+            font-size: 0.95em;
+            font-weight: 700;
+            font-family: 'Red Hat Display', sans-serif;
+            cursor: pointer;
+            transition: background 0.15s, transform 0.1s;
+        }
+        .login-button:hover { background: #1B5E6B; }
+        .login-button:active { transform: scale(0.98); }
+        .error-msg {
+            background: #fef2f2;
+            color: #dc2626;
+            padding: 10px 14px;
+            border-radius: 8px;
+            font-size: 0.88em;
+            font-weight: 600;
+            margin-bottom: 20px;
+            border-left: 4px solid #dc2626;
+        }
+    </style>
+</head>
+<body>
+    <div class="login-card">
+        <div class="login-header">
+            <h1>ServeIt Studio</h1>
+            <p>llm-d inference optimization</p>
+        </div>
+        <div class="login-body">
+            {% if error %}
+            <div class="error-msg">{{ error }}</div>
+            {% endif %}
+            <!-- Hidden fields to prevent Chrome password manager from detecting the real form -->
+            <div style="position:absolute;top:-9999px;left:-9999px;">
+                <input type="text" name="fake_user" tabindex="-1">
+                <input type="password" name="fake_pass" tabindex="-1">
+            </div>
+            <form method="POST" action="/login" autocomplete="off">
+                <div class="form-group">
+                    <label for="username">Username</label>
+                    <input type="text" id="username" name="username" autocomplete="off" autofocus required>
+                </div>
+                <div class="form-group">
+                    <label for="password">Password</label>
+                    <input type="password" id="password" name="password" autocomplete="new-password" required>
+                </div>
+                <div class="save-options">
+                    <label class="remember">
+                        <input type="checkbox" id="save-username" checked>
+                        <span>Save username</span>
+                    </label>
+                    <label class="remember">
+                        <input type="checkbox" id="save-password">
+                        <span>Save password</span>
+                    </label>
+                    <label class="remember">
+                        <input type="checkbox" name="remember" id="remember" checked>
+                        <span>Remember session</span>
+                    </label>
+                </div>
+                <button type="submit" class="login-button">Sign In</button>
+            </form>
+        </div>
+    </div>
+<script>
+(function() {
+    var usernameEl = document.getElementById('username');
+    var passwordEl = document.getElementById('password');
+    var saveUserEl = document.getElementById('save-username');
+    var savePassEl = document.getElementById('save-password');
+    var saved = JSON.parse(localStorage.getItem('serveit_creds') || '{}');
+    if (saved.username) { usernameEl.value = saved.username; saveUserEl.checked = true; }
+    if (saved.password) { passwordEl.value = atob(saved.password); savePassEl.checked = true; }
+    document.querySelector('form').addEventListener('submit', function() {
+        var creds = {};
+        if (saveUserEl.checked) creds.username = usernameEl.value;
+        if (savePassEl.checked) creds.password = btoa(passwordEl.value);
+        if (creds.username || creds.password) localStorage.setItem('serveit_creds', JSON.stringify(creds));
+        else localStorage.removeItem('serveit_creds');
+    });
+})();
+</script>
+</body>
+</html>

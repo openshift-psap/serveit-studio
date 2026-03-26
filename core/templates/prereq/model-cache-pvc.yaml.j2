@@ -1,0 +1,18 @@
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: {{ pvc_name | default('serveit-cache') }}
+  namespace: {{ namespace }}
+  labels:
+    app: llm-d
+    component: serveit-benchmark
+    test-id: {{ test_id }}
+  annotations:
+    description: "Model cache PVC for ServeIt Studio benchmark - {{ model_name }}"
+spec:
+  accessModes:
+    - {{ pvc_access_mode | default('ReadWriteMany') }}
+  storageClassName: {{ storage_class }}
+  resources:
+    requests:
+      storage: {{ storage_size }}Gi

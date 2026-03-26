@@ -1,0 +1,73 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ name }}
+  namespace: {{ namespace }}
+  labels:
+    app: {{ name }}
+spec:
+  replicas: 1
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      app: {{ name }}
+  template:
+    metadata:
+      labels:
+        app: {{ name }}
+    spec:
+      serviceAccountName: default
+      volumes:
+        - name: storage-volume
+          persistentVolumeClaim:
+            claimName: {{ pvc_name }}
+        - name: tmp-mem
+          emptyDir:
+            medium: Memory
+            sizeLimit: 4Gi
+      containers:
+        - name: runner
+          image: {{ image }}
+          imagePullPolicy: Always
+          command: ["/usr/local/bin/entrypoint.sh"]
+          env:
+            - name: INFTUNE_PATH
+              value: "/mnt/storage/app"
+            - name: HOME
+              value: "/mnt/storage"
+            - name: OPTIMIZATION_OUTPUT_DIR
+              value: "/mnt/storage/optimization-runs"
+            - name: HOME_STORAGE_DIR
+              value: "/mnt/storage"
+            - name: TARGET_NAMESPACE
+              value: "{{ namespace }}"
+            - name: METRIC_STEP_SECONDS
+              value: "5"
+            - name: DB_PATH
+              value: "/mnt/storage/serveit.db"
+            - name: INFTUNE_FORCE_NAD
+              value: "{{ force_nad }}"
+            - name: DEV_MODE
+              value: "{{ dev_mode }}"
+{% if serveit_mode is defined and serveit_mode %}
+            - name: INFTUNE_MODE
+              value: "{{ serveit_mode }}"
+{% endif %}
+            - name: HF_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: serveit-optimizer-hf-token
+                  key: HF_TOKEN
+                  optional: true
+          volumeMounts:
+            - name: storage-volume
+              mountPath: /mnt/storage
+            - name: tmp-mem
+              mountPath: /tmp
+          ports:
+            - containerPort: 5000
+          resources:
+            requests:
+              memory: "2Gi"
+              cpu: "1000m"

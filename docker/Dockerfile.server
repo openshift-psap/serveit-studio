@@ -1,0 +1,72 @@
+# inftune-server — Web UI, launcher, optimization orchestration
+# No guidellm, no heavy ML libs. Just the control plane.
+# Code is bundled at /app as fallback; runtime clones to PVC for live updates.
+FROM registry.access.redhat.com/ubi9/ubi:9.4
+ENV LANG="C.UTF-8" LC_ALL="C.UTF-8" PYTHONUNBUFFERED=1
+
+# Base system tools
+RUN \
+    dnf install -y https://dl.fedoraproject.org/pub/epel/epel-release-latest-$(rpm -E %{rhel}).noarch.rpm && \
+    dnf install -y \
+        python3.11 python3.11-devel \
+        procps git jq wget vim \
+        openssh-clients \
+        iputils net-tools bind-utils \
+    && \
+    python3.11 -m ensurepip --upgrade && \
+    python3.11 -m pip install --upgrade pip setuptools --no-cache-dir && \
+    dnf clean all && rm -rf /var/cache/dnf/* && \
+    ln -sf /usr/bin/python3.11 /usr/bin/python3 && \
+    ln -sf /usr/bin/python3.11 /usr/bin/python && \
+    ln -sf /usr/bin/pip3.11 /usr/bin/pip3 && \
+    ln -sf /usr/bin/pip3.11 /usr/bin/pip
+
+# Python deps — server only (no guidellm, no torch)
+RUN python3.11 -m pip install --no-cache-dir \
+    Flask \
+    Flask-SocketIO \
+    gevent \
+    gevent-websocket \
+    Jinja2 \
+    PyYAML \
+    requests \
+    httpx \
+    openai \
+    optuna \
+    kubernetes \
+    plotly \
+    pandas \
+    werkzeug \
+    transformers \
+    mlflow
+
+# kubectl + oc (multi-arch)
+RUN KUBECTL_VERSION="1.30.2" && \
+    ARCH=$(uname -m | sed 's/x86_64/amd64/;s/aarch64/arm64/') && \
+    curl -sLo /usr/local/bin/kubectl \
+        "https://dl.k8s.io/release/v${KUBECTL_VERSION}/bin/linux/${ARCH}/kubectl" && \
+    chmod +x /usr/local/bin/kubectl && \
+    if [ "$ARCH" = "amd64" ]; then \
+        curl -sLo /tmp/oc.tar.gz \
+            "https://mirror.openshift.com/pub/openshift-v4/clients/ocp/stable/openshift-client-linux.tar.gz" && \
+        tar xzf /tmp/oc.tar.gz -C /usr/local/bin oc && \
+        rm -f /tmp/oc.tar.gz; \
+    elif [ "$ARCH" = "arm64" ]; then \
+        curl -sLo /tmp/oc.tar.gz \
+            "https://mirror.openshift.com/pub/openshift-v4/clients/ocp/stable/openshift-client-linux-arm64.tar.gz" && \
+        tar xzf /tmp/oc.tar.gz -C /usr/local/bin oc && \
+        rm -f /tmp/oc.tar.gz; \
+    fi
+
+# Bundle source code as fallback (used when git clone fails)
+COPY core/ /app/core/
+COPY web/ /app/web/
+COPY launcher/ /app/launcher/
+COPY deployment/ /app/deployment/
+COPY docker/scripts/ /app/scripts/
+COPY cli/ /app/cli/
+
+COPY docker/entrypoint.sh /usr/local/bin/entrypoint.sh
+RUN chmod +x /usr/local/bin/entrypoint.sh
+EXPOSE 5000
+CMD ["/usr/local/bin/entrypoint.sh"]

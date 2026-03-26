@@ -1,0 +1,1532 @@
+"""Instance lifecycle management — create, delete, list ServeIt Studio instances.
+
+UI pods live in the shared launcher namespace (e.g. 'serveit').
+Workloads (LWS, guidellm, EPP) get their own per-instance namespace.
+Instances are organized into clusters (local or remote).
+"""
+
+import json
+import logging
+import os
+import re
+import subprocess
+import threading
+import time
+from concurrent.futures import ThreadPoolExecutor, as_completed
+from datetime import datetime
+from pathlib import Path
+from typing import List, Dict
+
+logger = logging.getLogger(__name__)
+
+from launcher.database import get_db
+
+TEMPLATES_DIR = Path(__file__).parent.parent / 'deployment' / 'templates'
+
+
+def _kubectl(args: list, input_data: str = None, proxy: str = None) -> subprocess.CompletedProcess:
+    env = None
+    if proxy:
+        env = os.environ.copy()
+        env['HTTPS_PROXY'] = proxy
+        env['https_proxy'] = proxy
+    return subprocess.run(['kubectl'] + args, input=input_data, capture_output=True, text=True, timeout=60, env=env)
+
+
+_is_oc_cached = None
+
+
+def _is_oc() -> bool:
+    global _is_oc_cached
+    if _is_oc_cached is not None:
+        return _is_oc_cached
+    try:
+        r = subprocess.run(['kubectl', 'api-resources', '--api-group=route.openshift.io'],
+                          capture_output=True, text=True, timeout=10)
+        _is_oc_cached = r.returncode == 0 and 'Route' in r.stdout
+    except (FileNotFoundError, subprocess.TimeoutExpired):
+        _is_oc_cached = False
+    return _is_oc_cached
+
+
+def _render(template_name: str, **ctx) -> str:
+    try:
+        from jinja2 import Environment, FileSystemLoader
+        env = Environment(loader=FileSystemLoader(str(TEMPLATES_DIR)), keep_trailing_newline=True)
+        return env.get_template(template_name).render(**ctx)
+    except ImportError:
+        content = (TEMPLATES_DIR / template_name).read_text()
+        for k, v in ctx.items():
+            content = content.replace('{{ ' + k + ' }}', str(v))
+        return content
+
+
+def _sanitize(name: str) -> str:
+    s = re.sub(r'[^a-z0-9-]', '-', name.lower())
+    s = re.sub(r'-+', '-', s).strip('-')[:40].strip('-')
+    return s or 'unnamed'
+
+
+def _validate_kubeconfig(kubeconfig_data: str, proxy: str = None, api_server_ip: str = None) -> tuple:
+    """Validate kubeconfig connectivity and return (cluster_url, cleaned_kubeconfig).
+
+    Tests each context in the kubeconfig to find one that connects to a
+    remote cluster (not the launcher's own cluster). Sets it as current-context
+    so the stored Secret always uses the correct context.
+    """
+    import yaml
+    try:
+        kc = yaml.safe_load(kubeconfig_data)
+    except Exception:
+        kc = None
+
+    # Detect the launcher's own cluster URL to exclude it
+    local_server = None
+    try:
+        r = subprocess.run(['kubectl', 'cluster-info'], capture_output=True, text=True, timeout=10)
+        if r.returncode == 0:
+            for line in r.stdout.split('\n'):
+                if 'is running at' in line:
+                    local_server = line.split('is running at')[-1].strip().split()[0]
+                    # Strip ANSI color codes
+                    import re
+                    local_server = re.sub(r'\x1b\[[0-9;]*m', '', local_server).strip()
+                    break
+    except Exception:
+        pass
+
+    target = None
+
+    if kc:
+        # Build a map of cluster name → server URL
+        cluster_servers = {}
+        for cl in kc.get('clusters', []):
+            cluster_servers[cl.get('name', '')] = cl.get('cluster', {}).get('server', '')
+
+        # Find the first context pointing to a non-local cluster
+        for ctx in kc.get('contexts', []):
+            ctx_cluster = ctx.get('context', {}).get('cluster', '')
+            server = cluster_servers.get(ctx_cluster, '')
+            if not server:
+                continue
+            # Skip if it's the launcher's own cluster
+            if local_server and server.rstrip('/') == local_server.rstrip('/'):
+                continue
+            # Found a remote cluster context
+            kc['current-context'] = ctx.get('name')
+            target = server
+            kubeconfig_data = yaml.dump(kc, default_flow_style=False)
+            break
+
+    if not target:
+        target = 'remote'
+
+    import tempfile
+
+    def _try_connect(kc_data, env=None):
+        with tempfile.NamedTemporaryFile(mode='w', suffix='.kubeconfig', delete=False) as tmp:
+            tmp.write(kc_data)
+            tmp_path = tmp.name
+        try:
+            return subprocess.run(
+                ['kubectl', '--kubeconfig', tmp_path, 'cluster-info'],
+                capture_output=True, text=True, timeout=15, env=env
+            )
+        finally:
+            os.unlink(tmp_path)
+
+    env = None
+    if proxy:
+        env = os.environ.copy()
+        env['HTTPS_PROXY'] = proxy
+        env['https_proxy'] = proxy
+
+    if api_server_ip:
+        rewritten = _rewrite_kubeconfig_ip(kubeconfig_data, api_server_ip)
+        if rewritten:
+            kubeconfig_data = rewritten
+
+    try:
+        r = _try_connect(kubeconfig_data, env)
+    except subprocess.TimeoutExpired:
+        raise RuntimeError(
+            f"Connection to {target} timed out. "
+            f"Verify the cluster is reachable from this network."
+            f"{' Try adding an HTTPS proxy.' if not proxy else ''}")
+
+    if r.returncode != 0 and 'lookup' in r.stderr.lower():
+        rewritten = _rewrite_kubeconfig_dns(kubeconfig_data)
+        if rewritten:
+            try:
+                r2 = _try_connect(rewritten, env)
+                if r2.returncode == 0:
+                    kubeconfig_data = rewritten
+                    r = r2
+            except subprocess.TimeoutExpired:
+                pass
+
+    if r.returncode != 0:
+        is_dns = 'lookup' in r.stderr.lower()
+        hint = (" The API hostname doesn't resolve from this network."
+                " Add the API server IP in the cluster settings." if is_dns else "")
+        raise RuntimeError(
+            f"Cannot connect to cluster {target}.{hint}\n"
+            f"Error: {r.stderr.strip()[:200]}")
+
+    return target, kubeconfig_data
+
+
+def _rewrite_kubeconfig_ip(kubeconfig_data: str, ip: str) -> str:
+    """Rewrite kubeconfig server URLs to use a specific IP."""
+    import yaml
+    from urllib.parse import urlparse
+    try:
+        kc = yaml.safe_load(kubeconfig_data)
+    except Exception:
+        return None
+    for cl in kc.get('clusters', []):
+        server = cl.get('cluster', {}).get('server', '')
+        if not server:
+            continue
+        parsed = urlparse(server)
+        port = parsed.port or 6443
+        cl['cluster']['server'] = f"https://{ip}:{port}"
+        cl['cluster']['insecure-skip-tls-verify'] = True
+        cl['cluster'].pop('certificate-authority-data', None)
+    return yaml.dump(kc, default_flow_style=False)
+
+
+def _rewrite_kubeconfig_dns(kubeconfig_data: str) -> str:
+    """Rewrite kubeconfig hostnames to IPs when DNS doesn't resolve.
+
+    Extracts the API server hostname, resolves it to an IP using
+    alternative methods (system resolver, dig with external DNS),
+    and rewrites the kubeconfig with the IP and insecure-skip-tls-verify.
+    """
+    import yaml, socket
+    from urllib.parse import urlparse
+
+    try:
+        kc = yaml.safe_load(kubeconfig_data)
+    except Exception:
+        return None
+
+    changed = False
+    for cl in kc.get('clusters', []):
+        server = cl.get('cluster', {}).get('server', '')
+        if not server:
+            continue
+        parsed = urlparse(server)
+        hostname = parsed.hostname
+        if not hostname:
+            continue
+
+        ip = None
+        try:
+            ip = socket.gethostbyname(hostname)
+        except socket.gaierror:
+            for cmd in [
+                ['dig', '+short', hostname],
+                ['dig', '+short', hostname, '@8.8.8.8'],
+                ['nslookup', hostname, '8.8.8.8'],
+            ]:
+                try:
+                    r = subprocess.run(cmd, capture_output=True, text=True, timeout=5)
+                    if r.returncode == 0:
+                        for line in r.stdout.strip().split('\n'):
+                            line = line.strip()
+                            if line and line[0].isdigit() and '.' in line:
+                                ip = line.split()[-1]
+                                break
+                    if ip:
+                        break
+                except Exception:
+                    continue
+
+        if ip and ip != hostname:
+            port = parsed.port or 6443
+            cl['cluster']['server'] = f"https://{ip}:{port}"
+            cl['cluster']['insecure-skip-tls-verify'] = True
+            cl['cluster'].pop('certificate-authority-data', None)
+            changed = True
+
+    if changed:
+        return yaml.dump(kc, default_flow_style=False)
+    return None
+
+
+# ── Cluster CRUD ─────────────────────────────────────────────────────────────
+
+def create_cluster(owner_id: int, name: str, icon: str = '🖥️',
+                   namespace: str = 'serveit',
+                   kubeconfig_data: str = None,
+                   storage_class: str = None,
+                   proxy: str = None,
+                   api_server_ip: str = None,
+                   description: str = None) -> Dict:
+    """Create a cluster entry. If kubeconfig is provided, validates it and stores as K8s Secret."""
+    target_cluster = 'local'
+    kubeconfig_secret = None
+
+    if kubeconfig_data:
+        target_cluster, kubeconfig_data = _validate_kubeconfig(kubeconfig_data, proxy=proxy, api_server_ip=api_server_ip)
+
+        # Check duplicate cluster URL
+        with get_db() as conn:
+            existing = conn.execute(
+                'SELECT id, name FROM clusters WHERE owner_id = ? AND target_cluster = ?',
+                (owner_id, target_cluster)
+            ).fetchone()
+            if existing:
+                raise RuntimeError(f'You already have a cluster "{existing["name"]}" targeting {target_cluster}')
+
+        with get_db() as conn:
+            user_row = conn.execute('SELECT username FROM users WHERE id = ?', (owner_id,)).fetchone()
+        owner_name = _sanitize(user_row['username']) if user_row else str(owner_id)
+        safe = _sanitize(name)
+        kubeconfig_secret = f"serveit-kubeconfig-{owner_name}-{safe}"
+        secret_yaml = json.dumps({
+            "apiVersion": "v1", "kind": "Secret",
+            "metadata": {"name": kubeconfig_secret, "namespace": namespace},
+            "type": "Opaque",
+            "stringData": {"kubeconfig": kubeconfig_data}
+        })
+        r = _kubectl(['apply', '-f', '-', '-n', namespace], input_data=secret_yaml)
+        if r.returncode != 0:
+            raise RuntimeError(f"Failed to create kubeconfig Secret: {r.stderr}")
+    else:
+        # Check: only one local cluster per user
+        with get_db() as conn:
+            existing = conn.execute(
+                "SELECT id FROM clusters WHERE owner_id = ? AND target_cluster = 'local'",
+                (owner_id,)
+            ).fetchone()
+            if existing:
+                raise RuntimeError('You already have a local cluster')
+
+    with get_db() as conn:
+        conn.execute(
+            "INSERT INTO clusters (name, icon, owner_id, kubeconfig_secret, target_cluster, storage_class, proxy, description, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
+            (name, icon, owner_id, kubeconfig_secret, target_cluster, storage_class, proxy or None, description or None, datetime.now().isoformat())
+        )
+        cid = conn.execute('SELECT last_insert_rowid()').fetchone()[0]
+
+    return {'id': cid, 'name': name, 'icon': icon, 'target_cluster': target_cluster}
+
+
+def delete_cluster(cluster_id: int, owner_id: int, is_admin: bool = False) -> bool:
+    with get_db() as conn:
+        if is_admin:
+            row = conn.execute(
+                'SELECT * FROM clusters WHERE id = ?', (cluster_id,)
+            ).fetchone()
+        else:
+            row = conn.execute(
+                'SELECT * FROM clusters WHERE id = ? AND owner_id = ?',
+                (cluster_id, owner_id)
+            ).fetchone()
+        if not row:
+            return False
+        row = dict(row)
+        instances = conn.execute(
+            'SELECT id FROM instances WHERE cluster_id = ?',
+            (cluster_id,)
+        ).fetchall()
+
+    # Delete instances — the async threads handle k8s cleanup, but we need
+    # the DB rows gone before deleting the cluster (foreign key constraint)
+    for inst in instances:
+        delete_instance(inst['id'], row['owner_id'])
+
+    # Wait for instance rows to be deleted (async threads do DB cleanup in finally block)
+    for _ in range(60):
+        with get_db() as conn:
+            remaining = conn.execute(
+                'SELECT COUNT(*) as cnt FROM instances WHERE cluster_id = ?', (cluster_id,)
+            ).fetchone()['cnt']
+        if remaining == 0:
+            break
+        time.sleep(1)
+
+    # Delete kubeconfig secret if it exists
+    if row.get('kubeconfig_secret'):
+        _kubectl(['delete', 'secret', row['kubeconfig_secret'], '-n', 'serveit', '--ignore-not-found=true'])
+
+    with get_db() as conn:
+        # Force-delete any remaining instance rows (in case async threads timed out)
+        conn.execute('DELETE FROM instances WHERE cluster_id = ?', (cluster_id,))
+        conn.execute('DELETE FROM clusters WHERE id = ?', (cluster_id,))
+    return True
+
+
+def list_clusters(owner_id: int) -> List[Dict]:
+    with get_db() as conn:
+        rows = conn.execute('''
+            SELECT c.*,
+                   COUNT(DISTINCT CASE WHEN i.owner_id = ? OR ia.user_id IS NOT NULL THEN i.id END) as instance_count,
+                   CASE WHEN c.owner_id = ? THEN 1 ELSE 0 END as is_cluster_owner
+            FROM clusters c
+            LEFT JOIN instances i ON c.id = i.cluster_id
+            LEFT JOIN instance_access ia ON i.id = ia.instance_id AND ia.user_id = ?
+            WHERE c.owner_id = ?
+               OR c.id IN (
+                   SELECT i2.cluster_id FROM instances i2
+                   JOIN instance_access ia2 ON i2.id = ia2.instance_id
+                   WHERE ia2.user_id = ?
+               )
+            GROUP BY c.id ORDER BY c.created_at
+        ''', (owner_id, owner_id, owner_id, owner_id, owner_id)).fetchall()
+    return [dict(r) for r in rows]
+
+
+def update_cluster(cluster_id: int, owner_id: int, name: str = None, icon: str = None, description: str = None) -> bool:
+    with get_db() as conn:
+        row = conn.execute(
+            'SELECT id FROM clusters WHERE id = ? AND owner_id = ?',
+            (cluster_id, owner_id)
+        ).fetchone()
+        if not row:
+            return False
+        if name is not None:
+            conn.execute('UPDATE clusters SET name = ? WHERE id = ?', (name, cluster_id))
+        if icon is not None:
+            conn.execute('UPDATE clusters SET icon = ? WHERE id = ?', (icon, cluster_id))
+        if description is not None:
+            conn.execute('UPDATE clusters SET description = ? WHERE id = ?', (description, cluster_id))
+    return True
+
+
+def _seed_instance_user(deployment_name: str, namespace: str, username: str, password_hash: str):
+    """Seed user credentials into instance DB. Retries until pod is Running and exec succeeds."""
+    import base64
+
+    b64user = base64.b64encode(username.encode()).decode()
+    b64hash = base64.b64encode(password_hash.encode()).decode()
+    seed_script = (
+        "import sqlite3,os,base64;"
+        f"u=base64.b64decode('{b64user}').decode();"
+        f"h=base64.b64decode('{b64hash}').decode();"
+        "db=os.environ.get('DB_PATH','/mnt/storage/serveit.db');"
+        "c=sqlite3.connect(db);"
+        "c.execute('CREATE TABLE IF NOT EXISTS users (id INTEGER PRIMARY KEY AUTOINCREMENT, username TEXT UNIQUE NOT NULL, password_hash TEXT NOT NULL, created_at TEXT NOT NULL)');"
+        "c.execute('INSERT OR IGNORE INTO users (username, password_hash, created_at) VALUES (?, ?, datetime(\"now\"))',(u,h));"
+        "c.commit();c.close()"
+    )
+
+    for attempt in range(90):
+        r = _kubectl(['get', 'pod', '-l', f'app={deployment_name}', '-n', namespace,
+                      '-o', 'jsonpath={.items[0].status.phase}'])
+        if r.stdout.strip() != 'Running':
+            time.sleep(3)
+            continue
+
+        # Wait for server to be ready (port 5000) before seeding
+        r = _kubectl(['exec', '-n', namespace, f'deploy/{deployment_name}', '--',
+                      'python3', '-c',
+                      "import socket;s=socket.socket();s.settimeout(1);s.connect(('127.0.0.1',5000));s.close()"])
+        if r.returncode != 0:
+            time.sleep(3)
+            continue
+
+        r = _kubectl(['exec', '-n', namespace, f'deploy/{deployment_name}', '--',
+                      'python3', '-c', seed_script])
+        if r.returncode == 0:
+            return
+        time.sleep(2)
+
+
+# ── User Management (admin) ──────────────────────────────────────────────────
+
+def list_users() -> List[Dict]:
+    with get_db() as conn:
+        rows = conn.execute('''
+            SELECT u.id, u.username, u.is_admin, u.created_at,
+                   COUNT(DISTINCT c.id) as cluster_count,
+                   COUNT(DISTINCT i.id) as instance_count,
+                   COUNT(DISTINCT ia.instance_id) as assigned_count
+            FROM users u
+            LEFT JOIN clusters c ON u.id = c.owner_id
+            LEFT JOIN instances i ON u.id = i.owner_id
+            LEFT JOIN instance_access ia ON u.id = ia.user_id
+            GROUP BY u.id ORDER BY u.created_at
+        ''').fetchall()
+    return [dict(r) for r in rows]
+
+
+def delete_user(user_id: int) -> bool:
+    with get_db() as conn:
+        row = conn.execute('SELECT id, is_admin FROM users WHERE id = ?', (user_id,)).fetchone()
+        if not row:
+            return False
+        if row['is_admin']:
+            return False
+        clusters = conn.execute('SELECT id FROM clusters WHERE owner_id = ?', (user_id,)).fetchall()
+
+    for c in clusters:
+        delete_cluster(c['id'], user_id)
+
+    with get_db() as conn:
+        conn.execute('DELETE FROM users WHERE id = ?', (user_id,))
+    return True
+
+
+# ── Instance Access (assignment) ─────────────────────────────────────────────
+
+def list_instance_users(instance_id: int) -> List[Dict]:
+    with get_db() as conn:
+        rows = conn.execute('''
+            SELECT u.id, u.username, ia.granted_at
+            FROM instance_access ia
+            JOIN users u ON ia.user_id = u.id
+            WHERE ia.instance_id = ?
+            ORDER BY ia.granted_at
+        ''', (instance_id,)).fetchall()
+    return [dict(r) for r in rows]
+
+
+def assign_instance_user(instance_id: int, user_id: int, granted_by: int) -> bool:
+    with get_db() as conn:
+        inst = conn.execute('SELECT owner_id FROM instances WHERE id = ?', (instance_id,)).fetchone()
+        if not inst:
+            return False
+        if inst['owner_id'] == user_id:
+            return False
+        try:
+            conn.execute(
+                'INSERT INTO instance_access (user_id, instance_id, granted_at, granted_by) VALUES (?, ?, ?, ?)',
+                (user_id, instance_id, datetime.now().isoformat(), granted_by)
+            )
+            return True
+        except Exception:
+            return False
+
+
+def revoke_instance_user(instance_id: int, user_id: int) -> bool:
+    with get_db() as conn:
+        cursor = conn.execute(
+            'DELETE FROM instance_access WHERE user_id = ? AND instance_id = ?',
+            (user_id, instance_id)
+        )
+        return cursor.rowcount > 0
+
+
+def get_user_assigned_instances(user_id: int) -> List[Dict]:
+    with get_db() as conn:
+        rows = conn.execute('''
+            SELECT i.id, i.name, i.display_name, i.status,
+                   c.name as cluster_name, c.icon as cluster_icon,
+                   u.username as owner_name, ia.granted_at
+            FROM instance_access ia
+            JOIN instances i ON ia.instance_id = i.id
+            JOIN clusters c ON i.cluster_id = c.id
+            JOIN users u ON i.owner_id = u.id
+            WHERE ia.user_id = ?
+            ORDER BY ia.granted_at DESC
+        ''', (user_id,)).fetchall()
+    return [dict(r) for r in rows]
+
+
+# ── Instance CRUD ───────────────────────────────────────────────────────────
+
+def create_instance(owner_id: int, username: str, name: str,
+                    cluster_id: int = None,
+                    namespace: str = 'serveit',
+                    image: str = 'quay.io/bbenshab/serveit-studio:server',
+                    password_hash: str = None,
+                    preset_gpus: int = None,
+                    preset_nodes: list = None,
+                    storage_size: int = None,
+                    storage_class_override: str = None) -> Dict:
+    """Create an instance. Kubeconfig and storage class come from the cluster."""
+
+    # Look up cluster for kubeconfig and storage class
+    kubeconfig_secret = None
+    target_cluster = 'local'
+    storage_class = None
+    kubeconfig_data = None
+
+    if cluster_id:
+        with get_db() as conn:
+            cluster = conn.execute('SELECT * FROM clusters WHERE id = ?', (cluster_id,)).fetchone()
+            if cluster:
+                cluster = dict(cluster)
+                kubeconfig_secret = cluster.get('kubeconfig_secret')
+                target_cluster = cluster.get('target_cluster', 'local')
+                storage_class = cluster.get('storage_class')
+                # Retrieve kubeconfig data from K8s secret if needed for remote setup
+                if kubeconfig_secret:
+                    import base64
+                    r = _kubectl(['get', 'secret', kubeconfig_secret, '-n', namespace,
+                                  '-o', 'jsonpath={.data.kubeconfig}'])
+                    if r.returncode == 0 and r.stdout.strip():
+                        try:
+                            kubeconfig_data = base64.b64decode(r.stdout.strip()).decode()
+                        except Exception:
+                            pass
+
+    # Include cluster name in resource names to avoid collisions across clusters
+    cluster_suffix = ''
+    if cluster_id:
+        with get_db() as conn:
+            cr = conn.execute('SELECT name FROM clusters WHERE id = ?', (cluster_id,)).fetchone()
+            if cr:
+                cluster_suffix = f"-{_sanitize(cr['name'])}"
+    safe_name = _sanitize(f"{username}-{name}{cluster_suffix}")
+    workload_namespace = f"serveit-{safe_name}"
+    deployment_name = f"serveit-{safe_name}"
+    pvc_name = f"serveit-{safe_name}-storage"
+    service_name = f"serveit-{safe_name}-ui"
+
+    # Set up remote workload namespace if remote cluster
+    cluster_proxy = cluster.get('proxy') if cluster_id and cluster else None
+    if kubeconfig_data:
+        import tempfile
+        with tempfile.NamedTemporaryFile(mode='w', suffix='.kubeconfig', delete=False) as tmp:
+            tmp.write(kubeconfig_data)
+            tmp_path = tmp.name
+        try:
+            def _remote(args, input=None):
+                env = None
+                if cluster_proxy:
+                    env = os.environ.copy()
+                    env['HTTPS_PROXY'] = cluster_proxy
+                    env['https_proxy'] = cluster_proxy
+                return subprocess.run(['kubectl', '--kubeconfig', tmp_path] + args,
+                                      input=input, capture_output=True, text=True, timeout=30, env=env)
+
+            r = _remote(['get', 'namespace', workload_namespace])
+            if r.returncode != 0:
+                r2 = _remote(['create', 'namespace', workload_namespace])
+                if r2.returncode != 0:
+                    raise RuntimeError(
+                        f"Failed to create namespace '{workload_namespace}' on remote cluster: {r2.stderr.strip()[:200]}")
+
+            r = _remote(['api-resources', '--api-group=route.openshift.io'])
+            remote_is_openshift = r.returncode == 0 and 'Route' in r.stdout
+
+            if remote_is_openshift:
+                prom_yaml = json.dumps({
+                    "apiVersion": "rbac.authorization.k8s.io/v1",
+                    "kind": "ClusterRoleBinding",
+                    "metadata": {"name": f"serveit-prometheus-{safe_name}"},
+                    "subjects": [{"kind": "ServiceAccount", "name": "default",
+                                  "namespace": workload_namespace}],
+                    "roleRef": {"kind": "ClusterRole", "name": "prometheus-k8s",
+                                "apiGroup": "rbac.authorization.k8s.io"}
+                })
+                _remote(['apply', '-f', '-'], input=prom_yaml)
+
+                # Create SCC for modelserver (allows IPC_LOCK, SYS_RAWIO, runAsUser:0)
+                scc_name = f"llm-d-modelserver-scc-{workload_namespace}"
+                scc_check = _remote(['get', 'scc', scc_name])
+                if scc_check.returncode != 0:
+                    scc_yaml = json.dumps({
+                        "apiVersion": "security.openshift.io/v1",
+                        "kind": "SecurityContextConstraints",
+                        "metadata": {"name": scc_name},
+                        "allowHostDirVolumePlugin": True,
+                        "allowHostIPC": False,
+                        "allowHostNetwork": False,
+                        "allowHostPID": False,
+                        "allowHostPorts": False,
+                        "allowPrivilegedContainer": True,
+                        "allowedCapabilities": ["IPC_LOCK", "SYS_RAWIO", "SYS_RESOURCE"],
+                        "fsGroup": {"type": "RunAsAny"},
+                        "runAsUser": {"type": "RunAsAny"},
+                        "seLinuxContext": {"type": "RunAsAny"},
+                        "supplementalGroups": {"type": "RunAsAny"},
+                        "users": [f"system:serviceaccount:{workload_namespace}:llm-d-modelserver"],
+                        "volumes": ["*"]
+                    })
+                    r_scc = _remote(['apply', '-f', '-'], input=scc_yaml)
+                    if r_scc.returncode == 0:
+                        logger.info(f"Created SCC {scc_name} for modelserver")
+
+            remote_rbac = json.dumps({
+                "apiVersion": "v1", "kind": "List", "items": [
+                    {"apiVersion": "rbac.authorization.k8s.io/v1", "kind": "Role",
+                     "metadata": {"name": "serveit-full-access", "namespace": workload_namespace},
+                     "rules": [
+                         {"apiGroups": [""], "resources": ["pods", "pods/log", "pods/exec", "services",
+                          "persistentvolumeclaims", "serviceaccounts", "configmaps", "secrets"],
+                          "verbs": ["get", "list", "create", "delete", "patch", "watch"]},
+                         {"apiGroups": ["apps"], "resources": ["deployments", "statefulsets"],
+                          "verbs": ["get", "list", "create", "delete", "patch", "update"]},
+                         {"apiGroups": ["batch"], "resources": ["jobs"],
+                          "verbs": ["get", "list", "create", "delete", "patch", "watch"]},
+                         {"apiGroups": ["leaderworkerset.x-k8s.io"], "resources": ["leaderworkersets"],
+                          "verbs": ["get", "list", "create", "delete", "patch", "update"]},
+                         {"apiGroups": ["rbac.authorization.k8s.io"], "resources": ["roles", "rolebindings"],
+                          "verbs": ["get", "list", "create", "delete", "patch"]},
+                         {"apiGroups": ["inference.networking.k8s.io"], "resources": ["inferencepools"],
+                          "verbs": ["get", "list", "create", "delete", "patch", "watch"]},
+                         {"apiGroups": ["gateway.networking.k8s.io"], "resources": ["gateways", "httproutes"],
+                          "verbs": ["get", "list", "create", "delete", "patch"]},
+                         {"apiGroups": ["networking.istio.io"], "resources": ["destinationrules"],
+                          "verbs": ["get", "list", "create", "delete", "patch"]},
+                         {"apiGroups": ["resource.k8s.io"], "resources": ["resourceclaimtemplates", "resourceclaims"],
+                          "verbs": ["get", "list", "create", "delete", "patch", "update"]},
+                         {"apiGroups": [""], "resources": ["endpoints"],
+                          "verbs": ["get", "list"]},
+                         {"apiGroups": ["monitoring.coreos.com"], "resources": ["podmonitors", "servicemonitors"],
+                          "verbs": ["get", "list", "create", "delete", "patch"]},
+                     ]},
+                    {"apiVersion": "rbac.authorization.k8s.io/v1", "kind": "RoleBinding",
+                     "metadata": {"name": "serveit-access", "namespace": workload_namespace},
+                     "subjects": [{"kind": "ServiceAccount", "name": "default", "namespace": workload_namespace}],
+                     "roleRef": {"kind": "Role", "name": "serveit-full-access",
+                                 "apiGroup": "rbac.authorization.k8s.io"}},
+                ]
+            })
+            _remote(['apply', '-f', '-'], input=remote_rbac)
+        finally:
+            os.unlink(tmp_path)
+    else:
+        # Local cluster: create workload namespace and RBAC using launcher's kubectl
+        _kubectl(['apply', '-f', '-'], input_data=json.dumps({
+            "apiVersion": "v1", "kind": "Namespace",
+            "metadata": {"name": workload_namespace}
+        }))
+        local_rbac = json.dumps({
+            "apiVersion": "v1", "kind": "List", "items": [
+                {"apiVersion": "rbac.authorization.k8s.io/v1", "kind": "Role",
+                 "metadata": {"name": "serveit-full-access", "namespace": workload_namespace},
+                 "rules": [
+                     {"apiGroups": [""], "resources": ["pods", "pods/log", "pods/exec", "services",
+                      "persistentvolumeclaims", "serviceaccounts", "configmaps", "secrets"],
+                      "verbs": ["get", "list", "create", "delete", "patch", "watch"]},
+                     {"apiGroups": ["apps"], "resources": ["deployments", "statefulsets"],
+                      "verbs": ["get", "list", "create", "delete", "patch", "update"]},
+                     {"apiGroups": ["batch"], "resources": ["jobs"],
+                      "verbs": ["get", "list", "create", "delete", "patch", "watch"]},
+                     {"apiGroups": ["leaderworkerset.x-k8s.io"], "resources": ["leaderworkersets"],
+                      "verbs": ["get", "list", "create", "delete", "patch", "update"]},
+                     {"apiGroups": ["rbac.authorization.k8s.io"], "resources": ["roles", "rolebindings"],
+                      "verbs": ["get", "list", "create", "delete", "patch"]},
+                     {"apiGroups": ["inference.networking.k8s.io"], "resources": ["inferencepools"],
+                      "verbs": ["get", "list", "create", "delete", "patch", "watch"]},
+                     {"apiGroups": ["gateway.networking.k8s.io"], "resources": ["gateways", "httproutes"],
+                      "verbs": ["get", "list", "create", "delete", "patch"]},
+                     {"apiGroups": ["networking.istio.io"], "resources": ["destinationrules"],
+                      "verbs": ["get", "list", "create", "delete", "patch"]},
+                     {"apiGroups": ["resource.k8s.io"], "resources": ["resourceclaimtemplates", "resourceclaims"],
+                      "verbs": ["get", "list", "create", "delete", "patch", "update"]},
+                 ]},
+                {"apiVersion": "rbac.authorization.k8s.io/v1", "kind": "RoleBinding",
+                 "metadata": {"name": "serveit-access", "namespace": workload_namespace},
+                 "subjects": [{"kind": "ServiceAccount", "name": "default", "namespace": namespace}],
+                 "roleRef": {"kind": "Role", "name": "serveit-full-access",
+                             "apiGroup": "rbac.authorization.k8s.io"}},
+                {"apiVersion": "v1", "kind": "ServiceAccount",
+                 "metadata": {"name": "llm-d-modelserver", "namespace": workload_namespace}},
+            ]
+        })
+        _kubectl(['apply', '-f', '-'], input_data=local_rbac)
+
+        # Create SCC for modelserver SA (privileged access for hostPath, RDMA)
+        is_openshift = False
+        try:
+            r_oc = _kubectl(['api-resources', '--api-group=security.openshift.io'])
+            is_openshift = r_oc.returncode == 0 and 'SecurityContextConstraints' in r_oc.stdout
+        except Exception:
+            pass
+        if is_openshift:
+            scc_name = f"llm-d-modelserver-scc-{workload_namespace}"
+            scc_yaml = json.dumps({
+                "apiVersion": "security.openshift.io/v1",
+                "kind": "SecurityContextConstraints",
+                "metadata": {"name": scc_name},
+                "allowHostDirVolumePlugin": True,
+                "allowHostIPC": False,
+                "allowHostNetwork": False,
+                "allowHostPID": False,
+                "allowHostPorts": False,
+                "allowPrivilegedContainer": True,
+                "allowedCapabilities": ["IPC_LOCK", "SYS_RAWIO", "SYS_RESOURCE"],
+                "fsGroup": {"type": "RunAsAny"},
+                "runAsUser": {"type": "RunAsAny"},
+                "seLinuxContext": {"type": "RunAsAny"},
+                "supplementalGroups": {"type": "RunAsAny"},
+                "users": [f"system:serviceaccount:{workload_namespace}:llm-d-modelserver"],
+                "volumes": ["*"]
+            })
+            _kubectl(['apply', '-f', '-'], input_data=scc_yaml)
+
+    import secrets
+    auto_login_token = secrets.token_urlsafe(32)
+
+    with get_db() as conn:
+        conn.execute('''
+            INSERT INTO instances (name, owner_id, cluster_id, display_name, status, namespace,
+                                   workload_namespace, deployment_name, pvc_name, service_name,
+                                   kubeconfig_secret, target_cluster, auto_login_token,
+                                   preset_gpus, preset_nodes, storage_class, storage_size, created_at)
+            VALUES (?, ?, ?, ?, 'creating', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        ''', (safe_name, owner_id, cluster_id, name, namespace, workload_namespace,
+              deployment_name, pvc_name, service_name,
+              kubeconfig_secret, target_cluster, auto_login_token,
+              preset_gpus, ','.join(preset_nodes) if preset_nodes else None,
+              storage_class_override or storage_class or '',
+              f'{storage_size or 50}Gi',
+              datetime.now().isoformat()))
+        instance_id = conn.execute('SELECT last_insert_rowid()').fetchone()[0]
+
+    try:
+        sc_name = storage_class_override or storage_class or ''
+        access_mode = 'ReadWriteOnce'
+        if sc_name:
+            r_sc = _kubectl(['get', 'sc', sc_name, '-o', 'jsonpath={.provisioner}'])
+            if r_sc.returncode == 0:
+                prov = r_sc.stdout.strip().lower()
+                if any(k in prov for k in ('nfs', 'cephfs', 'file', 'spectrum-scale', 'efs')):
+                    access_mode = 'ReadWriteMany'
+
+        pvc_yaml = _render('pvc.yaml.j2',
+            pvc_name=pvc_name, namespace=namespace,
+            storage_size=f'{storage_size or 50}Gi', storage_class=sc_name,
+            access_mode=access_mode)
+        r = _kubectl(['apply', '-f', '-', '-n', namespace], input_data=pvc_yaml)
+        if r.returncode != 0:
+            raise RuntimeError(f"PVC creation failed: {r.stderr}")
+
+        # For local clusters without a kubeconfig secret, generate one from in-cluster SA
+        if not kubeconfig_secret:
+            import base64 as _b64
+            sa_token_path = '/var/run/secrets/kubernetes.io/serviceaccount/token'
+            ca_path = '/var/run/secrets/kubernetes.io/serviceaccount/ca.crt'
+            api_host = os.environ.get('KUBERNETES_SERVICE_HOST', 'kubernetes.default.svc')
+            api_port = os.environ.get('KUBERNETES_SERVICE_PORT', '443')
+            if os.path.exists(sa_token_path):
+                with open(sa_token_path) as f:
+                    sa_token = f.read().strip()
+                with open(ca_path) as f:
+                    ca_data = _b64.b64encode(f.read().encode()).decode()
+                import yaml as _yaml
+                local_kc_dict = {
+                    'apiVersion': 'v1',
+                    'kind': 'Config',
+                    'clusters': [{'cluster': {
+                        'certificate-authority-data': ca_data,
+                        'server': f'https://{api_host}:{api_port}',
+                    }, 'name': 'local'}],
+                    'contexts': [{'context': {
+                        'cluster': 'local',
+                        'namespace': workload_namespace,
+                        'user': 'local',
+                    }, 'name': 'local'}],
+                    'current-context': 'local',
+                    'users': [{'name': 'local', 'user': {'token': sa_token}}],
+                }
+                local_kc = _yaml.dump(local_kc_dict, default_flow_style=False)
+                kubeconfig_secret = f"serveit-kubeconfig-local-{deployment_name}"
+                secret_yaml = json.dumps({
+                    "apiVersion": "v1", "kind": "Secret",
+                    "metadata": {"name": kubeconfig_secret, "namespace": namespace},
+                    "type": "Opaque",
+                    "stringData": {"kubeconfig": local_kc}
+                })
+                _kubectl(['apply', '-f', '-', '-n', namespace], input_data=secret_yaml)
+
+        deploy_yaml = _render('instance-deployment.yaml.j2',
+            name=deployment_name, namespace=namespace, image=image,
+            pvc_name=pvc_name, code_pvc_name='',
+            workload_namespace=workload_namespace,
+            dev_mode='false', force_nad='false',
+            auth_disabled='false',
+            kubeconfig_secret=kubeconfig_secret or '',
+            has_kubeconfig='true',
+            preset_gpus=preset_gpus or '',
+            preset_nodes=','.join(preset_nodes) if preset_nodes else '',
+            auto_login_token=auto_login_token,
+            https_proxy=cluster_proxy or '')
+
+        r = _kubectl(['apply', '-f', '-', '-n', namespace], input_data=deploy_yaml)
+        if r.returncode != 0:
+            raise RuntimeError(f"Deployment creation failed: {r.stderr}")
+
+        is_ocp = _is_oc()
+        svc_yaml = _render('service.yaml.j2',
+            name=deployment_name, namespace=namespace, is_openshift=is_ocp)
+        r = _kubectl(['apply', '-f', '-', '-n', namespace], input_data=svc_yaml)
+        if r.returncode != 0:
+            raise RuntimeError(f"Service creation failed: {r.stderr}")
+
+        service_url = None
+        if is_ocp:
+            r = _kubectl(['get', 'route', f'{deployment_name}-ui', '-n', namespace,
+                          '-o', 'jsonpath={.spec.host}'])
+            service_url = f"https://{r.stdout.strip()}" if r.stdout.strip() else None
+        else:
+            for _ in range(15):
+                r = _kubectl(['get', 'svc', f'{deployment_name}-ui', '-n', namespace,
+                              '-o', 'jsonpath={.status.loadBalancer.ingress[0].ip}'])
+                ext_ip = r.stdout.strip() if r.returncode == 0 else ''
+                if ext_ip and ext_ip != '<pending>':
+                    service_url = f"http://{ext_ip}:5000"
+                    break
+                r2 = _kubectl(['get', 'svc', f'{deployment_name}-ui', '-n', namespace,
+                               '-o', 'jsonpath={.status.loadBalancer.ingress[0].hostname}'])
+                ext_host = r2.stdout.strip() if r2.returncode == 0 else ''
+                if ext_host:
+                    service_url = f"http://{ext_host}:5000"
+                    break
+                time.sleep(2)
+            if not service_url:
+                r = _kubectl(['get', 'svc', f'{deployment_name}-ui', '-n', namespace,
+                              '-o', 'jsonpath={.spec.ports[0].nodePort}'])
+                node_port = r.stdout.strip() if r.returncode == 0 else ''
+                if node_port:
+                    service_url = f"http://localhost:{node_port}"
+                else:
+                    service_url = f"http://{service_name}.{namespace}.svc.cluster.local:5000"
+
+        if password_hash:
+            _seed_instance_user(deployment_name, namespace, username, password_hash)
+
+        with get_db() as conn:
+            conn.execute('UPDATE instances SET status = ?, service_url = ? WHERE id = ?',
+                         ('running', service_url, instance_id))
+
+        return {
+            'id': instance_id, 'name': name, 'deployment': deployment_name,
+            'service_url': service_url, 'target_cluster': target_cluster,
+            'status': 'running',
+        }
+
+    except Exception:
+        with get_db() as conn:
+            conn.execute("DELETE FROM instances WHERE id = ?", (instance_id,))
+        _kubectl(['delete', 'deployment', deployment_name, '-n', namespace, '--ignore-not-found=true'])
+        _kubectl(['delete', 'svc', f'{deployment_name}-ui', '-n', namespace, '--ignore-not-found=true'])
+        _kubectl(['delete', 'pvc', pvc_name, '-n', namespace, '--ignore-not-found=true'])
+        raise
+
+
+def list_backups() -> List[Dict]:
+    """List all available backups across all instances."""
+    backup_root = Path('/mnt/storage/backups')
+    if not backup_root.exists():
+        return []
+    backups = []
+    for instance_dir in sorted(backup_root.iterdir()):
+        if not instance_dir.is_dir():
+            continue
+        for ts_dir in sorted(instance_dir.iterdir(), reverse=True):
+            if not ts_dir.is_dir():
+                continue
+            # Try metadata.json first, fall back to backup_info.txt
+            meta_file = ts_dir / 'metadata.json'
+            if meta_file.exists():
+                try:
+                    meta = json.loads(meta_file.read_text())
+                    meta['path'] = str(ts_dir)
+                    backups.append(meta)
+                    continue
+                except Exception:
+                    pass
+            info_file = ts_dir / 'backup_info.txt'
+            info = info_file.read_text() if info_file.exists() else ''
+            size = sum(f.stat().st_size for f in ts_dir.rglob('*') if f.is_file())
+            has_db = (ts_dir / 'serveit.db.gz').exists() or (ts_dir / 'serveit.db').exists()
+            has_artifacts = (ts_dir / 'serveit-artifacts.tar.gz').exists() or (ts_dir / 'results').is_dir()
+            cluster = ''
+            for line in info.splitlines():
+                if line.startswith('Cluster:'):
+                    cluster = line.split(':', 1)[1].strip()
+            backups.append({
+                'instance': instance_dir.name,
+                'cluster': cluster,
+                'timestamp': ts_dir.name,
+                'path': str(ts_dir),
+                'size_mb': round(size / (1024 * 1024), 1),
+                'has_db': has_db,
+                'has_artifacts': has_artifacts,
+                'backup_time': ts_dir.name,
+            })
+    return backups
+
+
+def delete_backup(backup_path: str) -> Dict:
+    """Delete a backup directory."""
+    import shutil
+    backup_dir = Path(backup_path)
+    if not backup_dir.exists():
+        return {'ok': False, 'error': 'Backup not found'}
+    if not str(backup_dir).startswith('/mnt/storage/backups/'):
+        return {'ok': False, 'error': 'Invalid backup path'}
+    try:
+        shutil.rmtree(backup_dir)
+        # Clean up empty parent directory
+        parent = backup_dir.parent
+        if parent.exists() and not any(parent.iterdir()):
+            parent.rmdir()
+        return {'ok': True}
+    except Exception as e:
+        return {'ok': False, 'error': str(e)}
+
+
+def restore_backup(backup_path: str, target_instance_id: int, owner_id: int, restore_db: bool = True, restore_artifacts: bool = True) -> Dict:
+    """Restore a backup to a target instance via its API."""
+    import requests as _req
+
+    backup_dir = Path(backup_path)
+    if not backup_dir.exists():
+        return {'ok': False, 'error': 'Backup path not found'}
+
+    with get_db() as conn:
+        row = conn.execute(
+            'SELECT * FROM instances WHERE id = ? AND (owner_id = ? OR ? IN (SELECT id FROM users WHERE is_admin = 1))',
+            (target_instance_id, owner_id, owner_id)
+        ).fetchone()
+    if not row:
+        return {'ok': False, 'error': 'Target instance not found or not authorized'}
+
+    row = dict(row)
+    deployment_name = row['deployment_name']
+    namespace = row['namespace']
+    service_url = row.get('service_url')
+    service_name = row.get('service_name', f"{deployment_name}-ui")
+    internal_url = f"http://{service_name}.{namespace}.svc.cluster.local:5000"
+
+    # Look up proxy for the target instance's cluster
+    target_proxy = None
+    target_cluster_id = row.get('cluster_id')
+    if target_cluster_id:
+        with get_db() as conn:
+            cr = conn.execute('SELECT proxy FROM clusters WHERE id = ?', (target_cluster_id,)).fetchone()
+            if cr:
+                target_proxy = cr['proxy']
+    proxies = {'https': target_proxy, 'http': target_proxy} if target_proxy else None
+
+    results = []
+
+    def _try_url(base, use_proxy=False):
+        try:
+            _req.get(f"{base}/api/health", timeout=5, proxies=proxies if use_proxy else None, verify=False)
+            return True
+        except Exception:
+            return False
+
+    if _try_url(internal_url):
+        base_url = internal_url
+        proxies = None
+    elif service_url and _try_url(service_url, use_proxy=True):
+        base_url = service_url
+    else:
+        base_url = None
+    if not base_url:
+        return {'ok': False, 'error': 'Cannot reach target instance — is it running?'}
+
+    if restore_db:
+        db_file = backup_dir / 'serveit.db.gz'
+        if db_file.exists():
+            try:
+                with open(db_file, 'rb') as f:
+                    resp = _req.post(f"{base_url}/api/upload_database",
+                                     files={'database': ('serveit.db.gz', f, 'application/gzip')},
+                                     timeout=120, proxies=proxies, verify=False)
+                data = resp.json()
+                if data.get('success'):
+                    results.append(f"DB restored: {data.get('imported_runs', '?')} runs imported")
+                else:
+                    results.append(f"DB restore failed: {data.get('error', 'unknown')}")
+            except Exception as e:
+                results.append(f"DB restore error: {e}")
+        else:
+            results.append("No database backup found (serveit.db.gz)")
+
+    if restore_artifacts:
+        art_file = backup_dir / 'serveit-artifacts.tar.gz'
+        if art_file.exists():
+            try:
+                with open(art_file, 'rb') as f:
+                    resp = _req.post(f"{base_url}/api/restore/artifacts",
+                                     files={'artifacts': ('serveit-artifacts.tar.gz', f, 'application/gzip')},
+                                     timeout=600, proxies=proxies, verify=False)
+                data = resp.json()
+                if data.get('success'):
+                    results.append(f"Artifacts restored: {data.get('files_restored', '?')} files")
+                else:
+                    results.append(f"Artifacts restore failed: {data.get('error', 'unknown')}")
+            except Exception as e:
+                results.append(f"Artifacts restore error: {e}")
+        else:
+            results.append("No artifacts backup found (serveit-artifacts.tar.gz)")
+
+    return {'ok': True, 'results': results}
+
+
+def _backup_instance_db(deployment_name: str, namespace: str, instance_name: str):
+    """Copy instance database to launcher storage before deletion."""
+    backup_dir = Path('/mnt/storage/backups') / instance_name
+    try:
+        backup_dir.mkdir(parents=True, exist_ok=True)
+        r = _kubectl(['get', 'pod', '-l', f'app={deployment_name}', '-n', namespace,
+                      '-o', 'jsonpath={.items[0].metadata.name}'])
+        pod_name = r.stdout.strip() if r.returncode == 0 else ''
+        if not pod_name:
+            return
+        dest = str(backup_dir / 'serveit.db')
+        cmd = 'oc' if _is_oc() else 'kubectl'
+        subprocess.run(
+            [cmd, 'cp', f'{namespace}/{pod_name}:/mnt/storage/serveit.db', dest],
+            capture_output=True, timeout=60
+        )
+        ts_file = backup_dir / 'backup_info.txt'
+        ts_file.write_text(f"Instance: {instance_name}\nBackup: {datetime.now().isoformat()}\nPod: {pod_name}\n")
+    except Exception:
+        pass
+
+
+def backup_instance(instance_id: int, owner_id: int) -> Dict:
+    """Back up instance database and artifacts using the instance's API.
+
+    Calls /api/backup/database and /api/backup/artifacts on the instance,
+    which compress the data server-side and stream it back. Verifies MD5.
+    """
+    import hashlib
+    import requests as _req
+
+    with get_db() as conn:
+        row = conn.execute(
+            'SELECT * FROM instances WHERE id = ? AND (owner_id = ? OR ? IN (SELECT id FROM users WHERE is_admin = 1))',
+            (instance_id, owner_id, owner_id)
+        ).fetchone()
+    if not row:
+        return {'ok': False, 'error': 'Instance not found or not authorized'}
+
+    row = dict(row)
+    instance_name = row.get('display_name') or row['name']
+    service_url = row.get('service_url')
+    if not service_url:
+        return {'ok': False, 'error': 'Instance has no service URL — is it running?'}
+
+    # Look up cluster name and proxy
+    cluster_name = 'unknown'
+    cluster_proxy = None
+    cluster_details = None
+    cluster_id = row.get('cluster_id')
+    if cluster_id:
+        with get_db() as conn:
+            cr = conn.execute('SELECT name, proxy, scan_data FROM clusters WHERE id = ?', (cluster_id,)).fetchone()
+            if cr:
+                cluster_name = cr['name']
+                cluster_proxy = cr['proxy']
+                if cr['scan_data']:
+                    try:
+                        sd = json.loads(cr['scan_data'])
+                        s = sd.get('summary', sd)
+                        cluster_details = {
+                            'gpu_node_count': s.get('gpu_node_count'),
+                            'total_gpus': s.get('total_gpus'),
+                            'gpu_model': s.get('gpu_model'),
+                            'ocp_version': s.get('ocp_version'),
+                        }
+                    except Exception:
+                        pass
+
+    proxies = {'https': cluster_proxy, 'http': cluster_proxy} if cluster_proxy else None
+
+    deployment_name = row['deployment_name']
+    namespace = row['namespace']
+    service_name = row.get('service_name', f"{deployment_name}-ui")
+    internal_url = f"http://{service_name}.{namespace}.svc.cluster.local:5000"
+
+    timestamp = datetime.now().strftime('%Y%m%d-%H%M%S')
+    backup_dir = Path('/mnt/storage/backups') / instance_name / timestamp
+    backup_dir.mkdir(parents=True, exist_ok=True)
+
+    errors = []
+
+    def _download(endpoint, dest_filename, label):
+        for base in [internal_url, service_url]:
+            try:
+                url = f"{base}{endpoint}"
+                use_proxies = proxies if base == service_url else None
+                resp = _req.get(url, timeout=600, stream=True, proxies=use_proxies, verify=False)
+                if resp.status_code != 200:
+                    continue
+                dest = backup_dir / dest_filename
+                md5 = hashlib.md5()
+                with open(dest, 'wb') as f:
+                    for chunk in resp.iter_content(chunk_size=256 * 1024):
+                        f.write(chunk)
+                        md5.update(chunk)
+                expected_md5 = resp.headers.get('X-MD5')
+                if expected_md5 and md5.hexdigest() != expected_md5:
+                    errors.append(f'{label}: MD5 mismatch (expected {expected_md5}, got {md5.hexdigest()})')
+                    dest.unlink(missing_ok=True)
+                else:
+                    return True
+            except Exception:
+                continue
+        errors.append(f'{label}: download failed from all URLs')
+        return False
+
+    _download('/api/backup/database', 'serveit.db.gz', 'Database')
+    _download('/api/backup/artifacts', 'serveit-artifacts.tar.gz', 'Artifacts')
+
+    total_size = sum(f.stat().st_size for f in backup_dir.rglob('*') if f.is_file())
+    size_mb = total_size / (1024 * 1024)
+
+    backup_time = datetime.now().isoformat()
+    info = (
+        f"Instance: {instance_name}\n"
+        f"Cluster: {cluster_name}\n"
+        f"Backup: {backup_time}\n"
+        f"Source: {internal_url}\n"
+        f"Size: {size_mb:.1f} MB\n"
+    )
+    if errors:
+        info += f"Warnings: {'; '.join(errors)}\n"
+    (backup_dir / 'backup_info.txt').write_text(info)
+
+    metadata = {
+        'instance': instance_name,
+        'cluster': cluster_name,
+        'cluster_details': cluster_details,
+        'timestamp': timestamp,
+        'backup_time': backup_time,
+        'size_mb': round(size_mb, 1),
+        'has_db': (backup_dir / 'serveit.db.gz').exists(),
+        'has_artifacts': (backup_dir / 'serveit-artifacts.tar.gz').exists(),
+    }
+    (backup_dir / 'metadata.json').write_text(json.dumps(metadata, indent=2))
+
+    return {
+        'ok': len(errors) == 0 or size_mb > 0,
+        'path': str(backup_dir),
+        'size_mb': round(size_mb, 1),
+        'timestamp': timestamp,
+        'warnings': errors if errors else None
+    }
+
+
+def cleanup_workloads(instance_id: int, owner_id: int, launcher_namespace: str) -> dict:
+    """Clean up all workload resources in the instance's workload namespace.
+
+    Deletes LWS, deployments (EPP, gateway, workload), services, inference pools,
+    and any orphaned pods — everything except the instance pod itself.
+    For remote clusters, uses the cluster's kubeconfig secret and proxy.
+    """
+    import base64
+    import tempfile
+
+    with get_db() as conn:
+        row = conn.execute(
+            'SELECT * FROM instances WHERE id = ? AND owner_id = ?',
+            (instance_id, owner_id)
+        ).fetchone()
+    if not row:
+        return {'error': 'Instance not found or not owned by you'}
+
+    inst = dict(row)
+    wl_ns = inst.get('workload_namespace') or f"serveit-{inst['name']}"
+    if not wl_ns or wl_ns == launcher_namespace:
+        wl_ns = f"serveit-{inst['name']}"
+
+    # Get cluster info for remote kubeconfig + proxy
+    cluster_proxy = None
+    kubeconfig_path = None
+    if inst.get('cluster_id'):
+        with get_db() as conn:
+            cluster = conn.execute('SELECT * FROM clusters WHERE id = ?', (inst['cluster_id'],)).fetchone()
+            if cluster:
+                cluster = dict(cluster)
+                cluster_proxy = cluster.get('proxy')
+                kc_secret = cluster.get('kubeconfig_secret')
+                if kc_secret:
+                    r = _kubectl(['get', 'secret', kc_secret, '-n', launcher_namespace,
+                                  '-o', 'jsonpath={.data.kubeconfig}'])
+                    if r.returncode == 0 and r.stdout.strip():
+                        try:
+                            kc_data = base64.b64decode(r.stdout.strip()).decode()
+                            tmp = tempfile.NamedTemporaryFile(mode='w', suffix='.kubeconfig', delete=False)
+                            tmp.write(kc_data)
+                            tmp.close()
+                            kubeconfig_path = tmp.name
+                        except Exception:
+                            pass
+
+    def _run(args):
+        cmd = ['kubectl']
+        if kubeconfig_path:
+            cmd += ['--kubeconfig', kubeconfig_path]
+        env = None
+        if cluster_proxy:
+            env = os.environ.copy()
+            env['HTTPS_PROXY'] = cluster_proxy
+            env['https_proxy'] = cluster_proxy
+        return subprocess.run(cmd + args, capture_output=True, text=True, timeout=60, env=env)
+
+    deleted = []
+    errors = []
+
+    resource_types = [
+        ('leaderworkersets.leaderworkerset.x-k8s.io', 'LWS'),
+        ('deployments', 'Deployments'),
+        ('services', 'Services'),
+        ('inferencepools.inference.networking.k8s.io', 'InferencePools'),
+        ('inferencepools.inference.networking.x-k8s.io', 'InferencePools (legacy)'),
+        ('httproutes.gateway.networking.k8s.io', 'HTTPRoutes'),
+        ('gateways.gateway.networking.k8s.io', 'Gateways'),
+        ('destinationrules.networking.istio.io', 'DestinationRules'),
+    ]
+
+    try:
+        for resource, label in resource_types:
+            try:
+                r = _run(['delete', resource, '--all', '-n', wl_ns, '--ignore-not-found=true'])
+                if r.returncode == 0:
+                    output = r.stdout.strip()
+                    if output and 'deleted' in output:
+                        count = output.count('deleted')
+                        deleted.append(f"{count} {label}")
+            except Exception as e:
+                errors.append(f"{label}: {str(e)[:100]}")
+    finally:
+        if kubeconfig_path:
+            os.unlink(kubeconfig_path)
+
+    msg_parts = []
+    if deleted:
+        msg_parts.append('Deleted: ' + ', '.join(deleted))
+    else:
+        msg_parts.append('No workload resources found')
+    if errors:
+        msg_parts.append('Errors: ' + '; '.join(errors))
+
+    return {'ok': True, 'message': '. '.join(msg_parts), 'namespace': wl_ns}
+
+
+def delete_instance(instance_id: int, owner_id: int, backup: bool = True) -> bool:
+    with get_db() as conn:
+        row = conn.execute(
+            'SELECT * FROM instances WHERE id = ? AND owner_id = ?',
+            (instance_id, owner_id)
+        ).fetchone()
+        if not row:
+            return False
+        row = dict(row)
+        conn.execute("UPDATE instances SET status = 'deleting' WHERE id = ?", (instance_id,))
+
+    import threading
+    threading.Thread(target=_delete_instance_async, args=(instance_id, row, backup), daemon=True).start()
+    return True
+
+
+def _delete_instance_async(instance_id: int, row: dict, backup: bool):
+    ns = row['namespace']
+
+    try:
+        if backup:
+            try:
+                _backup_instance_db(row['deployment_name'], ns, row.get('name', str(instance_id)))
+            except Exception:
+                pass
+
+        for resource in [
+            f"deployment/{row['deployment_name']}",
+            f"service/{row['service_name']}",
+            f"pvc/{row['pvc_name']}",
+        ]:
+            _kubectl(['delete', resource, '-n', ns, '--ignore-not-found=true'])
+
+        if _is_oc():
+            _kubectl(['delete', 'route', f"{row['deployment_name']}-ui", '-n', ns, '--ignore-not-found=true'])
+
+        if row.get('kubeconfig_secret'):
+            try:
+                _cleanup_remote_cluster(row['kubeconfig_secret'], ns, row.get('workload_namespace', ''))
+            except Exception:
+                logger.warning(f"Remote cleanup failed for instance {instance_id}, continuing with deletion")
+
+        wl_ns = row.get('workload_namespace', '')
+        if wl_ns and wl_ns != ns and not row.get('kubeconfig_secret'):
+            _kubectl(['delete', 'namespace', wl_ns, '--ignore-not-found=true'])
+    except Exception as e:
+        logger.error(f"Error during async deletion of instance {instance_id}: {e}")
+    finally:
+        with get_db() as conn:
+            conn.execute('DELETE FROM instances WHERE id = ?', (instance_id,))
+
+
+def _cleanup_remote_cluster(kubeconfig_secret: str, namespace: str, workload_namespace: str):
+    if not workload_namespace:
+        return
+    import tempfile, base64
+    r = _kubectl(['get', 'secret', kubeconfig_secret, '-n', namespace,
+                  '-o', 'jsonpath={.data.kubeconfig}'])
+    if r.returncode != 0 or not r.stdout.strip():
+        return
+    try:
+        kubeconfig_data = base64.b64decode(r.stdout.strip()).decode()
+    except Exception:
+        return
+    with tempfile.NamedTemporaryFile(mode='w', suffix='.kubeconfig', delete=False) as tmp:
+        tmp.write(kubeconfig_data)
+        tmp_path = tmp.name
+    try:
+        subprocess.run(['kubectl', '--kubeconfig', tmp_path, 'delete', 'namespace',
+                        workload_namespace, '--ignore-not-found=true'],
+                       capture_output=True, text=True, timeout=60)
+    except Exception:
+        pass
+    finally:
+        os.unlink(tmp_path)
+
+
+_instances_cache = {}
+_instances_cache_lock = threading.Lock()
+_INSTANCES_CACHE_TTL = 30
+
+
+_STATUS_TIMEOUT = 15
+
+
+def _get_pod_status_for_instance(inst: dict, cluster_sc: dict) -> dict:
+    """Get pod status for a single instance via kubectl (runs in thread pool)."""
+    cmd = 'kubectl'
+    if not inst.get('storage_class'):
+        inst['storage_class'] = cluster_sc.get(inst.get('cluster_id'), '')
+
+    if inst.get('status') == 'deleting':
+        inst['pod_status'] = 'Deleting'
+        return inst
+
+    last_known = inst.get('status', 'Unknown').capitalize()
+    if last_known == 'Creating':
+        last_known = 'Pending'
+    elif last_known not in ('Running', 'Pending', 'Error', 'Failed', 'Unknown'):
+        last_known = 'Unknown'
+
+    try:
+        r = subprocess.run(
+            [cmd, 'get', 'pod', '-l', f"app={inst['deployment_name']}",
+             '-n', inst['namespace'],
+             '-o', 'jsonpath={.items[0].status.phase}:{.items[0].status.containerStatuses[0].state.waiting.reason}:{.items[0].status.containerStatuses[0].restartCount}'],
+            capture_output=True, text=True, timeout=_STATUS_TIMEOUT)
+    except subprocess.TimeoutExpired:
+        logger.warning(f"Pod status TIMEOUT for {inst['deployment_name']}, using last known: {last_known}")
+        inst['pod_status'] = last_known
+        return inst
+
+    if r.returncode != 0:
+        logger.warning(f"Pod status FAILED for {inst['deployment_name']}: rc={r.returncode} stderr={r.stderr.strip()}")
+        inst['pod_status'] = last_known
+        return inst
+
+    raw = r.stdout.strip()
+    parts = raw.split(':')
+    phase = parts[0] if parts else ''
+    waiting_reason = parts[1] if len(parts) > 1 else ''
+    restarts = int(parts[2]) if len(parts) > 2 and parts[2].isdigit() else 0
+    if waiting_reason in ('CrashLoopBackOff', 'Error', 'ImagePullBackOff'):
+        inst['pod_status'] = waiting_reason
+    elif phase == 'Running' and restarts > 2:
+        inst['pod_status'] = 'CrashLoop'
+    elif phase in ('Terminating', 'Pending', 'Failed', 'Succeeded', 'Running'):
+        inst['pod_status'] = phase
+    elif not raw or not phase:
+        try:
+            dep_r = subprocess.run(
+                [cmd, 'get', 'deployment', inst['deployment_name'],
+                 '-n', inst['namespace'], '--ignore-not-found', '-o', 'name'],
+                capture_output=True, text=True, timeout=_STATUS_TIMEOUT)
+            if dep_r.returncode == 0 and not dep_r.stdout.strip():
+                inst['pod_status'] = 'Deleted'
+            elif dep_r.returncode == 0:
+                inst['pod_status'] = 'Starting'
+            else:
+                inst['pod_status'] = 'Unknown'
+        except subprocess.TimeoutExpired:
+            inst['pod_status'] = 'Unknown'
+    else:
+        inst['pod_status'] = phase or 'Unknown'
+
+    if not inst.get('service_url') and inst['pod_status'] == 'Running':
+        try:
+            r = subprocess.run(
+                [cmd, 'get', 'route', f"{inst['deployment_name']}-ui", '-n', inst['namespace'],
+                 '-o', 'jsonpath={.spec.host}'],
+                capture_output=True, text=True, timeout=_STATUS_TIMEOUT)
+            if r.returncode == 0 and r.stdout.strip():
+                inst['service_url'] = f"https://{r.stdout.strip()}"
+                with get_db() as conn:
+                    conn.execute('UPDATE instances SET service_url = ? WHERE id = ?',
+                                 (inst['service_url'], inst['id']))
+        except Exception:
+            pass
+
+    return inst
+
+
+def invalidate_instances_cache(owner_id: int, cluster_id: int = None):
+    with _instances_cache_lock:
+        _instances_cache.pop((owner_id, cluster_id), None)
+
+
+def list_instances(owner_id: int, cluster_id: int = None) -> List[Dict]:
+    cache_key = (owner_id, cluster_id)
+    with _instances_cache_lock:
+        cached = _instances_cache.get(cache_key)
+        if cached and time.time() - cached['ts'] < _INSTANCES_CACHE_TTL:
+            return cached['data']
+
+    with get_db() as conn:
+        if cluster_id is not None:
+            rows = conn.execute('''
+                SELECT DISTINCT i.*,
+                    CASE WHEN i.owner_id = ? THEN 1 ELSE 0 END as is_owner
+                FROM instances i
+                LEFT JOIN instance_access ia ON i.id = ia.instance_id AND ia.user_id = ?
+                WHERE (i.owner_id = ? OR ia.user_id = ?)
+                  AND i.cluster_id = ?
+                ORDER BY i.created_at DESC
+            ''', (owner_id, owner_id, owner_id, owner_id, cluster_id)).fetchall()
+        else:
+            rows = conn.execute('''
+                SELECT DISTINCT i.*,
+                    CASE WHEN i.owner_id = ? THEN 1 ELSE 0 END as is_owner
+                FROM instances i
+                LEFT JOIN instance_access ia ON i.id = ia.instance_id AND ia.user_id = ?
+                WHERE (i.owner_id = ? OR ia.user_id = ?)
+                ORDER BY i.created_at DESC
+            ''', (owner_id, owner_id, owner_id, owner_id)).fetchall()
+
+    cluster_info = {}
+    with get_db() as conn:
+        for cr in conn.execute('SELECT id, name, storage_class FROM clusters').fetchall():
+            cluster_info[cr['id']] = {'name': cr['name'], 'storage_class': cr['storage_class'] or ''}
+    cluster_sc = {k: v['storage_class'] for k, v in cluster_info.items()}
+
+    raw_instances = []
+    for row in rows:
+        inst = dict(row)
+        ci = cluster_info.get(inst.get('cluster_id'), {})
+        inst['cluster_name'] = ci.get('name', 'local')
+        raw_instances.append(inst)
+
+    if not raw_instances:
+        with _instances_cache_lock:
+            _instances_cache[cache_key] = {'ts': time.time(), 'data': []}
+        return []
+
+    instances = []
+    with ThreadPoolExecutor(max_workers=min(len(raw_instances), 8)) as pool:
+        futures = {pool.submit(_get_pod_status_for_instance, inst, cluster_sc): inst
+                   for inst in raw_instances}
+        for future in as_completed(futures):
+            try:
+                instances.append(future.result(timeout=15))
+            except Exception:
+                inst = futures[future]
+                inst['pod_status'] = 'Unknown'
+                instances.append(inst)
+
+    instances.sort(key=lambda x: x.get('created_at', ''), reverse=True)
+
+    with _instances_cache_lock:
+        _instances_cache[cache_key] = {'ts': time.time(), 'data': instances}
+
+    return instances

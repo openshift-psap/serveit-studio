@@ -1,0 +1,26 @@
+apiVersion: inference.networking.k8s.io/v1
+kind: InferencePool
+metadata:
+  name: {{ gaie_pool_name | default('gaie-pd') }}
+  namespace: {{ namespace }}
+  labels:
+    app.kubernetes.io/name: {{ gaie_name | default('gaie-pd-epp') }}
+    app.kubernetes.io/version: v1.3.0
+    component: serveit-prereq
+spec:
+  selector:
+    matchLabels:
+      llm-d.ai/inferenceServing: "true"
+      llm-d.ai/guide: "{{ gaie_guide_label | default('serveit-aggregated') }}"
+  endpointPickerRef:
+    name: {{ gaie_name | default('gaie-pd-epp') }}
+    failureMode: FailOpen
+    port:
+      number: 9002
+  targetPorts:
+    - number: 8000
+{% if architecture == 'ep' and data_parallel_size is defined and data_parallel_size > 1 %}
+{% for i in range(1, data_parallel_size) %}
+    - number: {{ 8000 + i }}
+{% endfor %}
+{% endif %}

@@ -1,0 +1,385 @@
+apiVersion: leaderworkerset.x-k8s.io/v1
+kind: LeaderWorkerSet
+metadata:
+{% if per_node_storage %}
+  name: prefill-tp{{ prefill_tp }}
+{% else %}
+  name: {{ test_id }}-prefill
+{% endif %}
+  namespace: {{ namespace }}
+  labels:
+    app: llm-d
+    component: serveit-test
+    test-id: {{ test_id }}
+    architecture: pd
+    role: prefill
+spec:
+  replicas: {{ prefill_replicas }}
+  leaderWorkerTemplate:
+    size: {{ lws_size | default(1) }}
+    leaderTemplate:
+      metadata:
+        labels:
+          llm-d.ai/inferenceServing: "true"
+          llm-d.ai/inference-serving: "true"
+          llm-d.ai/model: {{ model_name_label }}
+          llm-d.ai/role: prefill
+          llm-d.ai/guide: serveit-{{ architecture | default('pd') }}
+          llm-d.ai/test-id: {{ test_id }}
+{% if rdma_network_annotation %}
+        annotations:
+          k8s.v1.cni.cncf.io/networks: '{{ rdma_network_annotation }}'
+{% endif %}
+      spec:
+        serviceAccountName: llm-d-modelserver
+        {% if use_anti_affinity or selected_nodes %}
+        affinity:
+          {% if use_anti_affinity %}
+          podAntiAffinity:
+            requiredDuringSchedulingIgnoredDuringExecution:
+            - labelSelector:
+                matchExpressions:
+                - key: llm-d.ai/inference-serving
+                  operator: In
+                  values:
+                  - "true"
+                - key: llm-d.ai/role
+                  operator: In
+                  values:
+                  - decode
+              topologyKey: kubernetes.io/hostname
+          {% endif %}
+          {% if selected_nodes %}
+          nodeAffinity:
+            requiredDuringSchedulingIgnoredDuringExecution:
+              nodeSelectorTerms:
+              - matchExpressions:
+                - key: kubernetes.io/hostname
+                  operator: In
+                  values:
+                  {% for node in selected_nodes %}
+                  - "{{ node }}"
+                  {% endfor %}
+          {% endif %}
+        {% endif %}
+        tolerations:
+          - key: node.kubernetes.io/disk-pressure
+            operator: Exists
+            effect: NoSchedule
+          - key: node.kubernetes.io/memory-pressure
+            operator: Exists
+            effect: NoSchedule
+        volumes:
+          - name: dshm
+            emptyDir:
+              medium: Memory
+              sizeLimit: 2Gi
+{% if local_disk_path %}
+          - name: hf-cache
+            hostPath:
+              path: {{ local_disk_path }}/model-cache
+              type: DirectoryOrCreate
+{% elif per_node_storage %}
+          - name: hf-cache
+            emptyDir: {}
+{% for nfs in node_nfs_pvcs %}
+          - name: nfs-{{ nfs.suffix }}
+            persistentVolumeClaim:
+              claimName: {{ nfs.pvc_name }}
+{% endfor %}
+{% else %}
+          - name: hf-cache
+            persistentVolumeClaim:
+              claimName: {{ pvc_name }}
+{% endif %}
+          - name: jit-cache
+            emptyDir: {}
+          - name: rdma-script
+            configMap:
+              name: rdma-discovery-script
+              defaultMode: 0755
+          - name: dev-infiniband
+            hostPath:
+              path: /dev/infiniband
+{% if per_node_storage and not local_disk_path %}
+        initContainers:
+          - name: select-nfs
+            image: busybox:stable
+            resources:
+              requests:
+                cpu: "100m"
+                memory: "64Mi"
+              limits:
+                cpu: "100m"
+                memory: "64Mi"
+            command: ["/bin/sh", "-c"]
+            args:
+              - |
+                echo "Node: $NODE_NAME"
+                case "$NODE_NAME" in
+{% for nfs in node_nfs_pvcs %}
+                  *{{ nfs.suffix }}*) ln -sf /nfs-{{ nfs.suffix }}/huggingface /model-cache/huggingface; echo "Linked to nfs-{{ nfs.suffix }}/huggingface" ;;
+{% endfor %}
+                  *) echo "ERROR: No NFS mount matches node $NODE_NAME"; ls -d /nfs-* 2>/dev/null; exit 1 ;;
+                esac
+            env:
+              - name: NODE_NAME
+                valueFrom:
+                  fieldRef:
+                    fieldPath: spec.nodeName
+            volumeMounts:
+              - name: hf-cache
+                mountPath: /model-cache
+{% for nfs in node_nfs_pvcs %}
+              - name: nfs-{{ nfs.suffix }}
+                mountPath: /nfs-{{ nfs.suffix }}
+{% endfor %}
+{% endif %}
+        containers:
+          - name: vllm
+            image: {{ image }}
+            command:
+              - /bin/bash
+              - -c
+            args:
+              - |
+                ulimit -l unlimited || true
+
+                # Pin to allocated GPUs (privileged pods see all host GPUs)
+                if [ -d /var/run/nvidia-container-devices ]; then
+                  GPU_INDICES=""
+                  for uuid in $(ls /var/run/nvidia-container-devices/); do
+                    idx=$(nvidia-smi --query-gpu=index,uuid --format=csv,noheader | grep "$uuid" | cut -d',' -f1 | tr -d ' ')
+                    [ -n "$idx" ] && GPU_INDICES="${GPU_INDICES:+$GPU_INDICES,}$idx"
+                  done
+                  if [ -n "$GPU_INDICES" ]; then
+                    export CUDA_VISIBLE_DEVICES="$GPU_INDICES"
+                    echo "--- CUDA_VISIBLE_DEVICES=$CUDA_VISIBLE_DEVICES ---"
+                  fi
+                fi
+
+                # Source RDMA discovery script if available
+                if [ -f /scripts/discover_ib_hca.sh ]; then
+                  source /scripts/discover_ib_hca.sh
+                  echo "--- Loaded RDMA environment ---"
+                fi
+
+                echo "========================================="
+                echo "ServeIt Studio Test: {{ test_id }}"
+                echo "Architecture: PD (Prefill)"
+                echo "Model: {{ model_name }}"
+                echo "TP: {{ prefill_tp }}"
+                echo "NCCL_IB_HCA: ${NCCL_IB_HCA}"
+                echo "UCX_NET_DEVICES: ${UCX_NET_DEVICES:-not set}"
+                echo "NCCL_SOCKET_IFNAME: ${NCCL_SOCKET_IFNAME:-not set}"
+                echo "========================================="
+
+                if [ -z "${UCX_NET_DEVICES:-}" ] || [ -z "${NCCL_IB_HCA:-}" ]; then
+                  echo "FATAL: RDMA env vars not set (UCX_NET_DEVICES=${UCX_NET_DEVICES:-}, NCCL_IB_HCA=${NCCL_IB_HCA:-}). Sleeping to prevent node crash."
+                  sleep infinity
+                fi
+
+                # Patch vllm#43396: FP8 MoE CUTLASS OOB at batch 8192
+                _MOE_FILE=$(python3 -c "import vllm; print(vllm.__path__[0])" 2>/dev/null)/model_executor/layers/fused_moe/moe_permute_unpermute.py
+                if [ -f "$_MOE_FILE" ] && grep -q 'a1q_scale\[permuted_idx.clamp' "$_MOE_FILE"; then
+                  sed -i 's|a1q_scale = a1q_scale\[permuted_idx.clamp(max=n_token \* topk - 1) // topk\]|scale_idx = permuted_idx.clamp(max=n_token * topk - 1) // topk; scale_idx = scale_idx.clamp(max=a1q_scale.shape[0] - 1); a1q_scale = a1q_scale[scale_idx]|' "$_MOE_FILE"
+                  echo "--- Applied vllm#43396 FP8 MoE patch ---"
+                fi
+
+                vllm serve {{ model_name }} \
+                  --port 8000 \
+                  --trust-remote-code \
+                  --tensor-parallel-size {{ prefill_tp }} \
+{% if lws_size | default(1) > 1 %}                  --nnodes {{ lws_size }} \
+                  --node-rank ${LWS_WORKER_INDEX:-0} \
+                  --master-addr ${LWS_LEADER_ADDRESS} \
+{% endif %}{% if data_parallelism > 1 %}                  --data-parallel-size ${DP_SIZE} \
+                  --data-parallel-size-local ${DP_SIZE_LOCAL} \
+                  --data-parallel-multi-port-external-lb \
+                  --data-parallel-supervisor-port=8208 \
+                  --data-parallel-start-rank $(( ${LWS_WORKER_INDEX:-0} * DP_SIZE_LOCAL )) \
+{% endif %}{% if pipeline_parallel_size %}                  --pipeline-parallel-size {{ pipeline_parallel_size }} \
+{% endif %}                  --api-server-count 1 \
+                  --block-size {{ block_size or 16 }} \
+                  --gpu-memory-utilization {{ prefill_gpu_memory_utilization or 0.80 }} \
+                  --kv-transfer-config '{"kv_connector":"{{ kv_connector }}","kv_role":"kv_both","kv_load_failure_policy":"fail"}' \
+{% if has_hybrid_attention %}                  --no-disable-hybrid-kv-cache-manager \
+{% endif %}{% if prefill_enable_expert_parallel %}                  --enable-expert-parallel \
+{% endif %}{% if prefill_enable_dbo %}                  --enable-dbo \
+                  --dbo-prefill-token-threshold {{ dbo_prefill_token_threshold | default(32) }} \
+{% endif %}{% if prefill_enable_eplb %}                  --enable-eplb \
+                  --eplb-config '{"window_size":"1000","step_interval":"3000","num_redundant_experts":"{{ num_redundant_experts | default(1) }}","log_balancedness":"False"}' \
+{% endif %}{% if prefill_moe_backend %}                  --moe-backend {{ prefill_moe_backend }} \
+{% endif %}{% if prefill_all2all_backend %}                  --all2all-backend {{ prefill_all2all_backend }} \
+{% endif %}{% if max_model_len %}                  --max-model-len {{ max_model_len }} \
+{% endif %}{% if enable_chunked_prefill %}                  --enable-chunked-prefill \
+{% endif %}{% if enable_prefix_caching %}                  --enable-prefix-caching \
+{% endif %}{% if disable_custom_all_reduce %}                  --disable-custom-all-reduce \
+{% endif %}{% if dtype %}                  --dtype {{ dtype }} \
+{% endif %}{% if kv_cache_dtype %}                  --kv-cache-dtype {{ kv_cache_dtype }} \
+{% endif %}{% if max_num_batched_tokens %}                  --max-num-batched-tokens {{ max_num_batched_tokens }} \
+{% endif %}{% if prefill_max_num_seqs %}                  --max-num-seqs {{ prefill_max_num_seqs }} \
+{% endif %}{% if speculative_method %}                  --speculative-config.method {{ speculative_method }} \
+                  --speculative-config.num_speculative_tokens {{ speculative_num_tokens | default(3) }} \
+{% endif %}{% if enable_auto_tool_choice %}                  --enable-auto-tool-choice \
+{% endif %}{% if tool_call_parser %}                  --tool-call-parser {{ tool_call_parser }} \
+{% endif %}{% if reasoning_parser %}                  --reasoning-parser {{ reasoning_parser }} \
+{% endif %}{% if chat_template_content_format %}                  --chat-template-content-format {{ chat_template_content_format }} \
+{% endif %}{% if weight_cpu_offload_gb %}                  --cpu-offload-gb {{ weight_cpu_offload_gb }} \
+{% endif %}{% if model_loader_extra_config %}                  --model-loader-extra-config '{{ model_loader_extra_config }}' \
+{% endif %}{% if extra_vllm_args %}                  {{ extra_vllm_args }} \
+{% endif %}                  --disable-uvicorn-access-log \
+                  || sleep infinity
+            env:
+              - name: VLLM_NIXL_SIDE_CHANNEL_HOST
+                valueFrom:
+                  fieldRef:
+                    fieldPath: status.podIP
+{% if selected_dra_classes %}
+              - name: RDMA_NETWORK_MODE
+                value: "dra-net"
+{% endif %}
+              - name: NCCL_IB_HCA
+                value: "{{ nccl_ib_hca }}"
+              - name: HF_TOKEN
+                valueFrom:
+                  secretKeyRef:
+                    name: llm-d-hf-token
+                    key: HF_TOKEN
+                    optional: true
+              - name: HF_HOME
+                value: "/model-cache/huggingface"
+              - name: HF_HUB_CACHE
+                value: "/model-cache/huggingface"
+              - name: VLLM_SKIP_P2P_CHECK
+                value: "1"
+              - name: NVIDIA_GDRCOPY
+                value: "enabled"
+              - name: VLLM_MEMORY_PROFILER_ESTIMATE_CUDAGRAPHS
+                value: "1"
+              - name: GLOO_SOCKET_IFNAME
+                value: "eth0"
+              - name: NCCL_SOCKET_IFNAME
+                value: "eth0"
+{% if use_deep_gemm is not none %}
+              - name: VLLM_USE_DEEP_GEMM
+                value: "{{ '1' if use_deep_gemm else '0' }}"
+{% endif %}
+{% if prefill_enable_expert_parallel %}
+              - name: VLLM_RANDOMIZE_DP_DUMMY_INPUTS
+                value: "1"
+              - name: NVSHMEM_REMOTE_TRANSPORT
+                value: "ibgda"
+              - name: NVSHMEM_IB_ENABLE_IBGDA
+                value: "true"
+              - name: NVSHMEM_DISABLE_CUDA_VMM
+                value: "0"
+              - name: NVSHMEM_SYMMETRIC_SIZE
+                value: "{{ nvshmem_symmetric_size | default('16G') }}"
+              - name: NVSHMEM_BOOTSTRAP_UID_SOCK_IFNAME
+                value: "eth0"
+{% endif %}
+              - name: VLLM_LOGGING_LEVEL
+                value: "{{ 'DEBUG' if vllm_debug_logs else 'ERROR' }}"
+              - name: NCCL_DEBUG
+                value: "{{ 'INFO' if nccl_debug_logs else 'ERROR' }}"
+              - name: TRITON_LIBCUDA_PATH
+                value: /usr/lib64
+              - name: CUDA_CACHE_PATH
+                value: /var/cache/vllm/cuda
+              - name: CCACHE_DIR
+                value: /var/cache/vllm/ccache
+              - name: VLLM_CACHE_ROOT
+                value: /var/cache/vllm/vllm
+              - name: FLASHINFER_WORKSPACE_BASE
+                value: /var/cache/vllm/flashinfer
+              - name: VLLM_NIXL_ABORT_REQUEST_TIMEOUT
+                value: "600"
+              - name: SHARED_STORAGE_PATH
+                value: "/data"
+              - name: TP_SIZE
+                value: "{{ prefill_tp }}"
+              - name: DP_SIZE
+                value: "{{ data_parallelism }}"
+              - name: DP_SIZE_LOCAL
+                value: "{{ data_parallelism }}"
+{% if http_timeout_keep_alive %}
+              - name: VLLM_HTTP_TIMEOUT_KEEP_ALIVE
+                value: "{{ http_timeout_keep_alive }}"
+{% endif %}
+{% if prefix_cache_retention is not none %}
+              - name: VLLM_PREFIX_CACHE_RETENTION_INTERVAL
+                value: "{{ prefix_cache_retention }}"
+{% endif %}
+{% if ssm_conv_state_layout %}
+              - name: VLLM_SSM_CONV_STATE_LAYOUT
+                value: "{{ ssm_conv_state_layout }}"
+{% endif %}
+{% if extra_env_vars %}{% for env in extra_env_vars %}
+              - name: {{ env.name }}
+                value: "{{ env.value }}"
+{% endfor %}{% endif %}
+            ports:
+              - containerPort: 8000
+                name: {{ 'vllm-rank0' if data_parallelism > 1 else 'vllm' }}
+{% if data_parallelism > 1 %}
+{% for i in range(1, data_parallelism) %}
+              - containerPort: {{ 8000 + i }}
+                name: vllm-rank{{ i }}
+{% endfor %}
+              - containerPort: 8208
+                name: supervisor
+{% endif %}
+              - containerPort: 5555
+                name: rpc
+            securityContext:
+              runAsUser: 0
+              privileged: true
+              capabilities:
+                add:
+                  - "IPC_LOCK"
+                  - "SYS_RAWIO"
+                  - "SYS_RESOURCE"
+            resources:
+              limits:
+                cpu: "{{ cpu_limit }}"
+                memory: "{{ memory_limit }}"
+{% if selected_dra_classes %}
+                {{ gpu_resource_key }}: "{{ prefill_gpu_count }}"
+{% else %}
+                {{ gpu_resource_key }}: "{{ prefill_gpu_count }}"
+                {% for r in prefill_extra_device_resources %}
+                {{ r.key }}: "{{ r.value }}"
+                {% endfor %}
+{% endif %}
+              requests:
+                cpu: "{{ cpu_limit }}"
+                memory: "{{ memory_limit }}"
+{% if selected_dra_classes %}
+                {{ gpu_resource_key }}: "{{ prefill_gpu_count }}"
+{% else %}
+                {{ gpu_resource_key }}: "{{ prefill_gpu_count }}"
+                {% for r in prefill_extra_device_resources %}
+                {{ r.key }}: "{{ r.value }}"
+                {% endfor %}
+{% endif %}
+            volumeMounts:
+              - name: dshm
+                mountPath: /dev/shm
+              - name: hf-cache
+                mountPath: /model-cache
+              - name: jit-cache
+                mountPath: /var/cache/vllm
+              - name: rdma-script
+                mountPath: /scripts
+              - name: dev-infiniband
+                mountPath: /dev/infiniband
+{% if per_node_storage and not local_disk_path %}
+{% for nfs in node_nfs_pvcs %}
+              - name: nfs-{{ nfs.suffix }}
+                mountPath: /nfs-{{ nfs.suffix }}
+{% endfor %}
+{% endif %}
+    workerTemplate:
+      spec:
+        containers: []

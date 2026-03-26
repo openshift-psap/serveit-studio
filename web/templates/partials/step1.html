@@ -1,0 +1,83 @@
+                    <!-- Step 1: Optimization Goal -->
+                    <div class="step-section" id="step1-section" style="display: block;">
+                        <h3>What's your priority?</h3>
+                        <p class="description">
+                            Pick what matters most to you. ServeIt Studio will automatically test different server configurations to find the best one for your needs.
+                        </p>
+
+                        <div class="info-box">
+                            <h4>🎯 How it works</h4>
+                            <p><strong>Throughput Priority:</strong> Tests different server setups to find the one that handles the most requests at once -- like finding the highway lane configuration that moves the most cars per hour.</p>
+                            <p><strong>Response Time Priority:</strong> Tests different server setups to find the one that starts replying fastest -- like finding the checkout lane that begins scanning your items soonest.</p>
+                            <p><strong>Full Coverage:</strong> Tests all available architectures including multi-node TEP (Tensor + Expert Parallelism) to find the best overall winner.</p>
+                            <p><strong>Single Architecture:</strong> Already know which architecture you want? Pick Aggregated Only, PD Only, or EP Only to skip the comparison and go straight to optimizing that architecture.</p>
+                        </div>
+
+                        <div class="architecture-grid">
+                            <div class="arch-card" data-goal="throughput">
+                                <h4>Throughput Priority</h4>
+                                <p>Finds the setup that handles the most requests per second for your specific model and workload. Tests Aggregated and EP (including multi-node TEP when multiple nodes are available), picks whichever wins.</p>
+                                <div class="best-for">
+                                    <strong>Compares:</strong> <span>Aggregated vs EP/TEP — best config from each is compared</span>
+                                </div>
+                            </div>
+
+                            <div class="arch-card" data-goal="ttft">
+                                <h4>Response Time Priority</h4>
+                                <p>Finds the fastest first-reply time for your specific model and workload. Aggregated can beat PD in some cases, so we test both and pick the winner.</p>
+                                <div class="best-for">
+                                    <strong>Compares:</strong> <span>Aggregated vs Prefill/Decode (PD) — best config from each is compared</span>
+                                </div>
+                            </div>
+
+                            <div class="arch-card" data-goal="balanced">
+                                <h4>Full Coverage</h4>
+                                <p>Tests every possible architecture for your model and workload — Aggregated, PD, EP/TEP (single and multi-node), and PD-EP (disaggregated with Expert Parallelism). Picks the best overall winner.</p>
+                                <div class="best-for">
+                                    <strong>Compares:</strong> <span>Aggregated vs PD vs EP/TEP vs PD-EP — best config from each is compared</span>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div style="text-align: center; margin: 24px 0 16px; color: var(--rh-gray-500); font-weight: 700; font-size: 0.95em;">— OR if you already know which architecture to use —</div>
+
+                        <div class="architecture-grid">
+                            <div class="arch-card" data-goal="aggregated_only">
+                                <h4>Aggregated Only</h4>
+                                <p>Test only the aggregated setup where all GPUs share the same workload. Fastest option — no architecture comparison.</p>
+                                <div class="best-for">
+                                    <strong>Architecture:</strong> <span>Aggregated</span>
+                                </div>
+                            </div>
+
+                            <div class="arch-card" data-goal="pd_only">
+                                <h4>Prefill/Decode Only</h4>
+                                <p>Test only the P/D split architecture where separate GPU groups handle input processing and text generation.</p>
+                                <div class="best-for">
+                                    <strong>Architecture:</strong> <span>Prefill/Decode (PD)</span>
+                                </div>
+                            </div>
+
+                            <div class="arch-card" data-goal="ep_only">
+                                <h4>Expert Parallelism Only</h4>
+                                <p>Test only the EP architecture where MoE expert layers are distributed across GPUs. For Mixture-of-Experts models only.</p>
+                                <div class="best-for">
+                                    <strong>Architecture:</strong> <span>Expert Parallelism (EP)</span>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div style="text-align: center; margin: 24px 0 16px; color: var(--rh-gray-500); font-weight: 700; font-size: 0.95em;">— OR run a specific configuration —</div>
+
+                        <div class="architecture-grid">
+                            <div class="arch-card" data-goal="single_test">
+                                <h4>Single Test</h4>
+                                <p>Run one test with an exact configuration you specify — architecture, TP, and pod count. No sweeps, no optimization — just deploy, benchmark, and report.</p>
+                                <div class="best-for">
+                                    <strong>Best For:</strong> <span>Validating a known-good config or re-testing a recommendation</span>
+                                </div>
+                            </div>
+                        </div>
+
+                        <button class="action-button" id="next-step1">Continue to Model Selection →</button>
+                    </div>

@@ -1,0 +1,73 @@
+                    <div class="step-section" id="step2-section">
+                        <!-- HuggingFace API Token (collapsible) -->
+                        <div style="border:2px solid #f59e0b;border-radius:12px;overflow:hidden;margin-bottom:16px;">
+                            <div style="background:linear-gradient(135deg,#fffbeb,#fef3c7);padding:14px 20px;cursor:pointer;display:flex;align-items:center;justify-content:space-between;" onclick="var b=document.getElementById('hf-token-body');var a=document.getElementById('hf-token-arrow');if(b.style.display==='none'){b.style.display='block';a.textContent='▾';}else{b.style.display='none';a.textContent='▸';}">
+                                <div>
+                                    <div style="font-weight:700;color:#92400e;font-size:1.05em;">🔑 HuggingFace API Token</div>
+                                    <div style="color:#a16207;font-size:0.92em;margin-top:4px;">Only needed if your model requires special access (private or gated models).</div>
+                                </div>
+                                <div id="hf-token-arrow" style="font-size:1.4em;color:#92400e;font-weight:700;">▸</div>
+                            </div>
+                            <div id="hf-token-body" style="display:none;padding:16px 20px;">
+                                <div class="custom-input-box">
+                                    <label>API Token:</label>
+                                    <input type="text" id="hf-token" placeholder="hf_..." autocomplete="off" style="-webkit-text-security:disc;">
+                                    <div class="help-text" style="margin-top: 8px; color: #6b7280; font-size: 0.85em;">
+                                        Get a free token at <a href="https://huggingface.co/settings/tokens" target="_blank" style="color: #e53e3e;">huggingface.co/settings/tokens</a>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Custom Model (toggle) -->
+                        <div style="border:2px solid #0ea5e9;border-radius:12px;overflow:hidden;margin-bottom:16px;">
+                            <div id="custom-model-toggle" style="background:linear-gradient(135deg,#f0f9ff,#e0f2fe);padding:14px 20px;cursor:pointer;display:flex;align-items:center;justify-content:space-between;" onclick="var on=!document.getElementById('custom-model-enabled').checked;document.getElementById('custom-model-enabled').checked=on;document.getElementById('custom-model-body').style.display=on?'block':'none';var sw=document.getElementById('custom-model-switch');sw.style.background=on?'#0ea5e9':'#ccc';sw.querySelector('span').style.transform=on?'translateX(18px)':'translateX(0)';var gs=document.getElementById('model-gallery-section');var od=document.getElementById('model-or-divider');if(gs){gs.style.opacity=on?'0.35':'1';gs.style.pointerEvents=on?'none':'auto';}if(od){od.style.opacity=on?'0.35':'1';}if(on){document.getElementById('custom-model').focus();document.querySelectorAll('.model-card').forEach(function(c){c.classList.remove('selected')});}else{document.getElementById('custom-model').value='';config.model=null;saveConfig();}">
+                                <div>
+                                    <div style="font-weight:700;color:#0c4a6e;font-size:1.05em;">✏️ Custom Model</div>
+                                    <div style="color:#075985;font-size:0.92em;margin-top:4px;">Enter a HuggingFace model path directly. Use this for private, gated, or unlisted models.</div>
+                                </div>
+                                <input type="checkbox" id="custom-model-enabled" style="display:none;">
+                                <div id="custom-model-switch" style="width:40px;height:22px;background:#ccc;border-radius:11px;position:relative;transition:background-color 0.2s;flex-shrink:0;margin-left:16px;">
+                                    <span style="position:absolute;top:2px;left:2px;width:18px;height:18px;background:white;border-radius:50%;transition:transform 0.2s;box-shadow:0 1px 3px rgba(0,0,0,0.2);display:block;"></span>
+                                </div>
+                            </div>
+                            <div id="custom-model-body" style="display:none;padding:16px 20px;">
+                                <div class="custom-input-box">
+                                    <label>Enter custom model path:</label>
+                                    <input type="text" id="custom-model" placeholder="e.g., username/custom-model-name">
+                                    <div class="help-text" style="margin-top: 8px; color: #6b7280; font-size: 0.85em;">The model's HuggingFace path, e.g. "meta-llama/Llama-3-8B". You can find this on the model's HuggingFace page.</div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div id="model-or-divider" style="text-align: center; margin: 20px 0; color: var(--rh-gray-500); font-weight: 700; font-size: 0.95em;">— OR —</div>
+
+                        <div id="model-gallery-section" style="border:2px solid #22c55e;border-radius:12px;overflow:hidden;margin-bottom:16px;transition:opacity 0.2s;">
+                            <div style="background:linear-gradient(135deg,#f0fdf4,#dcfce7);padding:14px 20px;cursor:pointer;display:flex;align-items:center;justify-content:space-between;" onclick="var b=document.getElementById('model-gallery-body');var a=document.getElementById('model-gallery-arrow');if(b.style.display==='none'){b.style.display='block';a.textContent='▾';}else{b.style.display='none';a.textContent='▸';}">
+                                <div>
+                                    <div style="font-weight:700;color:#15803d;font-size:1.05em;">📋 Model Gallery</div>
+                                    <div style="color:#166534;font-size:0.92em;margin-top:4px;">Browse and select from popular open-source LLM models. Filter by category or search by name.</div>
+                                </div>
+                                <div id="model-gallery-arrow" style="font-size:1.4em;color:#15803d;font-weight:700;">▾</div>
+                            </div>
+                            <div id="model-gallery-body" style="padding:16px 20px;">
+                                <input type="text" class="search-box" id="model-search" placeholder="Search models..." style="margin-bottom:12px;">
+
+                                <div id="model-category-filters" style="display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 16px;">
+                                    <!-- Populated dynamically from model categories -->
+                                </div>
+
+                                <div class="model-grid" id="model-list">
+                                    <!-- Models loaded dynamically from /api/models -->
+                                </div>
+
+                                <div style="text-align: center; margin-top: 20px;">
+                                    <button id="load-more-models" style="display: none; padding: 10px 32px; border: 2px solid #cbd5e1; border-radius: 6px; background: white; color: #475569; font-weight: 600; font-size: 0.9em; font-family: 'Red Hat Display', sans-serif; cursor: pointer; transition: all 0.2s;" onmouseover="this.style.borderColor='var(--rh-red-primary)';this.style.color='var(--rh-red-primary)';" onmouseout="this.style.borderColor='#cbd5e1';this.style.color='#475569';">
+                                        Load More Models
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+
+                        <button class="action-button" id="next-step2">Continue to Workload →</button>
+                    </div>

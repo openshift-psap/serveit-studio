@@ -1,0 +1,443 @@
+---
+apiVersion: security.openshift.io/v1
+kind: SecurityContextConstraints
+metadata:
+  name: hardware-discovery-scc
+allowHostDirVolumePlugin: true
+allowHostIPC: false
+allowHostNetwork: true
+allowHostPID: true
+allowHostPorts: false
+allowPrivilegedContainer: true
+allowedCapabilities:
+- '*'
+defaultAddCapabilities: null
+fsGroup:
+  type: RunAsAny
+groups: []
+priority: null
+readOnlyRootFilesystem: false
+requiredDropCapabilities: null
+runAsUser:
+  type: RunAsAny
+seLinuxContext:
+  type: RunAsAny
+supplementalGroups:
+  type: RunAsAny
+users:
+- system:serviceaccount:{{ namespace }}:hardware-discovery
+volumes:
+- '*'
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: hardware-discovery
+  namespace: {{ namespace }}
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: hardware-discovery
+  namespace: {{ namespace }}
+rules:
+- apiGroups: [""]
+  resources: ["configmaps"]
+  verbs: ["get", "list", "create", "update", "patch"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: hardware-discovery
+  namespace: {{ namespace }}
+subjects:
+- kind: ServiceAccount
+  name: hardware-discovery
+  namespace: {{ namespace }}
+roleRef:
+  kind: Role
+  name: hardware-discovery
+  apiGroup: rbac.authorization.k8s.io
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: hardware-discovery-script
+  namespace: {{ namespace }}
+data:
+  discover.sh: |
+    #!/bin/bash
+    # Hardware Discovery Script
+    # Scans node for GPUs, NICs, CPU, RAM and reports to ConfigMap
+
+    NODE_NAME=${NODE_NAME:-$(hostname)}
+    OUTPUT_FILE="/tmp/hardware-info.json"
+    CONFIGMAP_NAME="hardware-info-${NODE_NAME}"
+
+    # Check if ConfigMap already exists (discovery already completed)
+    if kubectl get configmap "${CONFIGMAP_NAME}" -n {{ namespace }} &>/dev/null; then
+      echo "✅ Hardware info already collected for ${NODE_NAME}. Sleeping..."
+      # ConfigMap exists, sleep indefinitely (DaemonSet will keep us running)
+      sleep infinity
+    fi
+
+    echo "🔍 Scanning hardware on node: ${NODE_NAME}"
+
+    # Initialize JSON structure
+    cat > ${OUTPUT_FILE} <<EOF
+    {
+      "node": "${NODE_NAME}",
+      "timestamp": "$(date -u +%Y-%m-%dT%H:%M:%SZ)",
+      "gpus": [],
+      "nics": [],
+      "cpu": {},
+      "memory": {}
+    }
+    EOF
+
+    # Detect GPUs using nvidia-smi
+    if command -v nvidia-smi &> /dev/null; then
+      echo "📊 Detecting NVIDIA GPUs..."
+      GPU_COUNT=$(nvidia-smi --query-gpu=count --format=csv,noheader | head -1)
+      GPU_MODEL=$(nvidia-smi --query-gpu=name --format=csv,noheader | head -1)
+      GPU_MEMORY=$(nvidia-smi --query-gpu=memory.total --format=csv,noheader,nounits | head -1)
+
+      # Update JSON with GPU info
+      jq --arg count "$GPU_COUNT" --arg model "$GPU_MODEL" --arg memory "$GPU_MEMORY" \
+        '.gpus = [{"vendor": "NVIDIA", "model": $model, "count": ($count | tonumber), "memory_mb": ($memory | tonumber)}]' \
+        ${OUTPUT_FILE} > ${OUTPUT_FILE}.tmp && mv ${OUTPUT_FILE}.tmp ${OUTPUT_FILE}
+    fi
+
+    # Detect ALL Network Interfaces with speed
+    echo "🌐 Detecting Network Interfaces..."
+    NIC_INFO="[]"
+
+    # Build a set of RDMA device names for cross-referencing
+    RDMA_DEVICES=""
+    if [ -d /sys/class/infiniband ]; then
+      for dev in /sys/class/infiniband/*; do
+        if [ -d "$dev" ]; then
+          RDMA_DEVICES="$RDMA_DEVICES $(basename $dev)"
+        fi
+      done
+    fi
+
+    # Scan ALL network interfaces from /sys/class/net
+    for netdev in /sys/class/net/*; do
+      if [ -d "$netdev" ]; then
+        IFACE=$(basename $netdev)
+
+        # Skip loopback, virtual, bridge, veth, and OVN/OVS interfaces
+        if [[ "$IFACE" == "lo" ]] || \
+           [[ "$IFACE" == br-* ]] || \
+           [[ "$IFACE" == ovs-* ]] || \
+           [[ "$IFACE" == ovn-* ]] || \
+           [[ "$IFACE" == genev_* ]] || \
+           [[ "$IFACE" == vxlan* ]] || \
+           [[ "$IFACE" == veth* ]] || \
+           [[ "$IFACE" == docker* ]] || \
+           [[ "$IFACE" == cni* ]] || \
+           [[ "$IFACE" == flannel* ]] || \
+           [[ "$IFACE" == cali* ]]; then
+          continue
+        fi
+
+        # Skip virtual ethernet pairs (container networking) - names are hex strings
+        if [[ "$IFACE" =~ ^[0-9a-f]{15,}$ ]]; then
+          continue
+        fi
+
+        # Detect speed (Mbps from sysfs, convert to Gbps)
+        SPEED_GBPS=0
+        if [ -f "$netdev/speed" ]; then
+          SPEED_MBPS=$(cat "$netdev/speed" 2>/dev/null || echo "-1")
+          if [ "$SPEED_MBPS" != "-1" ] && [ "$SPEED_MBPS" -gt 0 ] 2>/dev/null; then
+            # Use awk for float division
+            SPEED_GBPS=$(awk "BEGIN {printf \"%.1f\", $SPEED_MBPS / 1000}")
+          fi
+        fi
+
+        # Try ethtool as fallback for speed
+        if [ "$SPEED_GBPS" = "0" ] && command -v ethtool &> /dev/null; then
+          ETHTOOL_SPEED=$(ethtool "$IFACE" 2>/dev/null | grep "Speed:" | awk '{print $2}' | sed 's/Mb\/s//' | sed 's/Gb\/s/*1000/' | sed 's/Kb\/s/\/1000/')
+          if [[ "$ETHTOOL_SPEED" =~ ^[0-9]+$ ]] && [ "$ETHTOOL_SPEED" -gt 0 ] 2>/dev/null; then
+            SPEED_GBPS=$(awk "BEGIN {printf \"%.1f\", $ETHTOOL_SPEED / 1000}")
+          fi
+        fi
+
+        # Detect interface type
+        TYPE="Ethernet"
+        VENDOR="unknown"
+        MODEL="unknown"
+
+        # Check if this interface has an RDMA counterpart
+        # Read the driver/device info
+        DRIVER=""
+        if [ -L "$netdev/device/driver" ]; then
+          DRIVER=$(basename $(readlink "$netdev/device/driver" 2>/dev/null) 2>/dev/null || echo "")
+        fi
+
+        # Check if it's an RDMA-capable device
+        IS_RDMA=false
+        for rdma_dev in $RDMA_DEVICES; do
+          # mlx5 RDMA devices map to net interfaces - check by matching device paths
+          if [ -d "/sys/class/infiniband/$rdma_dev/device/net/$IFACE" ]; then
+            IS_RDMA=true
+            break
+          fi
+        done
+
+        # Detect vendor and model from driver or device info
+        if [[ "$DRIVER" == "mlx5_core" ]] || [[ "$IFACE" == mlx5* ]]; then
+          VENDOR="Mellanox"
+          MODEL="ConnectX-5/6/7 (mlx5)"
+          if [ "$IS_RDMA" = true ]; then
+            TYPE="RoCE"
+          fi
+        elif [[ "$DRIVER" == "mlx4"* ]]; then
+          VENDOR="Mellanox"
+          MODEL="ConnectX-3/4 (mlx4)"
+          if [ "$IS_RDMA" = true ]; then
+            TYPE="InfiniBand"
+          fi
+        elif [[ "$DRIVER" == "i40e" ]] || [[ "$DRIVER" == "ice" ]] || [[ "$DRIVER" == "ixgbe" ]] || [[ "$DRIVER" == "igb" ]] || [[ "$DRIVER" == "e1000"* ]]; then
+          VENDOR="Intel"
+          MODEL="$DRIVER"
+        elif [[ "$DRIVER" == "bnxt_en" ]] || [[ "$DRIVER" == "tg3" ]] || [[ "$DRIVER" == "bnx2"* ]]; then
+          VENDOR="Broadcom"
+          MODEL="$DRIVER"
+        elif [[ "$DRIVER" == "virtio"* ]]; then
+          VENDOR="VirtIO"
+          MODEL="virtio-net"
+          TYPE="Ethernet"
+        elif [[ "$DRIVER" == "hfi1" ]]; then
+          VENDOR="Intel"
+          MODEL="Omni-Path"
+          TYPE="InfiniBand"
+        fi
+
+        # Also check /sys/class/infiniband for pure IB devices not in /sys/class/net
+        # (handled separately below)
+
+        # Check link type from sysfs
+        if [ -f "$netdev/type" ]; then
+          LINK_TYPE=$(cat "$netdev/type" 2>/dev/null || echo "1")
+          if [ "$LINK_TYPE" = "32" ]; then
+            TYPE="InfiniBand"
+          fi
+        fi
+
+        NIC_INFO=$(echo "$NIC_INFO" | jq \
+          --arg name "$IFACE" \
+          --arg vendor "$VENDOR" \
+          --arg model "$MODEL" \
+          --arg type "$TYPE" \
+          --argjson speed "$SPEED_GBPS" \
+          '. += [{"name": $name, "vendor": $vendor, "model": $model, "type": $type, "speed_gbps": $speed}]')
+      fi
+    done
+
+    # Also add pure InfiniBand devices from /sys/class/infiniband that have no /sys/class/net mapping
+    if [ -d /sys/class/infiniband ]; then
+      for dev in /sys/class/infiniband/*; do
+        if [ -d "$dev" ]; then
+          IB_NAME=$(basename $dev)
+
+          # Check if already covered via /sys/class/net
+          ALREADY_FOUND=$(echo "$NIC_INFO" | jq --arg name "$IB_NAME" '[.[] | select(.name == $name)] | length')
+          # Also check if any net interface maps to this IB device
+          HAS_NET_IFACE=false
+          if [ -d "$dev/device/net" ]; then
+            NET_COUNT=$(ls "$dev/device/net" 2>/dev/null | wc -l)
+            if [ "$NET_COUNT" -gt 0 ]; then
+              HAS_NET_IFACE=true
+            fi
+          fi
+
+          if [ "$ALREADY_FOUND" = "0" ] && [ "$HAS_NET_IFACE" = "false" ]; then
+            VENDOR="unknown"
+            MODEL="unknown"
+            TYPE="InfiniBand"
+
+            if [[ "$IB_NAME" == mlx5* ]]; then
+              VENDOR="Mellanox"
+              MODEL="ConnectX-5/6/7 (mlx5)"
+              TYPE="RoCE"
+            elif [[ "$IB_NAME" == mlx4* ]]; then
+              VENDOR="Mellanox"
+              MODEL="ConnectX-3/4 (mlx4)"
+            elif [[ "$IB_NAME" == hfi* ]]; then
+              VENDOR="Intel"
+              MODEL="Omni-Path"
+            fi
+
+            # Try to get IB port speed
+            IB_SPEED_GBPS=0
+            if [ -f "$dev/ports/1/rate" ]; then
+              IB_RATE=$(cat "$dev/ports/1/rate" 2>/dev/null | awk '{print $1}')
+              if [[ "$IB_RATE" =~ ^[0-9]+$ ]] && [ "$IB_RATE" -gt 0 ] 2>/dev/null; then
+                IB_SPEED_GBPS=$IB_RATE
+              fi
+            fi
+
+            NIC_INFO=$(echo "$NIC_INFO" | jq \
+              --arg name "$IB_NAME" \
+              --arg vendor "$VENDOR" \
+              --arg model "$MODEL" \
+              --arg type "$TYPE" \
+              --argjson speed "$IB_SPEED_GBPS" \
+              '. += [{"name": $name, "vendor": $vendor, "model": $model, "type": $type, "speed_gbps": $speed}]')
+          fi
+        fi
+      done
+    fi
+
+    # Store NIC info
+    if [ "$NIC_INFO" != "[]" ]; then
+      jq --argjson nics "$NIC_INFO" '.nics = $nics' ${OUTPUT_FILE} > ${OUTPUT_FILE}.tmp && mv ${OUTPUT_FILE}.tmp ${OUTPUT_FILE}
+    fi
+
+    # Detect CPU
+    echo "🖥️ Detecting CPU..."
+    CPU_MODEL=$(lscpu | grep "Model name" | cut -d: -f2 | xargs)
+    CPU_CORES=$(nproc)
+    CPU_SOCKETS=$(lscpu | grep "Socket(s)" | awk '{print $2}')
+
+    jq --arg model "$CPU_MODEL" --arg cores "$CPU_CORES" --arg sockets "$CPU_SOCKETS" \
+      '.cpu = {"model": $model, "cores": ($cores | tonumber), "sockets": ($sockets | tonumber)}' \
+      ${OUTPUT_FILE} > ${OUTPUT_FILE}.tmp && mv ${OUTPUT_FILE}.tmp ${OUTPUT_FILE}
+
+    # Detect NUMA topology
+    echo "🏗️ Detecting NUMA topology..."
+    NUMA_NODES=$(ls -d /sys/devices/system/node/node* 2>/dev/null | wc -l)
+    NUMA_NODES=${NUMA_NODES:-1}
+
+    jq --arg sockets "$CPU_SOCKETS" --arg numa "$NUMA_NODES" \
+      '.cpu.sockets = ($sockets | tonumber) | .cpu.numa_nodes = ($numa | tonumber)' \
+      ${OUTPUT_FILE} > ${OUTPUT_FILE}.tmp && mv ${OUTPUT_FILE}.tmp ${OUTPUT_FILE}
+
+    # Detect Memory
+    echo "💾 Detecting Memory..."
+    TOTAL_MEM_KB=$(grep MemTotal /proc/meminfo | awk '{print $2}')
+    TOTAL_MEM_GB=$((TOTAL_MEM_KB / 1024 / 1024))
+
+    jq --arg total_gb "$TOTAL_MEM_GB" \
+      '.memory = {"total_gb": ($total_gb | tonumber)}' \
+      ${OUTPUT_FILE} > ${OUTPUT_FILE}.tmp && mv ${OUTPUT_FILE}.tmp ${OUTPUT_FILE}
+
+    # Pretty print the result
+    echo "✅ Hardware discovery complete:"
+    jq . ${OUTPUT_FILE}
+
+    # Store in ConfigMap with label for easy cleanup
+    echo "💾 Storing results in ConfigMap..."
+
+    # Create or update ConfigMap from the output file
+    kubectl create configmap "hardware-info-${NODE_NAME}" \
+      --from-file=hardware.json=${OUTPUT_FILE} \
+      --dry-run=client -o yaml | \
+      kubectl label --local -f - --dry-run=client -o yaml \
+        app=hardware-discovery "node=${NODE_NAME}" | \
+      kubectl apply -n {{ namespace }} -f -
+
+    echo "✅ Hardware info stored in ConfigMap: hardware-info-${NODE_NAME}"
+    echo ""
+    echo "🎉 Hardware discovery completed successfully!"
+    echo "This pod will now sleep. To clean up, delete the DaemonSet:"
+    echo "  kubectl delete daemonset hardware-discovery -n {{ namespace }}"
+    echo ""
+
+    # Sleep indefinitely - discovery is complete
+    # Pod will stay in Running state with minimal resource usage
+    sleep infinity
+
+---
+apiVersion: apps/v1
+kind: DaemonSet
+metadata:
+  name: hardware-discovery
+  namespace: {{ namespace }}
+  labels:
+    app: hardware-discovery
+spec:
+  selector:
+    matchLabels:
+      app: hardware-discovery
+  template:
+    metadata:
+      labels:
+        app: hardware-discovery
+    spec:
+      hostNetwork: true
+      hostPID: true
+      nodeSelector:
+        nvidia.com/gpu.present: "true"  # Only run on GPU nodes
+      tolerations:
+      - key: nvidia.com/gpu
+        operator: Exists
+        effect: NoSchedule
+      containers:
+      - name: discovery
+        image: {{ discovery_image | default('ghcr.io/llm-d/llm-d-cuda:v0.8.0') }}
+        imagePullPolicy: IfNotPresent
+        securityContext:
+          privileged: true
+        command:
+        - /bin/bash
+        - -c
+        - |
+          # Install jq and kubectl if not present (vLLM image may already have them)
+          if ! command -v jq &> /dev/null; then
+            # Try pip-based install or dnf depending on what's available
+            pip install jq 2>/dev/null || dnf install -y jq 2>/dev/null || \
+              (curl -sL https://github.com/jqlang/jq/releases/download/jq-1.7.1/jq-linux-amd64 -o /usr/local/bin/jq && chmod +x /usr/local/bin/jq) || true
+          fi
+          if ! command -v kubectl &> /dev/null; then
+            curl -sL "https://dl.k8s.io/release/$(curl -sL https://dl.k8s.io/release/stable.txt)/bin/linux/amd64/kubectl" -o /usr/local/bin/kubectl && chmod +x /usr/local/bin/kubectl || true
+          fi
+
+          # Run discovery script
+          # Script will sleep infinity if already completed
+          /scripts/discover.sh
+        env:
+        - name: NODE_NAME
+          valueFrom:
+            fieldRef:
+              fieldPath: spec.nodeName
+        volumeMounts:
+        - name: scripts
+          mountPath: /scripts
+        - name: dev
+          mountPath: /dev
+        - name: sys
+          mountPath: /sys
+        - name: proc
+          mountPath: /proc
+        - name: tmp-mem
+          mountPath: /tmp
+        resources:
+          requests:
+            memory: "128Mi"
+            cpu: "100m"
+          limits:
+            memory: "256Mi"
+            cpu: "200m"
+      serviceAccountName: hardware-discovery
+      volumes:
+      - name: scripts
+        configMap:
+          name: hardware-discovery-script
+          defaultMode: 0755
+      - name: dev
+        hostPath:
+          path: /dev
+      - name: sys
+        hostPath:
+          path: /sys
+      - name: proc
+        hostPath:
+          path: /proc
+      - name: tmp-mem
+        emptyDir:
+          medium: Memory
+          sizeLimit: 512Mi

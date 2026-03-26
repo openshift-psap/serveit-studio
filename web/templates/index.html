@@ -1,0 +1,159 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ServeIt Studio - llm-d recipe based optimizer</title>
+    <link rel="icon" type="image/png" sizes="32x32" href="{{ url_for('static', filename='img/favicon.png') }}">
+    <link rel="apple-touch-icon" sizes="180x180" href="{{ url_for('static', filename='img/apple-touch-icon.png') }}">
+    <script src="https://cdn.socket.io/4.5.4/socket.io.min.js"></script>
+    <script src="https://cdn.plot.ly/plotly-2.35.2.min.js" charset="utf-8"></script>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Red+Hat+Display:wght@400;500;600;700;800;900&family=Red+Hat+Mono:wght@400;500;600;700&family=Syne:wght@700;800;900&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}?v={{ range(10000,99999) | random }}">
+</head>
+<body>
+    {% include 'partials/modals.html' %}
+
+    <button class="sidebar-toggle" id="sidebar-toggle">☰</button>
+    <div class="sidebar-backdrop" id="sidebar-backdrop"></div>
+
+    <div class="main-container">
+        <!-- Sidebar -->
+        <aside class="sidebar" id="sidebar">
+            <div class="sidebar-header">
+                <img src="{{ url_for('static', filename='img/serveit-logo-horizontal.png') }}?v={{ range(10000,99999) | random }}" alt="ServeIt Studio">
+            </div>
+            <nav class="sidebar-nav">
+                <div class="sidebar-section-label">Wizard Steps</div>
+                <div class="step-indicators">
+                    <div class="step-indicator active" id="step1-indicator">
+                        <div class="step-number">1</div>
+                        <div class="step-label">Goal</div>
+                        <div class="step-sublabel" id="step1-value">Select</div>
+                    </div>
+                    <div class="step-indicator" id="step2-indicator">
+                        <div class="step-number">2</div>
+                        <div class="step-label">Model</div>
+                        <div class="step-sublabel" id="step2-value">Choose</div>
+                    </div>
+                    <div class="step-indicator" id="step3-indicator">
+                        <div class="step-number">3</div>
+                        <div class="step-label">Workload</div>
+                        <div class="step-sublabel" id="step3-value">ISL/OSL</div>
+                    </div>
+                    <div class="step-indicator" id="step4-indicator">
+                        <div class="step-number">4</div>
+                        <div class="step-label">Test Config</div>
+                        <div class="step-sublabel" id="step4-value">Settings</div>
+                    </div>
+                    <div class="step-indicator" id="step5-indicator">
+                        <div class="step-number">5</div>
+                        <div class="step-label">Infrastructure & Deployment</div>
+                        <div class="step-sublabel" id="step5-value">Resources</div>
+                    </div>
+                    <div class="step-indicator" id="step6-indicator">
+                        <div class="step-number">6</div>
+                        <div class="step-label">EPP Config</div>
+                        <div class="step-sublabel" id="step6-value">Routing</div>
+                    </div>
+                    <div class="step-indicator" id="step7-indicator">
+                        <div class="step-number">7</div>
+                        <div class="step-label">Review & Run</div>
+                        <div class="step-sublabel" id="step7-value">Summary</div>
+                    </div>
+                </div>
+
+                <div class="sidebar-separator"></div>
+                <div class="sidebar-section-label">Actions</div>
+
+                <div class="step-indicator reset-indicator" id="reset-indicator">
+                    <div class="reset-icon">🔄</div>
+                    <div class="step-label">Reset</div>
+                </div>
+                <div class="step-indicator download-indicator" id="download-indicator">
+                    <div class="download-icon">💾</div>
+                    <div class="step-label">Download</div>
+                </div>
+                <div class="step-indicator upload-indicator" id="upload-indicator">
+                    <div class="upload-icon">📤</div>
+                    <div class="step-label">Upload</div>
+                </div>
+                <input type="file" id="upload-db-input" accept=".db,.sqlite,.sqlite3,.gz" style="display: none;">
+                <div class="step-indicator report-indicator" id="report-indicator">
+                    <div class="report-icon">📊</div>
+                    <div class="step-label">Analytics</div>
+                </div>
+                <div class="step-indicator resume-indicator" id="resume-indicator">
+                    <div class="resume-icon">▶</div>
+                    <div class="step-label">Resume</div>
+                </div>
+                <div class="step-indicator mlflow-indicator" id="mlflow-indicator" onclick="openMlflowDialog()" style="cursor:pointer;">
+                    <div class="resume-icon">🔬</div>
+                    <div class="step-label">MLflow</div>
+                </div>
+                <div class="step-indicator" id="rest-control-indicator" style="display:none;cursor:pointer;" onclick="document.getElementById('rest-control-modal').classList.add('active');">
+                    <div class="resume-icon">🤖</div>
+                    <div class="step-label" style="color:#d97706;font-weight:700;">API</div>
+                </div>
+            </nav>
+            <div class="sidebar-footer">ServeIt Studio v1.0</div>
+        </aside>
+
+        <!-- Main Area -->
+        <div class="main-area">
+            <div class="header-row">
+                <div class="breadcrumb-bar">
+                    <span class="breadcrumb-step">ServeIt Studio</span>
+                    <span style="color: var(--rh-gray-400);">›</span>
+                    <span class="breadcrumb-step" id="breadcrumb-instance" style="color:#0ea5e9;font-weight:600;"></span>
+                    <span style="color: var(--rh-gray-400);" id="breadcrumb-instance-sep" class="hidden">›</span>
+                    <span class="breadcrumb-current" id="breadcrumb-title">Step 1: Goal</span>
+                </div>
+                <div class="console-toolbar">
+                    <span>💻 Console</span>
+                    <div class="console-actions">
+                        <button id="save-console">💾 Save</button>
+                        <button id="clear-console">🗑️ Clear</button>
+                    </div>
+                </div>
+            </div>
+
+            <div class="content-area">
+                <!-- Wizard Panel (left) -->
+                <div class="panel wizard-panel">
+                    <div class="panel-content">
+                        {% include 'partials/step1.html' %}
+                        {% include 'partials/step2.html' %}
+                        {% include 'partials/step3.html' %}
+                        {% include 'partials/step4.html' %}
+                        {% include 'partials/step6.html' %}
+                        {% include 'partials/step5_epp.html' %}
+                        {% include 'partials/step7.html' %}
+                    </div>
+                </div>
+
+                <!-- Console Panel (right, fills remaining space) -->
+                {% include 'partials/console.html' %}
+            </div>
+        </div>
+    </div>
+
+    {% include 'partials/overlays.html' %}
+
+    <script src="{{ url_for('static', filename='js/modules/socket.js') }}?v={{ range(10000,99999) | random }}"></script>
+    <script src="{{ url_for('static', filename='js/modules/console.js') }}?v={{ range(10000,99999) | random }}"></script>
+    <script src="{{ url_for('static', filename='js/modules/config.js') }}?v={{ range(10000,99999) | random }}"></script>
+    <script src="{{ url_for('static', filename='js/modules/wizard.js') }}?v={{ range(10000,99999) | random }}"></script>
+    <script src="{{ url_for('static', filename='js/modules/settings.js') }}?v={{ range(10000,99999) | random }}"></script>
+    <script src="{{ url_for('static', filename='js/modules/cluster.js') }}?v={{ range(10000,99999) | random }}"></script>
+    <script src="{{ url_for('static', filename='js/modules/navigation.js') }}?v={{ range(10000,99999) | random }}"></script>
+    <script src="{{ url_for('static', filename='js/modules/resume.js') }}?v={{ range(10000,99999) | random }}"></script>
+    <script src="{{ url_for('static', filename='js/modules/report.js') }}?v={{ range(10000,99999) | random }}"></script>
+    <script src="{{ url_for('static', filename='js/modules/charts.js') }}?v={{ range(10000,99999) | random }}"></script>
+    <script src="{{ url_for('static', filename='js/modules/ui-helpers.js') }}?v={{ range(10000,99999) | random }}"></script>
+    <script src="{{ url_for('static', filename='js/report-download.js') }}?v={{ range(10000,99999) | random }}"></script>
+    <script src="{{ url_for('static', filename='js/modules/mlflow.js') }}?v={{ range(10000,99999) | random }}"></script>
+</body>
+</html>

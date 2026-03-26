@@ -1,0 +1,99 @@
+# Bare Metal - InfiniBand Profile
+# High-performance RDMA with InfiniBand
+
+name: infiniband
+description: "Bare metal with InfiniBand RDMA (high performance)"
+
+# No pod scheduling constraints for bare metal
+constraints:
+  max_prefill_pods_per_node: null
+  max_decode_pods_per_node: null
+  max_total_pods_per_node: null
+  supports_rdma: true
+  supports_pod_affinity: true
+  supports_node_affinity: true
+  supports_multi_pod_per_node: true
+
+# InfiniBand network configuration
+network:
+  rdma_type: infiniband
+  rdma_device_plugin: rdma/rdma_shared_device_a
+  requires_cni: false
+  max_bandwidth_gbps: 400
+  expected_latency_us: 0.5  # Sub-microsecond latency
+  config:
+    ib_device: mlx5_0
+    ib_port: 1
+    roce_mode: false
+
+# Template overrides for PD deployments
+template_overrides:
+  pd:
+    # InfiniBand-specific annotations
+    pod_annotations:
+      rdma.device: mlx5_0
+
+    # Resource requests for RDMA
+    resources:
+      requests:
+        rdma/rdma_shared_device_a: 1
+      limits:
+        rdma/rdma_shared_device_a: 1
+
+    # Environment variables for InfiniBand
+    env:
+      - name: NCCL_IB_HCA
+        value: mlx5
+      - name: NCCL_IB_DISABLE
+        value: "0"
+      - name: NCCL_SOCKET_IFNAME
+        value: ib0
+
+# Enabled architectures
+enabled_architectures:
+  - aggregated
+  - pd
+  - ep
+
+# Provider-specific configuration
+config:
+  # All PD ratios work on bare metal
+  recommended_ratios:
+    - "1:1"
+    - "1:2"
+    - "1:4"
+    - "2:1"
+
+  notes: |
+    InfiniBand provides the highest performance for PD disaggregation:
+    - Sub-microsecond latency
+    - 400 Gbps bandwidth per NIC
+    - Ideal for large KV cache transfers
+    - No cloud provider constraints
+
+# FUTURE: Metrics configuration
+# metrics:
+#   endpoint_url: http://prometheus.monitoring.svc:9090
+#   custom_queries:
+#     gpu_utilization: 'avg(DCGM_FI_DEV_GPU_UTIL{namespace="llm-d"})'
+#     ib_throughput: 'rate(node_infiniband_port_received_data_bytes_total{port="1"}[5m])'
+#     ib_errors: 'rate(node_infiniband_port_receive_errors_total{port="1"}[5m])'
+#   scrape_interval_seconds: 15
+
+# FUTURE: Cost model (on-premises has different cost structure)
+# cost_model:
+#   gpu_cost_per_hour: 0.0  # Capex, not opex
+#   pricing_factors:
+#     power_cost_per_kwh: 0.12
+#     gpu_power_watts: 700
+
+# FUTURE: Search space
+# search_space:
+#   allowed_pd_ratios:
+#     - "1:1"
+#     - "1:2"
+#     - "1:4"
+#     - "2:1"
+#   allowed_tp_values: [1, 2, 4, 8]
+#   min_batch_size: 1
+#   max_batch_size: 512

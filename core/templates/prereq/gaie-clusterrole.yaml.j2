@@ -1,0 +1,25 @@
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: {{ gaie_name | default('gaie-pd') }}-{{ namespace }}-epp
+  labels:
+    app.kubernetes.io/name: {{ gaie_name | default('gaie-pd-epp') }}
+    app.kubernetes.io/version: v1.3.0
+    component: serveit-prereq
+rules:
+  - apiGroups:
+      - authentication.k8s.io
+    resources:
+      - tokenreviews
+    verbs:
+      - create
+  - apiGroups:
+      - authorization.k8s.io
+    resources:
+      - subjectaccessreviews
+    verbs:
+      - create
+  - nonResourceURLs:
+      - /metrics
+    verbs:
+      - get

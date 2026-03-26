@@ -1,0 +1,69 @@
+# CoreWeave - Default Profile
+# Kubernetes-native GPU cloud with InfiniBand RDMA
+
+name: default
+description: "CoreWeave with InfiniBand RDMA"
+
+# No pod scheduling constraints on CoreWeave
+constraints:
+  max_prefill_pods_per_node: null
+  max_decode_pods_per_node: null
+  max_total_pods_per_node: null
+  supports_rdma: true
+  supports_pod_affinity: true
+  supports_node_affinity: true
+  supports_multi_pod_per_node: true
+
+# InfiniBand network configuration
+network:
+  rdma_type: infiniband
+  rdma_device_plugin: rdma/ib
+  requires_cni: false
+  max_bandwidth_gbps: 3200  # 8x 400Gbps NICs
+  expected_latency_us: 0.5
+  config:
+    ib_device: mlx5_0
+    ib_port: 1
+    roce_mode: false
+
+# Template overrides for PD deployments
+template_overrides:
+  pd:
+    pod_annotations: {}
+
+    anti_affinity_required: false
+
+    resources:
+      requests:
+        rdma/ib: 1
+      limits:
+        rdma/ib: 1
+
+    env:
+      - name: NCCL_IB_HCA
+        value: mlx5
+      - name: NCCL_IB_DISABLE
+        value: "0"
+      - name: NCCL_SOCKET_IFNAME
+        value: eth0
+
+# Enabled architectures
+enabled_architectures:
+  - aggregated
+  - pd
+  - ep
+
+# Provider-specific configuration
+config:
+  recommended_ratios:
+    - "1:1"
+    - "1:2"
+    - "1:4"
+    - "2:1"
+
+  notes: |
+    CoreWeave provides GPU cloud with:
+    - InfiniBand networking (400Gbps per NIC, 8 NICs per node)
+    - No pod-per-node constraints
+    - Vanilla Kubernetes (not OpenShift)
+    - rdma/ib device plugin for RDMA resources

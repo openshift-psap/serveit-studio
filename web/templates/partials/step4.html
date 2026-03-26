@@ -1,0 +1,552 @@
+                    <div class="step-section" id="step4-section">
+                        <h3>Test Configuration</h3>
+                        <p class="description">Configure how long and how hard to push each test run.</p>
+
+                        <!-- Run Description -->
+                        <div style="border:2px solid #059669;border-radius:12px;overflow:hidden;margin-bottom:20px;">
+                            <div style="background:linear-gradient(135deg,#ecfdf5,#d1fae5);padding:14px 20px;">
+                                <div style="font-weight:700;color:#065f46;font-size:1.05em;">Run Description <span style="font-weight:400;color:#6ee7b7;font-size:0.85em;">(optional)</span></div>
+                                <div style="color:#047857;font-size:0.92em;margin-top:4px;">A short note to help you identify this run later. Shows up in the run list and reports.</div>
+                            </div>
+                            <div style="padding:12px 20px;">
+                                <input type="text" id="run-description-input" placeholder="e.g., Baseline test with 80% prefix cache on H200s" style="width:100%;padding:10px 14px;border:2px solid #a7f3d0;border-radius:8px;font-size:0.95em;box-sizing:border-box;" oninput="config.run_description=this.value;saveConfig();">
+                            </div>
+                        </div>
+
+                        <!-- Benchmark Settings -->
+                        <div style="border:2px solid #0ea5e9;border-radius:12px;overflow:hidden;margin-bottom:20px;">
+                            <div style="background:linear-gradient(135deg,#f0f9ff,#e0f2fe);padding:16px 20px;">
+                                <div style="font-weight:700;color:#0c4a6e;font-size:1.05em;">🎯 Benchmark Settings</div>
+                                <div style="color:#075985;font-size:0.92em;margin-top:4px;">Control how many simulated users hit the server, how long each test runs, and whether to automatically find the right load level.</div>
+                            </div>
+                            <div style="padding:16px 20px;">
+                                <!-- Load Profile -->
+                                <div style="margin-bottom:16px;">
+                                    <label style="font-weight:600;font-size:0.9em;margin-bottom:8px;display:block;">Load Profile</label>
+                                    <!-- Constant RPS and Poisson RPS hidden: calibration math (Little's Law),
+                                         concurrency sweep levels, and InferenceX charts all assume concurrent users.
+                                         Using constant/poisson would produce incorrect calibration and misleading results.
+                                         Re-enable when the pipeline supports rate-based calibration. -->
+                                    <div style="display: grid; grid-template-columns: repeat(1, 1fr); gap: 6px;">
+                                        <button type="button" id="rate-type-concurrent" onclick="setRateType('concurrent')" style="padding:10px 0; border:2px solid var(--rh-red-primary); border-radius:6px; background:var(--rh-red-primary); color:white; font-weight:600; cursor:pointer; font-size:0.85em; text-align:center;">Concurrent Users</button>
+                                        <!--<button type="button" id="rate-type-constant" onclick="setRateType('constant')" style="padding:10px 0; border:2px solid #cbd5e1; border-radius:6px; background:white; color:#475569; font-weight:600; cursor:pointer; font-size:0.85em; text-align:center;">Constant RPS</button>-->
+                                        <!--<button type="button" id="rate-type-poisson" onclick="setRateType('poisson')" style="padding:10px 0; border:2px solid #cbd5e1; border-radius:6px; background:white; color:#475569; font-weight:600; cursor:pointer; font-size:0.85em; text-align:center;">Poisson RPS</button>-->
+                                    </div>
+                                </div>
+                                <div class="input-grid" style="grid-template-columns: 1fr 1fr 1fr;">
+                                    <div class="input-group">
+                                        <label id="users-label">Concurrent Users</label>
+                                        <input type="number" id="users-input" value="100" min="1" max="10000">
+                                        <div class="help-text" id="users-help">How many users are sending requests at the same time. Think of it like how many people are in line at once.</div>
+                                    </div>
+                                    <div class="input-group">
+                                        <label>Test Stop Condition</label>
+                                        <div style="display: flex; gap: 8px; margin-bottom: 8px;">
+                                            <button type="button" class="stop-mode-btn selected" id="stop-mode-duration" onclick="setStopMode('duration')" style="flex:1; padding:8px 12px; border:2px solid var(--rh-red-primary); border-radius:6px; background:var(--rh-red-primary); color:white; font-weight:600; cursor:pointer; font-size:0.85em;">Duration (seconds)</button>
+                                            <button type="button" class="stop-mode-btn" id="stop-mode-requests" onclick="setStopMode('max_requests')" style="flex:1; padding:8px 12px; border:2px solid #cbd5e1; border-radius:6px; background:white; color:#475569; font-weight:600; cursor:pointer; font-size:0.85em;">Max Requests</button>
+                                        </div>
+                                        <div id="duration-wrapper">
+                                            <input type="number" id="duration-input" value="300" min="60" max="3600">
+                                            <div class="help-text">How long each test runs. Longer = more reliable results. We recommend at least 300 seconds (5 min).</div>
+                                        </div>
+                                        <div id="max-requests-wrapper" style="display:none;">
+                                            <input type="number" id="max-requests-input" value="100" min="1" max="100000" placeholder="e.g. 100">
+                                            <div class="help-text">Stop the test after this many requests finish. Use this for quick checks or when you want to limit resource usage.</div>
+                                        </div>
+                                    </div>
+                                    <div class="input-group" id="autoscale-card" style="cursor:pointer;border:2px solid #e2e8f0;border-radius:10px;padding:16px;transition:all 0.2s;background:#fafafa;" onclick="var cb=document.getElementById('use-achievable-qps');cb.checked=!cb.checked;cb.dispatchEvent(new Event('change'));updateAutoScaleCard();">
+                                        <input type="checkbox" id="use-achievable-qps" style="display:none;" onclick="event.stopPropagation();updateAutoScaleCard();">
+                                        <label style="text-align:center;margin-bottom:8px;">Auto-Scale Concurrency</label>
+                                        <div style="font-size:3.5em;text-align:center;margin:12px 0;">⚖️</div>
+                                        <div class="help-text" style="font-size:0.82em;text-align:center;line-height:1.5;">If your requested concurrent users exceed what the cluster can sustain, automatically scale down to the achievable concurrency.</div>
+                                    </div>
+                                    <script>
+                                    function updateAutoScaleCard(){var c=document.getElementById('use-achievable-qps').checked;var d=document.getElementById('autoscale-card');if(c){d.style.borderColor='#0ea5e9';d.style.background='linear-gradient(135deg,#f0f9ff,#e0f2fe)';}else{d.style.borderColor='#e2e8f0';d.style.background='#fafafa';}}
+                                    </script>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- TP Pair Breadth (collapsible) — hidden in single_test mode -->
+                        <div id="sweep-tp-section" style="border:2px solid #8b5cf6;border-radius:12px;overflow:hidden;margin-bottom:20px;">
+                            <div style="background:linear-gradient(135deg,#f5f3ff,#ede9fe);padding:14px 20px;cursor:pointer;display:flex;align-items:center;justify-content:space-between;" onclick="var b=document.getElementById('tp-search-body');var a=document.getElementById('tp-search-arrow');if(b.style.display==='none'){b.style.display='block';a.textContent='▾';}else{b.style.display='none';a.textContent='▸';}">
+                                <div>
+                                    <div style="font-weight:700;color:#5b21b6;font-size:1.05em;">GPU Split Combinations</div>
+                                    <div style="color:#6d28d9;font-size:0.92em;margin-top:4px;">How many Prefill TP &times; Decode TP combinations to explore. Steps 2-3 measure all TP values &mdash; this controls how many of those are combined for P/D testing.</div>
+                                </div>
+                                <div id="tp-search-arrow" style="font-size:1.4em;color:#5b21b6;font-weight:700;">▸</div>
+                            </div>
+                            <div id="tp-search-body" style="display:none;padding:16px 20px;">
+                                <div style="display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; margin-bottom: 12px;">
+                                    <button type="button" class="stop-mode-btn" id="tp-depth-1" onclick="setTpPairTopN(1)" style="padding:12px 0; border:2px solid #cbd5e1; border-radius:6px; background:#FAFAFA; color:#475569; font-weight:700; cursor:pointer; font-size:0.9em; text-align:center;">1 - Fast</button>
+                                    <button type="button" class="stop-mode-btn" id="tp-depth-2" onclick="setTpPairTopN(2)" style="padding:12px 0; border:2px solid #cbd5e1; border-radius:6px; background:#FAFAFA; color:#475569; font-weight:700; cursor:pointer; font-size:0.9em; text-align:center;">2 - Fast</button>
+                                    <button type="button" class="stop-mode-btn" id="tp-depth-3" onclick="setTpPairTopN(3)" style="padding:12px 0; border:2px solid #cbd5e1; border-radius:6px; background:#FAFAFA; color:#475569; font-weight:700; cursor:pointer; font-size:0.9em; text-align:center;">3 - Deep</button>
+                                    <button type="button" class="stop-mode-btn selected" id="tp-depth-4" onclick="setTpPairTopN(4)" style="padding:12px 0; border:2px solid var(--rh-red-primary); border-radius:6px; background:var(--rh-red-primary); color:white; font-weight:700; cursor:pointer; font-size:0.9em; text-align:center;">4 - Full (Default)</button>
+                                </div>
+                                <div style="background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 6px; padding: 12px; font-size: 0.8em; color: #475569; line-height: 1.6;">
+                                    Controls how many of the best Prefill TP and Decode TP values (from Steps 2-3) are crossed to form TP pairs. Each pair then gets its own set of P/D ratio tests.<br><br>
+                                    <span style="font-family: var(--font-mono); color: #0369a1;">1</span> &rarr; Only the single best prefill TP &times; best decode TP. Fastest &mdash; 1 TP pair.<br>
+                                    <span style="font-family: var(--font-mono); color: #0369a1;">2</span> &rarr; Top-2 &times; Top-2 = up to 4 TP pairs. Good balance.<br>
+                                    <span style="font-family: var(--font-mono); color: #0369a1;">3</span> &rarr; Top-3 &times; Top-3 = up to 9 TP pairs. More coverage.<br>
+                                    <span style="font-family: var(--font-mono); color: #0369a1;">4</span> &rarr; All 4 &times; All 4 = up to 16 TP pairs. Most thorough.
+                                </div>
+                                <!-- Asymmetric TP toggle -->
+                                <div style="margin-top:12px;display:flex;align-items:center;justify-content:space-between;gap:12px;padding:10px 14px;background:#fefce8;border:1px solid #fde68a;border-radius:8px 8px 0 0;cursor:pointer;" onclick="var on=!document.getElementById('allow-asymmetric-tp').checked;document.getElementById('allow-asymmetric-tp').checked=on;config.allow_asymmetric_tp=on;var sw=document.getElementById('asymmetric-tp-switch');sw.style.background=on?'#d97706':'#ccc';sw.querySelector('span').style.transform=on?'translateX(18px)':'translateX(0)';document.getElementById('asymmetric-tp-options').style.display=on?'flex':'none';if(!on){config.asymmetric_allow_decode_gt_prefill=true;config.asymmetric_allow_prefill_gt_decode=true;}saveConfig();">
+                                    <div>
+                                        <div style="font-weight:600;font-size:0.9em;color:#92400e;">Allow Asymmetric TP</div>
+                                        <div style="font-size:0.8em;color:#a16207;margin-top:2px;">Test configurations where prefill and decode use different TP sizes (e.g., Prefill TP8 / Decode TP4 or vice versa). NIXL KV transfer supports heterogeneous TP in both directions.</div>
+                                    </div>
+                                    <input type="checkbox" id="allow-asymmetric-tp" style="display:none;">
+                                    <div id="asymmetric-tp-switch" style="width:40px;height:22px;background:#ccc;border-radius:11px;position:relative;transition:background-color 0.2s;flex-shrink:0;margin-left:16px;">
+                                        <span style="position:absolute;top:2px;left:2px;width:18px;height:18px;background:white;border-radius:50%;transition:transform 0.2s;box-shadow:0 1px 3px rgba(0,0,0,0.2);display:block;"></span>
+                                    </div>
+                                </div>
+                                <div id="asymmetric-tp-options" style="display:none;gap:8px;padding:8px 14px;background:#fffbeb;border:1px solid #fde68a;border-top:none;border-radius:0 0 8px 8px;">
+                                    <label style="display:flex;align-items:center;gap:6px;cursor:pointer;padding:4px 8px;border-radius:6px;font-size:0.85em;color:#92400e;" onclick="event.stopPropagation();">
+                                        <input type="checkbox" id="asymmetric-decode-gt-prefill" checked onchange="config.asymmetric_allow_decode_gt_prefill=this.checked;saveConfig();" style="width:15px;height:15px;accent-color:#d97706;">
+                                        <span>Allow Decode TP &gt; Prefill TP <span style="color:#a16207;font-size:0.9em;">(e.g., Prefill TP4 / Decode TP8)</span></span>
+                                    </label>
+                                    <label style="display:flex;align-items:center;gap:6px;cursor:pointer;padding:4px 8px;border-radius:6px;font-size:0.85em;color:#92400e;" onclick="event.stopPropagation();">
+                                        <input type="checkbox" id="asymmetric-prefill-gt-decode" checked onchange="config.asymmetric_allow_prefill_gt_decode=this.checked;saveConfig();" style="width:15px;height:15px;accent-color:#d97706;">
+                                        <span>Allow Prefill TP &gt; Decode TP <span style="color:#a16207;font-size:0.9em;">(e.g., Prefill TP8 / Decode TP4)</span></span>
+                                    </label>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- P/D Split Strategy (collapsible) — hidden in single_test mode -->
+                        <div id="sweep-pd-section" style="border:2px solid #0891b2;border-radius:12px;overflow:hidden;margin-bottom:20px;">
+                            <div style="background:linear-gradient(135deg,#ecfeff,#cffafe);padding:14px 20px;cursor:pointer;display:flex;align-items:center;justify-content:space-between;" onclick="var b=document.getElementById('pd-search-body');var a=document.getElementById('pd-search-arrow');if(b.style.display==='none'){b.style.display='block';a.textContent='&#9662;';}else{b.style.display='none';a.textContent='&#9656;';}">
+                                <div>
+                                    <div style="font-weight:700;color:#155e75;font-size:1.05em;">Prefill / Decode Pod Balance</div>
+                                    <div style="color:#0e7490;font-size:0.92em;margin-top:4px;">For each TP pair above, how many prefill-vs-decode pod ratios to test.</div>
+                                </div>
+                                <div id="pd-search-arrow" style="font-size:1.4em;color:#155e75;font-weight:700;">&#9656;</div>
+                            </div>
+                            <div id="pd-search-body" style="display:none;padding:16px 20px;">
+                                <div style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 6px; margin-bottom: 12px;">
+                                    <button type="button" id="pd-search-smart" onclick="setPdSearchMode('smart')" style="padding:12px 0; border:2px solid var(--rh-red-primary); border-radius:6px; background:var(--rh-red-primary); color:white; font-weight:700; cursor:pointer; font-size:0.9em; text-align:center;">Smart (Recommended)</button>
+                                    <button type="button" id="pd-search-exhaustive" onclick="setPdSearchMode('exhaustive')" style="padding:12px 0; border:2px solid #cbd5e1; border-radius:6px; background:#FAFAFA; color:#475569; font-weight:700; cursor:pointer; font-size:0.9em; text-align:center;">Exhaustive</button>
+                                </div>
+                                <div style="background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 6px; padding: 12px; font-size: 0.8em; color: #475569; line-height: 1.6;">
+                                    For each TP pair, there are many ways to split GPUs between prefill and decode pods (e.g. 2 prefill + 6 decode, or 3 prefill + 4 decode). This controls how many of those ratios are actually deployed and tested.<br><br>
+                                    <span style="font-family: var(--font-mono); color: #0369a1;">Smart</span> &mdash; Uses the throughput measured in Steps 2-3 to calculate where the prefill/decode pipeline is balanced, then tests only ~3 ratios around that optimum. Much faster, same accuracy in practice.<br>
+                                    <span style="font-family: var(--font-mono); color: #0369a1;">Exhaustive</span> &mdash; Tests every valid pod ratio for each TP pair. Guarantees no split is missed, but can run 50+ tests on large clusters.
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Response Time Guarantee — hidden in single_test mode -->
+                        <div id="sweep-latency-section" style="border:2px solid #d97706;border-radius:12px;overflow:hidden;margin-bottom:20px;">
+                            <div id="latency-sla-toggle" style="background:linear-gradient(135deg,#fffbeb,#fef3c7);padding:14px 20px;cursor:pointer;display:flex;align-items:center;justify-content:space-between;" onclick="var on=!document.getElementById('latency-constraint-enabled').checked;document.getElementById('latency-constraint-enabled').checked=on;config.latency_constraint_enabled=on;document.getElementById('latency-sla-body').style.display=on?'block':'none';document.getElementById('latency-sla-inner').style.opacity=on?'1':'0.4';var sw=document.getElementById('latency-sla-switch');sw.style.background=on?'#d97706':'#ccc';sw.querySelector('span').style.transform=on?'translateX(18px)':'translateX(0)';saveConfig();">
+                                <div>
+                                    <div style="font-weight:700;color:#92400e;font-size:1.05em;">⚡ Response Time Guarantee</div>
+                                    <div style="color:#a16207;font-size:0.92em;margin-top:4px;">Push load as high as possible while keeping replies fast enough to meet your target</div>
+                                </div>
+                                <input type="checkbox" id="latency-constraint-enabled" style="display:none;">
+                                <div id="latency-sla-switch" style="width:40px;height:22px;background:#ccc;border-radius:11px;position:relative;transition:background-color 0.2s;flex-shrink:0;margin-left:16px;">
+                                    <span style="position:absolute;top:2px;left:2px;width:18px;height:18px;background:white;border-radius:50%;transition:transform 0.2s;box-shadow:0 1px 3px rgba(0,0,0,0.2);display:block;"></span>
+                                </div>
+                            </div>
+                            <div id="latency-sla-body" style="display:none;padding:16px 20px;">
+                                    <div id="latency-sla-inner" class="input-grid" style="margin-bottom: 0; opacity: 0.4; transition:all 0.2s;">
+                                        <div class="input-group" id="latency-target-group">
+                                            <label>Max Response Time (ms)</label>
+                                            <input type="number" id="latency-target-input" value="500" min="1" max="60000" onclick="event.stopPropagation();">
+                                            <div class="help-text">The slowest acceptable time before the user sees the first word of the reply. 1000 ms = 1 second.</div>
+                                        </div>
+                                        <div class="input-group" id="latency-percentile-group">
+                                            <label>Apply Limit to</label>
+                                            <div style="display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px;">
+                                                <button type="button" class="stop-mode-btn" id="pctl-p50" onclick="event.stopPropagation();setLatencyPercentile('p50')" style="padding:16px 0; border:2px solid #cbd5e1; border-radius:6px; background:#FAFAFA; color:#475569; font-weight:700; cursor:pointer; font-size:0.9em; text-align:center;">P50</button>
+                                                <button type="button" class="stop-mode-btn selected" id="pctl-p90" onclick="event.stopPropagation();setLatencyPercentile('p90')" style="padding:16px 0; border:2px solid var(--rh-red-primary); border-radius:6px; background:var(--rh-red-primary); color:white; font-weight:700; cursor:pointer; font-size:0.9em; text-align:center;">P90</button>
+                                                <button type="button" class="stop-mode-btn" id="pctl-p95" onclick="event.stopPropagation();setLatencyPercentile('p95')" style="padding:16px 0; border:2px solid #cbd5e1; border-radius:6px; background:#FAFAFA; color:#475569; font-weight:700; cursor:pointer; font-size:0.9em; text-align:center;">P95</button>
+                                                <button type="button" class="stop-mode-btn" id="pctl-p99" onclick="event.stopPropagation();setLatencyPercentile('p99')" style="padding:16px 0; border:2px solid #cbd5e1; border-radius:6px; background:#FAFAFA; color:#475569; font-weight:700; cursor:pointer; font-size:0.9em; text-align:center;">P99</button>
+                                            </div>
+                                            <div class="help-text">P50 = typical request. P90 = 90% of requests. P99 = almost every request. Higher = stricter.</div>
+                                        </div>
+                                    </div>
+                            </div>
+                        </div>
+
+                        <!-- Calibrated Load / InferenceX Sweep -->
+                        <div id="sweep-calibrated-section" style="border:2px solid #059669;border-radius:12px;overflow:hidden;margin-bottom:20px;">
+                            <div style="background:linear-gradient(135deg,#ecfdf5,#d1fae5);padding:14px 20px;cursor:pointer;display:flex;align-items:center;justify-content:space-between;" onclick="var b=document.getElementById('calibrated-body');var a=document.getElementById('calibrated-arrow');if(b.style.display==='none'){b.style.display='block';a.textContent='&#9662;';}else{b.style.display='none';a.textContent='&#9656;';}">
+                                <div>
+                                    <div style="font-weight:700;color:#065f46;font-size:1.05em;">📊 Calibrated Load Testing</div>
+                                    <div style="color:#047857;font-size:0.92em;margin-top:4px;">After finding the best configuration, re-test it at realistic load levels to measure true production performance</div>
+                                </div>
+                                <div id="calibrated-arrow" style="font-size:1.4em;color:#065f46;font-weight:700;">&#9656;</div>
+                            </div>
+                            <div id="calibrated-body" style="display:none;padding:16px 20px;">
+                                <!-- Calibrated Load toggle -->
+                                <div style="display:flex;align-items:center;justify-content:space-between;gap:12px;padding:10px 14px;background:#f0fdf4;border:1px solid #bbf7d0;border-radius:8px;cursor:pointer;margin-bottom:10px;" onclick="var on=!document.getElementById('calibrated-load-enabled').checked;document.getElementById('calibrated-load-enabled').checked=on;config.calibrated_load_enabled=on;var sw=document.getElementById('calibrated-load-switch');sw.style.background=on?'#059669':'#ccc';sw.querySelector('span').style.transform=on?'translateX(18px)':'translateX(0)';document.getElementById('inferencex-sweep-row').style.opacity=on?'1':'0.4';document.getElementById('inferencex-sweep-row').style.pointerEvents=on?'auto':'none';if(!on){config.inferencex_sweep_enabled=false;document.getElementById('inferencex-sweep-enabled').checked=false;var ixSw=document.getElementById('inferencex-sweep-switch');ixSw.style.background='#ccc';ixSw.querySelector('span').style.transform='translateX(0)';}saveConfig();">
+                                    <div>
+                                        <div style="font-weight:600;font-size:0.9em;color:#065f46;">Calibrated Load Validation</div>
+                                        <div style="font-size:0.8em;color:#047857;margin-top:2px;">The optimization steps stress-test configs to find their limits, which inflates latency due to queuing. This step computes a sustainable concurrency where queue wait stays reasonable by analyzing measured service time and response time, then re-runs the best PD and Aggregated configs at that realistic load.</div>
+                                    </div>
+                                    <input type="checkbox" id="calibrated-load-enabled" style="display:none;">
+                                    <div id="calibrated-load-switch" style="width:40px;height:22px;background:#ccc;border-radius:11px;position:relative;transition:background-color 0.2s;flex-shrink:0;margin-left:16px;">
+                                        <span style="position:absolute;top:2px;left:2px;width:18px;height:18px;background:white;border-radius:50%;transition:transform 0.2s;box-shadow:0 1px 3px rgba(0,0,0,0.2);display:block;"></span>
+                                    </div>
+                                </div>
+                                <!-- InferenceX Sweep toggle -->
+                                <div id="inferencex-sweep-row" style="display:flex;align-items:center;justify-content:space-between;gap:12px;padding:10px 14px;background:#f0fdf4;border:1px solid #bbf7d0;border-radius:8px;cursor:pointer;opacity:0.4;pointer-events:none;" onclick="var on=!document.getElementById('inferencex-sweep-enabled').checked;document.getElementById('inferencex-sweep-enabled').checked=on;config.inferencex_sweep_enabled=on;var sw=document.getElementById('inferencex-sweep-switch');sw.style.background=on?'#059669':'#ccc';sw.querySelector('span').style.transform=on?'translateX(18px)':'translateX(0)';document.getElementById('concurrency-sweep-levels-row').style.display=on?'block':'none';saveConfig();">
+                                    <div>
+                                        <div style="font-weight:600;font-size:0.9em;color:#065f46;">Concurrency Sweep (InferenceX Charts)</div>
+                                        <div style="font-size:0.8em;color:#047857;margin-top:2px;">Runs the best configs at multiple concurrency levels to map the full performance curve. Levels are centered on the calibrated concurrency with half below and half above. Each level runs a full benchmark. Generates separate TTFT P90/P95/P99 vs Concurrency charts with all configs overlaid, plus Throughput-per-GPU vs Concurrency — so you can compare architectures and find the knee point where latency degrades.</div>
+                                    </div>
+                                    <input type="checkbox" id="inferencex-sweep-enabled" style="display:none;">
+                                    <div id="inferencex-sweep-switch" style="width:40px;height:22px;background:#ccc;border-radius:11px;position:relative;transition:background-color 0.2s;flex-shrink:0;margin-left:16px;">
+                                        <span style="position:absolute;top:2px;left:2px;width:18px;height:18px;background:white;border-radius:50%;transition:transform 0.2s;box-shadow:0 1px 3px rgba(0,0,0,0.2);display:block;"></span>
+                                    </div>
+                                </div>
+                                <div id="concurrency-sweep-levels-row" style="display:none;padding:8px 14px;">
+                                    <div style="display:flex;gap:12px;margin-bottom:8px;">
+                                        <div style="flex:1;">
+                                            <div style="font-weight:600;font-size:0.85em;color:#065f46;margin-bottom:4px;">Number of Levels <span style="font-weight:400;color:#6b7280;">(each level = 1 benchmark run)</span></div>
+                                            <input type="number" id="concurrency-sweep-count" min="2" max="100" placeholder="auto" style="width:100%;padding:6px 10px;border:1px solid #86efac;border-radius:6px;font-size:0.85em;" onchange="var v=parseInt(this.value);config.concurrency_sweep_count=v>0?v:null;saveConfig();">
+                                        </div>
+                                        <div style="flex:1;">
+                                            <div style="font-weight:600;font-size:0.85em;color:#065f46;margin-bottom:4px;">Step % <span style="font-weight:400;color:#6b7280;">(spacing between levels)</span></div>
+                                            <input type="number" id="concurrency-sweep-step-pct" min="1" max="100" value="20" style="width:100%;padding:6px 10px;border:1px solid #86efac;border-radius:6px;font-size:0.85em;" onchange="config.concurrency_sweep_step_pct=parseInt(this.value)||20;saveConfig();">
+                                        </div>
+                                    </div>
+                                    <div style="font-weight:600;font-size:0.85em;color:#065f46;margin-bottom:4px;">Or: Explicit Levels</div>
+                                    <input type="text" id="concurrency-sweep-levels" placeholder="e.g. 10, 50, 100, 200 (overrides count + step%)" style="width:100%;padding:6px 10px;border:1px solid #86efac;border-radius:6px;font-size:0.85em;font-family:var(--font-mono);" onchange="var v=this.value.trim();if(v){config.concurrency_sweep_levels=v.split(',').map(function(x){return parseInt(x.trim())}).filter(function(x){return !isNaN(x)&&x>0});}else{config.concurrency_sweep_levels=null;}saveConfig();">
+                                    <div style="font-size:0.75em;color:#6b7280;margin-top:4px;">Levels are centered on calibrated concurrency with half below and half above. Step % controls spacing (e.g., 20% of calibrated = step of 10 users if calibrated is 50). Overflow shifts upward when there isn't room below. Or type exact comma-separated values. Empty = auto ~6 levels up to 1.5x calibrated.</div>
+                                    <div id="multi-config-sweep-row" style="margin-top:12px;padding-top:10px;border-top:1px solid #bbf7d0;">
+                                        <div style="display:flex;align-items:center;justify-content:space-between;gap:12px;padding:8px 12px;background:#f0fdf4;border:1px solid #bbf7d0;border-radius:8px;cursor:pointer;" onclick="if(config.goal==='single_test')return;var on=!document.getElementById('sweep-all-configs').checked;document.getElementById('sweep-all-configs').checked=on;config.concurrency_sweep_all_configs=on;var sw=document.getElementById('sweep-all-switch');sw.style.background=on?'#059669':'#ccc';sw.querySelector('span').style.transform=on?'translateX(18px)':'translateX(0)';saveConfig();">
+                                            <div>
+                                                <div style="font-weight:600;font-size:0.85em;color:#065f46;">Recommendation Sweep</div>
+                                                <div style="font-size:0.75em;color:#047857;margin-top:2px;">Add the 4 recommendation configs (Best Balanced, Lowest TTFT, Highest Throughput, Most Efficient). Without this, only the best PD and best Aggregated are tested.</div>
+                                            </div>
+                                            <input type="checkbox" id="sweep-all-configs" style="display:none;">
+                                            <div id="sweep-all-switch" style="width:40px;height:22px;background:#ccc;border-radius:11px;position:relative;transition:background-color 0.2s;flex-shrink:0;">
+                                                <span style="position:absolute;top:2px;left:2px;width:18px;height:18px;background:white;border-radius:50%;transition:transform 0.2s;box-shadow:0 1px 3px rgba(0,0,0,0.2);display:block;"></span>
+                                            </div>
+                                        </div>
+                                    </div>
+                                    <div style="margin-top:10px;padding-top:10px;border-top:1px solid #bbf7d0;">
+                                        <div style="display:flex;align-items:center;gap:8px;padding:8px 12px;background:#f0fdf4;border:1px solid #bbf7d0;border-radius:8px;">
+                                            <div style="flex:1;">
+                                                <div style="font-weight:600;font-size:0.85em;color:#065f46;">Extra Configs</div>
+                                                <div style="font-size:0.75em;color:#047857;margin-top:2px;">Add N more configs ranked by score from the results pool. Works independently — with or without Recommendation Sweep.</div>
+                                            </div>
+                                            <input type="number" id="sweep-max-configs" min="0" max="50" placeholder="0" style="width:70px;padding:6px 10px;border:1px solid #86efac;border-radius:6px;font-size:0.85em;flex-shrink:0;" onchange="var v=parseInt(this.value);config.concurrency_sweep_max_configs=v>0?v:null;saveConfig();">
+                                        </div>
+                                    </div>
+                                    <div id="sweep-epp-tuned-row" style="margin-top:10px;padding-top:10px;border-top:1px solid #bbf7d0;">
+                                        <div style="display:flex;align-items:center;justify-content:space-between;gap:12px;padding:8px 12px;background:#f0fdf4;border:1px solid #bbf7d0;border-radius:8px;cursor:pointer;" onclick="var on=!document.getElementById('sweep-epp-tuned').checked;document.getElementById('sweep-epp-tuned').checked=on;config.concurrency_sweep_use_epp_tuned=on;var sw=document.getElementById('sweep-epp-switch');sw.style.background=on?'#059669':'#ccc';sw.querySelector('span').style.transform=on?'translateX(18px)':'translateX(0)';saveConfig();">
+                                            <div>
+                                                <div style="font-weight:600;font-size:0.85em;color:#065f46;">Use EPP-Tuned Weights</div>
+                                                <div style="font-size:0.75em;color:#047857;margin-top:2px;">If Step 9 found better EPP weights, re-run the sweep configs with tuned weights to compare against the baseline sweep.</div>
+                                            </div>
+                                            <input type="checkbox" id="sweep-epp-tuned" style="display:none;">
+                                            <div id="sweep-epp-switch" style="width:40px;height:22px;background:#ccc;border-radius:11px;position:relative;transition:background-color 0.2s;flex-shrink:0;">
+                                                <span style="position:absolute;top:2px;left:2px;width:18px;height:18px;background:white;border-radius:50%;transition:transform 0.2s;box-shadow:0 1px 3px rgba(0,0,0,0.2);display:block;"></span>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Cache Hit Sweep -->
+                        <div id="sweep-cache-section" style="border:2px solid #7c3aed;border-radius:12px;overflow:hidden;margin-bottom:20px;">
+                            <div style="background:linear-gradient(135deg,#f5f3ff,#ede9fe);padding:14px 20px;cursor:pointer;display:flex;align-items:center;justify-content:space-between;" onclick="var b=document.getElementById('cache-sweep-body');var a=document.getElementById('cache-sweep-arrow');if(b.style.display==='none'){b.style.display='block';a.textContent='&#9662;';}else{b.style.display='none';a.textContent='&#9656;';}">
+                                <div>
+                                    <div style="font-weight:700;color:#5b21b6;font-size:1.05em;">🗂️ Cache Hit Sweep</div>
+                                    <div style="color:#6d28d9;font-size:0.92em;margin-top:4px;">Measure how prefix cache hit ratio affects performance across the best configurations</div>
+                                </div>
+                                <div id="cache-sweep-arrow" style="font-size:1.4em;color:#5b21b6;font-weight:700;">&#9656;</div>
+                            </div>
+                            <div id="cache-sweep-body" style="display:none;padding:16px 20px;">
+                                <!-- Toggle 1: Cache Hit Sweep at user concurrency -->
+                                <div style="display:flex;align-items:center;justify-content:space-between;gap:12px;padding:10px 14px;background:#f5f3ff;border:1px solid #ddd6fe;border-radius:8px;cursor:pointer;margin-bottom:10px;" onclick="var on=!document.getElementById('cache-sweep-enabled').checked;document.getElementById('cache-sweep-enabled').checked=on;config.cache_sweep_enabled=on;if(!config.cache_sweep_mode)config.cache_sweep_mode=document.querySelector('input[name=cache-sweep-mode]:checked').value||'identical';if(!config.cache_sweep_levels){var lv=document.getElementById('cache-sweep-levels').value;config.cache_sweep_levels=lv.split(',').map(function(v){return parseInt(v.trim())}).filter(function(v){return !isNaN(v)});}if(!config.cache_sweep_groups)config.cache_sweep_groups=parseInt(document.getElementById('cache-sweep-groups').value)||5;var sw=document.getElementById('cache-sweep-switch');sw.style.background=on?'#7c3aed':'#ccc';sw.querySelector('span').style.transform=on?'translateX(18px)':'translateX(0)';saveConfig();">
+                                    <div>
+                                        <div style="font-weight:600;font-size:0.9em;color:#5b21b6;">Cache Hit Sweep</div>
+                                        <div style="font-size:0.8em;color:#6d28d9;margin-top:2px;">Test the best configs at multiple cache hit ratios using your workload concurrency. Generates datasets with controlled prefix sharing.</div>
+                                    </div>
+                                    <input type="checkbox" id="cache-sweep-enabled" style="display:none;">
+                                    <div id="cache-sweep-switch" style="width:40px;height:22px;background:#ccc;border-radius:11px;position:relative;transition:background-color 0.2s;flex-shrink:0;margin-left:16px;">
+                                        <span style="position:absolute;top:2px;left:2px;width:18px;height:18px;background:white;border-radius:50%;transition:transform 0.2s;box-shadow:0 1px 3px rgba(0,0,0,0.2);display:block;"></span>
+                                    </div>
+                                </div>
+                                <!-- Toggle 2: Cache Hit Sweep at calibrated concurrency -->
+                                <div style="display:flex;align-items:center;justify-content:space-between;gap:12px;padding:10px 14px;background:#f5f3ff;border:1px solid #ddd6fe;border-radius:8px;cursor:pointer;margin-bottom:12px;" onclick="var on=!document.getElementById('cache-sweep-calibrated').checked;document.getElementById('cache-sweep-calibrated').checked=on;config.cache_sweep_use_calibrated=on;if(!config.cache_sweep_mode)config.cache_sweep_mode=document.querySelector('input[name=cache-sweep-mode]:checked').value||'identical';if(!config.cache_sweep_levels){var lv=document.getElementById('cache-sweep-levels').value;config.cache_sweep_levels=lv.split(',').map(function(v){return parseInt(v.trim())}).filter(function(v){return !isNaN(v)});}if(!config.cache_sweep_groups)config.cache_sweep_groups=parseInt(document.getElementById('cache-sweep-groups').value)||5;var sw=document.getElementById('cache-sweep-cal-switch');sw.style.background=on?'#7c3aed':'#ccc';sw.querySelector('span').style.transform=on?'translateX(18px)':'translateX(0)';saveConfig();">
+                                    <div>
+                                        <div style="font-weight:600;font-size:0.9em;color:#5b21b6;">Cache Hit Sweep (Calibrated Concurrency)</div>
+                                        <div style="font-size:0.8em;color:#6d28d9;margin-top:2px;">Same sweep but using the calibrated concurrency from Step 11. Falls back to user concurrency if Step 11 didn't run.</div>
+                                    </div>
+                                    <input type="checkbox" id="cache-sweep-calibrated" style="display:none;">
+                                    <div id="cache-sweep-cal-switch" style="width:40px;height:22px;background:#ccc;border-radius:11px;position:relative;transition:background-color 0.2s;flex-shrink:0;margin-left:16px;">
+                                        <span style="position:absolute;top:2px;left:2px;width:18px;height:18px;background:white;border-radius:50%;transition:transform 0.2s;box-shadow:0 1px 3px rgba(0,0,0,0.2);display:block;"></span>
+                                    </div>
+                                </div>
+                                <!-- Recommendation Sweep toggle -->
+                                <div style="display:flex;align-items:center;justify-content:space-between;gap:12px;padding:10px 14px;background:#f5f3ff;border:1px solid #ddd6fe;border-radius:8px;cursor:pointer;margin-top:10px;" onclick="var cb=document.getElementById('cache-sweep-multi-enabled');cb.checked=!cb.checked;var sw=document.getElementById('cache-sweep-multi-switch');sw.style.background=cb.checked?'#7c3aed':'#ccc';sw.querySelector('span').style.transform=cb.checked?'translateX(18px)':'translateX(0)';config.cache_sweep_all_configs=cb.checked;saveConfig();">
+                                    <div style="flex:1;">
+                                        <div style="font-weight:600;font-size:0.85em;color:#5b21b6;">Recommendation Sweep</div>
+                                        <div style="font-size:0.78em;color:#6d28d9;margin-top:2px;">Add the 4 recommendation configs (Best Balanced, Lowest TTFT, Highest Throughput, Most Efficient). Without this, only the best PD and best Aggregated are tested.</div>
+                                    </div>
+                                    <input type="checkbox" id="cache-sweep-multi-enabled" style="display:none;">
+                                    <div id="cache-sweep-multi-switch" style="width:40px;height:22px;background:#ccc;border-radius:11px;position:relative;transition:background-color 0.2s;flex-shrink:0;margin-left:16px;">
+                                        <span style="position:absolute;top:2px;left:2px;width:18px;height:18px;background:white;border-radius:50%;transition:transform 0.2s;box-shadow:0 1px 3px rgba(0,0,0,0.2);display:block;"></span>
+                                    </div>
+                                </div>
+                                <!-- Extra Configs -->
+                                <div style="margin-top:10px;">
+                                    <div style="display:flex;align-items:center;gap:8px;padding:10px 14px;background:#f5f3ff;border:1px solid #ddd6fe;border-radius:8px;">
+                                        <div style="flex:1;">
+                                            <div style="font-weight:600;font-size:0.85em;color:#5b21b6;">Extra Configs</div>
+                                            <div style="font-size:0.75em;color:#6d28d9;margin-top:2px;">Add N more configs ranked by score from the results pool. Works independently — with or without Recommendation Sweep.</div>
+                                        </div>
+                                        <input type="number" id="cache-sweep-max-configs" min="0" max="50" placeholder="0" style="width:70px;padding:6px 10px;border:1px solid #c4b5fd;border-radius:6px;font-size:0.85em;flex-shrink:0;" onchange="var v=parseInt(this.value);config.cache_sweep_max_configs=v>0?v:null;saveConfig();">
+                                    </div>
+                                </div>
+                                <!-- Workload Settings -->
+                                <div style="margin-top:14px;padding-top:12px;border-top:2px solid #c4b5fd;">
+                                    <div style="font-weight:700;font-size:0.85em;color:#5b21b6;margin-bottom:8px;">Workload Settings</div>
+                                    <!-- Structured prefix toggle -->
+                                    <div style="display:flex;align-items:center;justify-content:space-between;gap:12px;padding:10px 14px;background:#f5f3ff;border:1px solid #ddd6fe;border-radius:8px;cursor:pointer;margin-bottom:10px;" onclick="var on=!document.getElementById('cache-sweep-structured-prefix').checked;document.getElementById('cache-sweep-structured-prefix').checked=on;config.structured_prefix=on;var sw=document.getElementById('cache-sweep-structured-switch');sw.style.background=on?'#7c3aed':'#ccc';sw.querySelector('span').style.transform=on?'translateX(18px)':'translateX(0)';var sp3=document.getElementById('structured-prefix-enabled');if(sp3){sp3.checked=on;var sw3=document.getElementById('structured-prefix-switch');if(sw3){sw3.style.background=on?'#15803d':'#ccc';sw3.querySelector('span').style.transform=on?'translateX(18px)':'translateX(0)';}}saveConfig();">
+                                        <div>
+                                            <div style="font-weight:600;font-size:0.85em;color:#5b21b6;">Structured Prefix Prompts</div>
+                                            <div style="font-size:0.78em;color:#6d28d9;margin-top:2px;">Generate prompts with a shared system-prompt prefix + unique question suffix instead of random tokens. The cache hit ratio at each level controls the prefix/suffix split. Better simulates real agentic and chat workloads.</div>
+                                        </div>
+                                        <input type="checkbox" id="cache-sweep-structured-prefix" style="display:none;">
+                                        <div id="cache-sweep-structured-switch" style="width:40px;height:22px;background:#ccc;border-radius:11px;position:relative;transition:background-color 0.2s;flex-shrink:0;margin-left:16px;">
+                                            <span style="position:absolute;top:2px;left:2px;width:18px;height:18px;background:white;border-radius:50%;transition:transform 0.2s;box-shadow:0 1px 3px rgba(0,0,0,0.2);display:block;"></span>
+                                        </div>
+                                    </div>
+                                    <!-- Cache mode selector -->
+                                    <div style="margin-bottom:10px;">
+                                        <div style="font-weight:600;font-size:0.85em;color:#5b21b6;margin-bottom:6px;">Cache Simulation Mode</div>
+                                        <div style="display:flex;gap:8px;flex-wrap:wrap;">
+                                            <label style="display:flex;align-items:center;gap:4px;padding:6px 12px;background:#ede9fe;border:1px solid #c4b5fd;border-radius:6px;cursor:pointer;font-size:0.85em;">
+                                                <input type="radio" name="cache-sweep-mode" value="identical" checked onchange="config.cache_sweep_mode='identical';document.getElementById('cache-sweep-groups-row').style.display='none';saveConfig();"> Identical Prompts
+                                            </label>
+                                            <label style="display:flex;align-items:center;gap:4px;padding:6px 12px;background:#ede9fe;border:1px solid #c4b5fd;border-radius:6px;cursor:pointer;font-size:0.85em;">
+                                                <input type="radio" name="cache-sweep-mode" value="shared_prefix" onchange="config.cache_sweep_mode='shared_prefix';document.getElementById('cache-sweep-groups-row').style.display='none';saveConfig();"> Shared Prefix
+                                            </label>
+                                            <label style="display:flex;align-items:center;gap:4px;padding:6px 12px;background:#ede9fe;border:1px solid #c4b5fd;border-radius:6px;cursor:pointer;font-size:0.85em;">
+                                                <input type="radio" name="cache-sweep-mode" value="multi_group" onchange="config.cache_sweep_mode='multi_group';document.getElementById('cache-sweep-groups-row').style.display='flex';saveConfig();"> Multi-Group
+                                            </label>
+                                        </div>
+                                    </div>
+                                    <!-- Cache hit levels -->
+                                    <div style="margin-bottom:10px;">
+                                        <div style="display:flex;gap:6px;margin-bottom:8px;">
+                                            <button type="button" id="cache-levels-mode-step" onclick="document.getElementById('cache-levels-step-row').style.display='';document.getElementById('cache-levels-explicit-row').style.display='none';this.classList.add('active');document.getElementById('cache-levels-mode-explicit').classList.remove('active');config.cache_sweep_levels=null;saveConfig();"
+                                                class="active" style="flex:1;padding:6px 0;border:1px solid #c4b5fd;border-radius:6px;font-size:0.8em;font-weight:600;cursor:pointer;background:#ede9fe;color:#5b21b6;transition:all 0.15s;">Step %</button>
+                                            <button type="button" id="cache-levels-mode-explicit" onclick="document.getElementById('cache-levels-step-row').style.display='none';document.getElementById('cache-levels-explicit-row').style.display='';this.classList.add('active');document.getElementById('cache-levels-mode-step').classList.remove('active');config.cache_sweep_step_pct=null;saveConfig();"
+                                                style="flex:1;padding:6px 0;border:1px solid #c4b5fd;border-radius:6px;font-size:0.8em;font-weight:600;cursor:pointer;background:#fff;color:#6b7280;transition:all 0.15s;">Explicit Levels</button>
+                                        </div>
+                                        <style>#cache-levels-mode-step.active,#cache-levels-mode-explicit.active{background:#7c3aed;color:#fff;border-color:#7c3aed;}#cache-levels-mode-step:not(.active),#cache-levels-mode-explicit:not(.active){background:#fff;color:#6b7280;}</style>
+                                        <div id="cache-levels-step-row">
+                                            <input type="number" id="cache-sweep-step-pct" min="1" max="50" value="10" style="width:100%;padding:6px 10px;border:1px solid #c4b5fd;border-radius:6px;font-size:0.85em;" onchange="config.cache_sweep_step_pct=parseInt(this.value)||10;saveConfig();">
+                                            <div style="font-size:0.75em;color:#6b7280;margin-top:2px;">Spacing between levels from 0% to 100%. E.g. 10% → 11 levels, 5% → 21 levels, 20% → 6 levels.</div>
+                                        </div>
+                                        <div id="cache-levels-explicit-row" style="display:none;">
+                                            <input type="text" id="cache-sweep-levels" value="0, 10, 30, 50, 70, 100" style="width:100%;padding:6px 10px;border:1px solid #c4b5fd;border-radius:6px;font-size:0.85em;font-family:var(--font-mono);" onchange="config.cache_sweep_levels=this.value.split(',').map(function(v){return parseInt(v.trim())}).filter(function(v){return !isNaN(v)});saveConfig();">
+                                            <div style="font-size:0.75em;color:#6b7280;margin-top:2px;">Comma-separated cache hit percentages to test.</div>
+                                        </div>
+                                    </div>
+                                    <!-- Groups (for multi_group) -->
+                                    <div id="cache-sweep-groups-row" style="display:none;align-items:center;gap:8px;">
+                                        <div style="font-weight:600;font-size:0.85em;color:#5b21b6;">Groups:</div>
+                                        <input type="number" id="cache-sweep-groups" value="5" min="2" max="50" style="width:60px;padding:4px 8px;border:1px solid #c4b5fd;border-radius:6px;font-size:0.85em;" onchange="config.cache_sweep_groups=parseInt(this.value)||5;saveConfig();">
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Single Test: Deployment Configuration (shown only when goal=single_test) -->
+                        <div id="single-test-config" style="display:none; margin-bottom:20px;">
+                            <div style="border:2px solid #8b5cf6;border-radius:12px;overflow:hidden;">
+                                <div style="background:linear-gradient(135deg,#f5f3ff,#ede9fe);padding:16px 20px;">
+                                    <div style="font-weight:700;color:#5b21b6;font-size:1.05em;">🧪 Deployment Configuration</div>
+                                    <div style="color:#6d28d9;font-size:0.92em;margin-top:4px;">Specify the exact architecture, TP size, and pod count for your single test.</div>
+                                </div>
+                                <div style="padding:16px 20px;">
+                                    <div style="margin-bottom:16px;">
+                                        <label style="display:block;font-weight:600;margin-bottom:8px;color:#374151;">Architecture</label>
+                                        <div id="single-test-arch-cards" style="display:grid;grid-template-columns:repeat(3,1fr);gap:10px;">
+                                            <div class="arch-select-card selected" data-arch="aggregated" onclick="selectSingleTestArch('aggregated')" style="border:2px solid #8b5cf6;border-radius:8px;padding:12px;text-align:center;cursor:pointer;transition:all 0.15s;background:#f5f3ff;">
+                                                <div style="font-weight:700;font-size:0.95em;">Aggregated</div>
+                                                <div style="font-size:0.8em;color:#6b7280;margin-top:4px;">Standard</div>
+                                            </div>
+                                            <div class="arch-select-card" data-arch="pd" onclick="selectSingleTestArch('pd')" style="border:2px solid #e2e8f0;border-radius:8px;padding:12px;text-align:center;cursor:pointer;transition:all 0.15s;">
+                                                <div style="font-weight:700;font-size:0.95em;">Prefill/Decode</div>
+                                                <div style="font-size:0.8em;color:#6b7280;margin-top:4px;">PD Split</div>
+                                            </div>
+                                            <div class="arch-select-card" data-arch="ep" onclick="selectSingleTestArch('ep')" style="border:2px solid #e2e8f0;border-radius:8px;padding:12px;text-align:center;cursor:pointer;transition:all 0.15s;">
+                                                <div style="font-weight:700;font-size:0.95em;">Expert Parallelism</div>
+                                                <div style="font-size:0.8em;color:#6b7280;margin-top:4px;">EP / MoE</div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                    <div id="single-test-agg-fields">
+                                        <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">
+                                            <div>
+                                                <label style="display:block;font-weight:600;margin-bottom:6px;color:#374151;font-size:0.9em;">Tensor Parallelism (TP)</label>
+                                                <select id="single-test-tp" style="width:100%;padding:10px 14px;border:2px solid #d1d5db;border-radius:8px;font-size:14px;background:white;">
+                                                    <option value="1">1</option>
+                                                    <option value="2">2</option>
+                                                    <option value="4" selected>4</option>
+                                                    <option value="8">8</option>
+                                                </select>
+                                            </div>
+                                            <div>
+                                                <label style="display:block;font-weight:600;margin-bottom:6px;color:#374151;font-size:0.9em;">Replicas (pods)</label>
+                                                <input type="number" id="single-test-replicas" value="1" min="1" max="64" style="width:100%;padding:10px 14px;border:2px solid #d1d5db;border-radius:8px;font-size:14px;">
+                                            </div>
+                                        </div>
+                                        <div id="single-test-gpu-summary" style="margin-top:10px;padding:10px 14px;background:#f5f3ff;border-radius:8px;font-size:0.88em;color:#5b21b6;font-weight:600;"></div>
+                                    </div>
+                                    <div id="single-test-pd-fields" style="display:none;">
+                                        <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:12px;">
+                                            <div>
+                                                <label style="display:block;font-weight:600;margin-bottom:6px;color:#374151;font-size:0.9em;">Prefill TP</label>
+                                                <select id="single-test-prefill-tp" style="width:100%;padding:10px 14px;border:2px solid #d1d5db;border-radius:8px;font-size:14px;background:white;">
+                                                    <option value="1">1</option>
+                                                    <option value="2">2</option>
+                                                    <option value="4" selected>4</option>
+                                                    <option value="8">8</option>
+                                                </select>
+                                            </div>
+                                            <div>
+                                                <label style="display:block;font-weight:600;margin-bottom:6px;color:#374151;font-size:0.9em;">Prefill Pods</label>
+                                                <input type="number" id="single-test-prefill-pods" value="1" min="1" max="32" style="width:100%;padding:10px 14px;border:2px solid #d1d5db;border-radius:8px;font-size:14px;">
+                                            </div>
+                                        </div>
+                                        <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">
+                                            <div>
+                                                <label style="display:block;font-weight:600;margin-bottom:6px;color:#374151;font-size:0.9em;">Decode TP</label>
+                                                <select id="single-test-decode-tp" style="width:100%;padding:10px 14px;border:2px solid #d1d5db;border-radius:8px;font-size:14px;background:white;">
+                                                    <option value="1">1</option>
+                                                    <option value="2">2</option>
+                                                    <option value="4">4</option>
+                                                    <option value="8" selected>8</option>
+                                                </select>
+                                            </div>
+                                            <div>
+                                                <label style="display:block;font-weight:600;margin-bottom:6px;color:#374151;font-size:0.9em;">Decode Pods</label>
+                                                <input type="number" id="single-test-decode-pods" value="1" min="1" max="32" style="width:100%;padding:10px 14px;border:2px solid #d1d5db;border-radius:8px;font-size:14px;">
+                                            </div>
+                                        </div>
+                                        <div id="single-test-pd-gpu-summary" style="margin-top:10px;padding:10px 14px;background:#f5f3ff;border-radius:8px;font-size:0.88em;color:#5b21b6;font-weight:600;"></div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        <!-- Advanced vLLM Settings -->
+                        <div style="border:2px solid #64748b;border-radius:12px;overflow:hidden;margin-bottom:20px;">
+                            <div id="adv-vllm-header" style="background:linear-gradient(135deg,#f1f5f9,#e2e8f0);padding:14px 20px;cursor:pointer;display:flex;align-items:center;justify-content:space-between;" onclick="var on=!document.getElementById('adv-vllm-custom-enabled').checked;document.getElementById('adv-vllm-custom-enabled').checked=on;toggleAdvVllmCustom(on);document.getElementById('advanced-vllm-body').style.display=on?'block':'none';var sw=document.getElementById('adv-vllm-switch');sw.style.background=on?'#64748b':'#ccc';sw.querySelector('span').style.transform=on?'translateX(18px)':'translateX(0)';saveConfig();">
+                                <div>
+                                    <div style="font-weight:700;color:#334155;font-size:1.05em;">⚙️ Auto-Tune vLLM Settings</div>
+                                    <div style="color:#64748b;font-size:0.92em;margin-top:4px;">Automatically optimizes memory, batch size, and engine settings. Override specific values below.</div>
+                                </div>
+                                <input type="checkbox" id="adv-vllm-custom-enabled" style="display:none;" checked>
+                                <div id="adv-vllm-switch" style="width:40px;height:22px;background:#64748b;border-radius:11px;position:relative;transition:background-color 0.2s;flex-shrink:0;margin-left:16px;">
+                                    <span style="position:absolute;top:2px;left:2px;width:18px;height:18px;background:white;border-radius:50%;transition:transform 0.2s;box-shadow:0 1px 3px rgba(0,0,0,0.2);display:block;transform:translateX(18px);"></span>
+                                </div>
+                            </div>
+                            <div id="advanced-vllm-body" style="padding:16px 20px;">
+
+                                <div id="adv-vllm-custom-section">
+                                <style>
+                                    #advanced-vllm-body select, #advanced-vllm-body input:not(#adv-vllm-raw-text) {
+                                        padding:6px 10px; border:1px solid #d1d5db; border-radius:6px; font-size:0.9em; width:150px; box-sizing:border-box;
+                                    }
+                                    #advanced-vllm-body td { padding:8px 12px; border-bottom:1px solid #f1f5f9; }
+                                    #advanced-vllm-body td:first-child { font-weight:600; }
+                                </style>
+
+                                <!-- Mode Toggle: Form vs Raw Text -->
+                                <div style="display:flex;gap:8px;margin-bottom:16px;">
+                                    <button type="button" id="adv-mode-form-btn" onclick="setAdvVllmMode('form')" style="padding:8px 20px;border:2px solid var(--rh-red-primary);border-radius:8px;background:linear-gradient(135deg,#fef2f2,#fee2e2);color:#1e293b;font-weight:600;cursor:pointer;font-size:0.9em;">Form</button>
+                                    <button type="button" id="adv-mode-raw-btn" onclick="setAdvVllmMode('raw')" style="padding:8px 20px;border:2px solid #cbd5e1;border-radius:8px;background:#fafafa;color:#1e293b;font-weight:600;cursor:pointer;font-size:0.9em;">Raw Text</button>
+                                </div>
+
+                                <!-- Raw Text Mode -->
+                                <div id="adv-vllm-raw-section" style="display:none;">
+                                    <div style="color:#64748b;font-size:0.85em;margin-bottom:8px;">Enter vLLM serve arguments directly. One flag per line. Lines starting with # are ignored. The model name, --port, --tensor-parallel-size, --gpu-memory-utilization, and resource settings are managed by the optimizer and should not be included here.</div>
+                                    <textarea id="adv-vllm-raw-text" style="width:100%;height:300px;font-family:monospace;font-size:0.9em;padding:12px;border:2px solid #d1d5db;border-radius:8px;background:#1e293b;color:#e2e8f0;line-height:1.6;resize:vertical;box-sizing:border-box;" oninput="updateAdvVllmRaw()" spellcheck="false"></textarea>
+                                    <div style="display:flex;gap:8px;margin-top:8px;">
+                                        <button type="button" onclick="populateRawFromForm()" style="padding:6px 14px;border:1px solid #d1d5db;border-radius:6px;background:#fff;color:#64748b;font-size:0.8em;cursor:pointer;font-weight:600;">Reset from Form Settings</button>
+                                    </div>
+
+                                    <!-- Raw Env Variables -->
+                                    <div style="margin-top:16px;padding-top:16px;border-top:1px solid #e2e8f0;">
+                                        <div style="font-weight:600;color:#334155;font-size:0.9em;margin-bottom:8px;text-transform:uppercase;letter-spacing:0.5px;">Extra Environment Variables</div>
+                                        <div style="color:#64748b;font-size:0.85em;margin-bottom:8px;">Added to the vLLM pod container. One per line: <code style="background:#f1f5f9;padding:2px 6px;border-radius:3px;">NAME=value</code>. Lines starting with # are ignored. To override a built-in variable, set it here — the last value wins.</div>
+                                        <textarea id="adv-extra-env-text" style="width:100%;height:200px;font-family:monospace;font-size:0.9em;padding:12px;border:2px solid #d1d5db;border-radius:8px;background:#1e293b;color:#e2e8f0;line-height:1.6;resize:vertical;box-sizing:border-box;" oninput="updateExtraEnvVars()" spellcheck="false">
+# Override or add env vars for the vLLM pod:
+# VLLM_MEMORY_PROFILER_ESTIMATE_CUDAGRAPHS=0
+# VLLM_USE_DEEP_GEMM=1
+# VLLM_RANDOMIZE_DP_DUMMY_INPUTS=1
+# VLLM_SKIP_P2P_CHECK=1
+# VLLM_LOGGING_LEVEL=DEBUG
+# NCCL_DEBUG=INFO
+# CUDA_LAUNCH_BLOCKING=1</textarea>
+                                    </div>
+                                </div>
+
+                                <div id="adv-vllm-form-section">
+
+                                <!-- Value Settings -->
+                                <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;">
+                                    <div style="font-weight:600;color:#334155;font-size:0.9em;text-transform:uppercase;letter-spacing:0.5px;">Value Settings</div>
+                                    <button type="button" onclick="resetAdvVllm()" style="padding:4px 14px;border:1px solid #d1d5db;border-radius:6px;background:#fff;color:#64748b;font-size:0.8em;cursor:pointer;font-weight:600;">Reset All to Default</button>
+                                </div>
+                                <table style="width:100%;border-collapse:collapse;font-size:0.9em;margin-bottom:20px;">
+                                    <tr style="background:#f8fafc;"><th style="text-align:left;padding:8px 12px;border-bottom:2px solid #e2e8f0;">Setting</th><th style="text-align:left;padding:8px 12px;border-bottom:2px solid #e2e8f0;">Description</th><th style="text-align:left;padding:8px 12px;border-bottom:2px solid #e2e8f0;width:130px;">Mode</th><th style="text-align:left;padding:8px 12px;border-bottom:2px solid #e2e8f0;width:150px;">Value</th></tr>
+                                    <tr><td>max-model-len</td><td style="font-weight:normal;color:#6b7280;font-size:0.9em;">Max total text length (input + output) per request. Larger values reserve more GPU memory, leaving less for KV cache (fewer concurrent users). <span style="color:#0369a1;">Auto = calculated by ServeIt Studio from your ISL + OSL.</span></td><td><select id="adv-max-model-len-mode" onchange="updateAdvVllm()"><option value="auto">Auto</option><option value="custom">Custom</option></select></td><td><input type="number" id="adv-max-model-len-val" disabled placeholder="auto" oninput="updateAdvVllm()"></td></tr>
+                                    <tr><td>gpu-memory-utilization</td><td style="font-weight:normal;color:#6b7280;font-size:0.9em;">Fraction of GPU memory the engine can use (0.0-0.99). Higher = more KV cache space for concurrent requests, but less safety margin for spikes. <span style="color:#0369a1;">Auto = calculated by ServeIt Studio based on model size and GPU VRAM.</span></td><td><select id="adv-gpu-memory-utilization-mode" onchange="updateAdvVllm()"><option value="auto">Auto</option><option value="custom">Custom</option></select></td><td><input type="number" id="adv-gpu-memory-utilization-val" disabled placeholder="auto" step="0.01" min="0.1" max="0.99" oninput="updateAdvVllm()"></td></tr>
+                                    <tr><td>max-num-seqs</td><td style="font-weight:normal;color:#6b7280;font-size:0.9em;">Max requests the engine processes simultaneously. Too high may cause out-of-memory; too low wastes GPU capacity. <span style="color:#0369a1;">Auto = calculated by ServeIt Studio from concurrent users and GPU count.</span></td><td><select id="adv-max-num-seqs-mode" onchange="updateAdvVllm()"><option value="auto">Auto</option><option value="custom">Custom</option></select></td><td><input type="number" id="adv-max-num-seqs-val" disabled placeholder="auto" oninput="updateAdvVllm()"></td></tr>
+                                    <tr><td>max-num-batched-tokens</td><td style="font-weight:normal;color:#6b7280;font-size:0.9em;">Max tokens processed in a single batch. Larger batches improve throughput but use more memory. <span style="color:#0369a1;">Auto = calculated by ServeIt Studio to match your workload.</span></td><td><select id="adv-max-num-batched-tokens-mode" onchange="updateAdvVllm()"><option value="auto">Auto</option><option value="custom">Custom</option></select></td><td><input type="number" id="adv-max-num-batched-tokens-val" disabled placeholder="auto" oninput="updateAdvVllm()"></td></tr>
+                                    <tr><td>dtype</td><td style="font-weight:normal;color:#6b7280;font-size:0.9em;">Precision for model weights. Lower precision (float16) uses less GPU memory but may reduce quality slightly. <span style="color:#64748b;">Auto = vLLM detects from the model config.</span></td><td><select id="adv-dtype-mode" onchange="updateAdvVllm()"><option value="auto">Auto</option><option value="custom">Custom</option></select></td><td><select id="adv-dtype-val" disabled onchange="updateAdvVllm()"><option value="auto">auto</option><option value="bfloat16">bfloat16</option><option value="float16">float16</option><option value="float32">float32</option></select></td></tr>
+                                    <tr><td>kv-cache-dtype</td><td style="font-weight:normal;color:#6b7280;font-size:0.9em;">Precision for KV cache (the engine's per-request working memory). FP8 halves cache memory, fitting more concurrent users. <span style="color:#64748b;">Auto = vLLM default (same as model dtype).</span></td><td><select id="adv-kv-cache-dtype-mode" onchange="updateAdvVllm()"><option value="auto">Auto</option><option value="custom">Custom</option></select></td><td><select id="adv-kv-cache-dtype-val" disabled onchange="updateAdvVllm()"><option value="auto">auto</option><option value="fp8">fp8</option><option value="fp8_e5m2">fp8_e5m2</option><option value="fp8_e4m3">fp8_e4m3</option></select></td></tr>
+                                    <tr><td>pipeline-parallel-size</td><td style="font-weight:normal;color:#6b7280;font-size:0.9em;">Split model across GPU groups in sequence. Only needed when the model is too large for tensor parallelism alone. <span style="color:#64748b;">Auto = vLLM default (1).</span></td><td><select id="adv-pipeline-parallel-size-mode" onchange="updateAdvVllm()"><option value="auto">Auto</option><option value="custom">Custom</option></select></td><td><input type="number" id="adv-pipeline-parallel-size-val" disabled placeholder="auto" min="1" oninput="updateAdvVllm()"></td></tr>
+                                    <tr><td>block-size</td><td style="font-weight:normal;color:#6b7280;font-size:0.9em;">Number of tokens per KV cache block. Larger blocks reduce management overhead for long sequences and improve NIXL KV transfer efficiency in P/D mode. <span style="color:#0369a1;">Auto = next-power-of-2 of &radic;(ISL+OSL). For P/D goals, minimum is 128 (NIXL transfers KV cache in blocks).</span></td><td><select id="adv-block-size-mode" onchange="updateAdvVllm()"><option value="auto">Auto</option><option value="custom">Custom</option></select></td><td><select id="adv-block-size-val" disabled onchange="updateAdvVllm()"><option value="">auto</option><option value="8">8</option><option value="16">16</option><option value="32">32</option><option value="64">64</option><option value="128">128</option><option value="256">256</option><option value="512">512</option></select></td></tr>
+                                    <tr><td>tool-call-parser</td><td style="font-weight:normal;color:#6b7280;font-size:0.9em;">How the engine parses function/tool calls in the model output. Only needed if your app uses tool calling. <span style="color:#64748b;">Auto = vLLM default (disabled).</span></td><td><select id="adv-tool-call-parser-mode" onchange="updateAdvVllm()"><option value="auto">Auto</option><option value="custom">Custom</option></select></td><td><select id="adv-tool-call-parser-val" disabled onchange="if(this.value==='__custom__'){this.style.display='none';var t=document.getElementById('adv-tool-call-parser-txt');t.style.display='inline-block';t.focus();}updateAdvVllm()"><option value="">select…</option><option value="hermes">hermes (Nous Hermes / Qwen2.5+)</option><option value="mistral">mistral (Mistral models)</option><option value="llama3_json">llama3_json (Llama 3)</option><option value="pythonic">pythonic (Llama 3.2)</option><option value="granite">granite (IBM Granite)</option><option value="granite-20b-fc">granite-20b-fc (Granite 20B)</option><option value="internlm">internlm (InternLM2)</option><option value="xlam">xlam (xLAM)</option><option value="glm4">glm4 (GLM-4)</option><option value="jamba">jamba (AI21 Jamba)</option><option value="kimi_k2">kimi_k2 (Kimi K2)</option><option value="__custom__">Custom…</option></select><input type="text" id="adv-tool-call-parser-txt" disabled placeholder="parser name" style="display:none;" onblur="if(!this.value){this.style.display='none';var s=document.getElementById('adv-tool-call-parser-val');s.style.display='';s.value='';}" oninput="updateAdvVllm()"></td></tr>
+                                    <tr><td>reasoning-parser</td><td style="font-weight:normal;color:#6b7280;font-size:0.9em;">Parser for chain-of-thought / reasoning extraction. Required for reasoning-capable models (e.g., DeepSeek-R1, Qwen3). <span style="color:#64748b;">Auto = disabled.</span></td><td><select id="adv-reasoning-parser-mode" onchange="updateAdvVllm()"><option value="auto">Auto</option><option value="custom">Custom</option></select></td><td><select id="adv-reasoning-parser-val" disabled onchange="if(this.value==='__custom__'){this.style.display='none';var t=document.getElementById('adv-reasoning-parser-txt');t.style.display='inline-block';t.focus();}updateAdvVllm()"><option value="">select…</option><option value="deepseek_r1">deepseek_r1 (DeepSeek-R1)</option><option value="qwen3">qwen3 (Qwen3 / Qwen3.5)</option><option value="granite">granite (IBM Granite)</option><option value="laguna">laguna (Laguna)</option><option value="__custom__">Custom…</option></select><input type="text" id="adv-reasoning-parser-txt" disabled placeholder="parser name" style="display:none;" onblur="if(!this.value){this.style.display='none';var s=document.getElementById('adv-reasoning-parser-val');s.style.display='';s.value='';}" oninput="updateAdvVllm()"></td></tr>
+                                    <tr><td>chat-template-content-format</td><td style="font-weight:normal;color:#6b7280;font-size:0.9em;">How chat message content is formatted before passing to the template. Some models (GLM) require 'string' instead of the default. <span style="color:#64748b;">Auto = vLLM default.</span></td><td><select id="adv-chat-template-content-format-mode" onchange="updateAdvVllm()"><option value="auto">Auto</option><option value="custom">Custom</option></select></td><td><select id="adv-chat-template-content-format-val" disabled onchange="updateAdvVllm()"><option value="">auto</option><option value="string">string</option><option value="openai">openai</option></select></td></tr>
+                                    <tr><td>dbo-prefill-token-threshold</td><td style="font-weight:normal;color:#6b7280;font-size:0.9em;">Minimum tokens to trigger Dual Batch Overlap on prefill. Lower = more aggressive overlap. Only applies when DBO is enabled (MoE/EP). <span style="color:#0369a1;">Auto = 32 (upstream default).</span></td><td><select id="adv-dbo-prefill-token-threshold-mode" onchange="updateAdvVllm()"><option value="auto">Auto</option><option value="custom">Custom</option></select></td><td><input type="number" id="adv-dbo-prefill-token-threshold-val" disabled value="32" min="1" max="512" oninput="updateAdvVllm()"></td></tr>
+                                    <tr><td>dbo-decode-token-threshold</td><td style="font-weight:normal;color:#6b7280;font-size:0.9em;">Minimum tokens to trigger Dual Batch Overlap on decode. Lower = more aggressive overlap. Only applies when DBO is enabled (MoE/EP). <span style="color:#0369a1;">Auto = 32 (upstream default).</span></td><td><select id="adv-dbo-decode-token-threshold-mode" onchange="updateAdvVllm()"><option value="auto">Auto</option><option value="custom">Custom</option></select></td><td><input type="number" id="adv-dbo-decode-token-threshold-val" disabled value="32" min="1" max="512" oninput="updateAdvVllm()"></td></tr>
+                                    <tr><td>moe-backend</td><td style="font-weight:normal;color:#6b7280;font-size:0.9em;">Computation backend for MoE expert layers. DeepGEMM provides optimized kernels for DeepSeek-style models. Only applies to MoE models. <span style="color:#0369a1;">Auto = deep_gemm when MoE detected.</span></td><td><select id="adv-moe-backend-mode" onchange="updateAdvVllm()"><option value="auto">Auto</option><option value="custom">Custom</option></select></td><td><select id="adv-moe-backend-val" disabled onchange="updateAdvVllm()"><option value="">auto</option><option value="deep_gemm">deep_gemm</option><option value="cutlass">cutlass</option></select></td></tr>
+                                    <tr><td>all2all-backend</td><td style="font-weight:normal;color:#6b7280;font-size:0.9em;">Communication backend for MoE expert-parallel all-to-all exchanges. High-throughput for prefill, low-latency for decode. Only applies to MoE/EP models. <span style="color:#0369a1;">Auto = deepep_high_throughput (prefill) / deepep_low_latency (decode).</span></td><td><select id="adv-all2all-backend-mode" onchange="updateAdvVllm()"><option value="auto">Auto</option><option value="custom">Custom</option></select></td><td><select id="adv-all2all-backend-val" disabled onchange="updateAdvVllm()"><option value="">auto</option><option value="deepep_high_throughput">deepep_high_throughput</option><option value="deepep_low_latency">deepep_low_latency</option><option value="nccl">nccl</option></select></td></tr>
+                                    <tr><td>headroom</td><td style="font-weight:normal;color:#6b7280;font-size:0.9em;">Safety margin for sustainable throughput calculation. The cluster's theoretical max throughput is divided by this value to avoid benchmarking at saturation. Higher = more conservative. <span style="color:#0369a1;">Auto = 1.3 (30% headroom).</span></td><td><select id="adv-headroom-mode" onchange="updateAdvVllm()"><option value="auto">Auto</option><option value="custom">Custom</option></select></td><td><input type="number" id="adv-headroom-val" disabled placeholder="1.3" step="0.1" min="1.0" max="3.0" oninput="updateAdvVllm()"></td></tr>
+                                    <tr><td>memory-reserve-pct</td><td style="font-weight:normal;color:#6b7280;font-size:0.9em;">Additional GPU memory to reserve as safety margin when calculating minimum TP. Prevents OOM from activation spikes, CUDA fragmentation, or unexpected overhead. Applied on top of model weights + KV cache estimate. <span style="color:#0369a1;">Auto = 0% (no extra reserve).</span></td><td><select id="adv-memory-reserve-pct-mode" onchange="updateAdvVllm()"><option value="auto">Auto</option><option value="custom">Custom</option></select></td><td><input type="number" id="adv-memory-reserve-pct-val" disabled placeholder="0" step="5" min="0" max="50" oninput="updateAdvVllm()"> <span style="font-size:0.85em;color:#64748b;">%</span></td></tr>
+                                    <tr><td>model-loader-extra-config</td><td style="font-weight:normal;color:#6b7280;font-size:0.9em;">JSON config for model loading optimization. E.g. <code>{"enable_multithread_load": true, "num_threads": 96}</code> for faster loading of large models (550B+). <span style="color:#64748b;">Auto = vLLM default.</span></td><td><select id="adv-model-loader-extra-config-mode" onchange="updateAdvVllm()"><option value="auto">Auto</option><option value="custom">Custom</option></select></td><td><input type="text" id="adv-model-loader-extra-config-val" disabled placeholder='{"enable_multithread_load": true, "num_threads": 96}' style="width:100%;font-size:0.85em" oninput="updateAdvVllm()"></td></tr>
+                                    <tr><td>cpu-offload-gb</td><td style="font-weight:normal;color:#6b7280;font-size:0.9em;">CPU memory (GB) for KV cache offloading via OffloadingConnector. Extends prefix cache beyond GPU HBM for long agentic sessions. Only applies to PD disaggregated mode. <span style="color:#64748b;">Auto = disabled.</span></td><td><select id="adv-cpu-offload-gb-mode" onchange="updateAdvVllm()"><option value="auto">Auto</option><option value="custom">Custom</option></select></td><td><input type="number" id="adv-cpu-offload-gb-val" disabled placeholder="200" step="10" min="0" max="2000" oninput="updateAdvVllm()"> <span style="font-size:0.85em;color:#64748b;">GB</span></td></tr>
+                                    <tr><td>weight-cpu-offload-gb</td><td style="font-weight:normal;color:#6b7280;font-size:0.9em;">Offload model weights from GPU to CPU RAM (vLLM --cpu-offload-gb). Frees GPU memory for KV cache at the cost of slower inference. Use when the model barely fits in GPU memory and needs more room for KV cache. <span style="color:#64748b;">Auto = disabled (all weights on GPU).</span></td><td><select id="adv-weight-cpu-offload-gb-mode" onchange="updateAdvVllm()"><option value="auto">Auto</option><option value="custom">Custom</option></select></td><td><input type="number" id="adv-weight-cpu-offload-gb-val" disabled placeholder="20" step="5" min="0" max="500" oninput="updateAdvVllm()"> <span style="font-size:0.85em;color:#64748b;">GB</span></td></tr>
+                                    <tr><td>http-timeout-keep-alive</td><td style="font-weight:normal;color:#6b7280;font-size:0.9em;">HTTP keep-alive timeout in seconds. Increase for long-running agentic requests that may idle between tool calls. <span style="color:#64748b;">Auto = vLLM default (5s).</span></td><td><select id="adv-http-timeout-keep-alive-mode" onchange="updateAdvVllm()"><option value="auto">Auto</option><option value="custom">Custom</option></select></td><td><input type="number" id="adv-http-timeout-keep-alive-val" disabled placeholder="120" step="10" min="5" max="600" oninput="updateAdvVllm()"> <span style="font-size:0.85em;color:#64748b;">sec</span></td></tr>
+                                    <tr><td>prefix-cache-retention</td><td style="font-weight:normal;color:#6b7280;font-size:0.9em;">Prefix cache retention interval (VLLM_PREFIX_CACHE_RETENTION_INTERVAL). Set to 0 for Mamba-hybrid models to improve multi-turn prefix cache hit rates. <span style="color:#64748b;">Auto = vLLM default. Set 0 for Nemotron.</span></td><td><select id="adv-prefix-cache-retention-mode" onchange="updateAdvVllm()"><option value="auto">Auto</option><option value="custom">Custom</option></select></td><td><input type="number" id="adv-prefix-cache-retention-val" disabled placeholder="0" step="1" min="0" max="100" oninput="updateAdvVllm()"></td></tr>
+                                    <tr><td>ssm-conv-state-layout</td><td style="font-weight:normal;color:#6b7280;font-size:0.9em;">SSM convolution state layout (VLLM_SSM_CONV_STATE_LAYOUT). Required for Mamba-hybrid models like Nemotron. <span style="color:#64748b;">Auto = vLLM default. Set DS for Nemotron.</span></td><td><select id="adv-ssm-conv-state-layout-mode" onchange="updateAdvVllm()"><option value="auto">Auto</option><option value="custom">Custom</option></select></td><td><select id="adv-ssm-conv-state-layout-val" disabled onchange="updateAdvVllm()"><option value="">auto</option><option value="DS">DS</option></select></td></tr>
+                                </table>
+
+                                <!-- Toggle Flags -->
+                                <div style="font-weight:600;color:#334155;font-size:0.9em;margin-bottom:12px;text-transform:uppercase;letter-spacing:0.5px;">Toggle Flags</div>
+                                <table style="width:100%;border-collapse:collapse;font-size:0.9em;">
+                                    <tr style="background:#f8fafc;"><th style="text-align:left;padding:8px 12px;border-bottom:2px solid #e2e8f0;">Flag</th><th style="text-align:left;padding:8px 12px;border-bottom:2px solid #e2e8f0;">Description</th><th style="text-align:left;padding:8px 12px;border-bottom:2px solid #e2e8f0;width:170px;">State</th></tr>
+                                    <tr><td>enable-prefix-caching</td><td style="font-weight:normal;color:#6b7280;font-size:0.9em;">Reuse computation for repeated prompt openings (e.g., system prompts). Saves GPU time when many requests share the same starting text. <span style="color:#0369a1;">Auto = enabled by ServeIt Studio.</span></td><td><select id="adv-enable-prefix-caching-mode" onchange="updateAdvVllm()"><option value="auto">Auto (On)</option><option value="on">On</option><option value="off">Off</option></select></td></tr>
+                                    <tr><td>disable-custom-all-reduce</td><td style="font-weight:normal;color:#6b7280;font-size:0.9em;">Turn off optimized GPU-to-GPU communication. Only enable if you see NCCL errors during multi-GPU runs. <span style="color:#64748b;">Auto = vLLM default (off).</span></td><td><select id="adv-disable-custom-all-reduce-mode" onchange="updateAdvVllm()"><option value="auto">Auto (Off)</option><option value="on">On</option><option value="off">Off</option></select></td></tr>
+                                    <tr><td>enable-auto-tool-choice</td><td style="font-weight:normal;color:#6b7280;font-size:0.9em;">Let the engine decide when to invoke tools/functions automatically. Only relevant if your application uses tool calling. <span style="color:#64748b;">Auto = vLLM default (off).</span></td><td><select id="adv-enable-auto-tool-choice-mode" onchange="updateAdvVllm()"><option value="auto">Auto (Off)</option><option value="on">On</option><option value="off">Off</option></select></td></tr>
+                                    <tr><td>enable-expert-parallel</td><td style="font-weight:normal;color:#6b7280;font-size:0.9em;">Split MoE experts across GPUs instead of replicating them. Saves memory and improves throughput for Mixture-of-Experts models (Mixtral, DeepSeek-MoE). <span style="color:#0369a1;">Auto = enabled when MoE model detected.</span></td><td><select id="adv-enable-expert-parallel-mode" onchange="updateAdvVllm()"><option value="auto">Auto (detect MoE)</option><option value="on">On</option><option value="off">Off</option></select></td></tr>
+                                    <tr><td>enable-dbo</td><td style="font-weight:normal;color:#6b7280;font-size:0.9em;">Dual Batch Overlap — overlaps MoE all-to-all communication with compute for higher throughput. Only for Expert Parallel models. <span style="color:#0369a1;">Auto = enabled when MoE model detected.</span></td><td><select id="adv-enable-dbo-mode" onchange="updateAdvVllm()"><option value="auto">Auto (detect MoE)</option><option value="on">On</option><option value="off">Off</option></select></td></tr>
+                                    <tr><td>enable-eplb</td><td style="font-weight:normal;color:#6b7280;font-size:0.9em;">Expert-Parallel Load Balancing — replicates heavily-used MoE experts to reduce imbalance across GPUs. Uses ~2GB extra per redundant expert per GPU. <span style="color:#0369a1;">Auto = enabled when MoE model detected.</span></td><td><select id="adv-enable-eplb-mode" onchange="updateAdvVllm()"><option value="auto">Auto (detect MoE)</option><option value="on">On</option><option value="off">Off</option></select></td></tr>
+                                    <tr><td>trust-remote-code</td><td style="font-weight:normal;color:#6b7280;font-size:0.9em;">Allow the model to run custom Python code from HuggingFace. Required by some models (e.g., custom architectures), but has security implications. <span style="color:#0369a1;">Auto = enabled by ServeIt Studio.</span></td><td><select id="adv-trust-remote-code-mode" onchange="updateAdvVllm()"><option value="auto">Auto (On)</option><option value="on">On</option><option value="off">Off</option></select></td></tr>
+                                    <tr><td>disable-log-requests</td><td style="font-weight:normal;color:#6b7280;font-size:0.9em;">Stop logging individual request/response details. Reduces log volume and improves performance during benchmarks. <span style="color:#0369a1;">Auto = enabled by ServeIt Studio.</span></td><td><select id="adv-disable-log-requests-mode" onchange="updateAdvVllm()"><option value="auto">Auto (On)</option><option value="on">On</option><option value="off">Off</option></select></td></tr>
+                                    <tr><td>vllm-debug-logs</td><td style="font-weight:normal;color:#6b7280;font-size:0.9em;">Enable verbose vLLM engine logs. Useful for debugging model loading, KV cache, and scheduling issues. Generates a lot of output. <span style="color:#64748b;">Auto = off (ERROR level only).</span></td><td><select id="adv-vllm-debug-logs-mode" onchange="updateAdvVllm()"><option value="auto">Auto (Off)</option><option value="on">On</option><option value="off">Off</option></select></td></tr>
+                                    <tr><td>nccl-debug-logs</td><td style="font-weight:normal;color:#6b7280;font-size:0.9em;">Enable verbose NCCL communication logs. Useful for debugging multi-GPU networking, RDMA, and InfiniBand issues. Very noisy. <span style="color:#64748b;">Auto = off (ERROR level only).</span></td><td><select id="adv-nccl-debug-logs-mode" onchange="updateAdvVllm()"><option value="auto">Auto (Off)</option><option value="on">On</option><option value="off">Off</option></select></td></tr>
+                                    <tr><td>enable-bidirectional-kv</td><td style="font-weight:normal;color:#6b7280;font-size:0.9em;">Enable bidirectional KV transfer in NixlConnector. Allows both prefill and decode to send/receive KV cache. Required for Nemotron-3 and agentic serving. <span style="color:#64748b;">Auto = off.</span></td><td><select id="adv-enable-bidirectional-kv-mode" onchange="updateAdvVllm()"><option value="auto">Auto (Off)</option><option value="on">On</option><option value="off">Off</option></select></td></tr>
+                                </table>
+                                </div><!-- end adv-vllm-form-section -->
+                                </div><!-- end adv-vllm-custom-section -->
+                            </div>
+                        </div>
+
+                        <button class="action-button" id="next-step4">Continue to Infrastructure →</button>
+                    </div>

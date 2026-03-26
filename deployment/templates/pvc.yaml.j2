@@ -1,0 +1,17 @@
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: {{ pvc_name }}
+  namespace: {{ namespace }}
+  labels:
+    app: serveit-optimizer
+    component: storage
+spec:
+  accessModes:
+    - {{ access_mode | default('ReadWriteMany') }}
+  resources:
+    requests:
+      storage: {{ storage_size }}
+{% if storage_class %}
+  storageClassName: {{ storage_class }}
+{% endif %}
