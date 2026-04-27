@@ -56,6 +56,16 @@ class TestConfig:
     prefill_max_num_seqs: Optional[int] = None  # For PD prefill pods
     decode_max_num_seqs: Optional[int] = None   # For PD decode pods
     max_num_batched_tokens: Optional[int] = None  # Limits tokens per forward pass
+    # Advanced vLLM flags
+    enable_prefix_caching: bool = True
+    disable_custom_all_reduce: bool = False
+    enable_auto_tool_choice: bool = False
+    tool_call_parser: Optional[str] = None
+    dtype: Optional[str] = None  # None = vLLM auto-detects
+    kv_cache_dtype: Optional[str] = None  # None = auto
+    pipeline_parallel_size: Optional[int] = None  # None = 1 (default)
+    trust_remote_code: bool = True
+    disable_log_requests: bool = True
     memory_request: str = '64Gi'  # System RAM per pod (overridden by dynamic calculation)
     memory_limit: str = '64Gi'  # System RAM per pod (overridden by dynamic calculation)
     cpu_request: str = '16'  # CPUs per pod (overridden by dynamic calculation)

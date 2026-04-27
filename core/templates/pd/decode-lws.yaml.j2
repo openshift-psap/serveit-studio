@@ -143,16 +143,23 @@ spec:
                   --port 8200 \
                   --tensor-parallel-size ${TP_SIZE} \
                   --data-parallel-size ${DP_SIZE} \
-                  --block-size 128 \
+{% if pipeline_parallel_size %}                  --pipeline-parallel-size {{ pipeline_parallel_size }} \
+{% endif %}                  --block-size 128 \
                   --kv-transfer-config '{"kv_connector":"{{ kv_connector }}", "kv_role":"kv_both"}' \
                   --disable-uvicorn-access-log \
-                  --disable-log-requests \
-                  --max-model-len {{ max_model_len }} \
-                  --gpu-memory-utilization {{ decode_gpu_memory_utilization }} \
-                  --enable-prefix-caching \
+{% if disable_log_requests %}                  --disable-log-requests \
+{% endif %}                  --max-model-len {{ max_model_len }} \
+                  --gpu-memory-utilization {{ decode_gpu_memory_utilization }}{% if enable_prefix_caching %} \
+                  --enable-prefix-caching{% endif %}{% if disable_custom_all_reduce %} \
+                  --disable-custom-all-reduce{% endif %}{% if dtype %} \
+                  --dtype {{ dtype }}{% endif %}{% if kv_cache_dtype %} \
+                  --kv-cache-dtype {{ kv_cache_dtype }}{% endif %} \
 {% if max_num_batched_tokens %}                  --max-num-batched-tokens {{ max_num_batched_tokens }} \
 {% endif %}{% if decode_max_num_seqs %}                  --max-num-seqs {{ decode_max_num_seqs }} \
-{% endif %}                  --trust-remote-code || sleep infinity
+{% endif %}{% if enable_auto_tool_choice %}                  --enable-auto-tool-choice \
+{% endif %}{% if tool_call_parser %}                  --tool-call-parser {{ tool_call_parser }} \
+{% endif %}{% if trust_remote_code %}                  --trust-remote-code \
+{% endif %}                  || sleep infinity
             env:
               - name: VLLM_NIXL_SIDE_CHANNEL_HOST
                 valueFrom:

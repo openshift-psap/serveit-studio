@@ -1527,6 +1527,7 @@ def stream_job_logs(job_name: str, namespace: str):
                     'dataset_source': saved_config.get('dataset_source'),
                     'dataset_column': saved_config.get('dataset_column'),
                     'dataset_max_output': saved_config.get('dataset_max_output', 256),
+                    'advanced_vllm': saved_config.get('advanced_vllm'),
                 }
 
                 # Start optimization in background
@@ -1815,6 +1816,7 @@ def run_optimization_background(data):
         dataset_source = data.get('dataset_source')
         dataset_column = data.get('dataset_column')
         dataset_max_output = int(data.get('dataset_max_output', 256))
+        advanced_vllm = data.get('advanced_vllm')
 
         # Create/update HuggingFace token secret if provided
         if hf_token and hf_token.strip():
@@ -1975,6 +1977,7 @@ data:
                 dataset_source=dataset_source,
                 dataset_column=dataset_column,
                 dataset_max_output=dataset_max_output,
+                advanced_vllm=advanced_vllm,
             )
 
             # Save full config to DB for resume
@@ -3141,13 +3144,15 @@ def handle_resume_optimization(data):
         if run.get('workload_mode') == 'dataset' and run.get('dataset_source'):
             log_to_ui(f'   Dataset: {run["dataset_source"]}', 'info')
 
-        # Restore selected_nodes from saved config_json
+        # Restore selected_nodes and advanced settings from saved config_json
         saved_selected_nodes = []
+        saved_advanced_vllm = None
         if run.get('config_json'):
             try:
                 import json as _json
                 saved_cfg = _json.loads(run['config_json'])
                 saved_selected_nodes = saved_cfg.get('selected_nodes', [])
+                saved_advanced_vllm = saved_cfg.get('advanced_vllm')
             except Exception:
                 pass
 
@@ -3181,6 +3186,7 @@ def handle_resume_optimization(data):
             'latency_constraint_enabled': bool(run.get('latency_constraint_enabled', 0)),
             'latency_constraint_ms': run.get('latency_constraint_ms', 500),
             'latency_constraint_percentile': run.get('latency_constraint_percentile', 'p90'),
+            'advanced_vllm': saved_advanced_vllm,
             'resume_run_id': run_id
         }
 
@@ -4350,6 +4356,7 @@ def handle_setup_storage(data):
                 'dataset_source': data.get('dataset_source'),
                 'dataset_column': data.get('dataset_column'),
                 'dataset_max_output': int(data.get('dataset_max_output', 256)),
+                'advanced_vllm': data.get('advanced_vllm'),
             }
             if resume_run_id:
                 optimization_data['resume_run_id'] = resume_run_id

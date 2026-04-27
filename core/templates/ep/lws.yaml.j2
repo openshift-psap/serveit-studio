@@ -100,18 +100,24 @@ spec:
                 exec vllm serve \
                   {{ model_name }} \
                   --port 8000 \
-                  --trust-remote-code \
-                  --disable-uvicorn-access-log \
-                  --disable-log-requests \
-                  --tensor-parallel-size {{ tensor_parallelism }} \
-                  --kv_transfer_config '{"kv_connector":"NixlConnector","kv_role":"kv_both"}' \
+{% if trust_remote_code %}                  --trust-remote-code \
+{% endif %}                  --disable-uvicorn-access-log \
+{% if disable_log_requests %}                  --disable-log-requests \
+{% endif %}                  --tensor-parallel-size {{ tensor_parallelism }} \
+{% if pipeline_parallel_size %}                  --pipeline-parallel-size {{ pipeline_parallel_size }} \
+{% endif %}                  --kv_transfer_config '{"kv_connector":"NixlConnector","kv_role":"kv_both"}' \
                   --async-scheduling \
                   --enable-eplb \
                   --max-model-len {{ max_model_len }} \
-                  --gpu-memory-utilization {{ gpu_memory_utilization }} \
-                  --enable-prefix-caching{% if max_num_batched_tokens %} \
+                  --gpu-memory-utilization {{ gpu_memory_utilization }}{% if enable_prefix_caching %} \
+                  --enable-prefix-caching{% endif %}{% if disable_custom_all_reduce %} \
+                  --disable-custom-all-reduce{% endif %}{% if dtype %} \
+                  --dtype {{ dtype }}{% endif %}{% if kv_cache_dtype %} \
+                  --kv-cache-dtype {{ kv_cache_dtype }}{% endif %}{% if max_num_batched_tokens %} \
                   --max-num-batched-tokens {{ max_num_batched_tokens }}{% endif %}{% if max_num_seqs %} \
-                  --max-num-seqs {{ max_num_seqs }}{% endif %}
+                  --max-num-seqs {{ max_num_seqs }}{% endif %}{% if enable_auto_tool_choice %} \
+                  --enable-auto-tool-choice{% endif %}{% if tool_call_parser %} \
+                  --tool-call-parser {{ tool_call_parser }}{% endif %}
 
             env:
               - name: HF_TOKEN

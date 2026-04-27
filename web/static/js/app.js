@@ -90,7 +90,8 @@ let config = {
     workload_mode: 'synthetic',
     dataset_source: null,
     dataset_column: null,
-    dataset_max_output: 256
+    dataset_max_output: 256,
+    advanced_vllm: null
 };
 
 // Track configuration used for last test plan generation
@@ -327,6 +328,9 @@ function updateUIFromConfig() {
         if (config.dataset_max_output && document.getElementById('dataset-max-output-input'))
             document.getElementById('dataset-max-output-input').value = config.dataset_max_output;
     }
+
+    // Restore advanced vLLM settings
+    restoreAdvVllm();
 
     // Restore "Use Existing PVC" checkbox and name
     if (config.use_existing_pvc && document.getElementById('use-existing-pvc')) {
@@ -1095,6 +1099,56 @@ function setLatencyPercentile(pctl) {
     saveConfig();
 }
 
+// Advanced vLLM settings
+var advValueFields = ['max-model-len','gpu-memory-utilization','max-num-seqs','max-num-batched-tokens','dtype','kv-cache-dtype','pipeline-parallel-size','tool-call-parser'];
+var advToggleFields = ['enable-prefix-caching','disable-custom-all-reduce','enable-auto-tool-choice','trust-remote-code','disable-log-requests'];
+
+function updateAdvVllm() {
+    var adv = {};
+    advValueFields.forEach(function(f) {
+        var modeEl = document.getElementById('adv-' + f + '-mode');
+        var valEl = document.getElementById('adv-' + f + '-val');
+        if (!modeEl) return;
+        var mode = modeEl.value;
+        valEl.disabled = (mode === 'auto');
+        if (mode === 'auto') valEl.value = '';
+        var key = f.replace(/-/g, '_');
+        adv[key] = { mode: mode, value: mode === 'custom' ? (valEl.value || null) : null };
+    });
+    advToggleFields.forEach(function(f) {
+        var modeEl = document.getElementById('adv-' + f + '-mode');
+        if (!modeEl) return;
+        var key = f.replace(/-/g, '_');
+        adv[key] = { mode: modeEl.value };
+    });
+    config.advanced_vllm = adv;
+    saveConfig();
+}
+
+function restoreAdvVllm() {
+    var adv = config.advanced_vllm;
+    if (!adv) return;
+    advValueFields.forEach(function(f) {
+        var key = f.replace(/-/g, '_');
+        var setting = adv[key];
+        if (!setting) return;
+        var modeEl = document.getElementById('adv-' + f + '-mode');
+        var valEl = document.getElementById('adv-' + f + '-val');
+        if (modeEl) modeEl.value = setting.mode || 'auto';
+        if (valEl) {
+            valEl.disabled = (setting.mode !== 'custom');
+            if (setting.mode === 'custom' && setting.value != null) valEl.value = setting.value;
+        }
+    });
+    advToggleFields.forEach(function(f) {
+        var key = f.replace(/-/g, '_');
+        var setting = adv[key];
+        if (!setting) return;
+        var modeEl = document.getElementById('adv-' + f + '-mode');
+        if (modeEl) modeEl.value = setting.mode || 'auto';
+    });
+}
+
 document.getElementById('latency-target-input').addEventListener('change', (e) => {
     config.latency_constraint_ms = parseInt(e.target.value) || 500;
     saveConfig();
@@ -1374,7 +1428,8 @@ document.getElementById('start-optimization').addEventListener('click', () => {
         workload_mode: config.workload_mode || 'synthetic',
         dataset_source: config.dataset_source || null,
         dataset_column: config.dataset_column || null,
-        dataset_max_output: config.dataset_max_output || 256
+        dataset_max_output: config.dataset_max_output || 256,
+        advanced_vllm: config.advanced_vllm || null
     });
 });
 

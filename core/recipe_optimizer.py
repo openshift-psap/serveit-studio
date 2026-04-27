@@ -97,6 +97,9 @@ class RecipeOptimizerConfig:
     dataset_column: Optional[str] = None
     dataset_max_output: int = 256
 
+    # Advanced vLLM settings (user overrides)
+    advanced_vllm: Optional[Dict] = None
+
     def to_dict(self) -> dict:
         """Serialize config to dict for DB persistence (excludes secrets)."""
         from dataclasses import fields as dc_fields
@@ -2057,7 +2060,7 @@ class RecipeOptimizer:
         is_calibration = (isl != self.config.isl) or (osl != self.config.osl)
         max_batched = None if is_calibration else self._compute_max_num_batched_tokens(tp)
 
-        return TestConfig(
+        cfg = TestConfig(
             test_id=test_id,
             architecture='aggregated',
             model_name=self.config.model_name,
@@ -2098,6 +2101,7 @@ class RecipeOptimizer:
             dataset_column=None if is_calibration else self.config.dataset_column,
             dataset_max_output=self.config.dataset_max_output or 256,
         )
+        return self._apply_advanced_vllm(cfg) if not is_calibration else cfg
 
     def _get_measured_overhead(self, tp: int) -> Optional[float]:
         """Get measured vLLM fixed overhead from Steps 2-3 results for a given TP."""
@@ -2204,6 +2208,45 @@ class RecipeOptimizer:
                  f"= {batch_budget}, clamped to [{2048}, {self.config.max_model_len}])")
         return clamped
 
+    def _apply_advanced_vllm(self, cfg: TestConfig) -> TestConfig:
+        """Apply user's advanced vLLM overrides to a TestConfig."""
+        adv = self.config.advanced_vllm
+        if not adv:
+            return cfg
+        val_fields = {
+            'max_model_len': 'max_model_len',
+            'gpu_memory_utilization': 'gpu_memory_utilization',
+            'max_num_seqs': 'max_num_seqs',
+            'max_num_batched_tokens': 'max_num_batched_tokens',
+            'dtype': 'dtype',
+            'kv_cache_dtype': 'kv_cache_dtype',
+            'pipeline_parallel_size': 'pipeline_parallel_size',
+            'tool_call_parser': 'tool_call_parser',
+        }
+        for key, attr in val_fields.items():
+            setting = adv.get(key)
+            if setting and setting.get('mode') == 'custom' and setting.get('value') is not None:
+                val = setting['value']
+                if attr in ('max_model_len', 'max_num_seqs', 'max_num_batched_tokens', 'pipeline_parallel_size'):
+                    val = int(val)
+                elif attr == 'gpu_memory_utilization':
+                    val = float(val)
+                setattr(cfg, attr, val)
+
+        toggle_fields = {
+            'enable_prefix_caching': 'enable_prefix_caching',
+            'disable_custom_all_reduce': 'disable_custom_all_reduce',
+            'enable_auto_tool_choice': 'enable_auto_tool_choice',
+            'trust_remote_code': 'trust_remote_code',
+            'disable_log_requests': 'disable_log_requests',
+        }
+        for key, attr in toggle_fields.items():
+            setting = adv.get(key)
+            if setting and setting.get('mode') in ('on', 'off'):
+                setattr(cfg, attr, setting['mode'] == 'on')
+
+        return cfg
+
     def _create_pd_config(self, split: FeasibleSplit) -> TestConfig:
         """Create PD architecture test config."""
         concurrency = self.effective_concurrency
@@ -2226,7 +2269,7 @@ class RecipeOptimizer:
         min_tp = min(split.prefill_tp, split.decode_tp)
         mem, cpu = self._get_pod_resources(tp=min_tp, total_pods=total_pods)
 
-        return TestConfig(
+        cfg = TestConfig(
             test_id=f"step7-{split.prefill_pods}p{split.decode_pods}d-ptp{split.prefill_tp}-dtp{split.decode_tp}",
             architecture='pd',
             model_name=self.config.model_name,
@@ -2283,6 +2326,7 @@ class RecipeOptimizer:
             dataset_column=self.config.dataset_column,
             dataset_max_output=self.config.dataset_max_output or 256,
         )
+        return self._apply_advanced_vllm(cfg)
 
     def _create_ep_config(
         self,
@@ -2316,7 +2360,7 @@ class RecipeOptimizer:
         replicas = num_gpus // tp
         mem, cpu = self._get_pod_resources(tp=tp, total_pods=replicas)
 
-        return TestConfig(
+        cfg = TestConfig(
             test_id=test_id,
             architecture='ep',
             model_name=self.config.model_name,
@@ -2357,6 +2401,7 @@ class RecipeOptimizer:
             dataset_column=self.config.dataset_column,
             dataset_max_output=self.config.dataset_max_output or 256,
         )
+        return self._apply_advanced_vllm(cfg)
 
     def _build_results(self) -> Dict[str, Any]:
         """Build optimization results summary."""
