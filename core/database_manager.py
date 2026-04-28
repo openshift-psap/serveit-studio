@@ -84,7 +84,9 @@ class DatabaseManager:
                     dataset_source TEXT,
                     dataset_column TEXT,
                     dataset_max_output INTEGER DEFAULT 256,
-                    rate_type TEXT DEFAULT 'concurrent'
+                    rate_type TEXT DEFAULT 'concurrent',
+                    prefix_cache_hit_pct INTEGER DEFAULT 0,
+                    prefix_cache_seed INTEGER
                 )
             ''')
 
@@ -143,6 +145,8 @@ class DatabaseManager:
                 ('optimization_runs', 'dataset_column', 'TEXT'),
                 ('optimization_runs', 'dataset_max_output', 'INTEGER DEFAULT 256'),
                 ('optimization_runs', 'rate_type', "TEXT DEFAULT 'concurrent'"),
+                ('optimization_runs', 'prefix_cache_hit_pct', 'INTEGER DEFAULT 0'),
+                ('optimization_runs', 'prefix_cache_seed', 'INTEGER'),
                 ('test_configurations', 'manifests_yaml', 'TEXT'),
                 ('test_configurations', 'architecture', 'TEXT'),
                 ('test_configurations', 'decode_tp', 'INTEGER'),
@@ -313,8 +317,8 @@ class DatabaseManager:
                  latency_constraint_enabled, latency_constraint_ms,
                  latency_constraint_percentile,
                  workload_mode, dataset_source, dataset_column, dataset_max_output,
-                 rate_type)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                 rate_type, prefix_cache_hit_pct, prefix_cache_seed)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             ''', (
                 run_name,
                 model,
@@ -340,6 +344,8 @@ class DatabaseManager:
                 config_dict.get('dataset_column') if config_dict else None,
                 config_dict.get('dataset_max_output', 256) if config_dict else 256,
                 config_dict.get('rate_type', 'concurrent') if config_dict else 'concurrent',
+                config_dict.get('prefix_cache_hit_pct', 0) if config_dict else 0,
+                config_dict.get('prefix_cache_seed') if config_dict else None,
             ))
             return cursor.lastrowid
 

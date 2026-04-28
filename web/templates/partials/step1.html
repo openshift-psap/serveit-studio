@@ -16,25 +16,25 @@
                         <div class="architecture-grid">
                             <div class="arch-card" data-goal="throughput">
                                 <h4>Throughput Priority</h4>
-                                <p>Finds the setup that handles the most requests and generates the most text per second. Best when you need to serve many users at once.</p>
+                                <p>Finds the setup that handles the most requests per second for your specific model and workload. Tests both Standard and EP, picks whichever wins.</p>
                                 <div class="best-for">
-                                    <strong>Benchmarks:</strong> <span>Standard setup vs Expert Parallelism (EP)</span>
+                                    <strong>Compares:</strong> <span>Standard vs Expert Parallelism (EP) — best config from each is compared</span>
                                 </div>
                             </div>
 
                             <div class="arch-card" data-goal="ttft">
                                 <h4>Response Time Priority</h4>
-                                <p>Finds the setup where users see the first word of the AI's reply as fast as possible. Best for chatbots and interactive apps where feeling "instant" matters.</p>
+                                <p>Finds the fastest first-reply time for your specific model and workload. Standard can beat PD in some cases, so we test both and pick the winner.</p>
                                 <div class="best-for">
-                                    <strong>Benchmarks:</strong> <span>Standard setup vs Prefill/Decode split (PD)</span>
+                                    <strong>Compares:</strong> <span>Standard vs Prefill/Decode (PD) — best config from each is compared</span>
                                 </div>
                             </div>
 
                             <div class="arch-card" data-goal="balanced">
                                 <h4>Balanced Performance</h4>
-                                <p>Tests all server configurations and picks the best overall tradeoff between fast replies and high request volume. Ideal when you want solid performance across the board.</p>
+                                <p>Tests all three architectures for your specific model and workload, then picks the best overall tradeoff between fast replies and high request volume.</p>
                                 <div class="best-for">
-                                    <strong>Benchmarks:</strong> <span>All configurations (Standard, EP, and PD)</span>
+                                    <strong>Compares:</strong> <span>Standard vs PD vs EP — best config from each is compared</span>
                                 </div>
                             </div>
                         </div>

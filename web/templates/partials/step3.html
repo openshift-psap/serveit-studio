@@ -83,6 +83,25 @@
                                                 <div class="help-text" style="margin-top: 8px;">Later messages are slower because there is more text to process each turn.</div>
                                             </div>
                                         </div>
+
+                                        <!-- Prefix Cache Simulation (collapsible) -->
+                                        <div style="border-top:1px solid #dcfce7;">
+                                            <div style="padding:12px 20px;cursor:pointer;display:flex;align-items:center;justify-content:space-between;" onclick="var b=document.getElementById('prefix-cache-body');var a=document.getElementById('prefix-cache-arrow');if(b.style.display==='none'){b.style.display='block';a.textContent='▾';}else{b.style.display='none';a.textContent='▸';}">
+                                                <div>
+                                                    <div style="font-weight:700;color:#15803d;font-size:0.95em;">🗂️ Prefix Cache Simulation (optional)</div>
+                                                    <div style="color:#166534;font-size:0.85em;margin-top:2px;">Control how often requests share the same prompt prefix, simulating system prompts or repeated context.</div>
+                                                </div>
+                                                <div id="prefix-cache-arrow" style="font-size:1.4em;color:#15803d;font-weight:700;">▸</div>
+                                            </div>
+                                            <div id="prefix-cache-body" style="display:none;padding:0 20px 16px;">
+                                                <div class="input-group">
+                                                    <label>Prefix Cache Hit Ratio: <span id="prefix-cache-value" style="font-weight:800;color:var(--rh-red-primary);">0%</span></label>
+                                                    <input type="range" id="prefix-cache-slider" min="0" max="100" value="0" style="width:100%;accent-color:var(--rh-red-primary);" oninput="config.prefix_cache_hit_pct=parseInt(this.value);document.getElementById('prefix-cache-value').textContent=this.value+'%';saveConfig();">
+                                                    <div style="display:flex;justify-content:space-between;font-size:0.75em;color:#94a3b8;margin-top:2px;"><span>0% — all unique prompts</span><span>100% — all identical</span></div>
+                                                    <div class="help-text" style="margin-top:8px;">At optimization start, a synthetic dataset is generated where this percentage of prompts share the same text. This simulates real-world scenarios where many users send similar system prompts. The dataset size is automatically calculated to overflow GPU prefix cache, ensuring accurate simulation. A deterministic seed is saved to the database so the exact same dataset can be reproduced on resume or future runs.</div>
+                                                </div>
+                                            </div>
+                                        </div>
                                     </div>
                                 </div>
 

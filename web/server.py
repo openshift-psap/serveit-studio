@@ -1528,6 +1528,7 @@ def stream_job_logs(job_name: str, namespace: str):
                     'dataset_column': saved_config.get('dataset_column'),
                     'dataset_max_output': saved_config.get('dataset_max_output', 256),
                     'rate_type': saved_config.get('rate_type', 'concurrent'),
+                    'prefix_cache_hit_pct': saved_config.get('prefix_cache_hit_pct', 0),
                     'advanced_vllm': saved_config.get('advanced_vllm'),
                 }
 
@@ -1818,6 +1819,7 @@ def run_optimization_background(data):
         dataset_column = data.get('dataset_column')
         dataset_max_output = int(data.get('dataset_max_output', 256))
         rate_type = data.get('rate_type', 'concurrent')
+        prefix_cache_hit_pct = int(data.get('prefix_cache_hit_pct', 0))
         advanced_vllm = data.get('advanced_vllm')
 
         # Create/update HuggingFace token secret if provided
@@ -2003,6 +2005,7 @@ data:
                 dataset_column=dataset_column,
                 dataset_max_output=dataset_max_output,
                 rate_type=rate_type,
+                prefix_cache_hit_pct=prefix_cache_hit_pct,
                 advanced_vllm=advanced_vllm,
             )
 
@@ -3210,6 +3213,8 @@ def handle_resume_optimization(data):
             'dataset_column': saved_dataset_column,
             'dataset_max_output': saved_dataset_max_output,
             'rate_type': run.get('rate_type') or 'concurrent',
+            'prefix_cache_hit_pct': run.get('prefix_cache_hit_pct') or 0,
+            'prefix_cache_seed': run.get('prefix_cache_seed'),
             'latency_constraint_enabled': bool(run.get('latency_constraint_enabled', 0)),
             'latency_constraint_ms': run.get('latency_constraint_ms', 500),
             'latency_constraint_percentile': run.get('latency_constraint_percentile', 'p90'),
@@ -4384,6 +4389,7 @@ def handle_setup_storage(data):
                 'dataset_column': data.get('dataset_column'),
                 'dataset_max_output': int(data.get('dataset_max_output', 256)),
                 'rate_type': data.get('rate_type', 'concurrent'),
+                'prefix_cache_hit_pct': int(data.get('prefix_cache_hit_pct', 0)),
                 'advanced_vllm': data.get('advanced_vllm'),
             }
             if resume_run_id:

@@ -92,6 +92,7 @@ let config = {
     dataset_source: null,
     dataset_column: null,
     dataset_max_output: 256,
+    prefix_cache_hit_pct: 0,
     advanced_vllm: null
 };
 
@@ -331,6 +332,12 @@ function updateUIFromConfig() {
             document.getElementById('dataset-column-input').value = config.dataset_column;
         if (config.dataset_max_output && document.getElementById('dataset-max-output-input'))
             document.getElementById('dataset-max-output-input').value = config.dataset_max_output;
+    }
+
+    // Restore prefix cache slider
+    if (config.prefix_cache_hit_pct && document.getElementById('prefix-cache-slider')) {
+        document.getElementById('prefix-cache-slider').value = config.prefix_cache_hit_pct;
+        document.getElementById('prefix-cache-value').textContent = config.prefix_cache_hit_pct + '%';
     }
 
     // Restore advanced vLLM settings
@@ -1479,6 +1486,7 @@ document.getElementById('start-optimization').addEventListener('click', () => {
         dataset_column: config.dataset_column || null,
         dataset_max_output: config.dataset_max_output || 256,
         rate_type: config.rate_type || 'concurrent',
+        prefix_cache_hit_pct: config.prefix_cache_hit_pct || 0,
         advanced_vllm: config.advanced_vllm || null
     });
 });
