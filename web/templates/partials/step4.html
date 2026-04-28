@@ -40,15 +40,13 @@
                                         </div>
                                     </div>
                                     <div class="input-group" id="autoscale-card" style="cursor:pointer;border:2px solid #e2e8f0;border-radius:10px;padding:16px;transition:all 0.2s;background:#fafafa;" onclick="var cb=document.getElementById('use-achievable-qps');cb.checked=!cb.checked;cb.dispatchEvent(new Event('change'));updateAutoScaleCard();">
-                                        <div style="display:flex;align-items:center;gap:10px;margin-bottom:10px;">
-                                            <input type="checkbox" id="use-achievable-qps" style="width:20px;height:20px;cursor:pointer;accent-color:var(--rh-red-primary);flex-shrink:0;" onclick="event.stopPropagation();updateAutoScaleCard();">
-                                            <label style="cursor:pointer;margin:0;font-weight:700;font-size:0.92em;">Auto-Scale Load</label>
-                                        </div>
+                                        <input type="checkbox" id="use-achievable-qps" style="display:none;" onclick="event.stopPropagation();updateAutoScaleCard();">
+                                        <label style="text-align:center;margin-bottom:8px;">Auto-Scale Load</label>
                                         <div style="font-size:3.5em;text-align:center;margin:12px 0;">⚖️</div>
-                                        <div style="font-size:0.82em;color:#6b7280;text-align:center;line-height:1.5;">Let the optimizer find the sustainable load your cluster can handle.</div>
+                                        <div class="help-text" style="font-size:0.82em;text-align:center;line-height:1.5;">Let the optimizer find the sustainable load your cluster can handle.</div>
                                     </div>
                                     <script>
-                                    function updateAutoScaleCard(){var c=document.getElementById('use-achievable-qps').checked;var d=document.getElementById('autoscale-card');var i=document.getElementById('autoscale-icon');if(c){d.style.borderColor='var(--rh-red-primary)';d.style.background='linear-gradient(135deg,#fef2f2,#fee2e2)';}else{d.style.borderColor='#e2e8f0';d.style.background='#fafafa';}}
+                                    function updateAutoScaleCard(){var c=document.getElementById('use-achievable-qps').checked;var d=document.getElementById('autoscale-card');if(c){d.style.borderColor='#0ea5e9';d.style.background='linear-gradient(135deg,#f0f9ff,#e0f2fe)';}else{d.style.borderColor='#e2e8f0';d.style.background='#fafafa';}}
                                     </script>
                                 </div>
                             </div>
@@ -79,7 +77,7 @@
                             </div>
                         </div>
 
-                        <!-- Response Time Guarantee (collapsible) -->
+                        <!-- Response Time Guarantee (collapsible + toggle) -->
                         <div style="border:2px solid #d97706;border-radius:12px;overflow:hidden;margin-bottom:20px;">
                             <div style="background:linear-gradient(135deg,#fffbeb,#fef3c7);padding:14px 20px;cursor:pointer;display:flex;align-items:center;justify-content:space-between;" onclick="var b=document.getElementById('latency-sla-body');var a=document.getElementById('latency-sla-arrow');if(b.style.display==='none'){b.style.display='block';a.textContent='▾';}else{b.style.display='none';a.textContent='▸';}">
                                 <div>
@@ -89,25 +87,25 @@
                                 <div id="latency-sla-arrow" style="font-size:1.4em;color:#92400e;font-weight:700;">▸</div>
                             </div>
                             <div id="latency-sla-body" style="display:none;padding:16px 20px;">
-                                <div style="display: flex; align-items: center; gap: 12px; cursor: pointer; margin-bottom: 12px;" onclick="document.getElementById('latency-constraint-enabled').click();">
-                                    <input type="checkbox" id="latency-constraint-enabled" style="width: 22px; height: 22px; cursor: pointer; accent-color: var(--rh-red-primary); flex-shrink: 0;" onclick="event.stopPropagation(); toggleLatencyConstraint();">
-                                    <label style="cursor: pointer; margin: 0; font-weight: 700; font-size: 0.95em;">Enable Response Time Limit</label>
-                                </div>
-                                <div id="latency-sla-options" class="input-grid" style="opacity: 0.4; pointer-events: none; padding-top: 16px; border-top: 1px solid #e2e8f0; margin-bottom: 0;">
-                                    <div class="input-group" id="latency-target-group">
-                                        <label>Max Response Time (ms)</label>
-                                        <input type="number" id="latency-target-input" value="500" min="1" max="60000">
-                                        <div class="help-text">The slowest acceptable time before the user sees the first word of the reply. 1000 ms = 1 second.</div>
-                                    </div>
-                                    <div class="input-group" id="latency-percentile-group">
-                                        <label>Apply Limit to</label>
-                                        <div style="display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px;">
-                                            <button type="button" class="stop-mode-btn" id="pctl-p50" onclick="setLatencyPercentile('p50')" style="padding:16px 0; border:2px solid #cbd5e1; border-radius:6px; background:#FAFAFA; color:#475569; font-weight:700; cursor:pointer; font-size:0.9em; text-align:center;">P50</button>
-                                            <button type="button" class="stop-mode-btn selected" id="pctl-p90" onclick="setLatencyPercentile('p90')" style="padding:16px 0; border:2px solid var(--rh-red-primary); border-radius:6px; background:var(--rh-red-primary); color:white; font-weight:700; cursor:pointer; font-size:0.9em; text-align:center;">P90</button>
-                                            <button type="button" class="stop-mode-btn" id="pctl-p95" onclick="setLatencyPercentile('p95')" style="padding:16px 0; border:2px solid #cbd5e1; border-radius:6px; background:#FAFAFA; color:#475569; font-weight:700; cursor:pointer; font-size:0.9em; text-align:center;">P95</button>
-                                            <button type="button" class="stop-mode-btn" id="pctl-p99" onclick="setLatencyPercentile('p99')" style="padding:16px 0; border:2px solid #cbd5e1; border-radius:6px; background:#FAFAFA; color:#475569; font-weight:700; cursor:pointer; font-size:0.9em; text-align:center;">P99</button>
+                                <input type="checkbox" id="latency-constraint-enabled" style="display:none;">
+                                <div id="latency-sla-wrapper" style="cursor:pointer;border:2px solid #e2e8f0;border-radius:8px;padding:12px 16px;transition:all 0.2s;background:#fafafa;" onclick="var cb=document.getElementById('latency-constraint-enabled');cb.checked=!cb.checked;config.latency_constraint_enabled=cb.checked;var inner=document.getElementById('latency-sla-inner');inner.style.opacity=cb.checked?'1':'0.4';saveConfig();">
+                                    <div style="font-size:0.85em;color:#6b7280;margin-bottom:12px;">👆 Click to enable/disable response time limit</div>
+                                    <div id="latency-sla-inner" class="input-grid" style="margin-bottom: 0; opacity: 0.4; transition:all 0.2s;">
+                                        <div class="input-group" id="latency-target-group">
+                                            <label>Max Response Time (ms)</label>
+                                            <input type="number" id="latency-target-input" value="500" min="1" max="60000" onclick="event.stopPropagation();">
+                                            <div class="help-text">The slowest acceptable time before the user sees the first word of the reply. 1000 ms = 1 second.</div>
                                         </div>
-                                        <div class="help-text">P50 = typical request. P90 = 90% of requests. P99 = almost every request. Higher = stricter.</div>
+                                        <div class="input-group" id="latency-percentile-group">
+                                            <label>Apply Limit to</label>
+                                            <div style="display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px;">
+                                                <button type="button" class="stop-mode-btn" id="pctl-p50" onclick="event.stopPropagation();setLatencyPercentile('p50')" style="padding:16px 0; border:2px solid #cbd5e1; border-radius:6px; background:#FAFAFA; color:#475569; font-weight:700; cursor:pointer; font-size:0.9em; text-align:center;">P50</button>
+                                                <button type="button" class="stop-mode-btn selected" id="pctl-p90" onclick="event.stopPropagation();setLatencyPercentile('p90')" style="padding:16px 0; border:2px solid var(--rh-red-primary); border-radius:6px; background:var(--rh-red-primary); color:white; font-weight:700; cursor:pointer; font-size:0.9em; text-align:center;">P90</button>
+                                                <button type="button" class="stop-mode-btn" id="pctl-p95" onclick="event.stopPropagation();setLatencyPercentile('p95')" style="padding:16px 0; border:2px solid #cbd5e1; border-radius:6px; background:#FAFAFA; color:#475569; font-weight:700; cursor:pointer; font-size:0.9em; text-align:center;">P95</button>
+                                                <button type="button" class="stop-mode-btn" id="pctl-p99" onclick="event.stopPropagation();setLatencyPercentile('p99')" style="padding:16px 0; border:2px solid #cbd5e1; border-radius:6px; background:#FAFAFA; color:#475569; font-weight:700; cursor:pointer; font-size:0.9em; text-align:center;">P99</button>
+                                            </div>
+                                            <div class="help-text">P50 = typical request. P90 = 90% of requests. P99 = almost every request. Higher = stricter.</div>
+                                        </div>
                                     </div>
                                 </div>
                             </div>

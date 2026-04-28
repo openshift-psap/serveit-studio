@@ -306,7 +306,12 @@ function updateUIFromConfig() {
 
     if (document.getElementById('latency-constraint-enabled')) {
         document.getElementById('latency-constraint-enabled').checked = config.latency_constraint_enabled || false;
-        toggleLatencyConstraint();
+        if (config.latency_constraint_enabled) {
+            document.getElementById('latency-sla-body').style.display = 'block';
+            document.getElementById('latency-sla-arrow').textContent = '▾';
+            var li = document.getElementById('latency-sla-inner');
+            if (li) { li.style.opacity = '1'; }
+        }
     }
     if (config.latency_constraint_ms && document.getElementById('latency-target-input')) {
         document.getElementById('latency-target-input').value = config.latency_constraint_ms;
@@ -687,7 +692,7 @@ function restoreClusterResources() {
 
         if (config.selected_nodes && config.selected_nodes.length > 0) {
             document.getElementById('enable-node-select').checked = true;
-            document.getElementById('node-select-list').style.display = 'block';
+            document.getElementById('node-select-list').style.opacity = '1';
         }
     }
 
@@ -697,7 +702,6 @@ function restoreClusterResources() {
 
 // Node selection toggle
 document.getElementById('enable-node-select').addEventListener('change', function() {
-    document.getElementById('node-select-list').style.display = this.checked ? 'block' : 'none';
     if (!this.checked) {
         document.getElementById('node-select-warning').style.display = 'none';
         config.selected_nodes = null;
@@ -1024,9 +1028,6 @@ function handleDatasetUpload(input) {
 
 function toggleMultiTurn() {
     const enabled = document.getElementById('multi-turn-enabled').checked;
-    const opts = document.getElementById('multi-turn-options');
-    opts.style.opacity = enabled ? '1' : '0.4';
-    opts.style.pointerEvents = enabled ? 'auto' : 'none';
     if (enabled) {
         config.turns = Math.max(2, parseInt(document.getElementById('turns-input').value) || 3);
     } else {
@@ -1117,9 +1118,6 @@ document.getElementById('use-achievable-qps').addEventListener('change', (e) => 
 function toggleLatencyConstraint() {
     const enabled = document.getElementById('latency-constraint-enabled').checked;
     config.latency_constraint_enabled = enabled;
-    const opts = document.getElementById('latency-sla-options');
-    opts.style.opacity = enabled ? '1' : '0.4';
-    opts.style.pointerEvents = enabled ? 'auto' : 'none';
     saveConfig();
 }
 
@@ -2087,7 +2085,7 @@ socket.on('cluster_scan_result', function(data) {
 
         if (config.selected_nodes && config.selected_nodes.length > 0) {
             document.getElementById('enable-node-select').checked = true;
-            document.getElementById('node-select-list').style.display = 'block';
+            document.getElementById('node-select-list').style.opacity = '1';
             validateNodeSelection();
         }
     }

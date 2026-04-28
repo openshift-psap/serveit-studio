@@ -57,7 +57,7 @@
                                             </div>
                                         </div>
 
-                                        <!-- Multi-Turn Conversation (collapsible) -->
+                                        <!-- Multi-Turn Conversation (collapsible + toggle) -->
                                         <div style="border-top:1px solid #dcfce7;">
                                             <div style="padding:12px 20px;cursor:pointer;display:flex;align-items:center;justify-content:space-between;" onclick="var b=document.getElementById('multi-turn-body');var a=document.getElementById('multi-turn-arrow');if(b.style.display==='none'){b.style.display='block';a.textContent='▾';}else{b.style.display='none';a.textContent='▸';}">
                                                 <div>
@@ -67,20 +67,18 @@
                                                 <div id="multi-turn-arrow" style="font-size:1.4em;color:#15803d;font-weight:700;">▸</div>
                                             </div>
                                             <div id="multi-turn-body" style="display:none;padding:0 20px 16px;">
-                                                <div style="display: flex; align-items: center; gap: 12px; cursor: pointer; margin-bottom: 12px;" onclick="document.getElementById('multi-turn-enabled').click();">
-                                                    <input type="checkbox" id="multi-turn-enabled" style="width: 22px; height: 22px; cursor: pointer; accent-color: var(--rh-red-primary); flex-shrink: 0;" onclick="event.stopPropagation(); toggleMultiTurn();">
-                                                    <label style="cursor: pointer; margin: 0; font-weight: 700; font-size: 0.95em;">Enable Multi-Turn</label>
-                                                </div>
-                                                <div id="multi-turn-options" style="opacity: 0.4; pointer-events: none;">
-                                                    <div class="input-grid" style="grid-template-columns: 1fr 1fr;">
-                                                        <div class="input-group">
+                                                <input type="checkbox" id="multi-turn-enabled" style="display:none;">
+                                                <div id="multi-turn-wrapper" style="cursor:pointer;border:2px solid #e2e8f0;border-radius:8px;padding:12px 16px;transition:all 0.2s;background:#fafafa;" onclick="var cb=document.getElementById('multi-turn-enabled');cb.checked=!cb.checked;toggleMultiTurn();var inner=document.getElementById('multi-turn-inner');inner.style.opacity=cb.checked?'1':'0.4';">
+                                                    <div style="font-size:0.85em;color:#6b7280;margin-bottom:8px;">👆 Click to enable/disable multi-turn</div>
+                                                    <div id="multi-turn-inner" style="opacity:0.4;transition:all 0.2s;">
+                                                        <div class="input-group" style="margin-bottom:0;">
                                                             <label style="font-size: 0.85em; margin-bottom: 6px; display: block;">Number of Turns</label>
-                                                            <input type="number" id="turns-input" value="3" min="2" max="20">
+                                                            <input type="number" id="turns-input" value="3" min="2" max="20" style="max-width:320px;margin:0 auto;display:block;" onclick="event.stopPropagation();">
                                                             <div class="help-text">How many back-and-forth exchanges per conversation (e.g., 3 = user asks, AI replies, user follows up, AI replies, user asks again, AI replies).</div>
                                                         </div>
+                                                        <div class="help-text" style="margin-top: 8px;">Each turn sends the entire conversation history as context. For example, with ISL=3000 and 3 turns, the final message sends ~9000 tokens (3 x 3000) because it includes all previous exchanges. This means later turns use significantly more GPU memory and take longer to process.</div>
                                                     </div>
                                                 </div>
-                                                <div class="help-text" style="margin-top: 8px;">Later messages are slower because there is more text to process each turn.</div>
                                             </div>
                                         </div>
 
@@ -133,7 +131,7 @@
                                                 <div class="input-group">
                                                     <label>Max Reply Length</label>
                                                     <input type="number" id="dataset-max-output-input" value="256" min="1" max="8000" style="padding:12px 16px;border:2px solid #d1d5db;border-radius:8px;font-size:15px;">
-                                                    <div class="help-text">The longest reply the AI is allowed to generate for each prompt. One token is roughly 3/4 of a word.</div>
+                                                    <div class="help-text">The longest reply the AI is allowed to generate for each prompt. A word is roughly 1.3 tokens. For example, a 200-word reply is about 260 tokens.</div>
                                                 </div>
                                             </div>
 
