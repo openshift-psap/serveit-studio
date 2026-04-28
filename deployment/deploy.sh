@@ -591,9 +591,10 @@ restart_server() {
     local local_port="$3"
 
     # Find the pod
-    local pod_name=$($kubectl_cmd get pod -n "$namespace" -l app=in-s8-optimizer -o jsonpath='{.items[0].metadata.name}' 2>/dev/null)
+    local pod_name=$($kubectl_cmd get pod -n "$namespace" -l app=in-s8-optimizer -o jsonpath='{.items[0].metadata.name}' 2>/dev/null || true)
     if [[ -z "$pod_name" ]]; then
         echo "❌ No in-s8-optimizer pod found in namespace $namespace" >&2
+        echo "   Deploy first: ./deployment/deploy.sh --dev -p <pvc-name>" >&2
         exit 1
     fi
     echo "🔄 Restarting server in pod: $pod_name" >&2
@@ -765,9 +766,10 @@ if [[ "$SYNC_CODE" == "true" || "$RESTART_SERVER" == "true" ]]; then
         SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
         REPO_ROOT="$SCRIPT_DIR/.."
 
-        POD_NAME=$($KUBECTL_CMD get pod -n ${NAMESPACE} -l app=in-s8-optimizer -o jsonpath='{.items[0].metadata.name}' 2>/dev/null)
+        POD_NAME=$($KUBECTL_CMD get pod -n ${NAMESPACE} -l app=in-s8-optimizer -o jsonpath='{.items[0].metadata.name}' 2>/dev/null || true)
         if [[ -z "$POD_NAME" ]]; then
             echo "❌ No optimizer pod found in namespace $NAMESPACE" >&2
+            echo "   Deploy first: ./deployment/deploy.sh --dev -p <pvc-name>" >&2
             exit 1
         fi
 
