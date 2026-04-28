@@ -1000,7 +1000,7 @@ def get_runs_for_resume():
                        r.latency_constraint_ms, r.latency_constraint_percentile,
                        r.config_json,
                        r.workload_mode, r.dataset_source, r.dataset_column,
-                       r.dataset_max_output,
+                       r.dataset_max_output, r.rate_type,
                        COUNT(tc.id) as completed_tests
                 FROM optimization_runs r
                 LEFT JOIN test_configurations tc ON tc.run_id = r.id AND tc.status = 'completed'
@@ -1527,6 +1527,7 @@ def stream_job_logs(job_name: str, namespace: str):
                     'dataset_source': saved_config.get('dataset_source'),
                     'dataset_column': saved_config.get('dataset_column'),
                     'dataset_max_output': saved_config.get('dataset_max_output', 256),
+                    'rate_type': saved_config.get('rate_type', 'concurrent'),
                     'advanced_vllm': saved_config.get('advanced_vllm'),
                 }
 
@@ -1816,6 +1817,7 @@ def run_optimization_background(data):
         dataset_source = data.get('dataset_source')
         dataset_column = data.get('dataset_column')
         dataset_max_output = int(data.get('dataset_max_output', 256))
+        rate_type = data.get('rate_type', 'concurrent')
         advanced_vllm = data.get('advanced_vllm')
 
         # Create/update HuggingFace token secret if provided
@@ -1977,6 +1979,7 @@ data:
                 dataset_source=dataset_source,
                 dataset_column=dataset_column,
                 dataset_max_output=dataset_max_output,
+                rate_type=rate_type,
                 advanced_vllm=advanced_vllm,
             )
 
@@ -3183,6 +3186,7 @@ def handle_resume_optimization(data):
             'dataset_source': saved_dataset_source,
             'dataset_column': saved_dataset_column,
             'dataset_max_output': saved_dataset_max_output,
+            'rate_type': run.get('rate_type') or 'concurrent',
             'latency_constraint_enabled': bool(run.get('latency_constraint_enabled', 0)),
             'latency_constraint_ms': run.get('latency_constraint_ms', 500),
             'latency_constraint_percentile': run.get('latency_constraint_percentile', 'p90'),
@@ -4356,6 +4360,7 @@ def handle_setup_storage(data):
                 'dataset_source': data.get('dataset_source'),
                 'dataset_column': data.get('dataset_column'),
                 'dataset_max_output': int(data.get('dataset_max_output', 256)),
+                'rate_type': data.get('rate_type', 'concurrent'),
                 'advanced_vllm': data.get('advanced_vllm'),
             }
             if resume_run_id:

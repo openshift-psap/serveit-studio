@@ -1427,6 +1427,9 @@
             margin-top: 10px;
             text-align: center;
         }
+        .help-text::before {
+            content: "ℹ️ ";
+        }
 
         /* Action Button */
         .action-button {

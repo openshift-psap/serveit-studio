@@ -83,7 +83,8 @@ class DatabaseManager:
                     workload_mode TEXT DEFAULT 'synthetic',
                     dataset_source TEXT,
                     dataset_column TEXT,
-                    dataset_max_output INTEGER DEFAULT 256
+                    dataset_max_output INTEGER DEFAULT 256,
+                    rate_type TEXT DEFAULT 'concurrent'
                 )
             ''')
 
@@ -141,6 +142,7 @@ class DatabaseManager:
                 ('optimization_runs', 'dataset_source', 'TEXT'),
                 ('optimization_runs', 'dataset_column', 'TEXT'),
                 ('optimization_runs', 'dataset_max_output', 'INTEGER DEFAULT 256'),
+                ('optimization_runs', 'rate_type', "TEXT DEFAULT 'concurrent'"),
                 ('test_configurations', 'manifests_yaml', 'TEXT'),
                 ('test_configurations', 'architecture', 'TEXT'),
                 ('test_configurations', 'decode_tp', 'INTEGER'),
@@ -310,8 +312,9 @@ class DatabaseManager:
                  isl_stdev, osl_stdev, turns, config_json,
                  latency_constraint_enabled, latency_constraint_ms,
                  latency_constraint_percentile,
-                 workload_mode, dataset_source, dataset_column, dataset_max_output)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                 workload_mode, dataset_source, dataset_column, dataset_max_output,
+                 rate_type)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             ''', (
                 run_name,
                 model,
@@ -336,6 +339,7 @@ class DatabaseManager:
                 config_dict.get('dataset_source') if config_dict else None,
                 config_dict.get('dataset_column') if config_dict else None,
                 config_dict.get('dataset_max_output', 256) if config_dict else 256,
+                config_dict.get('rate_type', 'concurrent') if config_dict else 'concurrent',
             ))
             return cursor.lastrowid
 

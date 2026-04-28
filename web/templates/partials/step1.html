@@ -2,38 +2,38 @@
                     <div class="step-section" id="step1-section" style="display: block;">
                         <h3>What's your priority?</h3>
                         <p class="description">
-                            Select your optimization goal. In-S8 will intelligently test the most relevant architectures for your use case.
+                            Pick what matters most to you. In-S8 will automatically test different server configurations to find the best one for your needs.
                         </p>
 
                         <div class="info-box">
                             <h4>🎯 How it works</h4>
-                            <p><strong>Throughput Priority:</strong> Benchmarks both Aggregated and Expert Parallelism (EP) architectures, then recommends the configuration that maximizes requests/second and tokens/second for your specific ISL/OSL workload.</p>
-                            <p><strong>Response Time Priority:</strong> Benchmarks both Aggregated and Prefill/Decode (PD) disaggregation architectures, then recommends the configuration that minimizes Time-to-First-Token (TTFT) for your specific ISL/OSL workload.</p>
-                            <p><strong>Balanced:</strong> Evaluates all three architectures (Aggregated, EP, and PD) to identify the optimal configuration that provides acceptable performance across both TTFT and throughput metrics.</p>
+                            <p><strong>Throughput Priority:</strong> Tests different server setups to find the one that handles the most requests at once -- like finding the highway lane configuration that moves the most cars per hour.</p>
+                            <p><strong>Response Time Priority:</strong> Tests different server setups to find the one that starts replying fastest -- like finding the checkout lane that begins scanning your items soonest.</p>
+                            <p><strong>Balanced:</strong> Tests all available server setups to find one that gives a good balance of fast response times and high request volume.</p>
                         </div>
 
                         <div class="architecture-grid">
                             <div class="arch-card" data-goal="throughput">
                                 <h4>Throughput Priority</h4>
-                                <p>Optimizes for maximum requests/second and tokens/second. Compares traditional Aggregated inference against Expert Parallelism (EP) to identify which architecture delivers superior throughput for your workload.</p>
+                                <p>Finds the setup that handles the most requests and generates the most text per second. Best when you need to serve many users at once.</p>
                                 <div class="best-for">
-                                    <strong>Benchmarks:</strong> <span>Aggregated vs Expert Parallelism</span>
+                                    <strong>Benchmarks:</strong> <span>Standard setup vs Expert Parallelism (EP)</span>
                                 </div>
                             </div>
 
                             <div class="arch-card" data-goal="ttft">
                                 <h4>Response Time Priority</h4>
-                                <p>Optimizes for minimum Time-to-First-Token (TTFT). Compares traditional Aggregated inference against Prefill/Decode (PD) disaggregation to determine which architecture provides faster initial response times.</p>
+                                <p>Finds the setup where users see the first word of the AI's reply as fast as possible. Best for chatbots and interactive apps where feeling "instant" matters.</p>
                                 <div class="best-for">
-                                    <strong>Benchmarks:</strong> <span>Aggregated vs Prefill/Decode</span>
+                                    <strong>Benchmarks:</strong> <span>Standard setup vs Prefill/Decode split (PD)</span>
                                 </div>
                             </div>
 
                             <div class="arch-card" data-goal="balanced">
                                 <h4>Balanced Performance</h4>
-                                <p>Evaluates all three architectures to find the optimal configuration that balances both TTFT and throughput. Ideal when you need good performance across multiple metrics without extreme optimization in one direction.</p>
+                                <p>Tests all server configurations and picks the best overall tradeoff between fast replies and high request volume. Ideal when you want solid performance across the board.</p>
                                 <div class="best-for">
-                                    <strong>Benchmarks:</strong> <span>Aggregated, EP, and PD</span>
+                                    <strong>Benchmarks:</strong> <span>All configurations (Standard, EP, and PD)</span>
                                 </div>
                             </div>
                         </div>

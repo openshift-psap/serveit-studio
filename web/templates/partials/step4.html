@@ -1,19 +1,28 @@
                     <div class="step-section" id="step4-section">
                         <h3>Test Configuration</h3>
-                        <p class="description">Configure how the optimization tests will run.</p>
+                        <p class="description">Configure how long and how hard to push each test run.</p>
 
                         <!-- Benchmark Settings -->
                         <div style="border:2px solid #0ea5e9;border-radius:12px;overflow:hidden;margin-bottom:20px;">
                             <div style="background:linear-gradient(135deg,#f0f9ff,#e0f2fe);padding:16px 20px;">
                                 <div style="font-weight:700;color:#0c4a6e;font-size:1.05em;">🎯 Benchmark Settings</div>
-                                <div style="color:#075985;font-size:0.92em;margin-top:4px;">Set the load level, test duration, and scaling behavior for each benchmark run.</div>
+                                <div style="color:#075985;font-size:0.92em;margin-top:4px;">Control how many simulated users hit the server, how long each test runs, and whether to automatically find the right load level.</div>
                             </div>
                             <div style="padding:16px 20px;">
+                                <!-- Load Profile -->
+                                <div style="margin-bottom:16px;">
+                                    <label style="font-weight:600;font-size:0.9em;margin-bottom:8px;display:block;">Load Profile</label>
+                                    <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px;">
+                                        <button type="button" id="rate-type-concurrent" onclick="setRateType('concurrent')" style="padding:10px 0; border:2px solid var(--rh-red-primary); border-radius:6px; background:var(--rh-red-primary); color:white; font-weight:600; cursor:pointer; font-size:0.85em; text-align:center;">Concurrent</button>
+                                        <button type="button" id="rate-type-constant" onclick="setRateType('constant')" style="padding:10px 0; border:2px solid #cbd5e1; border-radius:6px; background:white; color:#475569; font-weight:600; cursor:pointer; font-size:0.85em; text-align:center;">Constant RPS</button>
+                                        <button type="button" id="rate-type-poisson" onclick="setRateType('poisson')" style="padding:10px 0; border:2px solid #cbd5e1; border-radius:6px; background:white; color:#475569; font-weight:600; cursor:pointer; font-size:0.85em; text-align:center;">Poisson RPS</button>
+                                    </div>
+                                </div>
                                 <div class="input-grid" style="grid-template-columns: 1fr 1fr 1fr;">
                                     <div class="input-group">
-                                        <label>Concurrent Users</label>
+                                        <label id="users-label">Concurrent Users</label>
                                         <input type="number" id="users-input" value="100" min="1" max="10000">
-                                        <div class="help-text">Number of simultaneous requests</div>
+                                        <div class="help-text" id="users-help">How many users are sending requests at the same time. Think of it like how many people are in line at once.</div>
                                     </div>
                                     <div class="input-group">
                                         <label>Test Stop Condition</label>
@@ -23,31 +32,38 @@
                                         </div>
                                         <div id="duration-wrapper">
                                             <input type="number" id="duration-input" value="300" min="60" max="3600">
-                                            <div class="help-text">Duration per configuration test. For best results, we recommend a minimum of 5 minutes (300 seconds) per test.</div>
+                                            <div class="help-text">How long each test runs. Longer = more reliable results. We recommend at least 300 seconds (5 min).</div>
                                         </div>
                                         <div id="max-requests-wrapper" style="display:none;">
                                             <input type="number" id="max-requests-input" value="100" min="1" max="100000" placeholder="e.g. 100">
-                                            <div class="help-text">Stop after this many requests complete. Useful for quick validation or cost-controlled runs.</div>
+                                            <div class="help-text">Stop the test after this many requests finish. Use this for quick checks or when you want to limit resource usage.</div>
                                         </div>
                                     </div>
-                                    <div class="input-group" style="cursor: pointer;" onclick="document.getElementById('use-achievable-qps').click();">
-                                        <label>Scale to Sustainable Load</label>
-                                        <div style="display: flex; justify-content: center;">
-                                            <input type="checkbox" id="use-achievable-qps" style="width: 32px; height: 32px; cursor: pointer; accent-color: var(--rh-red-primary);" onclick="event.stopPropagation();">
+                                    <div class="input-group" id="autoscale-card" style="cursor:pointer;border:2px solid #e2e8f0;border-radius:10px;padding:16px;transition:all 0.2s;background:#fafafa;" onclick="var cb=document.getElementById('use-achievable-qps');cb.checked=!cb.checked;cb.dispatchEvent(new Event('change'));updateAutoScaleCard();">
+                                        <div style="display:flex;align-items:center;gap:10px;margin-bottom:10px;">
+                                            <input type="checkbox" id="use-achievable-qps" style="width:20px;height:20px;cursor:pointer;accent-color:var(--rh-red-primary);flex-shrink:0;" onclick="event.stopPropagation();updateAutoScaleCard();">
+                                            <label style="cursor:pointer;margin:0;font-weight:700;font-size:0.92em;">Auto-Scale Load</label>
                                         </div>
-                                        <div class="help-text">Steps 2-3 measure per-GPU capacity, then the optimizer auto-scales concurrent users to match your cluster's sustainable throughput.</div>
+                                        <div style="font-size:3.5em;text-align:center;margin:12px 0;">⚖️</div>
+                                        <div style="font-size:0.82em;color:#6b7280;text-align:center;line-height:1.5;">Let the optimizer find the sustainable load your cluster can handle.</div>
                                     </div>
+                                    <script>
+                                    function updateAutoScaleCard(){var c=document.getElementById('use-achievable-qps').checked;var d=document.getElementById('autoscale-card');var i=document.getElementById('autoscale-icon');if(c){d.style.borderColor='var(--rh-red-primary)';d.style.background='linear-gradient(135deg,#fef2f2,#fee2e2)';}else{d.style.borderColor='#e2e8f0';d.style.background='#fafafa';}}
+                                    </script>
                                 </div>
                             </div>
                         </div>
 
-                        <!-- TP Search Depth -->
+                        <!-- Search Thoroughness (collapsible) -->
                         <div style="border:2px solid #8b5cf6;border-radius:12px;overflow:hidden;margin-bottom:20px;">
-                            <div style="background:linear-gradient(135deg,#f5f3ff,#ede9fe);padding:16px 20px;">
-                                <div style="font-weight:700;color:#5b21b6;font-size:1.05em;">🔍 TP Search Depth</div>
-                                <div style="color:#6d28d9;font-size:0.92em;margin-top:4px;">How many Tensor Parallelism combinations to test for prefill/decode splits. Higher values test more combinations but take longer.</div>
+                            <div style="background:linear-gradient(135deg,#f5f3ff,#ede9fe);padding:14px 20px;cursor:pointer;display:flex;align-items:center;justify-content:space-between;" onclick="var b=document.getElementById('tp-search-body');var a=document.getElementById('tp-search-arrow');if(b.style.display==='none'){b.style.display='block';a.textContent='▾';}else{b.style.display='none';a.textContent='▸';}">
+                                <div>
+                                    <div style="font-weight:700;color:#5b21b6;font-size:1.05em;">🔍 Search Thoroughness</div>
+                                    <div style="color:#6d28d9;font-size:0.92em;margin-top:4px;">How many GPU-splitting strategies to try. More options mean a more thorough search but longer total test time.</div>
+                                </div>
+                                <div id="tp-search-arrow" style="font-size:1.4em;color:#5b21b6;font-weight:700;">▸</div>
                             </div>
-                            <div style="padding:16px 20px;">
+                            <div id="tp-search-body" style="display:none;padding:16px 20px;">
                                 <div style="display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; margin-bottom: 12px;">
                                     <button type="button" class="stop-mode-btn" id="tp-depth-1" onclick="setTpPairTopN(1)" style="padding:12px 0; border:2px solid #cbd5e1; border-radius:6px; background:#FAFAFA; color:#475569; font-weight:700; cursor:pointer; font-size:0.9em; text-align:center;">1 - Fast</button>
                                     <button type="button" class="stop-mode-btn selected" id="tp-depth-2" onclick="setTpPairTopN(2)" style="padding:12px 0; border:2px solid var(--rh-red-primary); border-radius:6px; background:var(--rh-red-primary); color:white; font-weight:700; cursor:pointer; font-size:0.9em; text-align:center;">2 - Default</button>
@@ -55,42 +71,43 @@
                                     <button type="button" class="stop-mode-btn" id="tp-depth-4" onclick="setTpPairTopN(4)" style="padding:12px 0; border:2px solid #cbd5e1; border-radius:6px; background:#FAFAFA; color:#475569; font-weight:700; cursor:pointer; font-size:0.9em; text-align:center;">4 - Full</button>
                                 </div>
                                 <div style="background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 6px; padding: 12px; font-size: 0.8em; color: #475569; line-height: 1.6;">
-                                    <strong>Example with TP options [1, 2, 4, 8]:</strong><br>
-                                    If calibration finds prefill is fastest at TP=8 and decode is most efficient at TP=1:<br>
-                                    <span style="font-family: var(--font-mono); color: #0369a1;">Depth 1</span> &rarr; tests only (PTP=8, DTP=1) &rarr; <strong>3 splits</strong><br>
-                                    <span style="font-family: var(--font-mono); color: #0369a1;">Depth 2</span> &rarr; adds 2nd-best TPs, cross-product &rarr; 4 pairs &rarr; <strong>~20 splits</strong><br>
-                                    <span style="font-family: var(--font-mono); color: #0369a1;">Depth 4</span> &rarr; all TP combinations &rarr; up to 10 pairs &rarr; <strong>~40+ splits</strong><br>
-                                    More splits = longer total runtime. Depth 2 is recommended for most workloads.
+                                    <span style="font-family: var(--font-mono); color: #0369a1;">1 - Fast</span> &rarr; Tests only the single best GPU split. Quickest, but may miss better options.<br>
+                                    <span style="font-family: var(--font-mono); color: #0369a1;">2 - Default</span> &rarr; Tests a handful of top GPU splits. Good balance of speed and quality. <strong>Recommended.</strong><br>
+                                    <span style="font-family: var(--font-mono); color: #0369a1;">3 - Deep</span> &rarr; Tests many more GPU splits. Takes longer but finds more nuanced configurations.<br>
+                                    <span style="font-family: var(--font-mono); color: #0369a1;">4 - Full</span> &rarr; Tests every possible GPU split. Most thorough but can take significantly longer.
                                 </div>
                             </div>
                         </div>
 
-                        <!-- Latency-Bounded Throughput Maximization -->
+                        <!-- Response Time Guarantee (collapsible) -->
                         <div style="border:2px solid #d97706;border-radius:12px;overflow:hidden;margin-bottom:20px;">
-                            <div style="background:linear-gradient(135deg,#fffbeb,#fef3c7);padding:16px 20px;">
-                                <div style="font-weight:700;color:#92400e;font-size:1.05em;">⚡ Latency SLA Constraint</div>
-                                <div style="color:#a16207;font-size:0.92em;margin-top:4px;">After finding the best configuration, maximize throughput while keeping latency under your target.</div>
+                            <div style="background:linear-gradient(135deg,#fffbeb,#fef3c7);padding:14px 20px;cursor:pointer;display:flex;align-items:center;justify-content:space-between;" onclick="var b=document.getElementById('latency-sla-body');var a=document.getElementById('latency-sla-arrow');if(b.style.display==='none'){b.style.display='block';a.textContent='▾';}else{b.style.display='none';a.textContent='▸';}">
+                                <div>
+                                    <div style="font-weight:700;color:#92400e;font-size:1.05em;">⚡ Response Time Guarantee</div>
+                                    <div style="color:#a16207;font-size:0.92em;margin-top:4px;">After finding the best setup, push the load as high as possible while still keeping replies fast enough to meet your target.</div>
+                                </div>
+                                <div id="latency-sla-arrow" style="font-size:1.4em;color:#92400e;font-weight:700;">▸</div>
                             </div>
-                            <div style="padding:16px 20px;">
+                            <div id="latency-sla-body" style="display:none;padding:16px 20px;">
                                 <div style="display: flex; align-items: center; gap: 12px; cursor: pointer; margin-bottom: 12px;" onclick="document.getElementById('latency-constraint-enabled').click();">
                                     <input type="checkbox" id="latency-constraint-enabled" style="width: 22px; height: 22px; cursor: pointer; accent-color: var(--rh-red-primary); flex-shrink: 0;" onclick="event.stopPropagation(); toggleLatencyConstraint();">
-                                    <label style="cursor: pointer; margin: 0; font-weight: 700; font-size: 0.95em;">Enable Latency-Bounded Throughput Maximization</label>
+                                    <label style="cursor: pointer; margin: 0; font-weight: 700; font-size: 0.95em;">Enable Response Time Limit</label>
                                 </div>
                                 <div id="latency-sla-options" class="input-grid" style="opacity: 0.4; pointer-events: none; padding-top: 16px; border-top: 1px solid #e2e8f0; margin-bottom: 0;">
                                     <div class="input-group" id="latency-target-group">
-                                        <label>Latency Target (ms)</label>
+                                        <label>Max Response Time (ms)</label>
                                         <input type="number" id="latency-target-input" value="500" min="1" max="60000">
-                                        <div class="help-text">Maximum acceptable latency in milliseconds</div>
+                                        <div class="help-text">The slowest acceptable time before the user sees the first word of the reply. 1000 ms = 1 second.</div>
                                     </div>
                                     <div class="input-group" id="latency-percentile-group">
-                                        <label>Enforce at Percentile</label>
+                                        <label>Apply Limit to</label>
                                         <div style="display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px;">
                                             <button type="button" class="stop-mode-btn" id="pctl-p50" onclick="setLatencyPercentile('p50')" style="padding:16px 0; border:2px solid #cbd5e1; border-radius:6px; background:#FAFAFA; color:#475569; font-weight:700; cursor:pointer; font-size:0.9em; text-align:center;">P50</button>
                                             <button type="button" class="stop-mode-btn selected" id="pctl-p90" onclick="setLatencyPercentile('p90')" style="padding:16px 0; border:2px solid var(--rh-red-primary); border-radius:6px; background:var(--rh-red-primary); color:white; font-weight:700; cursor:pointer; font-size:0.9em; text-align:center;">P90</button>
                                             <button type="button" class="stop-mode-btn" id="pctl-p95" onclick="setLatencyPercentile('p95')" style="padding:16px 0; border:2px solid #cbd5e1; border-radius:6px; background:#FAFAFA; color:#475569; font-weight:700; cursor:pointer; font-size:0.9em; text-align:center;">P95</button>
                                             <button type="button" class="stop-mode-btn" id="pctl-p99" onclick="setLatencyPercentile('p99')" style="padding:16px 0; border:2px solid #cbd5e1; border-radius:6px; background:#FAFAFA; color:#475569; font-weight:700; cursor:pointer; font-size:0.9em; text-align:center;">P99</button>
                                         </div>
-                                        <div class="help-text">Which percentile to enforce the latency target on</div>
+                                        <div class="help-text">P50 = typical request. P90 = 90% of requests. P99 = almost every request. Higher = stricter.</div>
                                     </div>
                                 </div>
                             </div>
@@ -100,35 +117,46 @@
                         <div style="border:2px solid #64748b;border-radius:12px;overflow:hidden;margin-bottom:20px;">
                             <div style="background:linear-gradient(135deg,#f1f5f9,#e2e8f0);padding:14px 20px;cursor:pointer;display:flex;align-items:center;justify-content:space-between;" onclick="var b=document.getElementById('advanced-vllm-body');var a=document.getElementById('advanced-vllm-arrow');if(b.style.display==='none'){b.style.display='block';a.textContent='▾';}else{b.style.display='none';a.textContent='▸';}">
                                 <div>
-                                    <div style="font-weight:700;color:#334155;font-size:1.05em;">⚙️ Advanced vLLM Settings</div>
-                                    <div style="color:#64748b;font-size:0.92em;margin-top:4px;">Override auto-calculated vLLM engine parameters. Most users can leave these on Auto.</div>
+                                    <div style="font-weight:700;color:#334155;font-size:1.05em;">⚙️ Advanced Settings</div>
+                                    <div style="color:#64748b;font-size:0.92em;margin-top:4px;">Fine-tune low-level engine settings. Most users should leave everything on "Auto" -- the optimizer picks good defaults for you.</div>
                                 </div>
                                 <div id="advanced-vllm-arrow" style="font-size:1.4em;color:#64748b;font-weight:700;">▸</div>
                             </div>
                             <div id="advanced-vllm-body" style="display:none;padding:16px 20px;">
+                                <style>
+                                    #advanced-vllm-body select, #advanced-vllm-body input {
+                                        padding:6px 10px; border:1px solid #d1d5db; border-radius:6px; font-size:0.9em; width:150px; box-sizing:border-box;
+                                    }
+                                    #advanced-vllm-body td { padding:8px 12px; border-bottom:1px solid #f1f5f9; }
+                                    #advanced-vllm-body td:first-child { font-weight:600; }
+                                </style>
+
                                 <!-- Value Settings -->
-                                <div style="font-weight:600;color:#334155;font-size:0.9em;margin-bottom:12px;text-transform:uppercase;letter-spacing:0.5px;">Value Settings</div>
+                                <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;">
+                                    <div style="font-weight:600;color:#334155;font-size:0.9em;text-transform:uppercase;letter-spacing:0.5px;">Value Settings</div>
+                                    <button type="button" onclick="resetAdvVllm()" style="padding:4px 14px;border:1px solid #d1d5db;border-radius:6px;background:#fff;color:#64748b;font-size:0.8em;cursor:pointer;font-weight:600;">Reset All to Default</button>
+                                </div>
                                 <table style="width:100%;border-collapse:collapse;font-size:0.9em;margin-bottom:20px;">
-                                    <tr style="background:#f8fafc;"><th style="text-align:left;padding:8px 12px;border-bottom:2px solid #e2e8f0;">Setting</th><th style="text-align:left;padding:8px 12px;border-bottom:2px solid #e2e8f0;width:120px;">Mode</th><th style="text-align:left;padding:8px 12px;border-bottom:2px solid #e2e8f0;width:180px;">Value</th></tr>
-                                    <tr><td style="padding:8px 12px;border-bottom:1px solid #f1f5f9;font-weight:600;">max-model-len</td><td style="padding:8px 12px;border-bottom:1px solid #f1f5f9;"><select id="adv-max-model-len-mode" onchange="updateAdvVllm()" style="padding:6px;border:1px solid #d1d5db;border-radius:6px;font-size:0.9em;"><option value="auto">Auto</option><option value="custom">Custom</option></select></td><td style="padding:8px 12px;border-bottom:1px solid #f1f5f9;"><input type="number" id="adv-max-model-len-val" disabled placeholder="auto" style="padding:6px 10px;border:1px solid #d1d5db;border-radius:6px;width:120px;font-size:0.9em;" oninput="updateAdvVllm()"></td></tr>
-                                    <tr><td style="padding:8px 12px;border-bottom:1px solid #f1f5f9;font-weight:600;">gpu-memory-utilization</td><td style="padding:8px 12px;border-bottom:1px solid #f1f5f9;"><select id="adv-gpu-memory-utilization-mode" onchange="updateAdvVllm()" style="padding:6px;border:1px solid #d1d5db;border-radius:6px;font-size:0.9em;"><option value="auto">Auto</option><option value="custom">Custom</option></select></td><td style="padding:8px 12px;border-bottom:1px solid #f1f5f9;"><input type="number" id="adv-gpu-memory-utilization-val" disabled placeholder="auto" step="0.01" min="0.1" max="0.99" style="padding:6px 10px;border:1px solid #d1d5db;border-radius:6px;width:120px;font-size:0.9em;" oninput="updateAdvVllm()"></td></tr>
-                                    <tr><td style="padding:8px 12px;border-bottom:1px solid #f1f5f9;font-weight:600;">max-num-seqs</td><td style="padding:8px 12px;border-bottom:1px solid #f1f5f9;"><select id="adv-max-num-seqs-mode" onchange="updateAdvVllm()" style="padding:6px;border:1px solid #d1d5db;border-radius:6px;font-size:0.9em;"><option value="auto">Auto</option><option value="custom">Custom</option></select></td><td style="padding:8px 12px;border-bottom:1px solid #f1f5f9;"><input type="number" id="adv-max-num-seqs-val" disabled placeholder="auto" style="padding:6px 10px;border:1px solid #d1d5db;border-radius:6px;width:120px;font-size:0.9em;" oninput="updateAdvVllm()"></td></tr>
-                                    <tr><td style="padding:8px 12px;border-bottom:1px solid #f1f5f9;font-weight:600;">max-num-batched-tokens</td><td style="padding:8px 12px;border-bottom:1px solid #f1f5f9;"><select id="adv-max-num-batched-tokens-mode" onchange="updateAdvVllm()" style="padding:6px;border:1px solid #d1d5db;border-radius:6px;font-size:0.9em;"><option value="auto">Auto</option><option value="custom">Custom</option></select></td><td style="padding:8px 12px;border-bottom:1px solid #f1f5f9;"><input type="number" id="adv-max-num-batched-tokens-val" disabled placeholder="auto" style="padding:6px 10px;border:1px solid #d1d5db;border-radius:6px;width:120px;font-size:0.9em;" oninput="updateAdvVllm()"></td></tr>
-                                    <tr><td style="padding:8px 12px;border-bottom:1px solid #f1f5f9;font-weight:600;">dtype</td><td style="padding:8px 12px;border-bottom:1px solid #f1f5f9;"><select id="adv-dtype-mode" onchange="updateAdvVllm()" style="padding:6px;border:1px solid #d1d5db;border-radius:6px;font-size:0.9em;"><option value="auto">Auto</option><option value="custom">Custom</option></select></td><td style="padding:8px 12px;border-bottom:1px solid #f1f5f9;"><select id="adv-dtype-val" disabled style="padding:6px 10px;border:1px solid #d1d5db;border-radius:6px;width:140px;font-size:0.9em;" onchange="updateAdvVllm()"><option value="auto">auto</option><option value="bfloat16">bfloat16</option><option value="float16">float16</option><option value="float32">float32</option></select></td></tr>
-                                    <tr><td style="padding:8px 12px;border-bottom:1px solid #f1f5f9;font-weight:600;">kv-cache-dtype</td><td style="padding:8px 12px;border-bottom:1px solid #f1f5f9;"><select id="adv-kv-cache-dtype-mode" onchange="updateAdvVllm()" style="padding:6px;border:1px solid #d1d5db;border-radius:6px;font-size:0.9em;"><option value="auto">Auto</option><option value="custom">Custom</option></select></td><td style="padding:8px 12px;border-bottom:1px solid #f1f5f9;"><select id="adv-kv-cache-dtype-val" disabled style="padding:6px 10px;border:1px solid #d1d5db;border-radius:6px;width:140px;font-size:0.9em;" onchange="updateAdvVllm()"><option value="auto">auto</option><option value="fp8">fp8</option><option value="fp8_e5m2">fp8_e5m2</option><option value="fp8_e4m3">fp8_e4m3</option></select></td></tr>
-                                    <tr><td style="padding:8px 12px;border-bottom:1px solid #f1f5f9;font-weight:600;">pipeline-parallel-size</td><td style="padding:8px 12px;border-bottom:1px solid #f1f5f9;"><select id="adv-pipeline-parallel-size-mode" onchange="updateAdvVllm()" style="padding:6px;border:1px solid #d1d5db;border-radius:6px;font-size:0.9em;"><option value="auto">Auto</option><option value="custom">Custom</option></select></td><td style="padding:8px 12px;border-bottom:1px solid #f1f5f9;"><input type="number" id="adv-pipeline-parallel-size-val" disabled placeholder="1" min="1" style="padding:6px 10px;border:1px solid #d1d5db;border-radius:6px;width:120px;font-size:0.9em;" oninput="updateAdvVllm()"></td></tr>
-                                    <tr><td style="padding:8px 12px;font-weight:600;">tool-call-parser</td><td style="padding:8px 12px;"><select id="adv-tool-call-parser-mode" onchange="updateAdvVllm()" style="padding:6px;border:1px solid #d1d5db;border-radius:6px;font-size:0.9em;"><option value="auto">Auto</option><option value="custom">Custom</option></select></td><td style="padding:8px 12px;"><select id="adv-tool-call-parser-val" disabled style="padding:6px 10px;border:1px solid #d1d5db;border-radius:6px;width:140px;font-size:0.9em;" onchange="updateAdvVllm()"><option value="">none</option><option value="openai">openai</option><option value="hermes">hermes</option><option value="mistral">mistral</option><option value="llama3_json">llama3_json</option></select></td></tr>
+                                    <tr style="background:#f8fafc;"><th style="text-align:left;padding:8px 12px;border-bottom:2px solid #e2e8f0;">Setting</th><th style="text-align:left;padding:8px 12px;border-bottom:2px solid #e2e8f0;">Description</th><th style="text-align:left;padding:8px 12px;border-bottom:2px solid #e2e8f0;width:130px;">Mode</th><th style="text-align:left;padding:8px 12px;border-bottom:2px solid #e2e8f0;width:150px;">Value</th></tr>
+                                    <tr><td>max-model-len</td><td style="font-weight:normal;color:#6b7280;font-size:0.9em;">Max total text length (input + output) per request. Larger values reserve more GPU memory, leaving less for KV cache (fewer concurrent users). <span style="color:#0369a1;">Auto = calculated by In-S8 from your ISL + OSL.</span></td><td><select id="adv-max-model-len-mode" onchange="updateAdvVllm()"><option value="auto">Auto</option><option value="custom">Custom</option></select></td><td><input type="number" id="adv-max-model-len-val" disabled placeholder="auto" oninput="updateAdvVllm()"></td></tr>
+                                    <tr><td>gpu-memory-utilization</td><td style="font-weight:normal;color:#6b7280;font-size:0.9em;">Fraction of GPU memory the engine can use (0.0-0.99). Higher = more KV cache space for concurrent requests, but less safety margin for spikes. <span style="color:#0369a1;">Auto = calculated by In-S8 based on model size and GPU VRAM.</span></td><td><select id="adv-gpu-memory-utilization-mode" onchange="updateAdvVllm()"><option value="auto">Auto</option><option value="custom">Custom</option></select></td><td><input type="number" id="adv-gpu-memory-utilization-val" disabled placeholder="auto" step="0.01" min="0.1" max="0.99" oninput="updateAdvVllm()"></td></tr>
+                                    <tr><td>max-num-seqs</td><td style="font-weight:normal;color:#6b7280;font-size:0.9em;">Max requests the engine processes simultaneously. Too high may cause out-of-memory; too low wastes GPU capacity. <span style="color:#0369a1;">Auto = calculated by In-S8 from concurrent users and GPU count.</span></td><td><select id="adv-max-num-seqs-mode" onchange="updateAdvVllm()"><option value="auto">Auto</option><option value="custom">Custom</option></select></td><td><input type="number" id="adv-max-num-seqs-val" disabled placeholder="auto" oninput="updateAdvVllm()"></td></tr>
+                                    <tr><td>max-num-batched-tokens</td><td style="font-weight:normal;color:#6b7280;font-size:0.9em;">Max tokens processed in a single batch. Larger batches improve throughput but use more memory. <span style="color:#0369a1;">Auto = calculated by In-S8 to match your workload.</span></td><td><select id="adv-max-num-batched-tokens-mode" onchange="updateAdvVllm()"><option value="auto">Auto</option><option value="custom">Custom</option></select></td><td><input type="number" id="adv-max-num-batched-tokens-val" disabled placeholder="auto" oninput="updateAdvVllm()"></td></tr>
+                                    <tr><td>dtype</td><td style="font-weight:normal;color:#6b7280;font-size:0.9em;">Precision for model weights. Lower precision (float16) uses less GPU memory but may reduce quality slightly. <span style="color:#64748b;">Auto = vLLM detects from the model config.</span></td><td><select id="adv-dtype-mode" onchange="updateAdvVllm()"><option value="auto">Auto</option><option value="custom">Custom</option></select></td><td><select id="adv-dtype-val" disabled onchange="updateAdvVllm()"><option value="auto">auto</option><option value="bfloat16">bfloat16</option><option value="float16">float16</option><option value="float32">float32</option></select></td></tr>
+                                    <tr><td>kv-cache-dtype</td><td style="font-weight:normal;color:#6b7280;font-size:0.9em;">Precision for KV cache (the engine's per-request working memory). FP8 halves cache memory, fitting more concurrent users. <span style="color:#64748b;">Auto = vLLM default (same as model dtype).</span></td><td><select id="adv-kv-cache-dtype-mode" onchange="updateAdvVllm()"><option value="auto">Auto</option><option value="custom">Custom</option></select></td><td><select id="adv-kv-cache-dtype-val" disabled onchange="updateAdvVllm()"><option value="auto">auto</option><option value="fp8">fp8</option><option value="fp8_e5m2">fp8_e5m2</option><option value="fp8_e4m3">fp8_e4m3</option></select></td></tr>
+                                    <tr><td>pipeline-parallel-size</td><td style="font-weight:normal;color:#6b7280;font-size:0.9em;">Split model across GPU groups in sequence. Only needed when the model is too large for tensor parallelism alone. <span style="color:#64748b;">Auto = vLLM default (1).</span></td><td><select id="adv-pipeline-parallel-size-mode" onchange="updateAdvVllm()"><option value="auto">Auto</option><option value="custom">Custom</option></select></td><td><input type="number" id="adv-pipeline-parallel-size-val" disabled placeholder="1" min="1" oninput="updateAdvVllm()"></td></tr>
+                                    <tr><td>tool-call-parser</td><td style="font-weight:normal;color:#6b7280;font-size:0.9em;">How the engine parses function/tool calls in the model output. Only needed if your app uses tool calling. <span style="color:#64748b;">Auto = vLLM default (disabled).</span></td><td><select id="adv-tool-call-parser-mode" onchange="updateAdvVllm()"><option value="auto">Auto</option><option value="custom">Custom</option></select></td><td><select id="adv-tool-call-parser-val" disabled onchange="updateAdvVllm()"><option value="">none</option><option value="openai">openai</option><option value="hermes">hermes</option><option value="mistral">mistral</option><option value="llama3_json">llama3_json</option></select></td></tr>
                                 </table>
 
                                 <!-- Toggle Flags -->
                                 <div style="font-weight:600;color:#334155;font-size:0.9em;margin-bottom:12px;text-transform:uppercase;letter-spacing:0.5px;">Toggle Flags</div>
                                 <table style="width:100%;border-collapse:collapse;font-size:0.9em;">
-                                    <tr style="background:#f8fafc;"><th style="text-align:left;padding:8px 12px;border-bottom:2px solid #e2e8f0;">Flag</th><th style="text-align:left;padding:8px 12px;border-bottom:2px solid #e2e8f0;width:140px;">State</th></tr>
-                                    <tr><td style="padding:8px 12px;border-bottom:1px solid #f1f5f9;font-weight:600;">enable-prefix-caching</td><td style="padding:8px 12px;border-bottom:1px solid #f1f5f9;"><select id="adv-enable-prefix-caching-mode" onchange="updateAdvVllm()" style="padding:6px;border:1px solid #d1d5db;border-radius:6px;font-size:0.9em;"><option value="auto">Auto (On)</option><option value="on">On</option><option value="off">Off</option></select></td></tr>
-                                    <tr><td style="padding:8px 12px;border-bottom:1px solid #f1f5f9;font-weight:600;">disable-custom-all-reduce</td><td style="padding:8px 12px;border-bottom:1px solid #f1f5f9;"><select id="adv-disable-custom-all-reduce-mode" onchange="updateAdvVllm()" style="padding:6px;border:1px solid #d1d5db;border-radius:6px;font-size:0.9em;"><option value="auto">Auto (Off)</option><option value="on">On</option><option value="off">Off</option></select></td></tr>
-                                    <tr><td style="padding:8px 12px;border-bottom:1px solid #f1f5f9;font-weight:600;">enable-auto-tool-choice</td><td style="padding:8px 12px;border-bottom:1px solid #f1f5f9;"><select id="adv-enable-auto-tool-choice-mode" onchange="updateAdvVllm()" style="padding:6px;border:1px solid #d1d5db;border-radius:6px;font-size:0.9em;"><option value="auto">Auto (Off)</option><option value="on">On</option><option value="off">Off</option></select></td></tr>
-                                    <tr><td style="padding:8px 12px;border-bottom:1px solid #f1f5f9;font-weight:600;">trust-remote-code</td><td style="padding:8px 12px;border-bottom:1px solid #f1f5f9;"><select id="adv-trust-remote-code-mode" onchange="updateAdvVllm()" style="padding:6px;border:1px solid #d1d5db;border-radius:6px;font-size:0.9em;"><option value="auto">Auto (On)</option><option value="on">On</option><option value="off">Off</option></select></td></tr>
-                                    <tr><td style="padding:8px 12px;font-weight:600;">disable-log-requests</td><td style="padding:8px 12px;"><select id="adv-disable-log-requests-mode" onchange="updateAdvVllm()" style="padding:6px;border:1px solid #d1d5db;border-radius:6px;font-size:0.9em;"><option value="auto">Auto (On)</option><option value="on">On</option><option value="off">Off</option></select></td></tr>
+                                    <tr style="background:#f8fafc;"><th style="text-align:left;padding:8px 12px;border-bottom:2px solid #e2e8f0;">Flag</th><th style="text-align:left;padding:8px 12px;border-bottom:2px solid #e2e8f0;">Description</th><th style="text-align:left;padding:8px 12px;border-bottom:2px solid #e2e8f0;width:170px;">State</th></tr>
+                                    <tr><td>enable-prefix-caching</td><td style="font-weight:normal;color:#6b7280;font-size:0.9em;">Reuse computation for repeated prompt openings (e.g., system prompts). Saves GPU time when many requests share the same starting text. <span style="color:#0369a1;">Auto = enabled by In-S8.</span></td><td><select id="adv-enable-prefix-caching-mode" onchange="updateAdvVllm()"><option value="auto">Auto (On)</option><option value="on">On</option><option value="off">Off</option></select></td></tr>
+                                    <tr><td>disable-custom-all-reduce</td><td style="font-weight:normal;color:#6b7280;font-size:0.9em;">Turn off optimized GPU-to-GPU communication. Only enable if you see NCCL errors during multi-GPU runs. <span style="color:#64748b;">Auto = vLLM default (off).</span></td><td><select id="adv-disable-custom-all-reduce-mode" onchange="updateAdvVllm()"><option value="auto">Auto (Off)</option><option value="on">On</option><option value="off">Off</option></select></td></tr>
+                                    <tr><td>enable-auto-tool-choice</td><td style="font-weight:normal;color:#6b7280;font-size:0.9em;">Let the engine decide when to invoke tools/functions automatically. Only relevant if your application uses tool calling. <span style="color:#64748b;">Auto = vLLM default (off).</span></td><td><select id="adv-enable-auto-tool-choice-mode" onchange="updateAdvVllm()"><option value="auto">Auto (Off)</option><option value="on">On</option><option value="off">Off</option></select></td></tr>
+                                    <tr><td>trust-remote-code</td><td style="font-weight:normal;color:#6b7280;font-size:0.9em;">Allow the model to run custom Python code from HuggingFace. Required by some models (e.g., custom architectures), but has security implications. <span style="color:#0369a1;">Auto = enabled by In-S8.</span></td><td><select id="adv-trust-remote-code-mode" onchange="updateAdvVllm()"><option value="auto">Auto (On)</option><option value="on">On</option><option value="off">Off</option></select></td></tr>
+                                    <tr><td>disable-log-requests</td><td style="font-weight:normal;color:#6b7280;font-size:0.9em;">Stop logging individual request/response details. Reduces log volume and improves performance during benchmarks. <span style="color:#0369a1;">Auto = enabled by In-S8.</span></td><td><select id="adv-disable-log-requests-mode" onchange="updateAdvVllm()"><option value="auto">Auto (On)</option><option value="on">On</option><option value="off">Off</option></select></td></tr>
                                 </table>
                             </div>
                         </div>

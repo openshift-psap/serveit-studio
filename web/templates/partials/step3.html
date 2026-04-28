@@ -1,6 +1,6 @@
                     <div class="step-section" id="step3-section">
                         <h3>Workload Configuration</h3>
-                        <p class="description">Define your typical workload characteristics.</p>
+                        <p class="description">Describe what a typical request looks like in your application.</p>
 
                         <!-- Full-card flip: Synthetic ↔ Dataset -->
                         <div class="workload-flip-wrapper">
@@ -12,7 +12,7 @@
                                             <div style="display:flex;align-items:center;justify-content:space-between;">
                                                 <div>
                                                     <div style="font-weight:700;color:#15803d;font-size:1.05em;">⚡ Synthetic Workload</div>
-                                                    <div style="color:#166534;font-size:0.92em;margin-top:4px;">Generate synthetic prompts with configurable sequence lengths and distribution.</div>
+                                                    <div style="color:#166534;font-size:0.92em;margin-top:4px;">Generate fake test prompts with the sizes you specify, to simulate your real traffic.</div>
                                                 </div>
                                                 <div style="color:#15803d;font-size:0.8em;font-weight:600;padding:4px 12px;border:1px solid #86efac;border-radius:20px;white-space:nowrap;">Click to switch to Dataset →</div>
                                             </div>
@@ -20,42 +20,67 @@
                                         <div style="padding:16px 20px;">
                                             <div class="input-grid">
                                                 <div class="input-group">
-                                                    <label>Input Sequence Length (ISL)</label>
+                                                    <label>Average Input Length (ISL)</label>
                                                     <input type="number" id="isl-input" value="3000" min="1" max="32000">
-                                                    <div class="help-text">Average prompt size in tokens</div>
+                                                    <div class="help-text">How long is the text your users typically send? A word is roughly 1.3 tokens. For example, a 500-word prompt is about 650 tokens.</div>
                                                 </div>
                                                 <div class="input-group">
-                                                    <label>Output Sequence Length (OSL)</label>
+                                                    <label>Average Output Length (OSL)</label>
                                                     <input type="number" id="osl-input" value="100" min="1" max="8000">
-                                                    <div class="help-text">Average completion size in tokens</div>
-                                                </div>
-                                                <div class="input-group">
-                                                    <label>ISL Std Dev (optional)</label>
-                                                    <input type="number" id="isl-stdev-input" value="" min="0" max="32000" placeholder="e.g. 3000">
-                                                    <div class="help-text">Standard deviation for input length variation. Leave empty for fixed-length prompts.</div>
-                                                </div>
-                                                <div class="input-group">
-                                                    <label>OSL Std Dev (optional)</label>
-                                                    <input type="number" id="osl-stdev-input" value="" min="0" max="8000" placeholder="e.g. 64">
-                                                    <div class="help-text">Standard deviation for output length variation. Leave empty for fixed-length completions.</div>
+                                                    <div class="help-text">How long is the reply you want the AI to write? A 200-word response is roughly 260 tokens.</div>
                                                 </div>
                                             </div>
+                                        </div>
 
-                                            <div class="input-group" style="border: 2px solid #e2e8f0; border-radius: 8px; padding: 20px; margin-top: 16px;">
-                                                <div style="display: flex; align-items: center; gap: 12px; cursor: pointer;" onclick="document.getElementById('multi-turn-enabled').click();">
-                                                    <input type="checkbox" id="multi-turn-enabled" style="width: 22px; height: 22px; cursor: pointer; accent-color: var(--rh-red-primary); flex-shrink: 0;" onclick="event.stopPropagation(); toggleMultiTurn();">
-                                                    <label style="cursor: pointer; margin: 0; font-weight: 700; font-size: 0.95em;">Multi-Turn Conversation</label>
+                                        <!-- Length Variation (collapsible) -->
+                                        <div style="border-top:1px solid #dcfce7;">
+                                            <div style="padding:12px 20px;cursor:pointer;display:flex;align-items:center;justify-content:space-between;" onclick="var b=document.getElementById('length-variation-body');var a=document.getElementById('length-variation-arrow');if(b.style.display==='none'){b.style.display='block';a.textContent='▾';}else{b.style.display='none';a.textContent='▸';}">
+                                                <div>
+                                                    <div style="font-weight:700;color:#15803d;font-size:0.95em;">📊 Length Variation (optional)</div>
+                                                    <div style="color:#166534;font-size:0.85em;margin-top:2px;">Add randomness to input/output lengths to simulate realistic traffic where not all requests are the same size.</div>
                                                 </div>
-                                                <div id="multi-turn-options" style="opacity: 0.4; pointer-events: none; margin-top: 16px; padding-top: 16px; border-top: 1px solid #e2e8f0;">
+                                                <div id="length-variation-arrow" style="font-size:1.4em;color:#15803d;font-weight:700;">▸</div>
+                                            </div>
+                                            <div id="length-variation-body" style="display:none;padding:0 20px 16px;">
+                                                <div class="input-grid">
+                                                    <div class="input-group">
+                                                        <label>Input Length Variation</label>
+                                                        <input type="number" id="isl-stdev-input" value="" min="0" max="32000" placeholder="e.g. 3000">
+                                                        <div class="help-text">Adds random variation around your Average Input Length above. For example, ISL=3000 with variation=1000 means prompts will range roughly between 2000-4000 tokens. Leave empty for fixed-length prompts.</div>
+                                                    </div>
+                                                    <div class="input-group">
+                                                        <label>Output Length Variation</label>
+                                                        <input type="number" id="osl-stdev-input" value="" min="0" max="8000" placeholder="e.g. 64">
+                                                        <div class="help-text">Adds random variation around your Average Output Length above. For example, OSL=100 with variation=50 means replies will range roughly between 50-150 tokens. Leave empty for fixed-length replies.</div>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        </div>
+
+                                        <!-- Multi-Turn Conversation (collapsible) -->
+                                        <div style="border-top:1px solid #dcfce7;">
+                                            <div style="padding:12px 20px;cursor:pointer;display:flex;align-items:center;justify-content:space-between;" onclick="var b=document.getElementById('multi-turn-body');var a=document.getElementById('multi-turn-arrow');if(b.style.display==='none'){b.style.display='block';a.textContent='▾';}else{b.style.display='none';a.textContent='▸';}">
+                                                <div>
+                                                    <div style="font-weight:700;color:#15803d;font-size:0.95em;">💬 Multi-Turn Conversation (optional)</div>
+                                                    <div style="color:#166534;font-size:0.85em;margin-top:2px;">Simulate back-and-forth chats where each message includes the full conversation history.</div>
+                                                </div>
+                                                <div id="multi-turn-arrow" style="font-size:1.4em;color:#15803d;font-weight:700;">▸</div>
+                                            </div>
+                                            <div id="multi-turn-body" style="display:none;padding:0 20px 16px;">
+                                                <div style="display: flex; align-items: center; gap: 12px; cursor: pointer; margin-bottom: 12px;" onclick="document.getElementById('multi-turn-enabled').click();">
+                                                    <input type="checkbox" id="multi-turn-enabled" style="width: 22px; height: 22px; cursor: pointer; accent-color: var(--rh-red-primary); flex-shrink: 0;" onclick="event.stopPropagation(); toggleMultiTurn();">
+                                                    <label style="cursor: pointer; margin: 0; font-weight: 700; font-size: 0.95em;">Enable Multi-Turn</label>
+                                                </div>
+                                                <div id="multi-turn-options" style="opacity: 0.4; pointer-events: none;">
                                                     <div class="input-grid" style="grid-template-columns: 1fr 1fr;">
                                                         <div class="input-group">
                                                             <label style="font-size: 0.85em; margin-bottom: 6px; display: block;">Number of Turns</label>
                                                             <input type="number" id="turns-input" value="3" min="2" max="20">
-                                                            <div class="help-text">User/assistant exchanges per conversation</div>
+                                                            <div class="help-text">How many back-and-forth exchanges per conversation (e.g., 3 = user asks, AI replies, user follows up, AI replies, user asks again, AI replies).</div>
                                                         </div>
                                                     </div>
                                                 </div>
-                                                <div class="help-text" style="margin-top: 12px;">Simulate real chat workloads where each turn sends the full conversation history, increasing context with every exchange.</div>
+                                                <div class="help-text" style="margin-top: 8px;">Later messages are slower because there is more text to process each turn.</div>
                                             </div>
                                         </div>
                                     </div>
@@ -68,7 +93,7 @@
                                             <div style="display:flex;align-items:center;justify-content:space-between;">
                                                 <div>
                                                     <div style="font-weight:700;color:#5b21b6;font-size:1.05em;">📊 Custom Dataset</div>
-                                                    <div style="color:#6d28d9;font-size:0.92em;margin-top:4px;">Use real prompts from a HuggingFace dataset or uploaded file instead of synthetic workload generation.</div>
+                                                    <div style="color:#6d28d9;font-size:0.92em;margin-top:4px;">Use real prompts from an existing dataset or file instead of generating fake test data.</div>
                                                 </div>
                                                 <div style="color:#5b21b6;font-size:0.8em;font-weight:600;padding:4px 12px;border:1px solid #c4b5fd;border-radius:20px;white-space:nowrap;">Click to switch to Synthetic →</div>
                                             </div>
@@ -77,19 +102,19 @@
                                             <div class="input-group" style="margin-bottom:16px;">
                                                 <label>Dataset Source</label>
                                                 <input type="text" id="dataset-source-input" placeholder="e.g. openai/gsm8k or /path/to/data.jsonl" style="width:100%;padding:12px 16px;border:2px solid #d1d5db;border-radius:8px;font-size:15px;">
-                                                <div class="help-text">HuggingFace dataset ID, URL, or path to a CSV/JSON/JSONL/TXT file on the pod.</div>
+                                                <div class="help-text">Enter a HuggingFace dataset name (e.g., "openai/gsm8k"), a URL, or a file path on the server.</div>
                                             </div>
 
                                             <div class="input-grid">
                                                 <div class="input-group">
-                                                    <label>Text Column (optional)</label>
+                                                    <label>Prompt Column Name (optional)</label>
                                                     <input type="text" id="dataset-column-input" placeholder="e.g. prompt, text, question" style="padding:12px 16px;border:2px solid #d1d5db;border-radius:8px;font-size:15px;">
-                                                    <div class="help-text">Column name containing the prompt text. Leave empty for auto-detect.</div>
+                                                    <div class="help-text">If your dataset has multiple columns, specify which one contains the prompts. Leave empty to auto-detect.</div>
                                                 </div>
                                                 <div class="input-group">
-                                                    <label>Max Output Tokens</label>
+                                                    <label>Max Reply Length</label>
                                                     <input type="number" id="dataset-max-output-input" value="256" min="1" max="8000" style="padding:12px 16px;border:2px solid #d1d5db;border-radius:8px;font-size:15px;">
-                                                    <div class="help-text">Maximum tokens to generate per prompt.</div>
+                                                    <div class="help-text">The longest reply the AI is allowed to generate for each prompt. One token is roughly 3/4 of a word.</div>
                                                 </div>
                                             </div>
 

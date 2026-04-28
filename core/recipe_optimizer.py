@@ -38,7 +38,8 @@ class RecipeOptimizerConfig:
     namespace: str
     isl: int  # Input Sequence Length
     osl: int  # Output Sequence Length
-    qps: float  # Concurrency (simultaneous in-flight requests)
+    qps: float  # Concurrency or requests-per-second depending on rate_type
+    rate_type: str = 'concurrent'  # 'concurrent', 'constant', or 'poisson'
 
     # Resources
     total_gpus: int = 16
@@ -748,7 +749,8 @@ class RecipeOptimizer:
         isl_s = f"ISL={self.config.isl}" + (f"(σ={self.config.isl_stdev})" if self.config.isl_stdev else "")
         osl_s = f"OSL={self.config.osl}" + (f"(σ={self.config.osl_stdev})" if self.config.osl_stdev else "")
         turns_s = f", Turns={self.config.turns}" if self.config.turns > 1 else ""
-        self.log(f"Workload: {isl_s}, {osl_s}, Concurrency={int(self.config.qps)}{turns_s}", 'info')
+        rate_label = f"Concurrency={int(self.config.qps)}" if self.config.rate_type == 'concurrent' else f"Rate={int(self.config.qps)} req/s ({self.config.rate_type})"
+        self.log(f"Workload: {isl_s}, {osl_s}, {rate_label}{turns_s}", 'info')
         self.log(f"Resources: {self.config.total_gpus} GPUs available", 'info')
         if self.completed_tests:
             self.log(f"Mode: RESUME ({len(self.completed_tests)} completed tests will be skipped)", 'info')
@@ -1498,7 +1500,8 @@ class RecipeOptimizer:
         isl_s = f"ISL={self.config.isl}" + (f"(σ={self.config.isl_stdev})" if self.config.isl_stdev else "")
         osl_s = f"OSL={self.config.osl}" + (f"(σ={self.config.osl_stdev})" if self.config.osl_stdev else "")
         turns_s = f", Turns={self.config.turns}" if self.config.turns > 1 else ""
-        self.log(f"Workload: {isl_s}, {osl_s}, Concurrency={int(self.config.qps)}{turns_s}", 'info')
+        rate_label = f"Concurrency={int(self.config.qps)}" if self.config.rate_type == 'concurrent' else f"Rate={int(self.config.qps)} req/s ({self.config.rate_type})"
+        self.log(f"Workload: {isl_s}, {osl_s}, {rate_label}{turns_s}", 'info')
 
         for i, split in enumerate(self.feasible_splits):
             if self._should_stop():
@@ -2070,7 +2073,7 @@ class RecipeOptimizer:
             isl=isl,
             osl=osl,
             num_users=concurrency,
-            request_type='concurrent' if use_concurrency else 'constant',
+            request_type=self.config.rate_type if use_concurrency else 'constant',
             request_rate=concurrency if use_concurrency else 1,
             test_duration=self.config.test_duration,
             stop_mode=self.config.stop_mode,
@@ -2280,8 +2283,7 @@ class RecipeOptimizer:
             osl=self.config.osl,
             num_users=concurrency,
 
-            # Benchmark load: concurrent users for realistic throughput measurement
-            request_type='concurrent',
+            request_type=self.config.rate_type,
             request_rate=concurrency,
 
             # TP and replicas (use prefill_tp as default for backward compatibility)
@@ -2370,7 +2372,7 @@ class RecipeOptimizer:
             isl=self.config.isl,
             osl=self.config.osl,
             num_users=concurrency,
-            request_type='concurrent' if use_concurrency else 'constant',
+            request_type=self.config.rate_type if use_concurrency else 'constant',
             request_rate=concurrency if use_concurrency else 1,
             test_duration=self.config.test_duration,
             stop_mode=self.config.stop_mode,

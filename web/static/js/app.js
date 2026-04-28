@@ -77,6 +77,7 @@ let config = {
     osl_stdev: null,
     turns: 1,
     users: 100,
+    rate_type: 'concurrent',
     duration: 300,
     stop_mode: 'duration',
     max_requests: null,
@@ -293,6 +294,9 @@ function updateUIFromConfig() {
     }
     if (config.stop_mode && config.stop_mode !== 'duration') {
         setStopMode(config.stop_mode);
+    }
+    if (config.rate_type && config.rate_type !== 'concurrent') {
+        setRateType(config.rate_type);
     }
 
     if (document.getElementById('use-achievable-qps')) {
@@ -1066,6 +1070,36 @@ function setStopMode(mode) {
     saveConfig();
 }
 
+function setRateType(type) {
+    config.rate_type = type;
+    ['concurrent', 'constant', 'poisson'].forEach(t => {
+        const btn = document.getElementById('rate-type-' + t);
+        if (!btn) return;
+        if (t === type) {
+            btn.style.background = 'var(--rh-red-primary)';
+            btn.style.color = 'white';
+            btn.style.borderColor = 'var(--rh-red-primary)';
+        } else {
+            btn.style.background = 'white';
+            btn.style.color = '#475569';
+            btn.style.borderColor = '#cbd5e1';
+        }
+    });
+    const label = document.getElementById('users-label');
+    const help = document.getElementById('users-help');
+    if (type === 'concurrent') {
+        if (label) label.textContent = 'Concurrent Users';
+        if (help) help.textContent = 'How many users are sending requests at the same time. Think of it like how many people are in line at once.';
+    } else if (type === 'poisson') {
+        if (label) label.textContent = 'Requests per Second (avg)';
+        if (help) help.textContent = 'Average requests per second with random variation, simulating realistic bursty traffic patterns.';
+    } else {
+        if (label) label.textContent = 'Requests per Second';
+        if (help) help.textContent = 'Sends exactly this many requests per second, regardless of how fast the server responds.';
+    }
+    saveConfig();
+}
+
 // Achievable QPS checkbox
 document.getElementById('use-achievable-qps').addEventListener('change', (e) => {
     config.use_achievable_qps = e.target.checked;
@@ -1147,6 +1181,21 @@ function restoreAdvVllm() {
         var modeEl = document.getElementById('adv-' + f + '-mode');
         if (modeEl) modeEl.value = setting.mode || 'auto';
     });
+}
+
+function resetAdvVllm() {
+    advValueFields.forEach(function(f) {
+        var modeEl = document.getElementById('adv-' + f + '-mode');
+        var valEl = document.getElementById('adv-' + f + '-val');
+        if (modeEl) modeEl.value = 'auto';
+        if (valEl) { valEl.disabled = true; valEl.value = ''; }
+    });
+    advToggleFields.forEach(function(f) {
+        var modeEl = document.getElementById('adv-' + f + '-mode');
+        if (modeEl) modeEl.value = 'auto';
+    });
+    config.advanced_vllm = null;
+    saveConfig();
 }
 
 document.getElementById('latency-target-input').addEventListener('change', (e) => {
@@ -1429,6 +1478,7 @@ document.getElementById('start-optimization').addEventListener('click', () => {
         dataset_source: config.dataset_source || null,
         dataset_column: config.dataset_column || null,
         dataset_max_output: config.dataset_max_output || 256,
+        rate_type: config.rate_type || 'concurrent',
         advanced_vllm: config.advanced_vllm || null
     });
 });
