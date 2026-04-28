@@ -6,6 +6,9 @@ tailored to its specific optimization goal:
 - TTFTStrategy: Response Time Priority (Aggregated search + PD splits)
 - ThroughputStrategy: Throughput Priority (Aggregated search + EP configs)
 - BalancedStrategy: Balanced Performance (Aggregated search + PD + EP)
+- AggregatedOnlyStrategy: Test only aggregated (standard) configurations
+- PDOnlyStrategy: Test only Prefill/Decode disaggregation splits
+- EPOnlyStrategy: Test only Expert Parallelism configurations
 
 Step 6 (Aggregated Configuration Search) runs before architecture-specific
 testing, so that Step 8 comparisons require no additional tests.
@@ -827,3 +830,83 @@ class BalancedStrategy(OptimizationStrategy):
             t = self.opt.calibrated_ep_result.ttft_p90 or 0
             p = self.opt.calibrated_ep_result.throughput_p90 or 0
             self.opt.log(f"  {'EP (best)':<25} {t:>10.1f}ms {p:>14.2f} req/s", 'info')
+
+
+class AggregatedOnlyStrategy(OptimizationStrategy):
+    """Aggregated Only: Skip architecture comparison, test only standard aggregated configs.
+
+    Step 6: Search for best aggregated configuration across TP values
+    Step 9: Latency-bounded throughput maximization (conditional)
+    """
+
+    def execute(self):
+        self.opt.log("STEP 6: Aggregated Configuration Search", 'decision')
+        self.opt.log("-" * 80, 'info')
+        self.opt._search_aggregated_configs()
+        self.opt.log("", 'info')
+        if self.opt._should_stop():
+            return
+
+        if self.opt._should_run_latency_bounded_search():
+            self.opt._run_latency_bounded_search()
+            self.opt.log("", 'info')
+
+
+class PDOnlyStrategy(OptimizationStrategy):
+    """PD Only: Test only Prefill/Decode disaggregation splits.
+
+    Steps 4-5: Calculate feasible P/D splits from TP calibration data
+    Step 7: Test all feasible PD splits, find Pareto front
+    Step 9: Latency-bounded throughput maximization (conditional)
+    """
+
+    def execute(self):
+        self.opt._select_tp_pairs()
+
+        self.opt.log("STEPS 4-5: Resource Sizing & Feasible Splits", 'decision')
+        self.opt.log("-" * 80, 'info')
+        self.opt._calculate_feasible_splits()
+        self.opt.log("", 'info')
+        if self.opt._should_stop():
+            return
+
+        self.opt.log("STEP 7: P/D Split Optimization (Pareto Front)", 'decision')
+        self.opt.log("-" * 80, 'info')
+        self.opt._optimize_pd_splits()
+        self.opt.log("", 'info')
+        if self.opt._should_stop():
+            return
+
+        if self.opt._should_run_latency_bounded_search():
+            self.opt._run_latency_bounded_search()
+            self.opt.log("", 'info')
+
+
+class EPOnlyStrategy(OptimizationStrategy):
+    """EP Only: Test only Expert Parallelism configurations.
+
+    Steps 4-5: Enumerate EP configurations (TP x replicas)
+    Step 7: Test EP configs at full workload, find best by throughput
+    Step 9: Latency-bounded throughput maximization (conditional)
+    """
+
+    def execute(self):
+        ep_strategy = ThroughputStrategy(self.opt)
+
+        self.opt.log("STEPS 4-5: EP Configuration Space", 'decision')
+        self.opt.log("-" * 80, 'info')
+        ep_strategy._calculate_ep_configs()
+        self.opt.log("", 'info')
+        if self.opt._should_stop():
+            return
+
+        self.opt.log("STEP 7: EP Configuration Testing (Throughput Optimization)", 'decision')
+        self.opt.log("-" * 80, 'info')
+        ep_strategy._test_ep_configs()
+        self.opt.log("", 'info')
+        if self.opt._should_stop():
+            return
+
+        if self.opt._should_run_latency_bounded_search():
+            self.opt._run_latency_bounded_search()
+            self.opt.log("", 'info')

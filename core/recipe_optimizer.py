@@ -358,11 +358,17 @@ class RecipeOptimizer:
 
     def _get_strategy(self):
         """Get the optimization strategy for the configured objective."""
-        from .optimization_strategies import TTFTStrategy, ThroughputStrategy, BalancedStrategy
+        from .optimization_strategies import (
+            TTFTStrategy, ThroughputStrategy, BalancedStrategy,
+            AggregatedOnlyStrategy, PDOnlyStrategy, EPOnlyStrategy,
+        )
         strategies = {
             'ttft': TTFTStrategy,
             'throughput': ThroughputStrategy,
             'balanced': BalancedStrategy,
+            'aggregated_only': AggregatedOnlyStrategy,
+            'pd_only': PDOnlyStrategy,
+            'ep_only': EPOnlyStrategy,
         }
         cls = strategies.get(self.config.objective, TTFTStrategy)
         self.log(f"Using {cls.__name__} for objective '{self.config.objective}'", 'info')

@@ -1896,7 +1896,7 @@ data:
         log_to_ui(f"   Optimization goal: {optimization_goal}", 'info')
 
         # Use Recipe-based optimization for all goals
-        if optimization_goal in ('ttft', 'throughput', 'balanced'):
+        if optimization_goal in ('ttft', 'throughput', 'balanced', 'aggregated_only', 'pd_only', 'ep_only'):
             goal_descriptions = {
                 'ttft': {
                     'label': 'Response Time Priority (PD vs Aggregated)',
@@ -1923,6 +1923,29 @@ data:
                         "Steps 4-5: Resource sizing for PD + EP",
                         "Step 7: Test PD splits and EP configurations",
                         "Step 8: Three-way comparison (PD vs EP vs Aggregated)",
+                    ]
+                },
+                'aggregated_only': {
+                    'label': 'Aggregated Only (Standard)',
+                    'steps': [
+                        "Steps 2-3: Find optimal TP (exhaustive sweep)",
+                        "Step 6: Test aggregated configurations at each TP",
+                    ]
+                },
+                'pd_only': {
+                    'label': 'Prefill/Decode Only',
+                    'steps': [
+                        "Steps 2-3: Find optimal prefill/decode TP (exhaustive sweep)",
+                        "Steps 4-5: Calculate feasible P/D splits",
+                        "Step 7: Test all feasible P/D splits",
+                    ]
+                },
+                'ep_only': {
+                    'label': 'Expert Parallelism Only',
+                    'steps': [
+                        "Steps 2-3: Find optimal TP (exhaustive sweep)",
+                        "Steps 4-5: EP configuration space enumeration",
+                        "Step 7: Test EP configurations at full workload",
                     ]
                 },
             }

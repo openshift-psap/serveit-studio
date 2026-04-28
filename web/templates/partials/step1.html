@@ -10,6 +10,7 @@
                             <p><strong>Throughput Priority:</strong> Tests different server setups to find the one that handles the most requests at once -- like finding the highway lane configuration that moves the most cars per hour.</p>
                             <p><strong>Response Time Priority:</strong> Tests different server setups to find the one that starts replying fastest -- like finding the checkout lane that begins scanning your items soonest.</p>
                             <p><strong>Balanced:</strong> Tests all available server setups to find one that gives a good balance of fast response times and high request volume.</p>
+                            <p><strong>Single Architecture:</strong> Already know which architecture you want? Pick Aggregated Only, PD Only, or EP Only to skip the comparison and go straight to optimizing that architecture.</p>
                         </div>
 
                         <div class="architecture-grid">
@@ -34,6 +35,34 @@
                                 <p>Tests all server configurations and picks the best overall tradeoff between fast replies and high request volume. Ideal when you want solid performance across the board.</p>
                                 <div class="best-for">
                                     <strong>Benchmarks:</strong> <span>All configurations (Standard, EP, and PD)</span>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div style="text-align: center; margin: 24px 0 16px; color: var(--rh-gray-500); font-weight: 700; font-size: 0.95em;">— OR if you already know which architecture to use —</div>
+
+                        <div class="architecture-grid">
+                            <div class="arch-card" data-goal="aggregated_only">
+                                <h4>Aggregated Only</h4>
+                                <p>Test only the standard setup where all GPUs share the same workload. Fastest option — no architecture comparison.</p>
+                                <div class="best-for">
+                                    <strong>Architecture:</strong> <span>Standard (Aggregated)</span>
+                                </div>
+                            </div>
+
+                            <div class="arch-card" data-goal="pd_only">
+                                <h4>Prefill/Decode Only</h4>
+                                <p>Test only the P/D split architecture where separate GPU groups handle input processing and text generation.</p>
+                                <div class="best-for">
+                                    <strong>Architecture:</strong> <span>Prefill/Decode (PD)</span>
+                                </div>
+                            </div>
+
+                            <div class="arch-card" data-goal="ep_only">
+                                <h4>Expert Parallelism Only</h4>
+                                <p>Test only the EP architecture where MoE expert layers are distributed across GPUs. For Mixture-of-Experts models only.</p>
+                                <div class="best-for">
+                                    <strong>Architecture:</strong> <span>Expert Parallelism (EP)</span>
                                 </div>
                             </div>
                         </div>

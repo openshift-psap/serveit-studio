@@ -2520,6 +2520,15 @@ function loadResumeRuns() {
                 } else if (goal === 'balanced') {
                     goalLabel = 'Balanced';
                     goalClass = 'throughput';
+                } else if (goal === 'aggregated_only') {
+                    goalLabel = 'Aggregated Only';
+                    goalClass = 'throughput';
+                } else if (goal === 'pd_only') {
+                    goalLabel = 'PD Only';
+                    goalClass = 'ttft';
+                } else if (goal === 'ep_only') {
+                    goalLabel = 'EP Only';
+                    goalClass = 'throughput';
                 } else if (goal) {
                     goalLabel = run.goal;
                 }
@@ -3208,8 +3217,8 @@ function renderCharts(data, runId) {
     // GOAL BANNER — what was this run optimizing for
     // ============================================================
     if (rec && rec.goal_info) {
-        const gColors = { ttft: '#3b82f6', throughput: '#f59e0b', balanced: '#10b981' };
-        const gIcons = { ttft: '&#9201;', throughput: '&#9889;', balanced: '&#9878;' };
+        const gColors = { ttft: '#3b82f6', throughput: '#f59e0b', balanced: '#10b981', aggregated_only: '#64748b', pd_only: '#8b5cf6', ep_only: '#0ea5e9' };
+        const gIcons = { ttft: '&#9201;', throughput: '&#9889;', balanced: '&#9878;', aggregated_only: '&#9634;', pd_only: '&#8644;', ep_only: '&#9881;' };
         const gc = gColors[rec.goal] || '#10b981';
         html += `<div class="chart-card" style="border: 3px solid ${gc}; border-left: 8px solid ${gc};">`;
         html += `<div class="chart-card-header" style="background: ${gc}; color: white; font-size: 1.3em;">`;
@@ -4812,8 +4821,8 @@ function downloadHTMLReport(runId, data) {
         secRec += '</div>';
     }
     if (rec.goal_info) {
-        const gColors = { ttft: '#3b82f6', throughput: '#f59e0b', balanced: '#10b981' };
-        const gIcons = { ttft: '&#9201;', throughput: '&#9889;', balanced: '&#9878;' };
+        const gColors = { ttft: '#3b82f6', throughput: '#f59e0b', balanced: '#10b981', aggregated_only: '#64748b', pd_only: '#8b5cf6', ep_only: '#0ea5e9' };
+        const gIcons = { ttft: '&#9201;', throughput: '&#9889;', balanced: '&#9878;', aggregated_only: '&#9634;', pd_only: '&#8644;', ep_only: '&#9881;' };
         const gc = gColors[rec.goal] || '#10b981';
         secRec += `<div style="border:3px solid ${gc}; border-left:8px solid ${gc}; border-radius:10px; margin:20px 0; overflow:hidden;">`;
         secRec += `<div style="background:${gc}; color:white; padding:14px 20px; font-size:1.3em; font-weight:800;">${gIcons[rec.goal] || ''} ${rec.goal_info.name}</div>`;

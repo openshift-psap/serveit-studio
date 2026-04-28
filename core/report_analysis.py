@@ -192,6 +192,27 @@ class ReportAnalyzer:
                                 'for your specific model and workload across both latency '
                                 'and throughput.'),
             },
+            'aggregated_only': {
+                'name': 'Aggregated Only',
+                'description': ('This optimization tested only the standard Aggregated '
+                                'architecture — all GPUs share the same workload with no '
+                                'architecture comparison. It searched across TP values to '
+                                'find the best aggregated configuration for your workload.'),
+            },
+            'pd_only': {
+                'name': 'Prefill/Decode Only',
+                'description': ('This optimization tested only Prefill/Decode (PD) '
+                                'disaggregation — separate GPU groups handle input processing '
+                                'and text generation. It searched across P/D splits to find '
+                                'the optimal ratio for your workload.'),
+            },
+            'ep_only': {
+                'name': 'Expert Parallelism Only',
+                'description': ('This optimization tested only Expert Parallelism (EP) '
+                                '— a pool of independent pods with expert-level load balancing. '
+                                'It searched across TP values and replica counts to find '
+                                'the best EP configuration for your workload.'),
+            },
         }
 
         # Categorize tests by step
@@ -484,7 +505,7 @@ class ReportAnalyzer:
         # Asymmetric TP / NIXL constraints only apply to PD architecture.
         # Suppress them when the primary recommendation is Aggregated or EP.
         constraint_notes = []
-        primary_key = 'response_time' if goal == 'ttft' else 'throughput'
+        primary_key = 'response_time' if goal in ('ttft', 'pd_only') else 'throughput'
         primary_arch = (recommendations.get(primary_key, {}).get('architecture') or '').upper()
         if primary_arch == 'PD':
             raw_notes = run_meta.get('constraint_notes')
