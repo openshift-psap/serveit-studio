@@ -759,32 +759,38 @@ if [[ "$PORT_FORWARD_ONLY" == "true" ]]; then
     exit $?
 fi
 
+# If only sync/restart requested (no deploy flags), handle and exit
 if [[ "$SYNC_CODE" == "true" || "$RESTART_SERVER" == "true" ]]; then
-    KUBECTL_CMD=$(detect_kubectl)
+    # Check if a full deploy is also requested (has storage flag)
+    if [[ -z "$ACTUAL_PVC_NAME" && "$AUTO_DEPLOY" == "true" ]]; then
+        # No deploy needed — just sync/restart the existing pod
+        KUBECTL_CMD=$(detect_kubectl)
 
-    if [[ "$SYNC_CODE" == "true" ]]; then
-        SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-        REPO_ROOT="$SCRIPT_DIR/.."
+        if [[ "$SYNC_CODE" == "true" ]]; then
+            SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+            REPO_ROOT="$SCRIPT_DIR/.."
 
-        POD_NAME=$($KUBECTL_CMD get pod -n ${NAMESPACE} -l app=in-s8-optimizer -o jsonpath='{.items[0].metadata.name}' 2>/dev/null || true)
-        if [[ -z "$POD_NAME" ]]; then
-            echo "❌ No optimizer pod found in namespace $NAMESPACE" >&2
-            echo "   Deploy first: ./deployment/deploy.sh --dev -p <pvc-name>" >&2
-            exit 1
+            POD_NAME=$($KUBECTL_CMD get pod -n ${NAMESPACE} -l app=in-s8-optimizer -o jsonpath='{.items[0].metadata.name}' 2>/dev/null || true)
+            if [[ -z "$POD_NAME" ]]; then
+                echo "❌ No optimizer pod found in namespace $NAMESPACE" >&2
+                echo "   Deploy first: ./deployment/deploy.sh --dev -p <pvc-name>" >&2
+                exit 1
+            fi
+
+            echo "📦 Syncing code to pod $POD_NAME..." >&2
+            sync_code_to_pod "$KUBECTL_CMD" "$NAMESPACE" "$POD_NAME" "$REPO_ROOT"
+            echo "" >&2
         fi
 
-        echo "📦 Syncing code to pod $POD_NAME..." >&2
-        sync_code_to_pod "$KUBECTL_CMD" "$NAMESPACE" "$POD_NAME" "$REPO_ROOT"
-        echo "" >&2
+        if [[ "$RESTART_SERVER" == "true" ]]; then
+            restart_server "$KUBECTL_CMD" "$NAMESPACE" "$LOCAL_PORT"
+        else
+            echo "   Code synced. Server will auto-restart and pick up changes." >&2
+            echo "   To force restart: ./deployment/deploy.sh --restart-server" >&2
+        fi
+        exit 0
     fi
-
-    if [[ "$RESTART_SERVER" == "true" ]]; then
-        restart_server "$KUBECTL_CMD" "$NAMESPACE" "$LOCAL_PORT"
-    else
-        echo "   Code synced. Server will auto-restart and pick up changes." >&2
-        echo "   To force restart: ./deployment/deploy.sh --restart-server" >&2
-    fi
-    exit 0
+    # Otherwise fall through to deploy, then sync/restart after pod is ready
 fi
 
 # Check if PVC exists and handle storage class conflicts
@@ -946,16 +952,23 @@ json.dump(s, sys.stdout)" \
             fi
         fi
 
-        if [[ "$DEV_MODE" == "true" ]]; then
-            POD_NAME=$($KUBECTL_CMD get pod -n ${NAMESPACE} -l app=in-s8-optimizer -o jsonpath='{.items[0].metadata.name}' 2>/dev/null)
-            SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-            REPO_ROOT="$SCRIPT_DIR/.."
+        if [[ "$DEV_MODE" == "true" || "$SYNC_CODE" == "true" ]]; then
+            POD_NAME=$($KUBECTL_CMD get pod -n ${NAMESPACE} -l app=in-s8-optimizer -o jsonpath='{.items[0].metadata.name}' 2>/dev/null || true)
+            if [[ -n "$POD_NAME" ]]; then
+                SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+                REPO_ROOT="$SCRIPT_DIR/.."
 
-            echo "📦 Syncing code to pod..." >&2
-            sync_code_to_pod "$KUBECTL_CMD" "$NAMESPACE" "$POD_NAME" "$REPO_ROOT"
-            echo "" >&2
-            echo "   Server will auto-start and auto-restart on crash." >&2
-            echo "   To re-sync code: ./deployment/deploy.sh --sync" >&2
+                echo "📦 Syncing code to pod..." >&2
+                sync_code_to_pod "$KUBECTL_CMD" "$NAMESPACE" "$POD_NAME" "$REPO_ROOT"
+                echo "" >&2
+
+                if [[ "$RESTART_SERVER" == "true" ]]; then
+                    restart_server "$KUBECTL_CMD" "$NAMESPACE" "$LOCAL_PORT"
+                else
+                    echo "   Server will auto-start and auto-restart on crash." >&2
+                    echo "   To re-sync code: ./deployment/deploy.sh --sync" >&2
+                fi
+            fi
         fi
 
         echo "" >&2
