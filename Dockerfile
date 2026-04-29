@@ -21,7 +21,8 @@ RUN \
 # Install Python libraries for In-S8 tool
 RUN \
     python3.11 -m pip install --no-cache-dir \
-        "guidellm>=0.6.0" \
+        "guidellm>=0.6.0,<0.7" \
+        transformers \
         openai \
         httpx \
         pandas \
