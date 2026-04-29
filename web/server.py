@@ -58,7 +58,9 @@ CURRENT_TEST_PLAN = None  # Store test plan for deployment
 state_lock = RLock()
 
 # Active UI session guard — only one controlling session at a time
-_active_ui_session = None  # { 'sid': str, 'username': str, 'connected_at': str }
+_active_ui_session = None  # { 'sid': str, 'username': str, 'connected_at': str, 'last_heartbeat': float }
+_session_lock = RLock()
+_SESSION_TIMEOUT_SECS = 15  # Consider session dead if no heartbeat for this long
 
 # Initialize Flask application and SocketIO with gevent
 app = Flask(__name__, template_folder='templates')
@@ -2867,32 +2869,43 @@ data:
 def handle_connect():
     """Handle client connection — enforce single active UI tab."""
     global _active_ui_session
+    import time as _time
     from flask import request as flask_request
     sid = flask_request.sid
     username = session.get('user', 'unknown')
-
     tab_id = flask_request.args.get('tab_id', '')
 
-    if _active_ui_session and _active_ui_session['sid'] != sid:
-        # Same tab reconnecting after socket drop — just update the SID
-        if tab_id and _active_ui_session.get('tab_id') == tab_id:
-            _active_ui_session['sid'] = sid
-            print(f'Client {sid} ({username}) reconnected same tab')
+    with _session_lock:
+        # Check if existing session is stale (no heartbeat)
+        if _active_ui_session and _active_ui_session['sid'] != sid:
+            elapsed = _time.time() - _active_ui_session.get('last_heartbeat', 0)
+            if elapsed > _SESSION_TIMEOUT_SECS:
+                print(f'Stale session from {_active_ui_session["username"]} (no heartbeat for {elapsed:.0f}s) — clearing')
+                _active_ui_session = None
+
+        if _active_ui_session and _active_ui_session['sid'] != sid:
+            # Same tab reconnecting after socket drop — update the SID
+            if tab_id and _active_ui_session.get('tab_id') == tab_id:
+                _active_ui_session['sid'] = sid
+                _active_ui_session['last_heartbeat'] = _time.time()
+                print(f'Client {sid} ({username}) reconnected same tab')
+                _replay_state_to_client()
+                return
+
+            emit('session_locked', {
+                'username': _active_ui_session['username'],
+                'connected_at': _active_ui_session['connected_at'],
+            })
+            print(f'Client {sid} ({username}) blocked — UI in use by {_active_ui_session["username"]}')
             return
 
-        emit('session_locked', {
-            'username': _active_ui_session['username'],
-            'connected_at': _active_ui_session['connected_at'],
-        })
-        print(f'Client {sid} ({username}) blocked — UI in use by {_active_ui_session["username"]}')
-        return
-
-    _active_ui_session = {
-        'sid': sid,
-        'tab_id': tab_id,
-        'username': username,
-        'connected_at': datetime.now().strftime('%H:%M:%S'),
-    }
+        _active_ui_session = {
+            'sid': sid,
+            'tab_id': tab_id,
+            'username': username,
+            'connected_at': datetime.now().strftime('%H:%M:%S'),
+            'last_heartbeat': _time.time(),
+        }
     print(f'Client {sid} ({username}) is now the active UI session')
     _replay_state_to_client()
 
@@ -2945,31 +2958,35 @@ def _replay_state_to_client():
 def handle_take_over():
     """New client takes over — kick old session, keep optimization running."""
     global _active_ui_session
+    import time as _time
     from flask import request as flask_request
     sid = flask_request.sid
     username = session.get('user', 'unknown')
-
     tab_id = flask_request.args.get('tab_id', '')
 
-    if _active_ui_session and _active_ui_session['sid'] != sid:
-        old_sid = _active_ui_session['sid']
-        old_user = _active_ui_session['username']
-        socketio.emit('session_kicked', {
-            'taken_by': username,
-        }, to=old_sid)
-        try:
-            socketio.server.disconnect(old_sid, namespace='/')
-        except Exception:
-            pass
-        print(f'Session takeover: {username} kicked {old_user}')
+    with _session_lock:
+        if _active_ui_session and _active_ui_session['sid'] != sid:
+            old_sid = _active_ui_session['sid']
+            old_user = _active_ui_session['username']
+            socketio.emit('session_kicked', {
+                'taken_by': username,
+            }, to=old_sid)
+            try:
+                socketio.server.disconnect(old_sid, namespace='/')
+            except Exception:
+                pass
+            print(f'Session takeover: {username} kicked {old_user}')
 
-    _active_ui_session = {
-        'sid': sid,
-        'tab_id': tab_id,
-        'username': username,
-        'connected_at': datetime.now().strftime('%H:%M:%S'),
-    }
+        _active_ui_session = {
+            'sid': sid,
+            'tab_id': tab_id,
+            'username': username,
+            'connected_at': datetime.now().strftime('%H:%M:%S'),
+            'last_heartbeat': _time.time(),
+        }
+
     emit('session_granted')
+    _replay_state_to_client()
 
 
 @socketio.on('disconnect')
@@ -2978,11 +2995,23 @@ def handle_disconnect():
     global _active_ui_session
     from flask import request as flask_request
     sid = flask_request.sid
-    if _active_ui_session and _active_ui_session['sid'] == sid:
-        print(f'Active UI session disconnected ({_active_ui_session["username"]})')
-        _active_ui_session = None
-    else:
-        print(f'Non-active client disconnected ({sid})')
+    with _session_lock:
+        if _active_ui_session and _active_ui_session['sid'] == sid:
+            print(f'Active UI session disconnected ({_active_ui_session["username"]})')
+            _active_ui_session = None
+        else:
+            print(f'Non-active client disconnected ({sid})')
+
+
+@socketio.on('heartbeat')
+def handle_heartbeat():
+    """Update last heartbeat timestamp for the active session."""
+    import time as _time
+    from flask import request as flask_request
+    sid = flask_request.sid
+    with _session_lock:
+        if _active_ui_session and _active_ui_session['sid'] == sid:
+            _active_ui_session['last_heartbeat'] = _time.time()
 
 @socketio.on('save_config')
 def handle_save_config(data):

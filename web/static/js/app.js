@@ -1,6 +1,7 @@
 const tabId = Math.random().toString(36).slice(2, 10);
 const socket = io({ query: { tab_id: tabId } });
 let initialConnectDone = false;
+let _takeoverTimeout = null;
 
 // --- Session guard ---
 socket.on('session_locked', function(data) {
@@ -16,8 +17,16 @@ socket.on('session_kicked', function(data) {
 
 socket.on('session_granted', function() {
     document.getElementById('session-lock-modal').classList.remove('active');
+    // Clear takeover timeout since we got a response
+    if (_takeoverTimeout) { clearTimeout(_takeoverTimeout); _takeoverTimeout = null; }
+    // Reset button state
+    var btn = document.querySelector('#session-lock-modal .modal-footer button:last-child');
+    if (btn) { btn.disabled = false; btn.textContent = 'Take Over'; }
     loadConfig();
 });
+
+// Heartbeat — prove we're alive every 5 seconds
+setInterval(function() { socket.emit('heartbeat'); }, 5000);
 
 function sortReportTable(tableId, colIdx, type) {
     var table = document.getElementById(tableId);
@@ -52,17 +61,23 @@ function takeOverSession() {
     btn.disabled = true;
     btn.innerHTML = '<span style="display:inline-block;width:16px;height:16px;border:2px solid rgba(255,255,255,0.3);border-top-color:white;border-radius:50%;animation:spin 0.6s linear infinite;vertical-align:middle;margin-right:8px;"></span>Taking over...';
     socket.emit('take_over');
-    setTimeout(function() {
+    // If no response in 5 seconds, reset button and show error
+    _takeoverTimeout = setTimeout(function() {
         btn.disabled = false;
         btn.textContent = 'Take Over';
-    }, 3000);
+        // If modal is still showing, the takeover failed
+        if (document.getElementById('session-lock-modal').classList.contains('active')) {
+            btn.textContent = 'Retry Take Over';
+        }
+    }, 5000);
 }
 
 // Re-load config on reconnect (e.g. after server restart)
+// The server's connect handler will either grant access or send session_locked
 socket.on('connect', () => {
     if (initialConnectDone) {
-        console.log('Reconnected to server, reloading config...');
-        loadConfig();
+        console.log('Reconnected to server...');
+        // Server will replay state if we're still active, or send session_locked if not
     }
     initialConnectDone = true;
 });
