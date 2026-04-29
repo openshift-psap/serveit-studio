@@ -539,12 +539,20 @@ start_port_forward() {
     # Wrapper loop: reconnects when kubectl port-forward exits (e.g. server restart)
     (
         set +e
+        local failures=0
         while true; do
             start_time=$(date +%s)
             $kubectl_cmd port-forward -n "$namespace" svc/in-s8-optimizer-ui "${local_port}:5000" &>/dev/null
             elapsed=$(( $(date +%s) - start_time ))
-            if [[ $elapsed -lt 3 ]]; then
-                sleep 2
+            if [[ $elapsed -lt 5 ]]; then
+                failures=$((failures + 1))
+                # Exponential backoff: 2s, 4s, 8s, 16s, max 30s
+                local backoff=$((2 ** failures))
+                [[ $backoff -gt 30 ]] && backoff=30
+                sleep $backoff
+            else
+                failures=0
+                sleep 1
             fi
         done
     ) &
