@@ -1072,7 +1072,7 @@ class TestOrchestrator:
                 col = getattr(config, 'dataset_column', None)
                 if col:
                     column_mapper = f'{{"text_column": "{col}"}}'
-                log_callback(f'   Using dataset: {data_payload}', 'info')
+                log_callback(f'   Using dataset: {data_payload}')
             else:
                 # Synthetic workload mode
                 data_payload = f'prompt_tokens={config.isl},output_tokens={config.osl}'
