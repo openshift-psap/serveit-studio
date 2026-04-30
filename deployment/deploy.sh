@@ -708,7 +708,7 @@ sync_code_to_pod() {
     # Build remote manifest in a single exec call (batch via xargs)
     $kubectl_cmd exec -n ${namespace} "$pod_name" -- bash -c '
         cd /mnt/storage/app 2>/dev/null || exit 0
-        find . -type f -print0 | xargs -0 md5sum
+        find . -type f -not -path "*/__pycache__/*" -not -name ".DS_Store" -print0 | xargs -0 md5sum
     ' 2>/dev/null | awk '{print $1, $2}' | sort -k2 > "$remote_manifest"
 
     # Compare: find files to copy (new or changed hash)
