@@ -690,10 +690,19 @@ sync_code_to_pod() {
     $kubectl_cmd exec -n ${namespace} "$pod_name" -- mkdir -p /mnt/storage/app 2>/dev/null || true
 
     # Build local manifest: "md5 path" sorted by path (batch via xargs)
-    local find_excludes='-not -path ./.git/* -not -path ./.claude/* -not -path */__pycache__/* -not -name .DS_Store'
     (cd "$repo_root" && {
-        find . -type f $find_excludes -print0 | xargs -0 md5 -r 2>/dev/null ||
-        find . -type f $find_excludes -print0 | xargs -0 md5sum
+        find . -type f \
+            -not -path './.git/*' \
+            -not -path './.claude/*' \
+            -not -path '*/__pycache__/*' \
+            -not -name '.DS_Store' \
+            -print0 | xargs -0 md5 -r 2>/dev/null ||
+        find . -type f \
+            -not -path './.git/*' \
+            -not -path './.claude/*' \
+            -not -path '*/__pycache__/*' \
+            -not -name '.DS_Store' \
+            -print0 | xargs -0 md5sum
     }) | awk '{print $1, $2}' | sort -k2 > "$local_manifest"
 
     # Build remote manifest in a single exec call (batch via xargs)
