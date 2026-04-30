@@ -689,25 +689,17 @@ sync_code_to_pod() {
 
     $kubectl_cmd exec -n ${namespace} "$pod_name" -- mkdir -p /mnt/storage/app 2>/dev/null || true
 
-    # Build local manifest: "md5 path" sorted by path
-    (cd "$repo_root" && find . -type f \
-        -not -path './.git/*' \
-        -not -path './.claude/*' \
-        -not -path '*/__pycache__/*' \
-        -not -name '.DS_Store' \
-        -exec md5 -r {} \; 2>/dev/null || \
-     find . -type f \
-        -not -path './.git/*' \
-        -not -path './.claude/*' \
-        -not -path '*/__pycache__/*' \
-        -not -name '.DS_Store' \
-        -exec md5sum {} \;
-    ) | awk '{print $1, $2}' | sort -k2 > "$local_manifest"
+    # Build local manifest: "md5 path" sorted by path (batch via xargs)
+    local find_excludes='-not -path ./.git/* -not -path ./.claude/* -not -path */__pycache__/* -not -name .DS_Store'
+    (cd "$repo_root" && {
+        find . -type f $find_excludes -print0 | xargs -0 md5 -r 2>/dev/null ||
+        find . -type f $find_excludes -print0 | xargs -0 md5sum
+    }) | awk '{print $1, $2}' | sort -k2 > "$local_manifest"
 
-    # Build remote manifest in a single exec call
+    # Build remote manifest in a single exec call (batch via xargs)
     $kubectl_cmd exec -n ${namespace} "$pod_name" -- bash -c '
         cd /mnt/storage/app 2>/dev/null || exit 0
-        find . -type f -exec md5sum {} \;
+        find . -type f -print0 | xargs -0 md5sum
     ' 2>/dev/null | awk '{print $1, $2}' | sort -k2 > "$remote_manifest"
 
     # Compare: find files to copy (new or changed hash)
@@ -742,13 +734,12 @@ sync_code_to_pod() {
         fi
     fi
 
-    # Copy changed files
-    local copied=0
-    for f in "${to_copy[@]}"; do
-        local rel="${f#./}"
-        $kubectl_cmd cp "$repo_root/$rel" "${namespace}/${pod_name}:/mnt/storage/app/$rel" 2>/dev/null || true
-        copied=$((copied + 1))
-    done
+    # Copy changed files (up to 4 in parallel)
+    local copied=${#to_copy[@]}
+    printf '%s\n' "${to_copy[@]}" | xargs -P4 -I{} sh -c '
+        rel="${1#./}"
+        "'"$kubectl_cmd"'" cp "'"$repo_root"'/$rel" "'"${namespace}/${pod_name}"':/mnt/storage/app/$rel" 2>/dev/null || true
+    ' _ {}
 
     # Delete stale remote files
     local deleted=0
