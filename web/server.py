@@ -1882,8 +1882,9 @@ data:
                 cursor.execute('''
                     INSERT INTO optimization_runs
                     (run_name, model, isl, osl, num_users, status, created_at, goal, test_duration, max_gpus, use_achievable_qps, isl_stdev, osl_stdev, turns,
-                     latency_constraint_enabled, latency_constraint_ms, latency_constraint_percentile)
-                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                     latency_constraint_enabled, latency_constraint_ms, latency_constraint_percentile,
+                     workload_mode, dataset_source, dataset_column, dataset_max_output, rate_type, prefix_cache_hit_pct)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 ''', (run_name, model, isl, osl, num_users, 'running',
                       datetime.now().isoformat(), optimization_goal, test_duration, max_gpus,
                       1 if use_achievable_qps else 0,
@@ -1892,7 +1893,9 @@ data:
                       turns,
                       1 if latency_constraint_enabled else 0,
                       latency_constraint_ms,
-                      latency_constraint_percentile))
+                      latency_constraint_percentile,
+                      workload_mode, dataset_source, dataset_column, dataset_max_output,
+                      rate_type, prefix_cache_hit_pct))
                 run_id = cursor.lastrowid
 
         # Step 1: Choose optimization approach
