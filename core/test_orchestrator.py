@@ -1410,7 +1410,10 @@ class TestOrchestrator:
                 log_callback('=' * 60)
 
             from core import PrereqManager
-            prereq_mgr = PrereqManager(namespace=self.namespace)
+            prereq_mgr = PrereqManager(
+                namespace=self.namespace,
+                kubectl_runner=self.deployment_manager.kubectl
+            )
 
             try:
                 # Deploy prerequisites - this will create missing resources and skip existing ones

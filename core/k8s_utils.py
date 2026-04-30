@@ -13,6 +13,8 @@ from typing import Dict, List, Optional
 
 logger = logging.getLogger(__name__)
 
+_cached_kubectl_cmd: Optional[str] = None
+
 
 def detect_kubectl_command() -> str:
     """Detect whether to use kubectl or oc CLI.
@@ -23,18 +25,24 @@ def detect_kubectl_command() -> str:
     Raises:
         RuntimeError: If neither kubectl nor oc is found
     """
+    global _cached_kubectl_cmd
+    if _cached_kubectl_cmd is not None:
+        return _cached_kubectl_cmd
+
     # Check if oc is available
     try:
-        subprocess.run(['oc', 'version'], capture_output=True, check=True, timeout=5)
+        subprocess.run(['oc', 'version'], capture_output=True, check=True, timeout=10)
         logger.info("Using OpenShift CLI (oc)")
+        _cached_kubectl_cmd = 'oc'
         return 'oc'
     except (subprocess.CalledProcessError, FileNotFoundError, subprocess.TimeoutExpired):
         pass
 
     # Check if kubectl is available
     try:
-        subprocess.run(['kubectl', 'version', '--client'], capture_output=True, timeout=5)
+        subprocess.run(['kubectl', 'version', '--client'], capture_output=True, timeout=10)
         logger.info("Using Kubernetes CLI (kubectl)")
+        _cached_kubectl_cmd = 'kubectl'
         return 'kubectl'
     except (FileNotFoundError, subprocess.TimeoutExpired):
         raise RuntimeError("Neither kubectl nor oc found. Please install Kubernetes CLI.")

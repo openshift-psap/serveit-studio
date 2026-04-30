@@ -20,16 +20,18 @@ logger = logging.getLogger(__name__)
 class PrereqManager:
     """Manages prerequisite infrastructure deployment."""
 
-    def __init__(self, namespace: str = 'llm-d', kubeconfig: Optional[str] = None):
+    def __init__(self, namespace: str = 'llm-d', kubeconfig: Optional[str] = None,
+                 kubectl_runner: Optional[KubectlRunner] = None):
         """
         Initialize PrereqManager.
 
         Args:
             namespace: Kubernetes namespace
             kubeconfig: Path to kubeconfig file
+            kubectl_runner: Existing KubectlRunner to reuse (creates new if None)
         """
         self.namespace = namespace
-        self.kubectl = KubectlRunner(kubeconfig=kubeconfig, namespace=namespace)
+        self.kubectl = kubectl_runner or KubectlRunner(kubeconfig=kubeconfig, namespace=namespace)
         self.template_mgr = TemplateManager()
 
     def check_prereqs_exist(self, gaie_name: str = 'gaie-pd-epp',
