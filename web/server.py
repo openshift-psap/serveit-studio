@@ -1529,6 +1529,7 @@ def stream_job_logs(job_name: str, namespace: str):
                     'latency_constraint_ms': saved_config.get('latency_constraint_ms', 500),
                     'latency_constraint_percentile': saved_config.get('latency_constraint_percentile', 'p90'),
                     'tp_pair_top_n': saved_config.get('tp_pair_top_n', 2),
+                    'pd_search_mode': saved_config.get('pd_search_mode', 'smart'),
                     'selected_nodes': saved_config.get('selected_nodes', []),
                     'workload_mode': saved_config.get('workload_mode', 'synthetic'),
                     'dataset_source': saved_config.get('dataset_source'),
@@ -1820,6 +1821,7 @@ def run_optimization_background(data):
         latency_constraint_ms = int(data.get('latency_constraint_ms', 500))
         latency_constraint_percentile = data.get('latency_constraint_percentile', 'p90')
         tp_pair_top_n = int(data.get('tp_pair_top_n', 2))
+        pd_search_mode = data.get('pd_search_mode', 'smart')
         selected_nodes = data.get('selected_nodes') or []
         workload_mode = data.get('workload_mode', 'synthetic')
         dataset_source = data.get('dataset_source')
@@ -1998,6 +2000,7 @@ data:
                 # Steps 2 & 3 exhaustively test ALL valid TP values
                 max_pd_splits=0,  # 0 = full coverage (test all valid splits)
                 tp_pair_top_n=tp_pair_top_n,
+                pd_search_mode=pd_search_mode,
                 thanos_url=thanos_url,
                 image='ghcr.io/llm-d/llm-d-cuda:v0.5.1',
                 pvc_name='in-s8-model-cache',
@@ -3213,12 +3216,14 @@ def handle_resume_optimization(data):
         # Restore selected_nodes and advanced settings from saved config_json
         saved_selected_nodes = []
         saved_advanced_vllm = None
+        saved_pd_search_mode = 'smart'
         if run.get('config_json'):
             try:
                 import json as _json
                 saved_cfg = _json.loads(run['config_json'])
                 saved_selected_nodes = saved_cfg.get('selected_nodes', [])
                 saved_advanced_vllm = saved_cfg.get('advanced_vllm')
+                saved_pd_search_mode = saved_cfg.get('pd_search_mode', 'smart')
             except Exception:
                 pass
 
@@ -3255,6 +3260,7 @@ def handle_resume_optimization(data):
             'latency_constraint_enabled': bool(run.get('latency_constraint_enabled', 0)),
             'latency_constraint_ms': run.get('latency_constraint_ms', 500),
             'latency_constraint_percentile': run.get('latency_constraint_percentile', 'p90'),
+            'pd_search_mode': saved_pd_search_mode,
             'advanced_vllm': saved_advanced_vllm,
             'resume_run_id': run_id
         }
@@ -4420,6 +4426,7 @@ def handle_setup_storage(data):
                 'latency_constraint_ms': data.get('latency_constraint_ms', 500),
                 'latency_constraint_percentile': data.get('latency_constraint_percentile', 'p90'),
                 'tp_pair_top_n': data.get('tp_pair_top_n', 2),
+                'pd_search_mode': data.get('pd_search_mode', 'smart'),
                 'selected_nodes': data.get('selected_nodes') or [],
                 'workload_mode': data.get('workload_mode', 'synthetic'),
                 'dataset_source': data.get('dataset_source'),

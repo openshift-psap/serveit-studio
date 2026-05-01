@@ -77,6 +77,27 @@
                             </div>
                         </div>
 
+                        <!-- P/D Search Strategy (collapsible) -->
+                        <div style="border:2px solid #0891b2;border-radius:12px;overflow:hidden;margin-bottom:20px;">
+                            <div style="background:linear-gradient(135deg,#ecfeff,#cffafe);padding:14px 20px;cursor:pointer;display:flex;align-items:center;justify-content:space-between;" onclick="var b=document.getElementById('pd-search-body');var a=document.getElementById('pd-search-arrow');if(b.style.display==='none'){b.style.display='block';a.textContent='&#9662;';}else{b.style.display='none';a.textContent='&#9656;';}">
+                                <div>
+                                    <div style="font-weight:700;color:#155e75;font-size:1.05em;">P/D Split Strategy</div>
+                                    <div style="color:#0e7490;font-size:0.92em;margin-top:4px;">How to find the optimal prefill/decode pod ratio. Smart mode calculates it from calibration data; exhaustive tests every valid split.</div>
+                                </div>
+                                <div id="pd-search-arrow" style="font-size:1.4em;color:#155e75;font-weight:700;">&#9656;</div>
+                            </div>
+                            <div id="pd-search-body" style="display:none;padding:16px 20px;">
+                                <div style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 6px; margin-bottom: 12px;">
+                                    <button type="button" id="pd-search-smart" onclick="setPdSearchMode('smart')" style="padding:12px 0; border:2px solid var(--rh-red-primary); border-radius:6px; background:var(--rh-red-primary); color:white; font-weight:700; cursor:pointer; font-size:0.9em; text-align:center;">Smart (Recommended)</button>
+                                    <button type="button" id="pd-search-exhaustive" onclick="setPdSearchMode('exhaustive')" style="padding:12px 0; border:2px solid #cbd5e1; border-radius:6px; background:#FAFAFA; color:#475569; font-weight:700; cursor:pointer; font-size:0.9em; text-align:center;">Exhaustive</button>
+                                </div>
+                                <div style="background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 6px; padding: 12px; font-size: 0.8em; color: #475569; line-height: 1.6;">
+                                    <span style="font-family: var(--font-mono); color: #0369a1;">Smart</span> &mdash; Uses Steps 2-3 throughput data to calculate the balanced P/D ratio mathematically. Tests ~3 configs per TP pair. Fast with near-identical accuracy.<br>
+                                    <span style="font-family: var(--font-mono); color: #0369a1;">Exhaustive</span> &mdash; Tests every valid split for each TP pair. More thorough but can be 50+ tests.
+                                </div>
+                            </div>
+                        </div>
+
                         <!-- Response Time Guarantee (collapsible + toggle) -->
                         <div style="border:2px solid #d97706;border-radius:12px;overflow:hidden;margin-bottom:20px;">
                             <div style="background:linear-gradient(135deg,#fffbeb,#fef3c7);padding:14px 20px;cursor:pointer;display:flex;align-items:center;justify-content:space-between;" onclick="var b=document.getElementById('latency-sla-body');var a=document.getElementById('latency-sla-arrow');if(b.style.display==='none'){b.style.display='block';a.textContent='▾';}else{b.style.display='none';a.textContent='▸';}">

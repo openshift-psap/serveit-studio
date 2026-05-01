@@ -108,6 +108,7 @@ let config = {
     dataset_column: null,
     dataset_max_output: 256,
     prefix_cache_hit_pct: 0,
+    pd_search_mode: 'smart',
     advanced_vllm: null
 };
 
@@ -358,6 +359,11 @@ function updateUIFromConfig() {
     if (config.prefix_cache_hit_pct && document.getElementById('prefix-cache-slider')) {
         document.getElementById('prefix-cache-slider').value = config.prefix_cache_hit_pct;
         document.getElementById('prefix-cache-value').textContent = config.prefix_cache_hit_pct + '%';
+    }
+
+    // Restore PD search mode
+    if (config.pd_search_mode && document.getElementById('pd-search-smart')) {
+        setPdSearchMode(config.pd_search_mode);
     }
 
     // Restore advanced vLLM settings
@@ -1240,6 +1246,24 @@ function setTpPairTopN(n) {
     saveConfig();
 }
 
+function setPdSearchMode(mode) {
+    config.pd_search_mode = mode;
+    ['smart', 'exhaustive'].forEach(m => {
+        const btn = document.getElementById('pd-search-' + m);
+        if (!btn) return;
+        if (m === mode) {
+            btn.style.background = 'var(--rh-red-primary)';
+            btn.style.color = 'white';
+            btn.style.borderColor = 'var(--rh-red-primary)';
+        } else {
+            btn.style.background = '#FAFAFA';
+            btn.style.color = '#475569';
+            btn.style.borderColor = '#cbd5e1';
+        }
+    });
+    saveConfig();
+}
+
 // Step navigation
 document.getElementById('next-step1').addEventListener('click', () => {
     if (!config.goal) {
@@ -1493,6 +1517,7 @@ document.getElementById('start-optimization').addEventListener('click', () => {
         latency_constraint_ms: config.latency_constraint_ms || 500,
         latency_constraint_percentile: config.latency_constraint_percentile || 'p90',
         tp_pair_top_n: config.tp_pair_top_n || 2,
+        pd_search_mode: config.pd_search_mode || 'smart',
         selected_nodes: config.selected_nodes || [],
         workload_mode: config.workload_mode || 'synthetic',
         dataset_source: config.dataset_source || null,

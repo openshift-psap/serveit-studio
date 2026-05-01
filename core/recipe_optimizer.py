@@ -55,6 +55,7 @@ class RecipeOptimizerConfig:
     # Step 7: P/D split search
     max_pd_splits: int = 0  # 0 = full coverage, >0 = limit splits
     tp_pair_top_n: int = 2  # Top-N prefill/decode TPs to cross-product (1=fast, 2=thorough)
+    pd_search_mode: str = 'smart'  # 'smart' (calculated ~3/pair) or 'exhaustive' (all splits)
 
     # Infrastructure
     thanos_url: Optional[str] = None
@@ -778,6 +779,8 @@ class RecipeOptimizer:
         bs = self._compute_block_size()
         self.log(f"Block size: {bs} (auto-tuned from seq_len={self.config.isl + self.config.osl}"
                  f"{', prefix caching' if self.config.prefix_cache_hit_pct > 0 else ''})", 'info')
+        pd_mode = 'Smart (~3/pair)' if self.config.pd_search_mode == 'smart' else 'Exhaustive (all splits)'
+        self.log(f"PD search: {pd_mode}", 'info')
         if self.completed_tests:
             self.log(f"Mode: RESUME ({len(self.completed_tests)} completed tests will be skipped)", 'info')
         else:
@@ -1221,6 +1224,81 @@ class RecipeOptimizer:
                 ))
         return splits
 
+    def _smart_pd_search(self, tp_pairs: List[tuple]) -> List[FeasibleSplit]:
+        """Calculate mathematically optimal P/D splits from calibration data.
+
+        For each TP pair, uses measured per-pod throughput from Steps 2-3 to
+        compute the balanced prefill/decode ratio, then returns ~3 candidate
+        splits around that optimum.
+        """
+        import math
+
+        prefill_by_tp = {r['tp']: r for r in self.prefill_tp_results}
+        decode_by_tp = {r['tp']: r for r in self.decode_tp_results}
+
+        smart_splits = []
+
+        for ptp, dtp in tp_pairs:
+            prefill_thr = prefill_by_tp.get(ptp, {}).get('throughput_p90', 0)
+            decode_thr = decode_by_tp.get(dtp, {}).get('throughput_p90', 0)
+
+            if prefill_thr <= 0 or decode_thr <= 0:
+                self.log(f"  ⚠️  Skipping PTP={ptp}/DTP={dtp}: missing throughput data", 'warning')
+                continue
+
+            all_valid = self._generate_splits_for_tp_pair(ptp, dtp)
+            if not all_valid:
+                continue
+
+            usable_gpus = self._usable_gpus_for_tp(max(ptp, dtp))
+            r = decode_thr / prefill_thr
+            d_ideal = usable_gpus / (r * ptp + dtp)
+
+            candidates_d = sorted({
+                max(1, math.floor(d_ideal) - 1),
+                max(1, math.floor(d_ideal)),
+                max(1, math.ceil(d_ideal)),
+                math.ceil(d_ideal) + 1,
+            })
+
+            self.log(f"  Smart search PTP={ptp}/DTP={dtp}:", 'info')
+            self.log(f"    Prefill: {prefill_thr:.2f} req/s/pod, Decode: {decode_thr:.2f} req/s/pod", 'info')
+            self.log(f"    Balanced ratio P:D = {r:.2f}:1, ideal decode pods = {d_ideal:.1f}", 'info')
+
+            valid_by_decode = {s.decode_pods: s for s in all_valid}
+            selected = []
+            for d in candidates_d:
+                if d in valid_by_decode:
+                    selected.append(valid_by_decode[d])
+
+            if len(selected) < 2 and all_valid:
+                by_distance = sorted(all_valid, key=lambda s: abs(s.decode_pods - d_ideal))
+                for s in by_distance:
+                    if s not in selected:
+                        selected.append(s)
+                    if len(selected) >= 3:
+                        break
+
+            for s in selected:
+                self.log(f"    -> {s.prefill_pods}P + {s.decode_pods}D "
+                         f"({s.prefill_pct:.1f}% prefill)", 'info')
+
+            smart_splits.extend(selected)
+
+        seen = set()
+        unique = []
+        for s in smart_splits:
+            key = (s.prefill_pods, s.decode_pods, s.prefill_tp, s.decode_tp)
+            if key not in seen:
+                seen.add(key)
+                unique.append(s)
+
+        unique.sort(key=lambda s: (s.prefill_tp, s.decode_tp, s.prefill_pct))
+
+        exhaustive_count = sum(len(self._generate_splits_for_tp_pair(p, d)) for p, d in tp_pairs)
+        self.log(f"  Smart PD search: {len(unique)} candidates (vs {exhaustive_count} exhaustive)", 'success')
+        return unique
+
     def _calculate_feasible_splits(self):
         """
         Steps 4-5: Calculate ideal P/D ratio and select splits to test.
@@ -1346,76 +1424,100 @@ class RecipeOptimizer:
 
         self.log(f"  Total valid splits: {len(all_valid_splits)}", 'info')
 
-        # On resume: include completed step7 splits AND any remaining planned splits
+        # Select splits to test based on search mode
         import re
         resumed_step7 = {name: row for name, row in self.completed_tests.items() if name.startswith('step7-')}
-        max_splits = self.config.max_pd_splits  # 0 = full coverage
 
-        if resumed_step7:
-            self.log(f"  Resuming: found {len(resumed_step7)} completed step7 tests", 'info')
+        if self.config.pd_search_mode == 'smart':
+            self.log(f"\n  Search mode: Smart (calculated ~3 splits per TP pair)", 'info')
+            planned = self._smart_pd_search(tp_pairs_to_test)
 
-            # Build a lookup of all valid splits by their test_id
-            split_by_id = {}
-            for s in all_valid_splits:
-                tid = f"step7-{s.prefill_pods}p{s.decode_pods}d-ptp{s.prefill_tp}-dtp{s.decode_tp}"
-                split_by_id[tid] = s
-
-            # Start with completed splits
-            completed_split_ids = set()
-            self.feasible_splits = []
-            for name in sorted(resumed_step7.keys()):
-                if name in split_by_id:
-                    self.feasible_splits.append(split_by_id[name])
-                    completed_split_ids.add(name)
-                else:
-                    m = re.match(r'step7-(\d+)p(\d+)d-ptp(\d+)-dtp(\d+)', name)
-                    if m:
-                        pp, dp, ptp, dtp = int(m.group(1)), int(m.group(2)), int(m.group(3)), int(m.group(4))
-                        self.feasible_splits.append(FeasibleSplit(
-                            prefill_pods=pp, decode_pods=dp,
-                            prefill_tp=ptp, decode_tp=dtp,
-                            prefill_gpus=pp * ptp, decode_gpus=dp * dtp,
-                            total_gpus=pp * ptp + dp * dtp,
-                            prefill_pct=(pp * ptp / (pp * ptp + dp * dtp)) * 100
-                        ))
-                        completed_split_ids.add(name)
-
-            # Add remaining un-tested splits
-            candidates = [s for s in all_valid_splits
-                          if f"step7-{s.prefill_pods}p{s.decode_pods}d-ptp{s.prefill_tp}-dtp{s.decode_tp}" not in completed_split_ids]
-            if max_splits > 0:
-                remaining_slots = max_splits - len(self.feasible_splits)
-                if remaining_slots > 0:
-                    candidates.sort(key=lambda s: abs(s.prefill_pct - self.ideal_prefill_pct))
-                    self.feasible_splits.extend(candidates[:remaining_slots])
+            if resumed_step7:
+                self.log(f"  Resuming: found {len(resumed_step7)} completed step7 tests", 'info')
+                planned_ids = {f"step7-{s.prefill_pods}p{s.decode_pods}d-ptp{s.prefill_tp}-dtp{s.decode_tp}" for s in planned}
+                self.feasible_splits = list(planned)
+                for name, row in resumed_step7.items():
+                    if name not in planned_ids:
+                        m = re.match(r'step7-(\d+)p(\d+)d-ptp(\d+)-dtp(\d+)', name)
+                        if m:
+                            pp, dp, ptp_v, dtp_v = int(m.group(1)), int(m.group(2)), int(m.group(3)), int(m.group(4))
+                            self.feasible_splits.append(FeasibleSplit(
+                                prefill_pods=pp, decode_pods=dp,
+                                prefill_tp=ptp_v, decode_tp=dtp_v,
+                                prefill_gpus=pp * ptp_v, decode_gpus=dp * dtp_v,
+                                total_gpus=pp * ptp_v + dp * dtp_v,
+                                prefill_pct=(pp * ptp_v / (pp * ptp_v + dp * dtp_v)) * 100
+                            ))
             else:
-                self.feasible_splits.extend(candidates)
+                self.feasible_splits = planned
 
-            self.feasible_splits.sort(key=lambda s: (s.prefill_tp, s.decode_tp, s.prefill_pct))
-        elif max_splits <= 0 or len(all_valid_splits) <= max_splits:
-            self.feasible_splits = all_valid_splits
             self.feasible_splits.sort(key=lambda s: (s.prefill_tp, s.decode_tp, s.prefill_pct))
         else:
-            # max_pd_splits limits: pick best per pair, fill remaining by proximity
-            by_pair = {}
-            for s in all_valid_splits:
-                key = (s.prefill_tp, s.decode_tp)
-                by_pair.setdefault(key, []).append(s)
+            # Exhaustive mode: test all valid splits (original behavior)
+            self.log(f"\n  Search mode: Exhaustive (all valid splits)", 'info')
+            max_splits = self.config.max_pd_splits
 
-            selected = []
-            for key, splits in by_pair.items():
-                best = min(splits, key=lambda s: abs(s.prefill_pct - self.ideal_prefill_pct))
-                selected.append(best)
+            if resumed_step7:
+                self.log(f"  Resuming: found {len(resumed_step7)} completed step7 tests", 'info')
 
-            selected_set = set(id(s) for s in selected)
-            remaining = [s for s in all_valid_splits if id(s) not in selected_set]
-            remaining.sort(key=lambda s: abs(s.prefill_pct - self.ideal_prefill_pct))
-            slots_left = max_splits - len(selected)
-            if slots_left > 0:
-                selected.extend(remaining[:slots_left])
+                split_by_id = {}
+                for s in all_valid_splits:
+                    tid = f"step7-{s.prefill_pods}p{s.decode_pods}d-ptp{s.prefill_tp}-dtp{s.decode_tp}"
+                    split_by_id[tid] = s
 
-            self.feasible_splits = selected
-            self.feasible_splits.sort(key=lambda s: (s.prefill_tp, s.decode_tp, s.prefill_pct))
+                completed_split_ids = set()
+                self.feasible_splits = []
+                for name in sorted(resumed_step7.keys()):
+                    if name in split_by_id:
+                        self.feasible_splits.append(split_by_id[name])
+                        completed_split_ids.add(name)
+                    else:
+                        m = re.match(r'step7-(\d+)p(\d+)d-ptp(\d+)-dtp(\d+)', name)
+                        if m:
+                            pp, dp, ptp_v, dtp_v = int(m.group(1)), int(m.group(2)), int(m.group(3)), int(m.group(4))
+                            self.feasible_splits.append(FeasibleSplit(
+                                prefill_pods=pp, decode_pods=dp,
+                                prefill_tp=ptp_v, decode_tp=dtp_v,
+                                prefill_gpus=pp * ptp_v, decode_gpus=dp * dtp_v,
+                                total_gpus=pp * ptp_v + dp * dtp_v,
+                                prefill_pct=(pp * ptp_v / (pp * ptp_v + dp * dtp_v)) * 100
+                            ))
+                            completed_split_ids.add(name)
+
+                candidates = [s for s in all_valid_splits
+                              if f"step7-{s.prefill_pods}p{s.decode_pods}d-ptp{s.prefill_tp}-dtp{s.decode_tp}" not in completed_split_ids]
+                if max_splits > 0:
+                    remaining_slots = max_splits - len(self.feasible_splits)
+                    if remaining_slots > 0:
+                        candidates.sort(key=lambda s: abs(s.prefill_pct - self.ideal_prefill_pct))
+                        self.feasible_splits.extend(candidates[:remaining_slots])
+                else:
+                    self.feasible_splits.extend(candidates)
+
+                self.feasible_splits.sort(key=lambda s: (s.prefill_tp, s.decode_tp, s.prefill_pct))
+            elif max_splits <= 0 or len(all_valid_splits) <= max_splits:
+                self.feasible_splits = all_valid_splits
+                self.feasible_splits.sort(key=lambda s: (s.prefill_tp, s.decode_tp, s.prefill_pct))
+            else:
+                by_pair = {}
+                for s in all_valid_splits:
+                    key = (s.prefill_tp, s.decode_tp)
+                    by_pair.setdefault(key, []).append(s)
+
+                selected = []
+                for key, splits in by_pair.items():
+                    best = min(splits, key=lambda s: abs(s.prefill_pct - self.ideal_prefill_pct))
+                    selected.append(best)
+
+                selected_set = set(id(s) for s in selected)
+                remaining = [s for s in all_valid_splits if id(s) not in selected_set]
+                remaining.sort(key=lambda s: abs(s.prefill_pct - self.ideal_prefill_pct))
+                slots_left = max_splits - len(selected)
+                if slots_left > 0:
+                    selected.extend(remaining[:slots_left])
+
+                self.feasible_splits = selected
+                self.feasible_splits.sort(key=lambda s: (s.prefill_tp, s.decode_tp, s.prefill_pct))
 
         for split in self.feasible_splits:
             self.log(f"  ✓ {split.prefill_pods}P×TP{split.prefill_tp} + {split.decode_pods}D×TP{split.decode_tp} "
