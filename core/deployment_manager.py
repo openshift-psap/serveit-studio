@@ -449,9 +449,8 @@ class DeploymentManager:
                 last_status = status
                 last_progress_log = time.time()
 
-            if status.ready:
-                # Cross-check: verify pods are actually ready (LWS status can be stale
-                # right after creation before the controller reconciles)
+            if status.ready or (status.pods_running == status.pods_expected and status.pods_expected > 0):
+                # Check actual pod readiness (LWS readyReplicas can lag behind)
                 if self._verify_pods_ready(test_id, status.pods_expected):
                     if log_callback:
                         elapsed_suffix = f" ({elapsed}s)" if elapsed > 0 else ""
@@ -460,7 +459,7 @@ class DeploymentManager:
                 else:
                     if log_callback and status_changed:
                         log_callback(
-                            f"   ⏳ LWS reports ready but pods not yet serving — waiting for model load..."
+                            f"   ⏳ Pods running but not yet serving — waiting for model load..."
                         )
 
             # Periodically check for pods stuck in Pending (DRA allocation failure)
