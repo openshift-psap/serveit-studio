@@ -1067,11 +1067,8 @@ class TestOrchestrator:
             if workload_mode == 'dataset' and getattr(config, 'dataset_source', None):
                 # Custom dataset mode
                 data_payload = config.dataset_source
-                max_output = getattr(config, 'dataset_max_output', 256) or 256
-                data_args = f'{{"output_tokens": {max_output}}}'
-                col = getattr(config, 'dataset_column', None)
-                if col:
-                    column_mapper = f'{{"text_column": "{col}"}}'
+                col = getattr(config, 'dataset_column', None) or 'prompt'
+                column_mapper = f'{{"text_column": "{col}"}}'
                 log_callback(f'   Using dataset: {data_payload}')
             else:
                 # Synthetic workload mode

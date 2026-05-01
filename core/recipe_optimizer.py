@@ -2621,7 +2621,7 @@ class RecipeOptimizer:
             rows = []
             # Shared rows: fixed prompt and fixed OSL (identical for cache hits)
             for _ in range(num_shared):
-                rows.append({"prompt": shared_prompt, "output_tokens": osl})
+                rows.append({"prompt": shared_prompt, "output_tokens_count": osl})
             # Unique rows: vary length around ISL/OSL using stdev if configured
             for i in range(num_unique):
                 unique_rng = random.Random(seed + i + 1)
@@ -2633,7 +2633,7 @@ class RecipeOptimizer:
                     row_osl = max(1, int(unique_rng.gauss(osl, osl_stdev)))
                 else:
                     row_osl = osl
-                rows.append({"prompt": make_prompt(row_isl, unique_rng), "output_tokens": row_osl})
+                rows.append({"prompt": make_prompt(row_isl, unique_rng), "output_tokens_count": row_osl})
 
             rng.shuffle(rows)
 
