@@ -124,7 +124,7 @@ spec:
                   --port 8000 \
                   --tensor-parallel-size {{ prefill_tp }} \
 {% if pipeline_parallel_size %}                  --pipeline-parallel-size {{ pipeline_parallel_size }} \
-{% endif %}                  --block-size {{ block_size | default(128) }} \
+{% endif %}                  --block-size {{ block_size | default(16) }} \
                   --kv-transfer-config '{"kv_connector":"{{ kv_connector }}", "kv_role":"kv_both"}' \
                   --disable-uvicorn-access-log \
 {% if disable_log_requests %}                  --disable-log-requests \
