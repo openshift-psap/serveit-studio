@@ -52,12 +52,12 @@
                             </div>
                         </div>
 
-                        <!-- Search Thoroughness (collapsible) -->
+                        <!-- TP Pair Breadth (collapsible) -->
                         <div style="border:2px solid #8b5cf6;border-radius:12px;overflow:hidden;margin-bottom:20px;">
                             <div style="background:linear-gradient(135deg,#f5f3ff,#ede9fe);padding:14px 20px;cursor:pointer;display:flex;align-items:center;justify-content:space-between;" onclick="var b=document.getElementById('tp-search-body');var a=document.getElementById('tp-search-arrow');if(b.style.display==='none'){b.style.display='block';a.textContent='▾';}else{b.style.display='none';a.textContent='▸';}">
                                 <div>
-                                    <div style="font-weight:700;color:#5b21b6;font-size:1.05em;">🔍 Search Thoroughness</div>
-                                    <div style="color:#6d28d9;font-size:0.92em;margin-top:4px;">How many GPU-splitting strategies to try. More options mean a more thorough search but longer total test time.</div>
+                                    <div style="font-weight:700;color:#5b21b6;font-size:1.05em;">TP Pair Breadth</div>
+                                    <div style="color:#6d28d9;font-size:0.92em;margin-top:4px;">How many Prefill TP &times; Decode TP combinations to explore. Steps 2-3 measure all TP values &mdash; this controls how many of those are combined for P/D testing.</div>
                                 </div>
                                 <div id="tp-search-arrow" style="font-size:1.4em;color:#5b21b6;font-weight:700;">▸</div>
                             </div>
@@ -69,20 +69,21 @@
                                     <button type="button" class="stop-mode-btn" id="tp-depth-4" onclick="setTpPairTopN(4)" style="padding:12px 0; border:2px solid #cbd5e1; border-radius:6px; background:#FAFAFA; color:#475569; font-weight:700; cursor:pointer; font-size:0.9em; text-align:center;">4 - Full</button>
                                 </div>
                                 <div style="background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 6px; padding: 12px; font-size: 0.8em; color: #475569; line-height: 1.6;">
-                                    <span style="font-family: var(--font-mono); color: #0369a1;">1 - Fast</span> &rarr; Tests only the single best GPU split. Quickest, but may miss better options.<br>
-                                    <span style="font-family: var(--font-mono); color: #0369a1;">2 - Default</span> &rarr; Tests a handful of top GPU splits. Good balance of speed and quality. <strong>Recommended.</strong><br>
-                                    <span style="font-family: var(--font-mono); color: #0369a1;">3 - Deep</span> &rarr; Tests many more GPU splits. Takes longer but finds more nuanced configurations.<br>
-                                    <span style="font-family: var(--font-mono); color: #0369a1;">4 - Full</span> &rarr; Tests every possible GPU split. Most thorough but can take significantly longer.
+                                    Controls how many of the best Prefill TP and Decode TP values (from Steps 2-3) are crossed to form TP pairs. Each pair then gets its own set of P/D ratio tests.<br><br>
+                                    <span style="font-family: var(--font-mono); color: #0369a1;">1</span> &rarr; Only the single best prefill TP &times; best decode TP. Fastest &mdash; 1 TP pair.<br>
+                                    <span style="font-family: var(--font-mono); color: #0369a1;">2</span> &rarr; Top-2 &times; Top-2 = up to 4 TP pairs. Good balance. <strong>Recommended.</strong><br>
+                                    <span style="font-family: var(--font-mono); color: #0369a1;">3</span> &rarr; Top-3 &times; Top-3 = up to 9 TP pairs. More coverage.<br>
+                                    <span style="font-family: var(--font-mono); color: #0369a1;">4</span> &rarr; All 4 &times; All 4 = up to 16 TP pairs. Most thorough.
                                 </div>
                             </div>
                         </div>
 
-                        <!-- P/D Search Strategy (collapsible) -->
+                        <!-- P/D Split Strategy (collapsible) -->
                         <div style="border:2px solid #0891b2;border-radius:12px;overflow:hidden;margin-bottom:20px;">
                             <div style="background:linear-gradient(135deg,#ecfeff,#cffafe);padding:14px 20px;cursor:pointer;display:flex;align-items:center;justify-content:space-between;" onclick="var b=document.getElementById('pd-search-body');var a=document.getElementById('pd-search-arrow');if(b.style.display==='none'){b.style.display='block';a.textContent='&#9662;';}else{b.style.display='none';a.textContent='&#9656;';}">
                                 <div>
-                                    <div style="font-weight:700;color:#155e75;font-size:1.05em;">P/D Split Strategy</div>
-                                    <div style="color:#0e7490;font-size:0.92em;margin-top:4px;">How to find the optimal prefill/decode pod ratio. Smart mode calculates it from calibration data; exhaustive tests every valid split.</div>
+                                    <div style="font-weight:700;color:#155e75;font-size:1.05em;">P/D Ratio Search</div>
+                                    <div style="color:#0e7490;font-size:0.92em;margin-top:4px;">For each TP pair above, how many prefill-vs-decode pod ratios to test.</div>
                                 </div>
                                 <div id="pd-search-arrow" style="font-size:1.4em;color:#155e75;font-weight:700;">&#9656;</div>
                             </div>
@@ -92,8 +93,9 @@
                                     <button type="button" id="pd-search-exhaustive" onclick="setPdSearchMode('exhaustive')" style="padding:12px 0; border:2px solid #cbd5e1; border-radius:6px; background:#FAFAFA; color:#475569; font-weight:700; cursor:pointer; font-size:0.9em; text-align:center;">Exhaustive</button>
                                 </div>
                                 <div style="background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 6px; padding: 12px; font-size: 0.8em; color: #475569; line-height: 1.6;">
-                                    <span style="font-family: var(--font-mono); color: #0369a1;">Smart</span> &mdash; Uses Steps 2-3 throughput data to calculate the balanced P/D ratio mathematically. Tests ~3 configs per TP pair. Fast with near-identical accuracy.<br>
-                                    <span style="font-family: var(--font-mono); color: #0369a1;">Exhaustive</span> &mdash; Tests every valid split for each TP pair. More thorough but can be 50+ tests.
+                                    For each TP pair, there are many ways to split GPUs between prefill and decode pods (e.g. 2 prefill + 6 decode, or 3 prefill + 4 decode). This controls how many of those ratios are actually deployed and tested.<br><br>
+                                    <span style="font-family: var(--font-mono); color: #0369a1;">Smart</span> &mdash; Uses the throughput measured in Steps 2-3 to calculate where the prefill/decode pipeline is balanced, then tests only ~3 ratios around that optimum. Much faster, same accuracy in practice.<br>
+                                    <span style="font-family: var(--font-mono); color: #0369a1;">Exhaustive</span> &mdash; Tests every valid pod ratio for each TP pair. Guarantees no split is missed, but can run 50+ tests on large clusters.
                                 </div>
                             </div>
                         </div>
