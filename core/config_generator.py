@@ -64,6 +64,7 @@ class TestConfig:
     dtype: Optional[str] = None  # None = vLLM auto-detects
     kv_cache_dtype: Optional[str] = None  # None = auto
     pipeline_parallel_size: Optional[int] = None  # None = 1 (default)
+    block_size: int = 16  # KV cache block size (auto-tuned from ISL+OSL)
     trust_remote_code: bool = True
     disable_log_requests: bool = True
     memory_request: str = '64Gi'  # System RAM per pod (overridden by dynamic calculation)

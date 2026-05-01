@@ -632,6 +632,22 @@ class RecipeOptimizer:
             self.cluster_resources.nodes, self.config.network_type or 'nad'
         )
 
+    def _compute_block_size(self) -> int:
+        """Compute optimal vLLM KV cache block size.
+
+        block_size = next_power_of_2(sqrt(ISL + OSL)), clamped to [16, 128].
+        With prefix caching enabled, floor is 128 for better prefix matching.
+        """
+        import math
+        seq_len = self.config.isl + self.config.osl
+        raw = math.sqrt(seq_len)
+        from core.utils import next_power_of_2
+        bs = next_power_of_2(max(1, int(raw)))
+        bs = max(16, min(128, bs))
+        if self.config.prefix_cache_hit_pct > 0:
+            bs = 128
+        return bs
+
     def _detect_rdma_nics_per_node(self) -> int:
         """
         Get physical NIC count per node from scanner results.
@@ -762,6 +778,9 @@ class RecipeOptimizer:
         rate_label = f"Concurrency={int(self.config.qps)}" if self.config.rate_type == 'concurrent' else f"Rate={int(self.config.qps)} req/s ({self.config.rate_type})"
         self.log(f"Workload: {isl_s}, {osl_s}, {rate_label}{turns_s}", 'info')
         self.log(f"Resources: {self.config.total_gpus} GPUs available", 'info')
+        bs = self._compute_block_size()
+        self.log(f"Block size: {bs} (auto-tuned from seq_len={self.config.isl + self.config.osl}"
+                 f"{', prefix caching' if self.config.prefix_cache_hit_pct > 0 else ''})", 'info')
         if self.completed_tests:
             self.log(f"Mode: RESUME ({len(self.completed_tests)} completed tests will be skipped)", 'info')
         else:
@@ -2117,6 +2136,7 @@ class RecipeOptimizer:
             dataset_source=None if is_calibration else self.config.dataset_source,
             dataset_column=None if is_calibration else self.config.dataset_column,
             dataset_max_output=self.config.dataset_max_output or 256,
+            block_size=self._compute_block_size(),
         )
         return self._apply_advanced_vllm(cfg) if not is_calibration else cfg
 
@@ -2239,12 +2259,13 @@ class RecipeOptimizer:
             'kv_cache_dtype': 'kv_cache_dtype',
             'pipeline_parallel_size': 'pipeline_parallel_size',
             'tool_call_parser': 'tool_call_parser',
+            'block_size': 'block_size',
         }
         for key, attr in val_fields.items():
             setting = adv.get(key)
             if setting and setting.get('mode') == 'custom' and setting.get('value') is not None:
                 val = setting['value']
-                if attr in ('max_model_len', 'max_num_seqs', 'max_num_batched_tokens', 'pipeline_parallel_size'):
+                if attr in ('max_model_len', 'max_num_seqs', 'max_num_batched_tokens', 'pipeline_parallel_size', 'block_size'):
                     val = int(val)
                 elif attr == 'gpu_memory_utilization':
                     val = float(val)
@@ -2341,6 +2362,7 @@ class RecipeOptimizer:
             dataset_source=self.config.dataset_source,
             dataset_column=self.config.dataset_column,
             dataset_max_output=self.config.dataset_max_output or 256,
+            block_size=self._compute_block_size(),
         )
         return self._apply_advanced_vllm(cfg)
 
@@ -2416,6 +2438,7 @@ class RecipeOptimizer:
             dataset_source=self.config.dataset_source,
             dataset_column=self.config.dataset_column,
             dataset_max_output=self.config.dataset_max_output or 256,
+            block_size=self._compute_block_size(),
         )
         return self._apply_advanced_vllm(cfg)
 

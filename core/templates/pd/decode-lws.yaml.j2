@@ -144,7 +144,7 @@ spec:
                   --tensor-parallel-size ${TP_SIZE} \
                   --data-parallel-size ${DP_SIZE} \
 {% if pipeline_parallel_size %}                  --pipeline-parallel-size {{ pipeline_parallel_size }} \
-{% endif %}                  --block-size 128 \
+{% endif %}                  --block-size {{ block_size | default(128) }} \
                   --kv-transfer-config '{"kv_connector":"{{ kv_connector }}", "kv_role":"kv_both"}' \
                   --disable-uvicorn-access-log \
 {% if disable_log_requests %}                  --disable-log-requests \

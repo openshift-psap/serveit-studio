@@ -97,7 +97,8 @@ spec:
 {% if disable_log_requests %}                  --disable-log-requests \
 {% endif %}                  --tensor-parallel-size {{ tensor_parallelism }} \
 {% if pipeline_parallel_size %}                  --pipeline-parallel-size {{ pipeline_parallel_size }} \
-{% endif %}                  --max-model-len {{ max_model_len }} \
+{% endif %}                  --block-size {{ block_size | default(16) }} \
+                  --max-model-len {{ max_model_len }} \
                   --gpu-memory-utilization {{ gpu_memory_utilization }}{% if enable_prefix_caching %} \
                   --enable-prefix-caching{% endif %}{% if disable_custom_all_reduce %} \
                   --disable-custom-all-reduce{% endif %}{% if dtype %} \
