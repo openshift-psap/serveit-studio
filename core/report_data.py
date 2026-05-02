@@ -51,6 +51,7 @@ class TestResult:
     # Raw data
     metrics_json: Optional[str]
     manifests_yaml: Optional[str]
+    test_config_json: Optional[str] = None
 
     @property
     def total_gpus(self) -> int:
@@ -171,11 +172,15 @@ class ReportDataLoader:
                 except (ValueError, IndexError):
                     pass
 
-            # Safely read manifests_yaml (may not exist in older DBs)
+            # Safely read optional fields (may not exist in older DBs)
             try:
                 manifests_yaml = row['manifests_yaml']
             except (IndexError, KeyError):
                 manifests_yaml = None
+            try:
+                test_config_json = row['test_config_json']
+            except (IndexError, KeyError):
+                test_config_json = None
 
             results.append(TestResult(
                 id=row['id'],
@@ -204,7 +209,8 @@ class ReportDataLoader:
                 started_at=row['started_at'],
                 completed_at=row['completed_at'],
                 metrics_json=row['metrics_json'],
-                manifests_yaml=manifests_yaml
+                manifests_yaml=manifests_yaml,
+                test_config_json=test_config_json
             ))
 
         return results

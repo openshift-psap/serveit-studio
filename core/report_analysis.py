@@ -908,6 +908,13 @@ class ReportAnalyzer:
                 except (json.JSONDecodeError, TypeError):
                     pass
 
+            test_config = None
+            if r.test_config_json:
+                try:
+                    test_config = json.loads(r.test_config_json)
+                except (json.JSONDecodeError, TypeError):
+                    pass
+
             all_results.append({
                 'config_name': r.display_label,
                 'test_id': r.config_name,
@@ -929,6 +936,7 @@ class ReportAnalyzer:
                 'prefill_tp': r.prefill_tp or r.tensor_parallelism,
                 'decode_tp': r.decode_tp or r.tensor_parallelism,
                 'manifest_types': manifest_types,
+                'test_config': test_config,
             })
         return all_results
 

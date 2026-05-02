@@ -28,6 +28,11 @@ socket.on('session_granted', function() {
 // Heartbeat — prove we're alive every 5 seconds
 setInterval(function() { socket.emit('heartbeat'); }, 5000);
 
+function toggleTestConfig(rowId) {
+    var row = document.getElementById(rowId);
+    if (row) row.style.display = row.style.display === 'none' ? '' : 'none';
+}
+
 function sortReportTable(tableId, colIdx, type) {
     var table = document.getElementById(tableId);
     if (!table) return;
@@ -3578,9 +3583,10 @@ function renderCharts(data, runId) {
         html += '<th style="cursor:pointer;" onclick="sortReportTable(\'' + allCfgTableId + '\',9,\'num\')">GPUs &#x21C5;</th>';
         html += '<th style="cursor:pointer;" title="Throughput P90 ÷ Total GPUs (req/s per GPU)" onclick="sortReportTable(\'' + allCfgTableId + '\',10,\'num\')">Efficiency &#x21C5;<br><span style="font-weight:400;font-size:0.75em;color:#64748b;">req/s per GPU</span></th>';
         html += '<th>Manifests</th>';
+        html += '<th>Config</th>';
         html += '</tr>';
         const paretoNames = new Set(charts.pareto.pareto_table.map(p => p.config_name));
-        data.all_results.forEach(r => {
+        data.all_results.forEach((r, idx) => {
             const cls = paretoNames.has(r.config_name) ? ' class="pareto-row"' : '';
             const rTestId = r.test_id || testIdLookup[r.config_name] || r.config_name;
             let manifestLinks = '-';
@@ -3590,7 +3596,56 @@ function renderCharts(data, runId) {
                 }).join(' ');
             }
             const na = 'N/A';
-            html += `<tr${cls}><td>${r.config_name}</td><td>${r.architecture}</td><td data-val="${r.ttft_p90}">${r.ttft_p90}</td><td data-val="${r.ttft_p95 ?? ''}">${r.ttft_p95 ?? na}</td><td data-val="${r.ttft_p99 ?? ''}">${r.ttft_p99 ?? na}</td><td data-val="${r.throughput_p90}">${r.throughput_p90}</td><td data-val="${r.throughput_p95 ?? ''}">${r.throughput_p95 ?? na}</td><td data-val="${r.throughput_p99 ?? ''}">${r.throughput_p99 ?? na}</td><td data-val="${r.itl_p90 ?? ''}">${r.itl_p90 ?? na}</td><td data-val="${r.gpus}">${r.gpus}</td><td data-val="${r.efficiency}">${r.efficiency}</td><td>${manifestLinks}</td></tr>`;
+            const cfgRowId = 'tcfg-' + runId + '-' + idx;
+            const cfgBtn = r.test_config ? `<button onclick="toggleTestConfig('${cfgRowId}')" style="padding:3px 10px;border:1px solid #6366f1;border-radius:4px;background:#eef2ff;color:#4338ca;font-size:11px;cursor:pointer;font-weight:600;">View</button>` : '<span style="color:#94a3b8;font-size:11px;">N/A</span>';
+            html += `<tr${cls}><td>${r.config_name}</td><td>${r.architecture}</td><td data-val="${r.ttft_p90}">${r.ttft_p90}</td><td data-val="${r.ttft_p95 ?? ''}">${r.ttft_p95 ?? na}</td><td data-val="${r.ttft_p99 ?? ''}">${r.ttft_p99 ?? na}</td><td data-val="${r.throughput_p90}">${r.throughput_p90}</td><td data-val="${r.throughput_p95 ?? ''}">${r.throughput_p95 ?? na}</td><td data-val="${r.throughput_p99 ?? ''}">${r.throughput_p99 ?? na}</td><td data-val="${r.itl_p90 ?? ''}">${r.itl_p90 ?? na}</td><td data-val="${r.gpus}">${r.gpus}</td><td data-val="${r.efficiency}">${r.efficiency}</td><td>${manifestLinks}</td><td>${cfgBtn}</td></tr>`;
+            if (r.test_config) {
+                const tc = r.test_config;
+                const v = (k, suffix) => tc[k] != null ? tc[k] + (suffix || '') : 'auto';
+                html += `<tr id="${cfgRowId}" style="display:none;"><td colspan="13" style="padding:0;border-top:none;">`;
+                html += '<div style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:6px;margin:4px 12px 12px;padding:16px;font-size:0.85em;">';
+                html += '<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:16px;">';
+                // Deployment
+                html += '<div><div style="font-weight:700;color:#1e293b;margin-bottom:8px;border-bottom:2px solid #6366f1;padding-bottom:4px;">Deployment</div>';
+                html += '<div style="line-height:1.8;">';
+                html += `<div><span style="color:#64748b;">Architecture:</span> <strong>${tc.architecture || na}</strong></div>`;
+                html += `<div><span style="color:#64748b;">Image:</span> ${tc.image || na}</div>`;
+                html += `<div><span style="color:#64748b;">Replicas:</span> ${tc.replicas || na}</div>`;
+                if (tc.architecture === 'pd') {
+                    html += `<div><span style="color:#64748b;">Prefill Pods:</span> ${tc.prefill_replicas} (TP=${tc.prefill_tp})</div>`;
+                    html += `<div><span style="color:#64748b;">Decode Pods:</span> ${tc.decode_replicas} (TP=${tc.decode_tp})</div>`;
+                    html += `<div><span style="color:#64748b;">KV Connector:</span> ${tc.kv_connector || 'NixlConnector'}</div>`;
+                } else {
+                    html += `<div><span style="color:#64748b;">Tensor Parallelism:</span> ${tc.tensor_parallelism}</div>`;
+                }
+                html += `<div><span style="color:#64748b;">Network Type:</span> ${tc.network_type || na}</div>`;
+                html += '</div></div>';
+                // Workload
+                html += '<div><div style="font-weight:700;color:#1e293b;margin-bottom:8px;border-bottom:2px solid #10b981;padding-bottom:4px;">Workload</div>';
+                html += '<div style="line-height:1.8;">';
+                html += `<div><span style="color:#64748b;">ISL:</span> ${tc.isl}${tc.isl_stdev ? ' (stdev=' + tc.isl_stdev + ')' : ''}</div>`;
+                html += `<div><span style="color:#64748b;">OSL:</span> ${tc.osl}${tc.osl_stdev ? ' (stdev=' + tc.osl_stdev + ')' : ''}</div>`;
+                html += `<div><span style="color:#64748b;">Users:</span> ${tc.num_users}</div>`;
+                html += `<div><span style="color:#64748b;">Rate Type:</span> ${tc.request_type}</div>`;
+                html += `<div><span style="color:#64748b;">Duration:</span> ${tc.test_duration}s</div>`;
+                html += `<div><span style="color:#64748b;">Workload Mode:</span> ${tc.workload_mode || 'synthetic'}</div>`;
+                if (tc.dataset_source) html += `<div><span style="color:#64748b;">Dataset:</span> ${tc.dataset_source}</div>`;
+                if (tc.turns > 1) html += `<div><span style="color:#64748b;">Turns:</span> ${tc.turns}</div>`;
+                html += '</div></div>';
+                // vLLM Engine
+                html += '<div><div style="font-weight:700;color:#1e293b;margin-bottom:8px;border-bottom:2px solid #f59e0b;padding-bottom:4px;">vLLM Engine</div>';
+                html += '<div style="line-height:1.8;">';
+                html += `<div><span style="color:#64748b;">Max Model Len:</span> ${tc.max_model_len}</div>`;
+                html += `<div><span style="color:#64748b;">GPU Mem Util:</span> ${tc.gpu_memory_utilization}</div>`;
+                html += `<div><span style="color:#64748b;">Block Size:</span> ${tc.block_size}</div>`;
+                html += `<div><span style="color:#64748b;">Max Num Seqs:</span> ${v('max_num_seqs')}</div>`;
+                html += `<div><span style="color:#64748b;">Max Batched Tokens:</span> ${v('max_num_batched_tokens')}</div>`;
+                html += `<div><span style="color:#64748b;">Prefix Caching:</span> ${tc.enable_prefix_caching ? 'On' : 'Off'}</div>`;
+                html += `<div><span style="color:#64748b;">Dtype:</span> ${tc.dtype || 'auto'}</div>`;
+                html += `<div><span style="color:#64748b;">KV Cache Dtype:</span> ${tc.kv_cache_dtype || 'auto'}</div>`;
+                html += '</div></div>';
+                html += '</div></div></td></tr>';
+            }
         });
         html += '</table></div></div>';
     }
