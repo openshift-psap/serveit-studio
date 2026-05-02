@@ -3604,18 +3604,24 @@ function renderCharts(data, runId) {
     secCfg += html; html = '';
 
     // ============================================================
-    // TEST SETTINGS tab — run-level configuration
+    // USER DEFINED TEST SETTINGS tab — run-level configuration
     // ============================================================
     if (data.run_config) {
         const rc = data.run_config;
         const na = 'N/A';
-        const v = (k) => rc[k] != null ? rc[k] : 'auto';
-        html += '<div class="chart-card"><div class="chart-card-header">Run Configuration</div>';
-        html += '<div style="padding:12px 20px 4px; color:#1e293b; font-size:0.95em;">Settings used for this entire optimization run. These apply to all tests — only the architecture, TP, and pod counts vary per test.</div>';
+        const adv = rc.advanced_vllm || {};
+        const advVal = (key, fallback) => { const s = adv[key]; return s && s.mode === 'custom' && s.value != null ? s.value : (fallback != null ? fallback : 'auto'); };
+        const advToggle = (key, fallback) => { const s = adv[key]; return s ? (s.mode === 'on' ? 'On' : s.mode === 'off' ? 'Off' : fallback) : fallback; };
+
+        html += '<div class="chart-card"><div class="chart-card-header">User Defined Test Settings</div>';
+        html += '<div style="padding:12px 20px 4px; color:#1e293b; font-size:0.95em;">All settings configured for this optimization run. These apply to every test — only the architecture, TP values, and pod counts vary between tests.</div>';
         html += '<div class="chart-card-body" style="padding:16px 20px;">';
-        html += '<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:24px;font-size:0.9em;">';
+        html += '<div style="display:grid;grid-template-columns:repeat(2,1fr);gap:24px;font-size:0.9em;">';
+
+        // Left column: Workload + Search Strategy
+        html += '<div>';
         // Workload
-        html += '<div><div style="font-weight:700;color:#1e293b;margin-bottom:10px;border-bottom:2px solid #10b981;padding-bottom:4px;">Workload</div><div style="line-height:2.2;">';
+        html += '<div style="font-weight:700;color:#1e293b;margin-bottom:10px;border-bottom:2px solid #10b981;padding-bottom:4px;">Workload</div><div style="line-height:2.2;margin-bottom:20px;">';
         html += `<div><span style="color:#64748b;">Model:</span> <strong>${rc.model_name || na}</strong></div>`;
         html += `<div><span style="color:#64748b;">ISL:</span> ${rc.isl}${rc.isl_stdev ? ' (&sigma;=' + rc.isl_stdev + ')' : ''}</div>`;
         html += `<div><span style="color:#64748b;">OSL:</span> ${rc.osl}${rc.osl_stdev ? ' (&sigma;=' + rc.osl_stdev + ')' : ''}</div>`;
@@ -3623,13 +3629,15 @@ function renderCharts(data, runId) {
         html += `<div><span style="color:#64748b;">Rate Type:</span> ${rc.rate_type || 'concurrent'}</div>`;
         html += `<div><span style="color:#64748b;">Test Duration:</span> ${rc.test_duration || 300}s</div>`;
         html += `<div><span style="color:#64748b;">Stop Mode:</span> ${rc.stop_mode || 'duration'}</div>`;
+        if (rc.max_requests) html += `<div><span style="color:#64748b;">Max Requests:</span> ${rc.max_requests}</div>`;
         if (rc.turns > 1) html += `<div><span style="color:#64748b;">Turns:</span> ${rc.turns}</div>`;
         html += `<div><span style="color:#64748b;">Workload Mode:</span> ${rc.workload_mode || 'synthetic'}</div>`;
         if (rc.dataset_source) html += `<div><span style="color:#64748b;">Dataset:</span> <span style="word-break:break-all;">${rc.dataset_source}</span></div>`;
+        if (rc.dataset_column) html += `<div><span style="color:#64748b;">Dataset Column:</span> ${rc.dataset_column}</div>`;
         if (rc.prefix_cache_hit_pct > 0) html += `<div><span style="color:#64748b;">Prefix Cache Hit:</span> ${rc.prefix_cache_hit_pct}%</div>`;
-        html += '</div></div>';
+        html += '</div>';
         // Search Strategy
-        html += '<div><div style="font-weight:700;color:#1e293b;margin-bottom:10px;border-bottom:2px solid #6366f1;padding-bottom:4px;">Search Strategy</div><div style="line-height:2.2;">';
+        html += '<div style="font-weight:700;color:#1e293b;margin-bottom:10px;border-bottom:2px solid #6366f1;padding-bottom:4px;">Search Strategy</div><div style="line-height:2.2;">';
         html += `<div><span style="color:#64748b;">Optimization Goal:</span> <strong>${(rc.objective || 'ttft').toUpperCase()}</strong></div>`;
         html += `<div><span style="color:#64748b;">Total GPUs:</span> ${rc.total_gpus || na}</div>`;
         html += `<div><span style="color:#64748b;">TP Options:</span> ${(rc.tp_options || []).join(', ') || na}</div>`;
@@ -3639,34 +3647,42 @@ function renderCharts(data, runId) {
         html += `<div><span style="color:#64748b;">Headroom:</span> ${rc.headroom || 1.3}x</div>`;
         if (rc.latency_constraint_enabled) {
             html += `<div><span style="color:#64748b;">Latency SLA:</span> ${rc.latency_constraint_ms}ms @ ${rc.latency_constraint_percentile}</div>`;
+        } else {
+            html += `<div><span style="color:#64748b;">Latency SLA:</span> Disabled</div>`;
         }
-        html += '</div></div>';
+        html += '</div>';
+        html += '</div>';
+
+        // Right column: Infrastructure + Advanced vLLM Settings
+        html += '<div>';
         // Infrastructure
-        html += '<div><div style="font-weight:700;color:#1e293b;margin-bottom:10px;border-bottom:2px solid #f59e0b;padding-bottom:4px;">Infrastructure &amp; Engine</div><div style="line-height:2.2;">';
+        html += '<div style="font-weight:700;color:#1e293b;margin-bottom:10px;border-bottom:2px solid #f59e0b;padding-bottom:4px;">Infrastructure</div><div style="line-height:2.2;margin-bottom:20px;">';
         html += `<div><span style="color:#64748b;">Image:</span> <span style="word-break:break-all;font-size:0.9em;">${rc.image || na}</span></div>`;
         html += `<div><span style="color:#64748b;">Namespace:</span> ${rc.namespace || na}</div>`;
         html += `<div><span style="color:#64748b;">PVC:</span> ${rc.pvc_name || na}</div>`;
         html += `<div><span style="color:#64748b;">Network Type:</span> ${rc.network_type || na}</div>`;
-        html += `<div><span style="color:#64748b;">Max Model Len:</span> ${rc.max_model_len || na}</div>`;
-        html += `<div><span style="color:#64748b;">GPU Mem Util:</span> ${rc.gpu_memory_utilization || na}</div>`;
-        if (rc.advanced_vllm) {
-            const adv = rc.advanced_vllm;
-            const showAdv = (key, label) => {
-                const s = adv[key];
-                if (s && s.mode !== 'auto') {
-                    html += `<div><span style="color:#64748b;">${label}:</span> ${s.value || s.mode}</div>`;
-                }
-            };
-            showAdv('block_size', 'Block Size');
-            showAdv('dtype', 'Dtype');
-            showAdv('kv_cache_dtype', 'KV Cache Dtype');
-            showAdv('max_num_seqs', 'Max Num Seqs');
-            showAdv('max_num_batched_tokens', 'Max Batched Tokens');
-            showAdv('pipeline_parallel_size', 'Pipeline Parallel');
-            showAdv('enable_prefix_caching', 'Prefix Caching');
-            showAdv('disable_custom_all_reduce', 'Disable All-Reduce');
-        }
-        html += '</div></div>';
+        html += `<div><span style="color:#64748b;">NCCL IB HCA:</span> ${rc.nccl_ib_hca || na}</div>`;
+        if (rc.rdma_nics_per_node) html += `<div><span style="color:#64748b;">RDMA NICs/Node:</span> ${rc.rdma_nics_per_node}</div>`;
+        html += '</div>';
+        // Advanced vLLM Settings
+        html += '<div style="font-weight:700;color:#1e293b;margin-bottom:10px;border-bottom:2px solid #8b5cf6;padding-bottom:4px;">Advanced vLLM Settings</div><div style="line-height:2.2;">';
+        html += `<div><span style="color:#64748b;">Max Model Len:</span> ${advVal('max_model_len', rc.max_model_len)}</div>`;
+        html += `<div><span style="color:#64748b;">GPU Memory Utilization:</span> ${advVal('gpu_memory_utilization', rc.gpu_memory_utilization)}</div>`;
+        html += `<div><span style="color:#64748b;">Block Size:</span> ${advVal('block_size', 'auto')}</div>`;
+        html += `<div><span style="color:#64748b;">Max Num Seqs:</span> ${advVal('max_num_seqs', 'auto')}</div>`;
+        html += `<div><span style="color:#64748b;">Max Batched Tokens:</span> ${advVal('max_num_batched_tokens', 'auto')}</div>`;
+        html += `<div><span style="color:#64748b;">Dtype:</span> ${advVal('dtype', 'auto')}</div>`;
+        html += `<div><span style="color:#64748b;">KV Cache Dtype:</span> ${advVal('kv_cache_dtype', 'auto')}</div>`;
+        html += `<div><span style="color:#64748b;">Pipeline Parallel:</span> ${advVal('pipeline_parallel_size', 'auto')}</div>`;
+        html += `<div><span style="color:#64748b;">Tool Call Parser:</span> ${advVal('tool_call_parser', 'auto')}</div>`;
+        html += `<div><span style="color:#64748b;">Prefix Caching:</span> ${advToggle('enable_prefix_caching', 'On (auto)')}</div>`;
+        html += `<div><span style="color:#64748b;">Custom All-Reduce:</span> ${advToggle('disable_custom_all_reduce', 'Enabled (auto)')}</div>`;
+        html += `<div><span style="color:#64748b;">Trust Remote Code:</span> ${advToggle('trust_remote_code', 'On (auto)')}</div>`;
+        html += `<div><span style="color:#64748b;">Disable Log Requests:</span> ${advToggle('disable_log_requests', 'On (auto)')}</div>`;
+        html += `<div><span style="color:#64748b;">Auto Tool Choice:</span> ${advToggle('enable_auto_tool_choice', 'Off (auto)')}</div>`;
+        html += '</div>';
+        html += '</div>';
+
         html += '</div></div></div>';
         secTestCfg = html; html = '';
     }
@@ -4156,12 +4172,12 @@ function renderCharts(data, runId) {
     if (secRec) subtabDefs.push({ id: 'recommendation', label: 'Recommendation', icon: '&#9733;' });
     if (secTP) subtabDefs.push({ id: 'tp-calibration', label: 'TP Calibration', icon: '&#9881;' });
     if (secCfg) subtabDefs.push({ id: 'configurations', label: 'Configurations', icon: '&#9776;' });
-    if (secTestCfg) subtabDefs.push({ id: 'test-settings', label: 'Test Settings', icon: '&#9881;' });
     if (secCmp) subtabDefs.push({ id: 'comparison', label: 'Comparison', icon: '&#8596;' });
     if (secStep9) subtabDefs.push({ id: 'latency-search', label: 'Latency Search', icon: '&#128269;' });
     if (secCal) subtabDefs.push({ id: 'calibrated-load', label: 'Calibrated Load', icon: '&#9878;' });
     if (secVLLM) subtabDefs.push({ id: 'vllm-metrics', label: 'vLLM Metrics', icon: '&#9889;' });
     subtabDefs.push({ id: 'estimator', label: 'Estimator', icon: '&#128200;' });
+    if (secTestCfg) subtabDefs.push({ id: 'test-settings', label: 'Test Settings', icon: '&#9881;' });
 
     const sectionMap = {
         'recommendation': secRec, 'tp-calibration': secTP, 'configurations': secCfg,
