@@ -1081,11 +1081,12 @@ class ReportAnalyzer:
 
         run_config = None
         try:
+            import json as _json
             row = loader.conn.execute(
                 'SELECT config_json FROM optimization_runs WHERE id = ?', (run_id,)
             ).fetchone()
             if row and row[0]:
-                run_config = json.loads(row[0])
+                run_config = _json.loads(row[0])
                 run_config.pop('hf_token', None)
         except Exception as e:
             import logging
