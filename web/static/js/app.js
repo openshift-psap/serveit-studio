@@ -3253,7 +3253,7 @@ function renderCharts(data, runId) {
     dlLink.onclick = (e) => { e.preventDefault(); downloadHTMLReport(runId, data); };
 
     let html = '';
-    let secRec = '', secTP = '', secCfg = '', secCmp = '', secStep9 = '', secCal = '', secVLLM = '';
+    let secRec = '', secTP = '', secCfg = '', secCmp = '', secStep9 = '', secCal = '', secVLLM = '', secTestCfg = '';
 
     // Build a lookup from test_id -> manifest_types for download links
     const manifestLookup = {};
@@ -3652,6 +3652,77 @@ function renderCharts(data, runId) {
 
     // Flush configurations (PD charts + pareto table + all results)
     secCfg += html; html = '';
+
+    // ============================================================
+    // TEST SETTINGS tab — full deployment config for each test
+    // ============================================================
+    if (data.all_results && data.all_results.some(r => r.test_config)) {
+        html += '<div class="chart-card"><div class="chart-card-header">Test Settings</div>';
+        html += '<div style="padding:12px 20px 4px; color:#1e293b; font-size:0.95em;">Full deployment and engine configuration used for each test. Shows exactly what was deployed — workload parameters, vLLM flags, resource limits, and infrastructure settings.</div>';
+        html += '<div class="chart-card-body" style="padding:12px 20px;">';
+        data.all_results.forEach((r, idx) => {
+            if (!r.test_config) return;
+            const tc = r.test_config;
+            const na = 'N/A';
+            const v = (k) => tc[k] != null ? tc[k] : 'auto';
+            const accId = 'ts-acc-' + runId + '-' + idx;
+            html += `<div style="border:1px solid #e2e8f0;border-radius:8px;margin-bottom:8px;overflow:hidden;">`;
+            html += `<div onclick="var p=document.getElementById('${accId}');p.style.display=p.style.display==='none'?'block':'none';this.querySelector('.ts-arrow').textContent=p.style.display==='none'?'\\u25B8':'\\u25BE'" style="padding:12px 16px;background:#f8fafc;cursor:pointer;display:flex;justify-content:space-between;align-items:center;">`;
+            html += `<div><strong style="color:#1e293b;">${r.config_name}</strong> <span style="color:#64748b;font-size:0.85em;margin-left:8px;">${r.architecture} &middot; ${r.gpus} GPUs</span></div>`;
+            html += `<span class="ts-arrow" style="color:#64748b;">&#9656;</span></div>`;
+            html += `<div id="${accId}" style="display:none;padding:16px;background:#fff;">`;
+            html += '<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:20px;font-size:0.85em;">';
+            // Deployment column
+            html += '<div><div style="font-weight:700;color:#1e293b;margin-bottom:8px;border-bottom:2px solid #6366f1;padding-bottom:4px;">Deployment</div><div style="line-height:2;">';
+            html += `<div><span style="color:#64748b;">Architecture:</span> <strong>${tc.architecture || na}</strong></div>`;
+            html += `<div><span style="color:#64748b;">Image:</span> ${tc.image || na}</div>`;
+            html += `<div><span style="color:#64748b;">Replicas:</span> ${tc.replicas || na}</div>`;
+            if (tc.architecture === 'pd') {
+                html += `<div><span style="color:#64748b;">Prefill Pods:</span> ${tc.prefill_replicas} &times; TP=${tc.prefill_tp}</div>`;
+                html += `<div><span style="color:#64748b;">Decode Pods:</span> ${tc.decode_replicas} &times; TP=${tc.decode_tp}</div>`;
+                html += `<div><span style="color:#64748b;">P/D Ratio:</span> ${tc.prefill_decode_ratio || na}</div>`;
+                html += `<div><span style="color:#64748b;">KV Connector:</span> ${tc.kv_connector || 'NixlConnector'}</div>`;
+            } else {
+                html += `<div><span style="color:#64748b;">Tensor Parallelism:</span> ${tc.tensor_parallelism}</div>`;
+            }
+            html += `<div><span style="color:#64748b;">Network:</span> ${tc.network_type || na}</div>`;
+            html += `<div><span style="color:#64748b;">Memory:</span> ${tc.memory_request || na}</div>`;
+            html += `<div><span style="color:#64748b;">CPU:</span> ${tc.cpu_request || na}</div>`;
+            html += '</div></div>';
+            // Workload column
+            html += '<div><div style="font-weight:700;color:#1e293b;margin-bottom:8px;border-bottom:2px solid #10b981;padding-bottom:4px;">Workload</div><div style="line-height:2;">';
+            html += `<div><span style="color:#64748b;">ISL:</span> ${tc.isl}${tc.isl_stdev ? ' (&sigma;=' + tc.isl_stdev + ')' : ''}</div>`;
+            html += `<div><span style="color:#64748b;">OSL:</span> ${tc.osl}${tc.osl_stdev ? ' (&sigma;=' + tc.osl_stdev + ')' : ''}</div>`;
+            html += `<div><span style="color:#64748b;">Concurrent Users:</span> ${tc.num_users}</div>`;
+            html += `<div><span style="color:#64748b;">Rate Type:</span> ${tc.request_type}</div>`;
+            html += `<div><span style="color:#64748b;">Duration:</span> ${tc.test_duration}s</div>`;
+            html += `<div><span style="color:#64748b;">Stop Mode:</span> ${tc.stop_mode || 'duration'}</div>`;
+            html += `<div><span style="color:#64748b;">Workload Mode:</span> ${tc.workload_mode || 'synthetic'}</div>`;
+            if (tc.dataset_source) html += `<div><span style="color:#64748b;">Dataset:</span> <span style="word-break:break-all;">${tc.dataset_source}</span></div>`;
+            if (tc.turns > 1) html += `<div><span style="color:#64748b;">Turns:</span> ${tc.turns}</div>`;
+            html += '</div></div>';
+            // vLLM Engine column
+            html += '<div><div style="font-weight:700;color:#1e293b;margin-bottom:8px;border-bottom:2px solid #f59e0b;padding-bottom:4px;">vLLM Engine</div><div style="line-height:2;">';
+            html += `<div><span style="color:#64748b;">Max Model Len:</span> ${tc.max_model_len}</div>`;
+            html += `<div><span style="color:#64748b;">GPU Mem Util:</span> ${tc.gpu_memory_utilization}</div>`;
+            if (tc.architecture === 'pd') {
+                html += `<div><span style="color:#64748b;">Prefill GPU Mem:</span> ${tc.prefill_gpu_memory_utilization || tc.gpu_memory_utilization}</div>`;
+                html += `<div><span style="color:#64748b;">Decode GPU Mem:</span> ${tc.decode_gpu_memory_utilization || tc.gpu_memory_utilization}</div>`;
+            }
+            html += `<div><span style="color:#64748b;">Block Size:</span> ${tc.block_size}</div>`;
+            html += `<div><span style="color:#64748b;">Max Num Seqs:</span> ${v('max_num_seqs')}</div>`;
+            html += `<div><span style="color:#64748b;">Max Batched Tokens:</span> ${v('max_num_batched_tokens')}</div>`;
+            html += `<div><span style="color:#64748b;">Prefix Caching:</span> ${tc.enable_prefix_caching ? 'On' : 'Off'}</div>`;
+            html += `<div><span style="color:#64748b;">Dtype:</span> ${tc.dtype || 'auto'}</div>`;
+            html += `<div><span style="color:#64748b;">KV Cache Dtype:</span> ${tc.kv_cache_dtype || 'auto'}</div>`;
+            if (tc.pipeline_parallel_size) html += `<div><span style="color:#64748b;">Pipeline Parallel:</span> ${tc.pipeline_parallel_size}</div>`;
+            html += `<div><span style="color:#64748b;">Trust Remote Code:</span> ${tc.trust_remote_code ? 'Yes' : 'No'}</div>`;
+            html += '</div></div>';
+            html += '</div></div></div>';
+        });
+        html += '</div></div>';
+        secTestCfg = html; html = '';
+    }
 
     // ============================================================
     // STEP 8: Architecture Comparison (separate card)
@@ -4138,6 +4209,7 @@ function renderCharts(data, runId) {
     if (secRec) subtabDefs.push({ id: 'recommendation', label: 'Recommendation', icon: '&#9733;' });
     if (secTP) subtabDefs.push({ id: 'tp-calibration', label: 'TP Calibration', icon: '&#9881;' });
     if (secCfg) subtabDefs.push({ id: 'configurations', label: 'Configurations', icon: '&#9776;' });
+    if (secTestCfg) subtabDefs.push({ id: 'test-settings', label: 'Test Settings', icon: '&#9881;' });
     if (secCmp) subtabDefs.push({ id: 'comparison', label: 'Comparison', icon: '&#8596;' });
     if (secStep9) subtabDefs.push({ id: 'latency-search', label: 'Latency Search', icon: '&#128269;' });
     if (secCal) subtabDefs.push({ id: 'calibrated-load', label: 'Calibrated Load', icon: '&#9878;' });
@@ -4146,8 +4218,8 @@ function renderCharts(data, runId) {
 
     const sectionMap = {
         'recommendation': secRec, 'tp-calibration': secTP, 'configurations': secCfg,
-        'comparison': secCmp, 'latency-search': secStep9, 'calibrated-load': secCal, 'vllm-metrics': secVLLM,
-        'estimator': secEst
+        'test-settings': secTestCfg, 'comparison': secCmp, 'latency-search': secStep9,
+        'calibrated-load': secCal, 'vllm-metrics': secVLLM, 'estimator': secEst
     };
 
     if (subtabDefs.length > 1) {
@@ -4913,7 +4985,7 @@ function downloadHTMLReport(runId, data) {
     html += `<p>Generated: ${new Date().toLocaleString()}</p>`;
 
     // === Build each section separately ===
-    let secRec = '', secTP = '', secCfg = '', secCmp = '', secStep9 = '', secCal = '', secVLLM = '';
+    let secRec = '', secTP = '', secCfg = '', secCmp = '', secStep9 = '', secCal = '', secVLLM = '', secTestCfg = '';
 
     // --- RECOMMENDATION ---
     if (rec.constraint_notes && rec.constraint_notes.length) {
