@@ -476,6 +476,11 @@ def init_db():
     except sqlite3.OperationalError:
         pass
 
+    try:
+        cursor.execute('ALTER TABLE test_configurations ADD COLUMN test_config_json TEXT')
+    except sqlite3.OperationalError:
+        pass
+
     # Create Optuna tables if they don't exist
     cursor.execute('''
         CREATE TABLE IF NOT EXISTS optuna_trials (
