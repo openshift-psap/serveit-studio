@@ -637,13 +637,17 @@ class RecipeOptimizer:
         """Compute optimal vLLM KV cache block size.
 
         block_size = next_power_of_2(sqrt(ISL + OSL)), clamped to [8, 512].
+        For PD goals (ttft, balanced, pd_only), floor is 128 because NIXL
+        transfers KV cache in blocks — larger blocks reduce transfer count.
         """
         import math
         seq_len = self.config.isl + self.config.osl
         raw = math.sqrt(seq_len)
         from core.utils import next_power_of_2
         bs = next_power_of_2(max(1, int(raw)))
-        return max(8, min(512, bs))
+        pd_goals = ('ttft', 'balanced', 'pd_only')
+        floor = 128 if self.config.objective in pd_goals else 8
+        return max(floor, min(512, bs))
 
     def _detect_rdma_nics_per_node(self) -> int:
         """
