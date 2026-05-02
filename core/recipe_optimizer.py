@@ -636,15 +636,14 @@ class RecipeOptimizer:
     def _compute_block_size(self) -> int:
         """Compute optimal vLLM KV cache block size.
 
-        block_size = next_power_of_2(sqrt(ISL + OSL)), clamped to [8, 32].
-        CUDA devices support block sizes up to 32 (official vLLM limit).
+        block_size = next_power_of_2(sqrt(ISL + OSL)), clamped to [8, 512].
         """
         import math
         seq_len = self.config.isl + self.config.osl
         raw = math.sqrt(seq_len)
         from core.utils import next_power_of_2
         bs = next_power_of_2(max(1, int(raw)))
-        return max(8, min(32, bs))
+        return max(8, min(512, bs))
 
     def _detect_rdma_nics_per_node(self) -> int:
         """
