@@ -1079,6 +1079,17 @@ class ReportAnalyzer:
         except Exception:
             pass
 
+        run_config = None
+        try:
+            row = loader.conn.execute(
+                'SELECT config_json FROM optimization_runs WHERE id = ?', (run_id,)
+            ).fetchone()
+            if row and row['config_json']:
+                run_config = json.loads(row['config_json'])
+                run_config.pop('hf_token', None)
+        except Exception:
+            pass
+
         return {
             'charts': charts,
             'summary': stats,
@@ -1087,4 +1098,5 @@ class ReportAnalyzer:
             'calibrated_qps': calibrated_qps_data,
             'latency_search': latency_search_data,
             'gpu_sizing': gpu_sizing,
+            'run_config': run_config,
         }

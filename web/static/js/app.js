@@ -3583,7 +3583,6 @@ function renderCharts(data, runId) {
         html += '<th style="cursor:pointer;" onclick="sortReportTable(\'' + allCfgTableId + '\',9,\'num\')">GPUs &#x21C5;</th>';
         html += '<th style="cursor:pointer;" title="Throughput P90 ÷ Total GPUs (req/s per GPU)" onclick="sortReportTable(\'' + allCfgTableId + '\',10,\'num\')">Efficiency &#x21C5;<br><span style="font-weight:400;font-size:0.75em;color:#64748b;">req/s per GPU</span></th>';
         html += '<th>Manifests</th>';
-        html += '<th>Config</th>';
         html += '</tr>';
         const paretoNames = new Set(charts.pareto.pareto_table.map(p => p.config_name));
         data.all_results.forEach((r, idx) => {
@@ -3596,56 +3595,7 @@ function renderCharts(data, runId) {
                 }).join(' ');
             }
             const na = 'N/A';
-            const cfgRowId = 'tcfg-' + runId + '-' + idx;
-            const cfgBtn = r.test_config ? `<button onclick="toggleTestConfig('${cfgRowId}')" style="padding:3px 10px;border:1px solid #6366f1;border-radius:4px;background:#eef2ff;color:#4338ca;font-size:11px;cursor:pointer;font-weight:600;">View</button>` : '<span style="color:#94a3b8;font-size:11px;">N/A</span>';
-            html += `<tr${cls}><td>${r.config_name}</td><td>${r.architecture}</td><td data-val="${r.ttft_p90}">${r.ttft_p90}</td><td data-val="${r.ttft_p95 ?? ''}">${r.ttft_p95 ?? na}</td><td data-val="${r.ttft_p99 ?? ''}">${r.ttft_p99 ?? na}</td><td data-val="${r.throughput_p90}">${r.throughput_p90}</td><td data-val="${r.throughput_p95 ?? ''}">${r.throughput_p95 ?? na}</td><td data-val="${r.throughput_p99 ?? ''}">${r.throughput_p99 ?? na}</td><td data-val="${r.itl_p90 ?? ''}">${r.itl_p90 ?? na}</td><td data-val="${r.gpus}">${r.gpus}</td><td data-val="${r.efficiency}">${r.efficiency}</td><td>${manifestLinks}</td><td>${cfgBtn}</td></tr>`;
-            if (r.test_config) {
-                const tc = r.test_config;
-                const v = (k, suffix) => tc[k] != null ? tc[k] + (suffix || '') : 'auto';
-                html += `<tr id="${cfgRowId}" style="display:none;"><td colspan="13" style="padding:0;border-top:none;">`;
-                html += '<div style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:6px;margin:4px 12px 12px;padding:16px;font-size:0.85em;">';
-                html += '<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:16px;">';
-                // Deployment
-                html += '<div><div style="font-weight:700;color:#1e293b;margin-bottom:8px;border-bottom:2px solid #6366f1;padding-bottom:4px;">Deployment</div>';
-                html += '<div style="line-height:1.8;">';
-                html += `<div><span style="color:#64748b;">Architecture:</span> <strong>${tc.architecture || na}</strong></div>`;
-                html += `<div><span style="color:#64748b;">Image:</span> ${tc.image || na}</div>`;
-                html += `<div><span style="color:#64748b;">Replicas:</span> ${tc.replicas || na}</div>`;
-                if (tc.architecture === 'pd') {
-                    html += `<div><span style="color:#64748b;">Prefill Pods:</span> ${tc.prefill_replicas} (TP=${tc.prefill_tp})</div>`;
-                    html += `<div><span style="color:#64748b;">Decode Pods:</span> ${tc.decode_replicas} (TP=${tc.decode_tp})</div>`;
-                    html += `<div><span style="color:#64748b;">KV Connector:</span> ${tc.kv_connector || 'NixlConnector'}</div>`;
-                } else {
-                    html += `<div><span style="color:#64748b;">Tensor Parallelism:</span> ${tc.tensor_parallelism}</div>`;
-                }
-                html += `<div><span style="color:#64748b;">Network Type:</span> ${tc.network_type || na}</div>`;
-                html += '</div></div>';
-                // Workload
-                html += '<div><div style="font-weight:700;color:#1e293b;margin-bottom:8px;border-bottom:2px solid #10b981;padding-bottom:4px;">Workload</div>';
-                html += '<div style="line-height:1.8;">';
-                html += `<div><span style="color:#64748b;">ISL:</span> ${tc.isl}${tc.isl_stdev ? ' (stdev=' + tc.isl_stdev + ')' : ''}</div>`;
-                html += `<div><span style="color:#64748b;">OSL:</span> ${tc.osl}${tc.osl_stdev ? ' (stdev=' + tc.osl_stdev + ')' : ''}</div>`;
-                html += `<div><span style="color:#64748b;">Users:</span> ${tc.num_users}</div>`;
-                html += `<div><span style="color:#64748b;">Rate Type:</span> ${tc.request_type}</div>`;
-                html += `<div><span style="color:#64748b;">Duration:</span> ${tc.test_duration}s</div>`;
-                html += `<div><span style="color:#64748b;">Workload Mode:</span> ${tc.workload_mode || 'synthetic'}</div>`;
-                if (tc.dataset_source) html += `<div><span style="color:#64748b;">Dataset:</span> ${tc.dataset_source}</div>`;
-                if (tc.turns > 1) html += `<div><span style="color:#64748b;">Turns:</span> ${tc.turns}</div>`;
-                html += '</div></div>';
-                // vLLM Engine
-                html += '<div><div style="font-weight:700;color:#1e293b;margin-bottom:8px;border-bottom:2px solid #f59e0b;padding-bottom:4px;">vLLM Engine</div>';
-                html += '<div style="line-height:1.8;">';
-                html += `<div><span style="color:#64748b;">Max Model Len:</span> ${tc.max_model_len}</div>`;
-                html += `<div><span style="color:#64748b;">GPU Mem Util:</span> ${tc.gpu_memory_utilization}</div>`;
-                html += `<div><span style="color:#64748b;">Block Size:</span> ${tc.block_size}</div>`;
-                html += `<div><span style="color:#64748b;">Max Num Seqs:</span> ${v('max_num_seqs')}</div>`;
-                html += `<div><span style="color:#64748b;">Max Batched Tokens:</span> ${v('max_num_batched_tokens')}</div>`;
-                html += `<div><span style="color:#64748b;">Prefix Caching:</span> ${tc.enable_prefix_caching ? 'On' : 'Off'}</div>`;
-                html += `<div><span style="color:#64748b;">Dtype:</span> ${tc.dtype || 'auto'}</div>`;
-                html += `<div><span style="color:#64748b;">KV Cache Dtype:</span> ${tc.kv_cache_dtype || 'auto'}</div>`;
-                html += '</div></div>';
-                html += '</div></div></td></tr>';
-            }
+            html += `<tr${cls}><td>${r.config_name}</td><td>${r.architecture}</td><td data-val="${r.ttft_p90}">${r.ttft_p90}</td><td data-val="${r.ttft_p95 ?? ''}">${r.ttft_p95 ?? na}</td><td data-val="${r.ttft_p99 ?? ''}">${r.ttft_p99 ?? na}</td><td data-val="${r.throughput_p90}">${r.throughput_p90}</td><td data-val="${r.throughput_p95 ?? ''}">${r.throughput_p95 ?? na}</td><td data-val="${r.throughput_p99 ?? ''}">${r.throughput_p99 ?? na}</td><td data-val="${r.itl_p90 ?? ''}">${r.itl_p90 ?? na}</td><td data-val="${r.gpus}">${r.gpus}</td><td data-val="${r.efficiency}">${r.efficiency}</td><td>${manifestLinks}</td></tr>`;
         });
         html += '</table></div></div>';
     }
@@ -3654,73 +3604,70 @@ function renderCharts(data, runId) {
     secCfg += html; html = '';
 
     // ============================================================
-    // TEST SETTINGS tab — full deployment config for each test
+    // TEST SETTINGS tab — run-level configuration
     // ============================================================
-    if (data.all_results && data.all_results.some(r => r.test_config)) {
-        html += '<div class="chart-card"><div class="chart-card-header">Test Settings</div>';
-        html += '<div style="padding:12px 20px 4px; color:#1e293b; font-size:0.95em;">Full deployment and engine configuration used for each test. Shows exactly what was deployed — workload parameters, vLLM flags, resource limits, and infrastructure settings.</div>';
-        html += '<div class="chart-card-body" style="padding:12px 20px;">';
-        data.all_results.forEach((r, idx) => {
-            if (!r.test_config) return;
-            const tc = r.test_config;
-            const na = 'N/A';
-            const v = (k) => tc[k] != null ? tc[k] : 'auto';
-            const accId = 'ts-acc-' + runId + '-' + idx;
-            html += `<div style="border:1px solid #e2e8f0;border-radius:8px;margin-bottom:8px;overflow:hidden;">`;
-            html += `<div onclick="var p=document.getElementById('${accId}');p.style.display=p.style.display==='none'?'block':'none';this.querySelector('.ts-arrow').textContent=p.style.display==='none'?'\\u25B8':'\\u25BE'" style="padding:12px 16px;background:#f8fafc;cursor:pointer;display:flex;justify-content:space-between;align-items:center;">`;
-            html += `<div><strong style="color:#1e293b;">${r.config_name}</strong> <span style="color:#64748b;font-size:0.85em;margin-left:8px;">${r.architecture} &middot; ${r.gpus} GPUs</span></div>`;
-            html += `<span class="ts-arrow" style="color:#64748b;">&#9656;</span></div>`;
-            html += `<div id="${accId}" style="display:none;padding:16px;background:#fff;">`;
-            html += '<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:20px;font-size:0.85em;">';
-            // Deployment column
-            html += '<div><div style="font-weight:700;color:#1e293b;margin-bottom:8px;border-bottom:2px solid #6366f1;padding-bottom:4px;">Deployment</div><div style="line-height:2;">';
-            html += `<div><span style="color:#64748b;">Architecture:</span> <strong>${tc.architecture || na}</strong></div>`;
-            html += `<div><span style="color:#64748b;">Image:</span> ${tc.image || na}</div>`;
-            html += `<div><span style="color:#64748b;">Replicas:</span> ${tc.replicas || na}</div>`;
-            if (tc.architecture === 'pd') {
-                html += `<div><span style="color:#64748b;">Prefill Pods:</span> ${tc.prefill_replicas} &times; TP=${tc.prefill_tp}</div>`;
-                html += `<div><span style="color:#64748b;">Decode Pods:</span> ${tc.decode_replicas} &times; TP=${tc.decode_tp}</div>`;
-                html += `<div><span style="color:#64748b;">P/D Ratio:</span> ${tc.prefill_decode_ratio || na}</div>`;
-                html += `<div><span style="color:#64748b;">KV Connector:</span> ${tc.kv_connector || 'NixlConnector'}</div>`;
-            } else {
-                html += `<div><span style="color:#64748b;">Tensor Parallelism:</span> ${tc.tensor_parallelism}</div>`;
-            }
-            html += `<div><span style="color:#64748b;">Network:</span> ${tc.network_type || na}</div>`;
-            html += `<div><span style="color:#64748b;">Memory:</span> ${tc.memory_request || na}</div>`;
-            html += `<div><span style="color:#64748b;">CPU:</span> ${tc.cpu_request || na}</div>`;
-            html += '</div></div>';
-            // Workload column
-            html += '<div><div style="font-weight:700;color:#1e293b;margin-bottom:8px;border-bottom:2px solid #10b981;padding-bottom:4px;">Workload</div><div style="line-height:2;">';
-            html += `<div><span style="color:#64748b;">ISL:</span> ${tc.isl}${tc.isl_stdev ? ' (&sigma;=' + tc.isl_stdev + ')' : ''}</div>`;
-            html += `<div><span style="color:#64748b;">OSL:</span> ${tc.osl}${tc.osl_stdev ? ' (&sigma;=' + tc.osl_stdev + ')' : ''}</div>`;
-            html += `<div><span style="color:#64748b;">Concurrent Users:</span> ${tc.num_users}</div>`;
-            html += `<div><span style="color:#64748b;">Rate Type:</span> ${tc.request_type}</div>`;
-            html += `<div><span style="color:#64748b;">Duration:</span> ${tc.test_duration}s</div>`;
-            html += `<div><span style="color:#64748b;">Stop Mode:</span> ${tc.stop_mode || 'duration'}</div>`;
-            html += `<div><span style="color:#64748b;">Workload Mode:</span> ${tc.workload_mode || 'synthetic'}</div>`;
-            if (tc.dataset_source) html += `<div><span style="color:#64748b;">Dataset:</span> <span style="word-break:break-all;">${tc.dataset_source}</span></div>`;
-            if (tc.turns > 1) html += `<div><span style="color:#64748b;">Turns:</span> ${tc.turns}</div>`;
-            html += '</div></div>';
-            // vLLM Engine column
-            html += '<div><div style="font-weight:700;color:#1e293b;margin-bottom:8px;border-bottom:2px solid #f59e0b;padding-bottom:4px;">vLLM Engine</div><div style="line-height:2;">';
-            html += `<div><span style="color:#64748b;">Max Model Len:</span> ${tc.max_model_len}</div>`;
-            html += `<div><span style="color:#64748b;">GPU Mem Util:</span> ${tc.gpu_memory_utilization}</div>`;
-            if (tc.architecture === 'pd') {
-                html += `<div><span style="color:#64748b;">Prefill GPU Mem:</span> ${tc.prefill_gpu_memory_utilization || tc.gpu_memory_utilization}</div>`;
-                html += `<div><span style="color:#64748b;">Decode GPU Mem:</span> ${tc.decode_gpu_memory_utilization || tc.gpu_memory_utilization}</div>`;
-            }
-            html += `<div><span style="color:#64748b;">Block Size:</span> ${tc.block_size}</div>`;
-            html += `<div><span style="color:#64748b;">Max Num Seqs:</span> ${v('max_num_seqs')}</div>`;
-            html += `<div><span style="color:#64748b;">Max Batched Tokens:</span> ${v('max_num_batched_tokens')}</div>`;
-            html += `<div><span style="color:#64748b;">Prefix Caching:</span> ${tc.enable_prefix_caching ? 'On' : 'Off'}</div>`;
-            html += `<div><span style="color:#64748b;">Dtype:</span> ${tc.dtype || 'auto'}</div>`;
-            html += `<div><span style="color:#64748b;">KV Cache Dtype:</span> ${tc.kv_cache_dtype || 'auto'}</div>`;
-            if (tc.pipeline_parallel_size) html += `<div><span style="color:#64748b;">Pipeline Parallel:</span> ${tc.pipeline_parallel_size}</div>`;
-            html += `<div><span style="color:#64748b;">Trust Remote Code:</span> ${tc.trust_remote_code ? 'Yes' : 'No'}</div>`;
-            html += '</div></div>';
-            html += '</div></div></div>';
-        });
+    if (data.run_config) {
+        const rc = data.run_config;
+        const na = 'N/A';
+        const v = (k) => rc[k] != null ? rc[k] : 'auto';
+        html += '<div class="chart-card"><div class="chart-card-header">Run Configuration</div>';
+        html += '<div style="padding:12px 20px 4px; color:#1e293b; font-size:0.95em;">Settings used for this entire optimization run. These apply to all tests — only the architecture, TP, and pod counts vary per test.</div>';
+        html += '<div class="chart-card-body" style="padding:16px 20px;">';
+        html += '<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:24px;font-size:0.9em;">';
+        // Workload
+        html += '<div><div style="font-weight:700;color:#1e293b;margin-bottom:10px;border-bottom:2px solid #10b981;padding-bottom:4px;">Workload</div><div style="line-height:2.2;">';
+        html += `<div><span style="color:#64748b;">Model:</span> <strong>${rc.model_name || na}</strong></div>`;
+        html += `<div><span style="color:#64748b;">ISL:</span> ${rc.isl}${rc.isl_stdev ? ' (&sigma;=' + rc.isl_stdev + ')' : ''}</div>`;
+        html += `<div><span style="color:#64748b;">OSL:</span> ${rc.osl}${rc.osl_stdev ? ' (&sigma;=' + rc.osl_stdev + ')' : ''}</div>`;
+        html += `<div><span style="color:#64748b;">Concurrent Users:</span> ${rc.qps != null ? Math.round(rc.qps) : na}</div>`;
+        html += `<div><span style="color:#64748b;">Rate Type:</span> ${rc.rate_type || 'concurrent'}</div>`;
+        html += `<div><span style="color:#64748b;">Test Duration:</span> ${rc.test_duration || 300}s</div>`;
+        html += `<div><span style="color:#64748b;">Stop Mode:</span> ${rc.stop_mode || 'duration'}</div>`;
+        if (rc.turns > 1) html += `<div><span style="color:#64748b;">Turns:</span> ${rc.turns}</div>`;
+        html += `<div><span style="color:#64748b;">Workload Mode:</span> ${rc.workload_mode || 'synthetic'}</div>`;
+        if (rc.dataset_source) html += `<div><span style="color:#64748b;">Dataset:</span> <span style="word-break:break-all;">${rc.dataset_source}</span></div>`;
+        if (rc.prefix_cache_hit_pct > 0) html += `<div><span style="color:#64748b;">Prefix Cache Hit:</span> ${rc.prefix_cache_hit_pct}%</div>`;
         html += '</div></div>';
+        // Search Strategy
+        html += '<div><div style="font-weight:700;color:#1e293b;margin-bottom:10px;border-bottom:2px solid #6366f1;padding-bottom:4px;">Search Strategy</div><div style="line-height:2.2;">';
+        html += `<div><span style="color:#64748b;">Optimization Goal:</span> <strong>${(rc.objective || 'ttft').toUpperCase()}</strong></div>`;
+        html += `<div><span style="color:#64748b;">Total GPUs:</span> ${rc.total_gpus || na}</div>`;
+        html += `<div><span style="color:#64748b;">TP Options:</span> ${(rc.tp_options || []).join(', ') || na}</div>`;
+        html += `<div><span style="color:#64748b;">TP Pair Breadth:</span> Top-${rc.tp_pair_top_n || 2}</div>`;
+        html += `<div><span style="color:#64748b;">P/D Ratio Search:</span> ${rc.pd_search_mode === 'exhaustive' ? 'Exhaustive' : 'Smart'}</div>`;
+        html += `<div><span style="color:#64748b;">Use Achievable QPS:</span> ${rc.use_achievable_qps ? 'Yes' : 'No'}</div>`;
+        html += `<div><span style="color:#64748b;">Headroom:</span> ${rc.headroom || 1.3}x</div>`;
+        if (rc.latency_constraint_enabled) {
+            html += `<div><span style="color:#64748b;">Latency SLA:</span> ${rc.latency_constraint_ms}ms @ ${rc.latency_constraint_percentile}</div>`;
+        }
+        html += '</div></div>';
+        // Infrastructure
+        html += '<div><div style="font-weight:700;color:#1e293b;margin-bottom:10px;border-bottom:2px solid #f59e0b;padding-bottom:4px;">Infrastructure &amp; Engine</div><div style="line-height:2.2;">';
+        html += `<div><span style="color:#64748b;">Image:</span> <span style="word-break:break-all;font-size:0.9em;">${rc.image || na}</span></div>`;
+        html += `<div><span style="color:#64748b;">Namespace:</span> ${rc.namespace || na}</div>`;
+        html += `<div><span style="color:#64748b;">PVC:</span> ${rc.pvc_name || na}</div>`;
+        html += `<div><span style="color:#64748b;">Network Type:</span> ${rc.network_type || na}</div>`;
+        html += `<div><span style="color:#64748b;">Max Model Len:</span> ${rc.max_model_len || na}</div>`;
+        html += `<div><span style="color:#64748b;">GPU Mem Util:</span> ${rc.gpu_memory_utilization || na}</div>`;
+        if (rc.advanced_vllm) {
+            const adv = rc.advanced_vllm;
+            const showAdv = (key, label) => {
+                const s = adv[key];
+                if (s && s.mode !== 'auto') {
+                    html += `<div><span style="color:#64748b;">${label}:</span> ${s.value || s.mode}</div>`;
+                }
+            };
+            showAdv('block_size', 'Block Size');
+            showAdv('dtype', 'Dtype');
+            showAdv('kv_cache_dtype', 'KV Cache Dtype');
+            showAdv('max_num_seqs', 'Max Num Seqs');
+            showAdv('max_num_batched_tokens', 'Max Batched Tokens');
+            showAdv('pipeline_parallel_size', 'Pipeline Parallel');
+            showAdv('enable_prefix_caching', 'Prefix Caching');
+            showAdv('disable_custom_all_reduce', 'Disable All-Reduce');
+        }
+        html += '</div></div>';
+        html += '</div></div></div>';
         secTestCfg = html; html = '';
     }
 
