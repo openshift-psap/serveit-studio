@@ -828,12 +828,13 @@ class RecipeOptimizer:
         if self._should_stop():
             return self._build_results()
 
-        # Steps 4-9: Dispatch to goal-specific strategy
+        # Steps 4-11: Dispatch to goal-specific strategy
         strategy = self._get_strategy()
         strategy.execute()
 
-        # EPP benchmarking (optional, after main optimization)
-        self._benchmark_epp_strategies()
+        # Step 11: EPP tuning (conditional, after all other steps)
+        if self.config.epp_benchmark and not self._should_stop():
+            self._benchmark_epp_strategies()
 
         # Return results
         return self._build_results()
@@ -2571,10 +2572,11 @@ class RecipeOptimizer:
         return self._apply_advanced_vllm(cfg)
 
     def _benchmark_epp_strategies(self):
-        """Benchmark different EPP scoring strategies on the best deployment.
+        """Step 11: EPP Tuning — smart weight sweep on the best deployment.
 
-        Keeps the same inference pods running, swaps only the EPP configmap
-        and restarts the EPP pod. Tests 2-3 presets and compares results.
+        Uses workload characteristics to calculate 3-4 promising weight
+        combinations for the user's selected EPP preset, then benchmarks
+        each by swapping only the EPP configmap (pods stay running).
         """
         if not self.config.epp_benchmark:
             return
@@ -2588,20 +2590,37 @@ class RecipeOptimizer:
                     best_result = result
 
         if not best_config:
-            self.log("⚠️  No successful test to benchmark EPP strategies against", 'warning')
+            self.log("⚠️  No successful test for EPP tuning", 'warning')
             return
 
         self.log("\n" + "=" * 80, 'info')
-        self.log("EPP STRATEGY BENCHMARKING", 'decision')
+        self.log("STEP 11: EPP Tuning (Smart Weight Sweep)", 'decision')
         self.log("=" * 80, 'info')
-        self.log(f"Testing different EPP scoring on: {best_config.test_id}", 'info')
+        self.log(f"Tuning EPP scoring weights on: {best_config.test_id}", 'info')
+        self.log(f"Preset: {self.config.epp_preset}", 'info')
 
-        current_preset = self.config.epp_preset
-        presets_to_test = []
-        for p in ['balanced', 'cache_optimized', 'queue_balanced']:
-            if p != current_preset:
-                presets_to_test.append(p)
-        presets_to_test = presets_to_test[:2]
+        # Smart sweep: generate weight combos based on workload
+        has_prefix_cache = self.config.prefix_cache_hit_pct > 0
+        has_sla = self.config.latency_constraint_enabled
+        isl_osl_ratio = self.config.isl / max(self.config.osl, 1)
+
+        weight_combos = []
+        # Combo 1: User's current preset (baseline)
+        base = self._build_epp_config()
+        # Combo 2: Heavy cache (good when prefix sharing is high)
+        weight_combos.append(('cache-heavy', {'prefix_cache_weight': 5.0, 'kv_cache_weight': 1.0, 'queue_weight': 1.0, 'slo_enabled': has_sla}))
+        # Combo 3: Heavy queue (good for diverse prompts, prevents hotspotting)
+        weight_combos.append(('queue-heavy', {'prefix_cache_weight': 1.0, 'kv_cache_weight': 1.0, 'queue_weight': 5.0, 'slo_enabled': has_sla}))
+        # Combo 4: Balanced with kv-cache emphasis (good for long sequences)
+        if isl_osl_ratio > 10:
+            weight_combos.append(('kv-heavy', {'prefix_cache_weight': 2.0, 'kv_cache_weight': 5.0, 'queue_weight': 1.0, 'slo_enabled': has_sla}))
+        else:
+            weight_combos.append(('equal', {'prefix_cache_weight': 2.0, 'kv_cache_weight': 2.0, 'queue_weight': 2.0, 'slo_enabled': has_sla}))
+
+        self.log(f"  ISL/OSL ratio: {isl_osl_ratio:.1f}, prefix cache: {'yes' if has_prefix_cache else 'no'}, SLA: {'yes' if has_sla else 'no'}", 'info')
+        self.log(f"  Testing {len(weight_combos)} weight combinations:", 'info')
+        for name, w in weight_combos:
+            self.log(f"    {name}: cache={w['prefix_cache_weight']}, kv={w['kv_cache_weight']}, queue={w['queue_weight']}", 'info')
 
         self.epp_benchmark_results = []
 
@@ -2611,18 +2630,24 @@ class RecipeOptimizer:
             kubectl_runner=self.orchestrator.deployment_manager.kubectl
         )
 
-        for preset in presets_to_test:
+        for name, weights in weight_combos:
             if self._should_stop():
                 break
 
-            test_id = f"epp-{preset}-{best_config.test_id}"
-            self.log(f"\n  Testing EPP preset: {preset}", 'info')
+            test_id = f"step11-epp-{name}"
+            self.log(f"\n  Testing: {name} (cache={weights['prefix_cache_weight']}, kv={weights['kv_cache_weight']}, queue={weights['queue_weight']})", 'info')
 
             epp_cfg = {
-                'preset': preset,
-                'maxPrefixBlocksToMatch': self._build_epp_config().get('maxPrefixBlocksToMatch', 256),
-                'lruCapacityPerServer': 31250,
-                'nonCachedTokens': min(16, max(1, self.config.isl // 100)),
+                'preset': 'custom',
+                'maxPrefixBlocksToMatch': base.get('maxPrefixBlocksToMatch', 256),
+                'lruCapacityPerServer': base.get('lruCapacityPerServer', 31250),
+                'nonCachedTokens': base.get('nonCachedTokens', 16),
+                'plugins': {
+                    'prefix_cache': {'enabled': True, 'weight': weights['prefix_cache_weight']},
+                    'kv_cache': {'enabled': True, 'weight': weights['kv_cache_weight']},
+                    'queue': {'enabled': True, 'weight': weights['queue_weight']},
+                    'slo': {'enabled': weights['slo_enabled']},
+                },
             }
 
             success = prereq_mgr.update_epp_config(
@@ -2631,7 +2656,7 @@ class RecipeOptimizer:
                 log_callback=lambda msg: self.log(msg, 'info')
             )
             if not success:
-                self.log(f"  ❌ Failed to update EPP config for {preset}", 'error')
+                self.log(f"  ❌ Failed to update EPP config for {name}", 'error')
                 continue
 
             epp_test_config = TestConfig(
@@ -2672,19 +2697,29 @@ class RecipeOptimizer:
             if result and result.guidellm_success:
                 ttft = result.ttft_p90 or 0
                 tput = result.throughput_p90 or 0
-                self.log(f"  ✅ {preset}: TTFT p90={ttft:.1f}ms, Throughput p90={tput:.2f} req/s", 'success')
-                self.epp_benchmark_results.append((preset, result))
+                self.log(f"  ✅ {name}: TTFT p90={ttft:.1f}ms, Throughput p90={tput:.2f} req/s", 'success')
+                self.epp_benchmark_results.append((name, weights, result))
                 self._save_test_to_database(epp_test_config, result)
             else:
-                self.log(f"  ❌ {preset}: benchmark failed", 'error')
+                self.log(f"  ❌ {name}: benchmark failed", 'error')
 
+        # Summary
         if self.epp_benchmark_results:
-            self.log(f"\n  EPP Benchmark Summary ({len(self.epp_benchmark_results)} strategies tested):", 'success')
-            for preset, result in self.epp_benchmark_results:
-                ttft = result.ttft_p90 or 0
+            self.log(f"\n  Step 11 Summary — {len(self.epp_benchmark_results)} EPP weight combos tested:", 'success')
+            best_epp_name = None
+            best_epp_ttft = float('inf')
+            for name, weights, result in self.epp_benchmark_results:
+                ttft = result.ttft_p90 or float('inf')
                 tput = result.throughput_p90 or 0
-                self.log(f"    {preset}: TTFT={ttft:.1f}ms, Throughput={tput:.2f} req/s", 'info')
+                marker = ''
+                if ttft < best_epp_ttft:
+                    best_epp_ttft = ttft
+                    best_epp_name = name
+                self.log(f"    {name}: TTFT={ttft:.1f}ms, Throughput={tput:.2f} req/s", 'info')
+            if best_epp_name:
+                self.log(f"  Best EPP config: {best_epp_name} (TTFT={best_epp_ttft:.1f}ms)", 'success')
 
+        # Restore user's original EPP config
         prereq_mgr.update_epp_config(
             architecture=best_config.architecture,
             epp_config=self._build_epp_config(),
