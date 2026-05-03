@@ -1,5 +1,5 @@
 """
-InferRecipe Configuration Generator
+InfeRecipe Configuration Generator
 
 Generates test configurations based on user inputs and cluster resources.
 Determines which architectures to test based on optimization priority.
@@ -603,7 +603,7 @@ def main():
     import json
 
     parser = argparse.ArgumentParser(
-        description='Generate InferRecipe optimization plan'
+        description='Generate InfeRecipe optimization plan'
     )
     parser.add_argument('--run-name', required=True, help='Name for this optimization run')
     parser.add_argument('--model', required=True, help='HuggingFace model name')

@@ -1,4 +1,4 @@
-# InferRecipe Web Interface
+# InfeRecipe Web Interface
 
 Flask-based web UI for configuring and monitoring optimization runs.
 
@@ -65,12 +65,12 @@ Main UI with tabbed interface.
 pip install -r requirements.txt
 
 # Set environment variables
-export INFER_RECIPE_PATH=/path/to/InferRecipe
+export INFER_RECIPE_PATH=/path/to/InfeRecipe
 export DB_PATH=./inferrecipe.db
 export OPTIMIZATION_OUTPUT_DIR=./optimization-runs
 
 # Run the server
-cd InferRecipe
+cd InfeRecipe
 python3 -m web.server
 ```
 
@@ -78,7 +78,7 @@ Access at: http://localhost:5000
 
 ## Running in Container
 
-The web server runs inside the InferRecipe benchmark pod:
+The web server runs inside the InfeRecipe benchmark pod:
 
 ```bash
 # Deploy to cluster

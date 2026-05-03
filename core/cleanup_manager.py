@@ -1,5 +1,5 @@
 """
-InferRecipe Cleanup Manager
+InfeRecipe Cleanup Manager
 
 Cleans up deployed test configurations by looking at database state.
 """
@@ -93,7 +93,7 @@ class CleanupManager:
 
     def cleanup_all_test_deployments(self, log_callback=None) -> bool:
         """
-        Clean up all InferRecipe test deployments.
+        Clean up all InfeRecipe test deployments.
 
         Args:
             log_callback: Optional callback for logging
@@ -103,7 +103,7 @@ class CleanupManager:
         """
         try:
             if log_callback:
-                log_callback('🧹 Cleaning up all InferRecipe test deployments...')
+                log_callback('🧹 Cleaning up all InfeRecipe test deployments...')
 
             # Delete all LeaderWorkerSets with inferrecipe label
             result = self.kubectl.run(
@@ -117,7 +117,7 @@ class CleanupManager:
                         log_callback(f'✅ {result.stdout.strip()}')
                 else:
                     if log_callback:
-                        log_callback('ℹ️  No InferRecipe test deployments found')
+                        log_callback('ℹ️  No InfeRecipe test deployments found')
 
             # Delete all associated services
             self.kubectl.run(
@@ -202,7 +202,7 @@ class CleanupManager:
 
     def get_deployed_resources(self) -> List[str]:
         """
-        Get list of currently deployed InferRecipe resources.
+        Get list of currently deployed InfeRecipe resources.
 
         Returns:
             List of LeaderWorkerSet names
@@ -226,7 +226,7 @@ def main():
     import argparse
 
     parser = argparse.ArgumentParser(
-        description='Clean up InferRecipe test deployments'
+        description='Clean up InfeRecipe test deployments'
     )
     parser.add_argument('action', choices=['cleanup', 'list'],
                         help='Action to perform')
@@ -244,7 +244,7 @@ def main():
             for r in resources:
                 print(f"  - {r}")
         else:
-            print("No InferRecipe deployments found")
+            print("No InfeRecipe deployments found")
 
     elif args.action == 'cleanup':
         if args.resource:

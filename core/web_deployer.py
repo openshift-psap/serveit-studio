@@ -1,5 +1,5 @@
 """
-Web UI deployment system for InferRecipe.
+Web UI deployment system for InfeRecipe.
 
 Consolidates deployment orchestration, network integration, resource application,
 and K8s resource generation used by the web interface. The CLI path uses
@@ -683,7 +683,7 @@ if [ -f /scripts/discover_ib_hca.sh ]; then
 fi
 
 echo "========================================="
-echo "InferRecipe Test: {config.test_id}"
+echo "InfeRecipe Test: {config.test_id}"
 echo "Architecture: PD ({role.capitalize()})"
 echo "Model: {config.model_name}"
 echo "TP: {tp}"

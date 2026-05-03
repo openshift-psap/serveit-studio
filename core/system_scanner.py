@@ -1,5 +1,5 @@
 """
-InferRecipe System Scanner
+InfeRecipe System Scanner
 
 Scans Kubernetes cluster for available resources (GPUs, RDMA NICs, nodes).
 """

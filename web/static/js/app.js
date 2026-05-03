@@ -171,7 +171,7 @@ function saveConsoleToFile() {
 
     // Format console history as text
     const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
-    let content = `InferRecipe Console Log\n`;
+    let content = `InfeRecipe Console Log\n`;
     content += `Generated: ${new Date().toLocaleString()}\n`;
     content += `Total Messages: ${consoleHistory.length}\n`;
     content += `${'='.repeat(80)}\n\n`;
@@ -4916,7 +4916,7 @@ function downloadHTMLReport(runId, data) {
     const hasStep8 = rec && (rec.pd_vs_agg || rec.ep_vs_agg);
     const hasStep10 = !!data.calibrated_qps;
 
-    let html = `<!DOCTYPE html><html><head><meta charset="UTF-8"><title>InferRecipe Report - Run ${runId}</title>`;
+    let html = `<!DOCTYPE html><html><head><meta charset="UTF-8"><title>InfeRecipe Report - Run ${runId}</title>`;
     html += '<script src="https://cdn.plot.ly/plotly-2.35.2.min.js"><\/script>';
     html += `<style>
         body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; width: 95%; margin: 0 auto; padding: 20px; background: #f8fafc; color: #1e293b; }
@@ -4944,7 +4944,7 @@ function downloadHTMLReport(runId, data) {
         .dl-pane.active { display:block; }
     </style></head><body>`;
 
-    html += `<h1>InferRecipe Optimization Report - Run #${runId}</h1>`;
+    html += `<h1>InfeRecipe Optimization Report - Run #${runId}</h1>`;
     html += `<p>Generated: ${new Date().toLocaleString()}</p>`;
 
     // === Build each section separately ===

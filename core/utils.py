@@ -1,5 +1,5 @@
 """
-Shared utility functions for InferRecipe.
+Shared utility functions for InfeRecipe.
 """
 
 from enum import Enum

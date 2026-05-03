@@ -1,6 +1,6 @@
 # Networking Module
 
-**Modular network resource creation for InferRecipe**
+**Modular network resource creation for InfeRecipe**
 
 ## Overview
 

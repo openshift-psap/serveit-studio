@@ -1,5 +1,5 @@
 """
-InferRecipe Prerequisite Manager
+InfeRecipe Prerequisite Manager
 
 Manages deployment of prerequisite infrastructure (GAIE, Gateway, etc.)
 """
@@ -470,7 +470,7 @@ def main():
     import argparse
 
     parser = argparse.ArgumentParser(
-        description='Manage InferRecipe prerequisite infrastructure'
+        description='Manage InfeRecipe prerequisite infrastructure'
     )
     parser.add_argument('action', choices=['deploy', 'check', 'cleanup'],
                         help='Action to perform')

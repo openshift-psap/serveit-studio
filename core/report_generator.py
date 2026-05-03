@@ -1,5 +1,5 @@
 """
-InferRecipe Optimization Report Generator — backward-compatibility facade.
+InfeRecipe Optimization Report Generator — backward-compatibility facade.
 
 This module re-exports everything from the split modules so that
 existing callers (e.g. `from core.report_generator import ReportGenerator`)

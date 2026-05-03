@@ -1,12 +1,12 @@
-# InferRecipe
+# InfeRecipe
 
 Automated benchmarking tool that finds the optimal vLLM inference configuration for your hardware, model, and workload.
 
-Given a model, a target QPS, and an optimization goal (response time or throughput), InferRecipe deploys real vLLM instances on your cluster, runs benchmarks, and returns a Pareto-optimal set of configurations — ranked by TTFT, throughput, or both.
+Given a model, a target QPS, and an optimization goal (response time or throughput), InfeRecipe deploys real vLLM instances on your cluster, runs benchmarks, and returns a Pareto-optimal set of configurations — ranked by TTFT, throughput, or both.
 
 ## How It Works
 
-InferRecipe supports three inference architectures:
+InfeRecipe supports three inference architectures:
 
 | Architecture | Description | Optimizes For |
 |---|---|---|
@@ -118,7 +118,7 @@ deployment/
 
 ## Multi-Cloud Support
 
-InferRecipe auto-detects the cloud provider and configures networking accordingly:
+InfeRecipe auto-detects the cloud provider and configures networking accordingly:
 
 | Provider | GPU Resource | Networking | RDMA |
 |---|---|---|---|

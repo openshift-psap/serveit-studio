@@ -1,5 +1,5 @@
 """
-InferRecipe Test Orchestrator
+InfeRecipe Test Orchestrator
 
 Orchestrates the complete test flow: deploy → run guidellm → collect metrics → cleanup.
 Coordinates between deployment_manager, metrics_collector, and database.
@@ -1756,7 +1756,7 @@ def main():
     import argparse
 
     parser = argparse.ArgumentParser(
-        description='Run InferRecipe test orchestration'
+        description='Run InfeRecipe test orchestration'
     )
     parser.add_argument('--plan-file', required=True,
                         help='Path to optimization plan JSON file')

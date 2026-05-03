@@ -1,5 +1,5 @@
 """
-InferRecipe Test Planner
+InfeRecipe Test Planner
 
 Calculates resource requirements and plans test configurations based on:
 - Model size and VRAM requirements

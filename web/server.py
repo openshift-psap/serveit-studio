@@ -1,6 +1,6 @@
 """
-InferRecipe llm-d optimizer Web Application
-Main Flask application for InferRecipe optimization benchmarking tool.
+InfeRecipe llm-d optimizer Web Application
+Main Flask application for InfeRecipe optimization benchmarking tool.
 Uses gevent instead of deprecated eventlet.
 """
 
@@ -1612,7 +1612,7 @@ def deploy_and_test_inference(model_name: str, namespace: str, job_name: str = N
         log_to_ui('=' * 60, 'info', job_name=job_name)
         log_to_ui('', 'info', job_name=job_name)
 
-        # Step 2: Check if there are existing InferRecipe deployments
+        # Step 2: Check if there are existing InfeRecipe deployments
         cleanup_mgr = CleanupManager(namespace=namespace)
         existing_resources = cleanup_mgr.get_deployed_resources()
 
@@ -3345,7 +3345,7 @@ def handle_cleanup_deployment(data):
         if pods_to_cleanup:
             success = cleanup_mgr.cleanup_last_deployment(pods_to_cleanup, log_callback=cleanup_log)
         else:
-            # No specific pods, try cleaning up all InferRecipe test deployments
+            # No specific pods, try cleaning up all InfeRecipe test deployments
             success = cleanup_mgr.cleanup_all_test_deployments(log_callback=cleanup_log)
 
         if success:
@@ -4065,7 +4065,7 @@ def handle_generate_test_plan(data):
             log_to_ui(f'   GPU Memory Utilization: {utilization:.1f}%', 'info')
             log_to_ui('', 'info')
             log_to_ui('🔹 OPTIMIZATION STRATEGY', 'info')
-            log_to_ui('   InferRecipe will now test multiple configurations:', 'info')
+            log_to_ui('   InfeRecipe will now test multiple configurations:', 'info')
             log_to_ui('   • Different GPU counts (scaling up from minimum)', 'info')
             log_to_ui('   • Different architectures (Aggregated, EP, PD)', 'info')
             log_to_ui('   • Different pod ratios (prefill/decode balance)', 'info')
@@ -4795,7 +4795,7 @@ def upload_database():
             ).fetchall()]
             if 'optimization_runs' not in src_tables or 'test_configurations' not in src_tables:
                 src_conn.close()
-                return jsonify({'success': False, 'error': 'Not a valid InferRecipe database (missing required tables)'}), 400
+                return jsonify({'success': False, 'error': 'Not a valid InfeRecipe database (missing required tables)'}), 400
 
             src_runs = src_conn.execute('SELECT * FROM optimization_runs ORDER BY id').fetchall()
             if not src_runs:
@@ -5007,7 +5007,7 @@ def cleanup_stale_optimizations():
 def main():
     """Main application entry point."""
     print("=" * 60)
-    print("InferRecipe llm-d optimizer - Intelligent Search for Optimal llm-d Inference Configuration")
+    print("InfeRecipe llm-d optimizer - Intelligent Search for Optimal llm-d Inference Configuration")
     print("=" * 60)
 
     # Initialize database

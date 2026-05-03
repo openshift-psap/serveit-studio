@@ -1,5 +1,5 @@
 """
-InferRecipe Deployment Manager
+InfeRecipe Deployment Manager
 
 Manages deployment of test configurations to Kubernetes cluster.
 """
@@ -630,7 +630,7 @@ class DeploymentManager:
         log_callback: Optional[Callable[[str], None]] = None
     ) -> bool:
         """
-        Delete all InferRecipe test deployments.
+        Delete all InfeRecipe test deployments.
 
         Args:
             log_callback: Optional callback for logging
@@ -639,7 +639,7 @@ class DeploymentManager:
             True if cleanup succeeded
         """
         if log_callback:
-            log_callback("🧹 Cleaning up all InferRecipe test deployments...")
+            log_callback("🧹 Cleaning up all InfeRecipe test deployments...")
 
         try:
             result = self.kubectl.run(
@@ -673,7 +673,7 @@ def main():
     import argparse
 
     parser = argparse.ArgumentParser(
-        description='Manage InferRecipe test deployments'
+        description='Manage InfeRecipe test deployments'
     )
     parser.add_argument('action', choices=['deploy', 'status', 'delete', 'cleanup'],
                         help='Action to perform')

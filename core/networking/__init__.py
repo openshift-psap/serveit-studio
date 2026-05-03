@@ -1,5 +1,5 @@
 """
-Modular networking system for InferRecipe.
+Modular networking system for InfeRecipe.
 
 Supports multiple network types:
 - NAD (NetworkAttachmentDefinition) - Multus CNI

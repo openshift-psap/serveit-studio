@@ -1,4 +1,4 @@
-# InferRecipe Core Modules
+# InfeRecipe Core Modules
 
 Core optimization engine for finding optimal LLM inference configurations.
 

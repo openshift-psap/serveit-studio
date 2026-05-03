@@ -1,5 +1,5 @@
 """
-Progress Tracking Utilities for InferRecipe
+Progress Tracking Utilities for InfeRecipe
 
 Provides reusable progress bar functionality for:
 - Model downloads

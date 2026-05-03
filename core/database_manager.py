@@ -1,5 +1,5 @@
 """
-Database manager for InferRecipe optimization results.
+Database manager for InfeRecipe optimization results.
 Provides immediate persistence of test results to SQLite database.
 """
 
@@ -17,7 +17,7 @@ from .metrics_analyzer import MetricsAnalyzer
 
 class DatabaseManager:
     """
-    Manages database operations for InferRecipe optimization runs.
+    Manages database operations for InfeRecipe optimization runs.
     Supports immediate test result persistence.
     """
 
