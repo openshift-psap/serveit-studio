@@ -155,14 +155,14 @@ function logToConsole(message, type = 'info') {
 
 // Save console message to localStorage
 function saveConsoleMessage(message, type) {
-    const consoleHistory = JSON.parse(localStorage.getItem('inferrecipe-console') || '[]');
+    const consoleHistory = JSON.parse(localStorage.getItem('inferecipe-console') || '[]');
     consoleHistory.push({ message, type, timestamp: Date.now() });
-    localStorage.setItem('inferrecipe-console', JSON.stringify(consoleHistory));
+    localStorage.setItem('inferecipe-console', JSON.stringify(consoleHistory));
 }
 
 // Save console log to txt file
 function saveConsoleToFile() {
-    const consoleHistory = JSON.parse(localStorage.getItem('inferrecipe-console') || '[]');
+    const consoleHistory = JSON.parse(localStorage.getItem('inferecipe-console') || '[]');
 
     if (consoleHistory.length === 0) {
         alert('Console is empty, nothing to save.');
@@ -188,7 +188,7 @@ function saveConsoleToFile() {
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
-    a.download = `inferrecipe-console-log-${timestamp}.txt`;
+    a.download = `inferecipe-console-log-${timestamp}.txt`;
     document.body.appendChild(a);
     a.click();
     document.body.removeChild(a);
@@ -197,7 +197,7 @@ function saveConsoleToFile() {
 
 // Restore console from localStorage
 function restoreConsole() {
-    const consoleHistory = JSON.parse(localStorage.getItem('inferrecipe-console') || '[]');
+    const consoleHistory = JSON.parse(localStorage.getItem('inferecipe-console') || '[]');
     const consoleEl = document.getElementById('console-output');
 
     // Only clear and restore if there's history
@@ -220,7 +220,7 @@ function restoreConsole() {
 // Clear console history
 function clearConsole() {
     // Clear localStorage
-    localStorage.removeItem('inferrecipe-console');
+    localStorage.removeItem('inferecipe-console');
 
     // Clear database via API
     fetch('/api/clear_console', {
@@ -253,8 +253,8 @@ function saveConfig() {
     });
 
     // Also keep in localStorage as fallback
-    localStorage.setItem('inferrecipe-config', JSON.stringify(config));
-    localStorage.setItem('inferrecipe-step', currentStep.toString());
+    localStorage.setItem('inferecipe-config', JSON.stringify(config));
+    localStorage.setItem('inferecipe-step', currentStep.toString());
 }
 
 // Update UI from current config state
@@ -411,8 +411,8 @@ function loadConfig() {
     socket.emit('load_config');
 
     // Fallback: also load from localStorage in case server fails
-    const saved = localStorage.getItem('inferrecipe-config');
-    const savedStep = localStorage.getItem('inferrecipe-step');
+    const saved = localStorage.getItem('inferecipe-config');
+    const savedStep = localStorage.getItem('inferecipe-step');
 
     if (saved) {
         const loadedConfig = JSON.parse(saved);
@@ -1766,7 +1766,7 @@ socket.on('status_update', function(data) {
 socket.on('clear_console', function() {
     // Clear console UI when server broadcasts clear event
     document.getElementById('console-output').innerHTML = '<div class="console-line">Console cleared.</div>';
-    localStorage.removeItem('inferrecipe-console');
+    localStorage.removeItem('inferecipe-console');
 });
 
 socket.on('config_updated', function(data) {
@@ -2405,7 +2405,7 @@ socket.on('compression_complete', function(data) {
             var url = window.URL.createObjectURL(blob);
             var a = document.createElement('a');
             a.href = url;
-            a.download = 'inferrecipe-optimizer.db.gz';
+            a.download = 'inferecipe-optimizer.db.gz';
             document.body.appendChild(a);
             a.click();
             window.URL.revokeObjectURL(url);
@@ -5314,7 +5314,7 @@ function downloadHTMLReport(runId, data) {
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
-    a.download = `inferrecipe-report-run-${runId}.html`;
+    a.download = `inferecipe-report-run-${runId}.html`;
     a.click();
     URL.revokeObjectURL(url);
 }

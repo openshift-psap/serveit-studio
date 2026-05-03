@@ -646,7 +646,7 @@ class DeploymentManager:
                 [
                     'delete',
                     'leaderworkerset',
-                    '-l', 'component=inferrecipe-test',
+                    '-l', 'component=inferecipe-test',
                     '-n', self.namespace
                 ],
                 check=False

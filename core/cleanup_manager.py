@@ -105,9 +105,9 @@ class CleanupManager:
             if log_callback:
                 log_callback('🧹 Cleaning up all InfeRecipe test deployments...')
 
-            # Delete all LeaderWorkerSets with inferrecipe label
+            # Delete all LeaderWorkerSets with inferecipe label
             result = self.kubectl.run(
-                ['delete', 'leaderworkerset', '-l', 'component=inferrecipe-test', '-n', self.namespace, '--ignore-not-found=true'],
+                ['delete', 'leaderworkerset', '-l', 'component=inferecipe-test', '-n', self.namespace, '--ignore-not-found=true'],
                 check=False
             )
 
@@ -121,7 +121,7 @@ class CleanupManager:
 
             # Delete all associated services
             self.kubectl.run(
-                ['delete', 'service', '-l', 'component=inferrecipe-test', '-n', self.namespace, '--ignore-not-found=true'],
+                ['delete', 'service', '-l', 'component=inferecipe-test', '-n', self.namespace, '--ignore-not-found=true'],
                 check=False
             )
 
@@ -209,7 +209,7 @@ class CleanupManager:
         """
         try:
             result = self.kubectl.run_json(
-                ['get', 'leaderworkerset', '-l', 'component=inferrecipe-test', '-n', self.namespace, '-o', 'json']
+                ['get', 'leaderworkerset', '-l', 'component=inferecipe-test', '-n', self.namespace, '-o', 'json']
             )
 
             if 'items' in result:

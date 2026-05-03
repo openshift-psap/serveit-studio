@@ -6,7 +6,7 @@ metadata:
   labels:
     app.kubernetes.io/name: {{ gaie_name | default('gaie-pd-epp') }}
     app.kubernetes.io/version: v1.3.0
-    component: inferrecipe-prereq
+    component: inferecipe-prereq
 spec:
   replicas: {{ gaie_replicas | default(1) }}
   selector:

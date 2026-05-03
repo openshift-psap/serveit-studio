@@ -26,7 +26,7 @@ logger = logging.getLogger(__name__)
 class ReportRenderer:
     """Render optimization reports as HTML or Markdown files."""
 
-    def __init__(self, db_path: str = '/mnt/storage/inferrecipe.db'):
+    def __init__(self, db_path: str = '/mnt/storage/inferecipe.db'):
         self.db_path = db_path
 
     # ------------------------------------------------------------------

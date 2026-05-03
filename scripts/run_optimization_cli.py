@@ -89,7 +89,7 @@ config_params = {
     # Infrastructure
     'thanos_url': None,
     'image': 'ghcr.io/llm-d/llm-d-cuda:v0.5.1',
-    'pvc_name': 'inferrecipe-model-cache',
+    'pvc_name': 'inferecipe-model-cache',
     'nccl_ib_hca': 'mlx',
     'hf_token': None,
 
@@ -156,7 +156,7 @@ print("💾 CREATING DATABASE RUN ENTRY")
 print("=" * 80)
 
 try:
-    db_manager = DatabaseManager(db_path='/mnt/storage/inferrecipe.db')
+    db_manager = DatabaseManager(db_path='/mnt/storage/inferecipe.db')
     run_id = db_manager.create_optimization_run(
         run_name=f"recipe-test-{datetime.now().strftime('%Y%m%d-%H%M%S')}",
         model=config_params['model_name'],
@@ -211,7 +211,7 @@ try:
         config=recipe_config,
         log_callback=log_callback,
         run_id=run_id,
-        db_path='/mnt/storage/inferrecipe.db'
+        db_path='/mnt/storage/inferecipe.db'
     )
     print("✅ RecipeOptimizer created successfully")
     print(f"   Database persistence enabled (run_id={run_id})")

@@ -79,10 +79,10 @@ Steps 2–3 and 7–9 deploy real workloads. Steps 4–6 are pure math.
 
 ```bash
 # Kubernetes
-kubectl port-forward svc/inferrecipe-benchmark-svc 5000:5000 -n llm-d
+kubectl port-forward svc/inferecipe-benchmark-svc 5000:5000 -n llm-d
 
 # OpenShift
-oc get route inferrecipe-benchmark-ui -n llm-d
+oc get route inferecipe-benchmark-ui -n llm-d
 ```
 
 ## Project Structure
@@ -139,22 +139,22 @@ InfeRecipe auto-detects the cloud provider and configures networking accordingly
 - vLLM queue depth, batch size, KV cache usage
 - InfiniBand RDMA throughput
 
-Results are stored in SQLite at `/mnt/storage/inferrecipe.db`.
+Results are stored in SQLite at `/mnt/storage/inferecipe.db`.
 
 ## Troubleshooting
 
 ```bash
 # Check pod status
-kubectl get pod inferrecipe-benchmark -n llm-d
+kubectl get pod inferecipe-benchmark -n llm-d
 
 # View logs
-kubectl logs -f inferrecipe-benchmark -n llm-d
+kubectl logs -f inferecipe-benchmark -n llm-d
 
 # Check active test deployments
 kubectl get leaderworkerset -n llm-d
 
 # Inspect a stuck pod
-kubectl describe pod inferrecipe-benchmark -n llm-d
+kubectl describe pod inferecipe-benchmark -n llm-d
 ```
 
 ## License

@@ -6,7 +6,7 @@ set -e
 
 # Default configuration
 NAMESPACE="llm-d"
-IMAGE="quay.io/bbenshab/vllm:inferrecipe"
+IMAGE="quay.io/bbenshab/vllm:inferecipe"
 PVC_NAME=""
 STORAGE_CLASS=""
 STORAGE_SIZE="100Gi"
@@ -31,7 +31,7 @@ Use --just-yaml to only generate YAML without deploying.
 
 Options:
   -n, --namespace NAME        Kubernetes namespace (default: llm-d)
-  -i, --image IMAGE           Container image (default: quay.io/bbenshab/vllm:inferrecipe)
+  -i, --image IMAGE           Container image (default: quay.io/bbenshab/vllm:inferecipe)
 
   Storage Options (choose one):
   -p, --pvc-name NAME         Use existing PVC (skips PVC creation)
@@ -83,12 +83,12 @@ Examples:
   ./deployment/deploy.sh --stop-port-forward
 
   # Only generate YAML (for manual review/deployment)
-  ./deployment/deploy.sh --just-yaml > inferrecipe-optimizer.yaml
-  less inferrecipe-optimizer.yaml
-  kubectl apply -f inferrecipe-optimizer.yaml
+  ./deployment/deploy.sh --just-yaml > inferecipe-optimizer.yaml
+  less inferecipe-optimizer.yaml
+  kubectl apply -f inferecipe-optimizer.yaml
 
   # Update the deployment with a new image
-  kubectl set image deployment/inferrecipe-optimizer runner=quay.io/bbenshab/vllm:new-tag -n <namespace>
+  kubectl set image deployment/inferecipe-optimizer runner=quay.io/bbenshab/vllm:new-tag -n <namespace>
 
 EOF
 }
@@ -182,7 +182,7 @@ if [[ -n "$PVC_NAME" ]]; then
     ACTUAL_PVC_NAME="$PVC_NAME"
 elif [[ -n "$STORAGE_CLASS" ]]; then
     CREATE_PVC="true"
-    ACTUAL_PVC_NAME="inferrecipe-storage"
+    ACTUAL_PVC_NAME="inferecipe-storage"
 else
     # Not needed for port-forward/stop commands
     if [[ "$PORT_FORWARD_ONLY" != "true" && "$STOP_PORT_FORWARD" != "true" && "$RESTART_SERVER" != "true" && "$SYNC_CODE" != "true" ]]; then
@@ -207,7 +207,7 @@ cat << EOF
 apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRoleBinding
 metadata:
-  name: inferrecipe-optimizer-prometheus-access
+  name: inferecipe-optimizer-prometheus-access
 subjects:
 - kind: ServiceAccount
   name: default
@@ -220,7 +220,7 @@ roleRef:
 apiVersion: rbac.authorization.k8s.io/v1
 kind: Role
 metadata:
-  name: inferrecipe-optimizer-pod-manager
+  name: inferecipe-optimizer-pod-manager
   namespace: ${NAMESPACE}
 rules:
 # Core resource management
@@ -272,7 +272,7 @@ rules:
 apiVersion: rbac.authorization.k8s.io/v1
 kind: RoleBinding
 metadata:
-  name: inferrecipe-optimizer-pod-manager-binding
+  name: inferecipe-optimizer-pod-manager-binding
   namespace: ${NAMESPACE}
 subjects:
 - kind: ServiceAccount
@@ -280,13 +280,13 @@ subjects:
   namespace: ${NAMESPACE}
 roleRef:
   kind: Role
-  name: inferrecipe-optimizer-pod-manager
+  name: inferecipe-optimizer-pod-manager
   apiGroup: rbac.authorization.k8s.io
 ---
 apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRole
 metadata:
-  name: inferrecipe-optimizer-cluster-manager
+  name: inferecipe-optimizer-cluster-manager
 rules:
 # Cluster-scoped RBAC for prerequisite deployment (GAIE needs ClusterRole/ClusterRoleBinding)
 - apiGroups: ["rbac.authorization.k8s.io"]
@@ -337,14 +337,14 @@ rules:
 apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRoleBinding
 metadata:
-  name: inferrecipe-optimizer-cluster-manager-binding
+  name: inferecipe-optimizer-cluster-manager-binding
 subjects:
 - kind: ServiceAccount
   name: default
   namespace: ${NAMESPACE}
 roleRef:
   kind: ClusterRole
-  name: inferrecipe-optimizer-cluster-manager
+  name: inferecipe-optimizer-cluster-manager
   apiGroup: rbac.authorization.k8s.io
 EOF
 
@@ -358,7 +358,7 @@ metadata:
   name: ${ACTUAL_PVC_NAME}
   namespace: ${NAMESPACE}
   labels:
-    app: inferrecipe-optimizer
+    app: inferecipe-optimizer
     component: storage
 spec:
   accessModes:
@@ -382,21 +382,21 @@ cat << EOF
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: inferrecipe-optimizer
+  name: inferecipe-optimizer
   namespace: ${NAMESPACE}
   labels:
-    app: inferrecipe-optimizer
+    app: inferecipe-optimizer
 spec:
   replicas: 1
   strategy:
     type: Recreate  # Use Recreate to avoid two pods mounting same PVC
   selector:
     matchLabels:
-      app: inferrecipe-optimizer
+      app: inferecipe-optimizer
   template:
     metadata:
       labels:
-        app: inferrecipe-optimizer
+        app: inferecipe-optimizer
     spec:
       serviceAccountName: default
       volumes:
@@ -421,7 +421,7 @@ spec:
                 echo "Dev mode: waiting for code at \${CODE_DIR}/web/server.py ..."
                 while [ ! -f "\${CODE_DIR}/web/server.py" ]; do sleep 2; done
                 echo "Code found. Starting server (auto-restart on crash)..."
-                export INFER_RECIPE_PATH="\${CODE_DIR}"
+                export INFE_RECIPE_PATH="\${CODE_DIR}"
                 while true; do
                   cd "\${CODE_DIR}/web"
                   find "\${CODE_DIR}" -type d -name __pycache__ -exec rm -rf {} + 2>/dev/null || true
@@ -435,7 +435,7 @@ spec:
                 exec python3.11 server.py
               fi
           env:
-            - name: INFER_RECIPE_PATH
+            - name: INFE_RECIPE_PATH
               value: "/app"
             - name: OPTIMIZATION_OUTPUT_DIR
               value: "/mnt/storage/optimization-runs"
@@ -452,15 +452,15 @@ spec:
             - name: INFERENCE_GATEWAY
               value: "http://infra-ep-inference-gateway-istio.${NAMESPACE}.svc.cluster.local:80"
             - name: DB_PATH
-              value: "/mnt/storage/inferrecipe.db"
-            - name: INFER_RECIPE_FORCE_NAD
+              value: "/mnt/storage/inferecipe.db"
+            - name: INFE_RECIPE_FORCE_NAD
               value: "${FORCE_NAD}"
             - name: DEV_MODE
               value: "${DEV_MODE}"
             - name: HF_TOKEN
               valueFrom:
                 secretKeyRef:
-                  name: inferrecipe-optimizer-hf-token
+                  name: inferecipe-optimizer-hf-token
                   key: HF_TOKEN
                   optional: true
           volumeMounts:
@@ -478,10 +478,10 @@ spec:
 apiVersion: v1
 kind: Service
 metadata:
-  name: inferrecipe-optimizer-ui
+  name: inferecipe-optimizer-ui
   namespace: ${NAMESPACE}
   labels:
-    app: inferrecipe-optimizer
+    app: inferecipe-optimizer
 spec:
   ports:
   - name: http
@@ -489,7 +489,7 @@ spec:
     protocol: TCP
     targetPort: 5000
   selector:
-    app: inferrecipe-optimizer
+    app: inferecipe-optimizer
 EOF
 
 if [[ "$IS_OPENSHIFT" == "true" ]]; then
@@ -500,16 +500,16 @@ if [[ "$IS_OPENSHIFT" == "true" ]]; then
 apiVersion: route.openshift.io/v1
 kind: Route
 metadata:
-  name: inferrecipe-optimizer-ui
+  name: inferecipe-optimizer-ui
   namespace: ${NAMESPACE}
   labels:
-    app: inferrecipe-optimizer
+    app: inferecipe-optimizer
 spec:
   port:
     targetPort: 5000
   to:
     kind: Service
-    name: inferrecipe-optimizer-ui
+    name: inferecipe-optimizer-ui
     weight: 100
   tls:
     termination: edge
@@ -523,7 +523,7 @@ EOF
 fi
 }
 
-PF_PID_FILE="/tmp/inferrecipe-port-forward.pid"
+PF_PID_FILE="/tmp/inferecipe-port-forward.pid"
 
 # Start port-forward in background with auto-reconnect
 start_port_forward() {
@@ -534,7 +534,7 @@ start_port_forward() {
     # Kill existing port-forward if running
     stop_port_forward quiet
 
-    echo "🔌 Starting port-forward (localhost:${local_port} -> svc/inferrecipe-optimizer-ui:5000)..." >&2
+    echo "🔌 Starting port-forward (localhost:${local_port} -> svc/inferecipe-optimizer-ui:5000)..." >&2
 
     # Wrapper loop: reconnects when kubectl port-forward exits (e.g. server restart)
     (
@@ -542,7 +542,7 @@ start_port_forward() {
         local failures=0
         while true; do
             start_time=$(date +%s)
-            $kubectl_cmd port-forward -n "$namespace" svc/inferrecipe-optimizer-ui "${local_port}:5000" &>/dev/null
+            $kubectl_cmd port-forward -n "$namespace" svc/inferecipe-optimizer-ui "${local_port}:5000" &>/dev/null
             elapsed=$(( $(date +%s) - start_time ))
             if [[ $elapsed -lt 5 ]]; then
                 failures=$((failures + 1))
@@ -599,9 +599,9 @@ restart_server() {
     local local_port="$3"
 
     # Find the pod
-    local pod_name=$($kubectl_cmd get pod -n "$namespace" -l app=inferrecipe-optimizer -o jsonpath='{.items[0].metadata.name}' 2>/dev/null || true)
+    local pod_name=$($kubectl_cmd get pod -n "$namespace" -l app=inferecipe-optimizer -o jsonpath='{.items[0].metadata.name}' 2>/dev/null || true)
     if [[ -z "$pod_name" ]]; then
-        echo "❌ No inferrecipe-optimizer pod found in namespace $namespace" >&2
+        echo "❌ No inferecipe-optimizer pod found in namespace $namespace" >&2
         echo "   Deploy first: ./deployment/deploy.sh --dev -p <pvc-name>" >&2
         exit 1
     fi
@@ -627,7 +627,7 @@ restart_server() {
     # Start server in background (close stdin/stdout/stderr so kubectl exec returns immediately)
     echo "   Starting server..." >&2
     $kubectl_cmd exec -n "$namespace" "$pod_name" -- bash -c \
-        "cd $code_path && INFER_RECIPE_PATH=$code_path nohup python3 web/server.py > /tmp/server.log 2>&1 < /dev/null &" 2>/dev/null
+        "cd $code_path && INFE_RECIPE_PATH=$code_path nohup python3 web/server.py > /tmp/server.log 2>&1 < /dev/null &" 2>/dev/null
 
     # Wait for server to bind to port (use Python socket check — works on any platform)
     echo "   Waiting for server to start..." >&2
@@ -653,7 +653,7 @@ restart_server() {
     if [[ "$kubectl_cmd" != "oc" ]]; then
         start_port_forward "$kubectl_cmd" "$namespace" "$local_port"
     else
-        local route_host=$($kubectl_cmd get route -n "$namespace" inferrecipe-optimizer -o jsonpath='{.spec.host}' 2>/dev/null)
+        local route_host=$($kubectl_cmd get route -n "$namespace" inferecipe-optimizer -o jsonpath='{.spec.host}' 2>/dev/null)
         if [[ -n "$route_host" ]]; then
             echo "🌐 Web UI: https://$route_host" >&2
         fi
@@ -778,7 +778,7 @@ if [[ "$SYNC_CODE" == "true" || "$RESTART_SERVER" == "true" ]]; then
             SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
             REPO_ROOT="$SCRIPT_DIR/.."
 
-            POD_NAME=$($KUBECTL_CMD get pod -n ${NAMESPACE} -l app=inferrecipe-optimizer -o jsonpath='{.items[0].metadata.name}' 2>/dev/null || true)
+            POD_NAME=$($KUBECTL_CMD get pod -n ${NAMESPACE} -l app=inferecipe-optimizer -o jsonpath='{.items[0].metadata.name}' 2>/dev/null || true)
             if [[ -z "$POD_NAME" ]]; then
                 echo "❌ No optimizer pod found in namespace $NAMESPACE" >&2
                 echo "   Deploy first: ./deployment/deploy.sh --dev -p <pvc-name>" >&2
@@ -945,7 +945,7 @@ json.dump(s, sys.stdout)" \
 
         # Wait for deployment to be ready
         echo "⏳ Waiting for deployment to be ready..." >&2
-        $KUBECTL_CMD wait --for=condition=available deployment/inferrecipe-optimizer -n ${NAMESPACE} --timeout=300s 2>&1 | sed 's/^/   /' >&2
+        $KUBECTL_CMD wait --for=condition=available deployment/inferecipe-optimizer -n ${NAMESPACE} --timeout=300s 2>&1 | sed 's/^/   /' >&2
 
         echo "" >&2
         echo "============================================================" >&2
@@ -954,14 +954,14 @@ json.dump(s, sys.stdout)" \
         echo "" >&2
 
         if [[ "$IS_OPENSHIFT" == "true" ]]; then
-            ROUTE_HOST=$($KUBECTL_CMD get route inferrecipe-optimizer-ui -n ${NAMESPACE} -o jsonpath='{.spec.host}' 2>/dev/null)
+            ROUTE_HOST=$($KUBECTL_CMD get route inferecipe-optimizer-ui -n ${NAMESPACE} -o jsonpath='{.spec.host}' 2>/dev/null)
             if [[ -n "$ROUTE_HOST" ]]; then
                 echo "   Web UI: https://${ROUTE_HOST}" >&2
             fi
         fi
 
         if [[ "$DEV_MODE" == "true" || "$SYNC_CODE" == "true" ]]; then
-            POD_NAME=$($KUBECTL_CMD get pod -n ${NAMESPACE} -l app=inferrecipe-optimizer -o jsonpath='{.items[0].metadata.name}' 2>/dev/null || true)
+            POD_NAME=$($KUBECTL_CMD get pod -n ${NAMESPACE} -l app=inferecipe-optimizer -o jsonpath='{.items[0].metadata.name}' 2>/dev/null || true)
             if [[ -n "$POD_NAME" ]]; then
                 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
                 REPO_ROOT="$SCRIPT_DIR/.."
@@ -981,7 +981,7 @@ json.dump(s, sys.stdout)" \
 
         echo "" >&2
         if [[ "$IS_OPENSHIFT" == "true" ]]; then
-            ROUTE_HOST=$($KUBECTL_CMD get route inferrecipe-optimizer-ui -n ${NAMESPACE} -o jsonpath='{.spec.host}' 2>/dev/null)
+            ROUTE_HOST=$($KUBECTL_CMD get route inferecipe-optimizer-ui -n ${NAMESPACE} -o jsonpath='{.spec.host}' 2>/dev/null)
             if [[ -n "$ROUTE_HOST" ]]; then
                 echo "🌐 Web UI: https://${ROUTE_HOST}" >&2
             fi

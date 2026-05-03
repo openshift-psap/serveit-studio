@@ -3,7 +3,7 @@ kind: ClusterRoleBinding
 metadata:
   name: {{ gaie_name | default('gaie-pd') }}-{{ namespace }}-epp
   labels:
-    component: inferrecipe-prereq
+    component: inferecipe-prereq
 roleRef:
   apiGroup: rbac.authorization.k8s.io
   kind: ClusterRole

@@ -200,9 +200,9 @@ class ConfigGenerator:
         import os
 
         # Check for manual override
-        force_nad = os.getenv('INFER_RECIPE_FORCE_NAD', 'false').lower() == 'true'
+        force_nad = os.getenv('INFE_RECIPE_FORCE_NAD', 'false').lower() == 'true'
         if force_nad:
-            logger.info("Forcing NAD network type via INFER_RECIPE_FORCE_NAD env var")
+            logger.info("Forcing NAD network type via INFE_RECIPE_FORCE_NAD env var")
             return 'nad'
 
         # Detect from cluster resources (cloud_provider is an Enum)

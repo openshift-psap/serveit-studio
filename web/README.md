@@ -65,8 +65,8 @@ Main UI with tabbed interface.
 pip install -r requirements.txt
 
 # Set environment variables
-export INFER_RECIPE_PATH=/path/to/InfeRecipe
-export DB_PATH=./inferrecipe.db
+export INFE_RECIPE_PATH=/path/to/InfeRecipe
+export DB_PATH=./inferecipe.db
 export OPTIMIZATION_OUTPUT_DIR=./optimization-runs
 
 # Run the server
@@ -85,7 +85,7 @@ The web server runs inside the InfeRecipe benchmark pod:
 ./scripts/deploy.sh deploy
 
 # Access via OpenShift Route
-https://inferrecipe-benchmark-ui-llm-d.apps.psap-gpu.ibm-rh-ai.rhperfscale.org
+https://inferecipe-benchmark-ui-llm-d.apps.psap-gpu.ibm-rh-ai.rhperfscale.org
 ```
 
 ## Database Schema

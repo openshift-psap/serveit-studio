@@ -21,7 +21,7 @@ from core.report_renderer import ReportRenderer
 class ReportGenerator:
     """Facade that combines data loading, analysis, and rendering."""
 
-    def __init__(self, db_path: str = '/mnt/storage/inferrecipe.db'):
+    def __init__(self, db_path: str = '/mnt/storage/inferecipe.db'):
         self.db_path = db_path
         self._loader = ReportDataLoader(db_path)
         self._analyzer = ReportAnalyzer()
@@ -65,14 +65,14 @@ class ReportGenerator:
 
 
 # Convenience functions
-def generate_html_report(db_path: str = '/mnt/storage/inferrecipe.db',
+def generate_html_report(db_path: str = '/mnt/storage/inferecipe.db',
                          output_path: str = '/mnt/storage/optimization_report.html',
                          run_id: Optional[int] = None) -> str:
     with ReportGenerator(db_path) as gen:
         return gen.generate_html_report(output_path, run_id)
 
 
-def generate_markdown_report(db_path: str = '/mnt/storage/inferrecipe.db',
+def generate_markdown_report(db_path: str = '/mnt/storage/inferecipe.db',
                               output_path: str = '/mnt/storage/optimization_report.md',
                               run_id: Optional[int] = None) -> str:
     with ReportGenerator(db_path) as gen:

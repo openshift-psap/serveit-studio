@@ -60,7 +60,7 @@ class RecipeOptimizerConfig:
     # Infrastructure
     thanos_url: Optional[str] = None
     image: str = 'ghcr.io/llm-d/llm-d-cuda:v0.5.1'
-    pvc_name: str = 'inferrecipe-model-cache'
+    pvc_name: str = 'inferecipe-model-cache'
     nccl_ib_hca: str = 'mlx'
     hf_token: Optional[str] = None
 
@@ -176,7 +176,7 @@ class RecipeOptimizer:
         config: RecipeOptimizerConfig,
         log_callback: Optional[Callable[[str, str], None]] = None,
         run_id: Optional[int] = None,
-        db_path: str = '/mnt/storage/inferrecipe.db',
+        db_path: str = '/mnt/storage/inferecipe.db',
         stop_check: Optional[Callable[[], bool]] = None
     ):
         """
@@ -614,7 +614,7 @@ class RecipeOptimizer:
         import os
 
         # Check for manual override
-        force_nad = os.getenv('INFER_RECIPE_FORCE_NAD', 'false').lower() == 'true'
+        force_nad = os.getenv('INFE_RECIPE_FORCE_NAD', 'false').lower() == 'true'
         if force_nad:
             return 'nad'
 

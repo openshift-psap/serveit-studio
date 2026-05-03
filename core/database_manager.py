@@ -21,7 +21,7 @@ class DatabaseManager:
     Supports immediate test result persistence.
     """
 
-    def __init__(self, db_path: str = '/mnt/storage/inferrecipe.db'):
+    def __init__(self, db_path: str = '/mnt/storage/inferecipe.db'):
         """
         Initialize database manager.
 

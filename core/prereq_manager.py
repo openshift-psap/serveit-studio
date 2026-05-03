@@ -158,7 +158,7 @@ class PrereqManager:
             configmap_template = f'prereq/gaie-configmap-{architecture}.yaml.j2'
 
             resources = [
-                # Note: Optimizer RBAC is deployed with the optimizer pod itself (deployment/inferrecipe-optimizer.yaml)
+                # Note: Optimizer RBAC is deployed with the optimizer pod itself (deployment/inferecipe-optimizer.yaml)
                 # GAIE RBAC
                 ('ServiceAccount', 'prereq/gaie-serviceaccount.yaml.j2'),
                 ('Role', 'prereq/gaie-role.yaml.j2'),
