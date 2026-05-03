@@ -22,13 +22,7 @@
         <!-- Sidebar -->
         <aside class="sidebar" id="sidebar">
             <div class="sidebar-header">
-                <div style="display:flex;align-items:flex-start;gap:12px;">
-                    <svg style="width:48px;height:48px;flex-shrink:0;color:var(--rh-red-primary);margin-top:2px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
-                    <div>
-                        <h1>InferRecipe</h1>
-                        <p>llm-d recipe based optimizer</p>
-                    </div>
-                </div>
+                <img src="{{ url_for('static', filename='img/logo.svg') }}" alt="InferRecipe" style="width:100%;max-width:220px;">
             </div>
             <nav class="sidebar-nav">
                 <div class="sidebar-section-label">Wizard Steps</div>
