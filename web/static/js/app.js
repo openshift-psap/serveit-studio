@@ -114,6 +114,7 @@ let config = {
     dataset_max_output: 256,
     prefix_cache_hit_pct: 0,
     pd_search_mode: 'smart',
+    run_description: '',
     advanced_vllm: null
 };
 
@@ -369,6 +370,11 @@ function updateUIFromConfig() {
     // Restore PD search mode
     if (config.pd_search_mode && document.getElementById('pd-search-smart')) {
         setPdSearchMode(config.pd_search_mode);
+    }
+
+    // Restore run description
+    if (config.run_description && document.getElementById('run-description-input')) {
+        document.getElementById('run-description-input').value = config.run_description;
     }
 
     // Restore advanced vLLM settings
@@ -1530,6 +1536,7 @@ document.getElementById('start-optimization').addEventListener('click', () => {
         dataset_max_output: config.dataset_max_output || 256,
         rate_type: config.rate_type || 'concurrent',
         prefix_cache_hit_pct: config.prefix_cache_hit_pct || 0,
+        run_description: config.run_description || '',
         advanced_vllm: config.advanced_vllm || null
     });
 });
@@ -2548,7 +2555,7 @@ function loadResumeRuns() {
             }
 
             let html = '<table class="resume-table"><thead><tr>';
-            html += '<th>ID</th><th>Date</th><th>Priority</th><th>Model</th>';
+            html += '<th>ID</th><th>Date</th><th>Description</th><th>Priority</th><th>Model</th>';
             html += '<th>Workload</th><th>GPUs</th><th>Status</th><th>Progress</th><th></th><th></th>';
             html += '</tr></thead><tbody>';
 
@@ -2628,6 +2635,7 @@ function loadResumeRuns() {
                 html += '<tr>';
                 html += `<td style="font-weight: 700; color: #7c3aed;">#${run.id}</td>`;
                 html += `<td style="white-space: nowrap;">${date}</td>`;
+                html += `<td style="max-width:180px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:0.85em;color:#475569;" title="${run.notes || ''}">${run.notes || '<span style="color:#cbd5e1;">—</span>'}</td>`;
                 html += `<td><span class="resume-goal-badge ${goalClass}">${goalLabel}</span></td>`;
                 html += `<td style="max-width: 200px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;" title="${run.model || ''}">${modelShort}</td>`;
                 html += `<td style="white-space: nowrap; font-size: 0.85em; color: #475569;">${workload}</td>`;
@@ -2807,7 +2815,8 @@ function loadRunList() {
                 const date = run.created_at ? new Date(run.created_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' }) : '';
                 const isCompleted = run.status === 'completed';
                 const statusLabel = isCompleted ? '\u2705 completed' : '\u274C ' + (run.status || 'unknown');
-                const parts = [`#${run.id}`, goal, modelShort, workload, users, gpus, statusLabel, date].filter(Boolean);
+                const desc = run.notes ? `"${run.notes}"` : '';
+                const parts = [`#${run.id}`, desc, goal, modelShort, workload, users, gpus, statusLabel, date].filter(Boolean);
                 opt.textContent = parts.join(' | ');
                 sel.appendChild(opt);
             });

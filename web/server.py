@@ -1535,6 +1535,7 @@ def stream_job_logs(job_name: str, namespace: str):
                     'latency_constraint_percentile': saved_config.get('latency_constraint_percentile', 'p90'),
                     'tp_pair_top_n': saved_config.get('tp_pair_top_n', 2),
                     'pd_search_mode': saved_config.get('pd_search_mode', 'smart'),
+                    'run_description': saved_config.get('run_description', ''),
                     'selected_nodes': saved_config.get('selected_nodes', []),
                     'workload_mode': saved_config.get('workload_mode', 'synthetic'),
                     'dataset_source': saved_config.get('dataset_source'),
@@ -1827,6 +1828,7 @@ def run_optimization_background(data):
         latency_constraint_percentile = data.get('latency_constraint_percentile', 'p90')
         tp_pair_top_n = int(data.get('tp_pair_top_n', 2))
         pd_search_mode = data.get('pd_search_mode', 'smart')
+        run_description = data.get('run_description', '')
         selected_nodes = data.get('selected_nodes') or []
         workload_mode = data.get('workload_mode', 'synthetic')
         dataset_source = data.get('dataset_source')
@@ -1895,8 +1897,8 @@ data:
                     INSERT INTO optimization_runs
                     (run_name, model, isl, osl, num_users, status, created_at, goal, test_duration, max_gpus, use_achievable_qps, isl_stdev, osl_stdev, turns,
                      latency_constraint_enabled, latency_constraint_ms, latency_constraint_percentile,
-                     workload_mode, dataset_source, dataset_column, dataset_max_output, rate_type, prefix_cache_hit_pct)
-                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                     workload_mode, dataset_source, dataset_column, dataset_max_output, rate_type, prefix_cache_hit_pct, notes)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 ''', (run_name, model, isl, osl, num_users, 'running',
                       datetime.now().isoformat(), optimization_goal, test_duration, max_gpus,
                       1 if use_achievable_qps else 0,
@@ -1907,7 +1909,7 @@ data:
                       latency_constraint_ms,
                       latency_constraint_percentile,
                       workload_mode, dataset_source, dataset_column, dataset_max_output,
-                      rate_type, prefix_cache_hit_pct))
+                      rate_type, prefix_cache_hit_pct, run_description or None))
                 run_id = cursor.lastrowid
 
         # Step 1: Choose optimization approach
@@ -4432,6 +4434,7 @@ def handle_setup_storage(data):
                 'latency_constraint_percentile': data.get('latency_constraint_percentile', 'p90'),
                 'tp_pair_top_n': data.get('tp_pair_top_n', 2),
                 'pd_search_mode': data.get('pd_search_mode', 'smart'),
+                'run_description': data.get('run_description', ''),
                 'selected_nodes': data.get('selected_nodes') or [],
                 'workload_mode': data.get('workload_mode', 'synthetic'),
                 'dataset_source': data.get('dataset_source'),

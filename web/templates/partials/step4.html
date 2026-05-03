@@ -2,6 +2,13 @@
                         <h3>Test Configuration</h3>
                         <p class="description">Configure how long and how hard to push each test run.</p>
 
+                        <!-- Run Description -->
+                        <div class="input-group" style="margin-bottom:20px;">
+                            <label style="font-weight:600;font-size:0.9em;">Run Description <span style="font-weight:400;color:#94a3b8;">(optional)</span></label>
+                            <input type="text" id="run-description-input" placeholder="e.g., Baseline test with 80% prefix cache on H200s" style="width:100%;padding:10px 14px;border:2px solid #e2e8f0;border-radius:8px;font-size:0.95em;" oninput="config.run_description=this.value;saveConfig();">
+                            <div class="help-text">A short note to help you identify this run later. Shows up in the run list and reports.</div>
+                        </div>
+
                         <!-- Benchmark Settings -->
                         <div style="border:2px solid #0ea5e9;border-radius:12px;overflow:hidden;margin-bottom:20px;">
                             <div style="background:linear-gradient(135deg,#f0f9ff,#e0f2fe);padding:16px 20px;">
