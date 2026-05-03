@@ -1304,6 +1304,15 @@ function updateEppCustom() {
     saveConfig();
 }
 
+function resetEppParams() {
+    ['epp-max-prefix-blocks', 'epp-lru-capacity', 'epp-non-cached-tokens'].forEach(id => {
+        var el = document.getElementById(id);
+        if (el) delete el.dataset.userEdited;
+    });
+    updateEppAutoSuggestion();
+    updateEppParams();
+}
+
 function updateEppParams() {
     if (!config.epp_config) config.epp_config = {};
     config.epp_config.maxPrefixBlocksToMatch = parseInt(document.getElementById('epp-max-prefix-blocks').value) || 256;
@@ -1325,14 +1334,31 @@ function updateEppAutoSuggestion() {
     } else {
         suggestion.style.display = 'none';
     }
-    // Auto-calculate parameters
+    // Auto-calculate parameters from workload settings
     var isl = config.isl || 3000;
-    var blockSize = 128;
+    var osl = config.osl || 100;
+    var seqLen = isl + osl;
+    var blockSize = Math.pow(2, Math.ceil(Math.log2(Math.max(1, Math.sqrt(seqLen)))));
+    blockSize = Math.max(8, Math.min(512, blockSize));
+    if (['ttft','balanced','pd_only'].includes(config.goal)) blockSize = Math.max(128, blockSize);
+
+    var autoMaxPrefixBlocks = Math.ceil(isl / blockSize);
+    var autoNonCachedTokens = Math.min(16, Math.max(1, Math.floor(isl / 100)));
+
+    // Estimate LRU capacity: (GPU_VRAM_MB - model_size_est) / (block_size * 2KB per block)
+    var gpuVramMb = 80 * 1024; // default 80GB
+    if (config.cluster_resources && config.cluster_resources.gpu_memory_per_gpu_mb) {
+        gpuVramMb = config.cluster_resources.gpu_memory_per_gpu_mb;
+    }
+    var autoLruCapacity = Math.max(1000, Math.floor((gpuVramMb * 0.5) / (blockSize * 2)));
+
     var el;
     el = document.getElementById('epp-max-prefix-blocks');
-    if (el) el.placeholder = Math.ceil(isl / blockSize);
+    if (el && !el.dataset.userEdited) el.value = autoMaxPrefixBlocks;
+    el = document.getElementById('epp-lru-capacity');
+    if (el && !el.dataset.userEdited) el.value = autoLruCapacity;
     el = document.getElementById('epp-non-cached-tokens');
-    if (el) el.placeholder = Math.min(16, Math.max(1, Math.floor(isl / 100)));
+    if (el && !el.dataset.userEdited) el.value = autoNonCachedTokens;
 }
 
 // Step navigation
@@ -1767,6 +1793,10 @@ function goToStep(step, skipSave) {
     }
     if (step > 5 && config.cluster_resources) {
         document.getElementById('step6-value').textContent = `${config.cluster_resources.total_gpus} GPUs`;
+    }
+    if (step === 5) {
+        updateEppAutoSuggestion();
+        if (config.epp_preset) setEppPreset(config.epp_preset);
     }
     if (step === 6) {
         // Check if cluster resources already scanned

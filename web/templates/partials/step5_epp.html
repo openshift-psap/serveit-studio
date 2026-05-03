@@ -85,20 +85,23 @@
                                 <div id="epp-params-arrow" style="font-size:1.4em;color:#155e75;font-weight:700;">&#9656;</div>
                             </div>
                             <div id="epp-params-body" style="display:none;padding:16px 20px;">
+                                <div style="display:flex;justify-content:flex-end;margin-bottom:10px;">
+                                    <button type="button" onclick="resetEppParams()" style="padding:4px 14px;border:1px solid #d1d5db;border-radius:6px;background:#fff;color:#64748b;font-size:0.8em;cursor:pointer;font-weight:600;">Reset to Auto</button>
+                                </div>
                                 <div class="input-grid" style="grid-template-columns: 1fr 1fr 1fr;">
                                     <div class="input-group">
                                         <label>maxPrefixBlocksToMatch</label>
-                                        <input type="number" id="epp-max-prefix-blocks" value="256" min="1" max="4096" onchange="updateEppParams()">
+                                        <input type="number" id="epp-max-prefix-blocks" min="1" max="4096" onchange="this.dataset.userEdited='1';updateEppParams()">
                                         <div class="help-text">Max prefix blocks the scorer checks for cache hits. Auto = ceil(ISL / block_size).</div>
                                     </div>
                                     <div class="input-group">
                                         <label>lruCapacityPerServer</label>
-                                        <input type="number" id="epp-lru-capacity" value="31250" min="100" max="500000" onchange="updateEppParams()">
+                                        <input type="number" id="epp-lru-capacity" min="100" max="500000" onchange="this.dataset.userEdited='1';updateEppParams()">
                                         <div class="help-text">LRU cache capacity per server (in blocks). Auto = estimated from GPU VRAM and block size.</div>
                                     </div>
                                     <div class="input-group">
                                         <label>nonCachedTokens (PD only)</label>
-                                        <input type="number" id="epp-non-cached-tokens" value="16" min="1" max="1024" onchange="updateEppParams()">
+                                        <input type="number" id="epp-non-cached-tokens" min="1" max="1024" onchange="this.dataset.userEdited='1';updateEppParams()">
                                         <div class="help-text">Threshold for routing to prefill vs decode in PD mode. Auto = min(16, ISL/100).</div>
                                     </div>
                                 </div>
