@@ -4649,23 +4649,22 @@ function renderCharts(data, runId) {
                     });
                 }
 
-                // SLA line (only on the target percentile chart)
+                // SLA line (shown on all percentile charts for reference)
                 const shapes = [];
                 const chartAnnotations = [];
-                if (isTargetPctl) {
-                    shapes.push({
-                        type: 'line', x0: -0.5, x1: xLabels.length - 0.5,
-                        y0: targetMs, y1: targetMs, yref: 'y',
-                        line: { color: '#ef4444', width: 2, dash: 'dash' },
-                    });
-                    chartAnnotations.push({
-                        x: xLabels.length - 1, y: targetMs, yref: 'y',
-                        text: `SLA Target: ${targetMs} ms`, showarrow: false,
-                        font: { color: '#ef4444', size: 11, weight: 700 },
-                        xanchor: 'right', yanchor: 'bottom', yshift: 5,
-                        bgcolor: 'rgba(255,255,255,0.85)',
-                    });
-                }
+                const slaLabel = isTargetPctl ? `SLA Target (${targetPct.toUpperCase()}): ${targetMs} ms` : `SLA Target (${targetPct.toUpperCase()}): ${targetMs} ms`;
+                shapes.push({
+                    type: 'line', x0: -0.5, x1: xLabels.length - 0.5,
+                    y0: targetMs, y1: targetMs, yref: 'y',
+                    line: { color: '#ef4444', width: isTargetPctl ? 2 : 1.5, dash: 'dash' },
+                });
+                chartAnnotations.push({
+                    x: xLabels.length - 1, y: targetMs, yref: 'y',
+                    text: slaLabel, showarrow: false,
+                    font: { color: '#ef4444', size: 11, weight: 700 },
+                    xanchor: 'right', yanchor: 'bottom', yshift: 5,
+                    bgcolor: 'rgba(255,255,255,0.85)',
+                });
 
                 Plotly.newPlot(el, traces, {
                     ...plotlyLayout, height: 500,
