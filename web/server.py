@@ -4741,7 +4741,7 @@ def upload_dataset():
         ext = os.path.splitext(f.filename)[1].lower()
         if ext not in allowed:
             return jsonify({'success': False, 'error': f'Unsupported file type: {ext}'})
-        dataset_dir = os.path.join(INFER_RECIPE_PATH, 'data', 'datasets')
+        dataset_dir = os.path.join(APP_PATH, 'data', 'datasets')
         os.makedirs(dataset_dir, exist_ok=True)
         safe_name = f.filename.replace('/', '_').replace('\\', '_')
         dest = os.path.join(dataset_dir, safe_name)
