@@ -3091,7 +3091,7 @@ def handle_load_config():
 
                 # If there's a running optimization, force step to 6 (monitoring)
                 if is_running:
-                    current_step = 6
+                    current_step = 7
 
                 emit('load_config_result', {
                     'success': True,
@@ -3102,7 +3102,7 @@ def handle_load_config():
                 })
             else:
                 # No saved session - check if there's a running optimization
-                current_step = 6 if is_running else 1
+                current_step = 7 if is_running else 1
 
                 emit('load_config_result', {
                     'success': True,

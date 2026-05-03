@@ -115,6 +115,9 @@ let config = {
     prefix_cache_hit_pct: 0,
     pd_search_mode: 'smart',
     run_description: '',
+    epp_preset: 'balanced',
+    epp_benchmark: false,
+    epp_config: null,
     advanced_vllm: null
 };
 
@@ -1275,6 +1278,63 @@ function setPdSearchMode(mode) {
     saveConfig();
 }
 
+function setEppPreset(preset) {
+    config.epp_preset = preset;
+    document.querySelectorAll('[data-epp]').forEach(el => {
+        if (el.dataset.epp === preset) {
+            el.style.borderColor = 'var(--rh-red-primary)';
+            el.style.background = 'linear-gradient(135deg,#fef2f2,#fee2e2)';
+        } else {
+            el.style.borderColor = '#cbd5e1';
+            el.style.background = '#fafafa';
+        }
+    });
+    var editor = document.getElementById('epp-custom-editor');
+    if (editor) editor.style.display = preset === 'custom' ? 'block' : 'none';
+    saveConfig();
+}
+
+function updateEppCustom() {
+    config.epp_config = {
+        prefix_cache: { enabled: document.getElementById('epp-plugin-prefix-cache').checked, weight: parseFloat(document.getElementById('epp-weight-prefix-cache').value) },
+        kv_cache: { enabled: document.getElementById('epp-plugin-kv-cache').checked, weight: parseFloat(document.getElementById('epp-weight-kv-cache').value) },
+        queue: { enabled: document.getElementById('epp-plugin-queue').checked, weight: parseFloat(document.getElementById('epp-weight-queue').value) },
+        slo: { enabled: document.getElementById('epp-plugin-slo').checked, weight: parseFloat(document.getElementById('epp-weight-slo').value) },
+    };
+    saveConfig();
+}
+
+function updateEppParams() {
+    if (!config.epp_config) config.epp_config = {};
+    config.epp_config.maxPrefixBlocksToMatch = parseInt(document.getElementById('epp-max-prefix-blocks').value) || 256;
+    config.epp_config.lruCapacityPerServer = parseInt(document.getElementById('epp-lru-capacity').value) || 31250;
+    config.epp_config.nonCachedTokens = parseInt(document.getElementById('epp-non-cached-tokens').value) || 16;
+    saveConfig();
+}
+
+function updateEppAutoSuggestion() {
+    var suggestion = document.getElementById('epp-auto-suggestion');
+    var text = document.getElementById('epp-suggestion-text');
+    if (!suggestion || !text) return;
+    if (config.prefix_cache_hit_pct > 0 && config.epp_preset !== 'cache_optimized') {
+        suggestion.style.display = 'block';
+        text.textContent = 'You have prefix cache enabled (' + config.prefix_cache_hit_pct + '%). Consider "Cache Optimized" for better cache-aware routing.';
+    } else if (config.latency_constraint_enabled && config.epp_preset !== 'latency_aware') {
+        suggestion.style.display = 'block';
+        text.textContent = 'You have a latency SLA enabled. Consider "Latency Aware" for SLO-based routing.';
+    } else {
+        suggestion.style.display = 'none';
+    }
+    // Auto-calculate parameters
+    var isl = config.isl || 3000;
+    var blockSize = 128;
+    var el;
+    el = document.getElementById('epp-max-prefix-blocks');
+    if (el) el.placeholder = Math.ceil(isl / blockSize);
+    el = document.getElementById('epp-non-cached-tokens');
+    if (el) el.placeholder = Math.min(16, Math.max(1, Math.floor(isl / 100)));
+}
+
 // Step navigation
 document.getElementById('next-step1').addEventListener('click', () => {
     if (!config.goal) {
@@ -1320,6 +1380,12 @@ document.getElementById('next-step4').addEventListener('click', () => {
     const stopInfo = config.stop_mode === 'max_requests' ? `${config.max_requests} requests` : `${config.duration}s`;
     logToConsole(`\n📋 Step 4 Complete: Test Config = ${config.users} users, ${stopInfo}, Mode: ${qpsMode}`, 'success');
     goToStep(5);
+});
+
+// Step 5: EPP Config
+document.getElementById('next-step5').addEventListener('click', () => {
+    logToConsole(`\n📋 Step 5 Complete: EPP Config = ${config.epp_preset || 'balanced'}`, 'success');
+    goToStep(6);
 });
 
 // Save storage class selection
@@ -1374,7 +1440,7 @@ function fetchAvailablePVCs() {
     socket.emit('list_pvcs', {});
 }
 
-document.getElementById('next-step5').addEventListener('click', () => {
+document.getElementById('next-step6').addEventListener('click', () => {
     // Validate storage setup
     const useExistingPvc = document.getElementById('use-existing-pvc').checked;
     const maxGpus = config.max_gpus || config.cluster_resources?.total_gpus;
@@ -1419,7 +1485,7 @@ document.getElementById('next-step5').addEventListener('click', () => {
     }
 
     // Just go to step 6 - test plan will be generated there if needed
-    goToStep(6);
+    goToStep(7);
 });
 
 function generateTestPlan() {
@@ -1537,6 +1603,9 @@ document.getElementById('start-optimization').addEventListener('click', () => {
         rate_type: config.rate_type || 'concurrent',
         prefix_cache_hit_pct: config.prefix_cache_hit_pct || 0,
         run_description: config.run_description || '',
+        epp_preset: config.epp_preset || 'balanced',
+        epp_benchmark: config.epp_benchmark || false,
+        epp_config: config.epp_config || null,
         advanced_vllm: config.advanced_vllm || null
     });
 });
@@ -1625,7 +1694,7 @@ function rescanCluster() {
     document.getElementById('rescan-cluster-btn').style.display = 'none';
 
     // Disable Continue button during scan
-    const nextStep5Btn = document.getElementById('next-step5');
+    const nextStep5Btn = document.getElementById('next-step6');
     nextStep5Btn.disabled = true;
     nextStep5Btn.textContent = 'Continue to Review → (Scanning...)';
     nextStep5Btn.style.opacity = '0.6';
@@ -1641,13 +1710,13 @@ function isOptimizationRunning() {
 
 function goToStep(step, skipSave) {
     // Block navigation away from step 6 while optimization is running
-    if (step !== 6 && isOptimizationRunning()) {
+    if (step !== 7 && isOptimizationRunning()) {
         document.getElementById('running-modal').classList.add('active');
         return;
     }
 
     // Hide all sections
-    for (let i = 1; i <= 6; i++) {
+    for (let i = 1; i <= 7; i++) {
         const section = document.getElementById(`step${i}-section`);
         const indicator = document.getElementById(`step${i}-indicator`);
 
@@ -1668,7 +1737,7 @@ function goToStep(step, skipSave) {
     if (!skipSave) saveConfig();
 
     // Update breadcrumb
-    const stepTitles = {1:'Goal', 2:'Model', 3:'Workload', 4:'Test Config', 5:'Setup', 6:'Review & Run'};
+    const stepTitles = {1:'Goal', 2:'Model', 3:'Workload', 4:'Test Config', 5:'EPP Config', 6:'Setup', 7:'Review & Run'};
     const bc = document.getElementById('breadcrumb-title');
     if (bc) bc.textContent = `Step ${step}: ${stepTitles[step] || ''}`;
 
@@ -1692,21 +1761,25 @@ function goToStep(step, skipSave) {
     if (step > 3) {
         document.getElementById('step4-value').textContent = `${config.users} users`;
     }
-    if (step > 4 && config.cluster_resources) {
-        document.getElementById('step5-value').textContent = `${config.cluster_resources.total_gpus} GPUs`;
+    if (step > 4) {
+        const presetLabels = {balanced:'Balanced', cache_optimized:'Cache Opt.', queue_balanced:'Queue Bal.', latency_aware:'Latency', custom:'Custom'};
+        document.getElementById('step5-value').textContent = presetLabels[config.epp_preset] || 'Balanced';
     }
-    if (step === 5) {
+    if (step > 5 && config.cluster_resources) {
+        document.getElementById('step6-value').textContent = `${config.cluster_resources.total_gpus} GPUs`;
+    }
+    if (step === 6) {
         // Check if cluster resources already scanned
         if (config.cluster_resources && document.getElementById('cluster-resources').style.display !== 'none') {
             // Resources already loaded - enable button immediately
-            const nextStep5Btn = document.getElementById('next-step5');
+            const nextStep5Btn = document.getElementById('next-step6');
             nextStep5Btn.disabled = false;
             nextStep5Btn.textContent = 'Continue to Review →';
             nextStep5Btn.style.opacity = '1';
         } else {
             // Auto-scan cluster resources when entering step 5
             // Disable next button and show scanning status
-            const nextStep5Btn = document.getElementById('next-step5');
+            const nextStep5Btn = document.getElementById('next-step6');
             nextStep5Btn.disabled = true;
             nextStep5Btn.textContent = 'Continue to Review → (Scanning...)';
             nextStep5Btn.style.opacity = '0.6';
@@ -1720,19 +1793,19 @@ function goToStep(step, skipSave) {
             socket.emit('scan_cluster', {});
         }
     }
-    if (step === 6) {
+    if (step === 7) {
         restoreConfigSummary();
     }
     if (step > 5) {
-        document.getElementById('step6-value').textContent = 'Ready';
+        document.getElementById('step7-value').textContent = 'Ready';
     }
 }
 
 // Make step indicators clickable to go back
-for (let i = 1; i <= 6; i++) {
+for (let i = 1; i <= 7; i++) {
     document.getElementById(`step${i}-indicator`).addEventListener('click', () => {
         if (i <= currentStep && i !== currentStep) {
-            if (isOptimizationRunning() && i !== 6) {
+            if (isOptimizationRunning() && i !== 7) {
                 document.getElementById('running-modal').classList.add('active');
                 return;
             }
@@ -2150,7 +2223,7 @@ socket.on('cluster_scan_result', function(data) {
     document.getElementById('rescan-cluster-btn').style.display = 'inline-block';
 
     // Enable Continue to Review button
-    const nextStep5Btn = document.getElementById('next-step5');
+    const nextStep5Btn = document.getElementById('next-step6');
     nextStep5Btn.disabled = false;
     nextStep5Btn.textContent = 'Continue to Review →';
     nextStep5Btn.style.opacity = '1';
@@ -2753,7 +2826,7 @@ function resumeRun(runId, runName) {
     document.getElementById('resume-overlay').classList.remove('active');
 
     // Navigate to step 6 (Review & Run)
-    goToStep(6);
+    goToStep(7);
 
     logToConsole('\n' + '='.repeat(55), 'info');
     logToConsole(`Resuming Run #${runId}: ${runName}`, 'success');
