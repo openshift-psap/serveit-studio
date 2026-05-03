@@ -1099,13 +1099,21 @@ class ReportAnalyzer:
             epp_tuning_data = []
             for r in sorted(epp_results, key=lambda x: x.ttft_p90 or float('inf')):
                 name = r.config_name.replace('step11-epp-', '')
+                manifest_types = []
+                if r.manifests_yaml:
+                    try:
+                        manifest_types = list(json.loads(r.manifests_yaml).keys())
+                    except (json.JSONDecodeError, TypeError):
+                        pass
                 epp_tuning_data.append({
                     'name': name,
+                    'test_id': r.config_name,
                     'config_name': r.display_label,
                     'ttft_p90': round(r.ttft_p90, 2) if r.ttft_p90 else None,
                     'ttft_p50': round(r.ttft_p50, 2) if r.ttft_p50 else None,
                     'throughput_p90': round(r.throughput_p90, 2) if r.throughput_p90 else None,
                     'itl_p90': round(r.itl_p90, 2) if r.itl_p90 else None,
+                    'manifest_types': manifest_types,
                 })
 
         return {

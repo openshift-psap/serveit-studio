@@ -410,6 +410,21 @@ class RecipeOptimizer:
             self.log(f"  ⚠️  Failed to render templates for DB: {e}", 'warning')
             return None
 
+    def _save_epp_test_to_database(self, test_config: TestConfig, test_result: TestResult):
+        """Save EPP tuning test result with configmap YAML as manifest."""
+        if self.db_manager and self.run_id:
+            try:
+                manifests_yaml = getattr(test_config, '_epp_manifests', None)
+                self.db_manager.insert_test_result(
+                    run_id=self.run_id,
+                    test_config=test_config,
+                    test_result=test_result,
+                    manifests_yaml=manifests_yaml
+                )
+                self.log(f"  💾 Saved to database (test_id={test_config.test_id})", 'info')
+            except Exception as e:
+                self.log(f"  ⚠️  Database save failed: {e}", 'warning')
+
     def _save_test_to_database(self, test_config: TestConfig, test_result: TestResult):
         """
         Save test result to database immediately after test completes.
@@ -2699,7 +2714,29 @@ class RecipeOptimizer:
                 tput = result.throughput_p90 or 0
                 self.log(f"  ✅ {name}: TTFT p90={ttft:.1f}ms, Throughput p90={tput:.2f} req/s", 'success')
                 self.epp_benchmark_results.append((name, weights, result))
-                self._save_test_to_database(epp_test_config, result)
+                # Render EPP configmap YAML for download
+                try:
+                    import json as _json
+                    tmgr = TemplateManager()
+                    arch = best_config.architecture
+                    cm_template = f'prereq/gaie-configmap-{arch}.yaml.j2'
+                    cm_yaml = tmgr.render_template(cm_template, **{
+                        'namespace': self.config.namespace,
+                        'gaie_name': f'gaie-{arch}-epp',
+                        'config_file': f'{arch}-config.yaml',
+                        'prefix_cache_weight': weights['prefix_cache_weight'],
+                        'kv_cache_weight': weights['kv_cache_weight'],
+                        'queue_weight': weights['queue_weight'],
+                        'slo_enabled': weights.get('slo_enabled', False),
+                        'max_prefix_blocks': epp_cfg.get('maxPrefixBlocksToMatch', 256),
+                        'lru_capacity': epp_cfg.get('lruCapacityPerServer', 31250),
+                        'non_cached_tokens': epp_cfg.get('nonCachedTokens', 16),
+                    })
+                    # Store as manifests_yaml so it shows as downloadable
+                    epp_test_config._epp_manifests = _json.dumps({'epp-configmap': cm_yaml})
+                except Exception:
+                    epp_test_config._epp_manifests = None
+                self._save_epp_test_to_database(epp_test_config, result)
             else:
                 self.log(f"  ❌ {name}: benchmark failed", 'error')
 

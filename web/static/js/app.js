@@ -4287,7 +4287,7 @@ function renderCharts(data, runId) {
         eppHtml += '<div class="chart-card-header" style="background:linear-gradient(135deg,#7c3aed,#8b5cf6);">Step 11: EPP Tuning Results</div>';
         eppHtml += '<div style="padding:12px 20px 4px; color:#1e293b; font-size:0.95em;">Same deployment, different EPP scoring weights. Each test swapped only the gateway configmap (~10s) to isolate the impact of request routing on performance.</div>';
         eppHtml += '<div class="chart-card-body" style="padding:0;"><table class="results-table">';
-        eppHtml += '<tr><th>Strategy</th><th>Weights (Cache : KV : Queue)</th><th>TTFT P50</th><th>TTFT P90</th><th>Throughput P90</th><th>ITL P90</th></tr>';
+        eppHtml += '<tr><th>Strategy</th><th>Weights (Cache : KV : Queue)</th><th>TTFT P50</th><th>TTFT P90</th><th>Throughput P90</th><th>ITL P90</th><th>EPP Config</th></tr>';
         let bestTtft = Math.min(...data.epp_tuning.map(e => e.ttft_p90 || Infinity));
         data.epp_tuning.forEach(e => {
             const isBest = e.ttft_p90 === bestTtft;
@@ -4295,11 +4295,19 @@ function renderCharts(data, runId) {
             const w = e.weights || {};
             const weights = `${w.prefix_cache || '?'} : ${w.kv_cache || '?'} : ${w.queue || '?'}`;
             const na = 'N/A';
+            let manifestLinks = '-';
+            if (e.manifest_types && e.manifest_types.length > 0) {
+                const rTestId = e.test_id || e.name;
+                manifestLinks = e.manifest_types.map(t => {
+                    return `<a href="/api/run/${runId}/config/${rTestId}/manifest/${t}" title="Download ${t}.yaml" style="color:#7c3aed; text-decoration:none; font-size:12px; padding:2px 6px; background:#f5f3ff; border-radius:4px; border:1px solid #c4b5fd; margin:1px; display:inline-block;">${t}</a>`;
+                }).join(' ');
+            }
             eppHtml += `<tr${cls}><td><strong>${e.name}</strong>${isBest ? ' ⭐' : ''}</td><td>${weights}</td>`;
             eppHtml += `<td>${e.ttft_p50 != null ? e.ttft_p50 : na}</td>`;
             eppHtml += `<td>${e.ttft_p90 != null ? e.ttft_p90 : na}</td>`;
             eppHtml += `<td>${e.throughput_p90 != null ? e.throughput_p90 : na}</td>`;
-            eppHtml += `<td>${e.itl_p90 != null ? e.itl_p90 : na}</td></tr>`;
+            eppHtml += `<td>${e.itl_p90 != null ? e.itl_p90 : na}</td>`;
+            eppHtml += `<td>${manifestLinks}</td></tr>`;
         });
         eppHtml += '</table></div></div>';
         secEppTuning = eppHtml;
