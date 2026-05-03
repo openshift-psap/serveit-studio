@@ -2182,13 +2182,14 @@
 .sidebar-header h1 {
     font-family: var(--font-display);
     font-weight: 900;
-    font-size: 1.6em;
+    font-size: 1.3em;
     color: var(--rh-red-primary);
     letter-spacing: -0.03em;
     margin: 0;
     display: flex;
     align-items: center;
     gap: 6px;
+    white-space: nowrap;
 }
 
 .sidebar-header p {
