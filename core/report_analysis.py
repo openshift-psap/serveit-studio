@@ -1092,6 +1092,22 @@ class ReportAnalyzer:
             import logging
             logging.getLogger(__name__).warning(f"Failed to load run config: {e}")
 
+        # Step 11: EPP tuning results
+        epp_tuning_data = None
+        epp_results = [r for r in results if r.config_name.startswith('step11-epp-') and r.is_successful]
+        if epp_results:
+            epp_tuning_data = []
+            for r in sorted(epp_results, key=lambda x: x.ttft_p90 or float('inf')):
+                name = r.config_name.replace('step11-epp-', '')
+                epp_tuning_data.append({
+                    'name': name,
+                    'config_name': r.display_label,
+                    'ttft_p90': round(r.ttft_p90, 2) if r.ttft_p90 else None,
+                    'ttft_p50': round(r.ttft_p50, 2) if r.ttft_p50 else None,
+                    'throughput_p90': round(r.throughput_p90, 2) if r.throughput_p90 else None,
+                    'itl_p90': round(r.itl_p90, 2) if r.itl_p90 else None,
+                })
+
         return {
             'charts': charts,
             'summary': stats,
@@ -1101,4 +1117,5 @@ class ReportAnalyzer:
             'latency_search': latency_search_data,
             'gpu_sizing': gpu_sizing,
             'run_config': run_config,
+            'epp_tuning': epp_tuning_data,
         }

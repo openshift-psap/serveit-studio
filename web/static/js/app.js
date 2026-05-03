@@ -3335,7 +3335,7 @@ function renderCharts(data, runId) {
     dlLink.onclick = (e) => { e.preventDefault(); downloadHTMLReport(runId, data); };
 
     let html = '';
-    let secRec = '', secTP = '', secCfg = '', secCmp = '', secStep9 = '', secCal = '', secVLLM = '', secTestCfg = '';
+    let secRec = '', secTP = '', secCfg = '', secCmp = '', secStep9 = '', secCal = '', secVLLM = '', secTestCfg = '', secEppTuning = '';
 
     // Build a lookup from test_id -> manifest_types for download links
     const manifestLookup = {};
@@ -4251,6 +4251,30 @@ function renderCharts(data, runId) {
 
     // === Build subtab structure ===
     const subtabDefs = [];
+    // Build EPP Tuning section from data.epp_tuning
+    if (data.epp_tuning && data.epp_tuning.length > 0) {
+        let eppHtml = '<div class="chart-card" style="border:2px solid #7c3aed;border-left:6px solid #7c3aed;">';
+        eppHtml += '<div class="chart-card-header" style="background:linear-gradient(135deg,#7c3aed,#8b5cf6);">Step 11: EPP Tuning Results</div>';
+        eppHtml += '<div style="padding:12px 20px 4px; color:#1e293b; font-size:0.95em;">Same deployment, different EPP scoring weights. Each test swapped only the gateway configmap (~10s) to isolate the impact of request routing on performance.</div>';
+        eppHtml += '<div class="chart-card-body" style="padding:0;"><table class="results-table">';
+        eppHtml += '<tr><th>Strategy</th><th>Weights (Cache : KV : Queue)</th><th>TTFT P50</th><th>TTFT P90</th><th>Throughput P90</th><th>ITL P90</th></tr>';
+        let bestTtft = Math.min(...data.epp_tuning.map(e => e.ttft_p90 || Infinity));
+        data.epp_tuning.forEach(e => {
+            const isBest = e.ttft_p90 === bestTtft;
+            const cls = isBest ? ' class="pareto-row"' : '';
+            const w = e.weights || {};
+            const weights = `${w.prefix_cache || '?'} : ${w.kv_cache || '?'} : ${w.queue || '?'}`;
+            const na = 'N/A';
+            eppHtml += `<tr${cls}><td><strong>${e.name}</strong>${isBest ? ' ⭐' : ''}</td><td>${weights}</td>`;
+            eppHtml += `<td>${e.ttft_p50 != null ? e.ttft_p50 : na}</td>`;
+            eppHtml += `<td>${e.ttft_p90 != null ? e.ttft_p90 : na}</td>`;
+            eppHtml += `<td>${e.throughput_p90 != null ? e.throughput_p90 : na}</td>`;
+            eppHtml += `<td>${e.itl_p90 != null ? e.itl_p90 : na}</td></tr>`;
+        });
+        eppHtml += '</table></div></div>';
+        secEppTuning = eppHtml;
+    }
+
     if (secRec) subtabDefs.push({ id: 'recommendation', label: 'Recommendation', icon: '&#9733;' });
     if (secTP) subtabDefs.push({ id: 'tp-calibration', label: 'TP Calibration', icon: '&#9881;' });
     if (secCfg) subtabDefs.push({ id: 'configurations', label: 'Configurations', icon: '&#9776;' });
@@ -4258,13 +4282,15 @@ function renderCharts(data, runId) {
     if (secStep9) subtabDefs.push({ id: 'latency-search', label: 'Latency Search', icon: '&#128269;' });
     if (secCal) subtabDefs.push({ id: 'calibrated-load', label: 'Calibrated Load', icon: '&#9878;' });
     if (secVLLM) subtabDefs.push({ id: 'vllm-metrics', label: 'vLLM Metrics', icon: '&#9889;' });
+    if (secEppTuning) subtabDefs.push({ id: 'epp-tuning', label: 'EPP Tuning', icon: '&#9881;' });
     subtabDefs.push({ id: 'estimator', label: 'Estimator', icon: '&#128200;' });
     if (secTestCfg) subtabDefs.push({ id: 'test-settings', label: 'Test Settings', icon: '&#9881;' });
 
     const sectionMap = {
         'recommendation': secRec, 'tp-calibration': secTP, 'configurations': secCfg,
         'test-settings': secTestCfg, 'comparison': secCmp, 'latency-search': secStep9,
-        'calibrated-load': secCal, 'vllm-metrics': secVLLM, 'estimator': secEst
+        'calibrated-load': secCal, 'vllm-metrics': secVLLM, 'epp-tuning': secEppTuning,
+        'estimator': secEst
     };
 
     if (subtabDefs.length > 1) {
@@ -5030,7 +5056,7 @@ function downloadHTMLReport(runId, data) {
     html += `<p>Generated: ${new Date().toLocaleString()}</p>`;
 
     // === Build each section separately ===
-    let secRec = '', secTP = '', secCfg = '', secCmp = '', secStep9 = '', secCal = '', secVLLM = '', secTestCfg = '';
+    let secRec = '', secTP = '', secCfg = '', secCmp = '', secStep9 = '', secCal = '', secVLLM = '', secTestCfg = '', secEppTuning = '';
 
     // --- RECOMMENDATION ---
     if (rec.constraint_notes && rec.constraint_notes.length) {

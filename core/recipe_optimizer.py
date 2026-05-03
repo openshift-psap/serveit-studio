@@ -2825,6 +2825,19 @@ class RecipeOptimizer:
             } if self.calibrated_ep_result else None,
             # Optimization goal for report rendering
             'optimization_goal': self.config.objective,
+            # Step 11: EPP tuning results
+            'epp_tuning': [
+                {
+                    'name': name,
+                    'weights': {'prefix_cache': w['prefix_cache_weight'], 'kv_cache': w['kv_cache_weight'], 'queue': w['queue_weight']},
+                    'ttft_p90': r.ttft_p90,
+                    'ttft_p50': r.ttft_p50,
+                    'throughput_p90': r.throughput_p90,
+                    'throughput_p50': r.throughput_p50,
+                    'itl_p90': r.itl_p90,
+                }
+                for name, w, r in self.epp_benchmark_results
+            ] if self.epp_benchmark_results else None,
             # All test results for database insertion
             'all_test_results': self.all_test_results,
             # Whether the user stopped the optimization early
