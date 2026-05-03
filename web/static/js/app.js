@@ -3792,6 +3792,20 @@ function renderCharts(data, runId) {
         html += `<div><span style="color:#64748b;">Trust Remote Code:</span> ${advToggle('trust_remote_code', 'On (auto)')}</div>`;
         html += `<div><span style="color:#64748b;">Disable Log Requests:</span> ${advToggle('disable_log_requests', 'On (auto)')}</div>`;
         html += `<div><span style="color:#64748b;">Auto Tool Choice:</span> ${advToggle('enable_auto_tool_choice', 'Off (auto)')}</div>`;
+        html += `<div><span style="color:#64748b;">vLLM Debug Logs:</span> ${advToggle('vllm_debug_logs', 'Off (auto)')}</div>`;
+        html += `<div><span style="color:#64748b;">NCCL Debug Logs:</span> ${advToggle('nccl_debug_logs', 'Off (auto)')}</div>`;
+        html += '</div>';
+        // EPP Configuration
+        const eppPresetLabels = {balanced:'Balanced', cache_optimized:'Cache Optimized', queue_balanced:'Queue Balanced', latency_aware:'Latency Aware', custom:'Custom'};
+        html += '<div style="font-weight:700;color:#1e293b;margin-bottom:10px;border-bottom:2px solid #7c3aed;padding-bottom:4px;">EPP Configuration</div><div style="line-height:2.2;">';
+        html += `<div><span style="color:#64748b;">Scoring Preset:</span> <strong>${eppPresetLabels[rc.epp_preset] || rc.epp_preset || 'Balanced'}</strong></div>`;
+        html += `<div><span style="color:#64748b;">EPP Tuning (Step 11):</span> ${rc.epp_benchmark ? 'Enabled' : 'Disabled'}</div>`;
+        if (rc.epp_config) {
+            const ec = rc.epp_config;
+            if (ec.maxPrefixBlocksToMatch) html += `<div><span style="color:#64748b;">Max Prefix Blocks:</span> ${ec.maxPrefixBlocksToMatch}</div>`;
+            if (ec.lruCapacityPerServer) html += `<div><span style="color:#64748b;">LRU Capacity/Server:</span> ${ec.lruCapacityPerServer}</div>`;
+            if (ec.nonCachedTokens) html += `<div><span style="color:#64748b;">Non-Cached Tokens:</span> ${ec.nonCachedTokens}</div>`;
+        }
         html += '</div>';
         html += '</div>';
 
