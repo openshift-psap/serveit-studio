@@ -277,6 +277,29 @@
                                         <p><strong>Result:</strong> Separate comparison showing calibrated vs overloaded metrics, with TTFT improvement percentage</p>
                                     </div>
                                 </div>
+
+                                <!-- Step 11 (Conditional) -->
+                                <div class="step-card" style="border-left: 3px solid #7c3aed;">
+                                    <div class="step-header">
+                                        <div class="step-number" style="background: linear-gradient(135deg, #7c3aed, #8b5cf6);">11</div>
+                                        <div class="step-title-wrapper">
+                                            <h4>EPP Tuning</h4>
+                                            <span class="step-badge" style="background: #f5f3ff; color: #7c3aed;">Conditional</span>
+                                        </div>
+                                    </div>
+                                    <div class="step-content">
+                                        <p><strong>Triggers when:</strong> "Benchmark EPP Strategies" is enabled in Step 5 (EPP Config)</p>
+                                        <p><strong>What runs:</strong> Takes the best deployment and tests 3 EPP scoring weight combinations, swapping only the gateway configmap (~10s per swap, no pod redeployment)</p>
+                                        <p><strong>Why:</strong> The EPP scoring weights (prefix-cache vs KV-utilization vs queue depth) significantly affect how requests are routed to pods. The optimal balance depends on your workload's cache hit rate and sequence lengths</p>
+                                        <p><strong>Weight combos tested:</strong></p>
+                                        <ul style="margin:4px 0 0 16px;font-size:0.9em;color:#475569;">
+                                            <li><strong>Cache-heavy</strong> (5:1:1) &mdash; maximizes prefix cache reuse</li>
+                                            <li><strong>Queue-heavy</strong> (1:1:5) &mdash; prevents pod hotspotting</li>
+                                            <li><strong>KV-heavy or Equal</strong> &mdash; based on ISL/OSL ratio</li>
+                                        </ul>
+                                        <p><strong>Result:</strong> Identifies the scoring weights that give the best TTFT for your specific workload</p>
+                                    </div>
+                                </div>
                             </div>
 
                         </div>
