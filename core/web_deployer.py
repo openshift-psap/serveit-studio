@@ -364,8 +364,8 @@ class BaseDeploymentGenerator(ABC):
 
     def _build_common_annotations(self, config: DeploymentConfig) -> Dict[str, str]:
         annotations = {
-            'inferrecipe.ai/test-id': config.test_id,
-            'inferrecipe.ai/architecture': config.architecture.value,
+            'llm-d.ai/test-id': config.test_id,
+            'llm-d.ai/architecture': config.architecture.value,
         }
         annotations.update(config.extra_annotations)
         return annotations
