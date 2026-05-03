@@ -2,168 +2,93 @@
 
 Core optimization engine for finding optimal LLM inference configurations.
 
-## Modules
+## Module Overview
 
-### `metrics_collector.py` ✅
-Collects metrics from Prometheus/Thanos for performance analysis.
+| Module | Description |
+|---|---|
+| `recipe_optimizer.py` | Recipe-based optimization engine (Steps 1-10), Smart PD Search, block size auto-tuning |
+| `optimization_strategies.py` | Goal-specific strategies: TTFT, Throughput, Balanced, Aggregated-only, PD-only, EP-only |
+| `test_orchestrator.py` | Deploy → benchmark (guidellm) → collect metrics → cleanup pipeline |
+| `deployment_manager.py` | K8s deployment lifecycle (LWS creation, sequential PD deploy, readiness checks) |
+| `prereq_manager.py` | Prerequisite infrastructure (RBAC, gateway, EPP, RDMA discovery, model download) |
+| `system_scanner.py` | Cluster resource discovery (GPUs, RDMA NICs, CPU, memory, storage classes, cloud provider) |
+| `config_generator.py` | Test configuration dataclass (`TestConfig`) with all vLLM and deployment parameters |
+| `template_manager.py` | Jinja2 template rendering for K8s manifests |
+| `metrics_collector.py` | Prometheus/Thanos metrics collection during benchmarks |
+| `metrics_analyzer.py` | Per-pod GPU utilization, memory, throughput analysis from Prometheus data |
+| `database_manager.py` | SQLite persistence for optimization runs, test results, Optuna trials |
+| `resource_calculator.py` | CPU/memory/GPU sizing math (per-node resource allocation) |
+| `report_analysis.py` | Report data builder (Pareto front, architecture comparison, charts) |
+| `report_data.py` | Data models (`TestResult`, `ParetoPoint`) and DB loader |
+| `cloud_constraints.py` | Cloud provider detection (IBM, CoreWeave, AWS, Azure, GCP, bare metal) |
+| `k8s_utils.py` | Shared kubectl/oc detection (cached) and command runner |
+| `cleanup_manager.py` | Test deployment cleanup (LWS, services, pods) |
+| `test_planner.py` | Memory calculation, engine config estimation |
 
-**Features**:
-- Class-based design with `MetricsCollector` and `MetricsConfig`
-- Categorized metric collection (GPU, Pod, vLLM, InfiniBand, Inference Gateway)
-- Standalone CLI execution support
-- Session reuse for HTTP performance
+## Key Dataclasses
 
-**Usage**:
+### RecipeOptimizerConfig
+Full optimization run configuration. Key fields:
+
 ```python
-from core.metrics_collector import MetricsCollector, MetricsConfig
-
-config = MetricsConfig.from_env()
-collector = MetricsCollector(config)
-collector.collect_all_metrics(start_time, end_time, 'output.json')
+model_name, namespace, isl, osl, qps, rate_type,
+total_gpus, max_model_len, gpu_memory_utilization,
+test_duration, stop_mode, max_requests,
+isl_stdev, osl_stdev, turns,
+tp_pair_top_n,           # GPU Split Combinations (1-4)
+pd_search_mode,          # 'smart' or 'exhaustive'
+objective,               # 'ttft', 'throughput', 'balanced', etc.
+use_achievable_qps,      # Auto-scale load
+latency_constraint_enabled, latency_constraint_ms, latency_constraint_percentile,
+workload_mode,           # 'synthetic' or 'dataset'
+dataset_source, dataset_column, dataset_max_output,
+prefix_cache_hit_pct,    # 0-100
+advanced_vllm,           # Dict of user overrides
 ```
 
-### `system_scanner.py` ⏳ (Next)
-Scans Kubernetes cluster for available resources.
+### TestConfig
+Per-test deployment configuration. Includes all vLLM flags, resource limits, networking, and workload parameters. Serialized to `test_config_json` in the DB for the report detail view.
 
-**Features**:
-- Detect number of GPUs per node
-- Identify RDMA/InfiniBand NICs
-- Calculate max tensor parallelism values
-- Determine node count and distribution
+### FeasibleSplit
+A valid P/D GPU allocation: `prefill_pods`, `decode_pods`, `prefill_tp`, `decode_tp`, `prefill_pct`.
 
-**Usage**:
+## Smart PD Search Algorithm
+
 ```python
-from core.system_scanner import SystemScanner
+# For each (prefill_tp, decode_tp) pair:
+prefill_thr = calibration_step3[prefill_tp].throughput_p90  # req/s per pod
+decode_thr  = calibration_step2[decode_tp].throughput_p90   # req/s per pod
+r = decode_thr / prefill_thr                                # balanced ratio
+D_ideal = total_gpus / (r * prefill_tp + decode_tp)         # ideal decode pods
 
-scanner = SystemScanner(namespace='llm-d')
-resources = scanner.scan_cluster()
-print(f"Available GPUs: {resources.total_gpus}")
-print(f"RDMA support: {resources.has_rdma}")
+# Test floor(D_ideal), ceil(D_ideal), ±1 → ~3 valid configs per pair
 ```
 
-### `config_generator.py` ⏳
-Generates test configurations based on user inputs.
+## Block Size Auto-Tuning
 
-**Features**:
-- Parse user inputs (ISL, OSL, users, priority)
-- Determine architectures to test (Aggregated+PD or Aggregated+EP)
-- Generate TP combinations based on available GPUs
-- For PD: Generate prefill/decode ratios
-- Create test matrix with unique test IDs
-
-**Usage**:
 ```python
-from core.config_generator import ConfigGenerator
-
-generator = ConfigGenerator()
-configs = generator.generate_test_matrix(
-    isl=3000,
-    osl=100,
-    users=100,
-    priority='response_time',
-    available_gpus=8
-)
+block_size = next_power_of_2(sqrt(ISL + OSL))  # clamped to [8, 512]
+# For PD goals: minimum 128 (NIXL transfers KV cache in blocks)
 ```
 
-### `template_manager.py` ⏳
-Renders Jinja2 templates with test configurations.
+## Templates
 
-**Features**:
-- Load templates from `templates/` directory
-- Render with configuration parameters
-- Validate rendered YAML
-- Support for all architectures (Aggregated, PD, EP)
-
-**Usage**:
-```python
-from core.template_manager import TemplateManager
-
-manager = TemplateManager(templates_dir='templates')
-manifests = manager.render_configuration('pd', config)
+```
+templates/
+├── aggregated/lws.yaml.j2        # Aggregated vLLM deployment
+├── aggregated/service.yaml.j2
+├── pd/prefill-lws.yaml.j2        # PD prefill pods (with NIXL KV transfer)
+├── pd/decode-lws.yaml.j2         # PD decode pods
+├── pd/prefill-service.yaml.j2
+├── pd/decode-service.yaml.j2
+├── ep/lws.yaml.j2                # Expert Parallelism deployment
+├── ep/service.yaml.j2
+└── prereq/                       # Gateway, EPP, RBAC, model download, PVC
 ```
 
-### `deployment_manager.py` ⏳
-Manages Kubernetes deployments for test configurations.
-
-**Features**:
-- Apply rendered manifests to cluster
-- Wait for pods to be ready
-- Verify service endpoints
-- Clean up after test completion
-- Handle failures and rollbacks
-
-**Usage**:
-```python
-from core.deployment_manager import DeploymentManager
-
-manager = DeploymentManager(namespace='llm-d')
-manager.deploy_configuration(manifests)
-manager.wait_for_ready(test_id, timeout=300)
-endpoint = manager.get_service_endpoint(test_id)
-```
-
-### `test_orchestrator.py` ✅
-Orchestrates guidellm tests for each configuration.
-
-**Features**:
-- Auto-discover Istio gateway or fallback to direct service
-- Execute guidellm with ISL/OSL/user parameters
-- Monitor pods for crashes during benchmark
-- Dynamic HuggingFace cache directory detection
-- Stream logs to console via callback
-- Collect metrics from Prometheus/Thanos
-- Handle test timeouts and failures
-
-**Environment Variables**:
-```bash
-HOME_STORAGE_DIR=/mnt/storage  # Storage mount point (set by deploy.sh)
-HF_HOME=/path/to/cache         # Optional: Override HuggingFace cache location
-                               # If not set, uses: ${HOME_STORAGE_DIR}/.cache/huggingface
-                               # Falls back to /tmp/huggingface_cache if mount unavailable
-```
-
-**Usage**:
-```python
-from core.test_orchestrator import TestOrchestrator
-
-orchestrator = TestOrchestrator(
-    namespace='llm-d',
-    thanos_url='https://thanos-querier...'
-)
-
-# Run test with auto-discovery
-success, result_file = orchestrator._run_guidellm_test(
-    endpoint=None,  # Auto-discover Istio gateway
-    config=test_config,
-    log_callback=print,
-    monitor_pods=True,
-    expected_pod_count=16
-)
-```
-
-### `results_analyzer.py` ⏳
-Analyzes results and finds optimal configuration.
-
-**Features**:
-- Calculate normalized scores per configuration
-- Apply weighted scoring based on optimization goal
-- Identify top 3 configurations
-- Generate comparison charts
-- Export optimal configuration as YAML
-
-**Usage**:
-```python
-from core.results_analyzer import ResultsAnalyzer
-
-analyzer = ResultsAnalyzer()
-scored_configs = analyzer.analyze_results(run_id=1, goal='response_time')
-recommendations = analyzer.generate_recommendations(scored_configs)
-```
-
-## Design Principles
-
-- **Modularity**: Each module has a single, clear responsibility
-- **Type Safety**: Type hints throughout for better code quality
-- **Error Handling**: Proper exception handling and logging
-- **Testability**: Each module can be tested independently
-- **Documentation**: Clear docstrings and inline comments
+All templates support configurable:
+- `block_size`, `gpu_memory_utilization`, `max_model_len`, `max_num_seqs`
+- `enable_prefix_caching`, `disable_custom_all_reduce`, `dtype`, `kv_cache_dtype`
+- `vllm_debug_logs` (VLLM_LOGGING_LEVEL), `nccl_debug_logs` (NCCL_DEBUG)
+- Node pinning via `selected_nodes`
+- RDMA device resources (auto-detected per cloud provider)
