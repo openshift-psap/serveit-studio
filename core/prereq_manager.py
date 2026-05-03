@@ -267,6 +267,79 @@ class PrereqManager:
             traceback.print_exc()
             return False
 
+    def update_epp_config(self, architecture: str, epp_config: dict,
+                          log_callback=None) -> bool:
+        """Update EPP configmap and restart the EPP pod to apply changes.
+
+        Args:
+            architecture: 'aggregated', 'pd', or 'ep'
+            epp_config: EPP config dict with preset, plugins, weights
+            log_callback: Optional callback for logging
+
+        Returns:
+            True if update succeeded
+        """
+        def log(msg):
+            if log_callback:
+                log_callback(msg)
+
+        arch_config = {
+            'aggregated': {'gaie_name': 'gaie-aggregated-epp', 'config_file': 'aggregated-config.yaml'},
+            'pd': {'gaie_name': 'gaie-pd-epp', 'config_file': 'pd-config.yaml'},
+            'ep': {'gaie_name': 'gaie-ep-epp', 'config_file': 'ep-config.yaml'},
+        }
+        if architecture not in arch_config:
+            return False
+
+        config = arch_config[architecture]
+        epp = epp_config or {}
+        epp_preset = epp.get('preset', 'balanced')
+        epp_presets = {
+            'balanced': {'prefix_cache_weight': 3.0, 'kv_cache_weight': 2.0, 'queue_weight': 2.0, 'slo_enabled': False},
+            'cache_optimized': {'prefix_cache_weight': 5.0, 'kv_cache_weight': 1.0, 'queue_weight': 2.0, 'slo_enabled': False},
+            'queue_balanced': {'prefix_cache_weight': 1.0, 'kv_cache_weight': 1.0, 'queue_weight': 3.0, 'slo_enabled': False},
+            'latency_aware': {'prefix_cache_weight': 3.0, 'kv_cache_weight': 2.0, 'queue_weight': 2.0, 'slo_enabled': True},
+        }
+        epp_weights = epp_presets.get(epp_preset, epp_presets['balanced'])
+
+        context = {
+            'namespace': self.namespace,
+            'gaie_name': config['gaie_name'],
+            'config_file': config['config_file'],
+            'prefix_cache_weight': epp_weights['prefix_cache_weight'],
+            'kv_cache_weight': epp_weights['kv_cache_weight'],
+            'queue_weight': epp_weights['queue_weight'],
+            'slo_enabled': epp_weights['slo_enabled'],
+            'max_prefix_blocks': epp.get('maxPrefixBlocksToMatch', 256),
+            'lru_capacity': epp.get('lruCapacityPerServer', 31250),
+            'non_cached_tokens': epp.get('nonCachedTokens', 16),
+        }
+
+        try:
+            template = f'prereq/gaie-configmap-{architecture}.yaml.j2'
+            manifest = self.template_mgr.render_template(template, **context)
+            result = self.kubectl.run(['apply', '-f', '-', '-n', self.namespace], input_data=manifest)
+            if result.returncode != 0:
+                log(f'❌ Failed to update EPP configmap: {result.stderr}')
+                return False
+            log(f'✅ EPP configmap updated ({epp_preset})')
+
+            result = self.kubectl.run(
+                ['rollout', 'restart', f'deployment/{config["gaie_name"]}', '-n', self.namespace],
+                check=False
+            )
+            if result.returncode == 0:
+                log(f'✅ EPP pod restarting...')
+            else:
+                log(f'⚠️  Could not restart EPP pod: {result.stderr}')
+
+            import time
+            time.sleep(10)
+            return True
+        except Exception as e:
+            log(f'❌ Failed to update EPP config: {e}')
+            return False
+
     def _ensure_modelserver_rbac(self, log_callback=None):
         """Create llm-d-modelserver ServiceAccount + Role + RoleBinding if missing."""
         def log(msg):

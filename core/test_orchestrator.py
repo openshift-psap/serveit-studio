@@ -1365,7 +1365,8 @@ class TestOrchestrator:
         log_callback: Optional[Callable[[str], None]] = None,
         cleanup: bool = True,
         skip_workload: bool = False,
-        stop_check: Optional[Callable[[], bool]] = None
+        stop_check: Optional[Callable[[], bool]] = None,
+        skip_prereqs: bool = False
     ) -> TestResult:
         """
         Run a complete test for a single configuration.
@@ -1400,49 +1401,52 @@ class TestOrchestrator:
 
         try:
             # Step 0: Check/Deploy prerequisite infrastructure
-            if log_callback:
-                log_callback('')
-                log_callback('=' * 60)
-                log_callback('📋 Step 1: Deploying Prerequisite Infrastructure')
-                log_callback('=' * 60)
+            if not skip_prereqs:
+                if log_callback:
+                    log_callback('')
+                    log_callback('=' * 60)
+                    log_callback('📋 Step 1: Deploying Prerequisite Infrastructure')
+                    log_callback('=' * 60)
 
-            from core import PrereqManager
-            prereq_mgr = PrereqManager(
-                namespace=self.namespace,
-                kubectl_runner=self.deployment_manager.kubectl
-            )
-
-            try:
-                # Deploy prerequisites - this will create missing resources and skip existing ones
-                success = prereq_mgr.deploy_prereqs(
-                    architecture=config.architecture,
-                    log_callback=lambda msg: log_callback(msg) if log_callback else None,
-                    epp_config=getattr(config, 'epp_config', None)
+                from core import PrereqManager
+                prereq_mgr = PrereqManager(
+                    namespace=self.namespace,
+                    kubectl_runner=self.deployment_manager.kubectl
                 )
 
-                if not success:
+                try:
+                    success = prereq_mgr.deploy_prereqs(
+                        architecture=config.architecture,
+                        log_callback=lambda msg: log_callback(msg) if log_callback else None,
+                        epp_config=getattr(config, 'epp_config', None)
+                    )
+
+                    if not success:
+                        if log_callback:
+                            log_callback('')
+                            log_callback('❌ Failed to deploy prerequisite infrastructure')
+                            log_callback('')
+                        result.error_message = "Failed to deploy prerequisite infrastructure"
+                        return result
+
                     if log_callback:
                         log_callback('')
-                        log_callback('❌ Failed to deploy prerequisite infrastructure')
+                        log_callback('ℹ️  Note: Gateway typically takes 1-2 minutes to become fully healthy')
+                        log_callback('   Waiting for gateway to be ready before proceeding...')
+                except Exception as e:
+                    if log_callback:
                         log_callback('')
-                    result.error_message = "Failed to deploy prerequisite infrastructure"
+                        log_callback(f'❌ Failed to deploy prerequisites: {str(e)}')
+                        log_callback('')
+                    result.error_message = f"Failed to deploy prerequisites: {str(e)}"
                     return result
-
-                if log_callback:
-                    log_callback('')
-                    log_callback('ℹ️  Note: Gateway typically takes 1-2 minutes to become fully healthy')
-                    log_callback('   Waiting for gateway to be ready before proceeding...')
-            except Exception as e:
-                if log_callback:
-                    log_callback('')
-                    log_callback(f'❌ Failed to deploy prerequisites: {str(e)}')
-                    log_callback('')
-                result.error_message = f"Failed to deploy prerequisites: {str(e)}"
-                return result
 
             if log_callback:
                 log_callback('')
-                log_callback('▶️  Prerequisites ready, continuing with inference pod deployment...')
+                if skip_prereqs:
+                    log_callback('⏩ Skipping prerequisite deployment (reusing existing)')
+                else:
+                    log_callback('▶️  Prerequisites ready, continuing with inference pod deployment...')
                 log_callback('')
                 log_callback('=' * 60)
                 log_callback('📋 Step 2: Deploying Inference Pods')

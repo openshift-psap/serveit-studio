@@ -312,6 +312,7 @@ class RecipeOptimizer:
         self.ideal_prefill_pct: float = 50.0
         self.feasible_splits: List[FeasibleSplit] = []
         self.pareto_results: List[Tuple[FeasibleSplit, TestResult]] = []
+        self.epp_benchmark_results: List = []
 
         # Calibration results for all TPs (populated in steps 2-3)
         self.decode_tp_results: List[Dict[str, Any]] = []  # [{tp, tpsg, ttft_p90, throughput_p90}]
@@ -830,6 +831,9 @@ class RecipeOptimizer:
         # Steps 4-9: Dispatch to goal-specific strategy
         strategy = self._get_strategy()
         strategy.execute()
+
+        # EPP benchmarking (optional, after main optimization)
+        self._benchmark_epp_strategies()
 
         # Return results
         return self._build_results()
@@ -2565,6 +2569,127 @@ class RecipeOptimizer:
             block_size=self._compute_block_size(),
         )
         return self._apply_advanced_vllm(cfg)
+
+    def _benchmark_epp_strategies(self):
+        """Benchmark different EPP scoring strategies on the best deployment.
+
+        Keeps the same inference pods running, swaps only the EPP configmap
+        and restarts the EPP pod. Tests 2-3 presets and compares results.
+        """
+        if not self.config.epp_benchmark:
+            return
+
+        best_config = None
+        best_result = None
+        for cfg, result in self.all_test_results:
+            if result and result.guidellm_success:
+                if best_result is None or (result.ttft_p90 and (best_result.ttft_p90 is None or result.ttft_p90 < best_result.ttft_p90)):
+                    best_config = cfg
+                    best_result = result
+
+        if not best_config:
+            self.log("⚠️  No successful test to benchmark EPP strategies against", 'warning')
+            return
+
+        self.log("\n" + "=" * 80, 'info')
+        self.log("EPP STRATEGY BENCHMARKING", 'decision')
+        self.log("=" * 80, 'info')
+        self.log(f"Testing different EPP scoring on: {best_config.test_id}", 'info')
+
+        current_preset = self.config.epp_preset
+        presets_to_test = []
+        for p in ['balanced', 'cache_optimized', 'queue_balanced']:
+            if p != current_preset:
+                presets_to_test.append(p)
+        presets_to_test = presets_to_test[:2]
+
+        self.epp_benchmark_results = []
+
+        from core import PrereqManager
+        prereq_mgr = PrereqManager(
+            namespace=self.config.namespace,
+            kubectl_runner=self.orchestrator.deployment_manager.kubectl
+        )
+
+        for preset in presets_to_test:
+            if self._should_stop():
+                break
+
+            test_id = f"epp-{preset}-{best_config.test_id}"
+            self.log(f"\n  Testing EPP preset: {preset}", 'info')
+
+            epp_cfg = {
+                'preset': preset,
+                'maxPrefixBlocksToMatch': self._build_epp_config().get('maxPrefixBlocksToMatch', 256),
+                'lruCapacityPerServer': 31250,
+                'nonCachedTokens': min(16, max(1, self.config.isl // 100)),
+            }
+
+            success = prereq_mgr.update_epp_config(
+                architecture=best_config.architecture,
+                epp_config=epp_cfg,
+                log_callback=lambda msg: self.log(msg, 'info')
+            )
+            if not success:
+                self.log(f"  ❌ Failed to update EPP config for {preset}", 'error')
+                continue
+
+            epp_test_config = TestConfig(
+                test_id=test_id,
+                architecture=best_config.architecture,
+                model_name=best_config.model_name,
+                namespace=best_config.namespace,
+                isl=best_config.isl, osl=best_config.osl,
+                num_users=best_config.num_users,
+                tensor_parallelism=best_config.tensor_parallelism,
+                replicas=best_config.replicas,
+                prefill_replicas=best_config.prefill_replicas,
+                decode_replicas=best_config.decode_replicas,
+                prefill_tp=best_config.prefill_tp,
+                decode_tp=best_config.decode_tp,
+                max_model_len=best_config.max_model_len,
+                gpu_memory_utilization=best_config.gpu_memory_utilization,
+                image=best_config.image,
+                pvc_name=best_config.pvc_name,
+                request_type=best_config.request_type,
+                request_rate=best_config.request_rate,
+                test_duration=best_config.test_duration,
+                workload_mode=best_config.workload_mode,
+                dataset_source=best_config.dataset_source,
+                block_size=best_config.block_size,
+                network_type=best_config.network_type,
+                nccl_ib_hca=best_config.nccl_ib_hca,
+            )
+
+            result = self.orchestrator.run_test(
+                epp_test_config,
+                cleanup=False,
+                log_callback=lambda msg: self.log(msg, 'info'),
+                stop_check=self._should_stop,
+                skip_prereqs=True,
+            )
+
+            if result and result.guidellm_success:
+                ttft = result.ttft_p90 or 0
+                tput = result.throughput_p90 or 0
+                self.log(f"  ✅ {preset}: TTFT p90={ttft:.1f}ms, Throughput p90={tput:.2f} req/s", 'success')
+                self.epp_benchmark_results.append((preset, result))
+                self._save_test_to_database(epp_test_config, result)
+            else:
+                self.log(f"  ❌ {preset}: benchmark failed", 'error')
+
+        if self.epp_benchmark_results:
+            self.log(f"\n  EPP Benchmark Summary ({len(self.epp_benchmark_results)} strategies tested):", 'success')
+            for preset, result in self.epp_benchmark_results:
+                ttft = result.ttft_p90 or 0
+                tput = result.throughput_p90 or 0
+                self.log(f"    {preset}: TTFT={ttft:.1f}ms, Throughput={tput:.2f} req/s", 'info')
+
+        prereq_mgr.update_epp_config(
+            architecture=best_config.architecture,
+            epp_config=self._build_epp_config(),
+            log_callback=lambda msg: self.log(msg, 'info')
+        )
 
     def _build_results(self) -> Dict[str, Any]:
         """Build optimization results summary."""
