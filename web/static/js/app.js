@@ -1342,16 +1342,27 @@ function updateEppAutoSuggestion() {
     blockSize = Math.max(8, Math.min(512, blockSize));
     if (['ttft','balanced','pd_only'].includes(config.goal)) blockSize = Math.max(128, blockSize);
 
-    var autoMaxPrefixBlocks = Math.ceil(isl / blockSize);
-    var autoNonCachedTokens = Math.min(16, Math.max(1, Math.floor(isl / 100)));
+    var cacheHitPct = config.prefix_cache_hit_pct || 0;
 
-    // Estimate LRU capacity: (GPU_VRAM_MB - model_size_est) / (block_size * 2KB per block)
+    // With high cache hit %, increase maxPrefixBlocksToMatch to check more blocks for hits
+    // Base: ceil(ISL / block_size). With cache: multiply by 1.5-2x to catch longer shared prefixes
+    var prefixMultiplier = cacheHitPct > 50 ? 2.0 : (cacheHitPct > 0 ? 1.5 : 1.0);
+    var autoMaxPrefixBlocks = Math.ceil(isl / blockSize * prefixMultiplier);
+
+    // nonCachedTokens: with high cache hits, lower threshold routes more to decode (prefix is already cached)
+    var autoNonCachedTokens = cacheHitPct > 50
+        ? Math.min(8, Math.max(1, Math.floor(isl / 200)))
+        : Math.min(16, Math.max(1, Math.floor(isl / 100)));
+
+    // LRU capacity from GPU VRAM
     var gpuVramMb = 80 * 1024; // default 80GB
     if (config.cluster_resources && config.cluster_resources.gpu_memory_per_gpu_mb) {
         gpuVramMb = config.cluster_resources.gpu_memory_per_gpu_mb;
     }
-    // LRU capacity: ~40% of VRAM for KV cache, each block holds block_size tokens at ~0.5KB/token
-    var availableKvMb = gpuVramMb * 0.4;
+    // ~40% of VRAM for KV cache, each block holds block_size tokens at ~0.5KB/token
+    // With high cache hit %, increase LRU capacity to track more cached prefixes
+    var kvFraction = cacheHitPct > 50 ? 0.5 : 0.4;
+    var availableKvMb = gpuVramMb * kvFraction;
     var kvPerBlockKb = blockSize * 0.5;
     var autoLruCapacity = Math.max(1000, Math.floor(availableKvMb * 1024 / kvPerBlockKb));
 
