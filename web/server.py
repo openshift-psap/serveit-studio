@@ -1536,6 +1536,9 @@ def stream_job_logs(job_name: str, namespace: str):
                     'tp_pair_top_n': saved_config.get('tp_pair_top_n', 2),
                     'pd_search_mode': saved_config.get('pd_search_mode', 'smart'),
                     'run_description': saved_config.get('run_description', ''),
+                    'epp_preset': saved_config.get('epp_preset', 'balanced'),
+                    'epp_benchmark': saved_config.get('epp_benchmark', False),
+                    'epp_config': saved_config.get('epp_config'),
                     'selected_nodes': saved_config.get('selected_nodes', []),
                     'workload_mode': saved_config.get('workload_mode', 'synthetic'),
                     'dataset_source': saved_config.get('dataset_source'),
@@ -1829,6 +1832,9 @@ def run_optimization_background(data):
         tp_pair_top_n = int(data.get('tp_pair_top_n', 2))
         pd_search_mode = data.get('pd_search_mode', 'smart')
         run_description = data.get('run_description', '')
+        epp_preset = data.get('epp_preset', 'balanced')
+        epp_benchmark = data.get('epp_benchmark', False)
+        epp_config = data.get('epp_config')
         selected_nodes = data.get('selected_nodes') or []
         workload_mode = data.get('workload_mode', 'synthetic')
         dataset_source = data.get('dataset_source')
@@ -2008,6 +2014,9 @@ data:
                 max_pd_splits=0,  # 0 = full coverage (test all valid splits)
                 tp_pair_top_n=tp_pair_top_n,
                 pd_search_mode=pd_search_mode,
+                epp_preset=epp_preset,
+                epp_benchmark=epp_benchmark,
+                epp_config=epp_config,
                 thanos_url=thanos_url,
                 image='ghcr.io/llm-d/llm-d-cuda:v0.5.1',
                 pvc_name='inferecipe-model-cache',
@@ -3224,6 +3233,9 @@ def handle_resume_optimization(data):
         saved_selected_nodes = []
         saved_advanced_vllm = None
         saved_pd_search_mode = 'smart'
+        saved_epp_preset = 'balanced'
+        saved_epp_benchmark = False
+        saved_epp_config = None
         if run.get('config_json'):
             try:
                 import json as _json
@@ -3231,6 +3243,9 @@ def handle_resume_optimization(data):
                 saved_selected_nodes = saved_cfg.get('selected_nodes', [])
                 saved_advanced_vllm = saved_cfg.get('advanced_vllm')
                 saved_pd_search_mode = saved_cfg.get('pd_search_mode', 'smart')
+                saved_epp_preset = saved_cfg.get('epp_preset', 'balanced')
+                saved_epp_benchmark = saved_cfg.get('epp_benchmark', False)
+                saved_epp_config = saved_cfg.get('epp_config')
             except Exception:
                 pass
 
@@ -3268,6 +3283,9 @@ def handle_resume_optimization(data):
             'latency_constraint_ms': run.get('latency_constraint_ms', 500),
             'latency_constraint_percentile': run.get('latency_constraint_percentile', 'p90'),
             'pd_search_mode': saved_pd_search_mode,
+            'epp_preset': saved_epp_preset,
+            'epp_benchmark': saved_epp_benchmark,
+            'epp_config': saved_epp_config,
             'advanced_vllm': saved_advanced_vllm,
             'resume_run_id': run_id
         }
@@ -4435,6 +4453,9 @@ def handle_setup_storage(data):
                 'tp_pair_top_n': data.get('tp_pair_top_n', 2),
                 'pd_search_mode': data.get('pd_search_mode', 'smart'),
                 'run_description': data.get('run_description', ''),
+                'epp_preset': data.get('epp_preset', 'balanced'),
+                'epp_benchmark': data.get('epp_benchmark', False),
+                'epp_config': data.get('epp_config'),
                 'selected_nodes': data.get('selected_nodes') or [],
                 'workload_mode': data.get('workload_mode', 'synthetic'),
                 'dataset_source': data.get('dataset_source'),

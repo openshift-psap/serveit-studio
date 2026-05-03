@@ -80,13 +80,15 @@ class PrereqManager:
 
         return status
 
-    def deploy_prereqs(self, architecture: str = 'aggregated', log_callback=None) -> bool:
+    def deploy_prereqs(self, architecture: str = 'aggregated', log_callback=None,
+                       epp_config: dict = None) -> bool:
         """
         Deploy prerequisite infrastructure.
 
         Args:
             architecture: 'aggregated', 'ep', or 'pd'
             log_callback: Optional callback for logging
+            epp_config: EPP scoring configuration (preset, plugins, weights, parameters)
 
         Returns:
             True if deployment succeeded
@@ -135,6 +137,26 @@ class PrereqManager:
 
             log(f'📦 Deploying prerequisite infrastructure for {architecture} architecture...')
 
+            # Resolve EPP plugin weights from preset
+            epp = epp_config or {}
+            epp_preset = epp.get('preset', 'balanced')
+            epp_presets = {
+                'balanced': {'prefix_cache_weight': 3.0, 'kv_cache_weight': 2.0, 'queue_weight': 2.0, 'slo_enabled': False},
+                'cache_optimized': {'prefix_cache_weight': 5.0, 'kv_cache_weight': 1.0, 'queue_weight': 2.0, 'slo_enabled': False},
+                'queue_balanced': {'prefix_cache_weight': 1.0, 'kv_cache_weight': 1.0, 'queue_weight': 3.0, 'slo_enabled': False},
+                'latency_aware': {'prefix_cache_weight': 3.0, 'kv_cache_weight': 2.0, 'queue_weight': 2.0, 'slo_enabled': True},
+            }
+            if epp_preset == 'custom' and epp.get('plugins'):
+                plugins = epp['plugins']
+                epp_weights = {
+                    'prefix_cache_weight': plugins.get('prefix_cache', {}).get('weight', 3.0) if plugins.get('prefix_cache', {}).get('enabled', True) else 0,
+                    'kv_cache_weight': plugins.get('kv_cache', {}).get('weight', 2.0) if plugins.get('kv_cache', {}).get('enabled', True) else 0,
+                    'queue_weight': plugins.get('queue', {}).get('weight', 2.0) if plugins.get('queue', {}).get('enabled', True) else 0,
+                    'slo_enabled': plugins.get('slo', {}).get('enabled', False),
+                }
+            else:
+                epp_weights = epp_presets.get(epp_preset, epp_presets['balanced'])
+
             # Template parameters
             context = {
                 'namespace': self.namespace,
@@ -144,7 +166,14 @@ class PrereqManager:
                 'config_file': config['config_file'],
                 'gaie_replicas': 1,
                 'gaie_image': 'ghcr.io/llm-d/llm-d-inference-scheduler:v0.6.0',
-                'gateway_name': config['gateway_name']
+                'gateway_name': config['gateway_name'],
+                'prefix_cache_weight': epp_weights['prefix_cache_weight'],
+                'kv_cache_weight': epp_weights['kv_cache_weight'],
+                'queue_weight': epp_weights['queue_weight'],
+                'slo_enabled': epp_weights['slo_enabled'],
+                'max_prefix_blocks': epp.get('maxPrefixBlocksToMatch', 256),
+                'lru_capacity': epp.get('lruCapacityPerServer', 31250),
+                'non_cached_tokens': epp.get('nonCachedTokens', 16),
             }
 
             # Create modelserver ServiceAccount + RBAC (used by LWS test pods)

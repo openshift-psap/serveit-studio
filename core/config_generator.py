@@ -107,6 +107,9 @@ class TestConfig:
     dataset_column: Optional[str] = None  # Column name for prompt text
     dataset_max_output: int = 256  # Max output tokens when using dataset
 
+    # EPP configuration (passed to prereq_manager for configmap generation)
+    epp_config: Optional[Dict] = None
+
 
 @dataclass
 class OptimizationPlan:

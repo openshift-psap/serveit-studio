@@ -1416,7 +1416,8 @@ class TestOrchestrator:
                 # Deploy prerequisites - this will create missing resources and skip existing ones
                 success = prereq_mgr.deploy_prereqs(
                     architecture=config.architecture,
-                    log_callback=lambda msg: log_callback(msg) if log_callback else None
+                    log_callback=lambda msg: log_callback(msg) if log_callback else None,
+                    epp_config=getattr(config, 'epp_config', None)
                 )
 
                 if not success:

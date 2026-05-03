@@ -9,25 +9,44 @@ metadata:
     architecture: aggregated
 data:
   aggregated-config.yaml: |
-    # Aggregated architecture - simple load balancing with prefix cache awareness
     apiVersion: inference.networking.x-k8s.io/v1alpha1
     kind: EndpointPickerConfig
     plugins:
+{% if slo_enabled | default(false) %}
+      - type: slo-aware-profile-handler
+      - type: slo-request-tracker
+{% else %}
       - type: single-profile-handler
+{% endif %}
       - type: prefix-cache-scorer
         parameters:
-          maxPrefixBlocksToMatch: 256
-          lruCapacityPerServer: 31250
+          maxPrefixBlocksToMatch: {{ max_prefix_blocks | default(256) }}
+          lruCapacityPerServer: {{ lru_capacity | default(31250) }}
       - type: kv-cache-utilization-scorer
       - type: queue-scorer
+{% if slo_enabled | default(false) %}
+      - type: slo-scorer
+{% endif %}
       - type: max-score-picker
     schedulingProfiles:
       - name: default
         plugins:
+{% if slo_enabled | default(false) %}
+          - pluginRef: slo-request-tracker
+{% endif %}
           - pluginRef: prefix-cache-scorer
-            weight: 3.0
+            weight: {{ prefix_cache_weight | default(3.0) }}
           - pluginRef: kv-cache-utilization-scorer
-            weight: 2.0
+            weight: {{ kv_cache_weight | default(2.0) }}
           - pluginRef: queue-scorer
-            weight: 2.0
+            weight: {{ queue_weight | default(2.0) }}
           - pluginRef: max-score-picker
+{% if slo_enabled | default(false) %}
+      - name: slo
+        plugins:
+          - pluginRef: prefix-cache-scorer
+            weight: 0
+          - pluginRef: slo-request-tracker
+          - pluginRef: slo-scorer
+          - pluginRef: max-score-picker
+{% endif %}

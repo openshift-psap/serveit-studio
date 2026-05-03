@@ -57,6 +57,11 @@ class RecipeOptimizerConfig:
     tp_pair_top_n: int = 2  # Top-N prefill/decode TPs to cross-product (1=fast, 2=thorough)
     pd_search_mode: str = 'smart'  # 'smart' (calculated ~3/pair) or 'exhaustive' (all splits)
 
+    # EPP configuration
+    epp_preset: str = 'balanced'  # 'balanced', 'cache_optimized', 'queue_balanced', 'latency_aware', 'custom'
+    epp_benchmark: bool = False  # Benchmark multiple EPP strategies
+    epp_config: Optional[Dict] = None  # Custom plugin weights and parameters
+
     # Infrastructure
     thanos_url: Optional[str] = None
     image: str = 'ghcr.io/llm-d/llm-d-cuda:v0.5.1'
@@ -648,6 +653,18 @@ class RecipeOptimizer:
         pd_goals = ('ttft', 'balanced', 'pd_only')
         floor = 128 if self.config.objective in pd_goals else 8
         return max(floor, min(512, bs))
+
+    def _build_epp_config(self) -> Optional[Dict]:
+        """Build EPP config dict for prereq_manager from optimizer config."""
+        import math
+        block_size = self._compute_block_size()
+        return {
+            'preset': self.config.epp_preset,
+            'plugins': self.config.epp_config if self.config.epp_preset == 'custom' else None,
+            'maxPrefixBlocksToMatch': math.ceil(self.config.isl / block_size),
+            'lruCapacityPerServer': 31250,
+            'nonCachedTokens': min(16, max(1, self.config.isl // 100)),
+        }
 
     def _detect_rdma_nics_per_node(self) -> int:
         """
@@ -2238,6 +2255,7 @@ class RecipeOptimizer:
             dataset_source=None if is_calibration else self.config.dataset_source,
             dataset_column=None if is_calibration else self.config.dataset_column,
             dataset_max_output=self.config.dataset_max_output or 256,
+            epp_config=self._build_epp_config(),
             block_size=self._compute_block_size(),
         )
         return self._apply_advanced_vllm(cfg) if not is_calibration else cfg
@@ -2466,6 +2484,7 @@ class RecipeOptimizer:
             dataset_source=self.config.dataset_source,
             dataset_column=self.config.dataset_column,
             dataset_max_output=self.config.dataset_max_output or 256,
+            epp_config=self._build_epp_config(),
             block_size=self._compute_block_size(),
         )
         return self._apply_advanced_vllm(cfg)
@@ -2542,6 +2561,7 @@ class RecipeOptimizer:
             dataset_source=self.config.dataset_source,
             dataset_column=self.config.dataset_column,
             dataset_max_output=self.config.dataset_max_output or 256,
+            epp_config=self._build_epp_config(),
             block_size=self._compute_block_size(),
         )
         return self._apply_advanced_vllm(cfg)
