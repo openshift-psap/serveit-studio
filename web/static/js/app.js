@@ -1350,7 +1350,10 @@ function updateEppAutoSuggestion() {
     if (config.cluster_resources && config.cluster_resources.gpu_memory_per_gpu_mb) {
         gpuVramMb = config.cluster_resources.gpu_memory_per_gpu_mb;
     }
-    var autoLruCapacity = Math.max(1000, Math.floor((gpuVramMb * 0.5) / (blockSize * 2)));
+    // LRU capacity: ~40% of VRAM for KV cache, each block holds block_size tokens at ~0.5KB/token
+    var availableKvMb = gpuVramMb * 0.4;
+    var kvPerBlockKb = blockSize * 0.5;
+    var autoLruCapacity = Math.max(1000, Math.floor(availableKvMb * 1024 / kvPerBlockKb));
 
     var el;
     el = document.getElementById('epp-max-prefix-blocks');
