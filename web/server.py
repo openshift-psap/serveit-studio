@@ -1,6 +1,6 @@
 """
-In-S8 llm-d optimizer Web Application
-Main Flask application for In-S8 optimization benchmarking tool.
+InferRecipe llm-d optimizer Web Application
+Main Flask application for InferRecipe optimization benchmarking tool.
 Uses gevent instead of deprecated eventlet.
 """
 
@@ -41,10 +41,10 @@ from core.web_deployer import DeploymentOrchestrator
 from core.k8s_utils import KubectlRunner
 
 # --- Configuration & Path Constants ---
-APP_PATH = os.environ.get('IN_S8_PATH', '/opt/in-s8')
-STATE_DIR = '/tmp/in_s8_state'
+APP_PATH = os.environ.get('INFER_RECIPE_PATH', '/opt/inferrecipe')
+STATE_DIR = '/tmp/infer_recipe_state'
 STATE_FILE = os.path.join(STATE_DIR, 'state.json')
-DB_PATH = os.environ.get('DB_PATH', '/mnt/storage/in-s8.db')
+DB_PATH = os.environ.get('DB_PATH', '/mnt/storage/inferrecipe.db')
 OPTIMIZATION_OUTPUT_DIR = os.environ.get('OPTIMIZATION_OUTPUT_DIR', '/mnt/storage/optimization-runs')
 
 if not os.environ.get('HF_HOME'):
@@ -703,7 +703,7 @@ def save_deployment_template(
     max_model_len: int = 8192,
     gpu_memory_utilization: float = 0.95,
     image: str = 'ghcr.io/llm-d/llm-d-cuda:v0.5.1',
-    pvc_name: str = 'in-s8-model-cache',
+    pvc_name: str = 'inferrecipe-model-cache',
     nccl_ib_hca: str = 'mlx',
     isl: int = 2000,
     osl: int = 100,
@@ -1247,7 +1247,7 @@ def update_deployment_template():
             max_model_len=data.get('max_model_len', 8192),
             gpu_memory_utilization=data.get('gpu_memory_utilization', 0.95),
             image=data.get('image', 'ghcr.io/llm-d/llm-d-cuda:v0.5.1'),
-            pvc_name=data.get('pvc_name', 'in-s8-model-cache'),
+            pvc_name=data.get('pvc_name', 'inferrecipe-model-cache'),
             nccl_ib_hca=data.get('nccl_ib_hca', 'mlx'),
             isl=data.get('isl', 2000),
             osl=data.get('osl', 100),
@@ -1612,7 +1612,7 @@ def deploy_and_test_inference(model_name: str, namespace: str, job_name: str = N
         log_to_ui('=' * 60, 'info', job_name=job_name)
         log_to_ui('', 'info', job_name=job_name)
 
-        # Step 2: Check if there are existing In-S8 deployments
+        # Step 2: Check if there are existing InferRecipe deployments
         cleanup_mgr = CleanupManager(namespace=namespace)
         existing_resources = cleanup_mgr.get_deployed_resources()
 
@@ -1634,7 +1634,7 @@ def deploy_and_test_inference(model_name: str, namespace: str, job_name: str = N
             log_to_ui('', 'info', job_name=job_name)
 
         timestamp = datetime.now().strftime('%Y%m%d-%H%M%S')
-        test_id = f'in-s8-inference-{timestamp}'
+        test_id = f'inferrecipe-inference-{timestamp}'
 
         log_to_ui('📋 Loading deployment template from database...', 'info', job_name=job_name)
 
@@ -1651,7 +1651,7 @@ def deploy_and_test_inference(model_name: str, namespace: str, job_name: str = N
             max_model_len = 8192
             gpu_memory_utilization = 0.95
             image = 'ghcr.io/llm-d/llm-d-cuda:v0.5.1'
-            pvc_name = 'in-s8-model-cache'
+            pvc_name = 'inferrecipe-model-cache'
             nccl_ib_hca = 'mlx'
             gpus_per_pod = tp
         else:
@@ -1751,7 +1751,7 @@ def deploy_and_test_inference(model_name: str, namespace: str, job_name: str = N
 
             # Run curl from within cluster (use a temporary pod)
             curl_cmd = [
-                kubectl_cmd, 'run', 'in-s8-curl-test', '-n', namespace,
+                kubectl_cmd, 'run', 'inferrecipe-curl-test', '-n', namespace,
                 '--rm', '-i', '--restart=Never',
                 '--image=registry.access.redhat.com/ubi9/ubi-minimal:latest',
                 '--', 'curl', '-s', '-m', '30', f'{service_url}/v1/models'
@@ -2008,7 +2008,7 @@ data:
                 pd_search_mode=pd_search_mode,
                 thanos_url=thanos_url,
                 image='ghcr.io/llm-d/llm-d-cuda:v0.5.1',
-                pvc_name='in-s8-model-cache',
+                pvc_name='inferrecipe-model-cache',
                 nccl_ib_hca='mlx',
                 hf_token=hf_token,
                 tp_options=tp_options,  # Dynamic based on cluster hardware
@@ -2295,7 +2295,7 @@ data:
                     gpu_memory_utilization=test_plan.model_requirements.gpu_memory_utilization,
                     memory_request=memory_per_pod,
                     memory_limit=memory_per_pod,
-                    pvc_name='in-s8-model-cache',
+                    pvc_name='inferrecipe-model-cache',
                     optimization_goal=optimization_goal,
                     test_duration=test_duration,
                     cpu_request=cpu_request
@@ -2316,7 +2316,7 @@ data:
                     gpu_memory_utilization=test_plan.model_requirements.gpu_memory_utilization,
                     memory_request=memory_per_pod,
                     memory_limit=memory_per_pod,
-                    pvc_name='in-s8-model-cache',
+                    pvc_name='inferrecipe-model-cache',
                     optimization_goal=optimization_goal,
                     test_duration=test_duration,
                     cpu_request=cpu_request
@@ -3345,7 +3345,7 @@ def handle_cleanup_deployment(data):
         if pods_to_cleanup:
             success = cleanup_mgr.cleanup_last_deployment(pods_to_cleanup, log_callback=cleanup_log)
         else:
-            # No specific pods, try cleaning up all In-S8 test deployments
+            # No specific pods, try cleaning up all InferRecipe test deployments
             success = cleanup_mgr.cleanup_all_test_deployments(log_callback=cleanup_log)
 
         if success:
@@ -4065,7 +4065,7 @@ def handle_generate_test_plan(data):
             log_to_ui(f'   GPU Memory Utilization: {utilization:.1f}%', 'info')
             log_to_ui('', 'info')
             log_to_ui('🔹 OPTIMIZATION STRATEGY', 'info')
-            log_to_ui('   In-S8 will now test multiple configurations:', 'info')
+            log_to_ui('   InferRecipe will now test multiple configurations:', 'info')
             log_to_ui('   • Different GPU counts (scaling up from minimum)', 'info')
             log_to_ui('   • Different architectures (Aggregated, EP, PD)', 'info')
             log_to_ui('   • Different pod ratios (prefill/decode balance)', 'info')
@@ -4449,10 +4449,10 @@ def handle_setup_storage(data):
             return
 
         # Create new PVC and download model
-        pvc_name = 'in-s8-model-cache'
+        pvc_name = 'inferrecipe-model-cache'
         timestamp = datetime.now().strftime('%Y%m%d-%H%M%S')
-        job_name = f'in-s8-model-download-{timestamp}'
-        test_id = f'in-s8-setup-{timestamp}'
+        job_name = f'inferrecipe-model-download-{timestamp}'
+        test_id = f'inferrecipe-setup-{timestamp}'
 
         # Initialize TemplateManager
         template_mgr = TemplateManager()
@@ -4655,7 +4655,7 @@ def handle_compress_database():
             return
 
         total_size = os.path.getsize(DB_PATH)
-        compressed_path = '/tmp/in-s8-optimizer.db.gz'
+        compressed_path = '/tmp/inferrecipe-optimizer.db.gz'
 
         emit('compression_progress', {'percent': 0, 'status': 'Compressing...',
              'original_size': total_size})
@@ -4696,7 +4696,7 @@ def download_database():
     try:
         from flask import send_file, after_this_request
 
-        compressed_path = '/tmp/in-s8-optimizer.db.gz'
+        compressed_path = '/tmp/inferrecipe-optimizer.db.gz'
         if os.path.exists(compressed_path):
             @after_this_request
             def cleanup(response):
@@ -4710,7 +4710,7 @@ def download_database():
                 compressed_path,
                 mimetype='application/gzip',
                 as_attachment=True,
-                download_name='in-s8-optimizer.db.gz'
+                download_name='inferrecipe-optimizer.db.gz'
             )
 
         if not os.path.exists(DB_PATH):
@@ -4720,7 +4720,7 @@ def download_database():
             DB_PATH,
             mimetype='application/x-sqlite3',
             as_attachment=True,
-            download_name='in-s8-optimizer.db'
+            download_name='inferrecipe-optimizer.db'
         )
     except Exception as e:
         print(f"ERROR downloading database: {e}")
@@ -4741,7 +4741,7 @@ def upload_dataset():
         ext = os.path.splitext(f.filename)[1].lower()
         if ext not in allowed:
             return jsonify({'success': False, 'error': f'Unsupported file type: {ext}'})
-        dataset_dir = os.path.join(IN_S8_PATH, 'data', 'datasets')
+        dataset_dir = os.path.join(INFER_RECIPE_PATH, 'data', 'datasets')
         os.makedirs(dataset_dir, exist_ok=True)
         safe_name = f.filename.replace('/', '_').replace('\\', '_')
         dest = os.path.join(dataset_dir, safe_name)
@@ -4795,7 +4795,7 @@ def upload_database():
             ).fetchall()]
             if 'optimization_runs' not in src_tables or 'test_configurations' not in src_tables:
                 src_conn.close()
-                return jsonify({'success': False, 'error': 'Not a valid In-S8 database (missing required tables)'}), 400
+                return jsonify({'success': False, 'error': 'Not a valid InferRecipe database (missing required tables)'}), 400
 
             src_runs = src_conn.execute('SELECT * FROM optimization_runs ORDER BY id').fetchall()
             if not src_runs:
@@ -5007,7 +5007,7 @@ def cleanup_stale_optimizations():
 def main():
     """Main application entry point."""
     print("=" * 60)
-    print("In-S8 llm-d optimizer - Intelligent Search for Optimal llm-d Inference Configuration")
+    print("InferRecipe llm-d optimizer - Intelligent Search for Optimal llm-d Inference Configuration")
     print("=" * 60)
 
     # Initialize database

@@ -1,5 +1,5 @@
 """
-Modular networking system for In-S8.
+Modular networking system for InferRecipe.
 
 Supports multiple network types:
 - NAD (NetworkAttachmentDefinition) - Multus CNI

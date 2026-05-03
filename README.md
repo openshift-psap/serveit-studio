@@ -1,12 +1,12 @@
-# In-S8
+# InferRecipe
 
 Automated benchmarking tool that finds the optimal vLLM inference configuration for your hardware, model, and workload.
 
-Given a model, a target QPS, and an optimization goal (response time or throughput), In-S8 deploys real vLLM instances on your cluster, runs benchmarks, and returns a Pareto-optimal set of configurations — ranked by TTFT, throughput, or both.
+Given a model, a target QPS, and an optimization goal (response time or throughput), InferRecipe deploys real vLLM instances on your cluster, runs benchmarks, and returns a Pareto-optimal set of configurations — ranked by TTFT, throughput, or both.
 
 ## How It Works
 
-In-S8 supports three inference architectures:
+InferRecipe supports three inference architectures:
 
 | Architecture | Description | Optimizes For |
 |---|---|---|
@@ -79,10 +79,10 @@ Steps 2–3 and 7–9 deploy real workloads. Steps 4–6 are pure math.
 
 ```bash
 # Kubernetes
-kubectl port-forward svc/in-s8-benchmark-svc 5000:5000 -n llm-d
+kubectl port-forward svc/inferrecipe-benchmark-svc 5000:5000 -n llm-d
 
 # OpenShift
-oc get route in-s8-benchmark-ui -n llm-d
+oc get route inferrecipe-benchmark-ui -n llm-d
 ```
 
 ## Project Structure
@@ -118,7 +118,7 @@ deployment/
 
 ## Multi-Cloud Support
 
-In-S8 auto-detects the cloud provider and configures networking accordingly:
+InferRecipe auto-detects the cloud provider and configures networking accordingly:
 
 | Provider | GPU Resource | Networking | RDMA |
 |---|---|---|---|
@@ -139,22 +139,22 @@ In-S8 auto-detects the cloud provider and configures networking accordingly:
 - vLLM queue depth, batch size, KV cache usage
 - InfiniBand RDMA throughput
 
-Results are stored in SQLite at `/mnt/storage/in-s8.db`.
+Results are stored in SQLite at `/mnt/storage/inferrecipe.db`.
 
 ## Troubleshooting
 
 ```bash
 # Check pod status
-kubectl get pod in-s8-benchmark -n llm-d
+kubectl get pod inferrecipe-benchmark -n llm-d
 
 # View logs
-kubectl logs -f in-s8-benchmark -n llm-d
+kubectl logs -f inferrecipe-benchmark -n llm-d
 
 # Check active test deployments
 kubectl get leaderworkerset -n llm-d
 
 # Inspect a stuck pod
-kubectl describe pod in-s8-benchmark -n llm-d
+kubectl describe pod inferrecipe-benchmark -n llm-d
 ```
 
 ## License

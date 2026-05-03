@@ -1,5 +1,5 @@
 """
-In-S8 Deployment Manager
+InferRecipe Deployment Manager
 
 Manages deployment of test configurations to Kubernetes cluster.
 """
@@ -630,7 +630,7 @@ class DeploymentManager:
         log_callback: Optional[Callable[[str], None]] = None
     ) -> bool:
         """
-        Delete all In-S8 test deployments.
+        Delete all InferRecipe test deployments.
 
         Args:
             log_callback: Optional callback for logging
@@ -639,14 +639,14 @@ class DeploymentManager:
             True if cleanup succeeded
         """
         if log_callback:
-            log_callback("🧹 Cleaning up all In-S8 test deployments...")
+            log_callback("🧹 Cleaning up all InferRecipe test deployments...")
 
         try:
             result = self.kubectl.run(
                 [
                     'delete',
                     'leaderworkerset',
-                    '-l', 'component=in-s8-test',
+                    '-l', 'component=inferrecipe-test',
                     '-n', self.namespace
                 ],
                 check=False
@@ -673,7 +673,7 @@ def main():
     import argparse
 
     parser = argparse.ArgumentParser(
-        description='Manage In-S8 test deployments'
+        description='Manage InferRecipe test deployments'
     )
     parser.add_argument('action', choices=['deploy', 'status', 'delete', 'cleanup'],
                         help='Action to perform')

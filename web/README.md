@@ -1,4 +1,4 @@
-# In-S8 Web Interface
+# InferRecipe Web Interface
 
 Flask-based web UI for configuring and monitoring optimization runs.
 
@@ -65,12 +65,12 @@ Main UI with tabbed interface.
 pip install -r requirements.txt
 
 # Set environment variables
-export IN_S8_PATH=/path/to/In-S8
-export DB_PATH=./in-s8.db
+export INFER_RECIPE_PATH=/path/to/InferRecipe
+export DB_PATH=./inferrecipe.db
 export OPTIMIZATION_OUTPUT_DIR=./optimization-runs
 
 # Run the server
-cd In-S8
+cd InferRecipe
 python3 -m web.server
 ```
 
@@ -78,14 +78,14 @@ Access at: http://localhost:5000
 
 ## Running in Container
 
-The web server runs inside the In-S8 benchmark pod:
+The web server runs inside the InferRecipe benchmark pod:
 
 ```bash
 # Deploy to cluster
 ./scripts/deploy.sh deploy
 
 # Access via OpenShift Route
-https://in-s8-benchmark-ui-llm-d.apps.psap-gpu.ibm-rh-ai.rhperfscale.org
+https://inferrecipe-benchmark-ui-llm-d.apps.psap-gpu.ibm-rh-ai.rhperfscale.org
 ```
 
 ## Database Schema

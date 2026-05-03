@@ -1,5 +1,5 @@
 """
-Database manager for In-S8 optimization results.
+Database manager for InferRecipe optimization results.
 Provides immediate persistence of test results to SQLite database.
 """
 
@@ -17,11 +17,11 @@ from .metrics_analyzer import MetricsAnalyzer
 
 class DatabaseManager:
     """
-    Manages database operations for In-S8 optimization runs.
+    Manages database operations for InferRecipe optimization runs.
     Supports immediate test result persistence.
     """
 
-    def __init__(self, db_path: str = '/mnt/storage/in-s8.db'):
+    def __init__(self, db_path: str = '/mnt/storage/inferrecipe.db'):
         """
         Initialize database manager.
 

@@ -107,7 +107,7 @@ class ParetoPoint:
 class ReportDataLoader:
     """Load test results from the SQLite database."""
 
-    def __init__(self, db_path: str = '/mnt/storage/in-s8.db'):
+    def __init__(self, db_path: str = '/mnt/storage/inferrecipe.db'):
         self.db_path = db_path
         self.conn: Optional[sqlite3.Connection] = None
 

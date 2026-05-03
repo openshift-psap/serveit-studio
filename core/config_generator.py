@@ -1,5 +1,5 @@
 """
-In-S8 Configuration Generator
+InferRecipe Configuration Generator
 
 Generates test configurations based on user inputs and cluster resources.
 Determines which architectures to test based on optimization priority.
@@ -200,9 +200,9 @@ class ConfigGenerator:
         import os
 
         # Check for manual override
-        force_nad = os.getenv('IN_S8_FORCE_NAD', 'false').lower() == 'true'
+        force_nad = os.getenv('INFER_RECIPE_FORCE_NAD', 'false').lower() == 'true'
         if force_nad:
-            logger.info("Forcing NAD network type via IN_S8_FORCE_NAD env var")
+            logger.info("Forcing NAD network type via INFER_RECIPE_FORCE_NAD env var")
             return 'nad'
 
         # Detect from cluster resources (cloud_provider is an Enum)
@@ -603,7 +603,7 @@ def main():
     import json
 
     parser = argparse.ArgumentParser(
-        description='Generate In-S8 optimization plan'
+        description='Generate InferRecipe optimization plan'
     )
     parser.add_argument('--run-name', required=True, help='Name for this optimization run')
     parser.add_argument('--model', required=True, help='HuggingFace model name')

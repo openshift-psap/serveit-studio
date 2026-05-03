@@ -1,6 +1,6 @@
 # Networking Module
 
-**Modular network resource creation for In-S8**
+**Modular network resource creation for InferRecipe**
 
 ## Overview
 

@@ -5,7 +5,7 @@ metadata:
   namespace: {{ namespace }}
   labels:
     app.kubernetes.io/name: {{ gaie_name | default('gaie-pd-epp') }}
-    component: in-s8-prereq
+    component: inferrecipe-prereq
 spec:
   host: {{ gaie_name | default('gaie-pd-epp') }}.{{ namespace }}.svc.cluster.local
   trafficPolicy:

@@ -1,4 +1,4 @@
-# In-S8 Core Modules
+# InferRecipe Core Modules
 
 Core optimization engine for finding optimal LLM inference configurations.
 

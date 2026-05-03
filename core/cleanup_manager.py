@@ -1,5 +1,5 @@
 """
-In-S8 Cleanup Manager
+InferRecipe Cleanup Manager
 
 Cleans up deployed test configurations by looking at database state.
 """
@@ -93,7 +93,7 @@ class CleanupManager:
 
     def cleanup_all_test_deployments(self, log_callback=None) -> bool:
         """
-        Clean up all In-S8 test deployments.
+        Clean up all InferRecipe test deployments.
 
         Args:
             log_callback: Optional callback for logging
@@ -103,11 +103,11 @@ class CleanupManager:
         """
         try:
             if log_callback:
-                log_callback('🧹 Cleaning up all In-S8 test deployments...')
+                log_callback('🧹 Cleaning up all InferRecipe test deployments...')
 
-            # Delete all LeaderWorkerSets with in-s8 label
+            # Delete all LeaderWorkerSets with inferrecipe label
             result = self.kubectl.run(
-                ['delete', 'leaderworkerset', '-l', 'component=in-s8-test', '-n', self.namespace, '--ignore-not-found=true'],
+                ['delete', 'leaderworkerset', '-l', 'component=inferrecipe-test', '-n', self.namespace, '--ignore-not-found=true'],
                 check=False
             )
 
@@ -117,11 +117,11 @@ class CleanupManager:
                         log_callback(f'✅ {result.stdout.strip()}')
                 else:
                     if log_callback:
-                        log_callback('ℹ️  No In-S8 test deployments found')
+                        log_callback('ℹ️  No InferRecipe test deployments found')
 
             # Delete all associated services
             self.kubectl.run(
-                ['delete', 'service', '-l', 'component=in-s8-test', '-n', self.namespace, '--ignore-not-found=true'],
+                ['delete', 'service', '-l', 'component=inferrecipe-test', '-n', self.namespace, '--ignore-not-found=true'],
                 check=False
             )
 
@@ -202,14 +202,14 @@ class CleanupManager:
 
     def get_deployed_resources(self) -> List[str]:
         """
-        Get list of currently deployed In-S8 resources.
+        Get list of currently deployed InferRecipe resources.
 
         Returns:
             List of LeaderWorkerSet names
         """
         try:
             result = self.kubectl.run_json(
-                ['get', 'leaderworkerset', '-l', 'component=in-s8-test', '-n', self.namespace, '-o', 'json']
+                ['get', 'leaderworkerset', '-l', 'component=inferrecipe-test', '-n', self.namespace, '-o', 'json']
             )
 
             if 'items' in result:
@@ -226,7 +226,7 @@ def main():
     import argparse
 
     parser = argparse.ArgumentParser(
-        description='Clean up In-S8 test deployments'
+        description='Clean up InferRecipe test deployments'
     )
     parser.add_argument('action', choices=['cleanup', 'list'],
                         help='Action to perform')
@@ -244,7 +244,7 @@ def main():
             for r in resources:
                 print(f"  - {r}")
         else:
-            print("No In-S8 deployments found")
+            print("No InferRecipe deployments found")
 
     elif args.action == 'cleanup':
         if args.resource:

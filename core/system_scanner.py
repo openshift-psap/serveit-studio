@@ -1,5 +1,5 @@
 """
-In-S8 System Scanner
+InferRecipe System Scanner
 
 Scans Kubernetes cluster for available resources (GPUs, RDMA NICs, nodes).
 """

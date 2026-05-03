@@ -18,7 +18,7 @@ RUN \
     ln -sf /usr/bin/pip3.11 /usr/bin/pip3 && \
     ln -sf /usr/bin/pip3.11 /usr/bin/pip
 
-# Install Python libraries for In-S8 tool
+# Install Python libraries for InferRecipe tool
 RUN \
     python3.11 -m pip install --no-cache-dir \
         "guidellm>=0.6.0,<0.7" \
@@ -45,7 +45,7 @@ RUN KUBECTL_VERSION="1.30.2" && \
     chmod +x ./kubectl && \
     mv ./kubectl /usr/local/bin/kubectl
 
-# Copy the In-S8 application to /app
+# Copy the InferRecipe application to /app
 WORKDIR /app
 COPY . /app/
 

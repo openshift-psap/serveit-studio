@@ -1,10 +1,10 @@
-# In-S8 Deployment Templates
+# InferRecipe Deployment Templates
 
 This directory contains Jinja2 templates for deploying different LLM inference architectures for optimization testing.
 
 ## Decision Matrix
 
-In-S8 helps users find the optimal deployment architecture based on their priorities:
+InferRecipe helps users find the optimal deployment architecture based on their priorities:
 
 | User Priority | Architectures Tested | Why |
 |--------------|---------------------|-----|

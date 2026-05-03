@@ -1,5 +1,5 @@
 """
-Shared utility functions for In-S8.
+Shared utility functions for InferRecipe.
 """
 
 from enum import Enum

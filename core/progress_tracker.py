@@ -1,5 +1,5 @@
 """
-Progress Tracking Utilities for In-S8
+Progress Tracking Utilities for InferRecipe
 
 Provides reusable progress bar functionality for:
 - Model downloads

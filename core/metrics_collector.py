@@ -1,5 +1,5 @@
 """
-In-S8 Metrics Collector
+InferRecipe Metrics Collector
 Collects metrics from Prometheus/Thanos for LLM inference optimization.
 """
 

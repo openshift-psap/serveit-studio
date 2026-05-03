@@ -1,5 +1,5 @@
 """
-In-S8 Prerequisite Manager
+InferRecipe Prerequisite Manager
 
 Manages deployment of prerequisite infrastructure (GAIE, Gateway, etc.)
 """
@@ -158,7 +158,7 @@ class PrereqManager:
             configmap_template = f'prereq/gaie-configmap-{architecture}.yaml.j2'
 
             resources = [
-                # Note: Optimizer RBAC is deployed with the optimizer pod itself (deployment/in-s8-optimizer.yaml)
+                # Note: Optimizer RBAC is deployed with the optimizer pod itself (deployment/inferrecipe-optimizer.yaml)
                 # GAIE RBAC
                 ('ServiceAccount', 'prereq/gaie-serviceaccount.yaml.j2'),
                 ('Role', 'prereq/gaie-role.yaml.j2'),
@@ -470,7 +470,7 @@ def main():
     import argparse
 
     parser = argparse.ArgumentParser(
-        description='Manage In-S8 prerequisite infrastructure'
+        description='Manage InferRecipe prerequisite infrastructure'
     )
     parser.add_argument('action', choices=['deploy', 'check', 'cleanup'],
                         help='Action to perform')

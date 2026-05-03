@@ -1,14 +1,14 @@
 apiVersion: v1
 kind: PersistentVolumeClaim
 metadata:
-  name: {{ pvc_name | default('in-s8-model-cache') }}
+  name: {{ pvc_name | default('inferrecipe-model-cache') }}
   namespace: {{ namespace }}
   labels:
     app: llm-d
-    component: in-s8-benchmark
+    component: inferrecipe-benchmark
     test-id: {{ test_id }}
   annotations:
-    description: "Model cache PVC for In-S8 benchmark - {{ model_name }}"
+    description: "Model cache PVC for InferRecipe benchmark - {{ model_name }}"
 spec:
   accessModes:
     - ReadWriteMany  # Required for shared access across pods

@@ -155,14 +155,14 @@ function logToConsole(message, type = 'info') {
 
 // Save console message to localStorage
 function saveConsoleMessage(message, type) {
-    const consoleHistory = JSON.parse(localStorage.getItem('in-s8-console') || '[]');
+    const consoleHistory = JSON.parse(localStorage.getItem('inferrecipe-console') || '[]');
     consoleHistory.push({ message, type, timestamp: Date.now() });
-    localStorage.setItem('in-s8-console', JSON.stringify(consoleHistory));
+    localStorage.setItem('inferrecipe-console', JSON.stringify(consoleHistory));
 }
 
 // Save console log to txt file
 function saveConsoleToFile() {
-    const consoleHistory = JSON.parse(localStorage.getItem('in-s8-console') || '[]');
+    const consoleHistory = JSON.parse(localStorage.getItem('inferrecipe-console') || '[]');
 
     if (consoleHistory.length === 0) {
         alert('Console is empty, nothing to save.');
@@ -171,7 +171,7 @@ function saveConsoleToFile() {
 
     // Format console history as text
     const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
-    let content = `In-S8 Console Log\n`;
+    let content = `InferRecipe Console Log\n`;
     content += `Generated: ${new Date().toLocaleString()}\n`;
     content += `Total Messages: ${consoleHistory.length}\n`;
     content += `${'='.repeat(80)}\n\n`;
@@ -188,7 +188,7 @@ function saveConsoleToFile() {
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
-    a.download = `in-s8-console-log-${timestamp}.txt`;
+    a.download = `inferrecipe-console-log-${timestamp}.txt`;
     document.body.appendChild(a);
     a.click();
     document.body.removeChild(a);
@@ -197,7 +197,7 @@ function saveConsoleToFile() {
 
 // Restore console from localStorage
 function restoreConsole() {
-    const consoleHistory = JSON.parse(localStorage.getItem('in-s8-console') || '[]');
+    const consoleHistory = JSON.parse(localStorage.getItem('inferrecipe-console') || '[]');
     const consoleEl = document.getElementById('console-output');
 
     // Only clear and restore if there's history
@@ -220,7 +220,7 @@ function restoreConsole() {
 // Clear console history
 function clearConsole() {
     // Clear localStorage
-    localStorage.removeItem('in-s8-console');
+    localStorage.removeItem('inferrecipe-console');
 
     // Clear database via API
     fetch('/api/clear_console', {
@@ -253,8 +253,8 @@ function saveConfig() {
     });
 
     // Also keep in localStorage as fallback
-    localStorage.setItem('in-s8-config', JSON.stringify(config));
-    localStorage.setItem('in-s8-step', currentStep.toString());
+    localStorage.setItem('inferrecipe-config', JSON.stringify(config));
+    localStorage.setItem('inferrecipe-step', currentStep.toString());
 }
 
 // Update UI from current config state
@@ -411,8 +411,8 @@ function loadConfig() {
     socket.emit('load_config');
 
     // Fallback: also load from localStorage in case server fails
-    const saved = localStorage.getItem('in-s8-config');
-    const savedStep = localStorage.getItem('in-s8-step');
+    const saved = localStorage.getItem('inferrecipe-config');
+    const savedStep = localStorage.getItem('inferrecipe-step');
 
     if (saved) {
         const loadedConfig = JSON.parse(saved);
@@ -1766,7 +1766,7 @@ socket.on('status_update', function(data) {
 socket.on('clear_console', function() {
     // Clear console UI when server broadcasts clear event
     document.getElementById('console-output').innerHTML = '<div class="console-line">Console cleared.</div>';
-    localStorage.removeItem('in-s8-console');
+    localStorage.removeItem('inferrecipe-console');
 });
 
 socket.on('config_updated', function(data) {
@@ -2405,7 +2405,7 @@ socket.on('compression_complete', function(data) {
             var url = window.URL.createObjectURL(blob);
             var a = document.createElement('a');
             a.href = url;
-            a.download = 'in-s8-optimizer.db.gz';
+            a.download = 'inferrecipe-optimizer.db.gz';
             document.body.appendChild(a);
             a.click();
             window.URL.revokeObjectURL(url);
@@ -4916,7 +4916,7 @@ function downloadHTMLReport(runId, data) {
     const hasStep8 = rec && (rec.pd_vs_agg || rec.ep_vs_agg);
     const hasStep10 = !!data.calibrated_qps;
 
-    let html = `<!DOCTYPE html><html><head><meta charset="UTF-8"><title>In-S8 Report - Run ${runId}</title>`;
+    let html = `<!DOCTYPE html><html><head><meta charset="UTF-8"><title>InferRecipe Report - Run ${runId}</title>`;
     html += '<script src="https://cdn.plot.ly/plotly-2.35.2.min.js"><\/script>';
     html += `<style>
         body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; width: 95%; margin: 0 auto; padding: 20px; background: #f8fafc; color: #1e293b; }
@@ -4944,7 +4944,7 @@ function downloadHTMLReport(runId, data) {
         .dl-pane.active { display:block; }
     </style></head><body>`;
 
-    html += `<h1>In-S8 Optimization Report - Run #${runId}</h1>`;
+    html += `<h1>InferRecipe Optimization Report - Run #${runId}</h1>`;
     html += `<p>Generated: ${new Date().toLocaleString()}</p>`;
 
     // === Build each section separately ===
@@ -5314,7 +5314,7 @@ function downloadHTMLReport(runId, data) {
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
-    a.download = `in-s8-report-run-${runId}.html`;
+    a.download = `inferrecipe-report-run-${runId}.html`;
     a.click();
     URL.revokeObjectURL(url);
 }

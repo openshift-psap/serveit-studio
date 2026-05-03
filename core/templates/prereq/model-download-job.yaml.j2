@@ -1,11 +1,11 @@
 apiVersion: batch/v1
 kind: Job
 metadata:
-  name: {{ job_name | default('in-s8-model-download') }}
+  name: {{ job_name | default('inferrecipe-model-download') }}
   namespace: {{ namespace }}
   labels:
     app: llm-d
-    component: in-s8-benchmark
+    component: inferrecipe-benchmark
     test-id: {{ test_id }}
   annotations:
     description: "Model download job for {{ model_name }}"
@@ -16,7 +16,7 @@ spec:
     metadata:
       labels:
         app: llm-d
-        component: in-s8-benchmark
+        component: inferrecipe-benchmark
         job: model-download
         test-id: {{ test_id }}
     spec:
@@ -32,7 +32,7 @@ spec:
             - |
               set -e
               echo "========================================="
-              echo "In-S8 Model Download Job"
+              echo "InferRecipe Model Download Job"
               echo "Model: {{ model_name }}"
               echo "Cache Directory: /model-cache"
               echo "========================================="
@@ -187,7 +187,7 @@ spec:
       volumes:
         - name: model-cache
           persistentVolumeClaim:
-            claimName: {{ pvc_name | default('in-s8-model-cache') }}
+            claimName: {{ pvc_name | default('inferrecipe-model-cache') }}
         - name: tmp-mem
           emptyDir:
             medium: Memory

@@ -1,5 +1,5 @@
 """
-In-S8 Test Planner
+InferRecipe Test Planner
 
 Calculates resource requirements and plans test configurations based on:
 - Model size and VRAM requirements
