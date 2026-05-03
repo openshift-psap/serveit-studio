@@ -1411,10 +1411,10 @@ document.getElementById('next-step4').addEventListener('click', () => {
     goToStep(5);
 });
 
-// Step 5: EPP Config
-document.getElementById('next-step5').addEventListener('click', () => {
-    logToConsole(`\n📋 Step 5 Complete: EPP Config = ${config.epp_preset || 'balanced'}`, 'success');
-    goToStep(6);
+// Step 6: EPP Config (next-step6 is in step5_epp.html)
+document.getElementById('next-step6').addEventListener('click', () => {
+    logToConsole(`\n📋 Step 6 Complete: EPP Config = ${config.epp_preset || 'balanced'}`, 'success');
+    goToStep(7);
 });
 
 // Save storage class selection
@@ -1469,7 +1469,7 @@ function fetchAvailablePVCs() {
     socket.emit('list_pvcs', {});
 }
 
-document.getElementById('next-step6').addEventListener('click', () => {
+document.getElementById('next-step5').addEventListener('click', () => {
     // Validate storage setup
     const useExistingPvc = document.getElementById('use-existing-pvc').checked;
     const maxGpus = config.max_gpus || config.cluster_resources?.total_gpus;
@@ -1513,8 +1513,8 @@ document.getElementById('next-step6').addEventListener('click', () => {
         logToConsole('   Node pinning: ' + config.selected_nodes.join(', '), 'info');
     }
 
-    // Just go to step 6 - test plan will be generated there if needed
-    goToStep(7);
+    // Go to step 6 (EPP Config)
+    goToStep(6);
 });
 
 function generateTestPlan() {
@@ -1723,9 +1723,9 @@ function rescanCluster() {
     document.getElementById('rescan-cluster-btn').style.display = 'none';
 
     // Disable Continue button during scan
-    const nextStep5Btn = document.getElementById('next-step6');
+    const nextStep5Btn = document.getElementById('next-step5');
     nextStep5Btn.disabled = true;
-    nextStep5Btn.textContent = 'Continue to Review → (Scanning...)';
+    nextStep5Btn.textContent = 'Continue to EPP Config → (Scanning...)';
     nextStep5Btn.style.opacity = '0.6';
 
     logToConsole('🔍 Re-scanning cluster resources...', 'info');
@@ -1766,7 +1766,7 @@ function goToStep(step, skipSave) {
     if (!skipSave) saveConfig();
 
     // Update breadcrumb
-    const stepTitles = {1:'Goal', 2:'Model', 3:'Workload', 4:'Test Config', 5:'EPP Config', 6:'Setup', 7:'Review & Run'};
+    const stepTitles = {1:'Goal', 2:'Model', 3:'Workload', 4:'Test Config', 5:'Setup', 6:'EPP Config', 7:'Review & Run'};
     const bc = document.getElementById('breadcrumb-title');
     if (bc) bc.textContent = `Step ${step}: ${stepTitles[step] || ''}`;
 
@@ -1790,31 +1790,31 @@ function goToStep(step, skipSave) {
     if (step > 3) {
         document.getElementById('step4-value').textContent = `${config.users} users`;
     }
-    if (step > 4) {
+    if (step > 4 && config.cluster_resources) {
+        document.getElementById('step5-value').textContent = `${config.cluster_resources.total_gpus} GPUs`;
+    }
+    if (step > 5) {
         const presetLabels = {balanced:'Balanced', cache_optimized:'Cache Opt.', queue_balanced:'Queue Bal.', latency_aware:'Latency', custom:'Custom'};
-        document.getElementById('step5-value').textContent = presetLabels[config.epp_preset] || 'Balanced';
+        document.getElementById('step6-value').textContent = presetLabels[config.epp_preset] || 'Balanced';
     }
-    if (step > 5 && config.cluster_resources) {
-        document.getElementById('step6-value').textContent = `${config.cluster_resources.total_gpus} GPUs`;
-    }
-    if (step === 5) {
+    if (step === 6) {
         updateEppAutoSuggestion();
         if (config.epp_preset) setEppPreset(config.epp_preset);
     }
-    if (step === 6) {
+    if (step === 5) {
         // Check if cluster resources already scanned
         if (config.cluster_resources && document.getElementById('cluster-resources').style.display !== 'none') {
             // Resources already loaded - enable button immediately
-            const nextStep5Btn = document.getElementById('next-step6');
+            const nextStep5Btn = document.getElementById('next-step5');
             nextStep5Btn.disabled = false;
-            nextStep5Btn.textContent = 'Continue to Review →';
+            nextStep5Btn.textContent = 'Continue to EPP Config →';
             nextStep5Btn.style.opacity = '1';
         } else {
             // Auto-scan cluster resources when entering step 5
             // Disable next button and show scanning status
-            const nextStep5Btn = document.getElementById('next-step6');
+            const nextStep5Btn = document.getElementById('next-step5');
             nextStep5Btn.disabled = true;
-            nextStep5Btn.textContent = 'Continue to Review → (Scanning...)';
+            nextStep5Btn.textContent = 'Continue to EPP Config → (Scanning...)';
             nextStep5Btn.style.opacity = '0.6';
 
             // Hide cluster resources div and show scanning status
@@ -2256,7 +2256,7 @@ socket.on('cluster_scan_result', function(data) {
     document.getElementById('rescan-cluster-btn').style.display = 'inline-block';
 
     // Enable Continue to Review button
-    const nextStep5Btn = document.getElementById('next-step6');
+    const nextStep5Btn = document.getElementById('next-step5');
     nextStep5Btn.disabled = false;
     nextStep5Btn.textContent = 'Continue to Review →';
     nextStep5Btn.style.opacity = '1';
