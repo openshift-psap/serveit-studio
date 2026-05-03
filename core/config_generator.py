@@ -67,6 +67,8 @@ class TestConfig:
     block_size: int = 16  # KV cache block size (auto-tuned from ISL+OSL)
     trust_remote_code: bool = True
     disable_log_requests: bool = True
+    vllm_debug_logs: bool = False
+    nccl_debug_logs: bool = False
     memory_request: str = '64Gi'  # System RAM per pod (overridden by dynamic calculation)
     memory_limit: str = '64Gi'  # System RAM per pod (overridden by dynamic calculation)
     cpu_request: str = '16'  # CPUs per pod (overridden by dynamic calculation)

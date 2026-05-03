@@ -182,9 +182,9 @@ spec:
               - name: NVIDIA_GDRCOPY
                 value: "enabled"
               - name: VLLM_LOGGING_LEVEL
-                value: "ERROR"
+                value: "{{ 'DEBUG' if vllm_debug_logs else 'ERROR' }}"
               - name: NCCL_DEBUG
-                value: "ERROR"
+                value: "{{ 'INFO' if nccl_debug_logs else 'ERROR' }}"
               - name: VLLM_NIXL_ABORT_REQUEST_TIMEOUT
                 value: "600"
               - name: SHARED_STORAGE_PATH

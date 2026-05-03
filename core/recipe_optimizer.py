@@ -2379,6 +2379,8 @@ class RecipeOptimizer:
             'enable_auto_tool_choice': 'enable_auto_tool_choice',
             'trust_remote_code': 'trust_remote_code',
             'disable_log_requests': 'disable_log_requests',
+            'vllm_debug_logs': 'vllm_debug_logs',
+            'nccl_debug_logs': 'nccl_debug_logs',
         }
         for key, attr in toggle_fields.items():
             setting = adv.get(key)
