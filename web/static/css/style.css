@@ -2160,7 +2160,7 @@
 }
 
 .sidebar-header {
-    padding: 16px 0px 14px;
+    padding: 16px 8px 14px;
     border-bottom: 1px solid var(--rh-gray-200);
     position: relative;
 }
