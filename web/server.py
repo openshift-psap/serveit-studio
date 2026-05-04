@@ -5006,11 +5006,20 @@ def cleanup_stale_optimizations():
 
                 # Mark them as interrupted
                 for run_id, run_name in stale_runs:
+                    # Preserve user's notes/description — append system message to constraint_notes instead
+                    existing = cursor.execute('SELECT constraint_notes FROM optimization_runs WHERE id = ?', (run_id,)).fetchone()
+                    sys_notes = []
+                    if existing and existing[0]:
+                        try:
+                            sys_notes = json.loads(existing[0])
+                        except Exception:
+                            sys_notes = []
+                    sys_notes.append('Server restarted while optimization was running')
                     cursor.execute('''
                         UPDATE optimization_runs
-                        SET status = ?, completed_at = ?
+                        SET status = ?, completed_at = ?, constraint_notes = ?
                         WHERE id = ?
-                    ''', ('interrupted', datetime.now().isoformat(), run_id))
+                    ''', ('interrupted', datetime.now().isoformat(), json.dumps(sys_notes), run_id))
                     print(f"   ✓ Marked {run_name} as interrupted")
 
                 print(f"✓ Cleaned up {len(stale_runs)} stale optimization(s)")
