@@ -52,9 +52,9 @@
                                     </div>
                                     <div class="input-group" id="autoscale-card" style="cursor:pointer;border:2px solid #e2e8f0;border-radius:10px;padding:16px;transition:all 0.2s;background:#fafafa;" onclick="var cb=document.getElementById('use-achievable-qps');cb.checked=!cb.checked;cb.dispatchEvent(new Event('change'));updateAutoScaleCard();">
                                         <input type="checkbox" id="use-achievable-qps" style="display:none;" onclick="event.stopPropagation();updateAutoScaleCard();">
-                                        <label style="text-align:center;margin-bottom:8px;">Auto-Scale Load</label>
+                                        <label style="text-align:center;margin-bottom:8px;">Auto-Scale Concurrency</label>
                                         <div style="font-size:3.5em;text-align:center;margin:12px 0;">⚖️</div>
-                                        <div class="help-text" style="font-size:0.82em;text-align:center;line-height:1.5;">Let the optimizer find the sustainable load your cluster can handle.</div>
+                                        <div class="help-text" style="font-size:0.82em;text-align:center;line-height:1.5;">If your requested concurrent users exceed what the cluster can sustain, automatically scale down to the achievable concurrency.</div>
                                     </div>
                                     <script>
                                     function updateAutoScaleCard(){var c=document.getElementById('use-achievable-qps').checked;var d=document.getElementById('autoscale-card');if(c){d.style.borderColor='#0ea5e9';d.style.background='linear-gradient(135deg,#f0f9ff,#e0f2fe)';}else{d.style.borderColor='#e2e8f0';d.style.background='#fafafa';}}

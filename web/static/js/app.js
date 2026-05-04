@@ -799,7 +799,7 @@ function restoreConfigSummary() {
     document.getElementById('config-summary-osl').textContent = config.osl;
     document.getElementById('config-summary-users').textContent = config.users;
     document.getElementById('config-summary-duration').textContent = config.stop_mode === 'max_requests' ? `${config.max_requests} requests` : `${config.duration}s duration`;
-    document.getElementById('config-summary-qps-mode').textContent = config.use_achievable_qps ? 'Sustainable Load (auto-scaled)' : 'User-defined Concurrent Users';
+    document.getElementById('config-summary-qps-mode').textContent = config.use_achievable_qps ? 'Sustainable Concurrency (auto-scaled)' : 'User-defined Concurrent Users';
     document.getElementById('config-summary-gpus').textContent = config.max_gpus || config.cluster_resources?.total_gpus || 'Not set';
     document.getElementById('config-summary-achievable-qps').textContent = config.use_achievable_qps ? 'Enabled' : 'Disabled';
     document.getElementById('config-summary-pvc').textContent = config.existing_pvc_name || 'Not set';
@@ -1416,7 +1416,7 @@ document.getElementById('next-step3').addEventListener('click', () => {
 });
 
 document.getElementById('next-step4').addEventListener('click', () => {
-    const qpsMode = config.use_achievable_qps ? 'Sustainable Load (auto-scaled)' : 'User-defined Concurrent Users';
+    const qpsMode = config.use_achievable_qps ? 'Sustainable Concurrency (auto-scaled)' : 'User-defined Concurrent Users';
     const stopInfo = config.stop_mode === 'max_requests' ? `${config.max_requests} requests` : `${config.duration}s`;
     logToConsole(`\n📋 Step 4 Complete: Test Config = ${config.users} users, ${stopInfo}, Mode: ${qpsMode}`, 'success');
     goToStep(5);
@@ -1549,7 +1549,7 @@ function generateTestPlan() {
     document.getElementById('config-summary-osl').textContent = config.osl;
     document.getElementById('config-summary-users').textContent = config.users;
     document.getElementById('config-summary-duration').textContent = config.stop_mode === 'max_requests' ? `${config.max_requests} requests` : `${config.duration}s duration`;
-    document.getElementById('config-summary-qps-mode').textContent = config.use_achievable_qps ? 'Sustainable Load (auto-scaled)' : 'User-defined Concurrent Users';
+    document.getElementById('config-summary-qps-mode').textContent = config.use_achievable_qps ? 'Sustainable Concurrency (auto-scaled)' : 'User-defined Concurrent Users';
     document.getElementById('config-summary-gpus').textContent = config.max_gpus || config.cluster_resources?.total_gpus;
     document.getElementById('config-summary-achievable-qps').textContent = config.use_achievable_qps ? 'Enabled' : 'Disabled';
     document.getElementById('config-summary-pvc').textContent = config.existing_pvc_name || 'Not set';
@@ -3475,7 +3475,8 @@ function renderCharts(data, runId) {
                 const gpus = pi === 0 ? c.gpus : cardConfig.gpus;
                 const conc = pi === 0 ? c.concurrency : cardConfig.concurrency;
                 const ratio = pi === 0 && c.ratio && c.decode_pods > 0 ? `P:D ratio ${c.ratio} | ` : '';
-                const concStr = conc ? ` | c=${conc}` : '';
+                const userConc = rec.workload ? rec.workload.users : null;
+                const concStr = conc ? ` | c=${conc}${userConc && userConc !== conc ? ' (from ' + userConc + ')' : ''}` : '';
 
                 html += `<div style="font-size:0.9em; color:#475569;">${ratio}TTFT ${pLabel}: <strong>${ttftVal} ms</strong> | Throughput ${pLabel}: <strong>${tputVal} req/s</strong> | ${gpus} GPUs${concStr}</div>`;
 
