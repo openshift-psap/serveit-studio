@@ -3521,6 +3521,72 @@ function renderCharts(data, runId) {
             html += '</div>';
         }
 
+        // --- EPP-Optimized Recommendation (from Step 11) ---
+        if (data.epp_tuning && data.epp_tuning.by_architecture) {
+            const eppArch = data.epp_tuning.by_architecture;
+            const hasEppData = Object.values(eppArch).some(t => t && t.length > 0);
+            if (hasEppData) {
+                html += '<div style="margin-top:24px; border:2px solid #7c3aed; border-left:6px solid #7c3aed; border-radius:10px; overflow:hidden;">';
+                html += '<div style="background:linear-gradient(135deg,#7c3aed,#8b5cf6); color:white; padding:14px 20px; font-size:1.1em; font-weight:800;">EPP-Optimized Recommendation (Step 11)</div>';
+                html += '<div style="padding:12px 20px 4px; color:#475569; font-size:0.9em;">These results use the same deployment as above but with tuned EPP scoring weights. The gateway routes requests more efficiently, improving latency without changing the inference pods.</div>';
+                html += '<div style="padding:16px 20px;">';
+
+                // Render row by row for each percentile
+                ['p90', 'p95', 'p99'].forEach(p => {
+                    const pLabel = p.toUpperCase();
+                    html += `<div style="display:grid; grid-template-columns:1fr 1fr; gap:16px; margin-bottom:12px;">`;
+
+                    // Best aggregated EPP result at this percentile
+                    const aggTrials = eppArch['aggregated'] || [];
+                    const aggBest = aggTrials.length ? aggTrials.reduce((a, b) => ((a[`ttft_${p}`] || Infinity) < (b[`ttft_${p}`] || Infinity)) ? a : b) : null;
+                    if (aggBest && aggBest[`ttft_${p}`]) {
+                        const w = aggBest.weights || {};
+                        html += `<div style="background:white; border:2px solid #7c3aed40; border-radius:10px; padding:16px;">`;
+                        html += `<div style="font-weight:800; color:#7c3aed; font-size:0.85em; text-transform:uppercase; margin-bottom:8px;">&#9201; TTFT ${pLabel} <span style="background:#7c3aed; color:white; font-size:0.7em; padding:2px 8px; border-radius:4px; margin-left:6px;">EPP TUNED</span> <span style="background:#64748b; color:white; font-size:0.65em; padding:2px 6px; border-radius:3px; margin-left:4px;">AGGREGATED</span></div>`;
+                        html += `<div style="font-size:1.3em; font-weight:800; color:#1e293b; margin-bottom:4px;">${aggBest.config_name}</div>`;
+                        html += `<div style="font-size:0.9em; color:#475569;">TTFT ${pLabel}: <strong>${aggBest[`ttft_${p}`]} ms</strong> | Throughput: <strong>${aggBest[`throughput_${p}`] || aggBest.throughput_p90} req/s</strong></div>`;
+                        html += `<div style="font-size:0.8em; color:#7c3aed; margin-top:4px;">EPP: ${aggBest.name} (${w.prefix_cache || '?'}:${w.kv_cache || '?'}:${w.queue || '?'})</div>`;
+                        if (aggBest.manifest_types && aggBest.manifest_types.length) {
+                            html += '<div style="margin-top:8px;">';
+                            aggBest.manifest_types.forEach(t => {
+                                html += `<a href="/api/run/${runId}/config/${aggBest.test_id}/manifest/${t}" style="color:#7c3aed;text-decoration:none;font-size:11px;padding:2px 6px;background:#f5f3ff;border-radius:4px;border:1px solid #c4b5fd;display:inline-block;">${t}</a> `;
+                            });
+                            html += '</div>';
+                        }
+                        html += '</div>';
+                    } else {
+                        html += '<div></div>';
+                    }
+
+                    // Best PD EPP result at this percentile
+                    const pdTrials = eppArch['pd'] || [];
+                    const pdBest = pdTrials.length ? pdTrials.reduce((a, b) => ((a[`ttft_${p}`] || Infinity) < (b[`ttft_${p}`] || Infinity)) ? a : b) : null;
+                    if (pdBest && pdBest[`ttft_${p}`]) {
+                        const w = pdBest.weights || {};
+                        html += `<div style="background:white; border:2px solid #7c3aed40; border-radius:10px; padding:16px;">`;
+                        html += `<div style="font-weight:800; color:#7c3aed; font-size:0.85em; text-transform:uppercase; margin-bottom:8px;">&#9889; THROUGHPUT ${pLabel} <span style="background:#7c3aed; color:white; font-size:0.7em; padding:2px 8px; border-radius:4px; margin-left:6px;">EPP TUNED</span> <span style="background:#64748b; color:white; font-size:0.65em; padding:2px 6px; border-radius:3px; margin-left:4px;">PD</span></div>`;
+                        html += `<div style="font-size:1.3em; font-weight:800; color:#1e293b; margin-bottom:4px;">${pdBest.config_name}</div>`;
+                        html += `<div style="font-size:0.9em; color:#475569;">TTFT ${pLabel}: <strong>${pdBest[`ttft_${p}`]} ms</strong> | Throughput: <strong>${pdBest[`throughput_${p}`] || pdBest.throughput_p90} req/s</strong></div>`;
+                        html += `<div style="font-size:0.8em; color:#7c3aed; margin-top:4px;">EPP: ${pdBest.name} (${w.prefix_cache || '?'}:${w.kv_cache || '?'}:${w.queue || '?'})</div>`;
+                        if (pdBest.manifest_types && pdBest.manifest_types.length) {
+                            html += '<div style="margin-top:8px;">';
+                            pdBest.manifest_types.forEach(t => {
+                                html += `<a href="/api/run/${runId}/config/${pdBest.test_id}/manifest/${t}" style="color:#7c3aed;text-decoration:none;font-size:11px;padding:2px 6px;background:#f5f3ff;border-radius:4px;border:1px solid #c4b5fd;display:inline-block;">${t}</a> `;
+                            });
+                            html += '</div>';
+                        }
+                        html += '</div>';
+                    } else {
+                        html += '<div></div>';
+                    }
+
+                    html += '</div>'; // Close row grid
+                });
+
+                html += '</div></div>';
+            }
+        }
+
         html += '</div></div>';
 
     } // end Deployment Recommendation card
