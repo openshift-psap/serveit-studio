@@ -411,6 +411,20 @@ class ReportAnalyzer:
         agg_tests = step6_agg_tests if step6_agg_tests else step8_tests
         if agg_tests:
             agg = min(agg_tests, key=lambda r: r.ttft_p90 if r.ttft_p90 else 1000000.0)
+            agg_c = None
+            if agg.test_config_json:
+                try:
+                    import json as _jc2
+                    agg_c = _jc2.loads(agg.test_config_json).get('num_users')
+                except Exception:
+                    pass
+            if agg_c is None and agg.metrics_json:
+                try:
+                    import json as _jc2
+                    mj = _jc2.loads(agg.metrics_json)
+                    agg_c = int(mj.get('concurrency_mean') or mj.get('concurrency_p50') or 0) or None
+                except Exception:
+                    pass
             aggregated_baseline = {
                 'config_name': agg.display_label,
                 'test_id': agg.config_name,
@@ -420,6 +434,7 @@ class ReportAnalyzer:
                 'throughput_p90': round(agg.throughput_p90, 2),
                 'gpus': agg.total_gpus,
                 'percentiles': _percentiles(agg),
+                'concurrency': agg_c,
             }
 
         # --- Best config per percentile per architecture ---
