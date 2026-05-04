@@ -4445,7 +4445,11 @@ function renderCharts(data, runId) {
 
     content.innerHTML = html;
 
-    // EPP tuning charts render on first tab click (hidden tabs have zero dimensions)
+    // Render EPP tuning charts now (before subtabs-ready hides non-active panes)
+    if (window._eppChartRenders && window._eppChartRenders.length) {
+        window._eppChartRenders.forEach(fn => fn());
+        window._eppChartRenders = [];
+    }
 
     // Render estimator methodology explanation
     updateEstimatorScaling(_chartSuffix);
