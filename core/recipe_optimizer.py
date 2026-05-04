@@ -2768,6 +2768,7 @@ class RecipeOptimizer:
                     tput = result.throughput_p90 or 0
                     self.log(f"  ✅ {name}: TTFT p90={ttft:.1f}ms, Throughput p90={tput:.2f} req/s", 'success')
                     arch_results.append((name, weights, result))
+                    self.all_test_results.append((epp_test_config, result))
                     try:
                         import json as _json
                         tmgr = TemplateManager()

@@ -4360,8 +4360,9 @@ function renderCharts(data, runId) {
             });
             eppHtml += '</table></div></div>';
 
-            // Render Plotly charts after DOM is ready (deferred)
-            setTimeout(() => {
+            // Collect chart render functions — will execute after DOM update
+            if (!window._eppChartRenders) window._eppChartRenders = [];
+            window._eppChartRenders.push(() => {
                 pctls.forEach(pctl => {
                     const el = document.getElementById(`${eppCardId}-${pctl.key}${_chartSuffix}`);
                     if (!el) return;
@@ -4403,7 +4404,7 @@ function renderCharts(data, runId) {
                         showlegend: true, legend: {x: 0, y: 1.18, orientation: 'h'}, shapes, annotations,
                     }, plotlyConfig);
                 });
-            }, 100);
+            });
         });
 
         secEppTuning = eppHtml;
@@ -4443,6 +4444,14 @@ function renderCharts(data, runId) {
     }
 
     content.innerHTML = html;
+
+    // Render EPP tuning charts (deferred until DOM is ready)
+    if (window._eppChartRenders && window._eppChartRenders.length) {
+        setTimeout(() => {
+            window._eppChartRenders.forEach(fn => fn());
+            window._eppChartRenders = [];
+        }, 50);
+    }
 
     // Render estimator methodology explanation
     updateEstimatorScaling(_chartSuffix);
