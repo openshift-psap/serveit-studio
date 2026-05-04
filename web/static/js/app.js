@@ -1143,7 +1143,7 @@ function setRateType(type) {
     saveConfig();
 }
 
-// Achievable QPS checkbox
+// Auto-Scale Concurrency checkbox
 document.getElementById('use-achievable-qps').addEventListener('change', (e) => {
     config.use_achievable_qps = e.target.checked;
     saveConfig();

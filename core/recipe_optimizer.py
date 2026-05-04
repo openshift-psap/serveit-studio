@@ -87,7 +87,7 @@ class RecipeOptimizerConfig:
     # Optimization objective for Step 7
     objective: str = 'balanced'  # 'ttft', 'throughput', or 'balanced'
 
-    # If True, scale down concurrent users to achievable QPS when GPUs are insufficient
+    # If True, scale down concurrent users to achievable concurrency when cluster capacity is insufficient
     use_achievable_qps: bool = False
 
     # Latency-bounded throughput maximization (Step 9)
