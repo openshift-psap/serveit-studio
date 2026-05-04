@@ -4445,6 +4445,10 @@ function renderCharts(data, runId) {
 
     content.innerHTML = html;
 
+    // --- Plotly chart config (must be before EPP chart rendering) ---
+    const plotlyLayout = { margin: { t: 10, b: 40, l: 50, r: 20 }, height: 430, paper_bgcolor: 'transparent', plot_bgcolor: 'transparent', font: { family: 'Inter, sans-serif' } };
+    const plotlyConfig = { responsive: true, displayModeBar: true, modeBarButtonsToRemove: ['select2d', 'lasso2d', 'autoScale2d'], toImageButtonOptions: { format: 'png', height: 600, width: 1200, scale: 2 } };
+
     // Render EPP tuning charts now (before subtabs-ready hides non-active panes)
     if (window._eppChartRenders && window._eppChartRenders.length) {
         window._eppChartRenders.forEach(fn => fn());
@@ -4453,10 +4457,6 @@ function renderCharts(data, runId) {
 
     // Render estimator methodology explanation
     updateEstimatorScaling(_chartSuffix);
-
-    // --- Render Plotly charts ---
-    const plotlyLayout = { margin: { t: 10, b: 40, l: 50, r: 20 }, height: 430, paper_bgcolor: 'transparent', plot_bgcolor: 'transparent', font: { family: 'Inter, sans-serif' } };
-    const plotlyConfig = { responsive: true, displayModeBar: true, modeBarButtonsToRemove: ['select2d', 'lasso2d', 'autoScale2d'], toImageButtonOptions: { format: 'png', height: 600, width: 1200, scale: 2 } };
 
     // Pareto frontier
     if (charts.pareto.traces.length) {
