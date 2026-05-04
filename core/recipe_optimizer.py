@@ -2699,6 +2699,7 @@ class RecipeOptimizer:
                 block_size=best_config.block_size,
                 network_type=best_config.network_type,
                 nccl_ib_hca=best_config.nccl_ib_hca,
+                epp_config=epp_cfg,
             )
 
             result = self.orchestrator.run_test(

@@ -1106,6 +1106,20 @@ class ReportAnalyzer:
                         manifest_types = list(_json2.loads(r.manifests_yaml).keys())
                     except (_json2.JSONDecodeError, TypeError):
                         pass
+                # Extract weights from test_config_json.epp_config
+                weights = {}
+                if r.test_config_json:
+                    try:
+                        tc = _json2.loads(r.test_config_json)
+                        epp = tc.get('epp_config') or {}
+                        plugins = epp.get('plugins') or {}
+                        weights = {
+                            'prefix_cache': plugins.get('prefix_cache', {}).get('weight', '?'),
+                            'kv_cache': plugins.get('kv_cache', {}).get('weight', '?'),
+                            'queue': plugins.get('queue', {}).get('weight', '?'),
+                        }
+                    except (_json2.JSONDecodeError, TypeError):
+                        pass
                 epp_tuning_data.append({
                     'name': name,
                     'test_id': r.config_name,
@@ -1115,6 +1129,7 @@ class ReportAnalyzer:
                     'throughput_p90': round(r.throughput_p90, 2) if r.throughput_p90 else None,
                     'itl_p90': round(r.itl_p90, 2) if r.itl_p90 else None,
                     'manifest_types': manifest_types,
+                    'weights': weights,
                 })
 
         return {
