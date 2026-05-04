@@ -4445,13 +4445,7 @@ function renderCharts(data, runId) {
 
     content.innerHTML = html;
 
-    // Render EPP tuning charts (deferred until DOM is ready)
-    if (window._eppChartRenders && window._eppChartRenders.length) {
-        setTimeout(() => {
-            window._eppChartRenders.forEach(fn => fn());
-            window._eppChartRenders = [];
-        }, 50);
-    }
+    // EPP tuning charts render on first tab click (hidden tabs have zero dimensions)
 
     // Render estimator methodology explanation
     updateEstimatorScaling(_chartSuffix);
@@ -4951,6 +4945,13 @@ function initReportSubtabs(container) {
                 pane.querySelectorAll('.chart-plot').forEach(plot => {
                     if (plot.data) Plotly.Plots.resize(plot);
                 });
+                // Render EPP charts on first tab click
+                if (paneId.startsWith('epp-tuning') && window._eppChartRenders && window._eppChartRenders.length) {
+                    setTimeout(() => {
+                        window._eppChartRenders.forEach(fn => fn());
+                        window._eppChartRenders = [];
+                    }, 50);
+                }
             }
         });
     });
