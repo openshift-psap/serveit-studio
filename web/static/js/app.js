@@ -3437,17 +3437,17 @@ function renderCharts(data, runId) {
         const pctls = ['p90', 'p95', 'p99'];
         const goalOrder = ['response_time', 'throughput'];
 
-        html += '<div style="display:flex; gap:16px; margin-bottom:20px; align-items:flex-start;">';
-        for (const key of goalOrder) {
-            const r = rec.recommendations[key];
-            if (!r) continue;
-            html += '<div style="flex:1; min-width:0;">'; // Column
-            const c = r.config;
-            const isPrimary = (rec.goal === 'ttft' && key === 'response_time') || (rec.goal === 'throughput' && key === 'throughput');
-            const archKey = (r.architecture || '').toLowerCase() === 'pd' ? 'pd' : 'aggregated';
+        // Render row by row: each row has 2 cards (Response Time + Throughput) at the same percentile
+        pctls.forEach((p, pi) => {
+            html += '<div style="display:grid; grid-template-columns:1fr 1fr; gap:16px; margin-bottom:12px;">';
 
-            pctls.forEach((p, pi) => {
-                // For P90, use the existing recommendation data. For P95/P99, use best_by_percentile.
+            for (const key of goalOrder) {
+                const r = rec.recommendations[key];
+                if (!r) { html += '<div></div>'; continue; }
+                const c = r.config;
+                const isPrimary = (rec.goal === 'ttft' && key === 'response_time') || (rec.goal === 'throughput' && key === 'throughput');
+                const archKey = (r.architecture || '').toLowerCase() === 'pd' ? 'pd' : 'aggregated';
+
                 let cardConfig, cardDeploy, cardArch;
                 if (pi === 0) {
                     cardConfig = c;
@@ -3455,7 +3455,7 @@ function renderCharts(data, runId) {
                     cardArch = r.architecture;
                 } else {
                     const bpData = (bp[p] || {})[archKey];
-                    if (!bpData) return;
+                    if (!bpData) { html += '<div></div>'; continue; }
                     cardConfig = bpData;
                     cardDeploy = bpData.config_name;
                     cardArch = archKey.toUpperCase();
@@ -3466,7 +3466,7 @@ function renderCharts(data, runId) {
                 const archBadge = cardArch ? `<span style="background:#64748b; color:white; font-size:0.65em; padding:2px 6px; border-radius:3px; margin-left:6px;">${cardArch}</span>` : '';
                 const pLabel = p.toUpperCase();
 
-                html += `<div style="background:white; border:${border}; border-radius:10px; padding:16px; margin-bottom:12px;">`;
+                html += `<div style="background:white; border:${border}; border-radius:10px; padding:16px;">`;
                 html += `<div style="font-weight:800; color:${goalColors[key]}; font-size:0.85em; text-transform:uppercase; margin-bottom:8px;">${goalIcons[key] || ''} ${r.goal} — ${pLabel}${badge}${archBadge}</div>`;
                 html += `<div style="font-size:1.4em; font-weight:800; color:#1e293b; margin-bottom:4px;">${cardDeploy}</div>`;
 
@@ -3493,10 +3493,9 @@ function renderCharts(data, runId) {
                     }
                 }
                 html += '</div>';
-            });
-            html += '</div>'; // Close column
-        }
-        html += '</div>'; // Close flex container
+            }
+            html += '</div>'; // Close row grid
+        });
 
         // Optimal TP values and test counts (outside the grid)
         if (rec.optimal_decode_tp || rec.optimal_prefill_tp || rec.pd_tests_count || rec.ep_tests_count) {
