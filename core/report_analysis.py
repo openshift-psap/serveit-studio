@@ -407,6 +407,40 @@ class ReportAnalyzer:
                 'percentiles': _percentiles(agg),
             }
 
+        # --- Best config per percentile per architecture ---
+        best_by_percentile = {}
+        for pctl in ('p90', 'p95', 'p99'):
+            ttft_field = f'ttft_{pctl}'
+            tput_field = f'throughput_{pctl}'
+            pctl_data = {}
+            # Best aggregated at this percentile
+            if agg_tests:
+                valid_agg = [r for r in agg_tests if getattr(r, ttft_field, None)]
+                if valid_agg:
+                    best_agg = min(valid_agg, key=lambda r: getattr(r, ttft_field))
+                    pctl_data['aggregated'] = {
+                        'config_name': best_agg.display_label,
+                        'ttft': round(getattr(best_agg, ttft_field), 1),
+                        'throughput': round(getattr(best_agg, tput_field, 0) or 0, 2),
+                        'gpus': best_agg.total_gpus,
+                        'tp': best_agg.tensor_parallelism,
+                    }
+            # Best PD at this percentile
+            if step7_tests:
+                valid_pd = [r for r in step7_tests if getattr(r, ttft_field, None)]
+                if valid_pd:
+                    best_pd = min(valid_pd, key=lambda r: getattr(r, ttft_field))
+                    pctl_data['pd'] = {
+                        'config_name': best_pd.display_label,
+                        'ttft': round(getattr(best_pd, ttft_field), 1),
+                        'throughput': round(getattr(best_pd, tput_field, 0) or 0, 2),
+                        'gpus': best_pd.total_gpus,
+                        'prefill_pods': best_pd.prefill_pods,
+                        'decode_pods': best_pd.decode_pods,
+                    }
+            if pctl_data:
+                best_by_percentile[pctl] = pctl_data
+
         # --- Build recommendation for each goal ---
         recommendations = {}
 
@@ -563,6 +597,7 @@ class ReportAnalyzer:
             'pd_vs_agg': pd_vs_agg,
             'ep_vs_agg': ep_vs_agg,
             'recommendations': recommendations,
+            'best_by_percentile': best_by_percentile,
             'constraint_notes': constraint_notes,
             'pd_tests_count': len(step7_pd_tests),
             'ep_tests_count': len(step7_ep_tests),

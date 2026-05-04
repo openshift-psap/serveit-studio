@@ -3492,6 +3492,42 @@ function renderCharts(data, runId) {
 
         html += '</div></div>';
 
+        // --- Best config per percentile per architecture ---
+        if (rec.best_by_percentile && Object.keys(rec.best_by_percentile).length > 0) {
+            const bp = rec.best_by_percentile;
+            html += '<div style="margin-top:20px;border:2px solid #e2e8f0;border-radius:10px;overflow:hidden;">';
+            html += '<div style="background:#f8fafc;padding:12px 20px;font-weight:700;color:#1e293b;border-bottom:1px solid #e2e8f0;">Best TTFT by Percentile</div>';
+            html += '<div style="padding:16px 20px;">';
+            html += '<table style="width:100%;border-collapse:collapse;font-size:0.9em;">';
+            html += '<tr style="background:#f1f5f9;"><th style="text-align:left;padding:10px 12px;border-bottom:2px solid #e2e8f0;">Architecture</th>';
+            ['p90','p95','p99'].forEach(p => {
+                html += `<th style="text-align:center;padding:10px 12px;border-bottom:2px solid #e2e8f0;">${p.toUpperCase()}</th>`;
+            });
+            html += '</tr>';
+            // Aggregated row
+            html += '<tr style="border-bottom:1px solid #f1f5f9;"><td style="padding:10px 12px;font-weight:600;">Aggregated</td>';
+            ['p90','p95','p99'].forEach(p => {
+                const d = (bp[p] || {}).aggregated;
+                if (d) {
+                    html += `<td style="text-align:center;padding:10px 12px;"><div style="font-weight:700;font-size:1.1em;color:#1e293b;">${d.ttft} <span style="font-size:0.7em;color:#64748b;">ms</span></div><div style="font-size:0.8em;color:#64748b;">${d.config_name}</div><div style="font-size:0.78em;color:#f59e0b;">${d.throughput} req/s</div></td>`;
+                } else {
+                    html += '<td style="text-align:center;padding:10px;color:#cbd5e1;">—</td>';
+                }
+            });
+            html += '</tr>';
+            // PD row
+            html += '<tr><td style="padding:10px 12px;font-weight:600;">PD</td>';
+            ['p90','p95','p99'].forEach(p => {
+                const d = (bp[p] || {}).pd;
+                if (d) {
+                    html += `<td style="text-align:center;padding:10px 12px;"><div style="font-weight:700;font-size:1.1em;color:#1e293b;">${d.ttft} <span style="font-size:0.7em;color:#64748b;">ms</span></div><div style="font-size:0.8em;color:#64748b;">${d.config_name}</div><div style="font-size:0.78em;color:#f59e0b;">${d.throughput} req/s</div></td>`;
+                } else {
+                    html += '<td style="text-align:center;padding:10px;color:#cbd5e1;">—</td>';
+                }
+            });
+            html += '</tr></table></div></div>';
+        }
+
     } // end Deployment Recommendation card
 
     // Flush recommendation part 1 (goal banner + deployment cards)
