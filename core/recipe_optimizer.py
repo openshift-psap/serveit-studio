@@ -2666,14 +2666,14 @@ class RecipeOptimizer:
             kubectl_runner=self.orchestrator.deployment_manager.kubectl
         )
 
-        for arch, base_cfg, concurrency in configs_to_test:
+        for arch_idx, (arch, base_cfg, concurrency) in enumerate(configs_to_test):
             if self._should_stop():
                 break
 
             self.log(f"\n  --- EPP Tuning: {arch.upper()} (c={concurrency}) ---", 'decision')
             arch_results = []
 
-            for name, weights in weight_combos:
+            for combo_idx, (name, weights) in enumerate(weight_combos):
                 if self._should_stop():
                     break
 
@@ -2730,12 +2730,13 @@ class RecipeOptimizer:
                     epp_config=epp_cfg,
                 )
 
+                is_last_combo = combo_idx == len(weight_combos) - 1
                 result = self.orchestrator.run_test(
                     epp_test_config,
-                    cleanup=False,
+                    cleanup=is_last_combo,
                     log_callback=lambda msg: self.log(msg, 'info'),
                     stop_check=self._should_stop,
-                    skip_prereqs=True,
+                    skip_prereqs=(combo_idx > 0),
                 )
 
                 if result and result.guidellm_success:
