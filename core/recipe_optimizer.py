@@ -2677,6 +2677,19 @@ class RecipeOptimizer:
                 if self._should_stop():
                     break
 
+                # Clean up any leftover step11 LWS from previous combo
+                try:
+                    self.orchestrator.deployment_manager.kubectl.run(
+                        ['delete', 'lws', '-l', 'component=inferecipe-test',
+                         '-n', self.config.namespace, '--ignore-not-found=true'],
+                        check=False
+                    )
+                    # Wait for pods to fully terminate before deploying new ones
+                    import time
+                    time.sleep(5)
+                except Exception:
+                    pass
+
                 test_id = f"step11-epp-{arch}-{name}"
                 self.log(f"  Testing: {name} (cache={weights['prefix_cache_weight']}, kv={weights['kv_cache_weight']}, queue={weights['queue_weight']})", 'info')
 
