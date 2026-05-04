@@ -3449,7 +3449,8 @@ function renderCharts(data, runId) {
             const ttftStr = c.ttft_p90 != null ? `TTFT P90: <strong>${c.ttft_p90} ms</strong>` : '';
             const tputStr = c.throughput_p90 != null ? `Throughput P90: <strong>${c.throughput_p90} req/s</strong>` : '';
             const metricsStr = [ttftStr, tputStr].filter(Boolean).join(' &nbsp;|&nbsp; ');
-            html += `<div style="font-size:0.9em; color:#475569;">${details}${metricsStr} &nbsp;|&nbsp; ${c.gpus} GPUs</div>`;
+            const concStr = c.concurrency ? ` &nbsp;|&nbsp; c=${c.concurrency}` : '';
+            html += `<div style="font-size:0.9em; color:#475569;">${details}${metricsStr} &nbsp;|&nbsp; ${c.gpus} GPUs${concStr}</div>`;
             html += `<div style="font-size:0.82em; color:#64748b; margin-top:8px; line-height:1.5;">${goalExplain[key] || ''}</div>`;
             // Manifest download links for recommended config
             const recTestId = c.test_id || testIdLookup[c.config_name] || c.config_name;
@@ -3495,37 +3496,30 @@ function renderCharts(data, runId) {
         // --- Best config per percentile per architecture ---
         if (rec.best_by_percentile && Object.keys(rec.best_by_percentile).length > 0) {
             const bp = rec.best_by_percentile;
-            html += '<div style="margin-top:20px;border:2px solid #e2e8f0;border-radius:10px;overflow:hidden;">';
-            html += '<div style="background:#f8fafc;padding:12px 20px;font-weight:700;color:#1e293b;border-bottom:1px solid #e2e8f0;">Best TTFT by Percentile</div>';
-            html += '<div style="padding:16px 20px;">';
-            html += '<table style="width:100%;border-collapse:collapse;font-size:0.9em;">';
-            html += '<tr style="background:#f1f5f9;"><th style="text-align:left;padding:10px 12px;border-bottom:2px solid #e2e8f0;">Architecture</th>';
-            ['p90','p95','p99'].forEach(p => {
-                html += `<th style="text-align:center;padding:10px 12px;border-bottom:2px solid #e2e8f0;">${p.toUpperCase()}</th>`;
-            });
-            html += '</tr>';
-            // Aggregated row
-            html += '<tr style="border-bottom:1px solid #f1f5f9;"><td style="padding:10px 12px;font-weight:600;">Aggregated</td>';
-            ['p90','p95','p99'].forEach(p => {
-                const d = (bp[p] || {}).aggregated;
-                if (d) {
-                    html += `<td style="text-align:center;padding:10px 12px;"><div style="font-weight:700;font-size:1.1em;color:#1e293b;">${d.ttft} <span style="font-size:0.7em;color:#64748b;">ms</span></div><div style="font-size:0.8em;color:#64748b;">${d.config_name}</div><div style="font-size:0.78em;color:#f59e0b;">${d.throughput} req/s</div></td>`;
-                } else {
-                    html += '<td style="text-align:center;padding:10px;color:#cbd5e1;">—</td>';
-                }
-            });
-            html += '</tr>';
-            // PD row
-            html += '<tr><td style="padding:10px 12px;font-weight:600;">PD</td>';
-            ['p90','p95','p99'].forEach(p => {
-                const d = (bp[p] || {}).pd;
-                if (d) {
-                    html += `<td style="text-align:center;padding:10px 12px;"><div style="font-weight:700;font-size:1.1em;color:#1e293b;">${d.ttft} <span style="font-size:0.7em;color:#64748b;">ms</span></div><div style="font-size:0.8em;color:#64748b;">${d.config_name}</div><div style="font-size:0.78em;color:#f59e0b;">${d.throughput} req/s</div></td>`;
-                } else {
-                    html += '<td style="text-align:center;padding:10px;color:#cbd5e1;">—</td>';
-                }
-            });
-            html += '</tr></table></div></div>';
+            const pctlColors = {p90: '#3b82f6', p95: '#dc2626', p99: '#7c3aed'};
+
+            const renderCards = (archKey, archLabel) => {
+                html += `<div style="margin-top:20px; font-weight:700; color:#1e293b; font-size:1.1em; margin-bottom:10px;">Best TTFT — ${archLabel}</div>`;
+                html += '<div style="display:grid; grid-template-columns:repeat(3, 1fr); gap:12px; margin-bottom:16px;">';
+                ['p90','p95','p99'].forEach(p => {
+                    const d = (bp[p] || {})[archKey];
+                    const c = pctlColors[p];
+                    if (d) {
+                        const cStr = d.concurrency ? ` &nbsp;|&nbsp; c=${d.concurrency}` : '';
+                        html += `<div style="background:${c}08; border:2px solid ${c}40; border-radius:10px; padding:16px;">`;
+                        html += `<div style="font-weight:800; color:${c}; font-size:0.85em; text-transform:uppercase; margin-bottom:8px;">&#9201; TTFT ${p.toUpperCase()} <span style="background:#64748b; color:white; font-size:0.7em; padding:2px 6px; border-radius:3px; margin-left:6px;">${archLabel.toUpperCase()}</span></div>`;
+                        html += `<div style="font-size:1.3em; font-weight:800; color:#1e293b; margin-bottom:4px;">${d.config_name}</div>`;
+                        html += `<div style="font-size:0.9em; color:#475569;">TTFT ${p.toUpperCase()}: <strong>${d.ttft} ms</strong> &nbsp;|&nbsp; Throughput: <strong>${d.throughput} req/s</strong> &nbsp;|&nbsp; ${d.gpus} GPUs${cStr}</div>`;
+                        html += '</div>';
+                    } else {
+                        html += `<div style="background:#f8fafc; border:2px solid #e2e8f0; border-radius:10px; padding:16px; text-align:center; color:#cbd5e1;">No data for ${p.toUpperCase()}</div>`;
+                    }
+                });
+                html += '</div>';
+            };
+
+            renderCards('aggregated', 'Aggregated');
+            renderCards('pd', 'PD');
         }
 
     } // end Deployment Recommendation card

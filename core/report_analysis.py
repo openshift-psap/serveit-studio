@@ -313,6 +313,13 @@ class ReportAnalyzer:
             }
 
         def _config_dict(r, include_eff=False):
+            c = None
+            if r.test_config_json:
+                try:
+                    import json as _jc
+                    c = _jc.loads(r.test_config_json).get('num_users')
+                except Exception:
+                    pass
             d = {
                 'config_name': r.display_label,
                 'test_id': r.config_name,
@@ -324,6 +331,7 @@ class ReportAnalyzer:
                 'gpus': r.total_gpus,
                 'ratio': f"{r.prefill_pods}:{r.decode_pods}",
                 'percentiles': _percentiles(r),
+                'concurrency': c,
             }
             if include_eff:
                 d['efficiency'] = round(r.throughput_p90 / r.total_gpus, 3)
@@ -418,18 +426,33 @@ class ReportAnalyzer:
                 valid_agg = [r for r in agg_tests if getattr(r, ttft_field, None)]
                 if valid_agg:
                     best_agg = min(valid_agg, key=lambda r: getattr(r, ttft_field))
+                    agg_c = None
+                    if best_agg.test_config_json:
+                        try:
+                            import json as _jj
+                            agg_c = _jj.loads(best_agg.test_config_json).get('num_users')
+                        except Exception:
+                            pass
                     pctl_data['aggregated'] = {
                         'config_name': best_agg.display_label,
                         'ttft': round(getattr(best_agg, ttft_field), 1),
                         'throughput': round(getattr(best_agg, tput_field, 0) or 0, 2),
                         'gpus': best_agg.total_gpus,
                         'tp': best_agg.tensor_parallelism,
+                        'concurrency': agg_c,
                     }
             # Best PD at this percentile
             if step7_tests:
                 valid_pd = [r for r in step7_tests if getattr(r, ttft_field, None)]
                 if valid_pd:
                     best_pd = min(valid_pd, key=lambda r: getattr(r, ttft_field))
+                    pd_c = None
+                    if best_pd.test_config_json:
+                        try:
+                            import json as _jj
+                            pd_c = _jj.loads(best_pd.test_config_json).get('num_users')
+                        except Exception:
+                            pass
                     pctl_data['pd'] = {
                         'config_name': best_pd.display_label,
                         'ttft': round(getattr(best_pd, ttft_field), 1),
@@ -437,6 +460,7 @@ class ReportAnalyzer:
                         'gpus': best_pd.total_gpus,
                         'prefill_pods': best_pd.prefill_pods,
                         'decode_pods': best_pd.decode_pods,
+                        'concurrency': pd_c,
                     }
             if pctl_data:
                 best_by_percentile[pctl] = pctl_data
