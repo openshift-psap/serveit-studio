@@ -3426,46 +3426,70 @@ function renderCharts(data, runId) {
         html += 'Deployment Recommendation</div>';
         html += '<div class="chart-card-body" style="padding: 24px;">';
 
-        // Recommendation cards for each goal
-        html += '<div style="display:grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 16px; margin-bottom: 20px;">';
+        // Recommendation cards for each goal — P90 (primary), P95, P99 stacked
         const goalIcons = { response_time: '&#9201;', throughput: '&#9889;' };
         const goalColors = { response_time: '#3b82f6', throughput: '#f59e0b' };
         const goalExplain = {
             response_time: 'Best for chatbots, real-time assistants, and interactive applications where users are waiting for a reply. This configuration minimizes the delay before the model starts generating its response.',
             throughput: 'Best for batch processing, API services, and high-volume workloads where you need to handle the most requests per second. Users may wait slightly longer per request, but the system serves more users overall.',
         };
+        const bp = rec.best_by_percentile || {};
+        const pctls = ['p90', 'p95', 'p99'];
+
         for (const [key, r] of Object.entries(rec.recommendations)) {
             const c = r.config;
-            const isPrimary = (rec.goal === 'ttft' && key === 'response_time') ||
-                             (rec.goal === 'throughput' && key === 'throughput');
-            const border = isPrimary ? `3px solid ${goalColors[key]}` : `2px solid ${goalColors[key]}40`;
-            const badge = isPrimary ? `<span style="background:${goalColors[key]}; color:white; font-size:0.7em; padding:2px 8px; border-radius:4px; margin-left:8px;">PRIMARY</span>` : '';
-            const archBadge = r.architecture ? `<span style="background:#64748b; color:white; font-size:0.65em; padding:2px 6px; border-radius:3px; margin-left:6px;">${r.architecture}</span>` : '';
-            html += `<div style="background:${goalColors[key]}10; border:${border}; border-radius:10px; padding:16px;">`;
-            html += `<div style="font-weight:800; color:${goalColors[key]}; font-size:0.85em; text-transform:uppercase; margin-bottom:8px;">${goalIcons[key] || ''} ${r.goal}${badge}${archBadge}</div>`;
-            html += `<div style="font-size:1.4em; font-weight:800; color:#1e293b; margin-bottom:4px;">${r.deploy}</div>`;
-            const details = c.ratio ? `P:D ratio ${c.ratio} &nbsp;|&nbsp; ` : '';
-            // Show both TTFT and Throughput for every recommendation card
-            const ttftStr = c.ttft_p90 != null ? `TTFT P90: <strong>${c.ttft_p90} ms</strong>` : '';
-            const tputStr = c.throughput_p90 != null ? `Throughput P90: <strong>${c.throughput_p90} req/s</strong>` : '';
-            const metricsStr = [ttftStr, tputStr].filter(Boolean).join(' &nbsp;|&nbsp; ');
-            const concStr = c.concurrency ? ` &nbsp;|&nbsp; c=${c.concurrency}` : '';
-            html += `<div style="font-size:0.9em; color:#475569;">${details}${metricsStr} &nbsp;|&nbsp; ${c.gpus} GPUs${concStr}</div>`;
-            html += `<div style="font-size:0.82em; color:#64748b; margin-top:8px; line-height:1.5;">${goalExplain[key] || ''}</div>`;
-            // Manifest download links for recommended config
-            const recTestId = c.test_id || testIdLookup[c.config_name] || c.config_name;
-            const recManifests = manifestLookup[recTestId];
-            if (recManifests && recManifests.length) {
-                html += '<div style="margin-top:10px; padding-top:8px; border-top:1px solid #e2e8f0;">';
-                html += '<span style="font-size:0.78em; color:#64748b; margin-right:6px;">Download YAML:</span>';
-                recManifests.filter(t => !t.includes('service')).forEach(t => {
-                    html += `<a href="/api/run/${runId}/config/${recTestId}/manifest/${t}" style="color:#0ea5e9; text-decoration:none; font-size:12px; padding:2px 6px; background:#f0f9ff; border-radius:4px; border:1px solid #bae6fd; margin:2px; display:inline-block;">${t}</a>`;
-                });
+            const isPrimary = (rec.goal === 'ttft' && key === 'response_time') || (rec.goal === 'throughput' && key === 'throughput');
+            const archKey = (r.architecture || '').toLowerCase() === 'pd' ? 'pd' : 'aggregated';
+
+            pctls.forEach((p, pi) => {
+                // For P90, use the existing recommendation data. For P95/P99, use best_by_percentile.
+                let cardConfig, cardDeploy, cardArch;
+                if (pi === 0) {
+                    cardConfig = c;
+                    cardDeploy = r.deploy;
+                    cardArch = r.architecture;
+                } else {
+                    const bpData = (bp[p] || {})[archKey];
+                    if (!bpData) return;
+                    cardConfig = bpData;
+                    cardDeploy = bpData.config_name;
+                    cardArch = archKey.toUpperCase();
+                }
+
+                const border = (pi === 0 && isPrimary) ? `3px solid ${goalColors[key]}` : `2px solid ${goalColors[key]}40`;
+                const badge = (pi === 0 && isPrimary) ? `<span style="background:${goalColors[key]}; color:white; font-size:0.7em; padding:2px 8px; border-radius:4px; margin-left:8px;">PRIMARY</span>` : '';
+                const archBadge = cardArch ? `<span style="background:#64748b; color:white; font-size:0.65em; padding:2px 6px; border-radius:3px; margin-left:6px;">${cardArch}</span>` : '';
+                const pLabel = p.toUpperCase();
+
+                html += `<div style="background:white; border:${border}; border-radius:10px; padding:16px; margin-bottom:12px;">`;
+                html += `<div style="font-weight:800; color:${goalColors[key]}; font-size:0.85em; text-transform:uppercase; margin-bottom:8px;">${goalIcons[key] || ''} ${r.goal} — ${pLabel}${badge}${archBadge}</div>`;
+                html += `<div style="font-size:1.4em; font-weight:800; color:#1e293b; margin-bottom:4px;">${cardDeploy}</div>`;
+
+                const ttftVal = pi === 0 ? c.ttft_p90 : cardConfig.ttft;
+                const tputVal = pi === 0 ? c.throughput_p90 : cardConfig.throughput;
+                const gpus = pi === 0 ? c.gpus : cardConfig.gpus;
+                const conc = pi === 0 ? c.concurrency : cardConfig.concurrency;
+                const ratio = pi === 0 && c.ratio ? `P:D ratio ${c.ratio} | ` : '';
+                const concStr = conc ? ` | c=${conc}` : '';
+
+                html += `<div style="font-size:0.9em; color:#475569;">${ratio}TTFT ${pLabel}: <strong>${ttftVal} ms</strong> | Throughput ${pLabel}: <strong>${tputVal} req/s</strong> | ${gpus} GPUs${concStr}</div>`;
+
+                if (pi === 0) {
+                    html += `<div style="font-size:0.82em; color:#64748b; margin-top:8px; line-height:1.5;">${goalExplain[key] || ''}</div>`;
+                    const recTestId = c.test_id || testIdLookup[c.config_name] || c.config_name;
+                    const recManifests = manifestLookup[recTestId];
+                    if (recManifests && recManifests.length) {
+                        html += '<div style="margin-top:10px; padding-top:8px; border-top:1px solid #e2e8f0;">';
+                        html += '<span style="font-size:0.78em; color:#64748b; margin-right:6px;">Download YAML:</span>';
+                        recManifests.filter(t => !t.includes('service')).forEach(t => {
+                            html += `<a href="/api/run/${runId}/config/${recTestId}/manifest/${t}" style="color:#0ea5e9; text-decoration:none; font-size:12px; padding:2px 6px; background:#f0f9ff; border-radius:4px; border:1px solid #bae6fd; margin:2px; display:inline-block;">${t}</a>`;
+                        });
+                        html += '</div>';
+                    }
+                }
                 html += '</div>';
-            }
-            html += '</div>';
+            });
         }
-        html += '</div>';
 
         // Optimal TP values and test counts
         if (rec.optimal_decode_tp || rec.optimal_prefill_tp || rec.pd_tests_count || rec.ep_tests_count) {
@@ -3494,34 +3518,7 @@ function renderCharts(data, runId) {
         html += '</div></div>';
 
         // --- Best config per percentile per architecture ---
-        if (rec.best_by_percentile && Object.keys(rec.best_by_percentile).length > 0) {
-            const bp = rec.best_by_percentile;
-            const pctlColors = {p90: '#3b82f6', p95: '#dc2626', p99: '#7c3aed'};
-
-            const renderCards = (archKey, archLabel) => {
-                html += `<div style="margin-top:20px; font-weight:700; color:#1e293b; font-size:1.1em; margin-bottom:10px;">Best TTFT — ${archLabel}</div>`;
-                html += '<div style="display:grid; grid-template-columns:repeat(3, 1fr); gap:12px; margin-bottom:16px;">';
-                ['p90','p95','p99'].forEach(p => {
-                    const d = (bp[p] || {})[archKey];
-                    const c = pctlColors[p];
-                    if (d) {
-                        const cStr = d.concurrency ? ` | c=${d.concurrency}` : '';
-                        html += `<div style="background:#fff; border:2px solid #e2e8f0; border-left:6px solid ${c}; border-radius:10px; padding:16px;">`;
-                        html += `<div style="font-weight:800; color:${c}; font-size:0.85em; text-transform:uppercase; margin-bottom:8px;">TTFT ${p.toUpperCase()} <span style="background:#64748b; color:white; font-size:0.7em; padding:2px 6px; border-radius:3px; margin-left:6px;">${archLabel.toUpperCase()}</span></div>`;
-                        html += `<div style="font-size:1.3em; font-weight:800; color:#1e293b; margin-bottom:6px;">${d.config_name}</div>`;
-                        html += `<div style="font-size:0.95em; color:#1e293b;">TTFT: <strong>${d.ttft} ms</strong></div>`;
-                        html += `<div style="font-size:0.85em; color:#475569; margin-top:4px;">Throughput: ${d.throughput} req/s | ${d.gpus} GPUs${cStr}</div>`;
-                        html += '</div>';
-                    } else {
-                        html += `<div style="background:#f8fafc; border:2px solid #e2e8f0; border-radius:10px; padding:16px; text-align:center; color:#cbd5e1;">No data for ${p.toUpperCase()}</div>`;
-                    }
-                });
-                html += '</div>';
-            };
-
-            renderCards('aggregated', 'Aggregated');
-            renderCards('pd', 'PD');
-        }
+        // Per-percentile cards are now integrated into the recommendation cards above
 
     } // end Deployment Recommendation card
 
