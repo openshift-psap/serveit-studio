@@ -320,6 +320,13 @@ class ReportAnalyzer:
                     c = _jc.loads(r.test_config_json).get('num_users')
                 except Exception:
                     pass
+            if c is None and r.metrics_json:
+                try:
+                    import json as _jc
+                    mj = _jc.loads(r.metrics_json)
+                    c = int(mj.get('concurrency_mean') or mj.get('concurrency_p50') or 0) or None
+                except Exception:
+                    pass
             d = {
                 'config_name': r.display_label,
                 'test_id': r.config_name,
@@ -1198,6 +1205,12 @@ class ReportAnalyzer:
                     'manifest_types': manifest_types,
                     'weights': weights,
                 }
+                # Add concurrency from test_config_json
+                if r.test_config_json:
+                    try:
+                        entry['concurrency'] = _json2.loads(r.test_config_json).get('num_users')
+                    except Exception:
+                        pass
                 by_arch.setdefault(arch, []).append(entry)
 
             # Get run config for SLA target info
