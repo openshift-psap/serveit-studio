@@ -3491,9 +3491,11 @@ function renderCharts(data, runId) {
                 }
                 html += '</div>';
             });
+            html += '</div>'; // Close column wrapper
         }
+        html += '</div>'; // Close 2-column grid
 
-        // Optimal TP values and test counts
+        // Optimal TP values and test counts (outside the grid)
         if (rec.optimal_decode_tp || rec.optimal_prefill_tp || rec.pd_tests_count || rec.ep_tests_count) {
             html += '<div style="background:#f8fafc; border-radius:8px; padding:14px 18px; display:flex; gap:32px; flex-wrap:wrap; font-size:0.9em; margin-top:12px;">';
             if (rec.optimal_decode_tp)
@@ -3507,7 +3509,7 @@ function renderCharts(data, runId) {
             html += '</div>';
         }
 
-        // Constraint notes (asymmetric TP, etc.)
+        // Constraint notes
         if (rec.constraint_notes && rec.constraint_notes.length) {
             html += '<div style="background:#fffbeb; border:2px solid #f59e0b; border-left:6px solid #f59e0b; border-radius:8px; padding:14px 18px; margin-top:12px;">';
             html += '<div style="font-weight:700; color:#92400e; margin-bottom:8px; font-size:0.95em;">&#9888; Configuration Constraints</div>';
@@ -3515,9 +3517,7 @@ function renderCharts(data, runId) {
                 html += `<p style="color:#78350f; margin:0 0 8px; font-size:0.88em; line-height:1.6;">${note}</p>`;
             }
             html += '</div>';
-            html += '</div>'; // Close column wrapper
         }
-        html += '</div>'; // Close 2-column grid
 
         html += '</div></div>';
 
