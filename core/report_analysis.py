@@ -1096,14 +1096,15 @@ class ReportAnalyzer:
         epp_tuning_data = None
         epp_results = [r for r in results if r.config_name.startswith('step11-epp-') and r.is_successful]
         if epp_results:
+            import json as _json2
             epp_tuning_data = []
             for r in sorted(epp_results, key=lambda x: x.ttft_p90 or float('inf')):
                 name = r.config_name.replace('step11-epp-', '')
                 manifest_types = []
                 if r.manifests_yaml:
                     try:
-                        manifest_types = list(json.loads(r.manifests_yaml).keys())
-                    except (json.JSONDecodeError, TypeError):
+                        manifest_types = list(_json2.loads(r.manifests_yaml).keys())
+                    except (_json2.JSONDecodeError, TypeError):
                         pass
                 epp_tuning_data.append({
                     'name': name,
