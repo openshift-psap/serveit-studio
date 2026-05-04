@@ -3505,11 +3505,12 @@ function renderCharts(data, runId) {
                     const d = (bp[p] || {})[archKey];
                     const c = pctlColors[p];
                     if (d) {
-                        const cStr = d.concurrency ? ` &nbsp;|&nbsp; c=${d.concurrency}` : '';
-                        html += `<div style="background:${c}08; border:2px solid ${c}40; border-radius:10px; padding:16px;">`;
-                        html += `<div style="font-weight:800; color:${c}; font-size:0.85em; text-transform:uppercase; margin-bottom:8px;">&#9201; TTFT ${p.toUpperCase()} <span style="background:#64748b; color:white; font-size:0.7em; padding:2px 6px; border-radius:3px; margin-left:6px;">${archLabel.toUpperCase()}</span></div>`;
-                        html += `<div style="font-size:1.3em; font-weight:800; color:#1e293b; margin-bottom:4px;">${d.config_name}</div>`;
-                        html += `<div style="font-size:0.9em; color:#475569;">TTFT ${p.toUpperCase()}: <strong>${d.ttft} ms</strong> &nbsp;|&nbsp; Throughput: <strong>${d.throughput} req/s</strong> &nbsp;|&nbsp; ${d.gpus} GPUs${cStr}</div>`;
+                        const cStr = d.concurrency ? ` | c=${d.concurrency}` : '';
+                        html += `<div style="background:#fff; border:2px solid #e2e8f0; border-left:6px solid ${c}; border-radius:10px; padding:16px;">`;
+                        html += `<div style="font-weight:800; color:${c}; font-size:0.85em; text-transform:uppercase; margin-bottom:8px;">TTFT ${p.toUpperCase()} <span style="background:#64748b; color:white; font-size:0.7em; padding:2px 6px; border-radius:3px; margin-left:6px;">${archLabel.toUpperCase()}</span></div>`;
+                        html += `<div style="font-size:1.3em; font-weight:800; color:#1e293b; margin-bottom:6px;">${d.config_name}</div>`;
+                        html += `<div style="font-size:0.95em; color:#1e293b;">TTFT: <strong>${d.ttft} ms</strong></div>`;
+                        html += `<div style="font-size:0.85em; color:#475569; margin-top:4px;">Throughput: ${d.throughput} req/s | ${d.gpus} GPUs${cStr}</div>`;
                         html += '</div>';
                     } else {
                         html += `<div style="background:#f8fafc; border:2px solid #e2e8f0; border-radius:10px; padding:16px; text-align:center; color:#cbd5e1;">No data for ${p.toUpperCase()}</div>`;
