@@ -535,9 +535,6 @@ class DatabaseManager:
             'vllm_gpu_blocks': getattr(test_result, 'vllm_gpu_blocks', None),
         })
 
-        # Store raw guidellm JSON so the /tmp file is never needed
-        guidellm_raw = getattr(test_result, 'guidellm_raw_json', None)
-
         # Serialize full TestConfig for report detail view
         from dataclasses import asdict
         tc_dict = asdict(test_config)
@@ -554,8 +551,8 @@ class DatabaseManager:
                  itl_p50, itl_p90, itl_p95, itl_p99,
                  throughput_p50, throughput_p90, throughput_p95, throughput_p99,
                  gpu_utilization, kv_cache_usage, started_at, completed_at, metrics_json,
-                 manifests_yaml, architecture, decode_tp, guidellm_raw_json, test_config_json)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                 manifests_yaml, architecture, decode_tp, test_config_json)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             ''', (
                 run_id,
                 test_config.test_id,
@@ -583,7 +580,6 @@ class DatabaseManager:
                 manifests_yaml,
                 architecture,
                 getattr(test_config, 'decode_tp', None),
-                guidellm_raw,
                 test_config_json,
             ))
 
