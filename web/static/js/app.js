@@ -3426,7 +3426,8 @@ function renderCharts(data, runId) {
         html += 'Deployment Recommendation</div>';
         html += '<div class="chart-card-body" style="padding: 24px;">';
 
-        // Recommendation cards for each goal — P90 (primary), P95, P99 stacked
+        // Recommendation cards — 2 columns (Response Time left, Throughput right), P90/P95/P99 stacked
+        html += '<div style="display:grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-bottom: 20px; align-items: start;">';
         const goalIcons = { response_time: '&#9201;', throughput: '&#9889;' };
         const goalColors = { response_time: '#3b82f6', throughput: '#f59e0b' };
         const goalExplain = {
@@ -3437,6 +3438,7 @@ function renderCharts(data, runId) {
         const pctls = ['p90', 'p95', 'p99'];
 
         for (const [key, r] of Object.entries(rec.recommendations)) {
+            html += '<div>'; // Column wrapper for this goal
             const c = r.config;
             const isPrimary = (rec.goal === 'ttft' && key === 'response_time') || (rec.goal === 'throughput' && key === 'throughput');
             const archKey = (r.architecture || '').toLowerCase() === 'pd' ? 'pd' : 'aggregated';
@@ -3513,12 +3515,11 @@ function renderCharts(data, runId) {
                 html += `<p style="color:#78350f; margin:0 0 8px; font-size:0.88em; line-height:1.6;">${note}</p>`;
             }
             html += '</div>';
+            html += '</div>'; // Close column wrapper
         }
+        html += '</div>'; // Close 2-column grid
 
         html += '</div></div>';
-
-        // --- Best config per percentile per architecture ---
-        // Per-percentile cards are now integrated into the recommendation cards above
 
     } // end Deployment Recommendation card
 
