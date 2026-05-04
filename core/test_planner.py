@@ -75,9 +75,9 @@ def calculate_engine_memory_config(
 
     # 2. Calculate stdev-adjusted max sequence lengths
     # When stdev is set, guidellm generates normally-distributed lengths.
-    # Use mean + 2*stdev to cover 97.7% of the distribution on the high end.
-    effective_isl = isl + 2 * isl_stdev if isl_stdev else isl
-    effective_osl = osl + 2 * osl_stdev if osl_stdev else osl
+    # Use mean + 3*stdev to cover 99.87% of the distribution on the high end.
+    effective_isl = isl + 3 * isl_stdev if isl_stdev else isl
+    effective_osl = osl + 3 * osl_stdev if osl_stdev else osl
 
     if isl_stdev or osl_stdev:
         logger.info(f"Stdev adjustment: ISL {isl}→{effective_isl} (stdev={isl_stdev}), "
