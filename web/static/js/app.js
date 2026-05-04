@@ -3427,7 +3427,6 @@ function renderCharts(data, runId) {
         html += '<div class="chart-card-body" style="padding: 24px;">';
 
         // Recommendation cards — 2 columns (Response Time left, Throughput right), P90/P95/P99 stacked
-        html += '<div style="display:grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-bottom: 20px; align-items: start;">';
         const goalIcons = { response_time: '&#9201;', throughput: '&#9889;' };
         const goalColors = { response_time: '#3b82f6', throughput: '#f59e0b' };
         const goalExplain = {
@@ -3436,9 +3435,13 @@ function renderCharts(data, runId) {
         };
         const bp = rec.best_by_percentile || {};
         const pctls = ['p90', 'p95', 'p99'];
+        const goalOrder = ['response_time', 'throughput'];
 
-        for (const [key, r] of Object.entries(rec.recommendations)) {
-            html += '<div>'; // Column wrapper for this goal
+        html += '<div style="display:flex; gap:16px; margin-bottom:20px; align-items:flex-start;">';
+        for (const key of goalOrder) {
+            const r = rec.recommendations[key];
+            if (!r) continue;
+            html += '<div style="flex:1; min-width:0;">'; // Column
             const c = r.config;
             const isPrimary = (rec.goal === 'ttft' && key === 'response_time') || (rec.goal === 'throughput' && key === 'throughput');
             const archKey = (r.architecture || '').toLowerCase() === 'pd' ? 'pd' : 'aggregated';
@@ -3491,9 +3494,9 @@ function renderCharts(data, runId) {
                 }
                 html += '</div>';
             });
-            html += '</div>'; // Close column wrapper
+            html += '</div>'; // Close column
         }
-        html += '</div>'; // Close 2-column grid
+        html += '</div>'; // Close flex container
 
         // Optimal TP values and test counts (outside the grid)
         if (rec.optimal_decode_tp || rec.optimal_prefill_tp || rec.pd_tests_count || rec.ep_tests_count) {
