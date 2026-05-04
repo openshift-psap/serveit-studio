@@ -50,6 +50,10 @@ spec:
               valueFrom:
                 fieldRef:
                   fieldPath: metadata.name
+          resources:
+            requests:
+              cpu: "1"
+              memory: "256Mi"
           ports:
             - containerPort: 9002
               name: grpc
