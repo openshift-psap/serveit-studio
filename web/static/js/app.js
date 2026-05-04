@@ -4374,14 +4374,18 @@ function renderCharts(data, runId) {
                         if (eppTargetMs && v != null) return v <= eppTargetMs ? '#10b981' : '#ef4444';
                         return i === bestIdx ? '#10b981' : pctl.color;
                     });
+                    const latText = latencies.map(v => v != null ? v.toFixed(0) + 'ms' : '');
+                    const tputText = throughputs.map(v => v != null ? v.toFixed(1) : '');
                     const traces = [
-                        {x: xLabels, y: latencies, name: `TTFT ${pctl.label}`, type: 'scatter', mode: 'lines+markers',
+                        {x: xLabels, y: latencies, name: `TTFT ${pctl.label}`, type: 'scatter', mode: 'lines+markers+text',
                          line: {color: pctl.color, width: 3, shape: 'spline'},
                          marker: {color: markerColors, size: 12, symbol: 'circle', line: {width: 2, color: 'white'}},
+                         text: latText, textposition: 'top center', textfont: {size: 11, color: pctl.color},
                          fill: 'tozeroy', fillcolor: pctl.color + '14'},
-                        {x: xLabels, y: throughputs, name: `Throughput ${pctl.label}`, type: 'scatter', mode: 'lines+markers', yaxis: 'y2',
+                        {x: xLabels, y: throughputs, name: `Throughput ${pctl.label}`, type: 'scatter', mode: 'lines+markers+text', yaxis: 'y2',
                          line: {color: '#f59e0b', width: 3, shape: 'spline'},
-                         marker: {color: '#f59e0b', size: 10, symbol: 'diamond', line: {width: 2, color: 'white'}}},
+                         marker: {color: '#f59e0b', size: 10, symbol: 'diamond', line: {width: 2, color: 'white'}},
+                         text: tputText, textposition: 'bottom center', textfont: {size: 10, color: '#f59e0b'}},
                     ];
                     if (bestIdx >= 0) {
                         traces.push({x: [xLabels[bestIdx]], y: [latencies[bestIdx]], name: 'Best EPP', type: 'scatter', mode: 'markers',
@@ -4393,14 +4397,15 @@ function renderCharts(data, runId) {
                         const blTtft = baseline[`ttft_${pctl.key}`];
                         const blTput = baseline[`throughput_${pctl.key}`] || baseline.throughput_p90;
                         if (blTtft != null) {
-                            traces.push({x: ['Baseline'], y: [blTtft], name: `Baseline (${baseline.config_name})`, type: 'scatter', mode: 'markers',
+                            traces.push({x: ['Baseline'], y: [blTtft], name: `Baseline (${baseline.config_name})`, type: 'scatter', mode: 'markers+text',
                                 marker: {color: '#94a3b8', size: 18, symbol: 'star', line: {width: 2, color: 'white'}},
-                                hovertext: [`<b>Baseline: ${baseline.config_name}</b><br>TTFT ${pctl.label}: ${blTtft} ms<br>Before EPP tuning`],
-                                hoverinfo: 'text', showlegend: true});
+                                text: [blTtft.toFixed(0) + 'ms'], textposition: 'top center', textfont: {size: 11, color: '#64748b'},
+                                showlegend: true});
                         }
                         if (blTput != null) {
-                            traces.push({x: ['Baseline'], y: [blTput], name: `Baseline Throughput`, type: 'scatter', mode: 'markers', yaxis: 'y2',
+                            traces.push({x: ['Baseline'], y: [blTput], name: `Baseline Throughput`, type: 'scatter', mode: 'markers+text', yaxis: 'y2',
                                 marker: {color: '#d4d4d8', size: 14, symbol: 'star', line: {width: 2, color: 'white'}},
+                                text: [blTput.toFixed(1)], textposition: 'bottom center', textfont: {size: 10, color: '#94a3b8'},
                                 showlegend: false});
                         }
                     }
