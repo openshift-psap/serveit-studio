@@ -312,7 +312,7 @@ class RecipeOptimizer:
         self.ideal_prefill_pct: float = 50.0
         self.feasible_splits: List[FeasibleSplit] = []
         self.pareto_results: List[Tuple[FeasibleSplit, TestResult]] = []
-        self.epp_benchmark_results: List = []
+        self.epp_benchmark_results: Dict = {}
 
         # Calibration results for all TPs (populated in steps 2-3)
         self.decode_tp_results: List[Dict[str, Any]] = []  # [{tp, tpsg, ttft_p90, throughput_p90}]
@@ -2587,57 +2587,76 @@ class RecipeOptimizer:
         return self._apply_advanced_vllm(cfg)
 
     def _benchmark_epp_strategies(self):
-        """Step 11: EPP Tuning — smart weight sweep on the best deployment.
+        """Step 11: EPP Tuning — smart weight sweep per architecture.
 
-        Uses workload characteristics to calculate 3-4 promising weight
-        combinations for the user's selected EPP preset, then benchmarks
-        each by swapping only the EPP configmap (pods stay running).
+        Tests 3 EPP weight combinations on the best config from each
+        architecture (PD and Aggregated), using the optimal concurrency
+        from Step 9/10. Swaps only the EPP configmap between tests.
         """
         if not self.config.epp_benchmark:
-            return
-
-        best_config = None
-        best_result = None
-        for cfg, result in self.all_test_results:
-            if result and result.guidellm_success:
-                if best_result is None or (result.ttft_p90 and (best_result.ttft_p90 is None or result.ttft_p90 < best_result.ttft_p90)):
-                    best_config = cfg
-                    best_result = result
-
-        if not best_config:
-            self.log("⚠️  No successful test for EPP tuning", 'warning')
             return
 
         self.log("\n" + "=" * 80, 'info')
         self.log("STEP 11: EPP Tuning (Smart Weight Sweep)", 'decision')
         self.log("=" * 80, 'info')
-        self.log(f"Tuning EPP scoring weights on: {best_config.test_id}", 'info')
-        self.log(f"Preset: {self.config.epp_preset}", 'info')
 
-        # Smart sweep: generate weight combos based on workload
-        has_prefix_cache = self.config.prefix_cache_hit_pct > 0
+        # Build weight combos based on workload
         has_sla = self.config.latency_constraint_enabled
         isl_osl_ratio = self.config.isl / max(self.config.osl, 1)
-
-        weight_combos = []
-        # Combo 1: User's current preset (baseline)
         base = self._build_epp_config()
-        # Combo 2: Heavy cache (good when prefix sharing is high)
-        weight_combos.append(('cache-heavy', {'prefix_cache_weight': 5.0, 'kv_cache_weight': 1.0, 'queue_weight': 1.0, 'slo_enabled': has_sla}))
-        # Combo 3: Heavy queue (good for diverse prompts, prevents hotspotting)
-        weight_combos.append(('queue-heavy', {'prefix_cache_weight': 1.0, 'kv_cache_weight': 1.0, 'queue_weight': 5.0, 'slo_enabled': has_sla}))
-        # Combo 4: Balanced with kv-cache emphasis (good for long sequences)
+
+        weight_combos = [
+            ('cache-heavy', {'prefix_cache_weight': 5.0, 'kv_cache_weight': 1.0, 'queue_weight': 1.0, 'slo_enabled': has_sla}),
+            ('queue-heavy', {'prefix_cache_weight': 1.0, 'kv_cache_weight': 1.0, 'queue_weight': 5.0, 'slo_enabled': has_sla}),
+        ]
         if isl_osl_ratio > 10:
             weight_combos.append(('kv-heavy', {'prefix_cache_weight': 2.0, 'kv_cache_weight': 5.0, 'queue_weight': 1.0, 'slo_enabled': has_sla}))
         else:
             weight_combos.append(('equal', {'prefix_cache_weight': 2.0, 'kv_cache_weight': 2.0, 'queue_weight': 2.0, 'slo_enabled': has_sla}))
 
-        self.log(f"  ISL/OSL ratio: {isl_osl_ratio:.1f}, prefix cache: {'yes' if has_prefix_cache else 'no'}, SLA: {'yes' if has_sla else 'no'}", 'info')
-        self.log(f"  Testing {len(weight_combos)} weight combinations:", 'info')
-        for name, w in weight_combos:
-            self.log(f"    {name}: cache={w['prefix_cache_weight']}, kv={w['kv_cache_weight']}, queue={w['queue_weight']}", 'info')
+        # Collect best configs per architecture
+        configs_to_test = []
 
-        self.epp_benchmark_results = []
+        # Best PD config
+        if self.pareto_results:
+            best_split, best_pd_result = min(self.pareto_results, key=lambda x: x[1].ttft_p90 if x[1].ttft_p90 else 1e9)
+            pd_cfg = self._create_pd_config(best_split)
+            # Use optimal concurrency from Step 9 if available
+            pd_concurrency = int(self.config.qps)
+            for arch_key, sr in getattr(self, 'latency_search_results', {}).items():
+                if 'pd' in arch_key and sr and sr.optimal_concurrency:
+                    pd_concurrency = sr.optimal_concurrency
+                    break
+            if hasattr(self, 'effective_concurrency') and self.effective_concurrency and pd_concurrency == int(self.config.qps):
+                pd_concurrency = self.effective_concurrency
+            configs_to_test.append(('pd', pd_cfg, pd_concurrency))
+            self.log(f"  PD: {best_split.prefill_pods}P×TP{best_split.prefill_tp} + {best_split.decode_pods}D×TP{best_split.decode_tp} at c={pd_concurrency}", 'info')
+
+        # Best Aggregated config
+        if self.aggregated_result and self.aggregated_tp:
+            agg_cfg = self._create_agg_config(
+                test_id=f"step11-epp-agg",
+                tp=self.aggregated_tp,
+                replicas=self.config.total_gpus // self.aggregated_tp,
+                concurrency=int(self.config.qps),
+            )
+            agg_concurrency = int(self.config.qps)
+            for arch_key, sr in getattr(self, 'latency_search_results', {}).items():
+                if 'aggregated' in arch_key and sr and sr.optimal_concurrency:
+                    agg_concurrency = sr.optimal_concurrency
+                    break
+            if hasattr(self, 'effective_concurrency') and self.effective_concurrency and agg_concurrency == int(self.config.qps):
+                agg_concurrency = self.effective_concurrency
+            configs_to_test.append(('aggregated', agg_cfg, agg_concurrency))
+            self.log(f"  Aggregated: {self.config.total_gpus // self.aggregated_tp}×TP{self.aggregated_tp} at c={agg_concurrency}", 'info')
+
+        if not configs_to_test:
+            self.log("⚠️  No successful configs for EPP tuning", 'warning')
+            return
+
+        self.log(f"  Weight combos: {', '.join(n for n, _ in weight_combos)}", 'info')
+
+        self.epp_benchmark_results = {}
 
         from core import PrereqManager
         prereq_mgr = PrereqManager(
@@ -2645,124 +2664,119 @@ class RecipeOptimizer:
             kubectl_runner=self.orchestrator.deployment_manager.kubectl
         )
 
-        for name, weights in weight_combos:
+        for arch, base_cfg, concurrency in configs_to_test:
             if self._should_stop():
                 break
 
-            test_id = f"step11-epp-{name}"
-            self.log(f"\n  Testing: {name} (cache={weights['prefix_cache_weight']}, kv={weights['kv_cache_weight']}, queue={weights['queue_weight']})", 'info')
+            self.log(f"\n  --- EPP Tuning: {arch.upper()} (c={concurrency}) ---", 'decision')
+            arch_results = []
 
-            epp_cfg = {
-                'preset': 'custom',
-                'maxPrefixBlocksToMatch': base.get('maxPrefixBlocksToMatch', 256),
-                'lruCapacityPerServer': base.get('lruCapacityPerServer', 31250),
-                'nonCachedTokens': base.get('nonCachedTokens', 16),
-                'plugins': {
-                    'prefix_cache': {'enabled': True, 'weight': weights['prefix_cache_weight']},
-                    'kv_cache': {'enabled': True, 'weight': weights['kv_cache_weight']},
-                    'queue': {'enabled': True, 'weight': weights['queue_weight']},
-                    'slo': {'enabled': weights['slo_enabled']},
-                },
-            }
+            for name, weights in weight_combos:
+                if self._should_stop():
+                    break
 
-            success = prereq_mgr.update_epp_config(
-                architecture=best_config.architecture,
-                epp_config=epp_cfg,
+                test_id = f"step11-epp-{arch}-{name}"
+                self.log(f"  Testing: {name} (cache={weights['prefix_cache_weight']}, kv={weights['kv_cache_weight']}, queue={weights['queue_weight']})", 'info')
+
+                epp_cfg = {
+                    'preset': 'custom',
+                    'maxPrefixBlocksToMatch': base.get('maxPrefixBlocksToMatch', 256),
+                    'lruCapacityPerServer': base.get('lruCapacityPerServer', 31250),
+                    'nonCachedTokens': base.get('nonCachedTokens', 16),
+                    'plugins': {
+                        'prefix_cache': {'enabled': True, 'weight': weights['prefix_cache_weight']},
+                        'kv_cache': {'enabled': True, 'weight': weights['kv_cache_weight']},
+                        'queue': {'enabled': True, 'weight': weights['queue_weight']},
+                        'slo': {'enabled': weights['slo_enabled']},
+                    },
+                }
+
+                success = prereq_mgr.update_epp_config(
+                    architecture=arch,
+                    epp_config=epp_cfg,
+                    log_callback=lambda msg: self.log(msg, 'info')
+                )
+                if not success:
+                    self.log(f"  ❌ Failed to update EPP config for {name}", 'error')
+                    continue
+
+                epp_test_config = TestConfig(
+                    test_id=test_id,
+                    architecture=base_cfg.architecture,
+                    model_name=base_cfg.model_name,
+                    namespace=base_cfg.namespace,
+                    isl=base_cfg.isl, osl=base_cfg.osl,
+                    num_users=concurrency,
+                    tensor_parallelism=base_cfg.tensor_parallelism,
+                    replicas=base_cfg.replicas,
+                    prefill_replicas=base_cfg.prefill_replicas,
+                    decode_replicas=base_cfg.decode_replicas,
+                    prefill_tp=base_cfg.prefill_tp,
+                    decode_tp=base_cfg.decode_tp,
+                    max_model_len=base_cfg.max_model_len,
+                    gpu_memory_utilization=base_cfg.gpu_memory_utilization,
+                    image=base_cfg.image,
+                    pvc_name=base_cfg.pvc_name,
+                    request_type=base_cfg.request_type,
+                    request_rate=concurrency,
+                    test_duration=base_cfg.test_duration,
+                    workload_mode=base_cfg.workload_mode,
+                    dataset_source=base_cfg.dataset_source,
+                    block_size=base_cfg.block_size,
+                    network_type=base_cfg.network_type,
+                    nccl_ib_hca=base_cfg.nccl_ib_hca,
+                    epp_config=epp_cfg,
+                )
+
+                result = self.orchestrator.run_test(
+                    epp_test_config,
+                    cleanup=False,
+                    log_callback=lambda msg: self.log(msg, 'info'),
+                    stop_check=self._should_stop,
+                    skip_prereqs=True,
+                )
+
+                if result and result.guidellm_success:
+                    ttft = result.ttft_p90 or 0
+                    tput = result.throughput_p90 or 0
+                    self.log(f"  ✅ {name}: TTFT p90={ttft:.1f}ms, Throughput p90={tput:.2f} req/s", 'success')
+                    arch_results.append((name, weights, result))
+                    try:
+                        import json as _json
+                        tmgr = TemplateManager()
+                        cm_template = f'prereq/gaie-configmap-{arch}.yaml.j2'
+                        cm_yaml = tmgr.render_template(cm_template, **{
+                            'namespace': self.config.namespace,
+                            'gaie_name': f'gaie-{arch}-epp',
+                            'config_file': f'{arch}-config.yaml',
+                            'prefix_cache_weight': weights['prefix_cache_weight'],
+                            'kv_cache_weight': weights['kv_cache_weight'],
+                            'queue_weight': weights['queue_weight'],
+                            'slo_enabled': weights.get('slo_enabled', False),
+                            'max_prefix_blocks': epp_cfg.get('maxPrefixBlocksToMatch', 256),
+                            'lru_capacity': epp_cfg.get('lruCapacityPerServer', 31250),
+                            'non_cached_tokens': epp_cfg.get('nonCachedTokens', 16),
+                        })
+                        epp_test_config._epp_manifests = _json.dumps({'epp-configmap': cm_yaml})
+                    except Exception:
+                        epp_test_config._epp_manifests = None
+                    self._save_epp_test_to_database(epp_test_config, result)
+                else:
+                    self.log(f"  ❌ {name}: benchmark failed", 'error')
+
+            self.epp_benchmark_results[arch] = arch_results
+
+            if arch_results:
+                best_name = min(arch_results, key=lambda x: x[2].ttft_p90 or float('inf'))[0]
+                self.log(f"  Best {arch}: {best_name}", 'success')
+
+        # Restore user's original EPP config for each architecture tested
+        for arch, _, _ in configs_to_test:
+            prereq_mgr.update_epp_config(
+                architecture=arch,
+                epp_config=self._build_epp_config(),
                 log_callback=lambda msg: self.log(msg, 'info')
             )
-            if not success:
-                self.log(f"  ❌ Failed to update EPP config for {name}", 'error')
-                continue
-
-            epp_test_config = TestConfig(
-                test_id=test_id,
-                architecture=best_config.architecture,
-                model_name=best_config.model_name,
-                namespace=best_config.namespace,
-                isl=best_config.isl, osl=best_config.osl,
-                num_users=best_config.num_users,
-                tensor_parallelism=best_config.tensor_parallelism,
-                replicas=best_config.replicas,
-                prefill_replicas=best_config.prefill_replicas,
-                decode_replicas=best_config.decode_replicas,
-                prefill_tp=best_config.prefill_tp,
-                decode_tp=best_config.decode_tp,
-                max_model_len=best_config.max_model_len,
-                gpu_memory_utilization=best_config.gpu_memory_utilization,
-                image=best_config.image,
-                pvc_name=best_config.pvc_name,
-                request_type=best_config.request_type,
-                request_rate=best_config.request_rate,
-                test_duration=best_config.test_duration,
-                workload_mode=best_config.workload_mode,
-                dataset_source=best_config.dataset_source,
-                block_size=best_config.block_size,
-                network_type=best_config.network_type,
-                nccl_ib_hca=best_config.nccl_ib_hca,
-                epp_config=epp_cfg,
-            )
-
-            result = self.orchestrator.run_test(
-                epp_test_config,
-                cleanup=False,
-                log_callback=lambda msg: self.log(msg, 'info'),
-                stop_check=self._should_stop,
-                skip_prereqs=True,
-            )
-
-            if result and result.guidellm_success:
-                ttft = result.ttft_p90 or 0
-                tput = result.throughput_p90 or 0
-                self.log(f"  ✅ {name}: TTFT p90={ttft:.1f}ms, Throughput p90={tput:.2f} req/s", 'success')
-                self.epp_benchmark_results.append((name, weights, result))
-                # Render EPP configmap YAML for download
-                try:
-                    import json as _json
-                    tmgr = TemplateManager()
-                    arch = best_config.architecture
-                    cm_template = f'prereq/gaie-configmap-{arch}.yaml.j2'
-                    cm_yaml = tmgr.render_template(cm_template, **{
-                        'namespace': self.config.namespace,
-                        'gaie_name': f'gaie-{arch}-epp',
-                        'config_file': f'{arch}-config.yaml',
-                        'prefix_cache_weight': weights['prefix_cache_weight'],
-                        'kv_cache_weight': weights['kv_cache_weight'],
-                        'queue_weight': weights['queue_weight'],
-                        'slo_enabled': weights.get('slo_enabled', False),
-                        'max_prefix_blocks': epp_cfg.get('maxPrefixBlocksToMatch', 256),
-                        'lru_capacity': epp_cfg.get('lruCapacityPerServer', 31250),
-                        'non_cached_tokens': epp_cfg.get('nonCachedTokens', 16),
-                    })
-                    # Store as manifests_yaml so it shows as downloadable
-                    epp_test_config._epp_manifests = _json.dumps({'epp-configmap': cm_yaml})
-                except Exception:
-                    epp_test_config._epp_manifests = None
-                self._save_epp_test_to_database(epp_test_config, result)
-            else:
-                self.log(f"  ❌ {name}: benchmark failed", 'error')
-
-        # Summary
-        if self.epp_benchmark_results:
-            self.log(f"\n  Step 11 Summary — {len(self.epp_benchmark_results)} EPP weight combos tested:", 'success')
-            best_epp_name = None
-            best_epp_ttft = float('inf')
-            for name, weights, result in self.epp_benchmark_results:
-                ttft = result.ttft_p90 or float('inf')
-                tput = result.throughput_p90 or 0
-                marker = ''
-                if ttft < best_epp_ttft:
-                    best_epp_ttft = ttft
-                    best_epp_name = name
-                self.log(f"    {name}: TTFT={ttft:.1f}ms, Throughput={tput:.2f} req/s", 'info')
-            if best_epp_name:
-                self.log(f"  Best EPP config: {best_epp_name} (TTFT={best_epp_ttft:.1f}ms)", 'success')
-
-        # Restore user's original EPP config
-        prereq_mgr.update_epp_config(
-            architecture=best_config.architecture,
-            epp_config=self._build_epp_config(),
-            log_callback=lambda msg: self.log(msg, 'info')
-        )
 
     def _build_results(self) -> Dict[str, Any]:
         """Build optimization results summary."""
@@ -2863,19 +2877,21 @@ class RecipeOptimizer:
             } if self.calibrated_ep_result else None,
             # Optimization goal for report rendering
             'optimization_goal': self.config.objective,
-            # Step 11: EPP tuning results
-            'epp_tuning': [
-                {
-                    'name': name,
-                    'weights': {'prefix_cache': w['prefix_cache_weight'], 'kv_cache': w['kv_cache_weight'], 'queue': w['queue_weight']},
-                    'ttft_p90': r.ttft_p90,
-                    'ttft_p50': r.ttft_p50,
-                    'throughput_p90': r.throughput_p90,
-                    'throughput_p50': r.throughput_p50,
-                    'itl_p90': r.itl_p90,
-                }
-                for name, w, r in self.epp_benchmark_results
-            ] if self.epp_benchmark_results else None,
+            # Step 11: EPP tuning results (per architecture)
+            'epp_tuning': {
+                arch: [
+                    {
+                        'name': name,
+                        'weights': {'prefix_cache': w['prefix_cache_weight'], 'kv_cache': w['kv_cache_weight'], 'queue': w['queue_weight']},
+                        'ttft_p50': r.ttft_p50, 'ttft_p90': r.ttft_p90, 'ttft_p95': r.ttft_p95, 'ttft_p99': r.ttft_p99,
+                        'throughput_p50': r.throughput_p50, 'throughput_p90': r.throughput_p90, 'throughput_p95': r.throughput_p95, 'throughput_p99': r.throughput_p99,
+                        'itl_p90': r.itl_p90,
+                    }
+                    for name, w, r in results
+                ]
+                for arch, results in self.epp_benchmark_results.items()
+                if results
+            } if self.epp_benchmark_results else None,
             # All test results for database insertion
             'all_test_results': self.all_test_results,
             # Whether the user stopped the optimization early

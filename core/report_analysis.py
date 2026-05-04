@@ -1092,21 +1092,24 @@ class ReportAnalyzer:
             import logging
             logging.getLogger(__name__).warning(f"Failed to load run config: {e}")
 
-        # Step 11: EPP tuning results
+        # Step 11: EPP tuning results (grouped by architecture)
         epp_tuning_data = None
         epp_results = [r for r in results if r.config_name.startswith('step11-epp-') and r.is_successful]
         if epp_results:
             import json as _json2
-            epp_tuning_data = []
+            by_arch = {}
             for r in sorted(epp_results, key=lambda x: x.ttft_p90 or float('inf')):
-                name = r.config_name.replace('step11-epp-', '')
+                full_name = r.config_name.replace('step11-epp-', '')
+                # Parse arch from name: "pd-cache-heavy" → arch="pd", name="cache-heavy"
+                parts = full_name.split('-', 1)
+                arch = parts[0] if len(parts) > 1 else 'unknown'
+                name = parts[1] if len(parts) > 1 else full_name
                 manifest_types = []
                 if r.manifests_yaml:
                     try:
                         manifest_types = list(_json2.loads(r.manifests_yaml).keys())
                     except (_json2.JSONDecodeError, TypeError):
                         pass
-                # Extract weights from test_config_json.epp_config
                 weights = {}
                 if r.test_config_json:
                     try:
@@ -1120,17 +1123,37 @@ class ReportAnalyzer:
                         }
                     except (_json2.JSONDecodeError, TypeError):
                         pass
-                epp_tuning_data.append({
+                entry = {
                     'name': name,
                     'test_id': r.config_name,
                     'config_name': r.display_label,
-                    'ttft_p90': round(r.ttft_p90, 2) if r.ttft_p90 else None,
                     'ttft_p50': round(r.ttft_p50, 2) if r.ttft_p50 else None,
+                    'ttft_p90': round(r.ttft_p90, 2) if r.ttft_p90 else None,
+                    'ttft_p95': round(r.ttft_p95, 2) if r.ttft_p95 else None,
+                    'ttft_p99': round(r.ttft_p99, 2) if r.ttft_p99 else None,
+                    'throughput_p50': round(r.throughput_p50, 2) if r.throughput_p50 else None,
                     'throughput_p90': round(r.throughput_p90, 2) if r.throughput_p90 else None,
+                    'throughput_p95': round(r.throughput_p95, 2) if r.throughput_p95 else None,
+                    'throughput_p99': round(r.throughput_p99, 2) if r.throughput_p99 else None,
                     'itl_p90': round(r.itl_p90, 2) if r.itl_p90 else None,
                     'manifest_types': manifest_types,
                     'weights': weights,
-                })
+                }
+                by_arch.setdefault(arch, []).append(entry)
+
+            # Get run config for SLA target info
+            target_ms = None
+            target_pct = None
+            if run_config:
+                if run_config.get('latency_constraint_enabled'):
+                    target_ms = run_config.get('latency_constraint_ms')
+                    target_pct = run_config.get('latency_constraint_percentile', 'p99')
+
+            epp_tuning_data = {
+                'by_architecture': by_arch,
+                'target_ms': target_ms,
+                'target_percentile': target_pct,
+            }
 
         return {
             'charts': charts,

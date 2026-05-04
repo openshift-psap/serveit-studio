@@ -4309,35 +4309,103 @@ function renderCharts(data, runId) {
 
     // === Build subtab structure ===
     const subtabDefs = [];
-    // Build EPP Tuning section from data.epp_tuning
-    if (data.epp_tuning && data.epp_tuning.length > 0) {
-        let eppHtml = '<div class="chart-card" style="border:2px solid #7c3aed;border-left:6px solid #7c3aed;">';
-        eppHtml += '<div class="chart-card-header" style="background:linear-gradient(135deg,#7c3aed,#8b5cf6);">Step 11: EPP Tuning Results</div>';
-        eppHtml += '<div style="padding:12px 20px 4px; color:#1e293b; font-size:0.95em;">Same deployment, different EPP scoring weights. Each test swapped only the gateway configmap (~10s) to isolate the impact of request routing on performance.</div>';
-        eppHtml += '<div class="chart-card-body" style="padding:0;"><table class="results-table">';
-        eppHtml += '<tr><th>Strategy</th><th>Weights (Cache : KV : Queue)</th><th>TTFT P50</th><th>TTFT P90</th><th>Throughput P90</th><th>ITL P90</th><th>EPP Config</th></tr>';
-        let bestTtft = Math.min(...data.epp_tuning.map(e => e.ttft_p90 || Infinity));
-        data.epp_tuning.forEach(e => {
-            const isBest = e.ttft_p90 === bestTtft;
-            const cls = isBest ? ' class="pareto-row"' : '';
-            const w = e.weights || {};
-            const weights = `${w.prefix_cache || '?'} : ${w.kv_cache || '?'} : ${w.queue || '?'}`;
-            const na = 'N/A';
-            let manifestLinks = '-';
-            if (e.manifest_types && e.manifest_types.length > 0) {
-                const rTestId = e.test_id || e.name;
-                manifestLinks = e.manifest_types.map(t => {
-                    return `<a href="/api/run/${runId}/config/${rTestId}/manifest/${t}" title="Download ${t}.yaml" style="color:#7c3aed; text-decoration:none; font-size:12px; padding:2px 6px; background:#f5f3ff; border-radius:4px; border:1px solid #c4b5fd; margin:1px; display:inline-block;">${t}</a>`;
-                }).join(' ');
-            }
-            eppHtml += `<tr${cls}><td><strong>${e.name}</strong>${isBest ? ' ⭐' : ''}</td><td>${weights}</td>`;
-            eppHtml += `<td>${e.ttft_p50 != null ? e.ttft_p50 : na}</td>`;
-            eppHtml += `<td>${e.ttft_p90 != null ? e.ttft_p90 : na}</td>`;
-            eppHtml += `<td>${e.throughput_p90 != null ? e.throughput_p90 : na}</td>`;
-            eppHtml += `<td>${e.itl_p90 != null ? e.itl_p90 : na}</td>`;
-            eppHtml += `<td>${manifestLinks}</td></tr>`;
+    // Build EPP Tuning section — per-architecture charts + tables
+    if (data.epp_tuning && data.epp_tuning.by_architecture) {
+        const eppData = data.epp_tuning;
+        const eppTargetMs = eppData.target_ms;
+        const eppTargetPct = eppData.target_percentile || 'p99';
+        let eppHtml = '';
+
+        Object.keys(eppData.by_architecture).forEach((arch, archIdx) => {
+            const trials = eppData.by_architecture[arch];
+            if (!trials || !trials.length) return;
+            const archLabel = arch.toUpperCase();
+            const eppCardId = `epp-${arch}-${runId}`;
+
+            eppHtml += `<div class="chart-card" style="margin-top:${archIdx > 0 ? '16' : '0'}px; border:2px solid #7c3aed; border-left:6px solid #7c3aed;">`;
+            eppHtml += `<div class="chart-card-header" style="background:linear-gradient(135deg,#7c3aed,#8b5cf6);">Step 11: EPP Tuning — ${archLabel}</div>`;
+            eppHtml += '<div style="padding:12px 20px 4px; color:#1e293b; font-size:0.95em;">Same deployment, different EPP scoring weights. Each test swapped only the gateway configmap (~10s) to isolate the impact of request routing.</div>';
+
+            // Summary cards
+            const bestTrial = trials.reduce((a, b) => (a.ttft_p90 || Infinity) < (b.ttft_p90 || Infinity) ? a : b);
+            eppHtml += '<div style="display:grid; grid-template-columns:repeat(4, 1fr); gap:12px; padding:12px 20px;">';
+            eppHtml += `<div style="background:#f0fdf4; border-radius:10px; padding:16px; text-align:center; border:1px solid #bbf7d0;"><div style="font-size:1.5em; font-weight:800; color:#059669;">${bestTrial.name}</div><div style="color:#64748b; font-size:0.82em; margin-top:4px;">Best Strategy</div></div>`;
+            eppHtml += `<div style="background:#f8fafc; border-radius:10px; padding:16px; text-align:center; border:1px solid #e2e8f0;"><div style="font-size:1.5em; font-weight:800; color:#1e293b;">${bestTrial.ttft_p90 || 'N/A'} <span style="font-size:0.5em; color:#64748b;">ms</span></div><div style="color:#64748b; font-size:0.82em; margin-top:4px;">TTFT P90</div></div>`;
+            eppHtml += `<div style="background:#f8fafc; border-radius:10px; padding:16px; text-align:center; border:1px solid #e2e8f0;"><div style="font-size:1.5em; font-weight:800; color:#1e293b;">${bestTrial.throughput_p90 || 'N/A'}</div><div style="color:#64748b; font-size:0.82em; margin-top:4px;">Throughput P90 (req/s)</div></div>`;
+            eppHtml += `<div style="background:#f8fafc; border-radius:10px; padding:16px; text-align:center; border:1px solid #e2e8f0;"><div style="font-size:1.5em; font-weight:800; color:#1e293b;">${trials.length}</div><div style="color:#64748b; font-size:0.82em; margin-top:4px;">Strategies Tested</div></div>`;
+            eppHtml += '</div>';
+
+            // Charts P90, P95, P99
+            const pctls = [{key:'p90',label:'P90',color:'#3b82f6'},{key:'p95',label:'P95',color:'#dc2626'},{key:'p99',label:'P99',color:'#7c3aed'}];
+            pctls.forEach(pctl => {
+                eppHtml += `<div id="${eppCardId}-${pctl.key}${_chartSuffix}" style="height:400px; margin:8px 20px; background:#fff; border-radius:8px; border:1px solid #e2e8f0;"></div>`;
+            });
+
+            // Results table
+            eppHtml += '<div style="padding:0 20px 16px;"><table class="results-table">';
+            eppHtml += '<tr><th>Strategy</th><th>Weights (C:K:Q)</th><th>TTFT P50</th><th>TTFT P90</th><th>TTFT P95</th><th>TTFT P99</th><th>Tput P90</th><th>ITL P90</th><th>EPP Config</th></tr>';
+            trials.forEach(e => {
+                const isBest = e === bestTrial;
+                const cls = isBest ? ' class="pareto-row"' : '';
+                const w = e.weights || {};
+                const wStr = `${w.prefix_cache || '?'}:${w.kv_cache || '?'}:${w.queue || '?'}`;
+                const na = 'N/A';
+                let ml = '-';
+                if (e.manifest_types && e.manifest_types.length > 0) {
+                    ml = e.manifest_types.map(t => `<a href="/api/run/${runId}/config/${e.test_id}/manifest/${t}" style="color:#7c3aed;text-decoration:none;font-size:11px;padding:2px 6px;background:#f5f3ff;border-radius:4px;border:1px solid #c4b5fd;display:inline-block;">${t}</a>`).join(' ');
+                }
+                eppHtml += `<tr${cls}><td><strong>${e.name}</strong>${isBest ? ' ⭐' : ''}</td><td>${wStr}</td>`;
+                eppHtml += `<td>${e.ttft_p50 ?? na}</td><td>${e.ttft_p90 ?? na}</td><td>${e.ttft_p95 ?? na}</td><td>${e.ttft_p99 ?? na}</td>`;
+                eppHtml += `<td>${e.throughput_p90 ?? na}</td><td>${e.itl_p90 ?? na}</td><td>${ml}</td></tr>`;
+            });
+            eppHtml += '</table></div></div>';
+
+            // Render Plotly charts after DOM is ready (deferred)
+            setTimeout(() => {
+                pctls.forEach(pctl => {
+                    const el = document.getElementById(`${eppCardId}-${pctl.key}${_chartSuffix}`);
+                    if (!el) return;
+                    const xLabels = trials.map(t => t.name);
+                    const latencies = trials.map(t => t[`ttft_${pctl.key}`]);
+                    const throughputs = trials.map(t => t[`throughput_${pctl.key}`] || t.throughput_p90);
+                    const bestIdx = latencies.indexOf(Math.min(...latencies.filter(v => v != null)));
+                    const markerColors = latencies.map((v, i) => {
+                        if (eppTargetMs && v != null) return v <= eppTargetMs ? '#10b981' : '#ef4444';
+                        return i === bestIdx ? '#10b981' : pctl.color;
+                    });
+                    const traces = [
+                        {x: xLabels, y: latencies, name: `TTFT ${pctl.label}`, type: 'scatter', mode: 'lines+markers',
+                         line: {color: pctl.color, width: 3, shape: 'spline'},
+                         marker: {color: markerColors, size: 12, symbol: 'circle', line: {width: 2, color: 'white'}},
+                         fill: 'tozeroy', fillcolor: pctl.color + '14'},
+                        {x: xLabels, y: throughputs, name: `Throughput ${pctl.label}`, type: 'scatter', mode: 'lines+markers', yaxis: 'y2',
+                         line: {color: '#f59e0b', width: 3, shape: 'spline'},
+                         marker: {color: '#f59e0b', size: 10, symbol: 'diamond', line: {width: 2, color: 'white'}}},
+                    ];
+                    if (bestIdx >= 0) {
+                        traces.push({x: [xLabels[bestIdx]], y: [latencies[bestIdx]], name: 'Best', type: 'scatter', mode: 'markers',
+                            marker: {color: '#10b981', size: 22, symbol: 'circle', line: {width: 3, color: 'white'}}, showlegend: true});
+                    }
+                    const shapes = [];
+                    const annotations = [];
+                    if (eppTargetMs) {
+                        shapes.push({type: 'line', x0: -0.5, x1: xLabels.length - 0.5, y0: eppTargetMs, y1: eppTargetMs, yref: 'y',
+                            line: {color: '#ef4444', width: pctl.key === eppTargetPct ? 2 : 1.5, dash: 'dash'}});
+                        annotations.push({x: xLabels.length - 1, y: eppTargetMs, yref: 'y',
+                            text: `SLA (${eppTargetPct.toUpperCase()}): ${eppTargetMs} ms`, showarrow: false,
+                            font: {color: '#ef4444', size: 11}, xanchor: 'right', yanchor: 'bottom', yshift: 5, bgcolor: 'rgba(255,255,255,0.85)'});
+                    }
+                    Plotly.newPlot(el, traces, {
+                        ...plotlyLayout, height: 400, margin: {t: 30, b: 80, l: 60, r: 60},
+                        xaxis: {title: 'EPP Strategy'},
+                        yaxis: {title: `TTFT ${pctl.label} (ms)`, side: 'left', titlefont: {color: pctl.color}, tickfont: {color: pctl.color}},
+                        yaxis2: {title: `Throughput ${pctl.label} (req/s)`, side: 'right', overlaying: 'y', titlefont: {color: '#f59e0b'}, tickfont: {color: '#f59e0b'}},
+                        showlegend: true, legend: {x: 0, y: 1.18, orientation: 'h'}, shapes, annotations,
+                    }, plotlyConfig);
+                });
+            }, 100);
         });
-        eppHtml += '</table></div></div>';
+
         secEppTuning = eppHtml;
     }
 
