@@ -5008,10 +5008,9 @@ def cleanup_stale_optimizations():
                 for run_id, run_name in stale_runs:
                     cursor.execute('''
                         UPDATE optimization_runs
-                        SET status = ?, completed_at = ?, notes = ?
+                        SET status = ?, completed_at = ?
                         WHERE id = ?
-                    ''', ('interrupted', datetime.now().isoformat(),
-                          'Server restarted while optimization was running', run_id))
+                    ''', ('interrupted', datetime.now().isoformat(), run_id))
                     print(f"   ✓ Marked {run_name} as interrupted")
 
                 print(f"✓ Cleaned up {len(stale_runs)} stale optimization(s)")
