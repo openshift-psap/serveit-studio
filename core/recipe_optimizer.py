@@ -2634,11 +2634,13 @@ class RecipeOptimizer:
 
         # Best Aggregated config
         if self.aggregated_result and self.aggregated_tp:
-            agg_cfg = self._create_agg_config(
-                test_id=f"step11-epp-agg",
+            agg_cfg = self._create_aggregated_config(
                 tp=self.aggregated_tp,
-                replicas=self.config.total_gpus // self.aggregated_tp,
-                concurrency=int(self.config.qps),
+                num_gpus=self.config.total_gpus,
+                isl=self.config.isl,
+                osl=self.config.osl,
+                test_id=f"step11-epp-aggregated",
+                use_concurrency=True,
             )
             agg_concurrency = int(self.config.qps)
             for arch_key, sr in getattr(self, 'latency_search_results', {}).items():
