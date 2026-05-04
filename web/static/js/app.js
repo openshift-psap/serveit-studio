@@ -3474,7 +3474,7 @@ function renderCharts(data, runId) {
                 const tputVal = pi === 0 ? c.throughput_p90 : cardConfig.throughput;
                 const gpus = pi === 0 ? c.gpus : cardConfig.gpus;
                 const conc = pi === 0 ? c.concurrency : cardConfig.concurrency;
-                const ratio = pi === 0 && c.ratio ? `P:D ratio ${c.ratio} | ` : '';
+                const ratio = pi === 0 && c.ratio && c.decode_pods > 0 ? `P:D ratio ${c.ratio} | ` : '';
                 const concStr = conc ? ` | c=${conc}` : '';
 
                 html += `<div style="font-size:0.9em; color:#475569;">${ratio}TTFT ${pLabel}: <strong>${ttftVal} ms</strong> | Throughput ${pLabel}: <strong>${tputVal} req/s</strong> | ${gpus} GPUs${concStr}</div>`;
