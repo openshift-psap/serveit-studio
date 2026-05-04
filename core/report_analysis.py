@@ -1149,8 +1149,32 @@ class ReportAnalyzer:
                     target_ms = run_config.get('latency_constraint_ms')
                     target_pct = run_config.get('latency_constraint_percentile', 'p99')
 
+            # Find baseline results (best from Step 6/7) for comparison
+            baselines = {}
+            non_epp = [r for r in results if not r.config_name.startswith('step11-epp-')
+                       and not r.config_name.startswith(('step2', 'step3', 'step9', 'step10'))
+                       and r.is_successful]
+            for arch_key in by_arch:
+                if arch_key == 'pd':
+                    candidates = [r for r in non_epp if r.architecture == 'pd']
+                else:
+                    candidates = [r for r in non_epp if r.architecture == 'aggregated']
+                if candidates:
+                    best = min(candidates, key=lambda r: r.ttft_p90 or float('inf'))
+                    baselines[arch_key] = {
+                        'config_name': best.display_label,
+                        'ttft_p50': round(best.ttft_p50, 2) if best.ttft_p50 else None,
+                        'ttft_p90': round(best.ttft_p90, 2) if best.ttft_p90 else None,
+                        'ttft_p95': round(best.ttft_p95, 2) if best.ttft_p95 else None,
+                        'ttft_p99': round(best.ttft_p99, 2) if best.ttft_p99 else None,
+                        'throughput_p90': round(best.throughput_p90, 2) if best.throughput_p90 else None,
+                        'throughput_p95': round(best.throughput_p95, 2) if best.throughput_p95 else None,
+                        'throughput_p99': round(best.throughput_p99, 2) if best.throughput_p99 else None,
+                    }
+
             epp_tuning_data = {
                 'by_architecture': by_arch,
+                'baselines': baselines,
                 'target_ms': target_ms,
                 'target_percentile': target_pct,
             }

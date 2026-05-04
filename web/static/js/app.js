@@ -4384,8 +4384,25 @@ function renderCharts(data, runId) {
                          marker: {color: '#f59e0b', size: 10, symbol: 'diamond', line: {width: 2, color: 'white'}}},
                     ];
                     if (bestIdx >= 0) {
-                        traces.push({x: [xLabels[bestIdx]], y: [latencies[bestIdx]], name: 'Best', type: 'scatter', mode: 'markers',
+                        traces.push({x: [xLabels[bestIdx]], y: [latencies[bestIdx]], name: 'Best EPP', type: 'scatter', mode: 'markers',
                             marker: {color: '#10b981', size: 22, symbol: 'circle', line: {width: 3, color: 'white'}}, showlegend: true});
+                    }
+                    // Baseline from Step 6/7 (before EPP tuning)
+                    const baseline = (eppData.baselines || {})[arch];
+                    if (baseline) {
+                        const blTtft = baseline[`ttft_${pctl.key}`];
+                        const blTput = baseline[`throughput_${pctl.key}`] || baseline.throughput_p90;
+                        if (blTtft != null) {
+                            traces.push({x: ['Baseline'], y: [blTtft], name: `Baseline (${baseline.config_name})`, type: 'scatter', mode: 'markers',
+                                marker: {color: '#94a3b8', size: 18, symbol: 'star', line: {width: 2, color: 'white'}},
+                                hovertext: [`<b>Baseline: ${baseline.config_name}</b><br>TTFT ${pctl.label}: ${blTtft} ms<br>Before EPP tuning`],
+                                hoverinfo: 'text', showlegend: true});
+                        }
+                        if (blTput != null) {
+                            traces.push({x: ['Baseline'], y: [blTput], name: `Baseline Throughput`, type: 'scatter', mode: 'markers', yaxis: 'y2',
+                                marker: {color: '#d4d4d8', size: 14, symbol: 'star', line: {width: 2, color: 'white'}},
+                                showlegend: false});
+                        }
                     }
                     const shapes = [];
                     const annotations = [];
