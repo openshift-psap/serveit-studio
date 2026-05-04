@@ -5478,6 +5478,8 @@ function downloadHTMLReport(runId, data) {
     if (secStep9) dlTabs.push({ id: 'step9', label: '&#128269; Latency Search', html: secStep9 });
     if (secCal) dlTabs.push({ id: 'cal', label: '&#9878; Calibrated Load', html: secCal });
     if (secVLLM) dlTabs.push({ id: 'vllm', label: '&#9889; vLLM Metrics', html: secVLLM });
+    if (secEppTuning) dlTabs.push({ id: 'epp', label: '&#9881; EPP Tuning', html: secEppTuning });
+    if (secTestCfg) dlTabs.push({ id: 'settings', label: '&#9881; Test Settings', html: secTestCfg });
 
     if (dlTabs.length > 1) {
         html += '<div class="dl-tab-bar">';
