@@ -92,17 +92,17 @@
                                     <div class="input-group">
                                         <label>maxPrefixBlocksToMatch</label>
                                         <input type="number" id="epp-max-prefix-blocks" min="1" max="4096" onchange="this.dataset.userEdited='1';updateEppParams()">
-                                        <div class="help-text">Max prefix blocks the scorer checks for cache hits. Auto = ceil(ISL / block_size).</div>
+                                        <div class="help-text">How many KV cache blocks the gateway checks when looking for prefix cache hits on each pod. Higher values find more cache matches but take longer to score. Should cover your longest prompt &mdash; <code>ceil(ISL / block_size)</code>. With prefix cache enabled, this is multiplied to catch longer shared prefixes.</div>
                                     </div>
                                     <div class="input-group">
                                         <label>lruCapacityPerServer</label>
                                         <input type="number" id="epp-lru-capacity" min="100" max="500000" onchange="this.dataset.userEdited='1';updateEppParams()">
-                                        <div class="help-text">LRU cache capacity per server (in blocks). Auto = estimated from GPU VRAM and block size.</div>
+                                        <div class="help-text">How many cache block entries the gateway tracks per vLLM pod. The gateway maintains a local index of which prompts each pod has cached. Larger values let the gateway remember more cached prefixes for smarter routing. Estimated from GPU VRAM: <code>(VRAM &times; 40%) / (block_size &times; 0.5KB)</code>.</div>
                                     </div>
                                     <div class="input-group">
-                                        <label>nonCachedTokens (PD only)</label>
+                                        <label>nonCachedTokens <span style="color:#94a3b8;">(PD only)</span></label>
                                         <input type="number" id="epp-non-cached-tokens" min="1" max="1024" onchange="this.dataset.userEdited='1';updateEppParams()">
-                                        <div class="help-text">Threshold for routing to prefill vs decode in PD mode. Auto = min(16, ISL/100).</div>
+                                        <div class="help-text">When a request arrives, the gateway checks how many prompt tokens are <strong>not</strong> already cached on a decode pod. If the uncached portion exceeds this threshold, the request is routed to a prefill pod first. If it's below, the decode pod handles it directly (saving the round-trip). Lower values = more aggressive prefill routing. Default: 16 tokens.</div>
                                     </div>
                                 </div>
                             </div>
