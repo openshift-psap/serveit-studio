@@ -2730,13 +2730,11 @@ class RecipeOptimizer:
                     epp_config=epp_cfg,
                 )
 
-                is_last_combo = combo_idx == len(weight_combos) - 1
                 result = self.orchestrator.run_test(
                     epp_test_config,
-                    cleanup=is_last_combo,
+                    cleanup=True,
                     log_callback=lambda msg: self.log(msg, 'info'),
                     stop_check=self._should_stop,
-                    skip_prereqs=(combo_idx > 0),
                 )
 
                 if result and result.guidellm_success:
