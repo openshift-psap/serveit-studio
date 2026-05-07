@@ -1,15 +1,13 @@
 // settings.js — Advanced vLLM settings, TP pairs, PD search, EPP config, prefix cache
 
-        config.turns = Math.max(2, parseInt(e.target.value) || 3);
+// Max requests input
+var maxReqInput = document.getElementById('max-requests-input');
+if (maxReqInput) {
+    maxReqInput.addEventListener('change', (e) => {
+        config.max_requests = parseInt(e.target.value);
         saveConfig();
     });
 }
-
-// Max requests input
-document.getElementById('max-requests-input').addEventListener('change', (e) => {
-    config.max_requests = parseInt(e.target.value);
-    saveConfig();
-});
 
 // Stop mode toggle (duration vs max_requests)
 function setStopMode(mode) {
@@ -440,6 +438,6 @@ document.getElementById('existing-pvc-select').addEventListener('change', (e) =>
 });
 
 // Track if PVCs have been fetched to avoid duplicate requests
-let pvcsFetched = false;
+var pvcsFetched = false;
 
 // Fetch available PVCs from cluster

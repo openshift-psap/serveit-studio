@@ -1,9 +1,9 @@
 // socket.js — Socket.IO init, session guard, utility helpers
 
-const tabId = Math.random().toString(36).slice(2, 10);
-const socket = io({ query: { tab_id: tabId } });
-let initialConnectDone = false;
-let _takeoverTimeout = null;
+var tabId = Math.random().toString(36).slice(2, 10);
+var socket = io({ query: { tab_id: tabId } });
+var initialConnectDone = false;
+var _takeoverTimeout = null;
 
 // --- Session guard ---
 socket.on('session_locked', function(data) {
@@ -89,8 +89,8 @@ socket.on('connect', () => {
     initialConnectDone = true;
 });
 
-let currentStep = 1;
-let config = {
+var currentStep = 1;
+var config = {
     goal: null,
     model: null,
     isl: 3000,
@@ -126,7 +126,7 @@ let config = {
 };
 
 // Track configuration used for last test plan generation
-let lastTestPlanConfig = null;
+var lastTestPlanConfig = null;
 
 function getTestPlanConfigSignature() {
     // Create a signature of config values that affect test plan generation

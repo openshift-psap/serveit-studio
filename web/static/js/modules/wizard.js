@@ -39,7 +39,7 @@ function loadMoreModels() {
     renderModels(nextBatch);
 }
 
-let activeCategory = null;
+var activeCategory = null;
 
 function buildCategoryFilters() {
     const container = document.getElementById('model-category-filters');
@@ -213,6 +213,10 @@ function toggleMultiTurn() {
     }
     saveConfig();
 }
-const turnsInput = document.getElementById('turns-input');
+var turnsInput = document.getElementById('turns-input');
 if (turnsInput) {
     turnsInput.addEventListener('change', (e) => {
+        config.turns = Math.max(2, parseInt(e.target.value) || 3);
+        saveConfig();
+    });
+}

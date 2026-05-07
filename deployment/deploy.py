@@ -28,7 +28,6 @@ Examples:
 """
 
 import argparse
-import hashlib
 import os
 import json
 import subprocess
@@ -124,58 +123,24 @@ def sync_code(cmd: str, namespace: str, pod_name: str):
     kubectl_run(cmd, ['exec', '-n', namespace, pod_name, '--',
                       'mkdir', '-p', '/mnt/storage/app'])
 
-    # Build local manifest
-    local_files = {}
-    for path in REPO_ROOT.rglob('*'):
-        if not path.is_file():
-            continue
-        rel = str(path.relative_to(REPO_ROOT))
-        if any(skip in rel for skip in ['.git/', '.claude/', '__pycache__/', '.DS_Store']):
-            continue
-        md5 = hashlib.md5(path.read_bytes()).hexdigest()
-        local_files['./' + rel] = md5
+    # Fast tar-based sync: pipe entire repo into pod
+    tar_cmd = ['tar', 'cf', '-',
+               '--exclude=.git', '--exclude=.claude', '--exclude=__pycache__',
+               '--exclude=.DS_Store', '--exclude=*.pyc',
+               '-C', str(REPO_ROOT), '.']
+    untar_cmd = [cmd, 'exec', '-i', '-n', namespace, pod_name, '--',
+                 'tar', 'xf', '-', '-C', '/mnt/storage/app/']
 
-    # Build remote manifest
-    remote_files = {}
-    r = kubectl_run(cmd, ['exec', '-n', namespace, pod_name, '--', 'bash', '-c',
-        'cd /mnt/storage/app 2>/dev/null && find . -type f -not -path "*/__pycache__/*" -not -name ".DS_Store" -print0 | xargs -0 md5sum 2>/dev/null || true'
-    ])
-    if r.returncode == 0:
-        for line in r.stdout.strip().split('\n'):
-            parts = line.strip().split(None, 1)
-            if len(parts) == 2:
-                remote_files[parts[1]] = parts[0]
+    tar_proc = subprocess.Popen(tar_cmd, stdout=subprocess.PIPE, stderr=subprocess.DEVNULL)
+    untar_proc = subprocess.Popen(untar_cmd, stdin=tar_proc.stdout,
+                                  stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+    tar_proc.stdout.close()
+    _, stderr = untar_proc.communicate(timeout=120)
 
-    # Diff
-    to_copy = [f for f, h in local_files.items() if remote_files.get(f) != h]
-    to_delete = [f for f in remote_files if f not in local_files]
-
-    if not to_copy and not to_delete:
-        print("   Already up to date.", file=sys.stderr)
-        return
-
-    # Create directories
-    if to_copy:
-        dirs = sorted(set(str(Path(f).parent) for f in to_copy if str(Path(f).parent) != '.'))
-        if dirs:
-            dir_cmd = ' && '.join(f'mkdir -p {d}' for d in dirs[:50])
-            kubectl_run(cmd, ['exec', '-n', namespace, pod_name, '--', 'bash', '-c',
-                             f'cd /mnt/storage/app && {dir_cmd}'])
-
-    # Copy files
-    for f in to_copy:
-        rel = f.lstrip('./')
-        src = str(REPO_ROOT / rel)
-        dst = f'{namespace}/{pod_name}:/mnt/storage/app/{rel}'
-        subprocess.run([cmd, 'cp', src, dst], capture_output=True, timeout=30)
-
-    # Delete stale files
-    if to_delete:
-        del_paths = ' '.join(f'/mnt/storage/app/{f.lstrip("./")}' for f in to_delete[:100])
-        kubectl_run(cmd, ['exec', '-n', namespace, pod_name, '--', 'bash', '-c',
-                         f'rm -f {del_paths}'])
-
-    print(f"   {len(to_copy)} file(s) updated, {len(to_delete)} file(s) removed.", file=sys.stderr)
+    if untar_proc.returncode == 0:
+        print("   Code synced.", file=sys.stderr)
+    else:
+        print(f"   Sync failed: {stderr.decode()[:200]}", file=sys.stderr)
 
 
 # ── Port Forward ─────────────────────────────────────────────────────────────

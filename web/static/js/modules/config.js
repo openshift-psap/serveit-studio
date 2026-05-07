@@ -613,6 +613,6 @@ document.querySelectorAll('[data-goal]').forEach(card => {
 });
 
 // Load models from API
-let allModels = [];
-let displayedModels = 0;
-const modelsPerPage = 16;
+var allModels = [];
+var displayedModels = 0;
+var modelsPerPage = 16;

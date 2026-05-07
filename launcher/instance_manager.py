@@ -254,11 +254,31 @@ def list_instances(owner_id: int) -> List[Dict]:
     instances = []
     for row in rows:
         inst = dict(row)
-        # Check live pod status
+        # Check live pod status (detect CrashLoopBackOff and Error)
         r = _kubectl(['get', 'pod', '-l', f"app={inst['deployment_name']}",
                       '-n', inst['namespace'],
-                      '-o', 'jsonpath={.items[0].status.phase}'])
-        inst['pod_status'] = r.stdout.strip() if r.returncode == 0 and r.stdout.strip() else 'Unknown'
+                      '-o', 'jsonpath={.items[0].status.phase}:{.items[0].status.containerStatuses[0].state.waiting.reason}:{.items[0].status.containerStatuses[0].restartCount}'])
+        raw = r.stdout.strip() if r.returncode == 0 else ''
+        parts = raw.split(':')
+        phase = parts[0] if parts else 'Unknown'
+        waiting_reason = parts[1] if len(parts) > 1 else ''
+        restarts = int(parts[2]) if len(parts) > 2 and parts[2].isdigit() else 0
+        if waiting_reason in ('CrashLoopBackOff', 'Error', 'ImagePullBackOff'):
+            inst['pod_status'] = waiting_reason
+        elif phase == 'Running' and restarts > 2:
+            inst['pod_status'] = 'CrashLoop'
+        elif phase in ('Terminating', 'Pending', 'Failed', 'Succeeded', 'Running'):
+            inst['pod_status'] = phase
+        elif not raw or not phase:
+            # Check if the deployment itself still exists
+            dep_r = _kubectl(['get', 'deployment', inst['deployment_name'],
+                              '-n', inst['namespace'], '--ignore-not-found', '-o', 'name'])
+            if not dep_r.stdout.strip():
+                inst['pod_status'] = 'Deleted'
+            else:
+                inst['pod_status'] = 'Starting'
+        else:
+            inst['pod_status'] = phase or 'Unknown'
         instances.append(inst)
 
     return instances

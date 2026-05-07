@@ -47,6 +47,7 @@
         .modal .btn-cancel{background:#f1f5f9;color:#475569}
         .toggle-row{display:flex;align-items:center;gap:12px;margin-bottom:16px}
         .toggle-row label{margin:0}
+        @keyframes spin{from{transform:rotate(0deg)}to{transform:rotate(360deg)}}
     </style>
 </head>
 <body>
@@ -68,23 +69,44 @@
     <div id="instance-list">
         {% if instances %}
             {% for inst in instances %}
-            <div class="card" id="instance-{{ inst.id }}">
-                <div class="card-info">
-                    <h3>{{ inst.display_name or inst.name }}</h3>
-                    <div class="meta">
-                        <span class="status status-{{ inst.pod_status|lower if inst.pod_status in ['Running'] else ('error' if inst.status == 'error' else 'unknown') }}">
-                            {{ inst.pod_status or inst.status }}
-                        </span>
-                        <span>{{ inst.target_cluster }}</span>
-                        <span>{{ inst.created_at[:16] }}</span>
+            {% set ps = inst.pod_status or inst.status %}
+            <div class="card" id="instance-{{ inst.id }}" style="padding:0;overflow:hidden;">
+                <div style="padding:16px 20px;display:flex;align-items:center;justify-content:space-between;">
+                    <div style="flex:1;">
+                        <div style="display:flex;align-items:center;gap:10px;margin-bottom:6px;">
+                            <h3 style="margin:0;font-size:1.05em;">{{ inst.display_name or inst.name }}</h3>
+                            {% if ps == 'Running' %}
+                            <span class="status status-running">{{ ps }}</span>
+                            {% elif ps in ['CrashLoopBackOff', 'CrashLoop', 'Error', 'Failed', 'Deleted'] %}
+                            <span class="status status-error">{{ ps }}</span>
+                            {% elif ps in ['Creating', 'Pending', 'Starting', 'Terminating'] %}
+                            <span class="status status-creating">{{ ps }}</span>
+                            {% else %}
+                            <span class="status status-unknown">{{ ps }}</span>
+                            {% endif %}
+                        </div>
+                        <div style="display:flex;align-items:center;gap:8px;font-size:0.8em;color:#64748b;">
+                            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M2 12h20"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/></svg>
+                            <span>{{ inst.target_cluster }}</span>
+                            <span style="color:#e2e8f0;">&bull;</span>
+                            <span>{{ inst.created_at[:16] }}</span>
+                        </div>
+                    </div>
+                    <div style="display:flex;gap:8px;align-items:center;">
+                        {% if inst.service_url %}
+                        <a href="{{ inst.service_url }}" target="_blank" class="btn btn-open">Open</a>
+                        {% endif %}
+                        <button class="btn btn-danger" onclick="deleteInstance({{ inst.id }}, '{{ inst.display_name or inst.name }}')">Delete</button>
                     </div>
                 </div>
-                <div class="card-actions">
-                    {% if inst.service_url %}
-                    <a href="{{ inst.service_url }}" target="_blank" class="btn btn-open">Open</a>
-                    {% endif %}
-                    <button class="btn btn-danger" onclick="deleteInstance({{ inst.id }}, '{{ inst.display_name or inst.name }}')">Delete</button>
+                {% if not (inst.service_url and inst.service_url.startswith('https://')) %}
+                <div style="background:linear-gradient(135deg,#f8fafc,#f1f5f9);border-top:1px solid #e2e8f0;padding:10px 20px;display:flex;align-items:center;gap:10px;">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#6366f1" stroke-width="2" style="flex-shrink:0;"><rect x="2" y="3" width="20" height="14" rx="2"/><path d="M8 21h8M12 17v4"/></svg>
+                    <span style="font-size:0.78em;color:#475569;white-space:nowrap;">Connect:</span>
+                    <code style="background:#1e293b;color:#a5b4fc;padding:5px 12px;border-radius:5px;font-size:0.76em;user-select:all;flex:1;overflow-x:auto;">kubectl port-forward -n {{ inst.namespace }} svc/{{ inst.service_name }} 8081:5000</code>
+                    <a href="http://localhost:8081" target="_blank" style="color:#6366f1;font-size:0.78em;text-decoration:none;white-space:nowrap;font-weight:600;">localhost:8081</a>
                 </div>
+                {% endif %}
             </div>
             {% endfor %}
         {% else %}
@@ -259,11 +281,48 @@ function createInstance(e) {
 
 function deleteInstance(id, name) {
     if (!confirm('Delete instance "' + name + '"? This removes the deployment, PVC, and all data.')) return;
+
+    var card = document.getElementById('instance-' + id);
+    if (card) {
+        // Disable buttons
+        card.querySelectorAll('.btn').forEach(function(b) {
+            b.disabled = true;
+            b.style.opacity = '0.4';
+            b.style.pointerEvents = 'none';
+        });
+        // Show spinner overlay
+        var overlay = document.createElement('div');
+        overlay.style.cssText = 'position:absolute;inset:0;background:rgba(255,255,255,0.7);display:flex;align-items:center;justify-content:center;border-radius:12px;z-index:5;';
+        overlay.innerHTML = '<div style="display:flex;align-items:center;gap:10px;"><svg width="20" height="20" viewBox="0 0 24 24" style="animation:spin 1s linear infinite;"><circle cx="12" cy="12" r="10" stroke="#6366f1" stroke-width="3" fill="none" stroke-dasharray="31.4 31.4" stroke-linecap="round"/></svg><span style="color:#475569;font-weight:600;font-size:0.9em;">Deleting...</span></div>';
+        card.style.position = 'relative';
+        card.appendChild(overlay);
+    }
+
     fetch('/api/instances/' + id, {method: 'DELETE'})
     .then(r => r.json())
     .then(data => {
-        if (data.ok) location.reload();
-        else alert('Error: ' + (data.error || 'Unknown error'));
+        if (data.ok) {
+            if (card) {
+                card.style.transition = 'opacity 0.3s, transform 0.3s';
+                card.style.opacity = '0';
+                card.style.transform = 'translateX(20px)';
+                setTimeout(function() { card.remove(); }, 300);
+            }
+        } else {
+            showCreateError(data.error || 'Failed to delete');
+            if (card) {
+                card.querySelector('div[style*="position:absolute"]').remove();
+                card.querySelectorAll('.btn').forEach(function(b) {
+                    b.disabled = false;
+                    b.style.opacity = '';
+                    b.style.pointerEvents = '';
+                });
+            }
+        }
+    })
+    .catch(function(err) {
+        showCreateError('Delete failed: ' + err);
+        location.reload();
     });
 }
 

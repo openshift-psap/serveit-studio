@@ -400,9 +400,9 @@ def load_state():
         if os.path.exists(STATE_FILE):
             try:
                 with open(STATE_FILE, 'r') as f:
-                    state = json.load(f)
-                state['optimization_running'] = state.get('running', False)
-                state['current_config'] = state.get('config', {})
+                    saved = json.load(f)
+                state['optimization_running'] = saved.get('running', False)
+                state['current_config'] = saved.get('config', {})
 
                 # Reset running state on app restart
                 if state['optimization_running']:

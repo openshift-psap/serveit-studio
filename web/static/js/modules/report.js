@@ -1,11 +1,11 @@
 // report.js — Tabbed report management, estimator, tab switching
 
 // ===== TABBED REPORT MANAGEMENT =====
-const reportTabs = [];
-let activeTabId = null;
-const tabDataCache = {};
-let _tabCounter = 0;
-let _chartSuffix = '';
+var reportTabs = [];
+var activeTabId = null;
+var tabDataCache = {};
+var _tabCounter = 0;
+var _chartSuffix = '';
 function cid(id) { return id + _chartSuffix; }
 
 document.getElementById('chart-add-btn').addEventListener('click', () => {
