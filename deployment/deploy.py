@@ -90,7 +90,8 @@ def render_template(name: str, **ctx) -> str:
 def generate_yaml(namespace: str, image: str, pvc_name: str,
                   storage_class: str, storage_size: str,
                   create_pvc: bool, dev_mode: bool, force_nad: bool,
-                  openshift: bool, name: str = 'inferecipe-optimizer') -> str:
+                  openshift: bool, name: str = 'inferecipe-optimizer',
+                  mode: str = 'local') -> str:
     parts = []
 
     # RBAC
@@ -106,7 +107,8 @@ def generate_yaml(namespace: str, image: str, pvc_name: str,
     parts.append(render_template('deployment.yaml.j2',
         name=name, namespace=namespace, image=image,
         pvc_name=pvc_name, dev_mode='true' if dev_mode else 'false',
-        force_nad='true' if force_nad else 'false'))
+        force_nad='true' if force_nad else 'false',
+        inferecipe_mode='launcher' if mode == 'launcher' else ''))
 
     # Service + Route
     parts.append(render_template('service.yaml.j2',
@@ -293,6 +295,8 @@ def main():
         epilog=__doc__,
     )
 
+    p.add_argument('--mode', choices=['local', 'launcher'], default='local',
+                   help='Deploy mode: local (single instance) or launcher (multi-user control plane)')
     p.add_argument('-n', '--namespace', default='llm-d', help='Kubernetes namespace (default: llm-d)')
     p.add_argument('-i', '--image', default='quay.io/bbenshab/vllm:inferecipe', help='Container image')
 
@@ -361,6 +365,7 @@ def main():
         sys.exit(1)
 
     # ── Generate YAML ──
+    deploy_name = 'inferecipe-launcher' if args.mode == 'launcher' else 'inferecipe-optimizer'
     yaml = generate_yaml(
         namespace=args.namespace,
         image=args.image,
@@ -371,6 +376,8 @@ def main():
         dev_mode=args.dev,
         force_nad=args.force_nad,
         openshift=openshift,
+        name=deploy_name,
+        mode=args.mode,
     )
 
     if args.just_yaml:

@@ -1,11 +1,15 @@
 """Authentication — login, setup, session guard, rate limiting."""
 
+import os
 import sqlite3
 from datetime import datetime, timedelta
 from flask import render_template, request, redirect, url_for, session
 from werkzeug.security import generate_password_hash, check_password_hash
 
 from web.app_context import app, DB_PATH
+
+# When managed by the launcher, auth is disabled
+AUTH_DISABLED = os.environ.get('AUTH_DISABLED', 'false').lower() == 'true'
 
 _login_attempts = {}
 _LOGIN_MAX_ATTEMPTS = 5
@@ -121,6 +125,8 @@ def register_auth_routes():
 
     @app.before_request
     def require_auth():
+        if AUTH_DISABLED:
+            return
         if request.endpoint in ('login', 'setup', 'static'):
             return
         if not _has_any_users():

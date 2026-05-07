@@ -1,0 +1,40 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>InfeRecipe Launcher{% if setup %} — Setup{% else %} — Login{% endif %}</title>
+    <style>
+        *{box-sizing:border-box;margin:0;padding:0}
+        body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;background:#0f172a;display:flex;align-items:center;justify-content:center;min-height:100vh}
+        .card{background:white;border-radius:16px;padding:40px;width:380px;box-shadow:0 25px 50px rgba(0,0,0,0.25)}
+        h1{color:#1e293b;margin-bottom:8px;font-size:1.5em}
+        .subtitle{color:#64748b;margin-bottom:24px;font-size:0.9em}
+        label{display:block;color:#475569;font-weight:600;font-size:0.85em;margin-bottom:6px}
+        input[type=text],input[type=password]{width:100%;padding:10px 14px;border:2px solid #e2e8f0;border-radius:8px;font-size:1em;margin-bottom:16px;outline:none}
+        input:focus{border-color:#6366f1}
+        button{width:100%;padding:12px;background:#6366f1;color:white;border:none;border-radius:8px;font-size:1em;font-weight:700;cursor:pointer}
+        button:hover{background:#4f46e5}
+        .error{background:#fef2f2;color:#dc2626;border:1px solid #fecaca;border-radius:8px;padding:10px;margin-bottom:16px;font-size:0.85em}
+        .logo{text-align:center;margin-bottom:20px;font-size:2em}
+    </style>
+</head>
+<body>
+<div class="card">
+    <div class="logo">🔬</div>
+    <h1>{% if setup %}Create Admin Account{% else %}Sign In{% endif %}</h1>
+    <p class="subtitle">{% if setup %}Set up your InfeRecipe Launcher account{% else %}InfeRecipe Launcher{% endif %}</p>
+    {% if error %}<div class="error">{{ error }}</div>{% endif %}
+    <form method="POST">
+        <label>Username</label>
+        <input type="text" name="username" required autofocus>
+        <label>Password</label>
+        <input type="password" name="password" required>
+        {% if setup %}
+        <label>Confirm Password</label>
+        <input type="password" name="confirm_password" required>
+        {% endif %}
+        <button type="submit">{% if setup %}Create Account{% else %}Sign In{% endif %}</button>
+    </form>
+</div>
+</body>
+</html>

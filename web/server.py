@@ -65,4 +65,8 @@ def main():
 
 
 if __name__ == '__main__':
-    main()
+    if os.environ.get('INFERECIPE_MODE') == 'launcher':
+        from launcher.app import main as launcher_main
+        launcher_main()
+    else:
+        main()

@@ -5,6 +5,7 @@ metadata:
   namespace: {{ namespace }}
   labels:
     app: {{ name }}
+    component: inferecipe-instance
 spec:
   replicas: 1
   strategy:
@@ -16,6 +17,7 @@ spec:
     metadata:
       labels:
         app: {{ name }}
+        component: inferecipe-instance
     spec:
       serviceAccountName: default
       volumes:
@@ -26,6 +28,11 @@ spec:
           emptyDir:
             medium: Memory
             sizeLimit: 4Gi
+{% if has_kubeconfig == 'true' %}
+        - name: kubeconfig
+          secret:
+            secretName: {{ kubeconfig_secret }}
+{% endif %}
       containers:
         - name: runner
           image: {{ image }}
@@ -34,25 +41,9 @@ spec:
             - "/bin/sh"
             - "-c"
             - |
-              echo "--- Starting InfeRecipe Optimizer ---"
-              if [ "${DEV_MODE}" = "true" ]; then
-                CODE_DIR="/mnt/storage/app"
-                echo "Dev mode: waiting for code at ${CODE_DIR}/web/server.py ..."
-                while [ ! -f "${CODE_DIR}/web/server.py" ]; do sleep 2; done
-                echo "Code found. Starting server (auto-restart on crash)..."
-                export INFE_RECIPE_PATH="${CODE_DIR}"
-                while true; do
-                  cd "${CODE_DIR}/web"
-                  find "${CODE_DIR}" -type d -name __pycache__ -exec rm -rf {} + 2>/dev/null || true
-                  python3.11 server.py || true
-                  echo "Server exited, restarting in 3s..."
-                  sleep 3
-                done
-              else
-                echo "Starting web server from image..."
-                cd /app/web
-                exec python3.11 server.py
-              fi
+              echo "--- Starting InfeRecipe Instance ---"
+              cd /app/web
+              exec python3.11 server.py
           env:
             - name: INFE_RECIPE_PATH
               value: "/app"
@@ -62,17 +53,17 @@ spec:
               value: "/mnt/storage"
             - name: TARGET_NAMESPACE
               value: "{{ namespace }}"
-            - name: METRIC_STEP_SECONDS
-              value: "5"
             - name: DB_PATH
               value: "/mnt/storage/inferecipe.db"
+            - name: AUTH_DISABLED
+              value: "{{ auth_disabled }}"
             - name: INFE_RECIPE_FORCE_NAD
               value: "{{ force_nad }}"
             - name: DEV_MODE
               value: "{{ dev_mode }}"
-{% if inferecipe_mode is defined and inferecipe_mode %}
-            - name: INFERECIPE_MODE
-              value: "{{ inferecipe_mode }}"
+{% if has_kubeconfig == 'true' %}
+            - name: KUBECONFIG
+              value: "/etc/kubeconfig/kubeconfig"
 {% endif %}
             - name: HF_TOKEN
               valueFrom:
@@ -85,6 +76,11 @@ spec:
               mountPath: /mnt/storage
             - name: tmp-mem
               mountPath: /tmp
+{% if has_kubeconfig == 'true' %}
+            - name: kubeconfig
+              mountPath: /etc/kubeconfig
+              readOnly: true
+{% endif %}
           ports:
             - containerPort: 5000
           resources:
