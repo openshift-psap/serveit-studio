@@ -39,7 +39,7 @@ class GuidellmMixin:
         tmgr = TemplateManager()
         pod_yaml = tmgr.render_template('benchmark/guidellm-pod.yaml.j2',
             namespace=self.namespace,
-            image=os.environ.get('GUIDELLM_IMAGE', 'quay.io/bbenshab/vllm:inferecipe'),
+            image=os.environ.get('GUIDELLM_IMAGE', 'quay.io/bbenshab/inferecipe:workload'),
             pvc_name=self._get_storage_pvc_name(config),
             hf_token=os.environ.get('HF_TOKEN', ''),
         )

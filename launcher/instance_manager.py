@@ -47,7 +47,7 @@ def create_instance(owner_id: int, username: str, name: str,
                     namespace: str = 'llm-d',
                     kubeconfig_data: str = None,
                     storage_class: str = None,
-                    image: str = 'quay.io/bbenshab/vllm:inferecipe') -> Dict:
+                    image: str = 'quay.io/bbenshab/inferecipe:server') -> Dict:
     """Create a new InfeRecipe instance for a user."""
 
     safe_name = _sanitize(f"{username}-{name}")

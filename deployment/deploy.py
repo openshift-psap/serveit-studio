@@ -180,12 +180,12 @@ def sync_code(cmd: str, namespace: str, pod_name: str):
 
 # ── Port Forward ─────────────────────────────────────────────────────────────
 
-def start_port_forward(cmd: str, namespace: str, port: int):
+def start_port_forward(cmd: str, namespace: str, port: int, svc_name: str = 'inferecipe-optimizer-ui'):
     stop_port_forward(quiet=True)
-    print(f"🔌 Starting port-forward (localhost:{port} -> svc/inferecipe-optimizer-ui:5000)...", file=sys.stderr)
+    print(f"🔌 Starting port-forward (localhost:{port} -> svc/{svc_name}:5000)...", file=sys.stderr)
 
     proc = subprocess.Popen(
-        [cmd, 'port-forward', '-n', namespace, 'svc/inferecipe-optimizer-ui', f'{port}:5000'],
+        [cmd, 'port-forward', '-n', namespace, f'svc/{svc_name}', f'{port}:5000'],
         stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL
     )
     PF_PID_FILE.write_text(str(proc.pid))
@@ -218,7 +218,9 @@ def stop_port_forward(quiet: bool = False):
 # ── Restart Server ───────────────────────────────────────────────────────────
 
 def restart_server(cmd: str, namespace: str, port: int):
-    r = kubectl_run(cmd, ['get', 'pod', '-n', namespace, '-l', 'app=inferecipe-optimizer',
+    # Find any inferecipe pod (optimizer or launcher)
+    r = kubectl_run(cmd, ['get', 'pod', '-n', namespace,
+                          '-l', 'app in (inferecipe-optimizer,inferecipe-launcher)',
                           '-o', 'jsonpath={.items[0].metadata.name}'])
     pod = r.stdout.strip()
     if not pod:
@@ -297,7 +299,7 @@ def main():
     p.add_argument('--mode', choices=['local', 'launcher'], default='local',
                    help='Deploy mode: local (single instance) or launcher (multi-user control plane)')
     p.add_argument('-n', '--namespace', default='llm-d', help='Kubernetes namespace (default: llm-d)')
-    p.add_argument('-i', '--image', default='quay.io/bbenshab/vllm:inferecipe', help='Container image')
+    p.add_argument('-i', '--image', default='quay.io/bbenshab/inferecipe:server', help='Container image')
 
     sg = p.add_argument_group('Storage')
     sg.add_argument('-p', '--pvc-name', help='Use existing PVC (skips PVC creation)')
@@ -337,7 +339,8 @@ def main():
 
     # ── Sync only ──
     if args.sync and not args.storage_class and not args.pvc_name:
-        r = kubectl_run(cmd, ['get', 'pod', '-n', args.namespace, '-l', 'app=inferecipe-optimizer',
+        app_label = 'inferecipe-launcher' if args.mode == 'launcher' else 'inferecipe-optimizer'
+        r = kubectl_run(cmd, ['get', 'pod', '-n', args.namespace, '-l', f'app={app_label}',
                               '-o', 'jsonpath={.items[0].metadata.name}'])
         pod = r.stdout.strip()
         if not pod:
@@ -397,7 +400,7 @@ def main():
     # Wait for pod
     print("⏳ Waiting for deployment to be ready...", file=sys.stderr)
     subprocess.run([cmd, 'wait', '--for=condition=available',
-                    'deployment/inferecipe-optimizer', '-n', args.namespace,
+                    f'deployment/{deploy_name}', '-n', args.namespace,
                     '--timeout=300s'], capture_output=True)
 
     print("\n" + "=" * 60, file=sys.stderr)
@@ -406,7 +409,7 @@ def main():
 
     # Sync code in dev mode
     if args.dev or args.sync:
-        r = kubectl_run(cmd, ['get', 'pod', '-n', args.namespace, '-l', 'app=inferecipe-optimizer',
+        r = kubectl_run(cmd, ['get', 'pod', '-n', args.namespace, '-l', f'app={deploy_name}',
                               '-o', 'jsonpath={.items[0].metadata.name}'])
         pod = r.stdout.strip()
         if pod:
@@ -417,13 +420,14 @@ def main():
                 print("\n   Server will auto-start on crash.", file=sys.stderr)
 
     # Port-forward (vanilla K8s)
+    svc_name = f'{deploy_name}-ui'
     if openshift:
-        r = kubectl_run(cmd, ['get', 'route', 'inferecipe-optimizer-ui', '-n', args.namespace,
+        r = kubectl_run(cmd, ['get', 'route', svc_name, '-n', args.namespace,
                               '-o', 'jsonpath={.spec.host}'])
         if r.stdout.strip():
             print(f"\n🌐 Web UI: https://{r.stdout.strip()}", file=sys.stderr)
     else:
-        start_port_forward(cmd, args.namespace, args.local_port)
+        start_port_forward(cmd, args.namespace, args.local_port, svc_name=svc_name)
 
     print("=" * 60, file=sys.stderr)
 
