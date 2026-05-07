@@ -1,0 +1,40 @@
+apiVersion: v1
+kind: Pod
+metadata:
+  name: inferecipe-guidellm
+  namespace: {{ namespace }}
+  labels:
+    component: inferecipe-benchmark
+    app: inferecipe-guidellm
+spec:
+  serviceAccountName: llm-d-modelserver
+  restartPolicy: Never
+  containers:
+  - name: guidellm
+    image: {{ image }}
+    command: ["sleep", "infinity"]
+    env:
+    - name: HF_HOME
+      value: "/mnt/storage/.cache/huggingface"
+    - name: HF_DATASETS_CACHE
+      value: "/mnt/storage/.cache/huggingface/datasets"
+    - name: TRANSFORMERS_CACHE
+      value: "/mnt/storage/.cache/huggingface/transformers"
+{% if hf_token %}
+    - name: HF_TOKEN
+      value: "{{ hf_token }}"
+{% endif %}
+    resources:
+      requests:
+        cpu: "1"
+        memory: "2Gi"
+      limits:
+        cpu: "4"
+        memory: "8Gi"
+    volumeMounts:
+    - name: storage
+      mountPath: /mnt/storage
+  volumes:
+  - name: storage
+    persistentVolumeClaim:
+      claimName: {{ pvc_name }}

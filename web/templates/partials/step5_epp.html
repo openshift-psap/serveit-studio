@@ -70,6 +70,26 @@
                                             <td style="text-align:center;"><input type="checkbox" id="epp-plugin-slo" onchange="updateEppCustom()"></td>
                                             <td style="text-align:center;"><input type="number" id="epp-weight-slo" value="3" min="0" max="10" step="0.5" style="width:60px;text-align:center;padding:4px;border:1px solid #d1d5db;border-radius:4px;" onchange="updateEppCustom()"></td>
                                         </tr>
+                                        <tr style="border-bottom:1px solid #f1f5f9;">
+                                            <td style="padding:8px;"><strong>precise-prefix-cache-scorer</strong><br><span style="color:#64748b;font-size:0.85em;">Tracks KV cache state in real time for exact prefix match scoring. More accurate than approximate prefix-cache-scorer but higher overhead.</span></td>
+                                            <td style="text-align:center;"><input type="checkbox" id="epp-plugin-precise-prefix-cache" onchange="updateEppCustom()"></td>
+                                            <td style="text-align:center;"><input type="number" id="epp-weight-precise-prefix-cache" value="3" min="0" max="10" step="0.5" style="width:60px;text-align:center;padding:4px;border:1px solid #d1d5db;border-radius:4px;" onchange="updateEppCustom()"></td>
+                                        </tr>
+                                        <tr style="border-bottom:1px solid #f1f5f9;">
+                                            <td style="padding:8px;"><strong>active-request-scorer</strong><br><span style="color:#64748b;font-size:0.85em;">Scores pods by number of in-flight requests. Load-aware alternative to queue-scorer that tracks actively processing requests.</span></td>
+                                            <td style="text-align:center;"><input type="checkbox" id="epp-plugin-active-request" onchange="updateEppCustom()"></td>
+                                            <td style="text-align:center;"><input type="number" id="epp-weight-active-request" value="2" min="0" max="10" step="0.5" style="width:60px;text-align:center;padding:4px;border:1px solid #d1d5db;border-radius:4px;" onchange="updateEppCustom()"></td>
+                                        </tr>
+                                        <tr style="border-bottom:1px solid #f1f5f9;">
+                                            <td style="padding:8px;"><strong>no-hit-lru-scorer</strong><br><span style="color:#64748b;font-size:0.85em;">For cold requests with no cache hits, ranks pods by least-recently-used to spread load across underutilized pods.</span></td>
+                                            <td style="text-align:center;"><input type="checkbox" id="epp-plugin-no-hit-lru" onchange="updateEppCustom()"></td>
+                                            <td style="text-align:center;"><input type="number" id="epp-weight-no-hit-lru" value="1" min="0" max="10" step="0.5" style="width:60px;text-align:center;padding:4px;border:1px solid #d1d5db;border-radius:4px;" onchange="updateEppCustom()"></td>
+                                        </tr>
+                                        <tr style="border-bottom:1px solid #f1f5f9;">
+                                            <td style="padding:8px;"><strong>session-aware-scorer</strong><br><span style="color:#64748b;font-size:0.85em;">Routes requests from the same session/user to the same pod for better cache reuse across a conversation.</span></td>
+                                            <td style="text-align:center;"><input type="checkbox" id="epp-plugin-session-aware" onchange="updateEppCustom()"></td>
+                                            <td style="text-align:center;"><input type="number" id="epp-weight-session-aware" value="2" min="0" max="10" step="0.5" style="width:60px;text-align:center;padding:4px;border:1px solid #d1d5db;border-radius:4px;" onchange="updateEppCustom()"></td>
+                                        </tr>
                                     </table>
                                 </div>
                             </div>
@@ -119,7 +139,15 @@
                             </div>
                             <div id="epp-benchmark-inner" style="padding:12px 20px;opacity:0.5;">
                                 <div style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:6px;padding:12px;font-size:0.82em;color:#475569;line-height:1.6;">
-                                    When enabled, the optimizer will take the best-performing deployment config and re-run the benchmark with different EPP scoring strategies &mdash; keeping the same pods but changing only how requests are routed. This isolates the impact of EPP scoring on performance.
+                                    Tests 3 aggressive weight distributions on the best deployment to find which scoring dimension matters most for your workload. Only the gateway configmap is swapped between tests (~10s), no pod redeployment needed.<br><br>
+                                    <strong>Strategies tested:</strong>
+                                    <table style="width:100%;margin-top:8px;font-size:0.95em;border-collapse:collapse;">
+                                        <tr style="background:#f1f5f9;"><td style="padding:4px 8px;font-weight:600;">Cache-heavy</td><td style="padding:4px 8px;font-family:monospace;">Cache(5) : KV(1) : Queue(1)</td><td style="padding:4px 8px;color:#64748b;">Maximizes prefix cache reuse</td></tr>
+                                        <tr><td style="padding:4px 8px;font-weight:600;">Queue-heavy</td><td style="padding:4px 8px;font-family:monospace;">Cache(1) : KV(1) : Queue(5)</td><td style="padding:4px 8px;color:#64748b;">Prevents pod hotspotting</td></tr>
+                                        <tr style="background:#f1f5f9;"><td style="padding:4px 8px;font-weight:600;">KV-heavy <span style="color:#94a3b8;font-weight:400;">(ISL/OSL &gt; 10)</span></td><td style="padding:4px 8px;font-family:monospace;">Cache(2) : KV(5) : Queue(1)</td><td style="padding:4px 8px;color:#64748b;">Favors free GPU memory for long sequences</td></tr>
+                                        <tr><td style="padding:4px 8px;font-weight:600;">Equal <span style="color:#94a3b8;font-weight:400;">(ISL/OSL &le; 10)</span></td><td style="padding:4px 8px;font-family:monospace;">Cache(2) : KV(2) : Queue(2)</td><td style="padding:4px 8px;color:#64748b;">Balanced fallback for short-prompt workloads</td></tr>
+                                    </table>
+                                    <div style="margin-top:8px;color:#92400e;">The winning strategy is automatically applied before the latency search (Step 10) so throughput results reflect optimal routing.</div>
                                 </div>
                             </div>
                         </div>

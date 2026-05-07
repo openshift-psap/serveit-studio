@@ -39,6 +39,12 @@ class OptimizationStrategy(ABC):
         """Execute Steps 4-9 for this optimization goal."""
         pass
 
+    def _run_epp_tuning_if_enabled(self):
+        """Step 9: EPP Tuning — runs before Step 10 so latency search uses optimal EPP weights."""
+        if self.opt.config.epp_benchmark and not self.opt._should_stop():
+            self.opt._benchmark_epp_strategies()
+            self.opt._apply_best_epp_config()
+
 
 class TTFTStrategy(OptimizationStrategy):
     """Response Time Priority: Aggregated search + PD disaggregation.
@@ -47,8 +53,9 @@ class TTFTStrategy(OptimizationStrategy):
     Step 6: Search for best aggregated configuration
     Step 7: Test all feasible PD splits, find Pareto front
     Step 8: Compare PD vs Aggregated (no new tests)
-    Step 9: Latency-bounded throughput maximization (Optuna, conditional)
-    Step 10: Re-test at calibrated load if overloaded
+    Step 9: EPP Tuning (conditional)
+    Step 10: Latency-bounded throughput maximization (conditional)
+    Step 11: Re-test at calibrated load if overloaded
     """
 
     def execute(self):
@@ -87,14 +94,17 @@ class TTFTStrategy(OptimizationStrategy):
         if self.opt._should_stop():
             return
 
-        # Step 9: Latency-bounded throughput maximization (only if enabled)
+        # Step 9: EPP Tuning (before latency search so it uses optimal EPP)
+        self._run_epp_tuning_if_enabled()
+
+        # Step 10: Latency-bounded throughput maximization (only if enabled)
         if self.opt._should_run_latency_bounded_search():
             self.opt._run_latency_bounded_search()
             self.opt.log("", 'info')
 
-        # Step 10: Re-test at calibrated load (only if overloaded)
+        # Step 11: Re-test at calibrated load (only if overloaded)
         if self.opt._should_run_step10():
-            self.opt.log("STEP 10: Calibrated Load Validation", 'decision')
+            self.opt.log("STEP 11: Calibrated Load Validation", 'decision')
             self.opt.log("-" * 80, 'info')
             self.opt._validate_at_calibrated_load()
             self.opt.log("", 'info')
@@ -107,8 +117,9 @@ class ThroughputStrategy(OptimizationStrategy):
     Step 6: Search for best aggregated configuration
     Step 7: Test EP configs at full workload, find best by throughput
     Step 8: Compare EP vs Aggregated (no new tests)
-    Step 9: Latency-bounded throughput maximization (Optuna, conditional)
-    Step 10: Re-test at calibrated load if overloaded
+    Step 9: EPP Tuning (conditional)
+    Step 10: Latency-bounded throughput maximization (conditional)
+    Step 11: Re-test at calibrated load if overloaded
     """
 
     def execute(self):
@@ -144,14 +155,17 @@ class ThroughputStrategy(OptimizationStrategy):
         if self.opt._should_stop():
             return
 
-        # Step 9: Latency-bounded throughput maximization (only if enabled)
+        # Step 9: EPP Tuning (before latency search so it uses optimal EPP)
+        self._run_epp_tuning_if_enabled()
+
+        # Step 10: Latency-bounded throughput maximization (only if enabled)
         if self.opt._should_run_latency_bounded_search():
             self.opt._run_latency_bounded_search()
             self.opt.log("", 'info')
 
-        # Step 10: Re-test at calibrated load (only if overloaded)
+        # Step 11: Re-test at calibrated load (only if overloaded)
         if self._should_run_step10():
-            self.opt.log("STEP 10: Calibrated Load Validation", 'decision')
+            self.opt.log("STEP 11: Calibrated Load Validation", 'decision')
             self.opt.log("-" * 80, 'info')
             self._validate_ep_at_calibrated_load()
             self.opt.log("", 'info')
@@ -203,9 +217,9 @@ class ThroughputStrategy(OptimizationStrategy):
                     self.opt.effective_concurrency = concurrency
                     self.opt.log(f"  ℹ️  Using original concurrency ({concurrency}) — expect overload", 'info')
                     if self.opt.config.latency_constraint_enabled:
-                        self.opt.log(f"  ℹ️  Step 9 will find max throughput under latency SLA", 'info')
+                        self.opt.log(f"  ℹ️  Step 10 will find max throughput under latency SLA", 'info')
                     else:
-                        self.opt.log(f"  ℹ️  Step 10 will re-test at sustainable load ({sustainable_concurrency} users)", 'info')
+                        self.opt.log(f"  ℹ️  Step 11 will re-test at sustainable load ({sustainable_concurrency} users)", 'info')
             else:
                 self.opt.effective_concurrency = concurrency
                 self.opt.log(f"  ✅ Cluster can handle the load ({concurrency} users, capacity: {sustainable_concurrency} users)", 'success')
@@ -367,7 +381,7 @@ class ThroughputStrategy(OptimizationStrategy):
             self.opt.log("✅ EP CONFIRMED — EP has equal or better throughput than Aggregated", 'decision')
 
     def _should_run_step10(self) -> bool:
-        """Check if Step 10 should run for EP."""
+        """Check if Step 11 should run for EP."""
         return (
             self.opt.achievable_concurrency is not None
             and not self.opt.config.use_achievable_qps
@@ -376,7 +390,7 @@ class ThroughputStrategy(OptimizationStrategy):
         )
 
     def _validate_ep_at_calibrated_load(self):
-        """Step 10: Re-test best EP and Aggregated at calibrated load.
+        """Step 11: Re-test best EP and Aggregated at calibrated load.
 
         Steps 7-8 ran at the original QPS which may overload the cluster.
         This step re-runs at a sustainable rate for realistic numbers.
@@ -591,14 +605,17 @@ class BalancedStrategy(OptimizationStrategy):
         if self.opt._should_stop():
             return
 
-        # Step 9: Latency-bounded throughput maximization (only if enabled)
+        # Step 9: EPP Tuning (before latency search so it uses optimal EPP)
+        self._run_epp_tuning_if_enabled()
+
+        # Step 10: Latency-bounded throughput maximization (only if enabled)
         if self.opt._should_run_latency_bounded_search():
             self.opt._run_latency_bounded_search()
             self.opt.log("", 'info')
 
-        # Step 10: Calibrated load for all architectures
+        # Step 11: Calibrated load for all architectures
         if self._should_run_step10():
-            self.opt.log("STEP 10: Calibrated Load Validation (All Architectures)", 'decision')
+            self.opt.log("STEP 11: Calibrated Load Validation (All Architectures)", 'decision')
             self.opt.log("-" * 80, 'info')
             self._validate_all_at_calibrated_load()
             self.opt.log("", 'info')
@@ -847,6 +864,8 @@ class AggregatedOnlyStrategy(OptimizationStrategy):
         if self.opt._should_stop():
             return
 
+        self._run_epp_tuning_if_enabled()
+
         if self.opt._should_run_latency_bounded_search():
             self.opt._run_latency_bounded_search()
             self.opt.log("", 'info')
@@ -877,6 +896,8 @@ class PDOnlyStrategy(OptimizationStrategy):
         if self.opt._should_stop():
             return
 
+        self._run_epp_tuning_if_enabled()
+
         if self.opt._should_run_latency_bounded_search():
             self.opt._run_latency_bounded_search()
             self.opt.log("", 'info')
@@ -906,6 +927,8 @@ class EPOnlyStrategy(OptimizationStrategy):
         self.opt.log("", 'info')
         if self.opt._should_stop():
             return
+
+        self._run_epp_tuning_if_enabled()
 
         if self.opt._should_run_latency_bounded_search():
             self.opt._run_latency_bounded_search()

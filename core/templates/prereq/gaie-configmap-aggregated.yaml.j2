@@ -27,6 +27,18 @@ data:
 {% if slo_enabled | default(false) %}
       - type: slo-scorer
 {% endif %}
+{% if precise_prefix_cache_enabled | default(false) %}
+      - type: precise-prefix-cache-scorer
+{% endif %}
+{% if active_request_enabled | default(false) %}
+      - type: active-request-scorer
+{% endif %}
+{% if no_hit_lru_enabled | default(false) %}
+      - type: no-hit-lru-scorer
+{% endif %}
+{% if session_aware_enabled | default(false) %}
+      - type: session-aware-scorer
+{% endif %}
       - type: max-score-picker
     schedulingProfiles:
       - name: default
@@ -40,6 +52,22 @@ data:
             weight: {{ kv_cache_weight | default(2.0) }}
           - pluginRef: queue-scorer
             weight: {{ queue_weight | default(2.0) }}
+{% if precise_prefix_cache_enabled | default(false) %}
+          - pluginRef: precise-prefix-cache-scorer
+            weight: {{ precise_prefix_cache_weight | default(3.0) }}
+{% endif %}
+{% if active_request_enabled | default(false) %}
+          - pluginRef: active-request-scorer
+            weight: {{ active_request_weight | default(2.0) }}
+{% endif %}
+{% if no_hit_lru_enabled | default(false) %}
+          - pluginRef: no-hit-lru-scorer
+            weight: {{ no_hit_lru_weight | default(1.0) }}
+{% endif %}
+{% if session_aware_enabled | default(false) %}
+          - pluginRef: session-aware-scorer
+            weight: {{ session_aware_weight | default(2.0) }}
+{% endif %}
           - pluginRef: max-score-picker
 {% if slo_enabled | default(false) %}
       - name: slo

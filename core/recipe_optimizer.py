@@ -8,8 +8,9 @@ Implements the step-by-step recipe approach:
 - Step 6: Search for best aggregated configuration (full workload at each TP)
 - Step 7: Exhaustively test feasible P/D splits near the ideal ratio
 - Step 8: Architecture comparison (PD vs Aggregated, no new tests)
-- Step 9: Latency-bounded throughput maximization (Optuna search, conditional)
-- Step 10: Calibrated load validation (conditional)
+- Step 9: EPP Tuning (conditional, smart weight sweep)
+- Step 10: Latency-bounded throughput maximization (conditional)
+- Step 11: Calibrated load validation (conditional)
 
 TP values that can't fit the model (based on model size and GPU VRAM) are skipped.
 """
@@ -90,7 +91,7 @@ class RecipeOptimizerConfig:
     # If True, scale down concurrent users to achievable concurrency when cluster capacity is insufficient
     use_achievable_qps: bool = False
 
-    # Latency-bounded throughput maximization (Step 9)
+    # Latency-bounded throughput maximization (Step 10)
     latency_constraint_enabled: bool = False
     latency_constraint_ms: int = 500
     latency_constraint_percentile: str = 'p90'  # p50, p90, p95, p99
@@ -106,6 +107,8 @@ class RecipeOptimizerConfig:
 
     # Prefix cache simulation (0 = disabled, 1-100 = hit ratio percentage)
     prefix_cache_hit_pct: int = 0
+    prefix_cache_mode: str = 'identical'  # 'identical' = N% same prompt, 'shared_prefix' = all prompts share N% prefix, 'multi_group' = N groups
+    prefix_cache_groups: int = 5  # Number of distinct prompt groups for multi_group mode
     prefix_cache_seed: Optional[int] = None  # Deterministic seed, stored in DB for reproducibility
 
     # Advanced vLLM settings (user overrides)
@@ -331,10 +334,10 @@ class RecipeOptimizer:
         self.aggregated_tp: Optional[int] = None
         self.aggregated_gpus: Optional[int] = None
 
-        # Step 9: Latency-bounded throughput maximization
+        # Step 10: Latency-bounded throughput maximization
         self.latency_bounded_result = None
 
-        # Step 10: Calibrated Load validation (only when user didn't enable achievable QPS)
+        # Step 11: Calibrated Load validation (only when user didn't enable achievable QPS)
         # Sustainable throughput in req/s (for logging/reporting)
         self.sustainable_throughput_rps: Optional[float] = None
         # Sustainable concurrency in concurrent-user units (for test configs)
@@ -548,6 +551,63 @@ class RecipeOptimizer:
                         self.log(f"   ⚠️  Config total_gpus={self.config.total_gpus} "
                                  f"but completed tests used {max_inferred} — correcting", 'warning')
                         self.config.total_gpus = max_inferred
+
+                    # Restore EPP benchmark results from completed step11-epp tests
+                    epp_tests = {k: v for k, v in self.completed_tests.items() if k.startswith('step11-epp-')}
+                    if epp_tests:
+                        for test_name, row_data in epp_tests.items():
+                            suffix = test_name.replace('step11-epp-', '')
+                            if suffix.startswith('aggregated-'):
+                                arch = 'aggregated'
+                                combo_name = suffix[len('aggregated-'):]
+                            elif suffix.startswith('pd-'):
+                                arch = 'pd'
+                                combo_name = suffix[len('pd-'):]
+                            else:
+                                continue
+                            result = self._make_test_result_from_db(row_data)
+                            weights = {}
+                            tc_raw = row_data.get('test_config_json')
+                            if tc_raw:
+                                try:
+                                    tc = _json.loads(tc_raw)
+                                    ec = tc.get('epp_config', {})
+                                    plugins = ec.get('plugins', {})
+                                    if plugins:
+                                        weights = {
+                                            'prefix_cache_weight': plugins.get('prefix_cache', {}).get('weight', 3.0),
+                                            'kv_cache_weight': plugins.get('kv_cache', {}).get('weight', 2.0),
+                                            'queue_weight': plugins.get('queue', {}).get('weight', 2.0),
+                                            'slo_enabled': False,
+                                        }
+                                except Exception:
+                                    pass
+                            if not weights:
+                                manifest_raw = row_data.get('manifests_yaml')
+                                if manifest_raw:
+                                    try:
+                                        manifests = _json.loads(manifest_raw)
+                                        for mk, mv in manifests.items():
+                                            if 'configmap' in mk:
+                                                import re as _re2
+                                                w_matches = _re2.findall(r'weight:\s*([\d.]+)', mv)
+                                                if len(w_matches) >= 3:
+                                                    weights = {
+                                                        'prefix_cache_weight': float(w_matches[0]),
+                                                        'kv_cache_weight': float(w_matches[1]) if 'kv-cache' in mv else 0,
+                                                        'queue_weight': float(w_matches[1] if 'kv-cache' not in mv else w_matches[2]),
+                                                        'slo_enabled': False,
+                                                    }
+                                    except Exception:
+                                        pass
+                            if not weights:
+                                preset_weights = {'cache-heavy': (5,1,1), 'queue-heavy': (1,1,5), 'kv-heavy': (2,5,1), 'equal': (2,2,2)}
+                                pw = preset_weights.get(combo_name, (3,2,2))
+                                weights = {'prefix_cache_weight': pw[0], 'kv_cache_weight': pw[1], 'queue_weight': pw[2], 'slo_enabled': False}
+                            if arch not in self.epp_benchmark_results:
+                                self.epp_benchmark_results[arch] = []
+                            self.epp_benchmark_results[arch].append((combo_name, weights, result))
+                        self.log(f"   📋 Restored EPP tuning results: {', '.join(f'{a}({len(r)})' for a, r in self.epp_benchmark_results.items())}", 'info')
         except Exception as e:
             self.log(f"⚠️  Could not load previous results: {e}", 'warning')
 
@@ -846,10 +906,6 @@ class RecipeOptimizer:
         # Steps 4-11: Dispatch to goal-specific strategy
         strategy = self._get_strategy()
         strategy.execute()
-
-        # Step 11: EPP tuning (conditional, after all other steps)
-        if self.config.epp_benchmark and not self._should_stop():
-            self._benchmark_epp_strategies()
 
         # Return results
         return self._build_results()
@@ -1433,9 +1489,9 @@ class RecipeOptimizer:
                 self.effective_concurrency = int(self.config.qps)
                 self.log(f"  ℹ️  Using original concurrency ({concurrency:.0f}) for Steps 7-8 — expect overload", 'info')
                 if self.config.latency_constraint_enabled:
-                    self.log(f"  ℹ️  Step 9 will find max throughput under latency SLA", 'info')
+                    self.log(f"  ℹ️  Step 10 will find max throughput under latency SLA", 'info')
                 else:
-                    self.log(f"  ℹ️  Step 10 will re-test at sustainable load ({sustainable_concurrency} users)", 'info')
+                    self.log(f"  ℹ️  Step 11 will re-test at sustainable load ({sustainable_concurrency} users)", 'info')
         else:
             self.effective_concurrency = int(self.config.qps)
             self.log(f"  ✅ Cluster can handle the load ({concurrency:.0f} users, capacity: {sustainable_concurrency} users)", 'success')
@@ -1785,12 +1841,12 @@ class RecipeOptimizer:
             self.log("✅ PD CONFIRMED — PD has equal or better TTFT than Aggregated", 'decision')
 
     def _should_run_latency_bounded_search(self) -> bool:
-        """Check if Step 9 (latency-bounded throughput maximization) should run."""
+        """Check if Step 10 (latency-bounded throughput maximization) should run."""
         return self.config.latency_constraint_enabled
 
     def _run_latency_bounded_search(self):
         """
-        Step 9: Find maximum throughput under a user-defined latency SLA.
+        Step 10: Find maximum throughput under a user-defined latency SLA.
 
         Uses exponential search + bisection over concurrency levels for both
         the best PD and best aggregated configurations.  The starting
@@ -1801,7 +1857,7 @@ class RecipeOptimizer:
         )
 
         self.log("=" * 60, 'info')
-        self.log("Step 9: Latency-Bounded Throughput Maximization", 'info')
+        self.log("Step 10: Latency-Bounded Throughput Maximization", 'info')
         self.log("=" * 60, 'info')
 
         constraint = LatencyConstraintConfig(
@@ -1904,7 +1960,7 @@ class RecipeOptimizer:
 
         # --- Search Aggregated configs ---
         # Test the primary aggregated TP (selected by objective in Step 6)
-        # AND the best-throughput TP if different, since Step 9 maximizes throughput under SLA
+        # AND the best-throughput TP if different, since Step 10 maximizes throughput under SLA
         agg_configs_to_test = []
         if self.aggregated_tp:
             agg_configs_to_test.append((self.aggregated_tp, self.aggregated_gpus, f"aggregated-tp{self.aggregated_tp}"))
@@ -2011,13 +2067,13 @@ class RecipeOptimizer:
             )
 
     def _should_run_step10(self) -> bool:
-        """Check if Step 10 (calibrated load validation) should run.
+        """Check if Step 11 (calibrated load validation) should run.
 
-        Step 10 runs when:
+        Step 11 runs when:
         1. The concurrency implies load beyond sustainable QPS
         2. The user did NOT enable 'use_achievable_qps'
         3. We have PD results from Step 7
-        4. Step 9 (latency-bounded search) did NOT run — it already
+        4. Step 10 (latency-bounded search) did NOT run — it already
            explores concurrency levels including calibrated load
         """
         return (
@@ -2029,7 +2085,7 @@ class RecipeOptimizer:
 
     def _validate_at_calibrated_load(self):
         """
-        Step 10: Re-test best PD and Aggregated at sustainable concurrency.
+        Step 11: Re-test best PD and Aggregated at sustainable concurrency.
 
         Steps 7-8 ran at the user's original concurrency which overloads the cluster.
         This step re-runs the best config at a sustainable level to show
@@ -2587,21 +2643,21 @@ class RecipeOptimizer:
         return self._apply_advanced_vllm(cfg)
 
     def _benchmark_epp_strategies(self):
-        """Step 11: EPP Tuning — smart weight sweep per architecture.
+        """Step 9: EPP Tuning — smart weight sweep per architecture.
 
         Tests 3 EPP weight combinations on the best config from each
         architecture (PD and Aggregated), using the optimal concurrency
-        from Step 9/10. Swaps only the EPP configmap between tests.
+        from Step 7/8. Swaps only the EPP configmap between tests.
         """
         if not self.config.epp_benchmark:
             return
 
         self.log("\n" + "=" * 80, 'info')
-        self.log("STEP 11: EPP Tuning (Smart Weight Sweep)", 'decision')
+        self.log("STEP 9: EPP Tuning (Smart Weight Sweep)", 'decision')
         self.log("=" * 80, 'info')
 
         # Build weight combos based on workload
-        has_sla = self.config.latency_constraint_enabled
+        has_sla = False
         isl_osl_ratio = self.config.isl / max(self.config.osl, 1)
         base = self._build_epp_config()
 
@@ -2621,7 +2677,7 @@ class RecipeOptimizer:
         if self.pareto_results:
             best_split, best_pd_result = min(self.pareto_results, key=lambda x: x[1].ttft_p90 if x[1].ttft_p90 else 1e9)
             pd_cfg = self._create_pd_config(best_split)
-            # Use optimal concurrency from Step 9 if available
+            # Use optimal concurrency from Step 10 if available
             pd_concurrency = int(self.config.qps)
             for arch_key, sr in getattr(self, 'latency_search_results', {}).items():
                 if 'pd' in arch_key and sr and sr.optimal_concurrency:
@@ -2658,6 +2714,10 @@ class RecipeOptimizer:
 
         self.log(f"  Weight combos: {', '.join(n for n, _ in weight_combos)}", 'info')
 
+        if self.epp_benchmark_results:
+            self.log(f"  EPP tuning already completed (resumed from DB) — skipping re-run", 'info')
+            return
+
         self.epp_benchmark_results = {}
 
         from core import PrereqManager
@@ -2677,7 +2737,7 @@ class RecipeOptimizer:
                 if self._should_stop():
                     break
 
-                # Clean up any leftover step11 LWS from previous combo
+                # Clean up any leftover step9 EPP LWS from previous combo
                 try:
                     self.orchestrator.deployment_manager.kubectl.run(
                         ['delete', 'lws', '-l', 'component=inferecipe-test',
@@ -2798,13 +2858,46 @@ class RecipeOptimizer:
                 best_name = min(arch_results, key=lambda x: x[2].ttft_p90 or float('inf'))[0]
                 self.log(f"  Best {arch}: {best_name}", 'success')
 
-        # Restore user's original EPP config for each architecture tested
-        for arch, _, _ in configs_to_test:
-            prereq_mgr.update_epp_config(
-                architecture=arch,
-                epp_config=self._build_epp_config(),
-                log_callback=lambda msg: self.log(msg, 'info')
+    def _apply_best_epp_config(self):
+        """After EPP tuning, deploy the best-performing EPP weights for subsequent steps."""
+        if not self.epp_benchmark_results:
+            return
+        for arch, results in self.epp_benchmark_results.items():
+            if not results:
+                continue
+            best_name, best_weights, _ = min(results, key=lambda x: x[2].ttft_p90 or float('inf'))
+            self.log(f"  Applying best EPP config for {arch}: {best_name} "
+                     f"(cache={best_weights['prefix_cache_weight']}, kv={best_weights['kv_cache_weight']}, "
+                     f"queue={best_weights['queue_weight']})", 'success')
+            epp_config = {
+                'preset': 'custom',
+                'plugins': {
+                    'prefix_cache': {'enabled': True, 'weight': best_weights['prefix_cache_weight']},
+                    'kv_cache': {'enabled': True, 'weight': best_weights['kv_cache_weight']},
+                    'queue': {'enabled': True, 'weight': best_weights['queue_weight']},
+                    'slo': {'enabled': False},
+                }
+            }
+            from core import PrereqManager
+            mgr = PrereqManager(
+                namespace=self.config.namespace,
+                kubectl_runner=self.orchestrator.deployment_manager.kubectl
             )
+            mgr.update_epp_config(arch, epp_config, log_callback=self.log)
+
+        winner = self.epp_benchmark_results.get('aggregated') or self.epp_benchmark_results.get('pd')
+        if winner:
+            _, best_w, _ = min(winner, key=lambda x: x[2].ttft_p90 or float('inf'))
+            self.config.epp_preset = 'custom'
+            if not self.config.epp_config:
+                self.config.epp_config = {}
+            self.config.epp_config['preset'] = 'custom'
+            self.config.epp_config['plugins'] = {
+                'prefix_cache': {'enabled': True, 'weight': best_w['prefix_cache_weight']},
+                'kv_cache': {'enabled': True, 'weight': best_w['kv_cache_weight']},
+                'queue': {'enabled': True, 'weight': best_w['queue_weight']},
+                'slo': {'enabled': False},
+            }
 
     def _build_results(self) -> Dict[str, Any]:
         """Build optimization results summary."""
@@ -2850,7 +2943,7 @@ class RecipeOptimizer:
                 'ttft_p90': self.aggregated_result.ttft_p90 if self.aggregated_result else None,
                 'throughput_p90': self.aggregated_result.throughput_p90 if self.aggregated_result else None,
             } if self.aggregated_result else None,
-            # Step 9: Latency-bounded throughput maximization
+            # Step 10: Latency-bounded throughput maximization
             'latency_bounded_result': {
                 'optimal_concurrency': self.latency_bounded_result.optimal_concurrency,
                 'achieved_throughput': self.latency_bounded_result.achieved_throughput,
@@ -2869,7 +2962,7 @@ class RecipeOptimizer:
                 }
                 for arch, res in getattr(self, 'latency_search_results', {}).items()
             } or None,
-            # Step 10: Calibrated Load results
+            # Step 11: Calibrated Load results
             'sustainable_throughput_rps': self.sustainable_throughput_rps,
             'calibrated_concurrency': self.achievable_concurrency,
             'calibrated_qps': self.sustainable_throughput_rps,  # backwards compat (req/s)
@@ -2905,7 +2998,7 @@ class RecipeOptimizer:
             } if self.calibrated_ep_result else None,
             # Optimization goal for report rendering
             'optimization_goal': self.config.objective,
-            # Step 11: EPP tuning results (per architecture)
+            # Step 9: EPP tuning results (per architecture)
             'epp_tuning': {
                 arch: [
                     {
@@ -2944,7 +3037,9 @@ class RecipeOptimizer:
         osl = self.config.osl
 
         # Compute deterministic seed from config (includes stdev so different variation = different dataset)
-        seed_input = f"{self.config.model_name}:{isl}:{osl}:{hit_pct}:{self.config.isl_stdev or 0}:{self.config.osl_stdev or 0}"
+        cache_mode = self.config.prefix_cache_mode or 'identical'
+        groups_str = str(self.config.prefix_cache_groups or 5) if cache_mode == 'multi_group' else '0'
+        seed_input = f"{self.config.model_name}:{isl}:{osl}:{hit_pct}:{self.config.isl_stdev or 0}:{self.config.osl_stdev or 0}:{cache_mode}:{groups_str}"
         if self.config.prefix_cache_seed is not None:
             seed = self.config.prefix_cache_seed
         else:
@@ -3008,34 +3103,83 @@ class RecipeOptimizer:
         isl_stdev = self.config.isl_stdev or 0
         osl_stdev = self.config.osl_stdev or 0
 
-        # Calculate split
-        num_shared = int(pool_size * hit_pct / 100)
-        num_unique = pool_size - num_shared
+        cache_mode = self.config.prefix_cache_mode or 'identical'
+        self.log(f"   Mode: {cache_mode}", 'info')
 
         # Generate dataset
         output_dir = Path(os.environ.get('HOME_STORAGE_DIR', '/mnt/storage')) / 'prefix-cache-datasets'
         output_dir.mkdir(parents=True, exist_ok=True)
-        dataset_path = output_dir / f'prefix-cache-{seed}.jsonl'
+        dataset_path = output_dir / f'prefix-cache-{cache_mode}-{seed}.jsonl'
 
         if dataset_path.exists():
             self.log(f"   Reusing existing dataset: {dataset_path}", 'info')
         else:
             rows = []
-            # Shared rows: fixed prompt and fixed OSL (identical for cache hits)
-            for _ in range(num_shared):
-                rows.append({"prompt": shared_prompt, "output_tokens_count": osl})
-            # Unique rows: vary length around ISL/OSL using stdev if configured
-            for i in range(num_unique):
-                unique_rng = random.Random(seed + i + 1)
-                if isl_stdev > 0:
-                    row_isl = max(16, int(unique_rng.gauss(isl, isl_stdev)))
-                else:
-                    row_isl = isl
-                if osl_stdev > 0:
-                    row_osl = max(1, int(unique_rng.gauss(osl, osl_stdev)))
-                else:
-                    row_osl = osl
-                rows.append({"prompt": make_prompt(row_isl, unique_rng), "output_tokens_count": row_osl})
+
+            if cache_mode == 'shared_prefix':
+                shared_token_count = int(isl * hit_pct / 100)
+                unique_token_count = isl - shared_token_count
+                shared_prefix_text = make_prompt(shared_token_count, random.Random(seed))
+                self.log(f"   Shared prefix: {shared_token_count} tokens, unique suffix: {unique_token_count} tokens", 'info')
+
+                for i in range(pool_size):
+                    suffix_rng = random.Random(seed + i + 1)
+                    if isl_stdev > 0:
+                        row_unique = max(1, int(suffix_rng.gauss(unique_token_count, isl_stdev * unique_token_count / isl)))
+                    else:
+                        row_unique = unique_token_count
+                    suffix_text = make_prompt(row_unique, suffix_rng)
+                    prompt = shared_prefix_text + ' ' + suffix_text
+                    if osl_stdev > 0:
+                        row_osl = max(1, int(suffix_rng.gauss(osl, osl_stdev)))
+                    else:
+                        row_osl = osl
+                    rows.append({"prompt": prompt, "output_tokens_count": row_osl})
+
+            elif cache_mode == 'multi_group':
+                num_groups = max(2, self.config.prefix_cache_groups or 5)
+                num_grouped = int(pool_size * hit_pct / 100)
+                num_unique = pool_size - num_grouped
+                per_group = max(1, num_grouped // num_groups)
+                self.log(f"   Multi-group: {num_groups} groups, {per_group} requests/group, {num_unique} unique", 'info')
+
+                group_prompts = []
+                for g in range(num_groups):
+                    group_rng = random.Random(seed + 100000 + g)
+                    group_prompts.append(make_prompt(isl, group_rng))
+
+                for g in range(num_groups):
+                    for _ in range(per_group):
+                        rows.append({"prompt": group_prompts[g], "output_tokens_count": osl})
+
+                for i in range(num_unique):
+                    unique_rng = random.Random(seed + i + 1)
+                    if isl_stdev > 0:
+                        row_isl = max(16, int(unique_rng.gauss(isl, isl_stdev)))
+                    else:
+                        row_isl = isl
+                    if osl_stdev > 0:
+                        row_osl = max(1, int(unique_rng.gauss(osl, osl_stdev)))
+                    else:
+                        row_osl = osl
+                    rows.append({"prompt": make_prompt(row_isl, unique_rng), "output_tokens_count": row_osl})
+
+            else:
+                num_shared = int(pool_size * hit_pct / 100)
+                num_unique = pool_size - num_shared
+                for _ in range(num_shared):
+                    rows.append({"prompt": shared_prompt, "output_tokens_count": osl})
+                for i in range(num_unique):
+                    unique_rng = random.Random(seed + i + 1)
+                    if isl_stdev > 0:
+                        row_isl = max(16, int(unique_rng.gauss(isl, isl_stdev)))
+                    else:
+                        row_isl = isl
+                    if osl_stdev > 0:
+                        row_osl = max(1, int(unique_rng.gauss(osl, osl_stdev)))
+                    else:
+                        row_osl = osl
+                    rows.append({"prompt": make_prompt(row_isl, unique_rng), "output_tokens_count": row_osl})
 
             rng.shuffle(rows)
 

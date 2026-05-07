@@ -54,6 +54,16 @@ class TestResult:
     test_config_json: Optional[str] = None
 
     @property
+    def throughput_mean(self) -> Optional[float]:
+        if self.metrics_json:
+            try:
+                import json
+                return json.loads(self.metrics_json).get('throughput_mean')
+            except Exception:
+                pass
+        return None
+
+    @property
     def total_gpus(self) -> int:
         """Calculate total GPUs used."""
         if self.architecture == 'pd':

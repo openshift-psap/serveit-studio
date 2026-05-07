@@ -133,7 +133,10 @@ class PrereqManager:
 
             if all(status.values()):
                 log(f'✅ All prerequisites for {architecture} already deployed')
-                return self._check_prereqs_ready(config['gaie_name'], log_callback=log)
+                if self._check_prereqs_ready(config['gaie_name'], log_callback=log):
+                    return True
+                log(f'   ⏳ Waiting for GAIE deployment to become ready...')
+                return self._wait_for_deployment_ready(config['gaie_name'], timeout=60, log_callback=log)
 
             log(f'📦 Deploying prerequisite infrastructure for {architecture} architecture...')
 
@@ -153,9 +156,25 @@ class PrereqManager:
                     'kv_cache_weight': plugins.get('kv_cache', {}).get('weight', 2.0) if plugins.get('kv_cache', {}).get('enabled', True) else 0,
                     'queue_weight': plugins.get('queue', {}).get('weight', 2.0) if plugins.get('queue', {}).get('enabled', True) else 0,
                     'slo_enabled': plugins.get('slo', {}).get('enabled', False),
+                    'precise_prefix_cache_enabled': plugins.get('precise_prefix_cache', {}).get('enabled', False),
+                    'precise_prefix_cache_weight': plugins.get('precise_prefix_cache', {}).get('weight', 3.0) if plugins.get('precise_prefix_cache', {}).get('enabled', False) else 0,
+                    'active_request_enabled': plugins.get('active_request', {}).get('enabled', False),
+                    'active_request_weight': plugins.get('active_request', {}).get('weight', 2.0) if plugins.get('active_request', {}).get('enabled', False) else 0,
+                    'no_hit_lru_enabled': plugins.get('no_hit_lru', {}).get('enabled', False),
+                    'no_hit_lru_weight': plugins.get('no_hit_lru', {}).get('weight', 1.0) if plugins.get('no_hit_lru', {}).get('enabled', False) else 0,
+                    'session_aware_enabled': plugins.get('session_aware', {}).get('enabled', False),
+                    'session_aware_weight': plugins.get('session_aware', {}).get('weight', 2.0) if plugins.get('session_aware', {}).get('enabled', False) else 0,
                 }
             else:
                 epp_weights = epp_presets.get(epp_preset, epp_presets['balanced'])
+                epp_weights.setdefault('precise_prefix_cache_enabled', False)
+                epp_weights.setdefault('precise_prefix_cache_weight', 0)
+                epp_weights.setdefault('active_request_enabled', False)
+                epp_weights.setdefault('active_request_weight', 0)
+                epp_weights.setdefault('no_hit_lru_enabled', False)
+                epp_weights.setdefault('no_hit_lru_weight', 0)
+                epp_weights.setdefault('session_aware_enabled', False)
+                epp_weights.setdefault('session_aware_weight', 0)
 
             # Template parameters
             context = {
@@ -171,6 +190,14 @@ class PrereqManager:
                 'kv_cache_weight': epp_weights['kv_cache_weight'],
                 'queue_weight': epp_weights['queue_weight'],
                 'slo_enabled': epp_weights['slo_enabled'],
+                'precise_prefix_cache_enabled': epp_weights['precise_prefix_cache_enabled'],
+                'precise_prefix_cache_weight': epp_weights['precise_prefix_cache_weight'],
+                'active_request_enabled': epp_weights['active_request_enabled'],
+                'active_request_weight': epp_weights['active_request_weight'],
+                'no_hit_lru_enabled': epp_weights['no_hit_lru_enabled'],
+                'no_hit_lru_weight': epp_weights['no_hit_lru_weight'],
+                'session_aware_enabled': epp_weights['session_aware_enabled'],
+                'session_aware_weight': epp_weights['session_aware_weight'],
                 'max_prefix_blocks': epp.get('maxPrefixBlocksToMatch', 256),
                 'lru_capacity': epp.get('lruCapacityPerServer', 31250),
                 'non_cached_tokens': epp.get('nonCachedTokens', 16),
@@ -300,7 +327,32 @@ class PrereqManager:
             'queue_balanced': {'prefix_cache_weight': 1.0, 'kv_cache_weight': 1.0, 'queue_weight': 3.0, 'slo_enabled': False},
             'latency_aware': {'prefix_cache_weight': 3.0, 'kv_cache_weight': 2.0, 'queue_weight': 2.0, 'slo_enabled': True},
         }
-        epp_weights = epp_presets.get(epp_preset, epp_presets['balanced'])
+        if epp_preset == 'custom' and epp.get('plugins'):
+            plugins = epp['plugins']
+            epp_weights = {
+                'prefix_cache_weight': plugins.get('prefix_cache', {}).get('weight', 3.0) if plugins.get('prefix_cache', {}).get('enabled', True) else 0,
+                'kv_cache_weight': plugins.get('kv_cache', {}).get('weight', 2.0) if plugins.get('kv_cache', {}).get('enabled', True) else 0,
+                'queue_weight': plugins.get('queue', {}).get('weight', 2.0) if plugins.get('queue', {}).get('enabled', True) else 0,
+                'slo_enabled': plugins.get('slo', {}).get('enabled', False),
+                'precise_prefix_cache_enabled': plugins.get('precise_prefix_cache', {}).get('enabled', False),
+                'precise_prefix_cache_weight': plugins.get('precise_prefix_cache', {}).get('weight', 3.0) if plugins.get('precise_prefix_cache', {}).get('enabled', False) else 0,
+                'active_request_enabled': plugins.get('active_request', {}).get('enabled', False),
+                'active_request_weight': plugins.get('active_request', {}).get('weight', 2.0) if plugins.get('active_request', {}).get('enabled', False) else 0,
+                'no_hit_lru_enabled': plugins.get('no_hit_lru', {}).get('enabled', False),
+                'no_hit_lru_weight': plugins.get('no_hit_lru', {}).get('weight', 1.0) if plugins.get('no_hit_lru', {}).get('enabled', False) else 0,
+                'session_aware_enabled': plugins.get('session_aware', {}).get('enabled', False),
+                'session_aware_weight': plugins.get('session_aware', {}).get('weight', 2.0) if plugins.get('session_aware', {}).get('enabled', False) else 0,
+            }
+        else:
+            epp_weights = epp_presets.get(epp_preset, epp_presets['balanced'])
+            epp_weights.setdefault('precise_prefix_cache_enabled', False)
+            epp_weights.setdefault('precise_prefix_cache_weight', 0)
+            epp_weights.setdefault('active_request_enabled', False)
+            epp_weights.setdefault('active_request_weight', 0)
+            epp_weights.setdefault('no_hit_lru_enabled', False)
+            epp_weights.setdefault('no_hit_lru_weight', 0)
+            epp_weights.setdefault('session_aware_enabled', False)
+            epp_weights.setdefault('session_aware_weight', 0)
 
         context = {
             'namespace': self.namespace,
@@ -310,6 +362,14 @@ class PrereqManager:
             'kv_cache_weight': epp_weights['kv_cache_weight'],
             'queue_weight': epp_weights['queue_weight'],
             'slo_enabled': epp_weights['slo_enabled'],
+            'precise_prefix_cache_enabled': epp_weights['precise_prefix_cache_enabled'],
+            'precise_prefix_cache_weight': epp_weights['precise_prefix_cache_weight'],
+            'active_request_enabled': epp_weights['active_request_enabled'],
+            'active_request_weight': epp_weights['active_request_weight'],
+            'no_hit_lru_enabled': epp_weights['no_hit_lru_enabled'],
+            'no_hit_lru_weight': epp_weights['no_hit_lru_weight'],
+            'session_aware_enabled': epp_weights['session_aware_enabled'],
+            'session_aware_weight': epp_weights['session_aware_weight'],
             'max_prefix_blocks': epp.get('maxPrefixBlocksToMatch', 256),
             'lru_capacity': epp.get('lruCapacityPerServer', 31250),
             'non_cached_tokens': epp.get('nonCachedTokens', 16),

@@ -362,7 +362,7 @@ metadata:
     component: storage
 spec:
   accessModes:
-    - ReadWriteOnce
+    - ReadWriteMany
   resources:
     requests:
       storage: ${STORAGE_SIZE}

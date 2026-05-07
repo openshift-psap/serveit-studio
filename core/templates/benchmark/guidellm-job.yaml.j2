@@ -1,0 +1,88 @@
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: guidellm-{{ test_id | replace('_', '-') | truncate(50, True, '') }}
+  namespace: {{ namespace }}
+  labels:
+    component: inferecipe-benchmark
+    test-id: {{ test_id }}
+spec:
+  backoffLimit: 0
+  ttlSecondsAfterFinished: 120
+  template:
+    metadata:
+      labels:
+        component: inferecipe-benchmark
+        test-id: {{ test_id }}
+    spec:
+      serviceAccountName: llm-d-modelserver
+      restartPolicy: Never
+      containers:
+      - name: guidellm
+        image: {{ image }}
+        command:
+        - guidellm
+        - benchmark
+        - run
+        - --target
+        - "{{ endpoint }}"
+        - --model
+        - "{{ model_name }}"
+        - --processor
+        - "{{ model_name }}"
+        - --data
+        - "{{ data_payload }}"
+        - --backend-kwargs
+        - '{"http2": false}'
+        - --request-format
+        - "{{ request_format }}"
+        - --rate-type
+        - "{{ rate_type }}"
+        - --rate
+        - "{{ rate }}"
+{% if stop_mode == 'max_requests' and max_requests %}
+        - --max-requests
+        - "{{ max_requests }}"
+{% else %}
+        - --max-seconds
+        - "{{ test_duration }}"
+{% endif %}
+        - --output-path
+        - "{{ output_path }}"
+        - --warmup
+        - "{{ warmup }}"
+        - --sample-requests
+        - "20"
+{% if data_args %}
+        - --data-args
+        - "{{ data_args }}"
+{% endif %}
+{% if column_mapper %}
+        - --data-column-mapper
+        - '{{ column_mapper }}'
+{% endif %}
+        env:
+        - name: HF_HOME
+          value: "/mnt/storage/.cache/huggingface"
+        - name: HF_DATASETS_CACHE
+          value: "/mnt/storage/.cache/huggingface/datasets"
+        - name: TRANSFORMERS_CACHE
+          value: "/mnt/storage/.cache/huggingface/transformers"
+{% if hf_token %}
+        - name: HF_TOKEN
+          value: "{{ hf_token }}"
+{% endif %}
+        resources:
+          requests:
+            cpu: "1"
+            memory: "2Gi"
+          limits:
+            cpu: "4"
+            memory: "8Gi"
+        volumeMounts:
+        - name: storage
+          mountPath: /mnt/storage
+      volumes:
+      - name: storage
+        persistentVolumeClaim:
+          claimName: {{ pvc_name }}

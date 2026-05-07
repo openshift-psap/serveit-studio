@@ -99,9 +99,10 @@ class ReportAnalyzer:
                     'count': len(arch_results),
                     'avg_ttft_p90': sum(r.ttft_p90 for r in arch_results) / len(arch_results),
                     'avg_throughput_p90': sum(r.throughput_p90 for r in arch_results) / len(arch_results),
+                    'avg_throughput_mean': sum((r.throughput_mean or r.throughput_p90) for r in arch_results) / len(arch_results),
                     'avg_gpus': sum(r.total_gpus for r in arch_results) / len(arch_results),
                     'best_ttft': min(r.ttft_p90 for r in arch_results),
-                    'best_throughput': max(r.throughput_p90 for r in arch_results),
+                    'best_throughput': max((r.throughput_mean or r.throughput_p90) for r in arch_results),
                 }
 
         best_ttft_config = min(successful, key=lambda r: r.ttft_p90)
@@ -334,6 +335,7 @@ class ReportAnalyzer:
                 'decode_pods': r.decode_pods,
                 'tp': r.tensor_parallelism,
                 'ttft_p90': round(r.ttft_p90, 1),
+                'throughput_mean': round(r.throughput_mean, 2) if r.throughput_mean else None,
                 'throughput_p90': round(r.throughput_p90, 2),
                 'gpus': r.total_gpus,
                 'ratio': f"{r.prefill_pods}:{r.decode_pods}",
@@ -432,13 +434,23 @@ class ReportAnalyzer:
                             agg_c = _jj.loads(best_agg.test_config_json).get('num_users')
                         except Exception:
                             pass
+                    agg_manifest_types = []
+                    if best_agg.manifests_yaml:
+                        try:
+                            import json as _jm
+                            agg_manifest_types = list(_jm.loads(best_agg.manifests_yaml).keys())
+                        except Exception:
+                            pass
                     pctl_data['aggregated'] = {
                         'config_name': best_agg.display_label,
+                        'test_id': best_agg.config_name,
                         'ttft': round(getattr(best_agg, ttft_field), 1),
+                        'throughput_mean': round(best_agg.throughput_mean, 2) if best_agg.throughput_mean else None,
                         'throughput': round(getattr(best_agg, tput_field, 0) or 0, 2),
                         'gpus': best_agg.total_gpus,
                         'tp': best_agg.tensor_parallelism,
                         'concurrency': agg_c,
+                        'manifest_types': agg_manifest_types,
                     }
             # Best PD at this percentile
             if step7_tests:
@@ -452,14 +464,24 @@ class ReportAnalyzer:
                             pd_c = _jj.loads(best_pd.test_config_json).get('num_users')
                         except Exception:
                             pass
+                    pd_manifest_types = []
+                    if best_pd.manifests_yaml:
+                        try:
+                            import json as _jm2
+                            pd_manifest_types = list(_jm2.loads(best_pd.manifests_yaml).keys())
+                        except Exception:
+                            pass
                     pctl_data['pd'] = {
                         'config_name': best_pd.display_label,
+                        'test_id': best_pd.config_name,
                         'ttft': round(getattr(best_pd, ttft_field), 1),
+                        'throughput_mean': round(best_pd.throughput_mean, 2) if best_pd.throughput_mean else None,
                         'throughput': round(getattr(best_pd, tput_field, 0) or 0, 2),
                         'gpus': best_pd.total_gpus,
                         'prefill_pods': best_pd.prefill_pods,
                         'decode_pods': best_pd.decode_pods,
                         'concurrency': pd_c,
+                        'manifest_types': pd_manifest_types,
                     }
             if pctl_data:
                 best_by_percentile[pctl] = pctl_data
@@ -705,15 +727,16 @@ class ReportAnalyzer:
                 continue
             scatter_data['traces'].append({
                 'x': [r.ttft_p90 for r in arch_res],
-                'y': [r.throughput_p90 for r in arch_res],
+                'y': [(r.throughput_mean or r.throughput_p90) for r in arch_res],
                 'sizes': [r.total_gpus * 3 for r in arch_res],
                 'text': [
                     f"{r.display_label}<br>"
                     f"TTFT: {r.ttft_p90:.1f}ms<br>"
-                    f"Throughput: {r.throughput_p90:.2f} req/s<br>"
+                    f"Throughput Mean: {(r.throughput_mean or r.throughput_p90):.2f} req/s<br>"
                     f"GPUs: {r.total_gpus}"
                     for r in arch_res
                 ],
+                'test_ids': [r.config_name for r in arch_res],
                 'name': arch.upper(),
                 'color': color,
             })
@@ -723,7 +746,7 @@ class ReportAnalyzer:
         eff_data = {'configs': [], 'values': [], 'colors': []}
         if successful:
             with_eff = sorted(
-                [(r.display_label, r.throughput_p90 / r.total_gpus, r.architecture) for r in successful],
+                [(r.display_label, (r.throughput_mean or r.throughput_p90) / r.total_gpus, r.architecture) for r in successful],
                 key=lambda x: x[1], reverse=True
             )[:15]
             eff_data['configs'] = [label for label, _, _ in with_eff]
@@ -738,7 +761,7 @@ class ReportAnalyzer:
             for arch, data in stats['by_architecture'].items():
                 arch_comp['architectures'].append(arch.upper())
                 arch_comp['avg_ttft'].append(round(data['avg_ttft_p90'], 2))
-                arch_comp['avg_throughput'].append(round(data['avg_throughput_p90'], 2))
+                arch_comp['avg_throughput'].append(round(data.get('avg_throughput_mean', data['avg_throughput_p90']), 2))
                 arch_comp['avg_gpus'].append(round(data['avg_gpus'], 1))
                 arch_comp['best_ttft'].append(round(data['best_ttft'], 2))
                 arch_comp['colors'].append(arch_colors.get(arch, '#999'))
@@ -844,9 +867,9 @@ class ReportAnalyzer:
                                     calibrated_qps_value=None, concurrency=None,
                                     total_gpus_available=None,
                                     gpu_sizing=None):
-        """Build Step 10 calibrated QPS comparison data for the report.
+        """Build Step 11 calibrated QPS comparison data for the report.
 
-        Step 10 re-tests the best configs at a sustainable QPS when the cluster
+        Step 11 re-tests the best configs at a sustainable QPS when the cluster
         was overloaded. Handles PD, EP, and Aggregated results.
         """
         if not step10_results:
@@ -983,6 +1006,7 @@ class ReportAnalyzer:
                 'ttft_p99': round(r.ttft_p99, 2) if r.ttft_p99 else None,
                 'itl_p90': round(r.itl_p90, 2) if r.itl_p90 else None,
                 'throughput_p50': round(r.throughput_p50, 2) if r.throughput_p50 else None,
+                'throughput_mean': round(r.throughput_mean, 2) if r.throughput_mean else None,
                 'throughput_p90': round(r.throughput_p90, 2),
                 'throughput_p95': round(r.throughput_p95, 2) if r.throughput_p95 else None,
                 'throughput_p99': round(r.throughput_p99, 2) if r.throughput_p99 else None,
@@ -1110,21 +1134,29 @@ class ReportAnalyzer:
                             total = r['prefill_pods'] + r['decode_pods']
                             arch_configs[arch] = f"{total}×TP{r['tensor_parallelism']}"
 
-                # Load manifest types for each step9 test
+                # Load manifest types and throughput_mean for each step9 test
                 for trial_list in by_arch.values():
                     for trial in trial_list:
                         tid = trial.get('test_id', '')
                         if tid:
                             m_row = loader.conn.execute(
-                                'SELECT manifests_yaml FROM test_configurations WHERE run_id=? AND config_name=?',
+                                'SELECT manifests_yaml, metrics_json FROM test_configurations WHERE run_id=? AND config_name=?',
                                 (run_id, tid)
                             ).fetchone()
-                            if m_row and m_row['manifests_yaml']:
-                                try:
-                                    import json as _json
-                                    trial['manifest_types'] = list(_json.loads(m_row['manifests_yaml']).keys())
-                                except Exception:
-                                    pass
+                            if m_row:
+                                if m_row['manifests_yaml']:
+                                    try:
+                                        import json as _json
+                                        trial['manifest_types'] = list(_json.loads(m_row['manifests_yaml']).keys())
+                                    except Exception:
+                                        pass
+                                if m_row['metrics_json']:
+                                    try:
+                                        import json as _json3
+                                        mj = _json3.loads(m_row['metrics_json'])
+                                        trial['throughput_mean'] = round(mj.get('throughput_mean', 0), 2) if mj.get('throughput_mean') else None
+                                    except Exception:
+                                        pass
 
                 all_trials = []
                 for arch_trials in by_arch.values():
@@ -1189,6 +1221,7 @@ class ReportAnalyzer:
                     'ttft_p90': round(r.ttft_p90, 2) if r.ttft_p90 else None,
                     'ttft_p95': round(r.ttft_p95, 2) if r.ttft_p95 else None,
                     'ttft_p99': round(r.ttft_p99, 2) if r.ttft_p99 else None,
+                    'throughput_mean': round(r.throughput_mean, 2) if r.throughput_mean else None,
                     'throughput_p50': round(r.throughput_p50, 2) if r.throughput_p50 else None,
                     'throughput_p90': round(r.throughput_p90, 2) if r.throughput_p90 else None,
                     'throughput_p95': round(r.throughput_p95, 2) if r.throughput_p95 else None,

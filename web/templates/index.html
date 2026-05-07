@@ -130,5 +130,6 @@
     {% include 'partials/overlays.html' %}
 
     <script src="{{ url_for('static', filename='js/app.js') }}?v={{ range(10000,99999) | random }}"></script>
+    <script src="{{ url_for('static', filename='js/report-download.js') }}?v={{ range(10000,99999) | random }}"></script>
 </body>
 </html>
