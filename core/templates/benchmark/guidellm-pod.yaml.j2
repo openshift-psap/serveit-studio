@@ -1,11 +1,11 @@
 apiVersion: v1
 kind: Pod
 metadata:
-  name: inferecipe-guidellm
+  name: inferecipe-workload
   namespace: {{ namespace }}
   labels:
     component: inferecipe-benchmark
-    app: inferecipe-guidellm
+    app: inferecipe-workload
 spec:
   serviceAccountName: llm-d-modelserver
   restartPolicy: Never

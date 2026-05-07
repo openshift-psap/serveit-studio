@@ -129,7 +129,17 @@
 
     {% include 'partials/overlays.html' %}
 
-    <script src="{{ url_for('static', filename='js/app.js') }}?v={{ range(10000,99999) | random }}"></script>
+    <script src="{{ url_for('static', filename='js/modules/socket.js') }}?v={{ range(10000,99999) | random }}"></script>
+    <script src="{{ url_for('static', filename='js/modules/console.js') }}?v={{ range(10000,99999) | random }}"></script>
+    <script src="{{ url_for('static', filename='js/modules/config.js') }}?v={{ range(10000,99999) | random }}"></script>
+    <script src="{{ url_for('static', filename='js/modules/wizard.js') }}?v={{ range(10000,99999) | random }}"></script>
+    <script src="{{ url_for('static', filename='js/modules/settings.js') }}?v={{ range(10000,99999) | random }}"></script>
+    <script src="{{ url_for('static', filename='js/modules/cluster.js') }}?v={{ range(10000,99999) | random }}"></script>
+    <script src="{{ url_for('static', filename='js/modules/navigation.js') }}?v={{ range(10000,99999) | random }}"></script>
+    <script src="{{ url_for('static', filename='js/modules/resume.js') }}?v={{ range(10000,99999) | random }}"></script>
+    <script src="{{ url_for('static', filename='js/modules/report.js') }}?v={{ range(10000,99999) | random }}"></script>
+    <script src="{{ url_for('static', filename='js/modules/charts.js') }}?v={{ range(10000,99999) | random }}"></script>
+    <script src="{{ url_for('static', filename='js/modules/ui-helpers.js') }}?v={{ range(10000,99999) | random }}"></script>
     <script src="{{ url_for('static', filename='js/report-download.js') }}?v={{ range(10000,99999) | random }}"></script>
 </body>
 </html>
