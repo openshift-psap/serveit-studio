@@ -11,8 +11,8 @@ from flask import jsonify, request, render_template, Response
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from web.app_context import app, get_db, DB_PATH, state, state_lock
-from web.database import save_state, get_deployment_template, get_resumable_run
+from web.app_context import app, socketio, get_db, DB_PATH, TARGET_NAMESPACE, state, state_lock
+from web.database import save_state, save_deployment_template, get_deployment_template, get_resumable_run
 
 logger = logging.getLogger(__name__)
 
