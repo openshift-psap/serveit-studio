@@ -2,156 +2,223 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <title>InfeRecipe Launcher</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="theme-color" content="#1A1A1A">
+    <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Ccircle cx='26' cy='26' r='18' fill='none' stroke='%23EE0000' stroke-width='5'/%3E%3Cline x1='39' y1='39' x2='56' y2='56' stroke='%23EE0000' stroke-width='5' stroke-linecap='round'/%3E%3C/svg%3E">
+    <title>InferRecipe Launcher</title>
     <style>
         *{box-sizing:border-box;margin:0;padding:0}
-        body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;background:#f8fafc;color:#1e293b}
-        .header{background:linear-gradient(135deg,#1e1b4b,#312e81);color:white;padding:20px 32px;display:flex;align-items:center;justify-content:space-between}
-        .header h1{font-size:1.3em;font-weight:800}
-        .header .user{font-size:0.85em;color:#c7d2fe}
-        .header a{color:#c7d2fe;text-decoration:none;margin-left:16px;font-size:0.85em}
-        .header a:hover{color:white}
-        .container{max-width:1000px;margin:32px auto;padding:0 24px}
-        .toolbar{display:flex;justify-content:space-between;align-items:center;margin-bottom:24px}
-        .toolbar h2{font-size:1.1em;color:#475569}
-        .btn{padding:10px 20px;border:none;border-radius:8px;font-weight:700;font-size:0.9em;cursor:pointer}
-        .btn-primary{background:#6366f1;color:white}
-        .btn-primary:hover{background:#4f46e5}
-        .btn-danger{background:#ef4444;color:white;font-size:0.8em;padding:6px 14px}
-        .btn-danger:hover{background:#dc2626}
-        .btn-open{background:#10b981;color:white;font-size:0.8em;padding:6px 14px}
-        .btn-open:hover{background:#059669}
-        .card{background:white;border-radius:12px;box-shadow:0 2px 8px rgba(0,0,0,0.06);border:1px solid #e2e8f0;margin-bottom:16px;padding:20px;display:flex;align-items:center;justify-content:space-between}
-        .card-info{flex:1}
-        .card-info h3{font-size:1em;margin-bottom:4px}
-        .card-info .meta{font-size:0.82em;color:#64748b;display:flex;gap:16px;flex-wrap:wrap}
-        .card-actions{display:flex;gap:8px;align-items:center}
-        .status{display:inline-block;padding:2px 8px;border-radius:12px;font-size:0.75em;font-weight:600}
-        .status-running{background:#d1fae5;color:#065f46}
-        .status-creating{background:#dbeafe;color:#1e40af}
-        .status-error{background:#fee2e2;color:#991b1b}
-        .status-unknown{background:#f1f5f9;color:#64748b}
-        .empty{text-align:center;padding:60px;color:#94a3b8}
-        .empty h3{margin-bottom:8px;color:#64748b}
-        .modal-overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,0.5);z-index:100;align-items:center;justify-content:center}
+        body{font-family:'Red Hat Display','Segoe UI',Roboto,sans-serif;background:#F8F8F8;color:#1A1A1A;min-height:100vh}
+
+        /* ── Sidebar ── */
+        body::before{content:'';position:fixed;top:0;left:0;right:0;height:4px;background:linear-gradient(90deg,#820000,#EE0000,#820000);z-index:100}
+        .sidebar{position:fixed;top:0;left:0;width:250px;height:100vh;background:#fff;border-right:1px solid #E0E0E0;display:flex;flex-direction:column;z-index:50;padding-top:4px}
+        .sidebar-brand{padding:10px 12px;border-bottom:1px solid #E0E0E0;display:flex;align-items:center;height:68px}
+        .sidebar-brand svg{width:100%;height:auto;display:block}
+        .sidebar-section{padding:12px 12px 8px;display:flex;align-items:center;justify-content:space-between}
+        .sidebar-section span{font-size:0.72em;font-weight:700;text-transform:uppercase;letter-spacing:0.08em;color:#999}
+        .sidebar-section button{width:24px;height:24px;border:none;background:#F8F8F8;border-radius:6px;cursor:pointer;display:flex;align-items:center;justify-content:center;color:#999;transition:background-color 0.12s,color 0.12s}
+        .sidebar-section button:hover{background:#EE0000;color:white}
+        .sidebar-section button:focus-visible{outline:2px solid #EE0000;outline-offset:1px}
+        .group-list{flex:1;overflow-y:auto;padding:0 8px 8px}
+        .group-item{display:flex;align-items:center;gap:8px;padding:9px 10px;border-radius:8px;cursor:pointer;transition:background-color 0.12s;font-size:0.88em;color:#4A4A4A;border:none;background:none;width:100%;text-align:left}
+        .group-item:hover{background:#F8F8F8}
+        .group-item.active{background:#FFF5F5;color:#A60000;font-weight:600}
+        .group-item .icon{font-size:1.1em;flex-shrink:0}
+        .group-item .name{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+        .group-item .count{font-size:0.75em;color:#999;background:#F0F0F0;padding:2px 7px;border-radius:10px;flex-shrink:0}
+        .group-item.active .count{background:#FFE5E5;color:#A60000}
+        .group-item .del-btn{display:none;border:none;background:none;color:#CCC;cursor:pointer;padding:2px;border-radius:4px;flex-shrink:0}
+        .group-item:hover .del-btn{display:block}
+        .group-item .del-btn:hover{color:#EE0000}
+        .sidebar-footer{padding:12px;border-top:1px solid #E0E0E0}
+        .user-pill{display:flex;align-items:center;gap:10px;padding:8px 10px;border-radius:8px}
+        .user-avatar{width:32px;height:32px;background:#EE0000;border-radius:8px;display:flex;align-items:center;justify-content:center;color:white;font-weight:700;font-size:0.85em;flex-shrink:0}
+        .user-info{flex:1;min-width:0}
+        .user-info .uname{color:#1A1A1A;font-size:0.85em;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+        .logout-btn{color:#999;text-decoration:none;font-size:0.78em;padding:4px 8px;border-radius:4px;transition:color 0.12s}
+        .logout-btn:hover{color:#EE0000}
+        .logout-btn:focus-visible{outline:2px solid #EE0000;outline-offset:2px}
+
+        /* ── Create group modal ── */
+        .icon-grid{display:grid;grid-template-columns:repeat(10,1fr);gap:6px;margin-bottom:16px}
+        .icon-opt{border:2px solid transparent;background:none;width:48px;height:48px;font-size:1.7em;cursor:pointer;border-radius:8px;transition:background-color 0.1s,border-color 0.1s;display:flex;align-items:center;justify-content:center}
+        .icon-opt:hover{background:#F0F0F0}
+        .icon-opt.selected{background:#FFE5E5;border-color:#EE0000}
+
+        /* ── Main ── */
+        .main{margin-left:250px;min-height:100vh;padding-top:4px}
+        .topbar{padding:0 32px;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:12px;border-bottom:1px solid #E0E0E0;background:white;height:68px}
+        .topbar h2{font-size:1.3em;font-weight:700;color:#1A1A1A;display:flex;align-items:center;gap:10px}
+        .topbar h2 .g-icon{font-size:1.1em}
+        .topbar .count{color:#999;font-weight:400;font-size:0.6em;margin-left:4px}
+        .btn{padding:10px 20px;border:none;border-radius:8px;font-weight:600;font-size:0.88em;cursor:pointer;transition:background-color 0.12s,transform 0.1s;text-decoration:none;display:inline-flex;align-items:center;gap:6px}
+        .btn:focus-visible{outline:none;box-shadow:0 0 0 3px rgba(238,0,0,0.25)}
+        .btn:active{transform:scale(0.97)}
+        .btn-primary{background:#EE0000;color:white}
+        .btn-primary:hover{background:#A60000}
+        .btn-danger{background:#EE0000;color:white;font-size:0.85em;padding:8px 18px}
+        .btn-danger:hover{background:#A60000}
+        .btn-open{background:#3BAA3B;color:white;font-size:0.85em;padding:8px 18px}
+        .btn-open:hover{background:#2d8a2d}
+
+        /* ── Instance Grid ── */
+        .grid{padding:24px 32px;display:flex;flex-direction:column;gap:12px}
+        .card{background:white;border-radius:10px;border:2px solid #CCC;overflow:hidden;transition:border-color 0.12s,box-shadow 0.12s;position:relative}
+        .card:hover{border-color:#CCC;box-shadow:0 2px 8px rgba(0,0,0,0.04)}
+        .card-main{padding:16px 20px;display:flex;align-items:center;justify-content:space-between;gap:16px}
+        .card-info{flex:1;min-width:0}
+        .card-title{display:flex;align-items:center;gap:10px;margin-bottom:5px}
+        .card-title h3{font-size:1.15em;font-weight:700;color:#EE0000;margin:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+        .card-meta{display:flex;align-items:center;gap:8px;font-size:0.78em;color:#4A4A4A}
+        .card-actions{display:flex;gap:8px;flex-shrink:0}
+        .status{display:inline-block;padding:4px 12px;border-radius:20px;font-size:0.85em;font-weight:600;flex-shrink:0}
+        .status-running{background:#f0fdf4;color:#3BAA3B}
+        .status-creating{background:#eff6ff;color:#3b82f6}
+        .status-error{background:#FFF5F5;color:#EE0000}
+        .status-unknown{background:#F0F0F0;color:#999}
+        .connect-bar{background:#F8F8F8;border-top:1px solid #E0E0E0;padding:10px 20px;display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+        .connect-bar .label{font-size:0.76em;color:#1A1A1A;font-weight:600;white-space:nowrap}
+        .connect-bar code{background:#1A1A1A;color:#ffffff;padding:6px 12px;border-radius:6px;font-size:0.76em;flex:1;min-width:0;overflow-x:auto;white-space:nowrap;font-family:'Red Hat Mono',monospace;user-select:all}
+        .copy-btn{border:1px solid #E0E0E0;background:white;color:#4A4A4A;padding:5px 12px;border-radius:6px;font-size:0.76em;font-weight:600;cursor:pointer;white-space:nowrap;transition:background-color 0.12s,border-color 0.12s}
+        .copy-btn:hover{background:#F0F0F0;border-color:#CCC}
+        .copy-btn.copied{background:#f0fdf4;border-color:#3BAA3B;color:#3BAA3B}
+        .connect-bar a{color:#EE0000;font-size:0.78em;text-decoration:none;white-space:nowrap;font-weight:600}
+        .connect-bar a:hover{color:#A60000}
+
+        /* ── Empty States ── */
+        .empty{text-align:center;padding:80px 24px;color:#999}
+        .empty-icon{width:64px;height:64px;margin:0 auto 20px;background:#FFF5F5;border-radius:16px;display:flex;align-items:center;justify-content:center}
+        .empty h3{color:#4A4A4A;margin-bottom:8px;font-size:1.1em}
+        .empty p{color:#999;font-size:0.9em;margin-bottom:24px}
+
+        /* ── Modal ── */
+        .modal-overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,0.4);z-index:100;align-items:center;justify-content:center;overscroll-behavior:contain}
         .modal-overlay.active{display:flex}
-        .modal{background:white;border-radius:16px;padding:32px;width:450px;max-width:90vw}
-        .modal h2{margin-bottom:16px}
-        .modal label{display:block;font-weight:600;font-size:0.85em;color:#475569;margin-bottom:6px}
-        .modal input[type=text],.modal select{width:100%;padding:10px;border:2px solid #e2e8f0;border-radius:8px;font-size:0.95em;margin-bottom:16px}
-        .modal input:focus{border-color:#6366f1;outline:none}
-        .modal .file-upload{border:2px dashed #cbd5e1;border-radius:8px;padding:20px;text-align:center;cursor:pointer;margin-bottom:16px;color:#64748b;font-size:0.85em}
-        .modal .file-upload:hover{border-color:#6366f1;color:#6366f1}
-        .modal .file-upload.has-file{border-color:#10b981;color:#065f46;background:#f0fdf4}
-        .modal .actions{display:flex;gap:12px;justify-content:flex-end}
-        .modal .btn-cancel{background:#f1f5f9;color:#475569}
-        .toggle-row{display:flex;align-items:center;gap:12px;margin-bottom:16px}
-        .toggle-row label{margin:0}
+        .modal{background:white;border-radius:14px;padding:28px;width:450px;max-width:90vw;max-height:90vh;overflow-y:auto;box-shadow:0 25px 60px rgba(0,0,0,0.15)}
+        .modal h2{color:#1A1A1A;font-size:1.15em;margin-bottom:4px}
+        .modal .modal-sub{color:#999;font-size:0.85em;margin-bottom:24px}
+        .modal label{display:block;font-weight:600;font-size:0.8em;color:#4A4A4A;text-transform:uppercase;letter-spacing:0.05em;margin-bottom:6px;cursor:pointer}
+        .modal input[type=text],.modal select{width:100%;padding:10px 12px;border:1.5px solid #E0E0E0;border-radius:8px;font-size:0.95em;margin-bottom:16px;background:#F8F8F8;color:#1A1A1A}
+        .modal input:focus-visible,.modal select:focus-visible{border-color:#EE0000;outline:none;box-shadow:0 0 0 3px rgba(238,0,0,0.1);background:white}
+        .modal .file-upload{border:2px dashed #E0E0E0;border-radius:8px;padding:24px;text-align:center;cursor:pointer;margin-bottom:16px;color:#999;font-size:0.85em;transition:border-color 0.15s}
+        .modal .file-upload:hover{border-color:#EE0000;color:#EE0000}
+        .modal .file-upload:focus-visible{outline:none;box-shadow:0 0 0 3px rgba(238,0,0,0.15)}
+        .modal .file-upload.has-file{border-color:#3BAA3B;color:#3BAA3B;background:#f0fdf4}
+        .modal .actions{display:flex;gap:10px;justify-content:flex-end;margin-top:8px}
+        .btn-cancel{background:#F0F0F0;color:#4A4A4A}
+        .btn-cancel:hover{background:#E0E0E0}
+        .toggle-row{display:flex;align-items:center;gap:10px;margin-bottom:16px;cursor:pointer}
+        .toggle-row input{accent-color:#EE0000}
+        .toggle-row span{font-size:0.88em;color:#4A4A4A;font-weight:400;text-transform:none;letter-spacing:0}
+        .create-error{display:none;background:#FFF5F5;border:1px solid #FFE5E5;border-left:4px solid #EE0000;border-radius:8px;padding:14px 16px;margin-bottom:16px;max-height:200px;overflow-y:auto}
+        .create-error .error-title{font-weight:700;color:#A60000;font-size:0.85em;margin-bottom:4px}
+        .create-error .error-text{color:#820000;font-size:0.8em;line-height:1.6;word-break:break-word}
+        .delete-overlay{position:absolute;inset:0;background:rgba(255,255,255,0.85);display:flex;align-items:center;justify-content:center;border-radius:10px;z-index:5}
+        .warn-overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,0.4);z-index:200;align-items:center;justify-content:center}
+        .warn-overlay.active{display:flex}
+        .warn-box{background:white;border-radius:14px;padding:0;width:440px;max-width:90vw;box-shadow:0 25px 60px rgba(0,0,0,0.15);overflow:hidden}
+        .warn-banner{background:linear-gradient(135deg,#fef3c7,#fde68a);border-left:4px solid #f59e0b;padding:18px 22px}
+        .warn-banner .warn-icon{display:flex;align-items:center;gap:10px;font-weight:700;color:#92400e;font-size:0.95em;margin-bottom:6px}
+        .warn-banner .warn-msg{color:#78350f;font-size:0.88em;line-height:1.6}
+        .warn-banner code{background:#92400e;color:#fef3c7;padding:3px 8px;border-radius:4px;font-size:0.85em;font-family:'Red Hat Mono',monospace;word-break:break-all}
+        .warn-actions{padding:14px 22px;display:flex;justify-content:flex-end;gap:8px}
         @keyframes spin{from{transform:rotate(0deg)}to{transform:rotate(360deg)}}
+        @media(prefers-reduced-motion:reduce){*{transition:none !important;animation:none !important}}
+        @media(max-width:768px){.sidebar{display:none}.main{margin-left:0}}
     </style>
 </head>
 <body>
 
-<div class="header">
-    <h1>InfeRecipe Launcher</h1>
-    <div>
-        <span class="user">{{ username }}</span>
-        <a href="/logout">Logout</a>
+<aside class="sidebar">
+    <div class="sidebar-brand">
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 260 50">
+            <circle cx="18" cy="16" r="15" fill="none" stroke="#EE0000" stroke-width="4"/>
+            <line x1="29" y1="27" x2="40" y2="38" stroke="#EE0000" stroke-width="4" stroke-linecap="round"/>
+            <text x="48" y="25" font-family="'Red Hat Display','Segoe UI',Arial,sans-serif" font-weight="900" font-size="27" fill="#EE0000" letter-spacing="-0.5">InferRecipe</text>
+            <text x="48" y="44" font-family="'Red Hat Display','Segoe UI',Arial,sans-serif" font-weight="500" font-size="12" fill="#999">llm-d recipe based optimizer</text>
+        </svg>
     </div>
-</div>
+    <div class="sidebar-section">
+        <span>Groups</span>
+        <button onclick="showGroupModal()" title="Create group" aria-label="Create group">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M12 5v14M5 12h14"/></svg>
+        </button>
+    </div>
+    <div class="group-list" id="group-list">
+        {% for g in groups %}
+        <button class="group-item{% if loop.first %} active{% endif %}" data-id="{{ g.id }}" onclick="selectGroup({{ g.id }})">
+            <span class="icon">{{ g.icon }}</span>
+            <span class="name">{{ g.name }}</span>
+            <span class="count">{{ g.instance_count }}</span>
+            <span class="del-btn" onclick="event.stopPropagation();deleteGroup({{ g.id }},'{{ g.name }}')" title="Delete group">&times;</span>
+        </button>
+        {% endfor %}
+    </div>
+    <div class="sidebar-footer">
+        <div class="user-pill">
+            <div class="user-avatar">{{ username[0]|upper }}</div>
+            <div class="user-info"><div class="uname">{{ username }}</div></div>
+            <a href="/logout" class="logout-btn">Logout</a>
+        </div>
+    </div>
+</aside>
 
-<div class="container">
-    <div class="toolbar">
-        <h2>Your Instances</h2>
-        <button class="btn btn-primary" onclick="showCreateModal()">+ New Instance</button>
+<div class="main">
+    <div class="topbar" id="topbar">
+        <h2 id="topbar-title">
+            {% if groups %}
+            <span class="g-icon">{{ groups[0].icon }}</span>{{ groups[0].name }}<span class="count">({{ groups[0].instance_count }})</span>
+            {% else %}
+            Instances
+            {% endif %}
+        </h2>
+        <button class="btn btn-primary" id="new-instance-btn" onclick="showCreateModal()" {% if not groups %}style="display:none"{% endif %}>
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>
+            New Instance
+        </button>
     </div>
 
-    <div id="instance-list">
-        {% if instances %}
-            {% for inst in instances %}
-            {% set ps = inst.pod_status or inst.status %}
-            <div class="card" id="instance-{{ inst.id }}" style="padding:0;overflow:hidden;">
-                <div style="padding:16px 20px;display:flex;align-items:center;justify-content:space-between;">
-                    <div style="flex:1;">
-                        <div style="display:flex;align-items:center;gap:10px;margin-bottom:6px;">
-                            <h3 style="margin:0;font-size:1.05em;">{{ inst.display_name or inst.name }}</h3>
-                            {% if ps == 'Running' %}
-                            <span class="status status-running">{{ ps }}</span>
-                            {% elif ps in ['CrashLoopBackOff', 'CrashLoop', 'Error', 'Failed', 'Deleted'] %}
-                            <span class="status status-error">{{ ps }}</span>
-                            {% elif ps in ['Creating', 'Pending', 'Starting', 'Terminating'] %}
-                            <span class="status status-creating">{{ ps }}</span>
-                            {% else %}
-                            <span class="status status-unknown">{{ ps }}</span>
-                            {% endif %}
-                        </div>
-                        <div style="display:flex;align-items:center;gap:8px;font-size:0.8em;color:#64748b;">
-                            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M2 12h20"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/></svg>
-                            <span>{{ inst.target_cluster }}</span>
-                            <span style="color:#e2e8f0;">&bull;</span>
-                            <span>{{ inst.created_at[:16] }}</span>
-                        </div>
-                    </div>
-                    <div style="display:flex;gap:8px;align-items:center;">
-                        {% if inst.service_url %}
-                        <a href="{{ inst.service_url }}" target="_blank" class="btn btn-open">Open</a>
-                        {% endif %}
-                        <button class="btn btn-danger" onclick="deleteInstance({{ inst.id }}, '{{ inst.display_name or inst.name }}')">Delete</button>
-                    </div>
-                </div>
-                {% if not (inst.service_url and inst.service_url.startswith('https://')) %}
-                <div style="background:linear-gradient(135deg,#f8fafc,#f1f5f9);border-top:1px solid #e2e8f0;padding:10px 20px;display:flex;align-items:center;gap:10px;">
-                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#6366f1" stroke-width="2" style="flex-shrink:0;"><rect x="2" y="3" width="20" height="14" rx="2"/><path d="M8 21h8M12 17v4"/></svg>
-                    <span style="font-size:0.78em;color:#475569;white-space:nowrap;">Connect:</span>
-                    <code style="background:#1e293b;color:#a5b4fc;padding:5px 12px;border-radius:5px;font-size:0.76em;user-select:all;flex:1;overflow-x:auto;">kubectl port-forward -n {{ inst.namespace }} svc/{{ inst.service_name }} 8081:5000</code>
-                    <a href="http://localhost:8081" target="_blank" style="color:#6366f1;font-size:0.78em;text-decoration:none;white-space:nowrap;font-weight:600;">localhost:8081</a>
-                </div>
-                {% endif %}
+    <div class="grid" id="instance-list">
+        {% if not groups %}
+        <div class="empty">
+            <div class="empty-icon">
+                <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="#EE0000" stroke-width="1.5" aria-hidden="true"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>
             </div>
-            {% endfor %}
-        {% else %}
-            <div class="empty">
-                <h3>No instances yet</h3>
-                <p>Create your first InfeRecipe instance to get started.</p>
-            </div>
+            <h3>Create your first group</h3>
+            <p>Organize your InferRecipe instances into groups. Click the + button in the sidebar to get started.</p>
+        </div>
         {% endif %}
     </div>
 </div>
 
 <!-- Create Instance Modal -->
-<div class="modal-overlay" id="create-modal">
-    <div class="modal">
-        <h2>New Instance</h2>
+<div class="modal-overlay" id="create-modal" onclick="if(event.target===this)hideCreateModal()">
+    <div class="modal" role="dialog" aria-labelledby="modal-title">
+        <h2 id="modal-title">New Instance</h2>
+        <p class="modal-sub">Deploy an InferRecipe optimizer instance</p>
         <form id="create-form" onsubmit="return createInstance(event)">
-            <label>Instance Name</label>
-            <input type="text" name="name" placeholder="e.g. prod-cluster-test" required>
-
-            <div class="toggle-row">
+            <input type="hidden" id="create-group-id" value="">
+            <label for="instance-name">Instance Name</label>
+            <input type="text" id="instance-name" name="name" placeholder="prod-cluster-test" autocomplete="off" required>
+            <label class="toggle-row">
                 <input type="checkbox" id="remote-toggle" onchange="toggleRemote()">
-                <label for="remote-toggle">Target a remote cluster (upload kubeconfig)</label>
-            </div>
-
+                <span>Target a remote cluster (upload kubeconfig)</span>
+            </label>
             <div id="kubeconfig-section" style="display:none;">
                 <label>Kubeconfig File</label>
-                <div class="file-upload" id="file-drop">
-                    Drop kubeconfig file here or click to browse
-                </div>
-                <input type="file" id="kubeconfig-input" accept=".yaml,.yml,.conf,.config,.kubeconfig,*" style="display:none">
+                <div class="file-upload" id="file-drop" tabindex="0" role="button" aria-label="Upload kubeconfig file">Drop kubeconfig file here or click to browse</div>
+                <input type="file" id="kubeconfig-input" accept=".yaml,.yml,.conf,.config,.kubeconfig,*" style="display:none" aria-hidden="true">
             </div>
-
-            <label>Storage Class</label>
-            <div style="display:flex;gap:8px;margin-bottom:16px;">
-                <select id="storage-class-select" name="storage_class" style="flex:1;padding:10px;border:2px solid #e2e8f0;border-radius:8px;font-size:0.95em;">
-                    <option value="">Loading...</option>
-                </select>
-                <button type="button" class="btn btn-cancel" onclick="loadStorageClasses()" style="white-space:nowrap;padding:8px 12px;">Refresh</button>
+            <label for="storage-class-select">Storage Class</label>
+            <div style="display:flex;gap:8px;margin-bottom:16px;align-items:stretch;">
+                <select id="storage-class-select" name="storage_class" style="flex:1;margin-bottom:0"><option value="">Loading&hellip;</option></select>
+                <button type="button" class="btn btn-cancel" onclick="loadStorageClasses()" style="white-space:nowrap;padding:0 14px;font-size:0.85em" aria-label="Refresh">Refresh</button>
             </div>
-
-            <div id="create-error" style="display:none;background:#fef2f2;border:2px solid #fecaca;border-left:6px solid #ef4444;border-radius:8px;padding:14px 16px;margin-bottom:16px;">
-                <div style="font-weight:700;color:#991b1b;font-size:0.9em;margin-bottom:6px;">Failed to create instance</div>
-                <div id="create-error-text" style="color:#7f1d1d;font-size:0.82em;line-height:1.6;word-break:break-word;"></div>
+            <div class="create-error" id="create-error" role="alert" aria-live="polite">
+                <div class="error-title">Failed to create instance</div>
+                <div class="error-text" id="create-error-text"></div>
             </div>
-
             <div class="actions">
                 <button type="button" class="btn btn-cancel" onclick="hideCreateModal()">Cancel</button>
                 <button type="submit" class="btn btn-primary" id="create-btn">Create</button>
@@ -160,190 +227,280 @@
     </div>
 </div>
 
+<!-- Create Group Modal -->
+<div class="modal-overlay" id="group-modal" onclick="if(event.target===this)hideGroupModal()">
+    <div class="modal" role="dialog" aria-labelledby="group-modal-title" style="width:600px">
+        <h2 id="group-modal-title">New Group</h2>
+        <p class="modal-sub">Organize your instances into a group</p>
+        <label for="new-group-name">Group Name</label>
+        <input type="text" id="new-group-name" placeholder="My Cluster" autocomplete="off">
+        <label>Icon</label>
+        <div class="icon-grid" id="icon-grid"></div>
+        <div class="actions">
+            <button type="button" class="btn btn-cancel" onclick="hideGroupModal()">Cancel</button>
+            <button type="button" class="btn btn-primary" onclick="saveGroup()">Create</button>
+        </div>
+    </div>
+</div>
+
+<!-- Warning Modal -->
+<div class="warn-overlay" id="warn-modal" onclick="if(event.target===this)hideWarn()">
+    <div class="warn-box">
+        <div class="warn-banner">
+            <div class="warn-icon">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#92400e" stroke-width="2"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><path d="M12 9v4m0 4h.01"/></svg>
+                <span id="warn-title">Cannot connect</span>
+            </div>
+            <div class="warn-msg" id="warn-msg"></div>
+        </div>
+        <div class="warn-actions">
+            <button class="btn btn-cancel" onclick="hideWarn()">Close</button>
+            <button class="btn btn-primary" id="warn-action-btn" style="display:none" onclick="hideWarn()">Open Anyway</button>
+        </div>
+    </div>
+</div>
+
 <script>
-function showCreateModal() {
-    document.getElementById('create-modal').classList.add('active');
-    loadStorageClasses();
-}
-function loadStorageClasses() {
-    var sel = document.getElementById('storage-class-select');
-    sel.innerHTML = '<option value="">Loading...</option>';
-    fetch('/api/storage_classes')
-    .then(r => r.json())
-    .then(classes => {
-        sel.innerHTML = '';
-        if (!classes.length) {
-            sel.innerHTML = '<option value="">(no storage classes found)</option>';
-            return;
-        }
-        classes.forEach(function(sc) {
-            var opt = document.createElement('option');
-            opt.value = sc.name;
-            opt.textContent = sc.name + (sc.is_default ? ' (default)' : '');
-            if (sc.is_default) opt.selected = true;
-            sel.appendChild(opt);
-        });
-    })
-    .catch(function() {
-        sel.innerHTML = '<option value="">Failed to load</option>';
-    });
-}
-function hideCreateModal() {
-    document.getElementById('create-modal').classList.remove('active');
-    document.getElementById('create-error').style.display = 'none';
-}
-function showCreateError(msg) {
-    var box = document.getElementById('create-error');
-    document.getElementById('create-error-text').textContent = msg;
-    box.style.display = 'block';
-    box.scrollIntoView({behavior: 'smooth', block: 'nearest'});
-}
-function toggleRemote() {
-    document.getElementById('kubeconfig-section').style.display =
-        document.getElementById('remote-toggle').checked ? 'block' : 'none';
-}
+var currentGroupId = {{ groups[0].id if groups else 'null' }};
+var ICONS = ['📦','🔬','🌐','🏢','🔧','☁️','🖥️','🧪','🚀','💻','🔒','⚡','🏗️','📊','🎯','🔥','💡','🛠️','📡','🗄️','🐳','🤖','🧠','💎','🔮','🌊','🏔️','🛡️','⚙️','🔗','📈','🧬','🎛️','💾','🔑','🌍','🏭','📐','🧊','🪐'];
+var selectedIcon = '📦';
 
-var kubeconfigContent = null;
-(function() {
-    var drop = document.getElementById('file-drop');
-    var input = document.getElementById('kubeconfig-input');
-
-    drop.addEventListener('click', function(e) {
-        e.preventDefault();
-        e.stopPropagation();
-        input.click();
+// Icon grid
+(function(){
+    var grid = document.getElementById('icon-grid');
+    ICONS.forEach(function(ic){
+        var b = document.createElement('button');
+        b.type='button'; b.className='icon-opt' + (ic==='📦'?' selected':'');
+        b.textContent = ic;
+        b.onclick = function(){ grid.querySelectorAll('.icon-opt').forEach(function(x){x.classList.remove('selected')}); b.classList.add('selected'); selectedIcon=ic; };
+        grid.appendChild(b);
     });
-
-    input.addEventListener('change', function() {
-        if (this.files[0]) readFile(this.files[0]);
-    });
-
-    drop.addEventListener('dragover', function(e) {
-        e.preventDefault();
-        drop.style.borderColor = '#6366f1';
-    });
-    drop.addEventListener('dragleave', function() {
-        drop.style.borderColor = '';
-    });
-    drop.addEventListener('drop', function(e) {
-        e.preventDefault();
-        drop.style.borderColor = '';
-        if (e.dataTransfer.files[0]) readFile(e.dataTransfer.files[0]);
-    });
-
-    function readFile(file) {
-        var reader = new FileReader();
-        reader.onload = function(ev) {
-            kubeconfigContent = ev.target.result;
-            drop.textContent = file.name;
-            drop.classList.add('has-file');
-        };
-        reader.readAsText(file);
-    }
 })();
 
-function createInstance(e) {
-    e.preventDefault();
-    var form = document.getElementById('create-form');
-    var name = form.querySelector('input[name=name]').value;
-    var btn = document.getElementById('create-btn');
-    btn.disabled = true;
-    btn.textContent = 'Creating...';
-
-    var body = JSON.stringify({
-        name: name,
-        kubeconfig: document.getElementById('remote-toggle').checked ? kubeconfigContent : null,
-        storage_class: document.getElementById('storage-class-select').value || null
-    });
-
-    fetch('/api/instances', {
-        method: 'POST',
-        headers: {'Content-Type': 'application/json'},
-        body: body
-    })
-    .then(r => r.json())
-    .then(data => {
-        if (data.error) {
-            showCreateError(data.error);
-            btn.disabled = false;
-            btn.textContent = 'Create';
-        } else {
-            location.reload();
-        }
-    })
-    .catch(err => {
-        showCreateError(err.message || err);
-        btn.disabled = false;
-        btn.textContent = 'Create';
-    });
-    return false;
+function showGroupModal(){
+    document.getElementById('group-modal').classList.add('active');
+    document.getElementById('new-group-name').value='';
+    document.getElementById('new-group-name').focus();
+}
+function hideGroupModal(){
+    document.getElementById('group-modal').classList.remove('active');
 }
 
-function deleteInstance(id, name) {
-    if (!confirm('Delete instance "' + name + '"? This removes the deployment, PVC, and all data.')) return;
-
-    var card = document.getElementById('instance-' + id);
-    if (card) {
-        // Disable buttons
-        card.querySelectorAll('.btn').forEach(function(b) {
-            b.disabled = true;
-            b.style.opacity = '0.4';
-            b.style.pointerEvents = 'none';
-        });
-        // Show spinner overlay
-        var overlay = document.createElement('div');
-        overlay.style.cssText = 'position:absolute;inset:0;background:rgba(255,255,255,0.7);display:flex;align-items:center;justify-content:center;border-radius:12px;z-index:5;';
-        overlay.innerHTML = '<div style="display:flex;align-items:center;gap:10px;"><svg width="20" height="20" viewBox="0 0 24 24" style="animation:spin 1s linear infinite;"><circle cx="12" cy="12" r="10" stroke="#6366f1" stroke-width="3" fill="none" stroke-dasharray="31.4 31.4" stroke-linecap="round"/></svg><span style="color:#475569;font-weight:600;font-size:0.9em;">Deleting...</span></div>';
-        card.style.position = 'relative';
-        card.appendChild(overlay);
-    }
-
-    fetch('/api/instances/' + id, {method: 'DELETE'})
-    .then(r => r.json())
-    .then(data => {
-        if (data.ok) {
-            if (card) {
-                card.style.transition = 'opacity 0.3s, transform 0.3s';
-                card.style.opacity = '0';
-                card.style.transform = 'translateX(20px)';
-                setTimeout(function() { card.remove(); }, 300);
-            }
-        } else {
-            showCreateError(data.error || 'Failed to delete');
-            if (card) {
-                card.querySelector('div[style*="position:absolute"]').remove();
-                card.querySelectorAll('.btn').forEach(function(b) {
-                    b.disabled = false;
-                    b.style.opacity = '';
-                    b.style.pointerEvents = '';
-                });
-            }
-        }
-    })
-    .catch(function(err) {
-        showCreateError('Delete failed: ' + err);
+function saveGroup(){
+    var name = document.getElementById('new-group-name').value.trim();
+    if(!name) return;
+    fetch('/api/groups',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({name:name,icon:selectedIcon})})
+    .then(function(r){return r.json()})
+    .then(function(data){
+        if(data.error){alert(data.error);return;}
+        hideGroupModal();
         location.reload();
     });
 }
 
-// Auto-refresh status every 15s
-setInterval(function() {
-    fetch('/api/instances')
-    .then(r => r.json())
-    .then(instances => {
-        // Lightweight status update without full reload
-        instances.forEach(function(inst) {
-            var card = document.getElementById('instance-' + inst.id);
-            if (card) {
-                var status = card.querySelector('.status');
-                if (status) {
-                    status.textContent = inst.pod_status || inst.status;
-                    status.className = 'status status-' + ((inst.pod_status === 'Running') ? 'running' : 'unknown');
+function deleteGroup(id, name){
+    if(!confirm('Delete group "'+name+'" and ALL its instances? This cannot be undone.')) return;
+    fetch('/api/groups/'+id,{method:'DELETE'})
+    .then(function(r){return r.json()})
+    .then(function(data){ if(data.ok) location.reload(); else alert(data.error||'Failed'); });
+}
+
+function selectGroup(id){
+    currentGroupId = id;
+    document.querySelectorAll('.group-item').forEach(function(el){ el.classList.toggle('active', parseInt(el.dataset.id)===id); });
+    var active = document.querySelector('.group-item.active');
+    if(active){
+        var icon = active.querySelector('.icon').textContent;
+        var name = active.querySelector('.name').textContent;
+        document.getElementById('topbar-title').innerHTML = '<span class="g-icon">'+icon+'</span>'+name+'<span class="count"></span>';
+    }
+    document.getElementById('new-instance-btn').style.display='';
+    loadInstances(id);
+}
+
+function loadInstances(groupId, isRefresh){
+    var list = document.getElementById('instance-list');
+    if(!isRefresh) list.innerHTML = '<div style="text-align:center;padding:40px;color:#999">Loading&hellip;</div>';
+    fetch('/api/instances?group_id='+groupId)
+    .then(function(r){return r.json()})
+    .then(function(instances){
+        var countEl = document.querySelector('.group-item.active .count');
+        if(countEl) countEl.textContent = instances.length;
+        var topCount = document.querySelector('#topbar-title .count');
+        if(topCount) topCount.textContent = '('+instances.length+')';
+
+        if(isRefresh){
+            // Update status in-place without rebuilding
+            instances.forEach(function(inst){
+                var card = document.getElementById('instance-'+inst.id);
+                if(card){
+                    var status = card.querySelector('.status');
+                    if(status){
+                        var ps = inst.pod_status || inst.status;
+                        var cls = ps==='Running'?'running':(ps==='Pending'||ps==='Creating'||ps==='Starting'?'creating':(ps==='Error'||ps==='CrashLoopBackOff'||ps==='Failed'||ps==='Deleted'?'error':'unknown'));
+                        status.textContent = ps;
+                        status.className = 'status status-'+cls;
+                    }
                 }
-            }
+            });
+            return;
+        }
+
+        if(!instances.length){
+            list.innerHTML = '<div class="empty"><div class="empty-icon"><svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="#EE0000" stroke-width="1.5"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/><path d="M3.27 6.96 12 12.01l8.73-5.05M12 22.08V12"/></svg></div><h3>No instances yet</h3><p>Create your first instance in this group.</p></div>';
+            return;
+        }
+        list.innerHTML = '';
+        instances.forEach(function(inst){
+            var ps = inst.pod_status || inst.status;
+            var cls = ps==='Running'?'running':(ps==='Pending'||ps==='Creating'||ps==='Starting'?'creating':(ps==='Error'||ps==='CrashLoopBackOff'||ps==='Failed'||ps==='Deleted'?'error':'unknown'));
+            var hasHttps = inst.service_url && inst.service_url.indexOf('https://')===0;
+            var localPort = 8080 + inst.id;
+            var openUrl = hasHttps ? inst.service_url : 'http://localhost:'+localPort;
+            var isRunning = ps === 'Running';
+            var openBtn = '<button class="btn btn-open" onclick="openInstance(\''+openUrl.replace(/'/g,"\\'")+'\','+inst.id+','+localPort+','+hasHttps+')"'+(isRunning?'':' disabled style="opacity:0.4;cursor:not-allowed"')+'>Open</button>';
+            var pfCmd = 'kubectl port-forward -n '+inst.namespace+' svc/'+inst.service_name+' '+localPort+':5000';
+            var connectBar = hasHttps ? '' : '<div class="connect-bar"><span class="label">Connect:</span><code>'+pfCmd+'</code><button class="copy-btn" onclick="copyCmd(this,\''+pfCmd.replace(/'/g,"\\'")+'\')">Copy</button><a href="http://localhost:'+localPort+'" target="_blank" rel="noopener">localhost:'+localPort+'</a></div>';
+            var card = document.createElement('div');
+            card.className='card';card.id='instance-'+inst.id;card.style.position='relative';
+            card.innerHTML = '<div class="card-main"><div class="card-info"><div class="card-title"><h3>'+(inst.display_name||inst.name)+'</h3><span class="status status-'+cls+'">'+ps+'</span></div><div class="card-meta"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><circle cx="12" cy="12" r="10"/><path d="M2 12h20"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/></svg><span>'+inst.target_cluster+'</span><span style="opacity:0.3">&bull;</span><span>'+inst.created_at.slice(0,16)+'</span></div></div><div class="card-actions">'+openBtn+'<button class="btn btn-danger" onclick="deleteInstance('+inst.id+',\''+((inst.display_name||inst.name).replace(/'/g,"\\'"))+'\')">Delete</button></div></div>'+connectBar;
+            list.appendChild(card);
         });
     });
-}, 15000);
+}
+
+function showCreateModal(){
+    if(!currentGroupId){alert('Create a group first');return;}
+    document.getElementById('create-group-id').value = currentGroupId;
+    document.getElementById('create-modal').classList.add('active');
+    document.getElementById('instance-name').focus();
+    loadStorageClasses();
+}
+function loadStorageClasses(){
+    var sel = document.getElementById('storage-class-select');
+    sel.innerHTML = '<option value="">Loading…</option>';
+    fetch('/api/storage_classes').then(function(r){return r.json()}).then(function(classes){
+        sel.innerHTML='';
+        if(!classes.length){sel.innerHTML='<option value="">(none found)</option>';return;}
+        classes.forEach(function(sc){ var o=document.createElement('option');o.value=sc.name;o.textContent=sc.name+(sc.is_default?' (default)':'');if(sc.is_default)o.selected=true;sel.appendChild(o);});
+    }).catch(function(){sel.innerHTML='<option value="">Failed</option>';});
+}
+function hideCreateModal(){document.getElementById('create-modal').classList.remove('active');document.getElementById('create-error').style.display='none';}
+function showCreateError(msg){var b=document.getElementById('create-error');document.getElementById('create-error-text').textContent=msg;b.style.display='block';}
+function toggleRemote(){document.getElementById('kubeconfig-section').style.display=document.getElementById('remote-toggle').checked?'block':'none';}
+
+var kubeconfigContent=null;
+(function(){
+    var drop=document.getElementById('file-drop'),input=document.getElementById('kubeconfig-input');
+    drop.addEventListener('click',function(e){e.preventDefault();input.click();});
+    drop.addEventListener('keydown',function(e){if(e.key==='Enter'||e.key===' '){e.preventDefault();input.click();}});
+    input.addEventListener('change',function(){if(this.files[0])readF(this.files[0]);});
+    drop.addEventListener('dragover',function(e){e.preventDefault();drop.style.borderColor='#EE0000';});
+    drop.addEventListener('dragleave',function(){drop.style.borderColor='';});
+    drop.addEventListener('drop',function(e){e.preventDefault();drop.style.borderColor='';if(e.dataTransfer.files[0])readF(e.dataTransfer.files[0]);});
+    function readF(f){var r=new FileReader();r.onload=function(ev){kubeconfigContent=ev.target.result;drop.textContent=f.name;drop.classList.add('has-file');};r.readAsText(f);}
+})();
+
+function createInstance(e){
+    e.preventDefault();
+    var name=document.getElementById('instance-name').value;
+    var btn=document.getElementById('create-btn');
+    btn.disabled=true;btn.textContent='Creating…';
+    fetch('/api/instances',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({
+        name:name, group_id:currentGroupId,
+        kubeconfig:document.getElementById('remote-toggle').checked?kubeconfigContent:null,
+        storage_class:document.getElementById('storage-class-select').value||null
+    })})
+    .then(function(r){return r.json()})
+    .then(function(data){
+        if(data.error){showCreateError(data.error);btn.disabled=false;btn.textContent='Create';}
+        else{hideCreateModal();loadInstances(currentGroupId);loadGroups();}
+    })
+    .catch(function(err){showCreateError(err.message||err);btn.disabled=false;btn.textContent='Create';});
+    return false;
+}
+
+function deleteInstance(id,name){
+    if(!confirm('Delete instance "'+name+'"? This removes the deployment, PVC, and all data.')) return;
+    var card=document.getElementById('instance-'+id);
+    if(card){card.querySelectorAll('.btn').forEach(function(b){b.disabled=true;b.style.opacity='0.4';});
+        var ov=document.createElement('div');ov.className='delete-overlay';ov.innerHTML='<div style="display:flex;align-items:center;gap:10px"><svg width="20" height="20" viewBox="0 0 24 24" aria-hidden="true" style="animation:spin 1s linear infinite"><circle cx="12" cy="12" r="10" stroke="#EE0000" stroke-width="3" fill="none" stroke-dasharray="31.4 31.4" stroke-linecap="round"/></svg><span style="color:#4A4A4A;font-weight:600;font-size:0.9em">Deleting…</span></div>';card.appendChild(ov);}
+    fetch('/api/instances/'+id,{method:'DELETE'}).then(function(r){return r.json()}).then(function(data){
+        if(data.ok){if(card){card.style.transition='opacity 0.3s';card.style.opacity='0';setTimeout(function(){card.remove()},300);}loadGroups();}
+        else{showCreateError(data.error||'Failed');if(card){var o=card.querySelector('.delete-overlay');if(o)o.remove();card.querySelectorAll('.btn').forEach(function(b){b.disabled=false;b.style.opacity='';});}}
+    });
+}
+
+function loadGroups(){
+    fetch('/api/groups').then(function(r){return r.json()}).then(function(groups){
+        var list=document.getElementById('group-list');list.innerHTML='';
+        groups.forEach(function(g){
+            var b=document.createElement('button');
+            b.className='group-item'+(g.id===currentGroupId?' active':'');
+            b.dataset.id=g.id;
+            b.onclick=function(){selectGroup(g.id)};
+            b.innerHTML='<span class="icon">'+g.icon+'</span><span class="name">'+g.name+'</span><span class="count">'+g.instance_count+'</span><span class="del-btn" onclick="event.stopPropagation();deleteGroup('+g.id+',\''+g.name.replace(/'/g,"\\'")+'\')" title="Delete group">&times;</span>';
+            list.appendChild(b);
+        });
+    });
+}
+
+function openInstance(url, instId, localPort, isHttps){
+    var btn = event.target;
+    btn.disabled = true;
+    btn.textContent = 'Checking…';
+    fetch(url, {method:'HEAD', mode:'no-cors', signal:AbortSignal.timeout(3000)})
+    .then(function(){
+        btn.disabled = false;
+        btn.textContent = 'Open';
+        window.open(url, '_blank');
+    })
+    .catch(function(){
+        btn.disabled = false;
+        btn.textContent = 'Open';
+        if(isHttps){
+            showWarn('Route not reachable',
+                'Cannot reach <code>'+url+'</code>. The route may not be ready yet.',
+                function(){ window.open(url, '_blank'); });
+        } else {
+            var card = document.getElementById('instance-'+instId);
+            var bar = card ? card.querySelector('.connect-bar') : null;
+            if(bar) bar.style.background = '#fef3c7';
+            showWarn('Port-forward required',
+                'Cannot reach <code>localhost:'+localPort+'</code>.<br><br>Did you enable port-forward? Copy the command below and run it first.');
+            setTimeout(function(){ if(bar) bar.style.background=''; }, 4000);
+        }
+    });
+}
+function showWarn(title, msg, actionFn){
+    document.getElementById('warn-title').textContent = title;
+    document.getElementById('warn-msg').innerHTML = msg;
+    var actionBtn = document.getElementById('warn-action-btn');
+    if(actionFn){
+        actionBtn.style.display = '';
+        actionBtn.onclick = function(){ hideWarn(); actionFn(); };
+    } else {
+        actionBtn.style.display = 'none';
+    }
+    document.getElementById('warn-modal').classList.add('active');
+}
+function hideWarn(){
+    document.getElementById('warn-modal').classList.remove('active');
+}
+
+function copyCmd(btn, cmd){
+    navigator.clipboard.writeText(cmd).then(function(){
+        btn.classList.add('copied');
+        btn.textContent = 'Copied!';
+        setTimeout(function(){ btn.textContent = 'Copy'; btn.classList.remove('copied'); }, 1500);
+    });
+}
+
+// Auto-refresh (status only, no flicker)
+setInterval(function(){if(currentGroupId)loadInstances(currentGroupId, true);},15000);
+
+// Initial load
+if(currentGroupId) loadInstances(currentGroupId);
 </script>
 </body>
 </html>

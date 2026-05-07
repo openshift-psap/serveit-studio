@@ -1,18 +1,5 @@
 ---
 apiVersion: rbac.authorization.k8s.io/v1
-kind: ClusterRoleBinding
-metadata:
-  name: inferecipe-optimizer-prometheus-access
-subjects:
-- kind: ServiceAccount
-  name: default
-  namespace: {{ namespace }}
-roleRef:
-  kind: ClusterRole
-  name: prometheus-k8s
-  apiGroup: rbac.authorization.k8s.io
----
-apiVersion: rbac.authorization.k8s.io/v1
 kind: Role
 metadata:
   name: inferecipe-optimizer-pod-manager
@@ -115,7 +102,42 @@ rules:
   verbs: ["get", "list"]
 - apiGroups: [""]
   resources: ["namespaces"]
-  verbs: ["get", "list", "patch"]
+  verbs: ["get", "list", "create", "delete", "patch"]
+# Instance namespace management (launcher creates resources in per-instance namespaces)
+# Must include ALL permissions granted by instance Roles (K8s RBAC escalation prevention)
+- apiGroups: ["rbac.authorization.k8s.io"]
+  resources: ["roles", "rolebindings"]
+  verbs: ["get", "list", "create", "delete", "patch"]
+- apiGroups: [""]
+  resources: ["pods", "pods/log", "pods/exec"]
+  verbs: ["get", "list", "create", "delete", "patch", "watch"]
+- apiGroups: [""]
+  resources: ["secrets", "services", "persistentvolumeclaims", "serviceaccounts", "configmaps"]
+  verbs: ["get", "list", "create", "delete", "patch", "watch"]
+- apiGroups: ["apps"]
+  resources: ["deployments", "statefulsets"]
+  verbs: ["get", "list", "create", "delete", "patch", "update"]
+- apiGroups: ["batch"]
+  resources: ["jobs"]
+  verbs: ["get", "list", "create", "delete", "patch", "watch"]
+- apiGroups: ["leaderworkerset.x-k8s.io"]
+  resources: ["leaderworkersets"]
+  verbs: ["get", "list", "create", "delete", "patch", "update"]
+- apiGroups: ["inference.networking.k8s.io"]
+  resources: ["inferencepools"]
+  verbs: ["get", "list", "create", "delete", "patch", "watch"]
+- apiGroups: ["gateway.networking.k8s.io"]
+  resources: ["gateways", "httproutes"]
+  verbs: ["get", "list", "create", "delete", "patch"]
+- apiGroups: ["networking.istio.io"]
+  resources: ["destinationrules"]
+  verbs: ["get", "list", "create", "delete", "patch"]
+- apiGroups: ["resource.k8s.io"]
+  resources: ["resourceclaimtemplates", "resourceclaims"]
+  verbs: ["get", "list", "create", "delete", "patch", "update"]
+- apiGroups: ["k8s.cni.cncf.io"]
+  resources: ["network-attachment-definitions"]
+  verbs: ["get", "list", "create", "delete", "patch", "update"]
 ---
 apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRoleBinding

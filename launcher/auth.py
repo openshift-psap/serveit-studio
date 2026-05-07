@@ -80,7 +80,7 @@ def register_auth_routes(app):
             password = request.form.get('password', '')
             user_id = check_auth(username, password)
             if user_id:
-                session.permanent = True
+                session.permanent = bool(request.form.get('remember'))
                 session['user_id'] = user_id
                 session['username'] = username
                 return redirect(url_for('dashboard'))

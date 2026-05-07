@@ -124,14 +124,16 @@ def sync_code(cmd: str, namespace: str, pod_name: str):
                       'mkdir', '-p', '/mnt/storage/app'])
 
     # Fast tar-based sync: pipe entire repo into pod
+    env = os.environ.copy()
+    env['COPYFILE_DISABLE'] = '1'  # Prevents macOS ._* resource fork files
     tar_cmd = ['tar', 'cf', '-',
                '--exclude=.git', '--exclude=.claude', '--exclude=__pycache__',
-               '--exclude=.DS_Store', '--exclude=*.pyc',
+               '--exclude=.DS_Store', '--exclude=*.pyc', '--exclude=._*',
                '-C', str(REPO_ROOT), '.']
     untar_cmd = [cmd, 'exec', '-i', '-n', namespace, pod_name, '--',
-                 'tar', 'xf', '-', '-C', '/mnt/storage/app/']
+                 'tar', 'xf', '-', '--overwrite', '-C', '/mnt/storage/app/']
 
-    tar_proc = subprocess.Popen(tar_cmd, stdout=subprocess.PIPE, stderr=subprocess.DEVNULL)
+    tar_proc = subprocess.Popen(tar_cmd, stdout=subprocess.PIPE, stderr=subprocess.DEVNULL, env=env)
     untar_proc = subprocess.Popen(untar_cmd, stdin=tar_proc.stdout,
                                   stdout=subprocess.PIPE, stderr=subprocess.PIPE)
     tar_proc.stdout.close()
@@ -261,7 +263,7 @@ def main():
         epilog=__doc__,
     )
 
-    p.add_argument('--mode', choices=['local', 'launcher'], default='local',
+    p.add_argument('--mode', choices=['local', 'launcher'], default='launcher',
                    help='Deploy mode: local (single instance) or launcher (multi-user control plane)')
     p.add_argument('-n', '--namespace', default='inferecipe', help='Kubernetes namespace (default: llm-d)')
     p.add_argument('-i', '--image', default='quay.io/bbenshab/inferecipe:server', help='Container image')
@@ -295,7 +297,8 @@ def main():
     openshift = is_openshift(cmd)
 
     if args.port_forward:
-        start_port_forward(cmd, args.namespace, args.local_port)
+        svc = 'inferecipe-launcher-ui' if args.mode == 'launcher' else 'inferecipe-optimizer-ui'
+        start_port_forward(cmd, args.namespace, args.local_port, svc_name=svc)
         return
 
     if args.restart_server:
@@ -304,12 +307,18 @@ def main():
 
     # ── Sync only ──
     if args.sync and not args.storage_class and not args.pvc_name:
+        # Try specified mode first, then fall back to either label
         app_label = 'inferecipe-launcher' if args.mode == 'launcher' else 'inferecipe-optimizer'
         r = kubectl_run(cmd, ['get', 'pod', '-n', args.namespace, '-l', f'app={app_label}',
                               '-o', 'jsonpath={.items[0].metadata.name}'])
         pod = r.stdout.strip()
         if not pod:
-            print("❌ No optimizer pod found. Deploy first.", file=sys.stderr)
+            r = kubectl_run(cmd, ['get', 'pod', '-n', args.namespace,
+                                  '-l', 'app in (inferecipe-optimizer,inferecipe-launcher)',
+                                  '-o', 'jsonpath={.items[0].metadata.name}'])
+            pod = r.stdout.strip()
+        if not pod:
+            print("❌ No InfeRecipe pod found. Deploy first.", file=sys.stderr)
             sys.exit(1)
         sync_code(cmd, args.namespace, pod)
         print("\n   Code synced. Server will auto-restart and pick up changes.", file=sys.stderr)

@@ -30,26 +30,71 @@ def create_app():
     namespace = os.environ.get('TARGET_NAMESPACE', 'inferecipe')
     image = os.environ.get('INFERECIPE_IMAGE', 'quay.io/bbenshab/vllm:inferecipe')
 
+    # ── Dashboard ──
+
     @app.route('/')
     def dashboard():
-        instances = instance_manager.list_instances(get_user_id())
+        groups = instance_manager.list_groups(get_user_id())
         return render_template('dashboard.html',
                                username=get_username(),
-                               instances=instances)
+                               groups=groups)
+
+    # ── Group API ──
+
+    @app.route('/api/groups', methods=['GET'])
+    def api_list_groups():
+        return jsonify(instance_manager.list_groups(get_user_id()))
+
+    @app.route('/api/groups', methods=['POST'])
+    def api_create_group():
+        data = request.get_json() or {}
+        name = data.get('name', '').strip()
+        icon = data.get('icon', '📦').strip()
+        if not name:
+            return jsonify({'error': 'Group name is required'}), 400
+        try:
+            result = instance_manager.create_group(get_user_id(), name, icon)
+            return jsonify(result)
+        except Exception as e:
+            if 'UNIQUE' in str(e):
+                return jsonify({'error': f'Group "{name}" already exists'}), 409
+            return jsonify({'error': str(e)}), 500
+
+    @app.route('/api/groups/<int:group_id>', methods=['DELETE'])
+    def api_delete_group(group_id):
+        success = instance_manager.delete_group(group_id, get_user_id())
+        if success:
+            return jsonify({'ok': True})
+        return jsonify({'error': 'Group not found'}), 404
+
+    @app.route('/api/groups/<int:group_id>', methods=['PUT'])
+    def api_update_group(group_id):
+        data = request.get_json() or {}
+        success = instance_manager.update_group(
+            group_id, get_user_id(),
+            name=data.get('name'), icon=data.get('icon'))
+        if success:
+            return jsonify({'ok': True})
+        return jsonify({'error': 'Group not found'}), 404
+
+    # ── Instance API ──
 
     @app.route('/api/instances', methods=['GET'])
     def api_list_instances():
-        instances = instance_manager.list_instances(get_user_id())
+        group_id = request.args.get('group_id', type=int)
+        instances = instance_manager.list_instances(get_user_id(), group_id=group_id)
         return jsonify(instances)
 
     @app.route('/api/instances', methods=['POST'])
     def api_create_instance():
         data = request.form if request.form else request.get_json()
         name = data.get('name', '').strip()
+        group_id = data.get('group_id')
         if not name:
             return jsonify({'error': 'Name is required'}), 400
+        if not group_id:
+            return jsonify({'error': 'Group is required'}), 400
 
-        # Check for duplicate name
         with get_db() as conn:
             existing = conn.execute(
                 'SELECT id FROM instances WHERE owner_id = ? AND name = ?',
@@ -71,6 +116,7 @@ def create_app():
                 owner_id=get_user_id(),
                 username=get_username(),
                 name=name,
+                group_id=int(group_id),
                 namespace=namespace,
                 kubeconfig_data=kubeconfig_data,
                 storage_class=storage_class,
@@ -82,7 +128,6 @@ def create_app():
 
     @app.route('/api/storage_classes', methods=['GET'])
     def api_storage_classes():
-        """List available storage classes on the local cluster."""
         import subprocess
         try:
             cmd = 'oc' if os.path.exists('/usr/local/bin/oc') else 'kubectl'
@@ -94,10 +139,10 @@ def create_app():
             data = _json.loads(r.stdout)
             classes = []
             for item in data.get('items', []):
-                name = item['metadata']['name']
+                sc_name = item['metadata']['name']
                 is_default = item['metadata'].get('annotations', {}).get(
                     'storageclass.kubernetes.io/is-default-class', 'false') == 'true'
-                classes.append({'name': name, 'is_default': is_default})
+                classes.append({'name': sc_name, 'is_default': is_default})
             classes.sort(key=lambda x: (not x['is_default'], x['name']))
             return jsonify(classes)
         except Exception:
