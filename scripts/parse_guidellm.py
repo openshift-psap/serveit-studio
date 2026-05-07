@@ -2,7 +2,7 @@
 """Parse guidellm JSON output and print only the metrics we need.
 
 Used by the orchestrator to extract results from the remote workload pod
-without copying the full 2-20MB JSON file.
+without copying the full JSON file.
 
 Usage:
     python3 parse_guidellm.py /tmp/results.json
