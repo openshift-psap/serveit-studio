@@ -20,7 +20,7 @@ logger = logging.getLogger(__name__)
 class PrereqManager:
     """Manages prerequisite infrastructure deployment."""
 
-    def __init__(self, namespace: str = 'llm-d', kubeconfig: Optional[str] = None,
+    def __init__(self, namespace: str = 'inferecipe', kubeconfig: Optional[str] = None,
                  kubectl_runner: Optional[KubectlRunner] = None):
         """
         Initialize PrereqManager.
@@ -636,7 +636,7 @@ def main():
     )
     parser.add_argument('action', choices=['deploy', 'check', 'cleanup'],
                         help='Action to perform')
-    parser.add_argument('--namespace', default='llm-d', help='Kubernetes namespace')
+    parser.add_argument('--namespace', default='inferecipe', help='Kubernetes namespace')
     parser.add_argument('--architecture', '-a', default='aggregated',
                         choices=['aggregated', 'ep', 'pd'],
                         help='Architecture type (default: aggregated)')

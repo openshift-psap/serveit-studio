@@ -108,7 +108,7 @@ def init_db():
             tensor_parallelism INTEGER,
             image TEXT,
             pvc_name TEXT,
-            namespace TEXT DEFAULT 'llm-d',
+            namespace TEXT DEFAULT 'inferecipe',
 
             -- vLLM serve parameters
             port INTEGER DEFAULT 8000,

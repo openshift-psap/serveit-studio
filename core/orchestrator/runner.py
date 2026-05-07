@@ -25,7 +25,7 @@ class TestOrchestrator(ParserMixin, GuidellmMixin):
 
     def __init__(
         self,
-        namespace: str = 'llm-d',
+        namespace: str = 'inferecipe',
         kubeconfig: Optional[str] = None,
         thanos_url: Optional[str] = None,
         deployment_timeout: int = 3600,
@@ -1089,7 +1089,7 @@ def main():
     )
     parser.add_argument('--plan-file', required=True,
                         help='Path to optimization plan JSON file')
-    parser.add_argument('--namespace', default='llm-d',
+    parser.add_argument('--namespace', default='inferecipe',
                         help='Kubernetes namespace')
     parser.add_argument('--thanos-url',
                         help='Thanos/Prometheus URL for metrics collection')

@@ -73,7 +73,7 @@ max_model_len, gpu_memory_utilization = calculate_engine_memory_config(
 
 config_params = {
     'model_name': 'RedHatAI/gpt-oss-20b',
-    'namespace': 'llm-d',
+    'namespace': 'inferecipe',
     'isl': isl,
     'osl': osl,
     'qps': 400.0,  # 400 users = 400 queries per second target
@@ -126,7 +126,7 @@ print("🔍 SCANNING CLUSTER")
 print("=" * 80)
 
 try:
-    scanner = SystemScanner(namespace='llm-d')
+    scanner = SystemScanner(namespace='inferecipe')
     cluster_resources = scanner.scan_cluster()
 
     total_gpus = cluster_resources.total_gpus

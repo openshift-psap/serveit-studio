@@ -130,7 +130,7 @@ class ConfigGenerator:
 
     def __init__(
         self,
-        namespace: str = 'llm-d',
+        namespace: str = 'inferecipe',
         kubeconfig: Optional[str] = None
     ):
         """
@@ -621,7 +621,7 @@ def main():
         default='balanced',
         help='Optimization goal'
     )
-    parser.add_argument('--namespace', default='llm-d', help='Kubernetes namespace')
+    parser.add_argument('--namespace', default='inferecipe', help='Kubernetes namespace')
     parser.add_argument('--output', help='Output JSON file path')
 
     args = parser.parse_args()

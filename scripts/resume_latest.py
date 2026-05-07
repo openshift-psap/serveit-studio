@@ -113,7 +113,7 @@ def main():
     from core.recipe_optimizer import RecipeOptimizer, RecipeOptimizerConfig
     from core.system_scanner import SystemScanner
 
-    namespace = os.environ.get('TARGET_NAMESPACE', 'llm-d')
+    namespace = os.environ.get('TARGET_NAMESPACE', 'inferecipe')
     scanner = SystemScanner(namespace=namespace)
     cluster_resources = scanner.scan_cluster()
     tp_options = cluster_resources.get_tp_options()

@@ -39,7 +39,7 @@ class DeploymentManager:
 
     def __init__(
         self,
-        namespace: str = 'llm-d',
+        namespace: str = 'inferecipe',
         kubeconfig: Optional[str] = None,
         template_manager: Optional[TemplateManager] = None
     ):
@@ -680,7 +680,7 @@ def main():
     parser.add_argument('--test-id', help='Test ID')
     parser.add_argument('--architecture', choices=['aggregated', 'pd', 'ep'],
                         help='Architecture type')
-    parser.add_argument('--namespace', default='llm-d', help='Kubernetes namespace')
+    parser.add_argument('--namespace', default='inferecipe', help='Kubernetes namespace')
     parser.add_argument('--timeout', type=int, default=600,
                         help='Timeout for wait operations (seconds)')
 

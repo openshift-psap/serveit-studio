@@ -27,7 +27,7 @@ def create_app():
 
     register_auth_routes(app)
 
-    namespace = os.environ.get('TARGET_NAMESPACE', 'llm-d')
+    namespace = os.environ.get('TARGET_NAMESPACE', 'inferecipe')
     image = os.environ.get('INFERECIPE_IMAGE', 'quay.io/bbenshab/vllm:inferecipe')
 
     @app.route('/')
@@ -48,6 +48,15 @@ def create_app():
         name = data.get('name', '').strip()
         if not name:
             return jsonify({'error': 'Name is required'}), 400
+
+        # Check for duplicate name
+        with get_db() as conn:
+            existing = conn.execute(
+                'SELECT id FROM instances WHERE owner_id = ? AND name = ?',
+                (get_user_id(), instance_manager._sanitize(f"{get_username()}-{name}"))
+            ).fetchone()
+            if existing:
+                return jsonify({'error': f'You already have an instance named "{name}". Please choose a different name.'}), 409
 
         kubeconfig_data = None
         if 'kubeconfig' in request.files:
@@ -70,6 +79,29 @@ def create_app():
             return jsonify(result)
         except Exception as e:
             return jsonify({'error': str(e)}), 500
+
+    @app.route('/api/storage_classes', methods=['GET'])
+    def api_storage_classes():
+        """List available storage classes on the local cluster."""
+        import subprocess
+        try:
+            cmd = 'oc' if os.path.exists('/usr/local/bin/oc') else 'kubectl'
+            r = subprocess.run([cmd, 'get', 'sc', '-o', 'json'],
+                               capture_output=True, text=True, timeout=15)
+            if r.returncode != 0:
+                return jsonify([])
+            import json as _json
+            data = _json.loads(r.stdout)
+            classes = []
+            for item in data.get('items', []):
+                name = item['metadata']['name']
+                is_default = item['metadata'].get('annotations', {}).get(
+                    'storageclass.kubernetes.io/is-default-class', 'false') == 'true'
+                classes.append({'name': name, 'is_default': is_default})
+            classes.sort(key=lambda x: (not x['is_default'], x['name']))
+            return jsonify(classes)
+        except Exception:
+            return jsonify([])
 
     @app.route('/api/instances/<int:instance_id>', methods=['DELETE'])
     def api_delete_instance(instance_id):

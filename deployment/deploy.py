@@ -298,7 +298,7 @@ def main():
 
     p.add_argument('--mode', choices=['local', 'launcher'], default='local',
                    help='Deploy mode: local (single instance) or launcher (multi-user control plane)')
-    p.add_argument('-n', '--namespace', default='llm-d', help='Kubernetes namespace (default: llm-d)')
+    p.add_argument('-n', '--namespace', default='inferecipe', help='Kubernetes namespace (default: llm-d)')
     p.add_argument('-i', '--image', default='quay.io/bbenshab/inferecipe:server', help='Container image')
 
     sg = p.add_argument_group('Storage')

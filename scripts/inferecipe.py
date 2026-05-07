@@ -93,8 +93,8 @@ def main():
                     help='Comma-separated TP values to explore (default: 1,2,4,8)')
     hw.add_argument('--image', type=str, default='ghcr.io/llm-d/llm-d-cuda:v0.5.1',
                     help='vLLM container image')
-    hw.add_argument('--namespace', type=str, default='llm-d',
-                    help='Kubernetes namespace (default: llm-d)')
+    hw.add_argument('--namespace', type=str, default='inferecipe',
+                    help='Kubernetes namespace (default: inferecipe)')
     hw.add_argument('--pvc', type=str, default='inferecipe-model-cache',
                     help='PVC name for model cache (default: inferecipe-model-cache)')
     hw.add_argument('--nccl-ib-hca', type=str, default='mlx',
@@ -380,7 +380,7 @@ def resume_run(args, db):
 
     config_params = {
         'model_name': row['model'],
-        'namespace': saved_config.get('namespace', 'llm-d'),
+        'namespace': saved_config.get('namespace', 'inferecipe'),
         'isl': row['isl'],
         'osl': row['osl'],
         'qps': float(row['num_users']),

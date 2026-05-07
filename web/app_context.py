@@ -30,7 +30,7 @@ OPTIMIZATION_OUTPUT_DIR = os.environ.get('OPTIMIZATION_OUTPUT_DIR', '/mnt/storag
 
 if not os.environ.get('HF_HOME'):
     os.environ['HF_HOME'] = os.path.join(os.path.dirname(DB_PATH), '.cache', 'huggingface')
-TARGET_NAMESPACE = os.environ.get('TARGET_NAMESPACE', 'llm-d')
+TARGET_NAMESPACE = os.environ.get('TARGET_NAMESPACE', 'inferecipe')
 
 
 # ── Mutable Global State (shared dict so mutations are visible everywhere) ──

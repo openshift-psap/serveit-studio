@@ -20,9 +20,11 @@ def _kubectl(args: list, input_data: str = None) -> subprocess.CompletedProcess:
 
 
 def _is_oc() -> bool:
+    """Check if we're on OpenShift (not just if oc CLI exists)."""
     try:
-        r = subprocess.run(['oc', 'version', '--client'], capture_output=True, timeout=5)
-        return r.returncode == 0
+        r = subprocess.run(['kubectl', 'api-resources', '--api-group=route.openshift.io'],
+                          capture_output=True, text=True, timeout=15)
+        return r.returncode == 0 and 'Route' in r.stdout
     except (FileNotFoundError, subprocess.TimeoutExpired):
         return False
 
@@ -44,7 +46,7 @@ def _sanitize(name: str) -> str:
 
 
 def create_instance(owner_id: int, username: str, name: str,
-                    namespace: str = 'llm-d',
+                    namespace: str = 'inferecipe',
                     kubeconfig_data: str = None,
                     storage_class: str = None,
                     image: str = 'quay.io/bbenshab/inferecipe:server') -> Dict:
@@ -123,9 +125,17 @@ def create_instance(owner_id: int, username: str, name: str,
             raise RuntimeError(f"PVC creation failed: {r.stderr}")
 
         # Create Deployment (with AUTH_DISABLED + optional kubeconfig mount)
+        # Detect launcher's PVC for shared code access
+        code_pvc = ''
+        r = _kubectl(['get', 'pod', '-l', 'app=inferecipe-launcher', '-n', namespace,
+                      '-o', 'jsonpath={.items[0].spec.volumes[?(@.persistentVolumeClaim)].persistentVolumeClaim.claimName}'])
+        if r.returncode == 0 and r.stdout.strip():
+            code_pvc = r.stdout.strip().split()[0]
+
         deploy_yaml = _render('instance-deployment.yaml.j2',
             name=deployment_name, namespace=namespace, image=image,
-            pvc_name=pvc_name, dev_mode='false', force_nad='false',
+            pvc_name=pvc_name, code_pvc_name=code_pvc,
+            dev_mode='false', force_nad='false',
             auth_disabled='true',
             kubeconfig_secret=kubeconfig_secret or '',
             has_kubeconfig='true' if kubeconfig_secret else 'false')
@@ -188,8 +198,14 @@ def create_instance(owner_id: int, username: str, name: str,
         }
 
     except Exception as e:
+        # Clean up the DB record and any partial K8s resources on failure
         with get_db() as conn:
-            conn.execute("UPDATE instances SET status = 'error' WHERE id = ?", (instance_id,))
+            conn.execute("DELETE FROM instances WHERE id = ?", (instance_id,))
+        _kubectl(['delete', 'deployment', deployment_name, '-n', namespace, '--ignore-not-found=true'])
+        _kubectl(['delete', 'svc', f'{deployment_name}-ui', '-n', namespace, '--ignore-not-found=true'])
+        _kubectl(['delete', 'pvc', pvc_name, '-n', namespace, '--ignore-not-found=true'])
+        if kubeconfig_secret:
+            _kubectl(['delete', 'secret', kubeconfig_secret, '-n', namespace, '--ignore-not-found=true'])
         raise
 
 

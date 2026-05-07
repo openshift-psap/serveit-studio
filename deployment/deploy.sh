@@ -5,7 +5,7 @@ set -e
 # Generates Kubernetes manifests for InfeRecipe optimizer deployment
 
 # Default configuration
-NAMESPACE="llm-d"
+NAMESPACE="inferecipe"
 IMAGE="quay.io/bbenshab/vllm:inferecipe"
 PVC_NAME=""
 STORAGE_CLASS=""
