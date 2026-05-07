@@ -93,6 +93,25 @@ def create_instance(owner_id: int, username: str, name: str,
         finally:
             os.unlink(tmp_path)
 
+        # Create namespace on remote cluster if it doesn't exist
+        import tempfile as _tf2
+        with _tf2.NamedTemporaryFile(mode='w', suffix='.kubeconfig', delete=False) as tmp2:
+            tmp2.write(kubeconfig_data)
+            tmp2_path = tmp2.name
+        try:
+            r = subprocess.run(
+                ['kubectl', '--kubeconfig', tmp2_path, 'get', 'namespace', namespace],
+                capture_output=True, text=True, timeout=15)
+            if r.returncode != 0:
+                r2 = subprocess.run(
+                    ['kubectl', '--kubeconfig', tmp2_path, 'create', 'namespace', namespace],
+                    capture_output=True, text=True, timeout=15)
+                if r2.returncode != 0:
+                    raise RuntimeError(
+                        f"Failed to create namespace '{namespace}' on remote cluster: {r2.stderr.strip()[:200]}")
+        finally:
+            os.unlink(tmp2_path)
+
         kubeconfig_secret = f"inferecipe-kubeconfig-{safe_name}"
         secret_yaml = json.dumps({
             "apiVersion": "v1", "kind": "Secret",

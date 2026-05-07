@@ -509,11 +509,11 @@ socket.on('cluster_scan_result', function(data) {
         document.getElementById('node-select-list').innerHTML = nodeHtml;
         document.getElementById('node-select-group').style.display = 'block';
 
-        if (config.selected_nodes && config.selected_nodes.length > 0) {
-            document.getElementById('enable-node-select').checked = true;
-            document.getElementById('node-select-list').style.opacity = '1';
-            validateNodeSelection();
-        }
+        var nodeEnabled = config.selected_nodes && config.selected_nodes.length > 0;
+        document.getElementById('enable-node-select').checked = nodeEnabled;
+        document.getElementById('node-select-list').style.opacity = nodeEnabled ? '1' : '0.5';
+        document.querySelectorAll('.node-select-cb').forEach(function(cb) { cb.disabled = !nodeEnabled; });
+        if (nodeEnabled) validateNodeSelection();
     }
 
     // Hide scanning status and show resources section

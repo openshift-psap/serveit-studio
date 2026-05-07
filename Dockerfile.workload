@@ -42,5 +42,9 @@ RUN KUBECTL_VERSION="1.30.2" && \
 
 WORKDIR /app
 
+# Add results parser script
+COPY scripts/parse_guidellm.py /usr/local/bin/parse_guidellm
+RUN chmod +x /usr/local/bin/parse_guidellm
+
 # Keep alive — the server does kubectl exec to run guidellm commands
 CMD ["sleep", "infinity"]

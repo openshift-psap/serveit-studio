@@ -484,10 +484,10 @@ function restoreClusterResources() {
         document.getElementById('node-select-list').innerHTML = nodeHtml;
         document.getElementById('node-select-group').style.display = 'block';
 
-        if (config.selected_nodes && config.selected_nodes.length > 0) {
-            document.getElementById('enable-node-select').checked = true;
-            document.getElementById('node-select-list').style.opacity = '1';
-        }
+        var nodeEnabled = config.selected_nodes && config.selected_nodes.length > 0;
+        document.getElementById('enable-node-select').checked = nodeEnabled;
+        document.getElementById('node-select-list').style.opacity = nodeEnabled ? '1' : '0.5';
+        document.querySelectorAll('.node-select-cb').forEach(function(cb) { cb.disabled = !nodeEnabled; });
     }
 
     // Show re-scan button
@@ -496,8 +496,12 @@ function restoreClusterResources() {
 
 // Node selection toggle
 document.getElementById('enable-node-select').addEventListener('change', function() {
+    var cbs = document.querySelectorAll('.node-select-cb');
+    cbs.forEach(function(cb) { cb.disabled = !this.checked; }.bind(this));
+    document.getElementById('node-select-list').style.opacity = this.checked ? '1' : '0.5';
     if (!this.checked) {
         document.getElementById('node-select-warning').style.display = 'none';
+        cbs.forEach(function(cb) { cb.checked = false; cb.closest('label').style.borderColor = '#e2e8f0'; });
         config.selected_nodes = null;
         saveConfig();
     } else {

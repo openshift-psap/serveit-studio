@@ -73,8 +73,8 @@
                                         </div>
                                         <div id="node-select-body" style="display:none;padding-bottom:12px;">
                                             <input type="checkbox" id="enable-node-select" style="display:none;">
-                                            <div id="node-select-content" style="border:2px solid #e2e8f0;border-radius:8px;padding:12px 16px;cursor:pointer;transition:all 0.2s;background:#fafafa;" onclick="var cb=document.getElementById('enable-node-select');cb.checked=!cb.checked;cb.dispatchEvent(new Event('change'));var inner=document.getElementById('node-select-list');inner.style.opacity=cb.checked?'1':'0.5';inner.style.pointerEvents=cb.checked?'auto':'none';">
-                                                <div style="font-size:0.85em;color:#6b7280;margin-bottom:8px;">👆 Click to enable/disable node pinning</div>
+                                            <div id="node-select-content" style="border:2px solid #e2e8f0;border-radius:8px;padding:12px 16px;transition:all 0.2s;background:#fafafa;">
+                                                <div style="font-size:0.85em;color:#6b7280;margin-bottom:8px;cursor:pointer;" onclick="var cb=document.getElementById('enable-node-select');cb.checked=!cb.checked;cb.dispatchEvent(new Event('change'));var inner=document.getElementById('node-select-list');inner.style.opacity=cb.checked?'1':'0.5';inner.style.pointerEvents=cb.checked?'auto':'none';this.textContent=cb.checked?'✅ Node pinning enabled — select nodes below':'👆 Click to enable/disable node pinning';">👆 Click to enable/disable node pinning</div>
                                                 <div id="node-select-list" style="opacity:0.5;pointer-events:none;transition:all 0.2s;"></div>
                                                 <div id="node-select-warning" style="display:none;margin-top:12px;padding:12px;background:#fef2f2;border-left:4px solid #ef4444;border-radius:6px;font-size:14px;color:#991b1b;"></div>
                                             </div>
