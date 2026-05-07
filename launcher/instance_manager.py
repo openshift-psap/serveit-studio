@@ -50,9 +50,15 @@ def create_instance(owner_id: int, username: str, name: str,
                     kubeconfig_data: str = None,
                     storage_class: str = None,
                     image: str = 'quay.io/bbenshab/inferecipe:server') -> Dict:
-    """Create a new InfeRecipe instance for a user."""
+    """Create a new InfeRecipe instance for a user.
+
+    Each instance gets its own namespace (inferecipe-{username}-{name}) to avoid
+    resource collisions when multiple instances target the same cluster.
+    """
 
     safe_name = _sanitize(f"{username}-{name}")
+    # Each instance gets its own namespace for isolation
+    instance_namespace = f"inferecipe-{safe_name}"
     deployment_name = f"inferecipe-{safe_name}"
     pvc_name = f"inferecipe-{safe_name}-storage"
     service_name = f"inferecipe-{safe_name}-ui"
@@ -93,33 +99,33 @@ def create_instance(owner_id: int, username: str, name: str,
         finally:
             os.unlink(tmp_path)
 
-        # Create namespace on remote cluster if it doesn't exist
+        # Create instance_namespace on remote cluster if it doesn't exist
         import tempfile as _tf2
         with _tf2.NamedTemporaryFile(mode='w', suffix='.kubeconfig', delete=False) as tmp2:
             tmp2.write(kubeconfig_data)
             tmp2_path = tmp2.name
         try:
             r = subprocess.run(
-                ['kubectl', '--kubeconfig', tmp2_path, 'get', 'namespace', namespace],
+                ['kubectl', '--kubeconfig', tmp2_path, 'get', 'namespace', instance_namespace],
                 capture_output=True, text=True, timeout=15)
             if r.returncode != 0:
                 r2 = subprocess.run(
-                    ['kubectl', '--kubeconfig', tmp2_path, 'create', 'namespace', namespace],
+                    ['kubectl', '--kubeconfig', tmp2_path, 'create', 'namespace', instance_namespace],
                     capture_output=True, text=True, timeout=15)
                 if r2.returncode != 0:
                     raise RuntimeError(
-                        f"Failed to create namespace '{namespace}' on remote cluster: {r2.stderr.strip()[:200]}")
+                        f"Failed to create namespace '{instance_namespace}' on remote cluster: {r2.stderr.strip()[:200]}")
         finally:
             os.unlink(tmp2_path)
 
         kubeconfig_secret = f"inferecipe-kubeconfig-{safe_name}"
         secret_yaml = json.dumps({
             "apiVersion": "v1", "kind": "Secret",
-            "metadata": {"name": kubeconfig_secret, "namespace": namespace},
+            "metadata": {"name": kubeconfig_secret, "namespace": instance_namespace},
             "type": "Opaque",
             "stringData": {"kubeconfig": kubeconfig_data}
         })
-        r = _kubectl(['apply', '-f', '-', '-n', namespace], input_data=secret_yaml)
+        r = _kubectl(['apply', '-f', '-', '-n', instance_namespace], input_data=secret_yaml)
         if r.returncode != 0:
             raise RuntimeError(f"Failed to create kubeconfig Secret: {r.stderr}")
 
@@ -130,16 +136,23 @@ def create_instance(owner_id: int, username: str, name: str,
                                    deployment_name, pvc_name, service_name,
                                    kubeconfig_secret, target_cluster, created_at)
             VALUES (?, ?, ?, 'creating', ?, ?, ?, ?, ?, ?, ?)
-        ''', (safe_name, owner_id, name, namespace, deployment_name, pvc_name,
+        ''', (safe_name, owner_id, name, instance_namespace, deployment_name, pvc_name,
               service_name, kubeconfig_secret, target_cluster, datetime.now().isoformat()))
         instance_id = conn.execute('SELECT last_insert_rowid()').fetchone()[0]
+
+    # Create instance namespace on local cluster
+    r = _kubectl(['get', 'namespace', instance_namespace])
+    if r.returncode != 0:
+        r = _kubectl(['create', 'namespace', instance_namespace])
+        if r.returncode != 0:
+            raise RuntimeError(f"Failed to create namespace {instance_namespace}: {r.stderr}")
 
     try:
         # Create PVC
         pvc_yaml = _render('pvc.yaml.j2',
-            pvc_name=pvc_name, namespace=namespace,
+            pvc_name=pvc_name, namespace=instance_namespace,
             storage_size='100Gi', storage_class=storage_class or '')
-        r = _kubectl(['apply', '-f', '-', '-n', namespace], input_data=pvc_yaml)
+        r = _kubectl(['apply', '-f', '-', '-n', instance_namespace], input_data=pvc_yaml)
         if r.returncode != 0:
             raise RuntimeError(f"PVC creation failed: {r.stderr}")
 
@@ -152,42 +165,42 @@ def create_instance(owner_id: int, username: str, name: str,
             code_pvc = r.stdout.strip().split()[0]
 
         deploy_yaml = _render('instance-deployment.yaml.j2',
-            name=deployment_name, namespace=namespace, image=image,
+            name=deployment_name, namespace=instance_namespace, image=image,
             pvc_name=pvc_name, code_pvc_name=code_pvc,
             dev_mode='false', force_nad='false',
             auth_disabled='true',
             kubeconfig_secret=kubeconfig_secret or '',
             has_kubeconfig='true' if kubeconfig_secret else 'false')
 
-        r = _kubectl(['apply', '-f', '-', '-n', namespace], input_data=deploy_yaml)
+        r = _kubectl(['apply', '-f', '-', '-n', instance_namespace], input_data=deploy_yaml)
         if r.returncode != 0:
             raise RuntimeError(f"Deployment creation failed: {r.stderr}")
 
         # Create Service
         is_ocp = _is_oc()
         svc_yaml = _render('service.yaml.j2',
-            name=deployment_name, namespace=namespace, is_openshift=is_ocp)
-        r = _kubectl(['apply', '-f', '-', '-n', namespace], input_data=svc_yaml)
+            name=deployment_name, namespace=instance_namespace, is_openshift=is_ocp)
+        r = _kubectl(['apply', '-f', '-', '-n', instance_namespace], input_data=svc_yaml)
         if r.returncode != 0:
             raise RuntimeError(f"Service creation failed: {r.stderr}")
 
         # Determine service URL — wait for external IP on LoadBalancer
         service_url = None
         if is_ocp:
-            r = _kubectl(['get', 'route', f'{deployment_name}-ui', '-n', namespace,
+            r = _kubectl(['get', 'route', f'{deployment_name}-ui', '-n', instance_namespace,
                           '-o', 'jsonpath={.spec.host}'])
             service_url = f"https://{r.stdout.strip()}" if r.stdout.strip() else None
         else:
             # Wait up to 30s for LoadBalancer external IP
             for _ in range(15):
-                r = _kubectl(['get', 'svc', f'{deployment_name}-ui', '-n', namespace,
+                r = _kubectl(['get', 'svc', f'{deployment_name}-ui', '-n', instance_namespace,
                               '-o', 'jsonpath={.status.loadBalancer.ingress[0].ip}'])
                 ext_ip = r.stdout.strip() if r.returncode == 0 else ''
                 if ext_ip and ext_ip != '<pending>':
                     service_url = f"http://{ext_ip}:5000"
                     break
                 # Also check hostname (some cloud providers use hostname instead of IP)
-                r2 = _kubectl(['get', 'svc', f'{deployment_name}-ui', '-n', namespace,
+                r2 = _kubectl(['get', 'svc', f'{deployment_name}-ui', '-n', instance_namespace,
                                '-o', 'jsonpath={.status.loadBalancer.ingress[0].hostname}'])
                 ext_host = r2.stdout.strip() if r2.returncode == 0 else ''
                 if ext_host:
@@ -196,13 +209,13 @@ def create_instance(owner_id: int, username: str, name: str,
                 time.sleep(2)
             if not service_url:
                 # Fallback: use NodePort
-                r = _kubectl(['get', 'svc', f'{deployment_name}-ui', '-n', namespace,
+                r = _kubectl(['get', 'svc', f'{deployment_name}-ui', '-n', instance_namespace,
                               '-o', 'jsonpath={.spec.ports[0].nodePort}'])
                 node_port = r.stdout.strip() if r.returncode == 0 else ''
                 if node_port:
                     service_url = f"http://localhost:{node_port}"
                 else:
-                    service_url = f"http://{service_name}.{namespace}.svc.cluster.local:5000"
+                    service_url = f"http://{service_name}.{instance_namespace}.svc.cluster.local:5000"
 
         # Update DB
         with get_db() as conn:
@@ -220,11 +233,11 @@ def create_instance(owner_id: int, username: str, name: str,
         # Clean up the DB record and any partial K8s resources on failure
         with get_db() as conn:
             conn.execute("DELETE FROM instances WHERE id = ?", (instance_id,))
-        _kubectl(['delete', 'deployment', deployment_name, '-n', namespace, '--ignore-not-found=true'])
-        _kubectl(['delete', 'svc', f'{deployment_name}-ui', '-n', namespace, '--ignore-not-found=true'])
-        _kubectl(['delete', 'pvc', pvc_name, '-n', namespace, '--ignore-not-found=true'])
+        _kubectl(['delete', 'deployment', deployment_name, '-n', instance_namespace, '--ignore-not-found=true'])
+        _kubectl(['delete', 'svc', f'{deployment_name}-ui', '-n', instance_namespace, '--ignore-not-found=true'])
+        _kubectl(['delete', 'pvc', pvc_name, '-n', instance_namespace, '--ignore-not-found=true'])
         if kubeconfig_secret:
-            _kubectl(['delete', 'secret', kubeconfig_secret, '-n', namespace, '--ignore-not-found=true'])
+            _kubectl(['delete', 'secret', kubeconfig_secret, '-n', instance_namespace, '--ignore-not-found=true'])
         raise
 
 
@@ -255,6 +268,9 @@ def delete_instance(instance_id: int, owner_id: int) -> bool:
     # Delete Route on OpenShift
     if _is_oc():
         _kubectl(['delete', 'route', f"{row['deployment_name']}-ui", '-n', ns, '--ignore-not-found=true'])
+
+    # Delete the instance namespace (cleans up everything in it)
+    _kubectl(['delete', 'namespace', ns, '--ignore-not-found=true'])
 
     with get_db() as conn:
         conn.execute('DELETE FROM instances WHERE id = ?', (instance_id,))
