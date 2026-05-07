@@ -59,6 +59,38 @@ def create_instance(owner_id: int, username: str, name: str,
     # Create kubeconfig Secret if provided
     kubeconfig_secret = None
     if kubeconfig_data:
+        # Extract cluster URL from kubeconfig
+        try:
+            import yaml
+            kc = yaml.safe_load(kubeconfig_data)
+            target_cluster = kc.get('clusters', [{}])[0].get('cluster', {}).get('server', 'remote')
+        except Exception:
+            target_cluster = 'remote'
+
+        # Validate kubeconfig — test connectivity to the target cluster
+        import tempfile
+        with tempfile.NamedTemporaryFile(mode='w', suffix='.kubeconfig', delete=False) as tmp:
+            tmp.write(kubeconfig_data)
+            tmp_path = tmp.name
+        try:
+            r = subprocess.run(
+                ['kubectl', '--kubeconfig', tmp_path, 'cluster-info'],
+                capture_output=True, text=True, timeout=15
+            )
+            if r.returncode != 0:
+                raise RuntimeError(
+                    f"Cannot connect to cluster {target_cluster}. "
+                    f"Verify the kubeconfig is correct and the cluster is reachable.\n"
+                    f"Error: {r.stderr.strip()[:200]}"
+                )
+        except subprocess.TimeoutExpired:
+            raise RuntimeError(
+                f"Connection to {target_cluster} timed out. "
+                f"Verify the cluster is reachable from this network."
+            )
+        finally:
+            os.unlink(tmp_path)
+
         kubeconfig_secret = f"inferecipe-kubeconfig-{safe_name}"
         secret_yaml = json.dumps({
             "apiVersion": "v1", "kind": "Secret",
@@ -69,14 +101,6 @@ def create_instance(owner_id: int, username: str, name: str,
         r = _kubectl(['apply', '-f', '-', '-n', namespace], input_data=secret_yaml)
         if r.returncode != 0:
             raise RuntimeError(f"Failed to create kubeconfig Secret: {r.stderr}")
-
-        # Extract cluster URL from kubeconfig for display
-        try:
-            import yaml
-            kc = yaml.safe_load(kubeconfig_data)
-            target_cluster = kc.get('clusters', [{}])[0].get('cluster', {}).get('server', 'remote')
-        except Exception:
-            target_cluster = 'remote'
 
     # Insert DB record first to get ID
     with get_db() as conn:
@@ -118,13 +142,38 @@ def create_instance(owner_id: int, username: str, name: str,
         if r.returncode != 0:
             raise RuntimeError(f"Service creation failed: {r.stderr}")
 
-        # Determine service URL
+        # Determine service URL — wait for external IP on LoadBalancer
+        service_url = None
         if is_ocp:
             r = _kubectl(['get', 'route', f'{deployment_name}-ui', '-n', namespace,
                           '-o', 'jsonpath={.spec.host}'])
             service_url = f"https://{r.stdout.strip()}" if r.stdout.strip() else None
         else:
-            service_url = f"http://{service_name}.{namespace}.svc.cluster.local:5000"
+            # Wait up to 30s for LoadBalancer external IP
+            for _ in range(15):
+                r = _kubectl(['get', 'svc', f'{deployment_name}-ui', '-n', namespace,
+                              '-o', 'jsonpath={.status.loadBalancer.ingress[0].ip}'])
+                ext_ip = r.stdout.strip() if r.returncode == 0 else ''
+                if ext_ip and ext_ip != '<pending>':
+                    service_url = f"http://{ext_ip}:5000"
+                    break
+                # Also check hostname (some cloud providers use hostname instead of IP)
+                r2 = _kubectl(['get', 'svc', f'{deployment_name}-ui', '-n', namespace,
+                               '-o', 'jsonpath={.status.loadBalancer.ingress[0].hostname}'])
+                ext_host = r2.stdout.strip() if r2.returncode == 0 else ''
+                if ext_host:
+                    service_url = f"http://{ext_host}:5000"
+                    break
+                time.sleep(2)
+            if not service_url:
+                # Fallback: use NodePort
+                r = _kubectl(['get', 'svc', f'{deployment_name}-ui', '-n', namespace,
+                              '-o', 'jsonpath={.spec.ports[0].nodePort}'])
+                node_port = r.stdout.strip() if r.returncode == 0 else ''
+                if node_port:
+                    service_url = f"http://localhost:{node_port}"
+                else:
+                    service_url = f"http://{service_name}.{namespace}.svc.cluster.local:5000"
 
         # Update DB
         with get_db() as conn:

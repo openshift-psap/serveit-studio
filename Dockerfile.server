@@ -1,0 +1,53 @@
+# inferecipe-server — Web UI, launcher, optimization orchestration
+# No guidellm, no heavy ML libs. Just the control plane.
+FROM registry.access.redhat.com/ubi9/ubi:9.4
+ENV LANG="C.UTF-8" LC_ALL="C.UTF-8" PYTHONUNBUFFERED=1
+
+# Base system tools
+RUN \
+    dnf install -y https://dl.fedoraproject.org/pub/epel/epel-release-latest-$(rpm -E %{rhel}).noarch.rpm && \
+    dnf install -y \
+        python3.11 python3.11-devel \
+        procps git jq wget vim \
+        iputils net-tools bind-utils \
+    && \
+    python3.11 -m ensurepip --upgrade && \
+    python3.11 -m pip install --upgrade pip setuptools --no-cache-dir && \
+    dnf clean all && rm -rf /var/cache/dnf/* && \
+    ln -sf /usr/bin/python3.11 /usr/bin/python3 && \
+    ln -sf /usr/bin/python3.11 /usr/bin/python && \
+    ln -sf /usr/bin/pip3.11 /usr/bin/pip3 && \
+    ln -sf /usr/bin/pip3.11 /usr/bin/pip
+
+# Python deps — server only (no guidellm, no torch, no transformers)
+RUN python3.11 -m pip install --no-cache-dir \
+    Flask \
+    Flask-SocketIO \
+    gevent \
+    gevent-websocket \
+    Jinja2 \
+    PyYAML \
+    requests \
+    httpx \
+    openai \
+    optuna \
+    kubernetes \
+    plotly \
+    pandas \
+    werkzeug
+
+# kubectl + oc
+RUN KUBECTL_VERSION="1.30.2" && \
+    curl -sLo /usr/local/bin/kubectl \
+        "https://dl.k8s.io/release/v${KUBECTL_VERSION}/bin/linux/amd64/kubectl" && \
+    chmod +x /usr/local/bin/kubectl && \
+    curl -sLo /tmp/oc.tar.gz \
+        "https://mirror.openshift.com/pub/openshift-v4/clients/ocp/stable/openshift-client-linux.tar.gz" && \
+    tar xzf /tmp/oc.tar.gz -C /usr/local/bin oc && \
+    rm -f /tmp/oc.tar.gz
+
+WORKDIR /app
+COPY . /app/
+
+EXPOSE 5000
+CMD ["python3.11", "web/server.py"]

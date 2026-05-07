@@ -1,0 +1,46 @@
+# inferecipe-workload — Guidellm benchmark runner + network debugging
+# Runs as a persistent pod, receives benchmark commands via kubectl exec.
+FROM registry.access.redhat.com/ubi9/ubi:9.4
+ENV LANG="C.UTF-8" LC_ALL="C.UTF-8" PYTHONUNBUFFERED=1
+
+# System tools — benchmark + network debugging
+RUN \
+    dnf install -y https://dl.fedoraproject.org/pub/epel/epel-release-latest-$(rpm -E %{rhel}).noarch.rpm && \
+    dnf install -y \
+        python3.11 python3.11-devel \
+        procps jq wget \
+        # Network debugging
+        iputils net-tools bind-utils traceroute \
+        ethtool nmap-ncat \
+        # RDMA/InfiniBand tools
+        rdma-core libibverbs-utils infiniband-diags \
+        # Performance tools
+        qperf iperf3 \
+    && \
+    python3.11 -m ensurepip --upgrade && \
+    python3.11 -m pip install --upgrade pip setuptools --no-cache-dir && \
+    dnf clean all && rm -rf /var/cache/dnf/* && \
+    ln -sf /usr/bin/python3.11 /usr/bin/python3 && \
+    ln -sf /usr/bin/python3.11 /usr/bin/python && \
+    ln -sf /usr/bin/pip3.11 /usr/bin/pip3 && \
+    ln -sf /usr/bin/pip3.11 /usr/bin/pip
+
+# Python deps — guidellm + tokenizer (for dataset generation)
+RUN python3.11 -m pip install --no-cache-dir \
+    "guidellm>=0.6.0,<0.7" \
+    transformers \
+    requests \
+    httpx \
+    PyYAML \
+    huggingface_hub
+
+# kubectl (for endpoint discovery, log streaming)
+RUN KUBECTL_VERSION="1.30.2" && \
+    curl -sLo /usr/local/bin/kubectl \
+        "https://dl.k8s.io/release/v${KUBECTL_VERSION}/bin/linux/amd64/kubectl" && \
+    chmod +x /usr/local/bin/kubectl
+
+WORKDIR /app
+
+# Keep alive — the server does kubectl exec to run guidellm commands
+CMD ["sleep", "infinity"]

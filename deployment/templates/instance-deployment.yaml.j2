@@ -24,6 +24,9 @@ spec:
         - name: storage-volume
           persistentVolumeClaim:
             claimName: {{ pvc_name }}
+        - name: code-volume
+          persistentVolumeClaim:
+            claimName: {{ code_pvc_name }}
         - name: tmp-mem
           emptyDir:
             medium: Memory
@@ -42,7 +45,14 @@ spec:
             - "-c"
             - |
               echo "--- Starting InfeRecipe Instance ---"
-              cd /app/web
+              if [ -f "/mnt/code/app/web/server.py" ]; then
+                echo "Using code from shared PVC"
+                export INFE_RECIPE_PATH="/mnt/code/app"
+                cd /mnt/code/app/web
+              else
+                echo "Using code from image"
+                cd /app/web
+              fi
               exec python3.11 server.py
           env:
             - name: INFE_RECIPE_PATH
@@ -74,6 +84,9 @@ spec:
           volumeMounts:
             - name: storage-volume
               mountPath: /mnt/storage
+            - name: code-volume
+              mountPath: /mnt/code
+              readOnly: true
             - name: tmp-mem
               mountPath: /tmp
 {% if has_kubeconfig == 'true' %}
