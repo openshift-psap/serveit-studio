@@ -99,8 +99,9 @@
         .modal h2{color:#1A1A1A;font-size:1.15em;margin-bottom:4px}
         .modal .modal-sub{color:#999;font-size:0.85em;margin-bottom:24px}
         .modal label{display:block;font-weight:600;font-size:0.8em;color:#4A4A4A;text-transform:uppercase;letter-spacing:0.05em;margin-bottom:6px;cursor:pointer}
-        .modal input[type=text],.modal select{width:100%;padding:10px 12px;border:1.5px solid #E0E0E0;border-radius:8px;font-size:0.95em;margin-bottom:16px;background:#F8F8F8;color:#1A1A1A}
+        .modal input[type=text],.modal input[type=password],.modal select{width:100%;padding:10px 12px;border:1.5px solid #E0E0E0;border-radius:8px;font-size:0.95em;margin-bottom:16px;background:#F8F8F8;color:#1A1A1A}
         .modal input:focus-visible,.modal select:focus-visible{border-color:#EE0000;outline:none;box-shadow:0 0 0 3px rgba(238,0,0,0.1);background:white}
+        .modal input[type=password]::placeholder{color:#999}
         .modal .file-upload{border:2px dashed #E0E0E0;border-radius:8px;padding:24px;text-align:center;cursor:pointer;margin-bottom:16px;color:#999;font-size:0.85em;transition:border-color 0.15s}
         .modal .file-upload:hover{border-color:#EE0000;color:#EE0000}
         .modal .file-upload:focus-visible{outline:none;box-shadow:0 0 0 3px rgba(238,0,0,0.15)}
@@ -123,6 +124,28 @@
         .warn-banner .warn-msg{color:#78350f;font-size:0.88em;line-height:1.6}
         .warn-banner code{background:#92400e;color:#fef3c7;padding:3px 8px;border-radius:4px;font-size:0.85em;font-family:'Red Hat Mono',monospace;word-break:break-all}
         .warn-actions{padding:14px 22px;display:flex;justify-content:flex-end;gap:8px}
+        .confirm-overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,0.4);z-index:200;align-items:center;justify-content:center}
+        .confirm-overlay.active{display:flex}
+        .confirm-box{background:white;border-radius:14px;width:420px;max-width:90vw;box-shadow:0 25px 60px rgba(0,0,0,0.15);overflow:hidden}
+        .confirm-header{padding:22px 24px 0}
+        .confirm-header h3{color:#1A1A1A;font-size:1.05em;margin-bottom:6px}
+        .confirm-header p{color:#4A4A4A;font-size:0.88em;line-height:1.6}
+        .confirm-header .confirm-warn{background:#FFF5F5;border-left:3px solid #EE0000;border-radius:6px;padding:10px 14px;margin-top:12px;color:#A60000;font-size:0.82em}
+        .confirm-actions{padding:18px 24px;display:flex;justify-content:flex-end;gap:8px}
+        /* ── Admin ── */
+        .nav-item{display:flex;align-items:center;gap:8px;padding:9px 10px;margin:0 8px;border-radius:8px;cursor:pointer;font-size:0.88em;color:#4A4A4A;border:none;background:none;width:calc(100% - 16px);text-align:left;text-decoration:none;transition:background-color 0.12s}
+        .nav-item:hover{background:#F8F8F8}
+        .nav-item.active{background:#FFF5F5;color:#A60000;font-weight:600}
+        .nav-item svg{opacity:0.5;flex-shrink:0}
+        .nav-item.active svg{opacity:1}
+        .user-table{width:100%;border-collapse:collapse;font-size:0.9em}
+        .user-table th{text-align:left;padding:10px 16px;color:#999;font-size:0.78em;text-transform:uppercase;letter-spacing:0.05em;border-bottom:2px solid #E0E0E0}
+        .user-table td{padding:12px 16px;border-bottom:1px solid #F0F0F0}
+        .user-table tr:hover td{background:#F8F8F8}
+        .user-table .badge-admin{background:#FFE5E5;color:#EE0000;padding:2px 8px;border-radius:10px;font-size:0.78em;font-weight:600}
+        .user-table .badge-user{background:#F0F0F0;color:#999;padding:2px 8px;border-radius:10px;font-size:0.78em;font-weight:600}
+        .viewing-banner{background:linear-gradient(135deg,#eff6ff,#dbeafe);border-left:4px solid #3b82f6;padding:10px 20px;margin:0 32px 16px;border-radius:8px;font-size:0.88em;color:#1e40af;display:flex;align-items:center;justify-content:space-between}
+        .viewing-banner button{border:none;background:#3b82f6;color:white;padding:5px 14px;border-radius:6px;font-size:0.82em;font-weight:600;cursor:pointer}
         @keyframes spin{from{transform:rotate(0deg)}to{transform:rotate(360deg)}}
         @media(prefers-reduced-motion:reduce){*{transition:none !important;animation:none !important}}
         @media(max-width:768px){.sidebar{display:none}.main{margin-left:0}}
@@ -155,11 +178,19 @@
         </button>
         {% endfor %}
     </div>
+    {% if is_admin %}
+    <div style="padding:8px 8px 0;border-top:1px solid #E0E0E0;">
+        <button class="nav-item" id="nav-users" onclick="showUsers()">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75"/></svg>
+            Users
+        </button>
+    </div>
+    {% endif %}
     <div class="sidebar-footer">
         <div class="user-pill">
             <div class="user-avatar">{{ username[0]|upper }}</div>
-            <div class="user-info"><div class="uname">{{ username }}</div></div>
-            <a href="/logout" class="logout-btn">Logout</a>
+            <div class="user-info"><div class="uname">{{ username }}{% if is_admin %} <span style="font-size:0.7em;color:#EE0000">(admin)</span>{% endif %}</div></div>
+            <a href="/logout" class="logout-btn" title="Logout"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg></a>
         </div>
     </div>
 </aside>
@@ -260,8 +291,43 @@
     </div>
 </div>
 
+<!-- Confirm Dialog -->
+<div class="confirm-overlay" id="confirm-modal">
+    <div class="confirm-box">
+        <div class="confirm-header">
+            <h3 id="confirm-title">Are you sure?</h3>
+            <p id="confirm-msg"></p>
+            <div class="confirm-warn" id="confirm-warn"></div>
+        </div>
+        <div class="confirm-actions">
+            <button class="btn btn-cancel" onclick="hideConfirm()">Cancel</button>
+            <button class="btn btn-danger" id="confirm-action-btn">Delete</button>
+        </div>
+    </div>
+</div>
+
+{% if is_admin %}
+<!-- Add User Modal -->
+<div class="modal-overlay" id="add-user-modal" onclick="if(event.target===this)hideAddUserModal()">
+    <div class="modal" role="dialog" style="width:400px">
+        <h2>Add User</h2>
+        <p class="modal-sub">Create a new launcher account</p>
+        <label for="new-username">Username</label>
+        <input type="text" id="new-username" placeholder="username" autocomplete="off">
+        <label for="new-user-password">Password</label>
+        <input type="password" id="new-user-password" placeholder="min 6 characters">
+        <div class="actions">
+            <button type="button" class="btn btn-cancel" onclick="hideAddUserModal()">Cancel</button>
+            <button type="button" class="btn btn-primary" onclick="addUser()">Create</button>
+        </div>
+    </div>
+</div>
+{% endif %}
+
 <script>
 var currentGroupId = {{ groups[0].id if groups else 'null' }};
+var IS_ADMIN = {{ 'true' if is_admin else 'false' }};
+var viewingUserId = null;
 var ICONS = ['📦','🔬','🌐','🏢','🔧','☁️','🖥️','🧪','🚀','💻','🔒','⚡','🏗️','📊','🎯','🔥','💡','🛠️','📡','🗄️','🐳','🤖','🧠','💎','🔮','🌊','🏔️','🛡️','⚙️','🔗','📈','🧬','🎛️','💾','🔑','🌍','🏭','📐','🧊','🪐'];
 var selectedIcon = '📦';
 
@@ -292,21 +358,39 @@ function saveGroup(){
     fetch('/api/groups',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({name:name,icon:selectedIcon})})
     .then(function(r){return r.json()})
     .then(function(data){
-        if(data.error){alert(data.error);return;}
+        if(data.error){showWarn('Cannot create group', data.error);return;}
         hideGroupModal();
-        location.reload();
+        // Reload groups in sidebar and select the new one
+        loadGroups();
+        currentGroupId = data.id;
+        setTimeout(function(){ selectGroup(data.id); }, 300);
     });
 }
 
+function showConfirm(title, msg, warn, btnText, onConfirm){
+    document.getElementById('confirm-title').textContent = title;
+    document.getElementById('confirm-msg').textContent = msg;
+    document.getElementById('confirm-warn').textContent = warn;
+    var btn = document.getElementById('confirm-action-btn');
+    btn.textContent = btnText || 'Delete';
+    btn.onclick = function(){ hideConfirm(); onConfirm(); };
+    document.getElementById('confirm-modal').classList.add('active');
+}
+function hideConfirm(){document.getElementById('confirm-modal').classList.remove('active');}
+
 function deleteGroup(id, name){
-    if(!confirm('Delete group "'+name+'" and ALL its instances? This cannot be undone.')) return;
-    fetch('/api/groups/'+id,{method:'DELETE'})
-    .then(function(r){return r.json()})
-    .then(function(data){ if(data.ok) location.reload(); else alert(data.error||'Failed'); });
+    showConfirm('Delete Group', 'Delete group "'+name+'"?', 'This will also delete ALL instances in this group and their data.', 'Delete Group', function(){
+        fetch('/api/groups/'+id,{method:'DELETE'})
+        .then(function(r){return r.json()})
+        .then(function(data){ if(data.ok) location.reload(); else showWarn('Error', data.error||'Failed'); });
+    });
 }
 
 function selectGroup(id){
     currentGroupId = id;
+    viewingUserId = null;
+    var navUsers = document.getElementById('nav-users');
+    if(navUsers) navUsers.classList.remove('active');
     document.querySelectorAll('.group-item').forEach(function(el){ el.classList.toggle('active', parseInt(el.dataset.id)===id); });
     var active = document.querySelector('.group-item.active');
     if(active){
@@ -318,10 +402,12 @@ function selectGroup(id){
     loadInstances(id);
 }
 
-function loadInstances(groupId, isRefresh){
+function loadInstances(groupId, isRefresh, userId){
     var list = document.getElementById('instance-list');
     if(!isRefresh) list.innerHTML = '<div style="text-align:center;padding:40px;color:#999">Loading&hellip;</div>';
-    fetch('/api/instances?group_id='+groupId)
+    var url = '/api/instances?group_id='+groupId;
+    if(userId) url += '&user_id='+userId;
+    fetch(url)
     .then(function(r){return r.json()})
     .then(function(instances){
         var countEl = document.querySelector('.group-item.active .count');
@@ -421,7 +507,9 @@ function createInstance(e){
 }
 
 function deleteInstance(id,name){
-    if(!confirm('Delete instance "'+name+'"? This removes the deployment, PVC, and all data.')) return;
+    showConfirm('Delete Instance', 'Delete instance "'+name+'"?', 'This removes the deployment, PVC, and all data. This cannot be undone.', 'Delete Instance', function(){ _doDeleteInstance(id,name); });
+}
+function _doDeleteInstance(id,name){
     var card=document.getElementById('instance-'+id);
     if(card){card.querySelectorAll('.btn').forEach(function(b){b.disabled=true;b.style.opacity='0.4';});
         var ov=document.createElement('div');ov.className='delete-overlay';ov.innerHTML='<div style="display:flex;align-items:center;gap:10px"><svg width="20" height="20" viewBox="0 0 24 24" aria-hidden="true" style="animation:spin 1s linear infinite"><circle cx="12" cy="12" r="10" stroke="#EE0000" stroke-width="3" fill="none" stroke-dasharray="31.4 31.4" stroke-linecap="round"/></svg><span style="color:#4A4A4A;font-weight:600;font-size:0.9em">Deleting…</span></div>';card.appendChild(ov);}
@@ -494,6 +582,115 @@ function copyCmd(btn, cmd){
         btn.textContent = 'Copied!';
         setTimeout(function(){ btn.textContent = 'Copy'; btn.classList.remove('copied'); }, 1500);
     });
+}
+
+// ── Admin: User Management ──
+function showUsers(){
+    currentGroupId = null;
+    viewingUserId = null;
+    document.querySelectorAll('.group-item').forEach(function(el){el.classList.remove('active')});
+    var navUsers = document.getElementById('nav-users');
+    if(navUsers) navUsers.classList.add('active');
+    document.getElementById('topbar-title').innerHTML = '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="opacity:0.5"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75"/></svg> User Management';
+    document.getElementById('new-instance-btn').style.display='none';
+    var list = document.getElementById('instance-list');
+    list.innerHTML = '<div style="text-align:center;padding:40px;color:#999">Loading&hellip;</div>';
+    fetch('/api/users').then(function(r){return r.json()}).then(function(users){
+        var html = '<div style="padding:0 32px"><div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px"><h3 style="color:#4A4A4A;font-size:0.95em">All Users</h3><button class="btn btn-primary" onclick="showAddUserModal()" style="font-size:0.85em;padding:8px 16px"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M12 5v14M5 12h14"/></svg> Add User</button></div>';
+        html += '<table class="user-table"><thead><tr><th>Username</th><th>Role</th><th>Groups</th><th>Instances</th><th>Created</th><th></th></tr></thead><tbody>';
+        users.forEach(function(u){
+            html += '<tr><td><strong>'+u.username+'</strong></td>';
+            html += '<td>'+(u.is_admin?'<span class="badge-admin">Admin</span>':'<span class="badge-user">User</span>')+'</td>';
+            html += '<td>'+u.group_count+'</td><td>'+u.instance_count+'</td>';
+            html += '<td style="color:#999;font-size:0.88em">'+u.created_at.slice(0,10)+'</td>';
+            html += '<td>';
+            if(!u.is_admin){
+                html += '<button class="btn btn-danger" style="font-size:0.78em;padding:5px 12px" onclick="deleteUser('+u.id+',\''+u.username.replace(/'/g,"\\'")+'\')">Delete</button> ';
+                html += '<button class="btn btn-cancel" style="font-size:0.78em;padding:5px 12px" onclick="resetUserPassword('+u.id+',\''+u.username.replace(/'/g,"\\'")+'\')">Reset Pwd</button> ';
+                html += '<button class="btn btn-open" style="font-size:0.78em;padding:5px 12px" onclick="viewUserGroups('+u.id+',\''+u.username.replace(/'/g,"\\'")+'\')">View</button>';
+            }
+            html += '</td></tr>';
+        });
+        html += '</tbody></table></div>';
+        list.innerHTML = html;
+    });
+}
+
+function showAddUserModal(){
+    document.getElementById('add-user-modal').classList.add('active');
+    document.getElementById('new-username').value='';
+    document.getElementById('new-user-password').value='';
+    document.getElementById('new-username').focus();
+}
+function hideAddUserModal(){document.getElementById('add-user-modal').classList.remove('active');}
+
+function addUser(){
+    var username = document.getElementById('new-username').value.trim();
+    var password = document.getElementById('new-user-password').value;
+    if(!username||!password) return;
+    fetch('/api/users',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({username:username,password:password})})
+    .then(function(r){return r.json()})
+    .then(function(data){
+        if(data.error){alert(data.error);return;}
+        hideAddUserModal();
+        showUsers();
+    });
+}
+
+function resetUserPassword(id, name){
+    var pwd = prompt('Set new temporary password for "'+name+'" (min 6 characters):');
+    if(!pwd) return;
+    if(pwd.length < 6){alert('Password must be at least 6 characters');return;}
+    fetch('/api/users/'+id+'/reset-password',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({password:pwd})})
+    .then(function(r){return r.json()})
+    .then(function(data){
+        if(data.ok) showWarn('Password Reset', 'Password for <strong>'+name+'</strong> has been reset. They will be asked to change it on next login.');
+        else alert(data.error||'Failed');
+    });
+}
+
+function deleteUser(id, name){
+    showConfirm('Delete User', 'Delete user "'+name+'"?', 'This will delete ALL their groups, instances, and data. This cannot be undone.', 'Delete User', function(){
+        fetch('/api/users/'+id,{method:'DELETE'}).then(function(r){return r.json()}).then(function(data){
+            if(data.ok) showUsers();
+            else showWarn('Error', data.error||'Failed');
+        });
+    });
+}
+
+function viewUserGroups(uid, uname){
+    viewingUserId = uid;
+    var navUsers = document.getElementById('nav-users');
+    if(navUsers) navUsers.classList.remove('active');
+    document.getElementById('topbar-title').innerHTML = 'Viewing: <strong>'+uname+'</strong>';
+    document.getElementById('new-instance-btn').style.display='none';
+    // Load that user's groups into sidebar
+    fetch('/api/groups?user_id='+uid).then(function(r){return r.json()}).then(function(groups){
+        var glist = document.getElementById('group-list');
+        glist.innerHTML = '';
+        groups.forEach(function(g){
+            var b = document.createElement('button');
+            b.className='group-item';b.dataset.id=g.id;
+            b.onclick=function(){
+                currentGroupId=g.id;
+                document.querySelectorAll('.group-item').forEach(function(el){el.classList.remove('active')});
+                b.classList.add('active');
+                document.getElementById('topbar-title').innerHTML = '<span class="g-icon">'+g.icon+'</span>'+g.name+' <span style="font-size:0.7em;color:#3b82f6">('+uname+')</span><span class="count"></span>';
+                loadInstances(g.id, false, uid);
+            };
+            b.innerHTML='<span class="icon">'+g.icon+'</span><span class="name">'+g.name+'</span><span class="count">'+g.instance_count+'</span>';
+            glist.appendChild(b);
+        });
+        if(!groups.length){
+            var list = document.getElementById('instance-list');
+            list.innerHTML = '<div class="empty"><h3>No groups</h3><p>This user has no groups yet.</p></div>';
+        }
+    });
+}
+
+function backToMyGroups(){
+    viewingUserId = null;
+    location.reload();
 }
 
 // Auto-refresh (status only, no flicker)

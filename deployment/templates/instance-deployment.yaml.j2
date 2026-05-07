@@ -24,11 +24,6 @@ spec:
         - name: storage-volume
           persistentVolumeClaim:
             claimName: {{ pvc_name }}
-{% if code_pvc_name %}
-        - name: code-volume
-          persistentVolumeClaim:
-            claimName: {{ code_pvc_name }}
-{% endif %}
         - name: tmp-mem
           emptyDir:
             medium: Memory
@@ -47,18 +42,8 @@ spec:
             - "-c"
             - |
               echo "--- Starting InfeRecipe Instance ---"
-              if [ -f "/mnt/code/app/web/server.py" ]; then
-                echo "Using code from shared code PVC"
-                export INFE_RECIPE_PATH="/mnt/code/app"
-                cd /mnt/code/app/web
-              elif [ -f "/mnt/storage/app/web/server.py" ]; then
-                echo "Using code from storage PVC"
-                export INFE_RECIPE_PATH="/mnt/storage/app"
-                cd /mnt/storage/app/web
-              else
-                echo "Using code from image"
-                cd /app/web
-              fi
+              cd /app && git pull --ff-only 2>/dev/null || true
+              cd /app/web
               exec python3.11 server.py
           env:
             - name: INFE_RECIPE_PATH
@@ -90,11 +75,6 @@ spec:
           volumeMounts:
             - name: storage-volume
               mountPath: /mnt/storage
-{% if code_pvc_name %}
-            - name: code-volume
-              mountPath: /mnt/code
-              readOnly: true
-{% endif %}
             - name: tmp-mem
               mountPath: /tmp
 {% if has_kubeconfig == 'true' %}

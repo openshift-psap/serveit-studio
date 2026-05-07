@@ -9,6 +9,7 @@ RUN \
     dnf install -y \
         python3.11 python3.11-devel \
         procps git jq wget vim \
+        openssh-clients \
         iputils net-tools bind-utils \
     && \
     python3.11 -m ensurepip --upgrade && \
@@ -46,8 +47,15 @@ RUN KUBECTL_VERSION="1.30.2" && \
     tar xzf /tmp/oc.tar.gz -C /usr/local/bin oc && \
     rm -f /tmp/oc.tar.gz
 
-WORKDIR /app
-COPY . /app/
+# Git deploy key (read-only, temporary until repo goes public)
+COPY .git-deploy-key /root/.ssh/id_ed25519
+RUN chmod 600 /root/.ssh/id_ed25519 && \
+    ssh-keyscan github.com >> /root/.ssh/known_hosts 2>/dev/null
 
+# Clone repo
+ARG GIT_BRANCH=main
+RUN git clone --depth 1 -b ${GIT_BRANCH} git@github.com:bbenshab/In-S8.git /app
+
+WORKDIR /app
 EXPOSE 5000
 CMD ["python3.11", "web/server.py"]

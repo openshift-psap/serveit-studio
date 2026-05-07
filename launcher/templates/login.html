@@ -47,6 +47,56 @@
     </style>
 </head>
 <body>
+<div class="split-right">
+    <div class="form-wrap">
+        <h1>{% if reset %}Change Password{% elif setup %}Create Account{% else %}Welcome Back{% endif %}</h1>
+        <p class="subtitle">{% if reset %}Your admin has reset your password. Please set a new one.{% elif setup %}Set up your admin account to get started{% else %}Sign in to manage your instances{% endif %}</p>
+        {% if error %}<div class="error" role="alert"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="flex-shrink:0"><circle cx="12" cy="12" r="10"/><path d="M12 8v4m0 4h.01"/></svg>{{ error }}</div>{% endif %}
+        <form method="POST">
+            {% if reset %}
+            <div class="field">
+                <label for="password">New Password</label>
+                <input type="password" id="password" name="password" autocomplete="new-password" required autofocus>
+            </div>
+            <div class="field">
+                <label for="confirm_password">Confirm Password</label>
+                <input type="password" id="confirm_password" name="confirm_password" autocomplete="new-password" required>
+            </div>
+            {% else %}
+            <div class="field">
+                <label for="username">Username</label>
+                <input type="text" id="username" name="username" autocomplete="username" required autofocus>
+            </div>
+            <div class="field">
+                <label for="password">Password</label>
+                <input type="password" id="password" name="password" autocomplete="{% if setup %}new-password{% else %}current-password{% endif %}" required>
+            </div>
+            {% endif %}
+            {% if setup %}
+            <div class="field">
+                <label for="confirm_password">Confirm Password</label>
+                <input type="password" id="confirm_password" name="confirm_password" autocomplete="new-password" required>
+            </div>
+            {% else %}
+            <div class="save-options">
+                <label class="remember">
+                    <input type="checkbox" id="save-username" checked>
+                    <span>Save username</span>
+                </label>
+                <label class="remember">
+                    <input type="checkbox" id="save-password">
+                    <span>Save password</span>
+                </label>
+                <label class="remember">
+                    <input type="checkbox" name="remember" id="remember" checked>
+                    <span>Remember session</span>
+                </label>
+            </div>
+            {% endif %}
+            <button type="submit" class="submit-btn">{% if reset %}Set Password{% elif setup %}Create Account{% else %}Sign In{% endif %}</button>
+        </form>
+    </div>
+</div>
 <div class="split-left">
     <div class="brand">
         <div class="brand-logo">
@@ -72,45 +122,6 @@
                 <span>EPP routing optimization and latency tuning</span>
             </div>
         </div>
-    </div>
-</div>
-<div class="split-right">
-    <div class="form-wrap">
-        <h1>{% if setup %}Create Account{% else %}Welcome Back{% endif %}</h1>
-        <p class="subtitle">{% if setup %}Set up your admin account to get started{% else %}Sign in to manage your instances{% endif %}</p>
-        {% if error %}<div class="error" role="alert"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="flex-shrink:0"><circle cx="12" cy="12" r="10"/><path d="M12 8v4m0 4h.01"/></svg>{{ error }}</div>{% endif %}
-        <form method="POST">
-            <div class="field">
-                <label for="username">Username</label>
-                <input type="text" id="username" name="username" autocomplete="username" required autofocus>
-            </div>
-            <div class="field">
-                <label for="password">Password</label>
-                <input type="password" id="password" name="password" autocomplete="{% if setup %}new-password{% else %}current-password{% endif %}" required>
-            </div>
-            {% if setup %}
-            <div class="field">
-                <label for="confirm_password">Confirm Password</label>
-                <input type="password" id="confirm_password" name="confirm_password" autocomplete="new-password" required>
-            </div>
-            {% else %}
-            <div class="save-options">
-                <label class="remember">
-                    <input type="checkbox" id="save-username" checked>
-                    <span>Save username</span>
-                </label>
-                <label class="remember">
-                    <input type="checkbox" id="save-password">
-                    <span>Save password</span>
-                </label>
-                <label class="remember">
-                    <input type="checkbox" name="remember" id="remember" checked>
-                    <span>Remember session</span>
-                </label>
-            </div>
-            {% endif %}
-            <button type="submit" class="submit-btn">{% if setup %}Create Account{% else %}Sign In{% endif %}</button>
-        </form>
     </div>
 </div>
 <script>

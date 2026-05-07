@@ -3,11 +3,21 @@
 import os
 import json
 from datetime import timedelta
+from functools import wraps
 from flask import Flask, render_template, jsonify, request, session
 
 from launcher.database import init_db, get_db
-from launcher.auth import register_auth_routes, get_user_id, get_username
+from launcher.auth import register_auth_routes, get_user_id, get_username, is_admin, create_user, reset_password
 from launcher import instance_manager
+
+
+def admin_required(f):
+    @wraps(f)
+    def decorated(*args, **kwargs):
+        if not is_admin():
+            return jsonify({'error': 'Admin access required'}), 403
+        return f(*args, **kwargs)
+    return decorated
 
 
 def create_app():
@@ -37,12 +47,61 @@ def create_app():
         groups = instance_manager.list_groups(get_user_id())
         return render_template('dashboard.html',
                                username=get_username(),
+                               is_admin=is_admin(),
                                groups=groups)
+
+    # ── User API (admin only) ──
+
+    @app.route('/api/users', methods=['GET'])
+    @admin_required
+    def api_list_users():
+        return jsonify(instance_manager.list_users())
+
+    @app.route('/api/users', methods=['POST'])
+    @admin_required
+    def api_create_user():
+        data = request.get_json() or {}
+        username = data.get('username', '').strip()
+        password = data.get('password', '')
+        if not username or len(username) < 3:
+            return jsonify({'error': 'Username must be at least 3 characters'}), 400
+        if not password or len(password) < 6:
+            return jsonify({'error': 'Password must be at least 6 characters'}), 400
+        try:
+            create_user(username, password)
+            return jsonify({'ok': True, 'username': username})
+        except Exception as e:
+            if 'UNIQUE' in str(e):
+                return jsonify({'error': f'User "{username}" already exists'}), 409
+            return jsonify({'error': str(e)}), 500
+
+    @app.route('/api/users/<int:user_id>', methods=['DELETE'])
+    @admin_required
+    def api_delete_user(user_id):
+        if user_id == get_user_id():
+            return jsonify({'error': 'Cannot delete yourself'}), 400
+        success = instance_manager.delete_user(user_id)
+        if success:
+            return jsonify({'ok': True})
+        return jsonify({'error': 'User not found or is admin'}), 404
+
+    @app.route('/api/users/<int:user_id>/reset-password', methods=['POST'])
+    @admin_required
+    def api_reset_password(user_id):
+        data = request.get_json() or {}
+        password = data.get('password', '')
+        if not password or len(password) < 6:
+            return jsonify({'error': 'Password must be at least 6 characters'}), 400
+        reset_password(user_id, password)
+        return jsonify({'ok': True})
 
     # ── Group API ──
 
     @app.route('/api/groups', methods=['GET'])
     def api_list_groups():
+        uid = request.args.get('user_id', type=int)
+        if uid and is_admin():
+            return jsonify(instance_manager.list_groups(uid))
         return jsonify(instance_manager.list_groups(get_user_id()))
 
     @app.route('/api/groups', methods=['POST'])
@@ -82,7 +141,11 @@ def create_app():
     @app.route('/api/instances', methods=['GET'])
     def api_list_instances():
         group_id = request.args.get('group_id', type=int)
-        instances = instance_manager.list_instances(get_user_id(), group_id=group_id)
+        uid = request.args.get('user_id', type=int)
+        if uid and is_admin():
+            instances = instance_manager.list_instances(uid, group_id=group_id)
+        else:
+            instances = instance_manager.list_instances(get_user_id(), group_id=group_id)
         return jsonify(instances)
 
     @app.route('/api/instances', methods=['POST'])
@@ -111,6 +174,11 @@ def create_app():
 
         storage_class = data.get('storage_class') or os.environ.get('STORAGE_CLASS')
 
+        # Get the current user's password hash to seed the instance DB
+        with get_db() as conn:
+            user_row = conn.execute('SELECT password_hash FROM users WHERE id = ?', (get_user_id(),)).fetchone()
+        pwd_hash = user_row['password_hash'] if user_row else None
+
         try:
             result = instance_manager.create_instance(
                 owner_id=get_user_id(),
@@ -121,6 +189,7 @@ def create_app():
                 kubeconfig_data=kubeconfig_data,
                 storage_class=storage_class,
                 image=image,
+                password_hash=pwd_hash,
             )
             return jsonify(result)
         except Exception as e:

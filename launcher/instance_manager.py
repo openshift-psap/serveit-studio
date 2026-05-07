@@ -109,6 +109,65 @@ def update_group(group_id: int, owner_id: int, name: str = None, icon: str = Non
     return True
 
 
+def _seed_instance_user(deployment_name: str, namespace: str, username: str, password_hash: str):
+    """Pre-seed the instance's DB with the launcher user so they don't need to set up a new account."""
+    import base64
+    for _ in range(30):
+        r = _kubectl(['get', 'pod', '-l', f'app={deployment_name}', '-n', namespace,
+                      '-o', 'jsonpath={.items[0].status.phase}'])
+        if r.stdout.strip() == 'Running':
+            break
+        time.sleep(2)
+
+    b64user = base64.b64encode(username.encode()).decode()
+    b64hash = base64.b64encode(password_hash.encode()).decode()
+    seed_script = (
+        "import sqlite3,os,base64;"
+        f"u=base64.b64decode('{b64user}').decode();"
+        f"h=base64.b64decode('{b64hash}').decode();"
+        "db=os.environ.get('DB_PATH','/mnt/storage/inferecipe.db');"
+        "c=sqlite3.connect(db);"
+        "c.execute('CREATE TABLE IF NOT EXISTS users (id INTEGER PRIMARY KEY AUTOINCREMENT, username TEXT UNIQUE NOT NULL, password_hash TEXT NOT NULL, created_at TEXT NOT NULL)');"
+        "c.execute('INSERT OR IGNORE INTO users (username, password_hash, created_at) VALUES (?, ?, datetime(\"now\"))',(u,h));"
+        "c.commit();c.close()"
+    )
+    _kubectl(['exec', '-n', namespace, f'deploy/{deployment_name}', '--',
+              'python3', '-c', seed_script])
+
+
+# ── User Management (admin) ──────────────────────────────────────────────────
+
+def list_users() -> List[Dict]:
+    with get_db() as conn:
+        rows = conn.execute('''
+            SELECT u.id, u.username, u.is_admin, u.created_at,
+                   COUNT(DISTINCT g.id) as group_count,
+                   COUNT(DISTINCT i.id) as instance_count
+            FROM users u
+            LEFT JOIN groups_ g ON u.id = g.owner_id
+            LEFT JOIN instances i ON u.id = i.owner_id
+            GROUP BY u.id ORDER BY u.created_at
+        ''').fetchall()
+    return [dict(r) for r in rows]
+
+
+def delete_user(user_id: int) -> bool:
+    with get_db() as conn:
+        row = conn.execute('SELECT id, is_admin FROM users WHERE id = ?', (user_id,)).fetchone()
+        if not row:
+            return False
+        if row['is_admin']:
+            return False
+        groups = conn.execute('SELECT id FROM groups_ WHERE owner_id = ?', (user_id,)).fetchall()
+
+    for g in groups:
+        delete_group(g['id'], user_id)
+
+    with get_db() as conn:
+        conn.execute('DELETE FROM users WHERE id = ?', (user_id,))
+    return True
+
+
 # ── Instance CRUD ───────────────────────────────────────────────────────────
 
 def create_instance(owner_id: int, username: str, name: str,
@@ -116,7 +175,8 @@ def create_instance(owner_id: int, username: str, name: str,
                     namespace: str = 'inferecipe',
                     kubeconfig_data: str = None,
                     storage_class: str = None,
-                    image: str = 'quay.io/bbenshab/inferecipe:server') -> Dict:
+                    image: str = 'quay.io/bbenshab/inferecipe:server',
+                    password_hash: str = None) -> Dict:
     safe_name = _sanitize(f"{username}-{name}")
     workload_namespace = f"inferecipe-{safe_name}"
     deployment_name = f"inferecipe-{safe_name}"
@@ -301,6 +361,10 @@ def create_instance(owner_id: int, username: str, name: str,
                     service_url = f"http://localhost:{node_port}"
                 else:
                     service_url = f"http://{service_name}.{namespace}.svc.cluster.local:5000"
+
+        # Pre-seed the instance DB with the launcher user's credentials
+        if password_hash:
+            _seed_instance_user(deployment_name, namespace, username, password_hash)
 
         with get_db() as conn:
             conn.execute('UPDATE instances SET status = ?, service_url = ? WHERE id = ?',

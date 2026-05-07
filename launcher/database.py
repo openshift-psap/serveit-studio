@@ -15,6 +15,8 @@ def init_db():
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             username TEXT UNIQUE NOT NULL,
             password_hash TEXT NOT NULL,
+            is_admin INTEGER NOT NULL DEFAULT 0,
+            must_reset INTEGER NOT NULL DEFAULT 0,
             created_at TEXT NOT NULL
         );
         CREATE TABLE IF NOT EXISTS groups_ (
@@ -49,6 +51,14 @@ def init_db():
     ''')
 
     # Migrations for existing databases
+    cur = conn.execute("PRAGMA table_info(users)")
+    user_cols = {row[1] for row in cur.fetchall()}
+    if 'is_admin' not in user_cols:
+        conn.execute("ALTER TABLE users ADD COLUMN is_admin INTEGER NOT NULL DEFAULT 0")
+        conn.execute("UPDATE users SET is_admin=1 WHERE id=(SELECT MIN(id) FROM users)")
+    if 'must_reset' not in user_cols:
+        conn.execute("ALTER TABLE users ADD COLUMN must_reset INTEGER NOT NULL DEFAULT 0")
+
     cur = conn.execute("PRAGMA table_info(instances)")
     cols = {row[1] for row in cur.fetchall()}
     if 'workload_namespace' not in cols:

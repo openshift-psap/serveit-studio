@@ -120,29 +120,36 @@ def generate_yaml(namespace: str, image: str, pvc_name: str,
 def sync_code(cmd: str, namespace: str, pod_name: str):
     print(f"📦 Syncing code to pod {pod_name}...", file=sys.stderr)
 
+    r = kubectl_run(cmd, ['exec', '-n', namespace, pod_name, '--',
+                          'bash', '-c', 'cd /app && git pull --ff-only 2>&1'])
+    if r.returncode == 0:
+        print(f"   {r.stdout.strip()}", file=sys.stderr)
+    else:
+        print(f"   git pull failed: {r.stderr.strip()[:200]}", file=sys.stderr)
+        print("   Falling back to tar sync...", file=sys.stderr)
+        _tar_sync(cmd, namespace, pod_name)
+
+
+def _tar_sync(cmd: str, namespace: str, pod_name: str):
     kubectl_run(cmd, ['exec', '-n', namespace, pod_name, '--',
                       'mkdir', '-p', '/mnt/storage/app'])
-
-    # Fast tar-based sync: pipe entire repo into pod
     env = os.environ.copy()
-    env['COPYFILE_DISABLE'] = '1'  # Prevents macOS ._* resource fork files
+    env['COPYFILE_DISABLE'] = '1'
     tar_cmd = ['tar', 'cf', '-',
                '--exclude=.git', '--exclude=.claude', '--exclude=__pycache__',
                '--exclude=.DS_Store', '--exclude=*.pyc', '--exclude=._*',
                '-C', str(REPO_ROOT), '.']
     untar_cmd = [cmd, 'exec', '-i', '-n', namespace, pod_name, '--',
                  'tar', 'xf', '-', '--overwrite', '-C', '/mnt/storage/app/']
-
     tar_proc = subprocess.Popen(tar_cmd, stdout=subprocess.PIPE, stderr=subprocess.DEVNULL, env=env)
     untar_proc = subprocess.Popen(untar_cmd, stdin=tar_proc.stdout,
                                   stdout=subprocess.PIPE, stderr=subprocess.PIPE)
     tar_proc.stdout.close()
     _, stderr = untar_proc.communicate(timeout=120)
-
     if untar_proc.returncode == 0:
-        print("   Code synced.", file=sys.stderr)
+        print("   Code synced (tar).", file=sys.stderr)
     else:
-        print(f"   Sync failed: {stderr.decode()[:200]}", file=sys.stderr)
+        print(f"   Tar sync failed: {stderr.decode()[:200]}", file=sys.stderr)
 
 
 # ── Port Forward ─────────────────────────────────────────────────────────────

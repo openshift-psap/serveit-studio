@@ -36,14 +36,12 @@ spec:
             - |
               echo "--- Starting InfeRecipe Optimizer ---"
               if [ "${DEV_MODE}" = "true" ]; then
-                CODE_DIR="/mnt/storage/app"
-                echo "Dev mode: waiting for code at ${CODE_DIR}/web/server.py ..."
-                while [ ! -f "${CODE_DIR}/web/server.py" ]; do sleep 2; done
-                echo "Code found. Starting server (auto-restart on crash)..."
-                export INFE_RECIPE_PATH="${CODE_DIR}"
+                echo "Dev mode: pulling latest code..."
+                cd /app && git pull --ff-only 2>/dev/null || true
+                export INFE_RECIPE_PATH="/app"
                 while true; do
-                  cd "${CODE_DIR}/web"
-                  find "${CODE_DIR}" -type d -name __pycache__ -exec rm -rf {} + 2>/dev/null || true
+                  cd /app/web
+                  find /app -type d -name __pycache__ -exec rm -rf {} + 2>/dev/null || true
                   python3.11 server.py || true
                   echo "Server exited, restarting in 3s..."
                   sleep 3
