@@ -169,8 +169,8 @@ class GuidellmMixin:
         max_requests = getattr(config, 'max_requests', None)
         warmup = min(60, max(0, config.test_duration - 30)) if hasattr(config, 'test_duration') else 60
 
-        output_path = f'/mnt/storage/guidellm-results/{config.test_id}.json'
-        Path('/mnt/storage/guidellm-results').mkdir(parents=True, exist_ok=True)
+        # Output path on the workload pod (remote or local)
+        output_path = f'/tmp/guidellm-{config.test_id}.json'
 
         # Build the shell command to exec
         stop_arg = f'--max-requests {max_requests}' if (stop_mode == 'max_requests' and max_requests) else f'--max-seconds {config.test_duration}'
@@ -274,13 +274,99 @@ class GuidellmMixin:
                 process.wait(timeout=10)
 
             elapsed_total = int(time.time() - benchmark_start)
-            result_path = Path(output_path)
-            output_exists = result_path.exists() and result_path.stat().st_size > 0
 
-            if benchmark_success and (process.returncode == 0 or output_exists):
+            if benchmark_success and process.returncode == 0:
                 if log_callback:
                     log_callback(f'✅ Benchmark completed ({elapsed_total}s)')
 
+                # Extract metrics from the workload pod using parse_guidellm
+                if log_callback:
+                    log_callback(f'   Extracting results from workload pod...')
+
+                extract_cmd = [
+                    kubectl.kubectl_cmd, 'exec', self._guidellm_pod_name,
+                    '-n', self.namespace, '--',
+                    'python3', '/usr/local/bin/parse_guidellm', output_path
+                ]
+                extract_env = os.environ.copy()
+                extract_env['KUBECONFIG'] = os.path.expanduser(kubectl.kubeconfig)
+
+                extract_result = subprocess.run(
+                    extract_cmd, capture_output=True, text=True,
+                    timeout=30, env=extract_env
+                )
+
+                if extract_result.returncode != 0 or not extract_result.stdout.strip():
+                    # Fallback: try reading the file directly (local workload pod)
+                    local_path = Path(output_path)
+                    if local_path.exists() and local_path.stat().st_size > 0:
+                        if log_callback:
+                            log_callback(f'   Using local results file')
+                        result_file = str(local_path)
+                    else:
+                        if log_callback:
+                            log_callback(f'   ❌ Failed to extract results: {extract_result.stderr[:100]}')
+                        return False, None, None
+                else:
+                    # Write extracted metrics to local temp file for the parser
+                    import json as _json
+                    local_results_dir = Path('/tmp/guidellm-extracted')
+                    local_results_dir.mkdir(parents=True, exist_ok=True)
+                    result_file = str(local_results_dir / f'{config.test_id}.json')
+
+                    # parse_guidellm outputs extracted metrics — wrap in benchmarks format
+                    # so _parse_guidellm_results can read it
+                    try:
+                        extracted = _json.loads(extract_result.stdout)
+                        if 'error' in extracted:
+                            if log_callback:
+                                log_callback(f'   ❌ Parse error: {extracted["error"]}')
+                            return False, None, None
+
+                        # Reconstruct the benchmarks format the parser expects
+                        # parse_guidellm flattens percentiles — nest them back
+                        def _reconstitute_dist(flat):
+                            pcts = {}
+                            top = {}
+                            for k, v in (flat or {}).items():
+                                if k.startswith('p') and k[1:].isdigit():
+                                    pcts[k] = v
+                                else:
+                                    top[k] = v
+                            top['percentiles'] = pcts
+                            return top
+
+                        reconstituted = {
+                            'benchmarks': [{
+                                'start_time': extracted.get('start_time'),
+                                'end_time': extracted.get('end_time'),
+                                'duration': extracted.get('benchmark_duration_s'),
+                                'warmup_duration': extracted.get('warmup_duration_s'),
+                                'metrics': {
+                                    'time_to_first_token_ms': {'successful': _reconstitute_dist(extracted.get('ttft_ms'))},
+                                    'inter_token_latency_ms': {'successful': _reconstitute_dist(extracted.get('itl_ms'))},
+                                    'requests_per_second': {'successful': _reconstitute_dist(extracted.get('throughput_rps'))},
+                                    'time_per_output_token_ms': {'successful': _reconstitute_dist(extracted.get('tpot_ms'))},
+                                    'request_latency': {'successful': _reconstitute_dist(extracted.get('e2e_latency_s'))},
+                                    'output_tokens_per_second': {'successful': _reconstitute_dist(extracted.get('output_tps'))},
+                                    'prompt_token_count': {'successful': _reconstitute_dist(extracted.get('prompt_tokens'))},
+                                    'output_token_count': {'successful': _reconstitute_dist(extracted.get('output_tokens'))},
+                                    'request_concurrency': {'successful': _reconstitute_dist(extracted.get('concurrency'))},
+                                    'request_totals': extracted.get('request_totals', {}),
+                                }
+                            }]
+                        }
+                        with open(result_file, 'w') as rf:
+                            _json.dump(reconstituted, rf)
+
+                        if log_callback:
+                            log_callback(f'   ✅ Results extracted ({config.test_id})')
+                    except Exception as parse_err:
+                        if log_callback:
+                            log_callback(f'   ❌ Failed to process extracted results: {str(parse_err)[:100]}')
+                        return False, None, None
+
+                # Collect Prometheus metrics if configured
                 metrics_path = None
                 if collect_metrics:
                     try:
@@ -297,7 +383,7 @@ class GuidellmMixin:
                         if log_callback:
                             log_callback(f'   ⚠️  Metrics collection failed: {str(e)[:100]}')
 
-                return True, str(result_path), metrics_path
+                return True, result_file, metrics_path
 
             return False, None, None
 
