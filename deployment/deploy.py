@@ -69,19 +69,18 @@ def is_openshift(cmd: str) -> bool:
 
 # ── Jinja2 Rendering ────────────────────────────────────────────────────────
 
-def render_template(name: str, **ctx) -> str:
+def render_template(template_name: str, **ctx) -> str:
     try:
         from jinja2 import Environment, FileSystemLoader
     except ImportError:
-        # Fallback: simple string replacement
-        path = TEMPLATES_DIR / name
+        path = TEMPLATES_DIR / template_name
         content = path.read_text()
         for key, val in ctx.items():
             content = content.replace('{{ ' + key + ' }}', str(val))
         return content
 
     env = Environment(loader=FileSystemLoader(str(TEMPLATES_DIR)), keep_trailing_newline=True)
-    tmpl = env.get_template(name)
+    tmpl = env.get_template(template_name)
     return tmpl.render(**ctx)
 
 
