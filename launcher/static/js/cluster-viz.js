@@ -84,10 +84,7 @@ function renderClusterDiagram(container, data) {
 }
 
 function _shortName(name) {
-    if (name.length <= 20) return name;
-    var parts = name.split('-');
-    if (parts.length > 2) return parts[0] + '-…-' + parts[parts.length - 1];
-    return name.substring(0, 18) + '…';
+    return name;
 }
 
 function scanAndRenderCluster(clusterId, container, forceRescan) {
