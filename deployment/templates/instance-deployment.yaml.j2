@@ -57,6 +57,14 @@ spec:
               value: "{{ force_nad }}"
             - name: DEV_MODE
               value: "{{ dev_mode }}"
+{% if preset_gpus %}
+            - name: PRESET_MAX_GPUS
+              value: "{{ preset_gpus }}"
+{% endif %}
+{% if preset_nodes %}
+            - name: PRESET_NODES
+              value: "{{ preset_nodes }}"
+{% endif %}
 {% if has_kubeconfig == 'true' %}
             - name: KUBECONFIG
               value: "/etc/kubeconfig/kubeconfig"

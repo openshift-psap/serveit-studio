@@ -446,8 +446,10 @@ function restoreClusterResources() {
             maxGpuSelect.appendChild(option);
         });
 
-        // Restore selected max GPUs
-        if (config.max_gpus) {
+        // Apply preset from launcher (if set), otherwise restore from saved config
+        if (data.preset_max_gpus) {
+            maxGpuSelect.value = data.preset_max_gpus;
+        } else if (config.max_gpus) {
             maxGpuSelect.value = config.max_gpus;
         }
 
@@ -471,7 +473,8 @@ function restoreClusterResources() {
     if (data.nodes_detail && data.nodes_detail.length > 0) {
         let nodeHtml = '<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:8px;">';
         data.nodes_detail.filter(n => n.gpus > 0).forEach(node => {
-            const prevSelected = config.selected_nodes && config.selected_nodes.includes(node.name);
+            const presetNodes = data.preset_nodes || [];
+            const prevSelected = (presetNodes.length > 0 && presetNodes.includes(node.name)) || (config.selected_nodes && config.selected_nodes.includes(node.name));
             nodeHtml += '<label style="display:flex;align-items:center;gap:10px;padding:10px 14px;background:#f8fafc;border:2px solid ' + (prevSelected ? '#0ea5e9' : '#e2e8f0') + ';border-radius:8px;cursor:pointer;transition:border-color 0.2s;">' +
                 '<input type="checkbox" class="node-select-cb" value="' + node.name + '" data-gpus="' + node.gpus + '"' + (prevSelected ? ' checked' : '') + ' style="width:18px;height:18px;accent-color:#0ea5e9;" onchange="validateNodeSelection();this.closest(\'label\').style.borderColor=this.checked?\'#0ea5e9\':\'#e2e8f0\'">' +
                 '<div style="flex:1;min-width:0;">' +

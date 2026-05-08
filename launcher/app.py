@@ -215,6 +215,9 @@ def create_app():
             user_row = conn.execute('SELECT password_hash FROM users WHERE id = ?', (get_user_id(),)).fetchone()
         pwd_hash = user_row['password_hash'] if user_row else None
 
+        preset_gpus = data.get('preset_gpus')
+        preset_nodes = data.get('preset_nodes')
+
         try:
             result = instance_manager.create_instance(
                 owner_id=get_user_id(),
@@ -224,6 +227,8 @@ def create_app():
                 namespace=namespace,
                 image=image,
                 password_hash=pwd_hash,
+                preset_gpus=int(preset_gpus) if preset_gpus else None,
+                preset_nodes=preset_nodes if preset_nodes else None,
             )
             return jsonify(result)
         except Exception as e:

@@ -252,7 +252,9 @@ def create_instance(owner_id: int, username: str, name: str,
                     cluster_id: int = None,
                     namespace: str = 'inftune',
                     image: str = 'quay.io/bbenshab/inftune-studio:server',
-                    password_hash: str = None) -> Dict:
+                    password_hash: str = None,
+                    preset_gpus: int = None,
+                    preset_nodes: list = None) -> Dict:
     """Create an instance. Kubeconfig and storage class come from the cluster."""
 
     # Look up cluster for kubeconfig and storage class
@@ -381,7 +383,9 @@ def create_instance(owner_id: int, username: str, name: str,
             dev_mode='false', force_nad='false',
             auth_disabled='true',
             kubeconfig_secret=kubeconfig_secret or '',
-            has_kubeconfig='true' if kubeconfig_secret else 'false')
+            has_kubeconfig='true' if kubeconfig_secret else 'false',
+            preset_gpus=preset_gpus or '',
+            preset_nodes=','.join(preset_nodes) if preset_nodes else '')
 
         r = _kubectl(['apply', '-f', '-', '-n', namespace], input_data=deploy_yaml)
         if r.returncode != 0:

@@ -272,12 +272,21 @@
 
 <!-- Create Instance Modal (simplified — cluster provides kubeconfig) -->
 <div class="modal-overlay" id="create-modal" onclick="if(event.target===this)hideCreateModal()">
-    <div class="modal" role="dialog" aria-labelledby="modal-title">
+    <div class="modal" role="dialog" aria-labelledby="modal-title" style="width:550px">
         <h2 id="modal-title">New Instance</h2>
         <p class="modal-sub">Deploy an Inftune Studio optimizer instance</p>
         <form id="create-form" onsubmit="return createInstance(event)">
             <label for="instance-name">Instance Name</label>
             <input type="text" id="instance-name" name="name" placeholder="my-optimization" autocomplete="off" required>
+
+            <label for="instance-gpu-select">GPU Limit</label>
+            <select id="instance-gpu-select" style="width:100%;padding:10px 12px;border:1.5px solid #E0E0E0;border-radius:8px;font-size:0.95em;margin-bottom:16px;background:#F8F8F8;color:#1A1A1A">
+                <option value="">All GPUs (default)</option>
+            </select>
+
+            <label>Node Selection <span style="font-weight:400;color:#999;text-transform:none">(optional — pin to specific nodes)</span></label>
+            <div id="instance-node-list" style="max-height:200px;overflow-y:auto;margin-bottom:16px;display:flex;flex-direction:column;gap:4px"></div>
+
             <div class="create-error" id="create-error" role="alert" aria-live="polite">
                 <div class="error-title">Failed to create instance</div>
                 <div class="error-text" id="create-error-text"></div>
@@ -603,6 +612,42 @@ function showCreateModal(){
     document.getElementById('create-modal').classList.add('active');
     document.getElementById('instance-name').value='';
     document.getElementById('create-error').style.display='none';
+
+    // Populate GPU and node options from cached scan
+    var gpuSel = document.getElementById('instance-gpu-select');
+    var nodeList = document.getElementById('instance-node-list');
+    fetch('/api/clusters/' + currentClusterId + '/scan')
+    .then(function(r){return r.json()})
+    .then(function(scan){
+        if(!scan.nodes) return;
+        var gpuNodes = scan.nodes.filter(function(n){return n.gpus > 0});
+        var totalGpus = scan.summary ? scan.summary.total_gpus : 0;
+
+        // GPU select
+        gpuSel.innerHTML = '<option value="">All (' + totalGpus + ' GPUs)</option>';
+        var opts = [];
+        for(var i=1;i<totalGpus;i*=2) opts.push(i);
+        [4,8,16,32,64].forEach(function(v){if(v<totalGpus&&opts.indexOf(v)===-1)opts.push(v)});
+        opts.sort(function(a,b){return a-b});
+        opts.forEach(function(v){
+            var o=document.createElement('option');o.value=v;o.textContent=v+' GPU'+(v>1?'s':'');
+            gpuSel.appendChild(o);
+        });
+
+        // Node checkboxes
+        nodeList.innerHTML='';
+        gpuNodes.forEach(function(n){
+            var label = document.createElement('label');
+            label.style.cssText='display:flex;align-items:center;gap:8px;padding:8px 10px;background:#F8F8F8;border:1.5px solid #E0E0E0;border-radius:8px;cursor:pointer;font-size:0.85em;transition:border-color 0.12s';
+            label.innerHTML = '<input type="checkbox" class="inst-node-cb" value="'+n.name+'" style="accent-color:#2A7B88;width:16px;height:16px" onchange="this.closest(\'label\').style.borderColor=this.checked?\'#2A7B88\':\'#E0E0E0\'">' +
+                '<div style="flex:1"><strong style="color:#1A1A1A">'+n.name+'</strong>' +
+                '<div style="font-size:0.85em;color:#999">'+n.gpus+' GPUs · '+(n.gpu_model||'GPU')+' · '+n.memory_gb+' GB RAM</div></div>' +
+                '<span style="font-size:0.75em;padding:2px 6px;border-radius:4px;background:'+(n.status==='Ready'?'#f0fdf4':'#fef2f2')+';color:'+(n.status==='Ready'?'#3BAA3B':'#dc2626')+'">'+n.status+'</span>';
+            nodeList.appendChild(label);
+        });
+        if(!gpuNodes.length) nodeList.innerHTML='<span style="color:#999;font-size:0.85em">No GPU nodes found</span>';
+    });
+
     document.getElementById('instance-name').focus();
 }
 function loadStorageClasses(){
@@ -640,9 +685,13 @@ function createInstance(e){
     var name=document.getElementById('instance-name').value;
     var btn=document.getElementById('create-btn');
     btn.disabled=true;btn.innerHTML='<svg width="16" height="16" viewBox="0 0 24 24" style="animation:spin 1s linear infinite;vertical-align:middle;margin-right:6px"><circle cx="12" cy="12" r="10" stroke="white" stroke-width="3" fill="none" stroke-dasharray="31.4 31.4" stroke-linecap="round"/></svg>Creating…';
-    fetch('/api/instances',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({
-        name:name, cluster_id:currentClusterId
-    })})
+    var gpuVal = document.getElementById('instance-gpu-select').value;
+    var selectedNodes = [];
+    document.querySelectorAll('.inst-node-cb:checked').forEach(function(cb){selectedNodes.push(cb.value)});
+    var body = {name:name, cluster_id:currentClusterId};
+    if(gpuVal) body.preset_gpus = parseInt(gpuVal);
+    if(selectedNodes.length) body.preset_nodes = selectedNodes;
+    fetch('/api/instances',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)})
     .then(function(r){return r.json()})
     .then(function(data){
         if(data.error){showCreateError(data.error);btn.disabled=false;btn.textContent='Create';}

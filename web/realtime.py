@@ -705,7 +705,10 @@ def handle_scan_cluster(data):
             # Provider and network information
             'provider': provider_name,
             'network_type': network_type,
-            'dranet_available': dranet_available
+            'dranet_available': dranet_available,
+            # Preset values from launcher (empty when running standalone)
+            'preset_max_gpus': int(os.environ.get('PRESET_MAX_GPUS', 0)) or None,
+            'preset_nodes': os.environ.get('PRESET_NODES', '').split(',') if os.environ.get('PRESET_NODES') else None,
         }
 
         emit('cluster_scan_result', result)
