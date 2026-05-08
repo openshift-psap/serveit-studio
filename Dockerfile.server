@@ -57,5 +57,7 @@ ARG GIT_BRANCH=main
 RUN git clone --depth 1 -b ${GIT_BRANCH} git@github.com:bbenshab/In-S8.git /app
 
 WORKDIR /app
+COPY deployment/entrypoint.sh /usr/local/bin/entrypoint.sh
+RUN chmod +x /usr/local/bin/entrypoint.sh
 EXPOSE 5000
-CMD ["python3.11", "web/server.py"]
+CMD ["/usr/local/bin/entrypoint.sh"]

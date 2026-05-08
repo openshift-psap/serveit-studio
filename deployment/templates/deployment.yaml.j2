@@ -30,27 +30,7 @@ spec:
         - name: runner
           image: {{ image }}
           imagePullPolicy: Always
-          command:
-            - "/bin/sh"
-            - "-c"
-            - |
-              echo "--- Starting InfeRecipe Optimizer ---"
-              if [ "${DEV_MODE}" = "true" ]; then
-                echo "Dev mode: pulling latest code..."
-                cd /app && git pull --ff-only 2>/dev/null || true
-                export INFE_RECIPE_PATH="/app"
-                while true; do
-                  cd /app/web
-                  find /app -type d -name __pycache__ -exec rm -rf {} + 2>/dev/null || true
-                  python3.11 server.py || true
-                  echo "Server exited, restarting in 3s..."
-                  sleep 3
-                done
-              else
-                echo "Starting web server from image..."
-                cd /app/web
-                exec python3.11 server.py
-              fi
+          command: ["/usr/local/bin/entrypoint.sh"]
           env:
             - name: INFE_RECIPE_PATH
               value: "/app"

@@ -37,19 +37,7 @@ spec:
         - name: runner
           image: {{ image }}
           imagePullPolicy: Always
-          command:
-            - "/bin/sh"
-            - "-c"
-            - |
-              echo "--- Starting InfeRecipe Instance ---"
-              cd /app && git pull --ff-only 2>/dev/null || true
-              while true; do
-                cd /app/web
-                find /app -type d -name __pycache__ -exec rm -rf {} + 2>/dev/null || true
-                python3.11 server.py || true
-                echo "Server exited, restarting in 3s..."
-                sleep 3
-              done
+          command: ["/usr/local/bin/entrypoint.sh"]
           env:
             - name: INFE_RECIPE_PATH
               value: "/app"
