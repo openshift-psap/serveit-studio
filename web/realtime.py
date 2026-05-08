@@ -18,7 +18,8 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from web.app_context import (
     app, socketio, get_db, DB_PATH, TARGET_NAMESPACE,
-    OPTIMIZATION_OUTPUT_DIR, state, state_lock, APP_PATH,
+    OPTIMIZATION_OUTPUT_DIR, STATE_DIR, STATE_FILE,
+    state, state_lock, APP_PATH,
     _session_lock, _SESSION_TIMEOUT_SECS
 )
 
