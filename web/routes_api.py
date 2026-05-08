@@ -94,15 +94,7 @@ def get_runs_for_resume():
     try:
         with get_db() as conn:
             runs = conn.execute('''
-                SELECT r.id, r.run_name, r.model, r.isl, r.osl, r.num_users,
-                       r.status, r.created_at, r.goal, r.max_gpus,
-                       r.test_duration, r.notes, r.isl_stdev, r.osl_stdev,
-                       r.turns, r.latency_constraint_enabled,
-                       r.latency_constraint_ms, r.latency_constraint_percentile,
-                       r.config_json,
-                       r.workload_mode, r.dataset_source, r.dataset_column,
-                       r.dataset_max_output, r.rate_type,
-                       COUNT(tc.id) as completed_tests
+                SELECT r.*, COUNT(tc.id) as completed_tests
                 FROM optimization_runs r
                 LEFT JOIN test_configurations tc ON tc.run_id = r.id AND tc.status = 'completed'
                 GROUP BY r.id
