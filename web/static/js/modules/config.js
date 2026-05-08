@@ -448,7 +448,15 @@ function restoreClusterResources() {
 
         // Apply preset from launcher (if set), otherwise restore from saved config
         if (data.preset_max_gpus) {
-            maxGpuSelect.value = data.preset_max_gpus;
+            maxGpuSelect.value = String(data.preset_max_gpus);
+            // If preset value doesn't exist as option, add it
+            if (maxGpuSelect.value !== String(data.preset_max_gpus)) {
+                var opt = document.createElement('option');
+                opt.value = data.preset_max_gpus;
+                opt.textContent = data.preset_max_gpus + ' GPUs (preset)';
+                maxGpuSelect.appendChild(opt);
+                maxGpuSelect.value = String(data.preset_max_gpus);
+            }
         } else if (config.max_gpus) {
             maxGpuSelect.value = config.max_gpus;
         }
@@ -487,9 +495,11 @@ function restoreClusterResources() {
         document.getElementById('node-select-list').innerHTML = nodeHtml;
         document.getElementById('node-select-group').style.display = 'block';
 
-        var nodeEnabled = config.selected_nodes && config.selected_nodes.length > 0;
+        var presetNodes = data.preset_nodes || [];
+        var nodeEnabled = presetNodes.length > 0 || (config.selected_nodes && config.selected_nodes.length > 0);
         document.getElementById('enable-node-select').checked = nodeEnabled;
         document.getElementById('node-select-list').style.opacity = nodeEnabled ? '1' : '0.5';
+        document.getElementById('node-select-list').style.pointerEvents = nodeEnabled ? 'auto' : 'none';
         document.querySelectorAll('.node-select-cb').forEach(function(cb) { cb.disabled = !nodeEnabled; });
     }
 
