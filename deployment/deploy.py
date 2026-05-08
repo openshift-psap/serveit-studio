@@ -45,13 +45,20 @@ PF_PID_FILE = Path('/tmp/inftune-port-forward.pid')
 # ── Kubectl ──────────────────────────────────────────────────────────────────
 
 def detect_kubectl() -> str:
-    for cmd in ['oc', 'kubectl']:
-        try:
-            subprocess.run([cmd, 'version', '--client'], capture_output=True, timeout=10)
-            return cmd
-        except (FileNotFoundError, subprocess.TimeoutExpired):
-            continue
-    print("Error: Neither kubectl nor oc found.", file=sys.stderr)
+    # Check if cluster is OpenShift (not just if oc binary exists)
+    try:
+        r = subprocess.run(['kubectl', 'api-resources', '--api-group=route.openshift.io'],
+                          capture_output=True, text=True, timeout=15)
+        if r.returncode == 0 and 'Route' in r.stdout:
+            return 'oc'
+    except (FileNotFoundError, subprocess.TimeoutExpired):
+        pass
+    try:
+        subprocess.run(['kubectl', 'version', '--client'], capture_output=True, timeout=10)
+        return 'kubectl'
+    except (FileNotFoundError, subprocess.TimeoutExpired):
+        pass
+    print("Error: kubectl not found.", file=sys.stderr)
     sys.exit(1)
 
 
