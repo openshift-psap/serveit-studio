@@ -49,6 +49,8 @@ spec:
               value: "{{ workload_namespace }}"
             - name: DB_PATH
               value: "/mnt/storage/inferecipe.db"
+            - name: INSTANCE_NAME
+              value: "{{ name }}"
             - name: AUTH_DISABLED
               value: "{{ auth_disabled }}"
             - name: INFE_RECIPE_FORCE_NAD

@@ -1859,6 +1859,9 @@ def download_database():
     try:
         from flask import send_file, after_this_request
 
+        instance_name = os.environ.get('INSTANCE_NAME', 'inferecipe')
+        download_filename = f'{instance_name}.db.gz'
+
         compressed_path = '/tmp/inferecipe-optimizer.db.gz'
         if os.path.exists(compressed_path):
             @after_this_request
@@ -1873,7 +1876,7 @@ def download_database():
                 compressed_path,
                 mimetype='application/gzip',
                 as_attachment=True,
-                download_name='inferecipe-optimizer.db.gz'
+                download_name=download_filename
             )
 
         if not os.path.exists(DB_PATH):
@@ -1883,7 +1886,7 @@ def download_database():
             DB_PATH,
             mimetype='application/x-sqlite3',
             as_attachment=True,
-            download_name='inferecipe-optimizer.db'
+            download_name=f'{instance_name}.db'
         )
     except Exception as e:
         print(f"ERROR downloading database: {e}")
