@@ -34,22 +34,32 @@ function renderClusterDiagram(container, data) {
             var vram = node.gpu_memory_gb ? node.gpu_memory_gb + ' GB' : '';
 
             html += '<div class="viz-node">';
-            html += '<div class="viz-node-header">';
-            html += '<span class="viz-node-status ' + statusClass + '"></span>';
+            // Server chassis top — status LED + name
+            html += '<div class="viz-server-top">';
+            html += '<span class="viz-led ' + statusClass + '"></span>';
+            html += '<span class="viz-led viz-led-activity"></span>';
             html += '<span class="viz-node-name">' + _shortName(node.name) + '</span>';
             html += '</div>';
 
-            // GPU chips
-            html += '<div class="viz-gpus">';
+            // Server chassis body — GPU slots
+            html += '<div class="viz-server-body">';
+            html += '<div class="viz-gpu-bay">';
             for (var i = 0; i < node.gpus; i++) {
-                html += '<div class="viz-gpu-chip" title="' + (node.gpu_model || 'GPU') + ' ' + vram + '">🟩</div>';
+                html += '<div class="viz-gpu-slot" title="' + (node.gpu_model || 'GPU') + ' ' + vram + '">';
+                html += '<svg width="14" height="14" viewBox="0 0 24 24" fill="#2A7B88" opacity="0.85"><rect x="2" y="4" width="20" height="16" rx="2"/><rect x="5" y="7" width="4" height="4" rx="0.5" fill="#1B5E6B"/><rect x="10" y="7" width="4" height="4" rx="0.5" fill="#1B5E6B"/><rect x="15" y="7" width="4" height="4" rx="0.5" fill="#1B5E6B"/><rect x="5" y="14" width="14" height="2" rx="0.5" fill="#1B5E6B"/></svg>';
+                html += '</div>';
             }
             html += '</div>';
-
-            html += '<div class="viz-node-info">';
+            html += '<div class="viz-server-specs">';
             html += '<span>' + node.gpus + '× ' + (node.gpu_model || 'GPU') + '</span>';
-            if (vram) html += '<span>' + vram + ' each</span>';
-            html += '<span>' + node.cpu_cores + ' CPUs, ' + node.memory_gb + ' GB RAM</span>';
+            if (vram) html += '<span>' + vram + ' ea</span>';
+            html += '</div>';
+            html += '</div>';
+
+            // Server chassis bottom — CPU/RAM/RDMA
+            html += '<div class="viz-server-bottom">';
+            html += '<span>' + node.cpu_cores + ' CPUs</span>';
+            html += '<span>' + node.memory_gb + ' GB</span>';
             if (node.has_rdma) html += '<span class="viz-rdma-badge">RDMA</span>';
             html += '</div>';
             html += '</div>';
