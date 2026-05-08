@@ -38,7 +38,7 @@ def create_app():
     register_auth_routes(app)
 
     namespace = os.environ.get('TARGET_NAMESPACE', 'inferecipe')
-    image = os.environ.get('INFERECIPE_IMAGE', 'quay.io/bbenshab/vllm:inferecipe')
+    image = os.environ.get('INFERECIPE_IMAGE', 'quay.io/bbenshab/inferecipe:server')
 
     # ── Dashboard ──
 
