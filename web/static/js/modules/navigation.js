@@ -480,9 +480,10 @@ socket.on('cluster_scan_result', function(data) {
         // Test plan will be regenerated when reaching step 6 (Review & Run)
     });
 
-    // Display GPU usage information
+    // Display GPU usage information (hide in launcher mode)
+    var _hasPresets = data.preset_max_gpus || (data.preset_nodes && data.preset_nodes.length > 0);
     const gpuUsageInfo = document.getElementById('gpu-usage-info');
-    if (data.gpus_in_use && data.gpus_in_use > 0) {
+    if (!_hasPresets && data.gpus_in_use && data.gpus_in_use > 0) {
         gpuUsageInfo.innerHTML = `⚠️ <strong>${data.gpus_in_use} GPU${data.gpus_in_use > 1 ? 's' : ''}</strong> currently in use by other workloads. <strong>${data.gpus_available} GPU${data.gpus_available !== 1 ? 's' : ''}</strong> available.`;
         gpuUsageInfo.style.display = 'block';
     } else {
@@ -492,8 +493,9 @@ socket.on('cluster_scan_result', function(data) {
     // Show max GPU selection group
     document.getElementById('max-gpu-group').style.display = 'block';
 
-    // Populate node selection checkboxes
-    if (data.nodes_detail && data.nodes_detail.length > 0) {
+    // Populate node selection checkboxes (skip if launcher presets are active)
+    var hasPresets = data.preset_max_gpus || (data.preset_nodes && data.preset_nodes.length > 0);
+    if (!hasPresets && data.nodes_detail && data.nodes_detail.length > 0) {
         let nodeHtml = '<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:8px;">';
         data.nodes_detail.filter(node => node.gpus > 0).forEach(node => {
             const prevSelected = config.selected_nodes && config.selected_nodes.includes(node.name);
