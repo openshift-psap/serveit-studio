@@ -142,6 +142,7 @@ def create_app():
             name=data.get('name'), icon=data.get('icon'))
         if success:
             return jsonify({'ok': True})
+        return jsonify({'error': 'Cluster not found'}), 404
 
     @app.route('/api/clusters/<int:cluster_id>/scan', methods=['GET'])
     def api_get_cluster_scan(cluster_id):

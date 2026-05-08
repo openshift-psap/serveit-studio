@@ -48,6 +48,9 @@ def init_db():
             service_url TEXT,
             kubeconfig_secret TEXT,
             target_cluster TEXT DEFAULT 'local',
+            auto_login_token TEXT,
+            preset_gpus INTEGER,
+            preset_nodes TEXT,
             created_at TEXT NOT NULL,
             FOREIGN KEY (owner_id) REFERENCES users(id),
             FOREIGN KEY (cluster_id) REFERENCES clusters(id),
@@ -95,6 +98,12 @@ def init_db():
         conn.execute("UPDATE instances SET cluster_id = group_id")
     elif 'cluster_id' not in inst_cols:
         conn.execute("ALTER TABLE instances ADD COLUMN cluster_id INTEGER REFERENCES clusters(id)")
+    if 'auto_login_token' not in inst_cols:
+        conn.execute("ALTER TABLE instances ADD COLUMN auto_login_token TEXT")
+    if 'preset_gpus' not in inst_cols:
+        conn.execute("ALTER TABLE instances ADD COLUMN preset_gpus INTEGER")
+    if 'preset_nodes' not in inst_cols:
+        conn.execute("ALTER TABLE instances ADD COLUMN preset_nodes TEXT")
 
     conn.commit()
     conn.close()

@@ -1,5 +1,16 @@
 // navigation.js — Wizard step navigation, optimization start/stop
 
+function selectNetwork(netId) {
+    document.getElementById('selected-network-type').value = netId;
+    config.network_type = netId;
+    document.querySelectorAll('.net-card').forEach(function(card) {
+        var selected = card.dataset.net === netId;
+        card.style.borderColor = selected ? '#2A7B88' : '#CCC';
+        card.style.background = selected ? '#F0F9FA' : 'white';
+    });
+    saveConfig();
+}
+
 function isOptimizationRunning() {
     const stopBtn = document.getElementById('stop-optimization');
     return stopBtn && stopBtn.style.display !== 'none';
@@ -293,71 +304,51 @@ socket.on('cluster_scan_result', function(data) {
         nicModel = data.nic_models.join(', ');
     }
 
-    // Build provider and network information panel (always shown)
-    let providerName = 'Unknown';
-    let networkName = 'Unknown';
+    // Provider display
+    let providerName = data.provider || 'Unknown';
+    const providerMap = {'ibm_cloud':'IBM Cloud','coreweave':'CoreWeave','baremetal':'Bare Metal','aws':'AWS','gcp':'GCP','azure':'Azure'};
+    if (providerMap[providerName]) providerName = providerMap[providerName];
 
-    if (data.provider === 'ibm_cloud') {
-        providerName = 'IBM Cloud';
-    } else if (data.provider === 'coreweave') {
-        providerName = 'CoreWeave';
-    } else if (data.provider === 'baremetal') {
-        providerName = 'Bare Metal';
-    } else if (data.provider === 'aws') {
-        providerName = 'AWS';
-    } else if (data.provider === 'gcp') {
-        providerName = 'GCP';
-    } else if (data.provider === 'azure') {
-        providerName = 'Azure';
-    }
-
-    if (data.network_type === 'dra') {
-        networkName = 'DRA (DRANET)';
-    } else if (data.network_type === 'nad') {
-        networkName = 'NAD (Multus)';
-    } else if (data.network_type === 'sriov') {
-        networkName = 'SR-IOV';
-    }
-
-    // Build notes based on provider + network combination
-    let deploymentNotes = '';
-
-    // IBM Cloud with DRANET
-    if (data.provider === 'ibm_cloud' && data.dranet_available) {
-        deploymentNotes = `
-            <li style="list-style-type: none;">✅ No pod-per-node limit - PD can run on single node</li>
-            <li style="list-style-type: none;">✅ GPU+NIC PCIe affinity guaranteed</li>
-        `;
-    }
-    // IBM Cloud with NAD only
-    else if (data.provider === 'ibm_cloud' && !data.dranet_available) {
-        deploymentNotes = `
-            <li style="list-style-type: none;">⚠️ With NAD network: Requires minimum 2 nodes for PD/EP workloads</li>
-            <li style="list-style-type: none;">⚠️ All nodes must have the same number of GPUs</li>
-        `;
-    }
-    // CoreWeave
-    else if (data.provider === 'coreweave') {
-        deploymentNotes = `
-            <li style="list-style-type: none;">✅ No pod-per-node constraints</li>
-            <li style="list-style-type: none;">✅ InfiniBand RDMA via rdma/ib device plugin</li>
-            <li style="list-style-type: none;">✅ Vanilla Kubernetes (not OpenShift)</li>
-        `;
-    }
-
-    let ibmWarning = `
-        <div style="padding: 4px 0; text-align: center;">
-            <ul style="margin: 5px auto; padding: 0; list-style-position: inside; text-align: center;">
-                <li style="list-style-type: none;"><strong>Provider:</strong> ${providerName}</li>
-                <li style="list-style-type: none;"><strong>Network:</strong> ${networkName}</li>
-                ${deploymentNotes}
-            </ul>
-        </div>
-    `;
-
-    // Display detected configuration (provider, network, notes)
     const detectedDiv = document.getElementById('detected-config-summary');
-    if (detectedDiv) detectedDiv.innerHTML = ibmWarning;
+    if (detectedDiv) {
+        detectedDiv.innerHTML = '<div style="font-size:0.92em;color:#4A4A4A;"><strong>Provider:</strong> ' + providerName +
+            (data.has_rdma ? ' &nbsp;·&nbsp; <strong>RDMA:</strong> Available' : '') + '</div>';
+    }
+
+    // Network selection cards
+    const networkCards = document.getElementById('network-select-cards');
+    const networks = data.available_networks || [];
+    const autoDetected = data.network_type || 'eth0';
+    const savedNetwork = config.network_type || autoDetected;
+
+    if (networkCards && networks.length > 0) {
+        let cardsHtml = '';
+        const icons = {'eth0':'🔌','nad':'🔗','dra':'⚡','shared_device':'📡'};
+        networks.forEach(function(net) {
+            const isSelected = net.id === savedNetwork;
+            const isRecommended = net.id === autoDetected;
+            const disabled = !net.available;
+            const borderColor = isSelected ? '#2A7B88' : (disabled ? '#E0E0E0' : '#CCC');
+            const bg = isSelected ? '#F0F9FA' : (disabled ? '#F8F8F8' : 'white');
+            const opacity = disabled ? '0.5' : '1';
+            const cursor = disabled ? 'not-allowed' : 'pointer';
+
+            cardsHtml += '<div class="net-card" data-net="' + net.id + '" ' +
+                'onclick="' + (disabled ? '' : 'selectNetwork(\'' + net.id + '\')') + '" ' +
+                'style="border:2px solid ' + borderColor + ';border-radius:10px;padding:14px;background:' + bg +
+                ';opacity:' + opacity + ';cursor:' + cursor + ';transition:border-color 0.12s;">';
+            cardsHtml += '<div style="display:flex;align-items:center;gap:8px;margin-bottom:6px;">';
+            cardsHtml += '<span style="font-size:1.3em;">' + (icons[net.id] || '🌐') + '</span>';
+            cardsHtml += '<span style="font-weight:700;font-size:0.95em;color:' + (disabled ? '#999' : '#1A1A1A') + ';">' + net.name + '</span>';
+            if (net.rdma && net.available) cardsHtml += '<span style="font-size:0.7em;background:#E0F2F4;color:#2A7B88;padding:1px 6px;border-radius:4px;">RDMA</span>';
+            cardsHtml += '</div>';
+            cardsHtml += '<div style="font-size:0.8em;color:#999;line-height:1.4;">' + net.description + '</div>';
+            if (!net.available && net.reason) cardsHtml += '<div style="font-size:0.75em;color:#dc2626;margin-top:4px;">' + net.reason + '</div>';
+            cardsHtml += '</div>';
+        });
+        networkCards.innerHTML = cardsHtml;
+        document.getElementById('selected-network-type').value = savedNetwork;
+    }
 
     // Display hardware resources table
     const resourcesDiv = document.getElementById('resources-summary');

@@ -470,9 +470,7 @@ function restoreClusterResources() {
             maxGpuSelect.innerHTML = `<option value="${data.total_gpus}" selected>All (${data.total_gpus} GPUs)</option>`;
 
             const gpuOptions = [];
-            for (let i = 1; i < data.total_gpus; i *= 2) gpuOptions.push(i);
-            [4, 8, 16, 32, 64].forEach(val => { if (val < data.total_gpus && !gpuOptions.includes(val)) gpuOptions.push(val); });
-            gpuOptions.sort((a, b) => a - b);
+            for (let i = 1; i < data.total_gpus; i++) gpuOptions.push(i);
             gpuOptions.forEach(count => {
                 const option = document.createElement('option');
                 option.value = count;

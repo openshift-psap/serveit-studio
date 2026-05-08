@@ -189,13 +189,8 @@ def update_cluster(cluster_id: int, owner_id: int, name: str = None, icon: str =
 
 
 def _seed_instance_user(deployment_name: str, namespace: str, username: str, password_hash: str):
+    """Seed user credentials into instance DB. Retries until pod is Running and exec succeeds."""
     import base64
-    for _ in range(30):
-        r = _kubectl(['get', 'pod', '-l', f'app={deployment_name}', '-n', namespace,
-                      '-o', 'jsonpath={.items[0].status.phase}'])
-        if r.stdout.strip() == 'Running':
-            break
-        time.sleep(2)
 
     b64user = base64.b64encode(username.encode()).decode()
     b64hash = base64.b64encode(password_hash.encode()).decode()
@@ -209,8 +204,19 @@ def _seed_instance_user(deployment_name: str, namespace: str, username: str, pas
         "c.execute('INSERT OR IGNORE INTO users (username, password_hash, created_at) VALUES (?, ?, datetime(\"now\"))',(u,h));"
         "c.commit();c.close()"
     )
-    _kubectl(['exec', '-n', namespace, f'deploy/{deployment_name}', '--',
-              'python3', '-c', seed_script])
+
+    for attempt in range(60):
+        r = _kubectl(['get', 'pod', '-l', f'app={deployment_name}', '-n', namespace,
+                      '-o', 'jsonpath={.items[0].status.phase}'])
+        if r.stdout.strip() != 'Running':
+            time.sleep(3)
+            continue
+
+        r = _kubectl(['exec', '-n', namespace, f'deploy/{deployment_name}', '--',
+                      'python3', '-c', seed_script])
+        if r.returncode == 0:
+            return
+        time.sleep(2)
 
 
 # ── User Management (admin) ──────────────────────────────────────────────────
@@ -357,15 +363,21 @@ def create_instance(owner_id: int, username: str, name: str,
         finally:
             os.unlink(tmp_path)
 
+    import secrets
+    auto_login_token = secrets.token_urlsafe(32)
+
     with get_db() as conn:
         conn.execute('''
             INSERT INTO instances (name, owner_id, cluster_id, display_name, status, namespace,
                                    workload_namespace, deployment_name, pvc_name, service_name,
-                                   kubeconfig_secret, target_cluster, created_at)
-            VALUES (?, ?, ?, ?, 'creating', ?, ?, ?, ?, ?, ?, ?, ?)
+                                   kubeconfig_secret, target_cluster, auto_login_token,
+                                   preset_gpus, preset_nodes, created_at)
+            VALUES (?, ?, ?, ?, 'creating', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         ''', (safe_name, owner_id, cluster_id, name, namespace, workload_namespace,
               deployment_name, pvc_name, service_name,
-              kubeconfig_secret, target_cluster, datetime.now().isoformat()))
+              kubeconfig_secret, target_cluster, auto_login_token,
+              preset_gpus, ','.join(preset_nodes) if preset_nodes else None,
+              datetime.now().isoformat()))
         instance_id = conn.execute('SELECT last_insert_rowid()').fetchone()[0]
 
     try:
@@ -381,11 +393,12 @@ def create_instance(owner_id: int, username: str, name: str,
             pvc_name=pvc_name, code_pvc_name='',
             workload_namespace=workload_namespace,
             dev_mode='false', force_nad='false',
-            auth_disabled='true',
+            auth_disabled='false',
             kubeconfig_secret=kubeconfig_secret or '',
             has_kubeconfig='true' if kubeconfig_secret else 'false',
             preset_gpus=preset_gpus or '',
-            preset_nodes=','.join(preset_nodes) if preset_nodes else '')
+            preset_nodes=','.join(preset_nodes) if preset_nodes else '',
+            auto_login_token=auto_login_token)
 
         r = _kubectl(['apply', '-f', '-', '-n', namespace], input_data=deploy_yaml)
         if r.returncode != 0:

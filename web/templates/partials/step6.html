@@ -21,14 +21,16 @@
 
                         <!-- Cluster Resources Display -->
                         <div id="cluster-resources" style="display: none;">
-                            <!-- Detected Configuration Section -->
+                            <!-- Provider + Network Selection -->
                             <div style="border:2px solid #0ea5e9;border-radius:12px;overflow:hidden;margin-bottom:20px;">
                                 <div style="background:linear-gradient(135deg,#f0f9ff,#e0f2fe);padding:16px 20px;">
-                                    <div style="font-weight:700;color:#0c4a6e;font-size:1.05em;">🔍 Detected Configuration</div>
-                                    <div style="color:#075985;font-size:0.92em;margin-top:4px;">Auto-detected cluster provider, network type, and deployment constraints.</div>
+                                    <div style="font-weight:700;color:#0c4a6e;font-size:1.05em;">🌐 Provider & Network</div>
+                                    <div style="color:#075985;font-size:0.92em;margin-top:4px;">Select how GPU nodes communicate. RDMA options are faster for multi-node workloads.</div>
                                 </div>
                                 <div style="padding:16px 20px;">
-                                    <div id="detected-config-summary"></div>
+                                    <div id="detected-config-summary" style="margin-bottom:12px"></div>
+                                    <div id="network-select-cards" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:10px;"></div>
+                                    <input type="hidden" id="selected-network-type" value="">
                                 </div>
                             </div>
 

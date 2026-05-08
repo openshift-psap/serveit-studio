@@ -57,6 +57,10 @@ spec:
               value: "{{ force_nad }}"
             - name: DEV_MODE
               value: "{{ dev_mode }}"
+{% if auto_login_token %}
+            - name: AUTO_LOGIN_TOKEN
+              value: "{{ auto_login_token }}"
+{% endif %}
 {% if preset_gpus %}
             - name: PRESET_MAX_GPUS
               value: "{{ preset_gpus }}"

@@ -356,7 +356,7 @@
 
 <!-- Edit Cluster Modal -->
 <div class="modal-overlay" id="edit-cluster-modal" onclick="if(event.target===this)hideEditCluster()">
-    <div class="modal" role="dialog" style="width:500px">
+    <div class="modal" role="dialog" style="width:580px;max-height:none;overflow:visible">
         <h2>Edit Cluster</h2>
         <input type="hidden" id="edit-cluster-id">
         <label for="edit-cluster-name">Cluster Name</label>
@@ -594,14 +594,23 @@ function loadInstances(clusterId, isRefresh, userId){
             var cls = ps==='Running'?'running':(ps==='Pending'||ps==='Creating'||ps==='Starting'?'creating':(ps==='Error'||ps==='CrashLoopBackOff'||ps==='Failed'||ps==='Deleted'?'error':'unknown'));
             var hasHttps = inst.service_url && inst.service_url.indexOf('https://')===0;
             var localPort = 8080 + inst.id;
-            var openUrl = hasHttps ? inst.service_url : 'http://localhost:'+localPort;
+            var baseUrl = hasHttps ? inst.service_url : 'http://localhost:'+localPort;
+            var openUrl = inst.auto_login_token ? baseUrl + '/auto-login?token=' + inst.auto_login_token : baseUrl;
             var isRunning = ps === 'Running';
             var openBtn = '<button class="btn btn-open" onclick="openInstance(\''+openUrl.replace(/'/g,"\\'")+'\','+inst.id+','+localPort+','+hasHttps+')"'+(isRunning?'':' disabled style="opacity:0.4;cursor:not-allowed"')+'>Open</button>';
             var pfCmd = 'kubectl port-forward -n '+inst.namespace+' svc/'+inst.service_name+' '+localPort+':5000';
             var connectBar = hasHttps ? '' : '<div class="connect-bar"><span class="label">Connect:</span><code>'+pfCmd+'</code><button class="copy-btn" onclick="copyCmd(this,\''+pfCmd.replace(/'/g,"\\'")+'\')">Copy</button><a href="http://localhost:'+localPort+'" target="_blank" rel="noopener">localhost:'+localPort+'</a></div>';
             var card = document.createElement('div');
             card.className='card';card.id='instance-'+inst.id;card.style.position='relative';
-            card.innerHTML = '<div class="card-main"><div class="card-info"><div class="card-title"><h3>'+(inst.display_name||inst.name)+'</h3><span class="status status-'+cls+'">'+ps+'</span></div><div class="card-meta"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><circle cx="12" cy="12" r="10"/><path d="M2 12h20"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/></svg><span>'+inst.target_cluster+'</span><span style="opacity:0.3">&bull;</span><span>'+inst.created_at.slice(0,16)+'</span></div></div><div class="card-actions">'+openBtn+'<button class="btn btn-danger" onclick="deleteInstance('+inst.id+',\''+((inst.display_name||inst.name).replace(/'/g,"\\'"))+'\')">Delete</button></div></div>'+connectBar;
+            var gpuInfo = '';
+            if (inst.preset_gpus) {
+                gpuInfo += '<span style="background:#E0F2F4;color:#2A7B88;padding:2px 8px;border-radius:4px;font-size:0.78em;font-weight:600">🎛️ '+inst.preset_gpus+' GPUs</span>';
+            }
+            if (inst.preset_nodes) {
+                var nodes = inst.preset_nodes.split(',');
+                gpuInfo += '<span style="background:#F0F0F0;color:#4A4A4A;padding:2px 8px;border-radius:4px;font-size:0.78em;font-weight:600">📍 '+nodes.length+' node'+(nodes.length>1?'s':'')+'</span>';
+            }
+            card.innerHTML = '<div class="card-main"><div class="card-info"><div class="card-title"><h3>'+(inst.display_name||inst.name)+'</h3><span class="status status-'+cls+'">'+ps+'</span></div><div class="card-meta"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><circle cx="12" cy="12" r="10"/><path d="M2 12h20"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/></svg><span>'+inst.target_cluster+'</span><span style="opacity:0.3">&bull;</span><span>'+inst.created_at.slice(0,16)+'</span>'+(gpuInfo?'<span style="opacity:0.3">&bull;</span>'+gpuInfo:'')+'</div></div><div class="card-actions">'+openBtn+'<button class="btn btn-danger" onclick="deleteInstance('+inst.id+',\''+((inst.display_name||inst.name).replace(/'/g,"\\'"))+'\')">Delete</button></div></div>'+connectBar;
             list.appendChild(card);
         });
     });
@@ -611,7 +620,12 @@ function showCreateModal(){
     if(!currentClusterId){showWarn('No Cluster','Create a cluster first before adding instances.');return;}
     document.getElementById('create-modal').classList.add('active');
     document.getElementById('instance-name').value='';
+    document.getElementById('instance-gpu-select').value='';
     document.getElementById('create-error').style.display='none';
+    // Reset Create button state
+    var btn = document.getElementById('create-btn');
+    btn.disabled = false;
+    btn.textContent = 'Create';
 
     // Populate GPU and node options from cached scan
     var gpuSel = document.getElementById('instance-gpu-select');
@@ -626,9 +640,7 @@ function showCreateModal(){
         // GPU select
         gpuSel.innerHTML = '<option value="">All (' + totalGpus + ' GPUs)</option>';
         var opts = [];
-        for(var i=1;i<totalGpus;i*=2) opts.push(i);
-        [4,8,16,32,64].forEach(function(v){if(v<totalGpus&&opts.indexOf(v)===-1)opts.push(v)});
-        opts.sort(function(a,b){return a-b});
+        for(var i=1;i<totalGpus;i++) opts.push(i);
         opts.forEach(function(v){
             var o=document.createElement('option');o.value=v;o.textContent=v+' GPU'+(v>1?'s':'');
             gpuSel.appendChild(o);
@@ -639,7 +651,7 @@ function showCreateModal(){
         gpuNodes.forEach(function(n){
             var label = document.createElement('label');
             label.style.cssText='display:flex;align-items:center;gap:8px;padding:8px 10px;background:#F8F8F8;border:1.5px solid #E0E0E0;border-radius:8px;cursor:pointer;font-size:0.85em;transition:border-color 0.12s';
-            label.innerHTML = '<input type="checkbox" class="inst-node-cb" value="'+n.name+'" style="accent-color:#2A7B88;width:16px;height:16px" onchange="this.closest(\'label\').style.borderColor=this.checked?\'#2A7B88\':\'#E0E0E0\'">' +
+            label.innerHTML = '<input type="checkbox" class="inst-node-cb" value="'+n.name+'" data-gpus="'+n.gpus+'" style="accent-color:#2A7B88;width:16px;height:16px" onchange="this.closest(\'label\').style.borderColor=this.checked?\'#2A7B88\':\'#E0E0E0\';updateGpuFromNodes()">' +
                 '<div style="flex:1"><strong style="color:#1A1A1A">'+n.name+'</strong>' +
                 '<div style="font-size:0.85em;color:#999">'+n.gpus+' GPUs · '+(n.gpu_model||'GPU')+' · '+n.memory_gb+' GB RAM</div></div>' +
                 '<span style="font-size:0.75em;padding:2px 6px;border-radius:4px;background:'+(n.status==='Ready'?'#f0fdf4':'#fef2f2')+';color:'+(n.status==='Ready'?'#3BAA3B':'#dc2626')+'">'+n.status+'</span>';
@@ -650,6 +662,39 @@ function showCreateModal(){
 
     document.getElementById('instance-name').focus();
 }
+function updateGpuFromNodes(){
+    var checked = document.querySelectorAll('.inst-node-cb:checked');
+    var gpuSel = document.getElementById('instance-gpu-select');
+
+    if(checked.length === 0){
+        // Restore full GPU options
+        if(gpuSel._allOptions) gpuSel.innerHTML = gpuSel._allOptions;
+        return;
+    }
+
+    // Save original options on first call
+    if(!gpuSel._allOptions) gpuSel._allOptions = gpuSel.innerHTML;
+
+    var totalSelectedGpus = 0;
+    checked.forEach(function(cb){ totalSelectedGpus += parseInt(cb.dataset.gpus || 0); });
+
+    var currentVal = parseInt(gpuSel.value) || 0;
+
+    // Rebuild options capped to selected nodes' total
+    gpuSel.innerHTML = '<option value="">All (' + totalSelectedGpus + ' GPUs)</option>';
+    var opts = [];
+    for(var i=1;i<totalSelectedGpus;i++) opts.push(i);
+    opts.forEach(function(v){
+        var o=document.createElement('option');o.value=v;o.textContent=v+' GPU'+(v>1?'s':'');
+        gpuSel.appendChild(o);
+    });
+
+    // Keep current selection if still valid
+    if(currentVal > 0 && currentVal <= totalSelectedGpus){
+        gpuSel.value = String(currentVal);
+    }
+}
+
 function loadStorageClasses(){
     var sel = document.getElementById('storage-class-select');
     sel.innerHTML = '<option value="">Loading…</option>';
@@ -683,8 +728,18 @@ var kubeconfigContent=null;
 function createInstance(e){
     e.preventDefault();
     var name=document.getElementById('instance-name').value;
+    var modal=document.querySelector('#create-modal .modal');
     var btn=document.getElementById('create-btn');
-    btn.disabled=true;btn.innerHTML='<svg width="16" height="16" viewBox="0 0 24 24" style="animation:spin 1s linear infinite;vertical-align:middle;margin-right:6px"><circle cx="12" cy="12" r="10" stroke="white" stroke-width="3" fill="none" stroke-dasharray="31.4 31.4" stroke-linecap="round"/></svg>Creating…';
+
+    // Gray out modal with overlay
+    var overlay=document.createElement('div');
+    overlay.style.cssText='position:absolute;inset:0;background:rgba(255,255,255,0.9);display:flex;align-items:center;justify-content:center;border-radius:14px;z-index:10;';
+    overlay.innerHTML='<div style="display:flex;flex-direction:column;align-items:center;gap:12px"><svg width="32" height="32" viewBox="0 0 24 24" style="animation:spin 1s linear infinite"><circle cx="12" cy="12" r="10" stroke="#2A7B88" stroke-width="3" fill="none" stroke-dasharray="31.4 31.4" stroke-linecap="round"/></svg><span style="color:#4A4A4A;font-weight:600;font-size:1.05em">Creating instance…</span><span style="color:#999;font-size:0.85em">This may take a minute</span></div>';
+    modal.style.position='relative';
+    modal.style.overflow='hidden';
+    modal.appendChild(overlay);
+    btn.disabled=true;
+
     var gpuVal = document.getElementById('instance-gpu-select').value;
     var selectedNodes = [];
     document.querySelectorAll('.inst-node-cb:checked').forEach(function(cb){selectedNodes.push(cb.value)});
@@ -694,10 +749,11 @@ function createInstance(e){
     fetch('/api/instances',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)})
     .then(function(r){return r.json()})
     .then(function(data){
+        overlay.remove();
         if(data.error){showCreateError(data.error);btn.disabled=false;btn.textContent='Create';}
         else{hideCreateModal();loadInstances(currentClusterId);loadClusters();}
     })
-    .catch(function(err){showCreateError(err.message||err);btn.disabled=false;btn.textContent='Create';});
+    .catch(function(err){overlay.remove();showCreateError(err.message||err);btn.disabled=false;btn.textContent='Create';});
     return false;
 }
 
@@ -895,9 +951,21 @@ setInterval(function(){if(currentClusterId)loadInstances(currentClusterId, true)
 // Initial load
 if(currentClusterId) {
     loadInstances(currentClusterId);
-    scanAndRenderCluster(currentClusterId, document.getElementById('cluster-viz'));
 }
 </script>
-<script src="{{ url_for('static', filename='js/cluster-viz.js') }}"></script>
+<script src="{{ url_for('static', filename='js/cluster-viz.js') }}?v={{ range(10000,99999) | random }}"></script>
+<script>
+// Load cluster viz after cluster-viz.js is loaded
+if(currentClusterId) {
+    {% if clusters and clusters[0].scan_data %}
+    // Render from cached DB data immediately (no fetch needed)
+    var _cachedScan = {{ clusters[0].scan_data | safe }};
+    renderClusterDiagram(document.getElementById('cluster-viz'), _cachedScan);
+    {% else %}
+    // No cached data — trigger scan
+    scanAndRenderCluster(currentClusterId, document.getElementById('cluster-viz'), true);
+    {% endif %}
+}
+</script>
 </body>
 </html>

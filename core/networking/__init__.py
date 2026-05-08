@@ -109,6 +109,115 @@ def compute_network_values(
     return values
 
 
+def scan_available_networks(kubectl_runner) -> List[Dict[str, Any]]:
+    """Scan the cluster and return ALL available network types.
+
+    Always includes eth0 (pod network). Checks for NAD CRDs,
+    DRA device classes, and shared RDMA device plugins.
+
+    Args:
+        kubectl_runner: KubectlRunner instance for cluster queries
+
+    Returns:
+        List of dicts: {id, name, description, available, reason, rdma}
+    """
+    networks = []
+
+    # 1. eth0 — always available
+    networks.append({
+        'id': 'eth0',
+        'name': 'Pod Network (TCP)',
+        'description': 'Standard Kubernetes pod networking. No RDMA — uses TCP for GPU communication. Works everywhere but slower for multi-node.',
+        'available': True,
+        'reason': '',
+        'rdma': False,
+    })
+
+    # 2. NAD (Multus CNI)
+    try:
+        r = kubectl_runner.run(['api-resources', '--api-group=k8s.cni.cncf.io'], check=False)
+        nad_available = r.returncode == 0 and 'network-attachment-definitions' in r.stdout
+    except Exception:
+        nad_available = False
+    networks.append({
+        'id': 'nad',
+        'name': 'NAD (Multus CNI)',
+        'description': 'Network Attachment Definitions via Multus. Supports SR-IOV, host-device, and macvlan plugins for RDMA.',
+        'available': nad_available,
+        'reason': '' if nad_available else 'Multus CNI not installed (k8s.cni.cncf.io API not found)',
+        'rdma': True,
+    })
+
+    # 3. DRA (DRANET)
+    try:
+        r = kubectl_runner.run(['get', 'deviceclass', '-o', 'name'], check=False)
+        dra_available = r.returncode == 0 and r.stdout.strip() != ''
+    except Exception:
+        dra_available = False
+    networks.append({
+        'id': 'dra',
+        'name': 'DRA (DRANET)',
+        'description': 'Dynamic Resource Allocation with GPU+NIC PCIe affinity. Automatically pairs GPUs with closest network interface.',
+        'available': dra_available,
+        'reason': '' if dra_available else 'No DRA device classes found on cluster',
+        'rdma': True,
+    })
+
+    # 4. SharedDevice (RDMA device plugin)
+    shared_available = False
+    shared_resource = ''
+    try:
+        r = kubectl_runner.run(['get', 'nodes', '-o',
+            'jsonpath={.items[*].status.allocatable}'], check=False)
+        if r.returncode == 0:
+            import json
+            # Parse each node's allocatable to find rdma/* resources
+            for node_alloc_str in r.stdout.strip().split(' '):
+                try:
+                    alloc = json.loads(node_alloc_str) if node_alloc_str.startswith('{') else {}
+                except Exception:
+                    alloc = {}
+                for key in alloc:
+                    if key.startswith('rdma/'):
+                        shared_available = True
+                        shared_resource = key
+                        break
+                if shared_available:
+                    break
+    except Exception:
+        pass
+    if not shared_available:
+        # Also check via node JSON
+        try:
+            r = kubectl_runner.run(['get', 'nodes', '-o', 'json'], check=False)
+            if r.returncode == 0:
+                import json
+                data = json.loads(r.stdout)
+                for node in data.get('items', []):
+                    alloc = node.get('status', {}).get('allocatable', {})
+                    for key in alloc:
+                        if key.startswith('rdma/'):
+                            shared_available = True
+                            shared_resource = key
+                            break
+                    if shared_available:
+                        break
+        except Exception:
+            pass
+
+    resource_label = f' ({shared_resource})' if shared_resource else ''
+    networks.append({
+        'id': 'shared_device',
+        'name': f'Shared Device Plugin{resource_label}',
+        'description': 'RDMA via pre-configured device plugin. Pods request RDMA resources directly — no CRDs needed.',
+        'available': shared_available,
+        'reason': '' if shared_available else 'No rdma/* resources found in node allocatable',
+        'rdma': True,
+    })
+
+    return networks
+
+
 __all__ = [
     'BaseNetworkCreator',
     'NetworkConfig',
@@ -120,4 +229,5 @@ __all__ = [
     'SharedDeviceNetworkCreator',
     'detect_rdma_device_resources',
     'compute_network_values',
+    'scan_available_networks',
 ]

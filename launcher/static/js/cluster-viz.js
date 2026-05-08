@@ -18,6 +18,10 @@ function renderClusterDiagram(container, data) {
     // Summary bar
     html += '<div class="viz-summary">';
     html += '<div class="viz-stat"><div class="viz-stat-value">' + s.total_gpus + '</div><div class="viz-stat-label">Total GPUs</div></div>';
+    var inUse = s.gpus_in_use || 0;
+    var avail = s.gpus_available != null ? s.gpus_available : s.total_gpus;
+    var usageColor = inUse > 0 ? (avail > 0 ? '#F0AB00' : '#dc2626') : '#3BAA3B';
+    html += '<div class="viz-stat"><div class="viz-stat-value" style="color:' + usageColor + '">' + avail + ' / ' + s.total_gpus + '</div><div class="viz-stat-label">Available GPUs</div></div>';
     html += '<div class="viz-stat"><div class="viz-stat-value">' + s.gpu_node_count + '</div><div class="viz-stat-label">GPU Nodes</div></div>';
     html += '<div class="viz-stat"><div class="viz-stat-value">' + (s.gpu_model || 'N/A') + '</div><div class="viz-stat-label">GPU Model</div></div>';
     html += '<div class="viz-stat"><div class="viz-stat-value">' + Math.round((s.gpu_memory_per_gpu_mb || 0) / 1024) + ' GB</div><div class="viz-stat-label">VRAM / GPU</div></div>';
@@ -37,7 +41,7 @@ function renderClusterDiagram(container, data) {
             // Server chassis top — status LED + name
             html += '<div class="viz-server-top">';
             html += '<span class="viz-led ' + statusClass + '"></span>';
-            html += '<span class="viz-led viz-led-activity"></span>';
+            html += '<span class="viz-led ' + (node.status === 'Ready' ? 'viz-led-activity' : statusClass) + '"></span>';
             html += '<span class="viz-node-name">' + _shortName(node.name) + '</span>';
             html += '</div>';
 
@@ -87,29 +91,50 @@ function _shortName(name) {
     return name;
 }
 
+function _handleScanResponse(r) {
+    if (r.redirected || r.status === 302 || r.status === 401 || r.status === 403) {
+        return Promise.reject('session_expired');
+    }
+    var ct = r.headers.get('content-type') || '';
+    if (ct.indexOf('application/json') === -1) {
+        return Promise.reject('session_expired');
+    }
+    return r.json();
+}
+
+function _showSessionExpired(container) {
+    container.innerHTML = '<div style="text-align:center;padding:40px;"><div style="font-size:2em;margin-bottom:12px">🔒</div><div style="color:#4A4A4A;font-weight:600;margin-bottom:8px">Session expired</div><div style="color:#999;font-size:0.9em">Please <a href="/logout" style="color:#2A7B88;font-weight:600">log in again</a> to continue.</div></div>';
+}
+
 function scanAndRenderCluster(clusterId, container, forceRescan) {
     if (forceRescan) {
         container.innerHTML = '<div style="text-align:center;padding:40px;color:#999"><div style="margin-bottom:12px">🔍</div>Scanning cluster resources…</div>';
         fetch('/api/clusters/' + clusterId + '/scan', { method: 'POST' })
-        .then(function(r) { return r.json(); })
+        .then(_handleScanResponse)
         .then(function(data) {
             if (data.error) { container.innerHTML = '<div style="text-align:center;padding:40px;color:#dc2626">Scan failed: ' + data.error + '</div>'; return; }
             renderClusterDiagram(container, data);
         })
-        .catch(function(err) { container.innerHTML = '<div style="text-align:center;padding:40px;color:#dc2626">Scan error: ' + err + '</div>'; });
+        .catch(function(err) {
+            if (err === 'session_expired') { _showSessionExpired(container); return; }
+            container.innerHTML = '<div style="text-align:center;padding:40px;color:#dc2626">Scan error: ' + err + '</div>';
+        });
         return;
     }
     // Try cached from DB first
     fetch('/api/clusters/' + clusterId + '/scan')
-    .then(function(r) { return r.json(); })
+    .then(_handleScanResponse)
     .then(function(data) {
-        if (data.not_scanned) {
-            // First time — trigger scan
+        if (data.not_scanned || data.error) {
+            // No cached data — trigger a fresh scan
             scanAndRenderCluster(clusterId, container, true);
             return;
         }
-        if (data.error) { container.innerHTML = ''; return; }
         renderClusterDiagram(container, data);
     })
-    .catch(function() { scanAndRenderCluster(clusterId, container, true); });
+    .catch(function(err) {
+        if (err === 'session_expired') { _showSessionExpired(container); return; }
+        // GET failed — trigger a fresh scan
+        scanAndRenderCluster(clusterId, container, true);
+    });
 }

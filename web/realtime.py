@@ -536,6 +536,17 @@ def handle_cleanup_deployment(data):
         emit('cleanup_result', {'success': False, 'error': error_msg})
 
 
+def _scan_networks(scanner):
+    """Scan available network types using the scanner's kubectl runner."""
+    try:
+        from core.networking import scan_available_networks
+        return scan_available_networks(scanner.kubectl)
+    except Exception as e:
+        print(f"Network scan error: {e}")
+        return [{'id': 'eth0', 'name': 'Pod Network (TCP)', 'description': 'Standard pod networking',
+                 'available': True, 'reason': '', 'rdma': False}]
+
+
 @socketio.on('scan_cluster')
 def handle_scan_cluster(data):
     """Scan cluster resources (GPUs, CPUs, RAM, storage classes)."""
@@ -706,6 +717,8 @@ def handle_scan_cluster(data):
             'provider': provider_name,
             'network_type': network_type,
             'dranet_available': dranet_available,
+            # All available network options for user selection
+            'available_networks': _scan_networks(scanner),
             # Preset values from launcher (empty when running standalone)
             'preset_max_gpus': int(os.environ.get('PRESET_MAX_GPUS', 0)) or None,
             'preset_nodes': os.environ.get('PRESET_NODES', '').split(',') if os.environ.get('PRESET_NODES') else None,

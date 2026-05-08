@@ -29,12 +29,14 @@ def detect_kubectl_command() -> str:
     if _cached_kubectl_cmd is not None:
         return _cached_kubectl_cmd
 
-    # Check if oc is available
+    # Check if this is an OpenShift cluster (not just if oc binary exists)
     try:
-        subprocess.run(['oc', 'version'], capture_output=True, check=True, timeout=10)
-        logger.info("Using OpenShift CLI (oc)")
-        _cached_kubectl_cmd = 'oc'
-        return 'oc'
+        r = subprocess.run(['kubectl', 'api-resources', '--api-group=route.openshift.io'],
+                          capture_output=True, text=True, timeout=15)
+        if r.returncode == 0 and 'Route' in r.stdout:
+            logger.info("Using OpenShift CLI (oc)")
+            _cached_kubectl_cmd = 'oc'
+            return 'oc'
     except (subprocess.CalledProcessError, FileNotFoundError, subprocess.TimeoutExpired):
         pass
 

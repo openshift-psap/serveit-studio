@@ -123,11 +123,30 @@ def register_auth_routes():
         session.clear()
         return redirect(url_for('login'))
 
+    @app.route('/auto-login')
+    def auto_login():
+        """Token-based auto-login for launcher integration."""
+        token = request.args.get('token', '')
+        if not token:
+            return redirect(url_for('login'))
+        expected = os.environ.get('AUTO_LOGIN_TOKEN', '')
+        if not expected or token != expected:
+            return redirect(url_for('login'))
+        # Find the first user and log them in
+        conn = sqlite3.connect(DB_PATH)
+        row = conn.execute('SELECT username FROM users ORDER BY id LIMIT 1').fetchone()
+        conn.close()
+        if row:
+            session.permanent = True
+            session['user'] = row[0]
+            session['_created'] = datetime.now().timestamp()
+        return redirect(url_for('index'))
+
     @app.before_request
     def require_auth():
         if AUTH_DISABLED:
             return
-        if request.endpoint in ('login', 'setup', 'static'):
+        if request.endpoint in ('login', 'setup', 'auto_login', 'static'):
             return
         if not _has_any_users():
             return redirect(url_for('setup'))
