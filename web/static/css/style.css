@@ -97,6 +97,8 @@
         .header-row .breadcrumb-bar {
             flex: 1;
             min-width: 0;
+            padding-right: 14px;
+            border-right: 1px solid var(--rh-gray-300);
         }
 
         .console-toolbar {
@@ -105,12 +107,10 @@
             display: flex;
             align-items: center;
             gap: 8px;
-            padding: 0 16px 0 30px;
+            padding: 0 16px;
             height: 80px;
             background: var(--rh-white);
             border-bottom: 1px solid var(--rh-gray-300);
-            border-left: 1px solid var(--rh-gray-300);
-            margin-left: -15px;
             font-size: 0.85em;
             font-weight: 600;
             color: var(--rh-gray-500);
