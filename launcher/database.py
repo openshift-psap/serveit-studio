@@ -1,4 +1,4 @@
-"""Launcher database — users, groups, and instance metadata."""
+"""Launcher database — users, clusters, and instance metadata."""
 
 import os
 import sqlite3
@@ -19,11 +19,14 @@ def init_db():
             must_reset INTEGER NOT NULL DEFAULT 0,
             created_at TEXT NOT NULL
         );
-        CREATE TABLE IF NOT EXISTS groups_ (
+        CREATE TABLE IF NOT EXISTS clusters (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             name TEXT NOT NULL,
-            icon TEXT NOT NULL DEFAULT '📦',
+            icon TEXT NOT NULL DEFAULT '🖥️',
             owner_id INTEGER NOT NULL,
+            kubeconfig_secret TEXT,
+            target_cluster TEXT DEFAULT 'local',
+            storage_class TEXT,
             created_at TEXT NOT NULL,
             FOREIGN KEY (owner_id) REFERENCES users(id),
             UNIQUE(owner_id, name)
@@ -32,7 +35,7 @@ def init_db():
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             name TEXT NOT NULL,
             owner_id INTEGER NOT NULL,
-            group_id INTEGER,
+            cluster_id INTEGER,
             display_name TEXT,
             status TEXT NOT NULL DEFAULT 'creating',
             namespace TEXT NOT NULL,
@@ -45,7 +48,7 @@ def init_db():
             target_cluster TEXT DEFAULT 'local',
             created_at TEXT NOT NULL,
             FOREIGN KEY (owner_id) REFERENCES users(id),
-            FOREIGN KEY (group_id) REFERENCES groups_(id),
+            FOREIGN KEY (cluster_id) REFERENCES clusters(id),
             UNIQUE(owner_id, name)
         );
     ''')
@@ -59,14 +62,35 @@ def init_db():
     if 'must_reset' not in user_cols:
         conn.execute("ALTER TABLE users ADD COLUMN must_reset INTEGER NOT NULL DEFAULT 0")
 
-    cur = conn.execute("PRAGMA table_info(instances)")
-    cols = {row[1] for row in cur.fetchall()}
-    if 'workload_namespace' not in cols:
-        conn.execute("ALTER TABLE instances ADD COLUMN workload_namespace TEXT NOT NULL DEFAULT ''")
-    if 'group_id' not in cols:
-        conn.execute("ALTER TABLE instances ADD COLUMN group_id INTEGER REFERENCES groups_(id)")
-    conn.commit()
+    # Migrate groups_ → clusters
+    tables = {row[0] for row in conn.execute("SELECT name FROM sqlite_master WHERE type='table'").fetchall()}
+    if 'groups_' in tables and 'clusters' not in tables:
+        conn.execute("ALTER TABLE groups_ RENAME TO clusters")
+        conn.execute("ALTER TABLE clusters ADD COLUMN kubeconfig_secret TEXT")
+        conn.execute("ALTER TABLE clusters ADD COLUMN target_cluster TEXT DEFAULT 'local'")
+        conn.execute("ALTER TABLE clusters ADD COLUMN storage_class TEXT")
+    elif 'clusters' in tables:
+        cur = conn.execute("PRAGMA table_info(clusters)")
+        cluster_cols = {row[1] for row in cur.fetchall()}
+        if 'kubeconfig_secret' not in cluster_cols:
+            conn.execute("ALTER TABLE clusters ADD COLUMN kubeconfig_secret TEXT")
+        if 'target_cluster' not in cluster_cols:
+            conn.execute("ALTER TABLE clusters ADD COLUMN target_cluster TEXT DEFAULT 'local'")
+        if 'storage_class' not in cluster_cols:
+            conn.execute("ALTER TABLE clusters ADD COLUMN storage_class TEXT")
 
+    # Migrate group_id → cluster_id
+    cur = conn.execute("PRAGMA table_info(instances)")
+    inst_cols = {row[1] for row in cur.fetchall()}
+    if 'workload_namespace' not in inst_cols:
+        conn.execute("ALTER TABLE instances ADD COLUMN workload_namespace TEXT NOT NULL DEFAULT ''")
+    if 'group_id' in inst_cols and 'cluster_id' not in inst_cols:
+        conn.execute("ALTER TABLE instances ADD COLUMN cluster_id INTEGER REFERENCES clusters(id)")
+        conn.execute("UPDATE instances SET cluster_id = group_id")
+    elif 'cluster_id' not in inst_cols:
+        conn.execute("ALTER TABLE instances ADD COLUMN cluster_id INTEGER REFERENCES clusters(id)")
+
+    conn.commit()
     conn.close()
     print(f"  Launcher DB: {DB_PATH}")
 

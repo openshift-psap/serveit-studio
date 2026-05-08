@@ -44,11 +44,11 @@ def create_app():
 
     @app.route('/')
     def dashboard():
-        groups = instance_manager.list_groups(get_user_id())
+        clusters = instance_manager.list_clusters(get_user_id())
         return render_template('dashboard.html',
                                username=get_username(),
                                is_admin=is_admin(),
-                               groups=groups)
+                               clusters=clusters)
 
     # ── User API (admin only) ──
 
@@ -95,68 +95,76 @@ def create_app():
         reset_password(user_id, password)
         return jsonify({'ok': True})
 
-    # ── Group API ──
+    # ── Cluster API ──
 
-    @app.route('/api/groups', methods=['GET'])
-    def api_list_groups():
+    @app.route('/api/clusters', methods=['GET'])
+    def api_list_clusters():
         uid = request.args.get('user_id', type=int)
         if uid and is_admin():
-            return jsonify(instance_manager.list_groups(uid))
-        return jsonify(instance_manager.list_groups(get_user_id()))
+            return jsonify(instance_manager.list_clusters(uid))
+        return jsonify(instance_manager.list_clusters(get_user_id()))
 
-    @app.route('/api/groups', methods=['POST'])
-    def api_create_group():
+    @app.route('/api/clusters', methods=['POST'])
+    def api_create_cluster():
         data = request.get_json() or {}
         name = data.get('name', '').strip()
-        icon = data.get('icon', '📦').strip()
+        icon = data.get('icon', '🖥️').strip()
         if not name:
-            return jsonify({'error': 'Group name is required'}), 400
+            return jsonify({'error': 'Cluster name is required'}), 400
+
+        kubeconfig_data = data.get('kubeconfig')
+        storage_class = data.get('storage_class') or os.environ.get('STORAGE_CLASS')
+
         try:
-            result = instance_manager.create_group(get_user_id(), name, icon)
+            result = instance_manager.create_cluster(
+                get_user_id(), name, icon,
+                namespace=namespace,
+                kubeconfig_data=kubeconfig_data,
+                storage_class=storage_class)
             return jsonify(result)
         except Exception as e:
             if 'UNIQUE' in str(e):
-                return jsonify({'error': f'Group "{name}" already exists'}), 409
+                return jsonify({'error': f'Cluster "{name}" already exists'}), 409
             return jsonify({'error': str(e)}), 500
 
-    @app.route('/api/groups/<int:group_id>', methods=['DELETE'])
-    def api_delete_group(group_id):
-        success = instance_manager.delete_group(group_id, get_user_id())
+    @app.route('/api/clusters/<int:cluster_id>', methods=['DELETE'])
+    def api_delete_cluster(cluster_id):
+        success = instance_manager.delete_cluster(cluster_id, get_user_id())
         if success:
             return jsonify({'ok': True})
-        return jsonify({'error': 'Group not found'}), 404
+        return jsonify({'error': 'Cluster not found'}), 404
 
-    @app.route('/api/groups/<int:group_id>', methods=['PUT'])
-    def api_update_group(group_id):
+    @app.route('/api/clusters/<int:cluster_id>', methods=['PUT'])
+    def api_update_cluster(cluster_id):
         data = request.get_json() or {}
-        success = instance_manager.update_group(
-            group_id, get_user_id(),
+        success = instance_manager.update_cluster(
+            cluster_id, get_user_id(),
             name=data.get('name'), icon=data.get('icon'))
         if success:
             return jsonify({'ok': True})
-        return jsonify({'error': 'Group not found'}), 404
+        return jsonify({'error': 'Cluster not found'}), 404
 
     # ── Instance API ──
 
     @app.route('/api/instances', methods=['GET'])
     def api_list_instances():
-        group_id = request.args.get('group_id', type=int)
+        cluster_id = request.args.get('cluster_id', type=int)
         uid = request.args.get('user_id', type=int)
         if uid and is_admin():
-            instances = instance_manager.list_instances(uid, group_id=group_id)
+            instances = instance_manager.list_instances(uid, cluster_id=cluster_id)
         else:
-            instances = instance_manager.list_instances(get_user_id(), group_id=group_id)
+            instances = instance_manager.list_instances(get_user_id(), cluster_id=cluster_id)
         return jsonify(instances)
 
     @app.route('/api/instances', methods=['POST'])
     def api_create_instance():
-        data = request.form if request.form else request.get_json()
+        data = request.get_json() or {}
         name = data.get('name', '').strip()
-        group_id = data.get('group_id')
+        cluster_id = data.get('cluster_id')
         if not name:
             return jsonify({'error': 'Name is required'}), 400
-        if not group_id:
-            return jsonify({'error': 'Group is required'}), 400
+        if not cluster_id:
+            return jsonify({'error': 'Cluster is required'}), 400
 
         with get_db() as conn:
             existing = conn.execute(
@@ -164,17 +172,8 @@ def create_app():
                 (get_user_id(), instance_manager._sanitize(f"{get_username()}-{name}"))
             ).fetchone()
             if existing:
-                return jsonify({'error': f'You already have an instance named "{name}". Please choose a different name.'}), 409
+                return jsonify({'error': f'You already have an instance named "{name}".'}), 409
 
-        kubeconfig_data = None
-        if 'kubeconfig' in request.files:
-            kubeconfig_data = request.files['kubeconfig'].read().decode('utf-8')
-        elif data.get('kubeconfig'):
-            kubeconfig_data = data['kubeconfig']
-
-        storage_class = data.get('storage_class') or os.environ.get('STORAGE_CLASS')
-
-        # Get the current user's password hash to seed the instance DB
         with get_db() as conn:
             user_row = conn.execute('SELECT password_hash FROM users WHERE id = ?', (get_user_id(),)).fetchone()
         pwd_hash = user_row['password_hash'] if user_row else None
@@ -184,10 +183,8 @@ def create_app():
                 owner_id=get_user_id(),
                 username=get_username(),
                 name=name,
-                group_id=int(group_id),
+                cluster_id=int(cluster_id),
                 namespace=namespace,
-                kubeconfig_data=kubeconfig_data,
-                storage_class=storage_class,
                 image=image,
                 password_hash=pwd_hash,
             )

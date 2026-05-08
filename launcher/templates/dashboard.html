@@ -20,17 +20,18 @@
         .sidebar-section button{width:24px;height:24px;border:none;background:#F8F8F8;border-radius:6px;cursor:pointer;display:flex;align-items:center;justify-content:center;color:#999;transition:background-color 0.12s,color 0.12s}
         .sidebar-section button:hover{background:#2A7B88;color:white}
         .sidebar-section button:focus-visible{outline:2px solid #2A7B88;outline-offset:1px}
-        .group-list{flex:1;overflow-y:auto;padding:0 8px 8px}
-        .group-item{display:flex;align-items:center;gap:8px;padding:9px 10px;border-radius:8px;cursor:pointer;transition:background-color 0.12s;font-size:0.88em;color:#4A4A4A;border:none;background:none;width:100%;text-align:left}
-        .group-item:hover{background:#F8F8F8}
-        .group-item.active{background:#F0F9FA;color:#1B5E6B;font-weight:600}
-        .group-item .icon{font-size:1.1em;flex-shrink:0}
-        .group-item .name{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-        .group-item .count{font-size:0.75em;color:#999;background:#F0F0F0;padding:2px 7px;border-radius:10px;flex-shrink:0}
-        .group-item.active .count{background:#E0F2F4;color:#1B5E6B}
-        .group-item .del-btn{display:none;border:none;background:none;color:#CCC;cursor:pointer;padding:2px;border-radius:4px;flex-shrink:0}
-        .group-item:hover .del-btn{display:block}
-        .group-item .del-btn:hover{color:#2A7B88}
+        .cluster-list{flex:1;overflow-y:auto;padding:0 8px 8px}
+        .cluster-item{display:flex;align-items:center;gap:8px;padding:9px 10px;border-radius:8px;cursor:pointer;transition:background-color 0.12s;font-size:0.88em;color:#4A4A4A;border:none;background:none;width:100%;text-align:left}
+        .cluster-item:hover{background:#F8F8F8}
+        .cluster-item.active{background:#F0F9FA;color:#1B5E6B;font-weight:600}
+        .cluster-item .icon{font-size:1.1em;flex-shrink:0}
+        .cluster-item .name{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;line-height:1.2}
+        .cluster-item .target{font-size:0.72em;color:#999;font-weight:400;display:block;overflow:hidden;text-overflow:ellipsis}
+        .cluster-item .count{font-size:0.75em;color:#999;background:#F0F0F0;padding:2px 7px;border-radius:10px;flex-shrink:0}
+        .cluster-item.active .count{background:#E0F2F4;color:#1B5E6B}
+        .cluster-item .del-btn{display:none;border:none;background:none;color:#CCC;cursor:pointer;padding:2px;border-radius:4px;flex-shrink:0}
+        .cluster-item:hover .del-btn{display:block}
+        .cluster-item .del-btn:hover{color:#2A7B88}
         .sidebar-footer{padding:12px;border-top:1px solid #E0E0E0}
         .user-pill{display:flex;align-items:center;gap:10px;padding:8px 10px;border-radius:8px}
         .user-avatar{width:32px;height:32px;background:#2A7B88;border-radius:8px;display:flex;align-items:center;justify-content:center;color:white;font-weight:700;font-size:0.85em;flex-shrink:0}
@@ -158,18 +159,18 @@
         <img src="{{ url_for('static', filename='img/inftune-logo-horizontal.png') }}" alt="Inftune Studio">
     </div>
     <div class="sidebar-section">
-        <span>Groups</span>
-        <button onclick="showGroupModal()" title="Create group" aria-label="Create group">
+        <span>Clusters</span>
+        <button onclick="showClusterModal()" title="Create group" aria-label="Create group">
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M12 5v14M5 12h14"/></svg>
         </button>
     </div>
-    <div class="group-list" id="group-list">
-        {% for g in groups %}
-        <button class="group-item{% if loop.first %} active{% endif %}" data-id="{{ g.id }}" onclick="selectGroup({{ g.id }})">
+    <div class="cluster-list" id="cluster-list">
+        {% for g in clusters %}
+        <button class="cluster-item{% if loop.first %} active{% endif %}" data-id="{{ g.id }}" onclick="selectCluster({{ g.id }})">
             <span class="icon">{{ g.icon }}</span>
-            <span class="name">{{ g.name }}</span>
+            <span class="name">{{ g.name }}<span class="target">{{ g.target_cluster or 'local' }}</span></span>
             <span class="count">{{ g.instance_count }}</span>
-            <span class="del-btn" onclick="event.stopPropagation();deleteGroup({{ g.id }},'{{ g.name }}')" title="Delete group">&times;</span>
+            <span class="del-btn" onclick="event.stopPropagation();deleteCluster({{ g.id }},'{{ g.name }}')" title="Delete cluster">&times;</span>
         </button>
         {% endfor %}
     </div>
@@ -193,54 +194,39 @@
 <div class="main">
     <div class="topbar" id="topbar">
         <h2 id="topbar-title">
-            {% if groups %}
-            <span class="g-icon">{{ groups[0].icon }}</span>{{ groups[0].name }}<span class="count">({{ groups[0].instance_count }})</span>
+            {% if clusters %}
+            <span class="g-icon">{{ clusters[0].icon }}</span>{{ clusters[0].name }}<span class="count">({{ clusters[0].instance_count }})</span>
             {% else %}
             Instances
             {% endif %}
         </h2>
-        <button class="btn btn-primary" id="new-instance-btn" onclick="showCreateModal()" {% if not groups %}style="display:none"{% endif %}>
+        <button class="btn btn-primary" id="new-instance-btn" onclick="showCreateModal()" {% if not clusters %}style="display:none"{% endif %}>
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>
             New Instance
         </button>
     </div>
 
     <div class="grid" id="instance-list">
-        {% if not groups %}
+        {% if not clusters %}
         <div class="empty">
             <div class="empty-icon">
                 <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="#2A7B88" stroke-width="1.5" aria-hidden="true"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>
             </div>
             <h3>Create your first group</h3>
-            <p>Organize your Inftune Studio instances into groups. Click the + button in the sidebar to get started.</p>
+            <p>Organize your Inftune Studio instances into clusters. Click the + button in the sidebar to get started.</p>
         </div>
         {% endif %}
     </div>
 </div>
 
-<!-- Create Instance Modal -->
+<!-- Create Instance Modal (simplified — cluster provides kubeconfig) -->
 <div class="modal-overlay" id="create-modal" onclick="if(event.target===this)hideCreateModal()">
     <div class="modal" role="dialog" aria-labelledby="modal-title">
         <h2 id="modal-title">New Instance</h2>
         <p class="modal-sub">Deploy an Inftune Studio optimizer instance</p>
         <form id="create-form" onsubmit="return createInstance(event)">
-            <input type="hidden" id="create-group-id" value="">
             <label for="instance-name">Instance Name</label>
-            <input type="text" id="instance-name" name="name" placeholder="prod-cluster-test" autocomplete="off" required>
-            <label class="toggle-row">
-                <input type="checkbox" id="remote-toggle" onchange="toggleRemote()">
-                <span>Target a remote cluster (upload kubeconfig)</span>
-            </label>
-            <div id="kubeconfig-section" style="display:none;">
-                <label>Kubeconfig File</label>
-                <div class="file-upload" id="file-drop" tabindex="0" role="button" aria-label="Upload kubeconfig file">Drop kubeconfig file here or click to browse</div>
-                <input type="file" id="kubeconfig-input" accept=".yaml,.yml,.conf,.config,.kubeconfig,*" style="display:none" aria-hidden="true">
-            </div>
-            <label for="storage-class-select">Storage Class</label>
-            <div style="display:flex;gap:8px;margin-bottom:16px;align-items:stretch;">
-                <select id="storage-class-select" name="storage_class" style="flex:1;margin-bottom:0"><option value="">Loading&hellip;</option></select>
-                <button type="button" class="btn btn-cancel" onclick="loadStorageClasses()" style="white-space:nowrap;padding:0 14px;font-size:0.85em" aria-label="Refresh">Refresh</button>
-            </div>
+            <input type="text" id="instance-name" name="name" placeholder="my-optimization" autocomplete="off" required>
             <div class="create-error" id="create-error" role="alert" aria-live="polite">
                 <div class="error-title">Failed to create instance</div>
                 <div class="error-text" id="create-error-text"></div>
@@ -253,18 +239,36 @@
     </div>
 </div>
 
-<!-- Create Group Modal -->
-<div class="modal-overlay" id="group-modal" onclick="if(event.target===this)hideGroupModal()">
-    <div class="modal" role="dialog" aria-labelledby="group-modal-title" style="width:600px">
-        <h2 id="group-modal-title">New Group</h2>
-        <p class="modal-sub">Organize your instances into a group</p>
-        <label for="new-group-name">Group Name</label>
-        <input type="text" id="new-group-name" placeholder="My Cluster" autocomplete="off">
+<!-- Create Cluster Modal -->
+<div class="modal-overlay" id="cluster-modal" onclick="if(event.target===this)hideClusterModal()">
+    <div class="modal" role="dialog" aria-labelledby="cluster-modal-title" style="width:600px">
+        <h2 id="cluster-modal-title">New Cluster</h2>
+        <p class="modal-sub">Add a local or remote cluster</p>
+        <label for="new-cluster-name">Cluster Name</label>
+        <input type="text" id="new-cluster-name" placeholder="My Cluster" autocomplete="off">
         <label>Icon</label>
         <div class="icon-grid" id="icon-grid"></div>
+        <label class="toggle-row">
+            <input type="checkbox" id="remote-toggle" onchange="toggleRemote()">
+            <span>Remote cluster (upload kubeconfig)</span>
+        </label>
+        <div id="kubeconfig-section" style="display:none;">
+            <label>Kubeconfig File</label>
+            <div class="file-upload" id="file-drop" tabindex="0" role="button" aria-label="Upload kubeconfig file">Drop kubeconfig file here or click to browse</div>
+            <input type="file" id="kubeconfig-input" accept=".yaml,.yml,.conf,.config,.kubeconfig,*" style="display:none" aria-hidden="true">
+        </div>
+        <label for="storage-class-select">Storage Class</label>
+        <div style="display:flex;gap:8px;margin-bottom:16px;align-items:stretch;">
+            <select id="storage-class-select" name="storage_class" style="flex:1;margin-bottom:0"><option value="">Loading&hellip;</option></select>
+            <button type="button" class="btn btn-cancel" onclick="loadStorageClasses()" style="white-space:nowrap;padding:0 14px;font-size:0.85em" aria-label="Refresh">Refresh</button>
+        </div>
+        <div class="create-error" id="cluster-error" role="alert" aria-live="polite" style="display:none">
+            <div class="error-title">Failed to create cluster</div>
+            <div class="error-text" id="cluster-error-text"></div>
+        </div>
         <div class="actions">
-            <button type="button" class="btn btn-cancel" onclick="hideGroupModal()">Cancel</button>
-            <button type="button" class="btn btn-primary" onclick="saveGroup()">Create</button>
+            <button type="button" class="btn btn-cancel" onclick="hideClusterModal()">Cancel</button>
+            <button type="button" class="btn btn-primary" id="cluster-create-btn" onclick="saveCluster()">Create</button>
         </div>
     </div>
 </div>
@@ -320,7 +324,7 @@
 {% endif %}
 
 <script>
-var currentGroupId = {{ groups[0].id if groups else 'null' }};
+var currentClusterId = {{ clusters[0].id if clusters else 'null' }};
 var IS_ADMIN = {{ 'true' if is_admin else 'false' }};
 var viewingUserId = null;
 var ICONS = ['📦','🔬','🌐','🏢','🔧','☁️','🖥️','🧪','🚀','💻','🔒','⚡','🏗️','📊','🎯','🔥','💡','🛠️','📡','🗄️','🐳','🤖','🧠','💎','🔮','🌊','🏔️','🛡️','⚙️','🔗','📈','🧬','🎛️','💾','🔑','🌍','🏭','📐','🧊','🪐'];
@@ -338,27 +342,44 @@ var selectedIcon = '📦';
     });
 })();
 
-function showGroupModal(){
-    document.getElementById('group-modal').classList.add('active');
-    document.getElementById('new-group-name').value='';
-    document.getElementById('new-group-name').focus();
+function showClusterModal(){
+    document.getElementById('cluster-modal').classList.add('active');
+    document.getElementById('new-cluster-name').value='';
+    document.getElementById('remote-toggle').checked=false;
+    document.getElementById('kubeconfig-section').style.display='none';
+    kubeconfigContent=null;
+    var drop=document.getElementById('file-drop');
+    drop.textContent='Drop kubeconfig file here or click to browse';
+    drop.classList.remove('has-file');
+    document.getElementById('cluster-error').style.display='none';
+    document.getElementById('new-cluster-name').focus();
+    loadStorageClasses();
 }
-function hideGroupModal(){
-    document.getElementById('group-modal').classList.remove('active');
+function hideClusterModal(){
+    document.getElementById('cluster-modal').classList.remove('active');
 }
 
-function saveGroup(){
-    var name = document.getElementById('new-group-name').value.trim();
+function saveCluster(){
+    var name = document.getElementById('new-cluster-name').value.trim();
     if(!name) return;
-    fetch('/api/groups',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({name:name,icon:selectedIcon})})
+    var btn = document.getElementById('cluster-create-btn');
+    btn.disabled=true; btn.textContent='Creating…';
+    var body = {name:name, icon:selectedIcon,
+        kubeconfig: document.getElementById('remote-toggle').checked ? kubeconfigContent : null,
+        storage_class: document.getElementById('storage-class-select').value || null};
+    fetch('/api/clusters',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)})
     .then(function(r){return r.json()})
     .then(function(data){
-        if(data.error){showWarn('Cannot create group', data.error);return;}
-        hideGroupModal();
-        // Reload groups in sidebar and select the new one
-        loadGroups();
-        currentGroupId = data.id;
-        setTimeout(function(){ selectGroup(data.id); }, 300);
+        btn.disabled=false; btn.textContent='Create';
+        if(data.error){
+            document.getElementById('cluster-error-text').textContent=data.error;
+            document.getElementById('cluster-error').style.display='block';
+            return;
+        }
+        hideClusterModal();
+        loadClusters();
+        currentClusterId = data.id;
+        setTimeout(function(){ selectCluster(data.id); }, 300);
     });
 }
 
@@ -373,21 +394,21 @@ function showConfirm(title, msg, warn, btnText, onConfirm){
 }
 function hideConfirm(){document.getElementById('confirm-modal').classList.remove('active');}
 
-function deleteGroup(id, name){
-    showConfirm('Delete Group', 'Delete group "'+name+'"?', 'This will also delete ALL instances in this group and their data.', 'Delete Group', function(){
-        fetch('/api/groups/'+id,{method:'DELETE'})
+function deleteCluster(id, name){
+    showConfirm('Delete Cluster', 'Delete cluster "'+name+'"?', 'This will also delete ALL instances in this group and their data.', 'Delete Cluster', function(){
+        fetch('/api/clusters/'+id,{method:'DELETE'})
         .then(function(r){return r.json()})
         .then(function(data){ if(data.ok) location.reload(); else showWarn('Error', data.error||'Failed'); });
     });
 }
 
-function selectGroup(id){
-    currentGroupId = id;
+function selectCluster(id){
+    currentClusterId = id;
     viewingUserId = null;
     var navUsers = document.getElementById('nav-users');
     if(navUsers) navUsers.classList.remove('active');
-    document.querySelectorAll('.group-item').forEach(function(el){ el.classList.toggle('active', parseInt(el.dataset.id)===id); });
-    var active = document.querySelector('.group-item.active');
+    document.querySelectorAll('.cluster-item').forEach(function(el){ el.classList.toggle('active', parseInt(el.dataset.id)===id); });
+    var active = document.querySelector('.cluster-item.active');
     if(active){
         var icon = active.querySelector('.icon').textContent;
         var name = active.querySelector('.name').textContent;
@@ -400,12 +421,12 @@ function selectGroup(id){
 function loadInstances(groupId, isRefresh, userId){
     var list = document.getElementById('instance-list');
     if(!isRefresh) list.innerHTML = '<div style="text-align:center;padding:40px;color:#999">Loading&hellip;</div>';
-    var url = '/api/instances?group_id='+groupId;
+    var url = '/api/instances?cluster_id='+groupId;
     if(userId) url += '&user_id='+userId;
     fetch(url)
     .then(function(r){return r.json()})
     .then(function(instances){
-        var countEl = document.querySelector('.group-item.active .count');
+        var countEl = document.querySelector('.cluster-item.active .count');
         if(countEl) countEl.textContent = instances.length;
         var topCount = document.querySelector('#topbar-title .count');
         if(topCount) topCount.textContent = '('+instances.length+')';
@@ -451,11 +472,11 @@ function loadInstances(groupId, isRefresh, userId){
 }
 
 function showCreateModal(){
-    if(!currentGroupId){alert('Create a group first');return;}
-    document.getElementById('create-group-id').value = currentGroupId;
+    if(!currentClusterId){showWarn('No Cluster','Create a cluster first before adding instances.');return;}
     document.getElementById('create-modal').classList.add('active');
+    document.getElementById('instance-name').value='';
+    document.getElementById('create-error').style.display='none';
     document.getElementById('instance-name').focus();
-    loadStorageClasses();
 }
 function loadStorageClasses(){
     var sel = document.getElementById('storage-class-select');
@@ -488,14 +509,12 @@ function createInstance(e){
     var btn=document.getElementById('create-btn');
     btn.disabled=true;btn.textContent='Creating…';
     fetch('/api/instances',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({
-        name:name, group_id:currentGroupId,
-        kubeconfig:document.getElementById('remote-toggle').checked?kubeconfigContent:null,
-        storage_class:document.getElementById('storage-class-select').value||null
+        name:name, cluster_id:currentClusterId
     })})
     .then(function(r){return r.json()})
     .then(function(data){
         if(data.error){showCreateError(data.error);btn.disabled=false;btn.textContent='Create';}
-        else{hideCreateModal();loadInstances(currentGroupId);loadGroups();}
+        else{hideCreateModal();loadInstances(currentClusterId);loadClusters();}
     })
     .catch(function(err){showCreateError(err.message||err);btn.disabled=false;btn.textContent='Create';});
     return false;
@@ -509,20 +528,20 @@ function _doDeleteInstance(id,name){
     if(card){card.querySelectorAll('.btn').forEach(function(b){b.disabled=true;b.style.opacity='0.4';});
         var ov=document.createElement('div');ov.className='delete-overlay';ov.innerHTML='<div style="display:flex;align-items:center;gap:10px"><svg width="20" height="20" viewBox="0 0 24 24" aria-hidden="true" style="animation:spin 1s linear infinite"><circle cx="12" cy="12" r="10" stroke="#2A7B88" stroke-width="3" fill="none" stroke-dasharray="31.4 31.4" stroke-linecap="round"/></svg><span style="color:#4A4A4A;font-weight:600;font-size:0.9em">Deleting…</span></div>';card.appendChild(ov);}
     fetch('/api/instances/'+id,{method:'DELETE'}).then(function(r){return r.json()}).then(function(data){
-        if(data.ok){if(card){card.style.transition='opacity 0.3s';card.style.opacity='0';setTimeout(function(){card.remove()},300);}loadGroups();}
+        if(data.ok){if(card){card.style.transition='opacity 0.3s';card.style.opacity='0';setTimeout(function(){card.remove()},300);}loadClusters();}
         else{showCreateError(data.error||'Failed');if(card){var o=card.querySelector('.delete-overlay');if(o)o.remove();card.querySelectorAll('.btn').forEach(function(b){b.disabled=false;b.style.opacity='';});}}
     });
 }
 
-function loadGroups(){
-    fetch('/api/groups').then(function(r){return r.json()}).then(function(groups){
-        var list=document.getElementById('group-list');list.innerHTML='';
-        groups.forEach(function(g){
+function loadClusters(){
+    fetch('/api/clusters').then(function(r){return r.json()}).then(function(clusters){
+        var list=document.getElementById('cluster-list');list.innerHTML='';
+        clusters.forEach(function(g){
             var b=document.createElement('button');
-            b.className='group-item'+(g.id===currentGroupId?' active':'');
+            b.className='cluster-item'+(g.id===currentClusterId?' active':'');
             b.dataset.id=g.id;
-            b.onclick=function(){selectGroup(g.id)};
-            b.innerHTML='<span class="icon">'+g.icon+'</span><span class="name">'+g.name+'</span><span class="count">'+g.instance_count+'</span><span class="del-btn" onclick="event.stopPropagation();deleteGroup('+g.id+',\''+g.name.replace(/'/g,"\\'")+'\')" title="Delete group">&times;</span>';
+            b.onclick=function(){selectCluster(g.id)};
+            b.innerHTML='<span class="icon">'+g.icon+'</span><span class="name">'+g.name+'</span><span class="count">'+g.instance_count+'</span><span class="del-btn" onclick="event.stopPropagation();deleteCluster('+g.id+',\''+g.name.replace(/'/g,"\\'")+'\')" title="Delete cluster">&times;</span>';
             list.appendChild(b);
         });
     });
@@ -581,9 +600,9 @@ function copyCmd(btn, cmd){
 
 // ── Admin: User Management ──
 function showUsers(){
-    currentGroupId = null;
+    currentClusterId = null;
     viewingUserId = null;
-    document.querySelectorAll('.group-item').forEach(function(el){el.classList.remove('active')});
+    document.querySelectorAll('.cluster-item').forEach(function(el){el.classList.remove('active')});
     var navUsers = document.getElementById('nav-users');
     if(navUsers) navUsers.classList.add('active');
     document.getElementById('topbar-title').innerHTML = '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="opacity:0.5"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75"/></svg> User Management';
@@ -592,17 +611,17 @@ function showUsers(){
     list.innerHTML = '<div style="text-align:center;padding:40px;color:#999">Loading&hellip;</div>';
     fetch('/api/users').then(function(r){return r.json()}).then(function(users){
         var html = '<div style="padding:0 32px"><div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px"><h3 style="color:#4A4A4A;font-size:0.95em">All Users</h3><button class="btn btn-primary" onclick="showAddUserModal()" style="font-size:0.85em;padding:8px 16px"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M12 5v14M5 12h14"/></svg> Add User</button></div>';
-        html += '<table class="user-table"><thead><tr><th>Username</th><th>Role</th><th>Groups</th><th>Instances</th><th>Created</th><th></th></tr></thead><tbody>';
+        html += '<table class="user-table"><thead><tr><th>Username</th><th>Role</th><th>Clusters</th><th>Instances</th><th>Created</th><th></th></tr></thead><tbody>';
         users.forEach(function(u){
             html += '<tr><td><strong>'+u.username+'</strong></td>';
             html += '<td>'+(u.is_admin?'<span class="badge-admin">Admin</span>':'<span class="badge-user">User</span>')+'</td>';
-            html += '<td>'+u.group_count+'</td><td>'+u.instance_count+'</td>';
+            html += '<td>'+u.cluster_count+'</td><td>'+u.instance_count+'</td>';
             html += '<td style="color:#999;font-size:0.88em">'+u.created_at.slice(0,10)+'</td>';
             html += '<td>';
             if(!u.is_admin){
                 html += '<button class="btn btn-danger" style="font-size:0.78em;padding:5px 12px" onclick="deleteUser('+u.id+',\''+u.username.replace(/'/g,"\\'")+'\')">Delete</button> ';
                 html += '<button class="btn btn-cancel" style="font-size:0.78em;padding:5px 12px" onclick="resetUserPassword('+u.id+',\''+u.username.replace(/'/g,"\\'")+'\')">Reset Pwd</button> ';
-                html += '<button class="btn btn-open" style="font-size:0.78em;padding:5px 12px" onclick="viewUserGroups('+u.id+',\''+u.username.replace(/'/g,"\\'")+'\')">View</button>';
+                html += '<button class="btn btn-open" style="font-size:0.78em;padding:5px 12px" onclick="viewUserClusters('+u.id+',\''+u.username.replace(/'/g,"\\'")+'\')">View</button>';
             }
             html += '</td></tr>';
         });
@@ -645,7 +664,7 @@ function resetUserPassword(id, name){
 }
 
 function deleteUser(id, name){
-    showConfirm('Delete User', 'Delete user "'+name+'"?', 'This will delete ALL their groups, instances, and data. This cannot be undone.', 'Delete User', function(){
+    showConfirm('Delete User', 'Delete user "'+name+'"?', 'This will delete ALL their clusters, instances, and data. This cannot be undone.', 'Delete User', function(){
         fetch('/api/users/'+id,{method:'DELETE'}).then(function(r){return r.json()}).then(function(data){
             if(data.ok) showUsers();
             else showWarn('Error', data.error||'Failed');
@@ -653,22 +672,22 @@ function deleteUser(id, name){
     });
 }
 
-function viewUserGroups(uid, uname){
+function viewUserClusters(uid, uname){
     viewingUserId = uid;
     var navUsers = document.getElementById('nav-users');
     if(navUsers) navUsers.classList.remove('active');
     document.getElementById('topbar-title').innerHTML = 'Viewing: <strong>'+uname+'</strong>';
     document.getElementById('new-instance-btn').style.display='none';
-    // Load that user's groups into sidebar
-    fetch('/api/groups?user_id='+uid).then(function(r){return r.json()}).then(function(groups){
-        var glist = document.getElementById('group-list');
+    // Load that user's clusters into sidebar
+    fetch('/api/clusters?user_id='+uid).then(function(r){return r.json()}).then(function(clusters){
+        var glist = document.getElementById('cluster-list');
         glist.innerHTML = '';
-        groups.forEach(function(g){
+        clusters.forEach(function(g){
             var b = document.createElement('button');
-            b.className='group-item';b.dataset.id=g.id;
+            b.className='cluster-item';b.dataset.id=g.id;
             b.onclick=function(){
-                currentGroupId=g.id;
-                document.querySelectorAll('.group-item').forEach(function(el){el.classList.remove('active')});
+                currentClusterId=g.id;
+                document.querySelectorAll('.cluster-item').forEach(function(el){el.classList.remove('active')});
                 b.classList.add('active');
                 document.getElementById('topbar-title').innerHTML = '<span class="g-icon">'+g.icon+'</span>'+g.name+' <span style="font-size:0.7em;color:#3b82f6">('+uname+')</span><span class="count"></span>';
                 loadInstances(g.id, false, uid);
@@ -676,23 +695,23 @@ function viewUserGroups(uid, uname){
             b.innerHTML='<span class="icon">'+g.icon+'</span><span class="name">'+g.name+'</span><span class="count">'+g.instance_count+'</span>';
             glist.appendChild(b);
         });
-        if(!groups.length){
+        if(!clusters.length){
             var list = document.getElementById('instance-list');
-            list.innerHTML = '<div class="empty"><h3>No groups</h3><p>This user has no groups yet.</p></div>';
+            list.innerHTML = '<div class="empty"><h3>No clusters</h3><p>This user has no clusters yet.</p></div>';
         }
     });
 }
 
-function backToMyGroups(){
+function backToMyClusters(){
     viewingUserId = null;
     location.reload();
 }
 
 // Auto-refresh (status only, no flicker)
-setInterval(function(){if(currentGroupId)loadInstances(currentGroupId, true);},15000);
+setInterval(function(){if(currentClusterId)loadInstances(currentClusterId, true);},15000);
 
 // Initial load
-if(currentGroupId) loadInstances(currentGroupId);
+if(currentClusterId) loadInstances(currentClusterId);
 </script>
 </body>
 </html>

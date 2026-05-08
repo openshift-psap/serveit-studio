@@ -2,7 +2,7 @@
 
 UI pods live in the shared launcher namespace (e.g. 'inftune').
 Workloads (LWS, guidellm, EPP) get their own per-instance namespace.
-Instances are organized into user-defined groups.
+Instances are organized into clusters (local or remote).
 """
 
 import json
@@ -49,68 +49,146 @@ def _sanitize(name: str) -> str:
     return re.sub(r'[^a-z0-9-]', '-', name.lower())[:40]
 
 
-# ── Group CRUD ──────────────────────────────────────────────────────────────
+def _validate_kubeconfig(kubeconfig_data: str) -> str:
+    """Validate kubeconfig connectivity and return the cluster API URL."""
+    try:
+        import yaml
+        kc = yaml.safe_load(kubeconfig_data)
+        target = kc.get('clusters', [{}])[0].get('cluster', {}).get('server', 'remote')
+    except Exception:
+        target = 'remote'
 
-def create_group(owner_id: int, name: str, icon: str = '📦') -> Dict:
+    import tempfile
+    with tempfile.NamedTemporaryFile(mode='w', suffix='.kubeconfig', delete=False) as tmp:
+        tmp.write(kubeconfig_data)
+        tmp_path = tmp.name
+    try:
+        r = subprocess.run(
+            ['kubectl', '--kubeconfig', tmp_path, 'cluster-info'],
+            capture_output=True, text=True, timeout=15
+        )
+        if r.returncode != 0:
+            raise RuntimeError(
+                f"Cannot connect to cluster {target}. "
+                f"Verify the kubeconfig is correct and the cluster is reachable.\n"
+                f"Error: {r.stderr.strip()[:200]}")
+    except subprocess.TimeoutExpired:
+        raise RuntimeError(
+            f"Connection to {target} timed out. "
+            f"Verify the cluster is reachable from this network.")
+    finally:
+        os.unlink(tmp_path)
+
+    return target
+
+
+# ── Cluster CRUD ─────────────────────────────────────────────────────────────
+
+def create_cluster(owner_id: int, name: str, icon: str = '🖥️',
+                   namespace: str = 'inftune',
+                   kubeconfig_data: str = None,
+                   storage_class: str = None) -> Dict:
+    """Create a cluster entry. If kubeconfig is provided, validates it and stores as K8s Secret."""
+    target_cluster = 'local'
+    kubeconfig_secret = None
+
+    if kubeconfig_data:
+        target_cluster = _validate_kubeconfig(kubeconfig_data)
+
+        # Check duplicate cluster URL
+        with get_db() as conn:
+            existing = conn.execute(
+                'SELECT id FROM clusters WHERE owner_id = ? AND target_cluster = ?',
+                (owner_id, target_cluster)
+            ).fetchone()
+            if existing:
+                raise RuntimeError(f'You already have a cluster targeting {target_cluster}')
+
+        safe = _sanitize(name)
+        kubeconfig_secret = f"inftune-kubeconfig-{safe}"
+        secret_yaml = json.dumps({
+            "apiVersion": "v1", "kind": "Secret",
+            "metadata": {"name": kubeconfig_secret, "namespace": namespace},
+            "type": "Opaque",
+            "stringData": {"kubeconfig": kubeconfig_data}
+        })
+        r = _kubectl(['apply', '-f', '-', '-n', namespace], input_data=secret_yaml)
+        if r.returncode != 0:
+            raise RuntimeError(f"Failed to create kubeconfig Secret: {r.stderr}")
+    else:
+        # Check: only one local cluster per user
+        with get_db() as conn:
+            existing = conn.execute(
+                "SELECT id FROM clusters WHERE owner_id = ? AND target_cluster = 'local'",
+                (owner_id,)
+            ).fetchone()
+            if existing:
+                raise RuntimeError('You already have a local cluster')
+
     with get_db() as conn:
         conn.execute(
-            "INSERT INTO groups_ (name, icon, owner_id, created_at) VALUES (?, ?, ?, ?)",
-            (name, icon, owner_id, datetime.now().isoformat())
+            "INSERT INTO clusters (name, icon, owner_id, kubeconfig_secret, target_cluster, storage_class, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)",
+            (name, icon, owner_id, kubeconfig_secret, target_cluster, storage_class, datetime.now().isoformat())
         )
-        gid = conn.execute('SELECT last_insert_rowid()').fetchone()[0]
-    return {'id': gid, 'name': name, 'icon': icon}
+        cid = conn.execute('SELECT last_insert_rowid()').fetchone()[0]
+
+    return {'id': cid, 'name': name, 'icon': icon, 'target_cluster': target_cluster}
 
 
-def delete_group(group_id: int, owner_id: int) -> bool:
+def delete_cluster(cluster_id: int, owner_id: int) -> bool:
     with get_db() as conn:
         row = conn.execute(
-            'SELECT id FROM groups_ WHERE id = ? AND owner_id = ?',
-            (group_id, owner_id)
+            'SELECT * FROM clusters WHERE id = ? AND owner_id = ?',
+            (cluster_id, owner_id)
         ).fetchone()
         if not row:
             return False
+        row = dict(row)
         instances = conn.execute(
-            'SELECT id FROM instances WHERE group_id = ? AND owner_id = ?',
-            (group_id, owner_id)
+            'SELECT id FROM instances WHERE cluster_id = ? AND owner_id = ?',
+            (cluster_id, owner_id)
         ).fetchall()
 
     for inst in instances:
         delete_instance(inst['id'], owner_id)
 
+    # Delete kubeconfig secret if it exists
+    if row.get('kubeconfig_secret'):
+        _kubectl(['delete', 'secret', row['kubeconfig_secret'], '-n', 'inftune', '--ignore-not-found=true'])
+
     with get_db() as conn:
-        conn.execute('DELETE FROM groups_ WHERE id = ?', (group_id,))
+        conn.execute('DELETE FROM clusters WHERE id = ?', (cluster_id,))
     return True
 
 
-def list_groups(owner_id: int) -> List[Dict]:
+def list_clusters(owner_id: int) -> List[Dict]:
     with get_db() as conn:
         rows = conn.execute(
-            '''SELECT g.*, COUNT(i.id) as instance_count
-               FROM groups_ g LEFT JOIN instances i ON g.id = i.group_id
-               WHERE g.owner_id = ?
-               GROUP BY g.id ORDER BY g.created_at''',
+            '''SELECT c.*, COUNT(i.id) as instance_count
+               FROM clusters c LEFT JOIN instances i ON c.id = i.cluster_id
+               WHERE c.owner_id = ?
+               GROUP BY c.id ORDER BY c.created_at''',
             (owner_id,)
         ).fetchall()
     return [dict(r) for r in rows]
 
 
-def update_group(group_id: int, owner_id: int, name: str = None, icon: str = None) -> bool:
+def update_cluster(cluster_id: int, owner_id: int, name: str = None, icon: str = None) -> bool:
     with get_db() as conn:
         row = conn.execute(
-            'SELECT id FROM groups_ WHERE id = ? AND owner_id = ?',
-            (group_id, owner_id)
+            'SELECT id FROM clusters WHERE id = ? AND owner_id = ?',
+            (cluster_id, owner_id)
         ).fetchone()
         if not row:
             return False
         if name is not None:
-            conn.execute('UPDATE groups_ SET name = ? WHERE id = ?', (name, group_id))
+            conn.execute('UPDATE clusters SET name = ? WHERE id = ?', (name, cluster_id))
         if icon is not None:
-            conn.execute('UPDATE groups_ SET icon = ? WHERE id = ?', (icon, group_id))
+            conn.execute('UPDATE clusters SET icon = ? WHERE id = ?', (icon, cluster_id))
     return True
 
 
 def _seed_instance_user(deployment_name: str, namespace: str, username: str, password_hash: str):
-    """Pre-seed the instance's DB with the launcher user so they don't need to set up a new account."""
     import base64
     for _ in range(30):
         r = _kubectl(['get', 'pod', '-l', f'app={deployment_name}', '-n', namespace,
@@ -141,10 +219,10 @@ def list_users() -> List[Dict]:
     with get_db() as conn:
         rows = conn.execute('''
             SELECT u.id, u.username, u.is_admin, u.created_at,
-                   COUNT(DISTINCT g.id) as group_count,
+                   COUNT(DISTINCT c.id) as cluster_count,
                    COUNT(DISTINCT i.id) as instance_count
             FROM users u
-            LEFT JOIN groups_ g ON u.id = g.owner_id
+            LEFT JOIN clusters c ON u.id = c.owner_id
             LEFT JOIN instances i ON u.id = i.owner_id
             GROUP BY u.id ORDER BY u.created_at
         ''').fetchall()
@@ -158,10 +236,10 @@ def delete_user(user_id: int) -> bool:
             return False
         if row['is_admin']:
             return False
-        groups = conn.execute('SELECT id FROM groups_ WHERE owner_id = ?', (user_id,)).fetchall()
+        clusters = conn.execute('SELECT id FROM clusters WHERE owner_id = ?', (user_id,)).fetchall()
 
-    for g in groups:
-        delete_group(g['id'], user_id)
+    for c in clusters:
+        delete_cluster(c['id'], user_id)
 
     with get_db() as conn:
         conn.execute('DELETE FROM users WHERE id = ?', (user_id,))
@@ -171,56 +249,52 @@ def delete_user(user_id: int) -> bool:
 # ── Instance CRUD ───────────────────────────────────────────────────────────
 
 def create_instance(owner_id: int, username: str, name: str,
-                    group_id: int = None,
+                    cluster_id: int = None,
                     namespace: str = 'inftune',
-                    kubeconfig_data: str = None,
-                    storage_class: str = None,
                     image: str = 'quay.io/bbenshab/inftune-studio:server',
                     password_hash: str = None) -> Dict:
+    """Create an instance. Kubeconfig and storage class come from the cluster."""
+
+    # Look up cluster for kubeconfig and storage class
+    kubeconfig_secret = None
+    target_cluster = 'local'
+    storage_class = None
+    kubeconfig_data = None
+
+    if cluster_id:
+        with get_db() as conn:
+            cluster = conn.execute('SELECT * FROM clusters WHERE id = ?', (cluster_id,)).fetchone()
+            if cluster:
+                cluster = dict(cluster)
+                kubeconfig_secret = cluster.get('kubeconfig_secret')
+                target_cluster = cluster.get('target_cluster', 'local')
+                storage_class = cluster.get('storage_class')
+                # Retrieve kubeconfig data from K8s secret if needed for remote setup
+                if kubeconfig_secret:
+                    import base64
+                    r = _kubectl(['get', 'secret', kubeconfig_secret, '-n', namespace,
+                                  '-o', 'jsonpath={.data.kubeconfig}'])
+                    if r.returncode == 0 and r.stdout.strip():
+                        try:
+                            kubeconfig_data = base64.b64decode(r.stdout.strip()).decode()
+                        except Exception:
+                            pass
+
     safe_name = _sanitize(f"{username}-{name}")
     workload_namespace = f"inftune-{safe_name}"
     deployment_name = f"inftune-{safe_name}"
     pvc_name = f"inftune-{safe_name}-storage"
     service_name = f"inftune-{safe_name}-ui"
-    target_cluster = 'local'
 
-    kubeconfig_secret = None
+    # Set up remote workload namespace if remote cluster
     if kubeconfig_data:
-        try:
-            import yaml
-            kc = yaml.safe_load(kubeconfig_data)
-            target_cluster = kc.get('clusters', [{}])[0].get('cluster', {}).get('server', 'remote')
-        except Exception:
-            target_cluster = 'remote'
-
         import tempfile
         with tempfile.NamedTemporaryFile(mode='w', suffix='.kubeconfig', delete=False) as tmp:
             tmp.write(kubeconfig_data)
             tmp_path = tmp.name
         try:
-            r = subprocess.run(
-                ['kubectl', '--kubeconfig', tmp_path, 'cluster-info'],
-                capture_output=True, text=True, timeout=15
-            )
-            if r.returncode != 0:
-                raise RuntimeError(
-                    f"Cannot connect to cluster {target_cluster}. "
-                    f"Verify the kubeconfig is correct and the cluster is reachable.\n"
-                    f"Error: {r.stderr.strip()[:200]}")
-        except subprocess.TimeoutExpired:
-            raise RuntimeError(
-                f"Connection to {target_cluster} timed out. "
-                f"Verify the cluster is reachable from this network.")
-        finally:
-            os.unlink(tmp_path)
-
-        import tempfile as _tf2
-        with _tf2.NamedTemporaryFile(mode='w', suffix='.kubeconfig', delete=False) as tmp2:
-            tmp2.write(kubeconfig_data)
-            tmp2_path = tmp2.name
-        try:
             def _remote(args, input=None):
-                return subprocess.run(['kubectl', '--kubeconfig', tmp2_path] + args,
+                return subprocess.run(['kubectl', '--kubeconfig', tmp_path] + args,
                                       input=input, capture_output=True, text=True, timeout=30)
 
             r = _remote(['get', 'namespace', workload_namespace])
@@ -279,33 +353,20 @@ def create_instance(owner_id: int, username: str, name: str,
             })
             _remote(['apply', '-f', '-'], input=remote_rbac)
         finally:
-            os.unlink(tmp2_path)
-
-        kubeconfig_secret = f"inftune-kubeconfig-{safe_name}"
+            os.unlink(tmp_path)
 
     with get_db() as conn:
         conn.execute('''
-            INSERT INTO instances (name, owner_id, group_id, display_name, status, namespace,
+            INSERT INTO instances (name, owner_id, cluster_id, display_name, status, namespace,
                                    workload_namespace, deployment_name, pvc_name, service_name,
                                    kubeconfig_secret, target_cluster, created_at)
             VALUES (?, ?, ?, ?, 'creating', ?, ?, ?, ?, ?, ?, ?, ?)
-        ''', (safe_name, owner_id, group_id, name, namespace, workload_namespace,
+        ''', (safe_name, owner_id, cluster_id, name, namespace, workload_namespace,
               deployment_name, pvc_name, service_name,
               kubeconfig_secret, target_cluster, datetime.now().isoformat()))
         instance_id = conn.execute('SELECT last_insert_rowid()').fetchone()[0]
 
     try:
-        if kubeconfig_data and kubeconfig_secret:
-            secret_yaml = json.dumps({
-                "apiVersion": "v1", "kind": "Secret",
-                "metadata": {"name": kubeconfig_secret, "namespace": namespace},
-                "type": "Opaque",
-                "stringData": {"kubeconfig": kubeconfig_data}
-            })
-            r = _kubectl(['apply', '-f', '-', '-n', namespace], input_data=secret_yaml)
-            if r.returncode != 0:
-                raise RuntimeError(f"Failed to create kubeconfig Secret: {r.stderr}")
-
         pvc_yaml = _render('pvc.yaml.j2',
             pvc_name=pvc_name, namespace=namespace,
             storage_size='100Gi', storage_class=storage_class or '')
@@ -362,7 +423,6 @@ def create_instance(owner_id: int, username: str, name: str,
                 else:
                     service_url = f"http://{service_name}.{namespace}.svc.cluster.local:5000"
 
-        # Pre-seed the instance DB with the launcher user's credentials
         if password_hash:
             _seed_instance_user(deployment_name, namespace, username, password_hash)
 
@@ -382,8 +442,6 @@ def create_instance(owner_id: int, username: str, name: str,
         _kubectl(['delete', 'deployment', deployment_name, '-n', namespace, '--ignore-not-found=true'])
         _kubectl(['delete', 'svc', f'{deployment_name}-ui', '-n', namespace, '--ignore-not-found=true'])
         _kubectl(['delete', 'pvc', pvc_name, '-n', namespace, '--ignore-not-found=true'])
-        if kubeconfig_secret:
-            _kubectl(['delete', 'secret', kubeconfig_secret, '-n', namespace, '--ignore-not-found=true'])
         raise
 
 
@@ -399,7 +457,6 @@ def delete_instance(instance_id: int, owner_id: int) -> bool:
 
     ns = row['namespace']
 
-    # Delete UI resources from the shared namespace (local cluster)
     for resource in [
         f"deployment/{row['deployment_name']}",
         f"service/{row['service_name']}",
@@ -407,15 +464,14 @@ def delete_instance(instance_id: int, owner_id: int) -> bool:
     ]:
         _kubectl(['delete', resource, '-n', ns, '--ignore-not-found=true'])
 
-    if row.get('kubeconfig_secret'):
-        # Clean up remote cluster workload namespace using the kubeconfig before deleting it
-        _cleanup_remote_cluster(row['kubeconfig_secret'], ns, row.get('workload_namespace', ''))
-        _kubectl(['delete', 'secret', row['kubeconfig_secret'], '-n', ns, '--ignore-not-found=true'])
-
     if _is_oc():
         _kubectl(['delete', 'route', f"{row['deployment_name']}-ui", '-n', ns, '--ignore-not-found=true'])
 
-    # Delete local workload namespace if it exists (for local-cluster instances)
+    # Clean up remote workload namespace
+    if row.get('kubeconfig_secret'):
+        _cleanup_remote_cluster(row['kubeconfig_secret'], ns, row.get('workload_namespace', ''))
+
+    # Delete local workload namespace (for local-cluster instances)
     wl_ns = row.get('workload_namespace', '')
     if wl_ns and wl_ns != ns and not row.get('kubeconfig_secret'):
         _kubectl(['delete', 'namespace', wl_ns, '--ignore-not-found=true'])
@@ -426,15 +482,13 @@ def delete_instance(instance_id: int, owner_id: int) -> bool:
 
 
 def _cleanup_remote_cluster(kubeconfig_secret: str, namespace: str, workload_namespace: str):
-    """Delete workload namespace on the remote cluster using the stored kubeconfig."""
     if not workload_namespace:
         return
-    import tempfile
+    import tempfile, base64
     r = _kubectl(['get', 'secret', kubeconfig_secret, '-n', namespace,
                   '-o', 'jsonpath={.data.kubeconfig}'])
     if r.returncode != 0 or not r.stdout.strip():
         return
-    import base64
     try:
         kubeconfig_data = base64.b64decode(r.stdout.strip()).decode()
     except Exception:
@@ -452,12 +506,12 @@ def _cleanup_remote_cluster(kubeconfig_secret: str, namespace: str, workload_nam
         os.unlink(tmp_path)
 
 
-def list_instances(owner_id: int, group_id: int = None) -> List[Dict]:
+def list_instances(owner_id: int, cluster_id: int = None) -> List[Dict]:
     with get_db() as conn:
-        if group_id is not None:
+        if cluster_id is not None:
             rows = conn.execute(
-                'SELECT * FROM instances WHERE owner_id = ? AND group_id = ? ORDER BY created_at DESC',
-                (owner_id, group_id)
+                'SELECT * FROM instances WHERE owner_id = ? AND cluster_id = ? ORDER BY created_at DESC',
+                (owner_id, cluster_id)
             ).fetchall()
         else:
             rows = conn.execute(
