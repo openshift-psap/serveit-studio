@@ -5,7 +5,7 @@ Simulates user selections from web console and runs optimization without the UI.
 Useful for debugging and headless runs.
 
 Usage:
-    python3 scripts/run_optimization_cli.py
+    python3 cli/run_optimization.py
 
 Edit the config_params dict below to match your desired workload parameters.
 """
