@@ -199,7 +199,7 @@
     <div class="topbar" id="topbar">
         <h2 id="topbar-title">
             {% if clusters %}
-            <span class="g-icon">{{ clusters[0].icon }}</span>{{ clusters[0].name }}<span style="font-size:0.6em;color:#999;margin-left:8px;font-weight:400">{{ clusters[0].target_cluster or 'local' }}</span><span class="count">({{ clusters[0].instance_count }})</span>
+            <span class="g-icon">{{ clusters[0].icon }}</span>{{ clusters[0].name }}{% if clusters[0].target_cluster and clusters[0].target_cluster != 'local' %}<span style="font-size:0.55em;color:#999;margin-left:8px;font-weight:400">{{ clusters[0].target_cluster }}</span>{% endif %}<span class="count">({{ clusters[0].instance_count }})</span>
             {% else %}
             Instances
             {% endif %}
@@ -420,10 +420,11 @@ function selectCluster(id){
     if(active){
         var icon = active.querySelector('.icon').textContent;
         var nameEl = active.querySelector('.name');
-        var name = nameEl.childNodes[0].textContent;
+        var name = nameEl.childNodes[0].textContent.trim();
         var target = nameEl.querySelector('.target');
-        var targetText = target ? target.textContent : 'local';
-        document.getElementById('topbar-title').innerHTML = '<span class="g-icon">'+icon+'</span>'+name+'<span style="font-size:0.6em;color:#999;margin-left:8px;font-weight:400">'+targetText+'</span><span class="count"></span>';
+        var targetText = target ? target.textContent.trim() : '';
+        var targetHtml = (targetText && targetText !== 'local') ? '<span style="font-size:0.55em;color:#999;margin-left:8px;font-weight:400">'+targetText+'</span>' : '';
+        document.getElementById('topbar-title').innerHTML = '<span class="g-icon">'+icon+'</span>'+name+targetHtml+'<span class="count"></span>';
     }
     document.getElementById('new-instance-btn').style.display='';
     loadInstances(id);
@@ -431,8 +432,8 @@ function selectCluster(id){
 
 function loadInstances(clusterId, isRefresh, userId){
     var list = document.getElementById('instance-list');
-    if(!isRefresh) list.innerHTML = '<div style="text-align:center;padding:40px;color:#999">Loading&hellip;</div>';
-    var url = '/api/instances?cluster_id='+groupId;
+    if(!isRefresh && list.children.length === 0) list.innerHTML = '<div style="text-align:center;padding:40px;color:#999">Loading&hellip;</div>';
+    var url = '/api/instances?cluster_id='+clusterId;
     if(userId) url += '&user_id='+userId;
     fetch(url)
     .then(function(r){return r.json()})
