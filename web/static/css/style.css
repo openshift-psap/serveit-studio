@@ -106,7 +106,7 @@
             min-width: 0;
             display: flex;
             align-items: center;
-            gap: 8px;
+            gap: 12px;
             padding: 0 16px;
             height: 80px;
             background: var(--rh-white);
@@ -115,6 +115,12 @@
             font-weight: 600;
             color: var(--rh-gray-500);
             position: relative;
+        }
+
+        .console-toolbar .console-actions {
+            margin-left: auto;
+            display: flex;
+            gap: 8px;
         }
 
         .console-toolbar::before {
@@ -132,14 +138,31 @@
         }
 
         .console-toolbar button {
-            background: #059669;
             color: white;
             border: none;
-            padding: 4px 10px;
-            border-radius: 4px;
+            padding: 8px 16px;
+            border-radius: 8px;
             cursor: pointer;
-            font-size: 0.9em;
+            font-size: 0.78em;
             font-weight: 600;
+            transition: background-color 0.12s, transform 0.1s, box-shadow 0.12s;
+        }
+        .console-toolbar button:active {
+            transform: scale(0.96);
+        }
+        .console-toolbar #save-console {
+            background: linear-gradient(135deg, #2A7B88, #1B5E6B);
+            box-shadow: 0 2px 6px rgba(42, 123, 136, 0.25);
+        }
+        .console-toolbar #save-console:hover {
+            box-shadow: 0 4px 12px rgba(42, 123, 136, 0.35);
+        }
+        .console-toolbar #clear-console {
+            background: linear-gradient(135deg, #4B5563, #374151) !important;
+            box-shadow: 0 2px 6px rgba(55, 65, 81, 0.25);
+        }
+        .console-toolbar #clear-console:hover {
+            box-shadow: 0 4px 12px rgba(55, 65, 81, 0.35);
         }
 
         .content-area {
