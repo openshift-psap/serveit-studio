@@ -422,85 +422,90 @@ function restoreClusterResources() {
         socket.emit('scan_cluster', {});
     }
 
-    // Populate max GPU dropdown
-    const maxGpuSelect = document.getElementById('max-gpu-select');
-    if (maxGpuSelect) {
-        maxGpuSelect.innerHTML = `<option value="${data.total_gpus}" selected>All (${data.total_gpus} GPUs)</option>`;
+    // Check if running from launcher with presets
+    var hasPresets = data.preset_max_gpus || (data.preset_nodes && data.preset_nodes.length > 0);
 
-        // Add powers of 2 and common GPU counts
-        const gpuOptions = [];
-        for (let i = 1; i < data.total_gpus; i *= 2) {
-            gpuOptions.push(i);
-        }
-        const commonValues = [4, 8, 16, 32, 64];
-        commonValues.forEach(val => {
-            if (val < data.total_gpus && !gpuOptions.includes(val)) {
-                gpuOptions.push(val);
-            }
-        });
-        gpuOptions.sort((a, b) => a - b);
-        gpuOptions.forEach(count => {
-            const option = document.createElement('option');
-            option.value = count;
-            option.textContent = `${count} GPU${count > 1 ? 's' : ''}`;
-            maxGpuSelect.appendChild(option);
-        });
+    if (hasPresets) {
+        // Launcher mode: show read-only preset summary
+        document.getElementById('max-gpu-group').style.display = 'block';
+        document.getElementById('node-select-group').style.display = 'none';
 
-        // Apply preset from launcher (if set), otherwise restore from saved config
+        var presetHtml = '<div style="background:#F0F9FA;border:1.5px solid #2A7B88;border-radius:10px;padding:16px 20px;">';
+        presetHtml += '<div style="font-weight:700;color:#2A7B88;font-size:0.95em;margin-bottom:8px;">⚡ Configured by Launcher</div>';
         if (data.preset_max_gpus) {
-            maxGpuSelect.value = String(data.preset_max_gpus);
-            // If preset value doesn't exist as option, add it
-            if (maxGpuSelect.value !== String(data.preset_max_gpus)) {
-                var opt = document.createElement('option');
-                opt.value = data.preset_max_gpus;
-                opt.textContent = data.preset_max_gpus + ' GPUs (preset)';
-                maxGpuSelect.appendChild(opt);
-                maxGpuSelect.value = String(data.preset_max_gpus);
+            presetHtml += '<div style="display:flex;align-items:center;gap:8px;margin-bottom:6px;"><span style="font-size:1.2em">🎛️</span><span><strong>' + data.preset_max_gpus + ' GPUs</strong> allocated</span></div>';
+            // Set the hidden select so the optimizer reads the right value
+            var maxGpuSelect = document.getElementById('max-gpu-select');
+            if (maxGpuSelect) {
+                maxGpuSelect.innerHTML = '<option value="' + data.preset_max_gpus + '" selected>' + data.preset_max_gpus + ' GPUs</option>';
             }
-        } else if (config.max_gpus) {
-            maxGpuSelect.value = config.max_gpus;
+        }
+        if (data.preset_nodes && data.preset_nodes.length > 0) {
+            presetHtml += '<div style="display:flex;align-items:flex-start;gap:8px;"><span style="font-size:1.2em">📍</span><div><strong>Pinned to ' + data.preset_nodes.length + ' node' + (data.preset_nodes.length > 1 ? 's' : '') + ':</strong>';
+            data.preset_nodes.forEach(function(n) {
+                presetHtml += '<div style="font-size:0.88em;color:#4A4A4A;margin-top:2px;">' + n + '</div>';
+            });
+            presetHtml += '</div></div>';
+            // Set hidden checkboxes
+            document.getElementById('enable-node-select').checked = true;
+        }
+        presetHtml += '</div>';
+
+        var gpuGroup = document.getElementById('max-gpu-group');
+        gpuGroup.innerHTML = presetHtml;
+
+    } else {
+        // Standalone mode: show full interactive GPU/node selection
+        const maxGpuSelect = document.getElementById('max-gpu-select');
+        if (maxGpuSelect) {
+            maxGpuSelect.innerHTML = `<option value="${data.total_gpus}" selected>All (${data.total_gpus} GPUs)</option>`;
+
+            const gpuOptions = [];
+            for (let i = 1; i < data.total_gpus; i *= 2) gpuOptions.push(i);
+            [4, 8, 16, 32, 64].forEach(val => { if (val < data.total_gpus && !gpuOptions.includes(val)) gpuOptions.push(val); });
+            gpuOptions.sort((a, b) => a - b);
+            gpuOptions.forEach(count => {
+                const option = document.createElement('option');
+                option.value = count;
+                option.textContent = `${count} GPU${count > 1 ? 's' : ''}`;
+                maxGpuSelect.appendChild(option);
+            });
+
+            if (config.max_gpus) maxGpuSelect.value = config.max_gpus;
+
+            const gpuUsageInfo = document.getElementById('gpu-usage-info');
+            if (data.gpus_in_use && data.gpus_in_use > 0) {
+                gpuUsageInfo.innerHTML = `⚠️ <strong>${data.gpus_in_use} GPU${data.gpus_in_use > 1 ? 's' : ''}</strong> currently in use by other workloads. <strong>${data.gpus_available} GPU${data.gpus_available !== 1 ? 's' : ''}</strong> available.`;
+                gpuUsageInfo.style.display = 'block';
+            } else {
+                gpuUsageInfo.style.display = 'none';
+            }
         }
 
-        // Note: Change listener is added in cluster_scan_result handler
+        document.getElementById('max-gpu-group').style.display = 'block';
 
-        // Display GPU usage information
-        const gpuUsageInfo = document.getElementById('gpu-usage-info');
-        if (data.gpus_in_use && data.gpus_in_use > 0) {
-            gpuUsageInfo.innerHTML = `⚠️ <strong>${data.gpus_in_use} GPU${data.gpus_in_use > 1 ? 's' : ''}</strong> currently in use by other workloads. <strong>${data.gpus_available} GPU${data.gpus_available !== 1 ? 's' : ''}</strong> available.`;
-            gpuUsageInfo.style.display = 'block';
-        } else {
-            gpuUsageInfo.style.display = 'none';
+        if (data.nodes_detail && data.nodes_detail.length > 0) {
+            let nodeHtml = '<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:8px;">';
+            data.nodes_detail.filter(n => n.gpus > 0).forEach(node => {
+                const prevSelected = config.selected_nodes && config.selected_nodes.includes(node.name);
+                nodeHtml += '<label style="display:flex;align-items:center;gap:10px;padding:10px 14px;background:#f8fafc;border:2px solid ' + (prevSelected ? '#0ea5e9' : '#e2e8f0') + ';border-radius:8px;cursor:pointer;transition:border-color 0.2s;">' +
+                    '<input type="checkbox" class="node-select-cb" value="' + node.name + '" data-gpus="' + node.gpus + '"' + (prevSelected ? ' checked' : '') + ' style="width:18px;height:18px;accent-color:#0ea5e9;" onchange="validateNodeSelection();this.closest(\'label\').style.borderColor=this.checked?\'#0ea5e9\':\'#e2e8f0\'">' +
+                    '<div style="flex:1;min-width:0;">' +
+                        '<div style="font-weight:600;color:#1e293b;font-size:0.95em;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;" title="' + node.name + '">' + node.name + '</div>' +
+                        '<div style="font-size:0.82em;color:#64748b;">' + node.gpus + ' GPUs · ' + (node.gpu_model || 'GPU') + ' · ' + node.memory_gb + 'GB RAM</div>' +
+                    '</div>' +
+                '</label>';
+            });
+            nodeHtml += '</div>';
+            document.getElementById('node-select-list').innerHTML = nodeHtml;
+            document.getElementById('node-select-group').style.display = 'block';
+
+            var nodeEnabled = config.selected_nodes && config.selected_nodes.length > 0;
+            document.getElementById('enable-node-select').checked = nodeEnabled;
+            document.getElementById('node-select-list').style.opacity = nodeEnabled ? '1' : '0.5';
+            document.getElementById('node-select-list').style.pointerEvents = nodeEnabled ? 'auto' : 'none';
+            document.querySelectorAll('.node-select-cb').forEach(function(cb) { cb.disabled = !nodeEnabled; });
         }
-    }
-
-    // Show the sections
-    document.getElementById('cluster-resources').style.display = 'block';
-    document.getElementById('max-gpu-group').style.display = 'block';
-
-    // Restore node selection checkboxes from saved config
-    if (data.nodes_detail && data.nodes_detail.length > 0) {
-        let nodeHtml = '<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:8px;">';
-        data.nodes_detail.filter(n => n.gpus > 0).forEach(node => {
-            const presetNodes = data.preset_nodes || [];
-            const prevSelected = (presetNodes.length > 0 && presetNodes.includes(node.name)) || (config.selected_nodes && config.selected_nodes.includes(node.name));
-            nodeHtml += '<label style="display:flex;align-items:center;gap:10px;padding:10px 14px;background:#f8fafc;border:2px solid ' + (prevSelected ? '#0ea5e9' : '#e2e8f0') + ';border-radius:8px;cursor:pointer;transition:border-color 0.2s;">' +
-                '<input type="checkbox" class="node-select-cb" value="' + node.name + '" data-gpus="' + node.gpus + '"' + (prevSelected ? ' checked' : '') + ' style="width:18px;height:18px;accent-color:#0ea5e9;" onchange="validateNodeSelection();this.closest(\'label\').style.borderColor=this.checked?\'#0ea5e9\':\'#e2e8f0\'">' +
-                '<div style="flex:1;min-width:0;">' +
-                    '<div style="font-weight:600;color:#1e293b;font-size:0.95em;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;" title="' + node.name + '">' + node.name + '</div>' +
-                    '<div style="font-size:0.82em;color:#64748b;">' + node.gpus + ' GPUs · ' + (node.gpu_model || 'GPU') + ' · ' + node.memory_gb + 'GB RAM</div>' +
-                '</div>' +
-            '</label>';
-        });
-        nodeHtml += '</div>';
-        document.getElementById('node-select-list').innerHTML = nodeHtml;
-        document.getElementById('node-select-group').style.display = 'block';
-
-        var presetNodes = data.preset_nodes || [];
-        var nodeEnabled = presetNodes.length > 0 || (config.selected_nodes && config.selected_nodes.length > 0);
-        document.getElementById('enable-node-select').checked = nodeEnabled;
-        document.getElementById('node-select-list').style.opacity = nodeEnabled ? '1' : '0.5';
-        document.getElementById('node-select-list').style.pointerEvents = nodeEnabled ? 'auto' : 'none';
-        document.querySelectorAll('.node-select-cb').forEach(function(cb) { cb.disabled = !nodeEnabled; });
     }
 
     // Show re-scan button
