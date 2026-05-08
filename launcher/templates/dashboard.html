@@ -413,7 +413,7 @@ function saveCluster(){
     var name = document.getElementById('new-cluster-name').value.trim();
     if(!name) return;
     var btn = document.getElementById('cluster-create-btn');
-    btn.disabled=true; btn.textContent='Creating…';
+    btn.disabled=true; btn.innerHTML='<svg width="16" height="16" viewBox="0 0 24 24" style="animation:spin 1s linear infinite;vertical-align:middle;margin-right:6px"><circle cx="12" cy="12" r="10" stroke="white" stroke-width="3" fill="none" stroke-dasharray="31.4 31.4" stroke-linecap="round"/></svg>Creating…';
     var body = {name:name, icon:selectedIcon,
         kubeconfig: document.getElementById('remote-toggle').checked ? kubeconfigContent : null,
         storage_class: document.getElementById('storage-class-select').value || null};
@@ -570,7 +570,7 @@ function createInstance(e){
     e.preventDefault();
     var name=document.getElementById('instance-name').value;
     var btn=document.getElementById('create-btn');
-    btn.disabled=true;btn.textContent='Creating…';
+    btn.disabled=true;btn.innerHTML='<svg width="16" height="16" viewBox="0 0 24 24" style="animation:spin 1s linear infinite;vertical-align:middle;margin-right:6px"><circle cx="12" cy="12" r="10" stroke="white" stroke-width="3" fill="none" stroke-dasharray="31.4 31.4" stroke-linecap="round"/></svg>Creating…';
     fetch('/api/instances',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({
         name:name, cluster_id:currentClusterId
     })})
