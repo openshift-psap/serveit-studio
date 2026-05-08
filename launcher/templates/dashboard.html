@@ -945,8 +945,32 @@ function backToMyClusters(){
     location.reload();
 }
 
-// Auto-refresh (status only, no flicker)
-setInterval(function(){if(currentClusterId)loadInstances(currentClusterId, true);},15000);
+// Auto-refresh (status only, no flicker) + session health check
+setInterval(function(){
+    if(currentClusterId) loadInstances(currentClusterId, true);
+    // Session health check
+    fetch('/api/clusters', {redirect:'manual'})
+    .then(function(r){
+        if(r.status === 302 || r.status === 0 || r.type === 'opaqueredirect'){
+            _showSessionExpiredOverlay();
+        }
+    })
+    .catch(function(){});
+}, 15000);
+
+function _showSessionExpiredOverlay(){
+    if(document.getElementById('session-expired-overlay')) return;
+    var ov = document.createElement('div');
+    ov.id = 'session-expired-overlay';
+    ov.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.6);z-index:1000;display:flex;align-items:center;justify-content:center;backdrop-filter:blur(4px)';
+    ov.innerHTML = '<div style="background:white;border-radius:14px;padding:40px;text-align:center;max-width:400px;box-shadow:0 25px 60px rgba(0,0,0,0.3)">' +
+        '<div style="font-size:3em;margin-bottom:16px">🔒</div>' +
+        '<h2 style="color:#1A1A1A;margin-bottom:8px">Session Expired</h2>' +
+        '<p style="color:#999;margin-bottom:24px">Your session has timed out. Please log in again to continue.</p>' +
+        '<a href="/login" class="btn btn-primary" style="text-decoration:none;padding:12px 32px;font-size:1em">Log In</a>' +
+        '</div>';
+    document.body.appendChild(ov);
+}
 
 // Initial load
 if(currentClusterId) {
