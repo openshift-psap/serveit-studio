@@ -199,7 +199,7 @@
     <div class="topbar" id="topbar">
         <h2 id="topbar-title">
             {% if clusters %}
-            <span class="g-icon">{{ clusters[0].icon }}</span>{{ clusters[0].name }}<span class="count">({{ clusters[0].instance_count }})</span>
+            <span class="g-icon">{{ clusters[0].icon }}</span>{{ clusters[0].name }}<span style="font-size:0.6em;color:#999;margin-left:8px;font-weight:400">{{ clusters[0].target_cluster or 'local' }}</span><span class="count">({{ clusters[0].instance_count }})</span>
             {% else %}
             Instances
             {% endif %}
@@ -419,8 +419,11 @@ function selectCluster(id){
     var active = document.querySelector('.cluster-item.active');
     if(active){
         var icon = active.querySelector('.icon').textContent;
-        var name = active.querySelector('.name').textContent;
-        document.getElementById('topbar-title').innerHTML = '<span class="g-icon">'+icon+'</span>'+name+'<span class="count"></span>';
+        var nameEl = active.querySelector('.name');
+        var name = nameEl.childNodes[0].textContent;
+        var target = nameEl.querySelector('.target');
+        var targetText = target ? target.textContent : 'local';
+        document.getElementById('topbar-title').innerHTML = '<span class="g-icon">'+icon+'</span>'+name+'<span style="font-size:0.6em;color:#999;margin-left:8px;font-weight:400">'+targetText+'</span><span class="count"></span>';
     }
     document.getElementById('new-instance-btn').style.display='';
     loadInstances(id);
