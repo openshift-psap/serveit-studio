@@ -129,6 +129,20 @@ def sync_code(cmd: str, namespace: str, pod_name: str):
         print("   Falling back to tar sync...", file=sys.stderr)
         _tar_sync(cmd, namespace, pod_name)
 
+    # Restart server so new code takes effect (restart loop picks it back up)
+    print("   Restarting server...", file=sys.stderr)
+    kubectl_run(cmd, ['exec', '-n', namespace, pod_name, '--',
+                      'bash', '-c', "pkill -f 'python.*server.py' || true"])
+    time.sleep(5)
+    for _ in range(20):
+        r = kubectl_run(cmd, ['exec', '-n', namespace, pod_name, '--', 'python3', '-c',
+            "import socket; s=socket.socket(); s.settimeout(1); s.connect(('127.0.0.1',5000)); s.close()"])
+        if r.returncode == 0:
+            print("   ✅ Server restarted", file=sys.stderr)
+            return
+        time.sleep(1)
+    print("   ⚠️  Server may not have restarted", file=sys.stderr)
+
 
 def _tar_sync(cmd: str, namespace: str, pod_name: str):
     kubectl_run(cmd, ['exec', '-n', namespace, pod_name, '--',
