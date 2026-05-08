@@ -142,6 +142,23 @@ def create_app():
             name=data.get('name'), icon=data.get('icon'))
         if success:
             return jsonify({'ok': True})
+
+    @app.route('/api/clusters/<int:cluster_id>/scan', methods=['POST'])
+    def api_scan_cluster(cluster_id):
+        """Scan cluster resources — nodes, GPUs, network."""
+        from launcher.cluster_scanner import scan_cluster_resources
+        with get_db() as conn:
+            cluster = conn.execute(
+                'SELECT * FROM clusters WHERE id = ? AND owner_id = ?',
+                (cluster_id, get_user_id())
+            ).fetchone()
+        if not cluster:
+            return jsonify({'error': 'Cluster not found'}), 404
+        try:
+            result = scan_cluster_resources(dict(cluster), namespace)
+            return jsonify(result)
+        except Exception as e:
+            return jsonify({'error': str(e)}), 500
         return jsonify({'error': 'Cluster not found'}), 404
 
     # ── Instance API ──

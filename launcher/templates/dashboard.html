@@ -87,6 +87,36 @@
         .connect-bar a{color:#2A7B88;font-size:0.78em;text-decoration:none;white-space:nowrap;font-weight:600}
         .connect-bar a:hover{color:#1B5E6B}
 
+        /* ── Cluster Visualization ── */
+        .viz-summary{display:flex;gap:12px;flex-wrap:wrap;margin-bottom:20px;padding:16px;background:white;border-radius:10px;border:1px solid #E0E0E0}
+        .viz-stat{text-align:center;flex:1;min-width:80px;padding:8px}
+        .viz-stat-value{font-size:1.3em;font-weight:700;color:#2A7B88}
+        .viz-stat-label{font-size:0.72em;color:#999;text-transform:uppercase;letter-spacing:0.05em;margin-top:2px}
+        .viz-section-title{font-size:0.78em;font-weight:700;color:#999;text-transform:uppercase;letter-spacing:0.06em;margin-bottom:10px}
+        .viz-nodes{display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:12px}
+        .viz-node{background:white;border:1.5px solid #E0E0E0;border-radius:10px;padding:14px;transition:border-color 0.12s}
+        .viz-node:hover{border-color:#2A7B88}
+        .viz-node-header{display:flex;align-items:center;gap:8px;margin-bottom:10px}
+        .viz-node-status{width:8px;height:8px;border-radius:50%;flex-shrink:0}
+        .viz-status-ready .viz-node-status,.viz-status-ready{background:#3BAA3B}
+        .viz-node .viz-status-ready{background:#3BAA3B}
+        .viz-node .viz-status-notready{background:#dc2626}
+        .viz-node .viz-status-unknown{background:#F0AB00}
+        .viz-node-name{font-size:0.82em;font-weight:600;color:#1A1A1A;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+        .viz-gpus{display:flex;flex-wrap:wrap;gap:3px;margin-bottom:8px}
+        .viz-gpu-chip{width:24px;height:24px;display:flex;align-items:center;justify-content:center;font-size:0.7em;border-radius:4px;cursor:default}
+        .viz-node-info{display:flex;flex-direction:column;gap:2px;font-size:0.75em;color:#4A4A4A}
+        .viz-rdma-badge{display:inline-block;background:#E0F2F4;color:#2A7B88;padding:1px 6px;border-radius:4px;font-size:0.85em;font-weight:600;width:fit-content}
+        .viz-other-nodes{display:flex;flex-wrap:wrap;gap:6px}
+        .viz-other-node{padding:4px 10px;border-radius:6px;font-size:0.75em;background:#F0F0F0;color:#4A4A4A;cursor:default}
+        .viz-other-node.viz-status-ready{border-left:3px solid #3BAA3B}
+        .viz-other-node.viz-status-notready{border-left:3px solid #dc2626}
+        .cluster-viz-panel{padding:24px 32px;border-bottom:1px solid #E0E0E0;background:#F8F8F8}
+        .cluster-viz-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:16px}
+        .cluster-viz-header h3{font-size:0.95em;color:#4A4A4A;font-weight:600}
+        .cluster-viz-header button{border:1px solid #E0E0E0;background:white;color:#4A4A4A;padding:5px 12px;border-radius:6px;font-size:0.78em;font-weight:600;cursor:pointer}
+        .cluster-viz-header button:hover{border-color:#2A7B88;color:#2A7B88}
+
         /* ── Empty States ── */
         .empty{text-align:center;padding:80px 24px;color:#999}
         .empty-icon{width:64px;height:64px;margin:0 auto 20px;background:#F0F9FA;border-radius:16px;display:flex;align-items:center;justify-content:center}
@@ -209,6 +239,16 @@
             New Instance
         </button>
     </div>
+
+    {% if clusters %}
+    <div class="cluster-viz-panel" id="cluster-viz-panel">
+        <div class="cluster-viz-header">
+            <h3>Cluster Resources</h3>
+            <button onclick="scanAndRenderCluster(currentClusterId, document.getElementById('cluster-viz'))">Rescan</button>
+        </div>
+        <div id="cluster-viz"></div>
+    </div>
+    {% endif %}
 
     <div class="grid" id="instance-list">
         {% if not clusters %}
@@ -427,7 +467,11 @@ function selectCluster(id){
         document.getElementById('topbar-title').innerHTML = '<span class="g-icon">'+icon+'</span>'+name+targetHtml+'<span class="count"></span>';
     }
     document.getElementById('new-instance-btn').style.display='';
+    var vizPanel = document.getElementById('cluster-viz-panel');
+    if(vizPanel) vizPanel.style.display='';
     loadInstances(id);
+    var vizContainer = document.getElementById('cluster-viz');
+    if(vizContainer) scanAndRenderCluster(id, vizContainer);
 }
 
 function loadInstances(clusterId, isRefresh, userId){
@@ -623,7 +667,7 @@ function showUsers(){
     var navUsers = document.getElementById('nav-users');
     if(navUsers) navUsers.classList.add('active');
     document.getElementById('topbar-title').innerHTML = '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="opacity:0.5"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75"/></svg> User Management';
-    document.getElementById('new-instance-btn').style.display='none';
+    document.getElementById('new-instance-btn').style.display='none';var _vp=document.getElementById('cluster-viz-panel');if(_vp)_vp.style.display='none';
     var list = document.getElementById('instance-list');
     list.innerHTML = '<div style="text-align:center;padding:40px;color:#999">Loading&hellip;</div>';
     fetch('/api/users').then(function(r){return r.json()}).then(function(users){
@@ -694,7 +738,7 @@ function viewUserClusters(uid, uname){
     var navUsers = document.getElementById('nav-users');
     if(navUsers) navUsers.classList.remove('active');
     document.getElementById('topbar-title').innerHTML = 'Viewing: <strong>'+uname+'</strong>';
-    document.getElementById('new-instance-btn').style.display='none';
+    document.getElementById('new-instance-btn').style.display='none';var _vp=document.getElementById('cluster-viz-panel');if(_vp)_vp.style.display='none';
     // Load that user's clusters into sidebar
     fetch('/api/clusters?user_id='+uid).then(function(r){return r.json()}).then(function(clusters){
         var glist = document.getElementById('cluster-list');
@@ -728,7 +772,11 @@ function backToMyClusters(){
 setInterval(function(){if(currentClusterId)loadInstances(currentClusterId, true);},15000);
 
 // Initial load
-if(currentClusterId) loadInstances(currentClusterId);
+if(currentClusterId) {
+    loadInstances(currentClusterId);
+    scanAndRenderCluster(currentClusterId, document.getElementById('cluster-viz'));
+}
 </script>
+<script src="{{ url_for('static', filename='js/cluster-viz.js') }}"></script>
 </body>
 </html>

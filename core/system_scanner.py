@@ -46,6 +46,7 @@ class NodeResources:
     rdma_devices: List[str]
     network_interfaces: List[NetworkInterface]
     labels: Dict[str, str]
+    status: str = 'Unknown'  # Ready, NotReady, Unknown
 
 
 @dataclass
@@ -741,6 +742,13 @@ class SystemScanner:
                 has_rdma, rdma_devices = self._check_rdma_support(node_data)
                 network_interfaces = self._detect_network_interfaces(node_data)
 
+            # Extract node status from conditions
+            node_status = 'Unknown'
+            for cond in node_data.get('status', {}).get('conditions', []):
+                if cond.get('type') == 'Ready':
+                    node_status = 'Ready' if cond.get('status') == 'True' else 'NotReady'
+                    break
+
             node_resources = NodeResources(
                 name=node_name,
                 gpus=gpu_count,
@@ -754,7 +762,8 @@ class SystemScanner:
                 has_rdma=has_rdma,
                 rdma_devices=rdma_devices,
                 network_interfaces=network_interfaces,
-                labels=labels
+                labels=labels,
+                status=node_status
             )
 
             nodes.append(node_resources)
