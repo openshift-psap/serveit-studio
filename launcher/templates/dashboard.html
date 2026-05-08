@@ -113,10 +113,8 @@
         .toggle-row{display:flex;align-items:center;gap:12px;margin-bottom:16px;padding:12px 14px;background:#F8F8F8;border:1.5px solid #E0E0E0;border-radius:10px;cursor:pointer;transition:border-color 0.15s,background-color 0.15s}
         .toggle-row:hover{border-color:#2A7B88;background:#F0F9FA}
         .toggle-row input{display:none}
-        .toggle-row .toggle-switch{width:40px;height:22px;background:#CCC;border-radius:11px;position:relative;transition:background-color 0.2s;flex-shrink:0}
-        .toggle-row .toggle-switch::after{content:'';width:18px;height:18px;background:white;border-radius:50%;position:absolute;top:2px;left:2px;transition:transform 0.2s;box-shadow:0 1px 3px rgba(0,0,0,0.2)}
-        .toggle-row input:checked + .toggle-switch{background:#2A7B88}
-        .toggle-row input:checked + .toggle-switch::after{transform:translateX(18px)}
+        .toggle-row.active{border-color:#2A7B88;background:#F0F9FA}
+        .toggle-row .toggle-icon{font-size:1.3em;flex-shrink:0}
         .toggle-row .toggle-text{font-size:0.88em;color:#4A4A4A;font-weight:500;text-transform:none;letter-spacing:0}
         .toggle-row .toggle-desc{font-size:0.75em;color:#999;font-weight:400;margin-top:2px}
         .create-error{display:none;background:#F0F9FA;border:1px solid #E0F2F4;border-left:4px solid #2A7B88;border-radius:8px;padding:14px 16px;margin-bottom:16px;max-height:200px;overflow-y:auto}
@@ -254,9 +252,9 @@
         <input type="text" id="new-cluster-name" placeholder="My Cluster" autocomplete="off">
         <label>Icon</label>
         <div class="icon-grid" id="icon-grid"></div>
-        <label class="toggle-row">
-            <input type="checkbox" id="remote-toggle" onchange="toggleRemote()">
-            <span class="toggle-switch"></span>
+        <label class="toggle-row" id="remote-toggle-row" onclick="toggleRemote()">
+            <input type="checkbox" id="remote-toggle">
+            <span class="toggle-icon">🌐</span>
             <div>
                 <div class="toggle-text">Remote Cluster</div>
                 <div class="toggle-desc">Upload a kubeconfig to target a remote cluster</div>
@@ -499,7 +497,12 @@ function loadStorageClasses(){
 }
 function hideCreateModal(){document.getElementById('create-modal').classList.remove('active');document.getElementById('create-error').style.display='none';}
 function showCreateError(msg){var b=document.getElementById('create-error');document.getElementById('create-error-text').textContent=msg;b.style.display='block';}
-function toggleRemote(){document.getElementById('kubeconfig-section').style.display=document.getElementById('remote-toggle').checked?'block':'none';}
+function toggleRemote(){
+    var cb=document.getElementById('remote-toggle');
+    cb.checked=!cb.checked;
+    document.getElementById('kubeconfig-section').style.display=cb.checked?'block':'none';
+    document.getElementById('remote-toggle-row').classList.toggle('active',cb.checked);
+}
 
 var kubeconfigContent=null;
 (function(){
