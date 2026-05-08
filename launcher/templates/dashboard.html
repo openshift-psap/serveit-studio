@@ -41,7 +41,7 @@
         .logout-btn:hover{color:#2A7B88}
         .logout-btn:focus-visible{outline:2px solid #2A7B88;outline-offset:2px}
 
-        /* ── Create group modal ── */
+        /* ── Create cluster modal ── */
         .icon-grid{display:grid;grid-template-columns:repeat(10,1fr);gap:6px;margin-bottom:16px}
         .icon-opt{border:2px solid transparent;background:none;width:48px;height:48px;font-size:1.7em;cursor:pointer;border-radius:8px;transition:background-color 0.1s,border-color 0.1s;display:flex;align-items:center;justify-content:center}
         .icon-opt:hover{background:#F0F0F0}
@@ -110,9 +110,15 @@
         .modal .actions{display:flex;gap:10px;justify-content:flex-end;margin-top:8px}
         .btn-cancel{background:#F0F0F0;color:#4A4A4A}
         .btn-cancel:hover{background:#E0E0E0}
-        .toggle-row{display:flex;align-items:center;gap:10px;margin-bottom:16px;cursor:pointer}
-        .toggle-row input{accent-color:#2A7B88}
-        .toggle-row span{font-size:0.88em;color:#4A4A4A;font-weight:400;text-transform:none;letter-spacing:0}
+        .toggle-row{display:flex;align-items:center;gap:12px;margin-bottom:16px;padding:12px 14px;background:#F8F8F8;border:1.5px solid #E0E0E0;border-radius:10px;cursor:pointer;transition:border-color 0.15s,background-color 0.15s}
+        .toggle-row:hover{border-color:#2A7B88;background:#F0F9FA}
+        .toggle-row input{display:none}
+        .toggle-row .toggle-switch{width:40px;height:22px;background:#CCC;border-radius:11px;position:relative;transition:background-color 0.2s;flex-shrink:0}
+        .toggle-row .toggle-switch::after{content:'';width:18px;height:18px;background:white;border-radius:50%;position:absolute;top:2px;left:2px;transition:transform 0.2s;box-shadow:0 1px 3px rgba(0,0,0,0.2)}
+        .toggle-row input:checked + .toggle-switch{background:#2A7B88}
+        .toggle-row input:checked + .toggle-switch::after{transform:translateX(18px)}
+        .toggle-row .toggle-text{font-size:0.88em;color:#4A4A4A;font-weight:500;text-transform:none;letter-spacing:0}
+        .toggle-row .toggle-desc{font-size:0.75em;color:#999;font-weight:400;margin-top:2px}
         .create-error{display:none;background:#F0F9FA;border:1px solid #E0F2F4;border-left:4px solid #2A7B88;border-radius:8px;padding:14px 16px;margin-bottom:16px;max-height:200px;overflow-y:auto}
         .create-error .error-title{font-weight:700;color:#1B5E6B;font-size:0.85em;margin-bottom:4px}
         .create-error .error-text{color:#164E58;font-size:0.8em;line-height:1.6;word-break:break-word}
@@ -160,7 +166,7 @@
     </div>
     <div class="sidebar-section">
         <span>Clusters</span>
-        <button onclick="showClusterModal()" title="Create group" aria-label="Create group">
+        <button onclick="showClusterModal()" title="Create cluster" aria-label="Create cluster">
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M12 5v14M5 12h14"/></svg>
         </button>
     </div>
@@ -212,8 +218,8 @@
             <div class="empty-icon">
                 <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="#2A7B88" stroke-width="1.5" aria-hidden="true"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>
             </div>
-            <h3>Create your first group</h3>
-            <p>Organize your Inftune Studio instances into clusters. Click the + button in the sidebar to get started.</p>
+            <h3>Create your first cluster</h3>
+            <p>Add a local or remote cluster to start deploying instances. Click the + button in the sidebar.</p>
         </div>
         {% endif %}
     </div>
@@ -250,7 +256,11 @@
         <div class="icon-grid" id="icon-grid"></div>
         <label class="toggle-row">
             <input type="checkbox" id="remote-toggle" onchange="toggleRemote()">
-            <span>Remote cluster (upload kubeconfig)</span>
+            <span class="toggle-switch"></span>
+            <div>
+                <div class="toggle-text">Remote Cluster</div>
+                <div class="toggle-desc">Upload a kubeconfig to target a remote cluster</div>
+            </div>
         </label>
         <div id="kubeconfig-section" style="display:none;">
             <label>Kubeconfig File</label>
@@ -395,7 +405,7 @@ function showConfirm(title, msg, warn, btnText, onConfirm){
 function hideConfirm(){document.getElementById('confirm-modal').classList.remove('active');}
 
 function deleteCluster(id, name){
-    showConfirm('Delete Cluster', 'Delete cluster "'+name+'"?', 'This will also delete ALL instances in this group and their data.', 'Delete Cluster', function(){
+    showConfirm('Delete Cluster', 'Delete cluster "'+name+'"?', 'This will also delete ALL instances in this cluster and their data.', 'Delete Cluster', function(){
         fetch('/api/clusters/'+id,{method:'DELETE'})
         .then(function(r){return r.json()})
         .then(function(data){ if(data.ok) location.reload(); else showWarn('Error', data.error||'Failed'); });
@@ -418,7 +428,7 @@ function selectCluster(id){
     loadInstances(id);
 }
 
-function loadInstances(groupId, isRefresh, userId){
+function loadInstances(clusterId, isRefresh, userId){
     var list = document.getElementById('instance-list');
     if(!isRefresh) list.innerHTML = '<div style="text-align:center;padding:40px;color:#999">Loading&hellip;</div>';
     var url = '/api/instances?cluster_id='+groupId;
@@ -449,7 +459,7 @@ function loadInstances(groupId, isRefresh, userId){
         }
 
         if(!instances.length){
-            list.innerHTML = '<div class="empty"><div class="empty-icon"><svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="#2A7B88" stroke-width="1.5"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/><path d="M3.27 6.96 12 12.01l8.73-5.05M12 22.08V12"/></svg></div><h3>No instances yet</h3><p>Create your first instance in this group.</p></div>';
+            list.innerHTML = '<div class="empty"><div class="empty-icon"><svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="#2A7B88" stroke-width="1.5"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/><path d="M3.27 6.96 12 12.01l8.73-5.05M12 22.08V12"/></svg></div><h3>No instances yet</h3><p>Create your first instance in this cluster.</p></div>';
             return;
         }
         list.innerHTML = '';
