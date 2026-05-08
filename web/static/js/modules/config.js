@@ -426,19 +426,18 @@ function restoreClusterResources() {
     var hasPresets = data.preset_max_gpus || (data.preset_nodes && data.preset_nodes.length > 0);
 
     if (hasPresets) {
-        // Launcher mode: show read-only preset summary
-        document.getElementById('max-gpu-group').style.display = 'block';
+        // Launcher mode: set values silently, replace visible UI with read-only card
+        var maxGpuSelect = document.getElementById('max-gpu-select');
+        if (maxGpuSelect) {
+            maxGpuSelect.innerHTML = '<option value="' + (data.preset_max_gpus || data.total_gpus) + '" selected>' + (data.preset_max_gpus || data.total_gpus) + ' GPUs</option>';
+            maxGpuSelect.style.display = 'none';
+        }
         document.getElementById('node-select-group').style.display = 'none';
 
-        var presetHtml = '<div style="background:#F0F9FA;border:1.5px solid #2A7B88;border-radius:10px;padding:16px 20px;">';
+        var presetHtml = '<div style="background:#F0F9FA;border:1.5px solid #2A7B88;border-radius:10px;padding:16px 20px;margin-top:12px">';
         presetHtml += '<div style="font-weight:700;color:#2A7B88;font-size:0.95em;margin-bottom:8px;">⚡ Configured by Launcher</div>';
         if (data.preset_max_gpus) {
             presetHtml += '<div style="display:flex;align-items:center;gap:8px;margin-bottom:6px;"><span style="font-size:1.2em">🎛️</span><span><strong>' + data.preset_max_gpus + ' GPUs</strong> allocated</span></div>';
-            // Set the hidden select so the optimizer reads the right value
-            var maxGpuSelect = document.getElementById('max-gpu-select');
-            if (maxGpuSelect) {
-                maxGpuSelect.innerHTML = '<option value="' + data.preset_max_gpus + '" selected>' + data.preset_max_gpus + ' GPUs</option>';
-            }
         }
         if (data.preset_nodes && data.preset_nodes.length > 0) {
             presetHtml += '<div style="display:flex;align-items:flex-start;gap:8px;"><span style="font-size:1.2em">📍</span><div><strong>Pinned to ' + data.preset_nodes.length + ' node' + (data.preset_nodes.length > 1 ? 's' : '') + ':</strong>';
@@ -446,13 +445,23 @@ function restoreClusterResources() {
                 presetHtml += '<div style="font-size:0.88em;color:#4A4A4A;margin-top:2px;">' + n + '</div>';
             });
             presetHtml += '</div></div>';
-            // Set hidden checkboxes
             document.getElementById('enable-node-select').checked = true;
         }
         presetHtml += '</div>';
 
+        // Insert preset card into max-gpu-group without destroying existing elements
         var gpuGroup = document.getElementById('max-gpu-group');
-        gpuGroup.innerHTML = presetHtml;
+        gpuGroup.style.display = 'block';
+        var existingPreset = document.getElementById('launcher-preset-card');
+        if (existingPreset) existingPreset.remove();
+        var presetDiv = document.createElement('div');
+        presetDiv.id = 'launcher-preset-card';
+        presetDiv.innerHTML = presetHtml;
+        gpuGroup.appendChild(presetDiv);
+
+        // Hide the GPU limit label/description since preset replaces it
+        var gpuLabels = gpuGroup.querySelectorAll('h3, p, .info-label');
+        gpuLabels.forEach(function(el) { el.style.display = 'none'; });
 
     } else {
         // Standalone mode: show full interactive GPU/node selection
