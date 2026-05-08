@@ -52,10 +52,10 @@
 
         @keyframes pulse-glow {
             0%, 100% {
-                box-shadow: 0 0 20px rgba(238, 0, 0, 0.3);
+                box-shadow: 0 0 20px rgba(42, 123, 136, 0.3);
             }
             50% {
-                box-shadow: 0 0 35px rgba(238, 0, 0, 0.5);
+                box-shadow: 0 0 35px rgba(42, 123, 136, 0.5);
             }
         }
 
@@ -255,7 +255,7 @@
             border-color: var(--rh-red-primary);
             color: var(--rh-white);
             animation: none;
-            box-shadow: 0 2px 8px rgba(238, 0, 0, 0.3);
+            box-shadow: 0 2px 8px rgba(42, 123, 136, 0.3);
         }
 
         .step-indicator.completed .step-number {
@@ -1184,7 +1184,7 @@
         .arch-card:hover {
             border-color: var(--rh-red-primary);
             transform: translateY(-5px);
-            box-shadow: 0 8px 24px rgba(238, 0, 0, 0.15);
+            box-shadow: 0 8px 24px rgba(42, 123, 136, 0.15);
         }
 
         .arch-card:hover::before {
@@ -1197,7 +1197,7 @@
         .arch-card.selected {
             border-color: var(--rh-red-primary);
             background: #F5F5F5;
-            box-shadow: 0 8px 24px rgba(238, 0, 0, 0.2);
+            box-shadow: 0 8px 24px rgba(42, 123, 136, 0.2);
         }
 
         .arch-card.selected::before {
@@ -1272,7 +1272,7 @@
         .search-box:focus {
             outline: none;
             border-color: var(--rh-red-primary);
-            box-shadow: 0 0 0 3px rgba(238, 0, 0, 0.1);
+            box-shadow: 0 0 0 3px rgba(42, 123, 136, 0.1);
             background: var(--rh-white);
         }
 
@@ -1305,7 +1305,7 @@
             background: #F5F5F5;
             box-shadow:
                 -4px 0 0 var(--rh-red-primary),
-                0 4px 16px rgba(238, 0, 0, 0.15);
+                0 4px 16px rgba(42, 123, 136, 0.15);
         }
 
         .model-card.selected::after {
@@ -1366,7 +1366,7 @@
         .custom-input-box input:focus {
             outline: none;
             border-color: var(--rh-red-primary);
-            box-shadow: 0 0 0 3px rgba(238, 0, 0, 0.1);
+            box-shadow: 0 0 0 3px rgba(42, 123, 136, 0.1);
         }
 
         /* Number Inputs */
@@ -1418,7 +1418,7 @@
         .input-group input:focus {
             outline: none;
             border-color: var(--rh-red-primary);
-            box-shadow: 0 0 0 3px rgba(238, 0, 0, 0.1);
+            box-shadow: 0 0 0 3px rgba(42, 123, 136, 0.1);
         }
 
         .input-group .help-text {
@@ -1452,7 +1452,7 @@
             position: relative;
             overflow: hidden;
             box-shadow:
-                0 8px 24px rgba(238, 0, 0, 0.4),
+                0 8px 24px rgba(42, 123, 136, 0.4),
                 inset 0 1px 0 rgba(255, 255, 255, 0.2);
         }
 
@@ -1477,8 +1477,8 @@
         .action-button:hover:not(:disabled) {
             transform: translateY(-4px);
             box-shadow:
-                0 16px 40px rgba(238, 0, 0, 0.5),
-                0 0 40px rgba(238, 0, 0, 0.3),
+                0 16px 40px rgba(42, 123, 136, 0.5),
+                0 0 40px rgba(42, 123, 136, 0.3),
                 inset 0 1px 0 rgba(255, 255, 255, 0.3);
             background: linear-gradient(135deg,
                 var(--rh-red-light) 0%,
@@ -1638,7 +1638,7 @@
                 var(--rh-red-primary) 0%,
                 var(--rh-red-light) 50%,
                 var(--rh-red-primary) 100%);
-            box-shadow: 0 0 10px rgba(238, 0, 0, 0.3);
+            box-shadow: 0 0 10px rgba(42, 123, 136, 0.3);
         }
 
         /* Review & Run Section Styles */
@@ -1648,7 +1648,7 @@
             padding: 32px;
             border-radius: 8px;
             margin-bottom: 24px;
-            box-shadow: 0 4px 12px rgba(238, 0, 0, 0.15);
+            box-shadow: 0 4px 12px rgba(42, 123, 136, 0.15);
         }
 
         .review-header h3 {
@@ -1804,7 +1804,7 @@
 
         .step-card:hover {
             border-color: #ee0000;
-            box-shadow: 0 4px 16px rgba(238, 0, 0, 0.1);
+            box-shadow: 0 4px 16px rgba(42, 123, 136, 0.1);
         }
 
         .step-header {
@@ -1826,7 +1826,7 @@
             font-size: 22px;
             font-weight: 700;
             flex-shrink: 0;
-            box-shadow: 0 4px 12px rgba(238, 0, 0, 0.3);
+            box-shadow: 0 4px 12px rgba(42, 123, 136, 0.3);
         }
 
         .step-title-wrapper {
@@ -2138,7 +2138,7 @@
         #pvc-size-input:focus {
             outline: none;
             border-color: #ee0000;
-            box-shadow: 0 0 0 3px rgba(238, 0, 0, 0.1);
+            box-shadow: 0 0 0 3px rgba(42, 123, 136, 0.1);
         }
 
         #use-existing-pvc:checked {
@@ -2160,9 +2160,14 @@
 }
 
 .sidebar-header {
-    padding: 16px 8px 14px;
+    padding: 10px 8px;
     border-bottom: 1px solid var(--rh-gray-200);
     position: relative;
+}
+
+.sidebar-header img {
+    max-height: 32px;
+    width: auto;
 }
 
 .sidebar-header::before {
