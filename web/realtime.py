@@ -4,6 +4,7 @@ import os
 import sys
 import json
 import time
+import sqlite3
 import logging
 import subprocess
 from datetime import datetime
