@@ -398,6 +398,8 @@ def delete_instance(instance_id: int, owner_id: int) -> bool:
         row = dict(row)
 
     ns = row['namespace']
+
+    # Delete UI resources from the shared namespace (local cluster)
     for resource in [
         f"deployment/{row['deployment_name']}",
         f"service/{row['service_name']}",
@@ -406,17 +408,48 @@ def delete_instance(instance_id: int, owner_id: int) -> bool:
         _kubectl(['delete', resource, '-n', ns, '--ignore-not-found=true'])
 
     if row.get('kubeconfig_secret'):
+        # Clean up remote cluster workload namespace using the kubeconfig before deleting it
+        _cleanup_remote_cluster(row['kubeconfig_secret'], ns, row.get('workload_namespace', ''))
         _kubectl(['delete', 'secret', row['kubeconfig_secret'], '-n', ns, '--ignore-not-found=true'])
+
     if _is_oc():
         _kubectl(['delete', 'route', f"{row['deployment_name']}-ui", '-n', ns, '--ignore-not-found=true'])
 
+    # Delete local workload namespace if it exists (for local-cluster instances)
     wl_ns = row.get('workload_namespace', '')
-    if wl_ns and wl_ns != ns:
+    if wl_ns and wl_ns != ns and not row.get('kubeconfig_secret'):
         _kubectl(['delete', 'namespace', wl_ns, '--ignore-not-found=true'])
 
     with get_db() as conn:
         conn.execute('DELETE FROM instances WHERE id = ?', (instance_id,))
     return True
+
+
+def _cleanup_remote_cluster(kubeconfig_secret: str, namespace: str, workload_namespace: str):
+    """Delete workload namespace on the remote cluster using the stored kubeconfig."""
+    if not workload_namespace:
+        return
+    import tempfile
+    r = _kubectl(['get', 'secret', kubeconfig_secret, '-n', namespace,
+                  '-o', 'jsonpath={.data.kubeconfig}'])
+    if r.returncode != 0 or not r.stdout.strip():
+        return
+    import base64
+    try:
+        kubeconfig_data = base64.b64decode(r.stdout.strip()).decode()
+    except Exception:
+        return
+    with tempfile.NamedTemporaryFile(mode='w', suffix='.kubeconfig', delete=False) as tmp:
+        tmp.write(kubeconfig_data)
+        tmp_path = tmp.name
+    try:
+        subprocess.run(['kubectl', '--kubeconfig', tmp_path, 'delete', 'namespace',
+                        workload_namespace, '--ignore-not-found=true'],
+                       capture_output=True, text=True, timeout=60)
+    except Exception:
+        pass
+    finally:
+        os.unlink(tmp_path)
 
 
 def list_instances(owner_id: int, group_id: int = None) -> List[Dict]:
