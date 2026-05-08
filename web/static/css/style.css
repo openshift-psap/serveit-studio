@@ -1643,7 +1643,7 @@
 
         /* Review & Run Section Styles */
         .review-header {
-            background: linear-gradient(135deg, #ee0000 0%, #c00000 100%);
+            background: linear-gradient(135deg, #2A7B88 0%, #1B5E6B 100%);
             color: white;
             padding: 32px;
             border-radius: 8px;
@@ -1670,7 +1670,7 @@
         }
 
         .config-item {
-            border-left: 4px solid #ee0000;
+            border-left: 4px solid #2A7B88;
             padding-left: 16px;
         }
 
@@ -1799,11 +1799,11 @@
             top: 0;
             bottom: 0;
             width: 6px;
-            background: linear-gradient(180deg, #ee0000 0%, #c00000 100%);
+            background: linear-gradient(180deg, #2A7B88 0%, #1B5E6B 100%);
         }
 
         .step-card:hover {
-            border-color: #ee0000;
+            border-color: #2A7B88;
             box-shadow: 0 4px 16px rgba(42, 123, 136, 0.1);
         }
 
@@ -1817,7 +1817,7 @@
         .step-number {
             width: 48px;
             height: 48px;
-            background: linear-gradient(135deg, #ee0000 0%, #c00000 100%);
+            background: linear-gradient(135deg, #2A7B88 0%, #1B5E6B 100%);
             color: white;
             border-radius: 12px;
             display: flex;
@@ -2129,7 +2129,7 @@
         #existing-pvc-select:hover,
         #storage-class-select:hover,
         #pvc-size-input:hover {
-            border-color: #ee0000;
+            border-color: #2A7B88;
         }
 
         #max-gpu-select:focus,
@@ -2137,7 +2137,7 @@
         #storage-class-select:focus,
         #pvc-size-input:focus {
             outline: none;
-            border-color: #ee0000;
+            border-color: #2A7B88;
             box-shadow: 0 0 0 3px rgba(42, 123, 136, 0.1);
         }
 
