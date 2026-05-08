@@ -2160,14 +2160,19 @@
 }
 
 .sidebar-header {
-    padding: 10px 8px;
+    padding: 14px 12px;
     border-bottom: 1px solid var(--rh-gray-200);
     position: relative;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    height: 80px;
 }
 
 .sidebar-header img {
-    max-height: 32px;
+    max-height: 60px;
     width: auto;
+    max-width: 100%;
 }
 
 .sidebar-header::before {
