@@ -1,14 +1,14 @@
         @keyframes spin { to { transform: rotate(360deg); } }
 
         :root {
-            /* Red Hat Brand Colors */
-            --rh-red-primary: #EE0000;
-            --rh-red-dark: #A60000;
-            --rh-red-darker: #820000;
-            --rh-red-light: #FF3333;
-            --rh-red-lighter: #FF6666;
-            --rh-red-pale: #FFE5E5;
-            --rh-red-very-pale: #FFF5F5;
+            /* Inftune Studio Brand Colors */
+            --rh-red-primary: #2A7B88;
+            --rh-red-dark: #1B5E6B;
+            --rh-red-darker: #164E58;
+            --rh-red-light: #3A9BAA;
+            --rh-red-lighter: #5BB8C7;
+            --rh-red-pale: #E0F2F4;
+            --rh-red-very-pale: #F0F9FA;
 
             /* Light Neutrals */
             --rh-white: #FFFFFF;
