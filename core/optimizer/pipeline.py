@@ -604,13 +604,49 @@ class RecipeOptimizer(
         """Build EPP config dict for prereq_manager from optimizer config."""
         import math
         block_size = self._compute_block_size()
+        lru_capacity = self._compute_lru_capacity(block_size)
         return {
             'preset': self.config.epp_preset,
             'plugins': self.config.epp_config if self.config.epp_preset == 'custom' else None,
             'maxPrefixBlocksToMatch': math.ceil(self.config.isl / block_size),
-            'lruCapacityPerServer': 31250,
+            'lruCapacityPerServer': lru_capacity,
             'nonCachedTokens': min(16, max(1, self.config.isl // 100)),
         }
+
+    def _compute_lru_capacity(self, block_size: int) -> int:
+        """Compute EPP LRU cache capacity from GPU VRAM and model architecture.
+
+        lruCapacity = (gpu_vram_gb * kv_cache_fraction * 1024^3) /
+                      (block_size * 2 * num_layers * kv_heads_per_gpu * head_dim * 2)
+
+        This is the number of KV cache blocks that fit in one GPU's available
+        memory, which is how many prefix entries the EPP should track.
+        """
+        kv_cache_fraction = 0.5
+
+        if self._model_config:
+            num_layers = self._model_config.get('num_hidden_layers', 32)
+            num_kv_heads = self._model_config.get('num_key_value_heads')
+            if num_kv_heads is None:
+                num_kv_heads = self._model_config.get('num_attention_heads', 32)
+            hidden_size = self._model_config.get('hidden_size', 4096)
+            num_attention_heads = self._model_config.get('num_attention_heads', 32)
+            head_dim = hidden_size // num_attention_heads
+        else:
+            num_layers, num_kv_heads, head_dim = 32, 8, 128
+
+        tp = self.optimal_decode_tp.tp if self.optimal_decode_tp else 1
+        kv_heads_per_gpu = max(num_kv_heads // tp, 1)
+
+        # Bytes per block: block_size tokens × 2 (K+V) × num_layers × kv_heads_per_gpu × head_dim × 2 bytes (fp16)
+        bytes_per_block = block_size * 2 * num_layers * kv_heads_per_gpu * head_dim * 2
+        if bytes_per_block <= 0:
+            return 31250
+
+        available_bytes = self._gpu_vram_gb * kv_cache_fraction * (1024 ** 3)
+        capacity = int(available_bytes / bytes_per_block)
+
+        return max(capacity, 1024)
 
     def _detect_rdma_nics_per_node(self) -> int:
         """
