@@ -80,25 +80,29 @@ function _shortName(name) {
     return name.substring(0, 18) + '…';
 }
 
-var _clusterScanCache = {};
-
 function scanAndRenderCluster(clusterId, container, forceRescan) {
-    if (!forceRescan && _clusterScanCache[clusterId]) {
-        renderClusterDiagram(container, _clusterScanCache[clusterId]);
+    if (forceRescan) {
+        container.innerHTML = '<div style="text-align:center;padding:40px;color:#999"><div style="margin-bottom:12px">🔍</div>Scanning cluster resources…</div>';
+        fetch('/api/clusters/' + clusterId + '/scan', { method: 'POST' })
+        .then(function(r) { return r.json(); })
+        .then(function(data) {
+            if (data.error) { container.innerHTML = '<div style="text-align:center;padding:40px;color:#dc2626">Scan failed: ' + data.error + '</div>'; return; }
+            renderClusterDiagram(container, data);
+        })
+        .catch(function(err) { container.innerHTML = '<div style="text-align:center;padding:40px;color:#dc2626">Scan error: ' + err + '</div>'; });
         return;
     }
-    container.innerHTML = '<div style="text-align:center;padding:40px;color:#999"><div style="margin-bottom:12px">🔍</div>Scanning cluster resources…</div>';
-    fetch('/api/clusters/' + clusterId + '/scan', { method: 'POST' })
+    // Try cached from DB first
+    fetch('/api/clusters/' + clusterId + '/scan')
     .then(function(r) { return r.json(); })
     .then(function(data) {
-        if (data.error) {
-            container.innerHTML = '<div style="text-align:center;padding:40px;color:#dc2626">Scan failed: ' + data.error + '</div>';
+        if (data.not_scanned) {
+            // First time — trigger scan
+            scanAndRenderCluster(clusterId, container, true);
             return;
         }
-        _clusterScanCache[clusterId] = data;
+        if (data.error) { container.innerHTML = ''; return; }
         renderClusterDiagram(container, data);
     })
-    .catch(function(err) {
-        container.innerHTML = '<div style="text-align:center;padding:40px;color:#dc2626">Scan error: ' + err + '</div>';
-    });
+    .catch(function() { scanAndRenderCluster(clusterId, container, true); });
 }

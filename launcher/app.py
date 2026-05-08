@@ -143,10 +143,25 @@ def create_app():
         if success:
             return jsonify({'ok': True})
 
+    @app.route('/api/clusters/<int:cluster_id>/scan', methods=['GET'])
+    def api_get_cluster_scan(cluster_id):
+        """Get cached cluster scan results."""
+        with get_db() as conn:
+            row = conn.execute(
+                'SELECT scan_data FROM clusters WHERE id = ? AND owner_id = ?',
+                (cluster_id, get_user_id())
+            ).fetchone()
+        if not row:
+            return jsonify({'error': 'Cluster not found'}), 404
+        if row['scan_data']:
+            return jsonify(json.loads(row['scan_data']))
+        return jsonify({'not_scanned': True})
+
     @app.route('/api/clusters/<int:cluster_id>/scan', methods=['POST'])
     def api_scan_cluster(cluster_id):
-        """Scan cluster resources — nodes, GPUs, network."""
+        """Scan cluster resources and save to DB."""
         from launcher.cluster_scanner import scan_cluster_resources
+        from datetime import datetime
         with get_db() as conn:
             cluster = conn.execute(
                 'SELECT * FROM clusters WHERE id = ? AND owner_id = ?',
@@ -156,6 +171,11 @@ def create_app():
             return jsonify({'error': 'Cluster not found'}), 404
         try:
             result = scan_cluster_resources(dict(cluster), namespace)
+            with get_db() as conn:
+                conn.execute(
+                    'UPDATE clusters SET scan_data = ?, scanned_at = ? WHERE id = ?',
+                    (json.dumps(result), datetime.now().isoformat(), cluster_id)
+                )
             return jsonify(result)
         except Exception as e:
             return jsonify({'error': str(e)}), 500
