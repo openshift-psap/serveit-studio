@@ -106,7 +106,8 @@
             display: flex;
             align-items: center;
             gap: 8px;
-            padding: 14px 16px;
+            padding: 0 16px;
+            height: 80px;
             background: var(--rh-white);
             border-bottom: 1px solid var(--rh-gray-300);
             font-size: 0.85em;
@@ -2245,7 +2246,8 @@
 
 .breadcrumb-bar {
     background: var(--rh-white);
-    padding: 14px 32px;
+    padding: 0 32px;
+    height: 80px;
     border-bottom: 1px solid var(--rh-gray-300);
     font-size: 0.95em;
     font-weight: 600;
