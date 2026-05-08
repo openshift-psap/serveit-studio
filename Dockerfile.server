@@ -54,7 +54,7 @@ RUN chmod 600 /root/.ssh/id_ed25519 && \
 
 # Clone repo
 ARG GIT_BRANCH=main
-RUN git clone --depth 1 -b ${GIT_BRANCH} git@github.com:bbenshab/In-S8.git /app
+RUN git clone --depth 1 -b ${GIT_BRANCH} git@github.com:bbenshab/inftune-studio.git /app
 
 WORKDIR /app
 COPY deployment/entrypoint.sh /usr/local/bin/entrypoint.sh
