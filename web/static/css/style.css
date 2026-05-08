@@ -95,7 +95,7 @@
         }
 
         .header-row .breadcrumb-bar {
-            width: calc(50% - 7px);
+            width: calc(50% - 14px);
             flex-shrink: 0;
             min-width: 0;
             border-right: 1px solid var(--rh-gray-300);
