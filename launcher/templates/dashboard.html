@@ -29,9 +29,11 @@
         .cluster-item .target{font-size:0.72em;color:#999;font-weight:400;display:block;overflow:hidden;text-overflow:ellipsis}
         .cluster-item .count{font-size:0.75em;color:#999;background:#F0F0F0;padding:2px 7px;border-radius:10px;flex-shrink:0}
         .cluster-item.active .count{background:#E0F2F4;color:#1B5E6B}
-        .cluster-item .del-btn{display:none;border:none;background:none;color:#CCC;cursor:pointer;padding:2px;border-radius:4px;flex-shrink:0}
-        .cluster-item:hover .del-btn{display:block}
-        .cluster-item .del-btn:hover{color:#2A7B88}
+        .cluster-item .cluster-actions{display:none;flex-shrink:0;gap:2px}
+        .cluster-item:hover .cluster-actions{display:flex}
+        .cluster-item .cl-btn{border:none;background:none;color:#CCC;cursor:pointer;padding:2px;border-radius:4px;font-size:0.85em;line-height:1}
+        .cluster-item .cl-btn:hover{color:#2A7B88}
+        .cluster-item .cl-btn.cl-del:hover{color:#dc2626}
         .sidebar-footer{padding:12px;border-top:1px solid #E0E0E0}
         .user-pill{display:flex;align-items:center;gap:10px;padding:8px 10px;border-radius:8px}
         .user-avatar{width:32px;height:32px;background:#2A7B88;border-radius:8px;display:flex;align-items:center;justify-content:center;color:white;font-weight:700;font-size:0.85em;flex-shrink:0}
@@ -206,7 +208,10 @@
             <span class="icon">{{ g.icon }}</span>
             <span class="name">{{ g.name }}<span class="target">{{ g.target_cluster or 'local' }}</span></span>
             <span class="count">{{ g.instance_count }}</span>
-            <span class="del-btn" onclick="event.stopPropagation();deleteCluster({{ g.id }},'{{ g.name }}')" title="Delete cluster">&times;</span>
+            <span class="cluster-actions">
+                <span class="cl-btn" onclick="event.stopPropagation();editCluster({{ g.id }},'{{ g.name }}','{{ g.icon }}')" title="Edit">✏️</span>
+                <span class="cl-btn cl-del" onclick="event.stopPropagation();deleteCluster({{ g.id }},'{{ g.name }}')" title="Delete">&times;</span>
+            </span>
         </button>
         {% endfor %}
     </div>
@@ -340,6 +345,22 @@
     </div>
 </div>
 
+<!-- Edit Cluster Modal -->
+<div class="modal-overlay" id="edit-cluster-modal" onclick="if(event.target===this)hideEditCluster()">
+    <div class="modal" role="dialog" style="width:500px">
+        <h2>Edit Cluster</h2>
+        <input type="hidden" id="edit-cluster-id">
+        <label for="edit-cluster-name">Cluster Name</label>
+        <input type="text" id="edit-cluster-name" autocomplete="off">
+        <label>Icon</label>
+        <div class="icon-grid" id="edit-icon-grid"></div>
+        <div class="actions">
+            <button type="button" class="btn btn-cancel" onclick="hideEditCluster()">Cancel</button>
+            <button type="button" class="btn btn-primary" onclick="saveEditCluster()">Save</button>
+        </div>
+    </div>
+</div>
+
 <!-- Confirm Dialog -->
 <div class="confirm-overlay" id="confirm-modal">
     <div class="confirm-box">
@@ -443,6 +464,54 @@ function showConfirm(title, msg, warn, btnText, onConfirm){
     document.getElementById('confirm-modal').classList.add('active');
 }
 function hideConfirm(){document.getElementById('confirm-modal').classList.remove('active');}
+
+var editSelectedIcon = '';
+
+// Build edit icon grid
+(function(){
+    var grid = document.getElementById('edit-icon-grid');
+    ICONS.forEach(function(ic){
+        var b = document.createElement('button');
+        b.type='button'; b.className='icon-opt';
+        b.textContent = ic;
+        b.onclick = function(){ grid.querySelectorAll('.icon-opt').forEach(function(x){x.classList.remove('selected')}); b.classList.add('selected'); editSelectedIcon=ic; };
+        grid.appendChild(b);
+    });
+})();
+
+function editCluster(id, name, icon) {
+    document.getElementById('edit-cluster-id').value = id;
+    document.getElementById('edit-cluster-name').value = name;
+    editSelectedIcon = icon;
+    var grid = document.getElementById('edit-icon-grid');
+    grid.querySelectorAll('.icon-opt').forEach(function(b){ b.classList.toggle('selected', b.textContent === icon); });
+    document.getElementById('edit-cluster-modal').classList.add('active');
+    document.getElementById('edit-cluster-name').focus();
+}
+
+function hideEditCluster() {
+    document.getElementById('edit-cluster-modal').classList.remove('active');
+}
+
+function saveEditCluster() {
+    var id = document.getElementById('edit-cluster-id').value;
+    var name = document.getElementById('edit-cluster-name').value.trim();
+    if (!name) return;
+    fetch('/api/clusters/' + id, {
+        method: 'PUT',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({name: name, icon: editSelectedIcon})
+    })
+    .then(function(r) { return r.json(); })
+    .then(function(data) {
+        if (data.error) { showWarn('Error', data.error); return; }
+        hideEditCluster();
+        loadClusters();
+        if (parseInt(id) === currentClusterId) {
+            selectCluster(currentClusterId);
+        }
+    });
+}
 
 function deleteCluster(id, name){
     showConfirm('Delete Cluster', 'Delete cluster "'+name+'"?', 'This will also delete ALL instances in this cluster and their data.', 'Delete Cluster', function(){
@@ -604,7 +673,8 @@ function loadClusters(){
             b.className='cluster-item'+(g.id===currentClusterId?' active':'');
             b.dataset.id=g.id;
             b.onclick=function(){selectCluster(g.id)};
-            b.innerHTML='<span class="icon">'+g.icon+'</span><span class="name">'+g.name+'</span><span class="count">'+g.instance_count+'</span><span class="del-btn" onclick="event.stopPropagation();deleteCluster('+g.id+',\''+g.name.replace(/'/g,"\\'")+'\')" title="Delete cluster">&times;</span>';
+            var esc = g.name.replace(/'/g,"\\'");
+            b.innerHTML='<span class="icon">'+g.icon+'</span><span class="name">'+g.name+'<span class="target">'+(g.target_cluster||'local')+'</span></span><span class="count">'+g.instance_count+'</span><span class="cluster-actions"><span class="cl-btn" onclick="event.stopPropagation();editCluster('+g.id+',\''+esc+'\',\''+g.icon+'\')" title="Edit">✏️</span><span class="cl-btn cl-del" onclick="event.stopPropagation();deleteCluster('+g.id+',\''+esc+'\')" title="Delete">&times;</span></span>';
             list.appendChild(b);
         });
     });
