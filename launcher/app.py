@@ -38,7 +38,7 @@ def create_app():
     register_auth_routes(app)
 
     namespace = os.environ.get('TARGET_NAMESPACE', 'inftune')
-    image = os.environ.get('INFTUNE_IMAGE', 'quay.io/bbenshab/inftune:server')
+    image = os.environ.get('INFTUNE_IMAGE', 'quay.io/bbenshab/inftune-studio:server')
 
     # ── Dashboard ──
 

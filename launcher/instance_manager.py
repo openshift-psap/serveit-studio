@@ -175,7 +175,7 @@ def create_instance(owner_id: int, username: str, name: str,
                     namespace: str = 'inftune',
                     kubeconfig_data: str = None,
                     storage_class: str = None,
-                    image: str = 'quay.io/bbenshab/inftune:server',
+                    image: str = 'quay.io/bbenshab/inftune-studio:server',
                     password_hash: str = None) -> Dict:
     safe_name = _sanitize(f"{username}-{name}")
     workload_namespace = f"inftune-{safe_name}"

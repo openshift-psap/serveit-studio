@@ -287,7 +287,7 @@ def main():
     p.add_argument('--mode', choices=['local', 'launcher'], default='launcher',
                    help='Deploy mode: local (single instance) or launcher (multi-user control plane)')
     p.add_argument('-n', '--namespace', default='inftune', help='Kubernetes namespace (default: llm-d)')
-    p.add_argument('-i', '--image', default='quay.io/bbenshab/inftune:server', help='Container image')
+    p.add_argument('-i', '--image', default='quay.io/bbenshab/inftune-studio:server', help='Container image')
 
     sg = p.add_argument_group('Storage')
     sg.add_argument('-p', '--pvc-name', help='Use existing PVC (skips PVC creation)')
