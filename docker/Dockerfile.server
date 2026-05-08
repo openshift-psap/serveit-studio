@@ -48,7 +48,7 @@ RUN KUBECTL_VERSION="1.30.2" && \
     rm -f /tmp/oc.tar.gz
 
 # Git deploy key (read-only, temporary until repo goes public)
-COPY .git-deploy-key /root/.ssh/id_ed25519
+COPY docker/.git-deploy-key /root/.ssh/id_ed25519
 RUN chmod 600 /root/.ssh/id_ed25519 && \
     ssh-keyscan github.com >> /root/.ssh/known_hosts 2>/dev/null
 
@@ -57,7 +57,7 @@ ARG GIT_BRANCH=main
 RUN git clone --depth 1 -b ${GIT_BRANCH} git@github.com:bbenshab/inftune-studio.git /app
 
 WORKDIR /app
-COPY deployment/entrypoint.sh /usr/local/bin/entrypoint.sh
+COPY docker/entrypoint.sh /usr/local/bin/entrypoint.sh
 RUN chmod +x /usr/local/bin/entrypoint.sh
 EXPOSE 5000
 CMD ["/usr/local/bin/entrypoint.sh"]

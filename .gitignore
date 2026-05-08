@@ -67,3 +67,4 @@ deployment/rdma-discovery-dranet.sh
 .claude/
 skills-lock.json
 .git-deploy-key
+docker/.git-deploy-key
