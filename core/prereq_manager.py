@@ -1,5 +1,5 @@
 """
-InfeRecipe Prerequisite Manager
+Inftune Studio Prerequisite Manager
 
 Manages deployment of prerequisite infrastructure (GAIE, Gateway, etc.)
 """
@@ -20,7 +20,7 @@ logger = logging.getLogger(__name__)
 class PrereqManager:
     """Manages prerequisite infrastructure deployment."""
 
-    def __init__(self, namespace: str = 'inferecipe', kubeconfig: Optional[str] = None,
+    def __init__(self, namespace: str = 'inftune', kubeconfig: Optional[str] = None,
                  kubectl_runner: Optional[KubectlRunner] = None):
         """
         Initialize PrereqManager.
@@ -214,7 +214,7 @@ class PrereqManager:
             configmap_template = f'prereq/gaie-configmap-{architecture}.yaml.j2'
 
             resources = [
-                # Note: Optimizer RBAC is deployed with the optimizer pod itself (deployment/inferecipe-optimizer.yaml)
+                # Note: Optimizer RBAC is deployed with the optimizer pod itself (deployment/inftune-optimizer.yaml)
                 # GAIE RBAC
                 ('ServiceAccount', 'prereq/gaie-serviceaccount.yaml.j2'),
                 ('Role', 'prereq/gaie-role.yaml.j2'),
@@ -632,11 +632,11 @@ def main():
     import argparse
 
     parser = argparse.ArgumentParser(
-        description='Manage InfeRecipe prerequisite infrastructure'
+        description='Manage Inftune Studio prerequisite infrastructure'
     )
     parser.add_argument('action', choices=['deploy', 'check', 'cleanup'],
                         help='Action to perform')
-    parser.add_argument('--namespace', default='inferecipe', help='Kubernetes namespace')
+    parser.add_argument('--namespace', default='inftune', help='Kubernetes namespace')
     parser.add_argument('--architecture', '-a', default='aggregated',
                         choices=['aggregated', 'ep', 'pd'],
                         help='Architecture type (default: aggregated)')

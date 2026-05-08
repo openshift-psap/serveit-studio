@@ -1,39 +1,39 @@
 #!/usr/bin/env python3
 """
-InfeRecipe CLI — run LLM inference optimization from the command line.
+Inftune Studio CLI — run LLM inference optimization from the command line.
 
 Mirrors every option from the web UI wizard. Only --model is required;
 everything else has sensible defaults.
 
 Examples:
     # Minimal — optimize gpt-oss-20b with defaults
-    inferecipe --model RedHatAI/gpt-oss-20b
+    inftune --model RedHatAI/gpt-oss-20b
 
     # Full workload spec
-    inferecipe --model RedHatAI/gpt-oss-20b \\
+    inftune --model RedHatAI/gpt-oss-20b \\
         --isl 9000 --isl-stdev 4000 --osl 50 --users 100 --gpus 16 \\
         --objective ttft --duration 300
 
     # With latency SLA + EPP tuning
-    inferecipe --model RedHatAI/gpt-oss-20b \\
+    inftune --model RedHatAI/gpt-oss-20b \\
         --latency-sla 2000 --latency-percentile p99 \\
         --epp-benchmark --epp-preset balanced
 
     # With prefix cache simulation
-    inferecipe --model RedHatAI/gpt-oss-20b \\
+    inftune --model RedHatAI/gpt-oss-20b \\
         --prefix-cache-pct 80 --prefix-cache-mode shared_prefix
 
     # Resume a previous run
-    inferecipe --resume 7
+    inftune --resume 7
 
     # Generate HTML report after completion
-    inferecipe --model RedHatAI/gpt-oss-20b --html-report results.html
+    inftune --model RedHatAI/gpt-oss-20b --html-report results.html
 
     # Generate report from an existing run (resume + immediate report)
-    inferecipe --resume 7 --html-report run7-report.html
+    inftune --resume 7 --html-report run7-report.html
 
     # Custom dataset workload
-    inferecipe --model RedHatAI/gpt-oss-20b \\
+    inftune --model RedHatAI/gpt-oss-20b \\
         --workload-mode dataset --dataset openai/gsm8k --dataset-column question
 """
 
@@ -44,8 +44,8 @@ from datetime import datetime
 
 def main():
     p = argparse.ArgumentParser(
-        prog='inferecipe',
-        description='InfeRecipe — LLM inference optimization CLI',
+        prog='inftune',
+        description='Inftune Studio — LLM inference optimization CLI',
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog=__doc__,
     )
@@ -93,10 +93,10 @@ def main():
                     help='Comma-separated TP values to explore (default: 1,2,4,8)')
     hw.add_argument('--image', type=str, default='ghcr.io/llm-d/llm-d-cuda:v0.5.1',
                     help='vLLM container image')
-    hw.add_argument('--namespace', type=str, default='inferecipe',
-                    help='Kubernetes namespace (default: inferecipe)')
-    hw.add_argument('--pvc', type=str, default='inferecipe-model-cache',
-                    help='PVC name for model cache (default: inferecipe-model-cache)')
+    hw.add_argument('--namespace', type=str, default='inftune',
+                    help='Kubernetes namespace (default: inftune)')
+    hw.add_argument('--pvc', type=str, default='inftune-model-cache',
+                    help='PVC name for model cache (default: inftune-model-cache)')
     hw.add_argument('--nccl-ib-hca', type=str, default='mlx',
                     help='NCCL IB HCA device prefix (default: mlx)')
     hw.add_argument('--hf-token', type=str, default=None,
@@ -195,8 +195,8 @@ def main():
                     help='Generate HTML report to file after completion (e.g., report.html)')
     ou.add_argument('--description', type=str, default=None,
                     help='Run description (stored in DB)')
-    ou.add_argument('--db', type=str, default='/mnt/storage/inferecipe.db',
-                    help='Database path (default: /mnt/storage/inferecipe.db)')
+    ou.add_argument('--db', type=str, default='/mnt/storage/inftune.db',
+                    help='Database path (default: /mnt/storage/inftune.db)')
     ou.add_argument('--quiet', action='store_true',
                     help='Suppress progress output')
 
@@ -207,7 +207,7 @@ def main():
         p.error('--model is required (or use --resume RUN_ID)')
 
     # ── Setup paths ───────────────────────────────────────────────────────
-    app_root = os.environ.get('INFE_RECIPE_PATH', '/mnt/storage/app')
+    app_root = os.environ.get('INFTUNE_PATH', '/mnt/storage/app')
     sys.path.insert(0, app_root)
 
     from core.recipe_optimizer import RecipeOptimizer, RecipeOptimizerConfig
@@ -341,7 +341,7 @@ def main():
 
     if not args.quiet:
         print(f"{'=' * 70}")
-        print(f"  InfeRecipe Optimization — Run #{run_id}")
+        print(f"  Inftune Studio Optimization — Run #{run_id}")
         print(f"{'=' * 70}")
         print(f"  Model:      {args.model}")
         print(f"  Workload:   ISL={args.isl} OSL={args.osl} × {args.users} users")
@@ -380,7 +380,7 @@ def resume_run(args, db):
 
     config_params = {
         'model_name': row['model'],
-        'namespace': saved_config.get('namespace', 'inferecipe'),
+        'namespace': saved_config.get('namespace', 'inftune'),
         'isl': row['isl'],
         'osl': row['osl'],
         'qps': float(row['num_users']),
@@ -402,7 +402,7 @@ def resume_run(args, db):
         'latency_constraint_ms': row.get('latency_constraint_ms', 500),
         'latency_constraint_percentile': row.get('latency_constraint_percentile', 'p99'),
         'image': saved_config.get('image', 'ghcr.io/llm-d/llm-d-cuda:v0.5.1'),
-        'pvc_name': saved_config.get('pvc_name', 'inferecipe-model-cache'),
+        'pvc_name': saved_config.get('pvc_name', 'inftune-model-cache'),
         'nccl_ib_hca': saved_config.get('nccl_ib_hca', 'mlx'),
         'hf_token': saved_config.get('hf_token') or os.environ.get('HF_TOKEN'),
         'selected_nodes': saved_config.get('selected_nodes', []),
@@ -431,7 +431,7 @@ def ensure_model_ready(config, log_fn):
     import subprocess as _sp
     from core.template_manager import TemplateManager
 
-    pvc_name = config.pvc_name or 'inferecipe-model-cache'
+    pvc_name = config.pvc_name or 'inftune-model-cache'
     namespace = config.namespace
     model = config.model_name
 
@@ -472,7 +472,7 @@ def ensure_model_ready(config, log_fn):
     log_fn(f'Downloading model: {model}', 'info')
     tmgr = TemplateManager()
     ts = datetime.now().strftime('%Y%m%d-%H%M%S')
-    job_name = f'inferecipe-model-download-{ts}'
+    job_name = f'inftune-model-download-{ts}'
 
     job_yaml = tmgr.render_template('prereq/model-download-job.yaml.j2',
         job_name=job_name, namespace=namespace,
@@ -589,7 +589,7 @@ def run_optimization(config_params, run_id, db_path, quiet, resume=False, html_r
         return 0
 
     except KeyboardInterrupt:
-        print(f"\nInterrupted. Run #{run_id} can be resumed with: inferecipe --resume {run_id}")
+        print(f"\nInterrupted. Run #{run_id} can be resumed with: inftune --resume {run_id}")
         db = DatabaseManager(db_path=db_path)
         with db.get_connection() as conn:
             conn.execute("UPDATE optimization_runs SET status = 'stopped' WHERE id = ?", (run_id,))
@@ -625,7 +625,7 @@ def generate_html_report(run_id, db_path, output_path, quiet):
             return
 
         # Load report-download.js to get the HTML builder
-        app_root = os.environ.get('INFE_RECIPE_PATH', '/mnt/storage/app')
+        app_root = os.environ.get('INFTUNE_PATH', '/mnt/storage/app')
         js_path = os.path.join(app_root, 'web', 'static', 'js', 'report-download.js')
 
         if not os.path.exists(js_path):
@@ -677,7 +677,7 @@ def build_python_html_report(run_id, data):
     all_res = data.get('all_results', [])
 
     html = f"""<!DOCTYPE html><html><head><meta charset="UTF-8">
-<title>InfeRecipe Report - Run {run_id}</title>
+<title>Inftune Studio Report - Run {run_id}</title>
 <script src="https://cdn.plot.ly/plotly-2.35.2.min.js"></script>
 <style>
 body{{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;width:95%;margin:0 auto;padding:20px;background:#f8fafc;color:#1e293b}}
@@ -690,7 +690,7 @@ td{{padding:8px 10px;border-bottom:1px solid #f1f5f9}}
 .stat .lbl{{color:#64748b;font-size:0.85em}}
 .pareto{{background:#f0fdf4;font-weight:600}}
 </style></head><body>
-<h1>InfeRecipe Optimization Report &mdash; Run #{run_id}</h1>
+<h1>Inftune Studio Optimization Report &mdash; Run #{run_id}</h1>
 <p style="color:#64748b;">Generated: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}</p>
 """
 

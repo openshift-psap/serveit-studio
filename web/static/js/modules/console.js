@@ -14,14 +14,14 @@ function logToConsole(message, type = 'info') {
 
 // Save console message to localStorage
 function saveConsoleMessage(message, type) {
-    const consoleHistory = JSON.parse(localStorage.getItem('inferecipe-console') || '[]');
+    const consoleHistory = JSON.parse(localStorage.getItem('inftune-console') || '[]');
     consoleHistory.push({ message, type, timestamp: Date.now() });
-    localStorage.setItem('inferecipe-console', JSON.stringify(consoleHistory));
+    localStorage.setItem('inftune-console', JSON.stringify(consoleHistory));
 }
 
 // Save console log to txt file
 function saveConsoleToFile() {
-    const consoleHistory = JSON.parse(localStorage.getItem('inferecipe-console') || '[]');
+    const consoleHistory = JSON.parse(localStorage.getItem('inftune-console') || '[]');
 
     if (consoleHistory.length === 0) {
         alert('Console is empty, nothing to save.');
@@ -30,7 +30,7 @@ function saveConsoleToFile() {
 
     // Format console history as text
     const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
-    let content = `InfeRecipe Console Log\n`;
+    let content = `Inftune Studio Console Log\n`;
     content += `Generated: ${new Date().toLocaleString()}\n`;
     content += `Total Messages: ${consoleHistory.length}\n`;
     content += `${'='.repeat(80)}\n\n`;
@@ -47,7 +47,7 @@ function saveConsoleToFile() {
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
-    a.download = `inferecipe-console-log-${timestamp}.txt`;
+    a.download = `inftune-console-log-${timestamp}.txt`;
     document.body.appendChild(a);
     a.click();
     document.body.removeChild(a);
@@ -56,7 +56,7 @@ function saveConsoleToFile() {
 
 // Restore console from localStorage
 function restoreConsole() {
-    const consoleHistory = JSON.parse(localStorage.getItem('inferecipe-console') || '[]');
+    const consoleHistory = JSON.parse(localStorage.getItem('inftune-console') || '[]');
     const consoleEl = document.getElementById('console-output');
 
     // Only clear and restore if there's history
@@ -79,7 +79,7 @@ function restoreConsole() {
 // Clear console history
 function clearConsole() {
     // Clear localStorage
-    localStorage.removeItem('inferecipe-console');
+    localStorage.removeItem('inftune-console');
 
     // Clear database via API
     fetch('/api/clear_console', {

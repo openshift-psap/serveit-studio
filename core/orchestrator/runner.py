@@ -25,7 +25,7 @@ class TestOrchestrator(ParserMixin, GuidellmMixin):
 
     def __init__(
         self,
-        namespace: str = 'inferecipe',
+        namespace: str = 'inftune',
         kubeconfig: Optional[str] = None,
         thanos_url: Optional[str] = None,
         deployment_timeout: int = 3600,
@@ -1085,11 +1085,11 @@ def main():
     import argparse
 
     parser = argparse.ArgumentParser(
-        description='Run InfeRecipe test orchestration'
+        description='Run Inftune Studio test orchestration'
     )
     parser.add_argument('--plan-file', required=True,
                         help='Path to optimization plan JSON file')
-    parser.add_argument('--namespace', default='inferecipe',
+    parser.add_argument('--namespace', default='inftune',
                         help='Kubernetes namespace')
     parser.add_argument('--thanos-url',
                         help='Thanos/Prometheus URL for metrics collection')

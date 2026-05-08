@@ -1,4 +1,4 @@
-# inferecipe-server — Web UI, launcher, optimization orchestration
+# inftune-server — Web UI, launcher, optimization orchestration
 # No guidellm, no heavy ML libs. Just the control plane.
 FROM registry.access.redhat.com/ubi9/ubi:9.4
 ENV LANG="C.UTF-8" LC_ALL="C.UTF-8" PYTHONUNBUFFERED=1

@@ -1,5 +1,5 @@
 """
-InfeRecipe System Scanner
+Inftune Studio System Scanner
 
 Scans Kubernetes cluster for available resources (GPUs, RDMA NICs, nodes).
 """
@@ -126,7 +126,7 @@ class ClusterResources:
 class SystemScanner:
     """Scans Kubernetes cluster for available resources."""
 
-    def __init__(self, namespace: str = 'inferecipe', kubeconfig: Optional[str] = None):
+    def __init__(self, namespace: str = 'inftune', kubeconfig: Optional[str] = None):
         """
         Initialize SystemScanner.
 
@@ -1059,7 +1059,7 @@ def main():
     )
     parser.add_argument(
         '--namespace',
-        default='inferecipe',
+        default='inftune',
         help='Kubernetes namespace to scan (default: llm-d)'
     )
     parser.add_argument(

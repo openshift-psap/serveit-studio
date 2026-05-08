@@ -73,7 +73,7 @@ max_model_len, gpu_memory_utilization = calculate_engine_memory_config(
 
 config_params = {
     'model_name': 'RedHatAI/gpt-oss-20b',
-    'namespace': 'inferecipe',
+    'namespace': 'inftune',
     'isl': isl,
     'osl': osl,
     'qps': 400.0,  # 400 users = 400 queries per second target
@@ -89,7 +89,7 @@ config_params = {
     # Infrastructure
     'thanos_url': None,
     'image': 'ghcr.io/llm-d/llm-d-cuda:v0.5.1',
-    'pvc_name': 'inferecipe-model-cache',
+    'pvc_name': 'inftune-model-cache',
     'nccl_ib_hca': 'mlx',
     'hf_token': None,
 
@@ -126,7 +126,7 @@ print("🔍 SCANNING CLUSTER")
 print("=" * 80)
 
 try:
-    scanner = SystemScanner(namespace='inferecipe')
+    scanner = SystemScanner(namespace='inftune')
     cluster_resources = scanner.scan_cluster()
 
     total_gpus = cluster_resources.total_gpus
@@ -156,7 +156,7 @@ print("💾 CREATING DATABASE RUN ENTRY")
 print("=" * 80)
 
 try:
-    db_manager = DatabaseManager(db_path='/mnt/storage/inferecipe.db')
+    db_manager = DatabaseManager(db_path='/mnt/storage/inftune.db')
     run_id = db_manager.create_optimization_run(
         run_name=f"recipe-test-{datetime.now().strftime('%Y%m%d-%H%M%S')}",
         model=config_params['model_name'],
@@ -211,7 +211,7 @@ try:
         config=recipe_config,
         log_callback=log_callback,
         run_id=run_id,
-        db_path='/mnt/storage/inferecipe.db'
+        db_path='/mnt/storage/inftune.db'
     )
     print("✅ RecipeOptimizer created successfully")
     print(f"   Database persistence enabled (run_id={run_id})")

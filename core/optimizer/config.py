@@ -68,7 +68,7 @@ class RecipeOptimizerConfig:
     # Infrastructure
     thanos_url: Optional[str] = None
     image: str = 'ghcr.io/llm-d/llm-d-cuda:v0.5.1'
-    pvc_name: str = 'inferecipe-model-cache'
+    pvc_name: str = 'inftune-model-cache'
     nccl_ib_hca: str = 'mlx'
     hf_token: Optional[str] = None
 

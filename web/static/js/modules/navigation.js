@@ -147,7 +147,7 @@ socket.on('status_update', function(data) {
 socket.on('clear_console', function() {
     // Clear console UI when server broadcasts clear event
     document.getElementById('console-output').innerHTML = '<div class="console-line">Console cleared.</div>';
-    localStorage.removeItem('inferecipe-console');
+    localStorage.removeItem('inftune-console');
 });
 
 socket.on('config_updated', function(data) {
@@ -786,7 +786,7 @@ socket.on('compression_complete', function(data) {
             var url = window.URL.createObjectURL(blob);
             var a = document.createElement('a');
             a.href = url;
-            a.download = 'inferecipe-optimizer.db.gz';
+            a.download = 'inftune-optimizer.db.gz';
             document.body.appendChild(a);
             a.click();
             window.URL.revokeObjectURL(url);

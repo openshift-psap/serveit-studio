@@ -1,5 +1,5 @@
 """
-Shared utility functions for InfeRecipe.
+Shared utility functions for Inftune Studio.
 """
 
 from enum import Enum

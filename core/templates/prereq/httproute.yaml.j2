@@ -7,7 +7,7 @@ metadata:
     app.kubernetes.io/component: {{ architecture }}
     app.kubernetes.io/name: llm-d
     deployment-type: {{ architecture }}
-    component: inferecipe-prereq
+    component: inftune-prereq
   annotations:
     description: Routes inference requests from {{ architecture }} gateway to InferencePool
 spec:

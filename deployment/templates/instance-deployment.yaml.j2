@@ -5,7 +5,7 @@ metadata:
   namespace: {{ namespace }}
   labels:
     app: {{ name }}
-    component: inferecipe-instance
+    component: inftune-instance
 spec:
   replicas: 1
   strategy:
@@ -17,7 +17,7 @@ spec:
     metadata:
       labels:
         app: {{ name }}
-        component: inferecipe-instance
+        component: inftune-instance
     spec:
       serviceAccountName: default
       volumes:
@@ -39,7 +39,7 @@ spec:
           imagePullPolicy: Always
           command: ["/usr/local/bin/entrypoint.sh"]
           env:
-            - name: INFE_RECIPE_PATH
+            - name: INFTUNE_PATH
               value: "/app"
             - name: OPTIMIZATION_OUTPUT_DIR
               value: "/mnt/storage/optimization-runs"
@@ -48,12 +48,12 @@ spec:
             - name: TARGET_NAMESPACE
               value: "{{ workload_namespace }}"
             - name: DB_PATH
-              value: "/mnt/storage/inferecipe.db"
+              value: "/mnt/storage/inftune.db"
             - name: INSTANCE_NAME
               value: "{{ name }}"
             - name: AUTH_DISABLED
               value: "{{ auth_disabled }}"
-            - name: INFE_RECIPE_FORCE_NAD
+            - name: INFTUNE_FORCE_NAD
               value: "{{ force_nad }}"
             - name: DEV_MODE
               value: "{{ dev_mode }}"
@@ -64,7 +64,7 @@ spec:
             - name: HF_TOKEN
               valueFrom:
                 secretKeyRef:
-                  name: inferecipe-optimizer-hf-token
+                  name: inftune-optimizer-hf-token
                   key: HF_TOKEN
                   optional: true
           volumeMounts:

@@ -1,5 +1,5 @@
 """
-Progress Tracking Utilities for InfeRecipe
+Progress Tracking Utilities for Inftune Studio
 
 Provides reusable progress bar functionality for:
 - Model downloads

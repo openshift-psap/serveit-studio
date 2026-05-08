@@ -1,4 +1,4 @@
-"""InfeRecipe Launcher — multi-user control plane."""
+"""Inftune Studio Launcher — multi-user control plane."""
 
 import os
 import json
@@ -37,8 +37,8 @@ def create_app():
 
     register_auth_routes(app)
 
-    namespace = os.environ.get('TARGET_NAMESPACE', 'inferecipe')
-    image = os.environ.get('INFERECIPE_IMAGE', 'quay.io/bbenshab/inferecipe:server')
+    namespace = os.environ.get('TARGET_NAMESPACE', 'inftune')
+    image = os.environ.get('INFTUNE_IMAGE', 'quay.io/bbenshab/inftune:server')
 
     # ── Dashboard ──
 
@@ -229,7 +229,7 @@ def create_app():
 
 def main():
     print("=" * 60)
-    print("InfeRecipe Launcher — Multi-User Control Plane")
+    print("Inftune Studio Launcher — Multi-User Control Plane")
     print("=" * 60)
 
     init_db()

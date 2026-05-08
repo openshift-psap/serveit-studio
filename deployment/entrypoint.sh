@@ -1,8 +1,8 @@
 #!/bin/bash
-# InfeRecipe server entrypoint — used by both launcher and instance pods.
+# Inftune Studio server entrypoint — used by both launcher and instance pods.
 # Pulls latest code from git, then runs server with auto-restart loop.
 
-echo "--- Starting InfeRecipe ---"
+echo "--- Starting Inftune Studio ---"
 cd /app && git pull --ff-only 2>/dev/null || true
 
 while true; do

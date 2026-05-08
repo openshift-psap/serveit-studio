@@ -346,7 +346,7 @@ def update_deployment_template():
             max_model_len=data.get('max_model_len', 8192),
             gpu_memory_utilization=data.get('gpu_memory_utilization', 0.95),
             image=data.get('image', 'ghcr.io/llm-d/llm-d-cuda:v0.5.1'),
-            pvc_name=data.get('pvc_name', 'inferecipe-model-cache'),
+            pvc_name=data.get('pvc_name', 'inftune-model-cache'),
             nccl_ib_hca=data.get('nccl_ib_hca', 'mlx'),
             isl=data.get('isl', 2000),
             osl=data.get('osl', 100),

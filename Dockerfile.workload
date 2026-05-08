@@ -1,4 +1,4 @@
-# inferecipe-workload — Guidellm benchmark runner + network debugging
+# inftune-workload — Guidellm benchmark runner + network debugging
 # Runs as a persistent pod, receives benchmark commands via kubectl exec.
 FROM registry.access.redhat.com/ubi9/ubi:9.4
 ENV LANG="C.UTF-8" LC_ALL="C.UTF-8" PYTHONUNBUFFERED=1

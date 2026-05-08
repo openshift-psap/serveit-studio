@@ -1,5 +1,5 @@
 """
-InfeRecipe Test Orchestrator
+Inftune Studio Test Orchestrator
 
 Orchestrates the complete test flow: deploy → run guidellm → collect metrics → cleanup.
 Coordinates between deployment_manager, metrics_collector, and database.

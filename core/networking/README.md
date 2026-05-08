@@ -1,6 +1,6 @@
 # Networking Module
 
-**Modular network resource creation for InfeRecipe**
+**Modular network resource creation for Inftune Studio**
 
 ## Overview
 

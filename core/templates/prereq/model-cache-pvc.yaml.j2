@@ -1,14 +1,14 @@
 apiVersion: v1
 kind: PersistentVolumeClaim
 metadata:
-  name: {{ pvc_name | default('inferecipe-model-cache') }}
+  name: {{ pvc_name | default('inftune-model-cache') }}
   namespace: {{ namespace }}
   labels:
     app: llm-d
-    component: inferecipe-benchmark
+    component: inftune-benchmark
     test-id: {{ test_id }}
   annotations:
-    description: "Model cache PVC for InfeRecipe benchmark - {{ model_name }}"
+    description: "Model cache PVC for Inftune Studio benchmark - {{ model_name }}"
 spec:
   accessModes:
     - ReadWriteMany  # Required for shared access across pods

@@ -1,4 +1,4 @@
-# InfeRecipe Core Modules
+# Inftune Studio Core Modules
 
 Core optimization engine for finding optimal LLM inference configurations.
 

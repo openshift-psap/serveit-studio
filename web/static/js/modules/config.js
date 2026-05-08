@@ -7,8 +7,8 @@ function saveConfig() {
     });
 
     // Also keep in localStorage as fallback
-    localStorage.setItem('inferecipe-config', JSON.stringify(config));
-    localStorage.setItem('inferecipe-step', currentStep.toString());
+    localStorage.setItem('inftune-config', JSON.stringify(config));
+    localStorage.setItem('inftune-step', currentStep.toString());
 }
 
 // Update UI from current config state
@@ -179,8 +179,8 @@ function loadConfig() {
     socket.emit('load_config');
 
     // Fallback: also load from localStorage in case server fails
-    const saved = localStorage.getItem('inferecipe-config');
-    const savedStep = localStorage.getItem('inferecipe-step');
+    const saved = localStorage.getItem('inftune-config');
+    const savedStep = localStorage.getItem('inftune-step');
 
     if (saved) {
         const loadedConfig = JSON.parse(saved);

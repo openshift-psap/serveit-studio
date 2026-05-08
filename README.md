@@ -1,12 +1,12 @@
-# InfeRecipe
+# Inftune Studio
 
 Automated benchmarking tool that finds the optimal vLLM inference configuration for your hardware, model, and workload.
 
-Given a model, a target QPS, and an optimization goal (response time or throughput), InfeRecipe deploys real vLLM instances on your cluster, runs benchmarks, and returns a Pareto-optimal set of configurations — ranked by TTFT, throughput, or both.
+Given a model, a target QPS, and an optimization goal (response time or throughput), Inftune Studio deploys real vLLM instances on your cluster, runs benchmarks, and returns a Pareto-optimal set of configurations — ranked by TTFT, throughput, or both.
 
 ## How It Works
 
-InfeRecipe supports three inference architectures:
+Inftune Studio supports three inference architectures:
 
 | Architecture | Description | Optimizes For |
 |---|---|---|
@@ -79,7 +79,7 @@ Steps 2-3 and 6-10 deploy real workloads. Steps 4-5 are pure math.
 
 ### Advanced vLLM Settings
 
-All settings default to "Auto" — InfeRecipe calculates optimal values. Override manually if needed.
+All settings default to "Auto" — Inftune Studio calculates optimal values. Override manually if needed.
 
 #### Value Settings
 
@@ -151,7 +151,7 @@ All settings default to "Auto" — InfeRecipe calculates optimal values. Overrid
 # Opens http://localhost:8080
 
 # OpenShift (auto-creates Route)
-oc get route inferecipe-optimizer-ui -n llm-d
+oc get route inftune-optimizer-ui -n llm-d
 ```
 
 ## Project Structure
@@ -186,7 +186,7 @@ web/
 ├── static/
 │   ├── css/style.css          # Red Hat branded UI styles
 │   ├── js/app.js              # Single-page app logic (wizard, charts, reports)
-│   └── img/logo.png           # InfeRecipe logo
+│   └── img/logo.png           # Inftune Studio logo
 └── templates/                 # Jinja2 HTML templates (wizard steps, overlays)
 
 deployment/
@@ -200,7 +200,7 @@ scripts/
 
 ## Multi-Cloud Support
 
-InfeRecipe auto-detects the cloud provider and configures networking accordingly:
+Inftune Studio auto-detects the cloud provider and configures networking accordingly:
 
 | Provider | GPU Resource | Networking | RDMA |
 |---|---|---|---|
@@ -245,7 +245,7 @@ For PD goals (TTFT, Balanced, PD Only), minimum is 128 because NIXL transfers KV
 - vLLM queue depth, batch size, KV cache usage
 - InfiniBand RDMA throughput
 
-Results are stored in SQLite at `/mnt/storage/inferecipe.db`.
+Results are stored in SQLite at `/mnt/storage/inftune.db`.
 
 ## Optimization Report
 
@@ -267,7 +267,7 @@ The report UI includes these tabs:
 
 ```bash
 # Check pod status
-kubectl get pods -n llm-d -l app=inferecipe-optimizer
+kubectl get pods -n llm-d -l app=inftune-optimizer
 
 # View server logs
 kubectl exec -n llm-d <pod> -- cat /tmp/server.log
@@ -287,7 +287,7 @@ for pod in json.load(sys.stdin)['items']:
 "
 
 # Clean up stuck test pods
-kubectl delete lws -n llm-d -l component=inferecipe-test
+kubectl delete lws -n llm-d -l component=inftune-test
 ```
 
 ## License

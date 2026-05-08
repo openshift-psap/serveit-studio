@@ -1,6 +1,6 @@
-# InfeRecipe Deployment
+# Inftune Studio Deployment
 
-Deployment script for InfeRecipe Optimizer.
+Deployment script for Inftune Studio Optimizer.
 
 ## Quick Start
 
@@ -36,7 +36,7 @@ Deployment script for InfeRecipe Optimizer.
 | Option | Short | Description | Default |
 |---|---|---|---|
 | `--namespace NAME` | `-n` | Kubernetes namespace | `llm-d` |
-| `--image IMAGE` | `-i` | Container image | `quay.io/bbenshab/vllm:inferecipe` |
+| `--image IMAGE` | `-i` | Container image | `quay.io/bbenshab/vllm:inftune` |
 | `--pvc-name NAME` | `-p` | Use existing PVC (skips creation) | — |
 | `--storage-class CLASS` | `-s` | Storage class for new PVC | — |
 | `--storage-size SIZE` | | Size of new PVC | `100Gi` |
@@ -55,7 +55,7 @@ Deployment script for InfeRecipe Optimizer.
 1. **ClusterRoleBinding** — Prometheus metrics access
 2. **Role + RoleBinding** — Pod/PVC/Job/LWS/Service management
 3. **ClusterRole + ClusterRoleBinding** — Node/StorageClass read access
-4. **Deployment** — InfeRecipe optimizer pod
+4. **Deployment** — Inftune Studio optimizer pod
 5. **Service** — ClusterIP service on port 5000
 6. **Route** (OpenShift only) — External access with TLS
 
@@ -65,7 +65,7 @@ The PVC is mounted at `/mnt/storage` and contains:
 
 | Path | Content |
 |---|---|
-| `/mnt/storage/inferecipe.db` | SQLite database (runs, tests, console logs, hardware scans) |
+| `/mnt/storage/inftune.db` | SQLite database (runs, tests, console logs, hardware scans) |
 | `/mnt/storage/app/` | Synced application code (dev mode) |
 | `/mnt/storage/.cache/huggingface/` | HuggingFace model/tokenizer cache |
 | `/mnt/storage/prefix-cache-datasets/` | Generated prefix cache simulation datasets |
@@ -92,5 +92,5 @@ In dev mode, `--sync` uses md5 checksums to efficiently sync only changed files:
 
 ### OpenShift
 ```bash
-oc get route inferecipe-optimizer-ui -n llm-d -o jsonpath='{.spec.host}'
+oc get route inftune-optimizer-ui -n llm-d -o jsonpath='{.spec.host}'
 ```

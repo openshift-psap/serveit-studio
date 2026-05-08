@@ -1,5 +1,5 @@
 """
-InfeRecipe Deployment Manager
+Inftune Studio Deployment Manager
 
 Manages deployment of test configurations to Kubernetes cluster.
 """
@@ -39,7 +39,7 @@ class DeploymentManager:
 
     def __init__(
         self,
-        namespace: str = 'inferecipe',
+        namespace: str = 'inftune',
         kubeconfig: Optional[str] = None,
         template_manager: Optional[TemplateManager] = None
     ):
@@ -630,7 +630,7 @@ class DeploymentManager:
         log_callback: Optional[Callable[[str], None]] = None
     ) -> bool:
         """
-        Delete all InfeRecipe test deployments.
+        Delete all Inftune Studio test deployments.
 
         Args:
             log_callback: Optional callback for logging
@@ -639,14 +639,14 @@ class DeploymentManager:
             True if cleanup succeeded
         """
         if log_callback:
-            log_callback("🧹 Cleaning up all InfeRecipe test deployments...")
+            log_callback("🧹 Cleaning up all Inftune Studio test deployments...")
 
         try:
             result = self.kubectl.run(
                 [
                     'delete',
                     'leaderworkerset',
-                    '-l', 'component=inferecipe-test',
+                    '-l', 'component=inftune-test',
                     '-n', self.namespace
                 ],
                 check=False
@@ -673,14 +673,14 @@ def main():
     import argparse
 
     parser = argparse.ArgumentParser(
-        description='Manage InfeRecipe test deployments'
+        description='Manage Inftune Studio test deployments'
     )
     parser.add_argument('action', choices=['deploy', 'status', 'delete', 'cleanup'],
                         help='Action to perform')
     parser.add_argument('--test-id', help='Test ID')
     parser.add_argument('--architecture', choices=['aggregated', 'pd', 'ep'],
                         help='Architecture type')
-    parser.add_argument('--namespace', default='inferecipe', help='Kubernetes namespace')
+    parser.add_argument('--namespace', default='inftune', help='Kubernetes namespace')
     parser.add_argument('--timeout', type=int, default=600,
                         help='Timeout for wait operations (seconds)')
 

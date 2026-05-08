@@ -1,5 +1,5 @@
 """
-Modular networking system for InfeRecipe.
+Modular networking system for Inftune Studio.
 
 Supports multiple network types:
 - NAD (NetworkAttachmentDefinition) - Multus CNI

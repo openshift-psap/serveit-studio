@@ -1,5 +1,5 @@
 """
-InfeRecipe llm-d optimizer — Web Application Entry Point
+Inftune Studio llm-d optimizer — Web Application Entry Point
 
 This is the thin orchestrator that imports all modules and starts the server.
 Business logic lives in:
@@ -45,7 +45,7 @@ import web.realtime
 def main():
     """Main application entry point."""
     print("=" * 60)
-    print("InfeRecipe llm-d optimizer")
+    print("Inftune Studio llm-d optimizer")
     print("Intelligent Search for Optimal llm-d Inference Configuration")
     print("=" * 60)
 
@@ -65,7 +65,7 @@ def main():
 
 
 if __name__ == '__main__':
-    if os.environ.get('INFERECIPE_MODE') == 'launcher':
+    if os.environ.get('INFTUNE_MODE') == 'launcher':
         from launcher.app import main as launcher_main
         launcher_main()
     else:

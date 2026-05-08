@@ -5,7 +5,7 @@ metadata:
   namespace: {{ namespace }}
   labels:
     app: llm-d
-    component: inferecipe-test
+    component: inftune-test
     test-id: {{ test_id }}
     architecture: aggregated
 spec:
@@ -19,7 +19,7 @@ spec:
           llm-d.ai/inference-serving: "true"
           llm-d.ai/model: {{ model_name_label }}
           llm-d.ai/role: aggregated
-          llm-d.ai/guide: "inferecipe-aggregated"
+          llm-d.ai/guide: "inftune-aggregated"
           llm-d.ai/test-id: {{ test_id }}
       spec:
         serviceAccountName: llm-d-modelserver
@@ -79,7 +79,7 @@ spec:
                 fi
 
                 echo "========================================="
-                echo "InfeRecipe Test: {{ test_id }}"
+                echo "Inftune Studio Test: {{ test_id }}"
                 echo "Architecture: Aggregated"
                 echo "Model: {{ model_name }}"
                 echo "TP: {{ tensor_parallelism }}"

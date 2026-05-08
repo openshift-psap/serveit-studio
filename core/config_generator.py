@@ -1,5 +1,5 @@
 """
-InfeRecipe Configuration Generator
+Inftune Studio Configuration Generator
 
 Generates test configurations based on user inputs and cluster resources.
 Determines which architectures to test based on optimization priority.
@@ -130,7 +130,7 @@ class ConfigGenerator:
 
     def __init__(
         self,
-        namespace: str = 'inferecipe',
+        namespace: str = 'inftune',
         kubeconfig: Optional[str] = None
     ):
         """
@@ -205,9 +205,9 @@ class ConfigGenerator:
         import os
 
         # Check for manual override
-        force_nad = os.getenv('INFE_RECIPE_FORCE_NAD', 'false').lower() == 'true'
+        force_nad = os.getenv('INFTUNE_FORCE_NAD', 'false').lower() == 'true'
         if force_nad:
-            logger.info("Forcing NAD network type via INFE_RECIPE_FORCE_NAD env var")
+            logger.info("Forcing NAD network type via INFTUNE_FORCE_NAD env var")
             return 'nad'
 
         # Detect from cluster resources (cloud_provider is an Enum)
@@ -608,7 +608,7 @@ def main():
     import json
 
     parser = argparse.ArgumentParser(
-        description='Generate InfeRecipe optimization plan'
+        description='Generate Inftune Studio optimization plan'
     )
     parser.add_argument('--run-name', required=True, help='Name for this optimization run')
     parser.add_argument('--model', required=True, help='HuggingFace model name')
@@ -621,7 +621,7 @@ def main():
         default='balanced',
         help='Optimization goal'
     )
-    parser.add_argument('--namespace', default='inferecipe', help='Kubernetes namespace')
+    parser.add_argument('--namespace', default='inftune', help='Kubernetes namespace')
     parser.add_argument('--output', help='Output JSON file path')
 
     args = parser.parse_args()

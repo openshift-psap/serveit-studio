@@ -2,11 +2,11 @@
 apiVersion: rbac.authorization.k8s.io/v1
 kind: Role
 metadata:
-  name: inferecipe-optimizer-reader
+  name: inftune-optimizer-reader
   namespace: {{ namespace }}
   labels:
-    app.kubernetes.io/name: inferecipe-optimizer
-    component: inferecipe-prereq
+    app.kubernetes.io/name: inftune-optimizer
+    component: inftune-prereq
 rules:
   # Read InferencePool CRDs for prerequisite checks
   - apiGroups: ["inference.networking.k8s.io"]
@@ -27,15 +27,15 @@ rules:
 apiVersion: rbac.authorization.k8s.io/v1
 kind: RoleBinding
 metadata:
-  name: inferecipe-optimizer-reader
+  name: inftune-optimizer-reader
   namespace: {{ namespace }}
   labels:
-    app.kubernetes.io/name: inferecipe-optimizer
-    component: inferecipe-prereq
+    app.kubernetes.io/name: inftune-optimizer
+    component: inftune-prereq
 roleRef:
   apiGroup: rbac.authorization.k8s.io
   kind: Role
-  name: inferecipe-optimizer-reader
+  name: inftune-optimizer-reader
 subjects:
   - kind: ServiceAccount
     name: default

@@ -1,5 +1,5 @@
 /*
- * InfeRecipe — app.js entry point
+ * Inftune Studio — app.js entry point
  *
  * All code has been split into focused modules under js/modules/:
  *   socket.js     — Socket.IO init, session guard

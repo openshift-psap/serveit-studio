@@ -1,11 +1,11 @@
 apiVersion: v1
 kind: Pod
 metadata:
-  name: inferecipe-workload
+  name: inftune-workload
   namespace: {{ namespace }}
   labels:
-    component: inferecipe-benchmark
-    app: inferecipe-workload
+    component: inftune-benchmark
+    app: inftune-workload
 spec:
   serviceAccountName: llm-d-modelserver
   restartPolicy: Never

@@ -32,7 +32,7 @@ spec:
           imagePullPolicy: Always
           command: ["/usr/local/bin/entrypoint.sh"]
           env:
-            - name: INFE_RECIPE_PATH
+            - name: INFTUNE_PATH
               value: "/app"
             - name: OPTIMIZATION_OUTPUT_DIR
               value: "/mnt/storage/optimization-runs"
@@ -43,19 +43,19 @@ spec:
             - name: METRIC_STEP_SECONDS
               value: "5"
             - name: DB_PATH
-              value: "/mnt/storage/inferecipe.db"
-            - name: INFE_RECIPE_FORCE_NAD
+              value: "/mnt/storage/inftune.db"
+            - name: INFTUNE_FORCE_NAD
               value: "{{ force_nad }}"
             - name: DEV_MODE
               value: "{{ dev_mode }}"
-{% if inferecipe_mode is defined and inferecipe_mode %}
-            - name: INFERECIPE_MODE
-              value: "{{ inferecipe_mode }}"
+{% if inftune_mode is defined and inftune_mode %}
+            - name: INFTUNE_MODE
+              value: "{{ inftune_mode }}"
 {% endif %}
             - name: HF_TOKEN
               valueFrom:
                 secretKeyRef:
-                  name: inferecipe-optimizer-hf-token
+                  name: inftune-optimizer-hf-token
                   key: HF_TOKEN
                   optional: true
           volumeMounts:

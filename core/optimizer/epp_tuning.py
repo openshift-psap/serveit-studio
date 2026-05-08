@@ -109,7 +109,7 @@ class EPPTuningMixin:
                 # Clean up any leftover step9 EPP LWS from previous combo
                 try:
                     self.orchestrator.deployment_manager.kubectl.run(
-                        ['delete', 'lws', '-l', 'component=inferecipe-test',
+                        ['delete', 'lws', '-l', 'component=inftune-test',
                          '-n', self.config.namespace, '--ignore-not-found=true'],
                         check=False
                     )

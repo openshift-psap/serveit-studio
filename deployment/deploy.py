@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-InfeRecipe Deployer — deploy, sync, and manage InfeRecipe on Kubernetes.
+Inftune Studio Deployer — deploy, sync, and manage Inftune Studio on Kubernetes.
 
 Replaces deploy.sh with a cleaner Python implementation using Jinja2 templates.
 
@@ -39,7 +39,7 @@ from typing import Optional
 SCRIPT_DIR = Path(__file__).parent.resolve()
 REPO_ROOT = SCRIPT_DIR.parent
 TEMPLATES_DIR = SCRIPT_DIR / 'templates'
-PF_PID_FILE = Path('/tmp/inferecipe-port-forward.pid')
+PF_PID_FILE = Path('/tmp/inftune-port-forward.pid')
 
 
 # ── Kubectl ──────────────────────────────────────────────────────────────────
@@ -88,7 +88,7 @@ def render_template(template_name: str, **ctx) -> str:
 def generate_yaml(namespace: str, image: str, pvc_name: str,
                   storage_class: str, storage_size: str,
                   create_pvc: bool, dev_mode: bool, force_nad: bool,
-                  openshift: bool, name: str = 'inferecipe-optimizer',
+                  openshift: bool, name: str = 'inftune-optimizer',
                   mode: str = 'local') -> str:
     parts = []
 
@@ -106,7 +106,7 @@ def generate_yaml(namespace: str, image: str, pvc_name: str,
         name=name, namespace=namespace, image=image,
         pvc_name=pvc_name, dev_mode='true' if dev_mode else 'false',
         force_nad='true' if force_nad else 'false',
-        inferecipe_mode='launcher' if mode == 'launcher' else ''))
+        inftune_mode='launcher' if mode == 'launcher' else ''))
 
     # Service + Route
     parts.append(render_template('service.yaml.j2',
@@ -168,7 +168,7 @@ def _tar_sync(cmd: str, namespace: str, pod_name: str):
 
 # ── Port Forward ─────────────────────────────────────────────────────────────
 
-def start_port_forward(cmd: str, namespace: str, port: int, svc_name: str = 'inferecipe-optimizer-ui'):
+def start_port_forward(cmd: str, namespace: str, port: int, svc_name: str = 'inftune-optimizer-ui'):
     stop_port_forward(quiet=True)
     print(f"🔌 Starting port-forward (localhost:{port} -> svc/{svc_name}:5000)...", file=sys.stderr)
 
@@ -206,9 +206,9 @@ def stop_port_forward(quiet: bool = False):
 # ── Restart Server ───────────────────────────────────────────────────────────
 
 def restart_server(cmd: str, namespace: str, port: int):
-    # Find any inferecipe pod (optimizer or launcher)
+    # Find any inftune pod (optimizer or launcher)
     r = kubectl_run(cmd, ['get', 'pod', '-n', namespace,
-                          '-l', 'app in (inferecipe-optimizer,inferecipe-launcher)',
+                          '-l', 'app in (inftune-optimizer,inftune-launcher)',
                           '-o', 'jsonpath={.items[0].metadata.name}'])
     pod = r.stdout.strip()
     if not pod:
@@ -279,15 +279,15 @@ def preflight_checks(cmd: str, namespace: str):
 def main():
     p = argparse.ArgumentParser(
         prog='deploy.py',
-        description='InfeRecipe Deployer — deploy, sync, and manage on Kubernetes',
+        description='Inftune Studio Deployer — deploy, sync, and manage on Kubernetes',
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog=__doc__,
     )
 
     p.add_argument('--mode', choices=['local', 'launcher'], default='launcher',
                    help='Deploy mode: local (single instance) or launcher (multi-user control plane)')
-    p.add_argument('-n', '--namespace', default='inferecipe', help='Kubernetes namespace (default: llm-d)')
-    p.add_argument('-i', '--image', default='quay.io/bbenshab/inferecipe:server', help='Container image')
+    p.add_argument('-n', '--namespace', default='inftune', help='Kubernetes namespace (default: llm-d)')
+    p.add_argument('-i', '--image', default='quay.io/bbenshab/inftune:server', help='Container image')
 
     sg = p.add_argument_group('Storage')
     sg.add_argument('-p', '--pvc-name', help='Use existing PVC (skips PVC creation)')
@@ -318,7 +318,7 @@ def main():
     openshift = is_openshift(cmd)
 
     if args.port_forward:
-        svc = 'inferecipe-launcher-ui' if args.mode == 'launcher' else 'inferecipe-optimizer-ui'
+        svc = 'inftune-launcher-ui' if args.mode == 'launcher' else 'inftune-optimizer-ui'
         start_port_forward(cmd, args.namespace, args.local_port, svc_name=svc)
         return
 
@@ -329,17 +329,17 @@ def main():
     # ── Sync only ──
     if args.sync and not args.storage_class and not args.pvc_name:
         # Try specified mode first, then fall back to either label
-        app_label = 'inferecipe-launcher' if args.mode == 'launcher' else 'inferecipe-optimizer'
+        app_label = 'inftune-launcher' if args.mode == 'launcher' else 'inftune-optimizer'
         r = kubectl_run(cmd, ['get', 'pod', '-n', args.namespace, '-l', f'app={app_label}',
                               '-o', 'jsonpath={.items[0].metadata.name}'])
         pod = r.stdout.strip()
         if not pod:
             r = kubectl_run(cmd, ['get', 'pod', '-n', args.namespace,
-                                  '-l', 'app in (inferecipe-optimizer,inferecipe-launcher)',
+                                  '-l', 'app in (inftune-optimizer,inftune-launcher)',
                                   '-o', 'jsonpath={.items[0].metadata.name}'])
             pod = r.stdout.strip()
         if not pod:
-            print("❌ No InfeRecipe pod found. Deploy first.", file=sys.stderr)
+            print("❌ No Inftune Studio pod found. Deploy first.", file=sys.stderr)
             sys.exit(1)
         sync_code(cmd, args.namespace, pod)
         print("\n   Code synced. Server will auto-restart and pick up changes.", file=sys.stderr)
@@ -352,7 +352,7 @@ def main():
         pvc_name = args.pvc_name
     elif args.storage_class:
         create_pvc = True
-        pvc_name = 'inferecipe-storage'
+        pvc_name = 'inftune-storage'
     else:
         if args.just_yaml:
             print("Error: --storage-class or --pvc-name required for YAML generation", file=sys.stderr)
@@ -362,7 +362,7 @@ def main():
         sys.exit(1)
 
     # ── Generate YAML ──
-    deploy_name = 'inferecipe-launcher' if args.mode == 'launcher' else 'inferecipe-optimizer'
+    deploy_name = 'inftune-launcher' if args.mode == 'launcher' else 'inftune-optimizer'
     yaml = generate_yaml(
         namespace=args.namespace,
         image=args.image,
@@ -384,7 +384,7 @@ def main():
     # ── Deploy ──
     preflight_checks(cmd, args.namespace)
 
-    print(f"🚀 Deploying InfeRecipe to namespace: {args.namespace}", file=sys.stderr)
+    print(f"🚀 Deploying Inftune Studio to namespace: {args.namespace}", file=sys.stderr)
     r = kubectl_run(cmd, ['apply', '-f', '-'], input_data=yaml)
     if r.returncode != 0:
         print(f"❌ Deployment failed:\n{r.stderr}", file=sys.stderr)
@@ -399,7 +399,7 @@ def main():
                     '--timeout=300s'], capture_output=True)
 
     print("\n" + "=" * 60, file=sys.stderr)
-    print("✅ InfeRecipe deployment complete!", file=sys.stderr)
+    print("✅ Inftune Studio deployment complete!", file=sys.stderr)
     print("=" * 60, file=sys.stderr)
 
     # Sync code in dev mode

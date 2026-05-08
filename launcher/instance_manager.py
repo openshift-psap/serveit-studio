@@ -1,6 +1,6 @@
-"""Instance lifecycle management — create, delete, list InfeRecipe instances.
+"""Instance lifecycle management — create, delete, list Inftune Studio instances.
 
-UI pods live in the shared launcher namespace (e.g. 'inferecipe').
+UI pods live in the shared launcher namespace (e.g. 'inftune').
 Workloads (LWS, guidellm, EPP) get their own per-instance namespace.
 Instances are organized into user-defined groups.
 """
@@ -125,7 +125,7 @@ def _seed_instance_user(deployment_name: str, namespace: str, username: str, pas
         "import sqlite3,os,base64;"
         f"u=base64.b64decode('{b64user}').decode();"
         f"h=base64.b64decode('{b64hash}').decode();"
-        "db=os.environ.get('DB_PATH','/mnt/storage/inferecipe.db');"
+        "db=os.environ.get('DB_PATH','/mnt/storage/inftune.db');"
         "c=sqlite3.connect(db);"
         "c.execute('CREATE TABLE IF NOT EXISTS users (id INTEGER PRIMARY KEY AUTOINCREMENT, username TEXT UNIQUE NOT NULL, password_hash TEXT NOT NULL, created_at TEXT NOT NULL)');"
         "c.execute('INSERT OR IGNORE INTO users (username, password_hash, created_at) VALUES (?, ?, datetime(\"now\"))',(u,h));"
@@ -172,16 +172,16 @@ def delete_user(user_id: int) -> bool:
 
 def create_instance(owner_id: int, username: str, name: str,
                     group_id: int = None,
-                    namespace: str = 'inferecipe',
+                    namespace: str = 'inftune',
                     kubeconfig_data: str = None,
                     storage_class: str = None,
-                    image: str = 'quay.io/bbenshab/inferecipe:server',
+                    image: str = 'quay.io/bbenshab/inftune:server',
                     password_hash: str = None) -> Dict:
     safe_name = _sanitize(f"{username}-{name}")
-    workload_namespace = f"inferecipe-{safe_name}"
-    deployment_name = f"inferecipe-{safe_name}"
-    pvc_name = f"inferecipe-{safe_name}-storage"
-    service_name = f"inferecipe-{safe_name}-ui"
+    workload_namespace = f"inftune-{safe_name}"
+    deployment_name = f"inftune-{safe_name}"
+    pvc_name = f"inftune-{safe_name}-storage"
+    service_name = f"inftune-{safe_name}-ui"
     target_cluster = 'local'
 
     kubeconfig_secret = None
@@ -237,7 +237,7 @@ def create_instance(owner_id: int, username: str, name: str,
                 prom_yaml = json.dumps({
                     "apiVersion": "rbac.authorization.k8s.io/v1",
                     "kind": "ClusterRoleBinding",
-                    "metadata": {"name": f"inferecipe-prometheus-{safe_name}"},
+                    "metadata": {"name": f"inftune-prometheus-{safe_name}"},
                     "subjects": [{"kind": "ServiceAccount", "name": "default",
                                   "namespace": workload_namespace}],
                     "roleRef": {"kind": "ClusterRole", "name": "prometheus-k8s",
@@ -248,7 +248,7 @@ def create_instance(owner_id: int, username: str, name: str,
             remote_rbac = json.dumps({
                 "apiVersion": "v1", "kind": "List", "items": [
                     {"apiVersion": "rbac.authorization.k8s.io/v1", "kind": "Role",
-                     "metadata": {"name": "inferecipe-full-access", "namespace": workload_namespace},
+                     "metadata": {"name": "inftune-full-access", "namespace": workload_namespace},
                      "rules": [
                          {"apiGroups": [""], "resources": ["pods", "pods/log", "pods/exec", "services",
                           "persistentvolumeclaims", "serviceaccounts", "configmaps", "secrets"],
@@ -271,9 +271,9 @@ def create_instance(owner_id: int, username: str, name: str,
                           "verbs": ["get", "list", "create", "delete", "patch", "update"]},
                      ]},
                     {"apiVersion": "rbac.authorization.k8s.io/v1", "kind": "RoleBinding",
-                     "metadata": {"name": "inferecipe-access", "namespace": workload_namespace},
+                     "metadata": {"name": "inftune-access", "namespace": workload_namespace},
                      "subjects": [{"kind": "ServiceAccount", "name": "default", "namespace": workload_namespace}],
-                     "roleRef": {"kind": "Role", "name": "inferecipe-full-access",
+                     "roleRef": {"kind": "Role", "name": "inftune-full-access",
                                  "apiGroup": "rbac.authorization.k8s.io"}},
                 ]
             })
@@ -281,7 +281,7 @@ def create_instance(owner_id: int, username: str, name: str,
         finally:
             os.unlink(tmp2_path)
 
-        kubeconfig_secret = f"inferecipe-kubeconfig-{safe_name}"
+        kubeconfig_secret = f"inftune-kubeconfig-{safe_name}"
 
     with get_db() as conn:
         conn.execute('''

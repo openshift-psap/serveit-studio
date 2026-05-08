@@ -22,15 +22,15 @@ from flask_socketio import SocketIO
 logger = logging.getLogger(__name__)
 
 # ── Path Constants ───────────────────────────────────────────────────────────
-APP_PATH = os.environ.get('INFE_RECIPE_PATH', '/opt/inferecipe')
+APP_PATH = os.environ.get('INFTUNE_PATH', '/opt/inftune')
 STATE_DIR = '/tmp/infe_recipe_state'
 STATE_FILE = os.path.join(STATE_DIR, 'state.json')
-DB_PATH = os.environ.get('DB_PATH', '/mnt/storage/inferecipe.db')
+DB_PATH = os.environ.get('DB_PATH', '/mnt/storage/inftune.db')
 OPTIMIZATION_OUTPUT_DIR = os.environ.get('OPTIMIZATION_OUTPUT_DIR', '/mnt/storage/optimization-runs')
 
 if not os.environ.get('HF_HOME'):
     os.environ['HF_HOME'] = os.path.join(os.path.dirname(DB_PATH), '.cache', 'huggingface')
-TARGET_NAMESPACE = os.environ.get('TARGET_NAMESPACE', 'inferecipe')
+TARGET_NAMESPACE = os.environ.get('TARGET_NAMESPACE', 'inftune')
 
 
 # ── Mutable Global State (shared dict so mutations are visible everywhere) ──

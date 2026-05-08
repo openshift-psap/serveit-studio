@@ -1,4 +1,4 @@
-# InfeRecipe CLI
+# Inftune Studio CLI
 
 Command-line interface for running LLM inference optimization without the web UI.
 Results are saved to the same database and can be viewed in the web UI report.
@@ -7,18 +7,18 @@ Results are saved to the same database and can be viewed in the web UI report.
 
 ```bash
 # Run from inside the optimizer pod
-kubectl exec -it -n llm-d deploy/inferecipe-optimizer -- bash
+kubectl exec -it -n llm-d deploy/inftune-optimizer -- bash
 cd /mnt/storage/app
 
 # Minimal run — only --model is required
-python3 scripts/inferecipe.py --model RedHatAI/gpt-oss-20b
+python3 scripts/inftune.py --model RedHatAI/gpt-oss-20b
 ```
 
 ## Usage
 
 ```
-python3 scripts/inferecipe.py --model MODEL [options]
-python3 scripts/inferecipe.py --resume RUN_ID [options]
+python3 scripts/inftune.py --model MODEL [options]
+python3 scripts/inftune.py --resume RUN_ID [options]
 ```
 
 Only `--model` is required for a new run. Everything else has sensible defaults
@@ -32,14 +32,14 @@ matching the web UI wizard.
 
 ```bash
 # Optimize with default settings (16 GPUs, ISL=3000, OSL=256, 100 users)
-python3 scripts/inferecipe.py --model RedHatAI/gpt-oss-20b
+python3 scripts/inftune.py --model RedHatAI/gpt-oss-20b
 
 # Specify workload parameters
-python3 scripts/inferecipe.py --model RedHatAI/gpt-oss-20b \
+python3 scripts/inftune.py --model RedHatAI/gpt-oss-20b \
     --isl 9000 --osl 50 --users 100 --gpus 16
 
 # With ISL/OSL standard deviation (realistic variable-length prompts)
-python3 scripts/inferecipe.py --model RedHatAI/gpt-oss-20b \
+python3 scripts/inftune.py --model RedHatAI/gpt-oss-20b \
     --isl 9000 --isl-stdev 4000 --osl 50 --osl-stdev 20 --users 100
 ```
 
@@ -47,34 +47,34 @@ python3 scripts/inferecipe.py --model RedHatAI/gpt-oss-20b \
 
 ```bash
 # Minimize response time (TTFT) — default
-python3 scripts/inferecipe.py --model RedHatAI/gpt-oss-20b --objective ttft
+python3 scripts/inftune.py --model RedHatAI/gpt-oss-20b --objective ttft
 
 # Maximize throughput
-python3 scripts/inferecipe.py --model RedHatAI/gpt-oss-20b --objective throughput
+python3 scripts/inftune.py --model RedHatAI/gpt-oss-20b --objective throughput
 
 # Balanced — test PD, EP, and Aggregated architectures
-python3 scripts/inferecipe.py --model RedHatAI/gpt-oss-20b --objective balanced
+python3 scripts/inftune.py --model RedHatAI/gpt-oss-20b --objective balanced
 
 # Only test aggregated (no PD disaggregation)
-python3 scripts/inferecipe.py --model RedHatAI/gpt-oss-20b --objective aggregated_only
+python3 scripts/inftune.py --model RedHatAI/gpt-oss-20b --objective aggregated_only
 
 # Only test PD disaggregation
-python3 scripts/inferecipe.py --model RedHatAI/gpt-oss-20b --objective pd_only
+python3 scripts/inftune.py --model RedHatAI/gpt-oss-20b --objective pd_only
 ```
 
 ### Latency SLA
 
 ```bash
 # Find max throughput under 2000ms TTFT at P99
-python3 scripts/inferecipe.py --model RedHatAI/gpt-oss-20b \
+python3 scripts/inftune.py --model RedHatAI/gpt-oss-20b \
     --latency-sla 2000 --latency-percentile p99
 
 # Strict SLA: 500ms at P95
-python3 scripts/inferecipe.py --model RedHatAI/gpt-oss-20b \
+python3 scripts/inftune.py --model RedHatAI/gpt-oss-20b \
     --latency-sla 500 --latency-percentile p95
 
 # Auto-scale concurrency to sustainable level
-python3 scripts/inferecipe.py --model RedHatAI/gpt-oss-20b \
+python3 scripts/inftune.py --model RedHatAI/gpt-oss-20b \
     --use-achievable-qps
 ```
 
@@ -82,19 +82,19 @@ python3 scripts/inferecipe.py --model RedHatAI/gpt-oss-20b \
 
 ```bash
 # Use cache-optimized EPP preset
-python3 scripts/inferecipe.py --model RedHatAI/gpt-oss-20b \
+python3 scripts/inftune.py --model RedHatAI/gpt-oss-20b \
     --epp-preset cache_optimized
 
 # Benchmark EPP strategies to find optimal routing
-python3 scripts/inferecipe.py --model RedHatAI/gpt-oss-20b \
+python3 scripts/inftune.py --model RedHatAI/gpt-oss-20b \
     --epp-benchmark
 
 # Custom EPP weights (cache:kv:queue)
-python3 scripts/inferecipe.py --model RedHatAI/gpt-oss-20b \
+python3 scripts/inftune.py --model RedHatAI/gpt-oss-20b \
     --epp-weights 5:1:1
 
 # Override EPP auto-calculated parameters
-python3 scripts/inferecipe.py --model RedHatAI/gpt-oss-20b \
+python3 scripts/inftune.py --model RedHatAI/gpt-oss-20b \
     --epp-max-prefix-blocks 512 \
     --epp-lru-capacity 50000 \
     --epp-non-cached-tokens 32
@@ -104,15 +104,15 @@ python3 scripts/inferecipe.py --model RedHatAI/gpt-oss-20b \
 
 ```bash
 # 80% identical prompts (FAQ/popular query pattern)
-python3 scripts/inferecipe.py --model RedHatAI/gpt-oss-20b \
+python3 scripts/inftune.py --model RedHatAI/gpt-oss-20b \
     --prefix-cache-pct 80 --prefix-cache-mode identical
 
 # Shared prefix — all prompts share 80% common prefix (system prompt pattern)
-python3 scripts/inferecipe.py --model RedHatAI/gpt-oss-20b \
+python3 scripts/inftune.py --model RedHatAI/gpt-oss-20b \
     --prefix-cache-pct 80 --prefix-cache-mode shared_prefix
 
 # Multi-group — 10 distinct tenant groups with 80% cache hit rate
-python3 scripts/inferecipe.py --model RedHatAI/gpt-oss-20b \
+python3 scripts/inftune.py --model RedHatAI/gpt-oss-20b \
     --prefix-cache-pct 80 --prefix-cache-mode multi_group --prefix-cache-groups 10
 ```
 
@@ -120,23 +120,23 @@ python3 scripts/inferecipe.py --model RedHatAI/gpt-oss-20b \
 
 ```bash
 # Fast search — 1 TP pair, smart PD splits
-python3 scripts/inferecipe.py --model RedHatAI/gpt-oss-20b \
+python3 scripts/inftune.py --model RedHatAI/gpt-oss-20b \
     --tp-pair-depth 1 --pd-search smart
 
 # Thorough search — all TP pairs, exhaustive PD splits
-python3 scripts/inferecipe.py --model RedHatAI/gpt-oss-20b \
+python3 scripts/inftune.py --model RedHatAI/gpt-oss-20b \
     --tp-pair-depth 4 --pd-search exhaustive
 
 # Specific TP values only
-python3 scripts/inferecipe.py --model RedHatAI/gpt-oss-20b \
+python3 scripts/inftune.py --model RedHatAI/gpt-oss-20b \
     --tp-options 1,2,4
 
 # Short test duration (quick validation)
-python3 scripts/inferecipe.py --model RedHatAI/gpt-oss-20b \
+python3 scripts/inftune.py --model RedHatAI/gpt-oss-20b \
     --duration 120
 
 # Stop after N requests instead of duration
-python3 scripts/inferecipe.py --model RedHatAI/gpt-oss-20b \
+python3 scripts/inftune.py --model RedHatAI/gpt-oss-20b \
     --stop-mode max_requests --max-requests 1000
 ```
 
@@ -144,15 +144,15 @@ python3 scripts/inferecipe.py --model RedHatAI/gpt-oss-20b \
 
 ```bash
 # Concurrent users (default)
-python3 scripts/inferecipe.py --model RedHatAI/gpt-oss-20b \
+python3 scripts/inftune.py --model RedHatAI/gpt-oss-20b \
     --users 100 --rate-type concurrent
 
 # Constant requests per second
-python3 scripts/inferecipe.py --model RedHatAI/gpt-oss-20b \
+python3 scripts/inftune.py --model RedHatAI/gpt-oss-20b \
     --users 50 --rate-type constant
 
 # Poisson-distributed arrivals
-python3 scripts/inferecipe.py --model RedHatAI/gpt-oss-20b \
+python3 scripts/inftune.py --model RedHatAI/gpt-oss-20b \
     --users 50 --rate-type poisson
 ```
 
@@ -160,13 +160,13 @@ python3 scripts/inferecipe.py --model RedHatAI/gpt-oss-20b \
 
 ```bash
 # HuggingFace dataset
-python3 scripts/inferecipe.py --model RedHatAI/gpt-oss-20b \
+python3 scripts/inftune.py --model RedHatAI/gpt-oss-20b \
     --workload-mode dataset \
     --dataset openai/gsm8k \
     --dataset-column question
 
 # Local JSONL file
-python3 scripts/inferecipe.py --model RedHatAI/gpt-oss-20b \
+python3 scripts/inftune.py --model RedHatAI/gpt-oss-20b \
     --workload-mode dataset \
     --dataset /mnt/storage/my-prompts.jsonl \
     --dataset-column prompt \
@@ -177,7 +177,7 @@ python3 scripts/inferecipe.py --model RedHatAI/gpt-oss-20b \
 
 ```bash
 # 3-turn conversation simulation
-python3 scripts/inferecipe.py --model RedHatAI/gpt-oss-20b \
+python3 scripts/inftune.py --model RedHatAI/gpt-oss-20b \
     --turns 3 --isl 2000 --osl 200
 ```
 
@@ -185,30 +185,30 @@ python3 scripts/inferecipe.py --model RedHatAI/gpt-oss-20b \
 
 ```bash
 # Custom vLLM image
-python3 scripts/inferecipe.py --model RedHatAI/gpt-oss-20b \
+python3 scripts/inftune.py --model RedHatAI/gpt-oss-20b \
     --image ghcr.io/llm-d/llm-d-cuda:v0.6.0
 
 # Different namespace and PVC
-python3 scripts/inferecipe.py --model RedHatAI/gpt-oss-20b \
+python3 scripts/inftune.py --model RedHatAI/gpt-oss-20b \
     --namespace my-namespace --pvc my-model-cache
 
 # Pin to specific nodes
-python3 scripts/inferecipe.py --model RedHatAI/gpt-oss-20b \
+python3 scripts/inftune.py --model RedHatAI/gpt-oss-20b \
     --nodes worker-gpu-01,worker-gpu-02
 
 # Gated model with HuggingFace token
-python3 scripts/inferecipe.py --model meta-llama/Llama-3-70b \
+python3 scripts/inftune.py --model meta-llama/Llama-3-70b \
     --hf-token hf_xxxxxxxxxxxxx
 # Or set HF_TOKEN environment variable
 export HF_TOKEN=hf_xxxxxxxxxxxxx
-python3 scripts/inferecipe.py --model meta-llama/Llama-3-70b
+python3 scripts/inftune.py --model meta-llama/Llama-3-70b
 ```
 
 ### Advanced vLLM Settings
 
 ```bash
 # Override engine parameters
-python3 scripts/inferecipe.py --model RedHatAI/gpt-oss-20b \
+python3 scripts/inftune.py --model RedHatAI/gpt-oss-20b \
     --max-model-len 16384 \
     --gpu-mem-util 0.92 \
     --block-size 256 \
@@ -216,15 +216,15 @@ python3 scripts/inferecipe.py --model RedHatAI/gpt-oss-20b \
     --kv-cache-dtype fp8
 
 # Enable debug logs for troubleshooting
-python3 scripts/inferecipe.py --model RedHatAI/gpt-oss-20b \
+python3 scripts/inftune.py --model RedHatAI/gpt-oss-20b \
     --vllm-debug-logs --nccl-debug-logs
 
 # Disable prefix caching
-python3 scripts/inferecipe.py --model RedHatAI/gpt-oss-20b \
+python3 scripts/inftune.py --model RedHatAI/gpt-oss-20b \
     --no-prefix-caching
 
 # Tool calling support
-python3 scripts/inferecipe.py --model RedHatAI/gpt-oss-20b \
+python3 scripts/inftune.py --model RedHatAI/gpt-oss-20b \
     --tool-call-parser hermes --enable-auto-tool-choice
 ```
 
@@ -232,28 +232,28 @@ python3 scripts/inferecipe.py --model RedHatAI/gpt-oss-20b \
 
 ```bash
 # Resume a stopped/failed run
-python3 scripts/inferecipe.py --resume 7
+python3 scripts/inftune.py --resume 7
 
 # Generate HTML report after optimization
-python3 scripts/inferecipe.py --model RedHatAI/gpt-oss-20b \
+python3 scripts/inftune.py --model RedHatAI/gpt-oss-20b \
     --html-report results.html
 
 # Generate report from an existing completed run
-python3 scripts/inferecipe.py --resume 7 --html-report run7-report.html
+python3 scripts/inftune.py --resume 7 --html-report run7-report.html
 
 # Run with description
-python3 scripts/inferecipe.py --model RedHatAI/gpt-oss-20b \
+python3 scripts/inftune.py --model RedHatAI/gpt-oss-20b \
     --description "Production baseline test with 80% cache hit"
 
 # Quiet mode (no progress output)
-python3 scripts/inferecipe.py --model RedHatAI/gpt-oss-20b --quiet
+python3 scripts/inftune.py --model RedHatAI/gpt-oss-20b --quiet
 ```
 
 ### Full Production Example
 
 ```bash
 # Complete production optimization run
-python3 scripts/inferecipe.py \
+python3 scripts/inftune.py \
     --model RedHatAI/gpt-oss-20b \
     --isl 9000 --isl-stdev 4000 \
     --osl 50 --osl-stdev 20 \
@@ -300,7 +300,7 @@ python3 scripts/inferecipe.py \
 | `--tp-options` | 1,2,4,8 | TP values to explore |
 | `--image` | ghcr.io/llm-d/llm-d-cuda:v0.5.1 | vLLM container image |
 | `--namespace` | llm-d | Kubernetes namespace |
-| `--pvc` | inferecipe-model-cache | PVC name |
+| `--pvc` | inftune-model-cache | PVC name |
 | `--nccl-ib-hca` | mlx | NCCL IB HCA prefix |
 | `--hf-token` | — | HuggingFace token (or HF_TOKEN env) |
 | `--nodes` | — | Comma-separated node names |
@@ -346,5 +346,5 @@ python3 scripts/inferecipe.py \
 | **Output** | | |
 | `--html-report` | — | Generate HTML report to file |
 | `--description` | — | Run description |
-| `--db` | /mnt/storage/inferecipe.db | Database path |
+| `--db` | /mnt/storage/inftune.db | Database path |
 | `--quiet` | off | Suppress progress output |

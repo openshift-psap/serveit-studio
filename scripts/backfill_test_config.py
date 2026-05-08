@@ -2,7 +2,7 @@
 """Backfill test_config_json for existing test_configurations rows."""
 import sqlite3, json, sys
 
-db_path = sys.argv[1] if len(sys.argv) > 1 else '/mnt/storage/inferecipe.db'
+db_path = sys.argv[1] if len(sys.argv) > 1 else '/mnt/storage/inftune.db'
 run_id = int(sys.argv[2]) if len(sys.argv) > 2 else 3
 
 conn = sqlite3.connect(db_path)

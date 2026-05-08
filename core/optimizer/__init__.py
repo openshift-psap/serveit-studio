@@ -1,5 +1,5 @@
 """
-InfeRecipe Optimizer — split into focused modules:
+Inftune Studio Optimizer — split into focused modules:
 
 - config.py         — dataclasses (RecipeOptimizerConfig, OptimalTP, FeasibleSplit)
 - pipeline.py       — RecipeOptimizer class, __init__, optimize(), _build_results()

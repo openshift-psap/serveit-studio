@@ -508,7 +508,7 @@ def handle_cleanup_deployment(data):
         if pods_to_cleanup:
             success = cleanup_mgr.cleanup_last_deployment(pods_to_cleanup, log_callback=cleanup_log)
         else:
-            # No specific pods, try cleaning up all InfeRecipe test deployments
+            # No specific pods, try cleaning up all Inftune Studio test deployments
             success = cleanup_mgr.cleanup_all_test_deployments(log_callback=cleanup_log)
 
         if success:
@@ -1227,7 +1227,7 @@ def handle_generate_test_plan(data):
             log_to_ui(f'   GPU Memory Utilization: {utilization:.1f}%', 'info')
             log_to_ui('', 'info')
             log_to_ui('🔹 OPTIMIZATION STRATEGY', 'info')
-            log_to_ui('   InfeRecipe will now test multiple configurations:', 'info')
+            log_to_ui('   Inftune Studio will now test multiple configurations:', 'info')
             log_to_ui('   • Different GPU counts (scaling up from minimum)', 'info')
             log_to_ui('   • Different architectures (Aggregated, EP, PD)', 'info')
             log_to_ui('   • Different pod ratios (prefill/decode balance)', 'info')
@@ -1614,10 +1614,10 @@ def handle_setup_storage(data):
             return
 
         # Create new PVC and download model
-        pvc_name = 'inferecipe-model-cache'
+        pvc_name = 'inftune-model-cache'
         timestamp = datetime.now().strftime('%Y%m%d-%H%M%S')
-        job_name = f'inferecipe-model-download-{timestamp}'
-        test_id = f'inferecipe-setup-{timestamp}'
+        job_name = f'inftune-model-download-{timestamp}'
+        test_id = f'inftune-setup-{timestamp}'
 
         # Initialize TemplateManager
         template_mgr = TemplateManager()
@@ -1819,7 +1819,7 @@ def handle_compress_database():
             return
 
         total_size = os.path.getsize(DB_PATH)
-        compressed_path = '/tmp/inferecipe-optimizer.db.gz'
+        compressed_path = '/tmp/inftune-optimizer.db.gz'
 
         emit('compression_progress', {'percent': 0, 'status': 'Compressing...',
              'original_size': total_size})
@@ -1860,10 +1860,10 @@ def download_database():
     try:
         from flask import send_file, after_this_request
 
-        instance_name = os.environ.get('INSTANCE_NAME', 'inferecipe')
+        instance_name = os.environ.get('INSTANCE_NAME', 'inftune')
         download_filename = f'{instance_name}.db.gz'
 
-        compressed_path = '/tmp/inferecipe-optimizer.db.gz'
+        compressed_path = '/tmp/inftune-optimizer.db.gz'
         if os.path.exists(compressed_path):
             @after_this_request
             def cleanup(response):
@@ -1962,7 +1962,7 @@ def upload_database():
             ).fetchall()]
             if 'optimization_runs' not in src_tables or 'test_configurations' not in src_tables:
                 src_conn.close()
-                return jsonify({'success': False, 'error': 'Not a valid InfeRecipe database (missing required tables)'}), 400
+                return jsonify({'success': False, 'error': 'Not a valid Inftune Studio database (missing required tables)'}), 400
 
             src_runs = src_conn.execute('SELECT * FROM optimization_runs ORDER BY id').fetchall()
             if not src_runs:

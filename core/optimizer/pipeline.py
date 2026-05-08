@@ -54,7 +54,7 @@ class RecipeOptimizer(
         config: RecipeOptimizerConfig,
         log_callback: Optional[Callable[[str, str], None]] = None,
         run_id: Optional[int] = None,
-        db_path: str = '/mnt/storage/inferecipe.db',
+        db_path: str = '/mnt/storage/inftune.db',
         stop_check: Optional[Callable[[], bool]] = None
     ):
         """
@@ -565,7 +565,7 @@ class RecipeOptimizer(
         import os
 
         # Check for manual override
-        force_nad = os.getenv('INFE_RECIPE_FORCE_NAD', 'false').lower() == 'true'
+        force_nad = os.getenv('INFTUNE_FORCE_NAD', 'false').lower() == 'true'
         if force_nad:
             return 'nad'
 

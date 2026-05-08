@@ -5,7 +5,7 @@ metadata:
   namespace: {{ namespace }}
   labels:
     app: llm-d
-    component: inferecipe-test
+    component: inftune-test
     test-id: {{ test_id }}
     architecture: ep
 spec:
@@ -19,7 +19,7 @@ spec:
           llm-d.ai/inference-serving: "true"
           llm-d.ai/model: {{ model_name_label }}
           llm-d.ai/role: ep
-          llm-d.ai/guide: inferecipe-ep
+          llm-d.ai/guide: inftune-ep
           llm-d.ai/test-id: {{ test_id }}
       spec:
         serviceAccountName: llm-d-modelserver
@@ -84,7 +84,7 @@ spec:
                 fi
 
                 echo "========================================="
-                echo "InfeRecipe Test: {{ test_id }}"
+                echo "Inftune Studio Test: {{ test_id }}"
                 echo "Architecture: EP (Eager Prefill)"
                 echo "Model: {{ model_name }}"
                 echo "TP: {{ tensor_parallelism }}"
