@@ -80,7 +80,13 @@ function _shortName(name) {
     return name.substring(0, 18) + '…';
 }
 
-function scanAndRenderCluster(clusterId, container) {
+var _clusterScanCache = {};
+
+function scanAndRenderCluster(clusterId, container, forceRescan) {
+    if (!forceRescan && _clusterScanCache[clusterId]) {
+        renderClusterDiagram(container, _clusterScanCache[clusterId]);
+        return;
+    }
     container.innerHTML = '<div style="text-align:center;padding:40px;color:#999"><div style="margin-bottom:12px">🔍</div>Scanning cluster resources…</div>';
     fetch('/api/clusters/' + clusterId + '/scan', { method: 'POST' })
     .then(function(r) { return r.json(); })
@@ -89,6 +95,7 @@ function scanAndRenderCluster(clusterId, container) {
             container.innerHTML = '<div style="text-align:center;padding:40px;color:#dc2626">Scan failed: ' + data.error + '</div>';
             return;
         }
+        _clusterScanCache[clusterId] = data;
         renderClusterDiagram(container, data);
     })
     .catch(function(err) {
