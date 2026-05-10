@@ -139,8 +139,56 @@ sed -i "s|caBundle:.*|caBundle: ${CABUNDLE}|g" deploy/base/webhook-config.yaml
 
 ### Deploy Everything
 
+**Important:** Do NOT use `make deploy` by itself — it generates new certs but applies the YAML with the OLD caBundle baked into `webhook-config.yaml`. This is the exact bug you hit before. Instead, do it in the right order:
+
 ```bash
-kubectl apply -f deploy/base/ -n $NAMESPACE
+# Apply everything EXCEPT the webhook config first
+kubectl apply -f deploy/base/webhook-deployment.yaml -n $NAMESPACE
+kubectl apply -f deploy/base/reconciler-deployment.yaml -n $NAMESPACE
+kubectl apply -f deploy/base/configmap.yaml -n $NAMESPACE
+kubectl apply -f deploy/base/rbac.yaml -n $NAMESPACE
+kubectl apply -f deploy/base/service.yaml -n $NAMESPACE
+
+# Now apply the webhook config with the CORRECT caBundle
+CABUNDLE=$(cat certs/tls.crt | base64 | tr -d '\n')
+sed "s|caBundle:.*|caBundle: ${CABUNDLE}|g" deploy/base/webhook-config.yaml | kubectl apply -f -
+```
+
+Or as a single all-in-one script you can save and re-run:
+
+```bash
+#!/bin/bash
+set -e
+NAMESPACE=dra-webhook-system
+
+# Create namespace
+kubectl create namespace $NAMESPACE --dry-run=client -o yaml | kubectl apply -f -
+
+# Generate cert
+mkdir -p certs
+openssl req -x509 -newkey rsa:4096 \
+  -keyout certs/tls.key -out certs/tls.crt \
+  -days 365 -nodes \
+  -subj "/CN=dra-gpu-nic-webhook.${NAMESPACE}.svc" \
+  -addext "subjectAltName=DNS:dra-gpu-nic-webhook.${NAMESPACE}.svc,DNS:dra-gpu-nic-webhook.${NAMESPACE}.svc.cluster.local"
+
+# Create TLS secret
+kubectl create secret tls dra-gpu-nic-webhook-tls \
+  --cert=certs/tls.crt --key=certs/tls.key \
+  -n $NAMESPACE --dry-run=client -o yaml | kubectl apply -f -
+
+# Apply all manifests (except webhook-config)
+for f in deploy/base/*.yaml; do
+  [[ "$f" == *webhook-config* ]] && continue
+  kubectl apply -f "$f" -n $NAMESPACE 2>/dev/null || kubectl apply -f "$f" 2>/dev/null
+done
+
+# Apply webhook-config with correct caBundle injected
+CABUNDLE=$(cat certs/tls.crt | base64 | tr -d '\n')
+sed "s|caBundle:.*|caBundle: ${CABUNDLE}|g" deploy/base/webhook-config.yaml | kubectl apply -f -
+
+echo "Done! Webhook deployed with matching TLS."
+kubectl get pods -n $NAMESPACE
 ```
 
 ### Verify the Webhook Is Running
