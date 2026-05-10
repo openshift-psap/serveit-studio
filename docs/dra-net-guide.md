@@ -1,41 +1,92 @@
-# DRA-NET Setup Guide: GPU + RDMA NIC Pairing with PCIe Affinity
+# DRA-NET Guide: GPU + RDMA NIC Pairing with PCIe Affinity
 
-This guide explains how to set up DRA-NET (Dynamic Resource Allocation for Networking) on a Kubernetes cluster to pair GPUs with their closest RDMA NIC using PCIe topology constraints.
+Complete guide to deploying and using DRA-NET for GPU+NIC PCIe-aware allocation on Kubernetes.
 
-## What DRA-NET Does
+---
 
-When a GPU communicates over the network (e.g., NCCL AllReduce between nodes), the data travels from GPU → PCIe bus → NIC → network. If the GPU and NIC are on different PCIe root complexes, the data must cross the CPU, adding latency. DRA-NET ensures each GPU is paired with the NIC on the same PCIe root complex, giving the shortest possible path.
+## What Is DRA-NET?
 
-Without DRA-NET, the kernel or container runtime picks NICs arbitrarily — GPU 0 might use a NIC that's physically closest to GPU 7, wasting PCIe bandwidth.
+When GPUs communicate across nodes (e.g., NCCL AllReduce during distributed training), data flows from GPU → PCIe bus → NIC → network. If a GPU and NIC are on different PCIe root complexes, the data crosses the CPU socket, adding latency and reducing bandwidth.
+
+DRA-NET solves this by using Kubernetes Dynamic Resource Allocation (DRA) to pair each GPU with the RDMA NIC on the same PCIe root complex. A mutating admission webhook intercepts pod creation and automatically generates the correct ResourceClaimTemplates with PCIe affinity constraints.
+
+**Without DRA-NET:** The container runtime picks NICs arbitrarily — GPU 0 might get a NIC closest to GPU 7.
+
+**With DRA-NET:** Each GPU is guaranteed the physically closest RDMA NIC, giving the shortest PCIe path for GPUDirect RDMA transfers.
+
+---
+
+## Architecture
+
+```
+Pod requests: dra.llm-d.io/gpu-nic-pair: "8"
+         ↓
+Admission Webhook intercepts
+         ↓
+Webhook creates ResourceClaimTemplate with 8 GPU+NIC pairs
+         ↓
+PCIe affinity constraints ensure each pair shares the same PCIe root
+         ↓
+Scheduler places pod on node where all pairs can be satisfied
+         ↓
+DRA drivers inject 8 GPUs + 8 RDMA NICs into the pod
+         ↓
+NCCL auto-discovers injected interfaces (net0-net7)
+```
+
+Components:
+- **NVIDIA DRA GPU Driver** — advertises GPUs as DRA devices with PCIe topology
+- **DRA-NET Driver** — advertises network interfaces as DRA devices with RDMA capability
+- **DRA GPU-NIC Admission Webhook** — translates simple resource requests into full DRA claims
+- **Reconciler** — cleans up orphaned ResourceClaimTemplates
+
+---
 
 ## Prerequisites
 
-- Kubernetes 1.31+ (DRA v1 API)
-- NVIDIA DRA driver installed (provides `gpu.nvidia.com` device class)
-- DRA-NET driver installed (provides `dra.net` device class)
+- Kubernetes 1.31+ with DRA enabled
+- NVIDIA DRA GPU driver installed (`gpu.nvidia.com` device class)
+- DRA-NET driver installed (`dranet` device class)
 - Nodes with RDMA-capable NICs (InfiniBand or RoCE)
-- GPUs and NICs must expose `resource.kubernetes.io/pcieRoot` attribute
+- `cert-manager` or ability to generate TLS certificates
 
-## Step 1: Verify DRA Drivers Are Running
+---
 
-Check that both the GPU and network DRA drivers are installed:
+## Step 1: Install DRA Drivers
 
+### NVIDIA DRA GPU Driver
+
+The NVIDIA DRA driver exposes GPUs as DRA devices with PCIe topology attributes. Install via Helm or the NVIDIA GPU Operator.
+
+After installation, verify:
 ```bash
-kubectl get deviceclass
+kubectl get deviceclass gpu.nvidia.com
 ```
 
-Expected output:
+Expected:
 ```
-NAME                                        AGE
-dranet                                      34d
-gpu.nvidia.com                              35d
+NAME             AGE
+gpu.nvidia.com   35d
 ```
 
-If these are missing, install the NVIDIA DRA GPU driver and DRA-NET driver first.
+### DRA-NET Driver
 
-## Step 2: Verify Device Attributes
+DRA-NET exposes network interfaces as DRA devices. Install it on the cluster following the DRA-NET project documentation.
 
-Check that GPUs and NICs on your worker nodes expose PCIe root information:
+After installation, verify:
+```bash
+kubectl get deviceclass dranet
+```
+
+Expected:
+```
+NAME     AGE
+dranet   34d
+```
+
+### Verify Devices Are Advertised
+
+Check that GPUs and RDMA NICs appear in ResourceSlices with PCIe root attributes:
 
 ```bash
 kubectl get resourceslice -o json | python3 -c "
@@ -55,86 +106,362 @@ for item in data.get('items', []):
 "
 ```
 
-Expected output (showing GPU+NIC pairs sharing PCIe roots):
+Expected output showing GPU+NIC pairs sharing PCIe roots:
 ```
 worker-3-5g8cv  gpu.nvidia.com        gpu-0                      pcie=pci0000:e6      rdma=False  if=
 worker-3-5g8cv  gpu.nvidia.com        gpu-1                      pcie=pci0000:dc      rdma=False  if=
-worker-3-5g8cv  gpu.nvidia.com        gpu-2                      pcie=pci0000:d2      rdma=False  if=
-worker-3-5g8cv  gpu.nvidia.com        gpu-3                      pcie=pci0000:c8      rdma=False  if=
-worker-3-5g8cv  gpu.nvidia.com        gpu-4                      pcie=pci0000:be      rdma=False  if=
-worker-3-5g8cv  gpu.nvidia.com        gpu-5                      pcie=pci0000:b4      rdma=False  if=
-worker-3-5g8cv  gpu.nvidia.com        gpu-6                      pcie=pci0000:aa      rdma=False  if=
-worker-3-5g8cv  gpu.nvidia.com        gpu-7                      pcie=pci0000:a0      rdma=False  if=
 worker-3-5g8cv  dra.net               pci-0000-e9-00-0           pcie=pci0000:e6      rdma=True   if=enp233s0
 worker-3-5g8cv  dra.net               pci-0000-df-00-0           pcie=pci0000:dc      rdma=True   if=enp223s0
-worker-3-5g8cv  dra.net               pci-0000-d5-00-0           pcie=pci0000:d2      rdma=True   if=enp213s0
-worker-3-5g8cv  dra.net               pci-0000-cb-00-0           pcie=pci0000:c8      rdma=True   if=enp203s0
-worker-3-5g8cv  dra.net               pci-0000-c1-00-0           pcie=pci0000:be      rdma=True   if=enp193s0
-worker-3-5g8cv  dra.net               pci-0000-b7-00-0           pcie=pci0000:b4      rdma=True   if=enp183s0
-worker-3-5g8cv  dra.net               pci-0000-ad-00-0           pcie=pci0000:aa      rdma=True   if=enp173s0
-worker-3-5g8cv  dra.net               pci-0000-a3-00-0           pcie=pci0000:a0      rdma=True   if=enp163s0
 ```
 
-Notice: gpu-0 and pci-0000-e9-00-0 both have `pcie=pci0000:e6` — they share the same PCIe root complex. This is the pair that DRA-NET will enforce.
+Notice: `gpu-0` and `pci-0000-e9-00-0` share `pcie=pci0000:e6` — they are on the same PCIe root.
 
-## Step 3: Create the DeviceClasses (if not already present)
+---
 
-### GPU DeviceClass
+## Step 2: Deploy the Admission Webhook
 
-```yaml
-apiVersion: resource.k8s.io/v1
-kind: DeviceClass
-metadata:
-  name: gpu.nvidia.com
-spec:
-  selectors:
-  - cel:
-      expression: >-
-        device.driver == 'gpu.nvidia.com' &&
-        device.attributes['gpu.nvidia.com'].type == 'gpu'
-```
+The webhook is available at: https://github.com/openshift-psap/dra-rail-admission-webhook
 
-This selects only GPU devices from the NVIDIA DRA driver (excluding MIG slices, compute domains, etc.).
+### Clone and Build
 
-### DRA-NET DeviceClass
-
-```yaml
-apiVersion: resource.k8s.io/v1
-kind: DeviceClass
-metadata:
-  name: dranet
-spec:
-  selectors:
-  - cel:
-      expression: device.driver == "dra.net"
-```
-
-This selects all network devices managed by the DRA-NET driver.
-
-Apply both:
 ```bash
-kubectl apply -f gpu-deviceclass.yaml
-kubectl apply -f dranet-deviceclass.yaml
+git clone https://github.com/openshift-psap/dra-rail-admission-webhook.git
+cd dra-rail-admission-webhook
+make build
 ```
 
-## Step 4: Create a ResourceClaimTemplate
+### Deploy
 
-The ResourceClaimTemplate defines what resources a pod needs. For 8 GPUs with 8 paired RDMA NICs:
+This generates TLS certificates and deploys all components:
+
+```bash
+make deploy NAMESPACE=dra-webhook-system
+```
+
+This creates:
+- TLS certificates (self-signed CA)
+- MutatingWebhookConfiguration with `/mutate` and `/mutate-ext` endpoints
+- Webhook deployment
+- Reconciler deployment (cleans up orphaned ResourceClaimTemplates)
+- ConfigMap with network configuration
+- RBAC (ClusterRole, ClusterRoleBinding, ServiceAccount)
+
+### Verify Deployment
+
+```bash
+kubectl get pods -n dra-webhook-system
+```
+
+Expected:
+```
+NAME                                    READY   STATUS    RESTARTS   AGE
+dra-gpu-nic-webhook-xxxxx               1/1     Running   0          5m
+dra-gpu-nic-reconciler-xxxxx            1/1     Running   0          5m
+```
+
+---
+
+## Step 3: Configure the Webhook
+
+The webhook reads its configuration from a ConfigMap at startup. Edit it to match your cluster's network topology.
+
+### Ethernet / RoCE Configuration
+
+For clusters with RoCE (RDMA over Converged Ethernet) NICs:
+
+```yaml
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: dra-gpu-nic-webhook-config
+  namespace: dra-webhook-system
+data:
+  config.yaml: |
+    # Device class names (must match what DRA drivers advertise)
+    gpuDeviceClassName: gpu.nvidia.com
+    nicDeviceClassName: dranet
+
+    # NUMA topology limits
+    maxPairsPerNUMA: 4          # Max GPU+NIC pairs per NUMA zone
+    maxPairsPerNode: 8          # Max GPU+NIC pairs per node (typically = GPUs per node)
+
+    # NIC configuration
+    nicConfig:
+      mtu: 9000                 # Jumbo frames for RDMA performance
+      rdmaRequired: true        # Only select RDMA-capable NICs
+      interfacePrefix: "net"    # Interfaces appear as net0, net1, ... in the pod
+      startingTableId: 100      # Policy routing table IDs start here
+      crossRailCIDR: "10.0.0.0/13"  # Supernet covering all rails
+
+      # Rails — one entry per NIC port (8 rails for 8-GPU node)
+      # Each rail is a separate network subnet for multi-rail RDMA
+      rails:
+        - subnet: "10.0.0.0/16"
+          gateway: "10.0.0.1"
+          ipv4Prefix: "10.0."
+        - subnet: "10.1.0.0/16"
+          gateway: "10.1.0.1"
+          ipv4Prefix: "10.1."
+        - subnet: "10.2.0.0/16"
+          gateway: "10.2.0.1"
+          ipv4Prefix: "10.2."
+        - subnet: "10.3.0.0/16"
+          gateway: "10.3.0.1"
+          ipv4Prefix: "10.3."
+        - subnet: "10.4.0.0/16"
+          gateway: "10.4.0.1"
+          ipv4Prefix: "10.4."
+        - subnet: "10.5.0.0/16"
+          gateway: "10.5.0.1"
+          ipv4Prefix: "10.5."
+        - subnet: "10.6.0.0/16"
+          gateway: "10.6.0.1"
+          ipv4Prefix: "10.6."
+        - subnet: "10.7.0.0/16"
+          gateway: "10.7.0.1"
+          ipv4Prefix: "10.7."
+
+    # Optional: pre-flight check (adds admission latency but gives
+    # immediate denial instead of pods stuck in Pending)
+    preflightCheck: false
+
+  reconciler.yaml: |
+    interval: "5m"
+    autoReap: false
+    gracePeriod: "10m"
+    statePath: "/data/reconciler-state.json"
+```
+
+### InfiniBand Configuration
+
+For clusters with InfiniBand NICs, use `ibRails` instead of `rails`:
+
+```yaml
+    nicConfig:
+      mtu: 2044                   # IPoIB MTU
+      rdmaRequired: true
+      ibRails:                    # GPU+NIC PCIe address pairs
+        - gpu: "0001:00:00.0"    # rail 0
+          nic: "0101:00:00.0"
+        - gpu: "0002:00:00.0"    # rail 1
+          nic: "0102:00:00.0"
+        # ... one entry per GPU-NIC pair
+```
+
+Find your cluster's PCIe addresses:
+```bash
+# GPU PCIe bus IDs
+kubectl get resourceslice -o json | jq -r '
+  .items[] |
+  select(.spec.driver=="gpu.nvidia.com") |
+  .spec.devices[] |
+  .attributes["resource.kubernetes.io/pciBusID"].string'
+
+# NIC PCI addresses
+kubectl get resourceslice -o json | jq -r '
+  .items[] |
+  select(.spec.driver=="dra.net") |
+  .spec.devices[] |
+  select(.attributes["dra.net/rdma"].bool==true) |
+  .attributes["dra.net/pciAddress"].string'
+```
+
+### Kustomize Overlays
+
+For cluster-specific configuration, use a kustomize overlay:
+
+```text
+deploy/
+  base/                      # Default manifests
+  overlays/
+    my-cluster/
+      kustomization.yaml
+      configmap-patch.yaml   # Your cluster's rail config
+```
+
+Deploy with:
+```bash
+kubectl apply -k deploy/overlays/my-cluster/
+```
+
+### Restart After Config Changes
+
+The webhook loads config at startup only. After editing the ConfigMap:
+
+```bash
+kubectl rollout restart deployment/dra-gpu-nic-webhook -n dra-webhook-system
+```
+
+---
+
+## Step 4: Enable Namespaces
+
+The webhook only intercepts pods in labeled namespaces. Label each namespace that should use GPU+NIC pairing:
+
+```bash
+kubectl label namespace my-namespace dra.llm-d.io/webhook-enabled=true
+```
+
+Without this label, pods in the namespace will NOT get DRA-NET GPU+NIC pairing.
+
+---
+
+## Step 5: NRI Plugin Timeout (Important)
+
+When using DRA-NET with multiple RDMA NICs per pod, increase the CRI-O NRI plugin timeout on every GPU worker node. Without this, CRI-O disconnects the DRA-NET NRI plugin during multi-NIC setup, causing crashes.
+
+Create on every GPU worker node:
+
+```bash
+cat > /etc/crio/crio.conf.d/10-nri-timeout.conf << 'EOF'
+[crio.nri]
+enable_nri = true
+nri_plugin_request_timeout = "60s"
+nri_plugin_registration_timeout = "10s"
+EOF
+```
+
+Restart CRI-O:
+```bash
+systemctl restart crio
+```
+
+---
+
+## Step 6: Request GPU+NIC Pairs in Your Pods
+
+### Simple Pod
+
+Request 8 GPU+NIC pairs — the webhook handles everything:
+
+```yaml
+apiVersion: v1
+kind: Pod
+metadata:
+  name: inference-worker
+  namespace: my-namespace     # must be labeled with dra.llm-d.io/webhook-enabled=true
+spec:
+  containers:
+  - name: model
+    image: vllm/vllm-openai:latest
+    command: ["python3", "-m", "vllm.entrypoints.openai.api_server",
+              "--model=meta-llama/Llama-3.1-70B-Instruct",
+              "--tensor-parallel-size=8"]
+    env:
+    - name: NCCL_SOCKET_IFNAME
+      value: "net0"
+    - name: GLOO_SOCKET_IFNAME
+      value: "net0"
+    resources:
+      requests:
+        cpu: "16"
+        memory: "128Gi"
+        dra.llm-d.io/gpu-nic-pair: "8"    # <-- This is the magic line
+      limits:
+        cpu: "32"
+        memory: "256Gi"
+        dra.llm-d.io/gpu-nic-pair: "8"
+    ports:
+    - containerPort: 8000
+```
+
+That's it. The `dra.llm-d.io/gpu-nic-pair: "8"` resource request is a synthetic resource. The webhook:
+
+1. Intercepts the pod at admission time
+2. Creates a ResourceClaimTemplate with 8 GPU+NIC pairs and PCIe constraints
+3. Injects `resourceClaims` into the pod spec
+4. Strips the synthetic resource from `requests`/`limits`
+5. Pins the pod to a node where all 8 pairs can be satisfied
+6. Annotates the pod with `dra.llm-d.io/mutated: "true"`
+
+### Deployment
+
+```yaml
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: inference
+  namespace: my-namespace
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: inference
+  template:
+    metadata:
+      labels:
+        app: inference
+    spec:
+      containers:
+      - name: model
+        image: vllm/vllm-openai:latest
+        resources:
+          requests:
+            cpu: "16"
+            memory: "128Gi"
+            dra.llm-d.io/gpu-nic-pair: "4"    # 4 GPUs + 4 NICs per replica
+          limits:
+            cpu: "32"
+            memory: "256Gi"
+            dra.llm-d.io/gpu-nic-pair: "4"
+```
+
+### Valid GPU+NIC Pair Counts
+
+| Count | Behavior | Notes |
+|-------|----------|-------|
+| 1-4 | Single NUMA zone | All pairs on one NUMA zone (PCIe + NUMA affinity) |
+| 5-7 | Rejected | Exceeds single NUMA capacity. Add annotation to allow (see below) |
+| 8 | Cross-NUMA | Full node, both NUMA zones used automatically |
+| >8 | Rejected | Exceeds maximum per node |
+
+For counts 5-7, add this annotation to allow cross-NUMA allocation:
+```yaml
+metadata:
+  annotations:
+    dra.llm-d.io/allow-cross-numa: "true"
+```
+
+---
+
+## Step 7: Verify GPU+NIC Pairing
+
+Once the pod is running:
+
+```bash
+kubectl exec -it inference-worker -- bash
+
+# Check GPUs
+nvidia-smi -L
+
+# Check injected RDMA interfaces
+ip link show | grep net
+
+# Check RDMA devices
+rdma link show
+
+# Check GPU-NIC PCIe topology
+nvidia-smi topo -m
+```
+
+Expected: 8 GPUs visible, 8 `netN` interfaces, each NIC on the same PCIe root as its GPU.
+
+---
+
+## What the Webhook Creates (Behind the Scenes)
+
+When you request `dra.llm-d.io/gpu-nic-pair: "8"`, the webhook generates a ResourceClaimTemplate like this:
 
 ```yaml
 apiVersion: resource.k8s.io/v1
 kind: ResourceClaimTemplate
 metadata:
-  name: 8gpu-8nic
-  namespace: my-namespace    # change to your namespace
+  name: <auto-generated>
+  namespace: my-namespace
 spec:
   spec:
     devices:
-      #
-      # CONSTRAINTS: Each GPU must be paired with a NIC on the same PCIe root.
-      # The scheduler will only place the pod on a node where all 8 pairs
-      # can be satisfied simultaneously.
-      #
+      # PCIe affinity constraints — each GPU+NIC pair must share the same PCIe root
       constraints:
       - matchAttribute: resource.kubernetes.io/pcieRoot
         requests: ["gpu0", "nic0"]
@@ -153,13 +480,8 @@ spec:
       - matchAttribute: resource.kubernetes.io/pcieRoot
         requests: ["gpu7", "nic7"]
 
-      #
-      # REQUESTS: 8 GPUs and 8 RDMA NICs.
-      # Each request gets a name (gpu0, nic0, etc.) that the constraints
-      # reference above.
-      #
+      # Device requests
       requests:
-      # --- Pair 0 ---
       - name: gpu0
         exactly:
           count: 1
@@ -171,275 +493,45 @@ spec:
           selectors:
           - cel:
               expression: 'device.attributes["dra.net"].rdma == true'
-
-      # --- Pair 1 ---
-      - name: gpu1
-        exactly:
-          count: 1
-          deviceClassName: gpu.nvidia.com
-      - name: nic1
-        exactly:
-          count: 1
-          deviceClassName: dranet
-          selectors:
-          - cel:
-              expression: 'device.attributes["dra.net"].rdma == true'
-
-      # --- Pair 2 ---
-      - name: gpu2
-        exactly:
-          count: 1
-          deviceClassName: gpu.nvidia.com
-      - name: nic2
-        exactly:
-          count: 1
-          deviceClassName: dranet
-          selectors:
-          - cel:
-              expression: 'device.attributes["dra.net"].rdma == true'
-
-      # --- Pair 3 ---
-      - name: gpu3
-        exactly:
-          count: 1
-          deviceClassName: gpu.nvidia.com
-      - name: nic3
-        exactly:
-          count: 1
-          deviceClassName: dranet
-          selectors:
-          - cel:
-              expression: 'device.attributes["dra.net"].rdma == true'
-
-      # --- Pair 4 ---
-      - name: gpu4
-        exactly:
-          count: 1
-          deviceClassName: gpu.nvidia.com
-      - name: nic4
-        exactly:
-          count: 1
-          deviceClassName: dranet
-          selectors:
-          - cel:
-              expression: 'device.attributes["dra.net"].rdma == true'
-
-      # --- Pair 5 ---
-      - name: gpu5
-        exactly:
-          count: 1
-          deviceClassName: gpu.nvidia.com
-      - name: nic5
-        exactly:
-          count: 1
-          deviceClassName: dranet
-          selectors:
-          - cel:
-              expression: 'device.attributes["dra.net"].rdma == true'
-
-      # --- Pair 6 ---
-      - name: gpu6
-        exactly:
-          count: 1
-          deviceClassName: gpu.nvidia.com
-      - name: nic6
-        exactly:
-          count: 1
-          deviceClassName: dranet
-          selectors:
-          - cel:
-              expression: 'device.attributes["dra.net"].rdma == true'
-
-      # --- Pair 7 ---
-      - name: gpu7
-        exactly:
-          count: 1
-          deviceClassName: gpu.nvidia.com
-      - name: nic7
-        exactly:
-          count: 1
-          deviceClassName: dranet
-          selectors:
-          - cel:
-              expression: 'device.attributes["dra.net"].rdma == true'
+      # ... repeated for gpu1/nic1 through gpu7/nic7
 ```
 
-Apply it:
-```bash
-kubectl apply -f resourceclaimtemplate.yaml
-```
+The `matchAttribute: resource.kubernetes.io/pcieRoot` constraint tells the scheduler: "gpu0 and nic0 must be allocated from devices that have the same `pcieRoot` value." This guarantees the shortest PCIe path between each GPU and its NIC.
 
-### How the constraints work
+---
 
-Each constraint block says: "the GPU request and the NIC request in this pair MUST be allocated from devices that have the same `resource.kubernetes.io/pcieRoot` attribute value."
+## Extended Resource Interception (Optional)
 
-For example:
-```yaml
-- matchAttribute: resource.kubernetes.io/pcieRoot
-  requests: ["gpu0", "nic0"]
-```
-
-This tells the scheduler: "when allocating gpu0 and nic0, pick devices where `pcieRoot` matches." If gpu0 gets assigned `gpu-0` (pcieRoot=`pci0000:e6`), then nic0 MUST be a device with pcieRoot=`pci0000:e6` — which is `pci-0000-e9-00-0` (enp233s0).
-
-### How the NIC selector works
+The webhook can also intercept standard `nvidia.com/gpu` requests and convert them to DRA claims. This ensures ALL GPU allocation goes through the DRA allocator:
 
 ```yaml
-selectors:
-- cel:
-    expression: 'device.attributes["dra.net"].rdma == true'
+# In the ConfigMap
+interceptExtendedResources:
+  - resourceName: "nvidia.com/gpu"
+    deviceClassName: "gpu.nvidia.com"
 ```
 
-This CEL (Common Expression Language) filter ensures the NIC supports RDMA. Without it, the scheduler might pick a non-RDMA interface (like `br-int` or `ovn-k8s-mp0`).
+With this enabled, a pod requesting `nvidia.com/gpu: 2` gets converted to DRA claims automatically — no code changes needed. The resource is stripped and replaced with proper DRA references.
 
-## Step 5: Create a Pod Using the Claim
+Note: A pod cannot request both `dra.llm-d.io/gpu-nic-pair` and an intercepted resource — both allocate from the same GPU pool.
 
-```yaml
-apiVersion: v1
-kind: Pod
-metadata:
-  name: gpu-rdma-test
-  namespace: my-namespace
-spec:
-  restartPolicy: Never
-  containers:
-  - name: worker
-    image: nvcr.io/nvidia/pytorch:24.01-py3
-    command: ["sleep", "infinity"]
-    resources:
-      claims:
-      - name: gpu-nic-resources
-  # Reference the ResourceClaimTemplate
-  resourceClaims:
-  - name: gpu-nic-resources
-    resourceClaimTemplateName: 8gpu-8nic
-```
-
-Apply and wait for scheduling:
-```bash
-kubectl apply -f pod.yaml
-kubectl get pod gpu-rdma-test -w
-```
-
-## Step 6: Verify Inside the Pod
-
-Once the pod is running, verify the GPU+NIC pairing:
-
-```bash
-kubectl exec -it gpu-rdma-test -- bash
-
-# Check GPUs are visible
-nvidia-smi -L
-
-# Check RDMA NICs are injected
-ip link show | grep -E "net[0-9]|enp"
-
-# Check RDMA devices
-rdma link show
-
-# Verify GPU-NIC affinity via nvidia-smi topology
-nvidia-smi topo -m
-```
-
-Expected: 8 GPUs visible, 8 network interfaces injected (net0-net7), and each NIC should be on the same PCIe root as its corresponding GPU.
-
-## Scaling to Different GPU Counts
-
-### 4 GPUs + 4 NICs
-
-Use the same pattern but with 4 pairs instead of 8:
-
-```yaml
-apiVersion: resource.k8s.io/v1
-kind: ResourceClaimTemplate
-metadata:
-  name: 4gpu-4nic
-  namespace: my-namespace
-spec:
-  spec:
-    devices:
-      constraints:
-      - matchAttribute: resource.kubernetes.io/pcieRoot
-        requests: ["gpu0", "nic0"]
-      - matchAttribute: resource.kubernetes.io/pcieRoot
-        requests: ["gpu1", "nic1"]
-      - matchAttribute: resource.kubernetes.io/pcieRoot
-        requests: ["gpu2", "nic2"]
-      - matchAttribute: resource.kubernetes.io/pcieRoot
-        requests: ["gpu3", "nic3"]
-      requests:
-      - name: gpu0
-        exactly: { count: 1, deviceClassName: gpu.nvidia.com }
-      - name: nic0
-        exactly:
-          count: 1
-          deviceClassName: dranet
-          selectors:
-          - cel: { expression: 'device.attributes["dra.net"].rdma == true' }
-      - name: gpu1
-        exactly: { count: 1, deviceClassName: gpu.nvidia.com }
-      - name: nic1
-        exactly:
-          count: 1
-          deviceClassName: dranet
-          selectors:
-          - cel: { expression: 'device.attributes["dra.net"].rdma == true' }
-      - name: gpu2
-        exactly: { count: 1, deviceClassName: gpu.nvidia.com }
-      - name: nic2
-        exactly:
-          count: 1
-          deviceClassName: dranet
-          selectors:
-          - cel: { expression: 'device.attributes["dra.net"].rdma == true' }
-      - name: gpu3
-        exactly: { count: 1, deviceClassName: gpu.nvidia.com }
-      - name: nic3
-        exactly:
-          count: 1
-          deviceClassName: dranet
-          selectors:
-          - cel: { expression: 'device.attributes["dra.net"].rdma == true' }
-```
-
-### 1 GPU + 1 NIC (minimal test)
-
-```yaml
-apiVersion: resource.k8s.io/v1
-kind: ResourceClaimTemplate
-metadata:
-  name: 1gpu-1nic
-  namespace: my-namespace
-spec:
-  spec:
-    devices:
-      constraints:
-      - matchAttribute: resource.kubernetes.io/pcieRoot
-        requests: ["gpu0", "nic0"]
-      requests:
-      - name: gpu0
-        exactly: { count: 1, deviceClassName: gpu.nvidia.com }
-      - name: nic0
-        exactly:
-          count: 1
-          deviceClassName: dranet
-          selectors:
-          - cel: { expression: 'device.attributes["dra.net"].rdma == true' }
-```
+---
 
 ## Troubleshooting
 
-### Pod stuck in Pending
+### Pod Stuck in Pending
 
 ```bash
 kubectl describe pod <pod-name>
 ```
 
 Common causes:
-- **"not enough devices"**: Not enough free GPUs or RDMA NICs on any single node
-- **"constraint not satisfiable"**: The PCIe pairing can't be satisfied — some GPUs don't have a co-located RDMA NIC
-- **DeviceClass not found**: The `gpu.nvidia.com` or `dranet` DeviceClass doesn't exist
+- **"not enough devices"** — Not enough free GPUs or RDMA NICs on any node
+- **"constraint not satisfiable"** — PCIe pairing can't be satisfied
+- **Namespace not labeled** — Add `dra.llm-d.io/webhook-enabled=true`
+- **Webhook not running** — Check `kubectl get pods -n dra-webhook-system`
 
-### Check available devices per node
+### Check Available Devices
 
 ```bash
 kubectl get resourceslice -o json | python3 -c "
@@ -456,190 +548,34 @@ for item in data.get('items', []):
             per_node[node]['gpus'] += 1
         if attrs.get('dra.net/rdma', {}).get('bool', False):
             per_node[node]['rdma_nics'] += 1
-for node, counts in sorted(per_node.items()):
-    if counts['gpus'] > 0:
-        print(f'{node}: {counts[\"gpus\"]} GPUs, {counts[\"rdma_nics\"]} RDMA NICs')
+for node, c in sorted(per_node.items()):
+    if c['gpus'] > 0:
+        print(f'{node}: {c[\"gpus\"]} GPUs, {c[\"rdma_nics\"]} RDMA NICs')
 "
 ```
 
-### Verify PCIe root pairing exists
+### Webhook Logs
 
-If a GPU has no matching RDMA NIC on the same PCIe root, the constraint can never be satisfied. Use the verification script from Step 2 to confirm all GPUs have a co-located NIC.
+```bash
+kubectl logs -n dra-webhook-system deploy/dra-gpu-nic-webhook
+```
 
-## Full Pod Example with Resource Allocation
+### Verify Pod Was Mutated
 
-This is a complete working example of a pod that requests 8 GPUs with 8 paired RDMA NICs, including resource limits:
+```bash
+kubectl get pod <pod-name> -o jsonpath='{.metadata.annotations.dra\.llm-d\.io/mutated}'
+```
 
-```yaml
-apiVersion: resource.k8s.io/v1
-kind: ResourceClaimTemplate
-metadata:
-  name: vllm-8gpu-8nic
-  namespace: llm-serving
-spec:
-  spec:
-    devices:
-      constraints:
-      - matchAttribute: resource.kubernetes.io/pcieRoot
-        requests: ["gpu0", "nic0"]
-      - matchAttribute: resource.kubernetes.io/pcieRoot
-        requests: ["gpu1", "nic1"]
-      - matchAttribute: resource.kubernetes.io/pcieRoot
-        requests: ["gpu2", "nic2"]
-      - matchAttribute: resource.kubernetes.io/pcieRoot
-        requests: ["gpu3", "nic3"]
-      - matchAttribute: resource.kubernetes.io/pcieRoot
-        requests: ["gpu4", "nic4"]
-      - matchAttribute: resource.kubernetes.io/pcieRoot
-        requests: ["gpu5", "nic5"]
-      - matchAttribute: resource.kubernetes.io/pcieRoot
-        requests: ["gpu6", "nic6"]
-      - matchAttribute: resource.kubernetes.io/pcieRoot
-        requests: ["gpu7", "nic7"]
-      requests:
-      - name: gpu0
-        exactly: { count: 1, deviceClassName: gpu.nvidia.com }
-      - name: nic0
-        exactly:
-          count: 1
-          deviceClassName: dranet
-          selectors:
-          - cel: { expression: 'device.attributes["dra.net"].rdma == true' }
-      - name: gpu1
-        exactly: { count: 1, deviceClassName: gpu.nvidia.com }
-      - name: nic1
-        exactly:
-          count: 1
-          deviceClassName: dranet
-          selectors:
-          - cel: { expression: 'device.attributes["dra.net"].rdma == true' }
-      - name: gpu2
-        exactly: { count: 1, deviceClassName: gpu.nvidia.com }
-      - name: nic2
-        exactly:
-          count: 1
-          deviceClassName: dranet
-          selectors:
-          - cel: { expression: 'device.attributes["dra.net"].rdma == true' }
-      - name: gpu3
-        exactly: { count: 1, deviceClassName: gpu.nvidia.com }
-      - name: nic3
-        exactly:
-          count: 1
-          deviceClassName: dranet
-          selectors:
-          - cel: { expression: 'device.attributes["dra.net"].rdma == true' }
-      - name: gpu4
-        exactly: { count: 1, deviceClassName: gpu.nvidia.com }
-      - name: nic4
-        exactly:
-          count: 1
-          deviceClassName: dranet
-          selectors:
-          - cel: { expression: 'device.attributes["dra.net"].rdma == true' }
-      - name: gpu5
-        exactly: { count: 1, deviceClassName: gpu.nvidia.com }
-      - name: nic5
-        exactly:
-          count: 1
-          deviceClassName: dranet
-          selectors:
-          - cel: { expression: 'device.attributes["dra.net"].rdma == true' }
-      - name: gpu6
-        exactly: { count: 1, deviceClassName: gpu.nvidia.com }
-      - name: nic6
-        exactly:
-          count: 1
-          deviceClassName: dranet
-          selectors:
-          - cel: { expression: 'device.attributes["dra.net"].rdma == true' }
-      - name: gpu7
-        exactly: { count: 1, deviceClassName: gpu.nvidia.com }
-      - name: nic7
-        exactly:
-          count: 1
-          deviceClassName: dranet
-          selectors:
-          - cel: { expression: 'device.attributes["dra.net"].rdma == true' }
+Should return `true`.
+
 ---
-apiVersion: v1
-kind: Pod
-metadata:
-  name: vllm-server
-  namespace: llm-serving
-spec:
-  restartPolicy: Never
-  containers:
-  - name: vllm
-    image: vllm/vllm-openai:latest
-    command:
-    - python3
-    - -m
-    - vllm.entrypoints.openai.api_server
-    - --model=meta-llama/Llama-3.1-70B-Instruct
-    - --tensor-parallel-size=8
-    - --port=8000
-    env:
-    # NCCL will auto-detect the DRA-NET injected interfaces
-    - name: NCCL_SOCKET_IFNAME
-      value: "net0"
-    - name: GLOO_SOCKET_IFNAME
-      value: "net0"
-    ports:
-    - containerPort: 8000
-    resources:
-      claims:
-      - name: gpu-nic
-      requests:
-        cpu: "16"
-        memory: "128Gi"
-      limits:
-        cpu: "32"
-        memory: "256Gi"
-  resourceClaims:
-  - name: gpu-nic
-    resourceClaimTemplateName: vllm-8gpu-8nic
-```
-
-### What gets injected into the pod
-
-When the pod starts, the DRA drivers inject:
-
-1. **8 NVIDIA GPUs** — visible via `nvidia-smi`, CUDA device indices 0-7
-2. **8 RDMA network interfaces** — named `net0` through `net7` inside the pod
-3. **RDMA device files** — `/dev/infiniband/` devices for each NIC
-
-The pod sees:
-```
-$ ip link show | grep net
-3: net0: <BROADCAST,MULTICAST,UP> mtu 4096 ...
-4: net1: <BROADCAST,MULTICAST,UP> mtu 4096 ...
-5: net2: <BROADCAST,MULTICAST,UP> mtu 4096 ...
-6: net3: <BROADCAST,MULTICAST,UP> mtu 4096 ...
-7: net4: <BROADCAST,MULTICAST,UP> mtu 4096 ...
-8: net5: <BROADCAST,MULTICAST,UP> mtu 4096 ...
-9: net6: <BROADCAST,MULTICAST,UP> mtu 4096 ...
-10: net7: <BROADCAST,MULTICAST,UP> mtu 4096 ...
-```
-
-Each `netN` interface corresponds to the RDMA NIC paired with GPU N via PCIe affinity.
-
-### Resource allocation summary
-
-| Resource | Source | How Allocated |
-|----------|--------|--------------|
-| GPUs (8×) | `gpu.nvidia.com` DeviceClass | DRA ResourceClaim with PCIe constraint |
-| RDMA NICs (8×) | `dranet` DeviceClass | DRA ResourceClaim, filtered by `rdma == true` |
-| GPU↔NIC pairing | `resource.kubernetes.io/pcieRoot` | DRA constraint ensures same PCIe root |
-| CPU | Standard K8s resources | `requests` / `limits` in container spec |
-| Memory | Standard K8s resources | `requests` / `limits` in container spec |
 
 ## How Inftune Studio Uses DRA-NET
 
-Inftune Studio auto-detects DRA device classes on the cluster. When DRA is available and the user selects it as the network type, the optimizer:
+Inftune Studio auto-detects DRA device classes on the cluster. When DRA is available and selected as the network type, the optimizer:
 
-1. Generates a ResourceClaimTemplate with the correct number of GPU+NIC pairs based on the TP (tensor parallelism) value
-2. Sets the PCIe root constraint for each pair
-3. Filters NICs with `rdma == true` to exclude non-RDMA interfaces
-4. Deploys vLLM pods using the claim — each pod gets GPUs with their closest RDMA NICs
-5. NCCL auto-discovers the injected interfaces and uses them for inter-node communication
+1. Detects `gpu.nvidia.com` and `dranet` device classes via `kubectl get deviceclass`
+2. Sets `dra.llm-d.io/gpu-nic-pair: N` in the vLLM pod spec (where N = tensor parallelism)
+3. The admission webhook handles all ResourceClaimTemplate generation
+4. NCCL auto-discovers the injected `netN` interfaces for inter-node communication
+5. No manual ResourceClaimTemplate or constraint configuration needed
