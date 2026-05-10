@@ -16,7 +16,7 @@ When NCCL does AllReduce across nodes, data goes GPU → PCIe → NIC → networ
 
 ## What You Need Before Starting
 
-- OpenShift 4.18+ (Kubernetes 1.31+) with the DRA feature gate enabled
+- OpenShift 4.21+ (Kubernetes 1.34+) with the DRA feature gate enabled
 - NVIDIA DRA GPU driver installed on the cluster
 - DRA-NET driver installed on the cluster
 - GPU nodes with RDMA-capable NICs (InfiniBand or RoCE)
