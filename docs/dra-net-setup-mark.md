@@ -2,7 +2,7 @@
 
 Hi Mark,
 
-This doc walks you through setting up DRA-NET on a Kubernetes cluster so that each GPU gets paired with its closest RDMA NIC via PCIe affinity. By the end you'll be able to deploy pods that request `dra.llm-d.io/gpu-nic-pair: "8"` and get 8 GPUs + 8 RDMA NICs automatically paired by hardware topology.
+This doc walks you through setting up DRA-NET on a OpenShift cluster so that each GPU gets paired with its closest RDMA NIC via PCIe affinity. By the end you'll be able to deploy pods that request `dra.llm-d.io/gpu-nic-pair: "8"` and get 8 GPUs + 8 RDMA NICs automatically paired by hardware topology.
 
 I know you ran into TLS/caBundle issues before — Step 2 covers that specifically with the exact commands to fix it.
 
@@ -16,7 +16,7 @@ When NCCL does AllReduce across nodes, data goes GPU → PCIe → NIC → networ
 
 ## What You Need Before Starting
 
-- Kubernetes 1.31+ with the DRA feature gate enabled
+- OpenShift 4.18+ (Kubernetes 1.31+) with the DRA feature gate enabled
 - NVIDIA DRA GPU driver installed on the cluster
 - DRA-NET driver installed on the cluster
 - GPU nodes with RDMA-capable NICs (InfiniBand or RoCE)
@@ -29,7 +29,7 @@ When NCCL does AllReduce across nodes, data goes GPU → PCIe → NIC → networ
 Before anything else, confirm both DRA drivers are running.
 
 ```bash
-kubectl get deviceclass
+oc get deviceclass
 ```
 
 You need to see at least:
@@ -44,7 +44,7 @@ If either is missing, get the corresponding driver installed first. This guide a
 Now verify devices expose PCIe topology (this is what enables the pairing):
 
 ```bash
-kubectl get resourceslice -o json | python3 -c "
+oc get resourceslice -o json | python3 -c "
 import json, sys
 data = json.load(sys.stdin)
 for item in data.get('items', []):
@@ -96,7 +96,7 @@ This is the critical part. The certificate's CN and SAN must match the webhook s
 NAMESPACE=dra-webhook-system
 
 # Create the namespace
-kubectl create namespace $NAMESPACE --dry-run=client -o yaml | kubectl apply -f -
+oc create namespace $NAMESPACE --dry-run=client -o yaml | oc apply -f -
 
 # Generate self-signed cert with the correct service DNS name
 openssl req -x509 -newkey rsa:4096 \
@@ -109,9 +109,9 @@ openssl req -x509 -newkey rsa:4096 \
 ### Create the TLS Secret
 
 ```bash
-kubectl create secret tls dra-gpu-nic-webhook-tls \
+oc create secret tls dra-gpu-nic-webhook-tls \
   --cert=certs/tls.crt --key=certs/tls.key \
-  -n $NAMESPACE --dry-run=client -o yaml | kubectl apply -f -
+  -n $NAMESPACE --dry-run=client -o yaml | oc apply -f -
 ```
 
 ### Update the caBundle in the Webhook Config
@@ -143,15 +143,15 @@ sed -i "s|caBundle:.*|caBundle: ${CABUNDLE}|g" deploy/base/webhook-config.yaml
 
 ```bash
 # Apply everything EXCEPT the webhook config first
-kubectl apply -f deploy/base/webhook-deployment.yaml -n $NAMESPACE
-kubectl apply -f deploy/base/reconciler-deployment.yaml -n $NAMESPACE
-kubectl apply -f deploy/base/configmap.yaml -n $NAMESPACE
-kubectl apply -f deploy/base/rbac.yaml -n $NAMESPACE
-kubectl apply -f deploy/base/service.yaml -n $NAMESPACE
+oc apply -f deploy/base/webhook-deployment.yaml -n $NAMESPACE
+oc apply -f deploy/base/reconciler-deployment.yaml -n $NAMESPACE
+oc apply -f deploy/base/configmap.yaml -n $NAMESPACE
+oc apply -f deploy/base/rbac.yaml -n $NAMESPACE
+oc apply -f deploy/base/service.yaml -n $NAMESPACE
 
 # Now apply the webhook config with the CORRECT caBundle
 CABUNDLE=$(cat certs/tls.crt | base64 | tr -d '\n')
-sed "s|caBundle:.*|caBundle: ${CABUNDLE}|g" deploy/base/webhook-config.yaml | kubectl apply -f -
+sed "s|caBundle:.*|caBundle: ${CABUNDLE}|g" deploy/base/webhook-config.yaml | oc apply -f -
 ```
 
 Or as a single all-in-one script you can save and re-run:
@@ -162,7 +162,7 @@ set -e
 NAMESPACE=dra-webhook-system
 
 # Create namespace
-kubectl create namespace $NAMESPACE --dry-run=client -o yaml | kubectl apply -f -
+oc create namespace $NAMESPACE --dry-run=client -o yaml | oc apply -f -
 
 # Generate cert
 mkdir -p certs
@@ -173,28 +173,28 @@ openssl req -x509 -newkey rsa:4096 \
   -addext "subjectAltName=DNS:dra-gpu-nic-webhook.${NAMESPACE}.svc,DNS:dra-gpu-nic-webhook.${NAMESPACE}.svc.cluster.local"
 
 # Create TLS secret
-kubectl create secret tls dra-gpu-nic-webhook-tls \
+oc create secret tls dra-gpu-nic-webhook-tls \
   --cert=certs/tls.crt --key=certs/tls.key \
-  -n $NAMESPACE --dry-run=client -o yaml | kubectl apply -f -
+  -n $NAMESPACE --dry-run=client -o yaml | oc apply -f -
 
 # Apply all manifests (except webhook-config)
 for f in deploy/base/*.yaml; do
   [[ "$f" == *webhook-config* ]] && continue
-  kubectl apply -f "$f" -n $NAMESPACE 2>/dev/null || kubectl apply -f "$f" 2>/dev/null
+  oc apply -f "$f" -n $NAMESPACE 2>/dev/null || oc apply -f "$f" 2>/dev/null
 done
 
 # Apply webhook-config with correct caBundle injected
 CABUNDLE=$(cat certs/tls.crt | base64 | tr -d '\n')
-sed "s|caBundle:.*|caBundle: ${CABUNDLE}|g" deploy/base/webhook-config.yaml | kubectl apply -f -
+sed "s|caBundle:.*|caBundle: ${CABUNDLE}|g" deploy/base/webhook-config.yaml | oc apply -f -
 
 echo "Done! Webhook deployed with matching TLS."
-kubectl get pods -n $NAMESPACE
+oc get pods -n $NAMESPACE
 ```
 
 ### Verify the Webhook Is Running
 
 ```bash
-kubectl get pods -n dra-webhook-system
+oc get pods -n dra-webhook-system
 ```
 
 Expected:
@@ -209,14 +209,14 @@ dra-gpu-nic-reconciler-xxxxx              1/1     Running   0          1m
 If the webhook pod is running but pods aren't getting mutated, check the webhook logs:
 
 ```bash
-kubectl logs -n dra-webhook-system deploy/dra-gpu-nic-webhook --tail=20
+oc logs -n dra-webhook-system deploy/dra-gpu-nic-webhook --tail=20
 ```
 
 And verify the API server can reach the webhook:
 
 ```bash
 # This should NOT show any TLS errors
-kubectl get mutatingwebhookconfiguration dra-gpu-nic-webhook -o yaml | grep -A2 failurePolicy
+oc get mutatingwebhookconfiguration dra-gpu-nic-webhook -o yaml | grep -A2 failurePolicy
 ```
 
 If you see `x509: certificate signed by unknown authority` in the API server logs, the caBundle doesn't match the cert. Re-run the caBundle update step above.
@@ -234,19 +234,19 @@ openssl req -x509 -newkey rsa:4096 \
   -addext "subjectAltName=DNS:dra-gpu-nic-webhook.dra-webhook-system.svc,DNS:dra-gpu-nic-webhook.dra-webhook-system.svc.cluster.local"
 
 # Update the secret
-kubectl create secret tls dra-gpu-nic-webhook-tls \
+oc create secret tls dra-gpu-nic-webhook-tls \
   --cert=certs/tls.crt --key=certs/tls.key \
-  -n dra-webhook-system --dry-run=client -o yaml | kubectl apply -f -
+  -n dra-webhook-system --dry-run=client -o yaml | oc apply -f -
 
 # Update caBundle
 CABUNDLE=$(cat certs/tls.crt | base64 | tr -d '\n')
-kubectl patch mutatingwebhookconfiguration dra-gpu-nic-webhook --type=json -p "[
+oc patch mutatingwebhookconfiguration dra-gpu-nic-webhook --type=json -p "[
   {\"op\":\"replace\",\"path\":\"/webhooks/0/clientConfig/caBundle\",\"value\":\"$CABUNDLE\"},
   {\"op\":\"replace\",\"path\":\"/webhooks/1/clientConfig/caBundle\",\"value\":\"$CABUNDLE\"}
 ]"
 
 # Restart the webhook to pick up the new cert
-kubectl rollout restart deployment/dra-gpu-nic-webhook -n dra-webhook-system
+oc rollout restart deployment/dra-gpu-nic-webhook -n dra-webhook-system
 ```
 
 ---
@@ -256,7 +256,7 @@ kubectl rollout restart deployment/dra-gpu-nic-webhook -n dra-webhook-system
 Edit the ConfigMap to match your cluster's network. The webhook reads this at startup.
 
 ```bash
-kubectl edit configmap dra-gpu-nic-webhook-config -n dra-webhook-system
+oc edit configmap dra-gpu-nic-webhook-config -n dra-webhook-system
 ```
 
 ### For RoCE / Ethernet Clusters
@@ -333,13 +333,13 @@ Replace `rails` with `ibRails`:
 To find your PCIe addresses:
 ```bash
 # GPU PCIe bus IDs
-kubectl get resourceslice -o json | jq -r '
+oc get resourceslice -o json | jq -r '
   .items[] | select(.spec.driver=="gpu.nvidia.com") |
   .spec.devices[] |
   .attributes["resource.kubernetes.io/pciBusID"].string'
 
 # NIC PCI addresses
-kubectl get resourceslice -o json | jq -r '
+oc get resourceslice -o json | jq -r '
   .items[] | select(.spec.driver=="dra.net") |
   .spec.devices[] |
   select(.attributes["dra.net/rdma"].bool==true) |
@@ -351,7 +351,7 @@ kubectl get resourceslice -o json | jq -r '
 Restart the webhook — it only reads the ConfigMap at startup:
 
 ```bash
-kubectl rollout restart deployment/dra-gpu-nic-webhook -n dra-webhook-system
+oc rollout restart deployment/dra-gpu-nic-webhook -n dra-webhook-system
 ```
 
 ---
@@ -382,7 +382,7 @@ Why: CRI-O's default NRI timeout is 2 seconds. Setting up 8 RDMA NICs takes long
 The webhook only operates on namespaces you explicitly enable:
 
 ```bash
-kubectl label namespace my-namespace dra.llm-d.io/webhook-enabled=true
+oc label namespace my-namespace dra.llm-d.io/webhook-enabled=true
 ```
 
 If you skip this, pods won't get mutated and will fail because `dra.llm-d.io/gpu-nic-pair` isn't a real Kubernetes resource.
@@ -482,11 +482,11 @@ spec:
 
 ```bash
 # Check pod was mutated
-kubectl get pod my-inference-server -o jsonpath='{.metadata.annotations.dra\.llm-d\.io/mutated}'
+oc get pod my-inference-server -o jsonpath='{.metadata.annotations.dra\.llm-d\.io/mutated}'
 # Should print: true
 
 # Inside the pod
-kubectl exec -it my-inference-server -- bash
+oc exec -it my-inference-server -- bash
 
 nvidia-smi -L              # 8 GPUs
 ip link show | grep net     # net0 through net7
@@ -504,7 +504,7 @@ If you see `x509: certificate signed by unknown authority` or webhook admission 
 
 ```bash
 # Check the caBundle matches the cert
-CABUNDLE_IN_CONFIG=$(kubectl get mutatingwebhookconfiguration dra-gpu-nic-webhook -o jsonpath='{.webhooks[0].clientConfig.caBundle}')
+CABUNDLE_IN_CONFIG=$(oc get mutatingwebhookconfiguration dra-gpu-nic-webhook -o jsonpath='{.webhooks[0].clientConfig.caBundle}')
 CABUNDLE_FROM_CERT=$(cat certs/tls.crt | base64 | tr -d '\n')
 
 if [ "$CABUNDLE_IN_CONFIG" = "$CABUNDLE_FROM_CERT" ]; then
@@ -514,12 +514,12 @@ else
 fi
 ```
 
-Fix: re-run the `kubectl patch mutatingwebhookconfiguration` command from Step 2.
+Fix: re-run the `oc patch mutatingwebhookconfiguration` command from Step 2.
 
 ### Pod Stuck in Pending
 
 ```bash
-kubectl describe pod <pod-name>
+oc describe pod <pod-name>
 ```
 
 - **"not enough devices"** — not enough free GPUs or RDMA NICs
@@ -529,7 +529,7 @@ kubectl describe pod <pod-name>
 ### Check Available GPUs/NICs
 
 ```bash
-kubectl get resourceslice -o json | python3 -c "
+oc get resourceslice -o json | python3 -c "
 import json, sys, collections
 data = json.load(sys.stdin)
 per_node = collections.defaultdict(lambda: {'gpus': 0, 'rdma_nics': 0})
@@ -552,7 +552,7 @@ for node, c in sorted(per_node.items()):
 ### Webhook Logs
 
 ```bash
-kubectl logs -n dra-webhook-system deploy/dra-gpu-nic-webhook --tail=50
+oc logs -n dra-webhook-system deploy/dra-gpu-nic-webhook --tail=50
 ```
 
 ---
