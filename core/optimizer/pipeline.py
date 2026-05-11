@@ -81,9 +81,10 @@ class RecipeOptimizer(
             self.log(f"Database persistence enabled (run_id={run_id})", 'info')
 
         # Initialize components
-        self.scanner = SystemScanner(namespace=config.namespace)
+        self.scanner = SystemScanner(namespace=config.namespace, kubeconfig=config.kubeconfig)
         self.orchestrator = TestOrchestrator(
             namespace=config.namespace,
+            kubeconfig=config.kubeconfig,
             thanos_url=config.thanos_url,
             deployment_timeout=3600,
             test_duration=config.test_duration

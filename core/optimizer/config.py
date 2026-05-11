@@ -116,13 +116,16 @@ class RecipeOptimizerConfig:
     # Advanced vLLM settings (user overrides)
     advanced_vllm: Optional[Dict] = None
 
+    # Cluster connectivity
+    kubeconfig: Optional[str] = None  # Path to kubeconfig file for remote clusters
+
     def to_dict(self) -> dict:
         """Serialize config to dict for DB persistence (excludes secrets)."""
         from dataclasses import fields as dc_fields
         d = {}
         for f in dc_fields(self):
             v = getattr(self, f.name)
-            if f.name == 'hf_token':
+            if f.name in ('hf_token', 'kubeconfig'):
                 d[f.name] = '***' if v else None
             else:
                 d[f.name] = v

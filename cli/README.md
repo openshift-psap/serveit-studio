@@ -1,7 +1,8 @@
 # Inftune Studio CLI
 
 Command-line interface for running LLM inference optimization without the web UI.
-Results are saved to the same database and can be viewed in the web UI report.
+Supports multi-cluster management and results are saved to the same database
+and can be viewed in the web UI report.
 
 ## Quick Start
 
@@ -10,36 +11,73 @@ Results are saved to the same database and can be viewed in the web UI report.
 kubectl exec -it -n llm-d deploy/inftune-optimizer -- bash
 cd /mnt/storage/app
 
-# Minimal run — only --model is required
-python3 scripts/inftune.py --model RedHatAI/gpt-oss-20b
+# Register the current cluster
+inftune cluster add --name local
+
+# Minimal run — only --model and --cluster are required
+inftune run --model RedHatAI/gpt-oss-20b --cluster local
 ```
 
-## Usage
+## Commands
 
 ```
-python3 scripts/inftune.py --model MODEL [options]
-python3 scripts/inftune.py --resume RUN_ID [options]
+inftune cluster add       Register a cluster
+inftune cluster list      List registered clusters
+inftune cluster remove    Remove a registered cluster
+inftune cluster scan      Scan cluster resources (GPUs, nodes, RDMA)
+inftune run               Run or resume an optimization
 ```
-
-Only `--model` is required for a new run. Everything else has sensible defaults
-matching the web UI wizard.
 
 ---
 
-## Examples
+## Cluster Management
+
+### Register Clusters
+
+```bash
+# Register the current kubectl context as a local cluster
+inftune cluster add --name local
+
+# Register a remote cluster with a kubeconfig file
+inftune cluster add --name prod --kubeconfig ~/.kube/prod.yaml
+
+# With custom namespace and storage class
+inftune cluster add --name staging \
+    --kubeconfig ~/.kube/staging.yaml \
+    --namespace my-namespace \
+    --storage-class gp3
+```
+
+### List and Inspect
+
+```bash
+# List all registered clusters
+inftune cluster list
+
+# Scan a cluster's resources
+inftune cluster scan prod
+# Output: GPU model, count, RDMA, nodes, cloud provider
+
+# Remove a cluster
+inftune cluster remove staging
+```
+
+---
+
+## Running Optimizations
 
 ### Basic Optimization
 
 ```bash
 # Optimize with default settings (16 GPUs, ISL=3000, OSL=256, 100 users)
-python3 scripts/inftune.py --model RedHatAI/gpt-oss-20b
+inftune run --model RedHatAI/gpt-oss-20b --cluster local
 
 # Specify workload parameters
-python3 scripts/inftune.py --model RedHatAI/gpt-oss-20b \
+inftune run --model RedHatAI/gpt-oss-20b --cluster prod \
     --isl 9000 --osl 50 --users 100 --gpus 16
 
 # With ISL/OSL standard deviation (realistic variable-length prompts)
-python3 scripts/inftune.py --model RedHatAI/gpt-oss-20b \
+inftune run --model RedHatAI/gpt-oss-20b --cluster local \
     --isl 9000 --isl-stdev 4000 --osl 50 --osl-stdev 20 --users 100
 ```
 
@@ -47,34 +85,34 @@ python3 scripts/inftune.py --model RedHatAI/gpt-oss-20b \
 
 ```bash
 # Minimize response time (TTFT) — default
-python3 scripts/inftune.py --model RedHatAI/gpt-oss-20b --objective ttft
+inftune run --model RedHatAI/gpt-oss-20b --cluster local --objective ttft
 
 # Maximize throughput
-python3 scripts/inftune.py --model RedHatAI/gpt-oss-20b --objective throughput
+inftune run --model RedHatAI/gpt-oss-20b --cluster local --objective throughput
 
 # Balanced — test PD, EP, and Aggregated architectures
-python3 scripts/inftune.py --model RedHatAI/gpt-oss-20b --objective balanced
+inftune run --model RedHatAI/gpt-oss-20b --cluster local --objective balanced
 
 # Only test aggregated (no PD disaggregation)
-python3 scripts/inftune.py --model RedHatAI/gpt-oss-20b --objective aggregated_only
+inftune run --model RedHatAI/gpt-oss-20b --cluster local --objective aggregated_only
 
 # Only test PD disaggregation
-python3 scripts/inftune.py --model RedHatAI/gpt-oss-20b --objective pd_only
+inftune run --model RedHatAI/gpt-oss-20b --cluster local --objective pd_only
 ```
 
 ### Latency SLA
 
 ```bash
 # Find max throughput under 2000ms TTFT at P99
-python3 scripts/inftune.py --model RedHatAI/gpt-oss-20b \
+inftune run --model RedHatAI/gpt-oss-20b --cluster local \
     --latency-sla 2000 --latency-percentile p99
 
 # Strict SLA: 500ms at P95
-python3 scripts/inftune.py --model RedHatAI/gpt-oss-20b \
+inftune run --model RedHatAI/gpt-oss-20b --cluster local \
     --latency-sla 500 --latency-percentile p95
 
 # Auto-scale concurrency to sustainable level
-python3 scripts/inftune.py --model RedHatAI/gpt-oss-20b \
+inftune run --model RedHatAI/gpt-oss-20b --cluster local \
     --use-achievable-qps
 ```
 
@@ -82,19 +120,19 @@ python3 scripts/inftune.py --model RedHatAI/gpt-oss-20b \
 
 ```bash
 # Use cache-optimized EPP preset
-python3 scripts/inftune.py --model RedHatAI/gpt-oss-20b \
+inftune run --model RedHatAI/gpt-oss-20b --cluster local \
     --epp-preset cache_optimized
 
 # Benchmark EPP strategies to find optimal routing
-python3 scripts/inftune.py --model RedHatAI/gpt-oss-20b \
+inftune run --model RedHatAI/gpt-oss-20b --cluster local \
     --epp-benchmark
 
 # Custom EPP weights (cache:kv:queue)
-python3 scripts/inftune.py --model RedHatAI/gpt-oss-20b \
+inftune run --model RedHatAI/gpt-oss-20b --cluster local \
     --epp-weights 5:1:1
 
 # Override EPP auto-calculated parameters
-python3 scripts/inftune.py --model RedHatAI/gpt-oss-20b \
+inftune run --model RedHatAI/gpt-oss-20b --cluster local \
     --epp-max-prefix-blocks 512 \
     --epp-lru-capacity 50000 \
     --epp-non-cached-tokens 32
@@ -104,15 +142,15 @@ python3 scripts/inftune.py --model RedHatAI/gpt-oss-20b \
 
 ```bash
 # 80% identical prompts (FAQ/popular query pattern)
-python3 scripts/inftune.py --model RedHatAI/gpt-oss-20b \
+inftune run --model RedHatAI/gpt-oss-20b --cluster local \
     --prefix-cache-pct 80 --prefix-cache-mode identical
 
 # Shared prefix — all prompts share 80% common prefix (system prompt pattern)
-python3 scripts/inftune.py --model RedHatAI/gpt-oss-20b \
+inftune run --model RedHatAI/gpt-oss-20b --cluster local \
     --prefix-cache-pct 80 --prefix-cache-mode shared_prefix
 
 # Multi-group — 10 distinct tenant groups with 80% cache hit rate
-python3 scripts/inftune.py --model RedHatAI/gpt-oss-20b \
+inftune run --model RedHatAI/gpt-oss-20b --cluster local \
     --prefix-cache-pct 80 --prefix-cache-mode multi_group --prefix-cache-groups 10
 ```
 
@@ -120,23 +158,23 @@ python3 scripts/inftune.py --model RedHatAI/gpt-oss-20b \
 
 ```bash
 # Fast search — 1 TP pair, smart PD splits
-python3 scripts/inftune.py --model RedHatAI/gpt-oss-20b \
+inftune run --model RedHatAI/gpt-oss-20b --cluster local \
     --tp-pair-depth 1 --pd-search smart
 
 # Thorough search — all TP pairs, exhaustive PD splits
-python3 scripts/inftune.py --model RedHatAI/gpt-oss-20b \
+inftune run --model RedHatAI/gpt-oss-20b --cluster local \
     --tp-pair-depth 4 --pd-search exhaustive
 
 # Specific TP values only
-python3 scripts/inftune.py --model RedHatAI/gpt-oss-20b \
+inftune run --model RedHatAI/gpt-oss-20b --cluster local \
     --tp-options 1,2,4
 
 # Short test duration (quick validation)
-python3 scripts/inftune.py --model RedHatAI/gpt-oss-20b \
+inftune run --model RedHatAI/gpt-oss-20b --cluster local \
     --duration 120
 
 # Stop after N requests instead of duration
-python3 scripts/inftune.py --model RedHatAI/gpt-oss-20b \
+inftune run --model RedHatAI/gpt-oss-20b --cluster local \
     --stop-mode max_requests --max-requests 1000
 ```
 
@@ -144,15 +182,15 @@ python3 scripts/inftune.py --model RedHatAI/gpt-oss-20b \
 
 ```bash
 # Concurrent users (default)
-python3 scripts/inftune.py --model RedHatAI/gpt-oss-20b \
+inftune run --model RedHatAI/gpt-oss-20b --cluster local \
     --users 100 --rate-type concurrent
 
 # Constant requests per second
-python3 scripts/inftune.py --model RedHatAI/gpt-oss-20b \
+inftune run --model RedHatAI/gpt-oss-20b --cluster local \
     --users 50 --rate-type constant
 
 # Poisson-distributed arrivals
-python3 scripts/inftune.py --model RedHatAI/gpt-oss-20b \
+inftune run --model RedHatAI/gpt-oss-20b --cluster local \
     --users 50 --rate-type poisson
 ```
 
@@ -160,13 +198,13 @@ python3 scripts/inftune.py --model RedHatAI/gpt-oss-20b \
 
 ```bash
 # HuggingFace dataset
-python3 scripts/inftune.py --model RedHatAI/gpt-oss-20b \
+inftune run --model RedHatAI/gpt-oss-20b --cluster local \
     --workload-mode dataset \
     --dataset openai/gsm8k \
     --dataset-column question
 
 # Local JSONL file
-python3 scripts/inftune.py --model RedHatAI/gpt-oss-20b \
+inftune run --model RedHatAI/gpt-oss-20b --cluster local \
     --workload-mode dataset \
     --dataset /mnt/storage/my-prompts.jsonl \
     --dataset-column prompt \
@@ -177,7 +215,7 @@ python3 scripts/inftune.py --model RedHatAI/gpt-oss-20b \
 
 ```bash
 # 3-turn conversation simulation
-python3 scripts/inftune.py --model RedHatAI/gpt-oss-20b \
+inftune run --model RedHatAI/gpt-oss-20b --cluster local \
     --turns 3 --isl 2000 --osl 200
 ```
 
@@ -185,30 +223,30 @@ python3 scripts/inftune.py --model RedHatAI/gpt-oss-20b \
 
 ```bash
 # Custom vLLM image
-python3 scripts/inftune.py --model RedHatAI/gpt-oss-20b \
+inftune run --model RedHatAI/gpt-oss-20b --cluster local \
     --image ghcr.io/llm-d/llm-d-cuda:v0.6.0
 
 # Different namespace and PVC
-python3 scripts/inftune.py --model RedHatAI/gpt-oss-20b \
+inftune run --model RedHatAI/gpt-oss-20b --cluster local \
     --namespace my-namespace --pvc my-model-cache
 
 # Pin to specific nodes
-python3 scripts/inftune.py --model RedHatAI/gpt-oss-20b \
+inftune run --model RedHatAI/gpt-oss-20b --cluster local \
     --nodes worker-gpu-01,worker-gpu-02
 
 # Gated model with HuggingFace token
-python3 scripts/inftune.py --model meta-llama/Llama-3-70b \
+inftune run --model meta-llama/Llama-3-70b --cluster local \
     --hf-token hf_xxxxxxxxxxxxx
 # Or set HF_TOKEN environment variable
 export HF_TOKEN=hf_xxxxxxxxxxxxx
-python3 scripts/inftune.py --model meta-llama/Llama-3-70b
+inftune run --model meta-llama/Llama-3-70b --cluster local
 ```
 
 ### Advanced vLLM Settings
 
 ```bash
 # Override engine parameters
-python3 scripts/inftune.py --model RedHatAI/gpt-oss-20b \
+inftune run --model RedHatAI/gpt-oss-20b --cluster local \
     --max-model-len 16384 \
     --gpu-mem-util 0.92 \
     --block-size 256 \
@@ -216,15 +254,15 @@ python3 scripts/inftune.py --model RedHatAI/gpt-oss-20b \
     --kv-cache-dtype fp8
 
 # Enable debug logs for troubleshooting
-python3 scripts/inftune.py --model RedHatAI/gpt-oss-20b \
+inftune run --model RedHatAI/gpt-oss-20b --cluster local \
     --vllm-debug-logs --nccl-debug-logs
 
 # Disable prefix caching
-python3 scripts/inftune.py --model RedHatAI/gpt-oss-20b \
+inftune run --model RedHatAI/gpt-oss-20b --cluster local \
     --no-prefix-caching
 
 # Tool calling support
-python3 scripts/inftune.py --model RedHatAI/gpt-oss-20b \
+inftune run --model RedHatAI/gpt-oss-20b --cluster local \
     --tool-call-parser hermes --enable-auto-tool-choice
 ```
 
@@ -232,29 +270,30 @@ python3 scripts/inftune.py --model RedHatAI/gpt-oss-20b \
 
 ```bash
 # Resume a stopped/failed run
-python3 scripts/inftune.py --resume 7
+inftune run --resume 7 --cluster local
 
 # Generate HTML report after optimization
-python3 scripts/inftune.py --model RedHatAI/gpt-oss-20b \
+inftune run --model RedHatAI/gpt-oss-20b --cluster local \
     --html-report results.html
 
 # Generate report from an existing completed run
-python3 scripts/inftune.py --resume 7 --html-report run7-report.html
+inftune run --resume 7 --cluster local --html-report run7-report.html
 
 # Run with description
-python3 scripts/inftune.py --model RedHatAI/gpt-oss-20b \
+inftune run --model RedHatAI/gpt-oss-20b --cluster local \
     --description "Production baseline test with 80% cache hit"
 
 # Quiet mode (no progress output)
-python3 scripts/inftune.py --model RedHatAI/gpt-oss-20b --quiet
+inftune run --model RedHatAI/gpt-oss-20b --cluster local --quiet
 ```
 
 ### Full Production Example
 
 ```bash
 # Complete production optimization run
-python3 scripts/inftune.py \
+inftune run \
     --model RedHatAI/gpt-oss-20b \
+    --cluster prod \
     --isl 9000 --isl-stdev 4000 \
     --osl 50 --osl-stdev 20 \
     --users 100 \
@@ -275,9 +314,22 @@ python3 scripts/inftune.py \
 
 ## All Options Reference
 
+### Cluster Commands
+
+| Command | Description |
+|---------|-------------|
+| `inftune cluster add --name NAME` | Register current kubectl context |
+| `inftune cluster add --name NAME --kubeconfig PATH` | Register remote cluster |
+| `inftune cluster list` | List registered clusters |
+| `inftune cluster remove NAME` | Remove a cluster |
+| `inftune cluster scan NAME` | Scan cluster resources |
+
+### Run Options
+
 | Flag | Default | Description |
 |------|---------|-------------|
 | `--model` | *required* | Model name or HuggingFace path |
+| `--cluster` | — | Registered cluster name |
 | `--resume` | — | Resume a previous run by ID |
 | **Workload** | | |
 | `--isl` | 3000 | Input sequence length |
@@ -299,7 +351,7 @@ python3 scripts/inftune.py \
 | `--gpus` | 16 | Total GPUs |
 | `--tp-options` | 1,2,4,8 | TP values to explore |
 | `--image` | ghcr.io/llm-d/llm-d-cuda:v0.5.1 | vLLM container image |
-| `--namespace` | llm-d | Kubernetes namespace |
+| `--namespace` | from cluster | Kubernetes namespace |
 | `--pvc` | inftune-model-cache | PVC name |
 | `--nccl-ib-hca` | mlx | NCCL IB HCA prefix |
 | `--hf-token` | — | HuggingFace token (or HF_TOKEN env) |
