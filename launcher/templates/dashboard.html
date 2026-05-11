@@ -377,6 +377,15 @@
             <h3 id="confirm-title">Are you sure?</h3>
             <p id="confirm-msg"></p>
             <div class="confirm-warn" id="confirm-warn"></div>
+            <div id="confirm-backup-option" style="display:none;margin-top:14px;">
+                <label style="display:flex;align-items:center;gap:10px;cursor:pointer;padding:10px 14px;background:#f0fdf4;border:1.5px solid #22c55e;border-radius:8px;">
+                    <input type="checkbox" id="confirm-backup-cb" checked style="width:18px;height:18px;accent-color:#22c55e;">
+                    <div>
+                        <div style="font-weight:600;color:#15803d;font-size:0.88em;">💾 Backup optimization data</div>
+                        <div style="font-size:0.78em;color:#166534;">Save the results database before deleting</div>
+                    </div>
+                </label>
+            </div>
         </div>
         <div class="confirm-actions">
             <button class="btn btn-cancel" onclick="hideConfirm()">Cancel</button>
@@ -494,6 +503,7 @@ function saveCluster(){
 }
 
 function showConfirm(title, msg, warn, btnText, onConfirm){
+    document.getElementById('confirm-backup-option').style.display='none';
     document.getElementById('confirm-title').textContent = title;
     document.getElementById('confirm-msg').textContent = msg;
     document.getElementById('confirm-warn').textContent = warn;
@@ -811,13 +821,19 @@ function createInstance(e){
 }
 
 function deleteInstance(id,name){
-    showConfirm('Delete Instance', 'Delete instance "'+name+'"?', 'This removes the deployment, PVC, and all data. This cannot be undone.', 'Delete Instance', function(){ _doDeleteInstance(id,name); });
+    document.getElementById('confirm-backup-option').style.display='block';
+    document.getElementById('confirm-backup-cb').checked=true;
+    showConfirm('Delete Instance', 'Delete instance "'+name+'"?', 'This removes the deployment, PVC, and all data. This cannot be undone.', 'Delete Instance', function(){
+        var backup = document.getElementById('confirm-backup-cb').checked;
+        document.getElementById('confirm-backup-option').style.display='none';
+        _doDeleteInstance(id, name, backup);
+    });
 }
-function _doDeleteInstance(id,name){
+function _doDeleteInstance(id, name, backup){
     var card=document.getElementById('instance-'+id);
     if(card){card.querySelectorAll('.btn').forEach(function(b){b.disabled=true;b.style.opacity='0.4';});
-        var ov=document.createElement('div');ov.className='delete-overlay';ov.innerHTML='<div style="display:flex;align-items:center;gap:10px"><svg width="20" height="20" viewBox="0 0 24 24" aria-hidden="true" style="animation:spin 1s linear infinite"><circle cx="12" cy="12" r="10" stroke="#2A7B88" stroke-width="3" fill="none" stroke-dasharray="31.4 31.4" stroke-linecap="round"/></svg><span style="color:#4A4A4A;font-weight:600;font-size:0.9em">Deleting…</span></div>';card.appendChild(ov);}
-    fetch('/api/instances/'+id,{method:'DELETE'}).then(function(r){return r.json()}).then(function(data){
+        var ov=document.createElement('div');ov.className='delete-overlay';ov.innerHTML='<div style="display:flex;align-items:center;gap:10px"><svg width="20" height="20" viewBox="0 0 24 24" aria-hidden="true" style="animation:spin 1s linear infinite"><circle cx="12" cy="12" r="10" stroke="#2A7B88" stroke-width="3" fill="none" stroke-dasharray="31.4 31.4" stroke-linecap="round"/></svg><span style="color:#4A4A4A;font-weight:600;font-size:0.9em">'+(backup?'Backing up & deleting…':'Deleting…')+'</span></div>';card.appendChild(ov);}
+    fetch('/api/instances/'+id+'?backup='+(backup?'1':'0'),{method:'DELETE'}).then(function(r){return r.json()}).then(function(data){
         if(data.ok){if(card){card.style.transition='opacity 0.3s';card.style.opacity='0';setTimeout(function(){card.remove()},300);}loadClusters();if(currentClusterId)setTimeout(function(){loadInstances(currentClusterId)},500);}
         else{showCreateError(data.error||'Failed');if(card){var o=card.querySelector('.delete-overlay');if(o)o.remove();card.querySelectorAll('.btn').forEach(function(b){b.disabled=false;b.style.opacity='';});}}
     });

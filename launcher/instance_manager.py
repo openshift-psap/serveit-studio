@@ -487,7 +487,7 @@ def _backup_instance_db(deployment_name: str, namespace: str, instance_name: str
         pass
 
 
-def delete_instance(instance_id: int, owner_id: int) -> bool:
+def delete_instance(instance_id: int, owner_id: int, backup: bool = True) -> bool:
     with get_db() as conn:
         row = conn.execute(
             'SELECT * FROM instances WHERE id = ? AND owner_id = ?',
@@ -500,8 +500,8 @@ def delete_instance(instance_id: int, owner_id: int) -> bool:
 
     ns = row['namespace']
 
-    # Backup instance database before deletion
-    _backup_instance_db(row['deployment_name'], ns, row.get('name', str(instance_id)))
+    if backup:
+        _backup_instance_db(row['deployment_name'], ns, row.get('name', str(instance_id)))
 
     for resource in [
         f"deployment/{row['deployment_name']}",

@@ -259,7 +259,8 @@ def create_app():
 
     @app.route('/api/instances/<int:instance_id>', methods=['DELETE'])
     def api_delete_instance(instance_id):
-        success = instance_manager.delete_instance(instance_id, get_user_id())
+        backup = request.args.get('backup', '1') == '1'
+        success = instance_manager.delete_instance(instance_id, get_user_id(), backup=backup)
         if success:
             return jsonify({'ok': True})
         return jsonify({'error': 'Instance not found or not owned by you'}), 404
