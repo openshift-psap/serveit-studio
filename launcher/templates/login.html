@@ -9,29 +9,29 @@
     <style>
         *{box-sizing:border-box;margin:0;padding:0}
         body{font-family:'Red Hat Display','Segoe UI',Roboto,sans-serif;background:#F8F8F8;min-height:100vh;display:flex}
-        .split-left{flex:1;display:flex;flex-direction:column;justify-content:center;align-items:center;padding:48px;background:#2d2d2d;position:relative;overflow:hidden}
+        .split-left{flex:1;display:flex;flex-direction:column;justify-content:center;align-items:center;padding:48px;background:#fff;position:relative;overflow:hidden}
         .split-left::before{content:'';position:absolute;top:0;left:0;right:0;height:4px;background:linear-gradient(90deg,#164E58,#2A7B88,#164E58)}
-        .split-left::after{content:'';position:absolute;inset:0;background:radial-gradient(circle at 30% 70%,rgba(42,123,136,0.08),transparent 60%)}
+        .split-left::after{content:'';position:absolute;inset:0;background:radial-gradient(circle at 30% 70%,rgba(42,123,136,0.06),transparent 60%)}
         .brand{position:relative;z-index:1;text-align:center;max-width:360px}
         .brand-logo{margin-bottom:32px}
         .brand-logo img{width:240px;height:auto;border-radius:12px}
-        .brand p{color:#999;font-size:0.95em;line-height:1.6}
+        .brand p{color:#555;font-size:0.95em;line-height:1.6}
         .features{margin-top:36px;display:flex;flex-direction:column;gap:16px}
-        .feature{display:flex;align-items:flex-start;gap:12px;color:#ccc}
-        .feature svg{flex-shrink:0;margin-top:2px;opacity:0.6}
+        .feature{display:flex;align-items:flex-start;gap:12px;color:#444}
+        .feature svg{flex-shrink:0;margin-top:2px;opacity:0.7}
         .feature span{font-size:0.85em;line-height:1.5}
-        .split-right{width:440px;display:flex;align-items:center;justify-content:center;padding:48px;background:#fff}
+        .split-right{width:440px;display:flex;align-items:center;justify-content:center;padding:48px;background:#2d2d2d}
         .form-wrap{width:100%;max-width:340px}
-        .form-wrap h1{color:#1A1A1A;font-size:1.6em;font-weight:800;margin-bottom:6px;letter-spacing:-0.02em}
+        .form-wrap h1{color:#eee;font-size:1.6em;font-weight:800;margin-bottom:6px;letter-spacing:-0.02em}
         .form-wrap .subtitle{color:#999;font-size:0.88em;margin-bottom:28px}
         .field{margin-bottom:20px}
-        .field label{display:block;color:#4A4A4A;font-weight:600;font-size:0.8em;text-transform:uppercase;letter-spacing:0.05em;margin-bottom:6px}
-        .field input[type=text],.field input[type=password]{width:100%;padding:11px 14px;border:1.5px solid #E0E0E0;border-radius:8px;font-size:0.95em;background:#F8F8F8;transition:border-color 0.15s,box-shadow 0.15s,background-color 0.15s}
-        .field input:hover{border-color:#CCC}
-        .field input:focus-visible{border-color:#2A7B88;outline:none;box-shadow:0 0 0 3px rgba(42,123,136,0.1);background:white}
-        .error{background:#F0F9FA;color:#1B5E6B;border:1px solid #E0F2F4;border-radius:8px;padding:11px 14px;margin-bottom:20px;font-size:0.85em;display:flex;align-items:center;gap:8px}
+        .field label{display:block;color:#aaa;font-weight:600;font-size:0.8em;text-transform:uppercase;letter-spacing:0.05em;margin-bottom:6px}
+        .field input[type=text],.field input[type=password]{width:100%;padding:11px 14px;border:1.5px solid #444;border-radius:8px;font-size:0.95em;background:#383838;color:#eee;transition:border-color 0.15s,box-shadow 0.15s,background-color 0.15s}
+        .field input:hover{border-color:#555}
+        .field input:focus-visible{border-color:#2A7B88;outline:none;box-shadow:0 0 0 3px rgba(42,123,136,0.2);background:#3a3a3a}
+        .error{background:rgba(42,123,136,0.15);color:#7fc8d2;border:1px solid rgba(42,123,136,0.3);border-radius:8px;padding:11px 14px;margin-bottom:20px;font-size:0.85em;display:flex;align-items:center;gap:8px}
         .save-options{margin-bottom:24px;display:flex;flex-direction:column;gap:10px}
-        .remember{display:flex;align-items:center;gap:8px;cursor:pointer;font-size:0.88em;color:#4A4A4A}
+        .remember{display:flex;align-items:center;gap:8px;cursor:pointer;font-size:0.88em;color:#aaa}
         .remember input{width:16px;height:16px;accent-color:#2A7B88}
         .submit-btn{width:100%;padding:13px;background:#2A7B88;color:white;border:none;border-radius:8px;font-size:0.95em;font-weight:700;cursor:pointer;transition:background-color 0.15s,transform 0.1s}
         .submit-btn:hover{background:#1B5E6B}
