@@ -22,7 +22,7 @@
         <!-- Sidebar -->
         <aside class="sidebar" id="sidebar">
             <div class="sidebar-header">
-                <video autoplay loop muted playsinline style="width:100%;height:auto"><source src="{{ url_for('static', filename='img/inftune-logo-animated.webm') }}" type="video/webm"><img src="{{ url_for('static', filename='img/inftune-logo-animated.gif') }}" alt="Inftune Studio" style="width:100%;height:auto"></video>
+                <img src="{{ url_for('static', filename='img/inftune-logo-horizontal.png') }}?v={{ range(10000,99999) | random }}" alt="Inftune Studio">
             </div>
             <nav class="sidebar-nav">
                 <div class="sidebar-section-label">Wizard Steps</div>
