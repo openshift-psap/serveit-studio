@@ -66,27 +66,29 @@
         .btn-open:hover{background:#2d8a2d}
 
         /* ── Instance Grid ── */
-        .grid{padding:24px 32px;display:flex;flex-direction:column;gap:12px}
-        .card{background:white;border-radius:10px;border:2px solid #CCC;overflow:hidden;transition:border-color 0.12s,box-shadow 0.12s;position:relative}
-        .card:hover{border-color:#CCC;box-shadow:0 2px 8px rgba(0,0,0,0.04)}
-        .card-main{padding:16px 20px;display:flex;align-items:center;justify-content:space-between;gap:16px}
-        .card-info{flex:1;min-width:0}
-        .card-title{display:flex;align-items:center;gap:10px;margin-bottom:5px}
-        .card-title h3{font-size:1.15em;font-weight:700;color:#2A7B88;margin:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-        .card-meta{display:flex;align-items:center;gap:8px;font-size:0.78em;color:#4A4A4A}
-        .card-actions{display:flex;gap:8px;flex-shrink:0}
-        .status{display:inline-block;padding:4px 12px;border-radius:20px;font-size:0.85em;font-weight:600;flex-shrink:0}
+        .grid{padding:24px 32px;display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:16px}
+        .card{background:white;border-radius:12px;border:2px solid #E0E0E0;overflow:hidden;transition:border-color 0.15s,box-shadow 0.15s,transform 0.15s;position:relative;display:flex;flex-direction:column;min-height:340px}
+        .card:hover{border-color:#2A7B88;box-shadow:0 6px 20px rgba(42,123,136,0.12);transform:translateY(-2px)}
+        .card-body{padding:20px;flex:1;display:flex;flex-direction:column}
+        .card-header{display:flex;flex-direction:column;align-items:center;gap:8px;margin-bottom:10px}
+        .card-icon{width:56px;height:56px;border-radius:14px;display:flex;align-items:center;justify-content:center;flex-shrink:0}
+        .card-name{font-size:1.1em;font-weight:700;color:#1A1A1A;word-break:break-word}
+        .card-details{margin-top:12px;font-size:0.78em;color:#4A4A4A;width:100%}
+        .card-details span{display:block;padding:6px 16px;border-bottom:1px solid #E0E0E0;text-align:center}
+        .card-details span:last-child{border-bottom:none}
+        .card-actions{display:flex;gap:8px;justify-content:center;padding:0 20px 16px}
+        .status{display:inline-block;padding:3px 10px;border-radius:20px;font-size:0.78em;font-weight:600}
         .status-running{background:#f0fdf4;color:#3BAA3B}
         .status-creating{background:#eff6ff;color:#3b82f6}
         .status-error{background:#fef2f2;color:#dc2626}
         .status-unknown{background:#F0F0F0;color:#999}
-        .connect-bar{background:#F8F8F8;border-top:1px solid #E0E0E0;padding:10px 20px;display:flex;align-items:center;gap:10px;flex-wrap:wrap}
-        .connect-bar .label{font-size:0.76em;color:#1A1A1A;font-weight:600;white-space:nowrap}
-        .connect-bar code{background:#1A1A1A;color:#ffffff;padding:6px 12px;border-radius:6px;font-size:0.76em;flex:1;min-width:0;overflow-x:auto;white-space:nowrap;font-family:'Red Hat Mono',monospace;user-select:all}
-        .copy-btn{border:1px solid #E0E0E0;background:white;color:#4A4A4A;padding:5px 12px;border-radius:6px;font-size:0.76em;font-weight:600;cursor:pointer;white-space:nowrap;transition:background-color 0.12s,border-color 0.12s}
+        .connect-bar{background:#F8F8F8;border-top:1px solid #E0E0E0;padding:8px 14px;display:flex;align-items:center;gap:6px;flex-wrap:wrap}
+        .connect-bar .label{font-size:0.7em;color:#1A1A1A;font-weight:600;white-space:nowrap}
+        .connect-bar code{background:#1A1A1A;color:#ffffff;padding:4px 8px;border-radius:4px;font-size:0.65em;flex:1;min-width:0;overflow-x:auto;white-space:nowrap;font-family:'Red Hat Mono',monospace;user-select:all}
+        .copy-btn{border:1px solid #E0E0E0;background:white;color:#4A4A4A;padding:3px 8px;border-radius:4px;font-size:0.7em;font-weight:600;cursor:pointer;white-space:nowrap;transition:background-color 0.12s,border-color 0.12s}
         .copy-btn:hover{background:#F0F0F0;border-color:#CCC}
         .copy-btn.copied{background:#f0fdf4;border-color:#3BAA3B;color:#3BAA3B}
-        .connect-bar a{color:#2A7B88;font-size:0.78em;text-decoration:none;white-space:nowrap;font-weight:600}
+        .connect-bar a{color:#2A7B88;font-size:0.7em;text-decoration:none;white-space:nowrap;font-weight:600}
         .connect-bar a:hover{color:#1B5E6B}
 
         /* ── Cluster Visualization ── */
@@ -122,8 +124,8 @@
         .cluster-viz-header button:hover{border-color:#2A7B88;color:#2A7B88}
 
         /* ── Empty States ── */
-        .empty{text-align:center;padding:80px 24px;color:#999}
-        .empty-icon{width:64px;height:64px;margin:0 auto 20px;background:#F0F9FA;border-radius:16px;display:flex;align-items:center;justify-content:center}
+        .empty{text-align:center;padding:80px 24px;color:#999;grid-column:1/-1}
+        .empty-icon{width:80px;height:80px;margin:0 auto 20px;background:#F8F8F8;border-radius:18px;display:flex;align-items:center;justify-content:center}
         .empty h3{color:#4A4A4A;margin-bottom:8px;font-size:1.1em}
         .empty p{color:#999;font-size:0.9em;margin-bottom:24px}
 
@@ -151,9 +153,9 @@
         .toggle-row .toggle-icon{font-size:2em;flex-shrink:0;line-height:1}
         .toggle-row .toggle-text{font-size:0.88em;color:#4A4A4A;font-weight:500;text-transform:none;letter-spacing:0}
         .toggle-row .toggle-desc{font-size:0.75em;color:#999;font-weight:400;margin-top:2px}
-        .create-error{display:none;background:#F0F9FA;border:1px solid #E0F2F4;border-left:4px solid #2A7B88;border-radius:8px;padding:14px 16px;margin-bottom:16px;max-height:200px;overflow-y:auto}
-        .create-error .error-title{font-weight:700;color:#1B5E6B;font-size:0.85em;margin-bottom:4px}
-        .create-error .error-text{color:#164E58;font-size:0.8em;line-height:1.6;word-break:break-word}
+        .create-error{display:none;background:#fef2f2;border:1px solid #fecaca;border-left:4px solid #dc2626;border-radius:8px;padding:14px 16px;margin-bottom:16px;max-height:200px;overflow-y:auto}
+        .create-error .error-title{font-weight:700;color:#dc2626;font-size:0.9em;margin-bottom:4px}
+        .create-error .error-text{color:#7f1d1d;font-size:0.8em;line-height:1.6;word-break:break-word}
         .delete-overlay{position:absolute;inset:0;background:rgba(255,255,255,0.85);display:flex;align-items:center;justify-content:center;border-radius:10px;z-index:5}
         .warn-overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,0.4);z-index:200;align-items:center;justify-content:center}
         .warn-overlay.active{display:flex}
@@ -247,15 +249,13 @@
         </button>
     </div>
 
-    {% if clusters %}
-    <div class="cluster-viz-panel" id="cluster-viz-panel">
+    <div class="cluster-viz-panel" id="cluster-viz-panel" {% if not clusters %}style="display:none"{% endif %}>
         <div class="cluster-viz-header">
             <h3>Cluster Resources</h3>
             <button onclick="scanAndRenderCluster(currentClusterId, document.getElementById('cluster-viz'), true)">Rescan</button>
         </div>
         <div id="cluster-viz"></div>
     </div>
-    {% endif %}
 
     <div class="grid" id="instance-list">
         {% if not clusters %}
@@ -395,6 +395,9 @@
         <input type="text" id="new-username" placeholder="username" autocomplete="off">
         <label for="new-user-password">Password</label>
         <input type="password" id="new-user-password" placeholder="min 6 characters">
+        <label for="new-user-password-confirm">Confirm Password</label>
+        <input type="password" id="new-user-password-confirm" placeholder="re-enter password">
+        <div id="add-user-error" style="display:none;color:#dc2626;font-size:0.85em;margin-bottom:12px;padding:8px 12px;background:#fef2f2;border-radius:6px;border-left:3px solid #dc2626;"></div>
         <div class="actions">
             <button type="button" class="btn btn-cancel" onclick="hideAddUserModal()">Cancel</button>
             <button type="button" class="btn btn-primary" onclick="addUser()">Create</button>
@@ -441,16 +444,36 @@ function hideClusterModal(){
 
 function saveCluster(){
     var name = document.getElementById('new-cluster-name').value.trim();
-    if(!name) return;
+    if(!name){
+        var inp = document.getElementById('new-cluster-name');
+        inp.style.borderColor = '#dc2626';
+        inp.placeholder = 'Cluster name is required';
+        inp.focus();
+        setTimeout(function(){ inp.style.borderColor = ''; inp.placeholder = 'My Cluster'; }, 3000);
+        return;
+    }
     var btn = document.getElementById('cluster-create-btn');
-    btn.disabled=true; btn.innerHTML='<svg width="16" height="16" viewBox="0 0 24 24" style="animation:spin 1s linear infinite;vertical-align:middle;margin-right:6px"><circle cx="12" cy="12" r="10" stroke="white" stroke-width="3" fill="none" stroke-dasharray="31.4 31.4" stroke-linecap="round"/></svg>Creating…';
+    var modal = document.querySelector('#cluster-modal .modal');
+    btn.disabled=true;
+
+    var overlay=document.createElement('div');
+    overlay.id='cluster-create-overlay';
+    overlay.style.cssText='position:absolute;inset:0;background:rgba(255,255,255,0.9);display:flex;align-items:center;justify-content:center;border-radius:14px;z-index:10;';
+    var msg = document.getElementById('remote-toggle').checked ? 'Validating kubeconfig and creating cluster…' : 'Creating cluster…';
+    overlay.innerHTML='<div style="display:flex;flex-direction:column;align-items:center;gap:12px"><svg width="32" height="32" viewBox="0 0 24 24" style="animation:spin 1s linear infinite"><circle cx="12" cy="12" r="10" stroke="#2A7B88" stroke-width="3" fill="none" stroke-dasharray="31.4 31.4" stroke-linecap="round"/></svg><span style="color:#4A4A4A;font-weight:600;font-size:1.05em">'+msg+'</span><span style="color:#999;font-size:0.85em">This may take a moment</span></div>';
+    modal.style.position='relative';
+    modal.style.overflow='hidden';
+    modal.appendChild(overlay);
+
     var body = {name:name, icon:selectedIcon,
         kubeconfig: document.getElementById('remote-toggle').checked ? kubeconfigContent : null,
         storage_class: document.getElementById('storage-class-select').value || null};
     fetch('/api/clusters',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)})
     .then(function(r){return r.json()})
     .then(function(data){
-        btn.disabled=false; btn.textContent='Create';
+        var ov=document.getElementById('cluster-create-overlay');
+        if(ov)ov.remove();
+        btn.disabled=false;
         if(data.error){
             document.getElementById('cluster-error-text').textContent=data.error;
             document.getElementById('cluster-error').style.display='block';
@@ -460,6 +483,13 @@ function saveCluster(){
         loadClusters();
         currentClusterId = data.id;
         setTimeout(function(){ selectCluster(data.id); }, 300);
+    })
+    .catch(function(err){
+        var ov=document.getElementById('cluster-create-overlay');
+        if(ov)ov.remove();
+        btn.disabled=false;
+        document.getElementById('cluster-error-text').textContent='Network error: '+err.message;
+        document.getElementById('cluster-error').style.display='block';
     });
 }
 
@@ -585,32 +615,49 @@ function loadInstances(clusterId, isRefresh, userId){
         }
 
         if(!instances.length){
-            list.innerHTML = '<div class="empty"><div class="empty-icon"><svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="#2A7B88" stroke-width="1.5"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/><path d="M3.27 6.96 12 12.01l8.73-5.05M12 22.08V12"/></svg></div><h3>No instances yet</h3><p>Create your first instance in this cluster.</p></div>';
+            list.innerHTML = '<div class="empty"><div class="empty-icon"><svg width="42" height="42" viewBox="0 0 24 24" fill="none" stroke="#2A7B88" stroke-width="1.5"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/><path d="M3.27 6.96 12 12.01l8.73-5.05M12 22.08V12"/></svg></div><h3>No instances yet</h3><p>Create your first instance in this cluster.</p></div>';
             return;
         }
         list.innerHTML = '';
         instances.forEach(function(inst){
-            var ps = inst.pod_status || inst.status;
-            var cls = ps==='Running'?'running':(ps==='Pending'||ps==='Creating'||ps==='Starting'?'creating':(ps==='Error'||ps==='CrashLoopBackOff'||ps==='Failed'||ps==='Deleted'?'error':'unknown'));
+            var ps = inst.status === 'deleting' ? 'Deleting' : (inst.pod_status || inst.status);
+            var cls = ps==='Running'?'running':(ps==='Pending'||ps==='Creating'||ps==='Starting'||ps==='Deleting'?'creating':(ps==='Error'||ps==='CrashLoopBackOff'||ps==='Failed'||ps==='Deleted'?'error':'unknown'));
             var hasHttps = inst.service_url && inst.service_url.indexOf('https://')===0;
             var localPort = 8080 + inst.id;
             var baseUrl = hasHttps ? inst.service_url : 'http://localhost:'+localPort;
             var openUrl = inst.auto_login_token ? baseUrl + '/auto-login?token=' + inst.auto_login_token : baseUrl;
             var isRunning = ps === 'Running';
             var openBtn = '<button class="btn btn-open" onclick="openInstance(\''+openUrl.replace(/'/g,"\\'")+'\','+inst.id+','+localPort+','+hasHttps+')"'+(isRunning?'':' disabled style="opacity:0.4;cursor:not-allowed"')+'>Open</button>';
-            var pfCmd = 'kubectl port-forward -n '+inst.namespace+' svc/'+inst.service_name+' '+localPort+':5000';
-            var connectBar = hasHttps ? '' : '<div class="connect-bar"><span class="label">Connect:</span><code>'+pfCmd+'</code><button class="copy-btn" onclick="copyCmd(this,\''+pfCmd.replace(/'/g,"\\'")+'\')">Copy</button><a href="http://localhost:'+localPort+'" target="_blank" rel="noopener">localhost:'+localPort+'</a></div>';
+            var connectBar;
+            if (hasHttps) {
+                connectBar = '<div class="connect-bar"><a href="'+openUrl+'" target="_blank" rel="noopener" style="flex:1;text-align:center">'+inst.service_url.replace(/^https?:\/\//,'')+'</a><button class="copy-btn" onclick="copyCmd(this,\''+inst.service_url.replace(/'/g,"\\'")+'\')">Copy URL</button></div>';
+            } else {
+                var pfCmd = 'kubectl port-forward -n '+inst.namespace+' svc/'+inst.service_name+' '+localPort+':5000';
+                connectBar = '<div class="connect-bar" style="justify-content:center"><button class="copy-btn" onclick="copyCmd(this,\''+pfCmd.replace(/'/g,"\\'")+'\')">📋 Copy connect command</button></div>';
+            }
             var card = document.createElement('div');
             card.className='card';card.id='instance-'+inst.id;card.style.position='relative';
-            var gpuInfo = '';
-            if (inst.preset_gpus) {
-                gpuInfo += '<span style="background:#E0F2F4;color:#2A7B88;padding:2px 8px;border-radius:4px;font-size:0.78em;font-weight:600">🎛️ '+inst.preset_gpus+' GPUs</span>';
+            if(ps==='Deleting'){
+                card.style.opacity='0.5';card.style.pointerEvents='none';
+                card.innerHTML='<div class="card-body" style="align-items:center;justify-content:center;text-align:center"><div class="card-icon" style="background:white"><svg width="34" height="34" viewBox="0 0 24 24" fill="none" stroke="#dc2626" stroke-width="1.5" style="animation:spin 2s linear infinite"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/><path d="M3.27 6.96 12 12.01l8.73-5.05M12 22.08V12"/></svg></div><div class="card-name">'+(inst.display_name||inst.name)+'</div><div style="color:#dc2626;font-size:0.9em;font-weight:600">Deleting…</div></div>';
+                list.appendChild(card);return;
             }
-            if (inst.preset_nodes) {
-                var nodes = inst.preset_nodes.split(',');
-                gpuInfo += '<span style="background:#F0F0F0;color:#4A4A4A;padding:2px 8px;border-radius:4px;font-size:0.78em;font-weight:600">📍 '+nodes.length+' node'+(nodes.length>1?'s':'')+'</span>';
-            }
-            card.innerHTML = '<div class="card-main"><div class="card-info"><div class="card-title"><h3>'+(inst.display_name||inst.name)+'</h3><span class="status status-'+cls+'">'+ps+'</span></div><div class="card-meta"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><circle cx="12" cy="12" r="10"/><path d="M2 12h20"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/></svg><span>'+inst.target_cluster+'</span><span style="opacity:0.3">&bull;</span><span>'+inst.created_at.slice(0,16)+'</span>'+(gpuInfo?'<span style="opacity:0.3">&bull;</span>'+gpuInfo:'')+'</div></div><div class="card-actions">'+openBtn+'<button class="btn btn-danger" onclick="deleteInstance('+inst.id+',\''+((inst.display_name||inst.name).replace(/'/g,"\\'"))+'\')">Delete</button></div></div>'+connectBar;
+            var iconColor = cls==='running' ? '#2A7B88' : (cls==='error' ? '#dc2626' : '#999');
+            var iconBg = 'white';
+            card.innerHTML = '<div class="card-body">' +
+                '<div class="card-header">' +
+                '<div class="card-icon" style="background:'+iconBg+'"><svg width="34" height="34" viewBox="0 0 24 24" fill="none" stroke="'+iconColor+'" stroke-width="1.5"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/><path d="M3.27 6.96 12 12.01l8.73-5.05M12 22.08V12"/></svg></div>' +
+                '<div style="text-align:center"><div class="card-name">'+(inst.display_name||inst.name)+'</div><span class="status status-'+cls+'">'+ps+'</span></div>' +
+                '</div>' +
+                '<div class="card-details">' +
+                '<span>🌐 '+(inst.target_cluster==='local'?'Local cluster':'Remote cluster')+'</span>' +
+                (inst.preset_gpus ? '<span>🎛️ '+inst.preset_gpus+' GPUs</span>' : '') +
+                (inst.preset_nodes ? '<span>📍 '+inst.preset_nodes.split(',').length+' node'+(inst.preset_nodes.split(',').length>1?'s':'')+'</span>' : '') +
+                '<span>📅 '+inst.created_at.slice(0,10)+'</span>' +
+                '</div>' +
+                '</div>' +
+                '<div class="card-actions">'+openBtn+'<button class="btn btn-danger" onclick="deleteInstance('+inst.id+',\''+((inst.display_name||inst.name).replace(/'/g,"\\'"))+'\')">Delete</button></div>' +
+                connectBar;
             list.appendChild(card);
         });
     });
@@ -744,7 +791,13 @@ function createInstance(e){
     var selectedNodes = [];
     document.querySelectorAll('.inst-node-cb:checked').forEach(function(cb){selectedNodes.push(cb.value)});
     var body = {name:name, cluster_id:currentClusterId};
-    if(gpuVal) body.preset_gpus = parseInt(gpuVal);
+    if(gpuVal) {
+        body.preset_gpus = parseInt(gpuVal);
+    } else if(selectedNodes.length) {
+        var totalGpus = 0;
+        document.querySelectorAll('.inst-node-cb:checked').forEach(function(cb){ totalGpus += parseInt(cb.dataset.gpus) || 0; });
+        if(totalGpus) body.preset_gpus = totalGpus;
+    }
     if(selectedNodes.length) body.preset_nodes = selectedNodes;
     fetch('/api/instances',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)})
     .then(function(r){return r.json()})
@@ -765,7 +818,7 @@ function _doDeleteInstance(id,name){
     if(card){card.querySelectorAll('.btn').forEach(function(b){b.disabled=true;b.style.opacity='0.4';});
         var ov=document.createElement('div');ov.className='delete-overlay';ov.innerHTML='<div style="display:flex;align-items:center;gap:10px"><svg width="20" height="20" viewBox="0 0 24 24" aria-hidden="true" style="animation:spin 1s linear infinite"><circle cx="12" cy="12" r="10" stroke="#2A7B88" stroke-width="3" fill="none" stroke-dasharray="31.4 31.4" stroke-linecap="round"/></svg><span style="color:#4A4A4A;font-weight:600;font-size:0.9em">Deleting…</span></div>';card.appendChild(ov);}
     fetch('/api/instances/'+id,{method:'DELETE'}).then(function(r){return r.json()}).then(function(data){
-        if(data.ok){if(card){card.style.transition='opacity 0.3s';card.style.opacity='0';setTimeout(function(){card.remove()},300);}loadClusters();}
+        if(data.ok){if(card){card.style.transition='opacity 0.3s';card.style.opacity='0';setTimeout(function(){card.remove()},300);}loadClusters();if(currentClusterId)setTimeout(function(){loadInstances(currentClusterId)},500);}
         else{showCreateError(data.error||'Failed');if(card){var o=card.querySelector('.delete-overlay');if(o)o.remove();card.querySelectorAll('.btn').forEach(function(b){b.disabled=false;b.style.opacity='';});}}
     });
 }
@@ -815,6 +868,19 @@ function openInstance(url, instId, localPort, isHttps){
 function showWarn(title, msg, actionFn){
     document.getElementById('warn-title').textContent = title;
     document.getElementById('warn-msg').innerHTML = msg;
+    var banner = document.querySelector('#warn-modal .warn-banner');
+    var isError = /error|fail|invalid|cannot/i.test(title);
+    if (isError) {
+        banner.style.background = 'linear-gradient(135deg,#fef2f2,#fecaca)';
+        banner.style.borderLeftColor = '#dc2626';
+        banner.querySelector('.warn-icon').style.color = '#dc2626';
+        banner.querySelector('.warn-msg').style.color = '#7f1d1d';
+    } else {
+        banner.style.background = '';
+        banner.style.borderLeftColor = '';
+        banner.querySelector('.warn-icon').style.color = '';
+        banner.querySelector('.warn-msg').style.color = '';
+    }
     var actionBtn = document.getElementById('warn-action-btn');
     if(actionFn){
         actionBtn.style.display = '';
@@ -829,10 +895,11 @@ function hideWarn(){
 }
 
 function copyCmd(btn, cmd){
+    var original = btn.textContent;
     navigator.clipboard.writeText(cmd).then(function(){
         btn.classList.add('copied');
         btn.textContent = 'Copied!';
-        setTimeout(function(){ btn.textContent = 'Copy'; btn.classList.remove('copied'); }, 1500);
+        setTimeout(function(){ btn.textContent = original; btn.classList.remove('copied'); }, 1500);
     });
 }
 
@@ -872,18 +939,34 @@ function showAddUserModal(){
     document.getElementById('add-user-modal').classList.add('active');
     document.getElementById('new-username').value='';
     document.getElementById('new-user-password').value='';
+    document.getElementById('new-user-password-confirm').value='';
+    document.getElementById('add-user-error').style.display='none';
     document.getElementById('new-username').focus();
 }
 function hideAddUserModal(){document.getElementById('add-user-modal').classList.remove('active');}
 
 function addUser(){
+    var errEl = document.getElementById('add-user-error');
+    errEl.style.display='none';
     var username = document.getElementById('new-username').value.trim();
     var password = document.getElementById('new-user-password').value;
-    if(!username||!password) return;
+    var confirm = document.getElementById('new-user-password-confirm').value;
+    if(!username){
+        errEl.textContent='Username is required.';errEl.style.display='block';
+        document.getElementById('new-username').focus();return;
+    }
+    if(password.length < 6){
+        errEl.textContent='Password must be at least 6 characters.';errEl.style.display='block';
+        document.getElementById('new-user-password').focus();return;
+    }
+    if(password !== confirm){
+        errEl.textContent='Passwords do not match.';errEl.style.display='block';
+        document.getElementById('new-user-password-confirm').focus();return;
+    }
     fetch('/api/users',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({username:username,password:password})})
     .then(function(r){return r.json()})
     .then(function(data){
-        if(data.error){alert(data.error);return;}
+        if(data.error){errEl.textContent=data.error;errEl.style.display='block';return;}
         hideAddUserModal();
         showUsers();
     });
@@ -892,12 +975,12 @@ function addUser(){
 function resetUserPassword(id, name){
     var pwd = prompt('Set new temporary password for "'+name+'" (min 6 characters):');
     if(!pwd) return;
-    if(pwd.length < 6){alert('Password must be at least 6 characters');return;}
+    if(pwd.length < 6){showWarn('Invalid Password', 'Password must be at least 6 characters.');return;}
     fetch('/api/users/'+id+'/reset-password',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({password:pwd})})
     .then(function(r){return r.json()})
     .then(function(data){
         if(data.ok) showWarn('Password Reset', 'Password for <strong>'+name+'</strong> has been reset. They will be asked to change it on next login.');
-        else alert(data.error||'Failed');
+        else showWarn('Error', data.error||'Password reset failed.');
     });
 }
 

@@ -104,8 +104,11 @@ def create_cluster(owner_id: int, name: str, icon: str = '🖥️',
             if existing:
                 raise RuntimeError(f'You already have a cluster targeting {target_cluster}')
 
+        with get_db() as conn:
+            user_row = conn.execute('SELECT username FROM users WHERE id = ?', (owner_id,)).fetchone()
+        owner_name = _sanitize(user_row['username']) if user_row else str(owner_id)
         safe = _sanitize(name)
-        kubeconfig_secret = f"inftune-kubeconfig-{safe}"
+        kubeconfig_secret = f"inftune-kubeconfig-{owner_name}-{safe}"
         secret_yaml = json.dumps({
             "apiVersion": "v1", "kind": "Secret",
             "metadata": {"name": kubeconfig_secret, "namespace": namespace},
@@ -471,6 +474,7 @@ def delete_instance(instance_id: int, owner_id: int) -> bool:
         if not row:
             return False
         row = dict(row)
+        conn.execute("UPDATE instances SET status = 'deleting' WHERE id = ?", (instance_id,))
 
     ns = row['namespace']
 
@@ -539,6 +543,10 @@ def list_instances(owner_id: int, cluster_id: int = None) -> List[Dict]:
     instances = []
     for row in rows:
         inst = dict(row)
+        if inst.get('status') == 'deleting':
+            inst['pod_status'] = 'Deleting'
+            instances.append(inst)
+            continue
         r = _kubectl(['get', 'pod', '-l', f"app={inst['deployment_name']}",
                       '-n', inst['namespace'],
                       '-o', 'jsonpath={.items[0].status.phase}:{.items[0].status.containerStatuses[0].state.waiting.reason}:{.items[0].status.containerStatuses[0].restartCount}'])
