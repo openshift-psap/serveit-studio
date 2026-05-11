@@ -465,6 +465,28 @@ def create_instance(owner_id: int, username: str, name: str,
         raise
 
 
+def _backup_instance_db(deployment_name: str, namespace: str, instance_name: str):
+    """Copy instance database to launcher storage before deletion."""
+    backup_dir = Path('/mnt/storage/backups') / instance_name
+    try:
+        backup_dir.mkdir(parents=True, exist_ok=True)
+        r = _kubectl(['get', 'pod', '-l', f'app={deployment_name}', '-n', namespace,
+                      '-o', 'jsonpath={.items[0].metadata.name}'])
+        pod_name = r.stdout.strip() if r.returncode == 0 else ''
+        if not pod_name:
+            return
+        dest = str(backup_dir / 'inftune.db')
+        cmd = 'oc' if _is_oc() else 'kubectl'
+        subprocess.run(
+            [cmd, 'cp', f'{namespace}/{pod_name}:/mnt/storage/inftune.db', dest],
+            capture_output=True, timeout=60
+        )
+        ts_file = backup_dir / 'backup_info.txt'
+        ts_file.write_text(f"Instance: {instance_name}\nBackup: {datetime.now().isoformat()}\nPod: {pod_name}\n")
+    except Exception:
+        pass
+
+
 def delete_instance(instance_id: int, owner_id: int) -> bool:
     with get_db() as conn:
         row = conn.execute(
@@ -477,6 +499,9 @@ def delete_instance(instance_id: int, owner_id: int) -> bool:
         conn.execute("UPDATE instances SET status = 'deleting' WHERE id = ?", (instance_id,))
 
     ns = row['namespace']
+
+    # Backup instance database before deletion
+    _backup_instance_db(row['deployment_name'], ns, row.get('name', str(instance_id)))
 
     for resource in [
         f"deployment/{row['deployment_name']}",
