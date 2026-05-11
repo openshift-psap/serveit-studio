@@ -1621,6 +1621,13 @@ def handle_setup_storage(data):
                 'rate_type': data.get('rate_type', 'concurrent'),
                 'prefix_cache_hit_pct': int(data.get('prefix_cache_hit_pct', 0)),
                 'advanced_vllm': data.get('advanced_vllm'),
+                'single_test_architecture': data.get('single_test_architecture'),
+                'single_test_tp': data.get('single_test_tp'),
+                'single_test_replicas': data.get('single_test_replicas'),
+                'single_test_prefill_tp': data.get('single_test_prefill_tp'),
+                'single_test_decode_tp': data.get('single_test_decode_tp'),
+                'single_test_prefill_pods': data.get('single_test_prefill_pods'),
+                'single_test_decode_pods': data.get('single_test_decode_pods'),
             }
             if resume_run_id:
                 optimization_data['resume_run_id'] = resume_run_id

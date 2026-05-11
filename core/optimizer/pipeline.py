@@ -246,6 +246,7 @@ class RecipeOptimizer(
         from .optimization_strategies import (
             TTFTStrategy, ThroughputStrategy, BalancedStrategy,
             AggregatedOnlyStrategy, PDOnlyStrategy, EPOnlyStrategy,
+            SingleTestStrategy,
         )
         strategies = {
             'ttft': TTFTStrategy,
@@ -254,6 +255,7 @@ class RecipeOptimizer(
             'aggregated_only': AggregatedOnlyStrategy,
             'pd_only': PDOnlyStrategy,
             'ep_only': EPOnlyStrategy,
+            'single_test': SingleTestStrategy,
         }
         cls = strategies.get(self.config.objective, TTFTStrategy)
         self.log(f"Using {cls.__name__} for objective '{self.config.objective}'", 'info')

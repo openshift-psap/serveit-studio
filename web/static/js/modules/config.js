@@ -637,8 +637,217 @@ document.querySelectorAll('[data-goal]').forEach(card => {
         document.querySelectorAll('[data-goal]').forEach(c => c.classList.remove('selected'));
         this.classList.add('selected');
         config.goal = this.dataset.goal;
+        updateSingleTestVisibility();
         saveConfig();
     });
+});
+
+// Single Test: show/hide deployment config and update GPU summary
+function updateSingleTestVisibility() {
+    var el = document.getElementById('single-test-config');
+    if (el) el.style.display = config.goal === 'single_test' ? 'block' : 'none';
+}
+
+var _pendingSingleTestId = null;
+
+function showSingleTestModal(recId) {
+    if (isOptimizationRunning()) {
+        document.getElementById('running-modal').classList.add('active');
+        return;
+    }
+    var rc = (window._recConfigs || {})[recId];
+    if (!rc) return;
+
+    var arch = rc.architecture || 'aggregated';
+    var tp = rc.tp || 1;
+    var prefillTp = rc.prefill_tp || tp;
+    var decodeTp = rc.decode_tp || tp;
+    var prefillPods = rc.prefill_pods || 0;
+    var decodePods = rc.decode_pods || 0;
+    var replicas = rc.replicas || (rc.gpus ? Math.floor(rc.gpus / tp) : 1);
+    var totalGpus = arch === 'pd' ? (prefillTp * prefillPods) + (decodeTp * decodePods) : tp * replicas;
+
+    var maxGpus = config.max_gpus || (config.cluster_resources ? config.cluster_resources.total_gpus : null);
+    var presetMax = config.cluster_resources ? config.cluster_resources.preset_max_gpus : null;
+    var gpuLimit = presetMax || maxGpus;
+
+    var warningEl = document.getElementById('single-test-modal-gpu-warning');
+    if (gpuLimit && totalGpus > gpuLimit) {
+        document.getElementById('single-test-modal-gpu-msg').textContent =
+            'This configuration requires ' + totalGpus + ' GPUs but your instance is limited to ' + gpuLimit + ' GPUs.' +
+            (presetMax ? ' (Set by launcher admin)' : '') +
+            ' You can adjust the configuration in the wizard.';
+        warningEl.style.display = 'block';
+    } else {
+        warningEl.style.display = 'none';
+    }
+
+    var ts = rc.test_settings || {};
+    var configHtml = '<strong>Architecture:</strong> ' + arch.toUpperCase() + '<br>';
+    if (arch === 'pd') {
+        configHtml += '<strong>Prefill:</strong> ' + prefillPods + ' pods × TP' + prefillTp + '<br>';
+        configHtml += '<strong>Decode:</strong> ' + decodePods + ' pods × TP' + decodeTp + '<br>';
+    } else {
+        configHtml += '<strong>TP:</strong> ' + tp + ' &nbsp; <strong>Replicas:</strong> ' + replicas + '<br>';
+    }
+    configHtml += '<strong>Total GPUs:</strong> ' + totalGpus;
+    if (ts.isl) configHtml += '<br><strong>Workload:</strong> ISL=' + ts.isl + ' OSL=' + (ts.osl || '?') + ' × ' + (ts.num_users || '?') + ' users';
+    if (ts.prefix_cache_hit_pct) configHtml += '<br><strong>Prefix Cache:</strong> ' + ts.prefix_cache_hit_pct + '%';
+    if (rc.epp_config) {
+        var plugins = (rc.epp_config.plugins || {});
+        var parts = [];
+        if (plugins.prefix_cache) parts.push('cache:' + (plugins.prefix_cache.weight || '?'));
+        if (plugins.kv_cache) parts.push('kv:' + (plugins.kv_cache.weight || '?'));
+        if (plugins.queue) parts.push('queue:' + (plugins.queue.weight || '?'));
+        if (parts.length) configHtml += '<br><strong>EPP Weights:</strong> ' + parts.join(', ');
+    }
+    document.getElementById('single-test-modal-config').innerHTML = configHtml;
+
+    _pendingSingleTestId = recId;
+    document.getElementById('single-test-modal').classList.add('active');
+}
+
+function confirmSingleTest() {
+    document.getElementById('single-test-modal').classList.remove('active');
+    if (!_pendingSingleTestId) return;
+    var rc = (window._recConfigs || {})[_pendingSingleTestId];
+    _pendingSingleTestId = null;
+    if (!rc) return;
+
+    var arch = rc.architecture || 'aggregated';
+    var ts = rc.test_settings || {};
+
+    config.goal = 'single_test';
+    config.single_test_architecture = arch;
+
+    // Restore workload settings from the original test
+    if (ts.isl != null) config.isl = ts.isl;
+    if (ts.osl != null) config.osl = ts.osl;
+    if (ts.isl_stdev != null) config.isl_stdev = ts.isl_stdev;
+    if (ts.osl_stdev != null) config.osl_stdev = ts.osl_stdev;
+    if (ts.num_users != null) config.users = ts.num_users;
+    if (ts.turns != null) config.turns = ts.turns;
+    if (ts.rate_type) config.rate_type = ts.rate_type;
+    if (ts.test_duration != null) config.duration = ts.test_duration;
+    if (ts.stop_mode) config.stop_mode = ts.stop_mode;
+    if (ts.max_requests != null) config.max_requests = ts.max_requests;
+    var isInternalDataset = ts.dataset_source && ts.dataset_source.indexOf('prefix-cache-datasets') !== -1;
+    if (isInternalDataset) {
+        config.workload_mode = 'synthetic';
+        config.dataset_source = null;
+        config.dataset_column = null;
+    } else {
+        if (ts.workload_mode) config.workload_mode = ts.workload_mode;
+        if (ts.dataset_source) config.dataset_source = ts.dataset_source;
+        if (ts.dataset_column) config.dataset_column = ts.dataset_column;
+        if (ts.dataset_max_output != null) config.dataset_max_output = ts.dataset_max_output;
+    }
+    if (ts.prefix_cache_hit_pct != null) config.prefix_cache_hit_pct = ts.prefix_cache_hit_pct;
+    if (ts.prefix_cache_mode) config.prefix_cache_mode = ts.prefix_cache_mode;
+    if (ts.prefix_cache_groups) config.prefix_cache_groups = ts.prefix_cache_groups;
+    if (ts.advanced_vllm) config.advanced_vllm = ts.advanced_vllm;
+    if (rc.epp_config) config.epp_config = rc.epp_config;
+    if (ts.tp_pair_top_n != null) config.tp_pair_top_n = ts.tp_pair_top_n;
+    if (ts.pd_search_mode) config.pd_search_mode = ts.pd_search_mode;
+    if (ts.use_achievable_qps != null) config.use_achievable_qps = ts.use_achievable_qps;
+    if (ts.latency_constraint_enabled != null) config.latency_constraint_enabled = ts.latency_constraint_enabled;
+    if (ts.latency_constraint_ms != null) config.latency_constraint_ms = ts.latency_constraint_ms;
+    if (ts.latency_constraint_percentile) config.latency_constraint_percentile = ts.latency_constraint_percentile;
+    if (ts.epp_preset) config.epp_preset = ts.epp_preset;
+    if (ts.epp_benchmark != null) config.epp_benchmark = ts.epp_benchmark;
+
+    // Set deployment config
+    document.querySelectorAll('[data-goal]').forEach(function(c) { c.classList.remove('selected'); });
+    var stCard = document.querySelector('[data-goal="single_test"]');
+    if (stCard) stCard.classList.add('selected');
+
+    var tp = rc.tp || 1;
+    if (arch === 'pd') {
+        var ptpEl = document.getElementById('single-test-prefill-tp');
+        var dtpEl = document.getElementById('single-test-decode-tp');
+        var ppEl = document.getElementById('single-test-prefill-pods');
+        var dpEl = document.getElementById('single-test-decode-pods');
+        if (ptpEl) ptpEl.value = rc.prefill_tp || tp;
+        if (dtpEl) dtpEl.value = rc.decode_tp || tp;
+        if (ppEl) ppEl.value = rc.prefill_pods || 1;
+        if (dpEl) dpEl.value = rc.decode_pods || 1;
+    } else {
+        var tpEl = document.getElementById('single-test-tp');
+        var repEl = document.getElementById('single-test-replicas');
+        if (tpEl) tpEl.value = tp;
+        if (repEl) repEl.value = rc.replicas || (rc.gpus ? Math.floor(rc.gpus / tp) : 1);
+    }
+
+    selectSingleTestArch(arch);
+    updateSingleTestVisibility();
+
+    saveConfig();
+
+    // Close the report overlay then navigate to workload step
+    var chartsOverlay = document.getElementById('charts-overlay');
+    if (chartsOverlay) chartsOverlay.classList.remove('active');
+
+    setTimeout(function() {
+        goToStep(3);
+        updateUIFromConfig();
+    }, 150);
+}
+
+function selectSingleTestArch(arch) {
+    document.querySelectorAll('#single-test-arch-cards > div').forEach(function(c) {
+        c.classList.remove('selected');
+        c.style.borderColor = '#e2e8f0';
+        c.style.background = '';
+    });
+    var card = document.querySelector('#single-test-arch-cards [data-arch="' + arch + '"]');
+    if (card) {
+        card.classList.add('selected');
+        card.style.borderColor = '#8b5cf6';
+        card.style.background = '#f5f3ff';
+    }
+    config.single_test_architecture = arch;
+    var aggFields = document.getElementById('single-test-agg-fields');
+    var pdFields = document.getElementById('single-test-pd-fields');
+    if (aggFields) aggFields.style.display = arch !== 'pd' ? 'block' : 'none';
+    if (pdFields) pdFields.style.display = arch === 'pd' ? 'block' : 'none';
+    updateSingleTestGpuSummary();
+    saveConfig();
+}
+
+function updateSingleTestGpuSummary() {
+    var arch = config.single_test_architecture || 'aggregated';
+    if (arch === 'pd') {
+        var ptpEl = document.getElementById('single-test-prefill-tp');
+        var ppEl = document.getElementById('single-test-prefill-pods');
+        var dtpEl = document.getElementById('single-test-decode-tp');
+        var dpEl = document.getElementById('single-test-decode-pods');
+        if (!ptpEl || !ppEl || !dtpEl || !dpEl) return;
+        var ptp = parseInt(ptpEl.value) || 4;
+        var pp = parseInt(ppEl.value) || 1;
+        var dtp = parseInt(dtpEl.value) || 8;
+        var dp = parseInt(dpEl.value) || 1;
+        var total = (ptp * pp) + (dtp * dp);
+        var el = document.getElementById('single-test-pd-gpu-summary');
+        if (el) el.textContent = 'Total GPUs: ' + total + ' (' + pp + ' prefill × TP' + ptp + ' + ' + dp + ' decode × TP' + dtp + ')';
+    } else {
+        var tpEl = document.getElementById('single-test-tp');
+        var repEl = document.getElementById('single-test-replicas');
+        if (!tpEl || !repEl) return;
+        var tp = parseInt(tpEl.value) || 4;
+        var reps = parseInt(repEl.value) || 1;
+        var total = tp * reps;
+        var el = document.getElementById('single-test-gpu-summary');
+        if (el) el.textContent = 'Total GPUs: ' + total + ' (' + reps + ' pods × TP' + tp + ')';
+    }
+}
+
+['single-test-tp', 'single-test-replicas'].forEach(function(id) {
+    var el = document.getElementById(id);
+    if (el) el.addEventListener('change', updateSingleTestGpuSummary);
+});
+['single-test-prefill-tp', 'single-test-prefill-pods', 'single-test-decode-tp', 'single-test-decode-pods'].forEach(function(id) {
+    var el = document.getElementById(id);
+    if (el) el.addEventListener('change', updateSingleTestGpuSummary);
 });
 
 // Load models from API

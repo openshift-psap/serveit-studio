@@ -160,6 +160,15 @@ class ReportAnalyzer:
         isl = run_meta['isl']
         osl = run_meta['osl']
 
+        run_config = {}
+        try:
+            rc_row = conn.execute('SELECT config_json FROM optimization_runs WHERE id = ?', (run_id,)).fetchone()
+            if rc_row and rc_row['config_json']:
+                import json as _jrc
+                run_config = _jrc.loads(rc_row['config_json'])
+        except Exception:
+            pass
+
         goal = run_meta.get('goal')
         if not goal:
             has_step7 = any(r.config_name.startswith('step7') for r in results)
@@ -328,12 +337,21 @@ class ReportAnalyzer:
                     c = int(mj.get('concurrency_mean') or mj.get('concurrency_p50') or 0) or None
                 except Exception:
                     pass
+            test_settings = {}
+            if r.test_config_json:
+                try:
+                    import json as _jtc
+                    test_settings = _jtc.loads(r.test_config_json)
+                except Exception:
+                    pass
             d = {
                 'config_name': r.display_label,
                 'test_id': r.config_name,
                 'prefill_pods': r.prefill_pods,
                 'decode_pods': r.decode_pods,
                 'tp': r.tensor_parallelism,
+                'prefill_tp': test_settings.get('prefill_tp') or r.tensor_parallelism,
+                'decode_tp': test_settings.get('decode_tp') or r.tensor_parallelism,
                 'ttft_p90': round(r.ttft_p90, 1),
                 'throughput_mean': round(r.throughput_mean, 2) if r.throughput_mean else None,
                 'throughput_p90': round(r.throughput_p90, 2),
@@ -341,6 +359,35 @@ class ReportAnalyzer:
                 'ratio': f"{r.prefill_pods}:{r.decode_pods}",
                 'percentiles': _percentiles(r),
                 'concurrency': c,
+                'epp_config': test_settings.get('epp_config'),
+                'test_settings': {
+                    'isl': test_settings.get('isl'),
+                    'osl': test_settings.get('osl'),
+                    'isl_stdev': test_settings.get('isl_stdev') or run_config.get('isl_stdev'),
+                    'osl_stdev': test_settings.get('osl_stdev') or run_config.get('osl_stdev'),
+                    'num_users': test_settings.get('num_users'),
+                    'turns': test_settings.get('turns'),
+                    'rate_type': test_settings.get('request_type') or run_config.get('rate_type'),
+                    'test_duration': test_settings.get('test_duration'),
+                    'stop_mode': test_settings.get('stop_mode'),
+                    'max_requests': test_settings.get('max_requests'),
+                    'workload_mode': test_settings.get('workload_mode') or run_config.get('workload_mode'),
+                    'dataset_source': test_settings.get('dataset_source') or run_config.get('dataset_source'),
+                    'dataset_column': test_settings.get('dataset_column') or run_config.get('dataset_column'),
+                    'dataset_max_output': test_settings.get('dataset_max_output') or run_config.get('dataset_max_output'),
+                    'prefix_cache_hit_pct': run_config.get('prefix_cache_hit_pct', 0),
+                    'prefix_cache_mode': run_config.get('prefix_cache_mode'),
+                    'prefix_cache_groups': run_config.get('prefix_cache_groups'),
+                    'advanced_vllm': run_config.get('advanced_vllm'),
+                    'tp_pair_top_n': run_config.get('tp_pair_top_n'),
+                    'pd_search_mode': run_config.get('pd_search_mode'),
+                    'use_achievable_qps': run_config.get('use_achievable_qps'),
+                    'latency_constraint_enabled': run_config.get('latency_constraint_enabled'),
+                    'latency_constraint_ms': run_config.get('latency_constraint_ms'),
+                    'latency_constraint_percentile': run_config.get('latency_constraint_percentile'),
+                    'epp_preset': run_config.get('epp_preset'),
+                    'epp_benchmark': run_config.get('epp_benchmark'),
+                },
             }
             if include_eff:
                 d['efficiency'] = round(r.throughput_p90 / r.total_gpus, 3)
@@ -1230,10 +1277,18 @@ class ReportAnalyzer:
                     'manifest_types': manifest_types,
                     'weights': weights,
                 }
-                # Add concurrency from test_config_json
                 if r.test_config_json:
                     try:
-                        entry['concurrency'] = _json2.loads(r.test_config_json).get('num_users')
+                        _tc = _json2.loads(r.test_config_json)
+                        entry['concurrency'] = _tc.get('num_users')
+                        entry['epp_config'] = _tc.get('epp_config')
+                        entry['tp'] = _tc.get('tensor_parallelism')
+                        entry['prefill_tp'] = _tc.get('prefill_tp')
+                        entry['decode_tp'] = _tc.get('decode_tp')
+                        entry['prefill_pods'] = _tc.get('prefill_replicas')
+                        entry['decode_pods'] = _tc.get('decode_replicas')
+                        entry['replicas'] = _tc.get('replicas')
+                        entry['gpus'] = r.total_gpus
                     except Exception:
                         pass
                 by_arch.setdefault(arch, []).append(entry)

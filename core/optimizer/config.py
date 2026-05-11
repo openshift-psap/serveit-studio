@@ -119,6 +119,15 @@ class RecipeOptimizerConfig:
     # Cluster connectivity
     kubeconfig: Optional[str] = None  # Path to kubeconfig file for remote clusters
 
+    # Single test mode (only used when objective='single_test')
+    single_test_architecture: Optional[str] = None  # 'aggregated', 'pd', 'ep'
+    single_test_tp: Optional[int] = None
+    single_test_replicas: Optional[int] = None
+    single_test_prefill_tp: Optional[int] = None
+    single_test_decode_tp: Optional[int] = None
+    single_test_prefill_pods: Optional[int] = None
+    single_test_decode_pods: Optional[int] = None
+
     def to_dict(self) -> dict:
         """Serialize config to dict for DB persistence (excludes secrets)."""
         from dataclasses import fields as dc_fields

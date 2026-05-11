@@ -177,7 +177,14 @@ document.getElementById('start-optimization').addEventListener('click', () => {
         epp_preset: config.epp_preset || 'balanced',
         epp_benchmark: config.epp_benchmark || false,
         epp_config: config.epp_config || null,
-        advanced_vllm: config.advanced_vllm || null
+        advanced_vllm: config.advanced_vllm || null,
+        single_test_architecture: config.single_test_architecture || null,
+        single_test_tp: config.goal === 'single_test' ? parseInt(document.getElementById('single-test-tp').value) || null : null,
+        single_test_replicas: config.goal === 'single_test' ? parseInt(document.getElementById('single-test-replicas').value) || null : null,
+        single_test_prefill_tp: config.goal === 'single_test' ? parseInt(document.getElementById('single-test-prefill-tp').value) || null : null,
+        single_test_decode_tp: config.goal === 'single_test' ? parseInt(document.getElementById('single-test-decode-tp').value) || null : null,
+        single_test_prefill_pods: config.goal === 'single_test' ? parseInt(document.getElementById('single-test-prefill-pods').value) || null : null,
+        single_test_decode_pods: config.goal === 'single_test' ? parseInt(document.getElementById('single-test-decode-pods').value) || null : null
     });
 });
 

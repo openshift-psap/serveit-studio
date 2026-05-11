@@ -557,6 +557,13 @@ def run_optimization_background(data):
         prefix_cache_mode = data.get('prefix_cache_mode', 'identical')
         prefix_cache_groups = int(data.get('prefix_cache_groups', 5))
         advanced_vllm = data.get('advanced_vllm')
+        single_test_architecture = data.get('single_test_architecture')
+        single_test_tp = data.get('single_test_tp')
+        single_test_replicas = data.get('single_test_replicas')
+        single_test_prefill_tp = data.get('single_test_prefill_tp')
+        single_test_decode_tp = data.get('single_test_decode_tp')
+        single_test_prefill_pods = data.get('single_test_prefill_pods')
+        single_test_decode_pods = data.get('single_test_decode_pods')
 
         # Create/update HuggingFace token secret if provided
         if hf_token and hf_token.strip():
@@ -752,6 +759,13 @@ data:
                 prefix_cache_mode=prefix_cache_mode,
                 prefix_cache_groups=prefix_cache_groups,
                 advanced_vllm=advanced_vllm,
+                single_test_architecture=single_test_architecture,
+                single_test_tp=int(single_test_tp) if single_test_tp else None,
+                single_test_replicas=int(single_test_replicas) if single_test_replicas else None,
+                single_test_prefill_tp=int(single_test_prefill_tp) if single_test_prefill_tp else None,
+                single_test_decode_tp=int(single_test_decode_tp) if single_test_decode_tp else None,
+                single_test_prefill_pods=int(single_test_prefill_pods) if single_test_prefill_pods else None,
+                single_test_decode_pods=int(single_test_decode_pods) if single_test_decode_pods else None,
             )
 
             # Save full config to DB for resume

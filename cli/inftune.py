@@ -377,6 +377,13 @@ def cmd_run(args):
         'epp_config': epp_config,
         'advanced_vllm': advanced_vllm,
         'kubeconfig': kubeconfig_path,
+        'single_test_architecture': args.single_test_arch,
+        'single_test_tp': args.single_test_tp,
+        'single_test_replicas': args.single_test_replicas,
+        'single_test_prefill_tp': args.single_test_prefill_tp,
+        'single_test_decode_tp': args.single_test_decode_tp,
+        'single_test_prefill_pods': args.single_test_prefill_pods,
+        'single_test_decode_pods': args.single_test_decode_pods,
     }
 
     # Create DB entry
@@ -474,6 +481,13 @@ def resume_run(args, db, kubeconfig_path=None):
         'epp_config': saved_config.get('epp_config'),
         'advanced_vllm': saved_config.get('advanced_vllm'),
         'kubeconfig': kubeconfig_path,
+        'single_test_architecture': saved_config.get('single_test_architecture'),
+        'single_test_tp': saved_config.get('single_test_tp'),
+        'single_test_replicas': saved_config.get('single_test_replicas'),
+        'single_test_prefill_tp': saved_config.get('single_test_prefill_tp'),
+        'single_test_decode_tp': saved_config.get('single_test_decode_tp'),
+        'single_test_prefill_pods': saved_config.get('single_test_prefill_pods'),
+        'single_test_decode_pods': saved_config.get('single_test_decode_pods'),
     }
 
     if not args.quiet:
@@ -846,7 +860,7 @@ def build_run_parser(parser):
 
     ss = parser.add_argument_group('Search Strategy')
     ss.add_argument('--objective', choices=['ttft', 'throughput', 'balanced',
-                    'aggregated_only', 'pd_only', 'ep_only'],
+                    'aggregated_only', 'pd_only', 'ep_only', 'single_test'],
                     default='ttft', help='Optimization goal (default: ttft)')
     ss.add_argument('--tp-pair-depth', type=int, default=2, choices=[1, 2, 3, 4],
                     help='TP pair breadth: 1=fast, 2=default, 3=deep, 4=full (default: 2)')
@@ -883,6 +897,22 @@ def build_run_parser(parser):
                     help='Override lruCapacityPerServer (auto-calculated from VRAM)')
     ep.add_argument('--epp-non-cached-tokens', type=int, default=None,
                     help='Override nonCachedTokens for PD routing threshold (default: 16)')
+
+    st = parser.add_argument_group('Single Test (requires --objective single_test)')
+    st.add_argument('--single-test-arch', choices=['aggregated', 'pd', 'ep'],
+                    default=None, help='Architecture for single test')
+    st.add_argument('--single-test-tp', type=int, default=None,
+                    help='TP size for single test (aggregated/EP)')
+    st.add_argument('--single-test-replicas', type=int, default=None,
+                    help='Number of pods for single test (aggregated/EP)')
+    st.add_argument('--single-test-prefill-tp', type=int, default=None,
+                    help='Prefill TP for PD single test')
+    st.add_argument('--single-test-decode-tp', type=int, default=None,
+                    help='Decode TP for PD single test')
+    st.add_argument('--single-test-prefill-pods', type=int, default=None,
+                    help='Prefill pod count for PD single test')
+    st.add_argument('--single-test-decode-pods', type=int, default=None,
+                    help='Decode pod count for PD single test')
 
     av = parser.add_argument_group('Advanced vLLM Settings')
     av.add_argument('--max-model-len', type=int, default=None,

@@ -849,6 +849,98 @@ class BalancedStrategy(OptimizationStrategy):
             self.opt.log(f"  {'EP (best)':<25} {t:>10.1f}ms {p:>14.2f} req/s", 'info')
 
 
+class SingleTestStrategy(OptimizationStrategy):
+    """Single Test: Run one user-specified configuration — no sweeps, no optimization.
+
+    Builds a TestConfig from the user's exact architecture/TP/pods, deploys,
+    benchmarks, and records the result. Supports aggregated, PD, and EP.
+    """
+
+    def execute(self):
+        self.opt.log("SINGLE TEST: Running user-specified configuration", 'decision')
+        self.opt.log("-" * 80, 'info')
+
+        cfg = self.opt.config
+        arch = cfg.single_test_architecture or 'aggregated'
+        self.opt.log(f"Architecture: {arch}", 'info')
+
+        if arch == 'aggregated':
+            tp = cfg.single_test_tp or 1
+            replicas = cfg.single_test_replicas or 1
+            num_gpus = tp * replicas
+            self.opt.log(f"TP={tp}, {replicas} replicas ({num_gpus} GPUs)", 'info')
+
+            test_config = self.opt._create_aggregated_config(
+                tp=tp,
+                num_gpus=num_gpus,
+                isl=cfg.isl,
+                osl=cfg.osl,
+                test_id=f"single-agg-tp{tp}-{replicas}r",
+                use_concurrency=True,
+            )
+
+        elif arch == 'pd':
+            from core.optimizer.config import FeasibleSplit
+            prefill_tp = cfg.single_test_prefill_tp or cfg.single_test_tp or 4
+            decode_tp = cfg.single_test_decode_tp or cfg.single_test_tp or 8
+            prefill_pods = cfg.single_test_prefill_pods or 1
+            decode_pods = cfg.single_test_decode_pods or 1
+            total_gpus = (prefill_tp * prefill_pods) + (decode_tp * decode_pods)
+
+            self.opt.log(f"Prefill: {prefill_pods} pods × TP{prefill_tp}, "
+                         f"Decode: {decode_pods} pods × TP{decode_tp} "
+                         f"({total_gpus} GPUs)", 'info')
+
+            split = FeasibleSplit(
+                prefill_pods=prefill_pods,
+                decode_pods=decode_pods,
+                prefill_tp=prefill_tp,
+                decode_tp=decode_tp,
+                prefill_gpus=prefill_tp * prefill_pods,
+                decode_gpus=decode_tp * decode_pods,
+                total_gpus=total_gpus,
+                prefill_pct=prefill_pods / (prefill_pods + decode_pods),
+            )
+            test_config = self.opt._create_pd_config(split)
+            test_config.test_id = f"single-pd-{prefill_pods}p{decode_pods}d-ptp{prefill_tp}-dtp{decode_tp}"
+
+        elif arch == 'ep':
+            tp = cfg.single_test_tp or 1
+            replicas = cfg.single_test_replicas or 1
+            num_gpus = tp * replicas
+            self.opt.log(f"TP={tp}, {replicas} replicas ({num_gpus} GPUs)", 'info')
+
+            test_config = self.opt._create_ep_config(
+                tp=tp,
+                num_gpus=num_gpus,
+                isl=cfg.isl,
+                osl=cfg.osl,
+                test_id=f"single-ep-tp{tp}-{replicas}r",
+            )
+
+        else:
+            self.opt.log(f"❌ Unknown architecture: {arch}", 'error')
+            return
+
+        self.opt.log("", 'info')
+        result = self.opt.orchestrator.run_test(
+            test_config,
+            cleanup=True,
+            log_callback=lambda msg: self.opt.log(msg, 'info'),
+            stop_check=self.opt._should_stop,
+        )
+
+        self.opt.all_test_results.append((test_config, result))
+        self.opt._save_test_to_database(test_config, result)
+
+        if result and result.guidellm_success:
+            ttft = result.ttft_p90 or result.ttft_p50 or 0
+            throughput = result.throughput_p90 or result.throughput_p50 or 0
+            self.opt.log(f"✅ TTFT p90: {ttft:.1f}ms, Throughput p90: {throughput:.2f} req/s", 'success')
+        else:
+            self.opt.log("❌ Test failed", 'error')
+
+
 class AggregatedOnlyStrategy(OptimizationStrategy):
     """Aggregated Only: Skip architecture comparison, test only standard aggregated configs.
 

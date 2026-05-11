@@ -132,6 +132,35 @@
         </div>
     </div>
 
+    <!-- Single Test from Recommendation Modal -->
+    <div class="modal-overlay" id="single-test-modal">
+        <div class="modal-content">
+            <div class="modal-header" style="background: linear-gradient(135deg, #8b5cf6 0%, #7c3aed 100%);">
+                <div class="modal-header-icon">🧪</div>
+                <div class="modal-header-text">
+                    <h3>Run Single Test</h3>
+                    <p>Test this specific configuration</p>
+                </div>
+            </div>
+            <div class="modal-body">
+                <div id="single-test-modal-gpu-warning" style="display:none; background:linear-gradient(135deg,#fef2f2,#fecaca); border-left:4px solid #dc2626; border-radius:8px; padding:14px; margin-bottom:16px;">
+                    <div style="font-weight:700; color:#991b1b; margin-bottom:4px;">⚠️ GPU Limit Exceeded</div>
+                    <p id="single-test-modal-gpu-msg" style="color:#7f1d1d; font-size:14px; margin:0;"></p>
+                </div>
+                <div style="background:#f5f3ff; border:2px solid #8b5cf640; border-radius:10px; padding:16px;">
+                    <div id="single-test-modal-config" style="font-size:0.95em; color:#1e293b; line-height:1.8;"></div>
+                </div>
+                <p style="color:#64748b; font-size:0.85em; margin-top:12px; line-height:1.6;">
+                    This will deploy the configuration above, run a benchmark, and collect results. You can adjust workload settings (ISL, OSL, users) in the wizard before starting.
+                </p>
+            </div>
+            <div class="modal-footer">
+                <button class="modal-button" style="background:#e2e8f0; color:#475569;" onclick="document.getElementById('single-test-modal').classList.remove('active')">Cancel</button>
+                <button class="modal-button" id="single-test-modal-confirm" style="background:linear-gradient(135deg,#8b5cf6,#7c3aed); color:white; box-shadow:0 4px 12px rgba(139,92,246,0.3);" onclick="confirmSingleTest()">Continue to Wizard →</button>
+            </div>
+        </div>
+    </div>
+
     <!-- Restart Run Confirmation Modal -->
     <div class="modal-overlay" id="restart-run-modal">
         <div class="modal-content">
