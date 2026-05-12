@@ -661,8 +661,8 @@ function loadInstances(clusterId, isRefresh, userId){
                 '</div>' +
                 '<div class="card-details">' +
                 '<span>🌐 '+(inst.target_cluster==='local'?'Local cluster':'Remote cluster')+'</span>' +
-                (inst.preset_gpus ? '<span>🎛️ '+inst.preset_gpus+' GPUs</span>' : '') +
-                (inst.preset_nodes ? '<span>📍 '+inst.preset_nodes.split(',').length+' node'+(inst.preset_nodes.split(',').length>1?'s':'')+'</span>' : '') +
+                '<span>🎛️ '+(inst.preset_gpus ? inst.preset_gpus+' GPUs' : 'All GPUs')+'</span>' +
+                '<span>📍 '+(inst.preset_nodes ? inst.preset_nodes.split(',').length+' node'+(inst.preset_nodes.split(',').length>1?'s':'') : 'All nodes')+'</span>' +
                 '<span>📅 '+inst.created_at.slice(0,10)+'</span>' +
                 '</div>' +
                 '</div>' +
