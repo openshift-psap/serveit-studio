@@ -134,6 +134,17 @@ function updateUIFromConfig() {
         setPdSearchMode(config.pd_search_mode);
     }
 
+    // Restore image selection
+    if (config.image && document.getElementById('image-repo-input')) {
+        var imgParts = config.image.split(':');
+        var imgTag = imgParts.pop();
+        var imgRepo = imgParts.join(':');
+        document.getElementById('image-repo-input').value = imgRepo;
+        var tagSelect = document.getElementById('image-tag-select');
+        tagSelect.innerHTML = '<option value="' + imgTag + '" selected>' + imgTag + '</option>';
+        document.getElementById('image-full-path').textContent = config.image;
+    }
+
     // Restore run description
     if (config.run_description && document.getElementById('run-description-input')) {
         document.getElementById('run-description-input').value = config.run_description;
