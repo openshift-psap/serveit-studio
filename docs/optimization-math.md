@@ -266,13 +266,24 @@ w_queue  = clamp(round(queue_wait_cost / total × 7), 1, 5)
 
 **Why clamp to [1, 5]?** Prevents extreme weights (e.g., 7:0:0) that would ignore entire routing dimensions. Even a low-impact dimension should have some influence.
 
-**Example:** ISL=9000, OSL=50, 80% cache hit, prefill_TPSG=50000, decode_TPSG=10000, 16 pods
+**Example (with Prometheus — measured cache hit = 63%):**
+ISL=9000, OSL=50, measured cache hit=63%, prefill_TPSG=50000, decode_TPSG=10000, 16 pods, KV variance=0.02, queue variance=0.05
+```
+prefix_impact = 9000 × 0.63 / 50000 = 0.1134 GPU-sec  (dominant)
+kv_eviction   = 9000 / 50000 × 0.02 = 0.0036 GPU-sec  (minor)
+queue_cost    = 9050 / 60000 × 0.15 = 0.0226 GPU-sec  (moderate)
+→ Weights: prefix=5, kv=1, queue=1  (cache-dominated workload)
+```
+
+**Example (without Prometheus — fallback to configured 80%):**
+ISL=9000, OSL=50, configured cache_hit=80%, concurrency=100, max_num_seqs=4096, 16 pods
 ```
 prefix_impact = 9000 × 0.8 / 50000 = 0.144 GPU-sec  (dominant)
 kv_eviction   = 9000 / 50000 × (100/4096)² ≈ 0.0001 GPU-sec  (negligible)
 queue_cost    = 9050 / 60000 / 16 = 0.0094 GPU-sec  (minor)
 → Weights: prefix=5, kv=1, queue=1  (cache-dominated workload)
 ```
+Note: The configured 80% overstates the actual hit rate (measured 63%) but produces the same dominant weight in this case. For workloads where cache and queue are closer in impact, the measured data would produce meaningfully different weights.
 
 ### Two-Pass Refinement (OpenShift)
 
@@ -299,15 +310,29 @@ The EPP routes each incoming request to the vLLM server that will handle it fast
 - **queue_score**: How many requests are already queued on this server. Lower queue = faster processing.
 
 ### Weight Selection Strategy
+
+**Primary: Smart EPP (default)** — Weights are derived mathematically from calibration data and measured Step 6/7 metrics as described above. Produces 1-2 tests per architecture.
+
+**Fallback: Preset Sweep** — Used when calibration TPSG data is unavailable (e.g., skipped Steps 2-3). Tests 3 preset weight combinations:
 ```
-Default:     prefix=3, kv=2, queue=2
-If ISL/OSL > 10 (long prompts, short outputs):
-  cache-heavy: prefix=5, kv=1, queue=1
-  queue-heavy: prefix=1, kv=1, queue=5
-  kv-heavy:    prefix=2, kv=5, queue=1
-  equal:       prefix=2, kv=2, queue=2
+cache-heavy: prefix=5, kv=1, queue=1
+queue-heavy: prefix=1, kv=1, queue=5
+kv-heavy:    prefix=2, kv=5, queue=1  (if ISL/OSL > 10)
+equal:       prefix=2, kv=2, queue=2  (if ISL/OSL ≤ 10)
 ```
-**Why ISL/OSL > 10 triggers more combos?** When prompts are much longer than outputs, prefix cache hits have a dramatic effect — a cache hit can skip thousands of tokens of prefill computation. This makes the routing decision much more impactful, so testing different weight strategies is worthwhile. For balanced ISL/OSL, the default weights work well because no single factor dominates.
+**Why ISL/OSL > 10 triggers kv-heavy instead of equal?** When prompts are much longer than outputs, prefix cache hits have a dramatic effect — a cache hit can skip thousands of tokens of prefill computation. KV cache pressure also increases with long sequences, making KV-aware routing more valuable. For balanced ISL/OSL, an equal distribution works because no single factor dominates.
+
+### Data Sources for Smart EPP
+
+| Data | Source | Fallback |
+|------|--------|----------|
+| Prefix cache hit rate | Measured from winning Step 6/7 config (Prometheus `prefix_cache_hits_total / prefix_cache_queries_total`) | User-configured `prefix_cache_hit_pct` |
+| KV utilization factor | Per-pod KV utilization variance from Step 6/7 (Prometheus `kv_cache_usage_perc`) | Estimated `(concurrency / max_num_seqs)²` |
+| Queue factor | Per-pod queue depth variance from Step 6/7 (Prometheus `inference_pool_per_pod_queue_size`) | Estimated `1 / num_pods` |
+| Prefill TPSG | Step 3 calibration (OSL=1 sweep) | Required — no fallback |
+| Decode TPSG | Step 2 calibration (ISL=1 sweep) | Required — no fallback |
+
+**Why use the winning config's metrics?** Different configurations produce different cache hit rates. A 16-pod aggregated deployment spreads requests across 16 caches (lower per-pod hit rate) while a 2-pod deployment concentrates them (higher hit rate). The winning config from Step 6 (best aggregated) or Step 7 (best PD from Pareto front) is the same config that EPP tuning will deploy, so its metrics are the most relevant.
 
 ### EPP Config Parameters
 
