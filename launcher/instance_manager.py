@@ -46,7 +46,9 @@ def _render(template_name: str, **ctx) -> str:
 
 
 def _sanitize(name: str) -> str:
-    return re.sub(r'[^a-z0-9-]', '-', name.lower())[:40]
+    s = re.sub(r'[^a-z0-9-]', '-', name.lower())
+    s = re.sub(r'-+', '-', s).strip('-')[:40].strip('-')
+    return s or 'unnamed'
 
 
 def _validate_kubeconfig(kubeconfig_data: str) -> str:

@@ -788,7 +788,17 @@ var kubeconfigContent=null;
 
 function createInstance(e){
     e.preventDefault();
-    var name=document.getElementById('instance-name').value;
+    var nameInput=document.getElementById('instance-name');
+    var name=nameInput.value.trim();
+    if(!name){
+        nameInput.style.borderColor='#dc2626';nameInput.placeholder='Instance name is required';nameInput.focus();
+        setTimeout(function(){nameInput.style.borderColor='';nameInput.placeholder='my-optimization';},3000);return;
+    }
+    if(/[^a-zA-Z0-9 _-]/.test(name)){
+        var errEl=document.getElementById('create-error');
+        document.getElementById('create-error-text').textContent='Name can only contain letters, numbers, spaces, hyphens, and underscores.';
+        errEl.style.display='block';nameInput.focus();return;
+    }
     var modal=document.querySelector('#create-modal .modal');
     var btn=document.getElementById('create-btn');
 
