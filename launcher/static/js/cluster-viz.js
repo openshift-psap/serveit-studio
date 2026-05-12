@@ -49,9 +49,7 @@ function renderClusterDiagram(container, data) {
             html += '<div class="viz-server-body">';
             html += '<div class="viz-gpu-bay">';
             for (var i = 0; i < node.gpus; i++) {
-                html += '<div class="viz-gpu-slot" title="' + (node.gpu_model || 'GPU') + ' ' + vram + '">';
-                html += '<svg width="14" height="14" viewBox="0 0 24 24" fill="#2A7B88" opacity="0.85"><rect x="2" y="4" width="20" height="16" rx="2"/><rect x="5" y="7" width="4" height="4" rx="0.5" fill="#1B5E6B"/><rect x="10" y="7" width="4" height="4" rx="0.5" fill="#1B5E6B"/><rect x="15" y="7" width="4" height="4" rx="0.5" fill="#1B5E6B"/><rect x="5" y="14" width="14" height="2" rx="0.5" fill="#1B5E6B"/></svg>';
-                html += '</div>';
+                html += '<div class="viz-gpu-slot" title="' + (node.gpu_model || 'GPU') + ' #' + (i+1) + ' ' + vram + '"></div>';
             }
             html += '</div>';
             html += '<div class="viz-server-specs">';
