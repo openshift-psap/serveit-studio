@@ -299,7 +299,7 @@ def main():
     sg = p.add_argument_group('Storage')
     sg.add_argument('-p', '--pvc-name', help='Use existing PVC (skips PVC creation)')
     sg.add_argument('-s', '--storage-class', help='Create new PVC with this storage class')
-    sg.add_argument('--storage-size', default='100Gi', help='PVC size (default: 100Gi)')
+    sg.add_argument('--storage-size', default='10Gi', help='PVC size (default: 10Gi)')
 
     dg = p.add_argument_group('Dev Options')
     dg.add_argument('--dev', action='store_true', help='Dev mode (auto-sync code, auto-restart)')
