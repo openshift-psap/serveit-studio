@@ -242,9 +242,9 @@ Instead of brute-force testing preset weight combinations (3-4 tests), Smart EPP
 Each weight is proportional to the **time impact** of optimal routing on that dimension:
 
 ```
-prefix_time_impact = (ISL × prefix_cache_hit_pct / 100) / prefill_TPSG
-kv_eviction_cost   = (ISL / prefill_TPSG) × (concurrency / max_num_seqs)²
-queue_wait_cost    = (ISL + OSL) / (prefill_TPSG + decode_TPSG) / num_pods
+prefix_time_impact = (ISL × actual_cache_hit_pct / 100) / prefill_TPSG
+kv_eviction_cost   = (ISL / prefill_TPSG) × kv_utilization_factor
+queue_wait_cost    = (ISL + OSL) / (prefill_TPSG + decode_TPSG) × queue_factor
 
 total = prefix_time_impact + kv_eviction_cost + queue_wait_cost
 w_prefix = clamp(round(prefix_time_impact / total × 7), 1, 5)
@@ -254,11 +254,13 @@ w_queue  = clamp(round(queue_wait_cost / total × 7), 1, 5)
 
 **Why these formulas?**
 
-- **prefix_time_impact**: A prefix cache hit skips `ISL × hit_pct` tokens of prefill computation. The time saved per request is `cached_tokens / prefill_TPSG` GPU-seconds. High ISL + high cache hit rate = large impact = high prefix weight.
+- **prefix_time_impact**: A prefix cache hit skips `ISL × hit_pct` tokens of prefill computation. The time saved per request is `cached_tokens / prefill_TPSG` GPU-seconds. The cache hit rate is the **actual measured rate** from Step 6 (aggregated) or Step 7 (PD) Prometheus metrics, not the user-configured `prefix_cache_hit_pct`. Setting 80% in the wizard doesn't guarantee 80% hits — the actual rate depends on pod count, EPP routing, and KV cache capacity. When Prometheus metrics are unavailable, falls back to the configured percentage.
 
-- **kv_eviction_cost**: When a request is routed to a server with full KV cache, it evicts an existing sequence that must be re-prefilled later — costing `ISL / prefill_TPSG` GPU-seconds. The probability of eviction scales quadratically with utilization `(concurrency / max_num_seqs)²`, reflecting that evictions spike non-linearly as KV cache fills.
+- **kv_eviction_cost**: When a request is routed to a server with full KV cache, it evicts an existing sequence that must be re-prefilled later — costing `ISL / prefill_TPSG` GPU-seconds. The `kv_utilization_factor` is the **measured per-pod KV utilization variance** from Step 6/7 when available (Prometheus). Higher variance means some pods are near-full while others have space — routing matters more. Falls back to `(concurrency / max_num_seqs)²` when metrics are unavailable.
 
-- **queue_wait_cost**: Each request in a pod's queue adds `(ISL + OSL) / total_TPSG` seconds of wait time. With more pods, imbalance is diluted (each pod's queue is shorter), so we divide by `num_pods`.
+- **queue_wait_cost**: Each request in a pod's queue adds `(ISL + OSL) / total_TPSG` seconds of wait time. The `queue_factor` is the **measured per-pod queue depth variance** from Step 6/7 when available. Higher variance means request distribution is uneven — queue-aware routing helps. Falls back to `1 / num_pods` when metrics are unavailable.
+
+**Architecture-specific derivation:** Weights are computed separately for aggregated and PD architectures because cache behavior differs. Aggregated pods each maintain their own prefix cache; PD mode only caches on prefill pods. The measured cache hit rates from Step 6 (aggregated) and Step 7 (PD) are used independently.
 
 **Why normalize to sum ~7?** The default balanced preset is 3:2:2 (sum=7). Normalizing to the same scale ensures the derived weights are in the EPP's expected range.
 
