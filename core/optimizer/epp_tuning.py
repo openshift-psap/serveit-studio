@@ -1,8 +1,9 @@
-"""Step 9: EPP tuning — smart weight sweep per architecture."""
+"""Step 9: EPP tuning — smart weight derivation + optional sweep."""
 
+import math
 import os
 import time
-from typing import Dict
+from typing import Dict, Optional, Tuple
 
 
 from core.config_generator import TestConfig
@@ -11,33 +12,186 @@ from core.template_manager import TemplateManager
 class EPPTuningMixin:
     """Mixin providing EPP tuning methods for RecipeOptimizer."""
 
-    def _benchmark_epp_strategies(self):
-        """Step 9: EPP Tuning — smart weight sweep per architecture.
+    def _compute_smart_epp_weights(self, num_pods: int = 1) -> Optional[Dict]:
+        """Derive EPP weights from calibration data (Steps 2-3).
 
-        Tests 3 EPP weight combinations on the best config from each
-        architecture (PD and Aggregated), using the optimal concurrency
-        from Step 7/8. Swaps only the EPP configmap between tests.
+        Each weight is proportional to the time impact of optimal routing
+        on that dimension:
+          prefix ∝ time saved by cache hit (ISL × hit_pct / prefill_TPSG)
+          kv     ∝ cost of KV eviction (ISL / prefill_TPSG × utilization²)
+          queue  ∝ wait time per queue imbalance ((ISL+OSL) / total_TPSG / pods)
+        """
+        prefill_tpsg = self.optimal_prefill_tp.tpsg if self.optimal_prefill_tp else None
+        decode_tpsg = self.optimal_decode_tp.tpsg if self.optimal_decode_tp else None
+
+        if not prefill_tpsg or not decode_tpsg:
+            self.log("  Smart EPP: no calibration TPSG data, falling back to presets", 'warning')
+            return None
+
+        isl = self.config.isl
+        osl = self.config.osl
+        cache_pct = self.config.prefix_cache_hit_pct or 0
+        concurrency = getattr(self, 'effective_concurrency', int(self.config.qps))
+
+        tp = self.optimal_decode_tp.tp if self.optimal_decode_tp else 1
+        max_seqs = self._compute_max_num_seqs(tp) or 256
+
+        prefix_time_impact = (isl * cache_pct / 100.0) / prefill_tpsg
+        kv_utilization = min(concurrency / max(max_seqs, 1), 1.0)
+        kv_eviction_cost = (isl / prefill_tpsg) * (kv_utilization ** 2)
+        total_tpsg = prefill_tpsg + decode_tpsg
+        queue_wait_cost = (isl + osl) / total_tpsg / max(num_pods, 1)
+
+        total = prefix_time_impact + kv_eviction_cost + queue_wait_cost
+        if total <= 0:
+            return None
+
+        w_prefix = max(1, min(5, round(prefix_time_impact / total * 7)))
+        w_kv = max(1, min(5, round(kv_eviction_cost / total * 7)))
+        w_queue = max(1, min(5, round(queue_wait_cost / total * 7)))
+
+        self.log("  Smart EPP Weight Derivation:", 'info')
+        self.log(f"    Prefix impact: ISL={isl} × {cache_pct}% / TPSG={prefill_tpsg:.0f} = {prefix_time_impact:.4f} GPU-sec", 'info')
+        self.log(f"    KV pressure:   ISL={isl} / {prefill_tpsg:.0f} × ({concurrency}/{max_seqs})² = {kv_eviction_cost:.4f} GPU-sec", 'info')
+        self.log(f"    Queue cost:    ({isl}+{osl}) / {total_tpsg:.0f} / {num_pods} pods = {queue_wait_cost:.4f} GPU-sec", 'info')
+        self.log(f"    → Weights: prefix={w_prefix}, kv={w_kv}, queue={w_queue}", 'success')
+
+        return {
+            'prefix_cache_weight': float(w_prefix),
+            'kv_cache_weight': float(w_kv),
+            'queue_weight': float(w_queue),
+            'slo_enabled': False,
+        }
+
+    def _refine_epp_from_metrics(self, test_result) -> Optional[Dict]:
+        """Refine EPP weights from actual Prometheus metrics (OpenShift only).
+
+        Reads prefix cache hit rate, KV utilization variance, and queue depth
+        variance from the test result's metrics. Returns refined weights or
+        None if metrics are unavailable.
+        """
+        if not test_result or not test_result.metrics_json:
+            return None
+
+        try:
+            import json
+            metrics = json.loads(test_result.metrics_json)
+        except Exception:
+            return None
+
+        prefill_tpsg = self.optimal_prefill_tp.tpsg if self.optimal_prefill_tp else None
+        decode_tpsg = self.optimal_decode_tp.tpsg if self.optimal_decode_tp else None
+        if not prefill_tpsg or not decode_tpsg:
+            return None
+
+        cache_hits = None
+        cache_queries = None
+        kv_values = []
+        queue_values = []
+
+        for key, val in metrics.items():
+            if 'prefix_cache_hits' in key and 'avg' in str(val):
+                cache_hits = val.get('avg') if isinstance(val, dict) else val
+            elif 'prefix_cache_queries' in key and 'avg' in str(val):
+                cache_queries = val.get('avg') if isinstance(val, dict) else val
+            elif 'kv_cache_usage_perc' in key:
+                if isinstance(val, dict):
+                    for v in val.values():
+                        if isinstance(v, (int, float)) and v > 0:
+                            kv_values.append(v)
+                elif isinstance(val, (int, float)) and val > 0:
+                    kv_values.append(val)
+            elif 'queue_size' in key and 'per_pod' in key:
+                if isinstance(val, dict):
+                    for v in val.values():
+                        if isinstance(v, (int, float)):
+                            queue_values.append(v)
+
+        if cache_hits is None and not kv_values and not queue_values:
+            self.log("  Smart EPP: no Prometheus metrics available for refinement", 'info')
+            return None
+
+        isl = self.config.isl
+        osl = self.config.osl
+
+        actual_hit_pct = 0
+        if cache_hits is not None and cache_queries and cache_queries > 0:
+            actual_hit_pct = (cache_hits / cache_queries) * 100
+            self.log(f"    Measured cache hit rate: {actual_hit_pct:.1f}%", 'info')
+
+        kv_variance = 0
+        if len(kv_values) >= 2:
+            kv_mean = sum(kv_values) / len(kv_values)
+            kv_variance = sum((v - kv_mean) ** 2 for v in kv_values) / len(kv_values)
+            self.log(f"    KV utilization variance: {kv_variance:.4f} (mean={kv_mean:.2f}%)", 'info')
+
+        queue_variance = 0
+        if len(queue_values) >= 2:
+            q_mean = sum(queue_values) / len(queue_values)
+            queue_variance = sum((v - q_mean) ** 2 for v in queue_values) / len(queue_values)
+            self.log(f"    Queue depth variance: {queue_variance:.4f} (mean={q_mean:.1f})", 'info')
+
+        prefix_impact = (isl * actual_hit_pct / 100.0) / prefill_tpsg
+        kv_impact = (isl / prefill_tpsg) * min(kv_variance, 1.0)
+        queue_impact = (isl + osl) / (prefill_tpsg + decode_tpsg) * min(queue_variance + 0.1, 1.0)
+
+        total = prefix_impact + kv_impact + queue_impact
+        if total <= 0:
+            return None
+
+        w_prefix = max(1, min(5, round(prefix_impact / total * 7)))
+        w_kv = max(1, min(5, round(kv_impact / total * 7)))
+        w_queue = max(1, min(5, round(queue_impact / total * 7)))
+
+        self.log(f"    → Refined weights: prefix={w_prefix}, kv={w_kv}, queue={w_queue}", 'success')
+
+        return {
+            'prefix_cache_weight': float(w_prefix),
+            'kv_cache_weight': float(w_kv),
+            'queue_weight': float(w_queue),
+            'slo_enabled': False,
+        }
+
+    def _benchmark_epp_strategies(self):
+        """Step 9: EPP Tuning — smart weight derivation + validation.
+
+        Derives EPP weights mathematically from calibration data (1 test),
+        then optionally refines from measured metrics (1 more test on OpenShift).
+        Falls back to preset sweep if calibration data is unavailable.
         """
         if not self.config.epp_benchmark:
             return
 
         self.log("\n" + "=" * 80, 'info')
-        self.log("STEP 9: EPP Tuning (Smart Weight Sweep)", 'decision')
+        self.log("STEP 9: EPP Tuning (Smart Weight Derivation)", 'decision')
         self.log("=" * 80, 'info')
 
-        # Build weight combos based on workload
         has_sla = False
-        isl_osl_ratio = self.config.isl / max(self.config.osl, 1)
         base = self._build_epp_config()
 
-        weight_combos = [
-            ('cache-heavy', {'prefix_cache_weight': 5.0, 'kv_cache_weight': 1.0, 'queue_weight': 1.0, 'slo_enabled': has_sla}),
-            ('queue-heavy', {'prefix_cache_weight': 1.0, 'kv_cache_weight': 1.0, 'queue_weight': 5.0, 'slo_enabled': has_sla}),
-        ]
-        if isl_osl_ratio > 10:
-            weight_combos.append(('kv-heavy', {'prefix_cache_weight': 2.0, 'kv_cache_weight': 5.0, 'queue_weight': 1.0, 'slo_enabled': has_sla}))
+        # Determine pod count for queue cost calculation
+        num_pods = 1
+        if self.pareto_results:
+            best_split = min(self.pareto_results, key=lambda x: x[1].ttft_p90 if x[1].ttft_p90 else 1e9)[0]
+            num_pods = best_split.prefill_pods + best_split.decode_pods
+        elif self.aggregated_result and self.aggregated_tp:
+            num_pods = self.config.total_gpus // self.aggregated_tp
+
+        # Try smart derivation first
+        smart_weights = self._compute_smart_epp_weights(num_pods=num_pods)
+
+        if smart_weights:
+            weight_combos = [('smart-derived', smart_weights)]
         else:
-            weight_combos.append(('equal', {'prefix_cache_weight': 2.0, 'kv_cache_weight': 2.0, 'queue_weight': 2.0, 'slo_enabled': has_sla}))
+            isl_osl_ratio = self.config.isl / max(self.config.osl, 1)
+            weight_combos = [
+                ('cache-heavy', {'prefix_cache_weight': 5.0, 'kv_cache_weight': 1.0, 'queue_weight': 1.0, 'slo_enabled': has_sla}),
+                ('queue-heavy', {'prefix_cache_weight': 1.0, 'kv_cache_weight': 1.0, 'queue_weight': 5.0, 'slo_enabled': has_sla}),
+            ]
+            if isl_osl_ratio > 10:
+                weight_combos.append(('kv-heavy', {'prefix_cache_weight': 2.0, 'kv_cache_weight': 5.0, 'queue_weight': 1.0, 'slo_enabled': has_sla}))
+            else:
+                weight_combos.append(('equal', {'prefix_cache_weight': 2.0, 'kv_cache_weight': 2.0, 'queue_weight': 2.0, 'slo_enabled': has_sla}))
 
         # Collect best configs per architecture
         configs_to_test = []
@@ -220,6 +374,82 @@ class EPPTuningMixin:
                     self._save_epp_test_to_database(epp_test_config, result)
                 else:
                     self.log(f"  ❌ {name}: benchmark failed", 'error')
+
+            # Smart EPP: try to refine from measured metrics after first test
+            if smart_weights and arch_results and not self._should_stop():
+                first_result = arch_results[0][2]
+                self.log(f"\n  Attempting metrics-based refinement...", 'info')
+                refined = self._refine_epp_from_metrics(first_result)
+                if refined and (refined['prefix_cache_weight'] != smart_weights['prefix_cache_weight'] or
+                                refined['kv_cache_weight'] != smart_weights['kv_cache_weight'] or
+                                refined['queue_weight'] != smart_weights['queue_weight']):
+                    self.log(f"  Weights changed — running validation test", 'info')
+                    # Run the refined combo through the same test loop
+                    refined_combos = [('smart-refined', refined)]
+                    for rname, rweights in refined_combos:
+                        if self._should_stop():
+                            break
+                        try:
+                            self.orchestrator.deployment_manager.kubectl.run(
+                                ['delete', 'lws', '-l', 'component=inftune-test',
+                                 '-n', self.config.namespace, '--ignore-not-found=true'], check=False)
+                            time.sleep(5)
+                        except Exception:
+                            pass
+                        rtest_id = f"step11-epp-{arch}-{rname}"
+                        self.log(f"  Testing: {rname} (cache={rweights['prefix_cache_weight']}, kv={rweights['kv_cache_weight']}, queue={rweights['queue_weight']})", 'info')
+                        repp_cfg = {
+                            'preset': 'custom',
+                            'maxPrefixBlocksToMatch': base.get('maxPrefixBlocksToMatch', 256),
+                            'lruCapacityPerServer': base.get('lruCapacityPerServer', 31250),
+                            'nonCachedTokens': base.get('nonCachedTokens', 16),
+                            'plugins': {
+                                'prefix_cache': {'enabled': True, 'weight': rweights['prefix_cache_weight']},
+                                'kv_cache': {'enabled': True, 'weight': rweights['kv_cache_weight']},
+                                'queue': {'enabled': True, 'weight': rweights['queue_weight']},
+                                'slo': {'enabled': False},
+                            },
+                        }
+                        rsuccess = prereq_mgr.update_epp_config(architecture=arch, epp_config=repp_cfg,
+                                                                 log_callback=lambda msg: self.log(msg, 'info'))
+                        if rsuccess:
+                            rtest_config = TestConfig(
+                                test_id=rtest_id, architecture=base_cfg.architecture,
+                                model_name=base_cfg.model_name, namespace=base_cfg.namespace,
+                                isl=base_cfg.isl, osl=base_cfg.osl, num_users=concurrency,
+                                tensor_parallelism=base_cfg.tensor_parallelism, replicas=base_cfg.replicas,
+                                prefill_replicas=base_cfg.prefill_replicas, decode_replicas=base_cfg.decode_replicas,
+                                prefill_tp=base_cfg.prefill_tp, decode_tp=base_cfg.decode_tp,
+                                max_model_len=base_cfg.max_model_len, gpu_memory_utilization=base_cfg.gpu_memory_utilization,
+                                image=base_cfg.image, pvc_name=base_cfg.pvc_name,
+                                request_type=base_cfg.request_type, request_rate=concurrency,
+                                test_duration=base_cfg.test_duration, workload_mode=base_cfg.workload_mode,
+                                dataset_source=base_cfg.dataset_source, block_size=base_cfg.block_size,
+                                network_type=base_cfg.network_type, nccl_ib_hca=base_cfg.nccl_ib_hca,
+                                rdma_device_resources=base_cfg.rdma_device_resources,
+                                rdma_nics_per_node=base_cfg.rdma_nics_per_node,
+                                memory_request=base_cfg.memory_request, memory_limit=base_cfg.memory_limit,
+                                cpu_request=base_cfg.cpu_request, cpu_limit=base_cfg.cpu_limit,
+                                max_num_seqs=base_cfg.max_num_seqs,
+                                prefill_max_num_seqs=base_cfg.prefill_max_num_seqs,
+                                decode_max_num_seqs=base_cfg.decode_max_num_seqs,
+                                max_num_batched_tokens=base_cfg.max_num_batched_tokens,
+                                prefill_gpu_memory_utilization=base_cfg.prefill_gpu_memory_utilization,
+                                decode_gpu_memory_utilization=base_cfg.decode_gpu_memory_utilization,
+                                selected_nodes=base_cfg.selected_nodes, epp_config=repp_cfg,
+                            )
+                            rresult = self.orchestrator.run_test(rtest_config, cleanup=True,
+                                                                 log_callback=lambda msg: self.log(msg, 'info'),
+                                                                 stop_check=self._should_stop)
+                            if rresult and rresult.guidellm_success:
+                                self.log(f"  ✅ {rname}: TTFT p90={rresult.ttft_p90:.1f}ms, Throughput p90={rresult.throughput_p90:.2f} req/s", 'success')
+                                arch_results.append((rname, rweights, rresult))
+                                self.all_test_results.append((rtest_config, rresult))
+                                self._save_epp_test_to_database(rtest_config, rresult)
+                            else:
+                                self.log(f"  ❌ {rname}: benchmark failed", 'error')
+                else:
+                    self.log(f"  Metrics confirm derived weights — no refinement needed", 'success')
 
             self.epp_benchmark_results[arch] = arch_results
 

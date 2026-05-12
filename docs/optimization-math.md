@@ -235,6 +235,54 @@ No new tests. Compares best PD (Step 7) vs best Aggregated (Step 6).
 
 ## Step 9: EPP (Endpoint Picker) Tuning
 
+### Smart EPP Weight Derivation
+
+Instead of brute-force testing preset weight combinations (3-4 tests), Smart EPP derives near-optimal weights mathematically from calibration data collected in Steps 2-3.
+
+Each weight is proportional to the **time impact** of optimal routing on that dimension:
+
+```
+prefix_time_impact = (ISL × prefix_cache_hit_pct / 100) / prefill_TPSG
+kv_eviction_cost   = (ISL / prefill_TPSG) × (concurrency / max_num_seqs)²
+queue_wait_cost    = (ISL + OSL) / (prefill_TPSG + decode_TPSG) / num_pods
+
+total = prefix_time_impact + kv_eviction_cost + queue_wait_cost
+w_prefix = clamp(round(prefix_time_impact / total × 7), 1, 5)
+w_kv     = clamp(round(kv_eviction_cost / total × 7), 1, 5)
+w_queue  = clamp(round(queue_wait_cost / total × 7), 1, 5)
+```
+
+**Why these formulas?**
+
+- **prefix_time_impact**: A prefix cache hit skips `ISL × hit_pct` tokens of prefill computation. The time saved per request is `cached_tokens / prefill_TPSG` GPU-seconds. High ISL + high cache hit rate = large impact = high prefix weight.
+
+- **kv_eviction_cost**: When a request is routed to a server with full KV cache, it evicts an existing sequence that must be re-prefilled later — costing `ISL / prefill_TPSG` GPU-seconds. The probability of eviction scales quadratically with utilization `(concurrency / max_num_seqs)²`, reflecting that evictions spike non-linearly as KV cache fills.
+
+- **queue_wait_cost**: Each request in a pod's queue adds `(ISL + OSL) / total_TPSG` seconds of wait time. With more pods, imbalance is diluted (each pod's queue is shorter), so we divide by `num_pods`.
+
+**Why normalize to sum ~7?** The default balanced preset is 3:2:2 (sum=7). Normalizing to the same scale ensures the derived weights are in the EPP's expected range.
+
+**Why clamp to [1, 5]?** Prevents extreme weights (e.g., 7:0:0) that would ignore entire routing dimensions. Even a low-impact dimension should have some influence.
+
+**Example:** ISL=9000, OSL=50, 80% cache hit, prefill_TPSG=50000, decode_TPSG=10000, 16 pods
+```
+prefix_impact = 9000 × 0.8 / 50000 = 0.144 GPU-sec  (dominant)
+kv_eviction   = 9000 / 50000 × (100/4096)² ≈ 0.0001 GPU-sec  (negligible)
+queue_cost    = 9050 / 60000 / 16 = 0.0094 GPU-sec  (minor)
+→ Weights: prefix=5, kv=1, queue=1  (cache-dominated workload)
+```
+
+### Two-Pass Refinement (OpenShift)
+
+On OpenShift with Prometheus, after running the first test with derived weights, the system reads actual metrics:
+- `prefix_cache_hits_total / prefix_cache_queries_total` → measured cache hit rate
+- Per-pod KV cache utilization variance → if uneven, increase kv weight
+- Per-pod queue depth variance → if uneven, increase queue weight
+
+Weights are recomputed with measured data. If they differ from the initial derivation, one additional validation test is run. Total: 1-2 tests instead of 3-4 preset sweeps.
+
+On vanilla Kubernetes (no Prometheus), only the derived weights are tested (1 test).
+
 ### EPP Scoring Formula
 ```
 score = prefix_cache_weight × prefix_score
