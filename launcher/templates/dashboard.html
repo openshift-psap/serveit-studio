@@ -1094,5 +1094,64 @@ if(currentClusterId) {
     {% endif %}
 }
 </script>
+<!-- Help Button -->
+<button id="help-fab" onclick="document.getElementById('help-modal').classList.add('active')" title="Help" aria-label="Help" style="position:fixed;bottom:24px;right:24px;width:48px;height:48px;border-radius:50%;background:#2A7B88;color:white;border:none;cursor:pointer;box-shadow:0 4px 14px rgba(42,123,136,0.35);font-size:20px;display:flex;align-items:center;justify-content:center;z-index:90;transition:background-color 0.15s,transform 0.15s;" onmouseover="this.style.background='#1B5E6B';this.style.transform='scale(1.1)'" onmouseout="this.style.background='#2A7B88';this.style.transform=''">
+    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+</button>
+
+<!-- Help Modal -->
+<div class="modal-overlay" id="help-modal" onclick="if(event.target===this)document.getElementById('help-modal').classList.remove('active')">
+    <div class="modal" style="width:560px;max-height:80vh;overflow-y:auto;">
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;">
+            <h2 style="margin:0;display:flex;align-items:center;gap:8px;"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#2A7B88" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg> Help</h2>
+            <button onclick="document.getElementById('help-modal').classList.remove('active')" style="border:none;background:none;cursor:pointer;color:#999;font-size:1.4em;padding:4px;">&times;</button>
+        </div>
+
+        <div style="font-size:0.9em;color:#4A4A4A;line-height:1.7;">
+
+            <div style="font-weight:700;color:#1B5E6B;font-size:1.05em;margin-bottom:6px;">Getting Started</div>
+            <p>Inftune Studio is a multi-cluster LLM inference optimization platform. Use this dashboard to manage clusters, create instances, and run optimizations.</p>
+
+            <div style="font-weight:700;color:#1B5E6B;font-size:1.05em;margin:16px 0 6px;">Clusters</div>
+            <p><strong>Local cluster</strong> uses your current Kubernetes context. <strong>Remote clusters</strong> require a kubeconfig file — upload it when creating the cluster and the system will validate connectivity and store it securely as a K8s Secret.</p>
+            <p>Click <strong>Rescan</strong> to refresh GPU, CPU, memory, and RDMA information from the cluster.</p>
+
+            <div style="font-weight:700;color:#1B5E6B;font-size:1.05em;margin:16px 0 6px;">Instances</div>
+            <p>Each instance is an isolated Inftune Studio deployment with its own database and optimization runs. Click <strong>+ New Instance</strong> to create one.</p>
+            <ul style="padding-left:20px;margin:8px 0;">
+                <li><strong>GPU Allocation</strong> — Limit how many GPUs an instance can use. Leave empty for full cluster access.</li>
+                <li><strong>Node Pinning</strong> — Restrict tests to specific machines. Useful for shared clusters or specific hardware.</li>
+            </ul>
+
+            <div style="font-weight:700;color:#1B5E6B;font-size:1.05em;margin:16px 0 6px;">Connecting to an Instance</div>
+            <div style="background:#f8fafc;border:1.5px solid #E0E0E0;border-radius:8px;padding:12px;margin:8px 0;">
+                <p style="margin:0 0 8px;"><strong>OpenShift</strong> — Instances get a Route URL automatically. Click <strong>Open</strong> to access directly.</p>
+                <p style="margin:0;"><strong>Vanilla Kubernetes</strong> — No built-in ingress. Use the <strong>"📋 Copy portforward cli"</strong> button to copy a <code style="background:#1A1A1A;color:#fff;padding:2px 6px;border-radius:3px;font-size:0.9em;">kubectl port-forward</code> command. Paste it in your terminal to create a local tunnel, then click <strong>Open</strong>.</p>
+            </div>
+
+            <div style="font-weight:700;color:#1B5E6B;font-size:1.05em;margin:16px 0 6px;">GPU Node Visualization</div>
+            <p>The <strong>Cluster Resources</strong> panel shows detected hardware. Each node card displays:</p>
+            <ul style="padding-left:20px;margin:8px 0;">
+                <li><span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:#3BAA3B;margin-right:4px;"></span> <strong>Green LEDs</strong> — Node is Ready</li>
+                <li><span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:#dc2626;margin-right:4px;"></span> <strong>Red LEDs</strong> — Node is Not Ready</li>
+                <li><strong>Teal bars</strong> — Individual GPU slots</li>
+                <li><span style="background:#164E58;color:white;padding:1px 5px;border-radius:3px;font-size:0.8em;">RDMA</span> — Node has InfiniBand/RoCE for fast GPU-to-GPU networking</li>
+            </ul>
+
+            <div style="font-weight:700;color:#1B5E6B;font-size:1.05em;margin:16px 0 6px;">Deleting Instances</div>
+            <p>When deleting, you'll be asked whether to <strong>backup the optimization database</strong>. If enabled, the results are copied to the launcher's storage at <code style="background:#f1f5f9;padding:2px 6px;border-radius:3px;font-size:0.9em;">/mnt/storage/backups/</code> before the instance is removed.</p>
+
+            {% if is_admin %}
+            <div style="font-weight:700;color:#1B5E6B;font-size:1.05em;margin:16px 0 6px;">Admin: User Management</div>
+            <p>As an admin, you can create users, reset passwords, and view their clusters. Each user's clusters and instances are isolated — deleting a user removes all their resources.</p>
+            {% endif %}
+        </div>
+
+        <div style="margin-top:20px;text-align:right;">
+            <button class="btn btn-primary" onclick="document.getElementById('help-modal').classList.remove('active')">Got it</button>
+        </div>
+    </div>
+</div>
+
 </body>
 </html>
