@@ -92,37 +92,40 @@
         .connect-bar a:hover{color:#1B5E6B}
 
         /* ── Cluster Visualization ── */
-        .viz-summary{display:flex;gap:12px;flex-wrap:wrap;margin-bottom:20px;padding:16px;background:white;border-radius:10px;border:1px solid #E0E0E0}
-        .viz-stat{text-align:center;flex:1;min-width:80px;padding:8px}
-        .viz-stat-value{font-size:1.3em;font-weight:700;color:#2A7B88}
-        .viz-stat-label{font-size:0.72em;color:#1A1A1A;text-transform:uppercase;letter-spacing:0.05em;margin-top:2px}
-        .viz-section-title{font-size:0.78em;font-weight:700;color:#1A1A1A;text-transform:uppercase;letter-spacing:0.06em;margin-bottom:10px}
+        .viz-summary{display:flex;flex-wrap:wrap;margin-bottom:20px;background:white;border-radius:10px;border:1px solid #E0E0E0;overflow:hidden;box-shadow:0 1px 3px rgba(0,0,0,0.04)}
+        .viz-stat{text-align:center;flex:1;min-width:80px;padding:14px 8px;border-right:1px solid #f0f0f0}
+        .viz-stat:last-child{border-right:none}
+        .viz-stat-value{font-size:1.5em;font-weight:800;color:#2A7B88}
+        .viz-stat-label{font-size:0.7em;color:#64748b;text-transform:uppercase;letter-spacing:0.06em;margin-top:4px;font-weight:600}
+        .viz-section-title{font-size:0.78em;font-weight:700;color:#1B5E6B;text-transform:uppercase;letter-spacing:0.06em;margin-bottom:12px;padding-left:10px;border-left:3px solid #2A7B88}
         .viz-nodes{display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:12px}
-        .viz-node{background:white;border-radius:10px;overflow:hidden;transition:box-shadow 0.15s;border:1.5px solid #E0E0E0}
-        .viz-node:hover{box-shadow:0 4px 12px rgba(42,123,136,0.12);border-color:#2A7B88}
-        .viz-server-top{display:flex;align-items:center;gap:6px;padding:8px 12px;background:#E0F2F4;border-bottom:1px solid #c7e3e7}
+        .viz-node{background:white;border-radius:10px;overflow:hidden;transition:box-shadow 0.15s,border-color 0.15s,transform 0.15s;border:1.5px solid #E0E0E0}
+        .viz-node:hover{box-shadow:0 6px 16px rgba(42,123,136,0.14);border-color:#2A7B88;transform:translateY(-2px)}
+        .viz-server-top{display:flex;align-items:center;gap:6px;padding:8px 12px;background:linear-gradient(135deg,#E0F2F4,#d4ecf0);border-bottom:1px solid #c7e3e7}
         .viz-led{width:7px;height:7px;border-radius:50%;flex-shrink:0}
         .viz-led.viz-status-ready{background:#3BAA3B;box-shadow:0 0 4px rgba(59,170,59,0.5)}
         .viz-led.viz-status-notready{background:#dc2626;box-shadow:0 0 4px rgba(220,38,38,0.5)}
         .viz-led.viz-status-unknown{background:#F0AB00;box-shadow:0 0 4px rgba(240,171,0,0.5)}
         .viz-led-activity{background:#2A7B88;box-shadow:0 0 3px rgba(42,123,136,0.5);opacity:0.7}
-        .viz-node-name{font-size:0.72em;font-weight:600;color:#4A4A4A;flex:1;word-break:break-all}
+        .viz-node-name{font-size:0.72em;font-weight:600;color:#1B5E6B;flex:1;word-break:break-all}
         .viz-server-body{padding:10px 12px}
-        .viz-gpu-bay{display:flex;gap:3px;justify-content:center;margin-bottom:8px;background:#f1f5f9;border:2px solid #cbd5e1;border-radius:8px;padding:10px}
+        .viz-gpu-bay{display:flex;gap:3px;justify-content:center;margin-bottom:8px;background:linear-gradient(135deg,#eef2f7,#e8ecf1);border:1.5px solid #cbd5e1;border-radius:8px;padding:10px}
         .viz-gpu-slot{width:20px;height:34px;background:linear-gradient(180deg,#2A7B88,#164E58);border-radius:3px;border:1px solid #164E58;cursor:default;transition:opacity 0.15s}
         .viz-gpu-slot:hover{opacity:0.8}
         .viz-server-specs{font-size:0.7em;color:#1A1A1A;display:flex;gap:8px}
-        .viz-server-bottom{display:flex;align-items:center;gap:8px;padding:6px 12px;background:#F0F9FA;border-top:1px solid #E0E0E0;font-size:0.7em;color:#1A1A1A}
-        .viz-rdma-badge{display:inline-block;background:#E0F2F4;color:#2A7B88;padding:1px 6px;border-radius:3px;font-size:0.85em;font-weight:600}
+        .viz-server-bottom{display:flex;align-items:center;gap:8px;padding:6px 12px;background:linear-gradient(135deg,#F0F9FA,#e8f4f6);border-top:1px solid #E0E0E0;font-size:0.7em;color:#1A1A1A}
+        .viz-rdma-badge{display:inline-block;background:#164E58;color:white;padding:1px 6px;border-radius:3px;font-size:0.85em;font-weight:600}
         .viz-other-nodes{display:flex;flex-wrap:wrap;gap:6px}
-        .viz-other-node{padding:4px 10px;border-radius:6px;font-size:0.75em;background:white;color:#4A4A4A;cursor:default;border:1px solid #E0E0E0}
+        .viz-other-node{padding:4px 10px;border-radius:6px;font-size:0.75em;background:white;color:#4A4A4A;cursor:default;border:1px solid #E0E0E0;transition:border-color 0.12s}
+        .viz-other-node:hover{border-color:#2A7B88}
         .viz-other-node.viz-status-ready{border-left:3px solid #3BAA3B}
         .viz-other-node.viz-status-notready{border-left:3px solid #dc2626}
-        .cluster-viz-panel{padding:24px 32px;border-bottom:1px solid #E0E0E0;background:#F0F9FA}
-        .cluster-viz-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:16px}
-        .cluster-viz-header h3{font-size:0.95em;color:#4A4A4A;font-weight:600}
-        .cluster-viz-header button{border:1px solid #E0E0E0;background:white;color:#4A4A4A;padding:5px 12px;border-radius:6px;font-size:0.78em;font-weight:600;cursor:pointer}
-        .cluster-viz-header button:hover{border-color:#2A7B88;color:#2A7B88}
+        .cluster-viz-panel{padding:24px 32px;margin:0 32px 0;background:white;border-radius:12px;border:1px solid #E0E0E0;box-shadow:0 2px 8px rgba(0,0,0,0.04)}
+        .cluster-viz-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:18px;padding-bottom:12px;border-bottom:2px solid #E0F2F4}
+        .cluster-viz-header h3{font-size:1em;color:#1B5E6B;font-weight:700;display:flex;align-items:center;gap:8px}
+        .cluster-viz-header h3::before{content:'';display:inline-block;width:4px;height:18px;background:#2A7B88;border-radius:2px}
+        .cluster-viz-header button{border:1.5px solid #2A7B88;background:white;color:#2A7B88;padding:6px 14px;border-radius:6px;font-size:0.78em;font-weight:600;cursor:pointer;transition:background-color 0.12s,color 0.12s}
+        .cluster-viz-header button:hover{background:#2A7B88;color:white}
 
         /* ── Empty States ── */
         .empty{text-align:center;padding:80px 24px;color:#999;grid-column:1/-1}
