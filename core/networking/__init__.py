@@ -148,12 +148,16 @@ def scan_available_networks(kubectl_runner) -> List[Dict[str, Any]]:
         'rdma': True,
     })
 
-    # 3. DRA (DRANET)
+    # 3. DRA (DRANET) — look for gpu-nic-pair or dranet-specific device classes
+    dra_available = False
     try:
-        r = kubectl_runner.run(['get', 'deviceclass', '-o', 'name'], check=False)
-        dra_available = r.returncode == 0 and r.stdout.strip() != ''
+        r = kubectl_runner.run(['get', 'deviceclass', '-o', 'jsonpath={.items[*].metadata.name}'], check=False)
+        if r.returncode == 0 and r.stdout.strip():
+            class_names = r.stdout.strip().split()
+            dra_available = any('nic' in c or 'dranet' in c or 'dra-net' in c or 'gpu-nic' in c
+                                for c in class_names)
     except Exception:
-        dra_available = False
+        pass
     networks.append({
         'id': 'dra',
         'name': 'DRA (DRANET)',
