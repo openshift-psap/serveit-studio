@@ -1095,9 +1095,8 @@ if(currentClusterId) {
 }
 </script>
 <!-- Help Button -->
-<button id="help-fab" onclick="document.getElementById('help-modal').classList.add('active')" title="Help" aria-label="Help" style="position:fixed;bottom:24px;right:24px;width:48px;height:48px;border-radius:50%;background:#2A7B88;color:white;border:none;cursor:pointer;box-shadow:0 4px 14px rgba(42,123,136,0.35);font-size:20px;display:flex;align-items:center;justify-content:center;z-index:90;transition:background-color 0.15s,transform 0.15s;" onmouseover="this.style.background='#1B5E6B';this.style.transform='scale(1.1)'" onmouseout="this.style.background='#2A7B88';this.style.transform=''">
-    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
-</button>
+<button id="help-fab" onclick="document.getElementById('help-modal').classList.add('active')" title="Help" aria-label="Help" style="position:fixed;bottom:24px;right:24px;width:48px;height:48px;border-radius:50%;background:#2A7B88;color:white;border:none;cursor:pointer;box-shadow:0 4px 14px rgba(42,123,136,0.35);font-size:24px;font-weight:800;display:flex;align-items:center;justify-content:center;font-family:serif;z-index:90;transition:background-color 0.15s,transform 0.15s;" onmouseover="this.style.background='#1B5E6B';this.style.transform='scale(1.1)'" onmouseout="this.style.background='#2A7B88';this.style.transform=''">
+?</button>
 
 <!-- Help Modal -->
 <div class="modal-overlay" id="help-modal" onclick="if(event.target===this)document.getElementById('help-modal').classList.remove('active')">
