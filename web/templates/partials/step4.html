@@ -145,6 +145,38 @@
                             </div>
                         </div>
 
+                        <!-- Container Image Selection (collapsible) -->
+                        <div style="border:2px solid #0ea5e9;border-radius:12px;overflow:hidden;margin-bottom:20px;">
+                            <div style="background:linear-gradient(135deg,#f0f9ff,#e0f2fe);padding:14px 20px;cursor:pointer;display:flex;align-items:center;justify-content:space-between;" onclick="var b=document.getElementById('image-select-body');var a=document.getElementById('image-select-arrow');if(b.style.display==='none'){b.style.display='block';a.textContent='▾';}else{b.style.display='none';a.textContent='▸';}">
+                                <div>
+                                    <div style="font-weight:700;color:#0c4a6e;font-size:1.05em;">📦 Inference Engine Image</div>
+                                    <div style="color:#0369a1;font-size:0.92em;margin-top:4px;">Select which llm-d / vLLM container image to use for inference pods. Default is the latest stable release.</div>
+                                </div>
+                                <div id="image-select-arrow" style="font-size:1.4em;color:#0c4a6e;font-weight:700;">▸</div>
+                            </div>
+                            <div id="image-select-body" style="display:none;padding:16px 20px;">
+                                <div style="margin-bottom:16px;">
+                                    <label style="display:block;font-weight:600;margin-bottom:6px;color:#374151;font-size:0.9em;">Image Repository</label>
+                                    <div style="display:flex;gap:8px;">
+                                        <input type="text" id="image-repo-input" value="ghcr.io/llm-d/llm-d-cuda" placeholder="ghcr.io/llm-d/llm-d-cuda" style="flex:1;padding:10px 14px;border:2px solid #d1d5db;border-radius:8px;font-size:14px;font-family:monospace;" onchange="config.custom_image_repo=this.value;fetchImageTags();saveConfig();">
+                                        <button type="button" onclick="fetchImageTags()" style="padding:10px 16px;background:#0ea5e9;color:white;border:none;border-radius:8px;font-weight:600;font-size:0.85em;cursor:pointer;white-space:nowrap;">Fetch Tags</button>
+                                    </div>
+                                    <div style="margin-top:6px;font-size:0.8em;color:#64748b;">For air-gapped clusters, enter your internal registry (e.g., <code style="background:#f1f5f9;padding:1px 4px;border-radius:3px;">registry.internal.company.com/llm-d/llm-d-cuda</code>)</div>
+                                </div>
+                                <div style="margin-bottom:16px;">
+                                    <label style="display:block;font-weight:600;margin-bottom:6px;color:#374151;font-size:0.9em;">Image Tag</label>
+                                    <select id="image-tag-select" style="width:100%;padding:10px 14px;border:2px solid #d1d5db;border-radius:8px;font-size:14px;font-family:monospace;background:white;" onchange="updateSelectedImage()">
+                                        <option value="v0.5.1" selected>v0.5.1 (default)</option>
+                                    </select>
+                                    <div id="image-tag-status" style="margin-top:6px;font-size:0.8em;color:#64748b;"></div>
+                                </div>
+                                <div style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:8px;padding:10px 14px;">
+                                    <div style="font-size:0.8em;color:#64748b;margin-bottom:4px;">Full image path:</div>
+                                    <code id="image-full-path" style="font-size:0.9em;color:#0c4a6e;word-break:break-all;">ghcr.io/llm-d/llm-d-cuda:v0.5.1</code>
+                                </div>
+                            </div>
+                        </div>
+
                         <!-- Advanced vLLM Settings (collapsible) -->
                         <div style="border:2px solid #64748b;border-radius:12px;overflow:hidden;margin-bottom:20px;">
                             <div style="background:linear-gradient(135deg,#f1f5f9,#e2e8f0);padding:14px 20px;cursor:pointer;display:flex;align-items:center;justify-content:space-between;" onclick="var b=document.getElementById('advanced-vllm-body');var a=document.getElementById('advanced-vllm-arrow');if(b.style.display==='none'){b.style.display='block';a.textContent='▾';}else{b.style.display='none';a.textContent='▸';}">

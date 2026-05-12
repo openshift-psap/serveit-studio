@@ -861,6 +861,53 @@ function updateSingleTestGpuSummary() {
     if (el) el.addEventListener('change', updateSingleTestGpuSummary);
 });
 
+// Image tag fetching
+function fetchImageTags() {
+    var repo = (document.getElementById('image-repo-input').value || 'ghcr.io/llm-d/llm-d-cuda').trim();
+    var statusEl = document.getElementById('image-tag-status');
+    var selectEl = document.getElementById('image-tag-select');
+    statusEl.textContent = 'Fetching tags...';
+    statusEl.style.color = '#0369a1';
+
+    socket.emit('fetch_image_tags', { repo: repo });
+}
+
+socket.on('image_tags_result', function(data) {
+    var selectEl = document.getElementById('image-tag-select');
+    var statusEl = document.getElementById('image-tag-status');
+
+    if (data.error) {
+        statusEl.textContent = 'Failed to fetch tags: ' + data.error;
+        statusEl.style.color = '#dc2626';
+        return;
+    }
+
+    var tags = data.tags || [];
+    statusEl.textContent = tags.length + ' tags found';
+    statusEl.style.color = '#22c55e';
+
+    var currentTag = config.image ? config.image.split(':').pop() : 'v0.5.1';
+    selectEl.innerHTML = '';
+    tags.forEach(function(tag) {
+        var opt = document.createElement('option');
+        opt.value = tag;
+        opt.textContent = tag;
+        if (tag === currentTag) opt.selected = true;
+        selectEl.appendChild(opt);
+    });
+
+    updateSelectedImage();
+});
+
+function updateSelectedImage() {
+    var repo = (document.getElementById('image-repo-input').value || 'ghcr.io/llm-d/llm-d-cuda').trim();
+    var tag = document.getElementById('image-tag-select').value;
+    var full = repo + ':' + tag;
+    document.getElementById('image-full-path').textContent = full;
+    config.image = full;
+    saveConfig();
+}
+
 // Load models from API
 var allModels = [];
 var displayedModels = 0;

@@ -557,6 +557,7 @@ def run_optimization_background(data):
         prefix_cache_mode = data.get('prefix_cache_mode', 'identical')
         prefix_cache_groups = int(data.get('prefix_cache_groups', 5))
         advanced_vllm = data.get('advanced_vllm')
+        vllm_image = data.get('image') or 'ghcr.io/llm-d/llm-d-cuda:v0.5.1'
         single_test_architecture = data.get('single_test_architecture')
         single_test_tp = data.get('single_test_tp')
         single_test_replicas = data.get('single_test_replicas')
@@ -739,7 +740,7 @@ data:
                 epp_benchmark=epp_benchmark,
                 epp_config=epp_config,
                 thanos_url=thanos_url,
-                image='ghcr.io/llm-d/llm-d-cuda:v0.5.1',
+                image=vllm_image,
                 pvc_name='inftune-model-cache',
                 nccl_ib_hca='mlx',
                 hf_token=hf_token,

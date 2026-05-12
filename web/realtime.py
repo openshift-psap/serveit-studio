@@ -1520,6 +1520,66 @@ def handle_list_pvcs(data):
             'pvcs': []
         })
 
+@socketio.on('fetch_image_tags')
+def handle_fetch_image_tags(data):
+    """Fetch available container image tags from a registry."""
+    repo = data.get('repo', 'ghcr.io/llm-d/llm-d-cuda').strip()
+    try:
+        import requests as _req
+
+        # Parse registry, namespace, and image from repo string
+        parts = repo.split('/')
+        if len(parts) >= 3:
+            registry = parts[0]
+            image_path = '/'.join(parts[1:])
+        else:
+            emit('image_tags_result', {'error': 'Invalid repo format. Use registry/org/image'})
+            return
+
+        # Get anonymous token (works for public repos on ghcr.io, quay.io, docker.io)
+        token = None
+        if 'ghcr.io' in registry:
+            r = _req.get(f'https://ghcr.io/token?scope=repository:{image_path}:pull', timeout=10)
+            if r.ok:
+                token = r.json().get('token')
+            api_url = f'https://ghcr.io/v2/{image_path}/tags/list'
+        elif 'quay.io' in registry:
+            api_url = f'https://quay.io/v2/{image_path}/tags/list'
+        elif 'docker.io' in registry or 'registry-1.docker.io' in registry:
+            r = _req.get(f'https://auth.docker.io/token?service=registry.docker.io&scope=repository:{image_path}:pull', timeout=10)
+            if r.ok:
+                token = r.json().get('token')
+            api_url = f'https://registry-1.docker.io/v2/{image_path}/tags/list'
+        else:
+            # Generic v2 registry (internal registries)
+            api_url = f'https://{registry}/v2/{image_path}/tags/list'
+
+        headers = {}
+        if token:
+            headers['Authorization'] = f'Bearer {token}'
+
+        r = _req.get(api_url, headers=headers, timeout=15)
+        if not r.ok:
+            emit('image_tags_result', {'error': f'Registry returned {r.status_code}'})
+            return
+
+        tags = r.json().get('tags', [])
+        # Sort: stable releases first (vX.Y.Z), then RCs, then others
+        import re
+        def tag_sort_key(t):
+            if re.match(r'^v\d+\.\d+\.\d+$', t):
+                return (0, t)
+            elif 'rc' in t:
+                return (1, t)
+            else:
+                return (2, t)
+        tags = sorted(tags, key=tag_sort_key, reverse=True)
+
+        emit('image_tags_result', {'tags': tags, 'repo': repo})
+    except Exception as e:
+        emit('image_tags_result', {'error': str(e)[:200]})
+
+
 @socketio.on('setup_storage')
 def handle_setup_storage(data):
     """Create PVC and start model download job."""
@@ -1621,6 +1681,7 @@ def handle_setup_storage(data):
                 'rate_type': data.get('rate_type', 'concurrent'),
                 'prefix_cache_hit_pct': int(data.get('prefix_cache_hit_pct', 0)),
                 'advanced_vllm': data.get('advanced_vllm'),
+                'image': data.get('image'),
                 'single_test_architecture': data.get('single_test_architecture'),
                 'single_test_tp': data.get('single_test_tp'),
                 'single_test_replicas': data.get('single_test_replicas'),
