@@ -376,6 +376,7 @@ def handle_resume_optimization(data):
         saved_epp_config = None
         saved_prefix_cache_mode = 'identical'
         saved_prefix_cache_groups = 5
+        saved_image = None
         if run.get('config_json'):
             try:
                 import json as _json
@@ -388,6 +389,7 @@ def handle_resume_optimization(data):
                 saved_epp_config = saved_cfg.get('epp_config')
                 saved_prefix_cache_mode = saved_cfg.get('prefix_cache_mode', 'identical')
                 saved_prefix_cache_groups = saved_cfg.get('prefix_cache_groups', 5)
+                saved_image = saved_cfg.get('image')
             except Exception:
                 pass
 
@@ -431,6 +433,7 @@ def handle_resume_optimization(data):
             'epp_benchmark': saved_epp_benchmark,
             'epp_config': saved_epp_config,
             'advanced_vllm': saved_advanced_vllm,
+            'image': saved_image,
             'resume_run_id': run_id
         }
 
