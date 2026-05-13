@@ -665,7 +665,7 @@ function loadInstances(clusterId, isRefresh, userId){
             var openBtn = '<button class="btn btn-open" onclick="openInstance(\''+openUrl.replace(/'/g,"\\'")+'\','+inst.id+','+localPort+','+hasHttps+')"'+(isRunning?'':' disabled style="opacity:0.4;cursor:not-allowed"')+'>Open</button>';
             var connectBar;
             if (hasHttps) {
-                connectBar = '<div class="connect-bar"><a href="'+openUrl+'" target="_blank" rel="noopener" style="flex:1;text-align:center">'+inst.service_url.replace(/^https?:\/\//,'')+'</a><button class="copy-btn" onclick="copyCmd(this,\''+inst.service_url.replace(/'/g,"\\'")+'\')">Copy URL</button></div>';
+                connectBar = '<div class="connect-bar" style="justify-content:center"><button class="btn" style="background:#2A7B88;color:white;font-size:0.78em;padding:8px 16px;" onclick="copyCmd(this,\''+inst.service_url.replace(/'/g,"\\'")+'\')">📋 Copy instance URL</button></div>';
             } else {
                 var pfCmd = 'kubectl port-forward -n '+inst.namespace+' svc/'+inst.service_name+' '+localPort+':5000';
                 connectBar = '<div class="connect-bar" style="justify-content:center"><button class="btn" style="background:#2A7B88;color:white;font-size:0.78em;padding:8px 16px;" onclick="copyCmd(this,\''+pfCmd.replace(/'/g,"\\'")+'\')">📋 Copy portforward cli</button></div>';
