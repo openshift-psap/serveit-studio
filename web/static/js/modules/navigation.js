@@ -81,6 +81,9 @@ function goToStep(step, skipSave) {
         if (config.epp_preset) setEppPreset(config.epp_preset);
     }
     if (step === 5) {
+        // Show/hide single test deployment config
+        if (typeof updateSingleTestVisibility === 'function') updateSingleTestVisibility();
+
         // Check if cluster resources already scanned
         if (config.cluster_resources && document.getElementById('cluster-resources').style.display !== 'none') {
             // Resources already loaded - enable button immediately
@@ -525,6 +528,9 @@ socket.on('cluster_scan_result', function(data) {
     // Store in config
     config.cluster_resources = data;
     saveConfig();
+
+    // Re-apply single test visibility after scan rebuilds the UI
+    if (typeof updateSingleTestVisibility === 'function') updateSingleTestVisibility();
 });
 
 socket.on('test_plan_result', function(data) {
