@@ -354,7 +354,11 @@ document.getElementById('next-step1').addEventListener('click', () => {
     const goalNames = {
         'throughput': 'Throughput Priority',
         'ttft': 'Response Time Priority',
-        'balanced': 'Balanced Performance'
+        'balanced': 'Balanced Performance',
+        'aggregated_only': 'Aggregated Only',
+        'pd_only': 'Prefill/Decode Only',
+        'ep_only': 'Expert Parallelism Only',
+        'single_test': 'Single Test',
     };
     logToConsole(`\n📋 Step 1 Complete: ${goalNames[config.goal]}`, 'success');
     goToStep(2);
