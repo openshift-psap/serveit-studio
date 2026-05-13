@@ -255,10 +255,18 @@ def _seed_instance_user(deployment_name: str, namespace: str, username: str, pas
         "c.commit();c.close()"
     )
 
-    for attempt in range(60):
+    for attempt in range(90):
         r = _kubectl(['get', 'pod', '-l', f'app={deployment_name}', '-n', namespace,
                       '-o', 'jsonpath={.items[0].status.phase}'])
         if r.stdout.strip() != 'Running':
+            time.sleep(3)
+            continue
+
+        # Wait for server to be ready (port 5000) before seeding
+        r = _kubectl(['exec', '-n', namespace, f'deploy/{deployment_name}', '--',
+                      'python3', '-c',
+                      "import socket;s=socket.socket();s.settimeout(1);s.connect(('127.0.0.1',5000));s.close()"])
+        if r.returncode != 0:
             time.sleep(3)
             continue
 
