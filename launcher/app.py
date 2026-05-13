@@ -219,6 +219,7 @@ def create_app():
         preset_gpus = data.get('preset_gpus')
         preset_nodes = data.get('preset_nodes')
         storage_size = data.get('storage_size')
+        storage_class = data.get('storage_class')
 
         import threading
 
@@ -238,6 +239,7 @@ def create_app():
                     preset_gpus=int(preset_gpus) if preset_gpus else None,
                     preset_nodes=preset_nodes if preset_nodes else None,
                     storage_size=int(storage_size) if storage_size else None,
+                    storage_class_override=storage_class,
                 )
             except Exception as e:
                 print(f"Instance creation failed: {e}")

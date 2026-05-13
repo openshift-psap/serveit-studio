@@ -302,6 +302,11 @@
                 <option value="50">50 GB</option>
             </select>
 
+            <label for="instance-storage-class">Storage Class</label>
+            <select id="instance-storage-class" style="width:100%;padding:10px 12px;border:1.5px solid #E0E0E0;border-radius:8px;font-size:0.95em;margin-bottom:16px;background:#F8F8F8;color:#1A1A1A">
+                <option value="">Loading...</option>
+            </select>
+
             <label>Node Selection <span style="font-weight:400;color:#999;text-transform:none">(optional — pin to specific nodes)</span></label>
             <div id="instance-node-list" style="max-height:200px;overflow-y:auto;margin-bottom:16px;display:flex;flex-direction:column;gap:4px"></div>
 
@@ -703,6 +708,20 @@ function showCreateModal(){
     btn.disabled = false;
     btn.textContent = 'Create';
 
+    // Populate storage classes from local cluster
+    var scSel = document.getElementById('instance-storage-class');
+    fetch('/api/storage_classes')
+    .then(function(r){return r.json()})
+    .then(function(classes){
+        scSel.innerHTML = '';
+        (classes || []).forEach(function(sc){
+            var o = document.createElement('option');
+            o.value = sc.name;
+            o.textContent = sc.name + ' (' + sc.provisioner + ')';
+            scSel.appendChild(o);
+        });
+    });
+
     // Populate GPU and node options from cached scan
     var gpuSel = document.getElementById('instance-gpu-select');
     var nodeList = document.getElementById('instance-node-list');
@@ -840,6 +859,8 @@ function createInstance(e){
     if(selectedNodes.length) body.preset_nodes = selectedNodes;
     var storageSize = document.getElementById('instance-storage-size').value;
     if(storageSize) body.storage_size = parseInt(storageSize);
+    var storageClass = document.getElementById('instance-storage-class').value;
+    if(storageClass) body.storage_class = storageClass;
     fetch('/api/instances',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)})
     .then(function(r){return r.json()})
     .then(function(data){

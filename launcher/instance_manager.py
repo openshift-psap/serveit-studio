@@ -311,7 +311,8 @@ def create_instance(owner_id: int, username: str, name: str,
                     password_hash: str = None,
                     preset_gpus: int = None,
                     preset_nodes: list = None,
-                    storage_size: int = None) -> Dict:
+                    storage_size: int = None,
+                    storage_class_override: str = None) -> Dict:
     """Create an instance. Kubeconfig and storage class come from the cluster."""
 
     # Look up cluster for kubeconfig and storage class
@@ -434,7 +435,7 @@ def create_instance(owner_id: int, username: str, name: str,
     try:
         pvc_yaml = _render('pvc.yaml.j2',
             pvc_name=pvc_name, namespace=namespace,
-            storage_size=f'{storage_size or 5}Gi', storage_class=storage_class or '')
+            storage_size=f'{storage_size or 5}Gi', storage_class=storage_class_override or storage_class or '')
         r = _kubectl(['apply', '-f', '-', '-n', namespace], input_data=pvc_yaml)
         if r.returncode != 0:
             raise RuntimeError(f"PVC creation failed: {r.stderr}")
