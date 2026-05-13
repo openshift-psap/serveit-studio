@@ -526,8 +526,9 @@ function saveCluster(){
     });
 }
 
-function showConfirm(title, msg, warn, btnText, onConfirm){
-    document.getElementById('confirm-backup-option').style.display='none';
+function showConfirm(title, msg, warn, btnText, onConfirm, showBackup){
+    document.getElementById('confirm-backup-option').style.display = showBackup ? 'block' : 'none';
+    if(showBackup) document.getElementById('confirm-backup-cb').checked = false;
     document.getElementById('confirm-title').textContent = title;
     document.getElementById('confirm-msg').textContent = msg;
     document.getElementById('confirm-warn').textContent = warn;
@@ -912,13 +913,10 @@ function createInstance(e){
 }
 
 function deleteInstance(id,name){
-    document.getElementById('confirm-backup-option').style.display='block';
-    document.getElementById('confirm-backup-cb').checked=false;
     showConfirm('Delete Instance', 'Delete instance "'+name+'"?', 'This removes the deployment, PVC, and all data. This cannot be undone.', 'Delete Instance', function(){
         var backup = document.getElementById('confirm-backup-cb').checked;
-        document.getElementById('confirm-backup-option').style.display='none';
         _doDeleteInstance(id, name, backup);
-    });
+    }, true);
 }
 function _doDeleteInstance(id, name, backup){
     var card=document.getElementById('instance-'+id);
