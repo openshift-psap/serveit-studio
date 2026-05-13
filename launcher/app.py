@@ -220,22 +220,34 @@ def create_app():
         preset_nodes = data.get('preset_nodes')
         storage_size = data.get('storage_size')
 
-        try:
-            result = instance_manager.create_instance(
-                owner_id=get_user_id(),
-                username=get_username(),
-                name=name,
-                cluster_id=int(cluster_id),
-                namespace=namespace,
-                image=image,
-                password_hash=pwd_hash,
-                preset_gpus=int(preset_gpus) if preset_gpus else None,
-                preset_nodes=preset_nodes if preset_nodes else None,
-                storage_size=int(storage_size) if storage_size else None,
-            )
-            return jsonify(result)
-        except Exception as e:
-            return jsonify({'error': str(e)}), 500
+        import threading
+
+        owner_id = get_user_id()
+        username = get_username()
+
+        def _create():
+            try:
+                instance_manager.create_instance(
+                    owner_id=owner_id,
+                    username=username,
+                    name=name,
+                    cluster_id=int(cluster_id),
+                    namespace=namespace,
+                    image=image,
+                    password_hash=pwd_hash,
+                    preset_gpus=int(preset_gpus) if preset_gpus else None,
+                    preset_nodes=preset_nodes if preset_nodes else None,
+                    storage_size=int(storage_size) if storage_size else None,
+                )
+            except Exception as e:
+                print(f"Instance creation failed: {e}")
+                with get_db() as conn:
+                    safe = instance_manager._sanitize(f"{username}-{name}")
+                    conn.execute("UPDATE instances SET status = 'error' WHERE name = ? AND owner_id = ?",
+                                 (safe, owner_id))
+
+        threading.Thread(target=_create, daemon=True).start()
+        return jsonify({'ok': True, 'status': 'creating', 'name': name})
 
     @app.route('/api/storage_classes', methods=['GET'])
     def api_storage_classes():
