@@ -99,8 +99,9 @@ def generate_yaml(namespace: str, image: str, pvc_name: str,
                   mode: str = 'local') -> str:
     parts = []
 
-    # RBAC
-    parts.append(render_template('rbac.yaml.j2', namespace=namespace))
+    # RBAC — launcher mode uses minimal permissions (no LWS/Istio/DRA)
+    rbac_template = 'rbac-launcher.yaml.j2' if mode == 'launcher' else 'rbac.yaml.j2'
+    parts.append(render_template(rbac_template, namespace=namespace))
 
     # PVC (conditional)
     if create_pvc:

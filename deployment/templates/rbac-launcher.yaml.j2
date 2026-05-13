@@ -1,0 +1,39 @@
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: inftune-launcher-manager
+  namespace: {{ namespace }}
+rules:
+- apiGroups: [""]
+  resources: ["pods", "pods/log", "pods/exec"]
+  verbs: ["get", "list", "create", "delete", "patch", "watch"]
+- apiGroups: [""]
+  resources: ["persistentvolumeclaims"]
+  verbs: ["get", "list", "create", "delete", "patch"]
+- apiGroups: ["apps"]
+  resources: ["deployments"]
+  verbs: ["get", "list", "create", "delete", "patch", "update"]
+- apiGroups: [""]
+  resources: ["services"]
+  verbs: ["get", "list", "create", "delete", "patch"]
+- apiGroups: [""]
+  resources: ["secrets", "configmaps"]
+  verbs: ["get", "list", "create", "delete", "patch"]
+- apiGroups: ["route.openshift.io"]
+  resources: ["routes"]
+  verbs: ["get", "list", "create", "delete", "patch"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: inftune-launcher-manager-binding
+  namespace: {{ namespace }}
+subjects:
+- kind: ServiceAccount
+  name: default
+  namespace: {{ namespace }}
+roleRef:
+  kind: Role
+  name: inftune-launcher-manager
+  apiGroup: rbac.authorization.k8s.io
