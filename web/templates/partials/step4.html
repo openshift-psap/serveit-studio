@@ -228,5 +228,85 @@
                             </div>
                         </div>
 
+                        <!-- Single Test: Deployment Configuration (shown only when goal=single_test) -->
+                        <div id="single-test-config" style="display:none; margin-bottom:20px;">
+                            <div style="border:2px solid #8b5cf6;border-radius:12px;overflow:hidden;">
+                                <div style="background:linear-gradient(135deg,#f5f3ff,#ede9fe);padding:16px 20px;">
+                                    <div style="font-weight:700;color:#5b21b6;font-size:1.05em;">🧪 Deployment Configuration</div>
+                                    <div style="color:#6d28d9;font-size:0.92em;margin-top:4px;">Specify the exact architecture, TP size, and pod count for your single test.</div>
+                                </div>
+                                <div style="padding:16px 20px;">
+                                    <div style="margin-bottom:16px;">
+                                        <label style="display:block;font-weight:600;margin-bottom:8px;color:#374151;">Architecture</label>
+                                        <div id="single-test-arch-cards" style="display:grid;grid-template-columns:repeat(3,1fr);gap:10px;">
+                                            <div class="arch-select-card selected" data-arch="aggregated" onclick="selectSingleTestArch('aggregated')" style="border:2px solid #8b5cf6;border-radius:8px;padding:12px;text-align:center;cursor:pointer;transition:all 0.15s;background:#f5f3ff;">
+                                                <div style="font-weight:700;font-size:0.95em;">Aggregated</div>
+                                                <div style="font-size:0.8em;color:#6b7280;margin-top:4px;">Standard</div>
+                                            </div>
+                                            <div class="arch-select-card" data-arch="pd" onclick="selectSingleTestArch('pd')" style="border:2px solid #e2e8f0;border-radius:8px;padding:12px;text-align:center;cursor:pointer;transition:all 0.15s;">
+                                                <div style="font-weight:700;font-size:0.95em;">Prefill/Decode</div>
+                                                <div style="font-size:0.8em;color:#6b7280;margin-top:4px;">PD Split</div>
+                                            </div>
+                                            <div class="arch-select-card" data-arch="ep" onclick="selectSingleTestArch('ep')" style="border:2px solid #e2e8f0;border-radius:8px;padding:12px;text-align:center;cursor:pointer;transition:all 0.15s;">
+                                                <div style="font-weight:700;font-size:0.95em;">Expert Parallelism</div>
+                                                <div style="font-size:0.8em;color:#6b7280;margin-top:4px;">EP / MoE</div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                    <div id="single-test-agg-fields">
+                                        <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">
+                                            <div>
+                                                <label style="display:block;font-weight:600;margin-bottom:6px;color:#374151;font-size:0.9em;">Tensor Parallelism (TP)</label>
+                                                <select id="single-test-tp" style="width:100%;padding:10px 14px;border:2px solid #d1d5db;border-radius:8px;font-size:14px;background:white;">
+                                                    <option value="1">1</option>
+                                                    <option value="2">2</option>
+                                                    <option value="4" selected>4</option>
+                                                    <option value="8">8</option>
+                                                </select>
+                                            </div>
+                                            <div>
+                                                <label style="display:block;font-weight:600;margin-bottom:6px;color:#374151;font-size:0.9em;">Replicas (pods)</label>
+                                                <input type="number" id="single-test-replicas" value="1" min="1" max="64" style="width:100%;padding:10px 14px;border:2px solid #d1d5db;border-radius:8px;font-size:14px;">
+                                            </div>
+                                        </div>
+                                        <div id="single-test-gpu-summary" style="margin-top:10px;padding:10px 14px;background:#f5f3ff;border-radius:8px;font-size:0.88em;color:#5b21b6;font-weight:600;"></div>
+                                    </div>
+                                    <div id="single-test-pd-fields" style="display:none;">
+                                        <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:12px;">
+                                            <div>
+                                                <label style="display:block;font-weight:600;margin-bottom:6px;color:#374151;font-size:0.9em;">Prefill TP</label>
+                                                <select id="single-test-prefill-tp" style="width:100%;padding:10px 14px;border:2px solid #d1d5db;border-radius:8px;font-size:14px;background:white;">
+                                                    <option value="1">1</option>
+                                                    <option value="2">2</option>
+                                                    <option value="4" selected>4</option>
+                                                    <option value="8">8</option>
+                                                </select>
+                                            </div>
+                                            <div>
+                                                <label style="display:block;font-weight:600;margin-bottom:6px;color:#374151;font-size:0.9em;">Prefill Pods</label>
+                                                <input type="number" id="single-test-prefill-pods" value="1" min="1" max="32" style="width:100%;padding:10px 14px;border:2px solid #d1d5db;border-radius:8px;font-size:14px;">
+                                            </div>
+                                        </div>
+                                        <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">
+                                            <div>
+                                                <label style="display:block;font-weight:600;margin-bottom:6px;color:#374151;font-size:0.9em;">Decode TP</label>
+                                                <select id="single-test-decode-tp" style="width:100%;padding:10px 14px;border:2px solid #d1d5db;border-radius:8px;font-size:14px;background:white;">
+                                                    <option value="1">1</option>
+                                                    <option value="2">2</option>
+                                                    <option value="4">4</option>
+                                                    <option value="8" selected>8</option>
+                                                </select>
+                                            </div>
+                                            <div>
+                                                <label style="display:block;font-weight:600;margin-bottom:6px;color:#374151;font-size:0.9em;">Decode Pods</label>
+                                                <input type="number" id="single-test-decode-pods" value="1" min="1" max="32" style="width:100%;padding:10px 14px;border:2px solid #d1d5db;border-radius:8px;font-size:14px;">
+                                            </div>
+                                        </div>
+                                        <div id="single-test-pd-gpu-summary" style="margin-top:10px;padding:10px 14px;background:#f5f3ff;border-radius:8px;font-size:0.88em;color:#5b21b6;font-weight:600;"></div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
                         <button class="action-button" id="next-step4">Continue to Setup →</button>
                     </div>
