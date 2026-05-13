@@ -54,51 +54,56 @@ def _sanitize(name: str) -> str:
 def _validate_kubeconfig(kubeconfig_data: str) -> tuple:
     """Validate kubeconfig connectivity and return (cluster_url, cleaned_kubeconfig).
 
-    If the kubeconfig has multiple contexts, finds the one matching the target
-    cluster and sets it as current-context. Returns the cleaned kubeconfig data
+    Tests each context in the kubeconfig to find one that connects to a
+    remote cluster (not the launcher's own cluster). Sets it as current-context
     so the stored Secret always uses the correct context.
     """
     import yaml
     try:
         kc = yaml.safe_load(kubeconfig_data)
-        target = kc.get('clusters', [{}])[0].get('cluster', {}).get('server', 'remote')
     except Exception:
-        target = 'remote'
         kc = None
 
-    # If multiple contexts, find one targeting a non-local cluster
-    if kc and len(kc.get('contexts', [])) > 1:
-        current = kc.get('current-context', '')
-        # Check if current context points to the target cluster
-        current_cluster = None
-        for ctx in kc.get('contexts', []):
-            if ctx.get('name') == current:
-                current_cluster = ctx.get('context', {}).get('cluster')
-                break
+    # Detect the launcher's own cluster URL to exclude it
+    local_server = None
+    try:
+        r = subprocess.run(['kubectl', 'cluster-info'], capture_output=True, text=True, timeout=10)
+        if r.returncode == 0:
+            for line in r.stdout.split('\n'):
+                if 'is running at' in line:
+                    local_server = line.split('is running at')[-1].strip().split()[0]
+                    # Strip ANSI color codes
+                    import re
+                    local_server = re.sub(r'\x1b\[[0-9;]*m', '', local_server).strip()
+                    break
+    except Exception:
+        pass
 
-        # Find if current context's cluster matches target
-        current_server = None
+    target = None
+
+    if kc:
+        # Build a map of cluster name → server URL
+        cluster_servers = {}
         for cl in kc.get('clusters', []):
-            if cl.get('name') == current_cluster:
-                current_server = cl.get('cluster', {}).get('server')
-                break
+            cluster_servers[cl.get('name', '')] = cl.get('cluster', {}).get('server', '')
 
-        # If current context is local/wrong, find the right one
-        if not current_server or 'localhost' in current_server or 'intlab' in current_server or current_server == target:
-            # Find a context pointing to a non-local cluster
-            for ctx in kc.get('contexts', []):
-                ctx_cluster = ctx.get('context', {}).get('cluster')
-                for cl in kc.get('clusters', []):
-                    if cl.get('name') == ctx_cluster:
-                        server = cl.get('cluster', {}).get('server', '')
-                        if server and 'localhost' not in server and server != target:
-                            kc['current-context'] = ctx.get('name')
-                            target = server
-                            kubeconfig_data = yaml.dump(kc, default_flow_style=False)
-                            break
-                else:
-                    continue
-                break
+        # Find the first context pointing to a non-local cluster
+        for ctx in kc.get('contexts', []):
+            ctx_cluster = ctx.get('context', {}).get('cluster', '')
+            server = cluster_servers.get(ctx_cluster, '')
+            if not server:
+                continue
+            # Skip if it's the launcher's own cluster
+            if local_server and server.rstrip('/') == local_server.rstrip('/'):
+                continue
+            # Found a remote cluster context
+            kc['current-context'] = ctx.get('name')
+            target = server
+            kubeconfig_data = yaml.dump(kc, default_flow_style=False)
+            break
+
+    if not target:
+        target = 'remote'
 
     import tempfile
     with tempfile.NamedTemporaryFile(mode='w', suffix='.kubeconfig', delete=False) as tmp:
