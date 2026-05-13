@@ -1,5 +1,6 @@
 # inftune-server — Web UI, launcher, optimization orchestration
 # No guidellm, no heavy ML libs. Just the control plane.
+# Code is NOT baked into the image — it's cloned to the PVC at runtime.
 FROM registry.access.redhat.com/ubi9/ubi:9.4
 ENV LANG="C.UTF-8" LC_ALL="C.UTF-8" PYTHONUNBUFFERED=1
 
@@ -52,11 +53,6 @@ COPY docker/.git-deploy-key /root/.ssh/id_ed25519
 RUN chmod 600 /root/.ssh/id_ed25519 && \
     ssh-keyscan github.com >> /root/.ssh/known_hosts 2>/dev/null
 
-# Clone repo
-ARG GIT_BRANCH=main
-RUN git clone --depth 1 -b ${GIT_BRANCH} git@github.com:bbenshab/inftune-studio.git /app
-
-WORKDIR /app
 COPY docker/entrypoint.sh /usr/local/bin/entrypoint.sh
 RUN chmod +x /usr/local/bin/entrypoint.sh
 EXPOSE 5000
