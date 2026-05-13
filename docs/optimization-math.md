@@ -270,7 +270,9 @@ w_queue  = clamp(round(queue_wait_cost / total × 7), 1, 5)
 
 **Why clamp to [1, 5]?** Prevents extreme weights (e.g., 7:0:0) that would ignore entire routing dimensions. Even a low-impact dimension should have some influence.
 
-**Sum after clamping:** The weights won't always sum to exactly 7 after independent rounding and clamping. For example, if the raw ratios are 5.8:0.7:0.5, the clamped result is 5:1:1 (sum=7). But if raw ratios are 3.5:2.1:1.4, the result is 4:2:1 (sum=7). Edge case: 4.9:4.9:0.2 → 5:5:1 (sum=11). The EPP normalizes weights internally, so the absolute sum doesn't matter — only the **ratios** between weights affect routing decisions. A 5:5:1 split behaves identically to a proportional 2.3:2.3:0.4 split.
+**Sum after clamping:** The weights won't always sum to exactly 7 after independent rounding and clamping. For example, if the raw ratios are 5.8:0.7:0.5, the clamped result is 5:1:1 (sum=7). But if raw ratios are 3.5:2.1:1.4, the result is 4:2:1 (sum=7). Edge case: 4.9:4.9:0.2 → 5:5:1 (sum=11). The EPP normalizes weights internally, so the absolute sum doesn't matter — only the **ratios** between weights affect routing decisions.
+
+**Intentional ratio compression:** The floor clamp of 1 compresses extreme ratios. In the 4.9:4.9:0.2 example, the raw math suggests the third dimension is 24.5× less important than the others. After clamping to 5:5:1, it becomes only 5× less important — making it significantly more influential than the math alone would suggest. This is a deliberate safety feature: even in a cache-dominated workload where the math says "queue depth is irrelevant," the EPP still considers queue depth at 1/5th weight. This prevents pathological routing where a pod with a massive queue or zero free VRAM keeps receiving requests because its cache score is high.
 
 **Example (with Prometheus — measured cache hit = 63%):**
 ISL=9000, OSL=50, measured cache hit=63%, prefill_TPSG=50000, decode_TPSG=10000, 16 pods, KV variance=0.02, queue variance=0.05
