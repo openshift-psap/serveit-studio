@@ -6,8 +6,11 @@ metadata:
   namespace: {{ namespace }}
 rules:
 - apiGroups: [""]
-  resources: ["pods", "pods/log", "pods/exec"]
+  resources: ["pods"]
   verbs: ["get", "list", "create", "delete", "patch", "watch"]
+- apiGroups: [""]
+  resources: ["pods/log", "pods/exec"]
+  verbs: ["get"]
 - apiGroups: [""]
   resources: ["persistentvolumeclaims"]
   verbs: ["get", "list", "create", "delete", "patch"]
