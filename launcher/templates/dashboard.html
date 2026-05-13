@@ -913,7 +913,7 @@ function createInstance(e){
 
 function deleteInstance(id,name){
     document.getElementById('confirm-backup-option').style.display='block';
-    document.getElementById('confirm-backup-cb').checked=true;
+    document.getElementById('confirm-backup-cb').checked=false;
     showConfirm('Delete Instance', 'Delete instance "'+name+'"?', 'This removes the deployment, PVC, and all data. This cannot be undone.', 'Delete Instance', function(){
         var backup = document.getElementById('confirm-backup-cb').checked;
         document.getElementById('confirm-backup-option').style.display='none';
@@ -946,6 +946,10 @@ function loadClusters(){
 }
 
 function openInstance(url, instId, localPort, isHttps){
+    if(isHttps){
+        window.open(url, '_blank');
+        return;
+    }
     var btn = event.target;
     btn.disabled = true;
     btn.textContent = 'Checking…';
@@ -958,18 +962,12 @@ function openInstance(url, instId, localPort, isHttps){
     .catch(function(){
         btn.disabled = false;
         btn.textContent = 'Open';
-        if(isHttps){
-            showWarn('Route not reachable',
-                'Cannot reach <code>'+url+'</code>. The route may not be ready yet.',
-                function(){ window.open(url, '_blank'); });
-        } else {
-            var card = document.getElementById('instance-'+instId);
-            var bar = card ? card.querySelector('.connect-bar') : null;
-            if(bar) bar.style.background = '#fef3c7';
-            showWarn('Port-forward required',
-                'Cannot reach <code>localhost:'+localPort+'</code>.<br><br>Did you enable port-forward? Copy the command below and run it first.');
-            setTimeout(function(){ if(bar) bar.style.background=''; }, 4000);
-        }
+        var card = document.getElementById('instance-'+instId);
+        var bar = card ? card.querySelector('.connect-bar') : null;
+        if(bar) bar.style.background = '#fef3c7';
+        showWarn('Port-forward required',
+            'Cannot reach <code>localhost:'+localPort+'</code>.<br><br>Did you enable port-forward? Copy the command below and run it first.');
+        setTimeout(function(){ if(bar) bar.style.background=''; }, 4000);
     });
 }
 function showWarn(title, msg, actionFn){
