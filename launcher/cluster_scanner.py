@@ -39,7 +39,48 @@ def scan_cluster_resources(cluster: Dict, namespace: str = 'inftune') -> Dict:
             namespace=namespace,
             kubeconfig=kubeconfig_path
         )
-        resources = scanner.scan_cluster()
+
+        try:
+            resources = scanner.scan_cluster()
+        except Exception as scan_err:
+            # Permission denied or no nodes — return empty result
+            return {
+                'nodes': [],
+                'summary': {
+                    'total_gpus': 0,
+                    'gpus_in_use': 0,
+                    'gpus_available': 0,
+                    'gpu_node_count': 0,
+                    'node_count': 0,
+                    'gpu_model': 'unknown',
+                    'gpu_vendor': 'unknown',
+                    'gpu_memory_per_gpu_mb': 0,
+                    'total_cpu_cores': 0,
+                    'total_memory_gb': 0,
+                    'has_rdma': False,
+                    'cloud_provider': 'unknown',
+                    'cpu_model': 'unknown',
+                },
+                'scan_warning': f'Limited permissions: {str(scan_err)[:200]}',
+            }
+
+        # Check for missing infrastructure components
+        warnings = []
+        cmd = 'oc' if _is_oc() else 'kubectl'
+        try:
+            r = subprocess.run([cmd, 'api-resources'], capture_output=True, text=True, timeout=15)
+            if r.returncode == 0:
+                if 'leaderworkerset' not in r.stdout:
+                    warnings.append('LeaderWorkerSet (LWS) not installed — required for vLLM pod deployment')
+        except Exception:
+            pass
+        try:
+            r = subprocess.run([cmd, 'get', 'namespace', 'istio-system'],
+                              capture_output=True, text=True, timeout=10)
+            if r.returncode != 0:
+                warnings.append('Istio not found — required for inference gateway routing')
+        except Exception:
+            pass
 
         # Count GPUs in use
         gpus_in_use = 0
@@ -72,7 +113,7 @@ def scan_cluster_resources(cluster: Dict, namespace: str = 'inftune') -> Dict:
                 'status': n.status,
             })
 
-        return {
+        result = {
             'nodes': nodes,
             'summary': {
                 'total_gpus': resources.total_gpus,
@@ -90,6 +131,9 @@ def scan_cluster_resources(cluster: Dict, namespace: str = 'inftune') -> Dict:
                 'cpu_model': resources.cpu_model,
             }
         }
+        if warnings:
+            result['infra_warnings'] = warnings
+        return result
     finally:
         if kubeconfig_path:
             os.unlink(kubeconfig_path)

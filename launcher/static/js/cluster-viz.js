@@ -10,6 +10,28 @@ function renderClusterDiagram(container, data) {
     }
 
     var s = data.summary;
+
+    // Show warning if scan had limited permissions
+    if (data.scan_warning) {
+        container.innerHTML = '<div style="padding:24px;text-align:center;">' +
+            '<div style="background:#fffbeb;border:1.5px solid #f59e0b;border-radius:10px;padding:16px 20px;margin-bottom:16px;text-align:left;">' +
+            '<div style="font-weight:700;color:#92400e;font-size:0.95em;margin-bottom:4px;">⚠️ Limited Cluster Access</div>' +
+            '<div style="color:#78350f;font-size:0.85em;line-height:1.6;">Could not scan cluster resources — the service account may lack node-level permissions. ' +
+            'This is normal for launcher-only clusters without GPUs. Instance creation and remote cluster management will still work.</div>' +
+            '</div>' +
+            '<div style="color:#999;font-size:0.85em;">Tip: Add remote clusters with GPU access to run optimizations.</div>' +
+            '</div>';
+        return;
+    }
+
+    if (s.total_gpus === 0 && data.nodes.length === 0) {
+        container.innerHTML = '<div style="padding:24px;text-align:center;">' +
+            '<div style="color:#999;font-size:0.95em;">No GPU nodes detected on this cluster.</div>' +
+            '<div style="color:#999;font-size:0.85em;margin-top:8px;">Add a remote cluster with GPUs to run optimizations.</div>' +
+            '</div>';
+        return;
+    }
+
     var gpuNodes = data.nodes.filter(function(n) { return n.gpus > 0; });
     var nonGpuNodes = data.nodes.filter(function(n) { return n.gpus === 0; });
 
@@ -28,6 +50,16 @@ function renderClusterDiagram(container, data) {
     html += '<div class="viz-stat"><div class="viz-stat-value">' + (s.has_rdma ? 'Yes' : 'No') + '</div><div class="viz-stat-label">RDMA</div></div>';
     html += '<div class="viz-stat"><div class="viz-stat-value">' + (s.cloud_provider || 'unknown') + '</div><div class="viz-stat-label">Provider</div></div>';
     html += '</div>';
+
+    // Infrastructure warnings (missing LWS, Istio, etc.)
+    if (data.infra_warnings && data.infra_warnings.length > 0) {
+        html += '<div style="background:#fef2f2;border:1.5px solid #dc2626;border-radius:10px;padding:14px 18px;margin-bottom:16px;">';
+        html += '<div style="font-weight:700;color:#dc2626;font-size:0.9em;margin-bottom:6px;">⚠️ Missing Infrastructure</div>';
+        data.infra_warnings.forEach(function(w) {
+            html += '<div style="color:#7f1d1d;font-size:0.82em;line-height:1.6;padding:2px 0;">• ' + w + '</div>';
+        });
+        html += '</div>';
+    }
 
     // GPU Nodes grid
     if (gpuNodes.length > 0) {
