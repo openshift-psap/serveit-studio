@@ -51,14 +51,54 @@ def _sanitize(name: str) -> str:
     return s or 'unnamed'
 
 
-def _validate_kubeconfig(kubeconfig_data: str) -> str:
-    """Validate kubeconfig connectivity and return the cluster API URL."""
+def _validate_kubeconfig(kubeconfig_data: str) -> tuple:
+    """Validate kubeconfig connectivity and return (cluster_url, cleaned_kubeconfig).
+
+    If the kubeconfig has multiple contexts, finds the one matching the target
+    cluster and sets it as current-context. Returns the cleaned kubeconfig data
+    so the stored Secret always uses the correct context.
+    """
+    import yaml
     try:
-        import yaml
         kc = yaml.safe_load(kubeconfig_data)
         target = kc.get('clusters', [{}])[0].get('cluster', {}).get('server', 'remote')
     except Exception:
         target = 'remote'
+        kc = None
+
+    # If multiple contexts, find one targeting a non-local cluster
+    if kc and len(kc.get('contexts', [])) > 1:
+        current = kc.get('current-context', '')
+        # Check if current context points to the target cluster
+        current_cluster = None
+        for ctx in kc.get('contexts', []):
+            if ctx.get('name') == current:
+                current_cluster = ctx.get('context', {}).get('cluster')
+                break
+
+        # Find if current context's cluster matches target
+        current_server = None
+        for cl in kc.get('clusters', []):
+            if cl.get('name') == current_cluster:
+                current_server = cl.get('cluster', {}).get('server')
+                break
+
+        # If current context is local/wrong, find the right one
+        if not current_server or 'localhost' in current_server or 'intlab' in current_server or current_server == target:
+            # Find a context pointing to a non-local cluster
+            for ctx in kc.get('contexts', []):
+                ctx_cluster = ctx.get('context', {}).get('cluster')
+                for cl in kc.get('clusters', []):
+                    if cl.get('name') == ctx_cluster:
+                        server = cl.get('cluster', {}).get('server', '')
+                        if server and 'localhost' not in server and server != target:
+                            kc['current-context'] = ctx.get('name')
+                            target = server
+                            kubeconfig_data = yaml.dump(kc, default_flow_style=False)
+                            break
+                else:
+                    continue
+                break
 
     import tempfile
     with tempfile.NamedTemporaryFile(mode='w', suffix='.kubeconfig', delete=False) as tmp:
@@ -81,7 +121,7 @@ def _validate_kubeconfig(kubeconfig_data: str) -> str:
     finally:
         os.unlink(tmp_path)
 
-    return target
+    return target, kubeconfig_data
 
 
 # ── Cluster CRUD ─────────────────────────────────────────────────────────────
@@ -95,7 +135,7 @@ def create_cluster(owner_id: int, name: str, icon: str = '🖥️',
     kubeconfig_secret = None
 
     if kubeconfig_data:
-        target_cluster = _validate_kubeconfig(kubeconfig_data)
+        target_cluster, kubeconfig_data = _validate_kubeconfig(kubeconfig_data)
 
         # Check duplicate cluster URL
         with get_db() as conn:
