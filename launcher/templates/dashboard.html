@@ -288,6 +288,16 @@
                 <option value="">All GPUs (default)</option>
             </select>
 
+            <label for="instance-storage-size">Storage Size <span style="font-weight:400;color:#999;text-transform:none">(for optimization database)</span></label>
+            <select id="instance-storage-size" style="width:100%;padding:10px 12px;border:1.5px solid #E0E0E0;border-radius:8px;font-size:0.95em;margin-bottom:16px;background:#F8F8F8;color:#1A1A1A">
+                <option value="1">1 GB</option>
+                <option value="2">2 GB</option>
+                <option value="5" selected>5 GB (default)</option>
+                <option value="10">10 GB</option>
+                <option value="20">20 GB</option>
+                <option value="50">50 GB</option>
+            </select>
+
             <label>Node Selection <span style="font-weight:400;color:#999;text-transform:none">(optional — pin to specific nodes)</span></label>
             <div id="instance-node-list" style="max-height:200px;overflow-y:auto;margin-bottom:16px;display:flex;flex-direction:column;gap:4px"></div>
 
@@ -823,6 +833,8 @@ function createInstance(e){
         if(totalGpus) body.preset_gpus = totalGpus;
     }
     if(selectedNodes.length) body.preset_nodes = selectedNodes;
+    var storageSize = document.getElementById('instance-storage-size').value;
+    if(storageSize) body.storage_size = parseInt(storageSize);
     fetch('/api/instances',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)})
     .then(function(r){return r.json()})
     .then(function(data){

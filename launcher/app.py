@@ -218,6 +218,7 @@ def create_app():
 
         preset_gpus = data.get('preset_gpus')
         preset_nodes = data.get('preset_nodes')
+        storage_size = data.get('storage_size')
 
         try:
             result = instance_manager.create_instance(
@@ -230,6 +231,7 @@ def create_app():
                 password_hash=pwd_hash,
                 preset_gpus=int(preset_gpus) if preset_gpus else None,
                 preset_nodes=preset_nodes if preset_nodes else None,
+                storage_size=int(storage_size) if storage_size else None,
             )
             return jsonify(result)
         except Exception as e:
