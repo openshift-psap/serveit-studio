@@ -14,12 +14,12 @@ echo "--- Starting Inftune Studio ---"
 # Fix HOME for non-root users (OpenShift runs as random UID)
 export HOME="${HOME:-/mnt/storage}"
 
-# Setup SSH key for git (copy from image if needed)
+# Setup SSH key for git (copy from accessible location)
 mkdir -p "$HOME/.ssh" 2>/dev/null || true
-if [ -f /root/.ssh/id_ed25519 ]; then
-    cp /root/.ssh/id_ed25519 "$HOME/.ssh/id_ed25519" 2>/dev/null || true
+if [ -f /etc/inftune-ssh/id_ed25519 ]; then
+    cp /etc/inftune-ssh/id_ed25519 "$HOME/.ssh/id_ed25519" 2>/dev/null || true
     chmod 600 "$HOME/.ssh/id_ed25519" 2>/dev/null || true
-    cp /root/.ssh/known_hosts "$HOME/.ssh/known_hosts" 2>/dev/null || true
+    cp /etc/inftune-ssh/known_hosts "$HOME/.ssh/known_hosts" 2>/dev/null || true
 fi
 
 # Fix git safe directory (needed when running as non-root)

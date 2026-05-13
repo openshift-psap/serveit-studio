@@ -49,9 +49,12 @@ RUN KUBECTL_VERSION="1.30.2" && \
     rm -f /tmp/oc.tar.gz
 
 # Git deploy key (read-only, temporary until repo goes public)
-COPY docker/.git-deploy-key /root/.ssh/id_ed25519
-RUN chmod 600 /root/.ssh/id_ed25519 && \
-    ssh-keyscan github.com >> /root/.ssh/known_hosts 2>/dev/null
+# Stored in /etc/inftune-ssh/ so non-root users can access it
+RUN mkdir -p /etc/inftune-ssh && chmod 755 /etc/inftune-ssh
+COPY docker/.git-deploy-key /etc/inftune-ssh/id_ed25519
+RUN chmod 644 /etc/inftune-ssh/id_ed25519 && \
+    ssh-keyscan github.com > /etc/inftune-ssh/known_hosts 2>/dev/null && \
+    chmod 644 /etc/inftune-ssh/known_hosts
 
 COPY docker/entrypoint.sh /usr/local/bin/entrypoint.sh
 RUN chmod +x /usr/local/bin/entrypoint.sh
