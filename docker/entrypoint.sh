@@ -51,8 +51,12 @@ echo "Commit: $(cd "$APP_DIR" && git log --oneline -1 2>/dev/null || echo 'unkno
 
 # Server auto-restart loop
 while true; do
-    cd "$APP_DIR/web"
+    # Pull latest code on every restart
+    cd "$APP_DIR"
+    git fetch origin 2>/dev/null && git reset --hard "origin/$BRANCH" 2>/dev/null || true
     find "$APP_DIR" -type d -name __pycache__ -exec rm -rf {} + 2>/dev/null || true
+    echo "Commit: $(git log --oneline -1 2>/dev/null || echo 'unknown')"
+    cd "$APP_DIR/web"
     python3.11 server.py || true
     echo "Server exited, restarting in 3s..."
     sleep 3
