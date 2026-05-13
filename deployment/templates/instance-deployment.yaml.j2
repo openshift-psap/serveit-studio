@@ -40,7 +40,9 @@ spec:
           command: ["/usr/local/bin/entrypoint.sh"]
           env:
             - name: INFTUNE_PATH
-              value: "/app"
+              value: "/mnt/storage/app"
+            - name: HOME
+              value: "/mnt/storage"
             - name: OPTIMIZATION_OUTPUT_DIR
               value: "/mnt/storage/optimization-runs"
             - name: HOME_STORAGE_DIR

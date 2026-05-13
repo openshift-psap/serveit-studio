@@ -864,9 +864,48 @@ function createInstance(e){
     fetch('/api/instances',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)})
     .then(function(r){return r.json()})
     .then(function(data){
-        overlay.remove();
-        if(data.error){showCreateError(data.error);btn.disabled=false;btn.textContent='Create';}
-        else{hideCreateModal();loadInstances(currentClusterId);loadClusters();}
+        if(data.error){
+            overlay.remove();showCreateError(data.error);btn.disabled=false;btn.textContent='Create';
+            return;
+        }
+        // Update overlay text
+        overlay.querySelector('span:first-of-type').textContent = 'Deploying instance…';
+        overlay.querySelector('span:last-of-type').textContent = 'Cloning code and starting server';
+
+        // Poll until instance is running or error
+        var pollCount = 0;
+        var pollInterval = setInterval(function(){
+            pollCount++;
+            fetch('/api/instances?cluster_id=' + currentClusterId)
+            .then(function(r){return r.json()})
+            .then(function(instances){
+                var inst = instances.find(function(i){return i.display_name === name || i.name === name || i.name.indexOf(name) !== -1});
+                if(inst){
+                    var ps = inst.pod_status || inst.status;
+                    if(ps === 'Running'){
+                        clearInterval(pollInterval);
+                        overlay.remove();
+                        hideCreateModal();
+                        loadInstances(currentClusterId);
+                        loadClusters();
+                    } else if(ps === 'Error' || ps === 'CrashLoopBackOff' || ps === 'Failed' || inst.status === 'error'){
+                        clearInterval(pollInterval);
+                        overlay.remove();
+                        showCreateError('Instance failed to start: ' + ps);
+                        btn.disabled=false;btn.textContent='Create';
+                    } else {
+                        overlay.querySelector('span:last-of-type').textContent = 'Status: ' + ps + '…';
+                    }
+                }
+                if(pollCount > 120){
+                    clearInterval(pollInterval);
+                    overlay.remove();
+                    hideCreateModal();
+                    loadInstances(currentClusterId);
+                    loadClusters();
+                }
+            });
+        }, 3000);
     })
     .catch(function(err){overlay.remove();showCreateError(err.message||err);btn.disabled=false;btn.textContent='Create';});
     return false;
