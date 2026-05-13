@@ -36,7 +36,7 @@ per_layer = attn_params + hidden × intermediate × 3
 ```
 embed_params = vocab_size × hidden_size × 2
 ```
-**Why × 2 for embeddings?** Input embedding + output (LM head) projection. Most models tie these weights, but we count the full parameter budget for VRAM planning.
+**Why × 2 for embeddings?** Input embedding + output (LM head) projection. Most models tie these weights (sharing the same tensor), but we count both for a conservative upper-bound VRAM estimate. This ensures we never under-allocate GPU memory — over-estimating by ~2-5% is safer than OOM crashes. When profiled data is available (Steps 2-3), the actual measured overhead replaces this estimate.
 
 ```
 total_params = layers × per_layer + embed_params
@@ -46,7 +46,7 @@ total_params = layers × per_layer + embed_params
 ```
 per_layer = attn_params + (hidden × intermediate × 3) × num_experts + hidden × num_experts
 ```
-The last term (`hidden × num_experts`) is the router/gating network — a small linear layer that decides which expert processes each token.
+The last term (`hidden × num_experts`) is the router/gating network — a small linear layer per-layer that decides which expert processes each token. This is included in `per_layer` and multiplied by `layers` in `total_params = layers × per_layer + embed_params`.
 
 **Model weight size in GB:**
 ```
@@ -73,6 +73,8 @@ min_tp = ceil(model_size_gb / (gpu_vram_gb × 0.7))
 - CUDA kernels/graphs (~5%): execution overhead
 - Activation memory (~5%): intermediate computation tensors
 
+**GQA constraint on max_tp:** For models using Grouped Query Attention (GQA), where `num_kv_heads < num_attention_heads`, TP cannot exceed `num_kv_heads`. Each GPU must hold at least 1 KV head — if TP > num_kv_heads, some GPUs would have zero KV heads and the model fails to load. Example: Llama-3-70B has 8 KV heads, so max TP is 8 even on nodes with 16 GPUs. This constraint is checked in both the TP sweep (Steps 2-3) and the PD split search (Step 5).
+
 ### Example
 ```
 70B FP8 model on 80GB GPUs:
@@ -91,7 +93,7 @@ Step 2 (Decode): TPSG = (throughput_p90 × OSL) / TP
 Step 3 (Prefill): TPSG = (throughput_p90 × ISL) / TP
 ```
 
-**Why throughput_p90?** P90 is a robust measure of sustained throughput — it excludes the top 10% of results which may be inflated by caching or measurement artifacts, while being less conservative than the median (P50).
+**Why throughput_p90 instead of mean?** P90 represents *reliable sustained throughput* — the rate achieved in at least 90% of measurement windows. Mean throughput can be inflated by short burst periods (e.g., a batch of cached requests completing simultaneously) that don't reflect what the system can consistently deliver. For the Smart PD Search balance equation (`r = decode_thr / prefill_thr`), using a burst-inflated mean would calculate an optimistic ratio that breaks down under real load variance. P90 is deliberately conservative: the calculated P/D split will hold up under sustained traffic, not just peak bursts. Falls back to P50 when P90 is unavailable.
 
 **Why multiply by sequence length?** Raw throughput is in requests/second, but different sequence lengths produce different amounts of work. A request with OSL=512 generates 512 tokens, while OSL=128 generates 128. Multiplying by sequence length converts to tokens/second — a fair unit of work.
 
@@ -145,6 +147,8 @@ sustainable_qps = total_gpus / total_cost / headroom
 **Why divide by headroom (1.3)?** Real workloads have variable arrival rates — requests come in bursts, not at a constant rate. The 30% headroom ensures the system can absorb load spikes without queuing. Without headroom, even small traffic bursts cause latency spikes because every GPU is already fully utilized.
 
 **Why 1.3 specifically?** Empirically, LLM inference workloads show ~20-30% variance in request arrival rates. 1.3× provides enough buffer for typical variance while not wasting too many GPUs on idle capacity. For production systems with strict SLAs, users can increase this to 1.5 or 2.0.
+
+**Interaction with Step 10:** Headroom is applied to the *theoretical* capacity estimate (Step 4). Step 10's latency-bounded search finds the *actual* breaking point empirically. If Step 10 runs, its result supersedes the headroom-adjusted estimate — the binary search already accounts for real-world variance by converging on the actual SLA boundary. Headroom is only used when Step 10 does NOT run (no latency SLA configured).
 
 ### Max-Throughput Prefill Ratio
 ```
@@ -266,6 +270,8 @@ w_queue  = clamp(round(queue_wait_cost / total × 7), 1, 5)
 
 **Why clamp to [1, 5]?** Prevents extreme weights (e.g., 7:0:0) that would ignore entire routing dimensions. Even a low-impact dimension should have some influence.
 
+**Sum after clamping:** The weights won't always sum to exactly 7 after independent rounding and clamping. For example, if the raw ratios are 5.8:0.7:0.5, the clamped result is 5:1:1 (sum=7). But if raw ratios are 3.5:2.1:1.4, the result is 4:2:1 (sum=7). Edge case: 4.9:4.9:0.2 → 5:5:1 (sum=11). The EPP normalizes weights internally, so the absolute sum doesn't matter — only the **ratios** between weights affect routing decisions. A 5:5:1 split behaves identically to a proportional 2.3:2.3:0.4 split.
+
 **Example (with Prometheus — measured cache hit = 63%):**
 ISL=9000, OSL=50, measured cache hit=63%, prefill_TPSG=50000, decode_TPSG=10000, 16 pods, KV variance=0.02, queue variance=0.05
 ```
@@ -353,7 +359,7 @@ Breaking down each term:
 | Term | Meaning | Why |
 |------|---------|-----|
 | `gpu_vram_gb` | GPU memory in GB | Total memory available |
-| `kv_cache_fraction` (0.5) | 50% of VRAM for KV cache | Typical split: ~50% model weights, ~50% KV cache. Conservative — actual fraction depends on model size vs GPU VRAM |
+| `kv_cache_fraction` (0.5) | 50% of VRAM for KV cache | **Note:** This is an approximation for the EPP's LRU cache sizing, NOT the actual vLLM allocation. In Step 1 we assume model weights use ~70% of VRAM for min_tp calculation, which would leave ~30% for KV cache. However, the 70% figure includes CUDA graphs, activations, and overhead — not just weights. Once vLLM loads and profiles actual memory (Steps 2-3), `gpu_memory_utilization` is set precisely. The 0.5 here is used only for the EPP's prefix cache tracking (how many block entries to remember), not for actual GPU allocation. Over-estimating slightly is acceptable — it just means the EPP tracks a few more entries than fit, which is harmless |
 | `× 1024³` | Convert GB → bytes | 1 GB = 1,073,741,824 bytes (1024 × 1024 × 1024) |
 | `block_size` | Tokens per KV cache block | From `_compute_block_size()` — how many tokens are grouped into one cache block |
 | `× 2` (first) | K + V tensors | Each token position stores both a Key tensor and a Value tensor — two separate data structures |
@@ -486,7 +492,9 @@ For PD objectives: floor = 128
 **Why sqrt(ISL + OSL)?** Block size is a trade-off:
 - **Too small** (e.g., 8): Many tiny blocks → high management overhead, more metadata per sequence, inefficient memory access patterns
 - **Too large** (e.g., 512): Few large blocks → wasted memory when sequences don't fill complete blocks (internal fragmentation)
-- **sqrt(total_seq_len)** balances these — for a 4096-token sequence, sqrt(4096) = 64, giving ~64 blocks per sequence. This is a sweet spot for cache management efficiency.
+- **sqrt(total_seq_len)** balances these — for a 4096-token sequence, sqrt(4096) = 64, giving ~64 blocks per sequence
+
+**Fragmentation note:** For long-context models (32k+), sqrt(32768) ≈ 181 → rounds to 256. This IS large and will cause some internal fragmentation for short sequences. However, in PD mode where NIXL transfers KV cache in blocks, larger blocks dramatically reduce transfer overhead (fewer network round-trips). The tradeoff favors throughput over memory efficiency. For aggregated-only workloads without NIXL, the floor is 8 (no PD transfer overhead), so block size stays small. Users can override via Advanced Settings if their workload has mostly short sequences on long-context models.
 
 **Why power of 2?** GPU memory operations are aligned to powers of 2 for optimal throughput. Non-power-of-2 block sizes cause unaligned memory accesses that reduce bandwidth.
 
