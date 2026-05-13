@@ -880,7 +880,7 @@ function createInstance(e){
             fetch('/api/instances?cluster_id=' + currentClusterId)
             .then(function(r){return r.json()})
             .then(function(instances){
-                var inst = instances.find(function(i){return i.display_name === name || i.name === name || i.name.indexOf(name) !== -1});
+                var inst = instances.find(function(i){return i.status !== 'deleting' && (i.display_name === name || i.name === name || i.name.indexOf(name) !== -1)});
                 if(inst){
                     var ps = inst.pod_status || inst.status;
                     if(ps === 'Running'){
