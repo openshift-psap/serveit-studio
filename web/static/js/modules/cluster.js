@@ -37,8 +37,9 @@ document.getElementById('next-step5').addEventListener('click', () => {
         return;
     }
 
-    // Validate node selection
-    if (config.selected_nodes && config.selected_nodes.length > 0) {
+    // Validate node selection (skip when launcher presets are active)
+    var hasPresets = config.cluster_resources && (config.cluster_resources.preset_max_gpus || config.cluster_resources.preset_nodes);
+    if (!hasPresets && config.selected_nodes && config.selected_nodes.length > 0) {
         const checked = [...document.querySelectorAll('.node-select-cb:checked')];
         const selectedGpus = checked.reduce((sum, cb) => sum + parseInt(cb.dataset.gpus), 0);
         if (selectedGpus < maxGpus) {
