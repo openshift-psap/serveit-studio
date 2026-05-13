@@ -644,6 +644,19 @@ def list_instances(owner_id: int, cluster_id: int = None) -> List[Dict]:
                 inst['pod_status'] = 'Starting'
         else:
             inst['pod_status'] = phase or 'Unknown'
+        # If service_url is missing, try to get it from the Route (OpenShift)
+        if not inst.get('service_url') and inst['pod_status'] == 'Running':
+            try:
+                r = _kubectl(['get', 'route', f"{inst['deployment_name']}-ui", '-n', inst['namespace'],
+                              '-o', 'jsonpath={.spec.host}'])
+                if r.returncode == 0 and r.stdout.strip():
+                    inst['service_url'] = f"https://{r.stdout.strip()}"
+                    with get_db() as conn:
+                        conn.execute('UPDATE instances SET service_url = ? WHERE id = ?',
+                                     (inst['service_url'], inst['id']))
+            except Exception:
+                pass
+
         instances.append(inst)
 
     return instances
