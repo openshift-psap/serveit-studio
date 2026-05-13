@@ -32,10 +32,10 @@ if [ -d "$APP_DIR/.git" ]; then
     git fetch origin 2>/dev/null || true
     git reset --hard "origin/$BRANCH" 2>/dev/null || echo "Pull failed — using existing code"
 else
-    echo "First boot — cloning repo to PVC..."
+    echo "Cloning repo to PVC..."
+    rm -rf "$APP_DIR" 2>/dev/null || true
     git clone --depth 1 -b "$BRANCH" "$REPO" "$APP_DIR" 2>&1 || {
         echo "Git clone failed — check deploy key and network"
-        # If clone fails but /app exists (legacy image), symlink it
         if [ -d "/app/web" ]; then
             echo "Falling back to image-bundled code at /app"
             APP_DIR="/app"
