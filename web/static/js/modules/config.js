@@ -673,10 +673,16 @@ function applyGpuPresets(data) {
 // Single Test: show/hide deployment config and update GPU summary
 function updateSingleTestVisibility() {
     var isSingle = config.goal === 'single_test';
+    console.log('updateSingleTestVisibility: goal=' + config.goal + ', isSingle=' + isSingle);
     var el = document.getElementById('single-test-config');
-    if (el) el.style.display = isSingle ? 'block' : 'none';
+    if (el) {
+        el.style.display = isSingle ? 'block' : 'none';
+        console.log('single-test-config display set to: ' + el.style.display);
+    } else {
+        console.log('single-test-config element NOT FOUND');
+    }
     // Hide sweep-only sections in single test mode
-    ['sweep-tp-section', 'sweep-pd-section', 'sweep-epp-section'].forEach(function(id) {
+    ['sweep-tp-section', 'sweep-pd-section', 'sweep-epp-section', 'sweep-latency-section'].forEach(function(id) {
         var s = document.getElementById(id);
         if (s) s.style.display = isSingle ? 'none' : '';
     });
