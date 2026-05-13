@@ -522,6 +522,11 @@ document.getElementById('max-gpu-select').addEventListener('change', function() 
 function validateNodeSelection() {
     const enabled = document.getElementById('enable-node-select').checked;
     const warningEl = document.getElementById('node-select-warning');
+    // Skip validation when presets are active (launcher already validated)
+    if (config.cluster_resources && (config.cluster_resources.preset_max_gpus || config.cluster_resources.preset_nodes)) {
+        warningEl.style.display = 'none';
+        return;
+    }
     if (!enabled) {
         warningEl.style.display = 'none';
         config.selected_nodes = null;
