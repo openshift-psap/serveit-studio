@@ -506,20 +506,25 @@ pods_per_node = max(
   ceil(total_pods / num_gpu_nodes),
   max_gpus_per_node // TP
 )
-memory_per_pod = floor((avg_node_memory_gb × 0.85) / pods_per_node)
-cpu_per_pod    = floor((avg_node_cpus × 0.80) / pods_per_node)
+system_reserve_memory = max(avg_node_memory_gb × 0.15, 16 GB)
+memory_per_pod = floor((avg_node_memory_gb - system_reserve_memory) / pods_per_node)
+
+system_reserve_cpu = max(avg_node_cpus × 0.20, 4 cores)
+cpu_per_pod    = floor((avg_node_cpus - system_reserve_cpu) / pods_per_node)
 ```
-**Why 0.85 for memory?** Reserve 15% of node memory for:
+**Why max(15%, 16 GB) for memory?** Reserve the larger of 15% or 16 GB for:
 - Kubelet and container runtime (~2-4 GB)
 - OS kernel and filesystem cache (~2-4 GB)
 - System pods (kube-proxy, CNI, monitoring) (~1-2 GB)
 - Safety margin for memory spikes
 
-**Why 0.80 for CPU?** Reserve 20% of node CPUs for:
+The absolute floor of 16 GB ensures small nodes (256 GB) don't starve the OS — 15% of 256 GB is only 38 GB which is fine, but on a hypothetical 64 GB node, 15% = 9.6 GB which could be too tight. The 16 GB floor guarantees enough headroom regardless of node size.
+
+**Why max(20%, 4 cores) for CPU?** Reserve the larger of 20% or 4 cores for:
 - Kubelet and container runtime overhead
 - NCCL communication threads (run on CPU alongside GPU work)
 - System pods and OS processes
-- CPU is less critical than memory (GPU-bound workloads), so a bit more aggressive
+- The 4-core floor ensures at least a few cores for system processes on smaller nodes
 
 ---
 
@@ -537,8 +542,8 @@ cpu_per_pod    = floor((avg_node_cpus × 0.80) / pods_per_node)
 | PD block size floor | 128 | Minimum for NIXL transfer efficiency |
 | Binary search threshold | 5% | Diminishing returns below this precision |
 | Starting C factor | 0.6 | 60% of ceiling — conservative but not too slow |
-| Node memory fraction | 0.85 | 15% for kubelet, OS, system pods |
-| Node CPU fraction | 0.80 | 20% for system overhead and NCCL threads |
+| Node memory reserve | max(15%, 16 GB) | Percentage or absolute floor, whichever is larger |
+| Node CPU reserve | max(20%, 4 cores) | Percentage or absolute floor, whichever is larger |
 | Max gpu_memory_util | 0.95 | 5% safety for unexpected allocation spikes |
 | Reserve scaling | 0.008 | 0.8% per additional pod for shared overhead |
 | Base reserve | 5% | Minimum overhead for single pod |

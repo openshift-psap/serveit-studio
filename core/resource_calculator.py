@@ -50,13 +50,15 @@ def calculate_pod_resources(
     pods_per_node = max(pods_from_deployment, pods_from_tp, 1)
 
     avg_node_memory_gb = sum(n.memory_gb for n in gpu_nodes) / num_gpu_nodes
-    usable_memory_gb = avg_node_memory_gb * 0.85
-    memory_per_pod_gb = int(usable_memory_gb / pods_per_node)
+    system_reserve_gb = max(avg_node_memory_gb * 0.15, 16)
+    usable_memory_gb = avg_node_memory_gb - system_reserve_gb
+    memory_per_pod_gb = max(1, int(usable_memory_gb / pods_per_node))
     mem_str = f"{memory_per_pod_gb}Gi"
 
     avg_node_cpus = sum(n.cpu_cores for n in gpu_nodes) / num_gpu_nodes
-    usable_cpus = avg_node_cpus * 0.80
-    cpus_per_pod = int(usable_cpus / pods_per_node)
+    system_reserve_cpus = max(avg_node_cpus * 0.20, 4)
+    usable_cpus = avg_node_cpus - system_reserve_cpus
+    cpus_per_pod = max(1, int(usable_cpus / pods_per_node))
     cpu_str = str(max(cpus_per_pod, 1))
 
     logger.info(
