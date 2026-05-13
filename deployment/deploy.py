@@ -247,19 +247,22 @@ def restart_server(cmd: str, namespace: str, port: int):
 
 # ── Preflight Checks ────────────────────────────────────────────────────────
 
-def preflight_checks(cmd: str, namespace: str):
-    # LWS CRD
-    r = subprocess.run([cmd, 'api-resources'], capture_output=True, text=True, timeout=15)
-    if 'leaderworkerset' not in r.stdout:
-        print("❌ LeaderWorkerSet (LWS) CRD not found.", file=sys.stderr)
-        print("   Install: kubectl apply --server-side -f https://github.com/kubernetes-sigs/lws/releases/latest/download/manifests.yaml", file=sys.stderr)
-        sys.exit(1)
+def preflight_checks(cmd: str, namespace: str, mode: str = 'local'):
+    # Launcher-only mode skips LWS and Istio checks — those are needed
+    # on the target clusters, not on the launcher's cluster
+    if mode != 'launcher':
+        # LWS CRD
+        r = subprocess.run([cmd, 'api-resources'], capture_output=True, text=True, timeout=15)
+        if 'leaderworkerset' not in r.stdout:
+            print("❌ LeaderWorkerSet (LWS) CRD not found.", file=sys.stderr)
+            print("   Install: kubectl apply --server-side -f https://github.com/kubernetes-sigs/lws/releases/latest/download/manifests.yaml", file=sys.stderr)
+            sys.exit(1)
 
-    # Istio
-    r = kubectl_run(cmd, ['get', 'namespace', 'istio-system'])
-    if r.returncode != 0:
-        print("❌ istio-system namespace not found. Install Istio first.", file=sys.stderr)
-        sys.exit(1)
+        # Istio
+        r = kubectl_run(cmd, ['get', 'namespace', 'istio-system'])
+        if r.returncode != 0:
+            print("❌ istio-system namespace not found. Install Istio first.", file=sys.stderr)
+            sys.exit(1)
 
     # Create namespace
     r = kubectl_run(cmd, ['get', 'namespace', namespace])
@@ -389,7 +392,7 @@ def main():
         return
 
     # ── Deploy ──
-    preflight_checks(cmd, args.namespace)
+    preflight_checks(cmd, args.namespace, mode=args.mode)
 
     print(f"🚀 Deploying Inftune Studio to namespace: {args.namespace}", file=sys.stderr)
     r = kubectl_run(cmd, ['apply', '-f', '-'], input_data=yaml)
