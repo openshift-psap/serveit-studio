@@ -63,8 +63,8 @@
                             </div>
                         </div>
 
-                        <!-- TP Pair Breadth (collapsible) -->
-                        <div style="border:2px solid #8b5cf6;border-radius:12px;overflow:hidden;margin-bottom:20px;">
+                        <!-- TP Pair Breadth (collapsible) — hidden in single_test mode -->
+                        <div id="sweep-tp-section" style="border:2px solid #8b5cf6;border-radius:12px;overflow:hidden;margin-bottom:20px;">
                             <div style="background:linear-gradient(135deg,#f5f3ff,#ede9fe);padding:14px 20px;cursor:pointer;display:flex;align-items:center;justify-content:space-between;" onclick="var b=document.getElementById('tp-search-body');var a=document.getElementById('tp-search-arrow');if(b.style.display==='none'){b.style.display='block';a.textContent='▾';}else{b.style.display='none';a.textContent='▸';}">
                                 <div>
                                     <div style="font-weight:700;color:#5b21b6;font-size:1.05em;">GPU Split Combinations</div>
@@ -89,8 +89,8 @@
                             </div>
                         </div>
 
-                        <!-- P/D Split Strategy (collapsible) -->
-                        <div style="border:2px solid #0891b2;border-radius:12px;overflow:hidden;margin-bottom:20px;">
+                        <!-- P/D Split Strategy (collapsible) — hidden in single_test mode -->
+                        <div id="sweep-pd-section" style="border:2px solid #0891b2;border-radius:12px;overflow:hidden;margin-bottom:20px;">
                             <div style="background:linear-gradient(135deg,#ecfeff,#cffafe);padding:14px 20px;cursor:pointer;display:flex;align-items:center;justify-content:space-between;" onclick="var b=document.getElementById('pd-search-body');var a=document.getElementById('pd-search-arrow');if(b.style.display==='none'){b.style.display='block';a.textContent='&#9662;';}else{b.style.display='none';a.textContent='&#9656;';}">
                                 <div>
                                     <div style="font-weight:700;color:#155e75;font-size:1.05em;">Prefill / Decode Pod Balance</div>

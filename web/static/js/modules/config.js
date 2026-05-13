@@ -20,6 +20,7 @@ function updateUIFromConfig() {
                 card.classList.add('selected');
             }
         });
+        updateSingleTestVisibility();
     }
 
     if (config.model) {
@@ -666,8 +667,14 @@ function applyGpuPresets(data) {
 
 // Single Test: show/hide deployment config and update GPU summary
 function updateSingleTestVisibility() {
+    var isSingle = config.goal === 'single_test';
     var el = document.getElementById('single-test-config');
-    if (el) el.style.display = config.goal === 'single_test' ? 'block' : 'none';
+    if (el) el.style.display = isSingle ? 'block' : 'none';
+    // Hide sweep-only sections in single test mode
+    ['sweep-tp-section', 'sweep-pd-section', 'sweep-epp-section'].forEach(function(id) {
+        var s = document.getElementById(id);
+        if (s) s.style.display = isSingle ? 'none' : '';
+    });
 }
 
 var _pendingSingleTestId = null;
