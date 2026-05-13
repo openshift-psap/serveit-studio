@@ -777,13 +777,11 @@ function updateGpuFromNodes(){
     var currentVal = parseInt(gpuSel.value) || 0;
 
     // Rebuild options capped to selected nodes' total
-    gpuSel.innerHTML = '<option value="">All (' + totalSelectedGpus + ' GPUs)</option>';
-    var opts = [];
-    for(var i=1;i<totalSelectedGpus;i++) opts.push(i);
-    opts.forEach(function(v){
-        var o=document.createElement('option');o.value=v;o.textContent=v+' GPU'+(v>1?'s':'');
+    gpuSel.innerHTML = '<option value="">All (' + totalSelectedGpus + ' GPUs from selected nodes)</option>';
+    for(var i=1;i<=totalSelectedGpus;i++){
+        var o=document.createElement('option');o.value=i;o.textContent=i+' GPU'+(i>1?'s':'');
         gpuSel.appendChild(o);
-    });
+    }
 
     // Keep current selection if still valid
     if(currentVal > 0 && currentVal <= totalSelectedGpus){
