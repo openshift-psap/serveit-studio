@@ -60,6 +60,7 @@ def _get_secret_key():
 
 
 app = Flask(__name__, template_folder='templates')
+app.config['TEMPLATES_AUTO_RELOAD'] = True
 app.config['SECRET_KEY'] = _get_secret_key()
 app.config['SESSION_COOKIE_HTTPONLY'] = True
 app.config['SESSION_COOKIE_SAMESITE'] = 'Lax'
