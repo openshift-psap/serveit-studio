@@ -62,7 +62,7 @@ class KubectlRunner:
         """
         self.namespace = namespace
         self.kubeconfig = kubeconfig or os.environ.get('KUBECONFIG', '~/.kube/kubeconfig')
-        self.kubectl_cmd = detect_kubectl_command()
+        self.kubectl_cmd = 'kubectl'
 
         # Prepare environment once (avoid copying on every call)
         self._env = os.environ.copy()

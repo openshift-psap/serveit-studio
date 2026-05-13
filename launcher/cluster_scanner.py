@@ -64,19 +64,17 @@ def scan_cluster_resources(cluster: Dict, namespace: str = 'inftune') -> Dict:
                 'scan_warning': f'Limited permissions: {str(scan_err)[:200]}',
             }
 
-        # Check for missing infrastructure components
+        # Check for missing infrastructure components (using the scanner's kubectl which respects kubeconfig)
         warnings = []
-        cmd = 'oc' if _is_oc() else 'kubectl'
         try:
-            r = subprocess.run([cmd, 'api-resources'], capture_output=True, text=True, timeout=15)
+            r = scanner.kubectl.run(['api-resources'], check=False)
             if r.returncode == 0:
                 if 'leaderworkerset' not in r.stdout:
                     warnings.append('LeaderWorkerSet (LWS) not installed — required for vLLM pod deployment')
         except Exception:
             pass
         try:
-            r = subprocess.run([cmd, 'get', 'namespace', 'istio-system'],
-                              capture_output=True, text=True, timeout=10)
+            r = scanner.kubectl.run(['get', 'namespace', 'istio-system'], check=False)
             if r.returncode != 0:
                 warnings.append('Istio not found — required for inference gateway routing')
         except Exception:
