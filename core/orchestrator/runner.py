@@ -953,7 +953,7 @@ class TestOrchestrator(ParserMixin, GuidellmMixin):
 
                 # Scan pod logs for critical errors
                 try:
-                    from .pod_error_scanner import scan_pod_logs
+                    from core.pod_error_scanner import scan_pod_logs
                     if log_callback:
                         log_callback("\n🔍 Scanning pod logs for critical errors...")
                     scan_result = scan_pod_logs(self.namespace, config.test_id)
@@ -1096,7 +1096,7 @@ def main():
         plan_dict = json.load(f)
 
     # Reconstruct plan
-    from .config_generator import TestConfig, OptimizationPlan, ClusterResources
+    from core.config_generator import TestConfig, OptimizationPlan, ClusterResources
     test_configs = [TestConfig(**cfg) for cfg in plan_dict['test_configs']]
     cluster_resources = ClusterResources(**plan_dict['cluster_resources'])
 

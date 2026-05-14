@@ -327,7 +327,7 @@ class RecipeOptimizer(
         if not test_result.pod_errors_detected:
             return
         try:
-            from .pod_error_scanner import PodErrorsDetected
+            from core.pod_error_scanner import PodErrorsDetected
         except ImportError:
             return
         if self.db_manager and self.run_id:
