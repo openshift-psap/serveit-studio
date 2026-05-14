@@ -246,15 +246,29 @@ Instead of brute-force testing preset weight combinations (3-4 tests), Smart EPP
 Each weight is proportional to the **time impact** of optimal routing on that dimension:
 
 ```
-prefix_time_impact = (ISL × actual_cache_hit_pct / 100) / prefill_TPSG
-kv_eviction_cost   = (ISL / prefill_TPSG) × kv_utilization_factor
-queue_wait_cost    = (ISL + OSL) / (prefill_TPSG + decode_TPSG) × queue_factor
+prefix_time_impact_raw = (ISL × actual_cache_hit_pct / 100) / prefill_TPSG
+prefix_time_impact     = prefix_time_impact_raw × diversity_factor
+kv_eviction_cost       = (ISL / prefill_TPSG) × kv_utilization_factor
+queue_wait_cost        = (ISL + OSL) / (prefill_TPSG + decode_TPSG) × queue_factor
 
 total = prefix_time_impact + kv_eviction_cost + queue_wait_cost
 w_prefix = clamp(round(prefix_time_impact / total × 7), 1, 5)
 w_kv     = clamp(round(kv_eviction_cost / total × 7), 1, 5)
 w_queue  = clamp(round(queue_wait_cost / total × 7), 1, 5)
 ```
+
+### Prefix Cache Diversity Factor
+
+The raw `prefix_time_impact` measures how much compute a cache hit saves, but it doesn't account for whether **routing** can actually improve the hit rate. When every pod caches the same prompt (identical mode), routing to a specific pod adds no value — any pod will have it cached. The diversity factor discounts the prefix weight accordingly:
+
+| Cache Mode | Diversity Factor | Rationale |
+|-----------|-----------------|-----------|
+| `identical` | 0.1 | All pods cache the same prompt. Routing is a commodity — the hit is guaranteed everywhere. Prioritizing prefix creates pod stickiness that hurts queue/KV balance. |
+| `shared_prefix` | 0.3 | High overlap across pods. Small routing gains from suffix variation don't justify skewing load distribution. |
+| `multi_group` | `min(1.0, max(0.3, num_groups / num_pods))` | Multiple distinct prompt groups. When groups ≥ pods, each pod specializes in a group — routing to the right pod has high value. When groups < pods, multiple pods share the same group, reducing routing benefit. |
+| No prefix cache | 1.0 (but `cache_hit_pct=0` makes `prefix_time_impact=0` regardless) | Diversity is irrelevant when there's nothing to cache. |
+
+**Why this matters:** Without the diversity factor, ISL=9000 with 80% identical cache produces weights `5:1:1` (cache-dominated). Empirical testing showed this was the **worst** preset — queue-heavy (`1:1:5`) and kv-heavy (`2:5:1`) both outperformed it because the high prefix weight created pod stickiness that prevented balanced load distribution. With `diversity=0.1`, the same inputs produce `3:1:4` (queue-dominated), aligning with empirical results.
 
 **Why these formulas?**
 
@@ -274,24 +288,36 @@ w_queue  = clamp(round(queue_wait_cost / total × 7), 1, 5)
 
 **Intentional ratio compression:** The floor clamp of 1 compresses extreme ratios. In the 4.9:4.9:0.2 example, the raw math suggests the third dimension is 24.5× less important than the others. After clamping to 5:5:1, it becomes only 5× less important — making it significantly more influential than the math alone would suggest. This is a deliberate safety feature: even in a cache-dominated workload where the math says "queue depth is irrelevant," the EPP still considers queue depth at 1/5th weight. This prevents pathological routing where a pod with a massive queue or zero free VRAM keeps receiving requests because its cache score is high.
 
-**Example (with Prometheus — measured cache hit = 63%):**
-ISL=9000, OSL=50, measured cache hit=63%, prefill_TPSG=50000, decode_TPSG=10000, 16 pods, KV variance=0.02, queue variance=0.05
+**Example (multi_group mode, 5 groups, 8 pods — Prometheus measured 63%):**
+ISL=9000, OSL=50, measured cache hit=63%, prefill_TPSG=50000, decode_TPSG=10000, 8 pods, KV variance=0.02, queue variance=0.05
 ```
-prefix_impact = 9000 × 0.63 / 50000 = 0.1134 GPU-sec  (dominant)
-kv_eviction   = 9000 / 50000 × 0.02 = 0.0036 GPU-sec  (minor)
-queue_cost    = 9050 / 60000 × 0.15 = 0.0226 GPU-sec  (moderate)
-→ Weights: prefix=5, kv=1, queue=1  (cache-dominated workload)
+prefix_raw    = 9000 × 0.63 / 50000 = 0.1134 GPU-sec
+diversity     = min(1.0, 5/8) = 0.625  (multi_group, 5 groups on 8 pods)
+prefix_impact = 0.1134 × 0.625 = 0.0709 GPU-sec
+kv_eviction   = 9000 / 50000 × 0.02 = 0.0036 GPU-sec
+queue_cost    = 9050 / 60000 × 0.15 = 0.0226 GPU-sec
+→ Weights: prefix=5, kv=1, queue=2  (prefix still dominant — routing matters for groups)
 ```
 
-**Example (without Prometheus — fallback to configured 80%):**
-ISL=9000, OSL=50, configured cache_hit=80%, concurrency=100, max_num_seqs=4096, 16 pods
+**Example (identical mode, 80% hit — no Prometheus):**
+ISL=9000, OSL=50, configured cache_hit=80%, prefill_TPSG=31790, decode_TPSG=1785, concurrency=12, max_num_seqs=256, 8 pods
 ```
-prefix_impact = 9000 × 0.8 / 50000 = 0.144 GPU-sec  (dominant)
-kv_eviction   = 9000 / 50000 × (100/4096)² ≈ 0.0001 GPU-sec  (negligible)
-queue_cost    = 9050 / 60000 / 16 = 0.0094 GPU-sec  (minor)
-→ Weights: prefix=5, kv=1, queue=1  (cache-dominated workload)
+prefix_raw    = 9000 × 0.8 / 31790 = 0.2265 GPU-sec
+diversity     = 0.1  (identical mode — all pods cache the same prompt)
+prefix_impact = 0.2265 × 0.1 = 0.0227 GPU-sec
+kv_eviction   = 9000 / 31790 × (12/256)² = 0.0006 GPU-sec
+queue_cost    = 9050 / 33575 / 8 = 0.0337 GPU-sec
+→ Weights: prefix=3, kv=1, queue=4  (queue-dominated — validated by empirical testing)
 ```
-Note: The configured 80% overstates the actual hit rate (measured 63%) but produces the same dominant weight in this case. For workloads where cache and queue are closer in impact, the measured data would produce meaningfully different weights.
+
+**Example (no prefix cache):**
+ISL=9000, OSL=50, cache_hit=0%, prefill_TPSG=2691, decode_TPSG=849, concurrency=100, max_num_seqs=256, 16 pods
+```
+prefix_impact = 0  (no cache → diversity irrelevant)
+kv_eviction   = 9000 / 2691 × (100/256)² = 0.5104 GPU-sec  (dominant)
+queue_cost    = 9050 / 3540 / 16 = 0.1598 GPU-sec
+→ Weights: prefix=1, kv=5, queue=2  (KV-dominated — matches empirical kv-heavy winner)
+```
 
 ### Two-Pass Refinement (OpenShift)
 
@@ -303,6 +329,16 @@ On OpenShift with Prometheus, after running the first test with derived weights,
 Weights are recomputed with measured data. If they differ from the initial derivation, one additional validation test is run. Total: 1-2 tests instead of 3-4 preset sweeps.
 
 On vanilla Kubernetes (no Prometheus), only the derived weights are tested (1 test).
+
+### A/B Guardrail
+
+After testing smart-derived weights, the system compares the result against the Step 6/7 baseline (which ran with default balanced EPP weights). If the smart-derived TTFT p90 is more than 5% worse than the baseline:
+
+1. Log a warning with both values
+2. Automatically test balanced weights (`2:2:2`) as a fallback
+3. Pick the winner by lowest TTFT p90
+
+This adds at most 1 extra test and only triggers when the formula produces suboptimal weights — a safety net against edge cases where the mathematical derivation doesn't match real routing behavior. The 5% threshold avoids false triggers from normal benchmark variance.
 
 ### EPP Scoring Formula
 ```
@@ -319,7 +355,7 @@ The EPP routes each incoming request to the vLLM server that will handle it fast
 
 ### Weight Selection Strategy
 
-**Primary: Smart EPP (default)** — Weights are derived mathematically from calibration data and measured Step 6/7 metrics as described above. Produces 1-2 tests per architecture.
+**Primary: Smart EPP (default)** — Weights are derived mathematically from calibration data, prefix cache diversity, and measured Step 6/7 metrics as described above. Produces 1-2 tests per architecture (plus 1 fallback test if A/B guardrail triggers).
 
 **Fallback: Preset Sweep** — Used when calibration TPSG data is unavailable (e.g., skipped Steps 2-3). Tests 3 preset weight combinations:
 ```
