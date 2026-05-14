@@ -30,6 +30,20 @@ document.getElementById('next-step5').addEventListener('click', () => {
             return;
         }
         config.storage_class = storageClass;
+
+        // Validate PVC size against model size
+        if (config.model) {
+            var sizeMatch = config.model.match(/(\d+\.?\d*)b/i);
+            if (sizeMatch) {
+                var modelSizeB = parseFloat(sizeMatch[1]);
+                var minPvcGb = Math.ceil(modelSizeB * 1.5) + 5;
+                var pvcSize = parseInt(document.getElementById('pvc-size-input').value) || 50;
+                if (pvcSize < minPvcGb) {
+                    logToConsole('❌ PVC size ' + pvcSize + 'Gi is too small for ' + config.model + '. Model needs ~' + Math.round(modelSizeB) + 'GB for weights + overhead. Minimum required: ' + minPvcGb + 'Gi.', 'error');
+                    return;
+                }
+            }
+        }
     }
 
     if (!maxGpus) {
@@ -135,21 +149,6 @@ document.getElementById('start-optimization').addEventListener('click', () => {
     const existingPvcName = useExistingPvc ? document.getElementById('existing-pvc-select').value : null;
     const storageClass = document.getElementById('storage-class-select').value;
     const pvcSize = parseInt(document.getElementById('pvc-size-input').value);
-
-    // Validate PVC size against model size estimate
-    if (!useExistingPvc && config.model) {
-        var sizeMatch = config.model.match(/(\d+\.?\d*)b/i);
-        if (sizeMatch) {
-            var modelSizeB = parseFloat(sizeMatch[1]);
-            var minPvcGb = Math.ceil(modelSizeB * 1.5) + 5;
-            if (pvcSize < minPvcGb) {
-                logToConsole('❌ PVC size ' + pvcSize + 'Gi is too small for ' + config.model + ' (~' + Math.round(modelSizeB) + 'GB model weights). Minimum: ' + minPvcGb + 'Gi.', 'error');
-                document.getElementById('start-optimization').style.display = 'block';
-                document.getElementById('stop-optimization').style.display = 'none';
-                return;
-            }
-        }
-    }
 
     if (useExistingPvc) {
         logToConsole('\n📦 Using existing PVC...', 'info');
