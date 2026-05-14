@@ -195,29 +195,51 @@ function setAdvVllmMode(mode) {
 
 function populateRawFromForm() {
     var lines = [];
-    var defaults = {
+    var isl = config.isl || 2048;
+    var osl = config.osl || 512;
+
+    // Auto-computed values (what the optimizer would set)
+    var autoMaxModelLen = Math.ceil((isl + osl) * 1.05);
+    var autoBlockSize = Math.pow(2, Math.ceil(Math.log2(Math.max(1, Math.sqrt(isl + osl)))));
+    autoBlockSize = Math.max(8, Math.min(512, autoBlockSize));
+
+    var valueDefaults = {
+        'max-model-len': autoMaxModelLen,
+        'block-size': autoBlockSize,
+    };
+
+    var toggleDefaults = {
         'trust-remote-code': true, 'disable-log-requests': true, 'enable-prefix-caching': true,
         'disable-custom-all-reduce': false, 'enable-auto-tool-choice': false,
         'enable-expert-parallel': false, 'vllm-debug-logs': false, 'nccl-debug-logs': false
     };
-    advToggleFields.forEach(function(f) {
-        var modeEl = document.getElementById('adv-' + f + '-mode');
-        if (!modeEl) return;
-        var mode = modeEl.value;
-        var on = mode === 'auto' ? (defaults[f] || false) : mode === 'on';
-        if (on) lines.push('--' + f);
-    });
+
+    // Value settings: use custom if set, otherwise auto-computed defaults
     advValueFields.forEach(function(f) {
         var modeEl = document.getElementById('adv-' + f + '-mode');
         var valEl = document.getElementById('adv-' + f + '-val');
         if (!modeEl || !valEl) return;
         if (modeEl.value === 'custom' && valEl.value) {
             lines.push('--' + f + ' ' + valEl.value);
+        } else if (valueDefaults[f] != null) {
+            lines.push('--' + f + ' ' + valueDefaults[f]);
         }
     });
+
+    // Toggle flags
+    advToggleFields.forEach(function(f) {
+        var modeEl = document.getElementById('adv-' + f + '-mode');
+        if (!modeEl) return;
+        var mode = modeEl.value;
+        var on = mode === 'auto' ? (toggleDefaults[f] || false) : mode === 'on';
+        if (on) lines.push('--' + f);
+    });
+
     var textarea = document.getElementById('adv-vllm-raw-text');
     if (textarea) {
-        var header = '# Additional vLLM serve flags\n# Model, port, TP, gpu-memory-utilization are managed by the optimizer\n';
+        var header = '# vLLM serve flags — edit freely, one flag per line\n';
+        header += '# Model name, --port, --tensor-parallel-size, and\n';
+        header += '# --gpu-memory-utilization are set by the optimizer\n\n';
         textarea.value = header + lines.join('\n');
     }
 }
