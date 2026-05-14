@@ -5,7 +5,7 @@ metadata:
   namespace: {{ namespace }}
 data:
   discover_ib_hca.sh: |
-    {% raw %}#!/bin/bash
+    #!/bin/bash
     # NOTE: Do NOT use set -e here — this script is sourced by pod entrypoints,
     # and set -e would kill the parent shell on any command failure.
 
@@ -111,7 +111,7 @@ data:
             fi
 
             # Filter by requested HCAs if -i flag was used
-            if [[ "${#requested_hcas[@]}" -gt 0 ]]; then
+            if [[ "{{ '${#' }}requested_hcas[@]}" -gt 0 ]]; then
                 is_requested=false
                 for requested_hca in "${requested_hcas[@]}"; do
                     if [[ "$hca" == "$requested_hca" ]]; then
@@ -135,7 +135,7 @@ data:
                 ip_addr=$(ip -4 addr show "$ifname" 2>/dev/null | grep -oP '(?<=inet\s)\d+(\.\d+){3}' | head -n 1 || true)
                 if [[ -n "$ip_addr" ]]; then
                     # Only add IP once for DRA-NET (all HCAs share net0)
-                    if [[ "$NETWORK_MODE" != "dra-net" ]] || [[ "${#data_ips[@]}" -eq 0 ]]; then
+                    if [[ "$NETWORK_MODE" != "dra-net" ]] || [[ "{{ '${#' }}data_ips[@]}" -eq 0 ]]; then
                         data_ips+=("$ip_addr")
                     fi
                     echo "Discovered: HCA=$hca, Interface=$ifname, IP=$ip_addr, Status=ACTIVE" >&2
@@ -150,7 +150,7 @@ data:
         fi
     done
 
-    if [[ "${#all_hcas[@]}" -eq 0 ]]; then
+    if [[ "{{ '${#' }}all_hcas[@]}" -eq 0 ]]; then
         echo "Warning: No active InfiniBand HCAs found, skipping RDMA configuration." >&2
         return 0 2>/dev/null || exit 0
     fi
@@ -226,7 +226,7 @@ data:
                 fi
             done
 
-            if [[ "${#best_hca_set[@]}" -gt 0 ]]; then
+            if [[ "{{ '${#' }}best_hca_set[@]}" -gt 0 ]]; then
                 all_hcas=()
                 for hca in "${!best_hca_set[@]}"; do
                     all_hcas+=("$hca")
@@ -242,7 +242,7 @@ data:
 
     # --- Sort HCAs by device number ---
     sorted_hcas=($(for hca in "${all_hcas[@]}"; do echo "$hca"; done | sort -V))
-    echo "--- Discovery complete: ${#sorted_hcas[@]} active HCAs found. ---" >&2
+    echo "--- Discovery complete: {{ '${#' }}sorted_hcas[@]} active HCAs found. ---" >&2
 
     # --- STEP 3: DEFINE NETWORK SPLIT ---
 
@@ -302,7 +302,7 @@ data:
                 fi
             fi
         done
-        if [[ "${#ucx_devices[@]}" -gt 0 ]]; then
+        if [[ "{{ '${#' }}ucx_devices[@]}" -gt 0 ]]; then
             env_vars["UCX_NET_DEVICES"]="$(IFS=','; echo "${ucx_devices[*]}")"
             echo "--- RoCE detected: UCX_NET_DEVICES set to netdev names ---" >&2
         else
@@ -359,4 +359,4 @@ data:
         echo "--- UCX_NET_DEVICES: ${env_vars[UCX_NET_DEVICES]} ---" >&2
     else
         echo "--- UCX_NET_DEVICES: not set (auto-detect) ---" >&2
-    fi{% endraw %}
+    fi
