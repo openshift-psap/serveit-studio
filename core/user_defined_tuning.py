@@ -207,7 +207,13 @@ class LatencyBinarySearch:
                 meets_sla = latency <= self.constraint.target_ms
             elif latency is not None and latency <= 0:
                 success = False
-                self.log(f"    ⚠️  c={concurrency}: zero latency — no valid results parsed", 'warning')
+                err_msg = getattr(result, 'error_message', '') or ''
+                self.log(f"    ❌ c={concurrency}: all requests failed — no valid results", 'error')
+                if err_msg:
+                    self.log(f"       {err_msg}", 'error')
+                self.log(f"    🛑 Stopping search — investigate pod logs before retrying", 'error')
+                self.log(f"       kubectl logs -n {self.create_config(concurrency, 'debug').namespace} -l component=inftune-test -c vllm --tail=50", 'info')
+                self._zero_result_abort = True
 
         self._tested_concurrencies.add(concurrency)
 
@@ -255,6 +261,7 @@ class LatencyBinarySearch:
 
     def search(self) -> Optional[LatencySearchResult]:
         """Run the full exponential-then-bisect search, with resume support."""
+        self._zero_result_abort = False
         pct = self.constraint.percentile.upper()
         self.log(f"  🔍 {self.architecture.upper()}: target TTFT {pct} "
                  f"≤ {self.constraint.target_ms}ms, "
@@ -274,11 +281,13 @@ class LatencyBinarySearch:
             c = low * 2
             self.log(f"  ⏩ Resuming ramp-up from c={low}", 'info')
 
-            while not self.stop_check():
+            while not self.stop_check() and not self._zero_result_abort:
                 if c in self._tested_concurrencies:
                     c = c * 2
                     continue
                 result, latency, meets_sla = self._test_concurrency(c, 'ramp_up')
+                if self._zero_result_abort:
+                    return self._build_result()
                 if not result or not result.guidellm_success or not meets_sla:
                     high = c
                     break
@@ -296,7 +305,7 @@ class LatencyBinarySearch:
             self.log(f"  ⏩ Resuming: all previous failed, "
                      f"ramping down from c={high}", 'info')
             c = max(1, high // 2)
-            while c >= 1 and not self.stop_check():
+            while c >= 1 and not self.stop_check() and not self._zero_result_abort:
                 if c in self._tested_concurrencies:
                     if c == 1:
                         break
@@ -304,6 +313,8 @@ class LatencyBinarySearch:
                     continue
                 result, latency, meets_sla = self._test_concurrency(
                     c, 'ramp_down')
+                if self._zero_result_abort:
+                    return self._build_result()
                 if meets_sla:
                     low = c
                     break
@@ -322,6 +333,9 @@ class LatencyBinarySearch:
 
             result, latency, meets_sla = self._test_concurrency(c, 'ramp_up')
 
+            if self._zero_result_abort:
+                return self._build_result()
+
             if not result or not result.guidellm_success:
                 self.log(f"  ❌ Initial test at c={c} failed", 'error')
                 return None
@@ -332,9 +346,11 @@ class LatencyBinarySearch:
                 high = c
                 # Ramp down (halving) until we find a concurrency that meets SLA
                 c = max(1, c // 2)
-                while c >= 1 and not self.stop_check():
+                while c >= 1 and not self.stop_check() and not self._zero_result_abort:
                     result, latency, meets_sla = self._test_concurrency(
                         c, 'ramp_down')
+                    if self._zero_result_abort:
+                        return self._build_result()
                     if meets_sla:
                         low = c
                         break
@@ -359,9 +375,11 @@ class LatencyBinarySearch:
                 else:
                     c = c * 2
 
-                while not self.stop_check():
+                while not self.stop_check() and not self._zero_result_abort:
                     result, latency, meets_sla = self._test_concurrency(
                         c, 'ramp_up')
+                    if self._zero_result_abort:
+                        return self._build_result()
                     if not result or not result.guidellm_success or not meets_sla:
                         high = c
                         break
@@ -376,7 +394,7 @@ class LatencyBinarySearch:
         # --- Phase 2: Bisection ---
         self.log(f"  📐 Bisecting between c={low} and c={high}", 'info')
 
-        while not self.stop_check():
+        while not self.stop_check() and not self._zero_result_abort:
             gap_pct = (high - low) / max(low, 1)
             if gap_pct < 0.05 or (high - low) <= 1:
                 break
@@ -386,7 +404,6 @@ class LatencyBinarySearch:
                 break
 
             if mid in self._tested_concurrencies:
-                # Already tested this value — use stored result to update bounds
                 prev = next((t for t in self._trials if t['concurrency'] == mid), None)
                 if prev and prev['success']:
                     if prev['meets_sla']:
@@ -400,6 +417,8 @@ class LatencyBinarySearch:
 
             result, latency, meets_sla = self._test_concurrency(
                 mid, 'binary_search')
+            if self._zero_result_abort:
+                break
 
             if not result or not result.guidellm_success:
                 high = mid
