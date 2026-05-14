@@ -207,13 +207,17 @@ class LatencyBinarySearch:
                 meets_sla = latency <= self.constraint.target_ms
             elif latency is not None and latency <= 0:
                 success = False
+                self._zero_result_count = getattr(self, '_zero_result_count', 0) + 1
                 err_msg = getattr(result, 'error_message', '') or ''
                 self.log(f"    ❌ c={concurrency}: all requests failed — no valid results", 'error')
                 if err_msg:
                     self.log(f"       {err_msg}", 'error')
-                self.log(f"    🛑 Stopping search — investigate pod logs before retrying", 'error')
-                self.log(f"       kubectl logs -n {self.create_config(concurrency, 'debug').namespace} -l component=inftune-test -c vllm --tail=50", 'info')
-                self._zero_result_abort = True
+                if self._zero_result_count >= 2:
+                    self.log(f"    🛑 Multiple zero-result tests — stopping search. Investigate pod logs:", 'error')
+                    self.log(f"       kubectl logs -n {self.create_config(concurrency, 'debug').namespace} -l component=inftune-test -c vllm --tail=50", 'info')
+                    self._zero_result_abort = True
+                else:
+                    self.log(f"    ⚠️  Treating as upper bound — search will try lower concurrency", 'warning')
 
         self._tested_concurrencies.add(concurrency)
 
@@ -262,6 +266,7 @@ class LatencyBinarySearch:
     def search(self) -> Optional[LatencySearchResult]:
         """Run the full exponential-then-bisect search, with resume support."""
         self._zero_result_abort = False
+        self._zero_result_count = 0
         pct = self.constraint.percentile.upper()
         self.log(f"  🔍 {self.architecture.upper()}: target TTFT {pct} "
                  f"≤ {self.constraint.target_ms}ms, "
