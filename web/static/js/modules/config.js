@@ -781,6 +781,7 @@ function showSingleTestModal(recId) {
     document.getElementById('single-test-modal').classList.add('active');
 }
 
+
 function confirmSingleTest() {
     document.getElementById('single-test-modal').classList.remove('active');
     if (!_pendingSingleTestId) return;
@@ -863,6 +864,53 @@ function confirmSingleTest() {
 
     setTimeout(function() {
         goToStep(3);
+        updateUIFromConfig();
+    }, 150);
+}
+
+function applyReportConfig(recId) {
+    if (isOptimizationRunning()) {
+        document.getElementById('running-modal').classList.add('active');
+        return;
+    }
+    var rc = (window._recConfigs || {})[recId];
+    if (!rc) return;
+
+    var arch = rc.architecture || 'aggregated';
+    var ts = rc.test_settings || {};
+    var tp = rc.tp || 1;
+
+    // Pre-fill deployment config for single_test
+    config.single_test_architecture = arch;
+    if (arch === 'pd') {
+        config.single_test_prefill_tp = rc.prefill_tp || tp;
+        config.single_test_decode_tp = rc.decode_tp || tp;
+        config.single_test_prefill_pods = rc.prefill_pods || 1;
+        config.single_test_decode_pods = rc.decode_pods || 1;
+    } else {
+        config.single_test_tp = tp;
+        config.single_test_replicas = rc.replicas || (rc.gpus ? Math.floor(rc.gpus / tp) : 1);
+    }
+
+    // Restore workload settings from the original test
+    if (ts.isl != null) config.isl = ts.isl;
+    if (ts.osl != null) config.osl = ts.osl;
+    if (ts.isl_stdev != null) config.isl_stdev = ts.isl_stdev;
+    if (ts.osl_stdev != null) config.osl_stdev = ts.osl_stdev;
+    if (ts.num_users != null) config.users = ts.num_users;
+    if (ts.prefix_cache_hit_pct != null) config.prefix_cache_hit_pct = ts.prefix_cache_hit_pct;
+    if (ts.prefix_cache_mode) config.prefix_cache_mode = ts.prefix_cache_mode;
+    if (rc.epp_config) config.epp_config = rc.epp_config;
+    if (ts.epp_preset) config.epp_preset = ts.epp_preset;
+    if (ts.advanced_vllm) config.advanced_vllm = ts.advanced_vllm;
+
+    saveConfig();
+
+    var chartsOverlay = document.getElementById('charts-overlay');
+    if (chartsOverlay) chartsOverlay.classList.remove('active');
+
+    setTimeout(function() {
+        goToStep(1);
         updateUIFromConfig();
     }, 150);
 }
