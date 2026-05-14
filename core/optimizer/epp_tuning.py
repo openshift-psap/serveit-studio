@@ -138,7 +138,20 @@ class EPPTuningMixin:
         # Try measured KV/queue variance from Step 6/7
         kv_var, q_var = self._extract_kv_and_queue_metrics(arch)
 
-        prefix_time_impact = (isl * cache_pct / 100.0) / prefill_tpsg
+        prefix_time_impact_raw = (isl * cache_pct / 100.0) / prefill_tpsg
+
+        cache_mode = getattr(self.config, 'prefix_cache_mode', 'identical') or 'identical'
+        if cache_mode == 'identical':
+            diversity = 0.1
+        elif cache_mode == 'shared_prefix':
+            diversity = 0.3
+        elif cache_mode == 'multi_group':
+            n_groups = getattr(self.config, 'prefix_cache_groups', 5) or 5
+            diversity = min(1.0, max(0.3, n_groups / max(num_pods, 1)))
+        else:
+            diversity = 1.0
+
+        prefix_time_impact = prefix_time_impact_raw * diversity
 
         if kv_var > 0:
             kv_eviction_cost = (isl / prefill_tpsg) * min(kv_var, 1.0)
@@ -161,7 +174,7 @@ class EPPTuningMixin:
         w_queue = max(1, min(5, round(queue_wait_cost / total * 7)))
 
         self.log(f"  Smart EPP Weight Derivation ({arch}):", 'info')
-        self.log(f"    Prefix impact: ISL={isl} × {cache_pct:.0f}% ({cache_source}) / TPSG={prefill_tpsg:.0f} = {prefix_time_impact:.4f} GPU-sec", 'info')
+        self.log(f"    Prefix impact: ISL={isl} × {cache_pct:.0f}% ({cache_source}) / TPSG={prefill_tpsg:.0f} = {prefix_time_impact_raw:.4f} × diversity={diversity} ({cache_mode}) = {prefix_time_impact:.4f} GPU-sec", 'info')
         if kv_var > 0:
             self.log(f"    KV pressure:   ISL={isl} / {prefill_tpsg:.0f} × kv_variance={kv_var:.4f} = {kv_eviction_cost:.4f} GPU-sec (measured)", 'info')
         else:
@@ -365,6 +378,14 @@ class EPPTuningMixin:
                 arch_pods = self.config.total_gpus // self.aggregated_tp
 
             smart_weights = self._compute_smart_epp_weights(num_pods=arch_pods, arch=arch)
+
+            # Baseline TTFT from Step 6/7 (ran with default EPP weights)
+            baseline_ttft = None
+            if arch == 'aggregated' and self.aggregated_result:
+                baseline_ttft = self.aggregated_result.ttft_p90
+            elif arch == 'pd' and self.pareto_results:
+                baseline_ttft = min(self.pareto_results, key=lambda x: x[1].ttft_p90 if x[1].ttft_p90 else 1e9)[1].ttft_p90
+
             if smart_weights:
                 weight_combos = [('smart-derived', smart_weights)]
             else:
@@ -567,6 +588,70 @@ class EPPTuningMixin:
                                 self.log(f"  ❌ {rname}: benchmark failed", 'error')
                 else:
                     self.log(f"  Metrics confirm derived weights — no refinement needed", 'success')
+
+            # A/B guardrail: if smart-derived is worse than Step 6/7 baseline, test balanced
+            if (baseline_ttft and arch_results and not self._should_stop()):
+                best_smart_ttft = min(r[2].ttft_p90 or float('inf') for r in arch_results)
+                if best_smart_ttft > baseline_ttft * 1.05:
+                    self.log(f"\n  ⚠️  Smart TTFT ({best_smart_ttft:.0f}ms) > baseline ({baseline_ttft:.0f}ms) — testing balanced fallback", 'warning')
+                    balanced_w = {'prefix_cache_weight': 2.0, 'kv_cache_weight': 2.0, 'queue_weight': 2.0, 'slo_enabled': False}
+                    fb_test_id = f"step11-epp-{arch}-balanced-fallback"
+                    fb_epp_cfg = {
+                        'preset': 'custom',
+                        'maxPrefixBlocksToMatch': base.get('maxPrefixBlocksToMatch', 256),
+                        'lruCapacityPerServer': base.get('lruCapacityPerServer', 31250),
+                        'nonCachedTokens': base.get('nonCachedTokens', 16),
+                        'plugins': {
+                            'prefix_cache': {'enabled': True, 'weight': 2.0},
+                            'kv_cache': {'enabled': True, 'weight': 2.0},
+                            'queue': {'enabled': True, 'weight': 2.0},
+                            'slo': {'enabled': False},
+                        },
+                    }
+                    try:
+                        self.orchestrator.deployment_manager.kubectl.run(
+                            ['delete', 'lws', '-l', 'component=inftune-test',
+                             '-n', self.config.namespace, '--ignore-not-found=true'], check=False)
+                        time.sleep(5)
+                    except Exception:
+                        pass
+                    prereq_mgr.update_epp_config(architecture=arch, epp_config=fb_epp_cfg,
+                                                  log_callback=lambda msg: self.log(msg, 'info'))
+                    fb_config = TestConfig(
+                        test_id=fb_test_id, architecture=base_cfg.architecture,
+                        model_name=base_cfg.model_name, namespace=base_cfg.namespace,
+                        isl=base_cfg.isl, osl=base_cfg.osl, num_users=concurrency,
+                        tensor_parallelism=base_cfg.tensor_parallelism, replicas=base_cfg.replicas,
+                        prefill_replicas=base_cfg.prefill_replicas, decode_replicas=base_cfg.decode_replicas,
+                        prefill_tp=base_cfg.prefill_tp, decode_tp=base_cfg.decode_tp,
+                        max_model_len=base_cfg.max_model_len, gpu_memory_utilization=base_cfg.gpu_memory_utilization,
+                        image=base_cfg.image, pvc_name=base_cfg.pvc_name,
+                        request_type=base_cfg.request_type, request_rate=concurrency,
+                        test_duration=base_cfg.test_duration, workload_mode=base_cfg.workload_mode,
+                        dataset_source=base_cfg.dataset_source, block_size=base_cfg.block_size,
+                        network_type=base_cfg.network_type, nccl_ib_hca=base_cfg.nccl_ib_hca,
+                        rdma_device_resources=base_cfg.rdma_device_resources,
+                        rdma_nics_per_node=base_cfg.rdma_nics_per_node,
+                        memory_request=base_cfg.memory_request, memory_limit=base_cfg.memory_limit,
+                        cpu_request=base_cfg.cpu_request, cpu_limit=base_cfg.cpu_limit,
+                        max_num_seqs=base_cfg.max_num_seqs,
+                        prefill_max_num_seqs=base_cfg.prefill_max_num_seqs,
+                        decode_max_num_seqs=base_cfg.decode_max_num_seqs,
+                        max_num_batched_tokens=base_cfg.max_num_batched_tokens,
+                        prefill_gpu_memory_utilization=base_cfg.prefill_gpu_memory_utilization,
+                        decode_gpu_memory_utilization=base_cfg.decode_gpu_memory_utilization,
+                        selected_nodes=base_cfg.selected_nodes, epp_config=fb_epp_cfg,
+                    )
+                    fb_result = self.orchestrator.run_test(fb_config, cleanup=True,
+                                                           log_callback=lambda msg: self.log(msg, 'info'),
+                                                           stop_check=self._should_stop)
+                    if fb_result and fb_result.guidellm_success:
+                        self.log(f"  ✅ balanced-fallback: TTFT p90={fb_result.ttft_p90:.1f}ms, Throughput p90={fb_result.throughput_p90:.2f} req/s", 'success')
+                        arch_results.append(('balanced-fallback', balanced_w, fb_result))
+                        self.all_test_results.append((fb_config, fb_result))
+                        self._save_epp_test_to_database(fb_config, fb_result)
+                    else:
+                        self.log(f"  ❌ balanced-fallback: benchmark failed", 'error')
 
             self.epp_benchmark_results[arch] = arch_results
 
