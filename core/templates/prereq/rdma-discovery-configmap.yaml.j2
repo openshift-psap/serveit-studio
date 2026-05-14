@@ -5,7 +5,7 @@ metadata:
   namespace: {{ namespace }}
 data:
   discover_ib_hca.sh: |
-    #!/bin/bash
+    {% raw %}#!/bin/bash
     # NOTE: Do NOT use set -e here — this script is sourced by pod entrypoints,
     # and set -e would kill the parent shell on any command failure.
 
@@ -359,4 +359,4 @@ data:
         echo "--- UCX_NET_DEVICES: ${env_vars[UCX_NET_DEVICES]} ---" >&2
     else
         echo "--- UCX_NET_DEVICES: not set (auto-detect) ---" >&2
-    fi
+    fi{% endraw %}
