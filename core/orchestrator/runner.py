@@ -1000,9 +1000,18 @@ class TestOrchestrator(ParserMixin, GuidellmMixin):
                 result.cleanup_time = datetime.now().isoformat()
             elif cleanup and not result.guidellm_success:
                 if log_callback:
-                    log_callback("\n⚠️  Test failed - keeping deployment for debugging")
-                    log_callback(f"🔍 kubectl logs -n {self.namespace} -l test-id={config.test_id}")
-                    log_callback(f"🧹 kubectl delete lws -n {self.namespace} -l test-id={config.test_id}")
+                    log_callback("\n🧹 Step 7: Cleaning up failed deployment...")
+                    log_callback(f"🔍 kubectl logs -n {self.namespace} -l test-id={config.test_id} -c vllm --tail=20")
+                self.deployment_manager.delete_deployment(
+                    config.test_id,
+                    config.architecture,
+                    log_callback=log_callback
+                )
+                self.deployment_manager.wait_for_pods_terminated(
+                    config.test_id,
+                    timeout=300,
+                    log_callback=log_callback
+                )
 
         # Final summary
         if log_callback:
