@@ -113,6 +113,11 @@ class RecipeOptimizerConfig:
     prefix_cache_groups: int = 5  # Number of distinct prompt groups for multi_group mode
     prefix_cache_seed: Optional[int] = None  # Deterministic seed, stored in DB for reproducibility
 
+    # Speculative decoding
+    speculative_config_method: Optional[str] = None  # 'mtp', 'draft', None
+    speculative_config_num_tokens: int = 3
+    speculative_config_enabled: bool = False  # User override (auto-detected if False)
+
     # Advanced vLLM settings (user overrides)
     advanced_vllm: Optional[Dict] = None
 

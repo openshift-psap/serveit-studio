@@ -118,6 +118,7 @@ class ConfigBuilderMixin:
             dataset_max_output=self.config.dataset_max_output or 256,
             epp_config=self._build_epp_config(),
             block_size=self._compute_block_size(),
+            enable_expert_parallel=getattr(self, '_is_moe', False),
         )
         return self._apply_advanced_vllm(cfg) if not is_calibration else cfg
 
@@ -241,6 +242,8 @@ class ConfigBuilderMixin:
             'pipeline_parallel_size': 'pipeline_parallel_size',
             'tool_call_parser': 'tool_call_parser',
             'block_size': 'block_size',
+            'reasoning_parser': 'reasoning_parser',
+            'chat_template_content_format': 'chat_template_content_format',
         }
         for key, attr in val_fields.items():
             setting = adv.get(key)
@@ -256,6 +259,7 @@ class ConfigBuilderMixin:
             'enable_prefix_caching': 'enable_prefix_caching',
             'disable_custom_all_reduce': 'disable_custom_all_reduce',
             'enable_auto_tool_choice': 'enable_auto_tool_choice',
+            'enable_expert_parallel': 'enable_expert_parallel',
             'trust_remote_code': 'trust_remote_code',
             'disable_log_requests': 'disable_log_requests',
             'vllm_debug_logs': 'vllm_debug_logs',
@@ -347,6 +351,7 @@ class ConfigBuilderMixin:
             dataset_max_output=self.config.dataset_max_output or 256,
             epp_config=self._build_epp_config(),
             block_size=self._compute_block_size(),
+            enable_expert_parallel=getattr(self, '_is_moe', False),
         )
         return self._apply_advanced_vllm(cfg)
 
@@ -424,6 +429,7 @@ class ConfigBuilderMixin:
             dataset_max_output=self.config.dataset_max_output or 256,
             epp_config=self._build_epp_config(),
             block_size=self._compute_block_size(),
+            enable_expert_parallel=getattr(self, '_is_moe', False),
         )
         return self._apply_advanced_vllm(cfg)
 

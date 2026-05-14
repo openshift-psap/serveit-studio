@@ -107,6 +107,17 @@ class TestConfig:
     dataset_column: Optional[str] = None  # Column name for prompt text
     dataset_max_output: int = 256  # Max output tokens when using dataset
 
+    # MoE / Expert Parallel
+    enable_expert_parallel: bool = False
+
+    # Speculative decoding
+    speculative_method: Optional[str] = None  # 'mtp', 'draft', None
+    speculative_num_tokens: Optional[int] = None
+
+    # Model-specific flags
+    reasoning_parser: Optional[str] = None
+    chat_template_content_format: Optional[str] = None
+
     # EPP configuration (passed to prereq_manager for configmap generation)
     epp_config: Optional[Dict] = None
 

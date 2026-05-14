@@ -26,6 +26,7 @@ from core.optimizer.latency_search import LatencySearchMixin
 from core.optimizer.config_builder import ConfigBuilderMixin
 from core.optimizer.epp_tuning import EPPTuningMixin
 from core.optimizer.dataset import DatasetMixin
+from core.optimizer.speculative import SpeculativeMixin
 
 logger = logging.getLogger(__name__)
 
@@ -36,6 +37,7 @@ class RecipeOptimizer(
     ConfigBuilderMixin,
     EPPTuningMixin,
     DatasetMixin,
+    SpeculativeMixin,
 ):
     """
     Recipe-based exhaustive optimizer.
@@ -155,6 +157,26 @@ class RecipeOptimizer(
                 self.log(f"Model size from config: {self._model_size_b:.1f}B parameters")
         except Exception as e:
             self.log(f"Could not load model config: {e}. Using defaults.", 'warning')
+
+        # Auto-detect MoE and speculative decoding (MTP) capability
+        self._is_moe = False
+        self._supports_mtp = False
+        if self._model_config:
+            num_experts = (self._model_config.get('num_local_experts')
+                          or self._model_config.get('n_routed_experts')
+                          or self._model_config.get('num_experts') or 0)
+            if num_experts > 1:
+                self._is_moe = True
+                self.log(f"MoE model detected ({num_experts} experts) — expert parallel will be enabled")
+            if self._model_config.get('num_nextn_predict_layers'):
+                self._supports_mtp = True
+                self.log(f"MTP support detected ({self._model_config['num_nextn_predict_layers']} prediction layers)")
+            else:
+                mtp_archs = ['Glm4ForCausalLM', 'DeepseekV3ForCausalLM']
+                model_archs = self._model_config.get('architectures', [])
+                if any(a in mtp_archs for a in model_archs):
+                    self._supports_mtp = True
+                    self.log(f"MTP support detected (architecture: {model_archs[0]})")
 
         # Set HF_TOKEN in process environment so guidellm and other subprocesses inherit it
         if self.config.hf_token and not os.environ.get('HF_TOKEN'):

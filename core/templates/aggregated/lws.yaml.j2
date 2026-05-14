@@ -105,9 +105,14 @@ spec:
                   --dtype {{ dtype }}{% endif %}{% if kv_cache_dtype %} \
                   --kv-cache-dtype {{ kv_cache_dtype }}{% endif %}{% if max_num_batched_tokens %} \
                   --max-num-batched-tokens {{ max_num_batched_tokens }}{% endif %}{% if max_num_seqs %} \
-                  --max-num-seqs {{ max_num_seqs }}{% endif %}{% if enable_auto_tool_choice %} \
+                  --max-num-seqs {{ max_num_seqs }}{% endif %}{% if enable_expert_parallel %} \
+                  --enable-expert-parallel{% endif %}{% if speculative_method %} \
+                  --speculative-config.method {{ speculative_method }} \
+                  --speculative-config.num_speculative_tokens {{ speculative_num_tokens | default(3) }}{% endif %}{% if enable_auto_tool_choice %} \
                   --enable-auto-tool-choice{% endif %}{% if tool_call_parser %} \
-                  --tool-call-parser {{ tool_call_parser }}{% endif %}
+                  --tool-call-parser {{ tool_call_parser }}{% endif %}{% if reasoning_parser %} \
+                  --reasoning-parser {{ reasoning_parser }}{% endif %}{% if chat_template_content_format %} \
+                  --chat-template-content-format {{ chat_template_content_format }}{% endif %}
 
             env:
               - name: HF_TOKEN

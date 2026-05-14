@@ -45,6 +45,11 @@ class OptimizationStrategy(ABC):
             self.opt._benchmark_epp_strategies()
             self.opt._apply_best_epp_config()
 
+    def _run_speculative_if_enabled(self):
+        """Step 12: Speculative decoding comparison."""
+        if self.opt._should_run_speculative() and not self.opt._should_stop():
+            self.opt._run_speculative_comparison()
+
 
 class TTFTStrategy(OptimizationStrategy):
     """Response Time Priority: Aggregated search + PD disaggregation.
@@ -109,6 +114,9 @@ class TTFTStrategy(OptimizationStrategy):
             self.opt._validate_at_calibrated_load()
             self.opt.log("", 'info')
 
+        # Step 12: Speculative decoding comparison (conditional)
+        self._run_speculative_if_enabled()
+
 
 class ThroughputStrategy(OptimizationStrategy):
     """Throughput Priority: Aggregated search + EP (Expert Parallelism).
@@ -169,6 +177,9 @@ class ThroughputStrategy(OptimizationStrategy):
             self.opt.log("-" * 80, 'info')
             self._validate_ep_at_calibrated_load()
             self.opt.log("", 'info')
+
+        # Step 12: Speculative decoding comparison (conditional)
+        self._run_speculative_if_enabled()
 
     def _calculate_ep_configs(self):
         """Steps 4-5: Calculate EP configuration space.
@@ -620,6 +631,9 @@ class BalancedStrategy(OptimizationStrategy):
             self._validate_all_at_calibrated_load()
             self.opt.log("", 'info')
 
+        # Step 12: Speculative decoding comparison (conditional)
+        self._run_speculative_if_enabled()
+
     def _validate_three_way(self):
         """Step 8: Three-way comparison — best PD vs best EP vs Aggregated.
 
@@ -962,6 +976,8 @@ class AggregatedOnlyStrategy(OptimizationStrategy):
             self.opt._run_latency_bounded_search()
             self.opt.log("", 'info')
 
+        self._run_speculative_if_enabled()
+
 
 class PDOnlyStrategy(OptimizationStrategy):
     """PD Only: Test only Prefill/Decode disaggregation splits.
@@ -994,6 +1010,8 @@ class PDOnlyStrategy(OptimizationStrategy):
             self.opt._run_latency_bounded_search()
             self.opt.log("", 'info')
 
+        self._run_speculative_if_enabled()
+
 
 class EPOnlyStrategy(OptimizationStrategy):
     """EP Only: Test only Expert Parallelism configurations.
@@ -1025,3 +1043,5 @@ class EPOnlyStrategy(OptimizationStrategy):
         if self.opt._should_run_latency_bounded_search():
             self.opt._run_latency_bounded_search()
             self.opt.log("", 'info')
+
+        self._run_speculative_if_enabled()

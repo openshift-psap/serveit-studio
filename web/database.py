@@ -298,6 +298,8 @@ def init_db():
         ('prefix_cache_seed', 'INTEGER'),
         ('stop_mode', 'TEXT'),
         ('max_requests', 'INTEGER'),
+        ('speculative_method', 'TEXT'),
+        ('speculative_num_tokens', 'INTEGER'),
     ]:
         try:
             cursor.execute(f'ALTER TABLE optimization_runs ADD COLUMN {col} {typ}')
