@@ -1592,7 +1592,9 @@ def handle_setup_storage(data):
 
         existing_pvc = data.get('existing_pvc')
         storage_class = data.get('storage_class')
-        pvc_size = data.get('pvc_size', 256)
+        pvc_size = int(data.get('pvc_size', 256))
+        if pvc_size < 50:
+            log_to_ui(f'⚠️ Model cache PVC size is {pvc_size}Gi — this may be too small for large models. Minimum recommended: 100Gi.', 'warning')
         model = data.get('model')
         hf_token = data.get('hf_token')
         namespace = TARGET_NAMESPACE
