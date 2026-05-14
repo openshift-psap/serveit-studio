@@ -1584,9 +1584,13 @@ def handle_fetch_image_tags(data):
                 return (2, t)
         tags = sorted(tags, key=tag_sort_key, reverse=True)
 
-        emit('image_tags_result', {'tags': tags, 'repo': repo})
+        target = data.get('target', 'image')
+        event = 'scheduler_tags_result' if target == 'scheduler' else 'image_tags_result'
+        emit(event, {'tags': tags, 'repo': repo})
     except Exception as e:
-        emit('image_tags_result', {'error': str(e)[:200]})
+        target = data.get('target', 'image')
+        event = 'scheduler_tags_result' if target == 'scheduler' else 'image_tags_result'
+        emit(event, {'error': str(e)[:200]})
 
 
 @socketio.on('setup_storage')

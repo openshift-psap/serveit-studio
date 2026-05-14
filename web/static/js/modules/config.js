@@ -1032,6 +1032,51 @@ function updateSelectedImage() {
     saveConfig();
 }
 
+function fetchSchedulerTags() {
+    var input = document.getElementById('scheduler-image-input');
+    var full = (input.value || 'ghcr.io/llm-d/llm-d-inference-scheduler:v0.7.1').trim();
+    var repo = full.split(':')[0];
+    var statusEl = document.getElementById('scheduler-tag-status');
+    statusEl.textContent = 'Fetching tags...';
+    statusEl.style.color = '#0369a1';
+    socket.emit('fetch_image_tags', { repo: repo, target: 'scheduler' });
+}
+
+socket.on('scheduler_tags_result', function(data) {
+    var selectEl = document.getElementById('scheduler-tag-select');
+    var statusEl = document.getElementById('scheduler-tag-status');
+    if (data.error) {
+        statusEl.textContent = 'Failed: ' + data.error;
+        statusEl.style.color = '#dc2626';
+        return;
+    }
+    var tags = data.tags || [];
+    statusEl.textContent = tags.length + ' tags found';
+    statusEl.style.color = '#22c55e';
+    var currentTag = config.scheduler_image ? config.scheduler_image.split(':').pop() : 'v0.7.1';
+    selectEl.innerHTML = '';
+    tags.forEach(function(tag) {
+        var opt = document.createElement('option');
+        opt.value = tag;
+        opt.textContent = tag;
+        if (tag === currentTag) opt.selected = true;
+        selectEl.appendChild(opt);
+    });
+    selectEl.style.display = 'block';
+    updateSelectedScheduler();
+});
+
+function updateSelectedScheduler() {
+    var input = document.getElementById('scheduler-image-input');
+    var repo = input.value.split(':')[0] || 'ghcr.io/llm-d/llm-d-inference-scheduler';
+    var selectEl = document.getElementById('scheduler-tag-select');
+    if (selectEl && selectEl.value) {
+        input.value = repo + ':' + selectEl.value;
+    }
+    config.scheduler_image = input.value;
+    saveConfig();
+}
+
 // Load models from API
 var allModels = [];
 var displayedModels = 0;

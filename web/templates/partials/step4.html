@@ -259,8 +259,12 @@
                                     <label style="display:block;font-weight:600;margin-bottom:6px;color:#374151;font-size:0.9em;">EPP Scheduler Image</label>
                                     <div style="display:flex;gap:8px;">
                                         <input type="text" id="scheduler-image-input" value="ghcr.io/llm-d/llm-d-inference-scheduler:v0.7.1" placeholder="ghcr.io/llm-d/llm-d-inference-scheduler:v0.7.1" style="flex:1;padding:10px 14px;border:2px solid #d1d5db;border-radius:8px;font-size:14px;font-family:monospace;" onchange="config.scheduler_image=this.value;saveConfig();">
+                                        <button type="button" onclick="fetchSchedulerTags()" style="padding:10px 16px;background:#0ea5e9;color:white;border:none;border-radius:8px;font-weight:600;font-size:0.85em;cursor:pointer;white-space:nowrap;">Fetch Tags</button>
                                     </div>
                                     <div style="margin-top:6px;font-size:0.8em;color:#64748b;">The EPP (Endpoint Picker) routes requests to inference pods. Should match the llm-d release version.</div>
+                                    <select id="scheduler-tag-select" style="display:none;width:100%;padding:10px 14px;border:2px solid #d1d5db;border-radius:8px;font-size:14px;font-family:monospace;background:white;margin-top:8px;" onchange="updateSelectedScheduler()">
+                                    </select>
+                                    <div id="scheduler-tag-status" style="margin-top:6px;font-size:0.8em;color:#64748b;"></div>
                                 </div>
 
                                 <div style="background:#fffbeb;border:1px solid #fde68a;border-radius:8px;padding:10px 14px;margin-top:12px;">
