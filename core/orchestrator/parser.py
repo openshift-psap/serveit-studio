@@ -140,12 +140,17 @@ class ParserMixin:
             result.benchmark_duration_s = bench.get('duration')
             result.warmup_duration_s = bench.get('warmup_duration')
 
-            logger.info(
-                f"Parsed guidellm metrics: TTFT p90={result.ttft_p90}ms, "
-                f"Throughput p90={result.throughput_p90} req/s, "
-                f"TPOT p90={result.tpot_p90}ms, "
-                f"Requests: {result.request_successful}/{result.request_total} ok"
-            )
+            if not result.request_successful or result.request_successful == 0:
+                logger.warning(f"No successful requests in guidellm output ({result.request_errored} errored, {result.request_incomplete} incomplete)")
+                result.guidellm_success = False
+                result.error_message = f"All requests failed ({result.request_errored or 0} errored, {result.request_incomplete or 0} incomplete)"
+            else:
+                logger.info(
+                    f"Parsed guidellm metrics: TTFT p90={result.ttft_p90}ms, "
+                    f"Throughput p90={result.throughput_p90} req/s, "
+                    f"TPOT p90={result.tpot_p90}ms, "
+                    f"Requests: {result.request_successful}/{result.request_total} ok"
+                )
 
         except Exception as e:
             logger.error(f"Failed to parse guidellm results: {e}")
