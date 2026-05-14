@@ -203,8 +203,11 @@ class LatencyBinarySearch:
 
         if success:
             latency = _get_latency_from_result(result, self.constraint.percentile)
-            if latency is not None:
+            if latency is not None and latency > 0:
                 meets_sla = latency <= self.constraint.target_ms
+            elif latency is not None and latency <= 0:
+                success = False
+                self.log(f"    ⚠️  c={concurrency}: zero latency — no valid results parsed", 'warning')
 
         self._tested_concurrencies.add(concurrency)
 
