@@ -367,9 +367,6 @@ class TestOrchestrator(ParserMixin, GuidellmMixin):
             # Use kubectl exec on workload pod to reach the gateway (works for both local and remote clusters)
             try:
                 models_url = endpoint.rstrip('/') + '/v1/models'
-                if not models_ok and log_callback and not getattr(self, '_gw_debug_logged', False):
-                    log_callback(f"   DEBUG: models_url={models_url}, kubeconfig={self.deployment_manager.kubectl.kubeconfig}")
-                    self._gw_debug_logged = True
                 curl_cmd = f"curl -s -o /dev/null -w '%{{http_code}}' --connect-timeout 5 '{models_url}'"
                 r = self.deployment_manager.kubectl.run(
                     ['exec', 'inftune-workload', '-n', self.namespace, '--', 'bash', '-c', curl_cmd],
