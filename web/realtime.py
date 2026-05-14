@@ -1698,6 +1698,8 @@ def handle_setup_storage(data):
                 'dataset_max_output': int(data.get('dataset_max_output', 256)),
                 'rate_type': data.get('rate_type', 'concurrent'),
                 'prefix_cache_hit_pct': int(data.get('prefix_cache_hit_pct', 0)),
+                'prefix_cache_mode': data.get('prefix_cache_mode', 'identical'),
+                'prefix_cache_groups': data.get('prefix_cache_groups', 5),
                 'advanced_vllm': data.get('advanced_vllm'),
                 'image': data.get('image'),
                 'single_test_architecture': data.get('single_test_architecture'),

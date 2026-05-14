@@ -135,6 +135,40 @@ function updateUIFromConfig() {
         setPdSearchMode(config.pd_search_mode);
     }
 
+    // Restore EPP settings (update UI without re-saving)
+    if (config.epp_preset && document.querySelector('[data-epp]')) {
+        document.querySelectorAll('[data-epp]').forEach(function(el) {
+            if (el.dataset.epp === config.epp_preset) {
+                el.style.borderColor = 'var(--rh-red-primary)';
+                el.style.background = 'linear-gradient(135deg,#fef2f2,#fee2e2)';
+            } else {
+                el.style.borderColor = '#cbd5e1';
+                el.style.background = '#fafafa';
+            }
+        });
+        var editor = document.getElementById('epp-custom-editor');
+        if (editor) editor.style.display = config.epp_preset === 'custom' ? 'block' : 'none';
+    }
+    if (document.getElementById('epp-benchmark-enabled')) {
+        var eppCb = document.getElementById('epp-benchmark-enabled');
+        eppCb.checked = !!config.epp_benchmark;
+        var eppInner = document.getElementById('epp-benchmark-inner');
+        if (eppInner) eppInner.style.opacity = eppCb.checked ? '1' : '0.5';
+    }
+    if (config.epp_config && document.getElementById('epp-plugin-prefix-cache')) {
+        var ec = config.epp_config;
+        var plugins = ['prefix-cache', 'kv-cache', 'queue', 'slo', 'precise-prefix-cache', 'active-request', 'no-hit-lru', 'session-aware'];
+        var keys = ['prefix_cache', 'kv_cache', 'queue', 'slo', 'precise_prefix_cache', 'active_request', 'no_hit_lru', 'session_aware'];
+        for (var pi = 0; pi < plugins.length; pi++) {
+            var plugEl = document.getElementById('epp-plugin-' + plugins[pi]);
+            var wEl = document.getElementById('epp-weight-' + plugins[pi]);
+            if (plugEl && ec[keys[pi]]) {
+                plugEl.checked = !!ec[keys[pi]].enabled;
+                if (wEl) wEl.value = ec[keys[pi]].weight || 0;
+            }
+        }
+    }
+
     // Restore image selection
     if (config.image && document.getElementById('image-repo-input')) {
         var imgParts = config.image.split(':');
