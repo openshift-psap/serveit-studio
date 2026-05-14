@@ -1593,9 +1593,22 @@ def handle_setup_storage(data):
         existing_pvc = data.get('existing_pvc')
         storage_class = data.get('storage_class')
         pvc_size = int(data.get('pvc_size', 256))
-        if pvc_size < 50:
-            log_to_ui(f'⚠️ Model cache PVC size is {pvc_size}Gi — this may be too small for large models. Minimum recommended: 100Gi.', 'warning')
         model = data.get('model')
+
+        # Calculate minimum PVC size from model size estimate
+        if model:
+            try:
+                from core.test_planner import TestPlanner
+                planner = TestPlanner()
+                model_size_b = planner.extract_model_size_from_name(model)
+                if model_size_b:
+                    # Model weights in GB (FP8 = 1 byte/param) + 50% overhead for HF cache structure
+                    min_pvc_gb = int(model_size_b * 1.5) + 5
+                    if pvc_size < min_pvc_gb:
+                        log_to_ui(f'⚠️ PVC size {pvc_size}Gi is too small for {model} (~{int(model_size_b)}B params = ~{int(model_size_b)}GB weights). Increasing to {min_pvc_gb}Gi.', 'warning')
+                        pvc_size = min_pvc_gb
+            except Exception:
+                pass
         hf_token = data.get('hf_token')
         namespace = TARGET_NAMESPACE
 
