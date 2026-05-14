@@ -150,10 +150,12 @@ function restoreAdvVllm() {
         if (modeEl) modeEl.value = setting.mode || 'auto';
     });
     // Restore raw text mode
-    if (config.advanced_vllm_mode === 'raw') {
+    var advMode = config.advanced_vllm_mode || (adv && adv._mode) || 'form';
+    var advRaw = config.advanced_vllm_raw || (adv && adv._raw_text) || '';
+    if (advMode === 'raw') {
         setAdvVllmMode('raw');
         var textarea = document.getElementById('adv-vllm-raw-text');
-        if (textarea && config.advanced_vllm_raw) textarea.value = config.advanced_vllm_raw;
+        if (textarea && advRaw) textarea.value = advRaw;
     }
 }
 
@@ -248,6 +250,9 @@ function updateAdvVllmRaw() {
     var textarea = document.getElementById('adv-vllm-raw-text');
     if (!textarea) return;
     config.advanced_vllm_raw = textarea.value;
+    if (!config.advanced_vllm) config.advanced_vllm = {};
+    config.advanced_vllm._mode = 'raw';
+    config.advanced_vllm._raw_text = textarea.value;
     saveConfig();
 }
 
