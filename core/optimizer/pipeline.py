@@ -243,7 +243,7 @@ class RecipeOptimizer(
 
     def _get_strategy(self):
         """Get the optimization strategy for the configured objective."""
-        from .optimization_strategies import (
+        from core.optimization_strategies import (
             TTFTStrategy, ThroughputStrategy, BalancedStrategy,
             AggregatedOnlyStrategy, PDOnlyStrategy, EPOnlyStrategy,
             SingleTestStrategy,
@@ -326,7 +326,10 @@ class RecipeOptimizer(
         """Check for pod errors after a test and raise if found."""
         if not test_result.pod_errors_detected:
             return
-        from .pod_error_scanner import PodErrorsDetected
+        try:
+            from .pod_error_scanner import PodErrorsDetected
+        except ImportError:
+            return
         if self.db_manager and self.run_id:
             try:
                 self.db_manager.save_pod_errors(

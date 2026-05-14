@@ -952,21 +952,24 @@ class TestOrchestrator(ParserMixin, GuidellmMixin):
                     result.metrics_collected = metrics_file is not None
 
                 # Scan pod logs for critical errors
-                from .pod_error_scanner import scan_pod_logs
-                if log_callback:
-                    log_callback("\n🔍 Scanning pod logs for critical errors...")
-                scan_result = scan_pod_logs(self.namespace, config.test_id)
-                if scan_result.has_errors:
-                    result.pod_errors_detected = True
-                    result.pod_errors_json = scan_result.to_json()
+                try:
+                    from .pod_error_scanner import scan_pod_logs
                     if log_callback:
-                        log_callback(f"🚨 CRITICAL POD ERRORS DETECTED: {scan_result.summary}")
-                        for report in scan_result.pod_reports:
-                            log_callback(f"   Pod: {report.pod_name}")
-                            for err in report.errors[:5]:
-                                log_callback(f"      [{err.pattern_name}] {err.line[:150]}")
-                        log_callback(f"\n⚠️  Pods left running for investigation:")
-                        log_callback(f"   kubectl logs -n {self.namespace} -l llm-d.ai/test-id={config.test_id} -c vllm")
+                        log_callback("\n🔍 Scanning pod logs for critical errors...")
+                    scan_result = scan_pod_logs(self.namespace, config.test_id)
+                    if scan_result.has_errors:
+                        result.pod_errors_detected = True
+                        result.pod_errors_json = scan_result.to_json()
+                        if log_callback:
+                            log_callback(f"🚨 CRITICAL POD ERRORS DETECTED: {scan_result.summary}")
+                            for report in scan_result.pod_reports:
+                                log_callback(f"   Pod: {report.pod_name}")
+                                for err in report.errors[:5]:
+                                    log_callback(f"      [{err.pattern_name}] {err.line[:150]}")
+                            log_callback(f"\n⚠️  Pods left running for investigation:")
+                            log_callback(f"   kubectl logs -n {self.namespace} -l llm-d.ai/test-id={config.test_id} -c vllm")
+                except ImportError:
+                    pass
 
         except Exception as e:
             error_msg = f"Test execution failed: {e}"
