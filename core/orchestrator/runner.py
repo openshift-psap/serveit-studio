@@ -174,83 +174,47 @@ class TestOrchestrator(ParserMixin, GuidellmMixin):
         log_callback: Optional[Callable[[str], None]] = None
     ) -> bool:
         """
-        Run a simple curl test to verify endpoint is responding.
-
-        Args:
-            endpoint: Service endpoint URL
-            config: Test configuration
-            log_callback: Optional callback for logging
-
-        Returns:
-            True if endpoint responds successfully
+        Run a curl test via the workload pod to verify the gateway endpoint.
+        Uses kubectl exec so it works for both local and remote clusters.
         """
         try:
             if log_callback:
                 log_callback(f"🔍 Testing endpoint: {endpoint}")
 
-            # Try to hit the /health or /v1/models endpoint
-            import requests
-
-            # Try health endpoint first
-            health_url = endpoint.replace('/v1', '/health')
-
-            if log_callback:
-                log_callback(f"   Checking health endpoint: {health_url}")
-
-            try:
-                response = requests.get(health_url, timeout=10)
-                if response.status_code == 200:
-                    if log_callback:
-                        log_callback(f"   ✅ Health check passed: {response.status_code}")
-                    return True
-            except Exception as e:
-                if log_callback:
-                    log_callback(f"   ⚠️  Health endpoint failed: {e}")
+            def _remote_curl(url, method='GET', data=None, timeout=10):
+                if data:
+                    cmd = f"curl -s -o /dev/null -w '%{{http_code}}' --connect-timeout {timeout} -X {method} -H 'Content-Type: application/json' -d '{data}' '{url}'"
+                else:
+                    cmd = f"curl -s -o /dev/null -w '%{{http_code}}' --connect-timeout {timeout} '{url}'"
+                r = self.deployment_manager.kubectl.run(
+                    ['exec', 'inftune-workload', '-n', self.namespace, '--', 'bash', '-c', cmd],
+                    check=False
+                )
+                return r.stdout.strip() if r.returncode == 0 else '000'
 
             # Try models endpoint
             models_url = f"{endpoint}/models"
             if log_callback:
                 log_callback(f"   Checking models endpoint: {models_url}")
-
-            try:
-                response = requests.get(models_url, timeout=10)
-                if response.status_code == 200:
-                    if log_callback:
-                        log_callback(f"   ✅ Models endpoint passed: {response.status_code}")
-                        data = response.json()
-                        if 'data' in data and len(data['data']) > 0:
-                            model_id = data['data'][0].get('id', 'unknown')
-                            log_callback(f"   📦 Model available: {model_id}")
-                    return True
-            except Exception as e:
+            code = _remote_curl(models_url)
+            if code == '200':
                 if log_callback:
-                    log_callback(f"   ⚠️  Models endpoint failed: {e}")
+                    log_callback(f"   ✅ Models endpoint passed: {code}")
+                return True
+            elif log_callback:
+                log_callback(f"   ⚠️  Models endpoint returned: {code}")
 
-            # Try simple completion request
+            # Try health endpoint
+            health_url = endpoint.replace('/v1', '/health')
             if log_callback:
-                log_callback("   Attempting test completion request...")
-
-            completion_url = f"{endpoint}/completions"
-            payload = {
-                "model": config.model_name,
-                "prompt": "Hello",
-                "max_tokens": 5,
-                "temperature": 0.0
-            }
-
-            try:
-                response = requests.post(completion_url, json=payload, timeout=30)
-                if response.status_code == 200:
-                    if log_callback:
-                        log_callback(f"   ✅ Completion request passed: {response.status_code}")
-                    return True
-                else:
-                    if log_callback:
-                        log_callback(f"   ❌ Completion failed with status: {response.status_code}")
-                        log_callback(f"   Response: {response.text[:200]}")
-            except Exception as e:
+                log_callback(f"   Checking health endpoint: {health_url}")
+            code = _remote_curl(health_url)
+            if code == '200':
                 if log_callback:
-                    log_callback(f"   ❌ Completion request failed: {e}")
+                    log_callback(f"   ✅ Health check passed: {code}")
+                return True
+            elif log_callback:
+                log_callback(f"   ⚠️  Health endpoint returned: {code}")
 
             return False
 
@@ -349,8 +313,6 @@ class TestOrchestrator(ParserMixin, GuidellmMixin):
         Returns:
             True if gateway is ready with all pods
         """
-        import requests as req_lib
-
         if log_callback:
             log_callback(f"🔄 Waiting for EPP to register {'1 pod' if expected_pods == 1 else f'all {expected_pods} pods'} in the inference pool...")
 
@@ -402,12 +364,18 @@ class TestOrchestrator(ParserMixin, GuidellmMixin):
                 continue
 
             # Step 2: All pods Ready in K8s — verify gateway routing works
+            # Use kubectl exec on workload pod to reach the gateway (works for both local and remote clusters)
             try:
                 models_url = endpoint.rstrip('/') + '/v1/models'
-                resp = req_lib.get(models_url, timeout=10, verify=False)
-                if resp.status_code != 200:
+                curl_cmd = f"curl -s -o /dev/null -w '%{{http_code}}' --connect-timeout 5 '{models_url}'"
+                r = self.deployment_manager.kubectl.run(
+                    ['exec', 'inftune-workload', '-n', self.namespace, '--', 'bash', '-c', curl_cmd],
+                    check=False
+                )
+                http_code = r.stdout.strip() if r.returncode == 0 else '000'
+                if http_code != '200':
                     if log_callback and not getattr(self, '_pool_wait_logged', False):
-                        log_callback("   EPP gateway check: waiting for pool registration...")
+                        log_callback(f"   EPP gateway check: waiting for pool registration... (HTTP {http_code})")
                         self._pool_wait_logged = True
                     time.sleep(5)
                     continue
@@ -425,13 +393,29 @@ class TestOrchestrator(ParserMixin, GuidellmMixin):
             # Step 3: Send a test completion to verify full routing through the pool
             try:
                 completion_url = endpoint.rstrip('/') + '/v1/chat/completions'
-                payload = {
+                payload_json = json.dumps({
                     "model": config.model_name,
                     "messages": [{"role": "user", "content": "Hello"}],
                     "max_tokens": 1,
                     "temperature": 0.0
-                }
-                resp = req_lib.post(completion_url, json=payload, timeout=30, verify=False)
+                })
+                curl_cmd = f"curl -s -w '\\n%{{http_code}}' --connect-timeout 10 -X POST -H 'Content-Type: application/json' -d '{payload_json}' '{completion_url}'"
+                r = self.deployment_manager.kubectl.run(
+                    ['exec', 'inftune-workload', '-n', self.namespace, '--', 'bash', '-c', curl_cmd],
+                    check=False
+                )
+                lines = r.stdout.strip().split('\n') if r.returncode == 0 else []
+                http_code = lines[-1] if lines else '000'
+                resp_body = '\n'.join(lines[:-1]) if len(lines) > 1 else ''
+
+                # Simulate response object for downstream code
+                class _RemoteResp:
+                    def __init__(self, code, body):
+                        self.status_code = int(code) if code.isdigit() else 0
+                        self._body = body
+                    def json(self):
+                        return json.loads(self._body)
+                resp = _RemoteResp(http_code, resp_body)
                 if resp.status_code == 200:
                     elapsed = int(time.time() - start_time)
                     if log_callback:
