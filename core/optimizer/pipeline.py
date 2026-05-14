@@ -611,9 +611,12 @@ class RecipeOptimizer(
         import math
         block_size = self._compute_block_size()
         lru_capacity = self._compute_lru_capacity(block_size)
+        plugins = None
+        if self.config.epp_preset == 'custom' and self.config.epp_config:
+            plugins = self.config.epp_config.get('plugins', self.config.epp_config)
         return {
             'preset': self.config.epp_preset,
-            'plugins': self.config.epp_config if self.config.epp_preset == 'custom' else None,
+            'plugins': plugins,
             'maxPrefixBlocksToMatch': math.ceil(self.config.isl / block_size),
             'lruCapacityPerServer': lru_capacity,
             'nonCachedTokens': min(16, max(1, self.config.isl // 100)),
