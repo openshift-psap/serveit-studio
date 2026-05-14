@@ -16,6 +16,7 @@ logger = logging.getLogger(__name__)
 class ParserMixin:
     """Mixin providing parsing and static helper methods."""
 
+    @staticmethod
     def _parse_guidellm_results(guidellm_output: str, result: TestResult) -> None:
         """
         Parse guidellm JSON output and populate ALL TestResult metrics.
