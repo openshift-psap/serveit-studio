@@ -1113,8 +1113,9 @@ function renderCharts(data, runId) {
             eppHtml += '<div style="padding:0 20px 16px;"><table class="results-table">';
             eppHtml += '<tr><th>Strategy</th><th>Weights (C:K:Q)</th><th>TTFT P50</th><th>TTFT P90</th><th>TTFT P95</th><th>TTFT P99</th><th>Tput P90</th><th>ITL P90</th><th>EPP Config</th></tr>';
             trials.forEach(e => {
-                const isBest = e === bestTrial;
-                const cls = isBest ? ' class="pareto-row"' : '';
+                const isBest = e === bestTrial && !e.is_baseline;
+                const isBase = e.is_baseline;
+                const cls = isBest ? ' class="pareto-row"' : (isBase ? ' style="background:#f8fafc;color:#64748b;font-style:italic;"' : '');
                 const w = e.weights || {};
                 const wStr = `${w.prefix_cache || '?'}:${w.kv_cache || '?'}:${w.queue || '?'}`;
                 const na = 'N/A';
@@ -1122,7 +1123,8 @@ function renderCharts(data, runId) {
                 if (e.manifest_types && e.manifest_types.length > 0) {
                     ml = e.manifest_types.map(t => `<a href="/api/run/${runId}/config/${e.test_id}/manifest/${t}" style="color:#7c3aed;text-decoration:none;font-size:11px;padding:2px 6px;background:#f5f3ff;border-radius:4px;border:1px solid #c4b5fd;display:inline-block;">${t}</a>`).join(' ');
                 }
-                eppHtml += `<tr${cls}><td><strong>${e.name}</strong>${isBest ? ' ⭐' : ''}</td><td>${wStr}</td>`;
+                const label = isBase ? `<span style="color:#94a3b8;">${e.name}</span>` : `<strong>${e.name}</strong>`;
+                eppHtml += `<tr${cls}><td>${label}${isBest ? ' ⭐' : ''}</td><td>${wStr}</td>`;
                 eppHtml += `<td>${e.ttft_p50 ?? na}</td><td>${e.ttft_p90 ?? na}</td><td>${e.ttft_p95 ?? na}</td><td>${e.ttft_p99 ?? na}</td>`;
                 eppHtml += `<td>${e.throughput_p90 ?? na}</td><td>${e.itl_p90 ?? na}</td><td>${ml}</td></tr>`;
             });

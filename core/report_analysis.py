@@ -1301,7 +1301,7 @@ class ReportAnalyzer:
                     target_ms = run_config.get('latency_constraint_ms')
                     target_pct = run_config.get('latency_constraint_percentile', 'p99')
 
-            # Find baseline results (best from Step 6/7) for comparison
+            # Find baseline results (best from Step 6/7) and add as comparison row
             baselines = {}
             non_epp = [r for r in results if not r.config_name.startswith('step11-epp-')
                        and not r.config_name.startswith(('step2', 'step3', 'step9', 'step10'))
@@ -1323,6 +1323,26 @@ class ReportAnalyzer:
                         'throughput_p95': round(best.throughput_p95, 2) if best.throughput_p95 else None,
                         'throughput_p99': round(best.throughput_p99, 2) if best.throughput_p99 else None,
                     }
+                    # Insert baseline as first row in EPP table for comparison
+                    baseline_entry = {
+                        'name': f'baseline (default)',
+                        'test_id': best.config_name,
+                        'config_name': best.display_label,
+                        'ttft_p50': round(best.ttft_p50, 2) if best.ttft_p50 else None,
+                        'ttft_p90': round(best.ttft_p90, 2) if best.ttft_p90 else None,
+                        'ttft_p95': round(best.ttft_p95, 2) if best.ttft_p95 else None,
+                        'ttft_p99': round(best.ttft_p99, 2) if best.ttft_p99 else None,
+                        'throughput_mean': round(best.throughput_mean, 2) if best.throughput_mean else None,
+                        'throughput_p50': round(best.throughput_p50, 2) if best.throughput_p50 else None,
+                        'throughput_p90': round(best.throughput_p90, 2) if best.throughput_p90 else None,
+                        'throughput_p95': round(best.throughput_p95, 2) if best.throughput_p95 else None,
+                        'throughput_p99': round(best.throughput_p99, 2) if best.throughput_p99 else None,
+                        'itl_p90': round(best.itl_p90, 2) if best.itl_p90 else None,
+                        'weights': {'prefix_cache': 'default', 'kv_cache': 'default', 'queue': 'default'},
+                        'manifest_types': [],
+                        'is_baseline': True,
+                    }
+                    by_arch[arch_key].insert(0, baseline_entry)
 
             epp_tuning_data = {
                 'by_architecture': by_arch,
