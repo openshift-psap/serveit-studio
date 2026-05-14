@@ -21,7 +21,7 @@ RUN \
     ln -sf /usr/bin/pip3.11 /usr/bin/pip3 && \
     ln -sf /usr/bin/pip3.11 /usr/bin/pip
 
-# Python deps — server only (no guidellm, no torch, no transformers)
+# Python deps — server only (no guidellm, no torch)
 RUN python3.11 -m pip install --no-cache-dir \
     Flask \
     Flask-SocketIO \
@@ -36,7 +36,8 @@ RUN python3.11 -m pip install --no-cache-dir \
     kubernetes \
     plotly \
     pandas \
-    werkzeug
+    werkzeug \
+    transformers
 
 # kubectl + oc
 RUN KUBECTL_VERSION="1.30.2" && \
