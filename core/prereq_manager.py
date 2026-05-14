@@ -201,7 +201,6 @@ class PrereqManager:
                 'gaie_name': config['gaie_name'],
                 'gaie_pool_name': config['gaie_pool_name'],
                 'config_file': 'default-plugins.yaml' if epp_use_defaults else config['config_file'],
-                'epp_use_defaults': epp_use_defaults,
                 'gaie_replicas': 1,
                 'gaie_image': 'ghcr.io/llm-d/llm-d-inference-scheduler:v0.6.0',
                 'gateway_name': config['gateway_name'],
@@ -238,10 +237,11 @@ class PrereqManager:
                 ('ClusterRole', 'prereq/gaie-clusterrole.yaml.j2'),
                 ('ClusterRoleBinding', 'prereq/gaie-clusterrolebinding.yaml.j2'),
             ]
-            if not epp_use_defaults:
-                resources.append(('ConfigMap', configmap_template))
+            if epp_use_defaults:
+                resources.append(('ConfigMap', 'prereq/gaie-configmap-default.yaml.j2'))
+                log('   Using llm-d default EPP configuration (queue:2, kv-cache:2, prefix-cache:3)')
             else:
-                log('   Using llm-d default EPP configuration (no custom configmap)')
+                resources.append(('ConfigMap', configmap_template))
             resources += [
                 ('Service', 'prereq/gaie-service.yaml.j2'),
                 ('Deployment', 'prereq/gaie-deployment.yaml.j2'),
