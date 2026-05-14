@@ -329,11 +329,11 @@ class TestOrchestrator(ParserMixin, GuidellmMixin):
 
             # Step 1: Count Ready pods matching the test-id label
             try:
-                result = subprocess.run(
-                    ['kubectl', 'get', 'pods', '-n', self.namespace,
+                result = self.deployment_manager.kubectl.run(
+                    ['get', 'pods', '-n', self.namespace,
                      '-l', f'llm-d.ai/test-id={config.test_id}',
                      '-o', 'json'],
-                    capture_output=True, text=True, timeout=15, check=False
+                    check=False
                 )
 
                 ready_count = 0
@@ -367,6 +367,9 @@ class TestOrchestrator(ParserMixin, GuidellmMixin):
             # Use kubectl exec on workload pod to reach the gateway (works for both local and remote clusters)
             try:
                 models_url = endpoint.rstrip('/') + '/v1/models'
+                if not models_ok and log_callback and not getattr(self, '_gw_debug_logged', False):
+                    log_callback(f"   DEBUG: models_url={models_url}, kubeconfig={self.deployment_manager.kubectl.kubeconfig}")
+                    self._gw_debug_logged = True
                 curl_cmd = f"curl -s -o /dev/null -w '%{{http_code}}' --connect-timeout 5 '{models_url}'"
                 r = self.deployment_manager.kubectl.run(
                     ['exec', 'inftune-workload', '-n', self.namespace, '--', 'bash', '-c', curl_cmd],
@@ -385,7 +388,7 @@ class TestOrchestrator(ParserMixin, GuidellmMixin):
                         log_callback("   EPP gateway check: models endpoint OK, verifying routing...")
             except Exception as e:
                 if log_callback and not getattr(self, '_gw_wait_logged', False):
-                    log_callback("   EPP gateway check: waiting for gateway...")
+                    log_callback(f"   EPP gateway check: waiting for gateway... (error: {e})")
                     self._gw_wait_logged = True
                 time.sleep(5)
                 continue
