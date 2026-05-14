@@ -21,7 +21,8 @@ class PrereqManager:
     """Manages prerequisite infrastructure deployment."""
 
     def __init__(self, namespace: str = 'inftune', kubeconfig: Optional[str] = None,
-                 kubectl_runner: Optional[KubectlRunner] = None):
+                 kubectl_runner: Optional[KubectlRunner] = None,
+                 scheduler_image: Optional[str] = None):
         """
         Initialize PrereqManager.
 
@@ -29,10 +30,12 @@ class PrereqManager:
             namespace: Kubernetes namespace
             kubeconfig: Path to kubeconfig file
             kubectl_runner: Existing KubectlRunner to reuse (creates new if None)
+            scheduler_image: Custom EPP scheduler image (default: llm-d-inference-scheduler:v0.7.1)
         """
         self.namespace = namespace
         self.kubectl = kubectl_runner or KubectlRunner(kubeconfig=kubeconfig, namespace=namespace)
         self.template_mgr = TemplateManager()
+        self.scheduler_image = scheduler_image
 
     def check_prereqs_exist(self, gaie_name: str = 'gaie-pd-epp',
                            pool_name: str = 'gaie-pd',
@@ -202,7 +205,7 @@ class PrereqManager:
                 'gaie_pool_name': config['gaie_pool_name'],
                 'config_file': 'default-plugins.yaml' if epp_use_defaults else config['config_file'],
                 'gaie_replicas': 1,
-                'gaie_image': 'ghcr.io/llm-d/llm-d-inference-scheduler:v0.6.0',
+                'gaie_image': self.scheduler_image or 'ghcr.io/llm-d/llm-d-inference-scheduler:v0.7.1',
                 'gateway_name': config['gateway_name'],
                 'prefix_cache_weight': epp_weights['prefix_cache_weight'],
                 'kv_cache_weight': epp_weights['kv_cache_weight'],

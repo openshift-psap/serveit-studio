@@ -188,6 +188,11 @@ function updateUIFromConfig() {
         document.getElementById('image-full-path').textContent = config.image;
     }
 
+    // Restore scheduler image
+    if (config.scheduler_image && document.getElementById('scheduler-image-input')) {
+        document.getElementById('scheduler-image-input').value = config.scheduler_image;
+    }
+
     // Restore run description
     if (config.run_description && document.getElementById('run-description-input')) {
         document.getElementById('run-description-input').value = config.run_description;

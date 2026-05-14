@@ -360,7 +360,8 @@ class EPPTuningMixin:
         from core import PrereqManager
         prereq_mgr = PrereqManager(
             namespace=self.config.namespace,
-            kubectl_runner=self.orchestrator.deployment_manager.kubectl
+            kubectl_runner=self.orchestrator.deployment_manager.kubectl,
+            scheduler_image=getattr(self.config, 'scheduler_image', None)
         )
 
         for arch_idx, (arch, base_cfg, concurrency) in enumerate(configs_to_test):
@@ -682,7 +683,8 @@ class EPPTuningMixin:
             from core import PrereqManager
             mgr = PrereqManager(
                 namespace=self.config.namespace,
-                kubectl_runner=self.orchestrator.deployment_manager.kubectl
+                kubectl_runner=self.orchestrator.deployment_manager.kubectl,
+                scheduler_image=getattr(self.config, 'scheduler_image', None)
             )
             mgr.update_epp_config(arch, epp_config, log_callback=self.log)
 

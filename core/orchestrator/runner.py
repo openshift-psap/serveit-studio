@@ -714,7 +714,8 @@ class TestOrchestrator(ParserMixin, GuidellmMixin):
                 from core import PrereqManager
                 prereq_mgr = PrereqManager(
                     namespace=self.namespace,
-                    kubectl_runner=self.deployment_manager.kubectl
+                    kubectl_runner=self.deployment_manager.kubectl,
+                    scheduler_image=getattr(config, 'scheduler_image', None)
                 )
 
                 try:

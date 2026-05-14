@@ -378,6 +378,7 @@ def handle_resume_optimization(data):
         saved_prefix_cache_mode = 'identical'
         saved_prefix_cache_groups = 5
         saved_image = None
+        saved_scheduler_image = None
         if run.get('config_json'):
             try:
                 import json as _json
@@ -392,6 +393,7 @@ def handle_resume_optimization(data):
                 saved_prefix_cache_mode = saved_cfg.get('prefix_cache_mode', 'identical')
                 saved_prefix_cache_groups = saved_cfg.get('prefix_cache_groups', 5)
                 saved_image = saved_cfg.get('image')
+                saved_scheduler_image = saved_cfg.get('scheduler_image') or None
             except Exception:
                 pass
 
@@ -437,6 +439,7 @@ def handle_resume_optimization(data):
             'epp_config': saved_epp_config,
             'advanced_vllm': saved_advanced_vllm,
             'image': saved_image,
+            'scheduler_image': saved_scheduler_image,
             'resume_run_id': run_id
         }
 
@@ -1706,6 +1709,7 @@ def handle_setup_storage(data):
                 'prefix_cache_groups': data.get('prefix_cache_groups', 5),
                 'advanced_vllm': data.get('advanced_vllm'),
                 'image': data.get('image'),
+                'scheduler_image': data.get('scheduler_image'),
                 'single_test_architecture': data.get('single_test_architecture'),
                 'single_test_tp': data.get('single_test_tp'),
                 'single_test_replicas': data.get('single_test_replicas'),

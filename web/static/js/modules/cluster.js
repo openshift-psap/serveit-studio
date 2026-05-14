@@ -195,6 +195,7 @@ document.getElementById('start-optimization').addEventListener('click', () => {
         epp_config: config.epp_config || null,
         advanced_vllm: config.advanced_vllm || null,
         image: config.image || null,
+        scheduler_image: config.scheduler_image || null,
         single_test_architecture: config.single_test_architecture || null,
         single_test_tp: config.goal === 'single_test' ? parseInt(document.getElementById('single-test-tp').value) || null : null,
         single_test_replicas: config.goal === 'single_test' ? parseInt(document.getElementById('single-test-replicas').value) || null : null,
