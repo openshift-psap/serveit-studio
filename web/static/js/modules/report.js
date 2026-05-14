@@ -45,7 +45,11 @@ function loadRunList() {
                 const isCompleted = run.status === 'completed';
                 const statusLabel = isCompleted ? '\u2705 completed' : '\u274C ' + (run.status || 'unknown');
                 const desc = run.notes ? `"${run.notes}"` : '';
-                const parts = [`#${run.id}`, desc, goal, modelShort, workload, users, gpus, statusLabel, date].filter(Boolean);
+                let imgTag = '';
+                if (run.config_json) {
+                    try { const rc = JSON.parse(run.config_json); imgTag = rc.image ? rc.image.split(':').pop() : ''; } catch(e) {}
+                }
+                const parts = [`#${run.id}`, desc, goal, modelShort, workload, users, gpus, imgTag, statusLabel, date].filter(Boolean);
                 opt.textContent = parts.join(' | ');
                 sel.appendChild(opt);
             });

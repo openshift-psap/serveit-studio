@@ -75,7 +75,8 @@ class TestConfig:
     cpu_limit: Optional[str] = None  # CPU limit (defaults to cpu_request if not set)
 
     # Infrastructure
-    image: str = 'ghcr.io/llm-d/llm-d-cuda:v0.5.1'
+    image: str = 'ghcr.io/llm-d/llm-d-cuda:v0.6.0'
+    scheduler_image: str = 'ghcr.io/llm-d/llm-d-inference-scheduler:v0.7.1'
     pvc_name: str = 'model-cache'
     nccl_ib_hca: str = 'mlx'
     kv_connector: str = 'NixlConnector'
