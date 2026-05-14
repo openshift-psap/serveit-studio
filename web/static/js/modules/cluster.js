@@ -189,6 +189,7 @@ document.getElementById('start-optimization').addEventListener('click', () => {
         prefix_cache_mode: config.prefix_cache_mode || 'identical',
         prefix_cache_groups: config.prefix_cache_groups || 5,
         run_description: config.run_description || '',
+        epp_custom_enabled: config.epp_custom_enabled !== false,
         epp_preset: config.epp_preset || 'balanced',
         epp_benchmark: config.epp_benchmark || false,
         epp_config: config.epp_config || null,

@@ -2,6 +2,18 @@
                         <h3>EPP Configuration</h3>
                         <p class="description">Configure how the gateway routes inference requests to your pods. The Endpoint Picker (EPP) uses scoring plugins to decide which pod handles each request.</p>
 
+                        <!-- EPP Mode Toggle -->
+                        <div style="border:2px solid #e2e8f0;border-radius:12px;overflow:hidden;margin-bottom:20px;">
+                            <div style="padding:14px 20px;display:flex;align-items:center;justify-content:space-between;cursor:pointer;" onclick="var cb=document.getElementById('epp-custom-enabled');cb.checked=!cb.checked;toggleEppCustomMode(cb.checked);">
+                                <div>
+                                    <div style="font-weight:700;color:#1e293b;font-size:1em;">Customize EPP Routing</div>
+                                    <div style="color:#64748b;font-size:0.85em;margin-top:2px;">When disabled, uses llm-d default plugin configuration (prefix-cache:3, queue:2, kv-cache:2)</div>
+                                </div>
+                                <input type="checkbox" id="epp-custom-enabled" style="width:20px;height:20px;cursor:pointer;" onclick="event.stopPropagation();toggleEppCustomMode(this.checked);">
+                            </div>
+                        </div>
+
+                        <div id="epp-custom-section" style="display:none;">
                         <!-- EPP Preset Selection -->
                         <div style="border:2px solid #6366f1;border-radius:12px;overflow:hidden;margin-bottom:20px;">
                             <div style="background:linear-gradient(135deg,#eef2ff,#e0e7ff);padding:16px 20px;">
@@ -153,6 +165,8 @@
                                 </div>
                             </div>
                         </div>
+
+                        </div><!-- end epp-custom-section -->
 
                         <button class="action-button" id="next-step6">Continue to Review &rarr;</button>
                     </div>

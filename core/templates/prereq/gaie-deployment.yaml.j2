@@ -34,8 +34,10 @@ spec:
             - inference.networking.k8s.io
             - --zap-encoder
             - json
+{% if not epp_use_defaults | default(false) %}
             - --config-file
             - /config/{{ config_file | default('pd-config.yaml') }}
+{% endif %}
             - --kv-cache-usage-percentage-metric
             - "vllm:kv_cache_usage_perc"
             - --v
@@ -61,6 +63,7 @@ spec:
               name: grpc-health
             - containerPort: 9090
               name: metrics
+{% if not epp_use_defaults | default(false) %}
           volumeMounts:
             - name: plugins-config-volume
               mountPath: /config
@@ -68,3 +71,4 @@ spec:
         - name: plugins-config-volume
           configMap:
             name: {{ gaie_name | default('gaie-pd-epp') }}
+{% endif %}

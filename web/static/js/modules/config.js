@@ -135,6 +135,14 @@ function updateUIFromConfig() {
         setPdSearchMode(config.pd_search_mode);
     }
 
+    // Restore EPP custom mode toggle
+    if (document.getElementById('epp-custom-enabled')) {
+        var eppCustom = !!config.epp_custom_enabled;
+        document.getElementById('epp-custom-enabled').checked = eppCustom;
+        var eppSection = document.getElementById('epp-custom-section');
+        if (eppSection) eppSection.style.display = eppCustom ? 'block' : 'none';
+    }
+
     // Restore EPP settings (update UI without re-saving)
     if (config.epp_preset && document.querySelector('[data-epp]')) {
         document.querySelectorAll('[data-epp]').forEach(function(el) {

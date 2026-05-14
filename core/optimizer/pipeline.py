@@ -630,6 +630,8 @@ class RecipeOptimizer(
 
     def _build_epp_config(self) -> Optional[Dict]:
         """Build EPP config dict for prereq_manager from optimizer config."""
+        if not getattr(self.config, 'epp_custom_enabled', True):
+            return {'preset': 'default'}
         import math
         block_size = self._compute_block_size()
         lru_capacity = self._compute_lru_capacity(block_size)

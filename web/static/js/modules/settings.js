@@ -244,6 +244,13 @@ function updatePrefixCacheModeDesc() {
     }
 }
 
+function toggleEppCustomMode(enabled) {
+    config.epp_custom_enabled = enabled;
+    var section = document.getElementById('epp-custom-section');
+    if (section) section.style.display = enabled ? 'block' : 'none';
+    saveConfig();
+}
+
 function setEppPreset(preset) {
     config.epp_preset = preset;
     document.querySelectorAll('[data-epp]').forEach(el => {

@@ -191,13 +191,17 @@ class PrereqManager:
                 epp_weights.setdefault('session_aware_enabled', False)
                 epp_weights.setdefault('session_aware_weight', 0)
 
+            # Check if user wants llm-d default EPP (no custom config)
+            epp_use_defaults = not epp.get('preset') or epp.get('preset') == 'default'
+
             # Template parameters
             context = {
                 'namespace': self.namespace,
                 'architecture': architecture,
                 'gaie_name': config['gaie_name'],
                 'gaie_pool_name': config['gaie_pool_name'],
-                'config_file': config['config_file'],
+                'config_file': 'default-plugins.yaml' if epp_use_defaults else config['config_file'],
+                'epp_use_defaults': epp_use_defaults,
                 'gaie_replicas': 1,
                 'gaie_image': 'ghcr.io/llm-d/llm-d-inference-scheduler:v0.6.0',
                 'gateway_name': config['gateway_name'],
@@ -225,19 +229,20 @@ class PrereqManager:
             self._ensure_rdma_discovery(context, log)
 
             # Deploy in order (RBAC -> ConfigMap -> Service -> Deployment -> InferencePool -> Gateway)
-            # Use architecture-specific ConfigMap template
             configmap_template = f'prereq/gaie-configmap-{architecture}.yaml.j2'
 
             resources = [
-                # Note: Optimizer RBAC is deployed with the optimizer pod itself (deployment/inftune-optimizer.yaml)
-                # GAIE RBAC
                 ('ServiceAccount', 'prereq/gaie-serviceaccount.yaml.j2'),
                 ('Role', 'prereq/gaie-role.yaml.j2'),
                 ('RoleBinding', 'prereq/gaie-rolebinding.yaml.j2'),
                 ('ClusterRole', 'prereq/gaie-clusterrole.yaml.j2'),
                 ('ClusterRoleBinding', 'prereq/gaie-clusterrolebinding.yaml.j2'),
-                # GAIE deployment resources
-                ('ConfigMap', configmap_template),
+            ]
+            if not epp_use_defaults:
+                resources.append(('ConfigMap', configmap_template))
+            else:
+                log('   Using llm-d default EPP configuration (no custom configmap)')
+            resources += [
                 ('Service', 'prereq/gaie-service.yaml.j2'),
                 ('Deployment', 'prereq/gaie-deployment.yaml.j2'),
                 ('InferencePool', 'prereq/gaie-inferencepool.yaml.j2'),
