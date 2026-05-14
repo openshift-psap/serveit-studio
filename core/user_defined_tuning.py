@@ -201,6 +201,12 @@ class LatencyBinarySearch:
         meets_sla = False
         success = result is not None and result.guidellm_success
 
+        if result and not result.guidellm_success:
+            err_msg = getattr(result, 'error_message', '') or 'unknown error'
+            self.log(f"    ❌ c={concurrency}: test failed — {err_msg}", 'error')
+            self.log(f"    🛑 Stopping search — deployment left running for investigation", 'error')
+            self._zero_result_abort = True
+
         if success:
             latency = _get_latency_from_result(result, self.constraint.percentile)
             if latency is not None and latency > 0:
