@@ -99,6 +99,21 @@ class PrereqManager:
             logger.info(msg)
 
         try:
+            # Ensure pull secret exists in namespace (needed for Red Hat registry images)
+            try:
+                r = self.kubectl.run(['get', 'secret', 'rhaii-pull-secret', '-n', self.namespace], check=False)
+                if r.returncode != 0:
+                    # Try to copy from istio-system
+                    r2 = self.kubectl.run(['get', 'secret', 'rhaii-pull-secret', '-n', 'istio-system', '-o', 'json'], check=False)
+                    if r2.returncode == 0 and r2.stdout.strip():
+                        import json as _json
+                        secret = _json.loads(r2.stdout)
+                        secret['metadata'] = {'name': 'rhaii-pull-secret', 'namespace': self.namespace}
+                        self.kubectl.run(['apply', '-f', '-'], input_data=_json.dumps(secret), check=False)
+                        log('   ✓ Copied pull secret from istio-system')
+            except Exception:
+                pass
+
             log(f'🔍 Checking prerequisite infrastructure for {architecture} architecture...')
 
             # Architecture-specific names and config
