@@ -849,6 +849,9 @@ class TestOrchestrator(ParserMixin, GuidellmMixin):
                 result.error_message = "Failed to get service endpoint"
                 return result
 
+            # Ensure workload pod exists (needed for gateway health checks via kubectl exec)
+            self.ensure_guidellm_pod(config, log_callback=log_callback)
+
             # Step 4b: Wait for gateway to register all pods in EPP
             if config.architecture == 'pd':
                 expected_pods = (config.prefill_replicas or 0) + (config.decode_replicas or 0)
