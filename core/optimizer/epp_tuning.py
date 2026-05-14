@@ -26,18 +26,18 @@ class EPPTuningMixin:
         import json as _json
 
         result = None
-        if arch == 'aggregated' and self.aggregated_result and self.aggregated_result.metrics_json:
+        if arch == 'aggregated' and self.aggregated_result and self.aggregated_result.metrics_json_content:
             result = self.aggregated_result
         elif arch == 'pd' and self.pareto_results:
             best = min(self.pareto_results, key=lambda x: x[1].ttft_p90 if x[1].ttft_p90 else 1e9)
-            if best[1].metrics_json:
+            if best[1].metrics_json_content:
                 result = best[1]
 
         if not result:
             return None
 
         try:
-            metrics = _json.loads(result.metrics_json)
+            metrics = _json.loads(result.metrics_json_content)
             hits = None
             queries = None
             for key, val in metrics.items():
@@ -63,18 +63,18 @@ class EPPTuningMixin:
         import json as _json
 
         result = None
-        if arch == 'aggregated' and self.aggregated_result and self.aggregated_result.metrics_json:
+        if arch == 'aggregated' and self.aggregated_result and self.aggregated_result.metrics_json_content:
             result = self.aggregated_result
         elif arch == 'pd' and self.pareto_results:
             best = min(self.pareto_results, key=lambda x: x[1].ttft_p90 if x[1].ttft_p90 else 1e9)
-            if best[1].metrics_json:
+            if best[1].metrics_json_content:
                 result = best[1]
 
         if not result:
             return 0, 0
 
         try:
-            metrics = _json.loads(result.metrics_json)
+            metrics = _json.loads(result.metrics_json_content)
             kv_values = []
             queue_values = []
             for key, val in metrics.items():
@@ -186,12 +186,12 @@ class EPPTuningMixin:
         KV utilization variance, and queue depth variance from the test.
         Returns refined weights or None if metrics unavailable.
         """
-        if not test_result or not test_result.metrics_json:
+        if not test_result or not test_result.metrics_json_content:
             return None
 
         try:
             import json
-            metrics = json.loads(test_result.metrics_json)
+            metrics = json.loads(test_result.metrics_json_content)
         except Exception:
             return None
 
