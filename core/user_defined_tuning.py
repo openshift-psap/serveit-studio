@@ -164,7 +164,7 @@ class LatencyBinarySearch:
             if success and meets_sla:
                 if low is None or c > low:
                     low = c
-            elif success and not meets_sla:
+            else:
                 if high is None or c < high:
                     high = c
 
