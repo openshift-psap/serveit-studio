@@ -18,7 +18,7 @@ from web.app_context import (
     app, socketio, get_db, DB_PATH, TARGET_NAMESPACE,
     OPTIMIZATION_OUTPUT_DIR, state, state_lock, APP_PATH
 )
-from web.database import save_state, get_deployment_template
+from web.database import save_state, load_state, get_deployment_template
 
 from core import SystemScanner, TestResult, DeploymentManager, TestConfig, TestOrchestrator
 from core.web_deployer import DeploymentOrchestrator
