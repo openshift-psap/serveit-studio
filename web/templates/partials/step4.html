@@ -268,12 +268,29 @@
                             </div>
                             <div id="advanced-vllm-body" style="display:none;padding:16px 20px;">
                                 <style>
-                                    #advanced-vllm-body select, #advanced-vllm-body input {
+                                    #advanced-vllm-body select, #advanced-vllm-body input:not(#adv-vllm-raw-text) {
                                         padding:6px 10px; border:1px solid #d1d5db; border-radius:6px; font-size:0.9em; width:150px; box-sizing:border-box;
                                     }
                                     #advanced-vllm-body td { padding:8px 12px; border-bottom:1px solid #f1f5f9; }
                                     #advanced-vllm-body td:first-child { font-weight:600; }
                                 </style>
+
+                                <!-- Mode Toggle: Form vs Raw Text -->
+                                <div style="display:flex;gap:8px;margin-bottom:16px;">
+                                    <button type="button" id="adv-mode-form-btn" onclick="setAdvVllmMode('form')" style="padding:8px 20px;border:2px solid var(--rh-red-primary);border-radius:8px;background:linear-gradient(135deg,#fef2f2,#fee2e2);color:#1e293b;font-weight:600;cursor:pointer;font-size:0.9em;">Form</button>
+                                    <button type="button" id="adv-mode-raw-btn" onclick="setAdvVllmMode('raw')" style="padding:8px 20px;border:2px solid #cbd5e1;border-radius:8px;background:#fafafa;color:#1e293b;font-weight:600;cursor:pointer;font-size:0.9em;">Raw Text</button>
+                                </div>
+
+                                <!-- Raw Text Mode -->
+                                <div id="adv-vllm-raw-section" style="display:none;">
+                                    <div style="color:#64748b;font-size:0.85em;margin-bottom:8px;">Enter vLLM serve arguments directly. One flag per line. Lines starting with # are ignored. The model name, --port, --tensor-parallel-size, --gpu-memory-utilization, and resource settings are managed by the optimizer and should not be included here.</div>
+                                    <textarea id="adv-vllm-raw-text" style="width:100%;height:300px;font-family:monospace;font-size:0.9em;padding:12px;border:2px solid #d1d5db;border-radius:8px;background:#1e293b;color:#e2e8f0;line-height:1.6;resize:vertical;box-sizing:border-box;" oninput="updateAdvVllmRaw()" spellcheck="false"></textarea>
+                                    <div style="display:flex;gap:8px;margin-top:8px;">
+                                        <button type="button" onclick="populateRawFromForm()" style="padding:6px 14px;border:1px solid #d1d5db;border-radius:6px;background:#fff;color:#64748b;font-size:0.8em;cursor:pointer;font-weight:600;">Reset from Form Settings</button>
+                                    </div>
+                                </div>
+
+                                <div id="adv-vllm-form-section">
 
                                 <!-- Value Settings -->
                                 <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;">
@@ -308,6 +325,7 @@
                                     <tr><td>vllm-debug-logs</td><td style="font-weight:normal;color:#6b7280;font-size:0.9em;">Enable verbose vLLM engine logs. Useful for debugging model loading, KV cache, and scheduling issues. Generates a lot of output. <span style="color:#64748b;">Auto = off (ERROR level only).</span></td><td><select id="adv-vllm-debug-logs-mode" onchange="updateAdvVllm()"><option value="auto">Auto (Off)</option><option value="on">On</option><option value="off">Off</option></select></td></tr>
                                     <tr><td>nccl-debug-logs</td><td style="font-weight:normal;color:#6b7280;font-size:0.9em;">Enable verbose NCCL communication logs. Useful for debugging multi-GPU networking, RDMA, and InfiniBand issues. Very noisy. <span style="color:#64748b;">Auto = off (ERROR level only).</span></td><td><select id="adv-nccl-debug-logs-mode" onchange="updateAdvVllm()"><option value="auto">Auto (Off)</option><option value="on">On</option><option value="off">Off</option></select></td></tr>
                                 </table>
+                                </div><!-- end adv-vllm-form-section -->
                             </div>
                         </div>
 

@@ -120,6 +120,9 @@ function updateAdvVllm() {
         var key = f.replace(/-/g, '_');
         adv[key] = { mode: modeEl.value };
     });
+    // Include raw text mode info
+    adv._mode = config.advanced_vllm_mode || 'form';
+    adv._raw_text = config.advanced_vllm_raw || '';
     config.advanced_vllm = adv;
     saveConfig();
 }
@@ -146,6 +149,12 @@ function restoreAdvVllm() {
         var modeEl = document.getElementById('adv-' + f + '-mode');
         if (modeEl) modeEl.value = setting.mode || 'auto';
     });
+    // Restore raw text mode
+    if (config.advanced_vllm_mode === 'raw') {
+        setAdvVllmMode('raw');
+        var textarea = document.getElementById('adv-vllm-raw-text');
+        if (textarea && config.advanced_vllm_raw) textarea.value = config.advanced_vllm_raw;
+    }
 }
 
 function resetAdvVllm() {
@@ -160,6 +169,63 @@ function resetAdvVllm() {
         if (modeEl) modeEl.value = 'auto';
     });
     config.advanced_vllm = null;
+    saveConfig();
+}
+
+function setAdvVllmMode(mode) {
+    var formBtn = document.getElementById('adv-mode-form-btn');
+    var rawBtn = document.getElementById('adv-mode-raw-btn');
+    var formSection = document.getElementById('adv-vllm-form-section');
+    var rawSection = document.getElementById('adv-vllm-raw-section');
+    if (mode === 'raw') {
+        formBtn.style.borderColor = '#cbd5e1'; formBtn.style.background = '#fafafa';
+        rawBtn.style.borderColor = 'var(--rh-red-primary)'; rawBtn.style.background = 'linear-gradient(135deg,#fef2f2,#fee2e2)';
+        if (formSection) formSection.style.display = 'none';
+        if (rawSection) rawSection.style.display = 'block';
+        populateRawFromForm();
+    } else {
+        rawBtn.style.borderColor = '#cbd5e1'; rawBtn.style.background = '#fafafa';
+        formBtn.style.borderColor = 'var(--rh-red-primary)'; formBtn.style.background = 'linear-gradient(135deg,#fef2f2,#fee2e2)';
+        if (formSection) formSection.style.display = 'block';
+        if (rawSection) rawSection.style.display = 'none';
+    }
+    config.advanced_vllm_mode = mode;
+    saveConfig();
+}
+
+function populateRawFromForm() {
+    var lines = [];
+    var defaults = {
+        'trust-remote-code': true, 'disable-log-requests': true, 'enable-prefix-caching': true,
+        'disable-custom-all-reduce': false, 'enable-auto-tool-choice': false,
+        'enable-expert-parallel': false, 'vllm-debug-logs': false, 'nccl-debug-logs': false
+    };
+    advToggleFields.forEach(function(f) {
+        var modeEl = document.getElementById('adv-' + f + '-mode');
+        if (!modeEl) return;
+        var mode = modeEl.value;
+        var on = mode === 'auto' ? (defaults[f] || false) : mode === 'on';
+        if (on) lines.push('--' + f);
+    });
+    advValueFields.forEach(function(f) {
+        var modeEl = document.getElementById('adv-' + f + '-mode');
+        var valEl = document.getElementById('adv-' + f + '-val');
+        if (!modeEl || !valEl) return;
+        if (modeEl.value === 'custom' && valEl.value) {
+            lines.push('--' + f + ' ' + valEl.value);
+        }
+    });
+    var textarea = document.getElementById('adv-vllm-raw-text');
+    if (textarea) {
+        var header = '# Additional vLLM serve flags\n# Model, port, TP, gpu-memory-utilization are managed by the optimizer\n';
+        textarea.value = header + lines.join('\n');
+    }
+}
+
+function updateAdvVllmRaw() {
+    var textarea = document.getElementById('adv-vllm-raw-text');
+    if (!textarea) return;
+    config.advanced_vllm_raw = textarea.value;
     saveConfig();
 }
 

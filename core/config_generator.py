@@ -118,6 +118,9 @@ class TestConfig:
     reasoning_parser: Optional[str] = None
     chat_template_content_format: Optional[str] = None
 
+    # Raw vLLM extra args (user-provided text, appended to vllm serve command)
+    extra_vllm_args: Optional[str] = None
+
     # EPP configuration (passed to prereq_manager for configmap generation)
     epp_config: Optional[Dict] = None
 

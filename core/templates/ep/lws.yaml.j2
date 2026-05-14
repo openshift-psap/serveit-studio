@@ -122,7 +122,8 @@ spec:
                   --enable-auto-tool-choice{% endif %}{% if tool_call_parser %} \
                   --tool-call-parser {{ tool_call_parser }}{% endif %}{% if reasoning_parser %} \
                   --reasoning-parser {{ reasoning_parser }}{% endif %}{% if chat_template_content_format %} \
-                  --chat-template-content-format {{ chat_template_content_format }}{% endif %}
+                  --chat-template-content-format {{ chat_template_content_format }}{% endif %}{% if extra_vllm_args %} \
+                  {{ extra_vllm_args }}{% endif %}
 
             env:
               - name: HF_TOKEN

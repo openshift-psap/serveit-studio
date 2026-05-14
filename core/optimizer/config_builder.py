@@ -270,6 +270,16 @@ class ConfigBuilderMixin:
             if setting and setting.get('mode') in ('on', 'off'):
                 setattr(cfg, attr, setting['mode'] == 'on')
 
+        # Raw text mode: parse user-provided flags into extra_vllm_args
+        if adv.get('_mode') == 'raw' and adv.get('_raw_text'):
+            lines = []
+            for line in adv['_raw_text'].strip().split('\n'):
+                line = line.strip()
+                if line and not line.startswith('#'):
+                    lines.append(line)
+            if lines:
+                cfg.extra_vllm_args = ' \\\n                  '.join(lines)
+
         return cfg
 
     def _create_pd_config(self, split: FeasibleSplit) -> TestConfig:
