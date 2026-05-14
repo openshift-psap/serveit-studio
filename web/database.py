@@ -288,6 +288,22 @@ def init_db():
     except sqlite3.OperationalError:
         pass
 
+    for col, typ in [
+        ('workload_mode', 'TEXT'),
+        ('dataset_source', 'TEXT'),
+        ('dataset_column', 'TEXT'),
+        ('dataset_max_output', 'INTEGER'),
+        ('rate_type', 'TEXT'),
+        ('prefix_cache_hit_pct', 'INTEGER'),
+        ('prefix_cache_seed', 'INTEGER'),
+        ('stop_mode', 'TEXT'),
+        ('max_requests', 'INTEGER'),
+    ]:
+        try:
+            cursor.execute(f'ALTER TABLE optimization_runs ADD COLUMN {col} {typ}')
+        except sqlite3.OperationalError:
+            pass
+
     # Create Optuna tables if they don't exist
     cursor.execute('''
         CREATE TABLE IF NOT EXISTS optuna_trials (
