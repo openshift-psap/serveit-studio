@@ -263,10 +263,19 @@ class SystemScanner:
         allocatable = node_data.get('status', {}).get('allocatable', {})
         rdma_devices = []
 
-        # Check for RDMA resources
+        # Check for RDMA resources (rdma/ib, nvidia.com/roce, etc.)
         for key in allocatable.keys():
-            if 'rdma' in key.lower():
+            key_lower = key.lower()
+            if 'rdma' in key_lower or 'roce' in key_lower or ('ib' in key_lower and '/' in key):
                 rdma_devices.append(key)
+
+        # Also check node labels for RDMA capability
+        if not rdma_devices:
+            labels = node_data.get('metadata', {}).get('labels', {})
+            for lk, lv in labels.items():
+                if 'rdma.capable' in lk and lv == 'true':
+                    rdma_devices.append('rdma-capable (label)')
+                    break
 
         return len(rdma_devices) > 0, rdma_devices
 
