@@ -104,6 +104,10 @@ def init_db():
         conn.execute("ALTER TABLE instances ADD COLUMN preset_gpus INTEGER")
     if 'preset_nodes' not in inst_cols:
         conn.execute("ALTER TABLE instances ADD COLUMN preset_nodes TEXT")
+    if 'storage_class' not in inst_cols:
+        conn.execute("ALTER TABLE instances ADD COLUMN storage_class TEXT")
+    if 'storage_size' not in inst_cols:
+        conn.execute("ALTER TABLE instances ADD COLUMN storage_size TEXT")
 
     conn.commit()
     conn.close()

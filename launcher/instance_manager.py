@@ -431,12 +431,14 @@ def create_instance(owner_id: int, username: str, name: str,
             INSERT INTO instances (name, owner_id, cluster_id, display_name, status, namespace,
                                    workload_namespace, deployment_name, pvc_name, service_name,
                                    kubeconfig_secret, target_cluster, auto_login_token,
-                                   preset_gpus, preset_nodes, created_at)
-            VALUES (?, ?, ?, ?, 'creating', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                                   preset_gpus, preset_nodes, storage_class, storage_size, created_at)
+            VALUES (?, ?, ?, ?, 'creating', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         ''', (safe_name, owner_id, cluster_id, name, namespace, workload_namespace,
               deployment_name, pvc_name, service_name,
               kubeconfig_secret, target_cluster, auto_login_token,
               preset_gpus, ','.join(preset_nodes) if preset_nodes else None,
+              storage_class_override or storage_class or '',
+              f'{storage_size or 5}Gi',
               datetime.now().isoformat()))
         instance_id = conn.execute('SELECT last_insert_rowid()').fetchone()[0]
 
@@ -622,7 +624,7 @@ def list_instances(owner_id: int, cluster_id: int = None) -> List[Dict]:
                 (owner_id,)
             ).fetchall()
 
-    # Look up storage class from cluster
+    # Fallback: look up storage class from cluster for old instances without it
     cluster_sc = {}
     with get_db() as conn:
         for cr in conn.execute('SELECT id, storage_class FROM clusters').fetchall():
@@ -631,7 +633,8 @@ def list_instances(owner_id: int, cluster_id: int = None) -> List[Dict]:
     instances = []
     for row in rows:
         inst = dict(row)
-        inst['storage_class'] = cluster_sc.get(inst.get('cluster_id'), '')
+        if not inst.get('storage_class'):
+            inst['storage_class'] = cluster_sc.get(inst.get('cluster_id'), '')
         if inst.get('status') == 'deleting':
             inst['pod_status'] = 'Deleting'
             instances.append(inst)
