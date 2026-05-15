@@ -439,6 +439,16 @@
 </div>
 {% endif %}
 
+<!-- Instance Info Modal -->
+<div class="modal-overlay" id="info-modal" onclick="if(event.target===this)this.classList.remove('active')">
+    <div class="modal" role="dialog" style="width:480px">
+        <h2 id="info-modal-title" style="margin-bottom:4px">Instance Properties</h2>
+        <p class="modal-sub" style="margin-bottom:16px">Details and resource configuration</p>
+        <div id="info-modal-body" style="max-height:400px;overflow-y:auto;"></div>
+        <div style="text-align:right;margin-top:16px;"><button class="btn" style="background:#2A7B88;color:white;padding:8px 24px;" onclick="document.getElementById('info-modal').classList.remove('active')">Close</button></div>
+    </div>
+</div>
+
 <script>
 var currentClusterId = {{ clusters[0].id if clusters else 'null' }};
 var IS_ADMIN = {{ 'true' if is_admin else 'false' }};
@@ -679,7 +689,21 @@ function loadInstances(clusterId, isRefresh, userId){
             }
             var iconColor = cls==='running' ? '#2A7B88' : (cls==='error' ? '#dc2626' : '#999');
             var iconBg = 'white';
+            var infoData = JSON.stringify({
+                name: inst.display_name||inst.name,
+                namespace: inst.namespace,
+                workload_ns: inst.workload_namespace||'',
+                cluster: inst.target_cluster==='local'?'Local':'Remote',
+                gpus: inst.preset_gpus||'All',
+                nodes: inst.preset_nodes||'All nodes',
+                pvc: inst.pvc_name||'',
+                deployment: inst.deployment_name||'',
+                service: inst.service_name||'',
+                created: inst.created_at||'',
+                status: ps
+            }).replace(/'/g,'&#39;').replace(/"/g,'&quot;');
             card.innerHTML = '<div class="card-body">' +
+                '<button onclick="showInstanceInfo(this)" data-info="'+infoData+'" title="Instance properties" style="position:absolute;top:8px;right:8px;background:none;border:none;cursor:pointer;font-size:16px;color:#94a3b8;padding:4px;border-radius:4px;line-height:1;z-index:1;" onmouseover="this.style.color=\'#2A7B88\';this.style.background=\'#f0fdfa\'" onmouseout="this.style.color=\'#94a3b8\';this.style.background=\'none\'">&#9432;</button>' +
                 '<div class="card-header">' +
                 '<div class="card-icon" style="background:'+iconBg+'"><svg width="34" height="34" viewBox="0 0 24 24" fill="none" stroke="'+iconColor+'" stroke-width="1.5"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/><path d="M3.27 6.96 12 12.01l8.73-5.05M12 22.08V12"/></svg></div>' +
                 '<div style="text-align:center"><div class="card-name">'+(inst.display_name||inst.name)+'</div><span class="status status-'+cls+'">'+ps+'</span></div>' +
@@ -1159,6 +1183,33 @@ function _showSessionExpiredOverlay(){
 // Initial load
 if(currentClusterId) {
     loadInstances(currentClusterId);
+}
+
+function showInstanceInfo(btn) {
+    var info = JSON.parse(btn.getAttribute('data-info'));
+    var rows = [
+        ['Instance Name', info.name],
+        ['Status', info.status],
+        ['Namespace', info.namespace],
+        ['Workload Namespace', info.workload_ns || 'Same as instance'],
+        ['Cluster', info.cluster],
+        ['GPU Limit', info.gpus === 'All' ? 'All available' : info.gpus + ' GPUs'],
+        ['Pinned Nodes', info.nodes === 'All nodes' ? 'None (all nodes)' : info.nodes],
+        ['PVC', info.pvc],
+        ['Deployment', info.deployment],
+        ['Service', info.service],
+        ['Created', info.created],
+    ];
+    var html = '<table style="width:100%;border-collapse:collapse;font-size:0.9em;">';
+    rows.forEach(function(r) {
+        if (!r[1] && r[1] !== 0) return;
+        html += '<tr><td style="padding:8px 12px;color:#64748b;font-weight:600;white-space:nowrap;border-bottom:1px solid #f1f5f9;">' + r[0] + '</td>';
+        html += '<td style="padding:8px 12px;color:#1e293b;border-bottom:1px solid #f1f5f9;word-break:break-all;">' + r[1] + '</td></tr>';
+    });
+    html += '</table>';
+    document.getElementById('info-modal-title').textContent = info.name;
+    document.getElementById('info-modal-body').innerHTML = html;
+    document.getElementById('info-modal').classList.add('active');
 }
 </script>
 <script src="{{ url_for('static', filename='js/cluster-viz.js') }}?v={{ range(10000,99999) | random }}"></script>
