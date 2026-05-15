@@ -263,8 +263,15 @@ def create_app():
             import json as _json
             data = _json.loads(r.stdout)
             classes = []
+            # Filter out RBD (block-only, no RWX) and snapshot storage classes
+            excluded = ('rbd', 'snapshot', 'block')
             for item in data.get('items', []):
                 sc_name = item['metadata']['name']
+                provisioner = item.get('provisioner', '')
+                if any(x in sc_name.lower() for x in excluded):
+                    continue
+                if 'rbd' in provisioner.lower():
+                    continue
                 is_default = item['metadata'].get('annotations', {}).get(
                     'storageclass.kubernetes.io/is-default-class', 'false') == 'true'
                 classes.append({'name': sc_name, 'is_default': is_default})
