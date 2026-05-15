@@ -232,6 +232,13 @@ class ConfigBuilderMixin:
         adv = self.config.advanced_vllm
         if not adv:
             return cfg
+
+        # Raw text mode: parse flags from text, set known ones on TestConfig,
+        # put unknown ones in extra_vllm_args. Skip form fields entirely.
+        if adv.get('_mode') == 'raw' and adv.get('_raw_text'):
+            return self._apply_raw_vllm_args(cfg, adv['_raw_text'])
+
+        # Form mode: apply structured overrides
         val_fields = {
             'max_model_len': 'max_model_len',
             'gpu_memory_utilization': 'gpu_memory_utilization',
@@ -270,15 +277,58 @@ class ConfigBuilderMixin:
             if setting and setting.get('mode') in ('on', 'off'):
                 setattr(cfg, attr, setting['mode'] == 'on')
 
-        # Raw text mode: parse user-provided flags into extra_vllm_args
-        if adv.get('_mode') == 'raw' and adv.get('_raw_text'):
-            lines = []
-            for line in adv['_raw_text'].strip().split('\n'):
-                line = line.strip()
-                if line and not line.startswith('#'):
-                    lines.append(line)
-            if lines:
-                cfg.extra_vllm_args = ' \\\n                  '.join(lines)
+        return cfg
+
+    def _apply_raw_vllm_args(self, cfg: TestConfig, raw_text: str) -> TestConfig:
+        """Parse raw text flags: set known flags on TestConfig, extras go to extra_vllm_args."""
+        known_flags = {
+            '--max-model-len': ('max_model_len', int),
+            '--block-size': ('block_size', int),
+            '--max-num-seqs': ('max_num_seqs', int),
+            '--max-num-batched-tokens': ('max_num_batched_tokens', int),
+            '--pipeline-parallel-size': ('pipeline_parallel_size', int),
+            '--gpu-memory-utilization': ('gpu_memory_utilization', float),
+            '--dtype': ('dtype', str),
+            '--kv-cache-dtype': ('kv_cache_dtype', str),
+            '--tool-call-parser': ('tool_call_parser', str),
+            '--reasoning-parser': ('reasoning_parser', str),
+            '--chat-template-content-format': ('chat_template_content_format', str),
+        }
+        known_toggles = {
+            '--enable-prefix-caching': ('enable_prefix_caching', True),
+            '--disable-custom-all-reduce': ('disable_custom_all_reduce', True),
+            '--enable-auto-tool-choice': ('enable_auto_tool_choice', True),
+            '--enable-expert-parallel': ('enable_expert_parallel', True),
+            '--trust-remote-code': ('trust_remote_code', True),
+            '--disable-log-requests': ('disable_log_requests', True),
+        }
+        # Disable all toggles first — only enable what's in the raw text
+        for _, (attr, _) in known_toggles.items():
+            setattr(cfg, attr, False)
+
+        extra = []
+        for line in raw_text.strip().split('\n'):
+            line = line.strip()
+            if not line or line.startswith('#'):
+                continue
+            parts = line.split(None, 1)
+            flag = parts[0]
+            value = parts[1] if len(parts) > 1 else None
+
+            if flag in known_toggles:
+                attr, val = known_toggles[flag]
+                setattr(cfg, attr, val)
+            elif flag in known_flags and value is not None:
+                attr, cast = known_flags[flag]
+                try:
+                    setattr(cfg, attr, cast(value))
+                except (ValueError, TypeError):
+                    extra.append(line)
+            else:
+                extra.append(line)
+
+        if extra:
+            cfg.extra_vllm_args = ' \\\n                  '.join(extra)
 
         return cfg
 
