@@ -622,9 +622,16 @@ def list_instances(owner_id: int, cluster_id: int = None) -> List[Dict]:
                 (owner_id,)
             ).fetchall()
 
+    # Look up storage class from cluster
+    cluster_sc = {}
+    with get_db() as conn:
+        for cr in conn.execute('SELECT id, storage_class FROM clusters').fetchall():
+            cluster_sc[cr['id']] = cr['storage_class'] or ''
+
     instances = []
     for row in rows:
         inst = dict(row)
+        inst['storage_class'] = cluster_sc.get(inst.get('cluster_id'), '')
         if inst.get('status') == 'deleting':
             inst['pod_status'] = 'Deleting'
             instances.append(inst)
