@@ -634,7 +634,16 @@ def list_instances(owner_id: int, cluster_id: int = None) -> List[Dict]:
     for row in rows:
         inst = dict(row)
         if not inst.get('storage_class'):
-            inst['storage_class'] = cluster_sc.get(inst.get('cluster_id'), '')
+            try:
+                r = _kubectl(['get', 'pvc', inst.get('pvc_name', ''), '-n', inst['namespace'],
+                              '-o', 'jsonpath={.spec.storageClassName}'])
+                if r.returncode == 0 and r.stdout.strip():
+                    inst['storage_class'] = r.stdout.strip()
+                    with get_db() as conn:
+                        conn.execute('UPDATE instances SET storage_class = ? WHERE id = ?',
+                                     (inst['storage_class'], inst['id']))
+            except Exception:
+                inst['storage_class'] = cluster_sc.get(inst.get('cluster_id'), '')
         if inst.get('status') == 'deleting':
             inst['pod_status'] = 'Deleting'
             instances.append(inst)
