@@ -264,7 +264,7 @@ def create_app():
             data = _json.loads(r.stdout)
             classes = []
             # Filter out RBD (block-only, no RWX) and snapshot storage classes
-            excluded = ('rbd', 'snapshot', 'block')
+            excluded = ('rbd', 'snapshot', 'block', 'rgw', 'noobaa')
             for item in data.get('items', []):
                 sc_name = item['metadata']['name']
                 provisioner = item.get('provisioner', '')
