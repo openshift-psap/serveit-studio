@@ -41,6 +41,8 @@ class OptimizationStrategy(ABC):
 
     def _run_epp_tuning_if_enabled(self):
         """Step 9: EPP Tuning — runs before Step 10 so latency search uses optimal EPP weights."""
+        if not getattr(self.opt.config, 'epp_custom_enabled', True):
+            return
         if self.opt.config.epp_benchmark and not self.opt._should_stop():
             self.opt._benchmark_epp_strategies()
             self.opt._apply_best_epp_config()
