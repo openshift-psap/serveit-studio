@@ -560,6 +560,15 @@ class ReportAnalyzer:
                     'metric_name': 'TTFT P90',
                     'architecture': 'Aggregated',
                 }
+        elif aggregated_baseline:
+            recommendations['response_time'] = {
+                'goal': 'Response Time (minimize TTFT)',
+                'config': aggregated_baseline,
+                'deploy': f"{aggregated_baseline['replicas']} Aggregated pods, TP={aggregated_baseline['tp']}",
+                'metric_value': f"{aggregated_baseline['ttft_p90']} ms",
+                'metric_name': 'TTFT P90',
+                'architecture': 'Aggregated',
+            }
 
         # Throughput recommendation: consider PD, EP, and Aggregated
         throughput_candidates = []
