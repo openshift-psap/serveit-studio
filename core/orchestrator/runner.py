@@ -662,6 +662,93 @@ class TestOrchestrator(ParserMixin, GuidellmMixin):
                 log_callback(f"❌ {error_msg}")
             return None
 
+    def _archive_test_artifacts(
+        self,
+        config: TestConfig,
+        result,
+        log_callback: Optional[Callable[[str], None]] = None
+    ):
+        """Copy all test artifacts to an organized directory on the instance PVC.
+
+        Structure: /mnt/storage/test-artifacts/{run_name}/{test_id}/
+            guidellm-raw.json      — Raw guidellm output from workload pod
+            metrics-prometheus.json — Prometheus/Thanos metrics (if collected)
+            test-config.json       — Full TestConfig used for this test
+            test-result.json       — Parsed results summary
+            manifests.yaml         — K8s manifests deployed
+        """
+        try:
+            artifact_dir = Path(f"/mnt/storage/test-artifacts/{config.test_id}")
+            artifact_dir.mkdir(parents=True, exist_ok=True)
+
+            # 1. Copy guidellm raw JSON from workload pod
+            remote_path = f"/tmp/guidellm-{config.test_id}.json"
+            local_raw = artifact_dir / "guidellm-raw.json"
+            try:
+                kubectl = self.deployment_manager.kubectl
+                env = os.environ.copy()
+                env['KUBECONFIG'] = os.path.expanduser(kubectl.kubeconfig)
+                import subprocess as _sp
+                _sp.run(
+                    [kubectl.kubectl_cmd, 'cp',
+                     f'{self._guidellm_pod_name}:{remote_path}',
+                     str(local_raw), '-n', self.namespace],
+                    env=env, check=False, timeout=60
+                )
+                if local_raw.exists() and local_raw.stat().st_size > 0:
+                    if log_callback:
+                        log_callback(f"   📁 Archived guidellm raw output ({local_raw.stat().st_size // 1024}KB)")
+                else:
+                    local_raw.unlink(missing_ok=True)
+            except Exception:
+                pass
+
+            # 2. Copy Prometheus metrics if collected
+            if result.metrics_file and Path(result.metrics_file).exists():
+                import shutil
+                shutil.copy2(result.metrics_file, artifact_dir / "metrics-prometheus.json")
+
+            # 3. Save test config
+            from dataclasses import asdict
+            tc_dict = asdict(config)
+            for key in ('hf_token', 'selected_nodes'):
+                tc_dict.pop(key, None)
+            with open(artifact_dir / "test-config.json", 'w') as f:
+                json.dump(tc_dict, f, indent=2, default=str)
+
+            # 4. Save parsed results summary
+            result_summary = {
+                'test_id': config.test_id,
+                'architecture': config.architecture,
+                'ttft_p50': result.ttft_p50, 'ttft_p90': result.ttft_p90,
+                'ttft_p95': result.ttft_p95, 'ttft_p99': result.ttft_p99,
+                'throughput_p50': result.throughput_p50, 'throughput_p90': result.throughput_p90,
+                'throughput_p95': result.throughput_p95, 'throughput_p99': result.throughput_p99,
+                'itl_p50': result.itl_p50, 'itl_p90': result.itl_p90,
+                'tpot_p50': result.tpot_p50, 'tpot_p90': result.tpot_p90,
+                'request_total': result.request_total,
+                'request_successful': result.request_successful,
+                'request_errored': result.request_errored,
+                'guidellm_success': result.guidellm_success,
+                'error_message': result.error_message,
+                'test_start_time': result.test_start_time,
+                'test_end_time': result.test_end_time,
+            }
+            with open(artifact_dir / "test-result.json", 'w') as f:
+                json.dump(result_summary, f, indent=2, default=str)
+
+            # 5. Save manifests
+            if hasattr(result, 'manifests') and result.manifests:
+                with open(artifact_dir / "manifests.yaml", 'w') as f:
+                    if isinstance(result.manifests, dict):
+                        for name, yaml_content in result.manifests.items():
+                            f.write(f"---\n# {name}\n{yaml_content}\n")
+                    else:
+                        f.write(str(result.manifests))
+
+        except Exception as e:
+            logger.warning(f"Failed to archive test artifacts: {e}")
+
     def run_test(
         self,
         config: TestConfig,
@@ -948,6 +1035,9 @@ class TestOrchestrator(ParserMixin, GuidellmMixin):
 
                     result.metrics_file = metrics_file
                     result.metrics_collected = metrics_file is not None
+
+                # Archive test artifacts to PVC for MLflow/analysis
+                self._archive_test_artifacts(config, result, log_callback=log_callback)
 
                 # Scan pod logs for critical errors
                 try:
