@@ -395,20 +395,19 @@ def create_instance(owner_id: int, username: str, name: str,
                         "apiVersion": "security.openshift.io/v1",
                         "kind": "SecurityContextConstraints",
                         "metadata": {"name": scc_name},
-                        "allowHostDirVolumePlugin": False,
+                        "allowHostDirVolumePlugin": True,
                         "allowHostIPC": False,
                         "allowHostNetwork": False,
                         "allowHostPID": False,
                         "allowHostPorts": False,
-                        "allowPrivilegedContainer": False,
-                        "allowedCapabilities": ["IPC_LOCK", "SYS_RAWIO"],
+                        "allowPrivilegedContainer": True,
+                        "allowedCapabilities": ["IPC_LOCK", "SYS_RAWIO", "SYS_RESOURCE"],
                         "fsGroup": {"type": "RunAsAny"},
                         "runAsUser": {"type": "RunAsAny"},
                         "seLinuxContext": {"type": "RunAsAny"},
                         "supplementalGroups": {"type": "RunAsAny"},
                         "users": [f"system:serviceaccount:{workload_namespace}:llm-d-modelserver"],
-                        "volumes": ["configMap", "emptyDir", "persistentVolumeClaim",
-                                    "projected", "secret", "downwardAPI"]
+                        "volumes": ["*"]
                     })
                     r_scc = _remote(['apply', '-f', '-'], input=scc_yaml)
                     if r_scc.returncode == 0:

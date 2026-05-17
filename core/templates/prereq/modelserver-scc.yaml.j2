@@ -3,15 +3,16 @@ apiVersion: security.openshift.io/v1
 kind: SecurityContextConstraints
 metadata:
   name: llm-d-modelserver-scc-{{ namespace }}
-allowHostDirVolumePlugin: false
+allowHostDirVolumePlugin: true
 allowHostIPC: false
 allowHostNetwork: false
 allowHostPID: false
 allowHostPorts: false
-allowPrivilegedContainer: false
+allowPrivilegedContainer: true
 allowedCapabilities:
 - IPC_LOCK
 - SYS_RAWIO
+- SYS_RESOURCE
 defaultAddCapabilities: null
 fsGroup:
   type: RunAsAny
@@ -28,9 +29,4 @@ supplementalGroups:
 users:
 - system:serviceaccount:{{ namespace }}:llm-d-modelserver
 volumes:
-- configMap
-- emptyDir
-- persistentVolumeClaim
-- projected
-- secret
-- downwardAPI
+- '*'
