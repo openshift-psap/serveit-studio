@@ -147,8 +147,7 @@ spec:
 {% endif %}                  --block-size {{ block_size | default(16) }} \
                   --kv-transfer-config '{"kv_connector":"{{ kv_connector }}", "kv_role":"kv_both"}' \
                   --disable-uvicorn-access-log \
-{% if disable_log_requests %}                  --disable-log-requests \
-{% endif %}                  --max-model-len {{ max_model_len }} \
+                  --max-model-len {{ max_model_len }} \
                   --gpu-memory-utilization {{ decode_gpu_memory_utilization }}{% if enable_prefix_caching %} \
                   --enable-prefix-caching{% endif %}{% if disable_custom_all_reduce %} \
                   --disable-custom-all-reduce{% endif %}{% if dtype %} \
@@ -173,6 +172,10 @@ spec:
                     fieldPath: status.podIP
               - name: NCCL_IB_HCA
                 value: "{{ nccl_ib_hca }}"
+{% if disable_log_requests %}
+              - name: VLLM_LOGGING_LEVEL
+                value: "WARNING"
+{% endif %}
               - name: HF_TOKEN
                 valueFrom:
                   secretKeyRef:

@@ -94,8 +94,7 @@ spec:
                   --port 8000 \
 {% if trust_remote_code %}                  --trust-remote-code \
 {% endif %}                  --disable-uvicorn-access-log \
-{% if disable_log_requests %}                  --disable-log-requests \
-{% endif %}                  --tensor-parallel-size {{ tensor_parallelism }} \
+                  --tensor-parallel-size {{ tensor_parallelism }} \
 {% if pipeline_parallel_size %}                  --pipeline-parallel-size {{ pipeline_parallel_size }} \
 {% endif %}                  --block-size {{ block_size | default(16) }} \
                   --max-model-len {{ max_model_len }} \
@@ -116,6 +115,10 @@ spec:
                   {{ extra_vllm_args }}{% endif %}
 
             env:
+{% if disable_log_requests %}
+              - name: VLLM_LOGGING_LEVEL
+                value: "WARNING"
+{% endif %}
               - name: HF_TOKEN
                 valueFrom:
                   secretKeyRef:
