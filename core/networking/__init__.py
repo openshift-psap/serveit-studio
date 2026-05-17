@@ -84,7 +84,9 @@ def compute_network_values(
 
     values: Dict[str, Any] = {}
 
-    if network_type == 'dra':
+    # GPU resource key: check if dra.llm-d.io/gpu-nic-pair is in allocatable,
+    # otherwise use nvidia.com/gpu (DRA webhook intercepts it transparently)
+    if network_type == 'dra' and rdma_device_resources and 'dra.llm-d.io/gpu-nic-pair' in rdma_device_resources:
         values['gpu_resource_key'] = 'dra.llm-d.io/gpu-nic-pair'
     else:
         values['gpu_resource_key'] = 'nvidia.com/gpu'

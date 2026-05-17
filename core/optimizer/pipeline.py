@@ -651,8 +651,7 @@ class RecipeOptimizer(
         """
         Detect network type by querying actual cluster resources.
 
-        Scans GPU node allocatable to find the GPU resource key, then
-        determines RDMA mode from available network resources.
+        Checks for DRA device classes, then RDMA resources, then NAD.
         """
         import os
 
@@ -663,9 +662,9 @@ class RecipeOptimizer(
         if not self.cluster_resources:
             return 'nad'
 
-        # Query a GPU node's allocatable to find the actual GPU resource key
-        gpu_key = 'nvidia.com/gpu'
+        # Check for DRA: either gpu-nic-pair in allocatable or dranet device class
         try:
+            # Method 1: gpu-nic-pair resource in allocatable
             r = self.scanner.kubectl.run(
                 ['get', 'nodes', '-l', 'nvidia.com/gpu.present=true',
                  '-o', 'jsonpath={.items[0].status.allocatable}'], check=False)
@@ -675,15 +674,26 @@ class RecipeOptimizer(
                 if 'dra.llm-d.io/gpu-nic-pair' in alloc:
                     self.log("Network: DRA gpu-nic-pair detected in allocatable")
                     return 'dra'
+
+            # Method 2: dranet or gpu.nvidia.com device classes exist
+            r = self.scanner.kubectl.run(
+                ['get', 'deviceclass', '-o', 'jsonpath={.items[*].metadata.name}'], check=False)
+            if r.returncode == 0 and r.stdout.strip():
+                classes = r.stdout.strip().split()
+                has_dranet = any('dranet' in c for c in classes)
+                has_gpu_dra = any('gpu.nvidia.com' in c for c in classes)
+                if has_dranet or has_gpu_dra:
+                    self.log(f"Network: DRA detected (device classes: {', '.join(c for c in classes if 'dranet' in c or 'gpu' in c)})")
+                    return 'dra'
         except Exception:
             pass
 
-        # No DRA gpu-nic-pair — check for RDMA resources
+        # SharedDevice: has RDMA resources but no DRA
         if self.cluster_resources.has_rdma:
             self.log("Network: RDMA detected (shared_device mode)")
             return 'shared_device'
 
-        # Check for NAD (Multus CNI)
+        # NAD (Multus CNI)
         try:
             r = self.scanner.kubectl.run(
                 ['api-resources', '--api-group=k8s.cni.cncf.io'], check=False)
