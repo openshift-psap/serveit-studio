@@ -461,6 +461,19 @@ class PrereqManager:
                 return
             log(f'   ✅ {resource_type} llm-d-modelserver created')
 
+        # OpenShift: create SCC for modelserver (allows IPC_LOCK, SYS_RAWIO, runAsUser: 0)
+        scc_check = self.kubectl.run(
+            ['get', 'scc', f'llm-d-modelserver-scc-{self.namespace}'], check=False)
+        if scc_check.returncode != 0:
+            api_check = self.kubectl.run(['api-resources', '--api-group=security.openshift.io'], check=False)
+            if api_check.returncode == 0 and 'securitycontextconstraints' in api_check.stdout:
+                manifest = self.template_mgr.render_template('prereq/modelserver-scc.yaml.j2', **context)
+                result = self.kubectl.run(['apply', '-f', '-'], input_data=manifest, check=False)
+                if result.returncode == 0:
+                    log(f'   ✅ SCC llm-d-modelserver created (OpenShift)')
+                else:
+                    log(f'   ⚠️  Failed to create SCC: {result.stderr[:100]}')
+
     def _ensure_rdma_discovery(self, context, log_callback=None):
         """Deploy rdma-discovery-script ConfigMap if missing."""
         def log(msg):
