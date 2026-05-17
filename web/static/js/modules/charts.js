@@ -75,12 +75,14 @@ function renderCharts(data, runId) {
         const goalOrder = ['response_time', 'throughput'];
 
         // Render row by row: each row has 2 cards (Response Time + Throughput) at the same percentile
+        const activeGoals = goalOrder.filter(k => rec.recommendations[k]);
+        const gridCols = activeGoals.length === 1 ? '1fr' : '1fr 1fr';
         pctls.forEach((p, pi) => {
-            html += '<div style="display:grid; grid-template-columns:1fr 1fr; gap:16px; margin-bottom:12px;">';
+            html += `<div style="display:grid; grid-template-columns:${gridCols}; gap:16px; margin-bottom:12px;">`;
 
-            for (const key of goalOrder) {
+            for (const key of activeGoals) {
                 const r = rec.recommendations[key];
-                if (!r) { html += '<div></div>'; continue; }
+                if (!r) continue;
                 const c = r.config;
                 const isPrimary = (rec.goal === 'ttft' && key === 'response_time') || (rec.goal === 'throughput' && key === 'throughput');
                 const archKey = (r.architecture || '').toLowerCase() === 'pd' ? 'pd' : 'aggregated';
