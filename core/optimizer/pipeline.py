@@ -649,23 +649,43 @@ class RecipeOptimizer(
 
     def _detect_network_type(self) -> str:
         """
-        Detect network type based on cloud provider.
+        Detect network type from actual cluster resources.
 
-        Returns:
-            'dra' for IBM Cloud (DRANET), 'nad' for bare metal or other providers
+        Checks node allocatable for specific resource keys rather than
+        guessing from cloud provider. DRA mode requires the llm-d
+        gpu-nic-pair webhook; shared_device uses nvidia.com/gpu with
+        separate RDMA resources.
         """
         import os
 
-        # Check for manual override
         force_nad = os.getenv('INFTUNE_FORCE_NAD', 'false').lower() == 'true'
         if force_nad:
             return 'nad'
 
-        if self.cluster_resources:
-            if self.cluster_resources.cloud_provider == CloudProvider.IBM_CLOUD:
-                return 'dra'
-            if self.cluster_resources.cloud_provider == CloudProvider.COREWEAVE:
-                return 'shared_device'
+        if not self.cluster_resources:
+            return 'nad'
+
+        # Check actual node allocatable resources
+        for node in self.cluster_resources.nodes:
+            if not node.gpus:
+                continue
+            alloc_keys = set()
+            # Collect allocatable keys from rdma_devices detected by scanner
+            for dev in (node.rdma_devices or []):
+                alloc_keys.add(dev.lower())
+
+        # DRA: requires dra.llm-d.io/gpu-nic-pair in allocatable
+        has_gpu_nic_pair = any(
+            'dra.llm-d.io/gpu-nic-pair' in (d or '')
+            for n in self.cluster_resources.nodes
+            for d in (n.rdma_devices or [])
+        )
+        if has_gpu_nic_pair:
+            return 'dra'
+
+        # SharedDevice: has RDMA resources (nvidia.com/roce, rdma/ib) but no DRA gpu-nic-pair
+        if self.cluster_resources.has_rdma:
+            return 'shared_device'
 
         return 'nad'
 
