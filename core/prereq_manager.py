@@ -241,8 +241,12 @@ class PrereqManager:
                 ('ClusterRoleBinding', 'prereq/gaie-clusterrolebinding.yaml.j2'),
             ]
             if epp_use_defaults:
-                resources.append(('ConfigMap', 'prereq/gaie-configmap-default.yaml.j2'))
-                log('   Using llm-d default EPP configuration (queue:2, kv-cache:2, prefix-cache:3)')
+                if architecture == 'pd':
+                    resources.append(('ConfigMap', 'prereq/gaie-configmap-default-pd.yaml.j2'))
+                    log('   Using llm-d default PD EPP configuration (prefill: prefix:2/queue:1, decode: prefix:2/queue:1)')
+                else:
+                    resources.append(('ConfigMap', 'prereq/gaie-configmap-default.yaml.j2'))
+                    log('   Using llm-d default EPP configuration (queue:2, kv-cache:2, prefix-cache:3)')
             else:
                 resources.append(('ConfigMap', configmap_template))
             resources += [
