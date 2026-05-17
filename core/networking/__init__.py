@@ -91,7 +91,9 @@ def compute_network_values(
 
     values['extra_device_resources'] = []
     values['rdma_nics_per_node'] = rdma_nics_per_node
-    if network_type != 'dra' and rdma_device_resources:
+    # NAD mode: request exclusive RDMA NICs per pod (SR-IOV VFs)
+    # DRA/shared_device: RDMA is shared, don't request per-pod resources
+    if network_type == 'nad' and rdma_device_resources:
         for resource_key in rdma_device_resources:
             values['extra_device_resources'].append({
                 'key': resource_key,
