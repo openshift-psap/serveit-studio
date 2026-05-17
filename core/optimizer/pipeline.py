@@ -439,11 +439,14 @@ class RecipeOptimizer(
                     # Backfill artifacts for completed tests missing from disk
                     from pathlib import Path
                     import json as _json2
+                    import hashlib as _hashlib
+                    backfilled = 0
                     for name, row in self.completed_tests.items():
                         artifact_dir = Path(f"/mnt/storage/test-artifacts/{name}")
                         if (artifact_dir / "test-result.json").exists():
                             continue
                         artifact_dir.mkdir(parents=True, exist_ok=True)
+                        backfilled += 1
                         try:
                             tc_raw = row.get('test_config_json')
                             if tc_raw:
@@ -462,8 +465,40 @@ class RecipeOptimizer(
                             if metrics_raw:
                                 with open(artifact_dir / "metrics-prometheus.json", 'w') as f:
                                     f.write(metrics_raw)
+
+                            # Try to recover guidellm raw JSON from workload pod
+                            raw_file = artifact_dir / "guidellm-raw.json"
+                            if not raw_file.exists():
+                                try:
+                                    remote_path = f"/tmp/guidellm-{name}.json"
+                                    kubectl = self.orchestrator.deployment_manager.kubectl
+                                    md5_r = kubectl.run(
+                                        ['exec', 'inftune-workload', '-n', self.config.namespace,
+                                         '--', 'md5sum', remote_path], check=False)
+                                    if md5_r.returncode == 0:
+                                        remote_md5 = md5_r.stdout.strip().split()[0]
+                                        import subprocess as _sp
+                                        cp_env = os.environ.copy()
+                                        cp_env['KUBECONFIG'] = os.path.expanduser(kubectl.kubeconfig)
+                                        for attempt in range(3):
+                                            _sp.run(
+                                                [kubectl.kubectl_cmd, 'cp',
+                                                 f'inftune-workload:{remote_path}',
+                                                 str(raw_file), '-n', self.config.namespace],
+                                                env=cp_env, check=False, timeout=120)
+                                            if raw_file.exists() and raw_file.stat().st_size > 0:
+                                                local_md5 = _hashlib.md5(raw_file.read_bytes()).hexdigest()
+                                                if local_md5 == remote_md5:
+                                                    break
+                                                raw_file.unlink(missing_ok=True)
+                                        else:
+                                            raw_file.unlink(missing_ok=True)
+                                except Exception:
+                                    pass
                         except Exception:
                             pass
+                    if backfilled:
+                        self.log(f"   📁 Backfilled artifacts for {backfilled} tests", 'info')
 
                     # Infer total_gpus from completed step6 test names
                     # All step6 tests use the same GPU count; take the max to be safe.
