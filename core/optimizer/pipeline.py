@@ -436,6 +436,35 @@ class RecipeOptimizer(
                     for name in sorted(self.completed_tests.keys()):
                         self.log(f"   ✅ {name}", 'info')
 
+                    # Backfill artifacts for completed tests missing from disk
+                    from pathlib import Path
+                    import json as _json2
+                    for name, row in self.completed_tests.items():
+                        artifact_dir = Path(f"/mnt/storage/test-artifacts/{name}")
+                        if (artifact_dir / "test-result.json").exists():
+                            continue
+                        artifact_dir.mkdir(parents=True, exist_ok=True)
+                        try:
+                            tc_raw = row.get('test_config_json')
+                            if tc_raw:
+                                with open(artifact_dir / "test-config.json", 'w') as f:
+                                    f.write(tc_raw)
+                            result_summary = {
+                                'test_id': name, 'architecture': row.get('architecture'),
+                                'ttft_p90': row.get('ttft_p90'), 'ttft_p95': row.get('ttft_p95'),
+                                'ttft_p99': row.get('ttft_p99'), 'throughput_p90': row.get('throughput_p90'),
+                                'throughput_p95': row.get('throughput_p95'), 'throughput_p99': row.get('throughput_p99'),
+                                'status': row.get('status'),
+                            }
+                            with open(artifact_dir / "test-result.json", 'w') as f:
+                                _json2.dump(result_summary, f, indent=2, default=str)
+                            metrics_raw = row.get('metrics_json')
+                            if metrics_raw:
+                                with open(artifact_dir / "metrics-prometheus.json", 'w') as f:
+                                    f.write(metrics_raw)
+                        except Exception:
+                            pass
+
                     # Infer total_gpus from completed step6 test names
                     # All step6 tests use the same GPU count; take the max to be safe.
                     # e.g. "step6-agg-tp2-16r" → tp=2, replicas=16 → total_gpus=32
