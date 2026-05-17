@@ -125,10 +125,6 @@ spec:
                   {{ extra_vllm_args }}{% endif %}
 
             env:
-{% if disable_log_requests %}
-              - name: VLLM_LOGGING_LEVEL
-                value: "WARNING"
-{% endif %}
               - name: HF_TOKEN
                 valueFrom:
                   secretKeyRef:

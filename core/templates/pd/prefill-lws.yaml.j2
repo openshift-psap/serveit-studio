@@ -152,10 +152,6 @@ spec:
                     fieldPath: status.podIP
               - name: NCCL_IB_HCA
                 value: "{{ nccl_ib_hca }}"
-{% if disable_log_requests %}
-              - name: VLLM_LOGGING_LEVEL
-                value: "WARNING"
-{% endif %}
               - name: HF_TOKEN
                 valueFrom:
                   secretKeyRef:
