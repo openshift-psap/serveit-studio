@@ -649,12 +649,10 @@ class RecipeOptimizer(
 
     def _detect_network_type(self) -> str:
         """
-        Detect network type from actual cluster resources.
+        Detect network type by querying actual cluster resources.
 
-        Checks node allocatable for specific resource keys rather than
-        guessing from cloud provider. DRA mode requires the llm-d
-        gpu-nic-pair webhook; shared_device uses nvidia.com/gpu with
-        separate RDMA resources.
+        Scans GPU node allocatable to find the GPU resource key, then
+        determines RDMA mode from available network resources.
         """
         import os
 
@@ -665,29 +663,38 @@ class RecipeOptimizer(
         if not self.cluster_resources:
             return 'nad'
 
-        # Check actual node allocatable resources
-        for node in self.cluster_resources.nodes:
-            if not node.gpus:
-                continue
-            alloc_keys = set()
-            # Collect allocatable keys from rdma_devices detected by scanner
-            for dev in (node.rdma_devices or []):
-                alloc_keys.add(dev.lower())
+        # Query a GPU node's allocatable to find the actual GPU resource key
+        gpu_key = 'nvidia.com/gpu'
+        try:
+            r = self.scanner.kubectl.run(
+                ['get', 'nodes', '-l', 'nvidia.com/gpu.present=true',
+                 '-o', 'jsonpath={.items[0].status.allocatable}'], check=False)
+            if r.returncode == 0 and r.stdout.strip():
+                import json as _j
+                alloc = _j.loads(r.stdout)
+                if 'dra.llm-d.io/gpu-nic-pair' in alloc:
+                    self.log("Network: DRA gpu-nic-pair detected in allocatable")
+                    return 'dra'
+        except Exception:
+            pass
 
-        # DRA: requires dra.llm-d.io/gpu-nic-pair in allocatable
-        has_gpu_nic_pair = any(
-            'dra.llm-d.io/gpu-nic-pair' in (d or '')
-            for n in self.cluster_resources.nodes
-            for d in (n.rdma_devices or [])
-        )
-        if has_gpu_nic_pair:
-            return 'dra'
-
-        # SharedDevice: has RDMA resources (nvidia.com/roce, rdma/ib) but no DRA gpu-nic-pair
+        # No DRA gpu-nic-pair — check for RDMA resources
         if self.cluster_resources.has_rdma:
+            self.log("Network: RDMA detected (shared_device mode)")
             return 'shared_device'
 
-        return 'nad'
+        # Check for NAD (Multus CNI)
+        try:
+            r = self.scanner.kubectl.run(
+                ['api-resources', '--api-group=k8s.cni.cncf.io'], check=False)
+            if r.returncode == 0 and 'network-attachment-definitions' in r.stdout:
+                self.log("Network: NAD (Multus) detected")
+                return 'nad'
+        except Exception:
+            pass
+
+        self.log("Network: No RDMA or NAD detected, using pod network (eth0)")
+        return 'eth0'
 
     def _detect_rdma_device_resources(self) -> List[str]:
         if not self.cluster_resources:
