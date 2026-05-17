@@ -856,9 +856,9 @@ function createInstance(e){
         nameInput.style.borderColor='#dc2626';nameInput.placeholder='Instance name is required';nameInput.focus();
         setTimeout(function(){nameInput.style.borderColor='';nameInput.placeholder='my-optimization';},3000);return;
     }
-    if(/[^a-zA-Z0-9 _-]/.test(name)){
+    if(/[^a-zA-Z0-9 ._-]/.test(name)){
         var errEl=document.getElementById('create-error');
-        document.getElementById('create-error-text').textContent='Name can only contain letters, numbers, spaces, hyphens, and underscores.';
+        document.getElementById('create-error-text').textContent='Name can only contain letters, numbers, spaces, dots, hyphens, and underscores.';
         errEl.style.display='block';nameInput.focus();return;
     }
     var modal=document.querySelector('#create-modal .modal');
