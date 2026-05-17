@@ -121,7 +121,7 @@ spec:
                   secretKeyRef:
                     name: llm-d-hf-token
                     key: HF_TOKEN
-                    optional: false
+                    optional: true
               - name: NCCL_IB_HCA
                 value: "{{ nccl_ib_hca }}"
               - name: NCCL_SOCKET_IFNAME

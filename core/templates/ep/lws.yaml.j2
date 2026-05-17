@@ -131,7 +131,7 @@ spec:
                   secretKeyRef:
                     name: llm-d-hf-token
                     key: HF_TOKEN
-                    optional: false
+                    optional: true
               - name: HF_HOME
                 value: "/model-cache/huggingface"
               - name: HF_HUB_CACHE
