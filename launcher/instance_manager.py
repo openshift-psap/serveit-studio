@@ -387,6 +387,33 @@ def create_instance(owner_id: int, username: str, name: str,
                 })
                 _remote(['apply', '-f', '-'], input=prom_yaml)
 
+                # Create SCC for modelserver (allows IPC_LOCK, SYS_RAWIO, runAsUser:0)
+                scc_name = f"llm-d-modelserver-scc-{workload_namespace}"
+                scc_check = _remote(['get', 'scc', scc_name])
+                if scc_check.returncode != 0:
+                    scc_yaml = json.dumps({
+                        "apiVersion": "security.openshift.io/v1",
+                        "kind": "SecurityContextConstraints",
+                        "metadata": {"name": scc_name},
+                        "allowHostDirVolumePlugin": False,
+                        "allowHostIPC": False,
+                        "allowHostNetwork": False,
+                        "allowHostPID": False,
+                        "allowHostPorts": False,
+                        "allowPrivilegedContainer": False,
+                        "allowedCapabilities": ["IPC_LOCK", "SYS_RAWIO"],
+                        "fsGroup": {"type": "RunAsAny"},
+                        "runAsUser": {"type": "RunAsAny"},
+                        "seLinuxContext": {"type": "RunAsAny"},
+                        "supplementalGroups": {"type": "RunAsAny"},
+                        "users": [f"system:serviceaccount:{workload_namespace}:llm-d-modelserver"],
+                        "volumes": ["configMap", "emptyDir", "persistentVolumeClaim",
+                                    "projected", "secret", "downwardAPI"]
+                    })
+                    r_scc = _remote(['apply', '-f', '-'], input=scc_yaml)
+                    if r_scc.returncode == 0:
+                        logger.info(f"Created SCC {scc_name} for modelserver")
+
             remote_rbac = json.dumps({
                 "apiVersion": "v1", "kind": "List", "items": [
                     {"apiVersion": "rbac.authorization.k8s.io/v1", "kind": "Role",
