@@ -681,7 +681,7 @@ class TestOrchestrator(ParserMixin, GuidellmMixin):
             artifact_dir = Path(f"/mnt/storage/test-artifacts/{config.test_id}")
             artifact_dir.mkdir(parents=True, exist_ok=True)
 
-            # 1. Copy guidellm raw JSON from workload pod
+            # 1. Copy guidellm raw JSON from workload pod with MD5 verification
             remote_path = f"/tmp/guidellm-{config.test_id}.json"
             local_raw = artifact_dir / "guidellm-raw.json"
             try:
@@ -689,16 +689,42 @@ class TestOrchestrator(ParserMixin, GuidellmMixin):
                 env = os.environ.copy()
                 env['KUBECONFIG'] = os.path.expanduser(kubectl.kubeconfig)
                 import subprocess as _sp
-                _sp.run(
-                    [kubectl.kubectl_cmd, 'cp',
-                     f'{self._guidellm_pod_name}:{remote_path}',
-                     str(local_raw), '-n', self.namespace],
-                    env=env, check=False, timeout=60
-                )
-                if local_raw.exists() and local_raw.stat().st_size > 0:
-                    if log_callback:
-                        log_callback(f"   📁 Archived guidellm raw output ({local_raw.stat().st_size // 1024}KB)")
+                import hashlib
+
+                # Get remote MD5
+                md5_r = kubectl.run(
+                    ['exec', self._guidellm_pod_name, '-n', self.namespace, '--',
+                     'md5sum', remote_path], check=False)
+                remote_md5 = md5_r.stdout.strip().split()[0] if md5_r.returncode == 0 else None
+
+                max_retries = 3
+                for attempt in range(max_retries):
+                    _sp.run(
+                        [kubectl.kubectl_cmd, 'cp',
+                         f'{self._guidellm_pod_name}:{remote_path}',
+                         str(local_raw), '-n', self.namespace],
+                        env=env, check=False, timeout=120
+                    )
+                    if not local_raw.exists() or local_raw.stat().st_size == 0:
+                        continue
+
+                    if remote_md5:
+                        local_md5 = hashlib.md5(local_raw.read_bytes()).hexdigest()
+                        if local_md5 == remote_md5:
+                            if log_callback:
+                                log_callback(f"   📁 Archived guidellm raw output ({local_raw.stat().st_size // 1024}KB, MD5 verified)")
+                            break
+                        else:
+                            if log_callback:
+                                log_callback(f"   ⚠️  MD5 mismatch (attempt {attempt+1}/{max_retries}), retrying copy...")
+                            local_raw.unlink(missing_ok=True)
+                    else:
+                        if log_callback:
+                            log_callback(f"   📁 Archived guidellm raw output ({local_raw.stat().st_size // 1024}KB)")
+                        break
                 else:
+                    if log_callback:
+                        log_callback(f"   ❌ Failed to copy guidellm output after {max_retries} attempts")
                     local_raw.unlink(missing_ok=True)
             except Exception:
                 pass
