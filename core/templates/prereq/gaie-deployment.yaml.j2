@@ -36,8 +36,6 @@ spec:
             - json
             - --config-file
             - /config/{{ config_file | default('default-plugins.yaml') }}
-            - --kv-cache-usage-percentage-metric
-            - "vllm:kv_cache_usage_perc"
             - --v
             - "1"
             - --tracing=false
