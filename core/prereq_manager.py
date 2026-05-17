@@ -151,6 +151,9 @@ class PrereqManager:
 
             if all(status.values()):
                 log(f'✅ All prerequisites for {architecture} already deployed')
+                # Ensure RDMA configmap exists even on the fast path
+                context = {'namespace': self.namespace}
+                self._ensure_rdma_discovery(context, log)
                 if self._check_prereqs_ready(config['gaie_name'], log_callback=log):
                     return True
                 log(f'   ⏳ Waiting for GAIE deployment to become ready...')
