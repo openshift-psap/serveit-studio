@@ -6,6 +6,7 @@ Instances are organized into clusters (local or remote).
 """
 
 import json
+import logging
 import os
 import re
 import subprocess
@@ -13,6 +14,8 @@ import time
 from datetime import datetime
 from pathlib import Path
 from typing import Optional, List, Dict
+
+logger = logging.getLogger(__name__)
 
 from launcher.database import get_db
 
