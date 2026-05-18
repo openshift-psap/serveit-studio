@@ -192,6 +192,8 @@ function updateUIFromConfig() {
     if (document.getElementById('adv-vllm-custom-enabled')) {
         var advCustom = config.advanced_vllm_custom_enabled !== false;
         document.getElementById('adv-vllm-custom-enabled').checked = advCustom;
+        var advToggle = document.getElementById('adv-vllm-toggle');
+        if (advToggle) { if (advCustom) advToggle.classList.add('active'); else advToggle.classList.remove('active'); }
         var advSection = document.getElementById('adv-vllm-custom-section');
         if (advSection) advSection.style.display = advCustom ? 'block' : 'none';
     }
