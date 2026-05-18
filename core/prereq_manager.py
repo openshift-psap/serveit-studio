@@ -262,31 +262,32 @@ class PrereqManager:
             ]
 
             for resource_type, template_path in resources:
-                # Skip if already exists
                 resource_name = context['gaie_name'] if 'gaie' in template_path else context.get('gateway_name', 'infra-pd-inference-gateway')
 
-                # Check existence based on resource type
-                check_cmd = None
-                if resource_type in ['ServiceAccount', 'Role', 'RoleBinding', 'ConfigMap', 'Service', 'Deployment']:
-                    check_cmd = ['get', resource_type.lower(), resource_name, '-n', self.namespace]
-                elif resource_type in ['ClusterRole', 'ClusterRoleBinding']:
-                    check_cmd = ['get', resource_type.lower(), f"{context['gaie_pool_name']}-{self.namespace}-epp"]
-                elif resource_type == 'InferencePool':
-                    check_cmd = ['get', 'inferencepool', context['gaie_pool_name'], '-n', self.namespace]
-                elif resource_type == 'Gateway':
-                    check_cmd = ['get', 'gateway', resource_name, '-n', self.namespace]
-                elif resource_type == 'HTTPRoute':
-                    check_cmd = ['get', 'httproute', f'llm-d-{architecture}', '-n', self.namespace]
-                elif resource_type == 'DestinationRule':
-                    check_cmd = ['get', 'destinationrule', context['gaie_name'], '-n', self.namespace]
-                if check_cmd:
-                    result = self.kubectl.run(check_cmd, check=False)
-                    if result.returncode == 0:
-                        log(f'   ✓ {resource_type} already exists')
-                        continue
+                # Always apply Deployment and ConfigMap so image/config changes take effect.
+                # Skip-if-exists only for immutable resources (RBAC, networking).
+                if resource_type not in ('Deployment', 'ConfigMap'):
+                    check_cmd = None
+                    if resource_type in ['ServiceAccount', 'Role', 'RoleBinding', 'Service']:
+                        check_cmd = ['get', resource_type.lower(), resource_name, '-n', self.namespace]
+                    elif resource_type in ['ClusterRole', 'ClusterRoleBinding']:
+                        check_cmd = ['get', resource_type.lower(), f"{context['gaie_pool_name']}-{self.namespace}-epp"]
+                    elif resource_type == 'InferencePool':
+                        check_cmd = ['get', 'inferencepool', context['gaie_pool_name'], '-n', self.namespace]
+                    elif resource_type == 'Gateway':
+                        check_cmd = ['get', 'gateway', resource_name, '-n', self.namespace]
+                    elif resource_type == 'HTTPRoute':
+                        check_cmd = ['get', 'httproute', f'llm-d-{architecture}', '-n', self.namespace]
+                    elif resource_type == 'DestinationRule':
+                        check_cmd = ['get', 'destinationrule', context['gaie_name'], '-n', self.namespace]
+                    if check_cmd:
+                        result = self.kubectl.run(check_cmd, check=False)
+                        if result.returncode == 0:
+                            log(f'   ✓ {resource_type} already exists')
+                            continue
 
                 # Render template
-                log(f'   Creating {resource_type}...')
+                log(f'   Applying {resource_type}...')
                 manifest = self.template_mgr.render_template(template_path, **context)
 
                 # Apply manifest
