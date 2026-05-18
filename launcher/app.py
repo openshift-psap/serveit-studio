@@ -206,11 +206,11 @@ def create_app():
 
         with get_db() as conn:
             existing = conn.execute(
-                'SELECT id FROM instances WHERE owner_id = ? AND name = ?',
-                (get_user_id(), instance_manager._sanitize(f"{get_username()}-{name}"))
+                'SELECT id FROM instances WHERE owner_id = ? AND name = ? AND cluster_id = ?',
+                (get_user_id(), instance_manager._sanitize(f"{get_username()}-{name}"), cluster_id)
             ).fetchone()
             if existing:
-                return jsonify({'error': f'You already have an instance named "{name}".'}), 409
+                return jsonify({'error': f'You already have an instance named "{name}" on this cluster.'}), 409
 
         with get_db() as conn:
             user_row = conn.execute('SELECT password_hash FROM users WHERE id = ?', (get_user_id(),)).fetchone()
