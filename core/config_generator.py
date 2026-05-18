@@ -47,8 +47,8 @@ class TestConfig:
     decode_tp: Optional[int] = None   # Separate TP for decode pods
 
     # Resource parameters
-    max_model_len: int = 8192  # Should be calculated as (isl + osl) * 1.2 for optimal memory usage
-    gpu_memory_utilization: float = 0.95  # For aggregated architecture
+    max_model_len: Optional[int] = None  # None = let vLLM use model's max_position_embeddings
+    gpu_memory_utilization: Optional[float] = None  # None = vLLM default (0.90)
     gpu_vram_gb: Optional[float] = None  # GPU VRAM in GiB (for memory profiling)
     prefill_gpu_memory_utilization: Optional[float] = None  # For PD prefill pods
     decode_gpu_memory_utilization: Optional[float] = None   # For PD decode pods

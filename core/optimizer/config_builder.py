@@ -232,8 +232,13 @@ class ConfigBuilderMixin:
         # When custom settings are disabled, strip auto-computed values
         # so vLLM uses its own defaults (upstream llm-d behavior)
         if not getattr(self.config, 'advanced_vllm_custom_enabled', True):
-            cfg.gpu_memory_utilization = 0.95
+            cfg.max_model_len = None
+            cfg.gpu_memory_utilization = None
+            cfg.prefill_gpu_memory_utilization = None
+            cfg.decode_gpu_memory_utilization = None
             cfg.max_num_seqs = None
+            cfg.prefill_max_num_seqs = None
+            cfg.decode_max_num_seqs = None
             cfg.max_num_batched_tokens = None
             return cfg
 

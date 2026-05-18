@@ -101,28 +101,28 @@ spec:
                   {{ model_name }} \
                   --port 8000 \
 {% if trust_remote_code %}                  --trust-remote-code \
-{% endif %}                  --disable-uvicorn-access-log \
-                  --tensor-parallel-size {{ tensor_parallelism }} \
+{% endif %}                  --tensor-parallel-size {{ tensor_parallelism }} \
 {% if pipeline_parallel_size %}                  --pipeline-parallel-size {{ pipeline_parallel_size }} \
 {% endif %}                  --kv_transfer_config '{"kv_connector":"NixlConnector","kv_role":"kv_both"}' \
                   --async-scheduling \
                   --enable-eplb \
-                  --max-model-len {{ max_model_len }} \
-                  --gpu-memory-utilization {{ gpu_memory_utilization }}{% if enable_prefix_caching %} \
-                  --enable-prefix-caching{% endif %}{% if disable_custom_all_reduce %} \
-                  --disable-custom-all-reduce{% endif %}{% if dtype %} \
-                  --dtype {{ dtype }}{% endif %}{% if kv_cache_dtype %} \
-                  --kv-cache-dtype {{ kv_cache_dtype }}{% endif %}{% if max_num_batched_tokens %} \
-                  --max-num-batched-tokens {{ max_num_batched_tokens }}{% endif %}{% if max_num_seqs %} \
-                  --max-num-seqs {{ max_num_seqs }}{% endif %}{% if enable_expert_parallel %} \
-                  --enable-expert-parallel{% endif %}{% if speculative_method %} \
-                  --speculative-config.method {{ speculative_method }} \
-                  --speculative-config.num_speculative_tokens {{ speculative_num_tokens | default(3) }}{% endif %}{% if enable_auto_tool_choice %} \
-                  --enable-auto-tool-choice{% endif %}{% if tool_call_parser %} \
-                  --tool-call-parser {{ tool_call_parser }}{% endif %}{% if reasoning_parser %} \
-                  --reasoning-parser {{ reasoning_parser }}{% endif %}{% if chat_template_content_format %} \
-                  --chat-template-content-format {{ chat_template_content_format }}{% endif %}{% if extra_vllm_args %} \
-                  {{ extra_vllm_args }}{% endif %}
+{% if max_model_len %}                  --max-model-len {{ max_model_len }} \
+{% endif %}{% if gpu_memory_utilization %}                  --gpu-memory-utilization {{ gpu_memory_utilization }} \
+{% endif %}{% if enable_prefix_caching %}                  --enable-prefix-caching \
+{% endif %}{% if disable_custom_all_reduce %}                  --disable-custom-all-reduce \
+{% endif %}{% if dtype %}                  --dtype {{ dtype }} \
+{% endif %}{% if kv_cache_dtype %}                  --kv-cache-dtype {{ kv_cache_dtype }} \
+{% endif %}{% if max_num_batched_tokens %}                  --max-num-batched-tokens {{ max_num_batched_tokens }} \
+{% endif %}{% if max_num_seqs %}                  --max-num-seqs {{ max_num_seqs }} \
+{% endif %}{% if enable_expert_parallel %}                  --enable-expert-parallel \
+{% endif %}{% if speculative_method %}                  --speculative-config.method {{ speculative_method }} \
+                  --speculative-config.num_speculative_tokens {{ speculative_num_tokens | default(3) }} \
+{% endif %}{% if enable_auto_tool_choice %}                  --enable-auto-tool-choice \
+{% endif %}{% if tool_call_parser %}                  --tool-call-parser {{ tool_call_parser }} \
+{% endif %}{% if reasoning_parser %}                  --reasoning-parser {{ reasoning_parser }} \
+{% endif %}{% if chat_template_content_format %}                  --chat-template-content-format {{ chat_template_content_format }} \
+{% endif %}{% if extra_vllm_args %}                  {{ extra_vllm_args }} \
+{% endif %}                  --disable-uvicorn-access-log
 
             env:
               - name: HF_TOKEN
