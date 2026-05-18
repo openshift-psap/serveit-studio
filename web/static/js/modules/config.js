@@ -87,13 +87,14 @@ function updateUIFromConfig() {
     }
 
     if (document.getElementById('latency-constraint-enabled')) {
-        document.getElementById('latency-constraint-enabled').checked = config.latency_constraint_enabled || false;
-        if (config.latency_constraint_enabled) {
+        var on = config.latency_constraint_enabled || false;
+        document.getElementById('latency-constraint-enabled').checked = on;
+        if (on) {
             document.getElementById('latency-sla-body').style.display = 'block';
-            var lsToggle = document.getElementById('latency-sla-toggle');
-            if (lsToggle) lsToggle.classList.add('active');
             var li = document.getElementById('latency-sla-inner');
-            if (li) { li.style.opacity = '1'; }
+            if (li) li.style.opacity = '1';
+            var sw = document.getElementById('latency-sla-switch');
+            if (sw) { sw.style.background = '#d97706'; sw.querySelector('span').style.transform = 'translateX(18px)'; }
         }
     }
     if (config.latency_constraint_ms && document.getElementById('latency-target-input')) {
