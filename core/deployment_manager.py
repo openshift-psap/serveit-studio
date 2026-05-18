@@ -519,23 +519,24 @@ class DeploymentManager:
             log_callback(f"🗑️ Deleting {architecture} deployment: {test_id}")
 
         try:
-            result = self.kubectl.run(
-                [
-                    'delete',
-                    'leaderworkerset',
-                    '-l', f'test-id={test_id}',
-                    '-n', self.namespace
-                ],
+            lws_result = self.kubectl.run(
+                ['delete', 'leaderworkerset', '-l', f'test-id={test_id}', '-n', self.namespace],
+                check=False
+            )
+            # Services are NOT owned by LWS and must be deleted separately
+            svc_result = self.kubectl.run(
+                ['delete', 'service', '-l', f'test-id={test_id}', '-n', self.namespace],
                 check=False
             )
 
+            ok = lws_result.returncode == 0
             if log_callback:
-                if result.returncode == 0:
+                if ok:
                     log_callback("✅ Deployment deleted")
                 else:
-                    log_callback(f"⚠️ Deletion warning: {result.stderr.strip()}")
+                    log_callback(f"⚠️ Deletion warning: {lws_result.stderr.strip()}")
 
-            return result.returncode == 0
+            return ok
 
         except Exception as e:
             error_msg = f"Failed to delete deployment: {e}"
@@ -642,23 +643,22 @@ class DeploymentManager:
             log_callback("🧹 Cleaning up all Inftune Studio test deployments...")
 
         try:
-            result = self.kubectl.run(
-                [
-                    'delete',
-                    'leaderworkerset',
-                    '-l', 'component=inftune-test',
-                    '-n', self.namespace
-                ],
+            lws_result = self.kubectl.run(
+                ['delete', 'leaderworkerset', '-l', 'component=inftune-test', '-n', self.namespace],
+                check=False
+            )
+            self.kubectl.run(
+                ['delete', 'service', '-l', 'component=inftune-test', '-n', self.namespace],
                 check=False
             )
 
             if log_callback:
-                if result.returncode == 0:
+                if lws_result.returncode == 0:
                     log_callback("✅ All test deployments cleaned up")
                 else:
-                    log_callback(f"⚠️ Cleanup warning: {result.stderr.strip()}")
+                    log_callback(f"⚠️ Cleanup warning: {lws_result.stderr.strip()}")
 
-            return result.returncode == 0
+            return lws_result.returncode == 0
 
         except Exception as e:
             error_msg = f"Failed to cleanup deployments: {e}"
