@@ -54,7 +54,7 @@ def init_db():
             created_at TEXT NOT NULL,
             FOREIGN KEY (owner_id) REFERENCES users(id),
             FOREIGN KEY (cluster_id) REFERENCES clusters(id),
-            UNIQUE(owner_id, name)
+            UNIQUE(owner_id, name, cluster_id)
         );
     ''')
 
@@ -108,6 +108,13 @@ def init_db():
         conn.execute("ALTER TABLE instances ADD COLUMN storage_class TEXT")
     if 'storage_size' not in inst_cols:
         conn.execute("ALTER TABLE instances ADD COLUMN storage_size TEXT")
+
+    # Allow same instance name on different clusters
+    try:
+        conn.execute("DROP INDEX IF EXISTS sqlite_autoindex_instances_1")
+        conn.execute("CREATE UNIQUE INDEX IF NOT EXISTS idx_instances_owner_name_cluster ON instances(owner_id, name, cluster_id)")
+    except Exception:
+        pass
 
     conn.commit()
     conn.close()
