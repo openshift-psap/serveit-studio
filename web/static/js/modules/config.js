@@ -63,6 +63,12 @@ function updateUIFromConfig() {
         if (config.turns && config.turns > 1) {
             document.getElementById('multi-turn-enabled').checked = true;
             document.getElementById('turns-input').value = config.turns;
+            var mtToggle = document.getElementById('multi-turn-toggle');
+            if (mtToggle) mtToggle.classList.add('active');
+            var mtBody = document.getElementById('multi-turn-body');
+            if (mtBody) mtBody.style.display = 'block';
+            var mtInner = document.getElementById('multi-turn-inner');
+            if (mtInner) mtInner.style.opacity = '1';
             toggleMultiTurn();
         }
     }
@@ -84,7 +90,8 @@ function updateUIFromConfig() {
         document.getElementById('latency-constraint-enabled').checked = config.latency_constraint_enabled || false;
         if (config.latency_constraint_enabled) {
             document.getElementById('latency-sla-body').style.display = 'block';
-            document.getElementById('latency-sla-arrow').textContent = '▾';
+            var lsToggle = document.getElementById('latency-sla-toggle');
+            if (lsToggle) lsToggle.classList.add('active');
             var li = document.getElementById('latency-sla-inner');
             if (li) { li.style.opacity = '1'; }
         }
