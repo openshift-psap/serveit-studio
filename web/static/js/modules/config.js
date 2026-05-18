@@ -139,6 +139,8 @@ function updateUIFromConfig() {
     if (document.getElementById('epp-custom-enabled')) {
         var eppCustom = !!config.epp_custom_enabled;
         document.getElementById('epp-custom-enabled').checked = eppCustom;
+        var eppToggle = document.getElementById('epp-custom-toggle');
+        if (eppToggle) { if (eppCustom) eppToggle.classList.add('active'); else eppToggle.classList.remove('active'); }
         var eppSection = document.getElementById('epp-custom-section');
         if (eppSection) eppSection.style.display = eppCustom ? 'block' : 'none';
     }
