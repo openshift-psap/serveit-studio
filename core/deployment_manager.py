@@ -335,15 +335,29 @@ class DeploymentManager:
             for pod in pods_data.get('items', []):
                 pod_name = pod.get('metadata', {}).get('name', '')
                 creation = pod.get('metadata', {}).get('creationTimestamp', '')
-                if creation:
-                    from datetime import datetime, timezone
-                    created_dt = datetime.fromisoformat(creation.replace('Z', '+00:00'))
-                    now = datetime.now(timezone.utc)
-                    pending_seconds = (now - created_dt).total_seconds()
-                    pending_pods.append({
-                        'name': pod_name,
-                        'pending_seconds': pending_seconds
-                    })
+                if not creation:
+                    continue
+
+                # Skip pods that are scheduled but still initialising (image pull,
+                # container creation). Only restart pods that are unscheduled —
+                # those are genuinely stuck on DRA/resource allocation.
+                conditions = {
+                    c.get('type'): c.get('status')
+                    for c in pod.get('status', {}).get('conditions', [])
+                }
+                if conditions.get('PodScheduled') == 'True':
+                    # Pod landed on a node — it's pulling an image or initialising,
+                    # not stuck on resource allocation. Leave it alone.
+                    continue
+
+                from datetime import datetime, timezone
+                created_dt = datetime.fromisoformat(creation.replace('Z', '+00:00'))
+                now = datetime.now(timezone.utc)
+                pending_seconds = (now - created_dt).total_seconds()
+                pending_pods.append({
+                    'name': pod_name,
+                    'pending_seconds': pending_seconds
+                })
             return pending_pods
 
         except Exception as e:
