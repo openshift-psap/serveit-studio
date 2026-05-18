@@ -585,30 +585,37 @@ def delete_instance(instance_id: int, owner_id: int, backup: bool = True) -> boo
 
     ns = row['namespace']
 
-    if backup:
-        _backup_instance_db(row['deployment_name'], ns, row.get('name', str(instance_id)))
+    try:
+        if backup:
+            try:
+                _backup_instance_db(row['deployment_name'], ns, row.get('name', str(instance_id)))
+            except Exception:
+                pass
 
-    for resource in [
-        f"deployment/{row['deployment_name']}",
-        f"service/{row['service_name']}",
-        f"pvc/{row['pvc_name']}",
-    ]:
-        _kubectl(['delete', resource, '-n', ns, '--ignore-not-found=true'])
+        for resource in [
+            f"deployment/{row['deployment_name']}",
+            f"service/{row['service_name']}",
+            f"pvc/{row['pvc_name']}",
+        ]:
+            _kubectl(['delete', resource, '-n', ns, '--ignore-not-found=true'])
 
-    if _is_oc():
-        _kubectl(['delete', 'route', f"{row['deployment_name']}-ui", '-n', ns, '--ignore-not-found=true'])
+        if _is_oc():
+            _kubectl(['delete', 'route', f"{row['deployment_name']}-ui", '-n', ns, '--ignore-not-found=true'])
 
-    # Clean up remote workload namespace
-    if row.get('kubeconfig_secret'):
-        _cleanup_remote_cluster(row['kubeconfig_secret'], ns, row.get('workload_namespace', ''))
+        # Clean up remote workload namespace
+        if row.get('kubeconfig_secret'):
+            try:
+                _cleanup_remote_cluster(row['kubeconfig_secret'], ns, row.get('workload_namespace', ''))
+            except Exception:
+                logger.warning(f"Remote cleanup failed for instance {instance_id}, continuing with deletion")
 
-    # Delete local workload namespace (for local-cluster instances)
-    wl_ns = row.get('workload_namespace', '')
-    if wl_ns and wl_ns != ns and not row.get('kubeconfig_secret'):
-        _kubectl(['delete', 'namespace', wl_ns, '--ignore-not-found=true'])
-
-    with get_db() as conn:
-        conn.execute('DELETE FROM instances WHERE id = ?', (instance_id,))
+        # Delete local workload namespace (for local-cluster instances)
+        wl_ns = row.get('workload_namespace', '')
+        if wl_ns and wl_ns != ns and not row.get('kubeconfig_secret'):
+            _kubectl(['delete', 'namespace', wl_ns, '--ignore-not-found=true'])
+    finally:
+        with get_db() as conn:
+            conn.execute('DELETE FROM instances WHERE id = ?', (instance_id,))
     return True
 
 
