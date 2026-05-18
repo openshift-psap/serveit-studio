@@ -545,6 +545,7 @@ def run_optimization_background(data):
         tp_pair_top_n = int(data.get('tp_pair_top_n', 2))
         pd_search_mode = data.get('pd_search_mode', 'smart')
         run_description = data.get('run_description', '')
+        advanced_vllm_custom_enabled = data.get('advanced_vllm_custom_enabled', True)
         epp_custom_enabled = data.get('epp_custom_enabled', True)
         epp_preset = data.get('epp_preset', 'balanced')
         epp_benchmark = data.get('epp_benchmark', False)
@@ -739,6 +740,7 @@ data:
                 max_pd_splits=0,  # 0 = full coverage (test all valid splits)
                 tp_pair_top_n=tp_pair_top_n,
                 pd_search_mode=pd_search_mode,
+                advanced_vllm_custom_enabled=advanced_vllm_custom_enabled,
                 epp_custom_enabled=epp_custom_enabled,
                 epp_preset=epp_preset,
                 epp_benchmark=epp_benchmark,

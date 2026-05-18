@@ -229,6 +229,14 @@ class ConfigBuilderMixin:
 
     def _apply_advanced_vllm(self, cfg: TestConfig) -> TestConfig:
         """Apply user's advanced vLLM overrides to a TestConfig."""
+        # When custom settings are disabled, strip auto-computed values
+        # so vLLM uses its own defaults (upstream llm-d behavior)
+        if not getattr(self.config, 'advanced_vllm_custom_enabled', True):
+            cfg.gpu_memory_utilization = 0.95
+            cfg.max_num_seqs = None
+            cfg.max_num_batched_tokens = None
+            return cfg
+
         adv = self.config.advanced_vllm
         if not adv:
             return cfg

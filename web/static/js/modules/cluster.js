@@ -193,6 +193,7 @@ document.getElementById('start-optimization').addEventListener('click', () => {
         epp_preset: config.epp_preset || 'balanced',
         epp_benchmark: config.epp_benchmark || false,
         epp_config: config.epp_config || null,
+        advanced_vllm_custom_enabled: config.advanced_vllm_custom_enabled !== false,
         advanced_vllm: config.advanced_vllm || null,
         image: config.image || null,
         scheduler_image: config.scheduler_image || null,

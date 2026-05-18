@@ -121,6 +121,7 @@ class RecipeOptimizerConfig:
     speculative_config_enabled: bool = False  # User override (auto-detected if False)
 
     # Advanced vLLM settings (user overrides)
+    advanced_vllm_custom_enabled: bool = True  # False = use llm-d upstream defaults
     advanced_vllm: Optional[Dict] = None
 
     # Cluster connectivity

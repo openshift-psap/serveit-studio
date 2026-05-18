@@ -288,6 +288,19 @@
                                 <div id="advanced-vllm-arrow" style="font-size:1.4em;color:#64748b;font-weight:700;">▸</div>
                             </div>
                             <div id="advanced-vllm-body" style="display:none;padding:16px 20px;">
+
+                                <!-- Customize toggle -->
+                                <div style="border:2px solid #e2e8f0;border-radius:10px;overflow:hidden;margin-bottom:16px;">
+                                    <div style="padding:12px 16px;display:flex;align-items:center;justify-content:space-between;cursor:pointer;" onclick="var cb=document.getElementById('adv-vllm-custom-enabled');cb.checked=!cb.checked;toggleAdvVllmCustom(cb.checked);">
+                                        <div>
+                                            <div style="font-weight:600;color:#1e293b;font-size:0.95em;">Customize vLLM Settings</div>
+                                            <div style="color:#64748b;font-size:0.82em;margin-top:2px;">When disabled, uses llm-d upstream defaults (trust-remote-code, enable-prefix-caching, auto memory/TP settings)</div>
+                                        </div>
+                                        <input type="checkbox" id="adv-vllm-custom-enabled" checked style="width:18px;height:18px;cursor:pointer;" onclick="event.stopPropagation();toggleAdvVllmCustom(this.checked);">
+                                    </div>
+                                </div>
+
+                                <div id="adv-vllm-custom-section">
                                 <style>
                                     #advanced-vllm-body select, #advanced-vllm-body input:not(#adv-vllm-raw-text) {
                                         padding:6px 10px; border:1px solid #d1d5db; border-radius:6px; font-size:0.9em; width:150px; box-sizing:border-box;
@@ -347,6 +360,7 @@
                                     <tr><td>nccl-debug-logs</td><td style="font-weight:normal;color:#6b7280;font-size:0.9em;">Enable verbose NCCL communication logs. Useful for debugging multi-GPU networking, RDMA, and InfiniBand issues. Very noisy. <span style="color:#64748b;">Auto = off (ERROR level only).</span></td><td><select id="adv-nccl-debug-logs-mode" onchange="updateAdvVllm()"><option value="auto">Auto (Off)</option><option value="on">On</option><option value="off">Off</option></select></td></tr>
                                 </table>
                                 </div><!-- end adv-vllm-form-section -->
+                                </div><!-- end adv-vllm-custom-section -->
                             </div>
                         </div>
 

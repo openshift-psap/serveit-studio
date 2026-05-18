@@ -174,6 +174,13 @@ function resetAdvVllm() {
     saveConfig();
 }
 
+function toggleAdvVllmCustom(enabled) {
+    config.advanced_vllm_custom_enabled = enabled;
+    var section = document.getElementById('adv-vllm-custom-section');
+    if (section) section.style.display = enabled ? 'block' : 'none';
+    saveConfig();
+}
+
 function setAdvVllmMode(mode) {
     var formBtn = document.getElementById('adv-mode-form-btn');
     var rawBtn = document.getElementById('adv-mode-raw-btn');

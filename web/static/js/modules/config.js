@@ -188,6 +188,14 @@ function updateUIFromConfig() {
         document.getElementById('image-full-path').textContent = config.image;
     }
 
+    // Restore advanced vLLM custom toggle
+    if (document.getElementById('adv-vllm-custom-enabled')) {
+        var advCustom = config.advanced_vllm_custom_enabled !== false;
+        document.getElementById('adv-vllm-custom-enabled').checked = advCustom;
+        var advSection = document.getElementById('adv-vllm-custom-section');
+        if (advSection) advSection.style.display = advCustom ? 'block' : 'none';
+    }
+
     // Restore scheduler image
     if (config.scheduler_image && document.getElementById('scheduler-image-input')) {
         document.getElementById('scheduler-image-input').value = config.scheduler_image;
