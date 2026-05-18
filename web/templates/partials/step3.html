@@ -58,15 +58,19 @@
                                         </div>
 
                                         <!-- Multi-Turn Conversation toggle -->
-                                        <div style="border-top:1px solid #dcfce7;padding:12px 20px;">
-                                            <div class="vllm-toggle" id="multi-turn-toggle" onclick="var t=this;var on=!t.classList.contains('active');if(on)t.classList.add('active');else t.classList.remove('active');document.getElementById('multi-turn-enabled').checked=on;toggleMultiTurn();document.getElementById('multi-turn-body').style.display=on?'block':'none';document.getElementById('multi-turn-inner').style.opacity=on?'1':'0.4';">
-                                                <div style="font-size:1.5em;flex-shrink:0;">💬</div>
-                                                <div>
-                                                    <div style="font-weight:600;color:#1e293b;font-size:0.95em;">Multi-Turn Conversation</div>
-                                                    <div style="color:#64748b;font-size:0.82em;margin-top:2px;">Simulate back-and-forth chats with full conversation history</div>
+                                        <div style="border-top:1px solid #dcfce7;">
+                                            <div id="multi-turn-toggle" style="padding:12px 20px;cursor:pointer;display:flex;align-items:center;justify-content:space-between;" onclick="var on=!document.getElementById('multi-turn-enabled').checked;document.getElementById('multi-turn-enabled').checked=on;toggleMultiTurn();document.getElementById('multi-turn-body').style.display=on?'block':'none';document.getElementById('multi-turn-inner').style.opacity=on?'1':'0.4';var sw=document.getElementById('multi-turn-switch');sw.style.background=on?'#15803d':'#ccc';sw.querySelector('span').style.transform=on?'translateX(18px)':'translateX(0)';">
+                                                <div style="display:flex;align-items:center;gap:10px;">
+                                                    <div style="font-size:1.3em;flex-shrink:0;">💬</div>
+                                                    <div>
+                                                        <div style="font-weight:600;color:#15803d;font-size:0.95em;">Multi-Turn Conversation</div>
+                                                        <div style="color:#166534;font-size:0.82em;margin-top:2px;">Simulate back-and-forth chats with full conversation history</div>
+                                                    </div>
                                                 </div>
                                                 <input type="checkbox" id="multi-turn-enabled" style="display:none;">
-                                                <div class="tgl-sw"></div>
+                                                <div id="multi-turn-switch" style="width:40px;height:22px;background:#ccc;border-radius:11px;position:relative;transition:background-color 0.2s;flex-shrink:0;margin-left:16px;">
+                                                    <span style="position:absolute;top:2px;left:2px;width:18px;height:18px;background:white;border-radius:50%;transition:transform 0.2s;box-shadow:0 1px 3px rgba(0,0,0,0.2);display:block;"></span>
+                                                </div>
                                             </div>
                                             <div id="multi-turn-body" style="display:none;padding-top:12px;">
                                                 <div id="multi-turn-inner" style="opacity:0.4;transition:all 0.2s;">

@@ -63,12 +63,12 @@ function updateUIFromConfig() {
         if (config.turns && config.turns > 1) {
             document.getElementById('multi-turn-enabled').checked = true;
             document.getElementById('turns-input').value = config.turns;
-            var mtToggle = document.getElementById('multi-turn-toggle');
-            if (mtToggle) mtToggle.classList.add('active');
             var mtBody = document.getElementById('multi-turn-body');
             if (mtBody) mtBody.style.display = 'block';
             var mtInner = document.getElementById('multi-turn-inner');
             if (mtInner) mtInner.style.opacity = '1';
+            var mtSw = document.getElementById('multi-turn-switch');
+            if (mtSw) { mtSw.style.background = '#15803d'; mtSw.querySelector('span').style.transform = 'translateX(18px)'; }
             toggleMultiTurn();
         }
     }
