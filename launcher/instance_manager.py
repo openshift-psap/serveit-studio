@@ -351,7 +351,14 @@ def create_instance(owner_id: int, username: str, name: str,
                         except Exception:
                             pass
 
-    safe_name = _sanitize(f"{username}-{name}")
+    # Include cluster name in resource names to avoid collisions across clusters
+    cluster_suffix = ''
+    if cluster_id:
+        with get_db() as conn:
+            cr = conn.execute('SELECT name FROM clusters WHERE id = ?', (cluster_id,)).fetchone()
+            if cr:
+                cluster_suffix = f"-{_sanitize(cr['name'])}"
+    safe_name = _sanitize(f"{username}-{name}{cluster_suffix}")
     workload_namespace = f"inftune-{safe_name}"
     deployment_name = f"inftune-{safe_name}"
     pvc_name = f"inftune-{safe_name}-storage"
