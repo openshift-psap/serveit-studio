@@ -1042,12 +1042,38 @@ socket.on('image_tags_result', function(data) {
     updateSelectedImage();
 });
 
+var CUDA_SCHEDULER_COMPAT = {
+    'v0.7.0': 'v0.8.0',
+    'v0.6.0': 'v0.7.1',
+    'v0.5.1': 'v0.6.0',
+};
+
 function updateSelectedImage() {
     var repo = (document.getElementById('image-repo-input').value || 'ghcr.io/llm-d/llm-d-cuda').trim();
     var tag = document.getElementById('image-tag-select').value;
     var full = repo + ':' + tag;
     document.getElementById('image-full-path').textContent = full;
     config.image = full;
+
+    // Auto-sync scheduler tag based on compatibility table
+    var schedulerTag = CUDA_SCHEDULER_COMPAT[tag];
+    if (schedulerTag) {
+        var schedInput = document.getElementById('scheduler-image-input');
+        var schedRepo = schedInput.value.split(':')[0] || 'ghcr.io/llm-d/llm-d-inference-scheduler';
+        schedInput.value = schedRepo + ':' + schedulerTag;
+        config.scheduler_image = schedInput.value;
+        // Also update the tag select dropdown if it's populated
+        var schedSelect = document.getElementById('scheduler-tag-select');
+        if (schedSelect && schedSelect.options.length > 0) {
+            for (var i = 0; i < schedSelect.options.length; i++) {
+                if (schedSelect.options[i].value === schedulerTag) {
+                    schedSelect.selectedIndex = i;
+                    break;
+                }
+            }
+        }
+    }
+
     saveConfig();
 }
 
