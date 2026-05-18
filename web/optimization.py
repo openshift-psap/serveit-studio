@@ -247,6 +247,7 @@ def stream_job_logs(job_name: str, namespace: str):
                     'tp_pair_top_n': saved_config.get('tp_pair_top_n', 2),
                     'pd_search_mode': saved_config.get('pd_search_mode', 'smart'),
                     'run_description': saved_config.get('run_description', ''),
+                    'advanced_vllm_custom_enabled': saved_config.get('advanced_vllm_custom_enabled', True),
                     'epp_custom_enabled': saved_config.get('epp_custom_enabled', True),
                     'epp_preset': saved_config.get('epp_preset', 'balanced'),
                     'epp_benchmark': saved_config.get('epp_benchmark', False),

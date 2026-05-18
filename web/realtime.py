@@ -371,6 +371,7 @@ def handle_resume_optimization(data):
         saved_selected_nodes = []
         saved_advanced_vllm = None
         saved_pd_search_mode = 'smart'
+        saved_advanced_vllm_custom_enabled = True
         saved_epp_custom_enabled = True
         saved_epp_preset = 'balanced'
         saved_epp_benchmark = False
@@ -386,6 +387,7 @@ def handle_resume_optimization(data):
                 saved_selected_nodes = saved_cfg.get('selected_nodes', [])
                 saved_advanced_vllm = saved_cfg.get('advanced_vllm')
                 saved_pd_search_mode = saved_cfg.get('pd_search_mode', 'smart')
+                saved_advanced_vllm_custom_enabled = saved_cfg.get('advanced_vllm_custom_enabled', True)
                 saved_epp_custom_enabled = saved_cfg.get('epp_custom_enabled', True)
                 saved_epp_preset = saved_cfg.get('epp_preset', 'balanced')
                 saved_epp_benchmark = saved_cfg.get('epp_benchmark', False)
@@ -433,6 +435,7 @@ def handle_resume_optimization(data):
             'latency_constraint_ms': run.get('latency_constraint_ms', 500),
             'latency_constraint_percentile': run.get('latency_constraint_percentile', 'p90'),
             'pd_search_mode': saved_pd_search_mode,
+            'advanced_vllm_custom_enabled': saved_advanced_vllm_custom_enabled,
             'epp_custom_enabled': saved_epp_custom_enabled,
             'epp_preset': saved_epp_preset,
             'epp_benchmark': saved_epp_benchmark,
@@ -1698,6 +1701,7 @@ def handle_setup_storage(data):
                 'tp_pair_top_n': data.get('tp_pair_top_n', 2),
                 'pd_search_mode': data.get('pd_search_mode', 'smart'),
                 'run_description': data.get('run_description', ''),
+                'advanced_vllm_custom_enabled': data.get('advanced_vllm_custom_enabled', True),
                 'epp_custom_enabled': data.get('epp_custom_enabled', True),
                 'epp_preset': data.get('epp_preset', 'balanced'),
                 'epp_benchmark': data.get('epp_benchmark', False),
