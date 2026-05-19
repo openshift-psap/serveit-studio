@@ -585,9 +585,13 @@ function renderCharts(data, runId) {
         html += `<div><span style="color:#64748b;">NCCL Debug Logs:</span> ${advToggle('nccl_debug_logs', 'Off (auto)')}</div>`;
         html += '</div>';
         // EPP Configuration
+        const eppCustomEnabled = rc.epp_custom_enabled !== false;
         const eppPresetLabels = {balanced:'Balanced', cache_optimized:'Cache Optimized', queue_balanced:'Queue Balanced', latency_aware:'Latency Aware', custom:'Custom'};
         html += '<div style="font-weight:700;color:#1e293b;margin-bottom:10px;border-bottom:2px solid #7c3aed;padding-bottom:4px;">EPP Configuration</div><div style="line-height:2.2;">';
-        html += `<div><span style="color:#64748b;">Scoring Preset:</span> <strong>${eppPresetLabels[rc.epp_preset] || rc.epp_preset || 'Balanced'}</strong></div>`;
+        if (!eppCustomEnabled) {
+            html += '<div style="color:#059669;font-style:italic;margin-bottom:6px;">Using upstream llm-d EPP defaults — no overrides applied.</div>';
+        }
+        html += `<div><span style="color:#64748b;">Scoring Preset:</span> <strong>${eppCustomEnabled ? (eppPresetLabels[rc.epp_preset] || rc.epp_preset || 'Balanced') : 'llm-d default'}</strong></div>`;
         html += `<div><span style="color:#64748b;">EPP Tuning (Step 9):</span> ${rc.epp_benchmark ? 'Enabled' : 'Disabled'}</div>`;
         if (rc.epp_config) {
             const ec = rc.epp_config;
