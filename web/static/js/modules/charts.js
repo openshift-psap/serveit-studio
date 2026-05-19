@@ -562,27 +562,28 @@ function renderCharts(data, runId) {
         html += '<div style="font-weight:700;color:#1e293b;margin-bottom:10px;border-bottom:2px solid #8b5cf6;padding-bottom:4px;">Advanced vLLM Settings</div><div style="line-height:2.2;">';
         const vllmCustomEnabled = rc.advanced_vllm_custom_enabled !== false;
         if (!vllmCustomEnabled) {
-            html += '<div style="color:#059669;font-style:italic;margin-bottom:6px;">Using upstream vLLM defaults — no overrides applied.</div>';
+            html += '<div style="color:#059669;font-style:italic;">Using upstream vLLM defaults — no overrides applied.</div>';
+        } else {
+            html += `<div><span style="color:#64748b;">Max Model Len:</span> ${advVal('max_model_len', rc.max_model_len)}</div>`;
+            html += `<div><span style="color:#64748b;">GPU Memory Utilization:</span> ${advVal('gpu_memory_utilization', rc.gpu_memory_utilization)}</div>`;
+            html += `<div><span style="color:#64748b;">Block Size:</span> ${advVal('block_size', 'auto')}</div>`;
+            html += `<div><span style="color:#64748b;">Max Num Seqs:</span> ${advVal('max_num_seqs', 'auto')}</div>`;
+            html += `<div><span style="color:#64748b;">Max Batched Tokens:</span> ${advVal('max_num_batched_tokens', 'auto')}</div>`;
+            html += `<div><span style="color:#64748b;">Dtype:</span> ${advVal('dtype', 'auto')}</div>`;
+            html += `<div><span style="color:#64748b;">KV Cache Dtype:</span> ${advVal('kv_cache_dtype', 'auto')}</div>`;
+            html += `<div><span style="color:#64748b;">Pipeline Parallel:</span> ${advVal('pipeline_parallel_size', 'auto')}</div>`;
+            html += `<div><span style="color:#64748b;">Tool Call Parser:</span> ${advVal('tool_call_parser', 'auto')}</div>`;
+            html += `<div><span style="color:#64748b;">Reasoning Parser:</span> ${advVal('reasoning_parser', 'auto')}</div>`;
+            html += `<div><span style="color:#64748b;">Chat Template Format:</span> ${advVal('chat_template_content_format', 'auto')}</div>`;
+            html += `<div><span style="color:#64748b;">Prefix Caching:</span> ${advToggle('enable_prefix_caching', 'On (auto)')}</div>`;
+            html += `<div><span style="color:#64748b;">Expert Parallel:</span> ${advToggle('enable_expert_parallel', 'Off (auto)')}</div>`;
+            html += `<div><span style="color:#64748b;">Custom All-Reduce:</span> ${advToggle('disable_custom_all_reduce', 'Enabled (auto)')}</div>`;
+            html += `<div><span style="color:#64748b;">Trust Remote Code:</span> ${advToggle('trust_remote_code', 'On (auto)')}</div>`;
+            html += `<div><span style="color:#64748b;">Disable Log Requests:</span> ${advToggle('disable_log_requests', 'On (auto)')}</div>`;
+            html += `<div><span style="color:#64748b;">Auto Tool Choice:</span> ${advToggle('enable_auto_tool_choice', 'Off (auto)')}</div>`;
+            html += `<div><span style="color:#64748b;">vLLM Debug Logs:</span> ${advToggle('vllm_debug_logs', 'Off (auto)')}</div>`;
+            html += `<div><span style="color:#64748b;">NCCL Debug Logs:</span> ${advToggle('nccl_debug_logs', 'Off (auto)')}</div>`;
         }
-        html += `<div><span style="color:#64748b;">Max Model Len:</span> ${vllmCustomEnabled ? advVal('max_model_len', rc.max_model_len) : 'vLLM default'}</div>`;
-        html += `<div><span style="color:#64748b;">GPU Memory Utilization:</span> ${vllmCustomEnabled ? advVal('gpu_memory_utilization', rc.gpu_memory_utilization) : 'vLLM default (0.90)'}</div>`;
-        html += `<div><span style="color:#64748b;">Block Size:</span> ${advVal('block_size', 'auto')}</div>`;
-        html += `<div><span style="color:#64748b;">Max Num Seqs:</span> ${advVal('max_num_seqs', 'auto')}</div>`;
-        html += `<div><span style="color:#64748b;">Max Batched Tokens:</span> ${advVal('max_num_batched_tokens', 'auto')}</div>`;
-        html += `<div><span style="color:#64748b;">Dtype:</span> ${advVal('dtype', 'auto')}</div>`;
-        html += `<div><span style="color:#64748b;">KV Cache Dtype:</span> ${advVal('kv_cache_dtype', 'auto')}</div>`;
-        html += `<div><span style="color:#64748b;">Pipeline Parallel:</span> ${advVal('pipeline_parallel_size', 'auto')}</div>`;
-        html += `<div><span style="color:#64748b;">Tool Call Parser:</span> ${advVal('tool_call_parser', 'auto')}</div>`;
-        html += `<div><span style="color:#64748b;">Reasoning Parser:</span> ${advVal('reasoning_parser', 'auto')}</div>`;
-        html += `<div><span style="color:#64748b;">Chat Template Format:</span> ${advVal('chat_template_content_format', 'auto')}</div>`;
-        html += `<div><span style="color:#64748b;">Prefix Caching:</span> ${advToggle('enable_prefix_caching', 'On (auto)')}</div>`;
-        html += `<div><span style="color:#64748b;">Expert Parallel:</span> ${advToggle('enable_expert_parallel', 'Off (auto)')}</div>`;
-        html += `<div><span style="color:#64748b;">Custom All-Reduce:</span> ${advToggle('disable_custom_all_reduce', 'Enabled (auto)')}</div>`;
-        html += `<div><span style="color:#64748b;">Trust Remote Code:</span> ${advToggle('trust_remote_code', 'On (auto)')}</div>`;
-        html += `<div><span style="color:#64748b;">Disable Log Requests:</span> ${advToggle('disable_log_requests', 'On (auto)')}</div>`;
-        html += `<div><span style="color:#64748b;">Auto Tool Choice:</span> ${advToggle('enable_auto_tool_choice', 'Off (auto)')}</div>`;
-        html += `<div><span style="color:#64748b;">vLLM Debug Logs:</span> ${advToggle('vllm_debug_logs', 'Off (auto)')}</div>`;
-        html += `<div><span style="color:#64748b;">NCCL Debug Logs:</span> ${advToggle('nccl_debug_logs', 'Off (auto)')}</div>`;
         html += '</div>';
         // EPP Configuration
         const eppCustomEnabled = rc.epp_custom_enabled !== false;
