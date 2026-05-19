@@ -149,19 +149,51 @@ def stream_job_logs(job_name: str, namespace: str):
             cmd[0] = 'kubectl'
             proc = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
 
-        # Stream lines to UI
-        for line in proc.stdout:
-            line = line.strip()
-            if line:
-                # Check if it's a progress bar line
-                if '[' in line and ']' in line and '%' in line:
-                    log_to_ui(line, 'info', job_name=job_name)
-                elif '✅' in line or 'complete' in line.lower():
-                    log_to_ui(line, 'success', job_name=job_name)
-                elif '❌' in line or 'error' in line.lower():
-                    log_to_ui(line, 'error', job_name=job_name)
-                else:
-                    log_to_ui(line, 'info', job_name=job_name)
+        STALL_TIMEOUT = 300  # seconds of silence before assuming stalled
+        last_line_at = time.time()
+        stall_warned = False
+
+        # Stream lines to UI — with stall watchdog on the read loop
+        import select as _select
+        while True:
+            # Non-blocking check for new output (1s poll)
+            ready, _, _ = _select.select([proc.stdout], [], [], 1.0)
+            if ready:
+                line = proc.stdout.readline()
+                if not line:
+                    break  # EOF — process exited
+                line = line.strip()
+                if line:
+                    last_line_at = time.time()
+                    stall_warned = False
+                    if '[' in line and ']' in line and '%' in line:
+                        log_to_ui(line, 'info', job_name=job_name)
+                    elif '✅' in line or 'complete' in line.lower():
+                        log_to_ui(line, 'success', job_name=job_name)
+                    elif '❌' in line or 'error' in line.lower():
+                        log_to_ui(line, 'error', job_name=job_name)
+                    else:
+                        log_to_ui(line, 'info', job_name=job_name)
+            else:
+                # No output — check if pod is still running and if we've stalled
+                if proc.poll() is not None:
+                    break  # process exited
+                silent_for = time.time() - last_line_at
+                if silent_for > STALL_TIMEOUT:
+                    if not stall_warned:
+                        log_to_ui(
+                            f'⚠️  Download appears stalled (no output for {int(silent_for//60)}m) — '
+                            f'restarting pod to resume. HuggingFace will pick up where it left off.',
+                            'warning', job_name=job_name
+                        )
+                        stall_warned = True
+                        # Delete pod — the Job controller recreates it automatically
+                        subprocess.run(
+                            [kubectl_cmd, 'delete', 'pod', pod_name, '-n', namespace],
+                            capture_output=True, timeout=30
+                        )
+                        log_to_ui('🔄 Pod deleted — waiting for restart...', 'info', job_name=job_name)
+                        break  # outer function will reconnect on next job run
 
         proc.wait()
 
