@@ -82,120 +82,118 @@ def stream_job_logs(job_name: str, namespace: str):
         except (FileNotFoundError, subprocess.CalledProcessError):
             kubectl_cmd = 'kubectl'
 
-        # Wait for pod to be created
-        time.sleep(2)
+        import select as _select
+        STALL_TIMEOUT = 300  # 5 min silence = stalled
+        MAX_RESTARTS = 5
 
-        # Get pod name from job
-        cmd = [kubectl_cmd, 'get', 'pods', '-n', namespace, '-l', f'job-name={job_name}', '-o', 'jsonpath={.items[0].metadata.name}']
-        pod_name = None
+        seen_pods = set()
+        restart_count = 0
 
-        # Wait up to 30 seconds for pod to appear
-        for i in range(30):
-            proc = subprocess.run(cmd, capture_output=True, timeout=10)
-            if proc.returncode == 0:
-                pod_name = proc.stdout.decode().strip()
-                if pod_name:
-                    break
-            time.sleep(1)
+        while restart_count <= MAX_RESTARTS:
+            # --- Find the current (possibly new) pod for this job ---
+            time.sleep(2)
+            pod_name = None
+            for _ in range(60):
+                r = subprocess.run(
+                    [kubectl_cmd, 'get', 'pods', '-n', namespace,
+                     '-l', f'job-name={job_name}',
+                     '-o', 'jsonpath={.items[*].metadata.name}'],
+                    capture_output=True, timeout=10
+                )
+                if r.returncode == 0:
+                    names = r.stdout.decode().strip().split()
+                    # Pick a pod we haven't fully streamed yet
+                    fresh = [n for n in names if n not in seen_pods]
+                    if fresh:
+                        pod_name = fresh[0]
+                        break
+                time.sleep(1)
 
-        if not pod_name:
-            log_to_ui('⚠️ Could not find download job pod', 'warning', job_name=job_name)
-            return
+            if not pod_name:
+                log_to_ui('⚠️ Could not find download job pod', 'warning', job_name=job_name)
+                return
 
-        # Wait for pod to be ready with status indicator
-        max_wait = 300  # 5 minutes
-        last_phase = None
-        logged_waiting = False
+            seen_pods.add(pod_name)
 
-        for i in range(max_wait):
-            # Get pod status
-            status_cmd = [kubectl_cmd, 'get', 'pod', pod_name, '-n', namespace, '-o', 'jsonpath={.status.phase}:{.status.containerStatuses[0].state}']
-            proc = subprocess.run(status_cmd, capture_output=True, timeout=10)
-
-            if proc.returncode == 0:
-                status_output = proc.stdout.decode().strip()
-                phase = status_output.split(':')[0] if ':' in status_output else status_output
-
+            # --- Wait for pod to be Running ---
+            last_phase = None
+            logged_waiting = False
+            for _ in range(300):
+                r = subprocess.run(
+                    [kubectl_cmd, 'get', 'pod', pod_name, '-n', namespace,
+                     '-o', 'jsonpath={.status.phase}'],
+                    capture_output=True, timeout=10
+                )
+                phase = r.stdout.decode().strip() if r.returncode == 0 else ''
                 if phase == 'Running':
                     log_to_ui('✅ Pod is ready', 'success', job_name=job_name)
                     break
                 elif phase == 'Failed':
-                    log_to_ui(f'❌ Pod {pod_name} failed to start', 'error', job_name=job_name)
+                    log_to_ui(f'❌ Pod {pod_name} failed', 'error', job_name=job_name)
                     return
                 elif phase == 'Succeeded':
-                    log_to_ui('✅ Job completed (no logs to stream)', 'success', job_name=job_name)
+                    log_to_ui('✅ Job completed', 'success', job_name=job_name)
                     return
                 else:
-                    # Only show status when it changes
                     if phase != last_phase:
                         if phase == 'Pending' and not logged_waiting:
                             log_to_ui('⏳ Waiting for pod to be scheduled...', 'info', job_name=job_name)
                             logged_waiting = True
                         elif phase == 'ContainerCreating':
                             log_to_ui('📦 Pulling container image...', 'info', job_name=job_name)
-                        else:
-                            log_to_ui(f'⏳ Pod status: {phase}', 'info', job_name=job_name)
                         last_phase = phase
+                time.sleep(1)
 
-            time.sleep(1)
+            log_to_ui(f'📡 Streaming logs from {pod_name}...', 'info', job_name=job_name)
 
-        log_to_ui(f'📡 Streaming logs from {pod_name}...', 'info', job_name=job_name)
+            # --- Stream with stall watchdog ---
+            log_cmd = [kubectl_cmd, 'logs', '-n', namespace, '-f', pod_name]
+            log_proc = subprocess.Popen(log_cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
 
-        # Stream logs with follow
-        cmd = ['oc', 'logs', '-n', namespace, '-f', pod_name]
-        try:
-            proc = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
-        except FileNotFoundError:
-            cmd[0] = 'kubectl'
-            proc = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+            last_line_at = time.time()
+            stalled = False
 
-        STALL_TIMEOUT = 300  # seconds of silence before assuming stalled
-        last_line_at = time.time()
-        stall_warned = False
-
-        # Stream lines to UI — with stall watchdog on the read loop
-        import select as _select
-        while True:
-            # Non-blocking check for new output (1s poll)
-            ready, _, _ = _select.select([proc.stdout], [], [], 1.0)
-            if ready:
-                line = proc.stdout.readline()
-                if not line:
-                    break  # EOF — process exited
-                line = line.strip()
-                if line:
-                    last_line_at = time.time()
-                    stall_warned = False
-                    if '[' in line and ']' in line and '%' in line:
-                        log_to_ui(line, 'info', job_name=job_name)
-                    elif '✅' in line or 'complete' in line.lower():
-                        log_to_ui(line, 'success', job_name=job_name)
-                    elif '❌' in line or 'error' in line.lower():
-                        log_to_ui(line, 'error', job_name=job_name)
-                    else:
-                        log_to_ui(line, 'info', job_name=job_name)
-            else:
-                # No output — check if pod is still running and if we've stalled
-                if proc.poll() is not None:
-                    break  # process exited
-                silent_for = time.time() - last_line_at
-                if silent_for > STALL_TIMEOUT:
-                    if not stall_warned:
+            while True:
+                ready, _, _ = _select.select([log_proc.stdout], [], [], 1.0)
+                if ready:
+                    line = log_proc.stdout.readline()
+                    if not line:
+                        break  # EOF — pod exited normally
+                    line = line.strip()
+                    if line:
+                        last_line_at = time.time()
+                        if '[' in line and ']' in line and '%' in line:
+                            log_to_ui(line, 'info', job_name=job_name)
+                        elif '✅' in line or 'complete' in line.lower():
+                            log_to_ui(line, 'success', job_name=job_name)
+                        elif '❌' in line or 'error' in line.lower():
+                            log_to_ui(line, 'error', job_name=job_name)
+                        else:
+                            log_to_ui(line, 'info', job_name=job_name)
+                else:
+                    if log_proc.poll() is not None:
+                        break  # process exited
+                    silent_for = time.time() - last_line_at
+                    if silent_for > STALL_TIMEOUT:
+                        restart_count += 1
                         log_to_ui(
-                            f'⚠️  Download appears stalled (no output for {int(silent_for//60)}m) — '
-                            f'restarting pod to resume. HuggingFace will pick up where it left off.',
+                            f'⚠️  Download stalled ({int(silent_for//60)}m silence) — '
+                            f'restarting pod (attempt {restart_count}/{MAX_RESTARTS}). '
+                            f'HuggingFace will resume from last completed blob.',
                             'warning', job_name=job_name
                         )
-                        stall_warned = True
-                        # Delete pod — the Job controller recreates it automatically
                         subprocess.run(
                             [kubectl_cmd, 'delete', 'pod', pod_name, '-n', namespace],
                             capture_output=True, timeout=30
                         )
-                        log_to_ui('🔄 Pod deleted — waiting for restart...', 'info', job_name=job_name)
-                        break  # outer function will reconnect on next job run
+                        log_to_ui('🔄 Pod deleted — waiting for new pod...', 'info', job_name=job_name)
+                        stalled = True
+                        break
 
-        proc.wait()
+            log_proc.wait()
+
+            if not stalled:
+                break  # pod exited cleanly — done
 
         # Wait a moment for pod to transition to Succeeded
         time.sleep(2)
