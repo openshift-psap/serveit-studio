@@ -554,6 +554,21 @@ def run_optimization_background(data):
     run_id = None
 
     try:
+        # Merge UI session state as fallback for any field the caller omitted
+        # (e.g. stale browser JS that doesn't send all fields yet)
+        try:
+            with get_db() as _conn:
+                _row = _conn.execute('SELECT config_json FROM ui_session_state WHERE id=1').fetchone()
+                _saved = json.loads(_row['config_json']) if _row and _row['config_json'] else {}
+        except Exception:
+            _saved = {}
+        def _get(key, default=None):
+            """Return data[key] if present, else ui_session_state[key], else default."""
+            v = data.get(key)
+            if v is None:
+                v = _saved.get(key)
+            return v if v is not None else default
+
         # Parse configuration directly from data (no test plan needed)
         model = data.get('model')
         isl = int(data.get('isl', 3000))
@@ -573,14 +588,14 @@ def run_optimization_background(data):
         latency_constraint_enabled = data.get('latency_constraint_enabled', False)
         latency_constraint_ms = int(data.get('latency_constraint_ms', 500))
         latency_constraint_percentile = data.get('latency_constraint_percentile', 'p90')
-        tp_pair_top_n = int(data.get('tp_pair_top_n', 2))
-        pd_search_mode = data.get('pd_search_mode', 'smart')
-        run_description = data.get('run_description', '')
-        advanced_vllm_custom_enabled = data.get('advanced_vllm_custom_enabled', True)
-        epp_custom_enabled = data.get('epp_custom_enabled', True)
-        epp_preset = data.get('epp_preset', 'balanced')
-        epp_benchmark = data.get('epp_benchmark', False)
-        epp_config = data.get('epp_config')
+        tp_pair_top_n = int(_get('tp_pair_top_n', 2))
+        pd_search_mode = _get('pd_search_mode', 'smart')
+        run_description = _get('run_description', '')
+        advanced_vllm_custom_enabled = _get('advanced_vllm_custom_enabled', True)
+        epp_custom_enabled = _get('epp_custom_enabled', True)
+        epp_preset = _get('epp_preset', 'balanced')
+        epp_benchmark = _get('epp_benchmark', False)
+        epp_config = _get('epp_config')
         selected_nodes = data.get('selected_nodes') or []
         workload_mode = data.get('workload_mode', 'synthetic')
         dataset_source = data.get('dataset_source')
