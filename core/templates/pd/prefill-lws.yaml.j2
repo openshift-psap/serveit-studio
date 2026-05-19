@@ -144,7 +144,8 @@ spec:
 {% endif %}{% if chat_template_content_format %}                  --chat-template-content-format {{ chat_template_content_format }} \
 {% endif %}{% if extra_vllm_args %}                  {{ extra_vllm_args }} \
 {% endif %}{% if trust_remote_code %}                  --trust-remote-code \
-{% endif %}                  || sleep infinity
+{% endif %}                  --disable-uvicorn-access-log \
+                  || sleep infinity
             env:
               - name: VLLM_NIXL_SIDE_CHANNEL_HOST
                 valueFrom:
