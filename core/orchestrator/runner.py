@@ -260,12 +260,28 @@ class TestOrchestrator(ParserMixin, GuidellmMixin):
                 for pod_name in pod_names:
                     if pod_name in ready_pods:
                         continue
+
+                    # Primary: check logs for startup message (use large tail so
+                    # metrics scrape lines don't push the startup message out)
                     log_result = subprocess.run(
                         ['kubectl', 'logs', pod_name, '-n', self.namespace,
-                         '-c', 'vllm', '--tail=50'],
-                        capture_output=True, text=True, timeout=15, check=False
+                         '-c', 'vllm', '--tail=500'],
+                        capture_output=True, text=True, timeout=30, check=False
                     )
-                    if 'Application startup complete' in log_result.stdout:
+                    startup_in_logs = 'Application startup complete' in log_result.stdout
+
+                    # Fallback: if log scraping missed it, query /health directly
+                    if not startup_in_logs:
+                        health_result = subprocess.run(
+                            ['kubectl', 'exec', pod_name, '-n', self.namespace,
+                             '-c', 'vllm', '--',
+                             'curl', '-sf', '--max-time', '5',
+                             'http://localhost:8000/health'],
+                            capture_output=True, text=True, timeout=15, check=False
+                        )
+                        startup_in_logs = health_result.returncode == 0
+
+                    if startup_in_logs:
                         ready_pods.add(pod_name)
                         if log_callback:
                             log_callback(f"   {pod_name}: model loaded ({len(ready_pods)}/{len(pod_names)})")
