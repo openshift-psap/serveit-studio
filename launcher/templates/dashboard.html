@@ -747,7 +747,8 @@ function showCreateModal(){
         (classes || []).forEach(function(sc){
             var o = document.createElement('option');
             o.value = sc.name;
-            o.textContent = sc.name + ' (' + sc.provisioner + ')';
+            var label = sc.is_default ? ' (default)' : '';
+            o.textContent = sc.name + label;
             scSel.appendChild(o);
         });
     });

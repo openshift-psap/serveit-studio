@@ -274,7 +274,7 @@ def create_app():
                     continue
                 is_default = item['metadata'].get('annotations', {}).get(
                     'storageclass.kubernetes.io/is-default-class', 'false') == 'true'
-                classes.append({'name': sc_name, 'is_default': is_default})
+                classes.append({'name': sc_name, 'provisioner': provisioner, 'is_default': is_default})
             classes.sort(key=lambda x: (not x['is_default'], x['name']))
             return jsonify(classes)
         except Exception:
