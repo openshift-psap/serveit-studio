@@ -562,32 +562,33 @@ def run_optimization_background(data):
                 _saved = json.loads(_row['config_json']) if _row and _row['config_json'] else {}
         except Exception:
             _saved = {}
-        def _get(key, default=None):
-            """Return data[key] if present, else ui_session_state[key], else default."""
+        def _get(key, default=None, ui_key=None):
+            """Return data[key] if present, else ui_session_state[ui_key or key], else default."""
             v = data.get(key)
             if v is None:
-                v = _saved.get(key)
+                v = _saved.get(ui_key or key)
             return v if v is not None else default
 
-        # Parse configuration directly from data (no test plan needed)
+        # Parse configuration — _get() falls back to ui_session_state for
+        # any field the caller omitted (e.g. stale browser JS cache)
         model = data.get('model')
-        isl = int(data.get('isl', 3000))
-        osl = int(data.get('osl', 100))
-        isl_stdev = data.get('isl_stdev')  # Optional ISL std dev
-        osl_stdev = data.get('osl_stdev')  # Optional OSL std dev
-        turns = int(data.get('turns', 1))  # Conversation turns (1 = single-turn)
-        num_users = int(data.get('num_users', 100))
-        optimization_goal = data.get('optimization_metric') or 'ttft'
-        stop_mode = data.get('stop_mode', 'duration')  # 'duration' or 'max_requests'
-        test_duration = int(data.get('max_test_duration', 300))
-        max_requests = data.get('max_requests')  # Alternative to duration
+        isl = int(_get('isl', 3000))
+        osl = int(_get('osl', 100))
+        isl_stdev = _get('isl_stdev')
+        osl_stdev = _get('osl_stdev')
+        turns = int(_get('turns', 1))
+        num_users = int(_get('num_users', 100, ui_key='users'))
+        optimization_goal = _get('optimization_metric', 'ttft', ui_key='goal') or 'ttft'
+        stop_mode = _get('stop_mode', 'duration')
+        test_duration = int(_get('max_test_duration', 300, ui_key='duration'))
+        max_requests = _get('max_requests')
         thanos_url = data.get('thanos_url', os.environ.get('THANOS_URL'))
-        hf_token = data.get('hf_token')
-        max_gpus = data.get('max_gpus', 16)
-        use_achievable_qps = data.get('use_achievable_qps', False)
-        latency_constraint_enabled = data.get('latency_constraint_enabled', False)
-        latency_constraint_ms = int(data.get('latency_constraint_ms', 500))
-        latency_constraint_percentile = data.get('latency_constraint_percentile', 'p90')
+        hf_token = _get('hf_token')
+        max_gpus = _get('max_gpus', 16)
+        use_achievable_qps = _get('use_achievable_qps', False)
+        latency_constraint_enabled = _get('latency_constraint_enabled', False)
+        latency_constraint_ms = int(_get('latency_constraint_ms', 500))
+        latency_constraint_percentile = _get('latency_constraint_percentile', 'p90')
         tp_pair_top_n = int(_get('tp_pair_top_n', 2))
         pd_search_mode = _get('pd_search_mode', 'smart')
         run_description = _get('run_description', '')
@@ -596,18 +597,18 @@ def run_optimization_background(data):
         epp_preset = _get('epp_preset', 'balanced')
         epp_benchmark = _get('epp_benchmark', False)
         epp_config = _get('epp_config')
-        selected_nodes = data.get('selected_nodes') or []
-        workload_mode = data.get('workload_mode', 'synthetic')
-        dataset_source = data.get('dataset_source')
-        dataset_column = data.get('dataset_column')
-        dataset_max_output = int(data.get('dataset_max_output', 256))
-        rate_type = data.get('rate_type', 'concurrent')
-        prefix_cache_hit_pct = int(data.get('prefix_cache_hit_pct', 0))
-        prefix_cache_mode = data.get('prefix_cache_mode', 'identical')
-        prefix_cache_groups = int(data.get('prefix_cache_groups', 5))
-        advanced_vllm = data.get('advanced_vllm')
-        vllm_image = data.get('image') or 'ghcr.io/llm-d/llm-d-cuda:v0.6.0'
-        scheduler_image = data.get('scheduler_image') or 'ghcr.io/llm-d/llm-d-inference-scheduler:v0.7.1'
+        selected_nodes = _get('selected_nodes') or []
+        workload_mode = _get('workload_mode', 'synthetic')
+        dataset_source = _get('dataset_source')
+        dataset_column = _get('dataset_column')
+        dataset_max_output = int(_get('dataset_max_output', 256))
+        rate_type = _get('rate_type', 'concurrent')
+        prefix_cache_hit_pct = int(_get('prefix_cache_hit_pct', 0))
+        prefix_cache_mode = _get('prefix_cache_mode', 'identical')
+        prefix_cache_groups = int(_get('prefix_cache_groups', 5))
+        advanced_vllm = _get('advanced_vllm')
+        vllm_image = _get('image') or 'ghcr.io/llm-d/llm-d-cuda:v0.6.0'
+        scheduler_image = _get('scheduler_image') or 'ghcr.io/llm-d/llm-d-inference-scheduler:v0.7.1'
         single_test_architecture = data.get('single_test_architecture')
         single_test_tp = data.get('single_test_tp')
         single_test_replicas = data.get('single_test_replicas')
