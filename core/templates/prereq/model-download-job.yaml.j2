@@ -89,6 +89,7 @@ spec:
                           print(f'💾 Total size: ~{total_size_gb:.2f} GB ({files_with_size}/{len(files)} files have size info)\n', flush=True)
                       else:
                           print(f'💾 Total size: Unknown (HuggingFace did not provide size metadata)\n', flush=True)
+                          print(f'ℹ️  Progress below is based on file count, not bytes. Large weight shards may take much longer than small config files — 100% file count does not mean the download is fully written to disk.\n', flush=True)
                   except Exception as e:
                       print(f'⚠️ Could not fetch metadata: {e}', flush=True)
 
