@@ -876,6 +876,13 @@ data:
                 stop_check=check_stopped
             )
 
+            # Re-save config after optimizer init — auto-detection (network_type,
+            # RDMA, MoE) updates recipe_config fields that were None before
+            with get_db() as conn:
+                conn.execute(
+                    'UPDATE optimization_runs SET config_json = ? WHERE id = ?',
+                    (json.dumps(recipe_config.to_dict()), run_id))
+
             try:
                 results = optimizer.optimize(resume=bool(resume_run_id))
 
