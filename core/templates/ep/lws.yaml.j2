@@ -103,10 +103,14 @@ spec:
 {% if trust_remote_code %}                  --trust-remote-code \
 {% endif %}                  --tensor-parallel-size {{ tensor_parallelism }} \
 {% if pipeline_parallel_size %}                  --pipeline-parallel-size {{ pipeline_parallel_size }} \
-{% endif %}                  --kv_transfer_config '{"kv_connector":"NixlConnector","kv_role":"kv_both"}' \
-                  --async-scheduling \
+{% endif %}                  --kv_transfer_config '{"kv_connector":"NixlConnector","kv_role":"kv_both","kv_load_failure_policy":"fail"}' \
+                  --enable-dbo \
+{% if enable_expert_parallel %}                  --enable-expert-parallel \
                   --enable-eplb \
-{% if max_model_len %}                  --max-model-len {{ max_model_len }} \
+                  --eplb-config '{"window_size":"1000","step_interval":"3000","num_redundant_experts":"32","log_balancedness":"False"}' \
+                  --moe-backend deep_gemm \
+                  --all2all-backend deepep_high_throughput \
+{% endif %}{% if max_model_len %}                  --max-model-len {{ max_model_len }} \
 {% endif %}{% if gpu_memory_utilization %}                  --gpu-memory-utilization {{ gpu_memory_utilization }} \
 {% endif %}{% if enable_prefix_caching %}                  --enable-prefix-caching \
 {% endif %}{% if disable_custom_all_reduce %}                  --disable-custom-all-reduce \
@@ -114,7 +118,6 @@ spec:
 {% endif %}{% if kv_cache_dtype %}                  --kv-cache-dtype {{ kv_cache_dtype }} \
 {% endif %}{% if max_num_batched_tokens %}                  --max-num-batched-tokens {{ max_num_batched_tokens }} \
 {% endif %}{% if max_num_seqs %}                  --max-num-seqs {{ max_num_seqs }} \
-{% endif %}{% if enable_expert_parallel %}                  --enable-expert-parallel \
 {% endif %}{% if speculative_method %}                  --speculative-config.method {{ speculative_method }} \
                   --speculative-config.num_speculative_tokens {{ speculative_num_tokens | default(3) }} \
 {% endif %}{% if enable_auto_tool_choice %}                  --enable-auto-tool-choice \
@@ -122,7 +125,7 @@ spec:
 {% endif %}{% if reasoning_parser %}                  --reasoning-parser {{ reasoning_parser }} \
 {% endif %}{% if chat_template_content_format %}                  --chat-template-content-format {{ chat_template_content_format }} \
 {% endif %}{% if extra_vllm_args %}                  {{ extra_vllm_args }} \
-{% endif %}                  --disable-uvicorn-access-log
+{% endif %}                  --disable-access-log-for-endpoints=/health,/metrics
 
             env:
               - name: HF_TOKEN
@@ -145,8 +148,22 @@ spec:
                 value: "1"
               - name: NVIDIA_GDRCOPY
                 value: "enabled"
+              - name: VLLM_MEMORY_PROFILER_ESTIMATE_CUDAGRAPHS
+                value: "1"
+              - name: VLLM_RANDOMIZE_DP_DUMMY_INPUTS
+                value: "1"
+              - name: NVSHMEM_REMOTE_TRANSPORT
+                value: "ibgda"
+              - name: NVSHMEM_IB_ENABLE_IBGDA
+                value: "true"
+              - name: NVSHMEM_BOOTSTRAP_UID_SOCK_IFNAME
+                value: "eth0"
               - name: TRITON_LIBCUDA_PATH
                 value: /usr/lib64
+              - name: VLLM_NIXL_SIDE_CHANNEL_HOST
+                valueFrom:
+                  fieldRef:
+                    fieldPath: status.podIP
               - name: VLLM_LOGGING_LEVEL
                 value: "{{ 'DEBUG' if vllm_debug_logs else 'ERROR' }}"
               - name: CUDA_CACHE_PATH

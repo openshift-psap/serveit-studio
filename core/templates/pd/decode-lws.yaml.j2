@@ -84,9 +84,9 @@ spec:
               - --port=8000
               - --vllm-port=8200
               - --connector=nixlv2
-              - --zap-encoder=json
-              - --zap-log-level=debug
+              - --zap-log-level=1
               - --secure-proxy=false
+              - --enable-prefiller-sampling
             ports:
               - containerPort: 8000
                 name: http
@@ -141,21 +141,26 @@ spec:
 
                 vllm serve {{ model_name }} \
                   --port 8200 \
-                  --tensor-parallel-size ${TP_SIZE} \
+{% if trust_remote_code %}                  --trust-remote-code \
+{% endif %}                  --tensor-parallel-size ${TP_SIZE} \
                   --data-parallel-size ${DP_SIZE} \
 {% if pipeline_parallel_size %}                  --pipeline-parallel-size {{ pipeline_parallel_size }} \
-{% endif %}                  --block-size {{ block_size | default(16) }} \
-                  --kv-transfer-config '{"kv_connector":"{{ kv_connector }}", "kv_role":"kv_both"}' \
-{% if max_model_len %}                  --max-model-len {{ max_model_len }} \
+{% endif %}                  --kv-transfer-config '{"kv_connector":"{{ kv_connector }}","kv_role":"kv_both","kv_load_failure_policy":"fail"}' \
+                  --enable-dbo \
+                  --dbo-decode-token-threshold 32 \
+{% if enable_expert_parallel %}                  --enable-expert-parallel \
+                  --enable-eplb \
+                  --eplb-config '{"window_size":"1000","step_interval":"3000","num_redundant_experts":"32","log_balancedness":"False"}' \
+                  --moe-backend deep_gemm \
+                  --all2all-backend deepep_low_latency \
+{% endif %}{% if max_model_len %}                  --max-model-len {{ max_model_len }} \
 {% endif %}{% if decode_gpu_memory_utilization %}                  --gpu-memory-utilization {{ decode_gpu_memory_utilization }} \
 {% endif %}{% if enable_prefix_caching %}                  --enable-prefix-caching \
 {% endif %}{% if disable_custom_all_reduce %}                  --disable-custom-all-reduce \
 {% endif %}{% if dtype %}                  --dtype {{ dtype }} \
 {% endif %}{% if kv_cache_dtype %}                  --kv-cache-dtype {{ kv_cache_dtype }} \
-{% endif %}
-{% if max_num_batched_tokens %}                  --max-num-batched-tokens {{ max_num_batched_tokens }} \
+{% endif %}{% if max_num_batched_tokens %}                  --max-num-batched-tokens {{ max_num_batched_tokens }} \
 {% endif %}{% if decode_max_num_seqs %}                  --max-num-seqs {{ decode_max_num_seqs }} \
-{% endif %}{% if enable_expert_parallel %}                  --enable-expert-parallel \
 {% endif %}{% if speculative_method %}                  --speculative-config.method {{ speculative_method }} \
                   --speculative-config.num_speculative_tokens {{ speculative_num_tokens | default(3) }} \
 {% endif %}{% if enable_auto_tool_choice %}                  --enable-auto-tool-choice \
@@ -163,8 +168,7 @@ spec:
 {% endif %}{% if reasoning_parser %}                  --reasoning-parser {{ reasoning_parser }} \
 {% endif %}{% if chat_template_content_format %}                  --chat-template-content-format {{ chat_template_content_format }} \
 {% endif %}{% if extra_vllm_args %}                  {{ extra_vllm_args }} \
-{% endif %}{% if trust_remote_code %}                  --trust-remote-code \
-{% endif %}                  --disable-uvicorn-access-log \
+{% endif %}                  --disable-access-log-for-endpoints=/health,/metrics \
                   || sleep infinity
             env:
               - name: VLLM_NIXL_SIDE_CHANNEL_HOST
@@ -187,6 +191,24 @@ spec:
                 value: "1"
               - name: NVIDIA_GDRCOPY
                 value: "enabled"
+              - name: VLLM_MEMORY_PROFILER_ESTIMATE_CUDAGRAPHS
+                value: "1"
+              - name: VLLM_RANDOMIZE_DP_DUMMY_INPUTS
+                value: "1"
+              - name: VLLM_USE_DEEP_GEMM
+                value: "1"
+              - name: NVSHMEM_REMOTE_TRANSPORT
+                value: "ibgda"
+              - name: NVSHMEM_IB_ENABLE_IBGDA
+                value: "true"
+              - name: NVSHMEM_SYMMETRIC_SIZE
+                value: "16G"
+              - name: NVSHMEM_BOOTSTRAP_UID_SOCK_IFNAME
+                value: "eth0"
+              - name: GLOO_SOCKET_IFNAME
+                value: "eth0"
+              - name: NCCL_SOCKET_IFNAME
+                value: "eth0"
               - name: VLLM_LOGGING_LEVEL
                 value: "{{ 'DEBUG' if vllm_debug_logs else 'ERROR' }}"
               - name: NCCL_DEBUG
