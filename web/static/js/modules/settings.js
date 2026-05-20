@@ -250,6 +250,32 @@ function populateRawFromForm() {
     // Always-on flags from upstream defaults
     lines.push('--disable-access-log-for-endpoints=/health,/metrics');
 
+    // MoE/EP flags — shown commented out so users know they exist.
+    // Auto-enabled at runtime when MoE model detected.
+    lines.push('');
+    lines.push('# MoE / Expert Parallel flags (auto-enabled for MoE models)');
+    lines.push('# Uncomment to force-enable for any model:');
+    var moeFlags = [
+        {flag: 'enable-expert-parallel', desc: 'Split experts across GPUs'},
+        {flag: 'enable-dbo', desc: 'Dual Batch Overlap (overlaps compute + comms)'},
+        {flag: 'enable-eplb', desc: 'Expert-Parallel Load Balancing'},
+    ];
+    var moeVals = [
+        {flag: 'moe-backend', val: 'deep_gemm', desc: 'MoE computation kernel'},
+        {flag: 'all2all-backend', val: 'deepep_high_throughput', desc: 'EP communication (prefill)'},
+    ];
+    moeFlags.forEach(function(m) {
+        var el = document.getElementById('adv-' + m.flag + '-mode');
+        var on = el && (el.value === 'on' || (el.value === 'auto' && toggleDefaults[m.flag]));
+        lines.push((on ? '' : '# ') + '--' + m.flag);
+    });
+    moeVals.forEach(function(m) {
+        var el = document.getElementById('adv-' + m.flag + '-mode');
+        var valEl = document.getElementById('adv-' + m.flag + '-val');
+        var on = el && el.value === 'custom' && valEl && valEl.value;
+        lines.push((on ? '' : '# ') + '--' + m.flag + ' ' + (on ? valEl.value : m.val));
+    });
+
     var textarea = document.getElementById('adv-vllm-raw-text');
     if (textarea) {
         var header = '# vLLM serve flags — edit freely, one flag per line\n';
