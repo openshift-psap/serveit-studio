@@ -31,7 +31,7 @@ function downloadPDFReport(runId, data) {
         document.querySelectorAll('.report-tab-panel.active .js-plotly-plot').forEach(el => {
             if (el.id) {
                 chartPromises.push(
-                    Plotly.toImage(el, { format: 'png', width: 900, height: 280 })
+                    Plotly.toImage(el, { format: 'png', width: 1000, height: 350 })
                         .then(img => { chartImages[el.id] = img; })
                         .catch(() => {})
                 );
@@ -59,13 +59,19 @@ function downloadPDFReport(runId, data) {
             bodyHtml += `<h1 style="border-bottom:3px solid #10b981;padding-bottom:10px;">Inftune Studio Report — Run #${runId}</h1>`;
             bodyHtml += `<p style="color:#64748b;">Generated: ${new Date().toLocaleString()}</p>`;
 
-            // Inject captured chart images in a 2-column grid
+            // Inject captured chart images — 2 per page, stacked vertically
             if (Object.keys(chartImages).length) {
-                bodyHtml += '<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin:16px 0;">';
-                for (var cid in chartImages) {
-                    bodyHtml += `<div class="pdf-chart" style="background:white;border-radius:6px;border:1px solid #e2e8f0;padding:6px;break-inside:avoid;page-break-inside:avoid;"><img src="${chartImages[cid]}" style="width:100%;height:auto;display:block;"></div>`;
+                var cids = Object.keys(chartImages);
+                for (var i = 0; i < cids.length; i += 2) {
+                    // Each pair gets its own page-break-before (except the first)
+                    var pageBreak = i > 0 ? 'page-break-before:always;' : '';
+                    bodyHtml += `<div style="${pageBreak}">`;
+                    bodyHtml += `<div style="background:white;border-radius:6px;border:1px solid #e2e8f0;padding:8px;margin-bottom:8px;"><img src="${chartImages[cids[i]]}" style="width:100%;height:auto;display:block;"></div>`;
+                    if (i + 1 < cids.length) {
+                        bodyHtml += `<div style="background:white;border-radius:6px;border:1px solid #e2e8f0;padding:8px;"><img src="${chartImages[cids[i+1]]}" style="width:100%;height:auto;display:block;"></div>`;
+                    }
+                    bodyHtml += '</div>';
                 }
-                bodyHtml += '</div>';
             }
 
             [secRec, secCfg, secCmp, secStep9, secCal, secEpp, secTestCfg].forEach(sec => {
