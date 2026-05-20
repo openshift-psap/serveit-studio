@@ -123,7 +123,7 @@ class ConfigBuilderMixin:
             dataset_max_output=self.config.dataset_max_output or 256,
             epp_config=self._build_epp_config(),
             block_size=self._compute_block_size(),
-            enable_expert_parallel=getattr(self, '_is_moe', False),
+            enable_expert_parallel=False,  # Single-node: replicate experts (no NCCL all-to-all overhead)
             enable_dbo=False,  # Requires multi-node EP (LWS size>=2) with DeepEP/NVSHMEM
             dbo_prefill_token_threshold=getattr(self, '_dbo_threshold', 32),
             dbo_decode_token_threshold=getattr(self, '_dbo_threshold', 32),
@@ -453,7 +453,7 @@ class ConfigBuilderMixin:
             dataset_max_output=self.config.dataset_max_output or 256,
             epp_config=self._build_epp_config(),
             block_size=self._compute_block_size(),
-            enable_expert_parallel=getattr(self, '_is_moe', False),
+            enable_expert_parallel=False,  # Single-node: replicate experts (no NCCL all-to-all overhead)
             enable_dbo=False,  # Requires multi-node EP (LWS size>=2) with DeepEP/NVSHMEM
             dbo_prefill_token_threshold=getattr(self, '_dbo_threshold', 32),
             dbo_decode_token_threshold=getattr(self, '_dbo_threshold', 32),
@@ -537,7 +537,7 @@ class ConfigBuilderMixin:
             dataset_max_output=self.config.dataset_max_output or 256,
             epp_config=self._build_epp_config(),
             block_size=self._compute_block_size(),
-            enable_expert_parallel=getattr(self, '_is_moe', False),
+            enable_expert_parallel=False,  # Single-node: replicate experts (no NCCL all-to-all overhead)
             enable_dbo=False,  # Requires multi-node EP (LWS size>=2) with DeepEP/NVSHMEM
             dbo_prefill_token_threshold=getattr(self, '_dbo_threshold', 32),
             dbo_decode_token_threshold=getattr(self, '_dbo_threshold', 32),
