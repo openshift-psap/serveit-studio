@@ -387,6 +387,8 @@ class ReportAnalyzer:
                     'latency_constraint_percentile': run_config.get('latency_constraint_percentile'),
                     'epp_preset': run_config.get('epp_preset'),
                     'epp_benchmark': run_config.get('epp_benchmark'),
+                    'epp_custom_enabled': run_config.get('epp_custom_enabled'),
+                    'advanced_vllm_custom_enabled': run_config.get('advanced_vllm_custom_enabled'),
                 },
             }
             if include_eff:
