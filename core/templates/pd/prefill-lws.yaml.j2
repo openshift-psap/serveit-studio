@@ -173,6 +173,11 @@ spec:
                 value: "enabled"
               - name: VLLM_MEMORY_PROFILER_ESTIMATE_CUDAGRAPHS
                 value: "1"
+              - name: GLOO_SOCKET_IFNAME
+                value: "eth0"
+              - name: NCCL_SOCKET_IFNAME
+                value: "eth0"
+{% if enable_expert_parallel %}
               - name: VLLM_RANDOMIZE_DP_DUMMY_INPUTS
                 value: "1"
               - name: NVSHMEM_REMOTE_TRANSPORT
@@ -181,10 +186,7 @@ spec:
                 value: "true"
               - name: NVSHMEM_BOOTSTRAP_UID_SOCK_IFNAME
                 value: "eth0"
-              - name: GLOO_SOCKET_IFNAME
-                value: "eth0"
-              - name: NCCL_SOCKET_IFNAME
-                value: "eth0"
+{% endif %}
               - name: VLLM_LOGGING_LEVEL
                 value: "{{ 'DEBUG' if vllm_debug_logs else 'ERROR' }}"
               - name: NCCL_DEBUG
