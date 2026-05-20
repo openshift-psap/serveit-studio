@@ -134,15 +134,6 @@ class ConfigBuilderMixin:
         if not is_calibration or not getattr(self.config, 'advanced_vllm_custom_enabled', True):
             cfg = self._apply_advanced_vllm(cfg)
 
-        # For calibration tests: always set max_model_len to the actual workload
-        # length, even when auto-tuning is off. vLLM sizes KV cache slots based
-        # on max_model_len — using the model default (e.g., 40960) wastes 95% of
-        # memory on empty slots, limiting concurrent requests and crashing at
-        # the user's requested concurrency. The calibration workload has a KNOWN
-        # length, so this is safe and doesn't override the user's production setting.
-        if is_calibration and cfg.max_model_len is None:
-            cfg.max_model_len = int((isl + osl) * 1.1)  # 10% headroom
-
         return cfg
 
     def _get_measured_overhead(self, tp: int) -> Optional[float]:
@@ -253,9 +244,12 @@ class ConfigBuilderMixin:
     def _apply_advanced_vllm(self, cfg: TestConfig) -> TestConfig:
         """Apply user's advanced vLLM overrides to a TestConfig."""
         # When custom settings are disabled, strip auto-computed values
-        # so vLLM uses its own defaults (upstream llm-d behavior)
+        # so vLLM uses its own defaults (upstream llm-d behavior).
+        # Exception: max_model_len is ALWAYS set — without it vLLM uses
+        # max_position_embeddings (e.g., 40960) which wastes 95%+ of KV
+        # cache memory on empty slots, making it impossible to serve the
+        # user's workload at their requested concurrency.
         if not getattr(self.config, 'advanced_vllm_custom_enabled', True):
-            cfg.max_model_len = None
             cfg.gpu_memory_utilization = None
             cfg.prefill_gpu_memory_utilization = None
             cfg.decode_gpu_memory_utilization = None
