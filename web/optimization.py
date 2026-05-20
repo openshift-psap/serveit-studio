@@ -80,6 +80,8 @@ def _reset_optimization_state(reason: str = ''):
         print(f"Warning: Failed to update optimization_running in database: {e}")
     socketio.emit('status_update', {'running': False, 'message': reason})
 
+_active_stream_job = [None]  # mutable container for current active job name
+
 def stream_job_logs(job_name: str, namespace: str):
     """
     Stream Kubernetes job logs to UI in real-time.
@@ -89,6 +91,13 @@ def stream_job_logs(job_name: str, namespace: str):
         namespace: Kubernetes namespace
     """
     import time
+
+    # Register as the active streamer — any previous greenlet will see
+    # _active_stream_job[0] != its job_name and exit silently.
+    _active_stream_job[0] = job_name
+
+    def _is_superseded():
+        return _active_stream_job[0] != job_name
 
     try:
         # Determine kubectl command
@@ -106,6 +115,8 @@ def stream_job_logs(job_name: str, namespace: str):
         restart_count = 0
 
         while restart_count <= MAX_RESTARTS:
+            if _is_superseded():
+                return
             # --- Find the current (possibly new) pod for this job ---
             time.sleep(2)
             pod_name = None
@@ -211,6 +222,10 @@ def stream_job_logs(job_name: str, namespace: str):
 
             if not stalled:
                 break  # pod exited cleanly — done
+
+        # If a newer streamer took over, exit silently
+        if _is_superseded():
+            return
 
         # Wait a moment for pod to transition to Succeeded
         time.sleep(2)
