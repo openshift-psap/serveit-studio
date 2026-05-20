@@ -31,7 +31,7 @@ function downloadPDFReport(runId, data) {
         document.querySelectorAll('.report-tab-panel.active .js-plotly-plot').forEach(el => {
             if (el.id) {
                 chartPromises.push(
-                    Plotly.toImage(el, { format: 'png', width: 1000, height: 400 })
+                    Plotly.toImage(el, { format: 'png', width: 900, height: 280 })
                         .then(img => { chartImages[el.id] = img; })
                         .catch(() => {})
                 );
@@ -59,11 +59,11 @@ function downloadPDFReport(runId, data) {
             bodyHtml += `<h1 style="border-bottom:3px solid #10b981;padding-bottom:10px;">Inftune Studio Report — Run #${runId}</h1>`;
             bodyHtml += `<p style="color:#64748b;">Generated: ${new Date().toLocaleString()}</p>`;
 
-            // Inject captured chart images
+            // Inject captured chart images in a 2-column grid
             if (Object.keys(chartImages).length) {
-                bodyHtml += '<div style="margin:20px 0;">';
+                bodyHtml += '<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin:16px 0;">';
                 for (var cid in chartImages) {
-                    bodyHtml += `<div style="background:white;border-radius:8px;border:1px solid #e2e8f0;margin:12px 0;padding:12px;page-break-inside:avoid;break-inside:avoid;page-break-before:auto;"><img src="${chartImages[cid]}" style="width:100%;max-width:950px;"></div>`;
+                    bodyHtml += `<div class="pdf-chart" style="background:white;border-radius:6px;border:1px solid #e2e8f0;padding:6px;break-inside:avoid;page-break-inside:avoid;"><img src="${chartImages[cid]}" style="width:100%;height:auto;display:block;"></div>`;
                 }
                 bodyHtml += '</div>';
             }
@@ -75,12 +75,12 @@ function downloadPDFReport(runId, data) {
 
             // Use html2pdf string mode
             html2pdf().set({
-                margin: [8, 8, 8, 8],
+                margin: [6, 6, 6, 6],
                 filename: `inftune-report-run-${runId}.pdf`,
-                image: { type: 'jpeg', quality: 0.92 },
-                html2canvas: { scale: 1.5, useCORS: true },
+                image: { type: 'jpeg', quality: 0.90 },
+                html2canvas: { scale: 1.2, useCORS: true },
                 jsPDF: { unit: 'mm', format: 'a4', orientation: 'landscape' },
-                pagebreak: { mode: ['css', 'legacy'], avoid: ['tr', 'img', 'div[style*="break-inside"]', '.stat-card'] }
+                pagebreak: { mode: ['css', 'legacy'], avoid: ['.pdf-chart', 'tr', '.stat-card'] }
             }).from(bodyHtml, 'string').save().then(() => {
                 reset();
             }).catch(err => {
