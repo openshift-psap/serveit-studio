@@ -348,6 +348,18 @@
     "category": "MoE (Mixture of Experts)"
   },
   {
+    "id": "RedHatAI/Qwen3-235B-A22B-FP8-dynamic",
+    "name": "Qwen 3 235B A22B FP8 Dynamic",
+    "description": "235B MoE model (22B active), dynamic FP8 quantization",
+    "category": "MoE (Mixture of Experts)"
+  },
+  {
+    "id": "RedHatAI/Qwen3-30B-A3B-FP8-dynamic",
+    "name": "Qwen 3 30B A3B FP8 Dynamic",
+    "description": "30B MoE model (3B active), dynamic FP8 quantization",
+    "category": "MoE (Mixture of Experts)"
+  },
+  {
     "id": "RedHatAI/SmolLM2-1.7B-Instruct-FP8",
     "name": "SmolLM2 1.7B FP8",
     "description": "Compact SmolLM2 1.7B model",
