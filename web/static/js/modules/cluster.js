@@ -177,7 +177,7 @@ document.getElementById('start-optimization').addEventListener('click', () => {
         latency_constraint_enabled: config.latency_constraint_enabled || false,
         latency_constraint_ms: config.latency_constraint_ms || 500,
         latency_constraint_percentile: config.latency_constraint_percentile || 'p90',
-        tp_pair_top_n: config.tp_pair_top_n || 2,
+        tp_pair_top_n: config.tp_pair_top_n || 4,
         pd_search_mode: config.pd_search_mode || 'smart',
         selected_nodes: config.selected_nodes || [],
         workload_mode: config.workload_mode || 'synthetic',

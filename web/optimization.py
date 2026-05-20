@@ -274,7 +274,7 @@ def stream_job_logs(job_name: str, namespace: str):
                     'latency_constraint_enabled': saved_config.get('latency_constraint_enabled', False),
                     'latency_constraint_ms': saved_config.get('latency_constraint_ms', 500),
                     'latency_constraint_percentile': saved_config.get('latency_constraint_percentile', 'p90'),
-                    'tp_pair_top_n': saved_config.get('tp_pair_top_n', 2),
+                    'tp_pair_top_n': saved_config.get('tp_pair_top_n', 4),
                     'pd_search_mode': saved_config.get('pd_search_mode', 'smart'),
                     'run_description': saved_config.get('run_description', ''),
                     'advanced_vllm_custom_enabled': saved_config.get('advanced_vllm_custom_enabled', True),
@@ -589,7 +589,7 @@ def run_optimization_background(data):
         latency_constraint_enabled = _get('latency_constraint_enabled', False)
         latency_constraint_ms = int(_get('latency_constraint_ms', 500))
         latency_constraint_percentile = _get('latency_constraint_percentile', 'p90')
-        tp_pair_top_n = int(_get('tp_pair_top_n', 2))
+        tp_pair_top_n = int(_get('tp_pair_top_n', 4))
         pd_search_mode = _get('pd_search_mode', 'smart')
         run_description = _get('run_description', '')
         advanced_vllm_custom_enabled = _get('advanced_vllm_custom_enabled', True)

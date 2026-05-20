@@ -57,7 +57,7 @@ class RecipeOptimizerConfig:
 
     # Step 7: P/D split search
     max_pd_splits: int = 0  # 0 = full coverage, >0 = limit splits
-    tp_pair_top_n: int = 2  # Top-N prefill/decode TPs to cross-product (1=fast, 2=thorough)
+    tp_pair_top_n: int = 4  # Top-N prefill/decode TPs to cross-product (1=fast, 4=full)
     pd_search_mode: str = 'smart'  # 'smart' (calculated ~3/pair) or 'exhaustive' (all splits)
 
     # EPP configuration

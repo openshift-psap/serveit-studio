@@ -1698,7 +1698,7 @@ def handle_setup_storage(data):
                 'latency_constraint_enabled': data.get('latency_constraint_enabled', False),
                 'latency_constraint_ms': data.get('latency_constraint_ms', 500),
                 'latency_constraint_percentile': data.get('latency_constraint_percentile', 'p90'),
-                'tp_pair_top_n': data.get('tp_pair_top_n', 2),
+                'tp_pair_top_n': data.get('tp_pair_top_n', 4),
                 'pd_search_mode': data.get('pd_search_mode', 'smart'),
                 'run_description': data.get('run_description', ''),
                 'advanced_vllm_custom_enabled': data.get('advanced_vllm_custom_enabled', True),
