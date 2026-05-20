@@ -104,8 +104,8 @@ spec:
 {% endif %}                  --tensor-parallel-size {{ tensor_parallelism }} \
 {% if pipeline_parallel_size %}                  --pipeline-parallel-size {{ pipeline_parallel_size }} \
 {% endif %}                  --kv_transfer_config '{"kv_connector":"NixlConnector","kv_role":"kv_both","kv_load_failure_policy":"fail"}' \
-                  --enable-dbo \
 {% if enable_expert_parallel %}                  --enable-expert-parallel \
+                  --enable-dbo \
                   --enable-eplb \
                   --eplb-config '{"window_size":"1000","step_interval":"3000","num_redundant_experts":"32","log_balancedness":"False"}' \
                   --moe-backend deep_gemm \
