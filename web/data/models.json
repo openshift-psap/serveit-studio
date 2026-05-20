@@ -1,14 +1,32 @@
 [
   {
-    "id": "RedHatAI/Llama-3.2-1B-Instruct-FP8-dynamic",
-    "name": "Llama 3.2 1B FP8 Dynamic",
-    "description": "Tiny model with dynamic FP8 quantization",
+    "id": "RedHatAI/gemma-3-4b-it-FP8-dynamic",
+    "name": "Gemma 3 4B FP8 Dynamic",
+    "description": "Google Gemma 3 4B, dynamic FP8",
     "category": "Small (1B-3B)"
   },
   {
-    "id": "RedHatAI/Qwen2.5-1.5B-quantized.w8a8",
-    "name": "Qwen 2.5 1.5B w8a8",
-    "description": "Small multilingual w8a8 quantized",
+    "id": "RedHatAI/granite-3.0-2b-base",
+    "name": "Granite 3.0 2B Base",
+    "description": "IBM Granite 3.0 2B base model",
+    "category": "Small (1B-3B)"
+  },
+  {
+    "id": "RedHatAI/granite-3.0-2b-instruct",
+    "name": "Granite 3.0 2B Instruct",
+    "description": "IBM Granite 3.0 2B instruction model",
+    "category": "Small (1B-3B)"
+  },
+  {
+    "id": "RedHatAI/granite-3.1-2b-base",
+    "name": "Granite 3.1 2B Base",
+    "description": "IBM Granite 2B base model",
+    "category": "Small (1B-3B)"
+  },
+  {
+    "id": "RedHatAI/granite-3.1-2b-instruct",
+    "name": "Granite 3.1 2B Instruct",
+    "description": "IBM Granite 2B instruction model",
     "category": "Small (1B-3B)"
   },
   {
@@ -18,9 +36,33 @@
     "category": "Small (1B-3B)"
   },
   {
+    "id": "RedHatAI/Llama-3.2-1B-Instruct-FP8-dynamic",
+    "name": "Llama 3.2 1B FP8 Dynamic",
+    "description": "Tiny model with dynamic FP8 quantization",
+    "category": "Small (1B-3B)"
+  },
+  {
     "id": "RedHatAI/Llama-3.2-3B-Instruct-FP8",
     "name": "Llama 3.2 3B FP8",
     "description": "Small multilingual model with FP8",
+    "category": "Small (1B-3B)"
+  },
+  {
+    "id": "RedHatAI/Llama-3.2-3B-Instruct-FP8-dynamic",
+    "name": "Llama 3.2 3B FP8 Dynamic",
+    "description": "3B model with dynamic FP8 quantization",
+    "category": "Small (1B-3B)"
+  },
+  {
+    "id": "RedHatAI/Phi-3-mini-128k-instruct-FP8",
+    "name": "Phi 3 Mini 128k FP8",
+    "description": "Microsoft Phi 3 with 128k context",
+    "category": "Small (1B-3B)"
+  },
+  {
+    "id": "RedHatAI/Phi-3.5-mini-instruct-FP8",
+    "name": "Phi 3.5 Mini FP8",
+    "description": "Microsoft Phi 3.5 mini with FP8",
     "category": "Small (1B-3B)"
   },
   {
@@ -28,6 +70,90 @@
     "name": "Qwen 2 1.5B FP8",
     "description": "Compact Qwen model with FP8 quantization",
     "category": "Small (1B-3B)"
+  },
+  {
+    "id": "RedHatAI/Qwen2.5-1.5B-quantized.w8a8",
+    "name": "Qwen 2.5 1.5B w8a8",
+    "description": "Small multilingual w8a8 quantized",
+    "category": "Small (1B-3B)"
+  },
+  {
+    "id": "RedHatAI/Qwen2.5-3B-Instruct-FP8",
+    "name": "Qwen 2.5 3B FP8",
+    "description": "Qwen 2.5 3B with FP8 quantization",
+    "category": "Small (1B-3B)"
+  },
+  {
+    "id": "RedHatAI/Qwen3-1.7B-FP8-dynamic",
+    "name": "Qwen 3 1.7B FP8 Dynamic",
+    "description": "1.7B model with dynamic FP8",
+    "category": "Small (1B-3B)"
+  },
+  {
+    "id": "RedHatAI/Qwen3-4B-FP8-dynamic",
+    "name": "Qwen 3 4B FP8 Dynamic",
+    "description": "4B model with dynamic FP8",
+    "category": "Small (1B-3B)"
+  },
+  {
+    "id": "RedHatAI/Qwen3.5-4B-FP8-dynamic",
+    "name": "Qwen 3.5 4B FP8 Dynamic",
+    "description": "4B model with dynamic FP8",
+    "category": "Small (1B-3B)"
+  },
+  {
+    "id": "RedHatAI/SmolLM2-1.7B-Instruct-FP8",
+    "name": "SmolLM2 1.7B FP8",
+    "description": "Compact SmolLM2 1.7B model",
+    "category": "Small (1B-3B)"
+  },
+  {
+    "id": "RedHatAI/SmolLM3-3B-FP8-dynamic",
+    "name": "SmolLM3 3B FP8 Dynamic",
+    "description": "SmolLM3 3B, dynamic FP8",
+    "category": "Small (1B-3B)"
+  },
+  {
+    "id": "RedHatAI/aya-expanse-8b-FP8",
+    "name": "Aya Expanse 8B FP8",
+    "description": "Multilingual Aya Expanse 8B",
+    "category": "Medium (8B)"
+  },
+  {
+    "id": "RedHatAI/gemma-2-9b-it-FP8",
+    "name": "Gemma 2 9B FP8",
+    "description": "Google Gemma 2 9B instruction model",
+    "category": "Medium (8B)"
+  },
+  {
+    "id": "RedHatAI/gemma-2-9b-it-quantized.w4a16",
+    "name": "Gemma 2 9B w4a16",
+    "description": "Google Gemma 2 9B with 4-bit quantization",
+    "category": "Medium (8B)"
+  },
+  {
+    "id": "RedHatAI/granite-3.0-8b-base",
+    "name": "Granite 3.0 8B Base",
+    "description": "IBM Granite 3.0 8B base model",
+    "category": "Medium (8B)"
+  },
+  {
+    "id": "RedHatAI/granite-3.0-8b-instruct",
+    "name": "Granite 3.0 8B Instruct",
+    "description": "IBM Granite 3.0 8B instruction model",
+    "category": "Medium (8B)"
+  },
+  {
+    "id": "RedHatAI/granite-3.1-8b-base",
+    "name": "Granite 3.1 8B Base",
+    "description": "IBM Granite 8B base model",
+    "category": "Medium (8B)"
+  },
+  {
+    "id": "RedHatAI/granite-3.1-8b-instruct",
+    "name": "Granite 3.1 8B Instruct",
+    "description": "IBM Granite 8B instruction model",
+    "category": "Medium (8B)"
   },
   {
     "id": "RedHatAI/Meta-Llama-3.1-8B-Instruct-FP8",
@@ -48,9 +174,9 @@
     "category": "Medium (8B)"
   },
   {
-    "id": "RedHatAI/Qwen3-8B-FP8-dynamic",
-    "name": "Qwen 3 8B FP8 Dynamic",
-    "description": "Qwen 3 8B with dynamic FP8",
+    "id": "RedHatAI/Llama-3.1-8B-Instruct-NVFP4",
+    "name": "Llama 3.1 8B NVFP4",
+    "description": "8B model with NVIDIA FP4 quantization",
     "category": "Medium (8B)"
   },
   {
@@ -60,51 +186,177 @@
     "category": "Medium (8B)"
   },
   {
-    "id": "RedHatAI/Llama-3.1-8B-Instruct-NVFP4",
-    "name": "Llama 3.1 8B NVFP4",
-    "description": "8B model with NVIDIA FP4 quantization",
+    "id": "RedHatAI/Ministral-8B-Instruct-2410-FP8",
+    "name": "Ministral 8B FP8",
+    "description": "Mistral mini 8B instruction model",
     "category": "Medium (8B)"
   },
   {
-    "id": "RedHatAI/Meta-Llama-3.1-70B-Instruct-FP8",
-    "name": "Llama 3.1 70B FP8",
-    "description": "Large 70B model with FP8 quantization",
-    "category": "Large (70B+)"
+    "id": "RedHatAI/Mistral-7B-Instruct-v0.3-FP8",
+    "name": "Mistral 7B v0.3 FP8",
+    "description": "Mistral 7B instruction model",
+    "category": "Medium (8B)"
   },
   {
-    "id": "RedHatAI/Meta-Llama-3.1-70B-Instruct-quantized.w4a16",
-    "name": "Llama 3.1 70B w4a16",
-    "description": "70B model with 4-bit weight quantization",
-    "category": "Large (70B+)"
+    "id": "RedHatAI/Qwen2.5-7B-Instruct-FP8",
+    "name": "Qwen 2.5 7B FP8",
+    "description": "Qwen 2.5 7B with FP8 quantization",
+    "category": "Medium (8B)"
   },
   {
-    "id": "RedHatAI/Llama-3.3-70B-Instruct-FP8-dynamic",
-    "name": "Llama 3.3 70B FP8 Dynamic",
-    "description": "Latest 70B model with dynamic FP8",
-    "category": "Large (70B+)"
+    "id": "RedHatAI/Qwen3-8B-FP8-dynamic",
+    "name": "Qwen 3 8B FP8 Dynamic",
+    "description": "Qwen 3 8B with dynamic FP8",
+    "category": "Medium (8B)"
   },
   {
-    "id": "RedHatAI/DeepSeek-V2.5-1210-FP8",
-    "name": "DeepSeek V2.5 FP8",
-    "description": "DeepSeek V2.5 with FP8 quantization",
-    "category": "Large (70B+)"
+    "id": "RedHatAI/gemma-3-12b-it-FP8-dynamic",
+    "name": "Gemma 3 12B FP8 Dynamic",
+    "description": "Google Gemma 3 12B, dynamic FP8",
+    "category": "Medium (8B-14B)"
   },
   {
-    "id": "RedHatAI/DeepSeek-Coder-V2-Lite-Instruct-FP8",
-    "name": "DeepSeek Coder V2 Lite FP8",
-    "description": "Code-specialized DeepSeek model",
-    "category": "Code Specialists"
+    "id": "RedHatAI/granite-3.1-8b-instruct-FP8-dynamic",
+    "name": "Granite 3.1 8B FP8 Dynamic",
+    "description": "IBM Granite 3.1 8B, dynamic FP8",
+    "category": "Medium (8B-14B)"
   },
   {
-    "id": "RedHatAI/Qwen3-32B-NVFP4",
-    "name": "Qwen 3 32B NVFP4",
-    "description": "32B model with NVIDIA FP4 quantization",
+    "id": "RedHatAI/Mistral-Nemo-Instruct-2407-FP8",
+    "name": "Mistral Nemo 12B FP8",
+    "description": "Mistral Nemo 12B with FP8",
+    "category": "Medium (8B-14B)"
+  },
+  {
+    "id": "RedHatAI/Mistral-Nemo-Instruct-2407-quantized.w4a16",
+    "name": "Mistral Nemo 12B w4a16",
+    "description": "Mistral Nemo 12B with 4-bit quantization",
+    "category": "Medium (8B-14B)"
+  },
+  {
+    "id": "RedHatAI/NVIDIA-Nemotron-Nano-9B-v2-FP8-dynamic",
+    "name": "Nemotron Nano 9B v2 FP8",
+    "description": "NVIDIA Nemotron Nano 9B, dynamic FP8",
+    "category": "Medium (8B-14B)"
+  },
+  {
+    "id": "RedHatAI/phi-4-FP8-dynamic",
+    "name": "Phi-4 FP8 Dynamic",
+    "description": "Microsoft Phi-4, dynamic FP8",
+    "category": "Medium (8B-14B)"
+  },
+  {
+    "id": "RedHatAI/Phi-4-reasoning-FP8-dynamic",
+    "name": "Phi-4 Reasoning FP8 Dynamic",
+    "description": "Phi-4 reasoning variant, dynamic FP8",
+    "category": "Medium (8B-14B)"
+  },
+  {
+    "id": "RedHatAI/pixtral-12b-FP8-dynamic",
+    "name": "Pixtral 12B FP8 Dynamic",
+    "description": "Mistral Pixtral 12B vision model",
+    "category": "Medium (8B-14B)"
+  },
+  {
+    "id": "RedHatAI/Qwen2.5-14B-Instruct-FP8",
+    "name": "Qwen 2.5 14B FP8",
+    "description": "Qwen 2.5 14B with FP8 quantization",
+    "category": "Medium (8B-14B)"
+  },
+  {
+    "id": "RedHatAI/Qwen3-14B-FP8-dynamic",
+    "name": "Qwen 3 14B FP8 Dynamic",
+    "description": "14B model with dynamic FP8",
+    "category": "Medium (8B-14B)"
+  },
+  {
+    "id": "RedHatAI/Qwen3-14B-NVFP4",
+    "name": "Qwen 3 14B NVFP4",
+    "description": "14B model with NVIDIA FP4 quantization",
+    "category": "Medium (8B-14B)"
+  },
+  {
+    "id": "RedHatAI/Qwen3.5-9B-FP8-dynamic",
+    "name": "Qwen 3.5 9B FP8 Dynamic",
+    "description": "9B model with dynamic FP8",
+    "category": "Medium (8B-14B)"
+  },
+  {
+    "id": "RedHatAI/aya-expanse-32b-FP8",
+    "name": "Aya Expanse 32B FP8",
+    "description": "Multilingual Aya Expanse 32B",
     "category": "Large (32B-70B)"
   },
   {
-    "id": "RedHatAI/Qwen3-32B-quantized.w4a16",
-    "name": "Qwen 3 32B w4a16",
-    "description": "32B model with 4-bit weight quantization",
+    "id": "RedHatAI/c4ai-command-r-08-2024-FP8",
+    "name": "Command R 08-2024 FP8",
+    "description": "Cohere Command R model",
+    "category": "Large (32B-70B)"
+  },
+  {
+    "id": "RedHatAI/c4ai-command-r-08-2024-quantized.w4a16",
+    "name": "Command R 08-2024 w4a16",
+    "description": "Cohere Command R with 4-bit quantization",
+    "category": "Large (32B-70B)"
+  },
+  {
+    "id": "RedHatAI/DeepSeek-R1-Distill-Qwen-32B-FP8-dynamic",
+    "name": "DeepSeek R1 Distill Qwen 32B FP8",
+    "description": "DeepSeek R1 distilled to Qwen 32B",
+    "category": "Large (32B-70B)"
+  },
+  {
+    "id": "RedHatAI/gpt-oss-20b",
+    "name": "GPT OSS 20B",
+    "description": "Open-source GPT 20B model",
+    "category": "Large (32B-70B)"
+  },
+  {
+    "id": "RedHatAI/gemma-2-27b-it-FP8",
+    "name": "Gemma 2 27B FP8",
+    "description": "Google Gemma 2 27B instruction model",
+    "category": "Large (32B-70B)"
+  },
+  {
+    "id": "RedHatAI/gemma-2-27b-it-quantized.w4a16",
+    "name": "Gemma 2 27B w4a16",
+    "description": "Google Gemma 2 27B with 4-bit quantization",
+    "category": "Large (32B-70B)"
+  },
+  {
+    "id": "RedHatAI/gemma-3-27b-it-FP8-dynamic",
+    "name": "Gemma 3 27B FP8 Dynamic",
+    "description": "Google Gemma 3 27B, dynamic FP8",
+    "category": "Large (32B-70B)"
+  },
+  {
+    "id": "RedHatAI/gemma-4-26B-A4B-it-FP8-Dynamic",
+    "name": "Gemma 4 26B A4B FP8 Dynamic",
+    "description": "Google Gemma 4 26B MoE (4B active)",
+    "category": "Large (32B-70B)"
+  },
+  {
+    "id": "RedHatAI/gemma-4-26B-A4B-it-NVFP4",
+    "name": "Gemma 4 26B A4B NVFP4",
+    "description": "Google Gemma 4 26B MoE, NVIDIA FP4",
+    "category": "Large (32B-70B)"
+  },
+  {
+    "id": "RedHatAI/gemma-4-31B-it-FP8-Dynamic",
+    "name": "Gemma 4 31B FP8 Dynamic",
+    "description": "Google Gemma 4 31B, dynamic FP8",
+    "category": "Large (32B-70B)"
+  },
+  {
+    "id": "RedHatAI/gemma-4-31B-it-NVFP4",
+    "name": "Gemma 4 31B NVFP4",
+    "description": "Google Gemma 4 31B, NVIDIA FP4",
+    "category": "Large (32B-70B)"
+  },
+  {
+    "id": "RedHatAI/Magistral-Small-2506-FP8",
+    "name": "Magistral Small FP8",
+    "description": "Magistral Small reasoning model, FP8",
     "category": "Large (32B-70B)"
   },
   {
@@ -120,34 +372,28 @@
     "category": "Large (32B-70B)"
   },
   {
-    "id": "RedHatAI/Qwen3-14B-NVFP4",
-    "name": "Qwen 3 14B NVFP4",
-    "description": "14B model with NVIDIA FP4 quantization",
-    "category": "Medium (8B-14B)"
-  },
-  {
-    "id": "RedHatAI/DeepSeek-R1-Distill-Qwen-14B-FP8-dynamic",
-    "name": "DeepSeek R1 Distill Qwen 14B",
-    "description": "DeepSeek R1 distilled to Qwen 14B",
-    "category": "DeepSeek R1"
-  },
-  {
-    "id": "RedHatAI/gpt-oss-20b",
-    "name": "GPT OSS 20B",
-    "description": "Open-source GPT 20B model",
+    "id": "RedHatAI/Mistral-Small-3.1-24B-Instruct-2503-FP8-dynamic",
+    "name": "Mistral Small 3.1 24B FP8",
+    "description": "Mistral Small 24B, dynamic FP8",
     "category": "Large (32B-70B)"
   },
   {
-    "id": "RedHatAI/Mixtral-8x7B-Instruct-v0.1",
-    "name": "Mixtral 8x7B Instruct",
-    "description": "Mixture of experts 8x7B model",
-    "category": "MoE (Mixture of Experts)"
+    "id": "RedHatAI/Mistral-Small-3.2-24B-Instruct-2506-FP8",
+    "name": "Mistral Small 3.2 24B FP8",
+    "description": "Mistral Small 3.2 24B, FP8",
+    "category": "Large (32B-70B)"
   },
   {
-    "id": "RedHatAI/Qwen3-Coder-Next-NVFP4",
-    "name": "Qwen 3 Coder Next NVFP4",
-    "description": "Code-specialized Qwen 3 with FP4",
-    "category": "Code Specialists"
+    "id": "RedHatAI/QwQ-32B-FP8-dynamic",
+    "name": "QwQ 32B FP8 Dynamic",
+    "description": "QwQ reasoning model, dynamic FP8",
+    "category": "Large (32B-70B)"
+  },
+  {
+    "id": "RedHatAI/Qwen2.5-32B-Instruct-FP8",
+    "name": "Qwen 2.5 32B FP8",
+    "description": "Qwen 2.5 32B with FP8 quantization",
+    "category": "Large (32B-70B)"
   },
   {
     "id": "RedHatAI/Qwen3-30B-A3B-FP8-block",
@@ -162,136 +408,112 @@
     "category": "Large (32B-70B)"
   },
   {
-    "id": "RedHatAI/Qwen3-8B-speculator.eagle3",
-    "name": "Qwen 3 8B Speculator",
-    "description": "8B speculative decoding model",
-    "category": "Speculative Decoding"
-  },
-  {
-    "id": "RedHatAI/gpt-oss-20b-speculator.eagle3",
-    "name": "GPT OSS 20B Speculator",
-    "description": "20B speculative decoding model",
-    "category": "Speculative Decoding"
-  },
-  {
-    "id": "RedHatAI/Llama-3.1-8B-Instruct-speculator.eagle3",
-    "name": "Llama 3.1 8B Speculator",
-    "description": "8B Llama speculative decoding model",
-    "category": "Speculative Decoding"
-  },
-  {
-    "id": "RedHatAI/granite-3.1-2b-instruct",
-    "name": "Granite 3.1 2B Instruct",
-    "description": "IBM Granite 2B instruction model",
-    "category": "Small (1B-3B)"
-  },
-  {
-    "id": "RedHatAI/granite-3.1-8b-instruct",
-    "name": "Granite 3.1 8B Instruct",
-    "description": "IBM Granite 8B instruction model",
-    "category": "Medium (8B)"
-  },
-  {
-    "id": "RedHatAI/granite-3.1-2b-base",
-    "name": "Granite 3.1 2B Base",
-    "description": "IBM Granite 2B base model",
-    "category": "Small (1B-3B)"
-  },
-  {
-    "id": "RedHatAI/granite-3.1-8b-base",
-    "name": "Granite 3.1 8B Base",
-    "description": "IBM Granite 8B base model",
-    "category": "Medium (8B)"
-  },
-  {
-    "id": "RedHatAI/granite-3.0-2b-instruct",
-    "name": "Granite 3.0 2B Instruct",
-    "description": "IBM Granite 3.0 2B instruction model",
-    "category": "Small (1B-3B)"
-  },
-  {
-    "id": "RedHatAI/granite-3.0-8b-instruct",
-    "name": "Granite 3.0 8B Instruct",
-    "description": "IBM Granite 3.0 8B instruction model",
-    "category": "Medium (8B)"
-  },
-  {
-    "id": "RedHatAI/granite-3.0-2b-base",
-    "name": "Granite 3.0 2B Base",
-    "description": "IBM Granite 3.0 2B base model",
-    "category": "Small (1B-3B)"
-  },
-  {
-    "id": "RedHatAI/granite-3.0-8b-base",
-    "name": "Granite 3.0 8B Base",
-    "description": "IBM Granite 3.0 8B base model",
-    "category": "Medium (8B)"
-  },
-  {
-    "id": "RedHatAI/DeepSeek-R1-Distill-Llama-8B-FP8-dynamic",
-    "name": "DeepSeek R1 Distill Llama 8B",
-    "description": "DeepSeek R1 distilled to Llama 8B",
-    "category": "DeepSeek R1"
-  },
-  {
-    "id": "RedHatAI/DeepSeek-R1-Distill-Llama-70B-FP8-dynamic",
-    "name": "DeepSeek R1 Distill Llama 70B",
-    "description": "DeepSeek R1 distilled to Llama 70B",
-    "category": "DeepSeek R1"
-  },
-  {
-    "id": "RedHatAI/Llama-3.2-3B-Instruct-FP8-dynamic",
-    "name": "Llama 3.2 3B FP8 Dynamic",
-    "description": "3B model with dynamic FP8 quantization",
-    "category": "Small (1B-3B)"
-  },
-  {
-    "id": "RedHatAI/Qwen2.5-3B-Instruct-FP8",
-    "name": "Qwen 2.5 3B FP8",
-    "description": "Qwen 2.5 3B with FP8 quantization",
-    "category": "Small (1B-3B)"
-  },
-  {
-    "id": "RedHatAI/Qwen2.5-7B-Instruct-FP8",
-    "name": "Qwen 2.5 7B FP8",
-    "description": "Qwen 2.5 7B with FP8 quantization",
-    "category": "Medium (8B)"
-  },
-  {
-    "id": "RedHatAI/Qwen2.5-14B-Instruct-FP8",
-    "name": "Qwen 2.5 14B FP8",
-    "description": "Qwen 2.5 14B with FP8 quantization",
-    "category": "Medium (8B-14B)"
-  },
-  {
-    "id": "RedHatAI/Qwen2.5-32B-Instruct-FP8",
-    "name": "Qwen 2.5 32B FP8",
-    "description": "Qwen 2.5 32B with FP8 quantization",
+    "id": "RedHatAI/Qwen3-32B-FP8-dynamic",
+    "name": "Qwen 3 32B FP8 Dynamic",
+    "description": "32B model with dynamic FP8",
     "category": "Large (32B-70B)"
   },
   {
-    "id": "RedHatAI/Qwen2.5-72B-Instruct-FP8",
-    "name": "Qwen 2.5 72B FP8",
-    "description": "Qwen 2.5 72B with FP8 quantization",
+    "id": "RedHatAI/Qwen3-32B-NVFP4",
+    "name": "Qwen 3 32B NVFP4",
+    "description": "32B model with NVIDIA FP4 quantization",
+    "category": "Large (32B-70B)"
+  },
+  {
+    "id": "RedHatAI/Qwen3-32B-quantized.w4a16",
+    "name": "Qwen 3 32B w4a16",
+    "description": "32B model with 4-bit weight quantization",
+    "category": "Large (32B-70B)"
+  },
+  {
+    "id": "RedHatAI/Qwen3.6-27B-FP8",
+    "name": "Qwen 3.6 27B FP8",
+    "description": "27B model with FP8",
+    "category": "Large (32B-70B)"
+  },
+  {
+    "id": "RedHatAI/Apertus-70B-Instruct-2509-FP8-dynamic",
+    "name": "Apertus 70B FP8 Dynamic",
+    "description": "Apertus 70B instruction model",
     "category": "Large (70B+)"
   },
   {
-    "id": "RedHatAI/Qwen2.5-Coder-7B-Instruct-FP8",
-    "name": "Qwen 2.5 Coder 7B FP8",
-    "description": "Code-specialized Qwen 2.5 7B",
-    "category": "Code Specialists"
+    "id": "RedHatAI/c4ai-command-r-plus-08-2024-FP8",
+    "name": "Command R Plus 08-2024 FP8",
+    "description": "Cohere Command R Plus model",
+    "category": "Large (70B+)"
   },
   {
-    "id": "RedHatAI/Qwen2.5-Coder-14B-Instruct-FP8",
-    "name": "Qwen 2.5 Coder 14B FP8",
-    "description": "Code-specialized Qwen 2.5 14B",
-    "category": "Code Specialists"
+    "id": "RedHatAI/c4ai-command-r-plus-08-2024-quantized.w4a16",
+    "name": "Command R Plus 08-2024 w4a16",
+    "description": "Cohere Command R Plus with 4-bit quantization",
+    "category": "Large (70B+)"
   },
   {
-    "id": "RedHatAI/Qwen2.5-Coder-32B-Instruct-FP8",
-    "name": "Qwen 2.5 Coder 32B FP8",
-    "description": "Code-specialized Qwen 2.5 32B",
-    "category": "Code Specialists"
+    "id": "RedHatAI/DeepSeek-V2.5-1210-FP8",
+    "name": "DeepSeek V2.5 FP8",
+    "description": "DeepSeek V2.5 with FP8 quantization",
+    "category": "Large (70B+)"
+  },
+  {
+    "id": "RedHatAI/Meta-Llama-3.1-405B-Instruct-FP8",
+    "name": "Llama 3.1 405B FP8",
+    "description": "Largest Llama, 405B with FP8",
+    "category": "Large (70B+)"
+  },
+  {
+    "id": "RedHatAI/Meta-Llama-3.1-405B-Instruct-FP8-dynamic",
+    "name": "Llama 3.1 405B FP8 Dynamic",
+    "description": "Largest Llama, 405B with dynamic FP8",
+    "category": "Large (70B+)"
+  },
+  {
+    "id": "RedHatAI/Meta-Llama-3.1-70B-Instruct-FP8",
+    "name": "Llama 3.1 70B FP8",
+    "description": "Large 70B model with FP8 quantization",
+    "category": "Large (70B+)"
+  },
+  {
+    "id": "RedHatAI/Meta-Llama-3.1-70B-Instruct-FP8-dynamic",
+    "name": "Llama 3.1 70B FP8 Dynamic",
+    "description": "70B model with dynamic FP8",
+    "category": "Large (70B+)"
+  },
+  {
+    "id": "RedHatAI/Meta-Llama-3.1-70B-Instruct-quantized.w4a16",
+    "name": "Llama 3.1 70B w4a16",
+    "description": "70B model with 4-bit weight quantization",
+    "category": "Large (70B+)"
+  },
+  {
+    "id": "RedHatAI/Llama-3.1-Nemotron-70B-Instruct-HF-FP8",
+    "name": "Llama 3.1 Nemotron 70B FP8",
+    "description": "NVIDIA Nemotron 70B with FP8",
+    "category": "Large (70B+)"
+  },
+  {
+    "id": "RedHatAI/Llama-3.1-Nemotron-70B-Instruct-HF-quantized.w4a16",
+    "name": "Llama 3.1 Nemotron 70B w4a16",
+    "description": "NVIDIA Nemotron 70B with 4-bit quantization",
+    "category": "Large (70B+)"
+  },
+  {
+    "id": "RedHatAI/Llama-3.3-70B-Instruct-FP8-block",
+    "name": "Llama 3.3 70B FP8 Block",
+    "description": "70B model with block FP8",
+    "category": "Large (70B+)"
+  },
+  {
+    "id": "RedHatAI/Llama-3.3-70B-Instruct-FP8-dynamic",
+    "name": "Llama 3.3 70B FP8 Dynamic",
+    "description": "Latest 70B model with dynamic FP8",
+    "category": "Large (70B+)"
+  },
+  {
+    "id": "RedHatAI/Llama-3.3-70B-Instruct-NVFP4",
+    "name": "Llama 3.3 70B NVFP4",
+    "description": "70B model with NVIDIA FP4",
+    "category": "Large (70B+)"
   },
   {
     "id": "RedHatAI/Meta-Llama-3.3-70B-Instruct-quantized.w4a16",
@@ -300,46 +522,106 @@
     "category": "Large (70B+)"
   },
   {
-    "id": "RedHatAI/Mistral-Nemo-Instruct-2407-FP8",
-    "name": "Mistral Nemo 12B FP8",
-    "description": "Mistral Nemo 12B with FP8",
-    "category": "Medium (8B-14B)"
-  },
-  {
-    "id": "RedHatAI/Mistral-7B-Instruct-v0.3-FP8",
-    "name": "Mistral 7B v0.3 FP8",
-    "description": "Mistral 7B instruction model",
-    "category": "Medium (8B)"
-  },
-  {
-    "id": "RedHatAI/Phi-3.5-mini-instruct-FP8",
-    "name": "Phi 3.5 Mini FP8",
-    "description": "Microsoft Phi 3.5 mini with FP8",
-    "category": "Small (1B-3B)"
-  },
-  {
-    "id": "RedHatAI/Phi-3-mini-128k-instruct-FP8",
-    "name": "Phi 3 Mini 128k FP8",
-    "description": "Microsoft Phi 3 with 128k context",
-    "category": "Small (1B-3B)"
-  },
-  {
-    "id": "RedHatAI/gemma-2-9b-it-FP8",
-    "name": "Gemma 2 9B FP8",
-    "description": "Google Gemma 2 9B instruction model",
-    "category": "Medium (8B)"
-  },
-  {
-    "id": "RedHatAI/gemma-2-27b-it-FP8",
-    "name": "Gemma 2 27B FP8",
-    "description": "Google Gemma 2 27B instruction model",
-    "category": "Large (32B-70B)"
-  },
-  {
-    "id": "RedHatAI/Llama-3.1-Nemotron-70B-Instruct-HF-FP8",
-    "name": "Llama 3.1 Nemotron 70B FP8",
-    "description": "NVIDIA Nemotron 70B with FP8",
+    "id": "RedHatAI/Llama-3.1-Nemotron-70B-Instruct-HF-FP8-dynamic",
+    "name": "Nemotron 70B FP8 Dynamic",
+    "description": "NVIDIA Nemotron 70B reward model",
     "category": "Large (70B+)"
+  },
+  {
+    "id": "RedHatAI/Qwen2.5-72B-Instruct-FP8",
+    "name": "Qwen 2.5 72B FP8",
+    "description": "Qwen 2.5 72B with FP8 quantization",
+    "category": "Large (70B+)"
+  },
+  {
+    "id": "RedHatAI/Qwen2.5-72B-Instruct-FP8-dynamic",
+    "name": "Qwen 2.5 72B FP8 Dynamic",
+    "description": "72B model with dynamic FP8",
+    "category": "Large (70B+)"
+  },
+  {
+    "id": "RedHatAI/DeepSeek-V4-Flash-NVFP4-FP8",
+    "name": "DeepSeek V4 Flash NVFP4-FP8",
+    "description": "DeepSeek V4 Flash MoE",
+    "category": "MoE (Mixture of Experts)"
+  },
+  {
+    "id": "RedHatAI/Kimi-K2.6-FP8-BLOCK",
+    "name": "Kimi K2.6 FP8 Block",
+    "description": "Kimi K2.6 MoE, block FP8",
+    "category": "MoE (Mixture of Experts)"
+  },
+  {
+    "id": "RedHatAI/Kimi-K2.6-NVFP4",
+    "name": "Kimi K2.6 NVFP4",
+    "description": "Kimi K2.6 MoE, NVIDIA FP4",
+    "category": "MoE (Mixture of Experts)"
+  },
+  {
+    "id": "RedHatAI/Llama-4-Maverick-17B-128E-Instruct-FP8",
+    "name": "Llama 4 Maverick 17B 128E FP8",
+    "description": "17B with 128 experts, FP8",
+    "category": "MoE (Mixture of Experts)"
+  },
+  {
+    "id": "RedHatAI/Llama-4-Maverick-17B-128E-Instruct-NVFP4",
+    "name": "Llama 4 Maverick 17B 128E NVFP4",
+    "description": "17B with 128 experts, NVIDIA FP4",
+    "category": "MoE (Mixture of Experts)"
+  },
+  {
+    "id": "RedHatAI/Llama-4-Scout-17B-16E-Instruct-FP8-dynamic",
+    "name": "Llama 4 Scout 17B 16E FP8 Dynamic",
+    "description": "17B with 16 experts, dynamic FP8",
+    "category": "MoE (Mixture of Experts)"
+  },
+  {
+    "id": "RedHatAI/Llama-4-Scout-17B-16E-Instruct-NVFP4",
+    "name": "Llama 4 Scout 17B 16E NVFP4",
+    "description": "17B with 16 experts, NVIDIA FP4",
+    "category": "MoE (Mixture of Experts)"
+  },
+  {
+    "id": "RedHatAI/Mistral-Small-4-119B-2603-NVFP4",
+    "name": "Mistral Small 4 119B NVFP4",
+    "description": "119B MoE, NVIDIA FP4",
+    "category": "MoE (Mixture of Experts)"
+  },
+  {
+    "id": "RedHatAI/Mixtral-8x22B-Instruct-v0.1-FP8",
+    "name": "Mixtral 8x22B FP8",
+    "description": "8x22B MoE with FP8",
+    "category": "MoE (Mixture of Experts)"
+  },
+  {
+    "id": "RedHatAI/Mixtral-8x7B-Instruct-v0.1-FP8",
+    "name": "Mixtral 8x7B FP8",
+    "description": "8x7B MoE with FP8",
+    "category": "MoE (Mixture of Experts)"
+  },
+  {
+    "id": "RedHatAI/Mixtral-8x7B-Instruct-v0.1",
+    "name": "Mixtral 8x7B Instruct",
+    "description": "Mixture of experts 8x7B model",
+    "category": "MoE (Mixture of Experts)"
+  },
+  {
+    "id": "RedHatAI/NVIDIA-Nemotron-3-Nano-30B-A3B-FP8",
+    "name": "Nemotron 3 Nano 30B A3B FP8",
+    "description": "30B MoE (3B active), FP8",
+    "category": "MoE (Mixture of Experts)"
+  },
+  {
+    "id": "RedHatAI/NVIDIA-Nemotron-3-Super-120B-A12B-FP8",
+    "name": "Nemotron 3 Super 120B A12B FP8",
+    "description": "120B MoE (12B active), FP8",
+    "category": "MoE (Mixture of Experts)"
+  },
+  {
+    "id": "RedHatAI/NVIDIA-Nemotron-3-Super-120B-A12B-NVFP4",
+    "name": "Nemotron 3 Super 120B A12B NVFP4",
+    "description": "120B MoE (12B active), NVIDIA FP4",
+    "category": "MoE (Mixture of Experts)"
   },
   {
     "id": "RedHatAI/OLMoE-1B-7B-0924-Instruct-FP8",
@@ -354,28 +636,94 @@
     "category": "MoE (Mixture of Experts)"
   },
   {
+    "id": "RedHatAI/Qwen3-235B-A22B-NVFP4",
+    "name": "Qwen 3 235B A22B NVFP4",
+    "description": "235B MoE (22B active), NVIDIA FP4",
+    "category": "MoE (Mixture of Experts)"
+  },
+  {
     "id": "RedHatAI/Qwen3-30B-A3B-FP8-dynamic",
     "name": "Qwen 3 30B A3B FP8 Dynamic",
     "description": "30B MoE model (3B active), dynamic FP8 quantization",
     "category": "MoE (Mixture of Experts)"
   },
   {
-    "id": "RedHatAI/SmolLM2-1.7B-Instruct-FP8",
-    "name": "SmolLM2 1.7B FP8",
-    "description": "Compact SmolLM2 1.7B model",
-    "category": "Small (1B-3B)"
+    "id": "RedHatAI/Qwen3-Coder-480B-A35B-Instruct-FP8",
+    "name": "Qwen 3 Coder 480B A35B FP8",
+    "description": "480B MoE code model (35B active), FP8",
+    "category": "MoE (Mixture of Experts)"
   },
   {
-    "id": "RedHatAI/c4ai-command-r-08-2024-FP8",
-    "name": "Command R 08-2024 FP8",
-    "description": "Cohere Command R model",
-    "category": "Large (32B-70B)"
+    "id": "RedHatAI/Qwen3-Next-80B-A3B-Instruct-FP8-dynamic",
+    "name": "Qwen 3 Next 80B A3B FP8 Dynamic",
+    "description": "80B MoE (3B active), dynamic FP8",
+    "category": "MoE (Mixture of Experts)"
   },
   {
-    "id": "RedHatAI/c4ai-command-r-plus-08-2024-FP8",
-    "name": "Command R Plus 08-2024 FP8",
-    "description": "Cohere Command R Plus model",
-    "category": "Large (70B+)"
+    "id": "RedHatAI/Qwen3-Next-80B-A3B-Instruct-NVFP4",
+    "name": "Qwen 3 Next 80B A3B NVFP4",
+    "description": "80B MoE (3B active), NVIDIA FP4",
+    "category": "MoE (Mixture of Experts)"
+  },
+  {
+    "id": "RedHatAI/Qwen3.5-122B-A10B-FP8-dynamic",
+    "name": "Qwen 3.5 122B A10B FP8 Dynamic",
+    "description": "122B MoE (10B active), dynamic FP8",
+    "category": "MoE (Mixture of Experts)"
+  },
+  {
+    "id": "RedHatAI/Qwen3.5-122B-A10B-NVFP4",
+    "name": "Qwen 3.5 122B A10B NVFP4",
+    "description": "122B MoE (10B active), NVIDIA FP4",
+    "category": "MoE (Mixture of Experts)"
+  },
+  {
+    "id": "RedHatAI/Qwen3.5-35B-A3B-FP8-dynamic",
+    "name": "Qwen 3.5 35B A3B FP8 Dynamic",
+    "description": "35B MoE (3B active), dynamic FP8",
+    "category": "MoE (Mixture of Experts)"
+  },
+  {
+    "id": "RedHatAI/Qwen3.5-397B-A17B-FP8-dynamic",
+    "name": "Qwen 3.5 397B A17B FP8 Dynamic",
+    "description": "397B MoE (17B active), dynamic FP8",
+    "category": "MoE (Mixture of Experts)"
+  },
+  {
+    "id": "RedHatAI/Qwen3.6-35B-A3B-FP8-dynamic",
+    "name": "Qwen 3.6 35B A3B FP8 Dynamic",
+    "description": "35B MoE (3B active), dynamic FP8",
+    "category": "MoE (Mixture of Experts)"
+  },
+  {
+    "id": "RedHatAI/DeepSeek-R1-Distill-Llama-70B-FP8-dynamic",
+    "name": "DeepSeek R1 Distill Llama 70B",
+    "description": "DeepSeek R1 distilled to Llama 70B",
+    "category": "DeepSeek R1"
+  },
+  {
+    "id": "RedHatAI/DeepSeek-R1-Distill-Llama-8B-FP8-dynamic",
+    "name": "DeepSeek R1 Distill Llama 8B",
+    "description": "DeepSeek R1 distilled to Llama 8B",
+    "category": "DeepSeek R1"
+  },
+  {
+    "id": "RedHatAI/DeepSeek-R1-Distill-Qwen-1.5B-FP8-dynamic",
+    "name": "DeepSeek R1 Distill Qwen 1.5B FP8",
+    "description": "R1 distilled to Qwen 1.5B",
+    "category": "DeepSeek R1"
+  },
+  {
+    "id": "RedHatAI/DeepSeek-R1-Distill-Qwen-14B-FP8-dynamic",
+    "name": "DeepSeek R1 Distill Qwen 14B",
+    "description": "DeepSeek R1 distilled to Qwen 14B",
+    "category": "DeepSeek R1"
+  },
+  {
+    "id": "RedHatAI/DeepSeek-R1-Distill-Qwen-7B-FP8-dynamic",
+    "name": "DeepSeek R1 Distill Qwen 7B FP8",
+    "description": "R1 distilled to Qwen 7B",
+    "category": "DeepSeek R1"
   },
   {
     "id": "RedHatAI/Codestral-22B-v0.1-FP8",
@@ -384,63 +732,111 @@
     "category": "Code Specialists"
   },
   {
-    "id": "RedHatAI/Ministral-8B-Instruct-2410-FP8",
-    "name": "Ministral 8B FP8",
-    "description": "Mistral mini 8B instruction model",
-    "category": "Medium (8B)"
-  },
-  {
-    "id": "RedHatAI/aya-expanse-8b-FP8",
-    "name": "Aya Expanse 8B FP8",
-    "description": "Multilingual Aya Expanse 8B",
-    "category": "Medium (8B)"
-  },
-  {
-    "id": "RedHatAI/aya-expanse-32b-FP8",
-    "name": "Aya Expanse 32B FP8",
-    "description": "Multilingual Aya Expanse 32B",
-    "category": "Large (32B-70B)"
-  },
-  {
     "id": "RedHatAI/Codestral-22B-v0.1-quantized.w4a16",
     "name": "Codestral 22B w4a16",
     "description": "Code-specialized 22B with 4-bit quantization",
     "category": "Code Specialists"
   },
   {
-    "id": "RedHatAI/Mistral-Nemo-Instruct-2407-quantized.w4a16",
-    "name": "Mistral Nemo 12B w4a16",
-    "description": "Mistral Nemo 12B with 4-bit quantization",
-    "category": "Medium (8B-14B)"
+    "id": "RedHatAI/DeepSeek-Coder-V2-Lite-Instruct-FP8",
+    "name": "DeepSeek Coder V2 Lite FP8",
+    "description": "Code-specialized DeepSeek model",
+    "category": "Code Specialists"
   },
   {
-    "id": "RedHatAI/gemma-2-9b-it-quantized.w4a16",
-    "name": "Gemma 2 9B w4a16",
-    "description": "Google Gemma 2 9B with 4-bit quantization",
-    "category": "Medium (8B)"
+    "id": "RedHatAI/Qwen2.5-Coder-14B-Instruct-FP8",
+    "name": "Qwen 2.5 Coder 14B FP8",
+    "description": "Code-specialized Qwen 2.5 14B",
+    "category": "Code Specialists"
   },
   {
-    "id": "RedHatAI/gemma-2-27b-it-quantized.w4a16",
-    "name": "Gemma 2 27B w4a16",
-    "description": "Google Gemma 2 27B with 4-bit quantization",
-    "category": "Large (32B-70B)"
+    "id": "RedHatAI/Qwen2.5-Coder-14B-Instruct-FP8-dynamic",
+    "name": "Qwen 2.5 Coder 14B FP8",
+    "description": "14B code model, dynamic FP8",
+    "category": "Code Specialists"
   },
   {
-    "id": "RedHatAI/Llama-3.1-Nemotron-70B-Instruct-HF-quantized.w4a16",
-    "name": "Llama 3.1 Nemotron 70B w4a16",
-    "description": "NVIDIA Nemotron 70B with 4-bit quantization",
-    "category": "Large (70B+)"
+    "id": "RedHatAI/Qwen2.5-Coder-32B-Instruct-FP8",
+    "name": "Qwen 2.5 Coder 32B FP8",
+    "description": "Code-specialized Qwen 2.5 32B",
+    "category": "Code Specialists"
   },
   {
-    "id": "RedHatAI/c4ai-command-r-08-2024-quantized.w4a16",
-    "name": "Command R 08-2024 w4a16",
-    "description": "Cohere Command R with 4-bit quantization",
-    "category": "Large (32B-70B)"
+    "id": "RedHatAI/Qwen2.5-Coder-32B-Instruct-FP8-dynamic",
+    "name": "Qwen 2.5 Coder 32B FP8",
+    "description": "32B code model, dynamic FP8",
+    "category": "Code Specialists"
   },
   {
-    "id": "RedHatAI/c4ai-command-r-plus-08-2024-quantized.w4a16",
-    "name": "Command R Plus 08-2024 w4a16",
-    "description": "Cohere Command R Plus with 4-bit quantization",
-    "category": "Large (70B+)"
+    "id": "RedHatAI/Qwen2.5-Coder-7B-Instruct-FP8",
+    "name": "Qwen 2.5 Coder 7B FP8",
+    "description": "Code-specialized Qwen 2.5 7B",
+    "category": "Code Specialists"
+  },
+  {
+    "id": "RedHatAI/Qwen2.5-Coder-7B-Instruct-FP8-dynamic",
+    "name": "Qwen 2.5 Coder 7B FP8",
+    "description": "7B code model, dynamic FP8",
+    "category": "Code Specialists"
+  },
+  {
+    "id": "RedHatAI/Qwen3-Coder-Next-FP8-dynamic",
+    "name": "Qwen 3 Coder Next FP8 Dynamic",
+    "description": "Qwen 3 code generation model",
+    "category": "Code Specialists"
+  },
+  {
+    "id": "RedHatAI/Qwen3-Coder-Next-NVFP4",
+    "name": "Qwen 3 Coder Next NVFP4",
+    "description": "Code-specialized Qwen 3 with FP4",
+    "category": "Code Specialists"
+  },
+  {
+    "id": "RedHatAI/gpt-oss-20b-speculator.eagle3",
+    "name": "GPT OSS 20B Speculator",
+    "description": "20B speculative decoding model",
+    "category": "Speculative Decoding"
+  },
+  {
+    "id": "RedHatAI/gemma-4-26B-A4B-it-speculator.eagle3",
+    "name": "Gemma 4 26B A4B EAGLE3 Speculator",
+    "description": "EAGLE3 speculator for Gemma 4 26B",
+    "category": "Speculative Decoding"
+  },
+  {
+    "id": "RedHatAI/gemma-4-31B-it-speculator.eagle3",
+    "name": "Gemma 4 31B EAGLE3 Speculator",
+    "description": "EAGLE3 speculator for Gemma 4 31B",
+    "category": "Speculative Decoding"
+  },
+  {
+    "id": "RedHatAI/Llama-3.1-8B-Instruct-speculator.eagle3",
+    "name": "Llama 3.1 8B Speculator",
+    "description": "8B Llama speculative decoding model",
+    "category": "Speculative Decoding"
+  },
+  {
+    "id": "RedHatAI/Llama-3.3-70B-Instruct-speculator.eagle3",
+    "name": "Llama 3.3 70B EAGLE3 Speculator",
+    "description": "EAGLE3 speculator for Llama 3.3 70B",
+    "category": "Speculative Decoding"
+  },
+  {
+    "id": "RedHatAI/Qwen3-14B-speculator.eagle3",
+    "name": "Qwen 3 14B EAGLE3 Speculator",
+    "description": "EAGLE3 speculator for Qwen 3 14B",
+    "category": "Speculative Decoding"
+  },
+  {
+    "id": "RedHatAI/Qwen3-32B-speculator.eagle3",
+    "name": "Qwen 3 32B EAGLE3 Speculator",
+    "description": "EAGLE3 speculator for Qwen 3 32B",
+    "category": "Speculative Decoding"
+  },
+  {
+    "id": "RedHatAI/Qwen3-8B-speculator.eagle3",
+    "name": "Qwen 3 8B Speculator",
+    "description": "8B speculative decoding model",
+    "category": "Speculative Decoding"
   }
 ]
