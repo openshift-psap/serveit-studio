@@ -119,6 +119,10 @@ class ConfigBuilderMixin:
             epp_config=self._build_epp_config(),
             block_size=self._compute_block_size(),
             enable_expert_parallel=getattr(self, '_is_moe', False),
+            enable_dbo=getattr(self, '_is_moe', False),
+            enable_eplb=getattr(self, '_is_moe', False),
+            moe_backend='deep_gemm' if getattr(self, '_is_moe', False) else None,
+            all2all_backend='deepep_high_throughput' if getattr(self, '_is_moe', False) else None,
         )
         if not is_calibration or not getattr(self.config, 'advanced_vllm_custom_enabled', True):
             cfg = self._apply_advanced_vllm(cfg)
@@ -266,6 +270,8 @@ class ConfigBuilderMixin:
             'block_size': 'block_size',
             'reasoning_parser': 'reasoning_parser',
             'chat_template_content_format': 'chat_template_content_format',
+            'moe_backend': 'moe_backend',
+            'all2all_backend': 'all2all_backend',
         }
         for key, attr in val_fields.items():
             setting = adv.get(key)
@@ -282,6 +288,8 @@ class ConfigBuilderMixin:
             'disable_custom_all_reduce': 'disable_custom_all_reduce',
             'enable_auto_tool_choice': 'enable_auto_tool_choice',
             'enable_expert_parallel': 'enable_expert_parallel',
+            'enable_dbo': 'enable_dbo',
+            'enable_eplb': 'enable_eplb',
             'trust_remote_code': 'trust_remote_code',
             'disable_log_requests': 'disable_log_requests',
             'vllm_debug_logs': 'vllm_debug_logs',
@@ -427,6 +435,10 @@ class ConfigBuilderMixin:
             epp_config=self._build_epp_config(),
             block_size=self._compute_block_size(),
             enable_expert_parallel=getattr(self, '_is_moe', False),
+            enable_dbo=getattr(self, '_is_moe', False),
+            enable_eplb=getattr(self, '_is_moe', False),
+            moe_backend='deep_gemm' if getattr(self, '_is_moe', False) else None,
+            all2all_backend='deepep_high_throughput' if getattr(self, '_is_moe', False) else None,
         )
         return self._apply_advanced_vllm(cfg)
 
@@ -505,6 +517,10 @@ class ConfigBuilderMixin:
             epp_config=self._build_epp_config(),
             block_size=self._compute_block_size(),
             enable_expert_parallel=getattr(self, '_is_moe', False),
+            enable_dbo=getattr(self, '_is_moe', False),
+            enable_eplb=getattr(self, '_is_moe', False),
+            moe_backend='deep_gemm' if getattr(self, '_is_moe', False) else None,
+            all2all_backend='deepep_high_throughput' if getattr(self, '_is_moe', False) else None,
         )
         return self._apply_advanced_vllm(cfg)
 

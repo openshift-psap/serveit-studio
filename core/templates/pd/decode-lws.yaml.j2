@@ -147,12 +147,12 @@ spec:
 {% if pipeline_parallel_size %}                  --pipeline-parallel-size {{ pipeline_parallel_size }} \
 {% endif %}                  --kv-transfer-config '{"kv_connector":"{{ kv_connector }}","kv_role":"kv_both","kv_load_failure_policy":"fail"}' \
 {% if enable_expert_parallel %}                  --enable-expert-parallel \
-                  --enable-dbo \
+{% endif %}{% if enable_dbo %}                  --enable-dbo \
                   --dbo-decode-token-threshold 32 \
-                  --enable-eplb \
+{% endif %}{% if enable_eplb %}                  --enable-eplb \
                   --eplb-config '{"window_size":"1000","step_interval":"3000","num_redundant_experts":"32","log_balancedness":"False"}' \
-                  --moe-backend deep_gemm \
-                  --all2all-backend deepep_low_latency \
+{% endif %}{% if moe_backend %}                  --moe-backend {{ moe_backend }} \
+{% endif %}{% if all2all_backend %}                  --all2all-backend {{ all2all_backend }} \
 {% endif %}{% if max_model_len %}                  --max-model-len {{ max_model_len }} \
 {% endif %}{% if decode_gpu_memory_utilization %}                  --gpu-memory-utilization {{ decode_gpu_memory_utilization }} \
 {% endif %}{% if enable_prefix_caching %}                  --enable-prefix-caching \

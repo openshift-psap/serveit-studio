@@ -110,6 +110,10 @@ class TestConfig:
 
     # MoE / Expert Parallel
     enable_expert_parallel: bool = False
+    enable_dbo: bool = False
+    enable_eplb: bool = False
+    moe_backend: Optional[str] = None  # 'deep_gemm', 'cutlass', None
+    all2all_backend: Optional[str] = None  # 'deepep_high_throughput', 'deepep_low_latency', 'nccl', None
 
     # Speculative decoding
     speculative_method: Optional[str] = None  # 'mtp', 'draft', None
