@@ -25,59 +25,70 @@ function downloadPDFReport(runId, data) {
     function reset() { btn.textContent = origText; btn.style.pointerEvents = ''; }
 
     _ensureHtml2Pdf().then(() => {
-        // Build a static HTML string (same as HTML download) and put it in a hidden div
-        const charts = data.charts;
-        const rec = data.recommendation || {};
-        const summary = data.summary;
-        const best = summary.best_configs || {};
-        const allRes = data.all_results || [];
-        const pdResults = allRes.filter(r => r.architecture === 'PD');
-        const hasVLLM = charts.vllm && charts.vllm.configs.length;
-        const hasPD = pdResults.length > 0;
-
-        // Build only the body content (no <html>/<head> wrapper)
-        const secRec = buildRecSection(runId, data, rec, summary, best, allRes);
-        const secTP = buildTPSection(rec, charts);
-        const secCfg = buildCfgSection(runId, data, charts, allRes, hasPD);
-        const secCmp = buildCmpSection(runId, rec, data);
-        const secStep9 = buildStep9Section(data);
-        const secCal = buildCalSection(data);
-        const secEpp = buildEppTuningSection(runId, data);
-        const secTestCfg = buildTestSettingsSection(data);
-
-        var bodyHtml = `<h1 style="font-family:sans-serif;border-bottom:3px solid #10b981;padding-bottom:10px;">Inftune Studio Report — Run #${runId}</h1>`;
-        bodyHtml += `<p style="color:#64748b;font-family:sans-serif;">Generated: ${new Date().toLocaleString()}</p>`;
-        [secRec, secTP, secCfg, secCmp, secStep9, secCal, secEpp, secTestCfg].forEach(sec => {
-            if (sec) bodyHtml += sec;
+        // Capture existing rendered charts as static images first
+        var chartImages = {};
+        var chartPromises = [];
+        document.querySelectorAll('.report-tab-panel.active .js-plotly-plot').forEach(el => {
+            if (el.id) {
+                chartPromises.push(
+                    Plotly.toImage(el, { format: 'png', width: 1000, height: 400 })
+                        .then(img => { chartImages[el.id] = img; })
+                        .catch(() => {})
+                );
+            }
         });
 
-        var container = document.createElement('div');
-        container.style.cssText = 'position:absolute;left:-9999px;top:0;width:1100px;font-family:-apple-system,BlinkMacSystemFont,Segoe UI,Roboto,sans-serif;color:#1e293b;background:white;padding:20px;';
-        container.innerHTML = bodyHtml;
+        Promise.all(chartPromises).then(() => {
+            const charts = data.charts;
+            const rec = data.recommendation || {};
+            const summary = data.summary;
+            const best = summary.best_configs || {};
+            const allRes = data.all_results || [];
+            const hasPD = allRes.some(r => r.architecture === 'PD');
 
-        // Add inline styles for tables/cards since we're outside the report stylesheet
-        var style = document.createElement('style');
-        style.textContent = 'table{width:100%;border-collapse:collapse}th{background:#1e293b;color:white;padding:8px 10px;text-align:left;font-size:0.85em}td{padding:6px 10px;border-bottom:1px solid #f1f5f9;font-size:0.85em}.pareto{background:#f0fdf4;font-weight:600}.stat-card{background:white;padding:16px;border-radius:8px;border:1px solid #e2e8f0;text-align:center}.stat-card .val{font-size:1.6em;font-weight:800}.stat-card .lbl{color:#64748b;font-size:0.82em}.stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:12px;margin:16px 0}.chart-box{background:white;border-radius:8px;border:1px solid #e2e8f0;margin:12px 0;padding:12px}.chart-box h3{margin:0 0 8px;font-size:1em}.grid2{display:grid;grid-template-columns:1fr 1fr;gap:16px}.section-grid{display:grid;grid-template-columns:repeat(2,1fr);gap:20px;font-size:0.9em}.section-hdr{font-weight:700;margin-bottom:8px;padding-bottom:4px}';
-        container.prepend(style);
-        document.body.appendChild(container);
+            // Build sections (tables + text only — no chart placeholders)
+            const secRec = buildRecSection(runId, data, rec, summary, best, allRes);
+            const secCfg = buildCfgSection(runId, data, charts, allRes, hasPD);
+            const secCmp = buildCmpSection(runId, rec, data);
+            const secStep9 = buildStep9Section(data);
+            const secCal = buildCalSection(data);
+            const secEpp = buildEppTuningSection(runId, data);
+            const secTestCfg = buildTestSettingsSection(data);
 
-        html2pdf().set({
-            margin: [8, 8, 8, 8],
-            filename: `inftune-report-run-${runId}.pdf`,
-            image: { type: 'jpeg', quality: 0.92 },
-            html2canvas: { scale: 1.5, useCORS: true, scrollY: 0, width: 1100 },
-            jsPDF: { unit: 'mm', format: 'a4', orientation: 'landscape' },
-            pagebreak: { mode: ['css', 'legacy'], avoid: ['.stat-card', '.chart-box', 'tr'] }
-        }).from(container).save().then(() => {
-            document.body.removeChild(container);
-            reset();
-        }).catch(err => {
-            console.error('PDF generation failed:', err);
-            document.body.removeChild(container);
-            reset();
+            var bodyHtml = '<div style="font-family:-apple-system,BlinkMacSystemFont,Segoe UI,Roboto,sans-serif;color:#1e293b;padding:20px;">';
+            bodyHtml += `<h1 style="border-bottom:3px solid #10b981;padding-bottom:10px;">Inftune Studio Report — Run #${runId}</h1>`;
+            bodyHtml += `<p style="color:#64748b;">Generated: ${new Date().toLocaleString()}</p>`;
+
+            // Inject captured chart images
+            if (Object.keys(chartImages).length) {
+                bodyHtml += '<div style="margin:20px 0;">';
+                for (var cid in chartImages) {
+                    bodyHtml += `<div style="background:white;border-radius:8px;border:1px solid #e2e8f0;margin:12px 0;padding:12px;page-break-inside:avoid;"><img src="${chartImages[cid]}" style="width:100%;max-width:1000px;"></div>`;
+                }
+                bodyHtml += '</div>';
+            }
+
+            [secRec, secCfg, secCmp, secStep9, secCal, secEpp, secTestCfg].forEach(sec => {
+                if (sec) bodyHtml += sec;
+            });
+            bodyHtml += '</div>';
+
+            // Use html2pdf string mode
+            html2pdf().set({
+                margin: [8, 8, 8, 8],
+                filename: `inftune-report-run-${runId}.pdf`,
+                image: { type: 'jpeg', quality: 0.92 },
+                html2canvas: { scale: 1.5, useCORS: true },
+                jsPDF: { unit: 'mm', format: 'a4', orientation: 'landscape' },
+                pagebreak: { mode: ['css', 'legacy'], avoid: ['tr', 'img'] }
+            }).from(bodyHtml, 'string').save().then(() => {
+                reset();
+            }).catch(err => {
+                console.error('PDF generation failed:', err);
+                reset();
+            });
         });
     }).catch(() => {
-        // CDN unreachable — fallback to print dialog
         reset();
         downloadHTMLReport(runId, data);
         alert('PDF library unavailable — downloaded HTML report instead. Open it and use Print > Save as PDF.');
