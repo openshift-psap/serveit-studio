@@ -111,6 +111,8 @@ class TestConfig:
     # MoE / Expert Parallel
     enable_expert_parallel: bool = False
     enable_dbo: bool = False
+    dbo_prefill_token_threshold: int = 32
+    dbo_decode_token_threshold: int = 32
     enable_eplb: bool = False
     moe_backend: Optional[str] = None  # 'deep_gemm', 'cutlass', None
     all2all_backend: Optional[str] = None  # 'deepep_high_throughput', 'deepep_low_latency', 'nccl', None

@@ -272,6 +272,8 @@ class ConfigBuilderMixin:
             'chat_template_content_format': 'chat_template_content_format',
             'moe_backend': 'moe_backend',
             'all2all_backend': 'all2all_backend',
+            'dbo_prefill_token_threshold': 'dbo_prefill_token_threshold',
+            'dbo_decode_token_threshold': 'dbo_decode_token_threshold',
         }
         for key, attr in val_fields.items():
             setting = adv.get(key)
@@ -318,6 +320,8 @@ class ConfigBuilderMixin:
             '--chat-template-content-format': ('chat_template_content_format', str),
             '--moe-backend': ('moe_backend', str),
             '--all2all-backend': ('all2all_backend', str),
+            '--dbo-prefill-token-threshold': ('dbo_prefill_token_threshold', int),
+            '--dbo-decode-token-threshold': ('dbo_decode_token_threshold', int),
         }
         known_toggles = {
             '--enable-prefix-caching': ('enable_prefix_caching', True),
