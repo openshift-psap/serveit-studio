@@ -34,6 +34,10 @@ function updateUIFromConfig() {
         });
         if (!found && document.getElementById('custom-model')) {
             document.getElementById('custom-model').value = config.model;
+            document.getElementById('custom-model-enabled').checked = true;
+            document.getElementById('custom-model-body').style.display = 'block';
+            var cmSw = document.getElementById('custom-model-switch');
+            if (cmSw) { cmSw.style.background = '#0ea5e9'; cmSw.querySelector('span').style.transform = 'translateX(18px)'; }
         }
     }
 
