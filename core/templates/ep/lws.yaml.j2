@@ -88,7 +88,7 @@ spec:
                 echo "Architecture: EP (Eager Prefill)"
                 echo "Model: {{ model_name }}"
                 echo "TP: {{ tensor_parallelism }}"
-                echo "Max Model Len: {{ max_model_len }}"
+                echo "Max Model Len: {{ max_model_len or 'vLLM default' }}"
                 echo "========================================="
 
                 # Set unlimited locked memory for RDMA/NVSHMEM
