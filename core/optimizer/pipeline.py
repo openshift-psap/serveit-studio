@@ -932,21 +932,26 @@ class RecipeOptimizer(
         if self.config.prefix_cache_hit_pct > 0 and self.config.workload_mode == 'synthetic':
             self._generate_prefix_cache_dataset()
 
-        # Step 2: Find optimal decode TP
-        self.log("STEP 2: Decode TP Optimization", 'decision')
-        self.log("-" * 80, 'info')
-        self._optimize_decode_tp()
-        self.log("", 'info')
-        if self._should_stop():
-            return self._build_results()
+        # Steps 2-3: TP Calibration (skip for strategies that don't need it)
+        skip_tp_cal = self.config.objective in ('ep_only', 'single_test')
+        if not skip_tp_cal:
+            # Step 2: Find optimal decode TP
+            self.log("STEP 2: Decode TP Optimization", 'decision')
+            self.log("-" * 80, 'info')
+            self._optimize_decode_tp()
+            self.log("", 'info')
+            if self._should_stop():
+                return self._build_results()
 
-        # Step 3: Find optimal prefill TP
-        self.log("STEP 3: Prefill TP Optimization", 'decision')
-        self.log("-" * 80, 'info')
-        self._optimize_prefill_tp()
-        self.log("", 'info')
-        if self._should_stop():
-            return self._build_results()
+            # Step 3: Find optimal prefill TP
+            self.log("STEP 3: Prefill TP Optimization", 'decision')
+            self.log("-" * 80, 'info')
+            self._optimize_prefill_tp()
+            self.log("", 'info')
+            if self._should_stop():
+                return self._build_results()
+        else:
+            self.log(f"Skipping Steps 2-3 (TP calibration) — {self.config.objective} strategy handles TP directly", 'info')
 
         # Steps 4-11: Dispatch to goal-specific strategy
         strategy = self._get_strategy()
