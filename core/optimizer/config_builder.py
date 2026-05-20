@@ -120,7 +120,9 @@ class ConfigBuilderMixin:
             block_size=self._compute_block_size(),
             enable_expert_parallel=getattr(self, '_is_moe', False),
         )
-        return self._apply_advanced_vllm(cfg) if not is_calibration else cfg
+        if not is_calibration or not getattr(self.config, 'advanced_vllm_custom_enabled', True):
+            cfg = self._apply_advanced_vllm(cfg)
+        return cfg
 
     def _get_measured_overhead(self, tp: int) -> Optional[float]:
         """Get measured vLLM fixed overhead from Steps 2-3 results for a given TP."""
