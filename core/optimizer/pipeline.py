@@ -668,9 +668,9 @@ class RecipeOptimizer(
         if not self._model_config:
             return int(self.config.qps)
 
-        # Use actual workload length, not max_model_len — vLLM paged attention
-        # only allocates blocks for real tokens, not the full max_position_embeddings.
-        # ISL+OSL is the actual per-request memory footprint during calibration.
+        # Use ISL+OSL as effective sequence length for the concurrency estimate.
+        # Calibration tests now set max_model_len to ISL+OSL (even when auto-tuning
+        # is off), so vLLM's actual KV slot size matches this.
         effective_seq_len = self.config.isl + self.config.osl
 
         num_layers = self._model_config.get('num_hidden_layers', 32)
