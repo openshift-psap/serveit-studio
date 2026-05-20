@@ -668,10 +668,10 @@ class RecipeOptimizer(
         if not self._model_config:
             return int(self.config.qps)
 
-        # Determine effective max_model_len
-        max_model_len = self.config.max_model_len
-        if not max_model_len:
-            max_model_len = self._model_config.get('max_position_embeddings', 8192)
+        # Use actual workload length, not max_model_len — vLLM paged attention
+        # only allocates blocks for real tokens, not the full max_position_embeddings.
+        # ISL+OSL is the actual per-request memory footprint during calibration.
+        effective_seq_len = self.config.isl + self.config.osl
 
         num_layers = self._model_config.get('num_hidden_layers', 32)
         num_kv_heads = self._model_config.get('num_key_value_heads',
@@ -681,8 +681,8 @@ class RecipeOptimizer(
                    self._model_config.get('num_attention_heads', 32))
         kv_heads_per_gpu = max(1, num_kv_heads // tp)
 
-        # KV cache per sequence in GB: 2(K+V) × layers × kv_heads/tp × head_dim × max_model_len × 2 bytes
-        kv_per_seq_gb = (2 * num_layers * kv_heads_per_gpu * head_dim * max_model_len * 2) / (1024**3)
+        # KV cache per sequence in GB: 2(K+V) × layers × kv_heads/tp × head_dim × seq_len × 2 bytes
+        kv_per_seq_gb = (2 * num_layers * kv_heads_per_gpu * head_dim * effective_seq_len * 2) / (1024**3)
 
         if kv_per_seq_gb <= 0:
             return int(self.config.qps)
@@ -692,7 +692,7 @@ class RecipeOptimizer(
 
         result = min(int(self.config.qps), safe_concurrent)
         self.log(f"   Safe concurrency for TP={tp}: {result} "
-                 f"(max_slots={max_concurrent}, max_model_len={max_model_len}, "
+                 f"(max_slots={max_concurrent}, seq_len={effective_seq_len}, "
                  f"kv/seq={kv_per_seq_gb:.2f}GB, available={available_for_kv:.0f}GB)")
         return result
 
