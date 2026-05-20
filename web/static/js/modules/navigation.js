@@ -179,6 +179,14 @@ socket.on('load_config_result', function(data) {
         config = { ...config, ...data.config };
         if (data.namespace) {
             config.namespace = data.namespace;
+            var instanceName = data.namespace.replace(/^inftune-/, '');
+            var bcEl = document.getElementById('breadcrumb-instance');
+            var bcSep = document.getElementById('breadcrumb-instance-sep');
+            if (bcEl && instanceName) {
+                bcEl.textContent = instanceName;
+                bcEl.classList.remove('hidden');
+                if (bcSep) bcSep.classList.remove('hidden');
+            }
         }
         // Explicitly check for null/undefined, but allow 0 and other values
         currentStep = (data.current_step !== null && data.current_step !== undefined) ? data.current_step : 1;

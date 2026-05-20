@@ -2367,3 +2367,4 @@
 .vllm-toggle.active .tgl-sw::after{transform:translateX(18px)}
 .vllm-toggle.active{border-color:#2A7B88;background:#f0fdfa}
 
+.hidden{display:none!important}
