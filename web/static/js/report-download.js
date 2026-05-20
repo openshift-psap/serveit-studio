@@ -17,7 +17,11 @@ function downloadHTMLReport(runId, data) {
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
-    a.download = `inftune-report-run-${runId}.html`;
+    const rc = data.run_config || {};
+    const model = (rc.model_name || '').split('/').pop() || 'model';
+    const goal = (rc.objective || 'ttft').toLowerCase();
+    const date = new Date().toISOString().slice(0, 10);
+    a.download = `inftune-${model}-${goal}-run${runId}-${date}.html`;
     a.click();
     URL.revokeObjectURL(url);
 }

@@ -785,7 +785,9 @@ socket.on('compression_complete', function(data) {
             var url = window.URL.createObjectURL(blob);
             var a = document.createElement('a');
             a.href = url;
-            a.download = 'inftune-optimizer.db.gz';
+            var dbModel = (config.model || '').split('/').pop() || 'model';
+            var dbDate = new Date().toISOString().slice(0, 10);
+            a.download = 'inftune-' + dbModel + '-' + dbDate + '.db.gz';
             document.body.appendChild(a);
             a.click();
             window.URL.revokeObjectURL(url);
