@@ -103,6 +103,9 @@ function addReportTab(runId) {
                 dlLink.style.display = 'inline';
                 dlLink.href = '#';
                 dlLink.onclick = (e) => { e.preventDefault(); downloadHTMLReport(runId, data); };
+                const pdfLink = document.getElementById('chart-download-pdf-link');
+                pdfLink.style.display = 'inline';
+                pdfLink.onclick = (e) => { e.preventDefault(); downloadPDFReport(runId, data); };
             }
         })
         .catch(err => {
@@ -404,15 +407,19 @@ function switchReportTab(tabId) {
     });
     updateTabBar();
 
-    // Update download link
+    // Update download links
     const tab = reportTabs.find(t => t.id === tabId);
     const dlLink = document.getElementById('chart-download-link');
+    const pdfLink = document.getElementById('chart-download-pdf-link');
     if (tab && !tab.isComparison && tabDataCache[tabId]) {
         dlLink.style.display = 'inline';
         dlLink.href = '#';
         dlLink.onclick = (e) => { e.preventDefault(); downloadHTMLReport(tab.runId, tabDataCache[tabId]); };
+        pdfLink.style.display = 'inline';
+        pdfLink.onclick = (e) => { e.preventDefault(); downloadPDFReport(tab.runId, tabDataCache[tabId]); };
     } else {
         dlLink.style.display = 'none';
+        pdfLink.style.display = 'none';
     }
 }
 
@@ -431,6 +438,7 @@ function closeReportTab(tabId) {
         } else {
             activeTabId = null;
             document.getElementById('chart-download-link').style.display = 'none';
+            document.getElementById('chart-download-pdf-link').style.display = 'none';
             // Show placeholder
             const content = document.getElementById('charts-content');
             if (!content.querySelector('.charts-loading')) {

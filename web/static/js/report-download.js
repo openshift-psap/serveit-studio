@@ -1,6 +1,25 @@
 // report-download.js — Self-contained HTML report generator for Inftune Studio
 // Extracted from app.js to keep the download report maintainable separately.
 
+function downloadPDFReport(runId, data) {
+    const charts = data.charts;
+    const rec = data.recommendation || {};
+    const summary = data.summary;
+    const best = summary.best_configs || {};
+    const allRes = data.all_results || [];
+    const pdResults = allRes.filter(r => r.architecture === 'PD');
+    const hasVLLM = charts.vllm && charts.vllm.configs.length;
+    const hasPD = pdResults.length > 0;
+
+    const html = buildFullReport(runId, data, charts, rec, summary, best, allRes, hasPD, hasVLLM);
+
+    const win = window.open('', '_blank');
+    win.document.write(html);
+    win.document.close();
+    // Wait for Plotly charts to render, then trigger print dialog
+    setTimeout(() => { win.print(); }, 2000);
+}
+
 function downloadHTMLReport(runId, data) {
     const charts = data.charts;
     const rec = data.recommendation || {};
@@ -89,6 +108,7 @@ td{padding:8px 10px;border-bottom:1px solid #f1f5f9}
 .dl-tab.active{color:#1e293b;border-bottom-color:#3b82f6;background:#eff6ff}
 .dl-pane{display:none;padding-top:16px}
 .dl-pane.active{display:block}
+@media print{body{width:100%;padding:10px}h1{font-size:1.2em}.dl-tab-bar{display:none!important}.dl-pane{display:block!important;page-break-before:auto}.chart-box,.stat-card{break-inside:avoid}table{font-size:0.85em}}
 .section-grid{display:grid;grid-template-columns:repeat(2,1fr);gap:24px;font-size:0.9em}
 .section-hdr{font-weight:700;color:#1e293b;margin-bottom:10px;padding-bottom:4px}
 </style></head><body>`;
