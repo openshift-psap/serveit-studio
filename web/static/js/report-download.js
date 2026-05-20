@@ -2,6 +2,11 @@
 // Extracted from app.js to keep the download report maintainable separately.
 
 function downloadPDFReport(runId, data) {
+    const btn = document.getElementById('chart-download-pdf-link');
+    const origText = btn.textContent;
+    btn.textContent = 'Generating PDF...';
+    btn.style.pointerEvents = 'none';
+
     const charts = data.charts;
     const rec = data.recommendation || {};
     const summary = data.summary;
@@ -13,11 +18,54 @@ function downloadPDFReport(runId, data) {
 
     const html = buildFullReport(runId, data, charts, rec, summary, best, allRes, hasPD, hasVLLM);
 
-    const win = window.open('', '_blank');
-    win.document.write(html);
-    win.document.close();
-    // Wait for Plotly charts to render, then trigger print dialog
-    setTimeout(() => { win.print(); }, 2000);
+    // Render in a hidden iframe so Plotly charts draw, then capture to PDF
+    const iframe = document.createElement('iframe');
+    iframe.style.cssText = 'position:fixed;left:-9999px;width:1200px;height:900px;border:none;';
+    document.body.appendChild(iframe);
+    iframe.contentDocument.open();
+    iframe.contentDocument.write(html);
+    iframe.contentDocument.close();
+
+    // Wait for Plotly to render, then use html2pdf
+    setTimeout(() => {
+        // Ensure all panes are visible for capture
+        iframe.contentDocument.querySelectorAll('.dl-pane').forEach(p => p.style.display = 'block');
+        iframe.contentDocument.querySelectorAll('.dl-tab-bar').forEach(b => b.style.display = 'none');
+
+        const body = iframe.contentDocument.body;
+        // Load html2pdf dynamically
+        const script = document.createElement('script');
+        script.src = 'https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.2/html2pdf.bundle.min.js';
+        script.onload = () => {
+            iframe.contentWindow.html2pdf().set({
+                margin: [10, 10, 10, 10],
+                filename: `inftune-report-run-${runId}.pdf`,
+                image: { type: 'jpeg', quality: 0.95 },
+                html2canvas: { scale: 1.5, useCORS: true, scrollY: 0, windowWidth: 1200 },
+                jsPDF: { unit: 'mm', format: 'a4', orientation: 'landscape' },
+                pagebreak: { mode: ['avoid-all', 'css', 'legacy'] }
+            }).from(body).save().then(() => {
+                document.body.removeChild(iframe);
+                btn.textContent = origText;
+                btn.style.pointerEvents = '';
+            }).catch(() => {
+                document.body.removeChild(iframe);
+                btn.textContent = origText;
+                btn.style.pointerEvents = '';
+            });
+        };
+        script.onerror = () => {
+            // Fallback: open in new tab with print dialog
+            document.body.removeChild(iframe);
+            const win = window.open('', '_blank');
+            win.document.write(html);
+            win.document.close();
+            setTimeout(() => { win.print(); }, 2000);
+            btn.textContent = origText;
+            btn.style.pointerEvents = '';
+        };
+        iframe.contentDocument.head.appendChild(script);
+    }, 3000);
 }
 
 function downloadHTMLReport(runId, data) {
