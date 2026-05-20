@@ -218,7 +218,7 @@ function populateRawFromForm() {
     };
 
     var toggleDefaults = {
-        'trust-remote-code': true, 'disable-log-requests': true, 'enable-prefix-caching': true,
+        'trust-remote-code': true, 'enable-prefix-caching': true,
         'disable-custom-all-reduce': false, 'enable-auto-tool-choice': false,
         'enable-expert-parallel': false, 'enable-dbo': false, 'enable-eplb': false,
         'vllm-debug-logs': false, 'nccl-debug-logs': false
@@ -236,8 +236,10 @@ function populateRawFromForm() {
         }
     });
 
-    // Toggle flags
+    // Toggle flags (skip internal-only flags that don't map to vLLM args)
+    var skipFlags = {'disable-log-requests':1, 'vllm-debug-logs':1, 'nccl-debug-logs':1};
     advToggleFields.forEach(function(f) {
+        if (skipFlags[f]) return;
         var modeEl = document.getElementById('adv-' + f + '-mode');
         if (!modeEl) return;
         var mode = modeEl.value;
@@ -245,11 +247,15 @@ function populateRawFromForm() {
         if (on) lines.push('--' + f);
     });
 
+    // Always-on flags from upstream defaults
+    lines.push('--disable-access-log-for-endpoints=/health,/metrics');
+
     var textarea = document.getElementById('adv-vllm-raw-text');
     if (textarea) {
         var header = '# vLLM serve flags — edit freely, one flag per line\n';
-        header += '# Model name, --port, --tensor-parallel-size, and\n';
-        header += '# --gpu-memory-utilization are set by the optimizer\n\n';
+        header += '# Model name, --port, --tensor-parallel-size,\n';
+        header += '# --gpu-memory-utilization, and --data-parallel-*\n';
+        header += '# are managed by the optimizer\n\n';
         textarea.value = header + lines.join('\n');
     }
 }
