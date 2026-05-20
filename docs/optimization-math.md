@@ -140,6 +140,18 @@ TP=8: total=1120GB, model=30GB, avail=1085GB → kv_cap=8346 → calibration=100
 ```
 KV capacity far exceeds user concurrency — cap never triggers. All TP values tested at user's 100 concurrent.
 
+### Calibration Stop Condition
+```
+stop_mode = max_requests
+max_requests = calibration_concurrency × 10
+```
+
+Calibration uses `max_requests` instead of a time-based duration. Duration-based tests (e.g., 60 seconds) at high concurrency flood the server — guidellm opens all connections immediately and sends requests as fast as possible, producing thousands of requests where most error from overload before the server can drain the queue.
+
+`max_requests = concurrency × 10` sends exactly 10 full rounds at the configured concurrency — enough data points for stable P90 throughput and TPSG measurement without flooding. The test ends when all requests complete, not on a wall-clock timer.
+
+**Why × 10?** P90 requires at least ~50 data points for statistical stability. At `concurrency × 10`, even if requests complete in waves (common with continuous batching), there are enough completed requests across the measurement window. Fewer rounds risk noisy P90; more rounds waste time without improving accuracy.
+
 ### Selection Criteria
 ```
 TTFT objective:  select TP with lowest TTFT_p90
