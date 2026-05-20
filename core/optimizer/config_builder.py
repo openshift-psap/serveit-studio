@@ -120,6 +120,8 @@ class ConfigBuilderMixin:
             block_size=self._compute_block_size(),
             enable_expert_parallel=getattr(self, '_is_moe', False),
             enable_dbo=False,  # Requires multi-node EP (LWS size>=2) with DeepEP/NVSHMEM
+            dbo_prefill_token_threshold=getattr(self, '_dbo_threshold', 32),
+            dbo_decode_token_threshold=getattr(self, '_dbo_threshold', 32),
             enable_eplb=False,  # Requires multi-node EP with NVSHMEM
             moe_backend=None,  # deep_gemm requires DeepEP; single-node uses NCCL
             all2all_backend=None,  # DeepEP backends require multi-node; single-node uses NCCL
@@ -444,6 +446,8 @@ class ConfigBuilderMixin:
             block_size=self._compute_block_size(),
             enable_expert_parallel=getattr(self, '_is_moe', False),
             enable_dbo=False,  # Requires multi-node EP (LWS size>=2) with DeepEP/NVSHMEM
+            dbo_prefill_token_threshold=getattr(self, '_dbo_threshold', 32),
+            dbo_decode_token_threshold=getattr(self, '_dbo_threshold', 32),
             enable_eplb=False,  # Requires multi-node EP with NVSHMEM
             moe_backend=None,  # deep_gemm requires DeepEP; single-node uses NCCL
             all2all_backend=None,  # DeepEP backends require multi-node; single-node uses NCCL
@@ -526,6 +530,8 @@ class ConfigBuilderMixin:
             block_size=self._compute_block_size(),
             enable_expert_parallel=getattr(self, '_is_moe', False),
             enable_dbo=False,  # Requires multi-node EP (LWS size>=2) with DeepEP/NVSHMEM
+            dbo_prefill_token_threshold=getattr(self, '_dbo_threshold', 32),
+            dbo_decode_token_threshold=getattr(self, '_dbo_threshold', 32),
             enable_eplb=False,  # Requires multi-node EP with NVSHMEM
             moe_backend=None,  # deep_gemm requires DeepEP; single-node uses NCCL
             all2all_backend=None,  # DeepEP backends require multi-node; single-node uses NCCL

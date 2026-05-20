@@ -160,6 +160,8 @@ class RecipeOptimizer(
 
         # Auto-detect MoE and speculative decoding (MTP) capability
         self._is_moe = False
+        self._num_experts = 0
+        self._dbo_threshold = 32
         self._supports_mtp = False
         if self._model_config:
             num_experts = (self._model_config.get('num_local_experts')
@@ -167,7 +169,10 @@ class RecipeOptimizer(
                           or self._model_config.get('num_experts') or 0)
             if num_experts > 1:
                 self._is_moe = True
+                self._num_experts = num_experts
+                self._dbo_threshold = self._compute_dbo_threshold(num_experts)
                 self.log(f"MoE model detected ({num_experts} experts) — expert parallel will be enabled")
+                self.log(f"  DBO token threshold: {self._dbo_threshold} (based on {num_experts} experts)")
             if self._model_config.get('num_nextn_predict_layers'):
                 self._supports_mtp = True
                 self.log(f"MTP support detected ({self._model_config['num_nextn_predict_layers']} prediction layers)")
@@ -1024,6 +1029,20 @@ class RecipeOptimizer(
             self.log(f"  MoE model: {num_experts} experts, ~{total_b:.1f}B total parameters")
 
         return round(total_b, 1)
+
+    def _compute_dbo_threshold(self, num_experts: int) -> int:
+        """Compute DBO token threshold based on expert count.
+
+        More experts = more all-to-all communication = overlap pays off
+        sooner = lower threshold. Upstream uses 32 for DeepSeek (256 experts).
+        """
+        if num_experts >= 128:
+            threshold = 32   # DeepSeek-class, heavy all-to-all
+        elif num_experts >= 32:
+            threshold = 48   # Medium MoE
+        else:
+            threshold = 64   # Small MoE (Mixtral), less all-to-all benefit
+        return threshold
 
     def _estimate_model_size_gb(self) -> float:
         """Estimate model weight size in GB for VRAM planning.

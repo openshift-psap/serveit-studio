@@ -538,6 +538,19 @@ For PD objectives: floor = 128
 
 **Why floor = 128 for PD?** In P/D mode, NIXL transfers KV cache from prefill GPUs to decode GPUs in blocks. Each transfer has fixed overhead (connection setup, header, acknowledgment). Larger blocks (128+ tokens) amortize this overhead — transferring 128 tokens in one block is much faster than 16 blocks of 8 tokens each, even though the total data is the same.
 
+### DBO Token Threshold (MoE only)
+```
+num_experts >= 128:  threshold = 32   (DeepSeek-class, heavy all-to-all)
+num_experts >= 32:   threshold = 48   (Medium MoE)
+num_experts < 32:    threshold = 64   (Small MoE, e.g. Mixtral)
+```
+
+Same threshold for both `dbo_prefill_token_threshold` and `dbo_decode_token_threshold` — per-token all-to-all volume is identical in both phases.
+
+**Why scale with expert count?** DBO overlaps MoE all-to-all communication with compute. More experts = more tokens dispatched across GPUs per forward pass = more communication to overlap = lower threshold (overlap pays off with smaller batches). DeepSeek-R1 has 256 experts with top-8 routing — the all-to-all traffic is massive, so overlapping at 32 tokens is already beneficial. Mixtral with 8 experts has much less traffic, so a higher threshold (64) avoids scheduling overhead for small batches where overlap benefit is marginal.
+
+**TP=1 / no EP sanity:** When running on a single GPU (TP=1, no expert parallelism), there's no inter-GPU all-to-all to overlap. DBO itself is disabled in this case (`enable_dbo=False`), so the threshold is irrelevant. The threshold only applies when DBO is explicitly enabled for multi-node EP deployments.
+
 ### Pod Resources (memory + CPU)
 ```
 pods_per_node = max(
