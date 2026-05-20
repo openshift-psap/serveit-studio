@@ -119,10 +119,10 @@ class ConfigBuilderMixin:
             epp_config=self._build_epp_config(),
             block_size=self._compute_block_size(),
             enable_expert_parallel=getattr(self, '_is_moe', False),
-            enable_dbo=getattr(self, '_is_moe', False),
-            enable_eplb=getattr(self, '_is_moe', False),
-            moe_backend='deep_gemm' if getattr(self, '_is_moe', False) else None,
-            all2all_backend='deepep_high_throughput' if getattr(self, '_is_moe', False) else None,
+            enable_dbo=False,  # Requires multi-node EP (LWS size>=2) with DeepEP/NVSHMEM
+            enable_eplb=False,  # Requires multi-node EP with NVSHMEM
+            moe_backend=None,  # deep_gemm requires DeepEP; single-node uses NCCL
+            all2all_backend=None,  # DeepEP backends require multi-node; single-node uses NCCL
         )
         if not is_calibration or not getattr(self.config, 'advanced_vllm_custom_enabled', True):
             cfg = self._apply_advanced_vllm(cfg)
@@ -439,10 +439,10 @@ class ConfigBuilderMixin:
             epp_config=self._build_epp_config(),
             block_size=self._compute_block_size(),
             enable_expert_parallel=getattr(self, '_is_moe', False),
-            enable_dbo=getattr(self, '_is_moe', False),
-            enable_eplb=getattr(self, '_is_moe', False),
-            moe_backend='deep_gemm' if getattr(self, '_is_moe', False) else None,
-            all2all_backend='deepep_high_throughput' if getattr(self, '_is_moe', False) else None,
+            enable_dbo=False,  # Requires multi-node EP (LWS size>=2) with DeepEP/NVSHMEM
+            enable_eplb=False,  # Requires multi-node EP with NVSHMEM
+            moe_backend=None,  # deep_gemm requires DeepEP; single-node uses NCCL
+            all2all_backend=None,  # DeepEP backends require multi-node; single-node uses NCCL
         )
         return self._apply_advanced_vllm(cfg)
 
@@ -521,10 +521,10 @@ class ConfigBuilderMixin:
             epp_config=self._build_epp_config(),
             block_size=self._compute_block_size(),
             enable_expert_parallel=getattr(self, '_is_moe', False),
-            enable_dbo=getattr(self, '_is_moe', False),
-            enable_eplb=getattr(self, '_is_moe', False),
-            moe_backend='deep_gemm' if getattr(self, '_is_moe', False) else None,
-            all2all_backend='deepep_high_throughput' if getattr(self, '_is_moe', False) else None,
+            enable_dbo=False,  # Requires multi-node EP (LWS size>=2) with DeepEP/NVSHMEM
+            enable_eplb=False,  # Requires multi-node EP with NVSHMEM
+            moe_backend=None,  # deep_gemm requires DeepEP; single-node uses NCCL
+            all2all_backend=None,  # DeepEP backends require multi-node; single-node uses NCCL
         )
         return self._apply_advanced_vllm(cfg)
 
