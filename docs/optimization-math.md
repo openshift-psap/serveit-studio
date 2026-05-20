@@ -126,7 +126,7 @@ calibration_concurrency = floor(max_concurrent × 0.9)
 
 Each calibration test deploys 1 replica with `TP` GPUs. The concurrency is set to 90% of the GPU's KV cache capacity — not the user's production concurrency. This ensures each TP value is measured at the same relative GPU utilization, giving a fair TPSG comparison. Using the user's concurrency (e.g., 100) would under-utilize large TP values and potentially overload small ones.
 
-**Why 90%?** Safety margin against estimation imprecision — our model_weights + 5GB overhead estimate is approximate. 90% is high enough to fully stress the GPU for accurate TPSG measurement, low enough to avoid hitting the exact OOM boundary.
+**Why 90%?** Safety margin against estimation imprecision. The model_weights + 5GB overhead calculation is approximate — actual memory consumption varies with CUDA graph capture, batch scheduling, and memory fragmentation. 90% keeps the GPU near saturation for accurate TPSG measurement while leaving room for estimation error.
 
 **Why per-TP calculation?** Available VRAM scales with TP (more GPUs = more total memory), so the safe concurrency is different for each TP value being tested. TP=8 can handle many more concurrent requests than TP=1.
 
