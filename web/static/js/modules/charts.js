@@ -563,6 +563,7 @@ function renderCharts(data, runId) {
         const vllmCustomEnabled = rc.advanced_vllm_custom_enabled !== false;
         if (!vllmCustomEnabled) {
             html += '<div style="color:#059669;font-style:italic;">Using upstream vLLM defaults — no overrides applied.</div>';
+            html += `<div><span style="color:#64748b;">Max Model Len:</span> ${rc.max_model_len || 'auto (from ISL+OSL)'}</div>`;
         } else {
             html += `<div><span style="color:#64748b;">Max Model Len:</span> ${advVal('max_model_len', rc.max_model_len)}</div>`;
             html += `<div><span style="color:#64748b;">GPU Memory Utilization:</span> ${advVal('gpu_memory_utilization', rc.gpu_memory_utilization)}</div>`;

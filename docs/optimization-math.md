@@ -105,28 +105,40 @@ Step 3 (Prefill): TPSG = (throughput_p90 × ISL) / TP
 
 **Why isolate prefill and decode?** In P/D disaggregated mode, prefill and decode run on separate GPU pools. Measuring them independently lets us calculate the optimal ratio between prefill and decode GPUs.
 
+### max_model_len (always set)
+```
+max_model_len = (ISL + OSL) * 1.05
+```
+
+**Why always set, even with auto-tuning disabled?** `max_model_len` is not a performance tuning preference — it's a memory sizing requirement. Without it, vLLM uses `max_position_embeddings` from the model config (e.g., 40960 for Qwen3). Each KV cache slot is pre-allocated for this full length. With ISL=1000 + OSL=1000, the actual per-request footprint is ~2000 tokens — allocating 40960 per slot wastes 95% of KV cache memory, limiting concurrent requests to ~20 instead of hundreds. This makes it impossible to serve the user's workload at their requested concurrency.
+
+The user explicitly chose ISL and OSL — there's no reason to allocate 20× more memory per slot than needed. This value is set for ALL tests (calibration and production) regardless of the auto-tuning toggle.
+
 ### Safe Calibration Concurrency
 ```
+effective_seq_len = ISL + OSL
 total_vram = gpu_vram_gb × TP
 available_for_kv = total_vram - model_weights_gb - 5.0 GB (overhead)
-kv_per_seq = (2 × layers × kv_heads_per_tp × head_dim × max_model_len × 2) / 1 GB
+kv_per_seq = (2 × layers × kv_heads_per_tp × head_dim × effective_seq_len × 2) / 1 GB
 max_concurrent = floor(available_for_kv / kv_per_seq)
 calibration_concurrency = min(user_concurrency, floor(max_concurrent × 0.8))
 ```
 
-Each calibration test deploys 1 replica with `TP` GPUs. The user's requested concurrency (e.g., 100) all hits that single pod. Without capping, small TP values (especially TP=1) can OOM because vLLM pre-allocates KV cache slots for `max_model_len` tokens each — when auto-tuning is disabled, this is the model's `max_position_embeddings` (e.g., 40960), leaving very few concurrent slots.
+Each calibration test deploys 1 replica with `TP` GPUs. The user's requested concurrency (e.g., 100) all hits that single pod. The safe concurrency cap prevents OOM when the model is very large relative to GPU VRAM. With `max_model_len` properly set to ISL+OSL, most configurations can handle the user's full concurrency — the cap is a safety net for edge cases.
 
 **Why × 0.8?** 20% safety margin for CUDA graph memory, activation buffers, and memory fragmentation not captured in the simple model_weights + 5GB overhead estimate.
 
 **Why per-TP calculation?** Available VRAM scales with TP (more GPUs = more total memory), so the safe concurrency is different for each TP value being tested. TP=8 can handle many more concurrent requests than TP=1.
 
-**Example: Qwen3-30B-A3B-FP8 on H200 (140GB), auto-tuning off:**
+**Example: Qwen3-30B-A3B-FP8 on H200 (140GB), ISL=1000, OSL=1000:**
 ```
-TP=1: total=140GB, model=30GB, avail=105GB, kv/seq=5.2GB → max=20 → safe=16
-TP=2: total=280GB, model=30GB, avail=245GB, kv/seq=2.6GB → max=94 → safe=75
-TP=4: total=560GB, model=30GB, avail=525GB, kv/seq=1.3GB → max=403 → safe=100 (capped at user's 100)
-TP=8: total=1120GB, model=30GB, avail=1085GB, kv/seq=0.65GB → max=1669 → safe=100 (capped)
+max_model_len = 2100 (always set from ISL+OSL)
+TP=1: total=140GB, model=30GB, avail=105GB, kv/seq=0.25GB → max=420 → safe=336 → use 100 (user's target)
+TP=2: total=280GB, model=30GB, avail=245GB, kv/seq=0.13GB → max=1884 → safe=100 (capped at user's 100)
+TP=4: total=560GB, model=30GB, avail=525GB → safe=100 (capped)
+TP=8: total=1120GB, model=30GB, avail=1085GB → safe=100 (capped)
 ```
+All TP values handle 100 concurrent comfortably with proper max_model_len.
 
 ### Selection Criteria
 ```
