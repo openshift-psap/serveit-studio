@@ -1,106 +1,6 @@
 // report-download.js — Self-contained HTML report generator for Inftune Studio
 // Extracted from app.js to keep the download report maintainable separately.
 
-// Load html2pdf.js once on first use
-var _html2pdfReady = null;
-function _ensureHtml2Pdf() {
-    if (_html2pdfReady) return _html2pdfReady;
-    _html2pdfReady = new Promise((resolve, reject) => {
-        if (window.html2pdf) { resolve(); return; }
-        var s = document.createElement('script');
-        s.src = 'https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.2/html2pdf.bundle.min.js';
-        s.onload = resolve;
-        s.onerror = () => { _html2pdfReady = null; reject(new Error('Failed to load html2pdf')); };
-        document.head.appendChild(s);
-    });
-    return _html2pdfReady;
-}
-
-function downloadPDFReport(runId, data) {
-    const btn = document.getElementById('chart-download-pdf-link');
-    const origText = btn.textContent;
-    btn.textContent = 'Generating PDF...';
-    btn.style.pointerEvents = 'none';
-
-    function reset() { btn.textContent = origText; btn.style.pointerEvents = ''; }
-
-    _ensureHtml2Pdf().then(() => {
-        // Capture existing rendered charts as static images first
-        var chartImages = {};
-        var chartPromises = [];
-        document.querySelectorAll('.report-tab-panel.active .js-plotly-plot').forEach(el => {
-            if (el.id) {
-                chartPromises.push(
-                    Plotly.toImage(el, { format: 'png', width: 1000, height: 350 })
-                        .then(img => { chartImages[el.id] = img; })
-                        .catch(() => {})
-                );
-            }
-        });
-
-        Promise.all(chartPromises).then(() => {
-            const charts = data.charts;
-            const rec = data.recommendation || {};
-            const summary = data.summary;
-            const best = summary.best_configs || {};
-            const allRes = data.all_results || [];
-            const hasPD = allRes.some(r => r.architecture === 'PD');
-
-            // Build sections (tables + text only — no chart placeholders)
-            const secRec = buildRecSection(runId, data, rec, summary, best, allRes);
-            const secCfg = buildCfgSection(runId, data, charts, allRes, hasPD);
-            const secCmp = buildCmpSection(runId, rec, data);
-            const secStep9 = buildStep9Section(data);
-            const secCal = buildCalSection(data);
-            const secEpp = buildEppTuningSection(runId, data);
-            const secTestCfg = buildTestSettingsSection(data);
-
-            var bodyHtml = '<div style="font-family:-apple-system,BlinkMacSystemFont,Segoe UI,Roboto,sans-serif;color:#1e293b;padding:20px;">';
-            bodyHtml += `<h1 style="border-bottom:3px solid #10b981;padding-bottom:10px;">Inftune Studio Report — Run #${runId}</h1>`;
-            bodyHtml += `<p style="color:#64748b;">Generated: ${new Date().toLocaleString()}</p>`;
-
-            // Inject captured chart images — 2 per page, stacked vertically
-            if (Object.keys(chartImages).length) {
-                var cids = Object.keys(chartImages);
-                for (var i = 0; i < cids.length; i += 2) {
-                    // Each pair gets its own page-break-before (except the first)
-                    var pageBreak = i > 0 ? 'page-break-before:always;' : '';
-                    bodyHtml += `<div style="${pageBreak}">`;
-                    bodyHtml += `<div style="background:white;border-radius:6px;border:1px solid #e2e8f0;padding:8px;margin-bottom:8px;"><img src="${chartImages[cids[i]]}" style="width:100%;height:auto;display:block;"></div>`;
-                    if (i + 1 < cids.length) {
-                        bodyHtml += `<div style="background:white;border-radius:6px;border:1px solid #e2e8f0;padding:8px;"><img src="${chartImages[cids[i+1]]}" style="width:100%;height:auto;display:block;"></div>`;
-                    }
-                    bodyHtml += '</div>';
-                }
-            }
-
-            [secRec, secCfg, secCmp, secStep9, secCal, secEpp, secTestCfg].forEach(sec => {
-                if (sec) bodyHtml += sec;
-            });
-            bodyHtml += '</div>';
-
-            // Use html2pdf string mode
-            html2pdf().set({
-                margin: [6, 6, 6, 6],
-                filename: `inftune-report-run-${runId}.pdf`,
-                image: { type: 'jpeg', quality: 0.90 },
-                html2canvas: { scale: 1.2, useCORS: true },
-                jsPDF: { unit: 'mm', format: 'a4', orientation: 'landscape' },
-                pagebreak: { mode: ['css', 'legacy'], avoid: ['.pdf-chart', 'tr', '.stat-card'] }
-            }).from(bodyHtml, 'string').save().then(() => {
-                reset();
-            }).catch(err => {
-                console.error('PDF generation failed:', err);
-                reset();
-            });
-        });
-    }).catch(() => {
-        reset();
-        downloadHTMLReport(runId, data);
-        alert('PDF library unavailable — downloaded HTML report instead. Open it and use Print > Save as PDF.');
-    });
-}
-
 function downloadHTMLReport(runId, data) {
     const charts = data.charts;
     const rec = data.recommendation || {};
@@ -189,7 +89,6 @@ td{padding:8px 10px;border-bottom:1px solid #f1f5f9}
 .dl-tab.active{color:#1e293b;border-bottom-color:#3b82f6;background:#eff6ff}
 .dl-pane{display:none;padding-top:16px}
 .dl-pane.active{display:block}
-@media print{body{width:100%;padding:10px}h1{font-size:1.2em}.dl-tab-bar{display:none!important}.dl-pane{display:block!important;page-break-before:auto}.chart-box,.stat-card{break-inside:avoid}table{font-size:0.85em}}
 .section-grid{display:grid;grid-template-columns:repeat(2,1fr);gap:24px;font-size:0.9em}
 .section-hdr{font-weight:700;color:#1e293b;margin-bottom:10px;padding-bottom:4px}
 </style></head><body>`;
