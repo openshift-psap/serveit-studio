@@ -105,6 +105,29 @@ Step 3 (Prefill): TPSG = (throughput_p90 × ISL) / TP
 
 **Why isolate prefill and decode?** In P/D disaggregated mode, prefill and decode run on separate GPU pools. Measuring them independently lets us calculate the optimal ratio between prefill and decode GPUs.
 
+### Safe Calibration Concurrency
+```
+total_vram = gpu_vram_gb × TP
+available_for_kv = total_vram - model_weights_gb - 5.0 GB (overhead)
+kv_per_seq = (2 × layers × kv_heads_per_tp × head_dim × max_model_len × 2) / 1 GB
+max_concurrent = floor(available_for_kv / kv_per_seq)
+calibration_concurrency = min(user_concurrency, floor(max_concurrent × 0.8))
+```
+
+Each calibration test deploys 1 replica with `TP` GPUs. The user's requested concurrency (e.g., 100) all hits that single pod. Without capping, small TP values (especially TP=1) can OOM because vLLM pre-allocates KV cache slots for `max_model_len` tokens each — when auto-tuning is disabled, this is the model's `max_position_embeddings` (e.g., 40960), leaving very few concurrent slots.
+
+**Why × 0.8?** 20% safety margin for CUDA graph memory, activation buffers, and memory fragmentation not captured in the simple model_weights + 5GB overhead estimate.
+
+**Why per-TP calculation?** Available VRAM scales with TP (more GPUs = more total memory), so the safe concurrency is different for each TP value being tested. TP=8 can handle many more concurrent requests than TP=1.
+
+**Example: Qwen3-30B-A3B-FP8 on H200 (140GB), auto-tuning off:**
+```
+TP=1: total=140GB, model=30GB, avail=105GB, kv/seq=5.2GB → max=20 → safe=16
+TP=2: total=280GB, model=30GB, avail=245GB, kv/seq=2.6GB → max=94 → safe=75
+TP=4: total=560GB, model=30GB, avail=525GB, kv/seq=1.3GB → max=403 → safe=100 (capped at user's 100)
+TP=8: total=1120GB, model=30GB, avail=1085GB, kv/seq=0.65GB → max=1669 → safe=100 (capped)
+```
+
 ### Selection Criteria
 ```
 TTFT objective:  select TP with lowest TTFT_p90

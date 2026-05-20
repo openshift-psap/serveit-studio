@@ -39,13 +39,15 @@ class TPCalibrationMixin:
                 result = self._make_test_result_from_db(row)
                 self.log("    ⏩ Resuming from DB (already completed)", 'info')
             else:
+                safe_c = self._estimate_safe_concurrency(tp)
                 test_config = self._create_aggregated_config(
                     tp=tp,
                     num_gpus=tp,
                     isl=1,
                     osl=self.config.osl,
                     test_id=test_id,
-                    use_concurrency=True
+                    use_concurrency=True,
+                    concurrency_override=safe_c
                 )
 
                 result = self.orchestrator.run_test(
@@ -152,13 +154,15 @@ class TPCalibrationMixin:
                 result = self._make_test_result_from_db(row)
                 self.log("    ⏩ Resuming from DB (already completed)", 'info')
             else:
+                safe_c = self._estimate_safe_concurrency(tp)
                 test_config = self._create_aggregated_config(
                     tp=tp,
                     num_gpus=tp,
                     isl=self.config.isl,
                     osl=1,
                     test_id=test_id,
-                    use_concurrency=True
+                    use_concurrency=True,
+                    concurrency_override=safe_c
                 )
 
                 result = self.orchestrator.run_test(

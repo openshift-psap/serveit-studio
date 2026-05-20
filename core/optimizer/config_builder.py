@@ -49,16 +49,21 @@ class ConfigBuilderMixin:
         isl: int,
         osl: int,
         test_id: str,
-        use_concurrency: bool = False
+        use_concurrency: bool = False,
+        concurrency_override: int = None
     ) -> TestConfig:
         """Create aggregated architecture test config.
 
         Args:
             use_concurrency: If True, use concurrent rate type with num_users.
                              All steps use concurrent/num_users to measure under realistic load.
+            concurrency_override: If set, use this instead of effective_concurrency.
+                                  Used by Steps 2-3 to cap concurrency based on KV cache capacity.
         """
-        # Use effective_concurrency for Steps 7-8 (may be scaled down), original for Steps 2-3
-        concurrency = self.effective_concurrency if use_concurrency else int(self.config.qps)
+        if concurrency_override is not None:
+            concurrency = concurrency_override
+        else:
+            concurrency = self.effective_concurrency if use_concurrency else int(self.config.qps)
 
         gpu_memory_utilization = self._compute_gpu_mem_util(tp)
         allocated_gb = self._gpu_vram_gb * gpu_memory_utilization

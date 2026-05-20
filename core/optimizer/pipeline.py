@@ -652,6 +652,50 @@ class RecipeOptimizer(
             warmup_duration_s=mj.get('warmup_duration_s'),
         )
 
+    def _estimate_safe_concurrency(self, tp: int) -> int:
+        """Estimate max safe concurrent requests for a single TP-group pod.
+
+        Calculates how many KV cache slots fit in available GPU memory after
+        model weights and overhead. Used to cap calibration concurrency so
+        Steps 2-3 don't OOM on small TP values.
+        """
+        gpu_vram = getattr(self, '_gpu_vram_gb', 80.0)
+        total_vram = gpu_vram * tp
+        model_gb = self._estimate_model_size_gb()
+        overhead_gb = 5.0  # CUDA graphs, activations, NCCL buffers
+        available_for_kv = max(0, total_vram - model_gb - overhead_gb)
+
+        if not self._model_config:
+            return int(self.config.qps)
+
+        # Determine effective max_model_len
+        max_model_len = self.config.max_model_len
+        if not max_model_len:
+            max_model_len = self._model_config.get('max_position_embeddings', 8192)
+
+        num_layers = self._model_config.get('num_hidden_layers', 32)
+        num_kv_heads = self._model_config.get('num_key_value_heads',
+                       self._model_config.get('num_attention_heads', 32))
+        head_dim = self._model_config.get('head_dim',
+                   self._model_config.get('hidden_size', 4096) //
+                   self._model_config.get('num_attention_heads', 32))
+        kv_heads_per_gpu = max(1, num_kv_heads // tp)
+
+        # KV cache per sequence in GB: 2(K+V) × layers × kv_heads/tp × head_dim × max_model_len × 2 bytes
+        kv_per_seq_gb = (2 * num_layers * kv_heads_per_gpu * head_dim * max_model_len * 2) / (1024**3)
+
+        if kv_per_seq_gb <= 0:
+            return int(self.config.qps)
+
+        max_concurrent = int(available_for_kv / kv_per_seq_gb)
+        safe_concurrent = max(1, int(max_concurrent * 0.8))
+
+        result = min(int(self.config.qps), safe_concurrent)
+        self.log(f"   Safe concurrency for TP={tp}: {result} "
+                 f"(max_slots={max_concurrent}, max_model_len={max_model_len}, "
+                 f"kv/seq={kv_per_seq_gb:.2f}GB, available={available_for_kv:.0f}GB)")
+        return result
+
     def _detect_network_type(self) -> str:
         """
         Detect network type by querying actual cluster resources.
