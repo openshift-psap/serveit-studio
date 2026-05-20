@@ -1,71 +1,87 @@
 // report-download.js — Self-contained HTML report generator for Inftune Studio
 // Extracted from app.js to keep the download report maintainable separately.
 
+// Load html2pdf.js once on first use
+var _html2pdfReady = null;
+function _ensureHtml2Pdf() {
+    if (_html2pdfReady) return _html2pdfReady;
+    _html2pdfReady = new Promise((resolve, reject) => {
+        if (window.html2pdf) { resolve(); return; }
+        var s = document.createElement('script');
+        s.src = 'https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.2/html2pdf.bundle.min.js';
+        s.onload = resolve;
+        s.onerror = () => { _html2pdfReady = null; reject(new Error('Failed to load html2pdf')); };
+        document.head.appendChild(s);
+    });
+    return _html2pdfReady;
+}
+
 function downloadPDFReport(runId, data) {
     const btn = document.getElementById('chart-download-pdf-link');
     const origText = btn.textContent;
     btn.textContent = 'Generating PDF...';
     btn.style.pointerEvents = 'none';
 
-    const charts = data.charts;
-    const rec = data.recommendation || {};
-    const summary = data.summary;
-    const best = summary.best_configs || {};
-    const allRes = data.all_results || [];
-    const pdResults = allRes.filter(r => r.architecture === 'PD');
-    const hasVLLM = charts.vllm && charts.vllm.configs.length;
-    const hasPD = pdResults.length > 0;
+    function reset() { btn.textContent = origText; btn.style.pointerEvents = ''; }
 
-    const html = buildFullReport(runId, data, charts, rec, summary, best, allRes, hasPD, hasVLLM);
+    _ensureHtml2Pdf().then(() => {
+        // Build a static HTML string (same as HTML download) and put it in a hidden div
+        const charts = data.charts;
+        const rec = data.recommendation || {};
+        const summary = data.summary;
+        const best = summary.best_configs || {};
+        const allRes = data.all_results || [];
+        const pdResults = allRes.filter(r => r.architecture === 'PD');
+        const hasVLLM = charts.vllm && charts.vllm.configs.length;
+        const hasPD = pdResults.length > 0;
 
-    // Render in a hidden iframe so Plotly charts draw, then capture to PDF
-    const iframe = document.createElement('iframe');
-    iframe.style.cssText = 'position:fixed;left:-9999px;width:1200px;height:900px;border:none;';
-    document.body.appendChild(iframe);
-    iframe.contentDocument.open();
-    iframe.contentDocument.write(html);
-    iframe.contentDocument.close();
+        // Build only the body content (no <html>/<head> wrapper)
+        const secRec = buildRecSection(runId, data, rec, summary, best, allRes);
+        const secTP = buildTPSection(rec, charts);
+        const secCfg = buildCfgSection(runId, data, charts, allRes, hasPD);
+        const secCmp = buildCmpSection(runId, rec, data);
+        const secStep9 = buildStep9Section(data);
+        const secCal = buildCalSection(data);
+        const secEpp = buildEppTuningSection(runId, data);
+        const secTestCfg = buildTestSettingsSection(data);
 
-    // Wait for Plotly to render, then use html2pdf
-    setTimeout(() => {
-        // Ensure all panes are visible for capture
-        iframe.contentDocument.querySelectorAll('.dl-pane').forEach(p => p.style.display = 'block');
-        iframe.contentDocument.querySelectorAll('.dl-tab-bar').forEach(b => b.style.display = 'none');
+        var bodyHtml = `<h1 style="font-family:sans-serif;border-bottom:3px solid #10b981;padding-bottom:10px;">Inftune Studio Report — Run #${runId}</h1>`;
+        bodyHtml += `<p style="color:#64748b;font-family:sans-serif;">Generated: ${new Date().toLocaleString()}</p>`;
+        [secRec, secTP, secCfg, secCmp, secStep9, secCal, secEpp, secTestCfg].forEach(sec => {
+            if (sec) bodyHtml += sec;
+        });
 
-        const body = iframe.contentDocument.body;
-        // Load html2pdf dynamically
-        const script = document.createElement('script');
-        script.src = 'https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.2/html2pdf.bundle.min.js';
-        script.onload = () => {
-            iframe.contentWindow.html2pdf().set({
-                margin: [10, 10, 10, 10],
-                filename: `inftune-report-run-${runId}.pdf`,
-                image: { type: 'jpeg', quality: 0.95 },
-                html2canvas: { scale: 1.5, useCORS: true, scrollY: 0, windowWidth: 1200 },
-                jsPDF: { unit: 'mm', format: 'a4', orientation: 'landscape' },
-                pagebreak: { mode: ['avoid-all', 'css', 'legacy'] }
-            }).from(body).save().then(() => {
-                document.body.removeChild(iframe);
-                btn.textContent = origText;
-                btn.style.pointerEvents = '';
-            }).catch(() => {
-                document.body.removeChild(iframe);
-                btn.textContent = origText;
-                btn.style.pointerEvents = '';
-            });
-        };
-        script.onerror = () => {
-            // Fallback: open in new tab with print dialog
-            document.body.removeChild(iframe);
-            const win = window.open('', '_blank');
-            win.document.write(html);
-            win.document.close();
-            setTimeout(() => { win.print(); }, 2000);
-            btn.textContent = origText;
-            btn.style.pointerEvents = '';
-        };
-        iframe.contentDocument.head.appendChild(script);
-    }, 3000);
+        var container = document.createElement('div');
+        container.style.cssText = 'position:absolute;left:-9999px;top:0;width:1100px;font-family:-apple-system,BlinkMacSystemFont,Segoe UI,Roboto,sans-serif;color:#1e293b;background:white;padding:20px;';
+        container.innerHTML = bodyHtml;
+
+        // Add inline styles for tables/cards since we're outside the report stylesheet
+        var style = document.createElement('style');
+        style.textContent = 'table{width:100%;border-collapse:collapse}th{background:#1e293b;color:white;padding:8px 10px;text-align:left;font-size:0.85em}td{padding:6px 10px;border-bottom:1px solid #f1f5f9;font-size:0.85em}.pareto{background:#f0fdf4;font-weight:600}.stat-card{background:white;padding:16px;border-radius:8px;border:1px solid #e2e8f0;text-align:center}.stat-card .val{font-size:1.6em;font-weight:800}.stat-card .lbl{color:#64748b;font-size:0.82em}.stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:12px;margin:16px 0}.chart-box{background:white;border-radius:8px;border:1px solid #e2e8f0;margin:12px 0;padding:12px}.chart-box h3{margin:0 0 8px;font-size:1em}.grid2{display:grid;grid-template-columns:1fr 1fr;gap:16px}.section-grid{display:grid;grid-template-columns:repeat(2,1fr);gap:20px;font-size:0.9em}.section-hdr{font-weight:700;margin-bottom:8px;padding-bottom:4px}';
+        container.prepend(style);
+        document.body.appendChild(container);
+
+        html2pdf().set({
+            margin: [8, 8, 8, 8],
+            filename: `inftune-report-run-${runId}.pdf`,
+            image: { type: 'jpeg', quality: 0.92 },
+            html2canvas: { scale: 1.5, useCORS: true, scrollY: 0, width: 1100 },
+            jsPDF: { unit: 'mm', format: 'a4', orientation: 'landscape' },
+            pagebreak: { mode: ['css', 'legacy'], avoid: ['.stat-card', '.chart-box', 'tr'] }
+        }).from(container).save().then(() => {
+            document.body.removeChild(container);
+            reset();
+        }).catch(err => {
+            console.error('PDF generation failed:', err);
+            document.body.removeChild(container);
+            reset();
+        });
+    }).catch(() => {
+        // CDN unreachable — fallback to print dialog
+        reset();
+        downloadHTMLReport(runId, data);
+        alert('PDF library unavailable — downloaded HTML report instead. Open it and use Print > Save as PDF.');
+    });
 }
 
 function downloadHTMLReport(runId, data) {
