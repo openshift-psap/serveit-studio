@@ -237,6 +237,8 @@ function updateUIFromConfig() {
         document.getElementById('pvc-size-group').style.display = 'none';
         document.getElementById('storage-note').style.display = 'none';
         document.getElementById('existing-pvc-note').style.display = 'block';
+        var pvcToggle = document.getElementById('existing-pvc-toggle');
+        if (pvcToggle) pvcToggle.classList.add('active');
 
         // Fetch PVCs to populate dropdown
         if (typeof fetchAvailablePVCs === 'function') {
@@ -566,6 +568,12 @@ function restoreClusterResources() {
             document.getElementById('node-select-list').style.opacity = nodeEnabled ? '1' : '0.5';
             document.getElementById('node-select-list').style.pointerEvents = nodeEnabled ? 'auto' : 'none';
             document.querySelectorAll('.node-select-cb').forEach(function(cb) { cb.disabled = !nodeEnabled; });
+            if (nodeEnabled) {
+                var nsToggle = document.getElementById('node-select-toggle');
+                if (nsToggle) nsToggle.classList.add('active');
+                var nsBody = document.getElementById('node-select-body');
+                if (nsBody) nsBody.style.display = 'block';
+            }
         }
     }
 
