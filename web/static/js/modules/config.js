@@ -38,6 +38,10 @@ function updateUIFromConfig() {
             document.getElementById('custom-model-body').style.display = 'block';
             var cmSw = document.getElementById('custom-model-switch');
             if (cmSw) { cmSw.style.background = '#0ea5e9'; cmSw.querySelector('span').style.transform = 'translateX(18px)'; }
+            var gs = document.getElementById('model-gallery-section');
+            var od = document.getElementById('model-or-divider');
+            if (gs) { gs.style.opacity = '0.35'; gs.style.pointerEvents = 'none'; }
+            if (od) { od.style.opacity = '0.35'; }
         }
     }
 
