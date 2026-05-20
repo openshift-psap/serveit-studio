@@ -316,12 +316,16 @@ class ConfigBuilderMixin:
             '--tool-call-parser': ('tool_call_parser', str),
             '--reasoning-parser': ('reasoning_parser', str),
             '--chat-template-content-format': ('chat_template_content_format', str),
+            '--moe-backend': ('moe_backend', str),
+            '--all2all-backend': ('all2all_backend', str),
         }
         known_toggles = {
             '--enable-prefix-caching': ('enable_prefix_caching', True),
             '--disable-custom-all-reduce': ('disable_custom_all_reduce', True),
             '--enable-auto-tool-choice': ('enable_auto_tool_choice', True),
             '--enable-expert-parallel': ('enable_expert_parallel', True),
+            '--enable-dbo': ('enable_dbo', True),
+            '--enable-eplb': ('enable_eplb', True),
             '--trust-remote-code': ('trust_remote_code', True),
             '--disable-log-requests': ('disable_log_requests', True),
         }

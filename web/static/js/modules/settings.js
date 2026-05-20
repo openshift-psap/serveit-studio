@@ -99,8 +99,8 @@ function setLatencyPercentile(pctl) {
 }
 
 // Advanced vLLM settings
-var advValueFields = ['max-model-len','gpu-memory-utilization','max-num-seqs','max-num-batched-tokens','dtype','kv-cache-dtype','pipeline-parallel-size','block-size','tool-call-parser','reasoning-parser','chat-template-content-format'];
-var advToggleFields = ['enable-prefix-caching','disable-custom-all-reduce','enable-auto-tool-choice','enable-expert-parallel','trust-remote-code','disable-log-requests','vllm-debug-logs','nccl-debug-logs'];
+var advValueFields = ['max-model-len','gpu-memory-utilization','max-num-seqs','max-num-batched-tokens','dtype','kv-cache-dtype','pipeline-parallel-size','block-size','tool-call-parser','reasoning-parser','chat-template-content-format','moe-backend','all2all-backend'];
+var advToggleFields = ['enable-prefix-caching','disable-custom-all-reduce','enable-auto-tool-choice','enable-expert-parallel','enable-dbo','enable-eplb','trust-remote-code','disable-log-requests','vllm-debug-logs','nccl-debug-logs'];
 
 function updateAdvVllm() {
     var adv = {};
@@ -220,7 +220,8 @@ function populateRawFromForm() {
     var toggleDefaults = {
         'trust-remote-code': true, 'disable-log-requests': true, 'enable-prefix-caching': true,
         'disable-custom-all-reduce': false, 'enable-auto-tool-choice': false,
-        'enable-expert-parallel': false, 'vllm-debug-logs': false, 'nccl-debug-logs': false
+        'enable-expert-parallel': false, 'enable-dbo': false, 'enable-eplb': false,
+        'vllm-debug-logs': false, 'nccl-debug-logs': false
     };
 
     // Value settings: use custom if set, otherwise auto-computed defaults
