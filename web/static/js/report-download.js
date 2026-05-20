@@ -63,7 +63,7 @@ function downloadPDFReport(runId, data) {
             if (Object.keys(chartImages).length) {
                 bodyHtml += '<div style="margin:20px 0;">';
                 for (var cid in chartImages) {
-                    bodyHtml += `<div style="background:white;border-radius:8px;border:1px solid #e2e8f0;margin:12px 0;padding:12px;page-break-inside:avoid;"><img src="${chartImages[cid]}" style="width:100%;max-width:1000px;"></div>`;
+                    bodyHtml += `<div style="background:white;border-radius:8px;border:1px solid #e2e8f0;margin:12px 0;padding:12px;page-break-inside:avoid;break-inside:avoid;page-break-before:auto;"><img src="${chartImages[cid]}" style="width:100%;max-width:950px;"></div>`;
                 }
                 bodyHtml += '</div>';
             }
@@ -80,7 +80,7 @@ function downloadPDFReport(runId, data) {
                 image: { type: 'jpeg', quality: 0.92 },
                 html2canvas: { scale: 1.5, useCORS: true },
                 jsPDF: { unit: 'mm', format: 'a4', orientation: 'landscape' },
-                pagebreak: { mode: ['css', 'legacy'], avoid: ['tr', 'img'] }
+                pagebreak: { mode: ['css', 'legacy'], avoid: ['tr', 'img', 'div[style*="break-inside"]', '.stat-card'] }
             }).from(bodyHtml, 'string').save().then(() => {
                 reset();
             }).catch(err => {
