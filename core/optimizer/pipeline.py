@@ -688,11 +688,10 @@ class RecipeOptimizer(
             return int(self.config.qps)
 
         max_concurrent = int(available_for_kv / kv_per_seq_gb)
-        safe_concurrent = max(1, int(max_concurrent * 0.8))
+        result = max(1, int(max_concurrent * 0.9))
 
-        result = min(int(self.config.qps), safe_concurrent)
-        self.log(f"   Safe concurrency for TP={tp}: {result} "
-                 f"(max_slots={max_concurrent}, seq_len={effective_seq_len}, "
+        self.log(f"   Calibration concurrency for TP={tp}: {result} "
+                 f"(90% of {max_concurrent} max slots, seq_len={effective_seq_len}, "
                  f"kv/seq={kv_per_seq_gb:.2f}GB, available={available_for_kv:.0f}GB)")
         return result
 

@@ -121,24 +121,24 @@ total_vram = gpu_vram_gb × TP
 available_for_kv = total_vram - model_weights_gb - 5.0 GB (overhead)
 kv_per_seq = (2 × layers × kv_heads_per_tp × head_dim × effective_seq_len × 2) / 1 GB
 max_concurrent = floor(available_for_kv / kv_per_seq)
-calibration_concurrency = min(user_concurrency, floor(max_concurrent × 0.8))
+calibration_concurrency = floor(max_concurrent × 0.9)
 ```
 
-Each calibration test deploys 1 replica with `TP` GPUs. The user's requested concurrency (e.g., 100) all hits that single pod. The safe concurrency cap prevents OOM when the model is very large relative to GPU VRAM. With `max_model_len` properly set to ISL+OSL, most configurations can handle the user's full concurrency — the cap is a safety net for edge cases.
+Each calibration test deploys 1 replica with `TP` GPUs. The concurrency is set to 90% of the GPU's KV cache capacity — not the user's production concurrency. This ensures each TP value is measured at the same relative GPU utilization, giving a fair TPSG comparison. Using the user's concurrency (e.g., 100) would under-utilize large TP values and potentially overload small ones.
 
-**Why × 0.8?** 20% safety margin for CUDA graph memory, activation buffers, and memory fragmentation not captured in the simple model_weights + 5GB overhead estimate.
+**Why 90%?** Leaves 10% headroom for CUDA graph memory, activation buffers, and memory fragmentation not captured in the simple model_weights + 5GB overhead estimate. High enough to fully stress the GPU, low enough to avoid OOM.
 
 **Why per-TP calculation?** Available VRAM scales with TP (more GPUs = more total memory), so the safe concurrency is different for each TP value being tested. TP=8 can handle many more concurrent requests than TP=1.
 
 **Example: Qwen3-30B-A3B-FP8 on H200 (140GB), ISL=1000, OSL=1000:**
 ```
 max_model_len = 2100 (always set from ISL+OSL)
-TP=1: total=140GB, model=30GB, avail=105GB, kv/seq=0.25GB → max=420 → safe=336 → use 100 (user's target)
-TP=2: total=280GB, model=30GB, avail=245GB, kv/seq=0.13GB → max=1884 → safe=100 (capped at user's 100)
-TP=4: total=560GB, model=30GB, avail=525GB → safe=100 (capped)
-TP=8: total=1120GB, model=30GB, avail=1085GB → safe=100 (capped)
+TP=1: total=140GB, model=30GB, avail=105GB, kv/seq=0.25GB → max=420 → calibration=378 (90%)
+TP=2: total=280GB, model=30GB, avail=245GB, kv/seq=0.13GB → max=1884 → calibration=1695
+TP=4: total=560GB, model=30GB, avail=525GB → max=4038 → calibration=3634
+TP=8: total=1120GB, model=30GB, avail=1085GB → max=8346 → calibration=7511
 ```
-All TP values handle 100 concurrent comfortably with proper max_model_len.
+Each TP value is measured at 90% GPU utilization — true apples-to-apples TPSG comparison.
 
 ### Selection Criteria
 ```
