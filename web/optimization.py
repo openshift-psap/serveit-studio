@@ -64,6 +64,22 @@ def log_to_ui(message: str, log_type: str = 'info', run_id: int = None, job_name
         # Don't fail the operation if logging fails, but print error
         print(f"Warning: Failed to persist log to database: {e}")
 
+def _reset_optimization_state(reason: str = ''):
+    """Reset optimization running state and notify the UI."""
+    with state_lock:
+        state['optimization_running'] = False
+        save_state()
+    try:
+        with get_db() as conn:
+            conn.execute('''
+                UPDATE ui_session_state
+                SET optimization_running = 0, updated_at = ?
+                WHERE id = 1
+            ''', (datetime.now().isoformat(),))
+    except Exception as e:
+        print(f"Warning: Failed to update optimization_running in database: {e}")
+    socketio.emit('status_update', {'running': False, 'message': reason})
+
 def stream_job_logs(job_name: str, namespace: str):
     """
     Stream Kubernetes job logs to UI in real-time.
@@ -130,6 +146,7 @@ def stream_job_logs(job_name: str, namespace: str):
                     break
                 elif phase == 'Failed':
                     log_to_ui(f'❌ Pod {pod_name} failed', 'error', job_name=job_name)
+                    _reset_optimization_state('Pod failed to start')
                     return
                 elif phase == 'Succeeded':
                     log_to_ui('✅ Job completed', 'success', job_name=job_name)
@@ -302,9 +319,11 @@ def stream_job_logs(job_name: str, namespace: str):
         else:
             log_to_ui(f'⚠️ Pod did not reach Succeeded status (current: {pod_phase})', 'warning', job_name=job_name)
             log_to_ui('   Deployment will not be triggered automatically', 'warning', job_name=job_name)
+            _reset_optimization_state('Model download did not complete')
 
     except Exception as e:
         log_to_ui(f'⚠️ Log streaming error: {str(e)}', 'warning', job_name=job_name)
+        _reset_optimization_state(f'Log streaming error: {str(e)}')
 
 def deploy_and_test_inference(model_name: str, namespace: str, job_name: str = None):
     """
