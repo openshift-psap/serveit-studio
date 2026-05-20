@@ -688,11 +688,12 @@ class RecipeOptimizer(
             return int(self.config.qps)
 
         max_concurrent = int(available_for_kv / kv_per_seq_gb)
-        result = max(1, int(max_concurrent * 0.9))
+        result = min(int(self.config.qps), max(1, int(max_concurrent * 0.9)))
 
         self.log(f"   Calibration concurrency for TP={tp}: {result} "
-                 f"(90% of {max_concurrent} max slots, seq_len={effective_seq_len}, "
-                 f"kv/seq={kv_per_seq_gb:.2f}GB, available={available_for_kv:.0f}GB)")
+                 f"(user={int(self.config.qps)}, kv_cap={max_concurrent}, "
+                 f"seq_len={effective_seq_len}, kv/seq={kv_per_seq_gb:.2f}GB, "
+                 f"available={available_for_kv:.0f}GB)")
         return result
 
     def _detect_network_type(self) -> str:
