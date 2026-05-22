@@ -53,10 +53,6 @@ class TPCalibrationMixin:
                 # flooding — send a controlled number, get clean TPSG measurement
                 test_config.stop_mode = 'max_requests'
                 test_config.max_requests = safe_c * 10
-                # Workaround: vLLM FP8 MoE CUTLASS bug at batch size 8192
-                # (https://github.com/vllm-project/vllm/issues/43396)
-                if not test_config.max_num_batched_tokens:
-                    test_config.max_num_batched_tokens = 4096
 
                 result = self.orchestrator.run_test(
                     test_config,
@@ -174,8 +170,6 @@ class TPCalibrationMixin:
                 )
                 test_config.stop_mode = 'max_requests'
                 test_config.max_requests = safe_c * 10
-                if not test_config.max_num_batched_tokens:
-                    test_config.max_num_batched_tokens = 4096
 
                 result = self.orchestrator.run_test(
                     test_config,

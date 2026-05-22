@@ -1076,6 +1076,7 @@ function updateSelectedImage() {
 
 var RHAIIS_VERSIONS = {
     '3.3.0': { cuda: 'v0.4.0', scheduler: 'v0.4.0', vllm: '0.13.0' },
+    '3.3.4': { cuda: 'v0.4.0', scheduler: 'v0.4.0', vllm: '0.13.0' },
     '3.4.0': { cuda: 'v0.6.0', scheduler: 'v0.7.1', vllm: '0.17.1' },
     '3.5.0': { cuda: 'v0.7.0', scheduler: 'v0.8.0', vllm: '0.19.1' },
 };
