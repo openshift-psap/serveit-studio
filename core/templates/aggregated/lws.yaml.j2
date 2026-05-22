@@ -93,11 +93,12 @@ spec:
                   {{ model_name }} \
                   --port 8000 \
 {% if trust_remote_code %}                  --trust-remote-code \
-{% endif %}                  --tensor-parallel-size {{ tensor_parallelism }} \
+{% endif %}                  --api-server-count 1 \
+                  --tensor-parallel-size {{ tensor_parallelism }} \
 {% if pipeline_parallel_size %}                  --pipeline-parallel-size {{ pipeline_parallel_size }} \
 {% endif %}                  --block-size {{ block_size | default(16) }} \
 {% if max_model_len %}                  --max-model-len {{ max_model_len }} \
-{% endif %}{% if gpu_memory_utilization %}                  --gpu-memory-utilization {{ gpu_memory_utilization }} \
+{% endif %}                  --gpu-memory-utilization {{ gpu_memory_utilization | default(0.90) }} \
 {% endif %}{% if enable_prefix_caching %}                  --enable-prefix-caching \
 {% endif %}{% if disable_custom_all_reduce %}                  --disable-custom-all-reduce \
 {% endif %}{% if dtype %}                  --dtype {{ dtype }} \

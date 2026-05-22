@@ -125,7 +125,9 @@ spec:
 {% if trust_remote_code %}                  --trust-remote-code \
 {% endif %}                  --tensor-parallel-size {{ prefill_tp }} \
 {% if pipeline_parallel_size %}                  --pipeline-parallel-size {{ pipeline_parallel_size }} \
-{% endif %}                  --kv-transfer-config '{"kv_connector":"{{ kv_connector }}","kv_role":"kv_both","kv_load_failure_policy":"fail"}' \
+{% endif %}                  --api-server-count 1 \
+                  --gpu-memory-utilization {{ prefill_gpu_memory_utilization | default(0.80) }} \
+                  --kv-transfer-config '{"kv_connector":"{{ kv_connector }}","kv_role":"kv_both","kv_load_failure_policy":"fail"}' \
 {% if enable_expert_parallel %}                  --enable-expert-parallel \
 {% endif %}{% if enable_dbo %}                  --enable-dbo \
                   --dbo-prefill-token-threshold {{ dbo_prefill_token_threshold | default(32) }} \
@@ -134,7 +136,6 @@ spec:
 {% endif %}{% if moe_backend %}                  --moe-backend {{ moe_backend }} \
 {% endif %}{% if all2all_backend %}                  --all2all-backend {{ all2all_backend }} \
 {% endif %}{% if max_model_len %}                  --max-model-len {{ max_model_len }} \
-{% endif %}{% if prefill_gpu_memory_utilization %}                  --gpu-memory-utilization {{ prefill_gpu_memory_utilization }} \
 {% endif %}{% if enable_prefix_caching %}                  --enable-prefix-caching \
 {% endif %}{% if disable_custom_all_reduce %}                  --disable-custom-all-reduce \
 {% endif %}{% if dtype %}                  --dtype {{ dtype }} \

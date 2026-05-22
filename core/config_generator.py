@@ -117,6 +117,9 @@ class TestConfig:
     moe_backend: Optional[str] = None  # 'deep_gemm', 'cutlass', None
     all2all_backend: Optional[str] = None  # 'deepep_high_throughput', 'deepep_low_latency', 'nccl', None
 
+    # Decode KV cache memory control
+    kv_cache_memory_bytes: Optional[str] = None  # e.g. '10GiB' — explicit KV cache budget for decode
+
     # Speculative decoding
     speculative_method: Optional[str] = None  # 'mtp', 'draft', None
     speculative_num_tokens: Optional[int] = None
