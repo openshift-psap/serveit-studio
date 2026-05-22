@@ -136,6 +136,22 @@ class ConfigBuilderMixin:
 
         return cfg
 
+    def _get_profiled_kv_cache_bytes(self, tp: int) -> Optional[int]:
+        """Get profiled KV cache memory in bytes for decode pods at a given TP.
+
+        Uses vllm_available_kv_gb from Steps 2-3 calibration. This is the
+        actual KV cache memory after model loading and overhead — per GPU.
+        Multiplied by TP to get the total per-pod budget.
+        Returns None if no profile data available for this TP.
+        """
+        for config, result in self.all_test_results:
+            if (result.vllm_available_kv_gb is not None
+                    and getattr(config, 'tensor_parallelism', None) == tp):
+                # vllm_available_kv_gb is per-GPU; multiply by TP for per-pod total
+                total_kv_gb = result.vllm_available_kv_gb * tp
+                return int(total_kv_gb * (1024 ** 3))
+        return None
+
     def _get_measured_overhead(self, tp: int) -> Optional[float]:
         """Get measured vLLM fixed overhead from Steps 2-3 results for a given TP."""
         for config, result in self.all_test_results:
@@ -430,6 +446,7 @@ class ConfigBuilderMixin:
             prefill_max_num_seqs=prefill_max_num_seqs,
             decode_max_num_seqs=decode_max_num_seqs,
             max_num_batched_tokens=max_batched,
+            kv_cache_memory_bytes=self._get_profiled_kv_cache_bytes(split.decode_tp),
             isl_stdev=self.config.isl_stdev,
             osl_stdev=self.config.osl_stdev,
             turns=self.config.turns,
