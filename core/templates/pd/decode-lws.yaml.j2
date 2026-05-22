@@ -146,9 +146,9 @@ spec:
                   --data-parallel-size ${DP_SIZE} \
 {% if pipeline_parallel_size %}                  --pipeline-parallel-size {{ pipeline_parallel_size }} \
 {% endif %}                  --api-server-count 1 \
-                  --gpu-memory-utilization {{ decode_gpu_memory_utilization | default(0.9) }} \
-                  --max-num-batched-tokens {{ max_num_batched_tokens | default(256) }} \
-                  --max-num-seqs {{ decode_max_num_seqs | default(256) }} \
+                  --gpu-memory-utilization {{ decode_gpu_memory_utilization or 0.9 }} \
+                  --max-num-batched-tokens {{ max_num_batched_tokens or 256 }} \
+                  --max-num-seqs {{ decode_max_num_seqs or 256 }} \
                   --kv-transfer-config '{"kv_connector":"{{ kv_connector }}","kv_role":"kv_both","kv_load_failure_policy":"fail"}' \
 {% if kv_cache_memory_bytes %}                  --kv-cache-memory-bytes={{ kv_cache_memory_bytes }} \
 {% endif %}{% if enable_expert_parallel %}                  --enable-expert-parallel \
