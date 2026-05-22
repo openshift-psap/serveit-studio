@@ -221,6 +221,15 @@ function updateUIFromConfig() {
         document.getElementById('scheduler-image-input').value = config.scheduler_image;
     }
 
+    // Restore RHAIIS version dropdown
+    if (document.getElementById('rhaiis-version-select')) {
+        if (config.rhaiis_version) {
+            document.getElementById('rhaiis-version-select').value = config.rhaiis_version;
+        } else if (typeof markImagesCustom === 'function') {
+            markImagesCustom();
+        }
+    }
+
     // Restore run description
     if (config.run_description && document.getElementById('run-description-input')) {
         document.getElementById('run-description-input').value = config.run_description;
@@ -1065,6 +1074,77 @@ function updateSelectedImage() {
     var full = repo + ':' + tag;
     document.getElementById('image-full-path').textContent = full;
     config.image = full;
+    saveConfig();
+}
+
+var RHAIIS_VERSIONS = {
+    '3.3.0': { cuda: 'v0.4.0', scheduler: 'v0.4.0', vllm: '0.13.0' },
+    '3.4.0': { cuda: 'v0.6.0', scheduler: 'v0.7.1', vllm: '0.17.1' },
+    '3.5.0': { cuda: 'v0.7.0', scheduler: 'v0.8.0', vllm: '0.19.1' },
+};
+
+function applyRhaiisVersion(version) {
+    var preset = RHAIIS_VERSIONS[version];
+    if (!preset) return; // 'custom' selected — do nothing
+
+    // Set cuda image tag
+    var tagSelect = document.getElementById('image-tag-select');
+    var found = false;
+    for (var i = 0; i < tagSelect.options.length; i++) {
+        if (tagSelect.options[i].value === preset.cuda) {
+            tagSelect.selectedIndex = i;
+            found = true;
+            break;
+        }
+    }
+    if (!found) {
+        var opt = document.createElement('option');
+        opt.value = preset.cuda;
+        opt.textContent = preset.cuda;
+        tagSelect.appendChild(opt);
+        tagSelect.value = preset.cuda;
+    }
+    updateSelectedImage();
+
+    // Set scheduler image
+    var schedInput = document.getElementById('scheduler-image-input');
+    var schedRepo = schedInput.value.split(':')[0] || 'ghcr.io/llm-d/llm-d-inference-scheduler';
+    schedInput.value = schedRepo + ':' + preset.scheduler;
+    config.scheduler_image = schedInput.value;
+
+    // Update scheduler tag dropdown if populated
+    var schedSelect = document.getElementById('scheduler-tag-select');
+    if (schedSelect && schedSelect.options.length > 0) {
+        for (var j = 0; j < schedSelect.options.length; j++) {
+            if (schedSelect.options[j].value === preset.scheduler) {
+                schedSelect.selectedIndex = j;
+                break;
+            }
+        }
+    }
+
+    config.rhaiis_version = version;
+    saveConfig();
+}
+
+function markImagesCustom() {
+    var sel = document.getElementById('rhaiis-version-select');
+    if (!sel) return;
+    var currentCuda = document.getElementById('image-tag-select').value;
+    var currentSched = (document.getElementById('scheduler-image-input').value || '').split(':').pop();
+
+    // Check if current images match any preset
+    var matched = false;
+    for (var ver in RHAIIS_VERSIONS) {
+        var p = RHAIIS_VERSIONS[ver];
+        if (p.cuda === currentCuda && p.scheduler === currentSched) {
+            sel.value = ver;
+            matched = true;
+            break;
+        }
+    }
+    if (!matched) sel.value = 'custom';
+    config.rhaiis_version = sel.value;
     saveConfig();
 }
 
