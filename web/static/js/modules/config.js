@@ -195,15 +195,9 @@ function updateUIFromConfig() {
         }
     }
 
-    // Restore image selection
+    // Restore image selection (single input with full path)
     if (config.image && document.getElementById('image-repo-input')) {
-        var imgParts = config.image.split(':');
-        var imgTag = imgParts.pop();
-        var imgRepo = imgParts.join(':');
-        document.getElementById('image-repo-input').value = imgRepo;
-        var tagSelect = document.getElementById('image-tag-select');
-        tagSelect.innerHTML = '<option value="' + imgTag + '" selected>' + imgTag + '</option>';
-        document.getElementById('image-full-path').textContent = config.image;
+        document.getElementById('image-repo-input').value = config.image;
     }
 
     // Restore advanced vLLM custom toggle
@@ -1032,9 +1026,9 @@ function updateSingleTestGpuSummary() {
 
 // Image tag fetching
 function fetchImageTags() {
-    var repo = (document.getElementById('image-repo-input').value || 'ghcr.io/llm-d/llm-d-cuda').trim();
+    var full = (document.getElementById('image-repo-input').value || 'ghcr.io/llm-d/llm-d-cuda:v0.6.0').trim();
+    var repo = full.split(':')[0];
     var statusEl = document.getElementById('image-tag-status');
-    var selectEl = document.getElementById('image-tag-select');
     statusEl.textContent = 'Fetching tags...';
     statusEl.style.color = '#0369a1';
 
@@ -1055,7 +1049,7 @@ socket.on('image_tags_result', function(data) {
     statusEl.textContent = tags.length + ' tags found';
     statusEl.style.color = '#22c55e';
 
-    var currentTag = config.image ? config.image.split(':').pop() : 'v0.5.1';
+    var currentTag = config.image ? config.image.split(':').pop() : 'v0.6.0';
     selectEl.innerHTML = '';
     tags.forEach(function(tag) {
         var opt = document.createElement('option');
@@ -1064,16 +1058,19 @@ socket.on('image_tags_result', function(data) {
         if (tag === currentTag) opt.selected = true;
         selectEl.appendChild(opt);
     });
+    selectEl.style.display = 'block';
 
     updateSelectedImage();
 });
 
 function updateSelectedImage() {
-    var repo = (document.getElementById('image-repo-input').value || 'ghcr.io/llm-d/llm-d-cuda').trim();
-    var tag = document.getElementById('image-tag-select').value;
-    var full = repo + ':' + tag;
-    document.getElementById('image-full-path').textContent = full;
-    config.image = full;
+    var input = document.getElementById('image-repo-input');
+    var repo = input.value.split(':')[0] || 'ghcr.io/llm-d/llm-d-cuda';
+    var selectEl = document.getElementById('image-tag-select');
+    if (selectEl && selectEl.value) {
+        input.value = repo + ':' + selectEl.value;
+    }
+    config.image = input.value;
     saveConfig();
 }
 
@@ -1087,24 +1084,22 @@ function applyRhaiisVersion(version) {
     var preset = RHAIIS_VERSIONS[version];
     if (!preset) return; // 'custom' selected — do nothing
 
-    // Set cuda image tag
+    // Set cuda image (full path in single input)
+    var cudaInput = document.getElementById('image-repo-input');
+    var cudaRepo = cudaInput.value.split(':')[0] || 'ghcr.io/llm-d/llm-d-cuda';
+    cudaInput.value = cudaRepo + ':' + preset.cuda;
+    config.image = cudaInput.value;
+
+    // Update tag dropdown if populated
     var tagSelect = document.getElementById('image-tag-select');
-    var found = false;
-    for (var i = 0; i < tagSelect.options.length; i++) {
-        if (tagSelect.options[i].value === preset.cuda) {
-            tagSelect.selectedIndex = i;
-            found = true;
-            break;
+    if (tagSelect && tagSelect.options.length > 0) {
+        for (var i = 0; i < tagSelect.options.length; i++) {
+            if (tagSelect.options[i].value === preset.cuda) {
+                tagSelect.selectedIndex = i;
+                break;
+            }
         }
     }
-    if (!found) {
-        var opt = document.createElement('option');
-        opt.value = preset.cuda;
-        opt.textContent = preset.cuda;
-        tagSelect.appendChild(opt);
-        tagSelect.value = preset.cuda;
-    }
-    updateSelectedImage();
 
     // Set scheduler image
     var schedInput = document.getElementById('scheduler-image-input');
@@ -1130,7 +1125,7 @@ function applyRhaiisVersion(version) {
 function markImagesCustom() {
     var sel = document.getElementById('rhaiis-version-select');
     if (!sel) return;
-    var currentCuda = document.getElementById('image-tag-select').value;
+    var currentCuda = (document.getElementById('image-repo-input').value || '').split(':').pop();
     var currentSched = (document.getElementById('scheduler-image-input').value || '').split(':').pop();
 
     // Check if current images match any preset
