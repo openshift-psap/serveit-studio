@@ -558,6 +558,19 @@ Breaking down `kv_per_seq_gb`:
 
 **Why use max_model_len (worst case)?** vLLM pre-allocates KV cache slots at the maximum sequence length to avoid runtime reallocation. Even if most sequences are shorter, each slot reserves max_model_len tokens worth of memory.
 
+### kv_cache_memory_bytes (PD decode only)
+```
+kv_cache_memory_bytes = int(vllm_available_kv_gb × TP × 1024³)
+```
+
+Set only for decode pods in PD mode. Uses the profiled `vllm_available_kv_gb` from Steps 2-3 — the actual KV cache memory after model loading, CUDA graphs, and all overhead.
+
+`vllm_available_kv_gb` is per-GPU (vLLM reports the minimum across all TP workers). Multiplied by TP to get the total per-pod budget. Cast to integer (vLLM expects raw byte count).
+
+**Why only for decode?** Upstream sets this only for decode pods. Prefill pods use the default vLLM allocation. Decode pods benefit from an explicit budget because their KV cache usage is more predictable (fixed sequence lengths from prefill handoff).
+
+**Why strict TP matching?** CUDA graph sizes change between TP values, affecting the memory available for KV cache. A profile at TP=4 doesn't accurately represent TP=8. If no matching TP profile exists, the flag is omitted and vLLM calculates internally.
+
 ### max_num_batched_tokens
 ```
 target_batch_latency = 0.2 seconds
