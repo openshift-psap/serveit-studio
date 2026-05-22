@@ -617,6 +617,22 @@ def run_optimization_background(data):
         test_duration = int(_get('max_test_duration', 300, ui_key='duration'))
         max_requests = _get('max_requests')
         thanos_url = data.get('thanos_url', os.environ.get('THANOS_URL'))
+        # Auto-detect Prometheus if not configured
+        if not thanos_url:
+            for candidate in [
+                'http://prometheus.monitoring.svc.cluster.local:9090',
+                'http://prometheus-k8s.openshift-monitoring.svc:9091',
+                'http://thanos-querier.openshift-monitoring.svc:9091',
+            ]:
+                try:
+                    import urllib.request
+                    r = urllib.request.urlopen(candidate + '/api/v1/status/config', timeout=3)
+                    if r.status == 200:
+                        thanos_url = candidate
+                        log_to_ui(f'📊 Auto-detected Prometheus at {candidate}', 'info')
+                        break
+                except Exception:
+                    continue
         hf_token = _get('hf_token')
         max_gpus = _get('max_gpus', 16)
         use_achievable_qps = _get('use_achievable_qps', False)
