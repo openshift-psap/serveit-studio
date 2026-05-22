@@ -45,7 +45,7 @@ function goToStep(step, skipSave) {
     if (!skipSave) saveConfig();
 
     // Update breadcrumb
-    const stepTitles = {1:'Goal', 2:'Model', 3:'Workload', 4:'Test Config', 5:'Setup', 6:'EPP Config', 7:'Review & Run'};
+    const stepTitles = {1:'Goal', 2:'Model', 3:'Workload', 4:'Test Config', 5:'Infrastructure & Deployment', 6:'EPP Config', 7:'Review & Run'};
     const bc = document.getElementById('breadcrumb-title');
     if (bc) bc.textContent = `Step ${step}: ${stepTitles[step] || ''}`;
 

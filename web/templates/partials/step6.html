@@ -1,11 +1,66 @@
                     <div class="step-section" id="step5-section">
                         <div style="display: flex; justify-content: space-between; align-items: center;">
-                            <h3>Cluster Resources & Storage</h3>
+                            <h3>Infrastructure & Deployment</h3>
                             <button id="rescan-cluster-btn" onclick="rescanCluster()" style="display: none; padding: 6px 14px; background: #0ea5e9; color: white; border: none; border-radius: 6px; font-size: 13px; font-weight: 600; cursor: pointer; transition: background 0.2s;">
                                 Re-scan Hardware
                             </button>
                         </div>
-                        <p class="description">Your cluster hardware is detected automatically. Configure where the model files are stored.</p>
+                        <p class="description">Select which llm-d version to deploy, configure cluster hardware, and set up model storage.</p>
+
+                        <!-- Container Image Selection (collapsible) -->
+                        <div style="border:2px solid #0ea5e9;border-radius:12px;overflow:hidden;margin-bottom:20px;">
+                            <div style="background:linear-gradient(135deg,#f0f9ff,#e0f2fe);padding:14px 20px;cursor:pointer;display:flex;align-items:center;justify-content:space-between;" onclick="var b=document.getElementById('image-select-body');var a=document.getElementById('image-select-arrow');if(b.style.display==='none'){b.style.display='block';a.textContent='▾';}else{b.style.display='none';a.textContent='▸';}">
+                                <div>
+                                    <div style="font-weight:700;color:#0c4a6e;font-size:1.05em;">📦 Inference Engine Image</div>
+                                    <div style="color:#0369a1;font-size:0.92em;margin-top:4px;">Select which llm-d / vLLM version to use for inference pods.</div>
+                                </div>
+                                <div id="image-select-arrow" style="font-size:1.4em;color:#0c4a6e;font-weight:700;">▸</div>
+                            </div>
+                            <div id="image-select-body" style="display:none;padding:16px 20px;">
+                                <!-- RHAIIS Version Preset -->
+                                <div style="margin-bottom:16px;">
+                                    <label style="display:block;font-weight:600;margin-bottom:6px;color:#374151;font-size:0.9em;">RHAIIS Version</label>
+                                    <select id="rhaiis-version-select" style="width:100%;padding:10px 14px;border:2px solid #d1d5db;border-radius:8px;font-size:14px;background:white;" onchange="applyRhaiisVersion(this.value)">
+                                        <option value="3.4.0">3.4.0 GA (default) — llm-d 0.6.0 / vLLM 0.17.1</option>
+                                        <option value="3.3.0">3.3.0 — llm-d 0.4.0 / vLLM 0.13.0</option>
+                                        <option value="3.5.0">3.5 EA2 — llm-d 0.7.0 / vLLM 0.19.1</option>
+                                        <option value="custom">Custom</option>
+                                    </select>
+                                </div>
+
+                                <div style="margin-bottom:16px;">
+                                    <label style="display:block;font-weight:600;margin-bottom:6px;color:#374151;font-size:0.9em;">Image Repository</label>
+                                    <div style="display:flex;gap:8px;">
+                                        <input type="text" id="image-repo-input" value="ghcr.io/llm-d/llm-d-cuda" placeholder="ghcr.io/llm-d/llm-d-cuda" style="flex:1;padding:10px 14px;border:2px solid #d1d5db;border-radius:8px;font-size:14px;font-family:monospace;" onchange="config.custom_image_repo=this.value;markImagesCustom();fetchImageTags();saveConfig();">
+                                        <button type="button" onclick="fetchImageTags()" style="padding:10px 16px;background:#0ea5e9;color:white;border:none;border-radius:8px;font-weight:600;font-size:0.85em;cursor:pointer;white-space:nowrap;">Fetch Tags</button>
+                                    </div>
+                                    <div style="margin-top:6px;font-size:0.8em;color:#64748b;">For air-gapped clusters, enter your internal registry (e.g., <code style="background:#f1f5f9;padding:1px 4px;border-radius:3px;">registry.internal.company.com/llm-d/llm-d-cuda</code>)</div>
+                                </div>
+                                <div style="margin-bottom:16px;">
+                                    <label style="display:block;font-weight:600;margin-bottom:6px;color:#374151;font-size:0.9em;">Image Tag</label>
+                                    <select id="image-tag-select" style="width:100%;padding:10px 14px;border:2px solid #d1d5db;border-radius:8px;font-size:14px;font-family:monospace;background:white;" onchange="updateSelectedImage();markImagesCustom();">
+                                        <option value="v0.6.0" selected>v0.6.0 (default)</option>
+                                    </select>
+                                    <div id="image-tag-status" style="margin-top:6px;font-size:0.8em;color:#64748b;"></div>
+                                </div>
+                                <div style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:8px;padding:10px 14px;">
+                                    <div style="font-size:0.8em;color:#64748b;margin-bottom:4px;">Full image path:</div>
+                                    <code id="image-full-path" style="font-size:0.9em;color:#0c4a6e;word-break:break-all;">ghcr.io/llm-d/llm-d-cuda:v0.6.0</code>
+                                </div>
+
+                                <div style="border-top:1px solid #e2e8f0;margin-top:16px;padding-top:16px;">
+                                    <label style="display:block;font-weight:600;margin-bottom:6px;color:#374151;font-size:0.9em;">EPP Scheduler Image</label>
+                                    <div style="display:flex;gap:8px;">
+                                        <input type="text" id="scheduler-image-input" value="ghcr.io/llm-d/llm-d-inference-scheduler:v0.7.1" placeholder="ghcr.io/llm-d/llm-d-inference-scheduler:v0.7.1" style="flex:1;padding:10px 14px;border:2px solid #d1d5db;border-radius:8px;font-size:14px;font-family:monospace;" onchange="config.scheduler_image=this.value;markImagesCustom();saveConfig();">
+                                        <button type="button" onclick="fetchSchedulerTags()" style="padding:10px 16px;background:#0ea5e9;color:white;border:none;border-radius:8px;font-weight:600;font-size:0.85em;cursor:pointer;white-space:nowrap;">Fetch Tags</button>
+                                    </div>
+                                    <div style="margin-top:6px;font-size:0.8em;color:#64748b;">The EPP (Endpoint Picker) routes requests to inference pods. Should match the llm-d release version.</div>
+                                    <select id="scheduler-tag-select" style="display:none;width:100%;padding:10px 14px;border:2px solid #d1d5db;border-radius:8px;font-size:14px;font-family:monospace;background:white;margin-top:8px;" onchange="updateSelectedScheduler();markImagesCustom();">
+                                    </select>
+                                    <div id="scheduler-tag-status" style="margin-top:6px;font-size:0.8em;color:#64748b;"></div>
+                                </div>
+                            </div>
+                        </div>
 
                         <!-- Scanning Status (shown during scan) -->
                         <div id="scanning-status" style="display: none; margin-bottom: 24px;">
