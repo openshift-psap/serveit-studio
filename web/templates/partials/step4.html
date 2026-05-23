@@ -259,13 +259,13 @@
                                     <div style="display:flex;gap:8px;margin-top:8px;">
                                         <button type="button" onclick="populateRawFromForm()" style="padding:6px 14px;border:1px solid #d1d5db;border-radius:6px;background:#fff;color:#64748b;font-size:0.8em;cursor:pointer;font-weight:600;">Reset from Form Settings</button>
                                     </div>
-                                </div>
 
-                                <!-- Raw Env Variables -->
-                                <div style="margin-top:16px;padding-top:16px;border-top:1px solid #e2e8f0;">
-                                    <div style="font-weight:600;color:#334155;font-size:0.9em;margin-bottom:8px;text-transform:uppercase;letter-spacing:0.5px;">Extra Environment Variables</div>
-                                    <div style="color:#64748b;font-size:0.85em;margin-bottom:8px;">Added to the vLLM pod container. One per line: <code style="background:#f1f5f9;padding:2px 6px;border-radius:3px;">NAME=value</code>. Lines starting with # are ignored.</div>
-                                    <textarea id="adv-extra-env-text" style="width:100%;height:120px;font-family:monospace;font-size:0.9em;padding:12px;border:2px solid #d1d5db;border-radius:8px;background:#1e293b;color:#e2e8f0;line-height:1.6;resize:vertical;box-sizing:border-box;" oninput="updateExtraEnvVars()" spellcheck="false" placeholder="# Example:&#10;VLLM_ATTENTION_BACKEND=FLASHINFER&#10;CUDA_LAUNCH_BLOCKING=1"></textarea>
+                                    <!-- Raw Env Variables -->
+                                    <div style="margin-top:16px;padding-top:16px;border-top:1px solid #e2e8f0;">
+                                        <div style="font-weight:600;color:#334155;font-size:0.9em;margin-bottom:8px;text-transform:uppercase;letter-spacing:0.5px;">Extra Environment Variables</div>
+                                        <div style="color:#64748b;font-size:0.85em;margin-bottom:8px;">Added to the vLLM pod container. One per line: <code style="background:#f1f5f9;padding:2px 6px;border-radius:3px;">NAME=value</code>. Lines starting with # are ignored.</div>
+                                        <textarea id="adv-extra-env-text" style="width:100%;height:120px;font-family:monospace;font-size:0.9em;padding:12px;border:2px solid #d1d5db;border-radius:8px;background:#1e293b;color:#e2e8f0;line-height:1.6;resize:vertical;box-sizing:border-box;" oninput="updateExtraEnvVars()" spellcheck="false" placeholder="# Example:&#10;VLLM_ATTENTION_BACKEND=FLASHINFER&#10;CUDA_LAUNCH_BLOCKING=1"></textarea>
+                                    </div>
                                 </div>
 
                                 <div id="adv-vllm-form-section">
