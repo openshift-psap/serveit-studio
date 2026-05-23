@@ -570,7 +570,7 @@ class ConfigBuilderMixin:
             epp_config=self._build_epp_config(),
             block_size=self._compute_block_size(),
             enable_expert_parallel=(max(split.prefill_tp, split.decode_tp) > 1),
-            enable_dbo=(max(split.prefill_tp, split.decode_tp) > 1),
+            enable_dbo=False,  # Requires DeepEP all2all backend (not available on single-node NCCL)
             dbo_prefill_token_threshold=dbo_threshold,
             dbo_decode_token_threshold=dbo_threshold,
             enable_eplb=(max(split.prefill_tp, split.decode_tp) > 1),
