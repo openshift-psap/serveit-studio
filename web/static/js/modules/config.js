@@ -212,6 +212,11 @@ function updateUIFromConfig() {
         if (sw) { sw.style.background = advCustom ? '#64748b' : '#ccc'; sw.querySelector('span').style.transform = advCustom ? 'translateX(18px)' : 'translateX(0)'; }
     }
 
+    // Restore extra env vars
+    if (config.extra_env_vars && document.getElementById('adv-extra-env-text')) {
+        document.getElementById('adv-extra-env-text').value = config.extra_env_vars.map(function(e) { return e.name + '=' + e.value; }).join('\n');
+    }
+
     // Restore scheduler image
     if (config.scheduler_image && document.getElementById('scheduler-image-input')) {
         document.getElementById('scheduler-image-input').value = config.scheduler_image;

@@ -160,6 +160,10 @@ spec:
                 value: /model-cache/huggingface
               - name: RAYON_NUM_THREADS
                 value: "1"
+{% if extra_env_vars %}{% for env in extra_env_vars %}
+              - name: {{ env.name }}
+                value: "{{ env.value }}"
+{% endfor %}{% endif %}
             ports:
               - containerPort: 8000
                 name: vllm

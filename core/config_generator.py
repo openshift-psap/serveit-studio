@@ -130,6 +130,8 @@ class TestConfig:
 
     # Raw vLLM extra args (user-provided text, appended to vllm serve command)
     extra_vllm_args: Optional[str] = None
+    # Raw extra env vars (list of {name, value} dicts, added to pod env)
+    extra_env_vars: Optional[List[Dict[str, str]]] = None
 
     # EPP configuration (passed to prereq_manager for configmap generation)
     epp_config: Optional[Dict] = None

@@ -123,13 +123,14 @@ class ConfigBuilderMixin:
             dataset_max_output=self.config.dataset_max_output or 256,
             epp_config=self._build_epp_config(),
             block_size=self._compute_block_size(),
-            enable_expert_parallel=False,  # Single-node: replicate experts (no NCCL all-to-all overhead)
-            enable_dbo=False,  # Requires multi-node EP (LWS size>=2) with DeepEP/NVSHMEM
+            extra_env_vars=self.config.extra_env_vars,
+            enable_expert_parallel=False,
+            enable_dbo=False,
             dbo_prefill_token_threshold=getattr(self, '_dbo_threshold', 32),
             dbo_decode_token_threshold=getattr(self, '_dbo_threshold', 32),
-            enable_eplb=False,  # Requires multi-node EP with NVSHMEM
-            moe_backend=None,  # deep_gemm requires DeepEP; single-node uses NCCL
-            all2all_backend=None,  # DeepEP backends require multi-node; single-node uses NCCL
+            enable_eplb=False,
+            moe_backend=None,
+            all2all_backend=None,
         )
         if not is_calibration or not getattr(self.config, 'advanced_vllm_custom_enabled', True):
             cfg = self._apply_advanced_vllm(cfg)
@@ -470,13 +471,14 @@ class ConfigBuilderMixin:
             dataset_max_output=self.config.dataset_max_output or 256,
             epp_config=self._build_epp_config(),
             block_size=self._compute_block_size(),
-            enable_expert_parallel=False,  # Single-node: replicate experts (no NCCL all-to-all overhead)
-            enable_dbo=False,  # Requires multi-node EP (LWS size>=2) with DeepEP/NVSHMEM
+            extra_env_vars=self.config.extra_env_vars,
+            enable_expert_parallel=False,
+            enable_dbo=False,
             dbo_prefill_token_threshold=getattr(self, '_dbo_threshold', 32),
             dbo_decode_token_threshold=getattr(self, '_dbo_threshold', 32),
-            enable_eplb=False,  # Requires multi-node EP with NVSHMEM
-            moe_backend=None,  # deep_gemm requires DeepEP; single-node uses NCCL
-            all2all_backend=None,  # DeepEP backends require multi-node; single-node uses NCCL
+            enable_eplb=False,
+            moe_backend=None,
+            all2all_backend=None,
         )
         return self._apply_advanced_vllm(cfg)
 
@@ -559,6 +561,7 @@ class ConfigBuilderMixin:
             dataset_max_output=self.config.dataset_max_output or 256,
             epp_config=self._build_epp_config(),
             block_size=self._compute_block_size(),
+            extra_env_vars=self.config.extra_env_vars,
             enable_expert_parallel=(max(split.prefill_tp, split.decode_tp) > 1),
             enable_dbo=(max(split.prefill_tp, split.decode_tp) > 1),
             dbo_prefill_token_threshold=dbo_threshold,

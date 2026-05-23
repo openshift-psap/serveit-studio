@@ -123,6 +123,7 @@ class RecipeOptimizerConfig:
     # Advanced vLLM settings (user overrides)
     advanced_vllm_custom_enabled: bool = True  # False = use llm-d upstream defaults
     advanced_vllm: Optional[Dict] = None
+    extra_env_vars: Optional[List[Dict[str, str]]] = None
 
     # Cluster connectivity
     kubeconfig: Optional[str] = None  # Path to kubeconfig file for remote clusters

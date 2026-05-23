@@ -181,6 +181,21 @@ function toggleAdvVllmCustom(enabled) {
     saveConfig();
 }
 
+function updateExtraEnvVars() {
+    var text = (document.getElementById('adv-extra-env-text') || {}).value || '';
+    var envVars = [];
+    text.split('\n').forEach(function(line) {
+        line = line.trim();
+        if (!line || line.startsWith('#')) return;
+        var eq = line.indexOf('=');
+        if (eq > 0) {
+            envVars.push({ name: line.substring(0, eq).trim(), value: line.substring(eq + 1).trim() });
+        }
+    });
+    config.extra_env_vars = envVars.length > 0 ? envVars : null;
+    saveConfig();
+}
+
 function setAdvVllmMode(mode) {
     var formBtn = document.getElementById('adv-mode-form-btn');
     var rawBtn = document.getElementById('adv-mode-raw-btn');
