@@ -559,13 +559,13 @@ class ConfigBuilderMixin:
             dataset_max_output=self.config.dataset_max_output or 256,
             epp_config=self._build_epp_config(),
             block_size=self._compute_block_size(),
-            enable_expert_parallel=True,
-            enable_dbo=True,
+            enable_expert_parallel=False,
+            enable_dbo=False,
             dbo_prefill_token_threshold=dbo_threshold,
             dbo_decode_token_threshold=dbo_threshold,
-            enable_eplb=True,
-            moe_backend='deep_gemm',
-            all2all_backend='deepep_high_throughput',
+            enable_eplb=False,
+            moe_backend=None,
+            all2all_backend=None,
         )
         return self._apply_advanced_vllm(cfg)
 
