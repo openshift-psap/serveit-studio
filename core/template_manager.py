@@ -74,14 +74,11 @@ class TemplateManager:
         """
         if architecture == 'aggregated':
             return 'aggregated/lws.yaml.j2'
-        elif architecture == 'pd':
-            # PD uses two templates: prefill and decode
+        elif architecture in ('pd', 'ep'):
             return {
                 'prefill': 'pd/prefill-lws.yaml.j2',
                 'decode': 'pd/decode-lws.yaml.j2'
             }
-        elif architecture == 'ep':
-            return 'ep/lws.yaml.j2'
         else:
             raise ValueError(f"Unknown architecture: {architecture}")
 
@@ -181,10 +178,10 @@ class TemplateManager:
             Dictionary with 'prefill' and 'decode' keys containing rendered YAML
             Ordered by GPU requirement (highest TP first)
         """
-        if config.architecture != 'pd':
-            raise ValueError(f"Expected pd architecture, got {config.architecture}")
+        if config.architecture not in ('pd', 'ep'):
+            raise ValueError(f"Expected pd or ep architecture, got {config.architecture}")
 
-        template_paths = self._get_template_path('pd')
+        template_paths = self._get_template_path(config.architecture)
         prefill_template = self.env.get_template(template_paths['prefill'])
         decode_template = self.env.get_template(template_paths['decode'])
 
@@ -216,28 +213,16 @@ class TemplateManager:
 
         return rendered
 
-    def render_ep(self, config: TestConfig) -> str:
+    def render_ep(self, config: TestConfig) -> Dict[str, str]:
         """
-        Render EP architecture template.
+        Render EP architecture templates (uses PD prefill/decode split).
 
-        Args:
-            config: Test configuration
-
-        Returns:
-            Rendered YAML manifest as string
+        EP reuses PD templates — the EP-specific flags (expert parallel, EPLB,
+        MoE backend) are set in the config and rendered via PD template conditionals.
         """
         if config.architecture != 'ep':
             raise ValueError(f"Expected ep architecture, got {config.architecture}")
-
-        template_path = self._get_template_path('ep')
-        template = self.env.get_template(template_path)
-
-        vars_dict = self._prepare_template_vars(config)
-
-        rendered = template.render(**vars_dict)
-        logger.info(f"Rendered EP template for {config.test_id}")
-
-        return rendered
+        return self.render_pd(config)
 
     def render_config(self, config: TestConfig) -> Dict[str, str]:
         """
@@ -255,33 +240,23 @@ class TemplateManager:
             service_template = self.env.get_template('aggregated/service.yaml.j2')
             service_yaml = service_template.render(**self._prepare_template_vars(config))
             return {'lws': lws_yaml, 'service': service_yaml}
-        elif config.architecture == 'pd':
+        elif config.architecture in ('pd', 'ep'):
             pd_manifests = self.render_pd(config)
-            # Add services for PD (in same order as LWS for consistency)
             vars_dict = self._prepare_template_vars(config)
             prefill_svc = self.env.get_template('pd/prefill-service.yaml.j2').render(**vars_dict)
             decode_svc = self.env.get_template('pd/decode-service.yaml.j2').render(**vars_dict)
 
-            # Determine service order based on GPU requirements (match LWS order)
             prefill_tp = config.prefill_tp or config.tensor_parallelism
             decode_tp = config.decode_tp or config.tensor_parallelism
 
             if decode_tp > prefill_tp:
-                # Decode first (higher GPU requirement)
                 pd_manifests['decode-service'] = decode_svc
                 pd_manifests['prefill-service'] = prefill_svc
             else:
-                # Prefill first (higher or equal GPU requirement)
                 pd_manifests['prefill-service'] = prefill_svc
                 pd_manifests['decode-service'] = decode_svc
 
             return pd_manifests
-        elif config.architecture == 'ep':
-            # Render both LWS and Service for EP
-            lws_yaml = self.render_ep(config)
-            service_template = self.env.get_template('ep/service.yaml.j2')
-            service_yaml = service_template.render(**self._prepare_template_vars(config))
-            return {'lws': lws_yaml, 'service': service_yaml}
         else:
             raise ValueError(f"Unknown architecture: {config.architecture}")
 

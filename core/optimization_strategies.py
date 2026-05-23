@@ -184,21 +184,16 @@ class ThroughputStrategy(OptimizationStrategy):
         self._run_speculative_if_enabled()
 
     def _calculate_ep_configs(self):
-        """Steps 4-5: Calculate EP configuration space.
+        """Steps 4-5: Calculate EP configuration space using PD-style splits.
 
-        For EP, the variable is TP value. Each TP determines:
-        - replicas = total_gpus / tp
-        - Higher TP = fewer but more powerful pods
-        - Lower TP = more pods with EPLB distributing work
-
-        Each EP pod is independent — TP selection is unconstrained.
+        EP uses the same prefill/decode split structure as PD, with asymmetric
+        TP support. Each split has separate prefill_tp, decode_tp, and pod counts.
         """
-        from .recipe_optimizer import EPConfig
+        from .optimizer.config import FeasibleSplit
 
         total_gpus = self.opt.config.total_gpus
         valid_tp = self.opt._get_valid_tp_options()
 
-        # Step 4: Cluster capacity analysis for EP
         best_tpsg = max(
             (r['tpsg'] for r in self.opt.decode_tp_results),
             default=0
@@ -229,43 +224,45 @@ class ThroughputStrategy(OptimizationStrategy):
                 else:
                     self.opt.effective_concurrency = concurrency
                     self.opt.log(f"  ℹ️  Using original concurrency ({concurrency}) — expect overload", 'info')
-                    if self.opt.config.latency_constraint_enabled:
-                        self.opt.log(f"  ℹ️  Step 10 will find max throughput under latency SLA", 'info')
-                    else:
-                        self.opt.log(f"  ℹ️  Step 11 will re-test at sustainable load ({sustainable_concurrency} users)", 'info')
             else:
                 self.opt.effective_concurrency = concurrency
                 self.opt.log(f"  ✅ Cluster can handle the load ({concurrency} users, capacity: {sustainable_concurrency} users)", 'success')
         self.opt.log("", 'info')
 
-        # EP configuration space
-        self.opt.log("EP Configurations:", 'info')
+        self.opt.log("EP Configurations (PD split):", 'info')
         self.opt.log(f"  Valid TP values: {valid_tp}", 'info')
         self.opt.log(f"  Total GPUs: {total_gpus}", 'info')
 
         ep_configs = []
-        for tp in valid_tp:
-            replicas = total_gpus // tp
-            if replicas < 1:
-                continue
-            actual_gpus = tp * replicas
-            ep_configs.append(EPConfig(tp=tp, replicas=replicas, total_gpus=actual_gpus))
-            self.opt.log(f"  ✓ TP={tp}: {replicas} replicas × {tp} GPUs/pod = {actual_gpus} GPUs", 'info')
-
-        # On resume: check for completed step7-ep tests and add any missing configs
-        import re
-        resumed_ep = {name: row for name, row in self.opt.completed_tests.items()
-                      if name.startswith('step7-ep-')}
-        if resumed_ep:
-            self.opt.log(f"  Resuming: found {len(resumed_ep)} completed EP tests", 'info')
-            # Ensure all resumed configs are in the list
-            existing_tps = {c.tp for c in ep_configs}
-            for name in resumed_ep:
-                m = re.match(r'step7-ep-tp(\d+)-(\d+)r', name)
-                if m and int(m.group(1)) not in existing_tps:
-                    tp_val = int(m.group(1))
-                    rep_val = int(m.group(2))
-                    ep_configs.append(EPConfig(tp=tp_val, replicas=rep_val, total_gpus=tp_val * rep_val))
+        seen = set()
+        for prefill_tp in valid_tp:
+            for decode_tp in valid_tp:
+                prefill_gpus = prefill_tp
+                remaining = total_gpus - prefill_gpus
+                if remaining < decode_tp:
+                    continue
+                decode_pods = remaining // decode_tp
+                if decode_pods < 1:
+                    continue
+                decode_gpus = decode_pods * decode_tp
+                total_used = prefill_gpus + decode_gpus
+                key = (prefill_tp, decode_tp, 1, decode_pods)
+                if key in seen:
+                    continue
+                seen.add(key)
+                split = FeasibleSplit(
+                    prefill_pods=1,
+                    decode_pods=decode_pods,
+                    prefill_tp=prefill_tp,
+                    decode_tp=decode_tp,
+                    prefill_gpus=prefill_gpus,
+                    decode_gpus=decode_gpus,
+                    total_gpus=total_used,
+                    prefill_pct=(prefill_gpus / total_used) * 100,
+                )
+                ep_configs.append(split)
+                self.opt.log(f"  ✓ PTP={prefill_tp} DTP={decode_tp}: "
+                             f"1P+{decode_pods}D = {total_used} GPUs", 'info')
 
         self.opt.ep_configs = ep_configs
         self.opt.log(f"\n  EP configs to test: {len(ep_configs)}", 'success')
@@ -273,7 +270,7 @@ class ThroughputStrategy(OptimizationStrategy):
     def _test_ep_configs(self):
         """Step 7: Test all EP configurations at full workload.
 
-        Tests each EP config and finds the best by throughput.
+        Tests each EP config (PD-style split) and finds the best by throughput.
         """
         if not self.opt.ep_configs:
             self.opt.log("❌ No EP configs to test!", 'error')
@@ -283,26 +280,21 @@ class ThroughputStrategy(OptimizationStrategy):
         self.opt.log(f"Workload: ISL={self.opt.config.isl}, OSL={self.opt.config.osl}, "
                      f"Concurrency={int(self.opt.effective_concurrency)}", 'info')
 
-        for i, ep_cfg in enumerate(self.opt.ep_configs):
+        for i, split in enumerate(self.opt.ep_configs):
             if self.opt._should_stop():
                 break
 
-            test_id = f"step7-ep-tp{ep_cfg.tp}-{ep_cfg.replicas}r"
+            test_id = f"step7-ep-{split.prefill_pods}p{split.decode_pods}d-ptp{split.prefill_tp}-dtp{split.decode_tp}"
             self.opt.log(f"  Test {i + 1}/{len(self.opt.ep_configs)}: "
-                         f"TP={ep_cfg.tp}, {ep_cfg.replicas} replicas ({ep_cfg.total_gpus} GPUs)", 'info')
+                         f"PTP={split.prefill_tp} DTP={split.decode_tp}, "
+                         f"{split.prefill_pods}P+{split.decode_pods}D ({split.total_gpus} GPUs)", 'info')
 
-            # Check for completed test from previous run
             if test_id in self.opt.completed_tests:
                 row = self.opt.completed_tests[test_id]
                 result = self.opt._make_test_result_from_db(row)
                 self.opt.log("    ⏩ Resuming from DB (already completed)", 'info')
             else:
-                test_config = self.opt._create_ep_config(
-                    tp=ep_cfg.tp,
-                    num_gpus=ep_cfg.total_gpus,
-                    test_id=test_id,
-                    use_concurrency=True
-                )
+                test_config = self.opt._create_ep_config(split)
 
                 result = self.opt.orchestrator.run_test(
                     test_config,
@@ -321,19 +313,18 @@ class ThroughputStrategy(OptimizationStrategy):
                                  f"-l test-id={test_id}", 'error')
                     raise RuntimeError(f"Test {test_id} failed - stopping optimization")
 
-            ttft = result.ttft_p90 if result.ttft_p90 else result.ttft_p50 if result.ttft_p50 else 1000000.0
-            throughput = result.throughput_p90 if result.throughput_p90 else result.throughput_p50 if result.throughput_p50 else 0.0
+            ttft = result.ttft_p90 or result.ttft_p50 or 1000000.0
+            throughput = result.throughput_p90 or result.throughput_p50 or 0.0
 
             self.opt.log(f"    ✅ TTFT p90: {ttft:.1f}ms, Throughput p90: {throughput:.2f} req/s", 'success')
-            self.opt.ep_results.append((ep_cfg, result))
+            self.opt.ep_results.append((split, result))
 
-        # Find best EP config by throughput
         if self.opt.ep_results:
-            best_cfg, best_result = max(
+            best_split, best_result = max(
                 self.opt.ep_results,
                 key=lambda x: x[1].throughput_p90 if x[1].throughput_p90 else 0.0
             )
-            self.opt.best_ep_config = best_cfg
+            self.opt.best_ep_config = best_split
             self.opt.best_ep_result = best_result
 
             best_ttft = best_result.ttft_p90 or best_result.ttft_p50 or 0
@@ -341,7 +332,8 @@ class ThroughputStrategy(OptimizationStrategy):
 
             self.opt.log("", 'info')
             self.opt.log(f"✅ Best EP Configuration (by throughput):", 'success')
-            self.opt.log(f"  TP={best_cfg.tp}, {best_cfg.replicas} replicas ({best_cfg.total_gpus} GPUs)", 'info')
+            self.opt.log(f"  PTP={best_split.prefill_tp} DTP={best_split.decode_tp}, "
+                         f"{best_split.prefill_pods}P+{best_split.decode_pods}D ({best_split.total_gpus} GPUs)", 'info')
             self.opt.log(f"  TTFT p90: {best_ttft:.1f}ms, Throughput p90: {best_tput:.2f} req/s", 'info')
 
     def _validate_ep_vs_aggregated(self):
@@ -364,7 +356,8 @@ class ThroughputStrategy(OptimizationStrategy):
         agg_ttft = self.opt.aggregated_result.ttft_p90 or self.opt.aggregated_result.ttft_p50 or 1000000.0
         agg_tput = self.opt.aggregated_result.throughput_p90 or self.opt.aggregated_result.throughput_p50 or 0.0
 
-        self.opt.log(f"Best EP: TP={best_cfg.tp}, {best_cfg.replicas} replicas ({best_cfg.total_gpus} GPUs)", 'info')
+        self.opt.log(f"Best EP: PTP={best_cfg.prefill_tp} DTP={best_cfg.decode_tp}, "
+                     f"{best_cfg.prefill_pods}P+{best_cfg.decode_pods}D ({best_cfg.total_gpus} GPUs)", 'info')
         self.opt.log(f"  TTFT p90: {best_ep_ttft:.1f}ms, Throughput p90: {best_ep_tput:.2f} req/s", 'info')
         self.opt.log(f"Best Aggregated: TP={self.opt.aggregated_tp}, "
                      f"{self.opt.aggregated_gpus // self.opt.aggregated_tp} replicas", 'info')
@@ -417,25 +410,21 @@ class ThroughputStrategy(OptimizationStrategy):
 
         self.opt.log(f"Re-testing best EP config at calibrated load ({calibrated_concurrency:.0f} users "
                      f"vs original {self.opt.config.qps:.0f} users)", 'info')
-        self.opt.log(f"Best EP: TP={best_cfg.tp}, {best_cfg.replicas} replicas", 'info')
+        self.opt.log(f"Best EP: PTP={best_cfg.prefill_tp} DTP={best_cfg.decode_tp}, "
+                     f"{best_cfg.prefill_pods}P+{best_cfg.decode_pods}D", 'info')
         self.opt.log(f"  Step 7 results (overloaded): TTFT={overloaded_ttft:.1f}ms, "
                      f"Throughput={overloaded_tput:.2f} req/s", 'info')
         self.opt.log("", 'info')
 
-        # --- Test best EP at calibrated load ---
-        test_id = f"step9-ep-tp{best_cfg.tp}-{best_cfg.replicas}r"
+        test_id = f"step9-ep-{best_cfg.prefill_pods}p{best_cfg.decode_pods}d-ptp{best_cfg.prefill_tp}-dtp{best_cfg.decode_tp}"
 
         if test_id in self.opt.completed_tests:
             row = self.opt.completed_tests[test_id]
             ep_result = self.opt._make_test_result_from_db(row)
             self.opt.log("  ⏩ EP test: resuming from DB (already completed)", 'info')
         else:
-            ep_config = self.opt._create_ep_config(
-                tp=best_cfg.tp,
-                num_gpus=best_cfg.total_gpus,
-                test_id=test_id,
-                use_concurrency=True
-            )
+            ep_config = self.opt._create_ep_config(split=best_cfg)
+            ep_config.test_id = test_id
             ep_config.num_users = int(calibrated_concurrency)
             ep_config.request_rate = int(calibrated_concurrency)
 
@@ -672,7 +661,8 @@ class BalancedStrategy(OptimizationStrategy):
             ep_cfg = self.opt.best_ep_config
             ep_ttft = self.opt.best_ep_result.ttft_p90 or self.opt.best_ep_result.ttft_p50 or 0
             ep_tput = self.opt.best_ep_result.throughput_p90 or self.opt.best_ep_result.throughput_p50 or 0
-            self.opt.log(f"Best EP: TP={ep_cfg.tp}, {ep_cfg.replicas} replicas ({ep_cfg.total_gpus} GPUs)", 'info')
+            self.opt.log(f"Best EP: PTP={ep_cfg.prefill_tp} DTP={ep_cfg.decode_tp}, "
+                         f"{ep_cfg.prefill_pods}P+{ep_cfg.decode_pods}D ({ep_cfg.total_gpus} GPUs)", 'info')
             self.opt.log(f"  TTFT p90: {ep_ttft:.1f}ms, Throughput p90: {ep_tput:.2f} req/s", 'info')
 
         agg_ttft = self.opt.aggregated_result.ttft_p90 or self.opt.aggregated_result.ttft_p50 or 1000000.0
@@ -694,7 +684,7 @@ class BalancedStrategy(OptimizationStrategy):
             self.opt.log(f"  {pd_label:<25} {pd_ttft:>10.1f}ms {pd_tput:>14.2f} req/s", 'info')
 
         if has_ep:
-            ep_label = f"EP (TP{ep_cfg.tp}×{ep_cfg.replicas}r)"
+            ep_label = f"EP ({ep_cfg.prefill_pods}P+{ep_cfg.decode_pods}D)"
             self.opt.log(f"  {ep_label:<25} {ep_ttft:>10.1f}ms {ep_tput:>14.2f} req/s", 'info')
 
         # Determine winners
@@ -768,17 +758,15 @@ class BalancedStrategy(OptimizationStrategy):
         # --- EP at calibrated load ---
         if self.opt.best_ep_config:
             ep_cfg = self.opt.best_ep_config
-            test_id = f"step9-ep-tp{ep_cfg.tp}-{ep_cfg.replicas}r"
+            test_id = f"step9-ep-{ep_cfg.prefill_pods}p{ep_cfg.decode_pods}d-ptp{ep_cfg.prefill_tp}-dtp{ep_cfg.decode_tp}"
 
             if test_id in self.opt.completed_tests:
                 row = self.opt.completed_tests[test_id]
                 ep_result = self.opt._make_test_result_from_db(row)
                 self.opt.log("  ⏩ EP test: resuming from DB", 'info')
             else:
-                ep_config = self.opt._create_ep_config(
-                    tp=ep_cfg.tp, num_gpus=ep_cfg.total_gpus,
-                    test_id=test_id, use_concurrency=True
-                )
+                ep_config = self.opt._create_ep_config(split=ep_cfg)
+                ep_config.test_id = test_id
                 ep_config.num_users = int(calibrated_concurrency)
                 ep_config.request_rate = int(calibrated_concurrency)
 

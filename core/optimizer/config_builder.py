@@ -480,65 +480,70 @@ class ConfigBuilderMixin:
         )
         return self._apply_advanced_vllm(cfg)
 
-    def _create_ep_config(
-        self,
-        tp: int,
-        num_gpus: int,
-        test_id: str,
-        use_concurrency: bool = False
-    ) -> TestConfig:
+    def _create_ep_config(self, split: 'FeasibleSplit') -> TestConfig:
         """Create EP (Expert Parallelism) architecture test config.
 
-        EP uses --enable-eplb for expert-level prefill load balancing.
-        Each pod handles both prefill and decode, with EPLB distributing work.
-
-        Args:
-            tp: Tensor parallelism per pod
-            num_gpus: Total GPUs to use (replicas = num_gpus // tp)
-            test_id: Unique test identifier
-            use_concurrency: If True, use concurrent rate type with num_users
+        EP uses the PD prefill/decode split with EP-specific flags enabled.
+        Same template structure as PD but with --enable-expert-parallel,
+        --enable-eplb, --moe-backend, --all2all-backend, and NVSHMEM env vars.
         """
-        concurrency = self.effective_concurrency if use_concurrency else int(self.config.qps)
+        concurrency = self.effective_concurrency
 
-        gpu_memory_utilization = self._compute_gpu_mem_util(tp)
-        allocated_gb = self._gpu_vram_gb * gpu_memory_utilization
-        reserve_gb = self._gpu_vram_gb - allocated_gb
-        self.log(f"   Memory: gpu_memory_utilization={gpu_memory_utilization:.4f} "
-                 f"→ {allocated_gb:.0f}GB allocated, {reserve_gb:.0f}GB reserved for overhead (per GPU)")
+        gpu_mem_util = self._compute_gpu_mem_util(split.prefill_tp)
+        alloc = self._gpu_vram_gb * gpu_mem_util
+        reserve = self._gpu_vram_gb - alloc
+        self.log(f"   Memory: gpu_memory_utilization={gpu_mem_util:.4f} "
+                 f"→ {alloc:.0f}GB allocated, {reserve:.0f}GB reserved for overhead (per GPU)")
 
-        max_num_seqs = self._compute_max_num_seqs(tp)
-        max_batched = self._compute_max_num_batched_tokens(tp)
+        prefill_max_num_seqs = self._compute_max_num_seqs(split.prefill_tp)
+        decode_max_num_seqs = self._compute_max_num_seqs(split.decode_tp)
+        max_batched = self._compute_max_num_batched_tokens(split.prefill_tp)
 
-        replicas = num_gpus // tp
-        mem, cpu = self._get_pod_resources(tp=tp, total_pods=replicas)
+        total_pods = split.prefill_pods + split.decode_pods
+        min_tp = min(split.prefill_tp, split.decode_tp)
+        mem, cpu = self._get_pod_resources(tp=min_tp, total_pods=total_pods)
+
+        dbo_threshold = getattr(self, '_dbo_threshold', 32)
 
         cfg = TestConfig(
-            test_id=test_id,
+            test_id=f"step7-ep-{split.prefill_pods}p{split.decode_pods}d-ptp{split.prefill_tp}-dtp{split.decode_tp}",
             architecture='ep',
             model_name=self.config.model_name,
-            tensor_parallelism=tp,
-            replicas=replicas,
+
             namespace=self.config.namespace,
             isl=self.config.isl,
             osl=self.config.osl,
             num_users=concurrency,
-            request_type=self.config.rate_type if use_concurrency else 'constant',
-            request_rate=concurrency if use_concurrency else 1,
-            test_duration=self.config.test_duration,
-            stop_mode=self.config.stop_mode,
-            max_requests=self.config.max_requests,
+            request_type=self.config.rate_type,
+            request_rate=concurrency,
+
+            tensor_parallelism=split.prefill_tp,
+            replicas=total_pods,
+            prefill_replicas=split.prefill_pods,
+            decode_replicas=split.decode_pods,
+            prefill_decode_ratio=f"{split.prefill_pods}:{split.decode_pods}",
+            prefill_tp=split.prefill_tp,
+            decode_tp=split.decode_tp,
+
+            max_model_len=self.config.max_model_len,
+            gpu_memory_utilization=gpu_mem_util,
+            prefill_gpu_memory_utilization=gpu_mem_util,
+            decode_gpu_memory_utilization=gpu_mem_util,
+            gpu_vram_gb=self._gpu_vram_gb,
+            prefill_max_num_seqs=prefill_max_num_seqs,
+            decode_max_num_seqs=decode_max_num_seqs,
             max_num_batched_tokens=max_batched,
+            kv_cache_memory_bytes=self._get_profiled_kv_cache_bytes(split.decode_tp),
             isl_stdev=self.config.isl_stdev,
             osl_stdev=self.config.osl_stdev,
             turns=self.config.turns,
             image=self.config.image,
             pvc_name=self.config.pvc_name,
             nccl_ib_hca=self.config.nccl_ib_hca,
-            max_model_len=self.config.max_model_len,
-            gpu_memory_utilization=gpu_memory_utilization,
-            gpu_vram_gb=self._gpu_vram_gb,
-            max_num_seqs=max_num_seqs,
             optimization_goal='throughput',
+            test_duration=self.config.test_duration,
+            stop_mode=self.config.stop_mode,
+            max_requests=self.config.max_requests,
             network_type=self.config.network_type,
             rdma_device_resources=self.config.rdma_device_resources or [],
             rdma_nics_per_node=self.config.rdma_nics_per_node or 0,
@@ -554,13 +559,13 @@ class ConfigBuilderMixin:
             dataset_max_output=self.config.dataset_max_output or 256,
             epp_config=self._build_epp_config(),
             block_size=self._compute_block_size(),
-            enable_expert_parallel=False,  # Single-node: replicate experts (no NCCL all-to-all overhead)
-            enable_dbo=False,  # Requires multi-node EP (LWS size>=2) with DeepEP/NVSHMEM
-            dbo_prefill_token_threshold=getattr(self, '_dbo_threshold', 32),
-            dbo_decode_token_threshold=getattr(self, '_dbo_threshold', 32),
-            enable_eplb=False,  # Requires multi-node EP with NVSHMEM
-            moe_backend=None,  # deep_gemm requires DeepEP; single-node uses NCCL
-            all2all_backend=None,  # DeepEP backends require multi-node; single-node uses NCCL
+            enable_expert_parallel=True,
+            enable_dbo=True,
+            dbo_prefill_token_threshold=dbo_threshold,
+            dbo_decode_token_threshold=dbo_threshold,
+            enable_eplb=True,
+            moe_backend='deep_gemm',
+            all2all_backend='deepep_high_throughput',
         )
         return self._apply_advanced_vllm(cfg)
 

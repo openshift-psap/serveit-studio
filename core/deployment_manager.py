@@ -129,8 +129,8 @@ class DeploymentManager:
         # Render manifests (already ordered by GPU requirement for PD)
         manifests = self.template_manager.render_config(config)
 
-        # For PD architecture: Deploy sequentially and wait
-        if config.architecture == 'pd':
+        # For PD/EP architecture: Deploy sequentially and wait
+        if config.architecture in ('pd', 'ep'):
             return self._deploy_pd_sequential(config, manifests, log_callback)
 
         # For other architectures: Deploy all manifests at once
@@ -228,8 +228,8 @@ class DeploymentManager:
             DeploymentStatus object
         """
         try:
-            # For PD, check both prefill and decode
-            if architecture == 'pd':
+            # For PD/EP, check both prefill and decode
+            if architecture in ('pd', 'ep'):
                 prefill_status = self._get_lws_status(f"{test_id}-prefill")
                 decode_status = self._get_lws_status(f"{test_id}-decode")
 

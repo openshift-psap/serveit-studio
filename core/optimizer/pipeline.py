@@ -244,10 +244,10 @@ class RecipeOptimizer(
         self.calibrated_agg_result: Optional[TestResult] = None
 
         # EP (Expert Parallelism) results — populated by ThroughputStrategy/BalancedStrategy
-        self.ep_configs: List[EPConfig] = []
-        self.ep_results: List[Tuple[EPConfig, TestResult]] = []
+        self.ep_configs: List[FeasibleSplit] = []
+        self.ep_results: List[Tuple[FeasibleSplit, TestResult]] = []
         self.best_ep_result: Optional[TestResult] = None
-        self.best_ep_config: Optional[EPConfig] = None
+        self.best_ep_config: Optional[FeasibleSplit] = None
         self.calibrated_ep_result: Optional[TestResult] = None
 
         # Store ALL test results for database insertion
