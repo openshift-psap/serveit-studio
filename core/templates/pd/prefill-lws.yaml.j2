@@ -147,7 +147,7 @@ spec:
 {% endif %}{% if disable_custom_all_reduce %}                  --disable-custom-all-reduce \
 {% endif %}{% if dtype %}                  --dtype {{ dtype }} \
 {% endif %}{% if kv_cache_dtype %}                  --kv-cache-dtype {{ kv_cache_dtype }} \
-{% endif %}{% if max_num_batched_tokens %}                  --max-num-batched-tokens {{ max_num_batched_tokens }} \
+{% endif %}                  --max-num-batched-tokens {{ max_num_batched_tokens or 8192 }} \
 {% endif %}{% if prefill_max_num_seqs %}                  --max-num-seqs {{ prefill_max_num_seqs }} \
 {% endif %}{% if speculative_method %}                  --speculative-config.method {{ speculative_method }} \
                   --speculative-config.num_speculative_tokens {{ speculative_num_tokens | default(3) }} \
