@@ -4,6 +4,7 @@ import os
 import time
 import subprocess
 import logging
+from datetime import datetime
 from pathlib import Path
 from typing import Optional, Callable
 
@@ -387,9 +388,10 @@ class GuidellmMixin:
                             results_dir = Path(f'/mnt/storage/results/{config.test_id}')
                             results_dir.mkdir(parents=True, exist_ok=True)
                             metrics_file = str(results_dir / 'metrics.json')
+                            self.metrics_collector.config.pod_name_pattern = config.test_id
                             self.metrics_collector.collect_all_metrics(
-                                namespace=self.namespace, test_id=config.test_id,
-                                start_time=benchmark_start, end_time=time.time(),
+                                start_time=datetime.fromtimestamp(benchmark_start),
+                                end_time=datetime.now(),
                                 output_file=metrics_file)
                             metrics_path = metrics_file
                     except Exception as e:
