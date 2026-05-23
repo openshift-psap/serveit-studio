@@ -138,6 +138,19 @@ class TemplateManager:
 
         vars_dict.update(network_vals)
 
+        # Per-role EP flags: only enable on roles with TP > 1
+        prefill_tp = vars_dict['prefill_tp']
+        decode_tp = vars_dict['decode_tp']
+        ep = config.enable_expert_parallel
+        vars_dict['prefill_enable_expert_parallel'] = ep and prefill_tp > 1
+        vars_dict['decode_enable_expert_parallel'] = ep and decode_tp > 1
+        vars_dict['prefill_enable_eplb'] = config.enable_eplb and prefill_tp > 1
+        vars_dict['decode_enable_eplb'] = config.enable_eplb and decode_tp > 1
+        vars_dict['prefill_enable_dbo'] = config.enable_dbo and prefill_tp > 1
+        vars_dict['decode_enable_dbo'] = config.enable_dbo and decode_tp > 1
+        vars_dict['prefill_moe_backend'] = config.moe_backend if prefill_tp > 1 else None
+        vars_dict['decode_moe_backend'] = config.moe_backend if decode_tp > 1 else None
+
         return vars_dict
 
     def render_aggregated(self, config: TestConfig) -> str:

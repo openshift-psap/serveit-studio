@@ -135,12 +135,12 @@ spec:
 {% endif %}                  --api-server-count 1 \
                   --gpu-memory-utilization {{ prefill_gpu_memory_utilization or 0.80 }} \
                   --kv-transfer-config '{"kv_connector":"{{ kv_connector }}","kv_role":"kv_both","kv_load_failure_policy":"fail"}' \
-{% if enable_expert_parallel %}                  --enable-expert-parallel \
-{% endif %}{% if enable_dbo %}                  --enable-dbo \
+{% if prefill_enable_expert_parallel %}                  --enable-expert-parallel \
+{% endif %}{% if prefill_enable_dbo %}                  --enable-dbo \
                   --dbo-prefill-token-threshold {{ dbo_prefill_token_threshold | default(32) }} \
-{% endif %}{% if enable_eplb %}                  --enable-eplb \
+{% endif %}{% if prefill_enable_eplb %}                  --enable-eplb \
                   --eplb-config '{"window_size":"1000","step_interval":"3000","num_redundant_experts":"32","log_balancedness":"False"}' \
-{% endif %}{% if moe_backend %}                  --moe-backend {{ moe_backend }} \
+{% endif %}{% if prefill_moe_backend %}                  --moe-backend {{ prefill_moe_backend }} \
 {% endif %}{% if all2all_backend %}                  --all2all-backend {{ all2all_backend }} \
 {% endif %}{% if max_model_len %}                  --max-model-len {{ max_model_len }} \
 {% endif %}{% if enable_prefix_caching %}                  --enable-prefix-caching \
@@ -185,7 +185,7 @@ spec:
                 value: "eth0"
               - name: NCCL_SOCKET_IFNAME
                 value: "eth0"
-{% if enable_expert_parallel %}
+{% if prefill_enable_expert_parallel %}
               - name: VLLM_RANDOMIZE_DP_DUMMY_INPUTS
                 value: "1"
               - name: NVSHMEM_REMOTE_TRANSPORT
