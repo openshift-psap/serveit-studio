@@ -150,6 +150,8 @@ class TemplateManager:
         vars_dict['decode_enable_dbo'] = config.enable_dbo and decode_tp > 1
         vars_dict['prefill_moe_backend'] = config.moe_backend if prefill_tp > 1 else None
         vars_dict['decode_moe_backend'] = config.moe_backend if decode_tp > 1 else None
+        vars_dict['prefill_all2all_backend'] = config.all2all_backend if prefill_tp > 1 else None
+        vars_dict['decode_all2all_backend'] = config.all2all_backend if decode_tp > 1 else None
 
         return vars_dict
 
