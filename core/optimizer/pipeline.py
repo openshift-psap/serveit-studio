@@ -972,32 +972,35 @@ class RecipeOptimizer(
             self.log("Mode: FRESH START", 'info')
         self.log("", 'info')
 
-        # Generate prefix cache dataset if configured
-        if self.config.prefix_cache_hit_pct > 0 and self.config.workload_mode == 'synthetic':
-            self._generate_prefix_cache_dataset()
+        try:
+            # Generate prefix cache dataset if configured
+            if self.config.prefix_cache_hit_pct > 0 and self.config.workload_mode == 'synthetic':
+                self._generate_prefix_cache_dataset()
 
-        # Step 2: Find optimal decode TP
-        self.log("STEP 2: Decode TP Optimization", 'decision')
-        self.log("-" * 80, 'info')
-        self._optimize_decode_tp()
-        self.log("", 'info')
-        if self._should_stop():
+            # Step 2: Find optimal decode TP
+            self.log("STEP 2: Decode TP Optimization", 'decision')
+            self.log("-" * 80, 'info')
+            self._optimize_decode_tp()
+            self.log("", 'info')
+            if self._should_stop():
+                return self._build_results()
+
+            # Step 3: Find optimal prefill TP
+            self.log("STEP 3: Prefill TP Optimization", 'decision')
+            self.log("-" * 80, 'info')
+            self._optimize_prefill_tp()
+            self.log("", 'info')
+            if self._should_stop():
+                return self._build_results()
+
+            # Steps 4-11: Dispatch to goal-specific strategy
+            strategy = self._get_strategy()
+            strategy.execute()
+
+            # Return results
             return self._build_results()
-
-        # Step 3: Find optimal prefill TP
-        self.log("STEP 3: Prefill TP Optimization", 'decision')
-        self.log("-" * 80, 'info')
-        self._optimize_prefill_tp()
-        self.log("", 'info')
-        if self._should_stop():
-            return self._build_results()
-
-        # Steps 4-11: Dispatch to goal-specific strategy
-        strategy = self._get_strategy()
-        strategy.execute()
-
-        # Return results
-        return self._build_results()
+        finally:
+            self.orchestrator.cleanup()
 
     def _get_valid_tp_options(self) -> List[int]:
         """

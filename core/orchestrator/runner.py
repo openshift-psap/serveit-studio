@@ -4,6 +4,7 @@ import os
 import sys
 import json
 import time
+import socket
 import logging
 import subprocess
 from datetime import datetime
@@ -44,6 +45,7 @@ class TestOrchestrator(ParserMixin, GuidellmMixin):
         self.namespace = namespace
         self.deployment_timeout = deployment_timeout
         self.test_duration = test_duration
+        self._pf_process = None
 
         self.deployment_manager = DeploymentManager(
             namespace=namespace,
@@ -57,34 +59,93 @@ class TestOrchestrator(ParserMixin, GuidellmMixin):
         if thanos_url is None:
             thanos_url = self._get_thanos_url()
 
+        # Fallback: port-forward to remote Prometheus on vanilla K8s
+        if thanos_url is None:
+            thanos_url = self._start_prometheus_port_forward(kubeconfig)
+
         self.metrics_collector = None
         if thanos_url:
             logger.info(f"Initializing MetricsCollector with Thanos URL: {thanos_url}")
 
-            # Read service account token for Thanos authentication
+            # Port-forwarded Prometheus doesn't need auth tokens
             token = None
-            token_file = '/run/secrets/kubernetes.io/serviceaccount/token'
-            if os.path.exists(token_file):
-                try:
-                    with open(token_file, 'r') as f:
-                        token = f.read().strip()
-                    logger.info("Successfully loaded service account token for Thanos authentication")
-                except Exception as e:
-                    logger.warning(f"Failed to read service account token: {e}")
-            else:
-                logger.warning(f"Service account token file not found at {token_file}")
+            if not thanos_url.startswith('http://localhost'):
+                token_file = '/run/secrets/kubernetes.io/serviceaccount/token'
+                if os.path.exists(token_file):
+                    try:
+                        with open(token_file, 'r') as f:
+                            token = f.read().strip()
+                        logger.info("Successfully loaded service account token for Thanos authentication")
+                    except Exception as e:
+                        logger.warning(f"Failed to read service account token: {e}")
 
-            # Create MetricsConfig object
             metrics_config = MetricsConfig(
                 thanos_url=thanos_url,
                 namespace=namespace,
-                pod_name_pattern='',  # Will be set per test
+                pod_name_pattern='',
                 step_seconds=5,
                 token=token
             )
             self.metrics_collector = MetricsCollector(metrics_config)
         else:
             logger.warning("No Thanos URL provided - metrics collection will be disabled")
+
+    def _start_prometheus_port_forward(self, kubeconfig: Optional[str]) -> Optional[str]:
+        """Start kubectl port-forward to Prometheus on a remote cluster."""
+        if not kubeconfig:
+            return None
+
+        s = socket.socket()
+        s.bind(('', 0))
+        port = s.getsockname()[1]
+        s.close()
+
+        env = os.environ.copy()
+        env['KUBECONFIG'] = os.path.expanduser(kubeconfig)
+
+        try:
+            self._pf_process = subprocess.Popen(
+                ['kubectl', 'port-forward', '-n', 'monitoring',
+                 'svc/prometheus', f'{port}:9090'],
+                stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+                env=env
+            )
+
+            import urllib.request
+            for _ in range(10):
+                time.sleep(1)
+                if self._pf_process.poll() is not None:
+                    logger.warning("Prometheus port-forward exited early")
+                    self._pf_process = None
+                    return None
+                try:
+                    r = urllib.request.urlopen(
+                        f'http://localhost:{port}/api/v1/status/config', timeout=2)
+                    if r.status == 200:
+                        url = f'http://localhost:{port}'
+                        logger.info(f"Port-forwarding to Prometheus at {url}")
+                        return url
+                except Exception:
+                    continue
+
+            logger.warning("Prometheus port-forward: could not connect within 10s")
+            self._pf_process.terminate()
+            self._pf_process = None
+        except Exception as e:
+            logger.warning(f"Failed to start Prometheus port-forward: {e}")
+            self._pf_process = None
+        return None
+
+    def cleanup(self):
+        """Clean up resources (port-forwards, etc.)."""
+        if self._pf_process and self._pf_process.poll() is None:
+            logger.info("Stopping Prometheus port-forward")
+            self._pf_process.terminate()
+            try:
+                self._pf_process.wait(timeout=5)
+            except subprocess.TimeoutExpired:
+                self._pf_process.kill()
+            self._pf_process = None
 
     def _get_service_endpoint(
         self,
@@ -1102,11 +1163,14 @@ class TestOrchestrator(ParserMixin, GuidellmMixin):
                     pass
 
         except Exception as e:
+            import traceback
+            tb = traceback.format_exc()
             error_msg = f"Test execution failed: {e}"
-            logger.error(error_msg)
+            logger.error(f"{error_msg}\n{tb}")
             result.error_message = error_msg
             if log_callback:
                 log_callback(f"\n❌ {error_msg}")
+                log_callback(f"📋 Full traceback:\n{tb}")
 
         finally:
             # Step 7: Cleanup
