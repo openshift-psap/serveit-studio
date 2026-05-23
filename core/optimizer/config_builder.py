@@ -136,6 +136,16 @@ class ConfigBuilderMixin:
 
         return cfg
 
+    def _image_supports_moe_backend(self) -> bool:
+        """Check if the vLLM image supports --moe-backend (requires llm-d v0.6.0+)."""
+        import re
+        tag = (self.config.image or '').rsplit(':', 1)[-1] if ':' in (self.config.image or '') else ''
+        m = re.match(r'v?(\d+)\.(\d+)\.(\d+)', tag)
+        if m:
+            major, minor, patch = int(m.group(1)), int(m.group(2)), int(m.group(3))
+            return (major, minor, patch) >= (0, 6, 0)
+        return False
+
     def _get_profiled_kv_cache_bytes(self, tp: int) -> Optional[int]:
         """Get profiled KV cache memory in bytes for decode pods at a given TP.
 
@@ -564,7 +574,7 @@ class ConfigBuilderMixin:
             dbo_prefill_token_threshold=dbo_threshold,
             dbo_decode_token_threshold=dbo_threshold,
             enable_eplb=(min(split.prefill_tp, split.decode_tp) > 1),
-            moe_backend='deep_gemm' if min(split.prefill_tp, split.decode_tp) > 1 else None,
+            moe_backend='deep_gemm' if min(split.prefill_tp, split.decode_tp) > 1 and self._image_supports_moe_backend() else None,
             all2all_backend=None,
         )
         return self._apply_advanced_vllm(cfg)
