@@ -564,7 +564,7 @@ class ConfigBuilderMixin:
             dbo_prefill_token_threshold=dbo_threshold,
             dbo_decode_token_threshold=dbo_threshold,
             enable_eplb=(max(split.prefill_tp, split.decode_tp) > 1),
-            moe_backend='deep_gemm' if max(split.prefill_tp, split.decode_tp) > 1 else None,
+            moe_backend=None,
             all2all_backend='deepep_high_throughput' if max(split.prefill_tp, split.decode_tp) > 1 else None,
         )
         return self._apply_advanced_vllm(cfg)
