@@ -204,10 +204,12 @@ function updateUIFromConfig() {
     if (document.getElementById('adv-vllm-custom-enabled')) {
         var advCustom = config.advanced_vllm_custom_enabled !== false;
         document.getElementById('adv-vllm-custom-enabled').checked = advCustom;
-        var advToggle = document.getElementById('adv-vllm-toggle');
-        if (advToggle) { if (advCustom) advToggle.classList.add('active'); else advToggle.classList.remove('active'); }
+        var advBody = document.getElementById('advanced-vllm-body');
+        if (advBody) advBody.style.display = advCustom ? 'block' : 'none';
         var advSection = document.getElementById('adv-vllm-custom-section');
         if (advSection) advSection.style.display = advCustom ? 'block' : 'none';
+        var sw = document.getElementById('adv-vllm-switch');
+        if (sw) { sw.style.background = advCustom ? '#64748b' : '#ccc'; sw.querySelector('span').style.transform = advCustom ? 'translateX(18px)' : 'translateX(0)'; }
     }
 
     // Restore scheduler image
