@@ -92,6 +92,7 @@ class TestOrchestrator(ParserMixin, GuidellmMixin):
 
     def _start_prometheus_port_forward(self, kubeconfig: Optional[str]) -> Optional[str]:
         """Start kubectl port-forward to Prometheus on a remote cluster."""
+        kubeconfig = kubeconfig or os.environ.get('KUBECONFIG')
         if not kubeconfig:
             return None
 
