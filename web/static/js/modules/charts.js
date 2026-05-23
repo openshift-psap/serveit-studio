@@ -1268,13 +1268,20 @@ function renderCharts(data, runId) {
     if (charts.pareto.traces.length) {
         const traces = charts.pareto.traces.map(t => ({
             x: t.x, y: t.y, text: t.text, name: t.name,
+            yaxis: t.yaxis || 'y',
             mode: 'markers+lines',
-            marker: { size: 14, color: t.color, symbol: 'diamond', line: { width: 2, color: 'white' } },
-            line: { width: 2, dash: 'dot' },
+            marker: { size: t.yaxis === 'y2' ? 10 : 14, color: t.color, symbol: t.yaxis === 'y2' ? 'circle' : 'diamond', line: { width: 2, color: 'white' } },
+            line: { width: t.yaxis === 'y2' ? 2 : 2, dash: t.yaxis === 'y2' ? 'dash' : 'dot' },
             hovertemplate: '<b>%{text}</b><extra></extra>'
         }));
         const paretoXvals = [...new Set(traces.flatMap(t => t.x))].sort((a, b) => a - b);
-        Plotly.newPlot(cid('chart-pareto'), traces, { ...plotlyLayout, xaxis: { title: 'Total GPUs', tickvals: paretoXvals }, yaxis: { title: 'TTFT P90 (ms) - lower is better' }, showlegend: true }, plotlyConfig);
+        Plotly.newPlot(cid('chart-pareto'), traces, {
+            ...plotlyLayout, margin: { ...plotlyLayout.margin, r: 60 },
+            xaxis: { title: 'Total GPUs', tickvals: paretoXvals },
+            yaxis: { title: 'TTFT P90 (ms) — lower is better', side: 'left' },
+            yaxis2: { title: 'ITL P90 (ms) — lower is better', side: 'right', overlaying: 'y', titlefont: { color: '#ef4444' }, tickfont: { color: '#ef4444' } },
+            showlegend: true
+        }, plotlyConfig);
     }
 
     // Scatter

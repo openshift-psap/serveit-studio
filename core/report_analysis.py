@@ -734,25 +734,33 @@ class ReportAnalyzer:
                 )
                 if not pts:
                     continue
+                hover = [
+                    f"{r.display_label}<br>"
+                    f"TP: {r.tensor_parallelism}<br>"
+                    f"TTFT: {r.ttft_p90:.1f}ms<br>"
+                    f"Throughput: {r.throughput_p90:.2f} req/s"
+                    + (f"<br>ITL: {r.itl_p90:.2f}ms" if r.itl_p90 else "")
+                    for r in pts
+                ]
                 pareto_data['traces'].append({
                     'x': [r.total_gpus for r in pts],
                     'y': [r.ttft_p90 for r in pts],
-                    'text': [
-                        f"{r.display_label}<br>"
-                        f"TP: {r.tensor_parallelism}<br>"
-                        f"TTFT: {r.ttft_p90:.1f}ms<br>"
-                        f"Throughput: {r.throughput_p90:.2f} req/s<br>"
-                        f"ITL: {r.itl_p90:.2f}ms"
-                        if r.itl_p90 else
-                        f"{r.display_label}<br>"
-                        f"TP: {r.tensor_parallelism}<br>"
-                        f"TTFT: {r.ttft_p90:.1f}ms<br>"
-                        f"Throughput: {r.throughput_p90:.2f} req/s"
-                        for r in pts
-                    ],
-                    'name': label,
+                    'text': hover,
+                    'name': f'{label} TTFT',
                     'color': color,
+                    'yaxis': 'y',
                 })
+                itl_vals = [r.itl_p90 for r in pts if r.itl_p90]
+                if itl_vals:
+                    itl_color = '#ef4444' if prefix == 'step2' else '#f97316'
+                    pareto_data['traces'].append({
+                        'x': [r.total_gpus for r in pts if r.itl_p90],
+                        'y': itl_vals,
+                        'text': [f"ITL P90: {v:.2f}ms" for v in itl_vals],
+                        'name': f'{label} ITL',
+                        'color': itl_color,
+                        'yaxis': 'y2',
+                    })
 
         # Pareto table still uses real test results
         for p in pareto:
