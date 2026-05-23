@@ -86,6 +86,13 @@ spec:
                 echo "Max Model Len: {{ max_model_len or 'vLLM default' }}"
                 echo "========================================="
 
+                # Patch vllm#43396: FP8 MoE CUTLASS OOB at batch 8192
+                _MOE_FILE=$(python3 -c "import vllm; print(vllm.__path__[0])" 2>/dev/null)/model_executor/layers/fused_moe/moe_permute_unpermute.py
+                if [ -f "$_MOE_FILE" ] && grep -q 'a1q_scale\[permuted_idx.clamp' "$_MOE_FILE"; then
+                  sed -i 's|a1q_scale = a1q_scale\[permuted_idx.clamp(max=n_token \* topk - 1) // topk\]|scale_idx = permuted_idx.clamp(max=n_token * topk - 1) // topk; scale_idx = scale_idx.clamp(max=a1q_scale.shape[0] - 1); a1q_scale = a1q_scale[scale_idx]|' "$_MOE_FILE"
+                  echo "--- Applied vllm#43396 FP8 MoE patch ---"
+                fi
+
                 #################
                 # RUN vLLM aggregated server
                 #################
