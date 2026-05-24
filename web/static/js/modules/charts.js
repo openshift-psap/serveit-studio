@@ -386,10 +386,9 @@ function renderCharts(data, runId) {
     // TP Pareto chart → TP Calibration subtab
     secTP += chartCard('TP Calibration: Latency vs GPU Count', chartDesc.pareto, 'chart-pareto');
 
-    // Scatter, efficiency, architecture → Configurations subtab
+    // Scatter, efficiency → Configurations subtab
     secCfg += chartCard('Throughput vs Latency', chartDesc.scatter, 'chart-scatter');
     secCfg += chartCard('GPU Efficiency (req/s per GPU)', chartDesc.efficiency, 'chart-efficiency');
-    secCfg += chartCard('Architecture Comparison', chartDesc.arch, 'chart-arch');
 
     // --- PD configurations TTFT + Throughput charts (one per percentile) ---
     if (data.all_results.filter(r => r.architecture === 'PD').length) {
@@ -737,6 +736,14 @@ function renderCharts(data, runId) {
             html += '</div>';
         }
     }
+
+    // Architecture comparison chart + percentile bar chart → Comparison tab
+    html += chartCard('Architecture Comparison', chartDesc.arch, 'chart-arch');
+    html += chartCard(
+        'Percentile Comparison: Winner vs Aggregated',
+        'Side-by-side bar chart comparing TTFT and Throughput at each percentile (P50, P90, P95, P99) between the recommended configuration and the Aggregated baseline.',
+        'chart-percentile-bars'
+    );
 
     // Flush comparison (Step 8)
     secCmp = html; html = '';
@@ -1339,6 +1346,37 @@ function renderCharts(data, runId) {
             xaxis2: { domain: [0.55, 1], title: '', anchor: 'y2' },
             yaxis2: { title: 'Throughput Mean (req/s) - higher is better', anchor: 'x2', titlefont: { color: '#f59e0b' } },
         }, plotlyConfig);
+    }
+
+    // Percentile comparison bar chart (Winner vs Aggregated)
+    if (rec && rec.recommendations && document.getElementById(cid('chart-percentile-bars'))) {
+        const primaryKey = rec.goal === 'ttft' ? 'response_time' : 'throughput';
+        const primaryRec = rec.recommendations[primaryKey];
+        const aggBase = rec.aggregated_baseline;
+        if (primaryRec && primaryRec.config.percentiles && aggBase && aggBase.percentiles) {
+            const pp = primaryRec.config.percentiles;
+            const ap = aggBase.percentiles;
+            const primaryArch = primaryRec.architecture || 'PD';
+            const pctls = ['p50', 'p90', 'p95', 'p99'];
+            const ttftTraces = [
+                { x: pctls, y: pctls.map(p => pp.ttft[p]), name: primaryArch + ' TTFT', type: 'bar', marker: { color: '#3b82f6' } },
+                { x: pctls, y: pctls.map(p => ap.ttft[p]), name: 'Aggregated TTFT', type: 'bar', marker: { color: '#94a3b8' } },
+            ];
+            const tputTraces = [
+                { x: pctls, y: pctls.map(p => pp.throughput[p]), name: primaryArch + ' Throughput', type: 'bar', marker: { color: '#10b981' }, xaxis: 'x2', yaxis: 'y2' },
+                { x: pctls, y: pctls.map(p => ap.throughput[p]), name: 'Aggregated Throughput', type: 'bar', marker: { color: '#d1d5db' }, xaxis: 'x2', yaxis: 'y2' },
+            ];
+            Plotly.newPlot(cid('chart-percentile-bars'), [...ttftTraces, ...tputTraces], {
+                ...plotlyLayout,
+                margin: { t: 30, b: 50, l: 60, r: 60 },
+                barmode: 'group',
+                showlegend: true, legend: { x: 0, y: 1.18, orientation: 'h' },
+                xaxis: { domain: [0, 0.45], title: 'Percentile' },
+                yaxis: { title: 'TTFT (ms) — lower is better', titlefont: { color: '#3b82f6' } },
+                xaxis2: { domain: [0.55, 1], title: 'Percentile', anchor: 'y2' },
+                yaxis2: { title: 'Throughput (req/s) — higher is better', anchor: 'x2', titlefont: { color: '#10b981' } },
+            }, plotlyConfig);
+        }
     }
 
     // TP Calibration charts (Step 2 decode, Step 3 prefill)
