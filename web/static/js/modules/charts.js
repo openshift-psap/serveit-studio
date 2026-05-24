@@ -387,10 +387,8 @@ function renderCharts(data, runId) {
     secTP += chartCard('TP Calibration: Latency vs GPU Count', chartDesc.pareto, 'chart-pareto');
 
     // Scatter, efficiency, architecture → Configurations subtab
-    secCfg += '<div class="charts-grid-2col">';
     secCfg += chartCard('Throughput vs Latency', chartDesc.scatter, 'chart-scatter');
     secCfg += chartCard('GPU Efficiency (req/s per GPU)', chartDesc.efficiency, 'chart-efficiency');
-    secCfg += '</div>';
     secCfg += chartCard('Architecture Comparison', chartDesc.arch, 'chart-arch');
 
     // --- PD configurations TTFT + Throughput charts (one per percentile) ---
