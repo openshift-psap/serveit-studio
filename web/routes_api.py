@@ -3,9 +3,11 @@
 import os
 import sys
 import json
+import shutil
 import subprocess
 import logging
 from datetime import datetime
+from pathlib import Path
 from typing import Optional, Dict
 from flask import jsonify, request, render_template, Response
 
@@ -144,6 +146,9 @@ def delete_run(run_id):
                 return jsonify({'success': False, 'error': f'Run #{run_id} not found'}), 404
             if status['status'] == 'running':
                 return jsonify({'success': False, 'error': f'Run #{run_id} is currently running — stop it first'}), 409
+            test_ids = [r[0] for r in conn.execute(
+                'SELECT config_name FROM test_configurations WHERE run_id = ?', (run_id,)
+            ).fetchall()]
             deleted_tests = conn.execute(
                 'DELETE FROM test_configurations WHERE run_id = ?', (run_id,)
             ).rowcount
@@ -153,9 +158,19 @@ def delete_run(run_id):
             conn.execute(
                 'DELETE FROM optimization_runs WHERE id = ?', (run_id,)
             )
+        _cleanup_result_files(test_ids)
         return jsonify({'success': True, 'deleted_tests': deleted_tests})
     except Exception as e:
         return jsonify({'success': False, 'error': str(e)}), 500
+
+
+def _cleanup_result_files(test_ids):
+    """Remove artifact directories for deleted tests."""
+    results_dir = Path('/mnt/storage/results')
+    for test_id in test_ids:
+        artifact_dir = results_dir / test_id
+        if artifact_dir.is_dir():
+            shutil.rmtree(artifact_dir, ignore_errors=True)
 
 
 @app.route('/api/restart_run/<int:run_id>', methods=['POST'])
@@ -170,6 +185,9 @@ def restart_run(run_id):
                 return jsonify({'success': False, 'error': f'Run #{run_id} not found'}), 404
             if row['status'] == 'running':
                 return jsonify({'success': False, 'error': f'Run #{run_id} is currently running — stop it first'}), 409
+            test_ids = [r[0] for r in conn.execute(
+                'SELECT config_name FROM test_configurations WHERE run_id = ?', (run_id,)
+            ).fetchall()]
             deleted_tests = conn.execute(
                 'DELETE FROM test_configurations WHERE run_id = ?', (run_id,)
             ).rowcount
@@ -183,6 +201,7 @@ def restart_run(run_id):
                     last_deployed_config = NULL, deployment_status = NULL, pods_deployed = NULL
                 WHERE id = ?
             ''', (run_id,))
+        _cleanup_result_files(test_ids)
         return jsonify({'success': True, 'deleted_tests': deleted_tests})
     except Exception as e:
         return jsonify({'success': False, 'error': str(e)}), 500
