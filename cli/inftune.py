@@ -376,6 +376,10 @@ def cmd_run(args):
         'epp_benchmark': args.epp_benchmark,
         'epp_config': epp_config,
         'advanced_vllm': advanced_vllm,
+        'scheduler_image': args.scheduler_image,
+        'thanos_url': args.thanos_url,
+        'extra_env_vars': [{'name': kv.split('=', 1)[0], 'value': kv.split('=', 1)[1]}
+                           for kv in args.extra_env_vars.split(',') if '=' in kv] if args.extra_env_vars else None,
         'kubeconfig': kubeconfig_path,
         'single_test_architecture': args.single_test_arch,
         'single_test_tp': args.single_test_tp,
@@ -463,7 +467,7 @@ def resume_run(args, db, kubeconfig_path=None):
         'latency_constraint_enabled': bool(row.get('latency_constraint_enabled', 0)),
         'latency_constraint_ms': row.get('latency_constraint_ms', 500),
         'latency_constraint_percentile': row.get('latency_constraint_percentile', 'p99'),
-        'image': saved_config.get('image', 'ghcr.io/llm-d/llm-d-cuda:v0.5.1'),
+        'image': saved_config.get('image', 'ghcr.io/llm-d/llm-d-cuda:v0.6.0'),
         'pvc_name': saved_config.get('pvc_name', 'inftune-model-cache'),
         'nccl_ib_hca': saved_config.get('nccl_ib_hca', 'mlx'),
         'hf_token': saved_config.get('hf_token') or os.environ.get('HF_TOKEN'),
@@ -480,6 +484,9 @@ def resume_run(args, db, kubeconfig_path=None):
         'epp_benchmark': saved_config.get('epp_benchmark', False),
         'epp_config': saved_config.get('epp_config'),
         'advanced_vllm': saved_config.get('advanced_vllm'),
+        'scheduler_image': saved_config.get('scheduler_image'),
+        'thanos_url': saved_config.get('thanos_url'),
+        'extra_env_vars': saved_config.get('extra_env_vars'),
         'kubeconfig': kubeconfig_path,
         'single_test_architecture': saved_config.get('single_test_architecture'),
         'single_test_tp': saved_config.get('single_test_tp'),
@@ -845,7 +852,7 @@ def build_run_parser(parser):
     hw.add_argument('--gpus', type=int, default=16, help='Total GPUs to use (default: 16)')
     hw.add_argument('--tp-options', type=str, default='1,2,4,8',
                     help='Comma-separated TP values to explore (default: 1,2,4,8)')
-    hw.add_argument('--image', type=str, default='ghcr.io/llm-d/llm-d-cuda:v0.5.1',
+    hw.add_argument('--image', type=str, default='ghcr.io/llm-d/llm-d-cuda:v0.6.0',
                     help='vLLM container image')
     hw.add_argument('--namespace', type=str, default=None,
                     help='Kubernetes namespace (default: from cluster or inftune)')
@@ -857,6 +864,12 @@ def build_run_parser(parser):
                     help='HuggingFace token for gated models')
     hw.add_argument('--nodes', type=str, default=None,
                     help='Comma-separated node names to pin tests to')
+    hw.add_argument('--scheduler-image', type=str, default=None,
+                    help='EPP scheduler image (default: ghcr.io/llm-d/llm-d-inference-scheduler:v0.7.1)')
+    hw.add_argument('--thanos-url', type=str, default=None,
+                    help='Prometheus/Thanos URL for metrics collection (auto-detected if not set)')
+    hw.add_argument('--extra-env-vars', type=str, default=None,
+                    help='Extra env vars for vLLM pods (format: KEY=VAL,KEY2=VAL2)')
 
     ss = parser.add_argument_group('Search Strategy')
     ss.add_argument('--objective', choices=['ttft', 'throughput', 'balanced',

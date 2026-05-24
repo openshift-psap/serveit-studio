@@ -12,7 +12,7 @@ Inftune Studio supports three inference architectures:
 |---|---|---|
 | **Aggregated** | Single vLLM deployment (baseline) | Simplicity |
 | **Prefill/Decode (PD)** | Separate prefill and decode pods with KV cache transfer via NIXL/RDMA | Response time (TTFT) |
-| **Expert Parallelism (EP)** | Distributed MoE inference with expert-parallel routing | Throughput |
+| **Expert Parallelism (EP)** | PD disaggregation with expert-parallel flags for MoE models | Throughput |
 
 The optimizer selects which architectures to test based on the goal:
 
@@ -23,7 +23,7 @@ The optimizer selects which architectures to test based on the goal:
 
 ### Optimization Steps
 
-The recipe-based optimizer runs up to 10 steps:
+The recipe-based optimizer runs up to 11 steps:
 
 1. **Prerequisite Infrastructure** — Deploy gateway, EPP, RBAC, RDMA discovery
 2. **Decode TP Sweep** — Deploy aggregated vLLM at each TP (1, 2, 4, 8), measure decode TPSG
@@ -31,12 +31,13 @@ The recipe-based optimizer runs up to 10 steps:
 4. **Cluster Capacity Analysis** — Calculate GPU cost per request, sustainable throughput
 5. **GPU Sizing & Feasible Splits** — Enumerate valid P/D GPU divisions respecting TP constraints
 6. **Aggregated Configuration Search** — Test all aggregated configs (TP1×16R, TP2×8R, etc.)
-7. **P/D Split Optimization** — Test selected P/D splits, find Pareto front
-8. **Architecture Comparison** — Compare best PD vs best Aggregated (no new tests)
-9. **Latency-Bounded Throughput** — Binary search for max throughput under latency SLA (optional)
-10. **Calibrated Load Validation** — Re-test at sustainable QPS if overloaded (optional)
+7. **P/D / EP Split Optimization** — Test selected splits, find Pareto front (or best throughput for EP)
+8. **Architecture Comparison** — Compare best PD/EP vs best Aggregated (no new tests)
+9. **EPP Tuning** — Test endpoint picker weight combinations (optional)
+10. **Latency-Bounded Throughput** — Binary search for max throughput under latency SLA (optional)
+11. **Calibrated Load Validation** — Re-test at sustainable QPS if overloaded (optional)
 
-Steps 2-3 and 6-10 deploy real workloads. Steps 4-5 are pure math.
+Steps 2-3 and 6-11 deploy real workloads. Steps 4-5 are pure math.
 
 ## Configuration Options
 
@@ -94,6 +95,10 @@ All settings default to "Auto" — Inftune Studio calculates optimal values. Ove
 | **pipeline-parallel-size** | Split model across GPU groups in sequence | 1 |
 | **block-size** | KV cache block size (8-512) | `next_power_of_2(sqrt(ISL+OSL))`, min 128 for PD (NIXL) |
 | **tool-call-parser** | Function/tool call parser (openai, hermes, mistral, llama3_json) | Disabled |
+| **moe-backend** | MoE expert computation backend (deep_gemm, cutlass) | Auto (deep_gemm for MoE) |
+| **all2all-backend** | MoE expert-parallel communication backend | Auto (deepep_high_throughput) |
+| **dbo-prefill-token-threshold** | Min tokens to trigger Dual Batch Overlap on prefill | 32 |
+| **dbo-decode-token-threshold** | Min tokens to trigger Dual Batch Overlap on decode | 32 |
 
 #### Toggle Flags
 
@@ -102,6 +107,9 @@ All settings default to "Auto" — Inftune Studio calculates optimal values. Ove
 | **enable-prefix-caching** | Reuse computation for shared prompt prefixes | On |
 | **disable-custom-all-reduce** | Turn off optimized GPU-to-GPU communication | Off |
 | **enable-auto-tool-choice** | Auto-detect when to invoke tools | Off |
+| **enable-expert-parallel** | Distribute MoE experts across GPUs (requires TP > 1) | Auto (MoE detection) |
+| **enable-dbo** | Dual Batch Overlap — overlap MoE all-to-all with compute | Auto (MoE detection) |
+| **enable-eplb** | Expert-parallel load balancing (replicate hot experts) | Auto (MoE detection) |
 | **trust-remote-code** | Allow custom model code from HuggingFace | On |
 | **disable-log-requests** | Suppress per-request logging during benchmarks | On |
 | **vllm-debug-logs** | Enable verbose vLLM engine logs (DEBUG level) | Off |
@@ -118,40 +126,40 @@ All settings default to "Auto" — Inftune Studio calculates optimal values. Ove
 
 ```bash
 # Deploy with defaults (auto-detects DRA vs NAD networking)
-./deployment/deploy.sh --storage-class <your-class>
+python3 deployment/deploy.py --storage-class <your-class>
 
 # Deploy with an existing PVC
-./deployment/deploy.sh --pvc-name my-existing-pvc
+python3 deployment/deploy.py --pvc-name my-existing-pvc
 
 # Force NAD (Multus) mode instead of DRA
-./deployment/deploy.sh --force-nad
+python3 deployment/deploy.py --force-nad
 ```
 
 ### Dev Mode
 
 ```bash
 # Deploy in dev mode (syncs local code to pod, auto-restarts on crash)
-./deployment/deploy.sh --dev --pvc-name my-pvc
+python3 deployment/deploy.py --dev --pvc-name my-pvc
 
-# Re-sync code to a running dev pod
-./deployment/deploy.sh --sync
+# Re-sync code to a running pod
+python3 deployment/deploy.py --sync
 
 # Port-forward the UI to localhost:8080
-./deployment/deploy.sh --port-forward
+python3 deployment/deploy.py --port-forward
 
 # Restart the server process in the pod
-./deployment/deploy.sh --restart-server
+python3 deployment/deploy.py --restart-server
 ```
 
 ### Access the UI
 
 ```bash
 # Kubernetes
-./deployment/deploy.sh --port-forward
+python3 deployment/deploy.py --port-forward
 # Opens http://localhost:8080
 
 # OpenShift (auto-creates Route)
-oc get route inftune-optimizer-ui -n llm-d
+oc get route -n inftune
 ```
 
 ## Project Structure
@@ -177,8 +185,7 @@ core/
 ├── providers/                 # Cloud provider adapters (AWS, Azure, GCP, IBM, CoreWeave, bare metal)
 └── templates/                 # Jinja2 K8s manifest templates
     ├── aggregated/            #   Aggregated LWS + Service
-    ├── pd/                    #   Prefill/Decode LWS + Services
-    ├── ep/                    #   Expert Parallelism LWS + Service
+    ├── pd/                    #   Prefill/Decode LWS + Services (also used by EP)
     └── prereq/                #   RBAC, gateway, GAIE, RDMA ConfigMap, model download
 
 web/
@@ -190,7 +197,7 @@ web/
 └── templates/                 # Jinja2 HTML templates (wizard steps, overlays)
 
 deployment/
-└── deploy.sh                  # Deployment script (YAML gen, deploy, dev mode, port-forward)
+└── deploy.py                  # Deployment script (YAML gen, deploy, dev mode, port-forward)
 
 scripts/
 ├── backfill_test_config.py    # Backfill test_config_json for existing runs
@@ -241,9 +248,13 @@ For PD goals (TTFT, Balanced, PD Only), minimum is 128 because NIXL transfers KV
 - Request counts (total, successful, incomplete, errored)
 
 **Server-side** (via Prometheus/Thanos):
-- GPU utilization and memory per pod
-- vLLM queue depth, batch size, KV cache usage
-- InfiniBand RDMA throughput
+- vLLM TTFT, ITL, E2E latency percentiles (engine histograms)
+- Token throughput (prompt + generation tokens/sec)
+- Request queue depth, KV cache utilization, preemptions
+- Processing time breakdown (prefill, decode, queue)
+- Pod network and InfiniBand RDMA throughput
+
+Prometheus metrics are auto-detected from OpenShift User Workload Monitoring or a standalone Prometheus instance. For vanilla K8s clusters accessed remotely, a `kubectl port-forward` to `svc/prometheus` in the `monitoring` namespace is started automatically.
 
 Results are stored in SQLite at `/mnt/storage/inftune.db`.
 
