@@ -291,14 +291,6 @@ function renderCharts(data, runId) {
     // Flush TP calibration
     secTP = html; html = '';
 
-    // Architecture comparison chart + percentile bar chart → Comparison tab (above tables)
-    html += chartCard('Architecture Comparison',
-        'Side-by-side comparison of <strong>Aggregated</strong> (single pool of GPUs) vs <strong>PD</strong> (dedicated prefill and decode GPUs) architectures. Lower TTFT is better for responsiveness. Higher throughput means more users served.',
-        'chart-arch');
-    html += chartCard('Percentile Comparison: Winner vs Aggregated',
-        'Side-by-side bar chart comparing TTFT and Throughput at each percentile (P50, P90, P95, P99) between the recommended configuration and the Aggregated baseline.',
-        'chart-percentile-bars');
-
     // ============================================================
     // PERCENTILE BREAKDOWN — combined primary vs Aggregated table
     // ============================================================
@@ -624,6 +616,14 @@ function renderCharts(data, runId) {
         html += '</div></div></div>';
         secTestCfg = html; html = '';
     }
+
+    // Architecture comparison chart + percentile bar chart → Comparison tab (above tables)
+    html += chartCard('Architecture Comparison',
+        'Side-by-side comparison of <strong>Aggregated</strong> (single pool of GPUs) vs <strong>PD</strong> (dedicated prefill and decode GPUs) architectures. Lower TTFT is better for responsiveness. Higher throughput means more users served.',
+        'chart-arch');
+    html += chartCard('Percentile Comparison: Winner vs Aggregated',
+        'Side-by-side bar chart comparing TTFT and Throughput at each percentile (P50, P90, P95, P99) between the recommended configuration and the Aggregated baseline.',
+        'chart-percentile-bars');
 
     // ============================================================
     // STEP 8: Architecture Comparison (separate card)
