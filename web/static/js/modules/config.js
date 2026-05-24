@@ -114,6 +114,9 @@ function updateUIFromConfig() {
     if (config.tp_pair_top_n) {
         setTpPairTopN(config.tp_pair_top_n);
     }
+    if (document.getElementById('allow-asymmetric-tp')) {
+        document.getElementById('allow-asymmetric-tp').checked = !!config.allow_asymmetric_tp;
+    }
 
     if (config.pvc_size && document.getElementById('pvc-size-input')) {
         document.getElementById('pvc-size-input').value = config.pvc_size;

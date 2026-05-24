@@ -47,26 +47,23 @@ class PDSearchMixin:
         # Primary pair: best prefill × best decode (always first)
         primary = (top_prefill[0], top_decode[0])
 
+        allow_asymmetric = getattr(self.config, 'allow_asymmetric_tp', False)
         all_pairs = [primary] + [(ptp, dtp) for ptp in top_prefill for dtp in top_decode if (ptp, dtp) != primary]
         for ptp, dtp in all_pairs:
             if (ptp, dtp) in seen:
                 continue
             seen.add((ptp, dtp))
-            if ptp > dtp and num_kv_heads > 0 and ptp >= num_kv_heads:
+            if ptp > dtp and not allow_asymmetric:
                 skipped.append((ptp, dtp))
                 continue
             self._selected_tp_pairs.append((ptp, dtp))
 
         if skipped:
             skipped_str = ', '.join(f'(PTP={p}, DTP={d})' for p, d in skipped)
-            self.log(f"  ⚠️  Skipped {len(skipped)} pairs due to NIXL sharding constraint:", 'warning')
-            self.log(f"     Problem: When Prefill TP ({max(p for p,_ in skipped)}) >= KV Heads ({num_kv_heads}), "
-                     f"KV data is highly fragmented ({num_kv_heads // max(p for p,_ in skipped)} head per GPU). "
-                     f"NIXL cannot transfer this fragmented data to a smaller Decode TP "
-                     f"because the many-to-few mapping logic fails.", 'warning')
+            self.log(f"  ⚠️  Skipped {len(skipped)} pairs: prefill TP > decode TP "
+                     f"(NIXL KV transfer crashes with asymmetric TP — vllm#43523)", 'warning')
             self.log(f"     Affected: [{skipped_str}]", 'warning')
-            self.log(f"     Constraint: To run PTP >= {num_kv_heads} with this model, "
-                     f"Decode TP must be >= Prefill TP.", 'warning')
+            self.log(f"     Enable 'Allow Prefill TP > Decode TP' in Test Config to override", 'warning')
 
         # Fall back to symmetric if everything was filtered
         if not self._selected_tp_pairs:

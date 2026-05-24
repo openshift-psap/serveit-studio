@@ -355,6 +355,7 @@ def cmd_run(args):
         'tp_pair_top_n': args.tp_pair_depth,
         'pd_search_mode': args.pd_search,
         'headroom': args.headroom,
+        'allow_asymmetric_tp': args.allow_asymmetric_tp,
         'objective': args.objective,
         'use_achievable_qps': args.use_achievable_qps,
         'latency_constraint_enabled': args.latency_sla is not None,
@@ -462,6 +463,7 @@ def resume_run(args, db, kubeconfig_path=None):
         'tp_pair_top_n': saved_config.get('tp_pair_top_n', 2),
         'pd_search_mode': saved_config.get('pd_search_mode', 'smart'),
         'headroom': saved_config.get('headroom', 1.3),
+        'allow_asymmetric_tp': saved_config.get('allow_asymmetric_tp', False),
         'objective': row.get('goal', 'ttft'),
         'use_achievable_qps': bool(row.get('use_achievable_qps', 0)),
         'latency_constraint_enabled': bool(row.get('latency_constraint_enabled', 0)),
@@ -881,6 +883,8 @@ def build_run_parser(parser):
                     default='smart', help='P/D ratio search mode (default: smart)')
     ss.add_argument('--headroom', type=float, default=1.3,
                     help='Sustainable load headroom multiplier (default: 1.3)')
+    ss.add_argument('--allow-asymmetric-tp', action='store_true',
+                    help='Allow prefill TP > decode TP (crashes on llm-d <= v0.4.0, vllm#43523)')
     ss.add_argument('--use-achievable-qps', action='store_true',
                     help='Auto-scale concurrency to sustainable level')
     ss.add_argument('--duration', type=int, default=300,

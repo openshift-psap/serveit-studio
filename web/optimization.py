@@ -640,6 +640,7 @@ def run_optimization_background(data):
         latency_constraint_ms = int(_get('latency_constraint_ms', 500))
         latency_constraint_percentile = _get('latency_constraint_percentile', 'p90')
         tp_pair_top_n = int(_get('tp_pair_top_n', 4))
+        allow_asymmetric_tp = _get('allow_asymmetric_tp', False)
         pd_search_mode = _get('pd_search_mode', 'smart')
         run_description = _get('run_description', '')
         advanced_vllm_custom_enabled = _get('advanced_vllm_custom_enabled', True)
@@ -838,6 +839,7 @@ data:
                 # Steps 2 & 3 exhaustively test ALL valid TP values
                 max_pd_splits=0,  # 0 = full coverage (test all valid splits)
                 tp_pair_top_n=tp_pair_top_n,
+                allow_asymmetric_tp=allow_asymmetric_tp,
                 pd_search_mode=pd_search_mode,
                 advanced_vllm_custom_enabled=advanced_vllm_custom_enabled,
                 epp_custom_enabled=epp_custom_enabled,
