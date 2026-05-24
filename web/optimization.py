@@ -657,6 +657,8 @@ def run_optimization_background(data):
         prefix_cache_mode = _get('prefix_cache_mode', 'identical')
         prefix_cache_groups = int(_get('prefix_cache_groups', 5))
         advanced_vllm = _get('advanced_vllm')
+        headroom_setting = (advanced_vllm or {}).get('headroom', {})
+        headroom = float(headroom_setting.get('value')) if headroom_setting.get('mode') == 'custom' and headroom_setting.get('value') else 1.3
         vllm_image = _get('image') or 'ghcr.io/llm-d/llm-d-cuda:v0.6.0'
         scheduler_image = _get('scheduler_image') or 'ghcr.io/llm-d/llm-d-inference-scheduler:v0.7.1'
         single_test_architecture = data.get('single_test_architecture')
@@ -863,6 +865,7 @@ data:
                 prefix_cache_hit_pct=prefix_cache_hit_pct,
                 prefix_cache_mode=prefix_cache_mode,
                 prefix_cache_groups=prefix_cache_groups,
+                headroom=headroom,
                 advanced_vllm=advanced_vllm,
                 single_test_architecture=single_test_architecture,
                 single_test_tp=int(single_test_tp) if single_test_tp else None,
