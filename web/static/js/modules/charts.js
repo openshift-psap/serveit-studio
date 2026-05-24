@@ -562,8 +562,17 @@ function renderCharts(data, runId) {
         html += '<div style="font-weight:700;color:#1e293b;margin-bottom:10px;border-bottom:2px solid #8b5cf6;padding-bottom:4px;">Advanced vLLM Settings</div><div style="line-height:2.2;">';
         const vllmCustomEnabled = rc.advanced_vllm_custom_enabled !== false;
         if (!vllmCustomEnabled) {
-            html += '<div style="color:#059669;font-style:italic;">Using upstream vLLM defaults — no overrides applied.</div>';
+            html += '<div style="color:#059669;font-style:italic;margin-bottom:8px;">Using upstream vLLM defaults — no overrides applied.</div>';
             html += `<div><span style="color:#64748b;">Max Model Len:</span> ${rc.max_model_len || 'auto (from ISL+OSL)'}</div>`;
+            html += `<div><span style="color:#64748b;">GPU Memory Utilization:</span> auto (calculated from model size + GPU VRAM)</div>`;
+            html += `<div><span style="color:#64748b;">Block Size:</span> auto (next power of 2 of √(ISL+OSL))</div>`;
+            html += `<div><span style="color:#64748b;">Max Num Seqs:</span> auto (from KV cache capacity)</div>`;
+            html += `<div><span style="color:#64748b;">Max Batched Tokens:</span> vLLM default</div>`;
+            html += `<div><span style="color:#64748b;">Dtype:</span> auto (from model config)</div>`;
+            html += `<div><span style="color:#64748b;">KV Cache Dtype:</span> auto (same as model dtype)</div>`;
+            html += `<div><span style="color:#64748b;">Prefix Caching:</span> Enabled</div>`;
+            html += `<div><span style="color:#64748b;">Trust Remote Code:</span> Enabled</div>`;
+            html += `<div><span style="color:#64748b;">Expert Parallel:</span> auto (enabled for MoE with TP &gt; 1)</div>`;
         } else {
             html += `<div><span style="color:#64748b;">Max Model Len:</span> ${advVal('max_model_len', rc.max_model_len)}</div>`;
             html += `<div><span style="color:#64748b;">GPU Memory Utilization:</span> ${advVal('gpu_memory_utilization', rc.gpu_memory_utilization)}</div>`;
@@ -591,9 +600,12 @@ function renderCharts(data, runId) {
         const eppPresetLabels = {balanced:'Balanced', cache_optimized:'Cache Optimized', queue_balanced:'Queue Balanced', latency_aware:'Latency Aware', custom:'Custom'};
         html += '<div style="font-weight:700;color:#1e293b;margin-bottom:10px;border-bottom:2px solid #7c3aed;padding-bottom:4px;">EPP Configuration</div><div style="line-height:2.2;">';
         if (!eppCustomEnabled) {
-            html += '<div style="color:#059669;font-style:italic;margin-bottom:6px;">Using upstream llm-d EPP defaults — no overrides applied.</div>';
+            html += '<div style="color:#059669;font-style:italic;margin-bottom:8px;">Using upstream llm-d EPP defaults — no overrides applied.</div>';
+            html += '<div><span style="color:#64748b;">Routing:</span> disagg-headers-handler → always-disagg-pd-decider</div>';
+            html += '<div><span style="color:#64748b;">Prefill Scorers:</span> prefix-cache (w:3), queue (w:2), kv-cache-utilization (w:2)</div>';
+            html += '<div><span style="color:#64748b;">Decode Scorers:</span> active-request (w:2), prefix-cache (w:3)</div>';
         }
-        html += `<div><span style="color:#64748b;">Scoring Preset:</span> <strong>${eppCustomEnabled ? (eppPresetLabels[rc.epp_preset] || rc.epp_preset || 'Balanced') : 'llm-d default'}</strong></div>`;
+        html += `<div><span style="color:#64748b;">Scoring Preset:</span> <strong>${eppCustomEnabled ? (eppPresetLabels[rc.epp_preset] || rc.epp_preset || 'Balanced') : 'llm-d upstream'}</strong></div>`;
         html += `<div><span style="color:#64748b;">EPP Tuning (Step 9):</span> ${rc.epp_benchmark ? 'Enabled' : 'Disabled'}</div>`;
         if (rc.epp_config) {
             const ec = rc.epp_config;
