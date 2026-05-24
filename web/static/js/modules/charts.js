@@ -953,7 +953,6 @@ function renderCharts(data, runId) {
         html += '<div style="padding:8px 20px; color:#1e293b; font-size:0.95em;">Prometheus metrics collected from the vLLM engine during each test. These metrics show engine-level behavior across all configurations — latency distributions, token throughput, request queuing, and processing time breakdown.</div>';
         html += '</div>';
 
-        html += '<div class="charts-grid-2col">';
         html += chartCard(
             'vLLM TTFT Percentiles',
             'Time-to-First-Token as reported by the vLLM engine histogram (averaged over the test window). Lower bars mean faster first-token delivery. Compare P50 (typical) vs P99 (worst-case) across configurations.',
@@ -964,9 +963,6 @@ function renderCharts(data, runId) {
             'Inter-Token Latency from vLLM engine histograms. This is the delay between consecutive generated tokens — it determines how "smooth" streaming feels to the user. Lower is better.',
             'chart-vllm-itl'
         );
-        html += '</div>';
-
-        html += '<div class="charts-grid-2col">';
         html += chartCard(
             'vLLM E2E Request Latency',
             'End-to-end request latency from vLLM (includes TTFT + all token generation). Shows the full time a request spends in the engine. Compare tail latency (P99) across configurations to spot saturation.',
@@ -977,9 +973,6 @@ function renderCharts(data, runId) {
             'Average prompt (input) and generation (output) token processing rates across all pods. Higher bars = more tokens processed per second. Generation rate directly impacts how many users can be served concurrently.',
             'chart-vllm-tokens'
         );
-        html += '</div>';
-
-        html += '<div class="charts-grid-2col">';
         html += chartCard(
             'Request Queue & KV Cache',
             'Average concurrent requests running and waiting in queue, plus KV cache utilization (%). High waiting counts indicate the engine is saturated. High KV cache usage means the model is near memory capacity.',
@@ -990,12 +983,10 @@ function renderCharts(data, runId) {
             'How engine time is split between prefill (prompt processing), decode (token generation), and queuing. Preemptions show how often the engine evicts running requests to make room — high preemptions indicate memory pressure.',
             'chart-vllm-time'
         );
-        html += '</div>';
 
         // Network throughput row
         if (charts.vllm.network && charts.vllm.network.pod_tx.some(v => v > 0)) {
             const hasIB = charts.vllm.network.ib_rx.some(v => v > 0);
-            html += '<div class="charts-grid-2col">';
             html += chartCard(
                 'Pod Network Throughput',
                 'Average network transmit (TX) and receive (RX) rates aggregated across all pods in each configuration. Higher TX indicates more data being sent to clients (generated tokens). Higher RX reflects incoming requests and model weight loading.',
@@ -1008,7 +999,6 @@ function renderCharts(data, runId) {
                     'chart-net-ib'
                 );
             }
-            html += '</div>';
         }
     }
 
