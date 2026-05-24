@@ -91,7 +91,7 @@
                                     <input type="checkbox" id="allow-asymmetric-tp" style="width:18px;height:18px;cursor:pointer;" onchange="config.allow_asymmetric_tp=this.checked;saveConfig();">
                                     <div>
                                         <div style="font-weight:600;font-size:0.9em;color:#92400e;">Allow Prefill TP &gt; Decode TP</div>
-                                        <div style="font-size:0.8em;color:#a16207;margin-top:2px;">Test configurations where prefill uses more GPUs per pod than decode. Disabled by default &mdash; NIXL KV transfer crashes with asymmetric TP on llm-d &le; v0.4.0 (<a href="https://github.com/vllm-project/vllm/issues/43523" target="_blank" style="color:#2563eb;">vllm#43523</a>).</div>
+                                        <div style="font-size:0.8em;color:#a16207;margin-top:2px;">Test configurations where prefill uses more GPUs per pod than decode. Disabled by default &mdash; NIXL KV transfer may crash with asymmetric TP on older llm-d versions.</div>
                                     </div>
                                 </div>
                             </div>
