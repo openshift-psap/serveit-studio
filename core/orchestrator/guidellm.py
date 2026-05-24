@@ -213,7 +213,7 @@ class GuidellmMixin:
 
         benchmark_start = time.time()
         monitor_timeout = 3600 if (stop_mode == 'max_requests' and max_requests) else config.test_duration
-        monitor_timeout += warmup + 120
+        monitor_timeout += warmup + 600
 
         try:
             # Launch kubectl exec as a subprocess to stream output
