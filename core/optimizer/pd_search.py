@@ -36,13 +36,15 @@ class PDSearchMixin:
         self.log(f"  Top-{top_n} decode TPs (by TPSG): {top_decode}", 'info')
 
         # Cross-product of top-N × top-N, deduplicated, primary pair first.
-        # NIXL KV transfer constraint: prefill_tp must be <= decode_tp.
-        # KV cache is sharded across TP workers — NIXL cannot transfer from a
-        # higher-TP prefill to a lower-TP decode (many-to-few shard mapping fails).
+        # NIXL KV transfer constraint: when prefill_tp >= num_kv_heads (KV cache is
+        # replicated across prefill TP workers) AND prefill_tp > decode_tp, the
+        # handshake fails with AssertionError in _validate_remote_agent_handshake.
+        num_kv_heads = (self._model_config or {}).get('num_key_value_heads', 0)
         seen = set()
         skipped = []
         self._selected_tp_pairs = []
 
+        # Primary pair: best prefill × best decode (always first)
         primary = (top_prefill[0], top_decode[0])
 
         all_pairs = [primary] + [(ptp, dtp) for ptp in top_prefill for dtp in top_decode if (ptp, dtp) != primary]
@@ -50,16 +52,21 @@ class PDSearchMixin:
             if (ptp, dtp) in seen:
                 continue
             seen.add((ptp, dtp))
-            if ptp > dtp:
+            if ptp > dtp and num_kv_heads > 0 and ptp >= num_kv_heads:
                 skipped.append((ptp, dtp))
                 continue
             self._selected_tp_pairs.append((ptp, dtp))
 
         if skipped:
             skipped_str = ', '.join(f'(PTP={p}, DTP={d})' for p, d in skipped)
-            self.log(f"  ⚠️  Skipped {len(skipped)} pairs: prefill TP > decode TP "
-                     f"(NIXL KV transfer requires prefill TP ≤ decode TP)", 'warning')
+            self.log(f"  ⚠️  Skipped {len(skipped)} pairs due to NIXL sharding constraint:", 'warning')
+            self.log(f"     Problem: When Prefill TP ({max(p for p,_ in skipped)}) >= KV Heads ({num_kv_heads}), "
+                     f"KV data is highly fragmented ({num_kv_heads // max(p for p,_ in skipped)} head per GPU). "
+                     f"NIXL cannot transfer this fragmented data to a smaller Decode TP "
+                     f"because the many-to-few mapping logic fails.", 'warning')
             self.log(f"     Affected: [{skipped_str}]", 'warning')
+            self.log(f"     Constraint: To run PTP >= {num_kv_heads} with this model, "
+                     f"Decode TP must be >= Prefill TP.", 'warning')
 
         # Fall back to symmetric if everything was filtered
         if not self._selected_tp_pairs:
