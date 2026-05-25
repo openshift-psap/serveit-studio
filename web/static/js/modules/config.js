@@ -936,7 +936,8 @@ function applyReportConfig(recId) {
         return;
     }
     var rc = (window._recConfigs || {})[recId];
-    if (!rc) return;
+    if (!rc) { console.warn('applyReportConfig: no config for', recId, 'available:', Object.keys(window._recConfigs || {})); return; }
+    console.log('applyReportConfig:', recId, rc);
 
     var arch = rc.architecture || 'aggregated';
     var ts = rc.test_settings || {};
