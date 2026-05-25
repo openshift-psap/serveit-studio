@@ -163,7 +163,7 @@ class GuidellmMixin:
                 if log_callback:
                     log_callback(f"   Copied dataset to workload pod: {os.path.basename(data_payload)}")
             col = getattr(config, 'dataset_column', None) or 'prompt'
-            column_args = f' --data-column-mapper \'{{"text_column": "{col}"}}\''
+            column_args = f' --data-column-mapper \'{{"text_column": "{col}", "output_tokens_count_column": "output_tokens_count"}}\''
         else:
             data_payload = f'prompt_tokens={config.isl},output_tokens={config.osl}'
             if getattr(config, 'isl_stdev', None):

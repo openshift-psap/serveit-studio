@@ -76,8 +76,14 @@ class DatasetMixin:
             vocab = None
 
         def make_prompt(length_tokens, rng_instance):
-            if vocab:
-                words = [rng_instance.choice(vocab) for _ in range(int(length_tokens * 1.3))]
+            if vocab and tokenizer:
+                words = [rng_instance.choice(vocab) for _ in range(length_tokens * 2)]
+                text = ' '.join(words)
+                tokens = tokenizer.encode(text, add_special_tokens=False)
+                if len(tokens) > length_tokens:
+                    text = tokenizer.decode(tokens[:length_tokens], skip_special_tokens=True)
+            elif vocab:
+                words = [rng_instance.choice(vocab) for _ in range(length_tokens)]
                 text = ' '.join(words)
             else:
                 words = []
