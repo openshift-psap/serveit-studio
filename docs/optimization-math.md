@@ -269,16 +269,28 @@ For each TP in valid_tp_options:
 ### Pareto Dominance
 ```
 Configuration j DOMINATES configuration i if:
-  ttft_j <= ttft_i  AND  throughput_j >= throughput_i
+  ttft_p99_j <= ttft_p99_i  AND  throughput_p90_j >= throughput_p90_i
   AND at least one strict inequality
 ```
+**Why P99 for TTFT?** P90 can hide catastrophic tail latency. A config with P90=919ms looks great, but if P99=264,630ms (4.4 minutes!), the config is saturated and unusable. Using P99 for dominance penalizes unstable configs that collapse under load — they get dominated by configs with lower tail latency, even if their P90 looks better.
+
+**Why P90 for throughput?** P90 throughput represents reliable sustained performance. P99 throughput can be noisy (a single slow measurement window), and using P99 would unfairly penalize otherwise good configs.
+
 **Why Pareto front?** TTFT and throughput are competing objectives — improving one often degrades the other. The Pareto front is the set of configurations where you can't improve one metric without sacrificing the other. This gives the user a menu of trade-offs rather than a single "best" answer.
+
+### Best Config Selection
+```
+Best TTFT config  = config with lowest ttft_p99 (from Pareto front or all Step 7 results)
+Best Throughput   = config with highest throughput_p90
+PD vs Aggregated  = compared using ttft_p99 (not P90)
+```
+**Why P99 for selection?** Consistent with Pareto dominance. The "best TTFT" config should have the lowest worst-case latency, not just the lowest typical latency.
 
 ---
 
 ## Step 8: Architecture Comparison
 
-No new tests. Compares best PD (Step 7) vs best Aggregated (Step 6).
+No new tests. Compares best PD (Step 7) vs best Aggregated (Step 6) at P90 throughput, P90 TTFT, and P99 TTFT (tail latency).
 
 **Why no new tests?** Step 6 already tested all aggregated configs. Comparing against P/D results from Step 7 is a pure data analysis step — no additional benchmarks needed.
 
@@ -288,15 +300,15 @@ No new tests. Compares best PD (Step 7) vs best Aggregated (Step 6).
 
 ### Smart EPP Weight Derivation
 
-Instead of brute-force testing preset weight combinations (3-4 tests), Smart EPP derives near-optimal weights mathematically from calibration data collected in Steps 2-3.
+Instead of brute-force testing preset weight combinations (3-4 tests), Smart EPP derives near-optimal weights from calibration data (Steps 2-3) and **real Prometheus metrics** collected during Step 6/7 benchmarks.
 
 Each weight is proportional to the **time impact** of optimal routing on that dimension:
 
 ```
 prefix_time_impact_raw = (ISL × actual_cache_hit_pct / 100) / prefill_TPSG
 prefix_time_impact     = prefix_time_impact_raw × diversity_factor
-kv_eviction_cost       = (ISL / prefill_TPSG) × kv_utilization_factor
-queue_wait_cost        = (ISL + OSL) / (prefill_TPSG + decode_TPSG) × queue_factor
+kv_eviction_cost       = (ISL / prefill_TPSG) × kv_pressure
+queue_wait_cost        = (ISL + OSL) / (prefill_TPSG + decode_TPSG) × (queue_pressure + 0.1)
 
 total = prefix_time_impact + kv_eviction_cost + queue_wait_cost
 w_prefix = clamp(round(prefix_time_impact / total × 7), 1, 5)
@@ -321,9 +333,9 @@ The raw `prefix_time_impact` measures how much compute a cache hit saves, but it
 
 - **prefix_time_impact**: A prefix cache hit skips `ISL × hit_pct` tokens of prefill computation. The time saved per request is `cached_tokens / prefill_TPSG` GPU-seconds. The cache hit rate is the **actual measured rate** from Step 6 (aggregated) or Step 7 (PD) Prometheus metrics, not the user-configured `prefix_cache_hit_pct`. Setting 80% in the wizard doesn't guarantee 80% hits — the actual rate depends on pod count, EPP routing, and KV cache capacity. When Prometheus metrics are unavailable, falls back to the configured percentage.
 
-- **kv_eviction_cost**: When a request is routed to a server with full KV cache, it evicts an existing sequence that must be re-prefilled later — costing `ISL / prefill_TPSG` GPU-seconds. The `kv_utilization_factor` is the **measured per-pod KV utilization variance** from Step 6/7 when available (Prometheus). Higher variance means some pods are near-full while others have space — routing matters more. Falls back to `(concurrency / max_num_seqs)²` when metrics are unavailable.
+- **kv_eviction_cost**: When a request is routed to a server with full KV cache, it evicts an existing sequence that must be re-prefilled later — costing `ISL / prefill_TPSG` GPU-seconds. The `kv_pressure` is the **measured average KV cache utilization** (`vllm_kv_cache_pct`, 0-1) from Step 6/7 Prometheus metrics. Higher utilization means pods are closer to full — routing to a less-full pod prevents evictions. Falls back to `(concurrency / max_num_seqs)²` when Prometheus metrics are unavailable.
 
-- **queue_wait_cost**: Each request in a pod's queue adds `(ISL + OSL) / total_TPSG` seconds of wait time. The `queue_factor` is the **measured per-pod queue depth variance** from Step 6/7 when available. Higher variance means request distribution is uneven — queue-aware routing helps. Falls back to `1 / num_pods` when metrics are unavailable.
+- **queue_wait_cost**: Each request in a pod's queue adds `(ISL + OSL) / total_TPSG` seconds of wait time. The `queue_pressure` is the **measured ratio of waiting to total requests** (`vllm_requests_waiting / (vllm_requests_running + vllm_requests_waiting)`) from Step 6/7 Prometheus metrics. Higher pressure means requests are queuing — queue-aware routing distributes load better. Falls back to the time-based ratio `vllm_queue_time_rate / (prefill_time + decode_time + queue_time)`, then to `1 / num_pods` when metrics are unavailable.
 
 **Architecture-specific derivation:** Weights are computed separately for aggregated and PD architectures because cache behavior differs. Aggregated pods each maintain their own prefix cache; PD mode only caches on prefill pods. The measured cache hit rates from Step 6 (aggregated) and Step 7 (PD) are used independently.
 
@@ -366,12 +378,20 @@ queue_cost    = 9050 / 3540 / 16 = 0.1598 GPU-sec
 → Weights: prefix=1, kv=5, queue=2  (KV-dominated — matches empirical kv-heavy winner)
 ```
 
-### Two-Pass Refinement (OpenShift)
+### Prometheus Metrics Used
 
-On OpenShift with Prometheus, after running the first test with derived weights, the system reads actual metrics:
-- `prefix_cache_hits_total / prefix_cache_queries_total` → measured cache hit rate
-- Per-pod KV cache utilization variance → if uneven, increase kv weight
-- Per-pod queue depth variance → if uneven, increase queue weight
+The weight derivation uses real vLLM Prometheus metrics from Step 6/7 when available:
+
+| Metric | EPP Dimension | What It Measures |
+|--------|--------------|------------------|
+| `vllm_prefix_cache_hits_rate / vllm_prefix_cache_queries_rate` | Prefix cache weight | Actual cache hit rate (vs configured estimate) |
+| `vllm_kv_cache_pct` | KV cache weight | Average KV cache utilization (0-1) |
+| `vllm_requests_waiting / (vllm_requests_running + vllm_requests_waiting)` | Queue weight | Fraction of requests queuing |
+| `vllm_queue_time_rate / (prefill_time + decode_time + queue_time)` | Queue weight (fallback) | Time-based queue pressure ratio |
+
+When Prometheus is unavailable (no port-forward, no OpenShift User Workload Monitoring), the derivation falls back to theoretical estimates from ISL, OSL, TPSG, concurrency, and pod count.
+
+### Two-Pass Refinement
 
 Weights are recomputed with measured data. If they differ from the initial derivation, one additional validation test is run. Total: 1-2 tests instead of 3-4 preset sweeps.
 
