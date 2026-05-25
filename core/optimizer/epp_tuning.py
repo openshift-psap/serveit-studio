@@ -523,12 +523,20 @@ class EPPTuningMixin:
                             'prefix_cache_weight': weights['prefix_cache_weight'],
                             'kv_cache_weight': weights['kv_cache_weight'],
                             'queue_weight': weights['queue_weight'],
+                            'active_request_enabled': True,
+                            'active_request_weight': weights.get('active_request_weight', 2),
                             'slo_enabled': weights.get('slo_enabled', False),
+                            'slo_weight': weights.get('slo_weight', 0),
                             'max_prefix_blocks': epp_cfg.get('maxPrefixBlocksToMatch', 256),
                             'lru_capacity': epp_cfg.get('lruCapacityPerServer', 31250),
                             'non_cached_tokens': epp_cfg.get('nonCachedTokens', 16),
                         })
-                        epp_test_config._epp_manifests = _json.dumps({'epp-configmap': cm_yaml})
+                        manifests = {'epp-configmap': cm_yaml}
+                        lws_manifests = tmgr.render_config(base_cfg)
+                        for mk, mv in lws_manifests.items():
+                            if 'service' not in mk:
+                                manifests[mk] = mv
+                        epp_test_config._epp_manifests = _json.dumps(manifests)
                     except Exception:
                         epp_test_config._epp_manifests = None
                     self._save_epp_test_to_database(epp_test_config, result)
