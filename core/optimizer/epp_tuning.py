@@ -13,23 +13,31 @@ class EPPTuningMixin:
     """Mixin providing EPP tuning methods for RecipeOptimizer."""
 
     def _get_best_result_prom(self, arch: str) -> Optional[Dict]:
-        """Get Prometheus metrics dict from the best Step 6/7 result for an architecture."""
+        """Get Prometheus metrics dict from the best Step 6/7 result from the database."""
         import json as _json
-        result = None
+        if not self.db_manager or not self.run_id:
+            return None
+
+        test_id = None
         if arch == 'aggregated' and self.aggregated_result:
-            result = self.aggregated_result
+            test_id = getattr(self.aggregated_result, 'test_id', None)
         elif arch == 'pd' and self.pareto_results:
             best = min(self.pareto_results, key=lambda x: x[1].ttft_p99 or x[1].ttft_p90 or 1e9)
-            result = best[1]
-        if not result:
+            test_id = getattr(best[1], 'test_id', None)
+        if not test_id:
             return None
+
         try:
-            content = getattr(result, 'metrics_json_content', None)
-            if content:
-                full = _json.loads(content)
-                return full.get('prometheus_metrics', full)
-            elif hasattr(result, 'prometheus_metrics') and result.prometheus_metrics:
-                return result.prometheus_metrics
+            with self.db_manager.get_connection() as conn:
+                row = conn.execute(
+                    'SELECT metrics_json FROM test_configurations WHERE config_name = ? AND run_id = ?',
+                    (test_id, self.run_id)
+                ).fetchone()
+                if row and row[0]:
+                    full = _json.loads(row[0])
+                    prom = full.get('prometheus_metrics', {})
+                    if prom and any(v is not None for v in prom.values()):
+                        return prom
         except Exception:
             pass
         return None
