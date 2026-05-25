@@ -1143,15 +1143,15 @@ function renderCharts(data, runId) {
                     let ttftDelta = '', tputDelta = '';
                     if (baselineTrial && !t.is_baseline && baselineTrial[ttftKey] && t[ttftKey]) {
                         const ttftPct = ((t[ttftKey] - baselineTrial[ttftKey]) / baselineTrial[ttftKey] * 100);
-                        if (Math.abs(ttftPct) < 5) ttftDelta = ' <span style="color:#6b7280;">(~baseline)</span>';
-                        else if (ttftPct < 0) ttftDelta = ` <span style="color:#059669;">(${Math.abs(ttftPct).toFixed(0)}% faster)</span>`;
-                        else ttftDelta = ` <span style="color:#dc2626;">(${ttftPct.toFixed(0)}% slower)</span>`;
+                        if (ttftPct < -0.5) ttftDelta = ` <span style="color:#059669;">(${Math.abs(ttftPct).toFixed(1)}% faster)</span>`;
+                        else if (ttftPct > 0.5) ttftDelta = ` <span style="color:#dc2626;">(+${ttftPct.toFixed(1)}% slower)</span>`;
+                        else ttftDelta = ` <span style="color:#6b7280;">(0%)</span>`;
                     }
                     if (baselineTrial && !t.is_baseline && baselineTrial.throughput_mean && t.throughput_mean) {
                         const tputPct = ((t.throughput_mean - baselineTrial.throughput_mean) / baselineTrial.throughput_mean * 100);
-                        if (Math.abs(tputPct) < 5) tputDelta = ' <span style="color:#6b7280;">(~baseline)</span>';
-                        else if (tputPct > 0) tputDelta = ` <span style="color:#059669;">(+${tputPct.toFixed(0)}%)</span>`;
-                        else tputDelta = ` <span style="color:#dc2626;">(${tputPct.toFixed(0)}%)</span>`;
+                        if (tputPct > 0.5) tputDelta = ` <span style="color:#059669;">(+${tputPct.toFixed(1)}%)</span>`;
+                        else if (tputPct < -0.5) tputDelta = ` <span style="color:#dc2626;">(${tputPct.toFixed(1)}%)</span>`;
+                        else tputDelta = ` <span style="color:#6b7280;">(0%)</span>`;
                     }
                     const icon = t === bestTrial && !t.is_baseline ? '⭐' : (t.is_baseline ? '📊' : '🔧');
                     const w = t.weights || {};
