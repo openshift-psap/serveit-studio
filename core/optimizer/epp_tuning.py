@@ -231,85 +231,72 @@ class EPPTuningMixin:
         KV utilization variance, and queue depth variance from the test.
         Returns refined weights or None if metrics unavailable.
         """
-        if not test_result or not test_result.metrics_json_content:
+        if not test_result:
             return None
 
-        try:
-            import json
-            metrics = json.loads(test_result.metrics_json_content)
-        except Exception:
+        import json
+        test_id = getattr(test_result, 'test_id', None)
+        prom = None
+        if self.db_manager and self.run_id and test_id:
+            try:
+                with self.db_manager.get_connection() as conn:
+                    row = conn.execute(
+                        'SELECT metrics_json FROM test_configurations WHERE config_name = ? AND run_id = ?',
+                        (test_id, self.run_id)
+                    ).fetchone()
+                    if row and row[0]:
+                        full = json.loads(row[0])
+                        prom = full.get('prometheus_metrics', {})
+            except Exception:
+                pass
+        if not prom:
             return None
+        metrics = prom
 
         prefill_tpsg = self.optimal_prefill_tp.tpsg if self.optimal_prefill_tp else None
         decode_tpsg = self.optimal_decode_tp.tpsg if self.optimal_decode_tp else None
         if not prefill_tpsg or not decode_tpsg:
             return None
 
-        cache_hits = None
-        cache_queries = None
-        kv_values = []
-        queue_values = []
-
-        for key, val in metrics.items():
-            if 'prefix_cache_hits' in key and 'avg' in str(val):
-                cache_hits = val.get('avg') if isinstance(val, dict) else val
-            elif 'prefix_cache_queries' in key and 'avg' in str(val):
-                cache_queries = val.get('avg') if isinstance(val, dict) else val
-            elif 'kv_cache_usage_perc' in key:
-                if isinstance(val, dict):
-                    for v in val.values():
-                        if isinstance(v, (int, float)) and v > 0:
-                            kv_values.append(v)
-                elif isinstance(val, (int, float)) and val > 0:
-                    kv_values.append(val)
-            elif 'queue_size' in key and 'per_pod' in key:
-                if isinstance(val, dict):
-                    for v in val.values():
-                        if isinstance(v, (int, float)):
-                            queue_values.append(v)
-
-        if cache_hits is None and not kv_values and not queue_values:
-            self.log("  Smart EPP: no Prometheus metrics available for refinement", 'info')
-            return None
-
         isl = self.config.isl
         osl = self.config.osl
 
-        actual_hit_pct = 0
-        if cache_hits is not None and cache_queries and cache_queries > 0:
-            actual_hit_pct = (cache_hits / cache_queries) * 100
+        hits = self._prom_avg(metrics, 'vllm_prefix_cache_hits_rate')
+        queries = self._prom_avg(metrics, 'vllm_prefix_cache_queries_rate')
+        actual_hit_pct = (hits / queries * 100) if hits is not None and queries and queries > 0 else 0
+        kv_pressure = self._prom_avg(metrics, 'vllm_kv_cache_pct') or 0
+        requests_waiting = self._prom_avg(metrics, 'vllm_requests_waiting') or 0
+        requests_running = self._prom_avg(metrics, 'vllm_requests_running') or 0
+        total_reqs = requests_running + requests_waiting
+        queue_pressure = (requests_waiting / total_reqs) if total_reqs > 0 else 0
+        active_load = requests_running / max(self._compute_max_num_seqs(self.optimal_decode_tp.tp if self.optimal_decode_tp else 1) or 256, 1)
+
+        if actual_hit_pct > 0:
             self.log(f"    Measured cache hit rate: {actual_hit_pct:.1f}%", 'info')
+        self.log(f"    Measured KV cache: {kv_pressure:.4f}, queue pressure: {queue_pressure:.4f}, active load: {active_load:.4f}", 'info')
 
-        kv_variance = 0
-        if len(kv_values) >= 2:
-            kv_mean = sum(kv_values) / len(kv_values)
-            kv_variance = sum((v - kv_mean) ** 2 for v in kv_values) / len(kv_values)
-            self.log(f"    KV utilization variance: {kv_variance:.4f} (mean={kv_mean:.2f}%)", 'info')
-
-        queue_variance = 0
-        if len(queue_values) >= 2:
-            q_mean = sum(queue_values) / len(queue_values)
-            queue_variance = sum((v - q_mean) ** 2 for v in queue_values) / len(queue_values)
-            self.log(f"    Queue depth variance: {queue_variance:.4f} (mean={q_mean:.1f})", 'info')
-
+        total_tpsg = prefill_tpsg + decode_tpsg
         prefix_impact = (isl * actual_hit_pct / 100.0) / prefill_tpsg
-        kv_impact = (isl / prefill_tpsg) * min(kv_variance, 1.0)
-        queue_impact = (isl + osl) / (prefill_tpsg + decode_tpsg) * min(queue_variance + 0.1, 1.0)
+        kv_impact = (isl / prefill_tpsg) * min(kv_pressure, 1.0)
+        queue_impact = (isl + osl) / total_tpsg * (queue_pressure + 0.1)
+        active_impact = (osl / decode_tpsg) * min(active_load, 1.0)
 
-        total = prefix_impact + kv_impact + queue_impact
+        total = prefix_impact + kv_impact + queue_impact + active_impact
         if total <= 0:
             return None
 
         w_prefix = max(1, min(5, round(prefix_impact / total * 7)))
         w_kv = max(1, min(5, round(kv_impact / total * 7)))
         w_queue = max(1, min(5, round(queue_impact / total * 7)))
+        w_active = max(1, min(5, round(active_impact / total * 7)))
 
-        self.log(f"    → Refined weights: prefix={w_prefix}, kv={w_kv}, queue={w_queue}", 'success')
+        self.log(f"    → Refined weights: prefix={w_prefix}, kv={w_kv}, queue={w_queue}, active={w_active}", 'success')
 
         return {
             'prefix_cache_weight': float(w_prefix),
             'kv_cache_weight': float(w_kv),
             'queue_weight': float(w_queue),
+            'active_request_weight': float(w_active),
             'slo_enabled': False,
         }
 

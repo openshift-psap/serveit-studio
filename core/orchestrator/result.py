@@ -125,7 +125,6 @@ class TestResult:
     # Metrics from Prometheus/Thanos
     gpu_utilization: Optional[float] = None
     kv_cache_usage: Optional[float] = None
-    metrics_json_content: Optional[str] = None
 
     # vLLM memory profiling (measured from pod logs after startup)
     vllm_gpu_blocks: Optional[int] = None
