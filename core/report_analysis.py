@@ -1339,7 +1339,7 @@ class ReportAnalyzer:
                 else:
                     candidates = [r for r in non_epp if r.architecture == 'aggregated']
                 if candidates:
-                    best = min(candidates, key=lambda r: r.ttft_p90 or float('inf'))
+                    best = min(candidates, key=lambda r: r.ttft_p99 or r.ttft_p90 or float('inf'))
                     baselines[arch_key] = {
                         'config_name': best.display_label,
                         'ttft_p50': round(best.ttft_p50, 2) if best.ttft_p50 else None,

@@ -404,7 +404,8 @@ class EPPTuningMixin:
             if arch == 'aggregated' and self.aggregated_result:
                 baseline_ttft = self.aggregated_result.ttft_p90
             elif arch == 'pd' and self.pareto_results:
-                baseline_ttft = min(self.pareto_results, key=lambda x: x[1].ttft_p90 if x[1].ttft_p90 else 1e9)[1].ttft_p90
+                best_pd = min(self.pareto_results, key=lambda x: x[1].ttft_p99 or x[1].ttft_p90 or 1e9)
+                baseline_ttft = best_pd[1].ttft_p90
 
             if smart_weights:
                 weight_combos = [('smart-derived', smart_weights)]
