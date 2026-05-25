@@ -69,6 +69,8 @@ spec:
           - name: hf-cache
             persistentVolumeClaim:
               claimName: {{ pvc_name }}
+          - name: jit-cache
+            emptyDir: {}
           - name: rdma-script
             configMap:
               name: rdma-discovery-script
@@ -225,6 +227,16 @@ spec:
                 value: "{{ 'DEBUG' if vllm_debug_logs else 'ERROR' }}"
               - name: NCCL_DEBUG
                 value: "{{ 'INFO' if nccl_debug_logs else 'ERROR' }}"
+              - name: TRITON_LIBCUDA_PATH
+                value: /usr/lib64
+              - name: CUDA_CACHE_PATH
+                value: /var/cache/vllm/cuda
+              - name: CCACHE_DIR
+                value: /var/cache/vllm/ccache
+              - name: VLLM_CACHE_ROOT
+                value: /var/cache/vllm/vllm
+              - name: FLASHINFER_WORKSPACE_BASE
+                value: /var/cache/vllm/flashinfer
               - name: VLLM_NIXL_ABORT_REQUEST_TIMEOUT
                 value: "600"
               - name: SHARED_STORAGE_PATH
@@ -272,6 +284,8 @@ spec:
                 mountPath: /dev/shm
               - name: hf-cache
                 mountPath: /model-cache
+              - name: jit-cache
+                mountPath: /var/cache/vllm
               - name: rdma-script
                 mountPath: /scripts
               - name: dev-infiniband
