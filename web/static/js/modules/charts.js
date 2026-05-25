@@ -1130,37 +1130,36 @@ function renderCharts(data, runId) {
             eppHtml += `<div style="background:#f8fafc; border-radius:10px; padding:16px; text-align:center; border:1px solid #e2e8f0;"><div style="font-size:1.2em; font-weight:800; color:#1e293b;">${weightsStr}</div><div style="color:#64748b; font-size:0.82em; margin-top:4px;">EPP Weights (Cache:KV:Queue:Active)</div></div>`;
             eppHtml += '</div>';
 
-            // Charts P90, P95, P99
+            // Charts P90, P95, P99 with per-percentile summary
+            const baselineTrial = trials.find(t => t.is_baseline);
             const pctls = [{key:'p90',label:'P90',color:'#3b82f6'},{key:'p95',label:'P95',color:'#dc2626'},{key:'p99',label:'P99',color:'#7c3aed'}];
             pctls.forEach(pctl => {
                 eppHtml += `<div id="${eppCardId}-${pctl.key}${_chartSuffix}" style="height:400px; margin:8px 20px; background:#fff; border-radius:8px; border:1px solid #e2e8f0;"></div>`;
+                eppHtml += `<div style="padding:4px 20px 12px; font-size:0.85em; line-height:1.7; color:#1e293b;">`;
+                trials.forEach(t => {
+                    const ttftKey = `ttft_${pctl.key}`;
+                    const ttft = t[ttftKey] != null ? t[ttftKey].toFixed(0) + 'ms' : 'N/A';
+                    const tput = t.throughput_mean != null ? t.throughput_mean.toFixed(1) : (t.throughput_p90 != null ? t.throughput_p90.toFixed(1) : 'N/A');
+                    let comparison = '';
+                    if (baselineTrial && !t.is_baseline && baselineTrial[ttftKey] && t[ttftKey] && baselineTrial.throughput_mean && t.throughput_mean) {
+                        const ttftPct = ((t[ttftKey] - baselineTrial[ttftKey]) / baselineTrial[ttftKey] * 100);
+                        const tputPct = ((t.throughput_mean - baselineTrial.throughput_mean) / baselineTrial.throughput_mean * 100);
+                        let ttftStr, tputStr;
+                        if (Math.abs(ttftPct) < 5) { ttftStr = 'similar TTFT'; }
+                        else if (ttftPct < 0) { ttftStr = `<span style="color:#059669;">${Math.abs(ttftPct).toFixed(0)}% faster</span>`; }
+                        else { ttftStr = `<span style="color:#dc2626;">${ttftPct.toFixed(0)}% slower</span>`; }
+                        if (Math.abs(tputPct) < 5) { tputStr = 'similar throughput'; }
+                        else if (tputPct > 0) { tputStr = `<span style="color:#059669;">${tputPct.toFixed(0)}% higher throughput</span>`; }
+                        else { tputStr = `<span style="color:#dc2626;">${Math.abs(tputPct).toFixed(0)}% lower throughput</span>`; }
+                        comparison = ` — ${ttftStr}, ${tputStr}`;
+                    }
+                    const icon = t === bestTrial && !t.is_baseline ? '⭐' : (t.is_baseline ? '📊' : '🔧');
+                    const w = t.weights || {};
+                    const wStr = `${w.prefix_cache || '?'}:${w.kv_cache || '?'}:${w.queue || '?'}:${w.active_request || 0}`;
+                    eppHtml += `<div>${icon} <strong>${t.name}</strong> (${wStr}): TTFT ${pctl.label}=${ttft}, Throughput=${tput} req/s${comparison}</div>`;
+                });
+                eppHtml += '</div>';
             });
-
-            // Summary below charts
-            const baselineTrial = trials.find(t => t.is_baseline);
-            eppHtml += '<div style="padding:8px 20px 16px; font-size:0.9em; line-height:1.8; color:#1e293b;">';
-            trials.forEach(t => {
-                const ttft = t.ttft_p90 != null ? t.ttft_p90.toFixed(0) + 'ms' : 'N/A';
-                const tput = t.throughput_mean != null ? t.throughput_mean.toFixed(1) : (t.throughput_p90 != null ? t.throughput_p90.toFixed(1) : 'N/A');
-                let comparison = '';
-                if (baselineTrial && !t.is_baseline && baselineTrial.ttft_p90 && t.ttft_p90 && baselineTrial.throughput_mean && t.throughput_mean) {
-                    const ttftPct = ((t.ttft_p90 - baselineTrial.ttft_p90) / baselineTrial.ttft_p90 * 100);
-                    const tputPct = ((t.throughput_mean - baselineTrial.throughput_mean) / baselineTrial.throughput_mean * 100);
-                    let ttftStr, tputStr;
-                    if (Math.abs(ttftPct) < 5) { ttftStr = 'similar TTFT'; }
-                    else if (ttftPct < 0) { ttftStr = `<span style="color:#059669;">${Math.abs(ttftPct).toFixed(0)}% faster</span>`; }
-                    else { ttftStr = `<span style="color:#dc2626;">${ttftPct.toFixed(0)}% slower</span>`; }
-                    if (Math.abs(tputPct) < 5) { tputStr = 'similar throughput'; }
-                    else if (tputPct > 0) { tputStr = `<span style="color:#059669;">${tputPct.toFixed(0)}% higher throughput</span>`; }
-                    else { tputStr = `<span style="color:#dc2626;">${Math.abs(tputPct).toFixed(0)}% lower throughput</span>`; }
-                    comparison = ` — ${ttftStr}, ${tputStr}`;
-                }
-                const icon = t === bestTrial && !t.is_baseline ? '⭐' : (t.is_baseline ? '📊' : '🔧');
-                const w = t.weights || {};
-                const wStr = `${w.prefix_cache || '?'}:${w.kv_cache || '?'}:${w.queue || '?'}:${w.active_request || 0}`;
-                eppHtml += `<div>${icon} <strong>${t.name}</strong> (${wStr}): TTFT P90=${ttft}, Throughput=${tput} req/s${comparison}</div>`;
-            });
-            eppHtml += '</div>';
 
             // Results table
             eppHtml += '<div style="padding:0 20px 16px;"><table class="results-table">';
