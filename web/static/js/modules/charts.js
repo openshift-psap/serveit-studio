@@ -1127,7 +1127,7 @@ function renderCharts(data, runId) {
             eppHtml += `<div style="background:#f8fafc; border-radius:10px; padding:16px; text-align:center; border:1px solid #e2e8f0;"><div style="font-size:1.5em; font-weight:800; color:#1e293b;">${bestTrial.throughput_p90 || 'N/A'}</div><div style="color:#64748b; font-size:0.82em; margin-top:4px;">Throughput P90 (req/s)</div></div>`;
             const bw = bestTrial.weights || {};
             const weightsStr = `${bw.prefix_cache || 0}:${bw.kv_cache || 0}:${bw.queue || 0}:${bw.active_request || 0}`;
-            eppHtml += `<div style="background:#f8fafc; border-radius:10px; padding:16px; text-align:center; border:1px solid #e2e8f0;"><div style="font-size:1.2em; font-weight:800; color:#1e293b;">${weightsStr}</div><div style="color:#64748b; font-size:0.82em; margin-top:4px;">EPP Weights (C:K:Q:A)</div></div>`;
+            eppHtml += `<div style="background:#f8fafc; border-radius:10px; padding:16px; text-align:center; border:1px solid #e2e8f0;"><div style="font-size:1.2em; font-weight:800; color:#1e293b;">${weightsStr}</div><div style="color:#64748b; font-size:0.82em; margin-top:4px;">EPP Weights (Cache:KV:Queue:Active)</div></div>`;
             eppHtml += '</div>';
 
             // Charts P90, P95, P99
