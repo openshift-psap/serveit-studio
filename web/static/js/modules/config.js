@@ -942,8 +942,7 @@ function applyReportConfig(recId) {
     var ts = rc.test_settings || {};
     var tp = rc.tp || 1;
 
-    // Set goal to single_test and pre-fill deployment config
-    config.goal = 'single_test';
+    // Pre-fill deployment config as starting point (keeps current goal)
     config.single_test_architecture = arch;
     if (arch === 'pd' || arch === 'ep') {
         config.single_test_prefill_tp = rc.prefill_tp || tp;
