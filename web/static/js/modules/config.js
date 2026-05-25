@@ -135,7 +135,7 @@ function updateUIFromConfig() {
     }
 
     // Restore prefix cache slider
-    if (config.prefix_cache_hit_pct && document.getElementById('prefix-cache-slider')) {
+    if (config.prefix_cache_hit_pct != null && document.getElementById('prefix-cache-slider')) {
         document.getElementById('prefix-cache-slider').value = config.prefix_cache_hit_pct;
         document.getElementById('prefix-cache-value').textContent = config.prefix_cache_hit_pct + '%';
     }
