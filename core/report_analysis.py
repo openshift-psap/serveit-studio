@@ -1365,7 +1365,7 @@ class ReportAnalyzer:
                         'throughput_p95': round(best.throughput_p95, 2) if best.throughput_p95 else None,
                         'throughput_p99': round(best.throughput_p99, 2) if best.throughput_p99 else None,
                         'itl_p90': round(best.itl_p90, 2) if best.itl_p90 else None,
-                        'weights': {'prefix_cache': 'default', 'kv_cache': 'default', 'queue': 'default'},
+                        'weights': {'prefix_cache': 3, 'kv_cache': 2, 'queue': 2, 'active_request': 2},
                         'manifest_types': [],
                         'is_baseline': True,
                     }
