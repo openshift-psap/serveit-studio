@@ -977,7 +977,8 @@ function applyReportConfig(recId) {
     if (rc.model) config.model = rc.model;
     if (rc.image) config.image = rc.image;
 
-    // Restore ALL workload settings — reset to test values or defaults
+    // Restore ALL settings — reset to test values or defaults
+    // Step 3: Workload
     config.isl = ts.isl || 2048;
     config.osl = ts.osl || 512;
     config.isl_stdev = ts.isl_stdev || null;
@@ -985,16 +986,38 @@ function applyReportConfig(recId) {
     config.users = ts.num_users || 100;
     config.rate_type = ts.rate_type || 'concurrent';
     config.turns = ts.turns || 1;
+    config.prefix_cache_hit_pct = ts.prefix_cache_hit_pct || 0;
+    config.prefix_cache_mode = ts.prefix_cache_mode || 'identical';
+    config.prefix_cache_groups = ts.prefix_cache_groups || 5;
+    config.workload_mode = ts.workload_mode || 'synthetic';
+    config.dataset_source = ts.dataset_source || null;
+    config.dataset_column = ts.dataset_column || null;
+    config.dataset_max_output = ts.dataset_max_output || 256;
+
+    // Step 4: Test config
+    config.run_description = '';
     config.duration = ts.test_duration || 300;
     config.stop_mode = ts.stop_mode || 'duration';
     config.max_requests = ts.max_requests || null;
-    config.prefix_cache_hit_pct = ts.prefix_cache_hit_pct || 0;
-    config.prefix_cache_mode = ts.prefix_cache_mode || 'identical';
-    config.workload_mode = ts.workload_mode || 'synthetic';
-    config.dataset_source = ts.dataset_source || null;
+    config.latency_constraint_enabled = false;
+    config.latency_constraint_ms = 500;
+    config.latency_constraint_percentile = 'p90';
+    config.tp_pair_top_n = 4;
+    config.pd_search_mode = 'smart';
+    config.use_achievable_qps = false;
+    config.allow_asymmetric_tp = false;
+    config.advanced_vllm = ts.advanced_vllm || null;
+    config.advanced_vllm_custom_enabled = ts.advanced_vllm ? true : false;
+
+    // Step 5: EPP
     config.epp_config = rc.epp_config || null;
     config.epp_preset = ts.epp_preset || 'balanced';
-    config.advanced_vllm = ts.advanced_vllm || null;
+    config.epp_custom_enabled = rc.epp_config ? true : false;
+    config.epp_benchmark = false;
+
+    // Step 6: Infrastructure
+    config.scheduler_image = null;
+    config.selected_nodes = [];
 
     saveConfig();
 
