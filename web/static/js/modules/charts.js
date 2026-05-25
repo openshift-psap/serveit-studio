@@ -641,6 +641,10 @@ function renderCharts(data, runId) {
             html += '<tr><th>Metric</th><th>PD (best)</th><th>Aggregated</th><th>Winner</th></tr>';
             html += `<tr><td><strong>TTFT P90</strong></td><td>${cmp.pd.ttft_p90} ms</td><td>${cmp.aggregated.ttft_p90} ms</td><td style="color:${ttftColor}; font-weight:700;">${cmp.ttft_winner} (${cmp.ttft_diff_pct}% better)</td></tr>`;
             html += `<tr><td><strong>Throughput P90</strong></td><td>${cmp.pd.throughput_p90} req/s</td><td>${cmp.aggregated.throughput_p90} req/s</td><td style="color:${tputColor}; font-weight:700;">${cmp.throughput_winner} (${cmp.throughput_diff_pct}% better)</td></tr>`;
+            if (cmp.pd.ttft_p99 && cmp.aggregated.ttft_p99) {
+                const p99Color = cmp.ttft_p99_winner === 'PD' ? '#10b981' : '#f59e0b';
+                html += `<tr style="border-top:2px solid #e2e8f0;"><td><strong>TTFT P99 (tail)</strong></td><td>${cmp.pd.ttft_p99} ms</td><td>${cmp.aggregated.ttft_p99} ms</td><td style="color:${p99Color}; font-weight:700;">${cmp.ttft_p99_winner} (${cmp.ttft_p99_diff_pct}% better)</td></tr>`;
+            }
             html += '</table></div>';
 
             // --- % Change chart: All PD configs vs Aggregated baseline ---

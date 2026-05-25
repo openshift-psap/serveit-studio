@@ -615,6 +615,8 @@ class ReportAnalyzer:
             agg_ttft = aggregated_baseline['ttft_p90']
             pd_tput = best_pd_ttft['throughput_p90']
             agg_tput = aggregated_baseline['throughput_p90']
+            pd_p99 = best_pd_ttft.get('ttft_p99') or pd_ttft
+            agg_p99 = aggregated_baseline.get('ttft_p99') or agg_ttft
             pd_vs_agg = {
                 'pd': best_pd_ttft,
                 'aggregated': aggregated_baseline,
@@ -622,6 +624,8 @@ class ReportAnalyzer:
                 'ttft_diff_pct': round(abs(pd_ttft - agg_ttft) / max(agg_ttft, 0.01) * 100, 1),
                 'throughput_winner': 'PD' if pd_tput >= agg_tput else 'Aggregated',
                 'throughput_diff_pct': round(abs(pd_tput - agg_tput) / max(agg_tput, 0.01) * 100, 1),
+                'ttft_p99_winner': 'PD' if pd_p99 <= agg_p99 else 'Aggregated',
+                'ttft_p99_diff_pct': round(abs(pd_p99 - agg_p99) / max(agg_p99, 0.01) * 100, 1),
             }
 
         # --- EP vs Aggregated comparison data ---
