@@ -153,6 +153,7 @@ spec:
                   --data-parallel-size ${DP_SIZE} \
 {% if pipeline_parallel_size %}                  --pipeline-parallel-size {{ pipeline_parallel_size }} \
 {% endif %}                  --api-server-count 1 \
+                  --block-size {{ block_size or 16 }} \
                   --gpu-memory-utilization {{ decode_gpu_memory_utilization or 0.9 }} \
                   --max-num-batched-tokens {{ max_num_batched_tokens or 256 }} \
                   --max-num-seqs {{ decode_max_num_seqs or 256 }} \

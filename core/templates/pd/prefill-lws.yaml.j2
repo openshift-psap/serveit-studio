@@ -133,6 +133,7 @@ spec:
 {% endif %}                  --tensor-parallel-size {{ prefill_tp }} \
 {% if pipeline_parallel_size %}                  --pipeline-parallel-size {{ pipeline_parallel_size }} \
 {% endif %}                  --api-server-count 1 \
+                  --block-size {{ block_size or 16 }} \
                   --gpu-memory-utilization {{ prefill_gpu_memory_utilization or 0.80 }} \
                   --kv-transfer-config '{"kv_connector":"{{ kv_connector }}","kv_role":"kv_both","kv_load_failure_policy":"fail"}' \
 {% if prefill_enable_expert_parallel %}                  --enable-expert-parallel \
