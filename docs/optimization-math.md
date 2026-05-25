@@ -309,11 +309,12 @@ prefix_time_impact_raw = (ISL × actual_cache_hit_pct / 100) / prefill_TPSG
 prefix_time_impact     = prefix_time_impact_raw × diversity_factor
 kv_eviction_cost       = (ISL / prefill_TPSG) × kv_pressure
 queue_wait_cost        = (ISL + OSL) / (prefill_TPSG + decode_TPSG) × (queue_pressure + 0.1)
+active_request_cost    = (OSL / decode_TPSG) × (requests_running / max_num_seqs)
+slo_cost               = (ISL + OSL) / total_TPSG × max(0, (ttft_p99 - SLA_target) / SLA_target)  [only with SLA]
 
-total = prefix_time_impact + kv_eviction_cost + queue_wait_cost
-w_prefix = clamp(round(prefix_time_impact / total × 7), 1, 5)
-w_kv     = clamp(round(kv_eviction_cost / total × 7), 1, 5)
-w_queue  = clamp(round(queue_wait_cost / total × 7), 1, 5)
+total  = prefix + kv + queue + active [+ slo]
+scale  = 9 if SLA enabled, else 7
+w_each = clamp(round(dimension / total × scale), 1, 5)
 ```
 
 ### Prefix Cache Diversity Factor
@@ -337,9 +338,13 @@ The raw `prefix_time_impact` measures how much compute a cache hit saves, but it
 
 - **queue_wait_cost**: Each request in a pod's queue adds `(ISL + OSL) / total_TPSG` seconds of wait time. The `queue_pressure` is the **measured ratio of waiting to total requests** (`vllm_requests_waiting / (vllm_requests_running + vllm_requests_waiting)`) from Step 6/7 Prometheus metrics. Higher pressure means requests are queuing — queue-aware routing distributes load better. Falls back to the time-based ratio `vllm_queue_time_rate / (prefill_time + decode_time + queue_time)`, then to `1 / num_pods` when metrics are unavailable.
 
+- **active_request_cost**: Each in-flight request on a pod consumes decode bandwidth — `OSL / decode_TPSG` GPU-seconds of decode work competing for the same GPU. The load factor is `vllm_requests_running / max_num_seqs` — the fraction of the pod's capacity in use. At 80% utilization, routing one more request to that pod adds significant contention. Routing to a less-busy pod improves per-request decode speed. Falls back to `concurrency / (pods × max_seqs)` when metrics are unavailable.
+
+- **slo_cost** *(only when latency SLA is enabled)*: Measures how far tail latency overshoots the SLA target. `overshoot = max(0, (vllm_ttft_p99 - SLA_target) / SLA_target)`. If P99 TTFT is 2× the target, overshoot=1.0 and the SLO scorer gets a high weight — the EPP uses predicted latency to route requests to pods that can meet the target. When P99 is within the SLA, overshoot=0 and the weight stays at 1 (clamped floor). Falls back to a moderate estimate (0.3) when metrics are unavailable.
+
 **Architecture-specific derivation:** Weights are computed separately for aggregated and PD architectures because cache behavior differs. Aggregated pods each maintain their own prefix cache; PD mode only caches on prefill pods. The measured cache hit rates from Step 6 (aggregated) and Step 7 (PD) are used independently.
 
-**Why normalize to sum ~7?** The default balanced preset is 3:2:2 (sum=7). Normalizing to the same scale ensures the derived weights are in the EPP's expected range.
+**Why normalize to sum ~7 (or ~9 with SLO)?** The default balanced preset is 3:2:2:2 (sum=9). With SLO enabled, the scale increases to 9 to accommodate the 5th dimension without compressing the existing weights. The EPP normalizes weights internally, so only ratios matter.
 
 **Why clamp to [1, 5]?** Prevents extreme weights (e.g., 7:0:0) that would ignore entire routing dimensions. Even a low-impact dimension should have some influence.
 
