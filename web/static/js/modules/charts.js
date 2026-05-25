@@ -1186,22 +1186,20 @@ function renderCharts(data, runId) {
                         traces.push({x: [xLabels[bestIdx]], y: [latencies[bestIdx]], name: 'Best EPP', type: 'scatter', mode: 'markers',
                             marker: {color: '#10b981', size: 22, symbol: 'circle', line: {width: 3, color: 'white'}}, showlegend: true});
                     }
-                    // Baseline from Step 6/7 (before EPP tuning)
+                    // Baseline from Step 6/7 (before EPP tuning) — horizontal reference lines
                     const baseline = (eppData.baselines || {})[arch];
                     if (baseline) {
                         const blTtft = baseline[`ttft_${pctl.key}`];
                         const blTput = baseline.throughput_mean || baseline.throughput_p90;
                         if (blTtft != null) {
-                            traces.push({x: ['Baseline'], y: [blTtft], name: `Baseline (${baseline.config_name})`, type: 'scatter', mode: 'markers+text',
-                                marker: {color: '#94a3b8', size: 18, symbol: 'star', line: {width: 2, color: 'white'}},
-                                text: [blTtft.toFixed(0) + 'ms'], textposition: 'top center', textfont: {size: 11, color: '#64748b'},
-                                showlegend: true});
+                            traces.push({x: xLabels, y: xLabels.map(() => blTtft), name: `Baseline TTFT (${baseline.config_name})`, type: 'scatter', mode: 'lines',
+                                line: {color: '#1e40af', width: 2, dash: 'dot'},
+                                showlegend: true, hovertemplate: `Baseline: ${blTtft.toFixed(0)}ms<extra></extra>`});
                         }
                         if (blTput != null) {
-                            traces.push({x: ['Baseline'], y: [blTput], name: `Baseline Throughput`, type: 'scatter', mode: 'markers+text', yaxis: 'y2',
-                                marker: {color: '#d4d4d8', size: 14, symbol: 'star', line: {width: 2, color: 'white'}},
-                                text: [blTput.toFixed(1)], textposition: 'bottom center', textfont: {size: 10, color: '#94a3b8'},
-                                showlegend: false});
+                            traces.push({x: xLabels, y: xLabels.map(() => blTput), name: `Baseline Throughput`, type: 'scatter', mode: 'lines', yaxis: 'y2',
+                                line: {color: '#92400e', width: 2, dash: 'dot'},
+                                showlegend: true, hovertemplate: `Baseline: ${blTput.toFixed(1)} req/s<extra></extra>`});
                         }
                     }
                     const shapes = [];
