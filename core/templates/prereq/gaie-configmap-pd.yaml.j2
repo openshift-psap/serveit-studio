@@ -11,17 +11,20 @@ data:
   pd-config.yaml: |
     apiVersion: inference.networking.x-k8s.io/v1alpha1
     kind: EndpointPickerConfig
-    featureGates:
-      - prepareDataPlugins
     plugins:
-      - type: prefill-header-handler
+      - type: disagg-headers-handler
+      - type: always-disagg-pd-decider
+      - type: disagg-profile-handler
+        parameters:
+          deciderPluginName: always-disagg-pd-decider
+      - type: prefill-filter
+      - type: decode-filter
       - type: prefix-cache-scorer
         parameters:
           maxPrefixBlocksToMatch: {{ max_prefix_blocks | default(256) }}
           lruCapacityPerServer: {{ lru_capacity | default(31250) }}
       - type: queue-scorer
-      - type: prefill-filter
-      - type: decode-filter
+      - type: kv-cache-utilization-scorer
 {% if slo_enabled | default(false) %}
       - type: slo-request-tracker
       - type: slo-scorer
@@ -39,13 +42,6 @@ data:
       - type: session-aware-scorer
 {% endif %}
       - type: max-score-picker
-      - type: prefix-based-pd-decider
-        parameters:
-          nonCachedTokens: {{ non_cached_tokens | default(16) }}
-      - type: pd-profile-handler
-        parameters:
-          primaryPort: 0
-          deciderPluginName: prefix-based-pd-decider
     schedulingProfiles:
       - name: prefill
         plugins:
@@ -54,6 +50,8 @@ data:
             weight: {{ prefix_cache_weight | default(3.0) }}
           - pluginRef: queue-scorer
             weight: {{ queue_weight | default(2.0) }}
+          - pluginRef: kv-cache-utilization-scorer
+            weight: {{ kv_cache_weight | default(2.0) }}
 {% if slo_enabled | default(false) %}
           - pluginRef: slo-scorer
             weight: {{ slo_weight | default(3.0) }}
@@ -82,6 +80,8 @@ data:
             weight: {{ prefix_cache_weight | default(3.0) }}
           - pluginRef: queue-scorer
             weight: {{ queue_weight | default(2.0) }}
+          - pluginRef: kv-cache-utilization-scorer
+            weight: {{ kv_cache_weight | default(2.0) }}
 {% if slo_enabled | default(false) %}
           - pluginRef: slo-scorer
             weight: {{ slo_weight | default(3.0) }}
