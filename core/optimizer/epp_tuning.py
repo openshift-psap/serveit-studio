@@ -161,25 +161,61 @@ class EPPTuningMixin:
             queue_wait_cost = (isl + osl) / total_tpsg / max(num_pods, 1)
             queue_source = f"1/{num_pods} pods (estimated)"
 
-        total = prefix_time_impact + kv_eviction_cost + queue_wait_cost
+        # Active request cost: proportional to how loaded pods are (running requests vs capacity)
+        prom = self._get_best_result_prom(arch)
+        active_running = self._prom_avg(prom, 'vllm_requests_running') if prom else None
+        if active_running is not None and active_running > 0:
+            active_load = min(active_running / max(max_seqs, 1), 1.0)
+            active_cost = (osl / decode_tpsg) * active_load
+            active_source = f"running={active_running:.1f}/{max_seqs} (measured)"
+        else:
+            active_load = min(concurrency / max(num_pods * max_seqs, 1), 1.0)
+            active_cost = (osl / decode_tpsg) * active_load
+            active_source = f"{concurrency}/{num_pods}×{max_seqs} (estimated)"
+
+        # SLO cost: only when latency SLA is enabled, proportional to tail latency overshoot
+        has_sla = getattr(self.config, 'latency_constraint_enabled', False)
+        slo_cost = 0.0
+        slo_source = "disabled"
+        if has_sla:
+            sla_ms = getattr(self.config, 'latency_constraint_ms', 500) or 500
+            ttft_p99 = self._prom_avg(prom, 'vllm_ttft_p99') if prom else None
+            if ttft_p99 is not None and ttft_p99 > 0:
+                overshoot = max(0, (ttft_p99 * 1000 - sla_ms) / sla_ms)
+                slo_cost = (isl + osl) / total_tpsg * min(overshoot, 1.0)
+                slo_source = f"p99={ttft_p99*1000:.0f}ms vs SLA={sla_ms}ms (measured)"
+            else:
+                slo_cost = (isl + osl) / total_tpsg * 0.3
+                slo_source = f"SLA={sla_ms}ms (estimated)"
+
+        total = prefix_time_impact + kv_eviction_cost + queue_wait_cost + active_cost + slo_cost
         if total <= 0:
             return None
 
-        w_prefix = max(1, min(5, round(prefix_time_impact / total * 7)))
-        w_kv = max(1, min(5, round(kv_eviction_cost / total * 7)))
-        w_queue = max(1, min(5, round(queue_wait_cost / total * 7)))
+        scale = 9 if has_sla else 7
+        w_prefix = max(1, min(5, round(prefix_time_impact / total * scale)))
+        w_kv = max(1, min(5, round(kv_eviction_cost / total * scale)))
+        w_queue = max(1, min(5, round(queue_wait_cost / total * scale)))
+        w_active = max(1, min(5, round(active_cost / total * scale)))
+        w_slo = max(1, min(5, round(slo_cost / total * scale))) if has_sla else 0
 
         self.log(f"  Smart EPP Weight Derivation ({arch}):", 'info')
-        self.log(f"    Prefix impact: ISL={isl} × {cache_pct:.0f}% ({cache_source}) / TPSG={prefill_tpsg:.0f} = {prefix_time_impact_raw:.4f} × diversity={diversity} ({cache_mode}) = {prefix_time_impact:.4f} GPU-sec", 'info')
-        self.log(f"    KV pressure:   ISL={isl} / {prefill_tpsg:.0f} × {kv_source} = {kv_eviction_cost:.4f} GPU-sec", 'info')
-        self.log(f"    Queue cost:    ({isl}+{osl}) / {total_tpsg:.0f} × {queue_source} = {queue_wait_cost:.4f} GPU-sec", 'info')
-        self.log(f"    → Weights: prefix={w_prefix}, kv={w_kv}, queue={w_queue}", 'success')
+        self.log(f"    Prefix impact:  ISL={isl} × {cache_pct:.0f}% ({cache_source}) / TPSG={prefill_tpsg:.0f} = {prefix_time_impact_raw:.4f} × diversity={diversity} ({cache_mode}) = {prefix_time_impact:.4f} GPU-sec", 'info')
+        self.log(f"    KV pressure:    ISL={isl} / {prefill_tpsg:.0f} × {kv_source} = {kv_eviction_cost:.4f} GPU-sec", 'info')
+        self.log(f"    Queue cost:     ({isl}+{osl}) / {total_tpsg:.0f} × {queue_source} = {queue_wait_cost:.4f} GPU-sec", 'info')
+        self.log(f"    Active request: OSL={osl} / {decode_tpsg:.0f} × {active_source} = {active_cost:.4f} GPU-sec", 'info')
+        if has_sla:
+            self.log(f"    SLO cost:       ({isl}+{osl}) / {total_tpsg:.0f} × {slo_source} = {slo_cost:.4f} GPU-sec", 'info')
+        self.log(f"    → Weights: prefix={w_prefix}, kv={w_kv}, queue={w_queue}, active={w_active}" +
+                 (f", slo={w_slo}" if has_sla else ""), 'success')
 
         return {
             'prefix_cache_weight': float(w_prefix),
             'kv_cache_weight': float(w_kv),
             'queue_weight': float(w_queue),
-            'slo_enabled': False,
+            'active_request_weight': float(w_active),
+            'slo_enabled': has_sla,
+            'slo_weight': float(w_slo) if has_sla else 0,
         }
 
     def _refine_epp_from_metrics(self, test_result, arch: str = 'aggregated') -> Optional[Dict]:
@@ -414,7 +450,8 @@ class EPPTuningMixin:
                         'prefix_cache': {'enabled': True, 'weight': weights['prefix_cache_weight']},
                         'kv_cache': {'enabled': True, 'weight': weights['kv_cache_weight']},
                         'queue': {'enabled': True, 'weight': weights['queue_weight']},
-                        'slo': {'enabled': weights['slo_enabled']},
+                        'active_request': {'enabled': True, 'weight': weights.get('active_request_weight', 2)},
+                        'slo': {'enabled': weights.get('slo_enabled', False), 'weight': weights.get('slo_weight', 0)},
                     },
                 }
 
@@ -537,7 +574,8 @@ class EPPTuningMixin:
                                 'prefix_cache': {'enabled': True, 'weight': rweights['prefix_cache_weight']},
                                 'kv_cache': {'enabled': True, 'weight': rweights['kv_cache_weight']},
                                 'queue': {'enabled': True, 'weight': rweights['queue_weight']},
-                                'slo': {'enabled': False},
+                                'active_request': {'enabled': True, 'weight': rweights.get('active_request_weight', 2)},
+                                'slo': {'enabled': rweights.get('slo_enabled', False), 'weight': rweights.get('slo_weight', 0)},
                             },
                         }
                         rsuccess = prereq_mgr.update_epp_config(architecture=arch, epp_config=repp_cfg,
@@ -598,7 +636,8 @@ class EPPTuningMixin:
                             'prefix_cache': {'enabled': True, 'weight': 2.0},
                             'kv_cache': {'enabled': True, 'weight': 2.0},
                             'queue': {'enabled': True, 'weight': 2.0},
-                            'slo': {'enabled': False},
+                            'active_request': {'enabled': True, 'weight': 2.0},
+                            'slo': {'enabled': has_sla, 'weight': 3.0 if has_sla else 0},
                         },
                     }
                     try:

@@ -24,24 +24,24 @@
                                 <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-bottom:12px;">
                                     <div class="arch-card" data-epp="balanced" onclick="setEppPreset('balanced')" style="border:2px solid var(--rh-red-primary);background:linear-gradient(135deg,#fef2f2,#fee2e2);padding:14px;border-radius:8px;cursor:pointer;text-align:center;">
                                         <div style="font-weight:700;color:#1e293b;font-size:0.95em;">Balanced</div>
-                                        <div style="font-size:0.78em;color:#64748b;margin-top:4px;">Cache(3) + KV(2) + Queue(2)</div>
+                                        <div style="font-size:0.78em;color:#64748b;margin-top:4px;">Cache(3) + KV(2) + Queue(2) + Active(2)</div>
                                         <div style="font-size:0.75em;color:#0369a1;margin-top:4px;">Recommended for most workloads</div>
                                     </div>
                                     <div class="arch-card" data-epp="cache_optimized" onclick="setEppPreset('cache_optimized')" style="border:2px solid #cbd5e1;background:#fafafa;padding:14px;border-radius:8px;cursor:pointer;text-align:center;">
                                         <div style="font-weight:700;color:#1e293b;font-size:0.95em;">Cache Optimized</div>
-                                        <div style="font-size:0.78em;color:#64748b;margin-top:4px;">Cache(5) + KV(1) + Queue(2)</div>
+                                        <div style="font-size:0.78em;color:#64748b;margin-top:4px;">Cache(5) + KV(1) + Queue(2) + Active(1)</div>
                                         <div style="font-size:0.75em;color:#0369a1;margin-top:4px;">Best with prefix cache enabled</div>
                                     </div>
                                     <div class="arch-card" data-epp="queue_balanced" onclick="setEppPreset('queue_balanced')" style="border:2px solid #cbd5e1;background:#fafafa;padding:14px;border-radius:8px;cursor:pointer;text-align:center;">
                                         <div style="font-weight:700;color:#1e293b;font-size:0.95em;">Queue Balanced</div>
-                                        <div style="font-size:0.78em;color:#64748b;margin-top:4px;">Cache(1) + KV(1) + Queue(3)</div>
+                                        <div style="font-size:0.78em;color:#64748b;margin-top:4px;">Cache(1) + KV(1) + Queue(3) + Active(3)</div>
                                         <div style="font-size:0.75em;color:#0369a1;margin-top:4px;">Diverse prompts, low cache hits</div>
                                     </div>
                                 </div>
                                 <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-bottom:16px;">
                                     <div class="arch-card" data-epp="latency_aware" onclick="setEppPreset('latency_aware')" style="border:2px solid #cbd5e1;background:#fafafa;padding:14px;border-radius:8px;cursor:pointer;text-align:center;">
                                         <div style="font-weight:700;color:#1e293b;font-size:0.95em;">Latency Aware</div>
-                                        <div style="font-size:0.78em;color:#64748b;margin-top:4px;">Cache(3) + KV(2) + Queue(2) + SLO</div>
+                                        <div style="font-size:0.78em;color:#64748b;margin-top:4px;">Cache(3) + KV(2) + Queue(2) + Active(2) + SLO(3)</div>
                                         <div style="font-size:0.75em;color:#0369a1;margin-top:4px;">Pairs with latency SLA constraint</div>
                                     </div>
                                     <div class="arch-card" data-epp="custom" onclick="setEppPreset('custom')" style="border:2px solid #cbd5e1;background:#fafafa;padding:14px;border-radius:8px;cursor:pointer;text-align:center;">

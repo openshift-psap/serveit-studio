@@ -54,6 +54,10 @@ data:
             weight: {{ prefix_cache_weight | default(3.0) }}
           - pluginRef: queue-scorer
             weight: {{ queue_weight | default(2.0) }}
+{% if slo_enabled | default(false) %}
+          - pluginRef: slo-scorer
+            weight: {{ slo_weight | default(3.0) }}
+{% endif %}
 {% if precise_prefix_cache_enabled | default(false) %}
           - pluginRef: precise-prefix-cache-scorer
             weight: {{ precise_prefix_cache_weight | default(3.0) }}
@@ -78,6 +82,10 @@ data:
             weight: {{ prefix_cache_weight | default(3.0) }}
           - pluginRef: queue-scorer
             weight: {{ queue_weight | default(2.0) }}
+{% if slo_enabled | default(false) %}
+          - pluginRef: slo-scorer
+            weight: {{ slo_weight | default(3.0) }}
+{% endif %}
 {% if precise_prefix_cache_enabled | default(false) %}
           - pluginRef: precise-prefix-cache-scorer
             weight: {{ precise_prefix_cache_weight | default(3.0) }}
