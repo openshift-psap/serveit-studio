@@ -12,96 +12,87 @@ from core.template_manager import TemplateManager
 class EPPTuningMixin:
     """Mixin providing EPP tuning methods for RecipeOptimizer."""
 
-    def _extract_cache_hit_rate(self, arch: str) -> Optional[float]:
-        """Extract actual prefix cache hit rate from the winning Step 6/7 config.
-
-        Returns measured hit rate (0-100) or None if not available.
-        Uses the BEST config per architecture (same config EPP tuning will deploy):
-          aggregated → best from Step 6 (self.aggregated_result)
-          pd → best TTFT from Step 7 Pareto front
-
-        This is important because different configs have different cache hit rates
-        (more pods = cache spread across more pods = lower per-pod hit rate).
-        """
+    def _get_best_result_prom(self, arch: str) -> Optional[Dict]:
+        """Get Prometheus metrics dict from the best Step 6/7 result for an architecture."""
         import json as _json
-
         result = None
-        if arch == 'aggregated' and self.aggregated_result and self.aggregated_result.metrics_json_content:
+        if arch == 'aggregated' and self.aggregated_result:
             result = self.aggregated_result
         elif arch == 'pd' and self.pareto_results:
-            best = min(self.pareto_results, key=lambda x: x[1].ttft_p90 if x[1].ttft_p90 else 1e9)
-            if best[1].metrics_json_content:
-                result = best[1]
-
+            best = min(self.pareto_results, key=lambda x: x[1].ttft_p99 or x[1].ttft_p90 or 1e9)
+            result = best[1]
         if not result:
             return None
-
         try:
-            metrics = _json.loads(result.metrics_json_content)
-            hits = None
-            queries = None
-            for key, val in metrics.items():
-                if 'prefix_cache_hits' in key:
-                    hits = val.get('avg') if isinstance(val, dict) else val
-                elif 'prefix_cache_queries' in key:
-                    queries = val.get('avg') if isinstance(val, dict) else val
-            if hits is not None and queries and queries > 0:
-                rate = (hits / queries) * 100
-                config_desc = f"TP={self.aggregated_tp}" if arch == 'aggregated' else "best PD split"
-                self.log(f"    Measured {arch} cache hit rate: {rate:.1f}% (from {config_desc})", 'info')
-                return rate
+            content = getattr(result, 'metrics_json_content', None)
+            if content:
+                full = _json.loads(content)
+                return full.get('prometheus_metrics', full)
+            elif hasattr(result, 'prometheus_metrics') and result.prometheus_metrics:
+                return result.prometheus_metrics
         except Exception:
             pass
         return None
 
+    def _prom_avg(self, prom: Dict, key: str) -> Optional[float]:
+        """Extract avg value from a Prometheus metric."""
+        val = prom.get(key)
+        if val is None:
+            return None
+        if isinstance(val, dict):
+            return val.get('avg')
+        return val if isinstance(val, (int, float)) else None
+
+    def _extract_cache_hit_rate(self, arch: str) -> Optional[float]:
+        """Extract actual prefix cache hit rate from Prometheus metrics."""
+        prom = self._get_best_result_prom(arch)
+        if not prom:
+            return None
+        hits = self._prom_avg(prom, 'vllm_prefix_cache_hits_rate')
+        queries = self._prom_avg(prom, 'vllm_prefix_cache_queries_rate')
+        if hits is not None and queries and queries > 0:
+            rate = (hits / queries) * 100
+            config_desc = f"TP={self.aggregated_tp}" if arch == 'aggregated' else "best PD split"
+            self.log(f"    Measured {arch} cache hit rate: {rate:.1f}% (from {config_desc})", 'info')
+            return rate
+        return None
+
     def _extract_kv_and_queue_metrics(self, arch: str) -> Tuple[float, float]:
-        """Extract KV utilization and queue depth variance from the winning Step 6/7 config.
+        """Extract KV cache pressure and queue pressure from Prometheus metrics.
 
-        Returns (kv_variance, queue_variance) or (0, 0) if unavailable.
-        Uses the same winning config as _extract_cache_hit_rate.
+        Returns (kv_pressure, queue_pressure) using real vLLM metrics:
+        - kv_pressure: avg KV cache utilization (0-1) — higher means more memory pressure
+        - queue_pressure: avg requests waiting / (running + waiting) — higher means more queuing
         """
-        import json as _json
-
-        result = None
-        if arch == 'aggregated' and self.aggregated_result and self.aggregated_result.metrics_json_content:
-            result = self.aggregated_result
-        elif arch == 'pd' and self.pareto_results:
-            best = min(self.pareto_results, key=lambda x: x[1].ttft_p90 if x[1].ttft_p90 else 1e9)
-            if best[1].metrics_json_content:
-                result = best[1]
-
-        if not result:
+        prom = self._get_best_result_prom(arch)
+        if not prom:
             return 0, 0
 
-        try:
-            metrics = _json.loads(result.metrics_json_content)
-            kv_values = []
-            queue_values = []
-            for key, val in metrics.items():
-                if 'kv_cache_usage_perc' in key:
-                    if isinstance(val, dict):
-                        for v in val.values():
-                            if isinstance(v, (int, float)) and v > 0:
-                                kv_values.append(v)
-                    elif isinstance(val, (int, float)) and val > 0:
-                        kv_values.append(val)
-                elif 'queue_size' in key and 'per_pod' in key:
-                    if isinstance(val, dict):
-                        for v in val.values():
-                            if isinstance(v, (int, float)):
-                                queue_values.append(v)
+        kv_pct = self._prom_avg(prom, 'vllm_kv_cache_pct')
+        requests_waiting = self._prom_avg(prom, 'vllm_requests_waiting')
+        requests_running = self._prom_avg(prom, 'vllm_requests_running')
+        queue_time = self._prom_avg(prom, 'vllm_queue_time_rate')
+        prefill_time = self._prom_avg(prom, 'vllm_prefill_time_rate')
+        decode_time = self._prom_avg(prom, 'vllm_decode_time_rate')
 
-            kv_var = 0
-            if len(kv_values) >= 2:
-                kv_mean = sum(kv_values) / len(kv_values)
-                kv_var = sum((v - kv_mean) ** 2 for v in kv_values) / len(kv_values)
+        kv_pressure = 0.0
+        if kv_pct is not None and kv_pct > 0:
+            kv_pressure = min(kv_pct, 1.0)
 
-            q_var = 0
-            if len(queue_values) >= 2:
-                q_mean = sum(queue_values) / len(queue_values)
-                q_var = sum((v - q_mean) ** 2 for v in queue_values) / len(queue_values)
+        queue_pressure = 0.0
+        if requests_waiting is not None and requests_running is not None:
+            total = requests_running + requests_waiting
+            if total > 0:
+                queue_pressure = requests_waiting / total
+        elif queue_time is not None and prefill_time is not None and decode_time is not None:
+            total_time = prefill_time + decode_time + queue_time
+            if total_time > 0:
+                queue_pressure = queue_time / total_time
 
-            return kv_var, q_var
+        if kv_pressure > 0 or queue_pressure > 0:
+            self.log(f"    Measured {arch}: KV cache={kv_pressure:.4f}, queue pressure={queue_pressure:.4f}", 'info')
+
+        return kv_pressure, queue_pressure
         except Exception:
             return 0, 0
 
@@ -136,7 +127,7 @@ class EPPTuningMixin:
         cache_source = 'measured' if measured_hit_rate is not None else 'configured'
 
         # Try measured KV/queue variance from Step 6/7
-        kv_var, q_var = self._extract_kv_and_queue_metrics(arch)
+        kv_pressure, queue_pressure = self._extract_kv_and_queue_metrics(arch)
 
         prefix_time_impact_raw = (isl * cache_pct / 100.0) / prefill_tpsg
 
@@ -153,17 +144,22 @@ class EPPTuningMixin:
 
         prefix_time_impact = prefix_time_impact_raw * diversity
 
-        if kv_var > 0:
-            kv_eviction_cost = (isl / prefill_tpsg) * min(kv_var, 1.0)
+        total_tpsg = prefill_tpsg + decode_tpsg
+
+        if kv_pressure > 0:
+            kv_eviction_cost = (isl / prefill_tpsg) * kv_pressure
+            kv_source = f"kv_cache={kv_pressure:.4f} (measured)"
         else:
             kv_utilization = min(concurrency / max(max_seqs, 1), 1.0)
             kv_eviction_cost = (isl / prefill_tpsg) * (kv_utilization ** 2)
+            kv_source = f"({concurrency}/{max_seqs})²={kv_utilization**2:.4f} (estimated)"
 
-        total_tpsg = prefill_tpsg + decode_tpsg
-        if q_var > 0:
-            queue_wait_cost = (isl + osl) / total_tpsg * min(q_var + 0.1, 1.0)
+        if queue_pressure > 0:
+            queue_wait_cost = (isl + osl) / total_tpsg * (queue_pressure + 0.1)
+            queue_source = f"queue_pressure={queue_pressure:.4f} (measured)"
         else:
             queue_wait_cost = (isl + osl) / total_tpsg / max(num_pods, 1)
+            queue_source = f"1/{num_pods} pods (estimated)"
 
         total = prefix_time_impact + kv_eviction_cost + queue_wait_cost
         if total <= 0:
@@ -175,14 +171,8 @@ class EPPTuningMixin:
 
         self.log(f"  Smart EPP Weight Derivation ({arch}):", 'info')
         self.log(f"    Prefix impact: ISL={isl} × {cache_pct:.0f}% ({cache_source}) / TPSG={prefill_tpsg:.0f} = {prefix_time_impact_raw:.4f} × diversity={diversity} ({cache_mode}) = {prefix_time_impact:.4f} GPU-sec", 'info')
-        if kv_var > 0:
-            self.log(f"    KV pressure:   ISL={isl} / {prefill_tpsg:.0f} × kv_variance={kv_var:.4f} = {kv_eviction_cost:.4f} GPU-sec (measured)", 'info')
-        else:
-            self.log(f"    KV pressure:   ISL={isl} / {prefill_tpsg:.0f} × ({concurrency}/{max_seqs})² = {kv_eviction_cost:.4f} GPU-sec (estimated)", 'info')
-        if q_var > 0:
-            self.log(f"    Queue cost:    ({isl}+{osl}) / {total_tpsg:.0f} × queue_variance={q_var:.4f} = {queue_wait_cost:.4f} GPU-sec (measured)", 'info')
-        else:
-            self.log(f"    Queue cost:    ({isl}+{osl}) / {total_tpsg:.0f} / {num_pods} pods = {queue_wait_cost:.4f} GPU-sec (estimated)", 'info')
+        self.log(f"    KV pressure:   ISL={isl} / {prefill_tpsg:.0f} × {kv_source} = {kv_eviction_cost:.4f} GPU-sec", 'info')
+        self.log(f"    Queue cost:    ({isl}+{osl}) / {total_tpsg:.0f} × {queue_source} = {queue_wait_cost:.4f} GPU-sec", 'info')
         self.log(f"    → Weights: prefix={w_prefix}, kv={w_kv}, queue={w_queue}", 'success')
 
         return {
