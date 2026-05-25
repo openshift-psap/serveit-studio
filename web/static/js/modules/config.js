@@ -955,17 +955,24 @@ function applyReportConfig(recId) {
         config.single_test_replicas = rc.replicas || (rc.gpus ? Math.floor(rc.gpus / tp) : 1);
     }
 
-    // Restore workload settings from the original test
-    if (ts.isl != null) config.isl = ts.isl;
-    if (ts.osl != null) config.osl = ts.osl;
-    if (ts.isl_stdev != null) config.isl_stdev = ts.isl_stdev;
-    if (ts.osl_stdev != null) config.osl_stdev = ts.osl_stdev;
-    if (ts.num_users != null) config.users = ts.num_users;
-    if (ts.prefix_cache_hit_pct != null) config.prefix_cache_hit_pct = ts.prefix_cache_hit_pct;
-    if (ts.prefix_cache_mode) config.prefix_cache_mode = ts.prefix_cache_mode;
-    if (rc.epp_config) config.epp_config = rc.epp_config;
-    if (ts.epp_preset) config.epp_preset = ts.epp_preset;
-    if (ts.advanced_vllm) config.advanced_vllm = ts.advanced_vllm;
+    // Restore ALL workload settings — reset to test values or defaults
+    config.isl = ts.isl || 2048;
+    config.osl = ts.osl || 512;
+    config.isl_stdev = ts.isl_stdev || null;
+    config.osl_stdev = ts.osl_stdev || null;
+    config.users = ts.num_users || 100;
+    config.rate_type = ts.rate_type || 'concurrent';
+    config.turns = ts.turns || 1;
+    config.duration = ts.test_duration || 300;
+    config.stop_mode = ts.stop_mode || 'duration';
+    config.max_requests = ts.max_requests || null;
+    config.prefix_cache_hit_pct = ts.prefix_cache_hit_pct || 0;
+    config.prefix_cache_mode = ts.prefix_cache_mode || 'identical';
+    config.workload_mode = ts.workload_mode || 'synthetic';
+    config.dataset_source = ts.dataset_source || null;
+    config.epp_config = rc.epp_config || null;
+    config.epp_preset = ts.epp_preset || 'balanced';
+    config.advanced_vllm = ts.advanced_vllm || null;
 
     saveConfig();
 
