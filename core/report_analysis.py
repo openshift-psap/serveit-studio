@@ -1283,6 +1283,7 @@ class ReportAnalyzer:
                             'prefix_cache': plugins.get('prefix_cache', {}).get('weight', '?'),
                             'kv_cache': plugins.get('kv_cache', {}).get('weight', '?'),
                             'queue': plugins.get('queue', {}).get('weight', '?'),
+                            'active_request': plugins.get('active_request', {}).get('weight', 0),
                         }
                     except (_json2.JSONDecodeError, TypeError):
                         pass
