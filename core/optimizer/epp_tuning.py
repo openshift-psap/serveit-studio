@@ -475,6 +475,7 @@ class EPPTuningMixin:
                     prefill_gpu_memory_utilization=base_cfg.prefill_gpu_memory_utilization,
                     decode_gpu_memory_utilization=base_cfg.decode_gpu_memory_utilization,
                     selected_nodes=base_cfg.selected_nodes,
+                    prefill_decode_ratio=base_cfg.prefill_decode_ratio,
                     epp_config=epp_cfg,
                 )
 
@@ -575,7 +576,8 @@ class EPPTuningMixin:
                                 max_num_batched_tokens=base_cfg.max_num_batched_tokens,
                                 prefill_gpu_memory_utilization=base_cfg.prefill_gpu_memory_utilization,
                                 decode_gpu_memory_utilization=base_cfg.decode_gpu_memory_utilization,
-                                selected_nodes=base_cfg.selected_nodes, epp_config=repp_cfg,
+                                selected_nodes=base_cfg.selected_nodes,
+                                prefill_decode_ratio=base_cfg.prefill_decode_ratio, epp_config=repp_cfg,
                             )
                             rresult = self.orchestrator.run_test(rtest_config, cleanup=True,
                                                                  log_callback=lambda msg: self.log(msg, 'info'),
@@ -641,7 +643,8 @@ class EPPTuningMixin:
                         max_num_batched_tokens=base_cfg.max_num_batched_tokens,
                         prefill_gpu_memory_utilization=base_cfg.prefill_gpu_memory_utilization,
                         decode_gpu_memory_utilization=base_cfg.decode_gpu_memory_utilization,
-                        selected_nodes=base_cfg.selected_nodes, epp_config=fb_epp_cfg,
+                        selected_nodes=base_cfg.selected_nodes,
+                        prefill_decode_ratio=base_cfg.prefill_decode_ratio, epp_config=fb_epp_cfg,
                     )
                     fb_result = self.orchestrator.run_test(fb_config, cleanup=True,
                                                            log_callback=lambda msg: self.log(msg, 'info'),

@@ -878,9 +878,11 @@ class TestOrchestrator(ParserMixin, GuidellmMixin):
             log_callback(f"🚀 Starting Test: {config.test_id}")
             log_callback(f"   Architecture: {config.architecture}")
             log_callback(f"   Model: {config.model_name}")
-            log_callback(f"   TP: {config.tensor_parallelism}")
-            if config.architecture == 'pd':
-                log_callback(f"   PD Ratio: {config.prefill_decode_ratio}")
+            if config.architecture in ('pd', 'ep') and (config.prefill_tp or config.decode_tp):
+                log_callback(f"   Prefill TP: {config.prefill_tp or config.tensor_parallelism}, Decode TP: {config.decode_tp or config.tensor_parallelism}")
+                log_callback(f"   Prefill Pods: {config.prefill_replicas}, Decode Pods: {config.decode_replicas}")
+            else:
+                log_callback(f"   TP: {config.tensor_parallelism}")
             log_callback(f"{'='*70}\n")
 
         result = TestResult(
