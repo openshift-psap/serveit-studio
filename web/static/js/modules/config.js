@@ -135,9 +135,10 @@ function updateUIFromConfig() {
     }
 
     // Restore prefix cache slider
-    if (config.prefix_cache_hit_pct != null && document.getElementById('prefix-cache-slider')) {
-        document.getElementById('prefix-cache-slider').value = config.prefix_cache_hit_pct;
-        document.getElementById('prefix-cache-value').textContent = config.prefix_cache_hit_pct + '%';
+    if (document.getElementById('prefix-cache-slider')) {
+        var pv = config.prefix_cache_hit_pct || 0;
+        document.getElementById('prefix-cache-slider').value = pv;
+        document.getElementById('prefix-cache-value').textContent = pv + '%';
     }
     if (config.prefix_cache_groups && document.getElementById('prefix-cache-groups-slider')) {
         document.getElementById('prefix-cache-groups-slider').value = config.prefix_cache_groups;
