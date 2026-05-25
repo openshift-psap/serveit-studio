@@ -93,8 +93,6 @@ class EPPTuningMixin:
             self.log(f"    Measured {arch}: KV cache={kv_pressure:.4f}, queue pressure={queue_pressure:.4f}", 'info')
 
         return kv_pressure, queue_pressure
-        except Exception:
-            return 0, 0
 
     def _compute_smart_epp_weights(self, num_pods: int = 1, arch: str = 'aggregated') -> Optional[Dict]:
         """Derive EPP weights from calibration data + measured Step 6/7 metrics.
