@@ -353,6 +353,8 @@ class ReportAnalyzer:
                 'prefill_tp': test_settings.get('prefill_tp') or r.tensor_parallelism,
                 'decode_tp': test_settings.get('decode_tp') or r.tensor_parallelism,
                 'ttft_p90': round(r.ttft_p90, 1),
+                'ttft_p95': round(r.ttft_p95, 1) if r.ttft_p95 else None,
+                'ttft_p99': round(r.ttft_p99, 1) if r.ttft_p99 else None,
                 'throughput_mean': round(r.throughput_mean, 2) if r.throughput_mean else None,
                 'throughput_p90': round(r.throughput_p90, 2),
                 'gpus': r.total_gpus,
