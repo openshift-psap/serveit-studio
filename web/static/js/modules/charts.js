@@ -1750,13 +1750,17 @@ function renderCharts(data, runId) {
             { x: vllm.configs, y: vllm.time_breakdown.preemptions, name: 'Preemptions/s', type: 'scatter', mode: 'lines+markers', yaxis: 'y2',
               line: { color: '#ef4444', width: 3 }, marker: { size: 10, symbol: 'triangle-up', color: '#ef4444', line: { width: 2, color: 'white' } },
               hovertemplate: '<b>%{x}</b><br>Preemptions: %{y:.1f}/s<extra></extra>' },
+            { x: vllm.configs, y: vllm.time_breakdown.waiting || [], name: 'Requests Waiting', type: 'scatter', mode: 'lines+markers', yaxis: 'y3',
+              line: { color: '#f59e0b', width: 3, dash: 'dash' }, marker: { size: 8, symbol: 'circle', color: '#f59e0b', line: { width: 2, color: 'white' } },
+              hovertemplate: '<b>%{x}</b><br>Waiting: %{y:.1f} avg<extra></extra>' },
         ], {
             ...vllmLayout,
             barmode: 'stack',
-            margin: { ...vllmLayout.margin, r: 60 },
+            margin: { ...vllmLayout.margin, r: 120 },
             xaxis: { tickangle: -35 },
             yaxis: { title: 'Time Rate (s/s)', side: 'left' },
-            yaxis2: { title: 'Preemptions/s', side: 'right', overlaying: 'y', titlefont: { color: '#ef4444' }, tickfont: { color: '#ef4444' } },
+            yaxis2: { title: 'Preemptions/s', side: 'right', overlaying: 'y', position: 0.95, titlefont: { color: '#ef4444' }, tickfont: { color: '#ef4444' } },
+            yaxis3: { title: 'Requests Waiting', side: 'right', overlaying: 'y', position: 1.0, titlefont: { color: '#f59e0b' }, tickfont: { color: '#f59e0b' } },
         }, plotlyConfig);
 
         // Chart 7: Pod Network Throughput

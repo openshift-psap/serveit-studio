@@ -854,7 +854,7 @@ class ReportAnalyzer:
         e2e = {'p50': [], 'p90': [], 'p95': [], 'p99': []}
         token_rates = {'prompt': [], 'generation': []}
         request_state = {'running': [], 'waiting': [], 'kv_cache': []}
-        time_breakdown = {'prefill': [], 'decode': [], 'queue': [], 'preemptions': []}
+        time_breakdown = {'prefill': [], 'decode': [], 'queue': [], 'preemptions': [], 'waiting': []}
         network = {'pod_tx': [], 'pod_rx': [], 'ib_rx': []}
 
         for r in successful:
@@ -907,6 +907,7 @@ class ReportAnalyzer:
             time_breakdown['decode'].append(get_avg('vllm_decode_time_rate'))
             time_breakdown['queue'].append(get_avg('vllm_queue_time_rate'))
             time_breakdown['preemptions'].append(get_avg('vllm_preemptions_rate'))
+            time_breakdown['waiting'].append(get_avg('vllm_requests_waiting'))
 
             # Network throughput (bytes/s → MB/s)
             network['pod_tx'].append(
