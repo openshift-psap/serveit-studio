@@ -154,6 +154,20 @@ function generateComparison() {
     });
     html += '</tr>';
 
+    // Best TTFT P99
+    html += '<tr><td><strong>Best TTFT P99 (tail)</strong></td>';
+    const ttft99Vals = runs.map(r => {
+        const b = (r.data.summary.best_configs || {}).lowest_latency;
+        return b && b.ttft_p99 ? b.ttft_p99 : null;
+    });
+    const bestTtft99 = Math.min(...ttft99Vals.filter(v => v != null));
+    runs.forEach((r, i) => {
+        const v = ttft99Vals[i];
+        const style = v === bestTtft99 ? 'color:#059669; font-weight:700;' : '';
+        html += '<td style="' + style + '">' + (v != null ? v.toFixed(1) + ' ms' : '-') + '</td>';
+    });
+    html += '</tr>';
+
     // Best Efficiency
     html += '<tr><td><strong>Best Efficiency</strong></td>';
     const effVals = runs.map(r => {
@@ -168,19 +182,56 @@ function generateComparison() {
     });
     html += '</tr>';
 
+    // Winner config details
+    html += '<tr style="border-top:2px solid #e2e8f0;"><td><strong>Best TTFT Config</strong></td>';
+    runs.forEach(r => {
+        const b = (r.data.summary.best_configs || {}).lowest_latency;
+        html += '<td>' + (b ? b.name : '-') + '</td>';
+    });
+    html += '</tr>';
+    html += '<tr><td><strong>Best Throughput Config</strong></td>';
+    runs.forEach(r => {
+        const b = (r.data.summary.best_configs || {}).highest_throughput;
+        html += '<td>' + (b ? b.name : '-') + '</td>';
+    });
+    html += '</tr>';
+
     html += '</table></div></div>';
 
-    // Comparison charts
+    // Recommended config comparison cards
+    html += '<div class="chart-card"><div class="chart-card-header">Recommended Configurations</div>';
+    html += '<div class="chart-card-body" style="padding:0;"><table class="results-table">';
+    html += '<tr><th>Recommendation</th>';
+    runs.forEach(r => { html += '<th style="border-left:3px solid ' + r.color + ';">Run #' + r.runId + '</th>'; });
+    html += '</tr>';
+    ['response_time', 'throughput'].forEach(key => {
+        const label = key === 'response_time' ? '⏱ Best TTFT' : '⚡ Best Throughput';
+        html += '<tr><td><strong>' + label + '</strong></td>';
+        runs.forEach(r => {
+            const recs = (r.data.recommendation || {}).recommendations || {};
+            const rec = recs[key];
+            if (rec) {
+                const arch = rec.architecture || '?';
+                const ttft = rec.config.ttft_p90 ? rec.config.ttft_p90.toFixed(1) + 'ms' : '?';
+                const tput = rec.config.throughput_p90 ? rec.config.throughput_p90.toFixed(2) : '?';
+                const deploy = rec.deploy || '';
+                html += '<td><div style="font-weight:700;color:#1e293b;">' + deploy + '</div>';
+                html += '<div style="font-size:0.85em;color:#64748b;">TTFT=' + ttft + ' | Tput=' + tput + ' req/s</div>';
+                html += '<div style="font-size:0.75em;color:#94a3b8;margin-top:2px;">' + arch + '</div></td>';
+            } else {
+                html += '<td>-</td>';
+            }
+        });
+        html += '</tr>';
+    });
+    html += '</table></div></div>';
+
+    // Comparison charts (full-width)
     const cmpSfx = '-' + tabId;
-    html += '<div class="charts-grid-2col">';
     html += '<div class="chart-card"><div class="chart-card-header">Best TTFT P90 by Run</div><div style="padding:8px 20px 0; color:#1e293b; font-size:0.92em;">Lower is better. Shows the best TTFT P90 achieved in each run.</div><div class="chart-card-body"><div id="cmp-ttft' + cmpSfx + '" class="chart-plot"></div></div></div>';
     html += '<div class="chart-card"><div class="chart-card-header">Best Throughput P90 by Run</div><div style="padding:8px 20px 0; color:#1e293b; font-size:0.92em;">Higher is better. Shows the best throughput P90 achieved in each run.</div><div class="chart-card-body"><div id="cmp-tput' + cmpSfx + '" class="chart-plot"></div></div></div>';
-    html += '</div>';
-
-    html += '<div class="charts-grid-2col">';
     html += '<div class="chart-card"><div class="chart-card-header">GPU Efficiency by Run</div><div style="padding:8px 20px 0; color:#1e293b; font-size:0.92em;">Higher is better. Best efficiency (req/s per GPU) from each run.</div><div class="chart-card-body"><div id="cmp-eff' + cmpSfx + '" class="chart-plot"></div></div></div>';
     html += '<div class="chart-card"><div class="chart-card-header">All Configs: Throughput vs Latency</div><div style="padding:8px 20px 0; color:#1e293b; font-size:0.92em;">Every tested configuration from all runs overlaid. Top-left is ideal (low latency, high throughput).</div><div class="chart-card-body"><div id="cmp-scatter' + cmpSfx + '" class="chart-plot"></div></div></div>';
-    html += '</div>';
 
     panel.innerHTML = html;
 
