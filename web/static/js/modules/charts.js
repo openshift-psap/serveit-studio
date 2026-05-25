@@ -1163,13 +1163,13 @@ function renderCharts(data, runId) {
 
             // Results table
             eppHtml += '<div style="padding:0 20px 16px;"><table class="results-table">';
-            eppHtml += '<tr><th>Strategy</th><th>Weights (C:K:Q)</th><th>TTFT P50</th><th>TTFT P90</th><th>TTFT P95</th><th>TTFT P99</th><th>Tput P90</th><th>ITL P90</th><th>EPP Config</th></tr>';
+            eppHtml += '<tr><th>Strategy</th><th>Weights (C:K:Q:A)</th><th>TTFT P50</th><th>TTFT P90</th><th>TTFT P95</th><th>TTFT P99</th><th>Tput P90</th><th>ITL P90</th><th>EPP Config</th></tr>';
             trials.forEach(e => {
                 const isBest = e === bestTrial && !e.is_baseline;
                 const isBase = e.is_baseline;
                 const cls = isBest ? ' class="pareto-row"' : (isBase ? ' style="background:#f8fafc;color:#64748b;font-style:italic;"' : '');
                 const w = e.weights || {};
-                const wStr = `${w.prefix_cache || '?'}:${w.kv_cache || '?'}:${w.queue || '?'}`;
+                const wStr = `${w.prefix_cache || '?'}:${w.kv_cache || '?'}:${w.queue || '?'}:${w.active_request || 0}`;
                 const na = 'N/A';
                 let ml = '-';
                 if (e.manifest_types && e.manifest_types.length > 0) {
