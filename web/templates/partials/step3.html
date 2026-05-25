@@ -32,16 +32,23 @@
                                             </div>
                                         </div>
 
-                                        <!-- Length Variation (collapsible) -->
+                                        <!-- Length Variation toggle -->
                                         <div style="border-top:1px solid #dcfce7;">
-                                            <div style="padding:12px 20px;cursor:pointer;display:flex;align-items:center;justify-content:space-between;" onclick="var b=document.getElementById('length-variation-body');var a=document.getElementById('length-variation-arrow');if(b.style.display==='none'){b.style.display='block';a.textContent='▾';}else{b.style.display='none';a.textContent='▸';}">
-                                                <div>
-                                                    <div style="font-weight:700;color:#15803d;font-size:0.95em;">📊 Length Variation (optional)</div>
-                                                    <div style="color:#166534;font-size:0.85em;margin-top:2px;">Add randomness to input/output lengths to simulate realistic traffic where not all requests are the same size.</div>
+                                            <div style="padding:12px 20px;cursor:pointer;display:flex;align-items:center;justify-content:space-between;" onclick="var on=!document.getElementById('length-variation-enabled').checked;document.getElementById('length-variation-enabled').checked=on;document.getElementById('length-variation-body').style.display=on?'block':'none';document.getElementById('length-variation-inner').style.opacity=on?'1':'0.4';var sw=document.getElementById('length-variation-switch');sw.style.background=on?'#15803d':'#ccc';sw.querySelector('span').style.transform=on?'translateX(18px)':'translateX(0)';if(!on){document.getElementById('isl-stdev-input').value='';document.getElementById('osl-stdev-input').value='';config.isl_stdev=null;config.osl_stdev=null;saveConfig();}">
+                                                <div style="display:flex;align-items:center;gap:10px;">
+                                                    <div style="font-size:1.3em;flex-shrink:0;">📊</div>
+                                                    <div>
+                                                        <div style="font-weight:600;color:#15803d;font-size:0.95em;">Length Variation</div>
+                                                        <div style="color:#166534;font-size:0.82em;margin-top:2px;">Add randomness to input/output lengths to simulate realistic traffic</div>
+                                                    </div>
                                                 </div>
-                                                <div id="length-variation-arrow" style="font-size:1.4em;color:#15803d;font-weight:700;">▸</div>
+                                                <input type="checkbox" id="length-variation-enabled" style="display:none;">
+                                                <div id="length-variation-switch" style="width:40px;height:22px;background:#ccc;border-radius:11px;position:relative;transition:background-color 0.2s;flex-shrink:0;margin-left:16px;">
+                                                    <span style="position:absolute;top:2px;left:2px;width:18px;height:18px;background:white;border-radius:50%;transition:transform 0.2s;box-shadow:0 1px 3px rgba(0,0,0,0.2);display:block;"></span>
+                                                </div>
                                             </div>
-                                            <div id="length-variation-body" style="display:none;padding:0 20px 16px;">
+                                            <div id="length-variation-body" style="display:none;padding-top:12px;">
+                                                <div id="length-variation-inner" style="opacity:0.4;transition:all 0.2s;padding:0 20px 16px;">
                                                 <div class="input-grid">
                                                     <div class="input-group">
                                                         <label>Input Length Variation</label>
@@ -53,6 +60,7 @@
                                                         <input type="number" id="osl-stdev-input" value="" min="0" max="8000" placeholder="e.g. 64">
                                                         <div class="help-text">Adds random variation around your Average Output Length above. For example, OSL=100 with variation=50 means replies will range roughly between 50-150 tokens. Leave empty for fixed-length replies.</div>
                                                     </div>
+                                                </div>
                                                 </div>
                                             </div>
                                         </div>
@@ -84,16 +92,23 @@
                                             </div>
                                         </div>
 
-                                        <!-- Prefix Cache Simulation (collapsible) -->
+                                        <!-- Prefix Cache Simulation toggle -->
                                         <div style="border-top:1px solid #dcfce7;">
-                                            <div style="padding:12px 20px;cursor:pointer;display:flex;align-items:center;justify-content:space-between;" onclick="var b=document.getElementById('prefix-cache-body');var a=document.getElementById('prefix-cache-arrow');if(b.style.display==='none'){b.style.display='block';a.textContent='▾';}else{b.style.display='none';a.textContent='▸';}">
-                                                <div>
-                                                    <div style="font-weight:700;color:#15803d;font-size:0.95em;">🗂️ Prefix Cache Simulation (optional)</div>
-                                                    <div style="color:#166534;font-size:0.85em;margin-top:2px;">Control how often requests share the same prompt prefix, simulating system prompts or repeated context.</div>
+                                            <div style="padding:12px 20px;cursor:pointer;display:flex;align-items:center;justify-content:space-between;" onclick="var on=!document.getElementById('prefix-cache-enabled').checked;document.getElementById('prefix-cache-enabled').checked=on;document.getElementById('prefix-cache-body').style.display=on?'block':'none';document.getElementById('prefix-cache-inner').style.opacity=on?'1':'0.4';var sw=document.getElementById('prefix-cache-switch');sw.style.background=on?'#15803d':'#ccc';sw.querySelector('span').style.transform=on?'translateX(18px)':'translateX(0)';if(!on){document.getElementById('prefix-cache-slider').value=0;document.getElementById('prefix-cache-value').textContent='0%';config.prefix_cache_hit_pct=0;saveConfig();}">
+                                                <div style="display:flex;align-items:center;gap:10px;">
+                                                    <div style="font-size:1.3em;flex-shrink:0;">🗂️</div>
+                                                    <div>
+                                                        <div style="font-weight:600;color:#15803d;font-size:0.95em;">Prefix Cache Simulation</div>
+                                                        <div style="color:#166534;font-size:0.82em;margin-top:2px;">Simulate shared prompt prefixes (system prompts, repeated context)</div>
+                                                    </div>
                                                 </div>
-                                                <div id="prefix-cache-arrow" style="font-size:1.4em;color:#15803d;font-weight:700;">▸</div>
+                                                <input type="checkbox" id="prefix-cache-enabled" style="display:none;">
+                                                <div id="prefix-cache-switch" style="width:40px;height:22px;background:#ccc;border-radius:11px;position:relative;transition:background-color 0.2s;flex-shrink:0;margin-left:16px;">
+                                                    <span style="position:absolute;top:2px;left:2px;width:18px;height:18px;background:white;border-radius:50%;transition:transform 0.2s;box-shadow:0 1px 3px rgba(0,0,0,0.2);display:block;"></span>
+                                                </div>
                                             </div>
-                                            <div id="prefix-cache-body" style="display:none;padding:0 20px 16px;">
+                                            <div id="prefix-cache-body" style="display:none;padding-top:12px;">
+                                                <div id="prefix-cache-inner" style="opacity:0.4;transition:all 0.2s;padding:0 20px 16px;">
                                                 <div class="input-group">
                                                     <label>Prefix Cache Hit Ratio: <span id="prefix-cache-value" style="font-weight:800;color:var(--rh-red-primary);">0%</span></label>
                                                     <input type="range" id="prefix-cache-slider" min="0" max="100" value="0" style="width:100%;accent-color:var(--rh-red-primary);" oninput="config.prefix_cache_hit_pct=parseInt(this.value);document.getElementById('prefix-cache-value').textContent=this.value+'%';saveConfig();updatePrefixCacheModeDesc();">
@@ -112,6 +127,7 @@
                                                         <div style="display:flex;justify-content:space-between;font-size:0.75em;color:#94a3b8;margin-top:2px;"><span>2 groups</span><span>20 groups</span></div>
                                                     </div>
                                                     <div id="prefix-cache-mode-desc" style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:6px;padding:12px;font-size:0.8em;color:#475569;line-height:1.6;"></div>
+                                                </div>
                                                 </div>
                                             </div>
                                         </div>

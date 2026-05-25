@@ -61,11 +61,19 @@ function updateUIFromConfig() {
     if (document.getElementById('duration-input')) {
         document.getElementById('duration-input').value = config.duration;
     }
-    if (config.isl_stdev && document.getElementById('isl-stdev-input')) {
-        document.getElementById('isl-stdev-input').value = config.isl_stdev;
-    }
-    if (config.osl_stdev && document.getElementById('osl-stdev-input')) {
-        document.getElementById('osl-stdev-input').value = config.osl_stdev;
+    if (document.getElementById('length-variation-enabled')) {
+        var hasStdev = (config.isl_stdev && config.isl_stdev > 0) || (config.osl_stdev && config.osl_stdev > 0);
+        document.getElementById('length-variation-enabled').checked = hasStdev;
+        if (hasStdev) {
+            if (config.isl_stdev) document.getElementById('isl-stdev-input').value = config.isl_stdev;
+            if (config.osl_stdev) document.getElementById('osl-stdev-input').value = config.osl_stdev;
+            var lvBody = document.getElementById('length-variation-body');
+            if (lvBody) lvBody.style.display = 'block';
+            var lvInner = document.getElementById('length-variation-inner');
+            if (lvInner) lvInner.style.opacity = '1';
+            var lvSw = document.getElementById('length-variation-switch');
+            if (lvSw) { lvSw.style.background = '#15803d'; lvSw.querySelector('span').style.transform = 'translateX(18px)'; }
+        }
     }
     if (document.getElementById('multi-turn-enabled')) {
         if (config.turns && config.turns > 1) {
@@ -134,11 +142,20 @@ function updateUIFromConfig() {
             document.getElementById('dataset-max-output-input').value = config.dataset_max_output;
     }
 
-    // Restore prefix cache slider
+    // Restore prefix cache toggle + slider
     if (document.getElementById('prefix-cache-slider')) {
         var pv = config.prefix_cache_hit_pct || 0;
         document.getElementById('prefix-cache-slider').value = pv;
         document.getElementById('prefix-cache-value').textContent = pv + '%';
+        if (pv > 0 && document.getElementById('prefix-cache-enabled')) {
+            document.getElementById('prefix-cache-enabled').checked = true;
+            var pcBody = document.getElementById('prefix-cache-body');
+            if (pcBody) pcBody.style.display = 'block';
+            var pcInner = document.getElementById('prefix-cache-inner');
+            if (pcInner) pcInner.style.opacity = '1';
+            var pcSw = document.getElementById('prefix-cache-switch');
+            if (pcSw) { pcSw.style.background = '#15803d'; pcSw.querySelector('span').style.transform = 'translateX(18px)'; }
+        }
     }
     if (config.prefix_cache_groups && document.getElementById('prefix-cache-groups-slider')) {
         document.getElementById('prefix-cache-groups-slider').value = config.prefix_cache_groups;
