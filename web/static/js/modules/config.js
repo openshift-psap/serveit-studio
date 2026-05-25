@@ -973,6 +973,10 @@ function applyReportConfig(recId) {
         config.single_test_replicas = rc.replicas || (rc.gpus ? Math.floor(rc.gpus / tp) : 1);
     }
 
+    // Restore model and image
+    if (rc.model) config.model = rc.model;
+    if (rc.image) config.image = rc.image;
+
     // Restore ALL workload settings — reset to test values or defaults
     config.isl = ts.isl || 2048;
     config.osl = ts.osl || 512;

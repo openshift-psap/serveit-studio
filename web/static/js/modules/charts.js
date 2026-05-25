@@ -105,7 +105,7 @@ function renderCharts(data, runId) {
 
                 const recId = 'rec-' + key + '-' + p;
                 const recArch = (cardArch || '').toLowerCase() === 'pd' ? 'pd' : ((cardArch || '').toLowerCase() === 'ep' ? 'ep' : 'aggregated');
-                window._recConfigs[recId] = { ...cardConfig, architecture: recArch, test_settings: c.test_settings, epp_config: cardConfig.epp_config || c.epp_config };
+                window._recConfigs[recId] = { ...cardConfig, architecture: recArch, model: rec.model, image: (data.run_config || {}).image, test_settings: c.test_settings, epp_config: cardConfig.epp_config || c.epp_config };
 
                 html += `<div style="background:white; border:${border}; border-radius:10px; padding:16px; position:relative;">`;
                 html += `<div style="font-weight:800; color:${goalColors[key]}; font-size:0.85em; text-transform:uppercase; margin-bottom:8px;">${goalIcons[key] || ''} ${r.goal} — ${pLabel}${badge}${archBadge}</div>`;
