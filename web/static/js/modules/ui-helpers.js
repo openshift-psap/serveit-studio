@@ -47,11 +47,15 @@ function statCard(value, label, detail) {
 
 // ===== COMPARISON TAB =====
 function generateComparison() {
+    try {
     // Remove any existing comparison tab
     reportTabs.filter(t => t.isComparison).forEach(t => closeReportTab(t.id));
 
     const runTabs = reportTabs.filter(t => !t.isComparison && tabDataCache[t.id]);
-    if (runTabs.length < 2) return;
+    if (runTabs.length < 2) {
+        console.warn('Compare: need 2+ runs with data. Tabs:', reportTabs.length, 'with cache:', runTabs.length);
+        return;
+    }
 
     const tabId = 'rt' + (++_tabCounter);
     reportTabs.push({ id: tabId, runId: null, label: 'Compare', isComparison: true });
@@ -233,6 +237,7 @@ function generateComparison() {
         yaxis: { title: 'Throughput P90 (req/s) - higher is better' },
         showlegend: true
     }, plotlyConfig);
+    } catch (e) { console.error('Compare error:', e); }
 }
 
 // downloadHTMLReport() is defined in report-download.js
