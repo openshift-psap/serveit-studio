@@ -13,7 +13,7 @@ document.getElementById('chart-add-btn').addEventListener('click', () => {
     if (runId) addReportTab(runId);
 });
 
-document.getElementById('chart-compare-btn').addEventListener('click', generateComparison);
+document.getElementById('chart-compare-btn').addEventListener('click', function() { generateComparison(); });
 
 function loadRunList() {
     fetch('/api/runs')
