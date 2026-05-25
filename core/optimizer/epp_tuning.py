@@ -314,7 +314,7 @@ class EPPTuningMixin:
 
         # Best PD config
         if self.pareto_results:
-            best_split, best_pd_result = min(self.pareto_results, key=lambda x: x[1].ttft_p90 if x[1].ttft_p90 else 1e9)
+            best_split, best_pd_result = min(self.pareto_results, key=lambda x: x[1].ttft_p99 or x[1].ttft_p90 or 1e9)
             pd_cfg = self._create_pd_config(best_split)
             # Use optimal concurrency from Step 10 if available
             pd_concurrency = int(self.config.qps)

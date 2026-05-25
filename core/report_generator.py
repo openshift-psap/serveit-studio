@@ -44,7 +44,7 @@ class ReportGenerator:
         return self._loader.get_all_test_results(run_id)
 
     # --- Analysis (delegate to ReportAnalyzer) ---
-    def calculate_pareto_frontier(self, results, metric='ttft_p90', throughput_metric='throughput_p90'):
+    def calculate_pareto_frontier(self, results, metric='ttft_p99', throughput_metric='throughput_p90'):
         return self._analyzer.calculate_pareto_frontier(results, metric, throughput_metric)
 
     def get_summary_statistics(self, results):

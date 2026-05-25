@@ -19,7 +19,7 @@ class ReportAnalyzer:
 
     def calculate_pareto_frontier(self,
                                   results: List[TestResult],
-                                  metric: str = 'ttft_p90',
+                                  metric: str = 'ttft_p99',
                                   throughput_metric: str = 'throughput_p90') -> List[ParetoPoint]:
         """
         Calculate Pareto frontier for optimization results.
@@ -400,7 +400,7 @@ class ReportAnalyzer:
         best_pd_throughput = None
 
         if step7_tests:
-            by_ttft = min(step7_tests, key=lambda r: r.ttft_p90)
+            by_ttft = min(step7_tests, key=lambda r: r.ttft_p99 or r.ttft_p90 or 1e9)
             best_pd_ttft = _config_dict(by_ttft)
 
             by_tput = max(step7_tests, key=lambda r: r.throughput_p90)
@@ -540,7 +540,9 @@ class ReportAnalyzer:
 
         pd_is_better_ttft = True
         if best_pd_ttft and aggregated_baseline:
-            if aggregated_baseline['ttft_p90'] < best_pd_ttft['ttft_p90']:
+            agg_p99 = aggregated_baseline.get('ttft_p99') or aggregated_baseline['ttft_p90']
+            pd_p99 = best_pd_ttft.get('ttft_p99') or best_pd_ttft['ttft_p90']
+            if agg_p99 < pd_p99:
                 pd_is_better_ttft = False
 
         if best_pd_ttft:

@@ -17,22 +17,22 @@ class ConfigBuilderMixin:
         Find Pareto front from P/D split results.
 
         A configuration is Pareto optimal if no other configuration has
-        both lower TTFT and higher throughput.
+        both lower TTFT P99 and higher throughput P90.
+        Uses P99 instead of P90 to penalize configs with unstable tail latency.
         """
         pareto = []
 
         for i, (split_i, result_i) in enumerate(self.pareto_results):
-            ttft_i = result_i.ttft_p90 or result_i.ttft_p50 or 1000000.0
+            ttft_i = result_i.ttft_p99 or result_i.ttft_p90 or result_i.ttft_p50 or 1000000.0
             tput_i = result_i.throughput_p90 or result_i.throughput_p50 or 0.0
 
             dominated = False
             for j, (split_j, result_j) in enumerate(self.pareto_results):
                 if i == j:
                     continue
-                ttft_j = result_j.ttft_p90 or result_j.ttft_p50 or 1000000.0
+                ttft_j = result_j.ttft_p99 or result_j.ttft_p90 or result_j.ttft_p50 or 1000000.0
                 tput_j = result_j.throughput_p90 or result_j.throughput_p50 or 0.0
 
-                # j dominates i if j is better or equal in both and strictly better in one
                 if ttft_j <= ttft_i and tput_j >= tput_i and (ttft_j < ttft_i or tput_j > tput_i):
                     dominated = True
                     break
