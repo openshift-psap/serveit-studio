@@ -942,9 +942,10 @@ function applyReportConfig(recId) {
     var ts = rc.test_settings || {};
     var tp = rc.tp || 1;
 
-    // Pre-fill deployment config for single_test
+    // Set goal to single_test and pre-fill deployment config
+    config.goal = 'single_test';
     config.single_test_architecture = arch;
-    if (arch === 'pd') {
+    if (arch === 'pd' || arch === 'ep') {
         config.single_test_prefill_tp = rc.prefill_tp || tp;
         config.single_test_decode_tp = rc.decode_tp || tp;
         config.single_test_prefill_pods = rc.prefill_pods || 1;
