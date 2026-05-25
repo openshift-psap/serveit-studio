@@ -575,8 +575,143 @@ class RecipeOptimizer(
                                 self.epp_benchmark_results[arch] = []
                             self.epp_benchmark_results[arch].append((combo_name, weights, result))
                         self.log(f"   📋 Restored EPP tuning results: {', '.join(f'{a}({len(r)})' for a, r in self.epp_benchmark_results.items())}", 'info')
+                    # Rebuild optimizer state from completed tests
+                    self._rebuild_state_from_db()
+
         except Exception as e:
             self.log(f"⚠️  Could not load previous results: {e}", 'warning')
+
+    def _rebuild_state_from_db(self):
+        """Rebuild in-memory optimizer state from completed tests in the DB.
+
+        On resume, Steps 2-7 are skipped but later steps (EPP, Step 10) depend
+        on state set during those steps. This reconstructs that state from DB rows.
+        """
+        import re as _re
+
+        # 1. Rebuild decode_tp_results + optimal_decode_tp from step2 tests
+        if not self.decode_tp_results:
+            step2 = [(name, row) for name, row in self.completed_tests.items()
+                     if name.startswith('step2-trial')]
+            if step2:
+                candidates = []
+                for name, row in step2:
+                    tp = row.get('tensor_parallelism', 1)
+                    tput = row.get('throughput_p90') or row.get('throughput_p50') or 0
+                    ttft = row.get('ttft_p90') or 0
+                    tpsg = (tput * self.config.osl) / tp if tp > 0 else 0
+                    candidates.append({'tp': tp, 'tpsg': tpsg, 'ttft_p90': ttft, 'throughput_p90': tput})
+                self.decode_tp_results = candidates
+                use_ttft = self.config.objective == 'ttft'
+                if use_ttft:
+                    valid = [c for c in candidates if c['ttft_p90'] and c['ttft_p90'] < 1e6]
+                    best = min(valid, key=lambda c: c['ttft_p90']) if valid else max(candidates, key=lambda c: c['tpsg'])
+                else:
+                    best = max(candidates, key=lambda c: c['tpsg'])
+                self.optimal_decode_tp = OptimalTP(
+                    tp=best['tp'], tpsg=best['tpsg'],
+                    ttft_p90=best['ttft_p90'], throughput_p90=best['throughput_p90'])
+                self.log(f"   🔄 Rebuilt decode_tp_results ({len(candidates)} TPs), optimal: TP={best['tp']} TPSG={best['tpsg']:.0f}", 'info')
+
+        # 2. Rebuild prefill_tp_results + optimal_prefill_tp from step3 tests
+        if not self.prefill_tp_results:
+            step3 = [(name, row) for name, row in self.completed_tests.items()
+                     if name.startswith('step3-trial')]
+            if step3:
+                candidates = []
+                for name, row in step3:
+                    tp = row.get('tensor_parallelism', 1)
+                    tput = row.get('throughput_p90') or row.get('throughput_p50') or 0
+                    ttft = row.get('ttft_p90') or 0
+                    tpsg = (tput * self.config.isl) / tp if tp > 0 else 0
+                    candidates.append({'tp': tp, 'tpsg': tpsg, 'ttft_p90': ttft, 'throughput_p90': tput})
+                self.prefill_tp_results = candidates
+                use_ttft = self.config.objective == 'ttft'
+                if use_ttft:
+                    valid = [c for c in candidates if c['ttft_p90'] and c['ttft_p90'] < 1e6]
+                    best = min(valid, key=lambda c: c['ttft_p90']) if valid else max(candidates, key=lambda c: c['tpsg'])
+                else:
+                    best = max(candidates, key=lambda c: c['tpsg'])
+                self.optimal_prefill_tp = OptimalTP(
+                    tp=best['tp'], tpsg=best['tpsg'],
+                    ttft_p90=best['ttft_p90'], throughput_p90=best['throughput_p90'])
+                self.log(f"   🔄 Rebuilt prefill_tp_results ({len(candidates)} TPs), optimal: TP={best['tp']} TPSG={best['tpsg']:.0f}", 'info')
+
+        # 3. Rebuild aggregated_result + aggregated_tp from step6 tests
+        if not self.aggregated_result:
+            step6 = [(name, row) for name, row in self.completed_tests.items()
+                     if name.startswith('step6-agg-')]
+            if step6:
+                use_ttft = self.config.objective == 'ttft'
+                if use_ttft:
+                    best_name, best_row = min(step6, key=lambda x: x[1].get('ttft_p99') or x[1].get('ttft_p90') or 1e9)
+                else:
+                    best_name, best_row = max(step6, key=lambda x: x[1].get('throughput_p90') or 0)
+                self.aggregated_result = self._make_test_result_from_db(best_row)
+                self.aggregated_tp = best_row.get('tensor_parallelism', 8)
+                self.aggregated_gpus = self.config.total_gpus
+                self.log(f"   🔄 Rebuilt aggregated_result: TP={self.aggregated_tp}, "
+                         f"TTFT={best_row.get('ttft_p90', 0):.1f}ms", 'info')
+
+        # 4. Rebuild pareto_results from step7 PD tests
+        if not self.pareto_results:
+            step7 = [(name, row) for name, row in self.completed_tests.items()
+                     if name.startswith('step7-') and not name.startswith('step7-ep-')]
+            if step7:
+                for name, row in step7:
+                    tc_raw = row.get('test_config_json')
+                    if not tc_raw:
+                        continue
+                    try:
+                        tc = _json.loads(tc_raw)
+                        split = FeasibleSplit(
+                            prefill_pods=tc.get('prefill_replicas', 1),
+                            decode_pods=tc.get('decode_replicas', 1),
+                            prefill_tp=tc.get('prefill_tp', 1),
+                            decode_tp=tc.get('decode_tp', 1),
+                            prefill_gpus=tc.get('prefill_replicas', 1) * tc.get('prefill_tp', 1),
+                            decode_gpus=tc.get('decode_replicas', 1) * tc.get('decode_tp', 1),
+                            total_gpus=self.config.total_gpus,
+                            prefill_pct=0,
+                        )
+                        split.prefill_pct = (split.prefill_gpus / max(split.total_gpus, 1)) * 100
+                        result = self._make_test_result_from_db(row)
+                        self.pareto_results.append((split, result))
+                    except Exception:
+                        continue
+                self.log(f"   🔄 Rebuilt pareto_results ({len(self.pareto_results)} PD splits)", 'info')
+
+        # 5. Rebuild EP results from step7-ep tests
+        if not self.ep_results:
+            step7_ep = [(name, row) for name, row in self.completed_tests.items()
+                        if name.startswith('step7-ep-')]
+            if step7_ep:
+                for name, row in step7_ep:
+                    tc_raw = row.get('test_config_json')
+                    if not tc_raw:
+                        continue
+                    try:
+                        tc = _json.loads(tc_raw)
+                        split = FeasibleSplit(
+                            prefill_pods=tc.get('prefill_replicas', 1),
+                            decode_pods=tc.get('decode_replicas', 1),
+                            prefill_tp=tc.get('prefill_tp', 1),
+                            decode_tp=tc.get('decode_tp', 1),
+                            prefill_gpus=tc.get('prefill_replicas', 1) * tc.get('prefill_tp', 1),
+                            decode_gpus=tc.get('decode_replicas', 1) * tc.get('decode_tp', 1),
+                            total_gpus=self.config.total_gpus,
+                            prefill_pct=0,
+                        )
+                        result = self._make_test_result_from_db(row)
+                        self.ep_results.append((split, result))
+                    except Exception:
+                        continue
+                if self.ep_results:
+                    best_split, best_result = max(self.ep_results,
+                        key=lambda x: x[1].throughput_p90 if x[1].throughput_p90 else 0)
+                    self.best_ep_config = best_split
+                    self.best_ep_result = best_result
+                    self.log(f"   🔄 Rebuilt ep_results ({len(self.ep_results)} configs)", 'info')
 
     def _make_test_result_from_db(self, row: Dict[str, Any]) -> TestResult:
         """Reconstruct a TestResult from a database row."""
