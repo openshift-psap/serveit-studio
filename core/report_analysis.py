@@ -410,7 +410,7 @@ class ReportAnalyzer:
             by_ttft = min(step7_tests, key=lambda r: r.ttft_p99 or r.ttft_p90 or 1e9)
             best_pd_ttft = _config_dict(by_ttft)
 
-            by_tput = max(step7_tests, key=lambda r: r.throughput_p90)
+            by_tput = max(step7_tests, key=lambda r: r.throughput_mean or r.throughput_p90 or 0)
             best_pd_throughput = _config_dict(by_tput)
 
         # --- Best EP configuration (from step7-ep tests) ---
@@ -581,33 +581,36 @@ class ReportAnalyzer:
                 'architecture': 'Aggregated',
             }
 
-        # Throughput recommendation: consider PD, EP, and Aggregated
+        # Throughput recommendation: consider PD, EP, and Aggregated (select by mean throughput)
         throughput_candidates = []
         if best_pd_throughput:
-            throughput_candidates.append(('PD', best_pd_throughput['throughput_p90'], {
+            tput_mean = best_pd_throughput.get('throughput_mean') or best_pd_throughput['throughput_p90']
+            throughput_candidates.append(('PD', tput_mean, {
                 'goal': 'Throughput (maximize req/s)',
                 'config': best_pd_throughput,
                 'deploy': f"{best_pd_throughput['prefill_pods']} Prefill + {best_pd_throughput['decode_pods']} Decode pods, TP={best_pd_throughput['tp']}",
-                'metric_value': f"{best_pd_throughput['throughput_p90']} req/s",
-                'metric_name': 'Throughput P90',
+                'metric_value': f"{tput_mean} req/s",
+                'metric_name': 'Throughput Mean',
                 'architecture': 'PD',
             }))
         if best_ep_throughput:
-            throughput_candidates.append(('EP', best_ep_throughput['throughput_p90'], {
+            tput_mean = best_ep_throughput.get('throughput_mean') or best_ep_throughput['throughput_p90']
+            throughput_candidates.append(('EP', tput_mean, {
                 'goal': 'Throughput (maximize req/s)',
                 'config': best_ep_throughput,
                 'deploy': f"{best_ep_throughput['replicas']} EP pods × TP{best_ep_throughput['tp']} ({best_ep_throughput['gpus']} GPUs)",
-                'metric_value': f"{best_ep_throughput['throughput_p90']} req/s",
-                'metric_name': 'Throughput P90',
+                'metric_value': f"{tput_mean} req/s",
+                'metric_name': 'Throughput Mean',
                 'architecture': 'EP',
             }))
         if aggregated_baseline:
-            throughput_candidates.append(('Aggregated', aggregated_baseline['throughput_p90'], {
+            tput_mean = aggregated_baseline.get('throughput_mean') or aggregated_baseline['throughput_p90']
+            throughput_candidates.append(('Aggregated', tput_mean, {
                 'goal': 'Throughput (maximize req/s)',
                 'config': aggregated_baseline,
                 'deploy': f"{aggregated_baseline['replicas']} Aggregated pods, TP={aggregated_baseline['tp']}",
-                'metric_value': f"{aggregated_baseline['throughput_p90']} req/s",
-                'metric_name': 'Throughput P90',
+                'metric_value': f"{tput_mean} req/s",
+                'metric_name': 'Throughput Mean',
                 'architecture': 'Aggregated',
             }))
 

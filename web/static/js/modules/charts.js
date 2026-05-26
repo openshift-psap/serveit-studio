@@ -86,11 +86,17 @@ function renderCharts(data, runId) {
                 const archKey = (r.architecture || '').toLowerCase() === 'pd' ? 'pd' : 'aggregated';
 
                 let cardConfig, cardDeploy, cardArch;
-                if (pi === 0) {
+                if (key === 'throughput') {
+                    // Throughput: always show the same config (best by mean) across all percentiles
+                    cardConfig = c;
+                    cardDeploy = r.deploy;
+                    cardArch = r.architecture;
+                } else if (pi === 0) {
                     cardConfig = c;
                     cardDeploy = r.deploy;
                     cardArch = r.architecture;
                 } else {
+                    // TTFT: allow different configs per percentile
                     const bpData = (bp[p] || {})[archKey];
                     if (!bpData) { html += '<div></div>'; continue; }
                     cardConfig = bpData;
@@ -115,23 +121,32 @@ function renderCharts(data, runId) {
                 html += `</div>`;
                 html += `<div style="font-size:1.4em; font-weight:800; color:#1e293b; margin-bottom:4px;">${cardDeploy}</div>`;
 
-                const ttftVal = pi === 0 ? c.ttft_p90 : cardConfig.ttft;
-                const tputVal = pi === 0 ? c.throughput_p90 : cardConfig.throughput;
-                const tputMean = pi === 0 ? c.throughput_mean : cardConfig.throughput_mean;
-                const gpus = pi === 0 ? c.gpus : cardConfig.gpus;
-                const conc = pi === 0 ? c.concurrency : cardConfig.concurrency;
-                const ratio = pi === 0 && c.ratio && c.decode_pods > 0 ? `P:D ratio ${c.ratio} | ` : '';
+                const gpus = key === 'throughput' ? c.gpus : (pi === 0 ? c.gpus : cardConfig.gpus);
+                const conc = key === 'throughput' ? c.concurrency : (pi === 0 ? c.concurrency : cardConfig.concurrency);
                 const userConc = rec.workload ? rec.workload.users : null;
                 const concStr = conc ? ` | c=${conc}${userConc && userConc !== conc ? ' (from ' + userConc + ')' : ''}` : '';
-                const meanStr = tputMean ? ` | Throughput Mean: <strong>${tputMean} req/s</strong>` : '';
 
-                html += `<div style="font-size:0.9em; color:#475569;">${ratio}TTFT ${pLabel}: <strong>${ttftVal} ms</strong> | Throughput ${pLabel}: <strong>${tputVal} req/s</strong>${meanStr} | ${gpus} GPUs${concStr}</div>`;
+                let statsLine;
+                if (key === 'throughput') {
+                    const tputMean = c.throughput_mean || c.throughput_p90;
+                    const ttftAtPctl = c[`ttft_${p}`] || c.ttft_p90;
+                    const ratio = c.ratio && c.decode_pods > 0 ? `P:D ratio ${c.ratio} | ` : '';
+                    statsLine = `${ratio}TTFT ${pLabel}: <strong>${ttftAtPctl} ms</strong> | Throughput Mean: <strong>${tputMean} req/s</strong> | ${gpus} GPUs${concStr}`;
+                } else {
+                    const ttftVal = pi === 0 ? c.ttft_p90 : cardConfig.ttft;
+                    const tputMean = pi === 0 ? (c.throughput_mean || c.throughput_p90) : (cardConfig.throughput_mean || cardConfig.throughput);
+                    const ratio = pi === 0 && c.ratio && c.decode_pods > 0 ? `P:D ratio ${c.ratio} | ` : '';
+                    statsLine = `${ratio}TTFT ${pLabel}: <strong>${ttftVal} ms</strong> | Throughput Mean: <strong>${tputMean} req/s</strong> | ${gpus} GPUs${concStr}`;
+                }
+
+                html += `<div style="font-size:0.9em; color:#475569;">${statsLine}</div>`;
 
                 if (pi === 0) {
                     html += `<div style="font-size:0.82em; color:#64748b; margin-top:8px; line-height:1.5;">${goalExplain[key] || ''}</div>`;
                 }
-                const recTestId = pi === 0 ? (c.test_id || testIdLookup[c.config_name] || c.config_name) : (cardConfig.test_id || testIdLookup[cardConfig.config_name] || cardConfig.config_name);
-                const recManifests = pi === 0 ? manifestLookup[recTestId] : (cardConfig.manifest_types || []);
+                const useOrigConfig = (key === 'throughput' || pi === 0);
+                const recTestId = useOrigConfig ? (c.test_id || testIdLookup[c.config_name] || c.config_name) : (cardConfig.test_id || testIdLookup[cardConfig.config_name] || cardConfig.config_name);
+                const recManifests = useOrigConfig ? manifestLookup[recTestId] : (cardConfig.manifest_types || []);
                 if (recManifests && recManifests.length) {
                     html += '<div style="margin-top:10px; padding-top:8px; border-top:1px solid #e2e8f0;">';
                     html += '<span style="font-size:0.78em; color:#64748b; margin-right:6px;">Download YAML:</span>';

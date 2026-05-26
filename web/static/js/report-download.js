@@ -159,9 +159,13 @@ function buildRecSection(runId, data, rec, summary, best, allRes) {
                 const archKey = (r.architecture || '').toLowerCase() === 'pd' ? 'pd' : 'aggregated';
 
                 let cardConfig, cardDeploy, cardArch;
-                if (pi === 0) {
+                if (key === 'throughput') {
+                    // Throughput: always show the same config (best by mean) across all percentiles
+                    cardConfig = c; cardDeploy = r.deploy; cardArch = r.architecture;
+                } else if (pi === 0) {
                     cardConfig = c; cardDeploy = r.deploy; cardArch = r.architecture;
                 } else {
+                    // TTFT: allow different configs per percentile (users may care about tail latency)
                     const bpData = (bp[p] || {})[archKey];
                     if (!bpData) { s += '<div></div>'; continue; }
                     cardConfig = bpData; cardDeploy = bpData.config_name; cardArch = archKey.toUpperCase();
@@ -176,17 +180,24 @@ function buildRecSection(runId, data, rec, summary, best, allRes) {
                 s += `<div style="font-weight:800;color:${goalColors[key]};font-size:0.85em;text-transform:uppercase;margin-bottom:8px;">${goalIcons[key] || ''} ${r.goal} &mdash; ${pLabel}${badge}${archBadge}</div>`;
                 s += `<div style="font-size:1.4em;font-weight:800;color:#1e293b;margin-bottom:4px;">${cardDeploy}</div>`;
 
-                const ttftVal = pi === 0 ? c.ttft_p90 : cardConfig.ttft;
-                const tputVal = pi === 0 ? c.throughput_p90 : cardConfig.throughput;
-                const tputMean = pi === 0 ? c.throughput_mean : cardConfig.throughput_mean;
-                const gpus = pi === 0 ? c.gpus : cardConfig.gpus;
-                const conc = pi === 0 ? c.concurrency : cardConfig.concurrency;
-                const ratio = (pi === 0 && c.ratio && c.decode_pods > 0) ? `P:D ratio ${c.ratio} | ` : '';
+                const gpus = c.gpus;
+                const conc = c.concurrency;
                 const userConc = rec.workload ? rec.workload.users : null;
                 const concStr = conc ? ` | c=${conc}${userConc && userConc !== conc ? ' (from ' + userConc + ')' : ''}` : '';
-                const meanStr = tputMean ? ` | Throughput Mean: <strong>${tputMean} req/s</strong>` : '';
 
-                s += `<div style="font-size:0.9em;color:#475569;">${ratio}TTFT ${pLabel}: <strong>${ttftVal} ms</strong> | Throughput ${pLabel}: <strong>${tputVal} req/s</strong>${meanStr} | ${gpus} GPUs${concStr}</div>`;
+                if (key === 'throughput') {
+                    // Throughput cards: show mean throughput + TTFT at this percentile
+                    const tputMean = c.throughput_mean || c.throughput_p90;
+                    const ttftAtPctl = c[`ttft_${p}`] || c.ttft_p90;
+                    const ratio = (c.ratio && c.decode_pods > 0) ? `P:D ratio ${c.ratio} | ` : '';
+                    s += `<div style="font-size:0.9em;color:#475569;">${ratio}TTFT ${pLabel}: <strong>${ttftAtPctl} ms</strong> | Throughput Mean: <strong>${tputMean} req/s</strong> | ${gpus} GPUs${concStr}</div>`;
+                } else {
+                    // TTFT cards: show TTFT at this percentile + throughput mean
+                    const ttftVal = pi === 0 ? c.ttft_p90 : cardConfig.ttft;
+                    const tputMean = pi === 0 ? (c.throughput_mean || c.throughput_p90) : (cardConfig.throughput_mean || cardConfig.throughput);
+                    const ratio = (pi === 0 && c.ratio && c.decode_pods > 0) ? `P:D ratio ${c.ratio} | ` : '';
+                    s += `<div style="font-size:0.9em;color:#475569;">${ratio}TTFT ${pLabel}: <strong>${ttftVal} ms</strong> | Throughput Mean: <strong>${tputMean} req/s</strong> | ${gpus} GPUs${concStr}</div>`;
+                }
                 if (pi === 0) s += `<div style="font-size:0.82em;color:#64748b;margin-top:8px;line-height:1.5;">${goalExplain[key] || ''}</div>`;
                 s += '</div>';
             }
