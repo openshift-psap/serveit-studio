@@ -194,53 +194,68 @@ Yes — this relates to the llm-d project and Red Hat OpenShift AI inference opt
 
 ### Business Value
 
-**Likelihood that proprietary companies will want to use this:** High
+**Please indicate the likelihood that companies who do not share an equal enthusiasm as Red Hat for free and open-source software will want or need to use or copy the invention:**
 
-Any company deploying LLMs at scale faces the same configuration optimization problem. Specific companies and relevance:
+**Likely**
 
-- **NVIDIA** — NIM (NVIDIA Inference Microservices) deploys vLLM but requires manual configuration tuning. This invention automates what their customers do manually.
-- **Amazon (AWS)** — SageMaker inference endpoints require manual TP/instance selection. Automated optimization would reduce customer GPU costs.
-- **Microsoft (Azure)** — Azure ML model deployments face the same manual tuning. Their Olive toolkit handles model compilation but not deployment configuration optimization.
-- **Google (GCP)** — Vertex AI model serving requires manual resource configuration.
-- **Anyscale** — Ray Serve could integrate similar optimization for their managed LLM deployment offering.
-- **CoreWeave** — GPU cloud provider whose customers manually optimize vLLM deployments on their infrastructure.
+**If you think it likely that proprietary software companies (e.g., Microsoft, Oracle, VMware, Amazon) will want or need to use or copy the invention, please identify those companies, the relevant product(s), and explain why:**
+
+Any company deploying LLMs at scale faces the same configuration optimization problem — choosing from hundreds of valid tensor parallelism, pod count, and disaggregation configurations for each model on each cluster. The following companies have products where this invention would provide significant value:
+
+- **NVIDIA** — NIM (NVIDIA Inference Microservices) deploys vLLM but requires manual configuration tuning. Customers must guess TP size, pod count, and disaggregation settings. This invention automates what their customers do manually, finding optimal configurations 22–46× faster than exhaustive search.
+- **Amazon (AWS)** — SageMaker inference endpoints require manual TP and instance selection. Automated optimization would reduce customer GPU costs by finding configurations that maximize throughput per GPU dollar. AWS's growing Inferentia/Trainium offering faces the same tuning problem.
+- **Microsoft (Azure)** — Azure ML model deployments face the same manual tuning challenge. Their Olive toolkit handles model compilation/quantization but not deployment configuration optimization. Azure OpenAI Service internally needs similar optimization for their hosted models.
+- **Google (GCP)** — Vertex AI model serving requires manual resource configuration. Google's TPU inference deployments face analogous parallelism and disaggregation optimization problems.
+- **Anyscale** — Ray Serve could integrate similar optimization for their managed LLM deployment offering. Their customers currently rely on manual tuning guides.
+- **CoreWeave** — GPU cloud provider whose customers manually optimize vLLM deployments on their infrastructure. Automated optimization would be a key differentiator for their managed inference service.
+- **Oracle (OCI)** — Oracle Cloud Infrastructure's GPU instances for AI inference require manual configuration. Their acquisition of GPU capacity makes inference optimization a priority.
 
 ### Detectability
 
-**Likelihood of detecting use in a competitor's product:** Medium-High
+**What is the likelihood that we would be able to detect use of the invention in a competitor's proprietary-code product?**
 
-The system produces several distinctive signatures:
-- Approximately 3 test deployments per TP pair instead of exhaustive search
-- Calibration runs with ISL=1 / OSL=1 (isolated prefill/decode measurement)
-- The specific formula `D = GPUs / (r × prefill_tp + decode_tp)` visible in configuration outputs or documentation
-- Block size auto-tuning heuristic (`sqrt(ISL+OSL)` rounded to power of 2) identifiable in generated configurations
-- TPSG normalization (`throughput × seq_len / TP`) as a comparison metric
-- P99 TTFT used for Pareto dominance instead of the standard P90
-- EPP weights derived from five measured vLLM Prometheus metrics (prefix cache hits, KV utilization, queue depth, active requests, TTFT P99)
-- `kubectl port-forward` to remote Prometheus for cross-cluster metrics collection
+**3 = High — detectable via product inspection or use**
 
-A competitor implementing these techniques would be detectable through their documentation, API parameters, published benchmarks, or observable deployment patterns.
+The system produces several distinctive, externally observable signatures:
+
+1. **Calibration pattern**: ISL=1 / OSL=1 test runs during TP calibration — a unique isolation technique not used by any other tool. Observable in deployment logs or API traffic patterns.
+2. **Smart PD Search formula**: Approximately 3 test deployments per TP pair instead of exhaustive search. The specific formula `D = GPUs / (r × prefill_tp + decode_tp)` would be visible in configuration outputs, documentation, or API parameters.
+3. **Block size heuristic**: `sqrt(ISL+OSL)` rounded to next power of 2 with PD floor of 128 — identifiable in generated vLLM configurations.
+4. **TPSG metric**: `throughput × seq_len / TP` as a per-GPU normalization for cross-TP comparison — a novel metric not used elsewhere.
+5. **P99 Pareto front**: Using P99 TTFT (not the standard P90) for Pareto dominance in architecture selection.
+6. **Five-dimension EPP weights**: Weights derived from five specific vLLM Prometheus metrics (prefix cache hits, KV utilization, queue depth, active requests, TTFT P99) — observable in EPP/gateway configurations.
+7. **Cross-cluster Prometheus**: `kubectl port-forward` to remote Prometheus for metrics collection — observable in network traffic patterns.
+
+A competitor implementing these techniques would be detectable through their product documentation, API parameters, generated configuration files, published benchmarks, or observable deployment patterns during product evaluation.
 
 ### Design Arounds
 
-1. **Exhaustive search** — Test all valid configurations without Smart PD Search. Disadvantage: 22–46× slower, requires 132–280 benchmark runs at ~1 hour each manually (5–12 days of engineer time). Cost-prohibitive for production use.
-2. **Analytical modeling / estimation tools** — Use pre-computed benchmark data or theoretical performance models (e.g., llm-d Planner, vendor sizing guides). Disadvantage: Recommendations are based on specific models tested on specific hardware at specific rates. They cannot predict how a different model with different concurrency will perform on the user's specific cluster with its unique RDMA topology, memory fragmentation, and scheduling constraints. Estimations miss real-world effects that only live benchmarking reveals.
-3. **Bayesian optimization (Optuna/similar)** — Use generic hyperparameter tuning. Disadvantage: Treats the problem as a black box, ignoring domain knowledge (NIXL constraints, TPSG normalization, PD balance equations). Requires many more trials to converge. Does not exploit the closed-form solution that exists for balanced PD splits.
-4. **Manual tuning with heuristics** — Current industry practice. Disadvantage: Requires deep expertise in vLLM internals, NCCL, RDMA, and Kubernetes scheduling. Takes days to weeks per model. Often produces suboptimal results because engineers cannot test enough configurations and rely on rules of thumb that don't account for their specific hardware and workload.
+**Describe any alternatives to the invention that would also solve the problems of the prior art. Are there disadvantages associated with these alternatives?**
 
-All alternatives are significantly slower, less accurate, or require domain expertise that the automated pipeline eliminates.
+1. **Exhaustive search** — Test all valid configurations without Smart PD Search. Disadvantage: 22–46× slower, requires 132–280 benchmark runs. At ~1 hour per manual test (deploy, load model, benchmark, analyze), this takes 5–12 days of continuous engineer time for a single model on a single cluster. Cost-prohibitive for production use where teams need to optimize multiple models across hardware generations.
+
+2. **Analytical modeling / estimation tools** — Use pre-computed benchmark data or theoretical performance models (e.g., llm-d Planner, vendor sizing guides). Disadvantage: Recommendations are based on specific models tested on specific hardware at specific request rates. They cannot account for the user's unique cluster characteristics: RDMA topology, InfiniBand switch congestion, GPU memory fragmentation under load, KV cache eviction patterns at the user's specific concurrency, noisy neighbor effects, PCIe bandwidth contention, and driver/firmware differences. These factors interact in complex ways that only live benchmarking on the actual infrastructure can measure.
+
+3. **Bayesian optimization (Optuna/similar)** — Use generic hyperparameter tuning frameworks. Disadvantage: Treats the configuration space as a black box, ignoring domain knowledge (NIXL KV transfer constraints, TPSG normalization, PD GPU balance equations). Requires 3–10× more trials to converge because it cannot exploit the closed-form solution that exists for balanced PD splits. Does not understand that certain TP combinations are invalid due to NIXL constraints.
+
+4. **Manual tuning with heuristics** — Current industry practice. Disadvantage: Requires deep expertise in vLLM internals, NCCL collective operations, RDMA networking, KV cache management, and Kubernetes scheduling. Takes days to weeks per model. Often produces suboptimal results because engineers cannot test enough configurations and rely on rules of thumb that don't account for their specific hardware topology and workload characteristics.
+
+All alternatives are significantly slower, less accurate, or require deep domain expertise that the automated pipeline eliminates.
 
 ### Comments
 
 **Have you discussed this invention with a member of the Patent Team or an Inventor Mentor?**
-*(Fill in)*
+
+*(To be filled in)*
 
 **Inventor Comments:**
 
 Complete technical documentation is available in the private repository (github.com/bbenshab/inftune-studio):
+
+- `docs/patent-detailed-description.md` — Standalone detailed description of the invention (11-step pipeline)
 - `docs/optimization-math.md` — All formulas, derivations, and constants with justification
 - `docs/supporting-material.md` — Model detection, cloud/network auto-discovery, deployment lifecycle
-- `docs/diagrams.md` — 12 Mermaid diagrams covering all system flows
-- `core/` — Source code for the optimization pipeline
+- `docs/diagrams.md` — 12 Mermaid diagrams covering all system flows (also available as interactive HTML in `docs/diagrams.html`)
+- `core/` — Complete source code for the optimization pipeline
 
-The three documentation files together provide a complete technical specification suitable for patent claims drafting.
+The documentation files together provide a complete technical specification suitable for patent claims drafting. The `docs/patent-detailed-description.md` file contains a concise step-by-step description of the 11-step pipeline optimized for patent filing (under 5,000 characters).
