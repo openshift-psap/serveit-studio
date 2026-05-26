@@ -26,9 +26,11 @@ Boaz Ben Shabat (bbenshab)
 
 Deploying Large Language Models (LLMs) for inference at scale requires choosing from hundreds of possible configurations — tensor parallelism (TP) size, number of pods, Prefill/Decode disaggregation ratios, Expert Parallelism settings, request routing weights, and KV cache parameters. Today, engineers manually guess configurations, deploy them, benchmark, and iterate — a process that takes days or weeks per model and often produces suboptimal results.
 
-The configuration space grows combinatorially with GPU count. A 32-GPU cluster has **132 valid Prefill/Decode split configurations** across all TP pair combinations (4 TP options × 4 TP options × variable pod counts). A 64-GPU cluster has **280 valid configurations**. Testing each requires deploying vLLM pods, loading the model (~3–4 minutes), running a benchmark (~5 minutes), collecting metrics, and cleaning up — roughly **10 minutes per test**. Exhaustive search of a 32-GPU cluster would take **~22 hours** of continuous GPU time. A 64-GPU cluster would take **~47 hours**.
+**The fundamental gap in existing solutions:** Current tools and vendor recommendations (NVIDIA NIM, llm-d Planner, cloud provider sizing guides) rely on pre-computed benchmarks for specific models at specific request rates on specific hardware. They provide **estimations** based on historical data — not measurements from the user's actual cluster, actual model, actual workload, and actual concurrency level. A recommendation that assumes 50 concurrent users on A100 GPUs tells you nothing about how your specific cluster with 100 concurrent users on H200 GPUs will actually perform. Real-world performance varies dramatically based on: RDMA vs Ethernet networking, NCCL topology, GPU memory fragmentation, KV cache eviction patterns, prefix cache hit rates, model quantization behavior, and Kubernetes scheduling constraints. These factors cannot be predicted from static benchmarks — they must be measured.
 
-No existing tool automatically discovers the optimal configuration across multiple inference architectures (Aggregated, Prefill/Decode, Expert Parallelism) for a given model, workload, and hardware combination.
+The configuration space grows combinatorially with GPU count. A 32-GPU cluster has **132 valid Prefill/Decode split configurations** across all TP pair combinations (4 TP options × 4 TP options × variable pod counts). A 64-GPU cluster has **280 valid configurations**. When an engineer manually tests a configuration, the full cycle — choosing parameters, writing manifests, deploying pods, waiting for model loading, running a benchmark, analyzing results, and deciding next steps — takes roughly **1 hour per test**. Exhaustive manual search of a 32-GPU cluster would take **~132 hours (over 5 days)** of continuous engineer time. A 64-GPU cluster would take **~280 hours (nearly 12 days)**.
+
+No existing tool takes the user's specific workload parameters (model, input/output length, concurrent users, latency requirements), deploys real inference pods on the user's own cluster, runs benchmarks with the user's actual concurrency and sequence lengths, and discovers the optimal configuration from measured data — not estimations.
 
 ### Detailed Description
 
@@ -51,11 +53,11 @@ This exploits the insight that optimal P/D splits occur where the prefill and de
 
 Only `floor(D_ideal)`, `ceil(D_ideal)`, and ±1 neighbors are tested (~3 per TP pair), finding configurations within 1–2% of the exhaustive optimum.
 
-| Cluster Size | Exhaustive Configs | Smart PD Search (top-2) | Reduction | Exhaustive Time | Smart Time |
-|-------------|-------------------|------------------------|-----------|-----------------|------------|
-| 16 GPUs | 58 | ~6 | 10× | ~10 hours | ~1 hour |
-| 32 GPUs | 132 | ~6 | 22× | ~22 hours | ~1 hour |
-| 64 GPUs | 280 | ~6 | 46× | ~47 hours | ~1 hour |
+| Cluster Size | Exhaustive Configs | Smart PD Search (top-2) | Reduction | Manual Time (~1hr/test) | Automated Smart Time |
+|-------------|-------------------|------------------------|-----------|------------------------|---------------------|
+| 16 GPUs | 58 | ~6 | 10× | ~58 hours (2.4 days) | ~1 hour |
+| 32 GPUs | 132 | ~6 | 22× | ~132 hours (5.5 days) | ~1 hour |
+| 64 GPUs | 280 | ~6 | 46× | ~280 hours (11.7 days) | ~1 hour |
 
 **2. TP Calibration with Isolated Measurement**
 
@@ -153,13 +155,13 @@ When the optimization UI runs on one cluster (e.g., OpenShift) but test pods run
 - **guidellm** (Neural Magic, 2024) — Benchmark tool for LLM inference. Used as a component in this invention but does NOT optimize configurations.
 - **Optuna / Hyperparameter tuning frameworks** — General optimization frameworks. Could theoretically be applied but lack domain-specific knowledge (NIXL constraints, TPSG normalization, PD balance equations). Would require many more trials to converge.
 
-No existing tool combines: (a) automated multi-architecture deployment on Kubernetes, (b) mathematical PD split optimization from calibration data, (c) metrics-driven EPP weight derivation from real Prometheus data, (d) P99 tail-latency-aware Pareto selection, and (e) production-ready manifest generation.
+**The critical distinction:** Every existing tool provides recommendations based on estimations from pre-computed benchmark data for specific models on specific hardware. This invention is the first to deploy, benchmark, and optimize on the **user's own cluster** with the **user's own workload parameters** — producing recommendations from measured data, not predictions. No existing tool combines: (a) automated multi-architecture deployment on the user's Kubernetes cluster, (b) real benchmarks with the user's specific concurrency, sequence lengths, and model, (c) mathematical PD split optimization from live calibration data, (d) metrics-driven EPP weight derivation from real Prometheus data, (e) P99 tail-latency-aware Pareto selection, and (f) production-ready manifest generation.
 
 **What advantages does your invention have over identified prior art?**
 
-1. **22–46× faster search** — Smart PD Search tests ~6 configs vs 132–280 exhaustive, finding configurations within 1–2% of optimal.
-2. **No manual configuration** — Auto-detects hardware, model architecture, network type, and cloud provider constraints.
-3. **Live hardware testing** — Uses actual GPU benchmarks rather than analytical models, capturing real-world effects (NCCL overhead, RDMA latency, memory fragmentation) that simulations miss.
+1. **Measured, not estimated** — The only system that benchmarks on the user's actual cluster with the user's actual workload (model, ISL, OSL, concurrency). Existing tools provide estimations from pre-computed data for specific models on specific hardware — this invention produces recommendations from real measurements that account for the user's specific RDMA topology, GPU memory fragmentation, KV cache behavior, and Kubernetes scheduling.
+2. **22–46× faster search** — Smart PD Search tests ~6 configs vs 132–280 exhaustive, finding configurations within 1–2% of optimal. Reduces 5+ days of manual testing to ~1 hour.
+3. **No manual configuration** — Auto-detects hardware, model architecture, network type, and cloud provider constraints.
 4. **Architecture-agnostic comparison** — First system to automatically compare Aggregated vs PD vs EP on the same hardware and workload.
 5. **Production-ready output** — Generates deployable Kubernetes manifests and EPP configmaps, not just tuning recommendations.
 6. **Profiled accuracy** — Memory utilization derived from actual vLLM pod logs, not theoretical estimates, eliminating OOM crashes and wasted VRAM.
@@ -221,10 +223,10 @@ A competitor implementing these techniques would be detectable through their doc
 
 ### Design Arounds
 
-1. **Exhaustive search** — Test all valid configurations without Smart PD Search. Disadvantage: 22–46× slower, requires 132–280 benchmark runs at ~10 minutes each (22–47 hours total). Cost-prohibitive for production use.
-2. **Analytical modeling** — Use theoretical performance models instead of live benchmarks. Disadvantage: Models miss real-world effects (NCCL communication overhead, RDMA latency, CUDA memory fragmentation, KV cache eviction patterns) and are inaccurate for new hardware or model architectures.
+1. **Exhaustive search** — Test all valid configurations without Smart PD Search. Disadvantage: 22–46× slower, requires 132–280 benchmark runs at ~1 hour each manually (5–12 days of engineer time). Cost-prohibitive for production use.
+2. **Analytical modeling / estimation tools** — Use pre-computed benchmark data or theoretical performance models (e.g., llm-d Planner, vendor sizing guides). Disadvantage: Recommendations are based on specific models tested on specific hardware at specific rates. They cannot predict how a different model with different concurrency will perform on the user's specific cluster with its unique RDMA topology, memory fragmentation, and scheduling constraints. Estimations miss real-world effects that only live benchmarking reveals.
 3. **Bayesian optimization (Optuna/similar)** — Use generic hyperparameter tuning. Disadvantage: Treats the problem as a black box, ignoring domain knowledge (NIXL constraints, TPSG normalization, PD balance equations). Requires many more trials to converge. Does not exploit the closed-form solution that exists for balanced PD splits.
-4. **Manual tuning with heuristics** — Current industry practice. Disadvantage: Requires deep expertise in vLLM internals, NCCL, RDMA, and Kubernetes scheduling. Takes days to weeks per model. Often produces suboptimal results because engineers cannot test enough configurations.
+4. **Manual tuning with heuristics** — Current industry practice. Disadvantage: Requires deep expertise in vLLM internals, NCCL, RDMA, and Kubernetes scheduling. Takes days to weeks per model. Often produces suboptimal results because engineers cannot test enough configurations and rely on rules of thumb that don't account for their specific hardware and workload.
 
 All alternatives are significantly slower, less accurate, or require domain expertise that the automated pipeline eliminates.
 
