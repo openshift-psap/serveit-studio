@@ -35,7 +35,7 @@ graph TB
     IP -->|Deploys| LWS
     IP -->|Configures| GW
     IP -->|Runs Benchmarks| GL
-    IP -->|Collects Metrics| PM
+    IP -->|"Collects Metrics<br>(port-forward for<br>remote clusters)"| PM
 
     style Launcher fill:#f0f9fa,stroke:#2A7B88
     style Instance fill:#fff7ed,stroke:#d97706
@@ -65,7 +65,7 @@ flowchart TD
     S8[Step 8: Architecture Comparison<br>PD vs Aggregated vs EP<br>No new tests] --> S9
 
     S9{EPP Benchmark<br>enabled?}
-    S9 -->|Yes| S9a[Step 9: EPP Tuning<br>Sweep routing weights<br>cache:kv:queue]
+    S9 -->|Yes| S9a[Step 9: EPP Tuning<br>Derive weights from<br>Prometheus metrics]
     S9 -->|No| S10
 
     S9a --> S10
@@ -106,13 +106,13 @@ flowchart TD
 
     CANDIDATES["Generate candidates<br>floor(D), ceil(D), ±1<br>~3 configs per TP pair"] --> NIXL
 
-    NIXL{NIXL constraint<br>check}
-    NIXL -->|Valid| TEST
-    NIXL -->|"prefill_tp ≥ kv_heads<br>AND prefill_tp > decode_tp"| SKIP[Skip: KV transfer<br>layout mismatch]
+    NIXL{Asymmetric TP<br>check}
+    NIXL -->|"prefill_tp ≤ decode_tp<br>OR allow_asymmetric=true"| TEST
+    NIXL -->|"prefill_tp > decode_tp"| SKIP[Skip: NIXL KV transfer<br>crashes with asymmetric TP<br>vllm#43523]
 
     TEST[Run benchmark<br>for each candidate] --> PARETO
 
-    PARETO[Build Pareto front<br>TTFT vs Throughput]
+    PARETO[Build Pareto front<br>TTFT P99 vs Throughput P90]
 
     style CAL fill:#fef3c7,stroke:#f59e0b
     style IDEAL fill:#f5f3ff,stroke:#8b5cf6
@@ -123,16 +123,16 @@ flowchart TD
 
 ```mermaid
 graph LR
-    subgraph Exhaustive["Exhaustive Search"]
-        E1[32 GPU cluster] --> E2[All valid splits:<br>30+ configurations]
-        E2 --> E3[30+ benchmark runs<br>~2.5 hours each]
-        E3 --> E4[Total: ~75 hours]
+    subgraph Exhaustive["Exhaustive Manual Search"]
+        E1[32 GPU cluster] --> E2[All valid splits:<br>132 configurations]
+        E2 --> E3[132 benchmark runs<br>~1 hour each manually]
+        E3 --> E4[Total: ~132 hours<br>5.5 days]
     end
 
-    subgraph Smart["Smart PD Search"]
+    subgraph Smart["Smart PD Search (Automated)"]
         S1[32 GPU cluster] --> S2[Mathematical calculation:<br>~3 per TP pair]
-        S2 --> S3[6-12 benchmark runs<br>~2.5 hours each]
-        S3 --> S4[Total: ~15-30 hours]
+        S2 --> S3[~6 benchmark runs<br>~10 min each automated]
+        S3 --> S4[Total: ~1 hour]
     end
 
     style Exhaustive fill:#fef2f2,stroke:#dc2626
@@ -370,7 +370,7 @@ flowchart LR
 
 ---
 
-## 10. EPP Routing Decision
+## 10. EPP Routing Decision & Metrics-Driven Weight Derivation
 
 ```mermaid
 flowchart TD
@@ -378,27 +378,34 @@ flowchart TD
 
     EPP --> SCORE[Score each vLLM server]
 
-    SCORE --> PC[Prefix Cache Score<br>How much prompt is<br>already cached here?]
-    SCORE --> KV[KV Cache Score<br>How much free memory<br>does this server have?]
-    SCORE --> QU[Queue Score<br>How many requests<br>are already waiting?]
+    SCORE --> PC[Prefix Cache Score<br>vllm_prefix_cache_hits_rate]
+    SCORE --> KV[KV Cache Score<br>vllm_kv_cache_pct]
+    SCORE --> QU[Queue Score<br>vllm_requests_waiting]
+    SCORE --> AR[Active Request Score<br>vllm_requests_running]
+    SCORE --> SLO[SLO Score<br>vllm_ttft_p99 vs target]
 
-    PC --> WEIGHTED["Weighted sum:<br>score = w₁×prefix + w₂×kv + w₃×queue"]
+    PC --> WEIGHTED["Weighted sum:<br>score = w₁×prefix + w₂×kv + w₃×queue + w₄×active + w₅×slo"]
     KV --> WEIGHTED
     QU --> WEIGHTED
+    AR --> WEIGHTED
+    SLO --> WEIGHTED
 
     WEIGHTED --> BEST[Route to highest<br>scoring server]
 
-    subgraph Presets["Weight Presets"]
-        P1["Balanced: 3:2:2"]
-        P2["Cache-heavy: 5:1:1<br>(long prompts)"]
-        P3["Queue-balanced: 1:1:5<br>(low latency)"]
-        P4["KV-heavy: 2:5:1<br>(high concurrency)"]
+    subgraph Derivation["Step 9: Smart Weight Derivation"]
+        PROM[Prometheus Metrics<br>from Step 7] --> DERIVE
+        DERIVE["Derive weights from<br>measured KV pressure,<br>queue depth, active load,<br>cache hit rate, tail latency"]
+        DERIVE --> TEST_W[Test derived weights<br>swap ConfigMap only ~10s]
+        TEST_W --> COMPARE{Better than<br>baseline?}
+        COMPARE -->|Yes| USE[Use derived weights]
+        COMPARE -->|No| FALL[Balanced fallback 2:2:2:2]
     end
 
-    Presets -.->|Step 9 sweeps<br>all presets| WEIGHTED
+    Derivation -.-> WEIGHTED
 
     style EPP fill:#f5f3ff,stroke:#8b5cf6
     style BEST fill:#ecfdf5,stroke:#10b981
+    style PROM fill:#fef3c7,stroke:#f59e0b
 ```
 
 ---
