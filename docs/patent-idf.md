@@ -82,13 +82,21 @@ Clamped to [8, 512], floor = 128 for PD mode
 
 The square root balances management overhead (too many small blocks) against internal fragmentation (too few large blocks). The PD floor of 128 ensures NIXL KV cache transfer efficiency — each block transfer has fixed overhead, so larger blocks amortize it.
 
-**5. Multi-Architecture Comparison**
+**5. Multi-Architecture Comparison with P99 Pareto Front**
 
-The pipeline automatically tests three inference architectures — Aggregated (standard), Prefill/Decode (disaggregated), and Expert Parallelism (MoE distributed) — on the same hardware and workload, then compares them on a Pareto front of TTFT (Time-to-First-Token) vs throughput. This is the first system to perform automated cross-architecture comparison.
+The pipeline automatically tests three inference architectures — Aggregated (standard), Prefill/Decode (disaggregated), and Expert Parallelism (MoE with PD disaggregation and expert-parallel flags) — on the same hardware and workload, then compares them on a Pareto front of TTFT P99 (tail latency) vs throughput P90. Using P99 instead of P90 for the Pareto front penalizes configurations with unstable tail latency that appear fast at P90 but collapse at P99 (e.g., 920ms P90 but 264,000ms P99). This is the first system to perform automated cross-architecture comparison with tail-latency-aware selection.
 
-**6. EPP Weight Sweep**
+**6. Metrics-Driven EPP Weight Derivation**
 
-Automated tuning of the Endpoint Picker's request routing weights (prefix_cache, kv_cache, queue) by swapping only the gateway ConfigMap between tests (~10 seconds), isolating the impact of request routing from inference pod configuration. Tests multiple preset weight combinations and selects the one that minimizes latency.
+Automated tuning of the Endpoint Picker's request routing weights using real Prometheus metrics collected during Step 7 benchmarks. Instead of brute-force testing preset combinations, the system derives near-optimal weights mathematically from five measured dimensions:
+
+- **Prefix cache**: `vllm_prefix_cache_hits_rate / queries_rate` — actual cache hit effectiveness
+- **KV cache**: `vllm_kv_cache_pct` — measured memory pressure per pod
+- **Queue**: `vllm_requests_waiting / (running + waiting)` — actual queue imbalance
+- **Active requests**: `vllm_requests_running / max_num_seqs` — pod saturation level
+- **SLO** (when latency SLA enabled): `vllm_ttft_p99` vs target — tail latency overshoot
+
+Each weight is proportional to the time impact of optimal routing on that dimension. The system tests the derived weights by swapping only the gateway ConfigMap (~10 seconds), isolating routing impact from pod configuration. Falls back to balanced weights if derived weights degrade performance.
 
 **7. Latency-Bounded Binary Search**
 
@@ -104,7 +112,7 @@ The 60% starting factor avoids wasting GPU time on overloaded tests. The two-pha
 
 **8. Prefix Cache Simulation**
 
-Generates synthetic datasets with three deterministic modes — identical prompts, shared prefix (system prompt pattern), and multi-group clustering (multi-tenant) — to test prefix cache effectiveness. Pool size is derived from estimated available KV cache capacity, and all randomness is seeded from a config hash for reproducibility.
+Generates synthetic datasets with three deterministic modes — identical prompts, shared prefix (system prompt pattern), and multi-group clustering (multi-tenant) — to test prefix cache effectiveness. Prompts are generated using the model's actual tokenizer to guarantee exact token counts (preventing prompt-too-long rejections from BPE subword overestimation). Pool size is derived from estimated available KV cache capacity, and all randomness is seeded from a config hash for reproducibility.
 
 **9. Auto-Adaptation Pipeline**
 
@@ -117,9 +125,17 @@ Automatically detects and adapts to:
 
 No manual configuration is required.
 
-**10. Report-to-Test Flow**
+**10. State Reconstruction on Resume**
 
-The system stores complete test configurations (`test_config_json`) in the database, enabling a "Single Test" mode where users can re-run any recommended configuration from the report page with one click. All settings (workload, EPP weights, deployment parameters) are restored automatically.
+The pipeline supports mid-run resume: if an optimization is interrupted and later resumed, all in-memory optimizer state (calibration TPSG results, optimal TP selections, aggregated baselines, Pareto front) is reconstructed from the database. This allows later steps (EPP tuning, calibrated load validation) to use data from earlier steps that were skipped on resume, without re-running them.
+
+**11. Report-to-Test Flow**
+
+The system stores complete test configurations (`test_config_json`) in the database, enabling a "Reuse" mode where users can pre-fill the wizard with any recommended configuration from the report page, and a "Single Test" mode to re-run an exact configuration with one click. All settings — model, workload, EPP weights, deployment parameters, prefix cache, latency SLA — are restored automatically.
+
+**12. Prometheus Metrics Port-Forward for Remote Clusters**
+
+When the optimization UI runs on one cluster (e.g., OpenShift) but test pods run on a remote cluster (e.g., vanilla K8s), the system automatically establishes a `kubectl port-forward` to the remote Prometheus service using the test cluster's kubeconfig. This enables vLLM metrics collection (KV cache utilization, queue depth, request rates) without requiring external Prometheus exposure or cross-cluster networking.
 
 **Attached diagrams:** See `docs/diagrams.md` (12 Mermaid diagrams), `docs/optimization-math.md` (complete formula reference), `docs/supporting-material.md` (detection and lifecycle details).
 
@@ -137,7 +153,7 @@ The system stores complete test configurations (`test_config_json`) in the datab
 - **guidellm** (Neural Magic, 2024) — Benchmark tool for LLM inference. Used as a component in this invention but does NOT optimize configurations.
 - **Optuna / Hyperparameter tuning frameworks** — General optimization frameworks. Could theoretically be applied but lack domain-specific knowledge (NIXL constraints, TPSG normalization, PD balance equations). Would require many more trials to converge.
 
-No existing tool combines: (a) automated multi-architecture deployment on Kubernetes, (b) mathematical PD split optimization from calibration data, (c) profiled memory auto-tuning, and (d) Pareto-optimal recommendation generation.
+No existing tool combines: (a) automated multi-architecture deployment on Kubernetes, (b) mathematical PD split optimization from calibration data, (c) metrics-driven EPP weight derivation from real Prometheus data, (d) P99 tail-latency-aware Pareto selection, and (e) production-ready manifest generation.
 
 **What advantages does your invention have over identified prior art?**
 
@@ -145,8 +161,10 @@ No existing tool combines: (a) automated multi-architecture deployment on Kubern
 2. **No manual configuration** — Auto-detects hardware, model architecture, network type, and cloud provider constraints.
 3. **Live hardware testing** — Uses actual GPU benchmarks rather than analytical models, capturing real-world effects (NCCL overhead, RDMA latency, memory fragmentation) that simulations miss.
 4. **Architecture-agnostic comparison** — First system to automatically compare Aggregated vs PD vs EP on the same hardware and workload.
-5. **Production-ready output** — Generates deployable Kubernetes manifests, not just tuning recommendations.
+5. **Production-ready output** — Generates deployable Kubernetes manifests and EPP configmaps, not just tuning recommendations.
 6. **Profiled accuracy** — Memory utilization derived from actual vLLM pod logs, not theoretical estimates, eliminating OOM crashes and wasted VRAM.
+7. **Metrics-driven routing optimization** — EPP weights derived from measured Prometheus metrics (KV cache utilization, queue depth, active requests, cache hit rates) rather than heuristic presets.
+8. **Tail-latency-aware selection** — Pareto front uses P99 TTFT to prevent recommending configurations with good P90 but catastrophic tail latency.
 
 ---
 
@@ -189,12 +207,15 @@ Any company deploying LLMs at scale faces the same configuration optimization pr
 
 **Likelihood of detecting use in a competitor's product:** Medium-High
 
-The Smart PD Search algorithm produces a distinctive signature:
+The system produces several distinctive signatures:
 - Approximately 3 test deployments per TP pair instead of exhaustive search
 - Calibration runs with ISL=1 / OSL=1 (isolated prefill/decode measurement)
 - The specific formula `D = GPUs / (r × prefill_tp + decode_tp)` visible in configuration outputs or documentation
 - Block size auto-tuning heuristic (`sqrt(ISL+OSL)` rounded to power of 2) identifiable in generated configurations
 - TPSG normalization (`throughput × seq_len / TP`) as a comparison metric
+- P99 TTFT used for Pareto dominance instead of the standard P90
+- EPP weights derived from five measured vLLM Prometheus metrics (prefix cache hits, KV utilization, queue depth, active requests, TTFT P99)
+- `kubectl port-forward` to remote Prometheus for cross-cluster metrics collection
 
 A competitor implementing these techniques would be detectable through their documentation, API parameters, published benchmarks, or observable deployment patterns.
 
