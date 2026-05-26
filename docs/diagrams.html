@@ -1,0 +1,441 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Inftune Studio — System Diagrams</title>
+<script src="https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.min.js"></script>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif; background: #f8fafc; color: #1e293b; }
+  .header { background: linear-gradient(135deg, #0f172a, #1e293b); color: white; padding: 40px 60px; }
+  .header h1 { font-size: 2em; font-weight: 800; margin-bottom: 8px; }
+  .header p { color: #94a3b8; font-size: 1.1em; }
+  .container { max-width: 1400px; margin: 0 auto; padding: 30px; }
+  .diagram-card { background: white; border-radius: 16px; box-shadow: 0 1px 3px rgba(0,0,0,0.08); margin-bottom: 30px; overflow: hidden; }
+  .diagram-card h2 { background: linear-gradient(135deg, #6366f1, #8b5cf6); color: white; padding: 16px 24px; font-size: 1.2em; font-weight: 700; }
+  .diagram-card .desc { padding: 12px 24px 0; color: #64748b; font-size: 0.92em; line-height: 1.6; }
+  .diagram-card .mermaid { padding: 24px; display: flex; justify-content: center; overflow-x: auto; }
+  .diagram-card .mermaid svg { max-width: 100%; height: auto; }
+  .toc { background: white; border-radius: 16px; padding: 24px; margin-bottom: 30px; box-shadow: 0 1px 3px rgba(0,0,0,0.08); }
+  .toc h3 { font-size: 1em; color: #6366f1; margin-bottom: 12px; text-transform: uppercase; letter-spacing: 1px; }
+  .toc a { display: inline-block; margin: 4px 8px 4px 0; padding: 6px 14px; background: #f1f5f9; border-radius: 8px; color: #334155; text-decoration: none; font-size: 0.88em; font-weight: 600; transition: all 0.15s; }
+  .toc a:hover { background: #6366f1; color: white; }
+  @media print { .toc { display: none; } .diagram-card { break-inside: avoid; } }
+</style>
+</head>
+<body>
+<div class="header">
+  <h1>Inftune Studio — System Diagrams</h1>
+  <p>Architecture, optimization pipeline, and decision flows</p>
+</div>
+<div class="container">
+
+<div class="toc">
+  <h3>Contents</h3>
+  <a href="#d1">1. Architecture</a>
+  <a href="#d2">2. Pipeline (11 Steps)</a>
+  <a href="#d3">3. Smart PD Search</a>
+  <a href="#d4">4. Single Test Flow</a>
+  <a href="#d5">5. PD Deployment</a>
+  <a href="#d6">6. Cluster Scanning</a>
+  <a href="#d7">7. Network Modes</a>
+  <a href="#d8">8. Model Detection</a>
+  <a href="#d9">9. Prefix Cache</a>
+  <a href="#d10">10. EPP Routing</a>
+  <a href="#d11">11. Latency Search</a>
+  <a href="#d12">12. Multi-Cluster</a>
+</div>
+
+<div class="diagram-card" id="d1">
+  <h2>1. System Architecture Overview</h2>
+  <div class="desc">The launcher manages multiple user instances. Each instance connects to a target Kubernetes cluster to deploy vLLM pods, run benchmarks, and collect Prometheus metrics (via port-forward for remote clusters).</div>
+  <pre class="mermaid">
+graph TB
+    subgraph Launcher["Launcher (Control Plane)"]
+        LP[Launcher Pod<br>Flask + SocketIO]
+        LDB[(launcher.db<br>Users, Clusters, Instances)]
+        LP --> LDB
+    end
+    subgraph Instance["Instance (per-user)"]
+        IP[Inftune Studio Pod<br>Flask + SocketIO]
+        IDB[(inftune.db<br>Runs, Results, Config)]
+        IP --> IDB
+    end
+    subgraph K8s["Target Cluster"]
+        LWS[LeaderWorkerSet<br>vLLM Pods]
+        GW[Inference Gateway<br>+ EPP]
+        GL[Guidellm<br>Benchmark Runner]
+        PM[Prometheus<br>Metrics]
+        LWS --> PM
+        GW --> LWS
+        GL --> GW
+    end
+    User([User Browser]) --> LP
+    LP -->|Creates Instance| IP
+    IP -->|Deploys| LWS
+    IP -->|Configures| GW
+    IP -->|Runs Benchmarks| GL
+    IP -->|"Collects Metrics<br>(port-forward for<br>remote clusters)"| PM
+    style Launcher fill:#f0f9fa,stroke:#2A7B88
+    style Instance fill:#fff7ed,stroke:#d97706
+    style K8s fill:#f0fdf4,stroke:#22c55e
+  </pre>
+</div>
+
+<div class="diagram-card" id="d2">
+  <h2>2. Optimization Pipeline (11 Steps)</h2>
+  <div class="desc">The recipe-based optimizer runs up to 11 steps. Steps 2-3 and 6-11 deploy real workloads. Steps 4-5 are pure math. Optional steps (9, 10, 11) run conditionally.</div>
+  <pre class="mermaid">
+flowchart TD
+    S1[Step 1: Initialization<br>Scan cluster, detect GPUs,<br>RDMA, cloud provider] --> S2
+    S2[Step 2: Decode TP Sweep<br>Test all valid TPs with ISL=1<br>Measure decode throughput] --> S3
+    S3[Step 3: Prefill TP Sweep<br>Test all valid TPs with OSL=1<br>Measure prefill throughput] --> S4
+    S4[Step 4: Capacity Analysis<br>GPU cost per request,<br>sustainable throughput] --> S5
+    S5[Step 5: Feasible Splits<br>Smart PD Search formula,<br>asymmetric TP constraints] --> S6
+    S6[Step 6: Aggregated Search<br>Test all TPs at full workload<br>with all GPUs] --> S7
+    S7[Step 7: PD / EP Testing<br>Test feasible splits,<br>build Pareto front P99] --> S8
+    S8[Step 8: Architecture Comparison<br>PD vs Aggregated vs EP<br>No new tests] --> S9
+    S9{EPP Benchmark<br>enabled?}
+    S9 -->|Yes| S9a[Step 9: EPP Tuning<br>Derive weights from<br>Prometheus metrics]
+    S9 -->|No| S10
+    S9a --> S10
+    S10{Latency SLA<br>enabled?}
+    S10 -->|Yes| S10a[Step 10: Latency Search<br>Binary search for max<br>throughput under SLA]
+    S10 -->|No| S11
+    S10a --> S11
+    S11{Overloaded?}
+    S11 -->|Yes| S11a[Step 11: Calibrated Load<br>Re-test at sustainable<br>concurrency]
+    S11 -->|No| DONE
+    S11a --> DONE[Results & Report<br>Pareto front,<br>recommendations]
+    style S1 fill:#e0f2fe,stroke:#0ea5e9
+    style S2 fill:#fef3c7,stroke:#f59e0b
+    style S3 fill:#fef3c7,stroke:#f59e0b
+    style S5 fill:#f5f3ff,stroke:#8b5cf6
+    style S7 fill:#f0fdf4,stroke:#22c55e
+    style DONE fill:#ecfdf5,stroke:#10b981
+  </pre>
+</div>
+
+<div class="diagram-card" id="d3">
+  <h2>3. Smart PD Search Algorithm</h2>
+  <div class="desc">Calculates near-optimal P/D split from calibration data. Tests ~3 configs per TP pair instead of exhaustive search (22-46x reduction).</div>
+  <pre class="mermaid">
+flowchart TD
+    CAL[Steps 2-3: TP Calibration<br>Measure prefill & decode<br>throughput per TP] --> PAIRS
+    PAIRS[Select top-N TP pairs<br>e.g. prefill_tp=8, decode_tp=1<br>prefill_tp=4, decode_tp=2] --> RATIO
+    RATIO[Calculate throughput ratio<br>r = decode_thr / prefill_thr] --> IDEAL
+    IDEAL["Compute ideal decode pods<br>D_ideal = GPUs / (r × prefill_tp + decode_tp)"] --> CANDIDATES
+    CANDIDATES["Generate candidates<br>floor(D), ceil(D), ±1<br>~3 configs per TP pair"] --> NIXL
+    NIXL{Asymmetric TP<br>check}
+    NIXL -->|"prefill_tp ≤ decode_tp<br>OR allow_asymmetric=true"| TEST
+    NIXL -->|"prefill_tp > decode_tp"| SKIP[Skip: NIXL KV transfer<br>crashes with asymmetric TP]
+    TEST[Run benchmark<br>for each candidate] --> PARETO
+    PARETO[Build Pareto front<br>TTFT P99 vs Throughput P90]
+    style CAL fill:#fef3c7,stroke:#f59e0b
+    style IDEAL fill:#f5f3ff,stroke:#8b5cf6
+    style PARETO fill:#ecfdf5,stroke:#10b981
+  </pre>
+</div>
+
+<div class="diagram-card" id="d4">
+  <h2>4. Single Test Execution Flow</h2>
+  <div class="desc">End-to-end flow when a user clicks "Reuse" or "Test" from the report to re-run a specific configuration.</div>
+  <pre class="mermaid">
+sequenceDiagram
+    participant U as User
+    participant W as Wizard UI
+    participant O as Optimizer
+    participant K as Kubernetes
+    participant G as Guidellm
+    participant P as Prometheus
+    U->>W: Select config from<br>report recommendation
+    W->>W: Pre-fill wizard with<br>all test settings
+    U->>W: Confirm & Start
+    W->>O: SingleTestStrategy<br>(architecture, TP, pods, EPP)
+    O->>K: Deploy prerequisites<br>(Gateway, EPP, RBAC)
+    O->>K: Deploy vLLM pods<br>(LWS manifest)
+    K-->>O: Pods Running
+    O->>K: Wait for vLLM<br>model loading
+    K-->>O: Model loaded,<br>profiled memory data
+    O->>G: Run benchmark<br>(guidellm)
+    G->>K: Send requests via<br>Inference Gateway
+    G-->>O: Benchmark results
+    O->>P: Collect vLLM metrics<br>(port-forward if remote)
+    P-->>O: TTFT, throughput,<br>KV cache, queue depth
+    O->>K: Cleanup deployment
+    O-->>W: Results saved to DB
+    W-->>U: Report with results
+  </pre>
+</div>
+
+<div class="diagram-card" id="d5">
+  <h2>5. Deployment Lifecycle (PD Architecture)</h2>
+  <div class="desc">Sequential deployment of prefill and decode pods. Higher GPU requirement deploys first to prevent scheduling deadlocks.</div>
+  <pre class="mermaid">
+sequenceDiagram
+    participant DM as Deployment Manager
+    participant K as Kubernetes
+    participant V as vLLM Pods
+    Note over DM: Deploy highest GPU<br>requirement first
+    DM->>K: Apply decode LWS<br>(e.g. TP=8, 1 pod)
+    loop Wait for running
+        DM->>K: Check LWS status
+        K-->>DM: replicas: 0/1
+        Note over DM: Poll every 5s
+    end
+    K-->>DM: replicas: 1/1 ✓
+    DM->>K: Apply prefill LWS<br>(e.g. TP=4, 2 pods)
+    loop Wait for running
+        DM->>K: Check LWS status
+        K-->>DM: replicas: 1/2
+    end
+    K-->>DM: replicas: 2/2 ✓
+    DM->>K: Apply services
+    loop Wait for model loading
+        DM->>V: Stream pod logs
+        V-->>DM: "Loading model..."
+    end
+    V-->>DM: "Application startup complete"
+    Note over DM: Extract profiled<br>memory data from logs
+    alt Pod stuck > 180s
+        DM->>K: Delete stuck pod
+        K->>K: LWS recreates pod
+        Note over DM: Max 3 retries
+    end
+  </pre>
+</div>
+
+<div class="diagram-card" id="d6">
+  <h2>6. Cluster Scanning & Auto-Detection</h2>
+  <div class="desc">Automatic discovery of GPUs, RDMA NICs, cloud provider, and storage without manual configuration.</div>
+  <pre class="mermaid">
+flowchart TD
+    SCAN[Scan Cluster] --> GPU
+    SCAN --> NET
+    SCAN --> CLOUD
+    SCAN --> STORAGE
+    GPU[GPU Detection] --> GPU1[Node allocatable:<br>nvidia.com/gpu]
+    GPU1 --> GPU2[GPU model from labels<br>nvidia.com/gpu.product]
+    GPU2 --> GPU3[VRAM from labels<br>or model lookup]
+    NET[Network Detection] --> NET1{RDMA resources<br>in allocatable?}
+    NET1 -->|Yes| NET2[Count physical NICs]
+    NET1 -->|No| NET3[No RDMA]
+    NET2 --> NIC1[Try port labels]
+    NIC1 -->|Found| NICOK[NIC count]
+    NIC1 -->|Not found| NIC2[Try speed labels]
+    NIC2 -->|Found| NICOK
+    NIC2 -->|Not found| NIC3[Try device plugin ConfigMap]
+    NIC3 -->|Found| NICOK
+    NIC3 -->|Not found| NIC4[Fallback: 1 NIC per GPU]
+    NIC4 --> NICOK
+    CLOUD[Cloud Provider] --> CL1{OpenShift?}
+    CL1 -->|Yes| CL2[Read infrastructure<br>resource → platform]
+    CL1 -->|No| CL3{CoreWeave labels?}
+    CL3 -->|Yes| CL4[CoreWeave]
+    CL3 -->|No| CL5[Bare Metal]
+    STORAGE[Storage Classes] --> ST1[List all StorageClass<br>resources]
+    GPU3 --> RESULT[ClusterResources]
+    NICOK --> RESULT
+    CL2 --> RESULT
+    CL4 --> RESULT
+    CL5 --> RESULT
+    ST1 --> RESULT
+    NET3 --> RESULT
+    style SCAN fill:#e0f2fe,stroke:#0ea5e9
+    style RESULT fill:#ecfdf5,stroke:#10b981
+  </pre>
+</div>
+
+<div class="diagram-card" id="d7">
+  <h2>7. Network Mode Selection</h2>
+  <div class="desc">Automatic selection of RDMA networking mode based on cloud provider and available resources.</div>
+  <pre class="mermaid">
+flowchart TD
+    DETECT[Detect Cloud Provider] --> IBM{IBM Cloud?}
+    IBM -->|Yes| DRA_CHECK{DRA resources<br>available?}
+    DRA_CHECK -->|Yes| DRA[DRA Mode<br>GPU+NIC pairing via<br>PCIe affinity webhook]
+    DRA_CHECK -->|No| NAD
+    IBM -->|No| CW{CoreWeave?}
+    CW -->|Yes| SHARED[Shared Device Mode<br>Pods request rdma/ib<br>from device plugin]
+    CW -->|No| BM{Bare Metal?}
+    BM -->|Yes| NAD[NAD Mode<br>Explicit NIC assignment<br>via Multus CNI]
+    BM -->|No| OTHER{RDMA available?}
+    OTHER -->|Yes| SHARED
+    OTHER -->|No| TCP[TCP Only<br>No RDMA acceleration]
+    style DRA fill:#f5f3ff,stroke:#8b5cf6
+    style NAD fill:#fef3c7,stroke:#f59e0b
+    style SHARED fill:#f0fdf4,stroke:#22c55e
+    style TCP fill:#f0f0f0,stroke:#999
+  </pre>
+</div>
+
+<div class="diagram-card" id="d8">
+  <h2>8. Model Architecture Detection</h2>
+  <div class="desc">Automatic detection of model type (dense vs MoE), attention mechanism (GQA vs MHA), and VRAM requirements.</div>
+  <pre class="mermaid">
+flowchart TD
+    START[Model Name] --> PVC{Model on<br>local PVC?}
+    PVC -->|Yes| READ[Read config.json<br>from PVC volume]
+    PVC -->|No| HF[Fetch config.json<br>from HuggingFace API]
+    HF --> HF_OK{Success?}
+    HF_OK -->|Yes| PARSE
+    HF_OK -->|401/403| TOKEN[Retry with HF token]
+    HF_OK -->|Fail| LOOKUP[Hardcoded lookup table]
+    TOKEN --> HF_OK2{Success?}
+    HF_OK2 -->|Yes| PARSE
+    HF_OK2 -->|No| LOOKUP
+    READ --> PARSE
+    LOOKUP --> DEFAULTS[Conservative defaults<br>40 layers, 8 KV heads]
+    PARSE[Parse config.json] --> ARCH{MoE model?}
+    ARCH -->|Yes| MOE[MoE: effective params<br>experts × size / 1.2]
+    ARCH -->|No| DENSE[Dense model]
+    MOE --> EXTRACT
+    DENSE --> EXTRACT
+    DEFAULTS --> EXTRACT
+    EXTRACT[Extract: hidden_size,<br>layers, kv_heads, head_dim] --> GQA{GQA?}
+    GQA -->|Yes| GQA_YES[Fewer KV heads<br>→ smaller KV cache]
+    GQA -->|No| MHA[Full KV heads<br>→ larger KV cache]
+    GQA_YES --> VRAM[Calculate VRAM<br>requirements & min TP]
+    MHA --> VRAM
+    style START fill:#e0f2fe,stroke:#0ea5e9
+    style PARSE fill:#fef3c7,stroke:#f59e0b
+    style VRAM fill:#ecfdf5,stroke:#10b981
+  </pre>
+</div>
+
+<div class="diagram-card" id="d9">
+  <h2>9. Prefix Cache Simulation Modes</h2>
+  <div class="desc">Three deterministic dataset generation modes for testing prefix cache effectiveness. Prompts are tokenizer-truncated to exact ISL token count.</div>
+  <pre class="mermaid">
+flowchart LR
+    subgraph identical["Identical Mode"]
+        I1["Hit% of requests →<br>same prompt A"]
+        I2["Rest → unique prompts"]
+        I1 --- I3["Cache: prompt A<br>always cached"]
+    end
+    subgraph shared["Shared Prefix Mode"]
+        S1["All requests share<br>first hit% of tokens<br>(system prompt)"]
+        S2["Each has unique<br>suffix (user message)"]
+        S1 --- S3["Cache: shared prefix<br>always hit"]
+    end
+    subgraph multi["Multi-Group Mode"]
+        M1["Group 1: tenant A"]
+        M2["Group 2: tenant B"]
+        M3["Group N: tenant N"]
+        M4["Remaining: unique"]
+        M1 --- M5["Cache: per-tenant<br>prompt cached"]
+    end
+    style identical fill:#f0fdf4,stroke:#22c55e
+    style shared fill:#e0f2fe,stroke:#0ea5e9
+    style multi fill:#f5f3ff,stroke:#8b5cf6
+  </pre>
+</div>
+
+<div class="diagram-card" id="d10">
+  <h2>10. EPP Routing & Metrics-Driven Weight Derivation</h2>
+  <div class="desc">The EPP scores each pod using 5 dimensions derived from real Prometheus metrics. Weights are computed mathematically, not swept as presets.</div>
+  <pre class="mermaid">
+flowchart TD
+    REQ[Incoming Request] --> EPP[EPP Endpoint Picker]
+    EPP --> SCORE[Score each vLLM server]
+    SCORE --> PC["Prefix Cache<br>vllm_prefix_cache_hits_rate"]
+    SCORE --> KV["KV Cache<br>vllm_kv_cache_pct"]
+    SCORE --> QU["Queue<br>vllm_requests_waiting"]
+    SCORE --> AR["Active Requests<br>vllm_requests_running"]
+    SCORE --> SLO["SLO (if enabled)<br>vllm_ttft_p99 vs target"]
+    PC --> WEIGHTED["score = w1×prefix + w2×kv + w3×queue + w4×active + w5×slo"]
+    KV --> WEIGHTED
+    QU --> WEIGHTED
+    AR --> WEIGHTED
+    SLO --> WEIGHTED
+    WEIGHTED --> BEST[Route to highest<br>scoring server]
+    subgraph Derivation["Step 9: Smart Weight Derivation"]
+        PROM["Prometheus Metrics<br>from Step 7 benchmarks"] --> DERIVE
+        DERIVE["Compute time impact<br>per dimension from<br>measured data"]
+        DERIVE --> TEST_W["Test derived weights<br>(swap ConfigMap ~10s)"]
+        TEST_W --> CMP{Better than<br>baseline?}
+        CMP -->|Yes| USE[Use derived weights]
+        CMP -->|No| FALL["Balanced fallback<br>2:2:2:2"]
+    end
+    Derivation -.-> WEIGHTED
+    style EPP fill:#f5f3ff,stroke:#8b5cf6
+    style BEST fill:#ecfdf5,stroke:#10b981
+    style PROM fill:#fef3c7,stroke:#f59e0b
+  </pre>
+</div>
+
+<div class="diagram-card" id="d11">
+  <h2>11. Latency-Bounded Throughput Search (Step 10)</h2>
+  <div class="desc">Finds maximum throughput under a user-defined latency SLA using two-phase search: exponential ramp-up then binary search.</div>
+  <pre class="mermaid">
+flowchart TD
+    START["Estimate starting concurrency<br>C₀ = throughput × (target_ms / observed_ms) × 0.6"] --> PHASE1
+    subgraph PHASE1["Phase 1: Exponential Ramp-Up"]
+        T1[Test at C₀] --> CHECK1{Latency < target?}
+        CHECK1 -->|Yes, far from limit| DOUBLE["C = C × 2.0"]
+        CHECK1 -->|Yes, approaching| BUMP["C = C × 1.2"]
+        CHECK1 -->|No| FOUND[Found upper bound]
+        DOUBLE --> T1
+        BUMP --> T1
+    end
+    FOUND --> PHASE2
+    subgraph PHASE2["Phase 2: Binary Search"]
+        BS["low = last good C<br>high = first bad C"] --> MID["Test at mid = (low+high)/2"]
+        MID --> CHECK2{Latency < target?}
+        CHECK2 -->|Yes| UP["low = mid"]
+        CHECK2 -->|No| DOWN["high = mid"]
+        UP --> CONV{Converged?<br>within 5%}
+        DOWN --> CONV
+        CONV -->|No| MID
+        CONV -->|Yes| RESULT["Max throughput<br>under SLA = low"]
+    end
+    style START fill:#e0f2fe,stroke:#0ea5e9
+    style RESULT fill:#ecfdf5,stroke:#10b981
+  </pre>
+</div>
+
+<div class="diagram-card" id="d12">
+  <h2>12. Multi-Cluster Management</h2>
+  <div class="desc">The launcher manages multiple clusters and user instances. Each instance has its own database and optimization pipeline.</div>
+  <pre class="mermaid">
+flowchart TD
+    ADMIN[Admin User] --> LAUNCHER[Launcher Dashboard]
+    LAUNCHER --> C1[Cluster: Local<br>Current kubectl context]
+    LAUNCHER --> C2[Cluster: IBM Cloud<br>Kubeconfig as Secret]
+    LAUNCHER --> C3[Cluster: CoreWeave<br>Kubeconfig as Secret]
+    C1 --> I1[Instance: team-dev<br>5 GPUs, 1 node]
+    C1 --> I2[Instance: prod-test<br>16 GPUs, 2 nodes]
+    C2 --> I3[Instance: frankfurt-bench<br>32 GPUs, 4 nodes]
+    C3 --> I4[Instance: h200-eval<br>8 GPUs, 1 node]
+    I1 --> WIZ1[Wizard → Optimize → Report]
+    I3 --> WIZ2[Wizard → Optimize → Report]
+    subgraph Each_Instance["Each Instance"]
+        DB[(inftune.db)]
+        OPT[Optimizer Pipeline]
+        RPT[Report & Charts]
+        OPT --> DB
+        DB --> RPT
+    end
+    style LAUNCHER fill:#f0f9fa,stroke:#2A7B88
+    style C1 fill:#f0fdf4,stroke:#22c55e
+    style C2 fill:#e0f2fe,stroke:#0ea5e9
+    style C3 fill:#fef3c7,stroke:#f59e0b
+  </pre>
+</div>
+
+</div>
+<script>
+  mermaid.initialize({
+    startOnLoad: true,
+    theme: 'default',
+    flowchart: { useMaxWidth: true, htmlLabels: true, curve: 'basis' },
+    sequence: { useMaxWidth: true, actorMargin: 80, messageMargin: 40 },
+    themeVariables: {
+      fontSize: '14px',
+      fontFamily: 'Inter, -apple-system, sans-serif'
+    }
+  });
+</script>
+</body>
+</html>
