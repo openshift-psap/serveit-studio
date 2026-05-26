@@ -26,7 +26,7 @@ Boaz Ben Shabat (bbenshab)
 
 Deploying Large Language Models (LLMs) for inference at scale requires choosing from hundreds of possible configurations — tensor parallelism (TP) size, number of pods, Prefill/Decode disaggregation ratios, Expert Parallelism settings, request routing weights, and KV cache parameters. Today, engineers manually guess configurations, deploy them, benchmark, and iterate — a process that takes days or weeks per model and often produces suboptimal results.
 
-The configuration space grows combinatorially with GPU count. A 32-GPU cluster has **132 valid Prefill/Decode split configurations** across all TP pair combinations (4 TP options × 4 TP options × variable pod counts). A 64-GPU cluster has **280 valid configurations**. Testing each requires deploying vLLM pods, running a benchmark (2–5 hours per test), and collecting metrics. Exhaustive search of a 32-GPU cluster would take **~330 hours (nearly 14 days)** of continuous GPU time.
+The configuration space grows combinatorially with GPU count. A 32-GPU cluster has **132 valid Prefill/Decode split configurations** across all TP pair combinations (4 TP options × 4 TP options × variable pod counts). A 64-GPU cluster has **280 valid configurations**. Testing each requires deploying vLLM pods, loading the model (~3–4 minutes), running a benchmark (~5 minutes), collecting metrics, and cleaning up — roughly **10 minutes per test**. Exhaustive search of a 32-GPU cluster would take **~22 hours** of continuous GPU time. A 64-GPU cluster would take **~47 hours**.
 
 No existing tool automatically discovers the optimal configuration across multiple inference architectures (Aggregated, Prefill/Decode, Expert Parallelism) for a given model, workload, and hardware combination.
 
@@ -51,11 +51,11 @@ This exploits the insight that optimal P/D splits occur where the prefill and de
 
 Only `floor(D_ideal)`, `ceil(D_ideal)`, and ±1 neighbors are tested (~3 per TP pair), finding configurations within 1–2% of the exhaustive optimum.
 
-| Cluster Size | Exhaustive Configs | Smart PD Search (top-2) | Reduction | Time Saved |
-|-------------|-------------------|------------------------|-----------|------------|
-| 16 GPUs | 58 | ~6 | 10× | ~130 hours |
-| 32 GPUs | 132 | ~6 | 22× | ~315 hours |
-| 64 GPUs | 280 | ~6 | 46× | ~685 hours |
+| Cluster Size | Exhaustive Configs | Smart PD Search (top-2) | Reduction | Exhaustive Time | Smart Time |
+|-------------|-------------------|------------------------|-----------|-----------------|------------|
+| 16 GPUs | 58 | ~6 | 10× | ~10 hours | ~1 hour |
+| 32 GPUs | 132 | ~6 | 22× | ~22 hours | ~1 hour |
+| 64 GPUs | 280 | ~6 | 46× | ~47 hours | ~1 hour |
 
 **2. TP Calibration with Isolated Measurement**
 
@@ -221,7 +221,7 @@ A competitor implementing these techniques would be detectable through their doc
 
 ### Design Arounds
 
-1. **Exhaustive search** — Test all valid configurations without Smart PD Search. Disadvantage: 22–46× slower, requires 132–280 benchmark runs at 2–5 hours each. Cost-prohibitive for production use.
+1. **Exhaustive search** — Test all valid configurations without Smart PD Search. Disadvantage: 22–46× slower, requires 132–280 benchmark runs at ~10 minutes each (22–47 hours total). Cost-prohibitive for production use.
 2. **Analytical modeling** — Use theoretical performance models instead of live benchmarks. Disadvantage: Models miss real-world effects (NCCL communication overhead, RDMA latency, CUDA memory fragmentation, KV cache eviction patterns) and are inaccurate for new hardware or model architectures.
 3. **Bayesian optimization (Optuna/similar)** — Use generic hyperparameter tuning. Disadvantage: Treats the problem as a black box, ignoring domain knowledge (NIXL constraints, TPSG normalization, PD balance equations). Requires many more trials to converge. Does not exploit the closed-form solution that exists for balanced PD splits.
 4. **Manual tuning with heuristics** — Current industry practice. Disadvantage: Requires deep expertise in vLLM internals, NCCL, RDMA, and Kubernetes scheduling. Takes days to weeks per model. Often produces suboptimal results because engineers cannot test enough configurations.
