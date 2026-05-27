@@ -189,17 +189,17 @@
         .nav-item svg{opacity:0.5;flex-shrink:0}
         .nav-item.active svg{opacity:1}
         .user-list{display:flex;flex-direction:column;gap:1px;background:#e5e7eb;border-radius:10px;overflow:hidden;border:1px solid #e5e7eb}
-        .user-row{display:flex;align-items:center;padding:12px 16px;background:white;gap:16px;transition:background 0.1s}
+        .user-row{display:flex;align-items:center;padding:10px 16px;background:white;gap:12px;transition:background 0.1s;flex-wrap:nowrap}
         .user-row:hover{background:#f8fafc}
-        .user-row .user-avatar{width:36px;height:36px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:0.85em;color:white;flex-shrink:0}
-        .user-row .user-info{flex:1;min-width:0}
-        .user-row .user-name{font-weight:600;font-size:0.92em;color:#1e293b}
-        .user-row .user-meta{font-size:0.78em;color:#94a3b8;margin-top:1px}
-        .user-row .user-stats{display:flex;gap:12px;flex-shrink:0}
-        .user-row .user-stat{text-align:center;min-width:48px}
-        .user-row .user-stat-val{font-weight:700;font-size:0.95em;color:#1e293b}
-        .user-row .user-stat-lbl{font-size:0.68em;color:#94a3b8;text-transform:uppercase;letter-spacing:0.03em}
-        .user-row .user-actions{display:flex;gap:4px;flex-shrink:0}
+        .user-row .user-avatar{width:32px;height:32px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:0.8em;color:white;flex-shrink:0}
+        .user-row .user-info{flex:1;min-width:120px;overflow:hidden}
+        .user-row .user-name{font-weight:600;font-size:0.88em;color:#1e293b;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+        .user-row .user-meta{font-size:0.72em;color:#94a3b8;margin-top:1px;white-space:nowrap}
+        .user-row .user-stats{display:flex;gap:16px;flex-shrink:0}
+        .user-row .user-stat{text-align:center;min-width:44px}
+        .user-row .user-stat-val{font-weight:700;font-size:0.9em;color:#1e293b}
+        .user-row .user-stat-lbl{font-size:0.65em;color:#94a3b8;text-transform:uppercase;letter-spacing:0.03em}
+        .user-row .user-actions{display:flex;gap:4px;flex-shrink:0;margin-left:auto}
         .badge-admin{background:#E0F2F4;color:#2A7B88;padding:2px 8px;border-radius:10px;font-size:0.72em;font-weight:600}
         .badge-user{background:#F0F0F0;color:#999;padding:2px 8px;border-radius:10px;font-size:0.72em;font-weight:600}
         .viewing-banner{background:linear-gradient(135deg,#eff6ff,#dbeafe);border-left:4px solid #3b82f6;padding:10px 20px;margin:0 32px 16px;border-radius:8px;font-size:0.88em;color:#1e40af;display:flex;align-items:center;justify-content:space-between}
