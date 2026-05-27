@@ -817,6 +817,88 @@ socket.on('compression_error', function(data) {
     document.getElementById('compress-modal').classList.remove('active');
 });
 
+// Download raw data button — compress test artifacts + results, then download
+document.getElementById('download-raw-indicator').addEventListener('click', () => {
+    logToConsole('\n📦 Compressing raw test data for download...', 'info');
+
+    var modal = document.getElementById('compress-modal');
+    var bar = document.getElementById('compress-bar');
+    var pctEl = document.getElementById('compress-percent');
+    var statusEl = document.getElementById('compress-status');
+    var sizeEl = document.getElementById('compress-size-info');
+
+    bar.style.width = '0%';
+    pctEl.textContent = '0%';
+    statusEl.textContent = 'Compressing raw data...';
+    sizeEl.textContent = '';
+    modal.classList.add('active');
+
+    socket.emit('compress_raw_data');
+});
+
+socket.on('raw_compression_progress', function(data) {
+    var bar = document.getElementById('compress-bar');
+    var pctEl = document.getElementById('compress-percent');
+    var statusEl = document.getElementById('compress-status');
+    var sizeEl = document.getElementById('compress-size-info');
+
+    bar.style.width = data.percent + '%';
+    pctEl.textContent = data.percent + '%';
+    if (data.status) statusEl.textContent = data.status;
+    if (data.original_size) {
+        var mb = (data.original_size / (1024 * 1024)).toFixed(1);
+        sizeEl.textContent = 'Total raw data: ' + mb + ' MB';
+    }
+});
+
+socket.on('raw_compression_complete', function(data) {
+    var bar = document.getElementById('compress-bar');
+    var pctEl = document.getElementById('compress-percent');
+    var statusEl = document.getElementById('compress-status');
+    var sizeEl = document.getElementById('compress-size-info');
+
+    bar.style.width = '100%';
+    pctEl.textContent = '100%';
+    statusEl.textContent = 'Downloading...';
+
+    var origMb = (data.original_size / (1024 * 1024)).toFixed(1);
+    var compMb = (data.compressed_size / (1024 * 1024)).toFixed(1);
+    sizeEl.textContent = origMb + ' MB -> ' + compMb + ' MB (' + data.ratio + '% smaller)';
+    logToConsole('   Compressed: ' + origMb + ' MB -> ' + compMb + ' MB (' + data.ratio + '% reduction)', 'info');
+
+    fetch('/api/download_raw_data')
+        .then(function(response) {
+            if (!response.ok) throw new Error('Download failed');
+            return response.blob();
+        })
+        .then(function(blob) {
+            var url = window.URL.createObjectURL(blob);
+            var a = document.createElement('a');
+            a.href = url;
+            var dbNs = (config.namespace || '').replace(/^inftune-/, '') || 'optimizer';
+            var dbDate = new Date().toISOString().slice(0, 10);
+            a.download = 'inftune-' + dbNs + '-raw-data-' + dbDate + '.tar.gz';
+            document.body.appendChild(a);
+            a.click();
+            window.URL.revokeObjectURL(url);
+            document.body.removeChild(a);
+
+            logToConsole('   Raw data downloaded successfully', 'success');
+            setTimeout(function() {
+                document.getElementById('compress-modal').classList.remove('active');
+            }, 1000);
+        })
+        .catch(function(err) {
+            logToConsole('   Failed to download: ' + err.message, 'error');
+            document.getElementById('compress-modal').classList.remove('active');
+        });
+});
+
+socket.on('raw_compression_error', function(data) {
+    logToConsole('   Raw data compression failed: ' + data.error, 'error');
+    document.getElementById('compress-modal').classList.remove('active');
+});
+
 // Upload database button
 document.getElementById('upload-indicator').addEventListener('click', () => {
     document.getElementById('upload-db-input').click();

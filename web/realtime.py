@@ -2015,6 +2015,102 @@ def download_database():
         traceback.print_exc()
         return jsonify({'error': str(e)}), 500
 
+@socketio.on('compress_raw_data')
+def handle_compress_raw_data():
+    """Compress test artifacts and results into a tar.gz archive."""
+    try:
+        import tarfile
+
+        artifacts_dir = '/mnt/storage/test-artifacts'
+        results_dir = '/mnt/storage/results'
+        compressed_path = '/tmp/inftune-raw-data.tar.gz'
+
+        dirs_to_pack = []
+        if os.path.isdir(artifacts_dir):
+            dirs_to_pack.append(('test-artifacts', artifacts_dir))
+        if os.path.isdir(results_dir):
+            dirs_to_pack.append(('results', results_dir))
+
+        if not dirs_to_pack:
+            emit('raw_compression_error', {'error': 'No test data found'})
+            return
+
+        total_size = 0
+        for _, d in dirs_to_pack:
+            for root, _, files in os.walk(d):
+                for f in files:
+                    total_size += os.path.getsize(os.path.join(root, f))
+
+        if total_size == 0:
+            emit('raw_compression_error', {'error': 'No test data found'})
+            return
+
+        emit('raw_compression_progress', {'percent': 0, 'status': 'Compressing...',
+             'original_size': total_size})
+
+        bytes_written = 0
+        with tarfile.open(compressed_path, 'w:gz', compresslevel=6) as tar:
+            for arcname, d in dirs_to_pack:
+                for root, _, files in os.walk(d):
+                    for f in files:
+                        fpath = os.path.join(root, f)
+                        rel = os.path.relpath(fpath, os.path.dirname(d))
+                        tar.add(fpath, arcname=rel)
+                        bytes_written += os.path.getsize(fpath)
+                        percent = min(int((bytes_written / total_size) * 100), 99)
+                        emit('raw_compression_progress', {'percent': percent, 'status': 'Compressing...'})
+                        socketio.sleep(0)
+
+        compressed_size = os.path.getsize(compressed_path)
+        ratio = ((total_size - compressed_size) / total_size) * 100
+
+        emit('raw_compression_progress', {'percent': 100, 'status': 'Done!'})
+        emit('raw_compression_complete', {
+            'original_size': total_size,
+            'compressed_size': compressed_size,
+            'ratio': round(ratio, 1)
+        })
+
+    except Exception as e:
+        print(f"ERROR compressing raw data: {e}")
+        import traceback
+        traceback.print_exc()
+        emit('raw_compression_error', {'error': str(e)})
+
+
+@app.route('/api/download_raw_data')
+def download_raw_data():
+    """Download the compressed raw test data archive."""
+    try:
+        from flask import send_file, after_this_request
+
+        instance_name = os.environ.get('INSTANCE_NAME', 'inftune')
+        compressed_path = '/tmp/inftune-raw-data.tar.gz'
+
+        if not os.path.exists(compressed_path):
+            return jsonify({'error': 'Raw data archive not found. Compress first.'}), 404
+
+        @after_this_request
+        def cleanup(response):
+            try:
+                os.remove(compressed_path)
+            except Exception:
+                pass
+            return response
+
+        return send_file(
+            compressed_path,
+            mimetype='application/gzip',
+            as_attachment=True,
+            download_name=f'{instance_name}-raw-data.tar.gz'
+        )
+    except Exception as e:
+        print(f"ERROR downloading raw data: {e}")
+        import traceback
+        traceback.print_exc()
+        return jsonify({'error': str(e)}), 500
+
+
 @app.route('/api/upload-dataset', methods=['POST'])
 def upload_dataset():
     """Upload a custom dataset file for benchmarking."""
