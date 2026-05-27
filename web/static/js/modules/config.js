@@ -973,9 +973,9 @@ function applyReportConfig(recId) {
         config.single_test_replicas = rc.replicas || (rc.gpus ? Math.floor(rc.gpus / tp) : 1);
     }
 
-    // Restore model and image
+    // Restore model and image (prefer per-test image over run-level)
     if (rc.model) config.model = rc.model;
-    if (rc.image) config.image = rc.image;
+    config.image = ts.image || rc.image || null;
 
     // Restore ALL settings — reset to test values or defaults
     // Step 3: Workload
@@ -1012,7 +1012,7 @@ function applyReportConfig(recId) {
     // Step 5: EPP
     config.epp_config = rc.epp_config || null;
     config.epp_preset = ts.epp_preset || 'balanced';
-    config.epp_custom_enabled = rc.epp_config && rc.epp_config.preset !== 'default' ? true : false;
+    config.epp_custom_enabled = ts.epp_custom_enabled != null ? !!ts.epp_custom_enabled : (rc.epp_config && rc.epp_config.preset !== 'default' ? true : false);
     config.epp_benchmark = false;
 
     // Step 6: Infrastructure

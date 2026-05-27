@@ -368,6 +368,7 @@ class ReportAnalyzer:
                 'concurrency': c,
                 'epp_config': test_settings.get('epp_config'),
                 'test_settings': {
+                    'image': test_settings.get('image') or run_config.get('image'),
                     'isl': test_settings.get('isl'),
                     'osl': test_settings.get('osl'),
                     'isl_stdev': test_settings.get('isl_stdev') or run_config.get('isl_stdev'),
