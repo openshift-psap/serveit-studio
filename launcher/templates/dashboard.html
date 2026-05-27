@@ -188,9 +188,9 @@
         .nav-item.active{background:#F0F9FA;color:#1B5E6B;font-weight:600}
         .nav-item svg{opacity:0.5;flex-shrink:0}
         .nav-item.active svg{opacity:1}
-        .user-table{width:100%;border-collapse:collapse;font-size:0.9em}
-        .user-table th{text-align:left;padding:10px 16px;color:#999;font-size:0.78em;text-transform:uppercase;letter-spacing:0.05em;border-bottom:2px solid #E0E0E0}
-        .user-table td{padding:12px 16px;border-bottom:1px solid #F0F0F0}
+        .user-table{width:100%;border-collapse:collapse;font-size:0.88em}
+        .user-table th{text-align:left;padding:8px 12px;color:#999;font-size:0.78em;text-transform:uppercase;letter-spacing:0.05em;border-bottom:2px solid #E0E0E0}
+        .user-table td{padding:8px 12px;border-bottom:1px solid #F0F0F0;vertical-align:middle}
         .user-table tr:hover td{background:#F8F8F8}
         .user-table .badge-admin{background:#E0F2F4;color:#2A7B88;padding:2px 8px;border-radius:10px;font-size:0.78em;font-weight:600}
         .user-table .badge-user{background:#F0F0F0;color:#999;padding:2px 8px;border-radius:10px;font-size:0.78em;font-weight:600}
@@ -1071,18 +1071,20 @@ function showUsers(){
     list.innerHTML = '<div style="text-align:center;padding:40px;color:#999">Loading&hellip;</div>';
     fetch('/api/users').then(function(r){return r.json()}).then(function(users){
         var html = '<div style="padding:0 32px"><div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px"><h3 style="color:#4A4A4A;font-size:0.95em">All Users</h3><button class="btn btn-primary" onclick="showAddUserModal()" style="font-size:0.85em;padding:8px 16px"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M12 5v14M5 12h14"/></svg> Add User</button></div>';
-        html += '<table class="user-table"><thead><tr><th>Username</th><th>Role</th><th>Clusters</th><th>Instances</th><th>Assigned</th><th>Created</th><th></th></tr></thead><tbody>';
+        html += '<table class="user-table"><thead><tr><th>Username</th><th>Role</th><th>Clusters</th><th>Instances</th><th>Assigned</th><th>Created</th><th style="text-align:right">Actions</th></tr></thead><tbody>';
         users.forEach(function(u){
             html += '<tr><td><strong>'+u.username+'</strong></td>';
             html += '<td>'+(u.is_admin?'<span class="badge-admin">Admin</span>':'<span class="badge-user">User</span>')+'</td>';
-            html += '<td>'+u.cluster_count+'</td><td>'+u.instance_count+'</td>';
-            html += '<td>'+(u.assigned_count||0)+'</td>';
+            html += '<td style="text-align:center">'+u.cluster_count+'</td><td style="text-align:center">'+u.instance_count+'</td>';
+            html += '<td style="text-align:center">'+(u.assigned_count||0)+'</td>';
             html += '<td style="color:#999;font-size:0.88em">'+u.created_at.slice(0,10)+'</td>';
-            html += '<td>';
+            html += '<td style="text-align:right;white-space:nowrap">';
             if(!u.is_admin){
-                html += '<button class="btn btn-danger" style="font-size:0.78em;padding:5px 12px" onclick="deleteUser('+u.id+',\''+u.username.replace(/'/g,"\\'")+'\')">Delete</button> ';
-                html += '<button class="btn btn-cancel" style="font-size:0.78em;padding:5px 12px" onclick="resetUserPassword('+u.id+',\''+u.username.replace(/'/g,"\\'")+'\')">Reset Pwd</button> ';
-                html += '<button class="btn btn-open" style="font-size:0.78em;padding:5px 12px" onclick="viewUserClusters('+u.id+',\''+u.username.replace(/'/g,"\\'")+'\')">View</button>';
+                html += '<div style="display:inline-flex;gap:4px;">';
+                html += '<button class="btn btn-open" style="font-size:0.75em;padding:4px 10px" onclick="viewUserClusters('+u.id+',\''+u.username.replace(/'/g,"\\'")+'\')">View</button>';
+                html += '<button class="btn btn-cancel" style="font-size:0.75em;padding:4px 10px" onclick="resetUserPassword('+u.id+',\''+u.username.replace(/'/g,"\\'")+'\')">Reset Pwd</button>';
+                html += '<button class="btn btn-danger" style="font-size:0.75em;padding:4px 10px" onclick="deleteUser('+u.id+',\''+u.username.replace(/'/g,"\\'")+'\')">Delete</button>';
+                html += '</div>';
             }
             html += '</td></tr>';
         });
