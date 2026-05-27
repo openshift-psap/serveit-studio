@@ -56,6 +56,16 @@ def init_db():
             FOREIGN KEY (cluster_id) REFERENCES clusters(id),
             UNIQUE(owner_id, name, cluster_id)
         );
+        CREATE TABLE IF NOT EXISTS instance_access (
+            user_id INTEGER NOT NULL,
+            instance_id INTEGER NOT NULL,
+            granted_at TEXT NOT NULL,
+            granted_by INTEGER,
+            PRIMARY KEY (user_id, instance_id),
+            FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+            FOREIGN KEY (instance_id) REFERENCES instances(id) ON DELETE CASCADE,
+            FOREIGN KEY (granted_by) REFERENCES users(id)
+        );
     ''')
 
     # Migrations for existing databases

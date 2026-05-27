@@ -216,13 +216,21 @@ def delete_cluster(cluster_id: int, owner_id: int) -> bool:
 
 def list_clusters(owner_id: int) -> List[Dict]:
     with get_db() as conn:
-        rows = conn.execute(
-            '''SELECT c.*, COUNT(i.id) as instance_count
-               FROM clusters c LEFT JOIN instances i ON c.id = i.cluster_id
-               WHERE c.owner_id = ?
-               GROUP BY c.id ORDER BY c.created_at''',
-            (owner_id,)
-        ).fetchall()
+        rows = conn.execute('''
+            SELECT c.*,
+                   COUNT(DISTINCT CASE WHEN i.owner_id = ? OR ia.user_id IS NOT NULL THEN i.id END) as instance_count,
+                   CASE WHEN c.owner_id = ? THEN 1 ELSE 0 END as is_cluster_owner
+            FROM clusters c
+            LEFT JOIN instances i ON c.id = i.cluster_id
+            LEFT JOIN instance_access ia ON i.id = ia.instance_id AND ia.user_id = ?
+            WHERE c.owner_id = ?
+               OR c.id IN (
+                   SELECT i2.cluster_id FROM instances i2
+                   JOIN instance_access ia2 ON i2.id = ia2.instance_id
+                   WHERE ia2.user_id = ?
+               )
+            GROUP BY c.id ORDER BY c.created_at
+        ''', (owner_id, owner_id, owner_id, owner_id, owner_id)).fetchall()
     return [dict(r) for r in rows]
 
 
@@ -287,10 +295,12 @@ def list_users() -> List[Dict]:
         rows = conn.execute('''
             SELECT u.id, u.username, u.is_admin, u.created_at,
                    COUNT(DISTINCT c.id) as cluster_count,
-                   COUNT(DISTINCT i.id) as instance_count
+                   COUNT(DISTINCT i.id) as instance_count,
+                   COUNT(DISTINCT ia.instance_id) as assigned_count
             FROM users u
             LEFT JOIN clusters c ON u.id = c.owner_id
             LEFT JOIN instances i ON u.id = i.owner_id
+            LEFT JOIN instance_access ia ON u.id = ia.user_id
             GROUP BY u.id ORDER BY u.created_at
         ''').fetchall()
     return [dict(r) for r in rows]
@@ -311,6 +321,62 @@ def delete_user(user_id: int) -> bool:
     with get_db() as conn:
         conn.execute('DELETE FROM users WHERE id = ?', (user_id,))
     return True
+
+
+# ── Instance Access (assignment) ─────────────────────────────────────────────
+
+def list_instance_users(instance_id: int) -> List[Dict]:
+    with get_db() as conn:
+        rows = conn.execute('''
+            SELECT u.id, u.username, ia.granted_at
+            FROM instance_access ia
+            JOIN users u ON ia.user_id = u.id
+            WHERE ia.instance_id = ?
+            ORDER BY ia.granted_at
+        ''', (instance_id,)).fetchall()
+    return [dict(r) for r in rows]
+
+
+def assign_instance_user(instance_id: int, user_id: int, granted_by: int) -> bool:
+    with get_db() as conn:
+        inst = conn.execute('SELECT owner_id FROM instances WHERE id = ?', (instance_id,)).fetchone()
+        if not inst:
+            return False
+        if inst['owner_id'] == user_id:
+            return False
+        try:
+            conn.execute(
+                'INSERT INTO instance_access (user_id, instance_id, granted_at, granted_by) VALUES (?, ?, ?, ?)',
+                (user_id, instance_id, datetime.now().isoformat(), granted_by)
+            )
+            return True
+        except Exception:
+            return False
+
+
+def revoke_instance_user(instance_id: int, user_id: int) -> bool:
+    with get_db() as conn:
+        cursor = conn.execute(
+            'DELETE FROM instance_access WHERE user_id = ? AND instance_id = ?',
+            (user_id, instance_id)
+        )
+        return cursor.rowcount > 0
+
+
+def get_user_assigned_instances(user_id: int) -> List[Dict]:
+    with get_db() as conn:
+        rows = conn.execute('''
+            SELECT i.id, i.name, i.display_name, i.status,
+                   c.name as cluster_name, c.icon as cluster_icon,
+                   u.username as owner_name, ia.granted_at
+            FROM instance_access ia
+            JOIN instances i ON ia.instance_id = i.id
+            JOIN clusters c ON i.cluster_id = c.id
+            JOIN users u ON i.owner_id = u.id
+            WHERE ia.user_id = ?
+            ORDER BY ia.granted_at DESC
+        ''', (user_id,)).fetchall()
+    return [dict(r) for r in rows]
 
 
 # ── Instance CRUD ───────────────────────────────────────────────────────────
@@ -657,15 +723,24 @@ def _cleanup_remote_cluster(kubeconfig_secret: str, namespace: str, workload_nam
 def list_instances(owner_id: int, cluster_id: int = None) -> List[Dict]:
     with get_db() as conn:
         if cluster_id is not None:
-            rows = conn.execute(
-                'SELECT * FROM instances WHERE owner_id = ? AND cluster_id = ? ORDER BY created_at DESC',
-                (owner_id, cluster_id)
-            ).fetchall()
+            rows = conn.execute('''
+                SELECT DISTINCT i.*,
+                    CASE WHEN i.owner_id = ? THEN 1 ELSE 0 END as is_owner
+                FROM instances i
+                LEFT JOIN instance_access ia ON i.id = ia.instance_id AND ia.user_id = ?
+                WHERE (i.owner_id = ? OR ia.user_id = ?)
+                  AND i.cluster_id = ?
+                ORDER BY i.created_at DESC
+            ''', (owner_id, owner_id, owner_id, owner_id, cluster_id)).fetchall()
         else:
-            rows = conn.execute(
-                'SELECT * FROM instances WHERE owner_id = ? ORDER BY created_at DESC',
-                (owner_id,)
-            ).fetchall()
+            rows = conn.execute('''
+                SELECT DISTINCT i.*,
+                    CASE WHEN i.owner_id = ? THEN 1 ELSE 0 END as is_owner
+                FROM instances i
+                LEFT JOIN instance_access ia ON i.id = ia.instance_id AND ia.user_id = ?
+                WHERE (i.owner_id = ? OR ia.user_id = ?)
+                ORDER BY i.created_at DESC
+            ''', (owner_id, owner_id, owner_id, owner_id)).fetchall()
 
     # Fallback: look up storage class from cluster for old instances without it
     cluster_sc = {}

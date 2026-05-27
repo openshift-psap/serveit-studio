@@ -286,7 +286,49 @@ def create_app():
         success = instance_manager.delete_instance(instance_id, get_user_id(), backup=backup)
         if success:
             return jsonify({'ok': True})
+        with get_db() as conn:
+            access = conn.execute(
+                'SELECT 1 FROM instance_access WHERE instance_id = ? AND user_id = ?',
+                (instance_id, get_user_id())
+            ).fetchone()
+        if access:
+            return jsonify({'error': 'Only the instance owner can delete it'}), 403
         return jsonify({'error': 'Instance not found or not owned by you'}), 404
+
+    # ── Instance access (assignment) endpoints ──
+
+    @app.route('/api/instances/<int:instance_id>/users', methods=['GET'])
+    @admin_required
+    def api_list_instance_users(instance_id):
+        users = instance_manager.list_instance_users(instance_id)
+        return jsonify(users)
+
+    @app.route('/api/instances/<int:instance_id>/users', methods=['POST'])
+    @admin_required
+    def api_assign_instance_users(instance_id):
+        data = request.get_json() or {}
+        user_ids = data.get('user_ids', [])
+        if not user_ids:
+            return jsonify({'error': 'No users specified'}), 400
+        results = []
+        for uid in user_ids:
+            ok = instance_manager.assign_instance_user(instance_id, uid, get_user_id())
+            results.append({'user_id': uid, 'assigned': ok})
+        return jsonify({'ok': True, 'results': results})
+
+    @app.route('/api/instances/<int:instance_id>/users/<int:user_id>', methods=['DELETE'])
+    @admin_required
+    def api_revoke_instance_user(instance_id, user_id):
+        success = instance_manager.revoke_instance_user(instance_id, user_id)
+        if success:
+            return jsonify({'ok': True})
+        return jsonify({'error': 'Assignment not found'}), 404
+
+    @app.route('/api/users/<int:user_id>/assigned-instances', methods=['GET'])
+    @admin_required
+    def api_user_assigned_instances(user_id):
+        instances = instance_manager.get_user_assigned_instances(user_id)
+        return jsonify(instances)
 
     return app
 

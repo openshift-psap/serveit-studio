@@ -453,6 +453,24 @@
     </div>
 </div>
 
+{% if is_admin %}
+<!-- Instance User Assignment Modal -->
+<div class="modal-overlay" id="assign-modal" onclick="if(event.target===this)hideAssignModal()">
+    <div class="modal" role="dialog" style="width:480px">
+        <h2 id="assign-modal-title">Manage Access</h2>
+        <p class="modal-sub">Assign or remove user access to this instance</p>
+        <div id="assign-current-users" style="margin-bottom:16px;"></div>
+        <div style="display:flex;gap:8px;margin-bottom:16px;">
+            <select id="assign-user-select" style="flex:1;padding:10px;border:1.5px solid #E0E0E0;border-radius:8px;background:#F8F8F8;font-size:0.92em;">
+                <option value="">Select user to add...</option>
+            </select>
+            <button class="btn btn-primary" style="padding:8px 16px" onclick="assignUser()">Add</button>
+        </div>
+        <div style="text-align:right;"><button class="btn btn-cancel" onclick="hideAssignModal()">Close</button></div>
+    </div>
+</div>
+{% endif %}
+
 <script>
 var currentClusterId = {{ clusters[0].id if clusters else 'null' }};
 var IS_ADMIN = {{ 'true' if is_admin else 'false' }};
@@ -721,7 +739,11 @@ function loadInstances(clusterId, isRefresh, userId){
                 '<span>📅 '+inst.created_at.slice(0,10)+'</span>' +
                 '</div>' +
                 '</div>' +
-                '<div class="card-actions">'+openBtn+'<button class="btn btn-danger" onclick="deleteInstance('+inst.id+',\''+((inst.display_name||inst.name).replace(/'/g,"\\'"))+'\')">Delete</button></div>' +
+                '<div class="card-actions">'+openBtn+
+                (inst.is_owner === 0 ? '<span style="font-size:0.75em;background:#eff6ff;color:#3b82f6;padding:3px 8px;border-radius:10px;font-weight:600">Shared</span>' :
+                '<button class="btn btn-danger" onclick="deleteInstance('+inst.id+',\''+((inst.display_name||inst.name).replace(/'/g,"\\'"))+'\')">Delete</button>') +
+                (IS_ADMIN ? ' <button class="btn btn-cancel" style="font-size:0.78em;padding:5px 10px" onclick="showAssignModal('+inst.id+',\''+((inst.display_name||inst.name).replace(/'/g,"\\'"))+'\')">&#128101;</button>' : '') +
+                '</div>' +
                 connectBar;
             list.appendChild(card);
         });
@@ -966,7 +988,8 @@ function loadClusters(){
             b.dataset.id=g.id;
             b.onclick=function(){selectCluster(g.id)};
             var esc = g.name.replace(/'/g,"\\'");
-            b.innerHTML='<span class="icon">'+g.icon+'</span><span class="name">'+g.name+'<span class="target">'+(g.target_cluster||'local')+'</span></span><span class="count">'+g.instance_count+'</span><span class="cluster-actions"><span class="cl-btn" onclick="event.stopPropagation();editCluster('+g.id+',\''+esc+'\',\''+g.icon+'\')" title="Edit">✏️</span><span class="cl-btn cl-del" onclick="event.stopPropagation();deleteCluster('+g.id+',\''+esc+'\')" title="Delete">&times;</span></span>';
+            var actions = g.is_cluster_owner ? '<span class="cluster-actions"><span class="cl-btn" onclick="event.stopPropagation();editCluster('+g.id+',\''+esc+'\',\''+g.icon+'\')" title="Edit">✏️</span><span class="cl-btn cl-del" onclick="event.stopPropagation();deleteCluster('+g.id+',\''+esc+'\')" title="Delete">&times;</span></span>' : '';
+            b.innerHTML='<span class="icon">'+g.icon+'</span><span class="name">'+g.name+'<span class="target">'+(g.target_cluster||'local')+'</span></span><span class="count">'+g.instance_count+'</span>'+actions;
             list.appendChild(b);
         });
     });
@@ -1048,11 +1071,12 @@ function showUsers(){
     list.innerHTML = '<div style="text-align:center;padding:40px;color:#999">Loading&hellip;</div>';
     fetch('/api/users').then(function(r){return r.json()}).then(function(users){
         var html = '<div style="padding:0 32px"><div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px"><h3 style="color:#4A4A4A;font-size:0.95em">All Users</h3><button class="btn btn-primary" onclick="showAddUserModal()" style="font-size:0.85em;padding:8px 16px"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M12 5v14M5 12h14"/></svg> Add User</button></div>';
-        html += '<table class="user-table"><thead><tr><th>Username</th><th>Role</th><th>Clusters</th><th>Instances</th><th>Created</th><th></th></tr></thead><tbody>';
+        html += '<table class="user-table"><thead><tr><th>Username</th><th>Role</th><th>Clusters</th><th>Instances</th><th>Assigned</th><th>Created</th><th></th></tr></thead><tbody>';
         users.forEach(function(u){
             html += '<tr><td><strong>'+u.username+'</strong></td>';
             html += '<td>'+(u.is_admin?'<span class="badge-admin">Admin</span>':'<span class="badge-user">User</span>')+'</td>';
             html += '<td>'+u.cluster_count+'</td><td>'+u.instance_count+'</td>';
+            html += '<td>'+(u.assigned_count||0)+'</td>';
             html += '<td style="color:#999;font-size:0.88em">'+u.created_at.slice(0,10)+'</td>';
             html += '<td>';
             if(!u.is_admin){
@@ -1158,6 +1182,69 @@ function viewUserClusters(uid, uname){
 function backToMyClusters(){
     viewingUserId = null;
     location.reload();
+}
+
+// ── Instance User Assignment ──
+var assignInstanceId = null;
+function showAssignModal(instId, instName){
+    assignInstanceId = instId;
+    document.getElementById('assign-modal-title').textContent = 'Manage Access: ' + instName;
+    document.getElementById('assign-modal').classList.add('active');
+    loadAssignedUsers(instId);
+    loadAvailableUsers(instId);
+}
+function hideAssignModal(){
+    document.getElementById('assign-modal').classList.remove('active');
+    assignInstanceId = null;
+    if(currentClusterId) loadInstances(currentClusterId, false, viewingUserId);
+}
+function loadAssignedUsers(instId){
+    fetch('/api/instances/'+instId+'/users').then(function(r){return r.json()}).then(function(users){
+        var div = document.getElementById('assign-current-users');
+        if(!users.length){ div.innerHTML='<div style="color:#999;font-size:0.88em;text-align:center;padding:12px;">No users assigned</div>'; return; }
+        var html = '<div style="font-size:0.78em;font-weight:600;color:#999;text-transform:uppercase;margin-bottom:6px;">Assigned Users</div>';
+        users.forEach(function(u){
+            html += '<div style="display:flex;align-items:center;justify-content:space-between;padding:8px 12px;background:#F8F8F8;border-radius:8px;margin-bottom:4px;">' +
+                '<span style="font-weight:600;">'+u.username+'</span>' +
+                '<span style="display:flex;align-items:center;gap:8px;"><span style="color:#999;font-size:0.8em">'+u.granted_at.slice(0,10)+'</span>' +
+                '<button class="btn btn-danger" style="font-size:0.72em;padding:4px 10px" onclick="revokeUser('+instId+','+u.id+')">Remove</button></span></div>';
+        });
+        div.innerHTML = html;
+    });
+}
+function loadAvailableUsers(instId){
+    Promise.all([
+        fetch('/api/users').then(function(r){return r.json()}),
+        fetch('/api/instances/'+instId+'/users').then(function(r){return r.json()})
+    ]).then(function(results){
+        var allUsers = results[0], assignedUsers = results[1];
+        var assignedIds = {};
+        assignedUsers.forEach(function(u){ assignedIds[u.id] = true; });
+        var sel = document.getElementById('assign-user-select');
+        sel.innerHTML = '<option value="">Select user to add...</option>';
+        allUsers.forEach(function(u){
+            if(!assignedIds[u.id] && !u.is_admin){
+                var o = document.createElement('option');
+                o.value = u.id; o.textContent = u.username;
+                sel.appendChild(o);
+            }
+        });
+    });
+}
+function assignUser(){
+    var sel = document.getElementById('assign-user-select');
+    var uid = parseInt(sel.value);
+    if(!uid) return;
+    fetch('/api/instances/'+assignInstanceId+'/users',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({user_ids:[uid]})})
+    .then(function(r){return r.json()}).then(function(data){
+        if(data.ok){ loadAssignedUsers(assignInstanceId); loadAvailableUsers(assignInstanceId); }
+    });
+}
+function revokeUser(instId, userId){
+    fetch('/api/instances/'+instId+'/users/'+userId,{method:'DELETE'})
+    .then(function(r){return r.json()}).then(function(data){
+        if(data.ok){ loadAssignedUsers(instId); loadAvailableUsers(instId); }
+    });
 }
 
 // Auto-refresh (status only, no flicker) + session health check
