@@ -1012,7 +1012,7 @@ function applyReportConfig(recId) {
     // Step 5: EPP
     config.epp_config = rc.epp_config || null;
     config.epp_preset = ts.epp_preset || 'balanced';
-    config.epp_custom_enabled = rc.epp_config ? true : false;
+    config.epp_custom_enabled = rc.epp_config && rc.epp_config.preset !== 'default' ? true : false;
     config.epp_benchmark = false;
 
     // Step 6: Infrastructure
