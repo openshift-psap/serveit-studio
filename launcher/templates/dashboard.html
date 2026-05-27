@@ -661,6 +661,7 @@ function selectCluster(id){
 
 function loadInstances(clusterId, isRefresh, userId){
     var list = document.getElementById('instance-list');
+    list.style.display = '';
     if(!isRefresh && list.children.length === 0) list.innerHTML = '<div style="text-align:center;padding:40px;color:#999">Loading&hellip;</div>';
     var url = '/api/instances?cluster_id='+clusterId;
     if(userId) url += '&user_id='+userId;
@@ -1076,10 +1077,11 @@ function showUsers(){
     document.getElementById('topbar-title').innerHTML = '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="opacity:0.5"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75"/></svg> User Management';
     document.getElementById('new-instance-btn').style.display='none';var _vp=document.getElementById('cluster-viz-panel');if(_vp)_vp.style.display='none';
     var list = document.getElementById('instance-list');
+    list.style.display = 'block';
     list.innerHTML = '<div style="text-align:center;padding:40px;color:#999">Loading&hellip;</div>';
     fetch('/api/users').then(function(r){return r.json()}).then(function(users){
         var colors = ['#2A7B88','#6366f1','#f59e0b','#ef4444','#10b981','#8b5cf6','#ec4899','#0ea5e9','#14b8a6'];
-        var html = '<div style="padding:0 32px">';
+        var html = '<div style="padding:0">';
         html += '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px">';
         html += '<div><h3 style="color:#1e293b;font-size:1em;margin:0">All Users</h3><p style="color:#94a3b8;font-size:0.82em;margin:2px 0 0">'+users.length+' user'+(users.length!==1?'s':'')+'</p></div>';
         html += '<button class="btn btn-primary" onclick="showAddUserModal()" style="font-size:0.85em;padding:8px 16px"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M12 5v14M5 12h14"/></svg> Add User</button></div>';
