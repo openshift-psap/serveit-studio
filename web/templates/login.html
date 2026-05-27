@@ -112,6 +112,11 @@
             {% if error %}
             <div class="error-msg">{{ error }}</div>
             {% endif %}
+            <!-- Hidden fields to prevent Chrome password manager from detecting the real form -->
+            <div style="position:absolute;top:-9999px;left:-9999px;">
+                <input type="text" name="fake_user" tabindex="-1">
+                <input type="password" name="fake_pass" tabindex="-1">
+            </div>
             <form method="POST" action="/login" autocomplete="off">
                 <div class="form-group">
                     <label for="username">Username</label>

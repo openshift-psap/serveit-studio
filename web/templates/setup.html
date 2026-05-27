@@ -120,7 +120,11 @@
             {% if error %}
             <div class="error-msg">{{ error }}</div>
             {% endif %}
-            <form method="POST" action="/setup">
+            <div style="position:absolute;top:-9999px;left:-9999px;">
+                <input type="text" name="fake_user" tabindex="-1">
+                <input type="password" name="fake_pass" tabindex="-1">
+            </div>
+            <form method="POST" action="/setup" autocomplete="off">
                 <div class="form-group">
                     <label>Username</label>
                     <input type="text" name="username" autocomplete="off" autofocus required minlength="3">
