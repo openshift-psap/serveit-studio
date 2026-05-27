@@ -464,17 +464,23 @@
 {% if is_admin %}
 <!-- Instance User Assignment Modal -->
 <div class="modal-overlay" id="assign-modal" onclick="if(event.target===this)hideAssignModal()">
-    <div class="modal" role="dialog" style="width:480px">
-        <h2 id="assign-modal-title">Manage Access</h2>
-        <p class="modal-sub">Assign or remove user access to this instance</p>
-        <div id="assign-current-users" style="margin-bottom:16px;"></div>
-        <div style="display:flex;gap:8px;margin-bottom:16px;">
-            <select id="assign-user-select" style="flex:1;padding:10px;border:1.5px solid #E0E0E0;border-radius:8px;background:#F8F8F8;font-size:0.92em;">
-                <option value="">Select user to add...</option>
-            </select>
-            <button class="btn btn-primary" style="padding:8px 16px" onclick="assignUser()">Add</button>
+    <div class="modal" role="dialog" style="width:500px;padding:0;overflow:hidden;">
+        <div style="background:linear-gradient(135deg,#0f172a,#1e293b);padding:20px 24px;color:white;">
+            <h2 id="assign-modal-title" style="color:white;font-size:1.1em;margin:0 0 4px;">Manage Access</h2>
+            <p style="color:#94a3b8;font-size:0.82em;margin:0;">Control which users can access this instance</p>
         </div>
-        <div style="text-align:right;"><button class="btn btn-cancel" onclick="hideAssignModal()">Close</button></div>
+        <div style="padding:20px 24px;">
+            <div style="display:flex;gap:8px;margin-bottom:20px;">
+                <select id="assign-user-select" style="flex:1;padding:9px 12px;border:1.5px solid #e2e8f0;border-radius:8px;background:white;font-size:0.88em;color:#334155;">
+                    <option value="">Select user to add...</option>
+                </select>
+                <button class="btn btn-primary" style="padding:8px 18px;font-size:0.85em;" onclick="assignUser()">+ Add</button>
+            </div>
+            <div id="assign-current-users"></div>
+            <div style="text-align:right;margin-top:16px;padding-top:16px;border-top:1px solid #f1f5f9;">
+                <button class="btn btn-cancel" style="padding:8px 20px;" onclick="hideAssignModal()">Done</button>
+            </div>
+        </div>
     </div>
 </div>
 {% endif %}
@@ -1220,16 +1226,23 @@ function hideAssignModal(){
     if(currentClusterId) loadInstances(currentClusterId, false, viewingUserId);
 }
 function loadAssignedUsers(instId){
+    var colors = ['#6366f1','#f59e0b','#ef4444','#10b981','#8b5cf6','#ec4899','#0ea5e9','#14b8a6','#2A7B88'];
     fetch('/api/instances/'+instId+'/users').then(function(r){return r.json()}).then(function(users){
         var div = document.getElementById('assign-current-users');
-        if(!users.length){ div.innerHTML='<div style="color:#999;font-size:0.88em;text-align:center;padding:12px;">No users assigned</div>'; return; }
-        var html = '<div style="font-size:0.78em;font-weight:600;color:#999;text-transform:uppercase;margin-bottom:6px;">Assigned Users</div>';
-        users.forEach(function(u){
-            html += '<div style="display:flex;align-items:center;justify-content:space-between;padding:8px 12px;background:#F8F8F8;border-radius:8px;margin-bottom:4px;">' +
-                '<span style="font-weight:600;">'+u.username+'</span>' +
-                '<span style="display:flex;align-items:center;gap:8px;"><span style="color:#999;font-size:0.8em">'+u.granted_at.slice(0,10)+'</span>' +
-                '<button class="btn btn-danger" style="font-size:0.72em;padding:4px 10px" onclick="revokeUser('+instId+','+u.id+')">Remove</button></span></div>';
+        if(!users.length){ div.innerHTML='<div style="color:#94a3b8;font-size:0.85em;text-align:center;padding:24px 12px;background:#f8fafc;border-radius:8px;border:1px dashed #e2e8f0;">No users assigned yet</div>'; return; }
+        var html = '<div style="font-size:0.7em;font-weight:600;color:#94a3b8;text-transform:uppercase;letter-spacing:0.05em;margin-bottom:8px;">'+users.length+' user'+(users.length!==1?'s':'')+' with access</div>';
+        html += '<div style="display:flex;flex-direction:column;gap:1px;background:#e5e7eb;border-radius:8px;overflow:hidden;border:1px solid #e5e7eb;">';
+        users.forEach(function(u, idx){
+            var bg = colors[idx % colors.length];
+            var initial = u.username.charAt(0).toUpperCase();
+            html += '<div style="display:flex;align-items:center;gap:10px;padding:8px 12px;background:white;">' +
+                '<div style="width:28px;height:28px;border-radius:50%;background:'+bg+';display:flex;align-items:center;justify-content:center;color:white;font-weight:700;font-size:0.72em;flex-shrink:0;">'+initial+'</div>' +
+                '<span style="font-weight:600;font-size:0.88em;flex:1;">'+u.username+'</span>' +
+                '<span style="color:#94a3b8;font-size:0.75em;">'+u.granted_at.slice(0,10)+'</span>' +
+                '<button style="background:none;border:1px solid #fca5a5;color:#dc2626;font-size:0.72em;padding:3px 10px;border-radius:6px;cursor:pointer;font-weight:600;" onmouseover="this.style.background=\'#fef2f2\'" onmouseout="this.style.background=\'none\'" onclick="revokeUser('+instId+','+u.id+')">Remove</button>' +
+                '</div>';
         });
+        html += '</div>';
         div.innerHTML = html;
     });
 }
