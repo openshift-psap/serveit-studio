@@ -286,11 +286,11 @@ class EPPTuningMixin:
 
         total_tpsg = prefill_tpsg + decode_tpsg
 
-        # Get pod count for damping
+        # Get pod count for damping (PD: only prefill pods are routed by EPP)
         num_pods = 1
         if arch == 'pd' and self.pareto_results:
             best_split = min(self.pareto_results, key=lambda x: x[1].ttft_p90 if x[1].ttft_p90 else 1e9)[0]
-            num_pods = best_split.prefill_pods + best_split.decode_pods
+            num_pods = best_split.prefill_pods
         elif arch == 'aggregated' and self.aggregated_tp:
             num_pods = self.config.total_gpus // self.aggregated_tp
 
@@ -410,10 +410,11 @@ class EPPTuningMixin:
             self.log(f"\n  --- EPP Tuning: {arch.upper()} (c={concurrency}) ---", 'decision')
 
             # Compute per-architecture smart weights using measured Step 6/7 data
+            # For PD, EPP routes to prefill pods (decode is a single NIXL endpoint)
             arch_pods = 1
             if arch == 'pd' and self.pareto_results:
                 best_split = min(self.pareto_results, key=lambda x: x[1].ttft_p90 if x[1].ttft_p90 else 1e9)[0]
-                arch_pods = best_split.prefill_pods + best_split.decode_pods
+                arch_pods = best_split.prefill_pods
             elif arch == 'aggregated' and self.aggregated_tp:
                 arch_pods = self.config.total_gpus // self.aggregated_tp
 
