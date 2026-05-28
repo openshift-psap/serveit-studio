@@ -221,7 +221,8 @@ function renderCharts(data, runId) {
                         html += `<button onclick="showSingleTestModal('${eppAggId}')" title="Run this exact configuration" style="background:none;border:1.5px solid #d1d5db;border-radius:6px;padding:4px 8px;cursor:pointer;color:#6b7280;font-size:14px;display:flex;align-items:center;gap:4px;transition:all 0.15s;" onmouseover="this.style.borderColor='#8b5cf6';this.style.color='#8b5cf6';this.style.background='#f5f3ff'" onmouseout="this.style.borderColor='#d1d5db';this.style.color='#6b7280';this.style.background='none'">&#129514; Test</button>`;
                         html += `</div>`;
                         html += `<div style="font-weight:800; color:#7c3aed; font-size:0.85em; text-transform:uppercase; margin-bottom:8px;">&#9201; TTFT ${pLabel} <span style="background:#7c3aed; color:white; font-size:0.7em; padding:2px 8px; border-radius:4px; margin-left:6px;">EPP TUNED</span> <span style="background:#64748b; color:white; font-size:0.65em; padding:2px 6px; border-radius:3px; margin-left:4px;">AGGREGATED</span></div>`;
-                        html += `<div style="font-size:1.3em; font-weight:800; color:#1e293b; margin-bottom:4px;">${aggBest.config_name}</div>`;
+                        const aggDeployLabel = aggBest.replicas ? `${aggBest.replicas} Aggregated pods, TP=${aggBest.tp || '?'}` : aggBest.config_name;
+                        html += `<div style="font-size:1.3em; font-weight:800; color:#1e293b; margin-bottom:4px;">${aggDeployLabel}</div>`;
                         const aggConcStr = aggBest.concurrency ? ` | c=${aggBest.concurrency}` : '';
                         const aggTputMean = aggBest.throughput_mean || aggBest.throughput_p90;
                         html += `<div style="font-size:0.9em; color:#475569;">TTFT ${pLabel}: <strong>${aggBest[`ttft_${p}`]} ms</strong> | Throughput Mean: <strong>${aggTputMean} req/s</strong>${aggConcStr}</div>`;
@@ -251,7 +252,8 @@ function renderCharts(data, runId) {
                         html += `<button onclick="showSingleTestModal('${eppPdId}')" title="Run this exact configuration" style="background:none;border:1.5px solid #d1d5db;border-radius:6px;padding:4px 8px;cursor:pointer;color:#6b7280;font-size:14px;display:flex;align-items:center;gap:4px;transition:all 0.15s;" onmouseover="this.style.borderColor='#8b5cf6';this.style.color='#8b5cf6';this.style.background='#f5f3ff'" onmouseout="this.style.borderColor='#d1d5db';this.style.color='#6b7280';this.style.background='none'">&#129514; Test</button>`;
                         html += `</div>`;
                         html += `<div style="font-weight:800; color:#7c3aed; font-size:0.85em; text-transform:uppercase; margin-bottom:8px;">&#9889; THROUGHPUT ${pLabel} <span style="background:#7c3aed; color:white; font-size:0.7em; padding:2px 8px; border-radius:4px; margin-left:6px;">EPP TUNED</span> <span style="background:#64748b; color:white; font-size:0.65em; padding:2px 6px; border-radius:3px; margin-left:4px;">PD</span></div>`;
-                        html += `<div style="font-size:1.3em; font-weight:800; color:#1e293b; margin-bottom:4px;">${pdBest.config_name}</div>`;
+                        const pdDeployLabel = pdBest.prefill_pods ? `${pdBest.prefill_pods} Prefill + ${pdBest.decode_pods} Decode pods, TP=${pdBest.prefill_tp || pdBest.tp || '?'}` : pdBest.config_name;
+                        html += `<div style="font-size:1.3em; font-weight:800; color:#1e293b; margin-bottom:4px;">${pdDeployLabel}</div>`;
                         const pdConcStr = pdBest.concurrency ? ` | c=${pdBest.concurrency}` : '';
                         const pdTputMean = pdBest.throughput_mean || pdBest.throughput_p90;
                         html += `<div style="font-size:0.9em; color:#475569;">TTFT ${pLabel}: <strong>${pdBest[`ttft_${p}`]} ms</strong> | Throughput Mean: <strong>${pdTputMean} req/s</strong>${pdConcStr}</div>`;
