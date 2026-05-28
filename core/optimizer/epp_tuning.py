@@ -734,6 +734,7 @@ class EPPTuningMixin:
                     'prefix_cache': {'enabled': True, 'weight': best_weights['prefix_cache_weight']},
                     'kv_cache': {'enabled': True, 'weight': best_weights['kv_cache_weight']},
                     'queue': {'enabled': True, 'weight': best_weights['queue_weight']},
+                    'active_request': {'enabled': True, 'weight': best_weights.get('active_request_weight', 2)},
                     'slo': {'enabled': False},
                 }
             }
