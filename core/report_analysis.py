@@ -964,16 +964,20 @@ class ReportAnalyzer:
         step10_agg = None
         epp_pd = None
         epp_agg = None
+        # First pass: prefer step10-epp (calibrated load) over step11-epp (full load)
         for r in step10_results:
             if r.config_name.startswith('step10-epp-aggregated') and epp_agg is None:
                 epp_agg = r
             elif r.config_name.startswith('step10-epp-') and epp_pd is None:
                 epp_pd = r
-            elif r.config_name.startswith('step11-epp-') and 'aggregated' in r.config_name and epp_agg is None:
+        # Fallback: step11-epp (only if no step10-epp exists)
+        for r in step10_results:
+            if r.config_name.startswith('step11-epp-') and 'aggregated' in r.config_name and epp_agg is None:
                 epp_agg = r
             elif r.config_name.startswith('step11-epp-') and epp_pd is None:
                 epp_pd = r
-            elif r.config_name.startswith('step10-ep-') and step10_ep is None:
+        for r in step10_results:
+            if r.config_name.startswith('step10-ep-') and step10_ep is None:
                 step10_ep = r
             elif r.architecture == 'pd' and not r.config_name.startswith('step11') and step10_pd is None:
                 step10_pd = r
