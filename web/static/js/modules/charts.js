@@ -59,8 +59,8 @@ function renderCharts(data, runId) {
     // ============================================================
     if (rec && rec.recommendations && Object.keys(rec.recommendations).length) {
         html += '<div class="chart-card" style="border: 2px solid #10b981; border-left: 6px solid #10b981;">';
-        html += '<div class="chart-card-header" style="background: linear-gradient(135deg, #ecfdf5, #d1fae5); font-size: 1.2em;">';
-        html += 'Deployment Recommendation</div>';
+        html += '<div class="chart-card-header" style="background: linear-gradient(135deg, #059669, #10b981); color: white; font-size: 1.1em; font-weight: 800;">Deployment Recommendation (Steps 6-8)</div>';
+        html += '<div style="padding:12px 20px 4px; color:#475569; font-size:0.9em;">Best configurations found during optimization. Each architecture\'s best TTFT is shown at P90, P95, and P99 — the config on the left has the lowest latency at that percentile.</div>';
         html += '<div class="chart-card-body" style="padding: 24px;">';
 
         // Recommendation cards — 2 columns sorted by TTFT (best left, second right), P90/P95/P99 stacked
