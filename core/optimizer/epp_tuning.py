@@ -102,16 +102,39 @@ class EPPTuningMixin:
 
         return kv_pressure, queue_pressure
 
+    def _get_user_baseline_weights(self) -> Dict:
+        """Get the user's selected EPP preset weights as the starting point."""
+        presets = {
+            'balanced': {'prefix_cache_weight': 3.0, 'kv_cache_weight': 2.0, 'queue_weight': 2.0, 'active_request_weight': 2.0},
+            'cache_optimized': {'prefix_cache_weight': 5.0, 'kv_cache_weight': 1.0, 'queue_weight': 2.0, 'active_request_weight': 1.0},
+            'queue_balanced': {'prefix_cache_weight': 1.0, 'kv_cache_weight': 1.0, 'queue_weight': 3.0, 'active_request_weight': 3.0},
+            'latency_aware': {'prefix_cache_weight': 3.0, 'kv_cache_weight': 2.0, 'queue_weight': 2.0, 'active_request_weight': 2.0},
+        }
+        preset = getattr(self.config, 'epp_preset', 'balanced') or 'balanced'
+        if preset == 'custom' and self.config.epp_config:
+            plugins = self.config.epp_config.get('plugins', {})
+            return {
+                'prefix_cache_weight': plugins.get('prefix_cache', {}).get('weight', 3.0),
+                'kv_cache_weight': plugins.get('kv_cache', {}).get('weight', 2.0),
+                'queue_weight': plugins.get('queue', {}).get('weight', 2.0),
+                'active_request_weight': plugins.get('active_request', {}).get('weight', 2.0),
+            }
+        return presets.get(preset, presets['balanced'])
+
     def _compute_smart_epp_weights(self, num_pods: int = 1, arch: str = 'aggregated') -> Optional[Dict]:
-        """Derive EPP weights from calibration data + measured Step 6/7 metrics.
+        """Refine EPP weights starting from the user's preset, adjusted by measured metrics.
 
-        Uses actual cache hit rate from Step 6/7 when available (Prometheus),
-        falls back to user-configured prefix_cache_hit_pct.
+        Instead of deriving weights from scratch (which ignores the user's choice),
+        starts from the user's selected preset and nudges weights based on measured
+        Prometheus metrics from Step 6/7. This respects the user's intent while
+        optimizing based on real data.
 
-        Each weight is proportional to the time impact of optimal routing:
-          prefix ∝ time saved by cache hit (ISL × actual_hit_pct / prefill_TPSG)
-          kv     ∝ cost of KV eviction (ISL / prefill_TPSG × utilization²)
-          queue  ∝ wait time per queue imbalance ((ISL+OSL) / total_TPSG / pods)
+        Adjustment rules:
+          - High cache hit rate + diverse prompts → nudge prefix up
+          - High KV pressure → nudge kv up
+          - High queue pressure → nudge queue up
+          - High active load → nudge active up
+          - Low metric → nudge that weight down (but never below 1)
         """
         prefill_tpsg = self.optimal_prefill_tp.tpsg if self.optimal_prefill_tp else None
         decode_tpsg = self.optimal_decode_tp.tpsg if self.optimal_decode_tp else None
@@ -122,105 +145,69 @@ class EPPTuningMixin:
 
         isl = self.config.isl
         osl = self.config.osl
-        concurrency = getattr(self, 'effective_concurrency', int(self.config.qps))
 
         tp = self.optimal_decode_tp.tp if self.optimal_decode_tp else 1
         max_seqs = self._compute_max_num_seqs(tp) or 256
 
-        # Try measured cache hit rate from Step 6/7, fall back to config
+        # Get user's baseline weights as starting point
+        base_w = self._get_user_baseline_weights()
+        w_prefix = base_w['prefix_cache_weight']
+        w_kv = base_w['kv_cache_weight']
+        w_queue = base_w['queue_weight']
+        w_active = base_w['active_request_weight']
+        preset_name = getattr(self.config, 'epp_preset', 'balanced') or 'balanced'
+
+        self.log(f"  Smart EPP Weight Refinement ({arch}, {num_pods} pods):", 'info')
+        self.log(f"    Starting from user preset: {preset_name} ({w_prefix}:{w_kv}:{w_queue}:{w_active})", 'info')
+
+        # Measure actual metrics
         measured_hit_rate = self._extract_cache_hit_rate(arch)
         cache_pct = measured_hit_rate if measured_hit_rate is not None else (self.config.prefix_cache_hit_pct or 0)
         cache_source = 'measured' if measured_hit_rate is not None else 'configured'
-
-        # Try measured KV/queue variance from Step 6/7
         kv_pressure, queue_pressure = self._extract_kv_and_queue_metrics(arch)
 
-        prefix_time_impact_raw = (isl * cache_pct / 100.0) / prefill_tpsg
-
-        cache_mode = getattr(self.config, 'prefix_cache_mode', 'identical') or 'identical'
-        if cache_mode == 'identical':
-            diversity = 0.1
-        elif cache_mode == 'shared_prefix':
-            diversity = 0.3
-        elif cache_mode == 'multi_group':
-            n_groups = getattr(self.config, 'prefix_cache_groups', 5) or 5
-            diversity = min(0.7, max(0.2, n_groups / max(num_pods * 3, 1)))
-        else:
-            diversity = 1.0
-
-        # With many pods, cache affinity causes queue imbalance — dampen prefix weight
-        # 1-2 pods: no damping (can't really imbalance), 3-4 pods: moderate, 8+: full damping
-        if num_pods <= 2:
-            pod_damping = 1.0
-        else:
-            pod_damping = min(1.0, 2.0 / num_pods)
-        prefix_time_impact = prefix_time_impact_raw * diversity * pod_damping
-
-        total_tpsg = prefill_tpsg + decode_tpsg
-
-        if kv_pressure > 0:
-            kv_eviction_cost = (isl / prefill_tpsg) * kv_pressure
-            kv_source = f"kv_cache={kv_pressure:.4f} (measured)"
-        else:
-            kv_utilization = min(concurrency / max(max_seqs, 1), 1.0)
-            kv_eviction_cost = (isl / prefill_tpsg) * (kv_utilization ** 2)
-            kv_source = f"({concurrency}/{max_seqs})²={kv_utilization**2:.4f} (estimated)"
-
-        # Queue cost floor: prevents queue weight from dropping to zero when measured pressure is low
-        # With 2 pods: floor=0.15 (low risk), 3+ pods: min(0.25, 1/pods)
-        queue_floor = 0.15 if num_pods <= 2 else min(0.25, 1.0 / max(num_pods, 1))
-        if queue_pressure > 0:
-            queue_wait_cost = (isl + osl) / total_tpsg * max(queue_pressure, queue_floor)
-            queue_source = f"queue_pressure=max({queue_pressure:.4f}, floor={queue_floor:.2f}) (measured)"
-        else:
-            queue_wait_cost = (isl + osl) / total_tpsg * queue_floor
-            queue_source = f"floor={queue_floor:.2f} ({num_pods} pods, estimated)"
-
-        # Active request cost: proportional to how loaded pods are (running requests vs capacity)
         prom = self._get_best_result_prom(arch)
         active_running = self._prom_avg(prom, 'vllm_requests_running') if prom else None
-        if active_running is not None and active_running > 0:
-            active_load = min(active_running / max(max_seqs, 1), 1.0)
-            active_cost = (osl / decode_tpsg) * active_load
-            active_source = f"running={active_running:.1f}/{max_seqs} (measured)"
+        active_load = min(active_running / max(max_seqs, 1), 1.0) if active_running and active_running > 0 else 0
+
+        # Compute adjustment signals (-1 to +1 range)
+        # Prefix: high cache hit rate with diverse prompts → increase
+        cache_mode = getattr(self.config, 'prefix_cache_mode', 'identical') or 'identical'
+        if cache_mode == 'identical':
+            cache_routing_value = 0.1  # routing doesn't help for identical
+        elif cache_mode == 'shared_prefix':
+            cache_routing_value = 0.3
         else:
-            active_load = min(concurrency / max(num_pods * max_seqs, 1), 1.0)
-            active_cost = (osl / decode_tpsg) * active_load
-            active_source = f"{concurrency}/{num_pods}×{max_seqs} (estimated)"
+            cache_routing_value = 0.7  # multi_group: routing has real value
 
-        # SLO cost: only when latency SLA is enabled, proportional to tail latency overshoot
-        has_sla = getattr(self.config, 'latency_constraint_enabled', False)
-        slo_cost = 0.0
-        slo_source = "disabled"
-        if has_sla:
-            sla_ms = getattr(self.config, 'latency_constraint_ms', 500) or 500
-            ttft_p99 = self._prom_avg(prom, 'vllm_ttft_p99') if prom else None
-            if ttft_p99 is not None and ttft_p99 > 0:
-                overshoot = max(0, (ttft_p99 * 1000 - sla_ms) / sla_ms)
-                slo_cost = (isl + osl) / total_tpsg * min(overshoot, 1.0)
-                slo_source = f"p99={ttft_p99*1000:.0f}ms vs SLA={sla_ms}ms (measured)"
-            else:
-                slo_cost = (isl + osl) / total_tpsg * 0.3
-                slo_source = f"SLA={sla_ms}ms (estimated)"
+        prefix_signal = (cache_pct / 100.0) * cache_routing_value - 0.3  # centered around 30% hit
+        if num_pods > 2:
+            prefix_signal *= min(1.0, 2.0 / num_pods)  # dampen for many pods
 
-        total = prefix_time_impact + kv_eviction_cost + queue_wait_cost + active_cost + slo_cost
-        if total <= 0:
-            return None
+        # KV: high pressure → increase weight to route away from full pods
+        kv_signal = (kv_pressure - 0.3) if kv_pressure > 0 else -0.1  # threshold at 30%
 
-        scale = 9 if has_sla else 7
-        w_prefix = max(1, min(5, round(prefix_time_impact / total * scale)))
-        w_kv = max(1, min(5, round(kv_eviction_cost / total * scale)))
-        w_queue = max(1, min(5, round(queue_wait_cost / total * scale)))
-        w_active = max(1, min(5, round(active_cost / total * scale)))
-        w_slo = max(1, min(5, round(slo_cost / total * scale))) if has_sla else 0
+        # Queue: high pressure → increase weight for better load distribution
+        queue_signal = (queue_pressure - 0.1) if queue_pressure > 0 else 0  # threshold at 10%
 
-        self.log(f"  Smart EPP Weight Derivation ({arch}, {num_pods} pods):", 'info')
-        self.log(f"    Prefix impact:  ISL={isl} × {cache_pct:.0f}% ({cache_source}) / TPSG={prefill_tpsg:.0f} = {prefix_time_impact_raw:.4f} × diversity={diversity:.2f} ({cache_mode}) × pod_damping={pod_damping:.2f} = {prefix_time_impact:.4f} GPU-sec", 'info')
-        self.log(f"    KV pressure:    ISL={isl} / {prefill_tpsg:.0f} × {kv_source} = {kv_eviction_cost:.4f} GPU-sec", 'info')
-        self.log(f"    Queue cost:     ({isl}+{osl}) / {total_tpsg:.0f} × {queue_source} = {queue_wait_cost:.4f} GPU-sec", 'info')
-        self.log(f"    Active request: OSL={osl} / {decode_tpsg:.0f} × {active_source} = {active_cost:.4f} GPU-sec", 'info')
-        if has_sla:
-            self.log(f"    SLO cost:       ({isl}+{osl}) / {total_tpsg:.0f} × {slo_source} = {slo_cost:.4f} GPU-sec", 'info')
+        # Active: high load → increase weight to spread requests
+        active_signal = (active_load - 0.3) if active_load > 0 else -0.1
+
+        # Apply adjustments (±1 max per signal)
+        adj_prefix = max(-1, min(1, round(prefix_signal * 2)))
+        adj_kv = max(-1, min(1, round(kv_signal * 3)))
+        adj_queue = max(-1, min(1, round(queue_signal * 3)))
+        adj_active = max(-1, min(1, round(active_signal * 2)))
+
+        w_prefix = max(1, min(5, w_prefix + adj_prefix))
+        w_kv = max(1, min(5, w_kv + adj_kv))
+        w_queue = max(1, min(5, w_queue + adj_queue))
+        w_active = max(1, min(5, w_active + adj_active))
+
+        self.log(f"    Cache hit: {cache_pct:.0f}% ({cache_source}), mode={cache_mode}, routing_value={cache_routing_value:.1f} → prefix adj={adj_prefix:+d}", 'info')
+        self.log(f"    KV pressure: {kv_pressure:.4f} → kv adj={adj_kv:+d}", 'info')
+        self.log(f"    Queue pressure: {queue_pressure:.4f} → queue adj={adj_queue:+d}", 'info')
+        self.log(f"    Active load: {active_load:.4f} → active adj={adj_active:+d}", 'info')
         self.log(f"    → Weights: prefix={w_prefix}, kv={w_kv}, queue={w_queue}, active={w_active}" +
                  (f", slo={w_slo}" if has_sla else ""), 'success')
 
