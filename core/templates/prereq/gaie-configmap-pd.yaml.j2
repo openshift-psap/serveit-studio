@@ -76,30 +76,8 @@ data:
       - name: decode
         plugins:
           - pluginRef: decode-filter
-          - pluginRef: prefix-cache-scorer
-            weight: {{ prefix_cache_weight | default(3.0) }}
-          - pluginRef: queue-scorer
-            weight: {{ queue_weight | default(2.0) }}
-          - pluginRef: kv-cache-utilization-scorer
-            weight: {{ kv_cache_weight | default(2.0) }}
-{% if slo_enabled | default(false) %}
-          - pluginRef: slo-scorer
-            weight: {{ slo_weight | default(3.0) }}
-{% endif %}
-{% if precise_prefix_cache_enabled | default(false) %}
-          - pluginRef: precise-prefix-cache-scorer
-            weight: {{ precise_prefix_cache_weight | default(3.0) }}
-{% endif %}
-{% if active_request_enabled | default(false) %}
           - pluginRef: active-request-scorer
             weight: {{ active_request_weight | default(2.0) }}
-{% endif %}
-{% if no_hit_lru_enabled | default(false) %}
-          - pluginRef: no-hit-lru-scorer
-            weight: {{ no_hit_lru_weight | default(1.0) }}
-{% endif %}
-{% if session_aware_enabled | default(false) %}
-          - pluginRef: session-aware-scorer
-            weight: {{ session_aware_weight | default(2.0) }}
-{% endif %}
+          - pluginRef: prefix-cache-scorer
+            weight: {{ prefix_cache_weight | default(3.0) }}
           - pluginRef: max-score-picker
