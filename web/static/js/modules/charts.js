@@ -63,90 +63,89 @@ function renderCharts(data, runId) {
         html += 'Deployment Recommendation</div>';
         html += '<div class="chart-card-body" style="padding: 24px;">';
 
-        // Recommendation cards — 2 columns (Response Time left, Throughput right), P90/P95/P99 stacked
-        const goalIcons = { response_time: '&#9201;', throughput: '&#9889;' };
-        const goalColors = { response_time: '#3b82f6', throughput: '#f59e0b' };
-        const goalExplain = {
-            response_time: 'Best for chatbots, real-time assistants, and interactive applications where users are waiting for a reply. This configuration minimizes the delay before the model starts generating its response.',
-            throughput: 'Best for batch processing, API services, and high-volume workloads where you need to handle the most requests per second. Users may wait slightly longer per request, but the system serves more users overall.',
-        };
+        // Recommendation cards — 2 columns sorted by TTFT (best left, second right), P90/P95/P99 stacked
         const bp = rec.best_by_percentile || {};
         const pctls = ['p90', 'p95', 'p99'];
-        const goalOrder = ['response_time', 'throughput'];
+        const accentColor = '#3b82f6';
 
-        // Render row by row: each row has 2 cards (Response Time + Throughput) at the same percentile
         pctls.forEach((p, pi) => {
             html += '<div style="display:grid; grid-template-columns:1fr 1fr; gap:16px; margin-bottom:12px;">';
+            const pLabel = p.toUpperCase();
 
-            for (const key of goalOrder) {
-                const r = rec.recommendations[key];
-                if (!r) { html += '<div></div>'; continue; }
-                const c = r.config;
-                const isPrimary = (rec.goal === 'ttft' && key === 'response_time') || (rec.goal === 'throughput' && key === 'throughput');
-                const archKey = (r.architecture || '').toLowerCase() === 'pd' ? 'pd' : 'aggregated';
-
-                let cardConfig, cardDeploy, cardArch;
-                if (key === 'throughput') {
-                    // Throughput: always show the same config (best by mean) across all percentiles
-                    cardConfig = c;
-                    cardDeploy = r.deploy;
-                    cardArch = r.architecture;
-                } else if (pi === 0) {
-                    cardConfig = c;
-                    cardDeploy = r.deploy;
-                    cardArch = r.architecture;
-                } else {
-                    // TTFT: allow different configs per percentile
-                    const bpData = (bp[p] || {})[archKey];
-                    if (!bpData) { html += '<div></div>'; continue; }
-                    cardConfig = bpData;
-                    if (bpData.prefill_pods && bpData.decode_pods) {
-                        const bpTp = bpData.tp || c.tp || c.prefill_tp || '?';
-                        cardDeploy = `${bpData.prefill_pods} Prefill + ${bpData.decode_pods} Decode pods, TP=${bpTp}`;
+            // Collect best config per architecture at this percentile
+            const cards = [];
+            ['pd', 'aggregated'].forEach(archKey => {
+                const bpData = (bp[p] || {})[archKey];
+                // For P90, use the primary recommendation config
+                let cfg, deploy, testSettings;
+                if (pi === 0) {
+                    const r = archKey === 'pd' ? rec.recommendations.response_time : (rec.recommendations.throughput || rec.recommendations.response_time);
+                    if (!r || (r.architecture || '').toLowerCase() !== archKey) {
+                        // Try the other recommendation
+                        const r2 = archKey === 'pd' ? rec.recommendations.throughput : rec.recommendations.response_time;
+                        if (r2 && (r2.architecture || '').toLowerCase() === archKey) {
+                            cfg = r2.config;
+                            deploy = r2.deploy;
+                            testSettings = cfg.test_settings;
+                        } else if (bpData) {
+                            cfg = bpData;
+                        }
                     } else {
-                        cardDeploy = bpData.config_name;
+                        cfg = r.config;
+                        deploy = r.deploy;
+                        testSettings = cfg.test_settings;
                     }
-                    cardArch = archKey.toUpperCase();
+                } else if (bpData) {
+                    cfg = bpData;
+                }
+                if (!cfg) return;
+
+                const ttftVal = cfg[`ttft_${p}`] || cfg.ttft || cfg.ttft_p90;
+                if (!ttftVal) return;
+
+                if (!deploy) {
+                    if (cfg.prefill_pods && cfg.decode_pods) {
+                        deploy = `${cfg.prefill_pods} Prefill + ${cfg.decode_pods} Decode pods, TP=${cfg.tp || cfg.prefill_tp || '?'}`;
+                    } else {
+                        deploy = cfg.config_name;
+                    }
                 }
 
-                const border = (pi === 0 && isPrimary) ? `3px solid ${goalColors[key]}; border-left:6px solid ${goalColors[key]}` : `2px solid ${goalColors[key]}40; border-left:5px solid ${goalColors[key]}80`;
-                const badge = (pi === 0 && isPrimary) ? `<span style="background:${goalColors[key]}; color:white; font-size:0.7em; padding:2px 8px; border-radius:4px; margin-left:8px;">PRIMARY</span>` : '';
-                const archBadge = cardArch ? `<span style="background:#64748b; color:white; font-size:0.65em; padding:2px 6px; border-radius:3px; margin-left:6px;">${cardArch}</span>` : '';
-                const pLabel = p.toUpperCase();
+                cards.push({ archKey, cfg, deploy, ttftVal, testSettings: testSettings || cfg.test_settings });
+            });
 
-                const recId = 'rec-' + key + '-' + p;
-                const recArch = (cardArch || '').toLowerCase() === 'pd' ? 'pd' : ((cardArch || '').toLowerCase() === 'ep' ? 'ep' : 'aggregated');
-                window._recConfigs[recId] = { ...cardConfig, architecture: recArch, model: rec.model, image: (data.run_config || {}).image, test_settings: c.test_settings, epp_config: cardConfig.epp_config || c.epp_config };
+            // Sort by TTFT — best first
+            cards.sort((a, b) => a.ttftVal - b.ttftVal);
+
+            cards.forEach((card, ci) => {
+                const { archKey, cfg, deploy, ttftVal, testSettings } = card;
+                const isPrimary = ci === 0 && pi === 0;
+                const border = isPrimary ? `3px solid ${accentColor}; border-left:6px solid ${accentColor}` : `2px solid ${accentColor}40; border-left:5px solid ${accentColor}80`;
+                const badge = isPrimary ? `<span style="background:${accentColor}; color:white; font-size:0.7em; padding:2px 8px; border-radius:4px; margin-left:8px;">PRIMARY</span>` : '';
+                const bestBadge = ci === 0 ? `<span style="background:#059669; color:white; font-size:0.65em; padding:2px 6px; border-radius:3px; margin-left:6px;">BEST TTFT</span>` : '';
+                const archLabel = archKey.toUpperCase();
+                const archBadge = `<span style="background:#64748b; color:white; font-size:0.65em; padding:2px 6px; border-radius:3px; margin-left:6px;">${archLabel}</span>`;
+
+                const recId = 'rec-' + archKey + '-' + p;
+                window._recConfigs[recId] = { ...cfg, architecture: archKey, model: rec.model, image: (data.run_config || {}).image, test_settings: testSettings, epp_config: cfg.epp_config };
 
                 html += `<div style="background:white; border:${border}; border-radius:10px; padding:16px; position:relative;">`;
-                html += `<div style="font-weight:800; color:${goalColors[key]}; font-size:0.85em; text-transform:uppercase; margin-bottom:8px;">${goalIcons[key] || ''} ${r.goal} — ${pLabel}${badge}${archBadge}</div>`;
+                html += `<div style="font-weight:800; color:${accentColor}; font-size:0.85em; text-transform:uppercase; margin-bottom:8px;">&#9201; TTFT ${pLabel}${badge}${archBadge}${bestBadge}</div>`;
                 html += `<div style="position:absolute;top:12px;right:12px;display:flex;gap:4px;">`;
-                html += `<button onclick="applyReportConfig('${recId}')" title="Use this configuration as starting point" style="background:none;border:1.5px solid #d1d5db;border-radius:6px;padding:4px 8px;cursor:pointer;color:#6b7280;font-size:14px;display:flex;align-items:center;gap:4px;transition:all 0.15s;" onmouseover="this.style.borderColor='#2563eb';this.style.color='#2563eb';this.style.background='#eff6ff'" onmouseout="this.style.borderColor='#d1d5db';this.style.color='#6b7280';this.style.background='none'">&#128260; Reuse</button>`;
+                html += `<button onclick="applyReportConfig('${recId}')" title="Use this configuration" style="background:none;border:1.5px solid #d1d5db;border-radius:6px;padding:4px 8px;cursor:pointer;color:#6b7280;font-size:14px;display:flex;align-items:center;gap:4px;transition:all 0.15s;" onmouseover="this.style.borderColor='#2563eb';this.style.color='#2563eb';this.style.background='#eff6ff'" onmouseout="this.style.borderColor='#d1d5db';this.style.color='#6b7280';this.style.background='none'">&#128260; Reuse</button>`;
                 html += `<button onclick="showSingleTestModal('${recId}')" title="Run this exact configuration" style="background:none;border:1.5px solid #d1d5db;border-radius:6px;padding:4px 8px;cursor:pointer;color:#6b7280;font-size:14px;display:flex;align-items:center;gap:4px;transition:all 0.15s;" onmouseover="this.style.borderColor='#8b5cf6';this.style.color='#8b5cf6';this.style.background='#f5f3ff'" onmouseout="this.style.borderColor='#d1d5db';this.style.color='#6b7280';this.style.background='none'">&#129514; Test</button>`;
                 html += `</div>`;
-                html += `<div style="font-size:1.4em; font-weight:800; color:#1e293b; margin-bottom:4px;">${cardDeploy}</div>`;
+                html += `<div style="font-size:1.4em; font-weight:800; color:#1e293b; margin-bottom:4px;">${deploy}</div>`;
 
-                const gpus = key === 'throughput' ? c.gpus : (pi === 0 ? c.gpus : cardConfig.gpus);
-                const conc = key === 'throughput' ? c.concurrency : (pi === 0 ? c.concurrency : cardConfig.concurrency);
+                const gpus = cfg.gpus || cfg.total_gpus;
+                const conc = cfg.concurrency;
                 const userConc = rec.workload ? rec.workload.users : null;
                 const concStr = conc ? ` | c=${conc}${userConc && userConc !== conc ? ' (from ' + userConc + ')' : ''}` : '';
+                const tputMean = cfg.throughput_mean || cfg.throughput || cfg.throughput_p90 || '-';
+                const ratio = cfg.ratio && cfg.decode_pods > 0 ? `P:D ratio ${cfg.ratio} | ` : '';
+                html += `<div style="font-size:0.9em; color:#475569;">${ratio}TTFT ${pLabel}: <strong>${ttftVal} ms</strong> | Throughput Mean: <strong>${tputMean} req/s</strong> | ${gpus} GPUs${concStr}</div>`;
 
-                let statsLine;
-                if (key === 'throughput') {
-                    const tputMean = c.throughput_mean || c.throughput_p90;
-                    const ttftAtPctl = c[`ttft_${p}`] || c.ttft_p90;
-                    const ratio = c.ratio && c.decode_pods > 0 ? `P:D ratio ${c.ratio} | ` : '';
-                    statsLine = `${ratio}TTFT ${pLabel}: <strong>${ttftAtPctl} ms</strong> | Throughput Mean: <strong>${tputMean} req/s</strong> | ${gpus} GPUs${concStr}`;
-                } else {
-                    const ttftVal = pi === 0 ? c.ttft_p90 : cardConfig.ttft;
-                    const tputMean = pi === 0 ? (c.throughput_mean || c.throughput_p90) : (cardConfig.throughput_mean || cardConfig.throughput);
-                    const ratio = pi === 0 && c.ratio && c.decode_pods > 0 ? `P:D ratio ${c.ratio} | ` : '';
-                    statsLine = `${ratio}TTFT ${pLabel}: <strong>${ttftVal} ms</strong> | Throughput Mean: <strong>${tputMean} req/s</strong> | ${gpus} GPUs${concStr}`;
-                }
-
-                html += `<div style="font-size:0.9em; color:#475569;">${statsLine}</div>`;
-                // EPP subtitle
-                const cardEpp = cardConfig.epp_config || c.epp_config;
+                const cardEpp = cfg.epp_config;
                 if (cardEpp && cardEpp.preset !== 'default') {
                     const ep = cardEpp.plugins || {};
                     const ew = [ep.prefix_cache, ep.kv_cache, ep.queue].filter(Boolean).map(x => x.weight || '?').join(':');
@@ -155,13 +154,13 @@ function renderCharts(data, runId) {
                     html += `<div style="font-size:0.8em; color:#94a3b8; margin-top:4px;">EPP: default (3:2:2)</div>`;
                 }
 
-                if (pi === 0) {
-                    html += `<div style="font-size:0.82em; color:#64748b; margin-top:8px; line-height:1.5;">${goalExplain[key] || ''}</div>`;
+                if (isPrimary) {
+                    html += `<div style="font-size:0.82em; color:#64748b; margin-top:8px; line-height:1.5;">Best configuration for minimizing Time-to-First-Token at this workload. Lower TTFT means users get faster initial responses.</div>`;
                 }
-                const useOrigConfig = (key === 'throughput' || pi === 0);
-                const recTestId = useOrigConfig ? (c.test_id || testIdLookup[c.config_name] || c.config_name) : (cardConfig.test_id || testIdLookup[cardConfig.config_name] || cardConfig.config_name);
-                const recManifests = useOrigConfig ? manifestLookup[recTestId] : (cardConfig.manifest_types || []);
-                if (recManifests && recManifests.length) {
+
+                const recTestId = cfg.test_id || testIdLookup[cfg.config_name] || cfg.config_name;
+                const recManifests = manifestLookup[recTestId] || cfg.manifest_types || [];
+                if (recManifests.length) {
                     html += '<div style="margin-top:10px; padding-top:8px; border-top:1px solid #e2e8f0;">';
                     html += '<span style="font-size:0.78em; color:#64748b; margin-right:6px;">Download YAML:</span>';
                     recManifests.filter(t => !t.includes('service')).forEach(t => {
@@ -170,7 +169,8 @@ function renderCharts(data, runId) {
                     html += '</div>';
                 }
                 html += '</div>';
-            }
+            });
+            if (cards.length < 2) html += '<div></div>';
             html += '</div>'; // Close row grid
         });
 
