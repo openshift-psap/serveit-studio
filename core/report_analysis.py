@@ -1043,6 +1043,7 @@ class ReportAnalyzer:
             data['overloaded_pd'] = {
                 'ttft_p90': overloaded_pd.get('ttft_p90'),
                 'throughput_p90': overloaded_pd.get('throughput_p90'),
+                'throughput_mean': overloaded_pd.get('throughput_mean'),
             }
             if data['pd']['ttft_p90'] and overloaded_pd.get('ttft_p90'):
                 old = overloaded_pd['ttft_p90']
@@ -1059,6 +1060,7 @@ class ReportAnalyzer:
             data['overloaded_agg'] = {
                 'ttft_p90': overloaded_agg.get('ttft_p90'),
                 'throughput_p90': overloaded_agg.get('throughput_p90'),
+                'throughput_mean': overloaded_agg.get('throughput_mean'),
             }
 
         # Winner comparison at calibrated QPS — pick the primary comparison
