@@ -306,11 +306,14 @@ Each weight is proportional to the **time impact** of optimal routing on that di
 
 ```
 prefix_time_impact_raw = (ISL × actual_cache_hit_pct / 100) / prefill_TPSG
-prefix_time_impact     = prefix_time_impact_raw × diversity_factor
+prefix_time_impact     = prefix_time_impact_raw × diversity_factor × pod_damping
 kv_eviction_cost       = (ISL / prefill_TPSG) × kv_pressure
-queue_wait_cost        = (ISL + OSL) / (prefill_TPSG + decode_TPSG) × (queue_pressure + 0.1)
+queue_wait_cost        = (ISL + OSL) / (prefill_TPSG + decode_TPSG) × max(queue_pressure, queue_floor)
 active_request_cost    = (OSL / decode_TPSG) × (requests_running / max_num_seqs)
 slo_cost               = (ISL + OSL) / total_TPSG × max(0, (ttft_p99 - SLA_target) / SLA_target)  [only with SLA]
+
+pod_damping  = 1.0 if num_pods ≤ 2, else min(1.0, 2 / num_pods)
+queue_floor  = 0.15 if num_pods ≤ 2, else min(0.25, 1 / num_pods)
 
 total  = prefix + kv + queue + active [+ slo]
 scale  = 9 if SLA enabled, else 7
@@ -325,10 +328,20 @@ The raw `prefix_time_impact` measures how much compute a cache hit saves, but it
 |-----------|-----------------|-----------|
 | `identical` | 0.1 | All pods cache the same prompt. Routing is a commodity — the hit is guaranteed everywhere. Prioritizing prefix creates pod stickiness that hurts queue/KV balance. |
 | `shared_prefix` | 0.3 | High overlap across pods. Small routing gains from suffix variation don't justify skewing load distribution. |
-| `multi_group` | `min(1.0, max(0.3, num_groups / num_pods))` | Multiple distinct prompt groups. When groups ≥ pods, each pod specializes in a group — routing to the right pod has high value. When groups < pods, multiple pods share the same group, reducing routing benefit. |
+| `multi_group` | `min(0.7, max(0.2, num_groups / (3 × num_pods)))` | Multiple distinct prompt groups. Tighter scaling prevents over-routing when groups outnumber pods significantly (e.g., 10 groups across 4 pods). |
 | No prefix cache | 1.0 (but `cache_hit_pct=0` makes `prefix_time_impact=0` regardless) | Diversity is irrelevant when there's nothing to cache. |
 
-**Why this matters:** Without the diversity factor, ISL=9000 with 80% identical cache produces weights `5:1:1` (cache-dominated). Empirical testing showed this was the **worst** preset — queue-heavy (`1:1:5`) and kv-heavy (`2:5:1`) both outperformed it because the high prefix weight created pod stickiness that prevented balanced load distribution. With `diversity=0.1`, the same inputs produce `3:1:4` (queue-dominated), aligning with empirical results.
+### Pod-Aware Damping
+
+Cache-heavy weights cause queue imbalance when there are enough pods for requests to pile up on specific ones. With 2 pods (e.g., aggregated TP8), cache affinity works well — each pod still gets ~50% of traffic. With 4+ pods, skewing toward cached pods starves others.
+
+| Pods | Pod Damping | Queue Floor | Effect |
+|------|------------|-------------|--------|
+| 1-2 | 1.0 (none) | 0.15 | Cache-heavy weights are safe — minimal queue imbalance risk |
+| 3-4 | 0.5-0.67 | 0.25 | Moderate damping — balance cache benefit against queue risk |
+| 8+ | 0.25 | 0.25 | Strong damping — queue balance dominates |
+
+**Why this matters:** Without pod damping, a PD config with 4 pods (3P+1D) and 50% cache hit rate produced weights 5:1:1:1 — the prefix cache dominated. This caused P99 TTFT to explode to 3346ms (+165% worse than baseline) because requests piled up on the pod with the cached prefix. With pod damping (0.5 for 4 pods), the same inputs produce 3:1:3:1, keeping P99 within 4% of baseline while still benefiting from cache affinity at P50. Meanwhile, the 2-pod aggregated config with no damping correctly produces cache-heavy weights (5:1:1) that improve TTFT P90 by 14%.
 
 **Why these formulas?**
 
@@ -336,7 +349,7 @@ The raw `prefix_time_impact` measures how much compute a cache hit saves, but it
 
 - **kv_eviction_cost**: When a request is routed to a server with full KV cache, it evicts an existing sequence that must be re-prefilled later — costing `ISL / prefill_TPSG` GPU-seconds. The `kv_pressure` is the **measured average KV cache utilization** (`vllm_kv_cache_pct`, 0-1) from Step 6/7 Prometheus metrics. Higher utilization means pods are closer to full — routing to a less-full pod prevents evictions. Falls back to `(concurrency / max_num_seqs)²` when Prometheus metrics are unavailable.
 
-- **queue_wait_cost**: Each request in a pod's queue adds `(ISL + OSL) / total_TPSG` seconds of wait time. The `queue_pressure` is the **measured ratio of waiting to total requests** (`vllm_requests_waiting / (vllm_requests_running + vllm_requests_waiting)`) from Step 6/7 Prometheus metrics. Higher pressure means requests are queuing — queue-aware routing distributes load better. Falls back to the time-based ratio `vllm_queue_time_rate / (prefill_time + decode_time + queue_time)`, then to `1 / num_pods` when metrics are unavailable.
+- **queue_wait_cost**: Each request in a pod's queue adds `(ISL + OSL) / total_TPSG` seconds of wait time. The `queue_pressure` is the **measured ratio of waiting to total requests** (`vllm_requests_waiting / (vllm_requests_running + vllm_requests_waiting)`) from Step 6/7 Prometheus metrics, but never drops below the `queue_floor`. The floor prevents the formula from ignoring queue balance just because the *current* weights already distribute load well — low measured pressure means the baseline works, not that skewing away from balance is safe. Falls back to the time-based ratio `vllm_queue_time_rate / (prefill_time + decode_time + queue_time)`, then to the queue floor when metrics are unavailable.
 
 - **active_request_cost**: Each in-flight request on a pod consumes decode bandwidth — `OSL / decode_TPSG` GPU-seconds of decode work competing for the same GPU. The load factor is `vllm_requests_running / max_num_seqs` — the fraction of the pod's capacity in use. At 80% utilization, routing one more request to that pod adds significant contention. Routing to a less-busy pod improves per-request decode speed. Falls back to `concurrency / (pods × max_seqs)` when metrics are unavailable.
 
@@ -352,34 +365,41 @@ The raw `prefix_time_impact` measures how much compute a cache hit saves, but it
 
 **Intentional ratio compression:** The floor clamp of 1 compresses extreme ratios. In the 4.9:4.9:0.2 example, the raw math suggests the third dimension is 24.5× less important than the others. After clamping to 5:5:1, it becomes only 5× less important — making it significantly more influential than the math alone would suggest. This is a deliberate safety feature: even in a cache-dominated workload where the math says "queue depth is irrelevant," the EPP still considers queue depth at 1/5th weight. This prevents pathological routing where a pod with a massive queue or zero free VRAM keeps receiving requests because its cache score is high.
 
-**Example (multi_group mode, 5 groups, 8 pods — Prometheus measured 63%):**
-ISL=9000, OSL=50, measured cache hit=63%, prefill_TPSG=50000, decode_TPSG=10000, 8 pods, KV variance=0.02, queue variance=0.05
+**Example (multi_group mode, 10 groups, 4 pods — PD 3P+1D):**
+ISL=2000, OSL=100, measured cache hit=50%, prefill_TPSG=10931, decode_TPSG=729, 4 pods
 ```
-prefix_raw    = 9000 × 0.63 / 50000 = 0.1134 GPU-sec
-diversity     = min(1.0, 5/8) = 0.625  (multi_group, 5 groups on 8 pods)
-prefix_impact = 0.1134 × 0.625 = 0.0709 GPU-sec
-kv_eviction   = 9000 / 50000 × 0.02 = 0.0036 GPU-sec
-queue_cost    = 9050 / 60000 × 0.15 = 0.0226 GPU-sec
-→ Weights: prefix=5, kv=1, queue=2  (prefix still dominant — routing matters for groups)
-```
-
-**Example (identical mode, 80% hit — no Prometheus):**
-ISL=9000, OSL=50, configured cache_hit=80%, prefill_TPSG=31790, decode_TPSG=1785, concurrency=12, max_num_seqs=256, 8 pods
-```
-prefix_raw    = 9000 × 0.8 / 31790 = 0.2265 GPU-sec
-diversity     = 0.1  (identical mode — all pods cache the same prompt)
-prefix_impact = 0.2265 × 0.1 = 0.0227 GPU-sec
-kv_eviction   = 9000 / 31790 × (12/256)² = 0.0006 GPU-sec
-queue_cost    = 9050 / 33575 / 8 = 0.0337 GPU-sec
-→ Weights: prefix=3, kv=1, queue=4  (queue-dominated — validated by empirical testing)
+prefix_raw    = 2000 × 0.50 / 10931 = 0.0915 GPU-sec
+diversity     = min(0.7, 10 / (3×4)) = 0.7  (multi_group)
+pod_damping   = min(1.0, 2/4) = 0.5  (4 pods — moderate damping)
+prefix_impact = 0.0915 × 0.7 × 0.5 = 0.0320 GPU-sec
+kv_eviction   = 2000 / 10931 × 0.0004 = 0.0001 GPU-sec
+queue_floor   = min(0.25, 1/4) = 0.25
+queue_cost    = 2100 / 11660 × 0.25 = 0.0450 GPU-sec
+active_cost   = 100 / 729 × 0.02 = 0.0027 GPU-sec
+→ Weights: prefix=3, kv=1, queue=4, active=1  (queue-balanced — prevents P99 blowup)
 ```
 
-**Example (no prefix cache):**
+**Example (aggregated TP8, 2 pods — cache-heavy is safe):**
+ISL=2000, OSL=100, measured cache hit=50%, prefill_TPSG=5924, decode_TPSG=444, 2 pods
+```
+prefix_raw    = 2000 × 0.50 / 5924 = 0.1688 GPU-sec
+diversity     = 0.7  (multi_group, 10 groups)
+pod_damping   = 1.0  (≤2 pods — no damping)
+prefix_impact = 0.1688 × 0.7 × 1.0 = 0.1182 GPU-sec
+kv_eviction   = 2000 / 5924 × 0.0004 = 0.0001 GPU-sec
+queue_floor   = 0.15  (≤2 pods — low floor)
+queue_cost    = 2100 / 6368 × 0.15 = 0.0495 GPU-sec
+active_cost   = 100 / 444 × 0.05 = 0.0113 GPU-sec
+→ Weights: prefix=5, kv=1, queue=2, active=1  (cache-dominant — correct for 2 pods)
+```
+
+**Example (no prefix cache, 16 pods):**
 ISL=9000, OSL=50, cache_hit=0%, prefill_TPSG=2691, decode_TPSG=849, concurrency=100, max_num_seqs=256, 16 pods
 ```
 prefix_impact = 0  (no cache → diversity irrelevant)
 kv_eviction   = 9000 / 2691 × (100/256)² = 0.5104 GPU-sec  (dominant)
-queue_cost    = 9050 / 3540 / 16 = 0.1598 GPU-sec
+queue_floor   = min(0.25, 1/16) = 0.0625
+queue_cost    = 9050 / 3540 × 0.0625 = 0.1598 GPU-sec
 → Weights: prefix=1, kv=5, queue=2  (KV-dominated — matches empirical kv-heavy winner)
 ```
 
