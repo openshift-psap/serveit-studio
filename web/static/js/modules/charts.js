@@ -966,23 +966,30 @@ function renderCharts(data, runId) {
         // --- Table 2: Overload Impact ---
         const origConcurrency = cal.concurrency != null ? `${cal.concurrency} concurrent` : '-';
         const calConcurrency = requestedRps != null ? `${Math.round(requestedRps)} concurrent` : '-';
-        const overloadRows = [];
-        if (cal.pd && cal.overloaded_pd) overloadRows.push({label: 'PD', cal: cal.pd, over: cal.overloaded_pd});
-        if (cal.aggregated && cal.overloaded_agg) overloadRows.push({label: 'Aggregated', cal: cal.aggregated, over: cal.overloaded_agg});
-        if (cal.epp_pd && cal.overloaded_pd) overloadRows.push({label: 'PD (EPP Tuned)', cal: cal.epp_pd, over: cal.overloaded_pd});
-        if (cal.epp_agg && cal.overloaded_agg) overloadRows.push({label: 'Aggregated (EPP Tuned)', cal: cal.epp_agg, over: cal.overloaded_agg});
-        if (overloadRows.length) {
-            html += `<div style="padding:8px 20px 2px; font-weight:700; font-size:0.9em; color:#1e293b; margin-top:8px;">Overload Impact: Calibrated vs Overloaded Load</div>`;
+        // Group overload comparisons by architecture family
+        const overloadGroups = [];
+        if (cal.pd && cal.overloaded_pd) {
+            var group = {title: 'PD', rows: [{label: 'PD', cal: cal.pd, over: cal.overloaded_pd}]};
+            if (cal.epp_pd) group.rows.push({label: 'PD (EPP Tuned)', cal: cal.epp_pd, over: cal.overloaded_pd});
+            overloadGroups.push(group);
+        }
+        if (cal.aggregated && cal.overloaded_agg) {
+            var group = {title: 'Aggregated', rows: [{label: 'Aggregated', cal: cal.aggregated, over: cal.overloaded_agg}]};
+            if (cal.epp_agg) group.rows.push({label: 'Aggregated (EPP Tuned)', cal: cal.epp_agg, over: cal.overloaded_agg});
+            overloadGroups.push(group);
+        }
+        overloadGroups.forEach(function(group) {
+            html += `<div style="padding:8px 20px 2px; font-weight:700; font-size:0.9em; color:#1e293b; margin-top:12px;">Overload Impact: ${group.title}</div>`;
             html += '<div class="chart-card-body" style="padding:0;"><table class="results-table">';
             html += '<tr><th>Configuration</th><th>Load</th><th>TTFT P90</th><th>Throughput Mean</th></tr>';
-            overloadRows.forEach(function(row) {
+            group.rows.forEach(function(row) {
                 var calTputMean = row.cal.throughput_mean || row.cal.throughput_p50 || '-';
                 var overTputMean = row.over.throughput_mean || row.over.throughput_p90 || '-';
                 html += `<tr><td><strong>${row.label} (calibrated)</strong></td><td>${calConcurrency}</td><td style="color:#059669; font-weight:700;">${row.cal.ttft_p90} ms</td><td style="color:#059669; font-weight:700;">${calTputMean} req/s</td></tr>`;
                 html += `<tr><td><strong>${row.label} (overloaded)</strong></td><td>${origConcurrency}</td><td style="color:#94a3b8;">${row.over.ttft_p90} ms</td><td style="color:#94a3b8;">${overTputMean} req/s</td></tr>`;
             });
             html += '</table></div>';
-        }
+        });
         html += '</div>';
     }
 
