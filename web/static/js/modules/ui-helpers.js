@@ -126,73 +126,57 @@ function generateComparison() {
     runs.forEach(r => { html += '<td>' + (r.data.summary.total_tests || 0) + ' total, ' + (r.data.summary.successful_tests || 0) + ' passed</td>'; });
     html += '</tr>';
 
-    // Best TTFT
-    html += '<tr><td><strong>Best TTFT P90</strong></td>';
-    const ttftVals = runs.map(r => {
-        const b = (r.data.summary.best_configs || {}).lowest_latency;
-        return b ? b.ttft_p90 : null;
-    });
-    const bestTtft = Math.min(...ttftVals.filter(v => v != null));
-    runs.forEach((r, i) => {
-        const v = ttftVals[i];
-        const style = v === bestTtft ? 'color:#059669; font-weight:700;' : '';
-        html += '<td style="' + style + '">' + (v != null ? v.toFixed(1) + ' ms' : '-') + '</td>';
-    });
-    html += '</tr>';
+    // Helper: render a comparison row with best highlighting
+    function cmpRow(label, vals, best, fmt, lowerIsBetter) {
+        html += '<tr><td><strong>' + label + '</strong></td>';
+        runs.forEach((r, i) => {
+            const v = vals[i];
+            const style = v != null && v === best ? 'color:#059669; font-weight:700;' : '';
+            html += '<td style="' + style + '">' + (v != null ? fmt(v) : '-') + '</td>';
+        });
+        html += '</tr>';
+    }
 
-    // Best Throughput
-    html += '<tr><td><strong>Best Throughput P90</strong></td>';
-    const tputVals = runs.map(r => {
-        const b = (r.data.summary.best_configs || {}).highest_throughput;
-        return b ? b.throughput_p90 : null;
-    });
-    const bestTput = Math.max(...tputVals.filter(v => v != null));
-    runs.forEach((r, i) => {
-        const v = tputVals[i];
-        const style = v === bestTput ? 'color:#059669; font-weight:700;' : '';
-        html += '<td style="' + style + '">' + (v != null ? v.toFixed(2) + ' req/s' : '-') + '</td>';
-    });
-    html += '</tr>';
+    // Best TTFT P90/P95/P99
+    const ttftVals = runs.map(r => { const b = (r.data.summary.best_configs || {}).lowest_latency; return b ? b.ttft_p90 : null; });
+    const ttft95Vals = runs.map(r => { const b = (r.data.summary.best_configs || {}).lowest_latency; return b && b.ttft_p95 ? b.ttft_p95 : null; });
+    const ttft99Vals = runs.map(r => { const b = (r.data.summary.best_configs || {}).lowest_latency; return b && b.ttft_p99 ? b.ttft_p99 : null; });
+    cmpRow('Best TTFT P90', ttftVals, Math.min(...ttftVals.filter(v => v != null)), v => v.toFixed(1) + ' ms');
+    cmpRow('Best TTFT P95', ttft95Vals, Math.min(...ttft95Vals.filter(v => v != null)), v => v.toFixed(1) + ' ms');
+    cmpRow('Best TTFT P99', ttft99Vals, Math.min(...ttft99Vals.filter(v => v != null)), v => v.toFixed(1) + ' ms');
 
-    // Best TTFT P99
-    html += '<tr><td><strong>Best TTFT P99 (tail)</strong></td>';
-    const ttft99Vals = runs.map(r => {
-        const b = (r.data.summary.best_configs || {}).lowest_latency;
-        return b && b.ttft_p99 ? b.ttft_p99 : null;
-    });
-    const bestTtft99 = Math.min(...ttft99Vals.filter(v => v != null));
-    runs.forEach((r, i) => {
-        const v = ttft99Vals[i];
-        const style = v === bestTtft99 ? 'color:#059669; font-weight:700;' : '';
-        html += '<td style="' + style + '">' + (v != null ? v.toFixed(1) + ' ms' : '-') + '</td>';
-    });
-    html += '</tr>';
+    // Best Throughput Mean
+    const tputVals = runs.map(r => { const b = (r.data.summary.best_configs || {}).highest_throughput; return b && b.throughput_mean ? b.throughput_mean : (b ? b.throughput_p90 : null); });
+    cmpRow('Best Throughput Mean', tputVals, Math.max(...tputVals.filter(v => v != null)), v => v.toFixed(2) + ' req/s');
 
     // Best Efficiency
-    html += '<tr><td><strong>Best Efficiency</strong></td>';
-    const effVals = runs.map(r => {
-        const b = (r.data.summary.best_configs || {}).most_efficient;
-        return b ? b.efficiency : null;
+    const effVals = runs.map(r => { const b = (r.data.summary.best_configs || {}).most_efficient; return b ? b.efficiency : null; });
+    cmpRow('Best Efficiency', effVals, Math.max(...effVals.filter(v => v != null)), v => v.toFixed(3) + ' req/s/GPU');
+
+    // Per-architecture breakdown
+    html += '<tr style="border-top:2px solid #e2e8f0;"><td colspan="' + (runs.length + 1) + '" style="font-weight:700; color:#6366f1; padding-top:12px;">Per-Architecture Best</td></tr>';
+    ['PD', 'AGGREGATED'].forEach(arch => {
+        const archVals90 = runs.map(r => { const ba = ((r.data.summary.best_configs || {}).by_architecture || {})[arch]; return ba ? ba.best_ttft_p90 : null; });
+        const archVals99 = runs.map(r => { const ba = ((r.data.summary.best_configs || {}).by_architecture || {})[arch]; return ba ? ba.best_ttft_p99 : null; });
+        const archTput = runs.map(r => { const ba = ((r.data.summary.best_configs || {}).by_architecture || {})[arch]; return ba ? ba.best_throughput_mean : null; });
+        if (archVals90.some(v => v != null)) {
+            cmpRow(arch + ' TTFT P90', archVals90, Math.min(...archVals90.filter(v => v != null)), v => v.toFixed(1) + ' ms');
+            cmpRow(arch + ' TTFT P99', archVals99, Math.min(...archVals99.filter(v => v != null)), v => v.toFixed(1) + ' ms');
+            cmpRow(arch + ' Throughput Mean', archTput, Math.max(...archTput.filter(v => v != null)), v => v.toFixed(2) + ' req/s');
+        }
     });
-    const bestEff = Math.max(...effVals.filter(v => v != null));
-    runs.forEach((r, i) => {
-        const v = effVals[i];
-        const style = v === bestEff ? 'color:#059669; font-weight:700;' : '';
-        html += '<td style="' + style + '">' + (v != null ? v.toFixed(3) + ' req/s/GPU' : '-') + '</td>';
-    });
-    html += '</tr>';
 
     // Winner config details
     html += '<tr style="border-top:2px solid #e2e8f0;"><td><strong>Best TTFT Config</strong></td>';
     runs.forEach(r => {
         const b = (r.data.summary.best_configs || {}).lowest_latency;
-        html += '<td>' + (b ? b.name : '-') + '</td>';
+        html += '<td>' + (b ? b.name + ' <span style="color:#94a3b8;font-size:0.8em;">(' + (b.architecture || '?') + ')</span>' : '-') + '</td>';
     });
     html += '</tr>';
     html += '<tr><td><strong>Best Throughput Config</strong></td>';
     runs.forEach(r => {
         const b = (r.data.summary.best_configs || {}).highest_throughput;
-        html += '<td>' + (b ? b.name : '-') + '</td>';
+        html += '<td>' + (b ? b.name + ' <span style="color:#94a3b8;font-size:0.8em;">(' + (b.architecture || '?') + ')</span>' : '-') + '</td>';
     });
     html += '</tr>';
 
@@ -228,9 +212,8 @@ function generateComparison() {
 
     // Comparison charts (full-width)
     const cmpSfx = '-' + tabId;
-    html += '<div class="chart-card"><div class="chart-card-header">Best TTFT P90 by Run</div><div style="padding:8px 20px 0; color:#1e293b; font-size:0.92em;">Lower is better. Shows the best TTFT P90 achieved in each run.</div><div class="chart-card-body"><div id="cmp-ttft' + cmpSfx + '" class="chart-plot"></div></div></div>';
-    html += '<div class="chart-card"><div class="chart-card-header">Best Throughput P90 by Run</div><div style="padding:8px 20px 0; color:#1e293b; font-size:0.92em;">Higher is better. Shows the best throughput P90 achieved in each run.</div><div class="chart-card-body"><div id="cmp-tput' + cmpSfx + '" class="chart-plot"></div></div></div>';
-    html += '<div class="chart-card"><div class="chart-card-header">GPU Efficiency by Run</div><div style="padding:8px 20px 0; color:#1e293b; font-size:0.92em;">Higher is better. Best efficiency (req/s per GPU) from each run.</div><div class="chart-card-body"><div id="cmp-eff' + cmpSfx + '" class="chart-plot"></div></div></div>';
+    html += '<div class="chart-card"><div class="chart-card-header">Best TTFT by Run (P90 / P95 / P99)</div><div style="padding:8px 20px 0; color:#1e293b; font-size:0.92em;">Lower is better. Grouped bars show best TTFT at each percentile per run.</div><div class="chart-card-body"><div id="cmp-ttft' + cmpSfx + '" class="chart-plot"></div></div></div>';
+    html += '<div class="chart-card"><div class="chart-card-header">Best Throughput Mean by Run</div><div style="padding:8px 20px 0; color:#1e293b; font-size:0.92em;">Higher is better. Shows the best mean throughput achieved in each run.</div><div class="chart-card-body"><div id="cmp-tput' + cmpSfx + '" class="chart-plot"></div></div></div>';
     html += '<div class="chart-card"><div class="chart-card-header">All Configs: Throughput vs Latency</div><div style="padding:8px 20px 0; color:#1e293b; font-size:0.92em;">Every tested configuration from all runs overlaid. Top-left is ideal (low latency, high throughput).</div><div class="chart-card-body"><div id="cmp-scatter' + cmpSfx + '" class="chart-plot"></div></div></div>';
 
     panel.innerHTML = html;
@@ -242,32 +225,28 @@ function generateComparison() {
     const runLabels = runs.map(r => 'Run #' + r.runId);
     const barColors = runs.map(r => r.color);
 
-    // TTFT bar chart
-    Plotly.newPlot('cmp-ttft' + cmpSfx, [{
-        x: runLabels, y: ttftVals, type: 'bar',
-        marker: { color: barColors },
-        text: ttftVals.map(v => fmtSI(v) + ' ms'), textposition: 'outside',
-        textfont: { size: 11, color: '#333' }, cliponaxis: false, constraintext: 'none',
-        hovertemplate: '<b>%{x}</b><br>%{y:.1f} ms<extra></extra>'
-    }], { ...plotlyLayout, yaxis: { title: 'TTFT P90 (ms) - lower is better', tickformat: '.2s' } }, plotlyConfig);
+    // TTFT grouped bar chart (P90/P95/P99)
+    const ttftTraces = [
+        { vals: ttftVals, label: 'P90', color: '#3b82f6' },
+        { vals: ttft95Vals, label: 'P95', color: '#dc2626' },
+        { vals: ttft99Vals, label: 'P99', color: '#7c3aed' },
+    ].map(t => ({
+        x: runLabels, y: t.vals, name: 'TTFT ' + t.label, type: 'bar',
+        marker: { color: t.color, opacity: 0.85 },
+        text: t.vals.map(v => v != null ? fmtSI(v) + ' ms' : ''), textposition: 'outside',
+        textfont: { size: 10, color: '#333' }, cliponaxis: false, constraintext: 'none',
+        hovertemplate: '<b>%{x}</b><br>TTFT ' + t.label + ': %{y:.1f} ms<extra></extra>'
+    }));
+    Plotly.newPlot('cmp-ttft' + cmpSfx, ttftTraces, { ...plotlyLayout, barmode: 'group', yaxis: { title: 'TTFT (ms) - lower is better', tickformat: '.2s' }, showlegend: true, legend: { x: 0, y: 1.15, orientation: 'h' } }, plotlyConfig);
 
-    // Throughput bar chart
+    // Throughput mean bar chart
     Plotly.newPlot('cmp-tput' + cmpSfx, [{
         x: runLabels, y: tputVals, type: 'bar',
         marker: { color: barColors },
-        text: tputVals.map(v => v.toFixed(2) + ' req/s'), textposition: 'outside',
+        text: tputVals.map(v => v != null ? v.toFixed(2) + ' req/s' : ''), textposition: 'outside',
         textfont: { size: 11, color: '#333' }, cliponaxis: false, constraintext: 'none',
         hovertemplate: '<b>%{x}</b><br>%{y:.2f} req/s<extra></extra>'
-    }], { ...plotlyLayout, yaxis: { title: 'Throughput P90 (req/s) - higher is better' } }, plotlyConfig);
-
-    // Efficiency bar chart
-    Plotly.newPlot('cmp-eff' + cmpSfx, [{
-        x: runLabels, y: effVals, type: 'bar',
-        marker: { color: barColors },
-        text: effVals.map(v => v.toFixed(3)), textposition: 'outside',
-        textfont: { size: 11, color: '#333' }, cliponaxis: false, constraintext: 'none',
-        hovertemplate: '<b>%{x}</b><br>%{y:.3f} req/s/GPU<extra></extra>'
-    }], { ...plotlyLayout, yaxis: { title: 'Efficiency (req/s/GPU) - higher is better' } }, plotlyConfig);
+    }], { ...plotlyLayout, yaxis: { title: 'Throughput Mean (req/s) - higher is better' } }, plotlyConfig);
 
     // Scatter: all configs from all runs
     const scatterTraces = runs.map(r => {

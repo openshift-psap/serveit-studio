@@ -118,15 +118,19 @@ class ReportAnalyzer:
             'best_configs': {
                 'lowest_latency': {
                     'name': best_ttft_config.display_label,
+                    'architecture': best_ttft_config.architecture,
                     'ttft_p90': best_ttft_config.ttft_p90,
                     'ttft_p95': best_ttft_config.ttft_p95,
                     'ttft_p99': best_ttft_config.ttft_p99,
+                    'throughput_mean': best_ttft_config.throughput_mean,
                     'throughput_p90': best_ttft_config.throughput_p90,
                     'gpus': best_ttft_config.total_gpus,
                 },
                 'highest_throughput': {
                     'name': best_throughput_config.display_label,
+                    'architecture': best_throughput_config.architecture,
                     'ttft_p90': best_throughput_config.ttft_p90,
+                    'throughput_mean': best_throughput_config.throughput_mean,
                     'throughput_p90': best_throughput_config.throughput_p90,
                     'throughput_p95': best_throughput_config.throughput_p95,
                     'throughput_p99': best_throughput_config.throughput_p99,
@@ -134,11 +138,20 @@ class ReportAnalyzer:
                 },
                 'most_efficient': {
                     'name': best_efficiency_config.display_label,
+                    'architecture': best_efficiency_config.architecture,
                     'ttft_p90': best_efficiency_config.ttft_p90,
                     'throughput_p90': best_efficiency_config.throughput_p90,
                     'gpus': best_efficiency_config.total_gpus,
                     'efficiency': best_efficiency_config.throughput_p90 / best_efficiency_config.total_gpus,
-                }
+                },
+                'by_architecture': {arch: {
+                    'best_ttft_p90': min(rs, key=lambda r: r.ttft_p90).ttft_p90,
+                    'best_ttft_p95': min(rs, key=lambda r: r.ttft_p95 or 1e9).ttft_p95,
+                    'best_ttft_p99': min(rs, key=lambda r: r.ttft_p99 or 1e9).ttft_p99,
+                    'best_throughput_mean': max((r.throughput_mean or 0) for r in rs),
+                    'best_name_ttft': min(rs, key=lambda r: r.ttft_p90).display_label,
+                    'best_name_tput': max(rs, key=lambda r: r.throughput_mean or 0).display_label,
+                } for arch, rs in by_arch.items() if rs},
             }
         }
 
