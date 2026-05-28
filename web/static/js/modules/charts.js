@@ -1183,6 +1183,12 @@ function renderCharts(data, runId) {
             eppHtml += `<div class="chart-card" style="margin-top:${archIdx > 0 ? '16' : '0'}px; border:2px solid #7c3aed; border-left:6px solid #7c3aed;">`;
             eppHtml += `<div class="chart-card-header" style="background:linear-gradient(135deg,#7c3aed,#8b5cf6);">Step 9: EPP Tuning — ${archLabel}</div>`;
             eppHtml += '<div style="padding:12px 20px 4px; color:#1e293b; font-size:0.95em;">Same deployment, different EPP scoring weights. Each test swapped only the gateway configmap (~10s) to isolate the impact of request routing.</div>';
+            eppHtml += '<div style="padding:4px 20px 8px; font-size:0.82em; color:#64748b; line-height:1.6;">' +
+                '<strong>baseline (default)</strong> — Step 7 result with upstream llm-d default weights (3:2:2). No EPP change. ' +
+                '<strong>smart-derived</strong> — Weights computed mathematically from measured Prometheus metrics (cache hit rate, KV pressure, queue depth, active requests). ' +
+                '<strong>smart-refined</strong> — Refined from smart-derived using metrics collected during the first EPP test. ' +
+                '<strong>balanced-fallback</strong> — Equal weights (2:2:2:2), tested as safety net when smart weights degrade performance vs baseline.' +
+                '</div>';
 
             // Summary cards
             const bestTrial = trials.reduce((a, b) => (a.ttft_p90 || Infinity) < (b.ttft_p90 || Infinity) ? a : b);
