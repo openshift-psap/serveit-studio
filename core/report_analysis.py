@@ -1423,6 +1423,11 @@ class ReportAnalyzer:
                         'weights': {'prefix_cache': 3, 'kv_cache': 2, 'queue': 2, 'active_request': 2},
                         'manifest_types': [],
                         'is_baseline': True,
+                        'prefill_pods': best.prefill_pods,
+                        'decode_pods': best.decode_pods,
+                        'tp': best.tensor_parallelism,
+                        'replicas': best.total_gpus // best.tensor_parallelism if best.tensor_parallelism else None,
+                        'gpus': best.total_gpus,
                     }
                     by_arch[arch_key].insert(0, baseline_entry)
 
