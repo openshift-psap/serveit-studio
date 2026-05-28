@@ -212,72 +212,65 @@ function renderCharts(data, runId) {
                 html += '<div style="padding:12px 20px 4px; color:#475569; font-size:0.9em;">These results use the same deployment as above but with tuned EPP scoring weights. The gateway routes requests more efficiently, improving latency without changing the inference pods.</div>';
                 html += '<div style="padding:16px 20px;">';
 
-                // Render row by row for each percentile
+                // Render row by row for each percentile — both architectures sorted by TTFT
                 ['p90', 'p95', 'p99'].forEach(p => {
                     const pLabel = p.toUpperCase();
                     html += `<div style="display:grid; grid-template-columns:1fr 1fr; gap:16px; margin-bottom:12px;">`;
 
-                    // Best aggregated EPP result at this percentile
-                    const aggTrials = eppArch['aggregated'] || [];
-                    const aggBest = aggTrials.length ? aggTrials.reduce((a, b) => ((a[`ttft_${p}`] || Infinity) < (b[`ttft_${p}`] || Infinity)) ? a : b) : null;
-                    if (aggBest && aggBest[`ttft_${p}`]) {
-                        const w = aggBest.weights || {};
-                        const eppAggId = 'epp-agg-' + p;
-                        window._recConfigs[eppAggId] = { ...aggBest, architecture: 'aggregated', test_settings: _baseTestSettings };
-                        html += `<div style="background:white; border:2px solid #7c3aed40; border-radius:10px; padding:16px; position:relative;">`;
-                        html += `<div style="position:absolute;top:12px;right:12px;display:flex;gap:4px;">`;
-                        html += `<button onclick="applyReportConfig('${eppAggId}')" title="Use this configuration as starting point" style="background:none;border:1.5px solid #d1d5db;border-radius:6px;padding:4px 8px;cursor:pointer;color:#6b7280;font-size:14px;display:flex;align-items:center;gap:4px;transition:all 0.15s;" onmouseover="this.style.borderColor='#2563eb';this.style.color='#2563eb';this.style.background='#eff6ff'" onmouseout="this.style.borderColor='#d1d5db';this.style.color='#6b7280';this.style.background='none'">&#128260; Reuse</button>`;
-                        html += `<button onclick="showSingleTestModal('${eppAggId}')" title="Run this exact configuration" style="background:none;border:1.5px solid #d1d5db;border-radius:6px;padding:4px 8px;cursor:pointer;color:#6b7280;font-size:14px;display:flex;align-items:center;gap:4px;transition:all 0.15s;" onmouseover="this.style.borderColor='#8b5cf6';this.style.color='#8b5cf6';this.style.background='#f5f3ff'" onmouseout="this.style.borderColor='#d1d5db';this.style.color='#6b7280';this.style.background='none'">&#129514; Test</button>`;
-                        html += `</div>`;
-                        html += `<div style="font-weight:800; color:#7c3aed; font-size:0.85em; text-transform:uppercase; margin-bottom:8px;">&#9201; TTFT ${pLabel} <span style="background:#7c3aed; color:white; font-size:0.7em; padding:2px 8px; border-radius:4px; margin-left:6px;">EPP TUNED</span> <span style="background:#64748b; color:white; font-size:0.65em; padding:2px 6px; border-radius:3px; margin-left:4px;">AGGREGATED</span></div>`;
-                        const aggDeployLabel = aggBest.replicas ? `${aggBest.replicas} Aggregated pods, TP=${aggBest.tp || '?'}` : aggBest.config_name;
-                        html += `<div style="font-size:1.3em; font-weight:800; color:#1e293b; margin-bottom:4px;">${aggDeployLabel}</div>`;
-                        const aggConcStr = aggBest.concurrency ? ` | c=${aggBest.concurrency}` : '';
-                        const aggTputMean = aggBest.throughput_mean || aggBest.throughput_p90;
-                        html += `<div style="font-size:0.9em; color:#475569;">TTFT ${pLabel}: <strong>${aggBest[`ttft_${p}`]} ms</strong> | Throughput Mean: <strong>${aggTputMean} req/s</strong>${aggConcStr}</div>`;
-                        html += `<div style="font-size:0.8em; color:#7c3aed; margin-top:4px;">EPP: ${aggBest.name} (${w.prefix_cache || '?'}:${w.kv_cache || '?'}:${w.queue || '?'})</div>`;
-                        if (aggBest.manifest_types && aggBest.manifest_types.length) {
-                            html += '<div style="margin-top:8px;">';
-                            aggBest.manifest_types.forEach(t => {
-                                html += `<a href="/api/run/${runId}/config/${aggBest.test_id}/manifest/${t}" style="color:#7c3aed;text-decoration:none;font-size:11px;padding:2px 6px;background:#f5f3ff;border-radius:4px;border:1px solid #c4b5fd;display:inline-block;">${t}</a> `;
-                            });
-                            html += '</div>';
+                    // Collect best EPP result per architecture at this percentile
+                    const candidates = [];
+                    ['aggregated', 'pd'].forEach(arch => {
+                        const trials = eppArch[arch] || [];
+                        if (!trials.length) return;
+                        const best = trials.reduce((a, b) => ((a[`ttft_${p}`] || Infinity) < (b[`ttft_${p}`] || Infinity)) ? a : b);
+                        if (best && best[`ttft_${p}`]) {
+                            candidates.push({ arch, best });
                         }
-                        html += '</div>';
-                    } else {
-                        html += '<div></div>';
-                    }
+                    });
+                    // Sort by TTFT — best (lowest) first
+                    candidates.sort((a, b) => (a.best[`ttft_${p}`] || Infinity) - (b.best[`ttft_${p}`] || Infinity));
 
-                    // Best PD EPP result at this percentile
-                    const pdTrials = eppArch['pd'] || [];
-                    const pdBest = pdTrials.length ? pdTrials.reduce((a, b) => ((a[`ttft_${p}`] || Infinity) < (b[`ttft_${p}`] || Infinity)) ? a : b) : null;
-                    if (pdBest && pdBest[`ttft_${p}`]) {
-                        const w = pdBest.weights || {};
-                        const eppPdId = 'epp-pd-' + p;
-                        window._recConfigs[eppPdId] = { ...pdBest, architecture: 'pd', test_settings: _baseTestSettings };
-                        html += `<div style="background:white; border:2px solid #7c3aed40; border-radius:10px; padding:16px; position:relative;">`;
+                    candidates.forEach(({arch, best}, ci) => {
+                        const w = best.weights || {};
+                        const archLabel = arch.toUpperCase();
+                        const eppId = `epp-${arch}-${p}`;
+                        const recArch = arch === 'pd' ? 'pd' : 'aggregated';
+                        window._recConfigs[eppId] = { ...best, architecture: recArch, test_settings: _baseTestSettings };
+
+                        const borderStyle = ci === 0 ? '3px solid #7c3aed; border-left:6px solid #7c3aed' : '2px solid #7c3aed40; border-left:5px solid #7c3aed80';
+                        const winnerBadge = ci === 0 ? '<span style="background:#059669; color:white; font-size:0.65em; padding:2px 6px; border-radius:3px; margin-left:6px;">BEST TTFT</span>' : '';
+
+                        let deployLabel;
+                        if (arch === 'pd' && best.prefill_pods) {
+                            deployLabel = `${best.prefill_pods} Prefill + ${best.decode_pods} Decode pods, TP=${best.prefill_tp || best.tp || '?'}`;
+                        } else if (best.replicas) {
+                            deployLabel = `${best.replicas} Aggregated pods, TP=${best.tp || '?'}`;
+                        } else {
+                            deployLabel = best.config_name;
+                        }
+
+                        html += `<div style="background:white; border:${borderStyle}; border-radius:10px; padding:16px; position:relative;">`;
                         html += `<div style="position:absolute;top:12px;right:12px;display:flex;gap:4px;">`;
-                        html += `<button onclick="applyReportConfig('${eppPdId}')" title="Use this configuration as starting point" style="background:none;border:1.5px solid #d1d5db;border-radius:6px;padding:4px 8px;cursor:pointer;color:#6b7280;font-size:14px;display:flex;align-items:center;gap:4px;transition:all 0.15s;" onmouseover="this.style.borderColor='#2563eb';this.style.color='#2563eb';this.style.background='#eff6ff'" onmouseout="this.style.borderColor='#d1d5db';this.style.color='#6b7280';this.style.background='none'">&#128260; Reuse</button>`;
-                        html += `<button onclick="showSingleTestModal('${eppPdId}')" title="Run this exact configuration" style="background:none;border:1.5px solid #d1d5db;border-radius:6px;padding:4px 8px;cursor:pointer;color:#6b7280;font-size:14px;display:flex;align-items:center;gap:4px;transition:all 0.15s;" onmouseover="this.style.borderColor='#8b5cf6';this.style.color='#8b5cf6';this.style.background='#f5f3ff'" onmouseout="this.style.borderColor='#d1d5db';this.style.color='#6b7280';this.style.background='none'">&#129514; Test</button>`;
+                        html += `<button onclick="applyReportConfig('${eppId}')" title="Use this configuration" style="background:none;border:1.5px solid #d1d5db;border-radius:6px;padding:4px 8px;cursor:pointer;color:#6b7280;font-size:14px;display:flex;align-items:center;gap:4px;transition:all 0.15s;" onmouseover="this.style.borderColor='#2563eb';this.style.color='#2563eb';this.style.background='#eff6ff'" onmouseout="this.style.borderColor='#d1d5db';this.style.color='#6b7280';this.style.background='none'">&#128260; Reuse</button>`;
+                        html += `<button onclick="showSingleTestModal('${eppId}')" title="Run this exact configuration" style="background:none;border:1.5px solid #d1d5db;border-radius:6px;padding:4px 8px;cursor:pointer;color:#6b7280;font-size:14px;display:flex;align-items:center;gap:4px;transition:all 0.15s;" onmouseover="this.style.borderColor='#8b5cf6';this.style.color='#8b5cf6';this.style.background='#f5f3ff'" onmouseout="this.style.borderColor='#d1d5db';this.style.color='#6b7280';this.style.background='none'">&#129514; Test</button>`;
                         html += `</div>`;
-                        html += `<div style="font-weight:800; color:#7c3aed; font-size:0.85em; text-transform:uppercase; margin-bottom:8px;">&#9889; THROUGHPUT ${pLabel} <span style="background:#7c3aed; color:white; font-size:0.7em; padding:2px 8px; border-radius:4px; margin-left:6px;">EPP TUNED</span> <span style="background:#64748b; color:white; font-size:0.65em; padding:2px 6px; border-radius:3px; margin-left:4px;">PD</span></div>`;
-                        const pdDeployLabel = pdBest.prefill_pods ? `${pdBest.prefill_pods} Prefill + ${pdBest.decode_pods} Decode pods, TP=${pdBest.prefill_tp || pdBest.tp || '?'}` : pdBest.config_name;
-                        html += `<div style="font-size:1.3em; font-weight:800; color:#1e293b; margin-bottom:4px;">${pdDeployLabel}</div>`;
-                        const pdConcStr = pdBest.concurrency ? ` | c=${pdBest.concurrency}` : '';
-                        const pdTputMean = pdBest.throughput_mean || pdBest.throughput_p90;
-                        html += `<div style="font-size:0.9em; color:#475569;">TTFT ${pLabel}: <strong>${pdBest[`ttft_${p}`]} ms</strong> | Throughput Mean: <strong>${pdTputMean} req/s</strong>${pdConcStr}</div>`;
-                        html += `<div style="font-size:0.8em; color:#7c3aed; margin-top:4px;">EPP: ${pdBest.name} (${w.prefix_cache || '?'}:${w.kv_cache || '?'}:${w.queue || '?'})</div>`;
-                        if (pdBest.manifest_types && pdBest.manifest_types.length) {
+                        html += `<div style="font-weight:800; color:#7c3aed; font-size:0.85em; text-transform:uppercase; margin-bottom:8px;">&#9201; TTFT ${pLabel} <span style="background:#7c3aed; color:white; font-size:0.7em; padding:2px 8px; border-radius:4px; margin-left:6px;">EPP TUNED</span> <span style="background:#64748b; color:white; font-size:0.65em; padding:2px 6px; border-radius:3px; margin-left:4px;">${archLabel}</span>${winnerBadge}</div>`;
+                        html += `<div style="font-size:1.3em; font-weight:800; color:#1e293b; margin-bottom:4px;">${deployLabel}</div>`;
+                        const concStr = best.concurrency ? ` | c=${best.concurrency}` : '';
+                        const tputMean = best.throughput_mean || best.throughput_p90;
+                        html += `<div style="font-size:0.9em; color:#475569;">TTFT ${pLabel}: <strong>${best[`ttft_${p}`]} ms</strong> | Throughput Mean: <strong>${tputMean} req/s</strong>${concStr}</div>`;
+                        html += `<div style="font-size:0.8em; color:#7c3aed; margin-top:4px;">EPP: ${best.name} (${w.prefix_cache || '?'}:${w.kv_cache || '?'}:${w.queue || '?'})</div>`;
+                        if (best.manifest_types && best.manifest_types.length) {
                             html += '<div style="margin-top:8px;">';
-                            pdBest.manifest_types.forEach(t => {
-                                html += `<a href="/api/run/${runId}/config/${pdBest.test_id}/manifest/${t}" style="color:#7c3aed;text-decoration:none;font-size:11px;padding:2px 6px;background:#f5f3ff;border-radius:4px;border:1px solid #c4b5fd;display:inline-block;">${t}</a> `;
+                            best.manifest_types.forEach(t => {
+                                html += `<a href="/api/run/${runId}/config/${best.test_id}/manifest/${t}" style="color:#7c3aed;text-decoration:none;font-size:11px;padding:2px 6px;background:#f5f3ff;border-radius:4px;border:1px solid #c4b5fd;display:inline-block;">${t}</a> `;
                             });
                             html += '</div>';
                         }
                         html += '</div>';
-                    } else {
-                        html += '<div></div>';
-                    }
+                    });
+                    // Fill empty slot if only one architecture
+                    if (candidates.length < 2) html += '<div></div>';
 
                     html += '</div>'; // Close row grid
                 });
