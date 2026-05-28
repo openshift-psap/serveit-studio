@@ -144,14 +144,16 @@ class ReportAnalyzer:
                     'gpus': best_efficiency_config.total_gpus,
                     'efficiency': best_efficiency_config.throughput_p90 / best_efficiency_config.total_gpus,
                 },
-                'by_architecture': {arch: {
-                    'best_ttft_p90': min(rs, key=lambda r: r.ttft_p90).ttft_p90,
-                    'best_ttft_p95': min(rs, key=lambda r: r.ttft_p95 or 1e9).ttft_p95,
-                    'best_ttft_p99': min(rs, key=lambda r: r.ttft_p99 or 1e9).ttft_p99,
-                    'best_throughput_mean': max((r.throughput_mean or 0) for r in rs),
-                    'best_name_ttft': min(rs, key=lambda r: r.ttft_p90).display_label,
-                    'best_name_tput': max(rs, key=lambda r: r.throughput_mean or 0).display_label,
-                } for arch, rs in by_arch.items() if rs},
+                'by_architecture': {arch.upper(): {
+                    'best_ttft_p90': min(r.ttft_p90 for r in arch_rs),
+                    'best_ttft_p95': min((r.ttft_p95 or 1e9) for r in arch_rs),
+                    'best_ttft_p99': min((r.ttft_p99 or 1e9) for r in arch_rs),
+                    'best_throughput_mean': max((r.throughput_mean or 0) for r in arch_rs),
+                    'best_name_ttft': min(arch_rs, key=lambda r: r.ttft_p90).display_label,
+                    'best_name_tput': max(arch_rs, key=lambda r: r.throughput_mean or 0).display_label,
+                } for arch in ['aggregated', 'pd', 'ep']
+                  for arch_rs in [[r for r in successful if r.architecture == arch]]
+                  if arch_rs},
             }
         }
 
