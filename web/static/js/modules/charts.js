@@ -218,8 +218,8 @@ function renderCharts(data, runId) {
                         html += `<div style="font-weight:800; color:#7c3aed; font-size:0.85em; text-transform:uppercase; margin-bottom:8px;">&#9201; TTFT ${pLabel} <span style="background:#7c3aed; color:white; font-size:0.7em; padding:2px 8px; border-radius:4px; margin-left:6px;">EPP TUNED</span> <span style="background:#64748b; color:white; font-size:0.65em; padding:2px 6px; border-radius:3px; margin-left:4px;">AGGREGATED</span></div>`;
                         html += `<div style="font-size:1.3em; font-weight:800; color:#1e293b; margin-bottom:4px;">${aggBest.config_name}</div>`;
                         const aggConcStr = aggBest.concurrency ? ` | c=${aggBest.concurrency}` : '';
-                        const aggMeanStr = aggBest.throughput_mean ? ` | Mean: <strong>${aggBest.throughput_mean} req/s</strong>` : '';
-                        html += `<div style="font-size:0.9em; color:#475569;">TTFT ${pLabel}: <strong>${aggBest[`ttft_${p}`]} ms</strong> | Throughput: <strong>${aggBest[`throughput_${p}`] || aggBest.throughput_p90} req/s</strong>${aggMeanStr}${aggConcStr}</div>`;
+                        const aggTputMean = aggBest.throughput_mean || aggBest.throughput_p90;
+                        html += `<div style="font-size:0.9em; color:#475569;">TTFT ${pLabel}: <strong>${aggBest[`ttft_${p}`]} ms</strong> | Throughput Mean: <strong>${aggTputMean} req/s</strong>${aggConcStr}</div>`;
                         html += `<div style="font-size:0.8em; color:#7c3aed; margin-top:4px;">EPP: ${aggBest.name} (${w.prefix_cache || '?'}:${w.kv_cache || '?'}:${w.queue || '?'})</div>`;
                         if (aggBest.manifest_types && aggBest.manifest_types.length) {
                             html += '<div style="margin-top:8px;">';
@@ -248,8 +248,8 @@ function renderCharts(data, runId) {
                         html += `<div style="font-weight:800; color:#7c3aed; font-size:0.85em; text-transform:uppercase; margin-bottom:8px;">&#9889; THROUGHPUT ${pLabel} <span style="background:#7c3aed; color:white; font-size:0.7em; padding:2px 8px; border-radius:4px; margin-left:6px;">EPP TUNED</span> <span style="background:#64748b; color:white; font-size:0.65em; padding:2px 6px; border-radius:3px; margin-left:4px;">PD</span></div>`;
                         html += `<div style="font-size:1.3em; font-weight:800; color:#1e293b; margin-bottom:4px;">${pdBest.config_name}</div>`;
                         const pdConcStr = pdBest.concurrency ? ` | c=${pdBest.concurrency}` : '';
-                        const pdMeanStr = pdBest.throughput_mean ? ` | Mean: <strong>${pdBest.throughput_mean} req/s</strong>` : '';
-                        html += `<div style="font-size:0.9em; color:#475569;">TTFT ${pLabel}: <strong>${pdBest[`ttft_${p}`]} ms</strong> | Throughput: <strong>${pdBest[`throughput_${p}`] || pdBest.throughput_p90} req/s</strong>${pdMeanStr}${pdConcStr}</div>`;
+                        const pdTputMean = pdBest.throughput_mean || pdBest.throughput_p90;
+                        html += `<div style="font-size:0.9em; color:#475569;">TTFT ${pLabel}: <strong>${pdBest[`ttft_${p}`]} ms</strong> | Throughput Mean: <strong>${pdTputMean} req/s</strong>${pdConcStr}</div>`;
                         html += `<div style="font-size:0.8em; color:#7c3aed; margin-top:4px;">EPP: ${pdBest.name} (${w.prefix_cache || '?'}:${w.kv_cache || '?'}:${w.queue || '?'})</div>`;
                         if (pdBest.manifest_types && pdBest.manifest_types.length) {
                             html += '<div style="margin-top:8px;">';

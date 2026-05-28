@@ -248,8 +248,8 @@ function buildRecSection(runId, data, rec, summary, best, allRes) {
                         s += `<div style="font-weight:800;color:#7c3aed;font-size:0.85em;text-transform:uppercase;margin-bottom:8px;">${goalLabel} ${pLabel} <span style="background:#7c3aed;color:white;font-size:0.7em;padding:2px 8px;border-radius:4px;margin-left:6px;">EPP TUNED</span> <span style="background:#64748b;color:white;font-size:0.65em;padding:2px 6px;border-radius:3px;margin-left:4px;">${archLabel}</span></div>`;
                         s += `<div style="font-size:1.3em;font-weight:800;color:#1e293b;margin-bottom:4px;">${b.config_name}</div>`;
                         const concStr = b.concurrency ? ` | c=${b.concurrency}` : '';
-                        const eppMeanStr = b.throughput_mean ? ` | Mean: <strong>${b.throughput_mean} req/s</strong>` : '';
-                        s += `<div style="font-size:0.9em;color:#475569;">TTFT ${pLabel}: <strong>${b[`ttft_${p}`]} ms</strong> | Throughput: <strong>${b[`throughput_${p}`] || b.throughput_p90} req/s</strong>${eppMeanStr}${concStr}</div>`;
+                        const eppTputMean = b.throughput_mean || b.throughput_p90;
+                        s += `<div style="font-size:0.9em;color:#475569;">TTFT ${pLabel}: <strong>${b[`ttft_${p}`]} ms</strong> | Throughput Mean: <strong>${eppTputMean} req/s</strong>${concStr}</div>`;
                         s += `<div style="font-size:0.8em;color:#7c3aed;margin-top:4px;">EPP: ${b.name} (${w.prefix_cache || '?'}:${w.kv_cache || '?'}:${w.queue || '?'})</div>`;
                         s += '</div>';
                     } else {
