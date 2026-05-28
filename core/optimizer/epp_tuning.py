@@ -144,11 +144,13 @@ class EPPTuningMixin:
             diversity = 0.3
         elif cache_mode == 'multi_group':
             n_groups = getattr(self.config, 'prefix_cache_groups', 5) or 5
-            diversity = min(1.0, max(0.3, n_groups / max(num_pods, 1)))
+            diversity = min(0.7, max(0.2, n_groups / max(num_pods * 3, 1)))
         else:
             diversity = 1.0
 
-        prefix_time_impact = prefix_time_impact_raw * diversity
+        # With few pods, cache affinity causes queue imbalance — dampen prefix weight
+        pod_damping = min(1.0, num_pods / 8.0) if num_pods > 0 else 0.5
+        prefix_time_impact = prefix_time_impact_raw * diversity * pod_damping
 
         total_tpsg = prefill_tpsg + decode_tpsg
 
@@ -160,12 +162,14 @@ class EPPTuningMixin:
             kv_eviction_cost = (isl / prefill_tpsg) * (kv_utilization ** 2)
             kv_source = f"({concurrency}/{max_seqs})²={kv_utilization**2:.4f} (estimated)"
 
+        # Queue cost: with few pods, queue balance matters more — scale inversely with pod count
+        queue_floor = max(0.15, 1.0 / max(num_pods, 1))
         if queue_pressure > 0:
-            queue_wait_cost = (isl + osl) / total_tpsg * (queue_pressure + 0.1)
-            queue_source = f"queue_pressure={queue_pressure:.4f} (measured)"
+            queue_wait_cost = (isl + osl) / total_tpsg * max(queue_pressure, queue_floor)
+            queue_source = f"queue_pressure=max({queue_pressure:.4f}, floor={queue_floor:.2f}) (measured)"
         else:
-            queue_wait_cost = (isl + osl) / total_tpsg / max(num_pods, 1)
-            queue_source = f"1/{num_pods} pods (estimated)"
+            queue_wait_cost = (isl + osl) / total_tpsg * queue_floor
+            queue_source = f"floor={queue_floor:.2f} ({num_pods} pods, estimated)"
 
         # Active request cost: proportional to how loaded pods are (running requests vs capacity)
         prom = self._get_best_result_prom(arch)
@@ -205,8 +209,8 @@ class EPPTuningMixin:
         w_active = max(1, min(5, round(active_cost / total * scale)))
         w_slo = max(1, min(5, round(slo_cost / total * scale))) if has_sla else 0
 
-        self.log(f"  Smart EPP Weight Derivation ({arch}):", 'info')
-        self.log(f"    Prefix impact:  ISL={isl} × {cache_pct:.0f}% ({cache_source}) / TPSG={prefill_tpsg:.0f} = {prefix_time_impact_raw:.4f} × diversity={diversity} ({cache_mode}) = {prefix_time_impact:.4f} GPU-sec", 'info')
+        self.log(f"  Smart EPP Weight Derivation ({arch}, {num_pods} pods):", 'info')
+        self.log(f"    Prefix impact:  ISL={isl} × {cache_pct:.0f}% ({cache_source}) / TPSG={prefill_tpsg:.0f} = {prefix_time_impact_raw:.4f} × diversity={diversity:.2f} ({cache_mode}) × pod_damping={pod_damping:.2f} = {prefix_time_impact:.4f} GPU-sec", 'info')
         self.log(f"    KV pressure:    ISL={isl} / {prefill_tpsg:.0f} × {kv_source} = {kv_eviction_cost:.4f} GPU-sec", 'info')
         self.log(f"    Queue cost:     ({isl}+{osl}) / {total_tpsg:.0f} × {queue_source} = {queue_wait_cost:.4f} GPU-sec", 'info')
         self.log(f"    Active request: OSL={osl} / {decode_tpsg:.0f} × {active_source} = {active_cost:.4f} GPU-sec", 'info')
@@ -276,9 +280,20 @@ class EPPTuningMixin:
         self.log(f"    Measured KV cache: {kv_pressure:.4f}, queue pressure: {queue_pressure:.4f}, active load: {active_load:.4f}", 'info')
 
         total_tpsg = prefill_tpsg + decode_tpsg
-        prefix_impact = (isl * actual_hit_pct / 100.0) / prefill_tpsg
+
+        # Get pod count for damping
+        num_pods = 1
+        if arch == 'pd' and self.pareto_results:
+            best_split = min(self.pareto_results, key=lambda x: x[1].ttft_p90 if x[1].ttft_p90 else 1e9)[0]
+            num_pods = best_split.prefill_pods + best_split.decode_pods
+        elif arch == 'aggregated' and self.aggregated_tp:
+            num_pods = self.config.total_gpus // self.aggregated_tp
+
+        pod_damping = min(1.0, num_pods / 8.0) if num_pods > 0 else 0.5
+        prefix_impact = (isl * actual_hit_pct / 100.0) / prefill_tpsg * pod_damping
         kv_impact = (isl / prefill_tpsg) * min(kv_pressure, 1.0)
-        queue_impact = (isl + osl) / total_tpsg * (queue_pressure + 0.1)
+        queue_floor = max(0.15, 1.0 / max(num_pods, 1))
+        queue_impact = (isl + osl) / total_tpsg * max(queue_pressure, queue_floor)
         active_impact = (osl / decode_tpsg) * min(active_load, 1.0)
 
         total = prefix_impact + kv_impact + queue_impact + active_impact
