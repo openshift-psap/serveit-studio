@@ -918,6 +918,8 @@ function renderCharts(data, runId) {
         if (cal.pd) calEntries.push({label: 'PD', entry: cal.pd});
         if (cal.aggregated) calEntries.push({label: 'Aggregated', entry: cal.aggregated});
         if (isBalanced && cal.ep) calEntries.push({label: 'EP', entry: cal.ep});
+        if (cal.epp_pd) calEntries.push({label: 'PD (EPP Tuned)', entry: cal.epp_pd});
+        if (cal.epp_agg) calEntries.push({label: 'Aggregated (EPP Tuned)', entry: cal.epp_agg});
 
         const tableTitle = calEntries.length > 1
             ? 'Percentile Breakdown: ' + calEntries.map(e => e.label).join(' vs ') + rpsLabel

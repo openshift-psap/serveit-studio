@@ -962,10 +962,16 @@ class ReportAnalyzer:
         step10_pd = None
         step10_ep = None
         step10_agg = None
+        epp_pd = None
+        epp_agg = None
         for r in step10_results:
-            if r.config_name.startswith('step10-ep-') and step10_ep is None:
+            if r.config_name.startswith('step11-epp-') and 'aggregated' in r.config_name and epp_agg is None:
+                epp_agg = r
+            elif r.config_name.startswith('step11-epp-') and epp_pd is None:
+                epp_pd = r
+            elif r.config_name.startswith('step10-ep-') and step10_ep is None:
                 step10_ep = r
-            elif r.architecture == 'pd' and step10_pd is None:
+            elif r.architecture == 'pd' and not r.config_name.startswith('step11') and step10_pd is None:
                 step10_pd = r
             elif r.config_name.startswith('step10-aggregated') and step10_agg is None:
                 step10_agg = r
@@ -1016,6 +1022,11 @@ class ReportAnalyzer:
 
         if step10_agg:
             data['aggregated'] = _step9_entry(step10_agg)
+
+        if epp_pd:
+            data['epp_pd'] = _step9_entry(epp_pd)
+        if epp_agg:
+            data['epp_agg'] = _step9_entry(epp_agg)
 
         # Add overloaded comparison if available
         if overloaded_pd and step10_pd:
@@ -1130,10 +1141,11 @@ class ReportAnalyzer:
             if r.config_name.startswith(('step2', 'step3')) and r.is_successful
         ]
 
-        # Step 10 calibrated QPS results (separate section)
+        # Step 10 calibrated QPS results + Step 11 EPP results (separate section)
         step10_results = [
             r for r in results
-            if r.config_name.startswith('step10') and r.is_successful
+            if (r.config_name.startswith('step10') or r.config_name.startswith('step11-epp-'))
+            and r.is_successful
         ]
 
         pareto = self.calculate_pareto_frontier(test_results)

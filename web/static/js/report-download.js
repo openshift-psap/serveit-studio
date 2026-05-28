@@ -522,6 +522,8 @@ function buildCalSection(data) {
     if (cal.pd) entries.push({ label: 'PD', entry: cal.pd });
     if (cal.aggregated) entries.push({ label: 'Aggregated', entry: cal.aggregated });
     if (cal.ep) entries.push({ label: 'EP', entry: cal.ep });
+    if (cal.epp_pd) entries.push({ label: 'PD (EPP Tuned)', entry: cal.epp_pd });
+    if (cal.epp_agg) entries.push({ label: 'Aggregated (EPP Tuned)', entry: cal.epp_agg });
 
     const dlRequestedRps = cal.requested_rps != null ? cal.requested_rps : null;
     const rpsLabel = dlRequestedRps != null ? ` at ${Math.round(dlRequestedRps)} concurrent` : '';
