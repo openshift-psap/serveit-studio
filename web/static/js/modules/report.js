@@ -302,13 +302,41 @@ function estimateGPUs(allResults, testedISL, testedOSL, testedUsers, testedTurns
         const tp = r.tp || r.prefill_tp || 1;
         const estGpus = Math.max(tp, Math.ceil(rawGpus / tp) * tp);
 
-        // SLA assessment from Step 7 tested data
+        // Estimate TTFT and throughput for the new workload
+        // TTFT scales roughly with ISL (prefill compute) and concurrency (queuing)
+        // Throughput scales inversely with cost per request
+        var islScale = userEffISL / testedEffISL;
+        var oslScale = userEffOSL / testedEffOSL;
+        var concRatio = userConcurrency / (testedUsers || userConcurrency);
+        // TTFT ~ prefill_time + queue_wait; prefill scales with ISL, queue with concurrency/capacity
+        // Approximate: TTFT scales with ISL for compute, and with sqrt(concurrency) for queuing
+        var ttftScale = islScale * Math.sqrt(concRatio);
+        // Throughput scales inversely with cost and proportionally with GPU count
+        var tputScale = (estGpus / r.gpus) / costScale / turnsScale;
+
+        var est_ttft_p50 = r.ttft_p50 != null ? Math.round(r.ttft_p50 * ttftScale * 10) / 10 : null;
+        var est_ttft_p90 = r.ttft_p90 != null ? Math.round(r.ttft_p90 * ttftScale * 10) / 10 : null;
+        var est_ttft_p95 = r.ttft_p95 != null ? Math.round(r.ttft_p95 * ttftScale * 10) / 10 : null;
+        var est_ttft_p99 = r.ttft_p99 != null ? Math.round(r.ttft_p99 * ttftScale * 10) / 10 : null;
+        var est_tput_mean = r.throughput_mean != null ? Math.round(r.throughput_mean * tputScale * 100) / 100 : null;
+        var est_tput_p90 = r.throughput_p90 != null ? Math.round(r.throughput_p90 * tputScale * 100) / 100 : null;
+
+        // SLA assessment on estimated values
         var sla_ttft = null;
         var sla_meets = null;
+        var sla_gpus_needed = null;
         if (slaMs && slaPctl) {
-            sla_ttft = r['ttft_' + slaPctl];
+            var estTtftAtPctl = slaPctl === 'p50' ? est_ttft_p50 : (slaPctl === 'p90' ? est_ttft_p90 : (slaPctl === 'p95' ? est_ttft_p95 : est_ttft_p99));
+            sla_ttft = estTtftAtPctl;
             if (sla_ttft != null) {
                 sla_meets = sla_ttft <= slaMs;
+                if (!sla_meets) {
+                    // Estimate GPUs needed: scale up until TTFT meets SLA
+                    // TTFT ~ concurrency/gpus, so gpus_needed = current_gpus * (current_ttft / target)
+                    var slaRatio = sla_ttft / slaMs;
+                    var rawSlaGpus = estGpus * slaRatio;
+                    sla_gpus_needed = Math.max(tp, Math.ceil(rawSlaGpus / tp) * tp);
+                }
             }
         }
 
@@ -322,12 +350,13 @@ function estimateGPUs(allResults, testedISL, testedOSL, testedUsers, testedTurns
             cost_model: hasTpsg ? 'tpsg' : 'proportional',
             prefill_tpsg: prefillTPSG,
             decode_tpsg: decodeTPSG,
-            ttft_p50: r.ttft_p50, ttft_p90: r.ttft_p90, ttft_p95: r.ttft_p95, ttft_p99: r.ttft_p99,
-            throughput_p50: r.throughput_p50, throughput_p90: r.throughput_p90, throughput_p95: r.throughput_p95, throughput_p99: r.throughput_p99,
+            ttft_p50: est_ttft_p50, ttft_p90: est_ttft_p90, ttft_p95: est_ttft_p95, ttft_p99: est_ttft_p99,
+            throughput_mean: est_tput_mean, throughput_p90: est_tput_p90,
             sla_target_ms: slaMs,
             sla_percentile: slaPctl,
             sla_ttft: sla_ttft,
             sla_meets: sla_meets,
+            sla_gpus_needed: sla_gpus_needed,
         };
     }).sort((a, b) => a.estimated_gpus - b.estimated_gpus);
 }
@@ -348,12 +377,11 @@ function renderEstimatorResults(results, suffix, testedISL, testedOSL, testedUse
     html += '<table class="estimator-table"><thead>' +
         '<tr><th rowspan="2">Configuration</th><th rowspan="2">Arch</th><th rowspan="2">TP</th>' +
         '<th rowspan="2">Tested<br>GPUs</th><th rowspan="2">Est.<br>GPUs</th>' +
-        '<th colspan="4" style="text-align:center;' + sep + '">TTFT (ms)</th>' +
-        '<th colspan="4" style="text-align:center;' + sep + '">Throughput (req/s)</th>' +
+        '<th colspan="4" style="text-align:center;' + sep + '">Est. TTFT (ms)</th>' +
+        '<th rowspan="2" style="text-align:center;' + sep + '">Est. Throughput<br>Mean (req/s)</th>' +
         (hasSla ? '<th rowspan="2" style="' + sep + '">SLA<br>' + slaPctl.toUpperCase() + ' &le; ' + slaMs + 'ms</th>' : '') +
         '</tr>' +
         '<tr>' +
-        '<th style="' + sep + '">P50</th><th>P90</th><th>P95</th><th>P99</th>' +
         '<th style="' + sep + '">P50</th><th>P90</th><th>P95</th><th>P99</th>' +
         '</tr></thead><tbody>';
 
@@ -364,11 +392,13 @@ function renderEstimatorResults(results, suffix, testedISL, testedOSL, testedUse
             if (r.sla_meets === true) {
                 slaCell = '<td style="' + sep + 'color:#059669;font-weight:700;text-align:center;">PASS<br><span style="font-weight:400;font-size:0.85em;">' + (r.sla_ttft != null ? r.sla_ttft.toFixed(1) + ' ms' : '-') + '</span></td>';
             } else if (r.sla_meets === false) {
-                slaCell = '<td style="' + sep + 'color:#dc2626;font-weight:700;text-align:center;">FAIL<br><span style="font-weight:400;font-size:0.85em;">' + (r.sla_ttft != null ? r.sla_ttft.toFixed(1) + ' ms' : '-') + '</span></td>';
+                var gpuHint = r.sla_gpus_needed ? '<br><span style="font-weight:400;font-size:0.82em;">Need ' + r.sla_gpus_needed + ' GPUs</span>' : '';
+                slaCell = '<td style="' + sep + 'color:#d97706;font-weight:700;text-align:center;">' + (r.sla_ttft != null ? r.sla_ttft.toFixed(1) + ' ms' : '-') + gpuHint + '</td>';
             } else {
                 slaCell = '<td style="' + sep + 'color:#64748b;text-align:center;">N/A</td>';
             }
         }
+        var tputMean = r.throughput_mean != null ? r.throughput_mean.toFixed(2) : (r.throughput_p90 != null ? r.throughput_p90.toFixed(2) : '-');
         html += '<tr class="' + (isBest ? 'estimator-best' : '') + '">' +
             '<td>' + r.config_name + '</td>' +
             '<td><span class="arch-badge arch-' + r.architecture.toLowerCase() + '">' + r.architecture + '</span></td>' +
@@ -379,10 +409,7 @@ function renderEstimatorResults(results, suffix, testedISL, testedOSL, testedUse
             '<td>' + v(r.ttft_p90, '') + '</td>' +
             '<td>' + v(r.ttft_p95, '') + '</td>' +
             '<td>' + v(r.ttft_p99, '') + '</td>' +
-            '<td style="' + sep + '">' + v(r.throughput_p50, '') + '</td>' +
-            '<td>' + v(r.throughput_p90, '') + '</td>' +
-            '<td>' + v(r.throughput_p95, '') + '</td>' +
-            '<td>' + v(r.throughput_p99, '') + '</td>' +
+            '<td style="' + sep + 'text-align:center;font-weight:600;">' + tputMean + '</td>' +
             slaCell +
             '</tr>';
     });
