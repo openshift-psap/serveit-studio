@@ -965,7 +965,11 @@ class ReportAnalyzer:
         epp_pd = None
         epp_agg = None
         for r in step10_results:
-            if r.config_name.startswith('step11-epp-') and 'aggregated' in r.config_name and epp_agg is None:
+            if r.config_name.startswith('step10-epp-aggregated') and epp_agg is None:
+                epp_agg = r
+            elif r.config_name.startswith('step10-epp-') and epp_pd is None:
+                epp_pd = r
+            elif r.config_name.startswith('step11-epp-') and 'aggregated' in r.config_name and epp_agg is None:
                 epp_agg = r
             elif r.config_name.startswith('step11-epp-') and epp_pd is None:
                 epp_pd = r

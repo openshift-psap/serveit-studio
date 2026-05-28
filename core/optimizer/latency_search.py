@@ -394,3 +394,78 @@ class LatencySearchMixin:
                     f"({ttft_improvement:+.1f}%)", 'info')
             self.log(f"  Throughput: {overloaded_tput:.2f} → {cal_pd_tput:.2f} req/s", 'info')
 
+        # --- EPP-tuned calibrated load tests (if EPP tuning ran) ---
+        if getattr(self, 'epp_benchmark_results', None) and not self._should_stop():
+            self.log("", 'info')
+            self.log("📊 Re-testing with EPP-tuned weights at calibrated load...", 'info')
+
+            for arch, results in self.epp_benchmark_results.items():
+                if not results:
+                    continue
+                best_name, best_weights, best_epp_result = min(
+                    results, key=lambda x: x[2].ttft_p90 or float('inf')
+                )
+
+                if arch == 'pd' and best_split:
+                    epp_test_id = f"step10-epp-{best_split.prefill_pods}p{best_split.decode_pods}d-ptp{best_split.prefill_tp}-dtp{best_split.decode_tp}"
+                    if epp_test_id in self.completed_tests:
+                        self.log(f"  ⏩ EPP PD test: resuming from DB", 'info')
+                        continue
+                    epp_config = self._create_pd_config(best_split)
+                    epp_config.test_id = epp_test_id
+                    epp_config.num_users = int(calibrated_concurrency)
+                    epp_config.request_rate = int(calibrated_concurrency)
+                    epp_config.epp_config = {
+                        'preset': 'custom',
+                        'plugins': {
+                            'prefix_cache': {'enabled': True, 'weight': best_weights['prefix_cache_weight']},
+                            'kv_cache': {'enabled': True, 'weight': best_weights['kv_cache_weight']},
+                            'queue': {'enabled': True, 'weight': best_weights['queue_weight']},
+                        }
+                    }
+                elif arch == 'aggregated' and self.aggregated_tp:
+                    epp_test_id = f"step10-epp-aggregated-tp{self.aggregated_tp}"
+                    if epp_test_id in self.completed_tests:
+                        self.log(f"  ⏩ EPP Aggregated test: resuming from DB", 'info')
+                        continue
+                    epp_config = self._create_aggregated_config(
+                        tp=self.aggregated_tp,
+                        num_gpus=self.aggregated_gpus,
+                        isl=self.config.isl,
+                        osl=self.config.osl,
+                        test_id=epp_test_id,
+                        use_concurrency=True
+                    )
+                    epp_config.num_users = int(calibrated_concurrency)
+                    epp_config.request_rate = int(calibrated_concurrency)
+                    epp_config.epp_config = {
+                        'preset': 'custom',
+                        'plugins': {
+                            'prefix_cache': {'enabled': True, 'weight': best_weights['prefix_cache_weight']},
+                            'kv_cache': {'enabled': True, 'weight': best_weights['kv_cache_weight']},
+                            'queue': {'enabled': True, 'weight': best_weights['queue_weight']},
+                        }
+                    }
+                else:
+                    continue
+
+                epp_result = self.orchestrator.run_test(
+                    epp_config,
+                    cleanup=True,
+                    log_callback=lambda msg: self.log(msg, 'info'),
+                    stop_check=self._should_stop
+                )
+                self.all_test_results.append((epp_config, epp_result))
+                self._save_test_to_database(epp_config, epp_result)
+
+                if epp_result and epp_result.guidellm_success:
+                    epp_ttft = epp_result.ttft_p90 or 0
+                    epp_tput = epp_result.throughput_p90 or 0
+                    self.log(f"  ✅ EPP {arch} at calibrated load: TTFT={epp_ttft:.1f}ms, "
+                            f"Throughput={epp_tput:.2f} req/s", 'success')
+                else:
+                    self.log(f"  ❌ EPP {arch} calibrated load test failed", 'error')
+
+                if self._should_stop():
+                    break
+
