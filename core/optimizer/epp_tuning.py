@@ -204,12 +204,13 @@ class EPPTuningMixin:
         w_queue = max(1, min(5, w_queue + adj_queue))
         w_active = max(1, min(5, w_active + adj_active))
 
+        has_sla = getattr(self.config, 'latency_constraint_enabled', False)
+
         self.log(f"    Cache hit: {cache_pct:.0f}% ({cache_source}), mode={cache_mode}, routing_value={cache_routing_value:.1f} → prefix adj={adj_prefix:+d}", 'info')
         self.log(f"    KV pressure: {kv_pressure:.4f} → kv adj={adj_kv:+d}", 'info')
         self.log(f"    Queue pressure: {queue_pressure:.4f} → queue adj={adj_queue:+d}", 'info')
         self.log(f"    Active load: {active_load:.4f} → active adj={adj_active:+d}", 'info')
-        self.log(f"    → Weights: prefix={w_prefix}, kv={w_kv}, queue={w_queue}, active={w_active}" +
-                 (f", slo={w_slo}" if has_sla else ""), 'success')
+        self.log(f"    → Weights: prefix={w_prefix}, kv={w_kv}, queue={w_queue}, active={w_active}", 'success')
 
         return {
             'prefix_cache_weight': float(w_prefix),
@@ -217,15 +218,15 @@ class EPPTuningMixin:
             'queue_weight': float(w_queue),
             'active_request_weight': float(w_active),
             'slo_enabled': has_sla,
-            'slo_weight': float(w_slo) if has_sla else 0,
+            'slo_weight': 3.0 if has_sla else 0,
         }
 
-    def _refine_epp_from_metrics(self, test_result, arch: str = 'aggregated') -> Optional[Dict]:
-        """Refine EPP weights from the Smart EPP test's own metrics.
+    def _refine_epp_from_metrics(self, test_result, arch: str = 'aggregated', base_weights: Dict = None) -> Optional[Dict]:
+        """Refine EPP weights from the smart-derived test's own Prometheus metrics.
 
-        After running with derived weights, reads actual cache hit rate,
-        KV utilization variance, and queue depth variance from the test.
-        Returns refined weights or None if metrics unavailable.
+        After running with smart-derived weights, reads the test's actual metrics
+        and applies a second round of ±1 adjustments. Uses the smart-derived
+        weights as the starting point (not the user preset).
         """
         if not test_result:
             return None
@@ -237,7 +238,7 @@ class EPPTuningMixin:
             try:
                 with self.db_manager.get_connection() as conn:
                     row = conn.execute(
-                        'SELECT metrics_json FROM test_configurations WHERE config_name = ? AND run_id = ?',
+                        'SELECT metrics_json, test_config_json FROM test_configurations WHERE config_name = ? AND run_id = ?',
                         (test_id, self.run_id)
                     ).fetchone()
                     if row and row[0]:
@@ -247,31 +248,22 @@ class EPPTuningMixin:
                 pass
         if not prom:
             return None
-        metrics = prom
 
-        prefill_tpsg = self.optimal_prefill_tp.tpsg if self.optimal_prefill_tp else None
-        decode_tpsg = self.optimal_decode_tp.tpsg if self.optimal_decode_tp else None
-        if not prefill_tpsg or not decode_tpsg:
-            return None
+        max_seqs = self._compute_max_num_seqs(self.optimal_decode_tp.tp if self.optimal_decode_tp else 1) or 256
 
-        isl = self.config.isl
-        osl = self.config.osl
-
-        hits = self._prom_avg(metrics, 'vllm_prefix_cache_hits_rate')
-        queries = self._prom_avg(metrics, 'vllm_prefix_cache_queries_rate')
+        hits = self._prom_avg(prom, 'vllm_prefix_cache_hits_rate')
+        queries = self._prom_avg(prom, 'vllm_prefix_cache_queries_rate')
         actual_hit_pct = (hits / queries * 100) if hits is not None and queries and queries > 0 else 0
-        kv_pressure = self._prom_avg(metrics, 'vllm_kv_cache_pct') or 0
-        requests_waiting = self._prom_avg(metrics, 'vllm_requests_waiting') or 0
-        requests_running = self._prom_avg(metrics, 'vllm_requests_running') or 0
+        kv_pressure = self._prom_avg(prom, 'vllm_kv_cache_pct') or 0
+        requests_waiting = self._prom_avg(prom, 'vllm_requests_waiting') or 0
+        requests_running = self._prom_avg(prom, 'vllm_requests_running') or 0
         total_reqs = requests_running + requests_waiting
         queue_pressure = (requests_waiting / total_reqs) if total_reqs > 0 else 0
-        active_load = requests_running / max(self._compute_max_num_seqs(self.optimal_decode_tp.tp if self.optimal_decode_tp else 1) or 256, 1)
+        active_load = requests_running / max(max_seqs, 1)
 
         if actual_hit_pct > 0:
             self.log(f"    Measured cache hit rate: {actual_hit_pct:.1f}%", 'info')
         self.log(f"    Measured KV cache: {kv_pressure:.4f}, queue pressure: {queue_pressure:.4f}, active load: {active_load:.4f}", 'info')
-
-        total_tpsg = prefill_tpsg + decode_tpsg
 
         # Get pod count for damping
         num_pods = 1
@@ -281,21 +273,27 @@ class EPPTuningMixin:
         elif arch == 'aggregated' and self.aggregated_tp:
             num_pods = self.config.total_gpus // self.aggregated_tp
 
-        pod_damping = 1.0 if num_pods <= 2 else min(1.0, 2.0 / num_pods)
-        prefix_impact = (isl * actual_hit_pct / 100.0) / prefill_tpsg * pod_damping
-        kv_impact = (isl / prefill_tpsg) * min(kv_pressure, 1.0)
-        queue_floor = 0.15 if num_pods <= 2 else min(0.25, 1.0 / max(num_pods, 1))
-        queue_impact = (isl + osl) / total_tpsg * max(queue_pressure, queue_floor)
-        active_impact = (osl / decode_tpsg) * min(active_load, 1.0)
+        # Compute adjustment signals from the test's own metrics
+        cache_mode = getattr(self.config, 'prefix_cache_mode', 'identical') or 'identical'
+        cache_routing_value = 0.1 if cache_mode == 'identical' else (0.3 if cache_mode == 'shared_prefix' else 0.7)
+        prefix_signal = (actual_hit_pct / 100.0) * cache_routing_value - 0.3
+        if num_pods > 2:
+            prefix_signal *= min(1.0, 2.0 / num_pods)
+        kv_signal = (kv_pressure - 0.3) if kv_pressure > 0 else -0.1
+        queue_signal = (queue_pressure - 0.1) if queue_pressure > 0 else 0
+        active_signal = (active_load - 0.3) if active_load > 0 else -0.1
 
-        total = prefix_impact + kv_impact + queue_impact + active_impact
-        if total <= 0:
-            return None
+        adj_prefix = max(-1, min(1, round(prefix_signal * 2)))
+        adj_kv = max(-1, min(1, round(kv_signal * 3)))
+        adj_queue = max(-1, min(1, round(queue_signal * 3)))
+        adj_active = max(-1, min(1, round(active_signal * 2)))
 
-        w_prefix = max(1, min(5, round(prefix_impact / total * 7)))
-        w_kv = max(1, min(5, round(kv_impact / total * 7)))
-        w_queue = max(1, min(5, round(queue_impact / total * 7)))
-        w_active = max(1, min(5, round(active_impact / total * 7)))
+        # Apply adjustments to the smart-derived weights from the first test
+        bw = base_weights or self._get_user_baseline_weights()
+        w_prefix = max(1, min(5, bw['prefix_cache_weight'] + adj_prefix))
+        w_kv = max(1, min(5, bw['kv_cache_weight'] + adj_kv))
+        w_queue = max(1, min(5, bw['queue_weight'] + adj_queue))
+        w_active = max(1, min(5, bw.get('active_request_weight', 2) + adj_active))
 
         self.log(f"    → Refined weights: prefix={w_prefix}, kv={w_kv}, queue={w_queue}, active={w_active}", 'success')
 
@@ -556,7 +554,7 @@ class EPPTuningMixin:
             if smart_weights and arch_results and not self._should_stop():
                 first_result = arch_results[0][2]
                 self.log(f"\n  Attempting metrics-based refinement...", 'info')
-                refined = self._refine_epp_from_metrics(first_result, arch=arch)
+                refined = self._refine_epp_from_metrics(first_result, arch=arch, base_weights=smart_weights)
                 if refined and (refined['prefix_cache_weight'] != smart_weights['prefix_cache_weight'] or
                                 refined['kv_cache_weight'] != smart_weights['kv_cache_weight'] or
                                 refined['queue_weight'] != smart_weights['queue_weight']):
