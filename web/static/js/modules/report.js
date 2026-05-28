@@ -215,11 +215,12 @@ function runEstimator(suffix) {
 
     const gpuSizing = data.gpu_sizing || {};
     const latencySearch = data.latency_search || null;
-    const results = estimateGPUs(data.all_results || [], testedISL, testedOSL, testedUsers, testedTurns, testedIslStdev, testedOslStdev, userConc, userISL, userOSL, userIslStdev, userOslStdev, userTurns, gpuSizing, slaMs, slaPctl, latencySearch);
+    const eppTuning = data.epp_tuning || null;
+    const results = estimateGPUs(data.all_results || [], testedISL, testedOSL, testedUsers, testedTurns, testedIslStdev, testedOslStdev, userConc, userISL, userOSL, userIslStdev, userOslStdev, userTurns, gpuSizing, slaMs, slaPctl, latencySearch, eppTuning);
     renderEstimatorResults(results, suffix, testedISL, testedOSL, testedUsers, testedTurns, testedIslStdev, testedOslStdev, slaMs, slaPctl);
 }
 
-function estimateGPUs(allResults, testedISL, testedOSL, testedUsers, testedTurns, testedIslStdev, testedOslStdev, userConcurrency, userISL, userOSL, userIslStdev, userOslStdev, userTurns, gpuSizing, slaMs, slaPctl, latencySearch) {
+function estimateGPUs(allResults, testedISL, testedOSL, testedUsers, testedTurns, testedIslStdev, testedOslStdev, userConcurrency, userISL, userOSL, userIslStdev, userOslStdev, userTurns, gpuSizing, slaMs, slaPctl, latencySearch, eppTuning) {
     // GPU estimation using additive cost model with TPSG from calibration.
     //
     // GPU cost per request = ISL/prefill_TPSG + OSL/decode_TPSG (GPU-seconds)
@@ -267,6 +268,34 @@ function estimateGPUs(allResults, testedISL, testedOSL, testedUsers, testedTurns
             bestByArch[arch] = r;
         }
     });
+
+    // Override with EPP-tuned results when available (better routing = better throughput)
+    if (eppTuning && eppTuning.by_architecture) {
+        ['aggregated', 'pd'].forEach(function(arch) {
+            var trials = (eppTuning.by_architecture || {})[arch];
+            if (!trials || !trials.length) return;
+            var best = trials.reduce(function(a, b) {
+                return (a.throughput_mean || a.throughput_p90 || 0) > (b.throughput_mean || b.throughput_p90 || 0) ? a : b;
+            });
+            var archKey = arch.toUpperCase();
+            var eppKey = archKey + ' (EPP)';
+            var baseEntry = bestByArch[archKey];
+            if (best && baseEntry) {
+                bestByArch[eppKey] = {
+                    config_name: best.config_name,
+                    architecture: arch + ' (epp)',
+                    gpus: baseEntry.gpus,
+                    tp: baseEntry.tp || baseEntry.prefill_tp || 1,
+                    prefill_tp: baseEntry.prefill_tp,
+                    throughput_p50: best.throughput_p50, throughput_p90: best.throughput_p90,
+                    throughput_p95: best.throughput_p95, throughput_p99: best.throughput_p99,
+                    throughput_mean: best.throughput_mean,
+                    ttft_p50: best.ttft_p50, ttft_p90: best.ttft_p90,
+                    ttft_p95: best.ttft_p95, ttft_p99: best.ttft_p99,
+                };
+            }
+        });
+    }
 
     return Object.values(bestByArch).map(r => {
         const rawGpus = r.gpus * totalScale;
