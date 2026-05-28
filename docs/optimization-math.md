@@ -341,7 +341,9 @@ Cache-heavy weights cause queue imbalance when there are enough pods for request
 | 3-4 | 0.5-0.67 | 0.25 | Moderate damping — balance cache benefit against queue risk |
 | 8+ | 0.25 | 0.25 | Strong damping — queue balance dominates |
 
-**Why this matters:** Without pod damping, a PD config with 4 pods (3P+1D) and 50% cache hit rate produced weights 5:1:1:1 — the prefix cache dominated. This caused P99 TTFT to explode to 3346ms (+165% worse than baseline) because requests piled up on the pod with the cached prefix. With pod damping (0.5 for 4 pods), the same inputs produce 3:1:3:1, keeping P99 within 4% of baseline while still benefiting from cache affinity at P50. Meanwhile, the 2-pod aggregated config with no damping correctly produces cache-heavy weights (5:1:1) that improve TTFT P90 by 14%.
+**Architecture-aware pod count:** For PD architecture, `num_pods` is the number of **prefill** pods, not total pods. EPP routes requests to prefill pods — the decode pod is a single NIXL endpoint with no routing choice. For a 3P+1D config, `num_pods=3` (not 4). For aggregated, `num_pods` is all pods.
+
+**Why this matters:** Without pod damping, a PD config with 3 prefill pods and 50% cache hit rate produced weights 5:1:1:1. This caused P99 TTFT to explode to 3346ms (+165% worse than baseline) because requests piled up on the pod with the cached prefix. With pod damping (0.67 for 3 prefill pods), the same inputs produce more balanced weights, keeping P99 close to baseline while still benefiting from cache affinity at P50. Meanwhile, the 2-pod aggregated config with no damping correctly produces cache-heavy weights (5:1:2) that improve TTFT P90 by 19% and P99 by 21%.
 
 **Why these formulas?**
 
@@ -355,7 +357,7 @@ Cache-heavy weights cause queue imbalance when there are enough pods for request
 
 - **slo_cost** *(only when latency SLA is enabled)*: Measures how far tail latency overshoots the SLA target. `overshoot = max(0, (vllm_ttft_p99 - SLA_target) / SLA_target)`. If P99 TTFT is 2× the target, overshoot=1.0 and the SLO scorer gets a high weight — the EPP uses predicted latency to route requests to pods that can meet the target. When P99 is within the SLA, overshoot=0 and the weight stays at 1 (clamped floor). Falls back to a moderate estimate (0.3) when metrics are unavailable.
 
-**Architecture-specific derivation:** Weights are computed separately for aggregated and PD architectures because cache behavior differs. Aggregated pods each maintain their own prefix cache; PD mode only caches on prefill pods. The measured cache hit rates from Step 6 (aggregated) and Step 7 (PD) are used independently.
+**Architecture-specific derivation:** Weights are computed separately for aggregated and PD architectures because routing behavior differs. Aggregated pods all serve requests end-to-end — `num_pods` is the full replica count. PD pods are split into prefill and decode roles — EPP only routes to prefill pods, so `num_pods` = `prefill_pods` for damping calculations. Cache hit rates are measured independently from Step 6 (aggregated) and Step 7 (PD) Prometheus metrics.
 
 **Why normalize to sum ~7 (or ~9 with SLO)?** The default balanced preset is 3:2:2:2 (sum=9). With SLO enabled, the scale increases to 9 to accommodate the 5th dimension without compressing the existing weights. The EPP normalizes weights internally, so only ratios matter.
 
@@ -365,18 +367,18 @@ Cache-heavy weights cause queue imbalance when there are enough pods for request
 
 **Intentional ratio compression:** The floor clamp of 1 compresses extreme ratios. In the 4.9:4.9:0.2 example, the raw math suggests the third dimension is 24.5× less important than the others. After clamping to 5:5:1, it becomes only 5× less important — making it significantly more influential than the math alone would suggest. This is a deliberate safety feature: even in a cache-dominated workload where the math says "queue depth is irrelevant," the EPP still considers queue depth at 1/5th weight. This prevents pathological routing where a pod with a massive queue or zero free VRAM keeps receiving requests because its cache score is high.
 
-**Example (multi_group mode, 10 groups, 4 pods — PD 3P+1D):**
-ISL=2000, OSL=100, measured cache hit=50%, prefill_TPSG=10931, decode_TPSG=729, 4 pods
+**Example (multi_group mode, 10 groups, PD 3P+1D — num_pods=3 prefill):**
+ISL=2000, OSL=100, measured cache hit=50%, prefill_TPSG=10931, decode_TPSG=729, 3 prefill pods
 ```
 prefix_raw    = 2000 × 0.50 / 10931 = 0.0915 GPU-sec
-diversity     = min(0.7, 10 / (3×4)) = 0.7  (multi_group)
-pod_damping   = min(1.0, 2/4) = 0.5  (4 pods — moderate damping)
-prefix_impact = 0.0915 × 0.7 × 0.5 = 0.0320 GPU-sec
+diversity     = min(0.7, 10 / (3×3)) = 0.7  (multi_group)
+pod_damping   = min(1.0, 2/3) = 0.67  (3 prefill pods)
+prefix_impact = 0.0915 × 0.7 × 0.67 = 0.0429 GPU-sec
 kv_eviction   = 2000 / 10931 × 0.0004 = 0.0001 GPU-sec
-queue_floor   = min(0.25, 1/4) = 0.25
+queue_floor   = min(0.25, 1/3) = 0.25
 queue_cost    = 2100 / 11660 × 0.25 = 0.0450 GPU-sec
 active_cost   = 100 / 729 × 0.02 = 0.0027 GPU-sec
-→ Weights: prefix=3, kv=1, queue=4, active=1  (queue-balanced — prevents P99 blowup)
+→ Weights: prefix=3, kv=1, queue=3, active=1  (balanced — cache + queue both weighted)
 ```
 
 **Example (aggregated TP8, 2 pods — cache-heavy is safe):**
