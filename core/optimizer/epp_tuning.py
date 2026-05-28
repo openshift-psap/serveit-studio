@@ -391,11 +391,8 @@ class EPPTuningMixin:
             self.log("⚠️  No successful configs for EPP tuning", 'warning')
             return
 
-        if self.epp_benchmark_results:
-            self.log(f"  EPP tuning already completed (resumed from DB) — skipping re-run", 'info')
-            return
-
-        self.epp_benchmark_results = {}
+        if not self.epp_benchmark_results:
+            self.epp_benchmark_results = {}
 
         from core import PrereqManager
         prereq_mgr = PrereqManager(
@@ -407,6 +404,10 @@ class EPPTuningMixin:
         for arch_idx, (arch, base_cfg, concurrency) in enumerate(configs_to_test):
             if self._should_stop():
                 break
+
+            if arch in self.epp_benchmark_results and self.epp_benchmark_results[arch]:
+                self.log(f"\n  --- EPP Tuning: {arch.upper()} — already completed (resumed from DB), skipping ---", 'info')
+                continue
 
             self.log(f"\n  --- EPP Tuning: {arch.upper()} (c={concurrency}) ---", 'decision')
 
