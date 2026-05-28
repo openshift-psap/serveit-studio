@@ -166,14 +166,13 @@ class EPPTuningMixin:
             kv_eviction_cost = (isl / prefill_tpsg) * (kv_utilization ** 2)
             kv_source = f"({concurrency}/{max_seqs})²={kv_utilization**2:.4f} (estimated)"
 
-        # Queue cost: use measured pressure with a safety margin (2x + 0.05)
-        # The floor prevents ignoring queue balance, but stays proportional to measurement
+        # Queue cost floor: prevents queue weight from dropping to zero when measured pressure is low
+        # With 2 pods: floor=0.15 (low risk), 3+ pods: min(0.25, 1/pods)
+        queue_floor = 0.15 if num_pods <= 2 else min(0.25, 1.0 / max(num_pods, 1))
         if queue_pressure > 0:
-            queue_floor = queue_pressure * 2 + 0.05
-            queue_wait_cost = (isl + osl) / total_tpsg * queue_floor
-            queue_source = f"queue={queue_pressure:.4f}*2+0.05={queue_floor:.4f} (measured)"
+            queue_wait_cost = (isl + osl) / total_tpsg * max(queue_pressure, queue_floor)
+            queue_source = f"queue_pressure=max({queue_pressure:.4f}, floor={queue_floor:.2f}) (measured)"
         else:
-            queue_floor = 0.15 if num_pods <= 2 else min(0.20, 1.0 / max(num_pods, 1))
             queue_wait_cost = (isl + osl) / total_tpsg * queue_floor
             queue_source = f"floor={queue_floor:.2f} ({num_pods} pods, estimated)"
 
@@ -287,19 +286,19 @@ class EPPTuningMixin:
 
         total_tpsg = prefill_tpsg + decode_tpsg
 
-        # Get pod count for damping (PD: only prefill pods are routed by EPP)
+        # Get pod count for damping
         num_pods = 1
         if arch == 'pd' and self.pareto_results:
             best_split = min(self.pareto_results, key=lambda x: x[1].ttft_p90 if x[1].ttft_p90 else 1e9)[0]
-            num_pods = best_split.prefill_pods
+            num_pods = best_split.prefill_pods + best_split.decode_pods
         elif arch == 'aggregated' and self.aggregated_tp:
             num_pods = self.config.total_gpus // self.aggregated_tp
 
         pod_damping = 1.0 if num_pods <= 2 else min(1.0, 2.0 / num_pods)
         prefix_impact = (isl * actual_hit_pct / 100.0) / prefill_tpsg * pod_damping
         kv_impact = (isl / prefill_tpsg) * min(kv_pressure, 1.0)
-        queue_eff = queue_pressure * 2 + 0.05 if queue_pressure > 0 else 0.15
-        queue_impact = (isl + osl) / total_tpsg * queue_eff
+        queue_floor = 0.15 if num_pods <= 2 else min(0.25, 1.0 / max(num_pods, 1))
+        queue_impact = (isl + osl) / total_tpsg * max(queue_pressure, queue_floor)
         active_impact = (osl / decode_tpsg) * min(active_load, 1.0)
 
         total = prefix_impact + kv_impact + queue_impact + active_impact
@@ -412,11 +411,10 @@ class EPPTuningMixin:
             self.log(f"\n  --- EPP Tuning: {arch.upper()} (c={concurrency}) ---", 'decision')
 
             # Compute per-architecture smart weights using measured Step 6/7 data
-            # For PD, EPP routes to prefill pods (decode is a single NIXL endpoint)
             arch_pods = 1
             if arch == 'pd' and self.pareto_results:
                 best_split = min(self.pareto_results, key=lambda x: x[1].ttft_p90 if x[1].ttft_p90 else 1e9)[0]
-                arch_pods = best_split.prefill_pods
+                arch_pods = best_split.prefill_pods + best_split.decode_pods
             elif arch == 'aggregated' and self.aggregated_tp:
                 arch_pods = self.config.total_gpus // self.aggregated_tp
 
