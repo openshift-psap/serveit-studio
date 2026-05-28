@@ -955,14 +955,6 @@ function renderCharts(data, runId) {
         if (cal.epp_agg) calEntries.push({label: 'Aggregated (EPP Tuned)', entry: cal.epp_agg});
         if (isBalanced && cal.ep) calEntries.push({label: 'EP', entry: cal.ep});
 
-        const tableTitle = calEntries.length > 1
-            ? 'Percentile Breakdown: ' + calEntries.map(e => e.label).join(' vs ') + rpsLabel
-            : 'Percentile Breakdown' + rpsLabel;
-
-        html += `<div style="padding:8px 20px 2px; font-weight:700; font-size:0.9em; color:#1e293b;">${tableTitle}</div>`;
-        html += '<div class="chart-card-body" style="padding:0;"><table class="results-table">';
-        html += '<tr><th>Configuration</th><th>Metric</th><th>P50</th><th>P90</th><th>P95</th><th>P99</th></tr>';
-
         // Helper: find best P90 value per metric for highlighting
         function findBest(metric, lowerIsBetter) {
             const vals = calEntries.map(e => e.entry[metric]).filter(v => v != null);
@@ -970,21 +962,21 @@ function renderCharts(data, runId) {
             return lowerIsBetter ? Math.min(...vals) : Math.max(...vals);
         }
         const bestTtft = findBest('ttft_p90', true);
-        const bestTput = findBest('throughput_p90', false);
         const bestItl = findBest('itl_p90', true);
         const hl = (val, best) => val != null && val === best ? 'color:#059669; font-weight:700;' : '';
 
-        const fmt = (v, unit) => v != null ? `${v} ${unit}` : '-';
-
+        // --- Table 1a: TTFT + ITL Percentile Breakdown ---
+        html += `<div style="padding:8px 20px 2px; font-weight:700; font-size:0.9em; color:#1e293b;">Latency Breakdown${rpsLabel}</div>`;
+        html += '<div class="chart-card-body" style="padding:0;"><table class="results-table">';
+        html += '<tr><th>Configuration</th><th>Metric</th><th>P50</th><th>P90</th><th>P95</th><th>P99</th></tr>';
         calEntries.forEach(({label, entry}, idx) => {
             const metrics = [
-                {name: 'TTFT (ms)', p50: entry.ttft_p50, p90: entry.ttft_p90, p95: entry.ttft_p95, p99: entry.ttft_p99, best: bestTtft, p90key: 'ttft_p90', unit: ''},
-                {name: 'ITL (ms)', p50: entry.itl_p50, p90: entry.itl_p90, p95: entry.itl_p95, p99: entry.itl_p99, best: bestItl, p90key: 'itl_p90', unit: ''},
-                {name: 'Throughput (req/s)', p50: entry.throughput_p50, p90: entry.throughput_p90, p95: entry.throughput_p95, p99: entry.throughput_p99, best: bestTput, p90key: 'throughput_p90', unit: ''},
+                {name: 'TTFT (ms)', p50: entry.ttft_p50, p90: entry.ttft_p90, p95: entry.ttft_p95, p99: entry.ttft_p99, best: bestTtft, p90key: 'ttft_p90'},
+                {name: 'ITL (ms)', p50: entry.itl_p50, p90: entry.itl_p90, p95: entry.itl_p95, p99: entry.itl_p99, best: bestItl, p90key: 'itl_p90'},
             ];
             metrics.forEach((m, mi) => {
                 const borderStyle = mi === 0 && idx > 0 ? ' border-top:2px solid #cbd5e1;' : '';
-                const rowspan = mi === 0 ? ` rowspan="3" style="vertical-align:middle; font-weight:700;${borderStyle}"` : '';
+                const rowspan = mi === 0 ? ` rowspan="2" style="vertical-align:middle; font-weight:700;${borderStyle}"` : '';
                 html += '<tr>';
                 if (mi === 0) html += `<td${rowspan}>${label}</td>`;
                 html += `<td style="color:#64748b;${borderStyle}">${m.name}</td>`;
@@ -994,6 +986,20 @@ function renderCharts(data, runId) {
                 html += `<td style="${borderStyle}">${m.p99 != null ? m.p99 : '-'}</td>`;
                 html += '</tr>';
             });
+        });
+        html += '</table></div>';
+
+        // --- Table 1b: Throughput (mean only) ---
+        const bestTputMean = Math.max(...calEntries.map(e => e.entry.throughput_mean || e.entry.throughput_p50 || 0));
+        html += `<div style="padding:8px 20px 2px; font-weight:700; font-size:0.9em; color:#1e293b; margin-top:8px;">Throughput${rpsLabel}</div>`;
+        html += '<div class="chart-card-body" style="padding:0;"><table class="results-table">';
+        html += '<tr><th>Configuration</th><th>Throughput Mean (req/s)</th></tr>';
+        calEntries.forEach(({label, entry}, idx) => {
+            const tputMean = entry.throughput_mean || entry.throughput_p50 || '-';
+            const isBest = tputMean === bestTputMean;
+            const style = isBest ? 'color:#059669; font-weight:700;' : '';
+            const border = idx > 0 ? ' border-top:1px solid #e2e8f0;' : '';
+            html += `<tr><td style="font-weight:700;${border}">${label}</td><td style="${style}${border}">${tputMean} req/s</td></tr>`;
         });
         html += '</table></div>';
 
