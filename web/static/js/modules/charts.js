@@ -109,7 +109,7 @@ function renderCharts(data, runId) {
                     cardArch = archKey.toUpperCase();
                 }
 
-                const border = (pi === 0 && isPrimary) ? `3px solid ${goalColors[key]}` : `2px solid ${goalColors[key]}40`;
+                const border = (pi === 0 && isPrimary) ? `3px solid ${goalColors[key]}; border-left:6px solid ${goalColors[key]}` : `2px solid ${goalColors[key]}40; border-left:5px solid ${goalColors[key]}80`;
                 const badge = (pi === 0 && isPrimary) ? `<span style="background:${goalColors[key]}; color:white; font-size:0.7em; padding:2px 8px; border-radius:4px; margin-left:8px;">PRIMARY</span>` : '';
                 const archBadge = cardArch ? `<span style="background:#64748b; color:white; font-size:0.65em; padding:2px 6px; border-radius:3px; margin-left:6px;">${cardArch}</span>` : '';
                 const pLabel = p.toUpperCase();
@@ -145,6 +145,15 @@ function renderCharts(data, runId) {
                 }
 
                 html += `<div style="font-size:0.9em; color:#475569;">${statsLine}</div>`;
+                // EPP subtitle
+                const cardEpp = cardConfig.epp_config || c.epp_config;
+                if (cardEpp && cardEpp.preset !== 'default') {
+                    const ep = cardEpp.plugins || {};
+                    const ew = [ep.prefix_cache, ep.kv_cache, ep.queue].filter(Boolean).map(x => x.weight || '?').join(':');
+                    html += `<div style="font-size:0.8em; color:#7c3aed; margin-top:4px;">EPP: ${cardEpp.preset || 'custom'} (${ew})</div>`;
+                } else {
+                    html += `<div style="font-size:0.8em; color:#94a3b8; margin-top:4px;">EPP: default (3:2:2)</div>`;
+                }
 
                 if (pi === 0) {
                     html += `<div style="font-size:0.82em; color:#64748b; margin-top:8px; line-height:1.5;">${goalExplain[key] || ''}</div>`;
