@@ -166,13 +166,14 @@ class EPPTuningMixin:
             kv_eviction_cost = (isl / prefill_tpsg) * (kv_utilization ** 2)
             kv_source = f"({concurrency}/{max_seqs})²={kv_utilization**2:.4f} (estimated)"
 
-        # Queue cost floor: prevents queue weight from dropping to zero when measured pressure is low
-        # With 2 pods: floor=0.15 (low risk), 4 pods: 0.25, 8+ pods: 0.25 (cap)
-        queue_floor = 0.15 if num_pods <= 2 else min(0.25, 1.0 / max(num_pods, 1))
+        # Queue cost: use measured pressure with a safety margin (2x + 0.05)
+        # The floor prevents ignoring queue balance, but stays proportional to measurement
         if queue_pressure > 0:
-            queue_wait_cost = (isl + osl) / total_tpsg * max(queue_pressure, queue_floor)
-            queue_source = f"queue_pressure=max({queue_pressure:.4f}, floor={queue_floor:.2f}) (measured)"
+            queue_floor = queue_pressure * 2 + 0.05
+            queue_wait_cost = (isl + osl) / total_tpsg * queue_floor
+            queue_source = f"queue={queue_pressure:.4f}*2+0.05={queue_floor:.4f} (measured)"
         else:
+            queue_floor = 0.15 if num_pods <= 2 else min(0.20, 1.0 / max(num_pods, 1))
             queue_wait_cost = (isl + osl) / total_tpsg * queue_floor
             queue_source = f"floor={queue_floor:.2f} ({num_pods} pods, estimated)"
 
@@ -297,8 +298,8 @@ class EPPTuningMixin:
         pod_damping = 1.0 if num_pods <= 2 else min(1.0, 2.0 / num_pods)
         prefix_impact = (isl * actual_hit_pct / 100.0) / prefill_tpsg * pod_damping
         kv_impact = (isl / prefill_tpsg) * min(kv_pressure, 1.0)
-        queue_floor = max(0.15, 1.0 / max(num_pods, 1))
-        queue_impact = (isl + osl) / total_tpsg * max(queue_pressure, queue_floor)
+        queue_eff = queue_pressure * 2 + 0.05 if queue_pressure > 0 else 0.15
+        queue_impact = (isl + osl) / total_tpsg * queue_eff
         active_impact = (osl / decode_tpsg) * min(active_load, 1.0)
 
         total = prefix_impact + kv_impact + queue_impact + active_impact
