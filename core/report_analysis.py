@@ -1286,6 +1286,26 @@ class ReportAnalyzer:
             if row and row[0]:
                 run_config = _json.loads(row[0])
                 run_config.pop('hf_token', None)
+            # Enrich with resolved auto values from first step7 test config
+            tc_row = loader.conn.execute(
+                "SELECT test_config_json FROM test_configurations WHERE run_id = ? AND config_name LIKE 'step7%' AND status = 'completed' LIMIT 1",
+                (run_id,)
+            ).fetchone()
+            if not tc_row:
+                tc_row = loader.conn.execute(
+                    "SELECT test_config_json FROM test_configurations WHERE run_id = ? AND config_name LIKE 'step6%' AND status = 'completed' LIMIT 1",
+                    (run_id,)
+                ).fetchone()
+            if tc_row and tc_row[0] and run_config:
+                tc = _json.loads(tc_row[0])
+                run_config['_resolved'] = {
+                    'block_size': tc.get('block_size'),
+                    'max_num_seqs': tc.get('max_num_seqs') or tc.get('prefill_max_num_seqs'),
+                    'decode_max_num_seqs': tc.get('decode_max_num_seqs'),
+                    'max_num_batched_tokens': tc.get('max_num_batched_tokens'),
+                    'gpu_memory_utilization': tc.get('gpu_memory_utilization'),
+                    'max_model_len': tc.get('max_model_len'),
+                }
         except Exception as e:
             import logging
             logging.getLogger(__name__).warning(f"Failed to load run config: {e}")

@@ -573,24 +573,33 @@ function renderCharts(data, runId) {
         // Advanced vLLM Settings
         html += '<div style="font-weight:700;color:#1e293b;margin-bottom:10px;border-bottom:2px solid #8b5cf6;padding-bottom:4px;">Advanced vLLM Settings</div><div style="line-height:2.2;">';
         const vllmCustomEnabled = rc.advanced_vllm_custom_enabled !== false;
+        const rv = rc._resolved || {};
+        function autoVal(key, label, fallback) {
+            var adv = rc.advanced_vllm || {};
+            var userVal = adv[key];
+            if (userVal != null && userVal !== '' && userVal !== 'auto') return String(userVal);
+            var resolved = rv[key];
+            if (resolved != null) return `${fallback || 'auto'} <span style="color:#94a3b8;">(${resolved})</span>`;
+            return fallback || 'auto';
+        }
         if (!vllmCustomEnabled) {
             html += '<div style="color:#059669;font-style:italic;margin-bottom:8px;">Using upstream vLLM defaults — no overrides applied.</div>';
-            html += `<div><span style="color:#64748b;">Max Model Len:</span> ${rc.max_model_len || 'auto (from ISL+OSL)'}</div>`;
-            html += `<div><span style="color:#64748b;">GPU Memory Utilization:</span> auto (calculated from model size + GPU VRAM)</div>`;
-            html += `<div><span style="color:#64748b;">Block Size:</span> auto (next power of 2 of √(ISL+OSL))</div>`;
-            html += `<div><span style="color:#64748b;">Max Num Seqs:</span> auto (from KV cache capacity)</div>`;
-            html += `<div><span style="color:#64748b;">Max Batched Tokens:</span> vLLM default</div>`;
-            html += `<div><span style="color:#64748b;">Dtype:</span> auto (from model config)</div>`;
-            html += `<div><span style="color:#64748b;">KV Cache Dtype:</span> auto (same as model dtype)</div>`;
+            html += `<div><span style="color:#64748b;">Max Model Len:</span> ${rv.max_model_len || rc.max_model_len || 'auto'}</div>`;
+            html += `<div><span style="color:#64748b;">GPU Memory Utilization:</span> ${rv.gpu_memory_utilization || 'auto'}</div>`;
+            html += `<div><span style="color:#64748b;">Block Size:</span> auto${rv.block_size ? ' <span style="color:#94a3b8;">(' + rv.block_size + ')</span>' : ''}</div>`;
+            html += `<div><span style="color:#64748b;">Max Num Seqs:</span> auto${rv.max_num_seqs ? ' <span style="color:#94a3b8;">(' + rv.max_num_seqs + ')</span>' : ''}</div>`;
+            html += `<div><span style="color:#64748b;">Max Batched Tokens:</span> auto${rv.max_num_batched_tokens ? ' <span style="color:#94a3b8;">(' + rv.max_num_batched_tokens + ')</span>' : ''}</div>`;
+            html += `<div><span style="color:#64748b;">Dtype:</span> auto</div>`;
+            html += `<div><span style="color:#64748b;">KV Cache Dtype:</span> auto</div>`;
             html += `<div><span style="color:#64748b;">Prefix Caching:</span> Enabled</div>`;
             html += `<div><span style="color:#64748b;">Trust Remote Code:</span> Enabled</div>`;
             html += `<div><span style="color:#64748b;">Expert Parallel:</span> auto (enabled for MoE with TP &gt; 1)</div>`;
         } else {
-            html += `<div><span style="color:#64748b;">Max Model Len:</span> ${advVal('max_model_len', rc.max_model_len)}</div>`;
-            html += `<div><span style="color:#64748b;">GPU Memory Utilization:</span> ${advVal('gpu_memory_utilization', rc.gpu_memory_utilization)}</div>`;
-            html += `<div><span style="color:#64748b;">Block Size:</span> ${advVal('block_size', 'auto')}</div>`;
-            html += `<div><span style="color:#64748b;">Max Num Seqs:</span> ${advVal('max_num_seqs', 'auto')}</div>`;
-            html += `<div><span style="color:#64748b;">Max Batched Tokens:</span> ${advVal('max_num_batched_tokens', 'auto')}</div>`;
+            html += `<div><span style="color:#64748b;">Max Model Len:</span> ${autoVal('max_model_len', 'Max Model Len', rc.max_model_len)}</div>`;
+            html += `<div><span style="color:#64748b;">GPU Memory Utilization:</span> ${autoVal('gpu_memory_utilization', 'GPU Mem Util', rc.gpu_memory_utilization)}</div>`;
+            html += `<div><span style="color:#64748b;">Block Size:</span> ${autoVal('block_size', 'Block Size', 'auto')}</div>`;
+            html += `<div><span style="color:#64748b;">Max Num Seqs:</span> ${autoVal('max_num_seqs', 'Max Num Seqs', 'auto')}</div>`;
+            html += `<div><span style="color:#64748b;">Max Batched Tokens:</span> ${autoVal('max_num_batched_tokens', 'Max Batched Tokens', 'auto')}</div>`;
             html += `<div><span style="color:#64748b;">Dtype:</span> ${advVal('dtype', 'auto')}</div>`;
             html += `<div><span style="color:#64748b;">KV Cache Dtype:</span> ${advVal('kv_cache_dtype', 'auto')}</div>`;
             html += `<div><span style="color:#64748b;">Pipeline Parallel:</span> ${advVal('pipeline_parallel_size', 'auto')}</div>`;
