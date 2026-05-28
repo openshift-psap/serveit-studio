@@ -431,6 +431,15 @@ function renderCharts(data, runId) {
         );
     }
 
+    // --- Aggregated configurations chart (all percentiles in one chart) ---
+    if (data.all_results.filter(r => r.architecture === 'AGGREGATED').length > 1) {
+        html += chartCard(
+            'Aggregated Configurations — TTFT & Throughput (P90 / P95 / P99)',
+            'All aggregated configurations with <strong style="color:#3b82f6">TTFT</strong> (bars, lower is better) and <strong style="color:#f59e0b">Throughput Mean</strong> (line, right axis, higher is better) across percentiles.',
+            'chart-agg-ttft-all'
+        );
+    }
+
     // --- Pareto table ---
     if (charts.pareto.pareto_table.length) {
         html += '<div class="chart-card"><div class="chart-card-header">Pareto Optimal Configurations</div>';
@@ -1622,6 +1631,47 @@ function renderCharts(data, runId) {
                 annotations: annotations,
             }, plotlyConfig);
         });
+    }
+
+    // ============================================================
+    // Aggregated configurations chart (all percentiles in one grouped bar chart)
+    // ============================================================
+    const aggResults = (data.all_results || []).filter(r => r.architecture === 'AGGREGATED' && r.ttft_p90);
+    if (aggResults.length > 1 && document.getElementById(cid('chart-agg-ttft-all'))) {
+        const aggSorted = [...aggResults].sort((a, b) => (a.tp || 1) - (b.tp || 1));
+        const aggLabels = aggSorted.map(r => `${r.replicas || Math.floor(r.gpus / (r.tp || 1))}×TP${r.tp || '?'}`);
+        const aggColors = { p90: '#3b82f6', p95: '#dc2626', p99: '#7c3aed' };
+        const traces = [];
+        ['p90', 'p95', 'p99'].forEach(p => {
+            traces.push({
+                x: aggLabels,
+                y: aggSorted.map(r => r['ttft_' + p]),
+                name: `TTFT ${p.toUpperCase()}`,
+                type: 'bar',
+                marker: { color: aggColors[p], opacity: 0.85 },
+                hovertemplate: `%{x}<br>TTFT ${p.toUpperCase()}: %{y:.1f} ms<extra></extra>`,
+            });
+        });
+        const aggTputVals = aggSorted.map(r => r.throughput_mean || r.throughput_p90);
+        traces.push({
+            x: aggLabels, y: aggTputVals,
+            name: 'Throughput Mean',
+            type: 'scatter', mode: 'lines+markers', yaxis: 'y2',
+            line: { color: '#f59e0b', width: 3, shape: 'spline' },
+            marker: { color: '#f59e0b', size: 10, symbol: 'diamond', line: { width: 2, color: 'white' } },
+            hovertemplate: 'Throughput Mean: %{y:.2f} req/s<extra></extra>',
+        });
+        Plotly.newPlot(cid('chart-agg-ttft-all'), traces, {
+            ...plotlyLayout,
+            height: 450,
+            barmode: 'group',
+            margin: { t: 30, b: 80, l: 60, r: 60 },
+            xaxis: { title: 'Aggregated Configuration' },
+            yaxis: { title: 'TTFT (ms) — lower is better', side: 'left', tickformat: '.2s' },
+            yaxis2: { title: 'Throughput Mean (req/s)', side: 'right', overlaying: 'y', titlefont: { color: '#f59e0b' }, tickfont: { color: '#f59e0b' } },
+            showlegend: true,
+            legend: { x: 0, y: 1.18, orientation: 'h' },
+        }, plotlyConfig);
     }
 
     // ============================================================
