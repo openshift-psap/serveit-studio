@@ -168,7 +168,14 @@ function buildRecSection(runId, data, rec, summary, best, allRes) {
                     // TTFT: allow different configs per percentile (users may care about tail latency)
                     const bpData = (bp[p] || {})[archKey];
                     if (!bpData) { s += '<div></div>'; continue; }
-                    cardConfig = bpData; cardDeploy = bpData.config_name; cardArch = archKey.toUpperCase();
+                    cardConfig = bpData;
+                    if (bpData.prefill_pods && bpData.decode_pods) {
+                        const bpTp = bpData.tp || c.tp || c.prefill_tp || '?';
+                        cardDeploy = `${bpData.prefill_pods} Prefill + ${bpData.decode_pods} Decode pods, TP=${bpTp}`;
+                    } else {
+                        cardDeploy = bpData.config_name;
+                    }
+                    cardArch = archKey.toUpperCase();
                 }
 
                 const border = (pi === 0 && isPrimary) ? `3px solid ${goalColors[key]}` : `2px solid ${goalColors[key]}40`;

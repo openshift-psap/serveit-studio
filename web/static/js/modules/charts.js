@@ -100,7 +100,12 @@ function renderCharts(data, runId) {
                     const bpData = (bp[p] || {})[archKey];
                     if (!bpData) { html += '<div></div>'; continue; }
                     cardConfig = bpData;
-                    cardDeploy = bpData.config_name;
+                    if (bpData.prefill_pods && bpData.decode_pods) {
+                        const bpTp = bpData.tp || c.tp || c.prefill_tp || '?';
+                        cardDeploy = `${bpData.prefill_pods} Prefill + ${bpData.decode_pods} Decode pods, TP=${bpTp}`;
+                    } else {
+                        cardDeploy = bpData.config_name;
+                    }
                     cardArch = archKey.toUpperCase();
                 }
 
