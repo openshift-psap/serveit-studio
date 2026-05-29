@@ -234,20 +234,21 @@ class ParserMixin:
         is the total non-KV memory (model weights + CUDA graphs + workspace).
         """
         try:
-            pods_result = subprocess.run(
-                ['kubectl', 'get', 'pods', '-n', self.namespace,
+            kubectl = self.deployment_manager.kubectl
+            pods_result = kubectl.run(
+                ['get', 'pods', '-n', self.namespace,
                  '-l', f'llm-d.ai/test-id={test_id}',
                  '-o', 'jsonpath={range .items[*]}{.metadata.name}{"\\n"}{end}'],
-                capture_output=True, text=True, timeout=15, check=False
+                check=False
             )
             if pods_result.returncode != 0 or not pods_result.stdout.strip():
                 return
 
             pod_name = pods_result.stdout.strip().splitlines()[0]
-            logs_result = subprocess.run(
-                ['kubectl', 'logs', '-n', self.namespace, pod_name,
+            logs_result = kubectl.run(
+                ['logs', '-n', self.namespace, pod_name,
                  '-c', 'vllm', '--tail=200'],
-                capture_output=True, text=True, timeout=30, check=False
+                check=False
             )
             if logs_result.returncode != 0:
                 return
