@@ -612,8 +612,8 @@ function renderCharts(data, runId) {
         }
         if (rv.gpu_vram_gb) html += `<div><span style="color:#64748b;">GPU VRAM:</span> ${rv.gpu_vram_gb.toFixed(1)} GB</div>`;
         html += `<div><span style="color:#64748b;">Block Size:</span> ${rv.block_size || '-'}</div>`;
-        html += `<div><span style="color:#64748b;">Max Num Seqs:</span> ${rv.max_num_seqs || '-'}${rv.decode_max_num_seqs ? ' <span style="color:#94a3b8;">(decode: ' + rv.decode_max_num_seqs + ')</span>' : ''}</div>`;
-        html += `<div><span style="color:#64748b;">Max Batched Tokens:</span> ${rv.max_num_batched_tokens || '-'}</div>`;
+        html += `<div><span style="color:#64748b;">Max Num Seqs:</span> ${rv.max_num_seqs || '256 (default)'}${rv.decode_max_num_seqs ? ' <span style="color:#94a3b8;">(decode: ' + rv.decode_max_num_seqs + ')</span>' : ''}</div>`;
+        html += `<div><span style="color:#64748b;">Max Batched Tokens:</span> ${rv.max_num_batched_tokens || rv.max_model_len || '-'}</div>`;
         html += `<div><span style="color:#64748b;">Prefix Caching:</span> ${rv.enable_prefix_caching === true ? 'Enabled' : (rv.enable_prefix_caching === false ? 'Disabled' : '-')}</div>`;
         html += `<div><span style="color:#64748b;">Expert Parallel:</span> ${rv.enable_expert_parallel === true ? 'Enabled' : (rv.enable_expert_parallel === false ? 'Disabled' : '-')}</div>`;
         html += `<div><span style="color:#64748b;">Trust Remote Code:</span> ${rv.trust_remote_code === true ? 'Enabled' : (rv.trust_remote_code === false ? 'Disabled' : '-')}</div>`;
