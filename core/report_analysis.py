@@ -1322,7 +1322,15 @@ class ReportAnalyzer:
                     'decode_max_num_seqs': tc.get('decode_max_num_seqs'),
                     'max_num_batched_tokens': tc.get('max_num_batched_tokens'),
                     'gpu_memory_utilization': tc.get('gpu_memory_utilization'),
+                    'prefill_gpu_memory_utilization': tc.get('prefill_gpu_memory_utilization'),
+                    'decode_gpu_memory_utilization': tc.get('decode_gpu_memory_utilization'),
                     'max_model_len': tc.get('max_model_len'),
+                    'enable_prefix_caching': tc.get('enable_prefix_caching'),
+                    'enable_expert_parallel': tc.get('enable_expert_parallel'),
+                    'trust_remote_code': tc.get('trust_remote_code'),
+                    'disable_custom_all_reduce': tc.get('disable_custom_all_reduce'),
+                    'disable_log_requests': tc.get('disable_log_requests'),
+                    'gpu_vram_gb': tc.get('gpu_vram_gb'),
                 }
         except Exception as e:
             import logging

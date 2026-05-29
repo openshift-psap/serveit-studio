@@ -602,38 +602,29 @@ function renderCharts(data, runId) {
             if (resolved != null) return `${fallback || 'auto'} <span style="color:#94a3b8;">(${resolved})</span>`;
             return fallback || 'auto';
         }
-        if (!vllmCustomEnabled) {
-            html += '<div style="color:#059669;font-style:italic;margin-bottom:8px;">Using upstream vLLM defaults — no overrides applied.</div>';
-            html += `<div><span style="color:#64748b;">Max Model Len:</span> ${rv.max_model_len || rc.max_model_len || 'auto'}</div>`;
-            html += `<div><span style="color:#64748b;">GPU Memory Utilization:</span> ${rv.gpu_memory_utilization || 'auto'}</div>`;
-            html += `<div><span style="color:#64748b;">Block Size:</span> auto${rv.block_size ? ' <span style="color:#94a3b8;">(' + rv.block_size + ')</span>' : ''}</div>`;
-            html += `<div><span style="color:#64748b;">Max Num Seqs:</span> auto${rv.max_num_seqs ? ' <span style="color:#94a3b8;">(' + rv.max_num_seqs + ')</span>' : ''}</div>`;
-            html += `<div><span style="color:#64748b;">Max Batched Tokens:</span> auto${rv.max_num_batched_tokens ? ' <span style="color:#94a3b8;">(' + rv.max_num_batched_tokens + ')</span>' : ''}</div>`;
-            html += `<div><span style="color:#64748b;">Dtype:</span> auto</div>`;
-            html += `<div><span style="color:#64748b;">KV Cache Dtype:</span> auto</div>`;
-            html += `<div><span style="color:#64748b;">Prefix Caching:</span> Enabled</div>`;
-            html += `<div><span style="color:#64748b;">Trust Remote Code:</span> Enabled</div>`;
-            html += `<div><span style="color:#64748b;">Expert Parallel:</span> auto (enabled for MoE with TP &gt; 1)</div>`;
+        // Show resolved values from actual test config — no meaningless "auto"
+        const rvGpu = rv.gpu_memory_utilization || rc.gpu_memory_utilization;
+        html += `<div><span style="color:#64748b;">Max Model Len:</span> ${rv.max_model_len || rc.max_model_len || '-'}</div>`;
+        if (rv.prefill_gpu_memory_utilization && rv.decode_gpu_memory_utilization && rv.prefill_gpu_memory_utilization !== rv.decode_gpu_memory_utilization) {
+            html += `<div><span style="color:#64748b;">GPU Memory Utilization:</span> prefill=${rv.prefill_gpu_memory_utilization}, decode=${rv.decode_gpu_memory_utilization}</div>`;
         } else {
-            html += `<div><span style="color:#64748b;">Max Model Len:</span> ${autoVal('max_model_len', 'Max Model Len', rc.max_model_len)}</div>`;
-            html += `<div><span style="color:#64748b;">GPU Memory Utilization:</span> ${autoVal('gpu_memory_utilization', 'GPU Mem Util', rc.gpu_memory_utilization)}</div>`;
-            html += `<div><span style="color:#64748b;">Block Size:</span> ${autoVal('block_size', 'Block Size', 'auto')}</div>`;
-            html += `<div><span style="color:#64748b;">Max Num Seqs:</span> ${autoVal('max_num_seqs', 'Max Num Seqs', 'auto')}</div>`;
-            html += `<div><span style="color:#64748b;">Max Batched Tokens:</span> ${autoVal('max_num_batched_tokens', 'Max Batched Tokens', 'auto')}</div>`;
-            html += `<div><span style="color:#64748b;">Dtype:</span> ${advVal('dtype', 'auto')}</div>`;
-            html += `<div><span style="color:#64748b;">KV Cache Dtype:</span> ${advVal('kv_cache_dtype', 'auto')}</div>`;
-            html += `<div><span style="color:#64748b;">Pipeline Parallel:</span> ${advVal('pipeline_parallel_size', 'auto')}</div>`;
-            html += `<div><span style="color:#64748b;">Tool Call Parser:</span> ${advVal('tool_call_parser', 'auto')}</div>`;
-            html += `<div><span style="color:#64748b;">Reasoning Parser:</span> ${advVal('reasoning_parser', 'auto')}</div>`;
-            html += `<div><span style="color:#64748b;">Chat Template Format:</span> ${advVal('chat_template_content_format', 'auto')}</div>`;
-            html += `<div><span style="color:#64748b;">Prefix Caching:</span> ${advToggle('enable_prefix_caching', 'On (auto)')}</div>`;
-            html += `<div><span style="color:#64748b;">Expert Parallel:</span> ${advToggle('enable_expert_parallel', 'Off (auto)')}</div>`;
-            html += `<div><span style="color:#64748b;">Custom All-Reduce:</span> ${advToggle('disable_custom_all_reduce', 'Enabled (auto)')}</div>`;
-            html += `<div><span style="color:#64748b;">Trust Remote Code:</span> ${advToggle('trust_remote_code', 'On (auto)')}</div>`;
-            html += `<div><span style="color:#64748b;">Disable Log Requests:</span> ${advToggle('disable_log_requests', 'On (auto)')}</div>`;
-            html += `<div><span style="color:#64748b;">Auto Tool Choice:</span> ${advToggle('enable_auto_tool_choice', 'Off (auto)')}</div>`;
-            html += `<div><span style="color:#64748b;">vLLM Debug Logs:</span> ${advToggle('vllm_debug_logs', 'Off (auto)')}</div>`;
-            html += `<div><span style="color:#64748b;">NCCL Debug Logs:</span> ${advToggle('nccl_debug_logs', 'Off (auto)')}</div>`;
+            html += `<div><span style="color:#64748b;">GPU Memory Utilization:</span> ${rvGpu || '-'}</div>`;
+        }
+        if (rv.gpu_vram_gb) html += `<div><span style="color:#64748b;">GPU VRAM:</span> ${rv.gpu_vram_gb.toFixed(1)} GB</div>`;
+        html += `<div><span style="color:#64748b;">Block Size:</span> ${rv.block_size || '-'}</div>`;
+        html += `<div><span style="color:#64748b;">Max Num Seqs:</span> ${rv.max_num_seqs || '-'}${rv.decode_max_num_seqs ? ' <span style="color:#94a3b8;">(decode: ' + rv.decode_max_num_seqs + ')</span>' : ''}</div>`;
+        html += `<div><span style="color:#64748b;">Max Batched Tokens:</span> ${rv.max_num_batched_tokens || '-'}</div>`;
+        html += `<div><span style="color:#64748b;">Prefix Caching:</span> ${rv.enable_prefix_caching === true ? 'Enabled' : (rv.enable_prefix_caching === false ? 'Disabled' : '-')}</div>`;
+        html += `<div><span style="color:#64748b;">Expert Parallel:</span> ${rv.enable_expert_parallel === true ? 'Enabled' : (rv.enable_expert_parallel === false ? 'Disabled' : '-')}</div>`;
+        html += `<div><span style="color:#64748b;">Trust Remote Code:</span> ${rv.trust_remote_code === true ? 'Enabled' : (rv.trust_remote_code === false ? 'Disabled' : '-')}</div>`;
+        if (vllmCustomEnabled) {
+            const adv = rc.advanced_vllm || {};
+            if (adv.dtype) html += `<div><span style="color:#64748b;">Dtype:</span> ${adv.dtype}</div>`;
+            if (adv.kv_cache_dtype) html += `<div><span style="color:#64748b;">KV Cache Dtype:</span> ${adv.kv_cache_dtype}</div>`;
+            if (adv.pipeline_parallel_size) html += `<div><span style="color:#64748b;">Pipeline Parallel:</span> ${adv.pipeline_parallel_size}</div>`;
+            if (adv.tool_call_parser) html += `<div><span style="color:#64748b;">Tool Call Parser:</span> ${adv.tool_call_parser}</div>`;
+            if (adv.reasoning_parser) html += `<div><span style="color:#64748b;">Reasoning Parser:</span> ${adv.reasoning_parser}</div>`;
+            if (adv.chat_template_content_format) html += `<div><span style="color:#64748b;">Chat Template Format:</span> ${adv.chat_template_content_format}</div>`;
         }
         html += '</div>';
         // EPP Configuration
