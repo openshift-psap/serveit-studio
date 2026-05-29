@@ -196,12 +196,12 @@ class ConfigBuilderMixin:
         return u
 
     def _compute_max_num_seqs(self, tp: int) -> Optional[int]:
-        """Compute max_num_seqs from profiled available KV cache memory.
+        """Compute max_num_seqs from available KV cache memory.
 
-        Uses the 'Available KV cache memory' value measured from Steps 2-3 pod logs
-        and the KV cache per sequence (computed from model architecture, TP, max_model_len).
-        Returns None if no profile data available (vLLM will use its default).
+        First tries profiled 'Available KV cache memory' from pod logs (older vLLM).
+        Falls back to estimating from GPU VRAM, model weight size, and overhead.
         """
+        # Try profiled value from pod logs
         measured_kv_gb = None
         for config, result in self.all_test_results:
             if (result.vllm_available_kv_gb is not None
@@ -209,7 +209,19 @@ class ConfigBuilderMixin:
                 measured_kv_gb = result.vllm_available_kv_gb
                 break
 
+        # Fall back to estimation from GPU VRAM and model size
         if measured_kv_gb is None or measured_kv_gb <= 0:
+            gpu_vram = self._gpu_vram_gb
+            gpu_mem_util = self._compute_gpu_mem_util(tp)
+            model_weight_gb = self._estimate_model_size_gb() / tp
+            # Overhead estimate: CUDA graphs (~2GB) + activation buffers (~1GB) + workspace (~1GB)
+            overhead_gb = 4.0
+            measured_kv_gb = max(0, gpu_vram * gpu_mem_util - model_weight_gb - overhead_gb)
+            source = 'estimated'
+        else:
+            source = 'profiled'
+
+        if measured_kv_gb <= 0:
             return None
 
         # KV cache per sequence: 2 (K+V) × layers × kv_heads/TP × head_dim × max_model_len × 2 bytes
@@ -234,7 +246,7 @@ class ConfigBuilderMixin:
         max_seqs = int(measured_kv_gb / kv_per_seq_gb)
         max_seqs = max(max_seqs, 1)
         self.log(f"   max_num_seqs(TP={tp}): {max_seqs} "
-                 f"(KV avail={measured_kv_gb:.1f}GB, per_seq={kv_per_seq_gb:.3f}GB)")
+                 f"(KV avail={measured_kv_gb:.1f}GB {source}, per_seq={kv_per_seq_gb:.3f}GB)")
         return max_seqs
 
     def _compute_max_num_batched_tokens(self, tp: int) -> Optional[int]:
