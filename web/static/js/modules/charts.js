@@ -603,6 +603,9 @@ function renderCharts(data, runId) {
             return fallback || 'auto';
         }
         // Show resolved values from actual test config — no meaningless "auto"
+        if (!vllmCustomEnabled) {
+            html += '<div style="color:#059669;font-style:italic;margin-bottom:8px;">Using upstream llm-d defaults — no auto tuning applied.</div>';
+        }
         const rvGpu = rv.gpu_memory_utilization || rc.gpu_memory_utilization;
         html += `<div><span style="color:#64748b;">Max Model Len:</span> ${rv.max_model_len || rc.max_model_len || '-'}</div>`;
         if (rv.prefill_gpu_memory_utilization && rv.decode_gpu_memory_utilization && rv.prefill_gpu_memory_utilization !== rv.decode_gpu_memory_utilization) {
