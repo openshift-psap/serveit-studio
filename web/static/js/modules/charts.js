@@ -111,7 +111,9 @@ function renderCharts(data, runId) {
                     }
                 }
 
-                cards.push({ archKey, cfg, deploy, ttftVal, testSettings: testSettings || cfg.test_settings });
+                // For P95/P99, test_settings comes from the P90 recommendation config
+                const fallbackTs = (rec.recommendations.response_time || rec.recommendations.throughput || {}).config?.test_settings;
+                cards.push({ archKey, cfg, deploy, ttftVal, testSettings: testSettings || cfg.test_settings || fallbackTs });
             });
 
             // Sort by TTFT — best first
