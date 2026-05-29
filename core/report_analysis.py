@@ -409,6 +409,8 @@ class ReportAnalyzer:
                     'latency_constraint_enabled': run_config.get('latency_constraint_enabled'),
                     'latency_constraint_ms': run_config.get('latency_constraint_ms'),
                     'latency_constraint_percentile': run_config.get('latency_constraint_percentile'),
+                    'allow_asymmetric_tp': run_config.get('allow_asymmetric_tp'),
+                    'headroom': run_config.get('headroom'),
                     'epp_preset': run_config.get('epp_preset'),
                     'epp_benchmark': run_config.get('epp_benchmark'),
                     'epp_custom_enabled': run_config.get('epp_custom_enabled'),

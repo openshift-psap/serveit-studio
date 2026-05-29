@@ -999,13 +999,13 @@ function applyReportConfig(recId) {
     config.duration = ts.test_duration || 300;
     config.stop_mode = ts.stop_mode || 'duration';
     config.max_requests = ts.max_requests || null;
-    config.latency_constraint_enabled = false;
-    config.latency_constraint_ms = 500;
-    config.latency_constraint_percentile = 'p90';
-    config.tp_pair_top_n = 4;
-    config.pd_search_mode = 'smart';
-    config.use_achievable_qps = false;
-    config.allow_asymmetric_tp = false;
+    config.latency_constraint_enabled = !!ts.latency_constraint_enabled;
+    config.latency_constraint_ms = ts.latency_constraint_ms || 500;
+    config.latency_constraint_percentile = ts.latency_constraint_percentile || 'p90';
+    config.tp_pair_top_n = ts.tp_pair_top_n || 4;
+    config.pd_search_mode = ts.pd_search_mode || 'smart';
+    config.use_achievable_qps = !!ts.use_achievable_qps;
+    config.allow_asymmetric_tp = !!ts.allow_asymmetric_tp;
     config.advanced_vllm = ts.advanced_vllm || null;
     config.advanced_vllm_custom_enabled = ts.advanced_vllm_custom_enabled != null ? !!ts.advanced_vllm_custom_enabled : (ts.advanced_vllm ? true : false);
 
@@ -1013,7 +1013,7 @@ function applyReportConfig(recId) {
     config.epp_config = rc.epp_config || null;
     config.epp_preset = ts.epp_preset || 'balanced';
     config.epp_custom_enabled = ts.epp_custom_enabled != null ? !!ts.epp_custom_enabled : (rc.epp_config && rc.epp_config.preset !== 'default' ? true : false);
-    config.epp_benchmark = false;
+    config.epp_benchmark = ts.epp_benchmark != null ? !!ts.epp_benchmark : false;
 
     // Step 6: Infrastructure
     config.scheduler_image = null;
