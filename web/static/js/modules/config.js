@@ -1007,7 +1007,7 @@ function applyReportConfig(recId) {
     config.use_achievable_qps = false;
     config.allow_asymmetric_tp = false;
     config.advanced_vllm = ts.advanced_vllm || null;
-    config.advanced_vllm_custom_enabled = ts.advanced_vllm ? true : false;
+    config.advanced_vllm_custom_enabled = ts.advanced_vllm_custom_enabled != null ? !!ts.advanced_vllm_custom_enabled : (ts.advanced_vllm ? true : false);
 
     // Step 5: EPP
     config.epp_config = rc.epp_config || null;

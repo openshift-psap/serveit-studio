@@ -402,6 +402,7 @@ class ReportAnalyzer:
                     'prefix_cache_mode': run_config.get('prefix_cache_mode'),
                     'prefix_cache_groups': run_config.get('prefix_cache_groups'),
                     'advanced_vllm': run_config.get('advanced_vllm'),
+                    'advanced_vllm_custom_enabled': run_config.get('advanced_vllm_custom_enabled'),
                     'tp_pair_top_n': run_config.get('tp_pair_top_n'),
                     'pd_search_mode': run_config.get('pd_search_mode'),
                     'use_achievable_qps': run_config.get('use_achievable_qps'),
