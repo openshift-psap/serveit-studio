@@ -196,35 +196,16 @@ class ConfigBuilderMixin:
         return u
 
     def _compute_max_num_seqs(self, tp: int) -> Optional[int]:
-        """Compute max_num_seqs from available KV cache memory.
+        """Compute max_num_seqs from model architecture and GPU VRAM.
 
-        First tries profiled 'Available KV cache memory' from pod logs (older vLLM).
-        Falls back to estimating from GPU VRAM, model weight size, and overhead.
+        Uses the model's activation profile (layers × KV heads × head_dim)
+        to determine how many concurrent sequences the GPU can efficiently
+        handle. Accounts for tensor parallelism and GPU architecture.
+
+        Hard capped at 512: beyond that, Tensor Cores are already saturated
+        and CUDA graph compilation becomes prohibitively slow.
         """
-        # Try profiled value from pod logs
-        measured_kv_gb = None
-        for config, result in self.all_test_results:
-            if (result.vllm_available_kv_gb is not None
-                    and getattr(config, 'tensor_parallelism', None) == tp):
-                measured_kv_gb = result.vllm_available_kv_gb
-                break
-
-        # Fall back to estimation from GPU VRAM and model size
-        if measured_kv_gb is None or measured_kv_gb <= 0:
-            gpu_vram = self._gpu_vram_gb
-            gpu_mem_util = self._compute_gpu_mem_util(tp)
-            model_weight_gb = self._estimate_model_size_gb() / tp
-            # Overhead estimate: CUDA graphs (~2GB) + activation buffers (~1GB) + workspace (~1GB)
-            overhead_gb = 4.0
-            measured_kv_gb = max(0, gpu_vram * gpu_mem_util - model_weight_gb - overhead_gb)
-            source = 'estimated'
-        else:
-            source = 'profiled'
-
-        if measured_kv_gb <= 0:
-            return None
-
-        # KV cache per sequence: 2 (K+V) × layers × kv_heads/TP × head_dim × max_model_len × 2 bytes
+        # Extract model architecture
         if self._model_config:
             num_layers = self._model_config.get('num_hidden_layers', 32)
             num_kv_heads = self._model_config.get('num_key_value_heads')
@@ -236,23 +217,39 @@ class ConfigBuilderMixin:
         else:
             num_layers, num_kv_heads, head_dim = 32, 8, 128
 
-        kv_heads_per_gpu = max(num_kv_heads // tp, 1)
-        kv_per_seq_gb = (2 * num_layers * kv_heads_per_gpu * head_dim
-                         * self.config.max_model_len * 2) / (1024**3)
+        # Activation profile: memory footprint per sequence slot in CUDA graph
+        # Proportional to layers × KV heads × head_dim × dtype_bytes
+        dtype_bytes = 1 if 'fp8' in self.config.model_name.lower() else 2
+        slot_weight = num_layers * num_kv_heads * head_dim * dtype_bytes
 
-        if kv_per_seq_gb <= 0:
-            return None
+        # Account for tensor parallelism (heads/layers distributed across GPUs)
+        effective_weight = slot_weight / tp
 
-        max_seqs = max(int(measured_kv_gb / kv_per_seq_gb), 1)
-        # vLLM requires max_num_seqs <= max_num_batched_tokens (defaults to max_model_len)
-        max_batched = self.config.max_model_len or 2048
-        if max_seqs > max_batched:
-            self.log(f"   max_num_seqs(TP={tp}): {max_batched} (capped by max_model_len, "
-                     f"KV capacity={max_seqs}, {measured_kv_gb:.1f}GB {source}, {kv_per_seq_gb:.3f}GB/seq)")
-            max_seqs = max_batched
-        else:
-            self.log(f"   max_num_seqs(TP={tp}): {max_seqs} "
-                     f"(KV avail={measured_kv_gb:.1f}GB {source}, {kv_per_seq_gb:.3f}GB/seq)")
+        # GPU architecture coefficient
+        gpu_vram = self._gpu_vram_gb
+        if gpu_vram >= 120:    # H200 (140GB), H100 NVL (94GB paired)
+            arch_coeff = 1.2
+        elif gpu_vram >= 70:   # A100-80GB, H100-80GB
+            arch_coeff = 1.0
+        elif gpu_vram >= 40:   # A100-40GB, A6000
+            arch_coeff = 0.8
+        else:                  # L4, A10G, T4
+            arch_coeff = 0.6
+
+        # VRAM per GPU rank (after TP split)
+        vram_bytes = gpu_vram * (1024 ** 3)
+
+        # Compute and align to multiple of 32 for optimal warp scheduling
+        raw_seqs = int((vram_bytes * arch_coeff) / effective_weight)
+        aligned_seqs = (raw_seqs // 32) * 32
+
+        # Clamp: min=64 (compute saturation), max=512 (Tensor Core + CUDA graph limits)
+        max_seqs = max(64, min(aligned_seqs, 512))
+
+        self.log(f"   max_num_seqs(TP={tp}): {max_seqs} "
+                 f"(layers={num_layers}, kv_heads={num_kv_heads}, head_dim={head_dim}, "
+                 f"slot={slot_weight}B, arch_coeff={arch_coeff}, "
+                 f"VRAM={gpu_vram:.0f}GB, raw={raw_seqs}, aligned={aligned_seqs})")
         return max_seqs
 
     def _compute_max_num_batched_tokens(self, tp: int) -> Optional[int]:
