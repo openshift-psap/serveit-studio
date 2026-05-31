@@ -1249,6 +1249,7 @@ class RecipeOptimizer(
             'concurrency': self.config.qps,
             'total_gpus_available': self.config.total_gpus,
             'gpu_sizing': getattr(self, '_gpu_sizing', None),
+            'calibration_analysis': getattr(self, '_calibration_analysis', None),
             'feasible_splits_count': len(self.feasible_splits),
             'pareto_front_count': len(self.pareto_results),
             'total_tests_run': len(self.all_test_results),

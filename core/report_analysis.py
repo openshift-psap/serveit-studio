@@ -1204,6 +1204,7 @@ class ReportAnalyzer:
                     calibrated_qps_value = opt.get('calibrated_concurrency') or opt.get('calibrated_qps')
                     total_gpus_available = opt.get('total_gpus_available')
                     gpu_sizing = opt.get('gpu_sizing')
+                    calibration_analysis = opt.get('calibration_analysis')
                     if concurrency is None:
                         concurrency = opt.get('concurrency') or opt.get('original_qps')
 
@@ -1218,6 +1219,7 @@ class ReportAnalyzer:
             pass
 
         # Build Step 10 calibrated QPS comparison data
+        calibration_analysis = locals().get('calibration_analysis')
         calibrated_qps_data = self._build_calibrated_qps_data(
             step10_results, recommendation,
             calibrated_qps_value=calibrated_qps_value,
@@ -1225,6 +1227,8 @@ class ReportAnalyzer:
             total_gpus_available=total_gpus_available,
             gpu_sizing=gpu_sizing
         )
+        if calibrated_qps_data and calibration_analysis:
+            calibrated_qps_data['calibration_analysis'] = calibration_analysis
 
         # Load latency search trials (Step 9) if any
         latency_search_data = None

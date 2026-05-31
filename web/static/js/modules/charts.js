@@ -931,6 +931,32 @@ function renderCharts(data, runId) {
         }
         html += '<div style="padding:12px 20px 4px; color:#1e293b; font-size:0.95em;">Steps 7-8 ran at the original user-requested concurrency which exceeded cluster capacity. This step re-tested the best configurations at a sustainable load to show realistic latency and throughput.</div>';
 
+        // --- Load Analysis per architecture ---
+        if (cal.calibration_analysis) {
+            const ca = cal.calibration_analysis;
+            html += '<div style="padding:8px 20px 2px; font-weight:700; font-size:0.9em; color:#1e293b; margin-top:8px;">Load Analysis (from measured Step 7 data)</div>';
+            html += '<div class="chart-card-body" style="padding:0;"><table class="results-table">';
+            html += '<tr><th>Architecture</th><th>Throughput</th><th>Response Time</th><th>Service Time</th><th>Queue Time</th><th>Utilization</th><th>Calibrated Load</th></tr>';
+            ['pd', 'aggregated'].forEach(arch => {
+                const a = ca[arch];
+                if (!a) return;
+                const label = arch === 'pd' ? 'PD' : 'Aggregated';
+                const queuePct = a.queue_pct || 0;
+                const queueColor = queuePct > 80 ? '#dc2626' : (queuePct > 50 ? '#d97706' : '#059669');
+                html += `<tr>`;
+                html += `<td style="font-weight:700;">${label}</td>`;
+                html += `<td>${a.throughput_mean} req/s <span style="color:#94a3b8;">@ c=${a.concurrency_tested}</span></td>`;
+                html += `<td>${(a.response_time_s * 1000).toFixed(0)}ms</td>`;
+                html += `<td>${a.service_time_ms.toFixed(0)}ms</td>`;
+                html += `<td style="color:${queueColor}; font-weight:600;">${a.queue_time_ms.toFixed(0)}ms (${queuePct}%)</td>`;
+                html += `<td>${a.utilization_pct}%</td>`;
+                html += `<td style="font-weight:700; color:#059669;">${a.calibrated_concurrency} users</td>`;
+                html += `</tr>`;
+            });
+            html += '</table></div>';
+            html += '<div style="padding:4px 20px 12px; font-size:0.82em; color:#64748b;">At the tested concurrency, most time is spent in queue — requests wait for GPU availability rather than being processed. The calibrated load reduces concurrency until queue time is reasonable (~2× service time), showing realistic per-request latency.</div>';
+        }
+
         // --- Table 1: Percentile Breakdown at Calibrated Load ---
         const isBalanced = !!(cal.pd && cal.ep);
         const requestedRps = cal.requested_rps != null ? cal.requested_rps : null;

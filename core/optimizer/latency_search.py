@@ -250,15 +250,62 @@ class LatencySearchMixin:
             and len(self.pareto_results) > 0
         )
 
+    def _compute_calibrated_concurrency(self, throughput_mean, concurrency, arch_label):
+        """Compute sustainable concurrency from measured Step 7 data.
+
+        Uses Little's Law: at the tested concurrency, each user produces
+        throughput_mean/concurrency req/s. The service time without queuing
+        is estimated from the decode TPSG. Sustainable concurrency is where
+        queue time stays reasonable (~2x service time).
+        """
+        if not throughput_mean or throughput_mean <= 0:
+            return self.achievable_concurrency or max(1, int(self.config.total_gpus / 1.3))
+
+        decode_tpsg = self.optimal_decode_tp.tpsg if self.optimal_decode_tp else 500
+        service_time = (self.config.isl / (self.optimal_prefill_tp.tpsg if self.optimal_prefill_tp else 5000)) + (self.config.osl / decode_tpsg)
+        response_time = concurrency / throughput_mean
+        queue_time = max(0, response_time - service_time)
+        utilization = service_time / response_time if response_time > 0 else 1
+
+        # Target: 3x service time as total response time (2x queuing headroom)
+        target_response = service_time * 3
+        # Scale concurrency proportionally: new_c = old_c × (target_response / actual_response)
+        cal_concurrency = max(1, int(concurrency * target_response / response_time))
+        # Cap at measured throughput (can't exceed cluster capacity)
+        cal_concurrency = min(cal_concurrency, int(throughput_mean * target_response))
+
+        self.log(f"  📊 {arch_label} Load Analysis:", 'info')
+        self.log(f"    Measured: {throughput_mean:.1f} req/s at c={concurrency:.0f}", 'info')
+        self.log(f"    Response time: {concurrency:.0f} / {throughput_mean:.1f} = {response_time:.2f}s", 'info')
+        self.log(f"    Service time (no queue): {service_time*1000:.0f}ms", 'info')
+        self.log(f"    Queue time: {queue_time*1000:.0f}ms ({queue_time/response_time*100:.0f}% of response)", 'info')
+        self.log(f"    Utilization: {utilization*100:.0f}%", 'info')
+        self.log(f"    → Calibrated concurrency: {cal_concurrency} users (target {target_response*1000:.0f}ms response)", 'info')
+
+        # Store for report display
+        if not hasattr(self, '_calibration_analysis'):
+            self._calibration_analysis = {}
+        self._calibration_analysis[arch_label.lower()] = {
+            'throughput_mean': round(throughput_mean, 2),
+            'concurrency_tested': int(concurrency),
+            'response_time_s': round(response_time, 3),
+            'service_time_ms': round(service_time * 1000, 1),
+            'queue_time_ms': round(queue_time * 1000, 1),
+            'queue_pct': round(queue_time / response_time * 100 if response_time > 0 else 0, 1),
+            'utilization_pct': round(utilization * 100, 1),
+            'calibrated_concurrency': cal_concurrency,
+        }
+
+        return cal_concurrency
+
     def _validate_at_calibrated_load(self):
         """
         Step 11: Re-test best PD and Aggregated at sustainable concurrency.
 
-        Steps 7-8 ran at the user's original concurrency which overloads the cluster.
-        This step re-runs the best config at a sustainable level to show
-        realistic latency and throughput numbers.
+        Computes per-architecture calibrated concurrency from measured Step 7
+        throughput using Little's Law, then re-tests at that level.
         """
-        calibrated_concurrency = self.achievable_concurrency
+        original_concurrency = int(self.config.qps)
 
         # Find best PD config by TTFT from Step 7
         best_split, best_pd_result = min(
@@ -268,14 +315,18 @@ class LatencySearchMixin:
 
         overloaded_ttft = best_pd_result.ttft_p90 or best_pd_result.ttft_p50 or 0
         overloaded_tput = best_pd_result.throughput_p90 or best_pd_result.throughput_p50 or 0
+        pd_tput_mean = best_pd_result.throughput_mean or best_pd_result.throughput_p50 or 0
 
-        self.log(f"Re-testing best PD config at calibrated load ({calibrated_concurrency:.0f} users "
-                f"vs original {self.config.qps:.0f} users)", 'info')
+        pd_calibrated = self._compute_calibrated_concurrency(pd_tput_mean, original_concurrency, 'PD')
+
+        self.log(f"\nRe-testing best PD config at calibrated load ({pd_calibrated} users "
+                f"vs original {original_concurrency} users)", 'info')
         self.log(f"Best PD: {best_split.prefill_pods}P×TP{best_split.prefill_tp} + "
                 f"{best_split.decode_pods}D×TP{best_split.decode_tp}", 'info')
         self.log(f"  Step 7 results (overloaded): TTFT={overloaded_ttft:.1f}ms, "
                 f"Throughput={overloaded_tput:.2f} req/s", 'info')
         self.log("", 'info')
+        calibrated_concurrency = pd_calibrated
 
         # --- Test best PD at calibrated load ---
         test_id = (f"step10-{best_split.prefill_pods}p{best_split.decode_pods}d"
@@ -324,6 +375,11 @@ class LatencySearchMixin:
             return
         agg_tp = self.aggregated_tp
         total_gpus = self.aggregated_gpus
+
+        # Compute aggregated-specific calibrated concurrency from measured data
+        agg_tput_mean = (self.aggregated_result.throughput_mean or self.aggregated_result.throughput_p50 or 0) if self.aggregated_result else 0
+        agg_calibrated = self._compute_calibrated_concurrency(agg_tput_mean, original_concurrency, 'Aggregated')
+
         agg_test_id = f"step10-aggregated-tp{agg_tp}"
         # Backwards compat: check old ID format with total_gpus embedded
         if agg_test_id not in self.completed_tests:
@@ -344,9 +400,9 @@ class LatencySearchMixin:
                 test_id=agg_test_id,
                 use_concurrency=True
             )
-            # Override with calibrated load
-            agg_config.num_users = int(calibrated_concurrency)
-            agg_config.request_rate = int(calibrated_concurrency)
+            # Override with aggregated-specific calibrated load
+            agg_config.num_users = int(agg_calibrated)
+            agg_config.request_rate = int(agg_calibrated)
 
             agg_result = self.orchestrator.run_test(
                 agg_config,
