@@ -196,14 +196,20 @@ class ConfigBuilderMixin:
         return u
 
     def _compute_max_num_seqs(self, tp: int) -> Optional[int]:
-        """Compute max_num_seqs from model architecture and GPU VRAM.
+        """Compute max_num_seqs by evaluating four competing constraints.
 
-        Uses the model's activation profile (layers × KV heads × head_dim)
-        to determine how many concurrent sequences the GPU can efficiently
-        handle. Accounts for tensor parallelism and GPU architecture.
+        max_num_seqs = min(S_activation, S_kv, S_concurrency, 512)
 
-        Hard capped at 512: beyond that, Tensor Cores are already saturated
-        and CUDA graph compilation becomes prohibitively slow.
+        S_activation: Compute slot scale from model activation profile.
+                      Protects ultra-low-spec hardware from OOM at startup.
+        S_kv:         KV cache capacity — how many sequences fit in available
+                      VRAM after model weights and overhead. The real constraint
+                      for long-context models.
+        S_concurrency: Expected peak load × 2x headroom. Prevents "ghost slots"
+                      that waste VRAM on pre-allocated but unused sequence space,
+                      freeing memory for prefix caching.
+        512:          Hard cap — Tensor Cores saturate at ~256 batch size,
+                      CUDA graph compilation above 512 causes >15min startup.
         """
         # Extract model architecture
         if self._model_config:
@@ -217,39 +223,38 @@ class ConfigBuilderMixin:
         else:
             num_layers, num_kv_heads, head_dim = 32, 8, 128
 
-        # Activation profile: memory footprint per sequence slot in CUDA graph
-        # Proportional to layers × KV heads × head_dim × dtype_bytes
         dtype_bytes = 1 if 'fp8' in self.config.model_name.lower() else 2
-        slot_weight = num_layers * num_kv_heads * head_dim * dtype_bytes
-
-        # Account for tensor parallelism (heads/layers distributed across GPUs)
-        effective_weight = slot_weight / tp
-
-        # GPU architecture coefficient
         gpu_vram = self._gpu_vram_gb
-        if gpu_vram >= 120:    # H200 (140GB), H100 NVL (94GB paired)
-            arch_coeff = 1.2
-        elif gpu_vram >= 70:   # A100-80GB, H100-80GB
-            arch_coeff = 1.0
-        elif gpu_vram >= 40:   # A100-40GB, A6000
-            arch_coeff = 0.8
-        else:                  # L4, A10G, T4
-            arch_coeff = 0.6
 
-        # VRAM per GPU rank (after TP split)
-        vram_bytes = gpu_vram * (1024 ** 3)
+        # --- S_activation: compute slot scale ---
+        slot_weight = num_layers * num_kv_heads * head_dim * dtype_bytes
+        effective_weight = slot_weight / tp
+        if gpu_vram >= 120: arch_coeff = 1.2
+        elif gpu_vram >= 70: arch_coeff = 1.0
+        elif gpu_vram >= 40: arch_coeff = 0.8
+        else: arch_coeff = 0.6
+        s_activation = int((gpu_vram * (1024 ** 3) * arch_coeff) / effective_weight)
 
-        # Compute and align to multiple of 32 for optimal warp scheduling
-        raw_seqs = int((vram_bytes * arch_coeff) / effective_weight)
-        aligned_seqs = (raw_seqs // 32) * 32
+        # --- S_kv: KV cache capacity ---
+        gpu_mem_util = self._compute_gpu_mem_util(tp)
+        model_weight_gb = self._estimate_model_size_gb() / tp
+        overhead_gb = 4.0
+        available_kv_gb = max(0, gpu_vram * gpu_mem_util - model_weight_gb - overhead_gb)
+        kv_per_seq_bytes = (2 * num_layers * (num_kv_heads // max(tp, 1)) * head_dim
+                           * self.config.max_model_len * dtype_bytes)
+        s_kv = int(available_kv_gb * (1024 ** 3) / kv_per_seq_bytes) if kv_per_seq_bytes > 0 else 512
 
-        # Clamp: min=64 (compute saturation), max=512 (Tensor Core + CUDA graph limits)
-        max_seqs = max(64, min(aligned_seqs, 512))
+        # --- S_concurrency: workload profile ---
+        concurrency = getattr(self, 'effective_concurrency', int(self.config.qps))
+        s_concurrency = max(64, int(concurrency * 2.0))
+
+        # --- Final: min of all constraints, aligned to 32 for warp scheduling ---
+        raw = min(s_activation, s_kv, s_concurrency, 512)
+        max_seqs = max(64, (raw // 32) * 32 or 64)
 
         self.log(f"   max_num_seqs(TP={tp}): {max_seqs} "
-                 f"(layers={num_layers}, kv_heads={num_kv_heads}, head_dim={head_dim}, "
-                 f"slot={slot_weight}B, arch_coeff={arch_coeff}, "
-                 f"VRAM={gpu_vram:.0f}GB, raw={raw_seqs}, aligned={aligned_seqs})")
+                 f"(S_act={s_activation}, S_kv={s_kv}, S_conc={s_concurrency}, cap=512, "
+                 f"model_len={self.config.max_model_len}, VRAM={gpu_vram:.0f}GB)")
         return max_seqs
 
     def _compute_max_num_batched_tokens(self, tp: int) -> Optional[int]:
