@@ -243,16 +243,16 @@ class ConfigBuilderMixin:
         if kv_per_seq_gb <= 0:
             return None
 
-        capacity = int(measured_kv_gb / kv_per_seq_gb)
-        # Only set max_num_seqs when memory-constrained (< vLLM default of 256)
-        # When capacity exceeds 256, leave it unset so vLLM uses its default
-        if capacity >= 256:
-            self.log(f"   max_num_seqs(TP={tp}): default (256) — KV capacity={capacity} sequences "
-                     f"({measured_kv_gb:.1f}GB {source}, {kv_per_seq_gb:.3f}GB/seq)")
-            return None
-        max_seqs = max(capacity, 1)
-        self.log(f"   max_num_seqs(TP={tp}): {max_seqs} — memory constrained "
-                 f"(KV avail={measured_kv_gb:.1f}GB {source}, {kv_per_seq_gb:.3f}GB/seq, capacity={capacity})")
+        max_seqs = max(int(measured_kv_gb / kv_per_seq_gb), 1)
+        # vLLM requires max_num_seqs <= max_num_batched_tokens (defaults to max_model_len)
+        max_batched = self.config.max_model_len or 2048
+        if max_seqs > max_batched:
+            self.log(f"   max_num_seqs(TP={tp}): {max_batched} (capped by max_model_len, "
+                     f"KV capacity={max_seqs}, {measured_kv_gb:.1f}GB {source}, {kv_per_seq_gb:.3f}GB/seq)")
+            max_seqs = max_batched
+        else:
+            self.log(f"   max_num_seqs(TP={tp}): {max_seqs} "
+                     f"(KV avail={measured_kv_gb:.1f}GB {source}, {kv_per_seq_gb:.3f}GB/seq)")
         return max_seqs
 
     def _compute_max_num_batched_tokens(self, tp: int) -> Optional[int]:
