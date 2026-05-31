@@ -244,9 +244,13 @@ class ConfigBuilderMixin:
             return None
 
         max_seqs = int(measured_kv_gb / kv_per_seq_gb)
-        max_seqs = max(min(max_seqs, 512), 1)
+        # vLLM requires max_num_seqs <= max_num_batched_tokens
+        # Compute what max_num_batched_tokens will be (or use max_model_len as default)
+        max_batched = self._compute_max_num_batched_tokens(tp) or self.config.max_model_len or 2048
+        max_seqs = max(min(max_seqs, max_batched), 1)
         self.log(f"   max_num_seqs(TP={tp}): {max_seqs} "
-                 f"(KV avail={measured_kv_gb:.1f}GB {source}, per_seq={kv_per_seq_gb:.3f}GB, capped at 512)")
+                 f"(KV avail={measured_kv_gb:.1f}GB {source}, per_seq={kv_per_seq_gb:.3f}GB, "
+                 f"capped by max_batched_tokens={max_batched})")
         return max_seqs
 
     def _compute_max_num_batched_tokens(self, tp: int) -> Optional[int]:
