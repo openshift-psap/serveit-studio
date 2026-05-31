@@ -244,9 +244,9 @@ class ConfigBuilderMixin:
             return None
 
         max_seqs = int(measured_kv_gb / kv_per_seq_gb)
-        max_seqs = max(max_seqs, 1)
+        max_seqs = max(min(max_seqs, 512), 1)
         self.log(f"   max_num_seqs(TP={tp}): {max_seqs} "
-                 f"(KV avail={measured_kv_gb:.1f}GB {source}, per_seq={kv_per_seq_gb:.3f}GB)")
+                 f"(KV avail={measured_kv_gb:.1f}GB {source}, per_seq={kv_per_seq_gb:.3f}GB, capped at 512)")
         return max_seqs
 
     def _compute_max_num_batched_tokens(self, tp: int) -> Optional[int]:
