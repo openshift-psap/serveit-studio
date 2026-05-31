@@ -238,7 +238,7 @@ class PDSearchMixin:
         self.log(f"  Available: {total_gpus} GPUs", 'info')
         self.log(f"  Sustainable QPS: {total_gpus} ÷ {total_cost:.2f} ÷ {self.config.headroom} = {sustainable_qps:.2f} req/s", 'info')
 
-        sustainable_concurrency = max(1, int(total_gpus / self.config.headroom))
+        sustainable_concurrency = max(1, int(total_gpus / (total_cost * self.config.headroom)))
 
         self._gpu_sizing = {
             'concurrency': concurrency,
@@ -258,9 +258,8 @@ class PDSearchMixin:
         }
 
         # Sustainable concurrency: max concurrent users before overload.
-        # From the overload check (concurrency > total_gpus / headroom),
-        # the boundary is exactly total_gpus / headroom.
-        sustainable_concurrency = max(1, int(total_gpus / self.config.headroom))
+        # Each request uses total_cost GPU-seconds, so max concurrent = GPUs / (cost × headroom)
+        sustainable_concurrency = max(1, int(total_gpus / (total_cost * self.config.headroom)))
         implied_throughput = sustainable_qps  # cluster max in req/s
 
         if concurrency > sustainable_concurrency:

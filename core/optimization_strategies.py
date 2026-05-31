@@ -201,7 +201,7 @@ class ThroughputStrategy(OptimizationStrategy):
         if best_tpsg > 0:
             total_cost = (self.opt.config.isl + self.opt.config.osl) / best_tpsg
             sustainable_qps = total_gpus / total_cost / self.opt.config.headroom
-            sustainable_concurrency = max(1, int(total_gpus / self.opt.config.headroom))
+            sustainable_concurrency = max(1, int(total_gpus / (total_cost * self.opt.config.headroom)))
             concurrency = int(self.opt.config.qps)
 
             self.opt.log("Step 4: Cluster Capacity Analysis (EP)", 'info')
