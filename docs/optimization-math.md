@@ -588,23 +588,93 @@ Without profiled data (fallback):
 **Why minimum 5.0 GB?** On smaller GPUs (e.g., A10 24GB), percentage-based reserves can be too small. 5 GB ensures enough room for CUDA context (~2 GB), NCCL buffers (~1 GB), and activation memory (~2 GB) regardless of GPU size.
 
 ### max_num_seqs
+
+Computed by evaluating four competing constraints and taking the minimum:
+
 ```
-kv_per_seq_gb = (2 × num_layers × kv_heads_per_gpu × head_dim × max_model_len × 2) / 1024³
-max_num_seqs = floor(measured_available_kv_gb / kv_per_seq_gb)
+max_num_seqs = align32(min(S_activation, S_kv, S_concurrency, 512))
+clamped to [64, 512]
 ```
 
-Breaking down `kv_per_seq_gb`:
+#### S_activation — Compute Slot Scale
+
+Protects ultra-low-spec hardware from OOM at startup. Based on the model's per-sequence activation footprint in CUDA graphs:
+
+```
+slot_weight = num_layers × num_kv_heads × head_dim × dtype_bytes
+effective_weight = slot_weight / TP
+S_activation = (GPU_VRAM_bytes × arch_coefficient) / effective_weight
+```
+
+| GPU Tier | VRAM | arch_coefficient |
+|----------|------|-----------------|
+| H200, H100 NVL | ≥120 GB | 1.2 |
+| A100-80GB, H100-80GB | ≥70 GB | 1.0 |
+| A100-40GB, A6000 | ≥40 GB | 0.8 |
+| L4, A10G, T4 | <40 GB | 0.6 |
+
+In practice, S_activation produces values in the millions — it only constrains on exotic ultra-low-spec hardware.
+
+#### S_kv — KV Cache Capacity (The Real Memory Constraint)
+
+How many concurrent sequences fit in available VRAM after model weights, CUDA graphs, and overhead:
+
+```
+available_kv_gb = GPU_VRAM × gpu_memory_utilization − model_weight_gb/TP − 4GB_overhead
+kv_per_seq_bytes = (2 × layers × kv_heads/TP × head_dim × max_model_len × dtype_bytes)
+S_kv = floor(available_kv_gb × 1024³ / kv_per_seq_bytes)
+```
+
+This is the dominant constraint for **long-context models**. At 128K context, each sequence consumes ~1.3GB of KV cache, and S_kv drops to ~22 on H200.
+
 | Term | Value | Why |
 |------|-------|-----|
 | `2` (first) | K + V | Two tensors stored per attention layer per token |
 | `num_layers` | e.g., 80 | Each transformer layer has its own KV cache |
-| `kv_heads_per_gpu` | `num_kv_heads // TP` | GQA shards KV heads across GPUs |
+| `kv_heads/TP` | `num_kv_heads // TP` | GQA shards KV heads across GPUs |
 | `head_dim` | e.g., 128 | Dimension per attention head |
-| `max_model_len` | e.g., 4096 | Maximum sequence length — worst case memory per sequence |
-| `2` (second) | FP16 bytes | Each KV cache value is float16 (2 bytes) |
-| `/ 1024³` | → GB | Convert bytes to gigabytes |
+| `max_model_len` | e.g., 2205 | Maximum sequence length — worst case memory per sequence |
+| `dtype_bytes` | 1 (FP8) or 2 (FP16/BF16) | Bytes per KV cache value |
 
-**Why use max_model_len (worst case)?** vLLM pre-allocates KV cache slots at the maximum sequence length to avoid runtime reallocation. Even if most sequences are shorter, each slot reserves max_model_len tokens worth of memory.
+**Why use max_model_len (worst case)?** vLLM pre-allocates KV cache slots at the maximum sequence length to avoid runtime reallocation.
+
+#### S_concurrency — Workload Profile (The Ghost Slot Trap)
+
+Prevents pre-allocating VRAM for thousands of unused sequence slots when the actual peak load is much lower:
+
+```
+S_concurrency = max(64, peak_concurrent_users × 2.0)
+```
+
+The 2× headroom accounts for burst traffic. Setting max_num_seqs=512 when peak load is 100 users wastes ~400 slots worth of VRAM that could be used for prefix caching.
+
+#### 512 Hard Cap — Tensor Core Saturation + CUDA Graph Limits
+
+Even when all other constraints allow higher values:
+1. **Tensor Core saturation**: GPU matrix multiplication tiles are fully utilized at batch size ~256. Going higher adds no compute benefit, only memory cost.
+2. **CUDA graph compilation**: vLLM captures individual graphs for discrete batch sizes. Above 512, startup extends past 15 minutes.
+
+#### Example Scenarios (H200, 140GB)
+
+| Scenario | S_activation | S_kv | S_concurrency | Result | Bound by |
+|----------|-------------|------|--------------|--------|----------|
+| Llama-70B FP8, 2K ctx, 100 users | 17M | 2,834 | 200 | **192** | Concurrency |
+| Llama-70B FP16, 8K ctx, 100 users | 8.8M | 353 | 200 | **192** | Concurrency |
+| Llama-70B FP16, 32K ctx, 100 users | 8.8M | 88 | 200 | **64** | KV capacity |
+| Llama-70B FP16, 128K ctx, 50 users | 8.8M | 22 | 100 | **64** | KV capacity (floor) |
+| Stress test, 8K ctx, 10K users | 8.8M | 353 | 20,000 | **352** | KV capacity |
+| Llama-8B, 8K ctx, TP=1, L4-24GB | 236K | 2 | 200 | **64** | KV capacity (floor) |
+
+#### PD Split-Role Asymmetry
+
+For PD architecture, `max_num_seqs` is computed separately per role:
+- **Prefill pods**: Use `prefill_tp` for TP division. Need high batch chunking but low concurrency (process and hand off).
+- **Decode pods**: Use `decode_tp`. Hold sequences for the full decode phase — need deeper sequence slots.
+
+```
+prefill_max_num_seqs = _compute_max_num_seqs(prefill_tp)
+decode_max_num_seqs = _compute_max_num_seqs(decode_tp)
+```
 
 ### kv_cache_memory_bytes (PD decode only)
 ```
