@@ -1461,12 +1461,37 @@ class ReportAnalyzer:
                     }
                     by_arch[arch_key].insert(0, baseline_entry)
 
+            # Detect skipped architectures (EPP tuning ran but smart-derived matched preset)
+            skipped = []
+            if run_config and run_config.get('epp_benchmark'):
+                for arch_key in ['pd', 'aggregated']:
+                    if arch_key not in by_arch:
+                        has_configs = any(r.architecture == arch_key for r in non_epp) if arch_key == 'pd' else any(r.architecture == 'aggregated' for r in non_epp)
+                        if has_configs:
+                            skipped.append(arch_key)
+
             epp_tuning_data = {
                 'by_architecture': by_arch,
+                'skipped_architectures': skipped,
                 'baselines': baselines,
                 'target_ms': target_ms,
                 'target_percentile': target_pct,
             }
+        elif run_config and run_config.get('epp_benchmark'):
+            # EPP was enabled but all architectures were skipped
+            skipped = []
+            successful = [r for r in results if r.is_successful and not r.config_name.startswith(('step2', 'step3', 'step9', 'step10', 'step11'))]
+            for arch_key in ['pd', 'aggregated']:
+                if any(r.architecture == arch_key for r in successful):
+                    skipped.append(arch_key)
+            if skipped:
+                epp_tuning_data = {
+                    'by_architecture': {},
+                    'skipped_architectures': skipped,
+                    'baselines': {},
+                    'target_ms': None,
+                    'target_percentile': None,
+                }
 
         return {
             'charts': charts,

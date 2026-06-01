@@ -414,6 +414,21 @@ class EPPTuningMixin:
                 baseline_ttft = best_pd[1].ttft_p90
 
             if smart_weights:
+                # Skip if smart-derived weights are identical to user's preset
+                base_w = self._get_user_baseline_weights()
+                weights_unchanged = (
+                    smart_weights['prefix_cache_weight'] == base_w['prefix_cache_weight'] and
+                    smart_weights['kv_cache_weight'] == base_w['kv_cache_weight'] and
+                    smart_weights['queue_weight'] == base_w['queue_weight'] and
+                    smart_weights.get('active_request_weight', 2) == base_w.get('active_request_weight', 2)
+                )
+                if weights_unchanged:
+                    self.log(f"  ✅ Smart-derived weights match user preset "
+                             f"({base_w['prefix_cache_weight']}:{base_w['kv_cache_weight']}:"
+                             f"{base_w['queue_weight']}:{base_w.get('active_request_weight', 2)}) "
+                             f"— metrics confirm preset is already optimal for {arch}. Skipping EPP test.", 'success')
+                    self.epp_benchmark_results[arch] = []
+                    continue
                 weight_combos = [('smart-derived', smart_weights)]
             else:
                 weight_combos = list(fallback_combos)
