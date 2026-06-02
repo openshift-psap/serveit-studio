@@ -1331,6 +1331,8 @@ class ReportAnalyzer:
                     'max_model_len': tc.get('max_model_len'),
                     'enable_prefix_caching': tc.get('enable_prefix_caching'),
                     'enable_expert_parallel': tc.get('enable_expert_parallel'),
+                    'moe_dp_chunk_size': tc.get('moe_dp_chunk_size'),
+                    'all2all_backend': tc.get('all2all_backend'),
                     'trust_remote_code': tc.get('trust_remote_code'),
                     'disable_custom_all_reduce': tc.get('disable_custom_all_reduce'),
                     'disable_log_requests': tc.get('disable_log_requests'),
