@@ -257,6 +257,26 @@ class ConfigBuilderMixin:
                  f"model_len={self.config.max_model_len}, VRAM={gpu_vram:.0f}GB)")
         return max_seqs
 
+    def _compute_moe_dp_chunk_size(self) -> Optional[int]:
+        """Compute MoE dispatch chunk size from model architecture.
+
+        Controls how many tokens are dispatched to each expert per batch.
+        Larger chunks = better GPU utilization but higher latency per chunk.
+        Scales with expert count: more experts need larger chunks to
+        amortize the dispatch overhead.
+
+        vLLM default: 256. Upstream llm-d uses 384 for decode.
+        """
+        if not self._is_moe or not self._model_config:
+            return None
+
+        num_experts = self._num_experts or 8
+        # Scale: 256 base + 16 per expert beyond 8, aligned to 64
+        chunk = 256 + max(0, num_experts - 8) * 16
+        chunk = max(256, min((chunk // 64) * 64, 512))
+        self.log(f"   moe_dp_chunk_size: {chunk} (experts={num_experts})")
+        return chunk
+
     def _compute_max_num_batched_tokens(self, tp: int) -> Optional[int]:
         """Compute max_num_batched_tokens from calibration prefill TPSG.
 
@@ -589,6 +609,7 @@ class ConfigBuilderMixin:
             enable_eplb=(max(split.prefill_tp, split.decode_tp) > 1),
             moe_backend=None,
             all2all_backend='deepep_high_throughput' if max(split.prefill_tp, split.decode_tp) > 1 else None,
+            moe_dp_chunk_size=self._compute_moe_dp_chunk_size() if self._is_moe else None,
         )
         return self._apply_advanced_vllm(cfg)
 

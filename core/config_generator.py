@@ -116,6 +116,7 @@ class TestConfig:
     enable_eplb: bool = False
     moe_backend: Optional[str] = None  # 'deep_gemm', 'cutlass', None
     all2all_backend: Optional[str] = None  # 'deepep_high_throughput', 'deepep_low_latency', 'nccl', None
+    moe_dp_chunk_size: Optional[int] = None  # MoE dispatch chunk size (default 256, upstream uses 384 for decode)
 
     # Decode KV cache memory control
     kv_cache_memory_bytes: Optional[str] = None  # e.g. '10GiB' — explicit KV cache budget for decode

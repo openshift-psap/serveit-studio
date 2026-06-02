@@ -215,7 +215,7 @@ spec:
               - name: VLLM_USE_DEEP_GEMM
                 value: "1"
               - name: VLLM_MOE_DP_CHUNK_SIZE
-                value: "384"
+                value: "{{ moe_dp_chunk_size | default(384) }}"
               - name: NVSHMEM_REMOTE_TRANSPORT
                 value: "ibgda"
               - name: NVSHMEM_IB_ENABLE_IBGDA

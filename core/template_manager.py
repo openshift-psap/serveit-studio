@@ -163,6 +163,8 @@ class TemplateManager:
             vars_dict['prefill_all2all_backend'] = None
             vars_dict['decode_all2all_backend'] = None
 
+        vars_dict['moe_dp_chunk_size'] = getattr(config, 'moe_dp_chunk_size', None)
+
         return vars_dict
 
     def render_aggregated(self, config: TestConfig) -> str:
