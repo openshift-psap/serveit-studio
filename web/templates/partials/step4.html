@@ -88,10 +88,10 @@
                                 </div>
                                 <!-- Asymmetric TP toggle -->
                                 <div style="margin-top:12px;display:flex;align-items:center;gap:12px;padding:10px 14px;background:#fefce8;border:1px solid #fde68a;border-radius:8px;">
-                                    <input type="checkbox" id="allow-asymmetric-tp" style="width:18px;height:18px;cursor:pointer;" onchange="config.allow_asymmetric_tp=this.checked;saveConfig();">
+                                    <input type="checkbox" id="allow-asymmetric-tp" checked style="width:18px;height:18px;cursor:pointer;" onchange="config.allow_asymmetric_tp=this.checked;saveConfig();">
                                     <div>
                                         <div style="font-weight:600;font-size:0.9em;color:#92400e;">Allow Prefill TP &gt; Decode TP</div>
-                                        <div style="font-size:0.8em;color:#a16207;margin-top:2px;">Test configurations where prefill uses more GPUs per pod than decode. Disabled by default &mdash; NIXL KV transfer may crash with asymmetric TP on older llm-d versions.</div>
+                                        <div style="font-size:0.8em;color:#a16207;margin-top:2px;">Test configurations where prefill uses more GPUs per pod than decode. Disable only for llm-d v0.4.0 (RHAIIS 3.3) or older where NIXL KV transfer may crash with asymmetric TP.</div>
                                     </div>
                                 </div>
                             </div>

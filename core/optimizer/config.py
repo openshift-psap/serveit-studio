@@ -88,7 +88,7 @@ class RecipeOptimizerConfig:
 
     # TP options to explore
     tp_options: List[int] = field(default_factory=lambda: [1, 2, 4, 8])
-    allow_asymmetric_tp: bool = False
+    allow_asymmetric_tp: bool = True
 
     # Optimization objective for Step 7
     objective: str = 'balanced'  # 'ttft', 'throughput', or 'balanced'
