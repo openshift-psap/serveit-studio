@@ -164,13 +164,17 @@ socket.on('clear_console', function() {
     localStorage.removeItem('inftune-console');
 });
 
+var _configSyncLock = false;
 socket.on('config_updated', function(data) {
+    if (_configSyncLock) return;
+    _configSyncLock = true;
     // Another client updated config - sync our state without saving back
     config = { ...config, ...data.config };
     currentStep = (data.current_step !== null && data.current_step !== undefined) ? data.current_step : 1;
 
     updateUIFromConfig();
     goToStep(currentStep, true);
+    setTimeout(function() { _configSyncLock = false; }, 100);
 });
 
 socket.on('load_config_result', function(data) {
