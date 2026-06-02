@@ -729,6 +729,60 @@ Same threshold for both `dbo_prefill_token_threshold` and `dbo_decode_token_thre
 
 **TP=1 / no EP sanity:** When running on a single GPU (TP=1, no expert parallelism), there's no inter-GPU all-to-all to overlap. DBO itself is disabled in this case (`enable_dbo=False`), so the threshold is irrelevant. The threshold only applies when DBO is explicitly enabled for multi-node EP deployments.
 
+### moe_dp_chunk_size (EP decode only)
+
+Controls how many tokens are dispatched to each expert per batch in MoE models with Expert Parallelism. Balances all2all communication overhead against GPU utilization.
+
+```
+moe_dp_chunk_size = min(S_sequences, S_expert_capacity, S_dispatch, 512)
+aligned to 64, floor 128
+```
+
+Only computed for MoE models with EP enabled. Set as `VLLM_MOE_DP_CHUNK_SIZE` env var on decode pods.
+
+#### S_sequences — Can't chunk more than max_num_seqs
+
+```
+S_sequences = max_num_seqs  (already computed, balances activation/KV/concurrency/512)
+```
+
+The dispatch chunk can't exceed the number of concurrent sequences the engine supports. Uses the already-computed `max_num_seqs` for the decode role rather than a separate estimate — that value already accounts for activation memory, KV capacity, concurrency, and the 512 hard cap.
+
+#### S_expert_capacity — GPU activation memory per expert
+
+```
+act_per_token = moe_intermediate_size × 2 × dtype_bytes
+model_weight_gb = model_size / TP
+activation_budget_gb = (VRAM - model_weight_gb - 4.0 GB overhead) × 15%
+expert_budget = activation_budget_gb / num_experts
+S_expert_capacity = expert_budget / act_per_token
+```
+
+Each dispatched token passes through the expert's gate-up and down projections. The 15% activation budget is conservative — most VRAM goes to model weights and KV cache, with activations using a small fraction. Dividing by `num_experts` gives per-expert capacity.
+
+#### S_dispatch — All2all communication vs utilization tradeoff
+
+```
+batch_tokens = max_num_seqs × top_k
+S_dispatch = sqrt(num_experts × batch_tokens / TP)
+```
+
+Larger chunks amortize all2all dispatch latency (fixed per dispatch) but increase per-chunk communication volume across TP GPUs. The `sqrt()` gives diminishing returns: doubling experts only increases chunk size by 1.4×. Dividing by TP accounts for the fact that more GPUs in the all2all ring means more communication per chunk.
+
+#### 512 Hard Cap
+
+Same rationale as max_num_seqs: per-chunk activation memory allocation and dispatch latency dominate above 512. vLLM's internal chunked dispatch loop handles larger batches by issuing multiple dispatch rounds.
+
+#### Example Scenarios
+
+| Model | Experts | top_k | TP | S_seq | S_expert | S_dispatch | Result |
+|-------|---------|-------|----|-------|----------|------------|--------|
+| Qwen3-Next-80B-A3B (128 experts) | 128 | 8 | 4 | 256 | ~340 | ~360 | 256 (S_seq) |
+| Mixtral-8x7B (8 experts) | 8 | 2 | 4 | 256 | ~2400 | ~45 | 128 (S_dispatch, floor) |
+| DeepSeek-R1 (256 experts) | 256 | 8 | 8 | 256 | ~170 | ~360 | 192 (S_expert, aligned) |
+
+**Why not just use a fixed value?** The upstream llm-d default of 384 works for their reference model (DeepSeek with TP=16 on 16 GPUs). But on smaller setups (fewer GPUs, smaller TP) or models with very different expert counts, 384 can be too large (wasting activation memory) or too small (not amortizing dispatch overhead). The multi-factor formula adapts to the actual deployment.
+
 ### Pod Resources (memory + CPU)
 ```
 pods_per_node = max(

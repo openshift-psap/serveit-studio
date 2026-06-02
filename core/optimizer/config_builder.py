@@ -257,24 +257,66 @@ class ConfigBuilderMixin:
                  f"model_len={self.config.max_model_len}, VRAM={gpu_vram:.0f}GB)")
         return max_seqs
 
-    def _compute_moe_dp_chunk_size(self) -> Optional[int]:
-        """Compute MoE dispatch chunk size from model architecture.
+    def _compute_moe_dp_chunk_size(self, tp: int, max_num_seqs: int = None) -> Optional[int]:
+        """Compute MoE dispatch chunk size by balancing 4 constraints.
 
-        Controls how many tokens are dispatched to each expert per batch.
-        Larger chunks = better GPU utilization but higher latency per chunk.
-        Scales with expert count: more experts need larger chunks to
-        amortize the dispatch overhead.
+        moe_dp_chunk_size = min(S_sequences, S_expert_capacity, S_dispatch, 512)
 
-        vLLM default: 256. Upstream llm-d uses 384 for decode.
+        S_sequences:       Can't dispatch more tokens than max_num_seqs allows.
+                          Uses the already-computed max_num_seqs (which itself
+                          balances activation, KV capacity, and concurrency).
+        S_expert_capacity: GPU activation memory per expert limits how many
+                          tokens each expert can process per dispatch.
+        S_dispatch:        Balance all2all communication cost vs GPU utilization.
+                          Scales with sqrt(num_experts * batch / TP) because
+                          more experts and more tokens need larger chunks to
+                          amortize dispatch overhead, but more TP GPUs increase
+                          per-chunk communication volume.
+        512:               Hard cap — per-chunk latency and activation memory
+                          allocation overhead dominate above 512.
         """
         if not self._is_moe or not self._model_config:
             return None
 
         num_experts = self._num_experts or 8
-        # Scale: 256 base + 16 per expert beyond 8, aligned to 64
-        chunk = 256 + max(0, num_experts - 8) * 16
-        chunk = max(256, min((chunk // 64) * 64, 512))
-        self.log(f"   moe_dp_chunk_size: {chunk} (experts={num_experts})")
+        top_k = self._model_config.get('num_experts_per_tok', 2)
+
+        # S_sequences: bound by max_num_seqs (already balances 4 constraints)
+        s_sequences = max_num_seqs or self._compute_max_num_seqs(tp)
+
+        # S_expert_capacity: activation memory per expert per token
+        # Each dispatched token activates top_k experts. Per expert, the token
+        # passes through gate_proj (up) and down_proj: intermediate_size * 2 * dtype_bytes.
+        # Activation budget ≈ (VRAM - model_weights - KV_reserved - overhead) / num_experts
+        intermediate = self._model_config.get('moe_intermediate_size',
+                       self._model_config.get('intermediate_size', 14336))
+        dtype_bytes = 1 if 'fp8' in self.config.model_name.lower() else 2
+        act_per_token_per_expert = intermediate * 2 * dtype_bytes
+        model_weight_gb = self._estimate_model_size_gb() / tp
+        overhead_gb = 4.0
+        activation_budget_gb = max(0, self._gpu_vram_gb - model_weight_gb - overhead_gb) * 0.15
+        expert_budget_bytes = (activation_budget_gb * 1024**3) / max(num_experts, 1)
+        s_expert_capacity = int(expert_budget_bytes / act_per_token_per_expert) if act_per_token_per_expert > 0 else 512
+
+        # S_dispatch: balance all2all overhead vs utilization
+        # Larger chunks amortize dispatch latency but increase per-chunk
+        # communication volume across TP GPUs. sqrt() balances the tradeoff.
+        # Divide by TP because each all2all round involves TP GPUs.
+        batch_tokens = s_sequences * top_k
+        s_dispatch = int(math.sqrt(num_experts * batch_tokens / max(tp, 1)))
+
+        # Final: min of all, aligned to 64 for GPU warp efficiency
+        raw = min(s_sequences, s_expert_capacity, s_dispatch, 512)
+        chunk = max(128, (raw // 64) * 64 or 128)
+
+        winner = ('S_seq' if raw == s_sequences else
+                  'S_expert' if raw == s_expert_capacity else
+                  'S_dispatch' if raw == s_dispatch else 'cap')
+
+        self.log(f"   moe_dp_chunk_size(TP={tp}): {chunk} "
+                 f"(S_seq={s_sequences}, S_expert={s_expert_capacity}, "
+                 f"S_dispatch={s_dispatch}, cap=512, "
+                 f"experts={num_experts}, top_k={top_k}, bound={winner})")
         return chunk
 
     def _compute_max_num_batched_tokens(self, tp: int) -> Optional[int]:
@@ -609,7 +651,7 @@ class ConfigBuilderMixin:
             enable_eplb=(max(split.prefill_tp, split.decode_tp) > 1),
             moe_backend=None,
             all2all_backend='deepep_high_throughput' if max(split.prefill_tp, split.decode_tp) > 1 else None,
-            moe_dp_chunk_size=self._compute_moe_dp_chunk_size() if self._is_moe else None,
+            moe_dp_chunk_size=self._compute_moe_dp_chunk_size(split.decode_tp, decode_max_num_seqs) if self._is_moe else None,
         )
         return self._apply_advanced_vllm(cfg)
 
