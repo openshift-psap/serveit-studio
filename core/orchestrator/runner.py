@@ -896,6 +896,13 @@ class TestOrchestrator(ParserMixin, GuidellmMixin):
         )
 
         try:
+            # Early stop check — catches stop pressed right after starting
+            if stop_check and stop_check():
+                if log_callback:
+                    log_callback("🛑 Optimization stopped before test started")
+                result.error_message = "Stopped by user"
+                return result
+
             # Step 0: Check/Deploy prerequisite infrastructure
             if not skip_prereqs:
                 if log_callback:
@@ -937,6 +944,12 @@ class TestOrchestrator(ParserMixin, GuidellmMixin):
                         log_callback('')
                     result.error_message = f"Failed to deploy prerequisites: {str(e)}"
                     return result
+
+            if stop_check and stop_check():
+                if log_callback:
+                    log_callback("🛑 Optimization stopped before pod deployment")
+                result.error_message = "Stopped by user"
+                return result
 
             if log_callback:
                 log_callback('')
@@ -981,6 +994,12 @@ class TestOrchestrator(ParserMixin, GuidellmMixin):
 
             if not deployment_success:
                 result.error_message = "Deployment failed"
+                return result
+
+            if stop_check and stop_check():
+                if log_callback:
+                    log_callback("🛑 Optimization stopped — cleaning up deployed pods")
+                result.error_message = "Stopped by user"
                 return result
 
             # Step 3: Wait for deployment to be ready
@@ -1066,6 +1085,12 @@ class TestOrchestrator(ParserMixin, GuidellmMixin):
                     result.error_message = "Gateway did not register all pods in time"
                     if log_callback:
                         log_callback("⚠️  Proceeding anyway — some pods may not be routable")
+
+            if stop_check and stop_check():
+                if log_callback:
+                    log_callback("🛑 Optimization stopped before benchmark")
+                result.error_message = "Stopped by user"
+                return result
 
             if skip_workload:
                 # Step 5 (Simplified): Curl test only - skip guidellm and metrics
