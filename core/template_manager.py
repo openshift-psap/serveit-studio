@@ -150,8 +150,18 @@ class TemplateManager:
         vars_dict['decode_enable_dbo'] = config.enable_dbo and decode_tp > 1
         vars_dict['prefill_moe_backend'] = config.moe_backend if prefill_tp > 1 else None
         vars_dict['decode_moe_backend'] = config.moe_backend if decode_tp > 1 else None
-        vars_dict['prefill_all2all_backend'] = config.all2all_backend if prefill_tp > 1 else None
-        vars_dict['decode_all2all_backend'] = config.all2all_backend if decode_tp > 1 else None
+        # Upstream llm-d uses different all2all backends per role:
+        # prefill = deepep_high_throughput (optimized for batch prefill)
+        # decode = deepep_low_latency (optimized for per-token decode)
+        if config.all2all_backend:
+            vars_dict['prefill_all2all_backend'] = config.all2all_backend if prefill_tp > 1 else None
+            if config.all2all_backend == 'deepep_high_throughput':
+                vars_dict['decode_all2all_backend'] = 'deepep_low_latency' if decode_tp > 1 else None
+            else:
+                vars_dict['decode_all2all_backend'] = config.all2all_backend if decode_tp > 1 else None
+        else:
+            vars_dict['prefill_all2all_backend'] = None
+            vars_dict['decode_all2all_backend'] = None
 
         return vars_dict
 

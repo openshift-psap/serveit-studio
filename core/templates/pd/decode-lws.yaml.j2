@@ -214,10 +214,14 @@ spec:
                 value: "1"
               - name: VLLM_USE_DEEP_GEMM
                 value: "1"
+              - name: VLLM_MOE_DP_CHUNK_SIZE
+                value: "384"
               - name: NVSHMEM_REMOTE_TRANSPORT
                 value: "ibgda"
               - name: NVSHMEM_IB_ENABLE_IBGDA
                 value: "true"
+              - name: NVSHMEM_DISABLE_CUDA_VMM
+                value: "0"
               - name: NVSHMEM_SYMMETRIC_SIZE
                 value: "16G"
               - name: NVSHMEM_BOOTSTRAP_UID_SOCK_IFNAME
