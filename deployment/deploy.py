@@ -14,8 +14,11 @@ Examples:
     # Dev mode (auto-sync code)
     python3 deployment/deploy.py --dev --storage-class shared-vast
 
-    # Sync code to running pod
+    # Sync code to launcher pod
     python3 deployment/deploy.py --sync
+
+    # Sync code to ALL inftune pods (launcher + wizards)
+    python3 deployment/deploy.py --sync-all
 
     # Restart server
     python3 deployment/deploy.py --restart-server
@@ -309,6 +312,7 @@ def main():
     dg = p.add_argument_group('Dev Options')
     dg.add_argument('--dev', action='store_true', help='Dev mode (auto-sync code, auto-restart)')
     dg.add_argument('--sync', action='store_true', help='Sync local code to running pod')
+    dg.add_argument('--sync-all', action='store_true', help='Sync code to ALL inftune pods in the namespace')
     dg.add_argument('--force-nad', action='store_true', help='Force NAD mode instead of DRA')
 
     pg = p.add_argument_group('Port Forward & Server')
@@ -339,8 +343,22 @@ def main():
         return
 
     # ── Sync only ──
-    if args.sync and not args.storage_class and not args.pvc_name:
-        # Try specified mode first, then fall back to either label
+    if (args.sync or args.sync_all) and not args.storage_class and not args.pvc_name:
+        if args.sync_all:
+            r = kubectl_run(cmd, ['get', 'pod', '-n', args.namespace,
+                                  '-o', 'jsonpath={range .items[*]}{.metadata.name}{"\\n"}{end}'])
+            all_pods = [p for p in r.stdout.strip().split('\n')
+                        if p.startswith('inftune-') and p]
+            if not all_pods:
+                print("❌ No Inftune Studio pods found.", file=sys.stderr)
+                sys.exit(1)
+            print(f"📦 Found {len(all_pods)} inftune pods to sync", file=sys.stderr)
+            for pod in all_pods:
+                sync_code(cmd, args.namespace, pod)
+            print(f"\n   ✅ All {len(all_pods)} pods synced and restarted.", file=sys.stderr)
+            return
+
+        # --sync: single pod (launcher or optimizer)
         app_label = 'inftune-launcher' if args.mode == 'launcher' else 'inftune-optimizer'
         r = kubectl_run(cmd, ['get', 'pod', '-n', args.namespace, '-l', f'app={app_label}',
                               '-o', 'jsonpath={.items[0].metadata.name}'])
