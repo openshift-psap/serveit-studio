@@ -138,6 +138,10 @@ spec:
                 value: "eth0"
               - name: VLLM_SKIP_P2P_CHECK
                 value: "1"
+{% if tensor_parallelism >= 8 %}
+              - name: VLLM_USE_DEEP_GEMM
+                value: "1"
+{% endif %}
               - name: NVIDIA_GDRCOPY
                 value: "enabled"
               - name: VLLM_MEMORY_PROFILER_ESTIMATE_CUDAGRAPHS

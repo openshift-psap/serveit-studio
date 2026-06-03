@@ -209,10 +209,12 @@ spec:
                 value: "eth0"
               - name: NCCL_SOCKET_IFNAME
                 value: "eth0"
+{% if decode_tp >= 8 %}
+              - name: VLLM_USE_DEEP_GEMM
+                value: "1"
+{% endif %}
 {% if decode_enable_expert_parallel %}
               - name: VLLM_RANDOMIZE_DP_DUMMY_INPUTS
-                value: "1"
-              - name: VLLM_USE_DEEP_GEMM
                 value: "1"
               - name: VLLM_MOE_DP_CHUNK_SIZE
                 value: "{{ moe_dp_chunk_size | default(384) }}"
