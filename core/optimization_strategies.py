@@ -192,7 +192,7 @@ class ThroughputStrategy(OptimizationStrategy):
         from .optimizer.config import FeasibleSplit
 
         total_gpus = self.opt.config.total_gpus
-        valid_tp = self.opt._get_valid_tp_options(expert_parallel=True)
+        valid_tp = self.opt._get_valid_tp_options()
 
         best_tpsg = max(
             (r['tpsg'] for r in self.opt.decode_tp_results),

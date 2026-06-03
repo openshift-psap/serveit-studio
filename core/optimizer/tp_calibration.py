@@ -54,6 +54,13 @@ class TPCalibrationMixin:
                 test_config.stop_mode = 'max_requests'
                 test_config.max_requests = safe_c * 10
 
+                # FP8 MoE: if TP is too large for block quantization without EP,
+                # enable expert parallel so experts are distributed not sharded
+                if self._tp_requires_expert_parallel(tp):
+                    test_config.enable_expert_parallel = True
+                    self.log(f"    ⚠️  FP8 MoE: TP={tp} requires --enable-expert-parallel "
+                             f"(moe_intermediate_size/{tp} < 128)", 'warning')
+
                 result = self.orchestrator.run_test(
                     test_config,
                     cleanup=True,
@@ -170,6 +177,11 @@ class TPCalibrationMixin:
                 )
                 test_config.stop_mode = 'max_requests'
                 test_config.max_requests = safe_c * 10
+
+                if self._tp_requires_expert_parallel(tp):
+                    test_config.enable_expert_parallel = True
+                    self.log(f"    ⚠️  FP8 MoE: TP={tp} requires --enable-expert-parallel "
+                             f"(moe_intermediate_size/{tp} < 128)", 'warning')
 
                 result = self.orchestrator.run_test(
                     test_config,

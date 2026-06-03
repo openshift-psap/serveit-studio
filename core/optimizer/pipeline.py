@@ -1137,17 +1137,12 @@ class RecipeOptimizer(
         finally:
             self.orchestrator.cleanup()
 
-    def _get_valid_tp_options(self, expert_parallel: bool = False) -> List[int]:
+    def _get_valid_tp_options(self) -> List[int]:
         """
         Get valid TP options based on cluster GPUs per node and model size.
 
-        Returns powers of 2 up to max GPUs per node, filtered to exclude:
-        - TP values too small to fit the model in VRAM
-        - TP values that break FP8 block quantization (partition < block_n=128)
-
-        Args:
-            expert_parallel: If True, MoE experts are distributed not sharded,
-                           so only hidden_size (attention) constrains FP8 TP.
+        Returns powers of 2 up to max GPUs per node, filtered to exclude
+        TP values too small to fit the model in VRAM.
         """
         if self.cluster_resources:
             tp_options = self.cluster_resources.get_tp_options()
@@ -1156,27 +1151,24 @@ class RecipeOptimizer(
                 dtype='fp8' if 'fp8' in self.config.model_name.lower() else 'fp16'
             )
             tp_options = [tp for tp in tp_options if tp >= min_tp]
-        else:
-            tp_options = list(self.config.tp_options)
+            if tp_options:
+                return tp_options
 
-        if self._model_config and self._model_dtype == 'fp8':
-            fp8_block_n = 128
-            if self._is_moe and not expert_parallel:
-                smallest_dim = self._model_config.get('moe_intermediate_size',
-                               self._model_config.get('intermediate_size', 0))
-                dim_name = 'moe_intermediate_size'
-            else:
-                smallest_dim = self._model_config.get('hidden_size', 0)
-                dim_name = 'hidden_size'
-            if smallest_dim > 0:
-                max_tp_fp8 = smallest_dim // fp8_block_n
-                before = len(tp_options)
-                tp_options = [tp for tp in tp_options if tp <= max_tp_fp8]
-                if len(tp_options) < before:
-                    self.log(f"  FP8 constraint: {dim_name}={smallest_dim}, "
-                             f"block_n={fp8_block_n} → max TP={max_tp_fp8}", 'warning')
+        return self.config.tp_options
 
-        return tp_options or self.config.tp_options
+    def _tp_requires_expert_parallel(self, tp: int) -> bool:
+        """Check if a TP value requires --enable-expert-parallel for FP8 MoE.
+
+        FP8 block quantization needs partition_size >= block_n (128).
+        Without EP, MoE FFN weights are TP-sharded: moe_intermediate_size / TP.
+        With EP, experts are distributed not sharded, so the constraint lifts.
+        """
+        if not (self._is_moe and self._model_config and self._model_dtype == 'fp8'):
+            return False
+        fp8_block_n = 128
+        moe_dim = self._model_config.get('moe_intermediate_size',
+                  self._model_config.get('intermediate_size', 0))
+        return moe_dim > 0 and (moe_dim // tp) < fp8_block_n
 
     def _estimate_params_from_config(self) -> float:
         """Estimate total parameter count (in billions) from loaded model config.
