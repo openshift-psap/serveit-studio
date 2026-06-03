@@ -209,10 +209,8 @@ spec:
                 value: "eth0"
               - name: NCCL_SOCKET_IFNAME
                 value: "eth0"
-{% if decode_tp >= 8 %}
               - name: VLLM_USE_DEEP_GEMM
-                value: "1"
-{% endif %}
+                value: "{{ '1' if decode_tp >= 8 else '0' }}"
 {% if decode_enable_expert_parallel %}
               - name: VLLM_RANDOMIZE_DP_DUMMY_INPUTS
                 value: "1"
