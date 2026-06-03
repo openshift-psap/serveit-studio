@@ -1141,8 +1141,9 @@ class RecipeOptimizer(
         """
         Get valid TP options based on cluster GPUs per node and model size.
 
-        Returns powers of 2 up to max GPUs per node, filtered to exclude
-        TP values too small to fit the model.
+        Returns powers of 2 up to max GPUs per node, filtered to exclude:
+        - TP values too small to fit the model in VRAM
+        - TP values that break FP8 block quantization (partition < block_n=128)
         """
         if self.cluster_resources:
             tp_options = self.cluster_resources.get_tp_options()
@@ -1151,11 +1152,22 @@ class RecipeOptimizer(
                 dtype='fp8' if 'fp8' in self.config.model_name.lower() else 'fp16'
             )
             tp_options = [tp for tp in tp_options if tp >= min_tp]
-            if tp_options:
-                return tp_options
+        else:
+            tp_options = list(self.config.tp_options)
 
-        # Fallback to configured options
-        return self.config.tp_options
+        if self._model_config and self._model_dtype == 'fp8':
+            fp8_block_n = 128
+            smallest_dim = self._model_config.get('moe_intermediate_size',
+                           self._model_config.get('intermediate_size', 0))
+            if smallest_dim > 0:
+                max_tp_fp8 = smallest_dim // fp8_block_n
+                before = len(tp_options)
+                tp_options = [tp for tp in tp_options if tp <= max_tp_fp8]
+                if len(tp_options) < before:
+                    self.log(f"  FP8 constraint: intermediate_size={smallest_dim}, "
+                             f"block_n={fp8_block_n} → max TP={max_tp_fp8}", 'warning')
+
+        return tp_options or self.config.tp_options
 
     def _estimate_params_from_config(self) -> float:
         """Estimate total parameter count (in billions) from loaded model config.
