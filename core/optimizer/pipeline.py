@@ -1137,13 +1137,17 @@ class RecipeOptimizer(
         finally:
             self.orchestrator.cleanup()
 
-    def _get_valid_tp_options(self) -> List[int]:
+    def _get_valid_tp_options(self, expert_parallel: bool = False) -> List[int]:
         """
         Get valid TP options based on cluster GPUs per node and model size.
 
         Returns powers of 2 up to max GPUs per node, filtered to exclude:
         - TP values too small to fit the model in VRAM
         - TP values that break FP8 block quantization (partition < block_n=128)
+
+        Args:
+            expert_parallel: If True, MoE experts are distributed not sharded,
+                           so only hidden_size (attention) constrains FP8 TP.
         """
         if self.cluster_resources:
             tp_options = self.cluster_resources.get_tp_options()
@@ -1157,14 +1161,19 @@ class RecipeOptimizer(
 
         if self._model_config and self._model_dtype == 'fp8':
             fp8_block_n = 128
-            smallest_dim = self._model_config.get('moe_intermediate_size',
-                           self._model_config.get('intermediate_size', 0))
+            if self._is_moe and not expert_parallel:
+                smallest_dim = self._model_config.get('moe_intermediate_size',
+                               self._model_config.get('intermediate_size', 0))
+                dim_name = 'moe_intermediate_size'
+            else:
+                smallest_dim = self._model_config.get('hidden_size', 0)
+                dim_name = 'hidden_size'
             if smallest_dim > 0:
                 max_tp_fp8 = smallest_dim // fp8_block_n
                 before = len(tp_options)
                 tp_options = [tp for tp in tp_options if tp <= max_tp_fp8]
                 if len(tp_options) < before:
-                    self.log(f"  FP8 constraint: intermediate_size={smallest_dim}, "
+                    self.log(f"  FP8 constraint: {dim_name}={smallest_dim}, "
                              f"block_n={fp8_block_n} → max TP={max_tp_fp8}", 'warning')
 
         return tp_options or self.config.tp_options
