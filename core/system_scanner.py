@@ -104,7 +104,8 @@ class ClusterResources:
                                         is_moe: bool = False,
                                         model_config: dict = None,
                                         seq_len: int = 0,
-                                        min_concurrency: int = 4) -> int:
+                                        min_concurrency: int = 4,
+                                        extra_reserve_pct: float = 0.0) -> int:
         """
         Estimate minimum number of GPUs needed to load a model AND serve
         a workload with reasonable concurrency.
@@ -148,6 +149,9 @@ class ClusterResources:
             kv_cache_gb = (bytes_per_token * total_tokens) / (1024 ** 3)
 
         required_memory_gb = model_size_gb + overhead_gb + kv_cache_gb
+        # User-specified extra safety margin
+        if extra_reserve_pct > 0:
+            required_memory_gb *= (1 + extra_reserve_pct / 100.0)
         min_gpus = int(required_memory_gb / gpu_memory_gb) + 1
 
         tp = next_power_of_2(min_gpus)

@@ -85,6 +85,7 @@ class RecipeOptimizerConfig:
 
     # Headroom for resource sizing
     headroom: float = 1.3
+    memory_reserve_pct: float = 0.0  # Extra GPU memory reserve (%) for TP estimation safety
 
     # TP options to explore
     tp_options: List[int] = field(default_factory=lambda: [1, 2, 4, 8])
