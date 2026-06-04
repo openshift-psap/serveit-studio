@@ -8,24 +8,24 @@ and can be viewed in the web UI report.
 
 ```bash
 # Run from inside the optimizer pod
-kubectl exec -it -n llm-d deploy/inftune-optimizer -- bash
+kubectl exec -it -n llm-d deploy/serveit-optimizer -- bash
 cd /mnt/storage/app
 
 # Register the current cluster
-inftune cluster add --name local
+serveit cluster add --name local
 
 # Minimal run — only --model and --cluster are required
-inftune run --model RedHatAI/gpt-oss-20b --cluster local
+serveit run --model RedHatAI/gpt-oss-20b --cluster local
 ```
 
 ## Commands
 
 ```
-inftune cluster add       Register a cluster
-inftune cluster list      List registered clusters
-inftune cluster remove    Remove a registered cluster
-inftune cluster scan      Scan cluster resources (GPUs, nodes, RDMA)
-inftune run               Run or resume an optimization
+serveit cluster add       Register a cluster
+serveit cluster list      List registered clusters
+serveit cluster remove    Remove a registered cluster
+serveit cluster scan      Scan cluster resources (GPUs, nodes, RDMA)
+serveit run               Run or resume an optimization
 ```
 
 ---
@@ -36,13 +36,13 @@ inftune run               Run or resume an optimization
 
 ```bash
 # Register the current kubectl context as a local cluster
-inftune cluster add --name local
+serveit cluster add --name local
 
 # Register a remote cluster with a kubeconfig file
-inftune cluster add --name prod --kubeconfig ~/.kube/prod.yaml
+serveit cluster add --name prod --kubeconfig ~/.kube/prod.yaml
 
 # With custom namespace and storage class
-inftune cluster add --name staging \
+serveit cluster add --name staging \
     --kubeconfig ~/.kube/staging.yaml \
     --namespace my-namespace \
     --storage-class gp3
@@ -52,14 +52,14 @@ inftune cluster add --name staging \
 
 ```bash
 # List all registered clusters
-inftune cluster list
+serveit cluster list
 
 # Scan a cluster's resources
-inftune cluster scan prod
+serveit cluster scan prod
 # Output: GPU model, count, RDMA, nodes, cloud provider
 
 # Remove a cluster
-inftune cluster remove staging
+serveit cluster remove staging
 ```
 
 ---
@@ -70,14 +70,14 @@ inftune cluster remove staging
 
 ```bash
 # Optimize with default settings (16 GPUs, ISL=3000, OSL=256, 100 users)
-inftune run --model RedHatAI/gpt-oss-20b --cluster local
+serveit run --model RedHatAI/gpt-oss-20b --cluster local
 
 # Specify workload parameters
-inftune run --model RedHatAI/gpt-oss-20b --cluster prod \
+serveit run --model RedHatAI/gpt-oss-20b --cluster prod \
     --isl 9000 --osl 50 --users 100 --gpus 16
 
 # With ISL/OSL standard deviation (realistic variable-length prompts)
-inftune run --model RedHatAI/gpt-oss-20b --cluster local \
+serveit run --model RedHatAI/gpt-oss-20b --cluster local \
     --isl 9000 --isl-stdev 4000 --osl 50 --osl-stdev 20 --users 100
 ```
 
@@ -85,34 +85,34 @@ inftune run --model RedHatAI/gpt-oss-20b --cluster local \
 
 ```bash
 # Minimize response time (TTFT) — default
-inftune run --model RedHatAI/gpt-oss-20b --cluster local --objective ttft
+serveit run --model RedHatAI/gpt-oss-20b --cluster local --objective ttft
 
 # Maximize throughput
-inftune run --model RedHatAI/gpt-oss-20b --cluster local --objective throughput
+serveit run --model RedHatAI/gpt-oss-20b --cluster local --objective throughput
 
 # Balanced — test PD, EP, and Aggregated architectures
-inftune run --model RedHatAI/gpt-oss-20b --cluster local --objective balanced
+serveit run --model RedHatAI/gpt-oss-20b --cluster local --objective balanced
 
 # Only test aggregated (no PD disaggregation)
-inftune run --model RedHatAI/gpt-oss-20b --cluster local --objective aggregated_only
+serveit run --model RedHatAI/gpt-oss-20b --cluster local --objective aggregated_only
 
 # Only test PD disaggregation
-inftune run --model RedHatAI/gpt-oss-20b --cluster local --objective pd_only
+serveit run --model RedHatAI/gpt-oss-20b --cluster local --objective pd_only
 ```
 
 ### Latency SLA
 
 ```bash
 # Find max throughput under 2000ms TTFT at P99
-inftune run --model RedHatAI/gpt-oss-20b --cluster local \
+serveit run --model RedHatAI/gpt-oss-20b --cluster local \
     --latency-sla 2000 --latency-percentile p99
 
 # Strict SLA: 500ms at P95
-inftune run --model RedHatAI/gpt-oss-20b --cluster local \
+serveit run --model RedHatAI/gpt-oss-20b --cluster local \
     --latency-sla 500 --latency-percentile p95
 
 # Auto-scale concurrency to sustainable level
-inftune run --model RedHatAI/gpt-oss-20b --cluster local \
+serveit run --model RedHatAI/gpt-oss-20b --cluster local \
     --use-achievable-qps
 ```
 
@@ -120,19 +120,19 @@ inftune run --model RedHatAI/gpt-oss-20b --cluster local \
 
 ```bash
 # Use cache-optimized EPP preset
-inftune run --model RedHatAI/gpt-oss-20b --cluster local \
+serveit run --model RedHatAI/gpt-oss-20b --cluster local \
     --epp-preset cache_optimized
 
 # Benchmark EPP strategies to find optimal routing
-inftune run --model RedHatAI/gpt-oss-20b --cluster local \
+serveit run --model RedHatAI/gpt-oss-20b --cluster local \
     --epp-benchmark
 
 # Custom EPP weights (cache:kv:queue)
-inftune run --model RedHatAI/gpt-oss-20b --cluster local \
+serveit run --model RedHatAI/gpt-oss-20b --cluster local \
     --epp-weights 5:1:1
 
 # Override EPP auto-calculated parameters
-inftune run --model RedHatAI/gpt-oss-20b --cluster local \
+serveit run --model RedHatAI/gpt-oss-20b --cluster local \
     --epp-max-prefix-blocks 512 \
     --epp-lru-capacity 50000 \
     --epp-non-cached-tokens 32
@@ -142,15 +142,15 @@ inftune run --model RedHatAI/gpt-oss-20b --cluster local \
 
 ```bash
 # 80% identical prompts (FAQ/popular query pattern)
-inftune run --model RedHatAI/gpt-oss-20b --cluster local \
+serveit run --model RedHatAI/gpt-oss-20b --cluster local \
     --prefix-cache-pct 80 --prefix-cache-mode identical
 
 # Shared prefix — all prompts share 80% common prefix (system prompt pattern)
-inftune run --model RedHatAI/gpt-oss-20b --cluster local \
+serveit run --model RedHatAI/gpt-oss-20b --cluster local \
     --prefix-cache-pct 80 --prefix-cache-mode shared_prefix
 
 # Multi-group — 10 distinct tenant groups with 80% cache hit rate
-inftune run --model RedHatAI/gpt-oss-20b --cluster local \
+serveit run --model RedHatAI/gpt-oss-20b --cluster local \
     --prefix-cache-pct 80 --prefix-cache-mode multi_group --prefix-cache-groups 10
 ```
 
@@ -158,23 +158,23 @@ inftune run --model RedHatAI/gpt-oss-20b --cluster local \
 
 ```bash
 # Fast search — 1 TP pair, smart PD splits
-inftune run --model RedHatAI/gpt-oss-20b --cluster local \
+serveit run --model RedHatAI/gpt-oss-20b --cluster local \
     --tp-pair-depth 1 --pd-search smart
 
 # Thorough search — all TP pairs, exhaustive PD splits
-inftune run --model RedHatAI/gpt-oss-20b --cluster local \
+serveit run --model RedHatAI/gpt-oss-20b --cluster local \
     --tp-pair-depth 4 --pd-search exhaustive
 
 # Specific TP values only
-inftune run --model RedHatAI/gpt-oss-20b --cluster local \
+serveit run --model RedHatAI/gpt-oss-20b --cluster local \
     --tp-options 1,2,4
 
 # Short test duration (quick validation)
-inftune run --model RedHatAI/gpt-oss-20b --cluster local \
+serveit run --model RedHatAI/gpt-oss-20b --cluster local \
     --duration 120
 
 # Stop after N requests instead of duration
-inftune run --model RedHatAI/gpt-oss-20b --cluster local \
+serveit run --model RedHatAI/gpt-oss-20b --cluster local \
     --stop-mode max_requests --max-requests 1000
 ```
 
@@ -182,15 +182,15 @@ inftune run --model RedHatAI/gpt-oss-20b --cluster local \
 
 ```bash
 # Concurrent users (default)
-inftune run --model RedHatAI/gpt-oss-20b --cluster local \
+serveit run --model RedHatAI/gpt-oss-20b --cluster local \
     --users 100 --rate-type concurrent
 
 # Constant requests per second
-inftune run --model RedHatAI/gpt-oss-20b --cluster local \
+serveit run --model RedHatAI/gpt-oss-20b --cluster local \
     --users 50 --rate-type constant
 
 # Poisson-distributed arrivals
-inftune run --model RedHatAI/gpt-oss-20b --cluster local \
+serveit run --model RedHatAI/gpt-oss-20b --cluster local \
     --users 50 --rate-type poisson
 ```
 
@@ -198,13 +198,13 @@ inftune run --model RedHatAI/gpt-oss-20b --cluster local \
 
 ```bash
 # HuggingFace dataset
-inftune run --model RedHatAI/gpt-oss-20b --cluster local \
+serveit run --model RedHatAI/gpt-oss-20b --cluster local \
     --workload-mode dataset \
     --dataset openai/gsm8k \
     --dataset-column question
 
 # Local JSONL file
-inftune run --model RedHatAI/gpt-oss-20b --cluster local \
+serveit run --model RedHatAI/gpt-oss-20b --cluster local \
     --workload-mode dataset \
     --dataset /mnt/storage/my-prompts.jsonl \
     --dataset-column prompt \
@@ -215,7 +215,7 @@ inftune run --model RedHatAI/gpt-oss-20b --cluster local \
 
 ```bash
 # 3-turn conversation simulation
-inftune run --model RedHatAI/gpt-oss-20b --cluster local \
+serveit run --model RedHatAI/gpt-oss-20b --cluster local \
     --turns 3 --isl 2000 --osl 200
 ```
 
@@ -223,30 +223,30 @@ inftune run --model RedHatAI/gpt-oss-20b --cluster local \
 
 ```bash
 # Custom vLLM image
-inftune run --model RedHatAI/gpt-oss-20b --cluster local \
+serveit run --model RedHatAI/gpt-oss-20b --cluster local \
     --image ghcr.io/llm-d/llm-d-cuda:v0.6.0
 
 # Different namespace and PVC
-inftune run --model RedHatAI/gpt-oss-20b --cluster local \
+serveit run --model RedHatAI/gpt-oss-20b --cluster local \
     --namespace my-namespace --pvc my-model-cache
 
 # Pin to specific nodes
-inftune run --model RedHatAI/gpt-oss-20b --cluster local \
+serveit run --model RedHatAI/gpt-oss-20b --cluster local \
     --nodes worker-gpu-01,worker-gpu-02
 
 # Gated model with HuggingFace token
-inftune run --model meta-llama/Llama-3-70b --cluster local \
+serveit run --model meta-llama/Llama-3-70b --cluster local \
     --hf-token hf_xxxxxxxxxxxxx
 # Or set HF_TOKEN environment variable
 export HF_TOKEN=hf_xxxxxxxxxxxxx
-inftune run --model meta-llama/Llama-3-70b --cluster local
+serveit run --model meta-llama/Llama-3-70b --cluster local
 ```
 
 ### Advanced vLLM Settings
 
 ```bash
 # Override engine parameters
-inftune run --model RedHatAI/gpt-oss-20b --cluster local \
+serveit run --model RedHatAI/gpt-oss-20b --cluster local \
     --max-model-len 16384 \
     --gpu-mem-util 0.92 \
     --block-size 256 \
@@ -254,15 +254,15 @@ inftune run --model RedHatAI/gpt-oss-20b --cluster local \
     --kv-cache-dtype fp8
 
 # Enable debug logs for troubleshooting
-inftune run --model RedHatAI/gpt-oss-20b --cluster local \
+serveit run --model RedHatAI/gpt-oss-20b --cluster local \
     --vllm-debug-logs --nccl-debug-logs
 
 # Disable prefix caching
-inftune run --model RedHatAI/gpt-oss-20b --cluster local \
+serveit run --model RedHatAI/gpt-oss-20b --cluster local \
     --no-prefix-caching
 
 # Tool calling support
-inftune run --model RedHatAI/gpt-oss-20b --cluster local \
+serveit run --model RedHatAI/gpt-oss-20b --cluster local \
     --tool-call-parser hermes --enable-auto-tool-choice
 ```
 
@@ -270,28 +270,28 @@ inftune run --model RedHatAI/gpt-oss-20b --cluster local \
 
 ```bash
 # Resume a stopped/failed run
-inftune run --resume 7 --cluster local
+serveit run --resume 7 --cluster local
 
 # Generate HTML report after optimization
-inftune run --model RedHatAI/gpt-oss-20b --cluster local \
+serveit run --model RedHatAI/gpt-oss-20b --cluster local \
     --html-report results.html
 
 # Generate report from an existing completed run
-inftune run --resume 7 --cluster local --html-report run7-report.html
+serveit run --resume 7 --cluster local --html-report run7-report.html
 
 # Run with description
-inftune run --model RedHatAI/gpt-oss-20b --cluster local \
+serveit run --model RedHatAI/gpt-oss-20b --cluster local \
     --description "Production baseline test with 80% cache hit"
 
 # Quiet mode (no progress output)
-inftune run --model RedHatAI/gpt-oss-20b --cluster local --quiet
+serveit run --model RedHatAI/gpt-oss-20b --cluster local --quiet
 ```
 
 ### Full Production Example
 
 ```bash
 # Complete production optimization run
-inftune run \
+serveit run \
     --model RedHatAI/gpt-oss-20b \
     --cluster prod \
     --isl 9000 --isl-stdev 4000 \
@@ -318,11 +318,11 @@ inftune run \
 
 | Command | Description |
 |---------|-------------|
-| `inftune cluster add --name NAME` | Register current kubectl context |
-| `inftune cluster add --name NAME --kubeconfig PATH` | Register remote cluster |
-| `inftune cluster list` | List registered clusters |
-| `inftune cluster remove NAME` | Remove a cluster |
-| `inftune cluster scan NAME` | Scan cluster resources |
+| `serveit cluster add --name NAME` | Register current kubectl context |
+| `serveit cluster add --name NAME --kubeconfig PATH` | Register remote cluster |
+| `serveit cluster list` | List registered clusters |
+| `serveit cluster remove NAME` | Remove a cluster |
+| `serveit cluster scan NAME` | Scan cluster resources |
 
 ### Run Options
 
@@ -352,7 +352,7 @@ inftune run \
 | `--tp-options` | 1,2,4,8 | TP values to explore |
 | `--image` | ghcr.io/llm-d/llm-d-cuda:v0.5.1 | vLLM container image |
 | `--namespace` | from cluster | Kubernetes namespace |
-| `--pvc` | inftune-model-cache | PVC name |
+| `--pvc` | serveit-model-cache | PVC name |
 | `--nccl-ib-hca` | mlx | NCCL IB HCA prefix |
 | `--hf-token` | — | HuggingFace token (or HF_TOKEN env) |
 | `--nodes` | — | Comma-separated node names |
@@ -398,5 +398,5 @@ inftune run \
 | **Output** | | |
 | `--html-report` | — | Generate HTML report to file |
 | `--description` | — | Run description |
-| `--db` | /mnt/storage/inftune.db | Database path |
+| `--db` | /mnt/storage/serveit.db | Database path |
 | `--quiet` | off | Suppress progress output |

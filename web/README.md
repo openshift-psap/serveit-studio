@@ -68,7 +68,7 @@ Main Flask application with SocketIO for real-time updates.
 ```bash
 # Set environment variables
 export INFTUNE_PATH=/path/to/ServeIt Studio
-export DB_PATH=./inftune.db
+export DB_PATH=./serveit.db
 
 # Run the server
 python3 web/server.py

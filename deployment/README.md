@@ -36,7 +36,7 @@ Deployment script for ServeIt Studio Optimizer.
 | Option | Short | Description | Default |
 |---|---|---|---|
 | `--namespace NAME` | `-n` | Kubernetes namespace | `llm-d` |
-| `--image IMAGE` | `-i` | Container image | `quay.io/bbenshab/vllm:inftune` |
+| `--image IMAGE` | `-i` | Container image | `quay.io/bbenshab/vllm:serveit` |
 | `--pvc-name NAME` | `-p` | Use existing PVC (skips creation) | — |
 | `--storage-class CLASS` | `-s` | Storage class for new PVC | — |
 | `--storage-size SIZE` | | Size of new PVC | `100Gi` |
@@ -65,7 +65,7 @@ The PVC is mounted at `/mnt/storage` and contains:
 
 | Path | Content |
 |---|---|
-| `/mnt/storage/inftune.db` | SQLite database (runs, tests, console logs, hardware scans) |
+| `/mnt/storage/serveit.db` | SQLite database (runs, tests, console logs, hardware scans) |
 | `/mnt/storage/app/` | Synced application code (dev mode) |
 | `/mnt/storage/.cache/huggingface/` | HuggingFace model/tokenizer cache |
 | `/mnt/storage/prefix-cache-datasets/` | Generated prefix cache simulation datasets |
@@ -92,5 +92,5 @@ In dev mode, `--sync` uses md5 checksums to efficiently sync only changed files:
 
 ### OpenShift
 ```bash
-oc get route inftune-optimizer-ui -n llm-d -o jsonpath='{.spec.host}'
+oc get route serveit-optimizer-ui -n llm-d -o jsonpath='{.spec.host}'
 ```

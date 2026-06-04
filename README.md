@@ -159,7 +159,7 @@ python3 deployment/deploy.py --port-forward
 # Opens http://localhost:8080
 
 # OpenShift (auto-creates Route)
-oc get route -n inftune
+oc get route -n serveit
 ```
 
 ## Project Structure
@@ -256,7 +256,7 @@ For PD goals (TTFT, Balanced, PD Only), minimum is 128 because NIXL transfers KV
 
 Prometheus metrics are auto-detected from OpenShift User Workload Monitoring or a standalone Prometheus instance. For vanilla K8s clusters accessed remotely, a `kubectl port-forward` to `svc/prometheus` in the `monitoring` namespace is started automatically.
 
-Results are stored in SQLite at `/mnt/storage/inftune.db`.
+Results are stored in SQLite at `/mnt/storage/serveit.db`.
 
 ## Optimization Report
 
@@ -278,7 +278,7 @@ The report UI includes these tabs:
 
 ```bash
 # Check pod status
-kubectl get pods -n llm-d -l app=inftune-optimizer
+kubectl get pods -n llm-d -l app=serveit-optimizer
 
 # View server logs
 kubectl exec -n llm-d <pod> -- cat /tmp/server.log
@@ -298,7 +298,7 @@ for pod in json.load(sys.stdin)['items']:
 "
 
 # Clean up stuck test pods
-kubectl delete lws -n llm-d -l component=inftune-test
+kubectl delete lws -n llm-d -l component=serveit-test
 ```
 
 ## License

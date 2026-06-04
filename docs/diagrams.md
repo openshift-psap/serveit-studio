@@ -16,7 +16,7 @@ graph TB
 
     subgraph Instance["Instance (per-user)"]
         IP[ServeIt Studio Pod<br>Flask + SocketIO]
-        IDB[(inftune.db<br>Runs, Results, Config)]
+        IDB[(serveit.db<br>Runs, Results, Config)]
         IP --> IDB
     end
 
@@ -465,7 +465,7 @@ flowchart TD
     I3 --> WIZ2[Wizard → Optimize → Report]
 
     subgraph Each Instance
-        DB[(inftune.db)]
+        DB[(serveit.db)]
         OPT[Optimizer Pipeline]
         RPT[Report & Charts]
         OPT --> DB
