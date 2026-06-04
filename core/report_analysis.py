@@ -1130,6 +1130,8 @@ class ReportAnalyzer:
                 'ttft_p95': round(r.ttft_p95, 2) if r.ttft_p95 else None,
                 'ttft_p99': round(r.ttft_p99, 2) if r.ttft_p99 else None,
                 'itl_p90': round(r.itl_p90, 2) if r.itl_p90 else None,
+                'itl_p95': round(r.itl_p95, 2) if r.itl_p95 else None,
+                'itl_p99': round(r.itl_p99, 2) if r.itl_p99 else None,
                 'throughput_p50': round(r.throughput_p50, 2) if r.throughput_p50 else None,
                 'throughput_mean': round(r.throughput_mean, 2) if r.throughput_mean else None,
                 'throughput_p90': round(r.throughput_p90, 2),
