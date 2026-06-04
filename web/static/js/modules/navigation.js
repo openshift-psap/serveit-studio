@@ -441,6 +441,9 @@ socket.on('cluster_scan_result', function(data) {
         option.textContent = `${sc.name} (${sc.provisioner})`;
         select.appendChild(option);
     });
+    if (config.storage_class) {
+        select.value = config.storage_class;
+    }
 
     // Populate max GPU dropdown
     const maxGpuSelect = document.getElementById('max-gpu-select');
