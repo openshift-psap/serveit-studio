@@ -113,10 +113,11 @@ class ClusterResources:
         Returns:
             Minimum number of GPUs required (power of 2)
         """
-        # MoE models have sparse activations — only top_k experts active per
-        # token, so activation memory is much lower than dense equivalent.
-        overhead_factor = 1.15 if is_moe else 1.4
-        required_memory_gb = model_size_gb * overhead_factor
+        # Overhead covers CUDA context, activation buffers, and framework memory.
+        # vLLM manages KV cache allocation internally via gpu_memory_utilization,
+        # so we only need weights + minimal overhead to fit on the GPU.
+        overhead_gb = 10  # ~10GB for CUDA context + activations + framework
+        required_memory_gb = model_size_gb + overhead_gb
 
         gpu_memory_gb = self.gpu_memory_per_gpu_mb / 1024
         min_gpus = int(required_memory_gb / gpu_memory_gb) + 1
