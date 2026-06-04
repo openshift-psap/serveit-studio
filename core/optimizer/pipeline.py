@@ -156,12 +156,24 @@ class RecipeOptimizer(
                     if k in tcfg and k not in self._model_config:
                         self._model_config[k] = tcfg[k]
 
-            # Detect dtype from quantization config, not model name
+            # Detect dtype from quantization config
             qcfg = self._model_config.get('quantization_config', {})
             if qcfg:
-                quant_type = (qcfg.get('quant_type', '') or qcfg.get('quant_method', '')).lower()
-                if 'fp8' in quant_type or 'w8a8' in str(qcfg).lower():
+                quant_method = (qcfg.get('quant_method', '') or '').lower()
+                quant_format = (qcfg.get('format', '') or qcfg.get('quant_type', '') or '').lower()
+                # Check explicit FP8 indicators
+                if 'fp8' in quant_method or 'fp8' in quant_format:
                     self._model_dtype = 'fp8'
+                elif 'w8a8' in quant_format:
+                    self._model_dtype = 'fp8'
+                # compressed-tensors: check weight config for float 8-bit
+                elif quant_method == 'compressed-tensors':
+                    groups = qcfg.get('config_groups', {})
+                    for g in groups.values():
+                        w = g.get('weights', {}) if isinstance(g, dict) else {}
+                        if w.get('num_bits') == 8 and w.get('type', '').lower() == 'float':
+                            self._model_dtype = 'fp8'
+                            break
             if self._model_dtype == 'fp16':
                 torch_dtype = self._model_config.get('torch_dtype', '')
                 if torch_dtype == 'float16':
