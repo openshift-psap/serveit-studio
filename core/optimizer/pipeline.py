@@ -1228,6 +1228,8 @@ class RecipeOptimizer(
                 extra_reserve_pct=reserve_pct
             )
             tp_options = [tp for tp in tp_options if tp >= min_tp]
+            # Cap TP by the instance's GPU limit
+            tp_options = [tp for tp in tp_options if tp <= self.config.total_gpus]
         else:
             tp_options = list(self.config.tp_options)
 
