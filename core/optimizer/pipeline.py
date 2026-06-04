@@ -206,6 +206,21 @@ class RecipeOptimizer(
                     self._supports_mtp = True
                     self.log(f"MTP support detected (architecture: {model_archs[0]})")
 
+        # Detect DeepGemm compatibility from quantization config
+        self._use_deep_gemm = None  # None = let vLLM decide
+        if self._model_config and self._model_dtype == 'fp8':
+            qcfg = self._model_config.get('quantization_config', {})
+            quant_method = (qcfg.get('quant_method', '') or '').lower()
+            if quant_method == 'compressed-tensors':
+                # compressed-tensors uses per-channel weight scales which
+                # DeepGemm doesn't support (requires per-tensor)
+                self._use_deep_gemm = False
+                self.log("  DeepGemm: disabled (compressed-tensors per-channel quantization)")
+            elif quant_method == 'fp8' or not quant_method:
+                # Standard FP8 per-tensor quantization — DeepGemm compatible
+                self._use_deep_gemm = True
+                self.log("  DeepGemm: enabled (per-tensor FP8 quantization)")
+
         # Set HF_TOKEN in process environment so guidellm and other subprocesses inherit it
         if self.config.hf_token and not os.environ.get('HF_TOKEN'):
             os.environ['HF_TOKEN'] = self.config.hf_token

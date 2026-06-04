@@ -188,8 +188,10 @@ spec:
                 value: "eth0"
               - name: NCCL_SOCKET_IFNAME
                 value: "eth0"
+{% if use_deep_gemm is not none %}
               - name: VLLM_USE_DEEP_GEMM
-                value: "{{ '1' if prefill_tp >= 8 else '0' }}"
+                value: "{{ '1' if use_deep_gemm else '0' }}"
+{% endif %}
 {% if prefill_enable_expert_parallel %}
               - name: VLLM_RANDOMIZE_DP_DUMMY_INPUTS
                 value: "1"
