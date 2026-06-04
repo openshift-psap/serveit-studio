@@ -659,6 +659,12 @@ def delete_instance(instance_id: int, owner_id: int, backup: bool = True) -> boo
         row = dict(row)
         conn.execute("UPDATE instances SET status = 'deleting' WHERE id = ?", (instance_id,))
 
+    import threading
+    threading.Thread(target=_delete_instance_async, args=(instance_id, row, backup), daemon=True).start()
+    return True
+
+
+def _delete_instance_async(instance_id: int, row: dict, backup: bool):
     ns = row['namespace']
 
     try:
@@ -678,21 +684,20 @@ def delete_instance(instance_id: int, owner_id: int, backup: bool = True) -> boo
         if _is_oc():
             _kubectl(['delete', 'route', f"{row['deployment_name']}-ui", '-n', ns, '--ignore-not-found=true'])
 
-        # Clean up remote workload namespace
         if row.get('kubeconfig_secret'):
             try:
                 _cleanup_remote_cluster(row['kubeconfig_secret'], ns, row.get('workload_namespace', ''))
             except Exception:
                 logger.warning(f"Remote cleanup failed for instance {instance_id}, continuing with deletion")
 
-        # Delete local workload namespace (for local-cluster instances)
         wl_ns = row.get('workload_namespace', '')
         if wl_ns and wl_ns != ns and not row.get('kubeconfig_secret'):
             _kubectl(['delete', 'namespace', wl_ns, '--ignore-not-found=true'])
+    except Exception as e:
+        logger.error(f"Error during async deletion of instance {instance_id}: {e}")
     finally:
         with get_db() as conn:
             conn.execute('DELETE FROM instances WHERE id = ?', (instance_id,))
-    return True
 
 
 def _cleanup_remote_cluster(kubeconfig_secret: str, namespace: str, workload_namespace: str):
