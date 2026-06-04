@@ -696,6 +696,10 @@ function restoreConfigSummary() {
             ? `${config.latency_constraint_ms}ms @ ${config.latency_constraint_percentile.toUpperCase()}`
             : 'Disabled';
     }
+    const imgEl = document.getElementById('config-summary-image');
+    if (imgEl) imgEl.textContent = config.image || document.getElementById('image-repo-input')?.value || '-';
+    const schImgEl = document.getElementById('config-summary-scheduler-image');
+    if (schImgEl) schImgEl.textContent = config.scheduler_image || document.getElementById('scheduler-image-input')?.value || '-';
     const atEl = document.getElementById('config-summary-autotune');
     if (atEl) atEl.textContent = config.advanced_vllm_custom_enabled ? 'Enabled' : 'Upstream Default';
     const eppEl = document.getElementById('config-summary-epp');

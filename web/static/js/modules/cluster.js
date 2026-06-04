@@ -98,6 +98,10 @@ function generateTestPlan() {
     document.getElementById('config-summary-achievable-qps').textContent = config.use_achievable_qps ? 'Enabled' : 'Disabled';
     document.getElementById('config-summary-pvc').textContent = config.existing_pvc_name || 'Not set';
     document.getElementById('config-summary-namespace').textContent = config.namespace || 'Not set';
+    const imgEl2 = document.getElementById('config-summary-image');
+    if (imgEl2) imgEl2.textContent = config.image || document.getElementById('image-repo-input')?.value || '-';
+    const schImgEl2 = document.getElementById('config-summary-scheduler-image');
+    if (schImgEl2) schImgEl2.textContent = config.scheduler_image || document.getElementById('scheduler-image-input')?.value || '-';
     const atEl2 = document.getElementById('config-summary-autotune');
     if (atEl2) atEl2.textContent = config.advanced_vllm_custom_enabled ? 'Enabled' : 'Upstream Default';
     const eppEl2 = document.getElementById('config-summary-epp');
