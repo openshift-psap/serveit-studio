@@ -132,6 +132,7 @@ class ConfigBuilderMixin:
             moe_backend=None,
             all2all_backend=None,
             use_deep_gemm=getattr(self, '_use_deep_gemm', None),
+            has_hybrid_attention=getattr(self, '_has_hybrid_attention', False),
         )
         if not is_calibration or not getattr(self.config, 'advanced_vllm_custom_enabled', True):
             cfg = self._apply_advanced_vllm(cfg)
@@ -563,6 +564,7 @@ class ConfigBuilderMixin:
             moe_backend=None,
             all2all_backend=None,
             use_deep_gemm=getattr(self, '_use_deep_gemm', None),
+            has_hybrid_attention=getattr(self, '_has_hybrid_attention', False),
         )
         return self._apply_advanced_vllm(cfg)
 
@@ -655,6 +657,7 @@ class ConfigBuilderMixin:
             all2all_backend='deepep_high_throughput' if max(split.prefill_tp, split.decode_tp) > 1 else None,
             moe_dp_chunk_size=self._compute_moe_dp_chunk_size(split.decode_tp, decode_max_num_seqs) if self._is_moe else None,
             use_deep_gemm=getattr(self, '_use_deep_gemm', None),
+            has_hybrid_attention=getattr(self, '_has_hybrid_attention', False),
         )
         return self._apply_advanced_vllm(cfg)
 

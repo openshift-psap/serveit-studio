@@ -218,6 +218,25 @@ class RecipeOptimizer(
                     self._supports_mtp = True
                     self.log(f"MTP support detected (architecture: {model_archs[0]})")
 
+        # Detect hybrid attention (mixed attention types across layers)
+        self._has_hybrid_attention = False
+        if self._model_config:
+            has_chunk = self._model_config.get('attention_chunk_size') is not None
+            has_sliding = self._model_config.get('sliding_window') is not None
+            hybrid_archs = ['Qwen3NextForCausalLM', 'Llama4ForConditionalGeneration',
+                            'Qwen3_5ForCausalLM', 'Bamba2ForCausalLM']
+            model_archs = self._model_config.get('architectures', [])
+            has_hybrid_arch = any(a in hybrid_archs for a in model_archs)
+            if has_chunk or has_hybrid_arch:
+                self._has_hybrid_attention = True
+                reason = []
+                if has_chunk:
+                    reason.append(f"attention_chunk_size={self._model_config['attention_chunk_size']}")
+                if has_hybrid_arch:
+                    reason.append(f"architecture={model_archs[0]}")
+                self.log(f"  Hybrid attention detected ({', '.join(reason)})")
+                self.log(f"    PD disaggregation requires NixlConnector with HMA support (vLLM >= v0.19)")
+
         # Detect DeepGemm compatibility from quantization config
         self._use_deep_gemm = None  # None = let vLLM decide
         if self._model_config and self._model_dtype == 'fp8':

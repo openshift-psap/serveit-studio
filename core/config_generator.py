@@ -118,6 +118,7 @@ class TestConfig:
     all2all_backend: Optional[str] = None  # 'deepep_high_throughput', 'deepep_low_latency', 'nccl', None
     moe_dp_chunk_size: Optional[int] = None  # MoE dispatch chunk size (default 256, upstream uses 384 for decode)
     use_deep_gemm: Optional[bool] = None  # None = let vLLM decide, True/False = explicit override
+    has_hybrid_attention: bool = False  # Model uses mixed attention types (chunked/GDN + full)
 
     # Decode KV cache memory control
     kv_cache_memory_bytes: Optional[str] = None  # e.g. '10GiB' — explicit KV cache budget for decode

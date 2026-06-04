@@ -138,7 +138,8 @@ spec:
                   --block-size {{ block_size or 16 }} \
                   --gpu-memory-utilization {{ prefill_gpu_memory_utilization or 0.80 }} \
                   --kv-transfer-config '{"kv_connector":"{{ kv_connector }}","kv_role":"kv_both","kv_load_failure_policy":"fail"}' \
-{% if prefill_enable_expert_parallel %}                  --enable-expert-parallel \
+{% if has_hybrid_attention %}                  --no-disable-hybrid-kv-cache-manager \
+{% endif %}{% if prefill_enable_expert_parallel %}                  --enable-expert-parallel \
 {% endif %}{% if prefill_enable_dbo %}                  --enable-dbo \
                   --dbo-prefill-token-threshold {{ dbo_prefill_token_threshold | default(32) }} \
 {% endif %}{% if prefill_enable_eplb %}                  --enable-eplb \
