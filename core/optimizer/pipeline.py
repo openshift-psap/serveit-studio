@@ -131,14 +131,8 @@ class RecipeOptimizer(
         # Load model config from HuggingFace for accurate memory calculations
         self._model_config = None
         self._model_size_b = 8.0
-        self._model_dtype = 'fp8'
+        self._model_dtype = 'fp16'
         try:
-            import re
-            match = re.search(r'(\d+)[Bb]', self.config.model_name)
-            if match:
-                self._model_size_b = float(match.group(1))
-            self._model_dtype = 'fp8' if 'fp8' in self.config.model_name.lower() else 'fp16'
-
             from transformers import AutoConfig
             self.log(f"Loading model config: {self.config.model_name}")
             hf_kwargs = {}
@@ -147,10 +141,39 @@ class RecipeOptimizer(
             self._model_config = AutoConfig.from_pretrained(
                 self.config.model_name, trust_remote_code=True, **hf_kwargs
             ).to_dict()
+
+            # Multimodal models nest LLM params under text_config
+            if 'text_config' in self._model_config and isinstance(self._model_config['text_config'], dict):
+                tcfg = self._model_config['text_config']
+                for k in ['hidden_size', 'intermediate_size', 'num_hidden_layers',
+                           'num_attention_heads', 'num_key_value_heads', 'vocab_size',
+                           'num_local_experts', 'n_routed_experts', 'num_experts',
+                           'moe_intermediate_size', 'shared_expert_intermediate_size',
+                           'n_shared_experts', 'num_experts_per_tok',
+                           'intermediate_size_mlp', 'interleave_moe_layer_step',
+                           'max_position_embeddings', 'attention_chunk_size',
+                           'num_nextn_predict_layers']:
+                    if k in tcfg and k not in self._model_config:
+                        self._model_config[k] = tcfg[k]
+
+            # Detect dtype from quantization config, not model name
+            qcfg = self._model_config.get('quantization_config', {})
+            if qcfg:
+                quant_type = (qcfg.get('quant_type', '') or qcfg.get('quant_method', '')).lower()
+                if 'fp8' in quant_type or 'w8a8' in str(qcfg).lower():
+                    self._model_dtype = 'fp8'
+            if self._model_dtype == 'fp16':
+                torch_dtype = self._model_config.get('torch_dtype', '')
+                if torch_dtype == 'float16':
+                    self._model_dtype = 'fp16'
+                elif torch_dtype == 'bfloat16':
+                    self._model_dtype = 'bf16'
+
             self.log(f"Model config loaded: {self._model_config.get('num_hidden_layers')} layers, "
                      f"{self._model_config.get('num_key_value_heads')} KV heads, "
                      f"hidden_size={self._model_config.get('hidden_size')}, "
-                     f"max_pos={self._model_config.get('max_position_embeddings')}")
+                     f"max_pos={self._model_config.get('max_position_embeddings')}, "
+                     f"dtype={self._model_dtype}")
             estimated_b = self._estimate_params_from_config()
             if estimated_b:
                 self._model_size_b = estimated_b
@@ -1149,7 +1172,7 @@ class RecipeOptimizer(
             tp_options = self.cluster_resources.get_tp_options()
             min_tp = self.cluster_resources.estimate_model_gpu_requirement(
                 model_size_gb=self._estimate_model_size_gb(),
-                dtype='fp8' if 'fp8' in self.config.model_name.lower() else 'fp16'
+                dtype=self._model_dtype
             )
             tp_options = [tp for tp in tp_options if tp >= min_tp]
         else:
@@ -1214,24 +1237,38 @@ class RecipeOptimizer(
         num_experts = cfg.get('num_local_experts') or cfg.get('n_routed_experts') or cfg.get('num_experts') or 1
         num_shared_experts = cfg.get('n_shared_experts', 0)
         moe_intermediate = cfg.get('moe_intermediate_size', 0)
+        dense_intermediate = cfg.get('intermediate_size_mlp', intermediate)
+        interleave_step = cfg.get('interleave_moe_layer_step', 1)
 
         if num_experts > 1 and moe_intermediate:
             # MoE with separate expert FFN size (Qwen-MoE, DeepSeek)
             ffn_per_expert = hidden * moe_intermediate * 3
             shared_ffn = hidden * intermediate * 3 if intermediate else 0
             router_params = hidden * num_experts
-            per_layer = attn_params + ffn_per_expert * num_experts + shared_ffn * num_shared_experts + router_params
+            moe_layer = attn_params + ffn_per_expert * num_experts + shared_ffn * num_shared_experts + router_params
+            dense_layer = attn_params + hidden * dense_intermediate * 3
         elif num_experts > 1:
-            # MoE where intermediate_size IS the per-expert size (Mixtral)
+            # MoE where intermediate_size IS the per-expert size (Mixtral, Llama-4)
             ffn_per_expert = hidden * intermediate * 3
             router_params = hidden * num_experts
-            per_layer = attn_params + ffn_per_expert * num_experts + router_params
+            moe_layer = attn_params + ffn_per_expert * num_experts + router_params
+            dense_layer = attn_params + hidden * dense_intermediate * 3
         else:
-            # Dense model
-            per_layer = attn_params + hidden * intermediate * 3
+            moe_layer = 0
+            dense_layer = attn_params + hidden * intermediate * 3
+
+        # Handle interleaved MoE/dense layers (e.g. Llama-4: every other layer is MoE)
+        if num_experts > 1 and interleave_step > 1:
+            moe_layers = layers // interleave_step
+            dense_layers = layers - moe_layers
+            total_layer_params = moe_layers * moe_layer + dense_layers * dense_layer
+        elif num_experts > 1:
+            total_layer_params = layers * moe_layer
+        else:
+            total_layer_params = layers * dense_layer
 
         embed_params = vocab * hidden * 2
-        total = layers * per_layer + embed_params
+        total = total_layer_params + embed_params
         total_b = total / 1e9
 
         if num_experts > 1:
@@ -1260,7 +1297,7 @@ class RecipeOptimizer(
         FP8: ~1 byte/param, FP16: ~2 bytes/param.
         """
         params_b = self._model_size_b
-        if 'fp8' in self.config.model_name.lower():
+        if self._model_dtype == 'fp8':
             return params_b * 1.0
         return params_b * 2.0
 

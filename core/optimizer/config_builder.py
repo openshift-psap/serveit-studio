@@ -223,7 +223,7 @@ class ConfigBuilderMixin:
         else:
             num_layers, num_kv_heads, head_dim = 32, 8, 128
 
-        dtype_bytes = 1 if 'fp8' in self.config.model_name.lower() else 2
+        dtype_bytes = 1 if getattr(self, '_model_dtype', 'fp16') == 'fp8' else 2
         gpu_vram = self._gpu_vram_gb
 
         # --- S_activation: compute slot scale ---
@@ -290,7 +290,7 @@ class ConfigBuilderMixin:
         # Activation budget ≈ (VRAM - model_weights - KV_reserved - overhead) / num_experts
         intermediate = self._model_config.get('moe_intermediate_size',
                        self._model_config.get('intermediate_size', 14336))
-        dtype_bytes = 1 if 'fp8' in self.config.model_name.lower() else 2
+        dtype_bytes = 1 if getattr(self, '_model_dtype', 'fp16') == 'fp8' else 2
         act_per_token_per_expert = intermediate * 2 * dtype_bytes
         model_weight_gb = self._estimate_model_size_gb() / tp
         overhead_gb = 4.0
