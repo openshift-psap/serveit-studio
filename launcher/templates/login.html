@@ -4,8 +4,8 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <meta name="theme-color" content="#1A1A1A">
-    <link rel="icon" type="image/png" href="{{ url_for('static', filename='img/inftune-logo-nobg.png') }}">
-    <title>Inftune Studio Launcher{% if setup %} — Setup{% else %} — Login{% endif %}</title>
+    <link rel="icon" type="image/png" href="{{ url_for('static', filename='img/serveit-logo.png') }}">
+    <title>ServeIt Studio Launcher{% if setup %} — Setup{% else %} — Login{% endif %}</title>
     <style>
         *{box-sizing:border-box;margin:0;padding:0}
         body{font-family:'Red Hat Display','Segoe UI',Roboto,sans-serif;background:#F8F8F8;min-height:100vh;display:flex}
@@ -100,7 +100,7 @@
 <div class="split-left">
     <div class="brand">
         <div class="brand-logo">
-            <img src="{{ url_for('static', filename='img/inftune-logo-dark-nobg.png') }}" alt="Inftune Studio">
+            <img src="{{ url_for('static', filename='img/serveit-logo.png') }}" alt="ServeIt Studio">
         </div>
         <p>Multi-cluster LLM inference optimization platform. Deploy, benchmark, and tune your models.</p>
         <div class="features">
@@ -126,15 +126,15 @@
     var saveUserEl = document.getElementById('save-username');
     var savePassEl = document.getElementById('save-password');
     if (!saveUserEl) return;
-    var saved = JSON.parse(localStorage.getItem('inftune_creds') || '{}');
+    var saved = JSON.parse(localStorage.getItem('serveit_creds') || '{}');
     if (saved.username) { usernameEl.value = saved.username; saveUserEl.checked = true; }
     if (saved.password) { passwordEl.value = atob(saved.password); savePassEl.checked = true; }
     document.querySelector('form').addEventListener('submit', function() {
         var creds = {};
         if (saveUserEl.checked) creds.username = usernameEl.value;
         if (savePassEl.checked) creds.password = btoa(passwordEl.value);
-        if (creds.username || creds.password) localStorage.setItem('inftune_creds', JSON.stringify(creds));
-        else localStorage.removeItem('inftune_creds');
+        if (creds.username || creds.password) localStorage.setItem('serveit_creds', JSON.stringify(creds));
+        else localStorage.removeItem('serveit_creds');
     });
 })();
 </script>

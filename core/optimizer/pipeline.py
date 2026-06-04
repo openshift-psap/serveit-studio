@@ -56,7 +56,7 @@ class RecipeOptimizer(
         config: RecipeOptimizerConfig,
         log_callback: Optional[Callable[[str, str], None]] = None,
         run_id: Optional[int] = None,
-        db_path: str = '/mnt/storage/inftune.db',
+        db_path: str = '/mnt/storage/serveit.db',
         stop_check: Optional[Callable[[], bool]] = None
     ):
         """
@@ -547,7 +547,7 @@ class RecipeOptimizer(
                                     remote_path = f"/tmp/guidellm-{name}.json"
                                     kubectl = self.orchestrator.deployment_manager.kubectl
                                     md5_r = kubectl.run(
-                                        ['exec', 'inftune-workload', '-n', self.config.namespace,
+                                        ['exec', 'serveit-workload', '-n', self.config.namespace,
                                          '--', 'md5sum', remote_path], check=False)
                                     if md5_r.returncode == 0:
                                         remote_md5 = md5_r.stdout.strip().split()[0]
@@ -557,7 +557,7 @@ class RecipeOptimizer(
                                         for attempt in range(3):
                                             _sp.run(
                                                 [kubectl.kubectl_cmd, 'cp',
-                                                 f'inftune-workload:{remote_path}',
+                                                 f'serveit-workload:{remote_path}',
                                                  str(raw_file), '-n', self.config.namespace],
                                                 env=cp_env, check=False, timeout=120)
                                             if raw_file.exists() and raw_file.stat().st_size > 0:

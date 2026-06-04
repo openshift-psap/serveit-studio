@@ -1,11 +1,11 @@
 apiVersion: batch/v1
 kind: Job
 metadata:
-  name: {{ job_name | default('inftune-model-download') }}
+  name: {{ job_name | default('serveit-model-download') }}
   namespace: {{ namespace }}
   labels:
     app: llm-d
-    component: inftune-benchmark
+    component: serveit-benchmark
     test-id: {{ test_id }}
   annotations:
     description: "Model download job for {{ model_name }}"
@@ -16,7 +16,7 @@ spec:
     metadata:
       labels:
         app: llm-d
-        component: inftune-benchmark
+        component: serveit-benchmark
         job: model-download
         test-id: {{ test_id }}
     spec:
@@ -32,7 +32,7 @@ spec:
             - |
               set -e
               echo "========================================="
-              echo "Inftune Studio Model Download Job"
+              echo "ServeIt Studio Model Download Job"
               echo "Model: {{ model_name }}"
               echo "Cache Directory: /model-cache"
               echo "========================================="
@@ -188,7 +188,7 @@ spec:
       volumes:
         - name: model-cache
           persistentVolumeClaim:
-            claimName: {{ pvc_name | default('inftune-model-cache') }}
+            claimName: {{ pvc_name | default('serveit-model-cache') }}
         - name: tmp-mem
           emptyDir:
             medium: Memory

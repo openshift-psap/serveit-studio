@@ -161,7 +161,7 @@ socket.on('status_update', function(data) {
 socket.on('clear_console', function() {
     // Clear console UI when server broadcasts clear event
     document.getElementById('console-output').innerHTML = '<div class="console-line">Console cleared.</div>';
-    localStorage.removeItem('inftune-console');
+    localStorage.removeItem('serveit-console');
 });
 
 var _configSyncLock = false;
@@ -183,7 +183,7 @@ socket.on('load_config_result', function(data) {
         config = { ...config, ...data.config };
         if (data.namespace) {
             config.namespace = data.namespace;
-            var instanceName = data.namespace.replace(/^inftune-/, '');
+            var instanceName = data.namespace.replace(/^serveit-/, '');
             var bcEl = document.getElementById('breadcrumb-instance');
             var bcSep = document.getElementById('breadcrumb-instance-sep');
             if (bcEl && instanceName) {
@@ -800,9 +800,9 @@ socket.on('compression_complete', function(data) {
             var url = window.URL.createObjectURL(blob);
             var a = document.createElement('a');
             a.href = url;
-            var dbNs = (config.namespace || '').replace(/^inftune-/, '') || 'optimizer';
+            var dbNs = (config.namespace || '').replace(/^serveit-/, '') || 'optimizer';
             var dbDate = new Date().toISOString().slice(0, 10);
-            a.download = 'inftune-' + dbNs + '-' + dbDate + '.db.gz';
+            a.download = 'serveit-' + dbNs + '-' + dbDate + '.db.gz';
             document.body.appendChild(a);
             a.click();
             window.URL.revokeObjectURL(url);
@@ -882,9 +882,9 @@ socket.on('raw_compression_complete', function(data) {
             var url = window.URL.createObjectURL(blob);
             var a = document.createElement('a');
             a.href = url;
-            var dbNs = (config.namespace || '').replace(/^inftune-/, '') || 'optimizer';
+            var dbNs = (config.namespace || '').replace(/^serveit-/, '') || 'optimizer';
             var dbDate = new Date().toISOString().slice(0, 10);
-            a.download = 'inftune-' + dbNs + '-raw-data-' + dbDate + '.tar.gz';
+            a.download = 'serveit-' + dbNs + '-raw-data-' + dbDate + '.tar.gz';
             document.body.appendChild(a);
             a.click();
             window.URL.revokeObjectURL(url);

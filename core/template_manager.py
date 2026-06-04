@@ -1,5 +1,5 @@
 """
-Inftune Studio Template Manager
+ServeIt Studio Template Manager
 
 Renders Jinja2 templates for Kubernetes deployments based on test configurations.
 Generates YAML manifests for Aggregated, PD, and EP architectures.

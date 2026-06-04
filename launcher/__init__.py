@@ -1,1 +1,1 @@
-"""Inftune Studio Launcher — multi-user control plane for Inftune Studio instances."""
+"""ServeIt Studio Launcher — multi-user control plane for ServeIt Studio instances."""

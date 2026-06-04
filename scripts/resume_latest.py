@@ -14,7 +14,7 @@ import signal
 
 sys.path.insert(0, '/mnt/storage/app')
 
-DB_PATH = '/mnt/storage/inftune.db'
+DB_PATH = '/mnt/storage/serveit.db'
 
 
 def get_latest_run(run_id=None):
@@ -113,7 +113,7 @@ def main():
     from core.recipe_optimizer import RecipeOptimizer, RecipeOptimizerConfig
     from core.system_scanner import SystemScanner
 
-    namespace = os.environ.get('TARGET_NAMESPACE', 'inftune')
+    namespace = os.environ.get('TARGET_NAMESPACE', 'serveit')
     scanner = SystemScanner(namespace=namespace)
     cluster_resources = scanner.scan_cluster()
     tp_options = cluster_resources.get_tp_options()
@@ -153,7 +153,7 @@ def main():
             qps=float(num_users), total_gpus=max_gpus,
             max_model_len=max_model_len, gpu_memory_utilization=gpu_memory_utilization,
             test_duration=test_duration, max_pd_splits=8,
-            image='ghcr.io/llm-d/llm-d-cuda:v0.5.1', pvc_name='inftune-model-cache',
+            image='ghcr.io/llm-d/llm-d-cuda:v0.5.1', pvc_name='serveit-model-cache',
             nccl_ib_hca='mlx', hf_token=hf_token, tp_options=tp_options,
             objective=goal, use_achievable_qps=bool(run.get('use_achievable_qps', 0)),
             latency_constraint_enabled=latency_enabled,

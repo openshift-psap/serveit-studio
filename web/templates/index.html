@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Inftune Studio - llm-d recipe based optimizer</title>
+    <title>ServeIt Studio - llm-d recipe based optimizer</title>
     <link rel="icon" type="image/png" sizes="32x32" href="{{ url_for('static', filename='img/favicon.png') }}">
     <link rel="apple-touch-icon" sizes="180x180" href="{{ url_for('static', filename='img/apple-touch-icon.png') }}">
     <script src="https://cdn.socket.io/4.5.4/socket.io.min.js"></script>
@@ -23,7 +23,7 @@
         <!-- Sidebar -->
         <aside class="sidebar" id="sidebar">
             <div class="sidebar-header">
-                <img src="{{ url_for('static', filename='img/inftune-logo-horizontal.png') }}?v={{ range(10000,99999) | random }}" alt="Inftune Studio">
+                <img src="{{ url_for('static', filename='img/serveit-logo-horizontal.png') }}?v={{ range(10000,99999) | random }}" alt="ServeIt Studio">
             </div>
             <nav class="sidebar-nav">
                 <div class="sidebar-section-label">Wizard Steps</div>
@@ -94,14 +94,14 @@
                     <div class="step-label">Resume</div>
                 </div>
             </nav>
-            <div class="sidebar-footer">Inftune Studio v1.0</div>
+            <div class="sidebar-footer">ServeIt Studio v1.0</div>
         </aside>
 
         <!-- Main Area -->
         <div class="main-area">
             <div class="header-row">
                 <div class="breadcrumb-bar">
-                    <span class="breadcrumb-step">Inftune Studio</span>
+                    <span class="breadcrumb-step">ServeIt Studio</span>
                     <span style="color: var(--rh-gray-400);">›</span>
                     <span class="breadcrumb-step" id="breadcrumb-instance" style="color:#0ea5e9;font-weight:600;"></span>
                     <span style="color: var(--rh-gray-400);" id="breadcrumb-instance-sep" class="hidden">›</span>

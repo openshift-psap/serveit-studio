@@ -1,5 +1,5 @@
 """
-Inftune Studio Cleanup Manager
+ServeIt Studio Cleanup Manager
 
 Cleans up deployed test configurations by looking at database state.
 """
@@ -19,7 +19,7 @@ logger = logging.getLogger(__name__)
 class CleanupManager:
     """Manages cleanup of deployed test resources."""
 
-    def __init__(self, namespace: str = 'inftune', kubeconfig: Optional[str] = None):
+    def __init__(self, namespace: str = 'serveit', kubeconfig: Optional[str] = None):
         """
         Initialize CleanupManager.
 
@@ -93,7 +93,7 @@ class CleanupManager:
 
     def cleanup_all_test_deployments(self, log_callback=None) -> bool:
         """
-        Clean up all Inftune Studio test deployments.
+        Clean up all ServeIt Studio test deployments.
 
         Args:
             log_callback: Optional callback for logging
@@ -103,11 +103,11 @@ class CleanupManager:
         """
         try:
             if log_callback:
-                log_callback('🧹 Cleaning up all Inftune Studio test deployments...')
+                log_callback('🧹 Cleaning up all ServeIt Studio test deployments...')
 
-            # Delete all LeaderWorkerSets with inftune label
+            # Delete all LeaderWorkerSets with serveit label
             result = self.kubectl.run(
-                ['delete', 'leaderworkerset', '-l', 'component=inftune-test', '-n', self.namespace, '--ignore-not-found=true'],
+                ['delete', 'leaderworkerset', '-l', 'component=serveit-test', '-n', self.namespace, '--ignore-not-found=true'],
                 check=False
             )
 
@@ -117,11 +117,11 @@ class CleanupManager:
                         log_callback(f'✅ {result.stdout.strip()}')
                 else:
                     if log_callback:
-                        log_callback('ℹ️  No Inftune Studio test deployments found')
+                        log_callback('ℹ️  No ServeIt Studio test deployments found')
 
             # Delete all associated services
             self.kubectl.run(
-                ['delete', 'service', '-l', 'component=inftune-test', '-n', self.namespace, '--ignore-not-found=true'],
+                ['delete', 'service', '-l', 'component=serveit-test', '-n', self.namespace, '--ignore-not-found=true'],
                 check=False
             )
 
@@ -202,14 +202,14 @@ class CleanupManager:
 
     def get_deployed_resources(self) -> List[str]:
         """
-        Get list of currently deployed Inftune Studio resources.
+        Get list of currently deployed ServeIt Studio resources.
 
         Returns:
             List of LeaderWorkerSet names
         """
         try:
             result = self.kubectl.run_json(
-                ['get', 'leaderworkerset', '-l', 'component=inftune-test', '-n', self.namespace, '-o', 'json']
+                ['get', 'leaderworkerset', '-l', 'component=serveit-test', '-n', self.namespace, '-o', 'json']
             )
 
             if 'items' in result:
@@ -226,11 +226,11 @@ def main():
     import argparse
 
     parser = argparse.ArgumentParser(
-        description='Clean up Inftune Studio test deployments'
+        description='Clean up ServeIt Studio test deployments'
     )
     parser.add_argument('action', choices=['cleanup', 'list'],
                         help='Action to perform')
-    parser.add_argument('--namespace', default='inftune', help='Kubernetes namespace')
+    parser.add_argument('--namespace', default='serveit', help='Kubernetes namespace')
     parser.add_argument('--resource', help='Specific resource to cleanup')
 
     args = parser.parse_args()
@@ -244,7 +244,7 @@ def main():
             for r in resources:
                 print(f"  - {r}")
         else:
-            print("No Inftune Studio deployments found")
+            print("No ServeIt Studio deployments found")
 
     elif args.action == 'cleanup':
         if args.resource:

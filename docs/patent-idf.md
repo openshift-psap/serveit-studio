@@ -1,4 +1,4 @@
-# Invention Disclosure Form — Inftune Studio
+# Invention Disclosure Form — ServeIt Studio
 
 ## Section 1: Inventors and Summary
 
@@ -177,7 +177,7 @@ When the optimization UI runs on one cluster (e.g., OpenShift) but test pods run
 
 **Has the invention been publicly disclosed?**
 
-No. The source code repository is private on GitHub (github.com/bbenshab/inftune-studio). No public demos, blog posts, conference talks, or papers have been published. No code has been pushed to any public repository. The invention has not been shared outside of Red Hat.
+No. The source code repository is private on GitHub (github.com/bbenshab/serveit-studio). No public demos, blog posts, conference talks, or papers have been published. No code has been pushed to any public repository. The invention has not been shared outside of Red Hat.
 
 **Date of first public disclosure:**
 N/A — no public disclosure has occurred.
@@ -250,7 +250,7 @@ All alternatives are significantly slower, less accurate, or require deep domain
 
 **Inventor Comments:**
 
-Complete technical documentation is available in the private repository (github.com/bbenshab/inftune-studio):
+Complete technical documentation is available in the private repository (github.com/bbenshab/serveit-studio):
 
 - `docs/patent-detailed-description.md` — Standalone detailed description of the invention (11-step pipeline)
 - `docs/optimization-math.md` — All formulas, derivations, and constants with justification

@@ -5,7 +5,7 @@ metadata:
   namespace: {{ namespace }}
   labels:
     app: llm-d
-    component: inftune-test
+    component: serveit-test
     test-id: {{ test_id }}
     architecture: pd
     role: prefill
@@ -20,7 +20,7 @@ spec:
           llm-d.ai/inference-serving: "true"
           llm-d.ai/model: {{ model_name_label }}
           llm-d.ai/role: prefill
-          llm-d.ai/guide: inftune-pd
+          llm-d.ai/guide: serveit-pd
           llm-d.ai/test-id: {{ test_id }}
       spec:
         serviceAccountName: llm-d-modelserver
@@ -108,7 +108,7 @@ spec:
                 fi
 
                 echo "========================================="
-                echo "Inftune Studio Test: {{ test_id }}"
+                echo "ServeIt Studio Test: {{ test_id }}"
                 echo "Architecture: PD (Prefill)"
                 echo "Model: {{ model_name }}"
                 echo "TP: {{ prefill_tp }}"

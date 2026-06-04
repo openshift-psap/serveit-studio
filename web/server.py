@@ -1,5 +1,5 @@
 """
-Inftune Studio llm-d optimizer — Web Application Entry Point
+ServeIt Studio llm-d optimizer — Web Application Entry Point
 
 This is the thin orchestrator that imports all modules and starts the server.
 Business logic lives in:
@@ -45,7 +45,7 @@ import web.realtime
 def main():
     """Main application entry point."""
     print("=" * 60)
-    print("Inftune Studio llm-d optimizer")
+    print("ServeIt Studio llm-d optimizer")
     print("Intelligent Search for Optimal llm-d Inference Configuration")
     print("=" * 60)
 

@@ -1,4 +1,4 @@
-# Inftune Studio Optimization Pipeline — Math & Formulas
+# ServeIt Studio Optimization Pipeline — Math & Formulas
 
 Complete reference for every calculation, heuristic, and formula used in the optimization pipeline. Each section explains not just the formula but **why** each value was chosen.
 
@@ -6,7 +6,7 @@ Complete reference for every calculation, heuristic, and formula used in the opt
 
 ## Overview
 
-Inftune Studio runs an 11-step optimization pipeline that deploys vLLM on Kubernetes, benchmarks it with guidellm, and finds optimal configurations. The pipeline tests different Tensor Parallelism (TP) values, Prefill/Decode (P/D) splits, aggregated configurations, EPP routing weights, and latency-bounded concurrency levels.
+ServeIt Studio runs an 11-step optimization pipeline that deploys vLLM on Kubernetes, benchmarks it with guidellm, and finds optimal configurations. The pipeline tests different Tensor Parallelism (TP) values, Prefill/Decode (P/D) splits, aggregated configurations, EPP routing weights, and latency-bounded concurrency levels.
 
 **Key metric: TPSG (Tokens Per Second per GPU)** — normalizes throughput by GPU count so configurations with different TP values can be compared fairly. Without normalization, TP=8 would always look faster than TP=2 simply because it uses 4× more GPUs.
 

@@ -1,5 +1,5 @@
 """
-Database manager for Inftune Studio optimization results.
+Database manager for ServeIt Studio optimization results.
 Provides immediate persistence of test results to SQLite database.
 """
 
@@ -17,11 +17,11 @@ from .metrics_analyzer import MetricsAnalyzer
 
 class DatabaseManager:
     """
-    Manages database operations for Inftune Studio optimization runs.
+    Manages database operations for ServeIt Studio optimization runs.
     Supports immediate test result persistence.
     """
 
-    def __init__(self, db_path: str = '/mnt/storage/inftune.db'):
+    def __init__(self, db_path: str = '/mnt/storage/serveit.db'):
         """
         Initialize database manager.
 

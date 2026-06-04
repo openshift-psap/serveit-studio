@@ -16,7 +16,7 @@ logger = logging.getLogger(__name__)
 class GuidellmMixin:
     """Mixin providing guidellm pod management and benchmark execution."""
 
-    _guidellm_pod_name = 'inftune-workload'
+    _guidellm_pod_name = 'serveit-workload'
 
     def ensure_guidellm_pod(self, config: TestConfig, log_callback=None):
         """Deploy the persistent guidellm pod if not already running."""
@@ -40,7 +40,7 @@ class GuidellmMixin:
         tmgr = TemplateManager()
         pod_yaml = tmgr.render_template('benchmark/guidellm-pod.yaml.j2',
             namespace=self.namespace,
-            image=os.environ.get('GUIDELLM_IMAGE', 'quay.io/bbenshab/inftune-studio:workload'),
+            image=os.environ.get('GUIDELLM_IMAGE', 'quay.io/bbenshab/serveit-studio:workload'),
             pvc_name=self._get_storage_pvc_name(config),
             hf_token=os.environ.get('HF_TOKEN', ''),
         )
@@ -87,7 +87,7 @@ class GuidellmMixin:
         # Get the optimizer pod's PVC
         try:
             r = kubectl.run(
-                ['get', 'pod', '-l', 'app=inftune-optimizer', '-n', self.namespace,
+                ['get', 'pod', '-l', 'app=serveit-optimizer', '-n', self.namespace,
                  '-o', 'jsonpath={.items[0].spec.volumes[?(@.persistentVolumeClaim)].persistentVolumeClaim.claimName}'],
                 check=False)
             if r.returncode == 0 and r.stdout.strip():
@@ -110,7 +110,7 @@ class GuidellmMixin:
                             return parts[0]
         except Exception:
             pass
-        return getattr(config, 'pvc_name', None) or 'inftune-model-cache'
+        return getattr(config, 'pvc_name', None) or 'serveit-model-cache'
 
     def _run_guidellm_job(
         self,

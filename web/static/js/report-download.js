@@ -1,4 +1,4 @@
-// report-download.js — Self-contained HTML report generator for Inftune Studio
+// report-download.js — Self-contained HTML report generator for ServeIt Studio
 // Extracted from app.js to keep the download report maintainable separately.
 
 function downloadHTMLReport(runId, data) {
@@ -21,7 +21,7 @@ function downloadHTMLReport(runId, data) {
     const model = (rc.model_name || '').split('/').pop() || 'model';
     const goal = (rc.objective || 'ttft').toLowerCase();
     const date = new Date().toISOString().slice(0, 10);
-    a.download = `inftune-${model}-${goal}-run${runId}-${date}.html`;
+    a.download = `serveit-${model}-${goal}-run${runId}-${date}.html`;
     a.click();
     URL.revokeObjectURL(url);
 }
@@ -49,7 +49,7 @@ function buildFullReport(runId, data, charts, rec, summary, best, allRes, hasPD,
     if (secTestCfg) dlTabs.push({ id: 'settings', label: '&#9881; Test Settings', html: secTestCfg });
 
     let out = buildHead(runId);
-    out += `<h1>Inftune Studio Optimization Report &mdash; Run #${runId}</h1>`;
+    out += `<h1>ServeIt Studio Optimization Report &mdash; Run #${runId}</h1>`;
     out += `<p style="color:#64748b;">Generated: ${new Date().toLocaleString()}</p>`;
 
     if (dlTabs.length > 1) {
@@ -68,7 +68,7 @@ function buildFullReport(runId, data, charts, rec, summary, best, allRes, hasPD,
 
 // ── Head & Styles ────────────────────────────────────────────────────────────
 function buildHead(runId) {
-    return `<!DOCTYPE html><html><head><meta charset="UTF-8"><title>Inftune Studio Report - Run ${runId}</title>
+    return `<!DOCTYPE html><html><head><meta charset="UTF-8"><title>ServeIt Studio Report - Run ${runId}</title>
 <script src="https://cdn.plot.ly/plotly-2.35.2.min.js"><\/script>
 <style>
 body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;width:95%;margin:0 auto;padding:20px;background:#f8fafc;color:#1e293b}

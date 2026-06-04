@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Inftune Studio — System Diagrams</title>
+<title>ServeIt Studio — System Diagrams</title>
 <script src="https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.min.js"></script>
 <style>
   * { box-sizing: border-box; margin: 0; padding: 0; }
@@ -26,7 +26,7 @@
 </head>
 <body>
 <div class="header">
-  <h1>Inftune Studio — System Diagrams</h1>
+  <h1>ServeIt Studio — System Diagrams</h1>
   <p>Architecture, optimization pipeline, and decision flows</p>
 </div>
 <div class="container">
@@ -58,7 +58,7 @@ graph TB
         LP --> LDB
     end
     subgraph Instance["Instance (per-user)"]
-        IP[Inftune Studio Pod<br>Flask + SocketIO]
+        IP[ServeIt Studio Pod<br>Flask + SocketIO]
         IDB[(inftune.db<br>Runs, Results, Config)]
         IP --> IDB
     end

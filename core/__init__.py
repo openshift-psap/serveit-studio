@@ -1,5 +1,5 @@
 """
-Inftune Studio Core Modules
+ServeIt Studio Core Modules
 
 Core optimization engine for finding optimal LLM inference configurations.
 """

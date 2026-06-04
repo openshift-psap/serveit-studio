@@ -7,8 +7,8 @@ function saveConfig() {
     });
 
     // Also keep in localStorage as fallback
-    localStorage.setItem('inftune-config', JSON.stringify(config));
-    localStorage.setItem('inftune-step', currentStep.toString());
+    localStorage.setItem('serveit-config', JSON.stringify(config));
+    localStorage.setItem('serveit-step', currentStep.toString());
 }
 
 // Update UI from current config state
@@ -299,8 +299,8 @@ function loadConfig() {
     socket.emit('load_config');
 
     // Fallback: also load from localStorage in case server fails
-    const saved = localStorage.getItem('inftune-config');
-    const savedStep = localStorage.getItem('inftune-step');
+    const saved = localStorage.getItem('serveit-config');
+    const savedStep = localStorage.getItem('serveit-step');
 
     if (saved) {
         const loadedConfig = JSON.parse(saved);

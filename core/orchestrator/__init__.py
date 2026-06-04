@@ -1,5 +1,5 @@
 """
-Inftune Studio Test Orchestrator — split into focused modules:
+ServeIt Studio Test Orchestrator — split into focused modules:
 
 - result.py  — TestResult dataclass
 - parser.py  — Guidellm result parsing (ParserMixin)

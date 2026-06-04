@@ -26,7 +26,7 @@ logger = logging.getLogger(__name__)
 class ReportRenderer:
     """Render optimization reports as HTML or Markdown files."""
 
-    def __init__(self, db_path: str = '/mnt/storage/inftune.db'):
+    def __init__(self, db_path: str = '/mnt/storage/serveit.db'):
         self.db_path = db_path
 
     # ------------------------------------------------------------------
@@ -192,7 +192,7 @@ class ReportRenderer:
 <html>
 <head>
     <meta charset="UTF-8">
-    <title>Inftune Studio Optimization Report</title>
+    <title>ServeIt Studio Optimization Report</title>
     <style>
         body {{ font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; max-width: 1400px; margin: 0 auto; padding: 20px; background-color: #f5f5f5; }}
         h1 {{ color: #2c3e50; border-bottom: 3px solid #3498db; padding-bottom: 10px; }}
@@ -215,7 +215,7 @@ class ReportRenderer:
 </head>
 <body>
     <div class="header">
-        <h1>Inftune Studio Optimization Report</h1>
+        <h1>ServeIt Studio Optimization Report</h1>
         <p><strong>Generated:</strong> {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}</p>
         <p><strong>Database:</strong> <code>{self.db_path}</code></p>
     </div>
@@ -308,7 +308,7 @@ class ReportRenderer:
 
     def generate_markdown_report(self, results, pareto, stats, output_path: str) -> str:
         lines = []
-        lines.append("# Inftune Studio Optimization Report")
+        lines.append("# ServeIt Studio Optimization Report")
         lines.append(f"\nGenerated: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
         lines.append(f"\nDatabase: `{self.db_path}`")
         lines.append("\n---\n")

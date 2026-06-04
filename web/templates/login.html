@@ -3,8 +3,8 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Inftune Studio - Login</title>
-    <link rel="icon" type="image/png" href="{{ url_for('static', filename='img/inftune-logo-nobg.png') }}">
+    <title>ServeIt Studio - Login</title>
+    <link rel="icon" type="image/png" href="{{ url_for('static', filename='img/serveit-logo.png') }}">
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Red+Hat+Display:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
@@ -105,7 +105,7 @@
 <body>
     <div class="login-card">
         <div class="login-header">
-            <h1>Inftune Studio</h1>
+            <h1>ServeIt Studio</h1>
             <p>llm-d inference optimization</p>
         </div>
         <div class="login-body">
@@ -150,15 +150,15 @@
     var passwordEl = document.getElementById('password');
     var saveUserEl = document.getElementById('save-username');
     var savePassEl = document.getElementById('save-password');
-    var saved = JSON.parse(localStorage.getItem('inftune_creds') || '{}');
+    var saved = JSON.parse(localStorage.getItem('serveit_creds') || '{}');
     if (saved.username) { usernameEl.value = saved.username; saveUserEl.checked = true; }
     if (saved.password) { passwordEl.value = atob(saved.password); savePassEl.checked = true; }
     document.querySelector('form').addEventListener('submit', function() {
         var creds = {};
         if (saveUserEl.checked) creds.username = usernameEl.value;
         if (savePassEl.checked) creds.password = btoa(passwordEl.value);
-        if (creds.username || creds.password) localStorage.setItem('inftune_creds', JSON.stringify(creds));
-        else localStorage.removeItem('inftune_creds');
+        if (creds.username || creds.password) localStorage.setItem('serveit_creds', JSON.stringify(creds));
+        else localStorage.removeItem('serveit_creds');
     });
 })();
 </script>

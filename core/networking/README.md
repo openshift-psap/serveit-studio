@@ -1,6 +1,6 @@
 # Networking Module
 
-**Modular network resource creation for Inftune Studio**
+**Modular network resource creation for ServeIt Studio**
 
 ## Overview
 

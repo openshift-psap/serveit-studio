@@ -1,4 +1,4 @@
-# Inftune Studio Web Interface
+# ServeIt Studio Web Interface
 
 Flask-based web UI for configuring and monitoring optimization runs.
 
@@ -11,7 +11,7 @@ web/
 ├── static/
 │   ├── css/style.css      # Red Hat branded UI styles
 │   ├── js/app.js          # Single-page app logic
-│   └── img/logo.png       # Inftune Studio logo
+│   └── img/logo.png       # ServeIt Studio logo
 └── templates/
     ├── index.html          # Main UI (wizard + report + console)
     ├── login.html          # Login page
@@ -67,7 +67,7 @@ Main Flask application with SocketIO for real-time updates.
 
 ```bash
 # Set environment variables
-export INFTUNE_PATH=/path/to/Inftune Studio
+export INFTUNE_PATH=/path/to/ServeIt Studio
 export DB_PATH=./inftune.db
 
 # Run the server

@@ -520,7 +520,7 @@ def handle_cleanup_deployment(data):
         if pods_to_cleanup:
             success = cleanup_mgr.cleanup_last_deployment(pods_to_cleanup, log_callback=cleanup_log)
         else:
-            # No specific pods, try cleaning up all Inftune Studio test deployments
+            # No specific pods, try cleaning up all ServeIt Studio test deployments
             success = cleanup_mgr.cleanup_all_test_deployments(log_callback=cleanup_log)
 
         if success:
@@ -1255,7 +1255,7 @@ def handle_generate_test_plan(data):
             log_to_ui(f'   GPU Memory Utilization: {utilization:.1f}%', 'info')
             log_to_ui('', 'info')
             log_to_ui('🔹 OPTIMIZATION STRATEGY', 'info')
-            log_to_ui('   Inftune Studio will now test multiple configurations:', 'info')
+            log_to_ui('   ServeIt Studio will now test multiple configurations:', 'info')
             log_to_ui('   • Different GPU counts (scaling up from minimum)', 'info')
             log_to_ui('   • Different architectures (Aggregated, EP, PD)', 'info')
             log_to_ui('   • Different pod ratios (prefill/decode balance)', 'info')
@@ -1734,10 +1734,10 @@ def handle_setup_storage(data):
             return
 
         # Create new PVC and download model
-        pvc_name = 'inftune-model-cache'
+        pvc_name = 'serveit-model-cache'
         timestamp = datetime.now().strftime('%Y%m%d-%H%M%S')
-        job_name = f'inftune-model-download-{timestamp}'
-        test_id = f'inftune-setup-{timestamp}'
+        job_name = f'serveit-model-download-{timestamp}'
+        test_id = f'serveit-setup-{timestamp}'
 
         # Initialize TemplateManager
         template_mgr = TemplateManager()
@@ -1939,7 +1939,7 @@ def handle_compress_database():
             return
 
         total_size = os.path.getsize(DB_PATH)
-        compressed_path = '/tmp/inftune-optimizer.db.gz'
+        compressed_path = '/tmp/serveit-optimizer.db.gz'
 
         emit('compression_progress', {'percent': 0, 'status': 'Compressing...',
              'original_size': total_size})
@@ -1980,10 +1980,10 @@ def download_database():
     try:
         from flask import send_file, after_this_request
 
-        instance_name = os.environ.get('INSTANCE_NAME', 'inftune')
+        instance_name = os.environ.get('INSTANCE_NAME', 'serveit')
         download_filename = f'{instance_name}.db.gz'
 
-        compressed_path = '/tmp/inftune-optimizer.db.gz'
+        compressed_path = '/tmp/serveit-optimizer.db.gz'
         if os.path.exists(compressed_path):
             @after_this_request
             def cleanup(response):
@@ -2023,7 +2023,7 @@ def handle_compress_raw_data():
 
         artifacts_dir = '/mnt/storage/test-artifacts'
         results_dir = '/mnt/storage/results'
-        compressed_path = '/tmp/inftune-raw-data.tar.gz'
+        compressed_path = '/tmp/serveit-raw-data.tar.gz'
 
         dirs_to_pack = []
         if os.path.isdir(artifacts_dir):
@@ -2084,8 +2084,8 @@ def download_raw_data():
     try:
         from flask import send_file, after_this_request
 
-        instance_name = os.environ.get('INSTANCE_NAME', 'inftune')
-        compressed_path = '/tmp/inftune-raw-data.tar.gz'
+        instance_name = os.environ.get('INSTANCE_NAME', 'serveit')
+        compressed_path = '/tmp/serveit-raw-data.tar.gz'
 
         if not os.path.exists(compressed_path):
             return jsonify({'error': 'Raw data archive not found. Compress first.'}), 404
@@ -2178,7 +2178,7 @@ def upload_database():
             ).fetchall()]
             if 'optimization_runs' not in src_tables or 'test_configurations' not in src_tables:
                 src_conn.close()
-                return jsonify({'success': False, 'error': 'Not a valid Inftune Studio database (missing required tables)'}), 400
+                return jsonify({'success': False, 'error': 'Not a valid ServeIt Studio database (missing required tables)'}), 400
 
             src_runs = src_conn.execute('SELECT * FROM optimization_runs ORDER BY id').fetchall()
             if not src_runs:

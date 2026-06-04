@@ -1,5 +1,5 @@
 """
-Inftune Studio Optimization Report Generator — backward-compatibility facade.
+ServeIt Studio Optimization Report Generator — backward-compatibility facade.
 
 This module re-exports everything from the split modules so that
 existing callers (e.g. `from core.report_generator import ReportGenerator`)
@@ -21,7 +21,7 @@ from core.report_renderer import ReportRenderer
 class ReportGenerator:
     """Facade that combines data loading, analysis, and rendering."""
 
-    def __init__(self, db_path: str = '/mnt/storage/inftune.db'):
+    def __init__(self, db_path: str = '/mnt/storage/serveit.db'):
         self.db_path = db_path
         self._loader = ReportDataLoader(db_path)
         self._analyzer = ReportAnalyzer()
@@ -65,14 +65,14 @@ class ReportGenerator:
 
 
 # Convenience functions
-def generate_html_report(db_path: str = '/mnt/storage/inftune.db',
+def generate_html_report(db_path: str = '/mnt/storage/serveit.db',
                          output_path: str = '/mnt/storage/optimization_report.html',
                          run_id: Optional[int] = None) -> str:
     with ReportGenerator(db_path) as gen:
         return gen.generate_html_report(output_path, run_id)
 
 
-def generate_markdown_report(db_path: str = '/mnt/storage/inftune.db',
+def generate_markdown_report(db_path: str = '/mnt/storage/serveit.db',
                               output_path: str = '/mnt/storage/optimization_report.md',
                               run_id: Optional[int] = None) -> str:
     with ReportGenerator(db_path) as gen:

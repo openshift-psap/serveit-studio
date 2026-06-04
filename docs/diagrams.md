@@ -1,4 +1,4 @@
-# Inftune Studio — System Diagrams
+# ServeIt Studio — System Diagrams
 
 All diagrams use Mermaid syntax and render natively on GitHub.
 
@@ -15,7 +15,7 @@ graph TB
     end
 
     subgraph Instance["Instance (per-user)"]
-        IP[Inftune Studio Pod<br>Flask + SocketIO]
+        IP[ServeIt Studio Pod<br>Flask + SocketIO]
         IDB[(inftune.db<br>Runs, Results, Config)]
         IP --> IDB
     end

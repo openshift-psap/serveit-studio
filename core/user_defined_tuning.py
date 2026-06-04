@@ -220,7 +220,7 @@ class LatencyBinarySearch:
                     self.log(f"       {err_msg}", 'error')
                 if self._zero_result_count >= 2:
                     self.log(f"    🛑 Multiple zero-result tests — stopping search. Investigate pod logs:", 'error')
-                    self.log(f"       kubectl logs -n {self.create_config(concurrency, 'debug').namespace} -l component=inftune-test -c vllm --tail=50", 'info')
+                    self.log(f"       kubectl logs -n {self.create_config(concurrency, 'debug').namespace} -l component=serveit-test -c vllm --tail=50", 'info')
                     self._zero_result_abort = True
                 else:
                     self.log(f"    ⚠️  Treating as upper bound — search will try lower concurrency", 'warning')

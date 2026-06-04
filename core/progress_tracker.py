@@ -1,5 +1,5 @@
 """
-Progress Tracking Utilities for Inftune Studio
+Progress Tracking Utilities for ServeIt Studio
 
 Provides reusable progress bar functionality for:
 - Model downloads

@@ -1,5 +1,5 @@
 """
-Inftune Studio Prerequisite Manager
+ServeIt Studio Prerequisite Manager
 
 Manages deployment of prerequisite infrastructure (GAIE, Gateway, etc.)
 """
@@ -20,7 +20,7 @@ logger = logging.getLogger(__name__)
 class PrereqManager:
     """Manages prerequisite infrastructure deployment."""
 
-    def __init__(self, namespace: str = 'inftune', kubeconfig: Optional[str] = None,
+    def __init__(self, namespace: str = 'serveit', kubeconfig: Optional[str] = None,
                  kubectl_runner: Optional[KubectlRunner] = None,
                  scheduler_image: Optional[str] = None):
         """
@@ -688,11 +688,11 @@ def main():
     import argparse
 
     parser = argparse.ArgumentParser(
-        description='Manage Inftune Studio prerequisite infrastructure'
+        description='Manage ServeIt Studio prerequisite infrastructure'
     )
     parser.add_argument('action', choices=['deploy', 'check', 'cleanup'],
                         help='Action to perform')
-    parser.add_argument('--namespace', default='inftune', help='Kubernetes namespace')
+    parser.add_argument('--namespace', default='serveit', help='Kubernetes namespace')
     parser.add_argument('--architecture', '-a', default='aggregated',
                         choices=['aggregated', 'ep', 'pd'],
                         help='Architecture type (default: aggregated)')

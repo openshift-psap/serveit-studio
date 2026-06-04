@@ -1,5 +1,5 @@
 """
-Web UI deployment system for Inftune Studio.
+Web UI deployment system for ServeIt Studio.
 
 Consolidates deployment orchestration, network integration, resource application,
 and K8s resource generation used by the web interface. The CLI path uses
@@ -63,7 +63,7 @@ class DeploymentConfig:
 
     num_nics: int = 8
 
-    pvc_name: str = "inftune-model-cache"
+    pvc_name: str = "serveit-model-cache"
     kv_connector: str = "NixlConnector"
 
     memory_request: str = "64Gi"
@@ -354,10 +354,10 @@ class BaseDeploymentGenerator(ABC):
     def _build_common_labels(self, config: DeploymentConfig) -> Dict[str, str]:
         labels = {
             'app': 'llm-d',
-            'component': 'inftune-test',
+            'component': 'serveit-test',
             'test-id': config.test_id,
             'architecture': config.architecture.value,
-            'llm-d.ai/guide': f'inftune-{config.architecture.value}',
+            'llm-d.ai/guide': f'serveit-{config.architecture.value}',
         }
         labels.update(config.extra_labels)
         return labels
@@ -431,7 +431,7 @@ class PrerequisiteGenerator:
             },
             {
                 'apiVersion': 'rbac.authorization.k8s.io/v1', 'kind': 'RoleBinding',
-                'metadata': {'name': 'inftune-optimizer', 'namespace': namespace},
+                'metadata': {'name': 'serveit-optimizer', 'namespace': namespace},
                 'roleRef': {'apiGroup': 'rbac.authorization.k8s.io', 'kind': 'ClusterRole', 'name': 'edit'},
                 'subjects': [{'kind': 'ServiceAccount', 'name': 'default', 'namespace': namespace}],
             },
@@ -541,7 +541,7 @@ class PrerequisiteGenerator:
     def _generate_model_cache_pvc(self, namespace: str, config: Dict) -> Dict:
         return {
             'apiVersion': 'v1', 'kind': 'PersistentVolumeClaim',
-            'metadata': {'name': 'inftune-model-cache', 'namespace': namespace},
+            'metadata': {'name': 'serveit-model-cache', 'namespace': namespace},
             'spec': {
                 'accessModes': ['ReadWriteMany'],
                 'resources': {'requests': {'storage': config.get('cache_size', '500Gi')}},
@@ -683,7 +683,7 @@ if [ -f /scripts/discover_ib_hca.sh ]; then
 fi
 
 echo "========================================="
-echo "Inftune Studio Test: {config.test_id}"
+echo "ServeIt Studio Test: {config.test_id}"
 echo "Architecture: PD ({role.capitalize()})"
 echo "Model: {config.model_name}"
 echo "TP: {tp}"
@@ -825,7 +825,7 @@ class DeploymentOrchestrator:
             num_experts=test_config.get('num_experts', 256),
             agg_pods=test_config.get('agg_pods', 1),
             num_nics=test_config.get('num_nics', test_config.get('tensor_parallelism', 1)),
-            pvc_name=test_config.get('pvc_name', 'inftune-model-cache'),
+            pvc_name=test_config.get('pvc_name', 'serveit-model-cache'),
             kv_connector=test_config.get('kv_connector', 'NixlConnector'),
             gpu_memory_utilization=test_config.get('gpu_memory_utilization', 0.95),
             max_model_len=test_config.get('max_model_len'),

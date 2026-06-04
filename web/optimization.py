@@ -395,7 +395,7 @@ def deploy_and_test_inference(model_name: str, namespace: str, job_name: str = N
         log_to_ui('=' * 60, 'info', job_name=job_name)
         log_to_ui('', 'info', job_name=job_name)
 
-        # Step 2: Check if there are existing Inftune Studio deployments
+        # Step 2: Check if there are existing ServeIt Studio deployments
         cleanup_mgr = CleanupManager(namespace=namespace)
         existing_resources = cleanup_mgr.get_deployed_resources()
 
@@ -417,7 +417,7 @@ def deploy_and_test_inference(model_name: str, namespace: str, job_name: str = N
             log_to_ui('', 'info', job_name=job_name)
 
         timestamp = datetime.now().strftime('%Y%m%d-%H%M%S')
-        test_id = f'inftune-inference-{timestamp}'
+        test_id = f'serveit-inference-{timestamp}'
 
         log_to_ui('📋 Loading deployment template from database...', 'info', job_name=job_name)
 
@@ -434,7 +434,7 @@ def deploy_and_test_inference(model_name: str, namespace: str, job_name: str = N
             max_model_len = 8192
             gpu_memory_utilization = 0.95
             image = 'ghcr.io/llm-d/llm-d-cuda:v0.5.1'
-            pvc_name = 'inftune-model-cache'
+            pvc_name = 'serveit-model-cache'
             nccl_ib_hca = 'mlx'
             gpus_per_pod = tp
         else:
@@ -534,7 +534,7 @@ def deploy_and_test_inference(model_name: str, namespace: str, job_name: str = N
 
             # Run curl from within cluster (use a temporary pod)
             curl_cmd = [
-                kubectl_cmd, 'run', 'inftune-curl-test', '-n', namespace,
+                kubectl_cmd, 'run', 'serveit-curl-test', '-n', namespace,
                 '--rm', '-i', '--restart=Never',
                 '--image=registry.access.redhat.com/ubi9/ubi-minimal:latest',
                 '--', 'curl', '-s', '-m', '30', f'{service_url}/v1/models'
@@ -849,7 +849,7 @@ data:
                 thanos_url=thanos_url,
                 image=vllm_image,
                 scheduler_image=scheduler_image,
-                pvc_name='inftune-model-cache',
+                pvc_name='serveit-model-cache',
                 nccl_ib_hca='mlx',
                 hf_token=hf_token,
                 tp_options=tp_options,  # Dynamic based on cluster hardware
@@ -1153,7 +1153,7 @@ data:
                     gpu_memory_utilization=test_plan.model_requirements.gpu_memory_utilization,
                     memory_request=memory_per_pod,
                     memory_limit=memory_per_pod,
-                    pvc_name='inftune-model-cache',
+                    pvc_name='serveit-model-cache',
                     optimization_goal=optimization_goal,
                     test_duration=test_duration,
                     cpu_request=cpu_request
@@ -1174,7 +1174,7 @@ data:
                     gpu_memory_utilization=test_plan.model_requirements.gpu_memory_utilization,
                     memory_request=memory_per_pod,
                     memory_limit=memory_per_pod,
-                    pvc_name='inftune-model-cache',
+                    pvc_name='serveit-model-cache',
                     optimization_goal=optimization_goal,
                     test_duration=test_duration,
                     cpu_request=cpu_request

@@ -1,12 +1,12 @@
-# Inftune Studio
+# ServeIt Studio
 
 Automated benchmarking tool that finds the optimal vLLM inference configuration for your hardware, model, and workload.
 
-Given a model, a target QPS, and an optimization goal (response time or throughput), Inftune Studio deploys real vLLM instances on your cluster, runs benchmarks, and returns a Pareto-optimal set of configurations — ranked by TTFT, throughput, or both.
+Given a model, a target QPS, and an optimization goal (response time or throughput), ServeIt Studio deploys real vLLM instances on your cluster, runs benchmarks, and returns a Pareto-optimal set of configurations — ranked by TTFT, throughput, or both.
 
 ## How It Works
 
-Inftune Studio supports three inference architectures:
+ServeIt Studio supports three inference architectures:
 
 | Architecture | Description | Optimizes For |
 |---|---|---|
@@ -80,7 +80,7 @@ Steps 2-3 and 6-11 deploy real workloads. Steps 4-5 are pure math.
 
 ### Advanced vLLM Settings
 
-All settings default to "Auto" — Inftune Studio calculates optimal values. Override manually if needed.
+All settings default to "Auto" — ServeIt Studio calculates optimal values. Override manually if needed.
 
 #### Value Settings
 
@@ -193,7 +193,7 @@ web/
 ├── static/
 │   ├── css/style.css          # Red Hat branded UI styles
 │   ├── js/app.js              # Single-page app logic (wizard, charts, reports)
-│   └── img/logo.png           # Inftune Studio logo
+│   └── img/logo.png           # ServeIt Studio logo
 └── templates/                 # Jinja2 HTML templates (wizard steps, overlays)
 
 deployment/
@@ -207,7 +207,7 @@ scripts/
 
 ## Multi-Cloud Support
 
-Inftune Studio auto-detects the cloud provider and configures networking accordingly:
+ServeIt Studio auto-detects the cloud provider and configures networking accordingly:
 
 | Provider | GPU Resource | Networking | RDMA |
 |---|---|---|---|

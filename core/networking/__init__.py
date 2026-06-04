@@ -1,5 +1,5 @@
 """
-Modular networking system for Inftune Studio.
+Modular networking system for ServeIt Studio.
 
 Supports multiple network types:
 - NAD (NetworkAttachmentDefinition) - Multus CNI

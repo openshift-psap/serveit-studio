@@ -1,10 +1,10 @@
-# Inftune Studio Deployment Templates
+# ServeIt Studio Deployment Templates
 
 This directory contains Jinja2 templates for deploying different LLM inference architectures for optimization testing.
 
 ## Decision Matrix
 
-Inftune Studio helps users find the optimal deployment architecture based on their priorities:
+ServeIt Studio helps users find the optimal deployment architecture based on their priorities:
 
 | User Priority | Architectures Tested | Why |
 |--------------|---------------------|-----|

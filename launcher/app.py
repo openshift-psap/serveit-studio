@@ -1,4 +1,4 @@
-"""Inftune Studio Launcher — multi-user control plane."""
+"""ServeIt Studio Launcher — multi-user control plane."""
 
 import os
 import json
@@ -37,8 +37,8 @@ def create_app():
 
     register_auth_routes(app)
 
-    namespace = os.environ.get('TARGET_NAMESPACE', 'inftune')
-    image = os.environ.get('INFTUNE_IMAGE', 'quay.io/bbenshab/inftune-studio:server')
+    namespace = os.environ.get('TARGET_NAMESPACE', 'serveit')
+    image = os.environ.get('INFTUNE_IMAGE', 'quay.io/bbenshab/serveit-studio:server')
 
     # ── Dashboard ──
 
@@ -335,7 +335,7 @@ def create_app():
 
 def main():
     print("=" * 60)
-    print("Inftune Studio Launcher — Multi-User Control Plane")
+    print("ServeIt Studio Launcher — Multi-User Control Plane")
     print("=" * 60)
 
     init_db()

@@ -570,9 +570,9 @@ Should return `true`.
 
 ---
 
-## How Inftune Studio Uses DRA-NET
+## How ServeIt Studio Uses DRA-NET
 
-Inftune Studio auto-detects DRA device classes on the cluster. When DRA is available and selected as the network type, the optimizer:
+ServeIt Studio auto-detects DRA device classes on the cluster. When DRA is available and selected as the network type, the optimizer:
 
 1. Detects `gpu.nvidia.com` and `dranet` device classes via `kubectl get deviceclass`
 2. Sets `dra.llm-d.io/gpu-nic-pair: N` in the vLLM pod spec (where N = tensor parallelism)

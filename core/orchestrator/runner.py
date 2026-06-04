@@ -26,7 +26,7 @@ class TestOrchestrator(ParserMixin, GuidellmMixin):
 
     def __init__(
         self,
-        namespace: str = 'inftune',
+        namespace: str = 'serveit',
         kubeconfig: Optional[str] = None,
         thanos_url: Optional[str] = None,
         deployment_timeout: int = 3600,
@@ -249,7 +249,7 @@ class TestOrchestrator(ParserMixin, GuidellmMixin):
                 else:
                     cmd = f"curl -s -o /dev/null -w '%{{http_code}}' --connect-timeout {timeout} '{url}'"
                 r = self.deployment_manager.kubectl.run(
-                    ['exec', 'inftune-workload', '-n', self.namespace, '--', 'bash', '-c', cmd],
+                    ['exec', 'serveit-workload', '-n', self.namespace, '--', 'bash', '-c', cmd],
                     check=False
                 )
                 return r.stdout.strip() if r.returncode == 0 else '000'
@@ -447,7 +447,7 @@ class TestOrchestrator(ParserMixin, GuidellmMixin):
                 models_url = endpoint.rstrip('/') + '/v1/models'
                 curl_cmd = f"curl -s -o /dev/null -w '%{{http_code}}' --connect-timeout 5 '{models_url}'"
                 r = self.deployment_manager.kubectl.run(
-                    ['exec', 'inftune-workload', '-n', self.namespace, '--', 'bash', '-c', curl_cmd],
+                    ['exec', 'serveit-workload', '-n', self.namespace, '--', 'bash', '-c', curl_cmd],
                     check=False
                 )
                 http_code = r.stdout.strip() if r.returncode == 0 else '000'
@@ -479,7 +479,7 @@ class TestOrchestrator(ParserMixin, GuidellmMixin):
                 })
                 curl_cmd = f"curl -s -w '\\n%{{http_code}}' --connect-timeout 10 -X POST -H 'Content-Type: application/json' -d '{payload_json}' '{completion_url}'"
                 r = self.deployment_manager.kubectl.run(
-                    ['exec', 'inftune-workload', '-n', self.namespace, '--', 'bash', '-c', curl_cmd],
+                    ['exec', 'serveit-workload', '-n', self.namespace, '--', 'bash', '-c', curl_cmd],
                     check=False
                 )
                 lines = r.stdout.strip().split('\n') if r.returncode == 0 else []
@@ -1300,11 +1300,11 @@ def main():
     import argparse
 
     parser = argparse.ArgumentParser(
-        description='Run Inftune Studio test orchestration'
+        description='Run ServeIt Studio test orchestration'
     )
     parser.add_argument('--plan-file', required=True,
                         help='Path to optimization plan JSON file')
-    parser.add_argument('--namespace', default='inftune',
+    parser.add_argument('--namespace', default='serveit',
                         help='Kubernetes namespace')
     parser.add_argument('--thanos-url',
                         help='Thanos/Prometheus URL for metrics collection')

@@ -2,7 +2,7 @@
 apiVersion: rbac.authorization.k8s.io/v1
 kind: Role
 metadata:
-  name: inftune-optimizer-pod-manager
+  name: serveit-optimizer-pod-manager
   namespace: {{ namespace }}
 rules:
 - apiGroups: [""]
@@ -51,7 +51,7 @@ rules:
 apiVersion: rbac.authorization.k8s.io/v1
 kind: RoleBinding
 metadata:
-  name: inftune-optimizer-pod-manager-binding
+  name: serveit-optimizer-pod-manager-binding
   namespace: {{ namespace }}
 subjects:
 - kind: ServiceAccount
@@ -59,13 +59,13 @@ subjects:
   namespace: {{ namespace }}
 roleRef:
   kind: Role
-  name: inftune-optimizer-pod-manager
+  name: serveit-optimizer-pod-manager
   apiGroup: rbac.authorization.k8s.io
 ---
 apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRole
 metadata:
-  name: inftune-optimizer-cluster-manager
+  name: serveit-optimizer-cluster-manager
 rules:
 - apiGroups: ["rbac.authorization.k8s.io"]
   resources: ["clusterroles", "clusterrolebindings"]
@@ -142,12 +142,12 @@ rules:
 apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRoleBinding
 metadata:
-  name: inftune-optimizer-cluster-manager-binding-{{ namespace }}
+  name: serveit-optimizer-cluster-manager-binding-{{ namespace }}
 subjects:
 - kind: ServiceAccount
   name: default
   namespace: {{ namespace }}
 roleRef:
   kind: ClusterRole
-  name: inftune-optimizer-cluster-manager
+  name: serveit-optimizer-cluster-manager
   apiGroup: rbac.authorization.k8s.io

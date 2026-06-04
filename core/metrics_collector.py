@@ -1,5 +1,5 @@
 """
-Inftune Studio Metrics Collector
+ServeIt Studio Metrics Collector
 Collects metrics from Prometheus/Thanos for LLM inference optimization.
 """
 
@@ -45,7 +45,7 @@ class MetricsConfig:
 
         return cls(
             thanos_url=os.environ.get('THANOS_URL', ''),
-            namespace=os.environ.get('TARGET_NAMESPACE', 'inftune'),
+            namespace=os.environ.get('TARGET_NAMESPACE', 'serveit'),
             pod_name_pattern=os.environ.get('POD_NAME_PATTERN', 'wide-ep-'),
             step_seconds=int(os.environ.get('METRIC_STEP_SECONDS', '5')),
             token=token

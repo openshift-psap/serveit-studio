@@ -1,5 +1,5 @@
 """
-Inftune Studio Deployment Manager
+ServeIt Studio Deployment Manager
 
 Manages deployment of test configurations to Kubernetes cluster.
 """
@@ -39,7 +39,7 @@ class DeploymentManager:
 
     def __init__(
         self,
-        namespace: str = 'inftune',
+        namespace: str = 'serveit',
         kubeconfig: Optional[str] = None,
         template_manager: Optional[TemplateManager] = None
     ):
@@ -645,7 +645,7 @@ class DeploymentManager:
         log_callback: Optional[Callable[[str], None]] = None
     ) -> bool:
         """
-        Delete all Inftune Studio test deployments.
+        Delete all ServeIt Studio test deployments.
 
         Args:
             log_callback: Optional callback for logging
@@ -654,15 +654,15 @@ class DeploymentManager:
             True if cleanup succeeded
         """
         if log_callback:
-            log_callback("🧹 Cleaning up all Inftune Studio test deployments...")
+            log_callback("🧹 Cleaning up all ServeIt Studio test deployments...")
 
         try:
             lws_result = self.kubectl.run(
-                ['delete', 'leaderworkerset', '-l', 'component=inftune-test', '-n', self.namespace],
+                ['delete', 'leaderworkerset', '-l', 'component=serveit-test', '-n', self.namespace],
                 check=False
             )
             self.kubectl.run(
-                ['delete', 'service', '-l', 'component=inftune-test', '-n', self.namespace],
+                ['delete', 'service', '-l', 'component=serveit-test', '-n', self.namespace],
                 check=False
             )
 
@@ -687,14 +687,14 @@ def main():
     import argparse
 
     parser = argparse.ArgumentParser(
-        description='Manage Inftune Studio test deployments'
+        description='Manage ServeIt Studio test deployments'
     )
     parser.add_argument('action', choices=['deploy', 'status', 'delete', 'cleanup'],
                         help='Action to perform')
     parser.add_argument('--test-id', help='Test ID')
     parser.add_argument('--architecture', choices=['aggregated', 'pd', 'ep'],
                         help='Architecture type')
-    parser.add_argument('--namespace', default='inftune', help='Kubernetes namespace')
+    parser.add_argument('--namespace', default='serveit', help='Kubernetes namespace')
     parser.add_argument('--timeout', type=int, default=600,
                         help='Timeout for wait operations (seconds)')
 

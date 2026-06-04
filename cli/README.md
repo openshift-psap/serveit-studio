@@ -1,4 +1,4 @@
-# Inftune Studio CLI
+# ServeIt Studio CLI
 
 Command-line interface for running LLM inference optimization without the web UI.
 Supports multi-cluster management and results are saved to the same database

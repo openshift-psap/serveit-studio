@@ -1,7 +1,7 @@
         @keyframes spin { to { transform: rotate(360deg); } }
 
         :root {
-            /* Inftune Studio Brand Colors */
+            /* ServeIt Studio Brand Colors */
             --rh-red-primary: #2A7B88;
             --rh-red-dark: #1B5E6B;
             --rh-red-darker: #164E58;

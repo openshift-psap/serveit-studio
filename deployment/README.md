@@ -1,6 +1,6 @@
-# Inftune Studio Deployment
+# ServeIt Studio Deployment
 
-Deployment script for Inftune Studio Optimizer.
+Deployment script for ServeIt Studio Optimizer.
 
 ## Quick Start
 
@@ -55,7 +55,7 @@ Deployment script for Inftune Studio Optimizer.
 1. **ClusterRoleBinding** — Prometheus metrics access
 2. **Role + RoleBinding** — Pod/PVC/Job/LWS/Service management
 3. **ClusterRole + ClusterRoleBinding** — Node/StorageClass read access
-4. **Deployment** — Inftune Studio optimizer pod
+4. **Deployment** — ServeIt Studio optimizer pod
 5. **Service** — ClusterIP service on port 5000
 6. **Route** (OpenShift only) — External access with TLS
 

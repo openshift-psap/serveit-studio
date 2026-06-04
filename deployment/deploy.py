@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Inftune Studio Deployer — deploy, sync, and manage Inftune Studio on Kubernetes.
+ServeIt Studio Deployer — deploy, sync, and manage ServeIt Studio on Kubernetes.
 
 Replaces deploy.sh with a cleaner Python implementation using Jinja2 templates.
 
@@ -17,7 +17,7 @@ Examples:
     # Sync code to launcher pod
     python3 deployment/deploy.py --sync
 
-    # Sync code to ALL inftune pods (launcher + wizards)
+    # Sync code to ALL serveit pods (launcher + wizards)
     python3 deployment/deploy.py --sync-all
 
     # Restart server
@@ -42,7 +42,7 @@ from typing import Optional
 SCRIPT_DIR = Path(__file__).parent.resolve()
 REPO_ROOT = SCRIPT_DIR.parent
 TEMPLATES_DIR = SCRIPT_DIR / 'templates'
-PF_PID_FILE = Path('/tmp/inftune-port-forward.pid')
+PF_PID_FILE = Path('/tmp/serveit-port-forward.pid')
 
 
 # ── Kubectl ──────────────────────────────────────────────────────────────────
@@ -98,7 +98,7 @@ def render_template(template_name: str, **ctx) -> str:
 def generate_yaml(namespace: str, image: str, pvc_name: str,
                   storage_class: str, storage_size: str,
                   create_pvc: bool, dev_mode: bool, force_nad: bool,
-                  openshift: bool, name: str = 'inftune-optimizer',
+                  openshift: bool, name: str = 'serveit-optimizer',
                   mode: str = 'local') -> str:
     parts = []
 
@@ -117,7 +117,7 @@ def generate_yaml(namespace: str, image: str, pvc_name: str,
         name=name, namespace=namespace, image=image,
         pvc_name=pvc_name, dev_mode='true' if dev_mode else 'false',
         force_nad='true' if force_nad else 'false',
-        inftune_mode='launcher' if mode == 'launcher' else ''))
+        serveit_mode='launcher' if mode == 'launcher' else ''))
 
     # Service + Route
     parts.append(render_template('service.yaml.j2',
@@ -180,7 +180,7 @@ def _tar_sync(cmd: str, namespace: str, pod_name: str):
 
 # ── Port Forward ─────────────────────────────────────────────────────────────
 
-def start_port_forward(cmd: str, namespace: str, port: int, svc_name: str = 'inftune-optimizer-ui'):
+def start_port_forward(cmd: str, namespace: str, port: int, svc_name: str = 'serveit-optimizer-ui'):
     stop_port_forward(quiet=True)
     print(f"🔌 Starting port-forward (localhost:{port} -> svc/{svc_name}:5000)...", file=sys.stderr)
 
@@ -218,9 +218,9 @@ def stop_port_forward(quiet: bool = False):
 # ── Restart Server ───────────────────────────────────────────────────────────
 
 def restart_server(cmd: str, namespace: str, port: int):
-    # Find any inftune pod (optimizer or launcher)
+    # Find any serveit pod (optimizer or launcher)
     r = kubectl_run(cmd, ['get', 'pod', '-n', namespace,
-                          '-l', 'app in (inftune-optimizer,inftune-launcher)',
+                          '-l', 'app in (serveit-optimizer,serveit-launcher)',
                           '-o', 'jsonpath={.items[0].metadata.name}'])
     pod = r.stdout.strip()
     if not pod:
@@ -294,15 +294,15 @@ def preflight_checks(cmd: str, namespace: str, mode: str = 'local'):
 def main():
     p = argparse.ArgumentParser(
         prog='deploy.py',
-        description='Inftune Studio Deployer — deploy, sync, and manage on Kubernetes',
+        description='ServeIt Studio Deployer — deploy, sync, and manage on Kubernetes',
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog=__doc__,
     )
 
     p.add_argument('--mode', choices=['local', 'launcher'], default='launcher',
                    help='Deploy mode: local (single instance) or launcher (multi-user control plane)')
-    p.add_argument('-n', '--namespace', default='inftune', help='Kubernetes namespace (default: llm-d)')
-    p.add_argument('-i', '--image', default='quay.io/bbenshab/inftune-studio:server', help='Container image')
+    p.add_argument('-n', '--namespace', default='serveit', help='Kubernetes namespace (default: llm-d)')
+    p.add_argument('-i', '--image', default='quay.io/bbenshab/serveit-studio:server', help='Container image')
 
     sg = p.add_argument_group('Storage')
     sg.add_argument('-p', '--pvc-name', help='Use existing PVC (skips PVC creation)')
@@ -312,7 +312,7 @@ def main():
     dg = p.add_argument_group('Dev Options')
     dg.add_argument('--dev', action='store_true', help='Dev mode (auto-sync code, auto-restart)')
     dg.add_argument('--sync', action='store_true', help='Sync local code to running pod')
-    dg.add_argument('--sync-all', action='store_true', help='Sync code to ALL inftune pods in the namespace')
+    dg.add_argument('--sync-all', action='store_true', help='Sync code to ALL serveit pods in the namespace')
     dg.add_argument('--force-nad', action='store_true', help='Force NAD mode instead of DRA')
 
     pg = p.add_argument_group('Port Forward & Server')
@@ -334,7 +334,7 @@ def main():
     openshift = is_openshift(cmd)
 
     if args.port_forward:
-        svc = 'inftune-launcher-ui' if args.mode == 'launcher' else 'inftune-optimizer-ui'
+        svc = 'serveit-launcher-ui' if args.mode == 'launcher' else 'serveit-optimizer-ui'
         start_port_forward(cmd, args.namespace, args.local_port, svc_name=svc)
         return
 
@@ -348,28 +348,28 @@ def main():
             r = kubectl_run(cmd, ['get', 'pod', '-n', args.namespace,
                                   '-o', 'jsonpath={range .items[*]}{.metadata.name}{"\\n"}{end}'])
             all_pods = [p for p in r.stdout.strip().split('\n')
-                        if p.startswith('inftune-') and p]
+                        if p.startswith('serveit-') and p]
             if not all_pods:
-                print("❌ No Inftune Studio pods found.", file=sys.stderr)
+                print("❌ No ServeIt Studio pods found.", file=sys.stderr)
                 sys.exit(1)
-            print(f"📦 Found {len(all_pods)} inftune pods to sync", file=sys.stderr)
+            print(f"📦 Found {len(all_pods)} serveit pods to sync", file=sys.stderr)
             for pod in all_pods:
                 sync_code(cmd, args.namespace, pod)
             print(f"\n   ✅ All {len(all_pods)} pods synced and restarted.", file=sys.stderr)
             return
 
         # --sync: single pod (launcher or optimizer)
-        app_label = 'inftune-launcher' if args.mode == 'launcher' else 'inftune-optimizer'
+        app_label = 'serveit-launcher' if args.mode == 'launcher' else 'serveit-optimizer'
         r = kubectl_run(cmd, ['get', 'pod', '-n', args.namespace, '-l', f'app={app_label}',
                               '-o', 'jsonpath={.items[0].metadata.name}'])
         pod = r.stdout.strip()
         if not pod:
             r = kubectl_run(cmd, ['get', 'pod', '-n', args.namespace,
-                                  '-l', 'app in (inftune-optimizer,inftune-launcher)',
+                                  '-l', 'app in (serveit-optimizer,serveit-launcher)',
                                   '-o', 'jsonpath={.items[0].metadata.name}'])
             pod = r.stdout.strip()
         if not pod:
-            print("❌ No Inftune Studio pod found. Deploy first.", file=sys.stderr)
+            print("❌ No ServeIt Studio pod found. Deploy first.", file=sys.stderr)
             sys.exit(1)
         sync_code(cmd, args.namespace, pod)
         print("\n   Code synced. Server will auto-restart and pick up changes.", file=sys.stderr)
@@ -382,7 +382,7 @@ def main():
         pvc_name = args.pvc_name
     elif args.storage_class:
         create_pvc = True
-        pvc_name = 'inftune-storage'
+        pvc_name = 'serveit-storage'
     else:
         if args.just_yaml:
             print("Error: --storage-class or --pvc-name required for YAML generation", file=sys.stderr)
@@ -392,7 +392,7 @@ def main():
         sys.exit(1)
 
     # ── Generate YAML ──
-    deploy_name = 'inftune-launcher' if args.mode == 'launcher' else 'inftune-optimizer'
+    deploy_name = 'serveit-launcher' if args.mode == 'launcher' else 'serveit-optimizer'
     yaml = generate_yaml(
         namespace=args.namespace,
         image=args.image,
@@ -414,7 +414,7 @@ def main():
     # ── Deploy ──
     preflight_checks(cmd, args.namespace, mode=args.mode)
 
-    print(f"🚀 Deploying Inftune Studio to namespace: {args.namespace}", file=sys.stderr)
+    print(f"🚀 Deploying ServeIt Studio to namespace: {args.namespace}", file=sys.stderr)
     r = kubectl_run(cmd, ['apply', '-f', '-'], input_data=yaml)
     if r.returncode != 0:
         print(f"❌ Deployment failed:\n{r.stderr}", file=sys.stderr)
@@ -429,7 +429,7 @@ def main():
                     '--timeout=300s'], capture_output=True)
 
     print("\n" + "=" * 60, file=sys.stderr)
-    print("✅ Inftune Studio deployment complete!", file=sys.stderr)
+    print("✅ ServeIt Studio deployment complete!", file=sys.stderr)
     print("=" * 60, file=sys.stderr)
 
     # Sync code in dev mode

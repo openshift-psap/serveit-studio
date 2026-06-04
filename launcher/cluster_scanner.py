@@ -8,7 +8,7 @@ from dataclasses import asdict
 from typing import Dict
 
 
-def scan_cluster_resources(cluster: Dict, namespace: str = 'inftune') -> Dict:
+def scan_cluster_resources(cluster: Dict, namespace: str = 'serveit') -> Dict:
     """Scan a cluster's resources using the system scanner.
 
     For remote clusters, extracts the kubeconfig from the K8s Secret

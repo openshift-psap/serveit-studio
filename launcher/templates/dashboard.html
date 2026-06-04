@@ -6,7 +6,7 @@
     <meta name="theme-color" content="#1A1A1A">
     <link rel="icon" type="image/png" sizes="32x32" href="{{ url_for('static', filename='img/favicon.png') }}">
     <link rel="apple-touch-icon" sizes="180x180" href="{{ url_for('static', filename='img/apple-touch-icon.png') }}">
-    <title>Inftune Studio Launcher</title>
+    <title>ServeIt Studio Launcher</title>
     <style>
         *{box-sizing:border-box;margin:0;padding:0}
         body{font-family:'Red Hat Display','Segoe UI',Roboto,sans-serif;background:#F8F8F8;color:#1A1A1A;min-height:100vh}
@@ -213,7 +213,7 @@
 
 <aside class="sidebar">
     <div class="sidebar-brand">
-        <img src="{{ url_for('static', filename='img/inftune-logo-horizontal.png') }}" alt="Inftune Studio">
+        <img src="{{ url_for('static', filename='img/serveit-logo-horizontal.png') }}" alt="ServeIt Studio">
     </div>
     <div class="sidebar-section">
         <span>Clusters</span>
@@ -291,7 +291,7 @@
 <div class="modal-overlay" id="create-modal" onclick="if(event.target===this)hideCreateModal()">
     <div class="modal" role="dialog" aria-labelledby="modal-title" style="width:550px">
         <h2 id="modal-title">New Instance</h2>
-        <p class="modal-sub">Deploy an Inftune Studio optimizer instance</p>
+        <p class="modal-sub">Deploy an ServeIt Studio optimizer instance</p>
         <form id="create-form" onsubmit="return createInstance(event)">
             <label for="instance-name">Instance Name</label>
             <input type="text" id="instance-name" name="name" placeholder="my-optimization" autocomplete="off" required>
@@ -1371,14 +1371,14 @@ if(currentClusterId) {
         <div style="font-size:0.9em;color:#4A4A4A;line-height:1.7;">
 
             <div style="font-weight:700;color:#1B5E6B;font-size:1.05em;margin-bottom:6px;">Getting Started</div>
-            <p>Inftune Studio is a multi-cluster LLM inference optimization platform. Use this dashboard to manage clusters, create instances, and run optimizations.</p>
+            <p>ServeIt Studio is a multi-cluster LLM inference optimization platform. Use this dashboard to manage clusters, create instances, and run optimizations.</p>
 
             <div style="font-weight:700;color:#1B5E6B;font-size:1.05em;margin:16px 0 6px;">Clusters</div>
             <p><strong>Local cluster</strong> uses your current Kubernetes context. <strong>Remote clusters</strong> require a kubeconfig file — upload it when creating the cluster and the system will validate connectivity and store it securely as a K8s Secret.</p>
             <p>Click <strong>Rescan</strong> to refresh GPU, CPU, memory, and RDMA information from the cluster.</p>
 
             <div style="font-weight:700;color:#1B5E6B;font-size:1.05em;margin:16px 0 6px;">Instances</div>
-            <p>Each instance is an isolated Inftune Studio deployment with its own database and optimization runs. Click <strong>+ New Instance</strong> to create one.</p>
+            <p>Each instance is an isolated ServeIt Studio deployment with its own database and optimization runs. Click <strong>+ New Instance</strong> to create one.</p>
             <ul style="padding-left:20px;margin:8px 0;">
                 <li><strong>GPU Allocation</strong> — Limit how many GPUs an instance can use. Leave empty for full cluster access.</li>
                 <li><strong>Node Pinning</strong> — Restrict tests to specific machines. Useful for shared clusters or specific hardware.</li>

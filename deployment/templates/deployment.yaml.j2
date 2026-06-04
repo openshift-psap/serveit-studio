@@ -45,19 +45,19 @@ spec:
             - name: METRIC_STEP_SECONDS
               value: "5"
             - name: DB_PATH
-              value: "/mnt/storage/inftune.db"
+              value: "/mnt/storage/serveit.db"
             - name: INFTUNE_FORCE_NAD
               value: "{{ force_nad }}"
             - name: DEV_MODE
               value: "{{ dev_mode }}"
-{% if inftune_mode is defined and inftune_mode %}
+{% if serveit_mode is defined and serveit_mode %}
             - name: INFTUNE_MODE
-              value: "{{ inftune_mode }}"
+              value: "{{ serveit_mode }}"
 {% endif %}
             - name: HF_TOKEN
               valueFrom:
                 secretKeyRef:
-                  name: inftune-optimizer-hf-token
+                  name: serveit-optimizer-hf-token
                   key: HF_TOKEN
                   optional: true
           volumeMounts:

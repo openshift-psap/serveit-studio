@@ -1,5 +1,5 @@
 """
-Shared utility functions for Inftune Studio.
+Shared utility functions for ServeIt Studio.
 """
 
 from enum import Enum

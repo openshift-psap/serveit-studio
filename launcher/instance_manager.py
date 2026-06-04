@@ -1,6 +1,6 @@
-"""Instance lifecycle management — create, delete, list Inftune Studio instances.
+"""Instance lifecycle management — create, delete, list ServeIt Studio instances.
 
-UI pods live in the shared launcher namespace (e.g. 'inftune').
+UI pods live in the shared launcher namespace (e.g. 'serveit').
 Workloads (LWS, guidellm, EPP) get their own per-instance namespace.
 Instances are organized into clusters (local or remote).
 """
@@ -135,7 +135,7 @@ def _validate_kubeconfig(kubeconfig_data: str) -> tuple:
 # ── Cluster CRUD ─────────────────────────────────────────────────────────────
 
 def create_cluster(owner_id: int, name: str, icon: str = '🖥️',
-                   namespace: str = 'inftune',
+                   namespace: str = 'serveit',
                    kubeconfig_data: str = None,
                    storage_class: str = None) -> Dict:
     """Create a cluster entry. If kubeconfig is provided, validates it and stores as K8s Secret."""
@@ -158,7 +158,7 @@ def create_cluster(owner_id: int, name: str, icon: str = '🖥️',
             user_row = conn.execute('SELECT username FROM users WHERE id = ?', (owner_id,)).fetchone()
         owner_name = _sanitize(user_row['username']) if user_row else str(owner_id)
         safe = _sanitize(name)
-        kubeconfig_secret = f"inftune-kubeconfig-{owner_name}-{safe}"
+        kubeconfig_secret = f"serveit-kubeconfig-{owner_name}-{safe}"
         secret_yaml = json.dumps({
             "apiVersion": "v1", "kind": "Secret",
             "metadata": {"name": kubeconfig_secret, "namespace": namespace},
@@ -207,7 +207,7 @@ def delete_cluster(cluster_id: int, owner_id: int) -> bool:
 
     # Delete kubeconfig secret if it exists
     if row.get('kubeconfig_secret'):
-        _kubectl(['delete', 'secret', row['kubeconfig_secret'], '-n', 'inftune', '--ignore-not-found=true'])
+        _kubectl(['delete', 'secret', row['kubeconfig_secret'], '-n', 'serveit', '--ignore-not-found=true'])
 
     with get_db() as conn:
         conn.execute('DELETE FROM clusters WHERE id = ?', (cluster_id,))
@@ -259,7 +259,7 @@ def _seed_instance_user(deployment_name: str, namespace: str, username: str, pas
         "import sqlite3,os,base64;"
         f"u=base64.b64decode('{b64user}').decode();"
         f"h=base64.b64decode('{b64hash}').decode();"
-        "db=os.environ.get('DB_PATH','/mnt/storage/inftune.db');"
+        "db=os.environ.get('DB_PATH','/mnt/storage/serveit.db');"
         "c=sqlite3.connect(db);"
         "c.execute('CREATE TABLE IF NOT EXISTS users (id INTEGER PRIMARY KEY AUTOINCREMENT, username TEXT UNIQUE NOT NULL, password_hash TEXT NOT NULL, created_at TEXT NOT NULL)');"
         "c.execute('INSERT OR IGNORE INTO users (username, password_hash, created_at) VALUES (?, ?, datetime(\"now\"))',(u,h));"
@@ -383,8 +383,8 @@ def get_user_assigned_instances(user_id: int) -> List[Dict]:
 
 def create_instance(owner_id: int, username: str, name: str,
                     cluster_id: int = None,
-                    namespace: str = 'inftune',
-                    image: str = 'quay.io/bbenshab/inftune-studio:server',
+                    namespace: str = 'serveit',
+                    image: str = 'quay.io/bbenshab/serveit-studio:server',
                     password_hash: str = None,
                     preset_gpus: int = None,
                     preset_nodes: list = None,
@@ -425,10 +425,10 @@ def create_instance(owner_id: int, username: str, name: str,
             if cr:
                 cluster_suffix = f"-{_sanitize(cr['name'])}"
     safe_name = _sanitize(f"{username}-{name}{cluster_suffix}")
-    workload_namespace = f"inftune-{safe_name}"
-    deployment_name = f"inftune-{safe_name}"
-    pvc_name = f"inftune-{safe_name}-storage"
-    service_name = f"inftune-{safe_name}-ui"
+    workload_namespace = f"serveit-{safe_name}"
+    deployment_name = f"serveit-{safe_name}"
+    pvc_name = f"serveit-{safe_name}-storage"
+    service_name = f"serveit-{safe_name}-ui"
 
     # Set up remote workload namespace if remote cluster
     if kubeconfig_data:
@@ -455,7 +455,7 @@ def create_instance(owner_id: int, username: str, name: str,
                 prom_yaml = json.dumps({
                     "apiVersion": "rbac.authorization.k8s.io/v1",
                     "kind": "ClusterRoleBinding",
-                    "metadata": {"name": f"inftune-prometheus-{safe_name}"},
+                    "metadata": {"name": f"serveit-prometheus-{safe_name}"},
                     "subjects": [{"kind": "ServiceAccount", "name": "default",
                                   "namespace": workload_namespace}],
                     "roleRef": {"kind": "ClusterRole", "name": "prometheus-k8s",
@@ -492,7 +492,7 @@ def create_instance(owner_id: int, username: str, name: str,
             remote_rbac = json.dumps({
                 "apiVersion": "v1", "kind": "List", "items": [
                     {"apiVersion": "rbac.authorization.k8s.io/v1", "kind": "Role",
-                     "metadata": {"name": "inftune-full-access", "namespace": workload_namespace},
+                     "metadata": {"name": "serveit-full-access", "namespace": workload_namespace},
                      "rules": [
                          {"apiGroups": [""], "resources": ["pods", "pods/log", "pods/exec", "services",
                           "persistentvolumeclaims", "serviceaccounts", "configmaps", "secrets"],
@@ -515,9 +515,9 @@ def create_instance(owner_id: int, username: str, name: str,
                           "verbs": ["get", "list", "create", "delete", "patch", "update"]},
                      ]},
                     {"apiVersion": "rbac.authorization.k8s.io/v1", "kind": "RoleBinding",
-                     "metadata": {"name": "inftune-access", "namespace": workload_namespace},
+                     "metadata": {"name": "serveit-access", "namespace": workload_namespace},
                      "subjects": [{"kind": "ServiceAccount", "name": "default", "namespace": workload_namespace}],
-                     "roleRef": {"kind": "Role", "name": "inftune-full-access",
+                     "roleRef": {"kind": "Role", "name": "serveit-full-access",
                                  "apiGroup": "rbac.authorization.k8s.io"}},
                 ]
             })
@@ -636,10 +636,10 @@ def _backup_instance_db(deployment_name: str, namespace: str, instance_name: str
         pod_name = r.stdout.strip() if r.returncode == 0 else ''
         if not pod_name:
             return
-        dest = str(backup_dir / 'inftune.db')
+        dest = str(backup_dir / 'serveit.db')
         cmd = 'oc' if _is_oc() else 'kubectl'
         subprocess.run(
-            [cmd, 'cp', f'{namespace}/{pod_name}:/mnt/storage/inftune.db', dest],
+            [cmd, 'cp', f'{namespace}/{pod_name}:/mnt/storage/serveit.db', dest],
             capture_output=True, timeout=60
         )
         ts_file = backup_dir / 'backup_info.txt'

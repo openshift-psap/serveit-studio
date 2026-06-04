@@ -443,7 +443,7 @@ class EPPTuningMixin:
                 # Clean up any leftover step9 EPP LWS from previous combo
                 try:
                     self.orchestrator.deployment_manager.kubectl.run(
-                        ['delete', 'lws', '-l', 'component=inftune-test',
+                        ['delete', 'lws', '-l', 'component=serveit-test',
                          '-n', self.config.namespace, '--ignore-not-found=true'],
                         check=False
                     )
@@ -581,7 +581,7 @@ class EPPTuningMixin:
                             break
                         try:
                             self.orchestrator.deployment_manager.kubectl.run(
-                                ['delete', 'lws', '-l', 'component=inftune-test',
+                                ['delete', 'lws', '-l', 'component=serveit-test',
                                  '-n', self.config.namespace, '--ignore-not-found=true'], check=False)
                             time.sleep(5)
                         except Exception:
@@ -665,7 +665,7 @@ class EPPTuningMixin:
                     }
                     try:
                         self.orchestrator.deployment_manager.kubectl.run(
-                            ['delete', 'lws', '-l', 'component=inftune-test',
+                            ['delete', 'lws', '-l', 'component=serveit-test',
                              '-n', self.config.namespace, '--ignore-not-found=true'], check=False)
                         time.sleep(5)
                     except Exception:

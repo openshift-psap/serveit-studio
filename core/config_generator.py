@@ -1,5 +1,5 @@
 """
-Inftune Studio Configuration Generator
+ServeIt Studio Configuration Generator
 
 Generates test configurations based on user inputs and cluster resources.
 Determines which architectures to test based on optimization priority.
@@ -159,7 +159,7 @@ class ConfigGenerator:
 
     def __init__(
         self,
-        namespace: str = 'inftune',
+        namespace: str = 'serveit',
         kubeconfig: Optional[str] = None
     ):
         """
@@ -637,7 +637,7 @@ def main():
     import json
 
     parser = argparse.ArgumentParser(
-        description='Generate Inftune Studio optimization plan'
+        description='Generate ServeIt Studio optimization plan'
     )
     parser.add_argument('--run-name', required=True, help='Name for this optimization run')
     parser.add_argument('--model', required=True, help='HuggingFace model name')
@@ -650,7 +650,7 @@ def main():
         default='balanced',
         help='Optimization goal'
     )
-    parser.add_argument('--namespace', default='inftune', help='Kubernetes namespace')
+    parser.add_argument('--namespace', default='serveit', help='Kubernetes namespace')
     parser.add_argument('--output', help='Output JSON file path')
 
     args = parser.parse_args()

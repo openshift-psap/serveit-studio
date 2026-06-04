@@ -1,4 +1,4 @@
-# Inftune Studio — Supporting Technical Material
+# ServeIt Studio — Supporting Technical Material
 
 Supplementary documentation covering system components not included in `optimization-math.md`. Covers model architecture detection, cloud/network auto-discovery, deployment lifecycle, metrics collection, and prefix cache simulation.
 

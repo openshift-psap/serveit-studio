@@ -1,22 +1,22 @@
 #!/usr/bin/env python3
 """
-Inftune Studio CLI — run LLM inference optimization from the command line.
+ServeIt Studio CLI — run LLM inference optimization from the command line.
 
 Usage:
     # Register clusters
-    inftune cluster add --name local
-    inftune cluster add --name prod --kubeconfig ~/.kube/prod.yaml
-    inftune cluster list
-    inftune cluster scan prod
-    inftune cluster remove prod
+    serveit cluster add --name local
+    serveit cluster add --name prod --kubeconfig ~/.kube/prod.yaml
+    serveit cluster list
+    serveit cluster scan prod
+    serveit cluster remove prod
 
     # Run optimization
-    inftune run --model RedHatAI/gpt-oss-20b --cluster local
-    inftune run --model RedHatAI/gpt-oss-20b --cluster prod \\
+    serveit run --model RedHatAI/gpt-oss-20b --cluster local
+    serveit run --model RedHatAI/gpt-oss-20b --cluster prod \\
         --isl 9000 --osl 50 --users 100 --gpus 16 --objective ttft
 
     # Resume a previous run
-    inftune run --resume 7 --cluster prod
+    serveit run --resume 7 --cluster prod
 """
 
 import argparse
@@ -66,7 +66,7 @@ def _resolve_cluster(name):
             (owner_id, name)
         ).fetchone()
     if not row:
-        print(f"Error: cluster '{name}' not found. Run 'inftune cluster list' to see registered clusters.")
+        print(f"Error: cluster '{name}' not found. Run 'serveit cluster list' to see registered clusters.")
         sys.exit(1)
     return dict(row)
 
@@ -112,7 +112,7 @@ def cmd_cluster_list(args):
     clusters = instance_manager.list_clusters(owner_id)
 
     if not clusters:
-        print("No clusters registered. Use 'inftune cluster add' to register one.")
+        print("No clusters registered. Use 'serveit cluster add' to register one.")
         return 0
 
     fmt = '{:<4} {:<20} {:<30} {:<15} {:<20}'
@@ -211,7 +211,7 @@ def _get_cluster_kubeconfig(cluster):
     import subprocess
     import tempfile
 
-    namespace = cluster.get('namespace', 'inftune')
+    namespace = cluster.get('namespace', 'serveit')
     # Use the launcher's own kubectl to read the secret from the launcher cluster
     cmd = 'oc' if _is_oc() else 'kubectl'
     r = subprocess.run(
@@ -262,7 +262,7 @@ def cmd_run(args):
         _ensure_launcher_db()
         cluster = _resolve_cluster(args.cluster)
         kubeconfig_path = _get_cluster_kubeconfig(cluster)
-        cluster_namespace = cluster.get('namespace') or 'inftune'
+        cluster_namespace = cluster.get('namespace') or 'serveit'
 
     if args.resume:
         return resume_run(args, db, kubeconfig_path)
@@ -335,7 +335,7 @@ def cmd_run(args):
 
     selected_nodes = [n.strip() for n in args.nodes.split(',')] if args.nodes else []
 
-    namespace = args.namespace or cluster_namespace or 'inftune'
+    namespace = args.namespace or cluster_namespace or 'serveit'
 
     config_params = {
         'model_name': args.model,
@@ -405,7 +405,7 @@ def cmd_run(args):
 
     if not args.quiet:
         print(f"{'=' * 70}")
-        print(f"  Inftune Studio Optimization — Run #{run_id}")
+        print(f"  ServeIt Studio Optimization — Run #{run_id}")
         print(f"{'=' * 70}")
         print(f"  Model:      {args.model}")
         print(f"  Workload:   ISL={args.isl} OSL={args.osl} x {args.users} users")
@@ -447,7 +447,7 @@ def resume_run(args, db, kubeconfig_path=None):
 
     config_params = {
         'model_name': row['model'],
-        'namespace': saved_config.get('namespace', 'inftune'),
+        'namespace': saved_config.get('namespace', 'serveit'),
         'isl': row['isl'],
         'osl': row['osl'],
         'qps': float(row['num_users']),
@@ -470,7 +470,7 @@ def resume_run(args, db, kubeconfig_path=None):
         'latency_constraint_ms': row.get('latency_constraint_ms', 500),
         'latency_constraint_percentile': row.get('latency_constraint_percentile', 'p99'),
         'image': saved_config.get('image', 'ghcr.io/llm-d/llm-d-cuda:v0.6.0'),
-        'pvc_name': saved_config.get('pvc_name', 'inftune-model-cache'),
+        'pvc_name': saved_config.get('pvc_name', 'serveit-model-cache'),
         'nccl_ib_hca': saved_config.get('nccl_ib_hca', 'mlx'),
         'hf_token': saved_config.get('hf_token') or os.environ.get('HF_TOKEN'),
         'selected_nodes': saved_config.get('selected_nodes', []),
@@ -512,7 +512,7 @@ def ensure_model_ready(config, log_fn):
     import subprocess as _sp
     from core.template_manager import TemplateManager
 
-    pvc_name = config.pvc_name or 'inftune-model-cache'
+    pvc_name = config.pvc_name or 'serveit-model-cache'
     namespace = config.namespace
     model = config.model_name
 
@@ -543,7 +543,7 @@ def ensure_model_ready(config, log_fn):
     log_fn(f'Downloading model: {model}', 'info')
     tmgr = TemplateManager()
     ts = datetime.now().strftime('%Y%m%d-%H%M%S')
-    job_name = f'inftune-model-download-{ts}'
+    job_name = f'serveit-model-download-{ts}'
 
     job_yaml = tmgr.render_template('prereq/model-download-job.yaml.j2',
         job_name=job_name, namespace=namespace,
@@ -655,7 +655,7 @@ def run_optimization(config_params, run_id, db_path, quiet, resume=False,
         return 0
 
     except KeyboardInterrupt:
-        print(f"\nInterrupted. Run #{run_id} can be resumed with: inftune run --resume {run_id}")
+        print(f"\nInterrupted. Run #{run_id} can be resumed with: serveit run --resume {run_id}")
         db = DatabaseManager(db_path=db_path)
         with db.get_connection() as conn:
             conn.execute("UPDATE optimization_runs SET status = 'stopped' WHERE id = ?", (run_id,))
@@ -742,7 +742,7 @@ def build_python_html_report(run_id, data):
     all_res = data.get('all_results', [])
 
     html = f"""<!DOCTYPE html><html><head><meta charset="UTF-8">
-<title>Inftune Studio Report - Run {run_id}</title>
+<title>ServeIt Studio Report - Run {run_id}</title>
 <script src="https://cdn.plot.ly/plotly-2.35.2.min.js"></script>
 <style>
 body{{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;width:95%;margin:0 auto;padding:20px;background:#f8fafc;color:#1e293b}}
@@ -755,7 +755,7 @@ td{{padding:8px 10px;border-bottom:1px solid #f1f5f9}}
 .stat .lbl{{color:#64748b;font-size:0.85em}}
 .pareto{{background:#f0fdf4;font-weight:600}}
 </style></head><body>
-<h1>Inftune Studio Optimization Report &mdash; Run #{run_id}</h1>
+<h1>ServeIt Studio Optimization Report &mdash; Run #{run_id}</h1>
 <p style="color:#64748b;">Generated: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}</p>
 """
 
@@ -822,7 +822,7 @@ def build_run_parser(parser):
     parser.add_argument('--model', type=str,
                         help='Model name or HuggingFace path (e.g., RedHatAI/gpt-oss-20b)')
     parser.add_argument('--cluster', type=str, metavar='NAME',
-                        help='Run against a registered cluster (see: inftune cluster list)')
+                        help='Run against a registered cluster (see: serveit cluster list)')
 
     wl = parser.add_argument_group('Workload')
     wl.add_argument('--isl', type=int, default=3000, help='Input sequence length (default: 3000)')
@@ -857,9 +857,9 @@ def build_run_parser(parser):
     hw.add_argument('--image', type=str, default='ghcr.io/llm-d/llm-d-cuda:v0.6.0',
                     help='vLLM container image')
     hw.add_argument('--namespace', type=str, default=None,
-                    help='Kubernetes namespace (default: from cluster or inftune)')
-    hw.add_argument('--pvc', type=str, default='inftune-model-cache',
-                    help='PVC name for model cache (default: inftune-model-cache)')
+                    help='Kubernetes namespace (default: from cluster or serveit)')
+    hw.add_argument('--pvc', type=str, default='serveit-model-cache',
+                    help='PVC name for model cache (default: serveit-model-cache)')
     hw.add_argument('--nccl-ib-hca', type=str, default='mlx',
                     help='NCCL IB HCA device prefix (default: mlx)')
     hw.add_argument('--hf-token', type=str, default=None,
@@ -976,16 +976,16 @@ def build_run_parser(parser):
                     help='Generate HTML report to file after completion (e.g., report.html)')
     ou.add_argument('--description', type=str, default=None,
                     help='Run description (stored in DB)')
-    ou.add_argument('--db', type=str, default='/mnt/storage/inftune.db',
-                    help='Database path (default: /mnt/storage/inftune.db)')
+    ou.add_argument('--db', type=str, default='/mnt/storage/serveit.db',
+                    help='Database path (default: /mnt/storage/serveit.db)')
     ou.add_argument('--quiet', action='store_true',
                     help='Suppress progress output')
 
 
 def main():
     top = argparse.ArgumentParser(
-        prog='inftune',
-        description='Inftune Studio — LLM inference optimization CLI',
+        prog='serveit',
+        description='ServeIt Studio — LLM inference optimization CLI',
     )
     sub = top.add_subparsers(dest='command')
 
@@ -997,8 +997,8 @@ def main():
     add_p.add_argument('--name', required=True, help='Cluster name')
     add_p.add_argument('--kubeconfig', type=str, default=None,
                        help='Path to kubeconfig file (omit for current context)')
-    add_p.add_argument('--namespace', type=str, default='inftune',
-                       help='Namespace for Inftune resources (default: inftune)')
+    add_p.add_argument('--namespace', type=str, default='serveit',
+                       help='Namespace for ServeIt resources (default: serveit)')
     add_p.add_argument('--storage-class', type=str, default=None,
                        help='Storage class for PVCs')
 
@@ -1009,8 +1009,8 @@ def main():
 
     scan_p = cluster_sub.add_parser('scan', help='Scan cluster resources')
     scan_p.add_argument('name', help='Cluster name to scan')
-    scan_p.add_argument('--namespace', type=str, default='inftune',
-                        help='Namespace (default: inftune)')
+    scan_p.add_argument('--namespace', type=str, default='serveit',
+                        help='Namespace (default: serveit)')
 
     # ── run ──────────────────────────────────────────────────────────────
     run_parser = sub.add_parser('run', help='Run an optimization',

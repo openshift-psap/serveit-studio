@@ -5,7 +5,7 @@ metadata:
   namespace: {{ namespace }}
   labels:
     app.kubernetes.io/name: {{ gaie_name | default('gaie-epp') }}
-    component: inftune-prereq
+    component: serveit-prereq
     architecture: {{ architecture | default('aggregated') }}
 data:
   {{ config_file | default('default-plugins.yaml') }}: |

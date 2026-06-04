@@ -1,5 +1,5 @@
 """
-Inftune Studio Test Planner
+ServeIt Studio Test Planner
 
 Calculates resource requirements and plans test configurations based on:
 - Model size and VRAM requirements
