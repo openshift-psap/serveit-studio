@@ -701,6 +701,17 @@ function restoreConfigSummary() {
         atEl.textContent = config.advanced_vllm_custom_enabled ? 'Enabled' : 'Disabled';
         atEl.style.color = config.advanced_vllm_custom_enabled ? '#065f46' : '#991b1b';
     }
+    const eppEl = document.getElementById('config-summary-epp');
+    if (eppEl) {
+        const presetNames = { balanced: 'Balanced (3:2:2)', cache_optimized: 'Cache Optimized (5:1:2)', queue_balanced: 'Queue Balanced (2:2:3)', custom: 'Custom' };
+        eppEl.textContent = config.epp_custom_enabled ? (presetNames[config.epp_preset] || config.epp_preset) : 'Upstream Default';
+        eppEl.style.color = config.epp_custom_enabled ? '#065f46' : '#64748b';
+    }
+    const eppSmartEl = document.getElementById('config-summary-epp-smart');
+    if (eppSmartEl) {
+        eppSmartEl.textContent = config.epp_benchmark ? 'Enabled' : 'Disabled';
+        eppSmartEl.style.color = config.epp_benchmark ? '#065f46' : '#991b1b';
+    }
     const tdEl = document.getElementById('config-summary-tp-depth');
     if (tdEl) {
         const labels = {1: '1 (Fast)', 2: '2 (Default)', 3: '3 (Deep)', 4: '4 (Full)'};

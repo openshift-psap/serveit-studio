@@ -103,6 +103,17 @@ function generateTestPlan() {
         atEl2.textContent = config.advanced_vllm_custom_enabled ? 'Enabled' : 'Disabled';
         atEl2.style.color = config.advanced_vllm_custom_enabled ? '#065f46' : '#991b1b';
     }
+    const eppEl2 = document.getElementById('config-summary-epp');
+    if (eppEl2) {
+        const presetNames = { balanced: 'Balanced (3:2:2)', cache_optimized: 'Cache Optimized (5:1:2)', queue_balanced: 'Queue Balanced (2:2:3)', custom: 'Custom' };
+        eppEl2.textContent = config.epp_custom_enabled ? (presetNames[config.epp_preset] || config.epp_preset) : 'Upstream Default';
+        eppEl2.style.color = config.epp_custom_enabled ? '#065f46' : '#64748b';
+    }
+    const eppSmartEl2 = document.getElementById('config-summary-epp-smart');
+    if (eppSmartEl2) {
+        eppSmartEl2.textContent = config.epp_benchmark ? 'Enabled' : 'Disabled';
+        eppSmartEl2.style.color = config.epp_benchmark ? '#065f46' : '#991b1b';
+    }
     const tdEl2 = document.getElementById('config-summary-tp-depth');
     if (tdEl2) {
         const labels = {1: '1 (Fast)', 2: '2 (Default)', 3: '3 (Deep)', 4: '4 (Full)'};
