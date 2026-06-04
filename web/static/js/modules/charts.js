@@ -1603,8 +1603,11 @@ function renderCharts(data, runId) {
         ];
 
         ttftPercentiles.forEach(pctl => {
+            const itlField = 'itl_' + pctl.key;
             const ttftVals = sorted.map(r => r[pctl.field]);
             const tputVals = sorted.map(r => r[pctl.tputField] || r.throughput_p90);
+            const itlVals = sorted.map(r => r[itlField] != null ? r[itlField] : null);
+            const hasItl = itlVals.some(v => v != null);
             const bestTtft = Math.min(...ttftVals);
             const bestTtftIdx = ttftVals.indexOf(bestTtft);
             const bestTput = Math.max(...tputVals);
@@ -1615,6 +1618,7 @@ function renderCharts(data, runId) {
                 `<b>${r.prefill_pods} Prefill pods</b> (TP=${r.prefill_tp})<br>` +
                 `<b>${r.decode_pods} Decode pods</b> (TP=${r.decode_tp})<br>` +
                 `TTFT ${pLabel}: <b>${r[pctl.field].toFixed(1)} ms</b><br>` +
+                (r[itlField] != null ? `ITL ${pLabel}: <b>${r[itlField].toFixed(2)} ms</b><br>` : '') +
                 `Throughput Mean: ${r[pctl.tputField] || r.throughput_p90} req/s<br>` +
                 `Total GPUs: ${r.gpus}`
             );
@@ -1639,7 +1643,10 @@ function renderCharts(data, runId) {
                     annotations.push({ x: labels[i], y: tputVals[i], yref: 'y2', text: '<b>EPP TUNED</b>', showarrow: true, arrowhead: 0, arrowwidth: 1, arrowcolor: '#7c3aed', ax: 55, ay: 0, font: { size: 9, color: 'white' }, bgcolor: '#7c3aed', borderpad: 3, bordercolor: '#7c3aed', borderwidth: 1 });
                 }
             });
-            Plotly.newPlot(cid(pctl.chartId), [
+
+            // Subplot domains: top 72% for TTFT+Throughput, bottom 22% for ITL, 6% gap
+            const topDomain = hasItl ? [0.28, 1] : [0, 1];
+            const traces = [
                 {
                     x: labels, y: ttftVals, name: `TTFT ${pLabel}`,
                     type: 'scatter', mode: 'lines+markers',
@@ -1669,18 +1676,51 @@ function renderCharts(data, runId) {
                     hovertext: [hoverText[bestTputIdx]], hoverinfo: 'text',
                     showlegend: true,
                 },
-            ], {
+            ];
+
+            const layout = {
                 ...plotlyLayout,
-                height: 500,
-                margin: { t: 30, b: 80, l: 60, r: 60 },
-                xaxis: { title: 'Prefill : Decode Pod Ratio' },
-                yaxis: { title: `TTFT ${pLabel} (ms) — lower is better`, side: 'left', titlefont: { color: pctl.color }, tickfont: { color: pctl.color }, tickformat: '.2s' },
-                yaxis2: { title: `Throughput Mean (req/s) — higher is better`, side: 'right', overlaying: 'y', titlefont: { color: '#f59e0b' }, tickfont: { color: '#f59e0b' } },
+                height: hasItl ? 620 : 500,
+                margin: { t: 30, b: 60, l: 60, r: 60 },
+                xaxis: { title: 'Prefill : Decode Pod Ratio', anchor: hasItl ? 'y3' : 'y' },
+                yaxis: { title: `TTFT ${pLabel} (ms)`, side: 'left', titlefont: { color: pctl.color }, tickfont: { color: pctl.color }, tickformat: '.2s', domain: topDomain },
+                yaxis2: { title: `Throughput Mean (req/s)`, side: 'right', overlaying: 'y', titlefont: { color: '#f59e0b' }, tickfont: { color: '#f59e0b' } },
                 showlegend: true,
-                legend: { x: 0, y: 1.18, orientation: 'h' },
+                legend: { x: 0, y: 1.12, orientation: 'h' },
                 shapes: shapes,
                 annotations: annotations,
-            }, plotlyConfig);
+            };
+
+            if (hasItl) {
+                const validItl = itlVals.filter(v => v != null);
+                const bestItl = Math.min(...validItl);
+                const bestItlIdx = itlVals.indexOf(bestItl);
+                const aggItl = aggBase ? aggBase[itlField] : null;
+
+                traces.push({
+                    x: labels, y: itlVals, name: `ITL ${pLabel}`,
+                    type: 'scatter', mode: 'lines+markers', yaxis: 'y3',
+                    line: { color: '#ef4444', width: 2, shape: 'spline' },
+                    marker: { color: '#ef4444', size: 8, symbol: 'square', line: { width: 1, color: 'white' } },
+                    hovertemplate: `ITL ${pLabel}: %{y:.2f} ms<extra></extra>`,
+                    connectgaps: true,
+                });
+                if (bestItlIdx >= 0) {
+                    traces.push({
+                        x: [labels[bestItlIdx]], y: [bestItl], name: `Best ITL`,
+                        type: 'scatter', mode: 'markers', yaxis: 'y3',
+                        marker: { color: '#10b981', size: 16, symbol: 'square', line: { width: 2, color: 'white' } },
+                        showlegend: true,
+                    });
+                }
+                if (aggItl) {
+                    shapes.push({ type: 'line', x0: -0.5, x1: labels.length - 0.5, y0: aggItl, y1: aggItl, yref: 'y3', line: { color: '#ef4444', width: 1.5, dash: 'dash' } });
+                    annotations.push({ x: 0, y: aggItl, yref: 'y3', text: `Agg ITL: ${aggItl.toFixed(1)} ms`, showarrow: false, font: { color: '#ef4444', size: 10, weight: 700 }, xanchor: 'left', yanchor: 'bottom', yshift: 3, bgcolor: 'rgba(255,255,255,0.85)' });
+                }
+                layout.yaxis3 = { title: `ITL ${pLabel} (ms)`, side: 'left', titlefont: { color: '#ef4444', size: 11 }, tickfont: { color: '#ef4444', size: 10 }, domain: [0, 0.22] };
+            }
+
+            Plotly.newPlot(cid(pctl.chartId), traces, layout, plotlyConfig);
         });
     }
 
@@ -1712,14 +1752,32 @@ function renderCharts(data, runId) {
             marker: { color: '#f59e0b', size: 10, symbol: 'diamond', line: { width: 2, color: 'white' } },
             hovertemplate: 'Throughput Mean: %{y:.2f} req/s<extra></extra>',
         });
+        const itlDashes = { p90: 'solid', p95: 'dash', p99: 'dot' };
+        const itlSymbols = { p90: 'square', p95: 'square-open', p99: 'square-open-dot' };
+        const hasAggItl = aggSorted.some(r => r.itl_p90 != null);
+        if (hasAggItl) {
+            ['p90', 'p95', 'p99'].forEach(p => {
+                traces.push({
+                    x: aggLabels,
+                    y: aggSorted.map(r => r['itl_' + p]),
+                    name: `ITL ${p.toUpperCase()}`,
+                    type: 'scatter', mode: 'lines+markers', yaxis: 'y3',
+                    line: { color: '#ef4444', width: 2, dash: itlDashes[p] },
+                    marker: { color: '#ef4444', size: 7, symbol: itlSymbols[p] },
+                    hovertemplate: `ITL ${p.toUpperCase()}: %{y:.2f} ms<extra></extra>`,
+                    connectgaps: true,
+                });
+            });
+        }
         Plotly.newPlot(cid('chart-agg-ttft-all'), traces, {
             ...plotlyLayout,
-            height: 450,
+            height: hasAggItl ? 520 : 450,
             barmode: 'group',
-            margin: { t: 30, b: 80, l: 60, r: 60 },
+            margin: { t: 30, b: 80, l: 60, r: hasAggItl ? 80 : 60 },
             xaxis: { title: 'Aggregated Configuration' },
             yaxis: { title: 'TTFT (ms) — lower is better', side: 'left', tickformat: '.2s' },
-            yaxis2: { title: 'Throughput Mean (req/s)', side: 'right', overlaying: 'y', titlefont: { color: '#f59e0b' }, tickfont: { color: '#f59e0b' } },
+            yaxis2: { title: 'Throughput Mean (req/s)', side: 'right', overlaying: 'y', titlefont: { color: '#f59e0b' }, tickfont: { color: '#f59e0b' }, position: hasAggItl ? 0.88 : 1 },
+            ...(hasAggItl ? { yaxis3: { title: 'ITL (ms)', side: 'right', overlaying: 'y', anchor: 'free', position: 1, titlefont: { color: '#ef4444', size: 11 }, tickfont: { color: '#ef4444', size: 10 } } } : {}),
             showlegend: true,
             legend: { x: 0, y: 1.18, orientation: 'h' },
         }, plotlyConfig);
