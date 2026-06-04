@@ -100,8 +100,8 @@ function generateTestPlan() {
     document.getElementById('config-summary-namespace').textContent = config.namespace || 'Not set';
     const atEl2 = document.getElementById('config-summary-autotune');
     if (atEl2) {
-        atEl2.textContent = config.advanced_vllm_custom_enabled ? 'Enabled' : 'Disabled';
-        atEl2.style.color = config.advanced_vllm_custom_enabled ? '#065f46' : '#991b1b';
+        atEl2.textContent = config.advanced_vllm_custom_enabled ? 'Enabled' : 'Upstream Default';
+        atEl2.style.color = config.advanced_vllm_custom_enabled ? '#065f46' : '#64748b';
     }
     const eppEl2 = document.getElementById('config-summary-epp');
     if (eppEl2) {
@@ -111,8 +111,8 @@ function generateTestPlan() {
     }
     const eppSmartEl2 = document.getElementById('config-summary-epp-smart');
     if (eppSmartEl2) {
-        eppSmartEl2.textContent = config.epp_benchmark ? 'Enabled' : 'Disabled';
-        eppSmartEl2.style.color = config.epp_benchmark ? '#065f46' : '#991b1b';
+        eppSmartEl2.textContent = config.epp_benchmark ? 'Enabled' : 'Upstream Default';
+        eppSmartEl2.style.color = config.epp_benchmark ? '#065f46' : '#64748b';
     }
     const tdEl2 = document.getElementById('config-summary-tp-depth');
     if (tdEl2) {

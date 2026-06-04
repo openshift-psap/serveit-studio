@@ -5,14 +5,34 @@
                         <!-- Configuration Summary -->
                         <div class="info-box">
                             <h4>📋 Configuration Summary</h4>
-                            <div class="config-grid">
-                                <div class="config-item">
-                                    <div class="config-label">Optimization Goal</div>
-                                    <div class="config-value"><span id="config-summary-goal">-</span></div>
-                                </div>
+
+                            <!-- Deployment -->
+                            <div style="font-weight:600;color:#0c4a6e;font-size:0.85em;text-transform:uppercase;letter-spacing:0.5px;margin-bottom:8px;margin-top:4px;">Deployment</div>
+                            <div class="config-grid" style="margin-bottom:16px;">
                                 <div class="config-item">
                                     <div class="config-label">Model</div>
                                     <div class="config-value"><span id="config-summary-model">-</span></div>
+                                </div>
+                                <div class="config-item">
+                                    <div class="config-label">Namespace</div>
+                                    <div class="config-value"><span id="config-summary-namespace">-</span></div>
+                                </div>
+                                <div class="config-item">
+                                    <div class="config-label">PVC</div>
+                                    <div class="config-value"><span id="config-summary-pvc">-</span></div>
+                                </div>
+                                <div class="config-item">
+                                    <div class="config-label">Max GPUs</div>
+                                    <div class="config-value"><span id="config-summary-gpus">-</span> GPUs</div>
+                                </div>
+                            </div>
+
+                            <!-- Workload -->
+                            <div style="font-weight:600;color:#0c4a6e;font-size:0.85em;text-transform:uppercase;letter-spacing:0.5px;margin-bottom:8px;border-top:1px solid #e2e8f0;padding-top:12px;">Workload</div>
+                            <div class="config-grid" style="margin-bottom:16px;">
+                                <div class="config-item">
+                                    <div class="config-label">Optimization Goal</div>
+                                    <div class="config-value"><span id="config-summary-goal">-</span></div>
                                 </div>
                                 <div class="config-item">
                                     <div class="config-label">Workload</div>
@@ -27,10 +47,6 @@
                                     <div class="config-value"><span id="config-summary-qps-mode">User-defined Concurrent Users</span></div>
                                 </div>
                                 <div class="config-item">
-                                    <div class="config-label">Max GPUs to Use</div>
-                                    <div class="config-value"><span id="config-summary-gpus">-</span> GPUs</div>
-                                </div>
-                                <div class="config-item">
                                     <div class="config-label">Auto-Scale Concurrency</div>
                                     <div class="config-value"><span id="config-summary-achievable-qps">Off</span></div>
                                 </div>
@@ -38,29 +54,26 @@
                                     <div class="config-label">Latency Constraint</div>
                                     <div class="config-value"><span id="config-summary-latency-constraint">Disabled</span></div>
                                 </div>
+                            </div>
+
+                            <!-- Tuning -->
+                            <div style="font-weight:600;color:#0c4a6e;font-size:0.85em;text-transform:uppercase;letter-spacing:0.5px;margin-bottom:8px;border-top:1px solid #e2e8f0;padding-top:12px;">Tuning</div>
+                            <div class="config-grid">
                                 <div class="config-item">
                                     <div class="config-label">Auto-Tune vLLM</div>
-                                    <div class="config-value"><span id="config-summary-autotune">Disabled</span></div>
+                                    <div class="config-value"><span id="config-summary-autotune">Upstream Default</span></div>
                                 </div>
                                 <div class="config-item">
                                     <div class="config-label">EPP Routing</div>
-                                    <div class="config-value"><span id="config-summary-epp">Disabled</span></div>
+                                    <div class="config-value"><span id="config-summary-epp">Upstream Default</span></div>
                                 </div>
                                 <div class="config-item">
                                     <div class="config-label">Smart EPP Tuning</div>
-                                    <div class="config-value"><span id="config-summary-epp-smart">Disabled</span></div>
+                                    <div class="config-value"><span id="config-summary-epp-smart">Upstream Default</span></div>
                                 </div>
                                 <div class="config-item">
                                     <div class="config-label">TP Search Depth</div>
                                     <div class="config-value"><span id="config-summary-tp-depth">2</span></div>
-                                </div>
-                                <div class="config-item">
-                                    <div class="config-label">PVC</div>
-                                    <div class="config-value"><span id="config-summary-pvc">-</span></div>
-                                </div>
-                                <div class="config-item">
-                                    <div class="config-label">Namespace</div>
-                                    <div class="config-value"><span id="config-summary-namespace">-</span></div>
                                 </div>
                             </div>
                         </div>

@@ -698,8 +698,8 @@ function restoreConfigSummary() {
     }
     const atEl = document.getElementById('config-summary-autotune');
     if (atEl) {
-        atEl.textContent = config.advanced_vllm_custom_enabled ? 'Enabled' : 'Disabled';
-        atEl.style.color = config.advanced_vllm_custom_enabled ? '#065f46' : '#991b1b';
+        atEl.textContent = config.advanced_vllm_custom_enabled ? 'Enabled' : 'Upstream Default';
+        atEl.style.color = config.advanced_vllm_custom_enabled ? '#065f46' : '#64748b';
     }
     const eppEl = document.getElementById('config-summary-epp');
     if (eppEl) {
@@ -709,8 +709,8 @@ function restoreConfigSummary() {
     }
     const eppSmartEl = document.getElementById('config-summary-epp-smart');
     if (eppSmartEl) {
-        eppSmartEl.textContent = config.epp_benchmark ? 'Enabled' : 'Disabled';
-        eppSmartEl.style.color = config.epp_benchmark ? '#065f46' : '#991b1b';
+        eppSmartEl.textContent = config.epp_benchmark ? 'Enabled' : 'Upstream Default';
+        eppSmartEl.style.color = config.epp_benchmark ? '#065f46' : '#64748b';
     }
     const tdEl = document.getElementById('config-summary-tp-depth');
     if (tdEl) {
