@@ -100,19 +100,22 @@ class ClusterResources:
             tp *= 2
         return options
 
-    def estimate_model_gpu_requirement(self, model_size_gb: float, dtype: str = 'fp16') -> int:
+    def estimate_model_gpu_requirement(self, model_size_gb: float, dtype: str = 'fp16',
+                                        is_moe: bool = False) -> int:
         """
         Estimate minimum number of GPUs needed to load a model.
 
         Args:
-            model_size_gb: Model size in GB
+            model_size_gb: Model size in GB (total weight size)
             dtype: Data type (fp16, fp8, int8, int4)
+            is_moe: If True, use lower overhead (MoE activations are sparse)
 
         Returns:
-            Minimum number of GPUs required
+            Minimum number of GPUs required (power of 2)
         """
-        # 1.4x overhead: KV cache (20%), activations (10%), CUDA kernels (10%)
-        overhead_factor = 1.4
+        # MoE models have sparse activations — only top_k experts active per
+        # token, so activation memory is much lower than dense equivalent.
+        overhead_factor = 1.15 if is_moe else 1.4
         required_memory_gb = model_size_gb * overhead_factor
 
         gpu_memory_gb = self.gpu_memory_per_gpu_mb / 1024

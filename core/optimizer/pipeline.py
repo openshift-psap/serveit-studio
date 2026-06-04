@@ -1187,7 +1187,8 @@ class RecipeOptimizer(
             tp_options = self.cluster_resources.get_tp_options()
             min_tp = self.cluster_resources.estimate_model_gpu_requirement(
                 model_size_gb=self._estimate_model_size_gb(),
-                dtype=self._model_dtype
+                dtype=self._model_dtype,
+                is_moe=self._is_moe
             )
             tp_options = [tp for tp in tp_options if tp >= min_tp]
         else:
