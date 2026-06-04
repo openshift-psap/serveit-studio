@@ -38,7 +38,7 @@ def create_app():
     register_auth_routes(app)
 
     namespace = os.environ.get('TARGET_NAMESPACE', 'serveit')
-    image = os.environ.get('INFTUNE_IMAGE', 'quay.io/bbenshab/inftune-studio:server')
+    image = os.environ.get('INFTUNE_IMAGE', 'quay.io/bbenshab/serveit-studio:server')
 
     # ── Dashboard ──
 

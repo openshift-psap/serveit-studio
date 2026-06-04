@@ -384,7 +384,7 @@ def get_user_assigned_instances(user_id: int) -> List[Dict]:
 def create_instance(owner_id: int, username: str, name: str,
                     cluster_id: int = None,
                     namespace: str = 'serveit',
-                    image: str = 'quay.io/bbenshab/inftune-studio:server',
+                    image: str = 'quay.io/bbenshab/serveit-studio:server',
                     password_hash: str = None,
                     preset_gpus: int = None,
                     preset_nodes: list = None,
