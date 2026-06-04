@@ -696,6 +696,11 @@ function restoreConfigSummary() {
             ? `${config.latency_constraint_ms}ms @ ${config.latency_constraint_percentile.toUpperCase()}`
             : 'Disabled';
     }
+    const atEl = document.getElementById('config-summary-autotune');
+    if (atEl) {
+        atEl.textContent = config.advanced_vllm_custom_enabled ? 'Enabled' : 'Disabled';
+        atEl.style.color = config.advanced_vllm_custom_enabled ? '#065f46' : '#991b1b';
+    }
     const tdEl = document.getElementById('config-summary-tp-depth');
     if (tdEl) {
         const labels = {1: '1 (Fast)', 2: '2 (Default)', 3: '3 (Deep)', 4: '4 (Full)'};

@@ -98,6 +98,11 @@ function generateTestPlan() {
     document.getElementById('config-summary-achievable-qps').textContent = config.use_achievable_qps ? 'Enabled' : 'Disabled';
     document.getElementById('config-summary-pvc').textContent = config.existing_pvc_name || 'Not set';
     document.getElementById('config-summary-namespace').textContent = config.namespace || 'Not set';
+    const atEl2 = document.getElementById('config-summary-autotune');
+    if (atEl2) {
+        atEl2.textContent = config.advanced_vllm_custom_enabled ? 'Enabled' : 'Disabled';
+        atEl2.style.color = config.advanced_vllm_custom_enabled ? '#065f46' : '#991b1b';
+    }
     const tdEl2 = document.getElementById('config-summary-tp-depth');
     if (tdEl2) {
         const labels = {1: '1 (Fast)', 2: '2 (Default)', 3: '3 (Deep)', 4: '4 (Full)'};
