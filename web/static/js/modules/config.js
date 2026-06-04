@@ -697,21 +697,14 @@ function restoreConfigSummary() {
             : 'Disabled';
     }
     const atEl = document.getElementById('config-summary-autotune');
-    if (atEl) {
-        atEl.textContent = config.advanced_vllm_custom_enabled ? 'Enabled' : 'Upstream Default';
-        atEl.style.color = config.advanced_vllm_custom_enabled ? '#065f46' : '#64748b';
-    }
+    if (atEl) atEl.textContent = config.advanced_vllm_custom_enabled ? 'Enabled' : 'Upstream Default';
     const eppEl = document.getElementById('config-summary-epp');
     if (eppEl) {
         const presetNames = { balanced: 'Balanced (3:2:2)', cache_optimized: 'Cache Optimized (5:1:2)', queue_balanced: 'Queue Balanced (2:2:3)', custom: 'Custom' };
         eppEl.textContent = config.epp_custom_enabled ? (presetNames[config.epp_preset] || config.epp_preset) : 'Upstream Default';
-        eppEl.style.color = config.epp_custom_enabled ? '#065f46' : '#64748b';
     }
     const eppSmartEl = document.getElementById('config-summary-epp-smart');
-    if (eppSmartEl) {
-        eppSmartEl.textContent = config.epp_benchmark ? 'Enabled' : 'Upstream Default';
-        eppSmartEl.style.color = config.epp_benchmark ? '#065f46' : '#64748b';
-    }
+    if (eppSmartEl) eppSmartEl.textContent = config.epp_benchmark ? 'Enabled' : 'Upstream Default';
     const tdEl = document.getElementById('config-summary-tp-depth');
     if (tdEl) {
         const labels = {1: '1 (Fast)', 2: '2 (Default)', 3: '3 (Deep)', 4: '4 (Full)'};

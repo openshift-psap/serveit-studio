@@ -99,21 +99,14 @@ function generateTestPlan() {
     document.getElementById('config-summary-pvc').textContent = config.existing_pvc_name || 'Not set';
     document.getElementById('config-summary-namespace').textContent = config.namespace || 'Not set';
     const atEl2 = document.getElementById('config-summary-autotune');
-    if (atEl2) {
-        atEl2.textContent = config.advanced_vllm_custom_enabled ? 'Enabled' : 'Upstream Default';
-        atEl2.style.color = config.advanced_vllm_custom_enabled ? '#065f46' : '#64748b';
-    }
+    if (atEl2) atEl2.textContent = config.advanced_vllm_custom_enabled ? 'Enabled' : 'Upstream Default';
     const eppEl2 = document.getElementById('config-summary-epp');
     if (eppEl2) {
         const presetNames = { balanced: 'Balanced (3:2:2)', cache_optimized: 'Cache Optimized (5:1:2)', queue_balanced: 'Queue Balanced (2:2:3)', custom: 'Custom' };
         eppEl2.textContent = config.epp_custom_enabled ? (presetNames[config.epp_preset] || config.epp_preset) : 'Upstream Default';
-        eppEl2.style.color = config.epp_custom_enabled ? '#065f46' : '#64748b';
     }
     const eppSmartEl2 = document.getElementById('config-summary-epp-smart');
-    if (eppSmartEl2) {
-        eppSmartEl2.textContent = config.epp_benchmark ? 'Enabled' : 'Upstream Default';
-        eppSmartEl2.style.color = config.epp_benchmark ? '#065f46' : '#64748b';
-    }
+    if (eppSmartEl2) eppSmartEl2.textContent = config.epp_benchmark ? 'Enabled' : 'Upstream Default';
     const tdEl2 = document.getElementById('config-summary-tp-depth');
     if (tdEl2) {
         const labels = {1: '1 (Fast)', 2: '2 (Default)', 3: '3 (Deep)', 4: '4 (Full)'};
