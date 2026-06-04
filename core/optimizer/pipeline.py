@@ -1216,10 +1216,14 @@ class RecipeOptimizer(
         """
         if self.cluster_resources:
             tp_options = self.cluster_resources.get_tp_options()
+            seq_len = self.config.isl + self.config.osl if hasattr(self.config, 'isl') else 0
             min_tp = self.cluster_resources.estimate_model_gpu_requirement(
                 model_size_gb=self._estimate_model_size_gb(),
                 dtype=self._model_dtype,
-                is_moe=self._is_moe
+                is_moe=self._is_moe,
+                model_config=self._model_config,
+                seq_len=seq_len,
+                min_concurrency=4
             )
             tp_options = [tp for tp in tp_options if tp >= min_tp]
         else:

@@ -101,28 +101,55 @@ class ClusterResources:
         return options
 
     def estimate_model_gpu_requirement(self, model_size_gb: float, dtype: str = 'fp16',
-                                        is_moe: bool = False) -> int:
+                                        is_moe: bool = False,
+                                        model_config: dict = None,
+                                        seq_len: int = 0,
+                                        min_concurrency: int = 4) -> int:
         """
-        Estimate minimum number of GPUs needed to load a model.
+        Estimate minimum number of GPUs needed to load a model AND serve
+        a workload with reasonable concurrency.
+
+        Accounts for:
+        - Model weights
+        - Framework/CUDA overhead (5% of VRAM)
+        - KV cache for min_concurrency users at seq_len tokens each
 
         Args:
-            model_size_gb: Model size in GB (total weight size)
-            dtype: Data type (fp16, fp8, int8, int4)
-            is_moe: If True, use lower overhead (MoE activations are sparse)
+            model_size_gb: Model weight size in GB
+            dtype: Weight data type (fp16, fp8)
+            is_moe: MoE model flag (unused, kept for API compat)
+            model_config: Model config dict from HuggingFace (for KV cache sizing)
+            seq_len: Total sequence length per user (ISL + OSL)
+            min_concurrency: Minimum concurrent users to support (default 4)
 
         Returns:
             Minimum number of GPUs required (power of 2)
         """
-        # vLLM manages KV cache via gpu_memory_utilization — it's not overhead.
-        # We only need weights to fit plus CUDA/framework overhead (~5% of VRAM).
-        overhead_pct = 0.05
-        overhead_gb = gpu_memory_gb * overhead_pct
-        required_memory_gb = model_size_gb + overhead_gb
-
         gpu_memory_gb = self.gpu_memory_per_gpu_mb / 1024
+
+        # Framework/CUDA overhead: ~5% of VRAM
+        overhead_gb = gpu_memory_gb * 0.05
+
+        # KV cache requirement from model architecture and workload
+        kv_cache_gb = 0
+        if model_config and seq_len > 0 and min_concurrency > 0:
+            layers = model_config.get('num_hidden_layers', 0)
+            kv_heads = model_config.get('num_key_value_heads')
+            if kv_heads is None:
+                kv_heads = model_config.get('num_attention_heads', 0)
+            hidden_size = model_config.get('hidden_size', 0)
+            num_attention_heads = model_config.get('num_attention_heads', 1)
+            head_dim = model_config.get('head_dim', hidden_size // num_attention_heads if num_attention_heads else 128)
+
+            # 2 tensors (K + V) × layers × kv_heads × head_dim × dtype_bytes per token
+            kv_dtype_bytes = 1 if dtype == 'fp8' else 2
+            bytes_per_token = 2 * layers * kv_heads * head_dim * kv_dtype_bytes
+            total_tokens = seq_len * min_concurrency
+            kv_cache_gb = (bytes_per_token * total_tokens) / (1024 ** 3)
+
+        required_memory_gb = model_size_gb + overhead_gb + kv_cache_gb
         min_gpus = int(required_memory_gb / gpu_memory_gb) + 1
 
-        # TP must be power of 2
         tp = next_power_of_2(min_gpus)
 
         return min(tp, self.max_gpus_per_node)
