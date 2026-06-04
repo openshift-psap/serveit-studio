@@ -348,7 +348,7 @@ def main():
             r = kubectl_run(cmd, ['get', 'pod', '-n', args.namespace,
                                   '-o', 'jsonpath={range .items[*]}{.metadata.name}{"\\n"}{end}'])
             all_pods = [p for p in r.stdout.strip().split('\n')
-                        if p.startswith('serveit-') and p]
+                        if (p.startswith('serveit-') or p.startswith('inftune-')) and p]
             if not all_pods:
                 print("❌ No ServeIt Studio pods found.", file=sys.stderr)
                 sys.exit(1)
@@ -365,7 +365,7 @@ def main():
         pod = r.stdout.strip()
         if not pod:
             r = kubectl_run(cmd, ['get', 'pod', '-n', args.namespace,
-                                  '-l', 'app in (serveit-optimizer,serveit-launcher)',
+                                  '-l', 'app in (serveit-optimizer,serveit-launcher,inftune-optimizer,inftune-launcher)',
                                   '-o', 'jsonpath={.items[0].metadata.name}'])
             pod = r.stdout.strip()
         if not pod:
