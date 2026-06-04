@@ -1593,7 +1593,7 @@ function renderCharts(data, runId) {
     const pdResults = data.all_results.filter(r => r.architecture === 'PD');
     if (pdResults.length) {
         const sorted = [...pdResults].sort((a, b) => a.prefill_pods - b.prefill_pods);
-        const labels = sorted.map(r => `${r.prefill_pods}P : ${r.decode_pods}D`);
+        const labels = sorted.map(r => `${r.prefill_pods}P : ${r.decode_pods}D<br>TP${r.prefill_tp} : TP${r.decode_tp}`);
         const aggBase = rec ? rec.aggregated_baseline : null;
 
         const ttftPercentiles = [
