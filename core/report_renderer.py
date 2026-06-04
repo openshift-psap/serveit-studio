@@ -262,14 +262,16 @@ class ReportRenderer:
             html_parts.append('''
     <h2>All Successful Configurations</h2>
     <table>
-        <tr><th>Configuration</th><th>TTFT P90 (ms)</th><th>ITL P90 (ms)</th><th>Throughput P90 (req/s)</th><th>GPUs</th><th>GPU Util (%)</th><th>KV Cache (%)</th><th>Efficiency</th><th>Architecture</th></tr>
+        <tr><th>Configuration</th><th>TTFT P90 (ms)</th><th>ITL P90 (ms)</th><th>ITL P95 (ms)</th><th>ITL P99 (ms)</th><th>Throughput P90 (req/s)</th><th>GPUs</th><th>GPU Util (%)</th><th>KV Cache (%)</th><th>Efficiency</th><th>Architecture</th></tr>
 ''')
             for result in sorted(successful, key=lambda r: r.ttft_p90):
                 eff = result.throughput_p90 / result.total_gpus
-                itl_str = f"{result.itl_p90:.2f}" if result.itl_p90 else "N/A"
+                itl90 = f"{result.itl_p90:.2f}" if result.itl_p90 else "N/A"
+                itl95 = f"{result.itl_p95:.2f}" if result.itl_p95 else "N/A"
+                itl99 = f"{result.itl_p99:.2f}" if result.itl_p99 else "N/A"
                 gpu_str = f"{result.gpu_utilization:.1f}" if result.gpu_utilization else "N/A"
                 kv_str = f"{result.kv_cache_usage:.4f}" if result.kv_cache_usage else "N/A"
-                html_parts.append(f'''        <tr><td><code>{result.config_name}</code></td><td>{result.ttft_p90:.2f}</td><td>{itl_str}</td><td>{result.throughput_p90:.2f}</td><td>{result.total_gpus}</td><td>{gpu_str}</td><td>{kv_str}</td><td>{eff:.3f}</td><td>{result.architecture.upper()}</td></tr>
+                html_parts.append(f'''        <tr><td><code>{result.config_name}</code></td><td>{result.ttft_p90:.2f}</td><td>{itl90}</td><td>{itl95}</td><td>{itl99}</td><td>{result.throughput_p90:.2f}</td><td>{result.total_gpus}</td><td>{gpu_str}</td><td>{kv_str}</td><td>{eff:.3f}</td><td>{result.architecture.upper()}</td></tr>
 ''')
             html_parts.append('    </table>')
 
@@ -398,16 +400,20 @@ class ReportRenderer:
         successful = [r for r in results if r.is_successful]
         if successful:
             lines.append("## Detailed Results\n")
-            lines.append("| Configuration | TTFT P90 (ms) | ITL P90 (ms) | Throughput P90 (req/s) | GPUs | GPU Util (%) | KV Cache (%) | TP | Architecture |")
-            lines.append("|---------------|---------------|--------------|------------------------|------|--------------|--------------|----|--------------|")
+            lines.append("| Configuration | TTFT P90 (ms) | ITL P90 (ms) | ITL P95 (ms) | ITL P99 (ms) | Throughput P90 (req/s) | GPUs | GPU Util (%) | KV Cache (%) | TP | Architecture |")
+            lines.append("|---------------|---------------|--------------|--------------|--------------|------------------------|------|--------------|--------------|----|--------------|")
 
             for result in sorted(successful, key=lambda r: r.ttft_p90):
-                itl_str = f"{result.itl_p90:.2f}" if result.itl_p90 else "N/A"
+                itl90 = f"{result.itl_p90:.2f}" if result.itl_p90 else "N/A"
+                itl95 = f"{result.itl_p95:.2f}" if result.itl_p95 else "N/A"
+                itl99 = f"{result.itl_p99:.2f}" if result.itl_p99 else "N/A"
                 gpu_str = f"{result.gpu_utilization:.1f}" if result.gpu_utilization else "N/A"
                 kv_str = f"{result.kv_cache_usage:.4f}" if result.kv_cache_usage else "N/A"
                 lines.append(f"| `{result.config_name}` | "
                            f"{result.ttft_p90:.2f} | "
-                           f"{itl_str} | "
+                           f"{itl90} | "
+                           f"{itl95} | "
+                           f"{itl99} | "
                            f"{result.throughput_p90:.2f} | "
                            f"{result.total_gpus} | "
                            f"{gpu_str} | "
