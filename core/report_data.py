@@ -55,6 +55,19 @@ class TestResult:
 
     @property
     def throughput_mean(self) -> Optional[float]:
+        """Actual requests per second (request_successful / test_duration)."""
+        if self.metrics_json and self.test_config_json:
+            try:
+                import json
+                m = json.loads(self.metrics_json)
+                tc = json.loads(self.test_config_json)
+                req_ok = m.get('request_successful', 0)
+                duration = tc.get('test_duration', 0)
+                if req_ok > 0 and duration > 0:
+                    return round(req_ok / duration, 2)
+            except Exception:
+                pass
+        # Fallback to guidellm metric if no request count available
         if self.metrics_json:
             try:
                 import json
