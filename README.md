@@ -45,6 +45,18 @@ Review your full configuration summary — deployment, workload, and tuning sett
 
 ![Review and Run](docs/screenshots/review-and-run.png)
 
+### Optimization Report — Throughput vs Latency
+
+Interactive scatter plot showing every tested configuration. Bubble size represents GPU count. The ideal configuration is in the top-left corner (low latency + high throughput). Hover over any bubble to see the exact configuration details.
+
+![Throughput vs Latency](docs/screenshots/report-throughput-latency.png)
+
+### PD Configuration Sweep
+
+TTFT, throughput, and inter-token latency (ITL) across all tested prefill/decode splits. The green dot marks the best TTFT, the pink diamond marks the best throughput. Aggregated baseline shown as dashed reference lines.
+
+![PD Configurations](docs/screenshots/report-pd-configurations.png)
+
 ## How It Works
 
 ServeIt Studio supports three inference architectures:
