@@ -138,6 +138,7 @@ Steps 2-3 and 6-11 deploy real workloads. Steps 4-5 are pure math.
 
 - Kubernetes or OpenShift cluster with NVIDIA GPUs
 - [LeaderWorkerSet](https://github.com/kubernetes-sigs/lws) CRD installed
+- [Istio](https://istio.io/) or equivalent gateway provider (for EPP routing)
 - `kubectl` (or `oc`) CLI configured
 - A HuggingFace token stored as Secret `llm-d-hf-token` in the target namespace
 
