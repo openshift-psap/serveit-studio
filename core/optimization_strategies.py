@@ -245,7 +245,8 @@ class ThroughputStrategy(OptimizationStrategy):
                 if decode_pods < 1:
                     continue
                 decode_gpus = decode_pods * decode_tp
-                # EPLB requires experts evenly divisible across EP ranks
+                # EPLB requires (num_experts + num_redundant) % ep_ranks == 0.
+                # num_redundant = ep_ranks, so this simplifies to num_experts % ep_ranks == 0.
                 num_experts = self.opt._num_experts or 0
                 ep_ranks = decode_tp * decode_pods
                 if num_experts > 0 and num_experts % ep_ranks != 0:

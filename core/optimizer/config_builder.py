@@ -660,7 +660,10 @@ class ConfigBuilderMixin:
             dtype_bytes = 1 if getattr(self, '_model_dtype', 'fp16') == 'fp8' else 2
             bytes_per_expert = 3 * hidden * intermediate * dtype_bytes
             ep_ranks = split.decode_tp * split.decode_pods
-            num_redundant = max(1, ep_ranks // self._num_experts) if self._num_experts else 1
+            # vLLM computes global_num_experts = num_experts + num_redundant_experts
+            # and asserts global_num_experts % ep_size == 0.
+            # So num_redundant must be a multiple of ep_ranks (or 0).
+            num_redundant = ep_ranks
             eplb_gb = max(num_layers * bytes_per_expert * num_redundant / max(ep_ranks, 1) / (1024**3), 0.5)
             self.log(f"   EPLB: {num_redundant} redundant experts/rank "
                      f"(expert={bytes_per_expert / 1024**2:.0f}MB, ep_ranks={ep_ranks})")
