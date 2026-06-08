@@ -592,15 +592,21 @@ class ConfigBuilderMixin:
         """
         concurrency = self.effective_concurrency
 
-        prefill_gmu = self._compute_gpu_mem_util(split.prefill_tp)
+        # EP needs extra memory for NVSHMEM symmetric heap (~16GB),
+        # DeepEP all2all buffers, and EPLB expert replication.
+        # Reserve 15% for EP overhead on top of the NIXL reserve.
+        prefill_gmu_raw = self._compute_gpu_mem_util(split.prefill_tp)
         decode_gmu_raw = self._compute_gpu_mem_util(split.decode_tp, log=False)
+        ep_reserve = 0.15  # 15% for NVSHMEM + DeepEP + EPLB
         nixl_reserve = 0.05
-        decode_gmu = round(min(decode_gmu_raw, decode_gmu_raw - nixl_reserve), 2)
-        decode_gmu = max(decode_gmu, 0.80)
 
-        self.log(f"   Prefill gpu_memory_utilization={prefill_gmu:.2f}")
+        prefill_gmu = round(max(prefill_gmu_raw - ep_reserve, 0.70), 2)
+        decode_gmu = round(max(decode_gmu_raw - ep_reserve - nixl_reserve, 0.70), 2)
+
+        self.log(f"   Prefill gpu_memory_utilization={prefill_gmu:.2f} "
+                 f"(base={prefill_gmu_raw:.2f} - {ep_reserve:.0%} EP reserve)")
         self.log(f"   Decode  gpu_memory_utilization={decode_gmu:.2f} "
-                 f"(base={decode_gmu_raw:.2f} - {nixl_reserve:.0%} NIXL reserve)")
+                 f"(base={decode_gmu_raw:.2f} - {ep_reserve:.0%} EP - {nixl_reserve:.0%} NIXL)")
 
         prefill_max_num_seqs = self._compute_max_num_seqs(
             split.prefill_tp, role='prefill',
