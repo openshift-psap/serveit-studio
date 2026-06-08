@@ -655,7 +655,11 @@ class ConfigBuilderMixin:
             ep_ranks = split.decode_tp * split.decode_pods
             eplb_gb = max(num_layers * bytes_per_expert * 1 / max(ep_ranks, 1) / (1024**3), 0.5)
 
-        ep_overhead_gb = nvshmem_gb + eplb_gb
+        # DeepEP NVLink buffers (high-throughput mode) + NVSHMEM internal
+        # overhead + DeepEP working memory are not covered by the symmetric
+        # heap formula.  Add a fixed 4 GB to cover these.
+        ep_misc_gb = 4.0
+        ep_overhead_gb = nvshmem_gb + eplb_gb + ep_misc_gb
         ep_reserve = round(ep_overhead_gb / self._gpu_vram_gb, 2)
         nixl_reserve = 0.05
 
@@ -665,7 +669,7 @@ class ConfigBuilderMixin:
         prefill_gmu = round(max(prefill_gmu_raw - ep_reserve, 0.70), 2)
         decode_gmu = round(max(decode_gmu_raw - ep_reserve - nixl_reserve, 0.70), 2)
 
-        self.log(f"   EP overhead: NVSHMEM={nvshmem_gb:.0f}GB + EPLB={eplb_gb:.1f}GB = {ep_overhead_gb:.1f}GB")
+        self.log(f"   EP overhead: NVSHMEM={nvshmem_gb:.0f}GB + EPLB={eplb_gb:.1f}GB + misc={ep_misc_gb:.0f}GB = {ep_overhead_gb:.1f}GB")
         self.log(f"   Prefill gpu_memory_utilization={prefill_gmu:.2f} "
                  f"(base={prefill_gmu_raw:.2f} - {ep_reserve:.0%} EP reserve)")
         self.log(f"   Decode  gpu_memory_utilization={decode_gmu:.2f} "
