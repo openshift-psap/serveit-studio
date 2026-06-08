@@ -422,11 +422,11 @@ function renderEstimatorResults(results, eppResults, suffix, testedISL, testedOS
             type: 'bar',
             name: 'Estimated GPUs',
             y: labels,
-            x: allForChart.map(r => r.estimated_gpus),
-            text: allForChart.map(r => r.estimated_gpus + ' GPUs'),
+            x: allForChart.map(r => r.sla_gpus_needed || r.estimated_gpus),
+            text: allForChart.map(r => (r.sla_gpus_needed || r.estimated_gpus) + ' GPUs'),
             textposition: 'outside',
             orientation: 'h',
-            marker: { color: '#d97706' },
+            marker: { color: allForChart.map(r => r.sla_gpus_needed ? '#ef4444' : '#d97706') },
             hovertemplate: '%{y}<br>Estimated: %{x} GPUs<extra></extra>',
         }
     ], {
