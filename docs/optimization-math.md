@@ -834,9 +834,7 @@ Same rationale as max_num_seqs: per-chunk activation memory allocation and dispa
 
 ### NVSHMEM_SYMMETRIC_SIZE (EP only)
 
-The NVSHMEM symmetric heap is pre-allocated on each GPU for DeepEP's RDMA-based all-to-all communication buffers. Upstream hardcodes this to 16G (sized for DeepSeek-R1 with 256 experts on 32 GPUs at large batch sizes), which wastes 10-14 GB per GPU on smaller models.
-
-ServeIt Studio computes the exact size from the DeepEP V1 `LowLatencyLayout` formula:
+The NVSHMEM symmetric heap is pre-allocated on each GPU for DeepEP's RDMA-based all-to-all communication buffers. Upstream hardcodes this to 16G. ServeIt Studio computes the size from the DeepEP V1 `LowLatencyLayout` formula using `max_num_batched_tokens` (the actual buffer token count vLLM passes to `get_low_latency_rdma_size_hint`):
 
 ```
 num_scales = hidden_size / 128
@@ -844,49 +842,53 @@ num_scales = hidden_size / 128
 dispatch_msg_bytes = 16 + max(hidden × 2, hidden + num_scales × 4)
 combine_msg_bytes  = num_scales × 4 + hidden × 2
 
-send_buf = max(chunk_size × dispatch_msg, num_experts × chunk_size × combine_msg)
-recv_buf = max(num_experts × chunk_size × dispatch_msg, num_experts × chunk_size × combine_msg)
+send_buf = max(batch × dispatch_msg, num_experts × batch × combine_msg)
+recv_buf = max(num_experts × batch × dispatch_msg, num_experts × batch × combine_msg)
 signal_buf = align_up(num_experts × 4, 128)
 
-raw_total = (send_buf + recv_buf + signal_buf) × 2        # double-buffered
+rdma_total = (send_buf + recv_buf + signal_buf) × 2        # double-buffered
 
-NVSHMEM_SYMMETRIC_SIZE = ceil((raw_total × 1.5 + 512 MB) / 1 GB)
+NVSHMEM_SYMMETRIC_SIZE = min(ceil(rdma_total × 1.25 + 0.5 GB), 16G)
                           floor = 2 GB
 ```
 
-Where `chunk_size` = `moe_dp_chunk_size` (the already-computed dispatch chunk), `hidden` and `num_experts` come from the model's config.json.
+Where `batch` = `max_num_batched_tokens`, `hidden` and `num_experts` come from config.json. Capped at 16G because `NVSHMEM_DISABLE_CUDA_VMM=0` enables CUDA VMM to grow the heap dynamically beyond the initial allocation.
 
-| Model | Experts | Hidden | Chunk | Raw | Result | Upstream |
-|-------|---------|--------|-------|-----|--------|----------|
-| DeepSeek-R1 | 256 | 7168 | 384 | 5.3 GB | **9G** | 16G |
-| Qwen3-Next-80B | 64 | 5120 | 256 | 0.9 GB | **2G** | 16G |
-| Llama-4-Maverick | 128 | 5120 | 384 | 1.9 GB | **4G** | 16G |
-
-**Why 1.5× safety margin + 512 MB?** The 1.5× accounts for NVSHMEM internal metadata (team structures, barrier buffers, collective temporaries). The 512 MB covers NVSHMEM initialization overhead — it requires at least 256 MiB for bootstrapping (env `NVSHMEM_CUMEM_GRANULARITY=512M` is set).
-
-**Why not use dynamic VMM?** `NVSHMEM_DISABLE_CUDA_VMM=0` (VMM enabled) allows the heap to grow dynamically. However, pre-allocating the right size avoids growth overhead during model loading. If undersized, NVSHMEM would grow in 512 MB increments, causing latency spikes. If oversized (the upstream 16G default), that VRAM is wasted — it cannot be used for KV cache or model weights.
+**Why `max_num_batched_tokens`, not `moe_dp_chunk_size`?** vLLM passes `scheduler_config.max_num_batched_tokens` to DeepEP as `num_max_dispatch_tokens_per_rank`. The RDMA buffer must handle the full batch, not individual dispatch chunks. Using `moe_dp_chunk_size` (typically 128-384) undersizes the buffer by 5-17×.
 
 ### EP Memory Reserve
 
-EP deployments reserve GPU memory for three components: NVSHMEM heap, and EPLB expert replication.
+EP deployments reserve GPU memory for DeepEP communication buffers (RDMA + NVLink) and EPLB expert replication:
 
 ```
+ep_mem_gb = rdma_total_gb + 1 GB (NVL buffer) + 2 GB (overhead)
+
+num_redundant_experts = max(1, ep_ranks / num_experts)
 EPLB_gb = max(
-    num_moe_layers × (3 × hidden × intermediate × dtype_bytes) × 1 / ep_ranks / 1 GB,
+    num_moe_layers × bytes_per_expert × num_redundant / ep_ranks / 1 GB,
     0.5
 )
-ep_reserve = (NVSHMEM_size_gb + EPLB_gb) / GPU_VRAM_gb
+
+ep_reserve = (ep_mem_gb + EPLB_gb) / GPU_VRAM_gb
 ```
 
-EPLB reserves space for 1 redundant expert per EP rank. Each expert has 3 weight matrices (gate, up, down projections): `hidden × intermediate × dtype_bytes` each. With many EP ranks, the per-rank overhead is small.
+**Why compute `num_redundant_experts`?** EPLB's `all_gather` during rebalancing needs scratch space proportional to all experts per layer. With the upstream hardcoded value of 32, Llama-4-Maverick OOMs — the all_gather tries to allocate 12.5 GB with only 4.5 GB free. Setting it to `max(1, ep_ranks / num_experts)` matches upstream llm-d defaults (~1 per rank).
 
-| Model | NVSHMEM | EPLB | Total | Reserve (H200) | Old Reserve |
-|-------|---------|------|-------|----------------|-------------|
-| DeepSeek-R1 FP8 | 9 GB | 0.5 GB | 9.5 GB | **6.8%** | 14.3% |
-| Qwen3-Next-80B | 2 GB | 0.5 GB | 2.5 GB | **1.8%** | 14.3% |
-| Llama-4-Maverick | 4 GB | 0.5 GB | 4.5 GB | **3.2%** | 14.3% |
+### num_redundant_experts (EP only)
 
-The savings (7.5-12.5% more VRAM available) directly increase KV cache capacity, allowing more concurrent sequences.
+Controls how many extra expert copies EPLB maintains per EP rank for load balancing:
+
+```
+num_redundant_experts = max(1, ep_ranks / num_experts)
+```
+
+| Model | Experts | EP Ranks | Result |
+|-------|---------|----------|--------|
+| DeepSeek-R1 (256 experts, 32 GPUs) | 256 | 32 | 1 |
+| Llama-4-Maverick (128 experts, 12 GPUs) | 128 | 12 | 1 |
+| Qwen3-Next-80B (64 experts, 8 GPUs) | 64 | 8 | 1 |
+
+**Why not more?** Each redundant expert per rank adds `bytes_per_expert` of GPU memory permanently, and EPLB's periodic rebalancing all_gather needs scratch space for the full expert weight tensor. More redundant experts = better load balancing but higher memory pressure and larger OOM risk during profiling.
 
 ### Pod Resources (memory + CPU)
 ```
