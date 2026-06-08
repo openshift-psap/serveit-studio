@@ -245,6 +245,11 @@ class ThroughputStrategy(OptimizationStrategy):
                 if decode_pods < 1:
                     continue
                 decode_gpus = decode_pods * decode_tp
+                # EPLB requires experts evenly divisible across EP ranks
+                num_experts = self.opt._num_experts or 0
+                ep_ranks = decode_tp * decode_pods
+                if num_experts > 0 and num_experts % ep_ranks != 0:
+                    continue
                 total_used = prefill_gpus + decode_gpus
                 key = (prefill_tp, decode_tp, 1, decode_pods)
                 if key in seen:
@@ -262,7 +267,8 @@ class ThroughputStrategy(OptimizationStrategy):
                 )
                 ep_configs.append(split)
                 self.opt.log(f"  ✓ PTP={prefill_tp} DTP={decode_tp}: "
-                             f"1P+{decode_pods}D = {total_used} GPUs", 'info')
+                             f"1P+{decode_pods}D = {total_used} GPUs "
+                             f"(EP={ep_ranks})", 'info')
 
         self.opt.ep_configs = ep_configs
         self.opt.log(f"\n  EP configs to test: {len(ep_configs)}", 'success')
