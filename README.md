@@ -144,30 +144,64 @@ Steps 2-3 and 6-11 deploy real workloads. Steps 4-5 are pure math.
 
 ## Deployment
 
+### Quick Start
+
 ```bash
-# Deploy launcher (multi-user, multi-cluster)
-python3 deployment/deploy.py --mode launcher --storage-class <your-class>
+# 1. Create the namespace
+kubectl create namespace serveit
 
-# Deploy with an existing PVC
-python3 deployment/deploy.py --pvc-name my-existing-pvc
+# 2. Create HuggingFace token secret
+kubectl create secret generic llm-d-hf-token \
+  --from-literal=HF_TOKEN=<your-token> \
+  -n serveit
 
-# Sync code to all running pods
-python3 deployment/deploy.py --sync-all
+# 3. Deploy ServeIt Studio (launcher mode)
+python3 deployment/deploy.py --mode launcher --storage-class <your-class> -n serveit
 
-# Port-forward the UI to localhost:8080
-python3 deployment/deploy.py --port-forward
+# 4. Access the UI
+python3 deployment/deploy.py --port-forward -n serveit
+# Opens http://localhost:8080
 ```
 
-### Access the UI
+On OpenShift, a Route is created automatically:
 
 ```bash
-# Kubernetes
-python3 deployment/deploy.py --port-forward
-# Opens http://localhost:8080
-
-# OpenShift (auto-creates Route)
 oc get route -n serveit
 ```
+
+### Deployment Modes
+
+| Mode | Command | Description |
+|---|---|---|
+| **Launcher** (default) | `--mode launcher` | Multi-user dashboard. Create instances per cluster, each with its own optimization environment |
+| **Standalone** | `--mode local` | Single-instance deployment. Direct access to the optimization wizard |
+
+### Common Commands
+
+```bash
+# Deploy with an existing PVC (skip PVC creation)
+python3 deployment/deploy.py --pvc-name my-existing-pvc -n serveit
+
+# Sync code to all running pods (after git pull)
+python3 deployment/deploy.py --sync-all -n serveit
+
+# Restart the server process
+python3 deployment/deploy.py --restart-server -n serveit
+
+# Generate YAML without deploying (for review or GitOps)
+python3 deployment/deploy.py --just-yaml --storage-class <your-class> -n serveit
+```
+
+### Remote Clusters
+
+The launcher supports optimizing models on remote clusters. When creating a new instance, upload a kubeconfig for the target cluster. ServeIt Studio will:
+
+1. Validate connectivity to the remote cluster
+2. Store the kubeconfig as a Kubernetes Secret
+3. Deploy workload pods (vLLM, guidellm, EPP) on the remote cluster
+4. Collect results back to the launcher's database
+
+The wizard pod runs on the launcher cluster; only the inference workload runs remotely.
 
 ## Multi-Cloud Support
 
