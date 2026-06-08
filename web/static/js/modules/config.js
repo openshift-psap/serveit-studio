@@ -243,10 +243,18 @@ function updateUIFromConfig() {
         document.getElementById('scheduler-image-input').value = config.scheduler_image;
     }
 
-    // Restore RHAIIS version dropdown
+    // Restore RHAIIS version dropdown and sync images
     if (document.getElementById('rhaiis-version-select')) {
         if (config.rhaiis_version) {
             document.getElementById('rhaiis-version-select').value = config.rhaiis_version;
+            // If the saved image doesn't match the preset, apply the preset
+            var preset = (typeof RHAIIS_VERSIONS !== 'undefined') ? RHAIIS_VERSIONS[config.rhaiis_version] : null;
+            if (preset) {
+                var currentTag = (config.image || '').split(':').pop();
+                if (currentTag !== preset.cuda) {
+                    applyRhaiisVersion(config.rhaiis_version);
+                }
+            }
         } else if (typeof markImagesCustom === 'function') {
             markImagesCustom();
         }
