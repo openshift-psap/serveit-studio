@@ -57,6 +57,12 @@ TTFT, throughput, and inter-token latency (ITL) across all tested prefill/decode
 
 ![PD Configurations](docs/screenshots/report-pd-configurations.png)
 
+### GPU Estimator
+
+Estimate how many GPUs you need for a different workload without re-running tests. Adjust concurrency, ISL/OSL, and set a latency SLA — the estimator scales your tested results and shows which configurations meet the target and how many GPUs each would need.
+
+![GPU Estimator](docs/screenshots/report-gpu-estimator.png)
+
 ## How It Works
 
 ServeIt Studio supports three inference architectures:
