@@ -479,14 +479,19 @@ class ConfigBuilderMixin:
         """Create PD architecture test config."""
         concurrency = self.effective_concurrency
 
-        # gpu_memory_utilization: same for prefill and decode — give vLLM max safe allocation.
-        # vLLM handles internal breakdown (model + CUDA graphs + KV cache).
-        # If Steps 2-3 measured the actual overhead, log it for visibility.
-        gpu_mem_util = self._compute_gpu_mem_util(split.prefill_tp)
-        alloc = self._gpu_vram_gb * gpu_mem_util
-        reserve = self._gpu_vram_gb - alloc
-        self.log(f"   Memory: gpu_memory_utilization={gpu_mem_util:.4f} "
-                 f"→ {alloc:.0f}GB allocated, {reserve:.0f}GB reserved for overhead (per GPU)")
+        # Compute gpu_memory_utilization separately for prefill and decode.
+        # Prefill pods: maximize compute — use full profiled allocation.
+        # Decode pods: need headroom for NIXL KV transfer receive buffers
+        # (~5% extra reserve on top of normal overhead).
+        prefill_gmu = self._compute_gpu_mem_util(split.prefill_tp)
+        decode_gmu_raw = self._compute_gpu_mem_util(split.decode_tp)
+        nixl_reserve = 0.05  # 5% extra for KV transfer buffers
+        decode_gmu = round(min(decode_gmu_raw, decode_gmu_raw - nixl_reserve), 2)
+        decode_gmu = max(decode_gmu, 0.80)  # floor at 0.80
+
+        self.log(f"   Prefill gpu_memory_utilization={prefill_gmu:.2f}")
+        self.log(f"   Decode  gpu_memory_utilization={decode_gmu:.2f} "
+                 f"(base={decode_gmu_raw:.2f} - {nixl_reserve:.0%} NIXL reserve)")
 
         prefill_max_num_seqs = self._compute_max_num_seqs(split.prefill_tp)
         decode_max_num_seqs = self._compute_max_num_seqs(split.decode_tp)
@@ -524,9 +529,9 @@ class ConfigBuilderMixin:
 
             # Infrastructure
             max_model_len=self.config.max_model_len,
-            gpu_memory_utilization=gpu_mem_util,
-            prefill_gpu_memory_utilization=gpu_mem_util,
-            decode_gpu_memory_utilization=gpu_mem_util,
+            gpu_memory_utilization=prefill_gmu,
+            prefill_gpu_memory_utilization=prefill_gmu,
+            decode_gpu_memory_utilization=decode_gmu,
             gpu_vram_gb=self._gpu_vram_gb,
             prefill_max_num_seqs=prefill_max_num_seqs,
             decode_max_num_seqs=decode_max_num_seqs,
@@ -577,11 +582,15 @@ class ConfigBuilderMixin:
         """
         concurrency = self.effective_concurrency
 
-        gpu_mem_util = self._compute_gpu_mem_util(split.prefill_tp)
-        alloc = self._gpu_vram_gb * gpu_mem_util
-        reserve = self._gpu_vram_gb - alloc
-        self.log(f"   Memory: gpu_memory_utilization={gpu_mem_util:.4f} "
-                 f"→ {alloc:.0f}GB allocated, {reserve:.0f}GB reserved for overhead (per GPU)")
+        prefill_gmu = self._compute_gpu_mem_util(split.prefill_tp)
+        decode_gmu_raw = self._compute_gpu_mem_util(split.decode_tp)
+        nixl_reserve = 0.05
+        decode_gmu = round(min(decode_gmu_raw, decode_gmu_raw - nixl_reserve), 2)
+        decode_gmu = max(decode_gmu, 0.80)
+
+        self.log(f"   Prefill gpu_memory_utilization={prefill_gmu:.2f}")
+        self.log(f"   Decode  gpu_memory_utilization={decode_gmu:.2f} "
+                 f"(base={decode_gmu_raw:.2f} - {nixl_reserve:.0%} NIXL reserve)")
 
         prefill_max_num_seqs = self._compute_max_num_seqs(split.prefill_tp)
         decode_max_num_seqs = self._compute_max_num_seqs(split.decode_tp)
@@ -614,9 +623,9 @@ class ConfigBuilderMixin:
             decode_tp=split.decode_tp,
 
             max_model_len=self.config.max_model_len,
-            gpu_memory_utilization=gpu_mem_util,
-            prefill_gpu_memory_utilization=gpu_mem_util,
-            decode_gpu_memory_utilization=gpu_mem_util,
+            gpu_memory_utilization=prefill_gmu,
+            prefill_gpu_memory_utilization=prefill_gmu,
+            decode_gpu_memory_utilization=decode_gmu,
             gpu_vram_gb=self._gpu_vram_gb,
             prefill_max_num_seqs=prefill_max_num_seqs,
             decode_max_num_seqs=decode_max_num_seqs,
