@@ -436,17 +436,34 @@ After testing smart-derived weights, the system compares the result against the 
 This adds at most 1 extra test and only triggers when the formula produces suboptimal weights — a safety net against edge cases where the mathematical derivation doesn't match real routing behavior. The 5% threshold avoids false triggers from normal benchmark variance.
 
 ### EPP Scoring Formula
+
+Prefill and decode pods use separate scoring profiles because they have different routing priorities.
+
+#### Prefill Profile
 ```
 score = prefix_cache_weight × prefix_score
       + kv_cache_weight × kv_score
       + queue_weight × queue_score
 ```
 
-The EPP routes each incoming request to the vLLM server that will handle it fastest. Each server is scored by three factors:
+The prefill profile routes incoming requests to the pod that will produce the first token fastest:
 
-- **prefix_score**: How much of the request's prompt is already cached on this server. Higher = less prefill work needed.
-- **kv_score**: How much free KV cache memory this server has. Higher = can accept more concurrent requests.
-- **queue_score**: How many requests are already queued on this server. Lower queue = faster processing.
+- **prefix_score** (weight 3-5): How much of the request's prompt is already cached. Higher = less prefill computation needed. This is the dominant signal for prefix-heavy workloads.
+- **kv_score** (weight 1-2): Free KV cache memory. Ensures the pod can accept the sequence.
+- **queue_score** (weight 1-2): Current queue depth. Avoids overloaded pods.
+
+#### Decode Profile
+```
+score = decode_prefix_cache_weight × prefix_score
+      + active_request_weight × active_request_score
+```
+
+The decode profile routes sequences (after prefill completes) to the pod that will generate tokens fastest:
+
+- **active_request_score** (weight 3): How many sequences are actively decoding on this pod. Lower = less contention for decode bandwidth. This is the dominant signal because decode is memory-bandwidth-bound.
+- **prefix_score** (weight 1): Kept at low weight for KV cache locality hints, but not a primary routing signal since prefill is already complete.
+
+**Why different weights?** Prefix cache hits only matter during prefill — they skip redundant prompt processing. Once a request moves to decode, the prefix is already computed. Decode routing should prioritize finding the least-loaded pod (active_request_score) rather than cache affinity. Using the same high prefix_cache_weight for decode causes requests to cluster on pods with cached data even when those pods are overloaded with active sequences.
 
 ### Weight Selection Strategy
 
