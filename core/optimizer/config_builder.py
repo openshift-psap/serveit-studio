@@ -163,7 +163,7 @@ class ConfigBuilderMixin:
                 return result.vllm_fixed_overhead_gb
         return None
 
-    def _compute_gpu_mem_util(self, tp: int) -> float:
+    def _compute_gpu_mem_util(self, tp: int, log: bool = True) -> float:
         """Compute gpu_memory_utilization per TP.
 
         When profiled data from Steps 2-3 is available, uses measured overhead
@@ -173,17 +173,15 @@ class ConfigBuilderMixin:
         """
         measured = self._get_measured_overhead(tp)
         if measured is not None and measured > 0:
-            # Measured overhead includes model weights + CUDA graphs + workspace.
-            # Add a small buffer (2 GiB) for allocation fragmentation.
             safe_budget = self._gpu_vram_gb - measured - 2.0
             if safe_budget > 0:
                 u = round(safe_budget / self._gpu_vram_gb, 2)
                 u = min(u, 0.95)
-                self.log(f"   gpu_memory_utilization={u} (profiled: measured overhead={measured:.1f}GB, "
-                         f"usable={safe_budget:.0f}/{self._gpu_vram_gb:.0f}GB)")
+                if log:
+                    self.log(f"   gpu_memory_utilization={u} (profiled: measured overhead={measured:.1f}GB, "
+                             f"usable={safe_budget:.0f}/{self._gpu_vram_gb:.0f}GB)")
                 return u
 
-        # Fallback: scale reserve with pod density (lower TP = more pods/node)
         gpus_per_node = 8
         if self.cluster_resources:
             gpu_nodes = [n for n in self.cluster_resources.nodes if n.gpus > 0]
@@ -193,8 +191,9 @@ class ConfigBuilderMixin:
         reserve_pct = 0.05 + (pods_per_node - 1) * 0.008
         reserve_gb = max(self._gpu_vram_gb * reserve_pct, 5.0)
         u = round((self._gpu_vram_gb - reserve_gb) / self._gpu_vram_gb, 2)
-        self.log(f"   gpu_memory_utilization={u} (estimated: {pods_per_node} pods/node, "
-                 f"reserving {reserve_gb:.1f}GB for overhead)")
+        if log:
+            self.log(f"   gpu_memory_utilization={u} (estimated: {pods_per_node} pods/node, "
+                     f"reserving {reserve_gb:.1f}GB for overhead)")
         return u
 
     def _compute_max_num_seqs(self, tp: int) -> Optional[int]:
@@ -238,7 +237,7 @@ class ConfigBuilderMixin:
         s_activation = int((gpu_vram * (1024 ** 3) * arch_coeff) / effective_weight)
 
         # --- S_kv: KV cache capacity ---
-        gpu_mem_util = self._compute_gpu_mem_util(tp)
+        gpu_mem_util = self._compute_gpu_mem_util(tp, log=False)
         model_weight_gb = self._estimate_model_size_gb() / tp
         overhead_gb = 4.0
         available_kv_gb = max(0, gpu_vram * gpu_mem_util - model_weight_gb - overhead_gb)
@@ -484,7 +483,7 @@ class ConfigBuilderMixin:
         # Decode pods: need headroom for NIXL KV transfer receive buffers
         # (~5% extra reserve on top of normal overhead).
         prefill_gmu = self._compute_gpu_mem_util(split.prefill_tp)
-        decode_gmu_raw = self._compute_gpu_mem_util(split.decode_tp)
+        decode_gmu_raw = self._compute_gpu_mem_util(split.decode_tp, log=False)
         nixl_reserve = 0.05  # 5% extra for KV transfer buffers
         decode_gmu = round(min(decode_gmu_raw, decode_gmu_raw - nixl_reserve), 2)
         decode_gmu = max(decode_gmu, 0.80)  # floor at 0.80
@@ -583,7 +582,7 @@ class ConfigBuilderMixin:
         concurrency = self.effective_concurrency
 
         prefill_gmu = self._compute_gpu_mem_util(split.prefill_tp)
-        decode_gmu_raw = self._compute_gpu_mem_util(split.decode_tp)
+        decode_gmu_raw = self._compute_gpu_mem_util(split.decode_tp, log=False)
         nixl_reserve = 0.05
         decode_gmu = round(min(decode_gmu_raw, decode_gmu_raw - nixl_reserve), 2)
         decode_gmu = max(decode_gmu, 0.80)
