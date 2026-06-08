@@ -196,23 +196,21 @@ class ConfigBuilderMixin:
                      f"reserving {reserve_gb:.1f}GB for overhead)")
         return u
 
-    def _compute_max_num_seqs(self, tp: int) -> Optional[int]:
+    def _compute_max_num_seqs(self, tp: int, role: str = 'aggregated',
+                              gpu_mem_util_override: float = None,
+                              num_pods: int = 1) -> Optional[int]:
         """Compute max_num_seqs by evaluating four competing constraints.
 
         max_num_seqs = min(S_activation, S_kv, S_concurrency, 512)
 
         S_activation: Compute slot scale from model activation profile.
-                      Protects ultra-low-spec hardware from OOM at startup.
-        S_kv:         KV cache capacity — how many sequences fit in available
-                      VRAM after model weights and overhead. The real constraint
-                      for long-context models.
-        S_concurrency: Expected peak load × 2x headroom. Prevents "ghost slots"
-                      that waste VRAM on pre-allocated but unused sequence space,
-                      freeing memory for prefix caching.
-        512:          Hard cap — Tensor Cores saturate at ~256 batch size,
-                      CUDA graph compilation above 512 causes >15min startup.
+        S_kv:         KV cache capacity from available VRAM.
+        S_concurrency: Role-dependent:
+                      - Prefill: concurrency / prefill_pods (only active prefills)
+                      - Decode: concurrency × 1.5 (holds ALL sequences post-prefill)
+                      - Aggregated: concurrency × 2.0 (handles both phases)
+        512:          Hard cap for CUDA graph compilation.
         """
-        # Extract model architecture
         if self._model_config:
             num_layers = self._model_config.get('num_hidden_layers', 32)
             num_kv_heads = self._model_config.get('num_key_value_heads')
@@ -237,7 +235,7 @@ class ConfigBuilderMixin:
         s_activation = int((gpu_vram * (1024 ** 3) * arch_coeff) / effective_weight)
 
         # --- S_kv: KV cache capacity ---
-        gpu_mem_util = self._compute_gpu_mem_util(tp, log=False)
+        gpu_mem_util = gpu_mem_util_override or self._compute_gpu_mem_util(tp, log=False)
         model_weight_gb = self._estimate_model_size_gb() / tp
         overhead_gb = 4.0
         available_kv_gb = max(0, gpu_vram * gpu_mem_util - model_weight_gb - overhead_gb)
@@ -245,15 +243,25 @@ class ConfigBuilderMixin:
                            * self.config.max_model_len * dtype_bytes)
         s_kv = int(available_kv_gb * (1024 ** 3) / kv_per_seq_bytes) if kv_per_seq_bytes > 0 else 512
 
-        # --- S_concurrency: workload profile ---
+        # --- S_concurrency: role-dependent ---
         concurrency = getattr(self, 'effective_concurrency', int(self.config.qps))
-        s_concurrency = max(64, int(concurrency * 2.0))
+        if role == 'prefill':
+            # Prefill only handles active prefills — a fraction of total users.
+            # At any time, only concurrency/prefill_pods users are prefilling per pod.
+            s_concurrency = max(64, int(concurrency / max(num_pods, 1) * 2.0))
+        elif role == 'decode':
+            # Decode holds ALL sequences that completed prefill.
+            # Needs capacity for full concurrency across fewer decode pods.
+            s_concurrency = max(64, int(concurrency / max(num_pods, 1) * 3.0))
+        else:
+            # Aggregated: handles both phases
+            s_concurrency = max(64, int(concurrency * 2.0))
 
         # --- Final: min of all constraints, aligned to 32 for warp scheduling ---
         raw = min(s_activation, s_kv, s_concurrency, 512)
         max_seqs = max(64, (raw // 32) * 32 or 64)
 
-        self.log(f"   max_num_seqs(TP={tp}): {max_seqs} "
+        self.log(f"   max_num_seqs(TP={tp}, {role}): {max_seqs} "
                  f"(S_act={s_activation}, S_kv={s_kv}, S_conc={s_concurrency}, cap=512, "
                  f"model_len={self.config.max_model_len}, VRAM={gpu_vram:.0f}GB)")
         return max_seqs
@@ -492,12 +500,15 @@ class ConfigBuilderMixin:
         self.log(f"   Decode  gpu_memory_utilization={decode_gmu:.2f} "
                  f"(base={decode_gmu_raw:.2f} - {nixl_reserve:.0%} NIXL reserve)")
 
-        prefill_max_num_seqs = self._compute_max_num_seqs(split.prefill_tp)
-        decode_max_num_seqs = self._compute_max_num_seqs(split.decode_tp)
+        prefill_max_num_seqs = self._compute_max_num_seqs(
+            split.prefill_tp, role='prefill',
+            gpu_mem_util_override=prefill_gmu, num_pods=split.prefill_pods)
+        decode_max_num_seqs = self._compute_max_num_seqs(
+            split.decode_tp, role='decode',
+            gpu_mem_util_override=decode_gmu, num_pods=split.decode_pods)
         max_batched = self._compute_max_num_batched_tokens(split.prefill_tp)
 
         total_pods = split.prefill_pods + split.decode_pods
-        # Use the smaller TP for resource calculation (more pods per node = more conservative)
         min_tp = min(split.prefill_tp, split.decode_tp)
         mem, cpu = self._get_pod_resources(tp=min_tp, total_pods=total_pods)
 
@@ -591,8 +602,12 @@ class ConfigBuilderMixin:
         self.log(f"   Decode  gpu_memory_utilization={decode_gmu:.2f} "
                  f"(base={decode_gmu_raw:.2f} - {nixl_reserve:.0%} NIXL reserve)")
 
-        prefill_max_num_seqs = self._compute_max_num_seqs(split.prefill_tp)
-        decode_max_num_seqs = self._compute_max_num_seqs(split.decode_tp)
+        prefill_max_num_seqs = self._compute_max_num_seqs(
+            split.prefill_tp, role='prefill',
+            gpu_mem_util_override=prefill_gmu, num_pods=split.prefill_pods)
+        decode_max_num_seqs = self._compute_max_num_seqs(
+            split.decode_tp, role='decode',
+            gpu_mem_util_override=decode_gmu, num_pods=split.decode_pods)
         max_batched = self._compute_max_num_batched_tokens(split.prefill_tp)
 
         total_pods = split.prefill_pods + split.decode_pods
