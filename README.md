@@ -1,8 +1,49 @@
-# ServeIt Studio
+<p align="center">
+  <img src="docs/branding/servit-logo-short.png" alt="ServeIt Studio" width="200">
+</p>
 
-Automated benchmarking tool that finds the optimal vLLM inference configuration for your hardware, model, and workload.
+<h1 align="center">ServeIt Studio</h1>
 
-Given a model, a target QPS, and an optimization goal (response time or throughput), ServeIt Studio deploys real vLLM instances on your cluster, runs benchmarks, and returns a Pareto-optimal set of configurations — ranked by TTFT, throughput, or both.
+<p align="center">
+  <strong>Automated LLM inference optimization for Kubernetes</strong><br>
+  Find the optimal vLLM configuration for your hardware, model, and workload — automatically.
+</p>
+
+---
+
+ServeIt Studio deploys real vLLM instances on your cluster, sweeps configurations across aggregated, prefill/decode disaggregated (PD), and expert parallel (EP) architectures, tunes engine parameters from first principles, and returns the optimal setup — ranked by TTFT, throughput, or both.
+
+## Screenshots
+
+### Multi-Cluster Launcher
+
+Manage multiple clusters and optimization instances from a single dashboard. Each cluster shows GPU nodes, VRAM, RDMA capability, and running instances.
+
+![Launcher Dashboard](docs/screenshots/launcher-dashboard.png)
+
+### Create a New Instance
+
+Deploy a new optimization instance to any cluster. Select GPU count, storage class, and pin to specific nodes.
+
+![New Instance](docs/screenshots/new-instance.png)
+
+### Choose Your Optimization Goal
+
+Select from response time, throughput, balanced, or architecture-specific strategies. Each goal tests different architectures and applies different optimization heuristics.
+
+![Optimization Goal](docs/screenshots/optimization-goal.png)
+
+### Model Gallery
+
+Browse and select from popular open-source LLM models. Filter by size category, architecture (Dense, MoE, Code, Speculative), and quantization format.
+
+![Model Gallery](docs/screenshots/model-gallery.png)
+
+### Review & Run
+
+Review your full configuration summary — deployment, workload, and tuning settings — then start the automated optimization pipeline. Live console output shows progress in real time.
+
+![Review and Run](docs/screenshots/review-and-run.png)
 
 ## How It Works
 
@@ -21,9 +62,7 @@ The optimizer selects which architectures to test based on the goal:
 - **Balanced** — All three
 - **Aggregated Only / PD Only / EP Only** — Test a single architecture
 
-### Optimization Steps
-
-The recipe-based optimizer runs up to 11 steps:
+### The 11-Step Pipeline
 
 1. **Prerequisite Infrastructure** — Deploy gateway, EPP, RBAC, RDMA discovery
 2. **Decode TP Sweep** — Deploy aggregated vLLM at each TP (1, 2, 4, 8), measure decode TPSG
@@ -33,87 +72,23 @@ The recipe-based optimizer runs up to 11 steps:
 6. **Aggregated Configuration Search** — Test all aggregated configs (TP1×16R, TP2×8R, etc.)
 7. **P/D / EP Split Optimization** — Test selected splits, find Pareto front (or best throughput for EP)
 8. **Architecture Comparison** — Compare best PD/EP vs best Aggregated (no new tests)
-9. **EPP Tuning** — Test endpoint picker weight combinations (optional)
+9. **EPP Tuning** — Smart EPP weight derivation from Prometheus metrics (optional)
 10. **Latency-Bounded Throughput** — Binary search for max throughput under latency SLA (optional)
-11. **Calibrated Load Validation** — Re-test at sustainable QPS if overloaded (optional)
+11. **Calibrated Load Validation** — Re-test at sustainable QPS computed via Little's Law (optional)
 
 Steps 2-3 and 6-11 deploy real workloads. Steps 4-5 are pure math.
 
-## Configuration Options
+### Smart Features
 
-### Workload Settings
-
-| Setting | Description | Default |
-|---|---|---|
-| **Model** | HuggingFace model name | Required |
-| **ISL** | Input Sequence Length (prompt tokens) | Required |
-| **ISL Stdev** | Standard deviation for ISL distribution | None (fixed) |
-| **OSL** | Output Sequence Length (generated tokens) | Required |
-| **OSL Stdev** | Standard deviation for OSL distribution | None (fixed) |
-| **Concurrent Users** | Number of simultaneous requests | 100 |
-| **Rate Type** | Load profile: Concurrent, Constant RPS, or Poisson RPS | Concurrent |
-| **Test Duration** | How long each benchmark runs (seconds) | 300 |
-| **Stop Mode** | Stop by duration or max requests | Duration |
-| **Conversation Turns** | Multi-turn conversation support (1 = single-turn) | 1 |
-| **Workload Mode** | Synthetic (generated prompts) or Dataset (HuggingFace/file) | Synthetic |
-| **Dataset Source** | HuggingFace dataset ID or local file path | None |
-| **Prefix Cache Hit %** | Simulate prefix cache hits (0-100%). Generates a dataset where N% of prompts share an identical prefix | 0 |
-| **Run Description** | Free-text note to identify the run later | None |
-
-### Search Strategy
-
-| Setting | Description | Default |
-|---|---|---|
-| **Optimization Goal** | TTFT, Throughput, Balanced, Aggregated Only, PD Only, EP Only | TTFT |
-| **GPU Split Combinations** | How many Prefill TP × Decode TP combinations to explore (1-4) | 2 |
-| **Prefill/Decode Pod Balance** | Smart (calculated ~3 splits/pair) or Exhaustive (all valid splits) | Smart |
-| **Auto-Scale Load** | Scale down to sustainable concurrency if cluster is overloaded | Off |
-| **Headroom** | Safety margin for sustainable throughput calculation | 1.3× |
-
-### Response Time Guarantee (Step 9)
-
-| Setting | Description | Default |
-|---|---|---|
-| **Latency SLA** | Enable latency-bounded throughput search | Off |
-| **Target Latency** | Maximum acceptable TTFT (ms) | 500 |
-| **Target Percentile** | Which percentile must meet the target (p50, p90, p95, p99) | p90 |
-
-### Advanced vLLM Settings
-
-All settings default to "Auto" — ServeIt Studio calculates optimal values. Override manually if needed.
-
-#### Value Settings
-
-| Setting | Description | Auto Behavior |
-|---|---|---|
-| **max-model-len** | Max total tokens (input + output) per request | Calculated from ISL + OSL |
-| **gpu-memory-utilization** | Fraction of GPU memory to use (0.0-0.99) | Calculated from model size + GPU VRAM |
-| **max-num-seqs** | Max concurrent requests per pod | Calculated from users + GPU count |
-| **max-num-batched-tokens** | Max tokens per forward pass | Calculated from workload |
-| **dtype** | Model weight precision (bfloat16, float16, float32) | vLLM auto-detects |
-| **kv-cache-dtype** | KV cache precision (auto, fp8, fp8_e5m2, fp8_e4m3) | Same as model dtype |
-| **pipeline-parallel-size** | Split model across GPU groups in sequence | 1 |
-| **block-size** | KV cache block size (8-512) | `next_power_of_2(sqrt(ISL+OSL))`, min 128 for PD (NIXL) |
-| **tool-call-parser** | Function/tool call parser (openai, hermes, mistral, llama3_json) | Disabled |
-| **moe-backend** | MoE expert computation backend (deep_gemm, cutlass) | Auto (deep_gemm for MoE) |
-| **all2all-backend** | MoE expert-parallel communication backend | Auto (deepep_high_throughput) |
-| **dbo-prefill-token-threshold** | Min tokens to trigger Dual Batch Overlap on prefill | 32 |
-| **dbo-decode-token-threshold** | Min tokens to trigger Dual Batch Overlap on decode | 32 |
-
-#### Toggle Flags
-
-| Flag | Description | Auto Default |
-|---|---|---|
-| **enable-prefix-caching** | Reuse computation for shared prompt prefixes | On |
-| **disable-custom-all-reduce** | Turn off optimized GPU-to-GPU communication | Off |
-| **enable-auto-tool-choice** | Auto-detect when to invoke tools | Off |
-| **enable-expert-parallel** | Distribute MoE experts across GPUs (requires TP > 1) | Auto (MoE detection) |
-| **enable-dbo** | Dual Batch Overlap — overlap MoE all-to-all with compute | Auto (MoE detection) |
-| **enable-eplb** | Expert-parallel load balancing (replicate hot experts) | Auto (MoE detection) |
-| **trust-remote-code** | Allow custom model code from HuggingFace | On |
-| **disable-log-requests** | Suppress per-request logging during benchmarks | On |
-| **vllm-debug-logs** | Enable verbose vLLM engine logs (DEBUG level) | Off |
-| **nccl-debug-logs** | Enable verbose NCCL communication logs (INFO level) | Off |
+- **Model config from HuggingFace** — Reads `config.json` directly for accurate model size, dtype, MoE detection, hybrid attention detection, and FP8 compatibility checks
+- **Smart PD Search** — Calculates optimal P/D split from calibration data, tests ~3 configs per TP pair instead of exhaustive sweep
+- **Smart max_num_seqs** — Multi-factor formula: `min(S_activation, S_kv, S_concurrency, 512)` adapted per model architecture
+- **Smart EPP weights** — Start from preset, adjust ±1 based on measured Prometheus metrics (prefix cache hits, queue depths)
+- **Workload-aware min TP** — Computes minimum TP from model weights + KV cache budget for the target workload
+- **DeepGemm compatibility** — Auto-detects compressed-tensors per-channel FP8 and disables DeepGemm for incompatible models
+- **Hybrid attention detection** — Passes `--no-disable-hybrid-kv-cache-manager` for models with mixed attention types
+- **Asymmetric TP** — Allows prefill TP > decode TP (disabled for llm-d v0.4.0 due to NIXL bug)
+- **Resume** — Resume interrupted runs from the last completed test
 
 ## Prerequisites
 
@@ -125,30 +100,17 @@ All settings default to "Auto" — ServeIt Studio calculates optimal values. Ove
 ## Deployment
 
 ```bash
-# Deploy with defaults (auto-detects DRA vs NAD networking)
-python3 deployment/deploy.py --storage-class <your-class>
+# Deploy launcher (multi-user, multi-cluster)
+python3 deployment/deploy.py --mode launcher --storage-class <your-class>
 
 # Deploy with an existing PVC
 python3 deployment/deploy.py --pvc-name my-existing-pvc
 
-# Force NAD (Multus) mode instead of DRA
-python3 deployment/deploy.py --force-nad
-```
-
-### Dev Mode
-
-```bash
-# Deploy in dev mode (syncs local code to pod, auto-restarts on crash)
-python3 deployment/deploy.py --dev --pvc-name my-pvc
-
-# Re-sync code to a running pod
-python3 deployment/deploy.py --sync
+# Sync code to all running pods
+python3 deployment/deploy.py --sync-all
 
 # Port-forward the UI to localhost:8080
 python3 deployment/deploy.py --port-forward
-
-# Restart the server process in the pod
-python3 deployment/deploy.py --restart-server
 ```
 
 ### Access the UI
@@ -162,49 +124,6 @@ python3 deployment/deploy.py --port-forward
 oc get route -n serveit
 ```
 
-## Project Structure
-
-```
-core/
-├── recipe_optimizer.py        # Recipe-based optimization engine (steps 1-10)
-├── optimization_strategies.py # TTFT, Throughput, Balanced, PD-only, EP-only strategies
-├── test_orchestrator.py       # Deploy → benchmark → collect → cleanup pipeline
-├── deployment_manager.py      # Kubernetes deployment lifecycle (LWS, sequential PD deploy)
-├── prereq_manager.py          # Prerequisite infrastructure (RBAC, gateway, EPP, RDMA)
-├── system_scanner.py          # Cluster resource discovery (GPUs, RDMA, nodes, storage)
-├── config_generator.py        # Test configuration generation (TestConfig dataclass)
-├── template_manager.py        # Jinja2 template rendering for K8s manifests
-├── metrics_collector.py       # Prometheus/Thanos metrics collection
-├── metrics_analyzer.py        # Per-pod GPU/memory/throughput analysis
-├── database_manager.py        # SQLite persistence for runs and results
-├── resource_calculator.py     # CPU/memory/GPU sizing math
-├── report_analysis.py         # Report data builder (charts, Pareto front, recommendations)
-├── report_data.py             # Data models and DB loader for reports
-├── cloud_constraints.py       # Cloud provider detection and constraints
-├── networking/                # Network plugins (DRA, NAD, shared device)
-├── providers/                 # Cloud provider adapters (AWS, Azure, GCP, IBM, CoreWeave, bare metal)
-└── templates/                 # Jinja2 K8s manifest templates
-    ├── aggregated/            #   Aggregated LWS + Service
-    ├── pd/                    #   Prefill/Decode LWS + Services (also used by EP)
-    └── prereq/                #   RBAC, gateway, GAIE, RDMA ConfigMap, model download
-
-web/
-├── server.py                  # Flask + SocketIO + gevent web server
-├── static/
-│   ├── css/style.css          # Red Hat branded UI styles
-│   ├── js/app.js              # Single-page app logic (wizard, charts, reports)
-│   └── img/logo.png           # ServeIt Studio logo
-└── templates/                 # Jinja2 HTML templates (wizard steps, overlays)
-
-deployment/
-└── deploy.py                  # Deployment script (YAML gen, deploy, dev mode, port-forward)
-
-scripts/
-├── backfill_test_config.py    # Backfill test_config_json for existing runs
-├── resume_latest.py           # CLI resume for the latest stopped run
-└── run_optimization_cli.py    # CLI-based optimization runner
-```
-
 ## Multi-Cloud Support
 
 ServeIt Studio auto-detects the cloud provider and configures networking accordingly:
@@ -216,27 +135,6 @@ ServeIt Studio auto-detects the cloud provider and configures networking accordi
 | Bare Metal | `nvidia.com/gpu` | NAD (Multus) | InfiniBand via Multus |
 | AWS / Azure / GCP | `nvidia.com/gpu` | Standard | Provider-specific |
 
-## Smart PD Search
-
-Instead of exhaustively testing every valid P/D split (50+ tests), Smart mode calculates the mathematically optimal split from calibration data:
-
-```
-D_ideal = total_gpus / (r × prefill_tp + decode_tp)
-where r = decode_throughput / prefill_throughput
-```
-
-Tests ~3 configurations around the calculated optimum per TP pair, reducing Step 7 from O(all_valid_splits) to O(3 × num_tp_pairs).
-
-## Block Size Auto-Tuning
-
-KV cache block size is auto-tuned from the workload:
-
-```
-block_size = next_power_of_2(sqrt(ISL + OSL))
-```
-
-For PD goals (TTFT, Balanced, PD Only), minimum is 128 because NIXL transfers KV cache in blocks — larger blocks reduce transfer count and network overhead.
-
 ## Metrics
 
 **Client-side** (via [guidellm](https://github.com/vllm-project/guidellm)):
@@ -244,61 +142,35 @@ For PD goals (TTFT, Balanced, PD Only), minimum is 128 because NIXL transfers KV
 - Inter-token latency (ITL)
 - Throughput (requests/sec)
 - TPOT (time per output token)
-- E2E request latency
-- Request counts (total, successful, incomplete, errored)
 
 **Server-side** (via Prometheus/Thanos):
-- vLLM TTFT, ITL, E2E latency percentiles (engine histograms)
-- Token throughput (prompt + generation tokens/sec)
-- Request queue depth, KV cache utilization, preemptions
-- Processing time breakdown (prefill, decode, queue)
+- vLLM TTFT, ITL, E2E latency percentiles
+- Token throughput, request queue depth, KV cache utilization
 - Pod network and InfiniBand RDMA throughput
-
-Prometheus metrics are auto-detected from OpenShift User Workload Monitoring or a standalone Prometheus instance. For vanilla K8s clusters accessed remotely, a `kubectl port-forward` to `svc/prometheus` in the `monitoring` namespace is started automatically.
 
 Results are stored in SQLite at `/mnt/storage/serveit.db`.
 
-## Optimization Report
+## Project Structure
 
-The report UI includes these tabs:
+```
+core/                          # Optimization engine
+├── optimizer/                 #   Pipeline, config builder, TP calibration, PD search
+├── orchestrator/              #   Deploy → benchmark → collect → cleanup
+├── templates/                 #   Jinja2 K8s manifests (aggregated, PD, prereqs)
+├── networking/                #   Network plugins (DRA, NAD, shared device)
+└── providers/                 #   Cloud provider adapters
 
-| Tab | Content |
-|---|---|
-| **Recommendation** | Deployment recommendation cards, percentile breakdown |
-| **TP Calibration** | Steps 2-3 Pareto chart (TTFT vs GPU count) |
-| **Configurations** | Scatter plots, efficiency bars, Pareto table, all results |
-| **Comparison** | PD vs Aggregated and EP vs Aggregated head-to-head |
-| **Latency Search** | Step 9 binary search trials (if latency SLA enabled) |
-| **Calibrated Load** | Step 10 re-test at sustainable QPS |
-| **vLLM Metrics** | Prometheus metrics tables |
-| **Estimator** | Scale results to different workloads without re-testing |
-| **Test Settings** | Full run configuration (workload, strategy, infrastructure, vLLM settings) |
+web/                           # Flask + SocketIO web UI
+├── static/                    #   CSS, JS modules, images
+└── templates/                 #   HTML wizard steps
 
-## Troubleshooting
+launcher/                      # Multi-user launcher
+├── app.py                     #   Flask API + dashboard
+├── instance_manager.py        #   Instance lifecycle (create, delete, list)
+└── templates/                 #   Launcher HTML
 
-```bash
-# Check pod status
-kubectl get pods -n llm-d -l app=serveit-optimizer
-
-# View server logs
-kubectl exec -n llm-d <pod> -- cat /tmp/server.log
-
-# Check active test deployments
-kubectl get leaderworkerset -n llm-d
-
-# Check GPU usage across all namespaces
-kubectl get pods --all-namespaces -o json | python3 -c "
-import sys, json
-for pod in json.load(sys.stdin)['items']:
-    if pod['status'].get('phase') not in ('Running','Pending'): continue
-    for c in pod['spec'].get('containers',[]):
-        gpus = c.get('resources',{}).get('requests',{}).get('nvidia.com/gpu')
-        if gpus and int(gpus) > 0:
-            print(f\"{pod['metadata']['namespace']}/{pod['metadata']['name']}: {gpus} GPU(s)\")
-"
-
-# Clean up stuck test pods
-kubectl delete lws -n llm-d -l component=serveit-test
+deployment/
+└── deploy.py                  #   Deploy, sync, port-forward CLI
 ```
 
 ## License
