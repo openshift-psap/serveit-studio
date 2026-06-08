@@ -567,10 +567,15 @@ Runs when:
 ## Auto-Computed vLLM Parameters
 
 ### gpu_memory_utilization
+
+Computed separately for prefill and decode pods. Aggregated pods use the prefill value.
+
+#### Prefill / Aggregated
+
 ```
 With profiled data (from Steps 2-3):
   safe_budget = gpu_vram_gb - measured_overhead - 2.0
-  U = min(safe_budget / gpu_vram_gb, 0.95)
+  U_prefill = min(safe_budget / gpu_vram_gb, 0.95)
 ```
 **Why subtract 2.0 GB?** This is a fragmentation buffer. CUDA memory allocation doesn't perfectly pack — small gaps accumulate between allocations. 2 GB covers typical fragmentation on 40-140 GB GPUs. Without this buffer, vLLM may fail to allocate KV cache blocks even though "enough" memory appears free.
 
@@ -581,11 +586,27 @@ Without profiled data (fallback):
   pods_per_node = max_gpus_per_node // TP
   reserve_pct = 0.05 + (pods_per_node - 1) × 0.008
   reserve_gb = max(gpu_vram_gb × reserve_pct, 5.0)
-  U = (gpu_vram_gb - reserve_gb) / gpu_vram_gb
+  U_prefill = (gpu_vram_gb - reserve_gb) / gpu_vram_gb
 ```
 **Why scale with pods_per_node?** Multiple vLLM pods on the same node share system resources (CPU memory, PCIe bandwidth, network buffers). Each additional pod adds ~0.8% overhead from shared CUDA context, NCCL communicator setup, and OS-level memory pressure. The base 5% covers single-pod overhead.
 
 **Why minimum 5.0 GB?** On smaller GPUs (e.g., A10 24GB), percentage-based reserves can be too small. 5 GB ensures enough room for CUDA context (~2 GB), NCCL buffers (~1 GB), and activation memory (~2 GB) regardless of GPU size.
+
+#### Decode (PD / EP only)
+
+```
+U_decode = max(U_prefill - 0.05, 0.80)
+```
+
+Decode pods receive KV cache data from prefill pods via NIXL over RDMA. The incoming KV transfer requires receive buffers that are allocated outside of vLLM's managed memory pool. An additional 5% reserve ensures these buffers don't compete with the KV cache allocation.
+
+**Why 5% NIXL reserve?** Measured from PD regression testing: applying the same `gpu_memory_utilization` to both prefill and decode caused 42-143% TTFT regression on decode-heavy configs (e.g., 1P+1D TP8: 466ms → 1,134ms). The decode pod's VRAM was fully committed to vLLM's KV cache, leaving no room for the NIXL receive buffers. 5% (~7 GB on H200) provides sufficient headroom for KV transfers without significantly reducing decode capacity.
+
+**Why floor at 0.80?** Below 0.80, the decode pod has so little KV cache that it cannot hold enough concurrent sequences to be useful. The floor ensures a minimum viable decode capacity.
+
+**Example (H200, 140GB, TP4):**
+- Prefill: `U = 0.94` → 131.6 GB allocated
+- Decode: `U = 0.89` → 124.6 GB allocated (7 GB NIXL headroom)
 
 ### max_num_seqs
 
