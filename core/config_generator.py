@@ -118,6 +118,7 @@ class TestConfig:
     all2all_backend: Optional[str] = None  # 'deepep_high_throughput', 'deepep_low_latency', 'nccl', None
     moe_dp_chunk_size: Optional[int] = None  # MoE dispatch chunk size (default 256, upstream uses 384 for decode)
     nvshmem_symmetric_size: Optional[str] = None  # e.g. '6G' — computed from model architecture
+    num_redundant_experts: Optional[int] = None  # EPLB redundant experts per EP rank
     use_deep_gemm: Optional[bool] = None  # None = let vLLM decide, True/False = explicit override
     has_hybrid_attention: bool = False  # Model uses mixed attention types (chunked/GDN + full)
 

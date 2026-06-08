@@ -165,6 +165,7 @@ class TemplateManager:
 
         vars_dict['moe_dp_chunk_size'] = getattr(config, 'moe_dp_chunk_size', None)
         vars_dict['nvshmem_symmetric_size'] = getattr(config, 'nvshmem_symmetric_size', None)
+        vars_dict['num_redundant_experts'] = getattr(config, 'num_redundant_experts', None)
 
         return vars_dict
 

@@ -143,7 +143,7 @@ spec:
 {% endif %}{% if prefill_enable_dbo %}                  --enable-dbo \
                   --dbo-prefill-token-threshold {{ dbo_prefill_token_threshold | default(32) }} \
 {% endif %}{% if prefill_enable_eplb %}                  --enable-eplb \
-                  --eplb-config '{"window_size":"1000","step_interval":"3000","num_redundant_experts":"32","log_balancedness":"False"}' \
+                  --eplb-config '{"window_size":"1000","step_interval":"3000","num_redundant_experts":"{{ num_redundant_experts | default(1) }}","log_balancedness":"False"}' \
 {% endif %}{% if prefill_moe_backend %}                  --moe-backend {{ prefill_moe_backend }} \
 {% endif %}{% if prefill_all2all_backend %}                  --all2all-backend {{ prefill_all2all_backend }} \
 {% endif %}{% if max_model_len %}                  --max-model-len {{ max_model_len }} \

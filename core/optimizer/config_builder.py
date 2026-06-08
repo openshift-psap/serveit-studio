@@ -647,7 +647,10 @@ class ConfigBuilderMixin:
         max_batched = self._compute_max_num_batched_tokens(split.prefill_tp) or self.config.max_model_len
         nvshmem_size, ep_mem_gb = self._compute_ep_memory_gb(max_batched)
 
-        # EPLB expert replication
+        # EPLB: compute num_redundant_experts to fit in available VRAM.
+        # EPLB all_gather needs scratch = num_experts_per_layer × bytes_per_expert
+        # during rebalancing. Keep redundant experts low to avoid OOM.
+        num_redundant = 1
         eplb_gb = 0.5
         if self._model_config:
             num_layers = self._model_config.get('num_hidden_layers', 32)
@@ -657,7 +660,10 @@ class ConfigBuilderMixin:
             dtype_bytes = 1 if getattr(self, '_model_dtype', 'fp16') == 'fp8' else 2
             bytes_per_expert = 3 * hidden * intermediate * dtype_bytes
             ep_ranks = split.decode_tp * split.decode_pods
-            eplb_gb = max(num_layers * bytes_per_expert * 1 / max(ep_ranks, 1) / (1024**3), 0.5)
+            num_redundant = max(1, ep_ranks // self._num_experts) if self._num_experts else 1
+            eplb_gb = max(num_layers * bytes_per_expert * num_redundant / max(ep_ranks, 1) / (1024**3), 0.5)
+            self.log(f"   EPLB: {num_redundant} redundant experts/rank "
+                     f"(expert={bytes_per_expert / 1024**2:.0f}MB, ep_ranks={ep_ranks})")
 
         ep_overhead_gb = ep_mem_gb + eplb_gb
         ep_reserve = round(ep_overhead_gb / self._gpu_vram_gb, 2)
@@ -749,6 +755,7 @@ class ConfigBuilderMixin:
             dbo_prefill_token_threshold=dbo_threshold,
             dbo_decode_token_threshold=dbo_threshold,
             enable_eplb=(max(split.prefill_tp, split.decode_tp) > 1),
+            num_redundant_experts=num_redundant,
             moe_backend=None,
             all2all_backend='deepep_high_throughput' if max(split.prefill_tp, split.decode_tp) > 1 else None,
             moe_dp_chunk_size=chunk_size if self._is_moe else None,
