@@ -592,12 +592,13 @@ class ConfigBuilderMixin:
         """
         concurrency = self.effective_concurrency
 
-        # EP needs extra memory for NVSHMEM symmetric heap (~16GB),
-        # DeepEP all2all buffers, and EPLB expert replication.
-        # Reserve 15% for EP overhead on top of the NIXL reserve.
+        # EP needs extra memory for NVSHMEM symmetric heap (16GB),
+        # DeepEP all2all buffers (~2GB), and EPLB expert replication (~2GB).
+        # Total ~20GB overhead — compute as percentage of GPU VRAM.
         prefill_gmu_raw = self._compute_gpu_mem_util(split.prefill_tp)
         decode_gmu_raw = self._compute_gpu_mem_util(split.decode_tp, log=False)
-        ep_reserve = 0.15  # 15% for NVSHMEM + DeepEP + EPLB
+        nvshmem_gb = 16.0 + 2.0 + 2.0  # NVSHMEM heap + DeepEP + EPLB
+        ep_reserve = round(nvshmem_gb / self._gpu_vram_gb, 2)  # ~14% on H200, ~25% on A100
         nixl_reserve = 0.05
 
         prefill_gmu = round(max(prefill_gmu_raw - ep_reserve, 0.70), 2)
