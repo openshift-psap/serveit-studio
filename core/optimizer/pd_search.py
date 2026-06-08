@@ -154,6 +154,14 @@ class PDSearchMixin:
                 if d in valid_by_decode:
                     selected.append(valid_by_decode[d])
 
+            # Always include edge splits (max prefill, max decode)
+            # These are often optimal and Smart Search may skip them
+            min_decode = min(valid_by_decode.keys())
+            max_decode = max(valid_by_decode.keys())
+            for edge_d in [min_decode, max_decode]:
+                if edge_d in valid_by_decode and valid_by_decode[edge_d] not in selected:
+                    selected.append(valid_by_decode[edge_d])
+
             if len(selected) < 2 and all_valid:
                 by_distance = sorted(all_valid, key=lambda s: abs(s.decode_pods - d_ideal))
                 for s in by_distance:
