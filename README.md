@@ -98,15 +98,41 @@ Steps 2-3 and 6-11 deploy real workloads. Steps 4-5 are pure math.
 
 ### Smart Features
 
-- **Model config from HuggingFace** — Reads `config.json` directly for accurate model size, dtype, MoE detection, hybrid attention detection, and FP8 compatibility checks
-- **Smart PD Search** — Calculates optimal P/D split from calibration data, tests ~3 configs per TP pair instead of exhaustive sweep
-- **Smart max_num_seqs** — Multi-factor formula: `min(S_activation, S_kv, S_concurrency, 512)` adapted per model architecture
-- **Smart EPP weights** — Start from preset, adjust ±1 based on measured Prometheus metrics (prefix cache hits, queue depths)
-- **Workload-aware min TP** — Computes minimum TP from model weights + KV cache budget for the target workload
-- **DeepGemm compatibility** — Auto-detects compressed-tensors per-channel FP8 and disables DeepGemm for incompatible models
-- **Hybrid attention detection** — Passes `--no-disable-hybrid-kv-cache-manager` for models with mixed attention types
-- **Asymmetric TP** — Allows prefill TP > decode TP (disabled for llm-d v0.4.0 due to NIXL bug)
-- **Resume** — Resume interrupted runs from the last completed test
+#### Model Intelligence
+- **Config from HuggingFace** — Reads `config.json` for model size, dtype, MoE detection, hybrid attention, FP8 compatibility. Handles multimodal nested configs (Llama-4 `text_config`), interleaved MoE layers, and compressed-tensors quantization
+- **Workload-aware min TP** — Computes minimum TP from model weights + framework overhead + KV cache budget for the actual workload (ISL × OSL × concurrency). Adapts to GQA vs full attention (8 KV heads vs 128)
+- **FP8 block quantization filter** — Auto-excludes TP values where `shared_expert_intermediate_size / TP < 128` (FP8 block_n constraint)
+- **DeepGemm compatibility** — Detects compressed-tensors per-channel FP8 and disables DeepGemm; enables for standard per-tensor FP8
+- **Hybrid attention detection** — Detects `attention_chunk_size` and hybrid architectures, passes `--no-disable-hybrid-kv-cache-manager` for PD
+
+#### Auto-Computed vLLM Parameters
+- **gpu_memory_utilization** — Profiled from actual VRAM usage after model load, or estimated from model size and GPU capacity
+- **max_num_seqs** — Multi-factor formula: `min(S_activation, S_kv, S_concurrency, 512)` — adapts per model (Qwen gets 192, Llama gets 1,433 at same TP)
+- **max_num_batched_tokens** — Computed from measured prefill TPSG × target batch latency
+- **block_size** — Auto-tuned from sequence length: `next_power_of_2(sqrt(ISL+OSL))`, min 128 for PD (NIXL block transfer)
+- **moe_dp_chunk_size** — Smart formula for EP decode: `min(S_seq, S_expert_capacity, S_dispatch, 512)`
+- **kv_cache_memory_bytes** — Profiled decode KV cache budget from calibration memory data
+- **DBO threshold** — Scaled by expert count: 32 for 128+ experts, 48 for 32+, 64 for smaller MoE
+
+#### Search & Optimization
+- **Smart PD Search** — Calculates optimal P/D split from calibration TPSG, tests ~3 configs per TP pair instead of exhaustive sweep (50+ → ~12 tests)
+- **Smart EPP weights** — Two-pass refinement: start from preset, adjust ±1 based on Prometheus metrics (prefix cache hit rate, queue depth, KV utilization), then refine with A/B guardrail
+- **Pareto front** — Identifies configurations where no other config has both lower TTFT AND higher throughput
+- **Calibrated load** — Per-architecture concurrency computed via Little's Law from measured throughput and response time
+- **Latency-bounded search** — Binary search for maximum throughput under a TTFT SLA constraint
+- **Asymmetric TP** — Allows prefill TP > decode TP (auto-disabled for llm-d v0.4.0 due to NIXL bug)
+
+#### Infrastructure & Operations
+- **Multi-cluster launcher** — Manage optimization instances across multiple Kubernetes/OpenShift clusters from a single dashboard
+- **Resume** — Resume interrupted runs from the last completed test. Per-architecture resume skips completed architectures, not the entire step
+- **Artifact management** — Download raw test artifacts (guidellm JSON, Prometheus metrics, manifests, configs) per test
+- **Database persistence** — All results, configs, and metrics stored in SQLite with full run history. Resume, compare, and reuse across sessions
+- **GPU Estimator** — Scale tested results to different workloads (ISL, OSL, concurrency, turns) without re-running tests. Shows GPU requirements for SLA targets
+- **Report analytics** — Interactive Plotly charts: Pareto front, PD configuration sweep with ITL subplot, throughput vs latency scatter, GPU efficiency, TP calibration, calibrated load analysis, EPP weight comparison, run comparison
+- **Downloadable reports** — HTML and raw artifact download for offline analysis and sharing
+- **Prefix cache simulation** — Generate multi-group prefix cache datasets with configurable hit rate, group count, and seed for reproducible workloads
+- **Pod error detection** — Auto-detects OOM, CUDA errors, and crash loops during tests; stops optimization and preserves pods for investigation
+- **Stop at any time** — Stop checks at every stage of test execution (before deploy, after deploy, during model load, before benchmark)
 
 ## Prerequisites
 
