@@ -77,7 +77,7 @@ data:
         plugins:
           - pluginRef: decode-filter
           - pluginRef: active-request-scorer
-            weight: {{ active_request_weight | default(2.0) }}
+            weight: {{ decode_active_request_weight | default(active_request_weight) | default(2.0) }}
           - pluginRef: prefix-cache-scorer
-            weight: {{ prefix_cache_weight | default(3.0) }}
+            weight: {{ decode_prefix_cache_weight | default(1.0) }}
           - pluginRef: max-score-picker

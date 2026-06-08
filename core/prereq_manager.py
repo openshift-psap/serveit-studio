@@ -165,10 +165,10 @@ class PrereqManager:
             epp = epp_config or {}
             epp_preset = epp.get('preset', 'balanced')
             epp_presets = {
-                'balanced': {'prefix_cache_weight': 3.0, 'kv_cache_weight': 2.0, 'queue_weight': 2.0, 'active_request_enabled': True, 'active_request_weight': 2.0, 'slo_enabled': False, 'slo_weight': 0},
-                'cache_optimized': {'prefix_cache_weight': 5.0, 'kv_cache_weight': 1.0, 'queue_weight': 2.0, 'active_request_enabled': True, 'active_request_weight': 1.0, 'slo_enabled': False, 'slo_weight': 0},
-                'queue_balanced': {'prefix_cache_weight': 1.0, 'kv_cache_weight': 1.0, 'queue_weight': 3.0, 'active_request_enabled': True, 'active_request_weight': 3.0, 'slo_enabled': False, 'slo_weight': 0},
-                'latency_aware': {'prefix_cache_weight': 3.0, 'kv_cache_weight': 2.0, 'queue_weight': 2.0, 'active_request_enabled': True, 'active_request_weight': 2.0, 'slo_enabled': True, 'slo_weight': 3.0},
+                'balanced': {'prefix_cache_weight': 3.0, 'kv_cache_weight': 2.0, 'queue_weight': 2.0, 'active_request_enabled': True, 'active_request_weight': 2.0, 'decode_prefix_cache_weight': 1.0, 'decode_active_request_weight': 3.0, 'slo_enabled': False, 'slo_weight': 0},
+                'cache_optimized': {'prefix_cache_weight': 5.0, 'kv_cache_weight': 1.0, 'queue_weight': 2.0, 'active_request_enabled': True, 'active_request_weight': 1.0, 'decode_prefix_cache_weight': 1.0, 'decode_active_request_weight': 3.0, 'slo_enabled': False, 'slo_weight': 0},
+                'queue_balanced': {'prefix_cache_weight': 1.0, 'kv_cache_weight': 1.0, 'queue_weight': 3.0, 'active_request_enabled': True, 'active_request_weight': 3.0, 'decode_prefix_cache_weight': 1.0, 'decode_active_request_weight': 3.0, 'slo_enabled': False, 'slo_weight': 0},
+                'latency_aware': {'prefix_cache_weight': 3.0, 'kv_cache_weight': 2.0, 'queue_weight': 2.0, 'active_request_enabled': True, 'active_request_weight': 2.0, 'decode_prefix_cache_weight': 1.0, 'decode_active_request_weight': 3.0, 'slo_enabled': True, 'slo_weight': 3.0},
             }
             if epp_preset == 'custom' and epp.get('plugins'):
                 plugins = epp['plugins']
@@ -220,6 +220,8 @@ class PrereqManager:
                 'precise_prefix_cache_weight': epp_weights['precise_prefix_cache_weight'],
                 'active_request_enabled': epp_weights['active_request_enabled'],
                 'active_request_weight': epp_weights['active_request_weight'],
+                'decode_prefix_cache_weight': epp_weights.get('decode_prefix_cache_weight', 1.0),
+                'decode_active_request_weight': epp_weights.get('decode_active_request_weight', 3.0),
                 'no_hit_lru_enabled': epp_weights['no_hit_lru_enabled'],
                 'no_hit_lru_weight': epp_weights['no_hit_lru_weight'],
                 'session_aware_enabled': epp_weights['session_aware_enabled'],
@@ -355,10 +357,10 @@ class PrereqManager:
         epp = epp_config or {}
         epp_preset = epp.get('preset', 'balanced')
         epp_presets = {
-            'balanced': {'prefix_cache_weight': 3.0, 'kv_cache_weight': 2.0, 'queue_weight': 2.0, 'active_request_enabled': True, 'active_request_weight': 2.0, 'slo_enabled': False, 'slo_weight': 0},
-            'cache_optimized': {'prefix_cache_weight': 5.0, 'kv_cache_weight': 1.0, 'queue_weight': 2.0, 'active_request_enabled': True, 'active_request_weight': 1.0, 'slo_enabled': False, 'slo_weight': 0},
-            'queue_balanced': {'prefix_cache_weight': 1.0, 'kv_cache_weight': 1.0, 'queue_weight': 3.0, 'active_request_enabled': True, 'active_request_weight': 3.0, 'slo_enabled': False, 'slo_weight': 0},
-            'latency_aware': {'prefix_cache_weight': 3.0, 'kv_cache_weight': 2.0, 'queue_weight': 2.0, 'active_request_enabled': True, 'active_request_weight': 2.0, 'slo_enabled': True, 'slo_weight': 3.0},
+            'balanced': {'prefix_cache_weight': 3.0, 'kv_cache_weight': 2.0, 'queue_weight': 2.0, 'active_request_enabled': True, 'active_request_weight': 2.0, 'decode_prefix_cache_weight': 1.0, 'decode_active_request_weight': 3.0, 'slo_enabled': False, 'slo_weight': 0},
+            'cache_optimized': {'prefix_cache_weight': 5.0, 'kv_cache_weight': 1.0, 'queue_weight': 2.0, 'active_request_enabled': True, 'active_request_weight': 1.0, 'decode_prefix_cache_weight': 1.0, 'decode_active_request_weight': 3.0, 'slo_enabled': False, 'slo_weight': 0},
+            'queue_balanced': {'prefix_cache_weight': 1.0, 'kv_cache_weight': 1.0, 'queue_weight': 3.0, 'active_request_enabled': True, 'active_request_weight': 3.0, 'decode_prefix_cache_weight': 1.0, 'decode_active_request_weight': 3.0, 'slo_enabled': False, 'slo_weight': 0},
+            'latency_aware': {'prefix_cache_weight': 3.0, 'kv_cache_weight': 2.0, 'queue_weight': 2.0, 'active_request_enabled': True, 'active_request_weight': 2.0, 'decode_prefix_cache_weight': 1.0, 'decode_active_request_weight': 3.0, 'slo_enabled': True, 'slo_weight': 3.0},
         }
         if epp_preset == 'custom' and epp.get('plugins'):
             plugins = epp['plugins']
