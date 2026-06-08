@@ -202,6 +202,8 @@ spec:
                 value: "true"
               - name: NVSHMEM_DISABLE_CUDA_VMM
                 value: "0"
+              - name: NVSHMEM_SYMMETRIC_SIZE
+                value: "{{ nvshmem_symmetric_size | default('16G') }}"
               - name: NVSHMEM_BOOTSTRAP_UID_SOCK_IFNAME
                 value: "eth0"
 {% endif %}

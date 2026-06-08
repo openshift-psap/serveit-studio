@@ -328,6 +328,48 @@ class ConfigBuilderMixin:
                  f"experts={num_experts}, top_k={top_k}, bound={winner})")
         return chunk
 
+    def _compute_nvshmem_size(self, tp: int, num_pods: int, moe_dp_chunk_size: int) -> str:
+        """Compute NVSHMEM_SYMMETRIC_SIZE from model architecture.
+
+        Uses the exact DeepEP V1 LowLatencyLayout formula:
+          dispatch_msg = 16 + max(hidden × 2, hidden + (hidden/128) × 4)
+          combine_msg  = (hidden/128) × 4 + hidden × 2
+          send_buf     = max(tokens × dispatch_msg, experts × tokens × combine_msg)
+          recv_buf     = max(experts × tokens × dispatch_msg, experts × tokens × combine_msg)
+          signal_buf   = align(experts × 4, 128)
+          total        = (send_buf + recv_buf + signal_buf) × 2   (double-buffered)
+        """
+        if not self._model_config:
+            return '16G'
+
+        hidden = self._model_config.get('hidden_size', 4096)
+        num_experts = self._num_experts or 8
+        num_ep_ranks = tp * num_pods
+        max_tokens = moe_dp_chunk_size or 384
+        num_scales = hidden // 128
+
+        dispatch_msg = 16 + max(hidden * 2, hidden + num_scales * 4)
+        combine_msg = num_scales * 4 + hidden * 2
+
+        send_buf = max(max_tokens * dispatch_msg,
+                       num_experts * max_tokens * combine_msg)
+        recv_buf = max(num_experts * max_tokens * dispatch_msg,
+                       num_experts * max_tokens * combine_msg)
+        signal_buf = ((num_experts * 4 + 127) // 128) * 128
+
+        total = (send_buf + recv_buf + signal_buf) * 2
+
+        nvshmem_overhead = 512 * 1024 * 1024
+        total_with_margin = int(total * 1.5) + nvshmem_overhead
+
+        size_gb = max(math.ceil(total_with_margin / (1024**3)), 2)
+
+        self.log(f"   NVSHMEM_SYMMETRIC_SIZE: {size_gb}G "
+                 f"(hidden={hidden}, experts={num_experts}, "
+                 f"ep_ranks={num_ep_ranks}, chunk={max_tokens}, "
+                 f"raw={total / 1024**3:.1f}GB)")
+        return f'{size_gb}G'
+
     def _compute_max_num_batched_tokens(self, tp: int) -> Optional[int]:
         """Compute max_num_batched_tokens from calibration prefill TPSG.
 
@@ -592,18 +634,38 @@ class ConfigBuilderMixin:
         """
         concurrency = self.effective_concurrency
 
-        # EP needs extra memory for NVSHMEM symmetric heap (16GB),
-        # DeepEP all2all buffers (~2GB), and EPLB expert replication (~2GB).
-        # Total ~20GB overhead — compute as percentage of GPU VRAM.
+        # Compute moe_dp_chunk_size first — needed for NVSHMEM sizing
+        decode_max_num_seqs_prelim = self._compute_max_num_seqs(
+            split.decode_tp, role='decode', num_pods=split.decode_pods)
+        chunk_size = self._compute_moe_dp_chunk_size(split.decode_tp, decode_max_num_seqs_prelim) if self._is_moe else 384
+
+        # Compute NVSHMEM symmetric heap from model architecture
+        nvshmem_size = self._compute_nvshmem_size(split.decode_tp, split.decode_pods, chunk_size)
+        nvshmem_gb = float(nvshmem_size.rstrip('G'))
+
+        # EPLB expert replication: NUM_MOE_LAYERS × BYTES_PER_EXPERT × redundant_experts / EP_RANKS
+        eplb_gb = 2.0
+        if self._model_config:
+            num_layers = self._model_config.get('num_hidden_layers', 32)
+            intermediate = self._model_config.get('moe_intermediate_size',
+                           self._model_config.get('intermediate_size', 14336))
+            hidden = self._model_config.get('hidden_size', 4096)
+            dtype_bytes = 1 if getattr(self, '_model_dtype', 'fp16') == 'fp8' else 2
+            bytes_per_expert = 3 * hidden * intermediate * dtype_bytes
+            ep_ranks = split.decode_tp * split.decode_pods
+            eplb_gb = max(num_layers * bytes_per_expert * 1 / max(ep_ranks, 1) / (1024**3), 0.5)
+
+        ep_overhead_gb = nvshmem_gb + eplb_gb
+        ep_reserve = round(ep_overhead_gb / self._gpu_vram_gb, 2)
+        nixl_reserve = 0.05
+
         prefill_gmu_raw = self._compute_gpu_mem_util(split.prefill_tp)
         decode_gmu_raw = self._compute_gpu_mem_util(split.decode_tp, log=False)
-        nvshmem_gb = 16.0 + 2.0 + 2.0  # NVSHMEM heap + DeepEP + EPLB
-        ep_reserve = round(nvshmem_gb / self._gpu_vram_gb, 2)  # ~14% on H200, ~25% on A100
-        nixl_reserve = 0.05
 
         prefill_gmu = round(max(prefill_gmu_raw - ep_reserve, 0.70), 2)
         decode_gmu = round(max(decode_gmu_raw - ep_reserve - nixl_reserve, 0.70), 2)
 
+        self.log(f"   EP overhead: NVSHMEM={nvshmem_gb:.0f}GB + EPLB={eplb_gb:.1f}GB = {ep_overhead_gb:.1f}GB")
         self.log(f"   Prefill gpu_memory_utilization={prefill_gmu:.2f} "
                  f"(base={prefill_gmu_raw:.2f} - {ep_reserve:.0%} EP reserve)")
         self.log(f"   Decode  gpu_memory_utilization={decode_gmu:.2f} "
@@ -685,7 +747,8 @@ class ConfigBuilderMixin:
             enable_eplb=(max(split.prefill_tp, split.decode_tp) > 1),
             moe_backend=None,
             all2all_backend='deepep_high_throughput' if max(split.prefill_tp, split.decode_tp) > 1 else None,
-            moe_dp_chunk_size=self._compute_moe_dp_chunk_size(split.decode_tp, decode_max_num_seqs) if self._is_moe else None,
+            moe_dp_chunk_size=chunk_size if self._is_moe else None,
+            nvshmem_symmetric_size=nvshmem_size,
             use_deep_gemm=getattr(self, '_use_deep_gemm', None),
             has_hybrid_attention=getattr(self, '_has_hybrid_attention', False),
         )

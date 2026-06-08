@@ -164,6 +164,7 @@ class TemplateManager:
             vars_dict['decode_all2all_backend'] = None
 
         vars_dict['moe_dp_chunk_size'] = getattr(config, 'moe_dp_chunk_size', None)
+        vars_dict['nvshmem_symmetric_size'] = getattr(config, 'nvshmem_symmetric_size', None)
 
         return vars_dict
 

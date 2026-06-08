@@ -625,6 +625,17 @@ Decode pods receive KV cache data from prefill pods via NIXL over RDMA. The inco
 - Prefill: `U = 0.94` → 131.6 GB allocated
 - Decode: `U = 0.89` → 124.6 GB allocated (7 GB NIXL headroom)
 
+#### EP Reserve (EP architecture only)
+
+For Expert Parallelism, an additional reserve is subtracted for NVSHMEM symmetric heap and EPLB expert replication. The reserve is computed from the model architecture — see [NVSHMEM_SYMMETRIC_SIZE](#nvshmem_symmetric_size-ep-only) and [EP Memory Reserve](#ep-memory-reserve).
+
+```
+U_prefill_ep = max(U_prefill - ep_reserve, 0.70)
+U_decode_ep  = max(U_prefill - ep_reserve - 0.05, 0.70)
+```
+
+**Why floor at 0.70 (not 0.80)?** EP models are typically large MoE architectures where each expert is small. The model can function with lower gpu_memory_utilization because the active parameter count per token is much smaller than the total model size.
+
 ### max_num_seqs
 
 Computed by evaluating four competing constraints and taking the minimum:
@@ -820,6 +831,62 @@ Same rationale as max_num_seqs: per-chunk activation memory allocation and dispa
 | DeepSeek-R1 (256 experts) | 256 | 8 | 8 | 256 | ~170 | ~360 | 192 (S_expert, aligned) |
 
 **Why not just use a fixed value?** The upstream llm-d default of 384 works for their reference model (DeepSeek with TP=16 on 16 GPUs). But on smaller setups (fewer GPUs, smaller TP) or models with very different expert counts, 384 can be too large (wasting activation memory) or too small (not amortizing dispatch overhead). The multi-factor formula adapts to the actual deployment.
+
+### NVSHMEM_SYMMETRIC_SIZE (EP only)
+
+The NVSHMEM symmetric heap is pre-allocated on each GPU for DeepEP's RDMA-based all-to-all communication buffers. Upstream hardcodes this to 16G (sized for DeepSeek-R1 with 256 experts on 32 GPUs at large batch sizes), which wastes 10-14 GB per GPU on smaller models.
+
+ServeIt Studio computes the exact size from the DeepEP V1 `LowLatencyLayout` formula:
+
+```
+num_scales = hidden_size / 128
+
+dispatch_msg_bytes = 16 + max(hidden × 2, hidden + num_scales × 4)
+combine_msg_bytes  = num_scales × 4 + hidden × 2
+
+send_buf = max(chunk_size × dispatch_msg, num_experts × chunk_size × combine_msg)
+recv_buf = max(num_experts × chunk_size × dispatch_msg, num_experts × chunk_size × combine_msg)
+signal_buf = align_up(num_experts × 4, 128)
+
+raw_total = (send_buf + recv_buf + signal_buf) × 2        # double-buffered
+
+NVSHMEM_SYMMETRIC_SIZE = ceil((raw_total × 1.5 + 512 MB) / 1 GB)
+                          floor = 2 GB
+```
+
+Where `chunk_size` = `moe_dp_chunk_size` (the already-computed dispatch chunk), `hidden` and `num_experts` come from the model's config.json.
+
+| Model | Experts | Hidden | Chunk | Raw | Result | Upstream |
+|-------|---------|--------|-------|-----|--------|----------|
+| DeepSeek-R1 | 256 | 7168 | 384 | 5.3 GB | **9G** | 16G |
+| Qwen3-Next-80B | 64 | 5120 | 256 | 0.9 GB | **2G** | 16G |
+| Llama-4-Maverick | 128 | 5120 | 384 | 1.9 GB | **4G** | 16G |
+
+**Why 1.5× safety margin + 512 MB?** The 1.5× accounts for NVSHMEM internal metadata (team structures, barrier buffers, collective temporaries). The 512 MB covers NVSHMEM initialization overhead — it requires at least 256 MiB for bootstrapping (env `NVSHMEM_CUMEM_GRANULARITY=512M` is set).
+
+**Why not use dynamic VMM?** `NVSHMEM_DISABLE_CUDA_VMM=0` (VMM enabled) allows the heap to grow dynamically. However, pre-allocating the right size avoids growth overhead during model loading. If undersized, NVSHMEM would grow in 512 MB increments, causing latency spikes. If oversized (the upstream 16G default), that VRAM is wasted — it cannot be used for KV cache or model weights.
+
+### EP Memory Reserve
+
+EP deployments reserve GPU memory for three components: NVSHMEM heap, and EPLB expert replication.
+
+```
+EPLB_gb = max(
+    num_moe_layers × (3 × hidden × intermediate × dtype_bytes) × 1 / ep_ranks / 1 GB,
+    0.5
+)
+ep_reserve = (NVSHMEM_size_gb + EPLB_gb) / GPU_VRAM_gb
+```
+
+EPLB reserves space for 1 redundant expert per EP rank. Each expert has 3 weight matrices (gate, up, down projections): `hidden × intermediate × dtype_bytes` each. With many EP ranks, the per-rank overhead is small.
+
+| Model | NVSHMEM | EPLB | Total | Reserve (H200) | Old Reserve |
+|-------|---------|------|-------|----------------|-------------|
+| DeepSeek-R1 FP8 | 9 GB | 0.5 GB | 9.5 GB | **6.8%** | 14.3% |
+| Qwen3-Next-80B | 2 GB | 0.5 GB | 2.5 GB | **1.8%** | 14.3% |
+| Llama-4-Maverick | 4 GB | 0.5 GB | 4.5 GB | **3.2%** | 14.3% |
+
+The savings (7.5-12.5% more VRAM available) directly increase KV cache capacity, allowing more concurrent sequences.
 
 ### Pod Resources (memory + CPU)
 ```
