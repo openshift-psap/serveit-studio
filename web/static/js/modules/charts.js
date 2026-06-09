@@ -631,11 +631,21 @@ function renderCharts(data, runId) {
         if (!vllmCustomEnabled) {
             html += '<div style="color:#059669;font-style:italic;margin-bottom:8px;">Using upstream llm-d defaults — no auto tuning applied.</div>';
         }
-        const rvGpu = rv.gpu_memory_utilization || rc.gpu_memory_utilization;
         html += `<div><span style="color:#64748b;">Max Model Len:</span> ${rv.max_model_len || rc.max_model_len || '-'}</div>`;
-        if (rv.prefill_gpu_memory_utilization && rv.decode_gpu_memory_utilization && rv.prefill_gpu_memory_utilization !== rv.decode_gpu_memory_utilization) {
-            html += `<div><span style="color:#64748b;">GPU Memory Utilization:</span> prefill=${rv.prefill_gpu_memory_utilization}, decode=${rv.decode_gpu_memory_utilization}</div>`;
+        const hasPdTests = (data.all_results || []).some(r => r.architecture === 'PD');
+        const hasAggTests = (data.all_results || []).some(r => r.architecture === 'AGGREGATED');
+        if (hasPdTests || hasEpTests) {
+            let gmuParts = [];
+            if (rv.prefill_gpu_memory_utilization) gmuParts.push(`PD prefill=${rv.prefill_gpu_memory_utilization}`);
+            if (rv.decode_gpu_memory_utilization) gmuParts.push(`PD decode=${rv.decode_gpu_memory_utilization}`);
+            if (hasAggTests) {
+                const aggResult = (data.all_results || []).find(r => r.architecture === 'AGGREGATED');
+                const aggTc = aggResult && aggResult.test_config_json ? (typeof aggResult.test_config_json === 'string' ? JSON.parse(aggResult.test_config_json) : aggResult.test_config_json) : {};
+                if (aggTc.gpu_memory_utilization) gmuParts.push(`Aggregated=${aggTc.gpu_memory_utilization}`);
+            }
+            html += `<div><span style="color:#64748b;">GPU Memory Utilization:</span> ${gmuParts.join(', ') || '-'}</div>`;
         } else {
+            const rvGpu = rv.gpu_memory_utilization || rc.gpu_memory_utilization;
             html += `<div><span style="color:#64748b;">GPU Memory Utilization:</span> ${rvGpu || '-'}</div>`;
         }
         if (rv.gpu_vram_gb) html += `<div><span style="color:#64748b;">GPU VRAM:</span> ${rv.gpu_vram_gb.toFixed(1)} GB</div>`;
@@ -643,8 +653,23 @@ function renderCharts(data, runId) {
         html += `<div><span style="color:#64748b;">Max Num Seqs:</span> ${rv.max_num_seqs || '256 (default)'}${rv.decode_max_num_seqs ? ' <span style="color:#94a3b8;">(decode: ' + rv.decode_max_num_seqs + ')</span>' : ''}</div>`;
         html += `<div><span style="color:#64748b;">Max Batched Tokens:</span> ${rv.max_num_batched_tokens || rv.max_model_len || '-'}</div>`;
         html += `<div><span style="color:#64748b;">Prefix Caching:</span> ${rv.enable_prefix_caching === true ? 'Enabled' : (rv.enable_prefix_caching === false ? 'Disabled' : '-')}</div>`;
-        html += `<div><span style="color:#64748b;">Expert Parallel:</span> ${rv.enable_expert_parallel === true ? 'Enabled' : (rv.enable_expert_parallel === false ? 'Disabled' : '-')}</div>`;
+        const hasEpTests = (data.all_results || []).some(r => r.architecture === 'EP');
+        if (hasEpTests) {
+            html += `<div><span style="color:#64748b;">Expert Parallel:</span> Enabled <span style="color:#94a3b8;">(EP configs)</span> / Disabled <span style="color:#94a3b8;">(PD, Aggregated)</span></div>`;
+        } else {
+            html += `<div><span style="color:#64748b;">Expert Parallel:</span> ${rv.enable_expert_parallel === true ? 'Enabled' : (rv.enable_expert_parallel === false ? 'Disabled' : '-')}</div>`;
+        }
         html += `<div><span style="color:#64748b;">Trust Remote Code:</span> ${rv.trust_remote_code === true ? 'Enabled' : (rv.trust_remote_code === false ? 'Disabled' : '-')}</div>`;
+        if (hasEpTests) {
+            const epResult = (data.all_results || []).find(r => r.architecture === 'EP');
+            const epTc = epResult && epResult.test_config_json ? (typeof epResult.test_config_json === 'string' ? JSON.parse(epResult.test_config_json) : epResult.test_config_json) : {};
+            html += '<div style="font-weight:700;color:#1e293b;margin-top:12px;margin-bottom:8px;border-bottom:2px solid #0ea5e9;padding-bottom:4px;">EP-Specific Settings</div>';
+            if (epTc.nvshmem_symmetric_size) html += `<div><span style="color:#64748b;">NVSHMEM Symmetric Size:</span> ${epTc.nvshmem_symmetric_size}</div>`;
+            if (epTc.num_redundant_experts != null) html += `<div><span style="color:#64748b;">EPLB Redundant Experts:</span> ${epTc.num_redundant_experts}</div>`;
+            if (epTc.moe_dp_chunk_size) html += `<div><span style="color:#64748b;">MoE DP Chunk Size:</span> ${epTc.moe_dp_chunk_size}</div>`;
+            if (epTc.all2all_backend) html += `<div><span style="color:#64748b;">All2All Backend:</span> ${epTc.all2all_backend}</div>`;
+            if (epTc.prefill_gpu_memory_utilization) html += `<div><span style="color:#64748b;">EP GPU Mem Util:</span> prefill=${epTc.prefill_gpu_memory_utilization}, decode=${epTc.decode_gpu_memory_utilization}</div>`;
+        }
         if (vllmCustomEnabled) {
             const adv = rc.advanced_vllm || {};
             if (adv.dtype) html += `<div><span style="color:#64748b;">Dtype:</span> ${adv.dtype}</div>`;
