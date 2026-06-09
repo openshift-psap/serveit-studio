@@ -375,11 +375,11 @@ def cmd_run(args):
         'prefix_cache_mode': args.prefix_cache_mode,
         'prefix_cache_groups': args.prefix_cache_groups,
         'prefix_cache_seed': args.prefix_cache_seed,
-        'epp_custom_enabled': not args.no_epp_custom,
+        'epp_custom_enabled': args.epp_custom,
         'epp_preset': epp_preset,
         'epp_benchmark': args.epp_benchmark,
         'epp_config': epp_config,
-        'advanced_vllm_custom_enabled': not args.no_auto_tune,
+        'advanced_vllm_custom_enabled': args.auto_tune,
         'memory_reserve_pct': args.memory_reserve_pct,
         'advanced_vllm': advanced_vllm,
         'scheduler_image': args.scheduler_image,
@@ -884,8 +884,8 @@ def build_run_parser(parser):
     ss.add_argument('--objective', choices=['ttft', 'throughput', 'balanced',
                     'aggregated_only', 'pd_only', 'ep_only', 'single_test'],
                     default='ttft', help='Optimization goal (default: ttft)')
-    ss.add_argument('--tp-pair-depth', type=int, default=2, choices=[1, 2, 3, 4],
-                    help='TP pair breadth: 1=fast, 2=default, 3=deep, 4=full (default: 2)')
+    ss.add_argument('--tp-pair-depth', type=int, default=4, choices=[1, 2, 3, 4],
+                    help='TP pair breadth: 1=fast, 2=default, 3=deep, 4=full (default: 4)')
     ss.add_argument('--pd-search', choices=['smart', 'exhaustive'],
                     default='smart', help='P/D ratio search mode (default: smart)')
     ss.add_argument('--headroom', type=float, default=1.3,
@@ -913,8 +913,8 @@ def build_run_parser(parser):
     ep.add_argument('--epp-preset', choices=['balanced', 'cache_optimized',
                     'queue_balanced', 'latency_aware', 'custom'],
                     default='balanced', help='EPP scoring preset (default: balanced)')
-    ep.add_argument('--no-epp-custom', action='store_true',
-                    help='Disable EPP customization — use upstream llm-d EPP defaults')
+    ep.add_argument('--epp-custom', action='store_true',
+                    help='Enable EPP customization (default: upstream llm-d EPP defaults)')
     ep.add_argument('--epp-benchmark', action='store_true',
                     help='Benchmark EPP strategies (Step 9)')
     ep.add_argument('--epp-weights', type=str, default=None, metavar='C:K:Q',
@@ -943,8 +943,8 @@ def build_run_parser(parser):
                     help='Decode pod count for PD single test')
 
     av = parser.add_argument_group('Advanced vLLM Settings')
-    av.add_argument('--no-auto-tune', action='store_true',
-                    help='Disable auto-tuning — use upstream vLLM defaults for all parameters')
+    av.add_argument('--auto-tune', action='store_true',
+                    help='Enable auto-tuning of vLLM parameters (default: upstream vLLM defaults)')
     av.add_argument('--memory-reserve-pct', type=float, default=0.0,
                     help='Extra GPU memory reserve %% for TP estimation safety (default: 0)')
     av.add_argument('--max-model-len', type=int, default=None,
