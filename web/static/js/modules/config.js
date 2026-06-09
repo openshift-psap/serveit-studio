@@ -123,7 +123,13 @@ function updateUIFromConfig() {
         setTpPairTopN(config.tp_pair_top_n);
     }
     if (document.getElementById('allow-asymmetric-tp')) {
-        document.getElementById('allow-asymmetric-tp').checked = !!config.allow_asymmetric_tp;
+        var atpOn = config.allow_asymmetric_tp !== false;
+        document.getElementById('allow-asymmetric-tp').checked = atpOn;
+        var atpSw = document.getElementById('asymmetric-tp-switch');
+        if (atpSw) {
+            atpSw.style.background = atpOn ? '#d97706' : '#ccc';
+            atpSw.querySelector('span').style.transform = atpOn ? 'translateX(18px)' : 'translateX(0)';
+        }
     }
 
     if (config.pvc_size && document.getElementById('pvc-size-input')) {
