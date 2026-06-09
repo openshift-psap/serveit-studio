@@ -717,73 +717,83 @@ function renderCharts(data, runId) {
         if (archOrder.length > 0) {
             html += '<div style="margin-top:24px;">';
             html += '<div style="font-weight:700;color:#1e293b;margin-bottom:10px;border-bottom:2px solid #059669;padding-bottom:4px;">Tuned Settings vs Upstream Defaults</div>';
-            html += '<div style="font-size:0.85em;color:#64748b;margin-bottom:12px;">Shows what ServeIt Studio auto-tuned for each architecture compared to upstream vLLM/llm-d defaults.</div>';
+            html += '<div style="font-size:0.85em;color:#64748b;margin-bottom:12px;">Green = auto-tuned by ServeIt Studio. Gray = upstream default (unchanged).</div>';
 
-            const upstreamDefaults = {
-                'gpu_memory_utilization': { val: '0.90', label: 'GPU Memory Utilization' },
-                'max_num_seqs': { val: '256', label: 'Max Num Seqs' },
-                'max_num_batched_tokens': { val: 'max_model_len', label: 'Max Batched Tokens' },
-                'block_size': { val: '16', label: 'Block Size' },
-                'enable_prefix_caching': { val: 'Off', label: 'Prefix Caching' },
-                'nvshmem_symmetric_size': { val: '16G', label: 'NVSHMEM Symmetric Size', ep_only: true },
-                'num_redundant_experts': { val: '32', label: 'EPLB Redundant Experts', ep_only: true },
-                'moe_dp_chunk_size': { val: '256', label: 'MoE DP Chunk Size', ep_only: true },
-            };
+            const hasEp = archOrder.includes('EP');
+            const na = '<span style="color:#cbd5e1;">N/A</span>';
 
-            html += '<div style="overflow-x:auto;"><table class="results-table" style="font-size:0.88em;">';
-            html += '<tr><th style="text-align:left;">Parameter</th><th>Upstream Default</th>';
+            function getVal(tc, key) { return tc[key] != null ? String(tc[key]) : null; }
+            function pdVal(tc, pKey, dKey) {
+                const p = tc[pKey], d = tc[dKey];
+                if (p != null && d != null && p !== d) return `P=${p} D=${d}`;
+                return p != null ? String(p) : (d != null ? String(d) : null);
+            }
+            function boolVal(tc, key) { return tc[key] === true ? 'On' : tc[key] === false ? 'Off' : null; }
+
+            const sections = [
+                { title: 'Memory & Batching', params: [
+                    { label: 'gpu-memory-utilization', def: '0.90', get: tc => pdVal(tc, 'prefill_gpu_memory_utilization', 'decode_gpu_memory_utilization') || getVal(tc, 'gpu_memory_utilization') },
+                    { label: 'max-model-len', def: 'auto', get: tc => getVal(tc, 'max_model_len') },
+                    { label: 'max-num-seqs', def: '256', get: tc => pdVal(tc, 'prefill_max_num_seqs', 'decode_max_num_seqs') || getVal(tc, 'max_num_seqs') },
+                    { label: 'max-num-batched-tokens', def: 'auto', get: tc => getVal(tc, 'max_num_batched_tokens') },
+                    { label: 'block-size', def: '16', get: tc => getVal(tc, 'block_size') },
+                    { label: 'kv-cache-memory-bytes', def: 'auto', get: tc => getVal(tc, 'kv_cache_memory_bytes'), pd_only: true },
+                ]},
+                { title: 'Precision & Compute', params: [
+                    { label: 'dtype', def: 'auto', get: tc => getVal(tc, 'dtype') },
+                    { label: 'kv-cache-dtype', def: 'auto', get: tc => getVal(tc, 'kv_cache_dtype') },
+                    { label: 'pipeline-parallel-size', def: '1', get: tc => getVal(tc, 'pipeline_parallel_size') },
+                ]},
+                { title: 'Feature Flags', params: [
+                    { label: 'enable-prefix-caching', def: 'Off', get: tc => boolVal(tc, 'enable_prefix_caching') },
+                    { label: 'enable-expert-parallel', def: 'Off', get: tc => boolVal(tc, 'enable_expert_parallel') },
+                    { label: 'enable-dbo', def: 'Off', get: tc => boolVal(tc, 'enable_dbo') },
+                    { label: 'enable-eplb', def: 'Off', get: tc => boolVal(tc, 'enable_eplb') },
+                    { label: 'trust-remote-code', def: 'Off', get: tc => boolVal(tc, 'trust_remote_code') },
+                ]},
+                { title: 'MoE / Expert Parallel', params: [
+                    { label: 'moe-dp-chunk-size', def: '256', get: tc => getVal(tc, 'moe_dp_chunk_size'), ep_only: true },
+                    { label: 'all2all-backend', def: 'auto', get: tc => getVal(tc, 'all2all_backend') || (tc.decode_all2all_backend ? `HT / ${tc.decode_all2all_backend}` : null), ep_only: true },
+                    { label: 'moe-backend', def: 'auto', get: tc => getVal(tc, 'moe_backend'), ep_only: true },
+                    { label: 'use-deep-gemm', def: 'auto', get: tc => tc.use_deep_gemm === true ? 'On' : tc.use_deep_gemm === false ? 'Off' : null },
+                    { label: 'dbo-prefill-threshold', def: '32', get: tc => getVal(tc, 'dbo_prefill_token_threshold') },
+                    { label: 'dbo-decode-threshold', def: '32', get: tc => getVal(tc, 'dbo_decode_token_threshold') },
+                    { label: 'num-redundant-experts', def: '32', get: tc => getVal(tc, 'num_redundant_experts'), ep_only: true },
+                    { label: 'NVSHMEM_SYMMETRIC_SIZE', def: '16G', get: tc => getVal(tc, 'nvshmem_symmetric_size'), ep_only: true },
+                ]},
+                { title: 'EPP Routing', params: [
+                    { label: 'prefix-cache-weight', def: '3', get: tc => tc.epp_config ? String(tc.epp_config.prefix_cache_weight || tc.epp_config.plugins?.['prefix-cache-scorer']?.weight || '-') : null },
+                    { label: 'kv-cache-weight', def: '2', get: tc => tc.epp_config ? String(tc.epp_config.kv_cache_weight || tc.epp_config.plugins?.['kv-cache-utilization-scorer']?.weight || '-') : null },
+                    { label: 'queue-weight', def: '2', get: tc => tc.epp_config ? String(tc.epp_config.queue_weight || tc.epp_config.plugins?.['queue-scorer']?.weight || '-') : null },
+                ]},
+            ];
+
+            html += '<div style="overflow-x:auto;"><table class="results-table" style="font-size:0.85em;">';
+            html += '<tr><th style="text-align:left;min-width:180px;">Parameter</th><th style="min-width:80px;">Default</th>';
             for (const arch of archOrder) {
                 const color = arch === 'AGGREGATED' ? '#6366f1' : arch === 'PD' ? '#0ea5e9' : '#10b981';
-                html += `<th style="color:${color};">${arch}</th>`;
+                html += `<th style="color:${color};min-width:100px;">${arch}</th>`;
             }
             html += '</tr>';
 
-            const hasEp = archOrder.includes('EP');
-
-            for (const [key, def] of Object.entries(upstreamDefaults)) {
-                if (def.ep_only && !hasEp) continue;
-
-                html += `<tr><td style="font-weight:600;color:#334155;">${def.label}</td>`;
-                html += `<td style="color:#94a3b8;text-align:center;">${def.val}</td>`;
-
-                for (const arch of archOrder) {
-                    const tc = archConfigs[arch];
-                    let val = '-';
-                    let changed = false;
-
-                    if (key === 'gpu_memory_utilization') {
-                        if (tc.prefill_gpu_memory_utilization && tc.decode_gpu_memory_utilization && tc.prefill_gpu_memory_utilization !== tc.decode_gpu_memory_utilization) {
-                            val = `P=${tc.prefill_gpu_memory_utilization} D=${tc.decode_gpu_memory_utilization}`;
-                        } else {
-                            val = tc.gpu_memory_utilization || '-';
-                        }
-                        changed = val !== '-' && String(val) !== def.val;
-                    } else if (key === 'max_num_seqs') {
-                        if (tc.prefill_max_num_seqs && tc.decode_max_num_seqs && tc.prefill_max_num_seqs !== tc.decode_max_num_seqs) {
-                            val = `P=${tc.prefill_max_num_seqs} D=${tc.decode_max_num_seqs}`;
-                        } else {
-                            val = tc.max_num_seqs || tc.prefill_max_num_seqs || '-';
-                        }
-                        changed = val !== '-' && String(val) !== def.val;
-                    } else if (key === 'enable_prefix_caching') {
-                        val = tc.enable_prefix_caching ? 'On' : 'Off';
-                        changed = val !== def.val;
-                    } else if (key === 'nvshmem_symmetric_size' || key === 'num_redundant_experts' || key === 'moe_dp_chunk_size') {
-                        if (arch === 'EP') {
-                            val = tc[key] != null ? String(tc[key]) : '-';
-                            changed = val !== '-' && val !== def.val;
-                        } else {
-                            val = '<span style="color:#cbd5e1;">N/A</span>';
-                        }
-                    } else {
-                        val = tc[key] != null ? String(tc[key]) : '-';
-                        changed = val !== '-' && val !== def.val;
+            for (const section of sections) {
+                html += `<tr><td colspan="${2 + archOrder.length}" style="background:#f1f5f9;font-weight:700;color:#475569;padding:6px 10px;font-size:0.95em;">${section.title}</td></tr>`;
+                for (const param of section.params) {
+                    if (param.ep_only && !hasEp) continue;
+                    html += `<tr><td style="color:#334155;padding-left:16px;"><code style="font-size:0.9em;">${param.label}</code></td>`;
+                    html += `<td style="color:#94a3b8;text-align:center;">${param.def}</td>`;
+                    for (const arch of archOrder) {
+                        const tc = archConfigs[arch];
+                        if (param.ep_only && arch !== 'EP') { html += `<td style="text-align:center;">${na}</td>`; continue; }
+                        if (param.pd_only && arch === 'AGGREGATED') { html += `<td style="text-align:center;">${na}</td>`; continue; }
+                        const val = param.get(tc);
+                        const display = val || '-';
+                        const changed = val && val !== '-' && val !== param.def && val !== 'null';
+                        const style = changed ? 'font-weight:700;color:#059669;' : '';
+                        html += `<td style="text-align:center;${style}">${display}</td>`;
                     }
-
-                    const style = changed ? 'font-weight:700;color:#059669;' : '';
-                    html += `<td style="text-align:center;${style}">${val}</td>`;
+                    html += '</tr>';
                 }
-                html += '</tr>';
             }
 
             html += '</table></div></div>';
