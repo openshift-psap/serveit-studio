@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="docs/branding/servit-logo-short.png" alt="ServeIt Studio" width="200">
+  <img src="docs/branding/serveit-logo.png" alt="ServeIt Studio" width="200">
 </p>
 
 <h1 align="center">ServeIt Studio</h1>
