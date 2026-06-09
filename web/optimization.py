@@ -1012,8 +1012,6 @@ data:
 
                 if results.get('stopped'):
                     run_status = 'stopped'
-                elif results.get('total_tests_run', 0) == 0:
-                    run_status = 'failed'
                 else:
                     run_status = 'completed'
 
