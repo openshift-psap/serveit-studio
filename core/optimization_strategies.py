@@ -109,6 +109,9 @@ class TTFTStrategy(OptimizationStrategy):
             self.opt._run_latency_bounded_search()
             self.opt.log("", 'info')
 
+        # Recalculate achievable concurrency from actual Step 7 throughput
+        self.opt._recalculate_achievable_concurrency()
+
         # Step 11: Re-test at calibrated load (only if overloaded)
         if self.opt._should_run_step10():
             self.opt.log("STEP 11: Calibrated Load Validation", 'decision')
@@ -172,6 +175,9 @@ class ThroughputStrategy(OptimizationStrategy):
         if self.opt._should_run_latency_bounded_search():
             self.opt._run_latency_bounded_search()
             self.opt.log("", 'info')
+
+        # Recalculate achievable concurrency from actual Step 7 throughput
+        self.opt._recalculate_achievable_concurrency()
 
         # Step 11: Re-test at calibrated load (only if overloaded)
         if self._should_run_step10():
@@ -631,6 +637,9 @@ class BalancedStrategy(OptimizationStrategy):
         if self.opt._should_run_latency_bounded_search():
             self.opt._run_latency_bounded_search()
             self.opt.log("", 'info')
+
+        # Recalculate achievable concurrency from actual Step 7 throughput
+        self.opt._recalculate_achievable_concurrency()
 
         # Step 11: Calibrated load for all architectures
         if self._should_run_step10():

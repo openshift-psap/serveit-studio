@@ -462,6 +462,54 @@ class RecipeOptimizer(
         elif errored > 0:
             self.log(f"   ⚠️  {errored}/{total} requests errored ({error_pct:.1f}%) — within 2% threshold", 'warning')
 
+    def _recalculate_achievable_concurrency(self):
+        """Recalculate achievable concurrency from actual Step 6/7 throughput.
+
+        The initial estimate from TPSG calibration (single-pod, 1 user) is often
+        too conservative for MoE models where batch efficiency scales with load.
+        After Step 7, we have real throughput data at the actual concurrency.
+        Use Little's Law: sustainable_concurrency = throughput × avg_latency.
+        """
+        best_tput = 0
+        best_e2e = 0
+        source = None
+
+        for results, label in [
+            (self.ep_results, 'EP'),
+            (self.pareto_results, 'PD'),
+        ]:
+            for cfg, result in results:
+                tput = result.throughput_mean or result.throughput_p90 or 0
+                if tput > best_tput:
+                    best_tput = tput
+                    e2e_s = ((result.ttft_p90 or 0) + (result.tpot_p90 or 10) * self.config.osl) / 1000
+                    best_e2e = max(e2e_s, 0.1)
+                    source = label
+
+        if self.aggregated_result:
+            tput = self.aggregated_result.throughput_mean or self.aggregated_result.throughput_p90 or 0
+            if tput > best_tput:
+                best_tput = tput
+                e2e_s = ((self.aggregated_result.ttft_p90 or 0) + (self.aggregated_result.tpot_p90 or 10) * self.config.osl) / 1000
+                best_e2e = max(e2e_s, 0.1)
+                source = 'Aggregated'
+
+        if best_tput <= 0:
+            return
+
+        measured_concurrency = int(best_tput * best_e2e / self.config.headroom)
+        old = self.achievable_concurrency
+        requested = int(self.config.qps)
+
+        if old is not None and measured_concurrency > old:
+            self.achievable_concurrency = min(measured_concurrency, requested)
+            self.log(f"  📊 Recalculated achievable concurrency from measured throughput:", 'info')
+            self.log(f"     Best throughput: {best_tput:.1f} req/s ({source}), avg E2E: {best_e2e:.1f}s", 'info')
+            self.log(f"     Old estimate (TPSG): {old} → Measured: {measured_concurrency} → Using: {self.achievable_concurrency}", 'info')
+        elif old is None and measured_concurrency < requested:
+            self.achievable_concurrency = measured_concurrency
+            self.log(f"  📊 Computed achievable concurrency from measured throughput: {measured_concurrency}", 'info')
+
     def _save_constraint_notes(self):
         """Save constraint notes to the database immediately so they persist even if the run fails."""
         if self.db_manager and self.run_id and self.constraint_notes:
