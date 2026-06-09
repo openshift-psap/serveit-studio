@@ -761,10 +761,17 @@ function renderCharts(data, runId) {
                     { label: 'num-redundant-experts', def: '32', get: tc => getVal(tc, 'num_redundant_experts'), ep_only: true },
                     { label: 'NVSHMEM_SYMMETRIC_SIZE', def: '16G', get: tc => getVal(tc, 'nvshmem_symmetric_size'), ep_only: true },
                 ]},
-                { title: 'EPP Routing', params: [
+                { title: 'EPP Routing Weights', params: [
                     { label: 'prefix-cache-weight', def: '3', get: tc => tc.epp_config ? String(tc.epp_config.prefix_cache_weight || tc.epp_config.plugins?.['prefix-cache-scorer']?.weight || '-') : null },
                     { label: 'kv-cache-weight', def: '2', get: tc => tc.epp_config ? String(tc.epp_config.kv_cache_weight || tc.epp_config.plugins?.['kv-cache-utilization-scorer']?.weight || '-') : null },
                     { label: 'queue-weight', def: '2', get: tc => tc.epp_config ? String(tc.epp_config.queue_weight || tc.epp_config.plugins?.['queue-scorer']?.weight || '-') : null },
+                    { label: 'decode-active-request-weight', def: '2', get: tc => tc.epp_config ? String(tc.epp_config.decode_active_request_weight || '-') : null },
+                    { label: 'decode-prefix-cache-weight', def: '3', get: tc => tc.epp_config ? String(tc.epp_config.decode_prefix_cache_weight || '-') : null },
+                ]},
+                { title: 'EPP Auto-Calculated', params: [
+                    { label: 'maxPrefixBlocksToMatch', def: 'auto', get: tc => tc.epp_config ? String(tc.epp_config.max_prefix_blocks || tc.epp_config.maxPrefixBlocksToMatch || '-') : null },
+                    { label: 'lruCapacityPerServer', def: 'auto', get: tc => tc.epp_config ? String(tc.epp_config.lru_capacity || tc.epp_config.lruCapacityPerServer || '-') : null },
+                    { label: 'nonCachedTokens', def: '16', get: tc => tc.epp_config ? String(tc.epp_config.non_cached_tokens || tc.epp_config.nonCachedTokens || '-') : null },
                 ]},
             ];
 
