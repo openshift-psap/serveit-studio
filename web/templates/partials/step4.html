@@ -90,11 +90,11 @@
                                 <div style="margin-top:12px;display:flex;align-items:center;justify-content:space-between;gap:12px;padding:10px 14px;background:#fefce8;border:1px solid #fde68a;border-radius:8px;cursor:pointer;" onclick="var on=!document.getElementById('allow-asymmetric-tp').checked;document.getElementById('allow-asymmetric-tp').checked=on;config.allow_asymmetric_tp=on;var sw=document.getElementById('asymmetric-tp-switch');sw.style.background=on?'#d97706':'#ccc';sw.querySelector('span').style.transform=on?'translateX(18px)':'translateX(0)';saveConfig();">
                                     <div>
                                         <div style="font-weight:600;font-size:0.9em;color:#92400e;">Allow Prefill TP &gt; Decode TP</div>
-                                        <div style="font-size:0.8em;color:#a16207;margin-top:2px;">Test configurations where prefill uses more GPUs per pod than decode. Disable only for llm-d v0.4.0 (RHAIIS 3.3) or older where NIXL KV transfer may crash with asymmetric TP.</div>
+                                        <div style="font-size:0.8em;color:#a16207;margin-top:2px;">Test configurations where prefill uses more GPUs per pod than decode. NIXL KV transfer requires matching TP between prefill and decode — asymmetric TP causes handshake failures. Enable only if your deployment does not use NIXL (non-PD aggregated mode).</div>
                                     </div>
-                                    <input type="checkbox" id="allow-asymmetric-tp" checked style="display:none;">
-                                    <div id="asymmetric-tp-switch" style="width:40px;height:22px;background:#d97706;border-radius:11px;position:relative;transition:background-color 0.2s;flex-shrink:0;margin-left:16px;">
-                                        <span style="position:absolute;top:2px;left:2px;width:18px;height:18px;background:white;border-radius:50%;transition:transform 0.2s;box-shadow:0 1px 3px rgba(0,0,0,0.2);display:block;transform:translateX(18px);"></span>
+                                    <input type="checkbox" id="allow-asymmetric-tp" style="display:none;">
+                                    <div id="asymmetric-tp-switch" style="width:40px;height:22px;background:#ccc;border-radius:11px;position:relative;transition:background-color 0.2s;flex-shrink:0;margin-left:16px;">
+                                        <span style="position:absolute;top:2px;left:2px;width:18px;height:18px;background:white;border-radius:50%;transition:transform 0.2s;box-shadow:0 1px 3px rgba(0,0,0,0.2);display:block;"></span>
                                     </div>
                                 </div>
                             </div>
