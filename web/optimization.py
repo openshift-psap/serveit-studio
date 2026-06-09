@@ -929,8 +929,9 @@ data:
                     for i, config in enumerate(results['pareto_configurations'], 1):
                         log_to_ui(f"   {i}. PD: {config['prefill_pods']}P×TP{config['prefill_tp']} + "
                                  f"{config['decode_pods']}D×TP{config['decode_tp']}", 'info')
+                        tput = config.get('throughput_mean') or config.get('throughput_p90') or 0
                         log_to_ui(f"      TTFT p90: {config['ttft_p90']:.1f}ms, "
-                                 f"Throughput p90: {config['throughput_p90']:.2f} req/s", 'info')
+                                 f"Throughput mean: {tput:.2f} req/s", 'info')
 
                 if results.get('ep_configurations'):
                     log_to_ui("", 'info')
@@ -955,10 +956,10 @@ data:
                     log_to_ui("📊 Aggregated Baseline (Step 8):", 'decision')
                     log_to_ui(f"   Aggregated: {agg['pods']} pods × TP{agg['tp']} ({agg['gpus']} GPUs)", 'info')
                     agg_ttft = agg.get('ttft_p90')
-                    agg_tput = agg.get('throughput_p90')
+                    agg_tput = agg.get('throughput_mean') or agg.get('throughput_p90')
                     if agg_ttft is not None and agg_tput is not None:
                         log_to_ui(f"      TTFT p90: {agg_ttft:.1f}ms, "
-                                 f"Throughput p90: {agg_tput:.2f} req/s", 'info')
+                                 f"Throughput mean: {agg_tput:.2f} req/s", 'info')
 
                         # Compare based on goal
                         if opt_goal == 'ttft':
@@ -971,7 +972,7 @@ data:
                                 else:
                                     log_to_ui(f"   ✅ PD has better TTFT ({pd_ttft:.1f}ms vs {agg_ttft:.1f}ms)", 'success')
                         elif opt_goal == 'throughput' and best_ep:
-                            ep_tput = best_ep.get('throughput_p90', 0)
+                            ep_tput = best_ep.get('throughput_mean') or best_ep.get('throughput_p90', 0)
                             if ep_tput and agg_tput:
                                 if ep_tput > agg_tput:
                                     log_to_ui(f"   ✅ EP has better throughput ({ep_tput:.2f} vs {agg_tput:.2f} req/s)", 'success')

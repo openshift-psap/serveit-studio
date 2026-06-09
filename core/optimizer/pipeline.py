@@ -1397,7 +1397,8 @@ class RecipeOptimizer(
                     'prefill_tp': split.prefill_tp,
                     'decode_tp': split.decode_tp,
                     'ttft_p90': result.ttft_p90,
-                    'throughput_p90': result.throughput_p90
+                    'throughput_p90': result.throughput_p90,
+                    'throughput_mean': result.throughput_mean or result.throughput_p90,
                 }
                 for split, result in self.pareto_results
             ],
@@ -1409,6 +1410,7 @@ class RecipeOptimizer(
                     'total_gpus': self.config.total_gpus,
                     'ttft_p90': result.ttft_p90,
                     'throughput_p90': result.throughput_p90,
+                    'throughput_mean': result.throughput_mean or result.throughput_p90,
                 }
                 for tp, result in self.aggregated_search_results
             ],
@@ -1419,6 +1421,7 @@ class RecipeOptimizer(
                 'pods': self.aggregated_gpus // self.aggregated_tp if self.aggregated_tp else None,
                 'ttft_p90': self.aggregated_result.ttft_p90 if self.aggregated_result else None,
                 'throughput_p90': self.aggregated_result.throughput_p90 if self.aggregated_result else None,
+                'throughput_mean': (self.aggregated_result.throughput_mean or self.aggregated_result.throughput_p90) if self.aggregated_result else None,
             } if self.aggregated_result else None,
             # Step 10: Latency-bounded throughput maximization
             'latency_bounded_result': {
