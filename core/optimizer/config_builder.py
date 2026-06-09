@@ -674,24 +674,34 @@ class ConfigBuilderMixin:
         decode_ep_savings = max(decode_ep_savings, 0)
         decode_ep_savings_pct = round(decode_ep_savings / self._gpu_vram_gb, 2)
 
-        ep_overhead_pct = round((ep_mem_gb + eplb_gb) / self._gpu_vram_gb, 2)
+        # Decode: full RDMA overhead (low-latency mode) + NIXL + EPLB
+        decode_ep_overhead_pct = round((ep_mem_gb + eplb_gb) / self._gpu_vram_gb, 2)
         nixl_reserve = 0.05
+
+        # Prefill: high-throughput mode uses small NVL buffers (~1GB),
+        # not the large RDMA buffers. Only EPLB + NVL overhead.
+        prefill_ep_overhead_gb = 1.0 + eplb_gb
+        prefill_ep_overhead_pct = round(prefill_ep_overhead_gb / self._gpu_vram_gb, 2)
 
         prefill_gmu_raw = self._compute_gpu_mem_util(split.prefill_tp)
         decode_gmu_raw = self._compute_gpu_mem_util(split.decode_tp, log=False)
 
-        prefill_gmu = round(max(prefill_gmu_raw - ep_overhead_pct, 0.70), 2)
-        decode_gmu = round(max(decode_gmu_raw - ep_overhead_pct - nixl_reserve + decode_ep_savings_pct, 0.70), 2)
+        prefill_gmu = round(max(prefill_gmu_raw - prefill_ep_overhead_pct, 0.70), 2)
+        prefill_gmu = min(prefill_gmu, 0.95)
+        decode_gmu = round(max(decode_gmu_raw - decode_ep_overhead_pct - nixl_reserve + decode_ep_savings_pct, 0.70), 2)
         decode_gmu = min(decode_gmu, 0.95)
 
         self.log(f"   EPLB: {num_redundant} redundant experts "
                  f"(expert={bytes_per_expert / 1024**2:.0f}MB, ep_ranks={ep_ranks})")
-        self.log(f"   EP overhead: {ep_mem_gb + eplb_gb:.1f}GB = {ep_overhead_pct:.0%}")
+        self.log(f"   Decode EP overhead: {ep_mem_gb + eplb_gb:.1f}GB = {decode_ep_overhead_pct:.0%} "
+                 f"(RDMA={ep_mem_gb:.1f}GB + EPLB={eplb_gb:.1f}GB)")
+        self.log(f"   Prefill EP overhead: {prefill_ep_overhead_gb:.1f}GB = {prefill_ep_overhead_pct:.0%} "
+                 f"(NVL=1GB + EPLB={eplb_gb:.1f}GB)")
         self.log(f"   EP weight savings (decode): {decode_ep_savings:.1f}GB = +{decode_ep_savings_pct:.0%} "
                  f"(experts={expert_weight_gb:.0f}GB, 1/{split.decode_tp} → 1/{ep_ranks})")
-        self.log(f"   Prefill gmu={prefill_gmu:.2f} (base={prefill_gmu_raw:.2f} - {ep_overhead_pct:.0%} EP)")
-        self.log(f"   Decode  gmu={decode_gmu:.2f} (base={decode_gmu_raw:.2f} - {ep_overhead_pct:.0%} EP "
-                 f"- {nixl_reserve:.0%} NIXL + {decode_ep_savings_pct:.0%} EP savings)")
+        self.log(f"   Prefill gmu={prefill_gmu:.2f} (base={prefill_gmu_raw:.2f} - {prefill_ep_overhead_pct:.0%} EP)")
+        self.log(f"   Decode  gmu={decode_gmu:.2f} (base={decode_gmu_raw:.2f} - {decode_ep_overhead_pct:.0%} EP "
+                 f"- {nixl_reserve:.0%} NIXL + {decode_ep_savings_pct:.0%} savings)")
 
         prefill_max_num_seqs = self._compute_max_num_seqs(
             split.prefill_tp, role='prefill',
