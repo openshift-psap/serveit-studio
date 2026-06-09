@@ -105,7 +105,9 @@ function renderCharts(data, runId) {
 
                 if (!deploy) {
                     if (cfg.prefill_pods && cfg.decode_pods) {
-                        deploy = `${cfg.prefill_pods} Prefill + ${cfg.decode_pods} Decode pods, TP=${cfg.tp || cfg.prefill_tp || '?'}`;
+                        deploy = cfg.prefill_tp === cfg.decode_tp
+                            ? `${cfg.prefill_pods}P+${cfg.decode_pods}D TP=${cfg.prefill_tp || cfg.tp || '?'}`
+                            : `${cfg.prefill_pods}P+${cfg.decode_pods}D PTP=${cfg.prefill_tp || cfg.tp || '?'} DTP=${cfg.decode_tp || '?'}`;
                     } else {
                         deploy = cfg.config_name;
                     }
@@ -243,8 +245,10 @@ function renderCharts(data, runId) {
                         const winnerBadge = ci === 0 ? '<span style="background:#059669; color:white; font-size:0.65em; padding:2px 6px; border-radius:3px; margin-left:6px;">BEST TTFT</span>' : '';
 
                         let deployLabel;
-                        if (arch === 'pd' && best.prefill_pods) {
-                            deployLabel = `${best.prefill_pods} Prefill + ${best.decode_pods} Decode pods, TP=${best.prefill_tp || best.tp || '?'}`;
+                        if ((arch === 'pd' || arch === 'ep') && best.prefill_pods) {
+                            deployLabel = best.prefill_tp === best.decode_tp
+                                ? `${best.prefill_pods}P+${best.decode_pods}D TP=${best.prefill_tp || best.tp || '?'}`
+                                : `${best.prefill_pods}P+${best.decode_pods}D PTP=${best.prefill_tp || best.tp || '?'} DTP=${best.decode_tp || '?'}`;
                         } else if (best.replicas) {
                             deployLabel = `${best.replicas} Aggregated pods, TP=${best.tp || '?'}`;
                         } else {
@@ -789,7 +793,7 @@ function renderCharts(data, runId) {
                         const tputColor = tputBetter ? '#059669' : '#dc2626';
                         const ttftArrow = ttftBetter ? '&#9660;' : '&#9650;';
                         const tputArrow = tputBetter ? '&#9650;' : '&#9660;';
-                        const label = `EP TP${cfg.tp} x ${cfg.replicas} replicas`;
+                        const label = cfg.prefill_pods ? `EP ${cfg.prefill_pods}P+${cfg.decode_pods}D PTP=${cfg.prefill_tp} DTP=${cfg.decode_tp}` : `EP TP${cfg.tp} x ${cfg.replicas} replicas`;
                         html += `<tr><td><strong>${label}</strong></td>`;
                         html += `<td data-val="${cfg.ttft_p90}">${cfg.ttft_p90} ms</td>`;
                         html += `<td data-val="${ttftPct}" style="color:${ttftColor}; font-weight:700;">${ttftArrow} ${ttftPct}%</td>`;

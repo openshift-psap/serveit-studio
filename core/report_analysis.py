@@ -438,50 +438,33 @@ class ReportAnalyzer:
         ep_all_configs = []
 
         if step7_ep_tests:
-            import re as _re
-            for r in step7_ep_tests:
-                m = _re.match(r'step7-ep-tp(\d+)-(\d+)r', r.config_name)
-                ep_tp = int(m.group(1)) if m else r.tensor_parallelism
-                ep_replicas = int(m.group(2)) if m else (r.total_gpus // r.tensor_parallelism)
-                ep_entry = {
+            def _ep_entry(r):
+                ptp = r.prefill_tp or r.tensor_parallelism
+                dtp = r.decode_tp or r.tensor_parallelism
+                return {
                     'config_name': r.display_label,
                     'test_id': r.config_name,
-                    'tp': ep_tp,
-                    'replicas': ep_replicas,
+                    'tp': ptp,
+                    'prefill_tp': ptp,
+                    'decode_tp': dtp,
+                    'replicas': r.prefill_pods + r.decode_pods,
+                    'prefill_pods': r.prefill_pods,
+                    'decode_pods': r.decode_pods,
                     'ttft_p90': round(r.ttft_p90, 1) if r.ttft_p90 else None,
                     'throughput_p90': round(r.throughput_p90, 2) if r.throughput_p90 else None,
+                    'throughput_mean': round(r.throughput_mean, 2) if r.throughput_mean else None,
                     'gpus': r.total_gpus,
                     'percentiles': _percentiles(r),
                 }
-                ep_all_configs.append(ep_entry)
 
-            # Best by throughput
-            by_tput = max(step7_ep_tests, key=lambda r: r.throughput_p90 or 0)
-            m = _re.match(r'step7-ep-tp(\d+)-(\d+)r', by_tput.config_name)
-            best_ep_throughput = {
-                'config_name': by_tput.display_label,
-                'test_id': by_tput.config_name,
-                'tp': int(m.group(1)) if m else by_tput.tensor_parallelism,
-                'replicas': int(m.group(2)) if m else (by_tput.total_gpus // by_tput.tensor_parallelism),
-                'ttft_p90': round(by_tput.ttft_p90, 1) if by_tput.ttft_p90 else None,
-                'throughput_p90': round(by_tput.throughput_p90, 2) if by_tput.throughput_p90 else None,
-                'gpus': by_tput.total_gpus,
-                'percentiles': _percentiles(by_tput),
-            }
+            for r in step7_ep_tests:
+                ep_all_configs.append(_ep_entry(r))
 
-            # Best by TTFT
+            by_tput = max(step7_ep_tests, key=lambda r: r.throughput_mean or r.throughput_p90 or 0)
+            best_ep_throughput = _ep_entry(by_tput)
+
             by_ttft = min(step7_ep_tests, key=lambda r: r.ttft_p90 if r.ttft_p90 else 1000000.0)
-            m = _re.match(r'step7-ep-tp(\d+)-(\d+)r', by_ttft.config_name)
-            best_ep_ttft = {
-                'config_name': by_ttft.display_label,
-                'test_id': by_ttft.config_name,
-                'tp': int(m.group(1)) if m else by_ttft.tensor_parallelism,
-                'replicas': int(m.group(2)) if m else (by_ttft.total_gpus // by_ttft.tensor_parallelism),
-                'ttft_p90': round(by_ttft.ttft_p90, 1) if by_ttft.ttft_p90 else None,
-                'throughput_p90': round(by_ttft.throughput_p90, 2) if by_ttft.throughput_p90 else None,
-                'gpus': by_ttft.total_gpus,
-                'percentiles': _percentiles(by_ttft),
-            }
+            best_ep_ttft = _ep_entry(by_ttft)
 
         # --- Aggregated baseline (from step 6 search, or legacy step 8) ---
         aggregated_baseline = None
@@ -617,7 +600,7 @@ class ReportAnalyzer:
             throughput_candidates.append(('EP', tput_mean, {
                 'goal': 'Throughput (maximize req/s)',
                 'config': best_ep_throughput,
-                'deploy': f"{best_ep_throughput['replicas']} EP pods × TP{best_ep_throughput['tp']} ({best_ep_throughput['gpus']} GPUs)",
+                'deploy': f"{best_ep_throughput['prefill_pods']}P+{best_ep_throughput['decode_pods']}D PTP={best_ep_throughput['prefill_tp']} DTP={best_ep_throughput['decode_tp']} ({best_ep_throughput['gpus']} GPUs)",
                 'metric_value': f"{tput_mean} req/s",
                 'metric_name': 'Throughput Mean',
                 'architecture': 'EP',
