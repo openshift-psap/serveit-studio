@@ -640,7 +640,7 @@ function renderCharts(data, runId) {
             if (rv.decode_gpu_memory_utilization) gmuParts.push(`PD decode=${rv.decode_gpu_memory_utilization}`);
             if (hasAggTests) {
                 const aggResult = (data.all_results || []).find(r => r.architecture === 'AGGREGATED');
-                const aggTc = aggResult && aggResult.test_config_json ? (typeof aggResult.test_config_json === 'string' ? JSON.parse(aggResult.test_config_json) : aggResult.test_config_json) : {};
+                const aggTc = (aggResult && aggResult.test_config) || {};
                 if (aggTc.gpu_memory_utilization) gmuParts.push(`Aggregated=${aggTc.gpu_memory_utilization}`);
             }
             html += `<div><span style="color:#64748b;">GPU Memory Utilization:</span> ${gmuParts.join(', ') || '-'}</div>`;
@@ -662,7 +662,7 @@ function renderCharts(data, runId) {
         html += `<div><span style="color:#64748b;">Trust Remote Code:</span> ${rv.trust_remote_code === true ? 'Enabled' : (rv.trust_remote_code === false ? 'Disabled' : '-')}</div>`;
         if (hasEpTests) {
             const epResult = (data.all_results || []).find(r => r.architecture === 'EP');
-            const epTc = epResult && epResult.test_config_json ? (typeof epResult.test_config_json === 'string' ? JSON.parse(epResult.test_config_json) : epResult.test_config_json) : {};
+            const epTc = (epResult && epResult.test_config) || {};
             html += '<div style="font-weight:700;color:#1e293b;margin-top:12px;margin-bottom:8px;border-bottom:2px solid #0ea5e9;padding-bottom:4px;">EP-Specific Settings</div>';
             if (epTc.nvshmem_symmetric_size) html += `<div><span style="color:#64748b;">NVSHMEM Symmetric Size:</span> ${epTc.nvshmem_symmetric_size}</div>`;
             if (epTc.num_redundant_experts != null) html += `<div><span style="color:#64748b;">EPLB Redundant Experts:</span> ${epTc.num_redundant_experts}</div>`;
@@ -708,8 +708,8 @@ function renderCharts(data, runId) {
             const arch = (r.architecture || '').toUpperCase();
             if (archConfigs[arch]) continue;
             let tc = null;
-            if (r.test_config_json) {
-                try { tc = typeof r.test_config_json === 'string' ? JSON.parse(r.test_config_json) : r.test_config_json; } catch(e) {}
+            if (r.test_config) {
+                try { tc = typeof r.test_config === 'string' ? JSON.parse(r.test_config) : r.test_config; } catch(e) {}
             }
             if (tc) { archConfigs[arch] = tc; archOrder.push(arch); }
         }
