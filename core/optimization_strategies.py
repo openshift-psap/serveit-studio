@@ -343,7 +343,7 @@ class ThroughputStrategy(OptimizationStrategy):
             self.opt.best_ep_result = best_result
 
             best_ttft = best_result.ttft_p90 or best_result.ttft_p50 or 0
-            best_tput = best_result.throughput_p90 or best_result.throughput_p50 or 0
+            best_tput = best_result.throughput_mean or best_result.throughput_p90 or 0
 
             self.opt.log("", 'info')
             self.opt.log(f"✅ Best EP Configuration (by throughput):", 'success')
@@ -366,10 +366,10 @@ class ThroughputStrategy(OptimizationStrategy):
 
         best_cfg = self.opt.best_ep_config
         best_ep_ttft = self.opt.best_ep_result.ttft_p90 or self.opt.best_ep_result.ttft_p50 or 0
-        best_ep_tput = self.opt.best_ep_result.throughput_p90 or self.opt.best_ep_result.throughput_p50 or 0
+        best_ep_tput = self.opt.best_ep_result.throughput_mean or self.opt.best_ep_result.throughput_p90 or 0
 
         agg_ttft = self.opt.aggregated_result.ttft_p90 or self.opt.aggregated_result.ttft_p50 or 1000000.0
-        agg_tput = self.opt.aggregated_result.throughput_p90 or self.opt.aggregated_result.throughput_p50 or 0.0
+        agg_tput = self.opt.aggregated_result.throughput_mean or self.opt.aggregated_result.throughput_p90 or 0.0
 
         self.opt.log(f"Best EP: PTP={best_cfg.prefill_tp} DTP={best_cfg.decode_tp}, "
                      f"{best_cfg.prefill_pods}P+{best_cfg.decode_pods}D ({best_cfg.total_gpus} GPUs)", 'info')
@@ -421,7 +421,7 @@ class ThroughputStrategy(OptimizationStrategy):
         best_ep_result = self.opt.best_ep_result
 
         overloaded_ttft = best_ep_result.ttft_p90 or best_ep_result.ttft_p50 or 0
-        overloaded_tput = best_ep_result.throughput_p90 or best_ep_result.throughput_p50 or 0
+        overloaded_tput = best_ep_result.throughput_mean or best_ep_result.throughput_p90 or 0
 
         self.opt.log(f"Re-testing best EP config at calibrated load ({calibrated_concurrency:.0f} users "
                      f"vs original {self.opt.config.qps:.0f} users)", 'info')
@@ -459,7 +459,7 @@ class ThroughputStrategy(OptimizationStrategy):
                 return
 
         cal_ep_ttft = ep_result.ttft_p90 or ep_result.ttft_p50 or 0
-        cal_ep_tput = ep_result.throughput_p90 or ep_result.throughput_p50 or 0
+        cal_ep_tput = ep_result.throughput_mean or ep_result.throughput_p90 or 0
         self.opt.calibrated_ep_result = ep_result
 
         self.opt.log(f"  ✅ EP at calibrated load: TTFT={cal_ep_ttft:.1f}ms, "
@@ -511,7 +511,7 @@ class ThroughputStrategy(OptimizationStrategy):
                 return
 
         cal_agg_ttft = agg_result.ttft_p90 or agg_result.ttft_p50 or 0
-        cal_agg_tput = agg_result.throughput_p90 or agg_result.throughput_p50 or 0
+        cal_agg_tput = agg_result.throughput_mean or agg_result.throughput_p90 or 0
         self.opt.calibrated_agg_result = agg_result
 
         self.opt.log(f"  ✅ Aggregated at calibrated load: TTFT={cal_agg_ttft:.1f}ms, "
@@ -668,7 +668,7 @@ class BalancedStrategy(OptimizationStrategy):
                 key=lambda x: x[1].ttft_p90 if x[1].ttft_p90 else 1000000.0
             )
             pd_ttft = best_pd_result.ttft_p90 or best_pd_result.ttft_p50 or 0
-            pd_tput = best_pd_result.throughput_p90 or best_pd_result.throughput_p50 or 0
+            pd_tput = best_pd_result.throughput_mean or best_pd_result.throughput_p90 or 0
             self.opt.log(f"Best PD: {best_pd_split.prefill_pods}P×TP{best_pd_split.prefill_tp} + "
                          f"{best_pd_split.decode_pods}D×TP{best_pd_split.decode_tp}", 'info')
             self.opt.log(f"  TTFT p90: {pd_ttft:.1f}ms, Throughput mean: {pd_tput:.2f} req/s", 'info')
@@ -677,13 +677,13 @@ class BalancedStrategy(OptimizationStrategy):
         if has_ep:
             ep_cfg = self.opt.best_ep_config
             ep_ttft = self.opt.best_ep_result.ttft_p90 or self.opt.best_ep_result.ttft_p50 or 0
-            ep_tput = self.opt.best_ep_result.throughput_p90 or self.opt.best_ep_result.throughput_p50 or 0
+            ep_tput = self.opt.best_ep_result.throughput_mean or self.opt.best_ep_result.throughput_p90 or 0
             self.opt.log(f"Best EP: PTP={ep_cfg.prefill_tp} DTP={ep_cfg.decode_tp}, "
                          f"{ep_cfg.prefill_pods}P+{ep_cfg.decode_pods}D ({ep_cfg.total_gpus} GPUs)", 'info')
             self.opt.log(f"  TTFT p90: {ep_ttft:.1f}ms, Throughput mean: {ep_tput:.2f} req/s", 'info')
 
         agg_ttft = self.opt.aggregated_result.ttft_p90 or self.opt.aggregated_result.ttft_p50 or 1000000.0
-        agg_tput = self.opt.aggregated_result.throughput_p90 or self.opt.aggregated_result.throughput_p50 or 0.0
+        agg_tput = self.opt.aggregated_result.throughput_mean or self.opt.aggregated_result.throughput_p90 or 0.0
         self.opt.log(f"Best Aggregated: TP={self.opt.aggregated_tp}, "
                      f"{self.opt.aggregated_gpus // self.opt.aggregated_tp} replicas", 'info')
         self.opt.log(f"  TTFT p90: {agg_ttft:.1f}ms, Throughput mean: {agg_tput:.2f} req/s", 'info')
@@ -769,7 +769,7 @@ class BalancedStrategy(OptimizationStrategy):
             if pd_result:
                 self.opt.calibrated_pd_result = pd_result
                 cal_ttft = pd_result.ttft_p90 or pd_result.ttft_p50 or 0
-                cal_tput = pd_result.throughput_p90 or pd_result.throughput_p50 or 0
+                cal_tput = pd_result.throughput_mean or pd_result.throughput_p90 or 0
                 self.opt.log(f"  ✅ PD at calibrated load: TTFT={cal_ttft:.1f}ms, "
                              f"Throughput={cal_tput:.2f} req/s", 'success')
 
@@ -804,7 +804,7 @@ class BalancedStrategy(OptimizationStrategy):
             if ep_result:
                 self.opt.calibrated_ep_result = ep_result
                 cal_ttft = ep_result.ttft_p90 or ep_result.ttft_p50 or 0
-                cal_tput = ep_result.throughput_p90 or ep_result.throughput_p50 or 0
+                cal_tput = ep_result.throughput_mean or ep_result.throughput_p90 or 0
                 self.opt.log(f"  ✅ EP at calibrated load: TTFT={cal_ttft:.1f}ms, "
                              f"Throughput={cal_tput:.2f} req/s", 'success')
 
@@ -848,7 +848,7 @@ class BalancedStrategy(OptimizationStrategy):
             if agg_result:
                 self.opt.calibrated_agg_result = agg_result
                 cal_ttft = agg_result.ttft_p90 or agg_result.ttft_p50 or 0
-                cal_tput = agg_result.throughput_p90 or agg_result.throughput_p50 or 0
+                cal_tput = agg_result.throughput_mean or agg_result.throughput_p90 or 0
                 self.opt.log(f"  ✅ Aggregated at calibrated load: TTFT={cal_ttft:.1f}ms, "
                              f"Throughput={cal_tput:.2f} req/s", 'success')
 
@@ -861,15 +861,15 @@ class BalancedStrategy(OptimizationStrategy):
 
         if self.opt.calibrated_agg_result:
             t = self.opt.calibrated_agg_result.ttft_p90 or 0
-            p = self.opt.calibrated_agg_result.throughput_p90 or 0
+            p = self.opt.calibrated_agg_result.throughput_mean or self.opt.calibrated_agg_result.throughput_p90 or 0
             self.opt.log(f"  {'Aggregated':<25} {t:>10.1f}ms {p:>14.2f} req/s", 'info')
         if self.opt.calibrated_pd_result:
             t = self.opt.calibrated_pd_result.ttft_p90 or 0
-            p = self.opt.calibrated_pd_result.throughput_p90 or 0
+            p = self.opt.calibrated_pd_result.throughput_mean or self.opt.calibrated_pd_result.throughput_p90 or 0
             self.opt.log(f"  {'PD (best)':<25} {t:>10.1f}ms {p:>14.2f} req/s", 'info')
         if self.opt.calibrated_ep_result:
             t = self.opt.calibrated_ep_result.ttft_p90 or 0
-            p = self.opt.calibrated_ep_result.throughput_p90 or 0
+            p = self.opt.calibrated_ep_result.throughput_mean or self.opt.calibrated_ep_result.throughput_p90 or 0
             self.opt.log(f"  {'EP (best)':<25} {t:>10.1f}ms {p:>14.2f} req/s", 'info')
 
 
