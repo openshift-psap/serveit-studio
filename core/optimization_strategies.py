@@ -327,9 +327,9 @@ class ThroughputStrategy(OptimizationStrategy):
                     raise RuntimeError(f"Test {test_id} failed - stopping optimization")
 
             ttft = result.ttft_p90 or result.ttft_p50 or 1000000.0
-            throughput = result.throughput_p90 or result.throughput_p50 or 0.0
+            throughput = result.throughput_mean or result.throughput_p90 or 0.0
 
-            self.opt.log(f"    ✅ TTFT p90: {ttft:.1f}ms, Throughput p90: {throughput:.2f} req/s", 'success')
+            self.opt.log(f"    ✅ TTFT p90: {ttft:.1f}ms, Throughput mean: {throughput:.2f} req/s", 'success')
             self.opt.ep_results.append((split, result))
 
         if self.opt.ep_results:
@@ -347,7 +347,7 @@ class ThroughputStrategy(OptimizationStrategy):
             self.opt.log(f"✅ Best EP Configuration (by throughput):", 'success')
             self.opt.log(f"  PTP={best_split.prefill_tp} DTP={best_split.decode_tp}, "
                          f"{best_split.prefill_pods}P+{best_split.decode_pods}D ({best_split.total_gpus} GPUs)", 'info')
-            self.opt.log(f"  TTFT p90: {best_ttft:.1f}ms, Throughput p90: {best_tput:.2f} req/s", 'info')
+            self.opt.log(f"  TTFT p90: {best_ttft:.1f}ms, Throughput mean: {best_tput:.2f} req/s", 'info')
 
     def _validate_ep_vs_aggregated(self):
         """Step 8: Compare best EP config against best Aggregated from Step 6.
@@ -371,10 +371,10 @@ class ThroughputStrategy(OptimizationStrategy):
 
         self.opt.log(f"Best EP: PTP={best_cfg.prefill_tp} DTP={best_cfg.decode_tp}, "
                      f"{best_cfg.prefill_pods}P+{best_cfg.decode_pods}D ({best_cfg.total_gpus} GPUs)", 'info')
-        self.opt.log(f"  TTFT p90: {best_ep_ttft:.1f}ms, Throughput p90: {best_ep_tput:.2f} req/s", 'info')
+        self.opt.log(f"  TTFT p90: {best_ep_ttft:.1f}ms, Throughput mean: {best_ep_tput:.2f} req/s", 'info')
         self.opt.log(f"Best Aggregated: TP={self.opt.aggregated_tp}, "
                      f"{self.opt.aggregated_gpus // self.opt.aggregated_tp} replicas", 'info')
-        self.opt.log(f"  TTFT p90: {agg_ttft:.1f}ms, Throughput p90: {agg_tput:.2f} req/s", 'info')
+        self.opt.log(f"  TTFT p90: {agg_ttft:.1f}ms, Throughput mean: {agg_tput:.2f} req/s", 'info')
         self.opt.log("", 'info')
 
         # Compare
@@ -386,7 +386,7 @@ class ThroughputStrategy(OptimizationStrategy):
         self.opt.log("📊 EP vs Aggregated Comparison:", 'decision')
         self.opt.log(f"  TTFT p90:       EP={best_ep_ttft:.1f}ms vs Agg={agg_ttft:.1f}ms "
                      f"({'EP wins by' if ttft_diff < 0 else 'Agg wins by'} {abs(ttft_pct):.1f}%)", 'info')
-        self.opt.log(f"  Throughput p90:  EP={best_ep_tput:.2f} vs Agg={agg_tput:.2f} req/s "
+        self.opt.log(f"  Throughput mean:  EP={best_ep_tput:.2f} vs Agg={agg_tput:.2f} req/s "
                      f"({'EP wins by' if tput_diff > 0 else 'Agg wins by'} {abs(tput_pct):.1f}%)", 'info')
 
         if agg_tput > best_ep_tput and agg_ttft <= best_ep_ttft:
@@ -526,7 +526,7 @@ class ThroughputStrategy(OptimizationStrategy):
 
         self.opt.log(f"  TTFT p90:       EP={cal_ep_ttft:.1f}ms vs Agg={cal_agg_ttft:.1f}ms "
                      f"({'EP wins by' if ttft_diff < 0 else 'Agg wins by'} {abs(ttft_pct):.1f}%)", 'info')
-        self.opt.log(f"  Throughput p90:  EP={cal_ep_tput:.2f} vs Agg={cal_agg_tput:.2f} req/s "
+        self.opt.log(f"  Throughput mean:  EP={cal_ep_tput:.2f} vs Agg={cal_agg_tput:.2f} req/s "
                      f"({'EP wins by' if tput_diff > 0 else 'Agg wins by'} {abs(tput_pct):.1f}%)", 'info')
         self.opt.log("", 'info')
 
@@ -669,7 +669,7 @@ class BalancedStrategy(OptimizationStrategy):
             pd_tput = best_pd_result.throughput_p90 or best_pd_result.throughput_p50 or 0
             self.opt.log(f"Best PD: {best_pd_split.prefill_pods}P×TP{best_pd_split.prefill_tp} + "
                          f"{best_pd_split.decode_pods}D×TP{best_pd_split.decode_tp}", 'info')
-            self.opt.log(f"  TTFT p90: {pd_ttft:.1f}ms, Throughput p90: {pd_tput:.2f} req/s", 'info')
+            self.opt.log(f"  TTFT p90: {pd_ttft:.1f}ms, Throughput mean: {pd_tput:.2f} req/s", 'info')
 
         # Get best EP config
         if has_ep:
@@ -678,18 +678,18 @@ class BalancedStrategy(OptimizationStrategy):
             ep_tput = self.opt.best_ep_result.throughput_p90 or self.opt.best_ep_result.throughput_p50 or 0
             self.opt.log(f"Best EP: PTP={ep_cfg.prefill_tp} DTP={ep_cfg.decode_tp}, "
                          f"{ep_cfg.prefill_pods}P+{ep_cfg.decode_pods}D ({ep_cfg.total_gpus} GPUs)", 'info')
-            self.opt.log(f"  TTFT p90: {ep_ttft:.1f}ms, Throughput p90: {ep_tput:.2f} req/s", 'info')
+            self.opt.log(f"  TTFT p90: {ep_ttft:.1f}ms, Throughput mean: {ep_tput:.2f} req/s", 'info')
 
         agg_ttft = self.opt.aggregated_result.ttft_p90 or self.opt.aggregated_result.ttft_p50 or 1000000.0
         agg_tput = self.opt.aggregated_result.throughput_p90 or self.opt.aggregated_result.throughput_p50 or 0.0
         self.opt.log(f"Best Aggregated: TP={self.opt.aggregated_tp}, "
                      f"{self.opt.aggregated_gpus // self.opt.aggregated_tp} replicas", 'info')
-        self.opt.log(f"  TTFT p90: {agg_ttft:.1f}ms, Throughput p90: {agg_tput:.2f} req/s", 'info')
+        self.opt.log(f"  TTFT p90: {agg_ttft:.1f}ms, Throughput mean: {agg_tput:.2f} req/s", 'info')
         self.opt.log("", 'info')
 
         # Three-way comparison
         self.opt.log("📊 Three-Way Architecture Comparison:", 'decision')
-        self.opt.log(f"  {'Architecture':<25} {'TTFT p90':>12} {'Throughput p90':>16}", 'info')
+        self.opt.log(f"  {'Architecture':<25} {'TTFT p90':>12} {'Throughput mean':>16}", 'info')
         self.opt.log(f"  {'-'*25} {'-'*12} {'-'*16}", 'info')
         self.opt.log(f"  {'Aggregated':<25} {agg_ttft:>10.1f}ms {agg_tput:>14.2f} req/s", 'info')
 
@@ -854,7 +854,7 @@ class BalancedStrategy(OptimizationStrategy):
 
         # Summary table
         self.opt.log(f"📊 Calibrated Load Results ({int(calibrated_concurrency)} users):", 'decision')
-        self.opt.log(f"  {'Architecture':<25} {'TTFT p90':>12} {'Throughput p90':>16}", 'info')
+        self.opt.log(f"  {'Architecture':<25} {'TTFT p90':>12} {'Throughput mean':>16}", 'info')
         self.opt.log(f"  {'-'*25} {'-'*12} {'-'*16}", 'info')
 
         if self.opt.calibrated_agg_result:
@@ -957,8 +957,8 @@ class SingleTestStrategy(OptimizationStrategy):
 
         if result and result.guidellm_success:
             ttft = result.ttft_p90 or result.ttft_p50 or 0
-            throughput = result.throughput_p90 or result.throughput_p50 or 0
-            self.opt.log(f"✅ TTFT p90: {ttft:.1f}ms, Throughput p90: {throughput:.2f} req/s", 'success')
+            throughput = result.throughput_mean or result.throughput_p90 or 0
+            self.opt.log(f"✅ TTFT p90: {ttft:.1f}ms, Throughput mean: {throughput:.2f} req/s", 'success')
         else:
             self.opt.log("❌ Test failed", 'error')
 

@@ -472,9 +472,9 @@ class PDSearchMixin:
                     raise RuntimeError(f"Test {test_id} failed - stopping optimization")
 
             ttft = result.ttft_p90 or result.ttft_p50 or 1000000.0
-            throughput = result.throughput_p90 or result.throughput_p50 or 0.0
+            throughput = result.throughput_mean or result.throughput_p90 or 0.0
 
-            self.log(f"    ✅ TTFT p90: {ttft:.1f}ms, Throughput p90: {throughput:.2f} req/s", 'success')
+            self.log(f"    ✅ TTFT p90: {ttft:.1f}ms, Throughput mean: {throughput:.2f} req/s", 'success')
             self.aggregated_search_results.append((tp, result))
 
         if not self.aggregated_search_results:
@@ -500,12 +500,12 @@ class PDSearchMixin:
         self.aggregated_gpus = total_gpus
 
         best_ttft = best_result.ttft_p90 or best_result.ttft_p50 or 0
-        best_tput = best_result.throughput_p90 or best_result.throughput_p50 or 0
+        best_tput = best_result.throughput_mean or best_result.throughput_p90 or 0
 
         self.log("", 'info')
         self.log(f"✅ Best Aggregated: TP={best_tp}, {total_gpus // best_tp} replicas "
                  f"(selected by {criterion})", 'success')
-        self.log(f"   TTFT p90: {best_ttft:.1f}ms, Throughput p90: {best_tput:.2f} req/s", 'info')
+        self.log(f"   TTFT p90: {best_ttft:.1f}ms, Throughput mean: {best_tput:.2f} req/s", 'info')
 
     def _optimize_pd_splits(self):
         """
@@ -563,7 +563,7 @@ class PDSearchMixin:
             ttft = result.ttft_p90 if result.ttft_p90 else result.ttft_p50 if result.ttft_p50 else 1000000.0
             throughput = result.throughput_p90 if result.throughput_p90 else result.throughput_p50 if result.throughput_p50 else 0.0
 
-            self.log(f"    ✅ TTFT p90: {ttft:.1f}ms, Throughput p90: {throughput:.2f} req/s", 'success')
+            self.log(f"    ✅ TTFT p90: {ttft:.1f}ms, Throughput mean: {throughput:.2f} req/s", 'success')
 
             self.pareto_results.append((split, result))
 
@@ -574,7 +574,7 @@ class PDSearchMixin:
         self.log(f"✅ Found {len(pareto_front)} Pareto optimal configurations:", 'success')
         for i, (split, result) in enumerate(pareto_front, 1):
             ttft = result.ttft_p90 or result.ttft_p50 or 0
-            throughput = result.throughput_p90 or result.throughput_p50 or 0
+            throughput = result.throughput_mean or result.throughput_p90 or 0
             self.log(f"  {i}. {split.prefill_pods}P×TP{split.prefill_tp} + {split.decode_pods}D×TP{split.decode_tp}: "
                     f"TTFT={ttft:.1f}ms, Throughput={throughput:.2f} req/s", 'info')
 
@@ -600,17 +600,17 @@ class PDSearchMixin:
         )
 
         best_pd_ttft = best_pd_result.ttft_p90 or best_pd_result.ttft_p50 or 0
-        best_pd_tput = best_pd_result.throughput_p90 or best_pd_result.throughput_p50 or 0
+        best_pd_tput = best_pd_result.throughput_mean or best_pd_result.throughput_p90 or 0
 
         agg_ttft = self.aggregated_result.ttft_p90 or self.aggregated_result.ttft_p50 or 1000000.0
-        agg_tput = self.aggregated_result.throughput_p90 or self.aggregated_result.throughput_p50 or 0.0
+        agg_tput = self.aggregated_result.throughput_mean or self.aggregated_result.throughput_p90 or 0.0
 
         self.log(f"Best PD: {best_split.prefill_pods}P×TP{best_split.prefill_tp} + "
                 f"{best_split.decode_pods}D×TP{best_split.decode_tp}", 'info')
-        self.log(f"  TTFT p90: {best_pd_ttft:.1f}ms, Throughput p90: {best_pd_tput:.2f} req/s", 'info')
+        self.log(f"  TTFT p90: {best_pd_ttft:.1f}ms, Throughput mean: {best_pd_tput:.2f} req/s", 'info')
         self.log(f"Best Aggregated: TP={self.aggregated_tp}, "
                 f"{self.aggregated_gpus // self.aggregated_tp} replicas", 'info')
-        self.log(f"  TTFT p90: {agg_ttft:.1f}ms, Throughput p90: {agg_tput:.2f} req/s", 'info')
+        self.log(f"  TTFT p90: {agg_ttft:.1f}ms, Throughput mean: {agg_tput:.2f} req/s", 'info')
         self.log("", 'info')
 
         # Compare
@@ -622,7 +622,7 @@ class PDSearchMixin:
         self.log("📊 PD vs Aggregated Comparison:", 'decision')
         self.log(f"  TTFT p90:       PD={best_pd_ttft:.1f}ms vs Agg={agg_ttft:.1f}ms "
                 f"({'PD wins by' if ttft_diff < 0 else 'Agg wins by'} {abs(ttft_pct):.1f}%)", 'info')
-        self.log(f"  Throughput p90:  PD={best_pd_tput:.2f} vs Agg={agg_tput:.2f} req/s "
+        self.log(f"  Throughput mean:  PD={best_pd_tput:.2f} vs Agg={agg_tput:.2f} req/s "
                 f"({'PD wins by' if tput_diff > 0 else 'Agg wins by'} {abs(tput_pct):.1f}%)", 'info')
 
         if agg_ttft < best_pd_ttft and agg_tput >= best_pd_tput:

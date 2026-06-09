@@ -441,7 +441,7 @@ class LatencySearchMixin:
 
         self.log(f"  TTFT p90:       PD={cal_pd_ttft:.1f}ms vs Agg={cal_agg_ttft:.1f}ms "
                 f"({'PD wins by' if ttft_diff < 0 else 'Agg wins by'} {abs(ttft_pct):.1f}%)", 'info')
-        self.log(f"  Throughput p90:  PD={cal_pd_tput:.2f} vs Agg={cal_agg_tput:.2f} req/s "
+        self.log(f"  Throughput mean:  PD={cal_pd_tput:.2f} vs Agg={cal_agg_tput:.2f} req/s "
                 f"({'PD wins by' if tput_diff > 0 else 'Agg wins by'} {abs(tput_pct):.1f}%)", 'info')
         self.log("", 'info')
 
