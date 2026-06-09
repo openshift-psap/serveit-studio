@@ -1014,7 +1014,18 @@ data:
                 if results.get('stopped'):
                     run_status = 'stopped'
                 else:
-                    run_status = 'completed'
+                    # Check if any tests failed
+                    has_failed = False
+                    try:
+                        with get_db() as _conn:
+                            _fc = _conn.execute(
+                                'SELECT COUNT(*) FROM test_configurations WHERE run_id = ? AND status = ?',
+                                (run_id, 'failed')
+                            ).fetchone()
+                            has_failed = _fc and _fc[0] > 0
+                    except Exception:
+                        pass
+                    run_status = 'completed_with_errors' if has_failed else 'completed'
 
                 with get_db() as conn:
                     conn.execute('''
