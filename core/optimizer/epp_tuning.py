@@ -371,6 +371,21 @@ class EPPTuningMixin:
             configs_to_test.append(('aggregated', agg_cfg, agg_concurrency))
             self.log(f"  Aggregated: {self.config.total_gpus // self.aggregated_tp}×TP{self.aggregated_tp} at c={agg_concurrency}", 'info')
 
+        # Best EP config
+        if self.best_ep_config and self.best_ep_result:
+            ep_split = self.best_ep_config
+            ep_cfg = self._create_ep_config(ep_split)
+            ep_concurrency = int(self.config.qps)
+            for arch_key, sr in getattr(self, 'latency_search_results', {}).items():
+                if 'ep' in arch_key and sr and sr.optimal_concurrency:
+                    ep_concurrency = sr.optimal_concurrency
+                    break
+            if hasattr(self, 'effective_concurrency') and self.effective_concurrency and ep_concurrency == int(self.config.qps):
+                ep_concurrency = self.effective_concurrency
+            configs_to_test.append(('ep', ep_cfg, ep_concurrency))
+            self.log(f"  EP: {ep_split.prefill_pods}P+{ep_split.decode_pods}D "
+                     f"PTP={ep_split.prefill_tp} DTP={ep_split.decode_tp} at c={ep_concurrency}", 'info')
+
         if not configs_to_test:
             self.log("⚠️  No successful configs for EPP tuning", 'warning')
             return
