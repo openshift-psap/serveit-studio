@@ -417,6 +417,8 @@ class EPPTuningMixin:
                 arch_pods = best_split.prefill_pods + best_split.decode_pods
             elif arch == 'aggregated' and self.aggregated_tp:
                 arch_pods = self.config.total_gpus // self.aggregated_tp
+            elif arch == 'ep' and self.best_ep_config:
+                arch_pods = self.best_ep_config.prefill_pods + self.best_ep_config.decode_pods
 
             smart_weights = self._compute_smart_epp_weights(num_pods=arch_pods, arch=arch)
 
@@ -427,6 +429,8 @@ class EPPTuningMixin:
             elif arch == 'pd' and self.pareto_results:
                 best_pd = min(self.pareto_results, key=lambda x: x[1].ttft_p99 or x[1].ttft_p90 or 1e9)
                 baseline_ttft = best_pd[1].ttft_p90
+            elif arch == 'ep' and self.best_ep_result:
+                baseline_ttft = self.best_ep_result.ttft_p90
 
             if smart_weights:
                 # Skip if smart-derived weights are identical to user's preset
