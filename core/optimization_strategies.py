@@ -236,8 +236,11 @@ class ThroughputStrategy(OptimizationStrategy):
         ep_configs = []
         seen = set()
         num_experts = self.opt._num_experts or 0
+        allow_asymmetric = getattr(self.opt.config, 'allow_asymmetric_tp', False)
         for prefill_tp in valid_tp:
             for decode_tp in valid_tp:
+                if prefill_tp > decode_tp and not allow_asymmetric:
+                    continue
                 max_prefill_pods = total_gpus // prefill_tp
                 for prefill_pods in range(1, max_prefill_pods + 1):
                     prefill_gpus = prefill_tp * prefill_pods
