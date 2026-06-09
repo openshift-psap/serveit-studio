@@ -68,13 +68,15 @@ function renderCharts(data, runId) {
         const pctls = ['p90', 'p95', 'p99'];
         const accentColor = '#3b82f6';
 
+        const hasEp = pctls.some(p => (bp[p] || {}).ep);
+        const gridCols = hasEp ? '1fr 1fr 1fr' : '1fr 1fr';
         pctls.forEach((p, pi) => {
-            html += '<div style="display:grid; grid-template-columns:1fr 1fr; gap:16px; margin-bottom:12px;">';
+            html += `<div style="display:grid; grid-template-columns:${gridCols}; gap:16px; margin-bottom:12px;">`;
             const pLabel = p.toUpperCase();
 
             // Collect best config per architecture at this percentile
             const cards = [];
-            ['pd', 'aggregated'].forEach(archKey => {
+            ['pd', 'aggregated', 'ep'].forEach(archKey => {
                 const bpData = (bp[p] || {})[archKey];
                 // For P90, use the primary recommendation config
                 let cfg, deploy, testSettings;

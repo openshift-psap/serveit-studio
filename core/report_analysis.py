@@ -541,6 +541,41 @@ class ReportAnalyzer:
                         'concurrency': pd_c,
                         'manifest_types': pd_manifest_types,
                     }
+            # Best EP at this percentile
+            if step7_ep_tests:
+                valid_ep = [r for r in step7_ep_tests if getattr(r, ttft_field, None)]
+                if valid_ep:
+                    best_ep = min(valid_ep, key=lambda r: getattr(r, ttft_field))
+                    ep_c = None
+                    if best_ep.test_config_json:
+                        try:
+                            import json as _je
+                            ep_c = _je.loads(best_ep.test_config_json).get('num_users')
+                        except Exception:
+                            pass
+                    ep_manifest_types = []
+                    if best_ep.manifests_yaml:
+                        try:
+                            import json as _jme
+                            ep_manifest_types = list(_jme.loads(best_ep.manifests_yaml).keys())
+                        except Exception:
+                            pass
+                    ptp = best_ep.prefill_tp or best_ep.tensor_parallelism
+                    dtp = best_ep.decode_tp or best_ep.tensor_parallelism
+                    pctl_data['ep'] = {
+                        'config_name': best_ep.display_label,
+                        'test_id': best_ep.config_name,
+                        'ttft': round(getattr(best_ep, ttft_field), 1),
+                        'throughput_mean': round(best_ep.throughput_mean, 2) if best_ep.throughput_mean else None,
+                        'throughput': round(getattr(best_ep, tput_field, 0) or 0, 2),
+                        'gpus': best_ep.total_gpus,
+                        'prefill_pods': best_ep.prefill_pods,
+                        'decode_pods': best_ep.decode_pods,
+                        'prefill_tp': ptp,
+                        'decode_tp': dtp,
+                        'concurrency': ep_c,
+                        'manifest_types': ep_manifest_types,
+                    }
             if pctl_data:
                 best_by_percentile[pctl] = pctl_data
 
