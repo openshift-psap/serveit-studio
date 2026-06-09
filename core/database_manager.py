@@ -372,8 +372,8 @@ class DatabaseManager:
         # Extract architecture info
         architecture = test_config.architecture or 'aggregated'
 
-        # For aggregated/ep, use replicas; for pd, use prefill/decode counts
-        if architecture == 'pd':
+        # For pd/ep, use prefill/decode counts; for aggregated, use replicas
+        if architecture in ('pd', 'ep'):
             prefill_pods = test_config.prefill_replicas or 0
             decode_pods = test_config.decode_replicas or 0
         else:

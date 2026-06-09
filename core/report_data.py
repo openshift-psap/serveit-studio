@@ -149,6 +149,7 @@ class ReportDataLoader:
             SELECT
                 tc.*,
                 CASE
+                    WHEN tc.architecture IS NOT NULL AND tc.architecture != '' THEN tc.architecture
                     WHEN tc.prefill_pods > 0 AND tc.decode_pods > 0 THEN 'pd'
                     ELSE 'aggregated'
                 END as architecture
