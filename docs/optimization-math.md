@@ -627,14 +627,26 @@ Decode pods receive KV cache data from prefill pods via NIXL over RDMA. The inco
 
 #### EP Reserve (EP architecture only)
 
-For Expert Parallelism, an additional reserve is subtracted for NVSHMEM symmetric heap and EPLB expert replication. The reserve is computed from the model architecture — see [NVSHMEM_SYMMETRIC_SIZE](#nvshmem_symmetric_size-ep-only) and [EP Memory Reserve](#ep-memory-reserve).
+For Expert Parallelism, separate overhead is computed for prefill (high-throughput mode, small NVL buffers) and decode (low-latency mode, large RDMA buffers). Decode pods also get an **expert weight savings** boost — with more decode pods, experts are distributed across more EP ranks, reducing weight per GPU.
 
 ```
-U_prefill_ep = max(U_prefill - ep_reserve, 0.70)
-U_decode_ep  = max(U_prefill - ep_reserve - 0.05, 0.70)
+# Prefill: high-throughput mode uses ~1GB NVL buffers
+prefill_ep_overhead = (1 GB + EPLB_gb) / GPU_VRAM
+U_prefill_ep = clamp(U_prefill - prefill_ep_overhead, 0.70, 0.95)
+
+# Decode: low-latency mode uses large RDMA buffers
+decode_ep_overhead = (ep_mem_gb + EPLB_gb) / GPU_VRAM
+
+# Expert weight savings: more EP ranks = fewer expert weights per GPU
+expert_savings = expert_weight_gb × (1/decode_tp - 1/ep_ranks) / GPU_VRAM
+# positive when ep_ranks > decode_tp (i.e., more than 1 decode pod)
+
+U_decode_ep = clamp(U_decode - decode_ep_overhead - 0.05_NIXL + expert_savings, 0.70, 0.95)
 ```
 
-**Why floor at 0.70 (not 0.80)?** EP models are typically large MoE architectures where each expert is small. The model can function with lower gpu_memory_utilization because the active parameter count per token is much smaller than the total model size.
+**Why separate prefill/decode overhead?** Prefill uses `deepep_high_throughput` with NVLink buffers (~1 GB). Decode uses `deepep_low_latency` with RDMA buffers (10-15 GB for large models). Applying the full RDMA overhead to prefill starved KV cache — Llama-4-Maverick at TP=4 OOMed with gmu=0.78 but works at gmu=0.89.
+
+**Why expert weight savings?** Without EP, each GPU holds `total_model / TP` weight. With EP, expert weights are distributed across `ep_ranks = decode_tp × decode_pods`. More decode pods = fewer expert weights per GPU = more VRAM for KV cache. For Llama-4-Maverick (360 GB expert weights), going from EP=4 (1 pod) to EP=8 (2 pods) saves 45 GB/GPU — raising decode gmu from 0.78 to 0.95.
 
 ### max_num_seqs
 
@@ -858,37 +870,71 @@ Where `batch` = `max_num_batched_tokens`, `hidden` and `num_experts` come from c
 
 ### EP Memory Reserve
 
-EP deployments reserve GPU memory for DeepEP communication buffers (RDMA + NVLink) and EPLB expert replication:
+EP deployments reserve GPU memory for DeepEP communication buffers and EPLB expert replication. Prefill and decode have different overhead because they use different DeepEP backends:
 
 ```
-ep_mem_gb = rdma_total_gb + 1 GB (NVL buffer) + 2 GB (overhead)
+# Decode: low-latency RDMA + NVL + overhead
+decode_ep_mem_gb = rdma_total_gb + 1 GB (NVL) + 2 GB (overhead)
 
-num_redundant_experts = max(1, ep_ranks / num_experts)
-EPLB_gb = max(
-    num_moe_layers × bytes_per_expert × num_redundant / ep_ranks / 1 GB,
-    0.5
-)
-
-ep_reserve = (ep_mem_gb + EPLB_gb) / GPU_VRAM_gb
+# Prefill: high-throughput NVL only
+prefill_ep_mem_gb = 1 GB (NVL) + EPLB_gb
 ```
-
-**Why compute `num_redundant_experts`?** EPLB's `all_gather` during rebalancing needs scratch space proportional to all experts per layer. With the upstream hardcoded value of 32, Llama-4-Maverick OOMs — the all_gather tries to allocate 12.5 GB with only 4.5 GB free. Setting it to `max(1, ep_ranks / num_experts)` matches upstream llm-d defaults (~1 per rank).
 
 ### num_redundant_experts (EP only)
 
-Controls how many extra expert copies EPLB maintains per EP rank for load balancing:
+Controls how many extra expert copies EPLB maintains for load balancing. Must equal `ep_ranks` to satisfy vLLM's divisibility constraint:
 
 ```
-num_redundant_experts = max(1, ep_ranks / num_experts)
+num_redundant_experts = ep_ranks
+
+# vLLM computes: global_num_experts = num_experts + num_redundant_experts
+# and asserts: global_num_experts % ep_size == 0
+# Since num_experts % ep_ranks == 0 (enforced by split filter),
+# adding ep_ranks guarantees (num_experts + ep_ranks) % ep_ranks == 0.
 ```
 
-| Model | Experts | EP Ranks | Result |
-|-------|---------|----------|--------|
-| DeepSeek-R1 (256 experts, 32 GPUs) | 256 | 32 | 1 |
-| Llama-4-Maverick (128 experts, 12 GPUs) | 128 | 12 | 1 |
-| Qwen3-Next-80B (64 experts, 8 GPUs) | 64 | 8 | 1 |
+| Model | Experts | EP Ranks | Redundant | Global | Global % EP |
+|-------|---------|----------|-----------|--------|-------------|
+| DeepSeek-R1 | 256 | 32 | 32 | 288 | 0 |
+| Llama-4-Maverick | 128 | 8 | 8 | 136 | 0 |
+| Qwen3-Next-80B | 64 | 8 | 8 | 72 | 0 |
 
-**Why not more?** Each redundant expert per rank adds `bytes_per_expert` of GPU memory permanently, and EPLB's periodic rebalancing all_gather needs scratch space for the full expert weight tensor. More redundant experts = better load balancing but higher memory pressure and larger OOM risk during profiling.
+**Why not `num_redundant=1`?** vLLM adds `num_redundant` to `num_experts` to get `global_num_experts`, which must divide evenly by `ep_size`. With 128 experts and EP=8, `num_redundant=1` gives 129 — not divisible by 8. Setting `num_redundant=ep_ranks` always works because `(num_experts + ep_ranks) % ep_ranks == num_experts % ep_ranks == 0` (already guaranteed by the split filter).
+
+### EP Split Generation
+
+EP configurations are generated by iterating over all valid combinations of prefill TP, decode TP, prefill pods, and decode pods. Multi-prefill-pod splits (e.g., 2P+2D) are explored to use all available GPUs.
+
+```
+for prefill_tp in valid_tp:
+    for decode_tp in valid_tp:
+        for prefill_pods in 1..max_pods:
+            decode_pods = (total_gpus - prefill_tp × prefill_pods) / decode_tp
+            # Filter: EPLB requires even expert distribution
+            if num_experts % (prefill_tp × prefill_pods) != 0: skip
+            if num_experts % (decode_tp × decode_pods) != 0: skip
+```
+
+| Model (128 experts, 16 GPUs) | Split | Prefill EP | Decode EP | Valid |
+|------|-------|------------|-----------|-------|
+| PTP=4 DTP=4 | 1P+3D | 4 | 12 | 128%12=8 — skip |
+| PTP=4 DTP=4 | **2P+2D** | **8** | **8** | **128%8=0** |
+| PTP=4 DTP=8 | 1P+1D | 4 | 8 | 128%8=0 |
+| PTP=4 DTP=8 | 2P+1D | 8 | 8 | 128%8=0 |
+| PTP=8 DTP=4 | 1P+2D | 8 | 8 | 128%8=0 |
+| PTP=8 DTP=8 | 1P+1D | 8 | 8 | 128%8=0 |
+
+**Why multi-prefill pods?** With 128 experts and TP=4, `1P+3D` gives decode EP=12 which doesn't divide 128. But `2P+2D` gives both EP groups = 8, which works and uses all 16 GPUs.
+
+### Request Error Rate Check
+
+After every test, the pipeline checks `request_errored / request_total`. If the error rate exceeds 2%, the optimization stops immediately. Only errors are counted — timeouts and incomplete requests are not included.
+
+```
+error_rate = request_errored / request_total
+if error_rate > 0.02: STOP with error message
+if error_rate > 0:    log warning
+```
 
 ### Pod Resources (memory + CPU)
 ```
