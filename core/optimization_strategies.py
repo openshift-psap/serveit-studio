@@ -235,41 +235,43 @@ class ThroughputStrategy(OptimizationStrategy):
 
         ep_configs = []
         seen = set()
+        num_experts = self.opt._num_experts or 0
         for prefill_tp in valid_tp:
             for decode_tp in valid_tp:
-                prefill_gpus = prefill_tp
-                remaining = total_gpus - prefill_gpus
-                if remaining < decode_tp:
-                    continue
-                decode_pods = remaining // decode_tp
-                if decode_pods < 1:
-                    continue
-                decode_gpus = decode_pods * decode_tp
-                # EPLB requires (num_experts + num_redundant) % ep_ranks == 0.
-                # num_redundant = ep_ranks, so this simplifies to num_experts % ep_ranks == 0.
-                num_experts = self.opt._num_experts or 0
-                ep_ranks = decode_tp * decode_pods
-                if num_experts > 0 and num_experts % ep_ranks != 0:
-                    continue
-                total_used = prefill_gpus + decode_gpus
-                key = (prefill_tp, decode_tp, 1, decode_pods)
-                if key in seen:
-                    continue
-                seen.add(key)
-                split = FeasibleSplit(
-                    prefill_pods=1,
-                    decode_pods=decode_pods,
-                    prefill_tp=prefill_tp,
-                    decode_tp=decode_tp,
-                    prefill_gpus=prefill_gpus,
-                    decode_gpus=decode_gpus,
-                    total_gpus=total_used,
-                    prefill_pct=(prefill_gpus / total_used) * 100,
-                )
-                ep_configs.append(split)
-                self.opt.log(f"  ✓ PTP={prefill_tp} DTP={decode_tp}: "
-                             f"1P+{decode_pods}D = {total_used} GPUs "
-                             f"(EP={ep_ranks})", 'info')
+                max_prefill_pods = total_gpus // prefill_tp
+                for prefill_pods in range(1, max_prefill_pods + 1):
+                    prefill_gpus = prefill_tp * prefill_pods
+                    remaining = total_gpus - prefill_gpus
+                    if remaining < decode_tp:
+                        continue
+                    decode_pods = remaining // decode_tp
+                    if decode_pods < 1:
+                        continue
+                    decode_gpus = decode_pods * decode_tp
+                    # EPLB requires num_experts % ep_ranks == 0 for both roles
+                    prefill_ep = prefill_tp * prefill_pods
+                    decode_ep = decode_tp * decode_pods
+                    if num_experts > 0 and (num_experts % decode_ep != 0 or num_experts % prefill_ep != 0):
+                        continue
+                    total_used = prefill_gpus + decode_gpus
+                    key = (prefill_tp, decode_tp, prefill_pods, decode_pods)
+                    if key in seen:
+                        continue
+                    seen.add(key)
+                    split = FeasibleSplit(
+                        prefill_pods=prefill_pods,
+                        decode_pods=decode_pods,
+                        prefill_tp=prefill_tp,
+                        decode_tp=decode_tp,
+                        prefill_gpus=prefill_gpus,
+                        decode_gpus=decode_gpus,
+                        total_gpus=total_used,
+                        prefill_pct=(prefill_gpus / total_used) * 100,
+                    )
+                    ep_configs.append(split)
+                    self.opt.log(f"  ✓ PTP={prefill_tp} DTP={decode_tp}: "
+                                 f"{prefill_pods}P+{decode_pods}D = {total_used} GPUs "
+                                 f"(prefill_EP={prefill_ep}, decode_EP={decode_ep})", 'info')
 
         self.opt.ep_configs = ep_configs
         self.opt.log(f"\n  EP configs to test: {len(ep_configs)}", 'success')
