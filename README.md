@@ -2,8 +2,6 @@
   <img src="docs/branding/serveit-logo.png" alt="ServeIt Studio" width="200">
 </p>
 
-<h1 align="center">ServeIt Studio</h1>
-
 <p align="center">
   <strong>Automated LLM inference optimization for Kubernetes</strong><br>
   Find the optimal vLLM configuration for your hardware, model, and workload — automatically.
