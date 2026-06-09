@@ -435,6 +435,25 @@ function renderCharts(data, runId) {
         );
     }
 
+    // --- EP configurations TTFT + Throughput charts (same layout as PD) ---
+    if (data.all_results.filter(r => r.architecture === 'EP').length) {
+        html += chartCard(
+            'EP Configurations — TTFT & Throughput (P90)',
+            '<strong style="color:#3b82f6">TTFT</strong> (left axis, lower is better) and <strong style="color:#f59e0b">Throughput</strong> (right axis, higher is better) at P90 for Expert Parallel configurations.',
+            'chart-ep-ttft-p90'
+        );
+        html += chartCard(
+            'EP Configurations — TTFT & Throughput (P95)',
+            '<strong style="color:#3b82f6">TTFT</strong> and <strong style="color:#f59e0b">Throughput</strong> at P95 for Expert Parallel configurations.',
+            'chart-ep-ttft-p95'
+        );
+        html += chartCard(
+            'EP Configurations — TTFT & Throughput (P99)',
+            '<strong style="color:#3b82f6">TTFT</strong> and <strong style="color:#f59e0b">Throughput</strong> at P99 for Expert Parallel configurations.',
+            'chart-ep-ttft-p99'
+        );
+    }
+
     // --- Aggregated configurations chart (all percentiles in one chart) ---
     if (data.all_results.filter(r => r.architecture === 'AGGREGATED').length > 1) {
         html += chartCard(
@@ -1589,17 +1608,18 @@ function renderCharts(data, runId) {
         }, plotlyConfig);
     }
 
-    // PD configurations TTFT charts (one per percentile)
-    const pdResults = data.all_results.filter(r => r.architecture === 'PD');
-    if (pdResults.length) {
-        const sorted = [...pdResults].sort((a, b) => a.prefill_pods - b.prefill_pods);
+    // PD and EP configurations TTFT charts (one per percentile, same layout)
+    function renderPdStyleCharts(archFilter, chartPrefix) {
+        const archResults = data.all_results.filter(r => r.architecture === archFilter);
+        if (!archResults.length) return;
+        const sorted = [...archResults].sort((a, b) => a.prefill_pods - b.prefill_pods);
         const labels = sorted.map(r => `${r.prefill_pods}P : ${r.decode_pods}D<br>TP${r.prefill_tp} : TP${r.decode_tp}`);
         const aggBase = rec ? rec.aggregated_baseline : null;
 
         const ttftPercentiles = [
-            { key: 'p90', field: 'ttft_p90', tputField: 'throughput_mean', color: '#3b82f6', chartId: 'chart-pd-ttft-p90' },
-            { key: 'p95', field: 'ttft_p95', tputField: 'throughput_mean', color: '#dc2626', chartId: 'chart-pd-ttft-p95' },
-            { key: 'p99', field: 'ttft_p99', tputField: 'throughput_mean', color: '#7c3aed', chartId: 'chart-pd-ttft-p99' },
+            { key: 'p90', field: 'ttft_p90', tputField: 'throughput_mean', color: '#3b82f6', chartId: chartPrefix + '-ttft-p90' },
+            { key: 'p95', field: 'ttft_p95', tputField: 'throughput_mean', color: '#dc2626', chartId: chartPrefix + '-ttft-p95' },
+            { key: 'p99', field: 'ttft_p99', tputField: 'throughput_mean', color: '#7c3aed', chartId: chartPrefix + '-ttft-p99' },
         ];
 
         ttftPercentiles.forEach(pctl => {
@@ -1723,6 +1743,8 @@ function renderCharts(data, runId) {
             Plotly.newPlot(cid(pctl.chartId), traces, layout, plotlyConfig);
         });
     }
+    renderPdStyleCharts('PD', 'chart-pd');
+    renderPdStyleCharts('EP', 'chart-ep');
 
     // ============================================================
     // Aggregated configurations chart (all percentiles in one grouped bar chart)
