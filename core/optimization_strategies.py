@@ -315,6 +315,7 @@ class ThroughputStrategy(OptimizationStrategy):
                 self.opt.all_test_results.append((test_config, result))
                 self.opt._save_test_to_database(test_config, result)
                 self.opt._check_pod_errors(test_config, result)
+                self.opt._check_request_errors(test_config, result)
 
                 if not result or not result.guidellm_success:
                     self.opt.log("    ❌ Test failed - STOPPING optimization", 'error')
@@ -446,6 +447,7 @@ class ThroughputStrategy(OptimizationStrategy):
             self.opt.all_test_results.append((ep_config, ep_result))
             self.opt._save_test_to_database(ep_config, ep_result)
             self.opt._check_pod_errors(ep_config, ep_result)
+            self.opt._check_request_errors(ep_config, ep_result)
 
             if not ep_result or not ep_result.guidellm_success:
                 self.opt.log("❌ EP calibrated load test failed", 'error')
@@ -496,6 +498,7 @@ class ThroughputStrategy(OptimizationStrategy):
             self.opt.all_test_results.append((agg_config, agg_result))
             self.opt._save_test_to_database(agg_config, agg_result)
             self.opt._check_pod_errors(agg_config, agg_result)
+            self.opt._check_request_errors(agg_config, agg_result)
 
             if not agg_result or not agg_result.guidellm_success:
                 self.opt.log("❌ Aggregated calibrated load test failed", 'error')
@@ -752,6 +755,7 @@ class BalancedStrategy(OptimizationStrategy):
                 self.opt.all_test_results.append((pd_config, pd_result))
                 self.opt._save_test_to_database(pd_config, pd_result)
                 self.opt._check_pod_errors(pd_config, pd_result)
+                self.opt._check_request_errors(pd_config, pd_result)
 
                 if not pd_result or not pd_result.guidellm_success:
                     self.opt.log("❌ PD calibrated load test failed", 'error')
@@ -786,6 +790,7 @@ class BalancedStrategy(OptimizationStrategy):
                 self.opt.all_test_results.append((ep_config, ep_result))
                 self.opt._save_test_to_database(ep_config, ep_result)
                 self.opt._check_pod_errors(ep_config, ep_result)
+                self.opt._check_request_errors(ep_config, ep_result)
 
                 if not ep_result or not ep_result.guidellm_success:
                     self.opt.log("❌ EP calibrated load test failed", 'error')
@@ -829,6 +834,7 @@ class BalancedStrategy(OptimizationStrategy):
                 self.opt.all_test_results.append((agg_config, agg_result))
                 self.opt._save_test_to_database(agg_config, agg_result)
                 self.opt._check_pod_errors(agg_config, agg_result)
+                self.opt._check_request_errors(agg_config, agg_result)
 
                 if not agg_result or not agg_result.guidellm_success:
                     self.opt.log("❌ Aggregated calibrated load test failed", 'error')

@@ -444,6 +444,24 @@ class RecipeOptimizer(
             test_id=test_config.test_id
         )
 
+    def _check_request_errors(self, test_config: TestConfig, test_result: TestResult):
+        """Stop the run if request error rate exceeds 2%."""
+        total = test_result.request_total or 0
+        errored = test_result.request_errored or 0
+        if total == 0 or errored == 0:
+            return
+        error_pct = errored / total * 100
+        if error_pct > 2.0:
+            self.log(f"🚨 High request error rate: {errored}/{total} requests errored ({error_pct:.1f}%)", 'error')
+            self.log(f"   Test: {test_config.test_id}", 'error')
+            self.log(f"   Threshold: 2% — stopping optimization", 'error')
+            raise RuntimeError(
+                f"Request error rate {error_pct:.1f}% exceeds 2% threshold "
+                f"({errored}/{total} errored) in test {test_config.test_id}"
+            )
+        elif errored > 0:
+            self.log(f"   ⚠️  {errored}/{total} requests errored ({error_pct:.1f}%) — within 2% threshold", 'warning')
+
     def _save_constraint_notes(self):
         """Save constraint notes to the database immediately so they persist even if the run fails."""
         if self.db_manager and self.run_id and self.constraint_notes:

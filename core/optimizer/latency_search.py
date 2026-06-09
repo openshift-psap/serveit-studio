@@ -69,6 +69,7 @@ class LatencySearchMixin:
         def save_test_fn(cfg, result):
             self._save_test_to_database(cfg, result)
             self._check_pod_errors(cfg, result)
+            self._check_request_errors(cfg, result)
 
         # --- Search PD ---
         best_split = None
@@ -353,6 +354,7 @@ class LatencySearchMixin:
             self.all_test_results.append((pd_config, pd_result))
             self._save_test_to_database(pd_config, pd_result)
             self._check_pod_errors(pd_config, pd_result)
+            self._check_request_errors(pd_config, pd_result)
 
             if not pd_result or not pd_result.guidellm_success:
                 self.log("❌ PD calibrated load test failed", 'error')
@@ -414,6 +416,7 @@ class LatencySearchMixin:
             self.all_test_results.append((agg_config, agg_result))
             self._save_test_to_database(agg_config, agg_result)
             self._check_pod_errors(agg_config, agg_result)
+            self._check_request_errors(agg_config, agg_result)
 
             if not agg_result or not agg_result.guidellm_success:
                 self.log("❌ Aggregated calibrated load test failed", 'error')

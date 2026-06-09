@@ -64,6 +64,7 @@ class TPCalibrationMixin:
                 self.all_test_results.append((test_config, result))
                 self._save_test_to_database(test_config, result)
                 self._check_pod_errors(test_config, result)
+                self._check_request_errors(test_config, result)
 
                 if not result or not result.guidellm_success:
                     self.log("    ❌ Test failed - STOPPING optimization", 'error')
@@ -181,6 +182,7 @@ class TPCalibrationMixin:
                 self.all_test_results.append((test_config, result))
                 self._save_test_to_database(test_config, result)
                 self._check_pod_errors(test_config, result)
+                self._check_request_errors(test_config, result)
 
                 if not result or not result.guidellm_success:
                     self.log("    ❌ Test failed - STOPPING optimization", 'error')
