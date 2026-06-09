@@ -257,6 +257,8 @@ class ThroughputStrategy(OptimizationStrategy):
                     if num_experts > 0 and (num_experts % decode_ep != 0 or num_experts % prefill_ep != 0):
                         continue
                     total_used = prefill_gpus + decode_gpus
+                    if total_used < total_gpus:
+                        continue
                     key = (prefill_tp, decode_tp, prefill_pods, decode_pods)
                     if key in seen:
                         continue
