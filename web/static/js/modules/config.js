@@ -728,6 +728,8 @@ function restoreConfigSummary() {
         const labels = {1: '1 (Fast)', 2: '2 (Default)', 3: '3 (Deep)', 4: '4 (Full)'};
         tdEl.textContent = labels[config.tp_pair_top_n] || config.tp_pair_top_n;
     }
+    const atpEl = document.getElementById('config-summary-asymmetric-tp');
+    if (atpEl) atpEl.textContent = config.allow_asymmetric_tp ? 'Enabled' : 'Disabled';
 
     // Update recipe section spans
     document.getElementById('recipe-objective').textContent = goalNames[config.goal] || config.goal;
