@@ -449,7 +449,7 @@ function renderCharts(data, runId) {
         html += '<div class="chart-card"><div class="chart-card-header">Pareto Optimal Configurations</div>';
         html += '<div style="padding:12px 20px 4px; color:#1e293b; font-size:0.95em;">These configurations represent the <strong>best possible trade-offs</strong>. Each one is optimal for a different balance of speed, throughput, and GPU cost. No other tested configuration beats any of these on all metrics at once.</div>';
         html += '<div class="chart-card-body" style="padding:0;">';
-        html += '<table class="results-table"><tr><th>Configuration</th><th>Metric</th><th>P50</th><th>P90</th><th>P95</th><th>P99</th><th>GPUs</th><th title="Throughput P90 ÷ Total GPUs (req/s per GPU). Higher = better cost-efficiency.">Efficiency<br><span style="font-weight:400;font-size:0.75em;color:#64748b;">req/s per GPU</span></th><th>Manifests</th></tr>';
+        html += '<table class="results-table"><tr><th>Configuration</th><th>Metric</th><th>P50</th><th>P90</th><th>P95</th><th>P99</th><th>GPUs</th><th title="Throughput Mean ÷ Total GPUs (req/s per GPU). Higher = better cost-efficiency.">Efficiency<br><span style="font-weight:400;font-size:0.75em;color:#64748b;">req/s per GPU</span></th><th>Manifests</th></tr>';
         charts.pareto.pareto_table.forEach((p, idx) => {
             let manifestLinks = '-';
             const pTestId = p.test_id || testIdLookup[p.config_name] || p.config_name;
@@ -460,10 +460,11 @@ function renderCharts(data, runId) {
                 }).join(' ');
             }
             const borderTop = idx > 0 ? ' border-top:2px solid #cbd5e1;' : '';
+            const tputMeanPareto = p.throughput_mean ?? p.throughput_p90;
             const metrics = [
                 {name: 'TTFT (ms)', p50: p.ttft_p50, p90: p.ttft_p90, p95: p.ttft_p95, p99: p.ttft_p99},
                 {name: 'ITL (ms)', p50: p.itl_p50, p90: p.itl_p90, p95: p.itl_p95, p99: p.itl_p99},
-                {name: 'Throughput (req/s)', p50: p.throughput_p50, p90: p.throughput_p90, p95: p.throughput_p95, p99: p.throughput_p99},
+                {name: 'Throughput Mean (req/s)', p50: null, p90: tputMeanPareto, p95: null, p99: null},
             ];
             metrics.forEach((m, mi) => {
                 const rowBorder = mi === 0 && idx > 0 ? borderTop : '';
@@ -500,12 +501,10 @@ function renderCharts(data, runId) {
         html += '<th style="cursor:pointer;" onclick="sortReportTable(\'' + allCfgTableId + '\',2,\'num\')">TTFT P90 &#x21C5;</th>';
         html += '<th style="cursor:pointer;" onclick="sortReportTable(\'' + allCfgTableId + '\',3,\'num\')">TTFT P95 &#x21C5;</th>';
         html += '<th style="cursor:pointer;" onclick="sortReportTable(\'' + allCfgTableId + '\',4,\'num\')">TTFT P99 &#x21C5;</th>';
-        html += '<th style="cursor:pointer;" onclick="sortReportTable(\'' + allCfgTableId + '\',5,\'num\')">Tput P90 &#x21C5;</th>';
-        html += '<th style="cursor:pointer;" onclick="sortReportTable(\'' + allCfgTableId + '\',6,\'num\')">Tput P95 &#x21C5;</th>';
-        html += '<th style="cursor:pointer;" onclick="sortReportTable(\'' + allCfgTableId + '\',7,\'num\')">Tput P99 &#x21C5;</th>';
-        html += '<th style="cursor:pointer;" onclick="sortReportTable(\'' + allCfgTableId + '\',8,\'num\')">ITL P90 &#x21C5;</th>';
-        html += '<th style="cursor:pointer;" onclick="sortReportTable(\'' + allCfgTableId + '\',9,\'num\')">GPUs &#x21C5;</th>';
-        html += '<th style="cursor:pointer;" title="Throughput P90 ÷ Total GPUs (req/s per GPU)" onclick="sortReportTable(\'' + allCfgTableId + '\',10,\'num\')">Efficiency &#x21C5;<br><span style="font-weight:400;font-size:0.75em;color:#64748b;">req/s per GPU</span></th>';
+        html += '<th style="cursor:pointer;" onclick="sortReportTable(\'' + allCfgTableId + '\',5,\'num\')">Tput Mean &#x21C5;</th>';
+        html += '<th style="cursor:pointer;" onclick="sortReportTable(\'' + allCfgTableId + '\',6,\'num\')">ITL P90 &#x21C5;</th>';
+        html += '<th style="cursor:pointer;" onclick="sortReportTable(\'' + allCfgTableId + '\',7,\'num\')">GPUs &#x21C5;</th>';
+        html += '<th style="cursor:pointer;" title="Throughput Mean ÷ Total GPUs (req/s per GPU)" onclick="sortReportTable(\'' + allCfgTableId + '\',8,\'num\')">Efficiency &#x21C5;<br><span style="font-weight:400;font-size:0.75em;color:#64748b;">req/s per GPU</span></th>';
         html += '<th>Manifests</th>';
         html += '</tr>';
         const paretoNames = new Set(charts.pareto.pareto_table.map(p => p.config_name));
@@ -520,7 +519,8 @@ function renderCharts(data, runId) {
             }
             const na = 'N/A';
             const eppBadge = (rTestId && rTestId.startsWith('step11-epp-')) ? ' <span style="background:#7c3aed;color:white;font-size:0.65em;padding:1px 5px;border-radius:3px;">EPP TUNED</span>' : '';
-            html += `<tr${cls}><td>${r.config_name}${eppBadge}</td><td>${r.architecture}</td><td data-val="${r.ttft_p90}">${r.ttft_p90}</td><td data-val="${r.ttft_p95 ?? ''}">${r.ttft_p95 ?? na}</td><td data-val="${r.ttft_p99 ?? ''}">${r.ttft_p99 ?? na}</td><td data-val="${r.throughput_p90}">${r.throughput_p90}</td><td data-val="${r.throughput_p95 ?? ''}">${r.throughput_p95 ?? na}</td><td data-val="${r.throughput_p99 ?? ''}">${r.throughput_p99 ?? na}</td><td data-val="${r.itl_p90 ?? ''}">${r.itl_p90 ?? na}</td><td data-val="${r.gpus}">${r.gpus}</td><td data-val="${r.efficiency}">${r.efficiency}</td><td>${manifestLinks}</td></tr>`;
+            const tputMeanVal = r.throughput_mean ?? r.throughput_p90 ?? na;
+            html += `<tr${cls}><td>${r.config_name}${eppBadge}</td><td>${r.architecture}</td><td data-val="${r.ttft_p90}">${r.ttft_p90}</td><td data-val="${r.ttft_p95 ?? ''}">${r.ttft_p95 ?? na}</td><td data-val="${r.ttft_p99 ?? ''}">${r.ttft_p99 ?? na}</td><td data-val="${tputMeanVal}">${tputMeanVal}</td><td data-val="${r.itl_p90 ?? ''}">${r.itl_p90 ?? na}</td><td data-val="${r.gpus}">${r.gpus}</td><td data-val="${r.efficiency}">${r.efficiency}</td><td>${manifestLinks}</td></tr>`;
         });
         html += '</table></div></div>';
     }
