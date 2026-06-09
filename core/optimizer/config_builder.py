@@ -642,15 +642,12 @@ class ConfigBuilderMixin:
         chunk_size = self._compute_moe_dp_chunk_size(split.decode_tp, decode_max_num_seqs_prelim) if self._is_moe else 384
 
         # Compute NVSHMEM symmetric heap from model architecture.
-        # vLLM sizes the DeepEP low-latency RDMA buffer using
-        # max_num_batched_tokens, not moe_dp_chunk_size.
         max_batched = self._compute_max_num_batched_tokens(split.prefill_tp) or self.config.max_model_len
         nvshmem_size, ep_mem_gb = self._compute_ep_memory_gb(max_batched)
 
-        # EPLB: compute num_redundant_experts to fit in available VRAM.
-        # EPLB all_gather needs scratch = num_experts_per_layer × bytes_per_expert
-        # during rebalancing. Keep redundant experts low to avoid OOM.
-        num_redundant = 1
+        # EPLB redundant experts: must equal ep_ranks for divisibility
+        ep_ranks = split.decode_tp * split.decode_pods
+        num_redundant = ep_ranks
         eplb_gb = 0.5
         if self._model_config:
             num_layers = self._model_config.get('num_hidden_layers', 32)
@@ -659,30 +656,42 @@ class ConfigBuilderMixin:
             hidden = self._model_config.get('hidden_size', 4096)
             dtype_bytes = 1 if getattr(self, '_model_dtype', 'fp16') == 'fp8' else 2
             bytes_per_expert = 3 * hidden * intermediate * dtype_bytes
-            ep_ranks = split.decode_tp * split.decode_pods
-            # vLLM computes global_num_experts = num_experts + num_redundant_experts
-            # and asserts global_num_experts % ep_size == 0.
-            # So num_redundant must be a multiple of ep_ranks (or 0).
-            num_redundant = ep_ranks
             eplb_gb = max(num_layers * bytes_per_expert * num_redundant / max(ep_ranks, 1) / (1024**3), 0.5)
-            self.log(f"   EPLB: {num_redundant} redundant experts/rank "
-                     f"(expert={bytes_per_expert / 1024**2:.0f}MB, ep_ranks={ep_ranks})")
 
-        ep_overhead_gb = ep_mem_gb + eplb_gb
-        ep_reserve = round(ep_overhead_gb / self._gpu_vram_gb, 2)
+        # EP gpu_memory_utilization: start from profiled base, subtract EP overhead,
+        # then ADD BACK weight savings from expert distribution.
+        # Without EP: all experts on every GPU (weight = total/TP).
+        # With EP: experts distributed across ep_ranks (weight = non_expert/TP + expert/EP).
+        # Savings = expert_weight × (1/TP - 1/EP) per GPU — positive when EP > TP.
+        expert_weight_gb = 0.0
+        if self._model_config and self._num_experts > 1:
+            num_layers_cfg = self._model_config.get('num_hidden_layers', 32)
+            interleave = self._model_config.get('interleave_moe_layer_step', 1)
+            moe_layers = num_layers_cfg // interleave if interleave > 1 else num_layers_cfg
+            expert_weight_gb = moe_layers * self._num_experts * bytes_per_expert / (1024**3)
+
+        decode_ep_savings = expert_weight_gb * (1.0 / split.decode_tp - 1.0 / ep_ranks)
+        decode_ep_savings = max(decode_ep_savings, 0)
+        decode_ep_savings_pct = round(decode_ep_savings / self._gpu_vram_gb, 2)
+
+        ep_overhead_pct = round((ep_mem_gb + eplb_gb) / self._gpu_vram_gb, 2)
         nixl_reserve = 0.05
 
         prefill_gmu_raw = self._compute_gpu_mem_util(split.prefill_tp)
         decode_gmu_raw = self._compute_gpu_mem_util(split.decode_tp, log=False)
 
-        prefill_gmu = round(max(prefill_gmu_raw - ep_reserve, 0.70), 2)
-        decode_gmu = round(max(decode_gmu_raw - ep_reserve - nixl_reserve, 0.70), 2)
+        prefill_gmu = round(max(prefill_gmu_raw - ep_overhead_pct, 0.70), 2)
+        decode_gmu = round(max(decode_gmu_raw - ep_overhead_pct - nixl_reserve + decode_ep_savings_pct, 0.70), 2)
+        decode_gmu = min(decode_gmu, 0.95)
 
-        self.log(f"   EP reserve: {ep_overhead_gb:.1f}GB total (DeepEP={ep_mem_gb:.1f}GB + EPLB={eplb_gb:.1f}GB) = {ep_reserve:.0%}")
-        self.log(f"   Prefill gpu_memory_utilization={prefill_gmu:.2f} "
-                 f"(base={prefill_gmu_raw:.2f} - {ep_reserve:.0%} EP reserve)")
-        self.log(f"   Decode  gpu_memory_utilization={decode_gmu:.2f} "
-                 f"(base={decode_gmu_raw:.2f} - {ep_reserve:.0%} EP - {nixl_reserve:.0%} NIXL)")
+        self.log(f"   EPLB: {num_redundant} redundant experts "
+                 f"(expert={bytes_per_expert / 1024**2:.0f}MB, ep_ranks={ep_ranks})")
+        self.log(f"   EP overhead: {ep_mem_gb + eplb_gb:.1f}GB = {ep_overhead_pct:.0%}")
+        self.log(f"   EP weight savings (decode): {decode_ep_savings:.1f}GB = +{decode_ep_savings_pct:.0%} "
+                 f"(experts={expert_weight_gb:.0f}GB, 1/{split.decode_tp} → 1/{ep_ranks})")
+        self.log(f"   Prefill gmu={prefill_gmu:.2f} (base={prefill_gmu_raw:.2f} - {ep_overhead_pct:.0%} EP)")
+        self.log(f"   Decode  gmu={decode_gmu:.2f} (base={decode_gmu_raw:.2f} - {ep_overhead_pct:.0%} EP "
+                 f"- {nixl_reserve:.0%} NIXL + {decode_ep_savings_pct:.0%} EP savings)")
 
         prefill_max_num_seqs = self._compute_max_num_seqs(
             split.prefill_tp, role='prefill',
