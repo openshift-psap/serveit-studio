@@ -702,7 +702,7 @@ function restoreConfigSummary() {
     document.getElementById('config-summary-qps-mode').textContent = config.use_achievable_qps ? 'Sustainable Concurrency (auto-scaled)' : 'User-defined Concurrent Users';
     document.getElementById('config-summary-gpus').textContent = config.max_gpus || config.cluster_resources?.total_gpus || 'Not set';
     document.getElementById('config-summary-achievable-qps').textContent = config.use_achievable_qps ? 'Enabled' : 'Disabled';
-    document.getElementById('config-summary-pvc').textContent = config.existing_pvc_name || 'Not set';
+    document.getElementById('config-summary-pvc').textContent = config.existing_pvc_name || 'Auto-generated';
     document.getElementById('config-summary-namespace').textContent = config.namespace || 'Not set';
     const lcEl = document.getElementById('config-summary-latency-constraint');
     if (lcEl) {
