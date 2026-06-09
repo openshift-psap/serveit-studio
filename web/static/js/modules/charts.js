@@ -809,8 +809,8 @@ function renderCharts(data, runId) {
                         if (param.ep_only && arch !== 'EP') { html += `<td style="text-align:center;">${na}</td>`; continue; }
                         if (param.pd_only && arch === 'AGGREGATED') { html += `<td style="text-align:center;">${na}</td>`; continue; }
                         const val = param.get(tc);
-                        const display = val || '-';
-                        const changed = val && val !== '-' && val !== param.def && val !== 'null';
+                        const display = val || param.def;
+                        const changed = val && val !== param.def && val !== 'null';
                         const style = changed ? 'font-weight:700;color:#059669;' : '';
                         html += `<td style="text-align:center;${style}">${display}</td>`;
                     }
