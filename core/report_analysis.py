@@ -529,6 +529,8 @@ class ReportAnalyzer:
                             pd_manifest_types = list(_jm2.loads(best_pd.manifests_yaml).keys())
                         except Exception:
                             pass
+                    ptp = best_pd.prefill_tp or best_pd.tensor_parallelism
+                    dtp = best_pd.decode_tp or best_pd.tensor_parallelism
                     pctl_data['pd'] = {
                         'config_name': best_pd.display_label,
                         'test_id': best_pd.config_name,
@@ -538,6 +540,9 @@ class ReportAnalyzer:
                         'gpus': best_pd.total_gpus,
                         'prefill_pods': best_pd.prefill_pods,
                         'decode_pods': best_pd.decode_pods,
+                        'prefill_tp': ptp,
+                        'decode_tp': dtp,
+                        'tp': ptp,
                         'concurrency': pd_c,
                         'manifest_types': pd_manifest_types,
                     }
