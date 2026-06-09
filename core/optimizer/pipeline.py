@@ -1454,20 +1454,24 @@ class RecipeOptimizer(
             # EP results (populated by ThroughputStrategy/BalancedStrategy)
             'ep_configurations': [
                 {
-                    'tp': ep_cfg.tp,
-                    'replicas': ep_cfg.replicas,
+                    'prefill_tp': ep_cfg.prefill_tp,
+                    'decode_tp': ep_cfg.decode_tp,
+                    'prefill_pods': ep_cfg.prefill_pods,
+                    'decode_pods': ep_cfg.decode_pods,
                     'total_gpus': ep_cfg.total_gpus,
                     'ttft_p90': result.ttft_p90,
-                    'throughput_p90': result.throughput_p90
+                    'throughput_mean': result.throughput_mean or result.throughput_p90,
                 }
                 for ep_cfg, result in self.ep_results
             ],
             'best_ep': {
-                'tp': self.best_ep_config.tp,
-                'replicas': self.best_ep_config.replicas,
+                'prefill_tp': self.best_ep_config.prefill_tp,
+                'decode_tp': self.best_ep_config.decode_tp,
+                'prefill_pods': self.best_ep_config.prefill_pods,
+                'decode_pods': self.best_ep_config.decode_pods,
                 'total_gpus': self.best_ep_config.total_gpus,
                 'ttft_p90': self.best_ep_result.ttft_p90,
-                'throughput_p90': self.best_ep_result.throughput_p90,
+                'throughput_mean': self.best_ep_result.throughput_mean or self.best_ep_result.throughput_p90,
             } if self.best_ep_result and self.best_ep_config else None,
             'calibrated_ep_result': {
                 'ttft_p90': self.calibrated_ep_result.ttft_p90,
