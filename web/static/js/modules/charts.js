@@ -722,6 +722,18 @@ function renderCharts(data, runId) {
             const hasEp = archOrder.includes('EP');
             const na = '<span style="color:#cbd5e1;">N/A</span>';
 
+            const _eppPresets = {
+                balanced: {prefix_cache_weight:3, kv_cache_weight:2, queue_weight:2, active_request_weight:2, decode_prefix_cache_weight:1, decode_active_request_weight:3},
+                cache_optimized: {prefix_cache_weight:5, kv_cache_weight:1, queue_weight:2, active_request_weight:1, decode_prefix_cache_weight:1, decode_active_request_weight:3},
+                queue_balanced: {prefix_cache_weight:1, kv_cache_weight:1, queue_weight:3, active_request_weight:3, decode_prefix_cache_weight:1, decode_active_request_weight:3},
+                latency_aware: {prefix_cache_weight:3, kv_cache_weight:2, queue_weight:2, active_request_weight:2, decode_prefix_cache_weight:1, decode_active_request_weight:3},
+            };
+            function _eppW(tc) {
+                if (!tc.epp_config) return null;
+                const preset = tc.epp_config.preset || rc.epp_preset || 'balanced';
+                return _eppPresets[preset] || _eppPresets.balanced;
+            }
+
             function getVal(tc, key) { return tc[key] != null ? String(tc[key]) : null; }
             function pdVal(tc, pKey, dKey) {
                 const p = tc[pKey], d = tc[dKey];
@@ -761,12 +773,15 @@ function renderCharts(data, runId) {
                     { label: 'num-redundant-experts', def: '32', get: tc => getVal(tc, 'num_redundant_experts'), ep_only: true },
                     { label: 'NVSHMEM_SYMMETRIC_SIZE', def: '16G', get: tc => getVal(tc, 'nvshmem_symmetric_size'), ep_only: true },
                 ]},
-                { title: 'EPP Routing Weights', params: [
-                    { label: 'prefix-cache-weight', def: '3', get: tc => tc.epp_config ? String(tc.epp_config.prefix_cache_weight || tc.epp_config.plugins?.['prefix-cache-scorer']?.weight || '-') : null },
-                    { label: 'kv-cache-weight', def: '2', get: tc => tc.epp_config ? String(tc.epp_config.kv_cache_weight || tc.epp_config.plugins?.['kv-cache-utilization-scorer']?.weight || '-') : null },
-                    { label: 'queue-weight', def: '2', get: tc => tc.epp_config ? String(tc.epp_config.queue_weight || tc.epp_config.plugins?.['queue-scorer']?.weight || '-') : null },
-                    { label: 'decode-active-request-weight', def: '2', get: tc => tc.epp_config ? String(tc.epp_config.decode_active_request_weight || '-') : null },
-                    { label: 'decode-prefix-cache-weight', def: '3', get: tc => tc.epp_config ? String(tc.epp_config.decode_prefix_cache_weight || '-') : null },
+                { title: 'EPP Prefill Routing Weights', params: [
+                    { label: 'prefix-cache-weight', def: '3', get: tc => { const w = _eppW(tc); return w ? String(w.prefix_cache_weight) : null; } },
+                    { label: 'kv-cache-weight', def: '2', get: tc => { const w = _eppW(tc); return w ? String(w.kv_cache_weight) : null; } },
+                    { label: 'queue-weight', def: '2', get: tc => { const w = _eppW(tc); return w ? String(w.queue_weight) : null; } },
+                    { label: 'active-request-weight', def: '2', get: tc => { const w = _eppW(tc); return w ? String(w.active_request_weight) : null; } },
+                ]},
+                { title: 'EPP Decode Routing Weights', params: [
+                    { label: 'decode-prefix-cache-weight', def: '3', get: tc => { const w = _eppW(tc); return w ? String(w.decode_prefix_cache_weight) : null; } },
+                    { label: 'decode-active-request-weight', def: '2', get: tc => { const w = _eppW(tc); return w ? String(w.decode_active_request_weight) : null; } },
                 ]},
                 { title: 'EPP Auto-Calculated', params: [
                     { label: 'maxPrefixBlocksToMatch', def: 'auto', get: tc => tc.epp_config ? String(tc.epp_config.max_prefix_blocks || tc.epp_config.maxPrefixBlocksToMatch || '-') : null },
