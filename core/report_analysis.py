@@ -247,8 +247,6 @@ class ReportAnalyzer:
         step7_ep_tests = []   # step7-ep-tp{tp}-{r}r (EP configs)
         step6_agg_tests = []
         step8_tests = []
-        step9_tests = []
-
         for r in results:
             if not r.is_successful:
                 continue
@@ -264,8 +262,6 @@ class ReportAnalyzer:
                 step6_agg_tests.append(r)
             elif r.config_name.startswith('step8'):
                 step8_tests.append(r)
-            elif r.config_name.startswith('step9'):
-                step9_tests.append(r)
 
         # Backward compatibility: combine PD tests for existing code
         step7_tests = step7_pd_tests
@@ -1020,11 +1016,11 @@ class ReportAnalyzer:
         for r in step10_results:
             if r.config_name.startswith(('step10-epp-', 'step11-epp-')):
                 continue
-            if r.config_name.startswith('step10-ep-') and step10_ep is None:
+            if (r.config_name.startswith('step10-ep-') or r.config_name.startswith('step9-ep-')) and step10_ep is None:
                 step10_ep = r
-            elif r.architecture == 'pd' and step10_pd is None:
+            elif r.architecture.lower() in ('pd', 'ep') and not r.config_name.startswith('step9-ep-') and step10_pd is None:
                 step10_pd = r
-            elif r.config_name.startswith('step10-aggregated') and step10_agg is None:
+            elif (r.config_name.startswith('step10-aggregated') or r.config_name.startswith('step9-aggregated')) and step10_agg is None:
                 step10_agg = r
 
         if not step10_pd and not step10_ep:
@@ -1199,7 +1195,7 @@ class ReportAnalyzer:
         # Step 10 calibrated QPS results + Step 11 EPP results (separate section)
         step10_results = [
             r for r in results
-            if (r.config_name.startswith('step10') or r.config_name.startswith('step11-epp-'))
+            if (r.config_name.startswith('step9-') or r.config_name.startswith('step10') or r.config_name.startswith('step11-epp-'))
             and r.is_successful
         ]
 
