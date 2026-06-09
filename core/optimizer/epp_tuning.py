@@ -24,6 +24,8 @@ class EPPTuningMixin:
         elif arch == 'pd' and self.pareto_results:
             best = min(self.pareto_results, key=lambda x: x[1].ttft_p99 or x[1].ttft_p90 or 1e9)
             test_id = getattr(best[1], 'test_id', None)
+        elif arch == 'ep' and self.best_ep_result:
+            test_id = getattr(self.best_ep_result, 'test_id', None)
         if not test_id:
             return None
 
@@ -60,7 +62,7 @@ class EPPTuningMixin:
         queries = self._prom_avg(prom, 'vllm_prefix_cache_queries_rate')
         if hits is not None and queries and queries > 0:
             rate = (hits / queries) * 100
-            config_desc = f"TP={self.aggregated_tp}" if arch == 'aggregated' else "best PD split"
+            config_desc = f"TP={self.aggregated_tp}" if arch == 'aggregated' else ("best EP config" if arch == 'ep' else "best PD split")
             self.log(f"    Measured {arch} cache hit rate: {rate:.1f}% (from {config_desc})", 'info')
             return rate
         return None
