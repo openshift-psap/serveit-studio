@@ -936,15 +936,18 @@ data:
                     log_to_ui("", 'info')
                     log_to_ui("📊 EP Configurations:", 'decision')
                     for i, config in enumerate(results['ep_configurations'], 1):
-                        log_to_ui(f"   {i}. EP: TP{config['tp']} × {config['replicas']} replicas "
+                        log_to_ui(f"   {i}. EP: {config.get('prefill_pods',1)}P+{config.get('decode_pods',1)}D "
+                                 f"PTP={config.get('prefill_tp','?')} DTP={config.get('decode_tp','?')} "
                                  f"({config['total_gpus']} GPUs)", 'info')
+                        tput = config.get('throughput_mean') or config.get('throughput_p90') or 0
                         log_to_ui(f"      TTFT p90: {config['ttft_p90']:.1f}ms, "
-                                 f"Throughput p90: {config['throughput_p90']:.2f} req/s", 'info')
+                                 f"Throughput mean: {tput:.2f} req/s", 'info')
 
                 best_ep = results.get('best_ep')
                 if best_ep:
                     log_to_ui("", 'info')
-                    log_to_ui(f"✅ Best EP: TP{best_ep['tp']} × {best_ep['replicas']} replicas", 'success')
+                    log_to_ui(f"✅ Best EP: {best_ep.get('prefill_pods',1)}P+{best_ep.get('decode_pods',1)}D "
+                             f"PTP={best_ep.get('prefill_tp','?')} DTP={best_ep.get('decode_tp','?')}", 'success')
 
                 agg = results.get('aggregated_result')
                 if agg:
