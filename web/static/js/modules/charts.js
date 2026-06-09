@@ -701,6 +701,94 @@ function renderCharts(data, runId) {
         html += '</div>';
         html += '</div>';
 
+        // Per-Architecture Tuning Comparison Table
+        const archConfigs = {};
+        const archOrder = [];
+        for (const r of (data.all_results || [])) {
+            const arch = (r.architecture || '').toUpperCase();
+            if (archConfigs[arch]) continue;
+            let tc = null;
+            if (r.test_config_json) {
+                try { tc = typeof r.test_config_json === 'string' ? JSON.parse(r.test_config_json) : r.test_config_json; } catch(e) {}
+            }
+            if (tc) { archConfigs[arch] = tc; archOrder.push(arch); }
+        }
+
+        if (archOrder.length > 0) {
+            html += '<div style="margin-top:24px;">';
+            html += '<div style="font-weight:700;color:#1e293b;margin-bottom:10px;border-bottom:2px solid #059669;padding-bottom:4px;">Tuned Settings vs Upstream Defaults</div>';
+            html += '<div style="font-size:0.85em;color:#64748b;margin-bottom:12px;">Shows what ServeIt Studio auto-tuned for each architecture compared to upstream vLLM/llm-d defaults.</div>';
+
+            const upstreamDefaults = {
+                'gpu_memory_utilization': { val: '0.90', label: 'GPU Memory Utilization' },
+                'max_num_seqs': { val: '256', label: 'Max Num Seqs' },
+                'max_num_batched_tokens': { val: 'max_model_len', label: 'Max Batched Tokens' },
+                'block_size': { val: '16', label: 'Block Size' },
+                'enable_prefix_caching': { val: 'Off', label: 'Prefix Caching' },
+                'nvshmem_symmetric_size': { val: '16G', label: 'NVSHMEM Symmetric Size', ep_only: true },
+                'num_redundant_experts': { val: '32', label: 'EPLB Redundant Experts', ep_only: true },
+                'moe_dp_chunk_size': { val: '256', label: 'MoE DP Chunk Size', ep_only: true },
+            };
+
+            html += '<div style="overflow-x:auto;"><table class="results-table" style="font-size:0.88em;">';
+            html += '<tr><th style="text-align:left;">Parameter</th><th>Upstream Default</th>';
+            for (const arch of archOrder) {
+                const color = arch === 'AGGREGATED' ? '#6366f1' : arch === 'PD' ? '#0ea5e9' : '#10b981';
+                html += `<th style="color:${color};">${arch}</th>`;
+            }
+            html += '</tr>';
+
+            const hasEp = archOrder.includes('EP');
+
+            for (const [key, def] of Object.entries(upstreamDefaults)) {
+                if (def.ep_only && !hasEp) continue;
+
+                html += `<tr><td style="font-weight:600;color:#334155;">${def.label}</td>`;
+                html += `<td style="color:#94a3b8;text-align:center;">${def.val}</td>`;
+
+                for (const arch of archOrder) {
+                    const tc = archConfigs[arch];
+                    let val = '-';
+                    let changed = false;
+
+                    if (key === 'gpu_memory_utilization') {
+                        if (tc.prefill_gpu_memory_utilization && tc.decode_gpu_memory_utilization && tc.prefill_gpu_memory_utilization !== tc.decode_gpu_memory_utilization) {
+                            val = `P=${tc.prefill_gpu_memory_utilization} D=${tc.decode_gpu_memory_utilization}`;
+                        } else {
+                            val = tc.gpu_memory_utilization || '-';
+                        }
+                        changed = val !== '-' && String(val) !== def.val;
+                    } else if (key === 'max_num_seqs') {
+                        if (tc.prefill_max_num_seqs && tc.decode_max_num_seqs && tc.prefill_max_num_seqs !== tc.decode_max_num_seqs) {
+                            val = `P=${tc.prefill_max_num_seqs} D=${tc.decode_max_num_seqs}`;
+                        } else {
+                            val = tc.max_num_seqs || tc.prefill_max_num_seqs || '-';
+                        }
+                        changed = val !== '-' && String(val) !== def.val;
+                    } else if (key === 'enable_prefix_caching') {
+                        val = tc.enable_prefix_caching ? 'On' : 'Off';
+                        changed = val !== def.val;
+                    } else if (key === 'nvshmem_symmetric_size' || key === 'num_redundant_experts' || key === 'moe_dp_chunk_size') {
+                        if (arch === 'EP') {
+                            val = tc[key] != null ? String(tc[key]) : '-';
+                            changed = val !== '-' && val !== def.val;
+                        } else {
+                            val = '<span style="color:#cbd5e1;">N/A</span>';
+                        }
+                    } else {
+                        val = tc[key] != null ? String(tc[key]) : '-';
+                        changed = val !== '-' && val !== def.val;
+                    }
+
+                    const style = changed ? 'font-weight:700;color:#059669;' : '';
+                    html += `<td style="text-align:center;${style}">${val}</td>`;
+                }
+                html += '</tr>';
+            }
+
+            html += '</table></div></div>';
+        }
+
         html += '</div></div></div>';
         secTestCfg = html; html = '';
     }
