@@ -356,6 +356,7 @@ def cmd_run(args):
         'pd_search_mode': args.pd_search,
         'headroom': args.headroom,
         'allow_asymmetric_tp': args.allow_asymmetric_tp,
+        'max_pd_splits': args.max_pd_splits,
         'objective': args.objective,
         'use_achievable_qps': args.use_achievable_qps,
         'latency_constraint_enabled': args.latency_sla is not None,
@@ -373,9 +374,13 @@ def cmd_run(args):
         'prefix_cache_hit_pct': args.prefix_cache_pct,
         'prefix_cache_mode': args.prefix_cache_mode,
         'prefix_cache_groups': args.prefix_cache_groups,
+        'prefix_cache_seed': args.prefix_cache_seed,
+        'epp_custom_enabled': not args.no_epp_custom,
         'epp_preset': epp_preset,
         'epp_benchmark': args.epp_benchmark,
         'epp_config': epp_config,
+        'advanced_vllm_custom_enabled': not args.no_auto_tune,
+        'memory_reserve_pct': args.memory_reserve_pct,
         'advanced_vllm': advanced_vllm,
         'scheduler_image': args.scheduler_image,
         'thanos_url': args.thanos_url,
@@ -849,6 +854,8 @@ def build_run_parser(parser):
                     default='identical', help='Cache simulation mode (default: identical)')
     pc.add_argument('--prefix-cache-groups', type=int, default=5,
                     help='Number of distinct prompt groups for multi_group mode (default: 5)')
+    pc.add_argument('--prefix-cache-seed', type=int, default=None,
+                    help='Random seed for reproducible prefix cache dataset generation')
 
     hw = parser.add_argument_group('Hardware')
     hw.add_argument('--gpus', type=int, default=16, help='Total GPUs to use (default: 16)')
@@ -884,7 +891,9 @@ def build_run_parser(parser):
     ss.add_argument('--headroom', type=float, default=1.3,
                     help='Sustainable load headroom multiplier (default: 1.3)')
     ss.add_argument('--allow-asymmetric-tp', action='store_true',
-                    help='Allow prefill TP > decode TP (crashes on llm-d <= v0.4.0, vllm#43523)')
+                    help='Allow prefill TP > decode TP (NIXL requires matching or lower prefill TP)')
+    ss.add_argument('--max-pd-splits', type=int, default=0,
+                    help='Limit PD splits tested per TP pair (0=unlimited, default: 0)')
     ss.add_argument('--use-achievable-qps', action='store_true',
                     help='Auto-scale concurrency to sustainable level')
     ss.add_argument('--duration', type=int, default=300,
@@ -904,6 +913,8 @@ def build_run_parser(parser):
     ep.add_argument('--epp-preset', choices=['balanced', 'cache_optimized',
                     'queue_balanced', 'latency_aware', 'custom'],
                     default='balanced', help='EPP scoring preset (default: balanced)')
+    ep.add_argument('--no-epp-custom', action='store_true',
+                    help='Disable EPP customization — use upstream llm-d EPP defaults')
     ep.add_argument('--epp-benchmark', action='store_true',
                     help='Benchmark EPP strategies (Step 9)')
     ep.add_argument('--epp-weights', type=str, default=None, metavar='C:K:Q',
@@ -932,6 +943,10 @@ def build_run_parser(parser):
                     help='Decode pod count for PD single test')
 
     av = parser.add_argument_group('Advanced vLLM Settings')
+    av.add_argument('--no-auto-tune', action='store_true',
+                    help='Disable auto-tuning — use upstream vLLM defaults for all parameters')
+    av.add_argument('--memory-reserve-pct', type=float, default=0.0,
+                    help='Extra GPU memory reserve %% for TP estimation safety (default: 0)')
     av.add_argument('--max-model-len', type=int, default=None,
                     help='Override max_model_len (auto-calculated if omitted)')
     av.add_argument('--gpu-mem-util', type=float, default=None,
