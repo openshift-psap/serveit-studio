@@ -142,7 +142,8 @@ class EPPTuningMixin:
         decode_tpsg = self.optimal_decode_tp.tpsg if self.optimal_decode_tp else None
 
         if not prefill_tpsg or not decode_tpsg:
-            self.log("  Smart EPP: no calibration TPSG data — using Prometheus metrics only", 'info')
+            self.log("🚨 BUG: TPSG data missing — Steps 2-3 should always produce this. "
+                     f"prefill_tpsg={prefill_tpsg}, decode_tpsg={decode_tpsg}", 'error')
 
         isl = self.config.isl
         osl = self.config.osl
