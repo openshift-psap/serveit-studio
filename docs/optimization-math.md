@@ -107,12 +107,18 @@ Step 3 (Prefill): TPSG = (throughput_p90 × ISL) / TP
 
 ### max_model_len (always set)
 ```
+# Aggregated and PD:
 max_model_len = (ISL + OSL) * 1.05
+
+# EP (Expert Parallelism):
+ep_max_model_len = min((ISL + OSL) * 1.05 * 1.10, max_position_embeddings)
 ```
 
 **Why always set, even with auto-tuning disabled?** `max_model_len` is not a performance tuning preference — it's a memory sizing requirement. Without it, vLLM uses `max_position_embeddings` from the model config (e.g., 40960 for Qwen3). Each KV cache slot is pre-allocated for this full length. With ISL=1000 + OSL=1000, the actual per-request footprint is ~2000 tokens — allocating 40960 per slot wastes 95% of KV cache memory, limiting concurrent requests to ~20 instead of hundreds. This makes it impossible to serve the user's workload at their requested concurrency.
 
 The user explicitly chose ISL and OSL — there's no reason to allocate 20× more memory per slot than needed. This value is set for ALL tests (calibration and production) regardless of the auto-tuning toggle.
+
+**Why 10% extra for EP?** EP adds routing metadata during DeepEP dispatch/combine operations. The all-to-all token exchange includes per-token routing indices, expert assignment metadata, and scaling factors that contribute to the effective sequence length seen by the engine. Without extra headroom, requests near the `max_model_len` boundary get rejected. The 10% overhead is capped at `max_position_embeddings` to stay within the model's absolute limit. `max_num_batched_tokens` is also raised to match.
 
 ### Safe Calibration Concurrency
 ```
