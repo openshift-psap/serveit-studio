@@ -435,8 +435,11 @@ class EPPTuningMixin:
                 baseline_ttft = self.best_ep_result.ttft_p90
 
             if smart_weights:
-                # Skip if smart-derived weights are identical to user's preset
                 base_w = self._get_user_baseline_weights()
+                self.log(f"  Preset:  {base_w['prefix_cache_weight']}:{base_w['kv_cache_weight']}:"
+                         f"{base_w['queue_weight']}:{base_w.get('active_request_weight', 2)}", 'info')
+                self.log(f"  Derived: {smart_weights['prefix_cache_weight']}:{smart_weights['kv_cache_weight']}:"
+                         f"{smart_weights['queue_weight']}:{smart_weights.get('active_request_weight', 2)}", 'info')
                 weights_unchanged = (
                     smart_weights['prefix_cache_weight'] == base_w['prefix_cache_weight'] and
                     smart_weights['kv_cache_weight'] == base_w['kv_cache_weight'] and
@@ -444,14 +447,13 @@ class EPPTuningMixin:
                     smart_weights.get('active_request_weight', 2) == base_w.get('active_request_weight', 2)
                 )
                 if weights_unchanged:
-                    self.log(f"  ✅ Smart-derived weights match user preset "
-                             f"({base_w['prefix_cache_weight']}:{base_w['kv_cache_weight']}:"
-                             f"{base_w['queue_weight']}:{base_w.get('active_request_weight', 2)}) "
-                             f"— metrics confirm preset is already optimal for {arch}. Skipping EPP test.", 'success')
+                    self.log(f"  ✅ Smart-derived weights match user preset — skipping EPP test for {arch}.", 'success')
                     self.epp_benchmark_results[arch] = []
                     continue
+                self.log(f"  ↔ Weights differ from preset — running EPP test for {arch}", 'info')
                 weight_combos = [('smart-derived', smart_weights)]
             else:
+                self.log(f"  ⚠️  Smart weight derivation returned None — using fallback combos", 'warning')
                 weight_combos = list(fallback_combos)
 
             self.log(f"  Weight combos: {', '.join(n for n, _ in weight_combos)}", 'info')
