@@ -452,6 +452,16 @@ class RecipeOptimizer(
             return
         error_pct = errored / total * 100
         if error_pct > 2.0:
+            # Mark test as failed in DB so resume won't skip it
+            if self.db_manager and self.run_id:
+                try:
+                    with self.db_manager.get_connection() as conn:
+                        conn.execute(
+                            'UPDATE test_configurations SET status = ? WHERE run_id = ? AND config_name = ?',
+                            ('failed', self.run_id, test_config.test_id)
+                        )
+                except Exception:
+                    pass
             self.log(f"🚨 High request error rate: {errored}/{total} requests errored ({error_pct:.1f}%)", 'error')
             self.log(f"   Test: {test_config.test_id}", 'error')
             self.log(f"   Threshold: 2% — stopping optimization", 'error')
