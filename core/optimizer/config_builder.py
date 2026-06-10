@@ -717,6 +717,12 @@ class ConfigBuilderMixin:
 
         dbo_threshold = getattr(self, '_dbo_threshold', 32)
 
+        # EP needs extra max_model_len headroom for routing metadata overhead
+        ep_max_model_len = min(
+            int(self.config.max_model_len * 1.10),
+            self._model_config.get('max_position_embeddings', 1048576) if self._model_config else 1048576
+        )
+
         cfg = TestConfig(
             test_id=f"step7-ep-{split.prefill_pods}p{split.decode_pods}d-ptp{split.prefill_tp}-dtp{split.decode_tp}",
             architecture='ep',
@@ -737,14 +743,14 @@ class ConfigBuilderMixin:
             prefill_tp=split.prefill_tp,
             decode_tp=split.decode_tp,
 
-            max_model_len=self.config.max_model_len,
+            max_model_len=ep_max_model_len,
             gpu_memory_utilization=prefill_gmu,
             prefill_gpu_memory_utilization=prefill_gmu,
             decode_gpu_memory_utilization=decode_gmu,
             gpu_vram_gb=self._gpu_vram_gb,
             prefill_max_num_seqs=prefill_max_num_seqs,
             decode_max_num_seqs=decode_max_num_seqs,
-            max_num_batched_tokens=max_batched,
+            max_num_batched_tokens=max(max_batched or 0, ep_max_model_len),
             kv_cache_memory_bytes=self._get_profiled_kv_cache_bytes(split.decode_tp),
             isl_stdev=self.config.isl_stdev,
             osl_stdev=self.config.osl_stdev,
