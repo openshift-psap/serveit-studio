@@ -1202,10 +1202,21 @@ class TestOrchestrator(ParserMixin, GuidellmMixin):
 
         finally:
             # Step 7: Cleanup
-            # Skip cleanup if pod errors detected — user needs to investigate
+            # Skip cleanup if pod errors or high request error rate — user needs to investigate
+            high_error_rate = False
+            if result.request_total and result.request_errored:
+                error_pct = result.request_errored / result.request_total * 100
+                if error_pct > 2.0:
+                    high_error_rate = True
+
             if result.pod_errors_detected:
                 if log_callback:
                     log_callback("\n⚠️  Skipping cleanup — pods left running due to critical errors")
+                    log_callback(f"🧹 Manual cleanup: kubectl delete lws -n {self.namespace} -l test-id={config.test_id}")
+            elif high_error_rate:
+                if log_callback:
+                    log_callback(f"\n⚠️  Skipping cleanup — high request error rate ({result.request_errored}/{result.request_total} errored)")
+                    log_callback(f"   Pods left running for investigation.")
                     log_callback(f"🧹 Manual cleanup: kubectl delete lws -n {self.namespace} -l test-id={config.test_id}")
             elif cleanup and result.guidellm_success:
                 if log_callback:

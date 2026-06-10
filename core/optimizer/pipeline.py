@@ -445,7 +445,7 @@ class RecipeOptimizer(
         )
 
     def _check_request_errors(self, test_config: TestConfig, test_result: TestResult):
-        """Stop the run if request error rate exceeds 2%."""
+        """Stop the run if request error rate exceeds 2%. Leaves pods running for investigation."""
         total = test_result.request_total or 0
         errored = test_result.request_errored or 0
         if total == 0 or errored == 0:
@@ -455,9 +455,12 @@ class RecipeOptimizer(
             self.log(f"🚨 High request error rate: {errored}/{total} requests errored ({error_pct:.1f}%)", 'error')
             self.log(f"   Test: {test_config.test_id}", 'error')
             self.log(f"   Threshold: 2% — stopping optimization", 'error')
-            raise RuntimeError(
-                f"Request error rate {error_pct:.1f}% exceeds 2% threshold "
-                f"({errored}/{total} errored) in test {test_config.test_id}"
+            self.log(f"   Pods left running for investigation.", 'error')
+            self.log(f"   kubectl logs -n {self.config.namespace} -l test-id={test_config.test_id} -c vllm", 'error')
+            from core.pod_error_scanner import PodErrorsDetected
+            raise PodErrorsDetected(
+                scan_result={'request_error_rate': error_pct, 'errored': errored, 'total': total},
+                test_id=test_config.test_id
             )
         elif errored > 0:
             self.log(f"   ⚠️  {errored}/{total} requests errored ({error_pct:.1f}%) — within 2% threshold", 'warning')
