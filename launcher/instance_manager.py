@@ -148,11 +148,11 @@ def create_cluster(owner_id: int, name: str, icon: str = '🖥️',
         # Check duplicate cluster URL
         with get_db() as conn:
             existing = conn.execute(
-                'SELECT id FROM clusters WHERE owner_id = ? AND target_cluster = ?',
+                'SELECT id, name FROM clusters WHERE owner_id = ? AND target_cluster = ?',
                 (owner_id, target_cluster)
             ).fetchone()
             if existing:
-                raise RuntimeError(f'You already have a cluster targeting {target_cluster}')
+                raise RuntimeError(f'You already have a cluster "{existing["name"]}" targeting {target_cluster}')
 
         with get_db() as conn:
             user_row = conn.execute('SELECT username FROM users WHERE id = ?', (owner_id,)).fetchone()
