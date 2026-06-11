@@ -22,9 +22,14 @@ from launcher.database import get_db
 TEMPLATES_DIR = Path(__file__).parent.parent / 'deployment' / 'templates'
 
 
-def _kubectl(args: list, input_data: str = None) -> subprocess.CompletedProcess:
+def _kubectl(args: list, input_data: str = None, proxy: str = None) -> subprocess.CompletedProcess:
     cmd = 'oc' if _is_oc() else 'kubectl'
-    return subprocess.run([cmd] + args, input=input_data, capture_output=True, text=True, timeout=60)
+    env = None
+    if proxy:
+        env = os.environ.copy()
+        env['HTTPS_PROXY'] = proxy
+        env['https_proxy'] = proxy
+    return subprocess.run([cmd] + args, input=input_data, capture_output=True, text=True, timeout=60, env=env)
 
 
 def _is_oc() -> bool:
@@ -54,7 +59,7 @@ def _sanitize(name: str) -> str:
     return s or 'unnamed'
 
 
-def _validate_kubeconfig(kubeconfig_data: str) -> tuple:
+def _validate_kubeconfig(kubeconfig_data: str, proxy: str = None) -> tuple:
     """Validate kubeconfig connectivity and return (cluster_url, cleaned_kubeconfig).
 
     Tests each context in the kubeconfig to find one that connects to a
@@ -113,9 +118,14 @@ def _validate_kubeconfig(kubeconfig_data: str) -> tuple:
         tmp.write(kubeconfig_data)
         tmp_path = tmp.name
     try:
+        env = None
+        if proxy:
+            env = os.environ.copy()
+            env['HTTPS_PROXY'] = proxy
+            env['https_proxy'] = proxy
         r = subprocess.run(
             ['kubectl', '--kubeconfig', tmp_path, 'cluster-info'],
-            capture_output=True, text=True, timeout=15
+            capture_output=True, text=True, timeout=15, env=env
         )
         if r.returncode != 0:
             raise RuntimeError(
@@ -125,7 +135,8 @@ def _validate_kubeconfig(kubeconfig_data: str) -> tuple:
     except subprocess.TimeoutExpired:
         raise RuntimeError(
             f"Connection to {target} timed out. "
-            f"Verify the cluster is reachable from this network.")
+            f"Verify the cluster is reachable from this network."
+            f"{' Try adding an HTTPS proxy.' if not proxy else ''}")
     finally:
         os.unlink(tmp_path)
 
@@ -137,13 +148,14 @@ def _validate_kubeconfig(kubeconfig_data: str) -> tuple:
 def create_cluster(owner_id: int, name: str, icon: str = '🖥️',
                    namespace: str = 'serveit',
                    kubeconfig_data: str = None,
-                   storage_class: str = None) -> Dict:
+                   storage_class: str = None,
+                   proxy: str = None) -> Dict:
     """Create a cluster entry. If kubeconfig is provided, validates it and stores as K8s Secret."""
     target_cluster = 'local'
     kubeconfig_secret = None
 
     if kubeconfig_data:
-        target_cluster, kubeconfig_data = _validate_kubeconfig(kubeconfig_data)
+        target_cluster, kubeconfig_data = _validate_kubeconfig(kubeconfig_data, proxy=proxy)
 
         # Check duplicate cluster URL
         with get_db() as conn:
@@ -180,8 +192,8 @@ def create_cluster(owner_id: int, name: str, icon: str = '🖥️',
 
     with get_db() as conn:
         conn.execute(
-            "INSERT INTO clusters (name, icon, owner_id, kubeconfig_secret, target_cluster, storage_class, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)",
-            (name, icon, owner_id, kubeconfig_secret, target_cluster, storage_class, datetime.now().isoformat())
+            "INSERT INTO clusters (name, icon, owner_id, kubeconfig_secret, target_cluster, storage_class, proxy, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+            (name, icon, owner_id, kubeconfig_secret, target_cluster, storage_class, proxy or None, datetime.now().isoformat())
         )
         cid = conn.execute('SELECT last_insert_rowid()').fetchone()[0]
 

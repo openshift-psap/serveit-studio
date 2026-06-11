@@ -356,6 +356,9 @@
             <label>Kubeconfig File</label>
             <div class="file-upload" id="file-drop" tabindex="0" role="button" aria-label="Upload kubeconfig file">Drop kubeconfig file here or click to browse</div>
             <input type="file" id="kubeconfig-input" accept=".yaml,.yml,.conf,.config,.kubeconfig,*" style="display:none" aria-hidden="true">
+            <label for="cluster-proxy" style="margin-top:10px;">HTTPS Proxy <span style="color:#999;font-weight:400;">(optional)</span></label>
+            <input type="text" id="cluster-proxy" placeholder="http://proxy.example.com:3128" autocomplete="off" style="margin-bottom:0;">
+            <div style="font-size:0.8em;color:#999;margin-bottom:16px;">Required if the cluster API is only reachable through a proxy</div>
         </div>
         <label for="storage-class-select">Storage Class</label>
         <div style="display:flex;gap:8px;margin-bottom:16px;align-items:stretch;">
@@ -546,6 +549,7 @@ function saveCluster(){
 
     var body = {name:name, icon:selectedIcon,
         kubeconfig: document.getElementById('remote-toggle').checked ? kubeconfigContent : null,
+        proxy: document.getElementById('remote-toggle').checked ? (document.getElementById('cluster-proxy').value.trim() || null) : null,
         storage_class: document.getElementById('storage-class-select').value || null};
     fetch('/api/clusters',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)})
     .then(function(r){return r.json()})

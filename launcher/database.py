@@ -27,6 +27,7 @@ def init_db():
             kubeconfig_secret TEXT,
             target_cluster TEXT DEFAULT 'local',
             storage_class TEXT,
+            proxy TEXT,
             scan_data TEXT,
             scanned_at TEXT,
             created_at TEXT NOT NULL,
@@ -97,6 +98,8 @@ def init_db():
             conn.execute("ALTER TABLE clusters ADD COLUMN scan_data TEXT")
         if 'scanned_at' not in cluster_cols:
             conn.execute("ALTER TABLE clusters ADD COLUMN scanned_at TEXT")
+        if 'proxy' not in cluster_cols:
+            conn.execute("ALTER TABLE clusters ADD COLUMN proxy TEXT")
 
     # Migrate group_id → cluster_id
     cur = conn.execute("PRAGMA table_info(instances)")

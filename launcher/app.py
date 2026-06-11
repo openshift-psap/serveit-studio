@@ -114,13 +114,15 @@ def create_app():
 
         kubeconfig_data = data.get('kubeconfig')
         storage_class = data.get('storage_class') or os.environ.get('STORAGE_CLASS')
+        proxy = data.get('proxy') or None
 
         try:
             result = instance_manager.create_cluster(
                 get_user_id(), name, icon,
                 namespace=namespace,
                 kubeconfig_data=kubeconfig_data,
-                storage_class=storage_class)
+                storage_class=storage_class,
+                proxy=proxy)
             return jsonify(result)
         except Exception as e:
             if 'UNIQUE' in str(e):

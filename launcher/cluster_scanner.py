@@ -8,7 +8,7 @@ from dataclasses import asdict
 from typing import Dict
 
 
-def scan_cluster_resources(cluster: Dict, namespace: str = 'serveit') -> Dict:
+def scan_cluster_resources(cluster: Dict, namespace: str = 'serveit', proxy: str = None) -> Dict:
     """Scan a cluster's resources using the system scanner.
 
     For remote clusters, extracts the kubeconfig from the K8s Secret
@@ -34,6 +34,12 @@ def scan_cluster_resources(cluster: Dict, namespace: str = 'serveit') -> Dict:
         kubeconfig_path = tmp.name
 
     try:
+        # Set proxy env before scanning if configured
+        proxy_url = proxy or cluster.get('proxy')
+        if proxy_url:
+            os.environ['HTTPS_PROXY'] = proxy_url
+            os.environ['https_proxy'] = proxy_url
+
         from core.system_scanner import SystemScanner
         scanner = SystemScanner(
             namespace=namespace,
