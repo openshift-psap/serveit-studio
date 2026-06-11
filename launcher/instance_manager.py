@@ -443,6 +443,7 @@ def create_instance(owner_id: int, username: str, name: str,
     service_name = f"serveit-{safe_name}-ui"
 
     # Set up remote workload namespace if remote cluster
+    cluster_proxy = cluster.get('proxy') if cluster_id and cluster else None
     if kubeconfig_data:
         import tempfile
         with tempfile.NamedTemporaryFile(mode='w', suffix='.kubeconfig', delete=False) as tmp:
@@ -450,8 +451,13 @@ def create_instance(owner_id: int, username: str, name: str,
             tmp_path = tmp.name
         try:
             def _remote(args, input=None):
+                env = None
+                if cluster_proxy:
+                    env = os.environ.copy()
+                    env['HTTPS_PROXY'] = cluster_proxy
+                    env['https_proxy'] = cluster_proxy
                 return subprocess.run(['kubectl', '--kubeconfig', tmp_path] + args,
-                                      input=input, capture_output=True, text=True, timeout=30)
+                                      input=input, capture_output=True, text=True, timeout=30, env=env)
 
             r = _remote(['get', 'namespace', workload_namespace])
             if r.returncode != 0:
@@ -574,7 +580,8 @@ def create_instance(owner_id: int, username: str, name: str,
             has_kubeconfig='true' if kubeconfig_secret else 'false',
             preset_gpus=preset_gpus or '',
             preset_nodes=','.join(preset_nodes) if preset_nodes else '',
-            auto_login_token=auto_login_token)
+            auto_login_token=auto_login_token,
+            https_proxy=cluster_proxy or '')
 
         r = _kubectl(['apply', '-f', '-', '-n', namespace], input_data=deploy_yaml)
         if r.returncode != 0:
