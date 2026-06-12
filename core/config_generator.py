@@ -82,9 +82,10 @@ class TestConfig:
     kv_connector: str = 'NixlConnector'
 
     # Networking
-    network_type: str = 'dra'  # 'dra' or 'nad' - controls anti-affinity rules
+    network_type: str = 'dra'  # 'dra', 'nad', 'shared_device', 'sriov_multinic', 'eth0'
     rdma_device_resources: List[str] = field(default_factory=list)  # RDMA resource keys from node allocatable
     rdma_nics_per_node: int = 0  # Physical NICs per node (from scanner, for RDMA request count)
+    rdma_network_annotation: Optional[str] = None  # Multus NAD annotation JSON for sriov_multinic
 
     # Benchmark load parameters
     request_type: str = 'constant'  # 'constant', 'concurrent', 'throughput', 'poisson'

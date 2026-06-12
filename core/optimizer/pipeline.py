@@ -112,6 +112,12 @@ class RecipeOptimizer(
             if self.config.rdma_nics_per_node:
                 self.log(f"Auto-detected RDMA NICs per node: {self.config.rdma_nics_per_node}")
 
+        # Auto-detect Multus NAD annotation for sriov_multinic
+        if self.config.network_type == 'sriov_multinic' and not self.config.rdma_network_annotation:
+            self.config.rdma_network_annotation = self._detect_rdma_network_annotation()
+            if self.config.rdma_network_annotation:
+                self.log(f"Auto-detected RDMA network annotation: {self.config.rdma_network_annotation}")
+
         # Memory and CPU per pod are calculated dynamically per deployment
         # based on actual TP and total_pods (see _get_pod_resources).
         # Users can still override via config.memory_per_pod / cpu_per_pod.
@@ -1020,7 +1026,19 @@ class RecipeOptimizer(
         except Exception:
             pass
 
-        # SharedDevice: has RDMA resources but no DRA
+        # SR-IOV multi-nic: rdma/roce_gdr + multi-nic NAD
+        if self.cluster_resources.has_rdma:
+            try:
+                r = self.scanner.kubectl.run(
+                    ['get', 'net-attach-def', '-n', self.config.namespace,
+                     '-o', 'jsonpath={.items[*].metadata.name}'], check=False)
+                if r.returncode == 0 and 'multi-nic-compute' in r.stdout:
+                    self.log("Network: SR-IOV multi-nic detected (rdma + multi-nic-compute NAD)")
+                    return 'sriov_multinic'
+            except Exception:
+                pass
+
+        # SharedDevice: has RDMA resources but no DRA or multi-nic
         if self.cluster_resources.has_rdma:
             self.log("Network: RDMA detected (shared_device mode)")
             return 'shared_device'
@@ -1131,6 +1149,37 @@ class RecipeOptimizer(
                         min_nics = nic.count
 
         return min_nics or 0
+
+    def _detect_rdma_network_annotation(self) -> Optional[str]:
+        """Detect Multus NetworkAttachmentDefinition for sriov_multinic mode."""
+        if not self.scanner:
+            return None
+        try:
+            import json as _j
+            r = self.scanner.kubectl.run(
+                ['get', 'net-attach-def', '-n', self.config.namespace,
+                 '-o', 'json'], check=False)
+            if r.returncode != 0:
+                # Try openshift-sriov-network-operator namespace
+                r = self.scanner.kubectl.run(
+                    ['get', 'net-attach-def', '-n', 'openshift-sriov-network-operator',
+                     '-o', 'json'], check=False)
+            if r.returncode == 0 and r.stdout.strip():
+                items = _j.loads(r.stdout).get('items', [])
+                for item in items:
+                    name = item['metadata']['name']
+                    ns = item['metadata']['namespace']
+                    if 'multi-nic-compute' in name:
+                        return _j.dumps([{"name": name, "namespace": ns}])
+                # Fallback: use first NAD with multi-nic in name
+                for item in items:
+                    name = item['metadata']['name']
+                    ns = item['metadata']['namespace']
+                    if 'multi-nic' in name:
+                        return _j.dumps([{"name": name, "namespace": ns}])
+        except Exception:
+            pass
+        return None
 
     def _get_pod_resources(self, tp: int, total_pods: int) -> tuple:
         """

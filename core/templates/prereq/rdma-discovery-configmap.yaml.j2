@@ -29,14 +29,21 @@ data:
 
     # Check for DRA-NET interface (net0)
     if ip link show net0 &>/dev/null; then
-        NETWORK_MODE="dra-net"
-        SOCKET_IFNAME="net0"
-        echo "--- DRA-NET mode detected (interface: net0) ---" >&2
+        # Distinguish DRA-NET from SR-IOV multi-nic: DRA creates macvlan/bridge,
+        # multi-nic creates ipvlan. Check if net1 also exists (multi-nic creates many).
+        NET_COUNT=$(ls -1 /sys/class/net/ 2>/dev/null | grep -c '^net[0-9]')
+        if [ "$NET_COUNT" -gt 4 ]; then
+            NETWORK_MODE="sriov_multinic"
+            SOCKET_IFNAME="net0"
+            echo "--- SR-IOV multi-nic mode detected ($NET_COUNT net interfaces) ---" >&2
+        else
+            NETWORK_MODE="dra-net"
+            SOCKET_IFNAME="net0"
+            echo "--- DRA-NET mode detected (interface: net0) ---" >&2
+        fi
     elif ls /sys/class/infiniband/* &>/dev/null && \
          ! ip link show net0 &>/dev/null && \
          ! ls /sys/class/net/net* &>/dev/null 2>&1; then
-        # InfiniBand HCAs present but no DRA-NET or NAD network interfaces —
-        # this is a shared device plugin environment (e.g., CoreWeave rdma/ib)
         NETWORK_MODE="shared_device"
         SOCKET_IFNAME="eth0"
         echo "--- NVIDIA shared device plugin mode detected (interface: eth0) ---" >&2

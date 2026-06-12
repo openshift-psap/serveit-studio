@@ -59,33 +59,31 @@ def compute_network_values(
     network_type: str,
     rdma_device_resources: Optional[List[str]] = None,
     rdma_nics_per_node: int = 0,
+    rdma_network_annotation: Optional[str] = None,
 ) -> Dict[str, Any]:
     """
     Produce template values from network configuration.
 
     Args:
-        network_type: 'dra', 'nad', or 'shared_device'
+        network_type: 'dra', 'nad', 'shared_device', 'sriov_multinic', or 'eth0'
         rdma_device_resources: List of RDMA device plugin resource keys from
-            node allocatable. Layout depends on NicClusterPolicy config:
-            - Single pool: ['rdma/ib'] — one shared resource for all NICs
-            - Per-NIC: ['rdma/ib-1', 'rdma/ib-2', ...] — separate resource per NIC
-            Physical NICs are divided evenly across resources.
+            node allocatable.
         rdma_nics_per_node: Physical NIC count per node from scanner.
+        rdma_network_annotation: Multus NAD annotation JSON for sriov_multinic.
 
     Returns:
         Dict with keys:
           gpu_resource_key: K8s resource key for GPU allocation
           extra_device_resources: List of {key, value} for additional device plugins
           use_anti_affinity: Whether PD pods need anti-affinity scheduling
-          rdma_nics_per_node: Physical NIC count (for downstream TP-based calculation)
+          rdma_nics_per_node: Physical NIC count
+          rdma_network_annotation: Multus annotation string (if sriov_multinic)
     """
     if rdma_device_resources is None:
         rdma_device_resources = []
 
     values: Dict[str, Any] = {}
 
-    # GPU resource key: check if dra.llm-d.io/gpu-nic-pair is in allocatable,
-    # otherwise use nvidia.com/gpu (DRA webhook intercepts it transparently)
     if network_type == 'dra' and rdma_device_resources and 'dra.llm-d.io/gpu-nic-pair' in rdma_device_resources:
         values['gpu_resource_key'] = 'dra.llm-d.io/gpu-nic-pair'
     else:
@@ -93,18 +91,22 @@ def compute_network_values(
 
     values['extra_device_resources'] = []
     values['rdma_nics_per_node'] = rdma_nics_per_node
-    # NAD mode: request exclusive RDMA NICs per pod (SR-IOV VFs)
-    # DRA/shared_device: RDMA is shared, don't request per-pod resources
+    values['rdma_network_annotation'] = None
+
     if network_type == 'nad' and rdma_device_resources:
         for resource_key in rdma_device_resources:
             values['extra_device_resources'].append({
                 'key': resource_key,
                 'value': '1'
             })
+    elif network_type == 'sriov_multinic' and rdma_device_resources:
+        for resource_key in rdma_device_resources:
+            values['extra_device_resources'].append({
+                'key': resource_key,
+                'value': '1'
+            })
+        values['rdma_network_annotation'] = rdma_network_annotation
 
-    # NAD with device plugin = IBM Cloud exclusive NICs → anti-affinity needed
-    # NAD without device plugin = baremetal → no anti-affinity
-    # DRA / SharedDevice → no anti-affinity
     values['use_anti_affinity'] = (
         network_type == 'nad'
         and len(rdma_device_resources) > 0

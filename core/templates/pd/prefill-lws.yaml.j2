@@ -22,6 +22,10 @@ spec:
           llm-d.ai/role: prefill
           llm-d.ai/guide: serveit-pd
           llm-d.ai/test-id: {{ test_id }}
+{% if rdma_network_annotation %}
+        annotations:
+          k8s.v1.cni.cncf.io/networks: '{{ rdma_network_annotation }}'
+{% endif %}
       spec:
         serviceAccountName: llm-d-modelserver
         {% if use_anti_affinity or selected_nodes %}

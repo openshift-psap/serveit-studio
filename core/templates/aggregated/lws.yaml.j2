@@ -21,6 +21,10 @@ spec:
           llm-d.ai/role: aggregated
           llm-d.ai/guide: "serveit-aggregated"
           llm-d.ai/test-id: {{ test_id }}
+{% if rdma_network_annotation %}
+        annotations:
+          k8s.v1.cni.cncf.io/networks: '{{ rdma_network_annotation }}'
+{% endif %}
       spec:
         serviceAccountName: llm-d-modelserver
         {% if selected_nodes %}
