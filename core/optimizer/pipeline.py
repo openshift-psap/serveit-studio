@@ -1032,8 +1032,8 @@ class RecipeOptimizer(
                 r = self.scanner.kubectl.run(
                     ['get', 'net-attach-def', '-n', self.config.namespace,
                      '-o', 'jsonpath={.items[*].metadata.name}'], check=False)
-                if r.returncode == 0 and 'multi-nic-compute' in r.stdout:
-                    self.log("Network: SR-IOV multi-nic detected (rdma + multi-nic-compute NAD)")
+                if r.returncode == 0 and ('multi-nic-inference' in r.stdout or 'multi-nic-compute' in r.stdout):
+                    self.log("Network: SR-IOV multi-nic detected (rdma + multi-nic NAD)")
                     return 'sriov_multinic'
             except Exception:
                 pass
@@ -1166,12 +1166,14 @@ class RecipeOptimizer(
                      '-o', 'json'], check=False)
             if r.returncode == 0 and r.stdout.strip():
                 items = _j.loads(r.stdout).get('items', [])
-                for item in items:
-                    name = item['metadata']['name']
-                    ns = item['metadata']['namespace']
-                    if 'multi-nic-compute' in name:
-                        return _j.dumps([{"name": name, "namespace": ns}])
-                # Fallback: use first NAD with multi-nic in name
+                # Prefer multi-nic-inference over multi-nic-compute
+                for preferred in ['multi-nic-inference', 'multi-nic-compute']:
+                    for item in items:
+                        name = item['metadata']['name']
+                        ns = item['metadata']['namespace']
+                        if name == preferred:
+                            return _j.dumps([{"name": name, "namespace": ns}])
+                # Fallback: first NAD with multi-nic in name
                 for item in items:
                     name = item['metadata']['name']
                     ns = item['metadata']['namespace']
