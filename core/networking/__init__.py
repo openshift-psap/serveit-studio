@@ -216,10 +216,9 @@ def scan_available_networks(kubectl_runner, namespace: str = None) -> List[Dict[
         except Exception:
             pass
 
-    resource_label = f' ({shared_resource})' if shared_resource else ''
     networks.append({
         'id': 'shared_device',
-        'name': f'Shared Device Plugin{resource_label}',
+        'name': 'Shared Device Plugin',
         'description': 'RDMA via pre-configured device plugin. Pods request RDMA resources directly — no CRDs needed.',
         'available': shared_available,
         'reason': '' if shared_available else 'No rdma/* resources found in node allocatable',
@@ -238,8 +237,8 @@ def scan_available_networks(kubectl_runner, namespace: str = None) -> List[Dict[
             pass
     networks.append({
         'id': 'sriov_multinic',
-        'name': 'SR-IOV Multi-NIC',
-        'description': 'RoCE RDMA via multi-nic-cni operator. Creates multiple network interfaces per pod for GPU-aware RDMA routing.',
+        'name': 'SR-IOV',
+        'description': 'RoCE RDMA via SR-IOV. Creates network interfaces per pod for GPU-aware RDMA routing.',
         'available': sriov_multinic_available,
         'reason': '' if sriov_multinic_available else 'multi-nic-cni NADs not found',
         'rdma': True,
