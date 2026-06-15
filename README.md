@@ -201,19 +201,63 @@ The launcher supports optimizing models on remote clusters. When creating a new 
 
 The wizard pod runs on the launcher cluster; only the inference workload runs remotely.
 
-## Multi-Cloud & Network Support
+## Network Types & Prerequisites
 
-ServeIt Studio auto-detects the cloud provider and configures networking accordingly:
+ServeIt Studio supports five network types for GPU-to-GPU communication. The wizard auto-detects available types and lets you choose. Each type has different cluster prerequisites:
 
-| Provider | GPU Resource | Networking | RDMA |
-|---|---|---|---|
-| IBM Cloud (DRA) | DRA (`dra.llm-d.io/gpu-nic-pair`) | DRANet | InfiniBand via DRA |
-| IBM Cloud (SR-IOV) | `nvidia.com/gpu` + `rdma/roce_gdr` | [multi-nic-cni](https://github.com/foundation-model-stack/multi-nic-cni) | RoCE via SR-IOV + Multus |
-| CoreWeave | `nvidia.com/gpu` + `rdma/ib` | Shared device plugin | InfiniBand via device plugin |
-| Bare Metal | `nvidia.com/gpu` | NAD (Multus) | InfiniBand via Multus |
-| AWS / Azure / GCP | `nvidia.com/gpu` | Standard | Provider-specific |
+### Pod Network (TCP)
+Standard Kubernetes pod networking. No RDMA — uses TCP for all GPU communication. Works everywhere but significantly slower for multi-node inference.
 
-For SR-IOV multi-nic clusters (e.g., pokprod), pods get the `multi-nic-inference` NetworkAttachmentDefinition annotation automatically. HTTPS proxy is supported for clusters behind corporate firewalls.
+**Prerequisites:** None. Always available.
+
+### NAD (Multus CNI)
+Network Attachment Definitions via [Multus CNI](https://github.com/k8snetworkplumbingwg/multus-cni). Supports host-device, macvlan, and SR-IOV plugins for RDMA.
+
+**Prerequisites:**
+- Multus CNI installed (`k8s.cni.cncf.io` API group available)
+- NetworkAttachmentDefinition CRs created in the workload namespace
+- For SR-IOV: [SR-IOV Network Operator](https://github.com/k8snetworkplumbingwg/sriov-network-operator) installed with:
+  - `SriovNetworkNodePolicy` configured by admin (VFs on physical NICs)
+  - `SriovNetwork` CR targeting the workload namespace (ServeIt Studio can create this)
+
+### DRA (DRANET)
+[Dynamic Resource Allocation](https://kubernetes.io/docs/concepts/scheduling-eviction/dynamic-resource-allocation/) with GPU+NIC PCIe affinity. Automatically pairs each GPU with its closest network interface.
+
+**Prerequisites:**
+- Kubernetes 1.31+ with DRA feature gate enabled
+- [DRANET](https://github.com/kubernetes-sigs/dranet) device classes deployed
+- `dra.llm-d.io/gpu-nic-pair` or `gpu.nvidia.com` device classes available
+
+### Shared Device Plugin
+RDMA via [NVIDIA Network Operator](https://docs.nvidia.com/networking/display/cokan10/network+operator) device plugin. Pods request RDMA resources directly in `limits` — no Multus annotations or CRDs needed.
+
+**Prerequisites:**
+- NVIDIA Network Operator (NNO) installed
+- NicClusterPolicy configured with `rdmaSharedDevicePlugin`
+- RDMA resources visible in node allocatable (e.g., `rdma/roce_gdr`, `nvidia.com/roce`, `rdma/ib`)
+- MOFED drivers loaded on GPU nodes
+
+### SR-IOV
+RoCE RDMA via SR-IOV Virtual Functions. Each pod gets dedicated network interfaces for GPU-aware RDMA routing. Supports both [multi-nic-cni](https://github.com/foundation-model-stack/multi-nic-cni) (auto-creates NADs per namespace) and manual SR-IOV operator setup.
+
+**Prerequisites:**
+- [SR-IOV Network Operator](https://github.com/k8snetworkplumbingwg/sriov-network-operator) installed
+- `SriovNetworkNodePolicy` configured by admin (creates VFs on physical NICs)
+- One of:
+  - **multi-nic-cni operator** installed → auto-creates `multi-nic-inference` / `multi-nic-compute` NADs in every namespace
+  - **Manual setup** → `SriovNetwork` CR created per NIC targeting the workload namespace (ServeIt Studio can create these via the wizard)
+- `rdma/roce_gdr` or similar RDMA resources in node allocatable
+
+### Network Selection in the Wizard
+
+The wizard scans the cluster and shows available network types as cards. When SR-IOV or NAD is selected:
+- **NAD dropdown** — pick which NetworkAttachmentDefinition to attach to pods
+- **SR-IOV policy checkboxes** — select which NICs to use (each creates a separate interface)
+
+When Shared Device Plugin is selected:
+- **RDMA resource dropdown** — pick which device plugin resource to request (e.g., `rdma/roce_gdr` vs `nvidia.com/roce`)
+
+HTTPS proxy is supported for clusters behind corporate firewalls — configure it when adding the cluster in the launcher.
 
 ## Metrics
 

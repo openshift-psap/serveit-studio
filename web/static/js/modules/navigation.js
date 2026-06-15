@@ -357,7 +357,7 @@ socket.on('cluster_scan_result', function(data) {
 
     const detectedDiv = document.getElementById('detected-config-summary');
     if (detectedDiv) {
-        detectedDiv.innerHTML = '<div style="font-size:0.92em;color:#4A4A4A;"><strong>Provider:</strong> ' + providerName +
+        detectedDiv.innerHTML = '<div style="font-size:0.92em;color:#4A4A4A;"><strong>Platform:</strong> ' + providerName +
             (data.has_rdma ? ' &nbsp;·&nbsp; <strong>RDMA:</strong> Available' : '') + '</div>';
     }
 
