@@ -96,9 +96,13 @@ class KubectlRunner:
                 capture_output=True,
                 text=True,
                 check=check,
-                env=self._env
+                env=self._env,
+                timeout=60
             )
             return result
+        except subprocess.TimeoutExpired:
+            logger.error(f"kubectl command timed out: {' '.join(cmd)}")
+            return subprocess.CompletedProcess(cmd, 1, stdout='', stderr='Command timed out')
         except subprocess.CalledProcessError as e:
             logger.error(f"kubectl command failed: {e.stderr}")
             raise
