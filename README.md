@@ -201,16 +201,19 @@ The launcher supports optimizing models on remote clusters. When creating a new 
 
 The wizard pod runs on the launcher cluster; only the inference workload runs remotely.
 
-## Multi-Cloud Support
+## Multi-Cloud & Network Support
 
 ServeIt Studio auto-detects the cloud provider and configures networking accordingly:
 
 | Provider | GPU Resource | Networking | RDMA |
 |---|---|---|---|
-| IBM Cloud | DRA (`dra.llm-d.io/gpu-nic-pair`) | DRANet | InfiniBand via DRA |
+| IBM Cloud (DRA) | DRA (`dra.llm-d.io/gpu-nic-pair`) | DRANet | InfiniBand via DRA |
+| IBM Cloud (SR-IOV) | `nvidia.com/gpu` + `rdma/roce_gdr` | [multi-nic-cni](https://github.com/foundation-model-stack/multi-nic-cni) | RoCE via SR-IOV + Multus |
 | CoreWeave | `nvidia.com/gpu` + `rdma/ib` | Shared device plugin | InfiniBand via device plugin |
 | Bare Metal | `nvidia.com/gpu` | NAD (Multus) | InfiniBand via Multus |
 | AWS / Azure / GCP | `nvidia.com/gpu` | Standard | Provider-specific |
+
+For SR-IOV multi-nic clusters (e.g., pokprod), pods get the `multi-nic-inference` NetworkAttachmentDefinition annotation automatically. HTTPS proxy is supported for clusters behind corporate firewalls.
 
 ## Metrics
 
@@ -223,31 +226,82 @@ ServeIt Studio auto-detects the cloud provider and configures networking accordi
 **Server-side** (via Prometheus/Thanos):
 - vLLM TTFT, ITL, E2E latency percentiles
 - Token throughput, request queue depth, KV cache utilization
-- Pod network and InfiniBand RDMA throughput
+- Prefix cache hit rate, preemption rate, request success rate
 
 Results are stored in SQLite at `/mnt/storage/serveit.db`.
 
 ## Project Structure
 
 ```
-core/                          # Optimization engine
-├── optimizer/                 #   Pipeline, config builder, TP calibration, PD search
-├── orchestrator/              #   Deploy → benchmark → collect → cleanup
-├── templates/                 #   Jinja2 K8s manifests (aggregated, PD, prereqs)
-├── networking/                #   Network plugins (DRA, NAD, shared device)
-└── providers/                 #   Cloud provider adapters
+core/                              # Optimization engine
+├── recipe_optimizer.py            #   Main optimizer (mixes in all modules below)
+├── optimization_strategies.py     #   Goal strategies: TTFT, Throughput, Balanced, EP-only
+├── optimizer/                     #   Pipeline steps
+│   ├── pipeline.py                #     Orchestration, resume, network/RDMA detection
+│   ├── config_builder.py          #     Auto-tune vLLM params (gmu, max_num_seqs, EP memory)
+│   ├── config.py                  #     RecipeOptimizerConfig dataclass
+│   ├── tp_calibration.py          #     Steps 2-3: TP sweep
+│   ├── pd_search.py               #     Steps 4-7: Smart PD split search, Pareto front
+│   ├── epp_tuning.py              #     Step 9: Smart EPP weight derivation
+│   ├── latency_search.py          #     Step 10: Binary search under latency SLA
+│   ├── speculative.py             #     Step 12: MTP/speculative decoding comparison
+│   └── dataset.py                 #     Prefix cache dataset generation
+├── orchestrator/                  #   Test execution
+│   ├── runner.py                  #     Deploy → wait → benchmark → collect → cleanup
+│   ├── guidellm.py                #     guidellm CLI wrapper
+│   ├── parser.py                  #     Parse guidellm JSON + Prometheus metrics
+│   └── result.py                  #     TestResult dataclass
+├── templates/                     #   Jinja2 K8s manifests
+│   ├── aggregated/                #     Single-pool LWS
+│   ├── pd/                        #     Prefill + Decode LWS (also used for EP)
+│   ├── prereq/                    #     Gateway, EPP, RDMA discovery, RBAC
+│   └── benchmark/                 #     Workload pod
+├── networking/                    #   Network type detection + template value computation
+├── providers/                     #   Cloud provider adapters
+├── system_scanner.py              #   Cluster scan: GPUs, RDMA, nodes, resources
+├── config_generator.py            #   TestConfig dataclass + config generation
+├── template_manager.py            #   Render templates with network/role-aware vars
+├── database_manager.py            #   SQLite persistence for runs and test results
+├── report_analysis.py             #   Build report data from DB (recommendations, charts)
+├── report_data.py                 #   Report data model + SQL queries
+├── metrics_collector.py           #   Prometheus/Thanos metric collection
+├── prereq_manager.py              #   EPP configmap + gateway deployment
+├── deployment_manager.py          #   LWS apply/delete/wait
+├── pod_error_scanner.py           #   Detect OOM, CUDA errors, crash loops in pod logs
+└── k8s_utils.py                   #   KubectlRunner, cloud detection
 
-web/                           # Flask + SocketIO web UI
-├── static/                    #   CSS, JS modules, images
-└── templates/                 #   HTML wizard steps
+web/                               # Flask + SocketIO web UI (wizard)
+├── server.py                      #   App factory + startup
+├── optimization.py                #   Background optimization runner + UI logging
+├── routes_api.py                  #   REST API (runs, configs, manifests, reports)
+├── realtime.py                    #   SocketIO event handlers
+├── static/js/modules/             #   Frontend JS modules
+│   ├── charts.js                  #     Plotly chart rendering (all report tabs)
+│   ├── config.js                  #     Config save/load, wizard state
+│   ├── report.js                  #     Report page orchestration
+│   ├── settings.js                #     Advanced vLLM + EPP settings UI
+│   ├── wizard.js                  #     Step navigation, model gallery
+│   └── ...                        #     console, resume, socket, navigation, cluster
+└── templates/partials/            #   HTML wizard steps (step1-step7)
 
-launcher/                      # Multi-user launcher
-├── app.py                     #   Flask API + dashboard
-├── instance_manager.py        #   Instance lifecycle (create, delete, list)
-└── templates/                 #   Launcher HTML
+launcher/                          # Multi-user launcher dashboard
+├── app.py                         #   Flask API + dashboard routes
+├── instance_manager.py            #   Instance CRUD, cluster CRUD, proxy support
+├── cluster_scanner.py             #   Scan remote clusters via kubeconfig
+├── database.py                    #   Launcher SQLite (users, clusters, instances)
+├── auth.py                        #   Authentication + session management
+└── templates/dashboard.html       #   Launcher single-page dashboard
+
+cli/
+└── inftune.py                     #   CLI interface (serveit run, cluster add/scan)
 
 deployment/
-└── deploy.py                  #   Deploy, sync, port-forward CLI
+├── deploy.py                      #   Deploy, sync, port-forward CLI
+└── templates/                     #   Instance deployment + PVC + service manifests
+
+docs/
+├── optimization-math.md           #   All formulas and parameter computation docs
+└── screenshots/                   #   README screenshots
 ```
 
 ## License
