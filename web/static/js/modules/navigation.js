@@ -8,11 +8,10 @@ function selectNetwork(netId) {
         card.style.borderColor = selected ? '#2A7B88' : '#CCC';
         card.style.background = selected ? '#F0F9FA' : 'white';
     });
-    var showNadPicker = (netId === 'sriov_multinic' || netId === 'nad');
     var nadSection = document.getElementById('nad-selector-section');
-    if (nadSection) nadSection.style.display = (showNadPicker && window._availableNads && window._availableNads.length > 0) ? 'block' : 'none';
+    if (nadSection) nadSection.style.display = ((netId === 'sriov_multinic' || netId === 'nad') && window._availableNads && window._availableNads.length > 0) ? 'block' : 'none';
     var sriovSection = document.getElementById('sriov-policy-section');
-    if (sriovSection) sriovSection.style.display = (showNadPicker && window._sriovPolicies && window._sriovPolicies.length > 0) ? 'block' : 'none';
+    if (sriovSection) sriovSection.style.display = (netId === 'sriov_multinic' && window._sriovPolicies && window._sriovPolicies.length > 0) ? 'block' : 'none';
     var sharedSection = document.getElementById('shared-device-section');
     if (sharedSection) sharedSection.style.display = (netId === 'shared_device' && window._sharedResources && window._sharedResources.length > 0) ? 'block' : 'none';
     saveConfig();
@@ -448,7 +447,7 @@ socket.on('cluster_scan_result', function(data) {
 
         if (allPolicies.length > 0) {
             var saved = config.selected_sriov_policies || [];
-            var showSrInit = (savedNetwork === 'sriov_multinic' || savedNetwork === 'nad');
+            var showSrInit = (savedNetwork === 'sriov_multinic');
             var srHtml = '<div id="sriov-policy-section" style="margin-top:12px;padding:12px 16px;background:#faf5ff;border:1px solid #d8b4fe;border-radius:8px;display:' +
                 (showSrInit ? 'block' : 'none') + ';">';
             srHtml += '<label style="font-weight:600;font-size:0.9em;color:#581c87;margin-bottom:6px;display:block;">SR-IOV Network Policies</label>';
