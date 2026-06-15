@@ -20,6 +20,7 @@ class NetworkType(Enum):
     NAD = "nad"  # NetworkAttachmentDefinition (Multus CNI)
     DRA = "dra"  # Dynamic Resource Allocation (DRANET)
     SHARED_DEVICE = "shared_device"  # Shared RDMA device plugin (e.g., CoreWeave rdma/ib)
+    SRIOV_MULTINIC = "sriov_multinic"  # SR-IOV multi-nic-cni (RoCE via ipvlan)
 
 
 class RDMAType(Enum):

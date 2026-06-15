@@ -264,10 +264,20 @@ def scan_available_networks(kubectl_runner, namespace: str = None) -> List[Dict[
         except Exception:
             pass
 
-    # Attach NAD list to each RDMA network type
+    # Scan SR-IOV policies for the NAD network type
+    sriov_policies = []
+    try:
+        from .sriov import detect_sriov_policies
+        sriov_policies = detect_sriov_policies(kubectl_runner)
+    except Exception:
+        pass
+
+    # Attach NAD list and SR-IOV policies to each RDMA network type
     for net in networks:
         if net['rdma'] and net['available']:
             net['available_nads'] = available_nads
+            if sriov_policies:
+                net['sriov_policies'] = sriov_policies
 
     return networks
 
