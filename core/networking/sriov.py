@@ -137,22 +137,25 @@ def create_sriov_network(
     return True
 
 
-def ensure_sriov_network(
+def ensure_sriov_networks(
     kubectl_runner,
     target_namespace: str,
-    policy_resource_name: str = None,
+    policy_resource_names: List[str] = None,
 ) -> Optional[str]:
-    """Ensure a SriovNetwork exists for the target namespace.
+    """Ensure SriovNetwork CRs exist for the target namespace.
 
-    If one already exists, returns its name. Otherwise creates one
-    from the first available RDMA-capable policy.
+    Creates one SriovNetwork per RDMA-capable policy (one per physical NIC),
+    similar to how DRA pairs each GPU with its closest NIC. Each SriovNetwork
+    generates a NAD in the target namespace.
 
-    Returns the NAD name (same as SriovNetwork name), or None on failure.
+    Returns the Multus annotation JSON string referencing all NADs,
+    or None on failure.
     """
     existing = detect_existing_sriov_networks(kubectl_runner, target_namespace)
     if existing:
-        logger.info(f"Found existing SriovNetwork for {target_namespace}: {existing[0]['name']}")
-        return existing[0]['name']
+        nad_refs = [{"name": n['name'], "namespace": target_namespace} for n in existing]
+        logger.info(f"Found {len(existing)} existing SriovNetwork(s) for {target_namespace}")
+        return json.dumps(nad_refs)
 
     policies = detect_sriov_policies(kubectl_runner)
     rdma_policies = [p for p in policies if p['isRdma']]
@@ -161,23 +164,49 @@ def ensure_sriov_network(
         logger.warning("No RDMA-capable SriovNetworkNodePolicy found")
         return None
 
-    if policy_resource_name:
-        policy = next((p for p in rdma_policies if p['resourceName'] == policy_resource_name), None)
-        if not policy:
-            logger.warning(f"Policy with resourceName={policy_resource_name} not found")
-            policy = rdma_policies[0]
-    else:
-        policy = rdma_policies[0]
+    if policy_resource_names:
+        rdma_policies = [p for p in rdma_policies if p['resourceName'] in policy_resource_names]
+        if not rdma_policies:
+            logger.warning(f"None of the requested policies found: {policy_resource_names}")
+            return None
 
-    nad_name = f"serveit-rdma-{target_namespace}"
-    success = create_sriov_network(
-        kubectl_runner,
-        name=nad_name,
-        resource_name=policy['resourceName'],
-        target_namespace=target_namespace,
-        mtu=policy.get('mtu', 9000),
-    )
+    # Deduplicate by resourceName (same policy shouldn't create multiple networks)
+    seen = set()
+    unique_policies = []
+    for p in rdma_policies:
+        if p['resourceName'] not in seen:
+            seen.add(p['resourceName'])
+            unique_policies.append(p)
 
-    if success:
-        return nad_name
+    nad_refs = []
+    # Use different IP ranges per NIC to avoid conflicts
+    base_third_octet = 100
+    for i, policy in enumerate(unique_policies):
+        nad_name = f"serveit-rdma-nic{i}"
+        ip_range = f"192.168.{base_third_octet + i}.0/24"
+
+        success = create_sriov_network(
+            kubectl_runner,
+            name=nad_name,
+            resource_name=policy['resourceName'],
+            target_namespace=target_namespace,
+            ipam_range=ip_range,
+            mtu=policy.get('mtu', 9000),
+        )
+        if success:
+            nad_refs.append({"name": nad_name, "namespace": target_namespace})
+
+    if nad_refs:
+        logger.info(f"Created {len(nad_refs)} SriovNetwork(s) for {target_namespace}")
+        return json.dumps(nad_refs)
     return None
+
+
+def ensure_sriov_network(
+    kubectl_runner,
+    target_namespace: str,
+    policy_resource_name: str = None,
+) -> Optional[str]:
+    """Convenience wrapper — ensure networks and return annotation string."""
+    names = [policy_resource_name] if policy_resource_name else None
+    return ensure_sriov_networks(kubectl_runner, target_namespace, names)
