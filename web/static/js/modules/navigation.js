@@ -9,7 +9,7 @@ function selectNetwork(netId) {
         card.style.background = selected ? '#F0F9FA' : 'white';
     });
     var nadSection = document.getElementById('nad-selector-section');
-    if (nadSection) nadSection.style.display = ((netId === 'sriov_multinic' || netId === 'nad') && window._availableNads && window._availableNads.length > 0) ? 'block' : 'none';
+    if (nadSection) nadSection.style.display = (netId === 'nad' && window._availableNads && window._availableNads.length > 0) ? 'block' : 'none';
     var sriovSection = document.getElementById('sriov-policy-section');
     if (sriovSection) sriovSection.style.display = (netId === 'sriov_multinic' && window._sriovPolicies && window._sriovPolicies.length > 0) ? 'block' : 'none';
     var sharedSection = document.getElementById('shared-device-section');
@@ -409,7 +409,7 @@ socket.on('cluster_scan_result', function(data) {
         window._availableNads = allNads;
 
         if (allNads.length > 0) {
-            var showNadInit = (savedNetwork === 'sriov_multinic' || savedNetwork === 'nad');
+            var showNadInit = (savedNetwork === 'nad');
             var nadHtml = '<div id="nad-selector-section" style="margin-top:12px;padding:12px 16px;background:#f0f9ff;border:1px solid #bae6fd;border-radius:8px;display:' +
                 (showNadInit ? 'block' : 'none') + ';">';
             nadHtml += '<label style="font-weight:600;font-size:0.9em;color:#0c4a6e;margin-bottom:6px;display:block;">Network Attachment Definition</label>';
