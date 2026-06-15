@@ -19,8 +19,20 @@ function selectNetwork(netId) {
 
 function selectNad(nadName, nadNamespace) {
     config.rdma_network_annotation = JSON.stringify([{"name": nadName, "namespace": nadNamespace}]);
-    var sel = document.getElementById('nad-select');
-    if (sel) sel.value = nadName + '/' + nadNamespace;
+    saveConfig();
+}
+
+function toggleNad(nadName, nadNamespace, checked) {
+    var current = [];
+    try { current = JSON.parse(config.rdma_network_annotation || '[]'); } catch(e) {}
+    if (checked) {
+        if (!current.some(function(n) { return n.name === nadName; })) {
+            current.push({"name": nadName, "namespace": nadNamespace});
+        }
+    } else {
+        current = current.filter(function(n) { return n.name !== nadName; });
+    }
+    config.rdma_network_annotation = current.length > 0 ? JSON.stringify(current) : null;
     saveConfig();
 }
 
@@ -410,25 +422,29 @@ socket.on('cluster_scan_result', function(data) {
 
         if (allNads.length > 0) {
             var showNadInit = (savedNetwork === 'nad');
+            var savedNadList = [];
+            try { savedNadList = JSON.parse(config.rdma_network_annotation || '[]'); } catch(e) {}
+            var savedNadNames = savedNadList.map(function(n) { return n.name; });
+
             var nadHtml = '<div id="nad-selector-section" style="margin-top:12px;padding:12px 16px;background:#f0f9ff;border:1px solid #bae6fd;border-radius:8px;display:' +
                 (showNadInit ? 'block' : 'none') + ';">';
-            nadHtml += '<label style="font-weight:600;font-size:0.9em;color:#0c4a6e;margin-bottom:6px;display:block;">Network Attachment Definition</label>';
-            nadHtml += '<div style="font-size:0.8em;color:#075985;margin-bottom:8px;">Select which NAD to attach to inference pods for RDMA communication</div>';
-            nadHtml += '<select id="nad-select" onchange="var v=this.value.split(\'/\');selectNad(v[0],v[1]);" style="width:100%;padding:8px 12px;border:1.5px solid #bae6fd;border-radius:6px;font-size:0.9em;">';
-            var savedNad = config.rdma_network_annotation ? JSON.parse(config.rdma_network_annotation)[0] : null;
+            nadHtml += '<label style="font-weight:600;font-size:0.9em;color:#0c4a6e;margin-bottom:6px;display:block;">Network Attachment Definitions</label>';
+            nadHtml += '<div style="font-size:0.8em;color:#075985;margin-bottom:8px;">Select which NADs to attach to inference pods. Check multiple for multi-NIC RDMA.</div>';
             allNads.forEach(function(nad) {
-                var val = nad.name + '/' + nad.namespace;
-                var selected = savedNad && savedNad.name === nad.name && savedNad.namespace === nad.namespace;
-                var label = nad.name;
-                nadHtml += '<option value="' + val + '"' + (selected ? ' selected' : '') + '>' + label + '</option>';
+                var isChecked = savedNadNames.length > 0 ? savedNadNames.indexOf(nad.name) !== -1 : nad.name === 'multi-nic-inference';
+                nadHtml += '<label style="display:flex;align-items:center;gap:8px;padding:6px 8px;margin-bottom:2px;background:white;border:1px solid #bae6fd;border-radius:6px;cursor:pointer;">';
+                nadHtml += '<input type="checkbox" ' + (isChecked ? 'checked' : '') +
+                    ' onchange="toggleNad(\'' + nad.name + '\',\'' + nad.namespace + '\',this.checked)" style="margin:0;">';
+                nadHtml += '<span style="font-size:0.9em;color:#1e293b;">' + nad.name + '</span>';
+                nadHtml += '</label>';
             });
-            nadHtml += '</select></div>';
+            nadHtml += '</div>';
             networkCards.insertAdjacentHTML('afterend', nadHtml);
 
-            // Auto-select first NAD if none saved
-            if (!config.rdma_network_annotation && allNads.length > 0) {
+            // Auto-select preferred NAD if none saved
+            if (savedNadNames.length === 0 && allNads.length > 0) {
                 var preferred = allNads.find(function(n) { return n.name === 'multi-nic-inference'; }) || allNads[0];
-                selectNad(preferred.name, preferred.namespace);
+                toggleNad(preferred.name, preferred.namespace, true);
             }
         }
 
