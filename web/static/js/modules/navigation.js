@@ -14,7 +14,7 @@ function selectNetwork(netId) {
     var sriovSection = document.getElementById('sriov-policy-section');
     if (sriovSection) sriovSection.style.display = (showNadPicker && window._sriovPolicies && window._sriovPolicies.length > 0) ? 'block' : 'none';
     var sharedSection = document.getElementById('shared-device-section');
-    if (sharedSection) sharedSection.style.display = (netId === 'shared_device' && window._sharedResources && window._sharedResources.length > 1) ? 'block' : 'none';
+    if (sharedSection) sharedSection.style.display = (netId === 'shared_device' && window._sharedResources && window._sharedResources.length > 0) ? 'block' : 'none';
     saveConfig();
 }
 
@@ -490,7 +490,7 @@ socket.on('cluster_scan_result', function(data) {
         });
         window._sharedResources = sharedResources;
 
-        if (sharedResources.length > 1) {
+        if (sharedResources.length > 0) {
             var showShInit = savedNetwork === 'shared_device';
             var shHtml = '<div id="shared-device-section" style="margin-top:12px;padding:12px 16px;background:#fefce8;border:1px solid #fde68a;border-radius:8px;display:' +
                 (showShInit ? 'block' : 'none') + ';">';
