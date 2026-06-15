@@ -785,7 +785,7 @@ function showCreateModal(){
     fetch('/api/storage_classes')
     .then(function(r){return r.json()})
     .then(function(classes){
-        scSel.innerHTML = '';
+        scSel.innerHTML = '<option value="">-- Select a Storage Class --</option>';
         (classes || []).forEach(function(sc){
             var o = document.createElement('option');
             o.value = sc.name;
@@ -865,9 +865,9 @@ function loadStorageClasses(){
     var sel = document.getElementById('storage-class-select');
     sel.innerHTML = '<option value="">Loading…</option>';
     fetch('/api/storage_classes').then(function(r){return r.json()}).then(function(classes){
-        sel.innerHTML='';
+        sel.innerHTML='<option value="">-- Select a Storage Class --</option>';
         if(!classes.length){sel.innerHTML='<option value="">(none found)</option>';return;}
-        classes.forEach(function(sc){ var o=document.createElement('option');o.value=sc.name;o.textContent=sc.name+(sc.is_default?' (default)':'');if(sc.is_default)o.selected=true;sel.appendChild(o);});
+        classes.forEach(function(sc){ var o=document.createElement('option');o.value=sc.name;o.textContent=sc.name+(sc.is_default?' (default)':'');sel.appendChild(o);});
     }).catch(function(){sel.innerHTML='<option value="">Failed</option>';});
 }
 function hideCreateModal(){document.getElementById('create-modal').classList.remove('active');document.getElementById('create-error').style.display='none';}
