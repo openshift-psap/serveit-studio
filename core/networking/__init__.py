@@ -225,6 +225,46 @@ def scan_available_networks(kubectl_runner) -> List[Dict[str, Any]]:
         'rdma': True,
     })
 
+    # 5. SR-IOV multi-nic (multi-nic-cni operator)
+    sriov_multinic_available = False
+    if nad_available and shared_available:
+        try:
+            r = kubectl_runner.run(['get', 'net-attach-def', '--all-namespaces',
+                '-o', 'jsonpath={.items[*].metadata.name}'], check=False)
+            if r.returncode == 0 and ('multi-nic-inference' in r.stdout or 'multi-nic-compute' in r.stdout):
+                sriov_multinic_available = True
+        except Exception:
+            pass
+    networks.append({
+        'id': 'sriov_multinic',
+        'name': 'SR-IOV Multi-NIC',
+        'description': 'RoCE RDMA via multi-nic-cni operator. Creates multiple network interfaces per pod for GPU-aware RDMA routing.',
+        'available': sriov_multinic_available,
+        'reason': '' if sriov_multinic_available else 'multi-nic-cni NADs not found',
+        'rdma': True,
+    })
+
+    # Scan available NADs for all network types
+    available_nads = []
+    if nad_available:
+        try:
+            r = kubectl_runner.run(['get', 'net-attach-def', '--all-namespaces',
+                '-o', 'json'], check=False)
+            if r.returncode == 0:
+                import json
+                items = json.loads(r.stdout).get('items', [])
+                for item in items:
+                    nad_name = item['metadata']['name']
+                    nad_ns = item['metadata']['namespace']
+                    available_nads.append({'name': nad_name, 'namespace': nad_ns})
+        except Exception:
+            pass
+
+    # Attach NAD list to each RDMA network type
+    for net in networks:
+        if net['rdma'] and net['available']:
+            net['available_nads'] = available_nads
+
     return networks
 
 

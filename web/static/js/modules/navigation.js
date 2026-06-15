@@ -8,6 +8,18 @@ function selectNetwork(netId) {
         card.style.borderColor = selected ? '#2A7B88' : '#CCC';
         card.style.background = selected ? '#F0F9FA' : 'white';
     });
+    // Show/hide NAD selector for RDMA networks
+    var nadSection = document.getElementById('nad-selector-section');
+    if (nadSection) {
+        nadSection.style.display = (netId !== 'eth0' && window._availableNads && window._availableNads.length > 0) ? 'block' : 'none';
+    }
+    saveConfig();
+}
+
+function selectNad(nadName, nadNamespace) {
+    config.rdma_network_annotation = JSON.stringify([{"name": nadName, "namespace": nadNamespace}]);
+    var sel = document.getElementById('nad-select');
+    if (sel) sel.value = nadName + '/' + nadNamespace;
     saveConfig();
 }
 
@@ -363,6 +375,44 @@ socket.on('cluster_scan_result', function(data) {
         });
         networkCards.innerHTML = cardsHtml;
         document.getElementById('selected-network-type').value = savedNetwork;
+
+        // Build NAD selector dropdown for RDMA network types
+        var allNads = [];
+        networks.forEach(function(net) {
+            if (net.available_nads) {
+                net.available_nads.forEach(function(nad) {
+                    var key = nad.name + '/' + nad.namespace;
+                    if (!allNads.some(function(n) { return n.name + '/' + n.namespace === key; })) {
+                        allNads.push(nad);
+                    }
+                });
+            }
+        });
+        window._availableNads = allNads;
+
+        if (allNads.length > 0) {
+            var nadHtml = '<div id="nad-selector-section" style="margin-top:12px;padding:12px 16px;background:#f0f9ff;border:1px solid #bae6fd;border-radius:8px;display:' +
+                (savedNetwork !== 'eth0' ? 'block' : 'none') + ';">';
+            nadHtml += '<label style="font-weight:600;font-size:0.9em;color:#0c4a6e;margin-bottom:6px;display:block;">Network Attachment Definition</label>';
+            nadHtml += '<div style="font-size:0.8em;color:#075985;margin-bottom:8px;">Select which NAD to attach to inference pods for RDMA communication</div>';
+            nadHtml += '<select id="nad-select" onchange="var v=this.value.split(\'/\');selectNad(v[0],v[1]);" style="width:100%;padding:8px 12px;border:1.5px solid #bae6fd;border-radius:6px;font-size:0.9em;">';
+            var savedNad = config.rdma_network_annotation ? JSON.parse(config.rdma_network_annotation)[0] : null;
+            allNads.forEach(function(nad) {
+                var val = nad.name + '/' + nad.namespace;
+                var selected = savedNad && savedNad.name === nad.name && savedNad.namespace === nad.namespace;
+                var label = nad.name + ' (' + nad.namespace + ')';
+                nadHtml += '<option value="' + val + '"' + (selected ? ' selected' : '') + '>' + label + '</option>';
+            });
+            nadHtml += '</select></div>';
+            networkCards.insertAdjacentHTML('afterend', nadHtml);
+
+            // Auto-select first NAD if none saved
+            if (!config.rdma_network_annotation && allNads.length > 0) {
+                // Prefer multi-nic-inference
+                var preferred = allNads.find(function(n) { return n.name === 'multi-nic-inference'; }) || allNads[0];
+                selectNad(preferred.name, preferred.namespace);
+            }
+        }
     }
 
     // Display hardware resources table
