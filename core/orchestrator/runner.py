@@ -922,7 +922,8 @@ class TestOrchestrator(ParserMixin, GuidellmMixin):
                     success = prereq_mgr.deploy_prereqs(
                         architecture=config.architecture,
                         log_callback=lambda msg: log_callback(msg) if log_callback else None,
-                        epp_config=getattr(config, 'epp_config', None)
+                        epp_config=getattr(config, 'epp_config', None),
+                        optimizer_config=config
                     )
 
                     if not success:

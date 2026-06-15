@@ -84,7 +84,7 @@ class PrereqManager:
         return status
 
     def deploy_prereqs(self, architecture: str = 'aggregated', log_callback=None,
-                       epp_config: dict = None) -> bool:
+                       epp_config: dict = None, optimizer_config=None) -> bool:
         """
         Deploy prerequisite infrastructure.
 
@@ -151,9 +151,11 @@ class PrereqManager:
 
             if all(status.values()):
                 log(f'✅ All prerequisites for {architecture} already deployed')
-                # Ensure RDMA configmap exists even on the fast path
+                # Ensure RDMA configmap and network resources exist even on the fast path
                 context = {'namespace': self.namespace}
                 self._ensure_rdma_discovery(context, log)
+                if optimizer_config:
+                    self._ensure_network_resources(optimizer_config, log)
                 if self._check_prereqs_ready(config['gaie_name'], log_callback=log):
                     return True
                 log(f'   ⏳ Waiting for GAIE deployment to become ready...')
@@ -236,6 +238,10 @@ class PrereqManager:
 
             # Deploy RDMA discovery ConfigMap (used by vLLM pods for InfiniBand HCA detection)
             self._ensure_rdma_discovery(context, log)
+
+            # Create network resources (NADs/SriovNetworks) based on user's network selection
+            if optimizer_config:
+                self._ensure_network_resources(optimizer_config, log)
 
             # Deploy in order (RBAC -> ConfigMap -> Service -> Deployment -> InferencePool -> Gateway)
             configmap_template = f'prereq/gaie-configmap-{architecture}.yaml.j2'
@@ -518,6 +524,54 @@ class PrereqManager:
             log(f'   ❌ Failed to create RDMA discovery ConfigMap: {result.stderr}')
             return
         log('   ✅ ConfigMap rdma-discovery-script created')
+
+    def _ensure_network_resources(self, config, log_callback=None):
+        """Create network resources (NADs/SriovNetworks) based on user's network selection.
+
+        For SR-IOV: creates SriovNetwork CRs from selected policies.
+        For NAD/NMState: creates NADs from selected NICs if they don't exist.
+        For DRA/Shared Device/eth0: nothing to create.
+        """
+        def log(msg):
+            if log_callback:
+                log_callback(msg)
+
+        network_type = getattr(config, 'network_type', None)
+        if not network_type or network_type in ('eth0', 'dra', 'shared_device'):
+            return
+
+        if network_type == 'sriov_multinic':
+            selected_policies = getattr(config, 'selected_sriov_policies', None)
+            if selected_policies:
+                from core.networking.sriov import ensure_sriov_networks
+                annotation = ensure_sriov_networks(
+                    self.kubectl, self.namespace,
+                    policy_resource_names=selected_policies
+                )
+                if annotation:
+                    config.rdma_network_annotation = annotation
+                    log(f'   ✅ SR-IOV networks created for {len(selected_policies)} policies')
+                else:
+                    log('   ⚠️  SR-IOV network creation failed — using existing NADs if available')
+
+        elif network_type in ('nad', 'nmstate'):
+            # Check if user-selected NADs already exist
+            annotation = getattr(config, 'rdma_network_annotation', None)
+            if annotation:
+                import json
+                try:
+                    nads = json.loads(annotation)
+                    for nad in nads:
+                        r = self.kubectl.run(
+                            ['get', 'net-attach-def', nad['name'], '-n', nad.get('namespace', self.namespace)],
+                            check=False
+                        )
+                        if r.returncode == 0:
+                            log(f'   ✓ NAD {nad["name"]} already exists')
+                        else:
+                            log(f'   ⚠️  NAD {nad["name"]} not found — admin must create it')
+                except Exception:
+                    pass
 
     def _check_prereqs_ready(self, gaie_name: str, log_callback=None) -> bool:
         """Check if prerequisites are ready."""
