@@ -455,11 +455,11 @@ socket.on('cluster_scan_result', function(data) {
             nadHtml += '<div style="font-size:0.8em;color:#075985;margin-bottom:8px;">Select which NADs to attach to inference pods. Check multiple for multi-NIC RDMA.</div>';
             allNads.forEach(function(nad) {
                 var isChecked = savedNadNames.length > 0 ? savedNadNames.indexOf(nad.name) !== -1 : nad.name === 'multi-nic-inference';
-                nadHtml += _toggleSwitch(
-                    '<span style="font-size:0.9em;font-weight:600;color:#1e293b;">' + nad.name + '</span>',
-                    isChecked,
-                    "toggleNad('" + nad.name + "','" + nad.namespace + "',on);"
-                );
+                nadHtml += '<label style="display:flex;align-items:center;gap:8px;padding:8px 10px;margin-bottom:4px;background:white;border:1px solid #bae6fd;border-radius:6px;cursor:pointer;">';
+                nadHtml += '<input type="checkbox" ' + (isChecked ? 'checked' : '') +
+                    ' onchange="toggleNad(\'' + nad.name + '\',\'' + nad.namespace + '\',this.checked)" style="width:16px;height:16px;">';
+                nadHtml += '<span style="font-size:0.9em;font-weight:600;color:#1e293b;">' + nad.name + '</span>';
+                nadHtml += '</label>';
             });
             // Subnet mode toggle for NAD
             var nadSameSubnet = config.nad_same_subnet || false;
@@ -503,11 +503,15 @@ socket.on('cluster_scan_result', function(data) {
                 var isChecked = saved.length > 0 ? saved.indexOf(p.resourceName) !== -1 : p.isRdma;
                 var rdmaBadge = p.isRdma ? ' <span style="font-size:0.7em;background:#dcfce7;color:#166534;padding:1px 5px;border-radius:3px;">RDMA</span>' : '';
                 var vendorInfo = p.vendor === '15b3' ? 'Mellanox' : (p.vendor || 'unknown');
-                var pLabel = '<div><div style="font-weight:600;font-size:0.9em;color:#1e293b;">' + p.name + rdmaBadge + '</div>' +
-                    '<div style="font-size:0.8em;color:#64748b;">' + vendorInfo +
+                srHtml += '<label style="display:flex;align-items:flex-start;gap:8px;padding:8px 10px;margin-bottom:4px;background:white;border:1px solid #e9d5ff;border-radius:6px;cursor:pointer;">';
+                srHtml += '<input type="checkbox" ' + (isChecked ? 'checked' : '') +
+                    ' onchange="toggleSriovPolicy(\'' + p.resourceName + '\',this.checked)" style="width:16px;height:16px;margin-top:2px;">';
+                srHtml += '<div>';
+                srHtml += '<div style="font-weight:600;font-size:0.9em;color:#1e293b;">' + p.name + rdmaBadge + '</div>';
+                srHtml += '<div style="font-size:0.8em;color:#64748b;">' + vendorInfo +
                     (p.deviceID ? ' (' + p.deviceID + ')' : '') +
-                    ' · ' + p.numVfs + ' VFs · MTU ' + p.mtu + '</div></div>';
-                srHtml += _toggleSwitch(pLabel, isChecked, "toggleSriovPolicy('" + p.resourceName + "',on);");
+                    ' · ' + p.numVfs + ' VFs · MTU ' + p.mtu + '</div>';
+                srHtml += '</div></label>';
             });
             // Subnet mode toggle
             var sameSubnet = config.sriov_same_subnet || false;
@@ -584,11 +588,11 @@ socket.on('cluster_scan_result', function(data) {
                 var isNic = cls.indexOf('nic') !== -1 || cls.indexOf('dranet') !== -1;
                 var isChecked = savedDra.length > 0 ? savedDra.indexOf(cls) !== -1 : isNic;
                 var badge = isNic ? ' <span style="font-size:0.7em;background:#dcfce7;color:#166534;padding:1px 5px;border-radius:3px;">NIC</span>' : '';
-                draHtml += _toggleSwitch(
-                    '<span style="font-size:0.9em;font-weight:600;color:#1e293b;">' + cls + badge + '</span>',
-                    isChecked,
-                    "toggleDraDeviceClass('" + cls + "',on);"
-                );
+                draHtml += '<label style="display:flex;align-items:center;gap:8px;padding:8px 10px;margin-bottom:4px;background:white;border:1px solid #a7f3d0;border-radius:6px;cursor:pointer;">';
+                draHtml += '<input type="checkbox" ' + (isChecked ? 'checked' : '') +
+                    ' onchange="toggleDraDeviceClass(\'' + cls + '\',this.checked)" style="width:16px;height:16px;">';
+                draHtml += '<span style="font-size:0.9em;font-weight:600;color:#1e293b;">' + cls + badge + '</span>';
+                draHtml += '</label>';
             });
             draHtml += '</div>';
 
