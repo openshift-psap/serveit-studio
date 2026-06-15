@@ -43,6 +43,17 @@ function selectSharedDevice(resource) {
     saveConfig();
 }
 
+function _toggleSwitch(id, checked, onChange) {
+    var bg = checked ? '#2A7B88' : '#ccc';
+    var tx = checked ? 'translateX(18px)' : 'translateX(0)';
+    return '<div style="display:flex;align-items:center;justify-content:space-between;gap:10px;padding:8px 10px;margin-bottom:4px;background:white;border:1px solid #e2e8f0;border-radius:8px;cursor:pointer;" ' +
+        'onclick="var sw=this.querySelector(\'.sw-knob\');var on=sw.style.transform!==\'translateX(18px)\';sw.style.transform=on?\'translateX(18px)\':\'translateX(0)\';sw.parentElement.style.background=on?\'#2A7B88\':\'#ccc\';' + onChange + '">' +
+        '<div style="flex:1;">' + id + '</div>' +
+        '<div style="width:40px;height:22px;background:' + bg + ';border-radius:11px;position:relative;transition:background 0.2s;flex-shrink:0;">' +
+        '<span class="sw-knob" style="position:absolute;top:2px;left:2px;width:18px;height:18px;background:white;border-radius:50%;transition:transform 0.2s;box-shadow:0 1px 3px rgba(0,0,0,0.2);display:block;transform:' + tx + ';"></span>' +
+        '</div></div>';
+}
+
 function toggleDraDeviceClass(className, checked) {
     if (!config.selected_dra_classes) config.selected_dra_classes = [];
     if (checked) {
@@ -444,11 +455,11 @@ socket.on('cluster_scan_result', function(data) {
             nadHtml += '<div style="font-size:0.8em;color:#075985;margin-bottom:8px;">Select which NADs to attach to inference pods. Check multiple for multi-NIC RDMA.</div>';
             allNads.forEach(function(nad) {
                 var isChecked = savedNadNames.length > 0 ? savedNadNames.indexOf(nad.name) !== -1 : nad.name === 'multi-nic-inference';
-                nadHtml += '<label style="display:flex;align-items:center;gap:8px;padding:6px 8px;margin-bottom:2px;background:white;border:1px solid #bae6fd;border-radius:6px;cursor:pointer;">';
-                nadHtml += '<input type="checkbox" ' + (isChecked ? 'checked' : '') +
-                    ' onchange="toggleNad(\'' + nad.name + '\',\'' + nad.namespace + '\',this.checked)" style="margin:0;">';
-                nadHtml += '<span style="font-size:0.9em;color:#1e293b;">' + nad.name + '</span>';
-                nadHtml += '</label>';
+                nadHtml += _toggleSwitch(
+                    '<span style="font-size:0.9em;font-weight:600;color:#1e293b;">' + nad.name + '</span>',
+                    isChecked,
+                    "toggleNad('" + nad.name + "','" + nad.namespace + "',on);"
+                );
             });
             nadHtml += '</div>';
             networkCards.insertAdjacentHTML('afterend', nadHtml);
@@ -484,15 +495,11 @@ socket.on('cluster_scan_result', function(data) {
                 var isChecked = saved.length > 0 ? saved.indexOf(p.resourceName) !== -1 : p.isRdma;
                 var rdmaBadge = p.isRdma ? ' <span style="font-size:0.7em;background:#dcfce7;color:#166534;padding:1px 5px;border-radius:3px;">RDMA</span>' : '';
                 var vendorInfo = p.vendor === '15b3' ? 'Mellanox' : (p.vendor || 'unknown');
-                srHtml += '<label style="display:flex;align-items:flex-start;gap:8px;padding:8px;margin-bottom:4px;background:white;border:1px solid #e9d5ff;border-radius:6px;cursor:pointer;">';
-                srHtml += '<input type="checkbox" ' + (isChecked ? 'checked' : '') +
-                    ' onchange="toggleSriovPolicy(\'' + p.resourceName + '\',this.checked)" style="margin-top:3px;">';
-                srHtml += '<div>';
-                srHtml += '<div style="font-weight:600;font-size:0.9em;color:#1e293b;">' + p.name + rdmaBadge + '</div>';
-                srHtml += '<div style="font-size:0.8em;color:#64748b;">Resource: ' + p.resourceName + ' · ' + vendorInfo +
+                var pLabel = '<div><div style="font-weight:600;font-size:0.9em;color:#1e293b;">' + p.name + rdmaBadge + '</div>' +
+                    '<div style="font-size:0.8em;color:#64748b;">' + vendorInfo +
                     (p.deviceID ? ' (' + p.deviceID + ')' : '') +
-                    ' · ' + p.numVfs + ' VFs · MTU ' + p.mtu + '</div>';
-                srHtml += '</div></label>';
+                    ' · ' + p.numVfs + ' VFs · MTU ' + p.mtu + '</div></div>';
+                srHtml += _toggleSwitch(pLabel, isChecked, "toggleSriovPolicy('" + p.resourceName + "',on);");
             });
             // Subnet mode toggle
             var sameSubnet = config.sriov_same_subnet || false;
@@ -569,11 +576,11 @@ socket.on('cluster_scan_result', function(data) {
                 var isNic = cls.indexOf('nic') !== -1 || cls.indexOf('dranet') !== -1;
                 var isChecked = savedDra.length > 0 ? savedDra.indexOf(cls) !== -1 : isNic;
                 var badge = isNic ? ' <span style="font-size:0.7em;background:#dcfce7;color:#166534;padding:1px 5px;border-radius:3px;">NIC</span>' : '';
-                draHtml += '<label style="display:flex;align-items:center;gap:8px;padding:6px 8px;margin-bottom:2px;background:white;border:1px solid #a7f3d0;border-radius:6px;cursor:pointer;">';
-                draHtml += '<input type="checkbox" ' + (isChecked ? 'checked' : '') +
-                    ' onchange="toggleDraDeviceClass(\'' + cls + '\',this.checked)" style="margin:0;">';
-                draHtml += '<span style="font-size:0.9em;color:#1e293b;">' + cls + badge + '</span>';
-                draHtml += '</label>';
+                draHtml += _toggleSwitch(
+                    '<span style="font-size:0.9em;font-weight:600;color:#1e293b;">' + cls + badge + '</span>',
+                    isChecked,
+                    "toggleDraDeviceClass('" + cls + "',on);"
+                );
             });
             draHtml += '</div>';
 
