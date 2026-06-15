@@ -87,6 +87,11 @@ class TestConfig:
     rdma_nics_per_node: int = 0  # Physical NICs per node (from scanner, for RDMA request count)
     rdma_network_annotation: Optional[str] = None  # Multus NAD annotation JSON for sriov_multinic
 
+    # Per-pod storage (LWS v0.8.0+ volumeClaimTemplates)
+    per_pod_storage: bool = False
+    storage_class: Optional[str] = None
+    pvc_size: Optional[str] = None  # e.g. '50Gi'
+
     # Benchmark load parameters
     request_type: str = 'constant'  # 'constant', 'concurrent', 'throughput', 'poisson'
     request_rate: int = 1  # Requests per second (constant) or concurrent users (concurrent)

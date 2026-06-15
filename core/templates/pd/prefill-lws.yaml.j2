@@ -70,9 +70,11 @@ spec:
             emptyDir:
               medium: Memory
               sizeLimit: 2Gi
+{% if not per_pod_storage %}
           - name: hf-cache
             persistentVolumeClaim:
               claimName: {{ pvc_name }}
+{% endif %}
           - name: jit-cache
             emptyDir: {}
           - name: rdma-script
@@ -281,3 +283,14 @@ spec:
     workerTemplate:
       spec:
         containers: []
+{% if per_pod_storage %}
+  volumeClaimTemplates:
+    - metadata:
+        name: hf-cache
+      spec:
+        accessModes: ["ReadWriteOnce"]
+        storageClassName: {{ storage_class }}
+        resources:
+          requests:
+            storage: {{ pvc_size | default('50Gi') }}
+{% endif %}
