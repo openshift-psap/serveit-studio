@@ -461,7 +461,15 @@ socket.on('cluster_scan_result', function(data) {
                     "toggleNad('" + nad.name + "','" + nad.namespace + "',on);"
                 );
             });
-            nadHtml += '</div>';
+            // Subnet mode toggle for NAD
+            var nadSameSubnet = config.nad_same_subnet || false;
+            nadHtml += '<div style="margin-top:10px;padding-top:8px;border-top:1px solid #bae6fd;">';
+            nadHtml += _toggleSwitch(
+                '<span style="font-size:0.85em;color:#0c4a6e;"><strong>Same subnet</strong> — all NICs share one L2 network. Turn off if each NIC is on a separate VLAN.</span>',
+                nadSameSubnet,
+                "config.nad_same_subnet=on;saveConfig();"
+            );
+            nadHtml += '</div></div>';
             networkCards.insertAdjacentHTML('afterend', nadHtml);
 
             // Auto-select preferred NAD if none saved
