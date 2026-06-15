@@ -157,10 +157,12 @@ def scan_available_networks(kubectl_runner, namespace: str = None) -> List[Dict[
 
     # 3. DRA (DRANET) — look for gpu-nic-pair or dranet-specific device classes
     dra_available = False
+    dra_device_classes = []
     try:
         r = kubectl_runner.run(['get', 'deviceclass', '-o', 'jsonpath={.items[*].metadata.name}'], check=False)
         if r.returncode == 0 and r.stdout.strip():
             class_names = r.stdout.strip().split()
+            dra_device_classes = sorted(class_names)
             dra_available = any('nic' in c or 'dranet' in c or 'dra-net' in c or 'gpu-nic' in c
                                 for c in class_names)
     except Exception:
@@ -172,6 +174,7 @@ def scan_available_networks(kubectl_runner, namespace: str = None) -> List[Dict[
         'available': dra_available,
         'reason': '' if dra_available else 'No DRA device classes found on cluster',
         'rdma': True,
+        'device_classes': dra_device_classes,
     })
 
     # 4. SharedDevice (RDMA device plugin)
@@ -217,6 +220,22 @@ def scan_available_networks(kubectl_runner, namespace: str = None) -> List[Dict[
         'description': 'RoCE RDMA via SR-IOV. Creates network interfaces per pod for GPU-aware RDMA routing.',
         'available': sriov_multinic_available,
         'reason': '' if sriov_multinic_available else 'multi-nic-cni NADs not found',
+        'rdma': True,
+    })
+
+    # 6. NMState — kubernetes-nmstate for RDMA interface configuration
+    nmstate_available = False
+    try:
+        r = kubectl_runner.run(['api-resources', '--api-group=nmstate.io'], check=False)
+        nmstate_available = r.returncode == 0 and 'nodenetworkstate' in r.stdout.lower()
+    except Exception:
+        pass
+    networks.append({
+        'id': 'nmstate',
+        'name': 'NMState',
+        'description': 'RDMA via kubernetes-nmstate. Configures host network interfaces declaratively for RoCE/InfiniBand.',
+        'available': nmstate_available,
+        'reason': '' if nmstate_available else 'kubernetes-nmstate API not found',
         'rdma': True,
     })
 

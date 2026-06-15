@@ -9,11 +9,13 @@ function selectNetwork(netId) {
         card.style.background = selected ? '#F0F9FA' : 'white';
     });
     var nadSection = document.getElementById('nad-selector-section');
-    if (nadSection) nadSection.style.display = (netId === 'nad' && window._availableNads && window._availableNads.length > 0) ? 'block' : 'none';
+    if (nadSection) nadSection.style.display = ((netId === 'nad' || netId === 'nmstate') && window._availableNads && window._availableNads.length > 0) ? 'block' : 'none';
     var sriovSection = document.getElementById('sriov-policy-section');
     if (sriovSection) sriovSection.style.display = (netId === 'sriov_multinic' && window._sriovPolicies && window._sriovPolicies.length > 0) ? 'block' : 'none';
     var sharedSection = document.getElementById('shared-device-section');
     if (sharedSection) sharedSection.style.display = (netId === 'shared_device' && window._sharedResources && window._sharedResources.length > 0) ? 'block' : 'none';
+    var draSection = document.getElementById('dra-device-class-section');
+    if (draSection) draSection.style.display = (netId === 'dra' && window._draDeviceClasses && window._draDeviceClasses.length > 0) ? 'block' : 'none';
     saveConfig();
 }
 
@@ -38,6 +40,16 @@ function toggleNad(nadName, nadNamespace, checked) {
 
 function selectSharedDevice(resource) {
     config.selected_shared_device = resource;
+    saveConfig();
+}
+
+function toggleDraDeviceClass(className, checked) {
+    if (!config.selected_dra_classes) config.selected_dra_classes = [];
+    if (checked) {
+        if (config.selected_dra_classes.indexOf(className) === -1) config.selected_dra_classes.push(className);
+    } else {
+        config.selected_dra_classes = config.selected_dra_classes.filter(function(c) { return c !== className; });
+    }
     saveConfig();
 }
 
@@ -380,7 +392,7 @@ socket.on('cluster_scan_result', function(data) {
 
     if (networkCards && networks.length > 0) {
         let cardsHtml = '';
-        const icons = {'eth0':'🔌','nad':'🔗','dra':'⚡','shared_device':'📡'};
+        const icons = {'eth0':'🔌','nad':'🔗','dra':'⚡','shared_device':'📡','sriov_multinic':'🌐','nmstate':'🔧'};
         networks.forEach(function(net) {
             const isSelected = net.id === savedNetwork;
             const isRecommended = net.id === autoDetected;
@@ -421,7 +433,7 @@ socket.on('cluster_scan_result', function(data) {
         window._availableNads = allNads;
 
         if (allNads.length > 0) {
-            var showNadInit = (savedNetwork === 'nad');
+            var showNadInit = (savedNetwork === 'nad' || savedNetwork === 'nmstate');
             var savedNadList = [];
             try { savedNadList = JSON.parse(config.rdma_network_annotation || '[]'); } catch(e) {}
             var savedNadNames = savedNadList.map(function(n) { return n.name; });
@@ -523,6 +535,45 @@ socket.on('cluster_scan_result', function(data) {
 
             if (!config.selected_shared_device) {
                 config.selected_shared_device = sharedResources[0];
+                saveConfig();
+            }
+        }
+
+        // Build DRA device class checkboxes
+        var draClasses = [];
+        networks.forEach(function(net) {
+            if (net.device_classes) {
+                net.device_classes.forEach(function(c) {
+                    if (draClasses.indexOf(c) === -1) draClasses.push(c);
+                });
+            }
+        });
+        window._draDeviceClasses = draClasses;
+
+        if (draClasses.length > 0) {
+            var showDraInit = savedNetwork === 'dra';
+            var savedDra = config.selected_dra_classes || [];
+            var draHtml = '<div id="dra-device-class-section" style="margin-top:12px;padding:12px 16px;background:#ecfdf5;border:1px solid #a7f3d0;border-radius:8px;display:' +
+                (showDraInit ? 'block' : 'none') + ';">';
+            draHtml += '<label style="font-weight:600;font-size:0.9em;color:#065f46;margin-bottom:6px;display:block;">DRA Device Classes</label>';
+            draHtml += '<div style="font-size:0.8em;color:#047857;margin-bottom:8px;">Select which device classes to use for GPU+NIC pairing</div>';
+            draClasses.forEach(function(cls) {
+                var isNic = cls.indexOf('nic') !== -1 || cls.indexOf('dranet') !== -1;
+                var isChecked = savedDra.length > 0 ? savedDra.indexOf(cls) !== -1 : isNic;
+                var badge = isNic ? ' <span style="font-size:0.7em;background:#dcfce7;color:#166534;padding:1px 5px;border-radius:3px;">NIC</span>' : '';
+                draHtml += '<label style="display:flex;align-items:center;gap:8px;padding:6px 8px;margin-bottom:2px;background:white;border:1px solid #a7f3d0;border-radius:6px;cursor:pointer;">';
+                draHtml += '<input type="checkbox" ' + (isChecked ? 'checked' : '') +
+                    ' onchange="toggleDraDeviceClass(\'' + cls + '\',this.checked)" style="margin:0;">';
+                draHtml += '<span style="font-size:0.9em;color:#1e293b;">' + cls + badge + '</span>';
+                draHtml += '</label>';
+            });
+            draHtml += '</div>';
+
+            var draInsert = document.getElementById('shared-device-section') || document.getElementById('sriov-policy-section') || document.getElementById('nad-selector-section') || networkCards;
+            draInsert.insertAdjacentHTML('afterend', draHtml);
+
+            if (savedDra.length === 0) {
+                config.selected_dra_classes = draClasses.filter(function(c) { return c.indexOf('nic') !== -1 || c.indexOf('dranet') !== -1; });
                 saveConfig();
             }
         }
