@@ -494,6 +494,14 @@ socket.on('cluster_scan_result', function(data) {
                     ' · ' + p.numVfs + ' VFs · MTU ' + p.mtu + '</div>';
                 srHtml += '</div></label>';
             });
+            // Subnet mode toggle
+            var sameSubnet = config.sriov_same_subnet || false;
+            srHtml += '<div style="margin-top:10px;padding-top:8px;border-top:1px solid #e9d5ff;display:flex;align-items:center;gap:10px;">';
+            srHtml += '<label style="display:flex;align-items:center;gap:6px;cursor:pointer;font-size:0.85em;color:#581c87;">';
+            srHtml += '<input type="checkbox" ' + (sameSubnet ? 'checked' : '') +
+                ' onchange="config.sriov_same_subnet=this.checked;saveConfig();" style="margin:0;">';
+            srHtml += '<span><strong>Same subnet</strong> — all NICs share one L2 network. Uncheck if each NIC is on a separate VLAN.</span>';
+            srHtml += '</label></div>';
             srHtml += '</div>';
 
             var insertAfter = document.getElementById('nad-selector-section') || networkCards;

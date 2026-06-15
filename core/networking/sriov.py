@@ -141,12 +141,15 @@ def ensure_sriov_networks(
     kubectl_runner,
     target_namespace: str,
     policy_resource_names: List[str] = None,
+    same_subnet: bool = False,
 ) -> Optional[str]:
     """Ensure SriovNetwork CRs exist for the target namespace.
 
-    Creates one SriovNetwork per RDMA-capable policy (one per physical NIC),
-    similar to how DRA pairs each GPU with its closest NIC. Each SriovNetwork
-    generates a NAD in the target namespace.
+    Creates one SriovNetwork per RDMA-capable policy (one per physical NIC).
+
+    Args:
+        same_subnet: If True, all NICs share one subnet (flat L2 network).
+                     If False, each NIC gets its own subnet (separate VLANs/networks).
 
     Returns the Multus annotation JSON string referencing all NADs,
     or None on failure.
@@ -170,7 +173,6 @@ def ensure_sriov_networks(
             logger.warning(f"None of the requested policies found: {policy_resource_names}")
             return None
 
-    # Deduplicate by resourceName (same policy shouldn't create multiple networks)
     seen = set()
     unique_policies = []
     for p in rdma_policies:
@@ -179,11 +181,12 @@ def ensure_sriov_networks(
             unique_policies.append(p)
 
     nad_refs = []
-    # Use different IP ranges per NIC to avoid conflicts
-    base_third_octet = 100
     for i, policy in enumerate(unique_policies):
         nad_name = f"serveit-rdma-nic{i}"
-        ip_range = f"192.168.{base_third_octet + i}.0/24"
+        if same_subnet:
+            ip_range = '192.168.100.0/24'
+        else:
+            ip_range = f'192.168.{100 + i}.0/24'
 
         success = create_sriov_network(
             kubectl_runner,
@@ -206,7 +209,8 @@ def ensure_sriov_network(
     kubectl_runner,
     target_namespace: str,
     policy_resource_name: str = None,
+    same_subnet: bool = False,
 ) -> Optional[str]:
     """Convenience wrapper — ensure networks and return annotation string."""
     names = [policy_resource_name] if policy_resource_name else None
-    return ensure_sriov_networks(kubectl_runner, target_namespace, names)
+    return ensure_sriov_networks(kubectl_runner, target_namespace, names, same_subnet=same_subnet)

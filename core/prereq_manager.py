@@ -544,9 +544,11 @@ class PrereqManager:
             selected_policies = getattr(config, 'selected_sriov_policies', None)
             if selected_policies:
                 from core.networking.sriov import ensure_sriov_networks
+                same_subnet = getattr(config, 'sriov_same_subnet', False)
                 annotation = ensure_sriov_networks(
                     self.kubectl, self.namespace,
-                    policy_resource_names=selected_policies
+                    policy_resource_names=selected_policies,
+                    same_subnet=same_subnet,
                 )
                 if annotation:
                     config.rdma_network_annotation = annotation
