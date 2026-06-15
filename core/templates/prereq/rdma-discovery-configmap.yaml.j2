@@ -27,14 +27,20 @@ data:
     NETWORK_MODE="nad"  # Default to NAD
     SOCKET_IFNAME="eth0"  # Default management interface
 
-    # Check for DRA-NET interface (net0)
-    if ip link show net0 &>/dev/null; then
-        # Distinguish DRA-NET from SR-IOV multi-nic: DRA creates macvlan/bridge,
-        # multi-nic creates ipvlan. Check if net1 also exists (multi-nic creates many).
-        NET_COUNT=$(ls -1 /sys/class/net/ 2>/dev/null | grep -c '^net[0-9]')
+    # Count Multus secondary interfaces (net0, net1, net1-0, net1-1, etc.)
+    NET_COUNT=$(ls -1 /sys/class/net/ 2>/dev/null | grep -c '^net[0-9]')
+
+    # Check for multi-nic-cni pattern: net1-0, net1-1, ... net1-15
+    MULTINIC_COUNT=$(ls -1 /sys/class/net/ 2>/dev/null | grep -c '^net1-[0-9]')
+
+    if [ "$MULTINIC_COUNT" -gt 4 ]; then
+        NETWORK_MODE="sriov_multinic"
+        SOCKET_IFNAME="eth0"
+        echo "--- SR-IOV multi-nic mode detected ($MULTINIC_COUNT net1-X interfaces) ---" >&2
+    elif ip link show net0 &>/dev/null; then
         if [ "$NET_COUNT" -gt 4 ]; then
             NETWORK_MODE="sriov_multinic"
-            SOCKET_IFNAME="net0"
+            SOCKET_IFNAME="eth0"
             echo "--- SR-IOV multi-nic mode detected ($NET_COUNT net interfaces) ---" >&2
         else
             NETWORK_MODE="dra-net"
@@ -42,8 +48,7 @@ data:
             echo "--- DRA-NET mode detected (interface: net0) ---" >&2
         fi
     elif ls /sys/class/infiniband/* &>/dev/null && \
-         ! ip link show net0 &>/dev/null && \
-         ! ls /sys/class/net/net* &>/dev/null 2>&1; then
+         [ "$NET_COUNT" -eq 0 ]; then
         NETWORK_MODE="shared_device"
         SOCKET_IFNAME="eth0"
         echo "--- NVIDIA shared device plugin mode detected (interface: eth0) ---" >&2
@@ -125,6 +130,40 @@ data:
                 fi
             fi
 
+            # For RoCE: verify this HCA has at least one valid IPv4 GID.
+            # Shared RDMA pools expose all host HCAs, but only the ones
+            # with GIDs can actually carry traffic from this pod.
+            link_layer=$(cat "$hca_path/ports/1/link_layer" 2>/dev/null || true)
+            if [[ "$link_layer" == "Ethernet" ]]; then
+                has_valid_gid=false
+                gid_ip=""
+                for gid_file in "$hca_path"/ports/1/gids/*; do
+                    gid_val=$(cat "$gid_file" 2>/dev/null || true)
+                    if echo "$gid_val" | grep -q 'ffff:'; then
+                        gid_type_file="${gid_file%/*}/gid_attrs/types/$(basename "$gid_file")"
+                        gid_type=$(cat "$gid_type_file" 2>/dev/null || true)
+                        if [[ "$gid_type" == *"RoCE v2"* ]] || [[ -z "$gid_type" ]]; then
+                            has_valid_gid=true
+                            # Extract IPv4 from GID (last 4 bytes: ffff:AABB:CCDD)
+                            hex=$(echo "$gid_val" | grep -oP 'ffff:\K[0-9a-f:]+' || true)
+                            if [[ -n "$hex" ]]; then
+                                hi=$(echo "$hex" | cut -d: -f1)
+                                lo=$(echo "$hex" | cut -d: -f2)
+                                if [[ -n "$hi" && -n "$lo" ]]; then
+                                    gid_ip="$((16#${hi:0:2})).$((16#${hi:2:2})).$((16#${lo:0:2})).$((16#${lo:2:2}))"
+                                fi
+                            fi
+                            break
+                        fi
+                    fi
+                done
+
+                if [[ "$has_valid_gid" == false ]]; then
+                    echo "Skipping $hca (RoCE HCA with no valid GIDs)" >&2
+                    continue
+                fi
+            fi
+
             all_hcas+=("$hca")
 
             # Get IP if interface name exists
@@ -141,6 +180,10 @@ data:
                 else
                     echo "Discovered: HCA=$hca, Interface=$ifname, Status=ACTIVE (no IP)" >&2
                 fi
+            elif [[ -n "${gid_ip:-}" ]]; then
+                # sriov_multinic: sysfs has no netdev, but GID table has the IP
+                data_ips+=("$gid_ip")
+                echo "Discovered: HCA=$hca, GID-IP=$gid_ip, Status=ACTIVE (IP from GID table)" >&2
             else
                 echo "Discovered: HCA=$hca, Status=ACTIVE (no interface name)" >&2
             fi
@@ -304,11 +347,15 @@ data:
     # UCX_NET_DEVICES:
     #   shared_device: use topology-matched IB HCAs (ibp0, ibp1, ...) so NIXL
     #   KV transfers use the NIC closest to the pod's GPU(s).
+    #   sriov_multinic: use HCA verbs device names (no sysfs netdev mapping)
     #   RoCE (Ethernet link layer): use netdev interface names with IPs
     #   InfiniBand: use HCA verbs device names (ibp0:1, mlx5_0:1, ...)
     if [[ "$NETWORK_MODE" == "shared_device" ]]; then
         env_vars["UCX_NET_DEVICES"]="$(IFS=','; echo "${hcas_with_port[*]}")"
         echo "--- shared_device mode: UCX_NET_DEVICES=${env_vars[UCX_NET_DEVICES]} ---" >&2
+    elif [[ "$NETWORK_MODE" == "sriov_multinic" ]]; then
+        env_vars["UCX_NET_DEVICES"]="$(IFS=','; echo "${hcas_with_port[*]}")"
+        echo "--- sriov_multinic mode: UCX_NET_DEVICES=${env_vars[UCX_NET_DEVICES]} ---" >&2
     elif [[ "$LINK_LAYER" == "Ethernet" ]]; then
         declare -a ucx_devices;
         for hca in "${sorted_hcas[@]}"; do
