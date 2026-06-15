@@ -79,6 +79,7 @@ class RecipeOptimizerConfig:
     rdma_device_resources: Optional[List[str]] = None  # RDMA resource keys from node allocatable, auto-detected
     rdma_nics_per_node: Optional[int] = None  # Physical NICs per node, auto-detected
     rdma_network_annotation: Optional[str] = None  # Multus NAD annotation JSON for sriov_multinic
+    selected_sriov_policies: Optional[List[str]] = None  # User-selected SR-IOV policy resourceNames
 
     # Resources (auto-calculated if not set)
     memory_per_pod: Optional[str] = None  # e.g., '191Gi', auto-calculated from cluster resources

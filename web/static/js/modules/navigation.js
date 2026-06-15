@@ -8,11 +8,11 @@ function selectNetwork(netId) {
         card.style.borderColor = selected ? '#2A7B88' : '#CCC';
         card.style.background = selected ? '#F0F9FA' : 'white';
     });
-    // Show/hide NAD selector for RDMA networks
+    var isRdma = netId !== 'eth0';
     var nadSection = document.getElementById('nad-selector-section');
-    if (nadSection) {
-        nadSection.style.display = (netId !== 'eth0' && window._availableNads && window._availableNads.length > 0) ? 'block' : 'none';
-    }
+    if (nadSection) nadSection.style.display = (isRdma && window._availableNads && window._availableNads.length > 0) ? 'block' : 'none';
+    var sriovSection = document.getElementById('sriov-policy-section');
+    if (sriovSection) sriovSection.style.display = (isRdma && window._sriovPolicies && window._sriovPolicies.length > 0) ? 'block' : 'none';
     saveConfig();
 }
 
@@ -20,6 +20,18 @@ function selectNad(nadName, nadNamespace) {
     config.rdma_network_annotation = JSON.stringify([{"name": nadName, "namespace": nadNamespace}]);
     var sel = document.getElementById('nad-select');
     if (sel) sel.value = nadName + '/' + nadNamespace;
+    saveConfig();
+}
+
+function toggleSriovPolicy(resourceName, checked) {
+    if (!config.selected_sriov_policies) config.selected_sriov_policies = [];
+    if (checked) {
+        if (config.selected_sriov_policies.indexOf(resourceName) === -1) {
+            config.selected_sriov_policies.push(resourceName);
+        }
+    } else {
+        config.selected_sriov_policies = config.selected_sriov_policies.filter(function(p) { return p !== resourceName; });
+    }
     saveConfig();
 }
 
@@ -408,9 +420,53 @@ socket.on('cluster_scan_result', function(data) {
 
             // Auto-select first NAD if none saved
             if (!config.rdma_network_annotation && allNads.length > 0) {
-                // Prefer multi-nic-inference
                 var preferred = allNads.find(function(n) { return n.name === 'multi-nic-inference'; }) || allNads[0];
                 selectNad(preferred.name, preferred.namespace);
+            }
+        }
+
+        // Build SR-IOV policy checkboxes
+        var allPolicies = [];
+        networks.forEach(function(net) {
+            if (net.sriov_policies) {
+                net.sriov_policies.forEach(function(p) {
+                    if (!allPolicies.some(function(e) { return e.resourceName === p.resourceName; })) {
+                        allPolicies.push(p);
+                    }
+                });
+            }
+        });
+        window._sriovPolicies = allPolicies;
+
+        if (allPolicies.length > 0) {
+            var saved = config.selected_sriov_policies || [];
+            var srHtml = '<div id="sriov-policy-section" style="margin-top:12px;padding:12px 16px;background:#faf5ff;border:1px solid #d8b4fe;border-radius:8px;display:' +
+                (savedNetwork !== 'eth0' ? 'block' : 'none') + ';">';
+            srHtml += '<label style="font-weight:600;font-size:0.9em;color:#581c87;margin-bottom:6px;display:block;">SR-IOV Network Policies</label>';
+            srHtml += '<div style="font-size:0.8em;color:#7e22ce;margin-bottom:8px;">Select which NICs to use for RDMA. Each checked policy creates a separate network interface on inference pods.</div>';
+            allPolicies.forEach(function(p) {
+                var isChecked = saved.length > 0 ? saved.indexOf(p.resourceName) !== -1 : p.isRdma;
+                var rdmaBadge = p.isRdma ? ' <span style="font-size:0.7em;background:#dcfce7;color:#166534;padding:1px 5px;border-radius:3px;">RDMA</span>' : '';
+                var vendorInfo = p.vendor === '15b3' ? 'Mellanox' : (p.vendor || 'unknown');
+                srHtml += '<label style="display:flex;align-items:flex-start;gap:8px;padding:8px;margin-bottom:4px;background:white;border:1px solid #e9d5ff;border-radius:6px;cursor:pointer;">';
+                srHtml += '<input type="checkbox" ' + (isChecked ? 'checked' : '') +
+                    ' onchange="toggleSriovPolicy(\'' + p.resourceName + '\',this.checked)" style="margin-top:3px;">';
+                srHtml += '<div>';
+                srHtml += '<div style="font-weight:600;font-size:0.9em;color:#1e293b;">' + p.name + rdmaBadge + '</div>';
+                srHtml += '<div style="font-size:0.8em;color:#64748b;">Resource: ' + p.resourceName + ' · ' + vendorInfo +
+                    (p.deviceID ? ' (' + p.deviceID + ')' : '') +
+                    ' · ' + p.numVfs + ' VFs · MTU ' + p.mtu + '</div>';
+                srHtml += '</div></label>';
+            });
+            srHtml += '</div>';
+
+            var insertAfter = document.getElementById('nad-selector-section') || networkCards;
+            insertAfter.insertAdjacentHTML('afterend', srHtml);
+
+            // Auto-select RDMA policies if none saved
+            if (saved.length === 0) {
+                config.selected_sriov_policies = allPolicies.filter(function(p) { return p.isRdma; }).map(function(p) { return p.resourceName; });
+                saveConfig();
             }
         }
     }
