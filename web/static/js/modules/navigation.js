@@ -420,7 +420,7 @@ socket.on('cluster_scan_result', function(data) {
             allNads.forEach(function(nad) {
                 var val = nad.name + '/' + nad.namespace;
                 var selected = savedNad && savedNad.name === nad.name && savedNad.namespace === nad.namespace;
-                var label = nad.name + ' (' + nad.namespace + ')';
+                var label = nad.name;
                 nadHtml += '<option value="' + val + '"' + (selected ? ' selected' : '') + '>' + label + '</option>';
             });
             nadHtml += '</select></div>';
