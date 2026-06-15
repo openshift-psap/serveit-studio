@@ -13,6 +13,8 @@ function selectNetwork(netId) {
     if (nadSection) nadSection.style.display = (showNadPicker && window._availableNads && window._availableNads.length > 0) ? 'block' : 'none';
     var sriovSection = document.getElementById('sriov-policy-section');
     if (sriovSection) sriovSection.style.display = (showNadPicker && window._sriovPolicies && window._sriovPolicies.length > 0) ? 'block' : 'none';
+    var sharedSection = document.getElementById('shared-device-section');
+    if (sharedSection) sharedSection.style.display = (netId === 'shared_device' && window._sharedResources && window._sharedResources.length > 1) ? 'block' : 'none';
     saveConfig();
 }
 
@@ -20,6 +22,11 @@ function selectNad(nadName, nadNamespace) {
     config.rdma_network_annotation = JSON.stringify([{"name": nadName, "namespace": nadNamespace}]);
     var sel = document.getElementById('nad-select');
     if (sel) sel.value = nadName + '/' + nadNamespace;
+    saveConfig();
+}
+
+function selectSharedDevice(resource) {
+    config.selected_shared_device = resource;
     saveConfig();
 }
 
@@ -468,6 +475,39 @@ socket.on('cluster_scan_result', function(data) {
             // Auto-select RDMA policies if none saved
             if (saved.length === 0) {
                 config.selected_sriov_policies = allPolicies.filter(function(p) { return p.isRdma; }).map(function(p) { return p.resourceName; });
+                saveConfig();
+            }
+        }
+
+        // Build Shared Device dropdown
+        var sharedResources = [];
+        networks.forEach(function(net) {
+            if (net.shared_resources) {
+                net.shared_resources.forEach(function(r) {
+                    if (sharedResources.indexOf(r) === -1) sharedResources.push(r);
+                });
+            }
+        });
+        window._sharedResources = sharedResources;
+
+        if (sharedResources.length > 1) {
+            var showShInit = savedNetwork === 'shared_device';
+            var shHtml = '<div id="shared-device-section" style="margin-top:12px;padding:12px 16px;background:#fefce8;border:1px solid #fde68a;border-radius:8px;display:' +
+                (showShInit ? 'block' : 'none') + ';">';
+            shHtml += '<label style="font-weight:600;font-size:0.9em;color:#92400e;margin-bottom:6px;display:block;">RDMA Device Resource</label>';
+            shHtml += '<div style="font-size:0.8em;color:#a16207;margin-bottom:8px;">Select which RDMA device plugin resource to request on inference pods</div>';
+            shHtml += '<select id="shared-device-select" onchange="selectSharedDevice(this.value);" style="width:100%;padding:8px 12px;border:1.5px solid #fde68a;border-radius:6px;font-size:0.9em;">';
+            var savedShared = config.selected_shared_device || sharedResources[0];
+            sharedResources.forEach(function(r) {
+                shHtml += '<option value="' + r + '"' + (r === savedShared ? ' selected' : '') + '>' + r + '</option>';
+            });
+            shHtml += '</select></div>';
+
+            var insertPoint = document.getElementById('sriov-policy-section') || document.getElementById('nad-selector-section') || networkCards;
+            insertPoint.insertAdjacentHTML('afterend', shHtml);
+
+            if (!config.selected_shared_device) {
+                config.selected_shared_device = sharedResources[0];
                 saveConfig();
             }
         }

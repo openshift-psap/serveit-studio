@@ -176,45 +176,20 @@ def scan_available_networks(kubectl_runner, namespace: str = None) -> List[Dict[
 
     # 4. SharedDevice (RDMA device plugin)
     shared_available = False
-    shared_resource = ''
+    shared_resources = set()
     try:
-        r = kubectl_runner.run(['get', 'nodes', '-o',
-            'jsonpath={.items[*].status.allocatable}'], check=False)
+        r = kubectl_runner.run(['get', 'nodes', '-o', 'json'], check=False)
         if r.returncode == 0:
             import json
-            # Parse each node's allocatable to find rdma/* resources
-            for node_alloc_str in r.stdout.strip().split(' '):
-                try:
-                    alloc = json.loads(node_alloc_str) if node_alloc_str.startswith('{') else {}
-                except Exception:
-                    alloc = {}
+            data = json.loads(r.stdout)
+            for node in data.get('items', []):
+                alloc = node.get('status', {}).get('allocatable', {})
                 for key in alloc:
-                    if key.startswith('rdma/'):
+                    if key.startswith('rdma/') or key == 'nvidia.com/roce':
+                        shared_resources.add(key)
                         shared_available = True
-                        shared_resource = key
-                        break
-                if shared_available:
-                    break
     except Exception:
         pass
-    if not shared_available:
-        # Also check via node JSON
-        try:
-            r = kubectl_runner.run(['get', 'nodes', '-o', 'json'], check=False)
-            if r.returncode == 0:
-                import json
-                data = json.loads(r.stdout)
-                for node in data.get('items', []):
-                    alloc = node.get('status', {}).get('allocatable', {})
-                    for key in alloc:
-                        if key.startswith('rdma/'):
-                            shared_available = True
-                            shared_resource = key
-                            break
-                    if shared_available:
-                        break
-        except Exception:
-            pass
 
     networks.append({
         'id': 'shared_device',
@@ -223,6 +198,7 @@ def scan_available_networks(kubectl_runner, namespace: str = None) -> List[Dict[
         'available': shared_available,
         'reason': '' if shared_available else 'No rdma/* resources found in node allocatable',
         'rdma': True,
+        'shared_resources': sorted(shared_resources),
     })
 
     # 5. SR-IOV multi-nic (multi-nic-cni operator)
