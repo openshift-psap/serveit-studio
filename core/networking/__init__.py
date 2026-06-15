@@ -119,155 +119,138 @@ def compute_network_values(
 def scan_available_networks(kubectl_runner, namespace: str = None) -> List[Dict[str, Any]]:
     """Scan the cluster and return ALL available network types.
 
-    Always includes eth0 (pod network). Checks for NAD CRDs,
-    DRA device classes, and shared RDMA device plugins.
+    Runs all kubectl queries in parallel for speed. Each query is
+    independent — failure of one doesn't block the others.
 
     Args:
         kubectl_runner: KubectlRunner instance for cluster queries
-        namespace: Target namespace for NAD discovery (scans target ns only)
+        namespace: Target namespace for NAD discovery
 
     Returns:
         List of dicts: {id, name, description, available, reason, rdma}
     """
-    networks = []
+    import json
+    from concurrent.futures import ThreadPoolExecutor, as_completed
 
-    # 1. eth0 — always available
-    networks.append({
-        'id': 'eth0',
-        'name': 'Pod Network (TCP)',
-        'description': 'Standard Kubernetes pod networking. No RDMA — uses TCP for GPU communication. Works everywhere but slower for multi-node.',
-        'available': True,
-        'reason': '',
-        'rdma': False,
-    })
+    results = {}
 
-    # 2. NAD (Multus CNI)
-    try:
-        r = kubectl_runner.run(['api-resources', '--api-group=k8s.cni.cncf.io'], check=False)
-        nad_available = r.returncode == 0 and 'network-attachment-definitions' in r.stdout
-    except Exception:
-        nad_available = False
-    networks.append({
-        'id': 'nad',
-        'name': 'NAD (Multus CNI)',
-        'description': 'Network Attachment Definitions via Multus. Supports SR-IOV, host-device, and macvlan plugins for RDMA.',
-        'available': nad_available,
-        'reason': '' if nad_available else 'Multus CNI not installed (k8s.cni.cncf.io API not found)',
-        'rdma': True,
-    })
+    def _query(name, args):
+        try:
+            r = kubectl_runner.run(args, check=False)
+            return name, r
+        except Exception:
+            return name, None
 
-    # 3. DRA (DRANET) — look for gpu-nic-pair or dranet-specific device classes
-    dra_available = False
+    # Fire all queries in parallel
+    queries = {
+        'nad_api': ['api-resources', '--api-group=k8s.cni.cncf.io'],
+        'dra_classes': ['get', 'deviceclass', '-o', 'jsonpath={.items[*].metadata.name}'],
+        'nodes': ['get', 'nodes', '-o', 'json'],
+        'nmstate_api': ['api-resources', '--api-group=nmstate.io'],
+    }
+    if namespace:
+        queries['nads'] = ['get', 'net-attach-def', '-n', namespace, '-o', 'json']
+        queries['sriov_policies'] = ['get', 'sriovnetworknodepolicies', '-n',
+                                     'openshift-sriov-network-operator', '-o', 'json']
+
+    with ThreadPoolExecutor(max_workers=len(queries)) as pool:
+        futures = {pool.submit(_query, name, args): name for name, args in queries.items()}
+        for f in as_completed(futures):
+            name, r = f.result()
+            results[name] = r
+
+    # Parse results
+    nad_r = results.get('nad_api')
+    nad_available = nad_r and nad_r.returncode == 0 and 'network-attachment-definitions' in nad_r.stdout
+
+    dra_r = results.get('dra_classes')
     dra_device_classes = []
-    try:
-        r = kubectl_runner.run(['get', 'deviceclass', '-o', 'jsonpath={.items[*].metadata.name}'], check=False)
-        if r.returncode == 0 and r.stdout.strip():
-            class_names = r.stdout.strip().split()
-            dra_device_classes = sorted(class_names)
-            dra_available = any('nic' in c or 'dranet' in c or 'dra-net' in c or 'gpu-nic' in c
-                                for c in class_names)
-    except Exception:
-        pass
-    networks.append({
-        'id': 'dra',
-        'name': 'DRA (DRANET)',
-        'description': 'Dynamic Resource Allocation with GPU+NIC PCIe affinity. Automatically pairs GPUs with closest network interface.',
-        'available': dra_available,
-        'reason': '' if dra_available else 'No DRA device classes found on cluster',
-        'rdma': True,
-        'device_classes': dra_device_classes,
-    })
+    dra_available = False
+    if dra_r and dra_r.returncode == 0 and dra_r.stdout.strip():
+        dra_device_classes = sorted(dra_r.stdout.strip().split())
+        dra_available = any('nic' in c or 'dranet' in c or 'dra-net' in c or 'gpu-nic' in c
+                            for c in dra_device_classes)
 
-    # 4. SharedDevice (RDMA device plugin)
+    nodes_r = results.get('nodes')
     shared_available = False
     shared_resources = set()
-    try:
-        r = kubectl_runner.run(['get', 'nodes', '-o', 'json'], check=False)
-        if r.returncode == 0:
-            import json
-            data = json.loads(r.stdout)
-            for node in data.get('items', []):
-                alloc = node.get('status', {}).get('allocatable', {})
-                for key in alloc:
+    if nodes_r and nodes_r.returncode == 0:
+        try:
+            for node in json.loads(nodes_r.stdout).get('items', []):
+                for key in node.get('status', {}).get('allocatable', {}):
                     if key.startswith('rdma/') or key == 'nvidia.com/roce':
                         shared_resources.add(key)
                         shared_available = True
-    except Exception:
-        pass
-
-    networks.append({
-        'id': 'shared_device',
-        'name': 'Shared Device Plugin',
-        'description': 'RDMA via pre-configured device plugin. Pods request RDMA resources directly — no CRDs needed.',
-        'available': shared_available,
-        'reason': '' if shared_available else 'No rdma/* resources found in node allocatable',
-        'rdma': True,
-        'shared_resources': sorted(shared_resources),
-    })
-
-    # 5. SR-IOV multi-nic (multi-nic-cni operator)
-    sriov_multinic_available = False
-    if nad_available and shared_available and namespace:
-        try:
-            r = kubectl_runner.run(['get', 'net-attach-def', '-n', namespace,
-                '-o', 'jsonpath={.items[*].metadata.name}'], check=False)
-            if r.returncode == 0 and ('multi-nic-inference' in r.stdout or 'multi-nic-compute' in r.stdout):
-                sriov_multinic_available = True
         except Exception:
             pass
-    networks.append({
-        'id': 'sriov_multinic',
-        'name': 'SR-IOV',
-        'description': 'RoCE RDMA via SR-IOV. Creates network interfaces per pod for GPU-aware RDMA routing.',
-        'available': sriov_multinic_available,
-        'reason': '' if sriov_multinic_available else 'multi-nic-cni NADs not found',
-        'rdma': True,
-    })
 
-    # 6. NMState — kubernetes-nmstate for RDMA interface configuration
-    nmstate_available = False
-    try:
-        r = kubectl_runner.run(['api-resources', '--api-group=nmstate.io'], check=False)
-        nmstate_available = r.returncode == 0 and 'nodenetworkstate' in r.stdout.lower()
-    except Exception:
-        pass
-    networks.append({
-        'id': 'nmstate',
-        'name': 'NMState',
-        'description': 'RDMA via kubernetes-nmstate. Configures host network interfaces declaratively for RoCE/InfiniBand.',
-        'available': nmstate_available,
-        'reason': '' if nmstate_available else 'kubernetes-nmstate API not found',
-        'rdma': True,
-    })
-
-    # Scan available NADs in the target namespace
+    nads_r = results.get('nads')
     available_nads = []
-    if nad_available and namespace:
+    sriov_multinic_available = False
+    if nads_r and nads_r.returncode == 0:
         try:
-            r = kubectl_runner.run(['get', 'net-attach-def', '-n', namespace,
-                '-o', 'json'], check=False)
-            if r.returncode == 0:
-                import json
-                items = json.loads(r.stdout).get('items', [])
-                seen = set()
-                for item in items:
-                    nad_name = item['metadata']['name']
-                    nad_ns = item['metadata']['namespace']
-                    if nad_name not in seen:
-                        available_nads.append({'name': nad_name, 'namespace': nad_ns})
-                        seen.add(nad_name)
+            seen = set()
+            for item in json.loads(nads_r.stdout).get('items', []):
+                nad_name = item['metadata']['name']
+                nad_ns = item['metadata']['namespace']
+                if nad_name not in seen:
+                    available_nads.append({'name': nad_name, 'namespace': nad_ns})
+                    seen.add(nad_name)
+                if nad_name in ('multi-nic-inference', 'multi-nic-compute'):
+                    sriov_multinic_available = True
         except Exception:
             pass
 
-    # Scan SR-IOV policies for the NAD network type
-    sriov_policies = []
-    try:
-        from .sriov import detect_sriov_policies
-        sriov_policies = detect_sriov_policies(kubectl_runner)
-    except Exception:
-        pass
+    nmstate_r = results.get('nmstate_api')
+    nmstate_available = nmstate_r and nmstate_r.returncode == 0 and 'nodenetworkstate' in nmstate_r.stdout.lower()
 
-    # Attach NAD list and SR-IOV policies to each RDMA network type
+    sriov_policies = []
+    sriov_r = results.get('sriov_policies')
+    if sriov_r and sriov_r.returncode == 0:
+        try:
+            for item in json.loads(sriov_r.stdout).get('items', []):
+                name = item['metadata']['name']
+                if name == 'default':
+                    continue
+                spec = item.get('spec', {})
+                sriov_policies.append({
+                    'name': name,
+                    'resourceName': spec.get('resourceName', ''),
+                    'numVfs': spec.get('numVfs', 0),
+                    'mtu': spec.get('mtu', 1500),
+                    'isRdma': spec.get('isRdma', False),
+                    'deviceType': spec.get('deviceType', 'netdevice'),
+                    'vendor': spec.get('nicSelector', {}).get('vendor', ''),
+                    'deviceID': spec.get('nicSelector', {}).get('deviceID', ''),
+                })
+        except Exception:
+            pass
+
+    # Build network list
+    networks = [
+        {'id': 'eth0', 'name': 'Pod Network (TCP)',
+         'description': 'Standard Kubernetes pod networking. No RDMA — uses TCP for GPU communication.',
+         'available': True, 'reason': '', 'rdma': False},
+        {'id': 'nad', 'name': 'NAD (Multus CNI)',
+         'description': 'Network Attachment Definitions via Multus. Supports SR-IOV, host-device, and macvlan plugins for RDMA.',
+         'available': nad_available, 'reason': '' if nad_available else 'Multus CNI not installed', 'rdma': True},
+        {'id': 'dra', 'name': 'DRA (DRANET)',
+         'description': 'Dynamic Resource Allocation with GPU+NIC PCIe affinity.',
+         'available': dra_available, 'reason': '' if dra_available else 'No DRA device classes found', 'rdma': True,
+         'device_classes': dra_device_classes},
+        {'id': 'shared_device', 'name': 'Shared Device Plugin',
+         'description': 'RDMA via pre-configured device plugin. Pods request RDMA resources directly.',
+         'available': shared_available, 'reason': '' if shared_available else 'No rdma/* resources found', 'rdma': True,
+         'shared_resources': sorted(shared_resources)},
+        {'id': 'sriov_multinic', 'name': 'SR-IOV',
+         'description': 'RoCE RDMA via SR-IOV. Creates network interfaces per pod for GPU-aware RDMA routing.',
+         'available': sriov_multinic_available or (shared_available and bool(sriov_policies)),
+         'reason': '' if (sriov_multinic_available or sriov_policies) else 'No SR-IOV NADs or policies found', 'rdma': True},
+        {'id': 'nmstate', 'name': 'NMState',
+         'description': 'RDMA via kubernetes-nmstate. Configures host network interfaces declaratively.',
+         'available': nmstate_available, 'reason': '' if nmstate_available else 'kubernetes-nmstate API not found', 'rdma': True},
+    ]
+
     for net in networks:
         if net['rdma'] and net['available']:
             net['available_nads'] = available_nads
