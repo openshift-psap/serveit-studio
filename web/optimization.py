@@ -662,6 +662,15 @@ def run_optimization_background(data):
         headroom = float(headroom_setting.get('value')) if headroom_setting.get('mode') == 'custom' and headroom_setting.get('value') else 1.3
         mem_reserve_setting = (advanced_vllm or {}).get('memory-reserve-pct', {})
         memory_reserve_pct = float(mem_reserve_setting.get('value')) if mem_reserve_setting.get('mode') == 'custom' and mem_reserve_setting.get('value') else 0.0
+
+        # Network selections
+        rdma_network_annotation = _get('rdma_network_annotation')
+        selected_sriov_policies = _get('selected_sriov_policies') or []
+        sriov_same_subnet = _get('sriov_same_subnet', False)
+        selected_shared_device = _get('selected_shared_device')
+        selected_dra_classes = _get('selected_dra_classes') or []
+        per_pod_storage = _get('per_pod_storage', False)
+        storage_class = _get('storage_class')
         vllm_image = _get('image') or 'ghcr.io/llm-d/llm-d-cuda:v0.6.0'
         scheduler_image = _get('scheduler_image') or 'ghcr.io/llm-d/llm-d-inference-scheduler:v0.7.1'
         single_test_architecture = data.get('single_test_architecture')
@@ -871,6 +880,13 @@ data:
                 prefix_cache_groups=prefix_cache_groups,
                 headroom=headroom,
                 memory_reserve_pct=memory_reserve_pct,
+                rdma_network_annotation=rdma_network_annotation,
+                selected_sriov_policies=selected_sriov_policies,
+                sriov_same_subnet=sriov_same_subnet,
+                selected_shared_device=selected_shared_device,
+                selected_dra_classes=selected_dra_classes,
+                per_pod_storage=per_pod_storage,
+                storage_class=storage_class,
                 advanced_vllm=advanced_vllm,
                 single_test_architecture=single_test_architecture,
                 single_test_tp=int(single_test_tp) if single_test_tp else None,

@@ -78,8 +78,14 @@ class RecipeOptimizerConfig:
     network_type: Optional[str] = None  # 'dra', 'nad', 'shared_device', 'sriov_multinic', 'eth0'
     rdma_device_resources: Optional[List[str]] = None  # RDMA resource keys from node allocatable, auto-detected
     rdma_nics_per_node: Optional[int] = None  # Physical NICs per node, auto-detected
-    rdma_network_annotation: Optional[str] = None  # Multus NAD annotation JSON for sriov_multinic
+    rdma_network_annotation: Optional[str] = None  # Multus NAD annotation JSON
     selected_sriov_policies: Optional[List[str]] = None  # User-selected SR-IOV policy resourceNames
+    sriov_same_subnet: bool = False  # All NICs share one L2 subnet
+    selected_shared_device: Optional[str] = None  # Selected shared RDMA resource key
+    selected_dra_classes: Optional[List[str]] = None  # User-selected DRA device classes
+    per_pod_storage: bool = False  # Use LWS volumeClaimTemplates for per-pod PVCs
+    storage_class: Optional[str] = None  # Storage class for per-pod PVCs
+    pvc_size: Optional[str] = None  # PVC size for per-pod storage
 
     # Resources (auto-calculated if not set)
     memory_per_pod: Optional[str] = None  # e.g., '191Gi', auto-calculated from cluster resources
