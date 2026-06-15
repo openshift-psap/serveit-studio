@@ -724,6 +724,7 @@ def handle_scan_cluster(data):
                     'allow_volume_expansion': sc.allow_volume_expansion
                 }
                 for sc in resources.storage_classes
+                if not any(blk in sc.name.lower() for blk in ('block', 'raw', 'iscsi-block'))
             ],
             # Provider and network information
             'provider': provider_name,
