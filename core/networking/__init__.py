@@ -115,7 +115,7 @@ def compute_network_values(
     return values
 
 
-def scan_available_networks(kubectl_runner) -> List[Dict[str, Any]]:
+def scan_available_networks(kubectl_runner, namespace: str = None) -> List[Dict[str, Any]]:
     """Scan the cluster and return ALL available network types.
 
     Always includes eth0 (pod network). Checks for NAD CRDs,
@@ -123,6 +123,7 @@ def scan_available_networks(kubectl_runner) -> List[Dict[str, Any]]:
 
     Args:
         kubectl_runner: KubectlRunner instance for cluster queries
+        namespace: Target namespace for NAD discovery (scans target ns only)
 
     Returns:
         List of dicts: {id, name, description, available, reason, rdma}
@@ -227,9 +228,9 @@ def scan_available_networks(kubectl_runner) -> List[Dict[str, Any]]:
 
     # 5. SR-IOV multi-nic (multi-nic-cni operator)
     sriov_multinic_available = False
-    if nad_available and shared_available:
+    if nad_available and shared_available and namespace:
         try:
-            r = kubectl_runner.run(['get', 'net-attach-def', '--all-namespaces',
+            r = kubectl_runner.run(['get', 'net-attach-def', '-n', namespace,
                 '-o', 'jsonpath={.items[*].metadata.name}'], check=False)
             if r.returncode == 0 and ('multi-nic-inference' in r.stdout or 'multi-nic-compute' in r.stdout):
                 sriov_multinic_available = True
@@ -244,19 +245,22 @@ def scan_available_networks(kubectl_runner) -> List[Dict[str, Any]]:
         'rdma': True,
     })
 
-    # Scan available NADs for all network types
+    # Scan available NADs in the target namespace
     available_nads = []
-    if nad_available:
+    if nad_available and namespace:
         try:
-            r = kubectl_runner.run(['get', 'net-attach-def', '--all-namespaces',
+            r = kubectl_runner.run(['get', 'net-attach-def', '-n', namespace,
                 '-o', 'json'], check=False)
             if r.returncode == 0:
                 import json
                 items = json.loads(r.stdout).get('items', [])
+                seen = set()
                 for item in items:
                     nad_name = item['metadata']['name']
                     nad_ns = item['metadata']['namespace']
-                    available_nads.append({'name': nad_name, 'namespace': nad_ns})
+                    if nad_name not in seen:
+                        available_nads.append({'name': nad_name, 'namespace': nad_ns})
+                        seen.add(nad_name)
         except Exception:
             pass
 

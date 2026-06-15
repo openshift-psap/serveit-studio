@@ -548,11 +548,11 @@ def handle_cleanup_deployment(data):
         emit('cleanup_result', {'success': False, 'error': error_msg})
 
 
-def _scan_networks(scanner):
+def _scan_networks(scanner, namespace=None):
     """Scan available network types using the scanner's kubectl runner."""
     try:
         from core.networking import scan_available_networks
-        return scan_available_networks(scanner.kubectl)
+        return scan_available_networks(scanner.kubectl, namespace=namespace or scanner.namespace)
     except Exception as e:
         print(f"Network scan error: {e}")
         return [{'id': 'eth0', 'name': 'Pod Network (TCP)', 'description': 'Standard pod networking',
