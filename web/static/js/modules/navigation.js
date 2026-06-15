@@ -8,7 +8,7 @@ function selectNetwork(netId) {
         card.style.borderColor = selected ? '#2A7B88' : '#CCC';
         card.style.background = selected ? '#F0F9FA' : 'white';
     });
-    var showNadPicker = (netId === 'shared_device' || netId === 'sriov_multinic');
+    var showNadPicker = (netId === 'sriov_multinic' || netId === 'nad');
     var nadSection = document.getElementById('nad-selector-section');
     if (nadSection) nadSection.style.display = (showNadPicker && window._availableNads && window._availableNads.length > 0) ? 'block' : 'none';
     var sriovSection = document.getElementById('sriov-policy-section');
@@ -403,7 +403,7 @@ socket.on('cluster_scan_result', function(data) {
         window._availableNads = allNads;
 
         if (allNads.length > 0) {
-            var showNadInit = (savedNetwork === 'shared_device' || savedNetwork === 'sriov_multinic');
+            var showNadInit = (savedNetwork === 'sriov_multinic' || savedNetwork === 'nad');
             var nadHtml = '<div id="nad-selector-section" style="margin-top:12px;padding:12px 16px;background:#f0f9ff;border:1px solid #bae6fd;border-radius:8px;display:' +
                 (showNadInit ? 'block' : 'none') + ';">';
             nadHtml += '<label style="font-weight:600;font-size:0.9em;color:#0c4a6e;margin-bottom:6px;display:block;">Network Attachment Definition</label>';
@@ -441,7 +441,7 @@ socket.on('cluster_scan_result', function(data) {
 
         if (allPolicies.length > 0) {
             var saved = config.selected_sriov_policies || [];
-            var showSrInit = (savedNetwork === 'shared_device' || savedNetwork === 'sriov_multinic');
+            var showSrInit = (savedNetwork === 'sriov_multinic' || savedNetwork === 'nad');
             var srHtml = '<div id="sriov-policy-section" style="margin-top:12px;padding:12px 16px;background:#faf5ff;border:1px solid #d8b4fe;border-radius:8px;display:' +
                 (showSrInit ? 'block' : 'none') + ';">';
             srHtml += '<label style="font-weight:600;font-size:0.9em;color:#581c87;margin-bottom:6px;display:block;">SR-IOV Network Policies</label>';
