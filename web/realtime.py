@@ -548,6 +548,19 @@ def handle_cleanup_deployment(data):
         emit('cleanup_result', {'success': False, 'error': error_msg})
 
 
+def _check_lws_vct(scanner):
+    """Check if LWS CRD supports volumeClaimTemplates (v0.8.0+)."""
+    try:
+        r = scanner.kubectl.run(
+            ['get', 'crd', 'leaderworkersets.leaderworkerset.x-k8s.io',
+             '-o', 'jsonpath={.spec.versions[0].schema.openAPIV3Schema.properties.spec.properties}'],
+            check=False)
+        if r.returncode == 0 and 'volumeClaimTemplates' in r.stdout:
+            return True
+    except Exception:
+        pass
+    return False
+
 def _scan_networks(scanner, namespace=None):
     """Scan available network types using the scanner's kubectl runner."""
     try:
@@ -732,6 +745,8 @@ def handle_scan_cluster(data):
             'dranet_available': dranet_available,
             # All available network options for user selection
             'available_networks': _scan_networks(scanner),
+            # LWS volumeClaimTemplates support (v0.8.0+)
+            'lws_supports_vct': _check_lws_vct(scanner),
             # Preset values from launcher (empty when running standalone)
             'preset_max_gpus': int(os.environ.get('PRESET_MAX_GPUS', 0)) or None,
             'preset_nodes': os.environ.get('PRESET_NODES', '').split(',') if os.environ.get('PRESET_NODES') else None,

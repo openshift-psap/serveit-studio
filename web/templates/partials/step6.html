@@ -188,6 +188,19 @@
                                         </div>
                                     </div>
 
+                                    <!-- Per-Pod Storage toggle (LWS v0.8.0+ volumeClaimTemplates) -->
+                                    <div id="per-pod-storage-group" style="display:none; margin-top:16px; border-top:1px solid #e2e8f0; padding-top:12px;">
+                                        <div class="vllm-toggle" id="per-pod-storage-toggle" onclick="var t=this;var on=!t.classList.contains('active');if(on)t.classList.add('active');else t.classList.remove('active');config.per_pod_storage=on;saveConfig();">
+                                            <div style="font-size:1.5em;flex-shrink:0;">📦</div>
+                                            <div>
+                                                <div style="font-weight:600;color:#1e293b;font-size:0.95em;">Per-Pod Storage</div>
+                                                <div style="color:#64748b;font-size:0.82em;margin-top:2px;">Each pod gets its own PVC instead of sharing one. Requires LWS v0.8.0+ and a storage class that supports dynamic provisioning. Useful with local storage or when ReadWriteMany is not available.</div>
+                                            </div>
+                                            <input type="checkbox" id="enable-per-pod-storage" style="display:none;">
+                                            <div class="tgl-sw"></div>
+                                        </div>
+                                    </div>
+
                                     <!-- Info Boxes -->
                                     <div id="storage-note" style="padding: 16px 0; margin-top: 12px; border-top: 1px solid #e2e8f0;">
                                         <div style="display: flex; align-items: flex-start; gap: 12px;">

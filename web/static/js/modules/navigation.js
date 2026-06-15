@@ -593,6 +593,16 @@ socket.on('cluster_scan_result', function(data) {
         select.value = config.storage_class;
     }
 
+    // Show per-pod storage toggle if LWS supports volumeClaimTemplates
+    var perPodGroup = document.getElementById('per-pod-storage-group');
+    if (perPodGroup) {
+        perPodGroup.style.display = data.lws_supports_vct ? 'block' : 'none';
+        if (config.per_pod_storage && data.lws_supports_vct) {
+            var toggle = document.getElementById('per-pod-storage-toggle');
+            if (toggle) toggle.classList.add('active');
+        }
+    }
+
     // Populate max GPU dropdown
     const maxGpuSelect = document.getElementById('max-gpu-select');
     maxGpuSelect.innerHTML = `<option value="${data.total_gpus}" selected>All (${data.total_gpus} GPUs)</option>`;
