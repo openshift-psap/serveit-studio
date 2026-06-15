@@ -93,12 +93,13 @@ def compute_network_values(
     values['rdma_nics_per_node'] = rdma_nics_per_node
     values['rdma_network_annotation'] = None
 
-    if network_type == 'nad' and rdma_device_resources:
+    if network_type in ('nad', 'nmstate') and rdma_device_resources:
         for resource_key in rdma_device_resources:
             values['extra_device_resources'].append({
                 'key': resource_key,
                 'value': '1'
             })
+        values['rdma_network_annotation'] = rdma_network_annotation
     elif network_type == 'sriov_multinic' and rdma_device_resources:
         for resource_key in rdma_device_resources:
             values['extra_device_resources'].append({
@@ -108,7 +109,7 @@ def compute_network_values(
         values['rdma_network_annotation'] = rdma_network_annotation
 
     values['use_anti_affinity'] = (
-        network_type == 'nad'
+        network_type in ('nad', 'nmstate')
         and len(rdma_device_resources) > 0
     )
 
