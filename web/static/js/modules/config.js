@@ -123,7 +123,7 @@ function updateUIFromConfig() {
         setTpPairTopN(config.tp_pair_top_n);
     }
     if (document.getElementById('allow-asymmetric-tp')) {
-        var atpOn = config.allow_asymmetric_tp !== false;
+        var atpOn = config.allow_asymmetric_tp === true;
         document.getElementById('allow-asymmetric-tp').checked = atpOn;
         var atpSw = document.getElementById('asymmetric-tp-switch');
         if (atpSw) {
