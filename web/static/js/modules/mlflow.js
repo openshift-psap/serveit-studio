@@ -187,8 +187,8 @@ function exportAllMlflow() {
         }
 
         var sr = queue.shift();
-        remaining--;
-        stopBtn.innerHTML = '<span class="mlflow-spinner"></span> Exporting ' + (remaining + 1) + ' run(s) remaining... Click to stop';
+        remaining = queue.length;
+        stopBtn.innerHTML = '<span class="mlflow-spinner"></span> Exporting run ' + (selectedRuns.length - remaining) + '/' + selectedRuns.length + '... Click to stop';
 
         fetch('/api/mlflow/export', {
             method: 'POST',
