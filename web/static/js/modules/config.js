@@ -1075,11 +1075,40 @@ function selectSingleTestArch(arch) {
     var pdFields = document.getElementById('single-test-pd-fields');
     if (aggFields) aggFields.style.display = arch !== 'pd' ? 'block' : 'none';
     if (pdFields) pdFields.style.display = arch === 'pd' ? 'block' : 'none';
+    syncSingleTestToConfig();
     updateSingleTestGpuSummary();
     saveConfig();
 }
 
+function syncSingleTestToConfig() {
+    var arch = config.single_test_architecture || 'aggregated';
+    if (arch === 'pd') {
+        var el;
+        el = document.getElementById('single-test-prefill-tp');
+        if (el) config.single_test_prefill_tp = parseInt(el.value) || 1;
+        el = document.getElementById('single-test-decode-tp');
+        if (el) config.single_test_decode_tp = parseInt(el.value) || 1;
+        el = document.getElementById('single-test-prefill-pods');
+        if (el) config.single_test_prefill_pods = parseInt(el.value) || 1;
+        el = document.getElementById('single-test-decode-pods');
+        if (el) config.single_test_decode_pods = parseInt(el.value) || 1;
+        config.single_test_tp = null;
+        config.single_test_replicas = null;
+    } else {
+        var el;
+        el = document.getElementById('single-test-tp');
+        if (el) config.single_test_tp = parseInt(el.value) || 1;
+        el = document.getElementById('single-test-replicas');
+        if (el) config.single_test_replicas = parseInt(el.value) || 1;
+        config.single_test_prefill_tp = null;
+        config.single_test_decode_tp = null;
+        config.single_test_prefill_pods = null;
+        config.single_test_decode_pods = null;
+    }
+}
+
 function updateSingleTestGpuSummary() {
+    syncSingleTestToConfig();
     var arch = config.single_test_architecture || 'aggregated';
     if (arch === 'pd') {
         var ptpEl = document.getElementById('single-test-prefill-tp');
