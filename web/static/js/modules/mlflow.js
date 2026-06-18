@@ -131,21 +131,56 @@ function exportAllMlflow() {
 
     if (selectedRuns.length === 0) { status.textContent = 'No runs selected'; return; }
 
-    btn.disabled = true;
     if (!document.getElementById('mlflow-spinner-style')) {
         var style = document.createElement('style');
         style.id = 'mlflow-spinner-style';
         style.textContent = '.mlflow-spinner{display:inline-block;width:14px;height:14px;border:2px solid rgba(255,255,255,0.3);border-top-color:white;border-radius:50%;animation:mlflow-spin 0.6s linear infinite;vertical-align:middle;margin-right:6px;}@keyframes mlflow-spin{to{transform:rotate(360deg)}}';
         document.head.appendChild(style);
     }
-    btn.innerHTML = '<span class="mlflow-spinner"></span> Exporting ' + selectedRuns.length + ' run(s)...';
-    status.textContent = '';
 
-    var completed = 0;
+    window._mlflowAbort = false;
+    var remaining = selectedRuns.length;
+    btn.style.display = 'none';
+
+    var stopBtn = document.getElementById('mlflow-stop-btn');
+    if (!stopBtn) {
+        stopBtn = document.createElement('button');
+        stopBtn.id = 'mlflow-stop-btn';
+        stopBtn.style.cssText = 'width:100%;padding:10px;background:#ef4444;color:white;border:none;border-radius:6px;cursor:pointer;font-weight:600;font-size:0.95em;';
+        btn.parentNode.insertBefore(stopBtn, btn.nextSibling);
+    }
+    stopBtn.style.display = 'block';
+    stopBtn.innerHTML = '<span class="mlflow-spinner"></span> Exporting ' + remaining + ' run(s)... Click to stop';
+    stopBtn.onclick = function() {
+        window._mlflowAbort = true;
+        stopBtn.textContent = 'Stopping...';
+        stopBtn.disabled = true;
+    };
+
     var totalExported = 0;
     var errors = [];
+    var queue = selectedRuns.slice();
 
-    selectedRuns.forEach(function(sr) {
+    function processNext() {
+        if (window._mlflowAbort || queue.length === 0) {
+            stopBtn.style.display = 'none';
+            btn.style.display = 'block';
+            btn.disabled = false;
+            btn.textContent = 'Export Selected to MLflow';
+            if (window._mlflowAbort) {
+                status.innerHTML = '<span style="color:#f59e0b;">Stopped. Exported ' + totalExported + ' tests from ' + (selectedRuns.length - remaining) + ' run(s)</span>';
+            } else if (errors.length === 0) {
+                status.innerHTML = '<span style="color:#16a34a;">Exported ' + totalExported + ' tests from ' + selectedRuns.length + ' run(s)</span>';
+            } else {
+                status.innerHTML = '<span style="color:#16a34a;">Exported ' + totalExported + ' tests</span><br><span style="color:#ef4444;">' + errors.length + ' error(s): ' + errors[0] + '</span>';
+            }
+            return;
+        }
+
+        var sr = queue.shift();
+        remaining--;
+        stopBtn.innerHTML = '<span class="mlflow-spinner"></span> Exporting ' + (remaining + 1) + ' run(s) remaining... Click to stop';
+
         fetch('/api/mlflow/export', {
             method: 'POST',
             headers: {'Content-Type': 'application/json'},
@@ -157,29 +192,16 @@ function exportAllMlflow() {
         })
         .then(function(r) { return r.json(); })
         .then(function(data) {
-            completed++;
             if (data.success) totalExported += data.total;
             else errors.push(data.error);
-            if (completed === selectedRuns.length) {
-                btn.disabled = false;
-                btn.textContent = 'Export Selected to MLflow';
-                if (errors.length === 0) {
-                    status.innerHTML = '<span style="color:#16a34a;">Exported ' + totalExported + ' tests from ' + selectedRuns.length + ' run(s)</span>';
-                } else {
-                    status.innerHTML = '<span style="color:#16a34a;">Exported ' + totalExported + ' tests</span><br><span style="color:#ef4444;">' + errors.length + ' error(s): ' + errors[0] + '</span>';
-                }
-            } else {
-                status.textContent = 'Exported ' + completed + '/' + selectedRuns.length + ' runs...';
-            }
+            status.textContent = totalExported + ' tests exported so far...';
+            processNext();
         })
         .catch(function(err) {
-            completed++;
             errors.push(String(err));
-            if (completed === selectedRuns.length) {
-                btn.disabled = false;
-                btn.textContent = 'Export Selected to MLflow';
-                status.innerHTML = '<span style="color:#ef4444;">Failed: ' + errors[0] + '</span>';
-            }
+            processNext();
         });
-    });
+    }
+
+    processNext();
 }
