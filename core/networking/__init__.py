@@ -253,8 +253,9 @@ def scan_available_networks(kubectl_runner, namespace: str = None) -> List[Dict[
 
     for net in networks:
         if net['rdma'] and net['available']:
-            net['available_nads'] = available_nads
-            if sriov_policies:
+            if net['id'] in ('nad', 'nmstate', 'sriov_multinic'):
+                net['available_nads'] = available_nads
+            if net['id'] == 'sriov_multinic' and sriov_policies:
                 net['sriov_policies'] = sriov_policies
 
     return networks
