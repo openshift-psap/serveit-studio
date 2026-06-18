@@ -9,6 +9,28 @@ from typing import List, Optional, Dict
 logger = logging.getLogger(__name__)
 
 
+def _register_workspace_header(workspace):
+    """Register a request header provider that injects X-Mlflow-Workspace into all SDK calls."""
+    from mlflow.tracking.request_header.abstract_request_header_provider import RequestHeaderProvider
+    from mlflow.tracking.request_header.registry import _request_header_provider_registry
+
+    for p in _request_header_provider_registry:
+        if getattr(p, '_serveit_workspace', False):
+            p._workspace = workspace
+            return
+
+    class _Provider(RequestHeaderProvider):
+        _serveit_workspace = True
+        def __init__(self):
+            self._workspace = workspace
+        def in_context(self):
+            return True
+        def request_headers(self):
+            return {'X-Mlflow-Workspace': self._workspace}
+
+    _request_header_provider_registry.append(_Provider())
+
+
 def _get_or_create_experiment(tracking_uri, name, workspace, username, password, insecure_tls):
     """Create or find an MLflow experiment in the target workspace via REST API."""
     import requests
@@ -75,8 +97,8 @@ def export_to_mlflow(
         os.environ['MLFLOW_TRACKING_INSECURE_TLS'] = 'true'
     else:
         os.environ.pop('MLFLOW_TRACKING_INSECURE_TLS', None)
-    os.environ['MLFLOW_TRACKING_HEADERS'] = json.dumps({'X-Mlflow-Workspace': workspace})
 
+    _register_workspace_header(workspace)
     mlflow.set_tracking_uri(tracking_uri)
 
     experiment_id = _get_or_create_experiment(
