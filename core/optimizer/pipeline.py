@@ -1223,10 +1223,31 @@ class RecipeOptimizer(
         pods_from_tp = max_gpus_per_node // tp if tp > 0 else 1
         pods_per_node = max(pods_from_deployment, pods_from_tp, 1)
 
-        # Use cached free resources if already queried this run
+        # Use cached free resources — consistent across all tests in a run.
+        # On resume, load from DB; on first run, query cluster and persist.
         if not hasattr(self, '_cached_free_mem_gb') or self._cached_free_mem_gb is None:
             self._cached_free_mem_gb = None
             self._cached_free_cpus = None
+
+            # Try loading from DB first (resume case)
+            if self.db_manager and self.run_id:
+                try:
+                    with self.db_manager.get_connection() as conn:
+                        row = conn.execute(
+                            'SELECT config_json FROM optimization_runs WHERE id = ?',
+                            (self.run_id,)
+                        ).fetchone()
+                        if row and row['config_json']:
+                            import json as _json2
+                            saved = _json2.loads(row['config_json'])
+                            if saved.get('_resource_pool_mem_gb') and saved.get('_resource_pool_cpus'):
+                                self._cached_free_mem_gb = saved['_resource_pool_mem_gb']
+                                self._cached_free_cpus = saved['_resource_pool_cpus']
+                                logger.info(
+                                    f"Loaded resource pool from DB: {self._cached_free_mem_gb:.0f}Gi memory, "
+                                    f"{self._cached_free_cpus:.0f} CPUs (consistent with previous tests)")
+                except Exception as e:
+                    logger.debug(f"Could not load resource pool from DB: {e}")
             try:
                 if hasattr(self, 'scanner') and self.scanner and hasattr(self.scanner, 'kubectl'):
                     import json as _json
@@ -1306,6 +1327,27 @@ class RecipeOptimizer(
                                 f"Node free resources (min): {self._cached_free_mem_gb:.0f}Gi memory "
                                 f"(bottleneck: {min_mem_node}), {self._cached_free_cpus:.0f} CPUs "
                                 f"(bottleneck: {min_cpu_node})")
+
+                            # Persist to DB so resume uses the same values
+                            if self.db_manager and self.run_id:
+                                try:
+                                    with self.db_manager.get_connection() as conn:
+                                        row = conn.execute(
+                                            'SELECT config_json FROM optimization_runs WHERE id = ?',
+                                            (self.run_id,)
+                                        ).fetchone()
+                                        if row and row['config_json']:
+                                            import json as _json3
+                                            cfg = _json3.loads(row['config_json'])
+                                            cfg['_resource_pool_mem_gb'] = self._cached_free_mem_gb
+                                            cfg['_resource_pool_cpus'] = self._cached_free_cpus
+                                            conn.execute(
+                                                'UPDATE optimization_runs SET config_json = ? WHERE id = ?',
+                                                (_json3.dumps(cfg), self.run_id)
+                                            )
+                                            logger.info("Saved resource pool to DB for resume consistency")
+                                except Exception as e:
+                                    logger.debug(f"Could not save resource pool to DB: {e}")
             except Exception as e:
                 logger.debug(f"Could not query node resources: {e}")
 
