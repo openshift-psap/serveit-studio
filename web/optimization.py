@@ -761,7 +761,7 @@ data:
         log_to_ui(f"   Optimization goal: {optimization_goal}", 'info')
 
         # Use Recipe-based optimization for all goals
-        if optimization_goal in ('ttft', 'throughput', 'balanced', 'aggregated_only', 'pd_only', 'ep_only'):
+        if optimization_goal in ('ttft', 'throughput', 'balanced', 'aggregated_only', 'pd_only', 'ep_only', 'single_test'):
             goal_descriptions = {
                 'ttft': {
                     'label': 'Response Time Priority (PD vs Aggregated)',
