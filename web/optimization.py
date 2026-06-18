@@ -681,6 +681,10 @@ def run_optimization_background(data):
         single_test_decode_tp = data.get('single_test_decode_tp')
         single_test_prefill_pods = data.get('single_test_prefill_pods')
         single_test_decode_pods = data.get('single_test_decode_pods')
+        if optimization_goal == 'single_test':
+            log_to_ui(f"Single test config: arch={single_test_architecture}, tp={single_test_tp}, "
+                      f"prefill_tp={single_test_prefill_tp}, decode_tp={single_test_decode_tp}, "
+                      f"prefill_pods={single_test_prefill_pods}, decode_pods={single_test_decode_pods}", 'info')
 
         # Create/update HuggingFace token secret if provided
         if hf_token and hf_token.strip():
