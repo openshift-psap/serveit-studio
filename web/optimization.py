@@ -674,13 +674,13 @@ def run_optimization_background(data):
         storage_class = _get('storage_class')
         vllm_image = _get('image') or 'ghcr.io/llm-d/llm-d-cuda:v0.6.0'
         scheduler_image = _get('scheduler_image') or 'ghcr.io/llm-d/llm-d-inference-scheduler:v0.7.1'
-        single_test_architecture = data.get('single_test_architecture')
-        single_test_tp = data.get('single_test_tp')
-        single_test_replicas = data.get('single_test_replicas')
-        single_test_prefill_tp = data.get('single_test_prefill_tp')
-        single_test_decode_tp = data.get('single_test_decode_tp')
-        single_test_prefill_pods = data.get('single_test_prefill_pods')
-        single_test_decode_pods = data.get('single_test_decode_pods')
+        single_test_architecture = _get('single_test_architecture')
+        single_test_tp = _get('single_test_tp')
+        single_test_replicas = _get('single_test_replicas')
+        single_test_prefill_tp = _get('single_test_prefill_tp')
+        single_test_decode_tp = _get('single_test_decode_tp')
+        single_test_prefill_pods = _get('single_test_prefill_pods')
+        single_test_decode_pods = _get('single_test_decode_pods')
         if optimization_goal == 'single_test':
             log_to_ui(f"Single test config: arch={single_test_architecture}, tp={single_test_tp}, "
                       f"prefill_tp={single_test_prefill_tp}, decode_tp={single_test_decode_tp}, "
