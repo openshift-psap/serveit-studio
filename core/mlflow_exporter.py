@@ -45,6 +45,7 @@ def export_to_mlflow(
         os.environ['MLFLOW_TRACKING_USERNAME'] = username
     if password:
         os.environ['MLFLOW_TRACKING_PASSWORD'] = password
+    os.environ['MLFLOW_TRACKING_INSECURE_TLS'] = 'true'
 
     mlflow.set_tracking_uri(tracking_uri)
     mlflow.set_experiment(experiment_name)
