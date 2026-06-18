@@ -186,14 +186,27 @@ def export_to_mlflow(
             extra_params['speculative_method'] = run_dict['speculative_method']
         if extra_params:
             mlflow.log_params(extra_params)
+        llmd_image = run_config.get('image', '')
+        llmd_version = llmd_image.split(':')[-1] if ':' in llmd_image else ''
+        scheduler_image = run_config.get('scheduler_image', '')
+        scheduler_version = scheduler_image.split(':')[-1] if ':' in scheduler_image else ''
+
         tags = {
             'mlflow.source.name': 'serveit-studio',
             'mlflow.source.type': 'LOCAL',
+            'serveit.model': model,
             'serveit.model_short': model_short,
             'serveit.status': run_dict['status'],
             'serveit.goal': goal,
             'serveit.run_id': str(run_id),
+            'serveit.total_gpus': str(run_dict['max_gpus']),
         }
+        if llmd_version:
+            tags['serveit.llmd_version'] = llmd_version
+        if scheduler_version:
+            tags['serveit.scheduler_version'] = scheduler_version
+        if run_config.get('gpu_type'):
+            tags['serveit.gpu_model'] = run_config['gpu_type']
         if notes:
             tags['serveit.notes'] = notes[:250]
         if run_config.get('cluster_name'):
@@ -217,11 +230,22 @@ def export_to_mlflow(
                 child_name = f"{test_id} ({arch} TP{tp})" if arch else f"{test_id} (TP{tp})"
 
                 with mlflow.start_run(run_name=child_name, nested=True) as child_run:
-                    mlflow.set_tags({
+                    child_tags = {
                         'mlflow.source.name': 'serveit-studio',
+                        'serveit.model_short': model_short,
                         'serveit.architecture': arch,
                         'serveit.tp': str(tp),
-                    })
+                        'serveit.total_gpus': str(run_dict['max_gpus']),
+                        'serveit.prefill_pods': str(test_dict['prefill_pods']),
+                        'serveit.decode_pods': str(test_dict['decode_pods']),
+                    }
+                    if test_dict.get('decode_tp'):
+                        child_tags['serveit.decode_tp'] = str(test_dict['decode_tp'])
+                    if llmd_version:
+                        child_tags['serveit.llmd_version'] = llmd_version
+                    if run_config.get('gpu_type'):
+                        child_tags['serveit.gpu_model'] = run_config['gpu_type']
+                    mlflow.set_tags(child_tags)
 
                     # Log params
                     params = {
