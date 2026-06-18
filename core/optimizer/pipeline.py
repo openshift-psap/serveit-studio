@@ -1431,6 +1431,12 @@ class RecipeOptimizer(
         self.log("", 'info')
 
         try:
+            # Single test: skip TP calibration, go straight to strategy
+            if self.config.objective == 'single_test':
+                strategy = self._get_strategy()
+                strategy.execute()
+                return self._build_results()
+
             # Generate prefix cache dataset if configured
             if self.config.prefix_cache_hit_pct > 0 and self.config.workload_mode == 'synthetic':
                 self._generate_prefix_cache_dataset()
