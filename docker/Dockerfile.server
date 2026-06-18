@@ -37,7 +37,8 @@ RUN python3.11 -m pip install --no-cache-dir \
     plotly \
     pandas \
     werkzeug \
-    transformers
+    transformers \
+    mlflow
 
 # kubectl + oc
 RUN KUBECTL_VERSION="1.30.2" && \
