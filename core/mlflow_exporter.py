@@ -66,6 +66,7 @@ def export_to_mlflow(
 
     import sqlite3
 
+    workspace = username or 'default'
     if username:
         os.environ['MLFLOW_TRACKING_USERNAME'] = username
     if password:
@@ -74,8 +75,7 @@ def export_to_mlflow(
         os.environ['MLFLOW_TRACKING_INSECURE_TLS'] = 'true'
     else:
         os.environ.pop('MLFLOW_TRACKING_INSECURE_TLS', None)
-
-    workspace = username or 'default'
+    os.environ['MLFLOW_TRACKING_HEADERS'] = json.dumps({'X-Mlflow-Workspace': workspace})
 
     mlflow.set_tracking_uri(tracking_uri)
 
