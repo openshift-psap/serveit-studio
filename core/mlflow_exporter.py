@@ -44,7 +44,14 @@ def _get_or_create_experiment(tracking_uri, name, workspace, username, password,
         headers=headers, auth=auth, verify=verify,
     )
     if resp.ok:
-        return resp.json()['experiment']['experiment_id']
+        exp = resp.json()['experiment']
+        if exp.get('lifecycle_stage') == 'deleted':
+            requests.post(
+                f'{tracking_uri}/api/2.0/mlflow/experiments/restore',
+                json={'experiment_id': exp['experiment_id']},
+                headers=headers, auth=auth, verify=verify,
+            )
+        return exp['experiment_id']
 
     resp = requests.post(
         f'{tracking_uri}/api/2.0/mlflow/experiments/create',
