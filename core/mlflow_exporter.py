@@ -134,11 +134,13 @@ def export_to_mlflow(
     exported = []
     errors = []
 
-    run_name = run_row['run_name']
     model = run_row['model']
+    model_short = model.split('/')[-1] if model else 'unknown'
     run_config = json.loads(run_row['config_json']) if run_row['config_json'] else {}
+    created = run_row['created_at'][:10] if run_row['created_at'] else ''
+    mlflow_run_name = f"{model_short} — ISL{run_row['isl']}/OSL{run_row['osl']} — {run_row['max_gpus']}GPU — {created}"
 
-    with mlflow.start_run(run_name=run_name, description=f"ServeIt Studio optimization: {model}") as parent_run:
+    with mlflow.start_run(run_name=mlflow_run_name, description=f"ServeIt Studio optimization: {model}") as parent_run:
         # Log run-level params
         mlflow.log_params({
             'model': model,
