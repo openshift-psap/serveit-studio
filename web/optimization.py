@@ -813,6 +813,12 @@ data:
                         "Step 7: Test EP configurations at full workload",
                     ]
                 },
+                'single_test': {
+                    'label': 'Single Test (user-defined configuration)',
+                    'steps': [
+                        "Deploy and benchmark a single user-specified configuration",
+                    ]
+                },
             }
             goal_info = goal_descriptions[optimization_goal]
             log_to_ui("", 'info')
