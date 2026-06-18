@@ -670,7 +670,7 @@ def run_optimization_background(data):
         sriov_same_subnet = _get('sriov_same_subnet', False)
         selected_shared_device = _get('selected_shared_device')
         selected_dra_classes = _get('selected_dra_classes') or []
-        per_pod_storage = _get('per_pod_storage', False)
+        per_pod_storage = _get('per_pod_storage', False) in (True, 'true', 'True', 1, '1')
         storage_class = _get('storage_class')
         vllm_image = _get('image') or 'ghcr.io/llm-d/llm-d-cuda:v0.6.0'
         scheduler_image = _get('scheduler_image') or 'ghcr.io/llm-d/llm-d-inference-scheduler:v0.7.1'
