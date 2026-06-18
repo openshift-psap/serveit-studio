@@ -552,10 +552,9 @@ def _check_lws_vct(scanner):
     """Check if LWS CRD supports volumeClaimTemplates (v0.8.0+)."""
     try:
         r = scanner.kubectl.run(
-            ['get', 'crd', 'leaderworkersets.leaderworkerset.x-k8s.io',
-             '-o', 'jsonpath={.spec.versions[0].schema.openAPIV3Schema.properties.spec.properties.leaderWorkerTemplate.properties.volumeClaimTemplates.type}'],
+            ['explain', 'leaderworkersets.spec.leaderWorkerTemplate.volumeClaimTemplates'],
             check=False)
-        if r.returncode == 0 and r.stdout.strip():
+        if r.returncode == 0 and 'volumeClaimTemplates' in r.stdout:
             return True
     except Exception:
         pass
