@@ -195,6 +195,14 @@ class DeploymentManager:
 
                 while time.time() - start_time < timeout:
                     status = self._get_lws_status(lws_name)
+                    if not status['deployed']:
+                        result = self.kubectl.run(
+                            ['get', 'lws', '-l', f'test-id={config.test_id},role={component}',
+                             '-n', self.namespace, '-o', 'jsonpath={.items[0].metadata.name}'],
+                            check=False,
+                        )
+                        if result.returncode == 0 and result.stdout.strip():
+                            status = self._get_lws_status(result.stdout.strip())
 
                     if status['deployed'] and status['pods_running'] >= status['pods_expected']:
                         if log_callback:
