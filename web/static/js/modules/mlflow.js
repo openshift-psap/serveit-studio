@@ -147,6 +147,7 @@ function exportAllMlflow() {
 
     window._mlflowAbort = false;
     window._mlflowExporting = true;
+    window._mlflowAbortController = new AbortController();
     var remaining = selectedRuns.length;
     btn.style.display = 'none';
 
@@ -158,11 +159,29 @@ function exportAllMlflow() {
         btn.parentNode.insertBefore(stopBtn, btn.nextSibling);
     }
     stopBtn.style.display = 'block';
+    stopBtn.disabled = false;
     stopBtn.innerHTML = '<span class="mlflow-spinner"></span> Exporting ' + remaining + ' run(s)... Click to stop';
+
+    function finishExport() {
+        window._mlflowExporting = false;
+        stopBtn.style.display = 'none';
+        btn.style.display = 'block';
+        btn.disabled = false;
+        btn.textContent = 'Export Selected to MLflow';
+        if (window._mlflowAbort) {
+            var done = selectedRuns.length - queue.length - 1;
+            status.innerHTML = '<span style="color:#f59e0b;">Stopped. Exported ' + totalExported + ' tests from ' + Math.max(0, done) + ' run(s)</span>';
+        } else if (errors.length === 0) {
+            status.innerHTML = '<span style="color:#16a34a;">Exported ' + totalExported + ' tests from ' + selectedRuns.length + ' run(s)</span>';
+        } else {
+            status.innerHTML = '<span style="color:#16a34a;">Exported ' + totalExported + ' tests</span><br><span style="color:#ef4444;">' + errors.length + ' error(s): ' + errors[0] + '</span>';
+        }
+    }
+
     stopBtn.onclick = function() {
         window._mlflowAbort = true;
-        stopBtn.textContent = 'Stopping...';
-        stopBtn.disabled = true;
+        window._mlflowAbortController.abort();
+        finishExport();
     };
 
     var totalExported = 0;
@@ -171,18 +190,7 @@ function exportAllMlflow() {
 
     function processNext() {
         if (window._mlflowAbort || queue.length === 0) {
-            window._mlflowExporting = false;
-            stopBtn.style.display = 'none';
-            btn.style.display = 'block';
-            btn.disabled = false;
-            btn.textContent = 'Export Selected to MLflow';
-            if (window._mlflowAbort) {
-                status.innerHTML = '<span style="color:#f59e0b;">Stopped. Exported ' + totalExported + ' tests from ' + (selectedRuns.length - remaining) + ' run(s)</span>';
-            } else if (errors.length === 0) {
-                status.innerHTML = '<span style="color:#16a34a;">Exported ' + totalExported + ' tests from ' + selectedRuns.length + ' run(s)</span>';
-            } else {
-                status.innerHTML = '<span style="color:#16a34a;">Exported ' + totalExported + ' tests</span><br><span style="color:#ef4444;">' + errors.length + ' error(s): ' + errors[0] + '</span>';
-            }
+            finishExport();
             return;
         }
 
@@ -197,7 +205,8 @@ function exportAllMlflow() {
                 run_id: sr.run_id,
                 test_ids: sr.test_ids,
                 experiment_name: document.getElementById('mlflow-experiment').value || null,
-            })
+            }),
+            signal: window._mlflowAbortController.signal,
         })
         .then(function(r) { return r.json(); })
         .then(function(data) {
@@ -207,6 +216,7 @@ function exportAllMlflow() {
             processNext();
         })
         .catch(function(err) {
+            if (err.name === 'AbortError') return;
             errors.push(String(err));
             processNext();
         });
