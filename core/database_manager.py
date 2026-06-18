@@ -272,18 +272,25 @@ class DatabaseManager:
             return None
 
     def save_mlflow_config(self, tracking_uri: str, username: str = None,
-                           password: str = None, experiment_name: str = None):
+                           password: str = None, experiment_name: str = None,
+                           insecure_tls: bool = True):
         with self.get_connection() as conn:
+            # Add insecure_tls column if missing
+            try:
+                conn.execute('ALTER TABLE mlflow_config ADD COLUMN insecure_tls INTEGER DEFAULT 1')
+            except Exception:
+                pass
             conn.execute('''
-                INSERT INTO mlflow_config (id, tracking_uri, username, password, experiment_name, updated_at)
-                VALUES (1, ?, ?, ?, ?, ?)
+                INSERT INTO mlflow_config (id, tracking_uri, username, password, experiment_name, insecure_tls, updated_at)
+                VALUES (1, ?, ?, ?, ?, ?, ?)
                 ON CONFLICT(id) DO UPDATE SET
                     tracking_uri=excluded.tracking_uri,
                     username=excluded.username,
                     password=excluded.password,
                     experiment_name=excluded.experiment_name,
+                    insecure_tls=excluded.insecure_tls,
                     updated_at=excluded.updated_at
-            ''', (tracking_uri, username, password, experiment_name, datetime.now().isoformat()))
+            ''', (tracking_uri, username, password, experiment_name, 1 if insecure_tls else 0, datetime.now().isoformat()))
 
     def save_pod_errors(self, run_id: int, test_id: str, errors_json: str,
                         architecture: Optional[str] = None):

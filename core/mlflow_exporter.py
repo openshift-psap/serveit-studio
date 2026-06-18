@@ -18,6 +18,7 @@ def export_to_mlflow(
     run_id: int,
     test_ids: Optional[List[str]] = None,
     artifact_dir: str = '/mnt/storage/test-artifacts',
+    insecure_tls: bool = True,
 ) -> Dict:
     """Export test results to MLflow.
 
@@ -45,7 +46,10 @@ def export_to_mlflow(
         os.environ['MLFLOW_TRACKING_USERNAME'] = username
     if password:
         os.environ['MLFLOW_TRACKING_PASSWORD'] = password
-    os.environ['MLFLOW_TRACKING_INSECURE_TLS'] = 'true'
+    if insecure_tls:
+        os.environ['MLFLOW_TRACKING_INSECURE_TLS'] = 'true'
+    else:
+        os.environ.pop('MLFLOW_TRACKING_INSECURE_TLS', None)
 
     mlflow.set_tracking_uri(tracking_uri)
     mlflow.set_experiment(experiment_name)
@@ -105,13 +109,14 @@ def export_to_mlflow(
                 with mlflow.start_run(run_name=test_id, nested=True) as child_run:
                     # Parse test config
                     tc = json.loads(test['test_config_json']) if test['test_config_json'] else {}
+                    test_dict = dict(test)
 
                     # Log params
                     params = {
-                        'architecture': test.get('architecture') or tc.get('architecture', ''),
-                        'tensor_parallelism': test['tensor_parallelism'],
-                        'prefill_pods': test['prefill_pods'],
-                        'decode_pods': test['decode_pods'],
+                        'architecture': test_dict.get('architecture') or tc.get('architecture', ''),
+                        'tensor_parallelism': test_dict['tensor_parallelism'],
+                        'prefill_pods': test_dict['prefill_pods'],
+                        'decode_pods': test_dict['decode_pods'],
                         'gpu_memory_utilization': tc.get('gpu_memory_utilization', ''),
                         'max_num_seqs': tc.get('max_num_seqs', ''),
                         'block_size': tc.get('block_size', ''),
@@ -119,8 +124,8 @@ def export_to_mlflow(
                         'network_type': tc.get('network_type', ''),
                         'enable_prefix_caching': tc.get('enable_prefix_caching', ''),
                     }
-                    if test.get('decode_tp'):
-                        params['decode_tp'] = test['decode_tp']
+                    if test_dict.get('decode_tp'):
+                        params['decode_tp'] = test_dict['decode_tp']
                     mlflow.log_params({k: v for k, v in params.items() if v != '' and v is not None})
 
                     # Log metrics
@@ -129,14 +134,14 @@ def export_to_mlflow(
                                   'itl_p50', 'itl_p90', 'itl_p95', 'itl_p99',
                                   'throughput_p50', 'throughput_p90', 'throughput_p95', 'throughput_p99',
                                   'gpu_utilization', 'kv_cache_usage']:
-                        val = test[field]
+                        val = test_dict.get(field)
                         if val is not None:
                             metrics[field] = float(val)
 
                     # Add metrics from metrics_json if available
-                    if test['metrics_json']:
+                    if test_dict.get('metrics_json'):
                         try:
-                            mj = json.loads(test['metrics_json'])
+                            mj = json.loads(test_dict['metrics_json'])
                             for k, v in mj.items():
                                 if isinstance(v, (int, float)) and k not in metrics:
                                     metrics[k] = float(v)

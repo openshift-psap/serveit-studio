@@ -74,7 +74,12 @@
                             <label style="font-size:0.8em;font-weight:600;color:#475569;">Experiment Name</label>
                             <input type="text" id="mlflow-experiment" placeholder="serveit-studio" style="width:100%;padding:7px 10px;border:1px solid #cbd5e1;border-radius:5px;margin-top:3px;font-size:0.85em;box-sizing:border-box;">
                         </div>
-                        <button onclick="saveMlflowConfig()" style="align-self:flex-end;padding:5px 14px;background:#0ea5e9;color:white;border:none;border-radius:5px;cursor:pointer;font-weight:600;font-size:0.85em;">Save Config</button>
+                        <div style="display:flex;align-items:center;justify-content:space-between;">
+                            <label style="font-size:0.8em;cursor:pointer;color:#475569;display:flex;align-items:center;gap:4px;">
+                                <input type="checkbox" id="mlflow-insecure-tls" checked style="width:14px;height:14px;"> Skip TLS verification
+                            </label>
+                            <button onclick="saveMlflowConfig()" style="padding:5px 14px;background:#0ea5e9;color:white;border:none;border-radius:5px;cursor:pointer;font-weight:600;font-size:0.85em;">Save Config</button>
+                        </div>
                     </div>
                     <div style="margin-top:16px;">
                         <button id="mlflow-export-btn" onclick="exportAllMlflow()" style="width:100%;padding:10px;background:#16a34a;color:white;border:none;border-radius:6px;cursor:pointer;font-weight:600;font-size:0.95em;">Export Selected to MLflow</button>

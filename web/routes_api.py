@@ -444,8 +444,10 @@ def get_mlflow_config():
         db = DatabaseManager(db_path=DB_PATH)
         cfg = db.get_mlflow_config()
         if cfg:
-            cfg['password'] = '***' if cfg.get('password') else ''
-            return jsonify({'success': True, 'config': dict(cfg)})
+            cfg_dict = dict(cfg)
+            cfg_dict['password'] = '***' if cfg_dict.get('password') else ''
+            cfg_dict['insecure_tls'] = bool(cfg_dict.get('insecure_tls', 1))
+            return jsonify({'success': True, 'config': cfg_dict})
         return jsonify({'success': True, 'config': None})
     except Exception as e:
         return jsonify({'success': False, 'error': str(e)}), 500
@@ -462,6 +464,7 @@ def save_mlflow_config():
             username=data.get('username'),
             password=data.get('password'),
             experiment_name=data.get('experiment_name'),
+            insecure_tls=data.get('insecure_tls', True),
         )
         return jsonify({'success': True})
     except Exception as e:
@@ -505,14 +508,16 @@ def export_to_mlflow():
             return jsonify({'success': False, 'error': 'MLflow not configured'}), 400
 
         from core.mlflow_exporter import export_to_mlflow as do_export
+        cfg_dict = dict(cfg)
         result = do_export(
             db_path=DB_PATH,
-            tracking_uri=cfg['tracking_uri'],
-            username=cfg.get('username'),
-            password=cfg.get('password'),
-            experiment_name=data.get('experiment_name') or cfg.get('experiment_name') or 'serveit-studio',
+            tracking_uri=cfg_dict['tracking_uri'],
+            username=cfg_dict.get('username'),
+            password=cfg_dict.get('password'),
+            experiment_name=data.get('experiment_name') or cfg_dict.get('experiment_name') or 'serveit-studio',
             run_id=data['run_id'],
             test_ids=data.get('test_ids'),
+            insecure_tls=bool(cfg_dict.get('insecure_tls', 1)),
         )
         return jsonify(result)
     except Exception as e:
