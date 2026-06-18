@@ -476,7 +476,8 @@ def get_mlflow_runs():
     try:
         with get_db() as conn:
             runs = conn.execute(
-                "SELECT id, run_name, model, status, created_at FROM optimization_runs ORDER BY id DESC"
+                "SELECT id, run_name, model, status, created_at, notes, isl, osl, num_users, max_gpus, goal "
+                "FROM optimization_runs ORDER BY id DESC"
             ).fetchall()
             return jsonify({'success': True, 'runs': [dict(r) for r in runs]})
     except Exception as e:

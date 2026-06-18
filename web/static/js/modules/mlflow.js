@@ -57,13 +57,20 @@ function loadAllRuns() {
                 var runDiv = document.createElement('div');
                 runDiv.style.cssText = 'margin-bottom:8px;border:1px solid #e2e8f0;border-radius:8px;overflow:hidden;';
                 var modelShort = run.model ? run.model.split('/').pop() : '';
+                var date = run.created_at ? run.created_at.substring(0, 10) : '';
+                var title = '#' + run.id + ' ' + modelShort;
+                if (run.notes) title += ' — ' + run.notes;
+                var subtitle = 'ISL' + (run.isl||'?') + '/OSL' + (run.osl||'?') + ' · ' + (run.num_users||'?') + ' users · ' + (run.max_gpus||'?') + ' GPUs · ' + date;
+                var statusBg = run.status === 'completed' ? '#dcfce7;color:#166534' : run.status === 'failed' ? '#fee2e2;color:#991b1b' : '#fef3c7;color:#92400e';
                 var header = document.createElement('div');
                 header.style.cssText = 'display:flex;align-items:center;gap:8px;padding:10px 12px;background:#f0f9ff;cursor:pointer;';
                 header.innerHTML =
-                    '<input type="checkbox" class="mlflow-run-cb" data-run-id="' + run.id + '" checked style="width:16px;height:16px;" onclick="event.stopPropagation();" onchange="toggleRunTests(' + run.id + ',this.checked)">' +
-                    '<span style="font-weight:700;color:#0c4a6e;flex:1;">' + run.run_name + '</span>' +
-                    '<span style="font-size:0.8em;color:#475569;">' + modelShort + '</span>' +
-                    '<span style="font-size:0.75em;padding:2px 8px;border-radius:10px;background:' + (run.status === 'completed' ? '#dcfce7;color:#166534' : '#fef3c7;color:#92400e') + ';">' + run.status + '</span>' +
+                    '<input type="checkbox" class="mlflow-run-cb" data-run-id="' + run.id + '" ' + (run.status === 'completed' ? 'checked' : '') + ' style="width:16px;height:16px;" onclick="event.stopPropagation();" onchange="toggleRunTests(' + run.id + ',this.checked)">' +
+                    '<div style="flex:1;min-width:0;">' +
+                        '<div style="font-weight:700;color:#0c4a6e;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">' + title + '</div>' +
+                        '<div style="font-size:0.78em;color:#64748b;margin-top:2px;">' + subtitle + '</div>' +
+                    '</div>' +
+                    '<span style="font-size:0.75em;padding:2px 8px;border-radius:10px;background:' + statusBg + ';white-space:nowrap;">' + run.status + '</span>' +
                     '<span class="mlflow-expand" style="font-size:0.8em;color:#94a3b8;">&#9660;</span>';
                 header.onclick = function() { toggleRunExpand(run.id); };
                 runDiv.appendChild(header);
