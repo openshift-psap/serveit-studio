@@ -203,13 +203,13 @@ spec:
       spec:
         containers: []
 {% if per_pod_storage %}
-  volumeClaimTemplates:
-    - metadata:
-        name: hf-cache
-      spec:
-        accessModes: ["ReadWriteOnce"]
-        storageClassName: {{ storage_class }}
-        resources:
-          requests:
-            storage: {{ pvc_size | default('50Gi') }}
+    volumeClaimTemplates:
+      - metadata:
+          name: hf-cache
+        spec:
+          accessModes: ["ReadWriteOnce"]
+          storageClassName: {{ storage_class }}
+          resources:
+            requests:
+              storage: {{ pvc_size | default('50Gi') }}
 {% endif %}

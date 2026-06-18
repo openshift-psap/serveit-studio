@@ -549,11 +549,11 @@ def handle_cleanup_deployment(data):
 
 
 def _check_lws_vct(scanner):
-    """Check if LWS CRD supports volumeClaimTemplates at spec level (v0.8.0+)."""
+    """Check if LWS CRD supports volumeClaimTemplates (v0.8.0+)."""
     try:
         r = scanner.kubectl.run(
             ['get', 'crd', 'leaderworkersets.leaderworkerset.x-k8s.io',
-             '-o', 'jsonpath={.spec.versions[0].schema.openAPIV3Schema.properties.spec.properties.volumeClaimTemplates.type}'],
+             '-o', 'jsonpath={.spec.versions[0].schema.openAPIV3Schema.properties.spec.properties.leaderWorkerTemplate.properties.volumeClaimTemplates.type}'],
             check=False)
         if r.returncode == 0 and r.stdout.strip():
             return True
