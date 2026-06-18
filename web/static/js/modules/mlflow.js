@@ -11,24 +11,7 @@ function openMlflowDialog() {
                 document.getElementById('mlflow-experiment').value = data.config.experiment_name || '';
             }
         });
-    fetch('/api/mlflow/runs')
-        .then(function(r) { return r.json(); })
-        .then(function(data) {
-            if (data.success) {
-                var sel = document.getElementById('mlflow-run-select');
-                sel.innerHTML = '<option value="">-- Select a run --</option>';
-                data.runs.forEach(function(run) {
-                    var opt = document.createElement('option');
-                    opt.value = run.id;
-                    opt.textContent = run.run_name + ' (' + run.model.split('/').pop() + ') - ' + run.status;
-                    sel.appendChild(opt);
-                });
-                if (data.runs.length === 1) {
-                    sel.value = data.runs[0].id;
-                    loadMlflowTests(data.runs[0].id);
-                }
-            }
-        });
+    loadAllRuns();
 }
 
 function closeMlflowDialog() {
@@ -52,94 +35,151 @@ function saveMlflowConfig() {
         });
 }
 
-function loadMlflowTests(runId) {
-    var list = document.getElementById('mlflow-tests-list');
-    var btn = document.getElementById('mlflow-export-btn');
-    if (!runId) {
-        list.innerHTML = '<div style="color:#94a3b8;font-size:0.85em;padding:20px;text-align:center;">Select a run to see tests</div>';
-        btn.disabled = true;
-        return;
-    }
+function loadAllRuns() {
+    var list = document.getElementById('mlflow-runs-list');
     list.innerHTML = '<div style="color:#94a3b8;font-size:0.85em;padding:20px;text-align:center;">Loading...</div>';
-    fetch('/api/mlflow/tests/' + runId)
+    fetch('/api/mlflow/runs')
         .then(function(r) { return r.json(); })
         .then(function(data) {
-            if (data.success) {
-                list.innerHTML = '';
-                if (data.tests.length === 0) {
-                    list.innerHTML = '<div style="color:#94a3b8;font-size:0.85em;padding:20px;text-align:center;">No tests in this run</div>';
-                    btn.disabled = true;
-                    return;
-                }
-                data.tests.forEach(function(t) {
-                    var completed = t.status === 'completed' || t.status === 'passed';
-                    var div = document.createElement('div');
-                    div.style.cssText = 'display:flex;align-items:center;gap:8px;padding:6px 10px;margin-bottom:2px;border-radius:4px;font-size:0.83em;' + (completed ? 'background:white;' : 'background:#f1f5f9;opacity:0.5;');
-                    div.innerHTML =
-                        '<input type="checkbox" class="mlflow-test-cb" value="' + t.config_name + '" ' + (completed ? 'checked' : 'disabled') + ' style="width:15px;height:15px;">' +
-                        '<span style="font-weight:600;min-width:180px;">' + t.config_name + '</span>' +
-                        '<span style="color:#64748b;min-width:60px;">' + (t.architecture || '') + '</span>' +
-                        '<span style="color:#0ea5e9;min-width:50px;">TP' + t.tensor_parallelism + '</span>' +
-                        (t.ttft_p90 ? '<span style="color:#8b5cf6;min-width:90px;">TTFT ' + Math.round(t.ttft_p90) + 'ms</span>' : '<span style="min-width:90px;"></span>') +
-                        (t.throughput_p90 ? '<span style="color:#f59e0b;">' + t.throughput_p90.toFixed(1) + ' req/s</span>' : '') +
-                        '<span style="margin-left:auto;font-size:0.9em;color:' + (completed ? '#16a34a' : '#ef4444') + ';">' + t.status + '</span>';
-                    list.appendChild(div);
-                });
-                btn.disabled = false;
-                document.getElementById('mlflow-select-all').checked = true;
+            if (!data.success || data.runs.length === 0) {
+                list.innerHTML = '<div style="color:#94a3b8;font-size:0.85em;padding:20px;text-align:center;">No runs found</div>';
+                return;
             }
+            list.innerHTML = '';
+            data.runs.forEach(function(run) {
+                var runDiv = document.createElement('div');
+                runDiv.style.cssText = 'margin-bottom:8px;border:1px solid #e2e8f0;border-radius:8px;overflow:hidden;';
+                var modelShort = run.model ? run.model.split('/').pop() : '';
+                var header = document.createElement('div');
+                header.style.cssText = 'display:flex;align-items:center;gap:8px;padding:10px 12px;background:#f0f9ff;cursor:pointer;';
+                header.innerHTML =
+                    '<input type="checkbox" class="mlflow-run-cb" data-run-id="' + run.id + '" checked style="width:16px;height:16px;" onclick="event.stopPropagation();" onchange="toggleRunTests(' + run.id + ',this.checked)">' +
+                    '<span style="font-weight:700;color:#0c4a6e;flex:1;">' + run.run_name + '</span>' +
+                    '<span style="font-size:0.8em;color:#475569;">' + modelShort + '</span>' +
+                    '<span style="font-size:0.75em;padding:2px 8px;border-radius:10px;background:' + (run.status === 'completed' ? '#dcfce7;color:#166534' : '#fef3c7;color:#92400e') + ';">' + run.status + '</span>' +
+                    '<span class="mlflow-expand" style="font-size:0.8em;color:#94a3b8;">&#9660;</span>';
+                header.onclick = function() { toggleRunExpand(run.id); };
+                runDiv.appendChild(header);
+
+                var testsDiv = document.createElement('div');
+                testsDiv.id = 'mlflow-run-tests-' + run.id;
+                testsDiv.style.cssText = 'display:none;padding:4px 8px 8px;background:white;';
+                testsDiv.innerHTML = '<div style="color:#94a3b8;font-size:0.82em;padding:8px;text-align:center;">Loading tests...</div>';
+                runDiv.appendChild(testsDiv);
+                list.appendChild(runDiv);
+            });
         });
 }
 
-function toggleMlflowAll(checked) {
-    document.querySelectorAll('.mlflow-test-cb:not(:disabled)').forEach(function(cb) { cb.checked = checked; });
+function toggleRunExpand(runId) {
+    var div = document.getElementById('mlflow-run-tests-' + runId);
+    if (!div) return;
+    if (div.style.display === 'none') {
+        div.style.display = 'block';
+        if (div.querySelector('[data-loaded]')) return;
+        fetch('/api/mlflow/tests/' + runId)
+            .then(function(r) { return r.json(); })
+            .then(function(data) {
+                div.setAttribute('data-loaded', '1');
+                if (!data.success || data.tests.length === 0) {
+                    div.innerHTML = '<div style="color:#94a3b8;font-size:0.82em;padding:8px;text-align:center;">No tests</div>';
+                    return;
+                }
+                div.innerHTML = '';
+                data.tests.forEach(function(t) {
+                    var completed = t.status === 'completed' || t.status === 'passed';
+                    var row = document.createElement('div');
+                    row.style.cssText = 'display:flex;align-items:center;gap:6px;padding:4px 8px;font-size:0.8em;border-bottom:1px solid #f1f5f9;' + (completed ? '' : 'opacity:0.4;');
+                    row.innerHTML =
+                        '<input type="checkbox" class="mlflow-test-cb" data-run-id="' + runId + '" value="' + t.config_name + '" ' + (completed ? 'checked' : 'disabled') + ' style="width:14px;height:14px;">' +
+                        '<span style="font-weight:600;min-width:170px;color:#1e293b;">' + t.config_name + '</span>' +
+                        '<span style="color:#64748b;min-width:55px;">' + (t.architecture || '') + '</span>' +
+                        '<span style="color:#0ea5e9;min-width:40px;">TP' + t.tensor_parallelism + '</span>' +
+                        (t.ttft_p90 ? '<span style="color:#8b5cf6;min-width:85px;">TTFT ' + Math.round(t.ttft_p90) + 'ms</span>' : '<span style="min-width:85px;"></span>') +
+                        (t.throughput_p90 ? '<span style="color:#f59e0b;min-width:70px;">' + t.throughput_p90.toFixed(1) + ' req/s</span>' : '<span style="min-width:70px;"></span>') +
+                        '<span style="margin-left:auto;color:' + (completed ? '#16a34a' : '#ef4444') + ';">' + t.status + '</span>';
+                    div.appendChild(row);
+                });
+            });
+    } else {
+        div.style.display = 'none';
+    }
 }
 
-function exportToMlflow() {
-    var runId = document.getElementById('mlflow-run-select').value;
-    if (!runId) { document.getElementById('mlflow-status').textContent = 'Select a run first'; return; }
-    var testIds = [];
-    document.querySelectorAll('.mlflow-test-cb:checked').forEach(function(cb) { testIds.push(cb.value); });
-    if (testIds.length === 0) { document.getElementById('mlflow-status').textContent = 'No tests selected'; return; }
+function toggleRunTests(runId, checked) {
+    document.querySelectorAll('.mlflow-test-cb[data-run-id="' + runId + '"]:not(:disabled)').forEach(function(cb) { cb.checked = checked; });
+}
 
+function toggleMlflowAll(checked) {
+    document.querySelectorAll('.mlflow-run-cb').forEach(function(cb) { cb.checked = checked; toggleRunTests(cb.dataset.runId, checked); });
+}
+
+function exportAllMlflow() {
     var btn = document.getElementById('mlflow-export-btn');
     var status = document.getElementById('mlflow-status');
-    btn.disabled = true;
-    btn.innerHTML = '<span class="mlflow-spinner"></span> Exporting...';
-    status.textContent = 'Exporting ' + testIds.length + ' tests to MLflow...';
 
+    // Collect selected runs and their tests
+    var selectedRuns = [];
+    document.querySelectorAll('.mlflow-run-cb:checked').forEach(function(cb) {
+        var runId = parseInt(cb.dataset.runId);
+        var testIds = [];
+        document.querySelectorAll('.mlflow-test-cb[data-run-id="' + runId + '"]:checked').forEach(function(tcb) {
+            testIds.push(tcb.value);
+        });
+        selectedRuns.push({run_id: runId, test_ids: testIds.length > 0 ? testIds : null});
+    });
+
+    if (selectedRuns.length === 0) { status.textContent = 'No runs selected'; return; }
+
+    btn.disabled = true;
     if (!document.getElementById('mlflow-spinner-style')) {
         var style = document.createElement('style');
         style.id = 'mlflow-spinner-style';
         style.textContent = '.mlflow-spinner{display:inline-block;width:14px;height:14px;border:2px solid rgba(255,255,255,0.3);border-top-color:white;border-radius:50%;animation:mlflow-spin 0.6s linear infinite;vertical-align:middle;margin-right:6px;}@keyframes mlflow-spin{to{transform:rotate(360deg)}}';
         document.head.appendChild(style);
     }
+    btn.innerHTML = '<span class="mlflow-spinner"></span> Exporting ' + selectedRuns.length + ' run(s)...';
+    status.textContent = '';
 
-    fetch('/api/mlflow/export', {
-        method: 'POST',
-        headers: {'Content-Type': 'application/json'},
-        body: JSON.stringify({
-            run_id: parseInt(runId),
-            test_ids: testIds,
-            experiment_name: document.getElementById('mlflow-experiment').value || null,
+    var completed = 0;
+    var totalExported = 0;
+    var errors = [];
+
+    selectedRuns.forEach(function(sr) {
+        fetch('/api/mlflow/export', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({
+                run_id: sr.run_id,
+                test_ids: sr.test_ids,
+                experiment_name: document.getElementById('mlflow-experiment').value || null,
+            })
         })
-    })
-    .then(function(r) { return r.json(); })
-    .then(function(data) {
-        btn.disabled = false;
-        btn.textContent = 'Export to MLflow';
-        if (data.success) {
-            status.innerHTML = '<span style="color:#16a34a;">Exported ' + data.total + ' tests successfully</span>';
-            if (data.errors && data.errors.length > 0) {
-                status.innerHTML += '<br><span style="color:#f59e0b;">' + data.errors.length + ' tests had errors</span>';
+        .then(function(r) { return r.json(); })
+        .then(function(data) {
+            completed++;
+            if (data.success) totalExported += data.total;
+            else errors.push(data.error);
+            if (completed === selectedRuns.length) {
+                btn.disabled = false;
+                btn.textContent = 'Export Selected to MLflow';
+                if (errors.length === 0) {
+                    status.innerHTML = '<span style="color:#16a34a;">Exported ' + totalExported + ' tests from ' + selectedRuns.length + ' run(s)</span>';
+                } else {
+                    status.innerHTML = '<span style="color:#16a34a;">Exported ' + totalExported + ' tests</span><br><span style="color:#ef4444;">' + errors.length + ' error(s): ' + errors[0] + '</span>';
+                }
+            } else {
+                status.textContent = 'Exported ' + completed + '/' + selectedRuns.length + ' runs...';
             }
-        } else {
-            status.innerHTML = '<span style="color:#ef4444;">' + data.error + '</span>';
-        }
-    })
-    .catch(function(err) {
-        btn.disabled = false;
-        btn.textContent = 'Export to MLflow';
-        status.innerHTML = '<span style="color:#ef4444;">Export failed: ' + err + '</span>';
+        })
+        .catch(function(err) {
+            completed++;
+            errors.push(String(err));
+            if (completed === selectedRuns.length) {
+                btn.disabled = false;
+                btn.textContent = 'Export Selected to MLflow';
+                status.innerHTML = '<span style="color:#ef4444;">Failed: ' + errors[0] + '</span>';
+            }
+        });
     });
 }
