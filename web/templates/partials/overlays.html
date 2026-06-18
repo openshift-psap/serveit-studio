@@ -40,3 +40,66 @@
             </div>
         </div>
     </div>
+
+    <!-- MLflow Export Dialog -->
+    <div class="charts-overlay" id="mlflow-overlay" style="display:none;">
+        <div class="charts-container" style="max-width:600px;">
+            <div class="charts-header">
+                <div>
+                    <h2>🔬 MLflow Export</h2>
+                    <p>Push test results to MLflow for experiment tracking</p>
+                </div>
+                <button class="charts-close" onclick="closeMlflowDialog()">&#x2715; Close</button>
+            </div>
+            <div style="padding:24px;">
+                <!-- Config Section -->
+                <div style="margin-bottom:20px;">
+                    <h3 style="margin-bottom:12px;color:#1e293b;">Server Configuration</h3>
+                    <div style="display:flex;flex-direction:column;gap:10px;">
+                        <div>
+                            <label style="font-size:0.85em;font-weight:600;color:#475569;">Tracking URI</label>
+                            <input type="text" id="mlflow-uri" placeholder="https://mlflow.example.com" style="width:100%;padding:8px 12px;border:1px solid #cbd5e1;border-radius:6px;margin-top:4px;">
+                        </div>
+                        <div style="display:flex;gap:10px;">
+                            <div style="flex:1;">
+                                <label style="font-size:0.85em;font-weight:600;color:#475569;">Username</label>
+                                <input type="text" id="mlflow-user" placeholder="optional" style="width:100%;padding:8px 12px;border:1px solid #cbd5e1;border-radius:6px;margin-top:4px;">
+                            </div>
+                            <div style="flex:1;">
+                                <label style="font-size:0.85em;font-weight:600;color:#475569;">Password</label>
+                                <input type="password" id="mlflow-pass" placeholder="optional" style="width:100%;padding:8px 12px;border:1px solid #cbd5e1;border-radius:6px;margin-top:4px;">
+                            </div>
+                        </div>
+                        <div>
+                            <label style="font-size:0.85em;font-weight:600;color:#475569;">Experiment Name</label>
+                            <input type="text" id="mlflow-experiment" placeholder="serveit-studio" style="width:100%;padding:8px 12px;border:1px solid #cbd5e1;border-radius:6px;margin-top:4px;">
+                        </div>
+                        <button onclick="saveMlflowConfig()" style="align-self:flex-end;padding:6px 16px;background:#0ea5e9;color:white;border:none;border-radius:6px;cursor:pointer;font-weight:600;">Save Config</button>
+                    </div>
+                </div>
+
+                <!-- Run Selector -->
+                <div style="margin-bottom:16px;border-top:1px solid #e2e8f0;padding-top:16px;">
+                    <h3 style="margin-bottom:8px;color:#1e293b;">Select Run</h3>
+                    <select id="mlflow-run-select" onchange="loadMlflowTests(this.value)" style="width:100%;padding:8px 12px;border:1px solid #cbd5e1;border-radius:6px;">
+                        <option value="">-- Select a run --</option>
+                    </select>
+                </div>
+
+                <!-- Test Selector -->
+                <div id="mlflow-tests-section" style="display:none;margin-bottom:16px;">
+                    <h3 style="margin-bottom:8px;color:#1e293b;">Select Tests</h3>
+                    <div style="margin-bottom:8px;">
+                        <label style="font-size:0.85em;cursor:pointer;"><input type="checkbox" id="mlflow-select-all" checked onchange="toggleMlflowAll(this.checked)"> Select All</label>
+                    </div>
+                    <div id="mlflow-tests-list" style="max-height:200px;overflow-y:auto;border:1px solid #e2e8f0;border-radius:6px;padding:8px;"></div>
+                </div>
+
+                <!-- Export Button -->
+                <div style="display:flex;align-items:center;gap:12px;">
+                    <button id="mlflow-export-btn" onclick="exportToMlflow()" style="padding:10px 24px;background:#16a34a;color:white;border:none;border-radius:6px;cursor:pointer;font-weight:600;font-size:1em;" disabled>Export to MLflow</button>
+                    <span id="mlflow-status" style="font-size:0.85em;color:#64748b;"></span>
+                </div>
+            </div>
+        </div>
+    </div>

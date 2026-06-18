@@ -93,6 +93,10 @@
                     <div class="resume-icon">▶</div>
                     <div class="step-label">Resume</div>
                 </div>
+                <div class="step-indicator mlflow-indicator" id="mlflow-indicator" onclick="openMlflowDialog()" style="cursor:pointer;">
+                    <div class="resume-icon">🔬</div>
+                    <div class="step-label">MLflow</div>
+                </div>
             </nav>
             <div class="sidebar-footer">ServeIt Studio v1.0</div>
         </aside>
@@ -150,5 +154,6 @@
     <script src="{{ url_for('static', filename='js/modules/charts.js') }}?v={{ range(10000,99999) | random }}"></script>
     <script src="{{ url_for('static', filename='js/modules/ui-helpers.js') }}?v={{ range(10000,99999) | random }}"></script>
     <script src="{{ url_for('static', filename='js/report-download.js') }}?v={{ range(10000,99999) | random }}"></script>
+    <script src="{{ url_for('static', filename='js/modules/mlflow.js') }}?v={{ range(10000,99999) | random }}"></script>
 </body>
 </html>

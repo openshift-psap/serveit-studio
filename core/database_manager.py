@@ -253,6 +253,38 @@ class DatabaseManager:
                 )
             ''')
 
+            cursor.execute('''
+                CREATE TABLE IF NOT EXISTS mlflow_config (
+                    id INTEGER PRIMARY KEY CHECK (id = 1),
+                    tracking_uri TEXT NOT NULL,
+                    username TEXT,
+                    password TEXT,
+                    experiment_name TEXT,
+                    updated_at TEXT
+                )
+            ''')
+
+    def get_mlflow_config(self) -> Optional[Dict]:
+        with self.get_connection() as conn:
+            row = conn.execute('SELECT * FROM mlflow_config WHERE id = 1').fetchone()
+            if row:
+                return dict(row)
+            return None
+
+    def save_mlflow_config(self, tracking_uri: str, username: str = None,
+                           password: str = None, experiment_name: str = None):
+        with self.get_connection() as conn:
+            conn.execute('''
+                INSERT INTO mlflow_config (id, tracking_uri, username, password, experiment_name, updated_at)
+                VALUES (1, ?, ?, ?, ?, ?)
+                ON CONFLICT(id) DO UPDATE SET
+                    tracking_uri=excluded.tracking_uri,
+                    username=excluded.username,
+                    password=excluded.password,
+                    experiment_name=excluded.experiment_name,
+                    updated_at=excluded.updated_at
+            ''', (tracking_uri, username, password, experiment_name, datetime.now().isoformat()))
+
     def save_pod_errors(self, run_id: int, test_id: str, errors_json: str,
                         architecture: Optional[str] = None):
         """Save pod error scan results."""

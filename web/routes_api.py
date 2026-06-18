@@ -433,3 +433,87 @@ def get_console_logs():
     except Exception as e:
         return jsonify({'success': False, 'error': str(e)}), 500
 
+
+
+# --- MLflow Integration ---
+
+@app.route('/api/mlflow/config', methods=['GET'])
+def get_mlflow_config():
+    try:
+        from core.database_manager import DatabaseManager
+        db = DatabaseManager(db_path=DB_PATH)
+        cfg = db.get_mlflow_config()
+        if cfg:
+            cfg['password'] = '***' if cfg.get('password') else ''
+            return jsonify({'success': True, 'config': dict(cfg)})
+        return jsonify({'success': True, 'config': None})
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+
+@app.route('/api/mlflow/config', methods=['POST'])
+def save_mlflow_config():
+    try:
+        data = request.json
+        from core.database_manager import DatabaseManager
+        db = DatabaseManager(db_path=DB_PATH)
+        db.save_mlflow_config(
+            tracking_uri=data.get('tracking_uri', ''),
+            username=data.get('username'),
+            password=data.get('password'),
+            experiment_name=data.get('experiment_name'),
+        )
+        return jsonify({'success': True})
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+
+@app.route('/api/mlflow/runs', methods=['GET'])
+def get_mlflow_runs():
+    try:
+        with get_db() as conn:
+            runs = conn.execute(
+                "SELECT id, run_name, model, status, created_at FROM optimization_runs ORDER BY id DESC"
+            ).fetchall()
+            return jsonify({'success': True, 'runs': [dict(r) for r in runs]})
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+
+@app.route('/api/mlflow/tests/<int:run_id>', methods=['GET'])
+def get_mlflow_tests(run_id):
+    try:
+        with get_db() as conn:
+            tests = conn.execute(
+                "SELECT config_name, status, architecture, tensor_parallelism, ttft_p90, throughput_p90 "
+                "FROM test_configurations WHERE run_id = ? ORDER BY id",
+                (run_id,)
+            ).fetchall()
+            return jsonify({'success': True, 'tests': [dict(t) for t in tests]})
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+
+@app.route('/api/mlflow/export', methods=['POST'])
+def export_to_mlflow():
+    try:
+        data = request.json
+        from core.database_manager import DatabaseManager
+        db = DatabaseManager(db_path=DB_PATH)
+        cfg = db.get_mlflow_config()
+        if not cfg:
+            return jsonify({'success': False, 'error': 'MLflow not configured'}), 400
+
+        from core.mlflow_exporter import export_to_mlflow as do_export
+        result = do_export(
+            db_path=DB_PATH,
+            tracking_uri=cfg['tracking_uri'],
+            username=cfg.get('username'),
+            password=cfg.get('password'),
+            experiment_name=data.get('experiment_name') or cfg.get('experiment_name') or 'serveit-studio',
+            run_id=data['run_id'],
+            test_ids=data.get('test_ids'),
+        )
+        return jsonify(result)
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)}), 500
