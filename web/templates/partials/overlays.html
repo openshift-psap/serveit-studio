@@ -43,7 +43,7 @@
 
     <!-- MLflow Export Dialog -->
     <div id="mlflow-overlay" style="display:none;position:fixed;top:0;left:0;right:0;bottom:0;z-index:9999;background:rgba(0,0,0,0.6);align-items:center;justify-content:center;">
-        <div style="max-width:950px;width:92%;background:white;border-radius:12px;box-shadow:0 20px 60px rgba(0,0,0,0.3);overflow:hidden;">
+        <div style="max-width:1200px;width:95%;max-height:85vh;background:white;border-radius:12px;box-shadow:0 20px 60px rgba(0,0,0,0.3);overflow:hidden;display:flex;flex-direction:column;">
             <div class="charts-header">
                 <div>
                     <h2>🔬 MLflow Export</h2>
@@ -51,7 +51,7 @@
                 </div>
                 <button class="charts-close" onclick="closeMlflowDialog()">&#x2715; Close</button>
             </div>
-            <div style="display:flex;gap:0;">
+            <div style="display:flex;gap:0;flex:1;overflow:hidden;">
                 <!-- Left: Config -->
                 <div style="flex:0 0 340px;padding:20px;border-right:1px solid #e2e8f0;">
                     <h3 style="margin:0 0 12px;color:#1e293b;font-size:0.95em;">Server Configuration</h3>
@@ -88,7 +88,7 @@
                     </div>
                 </div>
                 <!-- Right: Test list -->
-                <div style="flex:1;padding:20px;min-height:400px;display:flex;flex-direction:column;">
+                <div style="flex:1;padding:20px;display:flex;flex-direction:column;overflow:hidden;">
                     <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;">
                         <h3 style="margin:0;color:#1e293b;font-size:0.95em;">Tests</h3>
                         <label style="font-size:0.82em;cursor:pointer;color:#475569;"><input type="checkbox" id="mlflow-select-all" checked onchange="toggleMlflowAll(this.checked)"> Select All</label>
