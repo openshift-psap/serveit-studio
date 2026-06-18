@@ -94,6 +94,20 @@ def _replay_state_to_client():
     except Exception as e:
         print(f"Warning: Could not load optimization_running from database: {e}")
 
+    if optimization_running:
+        greenlet = state.get('_optimization_greenlet')
+        if greenlet is None or greenlet.dead:
+            optimization_running = False
+            with state_lock:
+                state['optimization_running'] = False
+                save_state()
+            try:
+                with get_db() as conn:
+                    conn.execute('UPDATE ui_session_state SET optimization_running = 0 WHERE id = 1')
+                    conn.execute("UPDATE optimization_runs SET status = 'stopped' WHERE status = 'running'")
+            except Exception:
+                pass
+
     emit('status_update', {
         'running': optimization_running,
         'config': state['current_config']
@@ -309,7 +323,7 @@ def handle_start_optimization(data):
     socketio.emit('status_update', {'running': True, 'message': 'Optimization started'})
 
     # Start optimization in background greenlet
-    spawn(run_optimization_background, data)
+    state['_optimization_greenlet'] = spawn(run_optimization_background, data)
 
 @socketio.on('resume_optimization')
 def handle_resume_optimization(data):
@@ -447,7 +461,7 @@ def handle_resume_optimization(data):
         }
 
         # Start optimization in background
-        spawn(run_optimization_background, optimization_data)
+        state['_optimization_greenlet'] = spawn(run_optimization_background, optimization_data)
 
     except Exception as e:
         log_to_ui(f'❌ Failed to resume run #{run_id}: {str(e)}', 'error')
@@ -459,17 +473,12 @@ def handle_resume_optimization(data):
 
 @socketio.on('stop_optimization')
 def handle_stop_optimization():
-    """Stop the running optimization."""
+    """Stop the running optimization. Idempotent — always resets state and notifies UI."""
 
     with state_lock:
-        if not state['optimization_running']:
-            emit('error', {'message': 'No optimization running'})
-            return
-
         state['optimization_running'] = False
         save_state()
 
-        # Update database to reflect optimization stopped
         try:
             with get_db() as conn:
                 conn.execute('''
@@ -478,10 +487,14 @@ def handle_stop_optimization():
                         updated_at = ?
                     WHERE id = 1
                 ''', (datetime.now().isoformat(),))
+                conn.execute('''
+                    UPDATE optimization_runs
+                    SET status = 'stopped', completed_at = ?
+                    WHERE status = 'running'
+                ''', (datetime.now().isoformat(),))
         except Exception as e:
-            print(f"Warning: Failed to update optimization_running in database: {e}")
+            print(f"Warning: Failed to update optimization state in database: {e}")
 
-    # Broadcast to all clients that optimization stopped
     socketio.emit('status_update', {'running': False, 'message': 'Optimization stopped'})
     socketio.emit('console_log', {'type': 'warning', 'message': '🛑 Optimization stopped by user'})
 

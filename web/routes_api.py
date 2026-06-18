@@ -49,16 +49,12 @@ def handle_config():
 
 @app.route('/api/stop_optimization', methods=['POST'])
 def api_stop_optimization():
-    """Stop the running optimization (REST endpoint)."""
+    """Stop the running optimization (REST endpoint). Idempotent — safe to call even if not running."""
 
     with state_lock:
-        if not state['optimization_running']:
-            return jsonify({'success': False, 'error': 'No optimization running'}), 400
-
         state['optimization_running'] = False
         save_state()
 
-    # Notify all connected clients
     socketio.emit('status_update', {'running': False, 'message': 'Optimization stopped'})
     socketio.emit('console_log', {'type': 'warning', 'message': '🛑 Optimization stopped by user'})
 
