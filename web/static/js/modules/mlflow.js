@@ -2,6 +2,8 @@
 
 function openMlflowDialog() {
     document.getElementById('mlflow-overlay').style.display = 'flex';
+    // Don't reload if export is in progress
+    if (window._mlflowExporting) return;
     fetch('/api/mlflow/config')
         .then(function(r) { return r.json(); })
         .then(function(data) {
@@ -139,6 +141,7 @@ function exportAllMlflow() {
     }
 
     window._mlflowAbort = false;
+    window._mlflowExporting = true;
     var remaining = selectedRuns.length;
     btn.style.display = 'none';
 
@@ -163,6 +166,7 @@ function exportAllMlflow() {
 
     function processNext() {
         if (window._mlflowAbort || queue.length === 0) {
+            window._mlflowExporting = false;
             stopBtn.style.display = 'none';
             btn.style.display = 'block';
             btn.disabled = false;
