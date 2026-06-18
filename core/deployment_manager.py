@@ -89,6 +89,7 @@ class DeploymentManager:
             error_msg = f"kubectl apply failed (exit {e.returncode})"
             logger.error(error_msg)
             logger.error(f"stderr: {e.stderr}")
+            logger.error(f"manifest first 500 chars: {manifest_content[:500]}")
             if log_callback:
                 log_callback(f"❌ {error_msg}")
                 # Show actual error from kubectl
