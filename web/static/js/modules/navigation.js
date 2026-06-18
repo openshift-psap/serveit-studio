@@ -686,13 +686,21 @@ socket.on('cluster_scan_result', function(data) {
         select.value = config.storage_class;
     }
 
-    // Show per-pod storage toggle if LWS supports volumeClaimTemplates
+    // Disable per-pod storage toggle if LWS doesn't support volumeClaimTemplates
     var perPodGroup = document.getElementById('per-pod-storage-group');
     if (perPodGroup) {
-        perPodGroup.style.display = data.lws_supports_vct ? 'block' : 'none';
-        if (!data.lws_supports_vct && config.per_pod_storage) {
-            config.per_pod_storage = false;
-            saveConfig();
+        if (!data.lws_supports_vct) {
+            perPodGroup.style.opacity = '0.4';
+            perPodGroup.style.pointerEvents = 'none';
+            perPodGroup.title = 'LWS CRD does not support volumeClaimTemplates. Update LWS CRD to v0.8.0+ to enable.';
+            if (config.per_pod_storage) {
+                config.per_pod_storage = false;
+                saveConfig();
+            }
+        } else {
+            perPodGroup.style.opacity = '1';
+            perPodGroup.style.pointerEvents = 'auto';
+            perPodGroup.title = '';
         }
         if (config.per_pod_storage && data.lws_supports_vct) {
             var toggle = document.getElementById('per-pod-storage-toggle');
