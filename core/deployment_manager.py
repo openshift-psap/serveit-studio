@@ -233,6 +233,18 @@ class DeploymentManager:
             if architecture in ('pd', 'ep'):
                 prefill_status = self._get_lws_status(f"{test_id}-prefill")
                 decode_status = self._get_lws_status(f"{test_id}-decode")
+                if not prefill_status['deployed'] or not decode_status['deployed']:
+                    for role in ('prefill', 'decode'):
+                        result = self.kubectl.run(
+                            ['get', 'lws', '-l', f'test-id={test_id},role={role}', '-n', self.namespace,
+                             '-o', 'jsonpath={.items[0].metadata.name}'],
+                            check=False,
+                        )
+                        if result.returncode == 0 and result.stdout.strip():
+                            if role == 'prefill':
+                                prefill_status = self._get_lws_status(result.stdout.strip())
+                            else:
+                                decode_status = self._get_lws_status(result.stdout.strip())
 
                 # Both must be deployed and ready
                 deployed = prefill_status['deployed'] and decode_status['deployed']
@@ -249,9 +261,18 @@ class DeploymentManager:
                     pods_expected=pods_expected
                 )
             else:
-                # For aggregated and EP
+                # For aggregated: try test_id-based name, fallback to per_pod_storage name
                 lws_name = f"{test_id}-{architecture}"
                 status = self._get_lws_status(lws_name)
+                if not status['deployed']:
+                    # per_pod_storage uses a stable name like aggregated-tp{N}
+                    result = self.kubectl.run(
+                        ['get', 'lws', '-l', f'test-id={test_id}', '-n', self.namespace,
+                         '-o', 'jsonpath={.items[0].metadata.name}'],
+                        check=False,
+                    )
+                    if result.returncode == 0 and result.stdout.strip():
+                        status = self._get_lws_status(result.stdout.strip())
 
                 return DeploymentStatus(
                     test_id=test_id,
