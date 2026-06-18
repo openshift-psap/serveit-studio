@@ -134,23 +134,73 @@ def export_to_mlflow(
     exported = []
     errors = []
 
-    model = run_row['model']
+    run_dict = dict(run_row)
+    model = run_dict['model']
     model_short = model.split('/')[-1] if model else 'unknown'
-    run_config = json.loads(run_row['config_json']) if run_row['config_json'] else {}
-    created = run_row['created_at'][:10] if run_row['created_at'] else ''
-    mlflow_run_name = f"{model_short} — ISL{run_row['isl']}/OSL{run_row['osl']} — {run_row['max_gpus']}GPU — {created}"
+    run_config = json.loads(run_dict['config_json']) if run_dict['config_json'] else {}
+    created = run_dict['created_at'][:10] if run_dict['created_at'] else ''
+    goal = run_dict['goal'] or 'ttft'
+    notes = run_dict.get('notes') or ''
 
-    with mlflow.start_run(run_name=mlflow_run_name, description=f"ServeIt Studio optimization: {model}") as parent_run:
-        # Log run-level params
+    mlflow_run_name = f"{model_short} — {run_dict['num_users']}users — ISL{run_dict['isl']}/OSL{run_dict['osl']} — {run_dict['max_gpus']}GPU — {created}"
+
+    description_lines = [
+        f"**Model:** {model}",
+        f"**Workload:** ISL={run_dict['isl']}, OSL={run_dict['osl']}, {run_dict['num_users']} concurrent users, {run_dict['test_duration']}s duration",
+        f"**Goal:** {goal} | **GPUs:** {run_dict['max_gpus']} | **Status:** {run_dict['status']}",
+    ]
+    if run_dict.get('workload_mode'):
+        description_lines.append(f"**Workload mode:** {run_dict['workload_mode']} | **Rate:** {run_dict.get('rate_type', 'concurrent')}")
+    if run_dict.get('prefix_cache_hit_pct'):
+        description_lines.append(f"**Prefix cache:** {run_dict['prefix_cache_hit_pct']}% hit rate")
+    if notes:
+        description_lines.append(f"**Notes:** {notes}")
+    if run_dict.get('optimal_config'):
+        try:
+            opt = json.loads(run_dict['optimal_config'])
+            opt_summary = ', '.join(f'{k}={v}' for k, v in opt.items() if not isinstance(v, (dict, list)))
+            description_lines.append(f"**Optimal:** {opt_summary}")
+        except (json.JSONDecodeError, TypeError):
+            pass
+
+    with mlflow.start_run(run_name=mlflow_run_name, description='\n\n'.join(description_lines)) as parent_run:
         mlflow.log_params({
             'model': model,
-            'isl': run_row['isl'],
-            'osl': run_row['osl'],
-            'num_users': run_row['num_users'],
-            'goal': run_row['goal'] or 'ttft',
-            'test_duration': run_row['test_duration'],
-            'max_gpus': run_row['max_gpus'],
+            'isl': run_dict['isl'],
+            'osl': run_dict['osl'],
+            'num_users': run_dict['num_users'],
+            'goal': goal,
+            'test_duration': run_dict['test_duration'],
+            'max_gpus': run_dict['max_gpus'],
         })
+        extra_params = {}
+        if run_dict.get('workload_mode'):
+            extra_params['workload_mode'] = run_dict['workload_mode']
+        if run_dict.get('rate_type'):
+            extra_params['rate_type'] = run_dict['rate_type']
+        if run_dict.get('prefix_cache_hit_pct'):
+            extra_params['prefix_cache_hit_pct'] = run_dict['prefix_cache_hit_pct']
+        if run_dict.get('turns') and run_dict['turns'] > 1:
+            extra_params['turns'] = run_dict['turns']
+        if run_dict.get('speculative_method'):
+            extra_params['speculative_method'] = run_dict['speculative_method']
+        if extra_params:
+            mlflow.log_params(extra_params)
+        tags = {
+            'mlflow.source.name': 'serveit-studio',
+            'mlflow.source.type': 'LOCAL',
+            'serveit.model_short': model_short,
+            'serveit.status': run_dict['status'],
+            'serveit.goal': goal,
+            'serveit.run_id': str(run_id),
+        }
+        if notes:
+            tags['serveit.notes'] = notes[:250]
+        if run_config.get('cluster_name'):
+            tags['serveit.cluster'] = run_config['cluster_name']
+        if run_config.get('namespace'):
+            tags['serveit.namespace'] = run_config['namespace']
+        mlflow.set_tags(tags)
 
         for test in tests:
             test_id = test['config_name']
@@ -160,10 +210,18 @@ def export_to_mlflow(
                 continue
 
             try:
-                with mlflow.start_run(run_name=test_id, nested=True) as child_run:
-                    # Parse test config
-                    tc = json.loads(test['test_config_json']) if test['test_config_json'] else {}
-                    test_dict = dict(test)
+                tc = json.loads(test['test_config_json']) if test['test_config_json'] else {}
+                test_dict = dict(test)
+                arch = test_dict.get('architecture') or tc.get('architecture', '')
+                tp = test_dict['tensor_parallelism']
+                child_name = f"{test_id} ({arch} TP{tp})" if arch else f"{test_id} (TP{tp})"
+
+                with mlflow.start_run(run_name=child_name, nested=True) as child_run:
+                    mlflow.set_tags({
+                        'mlflow.source.name': 'serveit-studio',
+                        'serveit.architecture': arch,
+                        'serveit.tp': str(tp),
+                    })
 
                     # Log params
                     params = {
