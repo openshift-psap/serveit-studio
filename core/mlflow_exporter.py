@@ -52,7 +52,18 @@ def export_to_mlflow(
         os.environ.pop('MLFLOW_TRACKING_INSECURE_TLS', None)
 
     mlflow.set_tracking_uri(tracking_uri)
-    mlflow.set_experiment(experiment_name)
+
+    client = mlflow.tracking.MlflowClient()
+    existing = client.get_experiment_by_name(experiment_name)
+    if existing:
+        mlflow.set_experiment(experiment_id=existing.experiment_id)
+    else:
+        workspace = username or 'default'
+        exp_id = client.create_experiment(
+            experiment_name,
+            artifact_location=f'mlflow-artifacts:/workspaces/{workspace}',
+        )
+        mlflow.set_experiment(experiment_id=exp_id)
 
     conn = sqlite3.connect(db_path)
     conn.row_factory = sqlite3.Row
