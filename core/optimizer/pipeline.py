@@ -1231,19 +1231,104 @@ class RecipeOptimizer(
         # Use the actual expected density (the higher of the two is more conservative)
         pods_per_node = max(pods_from_deployment, pods_from_tp, 1)
 
-        # Memory: 85% of node memory / pods_per_node
+        # Query actual free resources (allocatable minus used by running pods)
+        available_memory_gb = None
+        available_cpus = None
+        try:
+            if hasattr(self, 'scanner') and self.scanner and hasattr(self.scanner, 'kubectl'):
+                import json as _json
+                import re as _re
+
+                def _parse_mem(s):
+                    if not s:
+                        return 0
+                    s = str(s)
+                    if s.endswith('Ki'):
+                        return int(s[:-2]) / (1024 * 1024)
+                    if s.endswith('Mi'):
+                        return int(s[:-2]) / 1024
+                    if s.endswith('Gi'):
+                        return int(s[:-2])
+                    if s.endswith('Ti'):
+                        return int(s[:-2]) * 1024
+                    m = _re.match(r'^(\d+)$', s)
+                    return int(m.group(1)) / (1024 ** 3) if m else 0
+
+                def _parse_cpu(s):
+                    if not s:
+                        return 0
+                    s = str(s)
+                    if s.endswith('m'):
+                        return int(s[:-1]) / 1000
+                    return int(s)
+
+                # Get node allocatable
+                r = self.scanner.kubectl.run(['get', 'nodes', '-o', 'json'], check=False)
+                node_alloc = {}
+                if r.returncode == 0:
+                    for nd in _json.loads(r.stdout).get('items', []):
+                        name = nd['metadata']['name']
+                        alloc = nd.get('status', {}).get('allocatable', {})
+                        if int(alloc.get('nvidia.com/gpu', '0')) <= 0:
+                            continue
+                        node_alloc[name] = {
+                            'mem_gb': _parse_mem(alloc.get('memory', '0')),
+                            'cpu': _parse_cpu(alloc.get('cpu', '0')),
+                            'used_mem_gb': 0, 'used_cpu': 0,
+                        }
+
+                # Get pod resource requests on GPU nodes
+                if node_alloc:
+                    r = self.scanner.kubectl.run(['get', 'pods', '-A', '-o', 'json'], check=False)
+                    if r.returncode == 0:
+                        for pod in _json.loads(r.stdout).get('items', []):
+                            phase = pod.get('status', {}).get('phase', '')
+                            if phase not in ('Running', 'Pending'):
+                                continue
+                            node = pod.get('spec', {}).get('nodeName', '')
+                            if node not in node_alloc:
+                                continue
+                            for c in pod['spec'].get('containers', []):
+                                req = c.get('resources', {}).get('requests', {})
+                                node_alloc[node]['used_mem_gb'] += _parse_mem(req.get('memory', '0'))
+                                node_alloc[node]['used_cpu'] += _parse_cpu(req.get('cpu', '0'))
+
+                    # Calculate free resources per GPU node
+                    free_per_node = []
+                    for name, res in node_alloc.items():
+                        free_mem = max(res['mem_gb'] - res['used_mem_gb'], 0)
+                        free_cpu = max(res['cpu'] - res['used_cpu'], 0)
+                        free_per_node.append((free_mem, free_cpu))
+                        logger.debug(f"  {name}: alloc={res['mem_gb']:.0f}Gi/{res['cpu']}cpu "
+                                     f"used={res['used_mem_gb']:.0f}Gi/{res['used_cpu']:.0f}cpu "
+                                     f"free={free_mem:.0f}Gi/{free_cpu:.0f}cpu")
+
+                    if free_per_node:
+                        available_memory_gb = sum(m for m, _ in free_per_node) / len(free_per_node)
+                        available_cpus = sum(c for _, c in free_per_node) / len(free_per_node)
+                        logger.info(f"Node free resources (avg): {available_memory_gb:.0f}Gi memory, {available_cpus:.0f} CPUs")
+        except Exception as e:
+            logger.debug(f"Could not query node resources: {e}")
+
+        # Memory: use allocatable if available, else fall back to scan data with 85% factor
         if not mem_override:
-            avg_node_memory_gb = sum(n.memory_gb for n in gpu_nodes) / num_gpu_nodes
-            usable_memory_gb = avg_node_memory_gb * 0.85
+            if available_memory_gb:
+                usable_memory_gb = available_memory_gb * 0.80
+            else:
+                avg_node_memory_gb = sum(n.memory_gb for n in gpu_nodes) / num_gpu_nodes
+                usable_memory_gb = avg_node_memory_gb * 0.85
             memory_per_pod_gb = int(usable_memory_gb / pods_per_node)
             mem_str = f"{memory_per_pod_gb}Gi"
         else:
             mem_str = mem_override
 
-        # CPU: 80% of node CPUs / pods_per_node
+        # CPU: use allocatable if available, else fall back to scan data with 80% factor
         if not cpu_override:
-            avg_node_cpus = sum(n.cpu_cores for n in gpu_nodes) / num_gpu_nodes
-            usable_cpus = avg_node_cpus * 0.80
+            if available_cpus:
+                usable_cpus = available_cpus * 0.75
+            else:
+                avg_node_cpus = sum(n.cpu_cores for n in gpu_nodes) / num_gpu_nodes
+                usable_cpus = avg_node_cpus * 0.80
             cpus_per_pod = int(usable_cpus / pods_per_node)
             cpu_str = str(max(cpus_per_pod, 1))
         else:
