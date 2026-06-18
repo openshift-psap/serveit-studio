@@ -1085,7 +1085,8 @@ class TestOrchestrator(ParserMixin, GuidellmMixin):
                 if not gateway_ready:
                     result.error_message = "Gateway did not register all pods in time"
                     if log_callback:
-                        log_callback("⚠️  Proceeding anyway — some pods may not be routable")
+                        log_callback("❌ EPP gateway failed to register all pods — aborting test")
+                    return result
 
             if stop_check and stop_check():
                 if log_callback:
