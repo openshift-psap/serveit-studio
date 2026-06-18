@@ -9,6 +9,30 @@ from typing import List, Optional, Dict
 logger = logging.getLogger(__name__)
 
 
+def _get_or_create_experiment(tracking_uri, name, workspace, username, password, insecure_tls):
+    """Create or find an MLflow experiment in the target workspace via REST API."""
+    import requests
+    headers = {'Content-Type': 'application/json', 'X-Mlflow-Workspace': workspace}
+    auth = (username, password) if username else None
+    verify = not insecure_tls
+
+    resp = requests.get(
+        f'{tracking_uri}/api/2.0/mlflow/experiments/get-by-name',
+        params={'experiment_name': name},
+        headers=headers, auth=auth, verify=verify,
+    )
+    if resp.ok:
+        return resp.json()['experiment']['experiment_id']
+
+    resp = requests.post(
+        f'{tracking_uri}/api/2.0/mlflow/experiments/create',
+        json={'name': name},
+        headers=headers, auth=auth, verify=verify,
+    )
+    resp.raise_for_status()
+    return resp.json()['experiment_id']
+
+
 def export_to_mlflow(
     db_path: str,
     tracking_uri: str,
@@ -52,10 +76,13 @@ def export_to_mlflow(
         os.environ.pop('MLFLOW_TRACKING_INSECURE_TLS', None)
 
     workspace = username or 'default'
-    os.environ['MLFLOW_TRACKING_HEADERS'] = json.dumps({'X-Mlflow-Workspace': workspace})
 
     mlflow.set_tracking_uri(tracking_uri)
-    mlflow.set_experiment(experiment_name)
+
+    experiment_id = _get_or_create_experiment(
+        tracking_uri, experiment_name, workspace, username, password, insecure_tls,
+    )
+    mlflow.set_experiment(experiment_id=experiment_id)
 
     conn = sqlite3.connect(db_path)
     conn.row_factory = sqlite3.Row
