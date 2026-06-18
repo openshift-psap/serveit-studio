@@ -211,5 +211,5 @@ spec:
           storageClassName: {{ storage_class }}
           resources:
             requests:
-              storage: {{ pvc_size | default('50Gi') }}
+              storage: {{ pvc_size or '50Gi' }}
 {% endif %}
