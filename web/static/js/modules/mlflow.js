@@ -105,8 +105,15 @@ function exportToMlflow() {
     var btn = document.getElementById('mlflow-export-btn');
     var status = document.getElementById('mlflow-status');
     btn.disabled = true;
-    btn.textContent = 'Exporting...';
+    btn.innerHTML = '<span class="mlflow-spinner"></span> Exporting...';
     status.textContent = 'Exporting ' + testIds.length + ' tests to MLflow...';
+
+    if (!document.getElementById('mlflow-spinner-style')) {
+        var style = document.createElement('style');
+        style.id = 'mlflow-spinner-style';
+        style.textContent = '.mlflow-spinner{display:inline-block;width:14px;height:14px;border:2px solid rgba(255,255,255,0.3);border-top-color:white;border-radius:50%;animation:mlflow-spin 0.6s linear infinite;vertical-align:middle;margin-right:6px;}@keyframes mlflow-spin{to{transform:rotate(360deg)}}';
+        document.head.appendChild(style);
+    }
 
     fetch('/api/mlflow/export', {
         method: 'POST',
