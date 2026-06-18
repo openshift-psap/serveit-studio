@@ -11,6 +11,9 @@ function openMlflowDialog() {
                 document.getElementById('mlflow-uri').value = data.config.tracking_uri || '';
                 document.getElementById('mlflow-user').value = data.config.username || '';
                 document.getElementById('mlflow-experiment').value = data.config.experiment_name || '';
+                var passField = document.getElementById('mlflow-pass');
+                passField.value = '';
+                passField.placeholder = data.config.password === '***' ? '(saved)' : 'optional';
                 if (data.config.insecure_tls !== undefined) document.getElementById('mlflow-insecure-tls').checked = data.config.insecure_tls;
             }
         });
@@ -25,7 +28,7 @@ function saveMlflowConfig() {
     var data = {
         tracking_uri: document.getElementById('mlflow-uri').value,
         username: document.getElementById('mlflow-user').value || null,
-        password: document.getElementById('mlflow-pass').value || null,
+        password: document.getElementById('mlflow-pass').value || undefined,
         experiment_name: document.getElementById('mlflow-experiment').value || null,
         insecure_tls: document.getElementById('mlflow-insecure-tls').checked,
     };

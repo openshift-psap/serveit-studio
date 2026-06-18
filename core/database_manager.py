@@ -280,6 +280,10 @@ class DatabaseManager:
                 conn.execute('ALTER TABLE mlflow_config ADD COLUMN insecure_tls INTEGER DEFAULT 1')
             except Exception:
                 pass
+            if password is None:
+                existing = conn.execute('SELECT password FROM mlflow_config WHERE id = 1').fetchone()
+                if existing:
+                    password = existing['password']
             conn.execute('''
                 INSERT INTO mlflow_config (id, tracking_uri, username, password, experiment_name, insecure_tls, updated_at)
                 VALUES (1, ?, ?, ?, ?, ?, ?)
