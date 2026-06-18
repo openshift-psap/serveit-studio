@@ -1409,19 +1409,6 @@ class RecipeOptimizer(
         if not resume:
             self.clear_previous_results()
 
-        # Validate per_pod_storage against cluster CRD
-        if self.config.per_pod_storage and hasattr(self, 'scanner') and self.scanner:
-            try:
-                r = self.scanner.kubectl.run(
-                    ['get', 'crd', 'leaderworkersets.leaderworkerset.x-k8s.io',
-                     '-o', 'jsonpath={.spec.versions[0].schema.openAPIV3Schema.properties.spec.properties}'],
-                    check=False)
-                if r.returncode != 0 or 'volumeClaimTemplates' not in r.stdout:
-                    self.log("⚠️  LWS CRD does not support volumeClaimTemplates — disabling per-pod storage", 'warning')
-                    self.config.per_pod_storage = False
-            except Exception:
-                pass
-
         self.log("=" * 80, 'info')
         self.log("RECIPE-BASED OPTIMIZATION", 'success')
         self.log("=" * 80, 'info')

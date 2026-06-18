@@ -690,6 +690,10 @@ socket.on('cluster_scan_result', function(data) {
     var perPodGroup = document.getElementById('per-pod-storage-group');
     if (perPodGroup) {
         perPodGroup.style.display = data.lws_supports_vct ? 'block' : 'none';
+        if (!data.lws_supports_vct && config.per_pod_storage) {
+            config.per_pod_storage = false;
+            saveConfig();
+        }
         if (config.per_pod_storage && data.lws_supports_vct) {
             var toggle = document.getElementById('per-pod-storage-toggle');
             if (toggle) toggle.classList.add('active');
