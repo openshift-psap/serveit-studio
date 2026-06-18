@@ -692,7 +692,7 @@ socket.on('cluster_scan_result', function(data) {
         if (!data.lws_supports_vct) {
             perPodGroup.style.opacity = '0.4';
             perPodGroup.style.pointerEvents = 'none';
-            perPodGroup.title = 'LWS CRD does not support volumeClaimTemplates. Update LWS CRD to v0.8.0+ to enable.';
+            perPodGroup.title = 'LWS with volumeClaimTemplates CRD not available on this cluster.';
             if (config.per_pod_storage) {
                 config.per_pod_storage = false;
                 saveConfig();
