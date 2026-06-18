@@ -28,7 +28,7 @@ def _register_workspace_header(workspace):
         def request_headers(self):
             return {'X-Mlflow-Workspace': self._workspace}
 
-    _request_header_provider_registry.append(_Provider())
+    _request_header_provider_registry.register(_Provider)
 
 
 def _get_or_create_experiment(tracking_uri, name, workspace, username, password, insecure_tls):
