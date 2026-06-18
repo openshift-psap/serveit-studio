@@ -1,7 +1,11 @@
 apiVersion: leaderworkerset.x-k8s.io/v1
 kind: LeaderWorkerSet
 metadata:
-  name: {% if per_pod_storage %}decode-tp{{ decode_tp }}{% else %}{{ test_id }}-decode{% endif %}
+{% if per_pod_storage %}
+  name: decode-tp{{ decode_tp }}
+{% else %}
+  name: {{ test_id }}-decode
+{% endif %}
   namespace: {{ namespace }}
   labels:
     app: llm-d

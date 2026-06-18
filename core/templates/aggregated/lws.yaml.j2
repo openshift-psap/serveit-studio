@@ -1,7 +1,11 @@
 apiVersion: leaderworkerset.x-k8s.io/v1
 kind: LeaderWorkerSet
 metadata:
-  name: {% if per_pod_storage %}aggregated-tp{{ tensor_parallelism }}{% else %}{{ test_id }}-aggregated{% endif %}
+{% if per_pod_storage %}
+  name: aggregated-tp{{ tensor_parallelism }}
+{% else %}
+  name: {{ test_id }}-aggregated
+{% endif %}
   namespace: {{ namespace }}
   labels:
     app: llm-d

@@ -1,7 +1,11 @@
 apiVersion: leaderworkerset.x-k8s.io/v1
 kind: LeaderWorkerSet
 metadata:
-  name: {% if per_pod_storage %}prefill-tp{{ prefill_tp }}{% else %}{{ test_id }}-prefill{% endif %}
+{% if per_pod_storage %}
+  name: prefill-tp{{ prefill_tp }}
+{% else %}
+  name: {{ test_id }}-prefill
+{% endif %}
   namespace: {{ namespace }}
   labels:
     app: llm-d
