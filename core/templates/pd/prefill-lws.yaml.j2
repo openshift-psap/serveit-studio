@@ -97,7 +97,7 @@ spec:
               - |
                 DST="/model-cache/huggingface"
                 MODEL="{{ model_name }}"
-                if [ -d "$DST/hub" ] && ls "$DST/hub/models--"* >/dev/null 2>&1; then
+                if ls "$DST/models--"* >/dev/null 2>&1 || ls "$DST/hub/models--"* >/dev/null 2>&1; then
                   echo "Model already present on per-pod PVC, skipping download"
                   du -sh "$DST"
                 else
