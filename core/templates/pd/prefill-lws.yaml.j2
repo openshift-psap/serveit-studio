@@ -88,6 +88,41 @@ spec:
           - name: dev-infiniband
             hostPath:
               path: /dev/infiniband
+{% if per_pod_storage %}
+        initContainers:
+          - name: model-download
+            image: {{ image }}
+            command: ["/bin/bash", "-c"]
+            args:
+              - |
+                DST="/model-cache/huggingface"
+                MODEL="{{ model_name }}"
+                if [ -d "$DST/hub" ] && ls "$DST/hub/models--"* >/dev/null 2>&1; then
+                  echo "Model already present on per-pod PVC, skipping download"
+                  du -sh "$DST"
+                else
+                  echo "Downloading $MODEL to per-pod PVC..."
+                  pip install -q huggingface_hub 2>/dev/null
+                  export HF_HOME="$DST"
+                  export HF_HUB_CACHE="$DST"
+                  python3 -c "
+from huggingface_hub import snapshot_download
+snapshot_download('$MODEL', local_files_only=False)
+print('Download complete')
+"
+                  echo "Done: $(du -sh $DST | cut -f1)"
+                fi
+            env:
+              - name: HF_TOKEN
+                valueFrom:
+                  secretKeyRef:
+                    name: llm-d-hf-token
+                    key: HF_TOKEN
+                    optional: true
+            volumeMounts:
+              - name: hf-cache
+                mountPath: /model-cache
+{% endif %}
         containers:
           - name: vllm
             image: {{ image }}
