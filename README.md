@@ -127,6 +127,7 @@ Steps 2-3 and 6-11 deploy real workloads. Steps 4-5 are pure math.
 - **Database persistence** — All results, configs, and metrics stored in SQLite with full run history. Resume, compare, and reuse across sessions
 - **GPU Estimator** — Scale tested results to different workloads (ISL, OSL, concurrency, turns) without re-running tests. Shows GPU requirements for SLA targets
 - **Report analytics** — Interactive Plotly charts: Pareto front, PD configuration sweep with ITL subplot, throughput vs latency scatter, GPU efficiency, TP calibration, calibrated load analysis, EPP weight comparison, run comparison
+- **MLflow integration** — Export test results to MLflow with params, metrics, and artifacts. Per-user workspace targeting, descriptive run names, and tags for model, llm-d version, architecture, and cluster
 - **Downloadable reports** — HTML and raw artifact download for offline analysis and sharing
 - **Prefix cache simulation** — Generate multi-group prefix cache datasets with configurable hit rate, group count, and seed for reproducible workloads
 - **Pod error detection** — Auto-detects OOM, CUDA errors, and crash loops during tests; stops optimization and preserves pods for investigation
@@ -310,6 +311,7 @@ core/                              # Optimization engine
 ├── report_data.py                 #   Report data model + SQL queries
 ├── metrics_collector.py           #   Prometheus/Thanos metric collection
 ├── prereq_manager.py              #   EPP configmap + gateway deployment
+├── mlflow_exporter.py             #   Export results to MLflow (params, metrics, artifacts)
 ├── deployment_manager.py          #   LWS apply/delete/wait
 ├── pod_error_scanner.py           #   Detect OOM, CUDA errors, crash loops in pod logs
 └── k8s_utils.py                   #   KubectlRunner, cloud detection
@@ -325,6 +327,7 @@ web/                               # Flask + SocketIO web UI (wizard)
 │   ├── report.js                  #     Report page orchestration
 │   ├── settings.js                #     Advanced vLLM + EPP settings UI
 │   ├── wizard.js                  #     Step navigation, model gallery
+│   ├── mlflow.js                  #     MLflow export dialog + sequential export with stop
 │   └── ...                        #     console, resume, socket, navigation, cluster
 └── templates/partials/            #   HTML wizard steps (step1-step7)
 
