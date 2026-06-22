@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="docs/branding/serveit-logo.png" alt="ServeIt Studio" width="200">
+  <img src="images/serveit-logo.png" alt="ServeIt Studio" width="200">
 </p>
 
 <p align="center">
@@ -17,49 +17,49 @@ ServeIt Studio deploys real vLLM instances on your cluster, sweeps configuration
 
 Manage multiple clusters and optimization instances from a single dashboard. Each cluster shows GPU nodes, VRAM, RDMA capability, and running instances.
 
-![Launcher Dashboard](docs/screenshots/launcher-dashboard.png)
+![Launcher Dashboard](images/launcher-dashboard.png)
 
 ### Create a New Instance
 
 Deploy a new optimization instance to any cluster. Select GPU count, storage class, and pin to specific nodes.
 
-![New Instance](docs/screenshots/new-instance.png)
+![New Instance](images/new-instance.png)
 
 ### Choose Your Optimization Goal
 
 Select from response time, throughput, balanced, or architecture-specific strategies. Each goal tests different architectures and applies different optimization heuristics.
 
-![Optimization Goal](docs/screenshots/optimization-goal.png)
+![Optimization Goal](images/optimization-goal.png)
 
 ### Model Gallery
 
 Browse and select from popular open-source LLM models. Filter by size category, architecture (Dense, MoE, Code, Speculative), and quantization format.
 
-![Model Gallery](docs/screenshots/model-gallery.png)
+![Model Gallery](images/model-gallery.png)
 
 ### Review & Run
 
 Review your full configuration summary — deployment, workload, and tuning settings — then start the automated optimization pipeline. Live console output shows progress in real time.
 
-![Review and Run](docs/screenshots/review-and-run.png)
+![Review and Run](images/review-and-run.png)
 
 ### Optimization Report — Throughput vs Latency
 
 Interactive scatter plot showing every tested configuration. Bubble size represents GPU count. The ideal configuration is in the top-left corner (low latency + high throughput). Hover over any bubble to see the exact configuration details.
 
-![Throughput vs Latency](docs/screenshots/report-throughput-latency.png)
+![Throughput vs Latency](images/report-throughput-latency.png)
 
 ### PD Configuration Sweep
 
 TTFT, throughput, and inter-token latency (ITL) across all tested prefill/decode splits. The green dot marks the best TTFT, the pink diamond marks the best throughput. Aggregated baseline shown as dashed reference lines.
 
-![PD Configurations](docs/screenshots/report-pd-configurations.png)
+![PD Configurations](images/report-pd-configurations.png)
 
 ### GPU Estimator
 
 Estimate how many GPUs you need for a different workload without re-running tests. Adjust concurrency, ISL/OSL, and set a latency SLA — the estimator scales your tested results and shows which configurations meet the target and how many GPUs each would need.
 
-![GPU Estimator](docs/screenshots/report-gpu-estimator.png)
+![GPU Estimator](images/report-gpu-estimator.png)
 
 ## How It Works
 
