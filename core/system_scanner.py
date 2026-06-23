@@ -918,9 +918,9 @@ class SystemScanner:
                 cloud_provider=CloudProvider.UNKNOWN
             )
 
-        total_gpus = sum(node.gpus for node in nodes)
+        total_gpus = sum(node.gpus for node in nodes if node.status == 'Ready')
         gpus_per_node = {node.name: node.gpus for node in nodes}
-        gpu_nodes = [node for node in nodes if node.gpus > 0]
+        gpu_nodes = [node for node in nodes if node.gpus > 0 and node.status == 'Ready']
 
         max_gpus_per_node = max((node.gpus for node in gpu_nodes), default=0)
         min_gpus_per_node = min((node.gpus for node in gpu_nodes), default=0) if gpu_nodes else 0
