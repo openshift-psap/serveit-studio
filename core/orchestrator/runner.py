@@ -569,11 +569,12 @@ class TestOrchestrator(ParserMixin, GuidellmMixin):
                     if gateway_name.startswith(gateway_prefix):
                         gateway_class = gateway.get('spec', {}).get('gatewayClassName', 'istio')
                         if gateway_class == 'istio':
-                            # Upstream Istio: deploys service in same namespace with -istio suffix
+                            # Upstream Istio: creates service in same namespace with -istio suffix
                             svc = f'{gateway_name}-istio.{namespace}.svc.cluster.local'
                         else:
-                            # OpenShift gateway controller: deploys service in openshift-ingress
-                            svc = f'{gateway_name}-{gateway_class}.openshift-ingress.svc.cluster.local'
+                            # Other gateway controllers (data-science, openshift-default):
+                            # create service in same namespace as the Gateway resource
+                            svc = f'{gateway_name}-{gateway_class}.{namespace}.svc.cluster.local'
                         service_url = f'http://{svc}'
                         logger.debug(f'Using gateway: {svc} (class: {gateway_class})')
                         return service_url
