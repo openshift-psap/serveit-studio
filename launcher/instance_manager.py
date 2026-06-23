@@ -149,7 +149,8 @@ def create_cluster(owner_id: int, name: str, icon: str = '🖥️',
                    namespace: str = 'serveit',
                    kubeconfig_data: str = None,
                    storage_class: str = None,
-                   proxy: str = None) -> Dict:
+                   proxy: str = None,
+                   description: str = None) -> Dict:
     """Create a cluster entry. If kubeconfig is provided, validates it and stores as K8s Secret."""
     target_cluster = 'local'
     kubeconfig_secret = None
@@ -192,8 +193,8 @@ def create_cluster(owner_id: int, name: str, icon: str = '🖥️',
 
     with get_db() as conn:
         conn.execute(
-            "INSERT INTO clusters (name, icon, owner_id, kubeconfig_secret, target_cluster, storage_class, proxy, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
-            (name, icon, owner_id, kubeconfig_secret, target_cluster, storage_class, proxy or None, datetime.now().isoformat())
+            "INSERT INTO clusters (name, icon, owner_id, kubeconfig_secret, target_cluster, storage_class, proxy, description, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
+            (name, icon, owner_id, kubeconfig_secret, target_cluster, storage_class, proxy or None, description or None, datetime.now().isoformat())
         )
         cid = conn.execute('SELECT last_insert_rowid()').fetchone()[0]
 
@@ -246,7 +247,7 @@ def list_clusters(owner_id: int) -> List[Dict]:
     return [dict(r) for r in rows]
 
 
-def update_cluster(cluster_id: int, owner_id: int, name: str = None, icon: str = None) -> bool:
+def update_cluster(cluster_id: int, owner_id: int, name: str = None, icon: str = None, description: str = None) -> bool:
     with get_db() as conn:
         row = conn.execute(
             'SELECT id FROM clusters WHERE id = ? AND owner_id = ?',
@@ -258,6 +259,8 @@ def update_cluster(cluster_id: int, owner_id: int, name: str = None, icon: str =
             conn.execute('UPDATE clusters SET name = ? WHERE id = ?', (name, cluster_id))
         if icon is not None:
             conn.execute('UPDATE clusters SET icon = ? WHERE id = ?', (icon, cluster_id))
+        if description is not None:
+            conn.execute('UPDATE clusters SET description = ? WHERE id = ?', (description, cluster_id))
     return True
 
 

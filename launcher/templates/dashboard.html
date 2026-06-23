@@ -27,7 +27,9 @@
         .cluster-item.active{background:#F0F9FA;color:#1B5E6B;font-weight:600}
         .cluster-item .icon{font-size:1.1em;flex-shrink:0}
         .cluster-item .name{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;line-height:1.2}
-        .cluster-item .target{font-size:0.72em;color:#999;font-weight:400;display:block;overflow:hidden;text-overflow:ellipsis}
+        .cluster-item .target{font-size:0.72em;color:#999;font-weight:400;display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;cursor:text;min-height:1.1em}
+        .cluster-item .target:empty::before{content:'add note...';color:#ccc;font-style:italic}
+        .cluster-item .target:focus{outline:none;color:#555;background:rgba(42,123,136,0.05);border-radius:3px;padding:0 2px}
         .cluster-item .count{font-size:0.75em;color:#999;background:#F0F0F0;padding:2px 7px;border-radius:10px;flex-shrink:0}
         .cluster-item.active .count{background:#E0F2F4;color:#1B5E6B}
         .cluster-item .cluster-actions{display:none;flex-shrink:0;gap:2px}
@@ -223,12 +225,12 @@
     </div>
     <div class="cluster-list" id="cluster-list">
         {% for g in clusters %}
-        <button class="cluster-item{% if loop.first %} active{% endif %}" data-id="{{ g.id }}" onclick="selectCluster({{ g.id }})">
+        <button class="cluster-item" data-id="{{ g.id }}" onclick="selectCluster({{ g.id }})">
             <span class="icon">{{ g.icon }}</span>
-            <span class="name">{{ g.name }}<span class="target">{{ g.target_cluster or 'local' }}</span></span>
+            <span class="name">{{ g.name }}<span class="target" contenteditable="true" onclick="event.stopPropagation()" onblur="saveClusterComment({{ g.id }}, this)" onkeydown="if(event.key==='Enter'){event.preventDefault();this.blur()}">{{ g.description or '' }}</span></span>
             <span class="count">{{ g.instance_count }}</span>
             <span class="cluster-actions">
-                <span class="cl-btn" onclick="event.stopPropagation();editCluster({{ g.id }},'{{ g.name }}','{{ g.icon }}')" title="Edit">✏️</span>
+                <span class="cl-btn" onclick="event.stopPropagation();editCluster({{ g.id }},'{{ g.name }}','{{ g.icon }}','{{ g.description or '' }}')" title="Edit">✏️</span>
                 <span class="cl-btn cl-del" onclick="event.stopPropagation();deleteCluster({{ g.id }},'{{ g.name }}')" title="Delete">&times;</span>
             </span>
         </button>
@@ -341,6 +343,8 @@
         <p class="modal-sub">Add a local or remote cluster</p>
         <label for="new-cluster-name">Cluster Name</label>
         <input type="text" id="new-cluster-name" placeholder="My Cluster" autocomplete="off">
+        <label for="new-cluster-description">Description <span style="color:#999;font-weight:400;">(optional)</span></label>
+        <input type="text" id="new-cluster-description" placeholder="e.g. 8x H100, IBM Cloud VPC" autocomplete="off">
         <label>Icon</label>
         <div class="icon-grid" id="icon-grid"></div>
         <label class="toggle-row" id="remote-toggle-row" onclick="toggleRemote()">
@@ -400,6 +404,8 @@
         <input type="hidden" id="edit-cluster-id">
         <label for="edit-cluster-name">Cluster Name</label>
         <input type="text" id="edit-cluster-name" autocomplete="off">
+        <label for="edit-cluster-description">Description</label>
+        <input type="text" id="edit-cluster-description" placeholder="e.g. 8x H100, IBM Cloud VPC" autocomplete="off">
         <label>Icon</label>
         <div class="icon-grid" id="edit-icon-grid"></div>
         <div class="actions">
@@ -489,7 +495,9 @@
 {% endif %}
 
 <script>
-var currentClusterId = {{ clusters[0].id if clusters else 'null' }};
+var _clusterIds = [{% for g in clusters %}{{ g.id }}{% if not loop.last %},{% endif %}{% endfor %}];
+var _saved = localStorage.getItem('selectedClusterId');
+var currentClusterId = (_saved && _clusterIds.indexOf(parseInt(_saved)) !== -1) ? parseInt(_saved) : {{ clusters[0].id if clusters else 'null' }};
 var IS_ADMIN = {{ 'true' if is_admin else 'false' }};
 var viewingUserId = null;
 var ICONS = ['📦','🔬','🌐','🏢','🔧','☁️','🖥️','🧪','🚀','💻','🔒','⚡','🏗️','📊','🎯','🔥','💡','🛠️','📡','🗄️','🐳','🤖','🧠','💎','🔮','🌊','🏔️','🛡️','⚙️','🔗','📈','🧬','🎛️','💾','🔑','🌍','🏭','📐','🧊','🪐'];
@@ -510,6 +518,7 @@ var selectedIcon = '📦';
 function showClusterModal(){
     document.getElementById('cluster-modal').classList.add('active');
     document.getElementById('new-cluster-name').value='';
+    document.getElementById('new-cluster-description').value='';
     document.getElementById('remote-toggle').checked=false;
     document.getElementById('kubeconfig-section').style.display='none';
     kubeconfigContent=null;
@@ -548,6 +557,7 @@ function saveCluster(){
     modal.appendChild(overlay);
 
     var body = {name:name, icon:selectedIcon,
+        description: document.getElementById('new-cluster-description').value.trim() || null,
         kubeconfig: document.getElementById('remote-toggle').checked ? kubeconfigContent : null,
         proxy: document.getElementById('remote-toggle').checked ? (document.getElementById('cluster-proxy').value.trim() || null) : null,
         storage_class: document.getElementById('storage-class-select').value || null};
@@ -603,9 +613,10 @@ var editSelectedIcon = '';
     });
 })();
 
-function editCluster(id, name, icon) {
+function editCluster(id, name, icon, description) {
     document.getElementById('edit-cluster-id').value = id;
     document.getElementById('edit-cluster-name').value = name;
+    document.getElementById('edit-cluster-description').value = description || '';
     editSelectedIcon = icon;
     var grid = document.getElementById('edit-icon-grid');
     grid.querySelectorAll('.icon-opt').forEach(function(b){ b.classList.toggle('selected', b.textContent === icon); });
@@ -620,11 +631,12 @@ function hideEditCluster() {
 function saveEditCluster() {
     var id = document.getElementById('edit-cluster-id').value;
     var name = document.getElementById('edit-cluster-name').value.trim();
+    var description = document.getElementById('edit-cluster-description').value.trim();
     if (!name) return;
     fetch('/api/clusters/' + id, {
         method: 'PUT',
         headers: {'Content-Type': 'application/json'},
-        body: JSON.stringify({name: name, icon: editSelectedIcon})
+        body: JSON.stringify({name: name, icon: editSelectedIcon, description: description})
     })
     .then(function(r) { return r.json(); })
     .then(function(data) {
@@ -637,16 +649,26 @@ function saveEditCluster() {
     });
 }
 
+function saveClusterComment(id, el){
+    var desc = el.textContent.trim();
+    fetch('/api/clusters/' + id, {
+        method: 'PUT',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({description: desc})
+    });
+}
+
 function deleteCluster(id, name){
     showConfirm('Delete Cluster', 'Delete cluster "'+name+'"?', 'This will also delete ALL instances in this cluster and their data.', 'Delete Cluster', function(){
         fetch('/api/clusters/'+id,{method:'DELETE'})
         .then(function(r){return r.json()})
-        .then(function(data){ if(data.ok) location.reload(); else showWarn('Error', data.error||'Failed'); });
+        .then(function(data){ if(data.ok){ if(id===currentClusterId) localStorage.removeItem('selectedClusterId'); location.reload(); } else showWarn('Error', data.error||'Failed'); });
     });
 }
 
 function selectCluster(id){
     currentClusterId = id;
+    localStorage.setItem('selectedClusterId', id);
     viewingUserId = null;
     var navUsers = document.getElementById('nav-users');
     if(navUsers) navUsers.classList.remove('active');
@@ -780,9 +802,10 @@ function showCreateModal(){
     btn.disabled = false;
     btn.textContent = 'Create';
 
-    // Populate storage classes from local cluster
     var scSel = document.getElementById('instance-storage-class');
-    fetch('/api/storage_classes')
+    var scUrl = '/api/storage_classes';
+    if(currentClusterId) scUrl += '?cluster_id=' + currentClusterId;
+    fetch(scUrl)
     .then(function(r){return r.json()})
     .then(function(classes){
         scSel.innerHTML = '<option value="">-- Select a Storage Class --</option>';
@@ -864,7 +887,9 @@ function updateGpuFromNodes(){
 function loadStorageClasses(){
     var sel = document.getElementById('storage-class-select');
     sel.innerHTML = '<option value="">Loading…</option>';
-    fetch('/api/storage_classes').then(function(r){return r.json()}).then(function(classes){
+    var url = '/api/storage_classes';
+    if(currentClusterId) url += '?cluster_id=' + currentClusterId;
+    fetch(url).then(function(r){return r.json()}).then(function(classes){
         sel.innerHTML='<option value="">-- Select a Storage Class --</option>';
         if(!classes.length){sel.innerHTML='<option value="">(none found)</option>';return;}
         classes.forEach(function(sc){ var o=document.createElement('option');o.value=sc.name;o.textContent=sc.name+(sc.is_default?' (default)':'');sel.appendChild(o);});
@@ -1007,8 +1032,9 @@ function loadClusters(){
             b.dataset.id=g.id;
             b.onclick=function(){selectCluster(g.id)};
             var esc = g.name.replace(/'/g,"\\'");
-            var actions = g.is_cluster_owner ? '<span class="cluster-actions"><span class="cl-btn" onclick="event.stopPropagation();editCluster('+g.id+',\''+esc+'\',\''+g.icon+'\')" title="Edit">✏️</span><span class="cl-btn cl-del" onclick="event.stopPropagation();deleteCluster('+g.id+',\''+esc+'\')" title="Delete">&times;</span></span>' : '';
-            b.innerHTML='<span class="icon">'+g.icon+'</span><span class="name">'+g.name+'<span class="target">'+(g.target_cluster||'local')+'</span></span><span class="count">'+g.instance_count+'</span>'+actions;
+            var escDesc = (g.description||'').replace(/'/g,"\\'");
+            var actions = g.is_cluster_owner ? '<span class="cluster-actions"><span class="cl-btn" onclick="event.stopPropagation();editCluster('+g.id+',\''+esc+'\',\''+g.icon+'\',\''+escDesc+'\')" title="Edit">✏️</span><span class="cl-btn cl-del" onclick="event.stopPropagation();deleteCluster('+g.id+',\''+esc+'\')" title="Delete">&times;</span></span>' : '';
+            b.innerHTML='<span class="icon">'+g.icon+'</span><span class="name">'+g.name+'<span class="target" contenteditable="true" onclick="event.stopPropagation()" onblur="saveClusterComment('+g.id+', this)" onkeydown="if(event.key===\'Enter\'){event.preventDefault();this.blur()}">'+(g.description||'')+'</span></span><span class="count">'+g.instance_count+'</span>'+actions;
             list.appendChild(b);
         });
     });
@@ -1312,9 +1338,9 @@ function _showSessionExpiredOverlay(){
     document.body.appendChild(ov);
 }
 
-// Initial load
+// Initial load — select saved cluster (updates topbar, highlights sidebar, loads instances)
 if(currentClusterId) {
-    loadInstances(currentClusterId);
+    selectCluster(currentClusterId);
 }
 
 function showInstanceInfo(btn) {

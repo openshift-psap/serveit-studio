@@ -115,6 +115,7 @@ def create_app():
         kubeconfig_data = data.get('kubeconfig')
         storage_class = data.get('storage_class') or os.environ.get('STORAGE_CLASS')
         proxy = data.get('proxy') or None
+        description = data.get('description') or None
 
         try:
             result = instance_manager.create_cluster(
@@ -122,7 +123,8 @@ def create_app():
                 namespace=namespace,
                 kubeconfig_data=kubeconfig_data,
                 storage_class=storage_class,
-                proxy=proxy)
+                proxy=proxy,
+                description=description)
             return jsonify(result)
         except Exception as e:
             if 'UNIQUE' in str(e):
@@ -141,7 +143,8 @@ def create_app():
         data = request.get_json() or {}
         success = instance_manager.update_cluster(
             cluster_id, get_user_id(),
-            name=data.get('name'), icon=data.get('icon'))
+            name=data.get('name'), icon=data.get('icon'),
+            description=data.get('description'))
         if success:
             return jsonify({'ok': True})
         return jsonify({'error': 'Cluster not found'}), 404
@@ -255,17 +258,49 @@ def create_app():
 
     @app.route('/api/storage_classes', methods=['GET'])
     def api_storage_classes():
-        import subprocess
+        import subprocess, tempfile, base64
         try:
-            cmd = 'oc' if os.path.exists('/usr/local/bin/oc') else 'kubectl'
-            r = subprocess.run([cmd, 'get', 'sc', '-o', 'json'],
-                               capture_output=True, text=True, timeout=15)
+            cluster_id = request.args.get('cluster_id', type=int)
+            cmd_base = ['oc' if os.path.exists('/usr/local/bin/oc') else 'kubectl']
+            env = None
+            tmp_path = None
+
+            if cluster_id:
+                with get_db() as conn:
+                    cluster = conn.execute('SELECT * FROM clusters WHERE id = ?', (cluster_id,)).fetchone()
+                if cluster:
+                    cluster = dict(cluster)
+                    kubeconfig_secret = cluster.get('kubeconfig_secret')
+                    proxy = cluster.get('proxy')
+                    if kubeconfig_secret:
+                        namespace = os.environ.get('NAMESPACE', 'inftune')
+                        r = subprocess.run(cmd_base + ['get', 'secret', kubeconfig_secret, '-n', namespace,
+                                           '-o', 'jsonpath={.data.kubeconfig}'],
+                                           capture_output=True, text=True, timeout=15)
+                        if r.returncode == 0 and r.stdout.strip():
+                            kubeconfig_data = base64.b64decode(r.stdout.strip()).decode()
+                            tmp = tempfile.NamedTemporaryFile(mode='w', suffix='.kubeconfig', delete=False)
+                            tmp.write(kubeconfig_data)
+                            tmp.close()
+                            tmp_path = tmp.name
+                            cmd_base = ['kubectl', '--kubeconfig', tmp_path]
+                    if proxy:
+                        env = os.environ.copy()
+                        env['HTTPS_PROXY'] = proxy
+                        env['https_proxy'] = proxy
+
+            try:
+                r = subprocess.run(cmd_base + ['get', 'sc', '-o', 'json'],
+                                   capture_output=True, text=True, timeout=15, env=env)
+            finally:
+                if tmp_path:
+                    os.unlink(tmp_path)
+
             if r.returncode != 0:
                 return jsonify([])
             import json as _json
             data = _json.loads(r.stdout)
             classes = []
-            # Filter out RBD (block-only, no RWX) and snapshot storage classes
             excluded = ('rbd', 'snapshot', 'block', 'rgw', 'noobaa')
             for item in data.get('items', []):
                 sc_name = item['metadata']['name']
