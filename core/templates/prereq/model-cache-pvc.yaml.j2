@@ -11,7 +11,7 @@ metadata:
     description: "Model cache PVC for ServeIt Studio benchmark - {{ model_name }}"
 spec:
   accessModes:
-    - ReadWriteMany  # Required for shared access across pods
+    - {{ pvc_access_mode | default('ReadWriteMany') }}
   storageClassName: {{ storage_class }}
   resources:
     requests:

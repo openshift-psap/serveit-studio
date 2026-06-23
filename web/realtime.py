@@ -1778,6 +1778,19 @@ def handle_setup_storage(data):
         if not pvc_exists:
             log_to_ui(f'📦 Creating PVC {pvc_name} ({pvc_size}Gi)...', 'info')
 
+            # Determine access mode — LVM/topolvm only supports RWO, CephFS/NFS support RWX
+            pvc_access_mode = 'ReadWriteMany'
+            if storage_class:
+                sc_r = subprocess.run(
+                    ['kubectl', 'get', 'sc', storage_class,
+                     '-o', 'jsonpath={.provisioner}'],
+                    capture_output=True, text=True, timeout=10)
+                sc_provisioner = sc_r.stdout.strip() if sc_r.returncode == 0 else ''
+                rwo_provisioners = ('topolvm.io', 'ebs.csi', 'disk.csi', 'vpc.block',
+                                    'kubernetes.io/no-provisioner')
+                if any(p in sc_provisioner for p in rwo_provisioners):
+                    pvc_access_mode = 'ReadWriteOnce'
+
             # Render PVC template
             pvc_yaml = template_mgr.render_template(
                 'prereq/model-cache-pvc.yaml.j2',
@@ -1786,7 +1799,8 @@ def handle_setup_storage(data):
                 test_id=test_id,
                 model_name=model,
                 storage_class=storage_class,
-                storage_size=pvc_size
+                storage_size=pvc_size,
+                pvc_access_mode=pvc_access_mode,
             )
 
             cmd = ['kubectl', 'apply', '-f', '-']
