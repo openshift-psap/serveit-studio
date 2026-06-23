@@ -485,7 +485,20 @@ class DeploymentManager:
             time_for_progress = (time.time() - last_progress_log) >= progress_log_interval
 
             if log_callback and (status_changed or time_for_progress):
-                ready_label = "Ready" if status.ready else "Running (model is still loading into GPU)"
+                if status.ready:
+                    ready_label = "Ready"
+                else:
+                    # Check if any pods are still in init container phase
+                    pod_r = self.kubectl.run(
+                        ['get', 'pods', '-l', f'test-id={test_id}', '-n', self.namespace,
+                         '-o', 'jsonpath={range .items[*]}{.status.phase}{"/"}{range .status.initContainerStatuses[*]}{.state.running.startedAt}{" "}{end}{"\\n"}{end}'],
+                        check=False)
+                    in_init = pod_r.returncode == 0 and any(
+                        'Running' not in line.split('/')[0] or
+                        (len(line.split('/')) > 1 and line.split('/')[1].strip())
+                        for line in pod_r.stdout.strip().splitlines() if line.strip()
+                    )
+                    ready_label = "Running (downloading model...)" if in_init else "Running (model is still loading into GPU)"
                 elapsed_suffix = f" ({elapsed}s)" if elapsed > 0 else ""
                 log_callback(
                     f"📊 Status: {status.pods_running}/{status.pods_expected} {'pod' if status.pods_expected == 1 else 'pods'} {ready_label}{elapsed_suffix}"
