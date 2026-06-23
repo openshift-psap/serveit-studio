@@ -27,9 +27,7 @@
         .cluster-item.active{background:#F0F9FA;color:#1B5E6B;font-weight:600}
         .cluster-item .icon{font-size:1.1em;flex-shrink:0}
         .cluster-item .name{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;line-height:1.2}
-        .cluster-item .target{font-size:0.72em;color:#999;font-weight:400;display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;cursor:text;min-height:1.1em}
-        .cluster-item .target:empty::before{content:'add note...';color:#ccc;font-style:italic}
-        .cluster-item .target:focus{outline:none;color:#555;background:rgba(42,123,136,0.05);border-radius:3px;padding:0 2px}
+        .cluster-item .target{font-size:0.72em;color:#999;font-weight:400;display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-height:1.1em}
         .cluster-item .count{font-size:0.75em;color:#999;background:#F0F0F0;padding:2px 7px;border-radius:10px;flex-shrink:0}
         .cluster-item.active .count{background:#E0F2F4;color:#1B5E6B}
         .cluster-item .cluster-actions{display:none;flex-shrink:0;gap:2px}
@@ -227,7 +225,7 @@
         {% for g in clusters %}
         <button class="cluster-item" data-id="{{ g.id }}" onclick="selectCluster({{ g.id }})">
             <span class="icon">{{ g.icon }}</span>
-            <span class="name">{{ g.name }}<span class="target" contenteditable="true" onclick="event.stopPropagation()" onblur="saveClusterComment({{ g.id }}, this)" onkeydown="if(event.key==='Enter'){event.preventDefault();this.blur()}">{{ g.description or '' }}</span></span>
+            <span class="name">{{ g.name }}<span class="target">{{ g.description or '' }}</span></span>
             <span class="count">{{ g.instance_count }}</span>
             <span class="cluster-actions">
                 <span class="cl-btn" onclick="event.stopPropagation();editCluster({{ g.id }},'{{ g.name }}','{{ g.icon }}','{{ g.description or '' }}')" title="Edit">✏️</span>
@@ -649,15 +647,6 @@ function saveEditCluster() {
     });
 }
 
-function saveClusterComment(id, el){
-    var desc = el.textContent.trim();
-    fetch('/api/clusters/' + id, {
-        method: 'PUT',
-        headers: {'Content-Type': 'application/json'},
-        body: JSON.stringify({description: desc})
-    });
-}
-
 function deleteCluster(id, name){
     showConfirm('Delete Cluster', 'Delete cluster "'+name+'"?', 'This will also delete ALL instances in this cluster and their data.', 'Delete Cluster', function(){
         fetch('/api/clusters/'+id,{method:'DELETE'})
@@ -1034,7 +1023,7 @@ function loadClusters(){
             var esc = g.name.replace(/'/g,"\\'");
             var escDesc = (g.description||'').replace(/'/g,"\\'");
             var actions = g.is_cluster_owner ? '<span class="cluster-actions"><span class="cl-btn" onclick="event.stopPropagation();editCluster('+g.id+',\''+esc+'\',\''+g.icon+'\',\''+escDesc+'\')" title="Edit">✏️</span><span class="cl-btn cl-del" onclick="event.stopPropagation();deleteCluster('+g.id+',\''+esc+'\')" title="Delete">&times;</span></span>' : '';
-            b.innerHTML='<span class="icon">'+g.icon+'</span><span class="name">'+g.name+'<span class="target" contenteditable="true" onclick="event.stopPropagation()" onblur="saveClusterComment('+g.id+', this)" onkeydown="if(event.key===\'Enter\'){event.preventDefault();this.blur()}">'+(g.description||'')+'</span></span><span class="count">'+g.instance_count+'</span>'+actions;
+            b.innerHTML='<span class="icon">'+g.icon+'</span><span class="name">'+g.name+'<span class="target">'+(g.description||'')+'</span></span><span class="count">'+g.instance_count+'</span>'+actions;
             list.appendChild(b);
         });
     });
