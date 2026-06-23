@@ -180,9 +180,11 @@ def scan_available_networks(kubectl_runner, namespace: str = None) -> List[Dict[
             cel_expr = ' '.join(
                 s.get('cel', {}).get('expression', '') for s in selectors
             ).lower()
-            has_gpu = 'gpu' in cel_expr or 'nvidia' in cel_expr
-            has_nic = ('dra.net' in cel_expr or 'rdma' in cel_expr or
-                       'net' in cel_expr.replace('nvidia', ''))
+            # NIC: driver is dra.net, or expression references nic pairing
+            has_nic = ('dra.net' in cel_expr or '-nic-' in cel_expr or
+                       '"nic"' in cel_expr or "'nic'" in cel_expr or 'rdma' in cel_expr)
+            # GPU: expression references gpu but not compute-domain (which is internal infra)
+            has_gpu = ('gpu' in cel_expr and 'compute-domain' not in cel_expr)
             if has_gpu and has_nic:
                 kind = 'gpu_nic_pair'
             elif has_gpu:

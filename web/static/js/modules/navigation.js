@@ -614,8 +614,8 @@ socket.on('cluster_scan_result', function(data) {
                     ' onchange="toggleDraDeviceClass(\'' + name + '\',this.checked)" style="width:16px;height:16px;margin-top:2px;flex-shrink:0;">';
                 draHtml += '<div style="min-width:0;">';
                 draHtml += '<div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;">';
-                draHtml += '<span style="font-size:0.88em;font-weight:700;color:#1e293b;">' + meta.label + '</span>' + badge;
-                draHtml += '<span style="font-size:0.75em;color:#94a3b8;font-weight:400;">' + name + '</span>';
+                draHtml += '<span style="font-size:0.88em;font-weight:700;color:#1e293b;">' + name + '</span>';
+                draHtml += '<span style="font-size:0.88em;color:#64748b;font-weight:400;">— ' + meta.label + '</span>' + badge;
                 draHtml += '</div>';
                 draHtml += '<div style="font-size:0.78em;color:#475569;margin-top:2px;line-height:1.4;">' + meta.desc + '</div>';
                 draHtml += '</div></label>';
