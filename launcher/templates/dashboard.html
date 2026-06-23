@@ -1365,14 +1365,12 @@ function showInstanceInfo(btn) {
 <script>
 // Load cluster viz after cluster-viz.js is loaded
 if(currentClusterId) {
-    {% if clusters and clusters[0].scan_data %}
-    // Render from cached DB data immediately (no fetch needed)
-    var _cachedScan = {{ clusters[0].scan_data | safe }};
-    renderClusterDiagram(document.getElementById('cluster-viz'), _cachedScan);
-    {% else %}
-    // No cached data — trigger scan
-    scanAndRenderCluster(currentClusterId, document.getElementById('cluster-viz'), true);
-    {% endif %}
+    var _cachedScans = { {% for g in clusters %}{% if g.scan_data %}{{ g.id }}: {{ g.scan_data | safe }}{% if not loop.last %},{% endif %}{% endif %}{% endfor %} };
+    if(_cachedScans[currentClusterId]) {
+        renderClusterDiagram(document.getElementById('cluster-viz'), _cachedScans[currentClusterId]);
+    } else {
+        scanAndRenderCluster(currentClusterId, document.getElementById('cluster-viz'), true);
+    }
 }
 </script>
 <!-- Help Button -->
