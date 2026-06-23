@@ -490,7 +490,7 @@ class DeploymentManager:
                 else:
                     # Check if any pods are still in init container phase
                     pod_r = self.kubectl.run(
-                        ['get', 'pods', '-l', f'test-id={test_id}', '-n', self.namespace,
+                        ['get', 'pods', '-l', f'llm-d.ai/test-id={test_id}', '-n', self.namespace,
                          '-o', 'jsonpath={range .items[*]}{.status.phase}{"/"}{range .status.initContainerStatuses[*]}{.state.running.startedAt}{" "}{end}{"\\n"}{end}'],
                         check=False)
                     in_init = pod_r.returncode == 0 and any(
