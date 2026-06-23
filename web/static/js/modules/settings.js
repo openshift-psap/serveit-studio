@@ -112,7 +112,18 @@ function updateAdvVllm() {
         valEl.disabled = (mode === 'auto');
         if (mode === 'auto') valEl.value = '';
         var key = f.replace(/-/g, '_');
-        adv[key] = { mode: mode, value: mode === 'custom' ? (valEl.value || null) : null };
+        // Handle fields with an "other" free-text fallback (e.g. tool-call-parser)
+        var otherEl = document.getElementById('adv-' + f + '-other');
+        var effectiveValue = null;
+        if (mode === 'custom') {
+            if (otherEl) {
+                otherEl.disabled = (mode === 'auto');
+                effectiveValue = valEl.value === '__other__' ? (otherEl.value || null) : (valEl.value || null);
+            } else {
+                effectiveValue = valEl.value || null;
+            }
+        }
+        adv[key] = { mode: mode, value: effectiveValue };
     });
     advToggleFields.forEach(function(f) {
         var modeEl = document.getElementById('adv-' + f + '-mode');
@@ -139,7 +150,20 @@ function restoreAdvVllm() {
         if (modeEl) modeEl.value = setting.mode || 'auto';
         if (valEl) {
             valEl.disabled = (setting.mode !== 'custom');
-            if (setting.mode === 'custom' && setting.value != null) valEl.value = setting.value;
+            var otherEl = document.getElementById('adv-' + f + '-other');
+            if (setting.mode === 'custom' && setting.value != null) {
+                // Check if value matches a known option or needs "other"
+                var knownOption = valEl.querySelector('option[value="' + setting.value + '"]');
+                if (knownOption) {
+                    valEl.value = setting.value;
+                    if (otherEl) { otherEl.style.display = 'none'; otherEl.disabled = true; }
+                } else if (otherEl) {
+                    valEl.value = '__other__';
+                    otherEl.value = setting.value;
+                    otherEl.style.display = 'inline-block';
+                    otherEl.disabled = false;
+                }
+            }
         }
     });
     advToggleFields.forEach(function(f) {
