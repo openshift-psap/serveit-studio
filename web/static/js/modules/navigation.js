@@ -571,6 +571,7 @@ socket.on('cluster_scan_result', function(data) {
         networks.forEach(function(net) {
             if (net.device_classes) {
                 net.device_classes.forEach(function(c) {
+                    c = typeof c === 'object' ? c : {name: c, kind: 'unknown'};
                     if (draClasses.indexOf(c) === -1) draClasses.push(c);
                 });
             }
@@ -581,45 +582,42 @@ socket.on('cluster_scan_result', function(data) {
             var showDraInit = savedNetwork === 'dra';
             var savedDra = config.selected_dra_classes || [];
 
-            // Known device class metadata: label, description, badge, recommended
-            var draClassMeta = {
-                'composite-gpu-nic-pair': { label: 'GPU + NIC Pair', desc: 'Pairs each GPU with its nearest RDMA NIC using PCIe affinity. Use this for multi-node inference with GPUDirect RDMA.', badge: '⭐ Recommended', badgeColor: '#166534', badgeBg: '#dcfce7', recommended: true },
-                'composite-gpu': { label: 'GPU only (no NIC)', desc: 'Allocates GPUs without RDMA NIC pairing. Use for single-node or CPU-networking workloads.', badge: 'GPU', badgeColor: '#1e40af', badgeBg: '#dbeafe', recommended: false },
-                'dranet': { label: 'NIC only (DRANET)', desc: 'Allocates individual RDMA network interfaces. Used internally by the composite driver — select composite-gpu-nic-pair instead.', badge: 'NIC', badgeColor: '#374151', badgeBg: '#f3f4f6', recommended: false },
-                'gpu.nvidia.com': { label: 'NVIDIA GPU (standalone)', desc: 'Raw NVIDIA GPU allocation without NIC pairing. Used by the composite driver internally.', badge: 'GPU', badgeColor: '#374151', badgeBg: '#f3f4f6', recommended: false },
-                'mig.nvidia.com': { label: 'NVIDIA MIG slice', desc: 'Multi-Instance GPU slice. Only relevant if MIG partitioning is enabled on the nodes.', badge: 'MIG', badgeColor: '#374151', badgeBg: '#f3f4f6', recommended: false },
-                'vfio.gpu.nvidia.com': { label: 'GPU VFIO passthrough', desc: 'GPU in VFIO mode for VM passthrough. Not used for container inference workloads.', badge: 'VFIO', badgeColor: '#374151', badgeBg: '#f3f4f6', recommended: false },
-                'compute-domain-daemon.nvidia.com': { label: 'NVIDIA Compute Domain Daemon', desc: 'Internal NVIDIA daemon for multi-node compute domain setup. Not needed for standard inference.', badge: 'Internal', badgeColor: '#374151', badgeBg: '#f3f4f6', recommended: false },
-                'compute-domain-default-channel.nvidia.com': { label: 'NVIDIA Compute Domain Channel', desc: 'Internal NVIDIA compute domain communication channel. Not needed for standard inference.', badge: 'Internal', badgeColor: '#374151', badgeBg: '#f3f4f6', recommended: false },
+            // Kind-based metadata — works regardless of device class naming
+            var kindMeta = {
+                'gpu_nic_pair': { label: 'GPU + NIC Pair', desc: 'Pairs each GPU with its nearest RDMA NIC using PCIe affinity. Use this for multi-node inference with GPUDirect RDMA.', badge: '⭐ Recommended', badgeColor: '#166534', badgeBg: '#dcfce7', recommended: true },
+                'gpu':          { label: 'GPU only',       desc: 'Allocates GPUs without RDMA NIC pairing. Use for single-node or CPU-networking workloads.', badge: 'GPU', badgeColor: '#1e40af', badgeBg: '#dbeafe', recommended: false },
+                'nic':          { label: 'NIC only',       desc: 'Allocates individual RDMA network interfaces. Usually used internally by a composite driver — select a GPU+NIC Pair class instead.', badge: 'NIC', badgeColor: '#374151', badgeBg: '#f3f4f6', recommended: false },
+                'unknown':      { label: 'Other',          desc: 'Device class with unrecognised selector. Not typically needed for standard inference.', badge: 'Other', badgeColor: '#374151', badgeBg: '#f3f4f6', recommended: false },
             };
 
             var draHtml = '<div id="dra-device-class-section" style="margin-top:12px;padding:12px 16px;background:#ecfdf5;border:1px solid #a7f3d0;border-radius:8px;display:' +
                 (showDraInit ? 'block' : 'none') + ';">';
             draHtml += '<label style="font-weight:600;font-size:0.9em;color:#065f46;margin-bottom:4px;display:block;">DRA Device Classes</label>';
-            draHtml += '<div style="font-size:0.8em;color:#047857;margin-bottom:10px;">Choose which device class to use. For GPU+RDMA inference, select <strong>GPU + NIC Pair</strong>.</div>';
+            draHtml += '<div style="font-size:0.8em;color:#047857;margin-bottom:10px;">Choose which device class to use. For GPU+RDMA inference, select a <strong>GPU + NIC Pair</strong> class.</div>';
 
-            // Sort: recommended first
+            // Sort: gpu_nic_pair first, then gpu, then nic, then unknown
+            var kindOrder = {gpu_nic_pair: 0, gpu: 1, nic: 2, unknown: 3};
             var sortedClasses = draClasses.slice().sort(function(a, b) {
-                var aRec = (draClassMeta[a] && draClassMeta[a].recommended) ? 0 : 1;
-                var bRec = (draClassMeta[b] && draClassMeta[b].recommended) ? 0 : 1;
-                return aRec - bRec;
+                return (kindOrder[a.kind] || 3) - (kindOrder[b.kind] || 3);
             });
 
             sortedClasses.forEach(function(cls) {
-                var meta = draClassMeta[cls] || { label: cls, desc: '', badge: '', recommended: false };
-                var isChecked = savedDra.length > 0 ? savedDra.indexOf(cls) !== -1 : meta.recommended;
+                var name = cls.name || cls;
+                var kind = cls.kind || 'unknown';
+                var meta = kindMeta[kind] || kindMeta['unknown'];
+                var isChecked = savedDra.length > 0 ? savedDra.indexOf(name) !== -1 : meta.recommended;
                 var border = meta.recommended ? '2px solid #6ee7b7' : '1px solid #d1fae5';
                 var bg = meta.recommended ? '#f0fdf4' : 'white';
-                var badge = meta.badge ? '<span style="font-size:0.72em;background:' + (meta.badgeBg||'#f3f4f6') + ';color:' + (meta.badgeColor||'#374151') + ';padding:1px 6px;border-radius:3px;font-weight:600;white-space:nowrap;">' + meta.badge + '</span>' : '';
+                var badge = '<span style="font-size:0.72em;background:' + meta.badgeBg + ';color:' + meta.badgeColor + ';padding:1px 6px;border-radius:3px;font-weight:600;white-space:nowrap;">' + meta.badge + '</span>';
                 draHtml += '<label style="display:flex;align-items:flex-start;gap:10px;padding:10px 12px;margin-bottom:6px;background:' + bg + ';border:' + border + ';border-radius:6px;cursor:pointer;">';
                 draHtml += '<input type="checkbox" ' + (isChecked ? 'checked' : '') +
-                    ' onchange="toggleDraDeviceClass(\'' + cls + '\',this.checked)" style="width:16px;height:16px;margin-top:2px;flex-shrink:0;">';
+                    ' onchange="toggleDraDeviceClass(\'' + name + '\',this.checked)" style="width:16px;height:16px;margin-top:2px;flex-shrink:0;">';
                 draHtml += '<div style="min-width:0;">';
                 draHtml += '<div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;">';
-                draHtml += '<span style="font-size:0.88em;font-weight:700;color:#1e293b;">' + (meta.label || cls) + '</span>' + badge;
-                draHtml += '<span style="font-size:0.75em;color:#94a3b8;font-weight:400;">' + cls + '</span>';
+                draHtml += '<span style="font-size:0.88em;font-weight:700;color:#1e293b;">' + meta.label + '</span>' + badge;
+                draHtml += '<span style="font-size:0.75em;color:#94a3b8;font-weight:400;">' + name + '</span>';
                 draHtml += '</div>';
-                if (meta.desc) draHtml += '<div style="font-size:0.78em;color:#475569;margin-top:2px;line-height:1.4;">' + meta.desc + '</div>';
+                draHtml += '<div style="font-size:0.78em;color:#475569;margin-top:2px;line-height:1.4;">' + meta.desc + '</div>';
                 draHtml += '</div></label>';
             });
             draHtml += '</div>';
@@ -628,10 +626,10 @@ socket.on('cluster_scan_result', function(data) {
             draInsert.insertAdjacentHTML('afterend', draHtml);
 
             if (savedDra.length === 0) {
-                // Default: select composite-gpu-nic-pair if available, otherwise anything with 'nic'
-                var defaults = draClasses.filter(function(c) { return c === 'composite-gpu-nic-pair'; });
-                if (defaults.length === 0) defaults = draClasses.filter(function(c) { return c.indexOf('nic') !== -1 || c.indexOf('dranet') !== -1; });
-                config.selected_dra_classes = defaults;
+                // Default: select all gpu_nic_pair classes; fall back to nic-only classes
+                var defaults = draClasses.filter(function(c) { return c.kind === 'gpu_nic_pair'; });
+                if (defaults.length === 0) defaults = draClasses.filter(function(c) { return c.kind === 'nic'; });
+                config.selected_dra_classes = defaults.map(function(c) { return c.name || c; });
                 saveConfig();
             }
         }

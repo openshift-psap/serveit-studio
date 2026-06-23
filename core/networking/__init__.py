@@ -144,7 +144,7 @@ def scan_available_networks(kubectl_runner, namespace: str = None) -> List[Dict[
     # Fire all queries in parallel
     queries = {
         'nad_api': ['api-resources', '--api-group=k8s.cni.cncf.io'],
-        'dra_classes': ['get', 'deviceclass', '-o', 'jsonpath={.items[*].metadata.name}'],
+        'dra_classes': ['get', 'deviceclass', '-o', 'json'],
         'nodes': ['get', 'nodes', '-o', 'json'],
         'nmstate_api': ['api-resources', '--api-group=nmstate.io'],
     }
@@ -167,9 +167,33 @@ def scan_available_networks(kubectl_runner, namespace: str = None) -> List[Dict[
     dra_device_classes = []
     dra_available = False
     if dra_r and dra_r.returncode == 0 and dra_r.stdout.strip():
-        dra_device_classes = sorted(dra_r.stdout.strip().split())
-        dra_available = any('nic' in c or 'dranet' in c or 'dra-net' in c or 'gpu-nic' in c
-                            for c in dra_device_classes)
+        try:
+            dra_items = json.loads(dra_r.stdout).get('items', [])
+        except Exception:
+            dra_items = []
+        for item in dra_items:
+            name = item.get('metadata', {}).get('name', '')
+            if not name:
+                continue
+            # Classify by inspecting the CEL selector expression — works regardless of naming
+            selectors = item.get('spec', {}).get('selectors', [])
+            cel_expr = ' '.join(
+                s.get('cel', {}).get('expression', '') for s in selectors
+            ).lower()
+            has_gpu = 'gpu' in cel_expr or 'nvidia' in cel_expr
+            has_nic = ('dra.net' in cel_expr or 'rdma' in cel_expr or
+                       'net' in cel_expr.replace('nvidia', ''))
+            if has_gpu and has_nic:
+                kind = 'gpu_nic_pair'
+            elif has_gpu:
+                kind = 'gpu'
+            elif has_nic:
+                kind = 'nic'
+            else:
+                kind = 'unknown'
+            dra_device_classes.append({'name': name, 'kind': kind})
+        dra_device_classes = sorted(dra_device_classes, key=lambda x: x['name'])
+        dra_available = any(c['kind'] in ('gpu_nic_pair', 'nic') for c in dra_device_classes)
 
     nodes_r = results.get('nodes')
     shared_available = False
