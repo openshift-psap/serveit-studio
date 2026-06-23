@@ -37,7 +37,29 @@ class PrereqManager:
         self.kubectl = kubectl_runner or KubectlRunner(kubeconfig=kubeconfig, namespace=namespace)
         self.template_mgr = TemplateManager()
         self.scheduler_image = scheduler_image
-        self.gateway_class = gateway_class or 'istio'
+        self.gateway_class = gateway_class or self._detect_gateway_class()
+
+    def _detect_gateway_class(self) -> str:
+        """Detect the best available GatewayClass from the cluster."""
+        try:
+            r = self.kubectl.run(['get', 'gatewayclass', '-o',
+                                  'jsonpath={range .items[*]}{.metadata.name}{"\\t"}'
+                                  '{.status.conditions[0].status}{"\\n"}{end}'], check=False)
+            if r.returncode == 0 and r.stdout.strip():
+                classes = {}
+                for line in r.stdout.strip().splitlines():
+                    parts = line.strip().split('\t')
+                    if len(parts) == 2:
+                        classes[parts[0]] = parts[1]
+                for preferred in ('istio', 'data-science-gateway-class', 'openshift-default'):
+                    if classes.get(preferred) == 'True':
+                        return preferred
+                for name, accepted in classes.items():
+                    if accepted == 'True':
+                        return name
+        except Exception:
+            pass
+        return 'istio'
 
     def check_prereqs_exist(self, gaie_name: str = 'gaie-pd-epp',
                            pool_name: str = 'gaie-pd',
