@@ -73,10 +73,10 @@ def scan_cluster_resources(cluster: Dict, namespace: str = 'serveit', proxy: str
         # Check for missing infrastructure components (using the scanner's kubectl which respects kubeconfig)
         warnings = []
         try:
-            r = scanner.kubectl.run(['api-resources'], check=False)
-            if r.returncode == 0:
-                if 'leaderworkerset' not in r.stdout:
-                    warnings.append('LeaderWorkerSet (LWS) not installed — required for vLLM pod deployment')
+            r = scanner.kubectl.run(['get', 'crd', 'leaderworkersets.leaderworkerset.x-k8s.io',
+                                     '--ignore-not-found', '--no-headers'], check=False)
+            if r.returncode != 0 or not r.stdout.strip():
+                warnings.append('LeaderWorkerSet (LWS) not installed — required for vLLM pod deployment')
         except Exception:
             pass
         try:
