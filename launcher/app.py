@@ -301,7 +301,7 @@ def create_app():
             import json as _json
             data = _json.loads(r.stdout)
             classes = []
-            excluded = ('rbd', 'snapshot', 'block', 'rgw', 'noobaa')
+            excluded = ('rbd', 'snapshot', 'block', 'rgw', 'noobaa', 's3', 'cos')
             for item in data.get('items', []):
                 sc_name = item['metadata']['name']
                 provisioner = item.get('provisioner', '')
