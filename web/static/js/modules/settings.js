@@ -112,16 +112,17 @@ function updateAdvVllm() {
         valEl.disabled = (mode === 'auto');
         if (mode === 'auto') valEl.value = '';
         var key = f.replace(/-/g, '_');
-        // Handle fields with an "other" free-text fallback (e.g. tool-call-parser)
-        var otherEl = document.getElementById('adv-' + f + '-other');
+        var txtEl = document.getElementById('adv-' + f + '-txt');
         var effectiveValue = null;
         if (mode === 'custom') {
-            if (otherEl) {
-                otherEl.disabled = (mode === 'auto');
-                effectiveValue = valEl.value === '__other__' ? (otherEl.value || null) : (valEl.value || null);
+            if (txtEl && txtEl.style.display !== 'none') {
+                txtEl.disabled = false;
+                effectiveValue = txtEl.value || null;
             } else {
-                effectiveValue = valEl.value || null;
+                effectiveValue = (valEl.value && valEl.value !== '__custom__') ? valEl.value : null;
             }
+        } else if (txtEl) {
+            txtEl.disabled = true;
         }
         adv[key] = { mode: mode, value: effectiveValue };
     });
@@ -150,18 +151,18 @@ function restoreAdvVllm() {
         if (modeEl) modeEl.value = setting.mode || 'auto';
         if (valEl) {
             valEl.disabled = (setting.mode !== 'custom');
-            var otherEl = document.getElementById('adv-' + f + '-other');
+            var txtEl = document.getElementById('adv-' + f + '-txt');
             if (setting.mode === 'custom' && setting.value != null) {
-                // Check if value matches a known option or needs "other"
                 var knownOption = valEl.querySelector('option[value="' + setting.value + '"]');
-                if (knownOption) {
+                if (knownOption && setting.value !== '__custom__') {
                     valEl.value = setting.value;
-                    if (otherEl) { otherEl.style.display = 'none'; otherEl.disabled = true; }
-                } else if (otherEl) {
-                    valEl.value = '__other__';
-                    otherEl.value = setting.value;
-                    otherEl.style.display = 'inline-block';
-                    otherEl.disabled = false;
+                    valEl.style.display = '';
+                    if (txtEl) { txtEl.style.display = 'none'; txtEl.disabled = true; }
+                } else if (txtEl) {
+                    valEl.style.display = 'none';
+                    txtEl.value = setting.value;
+                    txtEl.style.display = 'inline-block';
+                    txtEl.disabled = false;
                 }
             }
         }
