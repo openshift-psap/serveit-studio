@@ -634,6 +634,7 @@ function renderCharts(data, runId) {
         html += `<div><span style="color:#64748b;">Max Model Len:</span> ${rv.max_model_len || rc.max_model_len || '-'}</div>`;
         const hasPdTests = (data.all_results || []).some(r => r.architecture === 'PD');
         const hasAggTests = (data.all_results || []).some(r => r.architecture === 'AGGREGATED');
+        const hasEpTests = (data.all_results || []).some(r => r.architecture === 'EP');
         if (hasPdTests || hasEpTests) {
             let gmuParts = [];
             if (rv.prefill_gpu_memory_utilization) gmuParts.push(`PD prefill=${rv.prefill_gpu_memory_utilization}`);
@@ -653,7 +654,6 @@ function renderCharts(data, runId) {
         html += `<div><span style="color:#64748b;">Max Num Seqs:</span> ${rv.max_num_seqs || '256 (default)'}${rv.decode_max_num_seqs ? ' <span style="color:#94a3b8;">(decode: ' + rv.decode_max_num_seqs + ')</span>' : ''}</div>`;
         html += `<div><span style="color:#64748b;">Max Batched Tokens:</span> ${rv.max_num_batched_tokens || rv.max_model_len || '-'}</div>`;
         html += `<div><span style="color:#64748b;">Prefix Caching:</span> ${rv.enable_prefix_caching === true ? 'Enabled' : (rv.enable_prefix_caching === false ? 'Disabled' : '-')}</div>`;
-        const hasEpTests = (data.all_results || []).some(r => r.architecture === 'EP');
         if (hasEpTests) {
             html += `<div><span style="color:#64748b;">Expert Parallel:</span> Enabled <span style="color:#94a3b8;">(EP configs)</span> / Disabled <span style="color:#94a3b8;">(PD, Aggregated)</span></div>`;
         } else {
