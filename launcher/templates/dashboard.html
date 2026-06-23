@@ -981,6 +981,12 @@ function createInstance(e){
                     } else {
                         overlay.querySelector('span:last-of-type').textContent = 'Status: ' + ps + '…';
                     }
+                } else if(pollCount > 3) {
+                    clearInterval(pollInterval);
+                    overlay.remove();
+                    hideCreateModal();
+                    loadInstances(currentClusterId);
+                    loadClusters();
                 }
                 if(pollCount > 120){
                     clearInterval(pollInterval);
