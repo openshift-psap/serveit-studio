@@ -697,6 +697,8 @@ def run_optimization_background(data):
         gateway_class = _get('gateway_class', 'istio')
         per_pod_storage = _get('per_pod_storage', False)
         storage_class = _get('storage_class')
+        pvc_size_raw = _get('pvc_size')
+        pvc_size = f"{int(pvc_size_raw)}Gi" if pvc_size_raw else None
         vllm_image = _get('image') or 'ghcr.io/llm-d/llm-d-cuda:v0.6.0'
         scheduler_image = _get('scheduler_image') or 'ghcr.io/llm-d/llm-d-inference-scheduler:v0.7.1'
         single_test_architecture = _get('single_test_architecture')
@@ -924,6 +926,7 @@ data:
                 gateway_class=gateway_class,
                 per_pod_storage=per_pod_storage,
                 storage_class=storage_class,
+                pvc_size=pvc_size,
                 advanced_vllm=advanced_vllm,
                 single_test_architecture=single_test_architecture,
                 single_test_tp=int(single_test_tp) if single_test_tp else None,
