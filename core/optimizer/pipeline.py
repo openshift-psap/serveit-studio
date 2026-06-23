@@ -1609,12 +1609,18 @@ class RecipeOptimizer(
         """Estimate model weight size in GB for VRAM planning.
 
         Uses _model_size_b (set from config or name parsing).
-        FP8: ~1 byte/param, FP16: ~2 bytes/param.
+        Multipliers account for raw weights + mixed-precision layers,
+        activation buffers, and CUDA graph capture overhead:
+          FP8:  1.0 byte/param × 1.1 overhead = 1.1x
+          FP16: 2.0 byte/param × 1.1 overhead = 2.2x
+          FP32: 4.0 byte/param × 1.1 overhead = 4.4x
         """
         params_b = self._model_size_b
         if self._model_dtype == 'fp8':
-            return params_b * 1.0
-        return params_b * 2.0
+            return params_b * 1.1
+        if self._model_dtype in ('fp16', 'bf16'):
+            return params_b * 2.2
+        return params_b * 4.4
 
 
     def _build_results(self) -> Dict[str, Any]:

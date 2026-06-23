@@ -127,12 +127,9 @@ class ClusterResources:
             Minimum number of GPUs required (power of 2)
         """
         gpu_memory_gb = self.gpu_memory_per_gpu_mb / 1024
-        # vLLM caps usable VRAM via gpu_memory_utilization (default 0.9).
-        # Use 0.85 as a conservative estimate to leave room for KV cache.
-        effective_gpu_memory_gb = gpu_memory_gb * 0.85
 
-        # Framework/CUDA overhead: ~5% of usable VRAM
-        overhead_gb = effective_gpu_memory_gb * 0.05
+        # Framework/CUDA overhead: ~5% of VRAM
+        overhead_gb = gpu_memory_gb * 0.05
 
         # KV cache requirement from model architecture and workload
         kv_cache_gb = 0
@@ -155,7 +152,7 @@ class ClusterResources:
         # User-specified extra safety margin
         if extra_reserve_pct > 0:
             required_memory_gb *= (1 + extra_reserve_pct / 100.0)
-        min_gpus = int(required_memory_gb / effective_gpu_memory_gb) + 1
+        min_gpus = int(required_memory_gb / gpu_memory_gb) + 1
 
         tp = next_power_of_2(min_gpus)
 
