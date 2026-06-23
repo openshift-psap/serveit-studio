@@ -102,8 +102,8 @@ spec:
                   du -sh "$DST"
                 else
                   echo "Downloading $MODEL to per-pod PVC..."
-                  pip install -q huggingface_hub 2>/dev/null
-                  HF_HOME="$DST" HF_HUB_CACHE="$DST" python3 -c "from huggingface_hub import snapshot_download; snapshot_download('$MODEL', local_files_only=False); print('Download complete')"
+                  pip install -q huggingface_hub hf-transfer 2>/dev/null
+                  HF_HOME="$DST" HF_HUB_CACHE="$DST" HF_HUB_ENABLE_HF_TRANSFER=1 python3 -c "from huggingface_hub import snapshot_download; snapshot_download('$MODEL', local_files_only=False); print('Download complete')"
                   echo "Done: $(du -sh $DST | cut -f1)"
                 fi
             env:
