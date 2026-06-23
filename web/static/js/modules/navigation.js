@@ -622,6 +622,8 @@ socket.on('cluster_scan_result', function(data) {
             });
             draHtml += '</div>';
 
+            var existing = document.getElementById('dra-device-class-section');
+            if (existing) existing.remove();
             var draInsert = document.getElementById('shared-device-section') || document.getElementById('sriov-policy-section') || document.getElementById('nad-selector-section') || networkCards;
             draInsert.insertAdjacentHTML('afterend', draHtml);
 
