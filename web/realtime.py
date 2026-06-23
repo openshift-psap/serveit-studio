@@ -561,6 +561,31 @@ def handle_cleanup_deployment(data):
         emit('cleanup_result', {'success': False, 'error': error_msg})
 
 
+def _detect_gateway_class(scanner):
+    """Detect the best available GatewayClass. Prefers 'istio', falls back to any accepted class."""
+    try:
+        r = scanner.kubectl.run(['get', 'gatewayclass', '-o',
+                                 'jsonpath={range .items[*]}{.metadata.name}{"\\t"}'
+                                 '{.status.conditions[0].status}{"\\n"}{end}'], check=False)
+        if r.returncode == 0 and r.stdout.strip():
+            classes = {}
+            for line in r.stdout.strip().splitlines():
+                parts = line.strip().split('\t')
+                if len(parts) == 2:
+                    classes[parts[0]] = parts[1]
+            # Prefer istio, then any accepted class
+            for preferred in ('istio', 'data-science-gateway-class', 'openshift-default'):
+                if classes.get(preferred) == 'True':
+                    return preferred
+            # Any accepted class
+            for name, accepted in classes.items():
+                if accepted == 'True':
+                    return name
+    except Exception:
+        pass
+    return 'istio'  # fallback default
+
+
 def _check_lws_vct(scanner):
     """Check if LWS CRD supports volumeClaimTemplates (v0.8.0+)."""
     try:
@@ -759,6 +784,8 @@ def handle_scan_cluster(data):
             'available_networks': _scan_networks(scanner),
             # LWS volumeClaimTemplates support (v0.8.0+)
             'lws_supports_vct': _check_lws_vct(scanner),
+            # Gateway class to use for inference gateway
+            'gateway_class': _detect_gateway_class(scanner),
             # Preset values from launcher (empty when running standalone)
             'preset_max_gpus': int(os.environ.get('PRESET_MAX_GPUS', 0)) or None,
             'preset_nodes': os.environ.get('PRESET_NODES', '').split(',') if os.environ.get('PRESET_NODES') else None,

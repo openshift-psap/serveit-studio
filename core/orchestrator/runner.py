@@ -915,7 +915,8 @@ class TestOrchestrator(ParserMixin, GuidellmMixin):
                 prereq_mgr = PrereqManager(
                     namespace=self.namespace,
                     kubectl_runner=self.deployment_manager.kubectl,
-                    scheduler_image=getattr(config, 'scheduler_image', None)
+                    scheduler_image=getattr(config, 'scheduler_image', None),
+                    gateway_class=getattr(config, 'gateway_class', 'istio'),
                 )
 
                 try:

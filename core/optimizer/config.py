@@ -83,6 +83,7 @@ class RecipeOptimizerConfig:
     sriov_same_subnet: bool = False  # All NICs share one L2 subnet
     selected_shared_device: Optional[str] = None  # Selected shared RDMA resource key
     selected_dra_classes: Optional[List[str]] = None  # User-selected DRA device classes
+    gateway_class: str = 'istio'  # GatewayClass name (detected from cluster)
     per_pod_storage: bool = False  # Use LWS volumeClaimTemplates for per-pod PVCs
     storage_class: Optional[str] = None  # Storage class for per-pod PVCs
     pvc_size: Optional[str] = None  # PVC size for per-pod storage

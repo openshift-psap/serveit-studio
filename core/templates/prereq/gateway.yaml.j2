@@ -8,7 +8,7 @@ metadata:
     component: pd-disaggregation
     istio.io/enable-inference-extproc: "true"
 spec:
-  gatewayClassName: istio
+  gatewayClassName: {{ gateway_class | default('istio') }}
   listeners:
     - name: default
       port: 80

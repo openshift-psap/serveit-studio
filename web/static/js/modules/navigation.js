@@ -771,6 +771,12 @@ socket.on('cluster_scan_result', function(data) {
         saveConfig();
     }
 
+    // Save detected gateway class so optimization pipeline can use it
+    if (data.gateway_class) {
+        config.gateway_class = data.gateway_class;
+        saveConfig();
+    }
+
     // Add event listener for max GPU selection
     maxGpuSelect.addEventListener('change', (e) => {
         const newMaxGpus = parseInt(e.target.value);

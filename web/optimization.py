@@ -363,7 +363,15 @@ def deploy_and_test_inference(model_name: str, namespace: str, job_name: str = N
 
         # Deploy prerequisites (GAIE, Gateway, InferencePool)
         # This function deploys aggregated architecture
-        prereq_mgr = PrereqManager(namespace=namespace)
+        # Read gateway_class from saved UI config (set during cluster scan)
+        try:
+            with get_db() as _conn:
+                _row = _conn.execute('SELECT config_json FROM ui_session_state WHERE id=1').fetchone()
+                _cfg = json.loads(_row['config_json']) if _row and _row['config_json'] else {}
+                gateway_class = _cfg.get('gateway_class', 'istio')
+        except Exception:
+            gateway_class = 'istio'
+        prereq_mgr = PrereqManager(namespace=namespace, gateway_class=gateway_class)
         try:
             # Deploy prerequisites - this will create missing resources and skip existing ones
             success = prereq_mgr.deploy_prereqs(
@@ -686,6 +694,7 @@ def run_optimization_background(data):
         sriov_same_subnet = _get('sriov_same_subnet', False)
         selected_shared_device = _get('selected_shared_device')
         selected_dra_classes = _get('selected_dra_classes') or []
+        gateway_class = _get('gateway_class', 'istio')
         per_pod_storage = _get('per_pod_storage', False)
         storage_class = _get('storage_class')
         vllm_image = _get('image') or 'ghcr.io/llm-d/llm-d-cuda:v0.6.0'
@@ -912,6 +921,7 @@ data:
                 sriov_same_subnet=sriov_same_subnet,
                 selected_shared_device=selected_shared_device,
                 selected_dra_classes=selected_dra_classes,
+                gateway_class=gateway_class,
                 per_pod_storage=per_pod_storage,
                 storage_class=storage_class,
                 advanced_vllm=advanced_vllm,

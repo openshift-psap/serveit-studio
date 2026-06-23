@@ -22,7 +22,8 @@ class PrereqManager:
 
     def __init__(self, namespace: str = 'serveit', kubeconfig: Optional[str] = None,
                  kubectl_runner: Optional[KubectlRunner] = None,
-                 scheduler_image: Optional[str] = None):
+                 scheduler_image: Optional[str] = None,
+                 gateway_class: Optional[str] = None):
         """
         Initialize PrereqManager.
 
@@ -36,6 +37,7 @@ class PrereqManager:
         self.kubectl = kubectl_runner or KubectlRunner(kubeconfig=kubeconfig, namespace=namespace)
         self.template_mgr = TemplateManager()
         self.scheduler_image = scheduler_image
+        self.gateway_class = gateway_class or 'istio'
 
     def check_prereqs_exist(self, gaie_name: str = 'gaie-pd-epp',
                            pool_name: str = 'gaie-pd',
@@ -213,6 +215,7 @@ class PrereqManager:
                 'gaie_replicas': 1,
                 'gaie_image': self.scheduler_image or 'ghcr.io/llm-d/llm-d-inference-scheduler:v0.7.1',
                 'gateway_name': config['gateway_name'],
+                'gateway_class': self.gateway_class,
                 'prefix_cache_weight': epp_weights['prefix_cache_weight'],
                 'kv_cache_weight': epp_weights['kv_cache_weight'],
                 'queue_weight': epp_weights['queue_weight'],
@@ -318,13 +321,19 @@ class PrereqManager:
                 log('❌ GAIE deployment did not become ready')
                 return False
 
-            # Wait for Gateway pod (Istio creates a deployment named {gateway_name}-istio)
-            gateway_deployment = f"{config['gateway_name']}-istio"
-            log(f'⏳ Waiting for Gateway deployment ({gateway_deployment}) to be ready...')
-            ready = self._wait_for_deployment_ready(gateway_deployment, timeout=300, log_callback=log)
-            if not ready:
-                log('❌ Gateway deployment did not become ready')
-                return False
+            # Wait for Gateway deployment
+            # Istio creates {gateway_name}-istio in the same namespace
+            # OpenShift gateway controller creates {gateway_name}-{class} in openshift-ingress
+            if self.gateway_class == 'istio':
+                gateway_deployment = f"{config['gateway_name']}-istio"
+                log(f'⏳ Waiting for Gateway deployment ({gateway_deployment}) to be ready...')
+                ready = self._wait_for_deployment_ready(gateway_deployment, timeout=300, log_callback=log)
+                if not ready:
+                    log('❌ Gateway deployment did not become ready')
+                    return False
+            else:
+                # OpenShift-managed gateway — deployment is in openshift-ingress, always up
+                log(f'✅ Gateway managed by OpenShift ({self.gateway_class}) — skipping deployment wait')
 
             log('✅ All prerequisite infrastructure deployed and ready')
             return True
