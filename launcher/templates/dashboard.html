@@ -792,9 +792,7 @@ function showCreateModal(){
     btn.textContent = 'Create';
 
     var scSel = document.getElementById('instance-storage-class');
-    var scUrl = '/api/storage_classes';
-    if(currentClusterId) scUrl += '?cluster_id=' + currentClusterId;
-    fetch(scUrl)
+    fetch('/api/storage_classes')
     .then(function(r){return r.json()})
     .then(function(classes){
         scSel.innerHTML = '<option value="">-- Select a Storage Class --</option>';
@@ -876,9 +874,7 @@ function updateGpuFromNodes(){
 function loadStorageClasses(){
     var sel = document.getElementById('storage-class-select');
     sel.innerHTML = '<option value="">Loading…</option>';
-    var url = '/api/storage_classes';
-    if(currentClusterId) url += '?cluster_id=' + currentClusterId;
-    fetch(url).then(function(r){return r.json()}).then(function(classes){
+    fetch('/api/storage_classes').then(function(r){return r.json()}).then(function(classes){
         sel.innerHTML='<option value="">-- Select a Storage Class --</option>';
         if(!classes.length){sel.innerHTML='<option value="">(none found)</option>';return;}
         classes.forEach(function(sc){ var o=document.createElement('option');o.value=sc.name;o.textContent=sc.name+(sc.is_default?' (default)':'');sel.appendChild(o);});

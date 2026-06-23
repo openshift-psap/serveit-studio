@@ -258,56 +258,24 @@ def create_app():
 
     @app.route('/api/storage_classes', methods=['GET'])
     def api_storage_classes():
-        import subprocess, tempfile, base64
+        import subprocess
         try:
-            cluster_id = request.args.get('cluster_id', type=int)
-            cmd_base = ['oc' if os.path.exists('/usr/local/bin/oc') else 'kubectl']
-            env = None
-            tmp_path = None
-
-            if cluster_id:
-                with get_db() as conn:
-                    cluster = conn.execute('SELECT * FROM clusters WHERE id = ?', (cluster_id,)).fetchone()
-                if cluster:
-                    cluster = dict(cluster)
-                    kubeconfig_secret = cluster.get('kubeconfig_secret')
-                    proxy = cluster.get('proxy')
-                    if kubeconfig_secret:
-                        namespace = os.environ.get('NAMESPACE', 'inftune')
-                        r = subprocess.run(cmd_base + ['get', 'secret', kubeconfig_secret, '-n', namespace,
-                                           '-o', 'jsonpath={.data.kubeconfig}'],
-                                           capture_output=True, text=True, timeout=15)
-                        if r.returncode == 0 and r.stdout.strip():
-                            kubeconfig_data = base64.b64decode(r.stdout.strip()).decode()
-                            tmp = tempfile.NamedTemporaryFile(mode='w', suffix='.kubeconfig', delete=False)
-                            tmp.write(kubeconfig_data)
-                            tmp.close()
-                            tmp_path = tmp.name
-                            cmd_base = ['kubectl', '--kubeconfig', tmp_path]
-                    if proxy:
-                        env = os.environ.copy()
-                        env['HTTPS_PROXY'] = proxy
-                        env['https_proxy'] = proxy
-
-            try:
-                r = subprocess.run(cmd_base + ['get', 'sc', '-o', 'json'],
-                                   capture_output=True, text=True, timeout=15, env=env)
-            finally:
-                if tmp_path:
-                    os.unlink(tmp_path)
-
+            cmd = 'oc' if os.path.exists('/usr/local/bin/oc') else 'kubectl'
+            r = subprocess.run([cmd, 'get', 'sc', '-o', 'json'],
+                               capture_output=True, text=True, timeout=15)
             if r.returncode != 0:
                 return jsonify([])
             import json as _json
             data = _json.loads(r.stdout)
             classes = []
-            excluded = ('rbd', 'snapshot', 'rgw', 'noobaa', 's3', 'cos')
+            excluded_names = ('rbd', 'snapshot', 'rgw', 'noobaa', 's3', 'cos')
+            excluded_provisioners = ('rbd', 'no-provisioner', '/obc', '/bucket')
             for item in data.get('items', []):
                 sc_name = item['metadata']['name']
                 provisioner = item.get('provisioner', '')
-                if any(x in sc_name.lower() for x in excluded):
+                if any(x in sc_name.lower() for x in excluded_names):
                     continue
-                if 'rbd' in provisioner.lower():
+                if any(x in provisioner.lower() for x in excluded_provisioners):
                     continue
                 is_default = item['metadata'].get('annotations', {}).get(
                     'storageclass.kubernetes.io/is-default-class', 'false') == 'true'
