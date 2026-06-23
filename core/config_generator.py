@@ -86,6 +86,7 @@ class TestConfig:
     rdma_device_resources: List[str] = field(default_factory=list)  # RDMA resource keys from node allocatable
     rdma_nics_per_node: int = 0  # Physical NICs per node (from scanner, for RDMA request count)
     rdma_network_annotation: Optional[str] = None  # Multus NAD annotation JSON for sriov_multinic
+    selected_dra_classes: Optional[List[str]] = None  # User-selected DRA device classes
 
     # Per-pod storage (LWS v0.8.0+ volumeClaimTemplates)
     per_pod_storage: bool = False

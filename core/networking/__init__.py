@@ -60,6 +60,7 @@ def compute_network_values(
     rdma_device_resources: Optional[List[str]] = None,
     rdma_nics_per_node: int = 0,
     rdma_network_annotation: Optional[str] = None,
+    selected_dra_classes: Optional[List[str]] = None,
 ) -> Dict[str, Any]:
     """
     Produce template values from network configuration.
@@ -88,6 +89,9 @@ def compute_network_values(
         values['gpu_resource_key'] = 'dra.llm-d.io/gpu-nic-pair'
     else:
         values['gpu_resource_key'] = 'nvidia.com/gpu'
+
+    # Pass selected DRA device classes through to template rendering
+    values['selected_dra_classes'] = selected_dra_classes or []
 
     values['extra_device_resources'] = []
     values['rdma_nics_per_node'] = rdma_nics_per_node

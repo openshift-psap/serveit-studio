@@ -115,6 +115,7 @@ class ConfigBuilderMixin:
             rdma_device_resources=self.config.rdma_device_resources or [],
             rdma_nics_per_node=self.config.rdma_nics_per_node or 0,
             rdma_network_annotation=self.config.rdma_network_annotation,
+            selected_dra_classes=self.config.selected_dra_classes or [],
 
             memory_request=mem,
             memory_limit=mem,
@@ -610,6 +611,7 @@ class ConfigBuilderMixin:
             rdma_device_resources=self.config.rdma_device_resources or [],
             rdma_nics_per_node=self.config.rdma_nics_per_node or 0,
             rdma_network_annotation=self.config.rdma_network_annotation,
+            selected_dra_classes=self.config.selected_dra_classes or [],
 
             memory_request=mem,
             memory_limit=mem,
@@ -777,6 +779,7 @@ class ConfigBuilderMixin:
             rdma_device_resources=self.config.rdma_device_resources or [],
             rdma_nics_per_node=self.config.rdma_nics_per_node or 0,
             rdma_network_annotation=self.config.rdma_network_annotation,
+            selected_dra_classes=self.config.selected_dra_classes or [],
 
             memory_request=mem,
             memory_limit=mem,

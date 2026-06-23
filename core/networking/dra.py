@@ -150,63 +150,87 @@ class DRANetworkCreator(BaseNetworkCreator):
             'rules': rules
         }
 
-        # Build device requests
-        gpu_request = {
-            'name': 'gpu',
-            'exactly': {
-                'allocationMode': 'ExactCount',
-                'count': 1,
-                'deviceClassName': 'gpu.nvidia.com'
-            }
-        }
+        # Check if user selected a composite gpu-nic-pair class (e.g. composite-gpu-nic-pair).
+        # If so, use a single request for that class — the composite driver handles GPU+NIC
+        # pairing internally. If not, fall back to separate gpu + nic requests (legacy mode).
+        selected_classes = self.config.selected_device_classes or []
+        composite_class = next(
+            (c for c in selected_classes if 'nic' in c.lower() and 'gpu' in c.lower()),
+            None
+        )
 
-        nic_request = {
-            'name': 'nic',
-            'exactly': {
-                'allocationMode': 'ExactCount',
-                'count': 1,
-                'deviceClassName': 'dranet',
-                'selectors': [
+        if composite_class:
+            # Single composite request — no separate GPU/NIC requests needed
+            requests = [
+                {
+                    'name': 'gpu-nic',
+                    'exactly': {
+                        'allocationMode': 'ExactCount',
+                        'count': 1,
+                        'deviceClassName': composite_class
+                    }
+                }
+            ]
+            config_entries = []
+            constraints = []
+        else:
+            # Legacy: separate GPU + NIC requests with PCIe affinity constraint
+            requests = [
+                {
+                    'name': 'gpu',
+                    'exactly': {
+                        'allocationMode': 'ExactCount',
+                        'count': 1,
+                        'deviceClassName': 'gpu.nvidia.com'
+                    }
+                },
+                {
+                    'name': 'nic',
+                    'exactly': {
+                        'allocationMode': 'ExactCount',
+                        'count': 1,
+                        'deviceClassName': 'dranet',
+                        'selectors': [
+                            {
+                                'cel': {
+                                    'expression': self._build_cel_expression(ip_subnet)
+                                }
+                            }
+                        ]
+                    }
+                }
+            ]
+            config_entries = [
+                {
+                    'opaque': {
+                        'driver': 'dra.net',
+                        'parameters': opaque_params
+                    },
+                    'requests': ['nic']
+                }
+            ]
+            constraints = []
+            if self.config.pcie_affinity:
+                constraints = [
                     {
-                        'cel': {
-                            # CEL expression: filter NICs with RDMA + matching IP subnet
-                            'expression': self._build_cel_expression(ip_subnet)
-                        }
+                        'matchAttribute': 'resource.kubernetes.io/pcieRoot',
+                        'requests': ['gpu', 'nic']
                     }
                 ]
-            }
-        }
-
-        # Build constraint (GPU+NIC must be on same PCIe root)
-        constraint = None
-        if self.config.pcie_affinity:
-            constraint = {
-                'matchAttribute': 'resource.kubernetes.io/pcieRoot',
-                'requests': ['gpu', 'nic']
-            }
 
         # Build spec
+        devices: Dict[str, Any] = {'requests': requests}
+        if config_entries:
+            devices['config'] = config_entries
+        if constraints:
+            devices['constraints'] = constraints
+
         spec = {
             'metadata': {},
             'spec': {
-                'devices': {
-                    'requests': [gpu_request, nic_request],
-                    'config': [
-                        {
-                            'opaque': {
-                                'driver': 'dra.net',
-                                'parameters': opaque_params
-                            },
-                            'requests': ['nic']
-                        }
-                    ]
-                }
+                'devices': devices
             }
         }
-
-        # Add constraint if enabled
-        if constraint:
-            spec['spec']['devices']['constraints'] = [constraint]
 
         return spec
 

@@ -63,6 +63,7 @@ class NetworkConfig:
     num_rails: int = 8  # Number of GPU+NIC pairs (H100 = 8)
     ip_prefix: str = "10.0."  # IP prefix for rail selection
     pcie_affinity: bool = True  # Ensure GPU+NIC on same PCIe root
+    selected_device_classes: Optional[List[str]] = None  # User-selected DRA device classes
 
     # NAD-specific (Multus)
     cni_plugins: List[str] = field(default_factory=lambda: ["host-device", "sbr-custom", "tuning"])

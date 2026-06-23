@@ -264,6 +264,7 @@ class NetworkIntegrator:
             num_rails=num_rails,
             ip_prefix='10.',
             pcie_affinity=True,
+            selected_device_classes=getattr(self, '_selected_dra_classes', None) or [],
         )
 
         creators = {
@@ -794,7 +795,7 @@ class DeploymentOrchestrator:
         provider = self._detect_provider()
         self.logger.info(f"Provider: {provider.get_display_name()}")
 
-        network = self._setup_network(provider, config)
+        network = self._setup_network(provider, config, selected_dra_classes=test_config.get('selected_dra_classes') or [])
         self.logger.info(f"Network type: {network.network_type.value}")
 
         self._deploy_prerequisites(config, test_config)
@@ -842,8 +843,9 @@ class DeploymentOrchestrator:
         from .providers import ProviderRegistry
         return ProviderRegistry.detect_provider(self.kubectl)
 
-    def _setup_network(self, provider, config: DeploymentConfig):
+    def _setup_network(self, provider, config: DeploymentConfig, selected_dra_classes=None):
         integrator = NetworkIntegrator(provider, self.kubectl)
+        integrator._selected_dra_classes = selected_dra_classes or []
         return integrator.setup_network(
             namespace=config.namespace,
             num_nics=config.num_nics,

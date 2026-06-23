@@ -130,6 +130,7 @@ class TemplateManager:
             rdma_resources,
             rdma_nics,
             rdma_network_annotation=getattr(config, 'rdma_network_annotation', None),
+            selected_dra_classes=getattr(config, 'selected_dra_classes', None),
         )
 
         # All roles use the same device resources (rdma/ib: 1 is a capacity token,
