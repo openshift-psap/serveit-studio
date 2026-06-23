@@ -597,8 +597,24 @@ def run_optimization_background(data):
                 _saved = json.loads(_row['config_json']) if _row and _row['config_json'] else {}
         except Exception:
             _saved = {}
+
+        # On resume: merge saved run config on top of ui_session_state so advanced
+        # settings (tool_call_parser, reasoning_parser, etc.) survive page reloads.
+        if resume_run_id:
+            try:
+                with get_db() as _conn:
+                    _rrow = _conn.execute(
+                        'SELECT config_json FROM optimization_runs WHERE id=?', (resume_run_id,)
+                    ).fetchone()
+                    if _rrow and _rrow['config_json']:
+                        _run_config = json.loads(_rrow['config_json'])
+                        # Merge run config into _saved — run config wins over session state
+                        _saved = {**_saved, **_run_config}
+            except Exception:
+                pass
+
         def _get(key, default=None, ui_key=None):
-            """Return data[key] if present, else ui_session_state[ui_key or key], else default."""
+            """Return data[key] if present, else optimization_runs/ui_session_state[ui_key or key], else default."""
             v = data.get(key)
             if v is None:
                 v = _saved.get(ui_key or key)
