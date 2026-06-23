@@ -698,7 +698,11 @@ def run_optimization_background(data):
         per_pod_storage = _get('per_pod_storage', False)
         storage_class = _get('storage_class')
         pvc_size_raw = _get('pvc_size')
-        pvc_size = f"{int(pvc_size_raw)}Gi" if pvc_size_raw else None
+        if pvc_size_raw:
+            pvc_size_str = str(pvc_size_raw).replace('Gi', '').replace('G', '').strip()
+            pvc_size = f"{int(pvc_size_str)}Gi" if pvc_size_str.isdigit() else str(pvc_size_raw)
+        else:
+            pvc_size = None
         vllm_image = _get('image') or 'ghcr.io/llm-d/llm-d-cuda:v0.6.0'
         scheduler_image = _get('scheduler_image') or 'ghcr.io/llm-d/llm-d-inference-scheduler:v0.7.1'
         single_test_architecture = _get('single_test_architecture')
