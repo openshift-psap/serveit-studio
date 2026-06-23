@@ -82,7 +82,11 @@ def scan_cluster_resources(cluster: Dict, namespace: str = 'serveit', proxy: str
         try:
             r = scanner.kubectl.run(['get', 'namespace', 'istio-system'], check=False)
             if r.returncode != 0:
-                warnings.append('Istio not found — required for inference gateway routing')
+                # Also check for istiod pod running in any namespace (e.g. openshift-ingress)
+                r2 = scanner.kubectl.run(['get', 'pods', '--all-namespaces', '-l', 'app=istiod',
+                                          '--no-headers', '--ignore-not-found'], check=False)
+                if r2.returncode != 0 or not r2.stdout.strip():
+                    warnings.append('Istio not found — required for inference gateway routing')
         except Exception:
             pass
 
