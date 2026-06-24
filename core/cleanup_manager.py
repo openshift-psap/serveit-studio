@@ -125,6 +125,15 @@ class CleanupManager:
                 check=False
             )
 
+            # Delete orphaned DRA ResourceClaimTemplates (created by dra-rail-admission-webhook)
+            result = self.kubectl.run(
+                ['delete', 'resourceclaimtemplate', '--all', '-n', self.namespace, '--ignore-not-found=true'],
+                check=False
+            )
+            if result.returncode == 0 and 'deleted' in result.stdout.lower():
+                if log_callback:
+                    log_callback(f'✅ Cleaned up DRA ResourceClaimTemplates')
+
             if log_callback:
                 log_callback('✅ Cleanup complete')
 
