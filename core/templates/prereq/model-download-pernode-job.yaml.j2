@@ -62,7 +62,7 @@ spec:
               sys.stderr.reconfigure(line_buffering=True)
 
               model_id = '{{ model_name }}'
-              cache_dir = '/nfs-{{ node_nfs_pvcs[0].suffix }}'
+              cache_dir = '/nfs-{{ node_nfs_pvcs[0].suffix }}/huggingface'
               token = os.getenv('HF_TOKEN')
               if not token or not token.strip():
                   token = None
@@ -150,7 +150,8 @@ spec:
                 echo "✅ nfs-{{ nfs.suffix }}: model already present, skipping ({{ loop.index }}/{{ node_nfs_pvcs | length - 1 }})"
               else
                 echo "📦 Copying to nfs-{{ nfs.suffix }}... ({{ loop.index }}/{{ node_nfs_pvcs | length - 1 }})"
-                cp -a "$PRIMARY" "$DST"
+                mkdir -p "$DST"
+                cp -a "$PRIMARY"/. "$DST"/
                 echo "✅ nfs-{{ nfs.suffix }}: done ($(du -sh "$DST" | cut -f1))"
               fi
 {% endfor %}
