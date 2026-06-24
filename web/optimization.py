@@ -374,11 +374,21 @@ def deploy_and_test_inference(model_name: str, namespace: str, job_name: str = N
         except Exception:
             gateway_class = 'istio'
         prereq_mgr = PrereqManager(namespace=namespace, gateway_class=gateway_class)
+
+        # Build a lightweight config for prereq phase (per-node PVC creation)
+        class _PrereqConfig:
+            pass
+        _prereq_cfg = _PrereqConfig()
+        _prereq_cfg.per_node_storage = _cfg.get('per_node_storage', False)
+        _prereq_cfg.pvc_size = _cfg.get('pvc_size', '200Gi')
+        _prereq_cfg.node_nfs_pvcs = []
+
         try:
             # Deploy prerequisites - this will create missing resources and skip existing ones
             success = prereq_mgr.deploy_prereqs(
                 architecture='aggregated',
-                log_callback=lambda msg: log_to_ui(msg, 'info', job_name=job_name)
+                log_callback=lambda msg: log_to_ui(msg, 'info', job_name=job_name),
+                optimizer_config=_prereq_cfg if _prereq_cfg.per_node_storage else None,
             )
 
             if not success:
@@ -386,6 +396,19 @@ def deploy_and_test_inference(model_name: str, namespace: str, job_name: str = N
                 log_to_ui('❌ Failed to deploy prerequisite infrastructure', 'error', job_name=job_name)
                 log_to_ui('', 'error', job_name=job_name)
                 return None
+
+            # Persist node_nfs_pvcs so the optimizer config picks it up
+            if _prereq_cfg.per_node_storage and _prereq_cfg.node_nfs_pvcs:
+                try:
+                    with get_db() as _conn:
+                        _row = _conn.execute('SELECT config_json FROM ui_session_state WHERE id=1').fetchone()
+                        _saved = json.loads(_row['config_json']) if _row and _row['config_json'] else {}
+                        _saved['node_nfs_pvcs'] = _prereq_cfg.node_nfs_pvcs
+                        _conn.execute('UPDATE ui_session_state SET config_json=? WHERE id=1',
+                                      (json.dumps(_saved),))
+                        _conn.commit()
+                except Exception:
+                    pass
 
             log_to_ui('', 'info', job_name=job_name)
             log_to_ui('ℹ️  Note: Gateway typically takes 1-2 minutes to become fully healthy', 'info', job_name=job_name)
