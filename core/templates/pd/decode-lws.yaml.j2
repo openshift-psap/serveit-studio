@@ -1,6 +1,6 @@
 {% set dra_gpu_nic_class = selected_dra_classes[0] if selected_dra_classes else '' %}
-{% set num_dra_rails = rdma_nics_per_node if rdma_nics_per_node > 0 else 8 %}
-{% if selected_dra_classes and rdma_nics_per_node > 0 %}
+{% set num_dra_rails = decode_gpu_count|int %}
+{% if selected_dra_classes and num_dra_rails > 0 %}
 {% for rail in range(num_dra_rails) %}
 ---
 apiVersion: resource.k8s.io/v1
@@ -94,7 +94,7 @@ spec:
           - key: node.kubernetes.io/memory-pressure
             operator: Exists
             effect: NoSchedule
-{% if selected_dra_classes and rdma_nics_per_node > 0 %}
+{% if selected_dra_classes and num_dra_rails > 0 %}
         resourceClaims:
 {% for rail in range(num_dra_rails) %}
           - name: pair-{{ rail }}
@@ -367,7 +367,7 @@ spec:
                 {{ r.key }}: "{{ r.value }}"
                 {% endfor %}
 {% endif %}
-{% if selected_dra_classes and rdma_nics_per_node > 0 %}
+{% if selected_dra_classes and num_dra_rails > 0 %}
               claims:
 {% for rail in range(num_dra_rails) %}
                 - name: pair-{{ rail }}
