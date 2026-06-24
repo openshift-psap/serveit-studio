@@ -774,294 +774,145 @@ oc adm policy add-scc-to-user privileged \
   -n nvidia-dra-driver-gpu
 ```
 
-### A3. Composite DRA Driver (GPU+NIC Pairing)
+### A3. DRA GPU-NIC Admission Webhook
 
-The composite driver pairs GPUs with RDMA NICs using PCIe root affinity.
+The admission webhook intercepts pods requesting `dra.llm-d.io/gpu-nic-pair` and automatically creates ResourceClaimTemplates with proper GPU+NIC pairing, PCIe affinity constraints, and DRANET opaque config (interface naming, IP assignment, routing).
 
-#### RBAC + SCC
+Source: [github.com/openshift-psap/dra-rail-admission-webhook](https://github.com/openshift-psap/dra-rail-admission-webhook)
 
-```yaml
-apiVersion: v1
-kind: Namespace
-metadata:
-  name: composite-dra-system
----
-apiVersion: v1
-kind: ServiceAccount
-metadata:
-  name: composite-dra-driver
-  namespace: composite-dra-system
----
-apiVersion: rbac.authorization.k8s.io/v1
-kind: ClusterRole
-metadata:
-  name: composite-dra-driver
-rules:
-- apiGroups: ["resource.k8s.io"]
-  resources: ["resourceslices"]
-  verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
-- apiGroups: ["resource.k8s.io"]
-  resources: ["resourceclaims"]
-  verbs: ["get", "list", "watch", "create", "update", "delete"]
-- apiGroups: ["resource.k8s.io"]
-  resources: ["resourceclaims/status"]
-  verbs: ["get", "update", "patch"]
-- apiGroups: ["resource.k8s.io"]
-  resources: ["resourceclaimtemplates"]
-  verbs: ["get", "list", "watch", "create", "update", "delete"]
-- apiGroups: [""]
-  resources: ["nodes"]
-  verbs: ["get"]
----
-apiVersion: rbac.authorization.k8s.io/v1
-kind: ClusterRoleBinding
-metadata:
-  name: composite-dra-driver
-roleRef:
-  apiGroup: rbac.authorization.k8s.io
-  kind: ClusterRole
-  name: composite-dra-driver
-subjects:
-- kind: ServiceAccount
-  name: composite-dra-driver
-  namespace: composite-dra-system
----
-apiVersion: security.openshift.io/v1
-kind: SecurityContextConstraints
-metadata:
-  name: composite-dra-driver
-allowPrivilegedContainer: true
-allowHostDirVolumePlugin: true
-allowHostNetwork: false
-allowHostPorts: false
-allowHostPID: false
-allowHostIPC: false
-readOnlyRootFilesystem: false
-runAsUser: { type: RunAsAny }
-seLinuxContext: { type: RunAsAny }
-fsGroup: { type: RunAsAny }
-supplementalGroups: { type: RunAsAny }
-volumes: [configMap, hostPath, emptyDir, projected, secret]
-users:
-- system:serviceaccount:composite-dra-system:composite-dra-driver
+#### Clone and generate TLS certificates
+
+The webhook requires a valid TLS certificate. The certificate's CN and SAN must match the webhook service name exactly:
+
+```bash
+git clone https://github.com/openshift-psap/dra-rail-admission-webhook.git
+cd dra-rail-admission-webhook
+
+NAMESPACE=dra-webhook-system
+
+# Create namespace
+oc create namespace $NAMESPACE --dry-run=client -o yaml | oc apply -f -
+
+# Generate self-signed cert
+mkdir -p certs
+openssl req -x509 -newkey rsa:4096 \
+  -keyout certs/tls.key -out certs/tls.crt \
+  -days 365 -nodes \
+  -subj "/CN=dra-gpu-nic-webhook.${NAMESPACE}.svc" \
+  -addext "subjectAltName=DNS:dra-gpu-nic-webhook.${NAMESPACE}.svc,DNS:dra-gpu-nic-webhook.${NAMESPACE}.svc.cluster.local"
+
+# Create TLS secret
+oc create secret tls dra-gpu-nic-webhook-tls \
+  --cert=certs/tls.crt --key=certs/tls.key \
+  -n $NAMESPACE --dry-run=client -o yaml | oc apply -f -
 ```
 
-#### Composite config ConfigMap
+#### Configure the network rails
+
+Create a ConfigMap matching your cluster's RDMA network layout. One rail entry per NIC port:
 
 ```yaml
 apiVersion: v1
 kind: ConfigMap
 metadata:
-  name: composite-dra-config
-  namespace: composite-dra-system
+  name: dra-gpu-nic-webhook-config
+  namespace: dra-webhook-system
 data:
   config.yaml: |
-    driver:
-      name: "composite.dra.io"
-    sources:
-      - name: gpu
-        deviceClassName: gpu.nvidia.com
-        driver: gpu.nvidia.com
-        forwardAttributes:
-        - { domain: resource.kubernetes.io, attributes: [pciBusID, pcieRoot] }
-        - { domain: gpu.nvidia.com, attributes: [model, memory] }
-      - name: nic
-        deviceClassName: dranet
-        driver: dra.net
-        forwardAttributes:
-        - { domain: dra.net, attributes: [ifName, pciAddress, numaNode, rdma, encapsulation, ipv4, mac] }
-        - { domain: resource.kubernetes.io, attributes: [pcieRoot] }
-    compositions:
-      - name: gpu-nic-pair
-        pairingMode: auto
-        transportMode: ethernet
-        constraints:
-        - { attribute: resource.kubernetes.io/pcieRoot, type: matchAttribute }
-        filters:
-          nic:
-            cel: device.attributes["dra.net"].rdma == true
-        members:
-        - { count: 1, source: gpu }
-        - { count: 1, source: nic }
-      - name: gpu
-        members:
-        - { count: 1, source: gpu }
-    deviceParams:
-      configMapPath: /etc/composite-dra/device-params/params.yaml
+    gpuDeviceClassName: gpu.nvidia.com
+    nicDeviceClassName: dranet
+    maxPairsPerNUMA: 4
+    maxPairsPerNode: 8
+    preflightCheck: false
+    nicConfig:
+      mtu: 9000
+      rdmaRequired: true
+      interfacePrefix: "net"
+      startingTableId: 100
+      crossRailCIDR: "10.0.0.0/13"
+      rails:
+        - subnet: "10.0.0.0/16"
+          gateway: "10.0.0.1"
+          ipv4Prefix: "10.0."
+        - subnet: "10.1.0.0/16"
+          gateway: "10.1.0.1"
+          ipv4Prefix: "10.1."
+        - subnet: "10.2.0.0/16"
+          gateway: "10.2.0.1"
+          ipv4Prefix: "10.2."
+        - subnet: "10.3.0.0/16"
+          gateway: "10.3.0.1"
+          ipv4Prefix: "10.3."
+        - subnet: "10.4.0.0/16"
+          gateway: "10.4.0.1"
+          ipv4Prefix: "10.4."
+        - subnet: "10.5.0.0/16"
+          gateway: "10.5.0.1"
+          ipv4Prefix: "10.5."
+        - subnet: "10.6.0.0/16"
+          gateway: "10.6.0.1"
+          ipv4Prefix: "10.6."
+        - subnet: "10.7.0.0/16"
+          gateway: "10.7.0.1"
+          ipv4Prefix: "10.7."
+  reconciler.yaml: |
+    interval: "5m"
+    autoReap: false
+    gracePeriod: "10m"
+    statePath: "/data/reconciler-state.json"
 ```
 
-#### Device-params ConfigMap
+Adjust `rails` to match your cluster's RDMA network subnets. One rail per NIC port — 8 entries for an 8-GPU-per-node cluster.
 
-Adapt the entries to match your network's CIDR layout. Each rail gets its own subnet, gateway, routing table, and cross-rail routes.
+#### Deploy the webhook and reconciler
 
-```yaml
-apiVersion: v1
-kind: ConfigMap
-metadata:
-  name: composite-dra-device-params
-  namespace: composite-dra-system
-data:
-  params.yaml: |
-    nic:
-      params: |
-        {
-          "interface": {"name": "net{{.PairOrdinal}}", "mtu": {{device "dra.net/mtu"}}, "addresses": ["{{device "dra.net/ipv4"}}"]},
-          "routes": [
-            {"destination": "{{network (device "dra.net/ipv4")}}", "scope": 253, "table": {{.Table}}}
-            {{- range .CrossRails}},
-            {"destination": "{{.}}", "gateway": "{{$.Gateway}}"}
-            {{- end}},
-            {"destination": "0.0.0.0/0", "gateway": "{{.Gateway}}", "table": {{.Table}}}
-          ],
-          "rules": [
-            {"source": "{{network (device "dra.net/ipv4")}}", "table": {{.Table}}, "priority": 32765}
-          ]
-        }
-      entries:
-        - match: { "dra.net/ipv4": { prefix: "10.0." } }
-          values: { Gateway: "10.0.0.1", Table: 100, CrossRails: ["10.1.0.0/16","10.2.0.0/16","10.3.0.0/16","10.4.0.0/16","10.5.0.0/16","10.6.0.0/16","10.7.0.0/16"] }
-        - match: { "dra.net/ipv4": { prefix: "10.1." } }
-          values: { Gateway: "10.1.0.1", Table: 101, CrossRails: ["10.0.0.0/16","10.2.0.0/16","10.3.0.0/16","10.4.0.0/16","10.5.0.0/16","10.6.0.0/16","10.7.0.0/16"] }
-        - match: { "dra.net/ipv4": { prefix: "10.2." } }
-          values: { Gateway: "10.2.0.1", Table: 102, CrossRails: ["10.0.0.0/16","10.1.0.0/16","10.3.0.0/16","10.4.0.0/16","10.5.0.0/16","10.6.0.0/16","10.7.0.0/16"] }
-        - match: { "dra.net/ipv4": { prefix: "10.3." } }
-          values: { Gateway: "10.3.0.1", Table: 103, CrossRails: ["10.0.0.0/16","10.1.0.0/16","10.2.0.0/16","10.4.0.0/16","10.5.0.0/16","10.6.0.0/16","10.7.0.0/16"] }
-        - match: { "dra.net/ipv4": { prefix: "10.4." } }
-          values: { Gateway: "10.4.0.1", Table: 104, CrossRails: ["10.0.0.0/16","10.1.0.0/16","10.2.0.0/16","10.3.0.0/16","10.5.0.0/16","10.6.0.0/16","10.7.0.0/16"] }
-        - match: { "dra.net/ipv4": { prefix: "10.5." } }
-          values: { Gateway: "10.5.0.1", Table: 105, CrossRails: ["10.0.0.0/16","10.1.0.0/16","10.2.0.0/16","10.3.0.0/16","10.4.0.0/16","10.6.0.0/16","10.7.0.0/16"] }
-        - match: { "dra.net/ipv4": { prefix: "10.6." } }
-          values: { Gateway: "10.6.0.1", Table: 106, CrossRails: ["10.0.0.0/16","10.1.0.0/16","10.2.0.0/16","10.3.0.0/16","10.4.0.0/16","10.5.0.0/16","10.7.0.0/16"] }
-        - match: { "dra.net/ipv4": { prefix: "10.7." } }
-          values: { Gateway: "10.7.0.1", Table: 107, CrossRails: ["10.0.0.0/16","10.1.0.0/16","10.2.0.0/16","10.3.0.0/16","10.4.0.0/16","10.5.0.0/16","10.6.0.0/16"] }
+Apply all manifests, injecting the correct caBundle into the webhook configuration:
+
+```bash
+NAMESPACE=dra-webhook-system
+CABUNDLE=$(cat certs/tls.crt | base64 | tr -d '\n')
+
+# Apply everything except webhook-config
+for f in deploy/base/rbac.yaml deploy/base/webhook-deployment.yaml \
+         deploy/base/reconciler-deployment.yaml deploy/base/reconciler-pvc.yaml \
+         deploy/base/webhook-service.yaml deploy/base/webhook-pdb.yaml; do
+  oc apply -f "$f" -n $NAMESPACE 2>/dev/null || oc apply -f "$f"
+done
+
+# Apply webhook-config with correct caBundle
+sed "s|caBundle:.*|caBundle: ${CABUNDLE}|g" deploy/base/webhook-config.yaml | oc apply -f -
 ```
 
-#### DaemonSet + DeviceClasses
+> **Important:** Do NOT use `make deploy` — it applies the YAML with a stale caBundle. Always inject the caBundle from your generated certificate as shown above.
 
-```yaml
-apiVersion: apps/v1
-kind: DaemonSet
-metadata:
-  name: composite-dra-driver
-  namespace: composite-dra-system
-spec:
-  selector:
-    matchLabels:
-      app.kubernetes.io/name: composite-dra-driver
-      app.kubernetes.io/component: driver
-  template:
-    metadata:
-      labels:
-        app.kubernetes.io/name: composite-dra-driver
-        app.kubernetes.io/component: driver
-    spec:
-      serviceAccountName: composite-dra-driver
-      priorityClassName: system-node-critical
-      tolerations:
-      - { key: node-role.kubernetes.io/control-plane, operator: Exists, effect: NoSchedule }
-      - { key: node-role.kubernetes.io/master, operator: Exists, effect: NoSchedule }
-      containers:
-      - name: driver
-        image: ghcr.io/openshift-psap/composite-dra-driver:pr-32
-        imagePullPolicy: Always
-        args: ["--config=/etc/composite-dra/config.yaml", "--state-dir=/var/lib/composite-dra", "--plugin-dir=/var/lib/kubelet/plugins", "--v=2"]
-        env:
-        - { name: NODE_NAME, valueFrom: { fieldRef: { fieldPath: spec.nodeName } } }
-        resources:
-          limits: { cpu: 200m, memory: 128Mi }
-          requests: { cpu: 50m, memory: 64Mi }
-        securityContext: { privileged: true, runAsUser: 0 }
-        volumeMounts:
-        - { mountPath: /var/lib/kubelet/plugins, name: kubelet-plugins }
-        - { mountPath: /var/lib/kubelet/plugins_registry, name: kubelet-registry }
-        - { mountPath: /var/lib/composite-dra, name: state }
-        - { mountPath: /etc/composite-dra, name: config, readOnly: true }
-        - { mountPath: /etc/composite-dra/device-params, name: device-params, readOnly: true }
-      volumes:
-      - { hostPath: { path: /var/lib/kubelet/plugins, type: DirectoryOrCreate }, name: kubelet-plugins }
-      - { hostPath: { path: /var/lib/kubelet/plugins_registry, type: DirectoryOrCreate }, name: kubelet-registry }
-      - { hostPath: { path: /var/lib/composite-dra, type: DirectoryOrCreate }, name: state }
-      - { configMap: { name: composite-dra-config }, name: config }
-      - { configMap: { name: composite-dra-device-params }, name: device-params }
----
-apiVersion: resource.k8s.io/v1
-kind: DeviceClass
-metadata:
-  name: composite-gpu-nic-pair
-spec:
-  selectors:
-  - cel:
-      expression: device.driver == "composite.dra.io" && device.attributes["composite"].compositionName == "gpu-nic-pair"
----
-apiVersion: resource.k8s.io/v1
-kind: DeviceClass
-metadata:
-  name: composite-gpu
-spec:
-  selectors:
-  - cel:
-      expression: device.driver == "composite.dra.io" && device.attributes["composite"].compositionName == "gpu"
+#### Label namespaces
+
+The webhook only operates on namespaces you explicitly enable:
+
+```bash
+oc label namespace serveit dra.llm-d.io/webhook-enabled=true
 ```
 
 #### Verify
 
 ```bash
-oc get pods -n composite-dra-system
-oc get deviceclass composite-gpu-nic-pair composite-gpu dranet gpu.nvidia.com
-oc get resourceslices | grep composite
+oc get pods -n dra-webhook-system
 ```
 
-Expected output:
+Expected:
 
 ```
-NAME                         READY   STATUS    AGE
-composite-dra-driver-2ftkz   1/1     Running   27s
-composite-dra-driver-jxkkf   1/1     Running   28s
-...  (one per node)
-
-NAME                                        AGE
-composite-gpu                               36s
-composite-gpu-nic-pair                      36s
-dranet                                      30m
-gpu.nvidia.com                              28m
-...
-
-...-665m9-composite.dra.io-...   ...   composite.dra.io   ...
-...-8ghjl-composite.dra.io-...   ...   composite.dra.io   ...
-...  (GPU-NIC pair slices on GPU nodes)
+NAME                                     READY   STATUS    AGE
+dra-gpu-nic-reconciler-xxxxx             1/1     Running   1m
+dra-gpu-nic-webhook-xxxxx                1/1     Running   1m
+dra-gpu-nic-webhook-yyyyy                1/1     Running   1m
 ```
 
 ### RDMA connectivity test
 
-To validate end-to-end, deploy two test pods with 8 GPU-NIC pairs each. Use a single ResourceClaimTemplate with all 8 pairs — the composite driver allocates one GPU + one PCIe-affinitized NIC per pair.
+With the webhook, pods just request `dra.llm-d.io/gpu-nic-pair: "N"` in resources — the webhook automatically creates ResourceClaimTemplates with PCIe-affinitized GPU+NIC pairs.
 
 ```yaml
-apiVersion: resource.k8s.io/v1
-kind: ResourceClaimTemplate
-metadata:
-  name: gpu-nic-pairs
-  namespace: serveit
-spec:
-  spec:
-    devices:
-      requests:
-      - name: pair-0
-        exactly: { allocationMode: ExactCount, count: 1, deviceClassName: composite-gpu-nic-pair }
-      - name: pair-1
-        exactly: { allocationMode: ExactCount, count: 1, deviceClassName: composite-gpu-nic-pair }
-      - name: pair-2
-        exactly: { allocationMode: ExactCount, count: 1, deviceClassName: composite-gpu-nic-pair }
-      - name: pair-3
-        exactly: { allocationMode: ExactCount, count: 1, deviceClassName: composite-gpu-nic-pair }
-      - name: pair-4
-        exactly: { allocationMode: ExactCount, count: 1, deviceClassName: composite-gpu-nic-pair }
-      - name: pair-5
-        exactly: { allocationMode: ExactCount, count: 1, deviceClassName: composite-gpu-nic-pair }
-      - name: pair-6
-        exactly: { allocationMode: ExactCount, count: 1, deviceClassName: composite-gpu-nic-pair }
-      - name: pair-7
-        exactly: { allocationMode: ExactCount, count: 1, deviceClassName: composite-gpu-nic-pair }
----
 apiVersion: v1
 kind: Pod
 metadata:
@@ -1069,63 +920,78 @@ metadata:
   namespace: serveit
 spec:
   restartPolicy: Never
-  resourceClaims:
-  - name: gpu-nics
-    resourceClaimTemplateName: gpu-nic-pairs
   containers:
   - name: test
     image: quay.io/dagray/rdma-tools:tiny
     command: ["sleep", "infinity"]
     resources:
-      claims:
-      - name: gpu-nics
+      requests:
+        cpu: "1"
+        memory: "4Gi"
+        dra.llm-d.io/gpu-nic-pair: "2"
+      limits:
+        cpu: "2"
+        memory: "8Gi"
+        dra.llm-d.io/gpu-nic-pair: "2"
 ```
 
-> **Note:** No `nvidia.com/gpu` in resources — GPUs are allocated via the DRA claims. Each `composite-gpu-nic-pair` claim allocates one GPU + one RDMA NIC on the same PCIe root.
+The webhook intercepts this pod and:
+1. Creates a ResourceClaimTemplate with 2 GPU+NIC pairs constrained by PCIe root
+2. Injects `resourceClaims` into the pod spec with DRANET opaque config (interface name, IP, routes)
+3. Strips the `dra.llm-d.io/gpu-nic-pair` resource
+4. Pins the pod to a node where both pairs can be satisfied
+5. Annotates the pod with `dra.llm-d.io/mutated: "true"`
 
-Verify interfaces inside the pod:
+Verify inside the pod:
 
 ```bash
 oc exec -n serveit dra-test-1 -- ip -4 addr show | grep -E "net[0-9]|inet "
-```
+# Expected: net0 and net1 with RDMA IPs
 
-Expected output (8 RDMA interfaces, one per rail):
+oc exec -n serveit dra-test-1 -- nvidia-smi -L
+# Expected: 2 GPUs
 
-```
-net0: 10.7.0.13/16
-net1: 10.5.0.13/16
-net2: 10.6.0.13/16
-net3: 10.4.0.13/16
-net4: 10.3.0.13/16
-net5: 10.2.0.13/16
-net6: 10.1.0.13/16
-net7: 10.0.0.13/16
+oc get pod dra-test-1 -o jsonpath='{.metadata.annotations.dra\.llm-d\.io/mutated}'
+# Expected: true
 ```
 
 Run RDMA bandwidth test between two pods on different nodes:
 
 ```bash
-# Start server on pod 2 (nohup keeps it alive after exec exits)
-oc exec -n serveit dra-test-2 -- bash -c 'nohup ib_write_bw -d mlx5_8 --report_gbits -D 5 > /dev/null 2>&1 &'
+oc exec -n serveit dra-test-2 -- bash -c 'nohup ib_write_bw -d mlx5_1 --report_gbits -D 5 > /dev/null 2>&1 &'
 sleep 3
-# Run client from pod 1
-oc exec -n serveit dra-test-1 -- ib_write_bw -d mlx5_8 --report_gbits -D 5 10.0.0.5
+oc exec -n serveit dra-test-1 -- ib_write_bw -d mlx5_1 --report_gbits -D 5 <pod2-net0-ip>
 ```
 
-Expected output (IBM Cloud VPC):
+Expected output (IBM Cloud VPC): ~160-165 Gb/s per rail. Bare-metal with CX-7 400GbE NICs shows ~380-400 Gb/s.
 
-```
-Rail 0 (10.0.x, mlx5_8): 164.33 Gb/s
-Rail 1 (10.1.x, mlx5_7): 160.35 Gb/s
-Rail 2 (10.2.x, mlx5_6): 160.16 Gb/s
-Rail 3 (10.3.x, mlx5_5): 164.28 Gb/s
-Rail 4 (10.4.x, mlx5_4): 164.37 Gb/s
-Rail 5 (10.5.x, mlx5_2): 164.18 Gb/s
-Rail 6 (10.6.x, mlx5_3): 164.88 Gb/s
-Rail 7 (10.7.x, mlx5_1): 164.33 Gb/s
-```
+#### Regenerating TLS certificates
 
-~160-165 Gb/s per rail is the normal line rate for IBM Cloud VPC. Bare-metal with CX-7 400GbE NICs shows ~380-400 Gb/s.
+If certificates expire or need rotation:
+
+```bash
+# Regenerate cert
+openssl req -x509 -newkey rsa:4096 \
+  -keyout certs/tls.key -out certs/tls.crt \
+  -days 365 -nodes \
+  -subj "/CN=dra-gpu-nic-webhook.dra-webhook-system.svc" \
+  -addext "subjectAltName=DNS:dra-gpu-nic-webhook.dra-webhook-system.svc,DNS:dra-gpu-nic-webhook.dra-webhook-system.svc.cluster.local"
+
+# Update secret
+oc create secret tls dra-gpu-nic-webhook-tls \
+  --cert=certs/tls.crt --key=certs/tls.key \
+  -n dra-webhook-system --dry-run=client -o yaml | oc apply -f -
+
+# Update caBundle
+CABUNDLE=$(cat certs/tls.crt | base64 | tr -d '\n')
+oc patch mutatingwebhookconfiguration dra-gpu-nic-webhook --type=json -p "[
+  {\"op\":\"replace\",\"path\":\"/webhooks/0/clientConfig/caBundle\",\"value\":\"$CABUNDLE\"},
+  {\"op\":\"replace\",\"path\":\"/webhooks/1/clientConfig/caBundle\",\"value\":\"$CABUNDLE\"}
+]"
+
+# Restart webhook
+oc rollout restart deployment/dra-gpu-nic-webhook -n dra-webhook-system
+```
 
 ---
 
@@ -1549,8 +1415,8 @@ oc get crd leaderworkersets.leaderworkerset.x-k8s.io                   # LWS
 # Option A (DRA)
 oc get pods -n kube-system -l app=dranet --no-headers | wc -l          # DRANET
 oc get pods -n nvidia-dra-driver-gpu --no-headers                       # GPU DRA
-oc get pods -n composite-dra-system --no-headers                        # Composite
-oc get deviceclass dranet composite-gpu-nic-pair gpu.nvidia.com         # DeviceClasses
+oc get pods -n dra-webhook-system --no-headers                          # DRA Webhook
+oc get deviceclass dranet gpu.nvidia.com                                # DeviceClasses
 oc get resourceslices --no-headers | wc -l                              # ResourceSlices
 
 # Option B/C (SR-IOV)
@@ -1577,7 +1443,7 @@ oc get cidrpools -n nvidia-network-operator                             # CIDRPo
 | CUDA Driver | 580.105 |
 | DRANET | v1.2.0 |
 | NVIDIA DRA GPU Driver | 25.12.0 |
-| Composite DRA Driver | 0.1.0 (pr-32) |
+| DRA GPU-NIC Admission Webhook | [openshift-psap/dra-rail-admission-webhook](https://github.com/openshift-psap/dra-rail-admission-webhook) |
 | SR-IOV Network Operator | 4.21.0 |
 | LWS Operator | 0.8.0 (upstream, installed via Helm) |
 | LVM Storage (LVMS) | 4.21.0 |
