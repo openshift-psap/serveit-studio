@@ -728,12 +728,11 @@ class PrereqManager:
         gpu_nodes = [n.strip() for n in r.stdout.strip().splitlines() if n.strip()]
 
         storage_class = getattr(config, 'storage_class', None)
+        nfs_classes = {}
         if not storage_class:
-            # Fallback: detect nfs-<suffix> classes
             r = self.kubectl.run([
                 'get', 'sc', '-o', 'jsonpath={range .items[*]}{.metadata.name}{"\\n"}{end}'
             ], check=False)
-            nfs_classes = {}
             if r.returncode == 0:
                 for sc in r.stdout.strip().splitlines():
                     sc = sc.strip()
