@@ -97,8 +97,10 @@ spec:
               - |
                 DST="/model-cache/huggingface"
                 MODEL="{{ model_name }}"
-                if ls "$DST/models--"* >/dev/null 2>&1 || ls "$DST/hub/models--"* >/dev/null 2>&1; then
-                  echo "Model already present on per-pod PVC, skipping download"
+                SNAPSHOT=$(ls -d "$DST"/models--*/snapshots/*/ 2>/dev/null | head -1)
+                MODEL_FILES=$(find "$SNAPSHOT" -maxdepth 1 \( -name "*.safetensors" -o -name "*.bin" -o -name "*.pt" \) 2>/dev/null | head -1)
+                if [ -n "$SNAPSHOT" ] && [ -n "$MODEL_FILES" ]; then
+                  echo "Model already present on per-pod PVC (snapshot + model files found), skipping download"
                   du -sh "$DST"
                 else
                   echo "Downloading $MODEL to per-pod PVC..."
