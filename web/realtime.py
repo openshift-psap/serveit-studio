@@ -1826,65 +1826,57 @@ def handle_setup_storage(data):
             pass
 
         if per_node_storage:
-            log_to_ui('📦 Per-node storage enabled — skipping shared PVC and model download', 'info')
-            log_to_ui('   Model will be downloaded by init containers on each node\'s NFS share', 'info')
+            node_nfs_pvcs = saved.get('node_nfs_pvcs', []) if 'saved' in dir() else []
+            if not node_nfs_pvcs:
+                try:
+                    with get_db() as conn:
+                        row = conn.execute('SELECT config_json FROM ui_session_state WHERE id = 1').fetchone()
+                        if row and row['config_json']:
+                            node_nfs_pvcs = json.loads(row['config_json']).get('node_nfs_pvcs', [])
+                except Exception:
+                    pass
+
+            if not node_nfs_pvcs:
+                raise Exception('Per-node storage enabled but no NFS PVC mapping found')
+
+            log_to_ui(f'📦 Per-node storage: downloading model once, then distributing to {len(node_nfs_pvcs)} nodes', 'info')
+
+            timestamp = datetime.now().strftime('%Y%m%d-%H%M%S')
+            job_name = f'serveit-model-download-{timestamp}'
+            test_id = f'serveit-setup-{timestamp}'
+
+            from core import TemplateManager
+            template_mgr = TemplateManager()
+
+            job_yaml = template_mgr.render_template(
+                'prereq/model-download-pernode-job.yaml.j2',
+                job_name=job_name,
+                namespace=namespace,
+                test_id=test_id,
+                model_name=model,
+                node_nfs_pvcs=node_nfs_pvcs,
+                hf_token=hf_token,
+            )
+
+            cmd = ['kubectl', 'apply', '-f', '-']
+            proc = subprocess.run(cmd, input=job_yaml.encode(), capture_output=True, timeout=30)
+            if proc.returncode != 0:
+                raise Exception(f"Per-node download job failed: {proc.stderr.decode()}")
+
+            log_to_ui(f'✅ Per-node download job {job_name} started', 'success')
+            log_to_ui('⏳ Streaming download + distribution progress...', 'info')
+
             emit('storage_setup_result', {
                 'success': True,
                 'pvc_name': 'per-node-nfs',
                 'pvc_size': 'per-node',
                 'storage_class': 'per-node-nfs',
                 'model': model,
-                'existing': True
+                'existing': False,
+                'job_name': job_name,
             })
-            socketio.emit('storage_download_complete', {'success': True, 'job_name': 'per-node-nfs'})
 
-            optimization_data = {
-                'model': model,
-                'isl': data.get('isl', 3000),
-                'osl': data.get('osl', 100),
-                'isl_stdev': data.get('isl_stdev'),
-                'osl_stdev': data.get('osl_stdev'),
-                'turns': data.get('turns', 1),
-                'num_users': data.get('num_users', 100),
-                'optimization_metric': data.get('optimization_goal', 'ttft'),
-                'max_test_duration': data.get('duration', 300),
-                'stop_mode': data.get('stop_mode', 'duration'),
-                'max_requests': data.get('max_requests'),
-                'hf_token': hf_token,
-                'max_gpus': data.get('max_gpus', 16),
-                'use_achievable_qps': data.get('use_achievable_qps', False),
-                'latency_constraint_enabled': data.get('latency_constraint_enabled', False),
-                'latency_constraint_ms': data.get('latency_constraint_ms', 500),
-                'latency_constraint_percentile': data.get('latency_constraint_percentile', 'p90'),
-                'tp_pair_top_n': data.get('tp_pair_top_n', 4),
-                'pd_search_mode': data.get('pd_search_mode', 'smart'),
-                'run_description': data.get('run_description', ''),
-                'advanced_vllm_custom_enabled': data.get('advanced_vllm_custom_enabled', True),
-                'epp_custom_enabled': data.get('epp_custom_enabled', True),
-                'epp_preset': data.get('epp_preset', 'balanced'),
-                'epp_benchmark': data.get('epp_benchmark', False),
-                'epp_config': data.get('epp_config'),
-                'selected_nodes': data.get('selected_nodes') or [],
-                'workload_mode': data.get('workload_mode', 'synthetic'),
-                'dataset_source': data.get('dataset_source'),
-                'dataset_column': data.get('dataset_column'),
-                'dataset_max_output': int(data.get('dataset_max_output', 256)),
-                'rate_type': data.get('rate_type', 'concurrent'),
-                'prefix_cache_hit_pct': int(data.get('prefix_cache_hit_pct', 0)),
-                'prefix_cache_mode': data.get('prefix_cache_mode', 'identical'),
-                'prefix_cache_groups': data.get('prefix_cache_groups', 5),
-                'advanced_vllm': data.get('advanced_vllm'),
-                'image': data.get('image'),
-                'scheduler_image': data.get('scheduler_image'),
-                'single_test_architecture': data.get('single_test_architecture'),
-                'single_test_tp': data.get('single_test_tp'),
-                'single_test_replicas': data.get('single_test_replicas'),
-                'single_test_prefill_tp': data.get('single_test_prefill_tp'),
-                'single_test_decode_tp': data.get('single_test_decode_tp'),
-                'single_test_prefill_pods': data.get('single_test_prefill_pods'),
-                'single_test_decode_pods': data.get('single_test_decode_pods'),
-            }
-            spawn(run_optimization_background, optimization_data)
+            spawn(stream_job_logs, job_name, namespace)
             return
 
         # Create new PVC and download model

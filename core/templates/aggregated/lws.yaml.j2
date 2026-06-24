@@ -90,38 +90,6 @@ spec:
               - name: nfs-{{ nfs.suffix }}
                 mountPath: /nfs-{{ nfs.suffix }}
 {% endfor %}
-          - name: model-download
-            image: {{ image }}
-            command: ["/bin/bash", "-c"]
-            args:
-              - |
-                DST="/model-cache/huggingface"
-                MODEL="{{ model_name }}"
-                SNAPSHOT=$(ls -d "$DST"/models--*/snapshots/*/ 2>/dev/null | head -1)
-                MODEL_FILES=$(find "$SNAPSHOT" -maxdepth 1 \( -name "*.safetensors" -o -name "*.bin" -o -name "*.pt" \) 2>/dev/null | head -1)
-                if [ -n "$SNAPSHOT" ] && [ -n "$MODEL_FILES" ]; then
-                  echo "Model already present on per-node NFS, skipping download"
-                  du -sh "$DST"
-                else
-                  echo "Downloading $MODEL to per-node NFS..."
-                  pip install -q huggingface_hub hf-transfer 2>/dev/null
-                  HF_HOME="$DST" HF_HUB_CACHE="$DST" HF_HUB_ENABLE_HF_TRANSFER=1 python3 -c "from huggingface_hub import snapshot_download; snapshot_download('$MODEL', local_files_only=False); print('Download complete')"
-                  echo "Done: $(du -sh $DST | cut -f1)"
-                fi
-            env:
-              - name: HF_TOKEN
-                valueFrom:
-                  secretKeyRef:
-                    name: llm-d-hf-token
-                    key: HF_TOKEN
-                    optional: true
-            volumeMounts:
-              - name: hf-cache
-                mountPath: /model-cache
-{% for nfs in node_nfs_pvcs %}
-              - name: nfs-{{ nfs.suffix }}
-                mountPath: /nfs-{{ nfs.suffix }}
-{% endfor %}
 {% endif %}
         containers:
           - name: vllm
