@@ -785,13 +785,12 @@ socket.on('cluster_scan_result', function(data) {
     // Add event listener for max GPU selection (replace previous to avoid duplicates)
     maxGpuSelect.onchange = (e) => {
         const newMaxGpus = parseInt(e.target.value);
+        if (newMaxGpus === config.max_gpus) return;
         config.max_gpus = newMaxGpus;
         saveConfig();
-        // Update config summary live
         const gpuSummary = document.getElementById('config-summary-gpus');
         if (gpuSummary) gpuSummary.textContent = newMaxGpus;
         logToConsole(`✅ Maximum GPUs set to ${newMaxGpus}`, 'success');
-        // Test plan will be regenerated when reaching step 6 (Review & Run)
     };
 
     // Display GPU usage information (hide in launcher mode)
