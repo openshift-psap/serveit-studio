@@ -1,28 +1,3 @@
-{% set dra_gpu_nic_class = selected_dra_classes[0] if selected_dra_classes else '' %}
-{% set num_dra_rails = gpu_count|int %}
-{% if selected_dra_classes and num_dra_rails > 0 %}
-{% for rail in range(num_dra_rails) %}
----
-apiVersion: resource.k8s.io/v1
-kind: ResourceClaimTemplate
-metadata:
-  name: {{ test_id }}-aggregated-pair-{{ rail }}
-  namespace: {{ namespace }}
-  labels:
-    test-id: {{ test_id }}
-    role: aggregated
-spec:
-  spec:
-    devices:
-      requests:
-      - name: gpu-nic
-        exactly:
-          allocationMode: ExactCount
-          count: 1
-          deviceClassName: {{ dra_gpu_nic_class }}
-{% endfor %}
-{% endif %}
----
 apiVersion: leaderworkerset.x-k8s.io/v1
 kind: LeaderWorkerSet
 metadata:
@@ -69,13 +44,6 @@ spec:
                   - "{{ node }}"
                   {% endfor %}
         {% endif %}
-{% if selected_dra_classes and num_dra_rails > 0 %}
-        resourceClaims:
-{% for rail in range(num_dra_rails) %}
-          - name: pair-{{ rail }}
-            resourceClaimTemplateName: {{ test_id }}-aggregated-pair-{{ rail }}
-{% endfor %}
-{% endif %}
         volumes:
           - name: dshm
             emptyDir:
@@ -255,7 +223,9 @@ spec:
             resources:
               limits:
                 memory: "{{ memory_limit }}"
-{% if not selected_dra_classes %}
+{% if selected_dra_classes %}
+                dra.llm-d.io/gpu-nic-pair: "{{ gpu_count }}"
+{% else %}
                 {{ gpu_resource_key }}: "{{ gpu_count }}"
                 {% for r in extra_device_resources %}
                 {{ r.key }}: "{{ r.value }}"
@@ -264,17 +234,13 @@ spec:
               requests:
                 cpu: "{{ cpu_request }}"
                 memory: "{{ memory_request }}"
-{% if not selected_dra_classes %}
+{% if selected_dra_classes %}
+                dra.llm-d.io/gpu-nic-pair: "{{ gpu_count }}"
+{% else %}
                 {{ gpu_resource_key }}: "{{ gpu_count }}"
                 {% for r in extra_device_resources %}
                 {{ r.key }}: "{{ r.value }}"
                 {% endfor %}
-{% endif %}
-{% if selected_dra_classes and num_dra_rails > 0 %}
-              claims:
-{% for rail in range(num_dra_rails) %}
-                - name: pair-{{ rail }}
-{% endfor %}
 {% endif %}
             volumeMounts:
               - name: dshm
