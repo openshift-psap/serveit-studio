@@ -1,3 +1,28 @@
+{% set dra_gpu_nic_class = selected_dra_classes[0] if selected_dra_classes else '' %}
+{% set num_dra_rails = rdma_nics_per_node if rdma_nics_per_node > 0 else 8 %}
+{% if selected_dra_classes and rdma_nics_per_node > 0 %}
+{% for rail in range(num_dra_rails) %}
+---
+apiVersion: resource.k8s.io/v1
+kind: ResourceClaimTemplate
+metadata:
+  name: {{ test_id }}-decode-pair-{{ rail }}
+  namespace: {{ namespace }}
+  labels:
+    test-id: {{ test_id }}
+    role: decode
+spec:
+  spec:
+    devices:
+      requests:
+      - name: gpu-nic
+        exactly:
+          allocationMode: ExactCount
+          count: 1
+          deviceClassName: {{ dra_gpu_nic_class }}
+{% endfor %}
+{% endif %}
+---
 apiVersion: leaderworkerset.x-k8s.io/v1
 kind: LeaderWorkerSet
 metadata:
@@ -69,6 +94,13 @@ spec:
           - key: node.kubernetes.io/memory-pressure
             operator: Exists
             effect: NoSchedule
+{% if selected_dra_classes and rdma_nics_per_node > 0 %}
+        resourceClaims:
+{% for rail in range(num_dra_rails) %}
+          - name: pair-{{ rail }}
+            resourceClaimTemplateName: {{ test_id }}-decode-pair-{{ rail }}
+{% endfor %}
+{% endif %}
         volumes:
           - name: dshm
             emptyDir:
@@ -316,17 +348,27 @@ spec:
               limits:
                 cpu: "{{ cpu_limit }}"
                 memory: "{{ memory_limit }}"
+{% if not selected_dra_classes %}
                 {{ gpu_resource_key }}: "{{ decode_gpu_count }}"
                 {% for r in decode_extra_device_resources %}
                 {{ r.key }}: "{{ r.value }}"
                 {% endfor %}
+{% endif %}
               requests:
                 cpu: "{{ cpu_request }}"
                 memory: "{{ memory_request }}"
+{% if not selected_dra_classes %}
                 {{ gpu_resource_key }}: "{{ decode_gpu_count }}"
                 {% for r in decode_extra_device_resources %}
                 {{ r.key }}: "{{ r.value }}"
                 {% endfor %}
+{% endif %}
+{% if selected_dra_classes and rdma_nics_per_node > 0 %}
+              claims:
+{% for rail in range(num_dra_rails) %}
+                - name: pair-{{ rail }}
+{% endfor %}
+{% endif %}
             volumeMounts:
               - name: dshm
                 mountPath: /dev/shm
