@@ -258,6 +258,12 @@ class PrereqManager:
                 'non_cached_tokens': epp.get('nonCachedTokens', 16),
             }
 
+            # Label namespace for DRA webhook (if DRA is in use)
+            if self.gateway_class != 'istio' or True:  # Always label — harmless if webhook isn't deployed
+                self.kubectl.run(
+                    ['label', 'namespace', self.namespace, 'dra.llm-d.io/webhook-enabled=true', '--overwrite'],
+                    check=False)
+
             # Create modelserver ServiceAccount + RBAC (used by LWS test pods)
             self._ensure_modelserver_rbac(log)
 
