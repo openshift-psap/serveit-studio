@@ -1841,11 +1841,31 @@ def handle_setup_storage(data):
 
             log_to_ui(f'📦 Per-node storage: downloading model once, then distributing to {len(node_nfs_pvcs)} nodes', 'info')
 
+            # Create per-node NFS PVCs before launching download job
+            from core.prereq_manager import PrereqManager
+            from core import TemplateManager
+
+            prereq_kubectl = None
+            try:
+                from core.k8s_utils import KubectlRunner
+                prereq_kubectl = KubectlRunner(namespace=namespace)
+            except Exception:
+                pass
+            if prereq_kubectl:
+                pm = PrereqManager(namespace=namespace, kubectl_runner=prereq_kubectl)
+                class _PvcCfg:
+                    per_node_storage = True
+                    node_nfs_pvcs = []
+                _pvc_cfg = _PvcCfg()
+                _pvc_cfg.pvc_size = str(pvc_size) + 'Gi' if str(pvc_size).isdigit() else str(pvc_size)
+                created_pvcs = pm._ensure_per_node_pvcs(_pvc_cfg, log_callback=lambda msg: log_to_ui(msg, 'info'))
+                if created_pvcs:
+                    node_nfs_pvcs = created_pvcs
+
             timestamp = datetime.now().strftime('%Y%m%d-%H%M%S')
             job_name = f'serveit-model-download-{timestamp}'
             test_id = f'serveit-setup-{timestamp}'
 
-            from core import TemplateManager
             template_mgr = TemplateManager()
 
             job_yaml = template_mgr.render_template(
@@ -1868,9 +1888,9 @@ def handle_setup_storage(data):
 
             emit('storage_setup_result', {
                 'success': True,
-                'pvc_name': 'per-node-nfs',
-                'pvc_size': 'per-node',
-                'storage_class': 'per-node-nfs',
+                'pvc_name': f'{len(node_nfs_pvcs)}x per-node NFS',
+                'pvc_size': pvc_size,
+                'storage_class': 'NFS (per-node)',
                 'model': model,
                 'existing': False,
                 'job_name': job_name,
