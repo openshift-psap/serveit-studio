@@ -159,9 +159,30 @@ spec:
 {% endfor %}
               echo "⏳ Waiting for {{ node_nfs_pvcs | length - 1 }} parallel copies to complete..."
               wait
+
               echo ""
               echo "========================================="
-              echo "✅ Model distributed to all {{ node_nfs_pvcs | length }} nodes"
+              echo "📋 Verifying copies (byte count)"
+              echo "========================================="
+              PRIMARY_BYTES=$(du -sb "$PRIMARY" | cut -f1)
+              echo "Primary (nfs-{{ node_nfs_pvcs[0].suffix }}): $PRIMARY_BYTES bytes"
+              FAIL=0
+{% for nfs in node_nfs_pvcs[1:] %}
+              DST_BYTES=$(du -sb "/nfs-{{ nfs.suffix }}/huggingface" 2>/dev/null | cut -f1)
+              if [ "$DST_BYTES" = "$PRIMARY_BYTES" ]; then
+                echo "✅ nfs-{{ nfs.suffix }}: $DST_BYTES bytes — match"
+              else
+                echo "❌ nfs-{{ nfs.suffix }}: $DST_BYTES bytes — MISMATCH (expected $PRIMARY_BYTES)"
+                FAIL=1
+              fi
+{% endfor %}
+              if [ "$FAIL" = "1" ]; then
+                echo "❌ Some copies failed verification"
+                exit 1
+              fi
+              echo ""
+              echo "========================================="
+              echo "✅ Model distributed and verified on all {{ node_nfs_pvcs | length }} nodes"
               echo "========================================="
           env:
             {% if hf_token %}
