@@ -74,7 +74,7 @@ spec:
                 echo "Node: $NODE_NAME"
                 case "$NODE_NAME" in
 {% for nfs in node_nfs_pvcs %}
-                  *{{ nfs.suffix }}*) ln -sf /nfs-{{ nfs.suffix }} /model-cache/huggingface; echo "Linked to nfs-{{ nfs.suffix }}" ;;
+                  *{{ nfs.suffix }}*) ln -sf /nfs-{{ nfs.suffix }}/huggingface /model-cache/huggingface; echo "Linked to nfs-{{ nfs.suffix }}/huggingface" ;;
 {% endfor %}
                   *) echo "ERROR: No NFS mount matches node $NODE_NAME"; ls -d /nfs-* 2>/dev/null; exit 1 ;;
                 esac
