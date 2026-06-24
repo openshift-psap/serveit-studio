@@ -1868,7 +1868,7 @@ def handle_setup_storage(data):
             if proc.returncode != 0:
                 from core import TemplateManager as _TM
                 _tm = _TM()
-                _sc = 'nfs-' + node_nfs_pvcs[0]['suffix'] if node_nfs_pvcs else storage_class
+                _sc = storage_class or ('nfs-' + node_nfs_pvcs[0]['suffix'] if node_nfs_pvcs else None)
                 if _sc:
                     _pvc_yaml = _tm.render_template(
                         'prereq/model-cache-pvc.yaml.j2',
