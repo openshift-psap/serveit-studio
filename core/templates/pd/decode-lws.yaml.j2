@@ -261,6 +261,10 @@ spec:
                 valueFrom:
                   fieldRef:
                     fieldPath: status.podIP
+{% if selected_dra_classes %}
+              - name: RDMA_NETWORK_MODE
+                value: "dra-net"
+{% endif %}
               - name: NCCL_IB_HCA
                 value: "{{ nccl_ib_hca }}"
               - name: HF_TOKEN

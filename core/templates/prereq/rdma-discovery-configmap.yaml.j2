@@ -33,20 +33,22 @@ data:
     # Check for multi-nic-cni pattern: net1-0, net1-1, ... net1-15
     MULTINIC_COUNT=$(ls -1 /sys/class/net/ 2>/dev/null | grep -c '^net1-[0-9]')
 
-    if [ "$MULTINIC_COUNT" -gt 4 ]; then
+    # Template-injected network mode takes priority over auto-detection.
+    # This avoids misdetecting DRA (8x net0-net7) as SR-IOV multinic.
+    if [[ -n "${RDMA_NETWORK_MODE:-}" ]]; then
+        NETWORK_MODE="$RDMA_NETWORK_MODE"
+        if [[ "$NETWORK_MODE" == "dra-net" ]]; then
+            SOCKET_IFNAME="net0"
+        fi
+        echo "--- Network mode from pod env: $NETWORK_MODE (interface: $SOCKET_IFNAME) ---" >&2
+    elif [ "$MULTINIC_COUNT" -gt 4 ]; then
         NETWORK_MODE="sriov_multinic"
         SOCKET_IFNAME="eth0"
         echo "--- SR-IOV multi-nic mode detected ($MULTINIC_COUNT net1-X interfaces) ---" >&2
     elif ip link show net0 &>/dev/null; then
-        if [ "$NET_COUNT" -gt 4 ]; then
-            NETWORK_MODE="sriov_multinic"
-            SOCKET_IFNAME="eth0"
-            echo "--- SR-IOV multi-nic mode detected ($NET_COUNT net interfaces) ---" >&2
-        else
-            NETWORK_MODE="dra-net"
-            SOCKET_IFNAME="net0"
-            echo "--- DRA-NET mode detected (interface: net0) ---" >&2
-        fi
+        NETWORK_MODE="dra-net"
+        SOCKET_IFNAME="net0"
+        echo "--- DRA-NET mode detected (interface: net0) ---" >&2
     elif ls /sys/class/infiniband/* &>/dev/null && \
          [ "$NET_COUNT" -eq 0 ]; then
         NETWORK_MODE="shared_device"

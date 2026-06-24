@@ -206,6 +206,10 @@ spec:
                     name: llm-d-hf-token
                     key: HF_TOKEN
                     optional: true
+{% if selected_dra_classes %}
+              - name: RDMA_NETWORK_MODE
+                value: "dra-net"
+{% endif %}
               - name: NCCL_IB_HCA
                 value: "{{ nccl_ib_hca }}"
               - name: NCCL_SOCKET_IFNAME
