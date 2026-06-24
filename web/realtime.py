@@ -1706,18 +1706,28 @@ def handle_setup_storage(data):
         hf_token = data.get('hf_token')
         namespace = TARGET_NAMESPACE
 
+        # Load saved config for fallbacks
+        saved = {}
+        try:
+            with get_db() as conn:
+                row = conn.execute('SELECT config_json FROM ui_session_state WHERE id = 1').fetchone()
+                if row and row['config_json']:
+                    saved = json.loads(row['config_json'])
+        except Exception:
+            pass
+
+        if not model and saved.get('model'):
+            model = saved['model']
+
+        # Per-node storage check BEFORE existing_pvc (per-node has its own download flow)
+        per_node_storage = saved.get('per_node_storage', False)
+
         # Fallback to saved config if frontend didn't send existing_pvc
-        if not existing_pvc:
+        if not existing_pvc and not per_node_storage:
             try:
-                with get_db() as conn:
-                    row = conn.execute('SELECT config_json FROM ui_session_state WHERE id = 1').fetchone()
-                    if row and row['config_json']:
-                        saved = json.loads(row['config_json'])
-                        if saved.get('use_existing_pvc') and saved.get('existing_pvc_name'):
-                            existing_pvc = saved['existing_pvc_name']
-                            log_to_ui(f'📦 Using saved PVC config: {existing_pvc}', 'info')
-                        if not model and saved.get('model'):
-                            model = saved['model']
+                if saved.get('use_existing_pvc') and saved.get('existing_pvc_name'):
+                    existing_pvc = saved['existing_pvc_name']
+                    log_to_ui(f'📦 Using saved PVC config: {existing_pvc}', 'info')
             except Exception:
                 pass
 
@@ -1814,27 +1824,8 @@ def handle_setup_storage(data):
             spawn(run_optimization_background, optimization_data)
             return
 
-        # Per-node storage: skip shared PVC + download — init containers handle it
-        per_node_storage = False
-        try:
-            with get_db() as conn:
-                row = conn.execute('SELECT config_json FROM ui_session_state WHERE id = 1').fetchone()
-                if row and row['config_json']:
-                    saved = json.loads(row['config_json'])
-                    per_node_storage = saved.get('per_node_storage', False)
-        except Exception:
-            pass
-
         if per_node_storage:
-            node_nfs_pvcs = saved.get('node_nfs_pvcs', []) if 'saved' in dir() else []
-            if not node_nfs_pvcs:
-                try:
-                    with get_db() as conn:
-                        row = conn.execute('SELECT config_json FROM ui_session_state WHERE id = 1').fetchone()
-                        if row and row['config_json']:
-                            node_nfs_pvcs = json.loads(row['config_json']).get('node_nfs_pvcs', [])
-                except Exception:
-                    pass
+            node_nfs_pvcs = saved.get('node_nfs_pvcs', [])
 
             if not node_nfs_pvcs:
                 raise Exception('Per-node storage enabled but no NFS PVC mapping found')
