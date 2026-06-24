@@ -551,6 +551,54 @@ enp163s0 enp173s0 enp183s0 enp193s0 enp203s0 enp213s0 enp223s0 enp233s0 enp3s0
 
 If names differ between nodes, you'll need udev rules to rename them, or list all variants in the SR-IOV `pfNames` list.
 
+### A0. Enable NRI in CRI-O (Required for DRANET)
+
+DRANET uses NRI (Node Resource Interface) hooks to move NICs into pod network namespaces. NRI must be explicitly enabled in CRI-O — without it, DRANET's NIC injection fails with `file exists` errors and orphaned network interfaces.
+
+On OpenShift, create a MachineConfig targeting the GPU nodes:
+
+```yaml
+apiVersion: machineconfiguration.openshift.io/v1
+kind: MachineConfig
+metadata:
+  name: 99-gdr-enable-nri
+  labels:
+    machineconfiguration.openshift.io/role: gdr
+spec:
+  config:
+    ignition:
+      version: 3.2.0
+    storage:
+      files:
+      - path: /etc/crio/crio.conf.d/99-nri.conf
+        mode: 0644
+        overwrite: true
+        contents:
+          source: data:text/plain;charset=utf-8;base64,W2NyaW8ubnJpXQplbmFibGVfbnJpID0gdHJ1ZQpucmlfcGx1Z2luX3JlcXVlc3RfdGltZW91dCA9ICIzMHMiCm5yaV9wbHVnaW5fcmVnaXN0cmF0aW9uX3RpbWVvdXQgPSAiMTBzIgo=
+```
+
+The base64 content decodes to:
+
+```ini
+[crio.nri]
+enable_nri = true
+nri_plugin_request_timeout = "30s"
+nri_plugin_registration_timeout = "10s"
+```
+
+> **Warning:** This triggers a rolling reboot of all GPU nodes (one at a time). Wait for the MachineConfigPool to show `UPDATED=True` before proceeding.
+
+```bash
+# Monitor rollout progress
+oc get mcp gdr -w
+```
+
+#### Verify NRI is enabled
+
+```bash
+oc debug node/<gpu-node> -- chroot /host cat /etc/crio/crio.conf.d/99-nri.conf
+```
+
 ### A1. DRANET Driver
 
 DRANET discovers network interfaces and advertises them as DRA devices with PCIe topology attributes.
