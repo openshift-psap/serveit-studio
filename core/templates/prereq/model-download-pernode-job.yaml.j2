@@ -26,6 +26,8 @@ spec:
           image: {{ image | default('registry.access.redhat.com/ubi9/python-311:latest') }}
           imagePullPolicy: Always
           command:
+            - stdbuf
+            - -oL
             - /bin/bash
             - -c
           args:
