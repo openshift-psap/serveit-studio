@@ -1,7 +1,7 @@
 apiVersion: leaderworkerset.x-k8s.io/v1
 kind: LeaderWorkerSet
 metadata:
-{% if per_pod_storage %}
+{% if per_node_storage %}
   name: prefill-tp{{ prefill_tp }}
 {% else %}
   name: {{ test_id }}-prefill
@@ -74,7 +74,15 @@ spec:
             emptyDir:
               medium: Memory
               sizeLimit: 2Gi
-{% if not per_pod_storage %}
+{% if per_node_storage %}
+          - name: hf-cache
+            emptyDir: {}
+{% for nfs in node_nfs_pvcs %}
+          - name: nfs-{{ nfs.suffix }}
+            persistentVolumeClaim:
+              claimName: {{ nfs.pvc_name }}
+{% endfor %}
+{% else %}
           - name: hf-cache
             persistentVolumeClaim:
               claimName: {{ pvc_name }}
@@ -88,8 +96,32 @@ spec:
           - name: dev-infiniband
             hostPath:
               path: /dev/infiniband
-{% if per_pod_storage %}
+{% if per_node_storage %}
         initContainers:
+          - name: select-nfs
+            image: busybox:stable
+            command: ["/bin/sh", "-c"]
+            args:
+              - |
+                echo "Node: $NODE_NAME"
+                case "$NODE_NAME" in
+{% for nfs in node_nfs_pvcs %}
+                  *{{ nfs.suffix }}*) ln -sf /nfs-{{ nfs.suffix }} /model-cache/huggingface; echo "Linked to nfs-{{ nfs.suffix }}" ;;
+{% endfor %}
+                  *) echo "ERROR: No NFS mount matches node $NODE_NAME"; ls -d /nfs-* 2>/dev/null; exit 1 ;;
+                esac
+            env:
+              - name: NODE_NAME
+                valueFrom:
+                  fieldRef:
+                    fieldPath: spec.nodeName
+            volumeMounts:
+              - name: hf-cache
+                mountPath: /model-cache
+{% for nfs in node_nfs_pvcs %}
+              - name: nfs-{{ nfs.suffix }}
+                mountPath: /nfs-{{ nfs.suffix }}
+{% endfor %}
           - name: model-download
             image: {{ image }}
             command: ["/bin/bash", "-c"]
@@ -100,10 +132,10 @@ spec:
                 SNAPSHOT=$(ls -d "$DST"/models--*/snapshots/*/ 2>/dev/null | head -1)
                 MODEL_FILES=$(find "$SNAPSHOT" -maxdepth 1 \( -name "*.safetensors" -o -name "*.bin" -o -name "*.pt" \) 2>/dev/null | head -1)
                 if [ -n "$SNAPSHOT" ] && [ -n "$MODEL_FILES" ]; then
-                  echo "Model already present on per-pod PVC (snapshot + model files found), skipping download"
+                  echo "Model already present on per-node NFS, skipping download"
                   du -sh "$DST"
                 else
-                  echo "Downloading $MODEL to per-pod PVC..."
+                  echo "Downloading $MODEL to per-node NFS..."
                   pip install -q huggingface_hub hf-transfer 2>/dev/null
                   HF_HOME="$DST" HF_HUB_CACHE="$DST" HF_HUB_ENABLE_HF_TRANSFER=1 python3 -c "from huggingface_hub import snapshot_download; snapshot_download('$MODEL', local_files_only=False); print('Download complete')"
                   echo "Done: $(du -sh $DST | cut -f1)"
@@ -118,6 +150,10 @@ spec:
             volumeMounts:
               - name: hf-cache
                 mountPath: /model-cache
+{% for nfs in node_nfs_pvcs %}
+              - name: nfs-{{ nfs.suffix }}
+                mountPath: /nfs-{{ nfs.suffix }}
+{% endfor %}
 {% endif %}
         containers:
           - name: vllm
@@ -327,17 +363,12 @@ spec:
                 mountPath: /scripts
               - name: dev-infiniband
                 mountPath: /dev/infiniband
+{% if per_node_storage %}
+{% for nfs in node_nfs_pvcs %}
+              - name: nfs-{{ nfs.suffix }}
+                mountPath: /nfs-{{ nfs.suffix }}
+{% endfor %}
+{% endif %}
     workerTemplate:
       spec:
         containers: []
-{% if per_pod_storage %}
-    volumeClaimTemplates:
-      - metadata:
-          name: hf-cache
-        spec:
-          accessModes: ["ReadWriteMany"]
-          storageClassName: {{ storage_class }}
-          resources:
-            requests:
-              storage: {{ pvc_size or '50Gi' }}
-{% endif %}

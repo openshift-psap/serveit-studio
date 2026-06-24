@@ -722,24 +722,29 @@ socket.on('cluster_scan_result', function(data) {
         select.value = config.storage_class;
     }
 
-    // Disable per-pod storage toggle if LWS doesn't support volumeClaimTemplates
-    var perPodGroup = document.getElementById('per-pod-storage-group');
-    if (perPodGroup) {
-        if (!data.lws_supports_vct) {
-            perPodGroup.style.opacity = '0.4';
-            perPodGroup.style.pointerEvents = 'none';
-            perPodGroup.title = 'LWS with volumeClaimTemplates CRD not available on this cluster.';
-            if (config.per_pod_storage) {
-                config.per_pod_storage = false;
+    // Per-node storage toggle — requires per-node NFS classes on the cluster
+    var perNodeGroup = document.getElementById('per-node-storage-group');
+    if (perNodeGroup) {
+        var hasNodeNfs = data.node_nfs_classes && data.node_nfs_classes.length > 0;
+        if (!hasNodeNfs) {
+            perNodeGroup.style.opacity = '0.4';
+            perNodeGroup.style.pointerEvents = 'none';
+            perNodeGroup.title = 'No per-node NFS storage classes found (nfs-<node-suffix>).';
+            if (config.per_node_storage) {
+                config.per_node_storage = false;
+                config.node_nfs_pvcs = [];
                 saveConfig();
             }
         } else {
-            perPodGroup.style.opacity = '1';
-            perPodGroup.style.pointerEvents = 'auto';
-            perPodGroup.title = '';
+            perNodeGroup.style.opacity = '1';
+            perNodeGroup.style.pointerEvents = 'auto';
+            perNodeGroup.title = data.node_nfs_classes.length + ' per-node NFS classes available';
+            config.node_nfs_pvcs = data.node_nfs_classes.map(function(c) {
+                return {suffix: c.suffix, pvc_name: 'model-cache-' + c.suffix};
+            });
         }
-        if (config.per_pod_storage && data.lws_supports_vct) {
-            var toggle = document.getElementById('per-pod-storage-toggle');
+        if (config.per_node_storage && hasNodeNfs) {
+            var toggle = document.getElementById('per-node-storage-toggle');
             if (toggle) toggle.classList.add('active');
         }
     }

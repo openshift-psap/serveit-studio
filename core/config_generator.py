@@ -89,8 +89,9 @@ class TestConfig:
     selected_dra_classes: Optional[List[str]] = None  # User-selected DRA device classes
     gateway_class: str = 'istio'  # GatewayClass name (detected from cluster)
 
-    # Per-pod storage (LWS v0.8.0+ volumeClaimTemplates)
-    per_pod_storage: bool = False
+    # Per-node storage (one NFS PVC per node, symlinked at runtime)
+    per_node_storage: bool = False
+    node_nfs_pvcs: List[dict] = field(default_factory=list)  # [{suffix, pvc_name}]
     storage_class: Optional[str] = None
     pvc_size: Optional[str] = None  # e.g. '50Gi'
 

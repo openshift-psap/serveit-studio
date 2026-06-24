@@ -269,11 +269,11 @@ class DeploymentManager:
                     pods_expected=pods_expected
                 )
             else:
-                # For aggregated: try test_id-based name, fallback to per_pod_storage name
+                # For aggregated: try test_id-based name, fallback to per_node_storage name
                 lws_name = f"{test_id}-{architecture}"
                 status = self._get_lws_status(lws_name)
                 if not status['deployed']:
-                    # per_pod_storage uses a stable name like aggregated-tp{N}
+                    # per_node_storage uses a stable name like aggregated-tp{N}
                     result = self.kubectl.run(
                         ['get', 'lws', '-l', f'test-id={test_id}', '-n', self.namespace,
                          '-o', 'jsonpath={.items[0].metadata.name}'],

@@ -697,7 +697,8 @@ def run_optimization_background(data):
         selected_shared_device = _get('selected_shared_device')
         selected_dra_classes = _get('selected_dra_classes') or []
         gateway_class = _get('gateway_class', 'istio')
-        per_pod_storage = _get('per_pod_storage', False)
+        per_node_storage = _get('per_node_storage', False)
+        node_nfs_pvcs = _get('node_nfs_pvcs') or []
         storage_class = _get('storage_class')
         pvc_size_raw = _get('pvc_size')
         if pvc_size_raw:
@@ -930,7 +931,8 @@ data:
                 selected_shared_device=selected_shared_device,
                 selected_dra_classes=selected_dra_classes,
                 gateway_class=gateway_class,
-                per_pod_storage=per_pod_storage,
+                per_node_storage=per_node_storage,
+                node_nfs_pvcs=node_nfs_pvcs,
                 storage_class=storage_class,
                 pvc_size=pvc_size,
                 advanced_vllm=advanced_vllm,

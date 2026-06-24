@@ -84,9 +84,10 @@ class RecipeOptimizerConfig:
     selected_shared_device: Optional[str] = None  # Selected shared RDMA resource key
     selected_dra_classes: Optional[List[str]] = None  # User-selected DRA device classes
     gateway_class: str = 'istio'  # GatewayClass name (detected from cluster)
-    per_pod_storage: bool = False  # Use LWS volumeClaimTemplates for per-pod PVCs
-    storage_class: Optional[str] = None  # Storage class for per-pod PVCs
-    pvc_size: Optional[str] = None  # PVC size for per-pod storage
+    per_node_storage: bool = False  # Use per-node NFS PVCs with symlink
+    node_nfs_pvcs: Optional[list] = None  # [{suffix, pvc_name}] per-node NFS PVC mapping
+    storage_class: Optional[str] = None  # Storage class for per-node PVCs
+    pvc_size: Optional[str] = None  # PVC size for per-node storage
 
     # Resources (auto-calculated if not set)
     memory_per_pod: Optional[str] = None  # e.g., '191Gi', auto-calculated from cluster resources

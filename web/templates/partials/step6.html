@@ -188,15 +188,15 @@
                                         </div>
                                     </div>
 
-                                    <!-- Per-Pod Storage toggle (LWS v0.8.0+ volumeClaimTemplates) -->
-                                    <div id="per-pod-storage-group" style="margin-top:16px; border-top:1px solid #e2e8f0; padding-top:12px;">
-                                        <div class="vllm-toggle" id="per-pod-storage-toggle" onclick="var t=this;var on=!t.classList.contains('active');if(on)t.classList.add('active');else t.classList.remove('active');config.per_pod_storage=on;saveConfig();">
+                                    <!-- Per-Node Storage toggle -->
+                                    <div id="per-node-storage-group" style="margin-top:16px; border-top:1px solid #e2e8f0; padding-top:12px;">
+                                        <div class="vllm-toggle" id="per-node-storage-toggle" onclick="var t=this;var on=!t.classList.contains('active');if(on)t.classList.add('active');else t.classList.remove('active');config.per_node_storage=on;saveConfig();">
                                             <div style="font-size:1.5em;flex-shrink:0;">📦</div>
                                             <div>
-                                                <div style="font-weight:600;color:#1e293b;font-size:0.95em;">Per-Pod Storage</div>
-                                                <div style="color:#64748b;font-size:0.82em;margin-top:2px;">Each pod gets its own PVC instead of sharing one. Requires LWS v0.8.0+ with <code style="font-size:1em;background:#f1f5f9;padding:1px 4px;border-radius:3px;">volumeClaimTemplates</code> field support (a built-in LWS field, like StatefulSets), and a storage class that supports dynamic provisioning. Useful with local NVMe storage or when ReadWriteMany is not available.</div>
+                                                <div style="font-weight:600;color:#1e293b;font-size:0.95em;">Per-Node Storage</div>
+                                                <div style="color:#64748b;font-size:0.82em;margin-top:2px;">Each node gets its own NFS-backed PVC for model caching. Pods are automatically linked to their node's local NFS share via symlink. The model is downloaded once per node and shared by all pods on that node. Requires per-node NFS storage classes.</div>
                                             </div>
-                                            <input type="checkbox" id="enable-per-pod-storage" style="display:none;">
+                                            <input type="checkbox" id="enable-per-node-storage" style="display:none;">
                                             <div class="tgl-sw"></div>
                                         </div>
                                     </div>

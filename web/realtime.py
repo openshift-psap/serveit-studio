@@ -598,6 +598,30 @@ def _check_lws_vct(scanner):
         pass
     return False
 
+def _detect_node_nfs_classes(scanner, resources):
+    """Detect NFS storage classes that match GPU node name suffixes (nfs-<suffix>)."""
+    try:
+        nfs_classes = {}
+        for sc in resources.storage_classes:
+            if sc.name.startswith('nfs-') and sc.name != 'nfs':
+                suffix = sc.name[4:]
+                nfs_classes[suffix] = sc.name
+
+        if not nfs_classes:
+            return []
+
+        gpu_nodes = [n.name for n in resources.nodes if n.gpu_count > 0]
+        result = []
+        for node in gpu_nodes:
+            for suffix, sc_name in nfs_classes.items():
+                if node.endswith(suffix):
+                    result.append({'suffix': suffix, 'sc_name': sc_name, 'node': node})
+                    break
+        return result
+    except Exception:
+        return []
+
+
 def _scan_networks(scanner, namespace=None):
     """Scan available network types using the scanner's kubectl runner."""
     try:
@@ -784,6 +808,8 @@ def handle_scan_cluster(data):
             'available_networks': _scan_networks(scanner),
             # LWS volumeClaimTemplates support (v0.8.0+)
             'lws_supports_vct': _check_lws_vct(scanner),
+            # Per-node NFS storage classes (nfs-<suffix> matching GPU nodes)
+            'node_nfs_classes': _detect_node_nfs_classes(scanner, resources),
             # Gateway class to use for inference gateway
             'gateway_class': _detect_gateway_class(scanner),
             # Preset values from launcher (empty when running standalone)
