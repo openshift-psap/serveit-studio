@@ -394,7 +394,7 @@ spec:
   vgpuDeviceManager:
     enabled: true
   gdrcopy:
-    enabled: false
+    enabled: true
   gds:
     enabled: false
   validator:
@@ -406,6 +406,7 @@ spec:
 > - `driver.rdma.enabled: true` — loads nvidia-peermem for GPU Direct RDMA
 > - `driver.rdma.useHostMofed: false` — uses the containerized MOFED from the Network Operator
 > - `cdi.enabled: true` — enables Container Device Interface for GPU passthrough
+> - `gdrcopy.enabled: true` — enables GPU Direct Copy for low-latency GPU memory transfers (required for optimal RDMA performance)
 
 #### 3c. Verify
 
@@ -1572,7 +1573,7 @@ oc get cidrpools -n nvidia-network-operator                             # CIDRPo
 | NFD Operator | 4.19.0 |
 | NVIDIA Network Operator | 26.1.0 |
 | DOCA/MOFED Driver | doca3.3.0-26.01-1.0.0.0-0 |
-| NVIDIA GPU Operator | 25.10.1 |
+| NVIDIA GPU Operator | 26.3.0 |
 | CUDA Driver | 580.105 |
 | DRANET | v1.2.0 |
 | NVIDIA DRA GPU Driver | 25.12.0 |
