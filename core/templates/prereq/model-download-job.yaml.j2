@@ -188,7 +188,7 @@ spec:
       volumes:
         - name: model-cache
           persistentVolumeClaim:
-            claimName: {{ pvc_name | default('serveit-model-cache') }}
+            claimName: {{ pvc_name | default('serveit-cache') }}
         - name: tmp-mem
           emptyDir:
             medium: Memory

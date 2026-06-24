@@ -63,7 +63,7 @@ class DeploymentConfig:
 
     num_nics: int = 8
 
-    pvc_name: str = "serveit-model-cache"
+    pvc_name: str = "serveit-cache"
     kv_connector: str = "NixlConnector"
 
     memory_request: str = "64Gi"
@@ -542,7 +542,7 @@ class PrerequisiteGenerator:
     def _generate_model_cache_pvc(self, namespace: str, config: Dict) -> Dict:
         return {
             'apiVersion': 'v1', 'kind': 'PersistentVolumeClaim',
-            'metadata': {'name': 'serveit-model-cache', 'namespace': namespace},
+            'metadata': {'name': 'serveit-cache', 'namespace': namespace},
             'spec': {
                 'accessModes': ['ReadWriteMany'],
                 'resources': {'requests': {'storage': config.get('cache_size', '500Gi')}},
@@ -826,7 +826,7 @@ class DeploymentOrchestrator:
             num_experts=test_config.get('num_experts', 256),
             agg_pods=test_config.get('agg_pods', 1),
             num_nics=test_config.get('num_nics', test_config.get('tensor_parallelism', 1)),
-            pvc_name=test_config.get('pvc_name', 'serveit-model-cache'),
+            pvc_name=test_config.get('pvc_name', 'serveit-cache'),
             kv_connector=test_config.get('kv_connector', 'NixlConnector'),
             gpu_memory_utilization=test_config.get('gpu_memory_utilization', 0.95),
             max_model_len=test_config.get('max_model_len'),

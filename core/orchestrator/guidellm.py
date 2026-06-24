@@ -110,7 +110,7 @@ class GuidellmMixin:
                             return parts[0]
         except Exception:
             pass
-        return getattr(config, 'pvc_name', None) or 'serveit-model-cache'
+        return getattr(config, 'pvc_name', None) or 'serveit-cache'
 
     def _run_guidellm_job(
         self,

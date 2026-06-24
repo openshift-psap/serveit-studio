@@ -70,7 +70,7 @@ class RecipeOptimizerConfig:
     thanos_url: Optional[str] = None
     image: str = 'ghcr.io/llm-d/llm-d-cuda:v0.6.0'
     scheduler_image: str = 'ghcr.io/llm-d/llm-d-inference-scheduler:v0.7.1'
-    pvc_name: str = 'serveit-model-cache'
+    pvc_name: str = 'serveit-cache'
     nccl_ib_hca: str = 'mlx'
     hf_token: Optional[str] = None
 

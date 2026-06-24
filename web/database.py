@@ -516,7 +516,7 @@ def save_deployment_template(
     max_model_len: int = 8192,
     gpu_memory_utilization: float = 0.95,
     image: str = 'ghcr.io/llm-d/llm-d-cuda:v0.5.1',
-    pvc_name: str = 'serveit-model-cache',
+    pvc_name: str = 'serveit-cache',
     nccl_ib_hca: str = 'mlx',
     isl: int = 2000,
     osl: int = 100,

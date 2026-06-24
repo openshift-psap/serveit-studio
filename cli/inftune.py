@@ -475,7 +475,7 @@ def resume_run(args, db, kubeconfig_path=None):
         'latency_constraint_ms': row.get('latency_constraint_ms', 500),
         'latency_constraint_percentile': row.get('latency_constraint_percentile', 'p99'),
         'image': saved_config.get('image', 'ghcr.io/llm-d/llm-d-cuda:v0.6.0'),
-        'pvc_name': saved_config.get('pvc_name', 'serveit-model-cache'),
+        'pvc_name': saved_config.get('pvc_name', 'serveit-cache'),
         'nccl_ib_hca': saved_config.get('nccl_ib_hca', 'mlx'),
         'hf_token': saved_config.get('hf_token') or os.environ.get('HF_TOKEN'),
         'selected_nodes': saved_config.get('selected_nodes', []),
@@ -517,7 +517,7 @@ def ensure_model_ready(config, log_fn):
     import subprocess as _sp
     from core.template_manager import TemplateManager
 
-    pvc_name = config.pvc_name or 'serveit-model-cache'
+    pvc_name = config.pvc_name or 'serveit-cache'
     namespace = config.namespace
     model = config.model_name
 
@@ -865,8 +865,8 @@ def build_run_parser(parser):
                     help='vLLM container image')
     hw.add_argument('--namespace', type=str, default=None,
                     help='Kubernetes namespace (default: from cluster or serveit)')
-    hw.add_argument('--pvc', type=str, default='serveit-model-cache',
-                    help='PVC name for model cache (default: serveit-model-cache)')
+    hw.add_argument('--pvc', type=str, default='serveit-cache',
+                    help='PVC name for model cache (default: serveit-cache)')
     hw.add_argument('--nccl-ib-hca', type=str, default='mlx',
                     help='NCCL IB HCA device prefix (default: mlx)')
     hw.add_argument('--hf-token', type=str, default=None,

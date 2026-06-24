@@ -1,0 +1,526 @@
+=== prefill-tp1 ===
+apiVersion: leaderworkerset.x-k8s.io/v1
+kind: LeaderWorkerSet
+metadata:
+  annotations:
+    kubectl.kubernetes.io/last-applied-configuration: |
+      {"apiVersion":"leaderworkerset.x-k8s.io/v1","kind":"LeaderWorkerSet","metadata":{"annotations":{},"labels":{"app":"llm-d","architecture":"pd","component":"serveit-test","role":"prefill","test-id":"single-pd-1p1d-ptp1-dtp1"},"name":"prefill-tp1","namespace":"serveit-admin-boaz-testing-pokprod"},"spec":{"leaderWorkerTemplate":{"leaderTemplate":{"metadata":{"annotations":{"k8s.v1.cni.cncf.io/networks":"[{\"name\":\"multi-nic-inference\",\"namespace\":\"serveit-admin-boaz-testing-pokprod\"}]"},"labels":{"llm-d.ai/guide":"serveit-pd","llm-d.ai/inference-serving":"true","llm-d.ai/inferenceServing":"true","llm-d.ai/model":"RedHatAI-Meta-Llama-3.1-8B-Instruct-FP8-dynamic","llm-d.ai/role":"prefill","llm-d.ai/test-id":"single-pd-1p1d-ptp1-dtp1"}},"spec":{"containers":[{"args":["ulimit -l unlimited || true\n\n# Pin to allocated GPUs (privileged pods see all host GPUs)\nif [ -d /var/run/nvidia-container-devices ]; then\n  GPU_INDICES=\"\"\n  for uuid in $(ls /var/run/nvidia-container-devices/); do\n    idx=$(nvidia-smi --query-gpu=index,uuid --format=csv,noheader | grep \"$uuid\" | cut -d',' -f1 | tr -d ' ')\n    [ -n \"$idx\" ] \u0026\u0026 GPU_INDICES=\"${GPU_INDICES:+$GPU_INDICES,}$idx\"\n  done\n  if [ -n \"$GPU_INDICES\" ]; then\n    export CUDA_VISIBLE_DEVICES=\"$GPU_INDICES\"\n    echo \"--- CUDA_VISIBLE_DEVICES=$CUDA_VISIBLE_DEVICES ---\"\n  fi\nfi\n\n# Source RDMA discovery script if available\nif [ -f /scripts/discover_ib_hca.sh ]; then\n  source /scripts/discover_ib_hca.sh\n  echo \"--- Loaded RDMA environment ---\"\nfi\n\necho \"=========================================\"\necho \"ServeIt Studio Test: single-pd-1p1d-ptp1-dtp1\"\necho \"Architecture: PD (Prefill)\"\necho \"Model: RedHatAI/Meta-Llama-3.1-8B-Instruct-FP8-dynamic\"\necho \"TP: 1\"\necho \"NCCL_IB_HCA: ${NCCL_IB_HCA}\"\necho \"UCX_NET_DEVICES: ${UCX_NET_DEVICES:-not set}\"\necho \"NCCL_SOCKET_IFNAME: ${NCCL_SOCKET_IFNAME:-not set}\"\necho \"=========================================\"\n\nif [ -z \"${UCX_NET_DEVICES:-}\" ] || [ -z \"${NCCL_IB_HCA:-}\" ]; then\n  echo \"FATAL: RDMA env vars not set (UCX_NET_DEVICES=${UCX_NET_DEVICES:-}, NCCL_IB_HCA=${NCCL_IB_HCA:-}). Sleeping to prevent node crash.\"\n  sleep infinity\nfi\n\n# Patch vllm#43396: FP8 MoE CUTLASS OOB at batch 8192\n_MOE_FILE=$(python3 -c \"import vllm; print(vllm.__path__[0])\" 2\u003e/dev/null)/model_executor/layers/fused_moe/moe_permute_unpermute.py\nif [ -f \"$_MOE_FILE\" ] \u0026\u0026 grep -q 'a1q_scale\\[permuted_idx.clamp' \"$_MOE_FILE\"; then\n  sed -i 's|a1q_scale = a1q_scale\\[permuted_idx.clamp(max=n_token \\* topk - 1) // topk\\]|scale_idx = permuted_idx.clamp(max=n_token * topk - 1) // topk; scale_idx = scale_idx.clamp(max=a1q_scale.shape[0] - 1); a1q_scale = a1q_scale[scale_idx]|' \"$_MOE_FILE\"\n  echo \"--- Applied vllm#43396 FP8 MoE patch ---\"\nfi\n\nvllm serve RedHatAI/Meta-Llama-3.1-8B-Instruct-FP8-dynamic \\\n  --port 8000 \\\n  --trust-remote-code \\\n  --tensor-parallel-size 1 \\\n  --api-server-count 1 \\\n  --block-size 16 \\\n  --gpu-memory-utilization 0.89 \\\n  --kv-transfer-config '{\"kv_connector\":\"NixlConnector\",\"kv_role\":\"kv_both\",\"kv_load_failure_policy\":\"fail\"}' \\\n  --max-model-len 189 \\\n  --enable-prefix-caching \\\n  --max-num-seqs 192 \\\n  --disable-uvicorn-access-log \\\n  || sleep infinity\n"],"command":["/bin/bash","-c"],"env":[{"name":"VLLM_NIXL_SIDE_CHANNEL_HOST","valueFrom":{"fieldRef":{"fieldPath":"status.podIP"}}},{"name":"NCCL_IB_HCA","value":"mlx"},{"name":"HF_TOKEN","valueFrom":{"secretKeyRef":{"key":"HF_TOKEN","name":"llm-d-hf-token","optional":true}}},{"name":"HF_HOME","value":"/model-cache/huggingface"},{"name":"HF_HUB_CACHE","value":"/model-cache/huggingface"},{"name":"VLLM_SKIP_P2P_CHECK","value":"1"},{"name":"NVIDIA_GDRCOPY","value":"enabled"},{"name":"VLLM_MEMORY_PROFILER_ESTIMATE_CUDAGRAPHS","value":"1"},{"name":"GLOO_SOCKET_IFNAME","value":"eth0"},{"name":"NCCL_SOCKET_IFNAME","value":"eth0"},{"name":"VLLM_USE_DEEP_GEMM","value":"0"},{"name":"VLLM_LOGGING_LEVEL","value":"ERROR"},{"name":"NCCL_DEBUG","value":"ERROR"},{"name":"TRITON_LIBCUDA_PATH","value":"/usr/lib64"},{"name":"CUDA_CACHE_PATH","value":"/var/cache/vllm/cuda"},{"name":"CCACHE_DIR","value":"/var/cache/vllm/ccache"},{"name":"VLLM_CACHE_ROOT","value":"/var/cache/vllm/vllm"},{"name":"FLASHINFER_WORKSPACE_BASE","value":"/var/cache/vllm/flashinfer"},{"name":"VLLM_NIXL_ABORT_REQUEST_TIMEOUT","value":"600"},{"name":"SHARED_STORAGE_PATH","value":"/data"},{"name":"TP_SIZE","value":"1"},{"name":"DP_SIZE","value":"1"},{"name":"DP_SIZE_LOCAL","value":"1"}],"image":"ghcr.io/llm-d/llm-d-cuda:v0.6.0","name":"vllm","ports":[{"containerPort":8000,"name":"vllm"},{"containerPort":5555,"name":"rpc"}],"resources":{"limits":{"cpu":"6","memory":"130Gi","nvidia.com/gpu":"1","rdma/roce_gdr":"1"},"requests":{"cpu":"6","memory":"130Gi","nvidia.com/gpu":"1","rdma/roce_gdr":"1"}},"securityContext":{"capabilities":{"add":["IPC_LOCK","SYS_RAWIO","SYS_RESOURCE"]},"privileged":true,"runAsUser":0},"volumeMounts":[{"mountPath":"/dev/shm","name":"dshm"},{"mountPath":"/model-cache","name":"hf-cache"},{"mountPath":"/var/cache/vllm","name":"jit-cache"},{"mountPath":"/scripts","name":"rdma-script"},{"mountPath":"/dev/infiniband","name":"dev-infiniband"}]}],"serviceAccountName":"llm-d-modelserver","tolerations":[{"effect":"NoSchedule","key":"node.kubernetes.io/disk-pressure","operator":"Exists"},{"effect":"NoSchedule","key":"node.kubernetes.io/memory-pressure","operator":"Exists"}],"volumes":[{"emptyDir":{"medium":"Memory","sizeLimit":"2Gi"},"name":"dshm"},{"emptyDir":{},"name":"jit-cache"},{"configMap":{"defaultMode":493,"name":"rdma-discovery-script"},"name":"rdma-script"},{"hostPath":{"path":"/dev/infiniband"},"name":"dev-infiniband"}]}},"size":1,"volumeClaimTemplates":[{"metadata":{"name":"hf-cache"},"spec":{"accessModes":["ReadWriteOnce"],"resources":{"requests":{"storage":"50Gi"}},"storageClassName":"ibm-spectrum-scale-fileset"}}],"workerTemplate":{"spec":{"containers":[]}}},"replicas":1}}
+  creationTimestamp: "2026-06-18T17:05:32Z"
+  generation: 1
+  labels:
+    app: llm-d
+    architecture: pd
+    component: serveit-test
+    role: prefill
+    test-id: single-pd-1p1d-ptp1-dtp1
+  name: prefill-tp1
+  namespace: serveit-admin-boaz-testing-pokprod
+  resourceVersion: "1183397608"
+  uid: 4d694cf6-d03e-44ad-a7bb-b2c2712566ff
+spec:
+  leaderWorkerTemplate:
+    leaderTemplate:
+      metadata:
+        annotations:
+          k8s.v1.cni.cncf.io/networks: '[{"name":"multi-nic-inference","namespace":"serveit-admin-boaz-testing-pokprod"}]'
+        labels:
+          llm-d.ai/guide: serveit-pd
+          llm-d.ai/inference-serving: "true"
+          llm-d.ai/inferenceServing: "true"
+          llm-d.ai/model: RedHatAI-Meta-Llama-3.1-8B-Instruct-FP8-dynamic
+          llm-d.ai/role: prefill
+          llm-d.ai/test-id: single-pd-1p1d-ptp1-dtp1
+      spec:
+        containers:
+        - args:
+          - |
+            ulimit -l unlimited || true
+
+            # Pin to allocated GPUs (privileged pods see all host GPUs)
+            if [ -d /var/run/nvidia-container-devices ]; then
+              GPU_INDICES=""
+              for uuid in $(ls /var/run/nvidia-container-devices/); do
+                idx=$(nvidia-smi --query-gpu=index,uuid --format=csv,noheader | grep "$uuid" | cut -d',' -f1 | tr -d ' ')
+                [ -n "$idx" ] && GPU_INDICES="${GPU_INDICES:+$GPU_INDICES,}$idx"
+              done
+              if [ -n "$GPU_INDICES" ]; then
+                export CUDA_VISIBLE_DEVICES="$GPU_INDICES"
+                echo "--- CUDA_VISIBLE_DEVICES=$CUDA_VISIBLE_DEVICES ---"
+              fi
+            fi
+
+            # Source RDMA discovery script if available
+            if [ -f /scripts/discover_ib_hca.sh ]; then
+              source /scripts/discover_ib_hca.sh
+              echo "--- Loaded RDMA environment ---"
+            fi
+
+            echo "========================================="
+            echo "ServeIt Studio Test: single-pd-1p1d-ptp1-dtp1"
+            echo "Architecture: PD (Prefill)"
+            echo "Model: RedHatAI/Meta-Llama-3.1-8B-Instruct-FP8-dynamic"
+            echo "TP: 1"
+            echo "NCCL_IB_HCA: ${NCCL_IB_HCA}"
+            echo "UCX_NET_DEVICES: ${UCX_NET_DEVICES:-not set}"
+            echo "NCCL_SOCKET_IFNAME: ${NCCL_SOCKET_IFNAME:-not set}"
+            echo "========================================="
+
+            if [ -z "${UCX_NET_DEVICES:-}" ] || [ -z "${NCCL_IB_HCA:-}" ]; then
+              echo "FATAL: RDMA env vars not set (UCX_NET_DEVICES=${UCX_NET_DEVICES:-}, NCCL_IB_HCA=${NCCL_IB_HCA:-}). Sleeping to prevent node crash."
+              sleep infinity
+            fi
+
+            # Patch vllm#43396: FP8 MoE CUTLASS OOB at batch 8192
+            _MOE_FILE=$(python3 -c "import vllm; print(vllm.__path__[0])" 2>/dev/null)/model_executor/layers/fused_moe/moe_permute_unpermute.py
+            if [ -f "$_MOE_FILE" ] && grep -q 'a1q_scale\[permuted_idx.clamp' "$_MOE_FILE"; then
+              sed -i 's|a1q_scale = a1q_scale\[permuted_idx.clamp(max=n_token \* topk - 1) // topk\]|scale_idx = permuted_idx.clamp(max=n_token * topk - 1) // topk; scale_idx = scale_idx.clamp(max=a1q_scale.shape[0] - 1); a1q_scale = a1q_scale[scale_idx]|' "$_MOE_FILE"
+              echo "--- Applied vllm#43396 FP8 MoE patch ---"
+            fi
+
+            vllm serve RedHatAI/Meta-Llama-3.1-8B-Instruct-FP8-dynamic \
+              --port 8000 \
+              --trust-remote-code \
+              --tensor-parallel-size 1 \
+              --api-server-count 1 \
+              --block-size 16 \
+              --gpu-memory-utilization 0.89 \
+              --kv-transfer-config '{"kv_connector":"NixlConnector","kv_role":"kv_both","kv_load_failure_policy":"fail"}' \
+              --max-model-len 189 \
+              --enable-prefix-caching \
+              --max-num-seqs 192 \
+              --disable-uvicorn-access-log \
+              || sleep infinity
+          command:
+          - /bin/bash
+          - -c
+          env:
+          - name: VLLM_NIXL_SIDE_CHANNEL_HOST
+            valueFrom:
+              fieldRef:
+                fieldPath: status.podIP
+          - name: NCCL_IB_HCA
+            value: mlx
+          - name: HF_TOKEN
+            valueFrom:
+              secretKeyRef:
+                key: HF_TOKEN
+                name: llm-d-hf-token
+                optional: true
+          - name: HF_HOME
+            value: /model-cache/huggingface
+          - name: HF_HUB_CACHE
+            value: /model-cache/huggingface
+          - name: VLLM_SKIP_P2P_CHECK
+            value: "1"
+          - name: NVIDIA_GDRCOPY
+            value: enabled
+          - name: VLLM_MEMORY_PROFILER_ESTIMATE_CUDAGRAPHS
+            value: "1"
+          - name: GLOO_SOCKET_IFNAME
+            value: eth0
+          - name: NCCL_SOCKET_IFNAME
+            value: eth0
+          - name: VLLM_USE_DEEP_GEMM
+            value: "0"
+          - name: VLLM_LOGGING_LEVEL
+            value: ERROR
+          - name: NCCL_DEBUG
+            value: ERROR
+          - name: TRITON_LIBCUDA_PATH
+            value: /usr/lib64
+          - name: CUDA_CACHE_PATH
+            value: /var/cache/vllm/cuda
+          - name: CCACHE_DIR
+            value: /var/cache/vllm/ccache
+          - name: VLLM_CACHE_ROOT
+            value: /var/cache/vllm/vllm
+          - name: FLASHINFER_WORKSPACE_BASE
+            value: /var/cache/vllm/flashinfer
+          - name: VLLM_NIXL_ABORT_REQUEST_TIMEOUT
+            value: "600"
+          - name: SHARED_STORAGE_PATH
+            value: /data
+          - name: TP_SIZE
+            value: "1"
+          - name: DP_SIZE
+            value: "1"
+          - name: DP_SIZE_LOCAL
+            value: "1"
+          image: ghcr.io/llm-d/llm-d-cuda:v0.6.0
+          name: vllm
+          ports:
+          - containerPort: 8000
+            name: vllm
+            protocol: TCP
+          - containerPort: 5555
+            name: rpc
+            protocol: TCP
+          resources:
+            limits:
+              cpu: "6"
+              memory: 130Gi
+              nvidia.com/gpu: "1"
+              rdma/roce_gdr: "1"
+            requests:
+              cpu: "6"
+              memory: 130Gi
+              nvidia.com/gpu: "1"
+              rdma/roce_gdr: "1"
+          securityContext:
+            capabilities:
+              add:
+              - IPC_LOCK
+              - SYS_RAWIO
+              - SYS_RESOURCE
+            privileged: true
+            runAsUser: 0
+          volumeMounts:
+          - mountPath: /dev/shm
+            name: dshm
+          - mountPath: /model-cache
+            name: hf-cache
+          - mountPath: /var/cache/vllm
+            name: jit-cache
+          - mountPath: /scripts
+            name: rdma-script
+          - mountPath: /dev/infiniband
+            name: dev-infiniband
+        serviceAccountName: llm-d-modelserver
+        tolerations:
+        - effect: NoSchedule
+          key: node.kubernetes.io/disk-pressure
+          operator: Exists
+        - effect: NoSchedule
+          key: node.kubernetes.io/memory-pressure
+          operator: Exists
+        volumes:
+        - emptyDir:
+            medium: Memory
+            sizeLimit: 2Gi
+          name: dshm
+        - emptyDir: {}
+          name: jit-cache
+        - configMap:
+            defaultMode: 493
+            name: rdma-discovery-script
+          name: rdma-script
+        - hostPath:
+            path: /dev/infiniband
+          name: dev-infiniband
+    restartPolicy: RecreateGroupOnPodRestart
+    size: 1
+    volumeClaimTemplates:
+    - metadata:
+        name: hf-cache
+      spec:
+        accessModes:
+        - ReadWriteOnce
+        resources:
+          requests:
+            storage: 50Gi
+        storageClassName: ibm-spectrum-scale-fileset
+      status: {}
+    workerTemplate:
+      metadata: {}
+      spec:
+        containers: []
+  networkConfig:
+    subdomainPolicy: Shared
+  replicas: 1
+  rolloutStrategy:
+    rollingUpdateConfiguration:
+      maxSurge: 0
+      maxUnavailable: 1
+      partition: 0
+    type: RollingUpdate
+  startupPolicy: LeaderCreated
+status:
+  conditions:
+  - lastTransitionTime: "2026-06-18T17:05:32Z"
+    message: Replicas are progressing
+    reason: GroupsProgressing
+    status: "False"
+    type: Progressing
+  - lastTransitionTime: "2026-06-18T17:05:44Z"
+    message: All replicas are ready
+    reason: AllGroupsReady
+    status: "True"
+    type: Available
+  hpaPodSelector: leaderworkerset.sigs.k8s.io/name=prefill-tp1,leaderworkerset.sigs.k8s.io/worker-index=0
+  readyReplicas: 1
+  replicas: 1
+  updatedReplicas: 1
+---
+=== decode-tp1 ===
+apiVersion: leaderworkerset.x-k8s.io/v1
+kind: LeaderWorkerSet
+metadata:
+  annotations:
+    kubectl.kubernetes.io/last-applied-configuration: |
+      {"apiVersion":"leaderworkerset.x-k8s.io/v1","kind":"LeaderWorkerSet","metadata":{"annotations":{},"labels":{"app":"llm-d","architecture":"pd","component":"serveit-test","role":"decode","test-id":"single-pd-1p1d-ptp1-dtp1"},"name":"decode-tp1","namespace":"serveit-admin-boaz-testing-pokprod"},"spec":{"leaderWorkerTemplate":{"leaderTemplate":{"metadata":{"annotations":{"k8s.v1.cni.cncf.io/networks":"[{\"name\":\"multi-nic-inference\",\"namespace\":\"serveit-admin-boaz-testing-pokprod\"}]"},"labels":{"llm-d.ai/guide":"serveit-pd","llm-d.ai/inference-serving":"true","llm-d.ai/inferenceServing":"true","llm-d.ai/model":"RedHatAI-Meta-Llama-3.1-8B-Instruct-FP8-dynamic","llm-d.ai/role":"decode","llm-d.ai/test-id":"single-pd-1p1d-ptp1-dtp1"}},"spec":{"containers":[{"args":["ulimit -l unlimited || true\n\n# Pin to allocated GPUs (privileged pods see all host GPUs)\nif [ -d /var/run/nvidia-container-devices ]; then\n  GPU_INDICES=\"\"\n  for uuid in $(ls /var/run/nvidia-container-devices/); do\n    idx=$(nvidia-smi --query-gpu=index,uuid --format=csv,noheader | grep \"$uuid\" | cut -d',' -f1 | tr -d ' ')\n    [ -n \"$idx\" ] \u0026\u0026 GPU_INDICES=\"${GPU_INDICES:+$GPU_INDICES,}$idx\"\n  done\n  if [ -n \"$GPU_INDICES\" ]; then\n    export CUDA_VISIBLE_DEVICES=\"$GPU_INDICES\"\n    echo \"--- CUDA_VISIBLE_DEVICES=$CUDA_VISIBLE_DEVICES ---\"\n  fi\nfi\n\n# Source RDMA discovery script if available\nif [ -f /scripts/discover_ib_hca.sh ]; then\n  source /scripts/discover_ib_hca.sh\n  echo \"--- Loaded RDMA environment ---\"\nfi\n\necho \"=========================================\"\necho \"ServeIt Studio Test: single-pd-1p1d-ptp1-dtp1\"\necho \"Architecture: PD (Decode)\"\necho \"Model: RedHatAI/Meta-Llama-3.1-8B-Instruct-FP8-dynamic\"\necho \"TP: 1\"\necho \"NCCL_IB_HCA: ${NCCL_IB_HCA}\"\necho \"UCX_NET_DEVICES: ${UCX_NET_DEVICES:-not set}\"\necho \"NCCL_SOCKET_IFNAME: ${NCCL_SOCKET_IFNAME:-not set}\"\necho \"=========================================\"\n\nif [ -z \"${UCX_NET_DEVICES:-}\" ] || [ -z \"${NCCL_IB_HCA:-}\" ]; then\n  echo \"FATAL: RDMA env vars not set (UCX_NET_DEVICES=${UCX_NET_DEVICES:-}, NCCL_IB_HCA=${NCCL_IB_HCA:-}). Sleeping to prevent node crash.\"\n  sleep infinity\nfi\n\n# Patch vllm#43396: FP8 MoE CUTLASS OOB at batch 8192\n_MOE_FILE=$(python3 -c \"import vllm; print(vllm.__path__[0])\" 2\u003e/dev/null)/model_executor/layers/fused_moe/moe_permute_unpermute.py\nif [ -f \"$_MOE_FILE\" ] \u0026\u0026 grep -q 'a1q_scale\\[permuted_idx.clamp' \"$_MOE_FILE\"; then\n  sed -i 's|a1q_scale = a1q_scale\\[permuted_idx.clamp(max=n_token \\* topk - 1) // topk\\]|scale_idx = permuted_idx.clamp(max=n_token * topk - 1) // topk; scale_idx = scale_idx.clamp(max=a1q_scale.shape[0] - 1); a1q_scale = a1q_scale[scale_idx]|' \"$_MOE_FILE\"\n  echo \"--- Applied vllm#43396 FP8 MoE patch ---\"\nfi\n\nvllm serve RedHatAI/Meta-Llama-3.1-8B-Instruct-FP8-dynamic \\\n  --port 8200 \\\n  --trust-remote-code \\\n  --tensor-parallel-size ${TP_SIZE} \\\n  --data-parallel-size ${DP_SIZE} \\\n  --api-server-count 1 \\\n  --block-size 16 \\\n  --gpu-memory-utilization 0.84 \\\n  --max-num-seqs 288 \\\n  --kv-transfer-config '{\"kv_connector\":\"NixlConnector\",\"kv_role\":\"kv_both\",\"kv_load_failure_policy\":\"fail\"}' \\\n  --max-model-len 189 \\\n  --enable-prefix-caching \\\n  --disable-uvicorn-access-log \\\n  || sleep infinity\n"],"command":["/bin/bash","-c"],"env":[{"name":"VLLM_NIXL_SIDE_CHANNEL_HOST","valueFrom":{"fieldRef":{"fieldPath":"status.podIP"}}},{"name":"NCCL_IB_HCA","value":"mlx"},{"name":"HF_TOKEN","valueFrom":{"secretKeyRef":{"key":"HF_TOKEN","name":"llm-d-hf-token","optional":true}}},{"name":"HF_HOME","value":"/model-cache/huggingface"},{"name":"HF_HUB_CACHE","value":"/model-cache/huggingface"},{"name":"VLLM_SKIP_P2P_CHECK","value":"1"},{"name":"NVIDIA_GDRCOPY","value":"enabled"},{"name":"VLLM_MEMORY_PROFILER_ESTIMATE_CUDAGRAPHS","value":"1"},{"name":"GLOO_SOCKET_IFNAME","value":"eth0"},{"name":"NCCL_SOCKET_IFNAME","value":"eth0"},{"name":"VLLM_USE_DEEP_GEMM","value":"0"},{"name":"VLLM_LOGGING_LEVEL","value":"ERROR"},{"name":"NCCL_DEBUG","value":"ERROR"},{"name":"TRITON_LIBCUDA_PATH","value":"/usr/lib64"},{"name":"CUDA_CACHE_PATH","value":"/var/cache/vllm/cuda"},{"name":"CCACHE_DIR","value":"/var/cache/vllm/ccache"},{"name":"VLLM_CACHE_ROOT","value":"/var/cache/vllm/vllm"},{"name":"FLASHINFER_WORKSPACE_BASE","value":"/var/cache/vllm/flashinfer"},{"name":"VLLM_NIXL_ABORT_REQUEST_TIMEOUT","value":"600"},{"name":"SHARED_STORAGE_PATH","value":"/data"},{"name":"TP_SIZE","value":"1"},{"name":"DP_SIZE","value":"1"},{"name":"DP_SIZE_LOCAL","value":"1"}],"image":"ghcr.io/llm-d/llm-d-cuda:v0.6.0","name":"vllm","ports":[{"containerPort":8200,"name":"vllm"},{"containerPort":5600,"name":"nixl"}],"resources":{"limits":{"cpu":"6","memory":"130Gi","nvidia.com/gpu":"1","rdma/roce_gdr":"1"},"requests":{"cpu":"6","memory":"130Gi","nvidia.com/gpu":"1","rdma/roce_gdr":"1"}},"securityContext":{"capabilities":{"add":["IPC_LOCK","SYS_RAWIO","SYS_RESOURCE"]},"privileged":true,"runAsUser":0},"volumeMounts":[{"mountPath":"/dev/shm","name":"dshm"},{"mountPath":"/model-cache","name":"hf-cache"},{"mountPath":"/var/cache/vllm","name":"jit-cache"},{"mountPath":"/scripts","name":"rdma-script"},{"mountPath":"/dev/infiniband","name":"dev-infiniband"}]}],"initContainers":[{"args":["--port=8000","--vllm-port=8200","--connector=nixlv2","--zap-log-level=1","--secure-proxy=false","--enable-prefiller-sampling"],"image":"ghcr.io/llm-d/llm-d-routing-sidecar:v0.6.0","imagePullPolicy":"Always","name":"routing-proxy","ports":[{"containerPort":8000,"name":"http","protocol":"TCP"}],"restartPolicy":"Always","securityContext":{"allowPrivilegeEscalation":false,"runAsNonRoot":true}}],"serviceAccountName":"llm-d-modelserver","tolerations":[{"effect":"NoSchedule","key":"node.kubernetes.io/disk-pressure","operator":"Exists"},{"effect":"NoSchedule","key":"node.kubernetes.io/memory-pressure","operator":"Exists"}],"volumes":[{"emptyDir":{"medium":"Memory","sizeLimit":"2Gi"},"name":"dshm"},{"emptyDir":{},"name":"jit-cache"},{"configMap":{"defaultMode":493,"name":"rdma-discovery-script"},"name":"rdma-script"},{"hostPath":{"path":"/dev/infiniband"},"name":"dev-infiniband"}]}},"size":1,"volumeClaimTemplates":[{"metadata":{"name":"hf-cache"},"spec":{"accessModes":["ReadWriteOnce"],"resources":{"requests":{"storage":"50Gi"}},"storageClassName":"ibm-spectrum-scale-fileset"}}],"workerTemplate":{"spec":{"containers":[]}}},"replicas":1}}
+  creationTimestamp: "2026-06-18T17:05:33Z"
+  generation: 1
+  labels:
+    app: llm-d
+    architecture: pd
+    component: serveit-test
+    role: decode
+    test-id: single-pd-1p1d-ptp1-dtp1
+  name: decode-tp1
+  namespace: serveit-admin-boaz-testing-pokprod
+  resourceVersion: "1183436358"
+  uid: 2141cc05-a4cf-4b48-99bd-0efac1890a2f
+spec:
+  leaderWorkerTemplate:
+    leaderTemplate:
+      metadata:
+        annotations:
+          k8s.v1.cni.cncf.io/networks: '[{"name":"multi-nic-inference","namespace":"serveit-admin-boaz-testing-pokprod"}]'
+        labels:
+          llm-d.ai/guide: serveit-pd
+          llm-d.ai/inference-serving: "true"
+          llm-d.ai/inferenceServing: "true"
+          llm-d.ai/model: RedHatAI-Meta-Llama-3.1-8B-Instruct-FP8-dynamic
+          llm-d.ai/role: decode
+          llm-d.ai/test-id: single-pd-1p1d-ptp1-dtp1
+      spec:
+        containers:
+        - args:
+          - |
+            ulimit -l unlimited || true
+
+            # Pin to allocated GPUs (privileged pods see all host GPUs)
+            if [ -d /var/run/nvidia-container-devices ]; then
+              GPU_INDICES=""
+              for uuid in $(ls /var/run/nvidia-container-devices/); do
+                idx=$(nvidia-smi --query-gpu=index,uuid --format=csv,noheader | grep "$uuid" | cut -d',' -f1 | tr -d ' ')
+                [ -n "$idx" ] && GPU_INDICES="${GPU_INDICES:+$GPU_INDICES,}$idx"
+              done
+              if [ -n "$GPU_INDICES" ]; then
+                export CUDA_VISIBLE_DEVICES="$GPU_INDICES"
+                echo "--- CUDA_VISIBLE_DEVICES=$CUDA_VISIBLE_DEVICES ---"
+              fi
+            fi
+
+            # Source RDMA discovery script if available
+            if [ -f /scripts/discover_ib_hca.sh ]; then
+              source /scripts/discover_ib_hca.sh
+              echo "--- Loaded RDMA environment ---"
+            fi
+
+            echo "========================================="
+            echo "ServeIt Studio Test: single-pd-1p1d-ptp1-dtp1"
+            echo "Architecture: PD (Decode)"
+            echo "Model: RedHatAI/Meta-Llama-3.1-8B-Instruct-FP8-dynamic"
+            echo "TP: 1"
+            echo "NCCL_IB_HCA: ${NCCL_IB_HCA}"
+            echo "UCX_NET_DEVICES: ${UCX_NET_DEVICES:-not set}"
+            echo "NCCL_SOCKET_IFNAME: ${NCCL_SOCKET_IFNAME:-not set}"
+            echo "========================================="
+
+            if [ -z "${UCX_NET_DEVICES:-}" ] || [ -z "${NCCL_IB_HCA:-}" ]; then
+              echo "FATAL: RDMA env vars not set (UCX_NET_DEVICES=${UCX_NET_DEVICES:-}, NCCL_IB_HCA=${NCCL_IB_HCA:-}). Sleeping to prevent node crash."
+              sleep infinity
+            fi
+
+            # Patch vllm#43396: FP8 MoE CUTLASS OOB at batch 8192
+            _MOE_FILE=$(python3 -c "import vllm; print(vllm.__path__[0])" 2>/dev/null)/model_executor/layers/fused_moe/moe_permute_unpermute.py
+            if [ -f "$_MOE_FILE" ] && grep -q 'a1q_scale\[permuted_idx.clamp' "$_MOE_FILE"; then
+              sed -i 's|a1q_scale = a1q_scale\[permuted_idx.clamp(max=n_token \* topk - 1) // topk\]|scale_idx = permuted_idx.clamp(max=n_token * topk - 1) // topk; scale_idx = scale_idx.clamp(max=a1q_scale.shape[0] - 1); a1q_scale = a1q_scale[scale_idx]|' "$_MOE_FILE"
+              echo "--- Applied vllm#43396 FP8 MoE patch ---"
+            fi
+
+            vllm serve RedHatAI/Meta-Llama-3.1-8B-Instruct-FP8-dynamic \
+              --port 8200 \
+              --trust-remote-code \
+              --tensor-parallel-size ${TP_SIZE} \
+              --data-parallel-size ${DP_SIZE} \
+              --api-server-count 1 \
+              --block-size 16 \
+              --gpu-memory-utilization 0.84 \
+              --max-num-seqs 288 \
+              --kv-transfer-config '{"kv_connector":"NixlConnector","kv_role":"kv_both","kv_load_failure_policy":"fail"}' \
+              --max-model-len 189 \
+              --enable-prefix-caching \
+              --disable-uvicorn-access-log \
+              || sleep infinity
+          command:
+          - /bin/bash
+          - -c
+          env:
+          - name: VLLM_NIXL_SIDE_CHANNEL_HOST
+            valueFrom:
+              fieldRef:
+                fieldPath: status.podIP
+          - name: NCCL_IB_HCA
+            value: mlx
+          - name: HF_TOKEN
+            valueFrom:
+              secretKeyRef:
+                key: HF_TOKEN
+                name: llm-d-hf-token
+                optional: true
+          - name: HF_HOME
+            value: /model-cache/huggingface
+          - name: HF_HUB_CACHE
+            value: /model-cache/huggingface
+          - name: VLLM_SKIP_P2P_CHECK
+            value: "1"
+          - name: NVIDIA_GDRCOPY
+            value: enabled
+          - name: VLLM_MEMORY_PROFILER_ESTIMATE_CUDAGRAPHS
+            value: "1"
+          - name: GLOO_SOCKET_IFNAME
+            value: eth0
+          - name: NCCL_SOCKET_IFNAME
+            value: eth0
+          - name: VLLM_USE_DEEP_GEMM
+            value: "0"
+          - name: VLLM_LOGGING_LEVEL
+            value: ERROR
+          - name: NCCL_DEBUG
+            value: ERROR
+          - name: TRITON_LIBCUDA_PATH
+            value: /usr/lib64
+          - name: CUDA_CACHE_PATH
+            value: /var/cache/vllm/cuda
+          - name: CCACHE_DIR
+            value: /var/cache/vllm/ccache
+          - name: VLLM_CACHE_ROOT
+            value: /var/cache/vllm/vllm
+          - name: FLASHINFER_WORKSPACE_BASE
+            value: /var/cache/vllm/flashinfer
+          - name: VLLM_NIXL_ABORT_REQUEST_TIMEOUT
+            value: "600"
+          - name: SHARED_STORAGE_PATH
+            value: /data
+          - name: TP_SIZE
+            value: "1"
+          - name: DP_SIZE
+            value: "1"
+          - name: DP_SIZE_LOCAL
+            value: "1"
+          image: ghcr.io/llm-d/llm-d-cuda:v0.6.0
+          name: vllm
+          ports:
+          - containerPort: 8200
+            name: vllm
+            protocol: TCP
+          - containerPort: 5600
+            name: nixl
+            protocol: TCP
+          resources:
+            limits:
+              cpu: "6"
+              memory: 130Gi
+              nvidia.com/gpu: "1"
+              rdma/roce_gdr: "1"
+            requests:
+              cpu: "6"
+              memory: 130Gi
+              nvidia.com/gpu: "1"
+              rdma/roce_gdr: "1"
+          securityContext:
+            capabilities:
+              add:
+              - IPC_LOCK
+              - SYS_RAWIO
+              - SYS_RESOURCE
+            privileged: true
+            runAsUser: 0
+          volumeMounts:
+          - mountPath: /dev/shm
+            name: dshm
+          - mountPath: /model-cache
+            name: hf-cache
+          - mountPath: /var/cache/vllm
+            name: jit-cache
+          - mountPath: /scripts
+            name: rdma-script
+          - mountPath: /dev/infiniband
+            name: dev-infiniband
+        initContainers:
+        - args:
+          - --port=8000
+          - --vllm-port=8200
+          - --connector=nixlv2
+          - --zap-log-level=1
+          - --secure-proxy=false
+          - --enable-prefiller-sampling
+          image: ghcr.io/llm-d/llm-d-routing-sidecar:v0.6.0
+          imagePullPolicy: Always
+          name: routing-proxy
+          ports:
+          - containerPort: 8000
+            name: http
+            protocol: TCP
+          resources: {}
+          restartPolicy: Always
+          securityContext:
+            allowPrivilegeEscalation: false
+            runAsNonRoot: true
+        serviceAccountName: llm-d-modelserver
+        tolerations:
+        - effect: NoSchedule
+          key: node.kubernetes.io/disk-pressure
+          operator: Exists
+        - effect: NoSchedule
+          key: node.kubernetes.io/memory-pressure
+          operator: Exists
+        volumes:
+        - emptyDir:
+            medium: Memory
+            sizeLimit: 2Gi
+          name: dshm
+        - emptyDir: {}
+          name: jit-cache
+        - configMap:
+            defaultMode: 493
+            name: rdma-discovery-script
+          name: rdma-script
+        - hostPath:
+            path: /dev/infiniband
+          name: dev-infiniband
+    restartPolicy: RecreateGroupOnPodRestart
+    size: 1
+    volumeClaimTemplates:
+    - metadata:
+        name: hf-cache
+      spec:
+        accessModes:
+        - ReadWriteOnce
+        resources:
+          requests:
+            storage: 50Gi
+        storageClassName: ibm-spectrum-scale-fileset
+      status: {}
+    workerTemplate:
+      metadata: {}
+      spec:
+        containers: []
+  networkConfig:
+    subdomainPolicy: Shared
+  replicas: 1
+  rolloutStrategy:
+    rollingUpdateConfiguration:
+      maxSurge: 0
+      maxUnavailable: 1
+      partition: 0
+    type: RollingUpdate
+  startupPolicy: LeaderCreated
+status:
+  conditions:
+  - lastTransitionTime: "2026-06-18T17:09:03Z"
+    message: Replicas are progressing
+    reason: GroupsProgressing
+    status: "False"
+    type: Progressing
+  - lastTransitionTime: "2026-06-18T17:09:11Z"
+    message: All replicas are ready
+    reason: AllGroupsReady
+    status: "True"
+    type: Available
+  hpaPodSelector: leaderworkerset.sigs.k8s.io/name=decode-tp1,leaderworkerset.sigs.k8s.io/worker-index=0
+  readyReplicas: 1
+  replicas: 1
+  updatedReplicas: 1

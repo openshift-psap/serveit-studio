@@ -139,7 +139,7 @@ Steps 2-3 and 6-11 deploy real workloads. Steps 4-5 are pure math.
 - [LeaderWorkerSet](https://github.com/kubernetes-sigs/lws) CRD installed
 - [Istio](https://istio.io/) gateway provider (for EPP routing)
 - `kubectl` (or `oc`) CLI configured
-- A HuggingFace token stored as Secret `llm-d-hf-token` in the target namespace
+- A HuggingFace token (only required for gated models — entered in the wizard, which creates the Secret automatically)
 
 ## Deployment
 
@@ -149,15 +149,10 @@ Steps 2-3 and 6-11 deploy real workloads. Steps 4-5 are pure math.
 # 1. Create the namespace
 kubectl create namespace serveit
 
-# 2. Create HuggingFace token secret
-kubectl create secret generic llm-d-hf-token \
-  --from-literal=HF_TOKEN=<your-token> \
-  -n serveit
-
-# 3. Deploy ServeIt Studio (launcher mode)
+# 2. Deploy ServeIt Studio (launcher mode)
 python3 deployment/deploy.py --mode launcher --storage-class <your-class> -n serveit
 
-# 4. Access the UI
+# 3. Access the UI
 python3 deployment/deploy.py --port-forward -n serveit
 # Opens http://localhost:8080
 ```

@@ -468,7 +468,7 @@ def deploy_and_test_inference(model_name: str, namespace: str, job_name: str = N
             max_model_len = 8192
             gpu_memory_utilization = 0.95
             image = 'ghcr.io/llm-d/llm-d-cuda:v0.5.1'
-            pvc_name = 'serveit-model-cache'
+            pvc_name = 'serveit-cache'
             nccl_ib_hca = 'mlx'
             gpus_per_pod = tp
         else:
@@ -928,7 +928,7 @@ data:
                 thanos_url=thanos_url,
                 image=vllm_image,
                 scheduler_image=scheduler_image,
-                pvc_name='serveit-model-cache',
+                pvc_name='serveit-cache',
                 nccl_ib_hca='mlx',
                 hf_token=hf_token,
                 tp_options=tp_options,  # Dynamic based on cluster hardware
@@ -1256,7 +1256,7 @@ data:
                     gpu_memory_utilization=test_plan.model_requirements.gpu_memory_utilization,
                     memory_request=memory_per_pod,
                     memory_limit=memory_per_pod,
-                    pvc_name='serveit-model-cache',
+                    pvc_name='serveit-cache',
                     optimization_goal=optimization_goal,
                     test_duration=test_duration,
                     cpu_request=cpu_request
@@ -1277,7 +1277,7 @@ data:
                     gpu_memory_utilization=test_plan.model_requirements.gpu_memory_utilization,
                     memory_request=memory_per_pod,
                     memory_limit=memory_per_pod,
-                    pvc_name='serveit-model-cache',
+                    pvc_name='serveit-cache',
                     optimization_goal=optimization_goal,
                     test_duration=test_duration,
                     cpu_request=cpu_request

@@ -765,7 +765,7 @@ class PrereqManager:
                 'metadata': {
                     'name': pvc_name,
                     'namespace': self.namespace,
-                    'labels': {'app': 'serveit-model-cache', 'node-suffix': matched_suffix}
+                    'labels': {'app': 'serveit-cache', 'node-suffix': matched_suffix}
                 },
                 'spec': {
                     'accessModes': ['ReadWriteMany'],
