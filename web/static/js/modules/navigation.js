@@ -777,8 +777,8 @@ socket.on('cluster_scan_result', function(data) {
         saveConfig();
     }
 
-    // Add event listener for max GPU selection
-    maxGpuSelect.addEventListener('change', (e) => {
+    // Add event listener for max GPU selection (replace previous to avoid duplicates)
+    maxGpuSelect.onchange = (e) => {
         const newMaxGpus = parseInt(e.target.value);
         config.max_gpus = newMaxGpus;
         saveConfig();
@@ -787,7 +787,7 @@ socket.on('cluster_scan_result', function(data) {
         if (gpuSummary) gpuSummary.textContent = newMaxGpus;
         logToConsole(`✅ Maximum GPUs set to ${newMaxGpus}`, 'success');
         // Test plan will be regenerated when reaching step 6 (Review & Run)
-    });
+    };
 
     // Display GPU usage information (hide in launcher mode)
     var _hasPresets = data.preset_max_gpus || (data.preset_nodes && data.preset_nodes.length > 0);
