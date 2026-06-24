@@ -1862,6 +1862,24 @@ def handle_setup_storage(data):
                 if created_pvcs:
                     node_nfs_pvcs = created_pvcs
 
+            # Create serveit-cache PVC for benchmark results (workload pod needs it)
+            check_cmd = ['kubectl', 'get', 'pvc', 'serveit-cache', '-n', namespace]
+            proc = subprocess.run(check_cmd, capture_output=True, timeout=10)
+            if proc.returncode != 0:
+                from core import TemplateManager as _TM
+                _tm = _TM()
+                _sc = storage_class or (node_nfs_pvcs[0]['pvc_name'].replace('model-cache-', 'nfs-') if node_nfs_pvcs else None)
+                if _sc:
+                    _pvc_yaml = _tm.render_template(
+                        'prereq/model-cache-pvc.yaml.j2',
+                        pvc_name='serveit-cache', namespace=namespace,
+                        test_id='serveit-cache', model_name=model,
+                        storage_class=_sc, storage_size=50,
+                        pvc_access_mode='ReadWriteMany',
+                    )
+                    subprocess.run(['kubectl', 'apply', '-f', '-'], input=_pvc_yaml.encode(), capture_output=True, timeout=30)
+                    log_to_ui('   ✅ Created serveit-cache PVC (benchmark results)', 'info')
+
             timestamp = datetime.now().strftime('%Y%m%d-%H%M%S')
             job_name = f'serveit-model-download-{timestamp}'
             test_id = f'serveit-setup-{timestamp}'
