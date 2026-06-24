@@ -335,7 +335,7 @@ spec:
       - metadata:
           name: hf-cache
         spec:
-          accessModes: ["ReadWriteOnce"]
+          accessModes: ["ReadWriteMany"]
           storageClassName: {{ storage_class }}
           resources:
             requests:
