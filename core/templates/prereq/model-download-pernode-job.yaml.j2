@@ -142,23 +142,21 @@ spec:
               echo "📋 Distributing model to {{ node_nfs_pvcs | length - 1 }} remaining nodes"
               echo "========================================="
 
+              echo "📦 Targets: {% for nfs in node_nfs_pvcs[1:] %}nfs-{{ nfs.suffix }}{% if not loop.last %}, {% endif %}{% endfor %}"
+              echo "⏳ Copying to {{ node_nfs_pvcs | length - 1 }} nodes in parallel..."
 {% for nfs in node_nfs_pvcs[1:] %}
               (
                 DST="/nfs-{{ nfs.suffix }}/huggingface"
                 SNAPSHOT_CHK=$(ls -d "$DST"/models--*/snapshots/*/ 2>/dev/null | head -1)
                 MODEL_CHK=$(find "$SNAPSHOT_CHK" -maxdepth 1 \( -name "*.safetensors" -o -name "*.bin" -o -name "*.pt" \) 2>/dev/null | head -1)
-                if [ -n "$SNAPSHOT_CHK" ] && [ -n "$MODEL_CHK" ]; then
-                  echo "✅ nfs-{{ nfs.suffix }}: model already present, skipping"
-                else
-                  echo "📦 Copying to nfs-{{ nfs.suffix }}..."
+                if [ -z "$SNAPSHOT_CHK" ] || [ -z "$MODEL_CHK" ]; then
                   mkdir -p "$DST"
                   cp -a "$PRIMARY"/. "$DST"/
-                  echo "✅ nfs-{{ nfs.suffix }}: done ($(du -sh "$DST" | cut -f1))"
                 fi
               ) &
 {% endfor %}
-              echo "⏳ Waiting for {{ node_nfs_pvcs | length - 1 }} parallel copies to complete..."
               wait
+              echo "✅ All parallel copies finished"
 
               echo ""
               echo "========================================="
