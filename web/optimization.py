@@ -239,6 +239,7 @@ def stream_job_logs(job_name: str, namespace: str):
 
         if proc.returncode == 0 and pod_phase == 'Succeeded':
             log_to_ui('✅ Model download completed successfully!', 'success', job_name=job_name)
+            socketio.emit('storage_download_complete', {'success': True, 'job_name': job_name})
 
             # Trigger aggregated deployment
             # Try to get model name from job metadata
@@ -334,6 +335,7 @@ def stream_job_logs(job_name: str, namespace: str):
                 log_to_ui('   CURRENT_TEST_PLAN is None or has no model_name', 'warning', job_name=job_name)
         else:
             log_to_ui(f'⚠️ Pod did not reach Succeeded status (current: {pod_phase})', 'warning', job_name=job_name)
+            socketio.emit('storage_download_complete', {'success': False, 'job_name': job_name})
             log_to_ui('   Deployment will not be triggered automatically', 'warning', job_name=job_name)
             _reset_optimization_state('Model download did not complete')
 

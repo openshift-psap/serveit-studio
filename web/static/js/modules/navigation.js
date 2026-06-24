@@ -272,8 +272,13 @@ socket.on('load_config_result', function(data) {
             if (startBtn) startBtn.style.display = 'none';
             if (stopBtn) stopBtn.style.display = 'block';
         } else {
-            // Optimization is NOT running - show Start button
-            if (startBtn) startBtn.style.display = 'block';
+            // Optimization is NOT running - show Start button (unless download in progress)
+            if (startBtn) {
+                startBtn.style.display = 'block';
+                startBtn.disabled = _storageSetupInProgress;
+                if (_storageSetupInProgress) startBtn.title = 'Model download in progress...';
+                else startBtn.title = '';
+            }
             if (stopBtn) stopBtn.style.display = 'none';
         }
     } else {
@@ -977,6 +982,8 @@ socket.on('pvc_list_result', function(data) {
     }
 });
 
+var _storageSetupInProgress = false;
+
 socket.on('storage_setup_result', function(data) {
     if (data.success) {
         logToConsole('✅ Storage setup complete!', 'success');
@@ -989,8 +996,10 @@ socket.on('storage_setup_result', function(data) {
             // Using existing PVC - model already downloaded
             logToConsole('✅ Model already available in PVC', 'success');
             logToConsole('\n🚀 Proceeding to test execution...', 'info');
+            _storageSetupInProgress = false;
         } else {
             // New PVC - model download in progress
+            _storageSetupInProgress = true;
             logToConsole(`   Download Job: ${data.job_name}`, 'info');
             logToConsole('\n📥 Model download in progress...', 'info');
             logToConsole('   (This may take several minutes depending on model size)', 'info');
@@ -1002,6 +1011,15 @@ socket.on('storage_setup_result', function(data) {
         saveConfig();
     } else {
         logToConsole(`❌ Storage setup failed: ${data.error}`, 'error');
+    }
+});
+
+socket.on('storage_download_complete', function(data) {
+    _storageSetupInProgress = false;
+    var startBtn = document.getElementById('start-optimization');
+    if (startBtn) {
+        startBtn.disabled = false;
+        startBtn.title = '';
     }
 });
 
