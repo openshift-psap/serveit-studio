@@ -707,8 +707,8 @@ class PrereqManager:
     def _ensure_per_node_pvcs(self, config, log_callback=None) -> list:
         """Create per-node NFS PVCs for per-node storage mode.
 
-        Detects NFS storage classes matching GPU node suffixes, creates one PVC
-        per node, and returns the mapping list for template rendering.
+        Creates one PVC per GPU node using the user-selected storage class.
+        Node suffixes are extracted from GPU node names.
         """
         def log(msg):
             if log_callback:
@@ -727,34 +727,26 @@ class PrereqManager:
 
         gpu_nodes = [n.strip() for n in r.stdout.strip().splitlines() if n.strip()]
 
-        # Get NFS storage classes (nfs-<suffix> pattern)
-        r = self.kubectl.run([
-            'get', 'sc', '-o', 'jsonpath={range .items[*]}{.metadata.name}{"\\n"}{end}'
-        ], check=False)
-        if r.returncode != 0:
-            return []
+        storage_class = getattr(config, 'storage_class', None)
+        if not storage_class:
+            # Fallback: detect nfs-<suffix> classes
+            r = self.kubectl.run([
+                'get', 'sc', '-o', 'jsonpath={range .items[*]}{.metadata.name}{"\\n"}{end}'
+            ], check=False)
+            nfs_classes = {}
+            if r.returncode == 0:
+                for sc in r.stdout.strip().splitlines():
+                    sc = sc.strip()
+                    if sc.startswith('nfs-') and sc != 'nfs':
+                        nfs_classes[sc[4:]] = sc
 
-        nfs_classes = {}
-        for sc in r.stdout.strip().splitlines():
-            sc = sc.strip()
-            if sc.startswith('nfs-') and sc != 'nfs':
-                suffix = sc[4:]  # strip 'nfs-' prefix
-                nfs_classes[suffix] = sc
-
-        # Match GPU nodes to NFS storage classes by suffix
         node_nfs_pvcs = []
         pvc_size = getattr(config, 'pvc_size', None) or '200Gi'
         for node in gpu_nodes:
-            matched_suffix = None
-            for suffix in nfs_classes:
-                if node.endswith(suffix):
-                    matched_suffix = suffix
-                    break
-            if not matched_suffix:
-                continue
-
-            pvc_name = f"model-cache-{matched_suffix}"
-            node_nfs_pvcs.append({'suffix': matched_suffix, 'pvc_name': pvc_name})
+            # Extract suffix from node name (last segment after last dash, 5 chars)
+            suffix = node.split('-')[-1]
+            pvc_name = f"model-cache-{suffix}"
+            node_nfs_pvcs.append({'suffix': suffix, 'pvc_name': pvc_name})
 
             # Check if PVC already exists
             r = self.kubectl.run(
@@ -762,18 +754,23 @@ class PrereqManager:
             if r.returncode == 0:
                 continue
 
-            # Create PVC
+            # Use user-selected storage class, fallback to nfs-<suffix> if available
+            sc = storage_class or nfs_classes.get(suffix)
+            if not sc:
+                log(f'   ⚠️  No storage class for node {node} (suffix {suffix})')
+                continue
+
             pvc_yaml = json.dumps({
                 'apiVersion': 'v1',
                 'kind': 'PersistentVolumeClaim',
                 'metadata': {
                     'name': pvc_name,
                     'namespace': self.namespace,
-                    'labels': {'app': 'serveit-cache', 'node-suffix': matched_suffix}
+                    'labels': {'app': 'serveit-cache', 'node-suffix': suffix}
                 },
                 'spec': {
                     'accessModes': ['ReadWriteMany'],
-                    'storageClassName': nfs_classes[matched_suffix],
+                    'storageClassName': sc,
                     'resources': {'requests': {'storage': pvc_size}}
                 }
             })

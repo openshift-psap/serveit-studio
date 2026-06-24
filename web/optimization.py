@@ -381,6 +381,7 @@ def deploy_and_test_inference(model_name: str, namespace: str, job_name: str = N
         _prereq_cfg = _PrereqConfig()
         _prereq_cfg.per_node_storage = _cfg.get('per_node_storage', False)
         _prereq_cfg.pvc_size = _cfg.get('pvc_size', '200Gi')
+        _prereq_cfg.storage_class = _cfg.get('storage_class')
         _prereq_cfg.node_nfs_pvcs = []
 
         try:

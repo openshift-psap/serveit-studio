@@ -1858,6 +1858,7 @@ def handle_setup_storage(data):
                     node_nfs_pvcs = []
                 _pvc_cfg = _PvcCfg()
                 _pvc_cfg.pvc_size = str(pvc_size) + 'Gi' if str(pvc_size).isdigit() else str(pvc_size)
+                _pvc_cfg.storage_class = storage_class
                 created_pvcs = pm._ensure_per_node_pvcs(_pvc_cfg, log_callback=lambda msg: log_to_ui(msg, 'info'))
                 if created_pvcs:
                     node_nfs_pvcs = created_pvcs
