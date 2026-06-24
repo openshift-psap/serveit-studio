@@ -180,6 +180,10 @@ class PrereqManager:
                 self._ensure_rdma_discovery(context, log)
                 if optimizer_config:
                     self._ensure_network_resources(optimizer_config, log)
+                    if getattr(optimizer_config, 'per_node_storage', False):
+                        node_nfs_pvcs = self._ensure_per_node_pvcs(optimizer_config, log)
+                        if node_nfs_pvcs:
+                            optimizer_config.node_nfs_pvcs = node_nfs_pvcs
                 if self._check_prereqs_ready(config['gaie_name'], log_callback=log):
                     return True
                 log(f'   ⏳ Waiting for GAIE deployment to become ready...')
