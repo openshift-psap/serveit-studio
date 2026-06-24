@@ -780,6 +780,47 @@ The admission webhook intercepts pods requesting `dra.llm-d.io/gpu-nic-pair` and
 
 Source: [github.com/openshift-psap/dra-rail-admission-webhook](https://github.com/openshift-psap/dra-rail-admission-webhook)
 
+#### Build the webhook image (optional)
+
+If you need to build a custom image, the repo includes a multi-stage Dockerfile:
+
+```dockerfile
+FROM golang:1.25 AS builder
+WORKDIR /workspace
+COPY go.mod go.sum ./
+RUN go mod download
+COPY . .
+RUN CGO_ENABLED=0 GOOS=linux go build -o webhook ./cmd/webhook/
+RUN CGO_ENABLED=0 GOOS=linux go build -o reconciler ./cmd/reconciler/
+
+FROM gcr.io/distroless/static:nonroot AS webhook
+WORKDIR /
+COPY --from=builder /workspace/webhook .
+USER 65532:65532
+ENTRYPOINT ["/webhook"]
+
+FROM gcr.io/distroless/static:nonroot AS reconciler
+WORKDIR /
+COPY --from=builder /workspace/reconciler .
+USER 65532:65532
+ENTRYPOINT ["/reconciler"]
+```
+
+Build and push:
+
+```bash
+git clone https://github.com/openshift-psap/dra-rail-admission-webhook.git
+cd dra-rail-admission-webhook
+
+# Build webhook and reconciler images
+docker build -t <your-registry>/dra-gpu-nic-webhook:latest --target webhook .
+docker build -t <your-registry>/dra-gpu-nic-reconciler:latest --target reconciler .
+docker push <your-registry>/dra-gpu-nic-webhook:latest
+docker push <your-registry>/dra-gpu-nic-reconciler:latest
+```
+
+> **Note:** Pre-built images are available in the repo's deployment manifests. Building your own is only needed for custom modifications.
+
 #### Clone and generate TLS certificates
 
 The webhook requires a valid TLS certificate. The certificate's CN and SAN must match the webhook service name exactly:
@@ -946,24 +987,67 @@ Verify inside the pod:
 
 ```bash
 oc exec -n serveit dra-test-1 -- ip -4 addr show | grep -E "net[0-9]|inet "
-# Expected: net0 and net1 with RDMA IPs
+```
 
+Expected output (2 GPU-NIC pairs requested):
+
+```
+net1: 10.1.0.12/16
+net0: 10.0.0.12/16
+```
+
+```bash
 oc exec -n serveit dra-test-1 -- nvidia-smi -L
-# Expected: 2 GPUs
+```
 
+Expected output:
+
+```
+GPU 0: NVIDIA H100 80GB HBM3 (UUID: GPU-...)
+GPU 1: NVIDIA H100 80GB HBM3 (UUID: GPU-...)
+```
+
+```bash
+# Verify the discovery script correctly detects DRA mode
+oc exec -n serveit dra-test-1 -- bash -c 'source /scripts/discover_ib_hca.sh 2>/dev/null; echo "NETWORK_MODE=$NETWORK_MODE"; echo "UCX_NET_DEVICES=$UCX_NET_DEVICES"; echo "NCCL_IB_HCA=$NCCL_IB_HCA"'
+```
+
+Expected output:
+
+```
+NETWORK_MODE=dra-net
+UCX_NET_DEVICES=net1,net0
+NCCL_IB_HCA=mlx5_7:1,mlx5_8:1
+```
+
+```bash
+# Verify webhook mutation
 oc get pod dra-test-1 -o jsonpath='{.metadata.annotations.dra\.llm-d\.io/mutated}'
 # Expected: true
 ```
 
-Run RDMA bandwidth test between two pods on different nodes:
+#### Cross-node RDMA test
+
+Deploy two pods requesting 8 GPU-NIC pairs each — the webhook will place them on separate nodes:
 
 ```bash
-oc exec -n serveit dra-test-2 -- bash -c 'nohup ib_write_bw -d mlx5_1 --report_gbits -D 5 > /dev/null 2>&1 &'
+# Start server on pod 2
+oc exec -n serveit dra-test-2 -- bash -c 'nohup ib_write_bw -d mlx5_8 --report_gbits -D 5 > /dev/null 2>&1 &'
 sleep 3
-oc exec -n serveit dra-test-1 -- ib_write_bw -d mlx5_1 --report_gbits -D 5 <pod2-net0-ip>
+# Get pod 2's net0 IP
+NODE2_IP=$(oc exec -n serveit dra-test-2 -- ip -4 addr show net0 | grep inet | awk '{print $2}' | cut -d/ -f1)
+# Run client from pod 1
+oc exec -n serveit dra-test-1 -- ib_write_bw -d mlx5_8 --report_gbits -D 5 $NODE2_IP
 ```
 
-Expected output (IBM Cloud VPC): ~160-165 Gb/s per rail. Bare-metal with CX-7 400GbE NICs shows ~380-400 Gb/s.
+Expected output (IBM Cloud VPC):
+
+```
+ #bytes     #iterations    BW peak[Gb/sec]    BW average[Gb/sec]   MsgRate[Mpps]
+ 65536      1011535          0.00               176.77               0.337170
+```
+
+~160-180 Gb/s per rail is the normal line rate for IBM Cloud VPC. Bare-metal with CX-7 400GbE NICs shows ~380-400 Gb/s.
 
 #### Regenerating TLS certificates
 
