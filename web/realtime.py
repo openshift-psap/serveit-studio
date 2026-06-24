@@ -1905,13 +1905,15 @@ def handle_setup_storage(data):
             log_to_ui(f'✅ Per-node download job {job_name} started', 'success')
             log_to_ui('⏳ Streaming download + distribution progress...', 'info')
 
+            _sc_display = storage_class or ('nfs-' + node_nfs_pvcs[0]['suffix'] if node_nfs_pvcs else 'unknown')
             emit('storage_setup_result', {
                 'success': True,
-                'pvc_name': f'{len(node_nfs_pvcs)}x per-node NFS',
+                'pvc_name': f'{len(node_nfs_pvcs)}x per-node',
                 'pvc_size': pvc_size,
-                'storage_class': 'NFS (per-node)',
+                'storage_class': _sc_display,
                 'model': model,
                 'existing': False,
+                'per_node': True,
                 'job_name': job_name,
             })
 

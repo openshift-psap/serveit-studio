@@ -990,19 +990,22 @@ var _storageSetupInProgress = false;
 
 socket.on('storage_setup_result', function(data) {
     if (data.success) {
-        logToConsole('✅ Storage setup complete!', 'success');
-        logToConsole(`   PVC: ${data.pvc_name}`, 'info');
-        logToConsole(`   Size: ${data.pvc_size} GB`, 'info');
-        logToConsole(`   Storage Class: ${data.storage_class}`, 'info');
-        logToConsole(`   Model: ${data.model}`, 'info');
-
-        if (data.existing) {
-            // Using existing PVC - model already downloaded
+        if (data.per_node) {
+            logToConsole(`✅ Per-node storage: ${data.pvc_name} PVCs (${data.storage_class})`, 'success');
+            logToConsole(`   Model: ${data.model}`, 'info');
+            logToConsole(`   Download Job: ${data.job_name}`, 'info');
+            _storageSetupInProgress = true;
+        } else if (data.existing) {
+            logToConsole('✅ Storage setup complete!', 'success');
+            logToConsole(`   PVC: ${data.pvc_name} (${data.storage_class})`, 'info');
+            logToConsole(`   Model: ${data.model}`, 'info');
             logToConsole('✅ Model already available in PVC', 'success');
             logToConsole('\n🚀 Proceeding to test execution...', 'info');
             _storageSetupInProgress = false;
         } else {
-            // New PVC - model download in progress
+            logToConsole('✅ Storage setup complete!', 'success');
+            logToConsole(`   PVC: ${data.pvc_name} (${data.pvc_size}Gi, ${data.storage_class})`, 'info');
+            logToConsole(`   Model: ${data.model}`, 'info');
             _storageSetupInProgress = true;
             logToConsole(`   Download Job: ${data.job_name}`, 'info');
             logToConsole('\n📥 Model download in progress...', 'info');
