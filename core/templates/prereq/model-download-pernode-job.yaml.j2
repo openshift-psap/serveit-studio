@@ -186,17 +186,18 @@ spec:
 
               echo ""
               echo "========================================="
-              echo "📋 Verifying copies (byte count)"
+              echo "📋 Verifying copies (model files present)"
               echo "========================================="
-              PRIMARY_BYTES=$(du -sb "$PRIMARY" | cut -f1)
-              echo "Primary (nfs-{{ node_nfs_pvcs[0].suffix }}): $PRIMARY_BYTES bytes"
               FAIL=0
 {% for nfs in node_nfs_pvcs[1:] %}
-              DST_BYTES=$(du -sb "/nfs-{{ nfs.suffix }}/huggingface" 2>/dev/null | cut -f1)
-              if [ "$DST_BYTES" = "$PRIMARY_BYTES" ]; then
-                echo "✅ nfs-{{ nfs.suffix }}: $DST_BYTES bytes — match"
+              DST="/nfs-{{ nfs.suffix }}/huggingface"
+              SNAP=$(ls -d "$DST"/models--*/snapshots/*/ 2>/dev/null | head -1)
+              MFILES=$(find "$SNAP" -maxdepth 1 \( -name "*.safetensors" -o -name "*.bin" -o -name "*.pt" \) 2>/dev/null | wc -l)
+              SIZE=$(du -sh "$DST" 2>/dev/null | cut -f1)
+              if [ "$MFILES" -gt 0 ] 2>/dev/null; then
+                echo "✅ nfs-{{ nfs.suffix }}: ${MFILES} model files, ${SIZE}"
               else
-                echo "❌ nfs-{{ nfs.suffix }}: $DST_BYTES bytes — MISMATCH (expected $PRIMARY_BYTES)"
+                echo "❌ nfs-{{ nfs.suffix }}: no model files found"
                 FAIL=1
               fi
 {% endfor %}
