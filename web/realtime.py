@@ -610,7 +610,7 @@ def _detect_node_nfs_classes(scanner, resources):
         if not nfs_classes:
             return []
 
-        gpu_nodes = [n.name for n in resources.nodes if n.gpu_count > 0]
+        gpu_nodes = [n.name for n in resources.nodes if n.gpus > 0]
         result = []
         for node in gpu_nodes:
             for suffix, sc_name in nfs_classes.items():
