@@ -1516,19 +1516,17 @@ oc get cidrpools -n nvidia-network-operator                             # CIDRPo
 
 ## Component Versions (tested)
 
-| Component | Version |
-|-----------|---------|
-| OpenShift | 4.21.18 |
-| Kubernetes | 1.34.8 |
-| NFD Operator | 4.19.0 |
-| NVIDIA Network Operator | 26.1.0 |
-| DOCA/MOFED Driver | doca3.3.0-26.01-1.0.0.0-0 |
-| NVIDIA GPU Operator | 26.3.0 |
-| CUDA Driver | 580.105 |
-| DRANET | v1.2.0 |
-| NVIDIA DRA GPU Driver | 25.12.0 |
-| DRA GPU-NIC Admission Webhook | [openshift-psap/dra-rail-admission-webhook](https://github.com/openshift-psap/dra-rail-admission-webhook) |
-| SR-IOV Network Operator | 4.21.0 |
-| LWS Operator | 0.8.0 (upstream, installed via Helm) |
-| LVM Storage (LVMS) | 4.21.0 |
-| NFS Provisioner Operator | 0.0.9 |
+| Component | Version | Notes |
+|-----------|---------|-------|
+| OpenShift | 4.21.18 | Kubernetes 1.34.8 |
+| NFD Operator | 4.19.0 | |
+| NVIDIA Network Operator | 26.1.0 | DOCA/MOFED doca3.3.0-26.01-1.0.0.0-0 |
+| NVIDIA GPU Operator | 26.3.0 | CUDA Driver 580.105, gdrcopy enabled |
+| DRANET | v1.2.0 | |
+| NVIDIA DRA GPU Driver | 25.12.0 | |
+| DRA GPU-NIC Admission Webhook | latest | [openshift-psap/dra-rail-admission-webhook](https://github.com/openshift-psap/dra-rail-admission-webhook) |
+| Gateway / Istio | OpenShift Service Mesh 3.3.4 | Uses `data-science-gateway-class` (OpenShift) or `istio` (upstream). llm-d upstream ships Istio 1.28.x with `ENABLE_GATEWAY_API_INFERENCE_EXTENSION=true` |
+| SR-IOV Network Operator | 4.21.0 | |
+| LWS Operator | 0.8.0 | Upstream, installed via Helm (Red Hat build v1.0.0 lacks `volumeClaimTemplates`) |
+| LVM Storage (LVMS) | 4.21.0 | |
+| NFS Provisioner Operator | 0.0.9 | |
