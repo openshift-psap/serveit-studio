@@ -586,7 +586,13 @@ nri_plugin_request_timeout = "30s"
 nri_plugin_registration_timeout = "10s"
 ```
 
-> **Warning:** This triggers a rolling reboot of all GPU nodes (one at a time). Wait for the MachineConfigPool to show `UPDATED=True` before proceeding.
+> **Warning:** This triggers a rolling reboot of all GPU nodes. Wait for the MachineConfigPool to show `UPDATED=True` before proceeding.
+
+To speed up the rollout, increase parallel updates (default is 1 node at a time):
+
+```bash
+oc patch mcp gdr --type merge -p '{"spec":{"maxUnavailable":4}}'
+```
 
 ```bash
 # Monitor rollout progress
