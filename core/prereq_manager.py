@@ -776,7 +776,7 @@ class PrereqManager:
             r = self.kubectl.run(
                 ['apply', '-f', '-', '-n', self.namespace], input_data=pvc_yaml, check=False)
             if r.returncode == 0:
-                log(f'   ✅ Created PVC {pvc_name} (nfs-{matched_suffix})')
+                log(f'   ✅ Created PVC {pvc_name} ({sc})')
             else:
                 log(f'   ❌ Failed to create PVC {pvc_name}: {r.stderr}')
 
