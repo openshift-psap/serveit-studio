@@ -167,18 +167,27 @@ class RecipeOptimizer(
             if qcfg:
                 quant_method = (qcfg.get('quant_method', '') or '').lower()
                 quant_format = (qcfg.get('format', '') or qcfg.get('quant_type', '') or '').lower()
-                # Check explicit FP8 indicators
-                if 'fp8' in quant_method or 'fp8' in quant_format:
+                # 4-bit quantization (MXFP4, W4A16, GPTQ-4bit, AWQ-4bit)
+                if 'mxfp4' in quant_method or 'nvfp4' in quant_method:
+                    self._model_dtype = 'fp4'
+                elif 'w4a16' in quant_format or 'w4a16' in quant_method:
+                    self._model_dtype = 'int4'
+                elif qcfg.get('bits') == 4 or qcfg.get('num_bits') == 4:
+                    self._model_dtype = 'int4'
+                # 8-bit quantization (FP8, W8A8)
+                elif 'fp8' in quant_method or 'fp8' in quant_format:
                     self._model_dtype = 'fp8'
                 elif 'w8a8' in quant_format:
                     self._model_dtype = 'fp8'
-                # compressed-tensors: check weight config for float 8-bit
                 elif quant_method == 'compressed-tensors':
                     groups = qcfg.get('config_groups', {})
                     for g in groups.values():
                         w = g.get('weights', {}) if isinstance(g, dict) else {}
                         if w.get('num_bits') == 8 and w.get('type', '').lower() == 'float':
                             self._model_dtype = 'fp8'
+                            break
+                        elif w.get('num_bits') == 4:
+                            self._model_dtype = 'int4'
                             break
             if self._model_dtype == 'fp16':
                 torch_dtype = self._model_config.get('torch_dtype', '')
@@ -1611,11 +1620,14 @@ class RecipeOptimizer(
         Uses _model_size_b (set from config or name parsing).
         Multipliers account for raw weights + mixed-precision layers,
         activation buffers, and CUDA graph capture overhead:
-          FP8:  1.0 byte/param × 1.1 overhead = 1.1x
-          FP16: 2.0 byte/param × 1.1 overhead = 2.2x
-          FP32: 4.0 byte/param × 1.1 overhead = 4.4x
+          FP4/INT4: 0.5 byte/param × 1.2 overhead = 0.6x (some layers stay FP16)
+          FP8:      1.0 byte/param × 1.1 overhead = 1.1x
+          FP16:     2.0 byte/param × 1.1 overhead = 2.2x
+          FP32:     4.0 byte/param × 1.1 overhead = 4.4x
         """
         params_b = self._model_size_b
+        if self._model_dtype in ('fp4', 'int4'):
+            return params_b * 0.6
         if self._model_dtype == 'fp8':
             return params_b * 1.1
         if self._model_dtype in ('fp16', 'bf16'):
