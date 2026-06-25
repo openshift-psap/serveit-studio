@@ -184,14 +184,6 @@ class ReportAnalyzer:
         except Exception:
             pass
 
-        infra_versions = {}
-        try:
-            vr = conn.execute('SELECT versions_json FROM hardware_scans WHERE versions_json IS NOT NULL ORDER BY id DESC LIMIT 1').fetchone()
-            if vr and vr['versions_json']:
-                import json as _jv
-                infra_versions = _jv.loads(vr['versions_json'])
-        except Exception:
-            pass
 
         goal = run_meta.get('goal')
         if not goal:
@@ -1259,6 +1251,16 @@ class ReportAnalyzer:
         )
         if calibrated_qps_data and calibration_analysis:
             calibrated_qps_data['calibration_analysis'] = calibration_analysis
+
+        # Infrastructure versions from latest hardware scan
+        infra_versions = {}
+        try:
+            vr = loader.conn.execute('SELECT versions_json FROM hardware_scans WHERE versions_json IS NOT NULL ORDER BY id DESC LIMIT 1').fetchone()
+            if vr and vr['versions_json']:
+                import json as _jv2
+                infra_versions = _jv2.loads(vr['versions_json'])
+        except Exception:
+            pass
 
         # InferenceX concurrency sweep data (Step 11)
         concurrency_sweep = None
