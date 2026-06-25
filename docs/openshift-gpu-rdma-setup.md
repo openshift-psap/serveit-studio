@@ -864,7 +864,7 @@ data:
     nicDeviceClassName: dranet
     maxPairsPerNUMA: 4
     maxPairsPerNode: 8
-    preflightCheck: false
+    preflightCheck: true
     nicConfig:
       mtu: 9000
       rdmaRequired: true
