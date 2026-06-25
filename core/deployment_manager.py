@@ -605,7 +605,7 @@ class DeploymentManager:
                         (len(line.split('/')) > 1 and line.split('/')[1].strip())
                         for line in pod_r.stdout.strip().splitlines() if line.strip()
                     )
-                    ready_label = "Running (downloading model...)" if in_init else "Running (model is still loading into GPU)"
+                    ready_label = "Running (init containers)" if in_init else "Running (loading model into GPU)"
                 elapsed_suffix = f" ({elapsed}s)" if elapsed > 0 else ""
                 log_callback(
                     f"📊 Status: {status.pods_running}/{status.pods_expected} {'pod' if status.pods_expected == 1 else 'pods'} {ready_label}{elapsed_suffix}"
