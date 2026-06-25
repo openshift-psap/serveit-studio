@@ -141,41 +141,43 @@ spec:
               echo "⏳ Copying to {{ node_nfs_pvcs | length - 1 }} nodes in parallel..."
               PRIMARY_SIZE=$(du -sb "$PRIMARY/$MODEL_CACHE_NAME" | cut -f1)
               PRIMARY_SIZE_H=$(du -sh "$PRIMARY/$MODEL_CACHE_NAME" | cut -f1)
-              RSYNC_PIDS=""
-{% for nfs in node_nfs_pvcs[1:] %}
-              (
-                DST="/nfs-{{ nfs.suffix }}/huggingface"
-                mkdir -p "$DST/$MODEL_CACHE_NAME"
-                rsync -a --no-perms --no-owner --no-group "$PRIMARY/$MODEL_CACHE_NAME/" "$DST/$MODEL_CACHE_NAME/"
-              ) &
-              RSYNC_PIDS="$RSYNC_PIDS $!"
-{% endfor %}
-
-              # Progress monitor in background — prints status every 30s to keep log stream alive
               COPY_START=$(date +%s)
+              DONE_FLAG=/tmp/rsync_done
+              rm -f $DONE_FLAG
+
+              # Run all rsyncs in background, touch flag when ALL complete
               (
-                while true; do
-                  sleep 30
-                  DONE=0
-                  STATUS=""
 {% for nfs in node_nfs_pvcs[1:] %}
-                  BYTES=$(du -sb "/nfs-{{ nfs.suffix }}/huggingface/$MODEL_CACHE_NAME" 2>/dev/null | cut -f1)
-                  if [ "${BYTES:-0}" -ge "$PRIMARY_SIZE" ] 2>/dev/null; then
-                    DONE=$((DONE + 1))
-                    STATUS="$STATUS {{ nfs.suffix }}:✅"
-                  else
-                    PCT=0
-                    [ "$PRIMARY_SIZE" -gt 0 ] 2>/dev/null && PCT=$((BYTES * 100 / PRIMARY_SIZE))
-                    STATUS="$STATUS {{ nfs.suffix }}:${PCT}%"
-                  fi
+                (
+                  DST="/nfs-{{ nfs.suffix }}/huggingface"
+                  mkdir -p "$DST/$MODEL_CACHE_NAME"
+                  rsync -a --no-perms --no-owner --no-group "$PRIMARY/$MODEL_CACHE_NAME/" "$DST/$MODEL_CACHE_NAME/"
+                ) &
 {% endfor %}
-                  ELAPSED=$(( $(date +%s) - COPY_START ))
-                  echo "📊 Copy progress (${ELAPSED}s): ${DONE}/{{ node_nfs_pvcs | length - 1 }} done |$STATUS"
-                done
+                wait
+                touch $DONE_FLAG
               ) &
-              MONITOR_PID=$!
-              wait $RSYNC_PIDS
-              kill $MONITOR_PID 2>/dev/null; wait $MONITOR_PID 2>/dev/null
+
+              # Progress monitor — prints every 30s until rsyncs complete
+              while [ ! -f $DONE_FLAG ]; do
+                sleep 30
+                DONE=0
+                STATUS=""
+{% for nfs in node_nfs_pvcs[1:] %}
+                BYTES=$(du -sb "/nfs-{{ nfs.suffix }}/huggingface/$MODEL_CACHE_NAME" 2>/dev/null | cut -f1)
+                if [ "${BYTES:-0}" -ge "$PRIMARY_SIZE" ] 2>/dev/null; then
+                  DONE=$((DONE + 1))
+                  STATUS="$STATUS {{ nfs.suffix }}:✅"
+                else
+                  PCT=0
+                  [ "$PRIMARY_SIZE" -gt 0 ] 2>/dev/null && PCT=$((BYTES * 100 / PRIMARY_SIZE))
+                  STATUS="$STATUS {{ nfs.suffix }}:${PCT}%"
+                fi
+{% endfor %}
+                ELAPSED=$(( $(date +%s) - COPY_START ))
+                echo "📊 Copy progress (${ELAPSED}s): ${DONE}/{{ node_nfs_pvcs | length - 1 }} done |$STATUS"
+              done
+              wait
               TOTAL_ELAPSED=$(( $(date +%s) - COPY_START ))
               echo "✅ All parallel copies finished (${TOTAL_ELAPSED}s) — ${PRIMARY_SIZE_H} × {{ node_nfs_pvcs | length - 1 }} nodes"
 
