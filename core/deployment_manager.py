@@ -223,8 +223,17 @@ class DeploymentManager:
                     log_callback(f"❌ Failed to scale to {i}: {result.stderr}")
                 return False
 
-            # Brief pause for webhook to process and update allocation state
-            time.sleep(2)
+            # Wait for the new pod to be scheduled before scaling the next one
+            pod_name = f"{lws_name}-{i - 1}"
+            for _ in range(60):
+                r = self.kubectl.run(
+                    ['get', 'pod', pod_name, '-n', self.namespace,
+                     '-o', 'jsonpath={.spec.nodeName}'],
+                    check=False
+                )
+                if r.returncode == 0 and r.stdout.strip():
+                    break
+                time.sleep(1)
 
             if i % 8 == 0 or i == target_replicas:
                 if log_callback:
