@@ -232,6 +232,12 @@ class DeploymentManager:
 
         return True
 
+    @staticmethod
+    def _extract_replicas(manifest_content: str) -> int:
+        import re
+        match = re.search(r'replicas:\s*(\d+)', manifest_content)
+        return int(match.group(1)) if match else 1
+
     def _deploy_pd_sequential(
         self,
         config: TestConfig,
@@ -252,6 +258,7 @@ class DeploymentManager:
         # Manifests are already ordered by template_manager (higher TP first)
         # Now we deploy them one by one and WAIT for pods to be ready
 
+        use_dra = getattr(config, 'selected_dra_classes', None)
         manifest_list = list(manifests.items())
 
         for i, (manifest_name, manifest_content) in enumerate(manifest_list):
@@ -262,8 +269,13 @@ class DeploymentManager:
             if log_callback:
                 log_callback(f"📄 Deploying {manifest_name}...")
 
-            # Deploy the manifest
-            if not self.deploy_manifest(manifest_content, log_callback):
+            # Use batch scaling for LWS manifests when DRA is active
+            if use_dra and 'LeaderWorkerSet' in manifest_content:
+                if not self._deploy_batch_scale(config, {manifest_name: manifest_content},
+                                                 self._extract_replicas(manifest_content),
+                                                 log_callback):
+                    return False
+            elif not self.deploy_manifest(manifest_content, log_callback):
                 return False
 
             # Wait for this component's pods to be running before deploying next
