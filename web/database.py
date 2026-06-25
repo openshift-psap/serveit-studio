@@ -185,7 +185,8 @@ def init_db():
             rdma_capable_nodes INTEGER,
             total_nics INTEGER,
             nodes_json TEXT,
-            nics_json TEXT
+            nics_json TEXT,
+            versions_json TEXT
         )
     ''')
 

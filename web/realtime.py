@@ -724,6 +724,17 @@ def handle_scan_cluster(data):
                 'nics': node_nics
             })
 
+        # Scan infrastructure component versions
+        infra_versions = {}
+        try:
+            from core.version_scanner import scan_versions
+            infra_versions = scan_versions(scanner.kubectl)
+            if infra_versions:
+                ver_summary = ', '.join(f'{k}={v}' for k, v in sorted(infra_versions.items()))
+                log_to_ui(f'🔍 Infrastructure versions: {ver_summary}', 'info')
+        except Exception as ver_err:
+            print(f"Version scan error: {ver_err}")
+
         # Save hardware scan to database
         try:
             with get_db() as conn:
@@ -733,8 +744,9 @@ def handle_scan_cluster(data):
                      total_gpus, gpu_vendor, gpu_model, gpu_memory_per_gpu_mb,
                      total_gpu_memory_gb, max_gpus_per_node, total_cpu_cores,
                      total_memory_gb, cpu_model, host_model, has_rdma,
-                     rdma_capable_nodes, total_nics, nodes_json, nics_json)
-                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                     rdma_capable_nodes, total_nics, nodes_json, nics_json,
+                     versions_json)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 ''', (
                     datetime.now().isoformat(),
                     provider_name,
@@ -754,7 +766,8 @@ def handle_scan_cluster(data):
                     resources.rdma_capable_nodes,
                     resources.total_network_interfaces,
                     json.dumps(nodes_detail),
-                    json.dumps(all_nics_detail)
+                    json.dumps(all_nics_detail),
+                    json.dumps(infra_versions) if infra_versions else None,
                 ))
             log_to_ui('💾 Hardware scan saved to database', 'info')
         except Exception as db_err:
