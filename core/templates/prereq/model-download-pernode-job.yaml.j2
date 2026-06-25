@@ -144,19 +144,8 @@ spec:
 {% for nfs in node_nfs_pvcs[1:] %}
               (
                 DST="/nfs-{{ nfs.suffix }}/huggingface"
-                SNAPSHOT_CHK=$(ls -d "$DST/$MODEL_CACHE_NAME"/snapshots/*/ 2>/dev/null | head -1)
-                MODEL_CHK=$(find "$SNAPSHOT_CHK" -maxdepth 1 \( -name "*.safetensors" -o -name "*.bin" -o -name "*.pt" \) 2>/dev/null | head -1)
-                NEEDS_COPY=1
-                if [ -n "$SNAPSHOT_CHK" ] && [ -n "$MODEL_CHK" ]; then
-                  DST_SIZE=$(du -sb "$DST/$MODEL_CACHE_NAME" 2>/dev/null | cut -f1)
-                  if [ "${DST_SIZE:-0}" -ge "$PRIMARY_SIZE" ] 2>/dev/null; then
-                    NEEDS_COPY=0
-                  fi
-                fi
-                if [ "$NEEDS_COPY" = "1" ]; then
-                  mkdir -p "$DST/$MODEL_CACHE_NAME"
-                  cp -r --no-preserve=ownership "$PRIMARY/$MODEL_CACHE_NAME"/. "$DST/$MODEL_CACHE_NAME"/
-                fi
+                mkdir -p "$DST/$MODEL_CACHE_NAME"
+                rsync -a --no-perms --no-owner --no-group "$PRIMARY/$MODEL_CACHE_NAME/" "$DST/$MODEL_CACHE_NAME/"
               ) &
 {% endfor %}
 
