@@ -375,7 +375,8 @@ def deploy_and_test_inference(model_name: str, namespace: str, job_name: str = N
                 gateway_class = _cfg.get('gateway_class', 'istio')
         except Exception:
             gateway_class = 'istio'
-        prereq_mgr = PrereqManager(namespace=namespace, gateway_class=gateway_class)
+        prereq_mgr = PrereqManager(namespace=namespace, gateway_class=gateway_class,
+                                    scheduler_image=_cfg.get('scheduler_image'))
 
         # Build a lightweight config for prereq phase (per-node PVC creation)
         class _PrereqConfig:
