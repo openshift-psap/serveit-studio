@@ -1006,10 +1006,8 @@ socket.on('storage_setup_result', function(data) {
             logToConsole('✅ Storage setup complete!', 'success');
             logToConsole(`   PVC: ${data.pvc_name} (${data.pvc_size}Gi, ${data.storage_class})`, 'info');
             logToConsole(`   Model: ${data.model}`, 'info');
-            _storageSetupInProgress = true;
             logToConsole(`   Download Job: ${data.job_name}`, 'info');
-            logToConsole('\n📥 Model download in progress...', 'info');
-            logToConsole('   (This may take several minutes depending on model size)', 'info');
+            _storageSetupInProgress = true;
         }
 
         // Store PVC info in config

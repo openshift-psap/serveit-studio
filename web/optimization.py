@@ -108,7 +108,7 @@ def stream_job_logs(job_name: str, namespace: str):
             kubectl_cmd = 'kubectl'
 
         import select as _select
-        STALL_TIMEOUT = 300  # 5 min silence = stalled
+        STALL_TIMEOUT = 900  # 15 min silence = stalled (large models can write silently for 10+ min)
         MAX_RESTARTS = 5
 
         seen_pods = set()
