@@ -119,8 +119,14 @@ class TemplateManager:
         # Data parallelism (not in TestConfig)
         vars_dict.setdefault('data_parallelism', 1)
 
-        # Routing proxy image
-        vars_dict.setdefault('routing_proxy_image', 'ghcr.io/llm-d/llm-d-router-disagg-sidecar:v0.9.0')
+        # Routing proxy image — match sidecar version to the inference image version
+        cuda_image = vars_dict.get('image', 'ghcr.io/llm-d/llm-d-cuda:v0.8.0')
+        cuda_tag = cuda_image.split(':')[-1] if ':' in cuda_image else 'v0.8.0'
+        # v0.7.0+ uses the new disagg sidecar name, older uses the old name
+        if cuda_tag >= 'v0.7' or cuda_tag == 'latest':
+            vars_dict.setdefault('routing_proxy_image', f'ghcr.io/llm-d/llm-d-router-disagg-sidecar:{cuda_tag}')
+        else:
+            vars_dict.setdefault('routing_proxy_image', f'ghcr.io/llm-d/llm-d-routing-sidecar:{cuda_tag}')
 
         # Network values from core/networking
         rdma_nics = getattr(config, 'rdma_nics_per_node', 0)
