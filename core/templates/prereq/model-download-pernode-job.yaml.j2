@@ -149,27 +149,31 @@ spec:
               ) &
 {% endfor %}
 
-              # Progress monitor — prints status every 30s to keep log stream alive
+              # Progress monitor in background — prints status every 30s to keep log stream alive
               COPY_START=$(date +%s)
-              while jobs -r 2>/dev/null | grep -q .; do
-                sleep 30
-                DONE=0
-                STATUS=""
+              (
+                while true; do
+                  sleep 30
+                  DONE=0
+                  STATUS=""
 {% for nfs in node_nfs_pvcs[1:] %}
-                BYTES=$(du -sb "/nfs-{{ nfs.suffix }}/huggingface/$MODEL_CACHE_NAME" 2>/dev/null | cut -f1)
-                if [ "${BYTES:-0}" -ge "$PRIMARY_SIZE" ] 2>/dev/null; then
-                  DONE=$((DONE + 1))
-                  STATUS="$STATUS {{ nfs.suffix }}:✅"
-                else
-                  PCT=0
-                  [ "$PRIMARY_SIZE" -gt 0 ] 2>/dev/null && PCT=$((BYTES * 100 / PRIMARY_SIZE))
-                  STATUS="$STATUS {{ nfs.suffix }}:${PCT}%"
-                fi
+                  BYTES=$(du -sb "/nfs-{{ nfs.suffix }}/huggingface/$MODEL_CACHE_NAME" 2>/dev/null | cut -f1)
+                  if [ "${BYTES:-0}" -ge "$PRIMARY_SIZE" ] 2>/dev/null; then
+                    DONE=$((DONE + 1))
+                    STATUS="$STATUS {{ nfs.suffix }}:✅"
+                  else
+                    PCT=0
+                    [ "$PRIMARY_SIZE" -gt 0 ] 2>/dev/null && PCT=$((BYTES * 100 / PRIMARY_SIZE))
+                    STATUS="$STATUS {{ nfs.suffix }}:${PCT}%"
+                  fi
 {% endfor %}
-                ELAPSED=$(( $(date +%s) - COPY_START ))
-                echo "📊 Copy progress (${ELAPSED}s): ${DONE}/{{ node_nfs_pvcs | length - 1 }} done |$STATUS"
-              done
-              wait
+                  ELAPSED=$(( $(date +%s) - COPY_START ))
+                  echo "📊 Copy progress (${ELAPSED}s): ${DONE}/{{ node_nfs_pvcs | length - 1 }} done |$STATUS"
+                done
+              ) &
+              MONITOR_PID=$!
+              wait $(jobs -p | grep -v $MONITOR_PID)
+              kill $MONITOR_PID 2>/dev/null
               TOTAL_ELAPSED=$(( $(date +%s) - COPY_START ))
               echo "✅ All parallel copies finished (${TOTAL_ELAPSED}s) — ${PRIMARY_SIZE_H} × {{ node_nfs_pvcs | length - 1 }} nodes"
 
