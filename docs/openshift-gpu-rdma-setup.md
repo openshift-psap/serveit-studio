@@ -897,9 +897,9 @@ data:
           gateway: "10.7.0.1"
           ipv4Prefix: "10.7."
   reconciler.yaml: |
-    interval: "5m"
+    interval: "30s"
     autoReap: true
-    gracePeriod: "10m"
+    gracePeriod: "30s"
     statePath: "/data/reconciler-state.json"
 ```
 
