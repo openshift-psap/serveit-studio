@@ -51,6 +51,35 @@ function renderClusterDiagram(container, data) {
     html += '<div class="viz-stat"><div class="viz-stat-value">' + (s.cloud_provider || 'unknown') + '</div><div class="viz-stat-label">Provider</div></div>';
     html += '</div>';
 
+    // Infrastructure component versions
+    if (data.infra_versions && Object.keys(data.infra_versions).length > 0) {
+        var iv = data.infra_versions;
+        var versionLabels = {
+            openshift: 'OpenShift', k8s: 'Kubernetes',
+            gpu_operator: 'GPU Operator', gpu_driver: 'GPU Driver', cuda_runtime: 'CUDA Runtime',
+            network_operator: 'Network Operator', mofed: 'MOFED/DOCA',
+            istio: 'Istio', service_mesh: 'Service Mesh', epp: 'EPP Scheduler',
+            nfd: 'NFD', lws: 'LWS'
+        };
+        var versionOrder = ['openshift', 'k8s', 'gpu_operator', 'gpu_driver', 'cuda_runtime', 'network_operator', 'mofed', 'istio', 'service_mesh', 'epp', 'nfd', 'lws'];
+        html += '<div style="background:#f0fdf4;border:1.5px solid #86efac;border-radius:10px;padding:14px 18px;margin-bottom:16px;">';
+        html += '<div style="font-weight:700;color:#065f46;font-size:0.9em;margin-bottom:8px;">Component Versions</div>';
+        html += '<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:4px 24px;">';
+        versionOrder.forEach(function(k) {
+            if (iv[k]) {
+                var label = versionLabels[k] || k;
+                html += '<div style="font-size:0.82em;line-height:1.8;"><span style="color:#64748b;">' + label + ':</span> <span style="font-family:monospace;color:#065f46;">' + iv[k] + '</span></div>';
+            }
+        });
+        // Any keys not in versionOrder
+        Object.keys(iv).forEach(function(k) {
+            if (versionOrder.indexOf(k) === -1) {
+                html += '<div style="font-size:0.82em;line-height:1.8;"><span style="color:#64748b;">' + k + ':</span> <span style="font-family:monospace;color:#065f46;">' + iv[k] + '</span></div>';
+            }
+        });
+        html += '</div></div>';
+    }
+
     // Infrastructure warnings (missing LWS, Istio, etc.)
     if (data.infra_warnings && data.infra_warnings.length > 0) {
         html += '<div style="background:#fef2f2;border:1.5px solid #dc2626;border-radius:10px;padding:14px 18px;margin-bottom:16px;">';

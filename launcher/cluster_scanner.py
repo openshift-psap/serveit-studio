@@ -138,6 +138,16 @@ def scan_cluster_resources(cluster: Dict, namespace: str = 'serveit', proxy: str
         }
         if warnings:
             result['infra_warnings'] = warnings
+
+        # Scan infrastructure component versions
+        try:
+            from core.version_scanner import scan_versions
+            versions = scan_versions(scanner.kubectl)
+            if versions:
+                result['infra_versions'] = versions
+        except Exception:
+            pass
+
         return result
     finally:
         if kubeconfig_path:
