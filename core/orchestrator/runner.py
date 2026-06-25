@@ -70,14 +70,27 @@ class TestOrchestrator(ParserMixin, GuidellmMixin):
             # Port-forwarded Prometheus doesn't need auth tokens
             token = None
             if not thanos_url.startswith('http://localhost'):
-                token_file = '/run/secrets/kubernetes.io/serviceaccount/token'
-                if os.path.exists(token_file):
-                    try:
-                        with open(token_file, 'r') as f:
-                            token = f.read().strip()
-                        logger.info("Successfully loaded service account token for Thanos authentication")
-                    except Exception as e:
-                        logger.warning(f"Failed to read service account token: {e}")
+                # For remote clusters, use the token from kubeconfig (not local SA)
+                try:
+                    r = subprocess.run(
+                        ['kubectl', 'config', 'view', '--raw', '-o', 'jsonpath={.users[0].user.token}'],
+                        capture_output=True, text=True, timeout=5
+                    )
+                    if r.returncode == 0 and r.stdout.strip():
+                        token = r.stdout.strip()
+                        logger.info("Loaded token from kubeconfig for Thanos authentication")
+                except Exception:
+                    pass
+                # Fallback to local SA token
+                if not token:
+                    token_file = '/run/secrets/kubernetes.io/serviceaccount/token'
+                    if os.path.exists(token_file):
+                        try:
+                            with open(token_file, 'r') as f:
+                                token = f.read().strip()
+                            logger.info("Loaded local SA token for Thanos authentication")
+                        except Exception as e:
+                            logger.warning(f"Failed to read service account token: {e}")
 
             metrics_config = MetricsConfig(
                 thanos_url=thanos_url,

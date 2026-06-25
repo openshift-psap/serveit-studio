@@ -175,9 +175,10 @@ class PrereqManager:
 
             if all(status.values()):
                 log(f'✅ All prerequisites for {architecture} already deployed')
-                # Ensure RDMA configmap and network resources exist even on the fast path
+                # Ensure RDMA configmap, PodMonitor, and network resources exist even on the fast path
                 context = {'namespace': self.namespace}
                 self._ensure_rdma_discovery(context, log)
+                self._ensure_pod_monitor(log)
                 if optimizer_config:
                     self._ensure_network_resources(optimizer_config, log)
                     if getattr(optimizer_config, 'per_node_storage', False):
@@ -270,6 +271,9 @@ class PrereqManager:
 
             # Create modelserver ServiceAccount + RBAC (used by LWS test pods)
             self._ensure_modelserver_rbac(log)
+
+            # Create PodMonitor for vLLM metrics scraping
+            self._ensure_pod_monitor(log)
 
             # Deploy RDMA discovery ConfigMap (used by vLLM pods for InfiniBand HCA detection)
             self._ensure_rdma_discovery(context, log)
@@ -544,6 +548,52 @@ class PrereqManager:
                     log(f'   ✅ SCC llm-d-modelserver created (OpenShift)')
                 else:
                     log(f'   ⚠️  Failed to create SCC: {result.stderr[:100]}')
+
+    def _ensure_pod_monitor(self, log_callback=None):
+        """Create PodMonitor for vLLM metrics scraping (OpenShift user workload monitoring)."""
+        def log(msg):
+            if log_callback:
+                log_callback(msg)
+
+        r = self.kubectl.run(
+            ['get', 'podmonitor', 'vllm-metrics', '-n', self.namespace],
+            check=False)
+        if r.returncode == 0:
+            return
+
+        # Check if PodMonitor CRD exists (not available on vanilla K8s without prometheus-operator)
+        r = self.kubectl.run(
+            ['get', 'crd', 'podmonitors.monitoring.coreos.com', '--ignore-not-found', '--no-headers'],
+            check=False)
+        if r.returncode != 0 or not r.stdout.strip():
+            return
+
+        import json
+        manifest = json.dumps({
+            'apiVersion': 'monitoring.coreos.com/v1',
+            'kind': 'PodMonitor',
+            'metadata': {
+                'name': 'vllm-metrics',
+                'namespace': self.namespace,
+            },
+            'spec': {
+                'selector': {
+                    'matchLabels': {'llm-d.ai/inference-serving': 'true'}
+                },
+                'podMetricsEndpoints': [{
+                    'port': 'vllm',
+                    'path': '/metrics',
+                    'interval': '15s',
+                }]
+            }
+        })
+        r = self.kubectl.run(
+            ['apply', '-f', '-', '-n', self.namespace],
+            input_data=manifest, check=False)
+        if r.returncode == 0:
+            log('   ✅ PodMonitor created (vLLM metrics scraping)')
+        else:
+            log(f'   ⚠️  PodMonitor creation failed: {r.stderr}')
 
     def _ensure_rdma_discovery(self, context, log_callback=None):
         """Deploy rdma-discovery-script ConfigMap if missing."""
