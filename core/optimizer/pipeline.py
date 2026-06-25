@@ -1702,6 +1702,7 @@ class RecipeOptimizer(
                 'ttft_p90': self.calibrated_agg_result.ttft_p90,
                 'throughput_p90': self.calibrated_agg_result.throughput_p90,
             } if self.calibrated_agg_result else None,
+            'concurrency_sweep': getattr(self, 'concurrency_sweep_results', None),
             # EP results (populated by ThroughputStrategy/BalancedStrategy)
             'ep_configurations': [
                 {

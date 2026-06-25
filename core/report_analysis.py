@@ -1251,6 +1251,16 @@ class ReportAnalyzer:
         if calibrated_qps_data and calibration_analysis:
             calibrated_qps_data['calibration_analysis'] = calibration_analysis
 
+        # InferenceX concurrency sweep data (Step 11)
+        concurrency_sweep = None
+        try:
+            if row and row['optimal_config']:
+                import json as _json
+                opt = _json.loads(row['optimal_config'])
+                concurrency_sweep = opt.get('concurrency_sweep')
+        except Exception:
+            pass
+
         # Load latency search trials (Step 9) if any
         latency_search_data = None
         try:
@@ -1526,4 +1536,5 @@ class ReportAnalyzer:
             'gpu_sizing': gpu_sizing,
             'run_config': run_config,
             'epp_tuning': epp_tuning_data,
+            'concurrency_sweep': concurrency_sweep,
         }

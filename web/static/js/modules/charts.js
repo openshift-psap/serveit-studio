@@ -1218,6 +1218,74 @@ function renderCharts(data, runId) {
         html += '</div>';
     }
 
+    // InferenceX Chart: Token Throughput per GPU vs Interactivity
+    if (data.concurrency_sweep) {
+        const sweep = data.concurrency_sweep;
+        html += '<div class="chart-card" style="margin-top:16px; border:2px solid #6366f1; border-left:6px solid #6366f1;">';
+        html += '<div class="chart-card-header" style="background:linear-gradient(135deg,#4f46e5,#6366f1); color:white; font-size:1.2em;">Token Throughput per GPU vs. Interactivity</div>';
+        html += '<div style="padding:8px 20px 4px; font-size:0.85em; color:#64748b;">Higher is better on both axes. The curve shows the tradeoff between per-user response speed (interactivity) and system-wide GPU efficiency. The marked point is the calibrated sustainable load.</div>';
+        html += '<div id="chart-inferencex" style="width:100%; height:450px;"></div>';
+        html += '</div>';
+
+        _pendingPlots.push(function() {
+            var traces = [];
+            var colors = { pd: '#10b981', aggregated: '#6366f1', ep: '#f59e0b' };
+            var labels = { pd: 'PD', aggregated: 'Aggregated', ep: 'EP' };
+            var annotations = [];
+
+            Object.keys(sweep).forEach(function(arch) {
+                var points = sweep[arch];
+                if (!points || !points.length) return;
+
+                var x = points.map(function(p) { return p.interactivity; });
+                var y = points.map(function(p) { return p.throughput_per_gpu; });
+                var text = points.map(function(p) {
+                    return 'Concurrency: ' + p.concurrency + ' users' +
+                           '<br>Throughput/GPU: ' + p.throughput_per_gpu.toFixed(0) + ' tok/s/gpu' +
+                           '<br>Interactivity: ' + p.interactivity.toFixed(1) + ' tok/s/user' +
+                           '<br>TTFT P90: ' + p.ttft_p90.toFixed(0) + 'ms' +
+                           '<br>Throughput: ' + p.throughput_mean.toFixed(1) + ' req/s' +
+                           (p.is_calibrated ? '<br><b>← Calibrated Load</b>' : '');
+                });
+
+                traces.push({
+                    x: x, y: y, text: text,
+                    mode: 'lines+markers',
+                    name: labels[arch] || arch,
+                    line: { color: colors[arch] || '#888', width: 3 },
+                    marker: { size: points.map(function(p) { return p.is_calibrated ? 14 : 8; }),
+                              color: points.map(function(p) { return p.is_calibrated ? '#fff' : (colors[arch] || '#888'); }),
+                              line: { color: colors[arch] || '#888', width: points.map(function(p) { return p.is_calibrated ? 3 : 0; }) } },
+                    hovertemplate: '%{text}<extra>' + (labels[arch] || arch) + '</extra>'
+                });
+
+                // Annotate calibrated point
+                points.forEach(function(p) {
+                    if (p.is_calibrated) {
+                        annotations.push({
+                            x: p.interactivity, y: p.throughput_per_gpu,
+                            text: (labels[arch] || arch) + ' (calibrated)',
+                            showarrow: true, arrowhead: 2, ax: 40, ay: -30,
+                            font: { size: 11, color: colors[arch] || '#888' },
+                            bgcolor: 'rgba(255,255,255,0.85)', borderpad: 3
+                        });
+                    }
+                });
+            });
+
+            Plotly.newPlot('chart-inferencex', traces, {
+                xaxis: { title: 'Interactivity (tok/s/user)', gridcolor: '#e2e8f0' },
+                yaxis: { title: 'Token Throughput per GPU (tok/s/gpu)', gridcolor: '#e2e8f0' },
+                plot_bgcolor: '#f8fafc',
+                paper_bgcolor: '#ffffff',
+                margin: { t: 20, b: 60, l: 70, r: 20 },
+                legend: { x: 1, y: 1, xanchor: 'right', bgcolor: 'rgba(255,255,255,0.9)' },
+                annotations: annotations,
+                hovermode: 'closest'
+            }, { responsive: true });
+        });
+    }
+
     // Flush calibrated load (Step 10)
     secCal = html; html = '';
 

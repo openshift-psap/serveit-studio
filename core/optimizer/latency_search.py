@@ -299,13 +299,103 @@ class LatencySearchMixin:
 
         return cal_concurrency
 
+    def _generate_sweep_levels(self, calibrated):
+        """Generate concurrency levels for the InferenceX sweep.
+
+        Produces ~6 rounded levels from low to 1.5× calibrated,
+        always including the exact calibrated value.
+        """
+        sweep_max = max(int(calibrated * 1.5), calibrated + 5)
+
+        def round_to(n, base=5):
+            return max(base, base * round(n / base))
+
+        step = max(5, round_to(sweep_max // 6))
+        levels = set()
+        v = step
+        while v <= sweep_max:
+            levels.add(round_to(v))
+            v += step
+        levels.add(calibrated)
+        levels.add(round_to(sweep_max))
+        return sorted(l for l in levels if l > 0)
+
+    def _run_sweep_for_arch(self, arch_label, calibrated, levels, create_config_fn, gpus):
+        """Run concurrency sweep for one architecture, return list of results."""
+        results = []
+        self.log(f"\n📊 InferenceX Sweep: {arch_label} ({len(levels)} levels: {levels})", 'info')
+        self.log(f"   Calibrated load: {calibrated} users", 'info')
+
+        for concurrency in levels:
+            if self._should_stop():
+                break
+
+            test_id = f"step11-sweep-{arch_label.lower()}-c{concurrency}"
+
+            if test_id in self.completed_tests:
+                row = self.completed_tests[test_id]
+                result = self._make_test_result_from_db(row)
+                self.log(f"  ⏩ c={concurrency}: resuming from DB", 'info')
+            else:
+                config = create_config_fn()
+                config.test_id = test_id
+                config.num_users = concurrency
+                config.request_rate = concurrency
+
+                result = self.orchestrator.run_test(
+                    config,
+                    cleanup=True,
+                    log_callback=lambda msg: self.log(msg, 'info'),
+                    stop_check=self._should_stop
+                )
+                self.all_test_results.append((config, result))
+                self._save_test_to_database(config, result)
+                self._check_pod_errors(config, result)
+                self._check_request_errors(config, result)
+
+                if not result or not result.guidellm_success:
+                    self.log(f"  ❌ c={concurrency}: test failed, skipping", 'warning')
+                    continue
+
+            tput = result.throughput_mean or result.throughput_p90 or 0
+            output_tps = result.output_tps_mean or 0
+            ttft = result.ttft_p90 or 0
+            interactivity = output_tps if output_tps > 0 else 0
+            throughput_per_gpu = (output_tps * concurrency / gpus) if gpus > 0 and output_tps > 0 else 0
+
+            results.append({
+                'concurrency': concurrency,
+                'is_calibrated': concurrency == calibrated,
+                'throughput_mean': round(tput, 2),
+                'output_tps_mean': round(output_tps, 2),
+                'interactivity': round(interactivity, 2),
+                'throughput_per_gpu': round(throughput_per_gpu, 2),
+                'ttft_p90': round(ttft, 1),
+                'ttft_p50': round(result.ttft_p50 or 0, 1),
+                'itl_p90': round(result.itl_p90 or 0, 1),
+                'gpus': gpus,
+                'test_id': test_id,
+            })
+
+            self.log(f"  ✅ c={concurrency}: TTFT={ttft:.0f}ms, "
+                    f"tput={tput:.1f} req/s, "
+                    f"interactivity={interactivity:.1f} tok/s/user, "
+                    f"throughput/GPU={throughput_per_gpu:.0f} tok/s/gpu"
+                    f"{' ← calibrated' if concurrency == calibrated else ''}", 'info')
+
+        return results
+
     def _validate_at_calibrated_load(self):
         """
-        Step 11: Re-test best PD and Aggregated at sustainable concurrency.
+        Step 11: Concurrency sweep for InferenceX charts.
 
-        Computes per-architecture calibrated concurrency from measured Step 7
-        throughput using Little's Law, then re-tests at that level.
+        Computes calibrated concurrency from measured Step 7 throughput using
+        Little's Law, then runs a sweep from low to 1.5× calibrated for both
+        best PD and Aggregated configs.
         """
+        if not hasattr(self, 'concurrency_sweep_results'):
+            self.concurrency_sweep_results = {}
+
         original_concurrency = int(self.config.qps)
 
         # Find best PD config by TTFT from Step 7
@@ -319,139 +409,76 @@ class LatencySearchMixin:
         pd_tput_mean = best_pd_result.throughput_mean or best_pd_result.throughput_p50 or 0
 
         pd_calibrated = self._compute_calibrated_concurrency(pd_tput_mean, original_concurrency, 'PD')
+        pd_levels = self._generate_sweep_levels(pd_calibrated)
 
-        self.log(f"\nRe-testing best PD config at calibrated load ({pd_calibrated} users "
-                f"vs original {original_concurrency} users)", 'info')
-        self.log(f"Best PD: {best_split.prefill_pods}P×TP{best_split.prefill_tp} + "
-                f"{best_split.decode_pods}D×TP{best_split.decode_tp}", 'info')
-        self.log(f"  Step 7 results (overloaded): TTFT={overloaded_ttft:.1f}ms, "
-                f"Throughput={overloaded_tput:.2f} req/s", 'info')
-        self.log("", 'info')
-        calibrated_concurrency = pd_calibrated
+        total_gpus_pd = (best_split.prefill_pods * best_split.prefill_tp +
+                         best_split.decode_pods * best_split.decode_tp)
 
-        # --- Test best PD at calibrated load ---
-        test_id = (f"step10-{best_split.prefill_pods}p{best_split.decode_pods}d"
-                  f"-ptp{best_split.prefill_tp}-dtp{best_split.decode_tp}")
+        # --- PD sweep ---
+        pd_sweep = self._run_sweep_for_arch(
+            'PD', pd_calibrated, pd_levels,
+            lambda: self._create_pd_config(best_split),
+            total_gpus_pd
+        )
+        self.concurrency_sweep_results['pd'] = pd_sweep
 
-        if test_id in self.completed_tests:
-            row = self.completed_tests[test_id]
-            pd_result = self._make_test_result_from_db(row)
-            self.log("  ⏩ PD test: resuming from DB (already completed)", 'info')
-        else:
-            # Create a PD config identical to the best split but with calibrated load
-            pd_config = self._create_pd_config(best_split)
-            pd_config.test_id = test_id
-            pd_config.num_users = int(calibrated_concurrency)
-            pd_config.request_rate = int(calibrated_concurrency)
-
-            pd_result = self.orchestrator.run_test(
-                pd_config,
-                cleanup=True,
-                log_callback=lambda msg: self.log(msg, 'info'),
-                stop_check=self._should_stop
-            )
-
-            self.all_test_results.append((pd_config, pd_result))
-            self._save_test_to_database(pd_config, pd_result)
-            self._check_pod_errors(pd_config, pd_result)
-            self._check_request_errors(pd_config, pd_result)
-
-            if not pd_result or not pd_result.guidellm_success:
-                self.log("❌ PD calibrated load test failed", 'error')
-                return
-
-        cal_pd_ttft = pd_result.ttft_p90 or pd_result.ttft_p50 or 0
-        cal_pd_tput = pd_result.throughput_p90 or pd_result.throughput_p50 or 0
-        self.calibrated_pd_result = pd_result
-
-        self.log(f"  ✅ PD at calibrated load: TTFT={cal_pd_ttft:.1f}ms, "
-                f"Throughput={cal_pd_tput:.2f} req/s", 'success')
+        # Store calibrated result for backwards compat
+        cal_results = [r for r in pd_sweep if r['is_calibrated']]
+        if cal_results:
+            cal_test = cal_results[0]
+            matching = [r for _, r in self.all_test_results if hasattr(_, 'test_id') and _.test_id == cal_test['test_id']]
+            if matching:
+                self.calibrated_pd_result = matching[0]
 
         if self._should_stop():
-            self.log("🛑 Optimization stopped — skipping aggregated calibration test", 'warning')
             return
 
-        # --- Test Aggregated at calibrated load ---
+        # --- Aggregated sweep ---
         if not self.aggregated_tp:
-            self.log("⚠️  No aggregated baseline — skipping aggregated re-test", 'warning')
+            self.log("⚠️  No aggregated baseline — skipping aggregated sweep", 'warning')
             return
-        agg_tp = self.aggregated_tp
-        total_gpus = self.aggregated_gpus
 
-        # Compute aggregated-specific calibrated concurrency from measured data
+        agg_tp = self.aggregated_tp
+        total_gpus_agg = self.aggregated_gpus
         agg_tput_mean = (self.aggregated_result.throughput_mean or self.aggregated_result.throughput_p50 or 0) if self.aggregated_result else 0
         agg_calibrated = self._compute_calibrated_concurrency(agg_tput_mean, original_concurrency, 'Aggregated')
+        agg_levels = self._generate_sweep_levels(agg_calibrated)
 
-        agg_test_id = f"step10-aggregated-tp{agg_tp}"
-        # Backwards compat: check old ID format with total_gpus embedded
-        if agg_test_id not in self.completed_tests:
-            old_id = f"step10-aggregated-{total_gpus}gpu-tp{agg_tp}"
-            if old_id in self.completed_tests:
-                agg_test_id = old_id
+        agg_sweep = self._run_sweep_for_arch(
+            'Aggregated', agg_calibrated, agg_levels,
+            lambda: self._create_aggregated_config(
+                tp=agg_tp, num_gpus=total_gpus_agg,
+                isl=self.config.isl, osl=self.config.osl,
+                test_id='_placeholder_', use_concurrency=True
+            ),
+            total_gpus_agg
+        )
+        self.concurrency_sweep_results['aggregated'] = agg_sweep
 
-        if agg_test_id in self.completed_tests:
-            row = self.completed_tests[agg_test_id]
-            agg_result = self._make_test_result_from_db(row)
-            self.log("  ⏩ Aggregated test: resuming from DB (already completed)", 'info')
-        else:
-            agg_config = self._create_aggregated_config(
-                tp=agg_tp,
-                num_gpus=total_gpus,
-                isl=self.config.isl,
-                osl=self.config.osl,
-                test_id=agg_test_id,
-                use_concurrency=True
-            )
-            # Override with aggregated-specific calibrated load
-            agg_config.num_users = int(agg_calibrated)
-            agg_config.request_rate = int(agg_calibrated)
+        cal_agg = [r for r in agg_sweep if r['is_calibrated']]
+        if cal_agg:
+            matching = [r for _, r in self.all_test_results if hasattr(_, 'test_id') and _.test_id == cal_agg[0]['test_id']]
+            if matching:
+                self.calibrated_agg_result = matching[0]
 
-            agg_result = self.orchestrator.run_test(
-                agg_config,
-                cleanup=True,
-                log_callback=lambda msg: self.log(msg, 'info'),
-                stop_check=self._should_stop
-            )
+        # --- Summary comparison at calibrated point ---
+        if cal_results and cal_agg:
+            self.log("", 'info')
+            self.log(f"📊 Calibrated Load Comparison:", 'decision')
+            pd_c = cal_results[0]
+            agg_c = cal_agg[0]
+            self.log(f"  PD  (c={pd_c['concurrency']}): TTFT={pd_c['ttft_p90']:.0f}ms, {pd_c['throughput_per_gpu']:.0f} tok/s/gpu", 'info')
+            self.log(f"  Agg (c={agg_c['concurrency']}): TTFT={agg_c['ttft_p90']:.0f}ms, {agg_c['throughput_per_gpu']:.0f} tok/s/gpu", 'info')
 
-            self.all_test_results.append((agg_config, agg_result))
-            self._save_test_to_database(agg_config, agg_result)
-            self._check_pod_errors(agg_config, agg_result)
-            self._check_request_errors(agg_config, agg_result)
-
-            if not agg_result or not agg_result.guidellm_success:
-                self.log("❌ Aggregated calibrated load test failed", 'error')
-                self.log("   PD calibrated results stand", 'warning')
-                return
-
-        cal_agg_ttft = agg_result.ttft_p90 or agg_result.ttft_p50 or 0
-        cal_agg_tput = agg_result.throughput_p90 or agg_result.throughput_p50 or 0
-        self.calibrated_agg_result = agg_result
-
-        self.log(f"  ✅ Aggregated at calibrated load: TTFT={cal_agg_ttft:.1f}ms, "
-                f"Throughput={cal_agg_tput:.2f} req/s", 'success')
-        self.log("", 'info')
-
-        # --- Compare ---
-        self.log(f"📊 Calibrated Load Results ({int(calibrated_concurrency)} users):", 'decision')
-
-        ttft_diff = cal_pd_ttft - cal_agg_ttft
-        ttft_pct = (ttft_diff / cal_agg_ttft * 100) if cal_agg_ttft > 0 else 0
-        tput_diff = cal_pd_tput - cal_agg_tput
-        tput_pct = (tput_diff / cal_agg_tput * 100) if cal_agg_tput > 0 else 0
-
-        self.log(f"  TTFT p90:       PD={cal_pd_ttft:.1f}ms vs Agg={cal_agg_ttft:.1f}ms "
-                f"({'PD wins by' if ttft_diff < 0 else 'Agg wins by'} {abs(ttft_pct):.1f}%)", 'info')
-        self.log(f"  Throughput mean:  PD={cal_pd_tput:.2f} vs Agg={cal_agg_tput:.2f} req/s "
-                f"({'PD wins by' if tput_diff > 0 else 'Agg wins by'} {abs(tput_pct):.1f}%)", 'info')
-        self.log("", 'info')
-
-        # Compare with overloaded results
-        if overloaded_ttft > 0:
+        # Compare with overloaded
+        if overloaded_ttft > 0 and cal_results:
+            cal_pd_ttft = cal_results[0]['ttft_p90']
             ttft_improvement = ((overloaded_ttft - cal_pd_ttft) / overloaded_ttft) * 100
+            self.log("", 'info')
             self.log("📉 Impact of load reduction on best PD config:", 'info')
             self.log(f"  TTFT:       {overloaded_ttft:.1f}ms → {cal_pd_ttft:.1f}ms "
                     f"({ttft_improvement:+.1f}%)", 'info')
-            self.log(f"  Throughput: {overloaded_tput:.2f} → {cal_pd_tput:.2f} req/s", 'info')
+            self.log(f"  Throughput: {overloaded_tput:.2f} → {cal_results[0]['throughput_mean']:.2f} req/s", 'info')
 
         # --- EPP-tuned calibrated load tests (if EPP tuning ran) ---
         if getattr(self, 'epp_benchmark_results', None) and not self._should_stop():
