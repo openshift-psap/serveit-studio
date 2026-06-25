@@ -369,7 +369,7 @@ spec:
         effect: NoSchedule
       containers:
       - name: discovery
-        image: {{ discovery_image | default('ghcr.io/llm-d/llm-d-cuda:v0.5.1') }}
+        image: {{ discovery_image | default('ghcr.io/llm-d/llm-d-cuda:v0.8.0') }}
         imagePullPolicy: IfNotPresent
         securityContext:
           privileged: true

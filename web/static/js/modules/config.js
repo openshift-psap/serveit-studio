@@ -1168,7 +1168,7 @@ function updateSingleTestGpuSummary() {
 
 // Image tag fetching
 function fetchImageTags() {
-    var full = (document.getElementById('image-repo-input').value || 'ghcr.io/llm-d/llm-d-cuda:v0.6.0').trim();
+    var full = (document.getElementById('image-repo-input').value || 'ghcr.io/llm-d/llm-d-cuda:v0.8.0').trim();
     var repo = full.split(':')[0];
     var statusEl = document.getElementById('image-tag-status');
     statusEl.textContent = 'Fetching tags...';
@@ -1218,8 +1218,9 @@ function updateSelectedImage() {
 
 var RHAIIS_VERSIONS = {
     '3.3.4': { cuda: 'v0.4.0', scheduler: 'v0.4.0', vllm: '0.13.0' },
-    '3.4.0': { cuda: 'v0.6.0', scheduler: 'v0.7.1', vllm: '0.17.1' },
-    '3.5.0': { cuda: 'v0.7.0', scheduler: 'v0.8.0', vllm: '0.19.1' },
+    '3.4.0': { cuda: 'v0.6.0', scheduler: 'v0.7.1', vllm: '0.18.0' },
+    '3.4.1': { cuda: 'v0.6.0', scheduler: 'v0.7.1', vllm: '0.18.0' },
+    '3.5.0': { cuda: 'v0.8.0', scheduler: 'v0.9.0', vllm: '0.24.0' },
 };
 
 function applyRhaiisVersion(version) {
@@ -1287,7 +1288,7 @@ function markImagesCustom() {
 
 function fetchSchedulerTags() {
     var input = document.getElementById('scheduler-image-input');
-    var full = (input.value || 'ghcr.io/llm-d/llm-d-inference-scheduler:v0.7.1').trim();
+    var full = (input.value || 'ghcr.io/llm-d/llm-d-inference-scheduler:v0.9.0').trim();
     var repo = full.split(':')[0];
     var statusEl = document.getElementById('scheduler-tag-status');
     statusEl.textContent = 'Fetching tags...';
@@ -1306,7 +1307,7 @@ socket.on('scheduler_tags_result', function(data) {
     var tags = data.tags || [];
     statusEl.textContent = tags.length + ' tags found';
     statusEl.style.color = '#22c55e';
-    var currentTag = config.scheduler_image ? config.scheduler_image.split(':').pop() : 'v0.7.1';
+    var currentTag = config.scheduler_image ? config.scheduler_image.split(':').pop() : 'v0.9.0';
     selectEl.innerHTML = '';
     tags.forEach(function(tag) {
         var opt = document.createElement('option');

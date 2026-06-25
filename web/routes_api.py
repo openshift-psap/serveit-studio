@@ -360,7 +360,7 @@ def update_deployment_template():
             replicas=data.get('replicas', 1),
             max_model_len=data.get('max_model_len', 8192),
             gpu_memory_utilization=data.get('gpu_memory_utilization', 0.95),
-            image=data.get('image', 'ghcr.io/llm-d/llm-d-cuda:v0.5.1'),
+            image=data.get('image', 'ghcr.io/llm-d/llm-d-cuda:v0.8.0'),
             pvc_name=data.get('pvc_name', 'serveit-cache'),
             nccl_ib_hca=data.get('nccl_ib_hca', 'mlx'),
             isl=data.get('isl', 2000),

@@ -470,7 +470,7 @@ def deploy_and_test_inference(model_name: str, namespace: str, job_name: str = N
             replicas = 1
             max_model_len = 8192
             gpu_memory_utilization = 0.95
-            image = 'ghcr.io/llm-d/llm-d-cuda:v0.5.1'
+            image = 'ghcr.io/llm-d/llm-d-cuda:v0.8.0'
             pvc_name = 'serveit-cache'
             nccl_ib_hca = 'mlx'
             gpus_per_pod = tp
@@ -734,8 +734,8 @@ def run_optimization_background(data):
             pvc_size = f"{int(pvc_size_str)}Gi" if pvc_size_str.isdigit() else str(pvc_size_raw)
         else:
             pvc_size = None
-        vllm_image = _get('image') or 'ghcr.io/llm-d/llm-d-cuda:v0.6.0'
-        scheduler_image = _get('scheduler_image') or 'ghcr.io/llm-d/llm-d-inference-scheduler:v0.7.1'
+        vllm_image = _get('image') or 'ghcr.io/llm-d/llm-d-cuda:v0.8.0'
+        scheduler_image = _get('scheduler_image') or 'ghcr.io/llm-d/llm-d-inference-scheduler:v0.9.0'
         single_test_architecture = _get('single_test_architecture')
         single_test_tp = _get('single_test_tp')
         single_test_replicas = _get('single_test_replicas')

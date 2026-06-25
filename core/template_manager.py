@@ -120,7 +120,7 @@ class TemplateManager:
         vars_dict.setdefault('data_parallelism', 1)
 
         # Routing proxy image
-        vars_dict.setdefault('routing_proxy_image', 'ghcr.io/llm-d/llm-d-routing-sidecar:v0.6.0')
+        vars_dict.setdefault('routing_proxy_image', 'ghcr.io/llm-d/llm-d-router-disagg-sidecar:v0.9.0')
 
         # Network values from core/networking
         rdma_nics = getattr(config, 'rdma_nics_per_node', 0)
