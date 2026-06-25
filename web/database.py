@@ -195,6 +195,12 @@ def init_db():
         CREATE INDEX IF NOT EXISTS idx_hw_scans_timestamp ON hardware_scans(scan_timestamp DESC)
     ''')
 
+    # Migration: add versions_json column if missing (existing databases)
+    try:
+        cursor.execute('ALTER TABLE hardware_scans ADD COLUMN versions_json TEXT')
+    except Exception:
+        pass
+
     # Initialize with default state if empty
     cursor.execute('SELECT COUNT(*) FROM ui_session_state')
     if cursor.fetchone()[0] == 0:
