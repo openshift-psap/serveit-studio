@@ -209,11 +209,12 @@ def handle_save_config(data):
 
         with get_db() as conn:
             conn.execute('''
-                UPDATE ui_session_state
-                SET config_json = ?,
-                    current_step = ?,
-                    updated_at = ?
-                WHERE id = 1
+                INSERT INTO ui_session_state (id, config_json, current_step, optimization_running, updated_at)
+                VALUES (1, ?, ?, 0, ?)
+                ON CONFLICT(id) DO UPDATE SET
+                    config_json = excluded.config_json,
+                    current_step = excluded.current_step,
+                    updated_at = excluded.updated_at
             ''', (json.dumps(config), current_step, datetime.now().isoformat()))
 
         # Broadcast config update to all connected clients (except sender)
