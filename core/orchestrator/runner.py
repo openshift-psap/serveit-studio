@@ -724,8 +724,14 @@ class TestOrchestrator(ParserMixin, GuidellmMixin):
             start_dt = datetime.fromisoformat(start_time)
             end_dt = datetime.fromisoformat(end_time)
 
-            # Update the pod_name_pattern in the config for this test
-            self.metrics_collector.config.pod_name_pattern = config.test_id
+            # Update the pod_name_pattern — per_node_storage uses stable LWS names
+            if getattr(config, 'per_node_storage', False):
+                if config.architecture == 'aggregated':
+                    self.metrics_collector.config.pod_name_pattern = f'aggregated-tp{config.tensor_parallelism}'
+                else:
+                    self.metrics_collector.config.pod_name_pattern = f'(prefill-tp{getattr(config, "prefill_tp", config.tensor_parallelism)}|decode-tp{getattr(config, "decode_tp", config.tensor_parallelism)})'
+            else:
+                self.metrics_collector.config.pod_name_pattern = config.test_id
 
             # Collect metrics
             self.metrics_collector.collect_all_metrics(
