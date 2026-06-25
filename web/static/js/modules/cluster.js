@@ -217,7 +217,11 @@ document.getElementById('start-optimization').addEventListener('click', () => {
         single_test_prefill_tp: config.single_test_prefill_tp || (document.getElementById('single-test-prefill-tp') ? parseInt(document.getElementById('single-test-prefill-tp').value) || null : null),
         single_test_decode_tp: config.single_test_decode_tp || (document.getElementById('single-test-decode-tp') ? parseInt(document.getElementById('single-test-decode-tp').value) || null : null),
         single_test_prefill_pods: config.single_test_prefill_pods || (document.getElementById('single-test-prefill-pods') ? parseInt(document.getElementById('single-test-prefill-pods').value) || null : null),
-        single_test_decode_pods: config.single_test_decode_pods || (document.getElementById('single-test-decode-pods') ? parseInt(document.getElementById('single-test-decode-pods').value) || null : null)
+        single_test_decode_pods: config.single_test_decode_pods || (document.getElementById('single-test-decode-pods') ? parseInt(document.getElementById('single-test-decode-pods').value) || null : null),
+        per_node_storage: !!config.per_node_storage,
+        node_nfs_pvcs: config.node_nfs_pvcs || [],
+        calibrated_load_enabled: !!config.calibrated_load_enabled,
+        inferencex_sweep_enabled: !!config.inferencex_sweep_enabled
     });
 });
 

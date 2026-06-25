@@ -1733,7 +1733,7 @@ def handle_setup_storage(data):
             model = saved['model']
 
         # Per-node storage check BEFORE existing_pvc (per-node has its own download flow)
-        per_node_storage = saved.get('per_node_storage', False)
+        per_node_storage = data.get('per_node_storage') or saved.get('per_node_storage', False)
 
         # Fallback to saved config if frontend didn't send existing_pvc
         if not existing_pvc and not per_node_storage:
@@ -1838,7 +1838,7 @@ def handle_setup_storage(data):
             return
 
         if per_node_storage:
-            node_nfs_pvcs = saved.get('node_nfs_pvcs', [])
+            node_nfs_pvcs = data.get('node_nfs_pvcs') or saved.get('node_nfs_pvcs', [])
 
             if not node_nfs_pvcs:
                 raise Exception('Per-node storage enabled but no NFS PVC mapping found')
