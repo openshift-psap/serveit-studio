@@ -619,10 +619,11 @@ function renderCharts(data, runId) {
         if (data.infra_versions && Object.keys(data.infra_versions).length > 0) {
             var iv = data.infra_versions;
             var versionLabels = {
+                openshift: 'OpenShift', k8s: 'Kubernetes',
                 gpu_operator: 'GPU Operator', gpu_driver: 'GPU Driver', cuda_runtime: 'CUDA Runtime',
-                network_operator: 'Network Operator', mofed: 'MOFED/DOCA', service_mesh: 'Service Mesh',
-                istio: 'Istio', nfd: 'NFD', k8s: 'Kubernetes', openshift: 'OpenShift',
-                lws: 'LWS', dra_webhook: 'DRA Webhook'
+                network_operator: 'Network Operator', mofed: 'MOFED/DOCA',
+                istio: 'Istio', service_mesh: 'Service Mesh', epp: 'EPP Scheduler',
+                nfd: 'NFD', lws: 'LWS'
             };
             html += '<div style="font-weight:700;color:#1e293b;margin-bottom:10px;border-bottom:2px solid #059669;padding-bottom:4px;">Component Versions</div>';
             html += '<table style="width:100%;font-size:0.88em;border-collapse:collapse;margin-bottom:20px;">';
