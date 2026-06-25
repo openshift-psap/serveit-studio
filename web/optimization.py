@@ -310,6 +310,8 @@ def stream_job_logs(job_name: str, namespace: str):
                     'tp_pair_top_n': saved_config.get('tp_pair_top_n', 4),
                     'allow_asymmetric_tp': saved_config.get('allow_asymmetric_tp', False),
                     'pd_search_mode': saved_config.get('pd_search_mode', 'smart'),
+                    'calibrated_load_enabled': saved_config.get('calibrated_load_enabled', False),
+                    'inferencex_sweep_enabled': saved_config.get('inferencex_sweep_enabled', False),
                     'run_description': saved_config.get('run_description', ''),
                     'advanced_vllm_custom_enabled': saved_config.get('advanced_vllm_custom_enabled', True),
                     'epp_custom_enabled': saved_config.get('epp_custom_enabled', True),
