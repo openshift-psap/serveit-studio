@@ -693,6 +693,8 @@ def run_optimization_background(data):
         tp_pair_top_n = int(_get('tp_pair_top_n', 4))
         allow_asymmetric_tp = _get('allow_asymmetric_tp', False)
         pd_search_mode = _get('pd_search_mode', 'smart')
+        calibrated_load_enabled = _get('calibrated_load_enabled', False)
+        inferencex_sweep_enabled = _get('inferencex_sweep_enabled', False)
         run_description = _get('run_description', '')
         advanced_vllm_custom_enabled = _get('advanced_vllm_custom_enabled', True)
         epp_custom_enabled = _get('epp_custom_enabled', True)
@@ -935,6 +937,8 @@ data:
                 tp_options=tp_options,  # Dynamic based on cluster hardware
                 objective=optimization_goal,  # 'ttft' selects TP by lowest latency
                 use_achievable_qps=use_achievable_qps,
+                calibrated_load_enabled=calibrated_load_enabled,
+                inferencex_sweep_enabled=inferencex_sweep_enabled,
                 latency_constraint_enabled=latency_constraint_enabled,
                 latency_constraint_ms=latency_constraint_ms,
                 latency_constraint_percentile=latency_constraint_percentile,

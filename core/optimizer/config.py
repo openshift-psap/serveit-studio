@@ -60,6 +60,10 @@ class RecipeOptimizerConfig:
     tp_pair_top_n: int = 4  # Top-N prefill/decode TPs to cross-product (1=fast, 4=full)
     pd_search_mode: str = 'smart'  # 'smart' (calculated ~3/pair) or 'exhaustive' (all splits)
 
+    # Step 11: Calibrated load / InferenceX sweep
+    calibrated_load_enabled: bool = False  # Re-test best configs at sustainable concurrency
+    inferencex_sweep_enabled: bool = False  # Full concurrency sweep for InferenceX chart
+
     # EPP configuration
     epp_custom_enabled: bool = True  # False = use llm-d default EPP config
     epp_preset: str = 'balanced'  # 'balanced', 'cache_optimized', 'queue_balanced', 'latency_aware', 'custom'

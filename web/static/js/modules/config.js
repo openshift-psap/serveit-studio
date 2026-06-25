@@ -132,6 +132,28 @@ function updateUIFromConfig() {
         }
     }
 
+    // Restore calibrated load toggles
+    if (document.getElementById('calibrated-load-enabled')) {
+        var clOn = config.calibrated_load_enabled === true;
+        document.getElementById('calibrated-load-enabled').checked = clOn;
+        var clSw = document.getElementById('calibrated-load-switch');
+        if (clSw) {
+            clSw.style.background = clOn ? '#059669' : '#ccc';
+            clSw.querySelector('span').style.transform = clOn ? 'translateX(18px)' : 'translateX(0)';
+        }
+        var ixRow = document.getElementById('inferencex-sweep-row');
+        if (ixRow) { ixRow.style.opacity = clOn ? '1' : '0.4'; ixRow.style.pointerEvents = clOn ? 'auto' : 'none'; }
+    }
+    if (document.getElementById('inferencex-sweep-enabled')) {
+        var ixOn = config.inferencex_sweep_enabled === true;
+        document.getElementById('inferencex-sweep-enabled').checked = ixOn;
+        var ixSw = document.getElementById('inferencex-sweep-switch');
+        if (ixSw) {
+            ixSw.style.background = ixOn ? '#059669' : '#ccc';
+            ixSw.querySelector('span').style.transform = ixOn ? 'translateX(18px)' : 'translateX(0)';
+        }
+    }
+
     if (config.pvc_size && document.getElementById('pvc-size-input')) {
         document.getElementById('pvc-size-input').value = config.pvc_size;
     }

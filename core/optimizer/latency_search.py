@@ -409,7 +409,10 @@ class LatencySearchMixin:
         pd_tput_mean = best_pd_result.throughput_mean or best_pd_result.throughput_p50 or 0
 
         pd_calibrated = self._compute_calibrated_concurrency(pd_tput_mean, original_concurrency, 'PD')
-        pd_levels = self._generate_sweep_levels(pd_calibrated)
+        if self.config.inferencex_sweep_enabled:
+            pd_levels = self._generate_sweep_levels(pd_calibrated)
+        else:
+            pd_levels = [pd_calibrated]
 
         total_gpus_pd = (best_split.prefill_pods * best_split.prefill_tp +
                          best_split.decode_pods * best_split.decode_tp)
@@ -442,7 +445,10 @@ class LatencySearchMixin:
         total_gpus_agg = self.aggregated_gpus
         agg_tput_mean = (self.aggregated_result.throughput_mean or self.aggregated_result.throughput_p50 or 0) if self.aggregated_result else 0
         agg_calibrated = self._compute_calibrated_concurrency(agg_tput_mean, original_concurrency, 'Aggregated')
-        agg_levels = self._generate_sweep_levels(agg_calibrated)
+        if self.config.inferencex_sweep_enabled:
+            agg_levels = self._generate_sweep_levels(agg_calibrated)
+        else:
+            agg_levels = [agg_calibrated]
 
         agg_sweep = self._run_sweep_for_arch(
             'Aggregated', agg_calibrated, agg_levels,
