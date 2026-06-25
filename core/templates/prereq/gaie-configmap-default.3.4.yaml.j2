@@ -15,15 +15,13 @@ data:
     - type: queue-scorer
     - type: kv-cache-utilization-scorer
     - type: prefix-cache-scorer
-    - type: lora-affinity-scorer
-    - type: openai-parser
+    - type: max-score-picker
     schedulingProfiles:
     - name: default
       plugins:
       - pluginRef: queue-scorer
+        weight: 2
       - pluginRef: kv-cache-utilization-scorer
+        weight: 2
       - pluginRef: prefix-cache-scorer
-      - pluginRef: lora-affinity-scorer
-    requestHandler:
-      parsers:
-      - pluginRef: openai-parser
+        weight: 3

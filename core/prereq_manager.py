@@ -299,12 +299,17 @@ class PrereqManager:
                 ('ClusterRoleBinding', 'prereq/gaie-clusterrolebinding.yaml.j2'),
             ]
             if epp_use_defaults:
+                # Detect version from scheduler image to pick correct defaults
+                sched_img = self.scheduler_image or ''
+                is_34 = any(v in sched_img for v in (':v0.4', ':v0.5', ':v0.6', ':v0.7'))
+                suffix = '.3.4' if is_34 else ''
+                ver_label = '3.4' if is_34 else '3.5'
                 if architecture == 'pd':
-                    resources.append(('ConfigMap', 'prereq/gaie-configmap-default-pd.yaml.j2'))
-                    log('   Using llm-d default PD EPP configuration (prefill: prefix:2/queue:1, decode: prefix:2/queue:1)')
+                    resources.append(('ConfigMap', f'prereq/gaie-configmap-default-pd{suffix}.yaml.j2'))
+                    log(f'   Using llm-d {ver_label} default PD EPP configuration')
                 else:
-                    resources.append(('ConfigMap', 'prereq/gaie-configmap-default.yaml.j2'))
-                    log('   Using llm-d default EPP configuration (queue:2, kv-cache:2, prefix-cache:3)')
+                    resources.append(('ConfigMap', f'prereq/gaie-configmap-default{suffix}.yaml.j2'))
+                    log(f'   Using llm-d {ver_label} default EPP configuration')
             else:
                 resources.append(('ConfigMap', configmap_template))
             resources += [

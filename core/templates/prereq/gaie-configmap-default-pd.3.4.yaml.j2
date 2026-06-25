@@ -9,7 +9,7 @@ metadata:
     architecture: pd
 data:
   {{ config_file | default('pd-config.yaml') }}: |
-    apiVersion: llm-d.ai/v1alpha1
+    apiVersion: inference.networking.x-k8s.io/v1alpha1
     kind: EndpointPickerConfig
     plugins:
     - type: disagg-headers-handler
@@ -21,7 +21,9 @@ data:
     - type: decode-filter
     - type: prefix-cache-scorer
     - type: queue-scorer
+    - type: kv-cache-utilization-scorer
     - type: active-request-scorer
+    - type: max-score-picker
     schedulingProfiles:
     - name: prefill
       plugins:
@@ -30,9 +32,14 @@ data:
         weight: 3
       - pluginRef: queue-scorer
         weight: 2
-      - pluginRef: active-request-scorer
+      - pluginRef: kv-cache-utilization-scorer
         weight: 2
+      - pluginRef: max-score-picker
     - name: decode
       plugins:
       - pluginRef: decode-filter
       - pluginRef: active-request-scorer
+        weight: 2
+      - pluginRef: prefix-cache-scorer
+        weight: 3
+      - pluginRef: max-score-picker
