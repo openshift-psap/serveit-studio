@@ -59,16 +59,18 @@ function renderClusterDiagram(container, data) {
             {key: 'gpu_operator', label: 'GPU Operator'},
             {key: 'gpu_driver', label: 'GPU Driver'},
             {key: 'network_operator', label: 'Network Operator'},
-            {key: 'mofed', label: 'MOFED/DOCA'},
+            {key: 'mofed', label: 'MOFED/DOCA', wide: true},
             {key: 'istio', label: 'Istio'},
             {key: 'service_mesh', label: 'Service Mesh'},
             {key: 'epp', label: 'EPP'},
             {key: 'lws', label: 'LWS'},
         ];
+        html += '<div class="viz-section-title">Cluster Versions</div>';
         html += '<div class="viz-summary">';
         versionItems.forEach(function(item) {
             if (iv[item.key]) {
-                html += '<div class="viz-stat"><div class="viz-stat-value">' + iv[item.key] + '</div><div class="viz-stat-label">' + item.label + '</div></div>';
+                var style = item.wide ? 'flex:2;min-width:160px;' : 'flex:0.8;min-width:60px;';
+                html += '<div class="viz-stat" style="' + style + '"><div class="viz-stat-value" style="font-size:1.1em;">' + iv[item.key] + '</div><div class="viz-stat-label">' + item.label + '</div></div>';
             }
         });
         html += '</div>';
