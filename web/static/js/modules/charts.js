@@ -615,6 +615,23 @@ function renderCharts(data, runId) {
         html += `<div><span style="color:#64748b;">NCCL IB HCA:</span> ${rc.nccl_ib_hca || na}</div>`;
         if (rc.rdma_nics_per_node) html += `<div><span style="color:#64748b;">RDMA NICs/Node:</span> ${rc.rdma_nics_per_node}</div>`;
         html += '</div>';
+        // Infrastructure Versions
+        if (data.infra_versions && Object.keys(data.infra_versions).length > 0) {
+            var iv = data.infra_versions;
+            var versionLabels = {
+                gpu_operator: 'GPU Operator', gpu_driver: 'GPU Driver', cuda_runtime: 'CUDA Runtime',
+                network_operator: 'Network Operator', mofed: 'MOFED/DOCA', service_mesh: 'Service Mesh',
+                istio: 'Istio', nfd: 'NFD', k8s: 'Kubernetes', openshift: 'OpenShift',
+                lws: 'LWS', dra_webhook: 'DRA Webhook'
+            };
+            html += '<div style="font-weight:700;color:#1e293b;margin-bottom:10px;border-bottom:2px solid #059669;padding-bottom:4px;">Component Versions</div>';
+            html += '<table style="width:100%;font-size:0.88em;border-collapse:collapse;margin-bottom:20px;">';
+            Object.keys(iv).forEach(function(k) {
+                var label = versionLabels[k] || k;
+                html += '<tr style="border-bottom:1px solid #f1f5f9;"><td style="padding:3px 8px 3px 0;color:#64748b;">' + label + '</td><td style="padding:3px 0;font-family:var(--font-mono,monospace);font-size:0.95em;">' + iv[k] + '</td></tr>';
+            });
+            html += '</table>';
+        }
         // Advanced vLLM Settings
         html += '<div style="font-weight:700;color:#1e293b;margin-bottom:10px;border-bottom:2px solid #8b5cf6;padding-bottom:4px;">Advanced vLLM Settings</div><div style="line-height:2.2;">';
         const vllmCustomEnabled = rc.advanced_vllm_custom_enabled !== false;

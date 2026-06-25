@@ -184,6 +184,15 @@ class ReportAnalyzer:
         except Exception:
             pass
 
+        infra_versions = {}
+        try:
+            vr = conn.execute('SELECT versions_json FROM hardware_scans WHERE versions_json IS NOT NULL ORDER BY id DESC LIMIT 1').fetchone()
+            if vr and vr['versions_json']:
+                import json as _jv
+                infra_versions = _jv.loads(vr['versions_json'])
+        except Exception:
+            pass
+
         goal = run_meta.get('goal')
         if not goal:
             has_step7 = any(r.config_name.startswith('step7') for r in results)
@@ -1535,6 +1544,7 @@ class ReportAnalyzer:
             'latency_search': latency_search_data,
             'gpu_sizing': gpu_sizing,
             'run_config': run_config,
+            'infra_versions': infra_versions,
             'epp_tuning': epp_tuning_data,
             'concurrency_sweep': concurrency_sweep,
         }
