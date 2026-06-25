@@ -144,7 +144,7 @@ spec:
               COPY_START=$(date +%s)
               PIDS=""
 {% for nfs in node_nfs_pvcs[1:] %}
-              rsync -a --no-perms --no-owner --no-group "$PRIMARY/$MODEL_CACHE_NAME/" "/nfs-{{ nfs.suffix }}/huggingface/$MODEL_CACHE_NAME/" &
+              rsync -r --size-only --no-perms --no-owner --no-group "$PRIMARY/$MODEL_CACHE_NAME/" "/nfs-{{ nfs.suffix }}/huggingface/$MODEL_CACHE_NAME/" &
               PIDS="$PIDS $!"
 {% endfor %}
 
