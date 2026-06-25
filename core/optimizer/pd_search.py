@@ -90,13 +90,21 @@ class PDSearchMixin:
         usable_gpus = self._usable_gpus_for_tp(max(prefill_tp, decode_tp))
         if usable_gpus < prefill_tp + decode_tp:
             return []
+
+        # Minimum prefill pods: 20% of total pods, rounded down to nearest even, min 2
+        total_pods = usable_gpus // min(prefill_tp, decode_tp)
+        min_prefill_pods = max(2, int(total_pods * 0.2) // 2 * 2) if total_pods > 4 else 1
+
         splits = []
         for prefill_gpus in range(prefill_tp, usable_gpus, prefill_tp):
             decode_gpus = usable_gpus - prefill_gpus
             if decode_gpus >= decode_tp and decode_gpus % decode_tp == 0:
+                prefill_pods = prefill_gpus // prefill_tp
+                if prefill_pods < min_prefill_pods:
+                    continue
                 prefill_pct = (prefill_gpus / usable_gpus) * 100
                 splits.append(FeasibleSplit(
-                    prefill_pods=prefill_gpus // prefill_tp,
+                    prefill_pods=prefill_pods,
                     decode_pods=decode_gpus // decode_tp,
                     prefill_tp=prefill_tp,
                     decode_tp=decode_tp,
