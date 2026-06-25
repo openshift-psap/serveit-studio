@@ -1284,6 +1284,127 @@ function renderCharts(data, runId) {
                 hovermode: 'closest'
             }, { responsive: true });
         });
+
+        // --- TTFT P90 vs Concurrency chart ---
+        html += '<div class="chart-card" style="margin-top:16px; border:2px solid #dc2626; border-left:6px solid #dc2626;">';
+        html += '<div class="chart-card-header" style="background:linear-gradient(135deg,#dc2626,#ef4444); color:white; font-size:1.1em;">TTFT P90 vs. Concurrency</div>';
+        html += '<div style="padding:8px 20px 4px; font-size:0.85em; color:#64748b;">Lower is better. Shows how first-token latency degrades as concurrent users increase.</div>';
+        html += '<div id="chart-sweep-ttft" style="width:100%; height:400px;"></div>';
+        html += '</div>';
+
+        _pendingPlots.push(function() {
+            var traces = [];
+            var colors = { pd: '#10b981', aggregated: '#6366f1', ep: '#f59e0b' };
+            var labels = { pd: 'PD', aggregated: 'Aggregated', ep: 'EP' };
+            var calShapes = [];
+
+            Object.keys(sweep).forEach(function(arch) {
+                var points = sweep[arch];
+                if (!points || !points.length) return;
+                traces.push({
+                    x: points.map(function(p) { return p.concurrency; }),
+                    y: points.map(function(p) { return p.ttft_p90; }),
+                    text: points.map(function(p) {
+                        return 'Concurrency: ' + p.concurrency + '<br>TTFT P90: ' + p.ttft_p90.toFixed(0) + 'ms' +
+                               '<br>TTFT P50: ' + p.ttft_p50.toFixed(0) + 'ms' +
+                               (p.is_calibrated ? '<br><b>← Calibrated</b>' : '');
+                    }),
+                    mode: 'lines+markers', name: labels[arch] || arch,
+                    line: { color: colors[arch] || '#888', width: 3 },
+                    marker: { size: points.map(function(p) { return p.is_calibrated ? 14 : 8; }),
+                              color: points.map(function(p) { return p.is_calibrated ? '#fff' : (colors[arch] || '#888'); }),
+                              line: { color: colors[arch] || '#888', width: points.map(function(p) { return p.is_calibrated ? 3 : 0; }) } },
+                    hovertemplate: '%{text}<extra>' + (labels[arch] || arch) + '</extra>'
+                });
+                points.forEach(function(p) {
+                    if (p.is_calibrated) {
+                        calShapes.push({ type: 'line', x0: p.concurrency, x1: p.concurrency, y0: 0, y1: 1, yref: 'paper',
+                            line: { color: colors[arch] || '#888', width: 1.5, dash: 'dash' } });
+                    }
+                });
+            });
+            Plotly.newPlot('chart-sweep-ttft', traces, {
+                xaxis: { title: 'Concurrent Users', gridcolor: '#e2e8f0' },
+                yaxis: { title: 'TTFT P90 (ms)', gridcolor: '#e2e8f0' },
+                plot_bgcolor: '#f8fafc', paper_bgcolor: '#ffffff',
+                margin: { t: 20, b: 60, l: 70, r: 20 },
+                legend: { x: 1, y: 1, xanchor: 'right', bgcolor: 'rgba(255,255,255,0.9)' },
+                shapes: calShapes, hovermode: 'closest'
+            }, { responsive: true });
+        });
+
+        // --- Throughput vs Concurrency chart ---
+        html += '<div class="chart-card" style="margin-top:16px; border:2px solid #0891b2; border-left:6px solid #0891b2;">';
+        html += '<div class="chart-card-header" style="background:linear-gradient(135deg,#0891b2,#06b6d4); color:white; font-size:1.1em;">Throughput vs. Concurrency</div>';
+        html += '<div style="padding:8px 20px 4px; font-size:0.85em; color:#64748b;">Higher is better. Shows how total system throughput scales with concurrent users — the plateau indicates cluster saturation.</div>';
+        html += '<div id="chart-sweep-throughput" style="width:100%; height:400px;"></div>';
+        html += '</div>';
+
+        _pendingPlots.push(function() {
+            var traces = [];
+            var colors = { pd: '#10b981', aggregated: '#6366f1', ep: '#f59e0b' };
+            var labels = { pd: 'PD', aggregated: 'Aggregated', ep: 'EP' };
+            var calShapes = [];
+
+            Object.keys(sweep).forEach(function(arch) {
+                var points = sweep[arch];
+                if (!points || !points.length) return;
+                traces.push({
+                    x: points.map(function(p) { return p.concurrency; }),
+                    y: points.map(function(p) { return p.throughput_mean; }),
+                    text: points.map(function(p) {
+                        return 'Concurrency: ' + p.concurrency + '<br>Throughput: ' + p.throughput_mean.toFixed(1) + ' req/s' +
+                               '<br>Throughput/GPU: ' + p.throughput_per_gpu.toFixed(0) + ' tok/s/gpu' +
+                               (p.is_calibrated ? '<br><b>← Calibrated</b>' : '');
+                    }),
+                    mode: 'lines+markers', name: labels[arch] || arch,
+                    line: { color: colors[arch] || '#888', width: 3 },
+                    marker: { size: points.map(function(p) { return p.is_calibrated ? 14 : 8; }),
+                              color: points.map(function(p) { return p.is_calibrated ? '#fff' : (colors[arch] || '#888'); }),
+                              line: { color: colors[arch] || '#888', width: points.map(function(p) { return p.is_calibrated ? 3 : 0; }) } },
+                    hovertemplate: '%{text}<extra>' + (labels[arch] || arch) + '</extra>'
+                });
+                points.forEach(function(p) {
+                    if (p.is_calibrated) {
+                        calShapes.push({ type: 'line', x0: p.concurrency, x1: p.concurrency, y0: 0, y1: 1, yref: 'paper',
+                            line: { color: colors[arch] || '#888', width: 1.5, dash: 'dash' } });
+                    }
+                });
+            });
+            Plotly.newPlot('chart-sweep-throughput', traces, {
+                xaxis: { title: 'Concurrent Users', gridcolor: '#e2e8f0' },
+                yaxis: { title: 'Throughput (req/s)', gridcolor: '#e2e8f0' },
+                plot_bgcolor: '#f8fafc', paper_bgcolor: '#ffffff',
+                margin: { t: 20, b: 60, l: 70, r: 20 },
+                legend: { x: 0, y: 1, bgcolor: 'rgba(255,255,255,0.9)' },
+                shapes: calShapes, hovermode: 'closest'
+            }, { responsive: true });
+        });
+
+        // --- Sweep Results Table ---
+        html += '<div class="chart-card" style="margin-top:16px; border-left:6px solid #64748b;">';
+        html += '<div class="chart-card-header" style="background:linear-gradient(135deg,#475569,#64748b); color:white; font-size:1.1em;">Concurrency Sweep Data</div>';
+        html += '<div class="chart-card-body" style="padding:0;"><table class="results-table">';
+        html += '<tr><th>Architecture</th><th>Users</th><th>TTFT P90</th><th>TTFT P50</th><th>Throughput</th><th>tok/s/user</th><th>tok/s/gpu</th></tr>';
+        Object.keys(sweep).forEach(function(arch) {
+            var points = sweep[arch];
+            if (!points || !points.length) return;
+            var archLabel = arch === 'pd' ? 'PD' : (arch === 'aggregated' ? 'Aggregated' : 'EP');
+            points.forEach(function(p, idx) {
+                var calMark = p.is_calibrated ? ' style="background:#ecfdf5; font-weight:700;"' : '';
+                var calBadge = p.is_calibrated ? ' <span style="background:#059669;color:white;font-size:0.7em;padding:1px 5px;border-radius:3px;">calibrated</span>' : '';
+                html += '<tr' + calMark + '>';
+                html += '<td>' + (idx === 0 ? '<strong>' + archLabel + '</strong>' : '') + '</td>';
+                html += '<td>' + p.concurrency + calBadge + '</td>';
+                html += '<td>' + p.ttft_p90.toFixed(0) + ' ms</td>';
+                html += '<td>' + p.ttft_p50.toFixed(0) + ' ms</td>';
+                html += '<td>' + p.throughput_mean.toFixed(1) + ' req/s</td>';
+                html += '<td>' + p.interactivity.toFixed(1) + '</td>';
+                html += '<td>' + p.throughput_per_gpu.toFixed(0) + '</td>';
+                html += '</tr>';
+            });
+        });
+        html += '</table></div></div>';
     }
 
     // Flush calibrated load (Step 10)
