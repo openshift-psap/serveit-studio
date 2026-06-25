@@ -42,8 +42,15 @@ spec:
               PRIMARY="/nfs-{{ node_nfs_pvcs[0].suffix }}/huggingface"
               MODEL_CACHE_NAME="models--{{ model_name | replace('/', '--') }}"
 
-              # Always run snapshot_download — it verifies integrity and only downloads what's missing
-              echo "📥 Verifying/downloading {{ model_name }} on nfs-{{ node_nfs_pvcs[0].suffix }}..."
+              # Check if THIS model already exists on primary NFS
+              SNAPSHOT=$(ls -d "$PRIMARY/$MODEL_CACHE_NAME"/snapshots/*/ 2>/dev/null | head -1)
+              MODEL_FILES=$(find "$SNAPSHOT" -maxdepth 1 \( -name "*.safetensors" -o -name "*.bin" -o -name "*.pt" \) 2>/dev/null | head -1)
+
+              if [ -n "$SNAPSHOT" ] && [ -n "$MODEL_FILES" ]; then
+                echo "✅ {{ model_name }} already present on nfs-{{ node_nfs_pvcs[0].suffix }}, skipping download"
+                du -sh "$PRIMARY/$MODEL_CACHE_NAME"
+              else
+              echo "📥 Downloading {{ model_name }} to nfs-{{ node_nfs_pvcs[0].suffix }}..."
 
               pip3 install --quiet huggingface_hub
 
@@ -130,7 +137,8 @@ spec:
 
                 echo ""
                 echo "📊 Primary NFS size:"
-                du -sh "/nfs-{{ node_nfs_pvcs[0].suffix }}/huggingface"
+                du -sh "/nfs-{{ node_nfs_pvcs[0].suffix }}/huggingface/$MODEL_CACHE_NAME"
+              fi
 
               echo ""
               echo "========================================="
