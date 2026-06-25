@@ -44,13 +44,6 @@ spec:
                   - "{{ node }}"
                   {% endfor %}
         {% endif %}
-        topologySpreadConstraints:
-          - maxSkew: 1
-            topologyKey: kubernetes.io/hostname
-            whenUnsatisfiable: DoNotSchedule
-            labelSelector:
-              matchLabels:
-                llm-d.ai/inference-serving: "true"
         volumes:
           - name: dshm
             emptyDir:

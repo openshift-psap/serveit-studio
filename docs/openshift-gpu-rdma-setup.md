@@ -898,10 +898,12 @@ data:
           ipv4Prefix: "10.7."
   reconciler.yaml: |
     interval: "5m"
-    autoReap: false
+    autoReap: true
     gracePeriod: "10m"
     statePath: "/data/reconciler-state.json"
 ```
+
+> **Important:** Set `autoReap: true` in the reconciler config. Without it, orphaned ResourceClaimTemplates from deleted pods accumulate and block GPU-NIC allocation on nodes, causing new pods to stay Pending with `cannot allocate all claims` errors.
 
 Adjust `rails` to match your cluster's RDMA network subnets. One rail per NIC port — 8 entries for an 8-GPU-per-node cluster.
 
