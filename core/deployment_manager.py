@@ -134,6 +134,13 @@ class DeploymentManager:
         if config.architecture in ('pd', 'ep'):
             return self._deploy_pd_sequential(config, manifests, log_callback)
 
+        # DRA webhook batch scaling: deploy with 1 replica, scale up one at a time
+        # to prevent the webhook's allocator from packing pods on the same node
+        use_dra = getattr(config, 'selected_dra_classes', None)
+        target_replicas = config.replicas if hasattr(config, 'replicas') else 1
+        if use_dra and target_replicas > 1:
+            return self._deploy_batch_scale(config, manifests, target_replicas, log_callback)
+
         # For other architectures: Deploy all manifests at once
         success = True
         for manifest_name, manifest_content in manifests.items():
@@ -145,6 +152,85 @@ class DeploymentManager:
                 break
 
         return success
+
+    def _deploy_batch_scale(
+        self,
+        config: TestConfig,
+        manifests: Dict[str, str],
+        target_replicas: int,
+        log_callback: Optional[Callable[[str], None]] = None
+    ) -> bool:
+        """
+        Deploy LWS with 1 replica then scale up one at a time.
+        Works around the DRA webhook's greedy node allocator by giving it
+        time to see updated allocation state between pod creations.
+        """
+        import time
+        import re
+
+        # Patch the LWS manifest to start with 1 replica
+        lws_manifest = None
+        lws_name = None
+        other_manifests = {}
+        for name, content in manifests.items():
+            if 'LeaderWorkerSet' in content:
+                lws_manifest = re.sub(
+                    r'replicas:\s*\d+',
+                    'replicas: 1',
+                    content,
+                    count=1
+                )
+                # Extract LWS name
+                for line in content.split('\n'):
+                    if 'name:' in line and 'metadata' not in line:
+                        lws_name = line.split('name:')[1].strip()
+                        break
+            else:
+                other_manifests[name] = content
+
+        if not lws_manifest or not lws_name:
+            if log_callback:
+                log_callback("⚠️  Could not find LWS manifest, deploying without batch scaling")
+            for name, content in manifests.items():
+                self.deploy_manifest(content, log_callback)
+            return True
+
+        if log_callback:
+            log_callback(f"📦 DRA batch scaling: deploying 1→{target_replicas} replicas one at a time")
+
+        # Deploy LWS with 1 replica
+        if not self.deploy_manifest(lws_manifest, log_callback):
+            return False
+
+        # Deploy other manifests (services etc.)
+        for name, content in other_manifests.items():
+            if log_callback:
+                log_callback(f"📄 Deploying {name}...")
+            self.deploy_manifest(content, log_callback)
+
+        # Wait for first pod to be scheduled
+        time.sleep(3)
+
+        # Scale up one replica at a time
+        for i in range(2, target_replicas + 1):
+            result = self.kubectl.run(
+                ['patch', 'lws', lws_name, '-n', self.namespace,
+                 '--type', 'merge', '-p', f'{{"spec":{{"replicas":{i}}}}}'],
+                check=False
+            )
+            if result.returncode != 0:
+                if log_callback:
+                    log_callback(f"❌ Failed to scale to {i}: {result.stderr}")
+                return False
+
+            # Brief pause for webhook to process and update allocation state
+            time.sleep(2)
+
+            if i % 8 == 0 or i == target_replicas:
+                if log_callback:
+                    log_callback(f"   📈 Scaled to {i}/{target_replicas} replicas")
+
+        return True
 
     def _deploy_pd_sequential(
         self,
