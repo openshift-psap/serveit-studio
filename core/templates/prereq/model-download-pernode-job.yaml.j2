@@ -139,8 +139,8 @@ spec:
 
               echo "📦 Targets: {% for nfs in node_nfs_pvcs[1:] %}nfs-{{ nfs.suffix }}{% if not loop.last %}, {% endif %}{% endfor %}"
               echo "⏳ Copying to {{ node_nfs_pvcs | length - 1 }} nodes in parallel..."
-              PRIMARY_SIZE=$(du -sb "$PRIMARY" | cut -f1)
-              PRIMARY_SIZE_H=$(du -sh "$PRIMARY" | cut -f1)
+              PRIMARY_SIZE=$(du -sb "$PRIMARY/$MODEL_CACHE_NAME" | cut -f1)
+              PRIMARY_SIZE_H=$(du -sh "$PRIMARY/$MODEL_CACHE_NAME" | cut -f1)
 {% for nfs in node_nfs_pvcs[1:] %}
               (
                 DST="/nfs-{{ nfs.suffix }}/huggingface"
@@ -148,14 +148,14 @@ spec:
                 MODEL_CHK=$(find "$SNAPSHOT_CHK" -maxdepth 1 \( -name "*.safetensors" -o -name "*.bin" -o -name "*.pt" \) 2>/dev/null | head -1)
                 NEEDS_COPY=1
                 if [ -n "$SNAPSHOT_CHK" ] && [ -n "$MODEL_CHK" ]; then
-                  DST_SIZE=$(du -sb "$DST" 2>/dev/null | cut -f1)
+                  DST_SIZE=$(du -sb "$DST/$MODEL_CACHE_NAME" 2>/dev/null | cut -f1)
                   if [ "${DST_SIZE:-0}" -ge "$PRIMARY_SIZE" ] 2>/dev/null; then
                     NEEDS_COPY=0
                   fi
                 fi
                 if [ "$NEEDS_COPY" = "1" ]; then
-                  mkdir -p "$DST"
-                  cp -a "$PRIMARY"/. "$DST"/
+                  mkdir -p "$DST/$MODEL_CACHE_NAME"
+                  cp -r --no-preserve=ownership "$PRIMARY/$MODEL_CACHE_NAME"/. "$DST/$MODEL_CACHE_NAME"/
                 fi
               ) &
 {% endfor %}
@@ -167,7 +167,7 @@ spec:
                 DONE=0
                 STATUS=""
 {% for nfs in node_nfs_pvcs[1:] %}
-                BYTES=$(du -sb "/nfs-{{ nfs.suffix }}/huggingface" 2>/dev/null | cut -f1)
+                BYTES=$(du -sb "/nfs-{{ nfs.suffix }}/huggingface/$MODEL_CACHE_NAME" 2>/dev/null | cut -f1)
                 if [ "${BYTES:-0}" -ge "$PRIMARY_SIZE" ] 2>/dev/null; then
                   DONE=$((DONE + 1))
                   STATUS="$STATUS {{ nfs.suffix }}:✅"
@@ -193,7 +193,7 @@ spec:
               DST="/nfs-{{ nfs.suffix }}/huggingface"
               SNAP=$(ls -d "$DST/$MODEL_CACHE_NAME"/snapshots/*/ 2>/dev/null | head -1)
               MFILES=$(find "$SNAP" -maxdepth 1 \( -name "*.safetensors" -o -name "*.bin" -o -name "*.pt" \) 2>/dev/null | wc -l)
-              SIZE=$(du -sh "$DST" 2>/dev/null | cut -f1)
+              SIZE=$(du -sh "$DST/$MODEL_CACHE_NAME" 2>/dev/null | cut -f1)
               if [ "$MFILES" -gt 0 ] 2>/dev/null; then
                 echo "✅ nfs-{{ nfs.suffix }}: ${MFILES} model files, ${SIZE}"
               else
