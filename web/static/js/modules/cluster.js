@@ -163,6 +163,9 @@ document.getElementById('start-optimization').addEventListener('click', () => {
     const storageClass = document.getElementById('storage-class-select').value;
     const pvcSize = parseInt(document.getElementById('pvc-size-input').value);
 
+    // Save config to database before starting — ensures backend reads latest toggle states
+    saveConfig();
+
     if (useExistingPvc) {
         logToConsole('\n📦 Using existing PVC...', 'info');
     } else {
