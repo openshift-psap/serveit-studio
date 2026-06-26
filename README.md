@@ -118,7 +118,7 @@ Steps 2-3 and 6-11 deploy real workloads. Steps 4-5 are pure math.
 - **Pareto front** — Identifies configurations where no other config has both lower TTFT AND higher throughput
 - **Calibrated load** — Per-architecture concurrency computed via Little's Law from measured throughput and response time
 - **Latency-bounded search** — Binary search for maximum throughput under a TTFT SLA constraint
-- **Asymmetric TP** — Prefill TP ≤ Decode TP is always allowed. Prefill TP > Decode TP is disabled by default (NIXL KV transfer requires matching or lower prefill TP)
+- **Asymmetric TP** — Prefill and decode can use different TP sizes in both directions (e.g., Prefill TP8 / Decode TP4 or vice versa). Disabled by default to reduce search space; enable via the "Allow Asymmetric TP" toggle
 
 #### Infrastructure & Operations
 - **Multi-cluster launcher** — Manage optimization instances across multiple Kubernetes/OpenShift clusters from a single dashboard

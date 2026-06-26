@@ -107,8 +107,8 @@ flowchart TD
     CANDIDATES["Generate candidates<br>floor(D), ceil(D), ±1<br>~3 configs per TP pair"] --> NIXL
 
     NIXL{Asymmetric TP<br>check}
-    NIXL -->|"prefill_tp ≤ decode_tp<br>OR allow_asymmetric=true"| TEST
-    NIXL -->|"prefill_tp > decode_tp"| SKIP[Skip: NIXL KV transfer<br>crashes with asymmetric TP<br>vllm#43523]
+    NIXL -->|"prefill_tp = decode_tp<br>OR allow_asymmetric=true"| TEST
+    NIXL -->|"prefill_tp ≠ decode_tp"| SKIP[Skip: asymmetric TP<br>disabled by default<br>enable via toggle]
 
     TEST[Run benchmark<br>for each candidate] --> PARETO
 

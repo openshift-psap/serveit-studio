@@ -105,7 +105,8 @@ class ClusterResources:
                                         model_config: dict = None,
                                         seq_len: int = 0,
                                         min_concurrency: int = 4,
-                                        extra_reserve_pct: float = 0.0) -> int:
+                                        extra_reserve_pct: float = 0.0,
+                                        gpu_memory_utilization: float = 0.80) -> int:
         """
         Estimate minimum number of GPUs needed to load a model AND serve
         a workload with reasonable concurrency.
@@ -114,6 +115,7 @@ class ClusterResources:
         - Model weights
         - Framework/CUDA overhead (5% of VRAM)
         - KV cache for min_concurrency users at seq_len tokens each
+        - gpu_memory_utilization budget (vLLM only uses this fraction of VRAM)
 
         Args:
             model_size_gb: Model weight size in GB
@@ -122,6 +124,7 @@ class ClusterResources:
             model_config: Model config dict from HuggingFace (for KV cache sizing)
             seq_len: Total sequence length per user (ISL + OSL)
             min_concurrency: Minimum concurrent users to support (default 4)
+            gpu_memory_utilization: vLLM memory budget fraction (0.80 for prefill, 0.90 for decode)
 
         Returns:
             Minimum number of GPUs required (power of 2)
@@ -152,7 +155,8 @@ class ClusterResources:
         # User-specified extra safety margin
         if extra_reserve_pct > 0:
             required_memory_gb *= (1 + extra_reserve_pct / 100.0)
-        min_gpus = int(required_memory_gb / gpu_memory_gb) + 1
+        usable_gpu_memory_gb = gpu_memory_gb * gpu_memory_utilization
+        min_gpus = int(required_memory_gb / usable_gpu_memory_gb) + 1
 
         tp = next_power_of_2(min_gpus)
 

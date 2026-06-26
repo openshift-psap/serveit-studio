@@ -409,9 +409,6 @@ class ConfigBuilderMixin:
         # cache memory on empty slots, making it impossible to serve the
         # user's workload at their requested concurrency.
         if not getattr(self.config, 'advanced_vllm_custom_enabled', True):
-            cfg.gpu_memory_utilization = None
-            cfg.prefill_gpu_memory_utilization = None
-            cfg.decode_gpu_memory_utilization = None
             cfg.max_num_seqs = None
             cfg.prefill_max_num_seqs = None
             cfg.decode_max_num_seqs = None

@@ -36,10 +36,8 @@ class PDSearchMixin:
         self.log(f"  Top-{top_n} decode TPs (by TPSG): {top_decode}", 'info')
 
         # Cross-product of top-N × top-N, deduplicated, primary pair first.
-        # NIXL KV transfer constraint: when prefill_tp >= num_kv_heads (KV cache is
-        # replicated across prefill TP workers) AND prefill_tp > decode_tp, the
-        # handshake fails with AssertionError in _validate_remote_agent_handshake.
-        num_kv_heads = (self._model_config or {}).get('num_key_value_heads', 0)
+        # Asymmetric TP (prefill TP ≠ decode TP) is supported by NIXL in both
+        # directions but disabled by default to reduce search space.
         seen = set()
         skipped = []
         self._selected_tp_pairs = []
@@ -53,17 +51,16 @@ class PDSearchMixin:
             if (ptp, dtp) in seen:
                 continue
             seen.add((ptp, dtp))
-            if ptp > dtp and not allow_asymmetric:
+            if ptp != dtp and not allow_asymmetric:
                 skipped.append((ptp, dtp))
                 continue
             self._selected_tp_pairs.append((ptp, dtp))
 
         if skipped:
             skipped_str = ', '.join(f'(PTP={p}, DTP={d})' for p, d in skipped)
-            self.log(f"  ⚠️  Skipped {len(skipped)} pairs: prefill TP > decode TP "
-                     f"(NIXL KV transfer crashes with asymmetric TP — vllm#43523)", 'warning')
+            self.log(f"  ⚠️  Skipped {len(skipped)} asymmetric TP pairs", 'warning')
             self.log(f"     Affected: [{skipped_str}]", 'warning')
-            self.log(f"     Enable 'Allow Prefill TP > Decode TP' in Test Config to override", 'warning')
+            self.log(f"     Enable 'Allow Asymmetric TP' in Test Config to override", 'warning')
 
         # Fall back to symmetric if everything was filtered
         if not self._selected_tp_pairs:

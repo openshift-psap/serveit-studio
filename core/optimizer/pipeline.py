@@ -1475,14 +1475,20 @@ class RecipeOptimizer(
         finally:
             self.orchestrator.cleanup()
 
-    def _get_valid_tp_options(self) -> List[int]:
+    def _get_valid_tp_options(self, role: str = 'aggregated') -> List[int]:
         """
         Get valid TP options based on cluster GPUs per node and model size.
+
+        Args:
+            role: 'prefill', 'decode', or 'aggregated'. Determines the
+                  gpu_memory_utilization budget used for min TP calculation
+                  (prefill=0.80, decode/aggregated=0.90).
 
         Returns powers of 2 up to max GPUs per node, filtered to exclude:
         - TP values too small to fit the model in VRAM
         - TP values that break FP8 block quantization (partition < block_n=128)
         """
+        gmu = 0.80 if role == 'prefill' else 0.90
         if self.cluster_resources:
             tp_options = self.cluster_resources.get_tp_options()
             seq_len = self.config.isl + self.config.osl if hasattr(self.config, 'isl') else 0
@@ -1494,7 +1500,8 @@ class RecipeOptimizer(
                 model_config=self._model_config,
                 seq_len=seq_len,
                 min_concurrency=4,
-                extra_reserve_pct=reserve_pct
+                extra_reserve_pct=reserve_pct,
+                gpu_memory_utilization=gmu
             )
             tp_options = [tp for tp in tp_options if tp >= min_tp]
             # Cap TP by the instance's GPU limit
@@ -1618,16 +1625,16 @@ class RecipeOptimizer(
         """Estimate model weight size in GB for VRAM planning.
 
         Uses _model_size_b (set from config or name parsing).
-        Multipliers account for raw weights + mixed-precision layers,
-        activation buffers, and CUDA graph capture overhead:
-          FP4/INT4: 0.5 byte/param × 1.2 overhead = 0.6x (some layers stay FP16)
-          FP8:      1.0 byte/param × 1.1 overhead = 1.1x
-          FP16:     2.0 byte/param × 1.1 overhead = 2.2x
-          FP32:     4.0 byte/param × 1.1 overhead = 4.4x
+        Multipliers account for raw weights + mixed-precision layers:
+          MoE FP4:   0.55x (experts ~97% at 0.5B/param, attention stays FP16)
+          Dense FP4: 0.7x  (FFN ~60% at 0.5B/param, attention ~30% stays FP16)
+          FP8:       1.1x
+          FP16:      2.2x
+          FP32:      4.4x
         """
         params_b = self._model_size_b
         if self._model_dtype in ('fp4', 'int4'):
-            return params_b * 0.6
+            return params_b * (0.55 if self._is_moe else 0.7)
         if self._model_dtype == 'fp8':
             return params_b * 1.1
         if self._model_dtype in ('fp16', 'bf16'):

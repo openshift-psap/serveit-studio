@@ -233,9 +233,11 @@ class PrereqManager:
             epp_use_defaults = not epp.get('preset') or epp.get('preset') == 'default'
 
             # Template parameters
+            data_parallel_size = getattr(optimizer_config, 'data_parallelism', 1) if optimizer_config else 1
             context = {
                 'namespace': self.namespace,
                 'architecture': architecture,
+                'data_parallel_size': data_parallel_size,
                 'gaie_name': config['gaie_name'],
                 'gaie_pool_name': config['gaie_pool_name'],
                 'config_file': 'default-plugins.yaml' if epp_use_defaults else config['config_file'],

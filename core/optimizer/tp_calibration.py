@@ -15,7 +15,7 @@ class TPCalibrationMixin:
         Tests decode-only workload (ISL=1, OSL=target) with every valid TP.
         Objective: lowest TTFT (when objective='ttft') or highest TPSG.
         """
-        valid_tp = self._get_valid_tp_options()
+        valid_tp = self._get_valid_tp_options(role='decode')
         self.log(f"Testing all {len(valid_tp)} valid TP values: {valid_tp}", 'info')
         self.log(f"Workload: ISL=1, OSL={self.config.osl} (decode-focused)", 'info')
 
@@ -135,7 +135,7 @@ class TPCalibrationMixin:
         Tests prefill-only workload (ISL=target, OSL=1) with every valid TP.
         Objective: lowest TTFT (when objective='ttft') or highest TPSG.
         """
-        valid_tp = self._get_valid_tp_options()
+        valid_tp = self._get_valid_tp_options(role='prefill')
         self.log(f"Testing all {len(valid_tp)} valid TP values: {valid_tp}", 'info')
         self.log(f"Workload: ISL={self.config.isl}, OSL=1 (prefill-focused)", 'info')
 

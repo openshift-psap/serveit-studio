@@ -128,8 +128,8 @@ flowchart TD
     IDEAL["Compute ideal decode pods<br>D_ideal = GPUs / (r × prefill_tp + decode_tp)"] --> CANDIDATES
     CANDIDATES["Generate candidates<br>floor(D), ceil(D), ±1<br>~3 configs per TP pair"] --> NIXL
     NIXL{Asymmetric TP<br>check}
-    NIXL -->|"prefill_tp ≤ decode_tp<br>OR allow_asymmetric=true"| TEST
-    NIXL -->|"prefill_tp > decode_tp"| SKIP[Skip: NIXL KV transfer<br>crashes with asymmetric TP]
+    NIXL -->|"prefill_tp = decode_tp<br>OR allow_asymmetric=true"| TEST
+    NIXL -->|"prefill_tp ≠ decode_tp"| SKIP[Skip: asymmetric TP<br>disabled by default]
     TEST[Run benchmark<br>for each candidate] --> PARETO
     PARETO[Build Pareto front<br>TTFT P99 vs Throughput P90]
     style CAL fill:#fef3c7,stroke:#f59e0b
