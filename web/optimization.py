@@ -312,6 +312,11 @@ def stream_job_logs(job_name: str, namespace: str):
                     'pd_search_mode': saved_config.get('pd_search_mode', 'smart'),
                     'calibrated_load_enabled': saved_config.get('calibrated_load_enabled', False),
                     'inferencex_sweep_enabled': saved_config.get('inferencex_sweep_enabled', False),
+                    'cache_sweep_enabled': saved_config.get('cache_sweep_enabled', False),
+                    'cache_sweep_use_calibrated': saved_config.get('cache_sweep_use_calibrated', False),
+                    'cache_sweep_mode': saved_config.get('cache_sweep_mode', 'identical'),
+                    'cache_sweep_levels': saved_config.get('cache_sweep_levels', [0, 10, 30, 50, 70, 100]),
+                    'cache_sweep_groups': saved_config.get('cache_sweep_groups', 5),
                     'run_description': saved_config.get('run_description', ''),
                     'advanced_vllm_custom_enabled': saved_config.get('advanced_vllm_custom_enabled', True),
                     'epp_custom_enabled': saved_config.get('epp_custom_enabled', True),
@@ -698,6 +703,13 @@ def run_optimization_background(data):
         pd_search_mode = _get('pd_search_mode', 'smart')
         calibrated_load_enabled = _get('calibrated_load_enabled', False)
         inferencex_sweep_enabled = _get('inferencex_sweep_enabled', False)
+        cache_sweep_enabled = _get('cache_sweep_enabled', False)
+        cache_sweep_use_calibrated = _get('cache_sweep_use_calibrated', False)
+        cache_sweep_mode = _get('cache_sweep_mode', 'identical')
+        cache_sweep_levels = _get('cache_sweep_levels', [0, 10, 30, 50, 70, 100])
+        if isinstance(cache_sweep_levels, str):
+            cache_sweep_levels = [int(x.strip()) for x in cache_sweep_levels.split(',') if x.strip().isdigit()]
+        cache_sweep_groups = int(_get('cache_sweep_groups', 5))
         run_description = _get('run_description', '')
         advanced_vllm_custom_enabled = _get('advanced_vllm_custom_enabled', True)
         epp_custom_enabled = _get('epp_custom_enabled', True)
@@ -942,6 +954,11 @@ data:
                 use_achievable_qps=use_achievable_qps,
                 calibrated_load_enabled=calibrated_load_enabled,
                 inferencex_sweep_enabled=inferencex_sweep_enabled,
+                cache_sweep_enabled=cache_sweep_enabled,
+                cache_sweep_use_calibrated=cache_sweep_use_calibrated,
+                cache_sweep_mode=cache_sweep_mode,
+                cache_sweep_levels=cache_sweep_levels,
+                cache_sweep_groups=cache_sweep_groups,
                 latency_constraint_enabled=latency_constraint_enabled,
                 latency_constraint_ms=latency_constraint_ms,
                 latency_constraint_percentile=latency_constraint_percentile,

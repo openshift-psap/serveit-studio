@@ -64,6 +64,13 @@ class RecipeOptimizerConfig:
     calibrated_load_enabled: bool = False  # Re-test best configs at sustainable concurrency
     inferencex_sweep_enabled: bool = False  # Full concurrency sweep for InferenceX chart
 
+    # Step 13: Cache hit sweep
+    cache_sweep_enabled: bool = False  # Sweep cache hit levels at user-defined concurrency
+    cache_sweep_use_calibrated: bool = False  # Sweep cache hit levels at calibrated concurrency
+    cache_sweep_mode: str = 'identical'  # 'identical' | 'shared_prefix' | 'multi_group'
+    cache_sweep_levels: Optional[List[int]] = None  # Default [0, 10, 30, 50, 70, 100]
+    cache_sweep_groups: int = 5  # Groups for multi_group mode
+
     # EPP configuration
     epp_custom_enabled: bool = True  # False = use llm-d default EPP config
     epp_preset: str = 'balanced'  # 'balanced', 'cache_optimized', 'queue_balanced', 'latency_aware', 'custom'

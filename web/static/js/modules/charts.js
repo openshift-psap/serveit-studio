@@ -1425,6 +1425,82 @@ function renderCharts(data, runId) {
         html += '</table></div></div>';
     }
 
+    // ============================================================
+    // CACHE HIT SWEEP CHARTS (Step 13)
+    // ============================================================
+    if (data.cache_sweep) {
+        const csweep = data.cache_sweep;
+        const archColors = {pd: '#2563eb', aggregated: '#059669', ep: '#7c3aed',
+                            pd_calibrated: '#60a5fa', aggregated_calibrated: '#34d399', ep_calibrated: '#a78bfa'};
+        const archLabels = {pd: 'PD', aggregated: 'Aggregated', ep: 'EP',
+                            pd_calibrated: 'PD (calibrated)', aggregated_calibrated: 'Aggregated (calibrated)', ep_calibrated: 'EP (calibrated)'};
+
+        html += '<div class="chart-card" style="margin-top:24px; border-left:6px solid #7c3aed;">';
+        html += '<div class="chart-card-header" style="background:linear-gradient(135deg,#7c3aed,#6d28d9); color:white; font-size:1.2em;">🗂️ Cache Hit Sweep (Step 13)</div>';
+        html += '<div style="padding:8px 20px; color:#1e293b; font-size:0.95em;">Performance impact of prefix cache hit ratio on the best configurations.</div>';
+
+        // --- TTFT vs Cache Hit % ---
+        html += '<div id="cache-sweep-ttft-chart" style="width:100%;height:420px;"></div>';
+        var csTracesTTFT = [];
+        Object.keys(csweep).forEach(function(arch) {
+            var pts = csweep[arch];
+            if (!pts || !pts.length) return;
+            csTracesTTFT.push({
+                x: pts.map(function(p) { return p.hit_pct; }),
+                y: pts.map(function(p) { return p.ttft_p90; }),
+                mode: 'lines+markers', name: archLabels[arch] || arch,
+                line: {color: archColors[arch] || '#888', width: 2},
+                marker: {size: 8},
+                text: pts.map(function(p) { return 'c=' + p.concurrency; }),
+                hovertemplate: '%{text}<br>Cache Hit: %{x}%<br>TTFT P90: %{y:.0f}ms<extra></extra>'
+            });
+        });
+        chartQueue.push({id: 'cache-sweep-ttft-chart', traces: csTracesTTFT, layout: {
+            title: 'TTFT P90 vs Cache Hit %', xaxis: {title: 'Cache Hit %', range: [-5, 105]},
+            yaxis: {title: 'TTFT P90 (ms)'}, legend: {orientation: 'h', y: -0.15}, margin: {t: 40, b: 60}
+        }});
+
+        // --- Throughput vs Cache Hit % ---
+        html += '<div id="cache-sweep-tput-chart" style="width:100%;height:420px;"></div>';
+        var csTracesTput = [];
+        Object.keys(csweep).forEach(function(arch) {
+            var pts = csweep[arch];
+            if (!pts || !pts.length) return;
+            csTracesTput.push({
+                x: pts.map(function(p) { return p.hit_pct; }),
+                y: pts.map(function(p) { return p.throughput_mean; }),
+                mode: 'lines+markers', name: archLabels[arch] || arch,
+                line: {color: archColors[arch] || '#888', width: 2},
+                marker: {size: 8},
+                hovertemplate: 'Cache Hit: %{x}%<br>Throughput: %{y:.1f} req/s<extra></extra>'
+            });
+        });
+        chartQueue.push({id: 'cache-sweep-tput-chart', traces: csTracesTput, layout: {
+            title: 'Throughput vs Cache Hit %', xaxis: {title: 'Cache Hit %', range: [-5, 105]},
+            yaxis: {title: 'Throughput (req/s)'}, legend: {orientation: 'h', y: -0.15}, margin: {t: 40, b: 60}
+        }});
+
+        // --- Data table ---
+        html += '<div style="padding:12px 20px;"><div style="overflow-x:auto;"><table class="report-table" style="width:100%;font-size:0.85em;">';
+        html += '<tr><th>Architecture</th><th>Cache Hit %</th><th>Concurrency</th><th>TTFT P90 (ms)</th><th>TTFT P50 (ms)</th><th>Throughput (req/s)</th><th>Output tok/s</th><th>ITL P90 (ms)</th></tr>';
+        Object.keys(csweep).forEach(function(arch) {
+            (csweep[arch] || []).forEach(function(p) {
+                html += '<tr>';
+                html += '<td>' + (archLabels[arch] || arch) + '</td>';
+                html += '<td>' + p.hit_pct + '%</td>';
+                html += '<td>' + p.concurrency + '</td>';
+                html += '<td>' + p.ttft_p90.toFixed(0) + '</td>';
+                html += '<td>' + p.ttft_p50.toFixed(0) + '</td>';
+                html += '<td>' + p.throughput_mean.toFixed(2) + '</td>';
+                html += '<td>' + p.output_tps_mean.toFixed(1) + '</td>';
+                html += '<td>' + p.itl_p90.toFixed(1) + '</td>';
+                html += '</tr>';
+            });
+        });
+        html += '</table></div></div>';
+        html += '</div>';
+    }
+
     // Flush calibrated load (Step 10)
     secCal = html; html = '';
 

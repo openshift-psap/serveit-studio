@@ -190,6 +190,66 @@
                             </div>
                         </div>
 
+                        <!-- Cache Hit Sweep -->
+                        <div id="sweep-cache-section" style="border:2px solid #7c3aed;border-radius:12px;overflow:hidden;margin-bottom:20px;">
+                            <div style="background:linear-gradient(135deg,#f5f3ff,#ede9fe);padding:14px 20px;cursor:pointer;display:flex;align-items:center;justify-content:space-between;" onclick="var b=document.getElementById('cache-sweep-body');var a=document.getElementById('cache-sweep-arrow');if(b.style.display==='none'){b.style.display='block';a.textContent='&#9662;';}else{b.style.display='none';a.textContent='&#9656;';}">
+                                <div>
+                                    <div style="font-weight:700;color:#5b21b6;font-size:1.05em;">🗂️ Cache Hit Sweep</div>
+                                    <div style="color:#6d28d9;font-size:0.92em;margin-top:4px;">Measure how prefix cache hit ratio affects performance across the best configurations</div>
+                                </div>
+                                <div id="cache-sweep-arrow" style="font-size:1.4em;color:#5b21b6;font-weight:700;">&#9656;</div>
+                            </div>
+                            <div id="cache-sweep-body" style="display:none;padding:16px 20px;">
+                                <!-- Toggle 1: Cache Hit Sweep at user concurrency -->
+                                <div style="display:flex;align-items:center;justify-content:space-between;gap:12px;padding:10px 14px;background:#f5f3ff;border:1px solid #ddd6fe;border-radius:8px;cursor:pointer;margin-bottom:10px;" onclick="var on=!document.getElementById('cache-sweep-enabled').checked;document.getElementById('cache-sweep-enabled').checked=on;config.cache_sweep_enabled=on;var sw=document.getElementById('cache-sweep-switch');sw.style.background=on?'#7c3aed':'#ccc';sw.querySelector('span').style.transform=on?'translateX(18px)':'translateX(0)';saveConfig();">
+                                    <div>
+                                        <div style="font-weight:600;font-size:0.9em;color:#5b21b6;">Cache Hit Sweep</div>
+                                        <div style="font-size:0.8em;color:#6d28d9;margin-top:2px;">Test the best configs at multiple cache hit ratios using your workload concurrency. Generates datasets with controlled prefix sharing.</div>
+                                    </div>
+                                    <input type="checkbox" id="cache-sweep-enabled" style="display:none;">
+                                    <div id="cache-sweep-switch" style="width:40px;height:22px;background:#ccc;border-radius:11px;position:relative;transition:background-color 0.2s;flex-shrink:0;margin-left:16px;">
+                                        <span style="position:absolute;top:2px;left:2px;width:18px;height:18px;background:white;border-radius:50%;transition:transform 0.2s;box-shadow:0 1px 3px rgba(0,0,0,0.2);display:block;"></span>
+                                    </div>
+                                </div>
+                                <!-- Toggle 2: Cache Hit Sweep at calibrated concurrency -->
+                                <div style="display:flex;align-items:center;justify-content:space-between;gap:12px;padding:10px 14px;background:#f5f3ff;border:1px solid #ddd6fe;border-radius:8px;cursor:pointer;margin-bottom:12px;" onclick="var on=!document.getElementById('cache-sweep-calibrated').checked;document.getElementById('cache-sweep-calibrated').checked=on;config.cache_sweep_use_calibrated=on;var sw=document.getElementById('cache-sweep-cal-switch');sw.style.background=on?'#7c3aed':'#ccc';sw.querySelector('span').style.transform=on?'translateX(18px)':'translateX(0)';saveConfig();">
+                                    <div>
+                                        <div style="font-weight:600;font-size:0.9em;color:#5b21b6;">Cache Hit Sweep (Calibrated Concurrency)</div>
+                                        <div style="font-size:0.8em;color:#6d28d9;margin-top:2px;">Same sweep but using the calibrated concurrency from Step 11. Falls back to user concurrency if Step 11 didn't run.</div>
+                                    </div>
+                                    <input type="checkbox" id="cache-sweep-calibrated" style="display:none;">
+                                    <div id="cache-sweep-cal-switch" style="width:40px;height:22px;background:#ccc;border-radius:11px;position:relative;transition:background-color 0.2s;flex-shrink:0;margin-left:16px;">
+                                        <span style="position:absolute;top:2px;left:2px;width:18px;height:18px;background:white;border-radius:50%;transition:transform 0.2s;box-shadow:0 1px 3px rgba(0,0,0,0.2);display:block;"></span>
+                                    </div>
+                                </div>
+                                <!-- Cache mode selector -->
+                                <div style="margin-bottom:10px;">
+                                    <div style="font-weight:600;font-size:0.85em;color:#5b21b6;margin-bottom:6px;">Cache Simulation Mode</div>
+                                    <div style="display:flex;gap:8px;flex-wrap:wrap;">
+                                        <label style="display:flex;align-items:center;gap:4px;padding:6px 12px;background:#ede9fe;border:1px solid #c4b5fd;border-radius:6px;cursor:pointer;font-size:0.85em;">
+                                            <input type="radio" name="cache-sweep-mode" value="identical" checked onchange="config.cache_sweep_mode='identical';saveConfig();"> Identical Prompts
+                                        </label>
+                                        <label style="display:flex;align-items:center;gap:4px;padding:6px 12px;background:#ede9fe;border:1px solid #c4b5fd;border-radius:6px;cursor:pointer;font-size:0.85em;">
+                                            <input type="radio" name="cache-sweep-mode" value="shared_prefix" onchange="config.cache_sweep_mode='shared_prefix';saveConfig();"> Shared Prefix
+                                        </label>
+                                        <label style="display:flex;align-items:center;gap:4px;padding:6px 12px;background:#ede9fe;border:1px solid #c4b5fd;border-radius:6px;cursor:pointer;font-size:0.85em;">
+                                            <input type="radio" name="cache-sweep-mode" value="multi_group" onchange="config.cache_sweep_mode='multi_group';document.getElementById('cache-sweep-groups-row').style.display='flex';saveConfig();"> Multi-Group
+                                        </label>
+                                    </div>
+                                </div>
+                                <!-- Cache hit levels -->
+                                <div style="margin-bottom:10px;">
+                                    <div style="font-weight:600;font-size:0.85em;color:#5b21b6;margin-bottom:4px;">Cache Hit Levels (%)</div>
+                                    <input type="text" id="cache-sweep-levels" value="0, 10, 30, 50, 70, 100" style="width:100%;padding:6px 10px;border:1px solid #c4b5fd;border-radius:6px;font-size:0.85em;font-family:var(--font-mono);" onchange="config.cache_sweep_levels=this.value.split(',').map(function(v){return parseInt(v.trim())}).filter(function(v){return !isNaN(v)});saveConfig();">
+                                </div>
+                                <!-- Groups (for multi_group) -->
+                                <div id="cache-sweep-groups-row" style="display:none;align-items:center;gap:8px;">
+                                    <div style="font-weight:600;font-size:0.85em;color:#5b21b6;">Groups:</div>
+                                    <input type="number" id="cache-sweep-groups" value="5" min="2" max="50" style="width:60px;padding:4px 8px;border:1px solid #c4b5fd;border-radius:6px;font-size:0.85em;" onchange="config.cache_sweep_groups=parseInt(this.value)||5;saveConfig();">
+                                </div>
+                            </div>
+                        </div>
+
                         <!-- Single Test: Deployment Configuration (shown only when goal=single_test) -->
                         <div id="single-test-config" style="display:none; margin-bottom:20px;">
                             <div style="border:2px solid #8b5cf6;border-radius:12px;overflow:hidden;">

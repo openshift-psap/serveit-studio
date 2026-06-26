@@ -52,6 +52,14 @@ class OptimizationStrategy(ABC):
         if self.opt._should_run_speculative() and not self.opt._should_stop():
             self.opt._run_speculative_comparison()
 
+    def _run_cache_sweep_if_enabled(self):
+        """Step 13: Cache hit sweep."""
+        if (self.opt.config.cache_sweep_enabled or self.opt.config.cache_sweep_use_calibrated) and not self.opt._should_stop():
+            self.opt.log("STEP 13: Cache Hit Sweep", 'decision')
+            self.opt.log("-" * 80, 'info')
+            self.opt._run_cache_hit_sweep()
+            self.opt.log("", 'info')
+
 
 class TTFTStrategy(OptimizationStrategy):
     """Response Time Priority: Aggregated search + PD disaggregation.
@@ -123,6 +131,9 @@ class TTFTStrategy(OptimizationStrategy):
         # Step 12: Speculative decoding comparison (conditional)
         self._run_speculative_if_enabled()
 
+        # Step 13: Cache hit sweep (user-controlled)
+        self._run_cache_sweep_if_enabled()
+
 
 class ThroughputStrategy(OptimizationStrategy):
     """Throughput Priority: Aggregated search + EP (Expert Parallelism).
@@ -187,6 +198,9 @@ class ThroughputStrategy(OptimizationStrategy):
 
         # Step 12: Speculative decoding comparison (conditional)
         self._run_speculative_if_enabled()
+
+        # Step 13: Cache hit sweep (user-controlled)
+        self._run_cache_sweep_if_enabled()
 
     def _calculate_ep_configs(self):
         """Steps 4-5: Calculate EP configuration space using PD-style splits.
@@ -648,6 +662,9 @@ class BalancedStrategy(OptimizationStrategy):
         # Step 12: Speculative decoding comparison (conditional)
         self._run_speculative_if_enabled()
 
+        # Step 13: Cache hit sweep (user-controlled)
+        self._run_cache_sweep_if_enabled()
+
     def _validate_three_way(self):
         """Step 8: Three-way comparison — best PD vs best EP vs Aggregated.
 
@@ -993,6 +1010,7 @@ class AggregatedOnlyStrategy(OptimizationStrategy):
             self.opt.log("", 'info')
 
         self._run_speculative_if_enabled()
+        self._run_cache_sweep_if_enabled()
 
 
 class PDOnlyStrategy(OptimizationStrategy):
@@ -1027,6 +1045,7 @@ class PDOnlyStrategy(OptimizationStrategy):
             self.opt.log("", 'info')
 
         self._run_speculative_if_enabled()
+        self._run_cache_sweep_if_enabled()
 
 
 class EPOnlyStrategy(OptimizationStrategy):
@@ -1061,3 +1080,4 @@ class EPOnlyStrategy(OptimizationStrategy):
             self.opt.log("", 'info')
 
         self._run_speculative_if_enabled()
+        self._run_cache_sweep_if_enabled()

@@ -154,6 +154,40 @@ function updateUIFromConfig() {
         }
     }
 
+    // Restore cache sweep toggles
+    if (document.getElementById('cache-sweep-enabled')) {
+        var csOn = config.cache_sweep_enabled === true;
+        document.getElementById('cache-sweep-enabled').checked = csOn;
+        var csSw = document.getElementById('cache-sweep-switch');
+        if (csSw) {
+            csSw.style.background = csOn ? '#7c3aed' : '#ccc';
+            csSw.querySelector('span').style.transform = csOn ? 'translateX(18px)' : 'translateX(0)';
+        }
+    }
+    if (document.getElementById('cache-sweep-calibrated')) {
+        var ccOn = config.cache_sweep_use_calibrated === true;
+        document.getElementById('cache-sweep-calibrated').checked = ccOn;
+        var ccSw = document.getElementById('cache-sweep-cal-switch');
+        if (ccSw) {
+            ccSw.style.background = ccOn ? '#7c3aed' : '#ccc';
+            ccSw.querySelector('span').style.transform = ccOn ? 'translateX(18px)' : 'translateX(0)';
+        }
+    }
+    if (config.cache_sweep_mode) {
+        var radios = document.querySelectorAll('input[name="cache-sweep-mode"]');
+        radios.forEach(function(r) { r.checked = r.value === config.cache_sweep_mode; });
+        if (config.cache_sweep_mode === 'multi_group') {
+            var gr = document.getElementById('cache-sweep-groups-row');
+            if (gr) gr.style.display = 'flex';
+        }
+    }
+    if (config.cache_sweep_levels && document.getElementById('cache-sweep-levels')) {
+        document.getElementById('cache-sweep-levels').value = config.cache_sweep_levels.join(', ');
+    }
+    if (config.cache_sweep_groups && document.getElementById('cache-sweep-groups')) {
+        document.getElementById('cache-sweep-groups').value = config.cache_sweep_groups;
+    }
+
     if (config.pvc_size && document.getElementById('pvc-size-input')) {
         document.getElementById('pvc-size-input').value = config.pvc_size;
     }
@@ -1056,6 +1090,11 @@ function applyReportConfig(recId) {
     config.pd_search_mode = ts.pd_search_mode || 'smart';
     config.use_achievable_qps = !!ts.use_achievable_qps;
     config.allow_asymmetric_tp = !!ts.allow_asymmetric_tp;
+    config.cache_sweep_enabled = !!ts.cache_sweep_enabled;
+    config.cache_sweep_use_calibrated = !!ts.cache_sweep_use_calibrated;
+    config.cache_sweep_mode = ts.cache_sweep_mode || 'identical';
+    config.cache_sweep_levels = ts.cache_sweep_levels || [0, 10, 30, 50, 70, 100];
+    config.cache_sweep_groups = ts.cache_sweep_groups || 5;
     config.advanced_vllm = ts.advanced_vllm || null;
     config.advanced_vllm_custom_enabled = ts.advanced_vllm_custom_enabled != null ? !!ts.advanced_vllm_custom_enabled : (ts.advanced_vllm ? true : false);
 

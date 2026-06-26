@@ -1264,11 +1264,13 @@ class ReportAnalyzer:
 
         # InferenceX concurrency sweep data (Step 11)
         concurrency_sweep = None
+        cache_sweep = None
         try:
             if row and row['optimal_config']:
                 import json as _json
                 opt = _json.loads(row['optimal_config'])
                 concurrency_sweep = opt.get('concurrency_sweep')
+                cache_sweep = opt.get('cache_sweep')
         except Exception:
             pass
 
@@ -1549,4 +1551,5 @@ class ReportAnalyzer:
             'infra_versions': infra_versions,
             'epp_tuning': epp_tuning_data,
             'concurrency_sweep': concurrency_sweep,
+            'cache_sweep': cache_sweep,
         }
