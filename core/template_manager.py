@@ -119,14 +119,13 @@ class TemplateManager:
         # Data parallelism (not in TestConfig)
         vars_dict.setdefault('data_parallelism', 1)
 
-        # Routing proxy image — match sidecar version to the inference image version
-        cuda_image = vars_dict.get('image', 'ghcr.io/llm-d/llm-d-cuda:v0.8.0')
-        cuda_tag = cuda_image.split(':')[-1] if ':' in cuda_image else 'v0.8.0'
-        # v0.7.0+ uses the new disagg sidecar name, older uses the old name
-        if cuda_tag >= 'v0.7' or cuda_tag == 'latest':
-            vars_dict.setdefault('routing_proxy_image', f'ghcr.io/llm-d/llm-d-router-disagg-sidecar:{cuda_tag}')
+        # Routing proxy image — derive from scheduler image (same router project)
+        sched_image = vars_dict.get('scheduler_image') or getattr(config, 'scheduler_image', '') or 'ghcr.io/llm-d/llm-d-inference-scheduler:v0.9.0'
+        sched_tag = sched_image.split(':')[-1] if ':' in sched_image else 'v0.9.0'
+        if sched_tag >= 'v0.9' or sched_tag == 'latest':
+            vars_dict.setdefault('routing_proxy_image', f'ghcr.io/llm-d/llm-d-router-disagg-sidecar:{sched_tag}')
         else:
-            vars_dict.setdefault('routing_proxy_image', f'ghcr.io/llm-d/llm-d-routing-sidecar:{cuda_tag}')
+            vars_dict.setdefault('routing_proxy_image', f'ghcr.io/llm-d/llm-d-routing-sidecar:{sched_tag}')
 
         # Network values from core/networking
         rdma_nics = getattr(config, 'rdma_nics_per_node', 0)
