@@ -27,6 +27,7 @@ from core.optimizer.config_builder import ConfigBuilderMixin
 from core.optimizer.epp_tuning import EPPTuningMixin
 from core.optimizer.dataset import DatasetMixin
 from core.optimizer.speculative import SpeculativeMixin
+from core.optimizer.cache_sweep import CacheSweepMixin
 
 logger = logging.getLogger(__name__)
 
@@ -38,6 +39,7 @@ class RecipeOptimizer(
     EPPTuningMixin,
     DatasetMixin,
     SpeculativeMixin,
+    CacheSweepMixin,
 ):
     """
     Recipe-based exhaustive optimizer.
@@ -1488,7 +1490,12 @@ class RecipeOptimizer(
         - TP values too small to fit the model in VRAM
         - TP values that break FP8 block quantization (partition < block_n=128)
         """
-        gmu = 0.80 if role == 'prefill' else 0.90
+        if role == 'prefill':
+            gmu = 0.80
+        elif role == 'decode':
+            gmu = 0.85  # 0.90 base - 5% NIXL KV transfer reserve
+        else:
+            gmu = 0.90
         if self.cluster_resources:
             tp_options = self.cluster_resources.get_tp_options()
             seq_len = self.config.isl + self.config.osl if hasattr(self.config, 'isl') else 0
@@ -1722,6 +1729,7 @@ class RecipeOptimizer(
                 'throughput_p90': self.calibrated_agg_result.throughput_p90,
             } if self.calibrated_agg_result else None,
             'concurrency_sweep': getattr(self, 'concurrency_sweep_results', None),
+            'cache_sweep': getattr(self, 'cache_sweep_results', None),
             # EP results (populated by ThroughputStrategy/BalancedStrategy)
             'ep_configurations': [
                 {
