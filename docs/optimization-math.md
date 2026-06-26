@@ -50,10 +50,12 @@ The last term (`hidden × num_experts`) is the router/gating network — a small
 
 **Model weight size in GB:**
 ```
-FP8:  params_B × 1.0 GB     (1 byte per parameter)
-FP16: params_B × 2.0 GB     (2 bytes per parameter)
+MoE FP4:   params_B × 0.55 GB  (experts ~97% at 0.5B/param, attention stays FP16)
+Dense FP4: params_B × 0.7 GB   (FFN ~60% at 0.5B/param, attention ~30% stays FP16)
+FP8:       params_B × 1.1 GB   (1 byte/param + 10% overhead)
+FP16:      params_B × 2.2 GB   (2 bytes/param + 10% overhead)
 ```
-**Why these ratios?** FP8 stores each parameter in 8 bits (1 byte). FP16 uses 16 bits (2 bytes). A 70B parameter model at FP8 = 70 GB, at FP16 = 140 GB.
+**Why different FP4 multipliers?** FP4/INT4 quantization only applies to linear weights (FFN/expert layers). Attention layers, embeddings, and layer norms remain FP16 (2 bytes/param). In MoE models, experts dominate (97%+ of params), so the effective multiplier is close to raw 0.5. In dense models, attention is a larger fraction (~30%), pulling the average higher.
 
 ### Max Model Length (stdev-adjusted)
 ```
@@ -64,14 +66,13 @@ max_model_len = (ISL + 2 × ISL_stdev) + (OSL + 2 × OSL_stdev)
 ### Valid TP Options
 ```
 Valid TP = powers of 2 up to max GPUs per node
-min_tp = ceil(model_size_gb / (gpu_vram_gb × 0.7))
+min_tp = ceil(required_memory_gb / (gpu_vram_gb × gpu_memory_utilization))
 ```
+where `required_memory_gb = model_weight_gb + overhead_gb (5%) + kv_cache_gb (4 users)`.
+
 **Why powers of 2?** GPU-to-GPU communication (NCCL AllReduce) is most efficient when the number of participants is a power of 2. Non-power-of-2 TP values cause uneven data splits and slower communication.
 
-**Why × 0.7?** Model weights typically use ~70% of GPU VRAM. The remaining ~30% is needed for:
-- KV cache (~20%): working memory for each concurrent request
-- CUDA kernels/graphs (~5%): execution overhead
-- Activation memory (~5%): intermediate computation tensors
+**Per-role gpu_memory_utilization:** vLLM's `--gpu-memory-utilization` caps usable VRAM. Prefill uses 0.80 (upstream default), decode uses 0.90. This means prefill requires higher min TP than decode for the same model — e.g., a 116.5B MoE FP4 model needs min TP=2 for prefill (64GB budget) but TP=1 fits decode (72GB budget) on H100 80GB.
 
 **GQA constraint on max_tp:** For models using Grouped Query Attention (GQA), where `num_kv_heads < num_attention_heads`, TP cannot exceed `num_kv_heads`. Each GPU must hold at least 1 KV head — if TP > num_kv_heads, some GPUs would have zero KV heads and the model fails to load. Example: Llama-3-70B has 8 KV heads, so max TP is 8 even on nodes with 16 GPUs. This constraint is checked in both the TP sweep (Steps 2-3) and the PD split search (Step 5).
 
@@ -226,11 +227,11 @@ sustainable_concurrency = max(1, floor(total_gpus / headroom))
 
 ## Step 5: Feasible P/D Split Generation
 
-### NIXL KV Transfer Constraint
+### Asymmetric TP Filtering
 ```
-Skip pairs where: prefill_tp >= num_kv_heads AND prefill_tp > decode_tp
+Skip pairs where: prefill_tp ≠ decode_tp (unless "Allow Asymmetric TP" is enabled)
 ```
-**Why?** NIXL (the KV cache transfer library in llm-d) transfers KV cache data from prefill GPUs to decode GPUs after prefill completes. When prefill TP >= number of KV heads, each prefill GPU holds only 1 KV head (or a fraction). Transferring this highly fragmented data to fewer decode GPUs (where each GPU needs multiple KV heads) causes a mapping failure — the NIXL handshake asserts that the source and destination layouts are compatible, and this many-to-few mapping violates that assertion.
+**Why disabled by default?** Asymmetric TP (e.g., prefill TP8 / decode TP4 or vice versa) is fully supported by NIXL KV transfer in both directions. It is disabled by default to reduce the search space — the cross-product of N×N TP pairs grows quadratically. Enable via the "Allow Asymmetric TP" toggle when heterogeneous TP configurations are desired.
 
 ### Smart PD Search Formula
 ```
