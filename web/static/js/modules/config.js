@@ -786,6 +786,17 @@ function restoreConfigSummary() {
     }
     const atpEl = document.getElementById('config-summary-asymmetric-tp');
     if (atpEl) atpEl.textContent = config.allow_asymmetric_tp ? 'Enabled' : 'Disabled';
+    const clEl = document.getElementById('config-summary-calibrated-load');
+    if (clEl) clEl.textContent = config.calibrated_load_enabled ? (config.inferencex_sweep_enabled ? 'Enabled + InferenceX Sweep' : 'Enabled') : 'Disabled';
+    const ixEl = document.getElementById('config-summary-inferencex-sweep');
+    if (ixEl) ixEl.textContent = config.inferencex_sweep_enabled ? 'Enabled' : 'Disabled';
+    const csEl = document.getElementById('config-summary-cache-sweep');
+    if (csEl) {
+        var csParts = [];
+        if (config.cache_sweep_enabled) csParts.push('User Concurrency');
+        if (config.cache_sweep_use_calibrated) csParts.push('Calibrated');
+        csEl.textContent = csParts.length ? csParts.join(' + ') + ' (' + (config.cache_sweep_mode || 'identical') + ')' : 'Disabled';
+    }
 
     // Update recipe section spans
     document.getElementById('recipe-objective').textContent = goalNames[config.goal] || config.goal;

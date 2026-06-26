@@ -84,8 +84,20 @@
                                     <div class="config-value"><span id="config-summary-tp-depth">2</span></div>
                                 </div>
                                 <div class="config-item">
-                                    <div class="config-label">Allow Prefill TP &gt; Decode TP</div>
+                                    <div class="config-label">Allow Asymmetric TP</div>
                                     <div class="config-value"><span id="config-summary-asymmetric-tp">Disabled</span></div>
+                                </div>
+                                <div class="config-item">
+                                    <div class="config-label">Calibrated Load</div>
+                                    <div class="config-value"><span id="config-summary-calibrated-load">Disabled</span></div>
+                                </div>
+                                <div class="config-item">
+                                    <div class="config-label">InferenceX Sweep</div>
+                                    <div class="config-value"><span id="config-summary-inferencex-sweep">Disabled</span></div>
+                                </div>
+                                <div class="config-item">
+                                    <div class="config-label">Cache Hit Sweep</div>
+                                    <div class="config-value"><span id="config-summary-cache-sweep">Disabled</span></div>
                                 </div>
                             </div>
                         </div>
@@ -335,6 +347,46 @@
                                         <p><strong>What runs:</strong> Re-tests the best PD and Aggregated configs at a sustainable concurrency level</p>
                                         <p><strong>Why:</strong> Steps 7-8 ran under overload, inflating latency. This step shows realistic performance at a load the cluster can actually handle</p>
                                         <p><strong>Result:</strong> Separate comparison showing calibrated vs overloaded metrics, with TTFT improvement percentage</p>
+                                    </div>
+                                </div>
+
+                                <!-- Step 12 (Conditional) -->
+                                <div class="step-card" style="border-left: 3px solid #ea580c;">
+                                    <div class="step-header">
+                                        <div class="step-number" style="background: linear-gradient(135deg, #ea580c, #f97316);">12</div>
+                                        <div class="step-title-wrapper">
+                                            <h4>Speculative Decoding Comparison</h4>
+                                            <span class="step-badge" style="background: #fff7ed; color: #ea580c;">Auto-detect</span>
+                                        </div>
+                                    </div>
+                                    <div class="step-content">
+                                        <p><strong>Triggers when:</strong> Model supports Multi-Token Prediction (MTP) — detected from <code>num_nextn_predict_layers</code> in config.json or known architectures (DeepSeek-V3, GLM-4)</p>
+                                        <p><strong>What runs:</strong> Re-tests the best Aggregated and best PD configs with speculative decoding enabled (<code>--speculative-config.method mtp</code>)</p>
+                                        <p><strong>Why:</strong> MTP can significantly reduce decode latency by predicting multiple tokens per step, but adds overhead that may not always be beneficial</p>
+                                        <p><strong>Result:</strong> Side-by-side comparison of TTFT and throughput with and without speculative decoding, with percentage improvement</p>
+                                    </div>
+                                </div>
+
+                                <!-- Step 13 (Conditional) -->
+                                <div class="step-card" style="border-left: 3px solid #7c3aed;">
+                                    <div class="step-header">
+                                        <div class="step-number" style="background: linear-gradient(135deg, #7c3aed, #a78bfa);">13</div>
+                                        <div class="step-title-wrapper">
+                                            <h4>Cache Hit Sweep</h4>
+                                            <span class="step-badge" style="background: #f5f3ff; color: #7c3aed;">Conditional</span>
+                                        </div>
+                                    </div>
+                                    <div class="step-content">
+                                        <p><strong>Triggers when:</strong> "Cache Hit Sweep" or "Cache Hit Sweep (Calibrated Concurrency)" is enabled in Test Configuration</p>
+                                        <p><strong>What runs:</strong> Tests the best PD/EP and Aggregated configs at multiple prefix cache hit ratios (default: 0%, 10%, 30%, 50%, 70%, 100%)</p>
+                                        <p><strong>Why:</strong> Real workloads have varying cache hit rates depending on prompt diversity. This step measures how prefix caching affects TTFT and throughput across the hit spectrum</p>
+                                        <p><strong>Cache modes:</strong></p>
+                                        <p style="font-size: 14px; color: #4b5563;">
+                                            • <strong>Identical Prompts:</strong> X% of requests use the same prompt — guarantees cache hits<br>
+                                            • <strong>Shared Prefix:</strong> All requests share a common prefix of X% tokens, with unique suffixes — simulates multi-turn conversations<br>
+                                            • <strong>Multi-Group:</strong> N distinct prompt groups with X% of requests distributed among them — simulates popular queries + long tail
+                                        </p>
+                                        <p><strong>Result:</strong> TTFT and throughput curves vs cache hit percentage, per architecture. Optionally runs at both user-defined and calibrated concurrency</p>
                                     </div>
                                 </div>
                             </div>
