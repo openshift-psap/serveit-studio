@@ -33,6 +33,7 @@ spec:
           args:
             - |
               set -e
+              umask 0000
               echo "========================================="
               echo "ServeIt Studio Per-Node Model Download"
               echo "Model: {{ model_name }}"
