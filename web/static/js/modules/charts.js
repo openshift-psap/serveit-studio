@@ -567,57 +567,59 @@ function renderCharts(data, runId) {
         const advToggle = (key, fallback) => { const s = adv[key]; return s ? (s.mode === 'on' ? 'On' : s.mode === 'off' ? 'Off' : fallback) : fallback; };
 
         html += '<div class="chart-card"><div class="chart-card-header">User Defined Test Settings</div>';
-        html += '<div style="padding:12px 20px 4px; color:#1e293b; font-size:0.95em;">All settings configured for this optimization run. These apply to every test — only the architecture, TP values, and pod counts vary between tests.</div>';
+        html += '<div style="padding:12px 20px 4px; color:#1e293b; font-size:0.92em;">All settings configured for this optimization run. These apply to every test — only the architecture, TP values, and pod counts vary between tests.</div>';
         html += '<div class="chart-card-body" style="padding:16px 20px;">';
-        html += '<div style="display:grid;grid-template-columns:repeat(2,1fr);gap:24px;font-size:0.9em;">';
+        html += '<div style="display:grid;grid-template-columns:repeat(2,1fr);gap:20px;">';
 
-        // Left column: Workload + Search Strategy
-        html += '<div>';
-        // Workload
-        html += '<div style="font-weight:700;color:#1e293b;margin-bottom:10px;border-bottom:2px solid #10b981;padding-bottom:4px;">Workload</div><div style="line-height:2.2;margin-bottom:20px;">';
-        html += `<div><span style="color:#64748b;">Model:</span> <strong>${rc.model_name || na}</strong></div>`;
-        html += `<div><span style="color:#64748b;">ISL:</span> ${rc.isl}${rc.isl_stdev ? ' (&sigma;=' + rc.isl_stdev + ')' : ''}</div>`;
-        html += `<div><span style="color:#64748b;">OSL:</span> ${rc.osl}${rc.osl_stdev ? ' (&sigma;=' + rc.osl_stdev + ')' : ''}</div>`;
-        html += `<div><span style="color:#64748b;">Concurrent Users:</span> ${rc.qps != null ? Math.round(rc.qps) : na}</div>`;
-        html += `<div><span style="color:#64748b;">Rate Type:</span> ${rc.rate_type || 'concurrent'}</div>`;
-        html += `<div><span style="color:#64748b;">Test Duration:</span> ${rc.test_duration || 300}s</div>`;
-        html += `<div><span style="color:#64748b;">Stop Mode:</span> ${rc.stop_mode || 'duration'}</div>`;
-        if (rc.max_requests) html += `<div><span style="color:#64748b;">Max Requests:</span> ${rc.max_requests}</div>`;
-        if (rc.turns > 1) html += `<div><span style="color:#64748b;">Turns:</span> ${rc.turns}</div>`;
-        html += `<div><span style="color:#64748b;">Workload Mode:</span> ${rc.workload_mode || 'synthetic'}</div>`;
-        if (rc.dataset_source) html += `<div><span style="color:#64748b;">Dataset:</span> <span style="word-break:break-all;">${rc.dataset_source}</span></div>`;
-        if (rc.dataset_column) html += `<div><span style="color:#64748b;">Dataset Column:</span> ${rc.dataset_column}</div>`;
-        if (rc.prefix_cache_hit_pct > 0) html += `<div><span style="color:#64748b;">Prefix Cache Hit:</span> ${rc.prefix_cache_hit_pct}%</div>`;
-        html += '</div>';
-        // Search Strategy
-        html += '<div style="font-weight:700;color:#1e293b;margin-bottom:10px;border-bottom:2px solid #6366f1;padding-bottom:4px;">Search Strategy</div><div style="line-height:2.2;">';
-        html += `<div><span style="color:#64748b;">Optimization Goal:</span> <strong>${(rc.objective || 'ttft').toUpperCase()}</strong></div>`;
-        html += `<div><span style="color:#64748b;">Total GPUs:</span> ${rc.total_gpus || na}</div>`;
-        html += `<div><span style="color:#64748b;">TP Options:</span> ${(rc.tp_options || []).join(', ') || na}</div>`;
-        html += `<div><span style="color:#64748b;">TP Pair Breadth:</span> Top-${rc.tp_pair_top_n || 4}</div>`;
-        html += `<div><span style="color:#64748b;">P/D Ratio Search:</span> ${rc.pd_search_mode === 'exhaustive' ? 'Exhaustive' : 'Smart'}</div>`;
-        html += `<div><span style="color:#64748b;">Use Achievable QPS:</span> ${rc.use_achievable_qps ? 'Yes' : 'No'}</div>`;
-        html += `<div><span style="color:#64748b;">Headroom:</span> ${rc.headroom || 1.3}x</div>`;
-        if (rc.latency_constraint_enabled) {
-            html += `<div><span style="color:#64748b;">Latency SLA:</span> ${rc.latency_constraint_ms}ms @ ${rc.latency_constraint_percentile}</div>`;
-        } else {
-            html += `<div><span style="color:#64748b;">Latency SLA:</span> Disabled</div>`;
+        function settingsTable(title, color, rows) {
+            let t = `<table class="results-table" style="font-size:0.85em;margin-bottom:16px;">`;
+            t += `<tr><th colspan="2" style="background:${color};text-align:left;">${title}</th></tr>`;
+            rows.forEach(function(r) {
+                if (r) t += `<tr><td style="color:#64748b;width:40%;">${r[0]}</td><td><strong>${r[1]}</strong></td></tr>`;
+            });
+            t += '</table>';
+            return t;
         }
-        html += '</div>';
+
+        // Left column
+        html += '<div>';
+        html += settingsTable('Workload', '#059669', [
+            ['Model', rc.model_name || na],
+            ['ISL', rc.isl + (rc.isl_stdev ? ' (&sigma;=' + rc.isl_stdev + ')' : '')],
+            ['OSL', rc.osl + (rc.osl_stdev ? ' (&sigma;=' + rc.osl_stdev + ')' : '')],
+            ['Concurrent Users', rc.qps != null ? Math.round(rc.qps) : na],
+            ['Rate Type', rc.rate_type || 'concurrent'],
+            ['Test Duration', (rc.test_duration || 300) + 's'],
+            ['Stop Mode', rc.stop_mode || 'duration'],
+            rc.max_requests ? ['Max Requests', rc.max_requests] : null,
+            rc.turns > 1 ? ['Turns', rc.turns] : null,
+            ['Workload Mode', rc.workload_mode || 'synthetic'],
+            rc.dataset_source ? ['Dataset', '<span style="word-break:break-all;font-size:0.9em;">' + rc.dataset_source + '</span>'] : null,
+            rc.prefix_cache_hit_pct > 0 ? ['Prefix Cache Hit', rc.prefix_cache_hit_pct + '%'] : null,
+        ]);
+        html += settingsTable('Search Strategy', '#4f46e5', [
+            ['Optimization Goal', (rc.objective || 'ttft').toUpperCase()],
+            ['Total GPUs', rc.total_gpus || na],
+            ['TP Options', (rc.tp_options || []).join(', ') || na],
+            ['TP Pair Breadth', 'Top-' + (rc.tp_pair_top_n || 4)],
+            ['P/D Ratio Search', rc.pd_search_mode === 'exhaustive' ? 'Exhaustive' : 'Adaptive'],
+            ['Auto-Scale Concurrency', rc.use_achievable_qps ? 'Yes' : 'No'],
+            ['Headroom', (rc.headroom || 1.3) + 'x'],
+            ['Latency SLA', rc.latency_constraint_enabled ? rc.latency_constraint_ms + 'ms @ ' + rc.latency_constraint_percentile : 'Disabled'],
+        ]);
         html += '</div>';
 
-        // Right column: Infrastructure + Advanced vLLM Settings
+        // Right column
         html += '<div>';
-        // Infrastructure
-        html += '<div style="font-weight:700;color:#1e293b;margin-bottom:10px;border-bottom:2px solid #f59e0b;padding-bottom:4px;">Infrastructure</div><div style="line-height:2.2;margin-bottom:20px;">';
-        html += `<div><span style="color:#64748b;">Inference Image:</span> <span style="word-break:break-all;font-size:0.9em;">${rc.image || na}</span></div>`;
-        html += `<div><span style="color:#64748b;">Scheduler Image:</span> <span style="word-break:break-all;font-size:0.9em;">${rc.scheduler_image || na}</span></div>`;
-        html += `<div><span style="color:#64748b;">Namespace:</span> ${rc.namespace || na}</div>`;
-        html += `<div><span style="color:#64748b;">PVC:</span> ${rc.pvc_name || na}</div>`;
-        html += `<div><span style="color:#64748b;">Network Type:</span> ${rc.network_type || na}</div>`;
-        html += `<div><span style="color:#64748b;">NCCL IB HCA:</span> ${rc.nccl_ib_hca || na}</div>`;
-        if (rc.rdma_nics_per_node) html += `<div><span style="color:#64748b;">RDMA NICs/Node:</span> ${rc.rdma_nics_per_node}</div>`;
-        html += '</div>';
+        html += settingsTable('Infrastructure', '#d97706', [
+            ['Inference Image', '<span style="word-break:break-all;font-size:0.9em;">' + (rc.image || na) + '</span>'],
+            ['Scheduler Image', '<span style="word-break:break-all;font-size:0.9em;">' + (rc.scheduler_image || na) + '</span>'],
+            ['Namespace', rc.namespace || na],
+            ['PVC', rc.pvc_name || na],
+            ['Network Type', rc.network_type || na],
+            ['NCCL IB HCA', rc.nccl_ib_hca || na],
+            rc.rdma_nics_per_node ? ['RDMA NICs/Node', rc.rdma_nics_per_node] : null,
+        ]);
         // Infrastructure Versions
         if (data.infra_versions && Object.keys(data.infra_versions).length > 0) {
             var iv = data.infra_versions;
@@ -628,98 +630,64 @@ function renderCharts(data, runId) {
                 istio: 'Istio', service_mesh: 'Service Mesh', epp: 'EPP Scheduler',
                 nfd: 'NFD', lws: 'LWS'
             };
-            html += '<div style="font-weight:700;color:#1e293b;margin-bottom:10px;border-bottom:2px solid #059669;padding-bottom:4px;">Component Versions</div>';
-            html += '<table style="width:100%;font-size:0.88em;border-collapse:collapse;margin-bottom:20px;">';
-            Object.keys(iv).forEach(function(k) {
-                var label = versionLabels[k] || k;
-                html += '<tr style="border-bottom:1px solid #f1f5f9;"><td style="padding:3px 8px 3px 0;color:#64748b;">' + label + '</td><td style="padding:3px 0;font-family:var(--font-mono,monospace);font-size:0.95em;">' + iv[k] + '</td></tr>';
-            });
-            html += '</table>';
+            var vRows = [];
+            Object.keys(iv).forEach(function(k) { vRows.push([versionLabels[k] || k, iv[k]]); });
+            html += settingsTable('Component Versions', '#059669', vRows);
         }
-        // Advanced vLLM Settings
-        html += '<div style="font-weight:700;color:#1e293b;margin-bottom:10px;border-bottom:2px solid #8b5cf6;padding-bottom:4px;">Advanced vLLM Settings</div><div style="line-height:2.2;">';
         const vllmCustomEnabled = rc.advanced_vllm_custom_enabled !== false;
         const rv = rc._resolved || {};
-        function autoVal(key, label, fallback) {
-            var adv = rc.advanced_vllm || {};
-            var userVal = adv[key];
-            if (userVal != null && userVal !== '' && userVal !== 'auto') return String(userVal);
-            var resolved = rv[key];
-            if (resolved != null) return `${fallback || 'auto'} <span style="color:#94a3b8;">(${resolved})</span>`;
-            return fallback || 'auto';
-        }
-        // Show resolved values from actual test config — no meaningless "auto"
-        if (!vllmCustomEnabled) {
-            html += '<div style="color:#059669;font-style:italic;margin-bottom:8px;">Using upstream llm-d defaults — no auto tuning applied.</div>';
-        }
-        html += `<div><span style="color:#64748b;">Max Model Len:</span> ${rv.max_model_len || rc.max_model_len || '-'}</div>`;
         const hasPdTests = (data.all_results || []).some(r => r.architecture === 'PD');
         const hasAggTests = (data.all_results || []).some(r => r.architecture === 'AGGREGATED');
         const hasEpTests = (data.all_results || []).some(r => r.architecture === 'EP');
+
+        // GPU Memory Utilization display
+        let gmuDisplay = '-';
         if (hasPdTests || hasEpTests) {
             let gmuParts = [];
-            if (rv.prefill_gpu_memory_utilization) gmuParts.push(`PD prefill=${rv.prefill_gpu_memory_utilization}`);
-            if (rv.decode_gpu_memory_utilization) gmuParts.push(`PD decode=${rv.decode_gpu_memory_utilization}`);
+            if (rv.prefill_gpu_memory_utilization) gmuParts.push(`P=${rv.prefill_gpu_memory_utilization}`);
+            if (rv.decode_gpu_memory_utilization) gmuParts.push(`D=${rv.decode_gpu_memory_utilization}`);
             if (hasAggTests) {
-                const aggResult = (data.all_results || []).find(r => r.architecture === 'AGGREGATED');
-                const aggTc = (aggResult && aggResult.test_config) || {};
-                if (aggTc.gpu_memory_utilization) gmuParts.push(`Aggregated=${aggTc.gpu_memory_utilization}`);
+                const aggTc = ((data.all_results || []).find(r => r.architecture === 'AGGREGATED') || {}).test_config || {};
+                if (aggTc.gpu_memory_utilization) gmuParts.push(`Agg=${aggTc.gpu_memory_utilization}`);
             }
-            html += `<div><span style="color:#64748b;">GPU Memory Utilization:</span> ${gmuParts.join(', ') || '-'}</div>`;
+            gmuDisplay = gmuParts.join(', ') || '-';
         } else {
-            const rvGpu = rv.gpu_memory_utilization || rc.gpu_memory_utilization;
-            html += `<div><span style="color:#64748b;">GPU Memory Utilization:</span> ${rvGpu || '-'}</div>`;
+            gmuDisplay = rv.gpu_memory_utilization || rc.gpu_memory_utilization || '-';
         }
-        if (rv.gpu_vram_gb) html += `<div><span style="color:#64748b;">GPU VRAM:</span> ${rv.gpu_vram_gb.toFixed(1)} GB</div>`;
-        html += `<div><span style="color:#64748b;">Block Size:</span> ${rv.block_size || '-'}</div>`;
-        html += `<div><span style="color:#64748b;">Max Num Seqs:</span> ${rv.max_num_seqs || '256 (default)'}${rv.decode_max_num_seqs ? ' <span style="color:#94a3b8;">(decode: ' + rv.decode_max_num_seqs + ')</span>' : ''}</div>`;
-        html += `<div><span style="color:#64748b;">Max Batched Tokens:</span> ${rv.max_num_batched_tokens || rv.max_model_len || '-'}</div>`;
-        html += `<div><span style="color:#64748b;">Prefix Caching:</span> ${rv.enable_prefix_caching === true ? 'Enabled' : (rv.enable_prefix_caching === false ? 'Disabled' : '-')}</div>`;
-        if (hasEpTests) {
-            html += `<div><span style="color:#64748b;">Expert Parallel:</span> Enabled <span style="color:#94a3b8;">(EP configs)</span> / Disabled <span style="color:#94a3b8;">(PD, Aggregated)</span></div>`;
-        } else {
-            html += `<div><span style="color:#64748b;">Expert Parallel:</span> ${rv.enable_expert_parallel === true ? 'Enabled' : (rv.enable_expert_parallel === false ? 'Disabled' : '-')}</div>`;
-        }
-        html += `<div><span style="color:#64748b;">Trust Remote Code:</span> ${rv.trust_remote_code === true ? 'Enabled' : (rv.trust_remote_code === false ? 'Disabled' : '-')}</div>`;
-        if (hasEpTests) {
-            const epResult = (data.all_results || []).find(r => r.architecture === 'EP');
-            const epTc = (epResult && epResult.test_config) || {};
-            html += '<div style="font-weight:700;color:#1e293b;margin-top:12px;margin-bottom:8px;border-bottom:2px solid #0ea5e9;padding-bottom:4px;">EP-Specific Settings</div>';
-            if (epTc.nvshmem_symmetric_size) html += `<div><span style="color:#64748b;">NVSHMEM Symmetric Size:</span> ${epTc.nvshmem_symmetric_size}</div>`;
-            if (epTc.num_redundant_experts != null) html += `<div><span style="color:#64748b;">EPLB Redundant Experts:</span> ${epTc.num_redundant_experts}</div>`;
-            if (epTc.moe_dp_chunk_size) html += `<div><span style="color:#64748b;">MoE DP Chunk Size:</span> ${epTc.moe_dp_chunk_size}</div>`;
-            if (epTc.all2all_backend) html += `<div><span style="color:#64748b;">All2All Backend:</span> ${epTc.all2all_backend}</div>`;
-            if (epTc.prefill_gpu_memory_utilization) html += `<div><span style="color:#64748b;">EP GPU Mem Util:</span> prefill=${epTc.prefill_gpu_memory_utilization}, decode=${epTc.decode_gpu_memory_utilization}</div>`;
-        }
+
+        var vllmRows = [
+            !vllmCustomEnabled ? ['Mode', '<span style="color:#059669;">Upstream defaults (no tuning)</span>'] : null,
+            ['Max Model Len', rv.max_model_len || rc.max_model_len || '-'],
+            ['GPU Memory Utilization', gmuDisplay],
+            rv.gpu_vram_gb ? ['GPU VRAM', rv.gpu_vram_gb.toFixed(1) + ' GB'] : null,
+            ['Block Size', rv.block_size || '-'],
+            ['Max Num Seqs', (rv.max_num_seqs || '256') + (rv.decode_max_num_seqs ? ' (decode: ' + rv.decode_max_num_seqs + ')' : '')],
+            ['Max Batched Tokens', rv.max_num_batched_tokens || rv.max_model_len || '-'],
+            ['Prefix Caching', rv.enable_prefix_caching === true ? 'Enabled' : (rv.enable_prefix_caching === false ? 'Disabled' : '-')],
+            ['Expert Parallel', hasEpTests ? 'Enabled (EP) / Disabled (PD, Agg)' : (rv.enable_expert_parallel === true ? 'Enabled' : 'Disabled')],
+            ['Trust Remote Code', rv.trust_remote_code === true ? 'Enabled' : 'Disabled'],
+        ];
         if (vllmCustomEnabled) {
-            const adv = rc.advanced_vllm || {};
-            if (adv.dtype) html += `<div><span style="color:#64748b;">Dtype:</span> ${adv.dtype}</div>`;
-            if (adv.kv_cache_dtype) html += `<div><span style="color:#64748b;">KV Cache Dtype:</span> ${adv.kv_cache_dtype}</div>`;
-            if (adv.pipeline_parallel_size) html += `<div><span style="color:#64748b;">Pipeline Parallel:</span> ${adv.pipeline_parallel_size}</div>`;
-            if (adv.tool_call_parser) html += `<div><span style="color:#64748b;">Tool Call Parser:</span> ${adv.tool_call_parser}</div>`;
-            if (adv.reasoning_parser) html += `<div><span style="color:#64748b;">Reasoning Parser:</span> ${adv.reasoning_parser}</div>`;
-            if (adv.chat_template_content_format) html += `<div><span style="color:#64748b;">Chat Template Format:</span> ${adv.chat_template_content_format}</div>`;
+            const adv2 = rc.advanced_vllm || {};
+            if (adv2.dtype) vllmRows.push(['Dtype', adv2.dtype]);
+            if (adv2.kv_cache_dtype) vllmRows.push(['KV Cache Dtype', adv2.kv_cache_dtype]);
+            if (adv2.pipeline_parallel_size) vllmRows.push(['Pipeline Parallel', adv2.pipeline_parallel_size]);
         }
-        html += '</div>';
+        html += settingsTable('Advanced vLLM Settings', '#7c3aed', vllmRows);
+
         // EPP Configuration
         const eppCustomEnabled = rc.epp_custom_enabled !== false;
         const eppPresetLabels = {balanced:'Balanced', cache_optimized:'Cache Optimized', queue_balanced:'Queue Balanced', latency_aware:'Latency Aware', custom:'Custom'};
-        html += '<div style="font-weight:700;color:#1e293b;margin-bottom:10px;border-bottom:2px solid #7c3aed;padding-bottom:4px;">EPP Configuration</div><div style="line-height:2.2;">';
-        if (!eppCustomEnabled) {
-            html += '<div style="color:#059669;font-style:italic;margin-bottom:8px;">Using upstream llm-d EPP defaults — no overrides applied.</div>';
-            html += '<div><span style="color:#64748b;">Routing:</span> disagg-headers-handler → always-disagg-pd-decider</div>';
-            html += '<div><span style="color:#64748b;">Prefill Scorers:</span> prefix-cache (w:3), queue (w:2), kv-cache-utilization (w:2)</div>';
-            html += '<div><span style="color:#64748b;">Decode Scorers:</span> active-request (w:2), prefix-cache (w:3)</div>';
-        }
-        html += `<div><span style="color:#64748b;">Scoring Preset:</span> <strong>${eppCustomEnabled ? (eppPresetLabels[rc.epp_preset] || rc.epp_preset || 'Balanced') : 'llm-d upstream'}</strong></div>`;
-        html += `<div><span style="color:#64748b;">EPP Tuning (Step 9):</span> ${rc.epp_benchmark ? 'Enabled' : 'Disabled'}</div>`;
+        var eppRows = [
+            ['Scoring Preset', eppCustomEnabled ? (eppPresetLabels[rc.epp_preset] || rc.epp_preset || 'Balanced') : 'llm-d upstream'],
+            ['EPP Tuning (Step 9)', rc.epp_benchmark ? 'Enabled' : 'Disabled'],
+        ];
         if (rc.epp_config) {
             const ec = rc.epp_config;
-            if (ec.maxPrefixBlocksToMatch) html += `<div><span style="color:#64748b;">Max Prefix Blocks:</span> ${ec.maxPrefixBlocksToMatch}</div>`;
-            if (ec.lruCapacityPerServer) html += `<div><span style="color:#64748b;">LRU Capacity/Server:</span> ${ec.lruCapacityPerServer}</div>`;
-            if (ec.nonCachedTokens) html += `<div><span style="color:#64748b;">Non-Cached Tokens:</span> ${ec.nonCachedTokens}</div>`;
+            if (ec.maxPrefixBlocksToMatch) eppRows.push(['Max Prefix Blocks', ec.maxPrefixBlocksToMatch]);
+            if (ec.lruCapacityPerServer) eppRows.push(['LRU Capacity/Server', ec.lruCapacityPerServer]);
         }
-        html += '</div>';
+        html += settingsTable('EPP Configuration', '#6d28d9', eppRows);
         html += '</div>';
 
         // Per-Architecture Tuning Comparison Table
@@ -737,7 +705,7 @@ function renderCharts(data, runId) {
 
         if (archOrder.length > 0) {
             html += '<div style="margin-top:24px;">';
-            html += '<div style="font-weight:700;color:#1e293b;margin-bottom:10px;border-bottom:2px solid #059669;padding-bottom:4px;">Tuned Settings vs Upstream Defaults</div>';
+            html += '<div style="font-weight:700;font-size:1em;color:#1e293b;margin-bottom:8px;padding:8px 12px;background:#ecfdf5;border-left:4px solid #059669;border-radius:4px;">Tuned Settings vs Upstream Defaults</div>';
             html += '<div style="font-size:0.85em;color:#64748b;margin-bottom:12px;">Green = auto-tuned by ServeIt Studio. Gray = upstream default (unchanged).</div>';
 
             const hasEp = archOrder.includes('EP');
