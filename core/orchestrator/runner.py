@@ -1204,17 +1204,25 @@ class TestOrchestrator(ParserMixin, GuidellmMixin):
                     if log_callback:
                         log_callback("\n🔍 Scanning pod logs for critical errors...")
                     scan_result = scan_pod_logs(self.namespace, config.test_id)
+                    if scan_result.nixl_error_count > 0:
+                        result.nixl_errors = scan_result.nixl_error_count
                     if scan_result.has_errors:
-                        result.pod_errors_detected = True
                         result.pod_errors_json = scan_result.to_json()
-                        if log_callback:
-                            log_callback(f"🚨 CRITICAL POD ERRORS DETECTED: {scan_result.summary}")
-                            for report in scan_result.pod_reports:
-                                log_callback(f"   Pod: {report.pod_name}")
-                                for err in report.errors[:5]:
-                                    log_callback(f"      [{err.pattern_name}] {err.line[:150]}")
-                            log_callback(f"\n⚠️  Pods left running for investigation:")
-                            log_callback(f"   kubectl logs -n {self.namespace} -l llm-d.ai/test-id={config.test_id} -c vllm")
+                        if scan_result.has_critical_errors:
+                            result.pod_errors_detected = True
+                            if log_callback:
+                                log_callback(f"🚨 CRITICAL POD ERRORS DETECTED: {scan_result.summary}")
+                                for report in scan_result.pod_reports:
+                                    log_callback(f"   Pod: {report.pod_name}")
+                                    for err in report.errors[:5]:
+                                        log_callback(f"      [{err.pattern_name}] {err.line[:150]}")
+                                log_callback(f"\n⚠️  Pods left running for investigation:")
+                                log_callback(f"   kubectl logs -n {self.namespace} -l llm-d.ai/test-id={config.test_id} -c vllm")
+                        else:
+                            if log_callback:
+                                log_callback(f"⚠️  Pod warnings: {scan_result.summary}")
+                                if scan_result.nixl_error_count > 0:
+                                    log_callback(f"   NIXL transfer errors: {scan_result.nixl_error_count} (non-critical, vLLM retries automatically)")
                 except ImportError:
                     pass
 

@@ -134,5 +134,6 @@ class TestResult:
     # Pod error scanning
     pod_errors_detected: bool = False
     pod_errors_json: Optional[str] = None
+    nixl_errors: int = 0
 
 

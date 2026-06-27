@@ -26,6 +26,9 @@ ERROR_PATTERNS = [
     ('PYTHON_TRACEBACK', re.compile(r'^Traceback \(most recent call last\):')),
 ]
 
+# Patterns that are logged but don't stop the run
+WARNING_PATTERNS = {'NIXL_ERROR'}
+
 # Lines that match error patterns but are harmless
 FALSE_POSITIVE_PATTERNS = [
     re.compile(r'error[_\s]*(rate|count|ratio)\s*[:=]\s*0', re.IGNORECASE),
@@ -53,6 +56,8 @@ class PodErrorReport:
 @dataclass
 class ErrorScanResult:
     has_errors: bool = False
+    has_critical_errors: bool = False
+    nixl_error_count: int = 0
     pod_reports: List[PodErrorReport] = field(default_factory=list)
     scan_timestamp: str = ''
     test_id: str = ''
@@ -115,11 +120,22 @@ def scan_pod_logs(namespace: str, test_id: str, tail_lines: int = 500) -> ErrorS
 
     if result.pod_reports:
         result.has_errors = True
-        total_errors = sum(len(r.errors) for r in result.pod_reports)
+        all_errors = [(e.pattern_name, e) for r in result.pod_reports for e in r.errors]
+        critical_errors = [e for name, e in all_errors if name not in WARNING_PATTERNS]
+        warning_errors = [e for name, e in all_errors if name in WARNING_PATTERNS]
+        result.nixl_error_count = sum(1 for name, _ in all_errors if name == 'NIXL_ERROR')
+        result.has_critical_errors = len(critical_errors) > 0
+
+        total_errors = len(all_errors)
         affected_pods = len(result.pod_reports)
-        error_types = sorted(set(e.pattern_name for r in result.pod_reports for e in r.errors))
+        error_types = sorted(set(name for name, _ in all_errors))
+        parts = []
+        if critical_errors:
+            parts.append(f"{len(critical_errors)} critical")
+        if warning_errors:
+            parts.append(f"{len(warning_errors)} warning (NIXL)")
         result.summary = (
-            f"{total_errors} error(s) in {affected_pods}/{len(pod_names)} pod(s): "
+            f"{' + '.join(parts)} in {affected_pods}/{len(pod_names)} pod(s): "
             f"{', '.join(error_types)}"
         )
     else:

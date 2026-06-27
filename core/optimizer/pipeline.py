@@ -436,7 +436,10 @@ class RecipeOptimizer(
                 self.log(f"  ⚠️  Database save failed: {e}", 'warning')
 
     def _check_pod_errors(self, test_config: TestConfig, test_result: TestResult):
-        """Check for pod errors after a test and raise if found."""
+        """Check for pod errors after a test. Raise on critical errors, log NIXL warnings."""
+        if test_result.nixl_errors > 0:
+            self.log(f"  ⚠️  NIXL transfer errors: {test_result.nixl_errors} (non-critical)", 'warning')
+
         if not test_result.pod_errors_detected:
             return
         try:
