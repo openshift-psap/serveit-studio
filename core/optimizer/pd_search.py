@@ -419,7 +419,9 @@ class PDSearchMixin:
             self.log(f"  ✓ {split.prefill_pods}P×TP{split.prefill_tp} + {split.decode_pods}D×TP{split.decode_tp} "
                     f"= {self.config.total_gpus} GPUs ({split.prefill_pct:.1f}% prefill)", 'info')
 
-        self.log(f"\n  Splits to test: {len(self.feasible_splits)}", 'success')
+        active_tp_pairs = len(set((s.prefill_tp, s.decode_tp) for s in self.feasible_splits))
+        self.log(f"\n  Candidate pool: {len(self.feasible_splits)} splits across {active_tp_pairs} TP pairs"
+                 f" (adaptive search will test ~1-4 per TP pair)", 'success')
 
     def _search_aggregated_configs(self):
         """
