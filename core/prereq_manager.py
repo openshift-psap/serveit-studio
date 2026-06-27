@@ -353,18 +353,26 @@ class PrereqManager:
                 return False
 
             # Wait for Gateway deployment
-            # Istio creates {gateway_name}-istio in the same namespace
-            # OpenShift gateway controller creates {gateway_name}-{class} in openshift-ingress
-            if self.gateway_class == 'istio':
-                gateway_deployment = f"{config['gateway_name']}-istio"
+            # The gateway controller creates a deployment named {gateway_name}-{class}
+            # Try the configured class first, then scan for any matching deployment
+            gateway_base = config['gateway_name']
+            gateway_deployment = None
+            for suffix in [self.gateway_class, 'istio', 'data-science-gateway-class']:
+                r = self.kubectl.run(
+                    ['get', 'deployment', f'{gateway_base}-{suffix}', '-n', self.namespace],
+                    check=False)
+                if r.returncode == 0:
+                    gateway_deployment = f'{gateway_base}-{suffix}'
+                    break
+
+            if gateway_deployment:
                 log(f'⏳ Waiting for Gateway deployment ({gateway_deployment}) to be ready...')
                 ready = self._wait_for_deployment_ready(gateway_deployment, timeout=300, log_callback=log)
                 if not ready:
                     log('❌ Gateway deployment did not become ready')
                     return False
             else:
-                # OpenShift-managed gateway — deployment is in openshift-ingress, always up
-                log(f'✅ Gateway managed by OpenShift ({self.gateway_class}) — skipping deployment wait')
+                log(f'✅ Gateway deployment not found in namespace — managed externally')
 
             log('✅ All prerequisite infrastructure deployed and ready')
             return True
