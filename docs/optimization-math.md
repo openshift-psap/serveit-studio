@@ -252,9 +252,47 @@ Substituting into (1): `D × r × prefill_tp + D × decode_tp = usable_gpus`
 
 Solving: `D = usable_gpus / (r × prefill_tp + decode_tp)`
 
-**Why test floor/ceil ± 1?** The ideal D is usually not an integer. We test the 3-4 closest valid integer values to find the actual optimum, accounting for rounding effects and real-world performance variations.
+**Initial split selection:** The calibration-based `d_ideal` determines the first split to test per TP pair. This is derived from Steps 2-3 TPSG data before any PD tests run.
 
-**Why is this "smart"?** Exhaustive search tests ALL valid splits (could be 30+ for a 32-GPU cluster). Smart search tests ~3 per TP pair — the mathematically optimal point and its neighbors. This reduces test time by 10× while finding configurations within 1-2% of the exhaustive optimum.
+### Adaptive Rebalancing (Step 7 Feedback Loop)
+
+After each PD test, the optimizer reads vLLM metrics (`num_requests_waiting` per pod) to compute the waiting ratio between decode and prefill:
+
+```
+decode_avg_waiting = mean(num_requests_waiting) across decode pods
+prefill_avg_waiting = mean(num_requests_waiting) across prefill pods
+ratio = decode_avg_waiting / prefill_avg_waiting
+```
+
+If the ratio is outside 0.8–1.2 (one side is the bottleneck), the optimizer computes a rebalanced split:
+
+```
+total_decode_waiting = decode_avg_waiting × decode_pods
+total_prefill_waiting = prefill_avg_waiting × prefill_pods
+
+GPU constraint: new_D × decode_tp + new_P × prefill_tp = total_gpus
+Balance target: total_decode_waiting / new_D = total_prefill_waiting / new_P
+
+Solving: new_D = total_gpus × total_decode_waiting / (decode_tp × total_decode_waiting + prefill_tp × total_prefill_waiting)
+```
+
+**Example:** 18P(TP2) + 14D(TP2) on 64 GPUs. Decode waiting=30/pod, prefill waiting=20/pod (ratio=1.5).
+- Total decode waiting: 30 × 14 = 420
+- Total prefill waiting: 20 × 18 = 360
+- new_D = 64 × 420 / (2 × 420 + 2 × 360) = 26880 / 1560 = 17.2 → 17D + 15P
+- Shift 3 pods from prefill to decode
+
+**Asymmetric TP example:** 8P(TP4) + 16D(TP2) on 64 GPUs. Decode waiting=30/pod, prefill waiting=5/pod.
+- GPU constraint: `new_D × 2 + new_P × 4 = 64`
+- The formula correctly accounts for different GPU costs per pod
+
+**Iteration:** Up to 4 tests per TP pair. Stops early when:
+- Ratio is 0.8–1.2 (balanced)
+- Both sides have low waiting (< 0.5/pod, system not saturated)
+- Computed next split was already tested
+- No valid split exists closer to the ideal
+
+**Fallback:** If vLLM metrics are unavailable (no PodMonitor, metrics collection failed), falls back to testing all pre-planned splits from the calibration-based smart search.
 
 ---
 
