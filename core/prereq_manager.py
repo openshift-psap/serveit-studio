@@ -171,25 +171,6 @@ class PrereqManager:
 
             config = arch_config[architecture]
 
-            status = self.check_prereqs_exist(config['gaie_name'], config['gaie_pool_name'], config['gateway_name'])
-
-            if all(status.values()):
-                log(f'✅ All prerequisites for {architecture} already deployed')
-                # Ensure RDMA configmap, PodMonitor, and network resources exist even on the fast path
-                context = {'namespace': self.namespace}
-                self._ensure_rdma_discovery(context, log)
-                self._ensure_pod_monitor(log)
-                if optimizer_config:
-                    self._ensure_network_resources(optimizer_config, log)
-                    if getattr(optimizer_config, 'per_node_storage', False):
-                        node_nfs_pvcs = self._ensure_per_node_pvcs(optimizer_config, log)
-                        if node_nfs_pvcs:
-                            optimizer_config.node_nfs_pvcs = node_nfs_pvcs
-                if self._check_prereqs_ready(config['gaie_name'], log_callback=log):
-                    return True
-                log(f'   ⏳ Waiting for GAIE deployment to become ready...')
-                return self._wait_for_deployment_ready(config['gaie_name'], timeout=60, log_callback=log)
-
             log(f'📦 Deploying prerequisite infrastructure for {architecture} architecture...')
 
             # Resolve EPP plugin weights from preset
@@ -326,9 +307,9 @@ class PrereqManager:
             for resource_type, template_path in resources:
                 resource_name = context['gaie_name'] if 'gaie' in template_path else context.get('gateway_name', 'infra-pd-inference-gateway')
 
-                # Always apply Deployment and ConfigMap so image/config changes take effect.
-                # Skip-if-exists only for immutable resources (RBAC, networking).
-                if resource_type not in ('Deployment', 'ConfigMap'):
+                # Always apply Deployment, ConfigMap, and InferencePool so image/config/targetPorts
+                # changes take effect across version upgrades. Skip-if-exists only for immutable resources.
+                if resource_type not in ('Deployment', 'ConfigMap', 'InferencePool'):
                     check_cmd = None
                     if resource_type in ['ServiceAccount', 'Role', 'RoleBinding', 'Service']:
                         check_cmd = ['get', resource_type.lower(), resource_name, '-n', self.namespace]
