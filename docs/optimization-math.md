@@ -286,11 +286,15 @@ Solving: new_D = total_gpus × total_decode_waiting / (decode_tp × total_decode
 - GPU constraint: `new_D × 2 + new_P × 4 = 64`
 - The formula correctly accounts for different GPU costs per pod
 
+**Split constraints:** Minimum 1 prefill pod and 1 decode pod. No artificial floor on the prefill ratio — the rebalancing formula can produce extreme splits like 1P+31D if the workload is decode-heavy (e.g., 0% cache hit with short OSL). This is correct: with random data every request hits prefill once but occupies decode for the entire output generation.
+
 **Iteration:** Up to 4 tests per TP pair. Stops early when:
 - Ratio is 0.8–1.2 (balanced)
 - Both sides have low waiting (< 0.5/pod, system not saturated)
 - Computed next split was already tested
 - No valid split exists closer to the ideal
+
+**Overload handling:** If guidellm reports >2% errors and all sampled errors are 503/disconnect (overload), the result is accepted without retry — it means the config is at capacity. The metrics from successful requests are still valid for Pareto ranking.
 
 **Fallback:** If vLLM metrics are unavailable (no PodMonitor, metrics collection failed), falls back to testing all pre-planned splits from the calibration-based smart search.
 
