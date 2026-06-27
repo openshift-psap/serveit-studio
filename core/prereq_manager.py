@@ -602,7 +602,53 @@ class PrereqManager:
         else:
             log(f'   ⚠️  PodMonitor creation failed: {r.stderr}')
 
-        # EPP metrics PodMonitor — EPP v0.9.0+ only (older versions require auth on metrics port)
+        # EPP metrics PodMonitor — requires SA token secret for kube-rbac-proxy auth
+        r = self.kubectl.run(
+            ['get', 'podmonitor', 'epp-metrics', '-n', self.namespace],
+            check=False)
+        if r.returncode != 0:
+            epp_sa = context.get('gaie_name', 'gaie-pd-epp')
+            # Create long-lived SA token secret for Prometheus to authenticate with EPP metrics
+            token_secret = json.dumps({
+                'apiVersion': 'v1',
+                'kind': 'Secret',
+                'metadata': {
+                    'name': 'epp-metrics-token',
+                    'namespace': self.namespace,
+                    'annotations': {'kubernetes.io/service-account.name': epp_sa}
+                },
+                'type': 'kubernetes.io/service-account-token'
+            })
+            self.kubectl.run(
+                ['apply', '-f', '-', '-n', self.namespace],
+                input_data=token_secret, check=False)
+
+            epp_manifest = json.dumps({
+                'apiVersion': 'monitoring.coreos.com/v1',
+                'kind': 'PodMonitor',
+                'metadata': {
+                    'name': 'epp-metrics',
+                    'namespace': self.namespace,
+                },
+                'spec': {
+                    'selector': {
+                        'matchExpressions': [{'key': 'inferencepool', 'operator': 'Exists'}]
+                    },
+                    'podMetricsEndpoints': [{
+                        'port': 'metrics',
+                        'path': '/metrics',
+                        'interval': '15s',
+                        'bearerTokenSecret': {'name': 'epp-metrics-token', 'key': 'token'},
+                    }]
+                }
+            })
+            r = self.kubectl.run(
+                ['apply', '-f', '-', '-n', self.namespace],
+                input_data=epp_manifest, check=False)
+            if r.returncode == 0:
+                log('   ✅ PodMonitor created (EPP metrics scraping)')
+            else:
+                log(f'   ⚠️  EPP PodMonitor creation failed: {r.stderr}')
 
     def _ensure_rdma_discovery(self, context, log_callback=None):
         """Deploy rdma-discovery-script ConfigMap if missing."""
