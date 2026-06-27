@@ -135,5 +135,6 @@ class TestResult:
     pod_errors_detected: bool = False
     pod_errors_json: Optional[str] = None
     nixl_errors: int = 0
+    guidellm_retries: int = 0
 
 

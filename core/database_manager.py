@@ -577,6 +577,7 @@ class DatabaseManager:
             'vllm_fixed_overhead_gb': getattr(test_result, 'vllm_fixed_overhead_gb', None),
             'vllm_gpu_blocks': getattr(test_result, 'vllm_gpu_blocks', None),
             'nixl_errors': getattr(test_result, 'nixl_errors', 0),
+            'guidellm_retries': getattr(test_result, 'guidellm_retries', 0),
         })
 
         # Serialize full TestConfig for report detail view

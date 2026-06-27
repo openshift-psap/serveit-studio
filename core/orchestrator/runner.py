@@ -1197,7 +1197,9 @@ class TestOrchestrator(ParserMixin, GuidellmMixin):
                         elif error_pct > 1.0 and guidellm_attempt < max_guidellm_retries:
                             if log_callback:
                                 log_callback(f"⚠️  Error rate {error_pct:.1f}% ({errored}/{total}) — retrying guidellm")
+                            result.guidellm_retries = guidellm_attempt
                             continue
+                    result.guidellm_retries = guidellm_attempt - 1
                     break
 
                 # Step 6: Collect metrics (if configured)
