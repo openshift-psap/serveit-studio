@@ -513,65 +513,232 @@ class PDSearchMixin:
                  f"(selected by {criterion})", 'success')
         self.log(f"   TTFT p90: {best_ttft:.1f}ms, Throughput mean: {best_tput:.2f} req/s", 'info')
 
+    def _get_waiting_ratio(self, result):
+        """Extract per-pod waiting ratio (decode/prefill) from test metrics.
+
+        Returns (decode_avg_waiting, prefill_avg_waiting, ratio) or None if
+        metrics are unavailable.
+        """
+        if not result.metrics_file:
+            return None
+        import json as _json
+        try:
+            with open(result.metrics_file) as f:
+                data = _json.load(f)
+        except Exception:
+            return None
+
+        metrics = data.get('metrics', {})
+        waiting_key = [k for k in metrics if 'num_requests_waiting' in k]
+        if not waiting_key:
+            return None
+
+        val = metrics[waiting_key[0]]
+        if not isinstance(val, dict) or 'data' not in val:
+            return None
+
+        results = val.get('data', {}).get('result', [])
+        if not results:
+            return None
+
+        prefill_avgs, decode_avgs = [], []
+        for r in results:
+            pod = r.get('metric', {}).get('pod', '')
+            values = r.get('values', [])
+            nums = [float(v[1]) for v in values if v[1] != 'NaN']
+            if not nums:
+                continue
+            avg = sum(nums) / len(nums)
+            if 'prefill' in pod:
+                prefill_avgs.append(avg)
+            elif 'decode' in pod:
+                decode_avgs.append(avg)
+
+        if not prefill_avgs or not decode_avgs:
+            return None
+
+        prefill_avg = sum(prefill_avgs) / len(prefill_avgs)
+        decode_avg = sum(decode_avgs) / len(decode_avgs)
+        ratio = decode_avg / prefill_avg if prefill_avg > 0.1 else (10.0 if decode_avg > 0.5 else 1.0)
+
+        return decode_avg, prefill_avg, ratio
+
+    def _compute_balanced_split(self, ptp, dtp, tested_split, decode_wait, prefill_wait):
+        """Compute the balanced split based on waiting ratio.
+
+        Uses the waiting ratio to determine how many pods to shift between
+        prefill and decode to equalize per-pod waiting queues.
+        """
+        total_decode_waiting = decode_wait * tested_split.decode_pods
+        total_prefill_waiting = prefill_wait * tested_split.prefill_pods
+        total_gpus = tested_split.total_gpus
+
+        if total_decode_waiting + total_prefill_waiting < 0.1:
+            return None
+
+        # Solve: total_decode_waiting / new_D = total_prefill_waiting / new_P
+        # with new_D * dtp + new_P * ptp = total_gpus
+        # => new_D = total_gpus * total_decode_waiting / (dtp * total_decode_waiting + ptp * total_prefill_waiting)
+        denom = dtp * total_decode_waiting + ptp * total_prefill_waiting
+        if denom <= 0:
+            return None
+
+        ideal_d = total_gpus * total_decode_waiting / denom
+        import math
+        candidate_d_values = sorted({max(1, math.floor(ideal_d)), max(1, math.ceil(ideal_d))})
+
+        all_valid = {s.decode_pods: s for s in self._generate_splits_for_tp_pair(ptp, dtp)}
+        if not all_valid:
+            return None
+
+        # Find closest valid split to ideal
+        best = None
+        best_dist = float('inf')
+        for d_target in candidate_d_values:
+            for d_actual in sorted(all_valid.keys(), key=lambda d: abs(d - d_target)):
+                dist = abs(d_actual - ideal_d)
+                if dist < best_dist:
+                    best_dist = dist
+                    best = all_valid[d_actual]
+                break
+
+        return best
+
+    def _run_split_test(self, split, test_num, total):
+        """Run a single PD split test. Returns (split, result) or raises on failure."""
+        test_id = f"step7-{split.prefill_pods}p{split.decode_pods}d-ptp{split.prefill_tp}-dtp{split.decode_tp}"
+        self.log(f"  Test {test_num}/{total}: "
+                f"{split.prefill_pods}P×TP{split.prefill_tp} + "
+                f"{split.decode_pods}D×TP{split.decode_tp} ({split.prefill_pct:.0f}% prefill)", 'info')
+
+        if test_id in self.completed_tests:
+            row = self.completed_tests[test_id]
+            result = self._make_test_result_from_db(row)
+            self.log("    ⏩ Resuming from DB (already completed)", 'info')
+        else:
+            test_config = self._create_pd_config(split)
+
+            result = self.orchestrator.run_test(
+                test_config,
+                cleanup=True,
+                log_callback=lambda msg: self.log(msg, 'info'),
+                stop_check=self._should_stop
+            )
+
+            self.all_test_results.append((test_config, result))
+            self._save_test_to_database(test_config, result)
+            self._check_pod_errors(test_config, result)
+            self._check_request_errors(test_config, result)
+
+            if not result or not result.guidellm_success:
+                self.log("    ❌ Test failed - STOPPING optimization", 'error')
+                self.log(f"    🔍 Debug: kubectl get pods -n {self.config.namespace} -l test-id={test_id}", 'error')
+                self.log(f"    🧹 Cleanup: kubectl delete lws -n {self.config.namespace} -l test-id={test_id}", 'error')
+                raise RuntimeError(f"Test {test_id} failed - stopping optimization")
+
+        ttft = result.ttft_p90 or result.ttft_p50 or 1000000.0
+        throughput = result.throughput_mean or result.throughput_p90 or 0.0
+        self.log(f"    ✅ TTFT p90: {ttft:.1f}ms, Throughput mean: {throughput:.2f} req/s", 'success')
+
+        return result
+
     def _optimize_pd_splits(self):
         """
-        Step 7: Exhaustively test all selected P/D splits.
+        Step 7: Adaptive P/D split search.
 
-        Tests each feasible split and identifies the Pareto front
-        (configurations where no other is better in both TTFT and throughput).
+        For each TP pair: test the calibration-based ideal split first, then
+        use the vLLM waiting ratio (decode vs prefill per-pod queue depth)
+        to compute and test a rebalanced split. Iterates up to 4 times per
+        TP pair until the waiting ratio is balanced (0.7-1.4).
         """
         if not self.feasible_splits:
             self.log("❌ No feasible splits to test!", 'error')
             return
 
-        self.log(f"Testing all {len(self.feasible_splits)} P/D split configurations...", 'info')
         isl_s = f"ISL={self.config.isl}" + (f"(σ={self.config.isl_stdev})" if self.config.isl_stdev else "")
         osl_s = f"OSL={self.config.osl}" + (f"(σ={self.config.osl_stdev})" if self.config.osl_stdev else "")
         turns_s = f", Turns={self.config.turns}" if self.config.turns > 1 else ""
         rate_label = f"Concurrency={int(self.config.qps)}" if self.config.rate_type == 'concurrent' else f"Rate={int(self.config.qps)} req/s ({self.config.rate_type})"
         self.log(f"Workload: {isl_s}, {osl_s}, {rate_label}{turns_s}", 'info')
 
-        for i, split in enumerate(self.feasible_splits):
+        # Group feasible splits by TP pair
+        from collections import defaultdict
+        splits_by_tp = defaultdict(list)
+        for s in self.feasible_splits:
+            splits_by_tp[(s.prefill_tp, s.decode_tp)].append(s)
+
+        test_num = 0
+        total_planned = len(self.feasible_splits)
+        max_iterations = 4
+
+        for (ptp, dtp), tp_splits in splits_by_tp.items():
             if self._should_stop():
                 break
 
-            test_id = f"step7-{split.prefill_pods}p{split.decode_pods}d-ptp{split.prefill_tp}-dtp{split.decode_tp}"
-            self.log(f"  Test {i + 1}/{len(self.feasible_splits)}: "
-                    f"{split.prefill_pods}P×TP{split.prefill_tp} + "
-                    f"{split.decode_pods}D×TP{split.decode_tp} ({split.prefill_pct:.0f}% prefill)", 'info')
+            tp_label = f"TP={ptp}" if ptp == dtp else f"PTP={ptp}/DTP={dtp}"
+            self.log(f"\n  --- {tp_label}: {len(tp_splits)} initial candidates ---", 'info')
 
-            # Check for completed test from previous run
-            if test_id in self.completed_tests:
-                row = self.completed_tests[test_id]
-                result = self._make_test_result_from_db(row)
-                self.log("    ⏩ Resuming from DB (already completed)", 'info')
-            else:
-                test_config = self._create_pd_config(split)
+            tested_keys = set()
+            iteration = 0
 
-                result = self.orchestrator.run_test(
-                    test_config,
-                    cleanup=True,
-                    log_callback=lambda msg: self.log(msg, 'info'),
-                    stop_check=self._should_stop
-                )
+            # Start with the first planned split (calibration-based ideal)
+            current_split = tp_splits[0]
 
-                self.all_test_results.append((test_config, result))
-                self._save_test_to_database(test_config, result)
-                self._check_pod_errors(test_config, result)
-                self._check_request_errors(test_config, result)
+            while iteration < max_iterations and not self._should_stop():
+                iteration += 1
+                split_key = (current_split.prefill_pods, current_split.decode_pods)
 
-                if not result or not result.guidellm_success:
-                    self.log("    ❌ Test failed - STOPPING optimization", 'error')
-                    self.log(f"    🔍 Debug: kubectl get pods -n {self.config.namespace} -l test-id={test_id}", 'error')
-                    self.log(f"    🧹 Cleanup: kubectl delete lws -n {self.config.namespace} -l test-id={test_id}", 'error')
-                    raise RuntimeError(f"Test {test_id} failed - stopping optimization")
+                if split_key in tested_keys:
+                    self.log(f"    ⏭️  Already tested {current_split.prefill_pods}P+{current_split.decode_pods}D, stopping iteration", 'info')
+                    break
 
-            ttft = result.ttft_p90 if result.ttft_p90 else result.ttft_p50 if result.ttft_p50 else 1000000.0
-            throughput = result.throughput_p90 if result.throughput_p90 else result.throughput_p50 if result.throughput_p50 else 0.0
+                tested_keys.add(split_key)
+                test_num += 1
 
-            self.log(f"    ✅ TTFT p90: {ttft:.1f}ms, Throughput mean: {throughput:.2f} req/s", 'success')
+                result = self._run_split_test(current_split, test_num, total_planned)
+                self.pareto_results.append((current_split, result))
 
-            self.pareto_results.append((split, result))
+                # Analyze waiting ratio to decide next split
+                waiting = self._get_waiting_ratio(result)
+                if waiting is None:
+                    self.log(f"    ℹ️  No vLLM waiting metrics — testing remaining planned splits", 'info')
+                    # Fall back to testing remaining planned splits
+                    for s in tp_splits[1:]:
+                        if self._should_stop():
+                            break
+                        sk = (s.prefill_pods, s.decode_pods)
+                        if sk in tested_keys:
+                            continue
+                        tested_keys.add(sk)
+                        test_num += 1
+                        r = self._run_split_test(s, test_num, total_planned)
+                        self.pareto_results.append((s, r))
+                    break
+
+                decode_wait, prefill_wait, ratio = waiting
+                self.log(f"    📊 Waiting ratio: decode={decode_wait:.1f}/pod, prefill={prefill_wait:.1f}/pod, ratio={ratio:.2f}", 'info')
+
+                # Balanced enough (0.7-1.4) — no need to iterate further for this TP
+                if 0.7 <= ratio <= 1.4:
+                    self.log(f"    ✅ Balanced (ratio {ratio:.2f} within 0.7-1.4) — moving to next TP pair", 'success')
+                    break
+
+                # Both sides have very low waiting — system not saturated, no signal
+                if decode_wait < 0.5 and prefill_wait < 0.5:
+                    self.log(f"    ✅ Low queue depth on both sides — system not saturated", 'info')
+                    break
+
+                # Compute rebalanced split
+                next_split = self._compute_balanced_split(ptp, dtp, current_split, decode_wait, prefill_wait)
+                if next_split is None or (next_split.prefill_pods, next_split.decode_pods) in tested_keys:
+                    self.log(f"    ℹ️  No new split to test — stopping iteration", 'info')
+                    break
+
+                direction = "more decode" if ratio > 1.4 else "more prefill"
+                self.log(f"    🔄 Rebalancing: {direction} → "
+                        f"{next_split.prefill_pods}P+{next_split.decode_pods}D "
+                        f"(iteration {iteration + 1}/{max_iterations})", 'info')
+                current_split = next_split
 
         # Find Pareto front from results
         pareto_front = self._find_pareto_front()
