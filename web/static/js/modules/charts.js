@@ -573,7 +573,7 @@ function renderCharts(data, runId) {
 
         function settingsTable(title, color, rows) {
             let t = `<table class="results-table" style="font-size:0.85em;margin-bottom:16px;">`;
-            t += `<tr><th colspan="2" style="background:${color};text-align:left;">${title}</th></tr>`;
+            t += `<tr><th colspan="2" style="background:${color};text-align:center;font-size:1.05em;">${title}</th></tr>`;
             rows.forEach(function(r) {
                 if (r) t += `<tr><td style="color:#64748b;width:40%;">${r[0]}</td><td><strong>${r[1]}</strong></td></tr>`;
             });
