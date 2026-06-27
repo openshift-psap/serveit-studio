@@ -719,8 +719,8 @@ class PDSearchMixin:
                 self.log(f"    📊 Waiting ratio: decode={decode_wait:.1f}/pod, prefill={prefill_wait:.1f}/pod, ratio={ratio:.2f}", 'info')
 
                 # Balanced enough (0.7-1.4) — no need to iterate further for this TP
-                if 0.7 <= ratio <= 1.4:
-                    self.log(f"    ✅ Balanced (ratio {ratio:.2f} within 0.7-1.4) — moving to next TP pair", 'success')
+                if 0.8 <= ratio <= 1.2:
+                    self.log(f"    ✅ Balanced (ratio {ratio:.2f} within 0.8-1.2) — moving to next TP pair", 'success')
                     break
 
                 # Both sides have very low waiting — system not saturated, no signal
@@ -734,7 +734,7 @@ class PDSearchMixin:
                     self.log(f"    ℹ️  No new split to test — stopping iteration", 'info')
                     break
 
-                direction = "more decode" if ratio > 1.4 else "more prefill"
+                direction = "more decode" if ratio > 1.2 else "more prefill"
                 self.log(f"    🔄 Rebalancing: {direction} → "
                         f"{next_split.prefill_pods}P+{next_split.decode_pods}D "
                         f"(iteration {iteration + 1}/{max_iterations})", 'info')
