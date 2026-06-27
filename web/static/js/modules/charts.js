@@ -2350,43 +2350,50 @@ function renderCharts(data, runId) {
         const vllmLayout = { ...plotlyLayout, margin: { ...plotlyLayout.margin, b: 100 }, barmode: 'group', showlegend: true, legend: { x: 0, y: 1.15, orientation: 'h' } };
         const pColors = { p50: '#60a5fa', p90: '#3b82f6', p95: '#f59e0b', p99: '#ef4444' };
 
+        const barText = (vals, fmt) => vals.map(v => v != null ? (fmt === 'int' ? Math.round(v).toLocaleString() : v.toFixed(1)) : '');
+        const barTextCfg = { textposition: 'outside', textfont: { size: 10, color: '#334155' }, cliponaxis: false, constraintext: 'none' };
+
         // Chart 1: TTFT Percentiles (grouped bar)
         Plotly.newPlot(cid('chart-vllm-ttft'), [
-            { x: vllm.configs, y: vllm.ttft.p50, name: 'P50', type: 'bar', marker: { color: pColors.p50 } },
-            { x: vllm.configs, y: vllm.ttft.p90, name: 'P90', type: 'bar', marker: { color: pColors.p90 } },
-            { x: vllm.configs, y: vllm.ttft.p95, name: 'P95', type: 'bar', marker: { color: pColors.p95 } },
-            { x: vllm.configs, y: vllm.ttft.p99, name: 'P99', type: 'bar', marker: { color: pColors.p99 } },
+            { x: vllm.configs, y: vllm.ttft.p50, name: 'P50', type: 'bar', marker: { color: pColors.p50 }, text: barText(vllm.ttft.p50, 'int'), ...barTextCfg },
+            { x: vllm.configs, y: vllm.ttft.p90, name: 'P90', type: 'bar', marker: { color: pColors.p90 }, text: barText(vllm.ttft.p90, 'int'), ...barTextCfg },
+            { x: vllm.configs, y: vllm.ttft.p95, name: 'P95', type: 'bar', marker: { color: pColors.p95 }, text: barText(vllm.ttft.p95, 'int'), ...barTextCfg },
+            { x: vllm.configs, y: vllm.ttft.p99, name: 'P99', type: 'bar', marker: { color: pColors.p99 }, text: barText(vllm.ttft.p99, 'int'), ...barTextCfg },
         ], { ...vllmLayout, xaxis: { tickangle: -35 }, yaxis: { title: 'TTFT (ms) — lower is better', tickformat: '.2s' } }, plotlyConfig);
 
         // Chart 2: ITL Percentiles (grouped bar)
         Plotly.newPlot(cid('chart-vllm-itl'), [
-            { x: vllm.configs, y: vllm.itl.p50, name: 'P50', type: 'bar', marker: { color: pColors.p50 } },
-            { x: vllm.configs, y: vllm.itl.p90, name: 'P90', type: 'bar', marker: { color: pColors.p90 } },
-            { x: vllm.configs, y: vllm.itl.p95, name: 'P95', type: 'bar', marker: { color: pColors.p95 } },
-            { x: vllm.configs, y: vllm.itl.p99, name: 'P99', type: 'bar', marker: { color: pColors.p99 } },
+            { x: vllm.configs, y: vllm.itl.p50, name: 'P50', type: 'bar', marker: { color: pColors.p50 }, text: barText(vllm.itl.p50), ...barTextCfg },
+            { x: vllm.configs, y: vllm.itl.p90, name: 'P90', type: 'bar', marker: { color: pColors.p90 }, text: barText(vllm.itl.p90), ...barTextCfg },
+            { x: vllm.configs, y: vllm.itl.p95, name: 'P95', type: 'bar', marker: { color: pColors.p95 }, text: barText(vllm.itl.p95), ...barTextCfg },
+            { x: vllm.configs, y: vllm.itl.p99, name: 'P99', type: 'bar', marker: { color: pColors.p99 }, text: barText(vllm.itl.p99), ...barTextCfg },
         ], { ...vllmLayout, xaxis: { tickangle: -35 }, yaxis: { title: 'ITL (ms) — lower is better', tickformat: '.2s' } }, plotlyConfig);
 
         // Chart 3: E2E Latency (grouped bar)
         Plotly.newPlot(cid('chart-vllm-e2e'), [
-            { x: vllm.configs, y: vllm.e2e.p50, name: 'P50', type: 'bar', marker: { color: pColors.p50 } },
-            { x: vllm.configs, y: vllm.e2e.p90, name: 'P90', type: 'bar', marker: { color: pColors.p90 } },
-            { x: vllm.configs, y: vllm.e2e.p95, name: 'P95', type: 'bar', marker: { color: pColors.p95 } },
-            { x: vllm.configs, y: vllm.e2e.p99, name: 'P99', type: 'bar', marker: { color: pColors.p99 } },
+            { x: vllm.configs, y: vllm.e2e.p50, name: 'P50', type: 'bar', marker: { color: pColors.p50 }, text: barText(vllm.e2e.p50), ...barTextCfg },
+            { x: vllm.configs, y: vllm.e2e.p90, name: 'P90', type: 'bar', marker: { color: pColors.p90 }, text: barText(vllm.e2e.p90), ...barTextCfg },
+            { x: vllm.configs, y: vllm.e2e.p95, name: 'P95', type: 'bar', marker: { color: pColors.p95 }, text: barText(vllm.e2e.p95), ...barTextCfg },
+            { x: vllm.configs, y: vllm.e2e.p99, name: 'P99', type: 'bar', marker: { color: pColors.p99 }, text: barText(vllm.e2e.p99), ...barTextCfg },
         ], { ...vllmLayout, xaxis: { tickangle: -35 }, yaxis: { title: 'E2E Latency (seconds) — lower is better', tickformat: '.2s' } }, plotlyConfig);
 
         // Chart 4: Token Throughput (grouped bar)
         Plotly.newPlot(cid('chart-vllm-tokens'), [
             { x: vllm.configs, y: vllm.token_rates.prompt, name: 'Prompt Tokens/s', type: 'bar', marker: { color: '#6366f1' },
+              text: barText(vllm.token_rates.prompt, 'int'), ...barTextCfg,
               hovertemplate: '<b>%{x}</b><br>Prompt: %{y:.0f} tokens/s<extra></extra>' },
             { x: vllm.configs, y: vllm.token_rates.generation, name: 'Generation Tokens/s', type: 'bar', marker: { color: '#10b981' },
+              text: barText(vllm.token_rates.generation, 'int'), ...barTextCfg,
               hovertemplate: '<b>%{x}</b><br>Generation: %{y:.0f} tokens/s<extra></extra>' },
         ], { ...vllmLayout, xaxis: { tickangle: -35 }, yaxis: { title: 'Tokens/second — higher is better' } }, plotlyConfig);
 
         // Chart 5: Request Queue & KV Cache (dual axis)
         Plotly.newPlot(cid('chart-vllm-queue'), [
             { x: vllm.configs, y: vllm.request_state.running, name: 'Avg Running', type: 'bar', marker: { color: '#3b82f6' },
+              text: barText(vllm.request_state.running), ...barTextCfg,
               hovertemplate: '<b>%{x}</b><br>Running: %{y:.1f}<extra></extra>' },
             { x: vllm.configs, y: vllm.request_state.waiting, name: 'Avg Waiting', type: 'bar', marker: { color: '#ef4444' },
+              text: barText(vllm.request_state.waiting), ...barTextCfg,
               hovertemplate: '<b>%{x}</b><br>Waiting: %{y:.1f}<extra></extra>' },
             { x: vllm.configs, y: vllm.request_state.kv_cache, name: 'KV Cache %', type: 'scatter', mode: 'lines+markers', yaxis: 'y2',
               line: { color: '#f59e0b', width: 3 }, marker: { size: 10, symbol: 'diamond', color: '#f59e0b', line: { width: 2, color: 'white' } },
