@@ -31,7 +31,7 @@ class PrereqManager:
             namespace: Kubernetes namespace
             kubeconfig: Path to kubeconfig file
             kubectl_runner: Existing KubectlRunner to reuse (creates new if None)
-            scheduler_image: Custom EPP scheduler image (default: llm-d-inference-scheduler:v0.9.0)
+            scheduler_image: Custom EPP scheduler image (default: llm-d-inference-scheduler:v0.8.0)
         """
         self.namespace = namespace
         self.kubectl = kubectl_runner or KubectlRunner(kubeconfig=kubeconfig, namespace=namespace)
