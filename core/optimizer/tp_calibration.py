@@ -65,8 +65,11 @@ class TPCalibrationMixin:
                 self._save_test_to_database(test_config, result)
 
                 if not result or not result.guidellm_success:
-                    self.log(f"    ⚠️  TP={tp} failed (likely OOM or insufficient memory) — skipping", 'warning')
-                    continue
+                    if self._is_memory_failure(result):
+                        self.log(f"    ⚠️  TP={tp} failed (OOM / insufficient memory) — skipping", 'warning')
+                        continue
+                    self.log(f"    ❌ TP={tp} failed (non-memory error) — stopping", 'error')
+                    raise RuntimeError(f"Test {test_id} failed - stopping optimization")
 
                 self._check_pod_errors(test_config, result)
                 self._check_request_errors(test_config, result)
@@ -77,7 +80,7 @@ class TPCalibrationMixin:
             elif result.throughput_p50 and result.throughput_p50 > 0:
                 tpsg = (result.throughput_p50 * self.config.osl) / tp
             else:
-                self.log("    ⚠️  No throughput metric available — skipping TP={tp}", 'warning')
+                self.log(f"    ⚠️  No throughput metric available — skipping TP={tp}", 'warning')
                 continue
 
             ttft = result.ttft_p90 if result.ttft_p90 else float('inf')
@@ -182,8 +185,11 @@ class TPCalibrationMixin:
                 self._save_test_to_database(test_config, result)
 
                 if not result or not result.guidellm_success:
-                    self.log(f"    ⚠️  TP={tp} failed (likely OOM or insufficient memory) — skipping", 'warning')
-                    continue
+                    if self._is_memory_failure(result):
+                        self.log(f"    ⚠️  TP={tp} failed (OOM / insufficient memory) — skipping", 'warning')
+                        continue
+                    self.log(f"    ❌ TP={tp} failed (non-memory error) — stopping", 'error')
+                    raise RuntimeError(f"Test {test_id} failed - stopping optimization")
 
                 self._check_pod_errors(test_config, result)
                 self._check_request_errors(test_config, result)

@@ -435,6 +435,23 @@ class RecipeOptimizer(
             except Exception as e:
                 self.log(f"  ⚠️  Database save failed: {e}", 'warning')
 
+    def _is_memory_failure(self, result) -> bool:
+        """Check if a test failure was caused by OOM or insufficient memory."""
+        if not result:
+            return False
+        oom_patterns = ['out of memory', 'oom', 'no available memory for the cache blocks',
+                        'cudaErrorMemoryAllocation', 'CUDA_OOM', 'OOM_KILLED',
+                        'Cannot allocate memory', 'oom-kill']
+        # Check error_message
+        err = (result.error_message or '').lower()
+        if any(p.lower() in err for p in oom_patterns):
+            return True
+        # Check pod_errors_json
+        pod_errs = (result.pod_errors_json or '').lower()
+        if any(p.lower() in pod_errs for p in oom_patterns):
+            return True
+        return False
+
     def _check_pod_errors(self, test_config: TestConfig, test_result: TestResult):
         """Check for pod errors after a test. Raise on critical errors, log NIXL warnings."""
         if test_result.nixl_errors > 0:
