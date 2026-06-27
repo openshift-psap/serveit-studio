@@ -378,6 +378,69 @@ class TestOrchestrator(ParserMixin, GuidellmMixin):
             log_callback(f"   Timeout after {elapsed}s waiting for model to load")
         return -1
 
+    def _collect_pod_timings(self, test_id: str, log_callback=None) -> Optional[dict]:
+        """Collect per-pod creation time and model load time.
+
+        Uses pod startTime and 'Application startup complete' log timestamp
+        to compute how long each pod took from creation to serving.
+        """
+        from datetime import datetime as _dt
+        try:
+            r = subprocess.run(
+                ['kubectl', 'get', 'pods', '-n', self.namespace,
+                 '-l', f'llm-d.ai/test-id={test_id}',
+                 '-o', 'jsonpath={range .items[*]}{.metadata.name}|{.status.startTime}\\n{end}'],
+                capture_output=True, text=True, timeout=15, check=False
+            )
+            if r.returncode != 0 or not r.stdout.strip():
+                return None
+
+            pod_starts = {}
+            for line in r.stdout.strip().splitlines():
+                parts = line.split('|')
+                if len(parts) == 2 and parts[0] and parts[1]:
+                    pod_starts[parts[0]] = parts[1]
+
+            timings = {}
+            for pod_name, start_str in pod_starts.items():
+                start_time = _dt.fromisoformat(start_str.replace('Z', '+00:00'))
+
+                log_r = subprocess.run(
+                    ['kubectl', 'logs', pod_name, '-n', self.namespace,
+                     '-c', 'vllm', '--timestamps', '--tail=200'],
+                    capture_output=True, text=True, timeout=30, check=False
+                )
+                model_ready_time = None
+                if log_r.returncode == 0:
+                    for log_line in log_r.stdout.splitlines():
+                        if 'Application startup complete' in log_line:
+                            ts = log_line.split(' ')[0].rstrip('Z')
+                            try:
+                                if '.' in ts and len(ts.split('.')[-1]) > 6:
+                                    ts = ts[:ts.index('.') + 7]
+                                model_ready_time = _dt.fromisoformat(ts + '+00:00')
+                            except Exception:
+                                pass
+                            break
+
+                pod_info = {'start_time': start_str}
+                if model_ready_time:
+                    load_s = int((model_ready_time - start_time).total_seconds())
+                    pod_info['model_load_s'] = load_s
+                    pod_info['ready_time'] = model_ready_time.isoformat()
+
+                timings[pod_name] = pod_info
+
+            if timings and log_callback:
+                load_times = [v['model_load_s'] for v in timings.values() if 'model_load_s' in v]
+                if load_times:
+                    log_callback(f"   📊 Pod load times: min={min(load_times)}s, max={max(load_times)}s, avg={sum(load_times)//len(load_times)}s ({len(load_times)} pods)")
+
+            return timings
+        except Exception as e:
+            logger.warning(f"Failed to collect pod timings: {e}")
+            return None
+
     def _wait_for_gateway_ready(
         self,
         endpoint: str,
@@ -1064,6 +1127,11 @@ class TestOrchestrator(ParserMixin, GuidellmMixin):
                 return result
 
             result.model_load_time_s = model_load_time
+
+            # Collect per-pod timing (creation → model loaded)
+            pod_timings = self._collect_pod_timings(config.test_id, log_callback=log_callback)
+            if pod_timings:
+                result.pod_timings = pod_timings
 
             # Profile vLLM memory after startup (measures actual fixed overhead)
             gpu_mem_util = getattr(config, 'gpu_memory_utilization', 0.95)

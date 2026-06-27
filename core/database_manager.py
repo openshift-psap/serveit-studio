@@ -579,6 +579,7 @@ class DatabaseManager:
             'nixl_errors': getattr(test_result, 'nixl_errors', 0),
             'guidellm_retries': getattr(test_result, 'guidellm_retries', 0),
             'model_load_time_s': getattr(test_result, 'model_load_time_s', None),
+            'pod_timings': getattr(test_result, 'pod_timings', None),
         })
 
         # Serialize full TestConfig for report detail view

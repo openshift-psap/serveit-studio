@@ -137,5 +137,6 @@ class TestResult:
     nixl_errors: int = 0
     guidellm_retries: int = 0
     model_load_time_s: Optional[int] = None
+    pod_timings: Optional[dict] = None
 
 
