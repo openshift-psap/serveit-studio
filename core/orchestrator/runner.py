@@ -378,6 +378,28 @@ class TestOrchestrator(ParserMixin, GuidellmMixin):
             log_callback(f"   Timeout after {elapsed}s waiting for model to load")
         return -1
 
+    def _are_overload_errors(self, guidellm_output: str) -> bool:
+        """Check if all sampled errors are 503/disconnect (overload, not infra failure)."""
+        try:
+            import json as _json
+            data = _json.loads(guidellm_output)
+            for bm in data.get('benchmarks', []):
+                reqs = bm.get('requests', {})
+                errored = reqs.get('errored', [])
+                if not errored:
+                    return True
+                overload_patterns = ['503', 'service unavailable', 'disconnect',
+                                     'jsondecodeerror', 'unterminated string',
+                                     'remotedisconnected', 'readtimeout']
+                for e in errored:
+                    info = e.get('info', {})
+                    err = str(info.get('error', '')).lower()
+                    if not any(p in err for p in overload_patterns):
+                        return False
+                return True
+        except Exception:
+            return False
+
     def _collect_pod_timings(self, test_id: str, log_callback=None) -> Optional[dict]:
         """Collect per-pod creation time and model load time.
 
@@ -1259,11 +1281,13 @@ class TestOrchestrator(ParserMixin, GuidellmMixin):
                     errored = result.request_errored or 0
                     if total > 0 and errored > 0:
                         error_pct = errored / total * 100
-                        if error_pct >= 4.0:
-                            if log_callback:
-                                log_callback(f"🚨 Error rate {error_pct:.1f}% exceeds 4% — not retrying")
-                            break
-                        elif error_pct > 2.0 and guidellm_attempt < max_guidellm_retries:
+                        if error_pct > 2.0 and guidellm_attempt < max_guidellm_retries:
+                            # Check if errors are all overload/disconnection (503, DC)
+                            if self._are_overload_errors(guidellm_output):
+                                if log_callback:
+                                    log_callback(f"⚠️  Error rate {error_pct:.1f}% ({errored}/{total}) — all 503/disconnect errors, config at capacity")
+                                result.guidellm_retries = guidellm_attempt - 1
+                                break
                             if log_callback:
                                 log_callback(f"⚠️  Error rate {error_pct:.1f}% ({errored}/{total}) — retrying guidellm")
                             result.guidellm_retries = guidellm_attempt

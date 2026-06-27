@@ -209,7 +209,7 @@ class GuidellmMixin:
             f' {stop_arg}'
             f' --output-path {output_path}'
             f' --warmup {warmup}'
-            f' --sample-requests 20'
+            f' --sample-requests 50'
             f'{column_args}'
         )
 
