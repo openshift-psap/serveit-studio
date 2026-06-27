@@ -667,6 +667,31 @@ class PDSearchMixin:
         for s in self.feasible_splits:
             splits_by_tp[(s.prefill_tp, s.decode_tp)].append(s)
 
+        # Check if Step 7 already completed (all TP pairs have at least one test in DB)
+        step7_completed = {name for name in self.completed_tests if name.startswith('step7-')}
+        if step7_completed:
+            all_pairs_tested = all(
+                any(f"ptp{ptp}-dtp{dtp}" in name for name in step7_completed)
+                for ptp, dtp in splits_by_tp
+            )
+            if all_pairs_tested:
+                self.log(f"  ⏩ All {len(splits_by_tp)} TP pairs already tested — resuming from DB", 'info')
+                for name in sorted(step7_completed):
+                    row = self.completed_tests[name]
+                    result = self._make_test_result_from_db(row)
+                    import re
+                    m = re.match(r'step7-(\d+)p(\d+)d-ptp(\d+)-dtp(\d+)', name)
+                    if m and result:
+                        from core.optimizer.config import FeasibleSplit
+                        pp, dp, ptp_v, dtp_v = int(m.group(1)), int(m.group(2)), int(m.group(3)), int(m.group(4))
+                        split = FeasibleSplit(prefill_pods=pp, decode_pods=dp, prefill_tp=ptp_v, decode_tp=dtp_v,
+                                             prefill_gpus=pp*ptp_v, decode_gpus=dp*dtp_v, total_gpus=pp*ptp_v+dp*dtp_v,
+                                             prefill_pct=(pp*ptp_v/(pp*ptp_v+dp*dtp_v))*100)
+                        self.pareto_results.append((split, result))
+                pareto_front = self._find_pareto_front()
+                self.log(f"✅ Resumed {len(self.pareto_results)} results, {len(pareto_front)} Pareto optimal", 'success')
+                return
+
         test_num = 0
         total_planned = len(self.feasible_splits)
         max_iterations = 4
