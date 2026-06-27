@@ -569,7 +569,7 @@ function renderCharts(data, runId) {
         html += '<div class="chart-card"><div class="chart-card-header">User Defined Test Settings</div>';
         html += '<div style="padding:12px 20px 4px; color:#1e293b; font-size:0.92em;">All settings configured for this optimization run. These apply to every test — only the architecture, TP values, and pod counts vary between tests.</div>';
         html += '<div class="chart-card-body" style="padding:16px 20px;">';
-        html += '<div style="display:grid;grid-template-columns:repeat(2,1fr);gap:20px;">';
+        html += '<div style="display:grid;grid-template-columns:1fr;gap:16px;">';
 
         function settingsTable(title, color, rows) {
             let t = `<table class="results-table" style="font-size:0.85em;margin-bottom:16px;">`;
@@ -581,8 +581,7 @@ function renderCharts(data, runId) {
             return t;
         }
 
-        // Left column
-        html += '<div>';
+        // Settings tables
         html += settingsTable('Workload', '#059669', [
             ['Model', rc.model_name || na],
             ['ISL', rc.isl + (rc.isl_stdev ? ' (&sigma;=' + rc.isl_stdev + ')' : '')],
@@ -607,10 +606,6 @@ function renderCharts(data, runId) {
             ['Headroom', (rc.headroom || 1.3) + 'x'],
             ['Latency SLA', rc.latency_constraint_enabled ? rc.latency_constraint_ms + 'ms @ ' + rc.latency_constraint_percentile : 'Disabled'],
         ]);
-        html += '</div>';
-
-        // Right column
-        html += '<div>';
         html += settingsTable('Infrastructure', '#d97706', [
             ['Inference Image', '<span style="word-break:break-all;font-size:0.9em;">' + (rc.image || na) + '</span>'],
             ['Scheduler Image', '<span style="word-break:break-all;font-size:0.9em;">' + (rc.scheduler_image || na) + '</span>'],
@@ -688,7 +683,6 @@ function renderCharts(data, runId) {
             if (ec.lruCapacityPerServer) eppRows.push(['LRU Capacity/Server', ec.lruCapacityPerServer]);
         }
         html += settingsTable('EPP Configuration', '#6d28d9', eppRows);
-        html += '</div>';
 
         // Per-Architecture Tuning Comparison Table
         const archConfigs = {};
