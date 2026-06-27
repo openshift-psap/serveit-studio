@@ -98,13 +98,13 @@ Steps 2-3 and 6-11 deploy real workloads. Steps 4-5 are pure math.
 
 #### Model Intelligence
 - **Config from HuggingFace** — Reads `config.json` for model size, dtype, MoE detection, hybrid attention, FP8 compatibility. Handles multimodal nested configs (Llama-4 `text_config`), interleaved MoE layers, and compressed-tensors quantization
-- **Workload-aware min TP** — Computes minimum TP from model weights + framework overhead + KV cache budget for the actual workload (ISL × OSL × concurrency). Adapts to GQA vs full attention (8 KV heads vs 128)
+- **Per-role min TP** — Computes minimum TP separately for prefill (0.80 gpu_memory_utilization) and decode (0.85 after NIXL reserve) from model weights + overhead + KV cache. MoE FP4 models use 0.55x weight multiplier (dense FP4: 0.7x)
 - **FP8 block quantization filter** — Auto-excludes TP values where `shared_expert_intermediate_size / TP < 128` (FP8 block_n constraint)
 - **DeepGemm compatibility** — Detects compressed-tensors per-channel FP8 and disables DeepGemm; enables for standard per-tensor FP8
 - **Hybrid attention detection** — Detects `attention_chunk_size` and hybrid architectures, passes `--no-disable-hybrid-kv-cache-manager` for PD
 
 #### Auto-Computed vLLM Parameters
-- **gpu_memory_utilization** — Profiled from actual VRAM usage after model load, or estimated from model size and GPU capacity
+- **gpu_memory_utilization** — Profiled from actual VRAM usage after model load, or estimated from model size and GPU capacity. Always computed and passed (even when auto-tune is off) to prevent OOM from template defaults
 - **max_num_seqs** — Multi-factor formula: `min(S_activation, S_kv, S_concurrency, 512)` — adapts per model (Qwen gets 192, Llama gets 1,433 at same TP)
 - **max_num_batched_tokens** — Computed from measured prefill TPSG × target batch latency
 - **block_size** — Auto-tuned from sequence length: `next_power_of_2(sqrt(ISL+OSL))`, min 128 for PD (NIXL block transfer)
@@ -113,12 +113,13 @@ Steps 2-3 and 6-11 deploy real workloads. Steps 4-5 are pure math.
 - **DBO threshold** — Scaled by expert count: 32 for 128+ experts, 48 for 32+, 64 for smaller MoE
 
 #### Search & Optimization
-- **Smart PD Search** — Calculates optimal P/D split from calibration TPSG, tests ~3 configs per TP pair instead of exhaustive sweep (50+ → ~12 tests)
+- **Adaptive PD Search** — Tests the calibration-based ideal split first, then uses live vLLM metrics (per-pod `num_requests_waiting` ratio) to iteratively rebalance prefill/decode pod counts. Converges in 1-4 tests per TP pair instead of testing 5+ precomputed splits blindly
 - **Smart EPP weights** — Two-pass refinement: start from preset, adjust ±1 based on Prometheus metrics (prefix cache hit rate, queue depth, KV utilization), then refine with A/B guardrail
 - **Pareto front** — Identifies configurations where no other config has both lower TTFT AND higher throughput
 - **Calibrated load** — Per-architecture concurrency computed via Little's Law from measured throughput and response time
 - **Latency-bounded search** — Binary search for maximum throughput under a TTFT SLA constraint
 - **Asymmetric TP** — Prefill and decode can use different TP sizes in both directions (e.g., Prefill TP8 / Decode TP4 or vice versa). Disabled by default to reduce search space; enable via the "Allow Asymmetric TP" toggle
+- **Cache hit sweep** — Tests performance at multiple prefix cache hit ratios (0-100%) on the best configs. Supports Identical, Shared Prefix, and Multi-Group cache modes. Optional calibrated concurrency
 
 #### Infrastructure & Operations
 - **Multi-cluster launcher** — Manage optimization instances across multiple Kubernetes/OpenShift clusters from a single dashboard
@@ -130,7 +131,10 @@ Steps 2-3 and 6-11 deploy real workloads. Steps 4-5 are pure math.
 - **MLflow integration** — Export test results to MLflow with params, metrics, and artifacts. Per-user workspace targeting, descriptive run names, and tags for model, llm-d version, architecture, and cluster
 - **Downloadable reports** — HTML and raw artifact download for offline analysis and sharing
 - **Prefix cache simulation** — Generate multi-group prefix cache datasets with configurable hit rate, group count, and seed for reproducible workloads
-- **Pod error detection** — Auto-detects OOM, CUDA errors, and crash loops during tests; stops optimization and preserves pods for investigation
+- **Wide-EP support** — Dynamic multi-port targetPorts on InferencePool, data-parallel sidecar and vLLM ports, supervisor port for DP > 1
+- **Pod error detection** — Auto-detects OOM, CUDA errors, and crash loops during tests; NIXL transfer errors logged as warnings (non-critical). Stops on critical errors, preserves pods for investigation
+- **Guidellm retry** — Retries guidellm up to 3 times on 2-4% error rate while pods are still running, avoiding expensive redeploy cycles. Stops with actionable guidance on >2% overload (503s)
+- **Speculative decoding** — Auto-detects MTP-capable models (DeepSeek-V3, GLM-4) and compares performance with and without speculative decoding
 - **Stop at any time** — Stop checks at every stage of test execution (before deploy, after deploy, during model load, before benchmark)
 
 ## Prerequisites
