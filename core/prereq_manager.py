@@ -284,7 +284,8 @@ class PrereqManager:
             if epp_use_defaults:
                 # Detect version from scheduler image to pick correct defaults
                 sched_img = self.scheduler_image or ''
-                is_34 = any(v in sched_img for v in (':v0.4', ':v0.5', ':v0.6', ':v0.7'))
+                sched_tag = sched_img.split(':')[-1] if ':' in sched_img else 'v0.8.0'
+                is_34 = sched_tag < 'v0.9'
                 suffix = '.3.4' if is_34 else ''
                 ver_label = '3.4' if is_34 else '3.5'
                 if architecture == 'pd':
