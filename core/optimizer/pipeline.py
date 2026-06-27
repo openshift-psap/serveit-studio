@@ -465,23 +465,44 @@ class RecipeOptimizer(
         )
 
     def _check_request_errors(self, test_config: TestConfig, test_result: TestResult):
-        """Check request error rate. Returns True if a retry is needed.
+        """Check request error rate and stop if overload is too high.
 
-        503 errors (EPP overload) are expected under heavy load — they indicate
-        the system is at capacity, which is valid load test data. Only non-503
-        errors (crashes, timeouts) trigger retries or stops.
+        High error rates (>2%) indicate 503 overload from EPP — the cluster
+        cannot handle the requested concurrency. Results under heavy overload
+        are unreliable for comparison, so the run stops with guidance to either
+        lower concurrency or enable Auto-Scale Concurrency.
         """
         total = test_result.request_total or 0
         errored = test_result.request_errored or 0
         if total == 0 or errored == 0:
-            return False
+            return
         error_pct = errored / total * 100
-        if error_pct > 1.0:
+        if error_pct > 2.0:
+            self.log(f"🚨 {errored}/{total} requests failed ({error_pct:.1f}%) — cluster overloaded (503 from EPP)", 'error')
+            self.log(f"   Results under heavy overload are unreliable for performance comparison.", 'error')
+            self.log(f"   To fix, start a new run with one of these options:", 'error')
+            self.log(f"   1. Lower the concurrent users in Workload Configuration", 'error')
+            self.log(f"   2. Enable 'Auto-Scale Concurrency' to let the optimizer find sustainable load", 'error')
+            if self.db_manager and self.run_id:
+                try:
+                    with self.db_manager.get_connection() as conn:
+                        conn.execute(
+                            'UPDATE test_configurations SET status = ? WHERE run_id = ? AND config_name = ?',
+                            ('failed', self.run_id, test_config.test_id)
+                        )
+                except Exception:
+                    pass
+            from core.pod_error_scanner import PodErrorsDetected
+            raise PodErrorsDetected(
+                scan_result={'request_error_rate': error_pct, 'errored': errored, 'total': total,
+                             'reason': 'overload_503'},
+                test_id=test_config.test_id
+            )
+        elif error_pct > 0.5:
             self.log(f"   ⚠️  {errored}/{total} requests errored ({error_pct:.1f}%) — "
-                     f"likely 503 overload from EPP (system at capacity)", 'warning')
+                     f"minor overload, results may have inflated latency", 'warning')
         elif errored > 0:
             self.log(f"   ⚠️  {errored}/{total} requests errored ({error_pct:.1f}%) — acceptable", 'warning')
-        return False
 
     def _recalculate_achievable_concurrency(self):
         """Recalculate achievable concurrency from actual Step 6/7 throughput.
