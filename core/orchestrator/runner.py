@@ -306,7 +306,7 @@ class TestOrchestrator(ParserMixin, GuidellmMixin):
         timeout: int = 3600,
         log_callback: Optional[Callable[[str], None]] = None,
         stop_check: Optional[Callable[[], bool]] = None
-    ) -> bool:
+    ) -> int:
         """Wait for all vLLM pods to finish loading the model by checking logs
         for 'Application startup complete'."""
         start_time = time.time()
@@ -316,7 +316,7 @@ class TestOrchestrator(ParserMixin, GuidellmMixin):
             if stop_check and stop_check():
                 if log_callback:
                     log_callback("🛑 Model load wait cancelled — optimization stopped")
-                return False
+                return -1
 
             try:
                 result = subprocess.run(
@@ -366,7 +366,7 @@ class TestOrchestrator(ParserMixin, GuidellmMixin):
                     if log_callback:
                         n = len(pod_names)
                         log_callback(f"   {'Pod has' if n == 1 else f'All {n} pods have'} model loaded ({elapsed}s)")
-                    return True
+                    return elapsed
 
             except Exception as e:
                 logger.warning(f"Failed to check model loading: {e}")
@@ -376,7 +376,7 @@ class TestOrchestrator(ParserMixin, GuidellmMixin):
         elapsed = int(time.time() - start_time)
         if log_callback:
             log_callback(f"   Timeout after {elapsed}s waiting for model to load")
-        return False
+        return -1
 
     def _wait_for_gateway_ready(
         self,
@@ -1052,16 +1052,18 @@ class TestOrchestrator(ParserMixin, GuidellmMixin):
             if log_callback:
                 log_callback("\n⏳ Step 3b: Waiting for vLLM model loading...")
 
-            model_loaded = self._wait_for_model_loaded(
+            model_load_time = self._wait_for_model_loaded(
                 config.test_id,
                 timeout=self.deployment_timeout,
                 log_callback=log_callback,
                 stop_check=stop_check
             )
 
-            if not model_loaded:
+            if model_load_time < 0:
                 result.error_message = "vLLM model did not finish loading in time"
                 return result
+
+            result.model_load_time_s = model_load_time
 
             # Profile vLLM memory after startup (measures actual fixed overhead)
             gpu_mem_util = getattr(config, 'gpu_memory_utilization', 0.95)
