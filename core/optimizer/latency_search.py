@@ -321,69 +321,111 @@ class LatencySearchMixin:
         return sorted(l for l in levels if l > 0)
 
     def _run_sweep_for_arch(self, arch_label, calibrated, levels, create_config_fn, gpus):
-        """Run concurrency sweep for one architecture, return list of results."""
+        """Run concurrency sweep for one architecture, return list of results.
+
+        Deploys pods once, runs all concurrency levels with pods still up,
+        then cleans up at the end. Only guidellm is re-run per level.
+        """
         results = []
         self.log(f"\n📊 InferenceX Sweep: {arch_label} ({len(levels)} levels: {levels})", 'info')
         self.log(f"   Calibrated load: {calibrated} users", 'info')
 
+        # Check which levels need testing vs already completed
+        levels_to_run = []
         for concurrency in levels:
-            if self._should_stop():
-                break
-
             test_id = f"step11-sweep-{arch_label.lower()}-c{concurrency}"
-
             if test_id in self.completed_tests:
                 row = self.completed_tests[test_id]
                 result = self._make_test_result_from_db(row)
                 self.log(f"  ⏩ c={concurrency}: resuming from DB", 'info')
+                self._append_sweep_result(results, result, concurrency, calibrated, gpus, test_id)
             else:
-                config = create_config_fn()
-                config.test_id = test_id
-                config.num_users = concurrency
-                config.request_rate = concurrency
+                levels_to_run.append(concurrency)
 
+        if not levels_to_run:
+            return results
+
+        # Deploy once for all remaining levels
+        deployed_test_id = None
+        for i, concurrency in enumerate(levels_to_run):
+            if self._should_stop():
+                break
+
+            test_id = f"step11-sweep-{arch_label.lower()}-c{concurrency}"
+            config = create_config_fn()
+            config.test_id = test_id
+            config.num_users = concurrency
+            config.request_rate = concurrency
+
+            is_first = (i == 0)
+            is_last = (i == len(levels_to_run) - 1)
+
+            if is_first:
+                # First level: deploy pods + run guidellm
                 result = self.orchestrator.run_test(
                     config,
-                    cleanup=True,
+                    cleanup=False,
                     log_callback=lambda msg: self.log(msg, 'info'),
                     stop_check=self._should_stop
                 )
-                self.all_test_results.append((config, result))
-                self._save_test_to_database(config, result)
-                self._check_pod_errors(config, result)
-                self._check_request_errors(config, result)
+                deployed_test_id = test_id
+            else:
+                # Subsequent levels: only re-run guidellm (pods already up)
+                result = self.orchestrator.run_test(
+                    config,
+                    cleanup=False,
+                    skip_deploy=True,
+                    log_callback=lambda msg: self.log(msg, 'info'),
+                    stop_check=self._should_stop
+                )
 
-                if not result or not result.guidellm_success:
-                    self.log(f"  ❌ c={concurrency}: test failed, skipping", 'warning')
-                    continue
+            self.all_test_results.append((config, result))
+            self._save_test_to_database(config, result)
+            self._check_pod_errors(config, result)
+            self._check_request_errors(config, result)
 
-            tput = result.throughput_mean or result.throughput_p90 or 0
-            output_tps = result.output_tps_mean or 0
-            ttft = result.ttft_p90 or 0
-            interactivity = output_tps if output_tps > 0 else 0
-            throughput_per_gpu = (output_tps * concurrency / gpus) if gpus > 0 and output_tps > 0 else 0
+            if not result or not result.guidellm_success:
+                self.log(f"  ❌ c={concurrency}: test failed, skipping", 'warning')
+                continue
 
-            results.append({
-                'concurrency': concurrency,
-                'is_calibrated': concurrency == calibrated,
-                'throughput_mean': round(tput, 2),
-                'output_tps_mean': round(output_tps, 2),
-                'interactivity': round(interactivity, 2),
-                'throughput_per_gpu': round(throughput_per_gpu, 2),
-                'ttft_p90': round(ttft, 1),
-                'ttft_p50': round(result.ttft_p50 or 0, 1),
-                'itl_p90': round(result.itl_p90 or 0, 1),
-                'gpus': gpus,
-                'test_id': test_id,
-            })
+            self._append_sweep_result(results, result, concurrency, calibrated, gpus, test_id)
 
-            self.log(f"  ✅ c={concurrency}: TTFT={ttft:.0f}ms, "
-                    f"tput={tput:.1f} req/s, "
-                    f"interactivity={interactivity:.1f} tok/s/user, "
-                    f"throughput/GPU={throughput_per_gpu:.0f} tok/s/gpu"
-                    f"{' ← calibrated' if concurrency == calibrated else ''}", 'info')
+        # Cleanup after all levels are done
+        if deployed_test_id:
+            self.log(f"  🧹 Cleaning up {arch_label} sweep deployment...", 'info')
+            cleanup_config = create_config_fn()
+            cleanup_config.test_id = deployed_test_id
+            self.orchestrator.cleanup_deployment(cleanup_config, log_callback=lambda msg: self.log(msg, 'info'))
 
         return results
+
+    def _append_sweep_result(self, results, result, concurrency, calibrated, gpus, test_id):
+        """Helper to build a sweep result dict."""
+        tput = result.throughput_mean or result.throughput_p90 or 0
+        output_tps = result.output_tps_mean or 0
+        ttft = result.ttft_p90 or 0
+        interactivity = output_tps if output_tps > 0 else 0
+        throughput_per_gpu = (output_tps * concurrency / gpus) if gpus > 0 and output_tps > 0 else 0
+
+        results.append({
+            'concurrency': concurrency,
+            'is_calibrated': concurrency == calibrated,
+            'throughput_mean': round(tput, 2),
+            'output_tps_mean': round(output_tps, 2),
+            'interactivity': round(interactivity, 2),
+            'throughput_per_gpu': round(throughput_per_gpu, 2),
+            'ttft_p90': round(ttft, 1),
+            'ttft_p50': round(result.ttft_p50 or 0, 1),
+            'itl_p90': round(result.itl_p90 or 0, 1),
+            'gpus': gpus,
+            'test_id': test_id,
+        })
+
+        self.log(f"  ✅ c={concurrency}: TTFT={ttft:.0f}ms, "
+                f"tput={tput:.1f} req/s, "
+                f"interactivity={interactivity:.1f} tok/s/user, "
+                f"throughput/GPU={throughput_per_gpu:.0f} tok/s/gpu"
+                f"{' ← calibrated' if concurrency == calibrated else ''}", 'info')
 
     def _validate_at_calibrated_load(self):
         """

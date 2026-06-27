@@ -52,47 +52,70 @@ class CacheSweepMixin:
         tag = f"-{concurrency_tag}" if concurrency_tag else ""
         self.log(f"\n🗂️  Cache Sweep: {arch_label} ({len(levels)} levels, c={concurrency}{tag})", 'info')
 
+        # Check which levels need testing vs already completed
+        levels_to_run = []
         for hit_pct in levels:
-            if self._should_stop():
-                break
-
             test_id = f"step13-cache{tag}-{arch_label.lower()}-h{hit_pct}"
-
             if test_id in self.completed_tests:
                 row = self.completed_tests[test_id]
                 result = self._make_test_result_from_db(row)
                 self.log(f"  ⏩ h={hit_pct}%: resuming from DB", 'info')
+                tput = result.throughput_mean or result.throughput_p90 or 0
+                output_tps = result.output_tps_mean or 0
+                ttft = result.ttft_p90 or 0
+                results.append({'hit_pct': hit_pct, 'throughput_mean': round(tput, 2),
+                    'output_tps_mean': round(output_tps, 2), 'ttft_p90': round(ttft, 1),
+                    'ttft_p50': round(result.ttft_p50 or 0, 1), 'itl_p90': round(result.itl_p90 or 0, 1),
+                    'gpus': gpus, 'concurrency': concurrency, 'test_id': test_id})
             else:
-                dataset_path = self._generate_cache_dataset_for_level(hit_pct)
+                levels_to_run.append(hit_pct)
 
-                config = create_config_fn()
-                config.test_id = test_id
-                config.num_users = concurrency
-                config.request_rate = concurrency
-                config.enable_prefix_caching = True
+        if not levels_to_run:
+            return results
 
-                if dataset_path and hit_pct > 0:
-                    config.workload_mode = 'dataset'
-                    config.dataset_source = dataset_path
-                    config.dataset_column = 'prompt'
-                    config.dataset_max_output = self.config.osl
-                else:
-                    config.workload_mode = 'synthetic'
+        # Deploy once for all remaining levels
+        deployed_test_id = None
+        for i, hit_pct in enumerate(levels_to_run):
+            if self._should_stop():
+                break
 
-                result = self.orchestrator.run_test(
-                    config,
-                    cleanup=True,
-                    log_callback=lambda msg: self.log(msg, 'info'),
-                    stop_check=self._should_stop
-                )
-                self.all_test_results.append((config, result))
-                self._save_test_to_database(config, result)
-                self._check_pod_errors(config, result)
-                self._check_request_errors(config, result)
+            test_id = f"step13-cache{tag}-{arch_label.lower()}-h{hit_pct}"
+            dataset_path = self._generate_cache_dataset_for_level(hit_pct)
 
-                if not result or not result.guidellm_success:
-                    self.log(f"  ❌ h={hit_pct}%: test failed, skipping", 'warning')
-                    continue
+            config = create_config_fn()
+            config.test_id = test_id
+            config.num_users = concurrency
+            config.request_rate = concurrency
+            config.enable_prefix_caching = True
+
+            if dataset_path and hit_pct > 0:
+                config.workload_mode = 'dataset'
+                config.dataset_source = dataset_path
+                config.dataset_column = 'prompt'
+                config.dataset_max_output = self.config.osl
+            else:
+                config.workload_mode = 'synthetic'
+
+            is_first = (i == 0)
+
+            result = self.orchestrator.run_test(
+                config,
+                cleanup=False,
+                skip_deploy=not is_first,
+                log_callback=lambda msg: self.log(msg, 'info'),
+                stop_check=self._should_stop
+            )
+            if is_first:
+                deployed_test_id = test_id
+
+            self.all_test_results.append((config, result))
+            self._save_test_to_database(config, result)
+            self._check_pod_errors(config, result)
+            self._check_request_errors(config, result)
+
+            if not result or not result.guidellm_success:
+                self.log(f"  ❌ h={hit_pct}%: test failed, skipping", 'warning')
+                continue
 
             tput = result.throughput_mean or result.throughput_p90 or 0
             output_tps = result.output_tps_mean or 0
@@ -113,6 +136,13 @@ class CacheSweepMixin:
             self.log(f"  ✅ h={hit_pct}%: TTFT={ttft:.0f}ms, "
                      f"tput={tput:.1f} req/s, "
                      f"output={output_tps:.1f} tok/s", 'info')
+
+        # Cleanup after all levels are done
+        if deployed_test_id:
+            self.log(f"  🧹 Cleaning up {arch_label} cache sweep deployment...", 'info')
+            cleanup_config = create_config_fn()
+            cleanup_config.test_id = deployed_test_id
+            self.orchestrator.cleanup_deployment(cleanup_config, log_callback=lambda msg: self.log(msg, 'info'))
 
         return results
 

@@ -161,6 +161,21 @@ class TestOrchestrator(ParserMixin, GuidellmMixin):
                 self._pf_process.kill()
             self._pf_process = None
 
+    def cleanup_deployment(self, config: TestConfig, log_callback=None):
+        """Clean up a test deployment (LWS + services). Used by sweeps to clean up after all levels."""
+        if log_callback:
+            log_callback(f"🧹 Cleaning up deployment: {config.test_id}")
+        self.deployment_manager.delete_deployment(
+            config.test_id,
+            config.architecture,
+            log_callback=log_callback
+        )
+        self.deployment_manager.wait_for_pods_terminated(
+            config.test_id,
+            timeout=300,
+            log_callback=log_callback
+        )
+
     def _get_service_endpoint(
         self,
         test_id: str,
@@ -970,7 +985,8 @@ class TestOrchestrator(ParserMixin, GuidellmMixin):
         cleanup: bool = True,
         skip_workload: bool = False,
         stop_check: Optional[Callable[[], bool]] = None,
-        skip_prereqs: bool = False
+        skip_prereqs: bool = False,
+        skip_deploy: bool = False
     ) -> TestResult:
         """
         Run a complete test for a single configuration.
@@ -1063,105 +1079,106 @@ class TestOrchestrator(ParserMixin, GuidellmMixin):
                 result.error_message = "Stopped by user"
                 return result
 
-            if log_callback:
-                log_callback('')
-                if skip_prereqs:
-                    log_callback('⏩ Skipping prerequisite deployment (reusing existing)')
-                else:
-                    log_callback('▶️  Prerequisites ready, continuing with inference pod deployment...')
-                log_callback('')
-                log_callback('=' * 60)
-                log_callback('📋 Step 2: Deploying Inference Pods')
-                log_callback('=' * 60)
-                log_callback('')
+            if skip_deploy:
+                if log_callback:
+                    log_callback('⏩ Reusing existing deployment (sweep mode)')
+                result.deployment_success = True
+                result.deployment_ready = True
+
+            if not skip_deploy:
+                if log_callback:
+                    log_callback('')
+                    if skip_prereqs:
+                        log_callback('⏩ Skipping prerequisite deployment (reusing existing)')
+                    else:
+                        log_callback('▶️  Prerequisites ready, continuing with inference pod deployment...')
+                    log_callback('')
+                    log_callback('=' * 60)
+                    log_callback('📋 Step 2: Deploying Inference Pods')
+                    log_callback('=' * 60)
+                    log_callback('')
 
             # Step 1a: Clean up any leftover deployment from a previous failed attempt
             # This prevents resume from hitting the same stuck LWS
-            existing = self.deployment_manager.get_deployment_status(
-                config.test_id, config.architecture
-            )
-            if existing.deployed:
+            if not skip_deploy:
+                existing = self.deployment_manager.get_deployment_status(
+                    config.test_id, config.architecture
+                )
+                if existing.deployed:
+                    if log_callback:
+                        log_callback(f"🧹 Cleaning up leftover deployment from previous attempt: {config.test_id}")
+                    self.deployment_manager.delete_deployment(
+                        config.test_id,
+                        config.architecture,
+                        log_callback=log_callback
+                    )
+                    self.deployment_manager.wait_for_pods_terminated(
+                        config.test_id,
+                        timeout=300,
+                        log_callback=log_callback
+                    )
+
+                deployment_success = self.deployment_manager.deploy_config(
+                    config,
+                    log_callback=log_callback
+                )
+
+                result.deployment_success = deployment_success
+
+                if not deployment_success:
+                    result.error_message = "Deployment failed"
+                    return result
+
+                if stop_check and stop_check():
+                    if log_callback:
+                        log_callback("🛑 Optimization stopped — cleaning up deployed pods")
+                    result.error_message = "Stopped by user"
+                    return result
+
                 if log_callback:
-                    log_callback(f"🧹 Cleaning up leftover deployment from previous attempt: {config.test_id}")
-                self.deployment_manager.delete_deployment(
+                    log_callback("\n⏳ Step 3: Waiting for deployment to be ready...")
+
+                ready = self.deployment_manager.wait_for_ready(
                     config.test_id,
                     config.architecture,
-                    log_callback=log_callback
-                )
-                # Wait for all pods to fully terminate before deploying new ones
-                # DRA resources (GPU-NIC pairs) are held until pods are gone
-                self.deployment_manager.wait_for_pods_terminated(
-                    config.test_id,
-                    timeout=300,
-                    log_callback=log_callback
+                    timeout=self.deployment_timeout,
+                    log_callback=log_callback,
+                    stop_check=stop_check
                 )
 
-            # Step 1b: Deploy configuration
-            deployment_success = self.deployment_manager.deploy_config(
-                config,
-                log_callback=log_callback
-            )
+                result.deployment_ready = ready
+                result.deployment_ready_time = datetime.now().isoformat()
 
-            result.deployment_success = deployment_success
+                if not ready:
+                    result.error_message = "Deployment did not become ready in time"
+                    return result
 
-            if not deployment_success:
-                result.error_message = "Deployment failed"
-                return result
-
-            if stop_check and stop_check():
                 if log_callback:
-                    log_callback("🛑 Optimization stopped — cleaning up deployed pods")
-                result.error_message = "Stopped by user"
-                return result
+                    log_callback("\n⏳ Step 3b: Waiting for vLLM model loading...")
 
-            # Step 3: Wait for deployment to be ready
-            if log_callback:
-                log_callback("\n⏳ Step 3: Waiting for deployment to be ready...")
+                model_load_time = self._wait_for_model_loaded(
+                    config.test_id,
+                    timeout=self.deployment_timeout,
+                    log_callback=log_callback,
+                    stop_check=stop_check
+                )
 
-            ready = self.deployment_manager.wait_for_ready(
-                config.test_id,
-                config.architecture,
-                timeout=self.deployment_timeout,
-                log_callback=log_callback,
-                stop_check=stop_check
-            )
+                if model_load_time < 0:
+                    result.error_message = "vLLM model did not finish loading in time"
+                    return result
 
-            result.deployment_ready = ready
-            result.deployment_ready_time = datetime.now().isoformat()
+                result.model_load_time_s = model_load_time
 
-            if not ready:
-                result.error_message = "Deployment did not become ready in time"
-                return result
+                pod_timings = self._collect_pod_timings(config.test_id, log_callback=log_callback)
+                if pod_timings:
+                    result.pod_timings = pod_timings
 
-            # Step 3b: Wait for vLLM to finish loading the model
-            if log_callback:
-                log_callback("\n⏳ Step 3b: Waiting for vLLM model loading...")
-
-            model_load_time = self._wait_for_model_loaded(
-                config.test_id,
-                timeout=self.deployment_timeout,
-                log_callback=log_callback,
-                stop_check=stop_check
-            )
-
-            if model_load_time < 0:
-                result.error_message = "vLLM model did not finish loading in time"
-                return result
-
-            result.model_load_time_s = model_load_time
-
-            # Collect per-pod timing (creation → model loaded)
-            pod_timings = self._collect_pod_timings(config.test_id, log_callback=log_callback)
-            if pod_timings:
-                result.pod_timings = pod_timings
-
-            # Profile vLLM memory after startup (measures actual fixed overhead)
-            gpu_mem_util = getattr(config, 'gpu_memory_utilization', 0.95)
-            gpu_vram = getattr(config, 'gpu_vram_gb', None)
-            if gpu_vram:
-                self._profile_vllm_memory(
-                    config.test_id, gpu_mem_util, gpu_vram, result,
-                    log_callback=log_callback
+                gpu_mem_util = getattr(config, 'gpu_memory_utilization', 0.95)
+                gpu_vram = getattr(config, 'gpu_vram_gb', None)
+                if gpu_vram:
+                    self._profile_vllm_memory(
+                        config.test_id, gpu_mem_util, gpu_vram, result,
+                        log_callback=log_callback
                 )
 
             # Step 4: Get service endpoint
