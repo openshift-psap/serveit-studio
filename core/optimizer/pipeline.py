@@ -465,14 +465,14 @@ class RecipeOptimizer(
         )
 
     def _check_request_errors(self, test_config: TestConfig, test_result: TestResult):
-        """Stop the run if request error rate exceeds 2%. Leaves pods running for investigation."""
+        """Check request error rate. Returns True if errors are above threshold and a retry is needed."""
         total = test_result.request_total or 0
         errored = test_result.request_errored or 0
         if total == 0 or errored == 0:
-            return
+            return False
         error_pct = errored / total * 100
-        if error_pct > 2.0:
-            # Mark test as failed in DB so resume won't skip it
+        if error_pct >= 4.0:
+            self.log(f"🚨 Request error rate {error_pct:.1f}% ({errored}/{total}) exceeds 4% — stopping", 'error')
             if self.db_manager and self.run_id:
                 try:
                     with self.db_manager.get_connection() as conn:
@@ -482,18 +482,17 @@ class RecipeOptimizer(
                         )
                 except Exception:
                     pass
-            self.log(f"🚨 High request error rate: {errored}/{total} requests errored ({error_pct:.1f}%)", 'error')
-            self.log(f"   Test: {test_config.test_id}", 'error')
-            self.log(f"   Threshold: 2% — stopping optimization", 'error')
-            self.log(f"   Pods left running for investigation.", 'error')
-            self.log(f"   kubectl logs -n {self.config.namespace} -l test-id={test_config.test_id} -c vllm", 'error')
             from core.pod_error_scanner import PodErrorsDetected
             raise PodErrorsDetected(
                 scan_result={'request_error_rate': error_pct, 'errored': errored, 'total': total},
                 test_id=test_config.test_id
             )
+        elif error_pct > 1.0:
+            self.log(f"   ⚠️  {errored}/{total} requests errored ({error_pct:.1f}%) — will retry guidellm", 'warning')
+            return True
         elif errored > 0:
-            self.log(f"   ⚠️  {errored}/{total} requests errored ({error_pct:.1f}%) — within 2% threshold", 'warning')
+            self.log(f"   ⚠️  {errored}/{total} requests errored ({error_pct:.1f}%) — acceptable", 'warning')
+        return False
 
     def _recalculate_achievable_concurrency(self):
         """Recalculate achievable concurrency from actual Step 6/7 throughput.
