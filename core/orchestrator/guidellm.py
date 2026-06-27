@@ -202,7 +202,7 @@ class GuidellmMixin:
             f' --model "{config.model_name}"'
             f' --processor "{config.model_name}"'
             f' --data "{data_payload}"'
-            f' --backend-kwargs \'{{"http2": false}}\''
+            f' --backend-kwargs \'{{"http2": false, "timeout": 300}}\''
             f' --request-format "{request_format}"'
             f' --rate-type {rate_type}'
             f' --rate {request_rate}'
@@ -528,7 +528,7 @@ class GuidellmMixin:
                 '--model', config.model_name,
                 '--processor', config.model_name,
                 '--data', data_payload,
-                '--backend-kwargs', '{"http2": false}',
+                '--backend-kwargs', '{"http2": false, "timeout": 300}',
                 '--request-format', request_format,
                 '--rate-type', rate_type,
                 '--rate', str(request_rate),
