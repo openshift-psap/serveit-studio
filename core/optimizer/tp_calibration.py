@@ -63,14 +63,13 @@ class TPCalibrationMixin:
 
                 self.all_test_results.append((test_config, result))
                 self._save_test_to_database(test_config, result)
-                self._check_pod_errors(test_config, result)
-                self._check_request_errors(test_config, result)
 
                 if not result or not result.guidellm_success:
-                    self.log("    ❌ Test failed - STOPPING optimization", 'error')
-                    self.log(f"    🔍 Debug: kubectl get pods -n {self.config.namespace} -l test-id={test_id}", 'error')
-                    self.log(f"    🧹 Cleanup: kubectl delete lws -n {self.config.namespace} -l test-id={test_id}", 'error')
-                    raise RuntimeError(f"Test {test_id} failed - stopping optimization")
+                    self.log(f"    ⚠️  TP={tp} failed (likely OOM or insufficient memory) — skipping", 'warning')
+                    continue
+
+                self._check_pod_errors(test_config, result)
+                self._check_request_errors(test_config, result)
 
             # Calculate TPSG
             if result.throughput_p90 and result.throughput_p90 > 0:
@@ -78,7 +77,7 @@ class TPCalibrationMixin:
             elif result.throughput_p50 and result.throughput_p50 > 0:
                 tpsg = (result.throughput_p50 * self.config.osl) / tp
             else:
-                self.log("    ❌ No throughput metric available", 'error')
+                self.log("    ⚠️  No throughput metric available — skipping TP={tp}", 'warning')
                 continue
 
             ttft = result.ttft_p90 if result.ttft_p90 else float('inf')
@@ -181,14 +180,13 @@ class TPCalibrationMixin:
 
                 self.all_test_results.append((test_config, result))
                 self._save_test_to_database(test_config, result)
-                self._check_pod_errors(test_config, result)
-                self._check_request_errors(test_config, result)
 
                 if not result or not result.guidellm_success:
-                    self.log("    ❌ Test failed - STOPPING optimization", 'error')
-                    self.log(f"    🔍 Debug: kubectl get pods -n {self.config.namespace} -l test-id={test_id}", 'error')
-                    self.log(f"    🧹 Cleanup: kubectl delete lws -n {self.config.namespace} -l test-id={test_id}", 'error')
-                    raise RuntimeError(f"Test {test_id} failed - stopping optimization")
+                    self.log(f"    ⚠️  TP={tp} failed (likely OOM or insufficient memory) — skipping", 'warning')
+                    continue
+
+                self._check_pod_errors(test_config, result)
+                self._check_request_errors(test_config, result)
 
             # Calculate TPSG
             if result.throughput_p90 and result.throughput_p90 > 0:
@@ -196,7 +194,7 @@ class TPCalibrationMixin:
             elif result.throughput_p50 and result.throughput_p50 > 0:
                 tpsg = (result.throughput_p50 * self.config.isl) / tp
             else:
-                self.log("    ❌ No throughput metric available", 'error')
+                self.log(f"    ⚠️  No throughput metric available — skipping TP={tp}", 'warning')
                 continue
 
             ttft = result.ttft_p90 if result.ttft_p90 else float('inf')
