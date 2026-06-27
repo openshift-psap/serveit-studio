@@ -287,7 +287,7 @@ class PrereqManager:
                 sched_tag = sched_img.split(':')[-1] if ':' in sched_img else 'v0.8.0'
                 is_34 = sched_tag < 'v0.9'
                 suffix = '.3.4' if is_34 else ''
-                ver_label = '3.4' if is_34 else '3.5'
+                ver_label = sched_tag
                 if architecture == 'pd':
                     resources.append(('ConfigMap', f'prereq/gaie-configmap-default-pd{suffix}.yaml.j2'))
                     log(f'   Using llm-d {ver_label} default PD EPP configuration')
