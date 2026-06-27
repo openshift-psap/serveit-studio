@@ -223,17 +223,26 @@ class DeploymentManager:
                     log_callback(f"❌ Failed to scale to {i}: {result.stderr}")
                 return False
 
-            # Wait for the new pod to be scheduled before scaling the next one
+            # Wait for the new pod to move past Pending (init or running)
             pod_name = f"{lws_name}-{i - 1}"
-            for _ in range(60):
+            scheduled = False
+            for wait_s in range(90):
                 r = self.kubectl.run(
                     ['get', 'pod', pod_name, '-n', self.namespace,
-                     '-o', 'jsonpath={.spec.nodeName}'],
+                     '-o', 'jsonpath={.status.phase} {.spec.nodeName}'],
                     check=False
                 )
                 if r.returncode == 0 and r.stdout.strip():
-                    break
+                    parts = r.stdout.strip().split()
+                    phase = parts[0] if parts else ''
+                    node = parts[1] if len(parts) > 1 else ''
+                    if phase != 'Pending' and node:
+                        scheduled = True
+                        break
                 time.sleep(1)
+            if not scheduled:
+                if log_callback:
+                    log_callback(f"   ⚠️  Pod {pod_name} stuck in Pending after 90s (DRA claim conflict)")
 
             if i % 8 == 0 or i == target_replicas:
                 if log_callback:
