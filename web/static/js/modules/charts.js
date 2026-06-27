@@ -396,9 +396,8 @@ function renderCharts(data, runId) {
     }
     if (best.highest_throughput) {
         const ht = best.highest_throughput;
-        html += statCard(ht.throughput_p90.toFixed(2) + ' req/s', 'Best Throughput P90', ht.name);
-        if (ht.throughput_p95) html += statCard(ht.throughput_p95.toFixed(2) + ' req/s', 'Best Throughput P95', ht.name);
-        if (ht.throughput_p99) html += statCard(ht.throughput_p99.toFixed(2) + ' req/s', 'Best Throughput P99', ht.name);
+        const htVal = ht.throughput_mean || ht.throughput_p90;
+        html += statCard(htVal.toFixed(2) + ' req/s', 'Best Throughput Mean', ht.name);
     }
     if (best.most_efficient)
         html += statCard(best.most_efficient.efficiency.toFixed(3) + ' req/s/GPU', 'Best Efficiency', best.most_efficient.name);
@@ -486,12 +485,11 @@ function renderCharts(data, runId) {
             }
             const borderTop = idx > 0 ? ' border-top:2px solid #cbd5e1;' : '';
             const tputMeanPareto = p.throughput_mean ?? p.throughput_p90;
-            const metrics = [
+            const latencyMetrics = [
                 {name: 'TTFT (ms)', p50: p.ttft_p50, p90: p.ttft_p90, p95: p.ttft_p95, p99: p.ttft_p99},
                 {name: 'ITL (ms)', p50: p.itl_p50, p90: p.itl_p90, p95: p.itl_p95, p99: p.itl_p99},
-                {name: 'Throughput Mean (req/s)', p50: null, p90: tputMeanPareto, p95: null, p99: null},
             ];
-            metrics.forEach((m, mi) => {
+            latencyMetrics.forEach((m, mi) => {
                 const rowBorder = mi === 0 && idx > 0 ? borderTop : '';
                 html += `<tr class="pareto-row">`;
                 if (mi === 0) {
@@ -510,6 +508,11 @@ function renderCharts(data, runId) {
                 }
                 html += '</tr>';
             });
+            // Throughput mean — single value spanning P50-P99 columns
+            html += `<tr class="pareto-row">`;
+            html += `<td style="color:#64748b;">Throughput Mean (req/s)</td>`;
+            html += `<td colspan="4" style="text-align:center; font-weight:600;">${tputMeanPareto ?? '-'}</td>`;
+            html += '</tr>';
         });
         html += '</table></div></div>';
     }
@@ -866,7 +869,7 @@ function renderCharts(data, runId) {
             html += '<div class="chart-card-body" style="padding:0;"><table class="results-table">';
             html += '<tr><th>Metric</th><th>PD (best)</th><th>Aggregated</th><th>Winner</th></tr>';
             html += `<tr><td><strong>TTFT P90</strong></td><td>${cmp.pd.ttft_p90} ms</td><td>${cmp.aggregated.ttft_p90} ms</td><td style="color:${ttftColor}; font-weight:700;">${cmp.ttft_winner} (${cmp.ttft_diff_pct}% better)</td></tr>`;
-            html += `<tr><td><strong>Throughput P90</strong></td><td>${cmp.pd.throughput_p90} req/s</td><td>${cmp.aggregated.throughput_p90} req/s</td><td style="color:${tputColor}; font-weight:700;">${cmp.throughput_winner} (${cmp.throughput_diff_pct}% better)</td></tr>`;
+            html += `<tr><td><strong>Throughput Mean</strong></td><td>${cmp.pd.throughput_mean || cmp.pd.throughput_p90} req/s</td><td>${cmp.aggregated.throughput_mean || cmp.aggregated.throughput_p90} req/s</td><td style="color:${tputColor}; font-weight:700;">${cmp.throughput_winner} (${cmp.throughput_diff_pct}% better)</td></tr>`;
             if (cmp.pd.ttft_p99 && cmp.aggregated.ttft_p99) {
                 const p99Color = cmp.ttft_p99_winner === 'PD' ? '#10b981' : '#f59e0b';
                 html += `<tr style="border-top:2px solid #e2e8f0;"><td><strong>TTFT P99 (tail)</strong></td><td>${cmp.pd.ttft_p99} ms</td><td>${cmp.aggregated.ttft_p99} ms</td><td style="color:${p99Color}; font-weight:700;">${cmp.ttft_p99_winner} (${cmp.ttft_p99_diff_pct}% better)</td></tr>`;
@@ -877,7 +880,7 @@ function renderCharts(data, runId) {
             if (rec.aggregated_baseline && data.all_results && data.all_results.length > 1) {
                 const aggBaseline = rec.aggregated_baseline;
                 const baseTtft = aggBaseline.ttft_p90;
-                const baseTput = aggBaseline.throughput_p90;
+                const baseTput = aggBaseline.throughput_mean || aggBaseline.throughput_p90;
                 const configs = data.all_results.filter(r => r.architecture === 'PD' && r.ttft_p90 && r.throughput_p90);
                 if (configs.length && baseTtft && baseTput) {
                     html += '<div style="padding:16px 20px 4px;"><div style="font-weight:700; font-size:0.95em; color:#1e293b; margin-bottom:4px;">All PD Configurations vs Aggregated Baseline</div>';
@@ -888,13 +891,14 @@ function renderCharts(data, runId) {
                     html += '<th style="cursor:pointer;" onclick="sortReportTable(\'' + pdTableId + '\',0,\'str\')">Configuration &#x21C5;</th>';
                     html += '<th style="cursor:pointer;" onclick="sortReportTable(\'' + pdTableId + '\',1,\'num\')">TTFT P90 &#x21C5;</th>';
                     html += '<th style="cursor:pointer;" onclick="sortReportTable(\'' + pdTableId + '\',2,\'num\')">TTFT vs Agg &#x21C5;</th>';
-                    html += '<th style="cursor:pointer;" onclick="sortReportTable(\'' + pdTableId + '\',3,\'num\')">Throughput P90 &#x21C5;</th>';
+                    html += '<th style="cursor:pointer;" onclick="sortReportTable(\'' + pdTableId + '\',3,\'num\')">Throughput Mean &#x21C5;</th>';
                     html += '<th style="cursor:pointer;" onclick="sortReportTable(\'' + pdTableId + '\',4,\'num\')">Tput vs Agg &#x21C5;</th>';
                     html += '</tr>';
                     const sorted = [...configs].sort((a, b) => a.ttft_p90 - b.ttft_p90);
                     for (const cfg of sorted) {
+                        const cfgTput = cfg.throughput_mean || cfg.throughput_p90;
                         const ttftPct = ((cfg.ttft_p90 - baseTtft) / baseTtft * 100).toFixed(1);
-                        const tputPct = ((cfg.throughput_p90 - baseTput) / baseTput * 100).toFixed(1);
+                        const tputPct = ((cfgTput - baseTput) / baseTput * 100).toFixed(1);
                         const ttftBetter = parseFloat(ttftPct) < 0;
                         const tputBetter = parseFloat(tputPct) > 0;
                         const ttftColor = ttftBetter ? '#059669' : '#dc2626';
@@ -905,7 +909,7 @@ function renderCharts(data, runId) {
                         html += `<tr><td><strong>${cfg.config_name}</strong>${cmpEppBadge}</td>`;
                         html += `<td data-val="${cfg.ttft_p90}">${cfg.ttft_p90} ms</td>`;
                         html += `<td data-val="${ttftPct}" style="color:${ttftColor}; font-weight:700;">${ttftArrow} ${ttftPct}%</td>`;
-                        html += `<td data-val="${cfg.throughput_p90}">${cfg.throughput_p90} req/s</td>`;
+                        html += `<td data-val="${cfgTput}">${cfgTput} req/s</td>`;
                         html += `<td data-val="${tputPct}" style="color:${tputColor}; font-weight:700;">${tputArrow} ${tputPct}%</td></tr>`;
                     }
                     html += `<tr class="baseline-row" style="background:#f1f5f9;"><td><strong>${aggBaseline.config_name}</strong> <span style="background:#1f77b4; color:white; font-size:0.65em; padding:1px 5px; border-radius:3px;">BASELINE</span></td>`;
@@ -927,14 +931,14 @@ function renderCharts(data, runId) {
             html += '<div class="chart-card-body" style="padding:0;"><table class="results-table">';
             html += '<tr><th>Metric</th><th>EP (best)</th><th>Aggregated</th><th>Winner</th></tr>';
             html += `<tr><td><strong>TTFT P90</strong></td><td>${cmp.ep.ttft_p90} ms</td><td>${cmp.aggregated.ttft_p90} ms</td><td style="color:${ttftColor}; font-weight:700;">${cmp.ttft_winner} (${cmp.ttft_diff_pct}% better)</td></tr>`;
-            html += `<tr><td><strong>Throughput P90</strong></td><td>${cmp.ep.throughput_p90} req/s</td><td>${cmp.aggregated.throughput_p90} req/s</td><td style="color:${tputColor}; font-weight:700;">${cmp.throughput_winner} (${cmp.throughput_diff_pct}% better)</td></tr>`;
+            html += `<tr><td><strong>Throughput Mean</strong></td><td>${cmp.ep.throughput_mean || cmp.ep.throughput_p90} req/s</td><td>${cmp.aggregated.throughput_mean || cmp.aggregated.throughput_p90} req/s</td><td style="color:${tputColor}; font-weight:700;">${cmp.throughput_winner} (${cmp.throughput_diff_pct}% better)</td></tr>`;
             html += '</table></div>';
 
             // --- % Change chart: All EP configs vs Aggregated baseline ---
             if (rec.aggregated_baseline && rec.ep_all_configs && rec.ep_all_configs.length > 0) {
                 const aggBaseline = rec.aggregated_baseline;
                 const baseTtft = aggBaseline.ttft_p90;
-                const baseTput = aggBaseline.throughput_p90;
+                const baseTput = aggBaseline.throughput_mean || aggBaseline.throughput_p90;
                 if (baseTtft && baseTput) {
                     html += '<div style="padding:16px 20px 4px;"><div style="font-weight:700; font-size:0.95em; color:#1e293b; margin-bottom:4px;">All EP Configurations vs Aggregated Baseline</div>';
                     html += '<div style="color:#1e293b; font-size:0.92em; margin-bottom:12px;">Percentage change in TTFT and Throughput relative to the Step 8 Aggregated baseline. For TTFT, negative (green) is better. For Throughput, positive (green) is better.</div>';
@@ -944,14 +948,15 @@ function renderCharts(data, runId) {
                     html += '<th style="cursor:pointer;" onclick="sortReportTable(\'' + epTableId + '\',0,\'str\')">Configuration &#x21C5;</th>';
                     html += '<th style="cursor:pointer;" onclick="sortReportTable(\'' + epTableId + '\',1,\'num\')">TTFT P90 &#x21C5;</th>';
                     html += '<th style="cursor:pointer;" onclick="sortReportTable(\'' + epTableId + '\',2,\'num\')">TTFT vs Agg &#x21C5;</th>';
-                    html += '<th style="cursor:pointer;" onclick="sortReportTable(\'' + epTableId + '\',3,\'num\')">Throughput P90 &#x21C5;</th>';
+                    html += '<th style="cursor:pointer;" onclick="sortReportTable(\'' + epTableId + '\',3,\'num\')">Throughput Mean &#x21C5;</th>';
                     html += '<th style="cursor:pointer;" onclick="sortReportTable(\'' + epTableId + '\',4,\'num\')">Tput vs Agg &#x21C5;</th>';
                     html += '</tr>';
-                    const sorted = [...rec.ep_all_configs].sort((a, b) => (b.throughput_p90||0) - (a.throughput_p90||0));
+                    const sorted = [...rec.ep_all_configs].sort((a, b) => (b.throughput_mean||b.throughput_p90||0) - (a.throughput_mean||a.throughput_p90||0));
                     for (const cfg of sorted) {
-                        if (!cfg.ttft_p90 || !cfg.throughput_p90) continue;
+                        const cfgTput = cfg.throughput_mean || cfg.throughput_p90;
+                        if (!cfg.ttft_p90 || !cfgTput) continue;
                         const ttftPct = ((cfg.ttft_p90 - baseTtft) / baseTtft * 100).toFixed(1);
-                        const tputPct = ((cfg.throughput_p90 - baseTput) / baseTput * 100).toFixed(1);
+                        const tputPct = ((cfgTput - baseTput) / baseTput * 100).toFixed(1);
                         const ttftBetter = parseFloat(ttftPct) < 0;
                         const tputBetter = parseFloat(tputPct) > 0;
                         const ttftColor = ttftBetter ? '#059669' : '#dc2626';
@@ -962,7 +967,7 @@ function renderCharts(data, runId) {
                         html += `<tr><td><strong>${label}</strong></td>`;
                         html += `<td data-val="${cfg.ttft_p90}">${cfg.ttft_p90} ms</td>`;
                         html += `<td data-val="${ttftPct}" style="color:${ttftColor}; font-weight:700;">${ttftArrow} ${ttftPct}%</td>`;
-                        html += `<td data-val="${cfg.throughput_p90}">${cfg.throughput_p90} req/s</td>`;
+                        html += `<td data-val="${cfgTput}">${cfgTput} req/s</td>`;
                         html += `<td data-val="${tputPct}" style="color:${tputColor}; font-weight:700;">${tputArrow} ${tputPct}%</td></tr>`;
                     }
                     html += `<tr class="baseline-row" style="background:#f1f5f9;"><td><strong>${aggBaseline.config_name}</strong> <span style="background:#1f77b4; color:white; font-size:0.65em; padding:1px 5px; border-radius:3px;">BASELINE</span></td>`;
