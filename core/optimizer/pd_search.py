@@ -88,10 +88,8 @@ class PDSearchMixin:
         if usable_gpus < prefill_tp + decode_tp:
             return []
 
-        # Minimum prefill pods: 20% of total pods, rounded up to nearest even, min 2
         import math
-        total_pods = usable_gpus // min(prefill_tp, decode_tp)
-        min_prefill_pods = max(2, math.ceil(total_pods * 0.2 / 2) * 2) if total_pods > 4 else 1
+        min_prefill_pods = 1
 
         splits = []
         for prefill_gpus in range(prefill_tp, usable_gpus, prefill_tp):
