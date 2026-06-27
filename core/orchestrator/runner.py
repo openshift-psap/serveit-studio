@@ -1150,57 +1150,33 @@ class TestOrchestrator(ParserMixin, GuidellmMixin):
                     log_callback("\n⏭️  Skipping guidellm workload and metrics collection (validation mode)")
 
             else:
-                # Step 5: Run guidellm test (with retry on high error rate)
-                max_guidellm_retries = 5
-                for guidellm_attempt in range(1, max_guidellm_retries + 1):
-                    if guidellm_attempt > 1:
-                        if log_callback:
-                            log_callback(f"\n🔄 Retrying guidellm (attempt {guidellm_attempt}/{max_guidellm_retries}) — pods still running")
+                # Step 5: Run guidellm test
+                if log_callback:
+                    log_callback("\n🧪 Step 5: Running guidellm load test...")
 
-                    if log_callback:
-                        log_callback("\n🧪 Step 5: Running guidellm load test...")
+                result.test_start_time = datetime.now().isoformat()
 
-                    result.test_start_time = datetime.now().isoformat()
+                use_job = os.environ.get('GUIDELLM_USE_JOB', 'true').lower() == 'true'
+                if use_job:
+                    guidellm_success, guidellm_output, metrics_output = self._run_guidellm_job(
+                        endpoint, config, log_callback=log_callback,
+                        stop_check=stop_check,
+                    )
+                else:
+                    guidellm_success, guidellm_output, metrics_output = self._run_guidellm_test(
+                        endpoint, config, log_callback=log_callback,
+                    )
 
-                    use_job = os.environ.get('GUIDELLM_USE_JOB', 'true').lower() == 'true'
-                    if use_job:
-                        guidellm_success, guidellm_output, metrics_output = self._run_guidellm_job(
-                            endpoint, config, log_callback=log_callback,
-                            stop_check=stop_check,
-                        )
-                    else:
-                        guidellm_success, guidellm_output, metrics_output = self._run_guidellm_test(
-                            endpoint, config, log_callback=log_callback,
-                        )
+                result.test_end_time = datetime.now().isoformat()
+                result.guidellm_success = guidellm_success
+                result.guidellm_output = guidellm_output
+                result.metrics_output = metrics_output
 
-                    result.test_end_time = datetime.now().isoformat()
-                    result.guidellm_success = guidellm_success
-                    result.guidellm_output = guidellm_output
-                    result.metrics_output = metrics_output
+                if guidellm_success and guidellm_output:
+                    self._parse_guidellm_results(guidellm_output, result)
 
-                    if guidellm_success and guidellm_output:
-                        self._parse_guidellm_results(guidellm_output, result)
-
-                    if not guidellm_success:
-                        result.error_message = "guidellm test failed"
-                        break
-
-                    # Check error rate — retry if between 1-4%, stop if >= 4%
-                    total = result.request_total or 0
-                    errored = result.request_errored or 0
-                    if total > 0 and errored > 0:
-                        error_pct = errored / total * 100
-                        if error_pct >= 4.0:
-                            if log_callback:
-                                log_callback(f"🚨 Error rate {error_pct:.1f}% exceeds 4% — not retrying")
-                            break
-                        elif error_pct > 1.0 and guidellm_attempt < max_guidellm_retries:
-                            if log_callback:
-                                log_callback(f"⚠️  Error rate {error_pct:.1f}% ({errored}/{total}) — retrying guidellm")
-                            result.guidellm_retries = guidellm_attempt
-                            continue
-                    result.guidellm_retries = guidellm_attempt - 1
-                    break
+                if not guidellm_success:
+                    result.error_message = "guidellm test failed"
 
                 # Step 6: Collect metrics (if configured)
                 if self.metrics_collector and result.test_start_time and result.test_end_time:
@@ -1262,10 +1238,6 @@ class TestOrchestrator(ParserMixin, GuidellmMixin):
             # Step 7: Cleanup
             # Skip cleanup if pod errors or high request error rate — user needs to investigate
             high_error_rate = False
-            if result.request_total and result.request_errored:
-                error_pct = result.request_errored / result.request_total * 100
-                if error_pct >= 4.0:
-                    high_error_rate = True
 
             if result.pod_errors_detected:
                 if log_callback:
