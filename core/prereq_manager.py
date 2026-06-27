@@ -223,7 +223,7 @@ class PrereqManager:
                 'gaie_pool_name': config['gaie_pool_name'],
                 'config_file': 'default-plugins.yaml' if epp_use_defaults else config['config_file'],
                 'gaie_replicas': 1,
-                'gaie_image': self.scheduler_image or 'ghcr.io/llm-d/llm-d-inference-scheduler:v0.9.0',
+                'gaie_image': self.scheduler_image or 'ghcr.io/llm-d/llm-d-inference-scheduler:v0.8.0',
                 'gateway_name': config['gateway_name'],
                 'gateway_class': self.gateway_class,
                 'prefix_cache_weight': epp_weights['prefix_cache_weight'],

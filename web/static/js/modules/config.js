@@ -1270,7 +1270,7 @@ var RHAIIS_VERSIONS = {
     '3.3.4': { cuda: 'v0.4.0', scheduler: 'v0.4.0', vllm: '0.13.0' },
     '3.4.0': { cuda: 'v0.6.0', scheduler: 'v0.7.1', vllm: '0.18.0' },
     '3.4.1': { cuda: 'v0.6.0', scheduler: 'v0.7.1', vllm: '0.18.0' },
-    '3.5.0': { cuda: 'v0.8.0', scheduler: 'v0.9.0', vllm: '0.24.0' },
+    '3.5.0': { cuda: 'v0.8.0', scheduler: 'v0.8.0', vllm: '0.24.0' },
 };
 
 function applyRhaiisVersion(version) {
@@ -1338,7 +1338,7 @@ function markImagesCustom() {
 
 function fetchSchedulerTags() {
     var input = document.getElementById('scheduler-image-input');
-    var full = (input.value || 'ghcr.io/llm-d/llm-d-inference-scheduler:v0.9.0').trim();
+    var full = (input.value || 'ghcr.io/llm-d/llm-d-inference-scheduler:v0.8.0').trim();
     var repo = full.split(':')[0];
     var statusEl = document.getElementById('scheduler-tag-status');
     statusEl.textContent = 'Fetching tags...';
