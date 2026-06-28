@@ -493,10 +493,12 @@ class ReportAnalyzer:
                     pass
             ptp = r.prefill_tp or r.tensor_parallelism
             dtp = r.decode_tp or r.tensor_parallelism
+            itl_field = ttft_field.replace('ttft_', 'itl_')
             entry = {
                 'config_name': r.display_label,
                 'test_id': r.config_name,
                 'ttft': round(getattr(r, ttft_field), 1),
+                'itl': round(getattr(r, itl_field), 2) if getattr(r, itl_field, None) else None,
                 'throughput_mean': round(r.throughput_mean, 2) if r.throughput_mean else None,
                 'throughput': round(getattr(r, tput_field, 0) or 0, 2),
                 'gpus': r.total_gpus,

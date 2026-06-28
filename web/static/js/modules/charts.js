@@ -158,12 +158,13 @@ function renderCharts(data, runId) {
 
                 // P90/P95/P99 table in a bordered box
                 html += '<div style="border:1px solid #e2e8f0;border-radius:8px;overflow:hidden;margin-bottom:12px;">';
+                html += '<div style="background:#f8fafc;padding:6px 8px;font-size:0.75em;font-weight:600;color:#64748b;text-transform:uppercase;letter-spacing:0.5px;text-align:center;border-bottom:1px solid #e2e8f0;">Latency Percentiles</div>';
                 html += '<table style="width:100%;border-collapse:collapse;font-size:0.82em;">';
                 html += '<tr style="background:#f8fafc;"><th style="text-align:center;padding:6px 8px;color:#94a3b8;font-weight:500;font-size:0.9em;"></th><th style="text-align:center;padding:6px 8px;color:#94a3b8;font-weight:500;font-size:0.9em;">TTFT</th><th style="text-align:center;padding:6px 8px;color:#94a3b8;font-weight:500;font-size:0.9em;">ITL</th></tr>';
                 ['p90', 'p95', 'p99'].forEach((p, pi) => {
                     const pCfg = isNewFormat ? ((bp[p] || {})[archKey] || {})[sel.key] : (bp[p] || {})[archKey];
                     const ttft = pCfg ? (pCfg.ttft || pCfg['ttft_' + p]) : null;
-                    const itl = pCfg ? (pCfg['itl_' + p] || pCfg.itl) : null;
+                    const itl = pCfg ? (pCfg.itl || pCfg['itl_' + p]) : null;
                     const bg = pi % 2 === 0 ? 'white' : '#fafbfc';
                     html += `<tr style="background:${bg};border-top:1px solid #f1f5f9;"><td style="text-align:center;padding:6px 8px;font-weight:600;color:#334155;">${p.toUpperCase()}</td>`;
                     html += `<td style="text-align:center;padding:6px 8px;color:#1e293b;">${ttft != null ? '<strong>' + ttft + '</strong> ms' : '<span style="color:#cbd5e1;">-</span>'}</td>`;
