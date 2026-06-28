@@ -1908,9 +1908,16 @@ function renderCharts(data, runId) {
 
     // Scatter
     if (charts.scatter.traces.length) {
-        var allSizes = charts.scatter.traces.flatMap(t => t.sizes || []);
+        var filteredScatter = charts.scatter.traces.map(function(t) {
+            var keep = [];
+            (t.text || []).forEach(function(txt, i) {
+                if (txt.indexOf('step11-') === -1 && txt.indexOf('step12-') === -1 && txt.indexOf('step13-') === -1) keep.push(i);
+            });
+            return { x: keep.map(i => t.x[i]), y: keep.map(i => t.y[i]), text: keep.map(i => t.text[i]), name: t.name, sizes: keep.map(i => (t.sizes || [])[i]), color: t.color };
+        }).filter(t => t.x.length);
+        var allSizes = filteredScatter.flatMap(t => t.sizes || []);
         var maxSize = Math.max.apply(null, allSizes) || 1;
-        const traces = charts.scatter.traces.map(t => ({
+        const traces = filteredScatter.map(t => ({
             x: t.x, y: t.y, text: t.text, name: t.name,
             mode: 'markers',
             marker: { size: (t.sizes || []).map(s => 8 + (s / maxSize) * 22), color: t.color, opacity: 0.7, line: { width: 1, color: 'white' } },
@@ -1919,16 +1926,25 @@ function renderCharts(data, runId) {
         Plotly.newPlot(cid('chart-scatter'), traces, { ...plotlyLayout, xaxis: { title: 'TTFT P90 (ms) - lower is better' }, yaxis: { title: 'Throughput Mean (req/s) - higher is better' }, showlegend: true }, plotlyConfig);
     }
 
-    // Efficiency bar
+    // Efficiency bar (filter out sweep tests)
     if (charts.efficiency.configs.length) {
-        Plotly.newPlot(cid('chart-efficiency'), [{
-            x: charts.efficiency.configs, y: charts.efficiency.values,
-            type: 'bar', marker: { color: charts.efficiency.colors },
-            text: charts.efficiency.values.map(v => v != null ? v.toFixed(3) : ''),
-            textposition: 'outside', textfont: { size: 11, color: '#333' },
-            cliponaxis: false, constraintext: 'none',
-            hovertemplate: '<b>%{x}</b><br>%{y:.3f} req/s/GPU<extra></extra>'
-        }], { ...plotlyLayout, margin: { ...plotlyLayout.margin, b: 120 }, xaxis: { tickangle: -45 }, yaxis: { title: 'Mean req/s per GPU - higher is better' } }, plotlyConfig);
+        var effIdx = [];
+        charts.efficiency.configs.forEach(function(c, i) {
+            if (c.indexOf('step11-') !== 0 && c.indexOf('step12-') !== 0 && c.indexOf('step13-') !== 0) effIdx.push(i);
+        });
+        var effConfigs = effIdx.map(i => charts.efficiency.configs[i]);
+        var effValues = effIdx.map(i => charts.efficiency.values[i]);
+        var effColors = effIdx.map(i => charts.efficiency.colors[i]);
+        if (effConfigs.length) {
+            Plotly.newPlot(cid('chart-efficiency'), [{
+                x: effConfigs, y: effValues,
+                type: 'bar', marker: { color: effColors },
+                text: effValues.map(v => v != null ? v.toFixed(3) : ''),
+                textposition: 'outside', textfont: { size: 11, color: '#333' },
+                cliponaxis: false, constraintext: 'none',
+                hovertemplate: '<b>%{x}</b><br>%{y:.3f} req/s/GPU<extra></extra>'
+            }], { ...plotlyLayout, margin: { ...plotlyLayout.margin, b: 120 }, xaxis: { tickangle: -45 }, yaxis: { title: 'Mean req/s per GPU - higher is better' } }, plotlyConfig);
+        }
     }
 
     // Architecture comparison — use subplots side by side instead of overlaying
