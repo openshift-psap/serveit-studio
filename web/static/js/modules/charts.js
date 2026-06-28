@@ -127,7 +127,7 @@ function renderCharts(data, runId) {
                 const tputMean = cfg.throughput_mean || cfg.throughput || cfg.throughput_p90 || '-';
 
                 // Card container with colored top accent
-                html += `<div style="background:white;border-radius:12px;overflow:hidden;box-shadow:0 1px 3px rgba(0,0,0,0.08),0 1px 2px rgba(0,0,0,0.06);border:1px solid #e2e8f0;">`;
+                html += `<div style="background:white;border-radius:12px;overflow:hidden;box-shadow:0 1px 3px rgba(0,0,0,0.08),0 1px 2px rgba(0,0,0,0.06);border:2px solid #cbd5e1;">`;
 
                 // Colored header bar
                 html += `<div style="background:linear-gradient(135deg,${sel.color},${sel.color}cc);padding:12px 16px;color:white;">`;
@@ -146,19 +146,19 @@ function renderCharts(data, runId) {
 
                 // Key metrics row
                 html += `<div style="display:flex;gap:12px;margin:0 0 12px;">`;
-                html += `<div style="flex:1;text-align:center;padding:8px;background:#f8fafc;border-radius:8px;border:1px solid #e2e8f0;">`;
+                html += `<div style="flex:1;text-align:center;padding:8px;background:#f8fafc;border-radius:8px;border:2px solid #cbd5e1;">`;
                 html += `<div style="font-size:0.7em;color:#64748b;text-transform:uppercase;letter-spacing:0.5px;margin-bottom:2px;">Throughput</div>`;
                 html += `<div style="font-size:1.1em;font-weight:700;color:#0f172a;">${tputMean} <span style="font-size:0.7em;font-weight:400;color:#64748b;">req/s</span></div>`;
                 html += `</div>`;
-                html += `<div style="flex:1;text-align:center;padding:8px;background:#f8fafc;border-radius:8px;border:1px solid #e2e8f0;">`;
+                html += `<div style="flex:1;text-align:center;padding:8px;background:#f8fafc;border-radius:8px;border:2px solid #cbd5e1;">`;
                 html += `<div style="font-size:0.7em;color:#64748b;text-transform:uppercase;letter-spacing:0.5px;margin-bottom:2px;">GPUs</div>`;
                 html += `<div style="font-size:1.1em;font-weight:700;color:#0f172a;">${gpus}</div>`;
                 html += `</div>`;
                 html += `</div>`;
 
                 // P90/P95/P99 table in a bordered box
-                html += '<div style="border:1px solid #e2e8f0;border-radius:8px;overflow:hidden;margin-bottom:12px;">';
-                html += '<div style="background:#f8fafc;padding:6px 8px;font-size:0.75em;font-weight:600;color:#64748b;text-transform:uppercase;letter-spacing:0.5px;text-align:center;border-bottom:1px solid #e2e8f0;">Latency Percentiles</div>';
+                html += '<div style="border:2px solid #cbd5e1;border-radius:8px;overflow:hidden;margin-bottom:12px;">';
+                html += '<div style="background:#f8fafc;padding:6px 8px;font-size:0.75em;font-weight:600;color:#64748b;text-transform:uppercase;letter-spacing:0.5px;text-align:center;border-bottom:2px solid #cbd5e1;">Latency Percentiles</div>';
                 html += '<table style="width:100%;border-collapse:collapse;font-size:0.82em;">';
                 html += '<tr style="background:#f8fafc;"><th style="text-align:center;padding:6px 8px;color:#94a3b8;font-weight:500;font-size:0.9em;"></th><th style="text-align:center;padding:6px 8px;color:#94a3b8;font-weight:500;font-size:0.9em;">TTFT</th><th style="text-align:center;padding:6px 8px;color:#94a3b8;font-weight:500;font-size:0.9em;">ITL</th></tr>';
                 ['p90', 'p95', 'p99'].forEach((p, pi) => {
