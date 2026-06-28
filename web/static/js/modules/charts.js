@@ -1908,10 +1908,12 @@ function renderCharts(data, runId) {
 
     // Scatter
     if (charts.scatter.traces.length) {
+        var allSizes = charts.scatter.traces.flatMap(t => t.sizes || []);
+        var maxSize = Math.max.apply(null, allSizes) || 1;
         const traces = charts.scatter.traces.map(t => ({
             x: t.x, y: t.y, text: t.text, name: t.name,
             mode: 'markers',
-            marker: { size: t.sizes, color: t.color, opacity: 0.7, line: { width: 1, color: 'white' } },
+            marker: { size: (t.sizes || []).map(s => 8 + (s / maxSize) * 22), color: t.color, opacity: 0.7, line: { width: 1, color: 'white' } },
             hovertemplate: '<b>%{text}</b><extra></extra>'
         }));
         Plotly.newPlot(cid('chart-scatter'), traces, { ...plotlyLayout, xaxis: { title: 'TTFT P90 (ms) - lower is better' }, yaxis: { title: 'Throughput Mean (req/s) - higher is better' }, showlegend: true }, plotlyConfig);
