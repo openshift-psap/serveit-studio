@@ -1204,172 +1204,94 @@ function renderCharts(data, runId) {
         html += '</div>';
     }
 
-    // InferenceX Chart: Token Throughput per GPU vs Interactivity
+    // Concurrency Sweep Charts — one section per architecture
     if (data.concurrency_sweep) {
         const sweep = data.concurrency_sweep;
-        html += '<div class="chart-card" style="margin-top:16px; border:2px solid #6366f1; border-left:6px solid #6366f1;">';
-        html += '<div class="chart-card-header" style="background:linear-gradient(135deg,#4f46e5,#6366f1); color:white; font-size:1.2em;">Token Throughput per GPU vs. Interactivity</div>';
-        html += '<div style="padding:8px 20px 4px; font-size:0.85em; color:#64748b;">Higher is better on both axes. The curve shows the tradeoff between per-user response speed (interactivity) and system-wide GPU efficiency. The marked point is the calibrated sustainable load.</div>';
-        html += '<div id="chart-inferencex" style="width:100%; height:450px;"></div>';
-        html += '</div>';
+        var archColors = { pd: '#10b981', aggregated: '#6366f1', ep: '#f59e0b' };
+        var archLabelsCS = { pd: 'PD', aggregated: 'Aggregated', ep: 'EP' };
+        var pctColors = { ttft_p90: '#3b82f6', ttft_p95: '#f59e0b', ttft_p99: '#ef4444' };
+        var archIdx = 0;
 
-        chartQueue.push(function() {
-            var traces = [];
-            var colors = { pd: '#10b981', aggregated: '#6366f1', ep: '#f59e0b' };
-            var labels = { pd: 'PD', aggregated: 'Aggregated', ep: 'EP' };
-            var annotations = [];
+        Object.keys(sweep).forEach(function(arch) {
+            var points = sweep[arch];
+            if (!points || !points.length) return;
+            var label = archLabelsCS[arch] || arch;
+            var color = archColors[arch] || '#888';
+            archIdx++;
 
-            Object.keys(sweep).forEach(function(arch) {
-                var points = sweep[arch];
-                if (!points || !points.length) return;
+            // --- Architecture header ---
+            html += '<div class="chart-card" style="margin-top:20px; border:2px solid ' + color + '; border-left:6px solid ' + color + ';">';
+            html += '<div class="chart-card-header" style="background:linear-gradient(135deg,' + color + ',' + color + '99); color:white; font-size:1.2em;">' + label + ' — Concurrency Sweep</div>';
 
-                var x = points.map(function(p) { return p.interactivity; });
-                var y = points.map(function(p) { return p.throughput_per_gpu; });
-                var text = points.map(function(p) {
-                    return 'Concurrency: ' + p.concurrency + ' users' +
-                           '<br>Throughput/GPU: ' + p.throughput_per_gpu.toFixed(0) + ' tok/s/gpu' +
-                           '<br>Interactivity: ' + p.interactivity.toFixed(1) + ' tok/s/user' +
-                           '<br>TTFT P90: ' + p.ttft_p90.toFixed(0) + 'ms' +
-                           '<br>Throughput: ' + p.throughput_mean.toFixed(1) + ' req/s' +
-                           (p.is_calibrated ? '<br><b>← Calibrated Load</b>' : '');
-                });
-
-                traces.push({
-                    x: x, y: y, text: text,
-                    mode: 'lines+markers',
-                    name: labels[arch] || arch,
-                    line: { color: colors[arch] || '#888', width: 3 },
-                    marker: { size: points.map(function(p) { return p.is_calibrated ? 14 : 8; }),
-                              color: points.map(function(p) { return p.is_calibrated ? '#fff' : (colors[arch] || '#888'); }),
-                              line: { color: colors[arch] || '#888', width: points.map(function(p) { return p.is_calibrated ? 3 : 0; }) } },
-                    hovertemplate: '%{text}<extra>' + (labels[arch] || arch) + '</extra>'
-                });
-
-                // Annotate calibrated point
-                points.forEach(function(p) {
-                    if (p.is_calibrated) {
-                        annotations.push({
-                            x: p.interactivity, y: p.throughput_per_gpu,
-                            text: (labels[arch] || arch) + ' (calibrated)',
-                            showarrow: true, arrowhead: 2, ax: 40, ay: -30,
-                            font: { size: 11, color: colors[arch] || '#888' },
-                            bgcolor: 'rgba(255,255,255,0.85)', borderpad: 3
-                        });
-                    }
-                });
-            });
-
-            Plotly.newPlot('chart-inferencex', traces, {
-                xaxis: { title: 'Interactivity (tok/s/user)', gridcolor: '#e2e8f0' },
-                yaxis: { title: 'Token Throughput per GPU (tok/s/gpu)', gridcolor: '#e2e8f0' },
-                plot_bgcolor: '#f8fafc',
-                paper_bgcolor: '#ffffff',
-                margin: { t: 20, b: 60, l: 70, r: 20 },
-                legend: { x: 1, y: 1, xanchor: 'right', bgcolor: 'rgba(255,255,255,0.9)' },
-                annotations: annotations,
-                hovermode: 'closest'
-            }, { responsive: true });
-        });
-
-        // --- TTFT vs Concurrency charts (P90, P95, P99) ---
-        var sweepPctiles = [
-            { key: 'ttft_p90', label: 'P90', color: '#dc2626', gradEnd: '#ef4444' },
-            { key: 'ttft_p95', label: 'P95', color: '#d97706', gradEnd: '#f59e0b' },
-            { key: 'ttft_p99', label: 'P99', color: '#7c3aed', gradEnd: '#a78bfa' },
-        ];
-        var sweepColors = { pd: '#10b981', aggregated: '#6366f1', ep: '#f59e0b' };
-        var sweepLabels = { pd: 'PD', aggregated: 'Aggregated', ep: 'EP' };
-
-        sweepPctiles.forEach(function(pct) {
-            var chartId = 'chart-sweep-ttft-' + pct.label.toLowerCase();
-            html += '<div class="chart-card" style="margin-top:16px; border:2px solid ' + pct.color + '; border-left:6px solid ' + pct.color + ';">';
-            html += '<div class="chart-card-header" style="background:linear-gradient(135deg,' + pct.color + ',' + pct.gradEnd + '); color:white; font-size:1.1em;">TTFT ' + pct.label + ' vs. Concurrency</div>';
-            html += '<div style="padding:8px 20px 4px; font-size:0.85em; color:#64748b;">Lower is better. Shows how ' + pct.label + ' first-token latency degrades as concurrent users increase.</div>';
-            html += '<div id="' + chartId + '" style="width:100%; height:400px;"></div>';
-            html += '</div>';
+            // --- TTFT P90/P95/P99 on same chart ---
+            var ttftChartId = 'chart-sweep-ttft-' + arch;
+            html += '<div style="padding:8px 20px 4px; font-size:0.85em; color:#64748b;">TTFT percentiles vs concurrent users. Lower is better.</div>';
+            html += '<div id="' + ttftChartId + '" style="width:100%; height:400px;"></div>';
 
             chartQueue.push(function() {
                 var traces = [];
                 var calShapes = [];
-                Object.keys(sweep).forEach(function(arch) {
-                    var points = sweep[arch];
-                    if (!points || !points.length || !points[0][pct.key]) return;
+                [{ key: 'ttft_p90', label: 'P90', dash: undefined },
+                 { key: 'ttft_p95', label: 'P95', dash: 'dash' },
+                 { key: 'ttft_p99', label: 'P99', dash: 'dot' }].forEach(function(pct) {
+                    if (!points[0][pct.key]) return;
                     traces.push({
                         x: points.map(function(p) { return p.concurrency; }),
                         y: points.map(function(p) { return p[pct.key] || 0; }),
-                        mode: 'lines+markers',
-                        name: sweepLabels[arch] || arch,
-                        line: { color: sweepColors[arch] || '#888', width: 3 },
-                        marker: { size: points.map(function(p) { return p.is_calibrated ? 14 : 8; }),
-                                  color: points.map(function(p) { return p.is_calibrated ? '#fff' : (sweepColors[arch] || '#888'); }),
-                                  line: { color: sweepColors[arch] || '#888', width: points.map(function(p) { return p.is_calibrated ? 3 : 0; }) } },
-                        hovertemplate: '<b>%{x} users</b><br>' + pct.label + ': %{y:.0f}ms<extra>' + (sweepLabels[arch] || arch) + '</extra>'
+                        mode: 'lines+markers', name: pct.label,
+                        line: { color: pctColors[pct.key], width: 2, dash: pct.dash },
+                        marker: { size: 7 },
+                        hovertemplate: '<b>%{x} users</b><br>' + pct.label + ': %{y:.0f}ms<extra></extra>'
                     });
-                    points.forEach(function(p) {
-                        if (p.is_calibrated) {
-                            calShapes.push({ type: 'line', x0: p.concurrency, x1: p.concurrency, y0: 0, y1: 1, yref: 'paper',
-                                line: { color: sweepColors[arch] || '#888', width: 1.5, dash: 'dash' } });
-                        }
-                    });
-                });
-                Plotly.newPlot(chartId, traces, {
-                    xaxis: { title: 'Concurrent Users', gridcolor: '#e2e8f0' },
-                    yaxis: { title: 'TTFT ' + pct.label + ' (ms)', gridcolor: '#e2e8f0' },
-                    plot_bgcolor: '#f8fafc', paper_bgcolor: '#ffffff',
-                    margin: { t: 20, b: 60, l: 70, r: 20 },
-                    legend: { x: 1, y: 1, xanchor: 'right', bgcolor: 'rgba(255,255,255,0.9)' },
-                    shapes: calShapes, hovermode: 'closest'
-                }, { responsive: true });
-            });
-        });
-
-        // --- Throughput vs Concurrency chart ---
-        html += '<div class="chart-card" style="margin-top:16px; border:2px solid #0891b2; border-left:6px solid #0891b2;">';
-        html += '<div class="chart-card-header" style="background:linear-gradient(135deg,#0891b2,#06b6d4); color:white; font-size:1.1em;">Token Throughput per GPU vs. Concurrency</div>';
-        html += '<div style="padding:8px 20px 4px; font-size:0.85em; color:#64748b;">Higher is better. Shows how per-GPU token throughput scales with concurrent users — the plateau indicates cluster saturation.</div>';
-        html += '<div id="chart-sweep-throughput" style="width:100%; height:400px;"></div>';
-        html += '</div>';
-
-        chartQueue.push(function() {
-            var traces = [];
-            var colors = { pd: '#10b981', aggregated: '#6366f1', ep: '#f59e0b' };
-            var labels = { pd: 'PD', aggregated: 'Aggregated', ep: 'EP' };
-            var calShapes = [];
-
-            Object.keys(sweep).forEach(function(arch) {
-                var points = sweep[arch];
-                if (!points || !points.length) return;
-                traces.push({
-                    x: points.map(function(p) { return p.concurrency; }),
-                    y: points.map(function(p) { return p.throughput_per_gpu; }),
-                    text: points.map(function(p) {
-                        return 'Concurrency: ' + p.concurrency + ' users' +
-                               '<br>Throughput/GPU: ' + p.throughput_per_gpu.toFixed(0) + ' tok/s/gpu' +
-                               '<br>Throughput: ' + p.throughput_mean.toFixed(1) + ' req/s' +
-                               (p.is_calibrated ? '<br><b>← Calibrated</b>' : '');
-                    }),
-                    mode: 'lines+markers', name: labels[arch] || arch,
-                    line: { color: colors[arch] || '#888', width: 3 },
-                    marker: { size: points.map(function(p) { return p.is_calibrated ? 14 : 8; }),
-                              color: points.map(function(p) { return p.is_calibrated ? '#fff' : (colors[arch] || '#888'); }),
-                              line: { color: colors[arch] || '#888', width: points.map(function(p) { return p.is_calibrated ? 3 : 0; }) } },
-                    hovertemplate: '%{text}<extra>' + (labels[arch] || arch) + '</extra>'
                 });
                 points.forEach(function(p) {
                     if (p.is_calibrated) {
                         calShapes.push({ type: 'line', x0: p.concurrency, x1: p.concurrency, y0: 0, y1: 1, yref: 'paper',
-                            line: { color: colors[arch] || '#888', width: 1.5, dash: 'dash' } });
+                            line: { color: '#059669', width: 1.5, dash: 'dash' } });
                     }
                 });
+                Plotly.newPlot(ttftChartId, traces, {
+                    xaxis: { title: 'Concurrent Users', gridcolor: '#e2e8f0' },
+                    yaxis: { title: 'TTFT (ms)', gridcolor: '#e2e8f0' },
+                    plot_bgcolor: '#f8fafc', paper_bgcolor: '#fff',
+                    margin: { t: 20, b: 60, l: 70, r: 20 },
+                    legend: { x: 0, y: 1, bgcolor: 'rgba(255,255,255,0.9)' },
+                    shapes: calShapes, hovermode: 'closest'
+                }, { responsive: true });
             });
-            Plotly.newPlot('chart-sweep-throughput', traces, {
-                xaxis: { title: 'Concurrent Users', gridcolor: '#e2e8f0' },
-                yaxis: { title: 'Token Throughput per GPU (tok/s/gpu)', gridcolor: '#e2e8f0' },
-                plot_bgcolor: '#f8fafc', paper_bgcolor: '#ffffff',
-                margin: { t: 20, b: 60, l: 70, r: 20 },
-                legend: { x: 0, y: 1, bgcolor: 'rgba(255,255,255,0.9)' },
-                shapes: calShapes, hovermode: 'closest'
-            }, { responsive: true });
+
+            // --- Throughput Mean vs Concurrency ---
+            var tputChartId = 'chart-sweep-tput-' + arch;
+            html += '<div style="padding:8px 20px 4px; font-size:0.85em; color:#64748b;">Token throughput per GPU vs concurrent users. Higher is better.</div>';
+            html += '<div id="' + tputChartId + '" style="width:100%; height:400px;"></div>';
+
+            chartQueue.push(function() {
+                var calShapes = [];
+                points.forEach(function(p) {
+                    if (p.is_calibrated) {
+                        calShapes.push({ type: 'line', x0: p.concurrency, x1: p.concurrency, y0: 0, y1: 1, yref: 'paper',
+                            line: { color: '#059669', width: 1.5, dash: 'dash' } });
+                    }
+                });
+                Plotly.newPlot(tputChartId, [{
+                    x: points.map(function(p) { return p.concurrency; }),
+                    y: points.map(function(p) { return p.throughput_per_gpu; }),
+                    mode: 'lines+markers', name: 'Throughput/GPU',
+                    line: { color: color, width: 3 },
+                    marker: { size: points.map(function(p) { return p.is_calibrated ? 14 : 8; }),
+                              color: points.map(function(p) { return p.is_calibrated ? '#fff' : color; }),
+                              line: { color: color, width: points.map(function(p) { return p.is_calibrated ? 3 : 0; }) } },
+                    hovertemplate: '<b>%{x} users</b><br>%{y:.0f} tok/s/gpu<extra></extra>'
+                }], {
+                    xaxis: { title: 'Concurrent Users', gridcolor: '#e2e8f0' },
+                    yaxis: { title: 'Token Throughput per GPU (tok/s/gpu)', gridcolor: '#e2e8f0' },
+                    plot_bgcolor: '#f8fafc', paper_bgcolor: '#fff',
+                    margin: { t: 20, b: 60, l: 70, r: 20 },
+                    shapes: calShapes, hovermode: 'closest'
+                }, { responsive: true });
+            });
+
+            html += '</div>';
         });
 
         // --- Sweep Results Table ---
