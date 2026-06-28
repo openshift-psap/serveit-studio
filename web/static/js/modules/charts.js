@@ -73,46 +73,50 @@ function renderCharts(data, runId) {
         // Recommendation cards — 2 columns sorted by TTFT (best left, second right), P90/P95/P99 stacked
         const bp = rec.best_by_percentile || {};
         const pctls = ['p90', 'p95', 'p99'];
-        const accentColor = '#3b82f6';
+        const selTypes = [
+            { key: 'balanced', label: 'Best Balanced', desc: 'Best TTFT-to-throughput ratio — the sweet spot', color: '#059669', icon: '&#9878;' },
+            { key: 'lowest_ttft', label: 'Lowest TTFT', desc: 'Fastest time to first token', color: '#3b82f6', icon: '&#9201;' },
+            { key: 'highest_tput', label: 'Highest Throughput', desc: 'Maximum requests per second', color: '#f59e0b', icon: '&#9889;' },
+        ];
+        const fallbackTs = (rec.recommendations.response_time || rec.recommendations.throughput || {}).config?.test_settings;
 
-        const hasEp = pctls.some(p => (bp[p] || {}).ep);
-        const gridCols = hasEp ? '1fr 1fr 1fr' : '1fr 1fr';
         pctls.forEach((p, pi) => {
-            html += `<div style="display:grid; grid-template-columns:${gridCols}; gap:16px; margin-bottom:12px;">`;
             const pLabel = p.toUpperCase();
+            const archEntries = bp[p] || {};
 
-            // Collect best config per architecture at this percentile
-            const cards = [];
             ['pd', 'aggregated', 'ep'].forEach(archKey => {
-                const bpData = (bp[p] || {})[archKey];
-                // For P90, use the primary recommendation config
-                let cfg, deploy, testSettings;
-                if (pi === 0) {
-                    const r = archKey === 'pd' ? rec.recommendations.response_time : (rec.recommendations.throughput || rec.recommendations.response_time);
-                    if (!r || (r.architecture || '').toLowerCase() !== archKey) {
-                        // Try the other recommendation
-                        const r2 = archKey === 'pd' ? rec.recommendations.throughput : rec.recommendations.response_time;
-                        if (r2 && (r2.architecture || '').toLowerCase() === archKey) {
-                            cfg = r2.config;
-                            deploy = r2.deploy;
-                            testSettings = cfg.test_settings;
-                        } else if (bpData) {
-                            cfg = bpData;
-                        }
-                    } else {
-                        cfg = r.config;
-                        deploy = r.deploy;
-                        testSettings = cfg.test_settings;
+                const archData = archEntries[archKey];
+                if (!archData) return;
+
+                // Support both old format (single dict) and new format (3 selections)
+                const isNewFormat = archData.balanced || archData.lowest_ttft || archData.highest_tput;
+                const selections = isNewFormat
+                    ? selTypes.map(st => ({ ...st, cfg: archData[st.key] })).filter(st => st.cfg)
+                    : [{ key: 'balanced', label: 'Best Config', desc: '', color: '#3b82f6', icon: '&#9201;', cfg: archData }];
+
+                const archLabel = archKey.toUpperCase();
+                const archBadge = `<span style="background:#64748b; color:white; font-size:0.65em; padding:2px 6px; border-radius:3px; margin-left:6px;">${archLabel}</span>`;
+
+                // Deduplicate — skip if same test_id as a previous selection
+                const seen = new Set();
+                html += `<div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(320px, 1fr)); gap:12px; margin-bottom:16px;">`;
+
+                selections.forEach((sel, si) => {
+                    const cfg = sel.cfg;
+                    const ttftVal = cfg[`ttft_${p}`] || cfg.ttft || cfg.ttft_p90;
+                    if (!ttftVal) return;
+                    const testId = cfg.test_id || cfg.config_name || '';
+
+                    // Check for duplicates — add note if same config
+                    let dupNote = '';
+                    if (seen.has(testId)) return;
+                    seen.add(testId);
+                    if (isNewFormat) {
+                        const otherMatches = selections.filter(s => s.key !== sel.key && s.cfg && (s.cfg.test_id || s.cfg.config_name) === testId);
+                        if (otherMatches.length) dupNote = ' (also ' + otherMatches.map(s => s.label).join(', ') + ')';
                     }
-                } else if (bpData) {
-                    cfg = bpData;
-                }
-                if (!cfg) return;
 
-                const ttftVal = cfg[`ttft_${p}`] || cfg.ttft || cfg.ttft_p90;
-                if (!ttftVal) return;
-
-                if (!deploy) {
+                    let deploy;
                     if (cfg.prefill_pods && cfg.decode_pods) {
                         deploy = cfg.prefill_tp === cfg.decode_tp
                             ? `${cfg.prefill_pods}P+${cfg.decode_pods}D TP=${cfg.prefill_tp || cfg.tp || '?'}`
@@ -120,71 +124,54 @@ function renderCharts(data, runId) {
                     } else {
                         deploy = cfg.config_name;
                     }
-                }
 
-                // For P95/P99, test_settings comes from the P90 recommendation config
-                const fallbackTs = (rec.recommendations.response_time || rec.recommendations.throughput || {}).config?.test_settings;
-                cards.push({ archKey, cfg, deploy, ttftVal, testSettings: testSettings || cfg.test_settings || fallbackTs });
-            });
+                    const isPrimary = si === 0 && pi === 0;
+                    const border = isPrimary ? `3px solid ${sel.color}; border-left:6px solid ${sel.color}` : `2px solid ${sel.color}60; border-left:5px solid ${sel.color}`;
 
-            // Sort by TTFT — best first
-            cards.sort((a, b) => a.ttftVal - b.ttftVal);
+                    const recId = 'rec-' + archKey + '-' + sel.key + '-' + p;
+                    window._recConfigs[recId] = { ...cfg, architecture: archKey, model: rec.model, image: (data.run_config || {}).image, test_settings: cfg.test_settings || fallbackTs, epp_config: cfg.epp_config };
 
-            cards.forEach((card, ci) => {
-                const { archKey, cfg, deploy, ttftVal, testSettings } = card;
-                const isPrimary = ci === 0 && pi === 0;
-                const border = isPrimary ? `3px solid ${accentColor}; border-left:6px solid ${accentColor}` : `2px solid ${accentColor}40; border-left:5px solid ${accentColor}80`;
-                const badge = isPrimary ? `<span style="background:${accentColor}; color:white; font-size:0.7em; padding:2px 8px; border-radius:4px; margin-left:8px;">PRIMARY</span>` : '';
-                const bestBadge = ci === 0 ? `<span style="background:#059669; color:white; font-size:0.65em; padding:2px 6px; border-radius:3px; margin-left:6px;">BEST TTFT</span>` : '';
-                const archLabel = archKey.toUpperCase();
-                const archBadge = `<span style="background:#64748b; color:white; font-size:0.65em; padding:2px 6px; border-radius:3px; margin-left:6px;">${archLabel}</span>`;
+                    html += `<div style="background:white; border:${border}; border-radius:10px; padding:16px; position:relative;">`;
+                    html += `<div style="font-weight:800; color:${sel.color}; font-size:0.85em; text-transform:uppercase; margin-bottom:8px;">${sel.icon} ${sel.label} — ${pLabel}${archBadge}${dupNote ? '<span style="color:#94a3b8;font-size:0.85em;text-transform:none;font-weight:400;margin-left:6px;">' + dupNote + '</span>' : ''}</div>`;
+                    html += `<div style="position:absolute;top:12px;right:12px;display:flex;gap:4px;">`;
+                    html += `<button onclick="applyReportConfig('${recId}')" title="Use this configuration" style="background:none;border:1.5px solid #d1d5db;border-radius:6px;padding:4px 8px;cursor:pointer;color:#6b7280;font-size:14px;display:flex;align-items:center;gap:4px;transition:all 0.15s;" onmouseover="this.style.borderColor='#2563eb';this.style.color='#2563eb';this.style.background='#eff6ff'" onmouseout="this.style.borderColor='#d1d5db';this.style.color='#6b7280';this.style.background='none'">&#128260; Reuse</button>`;
+                    html += `<button onclick="showSingleTestModal('${recId}')" title="Run this exact configuration" style="background:none;border:1.5px solid #d1d5db;border-radius:6px;padding:4px 8px;cursor:pointer;color:#6b7280;font-size:14px;display:flex;align-items:center;gap:4px;transition:all 0.15s;" onmouseover="this.style.borderColor='#8b5cf6';this.style.color='#8b5cf6';this.style.background='#f5f3ff'" onmouseout="this.style.borderColor='#d1d5db';this.style.color='#6b7280';this.style.background='none'">&#129514; Test</button>`;
+                    html += `</div>`;
+                    html += `<div style="font-size:1.4em; font-weight:800; color:#1e293b; margin-bottom:4px;">${deploy}</div>`;
 
-                const recId = 'rec-' + archKey + '-' + p;
-                window._recConfigs[recId] = { ...cfg, architecture: archKey, model: rec.model, image: (data.run_config || {}).image, test_settings: testSettings, epp_config: cfg.epp_config };
+                    const gpus = cfg.gpus || cfg.total_gpus;
+                    const conc = cfg.concurrency;
+                    const userConc = rec.workload ? rec.workload.users : null;
+                    const concStr = conc ? ` | c=${conc}${userConc && userConc !== conc ? ' (from ' + userConc + ')' : ''}` : '';
+                    const tputMean = cfg.throughput_mean || cfg.throughput || cfg.throughput_p90 || '-';
+                    const ratio = cfg.ratio && cfg.decode_pods > 0 ? `P:D ratio ${cfg.ratio} | ` : '';
+                    html += `<div style="font-size:0.9em; color:#475569;">${ratio}TTFT ${pLabel}: <strong>${ttftVal} ms</strong> | Throughput Mean: <strong>${tputMean} req/s</strong> | ${gpus} GPUs${concStr}</div>`;
 
-                html += `<div style="background:white; border:${border}; border-radius:10px; padding:16px; position:relative;">`;
-                html += `<div style="font-weight:800; color:${accentColor}; font-size:0.85em; text-transform:uppercase; margin-bottom:8px;">&#9201; TTFT ${pLabel}${badge}${archBadge}${bestBadge}</div>`;
-                html += `<div style="position:absolute;top:12px;right:12px;display:flex;gap:4px;">`;
-                html += `<button onclick="applyReportConfig('${recId}')" title="Use this configuration" style="background:none;border:1.5px solid #d1d5db;border-radius:6px;padding:4px 8px;cursor:pointer;color:#6b7280;font-size:14px;display:flex;align-items:center;gap:4px;transition:all 0.15s;" onmouseover="this.style.borderColor='#2563eb';this.style.color='#2563eb';this.style.background='#eff6ff'" onmouseout="this.style.borderColor='#d1d5db';this.style.color='#6b7280';this.style.background='none'">&#128260; Reuse</button>`;
-                html += `<button onclick="showSingleTestModal('${recId}')" title="Run this exact configuration" style="background:none;border:1.5px solid #d1d5db;border-radius:6px;padding:4px 8px;cursor:pointer;color:#6b7280;font-size:14px;display:flex;align-items:center;gap:4px;transition:all 0.15s;" onmouseover="this.style.borderColor='#8b5cf6';this.style.color='#8b5cf6';this.style.background='#f5f3ff'" onmouseout="this.style.borderColor='#d1d5db';this.style.color='#6b7280';this.style.background='none'">&#129514; Test</button>`;
-                html += `</div>`;
-                html += `<div style="font-size:1.4em; font-weight:800; color:#1e293b; margin-bottom:4px;">${deploy}</div>`;
+                    if (sel.desc) {
+                        html += `<div style="font-size:0.82em; color:#64748b; margin-top:6px; line-height:1.4;">${sel.desc}</div>`;
+                    }
 
-                const gpus = cfg.gpus || cfg.total_gpus;
-                const conc = cfg.concurrency;
-                const userConc = rec.workload ? rec.workload.users : null;
-                const concStr = conc ? ` | c=${conc}${userConc && userConc !== conc ? ' (from ' + userConc + ')' : ''}` : '';
-                const tputMean = cfg.throughput_mean || cfg.throughput || cfg.throughput_p90 || '-';
-                const ratio = cfg.ratio && cfg.decode_pods > 0 ? `P:D ratio ${cfg.ratio} | ` : '';
-                html += `<div style="font-size:0.9em; color:#475569;">${ratio}TTFT ${pLabel}: <strong>${ttftVal} ms</strong> | Throughput Mean: <strong>${tputMean} req/s</strong> | ${gpus} GPUs${concStr}</div>`;
+                    const cardEpp = cfg.epp_config;
+                    if (cardEpp && cardEpp.preset !== 'default') {
+                        const ep = cardEpp.plugins || {};
+                        const ew = [ep.prefix_cache, ep.kv_cache, ep.queue].filter(Boolean).map(x => x.weight || '?').join(':');
+                        html += `<div style="font-size:0.8em; color:#7c3aed; margin-top:4px;">EPP: ${cardEpp.preset || 'custom'} (${ew})</div>`;
+                    }
 
-                const cardEpp = cfg.epp_config;
-                if (cardEpp && cardEpp.preset !== 'default') {
-                    const ep = cardEpp.plugins || {};
-                    const ew = [ep.prefix_cache, ep.kv_cache, ep.queue].filter(Boolean).map(x => x.weight || '?').join(':');
-                    html += `<div style="font-size:0.8em; color:#7c3aed; margin-top:4px;">EPP: ${cardEpp.preset || 'custom'} (${ew})</div>`;
-                } else {
-                    html += `<div style="font-size:0.8em; color:#94a3b8; margin-top:4px;">EPP: default (3:2:2)</div>`;
-                }
-
-                if (isPrimary) {
-                    html += `<div style="font-size:0.82em; color:#64748b; margin-top:8px; line-height:1.5;">Best configuration for minimizing Time-to-First-Token at this workload. Lower TTFT means users get faster initial responses.</div>`;
-                }
-
-                const recTestId = cfg.test_id || testIdLookup[cfg.config_name] || cfg.config_name;
-                const recManifests = manifestLookup[recTestId] || cfg.manifest_types || [];
-                if (recManifests.length) {
-                    html += '<div style="margin-top:10px; padding-top:8px; border-top:1px solid #e2e8f0;">';
-                    html += '<span style="font-size:0.78em; color:#64748b; margin-right:6px;">Download YAML:</span>';
-                    recManifests.filter(t => !t.includes('service')).forEach(t => {
-                        html += `<a href="/api/run/${runId}/config/${recTestId}/manifest/${t}" style="color:#0ea5e9; text-decoration:none; font-size:12px; padding:2px 6px; background:#f0f9ff; border-radius:4px; border:1px solid #bae6fd; margin:2px; display:inline-block;">${t}</a>`;
-                    });
+                    const recTestId = cfg.test_id || testIdLookup[cfg.config_name] || cfg.config_name;
+                    const recManifests = manifestLookup[recTestId] || cfg.manifest_types || [];
+                    if (recManifests.length) {
+                        html += '<div style="margin-top:10px; padding-top:8px; border-top:1px solid #e2e8f0;">';
+                        html += '<span style="font-size:0.78em; color:#64748b; margin-right:6px;">Download YAML:</span>';
+                        recManifests.filter(t => !t.includes('service')).forEach(t => {
+                            html += `<a href="/api/run/${runId}/config/${recTestId}/manifest/${t}" style="color:#0ea5e9; text-decoration:none; font-size:12px; padding:2px 6px; background:#f0f9ff; border-radius:4px; border:1px solid #bae6fd; margin:2px; display:inline-block;">${t}</a>`;
+                        });
+                        html += '</div>';
+                    }
                     html += '</div>';
-                }
+                });
                 html += '</div>';
             });
-            if (cards.length < 2) html += '<div></div>';
-            html += '</div>'; // Close row grid
         });
 
         // Optimal TP values and test counts (outside the grid)

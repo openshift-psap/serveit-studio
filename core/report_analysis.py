@@ -421,6 +421,7 @@ class ReportAnalyzer:
         # --- Best PD configuration (from step 7) ---
         best_pd_ttft = None
         best_pd_throughput = None
+        best_pd_balanced = None
 
         if step7_tests:
             by_ttft = min(step7_tests, key=lambda r: r.ttft_p99 or r.ttft_p90 or 1e9)
@@ -428,6 +429,9 @@ class ReportAnalyzer:
 
             by_tput = max(step7_tests, key=lambda r: r.throughput_mean or r.throughput_p90 or 0)
             best_pd_throughput = _config_dict(by_tput)
+
+            by_balanced = min(step7_tests, key=lambda r: (r.ttft_p90 or 1e9) / (r.throughput_mean or 0.001))
+            best_pd_balanced = _config_dict(by_balanced)
 
         # --- Best EP configuration (from step7-ep tests) ---
         best_ep_throughput = None
@@ -472,132 +476,93 @@ class ReportAnalyzer:
             aggregated_baseline['replicas'] = agg.total_gpus // agg.tensor_parallelism
 
         # --- Best config per percentile per architecture ---
+        def _pctl_entry(r, ttft_field, tput_field):
+            """Build a percentile entry dict from a result row."""
+            import json as _pj
+            concurrency = None
+            if r.test_config_json:
+                try:
+                    concurrency = _pj.loads(r.test_config_json).get('num_users')
+                except Exception:
+                    pass
+            manifest_types = []
+            if r.manifests_yaml:
+                try:
+                    manifest_types = list(_pj.loads(r.manifests_yaml).keys())
+                except Exception:
+                    pass
+            ptp = r.prefill_tp or r.tensor_parallelism
+            dtp = r.decode_tp or r.tensor_parallelism
+            entry = {
+                'config_name': r.display_label,
+                'test_id': r.config_name,
+                'ttft': round(getattr(r, ttft_field), 1),
+                'throughput_mean': round(r.throughput_mean, 2) if r.throughput_mean else None,
+                'throughput': round(getattr(r, tput_field, 0) or 0, 2),
+                'gpus': r.total_gpus,
+                'tp': r.tensor_parallelism if r.architecture == 'aggregated' else ptp,
+                'concurrency': concurrency,
+                'manifest_types': manifest_types,
+            }
+            if r.architecture != 'aggregated':
+                entry.update({
+                    'prefill_pods': r.prefill_pods,
+                    'decode_pods': r.decode_pods,
+                    'prefill_tp': ptp,
+                    'decode_tp': dtp,
+                })
+            return entry
+
+        def _select_3(valid, ttft_field, tput_field):
+            """Select 3 best configs: balanced, lowest_ttft, highest_tput."""
+            by_balanced = min(valid, key=lambda r: (getattr(r, ttft_field) or 1e9) / (r.throughput_mean or 0.001))
+            by_ttft = min(valid, key=lambda r: getattr(r, ttft_field) or 1e9)
+            by_tput = max(valid, key=lambda r: r.throughput_mean or 0)
+            result = {
+                'balanced': _pctl_entry(by_balanced, ttft_field, tput_field),
+                'lowest_ttft': _pctl_entry(by_ttft, ttft_field, tput_field),
+                'highest_tput': _pctl_entry(by_tput, ttft_field, tput_field),
+            }
+            return result
+
         best_by_percentile = {}
         for pctl in ('p90', 'p95', 'p99'):
             ttft_field = f'ttft_{pctl}'
             tput_field = f'throughput_{pctl}'
             pctl_data = {}
-            # Best aggregated at this percentile
             if agg_tests:
                 valid_agg = [r for r in agg_tests if getattr(r, ttft_field, None)]
                 if valid_agg:
-                    best_agg = min(valid_agg, key=lambda r: getattr(r, ttft_field))
-                    agg_c = None
-                    if best_agg.test_config_json:
-                        try:
-                            import json as _jj
-                            agg_c = _jj.loads(best_agg.test_config_json).get('num_users')
-                        except Exception:
-                            pass
-                    agg_manifest_types = []
-                    if best_agg.manifests_yaml:
-                        try:
-                            import json as _jm
-                            agg_manifest_types = list(_jm.loads(best_agg.manifests_yaml).keys())
-                        except Exception:
-                            pass
-                    pctl_data['aggregated'] = {
-                        'config_name': best_agg.display_label,
-                        'test_id': best_agg.config_name,
-                        'ttft': round(getattr(best_agg, ttft_field), 1),
-                        'throughput_mean': round(best_agg.throughput_mean, 2) if best_agg.throughput_mean else None,
-                        'throughput': round(getattr(best_agg, tput_field, 0) or 0, 2),
-                        'gpus': best_agg.total_gpus,
-                        'tp': best_agg.tensor_parallelism,
-                        'concurrency': agg_c,
-                        'manifest_types': agg_manifest_types,
-                    }
-            # Best PD at this percentile
+                    pctl_data['aggregated'] = _select_3(valid_agg, ttft_field, tput_field)
             if step7_tests:
                 valid_pd = [r for r in step7_tests if getattr(r, ttft_field, None)]
                 if valid_pd:
-                    best_pd = min(valid_pd, key=lambda r: getattr(r, ttft_field))
-                    pd_c = None
-                    if best_pd.test_config_json:
-                        try:
-                            import json as _jj
-                            pd_c = _jj.loads(best_pd.test_config_json).get('num_users')
-                        except Exception:
-                            pass
-                    pd_manifest_types = []
-                    if best_pd.manifests_yaml:
-                        try:
-                            import json as _jm2
-                            pd_manifest_types = list(_jm2.loads(best_pd.manifests_yaml).keys())
-                        except Exception:
-                            pass
-                    ptp = best_pd.prefill_tp or best_pd.tensor_parallelism
-                    dtp = best_pd.decode_tp or best_pd.tensor_parallelism
-                    pctl_data['pd'] = {
-                        'config_name': best_pd.display_label,
-                        'test_id': best_pd.config_name,
-                        'ttft': round(getattr(best_pd, ttft_field), 1),
-                        'throughput_mean': round(best_pd.throughput_mean, 2) if best_pd.throughput_mean else None,
-                        'throughput': round(getattr(best_pd, tput_field, 0) or 0, 2),
-                        'gpus': best_pd.total_gpus,
-                        'prefill_pods': best_pd.prefill_pods,
-                        'decode_pods': best_pd.decode_pods,
-                        'prefill_tp': ptp,
-                        'decode_tp': dtp,
-                        'tp': ptp,
-                        'concurrency': pd_c,
-                        'manifest_types': pd_manifest_types,
-                    }
-            # Best EP at this percentile
+                    pctl_data['pd'] = _select_3(valid_pd, ttft_field, tput_field)
             if step7_ep_tests:
                 valid_ep = [r for r in step7_ep_tests if getattr(r, ttft_field, None)]
                 if valid_ep:
-                    best_ep = min(valid_ep, key=lambda r: getattr(r, ttft_field))
-                    ep_c = None
-                    if best_ep.test_config_json:
-                        try:
-                            import json as _je
-                            ep_c = _je.loads(best_ep.test_config_json).get('num_users')
-                        except Exception:
-                            pass
-                    ep_manifest_types = []
-                    if best_ep.manifests_yaml:
-                        try:
-                            import json as _jme
-                            ep_manifest_types = list(_jme.loads(best_ep.manifests_yaml).keys())
-                        except Exception:
-                            pass
-                    ptp = best_ep.prefill_tp or best_ep.tensor_parallelism
-                    dtp = best_ep.decode_tp or best_ep.tensor_parallelism
-                    pctl_data['ep'] = {
-                        'config_name': best_ep.display_label,
-                        'test_id': best_ep.config_name,
-                        'ttft': round(getattr(best_ep, ttft_field), 1),
-                        'throughput_mean': round(best_ep.throughput_mean, 2) if best_ep.throughput_mean else None,
-                        'throughput': round(getattr(best_ep, tput_field, 0) or 0, 2),
-                        'gpus': best_ep.total_gpus,
-                        'prefill_pods': best_ep.prefill_pods,
-                        'decode_pods': best_ep.decode_pods,
-                        'prefill_tp': ptp,
-                        'decode_tp': dtp,
-                        'concurrency': ep_c,
-                        'manifest_types': ep_manifest_types,
-                    }
+                    pctl_data['ep'] = _select_3(valid_ep, ttft_field, tput_field)
             if pctl_data:
                 best_by_percentile[pctl] = pctl_data
 
         # --- Build recommendation for each goal ---
         recommendations = {}
 
+        best_pd_primary = best_pd_balanced or best_pd_ttft
         pd_is_better_ttft = True
-        if best_pd_ttft and aggregated_baseline:
+        if best_pd_primary and aggregated_baseline:
             agg_p99 = aggregated_baseline.get('ttft_p99') or aggregated_baseline['ttft_p90']
-            pd_p99 = best_pd_ttft.get('ttft_p99') or best_pd_ttft['ttft_p90']
+            pd_p99 = best_pd_primary.get('ttft_p99') or best_pd_primary['ttft_p90']
             if agg_p99 < pd_p99:
                 pd_is_better_ttft = False
 
-        if best_pd_ttft:
+        if best_pd_primary:
             if pd_is_better_ttft or not aggregated_baseline:
                 recommendations['response_time'] = {
-                    'goal': 'Response Time (minimize TTFT)',
-                    'config': best_pd_ttft,
-                    'deploy': f"{best_pd_ttft['prefill_pods']} Prefill + {best_pd_ttft['decode_pods']} Decode pods, TP={best_pd_ttft['tp']}",
-                    'metric_value': f"{best_pd_ttft['ttft_p90']} ms",
+                    'goal': 'Response Time (best TTFT-to-throughput ratio)',
+                    'config': best_pd_primary,
+                    'deploy': f"{best_pd_primary['prefill_pods']} Prefill + {best_pd_primary['decode_pods']} Decode pods, TP={best_pd_primary['tp']}",
+                    'metric_value': f"{best_pd_primary['ttft_p90']} ms",
                     'metric_name': 'TTFT P90',
                     'architecture': 'PD',
                 }
