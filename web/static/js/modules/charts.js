@@ -1362,14 +1362,17 @@ function renderCharts(data, runId) {
 
             // --- TTFT P90/P95/P99 on same chart ---
             var csTtftId = 'cache-sweep-ttft-' + arch;
-            html += '<div style="padding:8px 20px 4px; font-size:0.85em; color:#64748b;">TTFT percentiles vs cache hit ratio. Lower is better.</div>';
-            html += '<div id="' + csTtftId + '" style="width:100%;height:400px;"></div>';
+            html += '<div style="padding:8px 20px 4px; font-size:0.85em; color:#64748b;">TTFT percentiles &amp; throughput vs cache hit ratio. Lower TTFT is better, higher throughput is better. Subplot shows actual vs configured cache hit rate from vLLM.</div>';
+            html += '<div id="' + csTtftId + '" style="width:100%;height:550px;"></div>';
+
+            var hasActualHitRate = pts.some(function(p) { return p.actual_hit_rate != null; });
 
             chartQueue.push(function() {
                 var traces = [];
-                [{ key: 'ttft_p90', label: 'P90' },
-                 { key: 'ttft_p95', label: 'P95' },
-                 { key: 'ttft_p99', label: 'P99' }].forEach(function(pct) {
+                // Main chart: TTFT P90/P95/P99 + Throughput on right axis
+                [{ key: 'ttft_p90', label: 'TTFT P90' },
+                 { key: 'ttft_p95', label: 'TTFT P95' },
+                 { key: 'ttft_p99', label: 'TTFT P99' }].forEach(function(pct) {
                     if (!pts[0][pct.key]) return;
                     traces.push({
                         x: pts.map(function(p) { return p.hit_pct; }),
@@ -1382,71 +1385,62 @@ function renderCharts(data, runId) {
                         hovertemplate: 'Cache Hit: %{x}%<br>' + pct.label + ': %{y:.0f}ms<extra></extra>'
                     });
                 });
-                Plotly.newPlot(csTtftId, traces, {
-                    xaxis: { title: 'Cache Hit %', range: [-5, 105], gridcolor: '#e2e8f0' },
-                    yaxis: { title: 'TTFT (ms)', gridcolor: '#e2e8f0' },
-                    plot_bgcolor: '#f8fafc', paper_bgcolor: '#fff',
-                    margin: { t: 20, b: 60, l: 70, r: 20 },
-                    legend: { x: 0, y: 1, bgcolor: 'rgba(255,255,255,0.9)' },
-                    hovermode: 'closest'
-                }, { responsive: true });
-            });
-
-            // --- Throughput Mean vs Cache Hit % ---
-            var csTputId = 'cache-sweep-tput-' + arch;
-            html += '<div style="padding:8px 20px 4px; font-size:0.85em; color:#64748b;">Throughput mean vs cache hit ratio. Higher is better.</div>';
-            html += '<div id="' + csTputId + '" style="width:100%;height:400px;"></div>';
-
-            chartQueue.push(function() {
-                Plotly.newPlot(csTputId, [{
+                // Throughput on right axis
+                traces.push({
                     x: pts.map(function(p) { return p.hit_pct; }),
                     y: pts.map(function(p) { return p.throughput_mean; }),
                     text: pts.map(function(p) { return p.throughput_mean.toFixed(1); }),
-                    textposition: 'top center', textfont: { size: 9, color: '#334155' },
+                    textposition: 'top center', textfont: { size: 9, color: '#d97706' },
                     mode: 'lines+markers+text', name: 'Throughput Mean',
-                    line: { color: csColor, width: 3 },
-                    marker: { size: 8 },
+                    yaxis: 'y2',
+                    line: { color: '#d97706', width: 3, dash: 'dash' },
+                    marker: { size: 8, symbol: 'diamond', color: '#d97706' },
                     hovertemplate: 'Cache Hit: %{x}%<br>Throughput: %{y:.1f} req/s<extra></extra>'
-                }], {
-                    xaxis: { title: 'Cache Hit %', range: [-5, 105], gridcolor: '#e2e8f0' },
-                    yaxis: { title: 'Throughput (req/s)', gridcolor: '#e2e8f0' },
-                    plot_bgcolor: '#f8fafc', paper_bgcolor: '#fff',
-                    margin: { t: 20, b: 60, l: 70, r: 20 },
-                    hovermode: 'closest'
-                }, { responsive: true });
-            });
-
-            // --- Actual Cache Hit Rate chart ---
-            var hasActualHitRate = pts.some(function(p) { return p.actual_hit_rate != null; });
-            if (hasActualHitRate) {
-                var csHitId = 'cache-sweep-hitrate-' + arch;
-                html += '<div style="padding:8px 20px 4px; font-size:0.85em; color:#64748b;">Configured vs actual prefix cache hit rate from vLLM Prometheus metrics. Shows whether the synthetic dataset achieves the target cache ratio.</div>';
-                html += '<div id="' + csHitId + '" style="width:100%;height:300px;"></div>';
-
-                chartQueue.push(function() {
-                    Plotly.newPlot(csHitId, [
-                        { x: pts.map(function(p) { return p.hit_pct; }),
-                          y: pts.map(function(p) { return p.hit_pct; }),
-                          mode: 'lines', name: 'Configured',
-                          line: { color: '#94a3b8', width: 2, dash: 'dash' } },
-                        { x: pts.map(function(p) { return p.hit_pct; }),
-                          y: pts.map(function(p) { return p.actual_hit_rate != null ? p.actual_hit_rate : 0; }),
-                          text: pts.map(function(p) { return p.actual_hit_rate != null ? p.actual_hit_rate.toFixed(1) + '%' : ''; }),
-                          textposition: 'top center', textfont: { size: 9, color: '#059669' },
-                          mode: 'lines+markers+text', name: 'Actual (vLLM)',
-                          line: { color: '#059669', width: 3 },
-                          marker: { size: 8 },
-                          hovertemplate: 'Configured: %{x}%<br>Actual: %{y:.1f}%<extra></extra>' }
-                    ], {
-                        xaxis: { title: 'Configured Cache Hit %', range: [-5, 105], gridcolor: '#e2e8f0' },
-                        yaxis: { title: 'Actual Cache Hit %', range: [-5, 105], gridcolor: '#e2e8f0' },
-                        plot_bgcolor: '#f8fafc', paper_bgcolor: '#fff',
-                        margin: { t: 20, b: 60, l: 70, r: 20 },
-                        legend: { x: 0, y: 1, bgcolor: 'rgba(255,255,255,0.9)' },
-                        hovermode: 'closest'
-                    }, { responsive: true });
                 });
-            }
+
+                // Subplot: Actual Cache Hit Rate
+                if (hasActualHitRate) {
+                    traces.push({
+                        x: pts.map(function(p) { return p.hit_pct; }),
+                        y: pts.map(function(p) { return p.hit_pct; }),
+                        xaxis: 'x2', yaxis: 'y3',
+                        mode: 'lines', name: 'Configured Hit %',
+                        line: { color: '#94a3b8', width: 2, dash: 'dash' },
+                        showlegend: true
+                    });
+                    traces.push({
+                        x: pts.map(function(p) { return p.hit_pct; }),
+                        y: pts.map(function(p) { return p.actual_hit_rate != null ? p.actual_hit_rate : 0; }),
+                        text: pts.map(function(p) { return p.actual_hit_rate != null ? p.actual_hit_rate.toFixed(1) + '%' : ''; }),
+                        textposition: 'top center', textfont: { size: 9, color: '#059669' },
+                        xaxis: 'x2', yaxis: 'y3',
+                        mode: 'lines+markers+text', name: 'Actual Hit % (vLLM)',
+                        line: { color: '#059669', width: 3 },
+                        marker: { size: 8 },
+                        hovertemplate: 'Configured: %{x}%<br>Actual: %{y:.1f}%<extra></extra>'
+                    });
+                }
+
+                var layout = {
+                    xaxis: { range: [-5, 105], gridcolor: '#e2e8f0', domain: [0, 1] },
+                    yaxis: { title: 'TTFT (ms)', gridcolor: '#e2e8f0', titlefont: { color: '#3b82f6' }, tickfont: { color: '#3b82f6' },
+                             domain: hasActualHitRate ? [0.3, 1] : [0, 1] },
+                    yaxis2: { title: 'Throughput (req/s)', side: 'right', overlaying: 'y',
+                              titlefont: { color: '#d97706' }, tickfont: { color: '#d97706' } },
+                    plot_bgcolor: '#f8fafc', paper_bgcolor: '#fff',
+                    margin: { t: 20, b: 60, l: 70, r: 70 },
+                    legend: { x: 0, y: 1.15, orientation: 'h', bgcolor: 'rgba(255,255,255,0.9)' },
+                    hovermode: 'closest'
+                };
+
+                if (hasActualHitRate) {
+                    layout.xaxis2 = { title: 'Cache Hit %', range: [-5, 105], gridcolor: '#e2e8f0', anchor: 'y3' };
+                    layout.yaxis3 = { title: 'Actual Hit %', range: [-5, 105], gridcolor: '#e2e8f0', domain: [0, 0.22],
+                                      titlefont: { color: '#059669' }, tickfont: { color: '#059669' } };
+                }
+
+                Plotly.newPlot(csTtftId, traces, layout, { responsive: true });
+            });
 
             // --- Data table ---
             var csCacheTblId = 'cache-sweep-tbl-' + arch + '-' + runId;
