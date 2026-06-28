@@ -2053,27 +2053,60 @@ function renderCharts(data, runId) {
     }
 
     // PD and EP configurations TTFT charts (one per percentile, same layout)
-    // MINIMAL PD chart for debugging
+    // PD chart with ITL subplot + best markers
     (function() {
         const archResults = data.all_results.filter(r => r.architecture === 'PD');
         if (!archResults.length) return;
         const sorted = [...archResults].sort((a, b) => a.prefill_pods - b.prefill_pods);
         const labels = sorted.map(r => r.prefill_pods + 'P:' + r.decode_pods + 'D');
         const ttftVals = sorted.map(r => r.ttft_p90);
+        const tputVals = sorted.map(r => r.throughput_mean || r.throughput_p90);
+        const itlVals = sorted.map(r => r.itl_p90 != null ? r.itl_p90 : null);
+        const hasItl = itlVals.some(v => v != null);
+        const bestTtftIdx = ttftVals.indexOf(Math.min(...ttftVals));
+        const bestTputIdx = tputVals.indexOf(Math.max(...tputVals));
 
         var el = document.getElementById(cid('chart-pd-ttft-p90'));
         if (!el) return;
 
-        Plotly.newPlot(el, [{
-            x: labels,
-            y: ttftVals,
-            type: 'scatter',
-            mode: 'lines+markers'
-        }], {
-            height: 500,
-            xaxis: { title: 'Config' },
-            yaxis: { title: 'TTFT P90 (ms)' }
-        }, { responsive: true });
+        var traces = [
+            { x: labels, y: ttftVals, type: 'scatter', mode: 'lines+markers', name: 'TTFT P90',
+              line: { color: '#3b82f6', width: 3, shape: 'spline' },
+              marker: { color: '#3b82f6', size: 12, symbol: 'circle', line: { width: 2, color: 'white' } },
+              fill: 'tozeroy', fillcolor: '#3b82f614' },
+            { x: [labels[bestTtftIdx]], y: [ttftVals[bestTtftIdx]], type: 'scatter', mode: 'markers', name: 'Best TTFT',
+              marker: { color: '#10b981', size: 22, symbol: 'circle', line: { width: 3, color: 'white' } }, showlegend: true },
+            { x: labels, y: tputVals, type: 'scatter', mode: 'lines+markers', name: 'Throughput Mean', yaxis: 'y2',
+              line: { color: '#f59e0b', width: 3, shape: 'spline' },
+              marker: { color: '#f59e0b', size: 10, symbol: 'diamond', line: { width: 2, color: 'white' } } },
+            { x: [labels[bestTputIdx]], y: [tputVals[bestTputIdx]], type: 'scatter', mode: 'markers', name: 'Best Throughput', yaxis: 'y2',
+              marker: { color: '#e11d48', size: 22, symbol: 'diamond', line: { width: 3, color: 'white' } }, showlegend: true },
+        ];
+
+        var layout = {
+            height: hasItl ? 620 : 500,
+            margin: { t: 30, b: 60, l: 60, r: 60 },
+            xaxis: { title: 'Prefill : Decode Pod Ratio', anchor: hasItl ? 'y3' : 'y' },
+            yaxis: { title: 'TTFT P90 (ms)', side: 'left', titlefont: { color: '#3b82f6' }, tickfont: { color: '#3b82f6' }, tickformat: '.2s', domain: hasItl ? [0.28, 1] : [0, 1] },
+            yaxis2: { title: 'Throughput Mean (req/s)', side: 'right', overlaying: 'y', titlefont: { color: '#f59e0b' }, tickfont: { color: '#f59e0b' } },
+            showlegend: true,
+            legend: { x: 0, y: 1.12, orientation: 'h' },
+        };
+
+        if (hasItl) {
+            const validItl = itlVals.filter(v => v != null);
+            const bestItlIdx = itlVals.indexOf(Math.min(...validItl));
+            traces.push(
+                { x: labels, y: itlVals, type: 'scatter', mode: 'lines+markers', name: 'ITL P90', yaxis: 'y3',
+                  line: { color: '#ef4444', width: 2, shape: 'spline' },
+                  marker: { color: '#ef4444', size: 8, symbol: 'square', line: { width: 1, color: 'white' } }, connectgaps: true },
+                { x: [labels[bestItlIdx]], y: [validItl[0] != null ? itlVals[bestItlIdx] : 0], type: 'scatter', mode: 'markers', name: 'Best ITL', yaxis: 'y3',
+                  marker: { color: '#10b981', size: 16, symbol: 'square', line: { width: 2, color: 'white' } }, showlegend: true }
+            );
+            layout.yaxis3 = { title: 'ITL P90 (ms)', side: 'left', titlefont: { color: '#ef4444', size: 11 }, tickfont: { color: '#ef4444', size: 10 }, domain: [0, 0.22] };
+        }
+
+        Plotly.newPlot(el, traces, layout, plotlyConfig);
     })();
 
     // ============================================================
