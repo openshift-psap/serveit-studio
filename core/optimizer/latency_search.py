@@ -442,11 +442,13 @@ class LatencySearchMixin:
 
         original_concurrency = int(self.config.qps)
 
-        # Find best PD config by TTFT from Step 7
-        best_split, best_pd_result = min(
-            self.pareto_results,
-            key=lambda x: x[1].ttft_p90 if x[1].ttft_p90 else 1000000.0
-        )
+        # Find best PD config from Step 7 — best TTFT-to-throughput ratio
+        # Lower TTFT and higher throughput both improve the ratio
+        def _pd_score(x):
+            ttft = x[1].ttft_p90 if x[1].ttft_p90 else 1e9
+            tput = x[1].throughput_mean or x[1].throughput_p90 or 0.001
+            return ttft / tput
+        best_split, best_pd_result = min(self.pareto_results, key=_pd_score)
 
         overloaded_ttft = best_pd_result.ttft_p90 or best_pd_result.ttft_p50 or 0
         overloaded_tput = best_pd_result.throughput_p90 or best_pd_result.throughput_p50 or 0

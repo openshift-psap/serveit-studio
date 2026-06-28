@@ -243,10 +243,11 @@ class CacheSweepMixin:
         best_pd_result = None
         total_gpus_pd = 0
         if hasattr(self, 'pareto_results') and self.pareto_results:
-            best_split, best_pd_result = min(
-                self.pareto_results,
-                key=lambda x: x[1].ttft_p90 if x[1].ttft_p90 else 1e9
-            )
+            def _pd_score(x):
+                ttft = x[1].ttft_p90 if x[1].ttft_p90 else 1e9
+                tput = x[1].throughput_mean or x[1].throughput_p90 or 0.001
+                return ttft / tput
+            best_split, best_pd_result = min(self.pareto_results, key=_pd_score)
             total_gpus_pd = (best_split.prefill_pods * best_split.prefill_tp +
                              best_split.decode_pods * best_split.decode_tp)
         elif hasattr(self, 'best_ep_config') and self.best_ep_config:
