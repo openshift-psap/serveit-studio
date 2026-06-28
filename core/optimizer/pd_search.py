@@ -219,6 +219,7 @@ class PDSearchMixin:
         total_cost = prefill_cost + decode_cost
 
         max_throughput_pct = (prefill_cost / total_cost) * 100
+        self.max_throughput_pct = max_throughput_pct
 
         total_gpus = self.config.total_gpus
         sustainable_qps = total_gpus / total_cost / self.config.headroom
@@ -670,8 +671,11 @@ class PDSearchMixin:
         splits_by_tp = defaultdict(list)
         for s in self.feasible_splits:
             splits_by_tp[(s.prefill_tp, s.decode_tp)].append(s)
+        # Start each TP pair from the balanced throughput ratio (50% of max-throughput + latency-optimal)
+        # This avoids starting at extreme splits like 1P+31D
+        balanced_start_pct = (self.max_throughput_pct + self.ideal_prefill_pct) / 2
         for tp_splits in splits_by_tp.values():
-            tp_splits.sort(key=lambda s: abs(s.prefill_pct - self.ideal_prefill_pct))
+            tp_splits.sort(key=lambda s: abs(s.prefill_pct - balanced_start_pct))
 
         # Check if Step 7 already completed (all TP pairs have at least one test in DB)
         step7_completed = {name for name in self.completed_tests if name.startswith('step7-')}
