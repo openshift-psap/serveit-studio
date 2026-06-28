@@ -1330,70 +1330,78 @@ function renderCharts(data, runId) {
     // ============================================================
     if (data.cache_sweep) {
         const csweep = data.cache_sweep;
-        const archColors = {pd: '#2563eb', aggregated: '#059669', ep: '#7c3aed',
-                            pd_calibrated: '#60a5fa', aggregated_calibrated: '#34d399', ep_calibrated: '#a78bfa'};
-        const archLabels = {pd: 'PD', aggregated: 'Aggregated', ep: 'EP',
-                            pd_calibrated: 'PD (calibrated)', aggregated_calibrated: 'Aggregated (calibrated)', ep_calibrated: 'EP (calibrated)'};
+        const csArchLabels = {pd: 'PD', aggregated: 'Aggregated', ep: 'EP',
+                              pd_calibrated: 'PD (calibrated)', aggregated_calibrated: 'Aggregated (calibrated)', ep_calibrated: 'EP (calibrated)'};
+        const csArchColors = {pd: '#2563eb', aggregated: '#059669', ep: '#7c3aed',
+                              pd_calibrated: '#60a5fa', aggregated_calibrated: '#34d399', ep_calibrated: '#a78bfa'};
+        const csPctColors = { ttft_p90: '#3b82f6', ttft_p95: '#f59e0b', ttft_p99: '#ef4444' };
 
-        html += '<div class="chart-card" style="margin-top:24px; border-left:6px solid #7c3aed;">';
-        html += '<div class="chart-card-header" style="background:linear-gradient(135deg,#7c3aed,#6d28d9); color:white; font-size:1.2em;">🗂️ Cache Hit Sweep (Step 13)</div>';
-        html += '<div style="padding:8px 20px; color:#1e293b; font-size:0.95em;">Performance impact of prefix cache hit ratio on the best configurations.</div>';
-
-        // --- TTFT vs Cache Hit % ---
-        var csPctiles = [
-            { key: 'ttft_p90', label: 'P90' },
-            { key: 'ttft_p95', label: 'P95' },
-            { key: 'ttft_p99', label: 'P99' },
-        ];
-        csPctiles.forEach(function(pct) {
-            var cChartId = 'cache-sweep-ttft-' + pct.label.toLowerCase();
-            html += '<div id="' + cChartId + '" style="width:100%;height:420px;"></div>';
-            var csTraces = [];
-            Object.keys(csweep).forEach(function(arch) {
-                var pts = csweep[arch];
-                if (!pts || !pts.length || !pts[0][pct.key]) return;
-                csTraces.push({
-                    x: pts.map(function(p) { return p.hit_pct; }),
-                    y: pts.map(function(p) { return p[pct.key] || 0; }),
-                    mode: 'lines+markers', name: archLabels[arch] || arch,
-                    line: {color: archColors[arch] || '#888', width: 2},
-                    marker: {size: 8},
-                    hovertemplate: 'Cache Hit: %{x}%<br>' + pct.label + ': %{y:.0f}ms<extra>' + (archLabels[arch] || arch) + '</extra>'
-                });
-            });
-            chartQueue.push({id: cChartId, traces: csTraces, layout: {
-                title: 'TTFT ' + pct.label + ' vs Cache Hit %', xaxis: {title: 'Cache Hit %', range: [-5, 105]},
-                yaxis: {title: 'TTFT ' + pct.label + ' (ms)'}, legend: {orientation: 'h', y: -0.15}, margin: {t: 40, b: 60}
-            }});
-        });
-
-        // --- Throughput vs Cache Hit % ---
-        html += '<div id="cache-sweep-tput-chart" style="width:100%;height:420px;"></div>';
-        var csTracesTput = [];
         Object.keys(csweep).forEach(function(arch) {
             var pts = csweep[arch];
             if (!pts || !pts.length) return;
-            csTracesTput.push({
-                x: pts.map(function(p) { return p.hit_pct; }),
-                y: pts.map(function(p) { return p.throughput_mean; }),
-                mode: 'lines+markers', name: archLabels[arch] || arch,
-                line: {color: archColors[arch] || '#888', width: 2},
-                marker: {size: 8},
-                hovertemplate: 'Cache Hit: %{x}%<br>Throughput: %{y:.1f} req/s<extra></extra>'
-            });
-        });
-        chartQueue.push({id: 'cache-sweep-tput-chart', traces: csTracesTput, layout: {
-            title: 'Throughput vs Cache Hit %', xaxis: {title: 'Cache Hit %', range: [-5, 105]},
-            yaxis: {title: 'Throughput (req/s)'}, legend: {orientation: 'h', y: -0.15}, margin: {t: 40, b: 60}
-        }});
+            var csLabel = csArchLabels[arch] || arch;
+            var csColor = csArchColors[arch] || '#888';
 
-        // --- Data table ---
-        html += '<div style="padding:12px 20px;"><div style="overflow-x:auto;"><table class="report-table" style="width:100%;font-size:0.85em;">';
-        html += '<tr><th>Architecture</th><th>Cache Hit %</th><th>Concurrency</th><th>TTFT P50</th><th>TTFT P90</th><th>TTFT P95</th><th>TTFT P99</th><th>Throughput</th><th>Output tok/s</th><th>ITL P90</th></tr>';
-        Object.keys(csweep).forEach(function(arch) {
-            (csweep[arch] || []).forEach(function(p) {
+            html += '<div class="chart-card" style="margin-top:20px; border:2px solid ' + csColor + '; border-left:6px solid ' + csColor + ';">';
+            html += '<div class="chart-card-header" style="background:linear-gradient(135deg,' + csColor + ',' + csColor + '99); color:white; font-size:1.2em;">' + csLabel + ' — Cache Hit Sweep</div>';
+
+            // --- TTFT P90/P95/P99 on same chart ---
+            var csTtftId = 'cache-sweep-ttft-' + arch;
+            html += '<div style="padding:8px 20px 4px; font-size:0.85em; color:#64748b;">TTFT percentiles vs cache hit ratio. Lower is better.</div>';
+            html += '<div id="' + csTtftId + '" style="width:100%;height:400px;"></div>';
+
+            chartQueue.push(function() {
+                var traces = [];
+                [{ key: 'ttft_p90', label: 'P90' },
+                 { key: 'ttft_p95', label: 'P95' },
+                 { key: 'ttft_p99', label: 'P99' }].forEach(function(pct) {
+                    if (!pts[0][pct.key]) return;
+                    traces.push({
+                        x: pts.map(function(p) { return p.hit_pct; }),
+                        y: pts.map(function(p) { return p[pct.key] || 0; }),
+                        mode: 'lines+markers', name: pct.label,
+                        line: { color: csPctColors[pct.key], width: 3 },
+                        marker: { size: 8 },
+                        hovertemplate: 'Cache Hit: %{x}%<br>' + pct.label + ': %{y:.0f}ms<extra></extra>'
+                    });
+                });
+                Plotly.newPlot(csTtftId, traces, {
+                    xaxis: { title: 'Cache Hit %', range: [-5, 105], gridcolor: '#e2e8f0' },
+                    yaxis: { title: 'TTFT (ms)', gridcolor: '#e2e8f0' },
+                    plot_bgcolor: '#f8fafc', paper_bgcolor: '#fff',
+                    margin: { t: 20, b: 60, l: 70, r: 20 },
+                    legend: { x: 0, y: 1, bgcolor: 'rgba(255,255,255,0.9)' },
+                    hovermode: 'closest'
+                }, { responsive: true });
+            });
+
+            // --- Throughput Mean vs Cache Hit % ---
+            var csTputId = 'cache-sweep-tput-' + arch;
+            html += '<div style="padding:8px 20px 4px; font-size:0.85em; color:#64748b;">Throughput mean vs cache hit ratio. Higher is better.</div>';
+            html += '<div id="' + csTputId + '" style="width:100%;height:400px;"></div>';
+
+            chartQueue.push(function() {
+                Plotly.newPlot(csTputId, [{
+                    x: pts.map(function(p) { return p.hit_pct; }),
+                    y: pts.map(function(p) { return p.throughput_mean; }),
+                    mode: 'lines+markers', name: 'Throughput Mean',
+                    line: { color: csColor, width: 3 },
+                    marker: { size: 8 },
+                    hovertemplate: 'Cache Hit: %{x}%<br>Throughput: %{y:.1f} req/s<extra></extra>'
+                }], {
+                    xaxis: { title: 'Cache Hit %', range: [-5, 105], gridcolor: '#e2e8f0' },
+                    yaxis: { title: 'Throughput (req/s)', gridcolor: '#e2e8f0' },
+                    plot_bgcolor: '#f8fafc', paper_bgcolor: '#fff',
+                    margin: { t: 20, b: 60, l: 70, r: 20 },
+                    hovermode: 'closest'
+                }, { responsive: true });
+            });
+
+            // --- Data table ---
+            html += '<div style="padding:12px 20px;"><div style="overflow-x:auto;"><table class="results-table" style="font-size:0.85em;">';
+            html += '<tr><th>Cache Hit %</th><th>Concurrency</th><th>TTFT P50</th><th>TTFT P90</th><th>TTFT P95</th><th>TTFT P99</th><th>Throughput</th><th>Output tok/s</th><th>ITL P90</th></tr>';
+            pts.forEach(function(p) {
                 html += '<tr>';
-                html += '<td>' + (archLabels[arch] || arch) + '</td>';
                 html += '<td>' + p.hit_pct + '%</td>';
                 html += '<td>' + p.concurrency + '</td>';
                 html += '<td>' + p.ttft_p50.toFixed(0) + '</td>';
@@ -1405,9 +1413,9 @@ function renderCharts(data, runId) {
                 html += '<td>' + p.itl_p90.toFixed(1) + '</td>';
                 html += '</tr>';
             });
+            html += '</table></div></div>';
+            html += '</div>';
         });
-        html += '</table></div></div>';
-        html += '</div>';
     }
 
     // Flush cache sweep
