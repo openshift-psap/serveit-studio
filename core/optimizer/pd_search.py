@@ -631,6 +631,10 @@ class PDSearchMixin:
             self._check_request_errors(test_config, result)
 
             if not result or not result.guidellm_success:
+                is_overload = result and result.guidellm_output and self.orchestrator._are_overload_errors(result.guidellm_output)
+                if is_overload:
+                    self.log(f"    ⚠️  Test failed (overload/503) — skipping {test_id}", 'warning')
+                    return None
                 self.log("    ❌ Test failed - STOPPING optimization", 'error')
                 self.log(f"    🔍 Debug: kubectl get pods -n {self.config.namespace} -l test-id={test_id}", 'error')
                 self.log(f"    🧹 Cleanup: kubectl delete lws -n {self.config.namespace} -l test-id={test_id}", 'error')
@@ -721,6 +725,8 @@ class PDSearchMixin:
                 test_num += 1
 
                 result = self._run_split_test(current_split, test_num, total_planned)
+                if result is None:
+                    break
                 self.pareto_results.append((current_split, result))
 
                 # Analyze waiting ratio to decide next split
@@ -737,7 +743,8 @@ class PDSearchMixin:
                         tested_keys.add(sk)
                         test_num += 1
                         r = self._run_split_test(s, test_num, total_planned)
-                        self.pareto_results.append((s, r))
+                        if r is not None:
+                            self.pareto_results.append((s, r))
                     break
 
                 decode_wait, prefill_wait, ratio = waiting
