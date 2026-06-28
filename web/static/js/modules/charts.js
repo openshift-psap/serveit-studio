@@ -87,8 +87,11 @@ function renderCharts(data, runId) {
 
             const archLabel = archKey.toUpperCase();
             const aColor = archColors[archKey] || '#64748b';
-            html += `<div style="font-weight:800; font-size:1.1em; color:${aColor}; margin:20px 0 10px; border-bottom:2px solid ${aColor}; padding-bottom:6px;">${archLabel} Configurations</div>`;
-            html += `<div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(280px, 1fr)); gap:12px; margin-bottom:16px;">`;
+            html += `<div style="display:flex;align-items:center;gap:10px;margin:24px 0 12px;">`;
+            html += `<div style="background:${aColor};color:white;font-weight:700;font-size:0.8em;padding:4px 12px;border-radius:20px;letter-spacing:0.5px;">${archLabel}</div>`;
+            html += `<div style="flex:1;height:1px;background:${aColor}30;"></div>`;
+            html += `</div>`;
+            html += `<div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(280px, 1fr)); gap:16px; margin-bottom:20px;">`;
 
             const p90Data = (bp.p90 || {})[archKey];
             if (!p90Data) { html += '</div>'; return; }
@@ -105,7 +108,7 @@ function renderCharts(data, runId) {
                 seen.add(testId);
                 if (isNewFormat) {
                     const otherMatches = selTypes.filter(s => s.key !== sel.key && p90Data[s.key] && (p90Data[s.key].test_id || p90Data[s.key].config_name) === testId);
-                    if (otherMatches.length) dupNote = ' (also ' + otherMatches.map(s => s.label).join(', ') + ')';
+                    if (otherMatches.length) dupNote = otherMatches.map(s => s.label).join(', ');
                 }
 
                 let deploy;
@@ -120,47 +123,72 @@ function renderCharts(data, runId) {
                 const recId = 'rec-' + archKey + '-' + sel.key;
                 window._recConfigs[recId] = { ...cfg, architecture: archKey, model: rec.model, image: (data.run_config || {}).image, test_settings: cfg.test_settings || fallbackTs, epp_config: cfg.epp_config };
 
-                html += `<div style="background:white; border:2px solid ${sel.color}; border-top:4px solid ${sel.color}; border-radius:10px; padding:14px;">`;
-                html += `<div style="font-weight:800; color:${sel.color}; font-size:0.82em; text-transform:uppercase; margin-bottom:6px;">${sel.icon} ${sel.label}</div>`;
-                if (dupNote) html += `<div style="color:#94a3b8;font-size:0.75em;margin-bottom:4px;">${dupNote}</div>`;
-                html += `<div style="font-size:0.78em; color:#64748b; margin-bottom:8px;">${sel.desc}</div>`;
-                html += `<div style="font-size:1.15em; font-weight:800; color:#1e293b; margin-bottom:6px;">${deploy}</div>`;
-
                 const gpus = cfg.gpus || cfg.total_gpus;
                 const tputMean = cfg.throughput_mean || cfg.throughput || cfg.throughput_p90 || '-';
-                html += `<div style="font-size:0.85em; color:#475569; margin-bottom:8px;">Tput: <strong>${tputMean} req/s</strong> | ${gpus} GPUs</div>`;
+
+                // Card container with colored top accent
+                html += `<div style="background:white;border-radius:12px;overflow:hidden;box-shadow:0 1px 3px rgba(0,0,0,0.08),0 1px 2px rgba(0,0,0,0.06);border:1px solid #e2e8f0;">`;
+
+                // Colored header bar
+                html += `<div style="background:linear-gradient(135deg,${sel.color},${sel.color}cc);padding:12px 16px;color:white;">`;
+                html += `<div style="display:flex;align-items:center;justify-content:space-between;">`;
+                html += `<div style="font-weight:700;font-size:0.9em;letter-spacing:0.3px;">${sel.icon} ${sel.label}</div>`;
+                if (dupNote) html += `<div style="font-size:0.7em;opacity:0.85;background:rgba(255,255,255,0.2);padding:2px 8px;border-radius:10px;">+ ${dupNote}</div>`;
+                html += `</div>`;
+                html += `<div style="font-size:0.75em;opacity:0.9;margin-top:2px;">${sel.desc}</div>`;
+                html += `</div>`;
+
+                // Body
+                html += `<div style="padding:16px;">`;
+
+                // Deploy config — large and prominent
+                html += `<div style="font-size:1.2em;font-weight:800;color:#0f172a;margin-bottom:4px;">${deploy}</div>`;
+
+                // Key metrics row
+                html += `<div style="display:flex;gap:16px;margin:10px 0 12px;">`;
+                html += `<div style="flex:1;text-align:center;padding:8px;background:#f8fafc;border-radius:8px;">`;
+                html += `<div style="font-size:0.7em;color:#64748b;text-transform:uppercase;letter-spacing:0.5px;margin-bottom:2px;">Throughput</div>`;
+                html += `<div style="font-size:1.1em;font-weight:700;color:#0f172a;">${tputMean} <span style="font-size:0.7em;font-weight:400;color:#64748b;">req/s</span></div>`;
+                html += `</div>`;
+                html += `<div style="flex:1;text-align:center;padding:8px;background:#f8fafc;border-radius:8px;">`;
+                html += `<div style="font-size:0.7em;color:#64748b;text-transform:uppercase;letter-spacing:0.5px;margin-bottom:2px;">GPUs</div>`;
+                html += `<div style="font-size:1.1em;font-weight:700;color:#0f172a;">${gpus}</div>`;
+                html += `</div>`;
+                html += `</div>`;
 
                 // P90/P95/P99 table
-                html += '<table style="width:100%; border-collapse:collapse; font-size:0.82em;">';
-                html += '<tr style="background:#f8fafc;"><th style="text-align:left;padding:3px 6px;color:#64748b;font-weight:600;"></th><th style="text-align:right;padding:3px 6px;color:#64748b;font-weight:600;">TTFT</th><th style="text-align:right;padding:3px 6px;color:#64748b;font-weight:600;">ITL</th></tr>';
-                ['p90', 'p95', 'p99'].forEach(p => {
+                html += '<table style="width:100%;border-collapse:collapse;font-size:0.82em;margin-bottom:12px;">';
+                html += '<tr><th style="text-align:left;padding:6px 8px;color:#94a3b8;font-weight:500;font-size:0.9em;border-bottom:1px solid #f1f5f9;"></th><th style="text-align:right;padding:6px 8px;color:#94a3b8;font-weight:500;font-size:0.9em;border-bottom:1px solid #f1f5f9;">TTFT</th><th style="text-align:right;padding:6px 8px;color:#94a3b8;font-weight:500;font-size:0.9em;border-bottom:1px solid #f1f5f9;">ITL</th></tr>';
+                ['p90', 'p95', 'p99'].forEach((p, pi) => {
                     const pCfg = isNewFormat ? ((bp[p] || {})[archKey] || {})[sel.key] : (bp[p] || {})[archKey];
                     const ttft = pCfg ? (pCfg.ttft || pCfg['ttft_' + p]) : null;
                     const itl = pCfg ? (pCfg['itl_' + p] || pCfg.itl) : null;
-                    html += `<tr style="border-top:1px solid #e2e8f0;"><td style="padding:3px 6px;font-weight:600;">${p.toUpperCase()}</td>`;
-                    html += `<td style="text-align:right;padding:3px 6px;">${ttft != null ? ttft + ' ms' : '-'}</td>`;
-                    html += `<td style="text-align:right;padding:3px 6px;">${itl != null ? itl + ' ms' : '-'}</td></tr>`;
+                    const bg = pi % 2 === 0 ? '#fafbfc' : 'white';
+                    html += `<tr style="background:${bg};"><td style="padding:5px 8px;font-weight:600;color:#334155;">${p.toUpperCase()}</td>`;
+                    html += `<td style="text-align:right;padding:5px 8px;color:#1e293b;">${ttft != null ? '<strong>' + ttft + '</strong> ms' : '<span style="color:#cbd5e1;">-</span>'}</td>`;
+                    html += `<td style="text-align:right;padding:5px 8px;color:#1e293b;">${itl != null ? '<strong>' + itl + '</strong> ms' : '<span style="color:#cbd5e1;">-</span>'}</td></tr>`;
                 });
                 html += '</table>';
 
                 // Action buttons
-                html += `<div style="display:flex;gap:4px;margin-top:8px;">`;
-                html += `<button onclick="applyReportConfig('${recId}')" style="flex:1;background:none;border:1.5px solid #d1d5db;border-radius:6px;padding:4px 6px;cursor:pointer;color:#6b7280;font-size:12px;transition:all 0.15s;" onmouseover="this.style.borderColor='#2563eb';this.style.color='#2563eb';this.style.background='#eff6ff'" onmouseout="this.style.borderColor='#d1d5db';this.style.color='#6b7280';this.style.background='none'">&#128260; Reuse</button>`;
-                html += `<button onclick="showSingleTestModal('${recId}')" style="flex:1;background:none;border:1.5px solid #d1d5db;border-radius:6px;padding:4px 6px;cursor:pointer;color:#6b7280;font-size:12px;transition:all 0.15s;" onmouseover="this.style.borderColor='#8b5cf6';this.style.color='#8b5cf6';this.style.background='#f5f3ff'" onmouseout="this.style.borderColor='#d1d5db';this.style.color='#6b7280';this.style.background='none'">&#129514; Test</button>`;
+                html += `<div style="display:flex;gap:8px;">`;
+                html += `<button onclick="applyReportConfig('${recId}')" style="flex:1;background:${sel.color}0a;border:1.5px solid ${sel.color}40;border-radius:8px;padding:6px 8px;cursor:pointer;color:${sel.color};font-size:12px;font-weight:600;transition:all 0.15s;" onmouseover="this.style.background='${sel.color}18';this.style.borderColor='${sel.color}'" onmouseout="this.style.background='${sel.color}0a';this.style.borderColor='${sel.color}40'">&#128260; Reuse</button>`;
+                html += `<button onclick="showSingleTestModal('${recId}')" style="flex:1;background:#f8fafc;border:1.5px solid #e2e8f0;border-radius:8px;padding:6px 8px;cursor:pointer;color:#64748b;font-size:12px;font-weight:600;transition:all 0.15s;" onmouseover="this.style.background='#f1f5f9';this.style.borderColor='#94a3b8'" onmouseout="this.style.background='#f8fafc';this.style.borderColor='#e2e8f0'">&#129514; Test</button>`;
                 html += `</div>`;
 
                 // YAML downloads
                 const recTestId = cfg.test_id || testIdLookup[cfg.config_name] || cfg.config_name;
                 const recManifests = manifestLookup[recTestId] || cfg.manifest_types || [];
                 if (recManifests.length) {
-                    html += '<div style="margin-top:6px; padding-top:6px; border-top:1px solid #e2e8f0;">';
-                    html += '<span style="font-size:0.72em; color:#64748b;">YAML: </span>';
+                    html += '<div style="margin-top:10px;padding-top:8px;border-top:1px solid #f1f5f9;display:flex;align-items:center;flex-wrap:wrap;gap:4px;">';
+                    html += '<span style="font-size:0.72em;color:#94a3b8;">YAML</span>';
                     recManifests.filter(t => !t.includes('service')).forEach(t => {
-                        html += `<a href="/api/run/${runId}/config/${recTestId}/manifest/${t}" style="color:#0ea5e9; text-decoration:none; font-size:11px; padding:1px 5px; background:#f0f9ff; border-radius:3px; border:1px solid #bae6fd; margin:1px;">${t}</a>`;
+                        html += `<a href="/api/run/${runId}/config/${recTestId}/manifest/${t}" style="color:#0ea5e9;text-decoration:none;font-size:11px;padding:2px 8px;background:#f0f9ff;border-radius:4px;border:1px solid #bae6fd;font-weight:500;">${t}</a>`;
                     });
                     html += '</div>';
                 }
-                html += '</div>';
+
+                html += '</div></div>'; // close body + card
             });
 
             html += '</div>';
