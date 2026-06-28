@@ -1078,14 +1078,17 @@ function renderCharts(data, runId) {
     // STEP 10: Calibrated Load Validation (separate card)
     // Handles PD, EP, or both depending on goal
     // ============================================================
-    if (data.calibrated_qps) {
+    if (data.calibrated_qps || data.concurrency_sweep) {
         html += '<div class="chart-card" style="border-left:6px solid #059669;">' +
             '<div class="chart-card-header" style="background:linear-gradient(135deg,#059669,#34d399); color:white;">Concurrency Sweep</div>' +
             '<div style="padding:12px 20px; color:#1e293b; font-size:0.93em; line-height:1.6;">' +
             'Validates the best configurations at <strong>increasing concurrency levels</strong> to find the achievable load capacity. ' +
             'Tests run at progressively higher user counts until latency degrades or errors appear. ' +
-            'The calibrated concurrency is the highest load where the system still meets performance targets.' +
+            'The <strong>calibrated concurrency</strong> (green dashed line on charts) marks the sweet spot — the highest sustainable load where TTFT-to-throughput ratio is optimal, ' +
+            'calculated using Little\'s Law from measured queue and service times.' +
             '</div></div>';
+    }
+    if (data.calibrated_qps) {
         const cal = data.calibrated_qps;
         // Determine primary architecture (PD or EP)
         const primary = cal.pd || cal.ep;
