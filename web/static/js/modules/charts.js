@@ -422,41 +422,12 @@ function renderCharts(data, runId) {
     secCfg += chartCard('Throughput vs Latency', chartDesc.scatter, 'chart-scatter');
     secCfg += chartCard('GPU Efficiency (req/s per GPU)', chartDesc.efficiency, 'chart-efficiency');
 
-    // --- PD configurations TTFT + Throughput charts (one per percentile) ---
+    // --- PD configurations TTFT + Throughput chart (P90 only for debugging) ---
     if (data.all_results.filter(r => r.architecture === 'PD').length) {
         html += chartCard(
             'PD Configurations — TTFT & Throughput (P90)',
-            '<strong style="color:#3b82f6">TTFT</strong> (left axis, lower is better) and <strong style="color:#f59e0b">Throughput</strong> (right axis, higher is better) at P90. The <strong style="color:#10b981">green point</strong> marks the best TTFT, the <strong style="color:#e11d48">pink point</strong> marks the best throughput.',
+            '<strong style="color:#3b82f6">TTFT</strong> (left axis, lower is better) and <strong style="color:#f59e0b">Throughput</strong> (right axis, higher is better) at P90.',
             'chart-pd-ttft-p90'
-        );
-        html += chartCard(
-            'PD Configurations — TTFT & Throughput (P95)',
-            '<strong style="color:#3b82f6">TTFT</strong> (left axis, lower is better) and <strong style="color:#f59e0b">Throughput</strong> (right axis, higher is better) at P95. Captures tail latency beyond P90.',
-            'chart-pd-ttft-p95'
-        );
-        html += chartCard(
-            'PD Configurations — TTFT & Throughput (P99)',
-            '<strong style="color:#3b82f6">TTFT</strong> (left axis, lower is better) and <strong style="color:#f59e0b">Throughput</strong> (right axis, higher is better) at P99. Shows worst-case tail latency.',
-            'chart-pd-ttft-p99'
-        );
-    }
-
-    // --- EP configurations TTFT + Throughput charts (same layout as PD) ---
-    if (data.all_results.filter(r => r.architecture === 'EP').length) {
-        html += chartCard(
-            'EP Configurations — TTFT & Throughput (P90)',
-            '<strong style="color:#3b82f6">TTFT</strong> (left axis, lower is better) and <strong style="color:#f59e0b">Throughput</strong> (right axis, higher is better) at P90 for Expert Parallel configurations.',
-            'chart-ep-ttft-p90'
-        );
-        html += chartCard(
-            'EP Configurations — TTFT & Throughput (P95)',
-            '<strong style="color:#3b82f6">TTFT</strong> and <strong style="color:#f59e0b">Throughput</strong> at P95 for Expert Parallel configurations.',
-            'chart-ep-ttft-p95'
-        );
-        html += chartCard(
-            'EP Configurations — TTFT & Throughput (P99)',
-            '<strong style="color:#3b82f6">TTFT</strong> and <strong style="color:#f59e0b">Throughput</strong> at P99 for Expert Parallel configurations.',
-            'chart-ep-ttft-p99'
         );
     }
 
@@ -2082,128 +2053,61 @@ function renderCharts(data, runId) {
     }
 
     // PD and EP configurations TTFT charts (one per percentile, same layout)
-    function renderPdStyleCharts(archFilter, chartPrefix) {
-        const archResults = data.all_results.filter(r => r.architecture === archFilter);
+    // PD chart with ITL subplot + best markers
+    (function() {
+        const archResults = data.all_results.filter(r => r.architecture === 'PD');
         if (!archResults.length) return;
         const sorted = [...archResults].sort((a, b) => a.prefill_pods - b.prefill_pods);
-        const labels = sorted.map(r => `${r.prefill_pods}P : ${r.decode_pods}D<br>TP${r.prefill_tp} : TP${r.decode_tp}`);
-        const aggBase = rec ? rec.aggregated_baseline : null;
+        const labels = sorted.map(r => r.prefill_pods + 'P:' + r.decode_pods + 'D');
+        const ttftVals = sorted.map(r => r.ttft_p90);
+        const tputVals = sorted.map(r => r.throughput_mean || r.throughput_p90);
+        const itlVals = sorted.map(r => r.itl_p90 != null ? r.itl_p90 : null);
+        const hasItl = itlVals.some(v => v != null);
+        const bestTtftIdx = ttftVals.indexOf(Math.min(...ttftVals));
+        const bestTputIdx = tputVals.indexOf(Math.max(...tputVals));
 
-        const ttftPercentiles = [
-            { key: 'p90', field: 'ttft_p90', tputField: 'throughput_mean', color: '#3b82f6', chartId: chartPrefix + '-ttft-p90' },
-            { key: 'p95', field: 'ttft_p95', tputField: 'throughput_mean', color: '#dc2626', chartId: chartPrefix + '-ttft-p95' },
-            { key: 'p99', field: 'ttft_p99', tputField: 'throughput_mean', color: '#7c3aed', chartId: chartPrefix + '-ttft-p99' },
+        var el = document.getElementById(cid('chart-pd-ttft-p90'));
+        if (!el) return;
+
+        var traces = [
+            { x: labels, y: ttftVals, type: 'scatter', mode: 'lines+markers', name: 'TTFT P90',
+              line: { color: '#3b82f6', width: 3, shape: 'spline' },
+              marker: { color: '#3b82f6', size: 12, symbol: 'circle', line: { width: 2, color: 'white' } },
+              fill: 'tozeroy', fillcolor: '#3b82f614' },
+            { x: [labels[bestTtftIdx]], y: [ttftVals[bestTtftIdx]], type: 'scatter', mode: 'markers', name: 'Best TTFT',
+              marker: { color: '#10b981', size: 22, symbol: 'circle', line: { width: 3, color: 'white' } }, showlegend: true },
+            { x: labels, y: tputVals, type: 'scatter', mode: 'lines+markers', name: 'Throughput Mean', yaxis: 'y2',
+              line: { color: '#f59e0b', width: 3, shape: 'spline' },
+              marker: { color: '#f59e0b', size: 10, symbol: 'diamond', line: { width: 2, color: 'white' } } },
+            { x: [labels[bestTputIdx]], y: [tputVals[bestTputIdx]], type: 'scatter', mode: 'markers', name: 'Best Throughput', yaxis: 'y2',
+              marker: { color: '#e11d48', size: 22, symbol: 'diamond', line: { width: 3, color: 'white' } }, showlegend: true },
         ];
 
-        ttftPercentiles.forEach(pctl => {
-            var el = document.getElementById(cid(pctl.chartId));
-            if (!el) return;
+        var layout = {
+            height: hasItl ? 620 : 500,
+            margin: { t: 30, b: 60, l: 60, r: 60 },
+            xaxis: { title: 'Prefill : Decode Pod Ratio', anchor: hasItl ? 'y3' : 'y' },
+            yaxis: { title: 'TTFT P90 (ms)', side: 'left', titlefont: { color: '#3b82f6' }, tickfont: { color: '#3b82f6' }, tickformat: '.2s', domain: hasItl ? [0.28, 1] : [0, 1] },
+            yaxis2: { title: 'Throughput Mean (req/s)', side: 'right', overlaying: 'y', titlefont: { color: '#f59e0b' }, tickfont: { color: '#f59e0b' } },
+            showlegend: true,
+            legend: { x: 0, y: 1.12, orientation: 'h' },
+        };
 
-            const itlField = 'itl_' + pctl.key;
-            const ttftVals = sorted.map(r => r[pctl.field]);
-            const tputVals = sorted.map(r => r[pctl.tputField] || r.throughput_p90);
-            const itlVals = sorted.map(r => r[itlField] != null ? r[itlField] : null);
-            const hasItl = itlVals.some(v => v != null);
-            const validTtft = ttftVals.filter(v => v != null);
-            if (!validTtft.length) return;
-            const bestTtft = Math.min(...validTtft);
-            const bestTtftIdx = ttftVals.indexOf(bestTtft);
-            const bestTput = Math.max(...tputVals.filter(v => v != null));
-            const bestTputIdx = tputVals.indexOf(bestTput);
-            const pLabel = pctl.key.toUpperCase();
-
-            const hoverText = sorted.map(r =>
-                `<b>${r.prefill_pods} Prefill pods</b> (TP=${r.prefill_tp})<br>` +
-                `<b>${r.decode_pods} Decode pods</b> (TP=${r.decode_tp})<br>` +
-                `TTFT ${pLabel}: <b>${(r[pctl.field] != null ? r[pctl.field].toFixed(1) : '?')} ms</b><br>` +
-                (r[itlField] != null ? `ITL ${pLabel}: <b>${r[itlField].toFixed(2)} ms</b><br>` : '') +
-                `Throughput Mean: ${r[pctl.tputField] || r.throughput_p90} req/s<br>` +
-                `Total GPUs: ${r.gpus}`
+        if (hasItl) {
+            const validItl = itlVals.filter(v => v != null);
+            const bestItlIdx = itlVals.indexOf(Math.min(...validItl));
+            traces.push(
+                { x: labels, y: itlVals, type: 'scatter', mode: 'lines+markers', name: 'ITL P90', yaxis: 'y3',
+                  line: { color: '#ef4444', width: 2, shape: 'spline' },
+                  marker: { color: '#ef4444', size: 8, symbol: 'square', line: { width: 1, color: 'white' } }, connectgaps: true },
+                { x: [labels[bestItlIdx]], y: [validItl[0] != null ? itlVals[bestItlIdx] : 0], type: 'scatter', mode: 'markers', name: 'Best ITL', yaxis: 'y3',
+                  marker: { color: '#10b981', size: 16, symbol: 'square', line: { width: 2, color: 'white' } }, showlegend: true }
             );
+            layout.yaxis3 = { title: 'ITL P90 (ms)', side: 'left', titlefont: { color: '#ef4444', size: 11 }, tickfont: { color: '#ef4444', size: 10 }, domain: [0, 0.22] };
+        }
 
-            const shapes = [];
-            const aggTtft = aggBase ? aggBase[pctl.field] : null;
-            const aggTput = aggBase ? aggBase[pctl.tputField] : null;
-            if (aggTtft) {
-                shapes.push({ type: 'line', x0: -0.5, x1: labels.length - 0.5, y0: aggTtft, y1: aggTtft, yref: 'y', line: { color: pctl.color, width: 2, dash: 'dash' } });
-            }
-            if (aggTput) {
-                shapes.push({ type: 'line', x0: -0.5, x1: labels.length - 0.5, y0: aggTput, y1: aggTput, yref: 'y2', line: { color: '#f59e0b', width: 2, dash: 'dash' } });
-            }
-
-            const topDomain = hasItl ? [0.28, 1] : [0, 1];
-            var traces = [
-                {
-                    x: labels, y: ttftVals, name: `TTFT ${pLabel}`,
-                    type: 'scatter', mode: 'lines+markers',
-                    line: { color: pctl.color, width: 3, shape: 'spline' },
-                    marker: { color: pctl.color, size: 12, symbol: 'circle', line: { width: 2, color: 'white' } },
-                    hovertext: hoverText, hoverinfo: 'text',
-                    fill: 'tozeroy', fillcolor: pctl.color + '14',
-                },
-                {
-                    x: [labels[bestTtftIdx]], y: [bestTtft], name: 'Best TTFT',
-                    type: 'scatter', mode: 'markers',
-                    marker: { color: '#10b981', size: 22, symbol: 'circle', line: { width: 3, color: 'white' } },
-                    hovertext: [hoverText[bestTtftIdx]], hoverinfo: 'text',
-                    showlegend: true,
-                },
-                {
-                    x: labels, y: tputVals, name: 'Throughput Mean',
-                    type: 'scatter', mode: 'lines+markers', yaxis: 'y2',
-                    line: { color: '#f59e0b', width: 3, shape: 'spline' },
-                    marker: { color: '#f59e0b', size: 10, symbol: 'diamond', line: { width: 2, color: 'white' } },
-                    hovertemplate: 'Throughput Mean: %{y:.2f} req/s<extra></extra>',
-                },
-                {
-                    x: [labels[bestTputIdx]], y: [tputVals[bestTputIdx]], name: 'Best Throughput',
-                    type: 'scatter', mode: 'markers', yaxis: 'y2',
-                    marker: { color: '#e11d48', size: 22, symbol: 'diamond', line: { width: 3, color: 'white' } },
-                    hovertext: [hoverText[bestTputIdx]], hoverinfo: 'text',
-                    showlegend: true,
-                },
-            ];
-
-            var layout = {
-                ...plotlyLayout,
-                height: hasItl ? 620 : 500,
-                margin: { t: 30, b: 60, l: 60, r: 60 },
-                xaxis: { title: 'Prefill : Decode Pod Ratio', anchor: hasItl ? 'y3' : 'y' },
-                yaxis: { title: `TTFT ${pLabel} (ms)`, side: 'left', titlefont: { color: pctl.color }, tickfont: { color: pctl.color }, tickformat: '.2s', domain: topDomain },
-                yaxis2: { title: 'Throughput Mean (req/s)', side: 'right', overlaying: 'y', titlefont: { color: '#f59e0b' }, tickfont: { color: '#f59e0b' } },
-                showlegend: true,
-                legend: { x: 0, y: 1.12, orientation: 'h' },
-                shapes: shapes,
-            };
-
-            if (hasItl) {
-                const validItl = itlVals.filter(v => v != null);
-                const bestItlIdx = itlVals.indexOf(Math.min(...validItl));
-                traces.push(
-                    { x: labels, y: itlVals, type: 'scatter', mode: 'lines+markers', name: `ITL ${pLabel}`, yaxis: 'y3',
-                      line: { color: '#ef4444', width: 2, shape: 'spline' },
-                      marker: { color: '#ef4444', size: 8, symbol: 'square', line: { width: 1, color: 'white' } }, connectgaps: true },
-                );
-                if (bestItlIdx >= 0) {
-                    traces.push(
-                        { x: [labels[bestItlIdx]], y: [itlVals[bestItlIdx]], type: 'scatter', mode: 'markers', name: 'Best ITL', yaxis: 'y3',
-                          marker: { color: '#10b981', size: 16, symbol: 'square', line: { width: 2, color: 'white' } }, showlegend: true }
-                    );
-                }
-                if (aggBase) {
-                    const aggItl = aggBase[itlField];
-                    if (aggItl) {
-                        shapes.push({ type: 'line', x0: -0.5, x1: labels.length - 0.5, y0: aggItl, y1: aggItl, yref: 'y3', line: { color: '#ef4444', width: 1.5, dash: 'dash' } });
-                    }
-                }
-                layout.yaxis3 = { title: `ITL ${pLabel} (ms)`, side: 'left', titlefont: { color: '#ef4444', size: 11 }, tickfont: { color: '#ef4444', size: 10 }, domain: [0, 0.22] };
-            }
-
-            Plotly.newPlot(el, traces, layout, plotlyConfig);
-        });
-    }
-    renderPdStyleCharts('PD', 'chart-pd');
-    renderPdStyleCharts('EP', 'chart-ep');
+        Plotly.newPlot(el, traces, layout, plotlyConfig);
+    })();
 
     // ============================================================
     // Aggregated configurations chart (all percentiles in one grouped bar chart)
