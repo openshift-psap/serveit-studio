@@ -31,7 +31,7 @@ class PrereqManager:
             namespace: Kubernetes namespace
             kubeconfig: Path to kubeconfig file
             kubectl_runner: Existing KubectlRunner to reuse (creates new if None)
-            scheduler_image: Custom EPP scheduler image (default: llm-d-inference-scheduler:v0.8.0)
+            scheduler_image: Custom EPP scheduler image (default: llm-d-inference-scheduler:v0.9.0)
         """
         self.namespace = namespace
         self.kubectl = kubectl_runner or KubectlRunner(kubeconfig=kubeconfig, namespace=namespace)
@@ -223,7 +223,7 @@ class PrereqManager:
                 'gaie_pool_name': config['gaie_pool_name'],
                 'config_file': 'default-plugins.yaml' if epp_use_defaults else config['config_file'],
                 'gaie_replicas': 1,
-                'gaie_image': self.scheduler_image or 'ghcr.io/llm-d/llm-d-inference-scheduler:v0.8.0',
+                'gaie_image': self.scheduler_image or 'ghcr.io/llm-d/llm-d-inference-scheduler:v0.9.0',
                 'gateway_name': config['gateway_name'],
                 'gateway_class': self.gateway_class,
                 'prefix_cache_weight': epp_weights['prefix_cache_weight'],
@@ -284,7 +284,7 @@ class PrereqManager:
             if epp_use_defaults:
                 # Detect version from scheduler image to pick correct defaults
                 sched_img = self.scheduler_image or ''
-                sched_tag = sched_img.split(':')[-1] if ':' in sched_img else 'v0.8.0'
+                sched_tag = sched_img.split(':')[-1] if ':' in sched_img else 'v0.9.0'
                 is_34 = sched_tag < 'v0.9'
                 suffix = '.3.4' if is_34 else ''
                 ver_label = sched_tag
