@@ -228,15 +228,16 @@ class CacheSweepMixin:
         self.log(f"Cache mode: {mode}", 'info')
 
         user_concurrency = int(self.config.qps)
-        calibrated_concurrency = None
-        if self.config.cache_sweep_use_calibrated:
-            calibrated_concurrency = getattr(self, 'achievable_concurrency', None)
-            if calibrated_concurrency:
-                calibrated_concurrency = int(calibrated_concurrency)
-                self.log(f"Calibrated concurrency: {calibrated_concurrency} (from Step 11)", 'info')
-            else:
-                self.log("⚠️  No calibrated concurrency available (Step 11 didn't run). "
-                         "Falling back to user-defined concurrency.", 'warning')
+        calibrated_concurrency = getattr(self, 'achievable_concurrency', None)
+        if calibrated_concurrency:
+            calibrated_concurrency = int(calibrated_concurrency)
+
+        # Use calibrated concurrency as default when available
+        default_concurrency = calibrated_concurrency or user_concurrency
+        if calibrated_concurrency and calibrated_concurrency != user_concurrency:
+            self.log(f"Using calibrated concurrency: {calibrated_concurrency} (from Step 11, user requested {user_concurrency})", 'info')
+        else:
+            self.log(f"Using concurrency: {default_concurrency}", 'info')
 
         # --- Find best configs ---
         best_split = None
@@ -260,17 +261,18 @@ class CacheSweepMixin:
         agg_result = getattr(self, 'aggregated_result', None)
         total_gpus_agg = getattr(self, 'aggregated_gpus', 0) or self.config.total_gpus
 
-        # --- Sweep at user-defined concurrency ---
+        # --- Sweep at default concurrency (calibrated if available, otherwise user-defined) ---
         if self.config.cache_sweep_enabled:
             self.log(f"\n{'='*60}", 'info')
-            self.log(f"Cache Sweep at user-defined concurrency ({user_concurrency})", 'decision')
+            self.log(f"Cache Sweep at concurrency {default_concurrency}" +
+                     (f" (calibrated)" if calibrated_concurrency else ""), 'decision')
             self.log(f"{'='*60}", 'info')
 
             if best_split:
                 pd_label = 'EP' if getattr(best_split, 'enable_expert_parallel', False) else 'PD'
                 pd_config_label = f"{best_split.prefill_pods}P×TP{best_split.prefill_tp} + {best_split.decode_pods}D×TP{best_split.decode_tp}"
                 sweep = self._run_cache_sweep_for_arch(
-                    pd_label, user_concurrency, levels,
+                    pd_label, default_concurrency, levels,
                     lambda: self._create_pd_config(best_split) if pd_label == 'PD' else self._create_ep_config(split=best_split),
                     total_gpus_pd
                 )
@@ -282,7 +284,7 @@ class CacheSweepMixin:
                 agg_replicas = total_gpus_agg // agg_tp if agg_tp else total_gpus_agg
                 agg_config_label = f"{agg_replicas}×TP{agg_tp}"
                 sweep = self._run_cache_sweep_for_arch(
-                    'Aggregated', user_concurrency, levels,
+                    'Aggregated', default_concurrency, levels,
                     lambda: self._create_aggregated_config(
                         tp=agg_tp, num_gpus=total_gpus_agg,
                         isl=self.config.isl, osl=self.config.osl,
@@ -294,19 +296,19 @@ class CacheSweepMixin:
                     r['config_label'] = agg_config_label
                 self.cache_sweep_results['aggregated'] = sweep
 
-        # --- Sweep at calibrated concurrency ---
-        if self.config.cache_sweep_use_calibrated and calibrated_concurrency and not self._should_stop():
+        # --- Optional second sweep at user-defined concurrency (if different from calibrated) ---
+        if self.config.cache_sweep_use_calibrated and calibrated_concurrency and user_concurrency != calibrated_concurrency and not self._should_stop():
             self.log(f"\n{'='*60}", 'info')
-            self.log(f"Cache Sweep at calibrated concurrency ({calibrated_concurrency})", 'decision')
+            self.log(f"Cache Sweep at user-defined concurrency ({user_concurrency})", 'decision')
             self.log(f"{'='*60}", 'info')
 
             if best_split:
                 pd_label = 'EP' if getattr(best_split, 'enable_expert_parallel', False) else 'PD'
                 pd_config_label = f"{best_split.prefill_pods}P×TP{best_split.prefill_tp} + {best_split.decode_pods}D×TP{best_split.decode_tp}"
                 sweep = self._run_cache_sweep_for_arch(
-                    pd_label, calibrated_concurrency, levels,
+                    pd_label, user_concurrency, levels,
                     lambda: self._create_pd_config(best_split) if pd_label == 'PD' else self._create_ep_config(split=best_split),
-                    total_gpus_pd, concurrency_tag='cal'
+                    total_gpus_pd, concurrency_tag='user'
                 )
                 for r in sweep:
                     r['config_label'] = pd_config_label
@@ -316,13 +318,13 @@ class CacheSweepMixin:
                 agg_replicas = total_gpus_agg // agg_tp if agg_tp else total_gpus_agg
                 agg_config_label = f"{agg_replicas}×TP{agg_tp}"
                 sweep = self._run_cache_sweep_for_arch(
-                    'Aggregated', calibrated_concurrency, levels,
+                    'Aggregated', user_concurrency, levels,
                     lambda: self._create_aggregated_config(
                         tp=agg_tp, num_gpus=total_gpus_agg,
                         isl=self.config.isl, osl=self.config.osl,
                         test_id='_placeholder_', use_concurrency=True
                     ),
-                    total_gpus_agg, concurrency_tag='cal'
+                    total_gpus_agg, concurrency_tag='user'
                 )
                 for r in sweep:
                     r['config_label'] = agg_config_label
