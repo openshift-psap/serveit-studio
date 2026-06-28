@@ -20,9 +20,6 @@ data:
       - type: prefill-filter
       - type: decode-filter
       - type: prefix-cache-scorer
-        parameters:
-          maxPrefixBlocksToMatch: {{ max_prefix_blocks | default(256) }}
-          lruCapacityPerServer: {{ lru_capacity | default(31250) }}
       - type: queue-scorer
       - type: kv-cache-utilization-scorer
 {% if slo_enabled | default(false) %}

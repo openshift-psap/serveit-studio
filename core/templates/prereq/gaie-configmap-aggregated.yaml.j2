@@ -19,9 +19,6 @@ data:
       - type: single-profile-handler
 {% endif %}
       - type: prefix-cache-scorer
-        parameters:
-          maxPrefixBlocksToMatch: {{ max_prefix_blocks | default(256) }}
-          lruCapacityPerServer: {{ lru_capacity | default(31250) }}
       - type: kv-cache-utilization-scorer
       - type: queue-scorer
 {% if slo_enabled | default(false) %}
