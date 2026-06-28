@@ -1030,7 +1030,7 @@ class TestOrchestrator(ParserMixin, GuidellmMixin):
                 return result
 
             # Step 0: Check/Deploy prerequisite infrastructure
-            if not skip_prereqs:
+            if not skip_prereqs and not skip_deploy:
                 if log_callback:
                     log_callback('')
                     log_callback('=' * 60)
@@ -1198,8 +1198,10 @@ class TestOrchestrator(ParserMixin, GuidellmMixin):
             # Ensure workload pod exists (needed for gateway health checks via kubectl exec)
             self.ensure_guidellm_pod(config, log_callback=log_callback)
 
-            # Step 4b: Wait for gateway to register all pods in EPP
-            if config.architecture == 'pd':
+            # Step 4b: Wait for gateway to register all pods in EPP (skip if reusing deployment)
+            if skip_deploy:
+                expected_pods = 0
+            elif config.architecture == 'pd':
                 expected_pods = (config.prefill_replicas or 0) + (config.decode_replicas or 0)
             else:
                 expected_pods = config.replicas
