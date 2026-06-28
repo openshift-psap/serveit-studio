@@ -422,41 +422,12 @@ function renderCharts(data, runId) {
     secCfg += chartCard('Throughput vs Latency', chartDesc.scatter, 'chart-scatter');
     secCfg += chartCard('GPU Efficiency (req/s per GPU)', chartDesc.efficiency, 'chart-efficiency');
 
-    // --- PD configurations TTFT + Throughput charts (one per percentile) ---
+    // --- PD configurations TTFT + Throughput chart (P90 only for debugging) ---
     if (data.all_results.filter(r => r.architecture === 'PD').length) {
         html += chartCard(
             'PD Configurations — TTFT & Throughput (P90)',
-            '<strong style="color:#3b82f6">TTFT</strong> (left axis, lower is better) and <strong style="color:#f59e0b">Throughput</strong> (right axis, higher is better) at P90. The <strong style="color:#10b981">green point</strong> marks the best TTFT, the <strong style="color:#e11d48">pink point</strong> marks the best throughput.',
+            '<strong style="color:#3b82f6">TTFT</strong> (left axis, lower is better) and <strong style="color:#f59e0b">Throughput</strong> (right axis, higher is better) at P90.',
             'chart-pd-ttft-p90'
-        );
-        html += chartCard(
-            'PD Configurations — TTFT & Throughput (P95)',
-            '<strong style="color:#3b82f6">TTFT</strong> (left axis, lower is better) and <strong style="color:#f59e0b">Throughput</strong> (right axis, higher is better) at P95. Captures tail latency beyond P90.',
-            'chart-pd-ttft-p95'
-        );
-        html += chartCard(
-            'PD Configurations — TTFT & Throughput (P99)',
-            '<strong style="color:#3b82f6">TTFT</strong> (left axis, lower is better) and <strong style="color:#f59e0b">Throughput</strong> (right axis, higher is better) at P99. Shows worst-case tail latency.',
-            'chart-pd-ttft-p99'
-        );
-    }
-
-    // --- EP configurations TTFT + Throughput charts (same layout as PD) ---
-    if (data.all_results.filter(r => r.architecture === 'EP').length) {
-        html += chartCard(
-            'EP Configurations — TTFT & Throughput (P90)',
-            '<strong style="color:#3b82f6">TTFT</strong> (left axis, lower is better) and <strong style="color:#f59e0b">Throughput</strong> (right axis, higher is better) at P90 for Expert Parallel configurations.',
-            'chart-ep-ttft-p90'
-        );
-        html += chartCard(
-            'EP Configurations — TTFT & Throughput (P95)',
-            '<strong style="color:#3b82f6">TTFT</strong> and <strong style="color:#f59e0b">Throughput</strong> at P95 for Expert Parallel configurations.',
-            'chart-ep-ttft-p95'
-        );
-        html += chartCard(
-            'EP Configurations — TTFT & Throughput (P99)',
-            '<strong style="color:#3b82f6">TTFT</strong> and <strong style="color:#f59e0b">Throughput</strong> at P99 for Expert Parallel configurations.',
-            'chart-ep-ttft-p99'
         );
     }
 
@@ -2213,11 +2184,12 @@ function renderCharts(data, runId) {
                 layout.yaxis3 = { title: `ITL ${pLabel} (ms)`, side: 'left', titlefont: { color: '#ef4444', size: 11 }, tickfont: { color: '#ef4444', size: 10 }, domain: [0, 0.22] };
             }
 
-            Plotly.newPlot(cid(pctl.chartId), traces, layout, plotlyConfig);
+            var chartEl = document.getElementById(cid(pctl.chartId));
+            if (chartEl) Plotly.newPlot(chartEl, traces, layout, plotlyConfig);
         });
     }
     renderPdStyleCharts('PD', 'chart-pd');
-    renderPdStyleCharts('EP', 'chart-ep');
+    // renderPdStyleCharts('EP', 'chart-ep');  // disabled for debugging
 
     // ============================================================
     // Aggregated configurations chart (all percentiles in one grouped bar chart)
