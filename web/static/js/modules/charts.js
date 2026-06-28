@@ -1910,8 +1910,9 @@ function renderCharts(data, runId) {
     if (charts.scatter.traces.length) {
         var filteredScatter = charts.scatter.traces.map(function(t) {
             var keep = [];
-            (t.text || []).forEach(function(txt, i) {
-                if (txt.indexOf('step11-') === -1 && txt.indexOf('step12-') === -1 && txt.indexOf('step13-') === -1) keep.push(i);
+            var tids = t.test_ids || [];
+            tids.forEach(function(tid, i) {
+                if (tid.indexOf('step11-') !== 0 && tid.indexOf('step12-') !== 0 && tid.indexOf('step13-') !== 0) keep.push(i);
             });
             return { x: keep.map(i => t.x[i]), y: keep.map(i => t.y[i]), text: keep.map(i => t.text[i]), name: t.name, sizes: keep.map(i => (t.sizes || [])[i]), color: t.color };
         }).filter(t => t.x.length);
@@ -1928,9 +1929,11 @@ function renderCharts(data, runId) {
 
     // Efficiency bar (filter out sweep tests)
     if (charts.efficiency.configs.length) {
+        var effTids = charts.efficiency.test_ids || [];
         var effIdx = [];
         charts.efficiency.configs.forEach(function(c, i) {
-            if (c.indexOf('step11-') !== 0 && c.indexOf('step12-') !== 0 && c.indexOf('step13-') !== 0) effIdx.push(i);
+            var tid = effTids[i] || '';
+            if (tid.indexOf('step11-') !== 0 && tid.indexOf('step12-') !== 0 && tid.indexOf('step13-') !== 0) effIdx.push(i);
         });
         var effConfigs = effIdx.map(i => charts.efficiency.configs[i]);
         var effValues = effIdx.map(i => charts.efficiency.values[i]);

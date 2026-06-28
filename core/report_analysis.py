@@ -864,15 +864,16 @@ class ReportAnalyzer:
         charts['scatter'] = scatter_data
 
         # --- Efficiency bar chart ---
-        eff_data = {'configs': [], 'values': [], 'colors': []}
+        eff_data = {'configs': [], 'values': [], 'colors': [], 'test_ids': []}
         if successful:
             with_eff = sorted(
-                [(r.display_label, (r.throughput_mean or r.throughput_p90) / r.total_gpus, r.architecture) for r in successful],
+                [(r.display_label, (r.throughput_mean or r.throughput_p90) / r.total_gpus, r.architecture, r.config_name) for r in successful],
                 key=lambda x: x[1], reverse=True
             )[:15]
-            eff_data['configs'] = [label for label, _, _ in with_eff]
-            eff_data['values'] = [round(eff, 3) for _, eff, _ in with_eff]
-            eff_data['colors'] = [arch_colors.get(arch, '#999') for _, _, arch in with_eff]
+            eff_data['configs'] = [label for label, _, _, _ in with_eff]
+            eff_data['values'] = [round(eff, 3) for _, eff, _, _ in with_eff]
+            eff_data['colors'] = [arch_colors.get(arch, '#999') for _, _, arch, _ in with_eff]
+            eff_data['test_ids'] = [tid for _, _, _, tid in with_eff]
         charts['efficiency'] = eff_data
 
         # --- Architecture comparison ---
