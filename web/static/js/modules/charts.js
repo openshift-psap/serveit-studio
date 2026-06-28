@@ -1235,12 +1235,26 @@ function renderCharts(data, runId) {
 
     // Concurrency Sweep Charts — one section per architecture
     // Build config labels for sweep chart titles (used by both concurrency and cache sweeps)
+    // Derive from all_results by matching sweep test_ids
     var sweepConfigLabels = {};
-    if (data.calibrated_qps) {
-        if (data.calibrated_qps.pd) sweepConfigLabels.pd = data.calibrated_qps.pd.config_name;
-        if (data.calibrated_qps.aggregated) sweepConfigLabels.aggregated = data.calibrated_qps.aggregated.config_name;
-        if (data.calibrated_qps.ep) sweepConfigLabels.ep = data.calibrated_qps.ep.config_name;
+    function findSweepConfigLabel(testIdPrefix) {
+        var match = (data.all_results || []).find(function(r) {
+            return r.test_id && r.test_id.indexOf(testIdPrefix) === 0;
+        });
+        if (!match) return '';
+        if (match.architecture === 'PD' || match.architecture === 'EP') {
+            return match.prefill_pods + 'P×TP' + match.prefill_tp + ' + ' + match.decode_pods + 'D×TP' + match.decode_tp;
+        }
+        var reps = match.replicas || (match.gpus && match.tp ? Math.floor(match.gpus / match.tp) : '?');
+        return reps + '×TP' + (match.tp || '?');
     }
+    sweepConfigLabels.pd = findSweepConfigLabel('step11-sweep-pd');
+    sweepConfigLabels.aggregated = findSweepConfigLabel('step11-sweep-aggregated');
+    sweepConfigLabels.ep = findSweepConfigLabel('step11-sweep-ep');
+    // Also try cache sweep test_ids for cache-only runs
+    if (!sweepConfigLabels.pd) sweepConfigLabels.pd = findSweepConfigLabel('step13-cache-pd');
+    if (!sweepConfigLabels.aggregated) sweepConfigLabels.aggregated = findSweepConfigLabel('step13-cache-aggregated');
+    if (!sweepConfigLabels.ep) sweepConfigLabels.ep = findSweepConfigLabel('step13-cache-ep');
 
     if (data.concurrency_sweep) {
         const sweep = data.concurrency_sweep;
