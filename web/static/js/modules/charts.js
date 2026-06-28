@@ -1402,14 +1402,6 @@ function renderCharts(data, runId) {
                 if (hasActualHitRate) {
                     traces.push({
                         x: pts.map(function(p) { return p.hit_pct; }),
-                        y: pts.map(function(p) { return p.hit_pct; }),
-                        xaxis: 'x2', yaxis: 'y3',
-                        mode: 'lines', name: 'Configured Hit %',
-                        line: { color: '#94a3b8', width: 2, dash: 'dash' },
-                        showlegend: true
-                    });
-                    traces.push({
-                        x: pts.map(function(p) { return p.hit_pct; }),
                         y: pts.map(function(p) { return p.actual_hit_rate != null ? p.actual_hit_rate : 0; }),
                         text: pts.map(function(p) { return p.actual_hit_rate != null ? p.actual_hit_rate.toFixed(1) + '%' : ''; }),
                         textposition: 'top center', textfont: { size: 9, color: '#059669' },
