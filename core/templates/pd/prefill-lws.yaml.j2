@@ -176,8 +176,8 @@ spec:
 
                 vllm serve {{ model_name }} \
                   --port 8000 \
-{% if trust_remote_code %}                  --trust-remote-code \
-{% endif %}                  --tensor-parallel-size {{ prefill_tp }} \
+                  --trust-remote-code \
+                  --tensor-parallel-size {{ prefill_tp }} \
 {% if data_parallelism > 1 %}                  --data-parallel-size ${DP_SIZE} \
                   --data-parallel-size-local ${DP_SIZE_LOCAL} \
                   --data-parallel-multi-port-external-lb \

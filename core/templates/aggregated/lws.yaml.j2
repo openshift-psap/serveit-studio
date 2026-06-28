@@ -144,8 +144,8 @@ spec:
                 exec vllm serve \
                   {{ model_name }} \
                   --port 8000 \
-{% if trust_remote_code %}                  --trust-remote-code \
-{% endif %}                  --api-server-count 1 \
+                  --trust-remote-code \
+                  --api-server-count 1 \
                   --tensor-parallel-size {{ tensor_parallelism }} \
 {% if pipeline_parallel_size %}                  --pipeline-parallel-size {{ pipeline_parallel_size }} \
 {% endif %}                  --block-size {{ block_size or 16 }} \
