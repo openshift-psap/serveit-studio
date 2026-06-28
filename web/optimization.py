@@ -748,7 +748,7 @@ def run_optimization_background(data):
         else:
             pvc_size = None
         vllm_image = _get('image') or 'ghcr.io/llm-d/llm-d-cuda:v0.8.0'
-        scheduler_image = _get('scheduler_image') or 'ghcr.io/llm-d/llm-d-inference-scheduler:v0.9.0'
+        scheduler_image = _get('scheduler_image') or 'ghcr.io/llm-d/llm-d-router-endpoint-picker:v0.9.0'
         single_test_architecture = _get('single_test_architecture')
         single_test_tp = _get('single_test_tp')
         single_test_replicas = _get('single_test_replicas')

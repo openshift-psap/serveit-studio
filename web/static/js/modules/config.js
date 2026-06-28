@@ -1297,7 +1297,7 @@ function applyRhaiisVersion(version) {
 
     // Set scheduler image
     var schedInput = document.getElementById('scheduler-image-input');
-    var schedRepo = schedInput.value.split(':')[0] || 'ghcr.io/llm-d/llm-d-inference-scheduler';
+    var schedRepo = schedInput.value.split(':')[0] || 'ghcr.io/llm-d/llm-d-router-endpoint-picker';
     schedInput.value = schedRepo + ':' + preset.scheduler;
     config.scheduler_image = schedInput.value;
 
@@ -1339,7 +1339,7 @@ function markImagesCustom() {
 
 function fetchSchedulerTags() {
     var input = document.getElementById('scheduler-image-input');
-    var full = (input.value || 'ghcr.io/llm-d/llm-d-inference-scheduler:v0.9.0').trim();
+    var full = (input.value || 'ghcr.io/llm-d/llm-d-router-endpoint-picker:v0.9.0').trim();
     var repo = full.split(':')[0];
     var statusEl = document.getElementById('scheduler-tag-status');
     statusEl.textContent = 'Fetching tags...';
@@ -1373,7 +1373,7 @@ socket.on('scheduler_tags_result', function(data) {
 
 function updateSelectedScheduler() {
     var input = document.getElementById('scheduler-image-input');
-    var repo = input.value.split(':')[0] || 'ghcr.io/llm-d/llm-d-inference-scheduler';
+    var repo = input.value.split(':')[0] || 'ghcr.io/llm-d/llm-d-router-endpoint-picker';
     var selectEl = document.getElementById('scheduler-tag-select');
     if (selectEl && selectEl.value) {
         input.value = repo + ':' + selectEl.value;
