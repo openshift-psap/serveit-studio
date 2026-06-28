@@ -2053,143 +2053,28 @@ function renderCharts(data, runId) {
     }
 
     // PD and EP configurations TTFT charts (one per percentile, same layout)
-    function renderPdStyleCharts(archFilter, chartPrefix) {
-        const archResults = data.all_results.filter(r => r.architecture === archFilter);
+    // MINIMAL PD chart for debugging
+    (function() {
+        const archResults = data.all_results.filter(r => r.architecture === 'PD');
         if (!archResults.length) return;
         const sorted = [...archResults].sort((a, b) => a.prefill_pods - b.prefill_pods);
-        const labels = sorted.map(r => `${r.prefill_pods}P : ${r.decode_pods}D<br>TP${r.prefill_tp} : TP${r.decode_tp}`);
-        const aggBase = rec ? rec.aggregated_baseline : null;
+        const labels = sorted.map(r => r.prefill_pods + 'P:' + r.decode_pods + 'D');
+        const ttftVals = sorted.map(r => r.ttft_p90);
 
-        const ttftPercentiles = [
-            { key: 'p90', field: 'ttft_p90', tputField: 'throughput_mean', color: '#3b82f6', chartId: chartPrefix + '-ttft-p90' },
-            { key: 'p95', field: 'ttft_p95', tputField: 'throughput_mean', color: '#dc2626', chartId: chartPrefix + '-ttft-p95' },
-            { key: 'p99', field: 'ttft_p99', tputField: 'throughput_mean', color: '#7c3aed', chartId: chartPrefix + '-ttft-p99' },
-        ];
+        var el = document.getElementById(cid('chart-pd-ttft-p90'));
+        if (!el) return;
 
-        ttftPercentiles.forEach(pctl => {
-            const itlField = 'itl_' + pctl.key;
-            const ttftVals = sorted.map(r => r[pctl.field]);
-            const tputVals = sorted.map(r => r[pctl.tputField] || r.throughput_p90);
-            const itlVals = sorted.map(r => r[itlField] != null ? r[itlField] : null);
-            const hasItl = itlVals.some(v => v != null);
-            const bestTtft = Math.min(...ttftVals);
-            const bestTtftIdx = ttftVals.indexOf(bestTtft);
-            const bestTput = Math.max(...tputVals);
-            const bestTputIdx = tputVals.indexOf(bestTput);
-            const pLabel = pctl.key.toUpperCase();
-
-            const hoverText = sorted.map(r =>
-                `<b>${r.prefill_pods} Prefill pods</b> (TP=${r.prefill_tp})<br>` +
-                `<b>${r.decode_pods} Decode pods</b> (TP=${r.decode_tp})<br>` +
-                `TTFT ${pLabel}: <b>${r[pctl.field].toFixed(1)} ms</b><br>` +
-                (r[itlField] != null ? `ITL ${pLabel}: <b>${r[itlField].toFixed(2)} ms</b><br>` : '') +
-                `Throughput Mean: ${r[pctl.tputField] || r.throughput_p90} req/s<br>` +
-                `Total GPUs: ${r.gpus}`
-            );
-
-            const shapes = [];
-            const annotations = [];
-            const aggTtft = aggBase ? aggBase[pctl.field] : null;
-            const aggTput = aggBase ? aggBase[pctl.tputField] : null;
-            if (aggTtft) {
-                shapes.push({ type: 'line', x0: -0.5, x1: labels.length - 0.5, y0: aggTtft, y1: aggTtft, yref: 'y', line: { color: pctl.color, width: 2, dash: 'dash' } });
-                annotations.push({ x: 0, y: aggTtft, yref: 'y', text: `Agg TTFT ${pLabel}: ${fmtSI(aggTtft)} ms`, showarrow: false, font: { color: pctl.color, size: 11, weight: 700 }, xanchor: 'left', yanchor: 'bottom', yshift: 5, bgcolor: 'rgba(255,255,255,0.85)' });
-            }
-            if (aggTput) {
-                shapes.push({ type: 'line', x0: -0.5, x1: labels.length - 0.5, y0: aggTput, y1: aggTput, yref: 'y2', line: { color: '#f59e0b', width: 2, dash: 'dash' } });
-                annotations.push({ x: labels.length - 1, y: aggTput, yref: 'y2', text: `Agg Tput ${pLabel}: ${aggTput} req/s`, showarrow: false, font: { color: '#f59e0b', size: 11, weight: 700 }, xanchor: 'right', yanchor: 'bottom', yshift: 5, bgcolor: 'rgba(255,255,255,0.85)' });
-            }
-
-            // Add EPP TUNED annotations for EPP-tuned points
-            sorted.forEach((r, i) => {
-                if (r.test_id && r.test_id.startsWith('step11-epp-')) {
-                    annotations.push({ x: labels[i], y: ttftVals[i], yref: 'y', text: '<b>EPP TUNED</b>', showarrow: true, arrowhead: 0, arrowwidth: 1, arrowcolor: '#7c3aed', ax: 55, ay: 0, font: { size: 9, color: 'white' }, bgcolor: '#7c3aed', borderpad: 3, bordercolor: '#7c3aed', borderwidth: 1 });
-                    annotations.push({ x: labels[i], y: tputVals[i], yref: 'y2', text: '<b>EPP TUNED</b>', showarrow: true, arrowhead: 0, arrowwidth: 1, arrowcolor: '#7c3aed', ax: 55, ay: 0, font: { size: 9, color: 'white' }, bgcolor: '#7c3aed', borderpad: 3, bordercolor: '#7c3aed', borderwidth: 1 });
-                }
-            });
-
-            // Subplot domains: top 72% for TTFT+Throughput, bottom 22% for ITL, 6% gap
-            const topDomain = hasItl ? [0.28, 1] : [0, 1];
-            const traces = [
-                {
-                    x: labels, y: ttftVals, name: `TTFT ${pLabel}`,
-                    type: 'scatter', mode: 'lines+markers',
-                    line: { color: pctl.color, width: 3, shape: 'spline' },
-                    marker: { color: pctl.color, size: 12, symbol: 'circle', line: { width: 2, color: 'white' } },
-                    hovertext: hoverText, hoverinfo: 'text',
-                    fill: 'tozeroy', fillcolor: pctl.color + '14',
-                },
-                {
-                    x: [labels[bestTtftIdx]], y: [bestTtft], name: `Best TTFT`,
-                    type: 'scatter', mode: 'markers',
-                    marker: { color: '#10b981', size: 22, symbol: 'circle', line: { width: 3, color: 'white' } },
-                    hovertext: [hoverText[bestTtftIdx]], hoverinfo: 'text',
-                    showlegend: true,
-                },
-                {
-                    x: labels, y: tputVals, name: `Throughput Mean`,
-                    type: 'scatter', mode: 'lines+markers', yaxis: 'y2',
-                    line: { color: '#f59e0b', width: 3, shape: 'spline' },
-                    marker: { color: '#f59e0b', size: 10, symbol: 'diamond', line: { width: 2, color: 'white' } },
-                    hovertemplate: `Throughput Mean: %{y:.2f} req/s<extra></extra>`,
-                },
-                {
-                    x: [labels[bestTputIdx]], y: [tputVals[bestTputIdx]], name: `Best Throughput`,
-                    type: 'scatter', mode: 'markers', yaxis: 'y2',
-                    marker: { color: '#e11d48', size: 22, symbol: 'diamond', line: { width: 3, color: 'white' } },
-                    hovertext: [hoverText[bestTputIdx]], hoverinfo: 'text',
-                    showlegend: true,
-                },
-            ];
-
-            const layout = {
-                ...plotlyLayout,
-                height: hasItl ? 620 : 500,
-                margin: { t: 30, b: 60, l: 60, r: 60 },
-                xaxis: { title: 'Prefill : Decode Pod Ratio', anchor: hasItl ? 'y3' : 'y' },
-                yaxis: { title: `TTFT ${pLabel} (ms)`, side: 'left', titlefont: { color: pctl.color }, tickfont: { color: pctl.color }, tickformat: '.2s', domain: topDomain },
-                yaxis2: { title: `Throughput Mean (req/s)`, side: 'right', overlaying: 'y', titlefont: { color: '#f59e0b' }, tickfont: { color: '#f59e0b' } },
-                showlegend: true,
-                legend: { x: 0, y: 1.12, orientation: 'h' },
-                shapes: shapes,
-                annotations: annotations,
-            };
-
-            if (hasItl) {
-                const validItl = itlVals.filter(v => v != null);
-                const bestItl = Math.min(...validItl);
-                const bestItlIdx = itlVals.indexOf(bestItl);
-                const aggItl = aggBase ? aggBase[itlField] : null;
-
-                traces.push({
-                    x: labels, y: itlVals, name: `ITL ${pLabel}`,
-                    type: 'scatter', mode: 'lines+markers', yaxis: 'y3',
-                    line: { color: '#ef4444', width: 2, shape: 'spline' },
-                    marker: { color: '#ef4444', size: 8, symbol: 'square', line: { width: 1, color: 'white' } },
-                    hovertemplate: `ITL ${pLabel}: %{y:.2f} ms<extra></extra>`,
-                    connectgaps: true,
-                });
-                if (bestItlIdx >= 0) {
-                    traces.push({
-                        x: [labels[bestItlIdx]], y: [bestItl], name: `Best ITL`,
-                        type: 'scatter', mode: 'markers', yaxis: 'y3',
-                        marker: { color: '#10b981', size: 16, symbol: 'square', line: { width: 2, color: 'white' } },
-                        showlegend: true,
-                    });
-                }
-                if (aggItl) {
-                    shapes.push({ type: 'line', x0: -0.5, x1: labels.length - 0.5, y0: aggItl, y1: aggItl, yref: 'y3', line: { color: '#ef4444', width: 1.5, dash: 'dash' } });
-                    annotations.push({ x: 0, y: aggItl, yref: 'y3', text: `Agg ITL: ${aggItl.toFixed(1)} ms`, showarrow: false, font: { color: '#ef4444', size: 10, weight: 700 }, xanchor: 'left', yanchor: 'bottom', yshift: 3, bgcolor: 'rgba(255,255,255,0.85)' });
-                }
-                layout.yaxis3 = { title: `ITL ${pLabel} (ms)`, side: 'left', titlefont: { color: '#ef4444', size: 11 }, tickfont: { color: '#ef4444', size: 10 }, domain: [0, 0.22] };
-            }
-
-            var chartEl = document.getElementById(cid(pctl.chartId));
-            if (chartEl) Plotly.newPlot(chartEl, traces, layout, plotlyConfig);
-        });
-    }
-    renderPdStyleCharts('PD', 'chart-pd');
-    // renderPdStyleCharts('EP', 'chart-ep');  // disabled for debugging
+        Plotly.newPlot(el, [{
+            x: labels,
+            y: ttftVals,
+            type: 'scatter',
+            mode: 'lines+markers'
+        }], {
+            height: 500,
+            xaxis: { title: 'Config' },
+            yaxis: { title: 'TTFT P90 (ms)' }
+        }, { responsive: true });
+    })();
 
     // ============================================================
     // Aggregated configurations chart (all percentiles in one grouped bar chart)
