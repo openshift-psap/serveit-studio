@@ -9,7 +9,7 @@ metadata:
     architecture: aggregated
 data:
   aggregated-config.yaml: |
-    apiVersion: inference.networking.x-k8s.io/v1alpha1
+    apiVersion: llm-d.ai/v1alpha1
     kind: EndpointPickerConfig
     plugins:
 {% if slo_enabled | default(false) %}
@@ -19,13 +19,13 @@ data:
       - type: single-profile-handler
 {% endif %}
       - type: prefix-cache-scorer
-      - type: kv-cache-utilization-scorer
+      - type: decode-filter
       - type: queue-scorer
+{% if kv_cache_enabled | default(false) %}
+      - type: kv-cache-utilization-scorer
+{% endif %}
 {% if slo_enabled | default(false) %}
       - type: latency-scorer
-{% endif %}
-{% if precise_prefix_cache_enabled | default(false) %}
-      - type: precise-prefix-cache-scorer
 {% endif %}
 {% if active_request_enabled | default(false) %}
       - type: active-request-scorer
@@ -40,18 +40,20 @@ data:
     schedulingProfiles:
       - name: default
         plugins:
-{% if slo_enabled | default(false) %}
-          - pluginRef: slo-request-tracker
-{% endif %}
+          - pluginRef: decode-filter
+          - pluginRef: max-score-picker
           - pluginRef: prefix-cache-scorer
-            weight: {{ prefix_cache_weight | default(3.0) }}
+            weight: {{ prefix_cache_weight | default(2.0) }}
+          - pluginRef: queue-scorer
+            weight: {{ queue_weight | default(1.0) }}
+{% if kv_cache_enabled | default(false) %}
           - pluginRef: kv-cache-utilization-scorer
             weight: {{ kv_cache_weight | default(2.0) }}
-          - pluginRef: queue-scorer
-            weight: {{ queue_weight | default(2.0) }}
-{% if precise_prefix_cache_enabled | default(false) %}
-          - pluginRef: precise-prefix-cache-scorer
-            weight: {{ precise_prefix_cache_weight | default(3.0) }}
+{% endif %}
+{% if slo_enabled | default(false) %}
+          - pluginRef: slo-request-tracker
+          - pluginRef: latency-scorer
+            weight: {{ slo_weight | default(3.0) }}
 {% endif %}
 {% if active_request_enabled | default(false) %}
           - pluginRef: active-request-scorer
@@ -65,7 +67,6 @@ data:
           - pluginRef: session-affinity-scorer
             weight: {{ session_aware_weight | default(2.0) }}
 {% endif %}
-          - pluginRef: max-score-picker
 {% if slo_enabled | default(false) %}
       - name: slo
         plugins:

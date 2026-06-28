@@ -9,25 +9,31 @@ metadata:
     architecture: pd
 data:
   pd-config.yaml: |
-    apiVersion: inference.networking.x-k8s.io/v1alpha1
+    apiVersion: llm-d.ai/v1alpha1
     kind: EndpointPickerConfig
     plugins:
-      - type: disagg-headers-handler
-      - type: always-disagg-pd-decider
-      - type: disagg-profile-handler
+      - type: approx-prefix-cache-producer
         parameters:
-          deciderPluginName: always-disagg-pd-decider
-      - type: prefill-filter
-      - type: decode-filter
+          maxPrefixBlocksToMatch: {{ max_prefix_blocks | default(256) }}
+          lruCapacityPerServer: {{ lru_capacity | default(31250) }}
       - type: prefix-cache-scorer
       - type: queue-scorer
+      - type: prefill-filter
+      - type: decode-filter
+      - type: max-score-picker
+      - type: prefix-based-pd-decider
+        parameters:
+          nonCachedTokens: {{ non_cached_tokens | default(16) }}
+      - type: disagg-profile-handler
+        parameters:
+          deciders:
+            prefill: prefix-based-pd-decider
+{% if kv_cache_enabled | default(false) %}
       - type: kv-cache-utilization-scorer
+{% endif %}
 {% if slo_enabled | default(false) %}
       - type: slo-request-tracker
       - type: latency-scorer
-{% endif %}
-{% if precise_prefix_cache_enabled | default(false) %}
-      - type: precise-prefix-cache-scorer
 {% endif %}
 {% if active_request_enabled | default(false) %}
       - type: active-request-scorer
@@ -38,24 +44,22 @@ data:
 {% if session_aware_enabled | default(false) %}
       - type: session-affinity-scorer
 {% endif %}
-      - type: max-score-picker
     schedulingProfiles:
       - name: prefill
         plugins:
           - pluginRef: prefill-filter
+          - pluginRef: max-score-picker
           - pluginRef: prefix-cache-scorer
-            weight: {{ prefix_cache_weight | default(3.0) }}
+            weight: {{ prefix_cache_weight | default(2.0) }}
           - pluginRef: queue-scorer
-            weight: {{ queue_weight | default(2.0) }}
+            weight: {{ queue_weight | default(1.0) }}
+{% if kv_cache_enabled | default(false) %}
           - pluginRef: kv-cache-utilization-scorer
             weight: {{ kv_cache_weight | default(2.0) }}
+{% endif %}
 {% if slo_enabled | default(false) %}
           - pluginRef: latency-scorer
             weight: {{ slo_weight | default(3.0) }}
-{% endif %}
-{% if precise_prefix_cache_enabled | default(false) %}
-          - pluginRef: precise-prefix-cache-scorer
-            weight: {{ precise_prefix_cache_weight | default(3.0) }}
 {% endif %}
 {% if active_request_enabled | default(false) %}
           - pluginRef: active-request-scorer
@@ -69,12 +73,15 @@ data:
           - pluginRef: session-affinity-scorer
             weight: {{ session_aware_weight | default(2.0) }}
 {% endif %}
-          - pluginRef: max-score-picker
       - name: decode
         plugins:
           - pluginRef: decode-filter
-          - pluginRef: active-request-scorer
-            weight: {{ decode_active_request_weight | default(active_request_weight) | default(2.0) }}
-          - pluginRef: prefix-cache-scorer
-            weight: {{ decode_prefix_cache_weight | default(1.0) }}
           - pluginRef: max-score-picker
+          - pluginRef: prefix-cache-scorer
+            weight: {{ decode_prefix_cache_weight | default(2.0) }}
+          - pluginRef: queue-scorer
+            weight: {{ decode_queue_weight | default(1.0) }}
+{% if active_request_enabled | default(false) %}
+          - pluginRef: active-request-scorer
+            weight: {{ decode_active_request_weight | default(2.0) }}
+{% endif %}
