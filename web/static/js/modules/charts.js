@@ -2073,7 +2073,7 @@ function renderCharts(data, runId) {
      {key:'p95',field:'ttft_p95',itlField:'itl_p95',color:'#dc2626',chartId:'chart-pd-ttft-p95'},
      {key:'p99',field:'ttft_p99',itlField:'itl_p99',color:'#7c3aed',chartId:'chart-pd-ttft-p99'}
     ].forEach(function(pctl) {
-        var archResults = coreResults.filter(r => r.architecture === archFilter);
+        var archResults = coreResults.filter(r => r.architecture === 'PD');
         if (!archResults.length) return;
         var sorted = archResults.slice().sort((a, b) => a.prefill_pods - b.prefill_pods);
         var labels = sorted.map(r => r.prefill_pods + 'P:' + r.decode_pods + 'D');
