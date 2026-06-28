@@ -1238,7 +1238,9 @@ function renderCharts(data, runId) {
                     traces.push({
                         x: points.map(function(p) { return p.concurrency; }),
                         y: points.map(function(p) { return p[pct.key] || 0; }),
-                        mode: 'lines+markers', name: pct.label,
+                        text: points.map(function(p) { return Math.round(p[pct.key] || 0).toLocaleString(); }),
+                        textposition: 'top center', textfont: { size: 9, color: pctColors[pct.key] },
+                        mode: 'lines+markers+text', name: pct.label,
                         line: { color: pctColors[pct.key], width: 3 },
                         marker: { size: 8 },
                         hovertemplate: '<b>%{x} users</b><br>' + pct.label + ': %{y:.0f}ms<extra></extra>'
@@ -1276,7 +1278,9 @@ function renderCharts(data, runId) {
                 Plotly.newPlot(tputChartId, [{
                     x: points.map(function(p) { return p.concurrency; }),
                     y: points.map(function(p) { return p.throughput_per_gpu; }),
-                    mode: 'lines+markers', name: 'Throughput/GPU',
+                    text: points.map(function(p) { return Math.round(p.throughput_per_gpu).toLocaleString(); }),
+                    textposition: 'top center', textfont: { size: 9, color: '#334155' },
+                    mode: 'lines+markers+text', name: 'Throughput/GPU',
                     line: { color: color, width: 3 },
                     marker: { size: points.map(function(p) { return p.is_calibrated ? 14 : 8; }),
                               color: points.map(function(p) { return p.is_calibrated ? '#fff' : color; }),
@@ -1297,8 +1301,19 @@ function renderCharts(data, runId) {
         // --- Sweep Results Table ---
         html += '<div class="chart-card" style="margin-top:16px; border-left:6px solid #64748b;">';
         html += '<div class="chart-card-header" style="background:linear-gradient(135deg,#475569,#64748b); color:white; font-size:1.1em;">Concurrency Sweep Data</div>';
-        html += '<div class="chart-card-body" style="padding:0;"><table class="results-table">';
-        html += '<tr><th>Architecture</th><th>Users</th><th>TTFT P50</th><th>TTFT P90</th><th>TTFT P95</th><th>TTFT P99</th><th>Throughput</th><th>tok/s/user</th><th>tok/s/gpu</th></tr>';
+        var csSweepTblId = 'concurrency-sweep-tbl-' + runId;
+        html += '<div class="chart-card-body" style="padding:0;"><table class="results-table" id="' + csSweepTblId + '">';
+        html += '<tr>';
+        html += '<th style="cursor:pointer;" onclick="sortReportTable(\'' + csSweepTblId + '\',0,\'str\')">Architecture &#x21C5;</th>';
+        html += '<th style="cursor:pointer;" onclick="sortReportTable(\'' + csSweepTblId + '\',1,\'num\')">Users &#x21C5;</th>';
+        html += '<th style="cursor:pointer;" onclick="sortReportTable(\'' + csSweepTblId + '\',2,\'num\')">TTFT P50 &#x21C5;</th>';
+        html += '<th style="cursor:pointer;" onclick="sortReportTable(\'' + csSweepTblId + '\',3,\'num\')">TTFT P90 &#x21C5;</th>';
+        html += '<th style="cursor:pointer;" onclick="sortReportTable(\'' + csSweepTblId + '\',4,\'num\')">TTFT P95 &#x21C5;</th>';
+        html += '<th style="cursor:pointer;" onclick="sortReportTable(\'' + csSweepTblId + '\',5,\'num\')">TTFT P99 &#x21C5;</th>';
+        html += '<th style="cursor:pointer;" onclick="sortReportTable(\'' + csSweepTblId + '\',6,\'num\')">Throughput &#x21C5;</th>';
+        html += '<th style="cursor:pointer;" onclick="sortReportTable(\'' + csSweepTblId + '\',7,\'num\')">tok/s/user &#x21C5;</th>';
+        html += '<th style="cursor:pointer;" onclick="sortReportTable(\'' + csSweepTblId + '\',8,\'num\')">tok/s/gpu &#x21C5;</th>';
+        html += '</tr>';
         Object.keys(sweep).forEach(function(arch) {
             var points = sweep[arch];
             if (!points || !points.length) return;
@@ -1359,7 +1374,9 @@ function renderCharts(data, runId) {
                     traces.push({
                         x: pts.map(function(p) { return p.hit_pct; }),
                         y: pts.map(function(p) { return p[pct.key] || 0; }),
-                        mode: 'lines+markers', name: pct.label,
+                        text: pts.map(function(p) { return Math.round(p[pct.key] || 0).toLocaleString(); }),
+                        textposition: 'top center', textfont: { size: 9, color: csPctColors[pct.key] },
+                        mode: 'lines+markers+text', name: pct.label,
                         line: { color: csPctColors[pct.key], width: 3 },
                         marker: { size: 8 },
                         hovertemplate: 'Cache Hit: %{x}%<br>' + pct.label + ': %{y:.0f}ms<extra></extra>'
@@ -1384,7 +1401,9 @@ function renderCharts(data, runId) {
                 Plotly.newPlot(csTputId, [{
                     x: pts.map(function(p) { return p.hit_pct; }),
                     y: pts.map(function(p) { return p.throughput_mean; }),
-                    mode: 'lines+markers', name: 'Throughput Mean',
+                    text: pts.map(function(p) { return p.throughput_mean.toFixed(1); }),
+                    textposition: 'top center', textfont: { size: 9, color: '#334155' },
+                    mode: 'lines+markers+text', name: 'Throughput Mean',
                     line: { color: csColor, width: 3 },
                     marker: { size: 8 },
                     hovertemplate: 'Cache Hit: %{x}%<br>Throughput: %{y:.1f} req/s<extra></extra>'
@@ -1398,8 +1417,19 @@ function renderCharts(data, runId) {
             });
 
             // --- Data table ---
-            html += '<div style="padding:12px 20px;"><div style="overflow-x:auto;"><table class="results-table" style="font-size:0.85em;">';
-            html += '<tr><th>Cache Hit %</th><th>Concurrency</th><th>TTFT P50</th><th>TTFT P90</th><th>TTFT P95</th><th>TTFT P99</th><th>Throughput</th><th>Output tok/s</th><th>ITL P90</th></tr>';
+            var csCacheTblId = 'cache-sweep-tbl-' + arch + '-' + runId;
+            html += '<div style="padding:12px 20px;"><div style="overflow-x:auto;"><table class="results-table" id="' + csCacheTblId + '" style="font-size:0.85em;">';
+            html += '<tr>';
+            html += '<th style="cursor:pointer;" onclick="sortReportTable(\'' + csCacheTblId + '\',0,\'num\')">Cache Hit % &#x21C5;</th>';
+            html += '<th style="cursor:pointer;" onclick="sortReportTable(\'' + csCacheTblId + '\',1,\'num\')">Concurrency &#x21C5;</th>';
+            html += '<th style="cursor:pointer;" onclick="sortReportTable(\'' + csCacheTblId + '\',2,\'num\')">TTFT P50 &#x21C5;</th>';
+            html += '<th style="cursor:pointer;" onclick="sortReportTable(\'' + csCacheTblId + '\',3,\'num\')">TTFT P90 &#x21C5;</th>';
+            html += '<th style="cursor:pointer;" onclick="sortReportTable(\'' + csCacheTblId + '\',4,\'num\')">TTFT P95 &#x21C5;</th>';
+            html += '<th style="cursor:pointer;" onclick="sortReportTable(\'' + csCacheTblId + '\',5,\'num\')">TTFT P99 &#x21C5;</th>';
+            html += '<th style="cursor:pointer;" onclick="sortReportTable(\'' + csCacheTblId + '\',6,\'num\')">Throughput &#x21C5;</th>';
+            html += '<th style="cursor:pointer;" onclick="sortReportTable(\'' + csCacheTblId + '\',7,\'num\')">Output tok/s &#x21C5;</th>';
+            html += '<th style="cursor:pointer;" onclick="sortReportTable(\'' + csCacheTblId + '\',8,\'num\')">ITL P90 &#x21C5;</th>';
+            html += '</tr>';
             pts.forEach(function(p) {
                 html += '<tr>';
                 html += '<td>' + p.hit_pct + '%</td>';
@@ -1464,8 +1494,14 @@ function renderCharts(data, runId) {
             });
 
             // Data table
-            html += '<div style="padding:12px 20px;"><table class="results-table" style="font-size:0.85em;">';
-            html += '<tr><th>Configuration</th><th>Architecture</th><th>Pods</th><th>Model Load Time</th></tr>';
+            var dtTblId = 'deploy-timing-tbl-' + runId;
+            html += '<div style="padding:12px 20px;"><table class="results-table" id="' + dtTblId + '" style="font-size:0.85em;">';
+            html += '<tr>';
+            html += '<th style="cursor:pointer;" onclick="sortReportTable(\'' + dtTblId + '\',0,\'str\')">Configuration &#x21C5;</th>';
+            html += '<th style="cursor:pointer;" onclick="sortReportTable(\'' + dtTblId + '\',1,\'str\')">Architecture &#x21C5;</th>';
+            html += '<th style="cursor:pointer;" onclick="sortReportTable(\'' + dtTblId + '\',2,\'num\')">Pods &#x21C5;</th>';
+            html += '<th style="cursor:pointer;" onclick="sortReportTable(\'' + dtTblId + '\',3,\'num\')">Model Load Time &#x21C5;</th>';
+            html += '</tr>';
             timingData.sort(function(a, b) { return a.load_s - b.load_s; }).forEach(function(d) {
                 var mins = Math.floor(d.load_s / 60);
                 var secs = d.load_s % 60;
