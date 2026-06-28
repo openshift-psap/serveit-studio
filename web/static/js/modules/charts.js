@@ -1419,8 +1419,9 @@ function renderCharts(data, runId) {
                     });
                 }
 
+                var xTickVals = pts.map(function(p) { return p.hit_pct; });
                 var layout = {
-                    xaxis: { range: [-5, 105], gridcolor: '#e2e8f0', domain: [0, 1] },
+                    xaxis: { range: [-5, 105], gridcolor: '#e2e8f0', domain: [0, 1], tickvals: xTickVals, ticktext: xTickVals.map(function(v) { return v + '%'; }) },
                     yaxis: { title: 'TTFT (ms)', gridcolor: '#e2e8f0', titlefont: { color: '#3b82f6' }, tickfont: { color: '#3b82f6' },
                              domain: hasActualHitRate ? [0.3, 1] : [0, 1] },
                     yaxis2: { title: 'Throughput (req/s)', side: 'right', overlaying: 'y',
@@ -1432,7 +1433,7 @@ function renderCharts(data, runId) {
                 };
 
                 if (hasActualHitRate) {
-                    layout.xaxis2 = { title: 'Cache Hit %', range: [-5, 105], gridcolor: '#e2e8f0', anchor: 'y3' };
+                    layout.xaxis2 = { title: 'Cache Hit %', range: [-5, 105], gridcolor: '#e2e8f0', anchor: 'y3', tickvals: xTickVals, ticktext: xTickVals.map(function(v) { return v + '%'; }) };
                     layout.yaxis3 = { title: 'Actual Hit %', range: [-5, 105], gridcolor: '#e2e8f0', domain: [0, 0.22],
                                       titlefont: { color: '#059669' }, tickfont: { color: '#059669' } };
                 }
