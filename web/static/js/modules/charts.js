@@ -1271,56 +1271,56 @@ function renderCharts(data, runId) {
             }, { responsive: true });
         });
 
-        // --- TTFT P90 vs Concurrency chart ---
-        html += '<div class="chart-card" style="margin-top:16px; border:2px solid #dc2626; border-left:6px solid #dc2626;">';
-        html += '<div class="chart-card-header" style="background:linear-gradient(135deg,#dc2626,#ef4444); color:white; font-size:1.1em;">TTFT P90 vs. Concurrency</div>';
-        html += '<div style="padding:8px 20px 4px; font-size:0.85em; color:#64748b;">Lower is better. Shows how first-token latency degrades as concurrent users increase.</div>';
-        html += '<div id="chart-sweep-ttft" style="width:100%; height:400px;"></div>';
-        html += '</div>';
+        // --- TTFT vs Concurrency charts (P90, P95, P99) ---
+        var sweepPctiles = [
+            { key: 'ttft_p90', label: 'P90', color: '#dc2626', gradEnd: '#ef4444' },
+            { key: 'ttft_p95', label: 'P95', color: '#d97706', gradEnd: '#f59e0b' },
+            { key: 'ttft_p99', label: 'P99', color: '#7c3aed', gradEnd: '#a78bfa' },
+        ];
+        var sweepColors = { pd: '#10b981', aggregated: '#6366f1', ep: '#f59e0b' };
+        var sweepLabels = { pd: 'PD', aggregated: 'Aggregated', ep: 'EP' };
 
-        chartQueue.push(function() {
-            var traces = [];
-            var colors = { pd: '#10b981', aggregated: '#6366f1', ep: '#f59e0b' };
-            var labels = { pd: 'PD', aggregated: 'Aggregated', ep: 'EP' };
-            var calShapes = [];
-            var pctiles = [
-                { key: 'ttft_p90', label: 'P90', dash: undefined, width: 3 },
-                { key: 'ttft_p95', label: 'P95', dash: 'dash', width: 2 },
-                { key: 'ttft_p99', label: 'P99', dash: 'dot', width: 2 },
-            ];
+        sweepPctiles.forEach(function(pct) {
+            var chartId = 'chart-sweep-ttft-' + pct.label.toLowerCase();
+            html += '<div class="chart-card" style="margin-top:16px; border:2px solid ' + pct.color + '; border-left:6px solid ' + pct.color + ';">';
+            html += '<div class="chart-card-header" style="background:linear-gradient(135deg,' + pct.color + ',' + pct.gradEnd + '); color:white; font-size:1.1em;">TTFT ' + pct.label + ' vs. Concurrency</div>';
+            html += '<div style="padding:8px 20px 4px; font-size:0.85em; color:#64748b;">Lower is better. Shows how ' + pct.label + ' first-token latency degrades as concurrent users increase.</div>';
+            html += '<div id="' + chartId + '" style="width:100%; height:400px;"></div>';
+            html += '</div>';
 
-            Object.keys(sweep).forEach(function(arch) {
-                var points = sweep[arch];
-                if (!points || !points.length) return;
-                pctiles.forEach(function(pct) {
-                    if (!points[0][pct.key]) return;
+            chartQueue.push(function() {
+                var traces = [];
+                var calShapes = [];
+                Object.keys(sweep).forEach(function(arch) {
+                    var points = sweep[arch];
+                    if (!points || !points.length || !points[0][pct.key]) return;
                     traces.push({
                         x: points.map(function(p) { return p.concurrency; }),
                         y: points.map(function(p) { return p[pct.key] || 0; }),
                         mode: 'lines+markers',
-                        name: (labels[arch] || arch) + ' ' + pct.label,
-                        line: { color: colors[arch] || '#888', width: pct.width, dash: pct.dash },
-                        marker: { size: pct.key === 'ttft_p90' ? points.map(function(p) { return p.is_calibrated ? 14 : 8; }) : 6,
-                                  color: pct.key === 'ttft_p90' ? points.map(function(p) { return p.is_calibrated ? '#fff' : (colors[arch] || '#888'); }) : (colors[arch] || '#888'),
-                                  line: pct.key === 'ttft_p90' ? { color: colors[arch] || '#888', width: points.map(function(p) { return p.is_calibrated ? 3 : 0; }) } : {} },
-                        hovertemplate: '<b>%{x} users</b><br>' + pct.label + ': %{y:.0f}ms<extra>' + (labels[arch] || arch) + '</extra>'
+                        name: sweepLabels[arch] || arch,
+                        line: { color: sweepColors[arch] || '#888', width: 3 },
+                        marker: { size: points.map(function(p) { return p.is_calibrated ? 14 : 8; }),
+                                  color: points.map(function(p) { return p.is_calibrated ? '#fff' : (sweepColors[arch] || '#888'); }),
+                                  line: { color: sweepColors[arch] || '#888', width: points.map(function(p) { return p.is_calibrated ? 3 : 0; }) } },
+                        hovertemplate: '<b>%{x} users</b><br>' + pct.label + ': %{y:.0f}ms<extra>' + (sweepLabels[arch] || arch) + '</extra>'
+                    });
+                    points.forEach(function(p) {
+                        if (p.is_calibrated) {
+                            calShapes.push({ type: 'line', x0: p.concurrency, x1: p.concurrency, y0: 0, y1: 1, yref: 'paper',
+                                line: { color: sweepColors[arch] || '#888', width: 1.5, dash: 'dash' } });
+                        }
                     });
                 });
-                points.forEach(function(p) {
-                    if (p.is_calibrated) {
-                        calShapes.push({ type: 'line', x0: p.concurrency, x1: p.concurrency, y0: 0, y1: 1, yref: 'paper',
-                            line: { color: colors[arch] || '#888', width: 1.5, dash: 'dash' } });
-                    }
-                });
+                Plotly.newPlot(chartId, traces, {
+                    xaxis: { title: 'Concurrent Users', gridcolor: '#e2e8f0' },
+                    yaxis: { title: 'TTFT ' + pct.label + ' (ms)', gridcolor: '#e2e8f0' },
+                    plot_bgcolor: '#f8fafc', paper_bgcolor: '#ffffff',
+                    margin: { t: 20, b: 60, l: 70, r: 20 },
+                    legend: { x: 1, y: 1, xanchor: 'right', bgcolor: 'rgba(255,255,255,0.9)' },
+                    shapes: calShapes, hovermode: 'closest'
+                }, { responsive: true });
             });
-            Plotly.newPlot('chart-sweep-ttft', traces, {
-                xaxis: { title: 'Concurrent Users', gridcolor: '#e2e8f0' },
-                yaxis: { title: 'TTFT (ms)', gridcolor: '#e2e8f0' },
-                plot_bgcolor: '#f8fafc', paper_bgcolor: '#ffffff',
-                margin: { t: 20, b: 60, l: 70, r: 20 },
-                legend: { x: 1, y: 1, xanchor: 'right', bgcolor: 'rgba(255,255,255,0.9)' },
-                shapes: calShapes, hovermode: 'closest'
-            }, { responsive: true });
         });
 
         // --- Throughput vs Concurrency chart ---
@@ -1417,32 +1417,32 @@ function renderCharts(data, runId) {
         html += '<div style="padding:8px 20px; color:#1e293b; font-size:0.95em;">Performance impact of prefix cache hit ratio on the best configurations.</div>';
 
         // --- TTFT vs Cache Hit % ---
-        html += '<div id="cache-sweep-ttft-chart" style="width:100%;height:420px;"></div>';
-        var csTracesTTFT = [];
         var csPctiles = [
-            { key: 'ttft_p90', label: 'P90', dash: undefined, width: 2 },
-            { key: 'ttft_p95', label: 'P95', dash: 'dash', width: 2 },
-            { key: 'ttft_p99', label: 'P99', dash: 'dot', width: 2 },
+            { key: 'ttft_p90', label: 'P90' },
+            { key: 'ttft_p95', label: 'P95' },
+            { key: 'ttft_p99', label: 'P99' },
         ];
-        Object.keys(csweep).forEach(function(arch) {
-            var pts = csweep[arch];
-            if (!pts || !pts.length) return;
-            csPctiles.forEach(function(pct) {
-                if (!pts[0][pct.key]) return;
-                csTracesTTFT.push({
+        csPctiles.forEach(function(pct) {
+            var cChartId = 'cache-sweep-ttft-' + pct.label.toLowerCase();
+            html += '<div id="' + cChartId + '" style="width:100%;height:420px;"></div>';
+            var csTraces = [];
+            Object.keys(csweep).forEach(function(arch) {
+                var pts = csweep[arch];
+                if (!pts || !pts.length || !pts[0][pct.key]) return;
+                csTraces.push({
                     x: pts.map(function(p) { return p.hit_pct; }),
                     y: pts.map(function(p) { return p[pct.key] || 0; }),
-                    mode: 'lines+markers', name: (archLabels[arch] || arch) + ' ' + pct.label,
-                    line: {color: archColors[arch] || '#888', width: pct.width, dash: pct.dash},
+                    mode: 'lines+markers', name: archLabels[arch] || arch,
+                    line: {color: archColors[arch] || '#888', width: 2},
                     marker: {size: 8},
                     hovertemplate: 'Cache Hit: %{x}%<br>' + pct.label + ': %{y:.0f}ms<extra>' + (archLabels[arch] || arch) + '</extra>'
                 });
             });
+            chartQueue.push({id: cChartId, traces: csTraces, layout: {
+                title: 'TTFT ' + pct.label + ' vs Cache Hit %', xaxis: {title: 'Cache Hit %', range: [-5, 105]},
+                yaxis: {title: 'TTFT ' + pct.label + ' (ms)'}, legend: {orientation: 'h', y: -0.15}, margin: {t: 40, b: 60}
+            }});
         });
-        chartQueue.push({id: 'cache-sweep-ttft-chart', traces: csTracesTTFT, layout: {
-            title: 'TTFT vs Cache Hit %', xaxis: {title: 'Cache Hit %', range: [-5, 105]},
-            yaxis: {title: 'TTFT (ms)'}, legend: {orientation: 'h', y: -0.15}, margin: {t: 40, b: 60}
-        }});
 
         // --- Throughput vs Cache Hit % ---
         html += '<div id="cache-sweep-tput-chart" style="width:100%;height:420px;"></div>';
