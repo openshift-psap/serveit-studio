@@ -16,6 +16,12 @@ function renderCharts(data, runId) {
     let html = '';
     let secRec = '', secTP = '', secCfg = '', secCmp = '', secStep9 = '', secCal = '', secCacheSweep = '', secVLLM = '', secTestCfg = '', secEppTuning = '', secDeployTiming = '';
 
+    // Filter out sweep tests (concurrency/cache) from configuration charts
+    var coreResults = (data.all_results || []).filter(function(r) {
+        var tid = r.test_id || r.config_name || '';
+        return tid.indexOf('step11-') !== 0 && tid.indexOf('step12-') !== 0 && tid.indexOf('step13-') !== 0;
+    });
+
     // Build a lookup from test_id -> manifest_types for download links
     const manifestLookup = {};
     const testIdLookup = {};
@@ -423,7 +429,7 @@ function renderCharts(data, runId) {
     secCfg += chartCard('GPU Efficiency (req/s per GPU)', chartDesc.efficiency, 'chart-efficiency');
 
     // --- PD configurations TTFT + Throughput charts (one per percentile) ---
-    if (data.all_results.filter(r => r.architecture === 'PD').length) {
+    if (coreResults.filter(r => r.architecture === 'PD').length) {
         html += chartCard(
             'PD Configurations — TTFT & Throughput (P90)',
             '<strong style="color:#3b82f6">TTFT</strong> (left axis, lower is better) and <strong style="color:#f59e0b">Throughput</strong> (right axis, higher is better) at P90.',
@@ -442,7 +448,7 @@ function renderCharts(data, runId) {
     }
 
     // --- Aggregated configurations chart (all percentiles in one chart) ---
-    if (data.all_results.filter(r => r.architecture === 'AGGREGATED').length > 1) {
+    if (coreResults.filter(r => r.architecture === 'AGGREGATED').length > 1) {
         html += chartCard(
             'Aggregated Configurations — TTFT & Throughput (P90 / P95 / P99)',
             'All aggregated configurations with <strong style="color:#3b82f6">TTFT</strong> (bars, lower is better) and <strong style="color:#f59e0b">Throughput Mean</strong> (line, right axis, higher is better) across percentiles.',
@@ -500,7 +506,7 @@ function renderCharts(data, runId) {
     }
 
     // --- All results table ---
-    if (data.all_results.length) {
+    if (coreResults.length) {
         var allCfgTableId = 'all-configs-table-' + runId;
         html += '<div class="chart-card"><div class="chart-card-header">All Successful Configurations</div>';
         html += '<div style="padding:12px 20px 4px; color:#1e293b; font-size:0.95em;">Complete results from every test that ran successfully. <strong>Green highlighted rows</strong> are Pareto optimal (the best trade-offs). Click any column header to sort.</div>';
@@ -518,7 +524,7 @@ function renderCharts(data, runId) {
         html += '<th>Manifests</th>';
         html += '</tr>';
         const paretoNames = new Set(charts.pareto.pareto_table.map(p => p.config_name));
-        data.all_results.forEach((r, idx) => {
+        coreResults.forEach((r, idx) => {
             const cls = paretoNames.has(r.config_name) ? ' class="pareto-row"' : '';
             const rTestId = r.test_id || testIdLookup[r.config_name] || r.config_name;
             let manifestLinks = '-';
@@ -821,11 +827,11 @@ function renderCharts(data, runId) {
             html += '</table></div>';
 
             // --- % Change chart: All PD configs vs Aggregated baseline ---
-            if (rec.aggregated_baseline && data.all_results && data.all_results.length > 1) {
+            if (rec.aggregated_baseline && coreResults.length > 1) {
                 const aggBaseline = rec.aggregated_baseline;
                 const baseTtft = aggBaseline.ttft_p90;
                 const baseTput = aggBaseline.throughput_mean || aggBaseline.throughput_p90;
-                const configs = data.all_results.filter(r => r.architecture === 'PD' && r.ttft_p90 && r.throughput_p90);
+                const configs = coreResults.filter(r => r.architecture === 'PD' && r.ttft_p90 && r.throughput_p90);
                 if (configs.length && baseTtft && baseTput) {
                     html += '<div style="padding:16px 20px 4px;"><div style="font-weight:700; font-size:0.95em; color:#1e293b; margin-bottom:4px;">All PD Configurations vs Aggregated Baseline</div>';
                     html += '<div style="color:#1e293b; font-size:0.92em; margin-bottom:12px;">Percentage change in TTFT and Throughput relative to the Step 8 Aggregated baseline (' + aggBaseline.config_name + '). For TTFT, negative (green) is better. For Throughput, positive (green) is better.</div>';
@@ -2067,7 +2073,7 @@ function renderCharts(data, runId) {
      {key:'p95',field:'ttft_p95',itlField:'itl_p95',color:'#dc2626',chartId:'chart-pd-ttft-p95'},
      {key:'p99',field:'ttft_p99',itlField:'itl_p99',color:'#7c3aed',chartId:'chart-pd-ttft-p99'}
     ].forEach(function(pctl) {
-        var archResults = data.all_results.filter(r => r.architecture === 'PD');
+        var archResults = coreResults.filter(r => r.architecture === archFilter);
         if (!archResults.length) return;
         var sorted = archResults.slice().sort((a, b) => a.prefill_pods - b.prefill_pods);
         var labels = sorted.map(r => r.prefill_pods + 'P:' + r.decode_pods + 'D');
@@ -2127,7 +2133,7 @@ function renderCharts(data, runId) {
     // ============================================================
     // Aggregated configurations chart (all percentiles in one grouped bar chart)
     // ============================================================
-    const aggResults = (data.all_results || []).filter(r => r.architecture === 'AGGREGATED' && r.ttft_p90);
+    const aggResults = coreResults.filter(r => r.architecture === 'AGGREGATED' && r.ttft_p90);
     if (aggResults.length > 1 && document.getElementById(cid('chart-agg-ttft-all'))) {
         const aggSorted = [...aggResults].sort((a, b) => (a.tp || 1) - (b.tp || 1));
         const aggLabels = aggSorted.map(r => `${r.replicas || Math.floor(r.gpus / (r.tp || 1))}×TP${r.tp || '?'}`);
