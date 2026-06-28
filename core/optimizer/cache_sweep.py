@@ -123,8 +123,30 @@ class CacheSweepMixin:
             output_tps = result.output_tps_mean or 0
             ttft = result.ttft_p90 or 0
 
+            # Extract actual prefix cache hit rate from Prometheus metrics
+            actual_hit_rate = None
+            if self.db_manager and self.run_id:
+                try:
+                    import json as _json
+                    with self.db_manager.get_connection() as conn:
+                        row = conn.execute(
+                            'SELECT metrics_json FROM test_configurations WHERE run_id=? AND config_name=?',
+                            (self.run_id, test_id)).fetchone()
+                        if row and row[0]:
+                            mj = _json.loads(row[0])
+                            pm = mj.get('prometheus_metrics', {})
+                            hits = pm.get('vllm_prefix_cache_hits_rate', {}).get('avg', 0)
+                            queries = pm.get('vllm_prefix_cache_queries_rate', {}).get('avg', 0)
+                            if queries > 0:
+                                actual_hit_rate = round(hits / queries * 100, 1)
+                            else:
+                                actual_hit_rate = 0.0
+                except Exception:
+                    pass
+
             results.append({
                 'hit_pct': hit_pct,
+                'actual_hit_rate': actual_hit_rate,
                 'throughput_mean': round(tput, 2),
                 'output_tps_mean': round(output_tps, 2),
                 'ttft_p50': round(result.ttft_p50 or 0, 1),

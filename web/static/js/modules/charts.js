@@ -1416,23 +1416,57 @@ function renderCharts(data, runId) {
                 }, { responsive: true });
             });
 
+            // --- Actual Cache Hit Rate chart ---
+            var hasActualHitRate = pts.some(function(p) { return p.actual_hit_rate != null; });
+            if (hasActualHitRate) {
+                var csHitId = 'cache-sweep-hitrate-' + arch;
+                html += '<div style="padding:8px 20px 4px; font-size:0.85em; color:#64748b;">Configured vs actual prefix cache hit rate from vLLM Prometheus metrics. Shows whether the synthetic dataset achieves the target cache ratio.</div>';
+                html += '<div id="' + csHitId + '" style="width:100%;height:300px;"></div>';
+
+                chartQueue.push(function() {
+                    Plotly.newPlot(csHitId, [
+                        { x: pts.map(function(p) { return p.hit_pct; }),
+                          y: pts.map(function(p) { return p.hit_pct; }),
+                          mode: 'lines', name: 'Configured',
+                          line: { color: '#94a3b8', width: 2, dash: 'dash' } },
+                        { x: pts.map(function(p) { return p.hit_pct; }),
+                          y: pts.map(function(p) { return p.actual_hit_rate != null ? p.actual_hit_rate : 0; }),
+                          text: pts.map(function(p) { return p.actual_hit_rate != null ? p.actual_hit_rate.toFixed(1) + '%' : ''; }),
+                          textposition: 'top center', textfont: { size: 9, color: '#059669' },
+                          mode: 'lines+markers+text', name: 'Actual (vLLM)',
+                          line: { color: '#059669', width: 3 },
+                          marker: { size: 8 },
+                          hovertemplate: 'Configured: %{x}%<br>Actual: %{y:.1f}%<extra></extra>' }
+                    ], {
+                        xaxis: { title: 'Configured Cache Hit %', range: [-5, 105], gridcolor: '#e2e8f0' },
+                        yaxis: { title: 'Actual Cache Hit %', range: [-5, 105], gridcolor: '#e2e8f0' },
+                        plot_bgcolor: '#f8fafc', paper_bgcolor: '#fff',
+                        margin: { t: 20, b: 60, l: 70, r: 20 },
+                        legend: { x: 0, y: 1, bgcolor: 'rgba(255,255,255,0.9)' },
+                        hovermode: 'closest'
+                    }, { responsive: true });
+                });
+            }
+
             // --- Data table ---
             var csCacheTblId = 'cache-sweep-tbl-' + arch + '-' + runId;
             html += '<div style="padding:12px 20px;"><div style="overflow-x:auto;"><table class="results-table" id="' + csCacheTblId + '" style="font-size:0.85em;">';
             html += '<tr>';
             html += '<th style="cursor:pointer;" onclick="sortReportTable(\'' + csCacheTblId + '\',0,\'num\')">Cache Hit % &#x21C5;</th>';
-            html += '<th style="cursor:pointer;" onclick="sortReportTable(\'' + csCacheTblId + '\',1,\'num\')">Concurrency &#x21C5;</th>';
-            html += '<th style="cursor:pointer;" onclick="sortReportTable(\'' + csCacheTblId + '\',2,\'num\')">TTFT P50 &#x21C5;</th>';
-            html += '<th style="cursor:pointer;" onclick="sortReportTable(\'' + csCacheTblId + '\',3,\'num\')">TTFT P90 &#x21C5;</th>';
-            html += '<th style="cursor:pointer;" onclick="sortReportTable(\'' + csCacheTblId + '\',4,\'num\')">TTFT P95 &#x21C5;</th>';
-            html += '<th style="cursor:pointer;" onclick="sortReportTable(\'' + csCacheTblId + '\',5,\'num\')">TTFT P99 &#x21C5;</th>';
-            html += '<th style="cursor:pointer;" onclick="sortReportTable(\'' + csCacheTblId + '\',6,\'num\')">Throughput &#x21C5;</th>';
-            html += '<th style="cursor:pointer;" onclick="sortReportTable(\'' + csCacheTblId + '\',7,\'num\')">Output tok/s &#x21C5;</th>';
-            html += '<th style="cursor:pointer;" onclick="sortReportTable(\'' + csCacheTblId + '\',8,\'num\')">ITL P90 &#x21C5;</th>';
+            html += '<th style="cursor:pointer;" onclick="sortReportTable(\'' + csCacheTblId + '\',1,\'num\')">Actual Hit % &#x21C5;</th>';
+            html += '<th style="cursor:pointer;" onclick="sortReportTable(\'' + csCacheTblId + '\',2,\'num\')">Concurrency &#x21C5;</th>';
+            html += '<th style="cursor:pointer;" onclick="sortReportTable(\'' + csCacheTblId + '\',3,\'num\')">TTFT P50 &#x21C5;</th>';
+            html += '<th style="cursor:pointer;" onclick="sortReportTable(\'' + csCacheTblId + '\',4,\'num\')">TTFT P90 &#x21C5;</th>';
+            html += '<th style="cursor:pointer;" onclick="sortReportTable(\'' + csCacheTblId + '\',5,\'num\')">TTFT P95 &#x21C5;</th>';
+            html += '<th style="cursor:pointer;" onclick="sortReportTable(\'' + csCacheTblId + '\',6,\'num\')">TTFT P99 &#x21C5;</th>';
+            html += '<th style="cursor:pointer;" onclick="sortReportTable(\'' + csCacheTblId + '\',7,\'num\')">Throughput &#x21C5;</th>';
+            html += '<th style="cursor:pointer;" onclick="sortReportTable(\'' + csCacheTblId + '\',8,\'num\')">Output tok/s &#x21C5;</th>';
+            html += '<th style="cursor:pointer;" onclick="sortReportTable(\'' + csCacheTblId + '\',9,\'num\')">ITL P90 &#x21C5;</th>';
             html += '</tr>';
             pts.forEach(function(p) {
                 html += '<tr>';
                 html += '<td>' + p.hit_pct + '%</td>';
+                html += '<td>' + (p.actual_hit_rate != null ? p.actual_hit_rate.toFixed(1) + '%' : '-') + '</td>';
                 html += '<td>' + p.concurrency + '</td>';
                 html += '<td>' + p.ttft_p50.toFixed(0) + '</td>';
                 html += '<td>' + p.ttft_p90.toFixed(0) + '</td>';
