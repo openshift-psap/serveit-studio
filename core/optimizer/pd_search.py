@@ -89,7 +89,7 @@ class PDSearchMixin:
             return []
 
         import math
-        min_prefill_pods = 1
+        min_prefill_pods = max(1, usable_gpus // (prefill_tp * 10))
 
         splits = []
         for prefill_gpus in range(prefill_tp, usable_gpus, prefill_tp):
