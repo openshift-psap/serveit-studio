@@ -1325,8 +1325,8 @@ function renderCharts(data, runId) {
 
         // --- Throughput vs Concurrency chart ---
         html += '<div class="chart-card" style="margin-top:16px; border:2px solid #0891b2; border-left:6px solid #0891b2;">';
-        html += '<div class="chart-card-header" style="background:linear-gradient(135deg,#0891b2,#06b6d4); color:white; font-size:1.1em;">Throughput vs. Concurrency</div>';
-        html += '<div style="padding:8px 20px 4px; font-size:0.85em; color:#64748b;">Higher is better. Shows how total system throughput scales with concurrent users — the plateau indicates cluster saturation.</div>';
+        html += '<div class="chart-card-header" style="background:linear-gradient(135deg,#0891b2,#06b6d4); color:white; font-size:1.1em;">Token Throughput per GPU vs. Concurrency</div>';
+        html += '<div style="padding:8px 20px 4px; font-size:0.85em; color:#64748b;">Higher is better. Shows how per-GPU token throughput scales with concurrent users — the plateau indicates cluster saturation.</div>';
         html += '<div id="chart-sweep-throughput" style="width:100%; height:400px;"></div>';
         html += '</div>';
 
@@ -1341,10 +1341,11 @@ function renderCharts(data, runId) {
                 if (!points || !points.length) return;
                 traces.push({
                     x: points.map(function(p) { return p.concurrency; }),
-                    y: points.map(function(p) { return p.throughput_mean; }),
+                    y: points.map(function(p) { return p.throughput_per_gpu; }),
                     text: points.map(function(p) {
-                        return 'Concurrency: ' + p.concurrency + '<br>Throughput: ' + p.throughput_mean.toFixed(1) + ' req/s' +
+                        return 'Concurrency: ' + p.concurrency + ' users' +
                                '<br>Throughput/GPU: ' + p.throughput_per_gpu.toFixed(0) + ' tok/s/gpu' +
+                               '<br>Throughput: ' + p.throughput_mean.toFixed(1) + ' req/s' +
                                (p.is_calibrated ? '<br><b>← Calibrated</b>' : '');
                     }),
                     mode: 'lines+markers', name: labels[arch] || arch,
@@ -1363,7 +1364,7 @@ function renderCharts(data, runId) {
             });
             Plotly.newPlot('chart-sweep-throughput', traces, {
                 xaxis: { title: 'Concurrent Users', gridcolor: '#e2e8f0' },
-                yaxis: { title: 'Throughput (req/s)', gridcolor: '#e2e8f0' },
+                yaxis: { title: 'Token Throughput per GPU (tok/s/gpu)', gridcolor: '#e2e8f0' },
                 plot_bgcolor: '#f8fafc', paper_bgcolor: '#ffffff',
                 margin: { t: 20, b: 60, l: 70, r: 20 },
                 legend: { x: 0, y: 1, bgcolor: 'rgba(255,255,255,0.9)' },
