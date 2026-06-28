@@ -50,7 +50,10 @@ class DatasetMixin:
         # 1.5x the cacheable count is sufficient — the duplicates fill up the cache,
         # and unique rows rotate through faster than the cache can hold them all.
         pool_size = max(1000, int(cacheable_sequences * 1.5))
-        pool_size = min(pool_size, 10000)  # Cap at 10K to keep file size reasonable
+        # Ensure enough rows to cover the full test duration without data exhaustion
+        min_rows = int(getattr(self.config, 'qps', 100) * getattr(self.config, 'test_duration', 300) * 1.5)
+        pool_size = max(pool_size, min_rows)
+        pool_size = min(pool_size, 100000)
 
         self.log(f"Generating prefix cache dataset: {hit_pct}% hit ratio, {pool_size} rows, seed={seed}", 'info')
         self.log(f"   Estimated cacheable sequences: {cacheable_sequences}", 'info')
