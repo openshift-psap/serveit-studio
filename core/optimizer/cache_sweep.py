@@ -63,9 +63,38 @@ class CacheSweepMixin:
                 tput = result.throughput_mean or result.throughput_p90 or 0
                 output_tps = result.output_tps_mean or 0
                 ttft = result.ttft_p90 or 0
-                results.append({'hit_pct': hit_pct, 'throughput_mean': round(tput, 2),
-                    'output_tps_mean': round(output_tps, 2), 'ttft_p90': round(ttft, 1),
-                    'ttft_p50': round(result.ttft_p50 or 0, 1), 'itl_p90': round(result.itl_p90 or 0, 1),
+                # Extract actual hit rate from DB for resumed tests
+                _actual_hr = None
+                _hits_r = None
+                _queries_r = None
+                if self.db_manager and self.run_id:
+                    try:
+                        import json as _json
+                        with self.db_manager.get_connection() as _conn:
+                            _row = _conn.execute(
+                                'SELECT metrics_json FROM test_configurations WHERE run_id=? AND config_name=?',
+                                (self.run_id, test_id)).fetchone()
+                            if _row and _row[0]:
+                                _mj = _json.loads(_row[0])
+                                _pm = _mj.get('prometheus_metrics', {})
+                                _h = _pm.get('vllm_prefix_cache_hits_rate', {}).get('avg', 0)
+                                _q = _pm.get('vllm_prefix_cache_queries_rate', {}).get('avg', 0)
+                                _actual_hr = round(_h / _q * 100, 1) if _q > 0 else 0.0
+                                _hits_r = round(_h, 1)
+                                _queries_r = round(_q, 1)
+                    except Exception:
+                        pass
+                results.append({'hit_pct': hit_pct, 'actual_hit_rate': _actual_hr,
+                    'cache_hits_rate': _hits_r, 'cache_queries_rate': _queries_r,
+                    'throughput_mean': round(tput, 2),
+                    'output_tps_mean': round(output_tps, 2),
+                    'ttft_p50': round(result.ttft_p50 or 0, 1),
+                    'ttft_p90': round(ttft, 1),
+                    'ttft_p95': round(result.ttft_p95 or 0, 1),
+                    'ttft_p99': round(result.ttft_p99 or 0, 1),
+                    'itl_p90': round(result.itl_p90 or 0, 1),
+                    'itl_p95': round(result.itl_p95 or 0, 1),
+                    'itl_p99': round(result.itl_p99 or 0, 1),
                     'gpus': gpus, 'concurrency': concurrency, 'test_id': test_id})
             else:
                 levels_to_run.append(hit_pct)
@@ -125,6 +154,8 @@ class CacheSweepMixin:
 
             # Extract actual prefix cache hit rate from Prometheus metrics
             actual_hit_rate = None
+            cache_hits_rate = None
+            cache_queries_rate = None
             if self.db_manager and self.run_id:
                 try:
                     import json as _json
@@ -141,12 +172,16 @@ class CacheSweepMixin:
                                 actual_hit_rate = round(hits / queries * 100, 1)
                             else:
                                 actual_hit_rate = 0.0
+                            cache_hits_rate = round(hits, 1)
+                            cache_queries_rate = round(queries, 1)
                 except Exception:
                     pass
 
             results.append({
                 'hit_pct': hit_pct,
                 'actual_hit_rate': actual_hit_rate,
+                'cache_hits_rate': cache_hits_rate,
+                'cache_queries_rate': cache_queries_rate,
                 'throughput_mean': round(tput, 2),
                 'output_tps_mean': round(output_tps, 2),
                 'ttft_p50': round(result.ttft_p50 or 0, 1),

@@ -1398,7 +1398,7 @@ function renderCharts(data, runId) {
                     hovertemplate: 'Cache Hit: %{x}%<br>Throughput: %{y:.1f} req/s<extra></extra>'
                 });
 
-                // Subplot: Actual Cache Hit Rate
+                // Subplot: Actual Cache Hit Rate (hits/queries from vLLM Prometheus)
                 if (hasActualHitRate) {
                     traces.push({
                         x: pts.map(function(p) { return p.hit_pct; }),
@@ -1414,10 +1414,16 @@ function renderCharts(data, runId) {
                         text: pts.map(function(p) { return p.actual_hit_rate != null ? p.actual_hit_rate.toFixed(1) + '%' : ''; }),
                         textposition: 'top center', textfont: { size: 9, color: '#059669' },
                         xaxis: 'x2', yaxis: 'y3',
-                        mode: 'lines+markers+text', name: 'Actual Hit % (vLLM)',
+                        mode: 'lines+markers+text', name: 'Actual Hit % (hits/queries)',
                         line: { color: '#059669', width: 3 },
                         marker: { size: 8 },
-                        hovertemplate: 'Configured: %{x}%<br>Actual: %{y:.1f}%<extra></extra>'
+                        hovertemplate: 'Configured: %{x}%<br>Actual: %{y:.1f}%' +
+                            '<br>Hits rate: ' + '%{customdata[0]}' + '/s' +
+                            '<br>Queries rate: ' + '%{customdata[1]}' + '/s<extra></extra>',
+                        customdata: pts.map(function(p) {
+                            return [p.cache_hits_rate != null ? p.cache_hits_rate.toFixed(0) : '-',
+                                    p.cache_queries_rate != null ? p.cache_queries_rate.toFixed(0) : '-'];
+                        })
                     });
                 }
 
