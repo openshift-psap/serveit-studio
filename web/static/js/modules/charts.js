@@ -585,13 +585,13 @@ function renderCharts(data, runId) {
         html += '<div class="chart-card"><div class="chart-card-header">User Defined Test Settings</div>';
         html += '<div style="padding:12px 20px 4px; color:#1e293b; font-size:0.92em;">All settings configured for this optimization run. These apply to every test — only the architecture, TP values, and pod counts vary between tests.</div>';
         html += '<div class="chart-card-body" style="padding:16px 20px;">';
-        html += '<div style="display:grid;grid-template-columns:repeat(auto-fit, minmax(320px, 1fr));gap:16px;">';
+        html += '<div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;">';
 
         function settingsTable(title, color, rows) {
-            let t = `<table class="results-table" style="font-size:0.85em;margin-bottom:16px;max-width:500px;">`;
+            let t = `<table class="results-table" style="font-size:0.85em;margin-bottom:16px;width:100%;">`;
             t += `<tr><th colspan="2" style="background:${color};text-align:center;font-size:1.05em;">${title}</th></tr>`;
             rows.forEach(function(r) {
-                if (r) t += `<tr><td style="color:#64748b;white-space:nowrap;">${r[0]}</td><td><strong>${r[1]}</strong></td></tr>`;
+                if (r) t += `<tr><td style="color:#64748b;white-space:nowrap;width:45%;">${r[0]}</td><td style="word-break:break-all;"><strong>${r[1]}</strong></td></tr>`;
             });
             t += '</table>';
             return t;
@@ -699,6 +699,7 @@ function renderCharts(data, runId) {
             if (ec.lruCapacityPerServer) eppRows.push(['LRU Capacity/Server', ec.lruCapacityPerServer]);
         }
         html += settingsTable('EPP Configuration', '#6d28d9', eppRows);
+        html += '</div>'; // close 2-column grid
 
         // Per-Architecture Tuning Comparison Table
         const archConfigs = {};
@@ -820,7 +821,7 @@ function renderCharts(data, runId) {
             html += '</table></div></div>';
         }
 
-        html += '</div></div></div>';
+        html += '</div></div>';
         secTestCfg = html; html = '';
     }
 
