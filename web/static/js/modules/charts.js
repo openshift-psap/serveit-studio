@@ -1283,24 +1283,28 @@ function renderCharts(data, runId) {
             var colors = { pd: '#10b981', aggregated: '#6366f1', ep: '#f59e0b' };
             var labels = { pd: 'PD', aggregated: 'Aggregated', ep: 'EP' };
             var calShapes = [];
+            var pctiles = [
+                { key: 'ttft_p90', label: 'P90', dash: undefined, width: 3 },
+                { key: 'ttft_p95', label: 'P95', dash: 'dash', width: 2 },
+                { key: 'ttft_p99', label: 'P99', dash: 'dot', width: 2 },
+            ];
 
             Object.keys(sweep).forEach(function(arch) {
                 var points = sweep[arch];
                 if (!points || !points.length) return;
-                traces.push({
-                    x: points.map(function(p) { return p.concurrency; }),
-                    y: points.map(function(p) { return p.ttft_p90; }),
-                    text: points.map(function(p) {
-                        return 'Concurrency: ' + p.concurrency + '<br>TTFT P90: ' + p.ttft_p90.toFixed(0) + 'ms' +
-                               '<br>TTFT P50: ' + p.ttft_p50.toFixed(0) + 'ms' +
-                               (p.is_calibrated ? '<br><b>← Calibrated</b>' : '');
-                    }),
-                    mode: 'lines+markers', name: labels[arch] || arch,
-                    line: { color: colors[arch] || '#888', width: 3 },
-                    marker: { size: points.map(function(p) { return p.is_calibrated ? 14 : 8; }),
-                              color: points.map(function(p) { return p.is_calibrated ? '#fff' : (colors[arch] || '#888'); }),
-                              line: { color: colors[arch] || '#888', width: points.map(function(p) { return p.is_calibrated ? 3 : 0; }) } },
-                    hovertemplate: '%{text}<extra>' + (labels[arch] || arch) + '</extra>'
+                pctiles.forEach(function(pct) {
+                    if (!points[0][pct.key]) return;
+                    traces.push({
+                        x: points.map(function(p) { return p.concurrency; }),
+                        y: points.map(function(p) { return p[pct.key] || 0; }),
+                        mode: 'lines+markers',
+                        name: (labels[arch] || arch) + ' ' + pct.label,
+                        line: { color: colors[arch] || '#888', width: pct.width, dash: pct.dash },
+                        marker: { size: pct.key === 'ttft_p90' ? points.map(function(p) { return p.is_calibrated ? 14 : 8; }) : 6,
+                                  color: pct.key === 'ttft_p90' ? points.map(function(p) { return p.is_calibrated ? '#fff' : (colors[arch] || '#888'); }) : (colors[arch] || '#888'),
+                                  line: pct.key === 'ttft_p90' ? { color: colors[arch] || '#888', width: points.map(function(p) { return p.is_calibrated ? 3 : 0; }) } : {} },
+                        hovertemplate: '<b>%{x} users</b><br>' + pct.label + ': %{y:.0f}ms<extra>' + (labels[arch] || arch) + '</extra>'
+                    });
                 });
                 points.forEach(function(p) {
                     if (p.is_calibrated) {
@@ -1311,7 +1315,7 @@ function renderCharts(data, runId) {
             });
             Plotly.newPlot('chart-sweep-ttft', traces, {
                 xaxis: { title: 'Concurrent Users', gridcolor: '#e2e8f0' },
-                yaxis: { title: 'TTFT P90 (ms)', gridcolor: '#e2e8f0' },
+                yaxis: { title: 'TTFT (ms)', gridcolor: '#e2e8f0' },
                 plot_bgcolor: '#f8fafc', paper_bgcolor: '#ffffff',
                 margin: { t: 20, b: 60, l: 70, r: 20 },
                 legend: { x: 1, y: 1, xanchor: 'right', bgcolor: 'rgba(255,255,255,0.9)' },
@@ -1371,7 +1375,7 @@ function renderCharts(data, runId) {
         html += '<div class="chart-card" style="margin-top:16px; border-left:6px solid #64748b;">';
         html += '<div class="chart-card-header" style="background:linear-gradient(135deg,#475569,#64748b); color:white; font-size:1.1em;">Concurrency Sweep Data</div>';
         html += '<div class="chart-card-body" style="padding:0;"><table class="results-table">';
-        html += '<tr><th>Architecture</th><th>Users</th><th>TTFT P90</th><th>TTFT P50</th><th>Throughput</th><th>tok/s/user</th><th>tok/s/gpu</th></tr>';
+        html += '<tr><th>Architecture</th><th>Users</th><th>TTFT P50</th><th>TTFT P90</th><th>TTFT P95</th><th>TTFT P99</th><th>Throughput</th><th>tok/s/user</th><th>tok/s/gpu</th></tr>';
         Object.keys(sweep).forEach(function(arch) {
             var points = sweep[arch];
             if (!points || !points.length) return;
@@ -1382,8 +1386,10 @@ function renderCharts(data, runId) {
                 html += '<tr' + calMark + '>';
                 html += '<td>' + (idx === 0 ? '<strong>' + archLabel + '</strong>' : '') + '</td>';
                 html += '<td>' + p.concurrency + calBadge + '</td>';
-                html += '<td>' + p.ttft_p90.toFixed(0) + ' ms</td>';
                 html += '<td>' + p.ttft_p50.toFixed(0) + ' ms</td>';
+                html += '<td>' + p.ttft_p90.toFixed(0) + ' ms</td>';
+                html += '<td>' + (p.ttft_p95 ? p.ttft_p95.toFixed(0) : '-') + ' ms</td>';
+                html += '<td>' + (p.ttft_p99 ? p.ttft_p99.toFixed(0) : '-') + ' ms</td>';
                 html += '<td>' + p.throughput_mean.toFixed(1) + ' req/s</td>';
                 html += '<td>' + p.interactivity.toFixed(1) + '</td>';
                 html += '<td>' + p.throughput_per_gpu.toFixed(0) + '</td>';
@@ -1413,22 +1419,29 @@ function renderCharts(data, runId) {
         // --- TTFT vs Cache Hit % ---
         html += '<div id="cache-sweep-ttft-chart" style="width:100%;height:420px;"></div>';
         var csTracesTTFT = [];
+        var csPctiles = [
+            { key: 'ttft_p90', label: 'P90', dash: undefined, width: 2 },
+            { key: 'ttft_p95', label: 'P95', dash: 'dash', width: 2 },
+            { key: 'ttft_p99', label: 'P99', dash: 'dot', width: 2 },
+        ];
         Object.keys(csweep).forEach(function(arch) {
             var pts = csweep[arch];
             if (!pts || !pts.length) return;
-            csTracesTTFT.push({
-                x: pts.map(function(p) { return p.hit_pct; }),
-                y: pts.map(function(p) { return p.ttft_p90; }),
-                mode: 'lines+markers', name: archLabels[arch] || arch,
-                line: {color: archColors[arch] || '#888', width: 2},
-                marker: {size: 8},
-                text: pts.map(function(p) { return 'c=' + p.concurrency; }),
-                hovertemplate: '%{text}<br>Cache Hit: %{x}%<br>TTFT P90: %{y:.0f}ms<extra></extra>'
+            csPctiles.forEach(function(pct) {
+                if (!pts[0][pct.key]) return;
+                csTracesTTFT.push({
+                    x: pts.map(function(p) { return p.hit_pct; }),
+                    y: pts.map(function(p) { return p[pct.key] || 0; }),
+                    mode: 'lines+markers', name: (archLabels[arch] || arch) + ' ' + pct.label,
+                    line: {color: archColors[arch] || '#888', width: pct.width, dash: pct.dash},
+                    marker: {size: 8},
+                    hovertemplate: 'Cache Hit: %{x}%<br>' + pct.label + ': %{y:.0f}ms<extra>' + (archLabels[arch] || arch) + '</extra>'
+                });
             });
         });
         chartQueue.push({id: 'cache-sweep-ttft-chart', traces: csTracesTTFT, layout: {
-            title: 'TTFT P90 vs Cache Hit %', xaxis: {title: 'Cache Hit %', range: [-5, 105]},
-            yaxis: {title: 'TTFT P90 (ms)'}, legend: {orientation: 'h', y: -0.15}, margin: {t: 40, b: 60}
+            title: 'TTFT vs Cache Hit %', xaxis: {title: 'Cache Hit %', range: [-5, 105]},
+            yaxis: {title: 'TTFT (ms)'}, legend: {orientation: 'h', y: -0.15}, margin: {t: 40, b: 60}
         }});
 
         // --- Throughput vs Cache Hit % ---
@@ -1453,15 +1466,17 @@ function renderCharts(data, runId) {
 
         // --- Data table ---
         html += '<div style="padding:12px 20px;"><div style="overflow-x:auto;"><table class="report-table" style="width:100%;font-size:0.85em;">';
-        html += '<tr><th>Architecture</th><th>Cache Hit %</th><th>Concurrency</th><th>TTFT P90 (ms)</th><th>TTFT P50 (ms)</th><th>Throughput (req/s)</th><th>Output tok/s</th><th>ITL P90 (ms)</th></tr>';
+        html += '<tr><th>Architecture</th><th>Cache Hit %</th><th>Concurrency</th><th>TTFT P50</th><th>TTFT P90</th><th>TTFT P95</th><th>TTFT P99</th><th>Throughput</th><th>Output tok/s</th><th>ITL P90</th></tr>';
         Object.keys(csweep).forEach(function(arch) {
             (csweep[arch] || []).forEach(function(p) {
                 html += '<tr>';
                 html += '<td>' + (archLabels[arch] || arch) + '</td>';
                 html += '<td>' + p.hit_pct + '%</td>';
                 html += '<td>' + p.concurrency + '</td>';
-                html += '<td>' + p.ttft_p90.toFixed(0) + '</td>';
                 html += '<td>' + p.ttft_p50.toFixed(0) + '</td>';
+                html += '<td>' + p.ttft_p90.toFixed(0) + '</td>';
+                html += '<td>' + (p.ttft_p95 ? p.ttft_p95.toFixed(0) : '-') + '</td>';
+                html += '<td>' + (p.ttft_p99 ? p.ttft_p99.toFixed(0) : '-') + '</td>';
                 html += '<td>' + p.throughput_mean.toFixed(2) + '</td>';
                 html += '<td>' + p.output_tps_mean.toFixed(1) + '</td>';
                 html += '<td>' + p.itl_p90.toFixed(1) + '</td>';
