@@ -2531,12 +2531,5 @@ function renderCharts(data, runId) {
 
     // Initialize subtab switching (activates first pane, hides others)
     initReportSubtabs(content);
-
-    // Resize all charts in the active pane after tabs are set up
-    setTimeout(function() {
-        content.querySelectorAll('.js-plotly-plot').forEach(function(plot) {
-            if (plot.offsetParent !== null) Plotly.Plots.resize(plot);
-        });
-    }, 100);
 }
 
