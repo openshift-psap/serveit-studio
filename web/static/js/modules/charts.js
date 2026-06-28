@@ -1276,6 +1276,8 @@ function renderCharts(data, runId) {
                     if (p.is_calibrated) {
                         calShapes.push({ type: 'line', x0: p.concurrency, x1: p.concurrency, y0: 0, y1: 1, yref: 'paper',
                             line: { color: '#059669', width: 1.5, dash: 'dash' } });
+                        traces.push({ x: [p.concurrency, p.concurrency], y: [null, null], mode: 'lines', name: 'Calibrated (' + p.concurrency + ' users)',
+                            line: { color: '#059669', width: 1.5, dash: 'dash' }, showlegend: true });
                     }
                 });
                 Plotly.newPlot(ttftChartId, traces, {
@@ -1295,10 +1297,13 @@ function renderCharts(data, runId) {
 
             chartQueue.push(function() {
                 var calShapes = [];
+                var calTraces = [];
                 points.forEach(function(p) {
                     if (p.is_calibrated) {
                         calShapes.push({ type: 'line', x0: p.concurrency, x1: p.concurrency, y0: 0, y1: 1, yref: 'paper',
                             line: { color: '#059669', width: 1.5, dash: 'dash' } });
+                        calTraces.push({ x: [p.concurrency, p.concurrency], y: [null, null], mode: 'lines', name: 'Calibrated (' + p.concurrency + ' users)',
+                            line: { color: '#059669', width: 1.5, dash: 'dash' }, showlegend: true });
                     }
                 });
                 Plotly.newPlot(tputChartId, [{
@@ -1312,11 +1317,12 @@ function renderCharts(data, runId) {
                               color: points.map(function(p) { return p.is_calibrated ? '#fff' : color; }),
                               line: { color: color, width: points.map(function(p) { return p.is_calibrated ? 3 : 0; }) } },
                     hovertemplate: '<b>%{x} users</b><br>%{y:.0f} tok/s/gpu<extra></extra>'
-                }], {
+                }].concat(calTraces), {
                     xaxis: { title: 'Concurrent Users', gridcolor: '#e2e8f0' },
                     yaxis: { title: 'Token Throughput per GPU (tok/s/gpu)', gridcolor: '#e2e8f0' },
                     plot_bgcolor: '#f8fafc', paper_bgcolor: '#fff',
                     margin: { t: 20, b: 60, l: 70, r: 20 },
+                    legend: { x: 0, y: 1, bgcolor: 'rgba(255,255,255,0.9)' },
                     shapes: calShapes, hovermode: 'closest'
                 }, { responsive: true });
             });
