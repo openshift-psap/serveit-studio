@@ -1817,7 +1817,7 @@ function renderCharts(data, runId) {
                     if (eppTargetMs) {
                         shapes.push({type: 'line', x0: -0.5, x1: xLabels.length - 0.5, y0: eppTargetMs, y1: eppTargetMs, yref: 'y',
                             line: {color: '#ef4444', width: pctl.key === eppTargetPct ? 2 : 1.5, dash: 'dash'}});
-                        annotations.push({x: xLabels.length - 1, y: eppTargetMs, yref: 'y',
+                        annotations.push({x: 0.99, xref: 'paper', y: eppTargetMs, yref: 'y',
                             text: `SLA (${eppTargetPct.toUpperCase()}): ${eppTargetMs} ms`, showarrow: false,
                             font: {color: '#ef4444', size: 11}, xanchor: 'right', yanchor: 'bottom', yshift: 5, bgcolor: 'rgba(255,255,255,0.85)'});
                     }
@@ -2122,11 +2122,11 @@ function renderCharts(data, runId) {
             const aggTput = aggBase ? aggBase[pctl.tputField] : null;
             if (aggTtft) {
                 shapes.push({ type: 'line', x0: -0.5, x1: labels.length - 0.5, y0: aggTtft, y1: aggTtft, yref: 'y', line: { color: pctl.color, width: 2, dash: 'dash' } });
-                annotations.push({ x: 0, y: aggTtft, yref: 'y', text: `Agg TTFT ${pLabel}: ${fmtSI(aggTtft)} ms`, showarrow: false, font: { color: pctl.color, size: 11, weight: 700 }, xanchor: 'left', yanchor: 'bottom', yshift: 5, bgcolor: 'rgba(255,255,255,0.85)' });
+                annotations.push({ x: 0.01, xref: 'paper', y: aggTtft, yref: 'y', text: `Agg TTFT ${pLabel}: ${fmtSI(aggTtft)} ms`, showarrow: false, font: { color: pctl.color, size: 11, weight: 700 }, xanchor: 'left', yanchor: 'bottom', yshift: 5, bgcolor: 'rgba(255,255,255,0.85)' });
             }
             if (aggTput) {
                 shapes.push({ type: 'line', x0: -0.5, x1: labels.length - 0.5, y0: aggTput, y1: aggTput, yref: 'y2', line: { color: '#f59e0b', width: 2, dash: 'dash' } });
-                annotations.push({ x: labels.length - 1, y: aggTput, yref: 'y2', text: `Agg Tput ${pLabel}: ${aggTput} req/s`, showarrow: false, font: { color: '#f59e0b', size: 11, weight: 700 }, xanchor: 'right', yanchor: 'bottom', yshift: 5, bgcolor: 'rgba(255,255,255,0.85)' });
+                annotations.push({ x: 0.99, xref: 'paper', y: aggTput, yref: 'y2', text: `Agg Tput ${pLabel}: ${aggTput} req/s`, showarrow: false, font: { color: '#f59e0b', size: 11, weight: 700 }, xanchor: 'right', yanchor: 'bottom', yshift: 5, bgcolor: 'rgba(255,255,255,0.85)' });
             }
 
             // Add EPP TUNED annotations for EPP-tuned points
@@ -2208,7 +2208,7 @@ function renderCharts(data, runId) {
                 }
                 if (aggItl) {
                     shapes.push({ type: 'line', x0: -0.5, x1: labels.length - 0.5, y0: aggItl, y1: aggItl, yref: 'y3', line: { color: '#ef4444', width: 1.5, dash: 'dash' } });
-                    annotations.push({ x: 0, y: aggItl, yref: 'y3', text: `Agg ITL: ${aggItl.toFixed(1)} ms`, showarrow: false, font: { color: '#ef4444', size: 10, weight: 700 }, xanchor: 'left', yanchor: 'bottom', yshift: 3, bgcolor: 'rgba(255,255,255,0.85)' });
+                    annotations.push({ x: 0.01, xref: 'paper', y: aggItl, yref: 'y3', text: `Agg ITL: ${aggItl.toFixed(1)} ms`, showarrow: false, font: { color: '#ef4444', size: 10, weight: 700 }, xanchor: 'left', yanchor: 'bottom', yshift: 3, bgcolor: 'rgba(255,255,255,0.85)' });
                 }
                 layout.yaxis3 = { title: `ITL ${pLabel} (ms)`, side: 'left', titlefont: { color: '#ef4444', size: 11 }, tickfont: { color: '#ef4444', size: 10 }, domain: [0, 0.22] };
             }
@@ -2388,7 +2388,7 @@ function renderCharts(data, runId) {
                     line: { color: '#ef4444', width: isTargetPctl ? 2 : 1.5, dash: 'dash' },
                 });
                 chartAnnotations.push({
-                    x: xLabels.length - 1, y: targetMs, yref: 'y',
+                    x: 0.99, xref: 'paper', y: targetMs, yref: 'y',
                     text: slaLabel, showarrow: false,
                     font: { color: '#ef4444', size: 11, weight: 700 },
                     xanchor: 'right', yanchor: 'bottom', yshift: 5,
