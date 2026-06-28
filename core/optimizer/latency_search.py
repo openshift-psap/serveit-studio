@@ -395,6 +395,9 @@ class LatencySearchMixin:
         """Helper to build a sweep result dict."""
         tput = result.throughput_mean or result.throughput_p90 or 0
         output_tps = result.output_tps_mean or 0
+        if output_tps == 0 and tput > 0:
+            osl = getattr(self.config, 'osl', 100)
+            output_tps = tput * osl
         ttft = result.ttft_p90 or 0
         interactivity = output_tps if output_tps > 0 else 0
         throughput_per_gpu = (output_tps * concurrency / gpus) if gpus > 0 and output_tps > 0 else 0
