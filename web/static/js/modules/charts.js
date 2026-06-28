@@ -2101,16 +2101,18 @@ function renderCharts(data, runId) {
             const tputVals = sorted.map(r => r[pctl.tputField] || r.throughput_p90);
             const itlVals = sorted.map(r => r[itlField] != null ? r[itlField] : null);
             const hasItl = itlVals.some(v => v != null);
-            const bestTtft = Math.min(...ttftVals);
+            const validTtft = ttftVals.filter(v => v != null);
+            if (!validTtft.length) return;
+            const bestTtft = Math.min(...validTtft);
             const bestTtftIdx = ttftVals.indexOf(bestTtft);
-            const bestTput = Math.max(...tputVals);
+            const bestTput = Math.max(...tputVals.filter(v => v != null));
             const bestTputIdx = tputVals.indexOf(bestTput);
             const pLabel = pctl.key.toUpperCase();
 
             const hoverText = sorted.map(r =>
                 `<b>${r.prefill_pods} Prefill pods</b> (TP=${r.prefill_tp})<br>` +
                 `<b>${r.decode_pods} Decode pods</b> (TP=${r.decode_tp})<br>` +
-                `TTFT ${pLabel}: <b>${r[pctl.field].toFixed(1)} ms</b><br>` +
+                `TTFT ${pLabel}: <b>${(r[pctl.field] != null ? r[pctl.field].toFixed(1) : '?')} ms</b><br>` +
                 (r[itlField] != null ? `ITL ${pLabel}: <b>${r[itlField].toFixed(2)} ms</b><br>` : '') +
                 `Throughput Mean: ${r[pctl.tputField] || r.throughput_p90} req/s<br>` +
                 `Total GPUs: ${r.gpus}`
