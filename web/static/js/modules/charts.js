@@ -72,106 +72,112 @@ function renderCharts(data, runId) {
 
         // Recommendation cards — 2 columns sorted by TTFT (best left, second right), P90/P95/P99 stacked
         const bp = rec.best_by_percentile || {};
-        const pctls = ['p90', 'p95', 'p99'];
         const selTypes = [
             { key: 'balanced', label: 'Best Balanced', desc: 'Best TTFT-to-throughput ratio — the sweet spot', color: '#059669', icon: '&#9878;' },
             { key: 'lowest_ttft', label: 'Lowest TTFT', desc: 'Fastest time to first token', color: '#3b82f6', icon: '&#9201;' },
             { key: 'highest_tput', label: 'Highest Throughput', desc: 'Maximum requests per second', color: '#f59e0b', icon: '&#9889;' },
         ];
         const fallbackTs = (rec.recommendations.response_time || rec.recommendations.throughput || {}).config?.test_settings;
+        const archColors = { pd: '#2563eb', aggregated: '#059669', ep: '#7c3aed' };
 
-        pctls.forEach((p, pi) => {
-            const pLabel = p.toUpperCase();
-            const archEntries = bp[p] || {};
+        // Loop: architecture → selection type → card with P90/P95/P99 inline
+        ['pd', 'aggregated', 'ep'].forEach(archKey => {
+            // Check if this architecture has any data
+            const hasData = ['p90', 'p95', 'p99'].some(p => (bp[p] || {})[archKey]);
+            if (!hasData) return;
 
-            ['pd', 'aggregated', 'ep'].forEach(archKey => {
-                const archData = archEntries[archKey];
-                if (!archData) return;
+            const archLabel = archKey.toUpperCase();
+            const aColor = archColors[archKey] || '#64748b';
+            html += `<div class="chart-card" style="margin-top:16px; border:2px solid ${aColor}; border-left:6px solid ${aColor};">`;
+            html += `<div class="chart-card-header" style="background:linear-gradient(135deg,${aColor},${aColor}cc); color:white; font-size:1.1em;">${archLabel} Configurations</div>`;
+            html += '<div class="chart-card-body" style="padding:12px 16px;">';
 
-                // Support both old format (single dict) and new format (3 selections)
-                const isNewFormat = archData.balanced || archData.lowest_ttft || archData.highest_tput;
-                const selections = isNewFormat
-                    ? selTypes.map(st => ({ ...st, cfg: archData[st.key] })).filter(st => st.cfg)
-                    : [{ key: 'balanced', label: 'Best Config', desc: '', color: '#3b82f6', icon: '&#9201;', cfg: archData }];
+            // Collect configs per selection type across percentiles
+            const seen = new Set();
+            selTypes.forEach(sel => {
+                // Get this selection's config from P90 (primary percentile)
+                const p90Data = (bp.p90 || {})[archKey];
+                if (!p90Data) return;
+                const isNewFormat = p90Data.balanced || p90Data.lowest_ttft || p90Data.highest_tput;
+                const cfg = isNewFormat ? p90Data[sel.key] : (sel.key === 'balanced' ? p90Data : null);
+                if (!cfg) return;
 
-                const archLabel = archKey.toUpperCase();
-                const archBadge = `<span style="background:#64748b; color:white; font-size:0.65em; padding:2px 6px; border-radius:3px; margin-left:6px;">${archLabel}</span>`;
+                const testId = cfg.test_id || cfg.config_name || '';
 
-                // Deduplicate — skip if same test_id as a previous selection
-                const seen = new Set();
-                html += `<div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(320px, 1fr)); gap:12px; margin-bottom:16px;">`;
+                // Dedup — if same config as a previous selection, skip but note it
+                let dupNote = '';
+                if (seen.has(testId)) return;
+                seen.add(testId);
+                if (isNewFormat) {
+                    const otherMatches = selTypes.filter(s => s.key !== sel.key && p90Data[s.key] && (p90Data[s.key].test_id || p90Data[s.key].config_name) === testId);
+                    if (otherMatches.length) dupNote = ' (also ' + otherMatches.map(s => s.label).join(', ') + ')';
+                }
 
-                selections.forEach((sel, si) => {
-                    const cfg = sel.cfg;
-                    const ttftVal = cfg[`ttft_${p}`] || cfg.ttft || cfg.ttft_p90;
-                    if (!ttftVal) return;
-                    const testId = cfg.test_id || cfg.config_name || '';
+                let deploy;
+                if (cfg.prefill_pods && cfg.decode_pods) {
+                    deploy = cfg.prefill_tp === cfg.decode_tp
+                        ? `${cfg.prefill_pods}P+${cfg.decode_pods}D TP=${cfg.prefill_tp || cfg.tp || '?'}`
+                        : `${cfg.prefill_pods}P+${cfg.decode_pods}D PTP=${cfg.prefill_tp || cfg.tp || '?'} DTP=${cfg.decode_tp || '?'}`;
+                } else {
+                    deploy = cfg.config_name;
+                }
 
-                    // Check for duplicates — add note if same config
-                    let dupNote = '';
-                    if (seen.has(testId)) return;
-                    seen.add(testId);
-                    if (isNewFormat) {
-                        const otherMatches = selections.filter(s => s.key !== sel.key && s.cfg && (s.cfg.test_id || s.cfg.config_name) === testId);
-                        if (otherMatches.length) dupNote = ' (also ' + otherMatches.map(s => s.label).join(', ') + ')';
-                    }
+                const recId = 'rec-' + archKey + '-' + sel.key;
+                window._recConfigs[recId] = { ...cfg, architecture: archKey, model: rec.model, image: (data.run_config || {}).image, test_settings: cfg.test_settings || fallbackTs, epp_config: cfg.epp_config };
 
-                    let deploy;
-                    if (cfg.prefill_pods && cfg.decode_pods) {
-                        deploy = cfg.prefill_tp === cfg.decode_tp
-                            ? `${cfg.prefill_pods}P+${cfg.decode_pods}D TP=${cfg.prefill_tp || cfg.tp || '?'}`
-                            : `${cfg.prefill_pods}P+${cfg.decode_pods}D PTP=${cfg.prefill_tp || cfg.tp || '?'} DTP=${cfg.decode_tp || '?'}`;
-                    } else {
-                        deploy = cfg.config_name;
-                    }
+                html += `<div style="background:white; border:2px solid ${sel.color}60; border-left:5px solid ${sel.color}; border-radius:10px; padding:16px; margin-bottom:12px; position:relative;">`;
+                html += `<div style="font-weight:800; color:${sel.color}; font-size:0.9em; text-transform:uppercase; margin-bottom:8px;">${sel.icon} ${sel.label}${dupNote ? '<span style="color:#94a3b8;font-size:0.85em;text-transform:none;font-weight:400;margin-left:6px;">' + dupNote + '</span>' : ''}</div>`;
+                html += `<div style="font-size:0.82em; color:#64748b; margin-bottom:10px;">${sel.desc}</div>`;
 
-                    const isPrimary = si === 0 && pi === 0;
-                    const border = isPrimary ? `3px solid ${sel.color}; border-left:6px solid ${sel.color}` : `2px solid ${sel.color}60; border-left:5px solid ${sel.color}`;
+                // Action buttons
+                html += `<div style="position:absolute;top:12px;right:12px;display:flex;gap:4px;">`;
+                html += `<button onclick="applyReportConfig('${recId}')" title="Use this configuration" style="background:none;border:1.5px solid #d1d5db;border-radius:6px;padding:4px 8px;cursor:pointer;color:#6b7280;font-size:14px;display:flex;align-items:center;gap:4px;transition:all 0.15s;" onmouseover="this.style.borderColor='#2563eb';this.style.color='#2563eb';this.style.background='#eff6ff'" onmouseout="this.style.borderColor='#d1d5db';this.style.color='#6b7280';this.style.background='none'">&#128260; Reuse</button>`;
+                html += `<button onclick="showSingleTestModal('${recId}')" title="Run this exact configuration" style="background:none;border:1.5px solid #d1d5db;border-radius:6px;padding:4px 8px;cursor:pointer;color:#6b7280;font-size:14px;display:flex;align-items:center;gap:4px;transition:all 0.15s;" onmouseover="this.style.borderColor='#8b5cf6';this.style.color='#8b5cf6';this.style.background='#f5f3ff'" onmouseout="this.style.borderColor='#d1d5db';this.style.color='#6b7280';this.style.background='none'">&#129514; Test</button>`;
+                html += `</div>`;
 
-                    const recId = 'rec-' + archKey + '-' + sel.key + '-' + p;
-                    window._recConfigs[recId] = { ...cfg, architecture: archKey, model: rec.model, image: (data.run_config || {}).image, test_settings: cfg.test_settings || fallbackTs, epp_config: cfg.epp_config };
+                // Deploy string
+                html += `<div style="font-size:1.3em; font-weight:800; color:#1e293b; margin-bottom:6px;">${deploy}</div>`;
 
-                    html += `<div style="background:white; border:${border}; border-radius:10px; padding:16px; position:relative;">`;
-                    html += `<div style="font-weight:800; color:${sel.color}; font-size:0.85em; text-transform:uppercase; margin-bottom:8px;">${sel.icon} ${sel.label} — ${pLabel}${archBadge}${dupNote ? '<span style="color:#94a3b8;font-size:0.85em;text-transform:none;font-weight:400;margin-left:6px;">' + dupNote + '</span>' : ''}</div>`;
-                    html += `<div style="position:absolute;top:12px;right:12px;display:flex;gap:4px;">`;
-                    html += `<button onclick="applyReportConfig('${recId}')" title="Use this configuration" style="background:none;border:1.5px solid #d1d5db;border-radius:6px;padding:4px 8px;cursor:pointer;color:#6b7280;font-size:14px;display:flex;align-items:center;gap:4px;transition:all 0.15s;" onmouseover="this.style.borderColor='#2563eb';this.style.color='#2563eb';this.style.background='#eff6ff'" onmouseout="this.style.borderColor='#d1d5db';this.style.color='#6b7280';this.style.background='none'">&#128260; Reuse</button>`;
-                    html += `<button onclick="showSingleTestModal('${recId}')" title="Run this exact configuration" style="background:none;border:1.5px solid #d1d5db;border-radius:6px;padding:4px 8px;cursor:pointer;color:#6b7280;font-size:14px;display:flex;align-items:center;gap:4px;transition:all 0.15s;" onmouseover="this.style.borderColor='#8b5cf6';this.style.color='#8b5cf6';this.style.background='#f5f3ff'" onmouseout="this.style.borderColor='#d1d5db';this.style.color='#6b7280';this.style.background='none'">&#129514; Test</button>`;
-                    html += `</div>`;
-                    html += `<div style="font-size:1.4em; font-weight:800; color:#1e293b; margin-bottom:4px;">${deploy}</div>`;
+                const gpus = cfg.gpus || cfg.total_gpus;
+                const tputMean = cfg.throughput_mean || cfg.throughput || cfg.throughput_p90 || '-';
+                html += `<div style="font-size:0.9em; color:#475569; margin-bottom:8px;">Throughput Mean: <strong>${tputMean} req/s</strong> | ${gpus} GPUs</div>`;
 
-                    const gpus = cfg.gpus || cfg.total_gpus;
-                    const conc = cfg.concurrency;
-                    const userConc = rec.workload ? rec.workload.users : null;
-                    const concStr = conc ? ` | c=${conc}${userConc && userConc !== conc ? ' (from ' + userConc + ')' : ''}` : '';
-                    const tputMean = cfg.throughput_mean || cfg.throughput || cfg.throughput_p90 || '-';
-                    const ratio = cfg.ratio && cfg.decode_pods > 0 ? `P:D ratio ${cfg.ratio} | ` : '';
-                    html += `<div style="font-size:0.9em; color:#475569;">${ratio}TTFT ${pLabel}: <strong>${ttftVal} ms</strong> | Throughput Mean: <strong>${tputMean} req/s</strong> | ${gpus} GPUs${concStr}</div>`;
-
-                    if (sel.desc) {
-                        html += `<div style="font-size:0.82em; color:#64748b; margin-top:6px; line-height:1.4;">${sel.desc}</div>`;
-                    }
-
-                    const cardEpp = cfg.epp_config;
-                    if (cardEpp && cardEpp.preset !== 'default') {
-                        const ep = cardEpp.plugins || {};
-                        const ew = [ep.prefix_cache, ep.kv_cache, ep.queue].filter(Boolean).map(x => x.weight || '?').join(':');
-                        html += `<div style="font-size:0.8em; color:#7c3aed; margin-top:4px;">EPP: ${cardEpp.preset || 'custom'} (${ew})</div>`;
-                    }
-
-                    const recTestId = cfg.test_id || testIdLookup[cfg.config_name] || cfg.config_name;
-                    const recManifests = manifestLookup[recTestId] || cfg.manifest_types || [];
-                    if (recManifests.length) {
-                        html += '<div style="margin-top:10px; padding-top:8px; border-top:1px solid #e2e8f0;">';
-                        html += '<span style="font-size:0.78em; color:#64748b; margin-right:6px;">Download YAML:</span>';
-                        recManifests.filter(t => !t.includes('service')).forEach(t => {
-                            html += `<a href="/api/run/${runId}/config/${recTestId}/manifest/${t}" style="color:#0ea5e9; text-decoration:none; font-size:12px; padding:2px 6px; background:#f0f9ff; border-radius:4px; border:1px solid #bae6fd; margin:2px; display:inline-block;">${t}</a>`;
-                        });
-                        html += '</div>';
-                    }
-                    html += '</div>';
+                // P90/P95/P99 inline table
+                html += '<table style="width:100%; border-collapse:collapse; font-size:0.88em;">';
+                html += '<tr style="background:#f8fafc;"><th style="text-align:left;padding:4px 8px;color:#64748b;font-weight:600;">Percentile</th><th style="text-align:right;padding:4px 8px;color:#64748b;font-weight:600;">TTFT</th><th style="text-align:right;padding:4px 8px;color:#64748b;font-weight:600;">ITL</th></tr>';
+                ['p90', 'p95', 'p99'].forEach(p => {
+                    const pCfg = isNewFormat ? ((bp[p] || {})[archKey] || {})[sel.key] : (bp[p] || {})[archKey];
+                    const ttft = pCfg ? (pCfg.ttft || pCfg['ttft_' + p]) : null;
+                    const itl = pCfg ? (pCfg['itl_' + p] || pCfg.itl) : null;
+                    html += `<tr style="border-top:1px solid #e2e8f0;"><td style="padding:4px 8px;font-weight:600;">${p.toUpperCase()}</td>`;
+                    html += `<td style="text-align:right;padding:4px 8px;">${ttft != null ? ttft + ' ms' : '-'}</td>`;
+                    html += `<td style="text-align:right;padding:4px 8px;">${itl != null ? itl + ' ms' : '-'}</td></tr>`;
                 });
+                html += '</table>';
+
+                // EPP config
+                const cardEpp = cfg.epp_config;
+                if (cardEpp && cardEpp.preset !== 'default') {
+                    const ep = cardEpp.plugins || {};
+                    const ew = [ep.prefix_cache, ep.kv_cache, ep.queue].filter(Boolean).map(x => x.weight || '?').join(':');
+                    html += `<div style="font-size:0.8em; color:#7c3aed; margin-top:6px;">EPP: ${cardEpp.preset || 'custom'} (${ew})</div>`;
+                }
+
+                // YAML downloads
+                const recTestId = cfg.test_id || testIdLookup[cfg.config_name] || cfg.config_name;
+                const recManifests = manifestLookup[recTestId] || cfg.manifest_types || [];
+                if (recManifests.length) {
+                    html += '<div style="margin-top:8px; padding-top:8px; border-top:1px solid #e2e8f0;">';
+                    html += '<span style="font-size:0.78em; color:#64748b; margin-right:6px;">Download YAML:</span>';
+                    recManifests.filter(t => !t.includes('service')).forEach(t => {
+                        html += `<a href="/api/run/${runId}/config/${recTestId}/manifest/${t}" style="color:#0ea5e9; text-decoration:none; font-size:12px; padding:2px 6px; background:#f0f9ff; border-radius:4px; border:1px solid #bae6fd; margin:2px; display:inline-block;">${t}</a>`;
+                    });
+                    html += '</div>';
+                }
                 html += '</div>';
             });
+
+            html += '</div></div>';
         });
 
         // Optimal TP values and test counts (outside the grid)
