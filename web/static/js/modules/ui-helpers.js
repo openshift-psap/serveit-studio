@@ -22,8 +22,8 @@ function initReportSubtabs(container) {
             const pane = wrapper.querySelector(`[data-subtab-pane="${paneId}"]`);
             if (pane) {
                 pane.classList.add('active');
-                pane.querySelectorAll('.chart-plot').forEach(plot => {
-                    if (plot.data) Plotly.Plots.resize(plot);
+                pane.querySelectorAll('.js-plotly-plot').forEach(plot => {
+                    Plotly.Plots.resize(plot);
                 });
                 // Render EPP charts on first tab click
                 if (paneId.startsWith('epp-tuning') && window._eppChartRenders && window._eppChartRenders.length) {
