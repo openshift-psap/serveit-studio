@@ -252,7 +252,17 @@ Substituting into (1): `D × r × prefill_tp + D × decode_tp = usable_gpus`
 
 Solving: `D = usable_gpus / (r × prefill_tp + decode_tp)`
 
-**Initial split selection:** The calibration-based `d_ideal` determines the first split to test per TP pair. This is derived from Steps 2-3 TPSG data before any PD tests run.
+**Initial split selection:** The first split to test per TP pair is chosen at the midpoint between the max-throughput ratio and the latency-optimal ratio:
+
+```
+max_throughput_pct = (prefill_cost / total_cost) × 100
+latency_optimal_pct = ((total_gpus - ideal_decode_gpus) / total_gpus) × 100
+balanced_start_pct = (max_throughput_pct + latency_optimal_pct) / 2
+```
+
+This avoids starting at extreme splits (e.g. 1P+31D) where the latency-optimal ratio alone would place the search. The balanced midpoint ensures the first test has enough prefill pods for meaningful throughput while still being close to the optimal region.
+
+**Overload tolerance:** If a PD test fails with all 503/disconnect errors (overload), it is skipped and the search continues with the next split. This is expected for heavily imbalanced splits. Other error types still stop the optimization.
 
 ### Adaptive Rebalancing (Step 7 Feedback Loop)
 
