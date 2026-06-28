@@ -1324,13 +1324,13 @@ function renderCharts(data, runId) {
                 html += '<tr' + calMark + '>';
                 html += '<td>' + (idx === 0 ? '<strong>' + archLabel + '</strong>' : '') + '</td>';
                 html += '<td>' + p.concurrency + calBadge + '</td>';
-                html += '<td>' + p.ttft_p50.toFixed(0) + ' ms</td>';
-                html += '<td>' + p.ttft_p90.toFixed(0) + ' ms</td>';
+                html += '<td>' + (p.ttft_p50 ? p.ttft_p50.toFixed(0) : '-') + ' ms</td>';
+                html += '<td>' + (p.ttft_p90 ? p.ttft_p90.toFixed(0) : '-') + ' ms</td>';
                 html += '<td>' + (p.ttft_p95 ? p.ttft_p95.toFixed(0) : '-') + ' ms</td>';
                 html += '<td>' + (p.ttft_p99 ? p.ttft_p99.toFixed(0) : '-') + ' ms</td>';
-                html += '<td>' + p.throughput_mean.toFixed(1) + ' req/s</td>';
-                html += '<td>' + p.interactivity.toFixed(1) + '</td>';
-                html += '<td>' + p.throughput_per_gpu.toFixed(0) + '</td>';
+                html += '<td>' + (p.throughput_mean ? p.throughput_mean.toFixed(1) : '-') + ' req/s</td>';
+                html += '<td>' + (p.interactivity ? p.interactivity.toFixed(1) : '-') + '</td>';
+                html += '<td>' + (p.throughput_per_gpu ? p.throughput_per_gpu.toFixed(0) : '-') + '</td>';
                 html += '</tr>';
             });
         });
