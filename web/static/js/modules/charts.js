@@ -88,7 +88,7 @@ function renderCharts(data, runId) {
             const archLabel = archKey.toUpperCase();
             const aColor = archColors[archKey] || '#64748b';
             html += `<div style="font-weight:800; font-size:1.1em; color:${aColor}; margin:20px 0 10px; border-bottom:2px solid ${aColor}; padding-bottom:6px;">${archLabel} Configurations</div>`;
-            html += `<div style="display:grid; grid-template-columns:1fr 1fr 1fr; gap:12px; margin-bottom:16px;">`;
+            html += `<div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(280px, 1fr)); gap:12px; margin-bottom:16px;">`;
 
             const p90Data = (bp.p90 || {})[archKey];
             if (!p90Data) { html += '</div>'; return; }
@@ -97,11 +97,11 @@ function renderCharts(data, runId) {
             const seen = new Set();
             selTypes.forEach(sel => {
                 const cfg = isNewFormat ? p90Data[sel.key] : (sel.key === 'balanced' ? p90Data : null);
-                if (!cfg) { html += '<div></div>'; return; }
+                if (!cfg) return;
 
                 const testId = cfg.test_id || cfg.config_name || '';
                 let dupNote = '';
-                if (seen.has(testId)) { html += '<div></div>'; return; }
+                if (seen.has(testId)) return;
                 seen.add(testId);
                 if (isNewFormat) {
                     const otherMatches = selTypes.filter(s => s.key !== sel.key && p90Data[s.key] && (p90Data[s.key].test_id || p90Data[s.key].config_name) === testId);
