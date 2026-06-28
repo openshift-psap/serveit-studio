@@ -2096,6 +2096,8 @@ function renderCharts(data, runId) {
         ];
 
         ttftPercentiles.forEach(pctl => {
+            try {
+            console.log('[PD-CHART] Rendering', pctl.key, 'chartId=', pctl.chartId, 'cid=', cid(pctl.chartId), 'el=', document.getElementById(cid(pctl.chartId)));
             const itlField = 'itl_' + pctl.key;
             const ttftVals = sorted.map(r => r[pctl.field]);
             const tputVals = sorted.map(r => r[pctl.tputField] || r.throughput_p90);
@@ -2215,7 +2217,10 @@ function renderCharts(data, runId) {
                 layout.yaxis3 = { title: `ITL ${pLabel} (ms)`, side: 'left', titlefont: { color: '#ef4444', size: 11 }, tickfont: { color: '#ef4444', size: 10 }, domain: [0, 0.22] };
             }
 
+            console.log('[PD-CHART] Plotting', pctl.key, 'traces=', traces.length);
             Plotly.newPlot(cid(pctl.chartId), traces, layout, plotlyConfig);
+            console.log('[PD-CHART] Done', pctl.key);
+            } catch(e) { console.error('[PD-CHART] ERROR in', pctl.key, e); }
         });
     }
     renderPdStyleCharts('PD', 'chart-pd');
