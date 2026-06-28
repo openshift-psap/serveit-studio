@@ -3,6 +3,7 @@
 function renderCharts(data, runId) {
     const content = document.getElementById('charts-content');
     const summary = data.summary;
+    const chartQueue = [];
     const charts = data.charts;
     const rec = data.recommendation;
 
@@ -1212,7 +1213,7 @@ function renderCharts(data, runId) {
         html += '<div id="chart-inferencex" style="width:100%; height:450px;"></div>';
         html += '</div>';
 
-        _pendingPlots.push(function() {
+        chartQueue.push(function() {
             var traces = [];
             var colors = { pd: '#10b981', aggregated: '#6366f1', ep: '#f59e0b' };
             var labels = { pd: 'PD', aggregated: 'Aggregated', ep: 'EP' };
@@ -1277,7 +1278,7 @@ function renderCharts(data, runId) {
         html += '<div id="chart-sweep-ttft" style="width:100%; height:400px;"></div>';
         html += '</div>';
 
-        _pendingPlots.push(function() {
+        chartQueue.push(function() {
             var traces = [];
             var colors = { pd: '#10b981', aggregated: '#6366f1', ep: '#f59e0b' };
             var labels = { pd: 'PD', aggregated: 'Aggregated', ep: 'EP' };
@@ -1325,7 +1326,7 @@ function renderCharts(data, runId) {
         html += '<div id="chart-sweep-throughput" style="width:100%; height:400px;"></div>';
         html += '</div>';
 
-        _pendingPlots.push(function() {
+        chartQueue.push(function() {
             var traces = [];
             var colors = { pd: '#10b981', aggregated: '#6366f1', ep: '#f59e0b' };
             var labels = { pd: 'PD', aggregated: 'Aggregated', ep: 'EP' };
@@ -2446,6 +2447,16 @@ function renderCharts(data, runId) {
             ], { ...vllmLayout, xaxis: { tickangle: -35 }, yaxis: { title: 'RDMA Throughput (GB/s)' } }, plotlyConfig);
         }
     }
+
+    // Execute deferred chart renders (concurrency sweep, cache sweep)
+    chartQueue.forEach(function(item) {
+        if (typeof item === 'function') {
+            try { item(); } catch(e) { console.warn('Deferred chart render failed:', e); }
+        } else if (item && item.id && item.traces) {
+            var el = document.getElementById(item.id);
+            if (el) Plotly.newPlot(el, item.traces, item.layout || {}, { responsive: true });
+        }
+    });
 
     // Initialize subtab switching (activates first pane, hides others)
     initReportSubtabs(content);
