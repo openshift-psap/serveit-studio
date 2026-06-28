@@ -73,8 +73,9 @@ class CacheSweepMixin:
         if not levels_to_run:
             return results
 
-        # Deploy once for all remaining levels
-        deployed_test_id = None
+        # All levels share the same pods — use first level's test_id for deployment
+        deploy_test_id = f"step13-cache{tag}-{arch_label.lower()}-h{levels_to_run[0]}"
+
         for i, hit_pct in enumerate(levels_to_run):
             if self._should_stop():
                 break
@@ -83,7 +84,7 @@ class CacheSweepMixin:
             dataset_path = self._generate_cache_dataset_for_level(hit_pct)
 
             config = create_config_fn()
-            config.test_id = test_id
+            config.test_id = deploy_test_id
             config.num_users = concurrency
             config.request_rate = concurrency
             config.enable_prefix_caching = True
@@ -105,8 +106,9 @@ class CacheSweepMixin:
                 log_callback=lambda msg: self.log(msg, 'info'),
                 stop_check=self._should_stop
             )
-            if is_first:
-                deployed_test_id = test_id
+
+            # Save with the actual test_id (not the deploy_test_id)
+            config.test_id = test_id
 
             self.all_test_results.append((config, result))
             self._save_test_to_database(config, result)
@@ -138,10 +140,10 @@ class CacheSweepMixin:
                      f"output={output_tps:.1f} tok/s", 'info')
 
         # Cleanup after all levels are done
-        if deployed_test_id:
+        if deploy_test_id:
             self.log(f"  🧹 Cleaning up {arch_label} cache sweep deployment...", 'info')
             cleanup_config = create_config_fn()
-            cleanup_config.test_id = deployed_test_id
+            cleanup_config.test_id = deploy_test_id
             self.orchestrator.cleanup_deployment(cleanup_config, log_callback=lambda msg: self.log(msg, 'info'))
 
         return results

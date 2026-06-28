@@ -345,39 +345,31 @@ class LatencySearchMixin:
         if not levels_to_run:
             return results
 
-        # Deploy once for all remaining levels
-        deployed_test_id = None
+        # All levels share the same pods — use first level's test_id for deployment
+        deploy_test_id = f"step11-sweep-{arch_label.lower()}-c{levels_to_run[0]}"
+
         for i, concurrency in enumerate(levels_to_run):
             if self._should_stop():
                 break
 
             test_id = f"step11-sweep-{arch_label.lower()}-c{concurrency}"
             config = create_config_fn()
-            config.test_id = test_id
+            config.test_id = deploy_test_id
             config.num_users = concurrency
             config.request_rate = concurrency
 
             is_first = (i == 0)
-            is_last = (i == len(levels_to_run) - 1)
 
-            if is_first:
-                # First level: deploy pods + run guidellm
-                result = self.orchestrator.run_test(
-                    config,
-                    cleanup=False,
-                    log_callback=lambda msg: self.log(msg, 'info'),
-                    stop_check=self._should_stop
-                )
-                deployed_test_id = test_id
-            else:
-                # Subsequent levels: only re-run guidellm (pods already up)
-                result = self.orchestrator.run_test(
-                    config,
-                    cleanup=False,
-                    skip_deploy=True,
-                    log_callback=lambda msg: self.log(msg, 'info'),
-                    stop_check=self._should_stop
-                )
+            result = self.orchestrator.run_test(
+                config,
+                cleanup=False,
+                skip_deploy=not is_first,
+                log_callback=lambda msg: self.log(msg, 'info'),
+                stop_check=self._should_stop
+            )
+
+            # Save with the actual test_id
+            config.test_id = test_id
 
             self.all_test_results.append((config, result))
             self._save_test_to_database(config, result)
@@ -394,7 +386,7 @@ class LatencySearchMixin:
         if deployed_test_id:
             self.log(f"  🧹 Cleaning up {arch_label} sweep deployment...", 'info')
             cleanup_config = create_config_fn()
-            cleanup_config.test_id = deployed_test_id
+            cleanup_config.test_id = deploy_test_id
             self.orchestrator.cleanup_deployment(cleanup_config, log_callback=lambda msg: self.log(msg, 'info'))
 
         return results
