@@ -2069,46 +2069,18 @@ function renderCharts(data, runId) {
         var el = document.getElementById(cid('chart-pd-ttft-p90'));
         if (!el) return;
 
-        const aggBase = rec ? rec.aggregated_baseline : null;
-        const aggTtft = aggBase ? aggBase.ttft_p90 : null;
-        const aggTput = aggBase ? (aggBase.throughput_mean || aggBase.throughput_p90) : null;
-        const shapes = [];
-        const annotations = [];
-
-        if (aggTtft) {
-            shapes.push({ type: 'line', x0: -0.5, x1: labels.length - 0.5, y0: aggTtft, y1: aggTtft, yref: 'y', line: { color: '#3b82f6', width: 2, dash: 'dash' } });
-            annotations.push({ x: 0, y: aggTtft, yref: 'y', text: 'Agg TTFT P90: ' + fmtSI(aggTtft) + ' ms', showarrow: false, font: { color: '#3b82f6', size: 11 }, xanchor: 'left', yanchor: 'bottom', yshift: 5, bgcolor: 'rgba(255,255,255,0.85)' });
-        }
-        if (aggTput) {
-            shapes.push({ type: 'line', x0: -0.5, x1: labels.length - 0.5, y0: aggTput, y1: aggTput, yref: 'y2', line: { color: '#f59e0b', width: 2, dash: 'dash' } });
-            annotations.push({ x: labels.length - 1, y: aggTput, yref: 'y2', text: 'Agg Tput P90: ' + aggTput + ' req/s', showarrow: false, font: { color: '#f59e0b', size: 11 }, xanchor: 'right', yanchor: 'bottom', yshift: 5, bgcolor: 'rgba(255,255,255,0.85)' });
-        }
-
-        const hoverText = sorted.map(r =>
-            '<b>' + r.prefill_pods + ' Prefill pods</b> (TP=' + r.prefill_tp + ')<br>' +
-            '<b>' + r.decode_pods + ' Decode pods</b> (TP=' + r.decode_tp + ')<br>' +
-            'TTFT P90: <b>' + r.ttft_p90.toFixed(1) + ' ms</b><br>' +
-            (r.itl_p90 != null ? 'ITL P90: <b>' + r.itl_p90.toFixed(2) + ' ms</b><br>' : '') +
-            'Throughput Mean: ' + (r.throughput_mean || r.throughput_p90) + ' req/s<br>' +
-            'Total GPUs: ' + r.gpus
-        );
-
         var traces = [
             { x: labels, y: ttftVals, type: 'scatter', mode: 'lines+markers', name: 'TTFT P90',
               line: { color: '#3b82f6', width: 3, shape: 'spline' },
               marker: { color: '#3b82f6', size: 12, symbol: 'circle', line: { width: 2, color: 'white' } },
-              hovertext: hoverText, hoverinfo: 'text',
               fill: 'tozeroy', fillcolor: '#3b82f614' },
             { x: [labels[bestTtftIdx]], y: [ttftVals[bestTtftIdx]], type: 'scatter', mode: 'markers', name: 'Best TTFT',
-              marker: { color: '#10b981', size: 22, symbol: 'circle', line: { width: 3, color: 'white' } },
-              hovertext: [hoverText[bestTtftIdx]], hoverinfo: 'text', showlegend: true },
+              marker: { color: '#10b981', size: 22, symbol: 'circle', line: { width: 3, color: 'white' } }, showlegend: true },
             { x: labels, y: tputVals, type: 'scatter', mode: 'lines+markers', name: 'Throughput Mean', yaxis: 'y2',
               line: { color: '#f59e0b', width: 3, shape: 'spline' },
-              marker: { color: '#f59e0b', size: 10, symbol: 'diamond', line: { width: 2, color: 'white' } },
-              hovertemplate: 'Throughput Mean: %{y:.2f} req/s<extra></extra>' },
+              marker: { color: '#f59e0b', size: 10, symbol: 'diamond', line: { width: 2, color: 'white' } } },
             { x: [labels[bestTputIdx]], y: [tputVals[bestTputIdx]], type: 'scatter', mode: 'markers', name: 'Best Throughput', yaxis: 'y2',
-              marker: { color: '#e11d48', size: 22, symbol: 'diamond', line: { width: 3, color: 'white' } },
-              hovertext: [hoverText[bestTputIdx]], hoverinfo: 'text', showlegend: true },
+              marker: { color: '#e11d48', size: 22, symbol: 'diamond', line: { width: 3, color: 'white' } }, showlegend: true },
         ];
 
         var layout = {
@@ -2119,16 +2091,9 @@ function renderCharts(data, runId) {
             yaxis2: { title: 'Throughput Mean (req/s)', side: 'right', overlaying: 'y', titlefont: { color: '#f59e0b' }, tickfont: { color: '#f59e0b' } },
             showlegend: true,
             legend: { x: 0, y: 1.12, orientation: 'h' },
-            shapes: shapes,
-            annotations: annotations,
         };
 
         if (hasItl) {
-            const aggItl = aggBase ? aggBase.itl_p90 : null;
-            if (aggItl) {
-                shapes.push({ type: 'line', x0: -0.5, x1: labels.length - 0.5, y0: aggItl, y1: aggItl, yref: 'y3', line: { color: '#ef4444', width: 1.5, dash: 'dash' } });
-                annotations.push({ x: 0, y: aggItl, yref: 'y3', text: 'Agg ITL: ' + aggItl.toFixed(1) + ' ms', showarrow: false, font: { color: '#ef4444', size: 10 }, xanchor: 'left', yanchor: 'bottom', yshift: 3, bgcolor: 'rgba(255,255,255,0.85)' });
-            }
             const validItl = itlVals.filter(v => v != null);
             const bestItlIdx = itlVals.indexOf(Math.min(...validItl));
             traces.push(
