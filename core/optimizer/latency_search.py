@@ -383,7 +383,7 @@ class LatencySearchMixin:
             self._append_sweep_result(results, result, concurrency, calibrated, gpus, test_id)
 
         # Cleanup after all levels are done
-        if deployed_test_id:
+        if deploy_test_id:
             self.log(f"  🧹 Cleaning up {arch_label} sweep deployment...", 'info')
             cleanup_config = create_config_fn()
             cleanup_config.test_id = deploy_test_id
