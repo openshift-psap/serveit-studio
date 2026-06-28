@@ -419,6 +419,9 @@ class LatencySearchMixin:
                 f"throughput/GPU={throughput_per_gpu:.0f} tok/s/gpu"
                 f"{' ← calibrated' if concurrency == calibrated else ''}", 'info')
 
+        # Save sweep progress incrementally so the report updates live
+        self._save_sweep_progress()
+
     def _validate_at_calibrated_load(self):
         """
         Step 11: Concurrency sweep for InferenceX charts.

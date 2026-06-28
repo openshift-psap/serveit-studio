@@ -139,6 +139,8 @@ class CacheSweepMixin:
                      f"tput={tput:.1f} req/s, "
                      f"output={output_tps:.1f} tok/s", 'info')
 
+            self._save_sweep_progress()
+
         # Cleanup after all levels are done
         if deploy_test_id:
             self.log(f"  🧹 Cleaning up {arch_label} cache sweep deployment...", 'info')

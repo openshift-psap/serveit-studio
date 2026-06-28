@@ -1114,7 +1114,7 @@ data:
                         'aggregated_result',
                         'calibrated_qps', 'calibrated_concurrency', 'sustainable_throughput_rps',
                         'calibrated_pd_result', 'calibrated_agg_result',
-                        'calibration_analysis', 'concurrency_sweep',
+                        'calibration_analysis', 'concurrency_sweep', 'cache_sweep',
                         'best_ep', 'calibrated_ep_result',
                         'optimization_goal', 'stopped',
                     }

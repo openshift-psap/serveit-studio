@@ -435,6 +435,24 @@ class RecipeOptimizer(
             except Exception as e:
                 self.log(f"  ⚠️  Database save failed: {e}", 'warning')
 
+    def _save_sweep_progress(self):
+        """Incrementally save concurrency_sweep and cache_sweep to optimal_config."""
+        if not self.db_manager or not self.run_id:
+            return
+        try:
+            import json as _json
+            with self.db_manager.get_connection() as conn:
+                row = conn.execute('SELECT optimal_config FROM optimization_runs WHERE id=?', (self.run_id,)).fetchone()
+                opt = _json.loads(row[0]) if row and row[0] else {}
+                if hasattr(self, 'concurrency_sweep_results') and self.concurrency_sweep_results:
+                    opt['concurrency_sweep'] = self.concurrency_sweep_results
+                if hasattr(self, 'cache_sweep_results') and self.cache_sweep_results:
+                    opt['cache_sweep'] = self.cache_sweep_results
+                conn.execute('UPDATE optimization_runs SET optimal_config=? WHERE id=?',
+                             (_json.dumps(opt), self.run_id))
+        except Exception:
+            pass
+
     def _is_memory_failure(self, result) -> bool:
         """Check if a test failure was caused by OOM or insufficient memory."""
         if not result:
