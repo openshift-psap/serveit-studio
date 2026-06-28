@@ -962,14 +962,14 @@ function renderCharts(data, runId) {
     // STEP 9: Latency-Bounded Throughput Search
     // Binary search over concurrency to find max throughput under SLA
     // ============================================================
-    html += '<div class="chart-card" style="border-left:6px solid #d97706;">' +
-        '<div class="chart-card-header" style="background:linear-gradient(135deg,#d97706,#f59e0b); color:white;">Latency Search</div>' +
-        '<div style="padding:12px 20px; color:#1e293b; font-size:0.93em; line-height:1.6;">' +
-        'Uses <strong>binary search over concurrency</strong> to find the maximum throughput that stays within the TTFT SLA target. ' +
-        'Each trial increases or decreases the number of concurrent users based on whether the previous trial met the latency constraint. ' +
-        'The result is the highest sustainable load for each architecture under the configured SLA.' +
-        '</div></div>';
     if (data.latency_search && data.latency_search.trials && data.latency_search.trials.length) {
+        html += '<div class="chart-card" style="border-left:6px solid #d97706;">' +
+            '<div class="chart-card-header" style="background:linear-gradient(135deg,#d97706,#f59e0b); color:white;">Latency Search</div>' +
+            '<div style="padding:12px 20px; color:#1e293b; font-size:0.93em; line-height:1.6;">' +
+            'Uses <strong>binary search over concurrency</strong> to find the maximum throughput that stays within the TTFT SLA target. ' +
+            'Each trial increases or decreases the number of concurrent users based on whether the previous trial met the latency constraint. ' +
+            'The result is the highest sustainable load for each architecture under the configured SLA.' +
+            '</div></div>';
         const ls = data.latency_search;
         const byArch = ls.by_architecture || {};
         const archKeys = Object.keys(byArch);
@@ -1078,14 +1078,14 @@ function renderCharts(data, runId) {
     // STEP 10: Calibrated Load Validation (separate card)
     // Handles PD, EP, or both depending on goal
     // ============================================================
-    html += '<div class="chart-card" style="border-left:6px solid #059669;">' +
-        '<div class="chart-card-header" style="background:linear-gradient(135deg,#059669,#34d399); color:white;">Concurrency Sweep</div>' +
-        '<div style="padding:12px 20px; color:#1e293b; font-size:0.93em; line-height:1.6;">' +
-        'Validates the best configurations at <strong>increasing concurrency levels</strong> to find the achievable load capacity. ' +
-        'Tests run at progressively higher user counts until latency degrades or errors appear. ' +
-        'The calibrated concurrency is the highest load where the system still meets performance targets.' +
-        '</div></div>';
     if (data.calibrated_qps) {
+        html += '<div class="chart-card" style="border-left:6px solid #059669;">' +
+            '<div class="chart-card-header" style="background:linear-gradient(135deg,#059669,#34d399); color:white;">Concurrency Sweep</div>' +
+            '<div style="padding:12px 20px; color:#1e293b; font-size:0.93em; line-height:1.6;">' +
+            'Validates the best configurations at <strong>increasing concurrency levels</strong> to find the achievable load capacity. ' +
+            'Tests run at progressively higher user counts until latency degrades or errors appear. ' +
+            'The calibrated concurrency is the highest load where the system still meets performance targets.' +
+            '</div></div>';
         const cal = data.calibrated_qps;
         // Determine primary architecture (PD or EP)
         const primary = cal.pd || cal.ep;
@@ -1369,14 +1369,14 @@ function renderCharts(data, runId) {
 
     // CACHE HIT SWEEP CHARTS (Step 13)
     // ============================================================
-    html += '<div class="chart-card" style="border-left:6px solid #7c3aed;">' +
-        '<div class="chart-card-header" style="background:linear-gradient(135deg,#7c3aed,#a78bfa); color:white;">Cache Hit Sweep</div>' +
-        '<div style="padding:12px 20px; color:#1e293b; font-size:0.93em; line-height:1.6;">' +
-        'Tests the best configurations across different <strong>prefix cache hit ratios</strong> (0% to 100%). ' +
-        'Higher cache hit rates mean more prompt tokens are reused from cache, reducing prefill compute and improving TTFT. ' +
-        'The charts show how latency and throughput change as the cache hit rate increases, with actual vLLM cache hit rates from Prometheus.' +
-        '</div></div>';
     if (data.cache_sweep) {
+        html += '<div class="chart-card" style="border-left:6px solid #7c3aed;">' +
+            '<div class="chart-card-header" style="background:linear-gradient(135deg,#7c3aed,#a78bfa); color:white;">Cache Hit Sweep</div>' +
+            '<div style="padding:12px 20px; color:#1e293b; font-size:0.93em; line-height:1.6;">' +
+            'Tests the best configurations across different <strong>prefix cache hit ratios</strong> (0% to 100%). ' +
+            'Higher cache hit rates mean more prompt tokens are reused from cache, reducing prefill compute and improving TTFT. ' +
+            'The charts show how latency and throughput change as the cache hit rate increases, with actual vLLM cache hit rates from Prometheus.' +
+            '</div></div>';
         const csweep = data.cache_sweep;
         const csArchLabels = {pd: 'PD', aggregated: 'Aggregated', ep: 'EP',
                               pd_calibrated: 'PD (calibrated)', aggregated_calibrated: 'Aggregated (calibrated)', ep_calibrated: 'EP (calibrated)'};
@@ -1514,13 +1514,13 @@ function renderCharts(data, runId) {
     // ============================================================
     // DEPLOYMENT TIMING (model load times per config)
     // ============================================================
-    html += '<div class="chart-card" style="border-left:6px solid #475569;">' +
-        '<div class="chart-card-header" style="background:linear-gradient(135deg,#475569,#64748b); color:white;">Deploy Timing</div>' +
-        '<div style="padding:12px 20px; color:#1e293b; font-size:0.93em; line-height:1.6;">' +
-        'Pod startup and <strong>model loading times</strong> for each tested configuration. ' +
-        'Larger TP values typically load faster (fewer replicas), while smaller TP with more replicas takes longer as each pod loads the model independently.' +
-        '</div></div>';
     if (data.all_results && data.all_results.length > 0) {
+        html += '<div class="chart-card" style="border-left:6px solid #475569;">' +
+            '<div class="chart-card-header" style="background:linear-gradient(135deg,#475569,#64748b); color:white;">Deploy Timing</div>' +
+            '<div style="padding:12px 20px; color:#1e293b; font-size:0.93em; line-height:1.6;">' +
+            'Pod startup and <strong>model loading times</strong> for each tested configuration. ' +
+            'Larger TP values typically load faster (fewer replicas), while smaller TP with more replicas takes longer as each pod loads the model independently.' +
+            '</div></div>';
         var timingData = [];
         data.all_results.forEach(function(r) {
             var mj = r.metrics_json ? (typeof r.metrics_json === 'string' ? JSON.parse(r.metrics_json) : r.metrics_json) : {};
