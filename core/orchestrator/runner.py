@@ -422,12 +422,13 @@ class TestOrchestrator(ParserMixin, GuidellmMixin):
         to compute how long each pod took from creation to serving.
         """
         from datetime import datetime as _dt
+        kubectl = self.deployment_manager.kubectl
         try:
-            r = subprocess.run(
-                ['kubectl', 'get', 'pods', '-n', self.namespace,
+            r = kubectl.run(
+                ['get', 'pods', '-n', self.namespace,
                  '-l', f'llm-d.ai/test-id={test_id}',
                  '-o', 'jsonpath={range .items[*]}{.metadata.name}|{.status.startTime}\\n{end}'],
-                capture_output=True, text=True, timeout=15, check=False
+                check=False
             )
             if r.returncode != 0 or not r.stdout.strip():
                 return None
@@ -442,10 +443,10 @@ class TestOrchestrator(ParserMixin, GuidellmMixin):
             for pod_name, start_str in pod_starts.items():
                 start_time = _dt.fromisoformat(start_str.replace('Z', '+00:00'))
 
-                log_r = subprocess.run(
-                    ['kubectl', 'logs', pod_name, '-n', self.namespace,
+                log_r = kubectl.run(
+                    ['logs', pod_name, '-n', self.namespace,
                      '-c', 'vllm', '--timestamps', '--tail=200'],
-                    capture_output=True, text=True, timeout=30, check=False
+                    check=False
                 )
                 model_ready_time = None
                 if log_r.returncode == 0:
