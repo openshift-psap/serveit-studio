@@ -1294,7 +1294,12 @@ class TestOrchestrator(ParserMixin, GuidellmMixin):
                         self._parse_guidellm_results(guidellm_output, result)
 
                     if not guidellm_success:
-                        result.error_message = "guidellm test failed"
+                        if guidellm_attempt < max_guidellm_retries:
+                            if log_callback:
+                                log_callback(f"⚠️  guidellm failed (0 completed requests) — retrying ({guidellm_attempt}/{max_guidellm_retries})")
+                            import time; time.sleep(10)
+                            continue
+                        result.error_message = "guidellm test failed after retries"
                         break
 
                     total = result.request_total or 0
