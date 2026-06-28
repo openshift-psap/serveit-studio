@@ -604,17 +604,7 @@ class DeploymentManager:
                 if status.ready:
                     ready_label = "Ready"
                 else:
-                    # Check if any pods are still in init container phase
-                    pod_r = self.kubectl.run(
-                        ['get', 'pods', '-l', f'llm-d.ai/test-id={test_id}', '-n', self.namespace,
-                         '-o', 'jsonpath={range .items[*]}{.status.phase}{"/"}{range .status.initContainerStatuses[*]}{.state.running.startedAt}{" "}{end}{"\\n"}{end}'],
-                        check=False)
-                    in_init = pod_r.returncode == 0 and any(
-                        'Running' not in line.split('/')[0] or
-                        (len(line.split('/')) > 1 and line.split('/')[1].strip())
-                        for line in pod_r.stdout.strip().splitlines() if line.strip()
-                    )
-                    ready_label = "Running (init containers)" if in_init else "Running (loading model into GPU)"
+                    ready_label = "Running (waiting for readiness)"
                 elapsed_suffix = f" ({elapsed}s)" if elapsed > 0 else ""
                 log_callback(
                     f"📊 Status: {status.pods_running}/{status.pods_expected} {'pod' if status.pods_expected == 1 else 'pods'} {ready_label}{elapsed_suffix}"
