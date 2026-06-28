@@ -89,7 +89,7 @@ class PDSearchMixin:
             return []
 
         import math
-        min_prefill_pods = max(1, usable_gpus // (prefill_tp * 10))
+        min_prefill_pods = 1
 
         splits = []
         for prefill_gpus in range(prefill_tp, usable_gpus, prefill_tp):
@@ -670,6 +670,8 @@ class PDSearchMixin:
         splits_by_tp = defaultdict(list)
         for s in self.feasible_splits:
             splits_by_tp[(s.prefill_tp, s.decode_tp)].append(s)
+        for tp_splits in splits_by_tp.values():
+            tp_splits.sort(key=lambda s: abs(s.prefill_pct - self.ideal_prefill_pct))
 
         # Check if Step 7 already completed (all TP pairs have at least one test in DB)
         step7_completed = {name for name in self.completed_tests if name.startswith('step7-')}
