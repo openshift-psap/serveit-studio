@@ -210,7 +210,6 @@ class GuidellmMixin:
             f' --output-path {output_path}'
             f' --warmup {warmup}'
             f' --sample-requests 50'
-            f' --data-samples {int(request_rate * (config.test_duration + warmup) * 3)}'
             f'{column_args}'
         )
 
@@ -553,8 +552,6 @@ class GuidellmMixin:
             warmup = min(60, max(0, config.test_duration - 30)) if hasattr(config, 'test_duration') else 60
             cmd.extend(['--warmup', str(warmup)])
             cmd.extend(['--sample-requests', '20'])
-            data_samples = int(config.num_users * (config.test_duration + warmup) * 3)
-            cmd.extend(['--data-samples', str(data_samples)])
 
             # Start guidellm in background
             logger.debug('Starting guidellm...')
