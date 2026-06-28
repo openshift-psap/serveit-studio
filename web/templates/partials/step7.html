@@ -88,7 +88,7 @@
                                     <div class="config-value"><span id="config-summary-asymmetric-tp">Disabled</span></div>
                                 </div>
                                 <div class="config-item">
-                                    <div class="config-label">Calibrated Load</div>
+                                    <div class="config-label">Concurrency Sweep</div>
                                     <div class="config-value"><span id="config-summary-calibrated-load">Disabled</span></div>
                                 </div>
                                 <div class="config-item">
@@ -338,12 +338,12 @@
                                     <div class="step-header">
                                         <div class="step-number" style="background: linear-gradient(135deg, #059669, #10b981);">11</div>
                                         <div class="step-title-wrapper">
-                                            <h4>Calibrated Load Validation</h4>
+                                            <h4>Concurrency Sweep</h4>
                                             <span class="step-badge" style="background: #ecfdf5; color: #059669;">Conditional</span>
                                         </div>
                                     </div>
                                     <div class="step-content">
-                                        <p><strong>Triggers when:</strong> "Calibrated Load Validation" is enabled in Test Configuration. Optionally enable "InferenceX Concurrency Sweep" for the full sweep.</p>
+                                        <p><strong>Triggers when:</strong> "Concurrency Sweep" is enabled in Test Configuration. Optionally enable "InferenceX Concurrency Sweep" for the full sweep.</p>
                                         <p><strong>What runs:</strong> Computes calibrated sustainable concurrency via Little's Law from Step 7 throughput. With InferenceX Sweep enabled, runs ~6 tests at increasing concurrency levels (from low to 1.5× calibrated) for both the best PD and Aggregated configs.</p>
                                         <p><strong>Why:</strong> Steps 7-8 may have run under overload, inflating latency. This step measures realistic performance at sustainable load. The concurrency sweep generates Token Throughput per GPU vs Interactivity curves (InferenceX-style charts) showing the operating efficiency frontier.</p>
                                         <p><strong>Result:</strong> Calibrated vs overloaded comparison with TTFT improvement percentage. With sweep: TTFT vs Concurrency, Throughput vs Concurrency, and InferenceX charts per architecture.</p>

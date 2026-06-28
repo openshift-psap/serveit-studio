@@ -14,7 +14,7 @@ function renderCharts(data, runId) {
     dlLink.onclick = (e) => { e.preventDefault(); downloadHTMLReport(runId, data); };
 
     let html = '';
-    let secRec = '', secTP = '', secCfg = '', secCmp = '', secStep9 = '', secCal = '', secVLLM = '', secTestCfg = '', secEppTuning = '';
+    let secRec = '', secTP = '', secCfg = '', secCmp = '', secStep9 = '', secCal = '', secCacheSweep = '', secVLLM = '', secTestCfg = '', secEppTuning = '';
 
     // Build a lookup from test_id -> manifest_types for download links
     const manifestLookup = {};
@@ -1066,7 +1066,7 @@ function renderCharts(data, runId) {
         const primaryKey = cal.pd ? 'pd' : 'ep';
         const primaryLabel = cal.pd ? 'PD' : 'EP';
 
-        html += '<div class="chart-card" style="margin-top:16px; border:2px solid #059669; border-left:6px solid #059669;"><div class="chart-card-header" style="background:linear-gradient(135deg,#059669,#10b981);">Step 11: Calibrated Load Validation</div>';
+        html += '<div class="chart-card" style="margin-top:16px; border:2px solid #059669; border-left:6px solid #059669;"><div class="chart-card-header" style="background:linear-gradient(135deg,#059669,#10b981);">Step 11: Concurrency Sweep</div>';
         // Capacity info with math breakdown
         if (cal.gpu_sizing) {
             const s = cal.gpu_sizing;
@@ -1394,6 +1394,9 @@ function renderCharts(data, runId) {
     }
 
     // ============================================================
+    // Flush concurrency sweep
+    secCal = html; html = '';
+
     // CACHE HIT SWEEP CHARTS (Step 13)
     // ============================================================
     if (data.cache_sweep) {
@@ -1469,8 +1472,8 @@ function renderCharts(data, runId) {
         html += '</div>';
     }
 
-    // Flush calibrated load (Step 10)
-    secCal = html; html = '';
+    // Flush cache sweep
+    secCacheSweep = html; html = '';
 
     // ============================================================
     // vLLM ENGINE METRICS CHARTS
@@ -1785,7 +1788,8 @@ function renderCharts(data, runId) {
     if (secCfg) subtabDefs.push({ id: 'configurations', label: 'Configurations', icon: '&#9776;' });
     if (secCmp) subtabDefs.push({ id: 'comparison', label: 'Comparison', icon: '&#8596;' });
     if (secStep9) subtabDefs.push({ id: 'latency-search', label: 'Latency Search', icon: '&#128269;' });
-    if (secCal) subtabDefs.push({ id: 'calibrated-load', label: 'Calibrated Load', icon: '&#9878;' });
+    if (secCal) subtabDefs.push({ id: 'calibrated-load', label: 'Concurrency Sweep', icon: '&#9878;' });
+    if (secCacheSweep) subtabDefs.push({ id: 'cache-sweep', label: 'Cache Sweep', icon: '&#128451;' });
     if (secVLLM) subtabDefs.push({ id: 'vllm-metrics', label: 'vLLM Metrics', icon: '&#9889;' });
     if (secEppTuning) subtabDefs.push({ id: 'epp-tuning', label: 'EPP Tuning', icon: '&#9881;' });
     if (secTestCfg) subtabDefs.push({ id: 'test-settings', label: 'Test Settings', icon: '&#9881;' });
@@ -1794,7 +1798,7 @@ function renderCharts(data, runId) {
     const sectionMap = {
         'recommendation': secRec, 'tp-calibration': secTP, 'configurations': secCfg,
         'test-settings': secTestCfg, 'comparison': secCmp, 'latency-search': secStep9,
-        'calibrated-load': secCal, 'vllm-metrics': secVLLM, 'epp-tuning': secEppTuning,
+        'calibrated-load': secCal, 'cache-sweep': secCacheSweep, 'vllm-metrics': secVLLM, 'epp-tuning': secEppTuning,
         'estimator': secEst
     };
 
