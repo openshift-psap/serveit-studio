@@ -304,6 +304,12 @@ function renderCharts(data, runId) {
     // ============================================================
     // TP CALIBRATION CHARTS — Step 2 (Decode) & Step 3 (Prefill)
     // ============================================================
+    html += '<div class="chart-card" style="border-left:6px solid #0d9488;">' +
+        '<div class="chart-card-header" style="background:linear-gradient(135deg,#0d9488,#14b8a6); color:white;">TP Calibration</div>' +
+        '<div style="padding:12px 20px; color:#1e293b; font-size:0.93em; line-height:1.6;">' +
+        'Tests different <strong>Tensor Parallelism (TP)</strong> values per role to find the minimum viable TP that fits in GPU memory. ' +
+        'Lower TP means fewer GPUs per pod, allowing more replicas and higher throughput. Each TP value is tested with a short benchmark to measure baseline latency and token throughput.' +
+        '</div></div>';
     if (rec) {
             const hasDecodeTP = rec.decode_tp_all && rec.decode_tp_all.length;
             const hasPrefillTP = rec.prefill_tp_all && rec.prefill_tp_all.length;
@@ -425,6 +431,12 @@ function renderCharts(data, runId) {
     secTP += chartCard('TP Calibration: Latency vs GPU Count', chartDesc.pareto, 'chart-pareto');
 
     // Scatter, efficiency → Configurations subtab
+    secCfg += '<div class="chart-card" style="border-left:6px solid #6366f1;">' +
+        '<div class="chart-card-header" style="background:linear-gradient(135deg,#6366f1,#818cf8); color:white;">Configurations</div>' +
+        '<div style="padding:12px 20px; color:#1e293b; font-size:0.93em; line-height:1.6;">' +
+        'All tested configurations across PD, EP, and Aggregated architectures. Charts show TTFT vs Throughput trade-offs at each percentile. ' +
+        'The <strong>Pareto Optimal</strong> table highlights configurations that offer the best trade-offs — no other config is better on both latency and throughput simultaneously.' +
+        '</div></div>';
     secCfg += chartCard('Throughput vs Latency', chartDesc.scatter, 'chart-scatter');
     secCfg += chartCard('GPU Efficiency (req/s per GPU)', chartDesc.efficiency, 'chart-efficiency');
 
@@ -554,6 +566,12 @@ function renderCharts(data, runId) {
         const advVal = (key, fallback) => { const s = adv[key]; return s && s.mode === 'custom' && s.value != null ? s.value : (fallback != null ? fallback : 'auto'); };
         const advToggle = (key, fallback) => { const s = adv[key]; return s ? (s.mode === 'on' ? 'On' : s.mode === 'off' ? 'Off' : fallback) : fallback; };
 
+        html += '<div class="chart-card" style="border-left:6px solid #64748b;">' +
+            '<div class="chart-card-header" style="background:linear-gradient(135deg,#64748b,#94a3b8); color:white;">Test Settings</div>' +
+            '<div style="padding:12px 20px; color:#1e293b; font-size:0.93em; line-height:1.6;">' +
+            'Complete configuration used for this optimization run — workload parameters, search strategy, infrastructure details, and component versions. ' +
+            'These settings apply to every test; only the architecture, TP values, and pod counts vary between configurations.' +
+            '</div></div>';
         html += '<div class="chart-card"><div class="chart-card-header">User Defined Test Settings</div>';
         html += '<div style="padding:12px 20px 4px; color:#1e293b; font-size:0.92em;">All settings configured for this optimization run. These apply to every test — only the architecture, TP values, and pod counts vary between tests.</div>';
         html += '<div class="chart-card-body" style="padding:16px 20px;">';
@@ -797,6 +815,13 @@ function renderCharts(data, runId) {
     }
 
     // Architecture comparison chart + percentile bar chart → Comparison tab (above tables)
+    html += '<div class="chart-card" style="border-left:6px solid #0284c7;">' +
+        '<div class="chart-card-header" style="background:linear-gradient(135deg,#0284c7,#38bdf8); color:white;">Architecture Comparison</div>' +
+        '<div style="padding:12px 20px; color:#1e293b; font-size:0.93em; line-height:1.6;">' +
+        'Compares <strong>PD/EP disaggregated</strong> inference against the <strong>Aggregated</strong> baseline. ' +
+        'PD separates prefill and decode into specialized pods so new requests don\'t wait behind ongoing generation. ' +
+        'The percentage change charts show exactly how much each PD configuration improves (or regresses) relative to the best Aggregated result.' +
+        '</div></div>';
     html += chartCard('Architecture Comparison',
         'Side-by-side comparison of <strong>Aggregated</strong> (single pool of GPUs) vs <strong>PD</strong> (dedicated prefill and decode GPUs) architectures. Lower TTFT is better for responsiveness. Higher throughput means more users served.',
         'chart-arch');
@@ -937,6 +962,13 @@ function renderCharts(data, runId) {
     // STEP 9: Latency-Bounded Throughput Search
     // Binary search over concurrency to find max throughput under SLA
     // ============================================================
+    html += '<div class="chart-card" style="border-left:6px solid #d97706;">' +
+        '<div class="chart-card-header" style="background:linear-gradient(135deg,#d97706,#f59e0b); color:white;">Latency Search</div>' +
+        '<div style="padding:12px 20px; color:#1e293b; font-size:0.93em; line-height:1.6;">' +
+        'Uses <strong>binary search over concurrency</strong> to find the maximum throughput that stays within the TTFT SLA target. ' +
+        'Each trial increases or decreases the number of concurrent users based on whether the previous trial met the latency constraint. ' +
+        'The result is the highest sustainable load for each architecture under the configured SLA.' +
+        '</div></div>';
     if (data.latency_search && data.latency_search.trials && data.latency_search.trials.length) {
         const ls = data.latency_search;
         const byArch = ls.by_architecture || {};
@@ -1046,6 +1078,13 @@ function renderCharts(data, runId) {
     // STEP 10: Calibrated Load Validation (separate card)
     // Handles PD, EP, or both depending on goal
     // ============================================================
+    html += '<div class="chart-card" style="border-left:6px solid #059669;">' +
+        '<div class="chart-card-header" style="background:linear-gradient(135deg,#059669,#34d399); color:white;">Concurrency Sweep</div>' +
+        '<div style="padding:12px 20px; color:#1e293b; font-size:0.93em; line-height:1.6;">' +
+        'Validates the best configurations at <strong>increasing concurrency levels</strong> to find the achievable load capacity. ' +
+        'Tests run at progressively higher user counts until latency degrades or errors appear. ' +
+        'The calibrated concurrency is the highest load where the system still meets performance targets.' +
+        '</div></div>';
     if (data.calibrated_qps) {
         const cal = data.calibrated_qps;
         // Determine primary architecture (PD or EP)
@@ -1330,6 +1369,13 @@ function renderCharts(data, runId) {
 
     // CACHE HIT SWEEP CHARTS (Step 13)
     // ============================================================
+    html += '<div class="chart-card" style="border-left:6px solid #7c3aed;">' +
+        '<div class="chart-card-header" style="background:linear-gradient(135deg,#7c3aed,#a78bfa); color:white;">Cache Hit Sweep</div>' +
+        '<div style="padding:12px 20px; color:#1e293b; font-size:0.93em; line-height:1.6;">' +
+        'Tests the best configurations across different <strong>prefix cache hit ratios</strong> (0% to 100%). ' +
+        'Higher cache hit rates mean more prompt tokens are reused from cache, reducing prefill compute and improving TTFT. ' +
+        'The charts show how latency and throughput change as the cache hit rate increases, with actual vLLM cache hit rates from Prometheus.' +
+        '</div></div>';
     if (data.cache_sweep) {
         const csweep = data.cache_sweep;
         const csArchLabels = {pd: 'PD', aggregated: 'Aggregated', ep: 'EP',
@@ -1468,6 +1514,12 @@ function renderCharts(data, runId) {
     // ============================================================
     // DEPLOYMENT TIMING (model load times per config)
     // ============================================================
+    html += '<div class="chart-card" style="border-left:6px solid #475569;">' +
+        '<div class="chart-card-header" style="background:linear-gradient(135deg,#475569,#64748b); color:white;">Deploy Timing</div>' +
+        '<div style="padding:12px 20px; color:#1e293b; font-size:0.93em; line-height:1.6;">' +
+        'Pod startup and <strong>model loading times</strong> for each tested configuration. ' +
+        'Larger TP values typically load faster (fewer replicas), while smaller TP with more replicas takes longer as each pod loads the model independently.' +
+        '</div></div>';
     if (data.all_results && data.all_results.length > 0) {
         var timingData = [];
         data.all_results.forEach(function(r) {
