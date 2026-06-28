@@ -142,21 +142,22 @@ function renderCharts(data, runId) {
                 html += `<div style="padding:16px;">`;
 
                 // Deploy config — large and prominent
-                html += `<div style="font-size:1.2em;font-weight:800;color:#0f172a;margin-bottom:4px;">${deploy}</div>`;
+                html += `<div style="font-size:1.2em;font-weight:800;color:#0f172a;padding-bottom:10px;border-bottom:1px solid #e2e8f0;margin-bottom:10px;">${deploy}</div>`;
 
                 // Key metrics row
-                html += `<div style="display:flex;gap:16px;margin:10px 0 12px;">`;
-                html += `<div style="flex:1;text-align:center;padding:8px;background:#f8fafc;border-radius:8px;">`;
+                html += `<div style="display:flex;gap:12px;margin:0 0 12px;">`;
+                html += `<div style="flex:1;text-align:center;padding:8px;background:#f8fafc;border-radius:8px;border:1px solid #e2e8f0;">`;
                 html += `<div style="font-size:0.7em;color:#64748b;text-transform:uppercase;letter-spacing:0.5px;margin-bottom:2px;">Throughput</div>`;
                 html += `<div style="font-size:1.1em;font-weight:700;color:#0f172a;">${tputMean} <span style="font-size:0.7em;font-weight:400;color:#64748b;">req/s</span></div>`;
                 html += `</div>`;
-                html += `<div style="flex:1;text-align:center;padding:8px;background:#f8fafc;border-radius:8px;">`;
+                html += `<div style="flex:1;text-align:center;padding:8px;background:#f8fafc;border-radius:8px;border:1px solid #e2e8f0;">`;
                 html += `<div style="font-size:0.7em;color:#64748b;text-transform:uppercase;letter-spacing:0.5px;margin-bottom:2px;">GPUs</div>`;
                 html += `<div style="font-size:1.1em;font-weight:700;color:#0f172a;">${gpus}</div>`;
                 html += `</div>`;
                 html += `</div>`;
 
                 // P90/P95/P99 table
+                html += '<div style="border-top:1px solid #e2e8f0;margin-bottom:10px;"></div>';
                 html += '<table style="width:100%;border-collapse:collapse;font-size:0.82em;margin-bottom:12px;">';
                 html += '<tr><th style="text-align:left;padding:6px 8px;color:#94a3b8;font-weight:500;font-size:0.9em;border-bottom:1px solid #f1f5f9;"></th><th style="text-align:right;padding:6px 8px;color:#94a3b8;font-weight:500;font-size:0.9em;border-bottom:1px solid #f1f5f9;">TTFT</th><th style="text-align:right;padding:6px 8px;color:#94a3b8;font-weight:500;font-size:0.9em;border-bottom:1px solid #f1f5f9;">ITL</th></tr>';
                 ['p90', 'p95', 'p99'].forEach((p, pi) => {
@@ -171,6 +172,7 @@ function renderCharts(data, runId) {
                 html += '</table>';
 
                 // Action buttons
+                html += '<div style="border-top:1px solid #e2e8f0;margin-bottom:10px;"></div>';
                 html += `<div style="display:flex;gap:8px;">`;
                 html += `<button onclick="applyReportConfig('${recId}')" style="flex:1;background:${sel.color}0a;border:1.5px solid ${sel.color}40;border-radius:8px;padding:6px 8px;cursor:pointer;color:${sel.color};font-size:12px;font-weight:600;transition:all 0.15s;" onmouseover="this.style.background='${sel.color}18';this.style.borderColor='${sel.color}'" onmouseout="this.style.background='${sel.color}0a';this.style.borderColor='${sel.color}40'">&#128260; Reuse</button>`;
                 html += `<button onclick="showSingleTestModal('${recId}')" style="flex:1;background:#f8fafc;border:1.5px solid #e2e8f0;border-radius:8px;padding:6px 8px;cursor:pointer;color:#64748b;font-size:12px;font-weight:600;transition:all 0.15s;" onmouseover="this.style.background='#f1f5f9';this.style.borderColor='#94a3b8'" onmouseout="this.style.background='#f8fafc';this.style.borderColor='#e2e8f0'">&#129514; Test</button>`;
