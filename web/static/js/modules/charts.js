@@ -1231,16 +1231,16 @@ function renderCharts(data, runId) {
             chartQueue.push(function() {
                 var traces = [];
                 var calShapes = [];
-                [{ key: 'ttft_p90', label: 'P90', dash: undefined },
-                 { key: 'ttft_p95', label: 'P95', dash: 'dash' },
-                 { key: 'ttft_p99', label: 'P99', dash: 'dot' }].forEach(function(pct) {
+                [{ key: 'ttft_p90', label: 'P90' },
+                 { key: 'ttft_p95', label: 'P95' },
+                 { key: 'ttft_p99', label: 'P99' }].forEach(function(pct) {
                     if (!points[0][pct.key]) return;
                     traces.push({
                         x: points.map(function(p) { return p.concurrency; }),
                         y: points.map(function(p) { return p[pct.key] || 0; }),
                         mode: 'lines+markers', name: pct.label,
-                        line: { color: pctColors[pct.key], width: 2, dash: pct.dash },
-                        marker: { size: 7 },
+                        line: { color: pctColors[pct.key], width: 3 },
+                        marker: { size: 8 },
                         hovertemplate: '<b>%{x} users</b><br>' + pct.label + ': %{y:.0f}ms<extra></extra>'
                     });
                 });
