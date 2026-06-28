@@ -805,7 +805,7 @@ function renderCharts(data, runId) {
             html += '</table></div></div>';
         }
 
-        html += '</div></div></div>';
+        html += '</div>';
         secTestCfg = html; html = '';
     }
 
