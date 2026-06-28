@@ -80,33 +80,28 @@ function renderCharts(data, runId) {
         const fallbackTs = (rec.recommendations.response_time || rec.recommendations.throughput || {}).config?.test_settings;
         const archColors = { pd: '#2563eb', aggregated: '#059669', ep: '#7c3aed' };
 
-        // Loop: architecture → selection type → card with P90/P95/P99 inline
+        // Loop: architecture → 3 cards in a row (balanced, lowest TTFT, highest throughput)
         ['pd', 'aggregated', 'ep'].forEach(archKey => {
-            // Check if this architecture has any data
             const hasData = ['p90', 'p95', 'p99'].some(p => (bp[p] || {})[archKey]);
             if (!hasData) return;
 
             const archLabel = archKey.toUpperCase();
             const aColor = archColors[archKey] || '#64748b';
-            html += `<div class="chart-card" style="margin-top:16px; border:2px solid ${aColor}; border-left:6px solid ${aColor};">`;
-            html += `<div class="chart-card-header" style="background:linear-gradient(135deg,${aColor},${aColor}cc); color:white; font-size:1.1em;">${archLabel} Configurations</div>`;
-            html += '<div class="chart-card-body" style="padding:12px 16px;">';
+            html += `<div style="font-weight:800; font-size:1.1em; color:${aColor}; margin:20px 0 10px; border-bottom:2px solid ${aColor}; padding-bottom:6px;">${archLabel} Configurations</div>`;
+            html += `<div style="display:grid; grid-template-columns:1fr 1fr 1fr; gap:12px; margin-bottom:16px;">`;
 
-            // Collect configs per selection type across percentiles
+            const p90Data = (bp.p90 || {})[archKey];
+            if (!p90Data) { html += '</div>'; return; }
+            const isNewFormat = p90Data.balanced || p90Data.lowest_ttft || p90Data.highest_tput;
+
             const seen = new Set();
             selTypes.forEach(sel => {
-                // Get this selection's config from P90 (primary percentile)
-                const p90Data = (bp.p90 || {})[archKey];
-                if (!p90Data) return;
-                const isNewFormat = p90Data.balanced || p90Data.lowest_ttft || p90Data.highest_tput;
                 const cfg = isNewFormat ? p90Data[sel.key] : (sel.key === 'balanced' ? p90Data : null);
-                if (!cfg) return;
+                if (!cfg) { html += '<div></div>'; return; }
 
                 const testId = cfg.test_id || cfg.config_name || '';
-
-                // Dedup — if same config as a previous selection, skip but note it
                 let dupNote = '';
-                if (seen.has(testId)) return;
+                if (seen.has(testId)) { html += '<div></div>'; return; }
                 seen.add(testId);
                 if (isNewFormat) {
                     const otherMatches = selTypes.filter(s => s.key !== sel.key && p90Data[s.key] && (p90Data[s.key].test_id || p90Data[s.key].config_name) === testId);
@@ -125,59 +120,50 @@ function renderCharts(data, runId) {
                 const recId = 'rec-' + archKey + '-' + sel.key;
                 window._recConfigs[recId] = { ...cfg, architecture: archKey, model: rec.model, image: (data.run_config || {}).image, test_settings: cfg.test_settings || fallbackTs, epp_config: cfg.epp_config };
 
-                html += `<div style="background:white; border:2px solid ${sel.color}60; border-left:5px solid ${sel.color}; border-radius:10px; padding:16px; margin-bottom:12px; position:relative;">`;
-                html += `<div style="font-weight:800; color:${sel.color}; font-size:0.9em; text-transform:uppercase; margin-bottom:8px;">${sel.icon} ${sel.label}${dupNote ? '<span style="color:#94a3b8;font-size:0.85em;text-transform:none;font-weight:400;margin-left:6px;">' + dupNote + '</span>' : ''}</div>`;
-                html += `<div style="font-size:0.82em; color:#64748b; margin-bottom:10px;">${sel.desc}</div>`;
-
-                // Action buttons
-                html += `<div style="position:absolute;top:12px;right:12px;display:flex;gap:4px;">`;
-                html += `<button onclick="applyReportConfig('${recId}')" title="Use this configuration" style="background:none;border:1.5px solid #d1d5db;border-radius:6px;padding:4px 8px;cursor:pointer;color:#6b7280;font-size:14px;display:flex;align-items:center;gap:4px;transition:all 0.15s;" onmouseover="this.style.borderColor='#2563eb';this.style.color='#2563eb';this.style.background='#eff6ff'" onmouseout="this.style.borderColor='#d1d5db';this.style.color='#6b7280';this.style.background='none'">&#128260; Reuse</button>`;
-                html += `<button onclick="showSingleTestModal('${recId}')" title="Run this exact configuration" style="background:none;border:1.5px solid #d1d5db;border-radius:6px;padding:4px 8px;cursor:pointer;color:#6b7280;font-size:14px;display:flex;align-items:center;gap:4px;transition:all 0.15s;" onmouseover="this.style.borderColor='#8b5cf6';this.style.color='#8b5cf6';this.style.background='#f5f3ff'" onmouseout="this.style.borderColor='#d1d5db';this.style.color='#6b7280';this.style.background='none'">&#129514; Test</button>`;
-                html += `</div>`;
-
-                // Deploy string
-                html += `<div style="font-size:1.3em; font-weight:800; color:#1e293b; margin-bottom:6px;">${deploy}</div>`;
+                html += `<div style="background:white; border:2px solid ${sel.color}; border-top:4px solid ${sel.color}; border-radius:10px; padding:14px;">`;
+                html += `<div style="font-weight:800; color:${sel.color}; font-size:0.82em; text-transform:uppercase; margin-bottom:6px;">${sel.icon} ${sel.label}</div>`;
+                if (dupNote) html += `<div style="color:#94a3b8;font-size:0.75em;margin-bottom:4px;">${dupNote}</div>`;
+                html += `<div style="font-size:0.78em; color:#64748b; margin-bottom:8px;">${sel.desc}</div>`;
+                html += `<div style="font-size:1.15em; font-weight:800; color:#1e293b; margin-bottom:6px;">${deploy}</div>`;
 
                 const gpus = cfg.gpus || cfg.total_gpus;
                 const tputMean = cfg.throughput_mean || cfg.throughput || cfg.throughput_p90 || '-';
-                html += `<div style="font-size:0.9em; color:#475569; margin-bottom:8px;">Throughput Mean: <strong>${tputMean} req/s</strong> | ${gpus} GPUs</div>`;
+                html += `<div style="font-size:0.85em; color:#475569; margin-bottom:8px;">Tput: <strong>${tputMean} req/s</strong> | ${gpus} GPUs</div>`;
 
-                // P90/P95/P99 inline table
-                html += '<table style="width:100%; border-collapse:collapse; font-size:0.88em;">';
-                html += '<tr style="background:#f8fafc;"><th style="text-align:left;padding:4px 8px;color:#64748b;font-weight:600;">Percentile</th><th style="text-align:right;padding:4px 8px;color:#64748b;font-weight:600;">TTFT</th><th style="text-align:right;padding:4px 8px;color:#64748b;font-weight:600;">ITL</th></tr>';
+                // P90/P95/P99 table
+                html += '<table style="width:100%; border-collapse:collapse; font-size:0.82em;">';
+                html += '<tr style="background:#f8fafc;"><th style="text-align:left;padding:3px 6px;color:#64748b;font-weight:600;"></th><th style="text-align:right;padding:3px 6px;color:#64748b;font-weight:600;">TTFT</th><th style="text-align:right;padding:3px 6px;color:#64748b;font-weight:600;">ITL</th></tr>';
                 ['p90', 'p95', 'p99'].forEach(p => {
                     const pCfg = isNewFormat ? ((bp[p] || {})[archKey] || {})[sel.key] : (bp[p] || {})[archKey];
                     const ttft = pCfg ? (pCfg.ttft || pCfg['ttft_' + p]) : null;
                     const itl = pCfg ? (pCfg['itl_' + p] || pCfg.itl) : null;
-                    html += `<tr style="border-top:1px solid #e2e8f0;"><td style="padding:4px 8px;font-weight:600;">${p.toUpperCase()}</td>`;
-                    html += `<td style="text-align:right;padding:4px 8px;">${ttft != null ? ttft + ' ms' : '-'}</td>`;
-                    html += `<td style="text-align:right;padding:4px 8px;">${itl != null ? itl + ' ms' : '-'}</td></tr>`;
+                    html += `<tr style="border-top:1px solid #e2e8f0;"><td style="padding:3px 6px;font-weight:600;">${p.toUpperCase()}</td>`;
+                    html += `<td style="text-align:right;padding:3px 6px;">${ttft != null ? ttft + ' ms' : '-'}</td>`;
+                    html += `<td style="text-align:right;padding:3px 6px;">${itl != null ? itl + ' ms' : '-'}</td></tr>`;
                 });
                 html += '</table>';
 
-                // EPP config
-                const cardEpp = cfg.epp_config;
-                if (cardEpp && cardEpp.preset !== 'default') {
-                    const ep = cardEpp.plugins || {};
-                    const ew = [ep.prefix_cache, ep.kv_cache, ep.queue].filter(Boolean).map(x => x.weight || '?').join(':');
-                    html += `<div style="font-size:0.8em; color:#7c3aed; margin-top:6px;">EPP: ${cardEpp.preset || 'custom'} (${ew})</div>`;
-                }
+                // Action buttons
+                html += `<div style="display:flex;gap:4px;margin-top:8px;">`;
+                html += `<button onclick="applyReportConfig('${recId}')" style="flex:1;background:none;border:1.5px solid #d1d5db;border-radius:6px;padding:4px 6px;cursor:pointer;color:#6b7280;font-size:12px;transition:all 0.15s;" onmouseover="this.style.borderColor='#2563eb';this.style.color='#2563eb';this.style.background='#eff6ff'" onmouseout="this.style.borderColor='#d1d5db';this.style.color='#6b7280';this.style.background='none'">&#128260; Reuse</button>`;
+                html += `<button onclick="showSingleTestModal('${recId}')" style="flex:1;background:none;border:1.5px solid #d1d5db;border-radius:6px;padding:4px 6px;cursor:pointer;color:#6b7280;font-size:12px;transition:all 0.15s;" onmouseover="this.style.borderColor='#8b5cf6';this.style.color='#8b5cf6';this.style.background='#f5f3ff'" onmouseout="this.style.borderColor='#d1d5db';this.style.color='#6b7280';this.style.background='none'">&#129514; Test</button>`;
+                html += `</div>`;
 
                 // YAML downloads
                 const recTestId = cfg.test_id || testIdLookup[cfg.config_name] || cfg.config_name;
                 const recManifests = manifestLookup[recTestId] || cfg.manifest_types || [];
                 if (recManifests.length) {
-                    html += '<div style="margin-top:8px; padding-top:8px; border-top:1px solid #e2e8f0;">';
-                    html += '<span style="font-size:0.78em; color:#64748b; margin-right:6px;">Download YAML:</span>';
+                    html += '<div style="margin-top:6px; padding-top:6px; border-top:1px solid #e2e8f0;">';
+                    html += '<span style="font-size:0.72em; color:#64748b;">YAML: </span>';
                     recManifests.filter(t => !t.includes('service')).forEach(t => {
-                        html += `<a href="/api/run/${runId}/config/${recTestId}/manifest/${t}" style="color:#0ea5e9; text-decoration:none; font-size:12px; padding:2px 6px; background:#f0f9ff; border-radius:4px; border:1px solid #bae6fd; margin:2px; display:inline-block;">${t}</a>`;
+                        html += `<a href="/api/run/${runId}/config/${recTestId}/manifest/${t}" style="color:#0ea5e9; text-decoration:none; font-size:11px; padding:1px 5px; background:#f0f9ff; border-radius:3px; border:1px solid #bae6fd; margin:1px;">${t}</a>`;
                     });
                     html += '</div>';
                 }
                 html += '</div>';
             });
 
-            html += '</div></div>';
+            html += '</div>';
         });
 
         // Optimal TP values and test counts (outside the grid)
