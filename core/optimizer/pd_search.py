@@ -635,9 +635,10 @@ class PDSearchMixin:
                 if self._is_memory_failure(result):
                     self.log(f"    ❌ OOM failure — skipping {test_id} (needs higher TP)", 'warning')
                     return None
-                error_msg = result.error_message if result else 'no result'
-                self.log(f"    ⚠️  Test failed — skipping {test_id} ({error_msg})", 'warning')
-                return None
+                self.log("    ❌ Test failed - STOPPING optimization", 'error')
+                self.log(f"    🔍 Debug: kubectl get pods -n {self.config.namespace} -l test-id={test_id}", 'error')
+                self.log(f"    🧹 Cleanup: kubectl delete lws -n {self.config.namespace} -l test-id={test_id}", 'error')
+                raise RuntimeError(f"Test {test_id} failed - stopping optimization")
 
         ttft = result.ttft_p90 or result.ttft_p50 or 1000000.0
         throughput = result.throughput_mean or result.throughput_p90 or 0.0
