@@ -671,10 +671,10 @@ function renderCharts(data, runId) {
             ['Max Model Len', rv.max_model_len || rc.max_model_len || '-'],
             ['GPU Memory Utilization', gmuDisplay],
             rv.gpu_vram_gb ? ['GPU VRAM', rv.gpu_vram_gb.toFixed(1) + ' GB'] : null,
-            ['Block Size', rv.block_size || '-'],
+            ['Block Size', rv.block_size || 'auto (16)'],
             ['Max Num Seqs', (rv.max_num_seqs || '256') + (rv.decode_max_num_seqs ? ' (decode: ' + rv.decode_max_num_seqs + ')' : '')],
-            ['Max Batched Tokens', rv.max_num_batched_tokens || rv.max_model_len || '-'],
-            ['Prefix Caching', rv.enable_prefix_caching === true ? 'Enabled' : (rv.enable_prefix_caching === false ? 'Disabled' : '-')],
+            ['Max Batched Tokens', rv.max_num_batched_tokens || rv.max_model_len || 'auto'],
+            ['Prefix Caching', rv.enable_prefix_caching === true ? 'Enabled' : (rv.enable_prefix_caching === false ? 'Disabled' : 'auto (Disabled)')],
             ['Expert Parallel', hasEpTests ? 'Enabled (EP) / Disabled (PD, Agg)' : (rv.enable_expert_parallel === true ? 'Enabled' : 'Disabled')],
             ['Trust Remote Code', rv.trust_remote_code === true ? 'Enabled' : 'Disabled'],
         ];
