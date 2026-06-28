@@ -1166,6 +1166,7 @@ class ReportAnalyzer:
                 'decode_tp': r.decode_tp or r.tensor_parallelism,
                 'manifest_types': manifest_types,
                 'test_config': test_config,
+                'metrics_json': r.metrics_json,
             })
         return all_results
 

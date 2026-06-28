@@ -14,7 +14,7 @@ function renderCharts(data, runId) {
     dlLink.onclick = (e) => { e.preventDefault(); downloadHTMLReport(runId, data); };
 
     let html = '';
-    let secRec = '', secTP = '', secCfg = '', secCmp = '', secStep9 = '', secCal = '', secCacheSweep = '', secVLLM = '', secTestCfg = '', secEppTuning = '';
+    let secRec = '', secTP = '', secCfg = '', secCmp = '', secStep9 = '', secCal = '', secCacheSweep = '', secVLLM = '', secTestCfg = '', secEppTuning = '', secDeployTiming = '';
 
     // Build a lookup from test_id -> manifest_types for download links
     const manifestLookup = {};
@@ -1422,6 +1422,63 @@ function renderCharts(data, runId) {
     secCacheSweep = html; html = '';
 
     // ============================================================
+    // DEPLOYMENT TIMING (model load times per config)
+    // ============================================================
+    if (data.all_results && data.all_results.length > 0) {
+        var timingData = [];
+        data.all_results.forEach(function(r) {
+            var mj = r.metrics_json ? (typeof r.metrics_json === 'string' ? JSON.parse(r.metrics_json) : r.metrics_json) : {};
+            var loadTime = mj.model_load_time_s;
+            if (loadTime != null && loadTime > 0) {
+                timingData.push({ name: r.config_name, load_s: loadTime, arch: r.architecture, pods: (r.prefill_pods || 0) + (r.decode_pods || 0) || r.replicas || 0 });
+            }
+        });
+
+        if (timingData.length > 0) {
+            html += '<div class="chart-card" style="margin-top:24px; border-left:6px solid #d97706;">';
+            html += '<div class="chart-card-header" style="background:linear-gradient(135deg,#d97706,#b45309); color:white; font-size:1.2em;">Deployment Timing</div>';
+            html += '<div style="padding:8px 20px; color:#1e293b; font-size:0.95em;">Time from pod deployment to model fully loaded and serving. Includes scheduling, image pull, model weight loading, and CUDA graph capture.</div>';
+
+            // Bar chart
+            html += '<div id="chart-deploy-timing" style="width:100%;height:400px;"></div>';
+            var archColorsDT = { AGGREGATED: '#6366f1', PD: '#10b981', EP: '#f59e0b' };
+            chartQueue.push(function() {
+                var sorted = timingData.sort(function(a, b) { return b.load_s - a.load_s; });
+                Plotly.newPlot('chart-deploy-timing', [{
+                    x: sorted.map(function(d) { return d.name; }),
+                    y: sorted.map(function(d) { return d.load_s; }),
+                    type: 'bar',
+                    marker: { color: sorted.map(function(d) { return archColorsDT[d.arch] || '#94a3b8'; }) },
+                    text: sorted.map(function(d) { return d.load_s + 's'; }),
+                    textposition: 'outside',
+                    textfont: { size: 10, color: '#334155' },
+                    cliponaxis: false,
+                    constraintext: 'none',
+                    hovertemplate: '<b>%{x}</b><br>Load time: %{y}s<extra></extra>'
+                }], {
+                    xaxis: { tickangle: -35 },
+                    yaxis: { title: 'Model Load Time (seconds)' },
+                    plot_bgcolor: '#f8fafc', paper_bgcolor: '#fff',
+                    margin: { t: 20, b: 120, l: 70, r: 20 }
+                }, { responsive: true });
+            });
+
+            // Data table
+            html += '<div style="padding:12px 20px;"><table class="results-table" style="font-size:0.85em;">';
+            html += '<tr><th>Configuration</th><th>Architecture</th><th>Pods</th><th>Model Load Time</th></tr>';
+            timingData.sort(function(a, b) { return a.load_s - b.load_s; }).forEach(function(d) {
+                var mins = Math.floor(d.load_s / 60);
+                var secs = d.load_s % 60;
+                var timeStr = mins > 0 ? mins + 'm ' + secs + 's' : secs + 's';
+                html += '<tr><td>' + d.name + '</td><td>' + d.arch + '</td><td>' + d.pods + '</td><td>' + timeStr + '</td></tr>';
+            });
+            html += '</table></div>';
+            html += '</div>';
+        }
+    }
+    secDeployTiming = html; html = '';
+
+    // ============================================================
     // vLLM ENGINE METRICS CHARTS
     // ============================================================
     if (charts.vllm && charts.vllm.configs.length) {
@@ -1736,6 +1793,7 @@ function renderCharts(data, runId) {
     if (secStep9) subtabDefs.push({ id: 'latency-search', label: 'Latency Search', icon: '&#128269;' });
     if (secCal) subtabDefs.push({ id: 'calibrated-load', label: 'Concurrency Sweep', icon: '&#9878;' });
     if (secCacheSweep) subtabDefs.push({ id: 'cache-sweep', label: 'Cache Sweep', icon: '&#128451;' });
+    if (secDeployTiming) subtabDefs.push({ id: 'deploy-timing', label: 'Deploy Timing', icon: '&#9202;' });
     if (secVLLM) subtabDefs.push({ id: 'vllm-metrics', label: 'vLLM Metrics', icon: '&#9889;' });
     if (secEppTuning) subtabDefs.push({ id: 'epp-tuning', label: 'EPP Tuning', icon: '&#9881;' });
     if (secTestCfg) subtabDefs.push({ id: 'test-settings', label: 'Test Settings', icon: '&#9881;' });
@@ -1744,7 +1802,7 @@ function renderCharts(data, runId) {
     const sectionMap = {
         'recommendation': secRec, 'tp-calibration': secTP, 'configurations': secCfg,
         'test-settings': secTestCfg, 'comparison': secCmp, 'latency-search': secStep9,
-        'calibrated-load': secCal, 'cache-sweep': secCacheSweep, 'vllm-metrics': secVLLM, 'epp-tuning': secEppTuning,
+        'calibrated-load': secCal, 'cache-sweep': secCacheSweep, 'deploy-timing': secDeployTiming, 'vllm-metrics': secVLLM, 'epp-tuning': secEppTuning,
         'estimator': secEst
     };
 
