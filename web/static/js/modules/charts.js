@@ -156,20 +156,20 @@ function renderCharts(data, runId) {
                 html += `</div>`;
                 html += `</div>`;
 
-                // P90/P95/P99 table
-                html += '<div style="border-top:1px solid #e2e8f0;margin-bottom:10px;"></div>';
-                html += '<table style="width:100%;border-collapse:collapse;font-size:0.82em;margin-bottom:12px;">';
-                html += '<tr><th style="text-align:left;padding:6px 8px;color:#94a3b8;font-weight:500;font-size:0.9em;border-bottom:1px solid #f1f5f9;"></th><th style="text-align:right;padding:6px 8px;color:#94a3b8;font-weight:500;font-size:0.9em;border-bottom:1px solid #f1f5f9;">TTFT</th><th style="text-align:right;padding:6px 8px;color:#94a3b8;font-weight:500;font-size:0.9em;border-bottom:1px solid #f1f5f9;">ITL</th></tr>';
+                // P90/P95/P99 table in a bordered box
+                html += '<div style="border:1px solid #e2e8f0;border-radius:8px;overflow:hidden;margin-bottom:12px;">';
+                html += '<table style="width:100%;border-collapse:collapse;font-size:0.82em;">';
+                html += '<tr style="background:#f8fafc;"><th style="text-align:center;padding:6px 8px;color:#94a3b8;font-weight:500;font-size:0.9em;"></th><th style="text-align:center;padding:6px 8px;color:#94a3b8;font-weight:500;font-size:0.9em;">TTFT</th><th style="text-align:center;padding:6px 8px;color:#94a3b8;font-weight:500;font-size:0.9em;">ITL</th></tr>';
                 ['p90', 'p95', 'p99'].forEach((p, pi) => {
                     const pCfg = isNewFormat ? ((bp[p] || {})[archKey] || {})[sel.key] : (bp[p] || {})[archKey];
                     const ttft = pCfg ? (pCfg.ttft || pCfg['ttft_' + p]) : null;
                     const itl = pCfg ? (pCfg['itl_' + p] || pCfg.itl) : null;
-                    const bg = pi % 2 === 0 ? '#fafbfc' : 'white';
-                    html += `<tr style="background:${bg};"><td style="padding:5px 8px;font-weight:600;color:#334155;">${p.toUpperCase()}</td>`;
-                    html += `<td style="text-align:right;padding:5px 8px;color:#1e293b;">${ttft != null ? '<strong>' + ttft + '</strong> ms' : '<span style="color:#cbd5e1;">-</span>'}</td>`;
-                    html += `<td style="text-align:right;padding:5px 8px;color:#1e293b;">${itl != null ? '<strong>' + itl + '</strong> ms' : '<span style="color:#cbd5e1;">-</span>'}</td></tr>`;
+                    const bg = pi % 2 === 0 ? 'white' : '#fafbfc';
+                    html += `<tr style="background:${bg};border-top:1px solid #f1f5f9;"><td style="text-align:center;padding:6px 8px;font-weight:600;color:#334155;">${p.toUpperCase()}</td>`;
+                    html += `<td style="text-align:center;padding:6px 8px;color:#1e293b;">${ttft != null ? '<strong>' + ttft + '</strong> ms' : '<span style="color:#cbd5e1;">-</span>'}</td>`;
+                    html += `<td style="text-align:center;padding:6px 8px;color:#1e293b;">${itl != null ? '<strong>' + itl + '</strong> ms' : '<span style="color:#cbd5e1;">-</span>'}</td></tr>`;
                 });
-                html += '</table>';
+                html += '</table></div>';
 
                 // Action buttons
                 html += '<div style="border-top:1px solid #e2e8f0;margin-bottom:10px;"></div>';
