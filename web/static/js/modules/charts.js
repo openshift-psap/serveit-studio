@@ -1393,7 +1393,7 @@ function renderCharts(data, runId) {
                     textposition: 'top center', textfont: { size: 9, color: '#d97706' },
                     mode: 'lines+markers+text', name: 'Throughput Mean',
                     yaxis: 'y2',
-                    line: { color: '#d97706', width: 3, dash: 'dash' },
+                    line: { color: '#d97706', width: 3 },
                     marker: { size: 8, symbol: 'diamond', color: '#d97706' },
                     hovertemplate: 'Cache Hit: %{x}%<br>Throughput: %{y:.1f} req/s<extra></extra>'
                 });
