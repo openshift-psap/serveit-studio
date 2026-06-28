@@ -1249,8 +1249,9 @@ function renderCharts(data, runId) {
             archIdx++;
 
             // --- Architecture header ---
+            var configLabel = points[0] && points[0].config_label ? ' — ' + points[0].config_label : '';
             html += '<div class="chart-card" style="margin-top:20px; border:2px solid ' + color + '; border-left:6px solid ' + color + ';">';
-            html += '<div class="chart-card-header" style="background:linear-gradient(135deg,' + color + ',' + color + '99); color:white; font-size:1.2em;">' + label + ' — Concurrency Sweep</div>';
+            html += '<div class="chart-card-header" style="background:linear-gradient(135deg,' + color + ',' + color + '99); color:white; font-size:1.2em;">' + label + configLabel + ' — Concurrency Sweep</div>';
 
             // --- TTFT P90/P95/P99 on same chart ---
             var ttftChartId = 'chart-sweep-ttft-' + arch;
@@ -1399,8 +1400,9 @@ function renderCharts(data, runId) {
             var csLabel = csArchLabels[arch] || arch;
             var csColor = csArchColors[arch] || '#888';
 
+            var csConfigLabel = pts[0] && pts[0].config_label ? ' — ' + pts[0].config_label : '';
             html += '<div class="chart-card" style="margin-top:20px; border:2px solid ' + csColor + '; border-left:6px solid ' + csColor + ';">';
-            html += '<div class="chart-card-header" style="background:linear-gradient(135deg,' + csColor + ',' + csColor + '99); color:white; font-size:1.2em;">' + csLabel + ' — Cache Hit Sweep</div>';
+            html += '<div class="chart-card-header" style="background:linear-gradient(135deg,' + csColor + ',' + csColor + '99); color:white; font-size:1.2em;">' + csLabel + csConfigLabel + ' — Cache Hit Sweep</div>';
 
             // --- TTFT P90/P95/P99 on same chart ---
             var csTtftId = 'cache-sweep-ttft-' + arch;

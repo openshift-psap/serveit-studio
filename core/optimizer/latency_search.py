@@ -467,6 +467,8 @@ class LatencySearchMixin:
             lambda: self._create_pd_config(best_split),
             total_gpus_pd
         )
+        for r in pd_sweep:
+            r['config_label'] = f"{best_split.prefill_pods}P×TP{best_split.prefill_tp} + {best_split.decode_pods}D×TP{best_split.decode_tp}"
         self.concurrency_sweep_results['pd'] = pd_sweep
 
         # Store calibrated result for backwards compat
@@ -503,6 +505,9 @@ class LatencySearchMixin:
             ),
             total_gpus_agg
         )
+        agg_replicas = total_gpus_agg // agg_tp if agg_tp else total_gpus_agg
+        for r in agg_sweep:
+            r['config_label'] = f"{agg_replicas}×TP{agg_tp}"
         self.concurrency_sweep_results['aggregated'] = agg_sweep
 
         cal_agg = [r for r in agg_sweep if r['is_calibrated']]

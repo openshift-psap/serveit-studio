@@ -267,14 +267,20 @@ class CacheSweepMixin:
 
             if best_split:
                 pd_label = 'EP' if getattr(best_split, 'enable_expert_parallel', False) else 'PD'
-                self.cache_sweep_results[pd_label.lower()] = self._run_cache_sweep_for_arch(
+                pd_config_label = f"{best_split.prefill_pods}P×TP{best_split.prefill_tp} + {best_split.decode_pods}D×TP{best_split.decode_tp}"
+                sweep = self._run_cache_sweep_for_arch(
                     pd_label, user_concurrency, levels,
                     lambda: self._create_pd_config(best_split) if pd_label == 'PD' else self._create_ep_config(split=best_split),
                     total_gpus_pd
                 )
+                for r in sweep:
+                    r['config_label'] = pd_config_label
+                self.cache_sweep_results[pd_label.lower()] = sweep
 
             if agg_tp and agg_result and not self._should_stop():
-                self.cache_sweep_results['aggregated'] = self._run_cache_sweep_for_arch(
+                agg_replicas = total_gpus_agg // agg_tp if agg_tp else total_gpus_agg
+                agg_config_label = f"{agg_replicas}×TP{agg_tp}"
+                sweep = self._run_cache_sweep_for_arch(
                     'Aggregated', user_concurrency, levels,
                     lambda: self._create_aggregated_config(
                         tp=agg_tp, num_gpus=total_gpus_agg,
@@ -283,6 +289,9 @@ class CacheSweepMixin:
                     ),
                     total_gpus_agg
                 )
+                for r in sweep:
+                    r['config_label'] = agg_config_label
+                self.cache_sweep_results['aggregated'] = sweep
 
         # --- Sweep at calibrated concurrency ---
         if self.config.cache_sweep_use_calibrated and calibrated_concurrency and not self._should_stop():
@@ -292,14 +301,20 @@ class CacheSweepMixin:
 
             if best_split:
                 pd_label = 'EP' if getattr(best_split, 'enable_expert_parallel', False) else 'PD'
-                self.cache_sweep_results[f'{pd_label.lower()}_calibrated'] = self._run_cache_sweep_for_arch(
+                pd_config_label = f"{best_split.prefill_pods}P×TP{best_split.prefill_tp} + {best_split.decode_pods}D×TP{best_split.decode_tp}"
+                sweep = self._run_cache_sweep_for_arch(
                     pd_label, calibrated_concurrency, levels,
                     lambda: self._create_pd_config(best_split) if pd_label == 'PD' else self._create_ep_config(split=best_split),
                     total_gpus_pd, concurrency_tag='cal'
                 )
+                for r in sweep:
+                    r['config_label'] = pd_config_label
+                self.cache_sweep_results[f'{pd_label.lower()}_calibrated'] = sweep
 
             if agg_tp and agg_result and not self._should_stop():
-                self.cache_sweep_results['aggregated_calibrated'] = self._run_cache_sweep_for_arch(
+                agg_replicas = total_gpus_agg // agg_tp if agg_tp else total_gpus_agg
+                agg_config_label = f"{agg_replicas}×TP{agg_tp}"
+                sweep = self._run_cache_sweep_for_arch(
                     'Aggregated', calibrated_concurrency, levels,
                     lambda: self._create_aggregated_config(
                         tp=agg_tp, num_gpus=total_gpus_agg,
@@ -308,6 +323,9 @@ class CacheSweepMixin:
                     ),
                     total_gpus_agg, concurrency_tag='cal'
                 )
+                for r in sweep:
+                    r['config_label'] = agg_config_label
+                self.cache_sweep_results['aggregated_calibrated'] = sweep
 
         # --- Summary ---
         if self.cache_sweep_results:
