@@ -22,7 +22,7 @@ data:
       - type: kv-cache-utilization-scorer
       - type: queue-scorer
 {% if slo_enabled | default(false) %}
-      - type: slo-scorer
+      - type: latency-scorer
 {% endif %}
 {% if precise_prefix_cache_enabled | default(false) %}
       - type: precise-prefix-cache-scorer
@@ -34,7 +34,7 @@ data:
       - type: no-hit-lru-scorer
 {% endif %}
 {% if session_aware_enabled | default(false) %}
-      - type: session-aware-scorer
+      - type: session-affinity-scorer
 {% endif %}
       - type: max-score-picker
     schedulingProfiles:
@@ -62,7 +62,7 @@ data:
             weight: {{ no_hit_lru_weight | default(1.0) }}
 {% endif %}
 {% if session_aware_enabled | default(false) %}
-          - pluginRef: session-aware-scorer
+          - pluginRef: session-affinity-scorer
             weight: {{ session_aware_weight | default(2.0) }}
 {% endif %}
           - pluginRef: max-score-picker
@@ -72,6 +72,6 @@ data:
           - pluginRef: prefix-cache-scorer
             weight: 0
           - pluginRef: slo-request-tracker
-          - pluginRef: slo-scorer
+          - pluginRef: latency-scorer
           - pluginRef: max-score-picker
 {% endif %}

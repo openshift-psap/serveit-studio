@@ -78,7 +78,7 @@
                                             <td style="text-align:center;"><input type="number" id="epp-weight-queue" value="2" min="0" max="10" step="0.5" style="width:60px;text-align:center;padding:4px;border:1px solid #d1d5db;border-radius:4px;" onchange="updateEppCustom()"></td>
                                         </tr>
                                         <tr style="border-bottom:1px solid #f1f5f9;">
-                                            <td style="padding:8px;"><strong>slo-scorer</strong><br><span style="color:#64748b;font-size:0.85em;">Uses predicted latency to route requests to pods that can meet the SLO target. Requires latency SLA to be enabled.</span></td>
+                                            <td style="padding:8px;"><strong>latency-scorer</strong><br><span style="color:#64748b;font-size:0.85em;">Uses predicted latency to route requests to pods that can meet the SLO target. Requires latency SLA to be enabled.</span></td>
                                             <td style="text-align:center;"><input type="checkbox" id="epp-plugin-slo" onchange="updateEppCustom()"></td>
                                             <td style="text-align:center;"><input type="number" id="epp-weight-slo" value="3" min="0" max="10" step="0.5" style="width:60px;text-align:center;padding:4px;border:1px solid #d1d5db;border-radius:4px;" onchange="updateEppCustom()"></td>
                                         </tr>
@@ -98,7 +98,7 @@
                                             <td style="text-align:center;"><input type="number" id="epp-weight-no-hit-lru" value="1" min="0" max="10" step="0.5" style="width:60px;text-align:center;padding:4px;border:1px solid #d1d5db;border-radius:4px;" onchange="updateEppCustom()"></td>
                                         </tr>
                                         <tr style="border-bottom:1px solid #f1f5f9;">
-                                            <td style="padding:8px;"><strong>session-aware-scorer</strong><br><span style="color:#64748b;font-size:0.85em;">Routes requests from the same session/user to the same pod for better cache reuse across a conversation.</span></td>
+                                            <td style="padding:8px;"><strong>session-affinity-scorer</strong><br><span style="color:#64748b;font-size:0.85em;">Routes requests from the same session/user to the same pod for better cache reuse across a conversation.</span></td>
                                             <td style="text-align:center;"><input type="checkbox" id="epp-plugin-session-aware" onchange="updateEppCustom()"></td>
                                             <td style="text-align:center;"><input type="number" id="epp-weight-session-aware" value="2" min="0" max="10" step="0.5" style="width:60px;text-align:center;padding:4px;border:1px solid #d1d5db;border-radius:4px;" onchange="updateEppCustom()"></td>
                                         </tr>
