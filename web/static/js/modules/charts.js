@@ -1388,8 +1388,8 @@ function renderCharts(data, runId) {
                 // Throughput on right axis
                 traces.push({
                     x: pts.map(function(p) { return p.hit_pct; }),
-                    y: pts.map(function(p) { return p.throughput_mean; }),
-                    text: pts.map(function(p) { return p.throughput_mean.toFixed(1); }),
+                    y: pts.map(function(p) { return p.throughput_mean || 0; }),
+                    text: pts.map(function(p) { return (p.throughput_mean || 0).toFixed(1); }),
                     textposition: 'top center', textfont: { size: 9, color: '#d97706' },
                     mode: 'lines+markers+text', name: 'Throughput Mean',
                     yaxis: 'y2',
@@ -1467,14 +1467,14 @@ function renderCharts(data, runId) {
                 html += '<tr>';
                 html += '<td>' + p.hit_pct + '%</td>';
                 html += '<td>' + (p.actual_hit_rate != null ? p.actual_hit_rate.toFixed(1) + '%' : '-') + '</td>';
-                html += '<td>' + p.concurrency + '</td>';
-                html += '<td>' + p.ttft_p50.toFixed(0) + '</td>';
-                html += '<td>' + p.ttft_p90.toFixed(0) + '</td>';
+                html += '<td>' + (p.concurrency || '-') + '</td>';
+                html += '<td>' + (p.ttft_p50 ? p.ttft_p50.toFixed(0) : '-') + '</td>';
+                html += '<td>' + (p.ttft_p90 ? p.ttft_p90.toFixed(0) : '-') + '</td>';
                 html += '<td>' + (p.ttft_p95 ? p.ttft_p95.toFixed(0) : '-') + '</td>';
                 html += '<td>' + (p.ttft_p99 ? p.ttft_p99.toFixed(0) : '-') + '</td>';
-                html += '<td>' + p.throughput_mean.toFixed(2) + '</td>';
-                html += '<td>' + p.output_tps_mean.toFixed(1) + '</td>';
-                html += '<td>' + p.itl_p90.toFixed(1) + '</td>';
+                html += '<td>' + (p.throughput_mean ? p.throughput_mean.toFixed(2) : '-') + '</td>';
+                html += '<td>' + (p.output_tps_mean ? p.output_tps_mean.toFixed(1) : '-') + '</td>';
+                html += '<td>' + (p.itl_p90 ? p.itl_p90.toFixed(1) : '-') + '</td>';
                 html += '</tr>';
             });
             html += '</table></div></div>';
