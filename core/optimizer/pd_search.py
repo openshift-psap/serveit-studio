@@ -580,18 +580,18 @@ class PDSearchMixin:
             # Decode is bottleneck — shift pods from prefill to decode
             # Shift proportional to the imbalance, but halved
             if prefill_wait < 0.1:
-                shift = max(2, total_pods // 4)
+                shift = max(1, total_pods // 4)
             else:
                 ratio = decode_wait / max(prefill_wait, 0.01)
-                shift = max(2, int((ratio - 1) * current_d / 4))
+                shift = max(1, int((ratio - 1) * current_d / 4))
             ideal_d = current_d + shift
         else:
             # Prefill is bottleneck — shift pods from decode to prefill
             if decode_wait < 0.1:
-                shift = max(2, total_pods // 4)
+                shift = max(1, total_pods // 4)
             else:
                 ratio = prefill_wait / max(decode_wait, 0.01)
-                shift = max(2, int((ratio - 1) * current_p / 4))
+                shift = max(1, int((ratio - 1) * current_p / 4))
             ideal_d = current_d - shift
 
         # Keep at least 1 pod on each side
