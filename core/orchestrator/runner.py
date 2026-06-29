@@ -277,7 +277,7 @@ class TestOrchestrator(ParserMixin, GuidellmMixin):
                 else:
                     cmd = f"curl -s -o /dev/null -w '%{{http_code}}' --connect-timeout {timeout} '{url}'"
                 r = self.deployment_manager.kubectl.run(
-                    ['exec', 'serveit-workload', '-n', self.namespace, '--', 'bash', '-c', cmd],
+                    ['exec', self._guidellm_pod_name, '-n', self.namespace, '--', 'bash', '-c', cmd],
                     check=False
                 )
                 return r.stdout.strip() if r.returncode == 0 else '000'
@@ -561,7 +561,7 @@ class TestOrchestrator(ParserMixin, GuidellmMixin):
                 models_url = endpoint.rstrip('/') + '/v1/models'
                 curl_cmd = f"curl -s -o /dev/null -w '%{{http_code}}' --connect-timeout 5 '{models_url}'"
                 r = self.deployment_manager.kubectl.run(
-                    ['exec', 'serveit-workload', '-n', self.namespace, '--', 'bash', '-c', curl_cmd],
+                    ['exec', self._guidellm_pod_name, '-n', self.namespace, '--', 'bash', '-c', curl_cmd],
                     check=False
                 )
                 http_code = r.stdout.strip() if r.returncode == 0 else '000'
@@ -593,7 +593,7 @@ class TestOrchestrator(ParserMixin, GuidellmMixin):
                 })
                 curl_cmd = f"curl -s -w '\\n%{{http_code}}' --connect-timeout 10 -X POST -H 'Content-Type: application/json' -d '{payload_json}' '{completion_url}'"
                 r = self.deployment_manager.kubectl.run(
-                    ['exec', 'serveit-workload', '-n', self.namespace, '--', 'bash', '-c', curl_cmd],
+                    ['exec', self._guidellm_pod_name, '-n', self.namespace, '--', 'bash', '-c', curl_cmd],
                     check=False
                 )
                 lines = r.stdout.strip().split('\n') if r.returncode == 0 else []
