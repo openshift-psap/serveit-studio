@@ -69,7 +69,12 @@ class DatasetMixin:
 
         dataset_path = f'/mnt/storage/prefix-cache-datasets/random-workload-{isl}-{osl}-{seed}.jsonl'
 
-        # Check if already exists on workload pod
+        # Ensure workload pod is running
+        from core.optimizer.config import TestConfig
+        dummy_config = TestConfig(model_name=self.config.model_name, namespace=self.config.namespace,
+                                  pvc_name=getattr(self.config, 'pvc_name', 'serveit-cache'))
+        self.orchestrator.ensure_guidellm_pod(dummy_config, log_callback=lambda msg: self.log(msg, 'info'))
+
         kubectl = self.orchestrator.deployment_manager.kubectl
         pod_name = self.orchestrator._guidellm_pod_name
         exists = kubectl.run(
@@ -144,6 +149,12 @@ class DatasetMixin:
         self.log(f"Generating prefix cache dataset: {hit_pct}% hit ratio, {pool_size} rows, seed={seed}", 'info')
         self.log(f"   Estimated cacheable sequences: {cacheable_sequences}", 'info')
         self.log(f"   Mode: {cache_mode}", 'info')
+
+        # Ensure workload pod is running
+        from core.optimizer.config import TestConfig
+        dummy_config = TestConfig(model_name=self.config.model_name, namespace=self.config.namespace,
+                                  pvc_name=getattr(self.config, 'pvc_name', 'serveit-cache'))
+        self.orchestrator.ensure_guidellm_pod(dummy_config, log_callback=lambda msg: self.log(msg, 'info'))
 
         kubectl = self.orchestrator.deployment_manager.kubectl
         pod_name = self.orchestrator._guidellm_pod_name
