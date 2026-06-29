@@ -100,7 +100,7 @@ class DatasetMixin:
 
             result = kubectl.run(
                 ['exec', pod_name, '-n', self.config.namespace, '--', 'bash', '-c', cmd],
-                check=False
+                check=False, timeout=3600
             )
             if result.returncode != 0:
                 self.log(f"   ❌ Dataset generation failed: {result.stderr[:200]}", 'error')
@@ -180,7 +180,7 @@ class DatasetMixin:
 
             result = kubectl.run(
                 ['exec', pod_name, '-n', self.config.namespace, '--', 'bash', '-c', cmd],
-                check=False
+                check=False, timeout=3600
             )
             if result.returncode != 0:
                 self.log(f"   ❌ Dataset generation failed: {result.stderr[:200]}", 'error')

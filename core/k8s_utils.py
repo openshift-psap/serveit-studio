@@ -72,7 +72,8 @@ class KubectlRunner:
         self,
         args: List[str],
         input_data: Optional[str] = None,
-        check: bool = True
+        check: bool = True,
+        timeout: int = 60
     ) -> subprocess.CompletedProcess:
         """Run kubectl command and return result.
 
@@ -80,6 +81,7 @@ class KubectlRunner:
             args: Command arguments (without kubectl/oc prefix)
             input_data: Optional stdin data for the command
             check: Whether to raise exception on non-zero exit
+            timeout: Command timeout in seconds (default 60)
 
         Returns:
             CompletedProcess result
@@ -97,7 +99,7 @@ class KubectlRunner:
                 text=True,
                 check=check,
                 env=self._env,
-                timeout=60
+                timeout=timeout
             )
             return result
         except subprocess.TimeoutExpired:
