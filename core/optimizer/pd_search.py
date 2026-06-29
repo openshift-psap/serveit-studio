@@ -622,34 +622,31 @@ class PDSearchMixin:
     def _compute_balanced_split(self, ptp, dtp, tested_split, decode_wait, prefill_wait):
         """Compute the next split by shifting pods toward the bottleneck side.
 
-        Uses per-pod waiting to determine direction and magnitude.
-        Moves halfway toward the ideal, minimum 2 pods shift.
+        When both sides have meaningful data (>0.1), use the full ratio-based
+        shift. When one side has near-zero waiting (no signal), limit to 25%
+        of total pods to avoid overshooting.
         """
         import math
         current_d = tested_split.decode_pods
         current_p = tested_split.prefill_pods
         total_pods = current_d + current_p
+        both_have_data = decode_wait > 0.1 and prefill_wait > 0.1
 
-        # Determine direction: which side needs more pods?
         if decode_wait > prefill_wait:
-            # Decode is bottleneck — shift pods from prefill to decode
-            # Shift proportional to the imbalance, but halved
-            if prefill_wait < 0.1:
-                shift = max(1, total_pods // 4)
+            if both_have_data:
+                ratio = decode_wait / prefill_wait
+                shift = max(1, int((ratio - 1) * current_d / 2))
             else:
-                ratio = decode_wait / max(prefill_wait, 0.01)
-                shift = max(1, int((ratio - 1) * current_d / 4))
+                shift = max(1, total_pods // 4)
             ideal_d = current_d + shift
         else:
-            # Prefill is bottleneck — shift pods from decode to prefill
-            if decode_wait < 0.1:
-                shift = max(1, total_pods // 4)
+            if both_have_data:
+                ratio = prefill_wait / decode_wait
+                shift = max(1, int((ratio - 1) * current_p / 2))
             else:
-                ratio = prefill_wait / max(decode_wait, 0.01)
-                shift = max(1, int((ratio - 1) * current_p / 4))
+                shift = max(1, total_pods // 4)
             ideal_d = current_d - shift
 
-        # Keep at least 1 pod on each side
         total_gpus = tested_split.total_gpus
         max_d = (total_gpus - ptp) // dtp
         ideal_d = max(1, min(max_d, ideal_d))
