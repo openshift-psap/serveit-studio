@@ -72,7 +72,7 @@ def _generate_random_chunk(chunk_args):
 
 def generate_random_parallel(args):
     """Generate random dataset using multiprocessing."""
-    num_workers = min(multiprocessing.cpu_count(), 4)
+    num_workers = min(multiprocessing.cpu_count(), 8)
     chunk_size = args.rows // num_workers
     remainder = args.rows % num_workers
 
@@ -128,7 +128,7 @@ def _generate_cache_chunk(chunk_args):
 
 def generate_cache_parallel(args):
     """Generate cache dataset using multiprocessing."""
-    num_workers = min(multiprocessing.cpu_count(), 4)
+    num_workers = min(multiprocessing.cpu_count(), 8)
 
     # Generate shared prompt in main process
     tokenizer, vocab = _load_tokenizer(args.model)
