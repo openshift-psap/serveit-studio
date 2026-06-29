@@ -149,27 +149,29 @@ class GuidellmMixin:
         column_args = ''
         if workload_mode == 'dataset' and getattr(config, 'dataset_source', None):
             data_payload = config.dataset_source
-            # Copy dataset to workload pod if it's a local file (skip if already there)
-            if os.path.isfile(data_payload):
-                already_exists = kubectl.run(
-                    ['exec', self._guidellm_pod_name, '-n', self.namespace, '--',
-                     'test', '-f', data_payload], check=False
-                ).returncode == 0
-                if not already_exists:
-                    remote_dir = os.path.dirname(data_payload)
-                    kubectl.run(['exec', self._guidellm_pod_name, '-n', self.namespace, '--',
-                                 'mkdir', '-p', remote_dir], check=False)
-                    import subprocess as _sp
-                    env = os.environ.copy()
-                    env['KUBECONFIG'] = os.path.expanduser(kubectl.kubeconfig)
-                    _sp.run([kubectl.kubectl_cmd, 'cp', data_payload,
-                             f'{self._guidellm_pod_name}:{data_payload}',
-                             '-n', self.namespace], env=env, check=False, timeout=120)
-                    if log_callback:
-                        log_callback(f"   Copied dataset to workload pod: {os.path.basename(data_payload)}")
-                else:
-                    if log_callback:
-                        log_callback(f"   Dataset already on workload pod: {os.path.basename(data_payload)}")
+            # Verify dataset exists on workload pod
+            exists = kubectl.run(
+                ['exec', self._guidellm_pod_name, '-n', self.namespace, '--',
+                 'test', '-f', data_payload], check=False
+            ).returncode == 0
+            if exists:
+                if log_callback:
+                    log_callback(f"   Dataset already on workload pod: {os.path.basename(data_payload)}")
+            elif os.path.isfile(data_payload):
+                remote_dir = os.path.dirname(data_payload)
+                kubectl.run(['exec', self._guidellm_pod_name, '-n', self.namespace, '--',
+                             'mkdir', '-p', remote_dir], check=False)
+                import subprocess as _sp
+                env = os.environ.copy()
+                env['KUBECONFIG'] = os.path.expanduser(kubectl.kubeconfig)
+                _sp.run([kubectl.kubectl_cmd, 'cp', data_payload,
+                         f'{self._guidellm_pod_name}:{data_payload}',
+                         '-n', self.namespace], env=env, check=False, timeout=120)
+                if log_callback:
+                    log_callback(f"   Copied dataset to workload pod: {os.path.basename(data_payload)}")
+            else:
+                if log_callback:
+                    log_callback(f"   ⚠️  Dataset not found: {data_payload}")
             col = getattr(config, 'dataset_column', None) or 'prompt'
             column_args = f' --data-column-mapper \'{{"text_column": "{col}", "output_tokens_count_column": "output_tokens_count"}}\''
         else:

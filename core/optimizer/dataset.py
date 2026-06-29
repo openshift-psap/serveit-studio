@@ -52,11 +52,10 @@ class DatasetMixin:
         return make_prompt
 
     def _generate_random_dataset(self):
-        """Generate a dataset with unique random prompts (0% cache hit).
+        """Generate a dataset with unique random prompts on the workload pod.
 
-        Every row has a unique prompt — no shared prefixes, no repetition.
-        Used for Steps 6-12 when prefix caching is disabled or for cache
-        sweep at 0% hit level.
+        Runs generate_dataset script on the workload pod via kubectl exec.
+        The dataset is written directly to the workload pod's shared storage.
         """
         isl = self.config.isl
         osl = self.config.osl
@@ -68,54 +67,58 @@ class DatasetMixin:
         pool_size = int(getattr(self.config, 'qps', 100) * getattr(self.config, 'test_duration', 300) * 1.5)
         pool_size = max(1000, min(pool_size, 100000))
 
-        output_dir = Path(os.environ.get('HOME_STORAGE_DIR', '/mnt/storage')) / 'prefix-cache-datasets'
-        output_dir.mkdir(parents=True, exist_ok=True)
-        dataset_path = output_dir / f'random-workload-{isl}-{osl}-{seed}.jsonl'
+        dataset_path = f'/mnt/storage/prefix-cache-datasets/random-workload-{isl}-{osl}-{seed}.jsonl'
 
-        if dataset_path.exists():
-            self.log(f"   Reusing existing random dataset: {dataset_path}", 'info')
+        # Check if already exists on workload pod
+        kubectl = self.orchestrator.deployment_manager.kubectl
+        pod_name = self.orchestrator._guidellm_pod_name
+        exists = kubectl.run(
+            ['exec', pod_name, '-n', self.config.namespace, '--',
+             'test', '-f', dataset_path], check=False
+        ).returncode == 0
+
+        if exists:
+            self.log(f"   Reusing existing random dataset on workload pod: {os.path.basename(dataset_path)}", 'info')
         else:
-            self.log(f"Generating random dataset: {pool_size} rows, ISL={isl}, OSL={osl}", 'info')
-            make_prompt = self._build_prompt_maker()
+            self.log(f"Generating random dataset on workload pod: {pool_size} rows, ISL={isl}, OSL={osl}", 'info')
             isl_stdev = self.config.isl_stdev or 0
             osl_stdev = self.config.osl_stdev or 0
+            cmd = (
+                f'generate_dataset'
+                f' --model "{self.config.model_name}"'
+                f' --isl {isl} --osl {osl}'
+                f' --seed {seed} --rows {pool_size}'
+                f' --output {dataset_path}'
+                f' --mode random'
+            )
+            if isl_stdev > 0:
+                cmd += f' --isl-stdev {isl_stdev}'
+            if osl_stdev > 0:
+                cmd += f' --osl-stdev {osl_stdev}'
 
-            rows = []
-            for i in range(pool_size):
-                row_rng = random.Random(seed + i + 1)
-                if isl_stdev > 0:
-                    row_isl = max(10, int(row_rng.gauss(isl, isl_stdev)))
-                else:
-                    row_isl = isl
-                if osl_stdev > 0:
-                    row_osl = max(1, int(row_rng.gauss(osl, osl_stdev)))
-                else:
-                    row_osl = osl
-                prompt = make_prompt(row_isl, row_rng)
-                rows.append(_json.dumps({'prompt': prompt, 'output_tokens_count': row_osl}))
+            result = kubectl.run(
+                ['exec', pod_name, '-n', self.config.namespace, '--', 'bash', '-c', cmd],
+                check=False, timeout=1800
+            )
+            if result.returncode != 0:
+                self.log(f"   ❌ Dataset generation failed: {result.stderr[:200]}", 'error')
+                raise RuntimeError(f"Failed to generate random dataset on workload pod")
+            if result.stderr:
+                for line in result.stderr.strip().splitlines():
+                    self.log(f"   {line}", 'info')
 
-            with open(dataset_path, 'w') as f:
-                f.write('\n'.join(rows) + '\n')
-            file_size_mb = dataset_path.stat().st_size / (1024 * 1024)
-            self.log(f"   Generated {dataset_path} ({file_size_mb:.1f} MB)", 'success')
-
-        self.random_dataset_path = str(dataset_path)
-        return str(dataset_path)
+        self.random_dataset_path = dataset_path
+        return dataset_path
 
     def _generate_prefix_cache_dataset(self):
-        """Generate a synthetic dataset with controlled prefix cache hit ratio.
+        """Generate a prefix cache dataset on the workload pod.
 
-        Creates a .jsonl file where prefix_cache_hit_pct% of rows share an
-        identical prompt (guaranteeing prefix cache hits) and the rest are
-        unique random prompts. The dataset is sized to overflow GPU prefix
-        cache so unique prompts don't accidentally get cached.
+        Uses the generate_dataset script on the workload pod for speed.
         """
-
         hit_pct = self.config.prefix_cache_hit_pct
         isl = self.config.isl
         osl = self.config.osl
 
-        # Compute deterministic seed from config (includes stdev so different variation = different dataset)
         cache_mode = self.config.prefix_cache_mode or 'identical'
         groups_str = str(self.config.prefix_cache_groups or 5) if cache_mode == 'multi_group' else '0'
         seed_input = f"{self.config.model_name}:{isl}:{osl}:{hit_pct}:{self.config.isl_stdev or 0}:{self.config.osl_stdev or 0}:{cache_mode}:{groups_str}"
@@ -125,127 +128,61 @@ class DatasetMixin:
             seed = int(hashlib.sha256(seed_input.encode()).hexdigest()[:8], 16)
             self.config.prefix_cache_seed = seed
 
-        # Calculate pool size: overflow the prefix cache
         gpu_vram_gb = getattr(self, '_gpu_vram_gb', 80.0)
         total_gpus = self.config.total_gpus
         model_size_gb = self._estimate_model_size_gb()
         available_cache_gb = max(1, total_gpus * gpu_vram_gb * 0.9 - model_size_gb)
-        # KV cache per token ≈ 2 * num_layers * num_kv_heads * head_dim * dtype_bytes
-        # Simplified: ~0.5KB/token for typical models
         cacheable_tokens = available_cache_gb * 1024 * 1024 * 1024 / 512
         cacheable_sequences = max(100, int(cacheable_tokens / isl))
-        # Pool needs enough unique rows that they get evicted before cycling back.
-        # 1.5x the cacheable count is sufficient — the duplicates fill up the cache,
-        # and unique rows rotate through faster than the cache can hold them all.
         pool_size = max(1000, int(cacheable_sequences * 1.5))
-        # Ensure enough rows to cover the full test duration without data exhaustion
         min_rows = int(getattr(self.config, 'qps', 100) * getattr(self.config, 'test_duration', 300) * 1.5)
         pool_size = max(pool_size, min_rows)
         pool_size = min(pool_size, 100000)
 
+        dataset_path = f'/mnt/storage/prefix-cache-datasets/prefix-cache-{cache_mode}-{seed}.jsonl'
+
         self.log(f"Generating prefix cache dataset: {hit_pct}% hit ratio, {pool_size} rows, seed={seed}", 'info')
         self.log(f"   Estimated cacheable sequences: {cacheable_sequences}", 'info')
-
-        rng = random.Random(seed)
-        make_prompt = self._build_prompt_maker()
-
-        # Generate the shared prompt (fixed length — must be identical for cache hits)
-        shared_rng = random.Random(seed)
-        shared_prompt = make_prompt(isl, shared_rng)
-
-        isl_stdev = self.config.isl_stdev or 0
-        osl_stdev = self.config.osl_stdev or 0
-
-        cache_mode = self.config.prefix_cache_mode or 'identical'
         self.log(f"   Mode: {cache_mode}", 'info')
 
-        # Generate dataset
-        output_dir = Path(os.environ.get('HOME_STORAGE_DIR', '/mnt/storage')) / 'prefix-cache-datasets'
-        output_dir.mkdir(parents=True, exist_ok=True)
-        dataset_path = output_dir / f'prefix-cache-{cache_mode}-{seed}.jsonl'
+        kubectl = self.orchestrator.deployment_manager.kubectl
+        pod_name = self.orchestrator._guidellm_pod_name
+        exists = kubectl.run(
+            ['exec', pod_name, '-n', self.config.namespace, '--',
+             'test', '-f', dataset_path], check=False
+        ).returncode == 0
 
-        if dataset_path.exists():
-            self.log(f"   Reusing existing dataset: {dataset_path}", 'info')
+        if exists:
+            self.log(f"   Reusing existing dataset: {os.path.basename(dataset_path)}", 'info')
         else:
-            rows = []
+            isl_stdev = self.config.isl_stdev or 0
+            osl_stdev = self.config.osl_stdev or 0
+            cmd = (
+                f'generate_dataset'
+                f' --model "{self.config.model_name}"'
+                f' --isl {isl} --osl {osl}'
+                f' --seed {seed} --rows {pool_size}'
+                f' --output {dataset_path}'
+                f' --mode cache --hit-pct {hit_pct}'
+            )
+            if isl_stdev > 0:
+                cmd += f' --isl-stdev {isl_stdev}'
+            if osl_stdev > 0:
+                cmd += f' --osl-stdev {osl_stdev}'
 
-            if cache_mode == 'shared_prefix':
-                shared_token_count = int(isl * hit_pct / 100)
-                unique_token_count = isl - shared_token_count
-                shared_prefix_text = make_prompt(shared_token_count, random.Random(seed))
-                self.log(f"   Shared prefix: {shared_token_count} tokens, unique suffix: {unique_token_count} tokens", 'info')
+            result = kubectl.run(
+                ['exec', pod_name, '-n', self.config.namespace, '--', 'bash', '-c', cmd],
+                check=False, timeout=1800
+            )
+            if result.returncode != 0:
+                self.log(f"   ❌ Dataset generation failed: {result.stderr[:200]}", 'error')
+                raise RuntimeError(f"Failed to generate prefix cache dataset on workload pod")
+            if result.stderr:
+                for line in result.stderr.strip().splitlines():
+                    self.log(f"   {line}", 'info')
 
-                for i in range(pool_size):
-                    suffix_rng = random.Random(seed + i + 1)
-                    if isl_stdev > 0:
-                        row_unique = max(1, int(suffix_rng.gauss(unique_token_count, isl_stdev * unique_token_count / isl)))
-                    else:
-                        row_unique = unique_token_count
-                    suffix_text = make_prompt(row_unique, suffix_rng)
-                    prompt = shared_prefix_text + ' ' + suffix_text
-                    if osl_stdev > 0:
-                        row_osl = max(1, int(suffix_rng.gauss(osl, osl_stdev)))
-                    else:
-                        row_osl = osl
-                    rows.append({"prompt": prompt, "output_tokens_count": row_osl})
-
-            elif cache_mode == 'multi_group':
-                num_groups = max(2, self.config.prefix_cache_groups or 5)
-                num_grouped = int(pool_size * hit_pct / 100)
-                num_unique = pool_size - num_grouped
-                per_group = max(1, num_grouped // num_groups)
-                self.log(f"   Multi-group: {num_groups} groups, {per_group} requests/group, {num_unique} unique", 'info')
-
-                group_prompts = []
-                for g in range(num_groups):
-                    group_rng = random.Random(seed + 100000 + g)
-                    group_prompts.append(make_prompt(isl, group_rng))
-
-                for g in range(num_groups):
-                    for _ in range(per_group):
-                        rows.append({"prompt": group_prompts[g], "output_tokens_count": osl})
-
-                for i in range(num_unique):
-                    unique_rng = random.Random(seed + i + 1)
-                    if isl_stdev > 0:
-                        row_isl = max(16, int(unique_rng.gauss(isl, isl_stdev)))
-                    else:
-                        row_isl = isl
-                    if osl_stdev > 0:
-                        row_osl = max(1, int(unique_rng.gauss(osl, osl_stdev)))
-                    else:
-                        row_osl = osl
-                    rows.append({"prompt": make_prompt(row_isl, unique_rng), "output_tokens_count": row_osl})
-
-            else:
-                num_shared = int(pool_size * hit_pct / 100)
-                num_unique = pool_size - num_shared
-                for _ in range(num_shared):
-                    rows.append({"prompt": shared_prompt, "output_tokens_count": osl})
-                for i in range(num_unique):
-                    unique_rng = random.Random(seed + i + 1)
-                    if isl_stdev > 0:
-                        row_isl = max(16, int(unique_rng.gauss(isl, isl_stdev)))
-                    else:
-                        row_isl = isl
-                    if osl_stdev > 0:
-                        row_osl = max(1, int(unique_rng.gauss(osl, osl_stdev)))
-                    else:
-                        row_osl = osl
-                    rows.append({"prompt": make_prompt(row_isl, unique_rng), "output_tokens_count": row_osl})
-
-            rng.shuffle(rows)
-
-            with open(dataset_path, 'w') as f:
-                for row in rows:
-                    f.write(_json.dumps(row) + '\n')
-
-            file_size_mb = dataset_path.stat().st_size / (1024 * 1024)
-            self.log(f"   Generated {dataset_path} ({file_size_mb:.1f} MB)", 'success')
-
-        # Switch workload mode to dataset for all subsequent tests
         self.config.workload_mode = 'dataset'
-        self.config.dataset_source = str(dataset_path)
+        self.config.dataset_source = dataset_path
         self.config.dataset_column = 'prompt'
         self.config.dataset_max_output = osl
         self.log(f"   Workload switched to dataset mode for prefix cache simulation", 'info')

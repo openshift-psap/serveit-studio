@@ -46,5 +46,9 @@ WORKDIR /app
 COPY scripts/parse_guidellm.py /usr/local/bin/parse_guidellm
 RUN chmod +x /usr/local/bin/parse_guidellm
 
+# Add dataset generation script
+COPY scripts/generate_dataset.py /usr/local/bin/generate_dataset
+RUN chmod +x /usr/local/bin/generate_dataset
+
 # Keep alive — the server does kubectl exec to run guidellm commands
 CMD ["sleep", "infinity"]
