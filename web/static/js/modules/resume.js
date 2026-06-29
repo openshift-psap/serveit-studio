@@ -66,12 +66,14 @@ function loadResumeRuns() {
                     const currentStepName = stepNames[lastStep] || `Step ${lastStep}`;
                     progressLabel = `${currentStepName} (${completed} tests)`;
                     if (run.status === 'stopped') progressLabel += ' Stopped';
+                    if (run.status === 'interrupted') progressLabel += ' Interrupted';
                 }
 
                 // Determine if resumable
-                const canResume = (run.status !== 'completed' && completed > 0) ||
-                                  (run.status === 'failed') ||
-                                  (run.status === 'running');
+                const canResume = run.status !== 'completed' &&
+                                  (run.status === 'stopped' || run.status === 'interrupted' ||
+                                   run.status === 'failed' || run.status === 'running' ||
+                                   completed > 0);
 
                 // Truncate model name for display
                 const modelShort = (run.model || '').split('/').pop() || run.model || '-';
