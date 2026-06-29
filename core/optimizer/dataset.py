@@ -148,10 +148,7 @@ class DatasetMixin:
         self.log(f"   Mode: {cache_mode}", 'info')
 
         # Ensure workload pod is running
-        from core.optimizer.config import TestConfig
-        dummy_config = TestConfig(model_name=self.config.model_name, namespace=self.config.namespace,
-                                  pvc_name=getattr(self.config, 'pvc_name', 'serveit-cache'))
-        self.orchestrator.ensure_guidellm_pod(dummy_config, log_callback=lambda msg: self.log(msg, 'info'))
+        self.orchestrator.ensure_guidellm_pod(self.config, log_callback=lambda msg: self.log(msg, 'info'))
 
         kubectl = self.orchestrator.deployment_manager.kubectl
         pod_name = self.orchestrator._guidellm_pod_name
