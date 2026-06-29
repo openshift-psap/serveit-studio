@@ -689,8 +689,9 @@ class RecipeOptimizer(
                                 try:
                                     remote_path = f"/tmp/guidellm-{name}.json"
                                     kubectl = self.orchestrator.deployment_manager.kubectl
+                                    workload_pod = self.orchestrator._guidellm_pod_name
                                     md5_r = kubectl.run(
-                                        ['exec', 'serveit-workload', '-n', self.config.namespace,
+                                        ['exec', workload_pod, '-n', self.config.namespace,
                                          '--', 'md5sum', remote_path], check=False)
                                     if md5_r.returncode == 0:
                                         remote_md5 = md5_r.stdout.strip().split()[0]
@@ -700,7 +701,7 @@ class RecipeOptimizer(
                                         for attempt in range(3):
                                             _sp.run(
                                                 [kubectl.kubectl_cmd, 'cp',
-                                                 f'serveit-workload:{remote_path}',
+                                                 f'{workload_pod}:{remote_path}',
                                                  str(raw_file), '-n', self.config.namespace],
                                                 env=cp_env, check=False, timeout=120)
                                             if raw_file.exists() and raw_file.stat().st_size > 0:
