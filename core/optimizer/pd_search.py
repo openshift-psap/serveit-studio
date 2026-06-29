@@ -520,13 +520,30 @@ class PDSearchMixin:
         Returns (decode_avg_waiting, prefill_avg_waiting, ratio) or None if
         metrics are unavailable.
         """
-        if not result.metrics_file:
-            return None
         import json as _json
-        try:
-            with open(result.metrics_file) as f:
-                data = _json.load(f)
-        except Exception:
+        data = None
+
+        # Try metrics_file first
+        if result.metrics_file:
+            try:
+                with open(result.metrics_file) as f:
+                    data = _json.load(f)
+            except Exception:
+                pass
+
+        # Fallback: try known path from test_id
+        if data is None and result.test_id:
+            import os
+            fallback_path = os.path.join(
+                os.environ.get('HOME_STORAGE_DIR', '/mnt/storage'),
+                'results', result.test_id, 'metrics.json')
+            try:
+                with open(fallback_path) as f:
+                    data = _json.load(f)
+            except Exception:
+                pass
+
+        if data is None:
             return None
 
         metrics = data.get('metrics', {})
