@@ -568,7 +568,8 @@ class PDSearchMixin:
         """Compute the balanced split based on waiting ratio.
 
         Uses the waiting ratio to determine how many pods to shift between
-        prefill and decode to equalize per-pod waiting queues.
+        prefill and decode. Clamps the adjustment to at most 50% of current
+        pod count per iteration to avoid extreme swings.
         """
         total_decode_waiting = decode_wait * tested_split.decode_pods
         total_prefill_waiting = prefill_wait * tested_split.prefill_pods
@@ -577,15 +578,22 @@ class PDSearchMixin:
         if total_decode_waiting + total_prefill_waiting < 0.1:
             return None
 
-        # Solve: total_decode_waiting / new_D = total_prefill_waiting / new_P
-        # with new_D * dtp + new_P * ptp = total_gpus
-        # => new_D = total_gpus * total_decode_waiting / (dtp * total_decode_waiting + ptp * total_prefill_waiting)
+        # Floor low waiting to prevent division-by-zero swings
+        total_prefill_waiting = max(total_prefill_waiting, 0.5)
+        total_decode_waiting = max(total_decode_waiting, 0.5)
+
         denom = dtp * total_decode_waiting + ptp * total_prefill_waiting
         if denom <= 0:
             return None
 
         ideal_d = total_gpus * total_decode_waiting / denom
+
+        # Clamp: don't move more than 50% of current decode pods per iteration
         import math
+        current_d = tested_split.decode_pods
+        max_shift = max(2, current_d // 2)
+        ideal_d = max(current_d - max_shift, min(current_d + max_shift, ideal_d))
+
         candidate_d_values = sorted({max(1, math.floor(ideal_d)), max(1, math.ceil(ideal_d))})
 
         all_valid = {s.decode_pods: s for s in self._generate_splits_for_tp_pair(ptp, dtp)}
