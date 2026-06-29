@@ -565,33 +565,39 @@ class PDSearchMixin:
         return decode_avg, prefill_avg, ratio
 
     def _compute_balanced_split(self, ptp, dtp, tested_split, decode_wait, prefill_wait):
-        """Compute the balanced split based on waiting ratio.
+        """Compute the next split by shifting pods toward the bottleneck side.
 
-        Uses the waiting ratio to determine how many pods to shift between
-        prefill and decode. Clamps the adjustment to at most 50% of current
-        pod count per iteration to avoid extreme swings.
+        Uses per-pod waiting to determine direction and magnitude.
+        Moves halfway toward the ideal, minimum 2 pods shift.
         """
-        total_decode_waiting = decode_wait * tested_split.decode_pods
-        total_prefill_waiting = prefill_wait * tested_split.prefill_pods
-        total_gpus = tested_split.total_gpus
-
-        if total_decode_waiting + total_prefill_waiting < 0.1:
-            return None
-
-        denom = dtp * total_decode_waiting + ptp * total_prefill_waiting
-        if denom <= 0:
-            return None
-
-        ideal_d = total_gpus * total_decode_waiting / denom
-
-        # Take half the step: move halfway between current and ideal
         import math
         current_d = tested_split.decode_pods
-        shift = ideal_d - current_d
-        ideal_d = current_d + shift / 2
-        # Ensure at least 2 pod shift to avoid pointless 1-pod moves
-        if abs(ideal_d - current_d) < 2:
-            ideal_d = current_d + (2 if shift > 0 else -2)
+        current_p = tested_split.prefill_pods
+        total_pods = current_d + current_p
+
+        # Determine direction: which side needs more pods?
+        if decode_wait > prefill_wait:
+            # Decode is bottleneck — shift pods from prefill to decode
+            # Shift proportional to the imbalance, but halved
+            if prefill_wait < 0.1:
+                shift = max(2, total_pods // 4)
+            else:
+                ratio = decode_wait / max(prefill_wait, 0.01)
+                shift = max(2, int((ratio - 1) * current_d / 4))
+            ideal_d = current_d + shift
+        else:
+            # Prefill is bottleneck — shift pods from decode to prefill
+            if decode_wait < 0.1:
+                shift = max(2, total_pods // 4)
+            else:
+                ratio = prefill_wait / max(decode_wait, 0.01)
+                shift = max(2, int((ratio - 1) * current_p / 4))
+            ideal_d = current_d - shift
+
+        # Keep at least 1 pod on each side
+        total_gpus = tested_split.total_gpus
+        max_d = (total_gpus - ptp) // dtp
+        ideal_d = max(1, min(max_d, ideal_d))
 
         candidate_d_values = sorted({max(1, math.floor(ideal_d)), max(1, math.ceil(ideal_d))})
 
