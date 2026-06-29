@@ -21,7 +21,7 @@ spec:
       containers:
       - name: guidellm
         image: {{ image }}
-        imagePullPolicy: IfNotPresent
+        imagePullPolicy: Always
         command: ["sleep", "infinity"]
         env:
         - name: HF_HOME
