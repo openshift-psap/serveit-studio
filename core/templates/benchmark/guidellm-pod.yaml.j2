@@ -20,9 +20,15 @@ spec:
       value: "/mnt/storage/.cache/huggingface/datasets"
     - name: TRANSFORMERS_CACHE
       value: "/mnt/storage/.cache/huggingface/transformers"
-{% if hf_token %}
     - name: HF_TOKEN
+{% if hf_token %}
       value: "{{ hf_token }}"
+{% else %}
+      valueFrom:
+        secretKeyRef:
+          name: llm-d-hf-token
+          key: HF_TOKEN
+          optional: true
 {% endif %}
     resources:
       requests:
