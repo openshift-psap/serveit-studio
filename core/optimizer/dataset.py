@@ -86,7 +86,7 @@ class DatasetMixin:
             isl_stdev = self.config.isl_stdev or 0
             osl_stdev = self.config.osl_stdev or 0
             cmd = (
-                f'generate_dataset'
+                f'/mnt/storage/generate_dataset'
                 f' --model "{self.config.model_name}"'
                 f' --isl {isl} --osl {osl}'
                 f' --seed {seed} --rows {pool_size}'
@@ -166,7 +166,7 @@ class DatasetMixin:
             isl_stdev = self.config.isl_stdev or 0
             osl_stdev = self.config.osl_stdev or 0
             cmd = (
-                f'generate_dataset'
+                f'/mnt/storage/generate_dataset'
                 f' --model "{self.config.model_name}"'
                 f' --isl {isl} --osl {osl}'
                 f' --seed {seed} --rows {pool_size}'
