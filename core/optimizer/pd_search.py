@@ -514,16 +514,55 @@ class PDSearchMixin:
                  f"(selected by {criterion})", 'success')
         self.log(f"   TTFT p90: {best_ttft:.1f}ms, Throughput mean: {best_tput:.2f} req/s", 'info')
 
+    def _save_waiting_ratio(self, test_id, waiting):
+        """Save per-pod waiting breakdown to DB for resume support."""
+        if not self.db_manager or not self.run_id:
+            return
+        decode_wait, prefill_wait, ratio = waiting
+        try:
+            import json as _json
+            with self.db_manager.get_connection() as conn:
+                row = conn.execute(
+                    'SELECT metrics_json FROM test_configurations WHERE run_id=? AND config_name=?',
+                    (self.run_id, test_id)).fetchone()
+                if row and row[0]:
+                    mj = _json.loads(row[0])
+                    mj['decode_avg_waiting'] = round(decode_wait, 4)
+                    mj['prefill_avg_waiting'] = round(prefill_wait, 4)
+                    mj['waiting_ratio'] = round(ratio, 4)
+                    conn.execute(
+                        'UPDATE test_configurations SET metrics_json=? WHERE run_id=? AND config_name=?',
+                        (_json.dumps(mj), self.run_id, test_id))
+        except Exception:
+            pass
+
     def _get_waiting_ratio(self, result):
         """Extract per-pod waiting ratio (decode/prefill) from test metrics.
 
-        Returns (decode_avg_waiting, prefill_avg_waiting, ratio) or None if
-        metrics are unavailable.
+        Returns (decode_avg_waiting, prefill_avg_waiting, ratio) or None.
+        Tries: 1) DB stored values, 2) metrics file, 3) fallback path.
         """
         import json as _json
-        data = None
 
-        # Try metrics_file first
+        # Try DB first (saved by _save_waiting_ratio)
+        if self.db_manager and self.run_id and result.test_id:
+            try:
+                with self.db_manager.get_connection() as conn:
+                    row = conn.execute(
+                        'SELECT metrics_json FROM test_configurations WHERE run_id=? AND config_name=?',
+                        (self.run_id, result.test_id)).fetchone()
+                    if row and row[0]:
+                        mj = _json.loads(row[0])
+                        if 'decode_avg_waiting' in mj and 'prefill_avg_waiting' in mj:
+                            d = mj['decode_avg_waiting']
+                            p = mj['prefill_avg_waiting']
+                            r = mj.get('waiting_ratio', d / p if p > 0.1 else (10.0 if d > 0.5 else 1.0))
+                            return d, p, r
+            except Exception:
+                pass
+
+        # Fall back to metrics file
+        data = None
         if result.metrics_file:
             try:
                 with open(result.metrics_file) as f:
@@ -531,7 +570,6 @@ class PDSearchMixin:
             except Exception:
                 pass
 
-        # Fallback: try known path from test_id
         if data is None and result.test_id:
             import os
             fallback_path = os.path.join(
@@ -766,6 +804,9 @@ class PDSearchMixin:
 
                 # Analyze waiting ratio to decide next split
                 waiting = self._get_waiting_ratio(result)
+                if waiting is not None:
+                    test_id = f"step7-{current_split.prefill_pods}p{current_split.decode_pods}d-ptp{ptp}-dtp{dtp}"
+                    self._save_waiting_ratio(test_id, waiting)
                 if waiting is None:
                     self.log(f"    ℹ️  No vLLM waiting metrics — testing remaining planned splits", 'info')
                     # Fall back to testing remaining planned splits
