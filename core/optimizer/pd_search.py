@@ -635,14 +635,14 @@ class PDSearchMixin:
         if decode_wait > prefill_wait:
             if both_have_data:
                 ratio = decode_wait / prefill_wait
-                shift = max(1, int((ratio - 1) * current_d / 2))
+                shift = max(1, int((ratio - 1) * current_d))
             else:
                 shift = max(1, total_pods // 4)
             ideal_d = current_d + shift
         else:
             if both_have_data:
                 ratio = prefill_wait / decode_wait
-                shift = max(1, int((ratio - 1) * current_p / 2))
+                shift = max(1, int((ratio - 1) * current_p))
             else:
                 shift = max(1, total_pods // 4)
             ideal_d = current_d - shift
