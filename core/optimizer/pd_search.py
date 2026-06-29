@@ -578,21 +578,20 @@ class PDSearchMixin:
         if total_decode_waiting + total_prefill_waiting < 0.1:
             return None
 
-        # Floor low waiting to prevent division-by-zero swings
-        total_prefill_waiting = max(total_prefill_waiting, 0.5)
-        total_decode_waiting = max(total_decode_waiting, 0.5)
-
         denom = dtp * total_decode_waiting + ptp * total_prefill_waiting
         if denom <= 0:
             return None
 
         ideal_d = total_gpus * total_decode_waiting / denom
 
-        # Clamp: don't move more than 50% of current decode pods per iteration
+        # Take half the step: move halfway between current and ideal
         import math
         current_d = tested_split.decode_pods
-        max_shift = max(2, current_d // 2)
-        ideal_d = max(current_d - max_shift, min(current_d + max_shift, ideal_d))
+        shift = ideal_d - current_d
+        ideal_d = current_d + shift / 2
+        # Ensure at least 2 pod shift to avoid pointless 1-pod moves
+        if abs(ideal_d - current_d) < 2:
+            ideal_d = current_d + (2 if shift > 0 else -2)
 
         candidate_d_values = sorted({max(1, math.floor(ideal_d)), max(1, math.ceil(ideal_d))})
 
