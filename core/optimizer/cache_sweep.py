@@ -35,8 +35,9 @@ class CacheSweepMixin:
             self.config.prefix_cache_seed = None
 
             if hit_pct == 0:
-                self.config.workload_mode = 'synthetic'
-                return None
+                if hasattr(self, 'random_dataset_path') and self.random_dataset_path:
+                    return self.random_dataset_path
+                return self._generate_random_dataset()
 
             self._generate_prefix_cache_dataset()
             return getattr(self.config, 'dataset_source', None)

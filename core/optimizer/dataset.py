@@ -1,6 +1,7 @@
-"""Prefix cache dataset generation."""
+"""Dataset generation for optimization workloads."""
 
 import os
+import json as _json
 import hashlib
 import random
 from pathlib import Path
@@ -10,6 +11,97 @@ from typing import Optional
 class DatasetMixin:
     """Mixin providing dataset generation methods for RecipeOptimizer."""
 
+    def _build_prompt_maker(self):
+        """Build a prompt generation function using the model tokenizer if available."""
+        vocab = None
+        tokenizer = None
+        try:
+            from transformers import AutoTokenizer
+            hf_home = os.environ.get('HF_HOME') or os.path.join(
+                os.environ.get('HOME_STORAGE_DIR', '/mnt/storage'), '.cache', 'huggingface')
+            hf_token = self.config.hf_token or os.environ.get('HF_TOKEN')
+            tokenizer = AutoTokenizer.from_pretrained(
+                self.config.model_name, trust_remote_code=True,
+                cache_dir=hf_home, token=hf_token
+            )
+            vocab = [t for t in tokenizer.get_vocab().keys()
+                     if len(t) > 2 and t.isascii() and t.isalpha()]
+            if len(vocab) < 500:
+                vocab = None
+        except Exception:
+            pass
+
+        def make_prompt(length_tokens, rng_instance):
+            if vocab and tokenizer:
+                words = [rng_instance.choice(vocab) for _ in range(length_tokens * 2)]
+                text = ' '.join(words)
+                tokens = tokenizer.encode(text, add_special_tokens=False)
+                if len(tokens) > length_tokens:
+                    text = tokenizer.decode(tokens[:length_tokens], skip_special_tokens=True)
+            elif vocab:
+                words = [rng_instance.choice(vocab) for _ in range(length_tokens)]
+                text = ' '.join(words)
+            else:
+                words = []
+                for _ in range(int(length_tokens * 1.3)):
+                    wlen = rng_instance.randint(3, 10)
+                    words.append(''.join(rng_instance.choices('abcdefghijklmnopqrstuvwxyz', k=wlen)))
+                text = ' '.join(words)
+            return text
+
+        return make_prompt
+
+    def _generate_random_dataset(self):
+        """Generate a dataset with unique random prompts (0% cache hit).
+
+        Every row has a unique prompt — no shared prefixes, no repetition.
+        Used for Steps 6-12 when prefix caching is disabled or for cache
+        sweep at 0% hit level.
+        """
+        isl = self.config.isl
+        osl = self.config.osl
+        seed = getattr(self.config, 'prefix_cache_seed', None)
+        if not seed:
+            seed_input = f"{self.config.model_name}:{isl}:{osl}:random"
+            seed = int(hashlib.md5(seed_input.encode()).hexdigest()[:8], 16)
+
+        pool_size = int(getattr(self.config, 'qps', 100) * getattr(self.config, 'test_duration', 300) * 1.5)
+        pool_size = max(1000, min(pool_size, 100000))
+
+        output_dir = Path(os.environ.get('HOME_STORAGE_DIR', '/mnt/storage')) / 'prefix-cache-datasets'
+        output_dir.mkdir(parents=True, exist_ok=True)
+        dataset_path = output_dir / f'random-workload-{isl}-{osl}-{seed}.jsonl'
+
+        if dataset_path.exists():
+            self.log(f"   Reusing existing random dataset: {dataset_path}", 'info')
+        else:
+            self.log(f"Generating random dataset: {pool_size} rows, ISL={isl}, OSL={osl}", 'info')
+            make_prompt = self._build_prompt_maker()
+            isl_stdev = self.config.isl_stdev or 0
+            osl_stdev = self.config.osl_stdev or 0
+
+            rows = []
+            for i in range(pool_size):
+                row_rng = random.Random(seed + i + 1)
+                if isl_stdev > 0:
+                    row_isl = max(10, int(row_rng.gauss(isl, isl_stdev)))
+                else:
+                    row_isl = isl
+                if osl_stdev > 0:
+                    row_osl = max(1, int(row_rng.gauss(osl, osl_stdev)))
+                else:
+                    row_osl = osl
+                prompt = make_prompt(row_isl, row_rng)
+                rows.append(_json.dumps({'prompt': prompt, 'output_tokens_count': row_osl}))
+
+            with open(dataset_path, 'w') as f:
+                f.write('\n'.join(rows) + '\n')
+            file_size_mb = dataset_path.stat().st_size / (1024 * 1024)
+            self.log(f"   Generated {dataset_path} ({file_size_mb:.1f} MB)", 'success')
+
+        self.random_dataset_path = str(dataset_path)
+        return str(dataset_path)
+
     def _generate_prefix_cache_dataset(self):
         """Generate a synthetic dataset with controlled prefix cache hit ratio.
 
@@ -18,10 +110,6 @@ class DatasetMixin:
         unique random prompts. The dataset is sized to overflow GPU prefix
         cache so unique prompts don't accidentally get cached.
         """
-        import hashlib
-        import json as _json
-        import random
-        from pathlib import Path
 
         hit_pct = self.config.prefix_cache_hit_pct
         isl = self.config.isl
@@ -59,42 +147,7 @@ class DatasetMixin:
         self.log(f"   Estimated cacheable sequences: {cacheable_sequences}", 'info')
 
         rng = random.Random(seed)
-
-        # Build vocabulary of printable words for prompt generation
-        # Use model tokenizer if available, otherwise generate random words
-        try:
-            from transformers import AutoTokenizer
-            hf_home = os.environ.get('HF_HOME') or os.path.join(
-                os.environ.get('HOME_STORAGE_DIR', '/mnt/storage'), '.cache', 'huggingface')
-            hf_token = self.config.hf_token or os.environ.get('HF_TOKEN')
-            tokenizer = AutoTokenizer.from_pretrained(
-                self.config.model_name, trust_remote_code=True,
-                cache_dir=hf_home, token=hf_token
-            )
-            vocab = [t for t in tokenizer.get_vocab().keys()
-                     if len(t) > 2 and t.isascii() and t.isalpha()]
-            if len(vocab) < 500:
-                vocab = None
-        except Exception:
-            vocab = None
-
-        def make_prompt(length_tokens, rng_instance):
-            if vocab and tokenizer:
-                words = [rng_instance.choice(vocab) for _ in range(length_tokens * 2)]
-                text = ' '.join(words)
-                tokens = tokenizer.encode(text, add_special_tokens=False)
-                if len(tokens) > length_tokens:
-                    text = tokenizer.decode(tokens[:length_tokens], skip_special_tokens=True)
-            elif vocab:
-                words = [rng_instance.choice(vocab) for _ in range(length_tokens)]
-                text = ' '.join(words)
-            else:
-                words = []
-                for _ in range(int(length_tokens * 1.3)):
-                    wlen = rng_instance.randint(3, 10)
-                    words.append(''.join(rng_instance.choices('abcdefghijklmnopqrstuvwxyz', k=wlen)))
-                text = ' '.join(words)
-            return text
+        make_prompt = self._build_prompt_maker()
 
         # Generate the shared prompt (fixed length — must be identical for cache hits)
         shared_rng = random.Random(seed)

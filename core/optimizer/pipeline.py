@@ -1495,9 +1495,16 @@ class RecipeOptimizer(
                 strategy.execute()
                 return self._build_results()
 
-            # Generate prefix cache dataset if configured
+            # Generate datasets for the workload
             if self.config.prefix_cache_hit_pct > 0 and self.config.workload_mode == 'synthetic':
                 self._generate_prefix_cache_dataset()
+            elif self.config.workload_mode == 'synthetic':
+                self._generate_random_dataset()
+                self.config.workload_mode = 'dataset'
+                self.config.dataset_source = self.random_dataset_path
+                self.config.dataset_column = 'prompt'
+                self.config.dataset_max_output = self.config.osl
+                self.log("   Workload switched to random dataset mode for reproducible testing", 'info')
 
             # Step 2: Find optimal decode TP
             self.log("STEP 2: Decode TP Optimization", 'decision')
