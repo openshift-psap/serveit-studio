@@ -18,45 +18,54 @@ class GuidellmMixin:
 
     _guidellm_pod_name = 'serveit-workload'
 
-    def ensure_guidellm_pod(self, config: TestConfig, log_callback=None):
-        """Deploy the persistent guidellm pod if not already running."""
+    def _resolve_guidellm_pod_name(self):
+        """Find the actual pod name from the workload deployment."""
+        kubectl = self.deployment_manager.kubectl
+        r = kubectl.run(
+            ['get', 'pods', '-l', 'app=serveit-workload', '-n', self.namespace,
+             '-o', 'jsonpath={.items[0].metadata.name}'], check=False)
+        if r.returncode == 0 and r.stdout.strip():
+            self._guidellm_pod_name = r.stdout.strip()
+        return self._guidellm_pod_name
+
+    def ensure_guidellm_pod(self, config, log_callback=None):
+        """Deploy the workload deployment if not already running."""
         kubectl = self.deployment_manager.kubectl
 
-        # Check if already running
-        r = kubectl.run(['get', 'pod', self._guidellm_pod_name, '-n', self.namespace,
-                         '-o', 'jsonpath={.status.phase}'], check=False)
+        # Check if a workload pod is already running
+        r = kubectl.run(
+            ['get', 'pods', '-l', 'app=serveit-workload', '-n', self.namespace,
+             '-o', 'jsonpath={.items[0].status.phase}'], check=False)
         if r.returncode == 0 and r.stdout.strip() == 'Running':
+            self._resolve_guidellm_pod_name()
             return True
 
         if log_callback:
             log_callback('📦 Deploying guidellm benchmark pod...')
 
-        # Clean up any stale pod
-        kubectl.run(['delete', 'pod', self._guidellm_pod_name, '-n', self.namespace,
-                     '--ignore-not-found=true'], check=False)
-        time.sleep(3)
-
         from core.template_manager import TemplateManager
         tmgr = TemplateManager()
-        pod_yaml = tmgr.render_template('benchmark/guidellm-pod.yaml.j2',
+        deploy_yaml = tmgr.render_template('benchmark/guidellm-pod.yaml.j2',
             namespace=self.namespace,
             image=os.environ.get('GUIDELLM_IMAGE', 'quay.io/bbenshab/serveit-studio:workload'),
             pvc_name=self._get_storage_pvc_name(config),
             hf_token=os.environ.get('HF_TOKEN', ''),
         )
 
-        result = kubectl.run(['apply', '-f', '-', '-n', self.namespace], input_data=pod_yaml)
+        result = kubectl.run(['apply', '-f', '-', '-n', self.namespace], input_data=deploy_yaml)
         if result.returncode != 0:
             if log_callback:
-                log_callback(f'❌ Failed to create guidellm pod: {result.stderr}')
+                log_callback(f'❌ Failed to create guidellm deployment: {result.stderr}')
             return False
 
         # Wait for pod to be running
         for _ in range(120):
-            r = kubectl.run(['get', 'pod', self._guidellm_pod_name, '-n', self.namespace,
-                             '-o', 'jsonpath={.status.phase}'], check=False)
+            r = kubectl.run(
+                ['get', 'pods', '-l', 'app=serveit-workload', '-n', self.namespace,
+                 '-o', 'jsonpath={.items[0].status.phase}'], check=False)
             phase = r.stdout.strip() if r.returncode == 0 else ''
             if phase == 'Running':
+                self._resolve_guidellm_pod_name()
                 if log_callback:
                     log_callback(f'✅ Guidellm pod ready')
                 return True
@@ -71,13 +80,13 @@ class GuidellmMixin:
         return False
 
     def teardown_guidellm_pod(self, log_callback=None):
-        """Delete the persistent guidellm pod."""
+        """Delete the workload deployment."""
         try:
             self.deployment_manager.kubectl.run(
-                ['delete', 'pod', self._guidellm_pod_name, '-n', self.namespace,
+                ['delete', 'deployment', 'serveit-workload', '-n', self.namespace,
                  '--ignore-not-found=true'], check=False)
             if log_callback:
-                log_callback('🧹 Guidellm pod cleaned up')
+                log_callback('🧹 Guidellm deployment cleaned up')
         except Exception:
             pass
 
