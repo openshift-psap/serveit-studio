@@ -388,8 +388,12 @@ class LatencySearchMixin:
 
         Deploys pods once, runs all concurrency levels with pods still up,
         then cleans up at the end. Only guidellm is re-run per level.
+        Results are saved incrementally to self.concurrency_sweep_results.
         """
-        results = []
+        arch_key = arch_label.lower()
+        if arch_key not in self.concurrency_sweep_results:
+            self.concurrency_sweep_results[arch_key] = []
+        results = self.concurrency_sweep_results[arch_key]
         self.log(f"\n📊 InferenceX Sweep: {arch_label} ({len(levels)} levels: {levels})", 'info')
         self.log(f"   Calibrated load: {calibrated} users", 'info')
 
@@ -534,7 +538,6 @@ class LatencySearchMixin:
         )
         for r in pd_sweep:
             r['config_label'] = f"{best_split.prefill_pods}P×TP{best_split.prefill_tp} + {best_split.decode_pods}D×TP{best_split.decode_tp}"
-        self.concurrency_sweep_results['pd'] = pd_sweep
 
         # Store calibrated result for backwards compat
         cal_results = [r for r in pd_sweep if r['is_calibrated']]
@@ -573,7 +576,6 @@ class LatencySearchMixin:
         agg_replicas = total_gpus_agg // agg_tp if agg_tp else total_gpus_agg
         for r in agg_sweep:
             r['config_label'] = f"{agg_replicas}×TP{agg_tp}"
-        self.concurrency_sweep_results['aggregated'] = agg_sweep
 
         cal_agg = [r for r in agg_sweep if r['is_calibrated']]
         if cal_agg:
