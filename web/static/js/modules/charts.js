@@ -2179,7 +2179,7 @@ function renderCharts(data, runId) {
             addAnnotations(pdPareto, '#2563eb');
 
             Plotly.newPlot(cid('chart-pareto-frontier'), traces, {
-                ...plotlyLayout, height: 650,
+                ...plotlyLayout, height: 850,
                 xaxis: { title: 'Normalized Tokens/s/user', range: [0, 1.05], gridcolor: '#d1d5db', dtick: 0.2 },
                 yaxis: { title: 'Normalized Tokens/s/GPU', range: [0, 1.05], gridcolor: '#d1d5db', dtick: 0.2 },
                 showlegend: true,
