@@ -302,9 +302,49 @@ class LatencySearchMixin:
     def _generate_sweep_levels(self, calibrated):
         """Generate concurrency levels for the InferenceX sweep.
 
-        Produces ~6 rounded levels from low to 1.5× calibrated,
-        always including the exact calibrated value.
+        Supports three modes via config.concurrency_sweep_levels:
+        - None: auto-generate ~6 levels up to 1.5× calibrated
+        - Single int N: generate N levels centered on calibrated,
+          step = ceil(calibrated * 0.2 / 10) * 10, overflow shifts above
+        - List of ints: use those exact levels (calibrated always included)
         """
+        import math
+        custom = getattr(self.config, 'concurrency_sweep_levels', None)
+
+        if custom is not None:
+            # List of explicit levels
+            if isinstance(custom, list) and len(custom) > 1:
+                levels = sorted(set(int(l) for l in custom if l > 0))
+                if calibrated and calibrated not in levels:
+                    levels.append(calibrated)
+                    levels.sort()
+                return levels
+
+            # Single number N = requested count of levels
+            n = int(custom[0]) if isinstance(custom, list) else int(custom)
+            if n < 1:
+                n = 6
+            step = max(10, math.ceil(calibrated * 0.2 / 10) * 10)
+
+            below_count = (n - 1) // 2
+            above_count = n - 1 - below_count
+
+            # How many actually fit below (minimum level = step)
+            max_below = max(0, (calibrated - step) // step)
+            actual_below = min(below_count, max_below)
+            # Shift overflow to above
+            actual_above = above_count + (below_count - actual_below)
+
+            levels = []
+            for i in range(actual_below, 0, -1):
+                levels.append(calibrated - i * step)
+            levels.append(calibrated)
+            for i in range(1, actual_above + 1):
+                levels.append(calibrated + i * step)
+
+            return [l for l in levels if l > 0]
+
+        # Default: ~6 levels up to 1.5× calibrated
         sweep_max = max(int(calibrated * 1.5), calibrated + 5)
 
         def round_to(n, base=5):

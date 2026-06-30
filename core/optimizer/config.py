@@ -63,6 +63,7 @@ class RecipeOptimizerConfig:
     # Step 11: Calibrated load / InferenceX sweep
     calibrated_load_enabled: bool = False  # Re-test best configs at sustainable concurrency
     inferencex_sweep_enabled: bool = False  # Full concurrency sweep for InferenceX chart
+    concurrency_sweep_levels: Optional[List[int]] = None  # Custom levels; None = auto ~6 from calibrated
 
     # Step 13: Cache hit sweep
     cache_sweep_enabled: bool = False  # Sweep cache hit levels at user-defined concurrency

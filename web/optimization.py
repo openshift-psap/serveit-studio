@@ -312,6 +312,7 @@ def stream_job_logs(job_name: str, namespace: str):
                     'pd_search_mode': saved_config.get('pd_search_mode', 'smart'),
                     'calibrated_load_enabled': saved_config.get('calibrated_load_enabled', False),
                     'inferencex_sweep_enabled': saved_config.get('inferencex_sweep_enabled', False),
+                    'concurrency_sweep_levels': saved_config.get('concurrency_sweep_levels', None),
                     'cache_sweep_enabled': saved_config.get('cache_sweep_enabled', False),
                     'cache_sweep_use_calibrated': saved_config.get('cache_sweep_use_calibrated', False),
                     'cache_sweep_mode': saved_config.get('cache_sweep_mode', 'identical'),
@@ -703,6 +704,11 @@ def run_optimization_background(data):
         pd_search_mode = _get('pd_search_mode', 'smart')
         calibrated_load_enabled = _get('calibrated_load_enabled', False)
         inferencex_sweep_enabled = _get('inferencex_sweep_enabled', False)
+        concurrency_sweep_levels = _get('concurrency_sweep_levels', None)
+        if isinstance(concurrency_sweep_levels, str):
+            concurrency_sweep_levels = [int(x.strip()) for x in concurrency_sweep_levels.split(',') if x.strip().isdigit()]
+        if concurrency_sweep_levels is not None and not concurrency_sweep_levels:
+            concurrency_sweep_levels = None
         cache_sweep_enabled = _get('cache_sweep_enabled', False)
         cache_sweep_use_calibrated = _get('cache_sweep_use_calibrated', False)
         cache_sweep_mode = _get('cache_sweep_mode', 'identical')
@@ -954,6 +960,7 @@ data:
                 use_achievable_qps=use_achievable_qps,
                 calibrated_load_enabled=calibrated_load_enabled,
                 inferencex_sweep_enabled=inferencex_sweep_enabled,
+                concurrency_sweep_levels=concurrency_sweep_levels,
                 cache_sweep_enabled=cache_sweep_enabled,
                 cache_sweep_use_calibrated=cache_sweep_use_calibrated,
                 cache_sweep_mode=cache_sweep_mode,

@@ -1148,6 +1148,7 @@ class ReportAnalyzer:
                 'tp': r.tensor_parallelism,
                 'prefill_tp': r.prefill_tp or r.tensor_parallelism,
                 'decode_tp': r.decode_tp or r.tensor_parallelism,
+                'concurrency': r.num_users if hasattr(r, 'num_users') and r.num_users else None,
                 'manifest_types': manifest_types,
                 'test_config': test_config,
                 'metrics_json': r.metrics_json,

@@ -470,6 +470,7 @@ function renderCharts(data, runId) {
             '<div style="padding:8px 20px 0; color:#1e293b; font-size:0.92em; line-height:1.5;">' +
             'Trade-off between time to first token (X, lower is better) and throughput efficiency (Y, higher is better). Top-left is ideal.</div>' +
             '<div class="chart-card-body"><div id="chart-pareto-ttft' + _chartSuffix + '" style="width:100%;height:850px;"></div></div></div>';
+
     }
 
     // --- PD configurations TTFT + Throughput charts (one per percentile) ---
@@ -1390,6 +1391,17 @@ function renderCharts(data, runId) {
             html += '</div>';
         });
 
+        // --- Sweep Pareto charts ---
+        html += '<div class="chart-card" style="margin-top:20px;"><div class="chart-card-header">Throughput vs Interactivity</div>' +
+            '<div style="padding:8px 20px 0; color:#1e293b; font-size:0.92em; line-height:1.5;">' +
+            'Trade-off between per-user token speed (X) and GPU throughput efficiency (Y) across concurrency levels. Top-right is ideal.</div>' +
+            '<div class="chart-card-body"><div id="chart-pareto-sweep-interactivity' + _chartSuffix + '" style="width:100%;height:850px;"></div></div></div>';
+
+        html += '<div class="chart-card" style="margin-top:16px;"><div class="chart-card-header">Throughput vs TTFT</div>' +
+            '<div style="padding:8px 20px 0; color:#1e293b; font-size:0.92em; line-height:1.5;">' +
+            'Trade-off between time to first token (X, lower/right is better) and GPU throughput efficiency (Y). Top-right is ideal.</div>' +
+            '<div class="chart-card-body"><div id="chart-pareto-sweep-ttft' + _chartSuffix + '" style="width:100%;height:850px;"></div></div></div>';
+
         // --- Sweep Results Table ---
         html += '<div class="chart-card" style="margin-top:16px; border-left:6px solid #64748b;">';
         html += '<div class="chart-card-header" style="background:linear-gradient(135deg,#475569,#64748b); color:white; font-size:1.1em;">Concurrency Sweep Data</div>';
@@ -2086,111 +2098,105 @@ function renderCharts(data, runId) {
                 var tput = r.throughput_mean || r.throughput_p90 || 0;
                 var conc = r.concurrency || 100;
                 var totalOutputTps = r.output_tps_mean || (tput * runOsl);
-                var interactivity = totalOutputTps / conc;  // per-user tok/s
-                var tpsGpu = totalOutputTps / (r.gpus || 1);  // total tok/s per GPU
-                return { x: interactivity, y: tpsGpu, label: r.config_name, arch: r.architecture, conc: conc };
+                var interactivity = totalOutputTps / conc;
+                var tpsGpu = totalOutputTps / (r.gpus || 1);
+                var cfgKey;
+                if (r.architecture === 'AGGREGATED') {
+                    var total = (r.prefill_pods || 0) + (r.decode_pods || 0);
+                    cfgKey = 'Agg ' + total + '×TP' + (r.tp || '?');
+                } else {
+                    cfgKey = 'PD ' + (r.prefill_pods || 0) + 'P+' + (r.decode_pods || 0) + 'D ×TP' + (r.tp || '?');
+                }
+                return { x: interactivity, y: tpsGpu, nx: interactivity, ny: tpsGpu,
+                         label: r.config_name, arch: r.architecture, conc: conc, cfgKey: cfgKey };
             }).filter(p => p.x > 0 && p.y > 0);
         }
 
         var allPoints = makeRawPoints(allCfgResults);
         if (allPoints.length > 1) {
-            // Use actual values — no normalization
-            allPoints.forEach(function(p) { p.nx = p.x; p.ny = p.y; });
-
-            var pdAll = allPoints.filter(p => p.arch === 'PD' || p.arch === 'EP');
-            var aggAll = allPoints.filter(p => p.arch === 'AGGREGATED');
-
-            // For each unique Y (tok/s/GPU) value, find the highest X (tok/s/user)
-            // Then remove points that go backwards (X decreases as Y increases)
             function frontierLine(points) {
-                var byY = {};
-                points.forEach(function(p) {
-                    var yKey = Math.round(p.ny * 100);
-                    if (!byY[yKey] || p.nx > byY[yKey].nx) {
-                        byY[yKey] = p;
-                    }
-                });
-                var line = Object.values(byY);
-                line.sort(function(a, b) { return a.ny - b.ny; });
-                // Walk bottom to top, only keep points where X keeps increasing
-                var filtered = [];
-                var maxX = -Infinity;
-                for (var i = 0; i < line.length; i++) {
-                    if (line[i].nx >= maxX) {
-                        filtered.push(line[i]);
-                        maxX = line[i].nx;
-                    }
+                if (!points.length) return [];
+                var sorted = points.slice().sort(function(a, b) { return b.nx - a.nx; });
+                var frontier = [];
+                var maxY = -Infinity;
+                for (var i = 0; i < sorted.length; i++) {
+                    if (sorted[i].ny > maxY) { frontier.push(sorted[i]); maxY = sorted[i].ny; }
                 }
-                return filtered;
+                frontier.sort(function(a, b) { return a.nx - b.nx; });
+                return frontier;
             }
-            var pdPareto = frontierLine(pdAll);
-            var aggPareto = frontierLine(aggAll);
 
+            // Group points by cfgKey for coloring
+            var cfgGroups = {};
+            allPoints.forEach(function(p) {
+                if (!cfgGroups[p.cfgKey]) cfgGroups[p.cfgKey] = [];
+                cfgGroups[p.cfgKey].push(p);
+            });
+
+            var cfgColors = [
+                '#dc2626', '#2563eb', '#059669', '#d97706', '#7c3aed',
+                '#db2777', '#0891b2', '#65a30d', '#ea580c', '#6d28d9'
+            ];
             var traces = [];
-            // Aggregated scatter (red, low opacity)
-            if (aggAll.length) {
-                traces.push({
-                    x: aggAll.map(p => p.nx), y: aggAll.map(p => p.ny),
-                    text: aggAll.map(p => p.label + '<br>' + p.x.toFixed(1) + ' tok/s/user<br>' + p.y.toFixed(0) + ' tok/s/GPU<br>c=' + p.conc),
-                    name: 'Aggregated — All points', mode: 'markers',
-                    marker: { color: '#fca5a5', size: 18, opacity: 0.5 },
-                    hovertemplate: '<b>%{text}</b><extra></extra>'
-                });
-            }
-            // PD scatter (blue, low opacity)
-            if (pdAll.length) {
-                traces.push({
-                    x: pdAll.map(p => p.nx), y: pdAll.map(p => p.ny),
-                    text: pdAll.map(p => p.label + '<br>' + p.x.toFixed(1) + ' tok/s/user<br>' + p.y.toFixed(0) + ' tok/s/GPU<br>c=' + p.conc),
-                    name: 'Disaggregation — All points', mode: 'markers',
-                    marker: { color: '#93c5fd', size: 18, opacity: 0.5 },
-                    hovertemplate: '<b>%{text}</b><extra></extra>'
-                });
-            }
-            // Aggregated Pareto line (bold red)
-            if (aggPareto.length) {
-                traces.push({
-                    x: aggPareto.map(p => p.nx), y: aggPareto.map(p => p.ny),
-                    name: 'Aggregated — Pareto', mode: aggPareto.length > 1 ? 'lines+markers' : 'markers',
-                    line: { color: '#dc2626', width: 3 },
-                    marker: { color: '#dc2626', size: 6 }
-                });
-            }
-            // PD Pareto line (bold blue)
-            if (pdPareto.length) {
-                traces.push({
-                    x: pdPareto.map(p => p.nx), y: pdPareto.map(p => p.ny),
-                    name: 'Disaggregation — Pareto', mode: pdPareto.length > 1 ? 'lines+markers' : 'markers',
-                    line: { color: '#2563eb', width: 3 },
-                    marker: { color: '#2563eb', size: 6 }
-                });
-            }
-
-            // Build annotations with arrows for Pareto frontier points only
             var paretoAnnotations = [];
             var annotIdx = 0;
-            function addAnnotations(points, color) {
-                points.forEach(function(p, i) {
+            var colorIdx = 0;
+
+            // One scatter trace per config (dots only, no lines)
+            Object.keys(cfgGroups).sort().forEach(function(key) {
+                var pts = cfgGroups[key];
+                var color = cfgColors[colorIdx % cfgColors.length];
+                colorIdx++;
+
+                traces.push({
+                    x: pts.map(p => p.nx), y: pts.map(p => p.ny),
+                    text: pts.map(p => p.label + '<br>' + p.x.toFixed(1) + ' tok/s/user<br>' + p.y.toFixed(0) + ' tok/s/GPU<br>c=' + p.conc),
+                    name: key, mode: 'markers',
+                    marker: { color: color, size: 14 },
+                    hovertemplate: '<b>%{text}</b><extra></extra>'
+                });
+            });
+
+            // Pareto frontier lines — upper-right envelope per architecture
+            var pdAll = allPoints.filter(p => p.arch === 'PD' || p.arch === 'EP');
+            var aggAll = allPoints.filter(p => p.arch === 'AGGREGATED');
+            var aggPareto = frontierLine(aggAll);
+            var pdPareto = frontierLine(pdAll);
+
+            if (aggPareto.length > 1) {
+                traces.push({
+                    x: aggPareto.map(p => p.nx), y: aggPareto.map(p => p.ny),
+                    name: 'Aggregated — Frontier', mode: 'lines',
+                    line: { color: '#dc2626', width: 3, dash: 'dot' },
+                    hoverinfo: 'skip'
+                });
+            }
+            if (pdPareto.length > 1) {
+                traces.push({
+                    x: pdPareto.map(p => p.nx), y: pdPareto.map(p => p.ny),
+                    name: 'Disaggregation — Frontier', mode: 'lines',
+                    line: { color: '#2563eb', width: 3, dash: 'dot' },
+                    hoverinfo: 'skip'
+                });
+            }
+
+            // Annotate frontier points with config name
+            function addFrontierAnnotations(points, color) {
+                points.forEach(function(p) {
                     if (!p.label) return;
                     annotIdx++;
                     var side = annotIdx % 2 === 0 ? 1 : -1;
                     paretoAnnotations.push({
-                        x: p.nx, y: p.ny,
-                        text: p.label,
-                        showarrow: true,
-                        arrowhead: 0,
-                        arrowwidth: 1,
-                        arrowcolor: color,
-                        ax: 60 * side,
-                        ay: -30 - (annotIdx % 3) * 15,
+                        x: p.nx, y: p.ny, text: p.cfgKey.replace('Agg ','').replace('PD ',''),
+                        showarrow: true, arrowhead: 0, arrowwidth: 1, arrowcolor: color,
+                        ax: 60 * side, ay: -30 - (annotIdx % 3) * 15,
                         font: { size: 10, color: color },
-                        bgcolor: 'rgba(255,255,255,0.85)',
-                        borderpad: 2,
+                        bgcolor: 'rgba(255,255,255,0)', borderpad: 2,
                     });
                 });
             }
-            addAnnotations(aggPareto, '#dc2626');
-            addAnnotations(pdPareto, '#2563eb');
+            addFrontierAnnotations(aggPareto, '#dc2626');
+            addFrontierAnnotations(pdPareto, '#2563eb');
 
             var paretoConfig = {
                 responsive: true, displayModeBar: true,
@@ -2226,29 +2232,26 @@ function renderCharts(data, runId) {
 
                 var ttftAllPts = makeTtftPoints(ttftAllResults);
                 if (ttftAllPts.length > 1) {
-                    // Normalize both axes 0-1, use sqrt on X to spread low TTFT values
-                    var ttftMaxX = Math.max.apply(null, ttftAllPts.map(function(p) { return p.x; }));
-                    var ttftMaxY = Math.max.apply(null, ttftAllPts.map(function(p) { return p.y; }));
-                    var sqrtMaxX = Math.sqrt(ttftMaxX);
-                    ttftAllPts.forEach(function(p) { p.nx = Math.sqrt(p.x) / sqrtMaxX; p.ny = p.y / ttftMaxY; });
+                    // Use actual values — no normalization
+                    ttftAllPts.forEach(function(p) { p.nx = p.x; p.ny = p.y; });
 
                     var ttftPd = ttftAllPts.filter(function(p) { return p.arch === 'PD' || p.arch === 'EP'; });
                     var ttftAgg = ttftAllPts.filter(function(p) { return p.arch === 'AGGREGATED'; });
 
                     // Reuse same frontierLine logic: bucket by Y, keep LOWEST X per bucket
-                    // Walk bottom-to-top, only keep points where X keeps decreasing (better TTFT going up)
                     function ttftFrontierLine(points) {
-                        var byY = {};
-                        points.forEach(function(p) {
-                            var yKey = Math.round(p.ny * 100);
-                            if (!byY[yKey] || p.nx < byY[yKey].nx) {
-                                byY[yKey] = p;
+                        if (!points.length) return [];
+                        var sorted = points.slice().sort(function(a, b) { return a.nx - b.nx; });
+                        var frontier = [];
+                        var maxY = -Infinity;
+                        for (var i = 0; i < sorted.length; i++) {
+                            if (sorted[i].ny > maxY) {
+                                frontier.push(sorted[i]);
+                                maxY = sorted[i].ny;
                             }
-                        });
-                        var line = Object.values(byY);
-                        line.sort(function(a, b) { return a.ny - b.ny; });
-                        // No fallback filter — connect all frontier dots
-                        return line;
+                        }
+                        frontier.sort(function(a, b) { return a.nx - b.nx; });
+                        return frontier;
                     }
 
                     var ttftPdPareto = ttftFrontierLine(ttftPd);
@@ -2301,7 +2304,7 @@ function renderCharts(data, runId) {
                                 showarrow: true, arrowhead: 0, arrowwidth: 1, arrowcolor: color,
                                 ax: 60 * side, ay: -30 - (ttftAnnotIdx % 3) * 15,
                                 font: { size: 10, color: color },
-                                bgcolor: 'rgba(255,255,255,0.85)', borderpad: 2,
+                                bgcolor: 'rgba(255,255,255,0)', borderpad: 2,
                             });
                         });
                     }
@@ -2310,8 +2313,8 @@ function renderCharts(data, runId) {
 
                     Plotly.newPlot(cid('chart-pareto-ttft'), ttftTraces, {
                         ...plotlyLayout, height: 850,
-                        xaxis: { title: 'Normalized TTFT P90 (lower/right is better →)', autorange: 'reversed', range: [1.05, 0], gridcolor: '#d1d5db', dtick: 0.2 },
-                        yaxis: { title: 'Normalized Tokens/s/GPU', range: [0, 1.05], gridcolor: '#d1d5db', dtick: 0.2 },
+                        xaxis: { title: 'TTFT P90 (ms) — lower/right is better →', autorange: 'reversed', gridcolor: '#d1d5db', rangemode: 'tozero' },
+                        yaxis: { title: 'Token Throughput per GPU (tok/s/GPU)', gridcolor: '#d1d5db', rangemode: 'tozero' },
                         showlegend: true,
                         legend: { x: 1.02, y: 1, xanchor: 'left', bgcolor: 'rgba(255,255,255,0.95)', bordercolor: '#e2e8f0', borderwidth: 1 },
                         margin: { t: 40, b: 70, l: 70, r: 220 },
@@ -2320,6 +2323,222 @@ function renderCharts(data, runId) {
                     }, paretoConfig);
                 }
             }
+
+        }
+    }
+
+    // --- Concurrency Sweep Pareto charts (rendered into Concurrency Sweep tab) ---
+    if (data.concurrency_sweep && document.getElementById(cid('chart-pareto-sweep-interactivity'))) {
+        var csw = data.concurrency_sweep;
+        var sweepArchMap = { pd: 'PD', aggregated: 'AGGREGATED', ep: 'EP' };
+
+        function swFrontierLine(points) {
+            if (!points.length) return [];
+            var sorted = points.slice().sort(function(a, b) { return b.nx - a.nx; });
+            var frontier = [];
+            var maxY = -Infinity;
+            for (var i = 0; i < sorted.length; i++) {
+                if (sorted[i].ny > maxY) { frontier.push(sorted[i]); maxY = sorted[i].ny; }
+            }
+            frontier.sort(function(a, b) { return a.nx - b.nx; });
+            return frontier;
+        }
+
+        var swAllPts = [];
+        Object.keys(csw).forEach(function(arch) {
+            var pts = csw[arch];
+            if (!pts || !pts.length) return;
+            var archLabel = sweepArchMap[arch] || arch.toUpperCase();
+            pts.forEach(function(p) {
+                var interPerUser = (p.output_tps_mean || 0) / (p.concurrency || 1);
+                var tputGpu = p.throughput_per_gpu || 0;
+                if (interPerUser > 0 && tputGpu > 0) {
+                    swAllPts.push({
+                        x: interPerUser, y: tputGpu, nx: interPerUser, ny: tputGpu,
+                        label: (p.config_label || archLabel) + ' c=' + p.concurrency,
+                        arch: archLabel, conc: p.concurrency
+                    });
+                }
+            });
+        });
+
+        var swParetoConfig = {
+            responsive: true, displayModeBar: true,
+            modeBarButtonsToRemove: ['select2d', 'lasso2d', 'autoScale2d'],
+            toImageButtonOptions: { format: 'png', height: 1200, width: 1600, scale: 2 }
+        };
+
+        if (swAllPts.length > 1) {
+            var swAgg = swAllPts.filter(function(p) { return p.arch === 'AGGREGATED'; });
+            var swPd = swAllPts.filter(function(p) { return p.arch === 'PD' || p.arch === 'EP'; });
+            var swAggPareto = swFrontierLine(swAgg);
+            var swPdPareto = swFrontierLine(swPd);
+
+            var swTraces = [];
+            if (swAgg.length) {
+                swTraces.push({
+                    x: swAgg.map(function(p) { return p.nx; }), y: swAgg.map(function(p) { return p.ny; }),
+                    text: swAgg.map(function(p) { return p.label + '<br>' + p.x.toFixed(1) + ' tok/s/user<br>' + p.y.toFixed(0) + ' tok/s/GPU'; }),
+                    name: 'Aggregated', mode: 'markers',
+                    marker: { color: '#fca5a5', size: 18, opacity: 0.5 },
+                    hovertemplate: '<b>%{text}</b><extra></extra>'
+                });
+            }
+            if (swPd.length) {
+                swTraces.push({
+                    x: swPd.map(function(p) { return p.nx; }), y: swPd.map(function(p) { return p.ny; }),
+                    text: swPd.map(function(p) { return p.label + '<br>' + p.x.toFixed(1) + ' tok/s/user<br>' + p.y.toFixed(0) + ' tok/s/GPU'; }),
+                    name: 'Disaggregation', mode: 'markers',
+                    marker: { color: '#93c5fd', size: 18, opacity: 0.5 },
+                    hovertemplate: '<b>%{text}</b><extra></extra>'
+                });
+            }
+            if (swAggPareto.length) {
+                swTraces.push({
+                    x: swAggPareto.map(function(p) { return p.nx; }), y: swAggPareto.map(function(p) { return p.ny; }),
+                    name: 'Aggregated — Pareto', mode: swAggPareto.length > 1 ? 'lines+markers' : 'markers',
+                    line: { color: '#dc2626', width: 3 }, marker: { color: '#dc2626', size: 6 }
+                });
+            }
+            if (swPdPareto.length) {
+                swTraces.push({
+                    x: swPdPareto.map(function(p) { return p.nx; }), y: swPdPareto.map(function(p) { return p.ny; }),
+                    name: 'Disaggregation — Pareto', mode: swPdPareto.length > 1 ? 'lines+markers' : 'markers',
+                    line: { color: '#2563eb', width: 3 }, marker: { color: '#2563eb', size: 6 }
+                });
+            }
+
+            var swAnnotations = [];
+            var swAnnotIdx = 0;
+            function addSwAnnotations(points, color) {
+                points.forEach(function(p) {
+                    if (!p.label) return;
+                    swAnnotIdx++;
+                    var side = swAnnotIdx % 2 === 0 ? 1 : -1;
+                    swAnnotations.push({
+                        x: p.nx, y: p.ny, text: p.label,
+                        showarrow: true, arrowhead: 0, arrowwidth: 1, arrowcolor: color,
+                        ax: 60 * side, ay: -30 - (swAnnotIdx % 3) * 15,
+                        font: { size: 10, color: color },
+                        bgcolor: 'rgba(255,255,255,0)', borderpad: 2,
+                    });
+                });
+            }
+            addSwAnnotations(swAggPareto, '#dc2626');
+            addSwAnnotations(swPdPareto, '#2563eb');
+
+            Plotly.newPlot(cid('chart-pareto-sweep-interactivity'), swTraces, {
+                ...plotlyLayout, height: 850,
+                xaxis: { title: 'Interactivity (tok/s/user)', gridcolor: '#d1d5db', rangemode: 'tozero' },
+                yaxis: { title: 'Token Throughput per GPU (tok/s/GPU)', gridcolor: '#d1d5db', rangemode: 'tozero' },
+                showlegend: true,
+                legend: { x: 1.02, y: 1, xanchor: 'left', bgcolor: 'rgba(255,255,255,0.95)', bordercolor: '#e2e8f0', borderwidth: 1 },
+                margin: { t: 40, b: 70, l: 70, r: 220 },
+                plot_bgcolor: 'white', paper_bgcolor: 'white',
+                annotations: swAnnotations,
+            }, swParetoConfig);
+        }
+
+        // --- Concurrency Sweep: Throughput vs TTFT ---
+        var swTtftPts = [];
+        Object.keys(csw).forEach(function(arch) {
+            var pts = csw[arch];
+            if (!pts || !pts.length) return;
+            var archLabel = sweepArchMap[arch] || arch.toUpperCase();
+            pts.forEach(function(p) {
+                var tputGpu = p.throughput_per_gpu || 0;
+                var ttft = p.ttft_p90 || 0;
+                if (tputGpu > 0 && ttft > 0) {
+                    swTtftPts.push({
+                        x: ttft, y: tputGpu, nx: ttft, ny: tputGpu,
+                        label: (p.config_label || archLabel) + ' c=' + p.concurrency,
+                        arch: archLabel, conc: p.concurrency
+                    });
+                }
+            });
+        });
+
+        if (swTtftPts.length > 1 && document.getElementById(cid('chart-pareto-sweep-ttft'))) {
+            var swTtftAgg = swTtftPts.filter(function(p) { return p.arch === 'AGGREGATED'; });
+            var swTtftPd = swTtftPts.filter(function(p) { return p.arch === 'PD' || p.arch === 'EP'; });
+
+            function swTtftFrontier(points) {
+                if (!points.length) return [];
+                var sorted = points.slice().sort(function(a, b) { return a.nx - b.nx; });
+                var frontier = [];
+                var maxY = -Infinity;
+                for (var i = 0; i < sorted.length; i++) {
+                    if (sorted[i].ny > maxY) { frontier.push(sorted[i]); maxY = sorted[i].ny; }
+                }
+                frontier.sort(function(a, b) { return a.nx - b.nx; });
+                return frontier;
+            }
+            var swTtftAggPareto = swTtftFrontier(swTtftAgg);
+            var swTtftPdPareto = swTtftFrontier(swTtftPd);
+
+            var swTtftTraces = [];
+            if (swTtftAgg.length) {
+                swTtftTraces.push({
+                    x: swTtftAgg.map(function(p) { return p.nx; }), y: swTtftAgg.map(function(p) { return p.ny; }),
+                    text: swTtftAgg.map(function(p) { return p.label + '<br>TTFT P90: ' + p.x.toFixed(0) + 'ms<br>' + p.y.toFixed(0) + ' tok/s/GPU'; }),
+                    name: 'Aggregated', mode: 'markers',
+                    marker: { color: '#fca5a5', size: 18, opacity: 0.5 },
+                    hovertemplate: '<b>%{text}</b><extra></extra>'
+                });
+            }
+            if (swTtftPd.length) {
+                swTtftTraces.push({
+                    x: swTtftPd.map(function(p) { return p.nx; }), y: swTtftPd.map(function(p) { return p.ny; }),
+                    text: swTtftPd.map(function(p) { return p.label + '<br>TTFT P90: ' + p.x.toFixed(0) + 'ms<br>' + p.y.toFixed(0) + ' tok/s/GPU'; }),
+                    name: 'Disaggregation', mode: 'markers',
+                    marker: { color: '#93c5fd', size: 18, opacity: 0.5 },
+                    hovertemplate: '<b>%{text}</b><extra></extra>'
+                });
+            }
+            if (swTtftAggPareto.length) {
+                swTtftTraces.push({
+                    x: swTtftAggPareto.map(function(p) { return p.nx; }), y: swTtftAggPareto.map(function(p) { return p.ny; }),
+                    name: 'Aggregated — Pareto', mode: swTtftAggPareto.length > 1 ? 'lines+markers' : 'markers',
+                    line: { color: '#dc2626', width: 3 }, marker: { color: '#dc2626', size: 6 }
+                });
+            }
+            if (swTtftPdPareto.length) {
+                swTtftTraces.push({
+                    x: swTtftPdPareto.map(function(p) { return p.nx; }), y: swTtftPdPareto.map(function(p) { return p.ny; }),
+                    name: 'Disaggregation — Pareto', mode: swTtftPdPareto.length > 1 ? 'lines+markers' : 'markers',
+                    line: { color: '#2563eb', width: 3 }, marker: { color: '#2563eb', size: 6 }
+                });
+            }
+
+            var swTtftAnnotations = [];
+            var swTtftAnnotIdx = 0;
+            function addSwTtftAnnotations(points, color) {
+                points.forEach(function(p) {
+                    if (!p.label) return;
+                    swTtftAnnotIdx++;
+                    var side = swTtftAnnotIdx % 2 === 0 ? 1 : -1;
+                    swTtftAnnotations.push({
+                        x: p.nx, y: p.ny, text: p.label,
+                        showarrow: true, arrowhead: 0, arrowwidth: 1, arrowcolor: color,
+                        ax: 60 * side, ay: -30 - (swTtftAnnotIdx % 3) * 15,
+                        font: { size: 10, color: color },
+                        bgcolor: 'rgba(255,255,255,0)', borderpad: 2,
+                    });
+                });
+            }
+            addSwTtftAnnotations(swTtftAggPareto, '#dc2626');
+            addSwTtftAnnotations(swTtftPdPareto, '#2563eb');
+
+            Plotly.newPlot(cid('chart-pareto-sweep-ttft'), swTtftTraces, {
+                ...plotlyLayout, height: 850,
+                xaxis: { title: 'TTFT P90 (ms) — lower/right is better →', autorange: 'reversed', gridcolor: '#d1d5db', rangemode: 'tozero' },
+                yaxis: { title: 'Token Throughput per GPU (tok/s/GPU)', gridcolor: '#d1d5db', rangemode: 'tozero' },
+                showlegend: true,
+                legend: { x: 1.02, y: 1, xanchor: 'left', bgcolor: 'rgba(255,255,255,0.95)', bordercolor: '#e2e8f0', borderwidth: 1 },
+                margin: { t: 40, b: 70, l: 70, r: 220 },
+                plot_bgcolor: 'white', paper_bgcolor: 'white',
+                annotations: swTtftAnnotations,
+            }, swParetoConfig);
         }
     }
 

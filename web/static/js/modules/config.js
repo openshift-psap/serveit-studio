@@ -152,6 +152,11 @@ function updateUIFromConfig() {
             ixSw.style.background = ixOn ? '#059669' : '#ccc';
             ixSw.querySelector('span').style.transform = ixOn ? 'translateX(18px)' : 'translateX(0)';
         }
+        var cslRow = document.getElementById('concurrency-sweep-levels-row');
+        if (cslRow) cslRow.style.display = ixOn ? 'block' : 'none';
+        if (config.concurrency_sweep_levels && document.getElementById('concurrency-sweep-levels')) {
+            document.getElementById('concurrency-sweep-levels').value = config.concurrency_sweep_levels.join(', ');
+        }
     }
 
     // Restore cache sweep toggles
