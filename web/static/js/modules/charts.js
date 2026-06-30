@@ -2094,10 +2094,8 @@ function renderCharts(data, runId) {
 
         var allPoints = makeRawPoints(allCfgResults);
         if (allPoints.length > 1) {
-            // Normalize to 0-1 using global max
-            var maxX = Math.max.apply(null, allPoints.map(p => p.x));
-            var maxY = Math.max.apply(null, allPoints.map(p => p.y));
-            allPoints.forEach(function(p) { p.nx = p.x / maxX; p.ny = p.y / maxY; });
+            // Use actual values — no normalization
+            allPoints.forEach(function(p) { p.nx = p.x; p.ny = p.y; });
 
             var pdAll = allPoints.filter(p => p.arch === 'PD' || p.arch === 'EP');
             var aggAll = allPoints.filter(p => p.arch === 'AGGREGATED');
@@ -2133,7 +2131,7 @@ function renderCharts(data, runId) {
             if (aggAll.length) {
                 traces.push({
                     x: aggAll.map(p => p.nx), y: aggAll.map(p => p.ny),
-                    text: aggAll.map(p => p.label + '<br>' + p.x.toFixed(0) + ' tok/s/user, ' + p.y.toFixed(0) + ' tok/s/GPU'),
+                    text: aggAll.map(p => p.label + '<br>' + p.x.toFixed(1) + ' tok/s/user<br>' + p.y.toFixed(0) + ' tok/s/GPU<br>c=' + p.conc),
                     name: 'Aggregated — All points', mode: 'markers',
                     marker: { color: '#fca5a5', size: 18, opacity: 0.5 },
                     hovertemplate: '<b>%{text}</b><extra></extra>'
@@ -2143,7 +2141,7 @@ function renderCharts(data, runId) {
             if (pdAll.length) {
                 traces.push({
                     x: pdAll.map(p => p.nx), y: pdAll.map(p => p.ny),
-                    text: pdAll.map(p => p.label + '<br>' + p.x.toFixed(0) + ' tok/s/user, ' + p.y.toFixed(0) + ' tok/s/GPU'),
+                    text: pdAll.map(p => p.label + '<br>' + p.x.toFixed(1) + ' tok/s/user<br>' + p.y.toFixed(0) + ' tok/s/GPU<br>c=' + p.conc),
                     name: 'Disaggregation — All points', mode: 'markers',
                     marker: { color: '#93c5fd', size: 18, opacity: 0.5 },
                     hovertemplate: '<b>%{text}</b><extra></extra>'
@@ -2201,8 +2199,8 @@ function renderCharts(data, runId) {
             };
             Plotly.newPlot(cid('chart-pareto-frontier'), traces, {
                 ...plotlyLayout, height: 850,
-                xaxis: { title: 'Normalized Tokens/s/user', range: [0, 1.05], gridcolor: '#d1d5db', dtick: 0.2 },
-                yaxis: { title: 'Normalized Tokens/s/GPU', range: [0, 1.05], gridcolor: '#d1d5db', dtick: 0.2 },
+                xaxis: { title: 'Interactivity (tok/s/user)', gridcolor: '#d1d5db', rangemode: 'tozero' },
+                yaxis: { title: 'Token Throughput per GPU (tok/s/GPU)', gridcolor: '#d1d5db', rangemode: 'tozero' },
                 showlegend: true,
                 legend: { x: 1.02, y: 1, xanchor: 'left', bgcolor: 'rgba(255,255,255,0.95)', bordercolor: '#e2e8f0', borderwidth: 1 },
                 margin: { t: 40, b: 70, l: 70, r: 220 },
