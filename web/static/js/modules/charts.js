@@ -2086,31 +2086,10 @@ function renderCharts(data, runId) {
             var pdAll = allPoints.filter(p => p.arch === 'PD' || p.arch === 'EP');
             var aggAll = allPoints.filter(p => p.arch === 'AGGREGATED');
 
-            function computeParetoFront(points) {
-                if (points.length < 2) return points.slice();
-                // Pareto front: a point is Pareto-optimal if no other point
-                // is better on BOTH axes simultaneously.
-                var dominated = new Set();
-                for (var i = 0; i < points.length; i++) {
-                    for (var j = 0; j < points.length; j++) {
-                        if (i === j) continue;
-                        if (points[j].nx >= points[i].nx && points[j].ny >= points[i].ny &&
-                            (points[j].nx > points[i].nx || points[j].ny > points[i].ny)) {
-                            dominated.add(i);
-                            break;
-                        }
-                    }
-                }
-                var front = [];
-                for (var i = 0; i < points.length; i++) {
-                    if (!dominated.has(i)) front.push(points[i]);
-                }
-                front.sort(function(a, b) { return a.nx - b.nx; });
-                return front;
-            }
-
-            var pdPareto = computeParetoFront(pdAll);
-            var aggPareto = computeParetoFront(aggAll);
+            // Sort each architecture's points by Y (bottom to top),
+            // then just connect them all with a line
+            var pdPareto = pdAll.slice().sort(function(a, b) { return a.ny - b.ny; });
+            var aggPareto = aggAll.slice().sort(function(a, b) { return a.ny - b.ny; });
 
             var traces = [];
             // Aggregated scatter (red, low opacity)
