@@ -2378,22 +2378,22 @@ function renderCharts(data, runId) {
             if (swAgg.length) {
                 swTraces.push({
                     x: swAgg.map(function(p) { return p.nx; }), y: swAgg.map(function(p) { return p.ny; }),
-                    text: swAgg.map(function(p) { return '' + p.conc; }),
-                    customdata: swAgg.map(function(p) { return p.label + '<br>' + p.x.toFixed(1) + ' tok/s/user<br>' + p.y.toFixed(0) + ' tok/s/GPU'; }),
+                    text: swAgg.map(function(p) { return p.x.toFixed(1) + ' tok/s/user | ' + p.y.toFixed(0) + ' tok/s/GPU'; }),
+                    customdata: swAgg.map(function(p) { return p.label + '<br>c=' + p.conc + '<br>' + p.x.toFixed(1) + ' tok/s/user<br>' + p.y.toFixed(0) + ' tok/s/GPU'; }),
                     name: 'Aggregated', mode: 'markers+text',
                     marker: { color: '#dc2626', size: 12 },
-                    textposition: 'top center', textfont: { size: 9, color: '#dc2626' },
+                    textposition: 'top center', textfont: { size: 8, color: '#dc2626' },
                     hovertemplate: '<b>%{customdata}</b><extra></extra>'
                 });
             }
             if (swPd.length) {
                 swTraces.push({
                     x: swPd.map(function(p) { return p.nx; }), y: swPd.map(function(p) { return p.ny; }),
-                    text: swPd.map(function(p) { return '' + p.conc; }),
-                    customdata: swPd.map(function(p) { return p.label + '<br>' + p.x.toFixed(1) + ' tok/s/user<br>' + p.y.toFixed(0) + ' tok/s/GPU'; }),
+                    text: swPd.map(function(p) { return p.x.toFixed(1) + ' tok/s/user | ' + p.y.toFixed(0) + ' tok/s/GPU'; }),
+                    customdata: swPd.map(function(p) { return p.label + '<br>c=' + p.conc + '<br>' + p.x.toFixed(1) + ' tok/s/user<br>' + p.y.toFixed(0) + ' tok/s/GPU'; }),
                     name: 'Disaggregation', mode: 'markers+text',
                     marker: { color: '#2563eb', size: 12 },
-                    textposition: 'top center', textfont: { size: 9, color: '#2563eb' },
+                    textposition: 'top center', textfont: { size: 8, color: '#2563eb' },
                     hovertemplate: '<b>%{customdata}</b><extra></extra>'
                 });
             }
@@ -2464,22 +2464,22 @@ function renderCharts(data, runId) {
             if (swTtftAgg.length) {
                 swTtftTraces.push({
                     x: swTtftAgg.map(function(p) { return p.nx; }), y: swTtftAgg.map(function(p) { return p.ny; }),
-                    text: swTtftAgg.map(function(p) { return '' + p.conc; }),
-                    customdata: swTtftAgg.map(function(p) { return p.label + '<br>TTFT P90: ' + p.x.toFixed(0) + 'ms<br>' + p.y.toFixed(0) + ' tok/s/GPU'; }),
+                    text: swTtftAgg.map(function(p) { return p.x.toFixed(0) + 'ms | ' + p.y.toFixed(0) + ' tok/s/GPU'; }),
+                    customdata: swTtftAgg.map(function(p) { return p.label + '<br>c=' + p.conc + '<br>TTFT P90: ' + p.x.toFixed(0) + 'ms<br>' + p.y.toFixed(0) + ' tok/s/GPU'; }),
                     name: 'Aggregated', mode: 'markers+text',
                     marker: { color: '#dc2626', size: 12 },
-                    textposition: 'top center', textfont: { size: 9, color: '#dc2626' },
+                    textposition: 'top center', textfont: { size: 8, color: '#dc2626' },
                     hovertemplate: '<b>%{customdata}</b><extra></extra>'
                 });
             }
             if (swTtftPd.length) {
                 swTtftTraces.push({
                     x: swTtftPd.map(function(p) { return p.nx; }), y: swTtftPd.map(function(p) { return p.ny; }),
-                    text: swTtftPd.map(function(p) { return '' + p.conc; }),
-                    customdata: swTtftPd.map(function(p) { return p.label + '<br>TTFT P90: ' + p.x.toFixed(0) + 'ms<br>' + p.y.toFixed(0) + ' tok/s/GPU'; }),
+                    text: swTtftPd.map(function(p) { return p.x.toFixed(0) + 'ms | ' + p.y.toFixed(0) + ' tok/s/GPU'; }),
+                    customdata: swTtftPd.map(function(p) { return p.label + '<br>c=' + p.conc + '<br>TTFT P90: ' + p.x.toFixed(0) + 'ms<br>' + p.y.toFixed(0) + ' tok/s/GPU'; }),
                     name: 'Disaggregation', mode: 'markers+text',
                     marker: { color: '#2563eb', size: 12 },
-                    textposition: 'top center', textfont: { size: 9, color: '#2563eb' },
+                    textposition: 'top center', textfont: { size: 8, color: '#2563eb' },
                     hovertemplate: '<b>%{customdata}</b><extra></extra>'
                 });
             }
