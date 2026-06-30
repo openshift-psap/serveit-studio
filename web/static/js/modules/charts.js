@@ -2086,22 +2086,22 @@ function renderCharts(data, runId) {
             var pdAll = allPoints.filter(p => p.arch === 'PD' || p.arch === 'EP');
             var aggAll = allPoints.filter(p => p.arch === 'AGGREGATED');
 
-            // Sort by Y, keep only the rightmost X at each Y level
-            function rightmostByY(points) {
-                var sorted = points.slice().sort(function(a, b) { return a.ny - b.ny; });
-                var result = [];
-                var maxX = -Infinity;
-                for (var i = sorted.length - 1; i >= 0; i--) {
-                    if (sorted[i].nx >= maxX) {
-                        result.push(sorted[i]);
-                        maxX = sorted[i].nx;
+            // For each unique Y (tok/s/GPU) value, find the highest X (tok/s/user)
+            function frontierLine(points) {
+                // Bucket by rounded Y, keep max X per bucket
+                var byY = {};
+                points.forEach(function(p) {
+                    var yKey = Math.round(p.ny * 100);
+                    if (!byY[yKey] || p.nx > byY[yKey].nx) {
+                        byY[yKey] = p;
                     }
-                }
-                result.reverse();
-                return result;
+                });
+                var line = Object.values(byY);
+                line.sort(function(a, b) { return a.ny - b.ny; });
+                return line;
             }
-            var pdPareto = rightmostByY(pdAll);
-            var aggPareto = rightmostByY(aggAll);
+            var pdPareto = frontierLine(pdAll);
+            var aggPareto = frontierLine(aggAll);
 
             var traces = [];
             // Aggregated scatter (red, low opacity)
