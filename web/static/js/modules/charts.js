@@ -449,6 +449,14 @@ function renderCharts(data, runId) {
         '</div></div>';
     secCfg += chartCard('Throughput vs Latency', chartDesc.scatter, 'chart-scatter');
     secCfg += chartCard('GPU Efficiency (req/s per GPU)', chartDesc.efficiency, 'chart-efficiency');
+    if (coreResults.some(r => r.architecture === 'PD' || r.architecture === 'EP') && coreResults.some(r => r.architecture === 'AGGREGATED')) {
+        secCfg += chartCard(
+            'Throughput–Interactivity Pareto Frontier',
+            'Each dot is a tested configuration. <strong style="color:#3b82f6">Blue = PD/EP</strong> (disaggregated), <strong style="color:#ef4444">Red = Aggregated</strong> (co-located). ' +
+            'Lines show the Pareto frontier — configs where no other is better on both axes. Top-right is ideal (high throughput per GPU AND fast output per user).',
+            'chart-pareto-frontier'
+        );
+    }
 
     // --- PD configurations TTFT + Throughput charts (one per percentile) ---
     if (coreResults.filter(r => r.architecture === 'PD').length) {
@@ -2045,6 +2053,83 @@ function renderCharts(data, runId) {
                 cliponaxis: false, constraintext: 'none',
                 hovertemplate: '<b>%{x}</b><br>%{y:.3f} req/s/GPU<extra></extra>'
             }], { ...plotlyLayout, margin: { ...plotlyLayout.margin, b: 120 }, xaxis: { tickangle: -45 }, yaxis: { title: 'Mean req/s per GPU - higher is better' } }, plotlyConfig);
+        }
+    }
+
+    // Throughput–Interactivity Pareto Frontier
+    if (document.getElementById(cid('chart-pareto-frontier'))) {
+        // Get OSL from run config for computing output_tps when not available
+        var runOsl = (rec && rec.workload) ? rec.workload.osl : 100;
+        var pdPoints = coreResults.filter(r => (r.architecture === 'PD' || r.architecture === 'EP') && (r.output_tps_mean > 0 || r.throughput_mean > 0));
+        var aggPoints = coreResults.filter(r => r.architecture === 'AGGREGATED' && (r.output_tps_mean > 0 || r.throughput_mean > 0));
+
+        function computePareto(points) {
+            var sorted = points.slice().sort((a, b) => a.x - b.x);
+            var front = [];
+            var maxY = -Infinity;
+            for (var i = sorted.length - 1; i >= 0; i--) {
+                if (sorted[i].y > maxY) {
+                    front.push(sorted[i]);
+                    maxY = sorted[i].y;
+                }
+            }
+            front.sort((a, b) => a.x - b.x);
+            return front;
+        }
+
+        function makePoints(results) {
+            return results.map(function(r) {
+                var tput = r.throughput_mean || r.throughput_p90 || 0;
+                var interactivity = r.output_tps_mean || (tput * runOsl);
+                var tpsGpu = interactivity * (r.concurrency || 100) / (r.gpus || 1);
+                return { x: interactivity, y: tpsGpu, label: r.config_name, arch: r.architecture };
+            }).filter(p => p.x > 0 && p.y > 0);
+        }
+
+        var pdData = makePoints(pdPoints);
+        var aggData = makePoints(aggPoints);
+        var pdPareto = computePareto(pdData);
+        var aggPareto = computePareto(aggData);
+
+        var traces = [];
+        if (aggData.length) {
+            traces.push({
+                x: aggData.map(p => p.x), y: aggData.map(p => p.y),
+                text: aggData.map(p => p.label), name: 'Aggregated', mode: 'markers',
+                marker: { color: '#ef4444', size: 8, opacity: 0.4 },
+                hovertemplate: '<b>%{text}</b><br>Interactivity: %{x:.1f} tok/s/user<br>Throughput: %{y:.0f} tok/s/GPU<extra>Aggregated</extra>'
+            });
+            if (aggPareto.length > 1) {
+                traces.push({
+                    x: aggPareto.map(p => p.x), y: aggPareto.map(p => p.y),
+                    name: 'Aggregated Pareto', mode: 'lines',
+                    line: { color: '#ef4444', width: 3 }, showlegend: true
+                });
+            }
+        }
+        if (pdData.length) {
+            traces.push({
+                x: pdData.map(p => p.x), y: pdData.map(p => p.y),
+                text: pdData.map(p => p.label), name: 'PD/EP', mode: 'markers',
+                marker: { color: '#3b82f6', size: 8, opacity: 0.4 },
+                hovertemplate: '<b>%{text}</b><br>Interactivity: %{x:.1f} tok/s/user<br>Throughput: %{y:.0f} tok/s/GPU<extra>PD/EP</extra>'
+            });
+            if (pdPareto.length > 1) {
+                traces.push({
+                    x: pdPareto.map(p => p.x), y: pdPareto.map(p => p.y),
+                    name: 'PD/EP Pareto', mode: 'lines',
+                    line: { color: '#3b82f6', width: 3 }, showlegend: true
+                });
+            }
+        }
+        if (traces.length) {
+            Plotly.newPlot(cid('chart-pareto-frontier'), traces, {
+                ...plotlyLayout, height: 500,
+                xaxis: { title: 'Interactivity (output tokens/s/user)', gridcolor: '#e2e8f0' },
+                yaxis: { title: 'Throughput (tokens/s/GPU)', gridcolor: '#e2e8f0' },
+                showlegend: true, legend: { x: 0.02, y: 0.98, bgcolor: 'rgba(255,255,255,0.9)' },
+                plot_bgcolor: '#fafbfc',
+            }, plotlyConfig);
         }
     }
 

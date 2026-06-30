@@ -1087,6 +1087,21 @@ class ReportAnalyzer:
 
         return data
 
+    def _get_output_tps(self, r):
+        """Extract output_tps_mean from result object or metrics_json."""
+        if getattr(r, 'output_tps_mean', None):
+            return round(r.output_tps_mean, 2)
+        if r.metrics_json:
+            try:
+                import json as _j
+                mj = _j.loads(r.metrics_json) if isinstance(r.metrics_json, str) else r.metrics_json
+                v = mj.get('output_tps_mean')
+                if v:
+                    return round(v, 2)
+            except Exception:
+                pass
+        return None
+
     def build_all_results_table(self, results):
         """Build the all-results table data for the frontend."""
         import json
@@ -1127,6 +1142,7 @@ class ReportAnalyzer:
                 'throughput_p99': round(r.throughput_p99, 2) if r.throughput_p99 else None,
                 'gpus': r.total_gpus,
                 'efficiency': round(r.throughput_p90 / r.total_gpus, 3),
+                'output_tps_mean': self._get_output_tps(r),
                 'prefill_pods': r.prefill_pods,
                 'decode_pods': r.decode_pods,
                 'tp': r.tensor_parallelism,
