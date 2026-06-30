@@ -2060,7 +2060,12 @@ function renderCharts(data, runId) {
     // Throughput–Interactivity Pareto Frontier (normalized 0-1)
     if (document.getElementById(cid('chart-pareto-frontier'))) {
         var runOsl = (rec && rec.workload) ? rec.workload.osl : 100;
-        var allCfgResults = coreResults.filter(r => (r.output_tps_mean > 0 || r.throughput_mean > 0));
+        // Use ALL results including sweeps for maximum data spread
+        var allCfgResults = (data.all_results || []).filter(function(r) {
+            var tid = r.test_id || r.config_name || '';
+            return tid.indexOf('step2-') !== 0 && tid.indexOf('step3-') !== 0 &&
+                   (r.output_tps_mean > 0 || r.throughput_mean > 0);
+        });
 
         function makeRawPoints(results) {
             return results.map(function(r) {
