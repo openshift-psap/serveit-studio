@@ -310,6 +310,8 @@ class LatencySearchMixin:
         """
         import math
         custom = getattr(self.config, 'concurrency_sweep_levels', None)
+        count = getattr(self.config, 'concurrency_sweep_count', None)
+        step_pct = getattr(self.config, 'concurrency_sweep_step_pct', 20)
 
         if custom is not None:
             # List of explicit levels
@@ -324,7 +326,7 @@ class LatencySearchMixin:
             n = int(custom[0]) if isinstance(custom, list) else int(custom)
             if n < 1:
                 n = 6
-            step = max(10, math.ceil(calibrated * 0.2 / 10) * 10)
+            step = max(10, math.ceil(calibrated * step_pct / 100 / 10) * 10)
 
             below_count = (n - 1) // 2
             above_count = n - 1 - below_count
@@ -333,6 +335,27 @@ class LatencySearchMixin:
             max_below = max(0, (calibrated - step) // step)
             actual_below = min(below_count, max_below)
             # Shift overflow to above
+            actual_above = above_count + (below_count - actual_below)
+
+            levels = []
+            for i in range(actual_below, 0, -1):
+                levels.append(calibrated - i * step)
+            levels.append(calibrated)
+            for i in range(1, actual_above + 1):
+                levels.append(calibrated + i * step)
+
+            return [l for l in levels if l > 0]
+
+        # Count-based generation (from UI count + step% inputs)
+        if count and int(count) > 0:
+            n = int(count)
+            step = max(10, math.ceil(calibrated * step_pct / 100 / 10) * 10)
+
+            below_count = (n - 1) // 2
+            above_count = n - 1 - below_count
+
+            max_below = max(0, (calibrated - step) // step)
+            actual_below = min(below_count, max_below)
             actual_above = above_count + (below_count - actual_below)
 
             levels = []

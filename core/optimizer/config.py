@@ -63,13 +63,17 @@ class RecipeOptimizerConfig:
     # Step 11: Calibrated load / InferenceX sweep
     calibrated_load_enabled: bool = False  # Re-test best configs at sustainable concurrency
     inferencex_sweep_enabled: bool = False  # Full concurrency sweep for InferenceX chart
-    concurrency_sweep_levels: Optional[List[int]] = None  # Custom levels; None = auto ~6 from calibrated
+    concurrency_sweep_levels: Optional[List[int]] = None  # Explicit levels; None = auto
+    concurrency_sweep_count: Optional[int] = None  # Number of levels to generate
+    concurrency_sweep_step_pct: int = 20  # Step as % of calibrated load
 
     # Step 13: Cache hit sweep
     cache_sweep_enabled: bool = False  # Sweep cache hit levels at user-defined concurrency
     cache_sweep_use_calibrated: bool = False  # Sweep cache hit levels at calibrated concurrency
     cache_sweep_mode: str = 'identical'  # 'identical' | 'shared_prefix' | 'multi_group'
-    cache_sweep_levels: Optional[List[int]] = None  # Default [0, 10, 30, 50, 70, 100]
+    cache_sweep_levels: Optional[List[int]] = None  # Explicit levels; None = auto
+    cache_sweep_count: Optional[int] = None  # Number of levels to generate
+    cache_sweep_step_pct: int = 10  # Step in percentage points
     cache_sweep_groups: int = 5  # Groups for multi_group mode
 
     # EPP configuration

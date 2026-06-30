@@ -208,7 +208,9 @@ document.getElementById('start-optimization').addEventListener('click', () => {
         cache_sweep_enabled: !!config.cache_sweep_enabled,
         cache_sweep_use_calibrated: !!config.cache_sweep_use_calibrated,
         cache_sweep_mode: config.cache_sweep_mode || 'identical',
-        cache_sweep_levels: config.cache_sweep_levels || [0, 10, 30, 50, 70, 100],
+        cache_sweep_levels: config.cache_sweep_levels || null,
+        cache_sweep_count: config.cache_sweep_count || null,
+        cache_sweep_step_pct: config.cache_sweep_step_pct || 10,
         cache_sweep_groups: config.cache_sweep_groups || 5,
         run_description: config.run_description || '',
         epp_custom_enabled: config.epp_custom_enabled === true,
@@ -230,7 +232,9 @@ document.getElementById('start-optimization').addEventListener('click', () => {
         node_nfs_pvcs: config.node_nfs_pvcs || [],
         calibrated_load_enabled: !!config.calibrated_load_enabled,
         inferencex_sweep_enabled: !!config.inferencex_sweep_enabled,
-        concurrency_sweep_levels: config.concurrency_sweep_levels || null
+        concurrency_sweep_levels: config.concurrency_sweep_levels || null,
+        concurrency_sweep_count: config.concurrency_sweep_count || null,
+        concurrency_sweep_step_pct: config.concurrency_sweep_step_pct || 20
     });
 });
 

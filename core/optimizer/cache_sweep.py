@@ -9,9 +9,37 @@ class CacheSweepMixin:
 
     def _get_cache_sweep_levels(self) -> List[int]:
         levels = self.config.cache_sweep_levels
-        if not levels:
-            levels = [0, 10, 30, 50, 70, 100]
-        return sorted(set(max(0, min(100, l)) for l in levels))
+        if levels:
+            return sorted(set(max(0, min(100, l)) for l in levels))
+
+        count = getattr(self.config, 'cache_sweep_count', None)
+        if count and int(count) > 0:
+            n = int(count)
+            step_pct = getattr(self.config, 'cache_sweep_step_pct', 10)
+            center = 50
+            below_count = (n - 1) // 2
+            above_count = n - 1 - below_count
+
+            max_below = center // step_pct if step_pct > 0 else 0
+            actual_below = min(below_count, max_below)
+            max_above = (100 - center) // step_pct if step_pct > 0 else 0
+            actual_above_fit = min(above_count, max_above)
+            # Shift overflow in both directions
+            extra_above = below_count - actual_below
+            extra_below = above_count - actual_above_fit
+            actual_above = actual_above_fit + extra_above
+            actual_below = min(actual_below + extra_below, center // step_pct if step_pct > 0 else 0)
+
+            result = []
+            for i in range(actual_below, 0, -1):
+                result.append(center - i * step_pct)
+            result.append(center)
+            for i in range(1, actual_above + 1):
+                result.append(center + i * step_pct)
+
+            return sorted(set(max(0, min(100, l)) for l in result))
+
+        return [0, 10, 30, 50, 70, 100]
 
     def _generate_cache_dataset_for_level(self, hit_pct: int) -> Optional[str]:
         """Generate a prefix cache dataset for a specific hit percentage.

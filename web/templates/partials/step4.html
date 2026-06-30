@@ -188,9 +188,19 @@
                                     </div>
                                 </div>
                                 <div id="concurrency-sweep-levels-row" style="display:none;padding:8px 14px;">
-                                    <div style="font-weight:600;font-size:0.85em;color:#065f46;margin-bottom:4px;">Concurrency Levels</div>
-                                    <input type="text" id="concurrency-sweep-levels" placeholder="auto (~6 levels)" style="width:100%;padding:6px 10px;border:1px solid #86efac;border-radius:6px;font-size:0.85em;font-family:var(--font-mono);" onchange="var v=this.value.trim();if(v){config.concurrency_sweep_levels=v.split(',').map(function(x){return parseInt(x.trim())}).filter(function(x){return !isNaN(x)&&x>0});}else{config.concurrency_sweep_levels=null;}saveConfig();">
-                                    <div style="font-size:0.75em;color:#6b7280;margin-top:4px;">Single number = count of levels centered on calibrated load (e.g. <b>20</b> → 20 levels with 20% step). Comma-separated = exact user counts (e.g. <b>10, 50, 100, 200</b>). Empty = auto ~6 levels.</div>
+                                    <div style="display:flex;gap:12px;margin-bottom:8px;">
+                                        <div style="flex:1;">
+                                            <div style="font-weight:600;font-size:0.85em;color:#065f46;margin-bottom:4px;">Number of Levels</div>
+                                            <input type="number" id="concurrency-sweep-count" min="2" max="100" placeholder="auto" style="width:100%;padding:6px 10px;border:1px solid #86efac;border-radius:6px;font-size:0.85em;" onchange="var v=parseInt(this.value);config.concurrency_sweep_count=v>0?v:null;saveConfig();">
+                                        </div>
+                                        <div style="flex:1;">
+                                            <div style="font-weight:600;font-size:0.85em;color:#065f46;margin-bottom:4px;">Step %</div>
+                                            <input type="number" id="concurrency-sweep-step-pct" min="1" max="100" value="20" style="width:100%;padding:6px 10px;border:1px solid #86efac;border-radius:6px;font-size:0.85em;" onchange="config.concurrency_sweep_step_pct=parseInt(this.value)||20;saveConfig();">
+                                        </div>
+                                    </div>
+                                    <div style="font-weight:600;font-size:0.85em;color:#065f46;margin-bottom:4px;">Or: Explicit Levels</div>
+                                    <input type="text" id="concurrency-sweep-levels" placeholder="e.g. 10, 50, 100, 200 (overrides count + step%)" style="width:100%;padding:6px 10px;border:1px solid #86efac;border-radius:6px;font-size:0.85em;font-family:var(--font-mono);" onchange="var v=this.value.trim();if(v){config.concurrency_sweep_levels=v.split(',').map(function(x){return parseInt(x.trim())}).filter(function(x){return !isNaN(x)&&x>0});}else{config.concurrency_sweep_levels=null;}saveConfig();">
+                                    <div style="font-size:0.75em;color:#6b7280;margin-top:4px;">Set count + step% to auto-generate levels centered on calibrated load. Or type exact comma-separated levels. Empty = auto ~6 levels.</div>
                                 </div>
                             </div>
                         </div>
@@ -244,8 +254,19 @@
                                 </div>
                                 <!-- Cache hit levels -->
                                 <div style="margin-bottom:10px;">
-                                    <div style="font-weight:600;font-size:0.85em;color:#5b21b6;margin-bottom:4px;">Cache Hit Levels (%)</div>
+                                    <div style="display:flex;gap:12px;margin-bottom:8px;">
+                                        <div style="flex:1;">
+                                            <div style="font-weight:600;font-size:0.85em;color:#5b21b6;margin-bottom:4px;">Number of Levels</div>
+                                            <input type="number" id="cache-sweep-count" min="2" max="50" placeholder="auto" style="width:100%;padding:6px 10px;border:1px solid #c4b5fd;border-radius:6px;font-size:0.85em;" onchange="var v=parseInt(this.value);config.cache_sweep_count=v>0?v:null;saveConfig();">
+                                        </div>
+                                        <div style="flex:1;">
+                                            <div style="font-weight:600;font-size:0.85em;color:#5b21b6;margin-bottom:4px;">Step %</div>
+                                            <input type="number" id="cache-sweep-step-pct" min="1" max="50" value="10" style="width:100%;padding:6px 10px;border:1px solid #c4b5fd;border-radius:6px;font-size:0.85em;" onchange="config.cache_sweep_step_pct=parseInt(this.value)||10;saveConfig();">
+                                        </div>
+                                    </div>
+                                    <div style="font-weight:600;font-size:0.85em;color:#5b21b6;margin-bottom:4px;">Or: Explicit Levels (%)</div>
                                     <input type="text" id="cache-sweep-levels" value="0, 10, 30, 50, 70, 100" style="width:100%;padding:6px 10px;border:1px solid #c4b5fd;border-radius:6px;font-size:0.85em;font-family:var(--font-mono);" onchange="config.cache_sweep_levels=this.value.split(',').map(function(v){return parseInt(v.trim())}).filter(function(v){return !isNaN(v)});saveConfig();">
+                                    <div style="font-size:0.75em;color:#6b7280;margin-top:4px;">Set count + step% to auto-generate levels centered on 50%. Or type exact comma-separated percentages. Default: 0, 10, 30, 50, 70, 100.</div>
                                 </div>
                                 <!-- Groups (for multi_group) -->
                                 <div id="cache-sweep-groups-row" style="display:none;align-items:center;gap:8px;">

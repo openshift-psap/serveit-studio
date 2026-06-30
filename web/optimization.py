@@ -313,10 +313,14 @@ def stream_job_logs(job_name: str, namespace: str):
                     'calibrated_load_enabled': saved_config.get('calibrated_load_enabled', False),
                     'inferencex_sweep_enabled': saved_config.get('inferencex_sweep_enabled', False),
                     'concurrency_sweep_levels': saved_config.get('concurrency_sweep_levels', None),
+                    'concurrency_sweep_count': saved_config.get('concurrency_sweep_count', None),
+                    'concurrency_sweep_step_pct': saved_config.get('concurrency_sweep_step_pct', 20),
                     'cache_sweep_enabled': saved_config.get('cache_sweep_enabled', False),
                     'cache_sweep_use_calibrated': saved_config.get('cache_sweep_use_calibrated', False),
                     'cache_sweep_mode': saved_config.get('cache_sweep_mode', 'identical'),
-                    'cache_sweep_levels': saved_config.get('cache_sweep_levels', [0, 10, 30, 50, 70, 100]),
+                    'cache_sweep_levels': saved_config.get('cache_sweep_levels', None),
+                    'cache_sweep_count': saved_config.get('cache_sweep_count', None),
+                    'cache_sweep_step_pct': saved_config.get('cache_sweep_step_pct', 10),
                     'cache_sweep_groups': saved_config.get('cache_sweep_groups', 5),
                     'run_description': saved_config.get('run_description', ''),
                     'advanced_vllm_custom_enabled': saved_config.get('advanced_vllm_custom_enabled', True),
@@ -709,12 +713,22 @@ def run_optimization_background(data):
             concurrency_sweep_levels = [int(x.strip()) for x in concurrency_sweep_levels.split(',') if x.strip().isdigit()]
         if concurrency_sweep_levels is not None and not concurrency_sweep_levels:
             concurrency_sweep_levels = None
+        concurrency_sweep_count = _get('concurrency_sweep_count', None)
+        if concurrency_sweep_count is not None:
+            concurrency_sweep_count = int(concurrency_sweep_count) if concurrency_sweep_count else None
+        concurrency_sweep_step_pct = int(_get('concurrency_sweep_step_pct', 20))
         cache_sweep_enabled = _get('cache_sweep_enabled', False)
         cache_sweep_use_calibrated = _get('cache_sweep_use_calibrated', False)
         cache_sweep_mode = _get('cache_sweep_mode', 'identical')
-        cache_sweep_levels = _get('cache_sweep_levels', [0, 10, 30, 50, 70, 100])
+        cache_sweep_levels = _get('cache_sweep_levels', None)
         if isinstance(cache_sweep_levels, str):
             cache_sweep_levels = [int(x.strip()) for x in cache_sweep_levels.split(',') if x.strip().isdigit()]
+        if cache_sweep_levels is not None and not cache_sweep_levels:
+            cache_sweep_levels = None
+        cache_sweep_count = _get('cache_sweep_count', None)
+        if cache_sweep_count is not None:
+            cache_sweep_count = int(cache_sweep_count) if cache_sweep_count else None
+        cache_sweep_step_pct = int(_get('cache_sweep_step_pct', 10))
         cache_sweep_groups = int(_get('cache_sweep_groups', 5))
         run_description = _get('run_description', '')
         advanced_vllm_custom_enabled = _get('advanced_vllm_custom_enabled', True)
@@ -961,10 +975,14 @@ data:
                 calibrated_load_enabled=calibrated_load_enabled,
                 inferencex_sweep_enabled=inferencex_sweep_enabled,
                 concurrency_sweep_levels=concurrency_sweep_levels,
+                concurrency_sweep_count=concurrency_sweep_count,
+                concurrency_sweep_step_pct=concurrency_sweep_step_pct,
                 cache_sweep_enabled=cache_sweep_enabled,
                 cache_sweep_use_calibrated=cache_sweep_use_calibrated,
                 cache_sweep_mode=cache_sweep_mode,
                 cache_sweep_levels=cache_sweep_levels,
+                cache_sweep_count=cache_sweep_count,
+                cache_sweep_step_pct=cache_sweep_step_pct,
                 cache_sweep_groups=cache_sweep_groups,
                 latency_constraint_enabled=latency_constraint_enabled,
                 latency_constraint_ms=latency_constraint_ms,

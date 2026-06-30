@@ -154,6 +154,12 @@ function updateUIFromConfig() {
         }
         var cslRow = document.getElementById('concurrency-sweep-levels-row');
         if (cslRow) cslRow.style.display = ixOn ? 'block' : 'none';
+        if (config.concurrency_sweep_count && document.getElementById('concurrency-sweep-count')) {
+            document.getElementById('concurrency-sweep-count').value = config.concurrency_sweep_count;
+        }
+        if (config.concurrency_sweep_step_pct && document.getElementById('concurrency-sweep-step-pct')) {
+            document.getElementById('concurrency-sweep-step-pct').value = config.concurrency_sweep_step_pct;
+        }
         if (config.concurrency_sweep_levels && document.getElementById('concurrency-sweep-levels')) {
             document.getElementById('concurrency-sweep-levels').value = config.concurrency_sweep_levels.join(', ');
         }
@@ -185,6 +191,12 @@ function updateUIFromConfig() {
             var gr = document.getElementById('cache-sweep-groups-row');
             if (gr) gr.style.display = 'flex';
         }
+    }
+    if (config.cache_sweep_count && document.getElementById('cache-sweep-count')) {
+        document.getElementById('cache-sweep-count').value = config.cache_sweep_count;
+    }
+    if (config.cache_sweep_step_pct && document.getElementById('cache-sweep-step-pct')) {
+        document.getElementById('cache-sweep-step-pct').value = config.cache_sweep_step_pct;
     }
     if (config.cache_sweep_levels && document.getElementById('cache-sweep-levels')) {
         document.getElementById('cache-sweep-levels').value = config.cache_sweep_levels.join(', ');
