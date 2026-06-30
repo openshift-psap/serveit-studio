@@ -2117,24 +2117,20 @@ function renderCharts(data, runId) {
             if (aggAll.length) {
                 traces.push({
                     x: aggAll.map(p => p.nx), y: aggAll.map(p => p.ny),
-                    text: aggAll.map(p => p.label),
-                    customdata: aggAll.map(p => p.x.toFixed(0) + ' tok/s/user<br>' + p.y.toFixed(0) + ' tok/s/GPU'),
-                    name: 'Aggregated — All points', mode: 'markers+text',
+                    text: aggAll.map(p => p.label + '<br>' + p.x.toFixed(0) + ' tok/s/user, ' + p.y.toFixed(0) + ' tok/s/GPU'),
+                    name: 'Aggregated — All points', mode: 'markers',
                     marker: { color: '#fca5a5', size: 12, opacity: 0.5 },
-                    textposition: 'top right', textfont: { size: 8, color: '#dc2626' },
-                    hovertemplate: '<b>%{text}</b><br>%{customdata}<extra>Aggregated</extra>'
+                    hovertemplate: '<b>%{text}</b><extra></extra>'
                 });
             }
             // PD scatter (blue, low opacity)
             if (pdAll.length) {
                 traces.push({
                     x: pdAll.map(p => p.nx), y: pdAll.map(p => p.ny),
-                    text: pdAll.map(p => p.label),
-                    customdata: pdAll.map(p => p.x.toFixed(0) + ' tok/s/user<br>' + p.y.toFixed(0) + ' tok/s/GPU'),
-                    name: 'Disaggregation — All points', mode: 'markers+text',
+                    text: pdAll.map(p => p.label + '<br>' + p.x.toFixed(0) + ' tok/s/user, ' + p.y.toFixed(0) + ' tok/s/GPU'),
+                    name: 'Disaggregation — All points', mode: 'markers',
                     marker: { color: '#93c5fd', size: 12, opacity: 0.5 },
-                    textposition: 'top right', textfont: { size: 8, color: '#2563eb' },
-                    hovertemplate: '<b>%{text}</b><br>%{customdata}<extra>Disaggregation</extra>'
+                    hovertemplate: '<b>%{text}</b><extra></extra>'
                 });
             }
             // Aggregated Pareto line (bold red)
@@ -2156,14 +2152,41 @@ function renderCharts(data, runId) {
                 });
             }
 
+            // Build annotations with arrows for Pareto frontier points only
+            var paretoAnnotations = [];
+            var annotIdx = 0;
+            function addAnnotations(points, color) {
+                points.forEach(function(p, i) {
+                    if (!p.label) return;
+                    annotIdx++;
+                    var side = annotIdx % 2 === 0 ? 1 : -1;
+                    paretoAnnotations.push({
+                        x: p.nx, y: p.ny,
+                        text: p.label,
+                        showarrow: true,
+                        arrowhead: 0,
+                        arrowwidth: 1,
+                        arrowcolor: color,
+                        ax: 60 * side,
+                        ay: -30 - (annotIdx % 3) * 15,
+                        font: { size: 10, color: color },
+                        bgcolor: 'rgba(255,255,255,0.85)',
+                        borderpad: 2,
+                    });
+                });
+            }
+            addAnnotations(aggPareto, '#dc2626');
+            addAnnotations(pdPareto, '#2563eb');
+
             Plotly.newPlot(cid('chart-pareto-frontier'), traces, {
-                ...plotlyLayout, height: 550,
+                ...plotlyLayout, height: 650,
                 xaxis: { title: 'Normalized Tokens/s/user', range: [0, 1.05], gridcolor: '#d1d5db', dtick: 0.2 },
                 yaxis: { title: 'Normalized Tokens/s/GPU', range: [0, 1.05], gridcolor: '#d1d5db', dtick: 0.2 },
                 showlegend: true,
                 legend: { x: 1.02, y: 1, xanchor: 'left', bgcolor: 'rgba(255,255,255,0.95)', bordercolor: '#e2e8f0', borderwidth: 1 },
                 margin: { t: 30, b: 60, l: 60, r: 200 },
                 plot_bgcolor: 'white', paper_bgcolor: 'white',
+                annotations: paretoAnnotations,
             }, plotlyConfig);
         }
     }
