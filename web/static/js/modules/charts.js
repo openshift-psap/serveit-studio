@@ -2082,17 +2082,31 @@ function renderCharts(data, runId) {
             var aggAll = allPoints.filter(p => p.arch === 'AGGREGATED');
 
             function computePareto(points) {
-                var sorted = points.slice().sort(function(a, b) { return a.nx - b.nx; });
-                var front = [];
-                var maxY = -Infinity;
-                for (var i = sorted.length - 1; i >= 0; i--) {
-                    if (sorted[i].ny > maxY) {
+                if (points.length < 2) return points.slice();
+                // Sort by X, then for each X region keep the best Y (upper envelope)
+                var sorted = points.slice().sort(function(a, b) { return a.nx - b.nx || b.ny - a.ny; });
+                // Build upper-left envelope: walk left-to-right, keep points that
+                // are not dominated by any point to their LEFT (higher Y at lower X)
+                var front = [sorted[0]];
+                for (var i = 1; i < sorted.length; i++) {
+                    // Keep if Y is higher than the last frontier point (extends upward)
+                    // OR if X is significantly different (extends rightward)
+                    var last = front[front.length - 1];
+                    if (sorted[i].ny > last.ny || Math.abs(sorted[i].nx - last.nx) > 0.02) {
                         front.push(sorted[i]);
-                        maxY = sorted[i].ny;
                     }
                 }
-                front.sort(function(a, b) { return a.nx - b.nx; });
-                return front;
+                // Now trim: walk right-to-left, remove points dominated from the right
+                var trimmed = [front[front.length - 1]];
+                var maxY = trimmed[0].ny;
+                for (var i = front.length - 2; i >= 0; i--) {
+                    if (front[i].ny >= maxY * 0.95) {
+                        trimmed.push(front[i]);
+                        if (front[i].ny > maxY) maxY = front[i].ny;
+                    }
+                }
+                trimmed.sort(function(a, b) { return a.nx - b.nx; });
+                return trimmed;
             }
 
             var pdPareto = computePareto(pdAll);
