@@ -2226,9 +2226,11 @@ function renderCharts(data, runId) {
 
                 var ttftAllPts = makeTtftPoints(ttftAllResults);
                 if (ttftAllPts.length > 1) {
-                    // Use actual TTFT (ms) for X with log scale, normalize Y only
+                    // Normalize both axes 0-1, use sqrt on X to spread low TTFT values
+                    var ttftMaxX = Math.max.apply(null, ttftAllPts.map(function(p) { return p.x; }));
                     var ttftMaxY = Math.max.apply(null, ttftAllPts.map(function(p) { return p.y; }));
-                    ttftAllPts.forEach(function(p) { p.nx = p.x; p.ny = p.y / ttftMaxY; });
+                    var sqrtMaxX = Math.sqrt(ttftMaxX);
+                    ttftAllPts.forEach(function(p) { p.nx = Math.sqrt(p.x) / sqrtMaxX; p.ny = p.y / ttftMaxY; });
 
                     var ttftPd = ttftAllPts.filter(function(p) { return p.arch === 'PD' || p.arch === 'EP'; });
                     var ttftAgg = ttftAllPts.filter(function(p) { return p.arch === 'AGGREGATED'; });
@@ -2308,7 +2310,7 @@ function renderCharts(data, runId) {
 
                     Plotly.newPlot(cid('chart-pareto-ttft'), ttftTraces, {
                         ...plotlyLayout, height: 850,
-                        xaxis: { title: 'TTFT P90 (ms) — lower/right is better →', type: 'log', autorange: 'reversed', gridcolor: '#d1d5db' },
+                        xaxis: { title: 'Normalized TTFT P90 (lower/right is better →)', autorange: 'reversed', range: [1.05, 0], gridcolor: '#d1d5db', dtick: 0.2 },
                         yaxis: { title: 'Normalized Tokens/s/GPU', range: [0, 1.05], gridcolor: '#d1d5db', dtick: 0.2 },
                         showlegend: true,
                         legend: { x: 1.02, y: 1, xanchor: 'left', bgcolor: 'rgba(255,255,255,0.95)', bordercolor: '#e2e8f0', borderwidth: 1 },
