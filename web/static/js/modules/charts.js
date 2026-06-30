@@ -2226,9 +2226,9 @@ function renderCharts(data, runId) {
 
                 var ttftAllPts = makeTtftPoints(ttftAllResults);
                 if (ttftAllPts.length > 1) {
-                    var ttftMaxX = Math.max.apply(null, ttftAllPts.map(function(p) { return p.x; }));
+                    // Use actual TTFT (ms) for X with log scale, normalize Y only
                     var ttftMaxY = Math.max.apply(null, ttftAllPts.map(function(p) { return p.y; }));
-                    ttftAllPts.forEach(function(p) { p.nx = p.x / ttftMaxX; p.ny = p.y / ttftMaxY; });
+                    ttftAllPts.forEach(function(p) { p.nx = p.x; p.ny = p.y / ttftMaxY; });
 
                     var ttftPd = ttftAllPts.filter(function(p) { return p.arch === 'PD' || p.arch === 'EP'; });
                     var ttftAgg = ttftAllPts.filter(function(p) { return p.arch === 'AGGREGATED'; });
@@ -2256,7 +2256,7 @@ function renderCharts(data, runId) {
                     if (ttftAgg.length) {
                         ttftTraces.push({
                             x: ttftAgg.map(function(p) { return p.nx; }), y: ttftAgg.map(function(p) { return p.ny; }),
-                            text: ttftAgg.map(function(p) { return p.label + '<br>TTFT: ' + p.x.toFixed(0) + 'ms, ' + p.y.toFixed(0) + ' tok/s/GPU'; }),
+                            text: ttftAgg.map(function(p) { return p.label + '<br>TTFT P90: ' + p.x.toFixed(0) + 'ms<br>' + p.y.toFixed(0) + ' tok/s/GPU'; }),
                             name: 'Aggregated — All points', mode: 'markers',
                             marker: { color: '#fca5a5', size: 18, opacity: 0.5 },
                             hovertemplate: '<b>%{text}</b><extra></extra>'
@@ -2265,7 +2265,7 @@ function renderCharts(data, runId) {
                     if (ttftPd.length) {
                         ttftTraces.push({
                             x: ttftPd.map(function(p) { return p.nx; }), y: ttftPd.map(function(p) { return p.ny; }),
-                            text: ttftPd.map(function(p) { return p.label + '<br>TTFT: ' + p.x.toFixed(0) + 'ms, ' + p.y.toFixed(0) + ' tok/s/GPU'; }),
+                            text: ttftPd.map(function(p) { return p.label + '<br>TTFT P90: ' + p.x.toFixed(0) + 'ms<br>' + p.y.toFixed(0) + ' tok/s/GPU'; }),
                             name: 'Disaggregation — All points', mode: 'markers',
                             marker: { color: '#93c5fd', size: 18, opacity: 0.5 },
                             hovertemplate: '<b>%{text}</b><extra></extra>'
@@ -2308,7 +2308,7 @@ function renderCharts(data, runId) {
 
                     Plotly.newPlot(cid('chart-pareto-ttft'), ttftTraces, {
                         ...plotlyLayout, height: 850,
-                        xaxis: { title: 'Normalized TTFT P90 (lower/right is better →)', autorange: 'reversed', range: [1.05, 0], gridcolor: '#d1d5db', dtick: 0.2 },
+                        xaxis: { title: 'TTFT P90 (ms) — lower/right is better →', type: 'log', autorange: 'reversed', gridcolor: '#d1d5db' },
                         yaxis: { title: 'Normalized Tokens/s/GPU', range: [0, 1.05], gridcolor: '#d1d5db', dtick: 0.2 },
                         showlegend: true,
                         legend: { x: 1.02, y: 1, xanchor: 'left', bgcolor: 'rgba(255,255,255,0.95)', bordercolor: '#e2e8f0', borderwidth: 1 },
