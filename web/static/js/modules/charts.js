@@ -2056,79 +2056,92 @@ function renderCharts(data, runId) {
         }
     }
 
-    // Throughput–Interactivity Pareto Frontier
+    // Throughput–Interactivity Pareto Frontier (normalized 0-1)
     if (document.getElementById(cid('chart-pareto-frontier'))) {
-        // Get OSL from run config for computing output_tps when not available
         var runOsl = (rec && rec.workload) ? rec.workload.osl : 100;
-        var pdPoints = coreResults.filter(r => (r.architecture === 'PD' || r.architecture === 'EP') && (r.output_tps_mean > 0 || r.throughput_mean > 0));
-        var aggPoints = coreResults.filter(r => r.architecture === 'AGGREGATED' && (r.output_tps_mean > 0 || r.throughput_mean > 0));
+        var allCfgResults = coreResults.filter(r => (r.output_tps_mean > 0 || r.throughput_mean > 0));
 
-        function computePareto(points) {
-            var sorted = points.slice().sort((a, b) => a.x - b.x);
-            var front = [];
-            var maxY = -Infinity;
-            for (var i = sorted.length - 1; i >= 0; i--) {
-                if (sorted[i].y > maxY) {
-                    front.push(sorted[i]);
-                    maxY = sorted[i].y;
-                }
-            }
-            front.sort((a, b) => a.x - b.x);
-            return front;
-        }
-
-        function makePoints(results) {
+        function makeRawPoints(results) {
             return results.map(function(r) {
                 var tput = r.throughput_mean || r.throughput_p90 || 0;
                 var interactivity = r.output_tps_mean || (tput * runOsl);
-                var tpsGpu = interactivity * (r.concurrency || 100) / (r.gpus || 1);
+                var tpsGpu = tput * runOsl / (r.gpus || 1);
                 return { x: interactivity, y: tpsGpu, label: r.config_name, arch: r.architecture };
             }).filter(p => p.x > 0 && p.y > 0);
         }
 
-        var pdData = makePoints(pdPoints);
-        var aggData = makePoints(aggPoints);
-        var pdPareto = computePareto(pdData);
-        var aggPareto = computePareto(aggData);
+        var allPoints = makeRawPoints(allCfgResults);
+        if (allPoints.length > 1) {
+            // Normalize to 0-1 using global max
+            var maxX = Math.max.apply(null, allPoints.map(p => p.x));
+            var maxY = Math.max.apply(null, allPoints.map(p => p.y));
+            allPoints.forEach(function(p) { p.nx = p.x / maxX; p.ny = p.y / maxY; });
 
-        var traces = [];
-        if (aggData.length) {
-            traces.push({
-                x: aggData.map(p => p.x), y: aggData.map(p => p.y),
-                text: aggData.map(p => p.label), name: 'Aggregated', mode: 'markers',
-                marker: { color: '#ef4444', size: 8, opacity: 0.4 },
-                hovertemplate: '<b>%{text}</b><br>Interactivity: %{x:.1f} tok/s/user<br>Throughput: %{y:.0f} tok/s/GPU<extra>Aggregated</extra>'
-            });
+            var pdAll = allPoints.filter(p => p.arch === 'PD' || p.arch === 'EP');
+            var aggAll = allPoints.filter(p => p.arch === 'AGGREGATED');
+
+            function computePareto(points) {
+                var sorted = points.slice().sort(function(a, b) { return a.nx - b.nx; });
+                var front = [];
+                var maxY = -Infinity;
+                for (var i = sorted.length - 1; i >= 0; i--) {
+                    if (sorted[i].ny > maxY) {
+                        front.push(sorted[i]);
+                        maxY = sorted[i].ny;
+                    }
+                }
+                front.sort(function(a, b) { return a.nx - b.nx; });
+                return front;
+            }
+
+            var pdPareto = computePareto(pdAll);
+            var aggPareto = computePareto(aggAll);
+
+            var traces = [];
+            // Aggregated scatter (red, low opacity)
+            if (aggAll.length) {
+                traces.push({
+                    x: aggAll.map(p => p.nx), y: aggAll.map(p => p.ny),
+                    text: aggAll.map(p => p.label + '<br>' + p.x.toFixed(0) + ' tok/s/user, ' + p.y.toFixed(0) + ' tok/s/GPU'),
+                    name: 'Aggregated — All points', mode: 'markers',
+                    marker: { color: '#fca5a5', size: 7, opacity: 0.5 },
+                    hovertemplate: '<b>%{text}</b><extra></extra>'
+                });
+            }
+            // PD scatter (blue, low opacity)
+            if (pdAll.length) {
+                traces.push({
+                    x: pdAll.map(p => p.nx), y: pdAll.map(p => p.ny),
+                    text: pdAll.map(p => p.label + '<br>' + p.x.toFixed(0) + ' tok/s/user, ' + p.y.toFixed(0) + ' tok/s/GPU'),
+                    name: 'Disaggregation — All points', mode: 'markers',
+                    marker: { color: '#93c5fd', size: 7, opacity: 0.5 },
+                    hovertemplate: '<b>%{text}</b><extra></extra>'
+                });
+            }
+            // Aggregated Pareto line (bold red)
             if (aggPareto.length > 1) {
                 traces.push({
-                    x: aggPareto.map(p => p.x), y: aggPareto.map(p => p.y),
-                    name: 'Aggregated Pareto', mode: 'lines',
-                    line: { color: '#ef4444', width: 3 }, showlegend: true
+                    x: aggPareto.map(p => p.nx), y: aggPareto.map(p => p.ny),
+                    name: 'Aggregated — Pareto', mode: 'lines',
+                    line: { color: '#dc2626', width: 3 }
                 });
             }
-        }
-        if (pdData.length) {
-            traces.push({
-                x: pdData.map(p => p.x), y: pdData.map(p => p.y),
-                text: pdData.map(p => p.label), name: 'PD/EP', mode: 'markers',
-                marker: { color: '#3b82f6', size: 8, opacity: 0.4 },
-                hovertemplate: '<b>%{text}</b><br>Interactivity: %{x:.1f} tok/s/user<br>Throughput: %{y:.0f} tok/s/GPU<extra>PD/EP</extra>'
-            });
+            // PD Pareto line (bold blue)
             if (pdPareto.length > 1) {
                 traces.push({
-                    x: pdPareto.map(p => p.x), y: pdPareto.map(p => p.y),
-                    name: 'PD/EP Pareto', mode: 'lines',
-                    line: { color: '#3b82f6', width: 3 }, showlegend: true
+                    x: pdPareto.map(p => p.nx), y: pdPareto.map(p => p.ny),
+                    name: 'Disaggregation — Pareto', mode: 'lines',
+                    line: { color: '#2563eb', width: 3 }
                 });
             }
-        }
-        if (traces.length) {
+
             Plotly.newPlot(cid('chart-pareto-frontier'), traces, {
-                ...plotlyLayout, height: 500,
-                xaxis: { title: 'Interactivity (output tokens/s/user)', gridcolor: '#e2e8f0' },
-                yaxis: { title: 'Throughput (tokens/s/GPU)', gridcolor: '#e2e8f0' },
-                showlegend: true, legend: { x: 0.02, y: 0.98, bgcolor: 'rgba(255,255,255,0.9)' },
-                plot_bgcolor: '#fafbfc',
+                ...plotlyLayout, height: 550,
+                xaxis: { title: 'Normalized Tokens/s/user', range: [0, 1.05], gridcolor: '#d1d5db', dtick: 0.2 },
+                yaxis: { title: 'Normalized Tokens/s/GPU', range: [0, 1.05], gridcolor: '#d1d5db', dtick: 0.2 },
+                showlegend: true,
+                legend: { x: 0.55, y: 0.98, bgcolor: 'rgba(255,255,255,0.95)', bordercolor: '#e2e8f0', borderwidth: 1 },
+                plot_bgcolor: 'white', paper_bgcolor: 'white',
             }, plotlyConfig);
         }
     }
