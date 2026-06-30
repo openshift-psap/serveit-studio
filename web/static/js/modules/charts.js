@@ -2233,8 +2233,8 @@ function renderCharts(data, runId) {
                     var ttftPd = ttftAllPts.filter(function(p) { return p.arch === 'PD' || p.arch === 'EP'; });
                     var ttftAgg = ttftAllPts.filter(function(p) { return p.arch === 'AGGREGATED'; });
 
-                    // For TTFT, frontier is the LOWEST X at each Y (lower TTFT is better)
-                    // Then remove points that go backwards (X should only decrease going up)
+                    // Same as frontierLine but for TTFT: bucket by Y, keep LOWEST X per bucket
+                    // Walk top-to-bottom, skip points where X increases (goes left on reversed axis)
                     function ttftFrontierLine(points) {
                         var byY = {};
                         points.forEach(function(p) {
@@ -2245,14 +2245,16 @@ function renderCharts(data, runId) {
                         });
                         var line = Object.values(byY);
                         line.sort(function(a, b) { return a.ny - b.ny; });
+                        // Walk top-to-bottom, keep only points where X keeps decreasing
                         var filtered = [];
                         var minX = Infinity;
-                        for (var i = 0; i < line.length; i++) {
+                        for (var i = line.length - 1; i >= 0; i--) {
                             if (line[i].nx <= minX) {
                                 filtered.push(line[i]);
                                 minX = line[i].nx;
                             }
                         }
+                        filtered.reverse();
                         return filtered;
                     }
 
