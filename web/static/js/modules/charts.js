@@ -16,10 +16,11 @@ function renderCharts(data, runId) {
     let html = '';
     let secRec = '', secTP = '', secCfg = '', secCmp = '', secStep9 = '', secCal = '', secCacheSweep = '', secVLLM = '', secTestCfg = '', secEppTuning = '', secDeployTiming = '';
 
-    // Filter out sweep tests (concurrency/cache) from configuration charts
+    // Filter out calibration and sweep tests from configuration charts
     var coreResults = (data.all_results || []).filter(function(r) {
         var tid = r.test_id || r.config_name || '';
-        return tid.indexOf('step11-') !== 0 && tid.indexOf('step12-') !== 0 && tid.indexOf('step13-') !== 0;
+        return tid.indexOf('step2-') !== 0 && tid.indexOf('step3-') !== 0 &&
+               tid.indexOf('step11-') !== 0 && tid.indexOf('step12-') !== 0 && tid.indexOf('step13-') !== 0;
     });
 
     // Build a lookup from test_id -> manifest_types for download links
