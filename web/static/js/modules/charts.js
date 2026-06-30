@@ -2087,8 +2087,8 @@ function renderCharts(data, runId) {
             var aggAll = allPoints.filter(p => p.arch === 'AGGREGATED');
 
             // For each unique Y (tok/s/GPU) value, find the highest X (tok/s/user)
+            // Then remove points that go backwards (X decreases as Y increases)
             function frontierLine(points) {
-                // Bucket by rounded Y, keep max X per bucket
                 var byY = {};
                 points.forEach(function(p) {
                     var yKey = Math.round(p.ny * 100);
@@ -2098,7 +2098,16 @@ function renderCharts(data, runId) {
                 });
                 var line = Object.values(byY);
                 line.sort(function(a, b) { return a.ny - b.ny; });
-                return line;
+                // Walk bottom to top, only keep points where X keeps increasing
+                var filtered = [];
+                var maxX = -Infinity;
+                for (var i = 0; i < line.length; i++) {
+                    if (line[i].nx >= maxX) {
+                        filtered.push(line[i]);
+                        maxX = line[i].nx;
+                    }
+                }
+                return filtered;
             }
             var pdPareto = frontierLine(pdAll);
             var aggPareto = frontierLine(aggAll);
