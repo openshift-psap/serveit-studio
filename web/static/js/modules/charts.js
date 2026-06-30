@@ -2119,7 +2119,7 @@ function renderCharts(data, runId) {
                     x: aggAll.map(p => p.nx), y: aggAll.map(p => p.ny),
                     text: aggAll.map(p => p.label + '<br>' + p.x.toFixed(0) + ' tok/s/user, ' + p.y.toFixed(0) + ' tok/s/GPU'),
                     name: 'Aggregated — All points', mode: 'markers',
-                    marker: { color: '#fca5a5', size: 7, opacity: 0.5 },
+                    marker: { color: '#fca5a5', size: 12, opacity: 0.5 },
                     hovertemplate: '<b>%{text}</b><extra></extra>'
                 });
             }
@@ -2129,7 +2129,7 @@ function renderCharts(data, runId) {
                     x: pdAll.map(p => p.nx), y: pdAll.map(p => p.ny),
                     text: pdAll.map(p => p.label + '<br>' + p.x.toFixed(0) + ' tok/s/user, ' + p.y.toFixed(0) + ' tok/s/GPU'),
                     name: 'Disaggregation — All points', mode: 'markers',
-                    marker: { color: '#93c5fd', size: 7, opacity: 0.5 },
+                    marker: { color: '#93c5fd', size: 12, opacity: 0.5 },
                     hovertemplate: '<b>%{text}</b><extra></extra>'
                 });
             }
