@@ -451,12 +451,11 @@ function renderCharts(data, runId) {
     secCfg += chartCard('Throughput vs Latency', chartDesc.scatter, 'chart-scatter');
     secCfg += chartCard('GPU Efficiency (req/s per GPU)', chartDesc.efficiency, 'chart-efficiency');
     if (coreResults.some(r => r.architecture === 'PD' || r.architecture === 'EP') && coreResults.some(r => r.architecture === 'AGGREGATED')) {
-        secCfg += chartCard(
-            'Throughput–Interactivity Pareto Frontier',
+        secCfg += '<div class="chart-card"><div class="chart-card-header">Throughput–Interactivity Pareto Frontier</div>' +
+            '<div style="padding:8px 20px 0; color:#1e293b; font-size:0.92em; line-height:1.5;">' +
             'Each dot is a tested configuration. <strong style="color:#3b82f6">Blue = PD/EP</strong> (disaggregated), <strong style="color:#ef4444">Red = Aggregated</strong> (co-located). ' +
-            'Lines show the Pareto frontier — configs where no other is better on both axes. Top-right is ideal (high throughput per GPU AND fast output per user).',
-            'chart-pareto-frontier'
-        );
+            'Lines show the Pareto frontier — configs where no other is better on both axes. Top-right is ideal (high throughput per GPU AND fast output per user).</div>' +
+            '<div class="chart-card-body"><div id="chart-pareto-frontier' + _chartSuffix + '" style="width:100%;height:850px;"></div></div></div>';
     }
 
     // --- PD configurations TTFT + Throughput charts (one per percentile) ---
