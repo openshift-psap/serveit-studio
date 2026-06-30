@@ -2086,38 +2086,29 @@ function renderCharts(data, runId) {
             var pdAll = allPoints.filter(p => p.arch === 'PD' || p.arch === 'EP');
             var aggAll = allPoints.filter(p => p.arch === 'AGGREGATED');
 
-            function computePareto(points) {
+            function computeUpperHull(points) {
                 if (points.length < 2) return points.slice();
-                // Upper envelope: for each point walking left-to-right,
-                // keep it if its Y is the highest seen so far at that X position.
-                // Then connect all kept points to form the frontier boundary.
-                var sorted = points.slice().sort(function(a, b) { return a.nx - b.nx; });
-
-                // Step 1: Build the staircase upper envelope (right-to-left scan)
-                var envelope = [];
-                var bestY = -Infinity;
-                for (var i = sorted.length - 1; i >= 0; i--) {
-                    if (sorted[i].ny >= bestY) {
-                        envelope.push(sorted[i]);
-                        bestY = sorted[i].ny;
+                // Upper convex hull — connects the outermost points forming
+                // the upper boundary. All other points are below this line.
+                var sorted = points.slice().sort(function(a, b) { return a.nx - b.nx || b.ny - a.ny; });
+                var hull = [];
+                for (var i = 0; i < sorted.length; i++) {
+                    while (hull.length >= 2) {
+                        var a = hull[hull.length - 2], b = hull[hull.length - 1], c = sorted[i];
+                        // Cross product: if turning clockwise (or straight), pop
+                        if ((b.nx - a.nx) * (c.ny - a.ny) - (b.ny - a.ny) * (c.nx - a.nx) >= 0) {
+                            hull.pop();
+                        } else {
+                            break;
+                        }
                     }
+                    hull.push(sorted[i]);
                 }
-                envelope.sort(function(a, b) { return a.nx - b.nx; });
-
-                // Step 2: Add staircase steps — for each frontier point,
-                // extend horizontally to the next point's X before dropping
-                var staircase = [];
-                for (var i = 0; i < envelope.length; i++) {
-                    staircase.push(envelope[i]);
-                    if (i < envelope.length - 1) {
-                        staircase.push({ nx: envelope[i + 1].nx, ny: envelope[i].ny, label: '' });
-                    }
-                }
-                return staircase;
+                return hull;
             }
 
-            var pdPareto = computePareto(pdAll);
-            var aggPareto = computePareto(aggAll);
+            var pdPareto = computeUpperHull(pdAll);
+            var aggPareto = computeUpperHull(aggAll);
 
             var traces = [];
             // Aggregated scatter (red, low opacity)
