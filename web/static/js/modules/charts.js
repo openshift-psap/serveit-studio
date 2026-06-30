@@ -2086,10 +2086,22 @@ function renderCharts(data, runId) {
             var pdAll = allPoints.filter(p => p.arch === 'PD' || p.arch === 'EP');
             var aggAll = allPoints.filter(p => p.arch === 'AGGREGATED');
 
-            // Sort each architecture's points by Y (bottom to top),
-            // then just connect them all with a line
-            var pdPareto = pdAll.slice().sort(function(a, b) { return a.ny - b.ny; });
-            var aggPareto = aggAll.slice().sort(function(a, b) { return a.ny - b.ny; });
+            // Sort by Y, keep only the rightmost X at each Y level
+            function rightmostByY(points) {
+                var sorted = points.slice().sort(function(a, b) { return a.ny - b.ny; });
+                var result = [];
+                var maxX = -Infinity;
+                for (var i = sorted.length - 1; i >= 0; i--) {
+                    if (sorted[i].nx >= maxX) {
+                        result.push(sorted[i]);
+                        maxX = sorted[i].nx;
+                    }
+                }
+                result.reverse();
+                return result;
+            }
+            var pdPareto = rightmostByY(pdAll);
+            var aggPareto = rightmostByY(aggAll);
 
             var traces = [];
             // Aggregated scatter (red, low opacity)
