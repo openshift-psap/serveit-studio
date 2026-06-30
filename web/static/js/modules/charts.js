@@ -2414,8 +2414,8 @@ function renderCharts(data, runId) {
 
             Plotly.newPlot(cid('chart-pareto-sweep-interactivity'), swTraces, {
                 ...plotlyLayout, height: 850,
-                xaxis: { title: 'Interactivity (tok/s/user)', gridcolor: '#d1d5db', rangemode: 'tozero' },
-                yaxis: { title: 'Token Throughput per GPU (tok/s/GPU)', gridcolor: '#d1d5db', rangemode: 'tozero' },
+                xaxis: { title: 'Interactivity (tok/s/user)', gridcolor: '#d1d5db' },
+                yaxis: { title: 'Token Throughput per GPU (tok/s/GPU)', gridcolor: '#d1d5db' },
                 showlegend: true,
                 legend: { x: 1.02, y: 1, xanchor: 'left', bgcolor: 'rgba(255,255,255,0.95)', bordercolor: '#e2e8f0', borderwidth: 1 },
                 margin: { t: 40, b: 70, l: 70, r: 160 },
@@ -2500,8 +2500,8 @@ function renderCharts(data, runId) {
 
             Plotly.newPlot(cid('chart-pareto-sweep-ttft'), swTtftTraces, {
                 ...plotlyLayout, height: 850,
-                xaxis: { title: 'TTFT P90 (ms) — lower/right is better →', autorange: 'reversed', gridcolor: '#d1d5db', rangemode: 'tozero' },
-                yaxis: { title: 'Token Throughput per GPU (tok/s/GPU)', gridcolor: '#d1d5db', rangemode: 'tozero' },
+                xaxis: { title: 'TTFT P90 (ms) — lower/right is better →', autorange: 'reversed', gridcolor: '#d1d5db' },
+                yaxis: { title: 'Token Throughput per GPU (tok/s/GPU)', gridcolor: '#d1d5db' },
                 showlegend: true,
                 legend: { x: 1.02, y: 1, xanchor: 'left', bgcolor: 'rgba(255,255,255,0.95)', bordercolor: '#e2e8f0', borderwidth: 1 },
                 margin: { t: 40, b: 70, l: 70, r: 160 },
