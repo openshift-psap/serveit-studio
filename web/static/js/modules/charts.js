@@ -2084,9 +2084,11 @@ function renderCharts(data, runId) {
         function makeRawPoints(results) {
             return results.map(function(r) {
                 var tput = r.throughput_mean || r.throughput_p90 || 0;
-                var interactivity = r.output_tps_mean || (tput * runOsl);
-                var tpsGpu = tput * runOsl / (r.gpus || 1);
-                return { x: interactivity, y: tpsGpu, label: r.config_name, arch: r.architecture };
+                var conc = r.concurrency || 100;
+                var totalOutputTps = r.output_tps_mean || (tput * runOsl);
+                var interactivity = totalOutputTps / conc;  // per-user tok/s
+                var tpsGpu = totalOutputTps / (r.gpus || 1);  // total tok/s per GPU
+                return { x: interactivity, y: tpsGpu, label: r.config_name, arch: r.architecture, conc: conc };
             }).filter(p => p.x > 0 && p.y > 0);
         }
 
