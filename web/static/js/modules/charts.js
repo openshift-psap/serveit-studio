@@ -2177,16 +2177,21 @@ function renderCharts(data, runId) {
             addAnnotations(aggPareto, '#dc2626');
             addAnnotations(pdPareto, '#2563eb');
 
+            var paretoConfig = {
+                responsive: true, displayModeBar: true,
+                modeBarButtonsToRemove: ['select2d', 'lasso2d', 'autoScale2d'],
+                toImageButtonOptions: { format: 'png', height: 1200, width: 1600, scale: 2 }
+            };
             Plotly.newPlot(cid('chart-pareto-frontier'), traces, {
                 ...plotlyLayout, height: 850,
                 xaxis: { title: 'Normalized Tokens/s/user', range: [0, 1.05], gridcolor: '#d1d5db', dtick: 0.2 },
                 yaxis: { title: 'Normalized Tokens/s/GPU', range: [0, 1.05], gridcolor: '#d1d5db', dtick: 0.2 },
                 showlegend: true,
                 legend: { x: 1.02, y: 1, xanchor: 'left', bgcolor: 'rgba(255,255,255,0.95)', bordercolor: '#e2e8f0', borderwidth: 1 },
-                margin: { t: 30, b: 60, l: 60, r: 200 },
+                margin: { t: 40, b: 70, l: 70, r: 220 },
                 plot_bgcolor: 'white', paper_bgcolor: 'white',
                 annotations: paretoAnnotations,
-            }, plotlyConfig);
+            }, paretoConfig);
         }
     }
 
