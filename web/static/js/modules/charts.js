@@ -2315,7 +2315,7 @@ function renderCharts(data, runId) {
 
                     Plotly.newPlot(cid('chart-pareto-ttft'), ttftTraces, {
                         ...plotlyLayout, height: 850,
-                        xaxis: { title: 'Normalized TTFT P90 (lower is better ←)', range: [0, 1.05], gridcolor: '#d1d5db', dtick: 0.2 },
+                        xaxis: { title: 'Normalized TTFT P90 (lower/right is better →)', autorange: 'reversed', range: [1.05, 0], gridcolor: '#d1d5db', dtick: 0.2 },
                         yaxis: { title: 'Normalized Tokens/s/GPU', range: [0, 1.05], gridcolor: '#d1d5db', dtick: 0.2 },
                         showlegend: true,
                         legend: { x: 1.02, y: 1, xanchor: 'left', bgcolor: 'rgba(255,255,255,0.95)', bordercolor: '#e2e8f0', borderwidth: 1 },
