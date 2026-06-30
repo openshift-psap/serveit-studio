@@ -2378,22 +2378,18 @@ function renderCharts(data, runId) {
             if (swAgg.length) {
                 swTraces.push({
                     x: swAgg.map(function(p) { return p.nx; }), y: swAgg.map(function(p) { return p.ny; }),
-                    text: swAgg.map(function(p) { return p.x.toFixed(1) + ' tok/s/user | ' + p.y.toFixed(0) + ' tok/s/GPU'; }),
                     customdata: swAgg.map(function(p) { return p.label + '<br>c=' + p.conc + '<br>' + p.x.toFixed(1) + ' tok/s/user<br>' + p.y.toFixed(0) + ' tok/s/GPU'; }),
-                    name: 'Aggregated', mode: 'markers+text',
+                    name: 'Aggregated', mode: 'markers',
                     marker: { color: '#dc2626', size: 12 },
-                    textposition: 'top center', textfont: { size: 8, color: '#dc2626' },
                     hovertemplate: '<b>%{customdata}</b><extra></extra>'
                 });
             }
             if (swPd.length) {
                 swTraces.push({
                     x: swPd.map(function(p) { return p.nx; }), y: swPd.map(function(p) { return p.ny; }),
-                    text: swPd.map(function(p) { return p.x.toFixed(1) + ' tok/s/user | ' + p.y.toFixed(0) + ' tok/s/GPU'; }),
                     customdata: swPd.map(function(p) { return p.label + '<br>c=' + p.conc + '<br>' + p.x.toFixed(1) + ' tok/s/user<br>' + p.y.toFixed(0) + ' tok/s/GPU'; }),
-                    name: 'Disaggregation', mode: 'markers+text',
+                    name: 'Disaggregation', mode: 'markers',
                     marker: { color: '#2563eb', size: 12 },
-                    textposition: 'top center', textfont: { size: 8, color: '#2563eb' },
                     hovertemplate: '<b>%{customdata}</b><extra></extra>'
                 });
             }
@@ -2412,6 +2408,25 @@ function renderCharts(data, runId) {
                 });
             }
 
+            var swAnnotations = [];
+            var swIdx = 0;
+            function addSwLabels(points, color) {
+                points.forEach(function(p) {
+                    swIdx++;
+                    var side = swIdx % 2 === 0 ? 1 : -1;
+                    swAnnotations.push({
+                        x: p.nx, y: p.ny,
+                        text: p.x.toFixed(1) + ' tok/s/user<br>' + p.y.toFixed(0) + ' tok/s/GPU',
+                        showarrow: true, arrowhead: 0, arrowwidth: 1, arrowcolor: color,
+                        ax: 70 * side, ay: -25 - (swIdx % 3) * 12,
+                        font: { size: 8, color: color },
+                        bgcolor: 'rgba(255,255,255,0)', borderpad: 2,
+                    });
+                });
+            }
+            addSwLabels(swAgg, '#dc2626');
+            addSwLabels(swPd, '#2563eb');
+
             Plotly.newPlot(cid('chart-pareto-sweep-interactivity'), swTraces, {
                 ...plotlyLayout, height: 850,
                 xaxis: { title: 'Interactivity (tok/s/user)', gridcolor: '#d1d5db' },
@@ -2420,6 +2435,7 @@ function renderCharts(data, runId) {
                 legend: { x: 1.02, y: 1, xanchor: 'left', bgcolor: 'rgba(255,255,255,0.95)', bordercolor: '#e2e8f0', borderwidth: 1 },
                 margin: { t: 40, b: 70, l: 70, r: 160 },
                 plot_bgcolor: 'white', paper_bgcolor: 'white',
+                annotations: swAnnotations,
             }, swParetoConfig);
         }
 
@@ -2464,22 +2480,18 @@ function renderCharts(data, runId) {
             if (swTtftAgg.length) {
                 swTtftTraces.push({
                     x: swTtftAgg.map(function(p) { return p.nx; }), y: swTtftAgg.map(function(p) { return p.ny; }),
-                    text: swTtftAgg.map(function(p) { return p.x.toFixed(0) + 'ms | ' + p.y.toFixed(0) + ' tok/s/GPU'; }),
                     customdata: swTtftAgg.map(function(p) { return p.label + '<br>c=' + p.conc + '<br>TTFT P90: ' + p.x.toFixed(0) + 'ms<br>' + p.y.toFixed(0) + ' tok/s/GPU'; }),
-                    name: 'Aggregated', mode: 'markers+text',
+                    name: 'Aggregated', mode: 'markers',
                     marker: { color: '#dc2626', size: 12 },
-                    textposition: 'top center', textfont: { size: 8, color: '#dc2626' },
                     hovertemplate: '<b>%{customdata}</b><extra></extra>'
                 });
             }
             if (swTtftPd.length) {
                 swTtftTraces.push({
                     x: swTtftPd.map(function(p) { return p.nx; }), y: swTtftPd.map(function(p) { return p.ny; }),
-                    text: swTtftPd.map(function(p) { return p.x.toFixed(0) + 'ms | ' + p.y.toFixed(0) + ' tok/s/GPU'; }),
                     customdata: swTtftPd.map(function(p) { return p.label + '<br>c=' + p.conc + '<br>TTFT P90: ' + p.x.toFixed(0) + 'ms<br>' + p.y.toFixed(0) + ' tok/s/GPU'; }),
-                    name: 'Disaggregation', mode: 'markers+text',
+                    name: 'Disaggregation', mode: 'markers',
                     marker: { color: '#2563eb', size: 12 },
-                    textposition: 'top center', textfont: { size: 8, color: '#2563eb' },
                     hovertemplate: '<b>%{customdata}</b><extra></extra>'
                 });
             }
@@ -2498,6 +2510,25 @@ function renderCharts(data, runId) {
                 });
             }
 
+            var swTtftAnnotations = [];
+            var swTtftIdx = 0;
+            function addSwTtftLabels(points, color) {
+                points.forEach(function(p) {
+                    swTtftIdx++;
+                    var side = swTtftIdx % 2 === 0 ? 1 : -1;
+                    swTtftAnnotations.push({
+                        x: p.nx, y: p.ny,
+                        text: p.x.toFixed(0) + 'ms<br>' + p.y.toFixed(0) + ' tok/s/GPU',
+                        showarrow: true, arrowhead: 0, arrowwidth: 1, arrowcolor: color,
+                        ax: 70 * side, ay: -25 - (swTtftIdx % 3) * 12,
+                        font: { size: 8, color: color },
+                        bgcolor: 'rgba(255,255,255,0)', borderpad: 2,
+                    });
+                });
+            }
+            addSwTtftLabels(swTtftAgg, '#dc2626');
+            addSwTtftLabels(swTtftPd, '#2563eb');
+
             Plotly.newPlot(cid('chart-pareto-sweep-ttft'), swTtftTraces, {
                 ...plotlyLayout, height: 850,
                 xaxis: { title: 'TTFT P90 (ms) — lower/right is better →', autorange: 'reversed', gridcolor: '#d1d5db' },
@@ -2506,6 +2537,7 @@ function renderCharts(data, runId) {
                 legend: { x: 1.02, y: 1, xanchor: 'left', bgcolor: 'rgba(255,255,255,0.95)', bordercolor: '#e2e8f0', borderwidth: 1 },
                 margin: { t: 40, b: 70, l: 70, r: 160 },
                 plot_bgcolor: 'white', paper_bgcolor: 'white',
+                annotations: swTtftAnnotations,
             }, swParetoConfig);
         }
     }
