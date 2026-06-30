@@ -2088,30 +2088,32 @@ function renderCharts(data, runId) {
 
             function computePareto(points) {
                 if (points.length < 2) return points.slice();
-                // Sort by X, then for each X region keep the best Y (upper envelope)
-                var sorted = points.slice().sort(function(a, b) { return a.nx - b.nx || b.ny - a.ny; });
-                // Build upper-left envelope: walk left-to-right, keep points that
-                // are not dominated by any point to their LEFT (higher Y at lower X)
-                var front = [sorted[0]];
-                for (var i = 1; i < sorted.length; i++) {
-                    // Keep if Y is higher than the last frontier point (extends upward)
-                    // OR if X is significantly different (extends rightward)
-                    var last = front[front.length - 1];
-                    if (sorted[i].ny > last.ny || Math.abs(sorted[i].nx - last.nx) > 0.02) {
-                        front.push(sorted[i]);
+                // Upper envelope: for each point walking left-to-right,
+                // keep it if its Y is the highest seen so far at that X position.
+                // Then connect all kept points to form the frontier boundary.
+                var sorted = points.slice().sort(function(a, b) { return a.nx - b.nx; });
+
+                // Step 1: Build the staircase upper envelope (right-to-left scan)
+                var envelope = [];
+                var bestY = -Infinity;
+                for (var i = sorted.length - 1; i >= 0; i--) {
+                    if (sorted[i].ny >= bestY) {
+                        envelope.push(sorted[i]);
+                        bestY = sorted[i].ny;
                     }
                 }
-                // Now trim: walk right-to-left, remove points dominated from the right
-                var trimmed = [front[front.length - 1]];
-                var maxY = trimmed[0].ny;
-                for (var i = front.length - 2; i >= 0; i--) {
-                    if (front[i].ny >= maxY * 0.95) {
-                        trimmed.push(front[i]);
-                        if (front[i].ny > maxY) maxY = front[i].ny;
+                envelope.sort(function(a, b) { return a.nx - b.nx; });
+
+                // Step 2: Add staircase steps — for each frontier point,
+                // extend horizontally to the next point's X before dropping
+                var staircase = [];
+                for (var i = 0; i < envelope.length; i++) {
+                    staircase.push(envelope[i]);
+                    if (i < envelope.length - 1) {
+                        staircase.push({ nx: envelope[i + 1].nx, ny: envelope[i].ny, label: '' });
                     }
                 }
-                trimmed.sort(function(a, b) { return a.nx - b.nx; });
-                return trimmed;
+                return staircase;
             }
 
             var pdPareto = computePareto(pdAll);
