@@ -2086,29 +2086,25 @@ function renderCharts(data, runId) {
             var pdAll = allPoints.filter(p => p.arch === 'PD' || p.arch === 'EP');
             var aggAll = allPoints.filter(p => p.arch === 'AGGREGATED');
 
-            function computeUpperHull(points) {
+            function computeRightEnvelope(points) {
                 if (points.length < 2) return points.slice();
-                // Upper convex hull — connects the outermost points forming
-                // the upper boundary. All other points are below this line.
-                var sorted = points.slice().sort(function(a, b) { return a.nx - b.nx || b.ny - a.ny; });
-                var hull = [];
-                for (var i = 0; i < sorted.length; i++) {
-                    while (hull.length >= 2) {
-                        var a = hull[hull.length - 2], b = hull[hull.length - 1], c = sorted[i];
-                        // Cross product: if turning clockwise (or straight), pop
-                        if ((b.nx - a.nx) * (c.ny - a.ny) - (b.ny - a.ny) * (c.nx - a.nx) >= 0) {
-                            hull.pop();
-                        } else {
-                            break;
-                        }
+                // Right envelope: sort by Y, for each Y level keep the rightmost X.
+                // This traces the right boundary of the point cloud.
+                var sorted = points.slice().sort(function(a, b) { return a.ny - b.ny; });
+                var envelope = [];
+                var maxX = -Infinity;
+                for (var i = sorted.length - 1; i >= 0; i--) {
+                    if (sorted[i].nx >= maxX) {
+                        envelope.push(sorted[i]);
+                        maxX = sorted[i].nx;
                     }
-                    hull.push(sorted[i]);
                 }
-                return hull;
+                envelope.sort(function(a, b) { return a.ny - b.ny; });
+                return envelope;
             }
 
-            var pdPareto = computeUpperHull(pdAll);
-            var aggPareto = computeUpperHull(aggAll);
+            var pdPareto = computeRightEnvelope(pdAll);
+            var aggPareto = computeRightEnvelope(aggAll);
 
             var traces = [];
             // Aggregated scatter (red, low opacity)
