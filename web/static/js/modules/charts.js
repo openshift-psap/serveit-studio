@@ -2408,34 +2408,14 @@ function renderCharts(data, runId) {
                 });
             }
 
-            var swAnnotations = [];
-            var swAnnotIdx = 0;
-            function addSwAnnotations(points, color) {
-                points.forEach(function(p) {
-                    if (!p.label) return;
-                    swAnnotIdx++;
-                    var side = swAnnotIdx % 2 === 0 ? 1 : -1;
-                    swAnnotations.push({
-                        x: p.nx, y: p.ny, text: p.label,
-                        showarrow: true, arrowhead: 0, arrowwidth: 1, arrowcolor: color,
-                        ax: 60 * side, ay: -30 - (swAnnotIdx % 3) * 15,
-                        font: { size: 10, color: color },
-                        bgcolor: 'rgba(255,255,255,0)', borderpad: 2,
-                    });
-                });
-            }
-            addSwAnnotations(swAggPareto, '#dc2626');
-            addSwAnnotations(swPdPareto, '#2563eb');
-
             Plotly.newPlot(cid('chart-pareto-sweep-interactivity'), swTraces, {
                 ...plotlyLayout, height: 850,
                 xaxis: { title: 'Interactivity (tok/s/user)', gridcolor: '#d1d5db', rangemode: 'tozero' },
                 yaxis: { title: 'Token Throughput per GPU (tok/s/GPU)', gridcolor: '#d1d5db', rangemode: 'tozero' },
                 showlegend: true,
                 legend: { x: 1.02, y: 1, xanchor: 'left', bgcolor: 'rgba(255,255,255,0.95)', bordercolor: '#e2e8f0', borderwidth: 1 },
-                margin: { t: 40, b: 70, l: 70, r: 220 },
+                margin: { t: 40, b: 70, l: 70, r: 160 },
                 plot_bgcolor: 'white', paper_bgcolor: 'white',
-                annotations: swAnnotations,
             }, swParetoConfig);
         }
 
@@ -2510,34 +2490,14 @@ function renderCharts(data, runId) {
                 });
             }
 
-            var swTtftAnnotations = [];
-            var swTtftAnnotIdx = 0;
-            function addSwTtftAnnotations(points, color) {
-                points.forEach(function(p) {
-                    if (!p.label) return;
-                    swTtftAnnotIdx++;
-                    var side = swTtftAnnotIdx % 2 === 0 ? 1 : -1;
-                    swTtftAnnotations.push({
-                        x: p.nx, y: p.ny, text: p.label,
-                        showarrow: true, arrowhead: 0, arrowwidth: 1, arrowcolor: color,
-                        ax: 60 * side, ay: -30 - (swTtftAnnotIdx % 3) * 15,
-                        font: { size: 10, color: color },
-                        bgcolor: 'rgba(255,255,255,0)', borderpad: 2,
-                    });
-                });
-            }
-            addSwTtftAnnotations(swTtftAggPareto, '#dc2626');
-            addSwTtftAnnotations(swTtftPdPareto, '#2563eb');
-
             Plotly.newPlot(cid('chart-pareto-sweep-ttft'), swTtftTraces, {
                 ...plotlyLayout, height: 850,
                 xaxis: { title: 'TTFT P90 (ms) — lower/right is better →', autorange: 'reversed', gridcolor: '#d1d5db', rangemode: 'tozero' },
                 yaxis: { title: 'Token Throughput per GPU (tok/s/GPU)', gridcolor: '#d1d5db', rangemode: 'tozero' },
                 showlegend: true,
                 legend: { x: 1.02, y: 1, xanchor: 'left', bgcolor: 'rgba(255,255,255,0.95)', bordercolor: '#e2e8f0', borderwidth: 1 },
-                margin: { t: 40, b: 70, l: 70, r: 220 },
+                margin: { t: 40, b: 70, l: 70, r: 160 },
                 plot_bgcolor: 'white', paper_bgcolor: 'white',
-                annotations: swTtftAnnotations,
             }, swParetoConfig);
         }
     }
