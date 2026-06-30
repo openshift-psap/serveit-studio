@@ -2117,20 +2117,24 @@ function renderCharts(data, runId) {
             if (aggAll.length) {
                 traces.push({
                     x: aggAll.map(p => p.nx), y: aggAll.map(p => p.ny),
-                    text: aggAll.map(p => p.label + '<br>' + p.x.toFixed(0) + ' tok/s/user, ' + p.y.toFixed(0) + ' tok/s/GPU'),
-                    name: 'Aggregated — All points', mode: 'markers',
+                    text: aggAll.map(p => p.label),
+                    customdata: aggAll.map(p => p.x.toFixed(0) + ' tok/s/user<br>' + p.y.toFixed(0) + ' tok/s/GPU'),
+                    name: 'Aggregated — All points', mode: 'markers+text',
                     marker: { color: '#fca5a5', size: 12, opacity: 0.5 },
-                    hovertemplate: '<b>%{text}</b><extra></extra>'
+                    textposition: 'top right', textfont: { size: 8, color: '#dc2626' },
+                    hovertemplate: '<b>%{text}</b><br>%{customdata}<extra>Aggregated</extra>'
                 });
             }
             // PD scatter (blue, low opacity)
             if (pdAll.length) {
                 traces.push({
                     x: pdAll.map(p => p.nx), y: pdAll.map(p => p.ny),
-                    text: pdAll.map(p => p.label + '<br>' + p.x.toFixed(0) + ' tok/s/user, ' + p.y.toFixed(0) + ' tok/s/GPU'),
-                    name: 'Disaggregation — All points', mode: 'markers',
+                    text: pdAll.map(p => p.label),
+                    customdata: pdAll.map(p => p.x.toFixed(0) + ' tok/s/user<br>' + p.y.toFixed(0) + ' tok/s/GPU'),
+                    name: 'Disaggregation — All points', mode: 'markers+text',
                     marker: { color: '#93c5fd', size: 12, opacity: 0.5 },
-                    hovertemplate: '<b>%{text}</b><extra></extra>'
+                    textposition: 'top right', textfont: { size: 8, color: '#2563eb' },
+                    hovertemplate: '<b>%{text}</b><br>%{customdata}<extra>Disaggregation</extra>'
                 });
             }
             // Aggregated Pareto line (bold red)
