@@ -2233,8 +2233,8 @@ function renderCharts(data, runId) {
                     var ttftPd = ttftAllPts.filter(function(p) { return p.arch === 'PD' || p.arch === 'EP'; });
                     var ttftAgg = ttftAllPts.filter(function(p) { return p.arch === 'AGGREGATED'; });
 
-                    // Same as frontierLine but for TTFT: bucket by Y, keep LOWEST X per bucket
-                    // Walk top-to-bottom, skip points where X increases (goes left on reversed axis)
+                    // Reuse same frontierLine logic: bucket by Y, keep LOWEST X per bucket
+                    // Walk bottom-to-top, only keep points where X keeps decreasing (better TTFT going up)
                     function ttftFrontierLine(points) {
                         var byY = {};
                         points.forEach(function(p) {
@@ -2245,17 +2245,8 @@ function renderCharts(data, runId) {
                         });
                         var line = Object.values(byY);
                         line.sort(function(a, b) { return a.ny - b.ny; });
-                        // Walk top-to-bottom, keep only points where X keeps decreasing
-                        var filtered = [];
-                        var minX = Infinity;
-                        for (var i = line.length - 1; i >= 0; i--) {
-                            if (line[i].nx <= minX) {
-                                filtered.push(line[i]);
-                                minX = line[i].nx;
-                            }
-                        }
-                        filtered.reverse();
-                        return filtered;
+                        // No fallback filter — connect all frontier dots
+                        return line;
                     }
 
                     var ttftPdPareto = ttftFrontierLine(ttftPd);
