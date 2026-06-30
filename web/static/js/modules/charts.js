@@ -2086,25 +2086,31 @@ function renderCharts(data, runId) {
             var pdAll = allPoints.filter(p => p.arch === 'PD' || p.arch === 'EP');
             var aggAll = allPoints.filter(p => p.arch === 'AGGREGATED');
 
-            function computeRightEnvelope(points) {
+            function computeParetoFront(points) {
                 if (points.length < 2) return points.slice();
-                // Right envelope: sort by Y, for each Y level keep the rightmost X.
-                // This traces the right boundary of the point cloud.
-                var sorted = points.slice().sort(function(a, b) { return a.ny - b.ny; });
-                var envelope = [];
-                var maxX = -Infinity;
-                for (var i = sorted.length - 1; i >= 0; i--) {
-                    if (sorted[i].nx >= maxX) {
-                        envelope.push(sorted[i]);
-                        maxX = sorted[i].nx;
+                // Pareto front: a point is Pareto-optimal if no other point
+                // is better on BOTH axes simultaneously.
+                var dominated = new Set();
+                for (var i = 0; i < points.length; i++) {
+                    for (var j = 0; j < points.length; j++) {
+                        if (i === j) continue;
+                        if (points[j].nx >= points[i].nx && points[j].ny >= points[i].ny &&
+                            (points[j].nx > points[i].nx || points[j].ny > points[i].ny)) {
+                            dominated.add(i);
+                            break;
+                        }
                     }
                 }
-                envelope.sort(function(a, b) { return a.ny - b.ny; });
-                return envelope;
+                var front = [];
+                for (var i = 0; i < points.length; i++) {
+                    if (!dominated.has(i)) front.push(points[i]);
+                }
+                front.sort(function(a, b) { return a.nx - b.nx; });
+                return front;
             }
 
-            var pdPareto = computeRightEnvelope(pdAll);
-            var aggPareto = computeRightEnvelope(aggAll);
+            var pdPareto = computeParetoFront(pdAll);
+            var aggPareto = computeParetoFront(aggAll);
 
             var traces = [];
             // Aggregated scatter (red, low opacity)
