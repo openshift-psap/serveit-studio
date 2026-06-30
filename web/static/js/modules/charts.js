@@ -2119,19 +2119,21 @@ function renderCharts(data, runId) {
                 });
             }
             // Aggregated Pareto line (bold red)
-            if (aggPareto.length > 1) {
+            if (aggPareto.length) {
                 traces.push({
                     x: aggPareto.map(p => p.nx), y: aggPareto.map(p => p.ny),
-                    name: 'Aggregated — Pareto', mode: 'lines',
-                    line: { color: '#dc2626', width: 3 }
+                    name: 'Aggregated — Pareto', mode: aggPareto.length > 1 ? 'lines+markers' : 'markers',
+                    line: { color: '#dc2626', width: 3 },
+                    marker: { color: '#dc2626', size: 6 }
                 });
             }
             // PD Pareto line (bold blue)
-            if (pdPareto.length > 1) {
+            if (pdPareto.length) {
                 traces.push({
                     x: pdPareto.map(p => p.nx), y: pdPareto.map(p => p.ny),
-                    name: 'Disaggregation — Pareto', mode: 'lines',
-                    line: { color: '#2563eb', width: 3 }
+                    name: 'Disaggregation — Pareto', mode: pdPareto.length > 1 ? 'lines+markers' : 'markers',
+                    line: { color: '#2563eb', width: 3 },
+                    marker: { color: '#2563eb', size: 6 }
                 });
             }
 
@@ -2140,7 +2142,8 @@ function renderCharts(data, runId) {
                 xaxis: { title: 'Normalized Tokens/s/user', range: [0, 1.05], gridcolor: '#d1d5db', dtick: 0.2 },
                 yaxis: { title: 'Normalized Tokens/s/GPU', range: [0, 1.05], gridcolor: '#d1d5db', dtick: 0.2 },
                 showlegend: true,
-                legend: { x: 0.55, y: 0.98, bgcolor: 'rgba(255,255,255,0.95)', bordercolor: '#e2e8f0', borderwidth: 1 },
+                legend: { x: 1.02, y: 1, xanchor: 'left', bgcolor: 'rgba(255,255,255,0.95)', bordercolor: '#e2e8f0', borderwidth: 1 },
+                margin: { t: 30, b: 60, l: 60, r: 200 },
                 plot_bgcolor: 'white', paper_bgcolor: 'white',
             }, plotlyConfig);
         }
