@@ -714,11 +714,21 @@ def restore_backup(backup_path: str, target_instance_id: int, owner_id: int, res
     service_url = row.get('service_url')
     internal_url = f"http://{deployment_name}.{namespace}.svc.cluster.local:5000"
 
+    # Look up proxy for the target instance's cluster
+    target_proxy = None
+    target_cluster_id = row.get('cluster_id')
+    if target_cluster_id:
+        with get_db() as conn:
+            cr = conn.execute('SELECT proxy FROM clusters WHERE id = ?', (target_cluster_id,)).fetchone()
+            if cr:
+                target_proxy = cr['proxy']
+    proxies = {'https': target_proxy, 'http': target_proxy} if target_proxy else None
+
     results = []
 
     def _try_url(base):
         try:
-            _req.get(f"{base}/api/health", timeout=5)
+            _req.get(f"{base}/api/health", timeout=5, proxies=proxies)
             return True
         except Exception:
             return False
@@ -734,7 +744,7 @@ def restore_backup(backup_path: str, target_instance_id: int, owner_id: int, res
                 with open(db_file, 'rb') as f:
                     resp = _req.post(f"{base_url}/api/upload_database",
                                      files={'database': ('serveit.db.gz', f, 'application/gzip')},
-                                     timeout=120)
+                                     timeout=120, proxies=proxies)
                 data = resp.json()
                 if data.get('success'):
                     results.append(f"DB restored: {data.get('imported_runs', '?')} runs imported")
@@ -752,7 +762,7 @@ def restore_backup(backup_path: str, target_instance_id: int, owner_id: int, res
                 with open(art_file, 'rb') as f:
                     resp = _req.post(f"{base_url}/api/restore/artifacts",
                                      files={'artifacts': ('serveit-artifacts.tar.gz', f, 'application/gzip')},
-                                     timeout=600)
+                                     timeout=600, proxies=proxies)
                 data = resp.json()
                 if data.get('success'):
                     results.append(f"Artifacts restored: {data.get('files_restored', '?')} files")
@@ -811,14 +821,18 @@ def backup_instance(instance_id: int, owner_id: int) -> Dict:
     if not service_url:
         return {'ok': False, 'error': 'Instance has no service URL — is it running?'}
 
-    # Look up cluster name
+    # Look up cluster name and proxy
     cluster_name = 'unknown'
+    cluster_proxy = None
     cluster_id = row.get('cluster_id')
     if cluster_id:
         with get_db() as conn:
-            cr = conn.execute('SELECT name FROM clusters WHERE id = ?', (cluster_id,)).fetchone()
+            cr = conn.execute('SELECT name, proxy FROM clusters WHERE id = ?', (cluster_id,)).fetchone()
             if cr:
                 cluster_name = cr['name']
+                cluster_proxy = cr['proxy']
+
+    proxies = {'https': cluster_proxy, 'http': cluster_proxy} if cluster_proxy else None
 
     deployment_name = row['deployment_name']
     namespace = row['namespace']
@@ -834,7 +848,7 @@ def backup_instance(instance_id: int, owner_id: int) -> Dict:
         for base in [internal_url, service_url]:
             try:
                 url = f"{base}{endpoint}"
-                resp = _req.get(url, timeout=600, stream=True)
+                resp = _req.get(url, timeout=600, stream=True, proxies=proxies)
                 if resp.status_code != 200:
                     continue
                 dest = backup_dir / dest_filename
