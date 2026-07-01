@@ -1430,12 +1430,17 @@ function renderCharts(data, runId) {
             });
         });
 
-        // For each concurrency level with multiple archs, find winners
+        // For each concurrency level with competing archs, find winners
+        // Only highlight when PD/EP competes with Aggregated, or PD vs EP
         var winners = {};
         Object.keys(byConcurrency).forEach(function(c) {
             var entries = byConcurrency[c];
             var archs = Object.keys(entries);
             if (archs.length < 2) return;
+            var hasDisagg = archs.some(function(a) { return a === 'pd' || a === 'ep'; });
+            var hasAgg = archs.indexOf('aggregated') >= 0;
+            var hasPdAndEp = archs.indexOf('pd') >= 0 && archs.indexOf('ep') >= 0;
+            if (!((hasDisagg && hasAgg) || hasPdAndEp)) return;
             var bestTtft = null, bestTput = null;
             archs.forEach(function(a) {
                 var p = entries[a];
