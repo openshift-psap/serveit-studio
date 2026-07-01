@@ -1292,16 +1292,26 @@ function renderCharts(data, runId) {
 
     if (data.concurrency_sweep) {
         const sweep = data.concurrency_sweep;
-        var archColors = { pd: '#10b981', aggregated: '#6366f1', ep: '#f59e0b' };
-        var archLabelsCS = { pd: 'PD', aggregated: 'Aggregated', ep: 'EP' };
         var pctColors = { ttft_p90: '#3b82f6', ttft_p95: '#f59e0b', ttft_p99: '#ef4444' };
         var archIdx = 0;
+        function sweepColor(key) {
+            if (key.startsWith('pd')) return '#10b981';
+            if (key.startsWith('aggregated')) return '#6366f1';
+            if (key.startsWith('ep')) return '#f59e0b';
+            return '#888';
+        }
+        function sweepLabel(key) {
+            if (key.startsWith('pd')) return 'PD';
+            if (key.startsWith('aggregated')) return 'Aggregated';
+            if (key.startsWith('ep')) return 'EP';
+            return key;
+        }
 
         Object.keys(sweep).forEach(function(arch) {
             var points = sweep[arch];
             if (!points || !points.length) return;
-            var label = archLabelsCS[arch] || arch;
-            var color = archColors[arch] || '#888';
+            var label = points[0] && points[0].config_label ? points[0].config_label : sweepLabel(arch);
+            var color = sweepColor(arch);
             archIdx++;
 
             // --- Architecture header ---
@@ -1481,7 +1491,7 @@ function renderCharts(data, runId) {
         Object.keys(sweep).forEach(function(arch) {
             var points = sweep[arch];
             if (!points || !points.length) return;
-            var archLabel = arch === 'pd' ? 'PD' : (arch === 'aggregated' ? 'Aggregated' : 'EP');
+            var archLabel = arch.startsWith('pd') ? 'PD' : (arch.startsWith('aggregated') ? 'Aggregated' : 'EP');
             points.forEach(function(p) {
                 var isWinner = winners[p.concurrency] === arch;
                 var isStandout = false;
@@ -2395,7 +2405,12 @@ function renderCharts(data, runId) {
     // --- Concurrency Sweep Pareto charts (rendered into Concurrency Sweep tab) ---
     if (data.concurrency_sweep && document.getElementById(cid('chart-pareto-sweep-interactivity'))) {
         var csw = data.concurrency_sweep;
-        var sweepArchMap = { pd: 'PD', aggregated: 'AGGREGATED', ep: 'EP' };
+        function sweepArchLabel(key) {
+            if (key.startsWith('pd')) return 'PD';
+            if (key.startsWith('aggregated')) return 'AGGREGATED';
+            if (key.startsWith('ep')) return 'EP';
+            return key.toUpperCase();
+        }
 
         function swFrontierLine(points) {
             if (!points.length) return [];
@@ -2413,7 +2428,7 @@ function renderCharts(data, runId) {
         Object.keys(csw).forEach(function(arch) {
             var pts = csw[arch];
             if (!pts || !pts.length) return;
-            var archLabel = sweepArchMap[arch] || arch.toUpperCase();
+            var archLabel = sweepArchLabel(arch);
             pts.forEach(function(p) {
                 var interPerUser = (p.output_tps_mean || 0) / (p.concurrency || 1);
                 var tputGpu = p.throughput_per_gpu || 0;
@@ -2509,7 +2524,7 @@ function renderCharts(data, runId) {
         Object.keys(csw).forEach(function(arch) {
             var pts = csw[arch];
             if (!pts || !pts.length) return;
-            var archLabel = sweepArchMap[arch] || arch.toUpperCase();
+            var archLabel = sweepArchLabel(arch);
             pts.forEach(function(p) {
                 var tputGpu = p.throughput_per_gpu || 0;
                 var ttft = p.ttft_p90 || 0;
@@ -2615,8 +2630,8 @@ function renderCharts(data, runId) {
             archKeys.forEach(function(arch) {
                 var pts = csw[arch];
                 if (!pts) return;
-                var archLabel = sweepArchMap[arch] || arch.toUpperCase();
-                var isDisagg = arch === 'pd' || arch === 'ep';
+                var archLabel = sweepArchLabel(arch);
+                var isDisagg = arch.startsWith('pd') || arch.startsWith('ep');
                 pts.forEach(function(p) {
                     var c = p.concurrency;
                     if (!bestByConc[c]) bestByConc[c] = {};
