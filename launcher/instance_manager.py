@@ -991,15 +991,18 @@ def list_instances(owner_id: int, cluster_id: int = None) -> List[Dict]:
                 ORDER BY i.created_at DESC
             ''', (owner_id, owner_id, owner_id, owner_id)).fetchall()
 
-    # Fallback: look up storage class from cluster for old instances without it
-    cluster_sc = {}
+    # Look up cluster names and storage classes
+    cluster_info = {}
     with get_db() as conn:
-        for cr in conn.execute('SELECT id, storage_class FROM clusters').fetchall():
-            cluster_sc[cr['id']] = cr['storage_class'] or ''
+        for cr in conn.execute('SELECT id, name, storage_class FROM clusters').fetchall():
+            cluster_info[cr['id']] = {'name': cr['name'], 'storage_class': cr['storage_class'] or ''}
+    cluster_sc = {k: v['storage_class'] for k, v in cluster_info.items()}
 
     instances = []
     for row in rows:
         inst = dict(row)
+        ci = cluster_info.get(inst.get('cluster_id'), {})
+        inst['cluster_name'] = ci.get('name', 'local')
         if not inst.get('storage_class'):
             try:
                 r = _kubectl(['get', 'pvc', inst.get('pvc_name', ''), '-n', inst['namespace'],

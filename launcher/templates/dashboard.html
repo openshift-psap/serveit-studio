@@ -441,6 +441,17 @@
     </div>
 </div>
 
+<!-- Backup Progress Modal -->
+<div class="modal-overlay" id="backup-modal">
+    <div class="modal" role="dialog" style="width:420px;text-align:center;padding:32px">
+        <div id="backup-modal-content">
+            <svg width="40" height="40" viewBox="0 0 24 24" aria-hidden="true" style="animation:spin 1.2s linear infinite;margin-bottom:16px"><circle cx="12" cy="12" r="10" stroke="#2A7B88" stroke-width="3" fill="none" stroke-dasharray="31.4 31.4" stroke-linecap="round"/></svg>
+            <div style="font-weight:700;font-size:1.1em;color:#1e293b;margin-bottom:6px" id="backup-modal-title">Backing up...</div>
+            <div style="color:#64748b;font-size:0.88em" id="backup-modal-status">Compressing and downloading database and artifacts. This may take a few minutes.</div>
+        </div>
+    </div>
+</div>
+
 {% if is_admin %}
 <!-- Add User Modal -->
 <div class="modal-overlay" id="add-user-modal" onclick="if(event.target===this)hideAddUserModal()">
@@ -593,7 +604,7 @@ function showConfirm(title, msg, warn, btnText, onConfirm, showBackup){
     if(showBackup) document.getElementById('confirm-backup-cb').checked = false;
     document.getElementById('confirm-title').textContent = title;
     document.getElementById('confirm-msg').textContent = msg;
-    document.getElementById('confirm-warn').textContent = warn;
+    document.getElementById('confirm-warn').innerHTML = warn;
     var btn = document.getElementById('confirm-action-btn');
     btn.textContent = btnText || 'Delete';
     btn.onclick = function(){ hideConfirm(); onConfirm(); };
@@ -1006,27 +1017,47 @@ function createInstance(e){
 }
 
 function backupInstance(id,name){
-    var card=document.getElementById('instance-'+id);
-    if(card){
-        var ov=document.createElement('div');ov.className='delete-overlay';ov.id='backup-overlay-'+id;
-        ov.innerHTML='<div style="display:flex;align-items:center;gap:10px"><svg width="20" height="20" viewBox="0 0 24 24" aria-hidden="true" style="animation:spin 1s linear infinite"><circle cx="12" cy="12" r="10" stroke="#475569" stroke-width="3" fill="none" stroke-dasharray="31.4 31.4" stroke-linecap="round"/></svg><span style="color:#4A4A4A;font-weight:600;font-size:0.9em">Backing up '+name+'...</span></div>';
-        card.appendChild(ov);
-    }
+    var modal = document.getElementById('backup-modal');
+    document.getElementById('backup-modal-title').textContent = 'Backing up ' + name + '...';
+    document.getElementById('backup-modal-status').textContent = 'Compressing and downloading database and artifacts. This may take a few minutes.';
+    document.getElementById('backup-modal-content').innerHTML =
+        '<svg width="40" height="40" viewBox="0 0 24 24" aria-hidden="true" style="animation:spin 1.2s linear infinite;margin-bottom:16px"><circle cx="12" cy="12" r="10" stroke="#2A7B88" stroke-width="3" fill="none" stroke-dasharray="31.4 31.4" stroke-linecap="round"/></svg>' +
+        '<div style="font-weight:700;font-size:1.1em;color:#1e293b;margin-bottom:6px">Backing up ' + name + '...</div>' +
+        '<div style="color:#64748b;font-size:0.88em">Compressing and downloading database and artifacts.<br>This may take a few minutes.</div>' +
+        '<div style="margin-top:16px;background:#f1f5f9;border-radius:8px;height:6px;overflow:hidden"><div id="backup-progress-bar" style="height:100%;background:#2A7B88;width:0%;transition:width 0.5s;border-radius:8px"></div></div>';
+    modal.classList.add('active');
+
+    var bar = document.getElementById('backup-progress-bar');
+    var progress = 0;
+    var progressTimer = setInterval(function(){
+        progress = Math.min(progress + 2, 90);
+        if(bar) bar.style.width = progress + '%';
+    }, 1000);
+
     fetch('/api/instances/'+id+'/backup',{method:'POST'}).then(function(r){return r.json()}).then(function(data){
-        var ov=document.getElementById('backup-overlay-'+id);
-        if(ov)ov.remove();
+        clearInterval(progressTimer);
         if(data.ok){
-            var msg='Backup complete: '+data.size_mb+' MB';
-            if(data.warnings&&data.warnings.length)msg+=' (with warnings)';
-            showCreateError(msg);
-            var errEl=document.getElementById('create-error');if(errEl){errEl.style.background='#ecfdf5';errEl.style.color='#065f46';errEl.style.border='1px solid #a7f3d0';}
+            var warnings = data.warnings && data.warnings.length ? '<div style="margin-top:8px;font-size:0.8em;color:#d97706">'+data.warnings.join('<br>')+'</div>' : '';
+            document.getElementById('backup-modal-content').innerHTML =
+                '<div style="font-size:2.5em;margin-bottom:12px">&#9989;</div>' +
+                '<div style="font-weight:700;font-size:1.1em;color:#065f46;margin-bottom:6px">Backup Complete</div>' +
+                '<div style="color:#64748b;font-size:0.88em">'+data.size_mb+' MB saved<br><span style="font-size:0.85em;color:#94a3b8">'+data.path+'</span></div>' +
+                warnings +
+                '<button class="btn" style="margin-top:16px;background:#2A7B88;color:white;padding:8px 24px" onclick="document.getElementById(\'backup-modal\').classList.remove(\'active\')">Done</button>';
         }else{
-            showCreateError(data.error||'Backup failed');
+            document.getElementById('backup-modal-content').innerHTML =
+                '<div style="font-size:2.5em;margin-bottom:12px">&#10060;</div>' +
+                '<div style="font-weight:700;font-size:1.1em;color:#dc2626;margin-bottom:6px">Backup Failed</div>' +
+                '<div style="color:#64748b;font-size:0.88em">'+(data.error||'Unknown error')+'</div>' +
+                '<button class="btn" style="margin-top:16px;background:#64748b;color:white;padding:8px 24px" onclick="document.getElementById(\'backup-modal\').classList.remove(\'active\')">Close</button>';
         }
     }).catch(function(e){
-        var ov=document.getElementById('backup-overlay-'+id);
-        if(ov)ov.remove();
-        showCreateError('Backup failed: '+e.message);
+        clearInterval(progressTimer);
+        document.getElementById('backup-modal-content').innerHTML =
+            '<div style="font-size:2.5em;margin-bottom:12px">&#10060;</div>' +
+            '<div style="font-weight:700;font-size:1.1em;color:#dc2626;margin-bottom:6px">Backup Failed</div>' +
+            '<div style="color:#64748b;font-size:0.88em">'+e.message+'</div>' +
+            '<button class="btn" style="margin-top:16px;background:#64748b;color:white;padding:8px 24px" onclick="document.getElementById(\'backup-modal\').classList.remove(\'active\')">Close</button>';
     });
 }
 
