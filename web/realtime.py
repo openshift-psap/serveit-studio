@@ -2323,76 +2323,6 @@ def download_raw_data():
         return jsonify({'error': str(e)}), 500
 
 
-@app.route('/api/backup/database')
-def backup_database():
-    """Compress and download database in one HTTP call (for launcher backup)."""
-    try:
-        import gzip as gzip_mod
-        import hashlib
-        import io
-        from flask import Response
-
-        if not os.path.exists(DB_PATH):
-            return jsonify({'error': 'Database file not found'}), 404
-
-        buf = io.BytesIO()
-        with open(DB_PATH, 'rb') as f_in, gzip_mod.GzipFile(fileobj=buf, mode='wb', compresslevel=6) as f_out:
-            while True:
-                chunk = f_in.read(256 * 1024)
-                if not chunk:
-                    break
-                f_out.write(chunk)
-
-        data = buf.getvalue()
-        md5 = hashlib.md5(data).hexdigest()
-
-        return Response(data, mimetype='application/gzip',
-                        headers={'Content-Disposition': 'attachment; filename=serveit.db.gz',
-                                 'X-MD5': md5, 'Content-Length': str(len(data))})
-    except Exception as e:
-        return jsonify({'error': str(e)}), 500
-
-
-@app.route('/api/backup/artifacts')
-def backup_artifacts():
-    """Compress and download test artifacts in one HTTP call (for launcher backup)."""
-    try:
-        import tarfile
-        import hashlib
-        import io
-        from flask import Response
-
-        artifacts_dir = '/mnt/storage/test-artifacts'
-        results_dir = '/mnt/storage/results'
-
-        dirs_to_pack = []
-        if os.path.isdir(artifacts_dir):
-            dirs_to_pack.append(('test-artifacts', artifacts_dir))
-        if os.path.isdir(results_dir):
-            dirs_to_pack.append(('results', results_dir))
-
-        if not dirs_to_pack:
-            return jsonify({'error': 'No test data found'}), 404
-
-        buf = io.BytesIO()
-        with tarfile.open(fileobj=buf, mode='w:gz', compresslevel=6) as tar:
-            for arcname, d in dirs_to_pack:
-                for root, _, files in os.walk(d):
-                    for f in files:
-                        fpath = os.path.join(root, f)
-                        rel = os.path.relpath(fpath, os.path.dirname(d))
-                        tar.add(fpath, arcname=rel)
-
-        data = buf.getvalue()
-        md5 = hashlib.md5(data).hexdigest()
-
-        return Response(data, mimetype='application/gzip',
-                        headers={'Content-Disposition': 'attachment; filename=serveit-artifacts.tar.gz',
-                                 'X-MD5': md5, 'Content-Length': str(len(data))})
-    except Exception as e:
-        return jsonify({'error': str(e)}), 500
-
-
 @app.route('/api/upload-dataset', methods=['POST'])
 def upload_dataset():
     """Upload a custom dataset file for benchmarking."""
@@ -2541,37 +2471,6 @@ def upload_database():
         print(f"ERROR uploading database: {e}")
         import traceback
         traceback.print_exc()
-        return jsonify({'success': False, 'error': str(e)}), 500
-
-
-@app.route('/api/restore/artifacts', methods=['POST'])
-def restore_artifacts():
-    """Restore test artifacts from a tar.gz archive."""
-    import tarfile
-    import tempfile
-    try:
-        if 'artifacts' not in request.files:
-            return jsonify({'success': False, 'error': 'No artifacts file provided'}), 400
-
-        file = request.files['artifacts']
-        if not file.filename:
-            return jsonify({'success': False, 'error': 'Empty filename'}), 400
-
-        with tempfile.NamedTemporaryFile(suffix='.tar.gz', delete=False) as tmp:
-            tmp_path = tmp.name
-            file.save(tmp_path)
-
-        try:
-            with tarfile.open(tmp_path, 'r:gz') as tar:
-                members = tar.getmembers()
-                safe_members = [m for m in members if not m.name.startswith('/') and '..' not in m.name]
-                tar.extractall('/mnt/storage', members=safe_members)
-            restored = len(safe_members)
-            return jsonify({'success': True, 'files_restored': restored})
-        finally:
-            os.unlink(tmp_path)
-
-    except Exception as e:
         return jsonify({'success': False, 'error': str(e)}), 500
 
 
