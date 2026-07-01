@@ -970,9 +970,10 @@ class SingleTestStrategy(OptimizationStrategy):
             return
 
         self.opt.log("", 'info')
+        sweep_after = cfg.calibrated_load_enabled or getattr(cfg, 'concurrency_sweep_count', None)
         result = self.opt.orchestrator.run_test(
             test_config,
-            cleanup=True,
+            cleanup=not sweep_after,
             log_callback=lambda msg: self.opt.log(msg, 'info'),
             stop_check=self.opt._should_stop,
         )
