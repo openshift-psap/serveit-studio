@@ -23,26 +23,23 @@ function updateUIFromConfig() {
         updateSingleTestVisibility();
     }
 
-    // Restore single test deployment fields
+    // Restore single test deployment fields — must happen BEFORE selectSingleTestArch
+    // which calls syncSingleTestToConfig and would overwrite config with HTML defaults
     if (config.single_test_architecture) {
-        var arch = config.single_test_architecture;
-        if (arch === 'pd' || arch === 'ep') {
-            var el;
-            el = document.getElementById('single-test-prefill-tp');
-            if (el && config.single_test_prefill_tp) el.value = config.single_test_prefill_tp;
-            el = document.getElementById('single-test-decode-tp');
-            if (el && config.single_test_decode_tp) el.value = config.single_test_decode_tp;
-            el = document.getElementById('single-test-prefill-pods');
-            if (el && config.single_test_prefill_pods) el.value = config.single_test_prefill_pods;
-            el = document.getElementById('single-test-decode-pods');
-            if (el && config.single_test_decode_pods) el.value = config.single_test_decode_pods;
-        } else {
-            var el;
-            el = document.getElementById('single-test-tp');
-            if (el && config.single_test_tp) el.value = config.single_test_tp;
-            el = document.getElementById('single-test-replicas');
-            if (el && config.single_test_replicas) el.value = config.single_test_replicas;
-        }
+        var el;
+        el = document.getElementById('single-test-prefill-tp');
+        if (el && config.single_test_prefill_tp) el.value = config.single_test_prefill_tp;
+        el = document.getElementById('single-test-decode-tp');
+        if (el && config.single_test_decode_tp) el.value = config.single_test_decode_tp;
+        el = document.getElementById('single-test-prefill-pods');
+        if (el && config.single_test_prefill_pods) el.value = config.single_test_prefill_pods;
+        el = document.getElementById('single-test-decode-pods');
+        if (el && config.single_test_decode_pods) el.value = config.single_test_decode_pods;
+        el = document.getElementById('single-test-tp');
+        if (el && config.single_test_tp) el.value = config.single_test_tp;
+        el = document.getElementById('single-test-replicas');
+        if (el && config.single_test_replicas) el.value = config.single_test_replicas;
+        selectSingleTestArch(config.single_test_architecture);
     }
 
     if (config.model) {
