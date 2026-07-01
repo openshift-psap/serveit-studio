@@ -236,6 +236,10 @@
     </div>
     {% if is_admin %}
     <div style="padding:8px 8px 0;border-top:1px solid #E0E0E0;">
+        <button class="nav-item" id="nav-restore" onclick="showRestore()">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/><path d="M12 7v5l4 2"/></svg>
+            Restore Data
+        </button>
         <button class="nav-item" id="nav-users" onclick="showUsers()">
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75"/></svg>
             Users
@@ -661,6 +665,8 @@ function selectCluster(id){
     viewingUserId = null;
     var navUsers = document.getElementById('nav-users');
     if(navUsers) navUsers.classList.remove('active');
+    var navRestore = document.getElementById('nav-restore');
+    if(navRestore) navRestore.classList.remove('active');
     document.querySelectorAll('.cluster-item').forEach(function(el){ el.classList.toggle('active', parseInt(el.dataset.id)===id); });
     var active = document.querySelector('.cluster-item.active');
     if(active){
@@ -1117,6 +1123,104 @@ function copyCmd(btn, cmd){
         btn.classList.add('copied');
         btn.textContent = 'Copied!';
         setTimeout(function(){ btn.textContent = original; btn.classList.remove('copied'); }, 1500);
+    });
+}
+
+// ── Admin: Restore Data ──
+function showRestore(){
+    currentClusterId = null;
+    viewingUserId = null;
+    document.querySelectorAll('.cluster-item').forEach(function(el){el.classList.remove('active')});
+    var navUsers = document.getElementById('nav-users');
+    if(navUsers) navUsers.classList.remove('active');
+    var navRestore = document.getElementById('nav-restore');
+    if(navRestore) navRestore.classList.add('active');
+    document.getElementById('topbar-title').innerHTML = '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="opacity:0.5"><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/></svg> Restore Data';
+    document.getElementById('new-instance-btn').style.display='none';
+    var _vp=document.getElementById('cluster-viz-panel');if(_vp)_vp.style.display='none';
+    var list = document.getElementById('instance-list');
+    list.style.display = 'block';
+    list.innerHTML = '<div style="text-align:center;padding:40px;color:#999">Loading backups&hellip;</div>';
+
+    fetch('/api/backups').then(function(r){return r.json()}).then(function(backups){
+        if(!backups.length){
+            list.innerHTML = '<div style="text-align:center;padding:60px;color:#999"><div style="font-size:2em;margin-bottom:12px">&#128190;</div><div style="font-size:1.1em;font-weight:600;margin-bottom:6px">No Backups Found</div><div style="font-size:0.85em">Use the &#128190; Backup button on any instance to create one.</div></div>';
+            return;
+        }
+
+        var html = '<div style="padding:20px">';
+        html += '<h3 style="margin:0 0 16px;color:#1e293b">Available Backups</h3>';
+        html += '<div style="display:flex;flex-direction:column;gap:12px">';
+
+        backups.forEach(function(b){
+            var badges = '';
+            if(b.has_db) badges += '<span style="background:#ecfdf5;color:#065f46;font-size:0.72em;padding:2px 6px;border-radius:4px;font-weight:600">Database</span> ';
+            if(b.has_artifacts) badges += '<span style="background:#eff6ff;color:#1d4ed8;font-size:0.72em;padding:2px 6px;border-radius:4px;font-weight:600">Artifacts</span> ';
+            var clusterBadge = b.cluster ? '<span style="background:#f5f3ff;color:#6d28d9;font-size:0.72em;padding:2px 6px;border-radius:4px;font-weight:600">'+b.cluster+'</span> ' : '';
+            var dateStr = b.backup_time || b.timestamp;
+            try { if(dateStr.length===15) dateStr = dateStr.substring(0,4)+'-'+dateStr.substring(4,6)+'-'+dateStr.substring(6,8)+' '+dateStr.substring(9,11)+':'+dateStr.substring(11,13)+':'+dateStr.substring(13,15); } catch(e){}
+
+            html += '<div style="background:white;border:1px solid #e2e8f0;border-radius:10px;padding:14px 18px;display:flex;align-items:center;justify-content:space-between;gap:12px">';
+            html += '<div style="flex:1;min-width:0">';
+            html += '<div style="font-weight:600;color:#1e293b;font-size:0.95em">'+b.instance+'</div>';
+            html += '<div style="font-size:0.8em;color:#64748b;margin-top:2px">'+clusterBadge+dateStr+' &middot; '+b.size_mb+' MB &middot; '+badges+'</div>';
+            html += '</div>';
+            html += '<div style="display:flex;gap:6px;flex-shrink:0">';
+            html += '<button class="btn" style="background:#2A7B88;color:white;font-size:0.78em;padding:6px 12px" onclick="restoreBackup(\''+b.path.replace(/'/g,"\\'")+'\',\''+b.instance.replace(/'/g,"\\'")+'\','+b.has_db+','+b.has_artifacts+')">Restore to&hellip;</button>';
+            html += '</div>';
+            html += '</div>';
+        });
+
+        html += '</div></div>';
+        list.innerHTML = html;
+    });
+}
+
+function restoreBackup(path, instanceName, hasDb, hasArtifacts){
+    // Fetch all instances to let user pick target
+    fetch('/api/instances').then(function(r){return r.json()}).then(function(instances){
+        var running = instances.filter(function(i){return i.pod_status==='Running'});
+        if(!running.length){
+            showCreateError('No running instances found to restore to');
+            return;
+        }
+
+        var optionsHtml = running.map(function(i){
+            return '<option value="'+i.id+'">'+((i.display_name||i.name))+' ('+i.cluster_name+')</option>';
+        }).join('');
+
+        var body = '<div style="margin-bottom:12px">Restore backup from <strong>'+instanceName+'</strong> to:</div>';
+        body += '<select id="restore-target" style="width:100%;padding:8px;border:1px solid #d1d5db;border-radius:6px;font-size:0.9em;margin-bottom:12px">'+optionsHtml+'</select>';
+        body += '<div style="display:flex;flex-direction:column;gap:6px;margin-bottom:12px">';
+        if(hasDb) body += '<label style="display:flex;align-items:center;gap:6px;font-size:0.9em"><input type="checkbox" id="restore-db" checked> Restore Database</label>';
+        if(hasArtifacts) body += '<label style="display:flex;align-items:center;gap:6px;font-size:0.9em"><input type="checkbox" id="restore-artifacts" checked> Restore Artifacts</label>';
+        body += '</div>';
+
+        showConfirm('Restore Backup', 'Select target instance', body, 'Restore', function(){
+            var targetId = parseInt(document.getElementById('restore-target').value);
+            var restoreDb = document.getElementById('restore-db') ? document.getElementById('restore-db').checked : false;
+            var restoreArt = document.getElementById('restore-artifacts') ? document.getElementById('restore-artifacts').checked : false;
+
+            showCreateError('Restoring...');
+            var errEl = document.getElementById('create-error');
+            if(errEl){errEl.style.background='#eff6ff';errEl.style.color='#1d4ed8';errEl.style.border='1px solid #bfdbfe';}
+
+            fetch('/api/backups/restore', {
+                method:'POST',
+                headers:{'Content-Type':'application/json'},
+                body:JSON.stringify({backup_path:path, target_instance_id:targetId, restore_db:restoreDb, restore_artifacts:restoreArt})
+            }).then(function(r){return r.json()}).then(function(data){
+                if(data.ok){
+                    showCreateError('Restore complete: '+data.results.join(', '));
+                    var errEl = document.getElementById('create-error');
+                    if(errEl){errEl.style.background='#ecfdf5';errEl.style.color='#065f46';errEl.style.border='1px solid #a7f3d0';}
+                }else{
+                    showCreateError(data.error||'Restore failed');
+                }
+            }).catch(function(e){
+                showCreateError('Restore failed: '+e.message);
+            });
+        });
     });
 }
 

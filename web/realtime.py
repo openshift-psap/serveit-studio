@@ -2548,6 +2548,37 @@ def upload_database():
         return jsonify({'success': False, 'error': str(e)}), 500
 
 
+@app.route('/api/restore/artifacts', methods=['POST'])
+def restore_artifacts():
+    """Restore test artifacts from a tar.gz archive."""
+    import tarfile
+    import tempfile
+    try:
+        if 'artifacts' not in request.files:
+            return jsonify({'success': False, 'error': 'No artifacts file provided'}), 400
+
+        file = request.files['artifacts']
+        if not file.filename:
+            return jsonify({'success': False, 'error': 'Empty filename'}), 400
+
+        with tempfile.NamedTemporaryFile(suffix='.tar.gz', delete=False) as tmp:
+            tmp_path = tmp.name
+            file.save(tmp_path)
+
+        try:
+            with tarfile.open(tmp_path, 'r:gz') as tar:
+                members = tar.getmembers()
+                safe_members = [m for m in members if not m.name.startswith('/') and '..' not in m.name]
+                tar.extractall('/mnt/storage', members=safe_members)
+            restored = len(safe_members)
+            return jsonify({'success': True, 'files_restored': restored})
+        finally:
+            os.unlink(tmp_path)
+
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+
 @app.route('/api/run/<int:run_id>/config/<config_name>/manifest/<manifest_type>')
 def download_manifest(run_id, config_name, manifest_type):
     """Download a rendered LWS YAML manifest for a specific test configuration.

@@ -648,6 +648,124 @@ def create_instance(owner_id: int, username: str, name: str,
         raise
 
 
+def list_backups() -> List[Dict]:
+    """List all available backups across all instances."""
+    backup_root = Path('/mnt/storage/backups')
+    if not backup_root.exists():
+        return []
+    backups = []
+    for instance_dir in sorted(backup_root.iterdir()):
+        if not instance_dir.is_dir():
+            continue
+        for ts_dir in sorted(instance_dir.iterdir(), reverse=True):
+            if not ts_dir.is_dir():
+                continue
+            # Try metadata.json first, fall back to backup_info.txt
+            meta_file = ts_dir / 'metadata.json'
+            if meta_file.exists():
+                try:
+                    meta = json.loads(meta_file.read_text())
+                    meta['path'] = str(ts_dir)
+                    backups.append(meta)
+                    continue
+                except Exception:
+                    pass
+            info_file = ts_dir / 'backup_info.txt'
+            info = info_file.read_text() if info_file.exists() else ''
+            size = sum(f.stat().st_size for f in ts_dir.rglob('*') if f.is_file())
+            has_db = (ts_dir / 'serveit.db.gz').exists() or (ts_dir / 'serveit.db').exists()
+            has_artifacts = (ts_dir / 'serveit-artifacts.tar.gz').exists() or (ts_dir / 'results').is_dir()
+            cluster = ''
+            for line in info.splitlines():
+                if line.startswith('Cluster:'):
+                    cluster = line.split(':', 1)[1].strip()
+            backups.append({
+                'instance': instance_dir.name,
+                'cluster': cluster,
+                'timestamp': ts_dir.name,
+                'path': str(ts_dir),
+                'size_mb': round(size / (1024 * 1024), 1),
+                'has_db': has_db,
+                'has_artifacts': has_artifacts,
+                'backup_time': ts_dir.name,
+            })
+    return backups
+
+
+def restore_backup(backup_path: str, target_instance_id: int, owner_id: int, restore_db: bool = True, restore_artifacts: bool = True) -> Dict:
+    """Restore a backup to a target instance via its API."""
+    import requests as _req
+
+    backup_dir = Path(backup_path)
+    if not backup_dir.exists():
+        return {'ok': False, 'error': 'Backup path not found'}
+
+    with get_db() as conn:
+        row = conn.execute(
+            'SELECT * FROM instances WHERE id = ? AND (owner_id = ? OR ? IN (SELECT id FROM users WHERE is_admin = 1))',
+            (target_instance_id, owner_id, owner_id)
+        ).fetchone()
+    if not row:
+        return {'ok': False, 'error': 'Target instance not found or not authorized'}
+
+    row = dict(row)
+    deployment_name = row['deployment_name']
+    namespace = row['namespace']
+    service_url = row.get('service_url')
+    internal_url = f"http://{deployment_name}.{namespace}.svc.cluster.local:5000"
+
+    results = []
+
+    def _try_url(base):
+        try:
+            _req.get(f"{base}/api/health", timeout=5)
+            return True
+        except Exception:
+            return False
+
+    base_url = internal_url if _try_url(internal_url) else (service_url if service_url and _try_url(service_url) else None)
+    if not base_url:
+        return {'ok': False, 'error': 'Cannot reach target instance — is it running?'}
+
+    if restore_db:
+        db_file = backup_dir / 'serveit.db.gz'
+        if db_file.exists():
+            try:
+                with open(db_file, 'rb') as f:
+                    resp = _req.post(f"{base_url}/api/upload_database",
+                                     files={'database': ('serveit.db.gz', f, 'application/gzip')},
+                                     timeout=120)
+                data = resp.json()
+                if data.get('success'):
+                    results.append(f"DB restored: {data.get('imported_runs', '?')} runs imported")
+                else:
+                    results.append(f"DB restore failed: {data.get('error', 'unknown')}")
+            except Exception as e:
+                results.append(f"DB restore error: {e}")
+        else:
+            results.append("No database backup found (serveit.db.gz)")
+
+    if restore_artifacts:
+        art_file = backup_dir / 'serveit-artifacts.tar.gz'
+        if art_file.exists():
+            try:
+                with open(art_file, 'rb') as f:
+                    resp = _req.post(f"{base_url}/api/restore/artifacts",
+                                     files={'artifacts': ('serveit-artifacts.tar.gz', f, 'application/gzip')},
+                                     timeout=600)
+                data = resp.json()
+                if data.get('success'):
+                    results.append(f"Artifacts restored: {data.get('files_restored', '?')} files")
+                else:
+                    results.append(f"Artifacts restore failed: {data.get('error', 'unknown')}")
+            except Exception as e:
+                results.append(f"Artifacts restore error: {e}")
+        else:
+            results.append("No artifacts backup found (serveit-artifacts.tar.gz)")
+
+    return {'ok': True, 'results': results}
+
+
 def _backup_instance_db(deployment_name: str, namespace: str, instance_name: str):
     """Copy instance database to launcher storage before deletion."""
     backup_dir = Path('/mnt/storage/backups') / instance_name
@@ -693,7 +811,15 @@ def backup_instance(instance_id: int, owner_id: int) -> Dict:
     if not service_url:
         return {'ok': False, 'error': 'Instance has no service URL — is it running?'}
 
-    # Use cluster-internal URL if available
+    # Look up cluster name
+    cluster_name = 'unknown'
+    cluster_id = row.get('cluster_id')
+    if cluster_id:
+        with get_db() as conn:
+            cr = conn.execute('SELECT name FROM clusters WHERE id = ?', (cluster_id,)).fetchone()
+            if cr:
+                cluster_name = cr['name']
+
     deployment_name = row['deployment_name']
     namespace = row['namespace']
     internal_url = f"http://{deployment_name}.{namespace}.svc.cluster.local:5000"
@@ -734,15 +860,28 @@ def backup_instance(instance_id: int, owner_id: int) -> Dict:
     total_size = sum(f.stat().st_size for f in backup_dir.rglob('*') if f.is_file())
     size_mb = total_size / (1024 * 1024)
 
+    backup_time = datetime.now().isoformat()
     info = (
         f"Instance: {instance_name}\n"
-        f"Backup: {datetime.now().isoformat()}\n"
+        f"Cluster: {cluster_name}\n"
+        f"Backup: {backup_time}\n"
         f"Source: {internal_url}\n"
         f"Size: {size_mb:.1f} MB\n"
     )
     if errors:
         info += f"Warnings: {'; '.join(errors)}\n"
     (backup_dir / 'backup_info.txt').write_text(info)
+
+    metadata = {
+        'instance': instance_name,
+        'cluster': cluster_name,
+        'timestamp': timestamp,
+        'backup_time': backup_time,
+        'size_mb': round(size_mb, 1),
+        'has_db': (backup_dir / 'serveit.db.gz').exists(),
+        'has_artifacts': (backup_dir / 'serveit-artifacts.tar.gz').exists(),
+    }
+    (backup_dir / 'metadata.json').write_text(json.dumps(metadata, indent=2))
 
     return {
         'ok': len(errors) == 0 or size_mb > 0,

@@ -307,6 +307,25 @@ def create_app():
             return jsonify(result)
         return jsonify(result), 400
 
+    @app.route('/api/backups', methods=['GET'])
+    def api_list_backups():
+        return jsonify(instance_manager.list_backups())
+
+    @app.route('/api/backups/restore', methods=['POST'])
+    def api_restore_backup():
+        data = request.json or {}
+        backup_path = data.get('backup_path')
+        target_instance_id = data.get('target_instance_id')
+        restore_db = data.get('restore_db', True)
+        restore_artifacts = data.get('restore_artifacts', True)
+        if not backup_path or not target_instance_id:
+            return jsonify({'ok': False, 'error': 'backup_path and target_instance_id required'}), 400
+        result = instance_manager.restore_backup(backup_path, int(target_instance_id), get_user_id(),
+                                                  restore_db=restore_db, restore_artifacts=restore_artifacts)
+        if result.get('ok'):
+            return jsonify(result)
+        return jsonify(result), 400
+
     # ── Instance access (assignment) endpoints ──
 
     @app.route('/api/instances/<int:instance_id>/users', methods=['GET'])
