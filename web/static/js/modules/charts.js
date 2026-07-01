@@ -2160,17 +2160,11 @@ function renderCharts(data, runId) {
         Plotly.newPlot(cid('chart-scatter'), traces, { ...plotlyLayout, xaxis: { title: 'TTFT P90 (ms) - lower is better' }, yaxis: { title: 'Throughput Mean (req/s) - higher is better' }, showlegend: true }, plotlyConfig);
     }
 
-    // Efficiency bar (filter out sweep tests)
+    // Efficiency bar
     if (charts.efficiency.configs.length) {
-        var effTids = charts.efficiency.test_ids || [];
-        var effIdx = [];
-        charts.efficiency.configs.forEach(function(c, i) {
-            var tid = effTids[i] || '';
-            if (tid.indexOf('step11-') !== 0 && tid.indexOf('step12-') !== 0 && tid.indexOf('step13-') !== 0) effIdx.push(i);
-        });
-        var effConfigs = effIdx.map(i => charts.efficiency.configs[i]);
-        var effValues = effIdx.map(i => charts.efficiency.values[i]);
-        var effColors = effIdx.map(i => charts.efficiency.colors[i]);
+        var effConfigs = charts.efficiency.configs;
+        var effValues = charts.efficiency.values;
+        var effColors = charts.efficiency.colors;
         if (effConfigs.length) {
             Plotly.newPlot(cid('chart-efficiency'), [{
                 x: effConfigs, y: effValues,

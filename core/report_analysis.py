@@ -833,8 +833,9 @@ class ReportAnalyzer:
         # --- Efficiency bar chart ---
         eff_data = {'configs': [], 'values': [], 'colors': [], 'test_ids': []}
         if successful:
+            core_successful = [r for r in successful if not r.config_name.startswith(('step11-', 'step12-', 'step13-'))]
             with_eff = sorted(
-                [(r.display_label, (r.throughput_mean or r.throughput_p90) / r.total_gpus, r.architecture, r.config_name) for r in successful],
+                [(r.display_label, (r.throughput_mean or r.throughput_p90) / r.total_gpus, r.architecture, r.config_name) for r in core_successful],
                 key=lambda x: x[1], reverse=True
             )[:15]
             eff_data['configs'] = [label for label, _, _, _ in with_eff]
