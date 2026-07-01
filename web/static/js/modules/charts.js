@@ -315,16 +315,16 @@ function renderCharts(data, runId) {
     // ============================================================
     // TP CALIBRATION CHARTS — Step 2 (Decode) & Step 3 (Prefill)
     // ============================================================
-    html += '<div class="chart-card" style="border-left:6px solid #0d9488;">' +
-        '<div class="chart-card-header" style="background:linear-gradient(135deg,#0d9488,#14b8a6); color:white;">TP Calibration</div>' +
-        '<div style="padding:12px 20px; color:#1e293b; font-size:0.93em; line-height:1.6;">' +
-        'Tests different <strong>Tensor Parallelism (TP)</strong> values per role to find the minimum viable TP that fits in GPU memory. ' +
-        'Lower TP means fewer GPUs per pod, allowing more replicas and higher throughput. Each TP value is tested with a short benchmark to measure baseline latency and token throughput.' +
-        '</div></div>';
     if (rec) {
             const hasDecodeTP = rec.decode_tp_all && rec.decode_tp_all.length;
             const hasPrefillTP = rec.prefill_tp_all && rec.prefill_tp_all.length;
             if (hasDecodeTP || hasPrefillTP) {
+                html += '<div class="chart-card" style="border-left:6px solid #0d9488;">' +
+                    '<div class="chart-card-header" style="background:linear-gradient(135deg,#0d9488,#14b8a6); color:white;">TP Calibration</div>' +
+                    '<div style="padding:12px 20px; color:#1e293b; font-size:0.93em; line-height:1.6;">' +
+                    'Tests different <strong>Tensor Parallelism (TP)</strong> values per role to find the minimum viable TP that fits in GPU memory. ' +
+                    'Lower TP means fewer GPUs per pod, allowing more replicas and higher throughput. Each TP value is tested with a short benchmark to measure baseline latency and token throughput.' +
+                    '</div></div>';
                 html += '<div class="charts-grid-2col">';
                 html += chartCard(
                     'Step 2: Decode TP Sweep',
