@@ -1406,8 +1406,10 @@ function renderCharts(data, runId) {
         html += '<div class="chart-card" style="margin-top:16px; border-left:6px solid #64748b;">';
         html += '<div class="chart-card-header" style="background:linear-gradient(135deg,#475569,#64748b); color:white; font-size:1.1em;">Concurrency Sweep Data</div>';
         html += '<div style="padding:8px 16px;display:flex;gap:16px;font-size:0.8em;color:#64748b;border-bottom:1px solid #e2e8f0;">';
-        html += '<span><span style="color:#059669;font-weight:700;">&#9632;</span> Best TTFT P99 at same concurrency</span>';
-        html += '<span><span style="color:#2563eb;font-weight:700;">&#9632;</span> Best Throughput at same concurrency</span>';
+        html += '<span><span style="color:#059669;font-weight:700;">&#9632;</span> Best TTFT P99</span>';
+        html += '<span><span style="color:#2563eb;font-weight:700;">&#9632;</span> Best Throughput</span>';
+        html += '<span><span style="display:inline-block;width:10px;height:10px;background:#ecfdf5;border:1px solid #059669;border-radius:2px;vertical-align:middle;margin-right:2px;"></span> Standout TTFT gain</span>';
+        html += '<span><span style="display:inline-block;width:10px;height:10px;background:#eff6ff;border:1px solid #2563eb;border-radius:2px;vertical-align:middle;margin-right:2px;"></span> Standout throughput gain</span>';
         html += '</div>';
         var csSweepTblId = 'concurrency-sweep-tbl-' + runId;
         html += '<div class="chart-card-body" style="padding:0;"><table class="results-table" id="' + csSweepTblId + '">';
@@ -1454,6 +1456,42 @@ function renderCharts(data, runId) {
             winners[c] = { ttft: bestTtft, tput: bestTput };
         });
 
+        // Compute improvement percentages for all competing concurrency levels
+        var allTtftPcts = [];
+        var allTputPcts = [];
+        Object.keys(winners).forEach(function(c) {
+            var w = winners[c];
+            var entries = byConcurrency[c];
+            if (!entries) return;
+            if (w.ttft) {
+                var bestVal = entries[w.ttft].ttft_p99;
+                Object.keys(entries).forEach(function(a) {
+                    if (a !== w.ttft && entries[a].ttft_p99 > 0) {
+                        var pct = (entries[a].ttft_p99 - bestVal) / entries[a].ttft_p99 * 100;
+                        allTtftPcts.push(pct);
+                    }
+                });
+            }
+            if (w.tput) {
+                var bestVal = entries[w.tput].throughput_per_gpu;
+                Object.keys(entries).forEach(function(a) {
+                    if (a !== w.tput && entries[a].throughput_per_gpu > 0) {
+                        var pct = (bestVal - entries[a].throughput_per_gpu) / entries[a].throughput_per_gpu * 100;
+                        allTputPcts.push(pct);
+                    }
+                });
+            }
+        });
+        // Top quartile threshold — only fill-highlight standout improvements
+        function percentile75(arr) {
+            if (!arr.length) return Infinity;
+            var s = arr.slice().sort(function(a, b) { return a - b; });
+            var idx = Math.floor(s.length * 0.75);
+            return s[Math.min(idx, s.length - 1)];
+        }
+        var ttftThreshold = percentile75(allTtftPcts);
+        var tputThreshold = percentile75(allTputPcts);
+
         Object.keys(sweep).forEach(function(arch) {
             var points = sweep[arch];
             if (!points || !points.length) return;
@@ -1462,11 +1500,32 @@ function renderCharts(data, runId) {
                 var w = winners[p.concurrency];
                 var isWinnerTtft = w && w.ttft === arch;
                 var isWinnerTput = w && w.tput === arch;
-                var rowBg = '';
+
+                // Check if this win is a standout (above 75th percentile of improvements)
+                var ttftStandout = false, tputStandout = false;
+                if (isWinnerTtft && byConcurrency[p.concurrency]) {
+                    var entries = byConcurrency[p.concurrency];
+                    Object.keys(entries).forEach(function(a) {
+                        if (a !== arch && entries[a].ttft_p99 > 0) {
+                            var pct = (entries[a].ttft_p99 - p.ttft_p99) / entries[a].ttft_p99 * 100;
+                            if (pct >= ttftThreshold) ttftStandout = true;
+                        }
+                    });
+                }
+                if (isWinnerTput && byConcurrency[p.concurrency]) {
+                    var entries = byConcurrency[p.concurrency];
+                    Object.keys(entries).forEach(function(a) {
+                        if (a !== arch && entries[a].throughput_per_gpu > 0) {
+                            var pct = (p.throughput_per_gpu - entries[a].throughput_per_gpu) / entries[a].throughput_per_gpu * 100;
+                            if (pct >= tputThreshold) tputStandout = true;
+                        }
+                    });
+                }
+
                 var calBadge = p.is_calibrated ? ' <span style="background:#059669;color:white;font-size:0.7em;padding:1px 5px;border-radius:3px;">calibrated</span>' : '';
-                var ttftStyle = isWinnerTtft ? ' style="color:#059669;font-weight:700;"' : '';
-                var tputStyle = isWinnerTput ? ' style="color:#2563eb;font-weight:700;"' : '';
-                html += '<tr' + rowBg + '>';
+                var ttftStyle = isWinnerTtft ? (ttftStandout ? ' style="color:#059669;font-weight:700;background:#ecfdf5;"' : ' style="color:#059669;font-weight:700;"') : '';
+                var tputStyle = isWinnerTput ? (tputStandout ? ' style="color:#2563eb;font-weight:700;background:#eff6ff;"' : ' style="color:#2563eb;font-weight:700;"') : '';
+                html += '<tr>';
                 html += '<td>' + archLabel + '</td>';
                 html += '<td>' + p.concurrency + calBadge + '</td>';
                 html += '<td' + ttftStyle + '>' + (p.ttft_p50 ? p.ttft_p50.toFixed(0) : '-') + ' ms</td>';
