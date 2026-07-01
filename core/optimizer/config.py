@@ -66,6 +66,8 @@ class RecipeOptimizerConfig:
     concurrency_sweep_levels: Optional[List[int]] = None  # Explicit levels; None = auto
     concurrency_sweep_count: Optional[int] = None  # Number of levels to generate
     concurrency_sweep_step_pct: int = 20  # Step as % of calibrated load
+    concurrency_sweep_all_configs: bool = False  # Sweep all discovered configs, not just best
+    concurrency_sweep_max_configs: Optional[int] = None  # Limit multi-config sweep to top N
 
     # Step 13: Cache hit sweep
     cache_sweep_enabled: bool = False  # Sweep cache hit levels at user-defined concurrency

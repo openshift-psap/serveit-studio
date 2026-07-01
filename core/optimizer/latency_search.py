@@ -508,90 +508,125 @@ class LatencySearchMixin:
             self.concurrency_sweep_results = {}
 
         original_concurrency = int(self.config.qps)
-
-        # Find best PD config from Step 7 — best TTFT-to-throughput ratio
-        # Lower TTFT and higher throughput both improve the ratio
-        def _pd_score(x):
-            ttft = x[1].ttft_p90 if x[1].ttft_p90 else 1e9
-            tput = x[1].throughput_mean or x[1].throughput_p90 or 0.001
-            return ttft / tput
-        best_split, best_pd_result = min(self.pareto_results, key=_pd_score)
-
-        overloaded_ttft = best_pd_result.ttft_p90 or best_pd_result.ttft_p50 or 0
-        overloaded_tput = best_pd_result.throughput_p90 or best_pd_result.throughput_p50 or 0
-        pd_tput_mean = best_pd_result.throughput_mean or best_pd_result.throughput_p50 or 0
-
-        pd_calibrated = self._compute_calibrated_concurrency(pd_tput_mean, original_concurrency, 'PD')
         sweep_on = self.config.inferencex_sweep_enabled or getattr(self.config, 'concurrency_sweep_count', None)
-        if sweep_on:
-            pd_levels = self._generate_sweep_levels(pd_calibrated)
-        else:
-            pd_levels = [pd_calibrated]
+        all_configs = getattr(self.config, 'concurrency_sweep_all_configs', False)
+        max_configs = getattr(self.config, 'concurrency_sweep_max_configs', None)
 
-        total_gpus_pd = (best_split.prefill_pods * best_split.prefill_tp +
-                         best_split.decode_pods * best_split.decode_tp)
+        def _tput_of(result):
+            return result.throughput_mean or result.throughput_p90 or 0
 
-        # --- PD sweep ---
-        pd_sweep = self._run_sweep_for_arch(
-            'PD', pd_calibrated, pd_levels,
-            lambda: self._create_pd_config(best_split),
-            total_gpus_pd
-        )
-        for r in pd_sweep:
-            r['config_label'] = f"{best_split.prefill_pods}P×TP{best_split.prefill_tp} + {best_split.decode_pods}D×TP{best_split.decode_tp}"
+        # --- Build list of PD configs to sweep ---
+        pd_configs = []
+        if self.pareto_results:
+            if all_configs:
+                configs = sorted(self.pareto_results, key=lambda x: _tput_of(x[1]), reverse=True)
+                if max_configs:
+                    configs = configs[:int(max_configs)]
+                pd_configs = configs
+            else:
+                def _pd_score(x):
+                    ttft = x[1].ttft_p90 if x[1].ttft_p90 else 1e9
+                    tput = _tput_of(x[1]) or 0.001
+                    return ttft / tput
+                pd_configs = [min(self.pareto_results, key=_pd_score)]
 
-        # Store calibrated result for backwards compat
-        cal_results = [r for r in pd_sweep if r['is_calibrated']]
-        if cal_results:
-            cal_test = cal_results[0]
-            matching = [r for _, r in self.all_test_results if hasattr(_, 'test_id') and _.test_id == cal_test['test_id']]
-            if matching:
-                self.calibrated_pd_result = matching[0]
+        # --- Sweep each PD config ---
+        cal_results = []
+        for cfg_idx, (split, pd_result) in enumerate(pd_configs):
+            if self._should_stop():
+                break
+            pd_tput_mean = _tput_of(pd_result)
+            label = f"{split.prefill_pods}P×TP{split.prefill_tp} + {split.decode_pods}D×TP{split.decode_tp}"
+            pd_calibrated = self._compute_calibrated_concurrency(pd_tput_mean, original_concurrency, f'PD ({label})')
+            if sweep_on:
+                pd_levels = self._generate_sweep_levels(pd_calibrated)
+            else:
+                pd_levels = [pd_calibrated]
+
+            total_gpus_pd = (split.prefill_pods * split.prefill_tp +
+                             split.decode_pods * split.decode_tp)
+
+            sweep_key = f"pd_{split.prefill_pods}p{split.decode_pods}d_tp{split.prefill_tp}_{split.decode_tp}"
+            current_split = split
+            pd_sweep = self._run_sweep_for_arch(
+                sweep_key, pd_calibrated, pd_levels,
+                lambda: self._create_pd_config(current_split),
+                total_gpus_pd
+            )
+            for r in pd_sweep:
+                r['config_label'] = label
+
+            cr = [r for r in pd_sweep if r['is_calibrated']]
+            if cr:
+                cal_results.extend(cr)
+                if cfg_idx == 0:
+                    matching = [r for _, r in self.all_test_results if hasattr(_, 'test_id') and _.test_id == cr[0]['test_id']]
+                    if matching:
+                        self.calibrated_pd_result = matching[0]
 
         if self._should_stop():
             return
 
-        # --- Aggregated sweep ---
-        if not self.aggregated_tp:
+        # --- Build list of Aggregated configs to sweep ---
+        agg_configs = []
+        if hasattr(self, 'aggregated_search_results') and self.aggregated_search_results:
+            if all_configs:
+                configs = sorted(self.aggregated_search_results, key=lambda x: _tput_of(x[1]), reverse=True)
+                if max_configs:
+                    configs = configs[:int(max_configs)]
+                agg_configs = configs
+            elif self.aggregated_tp and self.aggregated_result:
+                agg_configs = [(self.aggregated_tp, self.aggregated_result)]
+        elif self.aggregated_tp and self.aggregated_result:
+            agg_configs = [(self.aggregated_tp, self.aggregated_result)]
+
+        if not agg_configs:
             self.log("⚠️  No aggregated baseline — skipping aggregated sweep", 'warning')
-            return
-
-        agg_tp = self.aggregated_tp
-        total_gpus_agg = self.aggregated_gpus
-        agg_tput_mean = (self.aggregated_result.throughput_mean or self.aggregated_result.throughput_p50 or 0) if self.aggregated_result else 0
-        agg_calibrated = self._compute_calibrated_concurrency(agg_tput_mean, original_concurrency, 'Aggregated')
-        if sweep_on:
-            agg_levels = self._generate_sweep_levels(agg_calibrated)
         else:
-            agg_levels = [agg_calibrated]
+            total_gpus_agg = self.aggregated_gpus or self.config.total_gpus
+            cal_agg_results = []
+            for cfg_idx, (agg_tp, agg_result) in enumerate(agg_configs):
+                if self._should_stop():
+                    break
+                agg_tput_mean = _tput_of(agg_result)
+                agg_replicas = total_gpus_agg // agg_tp if agg_tp else total_gpus_agg
+                label = f"{agg_replicas}×TP{agg_tp}"
+                agg_calibrated = self._compute_calibrated_concurrency(agg_tput_mean, original_concurrency, f'Aggregated ({label})')
+                if sweep_on:
+                    agg_levels = self._generate_sweep_levels(agg_calibrated)
+                else:
+                    agg_levels = [agg_calibrated]
 
-        agg_sweep = self._run_sweep_for_arch(
-            'Aggregated', agg_calibrated, agg_levels,
-            lambda: self._create_aggregated_config(
-                tp=agg_tp, num_gpus=total_gpus_agg,
-                isl=self.config.isl, osl=self.config.osl,
-                test_id='_placeholder_', use_concurrency=True
-            ),
-            total_gpus_agg
-        )
-        agg_replicas = total_gpus_agg // agg_tp if agg_tp else total_gpus_agg
-        for r in agg_sweep:
-            r['config_label'] = f"{agg_replicas}×TP{agg_tp}"
+                sweep_key = f"aggregated_tp{agg_tp}"
+                current_tp = agg_tp
+                agg_sweep = self._run_sweep_for_arch(
+                    sweep_key, agg_calibrated, agg_levels,
+                    lambda: self._create_aggregated_config(
+                        tp=current_tp, num_gpus=total_gpus_agg,
+                        isl=self.config.isl, osl=self.config.osl,
+                        test_id='_placeholder_', use_concurrency=True
+                    ),
+                    total_gpus_agg
+                )
+                for r in agg_sweep:
+                    r['config_label'] = label
 
-        cal_agg = [r for r in agg_sweep if r['is_calibrated']]
-        if cal_agg:
-            matching = [r for _, r in self.all_test_results if hasattr(_, 'test_id') and _.test_id == cal_agg[0]['test_id']]
-            if matching:
-                self.calibrated_agg_result = matching[0]
+                cr = [r for r in agg_sweep if r['is_calibrated']]
+                if cr:
+                    cal_agg_results.extend(cr)
+                    if cfg_idx == 0:
+                        matching = [r for _, r in self.all_test_results if hasattr(_, 'test_id') and _.test_id == cr[0]['test_id']]
+                        if matching:
+                            self.calibrated_agg_result = matching[0]
 
-        # --- Summary comparison at calibrated point ---
-        if cal_results and cal_agg:
-            self.log("", 'info')
-            self.log(f"📊 Calibrated Load Comparison:", 'decision')
-            pd_c = cal_results[0]
-            agg_c = cal_agg[0]
-            self.log(f"  PD  (c={pd_c['concurrency']}): TTFT={pd_c['ttft_p90']:.0f}ms, {pd_c['throughput_per_gpu']:.0f} tok/s/gpu", 'info')
-            self.log(f"  Agg (c={agg_c['concurrency']}): TTFT={agg_c['ttft_p90']:.0f}ms, {agg_c['throughput_per_gpu']:.0f} tok/s/gpu", 'info')
+            # --- Summary comparison at calibrated point ---
+            if cal_results and cal_agg_results:
+                self.log("", 'info')
+                self.log(f"📊 Calibrated Load Comparison:", 'decision')
+                pd_c = cal_results[0]
+                agg_c = cal_agg_results[0]
+                self.log(f"  PD  (c={pd_c['concurrency']}): TTFT={pd_c['ttft_p90']:.0f}ms, {pd_c['throughput_per_gpu']:.0f} tok/s/gpu", 'info')
+                self.log(f"  Agg (c={agg_c['concurrency']}): TTFT={agg_c['ttft_p90']:.0f}ms, {agg_c['throughput_per_gpu']:.0f} tok/s/gpu", 'info')
 
         # Compare with overloaded
         if overloaded_ttft > 0 and cal_results:

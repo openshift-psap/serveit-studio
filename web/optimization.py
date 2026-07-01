@@ -315,6 +315,8 @@ def stream_job_logs(job_name: str, namespace: str):
                     'concurrency_sweep_levels': saved_config.get('concurrency_sweep_levels', None),
                     'concurrency_sweep_count': saved_config.get('concurrency_sweep_count', None),
                     'concurrency_sweep_step_pct': saved_config.get('concurrency_sweep_step_pct', 20),
+                    'concurrency_sweep_all_configs': saved_config.get('concurrency_sweep_all_configs', False),
+                    'concurrency_sweep_max_configs': saved_config.get('concurrency_sweep_max_configs', None),
                     'cache_sweep_enabled': saved_config.get('cache_sweep_enabled', False),
                     'cache_sweep_use_calibrated': saved_config.get('cache_sweep_use_calibrated', False),
                     'cache_sweep_mode': saved_config.get('cache_sweep_mode', 'identical'),
@@ -717,6 +719,10 @@ def run_optimization_background(data):
         if concurrency_sweep_count is not None:
             concurrency_sweep_count = int(concurrency_sweep_count) if concurrency_sweep_count else None
         concurrency_sweep_step_pct = int(_get('concurrency_sweep_step_pct', 20))
+        concurrency_sweep_all_configs = _get('concurrency_sweep_all_configs', False)
+        concurrency_sweep_max_configs = _get('concurrency_sweep_max_configs', None)
+        if concurrency_sweep_max_configs is not None:
+            concurrency_sweep_max_configs = int(concurrency_sweep_max_configs) if concurrency_sweep_max_configs else None
         cache_sweep_enabled = _get('cache_sweep_enabled', False)
         cache_sweep_use_calibrated = _get('cache_sweep_use_calibrated', False)
         cache_sweep_mode = _get('cache_sweep_mode', 'identical')
@@ -977,6 +983,8 @@ data:
                 concurrency_sweep_levels=concurrency_sweep_levels,
                 concurrency_sweep_count=concurrency_sweep_count,
                 concurrency_sweep_step_pct=concurrency_sweep_step_pct,
+                concurrency_sweep_all_configs=concurrency_sweep_all_configs,
+                concurrency_sweep_max_configs=concurrency_sweep_max_configs,
                 cache_sweep_enabled=cache_sweep_enabled,
                 cache_sweep_use_calibrated=cache_sweep_use_calibrated,
                 cache_sweep_mode=cache_sweep_mode,

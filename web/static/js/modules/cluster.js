@@ -234,7 +234,9 @@ document.getElementById('start-optimization').addEventListener('click', () => {
         inferencex_sweep_enabled: !!config.inferencex_sweep_enabled,
         concurrency_sweep_levels: config.concurrency_sweep_levels || null,
         concurrency_sweep_count: config.concurrency_sweep_count || null,
-        concurrency_sweep_step_pct: config.concurrency_sweep_step_pct || 20
+        concurrency_sweep_step_pct: config.concurrency_sweep_step_pct || 20,
+        concurrency_sweep_all_configs: !!config.concurrency_sweep_all_configs,
+        concurrency_sweep_max_configs: config.concurrency_sweep_max_configs || null
     });
 });
 

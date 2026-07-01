@@ -163,6 +163,17 @@ function updateUIFromConfig() {
         if (config.concurrency_sweep_levels && document.getElementById('concurrency-sweep-levels')) {
             document.getElementById('concurrency-sweep-levels').value = config.concurrency_sweep_levels.join(', ');
         }
+        if (document.getElementById('sweep-all-configs')) {
+            var allOn = config.concurrency_sweep_all_configs === true;
+            document.getElementById('sweep-all-configs').checked = allOn;
+            var allSw = document.getElementById('sweep-all-switch');
+            if (allSw) { allSw.style.background = allOn ? '#059669' : '#ccc'; allSw.querySelector('span').style.transform = allOn ? 'translateX(18px)' : 'translateX(0)'; }
+            var maxRow = document.getElementById('sweep-max-configs-row');
+            if (maxRow) maxRow.style.display = allOn ? 'flex' : 'none';
+            if (config.concurrency_sweep_max_configs && document.getElementById('sweep-max-configs')) {
+                document.getElementById('sweep-max-configs').value = config.concurrency_sweep_max_configs;
+            }
+        }
     }
 
     // Restore cache sweep toggles
