@@ -383,7 +383,7 @@ class LatencySearchMixin:
         levels.add(round_to(sweep_max))
         return sorted(l for l in levels if l > 0)
 
-    def _run_sweep_for_arch(self, arch_label, calibrated, levels, create_config_fn, gpus):
+    def _run_sweep_for_arch(self, arch_label, calibrated, levels, create_config_fn, gpus, config_label=None):
         """Run concurrency sweep for one architecture, return list of results.
 
         Deploys pods once, runs all concurrency levels with pods still up,
@@ -405,7 +405,7 @@ class LatencySearchMixin:
                 row = self.completed_tests[test_id]
                 result = self._make_test_result_from_db(row)
                 self.log(f"  ⏩ c={concurrency}: resuming from DB", 'info')
-                self._append_sweep_result(results, result, concurrency, calibrated, gpus, test_id)
+                self._append_sweep_result(results, result, concurrency, calibrated, gpus, test_id, config_label)
             else:
                 levels_to_run.append(concurrency)
 
@@ -447,7 +447,7 @@ class LatencySearchMixin:
                 self.log(f"  ❌ c={concurrency}: test failed, skipping", 'warning')
                 continue
 
-            self._append_sweep_result(results, result, concurrency, calibrated, gpus, test_id)
+            self._append_sweep_result(results, result, concurrency, calibrated, gpus, test_id, config_label)
 
         # Cleanup after all levels are done
         if deploy_test_id:
@@ -458,7 +458,7 @@ class LatencySearchMixin:
 
         return results
 
-    def _append_sweep_result(self, results, result, concurrency, calibrated, gpus, test_id):
+    def _append_sweep_result(self, results, result, concurrency, calibrated, gpus, test_id, config_label=None):
         """Helper to build a sweep result dict."""
         tput = result.throughput_mean or result.throughput_p90 or 0
         output_tps = result.output_tps_mean or 0
@@ -485,6 +485,7 @@ class LatencySearchMixin:
             'itl_p99': round(result.itl_p99 or 0, 1),
             'gpus': gpus,
             'test_id': test_id,
+            'config_label': config_label,
         })
 
         self.log(f"  ✅ c={concurrency}: TTFT={ttft:.0f}ms, "
@@ -556,10 +557,8 @@ class LatencySearchMixin:
             pd_sweep = self._run_sweep_for_arch(
                 sweep_key, pd_calibrated, pd_levels,
                 lambda: self._create_pd_config(current_split),
-                total_gpus_pd
+                total_gpus_pd, config_label=label
             )
-            for r in pd_sweep:
-                r['config_label'] = label
 
             cr = [r for r in pd_sweep if r['is_calibrated']]
             if cr:
@@ -611,10 +610,8 @@ class LatencySearchMixin:
                         isl=self.config.isl, osl=self.config.osl,
                         test_id='_placeholder_', use_concurrency=True
                     ),
-                    total_gpus_agg
+                    total_gpus_agg, config_label=label
                 )
-                for r in agg_sweep:
-                    r['config_label'] = label
 
                 cr = [r for r in agg_sweep if r['is_calibrated']]
                 if cr:
