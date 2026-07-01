@@ -551,7 +551,7 @@ class LatencySearchMixin:
             total_gpus_pd = (split.prefill_pods * split.prefill_tp +
                              split.decode_pods * split.decode_tp)
 
-            sweep_key = f"pd_{split.prefill_pods}p{split.decode_pods}d_tp{split.prefill_tp}_{split.decode_tp}"
+            sweep_key = f"pd-{split.prefill_pods}p{split.decode_pods}d-tp{split.prefill_tp}-{split.decode_tp}"
             current_split = split
             pd_sweep = self._run_sweep_for_arch(
                 sweep_key, pd_calibrated, pd_levels,
@@ -602,7 +602,7 @@ class LatencySearchMixin:
                 else:
                     agg_levels = [agg_calibrated]
 
-                sweep_key = f"aggregated_tp{agg_tp}"
+                sweep_key = f"aggregated-tp{agg_tp}"
                 current_tp = agg_tp
                 agg_sweep = self._run_sweep_for_arch(
                     sweep_key, agg_calibrated, agg_levels,
