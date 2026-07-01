@@ -984,6 +984,23 @@ class SingleTestStrategy(OptimizationStrategy):
             ttft = result.ttft_p90 or result.ttft_p50 or 0
             throughput = result.throughput_mean or result.throughput_p90 or 0
             self.opt.log(f"✅ TTFT p90: {ttft:.1f}ms, Throughput mean: {throughput:.2f} req/s", 'success')
+
+            # Run calibrated load / concurrency sweep if enabled
+            if cfg.calibrated_load_enabled and result:
+                self.opt.log("", 'info')
+                self.opt.log("STEP 11: Calibrated Load / Concurrency Sweep", 'decision')
+                self.opt.log("-" * 80, 'info')
+                if arch == 'aggregated':
+                    self.opt.aggregated_tp = tp
+                    self.opt.aggregated_gpus = num_gpus
+                    self.opt.aggregated_result = result
+                elif arch == 'pd':
+                    self.opt.pareto_results = [(split, result)]
+                elif arch == 'ep':
+                    self.opt.aggregated_tp = tp
+                    self.opt.aggregated_gpus = num_gpus
+                    self.opt.aggregated_result = result
+                self.opt._validate_at_calibrated_load()
         else:
             self.opt.log("❌ Test failed", 'error')
 
