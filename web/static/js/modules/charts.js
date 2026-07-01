@@ -1403,12 +1403,7 @@ function renderCharts(data, runId) {
             '<div class="chart-card-body"><div id="chart-pareto-sweep-ttft' + _chartSuffix + '" style="width:100%;height:850px;"></div></div></div>';
 
         // --- Architecture Comparison Charts ---
-        html += '<div class="chart-card" style="margin-top:20px;"><div class="chart-card-header">Architecture Winner by Concurrency</div>' +
-            '<div style="padding:8px 20px 0; color:#1e293b; font-size:0.92em; line-height:1.5;">' +
-            'At each concurrency level, which architecture delivered better throughput/GPU? Dots colored by winning architecture.</div>' +
-            '<div class="chart-card-body"><div id="chart-sweep-winner' + _chartSuffix + '" style="width:100%;height:600px;"></div></div></div>';
-
-        html += '<div class="chart-card" style="margin-top:16px;"><div class="chart-card-header">Best Envelope — PD vs Aggregated</div>' +
+        html += '<div class="chart-card" style="margin-top:20px;"><div class="chart-card-header">Best Envelope — PD vs Aggregated</div>' +
             '<div style="padding:8px 20px 0; color:#1e293b; font-size:0.92em; line-height:1.5;">' +
             'Pareto frontier of each architecture\'s best throughput/GPU at each concurrency level. The higher curve is the better architecture.</div>' +
             '<div class="chart-card-body"><div id="chart-sweep-envelope' + _chartSuffix + '" style="width:100%;height:600px;"></div></div></div>';
@@ -2672,37 +2667,7 @@ function renderCharts(data, runId) {
                 });
             });
 
-            // Chart 1: Winner per concurrency
-            if (document.getElementById(cid('chart-sweep-winner'))) {
-                var winConcs = [], winTputs = [], winColors = [], winTexts = [];
-                Object.keys(bestByConc).sort(function(a,b){return a-b;}).forEach(function(c) {
-                    var e = bestByConc[c];
-                    if (!e.disagg || !e.agg) return;
-                    var winner = e.disagg.tputGpu > e.agg.tputGpu ? e.disagg : e.agg;
-                    var loser = winner === e.disagg ? e.agg : e.disagg;
-                    var pct = ((winner.tputGpu - loser.tputGpu) / loser.tputGpu * 100).toFixed(0);
-                    winConcs.push(parseInt(c));
-                    winTputs.push(winner.tputGpu);
-                    winColors.push(winner === e.disagg ? '#2563eb' : '#dc2626');
-                    winTexts.push(winner.label + ' wins<br>+' + pct + '% over ' + loser.label);
-                });
-                if (winConcs.length) {
-                    Plotly.newPlot(cid('chart-sweep-winner'), [{
-                        x: winConcs, y: winTputs,
-                        type: 'bar',
-                        marker: { color: winColors },
-                        text: winTexts,
-                        hovertemplate: '<b>c=%{x}</b><br>%{y:.0f} tok/s/GPU<br>%{text}<extra></extra>'
-                    }], {
-                        ...plotlyLayout, height: 600,
-                        xaxis: { title: 'Concurrent Users', gridcolor: '#d1d5db' },
-                        yaxis: { title: 'Best Throughput per GPU (tok/s/GPU)', gridcolor: '#d1d5db' },
-                        plot_bgcolor: 'white', paper_bgcolor: 'white',
-                    }, swParetoConfig);
-                }
-            }
-
-            // Chart 2: Best envelope per arch
+            // Chart 1: Best envelope per arch
             if (document.getElementById(cid('chart-sweep-envelope'))) {
                 var envTraces = [];
                 ['agg', 'disagg'].forEach(function(cat) {
