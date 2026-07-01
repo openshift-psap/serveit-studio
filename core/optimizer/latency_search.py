@@ -630,15 +630,19 @@ class LatencySearchMixin:
                 self.log(f"  PD  (c={pd_c['concurrency']}): TTFT={pd_c['ttft_p90']:.0f}ms, {pd_c['throughput_per_gpu']:.0f} tok/s/gpu", 'info')
                 self.log(f"  Agg (c={agg_c['concurrency']}): TTFT={agg_c['ttft_p90']:.0f}ms, {agg_c['throughput_per_gpu']:.0f} tok/s/gpu", 'info')
 
-        # Compare with overloaded
-        if overloaded_ttft > 0 and cal_results:
-            cal_pd_ttft = cal_results[0]['ttft_p90']
-            ttft_improvement = ((overloaded_ttft - cal_pd_ttft) / overloaded_ttft) * 100
-            self.log("", 'info')
-            self.log("📉 Impact of load reduction on best PD config:", 'info')
-            self.log(f"  TTFT:       {overloaded_ttft:.1f}ms → {cal_pd_ttft:.1f}ms "
-                    f"({ttft_improvement:+.1f}%)", 'info')
-            self.log(f"  Throughput: {overloaded_tput:.2f} → {cal_results[0]['throughput_mean']:.2f} req/s", 'info')
+        # Compare with original (overloaded) result
+        if pd_configs and cal_results:
+            orig_result = pd_configs[0][1]
+            orig_ttft = orig_result.ttft_p90 or orig_result.ttft_p50 or 0
+            orig_tput = orig_result.throughput_mean or orig_result.throughput_p90 or 0
+            if orig_ttft > 0:
+                cal_pd_ttft = cal_results[0]['ttft_p90']
+                ttft_improvement = ((orig_ttft - cal_pd_ttft) / orig_ttft) * 100
+                self.log("", 'info')
+                self.log("📉 Impact of load reduction on best PD config:", 'info')
+                self.log(f"  TTFT:       {orig_ttft:.1f}ms → {cal_pd_ttft:.1f}ms "
+                        f"({ttft_improvement:+.1f}%)", 'info')
+                self.log(f"  Throughput: {orig_tput:.2f} → {cal_results[0]['throughput_mean']:.2f} req/s", 'info')
 
         # --- EPP-tuned calibrated load tests (if EPP tuning ran) ---
         if getattr(self, 'epp_benchmark_results', None) and not self._should_stop():
