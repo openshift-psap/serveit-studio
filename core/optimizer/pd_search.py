@@ -828,10 +828,16 @@ class PDSearchMixin:
                     self.log(f"    ✅ Balanced (ratio {ratio:.2f} within 0.8-1.2) — moving to next TP pair", 'success')
                     break
 
-                # Both sides have very low waiting — system not saturated, no signal
-                if decode_wait < 0.5 and prefill_wait < 0.5:
-                    self.log(f"    ✅ Low queue depth on both sides — system not saturated", 'info')
+                # Both sides truly idle — no queue pressure anywhere, split is fine
+                if decode_wait < 0.05 and prefill_wait < 0.05:
+                    self.log(f"    ✅ No queue pressure on either side — split is balanced", 'info')
                     break
+
+                # One side at 0 means it's over-provisioned — shift pods to the other side
+                if prefill_wait < 0.05 and decode_wait > 0:
+                    self.log(f"    📊 Prefill idle (wait={prefill_wait:.2f}), decode has queue ({decode_wait:.2f}) — shifting to more decode", 'info')
+                elif decode_wait < 0.05 and prefill_wait > 0:
+                    self.log(f"    📊 Decode idle (wait={decode_wait:.2f}), prefill has queue ({prefill_wait:.2f}) — shifting to more prefill", 'info')
 
                 # Compute rebalanced split
                 next_split = self._compute_balanced_split(ptp, dtp, current_split, decode_wait, prefill_wait)
