@@ -1834,8 +1834,13 @@ def handle_setup_storage(data):
             if resume_run_id:
                 optimization_data['resume_run_id'] = resume_run_id
 
-            # Start optimization in background
-            spawn(run_optimization_background, optimization_data)
+            # Start optimization in background (with guard against duplicates)
+            with state_lock:
+                if state['optimization_running']:
+                    log_to_ui('⚠️  Optimization already running — ignoring duplicate start', 'warning')
+                    return
+                state['optimization_running'] = True
+            state['_optimization_greenlet'] = spawn(run_optimization_background, optimization_data)
             return
 
         if per_node_storage:
