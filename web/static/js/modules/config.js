@@ -1141,29 +1141,44 @@ function applyReportConfig(recId) {
     var chartsOverlay = document.getElementById('charts-overlay');
     if (chartsOverlay) chartsOverlay.classList.remove('active');
 
+    // Save the values before selectSingleTestArch clobbers them via syncSingleTestToConfig
+    var _prefillTp = config.single_test_prefill_tp;
+    var _decodeTp = config.single_test_decode_tp;
+    var _prefillPods = config.single_test_prefill_pods;
+    var _decodePods = config.single_test_decode_pods;
+    var _aggTp = config.single_test_tp;
+    var _aggReplicas = config.single_test_replicas;
+
     setTimeout(function() {
         goToStep(1);
         updateUIFromConfig();
         selectSingleTestArch(arch);
-        // Populate the deployment fields after arch tab is visible
+        // Populate the deployment fields with saved values
         if (arch === 'pd' || arch === 'ep') {
             var el;
             el = document.getElementById('single-test-prefill-tp');
-            if (el) el.value = config.single_test_prefill_tp || 1;
+            if (el) el.value = _prefillTp || 1;
             el = document.getElementById('single-test-decode-tp');
-            if (el) el.value = config.single_test_decode_tp || 1;
+            if (el) el.value = _decodeTp || 1;
             el = document.getElementById('single-test-prefill-pods');
-            if (el) el.value = config.single_test_prefill_pods || 1;
+            if (el) el.value = _prefillPods || 1;
             el = document.getElementById('single-test-decode-pods');
-            if (el) el.value = config.single_test_decode_pods || 1;
+            if (el) el.value = _decodePods || 1;
+            config.single_test_prefill_tp = _prefillTp;
+            config.single_test_decode_tp = _decodeTp;
+            config.single_test_prefill_pods = _prefillPods;
+            config.single_test_decode_pods = _decodePods;
         } else {
             var el;
             el = document.getElementById('single-test-tp');
-            if (el) el.value = config.single_test_tp || 1;
+            if (el) el.value = _aggTp || 1;
             el = document.getElementById('single-test-replicas');
-            if (el) el.value = config.single_test_replicas || 1;
+            if (el) el.value = _aggReplicas || 1;
+            config.single_test_tp = _aggTp;
+            config.single_test_replicas = _aggReplicas;
         }
         updateSingleTestGpuSummary();
+        saveConfig();
     }, 150);
 }
 
