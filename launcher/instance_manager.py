@@ -692,6 +692,25 @@ def list_backups() -> List[Dict]:
     return backups
 
 
+def delete_backup(backup_path: str) -> Dict:
+    """Delete a backup directory."""
+    import shutil
+    backup_dir = Path(backup_path)
+    if not backup_dir.exists():
+        return {'ok': False, 'error': 'Backup not found'}
+    if not str(backup_dir).startswith('/mnt/storage/backups/'):
+        return {'ok': False, 'error': 'Invalid backup path'}
+    try:
+        shutil.rmtree(backup_dir)
+        # Clean up empty parent directory
+        parent = backup_dir.parent
+        if parent.exists() and not any(parent.iterdir()):
+            parent.rmdir()
+        return {'ok': True}
+    except Exception as e:
+        return {'ok': False, 'error': str(e)}
+
+
 def restore_backup(backup_path: str, target_instance_id: int, owner_id: int, restore_db: bool = True, restore_artifacts: bool = True) -> Dict:
     """Restore a backup to a target instance via its API."""
     import requests as _req

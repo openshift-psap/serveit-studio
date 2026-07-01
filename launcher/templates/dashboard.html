@@ -1157,6 +1157,16 @@ function copyCmd(btn, cmd){
     });
 }
 
+function deleteBackup(path){
+    if(!confirm('Delete this backup? This cannot be undone.')) return;
+    fetch('/api/backups/delete', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({path:path})})
+        .then(function(r){return r.json()})
+        .then(function(data){
+            if(data.ok) showRestore();
+            else showCreateError(data.error||'Delete failed');
+        });
+}
+
 // ── Admin: Restore Data ──
 function showRestore(){
     currentClusterId = null;
@@ -1174,6 +1184,7 @@ function showRestore(){
     list.innerHTML = '<div style="text-align:center;padding:40px;color:#999">Loading backups&hellip;</div>';
 
     fetch('/api/backups').then(function(r){return r.json()}).then(function(backups){
+        backups = backups.filter(function(b){ return b.size_mb > 0.1; });
         if(!backups.length){
             list.innerHTML = '<div style="text-align:center;padding:60px;color:#999"><div style="font-size:2em;margin-bottom:12px">&#128190;</div><div style="font-size:1.1em;font-weight:600;margin-bottom:6px">No Backups Found</div><div style="font-size:0.85em">Use the &#128190; Backup button on any instance to create one.</div></div>';
             return;
@@ -1198,6 +1209,7 @@ function showRestore(){
             html += '</div>';
             html += '<div style="display:flex;gap:6px;flex-shrink:0">';
             html += '<button class="btn" style="background:#2A7B88;color:white;font-size:0.78em;padding:6px 12px" onclick="restoreBackup(\''+b.path.replace(/'/g,"\\'")+'\',\''+b.instance.replace(/'/g,"\\'")+'\','+b.has_db+','+b.has_artifacts+')">Restore to&hellip;</button>';
+            html += '<button class="btn" style="background:#dc2626;color:white;font-size:0.78em;padding:6px 10px" onclick="deleteBackup(\''+b.path.replace(/'/g,"\\'")+'\')">&#128465;</button>';
             html += '</div>';
             html += '</div>';
         });

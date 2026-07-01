@@ -311,6 +311,17 @@ def create_app():
     def api_list_backups():
         return jsonify(instance_manager.list_backups())
 
+    @app.route('/api/backups/delete', methods=['POST'])
+    def api_delete_backup():
+        data = request.json or {}
+        backup_path = data.get('path')
+        if not backup_path:
+            return jsonify({'ok': False, 'error': 'path required'}), 400
+        result = instance_manager.delete_backup(backup_path)
+        if result.get('ok'):
+            return jsonify(result)
+        return jsonify(result), 400
+
     @app.route('/api/backups/restore', methods=['POST'])
     def api_restore_backup():
         data = request.json or {}
