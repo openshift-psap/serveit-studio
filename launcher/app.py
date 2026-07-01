@@ -311,6 +311,29 @@ def create_app():
     def api_list_backups():
         return jsonify(instance_manager.list_backups())
 
+    @app.route('/api/backups/download')
+    def api_download_backup():
+        import tarfile
+        import io
+        from flask import Response
+        backup_path = request.args.get('path', '')
+        if not backup_path or not backup_path.startswith('/mnt/storage/backups/'):
+            return jsonify({'error': 'Invalid path'}), 400
+        from pathlib import Path
+        backup_dir = Path(backup_path)
+        if not backup_dir.exists():
+            return jsonify({'error': 'Backup not found'}), 404
+        buf = io.BytesIO()
+        with tarfile.open(fileobj=buf, mode='w:gz', compresslevel=6) as tar:
+            for f in backup_dir.rglob('*'):
+                if f.is_file():
+                    tar.add(str(f), arcname=f.relative_to(backup_dir))
+        data = buf.getvalue()
+        name = f"{backup_dir.parent.name}-{backup_dir.name}.tar.gz"
+        return Response(data, mimetype='application/gzip',
+                        headers={'Content-Disposition': f'attachment; filename={name}',
+                                 'Content-Length': str(len(data))})
+
     @app.route('/api/backups/delete', methods=['POST'])
     def api_delete_backup():
         data = request.json or {}

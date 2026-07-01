@@ -1157,6 +1157,10 @@ function copyCmd(btn, cmd){
     });
 }
 
+function downloadBackup(path){
+    window.location.href = '/api/backups/download?path=' + encodeURIComponent(path);
+}
+
 function deleteBackup(path){
     if(!confirm('Delete this backup? This cannot be undone.')) return;
     fetch('/api/backups/delete', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({path:path})})
@@ -1208,6 +1212,7 @@ function showRestore(){
             html += '<div style="font-size:0.8em;color:#64748b;margin-top:2px">'+clusterBadge+dateStr+' &middot; '+b.size_mb+' MB &middot; '+badges+'</div>';
             html += '</div>';
             html += '<div style="display:flex;gap:6px;flex-shrink:0">';
+            html += '<button class="btn" style="background:#475569;color:white;font-size:0.78em;padding:6px 10px" onclick="downloadBackup(\''+b.path.replace(/'/g,"\\'")+'\')">&#11015; Download</button>';
             html += '<button class="btn" style="background:#2A7B88;color:white;font-size:0.78em;padding:6px 12px" onclick="restoreBackup(\''+b.path.replace(/'/g,"\\'")+'\',\''+b.instance.replace(/'/g,"\\'")+'\','+b.has_db+','+b.has_artifacts+')">Restore to&hellip;</button>';
             html += '<button class="btn" style="background:#dc2626;color:white;font-size:0.78em;padding:6px 10px" onclick="deleteBackup(\''+b.path.replace(/'/g,"\\'")+'\')">&#128465;</button>';
             html += '</div>';
