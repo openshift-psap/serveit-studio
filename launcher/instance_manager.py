@@ -727,14 +727,20 @@ def restore_backup(backup_path: str, target_instance_id: int, owner_id: int, res
 
     results = []
 
-    def _try_url(base):
+    def _try_url(base, use_proxy=False):
         try:
-            _req.get(f"{base}/api/health", timeout=5, proxies=proxies, verify=False)
+            _req.get(f"{base}/api/health", timeout=5, proxies=proxies if use_proxy else None, verify=False)
             return True
         except Exception:
             return False
 
-    base_url = internal_url if _try_url(internal_url) else (service_url if service_url and _try_url(service_url) else None)
+    if _try_url(internal_url):
+        base_url = internal_url
+        proxies = None
+    elif service_url and _try_url(service_url, use_proxy=True):
+        base_url = service_url
+    else:
+        base_url = None
     if not base_url:
         return {'ok': False, 'error': 'Cannot reach target instance — is it running?'}
 
@@ -850,7 +856,8 @@ def backup_instance(instance_id: int, owner_id: int) -> Dict:
         for base in [internal_url, service_url]:
             try:
                 url = f"{base}{endpoint}"
-                resp = _req.get(url, timeout=600, stream=True, proxies=proxies, verify=False)
+                use_proxies = proxies if base == service_url else None
+                resp = _req.get(url, timeout=600, stream=True, proxies=use_proxies, verify=False)
                 if resp.status_code != 200:
                     continue
                 dest = backup_dir / dest_filename
