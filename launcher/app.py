@@ -300,6 +300,13 @@ def create_app():
             return jsonify({'error': 'Only the instance owner can delete it'}), 403
         return jsonify({'error': 'Instance not found or not owned by you'}), 404
 
+    @app.route('/api/instances/<int:instance_id>/backup', methods=['POST'])
+    def api_backup_instance(instance_id):
+        result = instance_manager.backup_instance(instance_id, get_user_id())
+        if result.get('ok'):
+            return jsonify(result)
+        return jsonify(result), 400
+
     # ── Instance access (assignment) endpoints ──
 
     @app.route('/api/instances/<int:instance_id>/users', methods=['GET'])

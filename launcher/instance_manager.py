@@ -670,6 +670,75 @@ def _backup_instance_db(deployment_name: str, namespace: str, instance_name: str
         pass
 
 
+def backup_instance(instance_id: int, owner_id: int) -> Dict:
+    """Back up instance database and artifacts without deleting the instance."""
+    with get_db() as conn:
+        row = conn.execute(
+            'SELECT * FROM instances WHERE id = ? AND (owner_id = ? OR ? IN (SELECT id FROM users WHERE is_admin = 1))',
+            (instance_id, owner_id, owner_id)
+        ).fetchone()
+    if not row:
+        return {'ok': False, 'error': 'Instance not found or not authorized'}
+
+    row = dict(row)
+    deployment_name = row['deployment_name']
+    namespace = row['namespace']
+    instance_name = row.get('display_name') or row['name']
+
+    r = _kubectl(['get', 'pod', '-l', f'app={deployment_name}', '-n', namespace,
+                  '-o', 'jsonpath={.items[0].metadata.name}'])
+    pod_name = r.stdout.strip() if r.returncode == 0 else ''
+    if not pod_name:
+        return {'ok': False, 'error': 'Instance pod not running'}
+
+    timestamp = datetime.now().strftime('%Y%m%d-%H%M%S')
+    backup_dir = Path('/mnt/storage/backups') / instance_name / timestamp
+    backup_dir.mkdir(parents=True, exist_ok=True)
+
+    cmd = 'oc' if _is_oc() else 'kubectl'
+    errors = []
+
+    # Back up database
+    db_dest = str(backup_dir / 'serveit.db')
+    r_db = subprocess.run(
+        [cmd, 'cp', f'{namespace}/{pod_name}:/mnt/storage/serveit.db', db_dest],
+        capture_output=True, timeout=120
+    )
+    if r_db.returncode != 0:
+        errors.append(f'DB copy failed: {r_db.stderr[:200]}')
+
+    # Back up results/artifacts directory
+    results_dest = str(backup_dir / 'results')
+    r_results = subprocess.run(
+        [cmd, 'cp', f'{namespace}/{pod_name}:/mnt/storage/results', results_dest],
+        capture_output=True, timeout=600
+    )
+    if r_results.returncode != 0:
+        errors.append(f'Results copy failed (may not exist): {r_results.stderr[:200]}')
+
+    # Write backup info
+    total_size = sum(f.stat().st_size for f in backup_dir.rglob('*') if f.is_file())
+    size_mb = total_size / (1024 * 1024)
+    info = (
+        f"Instance: {instance_name}\n"
+        f"Backup: {datetime.now().isoformat()}\n"
+        f"Pod: {pod_name}\n"
+        f"Namespace: {namespace}\n"
+        f"Size: {size_mb:.1f} MB\n"
+    )
+    if errors:
+        info += f"Warnings: {'; '.join(errors)}\n"
+    (backup_dir / 'backup_info.txt').write_text(info)
+
+    return {
+        'ok': True,
+        'path': str(backup_dir),
+        'size_mb': round(size_mb, 1),
+        'timestamp': timestamp,
+        'warnings': errors if errors else None
+    }
+
+
 def delete_instance(instance_id: int, owner_id: int, backup: bool = True) -> bool:
     with get_db() as conn:
         row = conn.execute(

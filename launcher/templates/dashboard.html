@@ -771,6 +771,7 @@ function loadInstances(clusterId, isRefresh, userId){
                 '</div>' +
                 '<div class="card-actions">'+openBtn+
                 (inst.is_owner === 0 ? '<span style="font-size:0.75em;background:#eff6ff;color:#3b82f6;padding:3px 8px;border-radius:10px;font-weight:600">Shared</span>' :
+                '<button class="btn" style="background:#475569;color:white;font-size:0.78em;padding:5px 10px" onclick="event.stopPropagation();backupInstance('+inst.id+',\''+((inst.display_name||inst.name).replace(/'/g,"\\'"))+'\')">&#128190; Backup</button> ' +
                 '<button class="btn btn-danger" onclick="deleteInstance('+inst.id+',\''+((inst.display_name||inst.name).replace(/'/g,"\\'"))+'\')">Delete</button>') +
                 (IS_ADMIN ? ' <button class="btn btn-cancel" style="font-size:0.78em;padding:5px 10px" onclick="showAssignModal('+inst.id+',\''+((inst.display_name||inst.name).replace(/'/g,"\\'"))+'\')">&#128101;</button>' : '') +
                 '</div>' +
@@ -996,6 +997,31 @@ function createInstance(e){
     })
     .catch(function(err){overlay.remove();showCreateError(err.message||err);btn.disabled=false;btn.textContent='Create';});
     return false;
+}
+
+function backupInstance(id,name){
+    var card=document.getElementById('instance-'+id);
+    if(card){
+        var ov=document.createElement('div');ov.className='delete-overlay';ov.id='backup-overlay-'+id;
+        ov.innerHTML='<div style="display:flex;align-items:center;gap:10px"><svg width="20" height="20" viewBox="0 0 24 24" aria-hidden="true" style="animation:spin 1s linear infinite"><circle cx="12" cy="12" r="10" stroke="#475569" stroke-width="3" fill="none" stroke-dasharray="31.4 31.4" stroke-linecap="round"/></svg><span style="color:#4A4A4A;font-weight:600;font-size:0.9em">Backing up '+name+'...</span></div>';
+        card.appendChild(ov);
+    }
+    fetch('/api/instances/'+id+'/backup',{method:'POST'}).then(function(r){return r.json()}).then(function(data){
+        var ov=document.getElementById('backup-overlay-'+id);
+        if(ov)ov.remove();
+        if(data.ok){
+            var msg='Backup complete: '+data.size_mb+' MB';
+            if(data.warnings&&data.warnings.length)msg+=' (with warnings)';
+            showCreateError(msg);
+            var errEl=document.getElementById('create-error');if(errEl){errEl.style.background='#ecfdf5';errEl.style.color='#065f46';errEl.style.border='1px solid #a7f3d0';}
+        }else{
+            showCreateError(data.error||'Backup failed');
+        }
+    }).catch(function(e){
+        var ov=document.getElementById('backup-overlay-'+id);
+        if(ov)ov.remove();
+        showCreateError('Backup failed: '+e.message);
+    });
 }
 
 function deleteInstance(id,name){
