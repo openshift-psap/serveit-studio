@@ -1144,6 +1144,26 @@ function applyReportConfig(recId) {
     setTimeout(function() {
         goToStep(1);
         updateUIFromConfig();
+        selectSingleTestArch(arch);
+        // Populate the deployment fields after arch tab is visible
+        if (arch === 'pd' || arch === 'ep') {
+            var el;
+            el = document.getElementById('single-test-prefill-tp');
+            if (el) el.value = config.single_test_prefill_tp || 1;
+            el = document.getElementById('single-test-decode-tp');
+            if (el) el.value = config.single_test_decode_tp || 1;
+            el = document.getElementById('single-test-prefill-pods');
+            if (el) el.value = config.single_test_prefill_pods || 1;
+            el = document.getElementById('single-test-decode-pods');
+            if (el) el.value = config.single_test_decode_pods || 1;
+        } else {
+            var el;
+            el = document.getElementById('single-test-tp');
+            if (el) el.value = config.single_test_tp || 1;
+            el = document.getElementById('single-test-replicas');
+            if (el) el.value = config.single_test_replicas || 1;
+        }
+        updateSingleTestGpuSummary();
     }, 150);
 }
 
