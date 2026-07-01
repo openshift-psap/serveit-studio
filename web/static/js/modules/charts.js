@@ -1418,23 +1418,55 @@ function renderCharts(data, runId) {
         html += '<th style="cursor:pointer;" onclick="sortReportTable(\'' + csSweepTblId + '\',7,\'num\')">tok/s/user &#x21C5;</th>';
         html += '<th style="cursor:pointer;" onclick="sortReportTable(\'' + csSweepTblId + '\',8,\'num\')">tok/s/gpu &#x21C5;</th>';
         html += '</tr>';
+
+        // Build lookup: concurrency → {arch: point} for cross-arch comparison
+        var byConcurrency = {};
+        Object.keys(sweep).forEach(function(arch) {
+            var points = sweep[arch];
+            if (!points || !points.length) return;
+            points.forEach(function(p) {
+                if (!byConcurrency[p.concurrency]) byConcurrency[p.concurrency] = {};
+                byConcurrency[p.concurrency][arch] = p;
+            });
+        });
+
+        // For each concurrency level with multiple archs, find winners
+        var winners = {};
+        Object.keys(byConcurrency).forEach(function(c) {
+            var entries = byConcurrency[c];
+            var archs = Object.keys(entries);
+            if (archs.length < 2) return;
+            var bestTtft = null, bestTput = null;
+            archs.forEach(function(a) {
+                var p = entries[a];
+                if (p.ttft_p90 > 0 && (!bestTtft || p.ttft_p90 < entries[bestTtft].ttft_p90)) bestTtft = a;
+                if (p.throughput_per_gpu > 0 && (!bestTput || p.throughput_per_gpu > entries[bestTput].throughput_per_gpu)) bestTput = a;
+            });
+            winners[c] = { ttft: bestTtft, tput: bestTput };
+        });
+
         Object.keys(sweep).forEach(function(arch) {
             var points = sweep[arch];
             if (!points || !points.length) return;
             var archLabel = arch === 'pd' ? 'PD' : (arch === 'aggregated' ? 'Aggregated' : 'EP');
-            points.forEach(function(p, idx) {
-                var calMark = p.is_calibrated ? ' style="background:#ecfdf5; font-weight:700;"' : '';
+            points.forEach(function(p) {
+                var w = winners[p.concurrency];
+                var isWinnerTtft = w && w.ttft === arch;
+                var isWinnerTput = w && w.tput === arch;
+                var rowBg = (isWinnerTtft || isWinnerTput) ? ' style="background:#eff6ff;"' : '';
                 var calBadge = p.is_calibrated ? ' <span style="background:#059669;color:white;font-size:0.7em;padding:1px 5px;border-radius:3px;">calibrated</span>' : '';
-                html += '<tr' + calMark + '>';
+                var ttftStyle = isWinnerTtft ? ' style="color:#059669;font-weight:700;"' : '';
+                var tputStyle = isWinnerTput ? ' style="color:#2563eb;font-weight:700;"' : '';
+                html += '<tr' + rowBg + '>';
                 html += '<td>' + archLabel + '</td>';
                 html += '<td>' + p.concurrency + calBadge + '</td>';
                 html += '<td>' + (p.ttft_p50 ? p.ttft_p50.toFixed(0) : '-') + ' ms</td>';
-                html += '<td>' + (p.ttft_p90 ? p.ttft_p90.toFixed(0) : '-') + ' ms</td>';
+                html += '<td' + ttftStyle + '>' + (p.ttft_p90 ? p.ttft_p90.toFixed(0) : '-') + ' ms</td>';
                 html += '<td>' + (p.ttft_p95 ? p.ttft_p95.toFixed(0) : '-') + ' ms</td>';
                 html += '<td>' + (p.ttft_p99 ? p.ttft_p99.toFixed(0) : '-') + ' ms</td>';
-                html += '<td>' + (p.throughput_mean ? p.throughput_mean.toFixed(1) : '-') + ' req/s</td>';
+                html += '<td' + tputStyle + '>' + (p.throughput_mean ? p.throughput_mean.toFixed(1) : '-') + ' req/s</td>';
                 html += '<td>' + (p.interactivity ? p.interactivity.toFixed(1) : '-') + '</td>';
-                html += '<td>' + (p.throughput_per_gpu ? p.throughput_per_gpu.toFixed(0) : '-') + '</td>';
+                html += '<td' + tputStyle + '>' + (p.throughput_per_gpu ? p.throughput_per_gpu.toFixed(0) : '-') + '</td>';
                 html += '</tr>';
             });
         });
