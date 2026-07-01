@@ -2329,28 +2329,26 @@ def backup_database():
     try:
         import gzip as gzip_mod
         import hashlib
-        from flask import send_file, after_this_request
+        import io
+        from flask import Response
 
         if not os.path.exists(DB_PATH):
             return jsonify({'error': 'Database file not found'}), 404
 
-        compressed_path = '/tmp/serveit-backup.db.gz'
-        with open(DB_PATH, 'rb') as f_in, gzip_mod.open(compressed_path, 'wb', compresslevel=6) as f_out:
+        buf = io.BytesIO()
+        with open(DB_PATH, 'rb') as f_in, gzip_mod.GzipFile(fileobj=buf, mode='wb', compresslevel=6) as f_out:
             while True:
                 chunk = f_in.read(256 * 1024)
                 if not chunk:
                     break
                 f_out.write(chunk)
 
-        md5 = hashlib.md5(open(compressed_path, 'rb').read()).hexdigest()
+        data = buf.getvalue()
+        md5 = hashlib.md5(data).hexdigest()
 
-        @after_this_request
-        def add_md5(response):
-            response.headers['X-MD5'] = md5
-            return response
-
-        return send_file(compressed_path, mimetype='application/gzip', as_attachment=True,
-                         download_name='serveit.db.gz')
+        return Response(data, mimetype='application/gzip',
+                        headers={'Content-Disposition': 'attachment; filename=serveit.db.gz',
+                                 'X-MD5': md5, 'Content-Length': str(len(data))})
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 
@@ -2361,11 +2359,11 @@ def backup_artifacts():
     try:
         import tarfile
         import hashlib
-        from flask import send_file, after_this_request
+        import io
+        from flask import Response
 
         artifacts_dir = '/mnt/storage/test-artifacts'
         results_dir = '/mnt/storage/results'
-        compressed_path = '/tmp/serveit-backup-artifacts.tar.gz'
 
         dirs_to_pack = []
         if os.path.isdir(artifacts_dir):
@@ -2376,7 +2374,8 @@ def backup_artifacts():
         if not dirs_to_pack:
             return jsonify({'error': 'No test data found'}), 404
 
-        with tarfile.open(compressed_path, 'w:gz', compresslevel=6) as tar:
+        buf = io.BytesIO()
+        with tarfile.open(fileobj=buf, mode='w:gz', compresslevel=6) as tar:
             for arcname, d in dirs_to_pack:
                 for root, _, files in os.walk(d):
                     for f in files:
@@ -2384,15 +2383,12 @@ def backup_artifacts():
                         rel = os.path.relpath(fpath, os.path.dirname(d))
                         tar.add(fpath, arcname=rel)
 
-        md5 = hashlib.md5(open(compressed_path, 'rb').read()).hexdigest()
+        data = buf.getvalue()
+        md5 = hashlib.md5(data).hexdigest()
 
-        @after_this_request
-        def add_md5(response):
-            response.headers['X-MD5'] = md5
-            return response
-
-        return send_file(compressed_path, mimetype='application/gzip', as_attachment=True,
-                         download_name='serveit-artifacts.tar.gz')
+        return Response(data, mimetype='application/gzip',
+                        headers={'Content-Disposition': 'attachment; filename=serveit-artifacts.tar.gz',
+                                 'X-MD5': md5, 'Content-Length': str(len(data))})
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 
