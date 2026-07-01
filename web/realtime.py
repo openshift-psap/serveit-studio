@@ -2323,6 +2323,80 @@ def download_raw_data():
         return jsonify({'error': str(e)}), 500
 
 
+@app.route('/api/backup/database')
+def backup_database():
+    """Compress and download database in one HTTP call (for launcher backup)."""
+    try:
+        import gzip as gzip_mod
+        import hashlib
+        from flask import send_file, after_this_request
+
+        if not os.path.exists(DB_PATH):
+            return jsonify({'error': 'Database file not found'}), 404
+
+        compressed_path = '/tmp/serveit-backup.db.gz'
+        with open(DB_PATH, 'rb') as f_in, gzip_mod.open(compressed_path, 'wb', compresslevel=6) as f_out:
+            while True:
+                chunk = f_in.read(256 * 1024)
+                if not chunk:
+                    break
+                f_out.write(chunk)
+
+        md5 = hashlib.md5(open(compressed_path, 'rb').read()).hexdigest()
+
+        @after_this_request
+        def add_md5(response):
+            response.headers['X-MD5'] = md5
+            return response
+
+        return send_file(compressed_path, mimetype='application/gzip', as_attachment=True,
+                         download_name='serveit.db.gz')
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+
+@app.route('/api/backup/artifacts')
+def backup_artifacts():
+    """Compress and download test artifacts in one HTTP call (for launcher backup)."""
+    try:
+        import tarfile
+        import hashlib
+        from flask import send_file, after_this_request
+
+        artifacts_dir = '/mnt/storage/test-artifacts'
+        results_dir = '/mnt/storage/results'
+        compressed_path = '/tmp/serveit-backup-artifacts.tar.gz'
+
+        dirs_to_pack = []
+        if os.path.isdir(artifacts_dir):
+            dirs_to_pack.append(('test-artifacts', artifacts_dir))
+        if os.path.isdir(results_dir):
+            dirs_to_pack.append(('results', results_dir))
+
+        if not dirs_to_pack:
+            return jsonify({'error': 'No test data found'}), 404
+
+        with tarfile.open(compressed_path, 'w:gz', compresslevel=6) as tar:
+            for arcname, d in dirs_to_pack:
+                for root, _, files in os.walk(d):
+                    for f in files:
+                        fpath = os.path.join(root, f)
+                        rel = os.path.relpath(fpath, os.path.dirname(d))
+                        tar.add(fpath, arcname=rel)
+
+        md5 = hashlib.md5(open(compressed_path, 'rb').read()).hexdigest()
+
+        @after_this_request
+        def add_md5(response):
+            response.headers['X-MD5'] = md5
+            return response
+
+        return send_file(compressed_path, mimetype='application/gzip', as_attachment=True,
+                         download_name='serveit-artifacts.tar.gz')
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+
 @app.route('/api/upload-dataset', methods=['POST'])
 def upload_dataset():
     """Upload a custom dataset file for benchmarking."""
