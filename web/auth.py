@@ -147,7 +147,8 @@ def register_auth_routes():
         if AUTH_DISABLED:
             return
         if request.endpoint in ('login', 'setup', 'auto_login', 'static',
-                                  'backup_database', 'backup_artifacts', 'restore_artifacts'):
+                                  'backup_database', 'backup_artifacts', 'restore_artifacts',
+                                  'upload_database'):
             return
         if not _has_any_users():
             return redirect(url_for('setup'))
