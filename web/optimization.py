@@ -1033,9 +1033,14 @@ data:
                     (json.dumps(recipe_config.to_dict()), run_id))
 
             # Run optimization with database persistence
+            # Use a dedicated stop flag — only set by explicit user stop action,
+            # not by reconnects, state reloads, or error handlers
+            with state_lock:
+                state['_stop_requested'] = False
+
             def check_stopped():
                 with state_lock:
-                    return not state['optimization_running']
+                    return state.get('_stop_requested', False)
 
             optimizer = RecipeOptimizer(
                 config=recipe_config,

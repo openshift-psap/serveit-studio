@@ -477,6 +477,7 @@ def handle_stop_optimization():
     """Stop the running optimization. Idempotent — always resets state and notifies UI."""
 
     with state_lock:
+        state['_stop_requested'] = True
         state['optimization_running'] = False
         save_state()
 
