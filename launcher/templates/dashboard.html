@@ -1241,27 +1241,51 @@ function restoreBackup(path, instanceName, hasDb, hasArtifacts){
 
         showConfirm('Restore Backup', 'Select target instance', body, 'Restore', function(){
             var targetId = parseInt(document.getElementById('restore-target').value);
+            var targetName = document.getElementById('restore-target').selectedOptions[0].text;
             var restoreDb = document.getElementById('restore-db') ? document.getElementById('restore-db').checked : false;
             var restoreArt = document.getElementById('restore-artifacts') ? document.getElementById('restore-artifacts').checked : false;
 
-            showCreateError('Restoring...');
-            var errEl = document.getElementById('create-error');
-            if(errEl){errEl.style.background='#eff6ff';errEl.style.color='#1d4ed8';errEl.style.border='1px solid #bfdbfe';}
+            var modal = document.getElementById('backup-modal');
+            document.getElementById('backup-modal-content').innerHTML =
+                '<svg width="40" height="40" viewBox="0 0 24 24" aria-hidden="true" style="animation:spin 1.2s linear infinite;margin-bottom:16px"><circle cx="12" cy="12" r="10" stroke="#2A7B88" stroke-width="3" fill="none" stroke-dasharray="31.4 31.4" stroke-linecap="round"/></svg>' +
+                '<div style="font-weight:700;font-size:1.1em;color:#1e293b;margin-bottom:6px">Restoring to ' + targetName + '...</div>' +
+                '<div style="color:#64748b;font-size:0.88em">Uploading database and artifacts to the target instance.<br>This may take a few minutes.</div>' +
+                '<div style="margin-top:16px;background:#f1f5f9;border-radius:8px;height:6px;overflow:hidden"><div id="backup-progress-bar" style="height:100%;background:#2A7B88;width:0%;transition:width 0.5s;border-radius:8px"></div></div>';
+            modal.classList.add('active');
+
+            var bar = document.getElementById('backup-progress-bar');
+            var progress = 0;
+            var progressTimer = setInterval(function(){
+                progress = Math.min(progress + 1.5, 90);
+                if(bar) bar.style.width = progress + '%';
+            }, 1000);
 
             fetch('/api/backups/restore', {
                 method:'POST',
                 headers:{'Content-Type':'application/json'},
                 body:JSON.stringify({backup_path:path, target_instance_id:targetId, restore_db:restoreDb, restore_artifacts:restoreArt})
             }).then(function(r){return r.json()}).then(function(data){
+                clearInterval(progressTimer);
                 if(data.ok){
-                    showCreateError('Restore complete: '+data.results.join(', '));
-                    var errEl = document.getElementById('create-error');
-                    if(errEl){errEl.style.background='#ecfdf5';errEl.style.color='#065f46';errEl.style.border='1px solid #a7f3d0';}
+                    document.getElementById('backup-modal-content').innerHTML =
+                        '<div style="font-size:2.5em;margin-bottom:12px">&#9989;</div>' +
+                        '<div style="font-weight:700;font-size:1.1em;color:#065f46;margin-bottom:6px">Restore Complete</div>' +
+                        '<div style="color:#64748b;font-size:0.88em">' + data.results.join('<br>') + '</div>' +
+                        '<button class="btn" style="margin-top:16px;background:#2A7B88;color:white;padding:8px 24px" onclick="document.getElementById(\'backup-modal\').classList.remove(\'active\')">Done</button>';
                 }else{
-                    showCreateError(data.error||'Restore failed');
+                    document.getElementById('backup-modal-content').innerHTML =
+                        '<div style="font-size:2.5em;margin-bottom:12px">&#10060;</div>' +
+                        '<div style="font-weight:700;font-size:1.1em;color:#dc2626;margin-bottom:6px">Restore Failed</div>' +
+                        '<div style="color:#64748b;font-size:0.88em">'+(data.error||'Unknown error')+'</div>' +
+                        '<button class="btn" style="margin-top:16px;background:#64748b;color:white;padding:8px 24px" onclick="document.getElementById(\'backup-modal\').classList.remove(\'active\')">Close</button>';
                 }
             }).catch(function(e){
-                showCreateError('Restore failed: '+e.message);
+                clearInterval(progressTimer);
+                document.getElementById('backup-modal-content').innerHTML =
+                    '<div style="font-size:2.5em;margin-bottom:12px">&#10060;</div>' +
+                    '<div style="font-weight:700;font-size:1.1em;color:#dc2626;margin-bottom:6px">Restore Failed</div>' +
+                    '<div style="color:#64748b;font-size:0.88em">'+e.message+'</div>' +
+                    '<button class="btn" style="margin-top:16px;background:#64748b;color:white;padding:8px 24px" onclick="document.getElementById(\'backup-modal\').classList.remove(\'active\')">Close</button>';
             });
         });
     });
