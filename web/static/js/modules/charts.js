@@ -1405,6 +1405,10 @@ function renderCharts(data, runId) {
         // --- Sweep Results Table ---
         html += '<div class="chart-card" style="margin-top:16px; border-left:6px solid #64748b;">';
         html += '<div class="chart-card-header" style="background:linear-gradient(135deg,#475569,#64748b); color:white; font-size:1.1em;">Concurrency Sweep Data</div>';
+        html += '<div style="padding:8px 16px;display:flex;gap:16px;font-size:0.8em;color:#64748b;border-bottom:1px solid #e2e8f0;">';
+        html += '<span><span style="color:#059669;font-weight:700;">&#9632;</span> Best TTFT P90 at same concurrency</span>';
+        html += '<span><span style="color:#2563eb;font-weight:700;">&#9632;</span> Best Throughput at same concurrency</span>';
+        html += '</div>';
         var csSweepTblId = 'concurrency-sweep-tbl-' + runId;
         html += '<div class="chart-card-body" style="padding:0;"><table class="results-table" id="' + csSweepTblId + '">';
         html += '<tr>';
@@ -1458,7 +1462,7 @@ function renderCharts(data, runId) {
                 var w = winners[p.concurrency];
                 var isWinnerTtft = w && w.ttft === arch;
                 var isWinnerTput = w && w.tput === arch;
-                var rowBg = (isWinnerTtft || isWinnerTput) ? ' style="background:#eff6ff;"' : '';
+                var rowBg = '';
                 var calBadge = p.is_calibrated ? ' <span style="background:#059669;color:white;font-size:0.7em;padding:1px 5px;border-radius:3px;">calibrated</span>' : '';
                 var ttftStyle = isWinnerTtft ? ' style="color:#059669;font-weight:700;"' : '';
                 var tputStyle = isWinnerTput ? ' style="color:#2563eb;font-weight:700;"' : '';
