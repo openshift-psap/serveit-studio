@@ -1426,7 +1426,7 @@ function renderCharts(data, runId) {
                 var calMark = p.is_calibrated ? ' style="background:#ecfdf5; font-weight:700;"' : '';
                 var calBadge = p.is_calibrated ? ' <span style="background:#059669;color:white;font-size:0.7em;padding:1px 5px;border-radius:3px;">calibrated</span>' : '';
                 html += '<tr' + calMark + '>';
-                html += '<td>' + (idx === 0 ? '<strong>' + archLabel + '</strong>' : '') + '</td>';
+                html += '<td>' + archLabel + '</td>';
                 html += '<td>' + p.concurrency + calBadge + '</td>';
                 html += '<td>' + (p.ttft_p50 ? p.ttft_p50.toFixed(0) : '-') + ' ms</td>';
                 html += '<td>' + (p.ttft_p90 ? p.ttft_p90.toFixed(0) : '-') + ' ms</td>';
