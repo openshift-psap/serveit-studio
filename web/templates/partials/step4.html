@@ -202,10 +202,10 @@
                                     <input type="text" id="concurrency-sweep-levels" placeholder="e.g. 10, 50, 100, 200 (overrides count + step%)" style="width:100%;padding:6px 10px;border:1px solid #86efac;border-radius:6px;font-size:0.85em;font-family:var(--font-mono);" onchange="var v=this.value.trim();if(v){config.concurrency_sweep_levels=v.split(',').map(function(x){return parseInt(x.trim())}).filter(function(x){return !isNaN(x)&&x>0});}else{config.concurrency_sweep_levels=null;}saveConfig();">
                                     <div style="font-size:0.75em;color:#6b7280;margin-top:4px;">Set count + step% to auto-generate levels centered on calibrated load. Or type exact comma-separated levels. Empty = auto ~6 levels.</div>
                                     <div id="multi-config-sweep-row" style="margin-top:12px;padding-top:10px;border-top:1px solid #bbf7d0;">
-                                        <div style="display:flex;align-items:center;justify-content:space-between;gap:12px;padding:8px 12px;background:#f0fdf4;border:1px solid #bbf7d0;border-radius:8px;cursor:pointer;" onclick="var on=!document.getElementById('sweep-all-configs').checked;document.getElementById('sweep-all-configs').checked=on;config.concurrency_sweep_all_configs=on;document.getElementById('sweep-max-configs-row').style.display=on?'flex':'none';var sw=document.getElementById('sweep-all-switch');sw.style.background=on?'#059669':'#ccc';sw.querySelector('span').style.transform=on?'translateX(18px)':'translateX(0)';saveConfig();">
+                                        <div id="multi-config-sweep-toggle" style="display:flex;align-items:center;justify-content:space-between;gap:12px;padding:8px 12px;background:#f0fdf4;border:1px solid #bbf7d0;border-radius:8px;cursor:pointer;" onclick="if(config.goal==='single_test')return;var on=!document.getElementById('sweep-all-configs').checked;document.getElementById('sweep-all-configs').checked=on;config.concurrency_sweep_all_configs=on;document.getElementById('sweep-max-configs-row').style.display=on?'flex':'none';var sw=document.getElementById('sweep-all-switch');sw.style.background=on?'#059669':'#ccc';sw.querySelector('span').style.transform=on?'translateX(18px)':'translateX(0)';saveConfig();">
                                             <div>
                                                 <div style="font-weight:600;font-size:0.85em;color:#065f46;">Multi-Config Sweep</div>
-                                                <div style="font-size:0.75em;color:#047857;margin-top:2px;">Sweep all discovered configurations, not just the best per architecture. Does not apply to single tests.</div>
+                                                <div style="font-size:0.75em;color:#047857;margin-top:2px;">Sweep all discovered configurations, not just the best per architecture.</div>
                                             </div>
                                             <input type="checkbox" id="sweep-all-configs" style="display:none;">
                                             <div id="sweep-all-switch" style="width:40px;height:22px;background:#ccc;border-radius:11px;position:relative;transition:background-color 0.2s;flex-shrink:0;">
@@ -215,7 +215,7 @@
                                         <div id="sweep-max-configs-row" style="display:none;align-items:center;gap:8px;margin-top:8px;padding-left:12px;">
                                             <div style="font-weight:600;font-size:0.85em;color:#065f46;">Max configs:</div>
                                             <input type="number" id="sweep-max-configs" min="1" max="50" placeholder="all" style="width:80px;padding:4px 8px;border:1px solid #86efac;border-radius:6px;font-size:0.85em;" onchange="var v=parseInt(this.value);config.concurrency_sweep_max_configs=v>0?v:null;saveConfig();">
-                                            <div style="font-size:0.75em;color:#6b7280;">Leave empty = sweep all configs. Set a number = top N by throughput.</div>
+                                            <div style="font-size:0.75em;color:#6b7280;">Leave empty = sweep all configs. Set a number = top N by TTFT-to-throughput ratio.</div>
                                         </div>
                                     </div>
                                 </div>

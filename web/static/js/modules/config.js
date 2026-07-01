@@ -922,6 +922,20 @@ function updateSingleTestVisibility() {
         var s = document.getElementById(id);
         if (s) s.style.display = isSingle ? 'none' : '';
     });
+    var mcRow = document.getElementById('multi-config-sweep-toggle');
+    if (mcRow) {
+        mcRow.style.opacity = isSingle ? '0.4' : '1';
+        mcRow.style.pointerEvents = isSingle ? 'none' : 'auto';
+        if (isSingle) {
+            config.concurrency_sweep_all_configs = false;
+            var cb = document.getElementById('sweep-all-configs');
+            if (cb) cb.checked = false;
+            var sw = document.getElementById('sweep-all-switch');
+            if (sw) { sw.style.background = '#ccc'; sw.querySelector('span').style.transform = 'translateX(0)'; }
+            var mr = document.getElementById('sweep-max-configs-row');
+            if (mr) mr.style.display = 'none';
+        }
+    }
     _singleTestVisLock = false;
 }
 

@@ -515,11 +515,16 @@ class LatencySearchMixin:
         def _tput_of(result):
             return result.throughput_mean or result.throughput_p90 or 0
 
+        def _score(result):
+            ttft = result.ttft_p90 if result.ttft_p90 else 1e9
+            tput = _tput_of(result) or 0.001
+            return ttft / tput
+
         # --- Build list of PD configs to sweep ---
         pd_configs = []
         if self.pareto_results:
             if all_configs:
-                configs = sorted(self.pareto_results, key=lambda x: _tput_of(x[1]), reverse=True)
+                configs = sorted(self.pareto_results, key=lambda x: _score(x[1]))
                 if max_configs:
                     configs = configs[:int(max_configs)]
                 pd_configs = configs
@@ -571,7 +576,7 @@ class LatencySearchMixin:
         agg_configs = []
         if hasattr(self, 'aggregated_search_results') and self.aggregated_search_results:
             if all_configs:
-                configs = sorted(self.aggregated_search_results, key=lambda x: _tput_of(x[1]), reverse=True)
+                configs = sorted(self.aggregated_search_results, key=lambda x: _score(x[1]))
                 if max_configs:
                     configs = configs[:int(max_configs)]
                 agg_configs = configs
