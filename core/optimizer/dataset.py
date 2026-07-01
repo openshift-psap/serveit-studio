@@ -197,8 +197,8 @@ class DatasetMixin:
             try:
                 with self.db_manager.get_connection() as conn:
                     conn.execute(
-                        'UPDATE optimization_runs SET prefix_cache_seed = ?, config_json = ? WHERE id = ?',
-                        (seed, _json.dumps(self.config.to_dict()), self.run_id)
+                        'UPDATE optimization_runs SET prefix_cache_seed = ? WHERE id = ?',
+                        (seed, self.run_id)
                     )
             except Exception as e:
                 self.log(f"   Warning: failed to persist seed to DB: {e}", 'warning')
