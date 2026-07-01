@@ -1406,7 +1406,7 @@ function renderCharts(data, runId) {
         html += '<div class="chart-card" style="margin-top:16px; border-left:6px solid #64748b;">';
         html += '<div class="chart-card-header" style="background:linear-gradient(135deg,#475569,#64748b); color:white; font-size:1.1em;">Concurrency Sweep Data</div>';
         html += '<div style="padding:8px 16px;display:flex;gap:16px;font-size:0.8em;color:#64748b;border-bottom:1px solid #e2e8f0;">';
-        html += '<span><span style="color:#059669;font-weight:700;">&#9632;</span> Best TTFT P90 at same concurrency</span>';
+        html += '<span><span style="color:#059669;font-weight:700;">&#9632;</span> Best TTFT P99 at same concurrency</span>';
         html += '<span><span style="color:#2563eb;font-weight:700;">&#9632;</span> Best Throughput at same concurrency</span>';
         html += '</div>';
         var csSweepTblId = 'concurrency-sweep-tbl-' + runId;
@@ -1448,7 +1448,7 @@ function renderCharts(data, runId) {
             var bestTtft = null, bestTput = null;
             archs.forEach(function(a) {
                 var p = entries[a];
-                if (p.ttft_p90 > 0 && (!bestTtft || p.ttft_p90 < entries[bestTtft].ttft_p90)) bestTtft = a;
+                if (p.ttft_p99 > 0 && (!bestTtft || p.ttft_p99 < entries[bestTtft].ttft_p99)) bestTtft = a;
                 if (p.throughput_per_gpu > 0 && (!bestTput || p.throughput_per_gpu > entries[bestTput].throughput_per_gpu)) bestTput = a;
             });
             winners[c] = { ttft: bestTtft, tput: bestTput };
@@ -1469,12 +1469,12 @@ function renderCharts(data, runId) {
                 html += '<tr' + rowBg + '>';
                 html += '<td>' + archLabel + '</td>';
                 html += '<td>' + p.concurrency + calBadge + '</td>';
-                html += '<td>' + (p.ttft_p50 ? p.ttft_p50.toFixed(0) : '-') + ' ms</td>';
+                html += '<td' + ttftStyle + '>' + (p.ttft_p50 ? p.ttft_p50.toFixed(0) : '-') + ' ms</td>';
                 html += '<td' + ttftStyle + '>' + (p.ttft_p90 ? p.ttft_p90.toFixed(0) : '-') + ' ms</td>';
-                html += '<td>' + (p.ttft_p95 ? p.ttft_p95.toFixed(0) : '-') + ' ms</td>';
-                html += '<td>' + (p.ttft_p99 ? p.ttft_p99.toFixed(0) : '-') + ' ms</td>';
+                html += '<td' + ttftStyle + '>' + (p.ttft_p95 ? p.ttft_p95.toFixed(0) : '-') + ' ms</td>';
+                html += '<td' + ttftStyle + '>' + (p.ttft_p99 ? p.ttft_p99.toFixed(0) : '-') + ' ms</td>';
                 html += '<td' + tputStyle + '>' + (p.throughput_mean ? p.throughput_mean.toFixed(1) : '-') + ' req/s</td>';
-                html += '<td>' + (p.interactivity ? p.interactivity.toFixed(1) : '-') + '</td>';
+                html += '<td' + tputStyle + '>' + (p.interactivity ? p.interactivity.toFixed(1) : '-') + '</td>';
                 html += '<td' + tputStyle + '>' + (p.throughput_per_gpu ? p.throughput_per_gpu.toFixed(0) : '-') + '</td>';
                 html += '</tr>';
             });
