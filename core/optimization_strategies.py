@@ -970,16 +970,23 @@ class SingleTestStrategy(OptimizationStrategy):
             return
 
         self.opt.log("", 'info')
-        sweep_after = cfg.calibrated_load_enabled or getattr(cfg, 'concurrency_sweep_count', None)
-        result = self.opt.orchestrator.run_test(
-            test_config,
-            cleanup=not sweep_after,
-            log_callback=lambda msg: self.opt.log(msg, 'info'),
-            stop_check=self.opt._should_stop,
-        )
+        sweep_after = cfg.calibrated_load_enabled or getattr(cfg, 'concurrency_sweep_count', None) or getattr(cfg, 'concurrency_sweep_levels', None)
+
+        # Check if already completed (resume case)
+        if test_config.test_id in self.opt.completed_tests:
+            self.opt.log(f"  ⏩ {test_config.test_id}: already completed — resuming from DB", 'info')
+            row = self.opt.completed_tests[test_config.test_id]
+            result = self.opt._make_test_result_from_db(row)
+        else:
+            result = self.opt.orchestrator.run_test(
+                test_config,
+                cleanup=not sweep_after,
+                log_callback=lambda msg: self.opt.log(msg, 'info'),
+                stop_check=self.opt._should_stop,
+            )
+            self.opt._save_test_to_database(test_config, result)
 
         self.opt.all_test_results.append((test_config, result))
-        self.opt._save_test_to_database(test_config, result)
 
         if result and result.guidellm_success:
             ttft = result.ttft_p90 or result.ttft_p50 or 0
