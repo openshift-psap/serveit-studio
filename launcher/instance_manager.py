@@ -114,33 +114,110 @@ def _validate_kubeconfig(kubeconfig_data: str, proxy: str = None) -> tuple:
         target = 'remote'
 
     import tempfile
-    with tempfile.NamedTemporaryFile(mode='w', suffix='.kubeconfig', delete=False) as tmp:
-        tmp.write(kubeconfig_data)
-        tmp_path = tmp.name
+
+    def _try_connect(kc_data, env=None):
+        with tempfile.NamedTemporaryFile(mode='w', suffix='.kubeconfig', delete=False) as tmp:
+            tmp.write(kc_data)
+            tmp_path = tmp.name
+        try:
+            return subprocess.run(
+                ['kubectl', '--kubeconfig', tmp_path, 'cluster-info'],
+                capture_output=True, text=True, timeout=15, env=env
+            )
+        finally:
+            os.unlink(tmp_path)
+
+    env = None
+    if proxy:
+        env = os.environ.copy()
+        env['HTTPS_PROXY'] = proxy
+        env['https_proxy'] = proxy
+
     try:
-        env = None
-        if proxy:
-            env = os.environ.copy()
-            env['HTTPS_PROXY'] = proxy
-            env['https_proxy'] = proxy
-        r = subprocess.run(
-            ['kubectl', '--kubeconfig', tmp_path, 'cluster-info'],
-            capture_output=True, text=True, timeout=15, env=env
-        )
-        if r.returncode != 0:
-            raise RuntimeError(
-                f"Cannot connect to cluster {target}. "
-                f"Verify the kubeconfig is correct and the cluster is reachable.\n"
-                f"Error: {r.stderr.strip()[:200]}")
+        r = _try_connect(kubeconfig_data, env)
     except subprocess.TimeoutExpired:
         raise RuntimeError(
             f"Connection to {target} timed out. "
             f"Verify the cluster is reachable from this network."
             f"{' Try adding an HTTPS proxy.' if not proxy else ''}")
-    finally:
-        os.unlink(tmp_path)
+
+    if r.returncode != 0 and 'lookup' in r.stderr.lower():
+        rewritten = _rewrite_kubeconfig_dns(kubeconfig_data)
+        if rewritten:
+            try:
+                r2 = _try_connect(rewritten, env)
+                if r2.returncode == 0:
+                    kubeconfig_data = rewritten
+                    r = r2
+            except subprocess.TimeoutExpired:
+                pass
+
+    if r.returncode != 0:
+        raise RuntimeError(
+            f"Cannot connect to cluster {target}. "
+            f"Verify the kubeconfig is correct and the cluster is reachable.\n"
+            f"Error: {r.stderr.strip()[:200]}")
 
     return target, kubeconfig_data
+
+
+def _rewrite_kubeconfig_dns(kubeconfig_data: str) -> str:
+    """Rewrite kubeconfig hostnames to IPs when DNS doesn't resolve.
+
+    Extracts the API server hostname, resolves it to an IP using
+    alternative methods (system resolver, dig with external DNS),
+    and rewrites the kubeconfig with the IP and insecure-skip-tls-verify.
+    """
+    import yaml, socket
+    from urllib.parse import urlparse
+
+    try:
+        kc = yaml.safe_load(kubeconfig_data)
+    except Exception:
+        return None
+
+    changed = False
+    for cl in kc.get('clusters', []):
+        server = cl.get('cluster', {}).get('server', '')
+        if not server:
+            continue
+        parsed = urlparse(server)
+        hostname = parsed.hostname
+        if not hostname:
+            continue
+
+        ip = None
+        try:
+            ip = socket.gethostbyname(hostname)
+        except socket.gaierror:
+            for cmd in [
+                ['dig', '+short', hostname],
+                ['dig', '+short', hostname, '@8.8.8.8'],
+                ['nslookup', hostname, '8.8.8.8'],
+            ]:
+                try:
+                    r = subprocess.run(cmd, capture_output=True, text=True, timeout=5)
+                    if r.returncode == 0:
+                        for line in r.stdout.strip().split('\n'):
+                            line = line.strip()
+                            if line and line[0].isdigit() and '.' in line:
+                                ip = line.split()[-1]
+                                break
+                    if ip:
+                        break
+                except Exception:
+                    continue
+
+        if ip and ip != hostname:
+            port = parsed.port or 6443
+            cl['cluster']['server'] = f"https://{ip}:{port}"
+            cl['cluster']['insecure-skip-tls-verify'] = True
+            cl['cluster'].pop('certificate-authority-data', None)
+            changed = True
+
+    if changed:
+        return yaml.dump(kc, default_flow_style=False)
+    return None
 
 
 # ── Cluster CRUD ─────────────────────────────────────────────────────────────
