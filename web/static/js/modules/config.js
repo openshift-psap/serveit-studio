@@ -466,15 +466,18 @@ function restoreClusterResources() {
 
     // Build GPU display with vendor/model
     let gpuDisplay = `${data.total_gpus}`;
-    if (data.gpu_vendor && data.gpu_vendor !== 'unknown') {
+    if (data.gpu_warning) {
+        gpuDisplay = `<span style="color:#dc2626;">0 GPUs</span> <span style="color:#b45309;font-size:0.85em;">⚠️ ${data.gpu_warning}</span>`;
+    } else if (data.gpu_vendor && data.gpu_vendor !== 'unknown') {
         gpuDisplay += ` × ${data.gpu_vendor}`;
         if (data.gpu_model && data.gpu_model !== 'unknown') {
             gpuDisplay += ` ${data.gpu_model}`;
         }
+        gpuDisplay += ` (${Math.round(data.gpu_memory_per_gpu_mb / 1024)} GB each)`;
     } else {
         gpuDisplay += ` × ${data.gpu_type}`;
+        gpuDisplay += ` (${Math.round(data.gpu_memory_per_gpu_mb / 1024)} GB each)`;
     }
-    gpuDisplay += ` (${Math.round(data.gpu_memory_per_gpu_mb / 1024)} GB each)`;
 
     // Build provider and network information panel (always shown)
     let providerName = 'Unknown';

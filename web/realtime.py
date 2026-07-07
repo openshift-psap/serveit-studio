@@ -832,6 +832,14 @@ def handle_scan_cluster(data):
             'preset_nodes': os.environ.get('PRESET_NODES', '').split(',') if os.environ.get('PRESET_NODES') else None,
         }
 
+        if resources.total_gpus == 0 and infra_versions.get('gpu_operator'):
+            result['gpu_warning'] = (
+                f"GPU Operator {infra_versions['gpu_operator']} is installed but no GPUs are reported. "
+                f"The GPU operator ClusterPolicy may need to be applied or the device plugin pods may not be running."
+            )
+            log_to_ui(f'⚠️ GPU Operator detected ({infra_versions["gpu_operator"]}) but 0 GPUs reported — '
+                      f'check ClusterPolicy and device plugin pods', 'warning')
+
         emit('cluster_scan_result', result)
         log_to_ui('✅ Cluster scan complete', 'success')
 
