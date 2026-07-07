@@ -365,6 +365,9 @@
             <label for="cluster-proxy" style="margin-top:10px;">HTTPS Proxy <span style="color:#999;font-weight:400;">(optional)</span></label>
             <input type="text" id="cluster-proxy" placeholder="http://proxy.example.com:3128" autocomplete="off" style="margin-bottom:0;">
             <div style="font-size:0.8em;color:#999;margin-bottom:16px;">Required if the cluster API is only reachable through a proxy</div>
+            <label for="cluster-api-ip" style="margin-top:10px;">API Server IP <span style="color:#999;font-weight:400;">(optional)</span></label>
+            <input type="text" id="cluster-api-ip" placeholder="10.0.0.1" autocomplete="off" style="margin-bottom:0;">
+            <div style="font-size:0.8em;color:#999;margin-bottom:16px;">Override if the API hostname in the kubeconfig doesn't resolve from this network</div>
         </div>
         <label for="storage-class-select">Storage Class</label>
         <div style="display:flex;gap:8px;margin-bottom:16px;align-items:stretch;">
@@ -573,6 +576,7 @@ function saveCluster(){
         description: document.getElementById('new-cluster-description').value.trim() || null,
         kubeconfig: document.getElementById('remote-toggle').checked ? kubeconfigContent : null,
         proxy: document.getElementById('remote-toggle').checked ? (document.getElementById('cluster-proxy').value.trim() || null) : null,
+        api_server_ip: document.getElementById('cluster-api-ip').value.trim() || null,
         storage_class: document.getElementById('storage-class-select').value || null};
     fetch('/api/clusters',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)})
     .then(function(r){return r.json()})

@@ -59,7 +59,7 @@ def _sanitize(name: str) -> str:
     return s or 'unnamed'
 
 
-def _validate_kubeconfig(kubeconfig_data: str, proxy: str = None) -> tuple:
+def _validate_kubeconfig(kubeconfig_data: str, proxy: str = None, api_server_ip: str = None) -> tuple:
     """Validate kubeconfig connectivity and return (cluster_url, cleaned_kubeconfig).
 
     Tests each context in the kubeconfig to find one that connects to a
@@ -133,6 +133,11 @@ def _validate_kubeconfig(kubeconfig_data: str, proxy: str = None) -> tuple:
         env['HTTPS_PROXY'] = proxy
         env['https_proxy'] = proxy
 
+    if api_server_ip:
+        rewritten = _rewrite_kubeconfig_ip(kubeconfig_data, api_server_ip)
+        if rewritten:
+            kubeconfig_data = rewritten
+
     try:
         r = _try_connect(kubeconfig_data, env)
     except subprocess.TimeoutExpired:
@@ -153,12 +158,34 @@ def _validate_kubeconfig(kubeconfig_data: str, proxy: str = None) -> tuple:
                 pass
 
     if r.returncode != 0:
+        is_dns = 'lookup' in r.stderr.lower()
+        hint = (" The API hostname doesn't resolve from this network."
+                " Add the API server IP in the cluster settings." if is_dns else "")
         raise RuntimeError(
-            f"Cannot connect to cluster {target}. "
-            f"Verify the kubeconfig is correct and the cluster is reachable.\n"
+            f"Cannot connect to cluster {target}.{hint}\n"
             f"Error: {r.stderr.strip()[:200]}")
 
     return target, kubeconfig_data
+
+
+def _rewrite_kubeconfig_ip(kubeconfig_data: str, ip: str) -> str:
+    """Rewrite kubeconfig server URLs to use a specific IP."""
+    import yaml
+    from urllib.parse import urlparse
+    try:
+        kc = yaml.safe_load(kubeconfig_data)
+    except Exception:
+        return None
+    for cl in kc.get('clusters', []):
+        server = cl.get('cluster', {}).get('server', '')
+        if not server:
+            continue
+        parsed = urlparse(server)
+        port = parsed.port or 6443
+        cl['cluster']['server'] = f"https://{ip}:{port}"
+        cl['cluster']['insecure-skip-tls-verify'] = True
+        cl['cluster'].pop('certificate-authority-data', None)
+    return yaml.dump(kc, default_flow_style=False)
 
 
 def _rewrite_kubeconfig_dns(kubeconfig_data: str) -> str:
@@ -227,13 +254,14 @@ def create_cluster(owner_id: int, name: str, icon: str = '🖥️',
                    kubeconfig_data: str = None,
                    storage_class: str = None,
                    proxy: str = None,
+                   api_server_ip: str = None,
                    description: str = None) -> Dict:
     """Create a cluster entry. If kubeconfig is provided, validates it and stores as K8s Secret."""
     target_cluster = 'local'
     kubeconfig_secret = None
 
     if kubeconfig_data:
-        target_cluster, kubeconfig_data = _validate_kubeconfig(kubeconfig_data, proxy=proxy)
+        target_cluster, kubeconfig_data = _validate_kubeconfig(kubeconfig_data, proxy=proxy, api_server_ip=api_server_ip)
 
         # Check duplicate cluster URL
         with get_db() as conn:

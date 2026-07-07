@@ -115,6 +115,7 @@ def create_app():
         kubeconfig_data = data.get('kubeconfig')
         storage_class = data.get('storage_class') or os.environ.get('STORAGE_CLASS')
         proxy = data.get('proxy') or None
+        api_server_ip = data.get('api_server_ip') or None
         description = data.get('description') or None
 
         try:
@@ -124,6 +125,7 @@ def create_app():
                 kubeconfig_data=kubeconfig_data,
                 storage_class=storage_class,
                 proxy=proxy,
+                api_server_ip=api_server_ip,
                 description=description)
             return jsonify(result)
         except Exception as e:
