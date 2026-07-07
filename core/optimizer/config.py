@@ -99,6 +99,7 @@ class RecipeOptimizerConfig:
     rdma_network_annotation: Optional[str] = None  # Multus NAD annotation JSON
     selected_sriov_policies: Optional[List[str]] = None  # User-selected SR-IOV policy resourceNames
     sriov_same_subnet: bool = False  # All NICs share one L2 subnet
+    exclusive_pf: bool = False  # 1 VF per PF — each pod gets dedicated NICs
     selected_shared_device: Optional[str] = None  # Selected shared RDMA resource key
     selected_dra_classes: Optional[List[str]] = None  # User-selected DRA device classes
     gateway_class: str = 'istio'  # GatewayClass name (detected from cluster)

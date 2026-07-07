@@ -139,6 +139,26 @@ The system stores complete test configurations (`test_config_json`) in the datab
 
 When the optimization UI runs on one cluster (e.g., OpenShift) but test pods run on a remote cluster (e.g., vanilla K8s), the system automatically establishes a `kubectl port-forward` to the remote Prometheus service using the test cluster's kubeconfig. This enables vLLM metrics collection (KV cache utilization, queue depth, request rates) without requiring external Prometheus exposure or cross-cluster networking.
 
+**13. Concurrency Sweep with Little's Law Calibration**
+
+Step 11 computes calibrated concurrency for each winning configuration using Little's Law (`calibrated = throughput × (target_latency / observed_latency)`), then sweeps ~6 load levels from low to 1.5× calibrated. Pods are deployed once and only the benchmark is re-run at each level, so N levels cost N benchmark runs — not N deploy cycles. This discovers that the optimal configuration changes with load: a configuration that wins at low concurrency may be dominated by a different one at high concurrency.
+
+**14. Multi-Config Concurrency Sweep**
+
+When enabled, the system sweeps the top N configurations (ranked by TTFT-to-throughput ratio) across all concurrency levels, producing a complete performance map. This is the first system to automatically discover load-dependent crossover points between inference configurations — where Configuration A stops winning and Configuration B takes over.
+
+**15. Adaptive PD Search with Waiting Ratio Rebalancing**
+
+After each PD split test, the optimizer reads per-pod queue depths (`num_requests_waiting`) from Prometheus and computes the waiting ratio between decode and prefill pods. When imbalance exceeds a threshold (e.g., decode pods have 3× more queued requests than prefill), the optimizer dynamically shifts pods from the underloaded role to the overloaded role and re-tests. This discovers splits that the static mathematical formula cannot predict — cases where real-world queuing behavior differs from the theoretical balance point.
+
+**16. Smart MoE Dispatch Chunk Sizing**
+
+For Expert Parallelism (MoE models), the `moe_dp_chunk_size` parameter controls how many tokens are dispatched per expert per all-to-all communication round. The system computes this by balancing four constraints: (a) `S_sequences` — can't dispatch more than max_num_seqs, (b) `S_expert_capacity` — GPU activation memory per expert limits per-dispatch tokens, (c) `S_dispatch` — scales with `sqrt(num_experts × batch / TP)` to balance communication cost vs GPU utilization, and (d) a 512 cap. The minimum of all four is used, replacing upstream hardcoded values.
+
+**17. Smart NVSHMEM Symmetric Heap Sizing**
+
+The NVSHMEM symmetric heap is pre-allocated on each GPU for DeepEP's RDMA-based all-to-all communication. Upstream hardcodes this to 16 GB. The system computes the actual requirement from DeepEP's `LowLatencyLayout` formula: `rdma_size = batch × hidden × 2 × sizeof(float) + num_experts × batch × 3 × sizeof(int32)`, then applies a 1.25× safety margin plus 0.5 GB base, capped at 16 GB. This right-sizes the allocation — on models with fewer experts or smaller hidden dimensions, the savings can be 8–12 GB per GPU, freeing VRAM for KV cache.
+
 **Attached diagrams:** See `docs/diagrams.md` (12 Mermaid diagrams), `docs/optimization-math.md` (complete formula reference), `docs/supporting-material.md` (detection and lifecycle details).
 
 ---
@@ -167,6 +187,9 @@ When the optimization UI runs on one cluster (e.g., OpenShift) but test pods run
 6. **Profiled accuracy** — Memory utilization derived from actual vLLM pod logs, not theoretical estimates, eliminating OOM crashes and wasted VRAM.
 7. **Metrics-driven routing optimization** — EPP weights derived from measured Prometheus metrics (KV cache utilization, queue depth, active requests, cache hit rates) rather than heuristic presets.
 8. **Tail-latency-aware selection** — Pareto front uses P99 TTFT to prevent recommending configurations with good P90 but catastrophic tail latency.
+9. **Load-dependent optimization** — Concurrency sweep discovers that optimal configurations change with load, finding crossover points where one config stops winning and another takes over. No existing tool tests configurations across multiple load levels automatically.
+10. **Adaptive search from live metrics** — PD split search reads real queue depths after each test and rebalances pod counts dynamically, discovering splits that static formulas cannot predict.
+11. **MoE-aware parameter tuning** — Expert Parallelism dispatch chunk size and NVSHMEM heap size are computed from model architecture, not hardcoded — right-sizing memory allocation and communication buffers for each model.
 
 ---
 
@@ -225,6 +248,11 @@ The system produces several distinctive, externally observable signatures:
 5. **P99 Pareto front**: Using P99 TTFT (not the standard P90) for Pareto dominance in architecture selection.
 6. **Five-dimension EPP weights**: Weights derived from five specific vLLM Prometheus metrics (prefix cache hits, KV utilization, queue depth, active requests, TTFT P99) — observable in EPP/gateway configurations.
 7. **Cross-cluster Prometheus**: `kubectl port-forward` to remote Prometheus for metrics collection — observable in network traffic patterns.
+8. **Little's Law concurrency sweep**: Calibrated concurrency computed as `throughput × (target / observed)`, then sweeping ~6 levels to 1.5× — observable as a distinctive benchmark pattern (same pods, increasing concurrency, ~6 runs).
+9. **Multi-config sweep**: Top-N configurations swept across load levels — observable as multiple configurations tested at identical concurrency sequences, producing load-crossover analysis.
+10. **Queue-based PD rebalancing**: Per-pod `num_requests_waiting` read after each PD test, with pod count adjusted when waiting ratio exceeds threshold — observable in deployment patterns (pod count changing mid-optimization based on metrics).
+11. **Smart NVSHMEM sizing**: `NVSHMEM_SYMMETRIC_SIZE` computed from `batch × hidden × 2 × sizeof(float) + num_experts × batch × 3 × sizeof(int32)` instead of hardcoded 16G — observable in pod environment variables.
+12. **Four-factor moe_dp_chunk_size**: `min(S_sequences, S_expert_capacity, S_dispatch, 512)` with `S_dispatch = sqrt(experts × batch / TP)` — observable in vLLM command-line arguments.
 
 A competitor implementing these techniques would be detectable through their product documentation, API parameters, generated configuration files, published benchmarks, or observable deployment patterns during product evaluation.
 

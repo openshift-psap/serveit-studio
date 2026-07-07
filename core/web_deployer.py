@@ -62,6 +62,7 @@ class DeploymentConfig:
     agg_pods: int = 1
 
     num_nics: int = 8
+    exclusive_pf: bool = False
 
     pvc_name: str = "serveit-cache"
     kv_connector: str = "NixlConnector"
@@ -333,6 +334,30 @@ class BaseDeploymentGenerator(ABC):
     def generate(self, config: DeploymentConfig, network: NetworkIntegration) -> List[Dict[str, Any]]:
         pass
 
+    def _split_network_for_pod(self, network: NetworkIntegration, pod_index: int, total_pods: int, nics_per_pod: int) -> NetworkIntegration:
+        """Split network resources so each pod gets exclusive PFs."""
+        import json as _json, copy
+        ann = network.pod_annotations.get('k8s.v1.cni.cncf.io/networks', '')
+        try:
+            nad_list = _json.loads(ann) if ann.startswith('[') else [{'name': n.strip()} for n in ann.split(',') if n.strip()]
+        except Exception:
+            nad_list = [{'name': n.strip()} for n in ann.split(',') if n.strip()]
+
+        start = pod_index * nics_per_pod
+        pod_nads = nad_list[start:start + nics_per_pod]
+
+        new_ann = _json.dumps(pod_nads) if pod_nads and pod_nads[0].get('namespace') else ','.join(n['name'] for n in pod_nads)
+
+        split = copy.deepcopy(network)
+        split.pod_annotations = dict(network.pod_annotations)
+        split.pod_annotations['k8s.v1.cni.cncf.io/networks'] = new_ann
+
+        sr_keys = list(network.container_resources.keys())
+        pod_keys = sr_keys[start:start + nics_per_pod] if len(sr_keys) > nics_per_pod else sr_keys
+        split.container_resources = {k: network.container_resources[k] for k in pod_keys}
+
+        return split
+
     def _apply_network_to_pod_spec(self, pod_spec: Dict[str, Any], network: NetworkIntegration) -> Dict[str, Any]:
         if network.pod_annotations:
             pod_spec.setdefault('metadata', {}).setdefault('annotations', {}).update(network.pod_annotations)
@@ -558,14 +583,38 @@ class PDDeploymentGenerator(BaseDeploymentGenerator):
 
     def generate(self, config: DeploymentConfig, network: NetworkIntegration) -> List[Dict[str, Any]]:
         resources = []
-        resources.append(self._generate_prefill_lws(config, network))
-        resources.append(self._generate_prefill_service(config))
-        resources.append(self._generate_decode_lws(config, network))
-        resources.append(self._generate_decode_service(config))
-        self.logger.info(f"Generated PD deployment: {config.prefill_pods} prefill, {config.decode_pods} decode pods")
+        if config.exclusive_pf:
+            total_nads = len(self._parse_nad_list(network))
+            for role, pod_count, tp in [('prefill', config.prefill_pods, config.prefill_tp),
+                                         ('decode', config.decode_pods, config.decode_tp)]:
+                nics_per_pod = total_nads // (config.prefill_pods + config.decode_pods) if total_nads else tp
+                for i in range(pod_count):
+                    offset = i if role == 'prefill' else config.prefill_pods + i
+                    pod_network = self._split_network_for_pod(network, offset, config.prefill_pods + config.decode_pods, nics_per_pod)
+                    gen_fn = self._generate_prefill_lws if role == 'prefill' else self._generate_decode_lws
+                    lws = gen_fn(config, pod_network, replica_index=i)
+                    lws['spec']['replicas'] = 1
+                    lws['metadata']['name'] = f"{config.test_id}-{role}-{i}"
+                    resources.append(lws)
+                resources.append(self._generate_prefill_service(config) if role == 'prefill' else self._generate_decode_service(config))
+        else:
+            resources.append(self._generate_prefill_lws(config, network))
+            resources.append(self._generate_prefill_service(config))
+            resources.append(self._generate_decode_lws(config, network))
+            resources.append(self._generate_decode_service(config))
+        self.logger.info(f"Generated PD deployment: {config.prefill_pods} prefill, {config.decode_pods} decode pods"
+                         f"{' (exclusive PF)' if config.exclusive_pf else ''}")
         return resources
 
-    def _generate_prefill_lws(self, config: DeploymentConfig, network: NetworkIntegration) -> Dict[str, Any]:
+    def _parse_nad_list(self, network: NetworkIntegration) -> list:
+        import json as _json
+        ann = network.pod_annotations.get('k8s.v1.cni.cncf.io/networks', '')
+        try:
+            return _json.loads(ann) if ann.startswith('[') else [{'name': n.strip()} for n in ann.split(',') if n.strip()]
+        except Exception:
+            return [{'name': n.strip()} for n in ann.split(',') if n.strip()]
+
+    def _generate_prefill_lws(self, config: DeploymentConfig, network: NetworkIntegration, replica_index: int = None) -> Dict[str, Any]:
         labels = self._build_common_labels(config)
         labels.update({'role': 'prefill', 'llm-d.ai/role': 'prefill', 'llm-d.ai/inference-serving': 'true'})
 
@@ -599,7 +648,7 @@ class PDDeploymentGenerator(BaseDeploymentGenerator):
             },
         }
 
-    def _generate_decode_lws(self, config: DeploymentConfig, network: NetworkIntegration) -> Dict[str, Any]:
+    def _generate_decode_lws(self, config: DeploymentConfig, network: NetworkIntegration, replica_index: int = None) -> Dict[str, Any]:
         labels = self._build_common_labels(config)
         labels.update({'role': 'decode', 'llm-d.ai/role': 'decode', 'llm-d.ai/inference-serving': 'true'})
 
@@ -826,6 +875,7 @@ class DeploymentOrchestrator:
             num_experts=test_config.get('num_experts', 256),
             agg_pods=test_config.get('agg_pods', 1),
             num_nics=test_config.get('num_nics', test_config.get('tensor_parallelism', 1)),
+            exclusive_pf=test_config.get('exclusive_pf', False),
             pvc_name=test_config.get('pvc_name', 'serveit-cache'),
             kv_connector=test_config.get('kv_connector', 'NixlConnector'),
             gpu_memory_utilization=test_config.get('gpu_memory_utilization', 0.95),

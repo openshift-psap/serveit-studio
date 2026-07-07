@@ -761,6 +761,7 @@ def run_optimization_background(data):
         rdma_network_annotation = _get('rdma_network_annotation')
         selected_sriov_policies = _get('selected_sriov_policies') or []
         sriov_same_subnet = _get('sriov_same_subnet', False)
+        exclusive_pf = _get('exclusive_pf', False)
         selected_shared_device = _get('selected_shared_device')
         selected_dra_classes = _get('selected_dra_classes') or []
         gateway_class = _get('gateway_class', 'istio')
@@ -1009,6 +1010,7 @@ data:
                 rdma_network_annotation=rdma_network_annotation,
                 selected_sriov_policies=selected_sriov_policies,
                 sriov_same_subnet=sriov_same_subnet,
+                exclusive_pf=exclusive_pf,
                 selected_shared_device=selected_shared_device,
                 selected_dra_classes=selected_dra_classes,
                 gateway_class=gateway_class,

@@ -526,6 +526,13 @@ socket.on('cluster_scan_result', function(data) {
                 sameSubnet,
                 "config.sriov_same_subnet=on;saveConfig();"
             );
+            // Exclusive PF toggle
+            var exclusivePf = config.exclusive_pf || false;
+            srHtml += _toggleSwitch(
+                '<span style="font-size:0.85em;color:#581c87;"><strong>Exclusive PF</strong> — each pod gets dedicated NICs (1 VF per PF). Required when firmware limits RDMA to 1 VF per physical function.</span>',
+                exclusivePf,
+                "config.exclusive_pf=on;saveConfig();"
+            );
             srHtml += '</div></div>';
 
             var insertAfter = document.getElementById('nad-selector-section') || networkCards;

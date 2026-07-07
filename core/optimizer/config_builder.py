@@ -119,6 +119,7 @@ class ConfigBuilderMixin:
             rdma_network_annotation=self.config.rdma_network_annotation,
             selected_dra_classes=self.config.selected_dra_classes or [],
             gateway_class=self.config.gateway_class,
+            exclusive_pf=getattr(self.config, 'exclusive_pf', False),
 
             memory_request=mem,
             memory_limit=mem,
@@ -615,6 +616,7 @@ class ConfigBuilderMixin:
             rdma_network_annotation=self.config.rdma_network_annotation,
             selected_dra_classes=self.config.selected_dra_classes or [],
             gateway_class=self.config.gateway_class,
+            exclusive_pf=getattr(self.config, 'exclusive_pf', False),
 
             memory_request=mem,
             memory_limit=mem,
@@ -786,6 +788,7 @@ class ConfigBuilderMixin:
             rdma_network_annotation=self.config.rdma_network_annotation,
             selected_dra_classes=self.config.selected_dra_classes or [],
             gateway_class=self.config.gateway_class,
+            exclusive_pf=getattr(self.config, 'exclusive_pf', False),
 
             memory_request=mem,
             memory_limit=mem,
