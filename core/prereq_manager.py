@@ -861,9 +861,15 @@ class PrereqManager:
         node_nfs_pvcs = []
         pvc_size = getattr(config, 'pvc_size', None) or '200Gi'
         for node in gpu_nodes:
-            # Extract suffix from node short hostname (strip domain, take last segment)
+            # Match the node to an nfs-<suffix> storage class
             short_name = node.split('.')[0]
-            suffix = short_name.split('-')[-1]
+            suffix = None
+            for nfs_suffix in nfs_classes:
+                if nfs_suffix in node:
+                    suffix = nfs_suffix
+                    break
+            if not suffix:
+                suffix = short_name.split('-')[-1]
             pvc_name = f"model-cache-{suffix}"
             node_nfs_pvcs.append({'suffix': suffix, 'pvc_name': pvc_name})
 
