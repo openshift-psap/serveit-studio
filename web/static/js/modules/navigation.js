@@ -9,7 +9,7 @@ function selectNetwork(netId) {
         card.style.background = selected ? '#F0F9FA' : 'white';
     });
     var nadSection = document.getElementById('nad-selector-section');
-    if (nadSection) nadSection.style.display = ((netId === 'nad' || netId === 'nmstate') && window._availableNads && window._availableNads.length > 0) ? 'block' : 'none';
+    if (nadSection) nadSection.style.display = ((netId === 'nad' || netId === 'nmstate' || netId === 'shared_device') && window._availableNads && window._availableNads.length > 0) ? 'block' : 'none';
     var sriovSection = document.getElementById('sriov-policy-section');
     if (sriovSection) sriovSection.style.display = (netId === 'sriov_multinic' && window._sriovPolicies && window._sriovPolicies.length > 0) ? 'block' : 'none';
     var sharedSection = document.getElementById('shared-device-section');
@@ -449,7 +449,7 @@ socket.on('cluster_scan_result', function(data) {
         window._availableNads = allNads;
 
         if (allNads.length > 0) {
-            var showNadInit = (savedNetwork === 'nad' || savedNetwork === 'nmstate');
+            var showNadInit = (savedNetwork === 'nad' || savedNetwork === 'nmstate' || savedNetwork === 'shared_device');
             var savedNadList = [];
             try { savedNadList = JSON.parse(config.rdma_network_annotation || '[]'); } catch(e) {}
             var savedNadNames = savedNadList.map(function(n) { return n.name; });

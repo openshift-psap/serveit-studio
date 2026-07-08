@@ -111,6 +111,14 @@ def compute_network_values(
                 'value': '1'
             })
         values['rdma_network_annotation'] = rdma_network_annotation
+    elif network_type == 'shared_device' and rdma_device_resources:
+        for resource_key in rdma_device_resources:
+            values['extra_device_resources'].append({
+                'key': resource_key,
+                'value': '1'
+            })
+        if rdma_network_annotation:
+            values['rdma_network_annotation'] = rdma_network_annotation
 
     values['use_anti_affinity'] = (
         network_type in ('nad', 'nmstate')
