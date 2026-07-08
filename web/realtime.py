@@ -601,7 +601,11 @@ def _check_lws_vct(scanner):
     return False
 
 def _detect_node_nfs_classes(scanner, resources):
-    """Detect NFS storage classes that match GPU node name suffixes (nfs-<suffix>)."""
+    """Detect NFS storage classes for per-node storage (nfs-<suffix>).
+
+    First tries to match nfs-<suffix> to GPU node names. If no match,
+    returns all nfs-* storage classes so the user can select them.
+    """
     try:
         nfs_classes = {}
         for sc in resources.storage_classes:
@@ -616,10 +620,15 @@ def _detect_node_nfs_classes(scanner, resources):
         result = []
         for node in gpu_nodes:
             for suffix, sc_name in nfs_classes.items():
-                if node.endswith(suffix):
+                if suffix in node:
                     result.append({'suffix': suffix, 'sc_name': sc_name, 'node': node})
                     break
-        return result
+
+        if result:
+            return result
+
+        # No node match — return all nfs-* classes for user selection
+        return [{'suffix': suffix, 'sc_name': sc_name, 'node': ''} for suffix, sc_name in nfs_classes.items()]
     except Exception:
         return []
 
