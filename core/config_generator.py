@@ -88,6 +88,7 @@ class TestConfig:
     rdma_network_annotation: Optional[str] = None  # Multus NAD annotation JSON for sriov_multinic
     selected_dra_classes: Optional[List[str]] = None  # User-selected DRA device classes
     gateway_class: str = 'istio'  # GatewayClass name (detected from cluster)
+    exclusive_pf: bool = False  # 1 VF per PF — each pod gets dedicated NICs
 
     # Per-node storage (one NFS PVC per node, symlinked at runtime)
     per_node_storage: bool = False
