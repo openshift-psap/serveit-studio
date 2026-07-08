@@ -39,7 +39,11 @@ function renderClusterDiagram(container, data) {
 
     // Summary bar
     html += '<div class="viz-summary">';
-    html += '<div class="viz-stat"><div class="viz-stat-value">' + s.total_gpus + '</div><div class="viz-stat-label">Total GPUs</div></div>';
+    if (s.gpu_warning) {
+        html += '<div class="viz-stat"><div class="viz-stat-value" style="color:#dc2626">0</div><div class="viz-stat-label">Total GPUs</div></div>';
+    } else {
+        html += '<div class="viz-stat"><div class="viz-stat-value">' + s.total_gpus + '</div><div class="viz-stat-label">Total GPUs</div></div>';
+    }
     var inUse = s.gpus_in_use || 0;
     var avail = s.gpus_available != null ? s.gpus_available : s.total_gpus;
     var usageColor = inUse > 0 ? (avail > 0 ? '#F0AB00' : '#dc2626') : '#3BAA3B';
@@ -50,6 +54,11 @@ function renderClusterDiagram(container, data) {
     html += '<div class="viz-stat"><div class="viz-stat-value">' + (s.has_rdma ? 'Yes' : 'No') + '</div><div class="viz-stat-label">RDMA</div></div>';
     html += '<div class="viz-stat"><div class="viz-stat-value">' + (s.cloud_provider || 'unknown') + '</div><div class="viz-stat-label">Provider</div></div>';
     html += '</div>';
+
+    // GPU warning banner
+    if (s.gpu_warning) {
+        html += '<div style="background:#fef3c7;border:1px solid #f59e0b;border-radius:8px;padding:10px 14px;margin:10px 0;font-size:0.85em;color:#92400e;">⚠️ ' + s.gpu_warning + '</div>';
+    }
 
     // Infrastructure component versions — same viz-summary/viz-stat style
     if (data.infra_versions && Object.keys(data.infra_versions).length > 0) {

@@ -146,7 +146,19 @@ def scan_cluster_resources(cluster: Dict, namespace: str = 'serveit', proxy: str
             if versions:
                 result['infra_versions'] = versions
         except Exception:
-            pass
+            versions = {}
+
+        # GPU warning
+        if resources.total_gpus == 0:
+            if versions.get('gpu_operator'):
+                result['summary']['gpu_warning'] = (
+                    f"GPU Operator {versions['gpu_operator']} is installed but no GPUs are reported. "
+                    f"The ClusterPolicy may need to be applied or the device plugin pods may not be running."
+                )
+            else:
+                result['summary']['gpu_warning'] = (
+                    "No GPU Operator installed. Install the NVIDIA GPU Operator to enable GPU resources on this cluster."
+                )
 
         return result
     finally:
