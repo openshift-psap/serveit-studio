@@ -200,23 +200,35 @@ data:
     fi
 
     # --- In shared_device mode, prefer native IB over RoCE if both exist ---
+    # Only prefer IB if the IB devices have valid GIDs (are actually usable).
+    # On some systems (e.g., Dell XE9680L), IB devices are NVLink management
+    # NICs with no GIDs, while RoCE SuperNICs have valid GIDs for compute.
     if [[ "$NETWORK_MODE" == "shared_device" && "{{ '${#' }}all_hcas[@]}" -gt 0 ]]; then
-        has_ib=false
+        ib_with_gids=()
+        roce_with_gids=()
         for hca in "${all_hcas[@]}"; do
             ll=$(cat "/sys/class/infiniband/$hca/ports/1/link_layer" 2>/dev/null || true)
-            if [[ "$ll" == "InfiniBand" ]]; then has_ib=true; break; fi
-        done
-        if [[ "$has_ib" == true ]]; then
-            ib_only=()
-            for hca in "${all_hcas[@]}"; do
-                ll=$(cat "/sys/class/infiniband/$hca/ports/1/link_layer" 2>/dev/null || true)
-                if [[ "$ll" == "InfiniBand" ]]; then
-                    ib_only+=("$hca")
-                else
-                    echo "Filtering out $hca (RoCE, native IB available)" >&2
+            has_gid=false
+            for gid_file in /sys/class/infiniband/$hca/ports/1/gids/*; do
+                gid=$(cat "$gid_file" 2>/dev/null || true)
+                if [[ -n "$gid" && "$gid" != "0000:0000:0000:0000:0000:0000:0000:0000" && "$gid" != "fe80:"* ]]; then
+                    has_gid=true; break
                 fi
             done
-            all_hcas=("${ib_only[@]}")
+            if [[ "$ll" == "InfiniBand" ]]; then
+                if [[ "$has_gid" == true ]]; then ib_with_gids+=("$hca"); fi
+            else
+                if [[ "$has_gid" == true ]]; then roce_with_gids+=("$hca"); fi
+            fi
+        done
+        if [[ "{{ '${#' }}ib_with_gids[@]}" -gt 0 ]]; then
+            all_hcas=("${ib_with_gids[@]}")
+            echo "--- Prefer IB: {{ '${#' }}ib_with_gids[@]} IB HCAs with valid GIDs ---" >&2
+        elif [[ "{{ '${#' }}roce_with_gids[@]}" -gt 0 ]]; then
+            all_hcas=("${roce_with_gids[@]}")
+            echo "--- No usable IB HCAs, using {{ '${#' }}roce_with_gids[@]} RoCE HCAs with valid GIDs ---" >&2
+        else
+            echo "--- Warning: no HCAs with valid GIDs found, keeping all ---" >&2
         fi
     fi
 
