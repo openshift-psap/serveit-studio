@@ -144,7 +144,8 @@ spec:
               PRIMARY_SIZE_H=$(du -sh "$PRIMARY/$MODEL_CACHE_NAME" | cut -f1)
               COPY_START=$(date +%s)
 {% for nfs in node_nfs_pvcs[1:] %}
-              rsync -rl --size-only --no-perms --no-owner --no-group "$PRIMARY/$MODEL_CACHE_NAME/" "/nfs-{{ nfs.suffix }}/huggingface/$MODEL_CACHE_NAME/" 2>/dev/null &
+              mkdir -p "/nfs-{{ nfs.suffix }}/huggingface"
+              rsync -rL --size-only --no-perms --no-owner --no-group --exclude='trees/' "$PRIMARY/$MODEL_CACHE_NAME/" "/nfs-{{ nfs.suffix }}/huggingface/$MODEL_CACHE_NAME/" &
 {% endfor %}
               echo "⏳ Waiting for rsync to complete..."
               wait
