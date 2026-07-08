@@ -380,9 +380,11 @@ class PrereqManager:
             return True
 
         except Exception as e:
-            log(f'❌ Failed to deploy prerequisites: {str(e)}')
             import traceback
-            traceback.print_exc()
+            tb = traceback.format_exc()
+            log(f'❌ Failed to deploy prerequisites: {str(e)}')
+            for line in tb.strip().splitlines():
+                log(f'   {line}')
             return False
 
     def update_epp_config(self, architecture: str, epp_config: dict,
