@@ -836,6 +836,27 @@ class PrereqManager:
                     sc = sc.strip()
                     if sc.startswith('nfs-') and sc != 'nfs':
                         nfs_classes[sc[4:]] = sc
+                        self._ensure_nfs_mount_options(sc, log)
+
+    def _ensure_nfs_mount_options(self, sc_name, log=None):
+        """Ensure NFS storage class has vers=3 mount option (NFSv3 fallback)."""
+        r = self.kubectl.run([
+            'get', 'sc', sc_name, '-o', 'jsonpath={.mountOptions}'], check=False)
+        if r.returncode == 0 and 'vers=3' not in (r.stdout or ''):
+            import yaml as _yaml
+            r2 = self.kubectl.run(['get', 'sc', sc_name, '-o', 'json'], check=False)
+            if r2.returncode == 0:
+                import json as _json
+                sc_obj = _json.loads(r2.stdout)
+                sc_obj['mountOptions'] = ['vers=3']
+                sc_obj['metadata'] = {'name': sc_name}
+                for k in ['uid', 'resourceVersion', 'creationTimestamp', 'managedFields']:
+                    sc_obj.get('metadata', {}).pop(k, None)
+                sc_obj.pop('status', None)
+                self.kubectl.run(['delete', 'sc', sc_name], check=False)
+                self.kubectl.run(['apply', '-f', '-'], input_data=_json.dumps(sc_obj), check=False)
+                if log:
+                    log(f'   🔧 Patched {sc_name} with mountOptions: [vers=3]')
 
         node_nfs_pvcs = []
         pvc_size = getattr(config, 'pvc_size', None) or '200Gi'
