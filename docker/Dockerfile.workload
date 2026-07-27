@@ -9,14 +9,10 @@ RUN \
     dnf install -y \
         python3.11 python3.11-devel \
         procps jq wget \
-        # Network debugging
-        iputils net-tools bind-utils traceroute \
+        iputils net-tools bind-utils \
         ethtool nmap-ncat \
-        # RDMA/InfiniBand tools
-        rdma-core libibverbs-utils infiniband-diags \
-        # Performance tools
-        qperf iperf3 \
     && \
+    dnf install -y traceroute rdma-core libibverbs-utils infiniband-diags qperf iperf3 || true && \
     python3.11 -m ensurepip --upgrade && \
     python3.11 -m pip install --upgrade pip setuptools --no-cache-dir && \
     dnf clean all && rm -rf /var/cache/dnf/* && \
