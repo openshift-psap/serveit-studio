@@ -306,22 +306,27 @@ def create_cluster(owner_id: int, name: str, icon: str = '🖥️',
     return {'id': cid, 'name': name, 'icon': icon, 'target_cluster': target_cluster}
 
 
-def delete_cluster(cluster_id: int, owner_id: int) -> bool:
+def delete_cluster(cluster_id: int, owner_id: int, is_admin: bool = False) -> bool:
     with get_db() as conn:
-        row = conn.execute(
-            'SELECT * FROM clusters WHERE id = ? AND owner_id = ?',
-            (cluster_id, owner_id)
-        ).fetchone()
+        if is_admin:
+            row = conn.execute(
+                'SELECT * FROM clusters WHERE id = ?', (cluster_id,)
+            ).fetchone()
+        else:
+            row = conn.execute(
+                'SELECT * FROM clusters WHERE id = ? AND owner_id = ?',
+                (cluster_id, owner_id)
+            ).fetchone()
         if not row:
             return False
         row = dict(row)
         instances = conn.execute(
-            'SELECT id FROM instances WHERE cluster_id = ? AND owner_id = ?',
-            (cluster_id, owner_id)
+            'SELECT id FROM instances WHERE cluster_id = ?',
+            (cluster_id,)
         ).fetchall()
 
     for inst in instances:
-        delete_instance(inst['id'], owner_id)
+        delete_instance(inst['id'], row['owner_id'])
 
     # Delete kubeconfig secret if it exists
     if row.get('kubeconfig_secret'):

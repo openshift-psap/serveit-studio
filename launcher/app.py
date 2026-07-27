@@ -135,7 +135,8 @@ def create_app():
 
     @app.route('/api/clusters/<int:cluster_id>', methods=['DELETE'])
     def api_delete_cluster(cluster_id):
-        success = instance_manager.delete_cluster(cluster_id, get_user_id())
+        user_id = get_user_id()
+        success = instance_manager.delete_cluster(cluster_id, user_id, is_admin=is_admin())
         if success:
             return jsonify({'ok': True})
         return jsonify({'error': 'Cluster not found'}), 404
