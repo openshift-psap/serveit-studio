@@ -34,10 +34,11 @@ RUN python3.11 -m pip install --no-cache-dir \
     PyYAML \
     huggingface_hub
 
-# kubectl (for endpoint discovery, log streaming)
+# kubectl (multi-arch)
 RUN KUBECTL_VERSION="1.30.2" && \
+    ARCH=$(uname -m | sed 's/x86_64/amd64/;s/aarch64/arm64/') && \
     curl -sLo /usr/local/bin/kubectl \
-        "https://dl.k8s.io/release/v${KUBECTL_VERSION}/bin/linux/amd64/kubectl" && \
+        "https://dl.k8s.io/release/v${KUBECTL_VERSION}/bin/linux/${ARCH}/kubectl" && \
     chmod +x /usr/local/bin/kubectl
 
 WORKDIR /app

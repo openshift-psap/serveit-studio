@@ -291,7 +291,41 @@ def preflight_checks(cmd: str, namespace: str, mode: str = 'local'):
 
 # ── Main ─────────────────────────────────────────────────────────────────────
 
+def check_dependencies():
+    missing = []
+
+    try:
+        import jinja2
+    except ImportError:
+        missing.append(('jinja2', 'pip3 install jinja2'))
+
+    try:
+        subprocess.run(['kubectl', 'version', '--client'], capture_output=True, timeout=10)
+    except (FileNotFoundError, subprocess.TimeoutExpired):
+        missing.append(('kubectl', 'https://kubernetes.io/docs/tasks/tools/install-kubectl/'))
+
+    if not missing:
+        return
+
+    print("❌ Missing dependencies:", file=sys.stderr)
+    for name, fix in missing:
+        print(f"   • {name} — install with: {fix}", file=sys.stderr)
+
+    pip_deps = [name for name, fix in missing if fix.startswith('pip')]
+    if pip_deps:
+        install_cmd = f"pip3 install {' '.join(pip_deps)}"
+        answer = input(f"\nInstall Python dependencies now? ({install_cmd}) [y/N] ").strip().lower()
+        if answer == 'y':
+            subprocess.run([sys.executable, '-m', 'pip', 'install'] + pip_deps)
+            print("✅ Dependencies installed. Re-run the deploy command.", file=sys.stderr)
+        sys.exit(1)
+
+    sys.exit(1)
+
+
 def main():
+    check_dependencies()
+
     p = argparse.ArgumentParser(
         prog='deploy.py',
         description='ServeIt Studio Deployer — deploy, sync, and manage on Kubernetes',

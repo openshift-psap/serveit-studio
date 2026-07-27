@@ -40,15 +40,23 @@ RUN python3.11 -m pip install --no-cache-dir \
     transformers \
     mlflow
 
-# kubectl + oc
+# kubectl + oc (multi-arch)
 RUN KUBECTL_VERSION="1.30.2" && \
+    ARCH=$(uname -m | sed 's/x86_64/amd64/;s/aarch64/arm64/') && \
     curl -sLo /usr/local/bin/kubectl \
-        "https://dl.k8s.io/release/v${KUBECTL_VERSION}/bin/linux/amd64/kubectl" && \
+        "https://dl.k8s.io/release/v${KUBECTL_VERSION}/bin/linux/${ARCH}/kubectl" && \
     chmod +x /usr/local/bin/kubectl && \
-    curl -sLo /tmp/oc.tar.gz \
-        "https://mirror.openshift.com/pub/openshift-v4/clients/ocp/stable/openshift-client-linux.tar.gz" && \
-    tar xzf /tmp/oc.tar.gz -C /usr/local/bin oc && \
-    rm -f /tmp/oc.tar.gz
+    if [ "$ARCH" = "amd64" ]; then \
+        curl -sLo /tmp/oc.tar.gz \
+            "https://mirror.openshift.com/pub/openshift-v4/clients/ocp/stable/openshift-client-linux.tar.gz" && \
+        tar xzf /tmp/oc.tar.gz -C /usr/local/bin oc && \
+        rm -f /tmp/oc.tar.gz; \
+    elif [ "$ARCH" = "arm64" ]; then \
+        curl -sLo /tmp/oc.tar.gz \
+            "https://mirror.openshift.com/pub/openshift-v4/clients/ocp/stable/openshift-client-linux-arm64.tar.gz" && \
+        tar xzf /tmp/oc.tar.gz -C /usr/local/bin oc && \
+        rm -f /tmp/oc.tar.gz; \
+    fi
 
 # Git deploy key (read-only, temporary until repo goes public)
 # Stored in /etc/inftune-ssh/ so non-root users can access it
