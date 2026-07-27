@@ -668,9 +668,20 @@ function saveEditCluster() {
 
 function deleteCluster(id, name){
     showConfirm('Delete Cluster', 'Delete cluster "'+name+'"?', 'This will also delete ALL instances in this cluster and their data.', 'Delete Cluster', function(){
+        var btn=document.querySelector('.cluster-item[data-id="'+id+'"]');
+        if(btn){btn.style.opacity='0.5';btn.style.pointerEvents='none';btn.querySelector('.name').innerHTML='<span style="color:#888">Deleting…</span>';}
         fetch('/api/clusters/'+id,{method:'DELETE'})
         .then(function(r){return r.json()})
-        .then(function(data){ if(data.ok){ if(id===currentClusterId) localStorage.removeItem('selectedClusterId'); location.reload(); } else showWarn('Error', data.error||'Failed'); });
+        .then(function(data){
+            if(data.ok){
+                if(id===currentClusterId) localStorage.removeItem('selectedClusterId');
+                if(btn){btn.style.transition='opacity 0.3s';btn.style.opacity='0';setTimeout(function(){btn.remove()},300);}
+                loadClusters();
+            } else {
+                showWarn('Error', data.error||'Failed');
+                if(btn){btn.style.opacity='';btn.style.pointerEvents='';}
+            }
+        });
     });
 }
 
@@ -1091,7 +1102,8 @@ function loadClusters(){
             b.onclick=function(){selectCluster(g.id)};
             var esc = g.name.replace(/'/g,"\\'");
             var escDesc = (g.description||'').replace(/'/g,"\\'");
-            var actions = g.is_cluster_owner ? '<span class="cluster-actions"><span class="cl-btn" onclick="event.stopPropagation();editCluster('+g.id+',\''+esc+'\',\''+g.icon+'\',\''+escDesc+'\')" title="Edit">✏️</span><span class="cl-btn cl-del" onclick="event.stopPropagation();deleteCluster('+g.id+',\''+esc+'\')" title="Delete">&times;</span></span>' : '';
+            var canManage = g.is_cluster_owner || IS_ADMIN;
+            var actions = canManage ? '<span class="cluster-actions"><span class="cl-btn" onclick="event.stopPropagation();editCluster('+g.id+',\''+esc+'\',\''+g.icon+'\',\''+escDesc+'\')" title="Edit">✏️</span><span class="cl-btn cl-del" onclick="event.stopPropagation();deleteCluster('+g.id+',\''+esc+'\')" title="Delete">&times;</span></span>' : '';
             b.innerHTML='<span class="icon">'+g.icon+'</span><span class="name">'+g.name+'<span class="target">'+(g.description||'')+'</span></span><span class="count">'+g.instance_count+'</span>'+actions;
             list.appendChild(b);
         });
