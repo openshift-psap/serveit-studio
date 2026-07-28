@@ -239,6 +239,7 @@ spec:
 {% endif %}{% if tool_call_parser %}                  --tool-call-parser {{ tool_call_parser }} \
 {% endif %}{% if reasoning_parser %}                  --reasoning-parser {{ reasoning_parser }} \
 {% endif %}{% if chat_template_content_format %}                  --chat-template-content-format {{ chat_template_content_format }} \
+{% endif %}{% if model_loader_extra_config %}                  --model-loader-extra-config '{{ model_loader_extra_config }}' \
 {% endif %}{% if extra_vllm_args %}                  {{ extra_vllm_args }} \
 {% endif %}                  --disable-uvicorn-access-log \
                   || sleep infinity
@@ -317,6 +318,18 @@ spec:
                 value: "{{ data_parallelism }}"
               - name: DP_SIZE_LOCAL
                 value: "{{ data_parallelism }}"
+{% if http_timeout_keep_alive %}
+              - name: VLLM_HTTP_TIMEOUT_KEEP_ALIVE
+                value: "{{ http_timeout_keep_alive }}"
+{% endif %}
+{% if prefix_cache_retention is not none %}
+              - name: VLLM_PREFIX_CACHE_RETENTION_INTERVAL
+                value: "{{ prefix_cache_retention }}"
+{% endif %}
+{% if ssm_conv_state_layout %}
+              - name: VLLM_SSM_CONV_STATE_LAYOUT
+                value: "{{ ssm_conv_state_layout }}"
+{% endif %}
 {% if extra_env_vars %}{% for env in extra_env_vars %}
               - name: {{ env.name }}
                 value: "{{ env.value }}"

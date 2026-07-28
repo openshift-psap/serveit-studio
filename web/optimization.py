@@ -752,6 +752,7 @@ def run_optimization_background(data):
         prefix_cache_mode = _get('prefix_cache_mode', 'identical')
         prefix_cache_groups = int(_get('prefix_cache_groups', 5))
         advanced_vllm = _get('advanced_vllm')
+        extra_env_vars = _get('extra_env_vars')
         headroom_setting = (advanced_vllm or {}).get('headroom', {})
         headroom = float(headroom_setting.get('value')) if headroom_setting.get('mode') == 'custom' and headroom_setting.get('value') else 1.3
         mem_reserve_setting = (advanced_vllm or {}).get('memory-reserve-pct', {})
@@ -1019,6 +1020,7 @@ data:
                 storage_class=storage_class,
                 pvc_size=pvc_size,
                 advanced_vllm=advanced_vllm,
+                extra_env_vars=extra_env_vars,
                 single_test_architecture=single_test_architecture,
                 single_test_tp=int(single_test_tp) if single_test_tp else None,
                 single_test_replicas=int(single_test_replicas) if single_test_replicas else None,

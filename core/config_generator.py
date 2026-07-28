@@ -142,6 +142,12 @@ class TestConfig:
     # Model-specific flags
     reasoning_parser: Optional[str] = None
     chat_template_content_format: Optional[str] = None
+    model_loader_extra_config: Optional[str] = None
+    cpu_offload_gb: Optional[int] = None
+    http_timeout_keep_alive: Optional[int] = None
+    prefix_cache_retention: Optional[int] = None
+    ssm_conv_state_layout: Optional[str] = None
+    enable_bidirectional_kv: Optional[bool] = None
 
     # Raw vLLM extra args (user-provided text, appended to vllm serve command)
     extra_vllm_args: Optional[str] = None

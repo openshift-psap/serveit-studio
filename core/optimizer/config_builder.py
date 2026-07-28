@@ -443,12 +443,18 @@ class ConfigBuilderMixin:
             'all2all_backend': 'all2all_backend',
             'dbo_prefill_token_threshold': 'dbo_prefill_token_threshold',
             'dbo_decode_token_threshold': 'dbo_decode_token_threshold',
+            'model_loader_extra_config': 'model_loader_extra_config',
+            'cpu_offload_gb': 'cpu_offload_gb',
+            'http_timeout_keep_alive': 'http_timeout_keep_alive',
+            'prefix_cache_retention': 'prefix_cache_retention',
+            'ssm_conv_state_layout': 'ssm_conv_state_layout',
         }
         for key, attr in val_fields.items():
             setting = adv.get(key)
             if setting and setting.get('mode') == 'custom' and setting.get('value') is not None:
                 val = setting['value']
-                if attr in ('max_model_len', 'max_num_seqs', 'max_num_batched_tokens', 'pipeline_parallel_size', 'block_size'):
+                if attr in ('max_model_len', 'max_num_seqs', 'max_num_batched_tokens', 'pipeline_parallel_size', 'block_size',
+                            'cpu_offload_gb', 'http_timeout_keep_alive', 'prefix_cache_retention'):
                     val = int(val)
                 elif attr == 'gpu_memory_utilization':
                     val = float(val)
@@ -465,6 +471,7 @@ class ConfigBuilderMixin:
             'disable_log_requests': 'disable_log_requests',
             'vllm_debug_logs': 'vllm_debug_logs',
             'nccl_debug_logs': 'nccl_debug_logs',
+            'enable_bidirectional_kv': 'enable_bidirectional_kv',
         }
         for key, attr in toggle_fields.items():
             setting = adv.get(key)
