@@ -146,88 +146,107 @@ class GuidellmMixin:
             endpoint = self._discover_istio_gateway(
                 self.namespace, config.test_id, config.architecture, log_callback)
 
-        # Build guidellm command
-        rate_type_map = {'synchronous': 'constant', 'concurrent': 'concurrent',
-                         'throughput': 'throughput', 'constant': 'constant', 'poisson': 'poisson'}
-        rate_type = rate_type_map.get(getattr(config, 'request_type', 'constant'), 'constant')
+        # Build guidellm 0.7.x command
         request_rate = getattr(config, 'request_rate', 1)
+        request_profile = getattr(config, 'request_type', 'constant')
         turns = getattr(config, 'turns', 1) or 1
 
+        # Data argument
         workload_mode = getattr(config, 'workload_mode', 'synthetic') or 'synthetic'
-        data_payload = ''
+        data_arg = ''
         column_args = ''
         if workload_mode == 'dataset' and getattr(config, 'dataset_source', None):
-            data_payload = config.dataset_source
-            # Verify dataset exists on workload pod
+            dataset_path = config.dataset_source
             exists = kubectl.run(
                 ['exec', self._guidellm_pod_name, '-n', self.namespace, '--',
-                 'test', '-f', data_payload], check=False
+                 'test', '-f', dataset_path], check=False
             ).returncode == 0
             if exists:
                 if log_callback:
-                    log_callback(f"   Dataset already on workload pod: {os.path.basename(data_payload)}")
-            elif os.path.isfile(data_payload):
-                remote_dir = os.path.dirname(data_payload)
+                    log_callback(f"   Dataset already on workload pod: {os.path.basename(dataset_path)}")
+            elif os.path.isfile(dataset_path):
+                remote_dir = os.path.dirname(dataset_path)
                 kubectl.run(['exec', self._guidellm_pod_name, '-n', self.namespace, '--',
                              'mkdir', '-p', remote_dir], check=False)
                 import subprocess as _sp
                 env = os.environ.copy()
                 env['KUBECONFIG'] = os.path.expanduser(kubectl.kubeconfig)
-                _sp.run([kubectl.kubectl_cmd, 'cp', data_payload,
-                         f'{self._guidellm_pod_name}:{data_payload}',
+                _sp.run([kubectl.kubectl_cmd, 'cp', dataset_path,
+                         f'{self._guidellm_pod_name}:{dataset_path}',
                          '-n', self.namespace], env=env, check=False, timeout=120)
                 if log_callback:
-                    log_callback(f"   Copied dataset to workload pod: {os.path.basename(data_payload)}")
+                    log_callback(f"   Copied dataset to workload pod: {os.path.basename(dataset_path)}")
             else:
                 if log_callback:
-                    log_callback(f"   ⚠️  Dataset not found: {data_payload}")
+                    log_callback(f"   ⚠️  Dataset not found: {dataset_path}")
             col = getattr(config, 'dataset_column', None) or 'prompt'
-            column_args = f' --data-column-mapper \'{{"text_column": "{col}", "output_tokens_count_column": "output_tokens_count"}}\''
+            if dataset_path.endswith('.jsonl') or dataset_path.endswith('.json'):
+                data_arg = f'kind=json_file,path={dataset_path}'
+            else:
+                data_arg = f'kind=csv_file,path={dataset_path}'
+            column_args = f' --data-column-mapper \'{{\"kind\":\"generative_column_mapper\",\"column_mappings\":{{\"text_column\":\"{col}\",\"output_tokens_count_column\":\"output_tokens_count\"}}}}\''
         else:
-            data_payload = f'prompt_tokens={config.isl},output_tokens={config.osl}'
+            data_arg = f'kind=synthetic_text,prompt_tokens={config.isl},output_tokens={config.osl}'
             if getattr(config, 'isl_stdev', None):
-                data_payload += f',prompt_tokens_stdev={config.isl_stdev}'
+                data_arg += f',prompt_tokens_stdev={config.isl_stdev}'
             if getattr(config, 'osl_stdev', None):
-                data_payload += f',output_tokens_stdev={config.osl_stdev}'
+                data_arg += f',output_tokens_stdev={config.osl_stdev}'
             if turns > 1:
-                data_payload += f',turns={turns}'
+                data_arg += f',turns={turns}'
             max_model_len = getattr(config, 'max_model_len', 0)
             if max_model_len and (getattr(config, 'isl_stdev', None) or getattr(config, 'osl_stdev', None)):
                 prompt_max = max_model_len - config.osl - 200
                 if prompt_max > 0:
-                    data_payload += f',prompt_tokens_max={prompt_max}'
+                    data_arg += f',prompt_tokens_max={prompt_max}'
 
+        # Profile argument (rate type + rate)
         request_format = '/v1/chat/completions' if turns > 1 else '/v1/completions'
+        warmup = min(60, max(0, config.test_duration - 30)) if hasattr(config, 'test_duration') else 60
+        if request_profile in ('concurrent',):
+            profile_arg = f'kind=concurrent,streams={request_rate},warmup={warmup}'
+        elif request_profile == 'sweep':
+            profile_arg = f'kind=sweep,warmup={warmup}'
+        elif request_profile == 'throughput':
+            profile_arg = f'kind=throughput,warmup={warmup}'
+        elif request_profile == 'synchronous':
+            profile_arg = f'kind=synchronous,warmup={warmup}'
+        elif request_profile == 'poisson':
+            profile_arg = f'kind=poisson,rate={request_rate},warmup={warmup}'
+        else:
+            profile_arg = f'kind=constant,rate={request_rate},warmup={warmup}'
+
+        # Constraint argument (stop condition)
         stop_mode = getattr(config, 'stop_mode', 'duration')
         max_requests = getattr(config, 'max_requests', None)
-        warmup = min(60, max(0, config.test_duration - 30)) if hasattr(config, 'test_duration') else 60
+        if stop_mode == 'max_requests' and max_requests:
+            constraint_arg = f'kind=max_requests,count={max_requests}'
+        else:
+            constraint_arg = f'kind=max_duration,seconds={config.test_duration}'
+
+        # Backend argument
+        backend_arg = f'kind=openai_http,target={endpoint},model={config.model_name},request_format={request_format},http2=false,timeout=300'
 
         # Output path on the workload pod — use PVC to avoid node disk pressure
         output_path = f'/mnt/storage/tmp/guidellm-{config.test_id}.json'
 
-        # Build the shell command to exec
-        stop_arg = f'--max-requests {max_requests}' if (stop_mode == 'max_requests' and max_requests) else f'--max-seconds {config.test_duration}'
         exec_cmd = (
             f'mkdir -p /mnt/storage/tmp && '
             f'export TMPDIR=/mnt/storage/tmp && '
-            f'guidellm benchmark run'
-            f' --target "{endpoint}"'
-            f' --model "{config.model_name}"'
-            f' --processor "{config.model_name}"'
-            f' --data "{data_payload}"'
-            f' --backend-kwargs \'{{"http2": false, "timeout": 300}}\''
-            f' --request-format "{request_format}"'
-            f' --rate-type {rate_type}'
-            f' --rate {request_rate}'
-            f' {stop_arg}'
-            f' --output-path {output_path}'
-            f' --warmup {warmup}'
-            f' --sample-requests 50'
+            f'guidellm run'
+            f' --backend "{backend_arg}"'
+            f' --tokenizer "kind=huggingface_auto,model={config.model_name}"'
+            f' --data "{data_arg}"'
+            f' --profile "{profile_arg}"'
+            f' --constraint "{constraint_arg}"'
+            f' --output "kind=json,path={output_path}"'
+            f' --metrics "kind=generative,sample_size=50"'
             f'{column_args}'
         )
 
         if log_callback:
-            rate_label = f'{request_rate} concurrent users' if rate_type == 'concurrent' else f'{request_rate} req/s ({rate_type})'
+            rate_label = f'{request_rate} concurrent users' if request_profile == 'concurrent' else f'{request_rate} req/s ({request_profile})'
+            if request_profile == 'sweep':
+                rate_label = 'sweep (auto-discover rates)'
             log_callback(f'🏃 Running guidellm on pod {self._guidellm_pod_name}')
             log_callback(f'   Target: {endpoint}')
             log_callback(f'   Load: {rate_label}')
@@ -475,96 +494,89 @@ class GuidellmMixin:
                     log_callback
                 )
 
-            # Get request rate type and rate (with defaults)
-            # Map old profile names to rate-type for backward compatibility
-            rate_type_map = {
-                'synchronous': 'constant',
-                'concurrent': 'concurrent',
-                'throughput': 'throughput',
-                'constant': 'constant',
-                'poisson': 'poisson'
-            }
             request_profile = getattr(config, 'request_type', 'constant')
-            rate_type = rate_type_map.get(request_profile, 'constant')
             request_rate = getattr(config, 'request_rate', 1)
 
             if log_callback:
                 log_callback(f'   Target: {endpoint}')
-                rate_label = f'{request_rate} concurrent users' if rate_type == 'concurrent' else f'{request_rate} req/s ({rate_type})'
+                rate_label = f'{request_rate} concurrent users' if request_profile == 'concurrent' else f'{request_rate} req/s ({request_profile})'
+                if request_profile == 'sweep':
+                    rate_label = 'sweep (auto-discover rates)'
                 log_callback(f'   Load: {rate_label}')
 
-            # Create output file path (using --output-path like A-AYE-Benchmark)
             output_dir = Path(f'/tmp/guidellm-{config.test_id}')
             output_dir.mkdir(parents=True, exist_ok=True)
             output_file = output_dir / f'{config.test_id}.json'
 
-            # Prepare data config
             workload_mode = getattr(config, 'workload_mode', 'synthetic') or 'synthetic'
             turns = getattr(config, 'turns', 1) or 1
-            data_args = None
             column_mapper = None
 
             if workload_mode == 'dataset' and getattr(config, 'dataset_source', None):
-                # Custom dataset mode
-                data_payload = config.dataset_source
+                dataset_path = config.dataset_source
                 col = getattr(config, 'dataset_column', None) or 'prompt'
-                column_mapper = f'{{"text_column": "{col}"}}'
-                log_callback(f'   Using dataset: {data_payload}')
+                column_mapper = f'{{"kind":"generative_column_mapper","column_mappings":{{"text_column":"{col}"}}}}'
+                if log_callback:
+                    log_callback(f'   Using dataset: {dataset_path}')
+                if dataset_path.endswith('.jsonl') or dataset_path.endswith('.json'):
+                    data_arg = f'kind=json_file,path={dataset_path}'
+                else:
+                    data_arg = f'kind=csv_file,path={dataset_path}'
             else:
-                # Synthetic workload mode
-                data_payload = f'prompt_tokens={config.isl},output_tokens={config.osl}'
+                data_arg = f'kind=synthetic_text,prompt_tokens={config.isl},output_tokens={config.osl}'
                 if getattr(config, 'isl_stdev', None):
-                    data_payload += f',prompt_tokens_stdev={config.isl_stdev}'
+                    data_arg += f',prompt_tokens_stdev={config.isl_stdev}'
                 if getattr(config, 'osl_stdev', None):
-                    data_payload += f',output_tokens_stdev={config.osl_stdev}'
+                    data_arg += f',output_tokens_stdev={config.osl_stdev}'
                 if turns > 1:
-                    data_payload += f',turns={turns}'
-
-                # Clamp distribution tails to fit within max_model_len
+                    data_arg += f',turns={turns}'
                 max_model_len = getattr(config, 'max_model_len', 0)
                 if max_model_len and (getattr(config, 'isl_stdev', None) or getattr(config, 'osl_stdev', None)):
-                    overhead = 200
-                    prompt_max = max_model_len - config.osl - overhead
+                    prompt_max = max_model_len - config.osl - 200
                     if prompt_max > 0:
-                        data_payload += f',prompt_tokens_max={prompt_max}'
+                        data_arg += f',prompt_tokens_max={prompt_max}'
 
-            # Use chat completions for multi-turn, completions for single-turn
             request_format = '/v1/chat/completions' if turns > 1 else '/v1/completions'
+            warmup = min(60, max(0, config.test_duration - 30)) if hasattr(config, 'test_duration') else 60
 
-            # Build guidellm command
-            # --backend-kwargs '{"http2": false}' is critical for PD deployments:
-            # Istio ext_proc (EPP) cannot unmarshal HTTP/2 streamed request bodies,
-            # causing 400 "Error unmarshaling request body" on PD gateway
-            cmd = [
-                'guidellm', 'benchmark', 'run',
-                '--target', endpoint,
-                '--model', config.model_name,
-                '--processor', config.model_name,
-                '--data', data_payload,
-                '--backend-kwargs', '{"http2": false, "timeout": 300}',
-                '--request-format', request_format,
-                '--rate-type', rate_type,
-                '--rate', str(request_rate),
-            ]
+            # Profile
+            if request_profile == 'concurrent':
+                profile_arg = f'kind=concurrent,streams={request_rate},warmup={warmup}'
+            elif request_profile == 'sweep':
+                profile_arg = f'kind=sweep,warmup={warmup}'
+            elif request_profile == 'throughput':
+                profile_arg = f'kind=throughput,warmup={warmup}'
+            elif request_profile == 'synchronous':
+                profile_arg = f'kind=synchronous,warmup={warmup}'
+            elif request_profile == 'poisson':
+                profile_arg = f'kind=poisson,rate={request_rate},warmup={warmup}'
+            else:
+                profile_arg = f'kind=constant,rate={request_rate},warmup={warmup}'
 
-            # Dataset-specific args
-            if data_args:
-                cmd.extend(['--data-args', data_args])
-            if column_mapper:
-                cmd.extend(['--data-column-mapper', column_mapper])
-
-            # Stop condition: duration or max requests
+            # Constraint
             stop_mode = getattr(config, 'stop_mode', 'duration')
             max_requests = getattr(config, 'max_requests', None)
             if stop_mode == 'max_requests' and max_requests:
-                cmd.extend(['--max-requests', str(max_requests)])
+                constraint_arg = f'kind=max_requests,count={max_requests}'
             else:
-                cmd.extend(['--max-seconds', str(config.test_duration)])
+                constraint_arg = f'kind=max_duration,seconds={config.test_duration}'
 
-            cmd.extend(['--output-path', str(output_file)])
-            warmup = min(60, max(0, config.test_duration - 30)) if hasattr(config, 'test_duration') else 60
-            cmd.extend(['--warmup', str(warmup)])
-            cmd.extend(['--sample-requests', '20'])
+            # Build guidellm 0.7.x command
+            # http2=false is critical for PD deployments:
+            # Istio ext_proc (EPP) cannot unmarshal HTTP/2 streamed request bodies
+            cmd = [
+                'guidellm', 'run',
+                '--backend', f'kind=openai_http,target={endpoint},model={config.model_name},request_format={request_format},http2=false,timeout=300',
+                '--tokenizer', f'kind=huggingface_auto,model={config.model_name}',
+                '--data', data_arg,
+                '--profile', profile_arg,
+                '--constraint', constraint_arg,
+                '--output', f'kind=json,path={output_file}',
+                '--metrics', 'kind=generative,sample_size=20',
+            ]
+
+            if column_mapper:
+                cmd.extend(['--data-column-mapper', column_mapper])
 
             # Start guidellm in background
             logger.debug('Starting guidellm...')
