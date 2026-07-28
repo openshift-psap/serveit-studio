@@ -666,22 +666,44 @@ function saveEditCluster() {
     });
 }
 
+var _deleteQueue = [];
+var _deleteRunning = false;
+
 function deleteCluster(id, name){
     showConfirm('Delete Cluster', 'Delete cluster "'+name+'"?', 'This will also delete ALL instances in this cluster and their data.', 'Delete Cluster', function(){
         var btn=document.querySelector('.cluster-item[data-id="'+id+'"]');
-        if(btn){btn.style.opacity='0.5';btn.style.pointerEvents='none';btn.querySelector('.name').innerHTML='<span style="color:#888">Deleting…</span>';}
-        fetch('/api/clusters/'+id,{method:'DELETE'})
-        .then(function(r){return r.json()})
-        .then(function(data){
-            if(data.ok){
-                if(id===currentClusterId) localStorage.removeItem('selectedClusterId');
-                if(btn){btn.style.transition='opacity 0.3s';btn.style.opacity='0';setTimeout(function(){btn.remove()},300);}
-                loadClusters();
-            } else {
-                showWarn('Error', data.error||'Failed');
-                if(btn){btn.style.opacity='';btn.style.pointerEvents='';}
-            }
-        });
+        if(btn){
+            btn.style.opacity='0.5';btn.style.pointerEvents='none';
+            btn.querySelector('.name').innerHTML='<span style="color:#888">Queued for deletion…</span>';
+        }
+        _deleteQueue.push({id:id, name:name});
+        _processDeleteQueue();
+    });
+}
+
+function _processDeleteQueue(){
+    if(_deleteRunning || _deleteQueue.length===0) return;
+    _deleteRunning = true;
+    var item = _deleteQueue.shift();
+    var btn = document.querySelector('.cluster-item[data-id="'+item.id+'"]');
+    if(btn){btn.style.opacity='0.4';btn.querySelector('.name').innerHTML='<span style="color:#c00">Deleting…</span>';}
+    fetch('/api/clusters/'+item.id,{method:'DELETE'})
+    .then(function(r){return r.json()})
+    .then(function(data){
+        if(data.ok){
+            if(item.id===currentClusterId) localStorage.removeItem('selectedClusterId');
+            if(btn){btn.style.transition='opacity 0.3s';btn.style.opacity='0';setTimeout(function(){btn.remove()},300);}
+        } else {
+            showWarn('Error', 'Failed to delete "'+item.name+'": '+(data.error||'unknown'));
+            if(btn){btn.style.opacity='';btn.style.pointerEvents='';btn.querySelector('.name').textContent=item.name;}
+        }
+        _deleteRunning = false;
+        if(_deleteQueue.length > 0) setTimeout(_processDeleteQueue, 500);
+        else loadClusters();
+    }).catch(function(){
+        _deleteRunning = false;
+        if(btn){btn.style.opacity='';btn.style.pointerEvents='';}
+        _processDeleteQueue();
     });
 }
 
