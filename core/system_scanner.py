@@ -193,28 +193,32 @@ class SystemScanner:
         gpu_vendor = 'unknown'
         gpu_model = 'unknown'
 
-        # Check for NVIDIA GPUs
-        if 'nvidia.com/gpu' in allocatable:
-            gpu_count = int(allocatable['nvidia.com/gpu'])
-            gpu_vendor = 'NVIDIA'
+        # Check for NVIDIA GPUs — device plugin (allocatable) or DRA (NFD labels)
+        nvidia_gpu_count = int(allocatable.get('nvidia.com/gpu', 0))
+        if nvidia_gpu_count == 0:
+            nvidia_gpu_count = int(labels.get('nvidia.com/gpu.count', 0))
 
-            # Try to get GPU model from labels
+        if nvidia_gpu_count > 0:
+            gpu_count = nvidia_gpu_count
+            gpu_vendor = 'NVIDIA'
+            gpu_type = 'nvidia.com/gpu'
+            if labels.get('nvidia.com/dra-kubelet-plugin') == 'true':
+                gpu_type = 'nvidia.com/gpu (DRA)'
+
             gpu_product = labels.get('nvidia.com/gpu.product', '')
             if gpu_product:
                 gpu_model = gpu_product.replace('-', ' ')
-                # Strip vendor prefix to avoid "NVIDIA NVIDIA H200" in display
                 for prefix in ['NVIDIA ', 'AMD ', 'Intel ']:
                     if gpu_model.startswith(prefix):
                         gpu_model = gpu_model[len(prefix):]
                         break
             else:
-                # Try to detect from other labels
                 for label_key, label_value in labels.items():
-                    if 'gpu' in label_key.lower() and any(x in label_value.upper() for x in ['H100', 'A100', 'V100', 'T4', 'L4', 'L40', 'A10']):
+                    if 'gpu' in label_key.lower() and any(x in label_value.upper() for x in ['H100', 'H200', 'B200', 'A100', 'V100', 'T4', 'L4', 'L40', 'A10']):
                         gpu_model = label_value
                         break
 
-            return gpu_count, 'nvidia.com/gpu', gpu_vendor, gpu_model
+            return gpu_count, gpu_type, gpu_vendor, gpu_model
 
         # Check for AMD GPUs
         if 'amd.com/gpu' in allocatable:

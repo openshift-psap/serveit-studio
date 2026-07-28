@@ -152,8 +152,9 @@ def scan_cluster_resources(cluster: Dict, namespace: str = 'serveit', proxy: str
         if resources.total_gpus == 0:
             if versions.get('gpu_operator'):
                 result['summary']['gpu_warning'] = (
-                    f"GPU Operator {versions['gpu_operator']} is installed but no GPUs are reported. "
-                    f"The ClusterPolicy may need to be applied or the device plugin pods may not be running."
+                    f"GPU Operator {versions['gpu_operator']} is installed but no GPUs are detected. "
+                    f"Check that GPU nodes exist, the ClusterPolicy is applied, and either the device plugin "
+                    f"or DRA driver pods are running."
                 )
             else:
                 result['summary']['gpu_warning'] = (
