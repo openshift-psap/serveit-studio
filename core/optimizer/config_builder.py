@@ -118,6 +118,7 @@ class ConfigBuilderMixin:
             rdma_nics_per_node=self.config.rdma_nics_per_node or 0,
             rdma_network_annotation=self.config.rdma_network_annotation,
             selected_dra_classes=self.config.selected_dra_classes or [],
+            dra_gpu_resource_key=getattr(self.config, 'dra_gpu_resource_key', None),
             gateway_class=self.config.gateway_class,
             exclusive_pf=getattr(self.config, 'exclusive_pf', False),
 
@@ -622,6 +623,7 @@ class ConfigBuilderMixin:
             rdma_nics_per_node=self.config.rdma_nics_per_node or 0,
             rdma_network_annotation=self.config.rdma_network_annotation,
             selected_dra_classes=self.config.selected_dra_classes or [],
+            dra_gpu_resource_key=getattr(self.config, 'dra_gpu_resource_key', None),
             gateway_class=self.config.gateway_class,
             exclusive_pf=getattr(self.config, 'exclusive_pf', False),
 
@@ -794,6 +796,7 @@ class ConfigBuilderMixin:
             rdma_nics_per_node=self.config.rdma_nics_per_node or 0,
             rdma_network_annotation=self.config.rdma_network_annotation,
             selected_dra_classes=self.config.selected_dra_classes or [],
+            dra_gpu_resource_key=getattr(self.config, 'dra_gpu_resource_key', None),
             gateway_class=self.config.gateway_class,
             exclusive_pf=getattr(self.config, 'exclusive_pf', False),
 

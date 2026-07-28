@@ -765,6 +765,7 @@ def run_optimization_background(data):
         exclusive_pf = _get('exclusive_pf', False)
         selected_shared_device = _get('selected_shared_device')
         selected_dra_classes = _get('selected_dra_classes') or []
+        dra_gpu_resource_key = _get('dra_gpu_resource_key')
         gateway_class = _get('gateway_class', 'istio')
         per_node_storage = _get('per_node_storage', False)
         node_nfs_pvcs = _get('node_nfs_pvcs') or []
@@ -1014,6 +1015,7 @@ data:
                 exclusive_pf=exclusive_pf,
                 selected_shared_device=selected_shared_device,
                 selected_dra_classes=selected_dra_classes,
+                dra_gpu_resource_key=dra_gpu_resource_key,
                 gateway_class=gateway_class,
                 per_node_storage=per_node_storage,
                 node_nfs_pvcs=node_nfs_pvcs,

@@ -97,6 +97,7 @@ class NetworkIntegration:
     device_plugin: str = ""
     network_names: List[str] = field(default_factory=list)
     description: str = ""
+    dra_gpu_resource_key: str = ""
 
 
 # ---------------------------------------------------------------------------
@@ -229,6 +230,7 @@ class NetworkIntegrator:
             device_plugin=getattr(provider_network, 'rdma_device_plugin', '') or '',
             network_names=resource_names,
             description=f"{network_type.value.upper()} network with {num_nics} NICs",
+            dra_gpu_resource_key=getattr(self, '_dra_gpu_resource_key', '') or '',
         )
 
     def _select_network_type(self) -> NetworkType:
@@ -686,7 +688,8 @@ class PDDeploymentGenerator(BaseDeploymentGenerator):
         tp = config.prefill_tp if role == 'prefill' else config.decode_tp
         vllm_args = self._build_vllm_command(config, role)
         device_plugin = getattr(network, 'device_plugin', '') or ''
-        net_values = compute_network_values(network.network_type.value, [device_plugin] if device_plugin else [])
+        dra_key = getattr(network, 'dra_gpu_resource_key', None)
+        net_values = compute_network_values(network.network_type.value, [device_plugin] if device_plugin else [], dra_gpu_resource_key=dra_key)
 
         resources = {
             'limits': {
@@ -844,7 +847,8 @@ class DeploymentOrchestrator:
         provider = self._detect_provider()
         self.logger.info(f"Provider: {provider.get_display_name()}")
 
-        network = self._setup_network(provider, config, selected_dra_classes=test_config.get('selected_dra_classes') or [])
+        network = self._setup_network(provider, config, selected_dra_classes=test_config.get('selected_dra_classes') or [],
+                                       dra_gpu_resource_key=test_config.get('dra_gpu_resource_key'))
         self.logger.info(f"Network type: {network.network_type.value}")
 
         self._deploy_prerequisites(config, test_config)
@@ -893,9 +897,10 @@ class DeploymentOrchestrator:
         from .providers import ProviderRegistry
         return ProviderRegistry.detect_provider(self.kubectl)
 
-    def _setup_network(self, provider, config: DeploymentConfig, selected_dra_classes=None):
+    def _setup_network(self, provider, config: DeploymentConfig, selected_dra_classes=None, dra_gpu_resource_key=None):
         integrator = NetworkIntegrator(provider, self.kubectl)
         integrator._selected_dra_classes = selected_dra_classes or []
+        integrator._dra_gpu_resource_key = dra_gpu_resource_key
         return integrator.setup_network(
             namespace=config.namespace,
             num_nics=config.num_nics,

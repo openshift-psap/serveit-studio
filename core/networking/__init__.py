@@ -61,6 +61,7 @@ def compute_network_values(
     rdma_nics_per_node: int = 0,
     rdma_network_annotation: Optional[str] = None,
     selected_dra_classes: Optional[List[str]] = None,
+    dra_gpu_resource_key: Optional[str] = None,
 ) -> Dict[str, Any]:
     """
     Produce template values from network configuration.
@@ -71,6 +72,8 @@ def compute_network_values(
             node allocatable.
         rdma_nics_per_node: Physical NIC count per node from scanner.
         rdma_network_annotation: Multus NAD annotation JSON for sriov_multinic.
+        dra_gpu_resource_key: Extended resource name from the selected DRA DeviceClass
+            (e.g. 'composite.dra.io/gpu-nic-pair' or 'dra.llm-d.io/gpu-nic-pair').
 
     Returns:
         Dict with keys:
@@ -85,8 +88,8 @@ def compute_network_values(
 
     values: Dict[str, Any] = {}
 
-    if network_type == 'dra' and rdma_device_resources and 'dra.llm-d.io/gpu-nic-pair' in rdma_device_resources:
-        values['gpu_resource_key'] = 'dra.llm-d.io/gpu-nic-pair'
+    if network_type == 'dra' and dra_gpu_resource_key:
+        values['gpu_resource_key'] = dra_gpu_resource_key
     else:
         values['gpu_resource_key'] = 'nvidia.com/gpu'
 
@@ -205,7 +208,8 @@ def scan_available_networks(kubectl_runner, namespace: str = None) -> List[Dict[
                 kind = 'nic'
             else:
                 kind = 'unknown'
-            dra_device_classes.append({'name': name, 'kind': kind})
+            extended_resource = item.get('spec', {}).get('extendedResourceName', '')
+            dra_device_classes.append({'name': name, 'kind': kind, 'extendedResourceName': extended_resource})
         dra_device_classes = sorted(dra_device_classes, key=lambda x: x['name'])
         dra_available = any(c['kind'] in ('gpu_nic_pair', 'nic') for c in dra_device_classes)
 

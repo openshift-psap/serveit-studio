@@ -87,6 +87,7 @@ class TestConfig:
     rdma_nics_per_node: int = 0  # Physical NICs per node (from scanner, for RDMA request count)
     rdma_network_annotation: Optional[str] = None  # Multus NAD annotation JSON for sriov_multinic
     selected_dra_classes: Optional[List[str]] = None  # User-selected DRA device classes
+    dra_gpu_resource_key: Optional[str] = None  # extendedResourceName from selected DeviceClass
     gateway_class: str = 'istio'  # GatewayClass name (detected from cluster)
     exclusive_pf: bool = False  # 1 VF per PF — each pod gets dedicated NICs
 

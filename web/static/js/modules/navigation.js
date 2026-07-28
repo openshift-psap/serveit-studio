@@ -54,12 +54,14 @@ function _toggleSwitch(id, checked, onChange) {
         '</div></div>';
 }
 
-function toggleDraDeviceClass(className, checked) {
+function toggleDraDeviceClass(className, checked, extendedResourceName) {
     if (!config.selected_dra_classes) config.selected_dra_classes = [];
     if (checked) {
         if (config.selected_dra_classes.indexOf(className) === -1) config.selected_dra_classes.push(className);
+        if (extendedResourceName) config.dra_gpu_resource_key = extendedResourceName;
     } else {
         config.selected_dra_classes = config.selected_dra_classes.filter(function(c) { return c !== className; });
+        if (config.selected_dra_classes.length === 0) config.dra_gpu_resource_key = null;
     }
     saveConfig();
 }
@@ -622,8 +624,9 @@ socket.on('cluster_scan_result', function(data) {
                 var bg = meta.recommended ? '#f0fdf4' : 'white';
                 var badge = '<span style="font-size:0.72em;background:' + meta.badgeBg + ';color:' + meta.badgeColor + ';padding:1px 6px;border-radius:3px;font-weight:600;white-space:nowrap;">' + meta.badge + '</span>';
                 draHtml += '<label style="display:flex;align-items:flex-start;gap:10px;padding:10px 12px;margin-bottom:6px;background:' + bg + ';border:' + border + ';border-radius:6px;cursor:pointer;">';
+                var extRes = cls.extendedResourceName || '';
                 draHtml += '<input type="checkbox" ' + (isChecked ? 'checked' : '') +
-                    ' onchange="toggleDraDeviceClass(\'' + name + '\',this.checked)" style="width:16px;height:16px;margin-top:2px;flex-shrink:0;">';
+                    ' onchange="toggleDraDeviceClass(\'' + name + '\',this.checked,\'' + extRes + '\')" style="width:16px;height:16px;margin-top:2px;flex-shrink:0;">';
                 draHtml += '<div style="min-width:0;">';
                 draHtml += '<div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;">';
                 draHtml += '<span style="font-size:0.88em;font-weight:700;color:#1e293b;">' + name + '</span>';
@@ -644,6 +647,8 @@ socket.on('cluster_scan_result', function(data) {
                 var defaults = draClasses.filter(function(c) { return c.kind === 'gpu_nic_pair'; });
                 if (defaults.length === 0) defaults = draClasses.filter(function(c) { return c.kind === 'nic'; });
                 config.selected_dra_classes = defaults.map(function(c) { return c.name || c; });
+                var gpuNicPair = defaults.find(function(c) { return c.extendedResourceName; });
+                if (gpuNicPair) config.dra_gpu_resource_key = gpuNicPair.extendedResourceName;
                 saveConfig();
             }
         }

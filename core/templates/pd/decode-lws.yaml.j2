@@ -382,7 +382,7 @@ spec:
                 cpu: "{{ cpu_limit }}"
                 memory: "{{ memory_limit }}"
 {% if selected_dra_classes %}
-                dra.llm-d.io/gpu-nic-pair: "{{ decode_gpu_count }}"
+                {{ gpu_resource_key }}: "{{ decode_gpu_count }}"
 {% else %}
                 {{ gpu_resource_key }}: "{{ decode_gpu_count }}"
                 {% for r in decode_extra_device_resources %}
@@ -393,7 +393,7 @@ spec:
                 cpu: "{{ cpu_request }}"
                 memory: "{{ memory_request }}"
 {% if selected_dra_classes %}
-                dra.llm-d.io/gpu-nic-pair: "{{ decode_gpu_count }}"
+                {{ gpu_resource_key }}: "{{ decode_gpu_count }}"
 {% else %}
                 {{ gpu_resource_key }}: "{{ decode_gpu_count }}"
                 {% for r in decode_extra_device_resources %}
