@@ -601,34 +601,45 @@ def _check_lws_vct(scanner):
     return False
 
 def _detect_node_nfs_classes(scanner, resources):
-    """Detect NFS storage classes for per-node storage (nfs-<suffix>).
+    """Detect storage classes suitable for per-node storage.
 
-    First tries to match nfs-<suffix> to GPU node names. If no match,
-    returns all nfs-* storage classes so the user can select them.
+    Per-node storage creates one PVC per GPU node with a local model copy.
+    Works with any RWX-capable storage: NFS, CephFS, or other distributed FS.
+
+    Priority:
+    1. nfs-<suffix> classes matched to GPU node names (purpose-built per-node NFS)
+    2. Any RWX-capable distributed filesystem (CephFS, NFS provisioner, etc.)
     """
     try:
+        # First: look for purpose-built nfs-<suffix> classes
         nfs_classes = {}
         for sc in resources.storage_classes:
             if sc.name.startswith('nfs-') and sc.name != 'nfs':
                 suffix = sc.name[4:]
                 nfs_classes[suffix] = sc.name
 
-        if not nfs_classes:
-            return []
+        if nfs_classes:
+            gpu_nodes = [n.name for n in resources.nodes if n.gpus > 0]
+            result = []
+            for node in gpu_nodes:
+                for suffix, sc_name in nfs_classes.items():
+                    if suffix in node:
+                        result.append({'suffix': suffix, 'sc_name': sc_name, 'node': node})
+                        break
+            if result:
+                return result
+            return [{'suffix': suffix, 'sc_name': sc_name, 'node': ''} for suffix, sc_name in nfs_classes.items()]
 
+        # Second: look for any distributed/RWX filesystem (CephFS, NFS provisioner, etc.)
+        distributed_provisioners = ('cephfs', 'nfs', 'efs', 'azurefile', 'filestore')
         gpu_nodes = [n.name for n in resources.nodes if n.gpus > 0]
-        result = []
-        for node in gpu_nodes:
-            for suffix, sc_name in nfs_classes.items():
-                if suffix in node:
-                    result.append({'suffix': suffix, 'sc_name': sc_name, 'node': node})
-                    break
+        for sc in resources.storage_classes:
+            provisioner = getattr(sc, 'provisioner', '') or ''
+            if any(p in provisioner.lower() for p in distributed_provisioners):
+                return [{'suffix': node.split('.')[0].split('-')[-1], 'sc_name': sc.name, 'node': node}
+                        for node in gpu_nodes]
 
-        if result:
-            return result
-
-        # No node match — return all nfs-* classes for user selection
-        return [{'suffix': suffix, 'sc_name': sc_name, 'node': ''} for suffix, sc_name in nfs_classes.items()]
+        return []
     except Exception:
         return []
 
