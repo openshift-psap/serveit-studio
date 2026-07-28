@@ -24,6 +24,8 @@ spec:
         imagePullPolicy: IfNotPresent
         command: ["sleep", "infinity"]
         env:
+        - name: TMPDIR
+          value: "/mnt/storage/tmp"
         - name: HF_HOME
           value: "/mnt/storage/.cache/huggingface"
         - name: HF_DATASETS_CACHE

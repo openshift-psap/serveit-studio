@@ -202,12 +202,14 @@ class GuidellmMixin:
         max_requests = getattr(config, 'max_requests', None)
         warmup = min(60, max(0, config.test_duration - 30)) if hasattr(config, 'test_duration') else 60
 
-        # Output path on the workload pod (remote or local)
-        output_path = f'/tmp/guidellm-{config.test_id}.json'
+        # Output path on the workload pod — use PVC to avoid node disk pressure
+        output_path = f'/mnt/storage/tmp/guidellm-{config.test_id}.json'
 
         # Build the shell command to exec
         stop_arg = f'--max-requests {max_requests}' if (stop_mode == 'max_requests' and max_requests) else f'--max-seconds {config.test_duration}'
         exec_cmd = (
+            f'mkdir -p /mnt/storage/tmp && '
+            f'export TMPDIR=/mnt/storage/tmp && '
             f'guidellm benchmark run'
             f' --target "{endpoint}"'
             f' --model "{config.model_name}"'
