@@ -383,6 +383,31 @@ class TestOrchestrator(ParserMixin, GuidellmMixin):
                         log_callback(f"   {'Pod has' if n == 1 else f'All {n} pods have'} model loaded ({elapsed}s)")
                     return elapsed
 
+                # Check for CrashLoopBackOff — early exit on OOM during loading
+                for pod_name in pod_names:
+                    if pod_name in ready_pods:
+                        continue
+                    phase_r = subprocess.run(
+                        ['kubectl', 'get', 'pod', pod_name, '-n', self.namespace,
+                         '-o', 'jsonpath={.status.containerStatuses[0].state.waiting.reason}'],
+                        capture_output=True, text=True, timeout=10, check=False)
+                    reason = phase_r.stdout.strip()
+                    if reason in ('CrashLoopBackOff', 'Error'):
+                        crash_logs = subprocess.run(
+                            ['kubectl', 'logs', pod_name, '-n', self.namespace,
+                             '-c', 'vllm', '--previous', '--tail=50'],
+                            capture_output=True, text=True, timeout=15, check=False)
+                        crash_text = crash_logs.stdout or ''
+                        oom_keywords = ['out of memory', 'no available memory for the cache blocks',
+                                        'cuda out of memory', 'oom']
+                        if any(k in crash_text.lower() for k in oom_keywords):
+                            if log_callback:
+                                log_callback(f"   {pod_name}: OOM during model loading")
+                            return -2
+                        if log_callback:
+                            log_callback(f"   {pod_name}: crashed during model loading ({reason})")
+                        return -1
+
             except Exception as e:
                 logger.warning(f"Failed to check model loading: {e}")
 
@@ -1164,6 +1189,9 @@ class TestOrchestrator(ParserMixin, GuidellmMixin):
                     stop_check=stop_check
                 )
 
+                if model_load_time == -2:
+                    result.error_message = "OOM: No available memory for the cache blocks"
+                    return result
                 if model_load_time < 0:
                     result.error_message = "vLLM model did not finish loading in time"
                     return result
