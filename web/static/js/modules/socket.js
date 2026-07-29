@@ -19,11 +19,15 @@ socket.on('session_kicked', function(data) {
 
 socket.on('session_granted', function() {
     document.getElementById('session-lock-modal').classList.remove('active');
-    // Clear takeover timeout since we got a response
     if (_takeoverTimeout) { clearTimeout(_takeoverTimeout); _takeoverTimeout = null; }
-    // Reset button state
     var btn = document.querySelector('#session-lock-modal .modal-footer button:last-child');
     if (btn) { btn.disabled = false; btn.textContent = 'Take Over'; }
+    if (!window._serverConfigReceived) loadConfig();
+});
+
+// Load config as soon as socket connects — don't wait for session_granted
+// which may arrive later or trigger a duplicate load
+socket.on('connect', function() {
     loadConfig();
 });
 
