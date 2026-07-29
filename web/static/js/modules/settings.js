@@ -153,8 +153,15 @@ function restoreAdvVllm() {
             valEl.disabled = (setting.mode !== 'custom');
             var txtEl = document.getElementById('adv-' + f + '-txt');
             if (setting.mode === 'custom' && setting.value != null) {
-                var knownOption = valEl.querySelector('option[value="' + setting.value + '"]');
-                if (knownOption && setting.value !== '__custom__') {
+                var knownOption = null;
+                try {
+                    if (valEl.tagName === 'SELECT') {
+                        knownOption = Array.from(valEl.options).find(function(o) { return o.value === setting.value; });
+                    }
+                } catch(e) {}
+                if (valEl.tagName !== 'SELECT') {
+                    valEl.value = setting.value;
+                } else if (knownOption && setting.value !== '__custom__') {
                     valEl.value = setting.value;
                     valEl.style.display = '';
                     if (txtEl) { txtEl.style.display = 'none'; txtEl.disabled = true; }
