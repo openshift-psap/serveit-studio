@@ -1712,7 +1712,7 @@ class RecipeOptimizer(
         if self._model_dtype in ('fp4', 'int4'):
             return params_b * (0.55 if self._is_moe else 0.7)
         if self._model_dtype == 'fp8':
-            return params_b * 1.1
+            return params_b * (0.85 if self._is_moe else 1.1)
         if self._model_dtype in ('fp16', 'bf16'):
             return params_b * 2.2
         return params_b * 4.4
