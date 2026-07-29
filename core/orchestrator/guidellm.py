@@ -43,6 +43,13 @@ class GuidellmMixin:
         if log_callback:
             log_callback('📦 Deploying guidellm benchmark pod...')
 
+        # Ensure modelserver ServiceAccount exists before creating the workload pod
+        r = kubectl.run(['get', 'sa', 'llm-d-modelserver', '-n', self.namespace], check=False)
+        if r.returncode != 0:
+            from core.prereq_manager import PrereqManager
+            pm = PrereqManager(namespace=self.namespace, kubectl_runner=kubectl)
+            pm._ensure_modelserver_rbac(log_callback=log_callback)
+
         from core.template_manager import TemplateManager
         tmgr = TemplateManager()
         deploy_yaml = tmgr.render_template('benchmark/guidellm-pod.yaml.j2',
