@@ -42,6 +42,7 @@ class NodeResources:
     cpu_cores: int  # Total CPU cores
     cpu_model: str  # CPU model name
     memory_gb: int  # Total RAM in GB
+    numa_nodes: int = 1  # Number of NUMA nodes
     has_rdma: bool
     rdma_devices: List[str]
     network_interfaces: List[NetworkInterface]
@@ -762,6 +763,7 @@ class SystemScanner:
                 cpu_info = hw_info.get('cpu', {})
                 cpu_cores = cpu_info.get('cores', 0)
                 cpu_model = cpu_info.get('model', self._get_cpu_model(node_data))
+                numa_nodes = cpu_info.get('numa_nodes', 1)
 
                 mem_info = hw_info.get('memory', {})
                 memory_gb = mem_info.get('total_gb', 0)
@@ -811,6 +813,7 @@ class SystemScanner:
                 cpu_cores=cpu_cores,
                 cpu_model=cpu_model,
                 memory_gb=memory_gb,
+                numa_nodes=locals().get('numa_nodes', 1),
                 has_rdma=has_rdma,
                 rdma_devices=rdma_devices,
                 network_interfaces=network_interfaces,

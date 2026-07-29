@@ -307,6 +307,15 @@ data:
       '.cpu = {"model": $model, "cores": ($cores | tonumber), "sockets": ($sockets | tonumber)}' \
       ${OUTPUT_FILE} > ${OUTPUT_FILE}.tmp && mv ${OUTPUT_FILE}.tmp ${OUTPUT_FILE}
 
+    # Detect NUMA topology
+    echo "🏗️ Detecting NUMA topology..."
+    NUMA_NODES=$(ls -d /sys/devices/system/node/node* 2>/dev/null | wc -l)
+    NUMA_NODES=${NUMA_NODES:-1}
+
+    jq --arg sockets "$CPU_SOCKETS" --arg numa "$NUMA_NODES" \
+      '.cpu.sockets = ($sockets | tonumber) | .cpu.numa_nodes = ($numa | tonumber)' \
+      ${OUTPUT_FILE} > ${OUTPUT_FILE}.tmp && mv ${OUTPUT_FILE}.tmp ${OUTPUT_FILE}
+
     # Detect Memory
     echo "💾 Detecting Memory..."
     TOTAL_MEM_KB=$(grep MemTotal /proc/meminfo | awk '{print $2}')

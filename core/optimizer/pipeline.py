@@ -1440,8 +1440,8 @@ class RecipeOptimizer(
                 avg_node_cpus = sum(n.cpu_cores for n in gpu_nodes) / num_gpu_nodes
                 usable_cpus = avg_node_cpus * 0.80
             cpus_per_pod = int(usable_cpus / pods_per_node)
-            # Cap to fit within a single NUMA node (assumes 2 NUMA nodes per GPU server)
-            numa_nodes = 2
+            # Cap to fit within a single NUMA node for Topology Manager alignment
+            numa_nodes = max(n.numa_nodes for n in gpu_nodes) if gpu_nodes else 2
             max_cpus_per_numa = int(usable_cpus / numa_nodes)
             if cpus_per_pod > max_cpus_per_numa:
                 logger.info(f"Capping CPUs per pod from {cpus_per_pod} to {max_cpus_per_numa} (single NUMA node limit)")
