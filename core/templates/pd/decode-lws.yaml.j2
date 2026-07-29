@@ -100,6 +100,13 @@ spec:
 {% if per_node_storage %}
           - name: select-nfs
             image: busybox:stable
+            resources:
+              requests:
+                cpu: "100m"
+                memory: "64Mi"
+              limits:
+                cpu: "100m"
+                memory: "64Mi"
             command: ["/bin/sh", "-c"]
             args:
               - |
