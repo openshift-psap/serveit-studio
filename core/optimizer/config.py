@@ -146,6 +146,7 @@ class RecipeOptimizerConfig:
     prefix_cache_mode: str = 'identical'  # 'identical' = N% same prompt, 'shared_prefix' = all prompts share N% prefix, 'multi_group' = N groups
     prefix_cache_groups: int = 5  # Number of distinct prompt groups for multi_group mode
     prefix_cache_seed: Optional[int] = None  # Deterministic seed, stored in DB for reproducibility
+    structured_prefix: bool = False  # Generate shared prefix + unique suffix instead of random tokens
 
     # Speculative decoding
     speculative_config_method: Optional[str] = None  # 'mtp', 'draft', None

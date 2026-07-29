@@ -751,6 +751,7 @@ def run_optimization_background(data):
         prefix_cache_hit_pct = int(_get('prefix_cache_hit_pct', 0))
         prefix_cache_mode = _get('prefix_cache_mode', 'identical')
         prefix_cache_groups = int(_get('prefix_cache_groups', 5))
+        structured_prefix = _get('structured_prefix', False)
         advanced_vllm = _get('advanced_vllm')
         extra_env_vars = _get('extra_env_vars')
         headroom_setting = (advanced_vllm or {}).get('headroom', {})
@@ -1007,6 +1008,7 @@ data:
                 prefix_cache_hit_pct=prefix_cache_hit_pct,
                 prefix_cache_mode=prefix_cache_mode,
                 prefix_cache_groups=prefix_cache_groups,
+                structured_prefix=structured_prefix,
                 headroom=headroom,
                 memory_reserve_pct=memory_reserve_pct,
                 rdma_network_annotation=rdma_network_annotation,

@@ -114,6 +114,17 @@
                                                     <input type="range" id="prefix-cache-slider" min="0" max="100" value="0" style="width:100%;accent-color:var(--rh-red-primary);" oninput="config.prefix_cache_hit_pct=parseInt(this.value);document.getElementById('prefix-cache-value').textContent=this.value+'%';saveConfig();updatePrefixCacheModeDesc();">
                                                     <div style="display:flex;justify-content:space-between;font-size:0.75em;color:#94a3b8;margin-top:2px;"><span>0% — all unique prompts</span><span>100% — all identical</span></div>
                                                 </div>
+                                                <!-- Structured prefix toggle -->
+                                                <div style="display:flex;align-items:center;justify-content:space-between;gap:12px;padding:10px 14px;background:#f0fdf4;border:1px solid #bbf7d0;border-radius:8px;cursor:pointer;margin-top:10px;" onclick="var on=!document.getElementById('structured-prefix-enabled').checked;document.getElementById('structured-prefix-enabled').checked=on;config.structured_prefix=on;var sw=document.getElementById('structured-prefix-switch');sw.style.background=on?'#15803d':'#ccc';sw.querySelector('span').style.transform=on?'translateX(18px)':'translateX(0)';saveConfig();">
+                                                    <div>
+                                                        <div style="font-weight:600;font-size:0.88em;color:#15803d;">Structured Prefix Prompts</div>
+                                                        <div style="font-size:0.78em;color:#166534;margin-top:2px;">Instead of random tokens, generate prompts with a shared system-prompt prefix + unique question suffix per request. The hit ratio controls the prefix/suffix split (e.g., 43% = first 43% of tokens are the shared prefix, rest is a unique question). Better simulates real agentic and chat workloads.</div>
+                                                    </div>
+                                                    <input type="checkbox" id="structured-prefix-enabled" style="display:none;">
+                                                    <div id="structured-prefix-switch" style="width:40px;height:22px;background:#ccc;border-radius:11px;position:relative;transition:background-color 0.2s;flex-shrink:0;margin-left:16px;">
+                                                        <span style="position:absolute;top:2px;left:2px;width:18px;height:18px;background:white;border-radius:50%;transition:transform 0.2s;box-shadow:0 1px 3px rgba(0,0,0,0.2);display:block;"></span>
+                                                    </div>
+                                                </div>
                                                 <div class="input-group" style="margin-top:12px;">
                                                     <label style="font-weight:700;margin-bottom:8px;">Cache Simulation Mode</label>
                                                     <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:6px;margin-bottom:10px;">

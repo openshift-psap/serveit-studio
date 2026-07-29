@@ -266,6 +266,14 @@ function updateUIFromConfig() {
             if (pcSw) { pcSw.style.background = '#15803d'; pcSw.querySelector('span').style.transform = 'translateX(18px)'; }
         }
     }
+    if (config.structured_prefix) {
+        var spEl = document.getElementById('structured-prefix-enabled');
+        if (spEl) {
+            spEl.checked = true;
+            var spSw = document.getElementById('structured-prefix-switch');
+            if (spSw) { spSw.style.background = '#15803d'; spSw.querySelector('span').style.transform = 'translateX(18px)'; }
+        }
+    }
     if (config.prefix_cache_groups && document.getElementById('prefix-cache-groups-slider')) {
         document.getElementById('prefix-cache-groups-slider').value = config.prefix_cache_groups;
         document.getElementById('prefix-cache-groups-value').textContent = config.prefix_cache_groups;

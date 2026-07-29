@@ -164,8 +164,10 @@ class DatasetMixin:
             osl_stdev = self.config.osl_stdev or 0
             groups = int(self.config.prefix_cache_groups or 5) if cache_mode == 'multi_group' else 0
 
-            if cache_mode == 'multi_group' and groups > 0:
+            structured_prefix = getattr(self.config, 'structured_prefix', False)
+            if structured_prefix and hit_pct > 0:
                 prefix_tokens = int(isl * hit_pct / 100)
+                prefix_groups = groups if groups > 0 else 5
                 cmd = (
                     f'generate_dataset'
                     f' --model "{self.config.model_name}"'
@@ -174,9 +176,9 @@ class DatasetMixin:
                     f' --output {dataset_path}'
                     f' --mode prefix_group'
                     f' --prefix-tokens {prefix_tokens}'
-                    f' --prefix-groups {groups}'
+                    f' --prefix-groups {prefix_groups}'
                 )
-                self.log(f"   Prefix group mode: {groups} groups, {prefix_tokens} prefix tokens + {isl - prefix_tokens} suffix tokens", 'info')
+                self.log(f"   Structured prefix mode: {prefix_groups} groups, {prefix_tokens} prefix tokens + {isl - prefix_tokens} suffix tokens", 'info')
             else:
                 cmd = (
                     f'generate_dataset'
