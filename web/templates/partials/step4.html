@@ -23,10 +23,14 @@
                                 <!-- Load Profile -->
                                 <div style="margin-bottom:16px;">
                                     <label style="font-weight:600;font-size:0.9em;margin-bottom:8px;display:block;">Load Profile</label>
-                                    <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px;">
-                                        <button type="button" id="rate-type-concurrent" onclick="setRateType('concurrent')" style="padding:10px 0; border:2px solid var(--rh-red-primary); border-radius:6px; background:var(--rh-red-primary); color:white; font-weight:600; cursor:pointer; font-size:0.85em; text-align:center;">Concurrent</button>
-                                        <button type="button" id="rate-type-constant" onclick="setRateType('constant')" style="padding:10px 0; border:2px solid #cbd5e1; border-radius:6px; background:white; color:#475569; font-weight:600; cursor:pointer; font-size:0.85em; text-align:center;">Constant RPS</button>
-                                        <button type="button" id="rate-type-poisson" onclick="setRateType('poisson')" style="padding:10px 0; border:2px solid #cbd5e1; border-radius:6px; background:white; color:#475569; font-weight:600; cursor:pointer; font-size:0.85em; text-align:center;">Poisson RPS</button>
+                                    <!-- Constant RPS and Poisson RPS hidden: calibration math (Little's Law),
+                                         concurrency sweep levels, and InferenceX charts all assume concurrent users.
+                                         Using constant/poisson would produce incorrect calibration and misleading results.
+                                         Re-enable when the pipeline supports rate-based calibration. -->
+                                    <div style="display: grid; grid-template-columns: repeat(1, 1fr); gap: 6px;">
+                                        <button type="button" id="rate-type-concurrent" onclick="setRateType('concurrent')" style="padding:10px 0; border:2px solid var(--rh-red-primary); border-radius:6px; background:var(--rh-red-primary); color:white; font-weight:600; cursor:pointer; font-size:0.85em; text-align:center;">Concurrent Users</button>
+                                        <!--<button type="button" id="rate-type-constant" onclick="setRateType('constant')" style="padding:10px 0; border:2px solid #cbd5e1; border-radius:6px; background:white; color:#475569; font-weight:600; cursor:pointer; font-size:0.85em; text-align:center;">Constant RPS</button>-->
+                                        <!--<button type="button" id="rate-type-poisson" onclick="setRateType('poisson')" style="padding:10px 0; border:2px solid #cbd5e1; border-radius:6px; background:white; color:#475569; font-weight:600; cursor:pointer; font-size:0.85em; text-align:center;">Poisson RPS</button>-->
                                     </div>
                                 </div>
                                 <div class="input-grid" style="grid-template-columns: 1fr 1fr 1fr;">
