@@ -245,6 +245,7 @@ socket.on('config_updated', function(data) {
 });
 
 socket.on('load_config_result', function(data) {
+    window._serverConfigReceived = true;
     if (data.success) {
         console.log('Loaded config from server:', data);
         config = { ...config, ...data.config };

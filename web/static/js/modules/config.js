@@ -428,24 +428,23 @@ function updateUIFromConfig() {
 
 // Load config from server (with localStorage fallback)
 function loadConfig() {
-    // First, try to load from server
+    // Server config is authoritative — only use localStorage if server fails
     socket.emit('load_config');
 
-    // Fallback: also load from localStorage in case server fails
-    const saved = localStorage.getItem('serveit-config');
-    const savedStep = localStorage.getItem('serveit-step');
-
-    if (saved) {
-        const loadedConfig = JSON.parse(saved);
-        config = { ...config, ...loadedConfig };
-
-        if (savedStep) {
-            currentStep = parseInt(savedStep);
+    // Set a timeout: if server doesn't respond in 3s, fall back to localStorage
+    window._serverConfigReceived = false;
+    setTimeout(function() {
+        if (window._serverConfigReceived) return;
+        const saved = localStorage.getItem('serveit-config');
+        const savedStep = localStorage.getItem('serveit-step');
+        if (saved) {
+            const loadedConfig = JSON.parse(saved);
+            config = { ...config, ...loadedConfig };
+            if (savedStep) currentStep = parseInt(savedStep);
+            updateUIFromConfig();
+            goToStep(currentStep, true);
         }
-
-        // Note: updateUIFromConfig and goToStep will be called
-        // when we receive the load_config_result event
-    }
+    }, 3000);
 }
 
 // Restore Cluster Resources display
