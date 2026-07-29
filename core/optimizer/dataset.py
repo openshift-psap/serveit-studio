@@ -162,14 +162,30 @@ class DatasetMixin:
         else:
             isl_stdev = self.config.isl_stdev or 0
             osl_stdev = self.config.osl_stdev or 0
-            cmd = (
-                f'generate_dataset'
-                f' --model "{self.config.model_name}"'
-                f' --isl {isl} --osl {osl}'
-                f' --seed {seed} --rows {pool_size}'
-                f' --output {dataset_path}'
-                f' --mode cache --hit-pct {hit_pct}'
-            )
+            groups = int(self.config.prefix_cache_groups or 5) if cache_mode == 'multi_group' else 0
+
+            if cache_mode == 'multi_group' and groups > 0:
+                prefix_tokens = int(isl * hit_pct / 100)
+                cmd = (
+                    f'generate_dataset'
+                    f' --model "{self.config.model_name}"'
+                    f' --isl {isl} --osl {osl}'
+                    f' --seed {seed} --rows {pool_size}'
+                    f' --output {dataset_path}'
+                    f' --mode prefix_group'
+                    f' --prefix-tokens {prefix_tokens}'
+                    f' --prefix-groups {groups}'
+                )
+                self.log(f"   Prefix group mode: {groups} groups, {prefix_tokens} prefix tokens + {isl - prefix_tokens} suffix tokens", 'info')
+            else:
+                cmd = (
+                    f'generate_dataset'
+                    f' --model "{self.config.model_name}"'
+                    f' --isl {isl} --osl {osl}'
+                    f' --seed {seed} --rows {pool_size}'
+                    f' --output {dataset_path}'
+                    f' --mode cache --hit-pct {hit_pct}'
+                )
             if isl_stdev > 0:
                 cmd += f' --isl-stdev {isl_stdev}'
             if osl_stdev > 0:

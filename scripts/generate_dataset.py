@@ -163,16 +163,84 @@ def generate_cache_parallel(args):
     return rows
 
 
+def _generate_prefix_group_chunk(chunk_args):
+    """Generate a chunk of prefix-group rows: shared prefix + unique suffix per row."""
+    start_idx, count, seed, prefix_tokens, suffix_tokens, osl, osl_stdev, model_name, group_prefixes = chunk_args
+    pid = os.getpid()
+    tokenizer, vocab = _load_tokenizer(model_name)
+    num_groups = len(group_prefixes)
+    print(f"Worker {pid}: generating {count} prefix-group rows ({num_groups} groups, {prefix_tokens}+{suffix_tokens} tokens)...", file=sys.stderr, flush=True)
+
+    rows = []
+    for i in range(count):
+        rng = random.Random(seed + start_idx + i + 1)
+        group_idx = (start_idx + i) % num_groups
+        prefix = group_prefixes[group_idx]
+        suffix = _make_prompt(suffix_tokens, rng, tokenizer, vocab)
+        prompt = prefix + '\n' + suffix
+        row_osl = max(1, int(rng.gauss(osl, osl_stdev))) if osl_stdev > 0 else osl
+        rows.append(json.dumps({'prompt': prompt, 'output_tokens_count': row_osl}))
+        if (i + 1) % 2000 == 0:
+            print(f"Worker {pid}: {i+1}/{count}", file=sys.stderr, flush=True)
+
+    print(f"Worker {pid}: done ({count} rows)", file=sys.stderr, flush=True)
+    return rows
+
+
+def generate_prefix_group_parallel(args):
+    """Generate prefix-group dataset: N groups, each with a shared prefix + unique suffix per row."""
+    num_workers = min(multiprocessing.cpu_count(), 8)
+    num_groups = args.prefix_groups
+    prefix_tokens = args.prefix_tokens
+    suffix_tokens = max(1, args.isl - prefix_tokens)
+
+    tokenizer, vocab = _load_tokenizer(args.model)
+
+    print(f"Generating {num_groups} group prefixes ({prefix_tokens} tokens each)...", file=sys.stderr, flush=True)
+    group_prefixes = []
+    for g in range(num_groups):
+        grng = random.Random(args.seed + g * 10000)
+        group_prefixes.append(_make_prompt(prefix_tokens, grng, tokenizer, vocab))
+    print(f"Generated {num_groups} group prefixes, suffix={suffix_tokens} tokens", file=sys.stderr, flush=True)
+
+    chunk_size = args.rows // num_workers
+    remainder = args.rows % num_workers
+    chunks = []
+    offset = 0
+    for w in range(num_workers):
+        n = chunk_size + (1 if w < remainder else 0)
+        chunks.append((offset, n, args.seed, prefix_tokens, suffix_tokens, args.osl, args.osl_stdev, args.model, group_prefixes))
+        offset += n
+
+    print(f"Using {num_workers} workers for {args.rows} rows...", file=sys.stderr, flush=True)
+    t0 = time.time()
+
+    with multiprocessing.Pool(num_workers) as pool:
+        results = pool.map(_generate_prefix_group_chunk, chunks)
+
+    rows = []
+    for chunk_rows in results:
+        rows.extend(chunk_rows)
+
+    random.Random(args.seed + 999).shuffle(rows)
+
+    elapsed = time.time() - t0
+    print(f"Generation complete: {len(rows)} rows in {elapsed:.1f}s ({len(rows)/max(elapsed,0.1):.0f} rows/s)", file=sys.stderr, flush=True)
+    return rows
+
+
 def main():
     parser = argparse.ArgumentParser(description='Generate benchmark dataset')
     parser.add_argument('--model', required=True, help='HuggingFace model name')
-    parser.add_argument('--isl', type=int, required=True, help='Input sequence length')
+    parser.add_argument('--isl', type=int, required=True, help='Input sequence length (prefix + suffix)')
     parser.add_argument('--osl', type=int, required=True, help='Output sequence length')
     parser.add_argument('--seed', type=int, required=True, help='Random seed')
     parser.add_argument('--rows', type=int, required=True, help='Number of rows')
     parser.add_argument('--output', required=True, help='Output JSONL path')
-    parser.add_argument('--mode', default='random', choices=['random', 'cache'], help='Dataset mode')
+    parser.add_argument('--mode', default='random', choices=['random', 'cache', 'prefix_group'], help='Dataset mode')
     parser.add_argument('--hit-pct', type=int, default=100, help='Cache hit percentage (cache mode)')
+    parser.add_argument('--prefix-tokens', type=int, default=0, help='Shared prefix length in tokens (prefix_group mode)')
+    parser.add_argument('--prefix-groups', type=int, default=10, help='Number of prefix groups (prefix_group mode)')
     parser.add_argument('--isl-stdev', type=float, default=0, help='ISL standard deviation')
     parser.add_argument('--osl-stdev', type=float, default=0, help='OSL standard deviation')
     args = parser.parse_args()
@@ -181,6 +249,10 @@ def main():
 
     if args.mode == 'random':
         rows = generate_random_parallel(args)
+    elif args.mode == 'prefix_group':
+        if args.prefix_tokens <= 0:
+            args.prefix_tokens = int(args.isl * 0.43)
+        rows = generate_prefix_group_parallel(args)
     else:
         rows = generate_cache_parallel(args)
 
