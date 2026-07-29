@@ -25,10 +25,11 @@ socket.on('session_granted', function() {
     if (!window._serverConfigReceived) loadConfig();
 });
 
-// Load config as soon as socket connects — don't wait for session_granted
-// which may arrive later or trigger a duplicate load
+// Load config as soon as socket connects — defer to ensure config.js is loaded
 socket.on('connect', function() {
-    loadConfig();
+    setTimeout(function() {
+        if (typeof loadConfig === 'function' && !window._serverConfigReceived) loadConfig();
+    }, 200);
 });
 
 // Heartbeat — prove we're alive every 5 seconds
