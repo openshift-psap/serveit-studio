@@ -446,6 +446,7 @@ class ConfigBuilderMixin:
             'dbo_decode_token_threshold': 'dbo_decode_token_threshold',
             'model_loader_extra_config': 'model_loader_extra_config',
             'cpu_offload_gb': 'cpu_offload_gb',
+            'weight_cpu_offload_gb': 'weight_cpu_offload_gb',
             'http_timeout_keep_alive': 'http_timeout_keep_alive',
             'prefix_cache_retention': 'prefix_cache_retention',
             'ssm_conv_state_layout': 'ssm_conv_state_layout',
@@ -455,7 +456,7 @@ class ConfigBuilderMixin:
             if setting and setting.get('mode') == 'custom' and setting.get('value') is not None:
                 val = setting['value']
                 if attr in ('max_model_len', 'max_num_seqs', 'max_num_batched_tokens', 'pipeline_parallel_size', 'block_size',
-                            'cpu_offload_gb', 'http_timeout_keep_alive', 'prefix_cache_retention'):
+                            'cpu_offload_gb', 'weight_cpu_offload_gb', 'http_timeout_keep_alive', 'prefix_cache_retention'):
                     val = int(val)
                 elif attr == 'gpu_memory_utilization':
                     val = float(val)

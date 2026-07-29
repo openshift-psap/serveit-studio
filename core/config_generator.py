@@ -144,7 +144,8 @@ class TestConfig:
     reasoning_parser: Optional[str] = None
     chat_template_content_format: Optional[str] = None
     model_loader_extra_config: Optional[str] = None
-    cpu_offload_gb: Optional[int] = None
+    cpu_offload_gb: Optional[int] = None  # OffloadingConnector CPU KV cache (NIXL)
+    weight_cpu_offload_gb: Optional[int] = None  # vLLM --cpu-offload-gb (model weights to CPU)
     http_timeout_keep_alive: Optional[int] = None
     prefix_cache_retention: Optional[int] = None
     ssm_conv_state_layout: Optional[str] = None
