@@ -767,6 +767,20 @@ def run_optimization_background(data):
         selected_shared_device = _get('selected_shared_device')
         selected_dra_classes = _get('selected_dra_classes') or []
         dra_gpu_resource_key = _get('dra_gpu_resource_key')
+
+        # Auto-resolve dra_gpu_resource_key from the cluster if missing
+        if network_type == 'dra' and selected_dra_classes and not dra_gpu_resource_key:
+            for dc_name in selected_dra_classes:
+                try:
+                    r = scanner.kubectl.run(
+                        ['get', 'deviceclass', dc_name, '-o', 'jsonpath={.spec.extendedResourceName}'],
+                        check=False)
+                    if r.returncode == 0 and r.stdout.strip():
+                        dra_gpu_resource_key = r.stdout.strip()
+                        log_to_ui(f'Auto-resolved DRA resource key: {dra_gpu_resource_key}', 'info')
+                        break
+                except Exception:
+                    pass
         gateway_class = _get('gateway_class', 'istio')
         per_node_storage = _get('per_node_storage', False)
         node_nfs_pvcs = _get('node_nfs_pvcs') or []
