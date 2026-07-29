@@ -960,7 +960,7 @@ data:
             scanner = SystemScanner(namespace=TARGET_NAMESPACE)
             cluster_resources = scanner.scan_cluster()
             tp_options = cluster_resources.get_tp_options()
-            log_to_ui(f"   Valid TP options for this cluster: {tp_options}", 'info')
+            log_to_ui(f"   Hardware TP options: {tp_options} (model-based filtering applied later)", 'info')
             log_to_ui("", 'info')
 
             # Create optimizer config
