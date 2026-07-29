@@ -647,9 +647,15 @@ socket.on('cluster_scan_result', function(data) {
                 var defaults = draClasses.filter(function(c) { return c.kind === 'gpu_nic_pair'; });
                 if (defaults.length === 0) defaults = draClasses.filter(function(c) { return c.kind === 'nic'; });
                 config.selected_dra_classes = defaults.map(function(c) { return c.name || c; });
-                var gpuNicPair = defaults.find(function(c) { return c.extendedResourceName; });
-                if (gpuNicPair) config.dra_gpu_resource_key = gpuNicPair.extendedResourceName;
-                saveConfig();
+                savedDra = config.selected_dra_classes;
+            }
+            // Always sync dra_gpu_resource_key from the selected class's extendedResourceName
+            if (!config.dra_gpu_resource_key && savedDra.length > 0) {
+                var selectedClass = draClasses.find(function(c) { return savedDra.indexOf(c.name) !== -1 && c.extendedResourceName; });
+                if (selectedClass) {
+                    config.dra_gpu_resource_key = selectedClass.extendedResourceName;
+                    saveConfig();
+                }
             }
         }
     }
