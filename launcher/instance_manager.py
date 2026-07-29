@@ -325,14 +325,28 @@ def delete_cluster(cluster_id: int, owner_id: int, is_admin: bool = False) -> bo
             (cluster_id,)
         ).fetchall()
 
+    # Delete instances — the async threads handle k8s cleanup, but we need
+    # the DB rows gone before deleting the cluster (foreign key constraint)
     for inst in instances:
         delete_instance(inst['id'], row['owner_id'])
+
+    # Wait for instance rows to be deleted (async threads do DB cleanup in finally block)
+    for _ in range(60):
+        with get_db() as conn:
+            remaining = conn.execute(
+                'SELECT COUNT(*) as cnt FROM instances WHERE cluster_id = ?', (cluster_id,)
+            ).fetchone()['cnt']
+        if remaining == 0:
+            break
+        time.sleep(1)
 
     # Delete kubeconfig secret if it exists
     if row.get('kubeconfig_secret'):
         _kubectl(['delete', 'secret', row['kubeconfig_secret'], '-n', 'serveit', '--ignore-not-found=true'])
 
     with get_db() as conn:
+        # Force-delete any remaining instance rows (in case async threads timed out)
+        conn.execute('DELETE FROM instances WHERE cluster_id = ?', (cluster_id,))
         conn.execute('DELETE FROM clusters WHERE id = ?', (cluster_id,))
     return True
 
