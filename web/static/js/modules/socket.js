@@ -27,16 +27,6 @@ socket.on('session_granted', function() {
     loadConfig();
 });
 
-// Load config on connect (backup for when session_granted doesn't fire)
-socket.on('connect', function() {
-    if (!initialConnectDone) {
-        initialConnectDone = true;
-        setTimeout(function() {
-            if (!window._serverConfigReceived) loadConfig();
-        }, 500);
-    }
-});
-
 // Heartbeat — prove we're alive every 5 seconds
 setInterval(function() { socket.emit('heartbeat'); }, 5000);
 
