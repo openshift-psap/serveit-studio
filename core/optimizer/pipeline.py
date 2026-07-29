@@ -1614,6 +1614,8 @@ class RecipeOptimizer(
 
         hidden = cfg.get('hidden_size', 0)
         layers = cfg.get('num_hidden_layers', 0)
+        if not layers and cfg.get('layers_block_type'):
+            layers = len(cfg['layers_block_type'])
         vocab = cfg.get('vocab_size', 0)
         intermediate = cfg.get('intermediate_size', 0)
         num_heads = cfg.get('num_attention_heads', 0)
