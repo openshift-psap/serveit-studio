@@ -222,6 +222,14 @@ function updateUIFromConfig() {
             if (gr) gr.style.display = 'flex';
         }
     }
+    if (config.structured_prefix) {
+        var csSpEl = document.getElementById('cache-sweep-structured-prefix');
+        if (csSpEl) {
+            csSpEl.checked = true;
+            var csSpSw = document.getElementById('cache-sweep-structured-switch');
+            if (csSpSw) { csSpSw.style.background = '#7c3aed'; csSpSw.querySelector('span').style.transform = 'translateX(18px)'; }
+        }
+    }
     if (config.cache_sweep_count && document.getElementById('cache-sweep-count')) {
         document.getElementById('cache-sweep-count').value = config.cache_sweep_count;
     }

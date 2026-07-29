@@ -290,6 +290,17 @@
                                     <div style="font-weight:600;font-size:0.85em;color:#5b21b6;">Groups:</div>
                                     <input type="number" id="cache-sweep-groups" value="5" min="2" max="50" style="width:60px;padding:4px 8px;border:1px solid #c4b5fd;border-radius:6px;font-size:0.85em;" onchange="config.cache_sweep_groups=parseInt(this.value)||5;saveConfig();">
                                 </div>
+                                <!-- Structured prefix toggle -->
+                                <div style="display:flex;align-items:center;justify-content:space-between;gap:12px;padding:10px 14px;background:#f5f3ff;border:1px solid #ddd6fe;border-radius:8px;cursor:pointer;margin-top:10px;" onclick="var on=!document.getElementById('cache-sweep-structured-prefix').checked;document.getElementById('cache-sweep-structured-prefix').checked=on;config.structured_prefix=on;var sw=document.getElementById('cache-sweep-structured-switch');sw.style.background=on?'#7c3aed':'#ccc';sw.querySelector('span').style.transform=on?'translateX(18px)':'translateX(0)';var sp3=document.getElementById('structured-prefix-enabled');if(sp3){sp3.checked=on;var sw3=document.getElementById('structured-prefix-switch');if(sw3){sw3.style.background=on?'#15803d':'#ccc';sw3.querySelector('span').style.transform=on?'translateX(18px)':'translateX(0)';}}saveConfig();">
+                                    <div>
+                                        <div style="font-weight:600;font-size:0.85em;color:#5b21b6;">Structured Prefix Prompts</div>
+                                        <div style="font-size:0.78em;color:#6d28d9;margin-top:2px;">Generate prompts with a shared system-prompt prefix + unique question suffix instead of random tokens. The cache hit ratio at each level controls the prefix/suffix split. Better simulates real agentic and chat workloads.</div>
+                                    </div>
+                                    <input type="checkbox" id="cache-sweep-structured-prefix" style="display:none;">
+                                    <div id="cache-sweep-structured-switch" style="width:40px;height:22px;background:#ccc;border-radius:11px;position:relative;transition:background-color 0.2s;flex-shrink:0;margin-left:16px;">
+                                        <span style="position:absolute;top:2px;left:2px;width:18px;height:18px;background:white;border-radius:50%;transition:transform 0.2s;box-shadow:0 1px 3px rgba(0,0,0,0.2);display:block;"></span>
+                                    </div>
+                                </div>
                             </div>
                         </div>
 
