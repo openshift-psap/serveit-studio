@@ -885,10 +885,8 @@ function restoreTestPlan() {
 }
 
 // Load config and restore console on page load
-setTimeout(() => {
-    restoreConsole();  // Restore console first
-    loadConfig();      // Then load config (without logging extra message)
-}, 100);
+restoreConsole();
+// loadConfig() is called by socket 'session_granted' or 'connect' events — not a timer
 
 // Goal selection
 document.querySelectorAll('[data-goal]').forEach(card => {
