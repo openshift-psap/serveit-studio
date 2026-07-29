@@ -1124,26 +1124,51 @@ class TestOrchestrator(ParserMixin, GuidellmMixin):
                     log_callback('=' * 60)
                     log_callback('')
 
-            # Step 1a: Clean up any leftover deployment from a previous failed attempt
-            # This prevents resume from hitting the same stuck LWS
+            # Step 1a: Check if existing deployment is already serving
+            # Reuse running pods to avoid 30+ min model reload on large models
             if not skip_deploy:
                 existing = self.deployment_manager.get_deployment_status(
                     config.test_id, config.architecture
                 )
                 if existing.deployed:
-                    if log_callback:
-                        log_callback(f"🧹 Cleaning up leftover deployment from previous attempt: {config.test_id}")
-                    self.deployment_manager.delete_deployment(
-                        config.test_id,
-                        config.architecture,
-                        log_callback=log_callback
-                    )
-                    self.deployment_manager.wait_for_pods_terminated(
-                        config.test_id,
-                        timeout=300,
-                        log_callback=log_callback
-                    )
+                    # Check if ALL pods are serving
+                    r = subprocess.run(
+                        ['kubectl', 'get', 'pods', '-n', self.namespace,
+                         '-l', f'llm-d.ai/test-id={config.test_id}',
+                         '-o', 'jsonpath={range .items[*]}{.metadata.name}{" "}{end}'],
+                        capture_output=True, text=True, timeout=15, check=False)
+                    pod_names = [p for p in r.stdout.strip().split() if p]
+                    all_serving = len(pod_names) > 0
+                    for pn in pod_names:
+                        log_r = subprocess.run(
+                            ['kubectl', 'logs', pn, '-n', self.namespace,
+                             '-c', 'vllm', '--tail=2000'],
+                            capture_output=True, text=True, timeout=30, check=False)
+                        if 'Application startup complete' not in log_r.stdout:
+                            all_serving = False
+                            break
 
+                    if all_serving:
+                        if log_callback:
+                            log_callback(f"♻️  Reusing {len(pod_names)} existing serving pod(s) — skipping deployment")
+                        skip_deploy = True
+                        result.deployment_success = True
+                        result.deployment_ready = True
+                    else:
+                        if log_callback:
+                            log_callback(f"🧹 Cleaning up leftover deployment (not all pods serving): {config.test_id}")
+                        self.deployment_manager.delete_deployment(
+                            config.test_id,
+                            config.architecture,
+                            log_callback=log_callback
+                        )
+                        self.deployment_manager.wait_for_pods_terminated(
+                            config.test_id,
+                            timeout=300,
+                            log_callback=log_callback
+                        )
+
+            if not skip_deploy:
                 deployment_success = self.deployment_manager.deploy_config(
                     config,
                     log_callback=log_callback
