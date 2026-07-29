@@ -145,7 +145,7 @@ spec:
               COPY_START=$(date +%s)
 {% for nfs in node_nfs_pvcs[1:] %}
               mkdir -p "/nfs-{{ nfs.suffix }}/huggingface"
-              rsync -rL --size-only --no-perms --no-owner --no-group --exclude='trees/' "$PRIMARY/$MODEL_CACHE_NAME/" "/nfs-{{ nfs.suffix }}/huggingface/$MODEL_CACHE_NAME/" &
+              rsync -rL --size-only --no-perms --no-owner --no-group --info=progress2 --exclude='trees/' "$PRIMARY/$MODEL_CACHE_NAME/" "/nfs-{{ nfs.suffix }}/huggingface/$MODEL_CACHE_NAME/" &
 {% endfor %}
               echo "⏳ Waiting for rsync to complete..."
               wait
