@@ -144,8 +144,7 @@ class ConfigBuilderMixin:
             use_deep_gemm=getattr(self, '_use_deep_gemm', None),
             has_hybrid_attention=getattr(self, '_has_hybrid_attention', False),
         )
-        if not is_calibration or not getattr(self.config, 'advanced_vllm_custom_enabled', True):
-            cfg = self._apply_advanced_vllm(cfg)
+        cfg = self._apply_advanced_vllm(cfg)
 
         return cfg
 
