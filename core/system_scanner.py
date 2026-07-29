@@ -42,12 +42,12 @@ class NodeResources:
     cpu_cores: int  # Total CPU cores
     cpu_model: str  # CPU model name
     memory_gb: int  # Total RAM in GB
-    numa_nodes: int = 1  # Number of NUMA nodes
     has_rdma: bool
     rdma_devices: List[str]
     network_interfaces: List[NetworkInterface]
     labels: Dict[str, str]
     status: str = 'Unknown'  # Ready, NotReady, Unknown
+    numa_nodes: int = 1  # Number of NUMA nodes
 
 
 @dataclass
