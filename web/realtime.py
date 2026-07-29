@@ -76,6 +76,7 @@ def handle_connect():
             'last_heartbeat': _time.time(),
         }
     print(f'Client {sid} ({username}) is now the active UI session')
+    emit('session_granted')
     _replay_state_to_client()
 
 
