@@ -602,7 +602,7 @@ class PrereqManager:
             ['get', 'podmonitor', 'epp-metrics', '-n', self.namespace],
             check=False)
         if r.returncode != 0:
-            epp_sa = context.get('gaie_name', 'gaie-pd-epp')
+            epp_sa = getattr(self, '_gaie_name', None) or 'gaie-pd-epp'
             # Create long-lived SA token secret for Prometheus to authenticate with EPP metrics
             token_secret = json.dumps({
                 'apiVersion': 'v1',
