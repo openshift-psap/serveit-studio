@@ -237,6 +237,7 @@ spec:
                 protocol: TCP
             resources:
               limits:
+                cpu: "{{ cpu_limit }}"
                 memory: "{{ memory_limit }}"
 {% if selected_dra_classes %}
                 {{ gpu_resource_key }}: "{{ gpu_count }}"
