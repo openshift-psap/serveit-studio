@@ -90,7 +90,7 @@ class RecipeOptimizer(
             namespace=config.namespace,
             kubeconfig=config.kubeconfig,
             thanos_url=config.thanos_url,
-            deployment_timeout=3600,
+            deployment_timeout=3600,  # Updated after model config is loaded
             test_duration=config.test_duration
         )
 
@@ -280,6 +280,11 @@ class RecipeOptimizer(
                 # Standard FP8 per-tensor quantization — DeepGemm compatible
                 self._use_deep_gemm = True
                 self.log("  DeepGemm: enabled (per-tensor FP8 quantization)")
+
+        # Scale model load timeout by model size: 10s per 1B params, min 600s
+        model_load_timeout = max(600, int(self._model_size_b * 10))
+        self.orchestrator.deployment_timeout = model_load_timeout
+        self.log(f"Model load timeout: {model_load_timeout}s ({self._model_size_b:.0f}B × 10s/B)")
 
         # Set HF_TOKEN in process environment so guidellm and other subprocesses inherit it
         if self.config.hf_token and not os.environ.get('HF_TOKEN'):

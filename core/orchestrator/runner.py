@@ -355,7 +355,7 @@ class TestOrchestrator(ParserMixin, GuidellmMixin):
                     # metrics scrape lines don't push the startup message out)
                     log_result = subprocess.run(
                         ['kubectl', 'logs', pod_name, '-n', self.namespace,
-                         '-c', 'vllm', '--tail=500'],
+                         '-c', 'vllm', '--tail=2000'],
                         capture_output=True, text=True, timeout=30, check=False
                     )
                     startup_in_logs = 'Application startup complete' in log_result.stdout
