@@ -760,6 +760,7 @@ def run_optimization_background(data):
         memory_reserve_pct = float(mem_reserve_setting.get('value')) if mem_reserve_setting.get('mode') == 'custom' and mem_reserve_setting.get('value') else 0.0
 
         # Network selections
+        network_type = _get('network_type', 'eth0')
         rdma_network_annotation = _get('rdma_network_annotation')
         selected_sriov_policies = _get('selected_sriov_policies') or []
         sriov_same_subnet = _get('sriov_same_subnet', False)
