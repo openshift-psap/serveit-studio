@@ -145,7 +145,7 @@ class ConfigBuilderMixin:
             has_hybrid_attention=getattr(self, '_has_hybrid_attention', False),
         )
         cfg = self._apply_advanced_vllm(cfg)
-
+        cfg = self._auto_tune_model_loader(cfg)
         return cfg
 
     def _get_profiled_kv_cache_bytes(self, tp: int) -> Optional[int]:
@@ -481,6 +481,18 @@ class ConfigBuilderMixin:
 
         return cfg
 
+    @staticmethod
+    def _auto_tune_model_loader(cfg: TestConfig) -> TestConfig:
+        """Set model loader threads to match pod CPU allocation when not explicitly configured."""
+        if not cfg.model_loader_extra_config and cfg.cpu_limit:
+            import json as _json
+            num_threads = int(cfg.cpu_limit)
+            cfg.model_loader_extra_config = _json.dumps({
+                "enable_multithread_load": True,
+                "num_threads": num_threads
+            })
+        return cfg
+
     def _apply_raw_vllm_args(self, cfg: TestConfig, raw_text: str) -> TestConfig:
         """Parse raw text flags: set known flags on TestConfig, extras go to extra_vllm_args."""
         known_flags = {
@@ -649,7 +661,9 @@ class ConfigBuilderMixin:
             use_deep_gemm=getattr(self, '_use_deep_gemm', None),
             has_hybrid_attention=getattr(self, '_has_hybrid_attention', False),
         )
-        return self._apply_advanced_vllm(cfg)
+        cfg = self._apply_advanced_vllm(cfg)
+        cfg = self._auto_tune_model_loader(cfg)
+        return cfg
 
     def _create_ep_config(self, split: 'FeasibleSplit') -> TestConfig:
         """Create EP (Expert Parallelism) architecture test config.
@@ -825,5 +839,7 @@ class ConfigBuilderMixin:
             use_deep_gemm=getattr(self, '_use_deep_gemm', None),
             has_hybrid_attention=getattr(self, '_has_hybrid_attention', False),
         )
-        return self._apply_advanced_vllm(cfg)
+        cfg = self._apply_advanced_vllm(cfg)
+        cfg = self._auto_tune_model_loader(cfg)
+        return cfg
 
