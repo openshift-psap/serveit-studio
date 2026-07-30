@@ -354,7 +354,7 @@ class GuidellmMixin:
 
                 extract_result = subprocess.run(
                     extract_cmd, capture_output=True, text=True,
-                    timeout=30, env=extract_env
+                    timeout=120, env=extract_env
                 )
 
                 if extract_result.returncode != 0 or not extract_result.stdout.strip():
