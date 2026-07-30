@@ -45,8 +45,8 @@ class RecipeOptimizer(
     Recipe-based exhaustive optimizer.
 
     Workflow:
-    1. Step 2: Exhaustively test all valid decode TP values
-    2. Step 3: Exhaustively test all valid prefill TP values
+    1. Steps 2-3: Combined TP sweep — test all valid TP values for both
+       decode and prefill workloads (single deploy per TP)
     3. Steps 4-5: Calculate ideal P/D ratio and feasible splits
     4. Step 6: Search for best aggregated configuration
     5. Step 7: Exhaustively test P/D splits near ideal ratio
@@ -1053,11 +1053,11 @@ class RecipeOptimizer(
         # Scale by sequence length — short sequences (ISL=1 decode calibration)
         # need more concurrency to saturate GPUs
         if effective_seq_len < 100:
-            compute_cap = tp * 16  # decode-only: moderate batching
-        elif effective_seq_len < 1000:
-            compute_cap = tp * 12
+            compute_cap = tp * 16  # tiny sequences (ISL=1, OSL=1)
+        elif effective_seq_len < 4000:
+            compute_cap = tp * 12  # moderate (decode calibration ISL=1 + typical OSL)
         else:
-            compute_cap = tp * 8   # long sequences: fewer needed to saturate
+            compute_cap = tp * 8   # long sequences (prefill calibration with large ISL)
         max_concurrent = min(kv_cap, compute_cap)
         result = max(1, int(max_concurrent * 0.9))
 
@@ -1539,18 +1539,10 @@ class RecipeOptimizer(
                 self.config.dataset_max_output = self.config.osl
                 self.log("   Workload switched to random dataset mode for reproducible testing", 'info')
 
-            # Step 2: Find optimal decode TP
-            self.log("STEP 2: Decode TP Optimization", 'decision')
+            # Steps 2-3: Combined TP sweep (decode + prefill, single deploy per TP)
+            self.log("STEPS 2-3: Combined TP Sweep (Decode + Prefill)", 'decision')
             self.log("-" * 80, 'info')
-            self._optimize_decode_tp()
-            self.log("", 'info')
-            if self._should_stop():
-                return self._build_results()
-
-            # Step 3: Find optimal prefill TP
-            self.log("STEP 3: Prefill TP Optimization", 'decision')
-            self.log("-" * 80, 'info')
-            self._optimize_prefill_tp()
+            self._optimize_tp_combined()
             self.log("", 'info')
             if self._should_stop():
                 return self._build_results()

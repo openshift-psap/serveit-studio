@@ -823,6 +823,39 @@ class TestOrchestrator(ParserMixin, GuidellmMixin):
                 log_callback(f'⚠️  Warning: Pod health check failed: {str(e)[:100]}')
             return None
 
+    def _clear_gpu_cache(self, test_id: str, log_callback=None):
+        """Clear GPU cache on all serving pods for a test (parallel)."""
+        try:
+            result = subprocess.run(
+                ['kubectl', 'get', 'pods', '-n', self.namespace,
+                 '-l', f'llm-d.ai/test-id={test_id}',
+                 '-o', 'jsonpath={range .items[*]}{.metadata.name}{" "}{end}'],
+                capture_output=True, text=True, timeout=15, check=False
+            )
+            pod_names = [p for p in result.stdout.strip().split() if p]
+            if not pod_names:
+                return
+
+            procs = []
+            for pod_name in pod_names:
+                p = subprocess.Popen(
+                    ['kubectl', 'exec', pod_name, '-n', self.namespace,
+                     '-c', 'vllm', '--',
+                     'python3', '-c', 'import torch; torch.cuda.empty_cache()'],
+                    stdout=subprocess.DEVNULL, stderr=subprocess.PIPE
+                )
+                procs.append((pod_name, p))
+
+            for pod_name, p in procs:
+                p.wait(timeout=30)
+                if p.returncode != 0:
+                    logger.debug(f"GPU cache clear failed on {pod_name}: {p.stderr.read().decode()}")
+
+            if log_callback:
+                log_callback(f"   🧹 GPU cache cleared on {len(pod_names)} pod(s)")
+        except Exception as e:
+            logger.debug(f"Failed to clear GPU cache: {e}")
+
     # ── Persistent guidellm pod management ─────────────────────────────────
 
 
@@ -1418,6 +1451,9 @@ class TestOrchestrator(ParserMixin, GuidellmMixin):
                                     log_callback(f"   NIXL transfer errors: {scan_result.nixl_error_count} (non-critical, vLLM retries automatically)")
                 except ImportError:
                     pass
+
+                # Clear GPU cache on all serving pods after each test
+                self._clear_gpu_cache(config.test_id, log_callback=log_callback)
 
         except Exception as e:
             import traceback

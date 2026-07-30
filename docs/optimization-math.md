@@ -111,7 +111,7 @@ where `required_memory_gb = model_weight_gb + overhead_gb (5%) + kv_cache_gb (4 
 
 ---
 
-## Steps 2-3: TP Calibration (Decode & Prefill Sweeps)
+## Steps 2-3: Combined TP Sweep (Decode & Prefill)
 
 ### TPSG Calculation
 ```
@@ -130,6 +130,8 @@ Step 3 (Prefill): TPSG = (throughput_p90 × ISL) / TP
 - **Step 3 uses OSL=1**: Minimizes decode time so the benchmark measures pure prefill throughput. OSL=1 means generating only one output token.
 
 **Why isolate prefill and decode?** In P/D disaggregated mode, prefill and decode run on separate GPU pools. Measuring them independently lets us calculate the optimal ratio between prefill and decode GPUs.
+
+**Combined deployment:** Both tests deploy the same vLLM serving pod (same model, same TP, architecture=aggregated) — only the guidellm workload parameters differ. The pipeline deploys once per TP value, runs the decode workload, then runs the prefill workload on the same pods, and cleans up after both complete. For large models (550B+) where model loading takes 10+ minutes, this saves one full load cycle per TP value tested.
 
 ### max_model_len (always set)
 ```
@@ -163,9 +165,9 @@ kv_cap = floor(available_for_kv / kv_per_seq)
 
 # GPU compute saturation cap — scales by sequence length
 # Short sequences (decode calibration ISL=1) need more concurrency to saturate
-effective_seq_len < 100:   compute_cap = TP × 16
-effective_seq_len < 1000:  compute_cap = TP × 12
-effective_seq_len >= 1000: compute_cap = TP × 8
+effective_seq_len < 100:    compute_cap = TP × 16   # tiny (ISL=1, OSL=1)
+effective_seq_len < 4000:   compute_cap = TP × 12   # moderate (decode calibration)
+effective_seq_len >= 4000:  compute_cap = TP × 8    # long (prefill calibration)
 
 calibration_concurrency = floor(min(kv_cap, compute_cap) × 0.9)
 ```
@@ -188,8 +190,8 @@ Calibration concurrency is determined independently of the user's configured val
 **Example: Nemotron-3 Ultra NVFP4 on H200 (140GB):**
 ```
 Decode calibration (ISL=1, OSL=1024, seq=1025):
-  TP=4: kv_cap=5466, compute_cap=64 → safe=57
-  TP=8: kv_cap=17700, compute_cap=128 → safe=115
+  TP=4: kv_cap=5466, compute_cap=48 → safe=43
+  TP=8: kv_cap=17700, compute_cap=96 → safe=86
 
 Prefill calibration (ISL=7000, OSL=1, seq=7001):
   TP=4: kv_cap=800, compute_cap=32 → safe=28
