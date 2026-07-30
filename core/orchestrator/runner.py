@@ -1351,6 +1351,12 @@ class TestOrchestrator(ParserMixin, GuidellmMixin):
                 # Step 5: Run guidellm test (retry up to 3 times on 2-4% error rate)
                 max_guidellm_retries = 3
                 for guidellm_attempt in range(1, max_guidellm_retries + 1):
+                    if stop_check and stop_check():
+                        if log_callback:
+                            log_callback("🛑 Optimization stopped")
+                        result.error_message = "Stopped by user"
+                        return result
+
                     if guidellm_attempt > 1:
                         if log_callback:
                             log_callback(f"\n🔄 Retrying guidellm (attempt {guidellm_attempt}/{max_guidellm_retries}) — pods still running")
