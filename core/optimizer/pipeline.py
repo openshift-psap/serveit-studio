@@ -1509,6 +1509,8 @@ class RecipeOptimizer(
         import subprocess
         start = time.time()
         while time.time() - start < timeout:
+            if self._should_stop():
+                return
             r = subprocess.run(
                 ['kubectl', 'get', 'pods', '-n', self.config.namespace,
                  '-l', 'component=serveit-test', '--no-headers'],
@@ -1557,6 +1559,9 @@ class RecipeOptimizer(
         self.log("", 'info')
 
         try:
+            if self._should_stop():
+                return self._build_results()
+
             # Single test: skip TP calibration, go straight to strategy
             if self.config.objective == 'single_test':
                 strategy = self._get_strategy()
