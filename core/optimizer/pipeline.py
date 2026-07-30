@@ -1056,9 +1056,8 @@ class RecipeOptimizer(
         # need more concurrency to saturate GPUs
         # Longer sequences need fewer concurrent requests to saturate GPUs
         # Total tokens in flight to saturate ≈ 24K per GPU
-        compute_cap = max(1, int(tp * min(16.0, 24000.0 / max(effective_seq_len, 1))))
-        max_concurrent = min(kv_cap, compute_cap)
-        result = max(1, int(max_concurrent * 0.9))
+        compute_cap = max(1, math.ceil(tp * min(16.0, 24000.0 / max(effective_seq_len, 1))))
+        result = max(1, min(kv_cap, compute_cap))
 
         self.log(f"   Calibration concurrency for TP={tp}: {result} "
                  f"(kv_cap={kv_cap}, compute_cap={compute_cap}, "
