@@ -1504,6 +1504,21 @@ class RecipeOptimizer(
         except Exception as e:
             self.log(f"⚠️  Failed to clean up orphaned pods: {e}", 'warning')
 
+        # Restart EPP so its datastore re-discovers pods from scratch
+        try:
+            import subprocess
+            for arch in ('aggregated', 'pd', 'ep'):
+                name = f'gaie-{arch}-epp'
+                r = subprocess.run(
+                    ['kubectl', 'rollout', 'restart', 'deployment', name,
+                     '-n', self.config.namespace],
+                    capture_output=True, text=True, timeout=15, check=False
+                )
+                if r.returncode == 0:
+                    self.log(f"   🔄 Restarted EPP: {name}", 'info')
+        except Exception:
+            pass
+
         # Stale guidellm output files are cleaned per-test (rm -f before each run)
 
     def _wait_for_all_test_pods_terminated(self, timeout: int = 120):
