@@ -1038,7 +1038,13 @@ class RecipeOptimizer(
         # is off), so vLLM's actual KV slot size matches this.
         effective_seq_len = self.config.isl + self.config.osl
 
-        num_layers = self._model_config.get('num_hidden_layers', 32)
+        # Only attention layers need KV cache — Mamba/MoE layers don't
+        blocks = self._model_config.get('layers_block_type', [])
+        if blocks:
+            from collections import Counter
+            num_layers = Counter(blocks).get('attention', len(blocks))
+        else:
+            num_layers = self._model_config.get('num_hidden_layers', 32)
         num_kv_heads = self._model_config.get('num_key_value_heads',
                        self._model_config.get('num_attention_heads', 32))
         head_dim = self._model_config.get('head_dim',
