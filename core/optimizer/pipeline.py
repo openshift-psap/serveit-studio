@@ -1055,8 +1055,8 @@ class RecipeOptimizer(
         # Scale by sequence length — short sequences (ISL=1 decode calibration)
         # need more concurrency to saturate GPUs
         # Longer sequences need fewer concurrent requests to saturate GPUs
-        # Inverse scaling: at seq=2K → 12/GPU, seq=4K → 6, seq=12K+ → 2
-        per_gpu = min(16, max(2, 24000 // max(effective_seq_len, 1)))
+        # Inverse scaling: seq=2K → 12/GPU, seq=4K → 6, seq=24K+ → 1
+        per_gpu = min(16, max(1, 24000 // max(effective_seq_len, 1)))
         compute_cap = tp * per_gpu
         max_concurrent = min(kv_cap, compute_cap)
         result = max(1, int(max_concurrent * 0.9))
