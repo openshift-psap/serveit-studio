@@ -206,7 +206,6 @@ class RecipeOptimizer(
             estimated_b = self._estimate_params_from_config()
             if estimated_b:
                 self._model_size_b = estimated_b
-                self.log(f"Model size from config: {self._model_size_b:.1f}B parameters")
 
             # Sanity check: parse model name for parameter count (e.g., "550B", "70B")
             import re
@@ -217,7 +216,6 @@ class RecipeOptimizer(
                     self._model_size_b = name_b
                 elif not estimated_b:
                     self._model_size_b = name_b
-            self.log(f"Model size: {self._model_size_b:.0f}B parameters")
         except Exception as e:
             self.log(f"Could not load model config: {e}. Using defaults.", 'warning')
 
