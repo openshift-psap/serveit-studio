@@ -206,16 +206,6 @@ class RecipeOptimizer(
             estimated_b = self._estimate_params_from_config()
             if estimated_b:
                 self._model_size_b = estimated_b
-
-            # Sanity check: parse model name for parameter count (e.g., "550B", "70B")
-            import re
-            name_match = re.search(r'(\d+)[Bb]', self.config.model_name.split('/')[-1])
-            if name_match:
-                name_b = float(name_match.group(1))
-                if estimated_b and estimated_b > name_b * 3:
-                    self._model_size_b = name_b
-                elif not estimated_b:
-                    self._model_size_b = name_b
         except Exception as e:
             self.log(f"Could not load model config: {e}. Using defaults.", 'warning')
 
