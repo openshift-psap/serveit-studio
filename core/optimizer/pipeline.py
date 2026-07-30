@@ -1053,9 +1053,9 @@ class RecipeOptimizer(
         # Scale by sequence length — short sequences (ISL=1 decode calibration)
         # need more concurrency to saturate GPUs
         if effective_seq_len < 100:
-            compute_cap = tp * 64  # decode-only: light work per request
+            compute_cap = tp * 16  # decode-only: moderate batching
         elif effective_seq_len < 1000:
-            compute_cap = tp * 32
+            compute_cap = tp * 12
         else:
             compute_cap = tp * 8   # long sequences: fewer needed to saturate
         max_concurrent = min(kv_cap, compute_cap)
