@@ -1058,8 +1058,12 @@ class RecipeOptimizer(
             compute_cap = tp * 16  # tiny sequences (ISL=1, OSL=1)
         elif effective_seq_len < 4000:
             compute_cap = tp * 12  # moderate (decode calibration ISL=1 + typical OSL)
+        elif effective_seq_len < 32000:
+            compute_cap = tp * 8   # long sequences
+        elif effective_seq_len < 100000:
+            compute_cap = tp * 4   # very long (32K-100K context)
         else:
-            compute_cap = tp * 8   # long sequences (prefill calibration with large ISL)
+            compute_cap = tp * 2   # ultra long (100K+)
         max_concurrent = min(kv_cap, compute_cap)
         result = max(1, int(max_concurrent * 0.9))
 

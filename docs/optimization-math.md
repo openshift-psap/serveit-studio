@@ -165,9 +165,11 @@ kv_cap = floor(available_for_kv / kv_per_seq)
 
 # GPU compute saturation cap — scales by sequence length
 # Short sequences (decode calibration ISL=1) need more concurrency to saturate
-effective_seq_len < 100:    compute_cap = TP × 16   # tiny (ISL=1, OSL=1)
-effective_seq_len < 4000:   compute_cap = TP × 12   # moderate (decode calibration)
-effective_seq_len >= 4000:  compute_cap = TP × 8    # long (prefill calibration)
+effective_seq_len < 100:     compute_cap = TP × 16   # tiny (ISL=1, OSL=1)
+effective_seq_len < 4000:    compute_cap = TP × 12   # moderate (decode calibration)
+effective_seq_len < 32000:   compute_cap = TP × 8    # long (standard prefill)
+effective_seq_len < 100000:  compute_cap = TP × 4    # very long (32K-100K context)
+effective_seq_len >= 100000: compute_cap = TP × 2    # ultra long (100K+)
 
 calibration_concurrency = floor(min(kv_cap, compute_cap) × 0.9)
 ```
