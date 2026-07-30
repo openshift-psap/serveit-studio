@@ -238,6 +238,7 @@ class GuidellmMixin:
 
         exec_cmd = (
             f'mkdir -p /mnt/storage/tmp && '
+            f'rm -f {output_path} && '
             f'export TMPDIR=/mnt/storage/tmp && '
             f'guidellm run'
             f' --backend "{backend_arg}"'

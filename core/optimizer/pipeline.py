@@ -1473,7 +1473,14 @@ class RecipeOptimizer(
         return mem_str, cpu_str
 
     def clear_previous_results(self):
-        """Clear all previous test results for this run (start fresh)."""
+        """Clear all previous test results for this run (start fresh).
+
+        Also cleans up orphaned resources on the cluster:
+        - Serving pods (LWS) left behind by a killed optimizer
+        - Stale guidellm output files on the workload pod
+        Without this, the reuse logic in run_test would pick up old pods
+        and old results, skipping tests that should run fresh.
+        """
         if self.db_manager and self.run_id:
             try:
                 with self.db_manager.get_connection() as conn:
@@ -1485,6 +1492,34 @@ class RecipeOptimizer(
                 self.log("🗑️  Cleared all previous test results — starting fresh", 'info')
             except Exception as e:
                 self.log(f"⚠️  Failed to clear previous results: {e}", 'warning')
+
+        # Clean up orphaned serving pods on the cluster
+        try:
+            self.orchestrator.deployment_manager.cleanup_all_deployments(
+                log_callback=lambda msg: self.log(msg, 'info')
+            )
+            self._wait_for_all_test_pods_terminated(timeout=120)
+        except Exception as e:
+            self.log(f"⚠️  Failed to clean up orphaned pods: {e}", 'warning')
+
+        # Stale guidellm output files are cleaned per-test (rm -f before each run)
+
+    def _wait_for_all_test_pods_terminated(self, timeout: int = 120):
+        """Wait for all serveit-test pods to terminate."""
+        import subprocess
+        start = time.time()
+        while time.time() - start < timeout:
+            r = subprocess.run(
+                ['kubectl', 'get', 'pods', '-n', self.config.namespace,
+                 '-l', 'component=serveit-test', '--no-headers'],
+                capture_output=True, text=True, timeout=15, check=False
+            )
+            if not r.stdout.strip():
+                return
+            remaining = len(r.stdout.strip().splitlines())
+            self.log(f"   Waiting for {remaining} orphaned pod(s) to terminate...", 'info')
+            time.sleep(5)
+        self.log("   ⚠️  Timed out waiting for orphaned pods to terminate", 'warning')
 
     def optimize(self, resume: bool = True) -> Dict[str, Any]:
         """
