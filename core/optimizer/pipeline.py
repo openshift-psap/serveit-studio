@@ -1018,10 +1018,9 @@ class RecipeOptimizer(
             osl: Output sequence length for this test (default: config.osl)
         """
         gpu_vram = getattr(self, '_gpu_vram_gb', 80.0)
-        total_vram = gpu_vram * tp
         model_gb = self._estimate_model_size_gb()
         overhead_gb = 5.0  # CUDA graphs, activations, NCCL buffers
-        available_for_kv = max(0, total_vram - model_gb - overhead_gb)
+        available_per_gpu = max(0, gpu_vram - model_gb / tp - overhead_gb)
 
         if not self._model_config:
             return int(self.config.qps)
@@ -1044,25 +1043,22 @@ class RecipeOptimizer(
                    self._model_config.get('num_attention_heads', 32))
         kv_heads_per_gpu = max(1, num_kv_heads // tp)
 
-        # KV cache per sequence in GB: 2(K+V) × layers × kv_heads/tp × head_dim × seq_len × 2 bytes
+        # KV cache per sequence per GPU: 2(K+V) × layers × kv_heads/tp × head_dim × seq_len × 2 bytes
         kv_per_seq_gb = (2 * num_layers * kv_heads_per_gpu * head_dim * effective_seq_len * 2) / (1024**3)
 
         if kv_per_seq_gb <= 0:
             return int(self.config.qps)
 
-        kv_cap = int(available_for_kv / kv_per_seq_gb)
-        # Practical cap: GPU compute saturation, not just KV memory
-        # Scale by sequence length — short sequences (ISL=1 decode calibration)
-        # need more concurrency to saturate GPUs
-        # Longer sequences need fewer concurrent requests to saturate GPUs
-        # Total tokens in flight to saturate ≈ 24K per GPU
-        compute_cap = max(1, math.ceil(tp * min(16.0, 24000.0 / max(effective_seq_len, 1))))
-        result = max(1, min(kv_cap, compute_cap))
+        # How many sequences fit per GPU
+        kv_cap = max(1, int(available_per_gpu / kv_per_seq_gb))
+        # Use 10% of KV capacity for calibration — enough to saturate, not excessive
+        # Cap at 16 per GPU for short sequences where KV is trivial
+        result = max(1, min(kv_cap // 10 + 1, tp * 16))
 
         self.log(f"   Calibration concurrency for TP={tp}: {result} "
-                 f"(kv_cap={kv_cap}, compute_cap={compute_cap}, "
+                 f"(kv_cap={kv_cap}, "
                  f"seq_len={effective_seq_len}, kv/seq={kv_per_seq_gb:.2f}GB, "
-                 f"available={available_for_kv:.0f}GB)")
+                 f"available/gpu={available_per_gpu:.0f}GB)")
         return result
 
     def _detect_network_type(self) -> str:
