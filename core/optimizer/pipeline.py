@@ -1054,16 +1054,10 @@ class RecipeOptimizer(
         # Practical cap: GPU compute saturation, not just KV memory
         # Scale by sequence length — short sequences (ISL=1 decode calibration)
         # need more concurrency to saturate GPUs
-        if effective_seq_len < 100:
-            compute_cap = tp * 16  # tiny sequences (ISL=1, OSL=1)
-        elif effective_seq_len < 4000:
-            compute_cap = tp * 12  # moderate (decode calibration ISL=1 + typical OSL)
-        elif effective_seq_len < 32000:
-            compute_cap = tp * 8   # long sequences
-        elif effective_seq_len < 100000:
-            compute_cap = tp * 4   # very long (32K-100K context)
-        else:
-            compute_cap = tp * 2   # ultra long (100K+)
+        # Longer sequences need fewer concurrent requests to saturate GPUs
+        # Inverse scaling: at seq=2K → 12/GPU, seq=4K → 6, seq=12K+ → 2
+        per_gpu = min(16, max(2, 24000 // max(effective_seq_len, 1)))
+        compute_cap = tp * per_gpu
         max_concurrent = min(kv_cap, compute_cap)
         result = max(1, int(max_concurrent * 0.9))
 
