@@ -52,7 +52,9 @@ class TPCalibrationMixin:
                 # Calibration uses max_requests instead of duration to avoid
                 # flooding — send a controlled number, get clean TPSG measurement
                 test_config.stop_mode = 'max_requests'
-                test_config.max_requests = safe_c * 120
+                model_size_b = getattr(self, '_model_size_b', 8)
+                req_multiplier = 120 if model_size_b < 100 else (60 if model_size_b < 200 else 20)
+                test_config.max_requests = safe_c * req_multiplier
 
                 result = self.orchestrator.run_test(
                     test_config,
@@ -172,7 +174,9 @@ class TPCalibrationMixin:
                     concurrency_override=safe_c
                 )
                 test_config.stop_mode = 'max_requests'
-                test_config.max_requests = safe_c * 120
+                model_size_b = getattr(self, '_model_size_b', 8)
+                req_multiplier = 120 if model_size_b < 100 else (60 if model_size_b < 200 else 20)
+                test_config.max_requests = safe_c * req_multiplier
 
                 result = self.orchestrator.run_test(
                     test_config,
