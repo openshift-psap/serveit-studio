@@ -1559,9 +1559,6 @@ class RecipeOptimizer(
         self.log("", 'info')
 
         try:
-            if self._should_stop():
-                return self._build_results()
-
             # Single test: skip TP calibration, go straight to strategy
             if self.config.objective == 'single_test':
                 strategy = self._get_strategy()
