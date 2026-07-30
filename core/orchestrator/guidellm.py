@@ -188,7 +188,7 @@ class GuidellmMixin:
                     log_callback(f"   ⚠️  Dataset not found: {dataset_path}")
             col = getattr(config, 'dataset_column', None) or 'prompt'
             if dataset_path.endswith('.jsonl') or dataset_path.endswith('.json'):
-                data_arg = '{' + f'"kind":"json_file","path":"{dataset_path}","load_kwargs":{{"split":"train"}}' + '}'
+                data_arg = f'{{"kind":"json_file","path":"{dataset_path}","load_kwargs":{{"split":"train"}}}}'
             else:
                 data_arg = f'kind=csv_file,path={dataset_path}'
             column_args = f' --data-column-mapper \'{{\"kind\":\"generative_column_mapper\",\"column_mappings\":{{\"text_column\":\"{col}\",\"output_tokens_count_column\":\"output_tokens_count\"}}}}\''
@@ -243,7 +243,7 @@ class GuidellmMixin:
             f'guidellm run'
             f' --backend "{backend_arg}"'
             f' --tokenizer "kind=huggingface_auto,model={config.model_name}"'
-            f' --data "{data_arg}"'
+            f" --data '{data_arg}'"
             f' --profile "{profile_arg}"'
             f' --constraint "{constraint_arg}"'
             f' --output "kind=json,path={output_path}"'
@@ -527,7 +527,7 @@ class GuidellmMixin:
                 if log_callback:
                     log_callback(f'   Using dataset: {dataset_path}')
                 if dataset_path.endswith('.jsonl') or dataset_path.endswith('.json'):
-                    data_arg = f'kind=json_file,path={dataset_path}'
+                    data_arg = f'{{"kind":"json_file","path":"{dataset_path}","load_kwargs":{{"split":"train"}}}}'
                 else:
                     data_arg = f'kind=csv_file,path={dataset_path}'
             else:
