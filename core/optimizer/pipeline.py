@@ -1714,14 +1714,16 @@ class RecipeOptimizer(
     def _estimate_model_size_gb(self) -> float:
         """Estimate model weight size in GB for VRAM planning.
 
-        Uses _model_size_b (set from config or name parsing).
-        Multipliers account for raw weights + mixed-precision layers:
-          MoE FP4:   0.55x (experts ~97% at 0.5B/param, attention stays FP16)
-          Dense FP4: 0.7x  (FFN ~60% at 0.5B/param, attention ~30% stays FP16)
-          FP8:       1.1x
-          FP16:      2.2x
-          FP32:      4.4x
+        Prefers architecture-aware calculation from model config when available.
+        Handles LatentMoE (Nemotron-H), standard MoE, and dense models.
+        Falls back to simple multipliers on _model_size_b.
         """
+        if self._model_config:
+            try:
+                return self._estimate_weight_memory_from_config()
+            except Exception:
+                pass
+
         params_b = self._model_size_b
         if self._model_dtype in ('fp4', 'int4'):
             return params_b * (0.55 if self._is_moe else 0.7)
@@ -1730,6 +1732,109 @@ class RecipeOptimizer(
         if self._model_dtype in ('fp16', 'bf16'):
             return params_b * 2.2
         return params_b * 4.4
+
+    def _estimate_weight_memory_from_config(self) -> float:
+        """Calculate weight memory from model config, accounting for mixed quantization.
+
+        Reads per-layer quantization info to compute actual bytes:
+        - NVFP4: 0.5 bytes/param + scale overhead (group_size)
+        - FP8: 1 byte/param
+        - BF16/FP16: 2 bytes/param
+        Handles LatentMoE (moe_latent_size), standard MoE, Mamba, and attention layers.
+        """
+        cfg = self._model_config
+        hidden = cfg.get('hidden_size', 0)
+        vocab = cfg.get('vocab_size', 0)
+        if not hidden or not vocab:
+            raise ValueError("Missing hidden_size or vocab_size")
+
+        blocks = cfg.get('layers_block_type', [])
+        num_layers = len(blocks) or cfg.get('num_hidden_layers', 0)
+        if not num_layers:
+            raise ValueError("Cannot determine layer count")
+
+        from collections import Counter
+        block_counts = Counter(blocks) if blocks else {'attention': num_layers}
+
+        num_heads = cfg.get('num_attention_heads', 64)
+        num_kv_heads = cfg.get('num_key_value_heads', num_heads)
+        head_dim = cfg.get('head_dim', hidden // num_heads if num_heads else 128)
+        n_experts = cfg.get('n_routed_experts') or cfg.get('num_local_experts') or cfg.get('num_experts') or 1
+        n_shared = cfg.get('n_shared_experts', 0)
+        moe_intermediate = cfg.get('moe_intermediate_size', cfg.get('intermediate_size', 0))
+        moe_latent = cfg.get('moe_latent_size', 0)
+        shared_intermediate = cfg.get('moe_shared_expert_intermediate_size', 0)
+        intermediate = cfg.get('intermediate_size', 0)
+
+        # Determine per-layer quantization from config
+        qcfg = cfg.get('quantization_config', {})
+        ql = qcfg.get('quantized_layers', {})
+        has_nvfp4 = any(v.get('quant_algo') == 'NVFP4' for v in ql.values()) if ql else False
+        has_fp8 = any(v.get('quant_algo') == 'FP8' for v in ql.values()) if ql else False
+        fp4_group_size = 16
+        for v in ql.values():
+            if v.get('quant_algo') == 'NVFP4' and v.get('group_size'):
+                fp4_group_size = v['group_size']
+                break
+
+        # Byte costs
+        if has_nvfp4:
+            expert_bpp = 0.5 + (1.0 / fp4_group_size)  # NVFP4 + scale overhead
+        elif self._model_dtype == 'fp8':
+            expert_bpp = 1.0
+        else:
+            expert_bpp = 2.0
+
+        non_expert_bpp = 1.0 if (has_fp8 or self._model_dtype == 'fp8') else 2.0
+
+        total_bytes = 0
+
+        # Mamba layers
+        mamba_count = block_counts.get('mamba', 0)
+        if mamba_count > 0:
+            mamba_params = 4 * hidden * hidden  # in_proj + out_proj + conv + dt
+            total_bytes += mamba_params * non_expert_bpp * mamba_count
+
+        # Attention layers
+        attn_count = block_counts.get('attention', 0) if blocks else num_layers
+        if attn_count > 0 and n_experts <= 1:
+            # Dense model: attention + FFN
+            attn_params = hidden * (num_heads * head_dim + 2 * num_kv_heads * head_dim) + num_heads * head_dim * hidden
+            ffn_params = hidden * intermediate * 3
+            total_bytes += (attn_params + ffn_params) * non_expert_bpp * attn_count
+        elif attn_count > 0:
+            # MoE model: attention-only layers (no FFN, MoE layers handle FFN)
+            attn_params = hidden * (num_heads * head_dim + 2 * num_kv_heads * head_dim) + num_heads * head_dim * hidden
+            total_bytes += attn_params * non_expert_bpp * attn_count
+
+        # MoE layers
+        moe_count = block_counts.get('moe', 0)
+        if moe_count > 0 and n_experts > 1:
+            if moe_latent > 0:
+                # LatentMoE: experts operate in latent dim
+                expert_params = moe_latent * moe_intermediate * 2
+                latent_proj_params = hidden * moe_latent * 2
+                latent_bytes = latent_proj_params * non_expert_bpp
+            else:
+                expert_params = hidden * moe_intermediate * 3
+                latent_bytes = 0
+
+            expert_total_bytes = expert_params * expert_bpp * n_experts
+            router_bytes = hidden * n_experts * 2  # BF16
+            shared_bytes = hidden * shared_intermediate * 2 * n_shared * 2 if shared_intermediate else 0  # BF16
+
+            total_bytes += (expert_total_bytes + router_bytes + shared_bytes + latent_bytes) * moe_count
+
+        # Embeddings + LM head (BF16)
+        total_bytes += vocab * hidden * 2 * 2
+
+        # Layer norms (small)
+        total_bytes += hidden * num_layers * 4 * 2
+
+        total_gb = total_bytes / (1024 ** 3)
+        self.log(f"Weight memory from config: {total_gb:.0f} GB "
+                 f"({'NVFP4' if has_nvfp4 else 'FP8' if has_fp8 else self._model_dtype})")
+        return total_gb
 
 
     def _build_results(self) -> Dict[str, Any]:
