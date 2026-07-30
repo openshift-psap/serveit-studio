@@ -12,32 +12,10 @@ class CacheSweepMixin:
         if levels:
             return sorted(set(max(0, min(100, l)) for l in levels))
 
-        count = getattr(self.config, 'cache_sweep_count', None)
-        if count and int(count) > 0:
-            n = int(count)
-            step_pct = getattr(self.config, 'cache_sweep_step_pct', 10)
-            center = 50
-            below_count = (n - 1) // 2
-            above_count = n - 1 - below_count
-
-            max_below = center // step_pct if step_pct > 0 else 0
-            actual_below = min(below_count, max_below)
-            max_above = (100 - center) // step_pct if step_pct > 0 else 0
-            actual_above_fit = min(above_count, max_above)
-            # Shift overflow in both directions
-            extra_above = below_count - actual_below
-            extra_below = above_count - actual_above_fit
-            actual_above = actual_above_fit + extra_above
-            actual_below = min(actual_below + extra_below, center // step_pct if step_pct > 0 else 0)
-
-            result = []
-            for i in range(actual_below, 0, -1):
-                result.append(center - i * step_pct)
-            result.append(center)
-            for i in range(1, actual_above + 1):
-                result.append(center + i * step_pct)
-
-            return sorted(set(max(0, min(100, l)) for l in result))
+        step_pct = getattr(self.config, 'cache_sweep_step_pct', 10)
+        if step_pct and int(step_pct) > 0:
+            step = int(step_pct)
+            return list(range(0, 101, step))
 
         return [0, 10, 30, 50, 70, 100]
 
