@@ -34,16 +34,20 @@ class TPCalibrationMixin:
         model_size_b = getattr(self, '_model_size_b', 8)
         base_multiplier = 120 if model_size_b < 100 else (60 if model_size_b < 200 else 20)
 
-        def _req_multiplier(seq_len):
-            """Scale request multiplier down for long sequences."""
+        def _calibration_max_requests(safe_c, seq_len):
+            """Calculate max requests for calibration, scaling down for long sequences."""
             if seq_len <= 2048:
-                return base_multiplier
+                mult = base_multiplier
             elif seq_len <= 8192:
-                return max(base_multiplier // 2, 10)
+                mult = max(base_multiplier // 2, 10)
             elif seq_len <= 32768:
-                return max(base_multiplier // 4, 5)
+                mult = max(base_multiplier // 4, 5)
             else:
-                return max(base_multiplier // 8, 3)
+                mult = max(base_multiplier // 8, 3)
+            reqs = safe_c * mult
+            if seq_len > 32768:
+                reqs = min(reqs, 128)
+            return reqs
 
         for i, tp in enumerate(all_tps):
             if self._should_stop():
@@ -78,7 +82,7 @@ class TPCalibrationMixin:
                         use_concurrency=True, concurrency_override=safe_c
                     )
                     decode_config.stop_mode = 'max_requests'
-                    decode_config.max_requests = safe_c * _req_multiplier(1 + self.config.osl)
+                    decode_config.max_requests = _calibration_max_requests(safe_c, 1 + self.config.osl)
 
                     # Keep deployment alive for prefill test
                     needs_prefill_after = run_prefill and not prefill_cached
@@ -130,7 +134,7 @@ class TPCalibrationMixin:
                         use_concurrency=True, concurrency_override=safe_c
                     )
                     prefill_config.stop_mode = 'max_requests'
-                    prefill_config.max_requests = safe_c * _req_multiplier(self.config.isl + 1)
+                    prefill_config.max_requests = _calibration_max_requests(safe_c, self.config.isl + 1)
 
                     prefill_result = self.orchestrator.run_test(
                         prefill_config,
