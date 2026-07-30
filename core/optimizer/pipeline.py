@@ -1058,11 +1058,15 @@ class RecipeOptimizer(
         if kv_per_seq_gb <= 0:
             return int(self.config.qps)
 
-        max_concurrent = int(available_for_kv / kv_per_seq_gb)
-        result = min(int(self.config.qps), max(1, int(max_concurrent * 0.9)))
+        kv_cap = int(available_for_kv / kv_per_seq_gb)
+        # Practical cap: GPU compute saturation, not just KV memory
+        # ~8 concurrent per GPU is enough to saturate most models
+        compute_cap = tp * 8
+        max_concurrent = min(kv_cap, compute_cap)
+        result = max(1, int(max_concurrent * 0.9))
 
         self.log(f"   Calibration concurrency for TP={tp}: {result} "
-                 f"(user={int(self.config.qps)}, kv_cap={max_concurrent}, "
+                 f"(kv_cap={kv_cap}, compute_cap={compute_cap}, "
                  f"seq_len={effective_seq_len}, kv/seq={kv_per_seq_gb:.2f}GB, "
                  f"available={available_for_kv:.0f}GB)")
         return result
