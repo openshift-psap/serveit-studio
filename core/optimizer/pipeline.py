@@ -1495,7 +1495,7 @@ class RecipeOptimizer(
 
         # Clean up orphaned serving pods on the cluster
         try:
-            self.orchestrator.deployment_manager.cleanup_all_deployments(
+            self.orchestrator.deployment_manager.cleanup_all_tests(
                 log_callback=lambda msg: self.log(msg, 'info')
             )
             self._wait_for_all_test_pods_terminated(timeout=120)
