@@ -160,7 +160,8 @@ class RecipeOptimizer(
                            'n_shared_experts', 'num_experts_per_tok',
                            'intermediate_size_mlp', 'interleave_moe_layer_step',
                            'max_position_embeddings', 'attention_chunk_size',
-                           'num_nextn_predict_layers']:
+                           'num_nextn_predict_layers', 'layer_types',
+                           'top_k_experts', 'head_dim']:
                     if k in tcfg and k not in self._model_config:
                         self._model_config[k] = tcfg[k]
 
@@ -1028,11 +1029,12 @@ class RecipeOptimizer(
         # Use the actual test ISL+OSL, not the full workload
         effective_seq_len = (isl or self.config.isl) + (osl or self.config.osl)
 
-        # Only attention layers need KV cache — Mamba/MoE layers don't
-        blocks = self._model_config.get('layers_block_type', [])
+        # Only attention layers need KV cache — Mamba layers don't
+        blocks = self._model_config.get('layers_block_type', []) or self._model_config.get('layer_types', [])
         if blocks:
             from collections import Counter
-            num_layers = Counter(blocks).get('attention', len(blocks))
+            bc = Counter(blocks)
+            num_layers = sum(v for k, v in bc.items() if 'attention' in k) or len(blocks)
         else:
             num_layers = self._model_config.get('num_hidden_layers', 32)
         num_kv_heads = self._model_config.get('num_key_value_heads',
@@ -1675,8 +1677,10 @@ class RecipeOptimizer(
 
         hidden = cfg.get('hidden_size', 0)
         layers = cfg.get('num_hidden_layers', 0)
-        if not layers and cfg.get('layers_block_type'):
-            layers = len(cfg['layers_block_type'])
+        if not layers:
+            blocks = cfg.get('layers_block_type') or cfg.get('layer_types')
+            if blocks:
+                layers = len(blocks)
         vocab = cfg.get('vocab_size', 0)
         intermediate = cfg.get('intermediate_size', 0)
         num_heads = cfg.get('num_attention_heads', 0)
@@ -1783,7 +1787,7 @@ class RecipeOptimizer(
         if not hidden or not vocab:
             raise ValueError("Missing hidden_size or vocab_size")
 
-        blocks = cfg.get('layers_block_type', [])
+        blocks = cfg.get('layers_block_type', []) or cfg.get('layer_types', [])
         num_layers = len(blocks) or cfg.get('num_hidden_layers', 0)
         if not num_layers:
             raise ValueError("Cannot determine layer count")
@@ -1832,18 +1836,22 @@ class RecipeOptimizer(
 
         # Attention layers
         attn_count = block_counts.get('attention', 0) if blocks else num_layers
+        # Also count sliding_attention and full_attention (Gemma 4 layer_types)
+        attn_count += block_counts.get('sliding_attention', 0) + block_counts.get('full_attention', 0)
+        attn_params = hidden * (num_heads * head_dim + 2 * num_kv_heads * head_dim) + num_heads * head_dim * hidden
+
         if attn_count > 0 and n_experts <= 1:
             # Dense model: attention + FFN
-            attn_params = hidden * (num_heads * head_dim + 2 * num_kv_heads * head_dim) + num_heads * head_dim * hidden
             ffn_params = hidden * intermediate * 3
             total_bytes += (attn_params + ffn_params) * non_expert_bpp * attn_count
         elif attn_count > 0:
-            # MoE model: attention-only layers (no FFN, MoE layers handle FFN)
-            attn_params = hidden * (num_heads * head_dim + 2 * num_kv_heads * head_dim) + num_heads * head_dim * hidden
+            # MoE model with no separate MoE block type — every layer has attention + MoE FFN
             total_bytes += attn_params * non_expert_bpp * attn_count
 
-        # MoE layers
+        # MoE layers — either explicit 'moe' blocks, or all attention layers when no separate block type
         moe_count = block_counts.get('moe', 0)
+        if moe_count == 0 and n_experts > 1 and attn_count > 0:
+            moe_count = attn_count
         if moe_count > 0 and n_experts > 1:
             if moe_latent > 0:
                 # LatentMoE: experts operate in latent dim
