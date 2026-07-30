@@ -911,7 +911,7 @@ class TestOrchestrator(ParserMixin, GuidellmMixin):
             artifact_dir.mkdir(parents=True, exist_ok=True)
 
             # 1. Copy guidellm raw JSON from workload pod with MD5 verification
-            remote_path = f"/tmp/guidellm-{config.test_id}.json"
+            remote_path = f"/mnt/storage/tmp/guidellm-{config.test_id}.json"
             local_raw = artifact_dir / "guidellm-raw.json"
             try:
                 kubectl = self.deployment_manager.kubectl
