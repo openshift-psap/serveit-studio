@@ -609,13 +609,23 @@ class TestOrchestrator(ParserMixin, GuidellmMixin):
 
             # Step 3: Send a test completion to verify full routing through the pool
             try:
-                completion_url = endpoint.rstrip('/') + '/v1/chat/completions'
-                payload_json = json.dumps({
-                    "model": config.model_name,
-                    "messages": [{"role": "user", "content": "Hello"}],
-                    "max_tokens": 1,
-                    "temperature": 0.0
-                })
+                turns = getattr(config, 'turns', 1) or 1
+                if turns > 1:
+                    completion_url = endpoint.rstrip('/') + '/v1/chat/completions'
+                    payload_json = json.dumps({
+                        "model": config.model_name,
+                        "messages": [{"role": "user", "content": "Hello"}],
+                        "max_tokens": 1,
+                        "temperature": 0.0
+                    })
+                else:
+                    completion_url = endpoint.rstrip('/') + '/v1/completions'
+                    payload_json = json.dumps({
+                        "model": config.model_name,
+                        "prompt": "Hello",
+                        "max_tokens": 1,
+                        "temperature": 0.0
+                    })
                 curl_cmd = f"curl -s -w '\\n%{{http_code}}' --connect-timeout 10 -X POST -H 'Content-Type: application/json' -d '{payload_json}' '{completion_url}'"
                 r = self.deployment_manager.kubectl.run(
                     ['exec', self._guidellm_pod_name, '-n', self.namespace, '--', 'bash', '-c', curl_cmd],
@@ -633,9 +643,7 @@ class TestOrchestrator(ParserMixin, GuidellmMixin):
                     def json(self):
                         return json.loads(self._body)
                 resp = _RemoteResp(http_code, resp_body)
-                if resp.status_code in (200, 400):
-                    # 200 = success, 400 = request reached vLLM (routing works)
-                    # but payload was rejected (e.g. base model without chat template)
+                if resp.status_code == 200:
                     elapsed = int(time.time() - start_time)
                     if log_callback:
                         p = 'pod' if ready_count == 1 else 'pods'
