@@ -1636,6 +1636,12 @@ class RecipeOptimizer(
         if self.cluster_resources:
             tp_options = self.cluster_resources.get_tp_options()
             seq_len = self.config.isl + self.config.osl if hasattr(self.config, 'isl') else 0
+            if seq_len < 4000:
+                min_conc = 4
+            elif seq_len < 32000:
+                min_conc = 2
+            else:
+                min_conc = 1
             reserve_pct = getattr(self.config, 'memory_reserve_pct', 0.0)
             min_tp = self.cluster_resources.estimate_model_gpu_requirement(
                 model_size_gb=self._estimate_model_size_gb(),
@@ -1643,7 +1649,7 @@ class RecipeOptimizer(
                 is_moe=self._is_moe,
                 model_config=self._model_config,
                 seq_len=seq_len,
-                min_concurrency=4,
+                min_concurrency=min_conc,
                 extra_reserve_pct=reserve_pct,
                 gpu_memory_utilization=gmu
             )
