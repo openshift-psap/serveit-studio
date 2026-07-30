@@ -148,7 +148,11 @@ The user explicitly chose ISL and OSL — there's no reason to allocate 20× mor
 
 ### Safe Calibration Concurrency
 ```
-effective_seq_len = ISL + OSL
+# Uses the ACTUAL test ISL/OSL, not the full workload
+# Decode sweep: ISL=1, OSL=user_osl → effective_seq_len = 1 + osl
+# Prefill sweep: ISL=user_isl, OSL=1 → effective_seq_len = isl + 1
+
+effective_seq_len = test_isl + test_osl
 total_vram = gpu_vram_gb × TP
 available_for_kv = total_vram - model_weights_gb - 5.0 GB (overhead)
 
@@ -157,34 +161,39 @@ attn_layers = count of 'attention' in layers_block_type (or num_hidden_layers fo
 kv_per_seq = (2 × attn_layers × kv_heads_per_tp × head_dim × effective_seq_len × 2) / 1 GB
 kv_cap = floor(available_for_kv / kv_per_seq)
 
-# GPU compute saturation cap: ~8 concurrent per GPU
-compute_cap = TP × 8
+# GPU compute saturation cap — scales by sequence length
+# Short sequences (decode calibration ISL=1) need more concurrency to saturate
+effective_seq_len < 100:   compute_cap = TP × 16
+effective_seq_len < 1000:  compute_cap = TP × 12
+effective_seq_len >= 1000: compute_cap = TP × 8
 
 calibration_concurrency = floor(min(kv_cap, compute_cap) × 0.9)
 ```
 
 Calibration concurrency is determined independently of the user's configured value. It uses the minimum of two caps:
 
-1. **KV cache capacity** — how many sequences fit in available GPU memory. Only counts attention layers for KV cache (Mamba/MoE layers don't use KV cache).
-2. **GPU compute saturation** — ~8 concurrent requests per GPU is enough to keep Tensor Cores busy. Higher concurrency adds queue latency without improving throughput.
+1. **KV cache capacity** — how many sequences fit in available GPU memory. Only counts attention layers for KV cache (Mamba/MoE layers don't use KV cache). Uses the **actual test sequence length** (ISL=1 for decode, ISL=7000 for prefill), not the full workload ISL+OSL.
+2. **GPU compute saturation** — scales by sequence length. Decode calibration (ISL=1, short sequences) needs more concurrent requests to keep GPUs busy (~16/GPU). Prefill calibration (ISL=7000, long sequences) saturates at fewer concurrent requests (~8/GPU).
 
-**Why ignore user concurrency?** The TP calibration needs enough requests to saturate GPUs for a stable TPSG measurement, but not more. The user's setting (e.g., 50 or 100) is for the actual benchmark steps, not calibration. Over-saturating during calibration wastes time and inflates latency without improving measurement accuracy.
+**Why use actual test ISL/OSL?** The TP calibration uses simplified workloads (ISL=1 for decode, OSL=1 for prefill). Using the full workload `ISL+OSL=8024` for KV cache estimation when the actual test only uses `1+1024=1025` tokens massively overestimates memory per sequence, resulting in artificially low concurrency.
 
-**Why 8 per GPU?** Empirically, GPU matrix multiplication tiles are fully utilized at batch size ~8-16. Beyond that, additional concurrent requests queue without adding compute benefit — they just consume KV cache memory and increase per-request latency. 8 per GPU provides reliable throughput saturation while leaving KV cache headroom.
+**Why scale compute cap by sequence length?** With ISL=1, each request's prefill is trivial (1 token) and the work is purely decode. The GPUs can batch many more decode-only sequences efficiently. With ISL=7000, each request requires significant prefill compute — fewer concurrent requests are needed to saturate.
+
+**Why ignore user concurrency?** The TP calibration needs enough requests to saturate GPUs for a stable TPSG measurement, but not more. The user's setting (e.g., 50 or 100) is for the actual benchmark steps, not calibration.
 
 **Why only attention layers for KV?** Hybrid architectures (Nemotron-H) have Mamba + attention + MoE layers. Only attention layers maintain KV cache. Nemotron-H has 12 attention layers out of 108 total — using all 108 would underestimate KV capacity by 9×.
 
 **NUMA fallback:** When NUMA node count is unavailable from hardware discovery but the node has >80 CPUs, assume 2 NUMA nodes. CPU per pod is capped at `usable_cpus / numa_nodes` to fit within a single NUMA node for Topology Manager alignment.
 
-**Example: Nemotron-3 Ultra NVFP4 on H200 (140GB), ISL=7000, OSL=1024:**
+**Example: Nemotron-3 Ultra NVFP4 on H200 (140GB):**
 ```
-TP=4: total=560GB, model=304GB, avail=251GB
-  attn_layers=12, kv/seq=47MB → kv_cap=5466
-  compute_cap=32
-  calibration=floor(min(5466, 32) × 0.9) = 28
-TP=8: total=1120GB, model=304GB, avail=811GB
-  kv_cap=17700, compute_cap=64
-  calibration=floor(min(17700, 64) × 0.9) = 57
+Decode calibration (ISL=1, OSL=1024, seq=1025):
+  TP=4: kv_cap=5466, compute_cap=64 → safe=57
+  TP=8: kv_cap=17700, compute_cap=128 → safe=115
+
+Prefill calibration (ISL=7000, OSL=1, seq=7001):
+  TP=4: kv_cap=800, compute_cap=32 → safe=28
+  TP=8: kv_cap=2600, compute_cap=64 → safe=57
 ```
 
 ### Calibration Stop Condition
@@ -200,9 +209,20 @@ request_multiplier:
 
 Calibration uses `max_requests` instead of a time-based duration. Duration-based tests (e.g., 60 seconds) at high concurrency flood the server — guidellm opens all connections immediately and sends requests as fast as possible, producing thousands of requests where most error from overload before the server can drain the queue.
 
-**Why scale by model size?** The multiplier determines total benchmark time. A 8B model generates 1024 tokens in ~0.3s, so 120 rounds × 28 concurrent = 3360 requests = ~1 minute. A 550B model takes ~15s per request, so 120 rounds would take 80+ minutes. Scaling down to 20 rounds keeps calibration under ~5 minutes for large models while still providing enough data points.
+**Why scale by model size?** The multiplier determines total benchmark time. A 8B model generates 1024 tokens in ~0.3s, so 120 rounds × 57 concurrent = 6840 requests ≈ 1 minute. A 550B model takes ~15s per request, so 120 rounds would take 80+ minutes. Scaling down to 20 rounds keeps calibration under ~5 minutes for large models while still providing enough data points.
 
-**Why × 20 minimum?** P90 requires at least ~50 data points for statistical stability. At `28 concurrent × 20 rounds = 560 requests`, even with wave-based completion, there are enough data points. Fewer rounds risk noisy P90; more rounds waste time without improving accuracy.
+**Why × 20 minimum?** P90 requires at least ~50 data points for statistical stability. At `57 concurrent × 20 rounds = 1140 requests`, even with wave-based completion, there are enough data points. Fewer rounds risk noisy P90; more rounds waste time without improving accuracy.
+
+### Throughput Parsing (guidellm 0.7.x)
+
+guidellm 0.7.x reports `requests_per_second.successful.percentiles` as per-second snapshot rates (e.g., p90=0.14 per stream), not aggregate throughput. The `mean` field contains the true aggregate req/s.
+
+```
+throughput = requests_per_second.successful.mean    (aggregate, correct)
+NOT:        requests_per_second.successful.p90      (per-stream snapshot, misleading)
+```
+
+All throughput fields (p50, p90, p95, p99, mean) are set to the aggregate mean value. Fallback: `total_successful_requests / benchmark_duration`.
 
 ### Selection Criteria
 ```
@@ -1092,7 +1112,7 @@ The absolute floor of 16 GB ensures small nodes (256 GB) don't starve the OS —
 | Node memory reserve | max(15%, 16 GB) | Percentage or absolute floor, whichever is larger |
 | Node CPU reserve | max(20%, 4 cores) | Percentage or absolute floor, whichever is larger |
 | NUMA cap | usable_cpus / numa_nodes | Ensures pod fits in single NUMA node for Topology Manager |
-| GPU compute saturation | 8 per GPU | Calibration concurrency cap — enough to saturate Tensor Cores |
+| GPU compute saturation | 8-16 per GPU | Calibration concurrency cap — 16/GPU for short seqs (ISL=1), 8/GPU for long seqs |
 | Calibration multiplier | 120/60/20 (by model size) | Scales request count: small (<100B)/medium/large (>200B) models |
 | Model load timeout | model_size_B × 10s, min 600s | Scales with model size: 550B → 5500s (91 min) |
 | Max gpu_memory_util | 0.95 | 5% safety for unexpected allocation spikes |
