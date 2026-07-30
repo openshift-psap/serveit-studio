@@ -39,7 +39,7 @@ class TPCalibrationMixin:
                 result = self._make_test_result_from_db(row)
                 self.log("    ⏩ Resuming from DB (already completed)", 'info')
             else:
-                safe_c = self._estimate_safe_concurrency(tp)
+                safe_c = self._estimate_safe_concurrency(tp, isl=1, osl=self.config.osl)
                 test_config = self._create_aggregated_config(
                     tp=tp,
                     num_gpus=tp,
@@ -163,7 +163,7 @@ class TPCalibrationMixin:
                 result = self._make_test_result_from_db(row)
                 self.log("    ⏩ Resuming from DB (already completed)", 'info')
             else:
-                safe_c = self._estimate_safe_concurrency(tp)
+                safe_c = self._estimate_safe_concurrency(tp, isl=self.config.isl, osl=1)
                 test_config = self._create_aggregated_config(
                     tp=tp,
                     num_gpus=tp,

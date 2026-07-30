@@ -1004,12 +1004,17 @@ class RecipeOptimizer(
             warmup_duration_s=mj.get('warmup_duration_s'),
         )
 
-    def _estimate_safe_concurrency(self, tp: int) -> int:
+    def _estimate_safe_concurrency(self, tp: int, isl: int = None, osl: int = None) -> int:
         """Estimate max safe concurrent requests for a single TP-group pod.
 
         Calculates how many KV cache slots fit in available GPU memory after
         model weights and overhead. Used to cap calibration concurrency so
         Steps 2-3 don't OOM on small TP values.
+
+        Args:
+            tp: Tensor parallelism
+            isl: Input sequence length for this test (default: config.isl)
+            osl: Output sequence length for this test (default: config.osl)
         """
         gpu_vram = getattr(self, '_gpu_vram_gb', 80.0)
         total_vram = gpu_vram * tp
@@ -1020,10 +1025,8 @@ class RecipeOptimizer(
         if not self._model_config:
             return int(self.config.qps)
 
-        # Use ISL+OSL as effective sequence length for the concurrency estimate.
-        # Calibration tests now set max_model_len to ISL+OSL (even when auto-tuning
-        # is off), so vLLM's actual KV slot size matches this.
-        effective_seq_len = self.config.isl + self.config.osl
+        # Use the actual test ISL+OSL, not the full workload
+        effective_seq_len = (isl or self.config.isl) + (osl or self.config.osl)
 
         # Only attention layers need KV cache — Mamba/MoE layers don't
         blocks = self._model_config.get('layers_block_type', [])
@@ -1047,8 +1050,14 @@ class RecipeOptimizer(
 
         kv_cap = int(available_for_kv / kv_per_seq_gb)
         # Practical cap: GPU compute saturation, not just KV memory
-        # ~8 concurrent per GPU is enough to saturate most models
-        compute_cap = tp * 8
+        # Scale by sequence length — short sequences (ISL=1 decode calibration)
+        # need more concurrency to saturate GPUs
+        if effective_seq_len < 100:
+            compute_cap = tp * 64  # decode-only: light work per request
+        elif effective_seq_len < 1000:
+            compute_cap = tp * 32
+        else:
+            compute_cap = tp * 8   # long sequences: fewer needed to saturate
         max_concurrent = min(kv_cap, compute_cap)
         result = max(1, int(max_concurrent * 0.9))
 
