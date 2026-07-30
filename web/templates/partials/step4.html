@@ -277,17 +277,14 @@
                                 <div style="margin-bottom:10px;">
                                     <div style="display:flex;gap:12px;margin-bottom:8px;">
                                         <div style="flex:1;">
-                                            <div style="font-weight:600;font-size:0.85em;color:#5b21b6;margin-bottom:4px;">Number of Levels</div>
-                                            <input type="number" id="cache-sweep-count" min="2" max="50" placeholder="auto" style="width:100%;padding:6px 10px;border:1px solid #c4b5fd;border-radius:6px;font-size:0.85em;" onchange="var v=parseInt(this.value);config.cache_sweep_count=v>0?v:null;saveConfig();">
-                                        </div>
-                                        <div style="flex:1;">
                                             <div style="font-weight:600;font-size:0.85em;color:#5b21b6;margin-bottom:4px;">Step %</div>
                                             <input type="number" id="cache-sweep-step-pct" min="1" max="50" value="10" style="width:100%;padding:6px 10px;border:1px solid #c4b5fd;border-radius:6px;font-size:0.85em;" onchange="config.cache_sweep_step_pct=parseInt(this.value)||10;saveConfig();">
+                                            <div style="font-size:0.75em;color:#6b7280;margin-top:2px;">10% → 11 levels, 5% → 21 levels, 20% → 6 levels</div>
                                         </div>
                                     </div>
                                     <div style="font-weight:600;font-size:0.85em;color:#5b21b6;margin-bottom:4px;">Or: Explicit Levels (%)</div>
                                     <input type="text" id="cache-sweep-levels" value="0, 10, 30, 50, 70, 100" style="width:100%;padding:6px 10px;border:1px solid #c4b5fd;border-radius:6px;font-size:0.85em;font-family:var(--font-mono);" onchange="config.cache_sweep_levels=this.value.split(',').map(function(v){return parseInt(v.trim())}).filter(function(v){return !isNaN(v)});saveConfig();">
-                                    <div style="font-size:0.75em;color:#6b7280;margin-top:4px;">Set count + step% to auto-generate levels centered on 50%. Or type exact comma-separated percentages. Default: 0, 10, 30, 50, 70, 100.</div>
+                                    <div style="font-size:0.75em;color:#6b7280;margin-top:4px;">Step % generates levels from 0% to 100%. Or type exact comma-separated percentages to override.</div>
                                 </div>
                                 <!-- Groups (for multi_group) -->
                                 <div id="cache-sweep-groups-row" style="display:none;align-items:center;gap:8px;">
