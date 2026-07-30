@@ -633,7 +633,9 @@ class TestOrchestrator(ParserMixin, GuidellmMixin):
                     def json(self):
                         return json.loads(self._body)
                 resp = _RemoteResp(http_code, resp_body)
-                if resp.status_code == 200:
+                if resp.status_code in (200, 400):
+                    # 200 = success, 400 = request reached vLLM (routing works)
+                    # but payload was rejected (e.g. base model without chat template)
                     elapsed = int(time.time() - start_time)
                     if log_callback:
                         p = 'pod' if ready_count == 1 else 'pods'
