@@ -81,13 +81,24 @@ class ParserMixin:
             result.itl_std_dev = itl_dist.get('std_dev')
 
             # --- Throughput (requests/sec) ---
+            # guidellm 0.7.x: percentiles are per-second snapshot rates (not aggregate)
+            # Use mean for all throughput values — it's the true aggregate req/s
+            # Also compute from request_totals/duration as a fallback
             rps_dist = _get_dist('requests_per_second')
-            rps_p = _pcts(rps_dist)
-            result.throughput_p50 = rps_p.get('p50')
-            result.throughput_p90 = rps_p.get('p90')
-            result.throughput_p95 = rps_p.get('p95')
-            result.throughput_p99 = rps_p.get('p999')
-            result.throughput_mean = rps_dist.get('mean')
+            rps_mean = rps_dist.get('mean', 0)
+
+            # Fallback: calculate from totals
+            request_totals = metrics.get('request_totals', {})
+            total_reqs = request_totals.get('successful', request_totals.get('total', 0))
+            duration = bench.get('duration', 0)
+            if not rps_mean and total_reqs and duration:
+                rps_mean = total_reqs / duration
+
+            result.throughput_mean = rps_mean
+            result.throughput_p50 = rps_mean
+            result.throughput_p90 = rps_mean
+            result.throughput_p95 = rps_mean
+            result.throughput_p99 = rps_mean
 
             # --- TPOT (Time Per Output Token, ms) ---
             tpot_dist = _get_dist('time_per_output_token_ms')
