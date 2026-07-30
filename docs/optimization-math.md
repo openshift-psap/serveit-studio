@@ -48,13 +48,38 @@ per_layer = attn_params + (hidden × intermediate × 3) × num_experts + hidden 
 ```
 The last term (`hidden × num_experts`) is the router/gating network — a small linear layer per-layer that decides which expert processes each token. This is included in `per_layer` and multiplied by `layers` in `total_params = layers × per_layer + embed_params`.
 
-**Model weight size in GB:**
+**Model weight size in GB (architecture-aware):**
+
+When model config is available, weight memory is calculated per-component with actual quantization:
+
+```
+For each layer type (attention, mamba, moe):
+  - Read quantization from config (NVFP4=0.5 bytes + scale overhead, FP8=1 byte, BF16=2 bytes)
+  - Count only layers of that type (e.g., Nemotron-H has 48 mamba, 48 MoE, 12 attention)
+  - LatentMoE: experts use moe_latent_size (smaller dim), not hidden_size
+
+Embeddings + LM head: always BF16 (2 bytes/param)
+```
+
+**Example (Nemotron-3 Ultra 550B NVFP4):**
+```
+Mamba layers (48): FP8, ~268M params each = 12.9 GB
+Attention layers (12): FP8, ~138M params each = 1.7 GB
+MoE layers (48): NVFP4 experts (512 × 21M params), FP8 latent proj, BF16 router = 304 GB
+Embeddings: BF16, 2.1B params = 4.3 GB
+Total: ~327 GB
+```
+
+**Fallback (no config available):**
 ```
 MoE FP4:   params_B × 0.55 GB  (experts ~97% at 0.5B/param, attention stays FP16)
 Dense FP4: params_B × 0.7 GB   (FFN ~60% at 0.5B/param, attention ~30% stays FP16)
-FP8:       params_B × 1.1 GB   (1 byte/param + 10% overhead)
+FP8:       params_B × 0.85 GB  (MoE) or 1.1 GB (dense)
 FP16:      params_B × 2.2 GB   (2 bytes/param + 10% overhead)
 ```
+
+**Sanity check:** When config-based estimation produces a value >3× the parameter count parsed from the model name (e.g., "550B"), the name-based value is used instead.
+
 **Why different FP4 multipliers?** FP4/INT4 quantization only applies to linear weights (FFN/expert layers). Attention layers, embeddings, and layer norms remain FP16 (2 bytes/param). In MoE models, experts dominate (97%+ of params), so the effective multiplier is close to raw 0.5. In dense models, attention is a larger fraction (~30%), pulling the average higher.
 
 ### Max Model Length (stdev-adjusted)
@@ -126,38 +151,58 @@ The user explicitly chose ISL and OSL — there's no reason to allocate 20× mor
 effective_seq_len = ISL + OSL
 total_vram = gpu_vram_gb × TP
 available_for_kv = total_vram - model_weights_gb - 5.0 GB (overhead)
-kv_per_seq = (2 × layers × kv_heads_per_tp × head_dim × effective_seq_len × 2) / 1 GB
-max_concurrent = floor(available_for_kv / kv_per_seq)
-calibration_concurrency = min(user_concurrency, floor(max_concurrent × 0.9))
+
+# KV cache uses only attention layers (not Mamba/MoE layers)
+attn_layers = count of 'attention' in layers_block_type (or num_hidden_layers for dense)
+kv_per_seq = (2 × attn_layers × kv_heads_per_tp × head_dim × effective_seq_len × 2) / 1 GB
+kv_cap = floor(available_for_kv / kv_per_seq)
+
+# GPU compute saturation cap: ~8 concurrent per GPU
+compute_cap = TP × 8
+
+calibration_concurrency = floor(min(kv_cap, compute_cap) × 0.9)
 ```
 
-Each calibration test deploys 1 replica with `TP` GPUs. The concurrency is the user's requested value (e.g., 100) capped at 90% of KV cache capacity to prevent OOM. The KV cap only triggers when the model is very large relative to GPU VRAM — for most configurations with properly set `max_model_len`, the user's concurrency is used directly.
+Calibration concurrency is determined independently of the user's configured value. It uses the minimum of two caps:
 
-**Why cap at 90% of KV capacity?** KV cache capacity is the hard memory limit. Exceeding it causes vLLM to return 503 errors. The 10% margin accounts for estimation imprecision in the model_weights + 5GB overhead calculation.
+1. **KV cache capacity** — how many sequences fit in available GPU memory. Only counts attention layers for KV cache (Mamba/MoE layers don't use KV cache).
+2. **GPU compute saturation** — ~8 concurrent requests per GPU is enough to keep Tensor Cores busy. Higher concurrency adds queue latency without improving throughput.
 
-**Why per-TP calculation?** Available VRAM scales with TP (more GPUs = more total memory), so the safe concurrency is different for each TP value being tested. TP=8 can handle many more concurrent requests than TP=1.
+**Why ignore user concurrency?** The TP calibration needs enough requests to saturate GPUs for a stable TPSG measurement, but not more. The user's setting (e.g., 50 or 100) is for the actual benchmark steps, not calibration. Over-saturating during calibration wastes time and inflates latency without improving measurement accuracy.
 
-**Example: Qwen3-30B-A3B-FP8 on H200 (140GB), ISL=1000, OSL=1000, user=100 concurrent:**
+**Why 8 per GPU?** Empirically, GPU matrix multiplication tiles are fully utilized at batch size ~8-16. Beyond that, additional concurrent requests queue without adding compute benefit — they just consume KV cache memory and increase per-request latency. 8 per GPU provides reliable throughput saturation while leaving KV cache headroom.
+
+**Why only attention layers for KV?** Hybrid architectures (Nemotron-H) have Mamba + attention + MoE layers. Only attention layers maintain KV cache. Nemotron-H has 12 attention layers out of 108 total — using all 108 would underestimate KV capacity by 9×.
+
+**NUMA fallback:** When NUMA node count is unavailable from hardware discovery but the node has >80 CPUs, assume 2 NUMA nodes. CPU per pod is capped at `usable_cpus / numa_nodes` to fit within a single NUMA node for Topology Manager alignment.
+
+**Example: Nemotron-3 Ultra NVFP4 on H200 (140GB), ISL=7000, OSL=1024:**
 ```
-max_model_len = 2100 (always set from ISL+OSL)
-TP=1: total=140GB, model=30GB, avail=105GB, kv/seq=0.25GB → kv_cap=420 → calibration=min(100, 378)=100
-TP=2: total=280GB, model=30GB, avail=245GB, kv/seq=0.13GB → kv_cap=1884 → calibration=min(100, 1695)=100
-TP=4: total=560GB, model=30GB, avail=525GB → kv_cap=4038 → calibration=100
-TP=8: total=1120GB, model=30GB, avail=1085GB → kv_cap=8346 → calibration=100
+TP=4: total=560GB, model=304GB, avail=251GB
+  attn_layers=12, kv/seq=47MB → kv_cap=5466
+  compute_cap=32
+  calibration=floor(min(5466, 32) × 0.9) = 28
+TP=8: total=1120GB, model=304GB, avail=811GB
+  kv_cap=17700, compute_cap=64
+  calibration=floor(min(17700, 64) × 0.9) = 57
 ```
-KV capacity far exceeds user concurrency — cap never triggers. All TP values tested at user's 100 concurrent.
 
 ### Calibration Stop Condition
 ```
 stop_mode = max_requests
-max_requests = calibration_concurrency × 10
+max_requests = calibration_concurrency × request_multiplier
+
+request_multiplier:
+  model_size < 100B:  120   (small models, fast per-request)
+  model_size < 200B:   60   (medium models)
+  model_size >= 200B:  20   (large models like Nemotron 550B)
 ```
 
 Calibration uses `max_requests` instead of a time-based duration. Duration-based tests (e.g., 60 seconds) at high concurrency flood the server — guidellm opens all connections immediately and sends requests as fast as possible, producing thousands of requests where most error from overload before the server can drain the queue.
 
-`max_requests = concurrency × 10` sends exactly 10 full rounds at the configured concurrency — enough data points for stable P90 throughput and TPSG measurement without flooding. The test ends when all requests complete, not on a wall-clock timer.
+**Why scale by model size?** The multiplier determines total benchmark time. A 8B model generates 1024 tokens in ~0.3s, so 120 rounds × 28 concurrent = 3360 requests = ~1 minute. A 550B model takes ~15s per request, so 120 rounds would take 80+ minutes. Scaling down to 20 rounds keeps calibration under ~5 minutes for large models while still providing enough data points.
 
-**Why × 10?** P90 requires at least ~50 data points for statistical stability. At `concurrency × 10`, even if requests complete in waves (common with continuous batching), there are enough completed requests across the measurement window. Fewer rounds risk noisy P90; more rounds waste time without improving accuracy.
+**Why × 20 minimum?** P90 requires at least ~50 data points for statistical stability. At `28 concurrent × 20 rounds = 560 requests`, even with wave-based completion, there are enough data points. Fewer rounds risk noisy P90; more rounds waste time without improving accuracy.
 
 ### Selection Criteria
 ```
@@ -1006,7 +1051,14 @@ memory_per_pod = floor((avg_node_memory_gb - system_reserve_memory) / pods_per_n
 
 system_reserve_cpu = max(avg_node_cpus × 0.20, 4 cores)
 cpu_per_pod    = floor((avg_node_cpus - system_reserve_cpu) / pods_per_node)
+
+# NUMA cap: CPU per pod must fit within a single NUMA node
+numa_nodes = from hardware discovery, fallback to 2 if >80 CPUs
+max_cpus_per_numa = usable_cpus / numa_nodes
+cpu_per_pod = min(cpu_per_pod, max_cpus_per_numa)
 ```
+
+**Guaranteed QoS:** All containers (including init containers) set `requests == limits` for CPU and memory. This enables Topology Manager `single-numa-node` policy to enforce CPU + memory + GPU NUMA alignment.
 **Why max(15%, 16 GB) for memory?** Reserve the larger of 15% or 16 GB for:
 - Kubelet and container runtime (~2-4 GB)
 - OS kernel and filesystem cache (~2-4 GB)
@@ -1039,6 +1091,10 @@ The absolute floor of 16 GB ensures small nodes (256 GB) don't starve the OS —
 | Starting C factor | 0.6 | 60% of ceiling — conservative but not too slow |
 | Node memory reserve | max(15%, 16 GB) | Percentage or absolute floor, whichever is larger |
 | Node CPU reserve | max(20%, 4 cores) | Percentage or absolute floor, whichever is larger |
+| NUMA cap | usable_cpus / numa_nodes | Ensures pod fits in single NUMA node for Topology Manager |
+| GPU compute saturation | 8 per GPU | Calibration concurrency cap — enough to saturate Tensor Cores |
+| Calibration multiplier | 120/60/20 (by model size) | Scales request count: small (<100B)/medium/large (>200B) models |
+| Model load timeout | model_size_B × 10s, min 600s | Scales with model size: 550B → 5500s (91 min) |
 | Max gpu_memory_util | 0.95 | 5% safety for unexpected allocation spikes |
 | Reserve scaling | 0.008 | 0.8% per additional pod for shared overhead |
 | Base reserve | 5% | Minimum overhead for single pod |
