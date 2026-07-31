@@ -158,13 +158,13 @@ class PDSearchMixin:
                 if d in valid_by_decode:
                     selected.append(valid_by_decode[d])
 
-            # Always include edge splits (max prefill, max decode)
-            # These are often optimal and Smart Search may skip them
+            # Include edge splits only if they're within 3× of the ideal
             min_decode = min(valid_by_decode.keys())
             max_decode = max(valid_by_decode.keys())
             for edge_d in [min_decode, max_decode]:
                 if edge_d in valid_by_decode and valid_by_decode[edge_d] not in selected:
-                    selected.append(valid_by_decode[edge_d])
+                    if 0.3 * d_ideal <= edge_d <= 3 * d_ideal or len(selected) < 2:
+                        selected.append(valid_by_decode[edge_d])
 
             if len(selected) < 2 and all_valid:
                 by_distance = sorted(all_valid, key=lambda s: abs(s.decode_pods - d_ideal))
@@ -556,7 +556,7 @@ class PDSearchMixin:
                         if 'decode_avg_waiting' in mj and 'prefill_avg_waiting' in mj:
                             d = mj['decode_avg_waiting']
                             p = mj['prefill_avg_waiting']
-                            r = mj.get('waiting_ratio', d / p if p > 0.1 else (10.0 if d > 0.5 else 1.0))
+                            r = mj.get('waiting_ratio', d / max(p, 0.01))
                             return d, p, r
             except Exception:
                 pass
@@ -604,7 +604,12 @@ class PDSearchMixin:
             nums = [float(v[1]) for v in values if v[1] != 'NaN']
             if not nums:
                 continue
-            avg = sum(nums) / len(nums)
+            # Trim ramp-up (first 20%) and ramp-down (last 10%) for steady-state average
+            n = len(nums)
+            start = n // 5
+            end = n - n // 10
+            trimmed = nums[start:end] if end > start else nums
+            avg = sum(trimmed) / len(trimmed) if trimmed else 0
             if 'prefill' in pod:
                 prefill_avgs.append(avg)
             elif 'decode' in pod:
@@ -615,36 +620,33 @@ class PDSearchMixin:
 
         prefill_avg = sum(prefill_avgs) / len(prefill_avgs)
         decode_avg = sum(decode_avgs) / len(decode_avgs)
-        ratio = decode_avg / prefill_avg if prefill_avg > 0.1 else (10.0 if decode_avg > 0.5 else 1.0)
+        ratio = decode_avg / max(prefill_avg, 0.01)
 
         return decode_avg, prefill_avg, ratio
 
     def _compute_balanced_split(self, ptp, dtp, tested_split, decode_wait, prefill_wait):
         """Compute the next split by shifting pods toward the bottleneck side.
 
-        When both sides have meaningful data (>0.1), use the full ratio-based
-        shift. When one side has near-zero waiting (no signal), limit to 25%
-        of total pods to avoid overshooting.
+        Uses capped ratio to prevent wild jumps. Shift is limited to 1/3
+        of total pods per iteration for gradual convergence.
         """
         import math
         current_d = tested_split.decode_pods
         current_p = tested_split.prefill_pods
         total_pods = current_d + current_p
-        both_have_data = decode_wait > 0.1 and prefill_wait > 0.1
+        max_shift = max(1, total_pods // 3)
 
         if decode_wait > prefill_wait:
-            if both_have_data:
-                ratio = decode_wait / prefill_wait
-                shift = max(1, int((ratio - 1) * current_d))
-            else:
-                shift = max(1, total_pods // 4)
+            ratio = decode_wait / max(prefill_wait, 0.01)
+            capped = min(ratio, 3.0)
+            shift = max(1, int((capped - 1) * current_d))
+            shift = min(shift, max_shift)
             ideal_d = current_d + shift
         else:
-            if both_have_data:
-                ratio = prefill_wait / decode_wait
-                shift = max(1, int((ratio - 1) * current_p))
-            else:
-                shift = max(1, total_pods // 4)
+            ratio = prefill_wait / max(decode_wait, 0.01)
+            capped = min(ratio, 3.0)
+            shift = max(1, int((capped - 1) * current_p))
+            shift = min(shift, max_shift)
             ideal_d = current_d - shift
 
         total_gpus = tested_split.total_gpus
@@ -718,7 +720,7 @@ class PDSearchMixin:
         For each TP pair: test the calibration-based ideal split first, then
         use the vLLM waiting ratio (decode vs prefill per-pod queue depth)
         to compute and test a rebalanced split. Iterates up to 4 times per
-        TP pair until the waiting ratio is balanced (0.7-1.4).
+        TP pair until the waiting ratio is balanced (0.9-1.1).
         """
         if not self.feasible_splits:
             self.log("❌ No feasible splits to test!", 'error')
@@ -825,7 +827,7 @@ class PDSearchMixin:
 
                 # Balanced enough (0.7-1.4) — no need to iterate further for this TP
                 if 0.9 <= ratio <= 1.1:
-                    self.log(f"    ✅ Balanced (ratio {ratio:.2f} within 0.8-1.2) — moving to next TP pair", 'success')
+                    self.log(f"    ✅ Balanced (ratio {ratio:.2f} within 0.9-1.1) — moving to next TP pair", 'success')
                     break
 
                 # Both sides truly idle — no queue pressure anywhere, split is fine

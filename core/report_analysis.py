@@ -1510,8 +1510,8 @@ class ReportAnalyzer:
                 'target_ms': target_ms,
                 'target_percentile': target_pct,
             }
-        elif run_config and run_config.get('epp_benchmark'):
-            # EPP was enabled but all architectures were skipped
+        elif run_config and run_config.get('epp_benchmark') and run_meta.get('completed_at'):
+            # EPP was enabled and run finished but all architectures were skipped
             skipped = []
             successful = [r for r in results if r.is_successful and not r.config_name.startswith(('step2', 'step3', 'step9', 'step10', 'step11'))]
             for arch_key in ['pd', 'aggregated', 'ep']:
