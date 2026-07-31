@@ -32,7 +32,7 @@ class TPCalibrationMixin:
         prefill_candidates = []
 
         model_size_b = getattr(self, '_model_size_b', 8)
-        tokens_per_gpu = 500_000 if model_size_b < 100 else (250_000 if model_size_b < 200 else 100_000)
+        tokens_per_gpu = 2_000_000 if model_size_b < 100 else (1_000_000 if model_size_b < 200 else 400_000)
 
         def _calibration_max_requests(safe_c, seq_len, tp):
             """Calculate max requests from a per-GPU token budget."""
