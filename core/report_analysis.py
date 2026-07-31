@@ -844,6 +844,29 @@ class ReportAnalyzer:
             eff_data['test_ids'] = [tid for _, _, _, tid in with_eff]
         charts['efficiency'] = eff_data
 
+        # --- Per-user efficiency bar chart ---
+        per_user_data = {'configs': [], 'values': [], 'colors': [], 'test_ids': []}
+        if successful:
+            core_successful = [r for r in successful if not r.config_name.startswith(('step11-', 'step12-', 'step13-'))]
+            def _get_num_users(r):
+                try:
+                    import json as _j
+                    return _j.loads(r.test_config_json).get('num_users', 1) if r.test_config_json else 1
+                except Exception:
+                    return 1
+            with_pu = sorted(
+                [(r.display_label,
+                  (r.throughput_mean or r.throughput_p90) / max(_get_num_users(r), 1),
+                  r.architecture, r.config_name)
+                 for r in core_successful],
+                key=lambda x: x[1], reverse=True
+            )[:15]
+            per_user_data['configs'] = [label for label, _, _, _ in with_pu]
+            per_user_data['values'] = [round(eff, 4) for _, eff, _, _ in with_pu]
+            per_user_data['colors'] = [arch_colors.get(arch, '#999') for _, _, arch, _ in with_pu]
+            per_user_data['test_ids'] = [tid for _, _, _, tid in with_pu]
+        charts['per_user_efficiency'] = per_user_data
+
         # --- Architecture comparison ---
         arch_comp = {'architectures': [], 'avg_ttft': [], 'avg_throughput': [],
                      'avg_gpus': [], 'best_ttft': [], 'colors': []}

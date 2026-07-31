@@ -450,6 +450,7 @@ function renderCharts(data, runId) {
         '</div></div>';
     secCfg += chartCard('Throughput vs Latency', chartDesc.scatter, 'chart-scatter');
     secCfg += chartCard('GPU Efficiency (req/s per GPU)', chartDesc.efficiency, 'chart-efficiency');
+    secCfg += chartCard('User Efficiency (req/s per concurrent user)', 'Shows how many requests each concurrent user completes per second. <strong>Higher = faster per-user turnaround.</strong>', 'chart-per-user-efficiency');
     if (coreResults.some(r => r.architecture === 'PD' || r.architecture === 'EP') && coreResults.some(r => r.architecture === 'AGGREGATED')) {
         secPareto += '<div class="chart-card" style="border-left:6px solid #8b5cf6;">' +
             '<div class="chart-card-header" style="background:linear-gradient(135deg,#8b5cf6,#a78bfa); color:white;">Pareto Frontier Analysis</div>' +
@@ -2156,6 +2157,21 @@ function renderCharts(data, runId) {
                 hovertemplate: '<b>%{x}</b><br>%{y:.3f} req/s/GPU<extra></extra>'
             }], { ...plotlyLayout, margin: { ...plotlyLayout.margin, b: 120 }, xaxis: { tickangle: -45 }, yaxis: { title: 'Mean req/s per GPU - higher is better' } }, plotlyConfig);
         }
+    }
+
+    // Per-user efficiency bar
+    if (charts.per_user_efficiency && charts.per_user_efficiency.configs.length) {
+        var puConfigs = charts.per_user_efficiency.configs;
+        var puValues = charts.per_user_efficiency.values;
+        var puColors = charts.per_user_efficiency.colors;
+        Plotly.newPlot(cid('chart-per-user-efficiency'), [{
+            x: puConfigs, y: puValues,
+            type: 'bar', marker: { color: puColors },
+            text: puValues.map(v => v != null ? v.toFixed(4) : ''),
+            textposition: 'outside', textfont: { size: 11, color: '#333' },
+            cliponaxis: false, constraintext: 'none',
+            hovertemplate: '<b>%{x}</b><br>%{y:.4f} req/s/user<extra></extra>'
+        }], { ...plotlyLayout, margin: { ...plotlyLayout.margin, b: 120 }, xaxis: { tickangle: -45 }, yaxis: { title: 'Mean req/s per concurrent user - higher is better' } }, plotlyConfig);
     }
 
     // Throughput–Interactivity Pareto Frontier (normalized 0-1)
