@@ -1496,18 +1496,18 @@ class RecipeOptimizer(
         except Exception as e:
             self.log(f"⚠️  Failed to clean up orphaned pods: {e}", 'warning')
 
-        # Restart EPP so its datastore re-discovers pods from scratch
+        # Restart EPP and gateway pods for fresh state (cert rotation, stale datastore)
         try:
             import subprocess
             for arch in ('aggregated', 'pd', 'ep'):
-                name = f'gaie-{arch}-epp'
-                r = subprocess.run(
-                    ['kubectl', 'rollout', 'restart', 'deployment', name,
-                     '-n', self.config.namespace],
-                    capture_output=True, text=True, timeout=15, check=False
-                )
-                if r.returncode == 0:
-                    self.log(f"   🔄 Restarted EPP: {name}", 'info')
+                for prefix in (f'gaie-{arch}-epp', f'infra-{arch}-inference-gateway-istio'):
+                    r = subprocess.run(
+                        ['kubectl', 'rollout', 'restart', 'deployment', prefix,
+                         '-n', self.config.namespace],
+                        capture_output=True, text=True, timeout=15, check=False
+                    )
+                    if r.returncode == 0:
+                        self.log(f"   🔄 Restarted: {prefix}", 'info')
         except Exception:
             pass
 
