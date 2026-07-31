@@ -1496,7 +1496,10 @@ class RecipeOptimizer(
         except Exception as e:
             self.log(f"⚠️  Failed to clean up orphaned pods: {e}", 'warning')
 
-        # Restart EPP and gateway pods for fresh state (cert rotation, stale datastore)
+        # Stale guidellm output files are cleaned per-test (rm -f before each run)
+
+    def _restart_infra_pods(self):
+        """Restart EPP and gateway pods for fresh Istio certs and clean datastore."""
         try:
             import subprocess
             for arch in ('aggregated', 'pd', 'ep'):
@@ -1510,8 +1513,6 @@ class RecipeOptimizer(
                         self.log(f"   🔄 Restarted: {prefix}", 'info')
         except Exception:
             pass
-
-        # Stale guidellm output files are cleaned per-test (rm -f before each run)
 
     def _wait_for_all_test_pods_terminated(self, timeout: int = 120):
         """Wait for all serveit-test pods to terminate."""
@@ -1566,6 +1567,9 @@ class RecipeOptimizer(
         else:
             self.log("Mode: FRESH START", 'info')
         self.log("", 'info')
+
+        # Restart EPP and gateways for fresh Istio certs and clean datastore
+        self._restart_infra_pods()
 
         try:
             # Single test: skip TP calibration, go straight to strategy
