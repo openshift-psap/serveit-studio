@@ -64,8 +64,8 @@ class DatasetMixin:
             seed_input = f"{self.config.model_name}:{isl}:{osl}:random"
             seed = int(hashlib.md5(seed_input.encode()).hexdigest()[:8], 16)
 
-        pool_size = int(getattr(self.config, 'qps', 100) * getattr(self.config, 'test_duration', 300) * 1.5)
-        pool_size = max(1000, min(pool_size, 100000))
+        max_reqs = getattr(self.config, 'max_requests', None) or int(getattr(self.config, 'qps', 100) * getattr(self.config, 'test_duration', 300))
+        pool_size = max(max_reqs * 3, 100)  # 3× max_requests for cache churn
 
         dataset_path = f'/mnt/storage/prefix-cache-datasets/random-workload-{isl}-{osl}-{seed}.jsonl'
 
