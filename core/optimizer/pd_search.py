@@ -627,14 +627,14 @@ class PDSearchMixin:
     def _compute_balanced_split(self, ptp, dtp, tested_split, decode_wait, prefill_wait):
         """Compute the next split by shifting pods toward the bottleneck side.
 
-        Uses capped ratio to prevent wild jumps. Shift is limited to 1/3
+        Uses capped ratio to prevent wild jumps. Shift is limited to 25%
         of total pods per iteration for gradual convergence.
         """
         import math
         current_d = tested_split.decode_pods
         current_p = tested_split.prefill_pods
         total_pods = current_d + current_p
-        max_shift = max(1, total_pods // 3)
+        max_shift = max(1, total_pods // 4)
 
         if decode_wait > prefill_wait:
             ratio = decode_wait / max(prefill_wait, 0.01)
