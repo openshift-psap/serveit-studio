@@ -45,20 +45,32 @@ class TPCalibrationMixin:
         # Pre-compute max requests and KV cap across all TPs to size calibration datasets
         # Pool must be larger than KV cap to prevent full-cache hits from skewing results
         max_decode_reqs = 0
-        max_decode_kv = 0
         max_prefill_reqs = 0
-        max_prefill_kv = 0
+        max_decode_kvcap = 0
+        max_prefill_kvcap = 0
+        gpu_vram = getattr(self, '_gpu_vram_gb', 80.0)
+        model_gb = self._estimate_model_size_gb()
         for tp in all_tps:
+            avail = gpu_vram - model_gb / tp - 5.0
             if tp in decode_tps:
                 c = self._estimate_safe_concurrency(tp, isl=1, osl=self.config.osl)
                 max_decode_reqs = max(max_decode_reqs, _calibration_max_requests(c, 1 + self.config.osl, tp))
-                max_decode_kv = max(max_decode_kv, c)
+                kv_hpg = max(1, (self._model_config or {}).get('num_key_value_heads', 8) // tp)
+                head_dim = (self._model_config or {}).get('head_dim', 256)
+                n_layers = (self._model_config or {}).get('num_hidden_layers', 32)
+                kv_seq = (2 * n_layers * kv_hpg * head_dim * (1 + self.config.osl) * 2) / (1024**3)
+                max_decode_kvcap = max(max_decode_kvcap, int(avail / kv_seq) if kv_seq > 0 else 0)
             if tp in prefill_tps:
                 c = self._estimate_safe_concurrency(tp, isl=self.config.isl, osl=1)
                 max_prefill_reqs = max(max_prefill_reqs, _calibration_max_requests(c, self.config.isl + 1, tp))
-                max_prefill_kv = max(max_prefill_kv, c)
-        max_decode_reqs = max(max_decode_reqs, max_decode_kv * 3)
-        max_prefill_reqs = max(max_prefill_reqs, max_prefill_kv * 3)
+                kv_hpg = max(1, (self._model_config or {}).get('num_key_value_heads', 8) // tp)
+                head_dim = (self._model_config or {}).get('head_dim', 256)
+                n_layers = (self._model_config or {}).get('num_hidden_layers', 32)
+                kv_seq = (2 * n_layers * kv_hpg * head_dim * (self.config.isl + 1) * 2) / (1024**3)
+                max_prefill_kvcap = max(max_prefill_kvcap, int(avail / kv_seq) if kv_seq > 0 else 0)
+        # Pool must exceed KV cap so prefix cache can't hold all unique prompts
+        max_decode_reqs = max(max_decode_reqs, max_decode_kvcap * 3)
+        max_prefill_reqs = max(max_prefill_reqs, max_prefill_kvcap * 3)
 
         # Pre-generate calibration datasets so guidellm doesn't regenerate per test
         decode_dataset = self._generate_calibration_dataset(
