@@ -392,19 +392,27 @@ class ConfigBuilderMixin:
         if not self.optimal_prefill_tp or self.optimal_prefill_tp.tpsg <= 0:
             return None
 
-        # Multimodal models: let vLLM auto-determine based on vision encoder requirements
-        is_multimodal = self._model_config and (
-            self._model_config.get('vision_config') or self._model_config.get('visual')
-            or self._model_config.get('audio_config')
-        )
-        if is_multimodal:
-            self.log(f"   max_num_batched_tokens(TP={tp}): auto (multimodal — vLLM sets based on encoder requirements)")
-            return None
-
         target_batch_latency_s = 0.2
         tokens_per_second_per_gpu = self.optimal_prefill_tp.tpsg
         batch_budget = int(tokens_per_second_per_gpu * tp * target_batch_latency_s)
-        clamped = max(2048, min(batch_budget, self.config.max_model_len))
+
+        # Floor: must be >= vLLM's max_tokens_per_mm_item for multimodal models
+        floor = 2048
+        if self._model_config:
+            vcfg = self._model_config.get('vision_config') or self._model_config.get('visual')
+            if vcfg and isinstance(vcfg, dict):
+                patch = vcfg.get('patch_size', 16)
+                img_size = vcfg.get('image_size', 0) or vcfg.get('resolution', 0)
+                if img_size > 0:
+                    floor = max(floor, (img_size // patch) ** 2)
+                else:
+                    default_out = vcfg.get('default_output_length', 0)
+                    if default_out > 0:
+                        floor = max(floor, default_out * 10)
+                    else:
+                        floor = max(floor, 4096)
+
+        clamped = max(floor, min(batch_budget, self.config.max_model_len))
 
         self.log(f"   max_num_batched_tokens(TP={tp}): {clamped} "
                  f"(prefill_TPSG={tokens_per_second_per_gpu:.0f} × TP={tp} × {target_batch_latency_s}s "
