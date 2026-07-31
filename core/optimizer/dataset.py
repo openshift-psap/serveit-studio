@@ -112,8 +112,8 @@ class DatasetMixin:
         self.random_dataset_path = dataset_path
         return dataset_path
 
-    def _generate_calibration_dataset(self, isl: int, osl: int, label: str = 'calibration'):
-        """Generate a small dataset for calibration tests.
+    def _generate_calibration_dataset(self, isl: int, osl: int, label: str = 'calibration', pool_size: int = 0):
+        """Generate a dataset for calibration tests.
 
         Pre-generates prompts so guidellm doesn't regenerate synthetic
         tokens for every test in the sweep. Especially important for
@@ -123,7 +123,7 @@ class DatasetMixin:
         seed_input = f"{self.config.model_name}:{isl}:{osl}:calibration"
         seed = int(hashlib.md5(seed_input.encode()).hexdigest()[:8], 16)
 
-        pool_size = 500
+        pool_size = max(pool_size, 10)
         dataset_path = f'/mnt/storage/prefix-cache-datasets/calibration-{label}-{isl}-{osl}-{seed}.jsonl'
 
         try:

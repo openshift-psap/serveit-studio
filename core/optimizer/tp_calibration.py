@@ -26,9 +26,22 @@ class TPCalibrationMixin:
         self.log(f"  Decode workload: ISL=1, OSL={self.config.osl}", 'info')
         self.log(f"  Prefill workload: ISL={self.config.isl}, OSL=1", 'info')
 
+        # Pre-compute max requests across all TPs to size the calibration datasets
+        max_decode_reqs = 0
+        max_prefill_reqs = 0
+        for tp in all_tps:
+            if tp in decode_tps:
+                c = self._estimate_safe_concurrency(tp, isl=1, osl=self.config.osl)
+                max_decode_reqs = max(max_decode_reqs, _calibration_max_requests(c, 1 + self.config.osl, tp))
+            if tp in prefill_tps:
+                c = self._estimate_safe_concurrency(tp, isl=self.config.isl, osl=1)
+                max_prefill_reqs = max(max_prefill_reqs, _calibration_max_requests(c, self.config.isl + 1, tp))
+
         # Pre-generate calibration datasets so guidellm doesn't regenerate per test
-        decode_dataset = self._generate_calibration_dataset(isl=1, osl=self.config.osl, label='decode')
-        prefill_dataset = self._generate_calibration_dataset(isl=self.config.isl, osl=1, label='prefill')
+        decode_dataset = self._generate_calibration_dataset(
+            isl=1, osl=self.config.osl, label='decode', pool_size=max_decode_reqs)
+        prefill_dataset = self._generate_calibration_dataset(
+            isl=self.config.isl, osl=1, label='prefill', pool_size=max_prefill_reqs)
 
         use_ttft = self.config.objective == 'ttft'
 
