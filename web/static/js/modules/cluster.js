@@ -261,23 +261,32 @@ document.getElementById('stop-confirm').addEventListener('click', () => {
     logToConsole('🛑 Stopping Optimization Process', 'warning');
     logToConsole('═══════════════════════════════════════', 'warning');
 
-    fetch('/api/stop_optimization', {
-        method: 'POST',
-        headers: {
-            'Content-Type': 'application/json'
-        }
-    })
-    .then(response => response.json())
-    .then(data => {
-        if (data.success) {
-            logToConsole('✅ Optimization stopped', 'success');
-        } else {
-            logToConsole(`❌ Failed to stop: ${data.error}`, 'error');
-        }
-    })
-    .catch(err => {
-        logToConsole(`❌ Error stopping optimization: ${err}`, 'error');
-    });
+    // Try REST API first, fall back to socket
+    const tryStop = (attempt) => {
+        fetch('/api/stop_optimization', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' }
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                logToConsole('✅ Optimization stopped', 'success');
+            } else {
+                logToConsole(`❌ Failed to stop: ${data.error}`, 'error');
+            }
+        })
+        .catch(err => {
+            if (attempt < 2) {
+                setTimeout(() => tryStop(attempt + 1), 1000);
+            } else if (window.socket && window.socket.connected) {
+                window.socket.emit('stop_optimization');
+                logToConsole('✅ Stop signal sent via socket', 'success');
+            } else {
+                logToConsole(`❌ Error stopping optimization: ${err}`, 'error');
+            }
+        });
+    };
+    tryStop(0);
 });
 
 // Close modal when clicking outside

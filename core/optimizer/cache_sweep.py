@@ -125,6 +125,21 @@ class CacheSweepMixin:
             config.request_rate = concurrency
             config.enable_prefix_caching = True
 
+            # Override EPP to cache_optimized for cache sweep — prefix-cache-scorer
+            # must have high weight for requests to route to pods with cached prefixes
+            if config.epp_config and is_first:
+                from core import PrereqManager
+                prereq = PrereqManager(
+                    namespace=self.config.namespace,
+                    kubectl_runner=self.orchestrator.deployment_manager.kubectl,
+                )
+                cache_epp = dict(config.epp_config)
+                cache_epp['preset'] = 'cache_optimized'
+                prereq.update_epp_config(
+                    config.architecture, cache_epp,
+                    log_callback=lambda msg: self.log(msg, 'info')
+                )
+
             if dataset_path and hit_pct > 0:
                 config.workload_mode = 'dataset'
                 config.dataset_source = dataset_path

@@ -1156,6 +1156,16 @@ class ReportAnalyzer:
             })
         return all_results
 
+    @staticmethod
+    def _is_run_finished(run_id, loader):
+        try:
+            row = loader.conn.execute(
+                'SELECT completed_at FROM optimization_runs WHERE id = ?', (run_id,)
+            ).fetchone()
+            return bool(row and row[0])
+        except Exception:
+            return False
+
     def build_full_report_data(self, run_id, loader):
         """
         Build all data needed for the /api/runs/<id>/charts endpoint.
@@ -1510,7 +1520,7 @@ class ReportAnalyzer:
                 'target_ms': target_ms,
                 'target_percentile': target_pct,
             }
-        elif run_config and run_config.get('epp_benchmark') and run_meta.get('completed_at'):
+        elif run_config and run_config.get('epp_benchmark') and self._is_run_finished(run_id, loader):
             # EPP was enabled and run finished but all architectures were skipped
             skipped = []
             successful = [r for r in results if r.is_successful and not r.config_name.startswith(('step2', 'step3', 'step9', 'step10', 'step11'))]
