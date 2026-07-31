@@ -112,6 +112,55 @@ class DatasetMixin:
         self.random_dataset_path = dataset_path
         return dataset_path
 
+    def _generate_calibration_dataset(self, isl: int, osl: int, label: str = 'calibration'):
+        """Generate a small dataset for calibration tests.
+
+        Pre-generates prompts so guidellm doesn't regenerate synthetic
+        tokens for every test in the sweep. Especially important for
+        long-context prefill (ISL=100K) where synthetic generation is slow.
+        """
+        import hashlib
+        seed_input = f"{self.config.model_name}:{isl}:{osl}:calibration"
+        seed = int(hashlib.md5(seed_input.encode()).hexdigest()[:8], 16)
+
+        pool_size = 500
+        dataset_path = f'/mnt/storage/prefix-cache-datasets/calibration-{label}-{isl}-{osl}-{seed}.jsonl'
+
+        try:
+            self.orchestrator.ensure_guidellm_pod(self.config, log_callback=lambda msg: self.log(msg, 'info'))
+            kubectl = self.orchestrator.deployment_manager.kubectl
+            pod_name = self.orchestrator._guidellm_pod_name
+
+            exists = kubectl.run(
+                ['exec', pod_name, '-n', self.config.namespace, '--',
+                 'test', '-f', dataset_path], check=False
+            ).returncode == 0
+
+            if exists:
+                self.log(f"   Reusing calibration dataset ({label}): {os.path.basename(dataset_path)}", 'info')
+            else:
+                self.log(f"   Generating calibration dataset ({label}): {pool_size} rows, ISL={isl}, OSL={osl}", 'info')
+                cmd = (
+                    f'generate_dataset'
+                    f' --model "{self.config.model_name}"'
+                    f' --isl {isl} --osl {osl}'
+                    f' --seed {seed} --rows {pool_size}'
+                    f' --output {dataset_path}'
+                    f' --mode random'
+                )
+                result = kubectl.run(
+                    ['exec', pod_name, '-n', self.config.namespace, '--', 'bash', '-c', cmd],
+                    check=False, timeout=3600
+                )
+                if result.returncode != 0:
+                    self.log(f"   ⚠️  Calibration dataset generation failed, falling back to synthetic", 'warning')
+                    return None
+
+            return dataset_path
+        except Exception as e:
+            self.log(f"   ⚠️  Calibration dataset generation failed ({e}), falling back to synthetic", 'warning')
+            return None
+
     def _generate_prefix_cache_dataset(self):
         """Generate a prefix cache dataset on the workload pod.
 

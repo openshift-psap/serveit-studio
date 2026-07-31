@@ -26,6 +26,10 @@ class TPCalibrationMixin:
         self.log(f"  Decode workload: ISL=1, OSL={self.config.osl}", 'info')
         self.log(f"  Prefill workload: ISL={self.config.isl}, OSL=1", 'info')
 
+        # Pre-generate calibration datasets so guidellm doesn't regenerate per test
+        decode_dataset = self._generate_calibration_dataset(isl=1, osl=self.config.osl, label='decode')
+        prefill_dataset = self._generate_calibration_dataset(isl=self.config.isl, osl=1, label='prefill')
+
         use_ttft = self.config.objective == 'ttft'
 
         decode_candidates = []
@@ -76,6 +80,11 @@ class TPCalibrationMixin:
                     )
                     decode_config.stop_mode = 'max_requests'
                     decode_config.max_requests = _calibration_max_requests(safe_c, 1 + self.config.osl, tp)
+                    if decode_dataset:
+                        decode_config.workload_mode = 'dataset'
+                        decode_config.dataset_source = decode_dataset
+                        decode_config.dataset_column = 'prompt'
+                        decode_config.dataset_max_output = self.config.osl
 
                     # Keep deployment alive for prefill test
                     needs_prefill_after = run_prefill and not prefill_cached
@@ -128,6 +137,11 @@ class TPCalibrationMixin:
                     )
                     prefill_config.stop_mode = 'max_requests'
                     prefill_config.max_requests = _calibration_max_requests(safe_c, self.config.isl + 1, tp)
+                    if prefill_dataset:
+                        prefill_config.workload_mode = 'dataset'
+                        prefill_config.dataset_source = prefill_dataset
+                        prefill_config.dataset_column = 'prompt'
+                        prefill_config.dataset_max_output = 1
 
                     prefill_result = self.orchestrator.run_test(
                         prefill_config,
