@@ -392,6 +392,15 @@ class ConfigBuilderMixin:
         if not self.optimal_prefill_tp or self.optimal_prefill_tp.tpsg <= 0:
             return None
 
+        # Multimodal models: let vLLM auto-determine based on vision encoder requirements
+        is_multimodal = self._model_config and (
+            self._model_config.get('vision_config') or self._model_config.get('visual')
+            or self._model_config.get('audio_config')
+        )
+        if is_multimodal:
+            self.log(f"   max_num_batched_tokens(TP={tp}): auto (multimodal — vLLM sets based on encoder requirements)")
+            return None
+
         target_batch_latency_s = 0.2
         tokens_per_second_per_gpu = self.optimal_prefill_tp.tpsg
         batch_budget = int(tokens_per_second_per_gpu * tp * target_batch_latency_s)
