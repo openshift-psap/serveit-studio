@@ -479,6 +479,10 @@ class ConfigBuilderMixin:
             if setting and setting.get('mode') in ('on', 'off'):
                 setattr(cfg, attr, setting['mode'] == 'on')
 
+        # EP requires TP > 1 — no GPUs to split experts across at TP=1
+        if cfg.tensor_parallelism <= 1:
+            cfg.enable_expert_parallel = False
+
         return cfg
 
     @staticmethod
