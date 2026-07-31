@@ -26,16 +26,24 @@ class TPCalibrationMixin:
         self.log(f"  Decode workload: ISL=1, OSL={self.config.osl}", 'info')
         self.log(f"  Prefill workload: ISL={self.config.isl}, OSL=1", 'info')
 
-        # Pre-compute max requests across all TPs to size the calibration datasets
+        # Pre-compute max requests and KV cap across all TPs to size calibration datasets
+        # Pool must be larger than KV cap to prevent full-cache hits from skewing results
         max_decode_reqs = 0
+        max_decode_kv = 0
         max_prefill_reqs = 0
+        max_prefill_kv = 0
         for tp in all_tps:
             if tp in decode_tps:
                 c = self._estimate_safe_concurrency(tp, isl=1, osl=self.config.osl)
                 max_decode_reqs = max(max_decode_reqs, _calibration_max_requests(c, 1 + self.config.osl, tp))
+                max_decode_kv = max(max_decode_kv, c)
             if tp in prefill_tps:
                 c = self._estimate_safe_concurrency(tp, isl=self.config.isl, osl=1)
                 max_prefill_reqs = max(max_prefill_reqs, _calibration_max_requests(c, self.config.isl + 1, tp))
+                max_prefill_kv = max(max_prefill_kv, c)
+        # Ensure pool is at least 3x KV cap so cached entries get evicted before reuse
+        max_decode_reqs = max(max_decode_reqs, max_decode_kv * 3)
+        max_prefill_reqs = max(max_prefill_reqs, max_prefill_kv * 3)
 
         # Pre-generate calibration datasets so guidellm doesn't regenerate per test
         decode_dataset = self._generate_calibration_dataset(
