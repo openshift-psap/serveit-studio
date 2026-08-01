@@ -87,26 +87,31 @@ def scan_cluster_resources(cluster: Dict, namespace: str = 'serveit', proxy: str
         except Exception:
             pass
 
-        # Count GPUs in use (device plugin + DRA)
+        # Count GPUs in use (device plugin + DRA ResourceClaims)
         gpus_in_use = 0
         try:
             import json as _json
+            # Device plugin: count nvidia.com/gpu requests on running pods
             r = scanner.kubectl.run(['get', 'pods', '--all-namespaces', '-o', 'json'], check=False)
             if r.returncode == 0:
                 pods = _json.loads(r.stdout)
                 for pod in pods.get('items', []):
                     if pod.get('status', {}).get('phase') != 'Running':
                         continue
-                    # Device plugin GPUs (nvidia.com/gpu in resource requests)
                     for container in pod.get('spec', {}).get('containers', []):
                         reqs = container.get('resources', {}).get('requests', {})
                         gpu_req = reqs.get('nvidia.com/gpu', 0)
                         if gpu_req and str(gpu_req) != '0':
                             gpus_in_use += int(gpu_req)
-                    # DRA GPUs (ResourceClaims with gpu in the name)
-                    for claim in pod.get('spec', {}).get('resourceClaims', []):
-                        claim_name = claim.get('name', '')
-                        if 'gpu' in claim_name.lower():
+            # DRA: count allocated GPU devices from ResourceClaims
+            r = scanner.kubectl.run(['get', 'resourceclaim', '--all-namespaces', '-o', 'json'], check=False)
+            if r.returncode == 0:
+                claims = _json.loads(r.stdout)
+                for item in claims.get('items', []):
+                    alloc = item.get('status', {}).get('allocation', {})
+                    for dev in alloc.get('devices', {}).get('results', []):
+                        driver = dev.get('driver', '')
+                        if 'nvidia' in driver.lower() or 'gpu' in driver.lower():
                             gpus_in_use += 1
         except Exception:
             pass
