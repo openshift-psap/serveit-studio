@@ -87,7 +87,7 @@ def scan_cluster_resources(cluster: Dict, namespace: str = 'serveit', proxy: str
         except Exception:
             pass
 
-        # Count GPUs in use
+        # Count GPUs in use (device plugin + DRA)
         gpus_in_use = 0
         try:
             import json as _json
@@ -97,11 +97,17 @@ def scan_cluster_resources(cluster: Dict, namespace: str = 'serveit', proxy: str
                 for pod in pods.get('items', []):
                     if pod.get('status', {}).get('phase') != 'Running':
                         continue
+                    # Device plugin GPUs (nvidia.com/gpu in resource requests)
                     for container in pod.get('spec', {}).get('containers', []):
                         reqs = container.get('resources', {}).get('requests', {})
                         gpu_req = reqs.get('nvidia.com/gpu', 0)
                         if gpu_req and str(gpu_req) != '0':
                             gpus_in_use += int(gpu_req)
+                    # DRA GPUs (ResourceClaims with gpu in the name)
+                    for claim in pod.get('spec', {}).get('resourceClaims', []):
+                        claim_name = claim.get('name', '')
+                        if 'gpu' in claim_name.lower():
+                            gpus_in_use += 1
         except Exception:
             pass
 
