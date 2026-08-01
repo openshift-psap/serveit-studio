@@ -974,13 +974,25 @@ def backup_instance(instance_id: int, owner_id: int) -> Dict:
     # Look up cluster name and proxy
     cluster_name = 'unknown'
     cluster_proxy = None
+    cluster_details = None
     cluster_id = row.get('cluster_id')
     if cluster_id:
         with get_db() as conn:
-            cr = conn.execute('SELECT name, proxy FROM clusters WHERE id = ?', (cluster_id,)).fetchone()
+            cr = conn.execute('SELECT name, proxy, scan_data FROM clusters WHERE id = ?', (cluster_id,)).fetchone()
             if cr:
                 cluster_name = cr['name']
                 cluster_proxy = cr['proxy']
+                if cr['scan_data']:
+                    try:
+                        sd = json.loads(cr['scan_data'])
+                        cluster_details = {
+                            'gpu_node_count': sd.get('gpu_node_count'),
+                            'total_gpus': sd.get('total_gpus'),
+                            'gpu_model': sd.get('gpu_model'),
+                            'ocp_version': sd.get('ocp_version'),
+                        }
+                    except Exception:
+                        pass
 
     proxies = {'https': cluster_proxy, 'http': cluster_proxy} if cluster_proxy else None
 
@@ -1041,6 +1053,7 @@ def backup_instance(instance_id: int, owner_id: int) -> Dict:
     metadata = {
         'instance': instance_name,
         'cluster': cluster_name,
+        'cluster_details': cluster_details,
         'timestamp': timestamp,
         'backup_time': backup_time,
         'size_mb': round(size_mb, 1),

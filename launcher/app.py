@@ -313,23 +313,29 @@ def create_app():
     @app.route('/api/backups', methods=['GET'])
     def api_list_backups():
         backups = instance_manager.list_backups()
-        # Enrich with cluster details from scan_data
+        # For backups without cluster_details in metadata, try live scan_data
         cluster_cache = {}
-        with get_db() as conn:
-            for row in conn.execute('SELECT name, scan_data FROM clusters').fetchall():
-                if row['scan_data']:
-                    try:
-                        sd = json.loads(row['scan_data'])
-                        cluster_cache[row['name']] = {
-                            'gpu_node_count': sd.get('gpu_node_count'),
-                            'total_gpus': sd.get('total_gpus'),
-                            'gpu_model': sd.get('gpu_model'),
-                            'ocp_version': sd.get('ocp_version'),
-                        }
-                    except Exception:
-                        pass
         for b in backups:
-            b['cluster_details'] = cluster_cache.get(b.get('cluster'), None)
+            if b.get('cluster_details'):
+                continue
+            cname = b.get('cluster', '')
+            if not cname:
+                continue
+            if cname not in cluster_cache:
+                try:
+                    with get_db() as conn:
+                        row = conn.execute('SELECT scan_data FROM clusters WHERE name = ?', (cname,)).fetchone()
+                        if row and row['scan_data']:
+                            sd = json.loads(row['scan_data'])
+                            cluster_cache[cname] = {
+                                'gpu_node_count': sd.get('gpu_node_count'),
+                                'total_gpus': sd.get('total_gpus'),
+                                'gpu_model': sd.get('gpu_model'),
+                                'ocp_version': sd.get('ocp_version'),
+                            }
+                except Exception:
+                    pass
+            b['cluster_details'] = cluster_cache.get(cname)
         return jsonify(backups)
 
     @app.route('/api/backups/download')
