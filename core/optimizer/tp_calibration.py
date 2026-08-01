@@ -132,9 +132,25 @@ class TPCalibrationMixin:
                     self._save_test_to_database(decode_config, decode_result)
 
                     if not decode_result or not decode_result.guidellm_success:
+                        if self._is_memory_failure(decode_result):
+                            self.log(f"    ⚠️  Decode TP={tp} OOM — skipping prefill too", 'warning')
+                            continue
+                        # Retry once after restarting infra (gateway/EPP cert rotation)
                         err = getattr(decode_result, 'error_message', '') or ''
-                        self.log(f"    ⚠️  Decode TP={tp} failed ({err[:80]}) — skipping", 'warning')
-                        continue
+                        self.log(f"    ⚠️  Decode TP={tp} failed ({err[:80]}) — restarting infra and retrying", 'warning')
+                        self._restart_infra_pods()
+                        import time as _time; _time.sleep(15)
+                        decode_result = self.orchestrator.run_test(
+                            decode_config,
+                            cleanup=not needs_prefill_after,
+                            log_callback=lambda msg: self.log(msg, 'info'),
+                            stop_check=self._should_stop
+                        )
+                        deployed = needs_prefill_after and decode_result and decode_result.guidellm_success
+                        self.all_test_results.append((decode_config, decode_result))
+                        self._save_test_to_database(decode_config, decode_result)
+                        if not decode_result or not decode_result.guidellm_success:
+                            raise RuntimeError(f"Test {decode_test_id} failed after retry - stopping optimization")
 
                     self._check_pod_errors(decode_config, decode_result)
                     self._check_request_errors(decode_config, decode_result)
@@ -186,8 +202,28 @@ class TPCalibrationMixin:
                     self._save_test_to_database(prefill_config, prefill_result)
 
                     if not prefill_result or not prefill_result.guidellm_success:
-                        err = getattr(prefill_result, 'error_message', '') or ''
-                        self.log(f"    ⚠️  Prefill TP={tp} failed ({err[:80]}) — skipping", 'warning')
+                        if self._is_memory_failure(prefill_result):
+                            self.log(f"    ⚠️  Prefill TP={tp} OOM — skipping", 'warning')
+                        else:
+                            err = getattr(prefill_result, 'error_message', '') or ''
+                            self.log(f"    ⚠️  Prefill TP={tp} failed ({err[:80]}) — restarting infra and retrying", 'warning')
+                            self._restart_infra_pods()
+                            import time as _time; _time.sleep(15)
+                            prefill_result = self.orchestrator.run_test(
+                                prefill_config,
+                                cleanup=False,
+                                skip_deploy=deployed,
+                                skip_prereqs=deployed,
+                                log_callback=lambda msg: self.log(msg, 'info'),
+                                stop_check=self._should_stop
+                            )
+                            self.all_test_results.append((prefill_config, prefill_result))
+                            self._save_test_to_database(prefill_config, prefill_result)
+                            if not prefill_result or not prefill_result.guidellm_success:
+                                if deployed and decode_config:
+                                    self.orchestrator.cleanup_deployment(decode_config,
+                                        log_callback=lambda msg: self.log(msg, 'info'))
+                                raise RuntimeError(f"Test {prefill_test_id} failed after retry - stopping optimization")
                     else:
                         self._check_pod_errors(prefill_config, prefill_result)
                         self._check_request_errors(prefill_config, prefill_result)
