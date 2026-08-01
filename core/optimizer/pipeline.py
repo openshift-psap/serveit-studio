@@ -1052,8 +1052,9 @@ class RecipeOptimizer(
         # How many sequences fit per GPU
         kv_cap = max(1, int(available_per_gpu / kv_per_seq_gb))
         # Use 10% of KV capacity for calibration — enough to saturate, not excessive
+        # Floor at 1 per GPU (=tp) to saturate all GPUs
         # Cap at 16 per GPU for short sequences where KV is trivial
-        result = max(1, min(kv_cap // 10 + 1, tp * 16))
+        result = max(tp, min(kv_cap // 10 + 1, tp * 16))
 
         self.log(f"   Calibration concurrency for TP={tp}: {result} "
                  f"(kv_cap={kv_cap}, "
