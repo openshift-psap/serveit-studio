@@ -132,11 +132,9 @@ class TPCalibrationMixin:
                     self._save_test_to_database(decode_config, decode_result)
 
                     if not decode_result or not decode_result.guidellm_success:
-                        if self._is_memory_failure(decode_result):
-                            self.log(f"    ⚠️  Decode TP={tp} OOM — skipping prefill too", 'warning')
-                            continue
-                        self.log(f"    ❌ Decode TP={tp} failed (non-memory) — stopping", 'error')
-                        raise RuntimeError(f"Test {decode_test_id} failed - stopping optimization")
+                        err = getattr(decode_result, 'error_message', '') or ''
+                        self.log(f"    ⚠️  Decode TP={tp} failed ({err[:80]}) — skipping", 'warning')
+                        continue
 
                     self._check_pod_errors(decode_config, decode_result)
                     self._check_request_errors(decode_config, decode_result)
@@ -188,14 +186,8 @@ class TPCalibrationMixin:
                     self._save_test_to_database(prefill_config, prefill_result)
 
                     if not prefill_result or not prefill_result.guidellm_success:
-                        if self._is_memory_failure(prefill_result):
-                            self.log(f"    ⚠️  Prefill TP={tp} OOM — skipping", 'warning')
-                        else:
-                            self.log(f"    ❌ Prefill TP={tp} failed (non-memory) — stopping", 'error')
-                            if deployed and decode_config:
-                                self.orchestrator.cleanup_deployment(decode_config,
-                                    log_callback=lambda msg: self.log(msg, 'info'))
-                            raise RuntimeError(f"Test {prefill_test_id} failed - stopping optimization")
+                        err = getattr(prefill_result, 'error_message', '') or ''
+                        self.log(f"    ⚠️  Prefill TP={tp} failed ({err[:80]}) — skipping", 'warning')
                     else:
                         self._check_pod_errors(prefill_config, prefill_result)
                         self._check_request_errors(prefill_config, prefill_result)
