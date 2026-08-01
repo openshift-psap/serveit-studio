@@ -178,6 +178,8 @@ def create_app():
             ).fetchone()
         if not cluster:
             return jsonify({'error': 'Cluster not found'}), 404
+        if not _scan_lock.acquire(timeout=5):
+            return jsonify({'error': 'Scan already in progress'}), 409
         try:
             result = scan_cluster_resources(dict(cluster), namespace)
             with get_db() as conn:
@@ -188,7 +190,8 @@ def create_app():
             return jsonify(result)
         except Exception as e:
             return jsonify({'error': str(e)}), 500
-        return jsonify({'error': 'Cluster not found'}), 404
+        finally:
+            _scan_lock.release()
 
     # ── Instance API ──
 
@@ -447,6 +450,8 @@ def create_app():
     return app
 
 
+_scan_lock = __import__('threading').Lock()
+
 def _auto_rescan_loop(app, namespace):
     """Background thread: periodically rescan all clusters."""
     import time
@@ -468,19 +473,25 @@ def _auto_rescan_loop(app, namespace):
                     time.sleep(60)
                     continue
 
-                with get_db() as conn:
-                    clusters = conn.execute('SELECT * FROM clusters').fetchall()
+                if not _scan_lock.acquire(blocking=False):
+                    time.sleep(interval)
+                    continue
+                try:
+                    with get_db() as conn:
+                        clusters = conn.execute('SELECT * FROM clusters').fetchall()
 
-                for cluster in clusters:
-                    try:
-                        result = scan_cluster_resources(dict(cluster), namespace)
-                        with get_db() as conn:
-                            conn.execute(
-                                'UPDATE clusters SET scan_data = ?, scanned_at = ? WHERE id = ?',
-                                (json.dumps(result), datetime.now().isoformat(), cluster['id'])
-                            )
-                    except Exception as e:
-                        print(f"  Auto-rescan failed for cluster {cluster['name']}: {e}")
+                    for cluster in clusters:
+                        try:
+                            result = scan_cluster_resources(dict(cluster), namespace)
+                            with get_db() as conn:
+                                conn.execute(
+                                    'UPDATE clusters SET scan_data = ?, scanned_at = ? WHERE id = ?',
+                                    (json.dumps(result), datetime.now().isoformat(), cluster['id'])
+                                )
+                        except Exception as e:
+                            print(f"  Auto-rescan failed for cluster {cluster['name']}: {e}")
+                finally:
+                    _scan_lock.release()
 
                 time.sleep(interval)
             except Exception as e:
