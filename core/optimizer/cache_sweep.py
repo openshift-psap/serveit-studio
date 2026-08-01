@@ -127,18 +127,22 @@ class CacheSweepMixin:
 
             # Override EPP to cache_optimized for cache sweep — prefix-cache-scorer
             # must have high weight for requests to route to pods with cached prefixes
-            if config.epp_config and is_first:
-                from core import PrereqManager
-                prereq = PrereqManager(
-                    namespace=self.config.namespace,
-                    kubectl_runner=self.orchestrator.deployment_manager.kubectl,
-                )
-                cache_epp = dict(config.epp_config)
+            if is_first:
+                epp = config.epp_config or self._build_epp_config() or {}
+                cache_epp = dict(epp)
                 cache_epp['preset'] = 'cache_optimized'
-                prereq.update_epp_config(
-                    config.architecture, cache_epp,
-                    log_callback=lambda msg: self.log(msg, 'info')
-                )
+                try:
+                    from core import PrereqManager
+                    prereq = PrereqManager(
+                        namespace=self.config.namespace,
+                        kubectl_runner=self.orchestrator.deployment_manager.kubectl,
+                    )
+                    prereq.update_epp_config(
+                        config.architecture, cache_epp,
+                        log_callback=lambda msg: self.log(msg, 'info')
+                    )
+                except Exception as e:
+                    self.log(f"  ⚠️  Failed to update EPP for cache sweep: {e}", 'warning')
 
             if dataset_path and hit_pct > 0:
                 config.workload_mode = 'dataset'
@@ -351,6 +355,26 @@ class CacheSweepMixin:
                 for r in sweep:
                     r['config_label'] = agg_config_label
                 self.cache_sweep_results['aggregated_calibrated'] = sweep
+
+        # --- Restore user's EPP preset ---
+        try:
+            user_preset = (self.config.epp_config or {}).get('preset', 'balanced')
+            if user_preset != 'cache_optimized':
+                from core import PrereqManager
+                prereq = PrereqManager(
+                    namespace=self.config.namespace,
+                    kubectl_runner=self.orchestrator.deployment_manager.kubectl,
+                )
+                user_epp = dict(self.config.epp_config or {})
+                user_epp['preset'] = user_preset
+                for arch in ('aggregated', 'pd', 'ep'):
+                    prereq.update_epp_config(
+                        arch, user_epp,
+                        log_callback=lambda msg: self.log(msg, 'info')
+                    )
+                self.log(f"  🔄 Restored EPP preset: {user_preset}", 'info')
+        except Exception as e:
+            self.log(f"  ⚠️  Failed to restore EPP preset: {e}", 'warning')
 
         # --- Summary ---
         if self.cache_sweep_results:
