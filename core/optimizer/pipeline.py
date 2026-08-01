@@ -1500,7 +1500,21 @@ class RecipeOptimizer(
         # Stale guidellm output files are cleaned per-test (rm -f before each run)
 
     def _restart_infra_pods(self):
-        """Restart EPP and gateway pods for fresh Istio certs and clean datastore."""
+        """Restart EPP and gateway pods, kill orphaned guidellm processes."""
+        # Kill orphaned guidellm processes on the workload pod
+        try:
+            import subprocess
+            self.orchestrator.ensure_guidellm_pod(self.config, log_callback=lambda msg: self.log(msg, 'info'))
+            pod = self.orchestrator._guidellm_pod_name
+            subprocess.run(
+                ['kubectl', 'exec', pod, '-n', self.config.namespace, '--',
+                 'pkill', '-f', 'guidellm run'],
+                capture_output=True, timeout=10, check=False
+            )
+            self.log("   🧹 Killed orphaned guidellm processes", 'info')
+        except Exception:
+            pass
+
         try:
             import subprocess
             for arch in ('aggregated', 'pd', 'ep'):
