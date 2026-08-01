@@ -475,9 +475,19 @@ class PDSearchMixin:
                 self._save_test_to_database(test_config, result)
 
                 if not result or not result.guidellm_success:
-                    self.log("    ❌ Test failed - STOPPING optimization", 'error')
-                    self.log(f"    🔍 Debug: kubectl get pods -n {self.config.namespace} -l test-id={test_id}", 'error')
-                    raise RuntimeError(f"Test {test_id} failed - stopping optimization")
+                    self.log(f"    ⚠️  Test failed — restarting infra and retrying", 'warning')
+                    self._restart_infra_pods()
+                    import time as _time; _time.sleep(15)
+                    result = self.orchestrator.run_test(
+                        test_config, cleanup=True,
+                        log_callback=lambda msg: self.log(msg, 'info'),
+                        stop_check=self._should_stop
+                    )
+                    self.all_test_results.append((test_config, result))
+                    self._save_test_to_database(test_config, result)
+                    if not result or not result.guidellm_success:
+                        self.log("    ❌ Test failed after retry - STOPPING", 'error')
+                        raise RuntimeError(f"Test {test_id} failed after retry - stopping optimization")
 
             ttft = result.ttft_p90 or result.ttft_p50 or 1000000.0
             throughput = result.throughput_mean or result.throughput_p90 or 0.0
@@ -703,10 +713,19 @@ class PDSearchMixin:
                 if self._is_memory_failure(result):
                     self.log(f"    ❌ OOM failure — skipping {test_id} (needs higher TP)", 'warning')
                     return None
-                self.log("    ❌ Test failed - STOPPING optimization", 'error')
-                self.log(f"    🔍 Debug: kubectl get pods -n {self.config.namespace} -l test-id={test_id}", 'error')
-                self.log(f"    🧹 Cleanup: kubectl delete lws -n {self.config.namespace} -l test-id={test_id}", 'error')
-                raise RuntimeError(f"Test {test_id} failed - stopping optimization")
+                self.log(f"    ⚠️  Test failed — restarting infra and retrying", 'warning')
+                self._restart_infra_pods()
+                import time as _time; _time.sleep(15)
+                result = self.orchestrator.run_test(
+                    test_config, cleanup=True,
+                    log_callback=lambda msg: self.log(msg, 'info'),
+                    stop_check=self._should_stop
+                )
+                self.all_test_results.append((test_config, result))
+                self._save_test_to_database(test_config, result)
+                if not result or not result.guidellm_success:
+                    self.log("    ❌ Test failed after retry - STOPPING", 'error')
+                    raise RuntimeError(f"Test {test_id} failed after retry - stopping optimization")
 
         ttft = result.ttft_p90 or result.ttft_p50 or 1000000.0
         throughput = result.throughput_mean or result.throughput_p90 or 0.0
