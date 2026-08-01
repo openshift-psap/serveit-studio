@@ -1822,13 +1822,7 @@
         }
 
         .step-card::before {
-            content: '';
-            position: absolute;
-            left: 0;
-            top: 0;
-            bottom: 0;
-            width: 6px;
-            background: linear-gradient(180deg, #2A7B88 0%, #1B5E6B 100%);
+            display: none;
         }
 
         .step-card:hover {
