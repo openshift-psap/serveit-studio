@@ -1506,12 +1506,13 @@ class RecipeOptimizer(
             import subprocess
             self.orchestrator.ensure_guidellm_pod(self.config, log_callback=lambda msg: self.log(msg, 'info'))
             pod = self.orchestrator._guidellm_pod_name
-            subprocess.run(
+            r = subprocess.run(
                 ['kubectl', 'exec', pod, '-n', self.config.namespace, '--',
                  'pkill', '-f', 'guidellm run'],
                 capture_output=True, timeout=10, check=False
             )
-            self.log("   🧹 Killed orphaned guidellm processes", 'info')
+            if r.returncode == 0:
+                self.log("   🧹 Killed orphaned guidellm processes", 'info')
         except Exception:
             pass
 
