@@ -740,7 +740,7 @@ function selectCluster(id){
     list.innerHTML = '';
     loadInstances(id);
     var vizContainer = document.getElementById('cluster-viz');
-    if(vizContainer) scanAndRenderCluster(id, vizContainer);
+    if(vizContainer && typeof scanAndRenderCluster === 'function') scanAndRenderCluster(id, vizContainer);
 }
 
 function loadInstances(clusterId, isRefresh, userId){
