@@ -163,9 +163,10 @@ class PDSearchMixin:
             max_decode = max(valid_by_decode.keys())
             for edge_d in [min_decode, max_decode]:
                 if edge_d in valid_by_decode and valid_by_decode[edge_d] not in selected:
-                    if 0.3 * d_ideal <= edge_d <= 3 * d_ideal or len(selected) < 2:
+                    if 0.3 * d_ideal <= edge_d <= 3 * d_ideal:
                         selected.append(valid_by_decode[edge_d])
 
+            # If too few candidates, add by proximity to ideal (not extreme edges)
             if len(selected) < 2 and all_valid:
                 by_distance = sorted(all_valid, key=lambda s: abs(s.decode_pods - d_ideal))
                 for s in by_distance:
