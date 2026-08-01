@@ -327,11 +327,12 @@ def create_app():
                         row = conn.execute('SELECT scan_data FROM clusters WHERE name = ?', (cname,)).fetchone()
                         if row and row['scan_data']:
                             sd = json.loads(row['scan_data'])
+                            s = sd.get('summary', sd)
                             cluster_cache[cname] = {
-                                'gpu_node_count': sd.get('gpu_node_count'),
-                                'total_gpus': sd.get('total_gpus'),
-                                'gpu_model': sd.get('gpu_model'),
-                                'ocp_version': sd.get('ocp_version'),
+                                'gpu_node_count': s.get('gpu_node_count'),
+                                'total_gpus': s.get('total_gpus'),
+                                'gpu_model': s.get('gpu_model'),
+                                'ocp_version': s.get('ocp_version'),
                             }
                 except Exception:
                     pass
