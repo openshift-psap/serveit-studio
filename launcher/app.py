@@ -312,7 +312,25 @@ def create_app():
 
     @app.route('/api/backups', methods=['GET'])
     def api_list_backups():
-        return jsonify(instance_manager.list_backups())
+        backups = instance_manager.list_backups()
+        # Enrich with cluster details from scan_data
+        cluster_cache = {}
+        with get_db() as conn:
+            for row in conn.execute('SELECT name, scan_data FROM clusters').fetchall():
+                if row['scan_data']:
+                    try:
+                        sd = json.loads(row['scan_data'])
+                        cluster_cache[row['name']] = {
+                            'gpu_node_count': sd.get('gpu_node_count'),
+                            'total_gpus': sd.get('total_gpus'),
+                            'gpu_model': sd.get('gpu_model'),
+                            'ocp_version': sd.get('ocp_version'),
+                        }
+                    except Exception:
+                        pass
+        for b in backups:
+            b['cluster_details'] = cluster_cache.get(b.get('cluster'), None)
+        return jsonify(backups)
 
     @app.route('/api/backups/download')
     def api_download_backup():
