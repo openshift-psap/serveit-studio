@@ -650,9 +650,9 @@ class TestOrchestrator(ParserMixin, GuidellmMixin):
                         log_callback(f"   ✅ EPP ready — {ready_count} {p} registered in inference pool ({elapsed}s)")
                     return True
                 else:
-                    if log_callback and not getattr(self, '_routing_wait_logged', False):
-                        log_callback(f"   EPP pool registration: pods not yet routable (HTTP {resp.status_code}), waiting...")
-                        self._routing_wait_logged = True
+                    elapsed = int(time.time() - start_time)
+                    if log_callback and elapsed % 30 < 6:
+                        log_callback(f"   EPP pool registration: pods not yet routable (HTTP {resp.status_code}, {elapsed}s elapsed)")
                     time.sleep(5)
             except Exception as e:
                 if log_callback and not getattr(self, '_routing_wait_logged', False):
