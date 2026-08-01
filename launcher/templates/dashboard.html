@@ -469,9 +469,9 @@
         <label for="new-username">Username</label>
         <input type="text" id="new-username" placeholder="username" autocomplete="off">
         <label for="new-user-password">Password</label>
-        <input type="password" id="new-user-password" placeholder="min 6 characters">
+        <input type="text" id="new-user-password" placeholder="min 6 characters" autocomplete="off" style="-webkit-text-security:disc;">
         <label for="new-user-password-confirm">Confirm Password</label>
-        <input type="password" id="new-user-password-confirm" placeholder="re-enter password">
+        <input type="text" id="new-user-password-confirm" placeholder="re-enter password" autocomplete="off" style="-webkit-text-security:disc;">
         <div id="add-user-error" style="display:none;color:#dc2626;font-size:0.85em;margin-bottom:12px;padding:8px 12px;background:#fef2f2;border-radius:6px;border-left:3px solid #dc2626;"></div>
         <div class="actions">
             <button type="button" class="btn btn-cancel" onclick="hideAddUserModal()">Cancel</button>
