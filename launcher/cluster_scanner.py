@@ -23,7 +23,7 @@ def scan_cluster_resources(cluster: Dict, namespace: str = 'serveit', proxy: str
         r = subprocess.run(
             [cmd, 'get', 'secret', cluster['kubeconfig_secret'], '-n', namespace,
              '-o', 'jsonpath={.data.kubeconfig}'],
-            capture_output=True, text=True, timeout=15
+            capture_output=True, text=True, timeout=60
         )
         if r.returncode != 0 or not r.stdout.strip():
             raise RuntimeError('Could not read kubeconfig Secret')
@@ -176,7 +176,7 @@ def scan_cluster_resources(cluster: Dict, namespace: str = 'serveit', proxy: str
 def _is_oc() -> bool:
     try:
         r = subprocess.run(['kubectl', 'api-resources', '--api-group=route.openshift.io'],
-                          capture_output=True, text=True, timeout=15)
+                          capture_output=True, text=True, timeout=60)
         return r.returncode == 0 and 'Route' in r.stdout
     except (FileNotFoundError, subprocess.TimeoutExpired):
         return False

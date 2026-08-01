@@ -743,7 +743,7 @@ function selectCluster(id){
 function loadInstances(clusterId, isRefresh, userId){
     var list = document.getElementById('instance-list');
     list.style.display = '';
-    if(!isRefresh && list.children.length === 0) list.innerHTML = '<div style="text-align:center;padding:40px;color:#999">Loading&hellip;</div>';
+    if(!isRefresh) list.innerHTML = '<div style="text-align:center;padding:40px;color:#999">Loading&hellip;</div>';
     var url = '/api/instances?cluster_id='+clusterId;
     if(userId) url += '&user_id='+userId;
     fetch(url)
@@ -838,6 +838,8 @@ function loadInstances(clusterId, isRefresh, userId){
                 connectBar;
             list.appendChild(card);
         });
+    }).catch(function(err){
+        list.innerHTML = '<div style="text-align:center;padding:40px;color:#dc2626">Failed to load instances</div>';
     });
 }
 
