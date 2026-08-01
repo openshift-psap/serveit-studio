@@ -735,6 +735,9 @@ function selectCluster(id){
     document.getElementById('new-instance-btn').style.display='';
     var vizPanel = document.getElementById('cluster-viz-panel');
     if(vizPanel) vizPanel.style.display='';
+    var list = document.getElementById('instance-list');
+    list.style.display = 'block';
+    list.innerHTML = '';
     loadInstances(id);
     var vizContainer = document.getElementById('cluster-viz');
     if(vizContainer) scanAndRenderCluster(id, vizContainer);
