@@ -741,10 +741,14 @@ function selectCluster(id){
     if(vizContainer && typeof scanAndRenderCluster === 'function') scanAndRenderCluster(id, vizContainer);
 }
 
+var _lastLoadedClusterId = null;
 function loadInstances(clusterId, isRefresh, userId){
     var list = document.getElementById('instance-list');
     list.style.display = '';
-    if(!isRefresh && !list.querySelector('.card')) list.innerHTML = '<div style="text-align:center;padding:40px;color:#999">Loading&hellip;</div>';
+    if(!isRefresh && (_lastLoadedClusterId !== clusterId || !list.querySelector('.card'))) {
+        list.innerHTML = '<div style="text-align:center;padding:40px;color:#999">Loading&hellip;</div>';
+        _lastLoadedClusterId = clusterId;
+    }
     var url = '/api/instances?cluster_id='+clusterId;
     if(userId) url += '&user_id='+userId;
     fetch(url)
