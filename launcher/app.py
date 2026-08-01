@@ -178,8 +178,7 @@ def create_app():
             ).fetchone()
         if not cluster:
             return jsonify({'error': 'Cluster not found'}), 404
-        if not _scan_lock.acquire(timeout=5):
-            return jsonify({'error': 'Scan already in progress'}), 409
+        _scan_lock.acquire(timeout=120)
         try:
             result = scan_cluster_resources(dict(cluster), namespace)
             with get_db() as conn:
