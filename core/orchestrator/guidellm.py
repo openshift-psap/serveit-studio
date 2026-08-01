@@ -285,6 +285,12 @@ class GuidellmMixin:
                     if log_callback:
                         log_callback('   Stopping guidellm...')
                     process.kill()
+                    # Kill the remote guidellm process on the workload pod
+                    subprocess.run(
+                        ['kubectl', 'exec', self._guidellm_pod_name,
+                         '-n', self.namespace, '--', 'pkill', '-f', 'guidellm run'],
+                        capture_output=True, timeout=10, check=False, env=env
+                    )
                     return False, None, None
 
                 if process.poll() is not None:
