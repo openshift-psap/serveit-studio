@@ -163,23 +163,22 @@ attn_layers = count of 'attention' in layers_block_type (or num_hidden_layers fo
 kv_per_seq = (2 × attn_layers × kv_heads_per_tp × head_dim × effective_seq_len × 2) / 1 GB
 kv_cap = floor(available_for_kv / kv_per_seq)
 
-# GPU compute saturation cap — scales by sequence length
-# Short sequences (decode calibration ISL=1) need more concurrency to saturate
-per_gpu = min(16, max(2, 24000 / seq_len))
-compute_cap = TP × per_gpu
-# seq=1→16/GPU, seq=2K→12, seq=4K→6, seq=8K→3, seq=12K+→2
+# Per-GPU cap: 16/GPU max for short sequences
+cap = TP × 16
 
-calibration_concurrency = floor(min(kv_cap, compute_cap) × 0.9)
+# Floor at 1 per GPU (=TP) to saturate all GPUs
+calibration_concurrency = max(TP, min(kv_cap // 10 + 1, cap))
 ```
 
-Calibration concurrency is determined independently of the user's configured value. It uses the minimum of two caps:
+Calibration concurrency uses 10% of the per-GPU KV cache capacity, floored at 1 per GPU (=TP) and capped at 16 per GPU. This ensures:
 
-1. **KV cache capacity** — how many sequences fit in available GPU memory. Only counts attention layers for KV cache (Mamba/MoE layers don't use KV cache). Uses the **actual test sequence length** (ISL=1 for decode, ISL=7000 for prefill), not the full workload ISL+OSL.
-2. **GPU compute saturation** — scales by sequence length. Decode calibration (ISL=1, short sequences) needs more concurrent requests to keep GPUs busy (~16/GPU). Prefill calibration (ISL=7000, long sequences) saturates at fewer concurrent requests (~8/GPU).
+1. **KV-derived** — based on actual model size, GPU memory, and sequence length. No arbitrary constants.
+2. **Floor at TP** — every GPU gets at least 1 concurrent request for proper saturation.
+3. **Cap at 16/GPU** — prevents excessive queuing for short sequences where KV cap is huge.
 
-**Why use actual test ISL/OSL?** The TP calibration uses simplified workloads (ISL=1 for decode, OSL=1 for prefill). Using the full workload `ISL+OSL=8024` for KV cache estimation when the actual test only uses `1+1024=1025` tokens massively overestimates memory per sequence, resulting in artificially low concurrency.
+**Why 10% of KV cap?** Full KV cap would allow hundreds of concurrent requests for short sequences (all fit in memory), but the GPU can't process them all simultaneously. 10% provides enough to saturate without excessive queuing.
 
-**Why scale compute cap by sequence length?** With ISL=1, each request's prefill is trivial (1 token) and the work is purely decode. The GPUs can batch many more decode-only sequences efficiently. With ISL=7000, each request requires significant prefill compute — fewer concurrent requests are needed to saturate.
+**Why per-GPU available (not total)?** Each sequence's KV is sharded across TP GPUs. The bottleneck is the single GPU with the least free memory. Using `available_per_gpu = gpu_vram - model_gb/tp - overhead` gives the correct per-GPU limit.
 
 **Why ignore user concurrency?** The TP calibration needs enough requests to saturate GPUs for a stable TPSG measurement, but not more. The user's setting (e.g., 50 or 100) is for the actual benchmark steps, not calibration.
 
@@ -201,19 +200,21 @@ Prefill calibration (ISL=7000, OSL=1, seq=7001):
 ### Calibration Stop Condition
 ```
 stop_mode = max_requests
-max_requests = calibration_concurrency × request_multiplier
-
-request_multiplier:
-  model_size < 100B:  120   (small models, fast per-request)
-  model_size < 200B:   60   (medium models)
-  model_size >= 200B:  20   (large models like Nemotron 550B)
+max_requests = 7000 × TP / sqrt(seq_len)
+# Floor: tp × 3 (minimum 3 requests per GPU)
 ```
 
-Calibration uses `max_requests` instead of a time-based duration. Duration-based tests (e.g., 60 seconds) at high concurrency flood the server — guidellm opens all connections immediately and sends requests as fast as possible, producing thousands of requests where most error from overload before the server can drain the queue.
+Scales inversely with the square root of sequence length. Short sequences (decode ISL=1) generate many fast requests; long sequences (prefill ISL=100K) generate fewer slow requests. Both produce ~5-7 minutes of sustained load per test.
 
-**Why scale by model size?** The multiplier determines total benchmark time. A 8B model generates 1024 tokens in ~0.3s, so 120 rounds × 57 concurrent = 6840 requests ≈ 1 minute. A 550B model takes ~15s per request, so 120 rounds would take 80+ minutes. Scaling down to 20 rounds keeps calibration under ~5 minutes for large models while still providing enough data points.
+**Why sqrt?** Request processing time scales roughly linearly with sequence length, but we need diminishing returns — doubling the sequence length doesn't need half the requests, because statistical stability depends on request count, not total tokens. Power-law fit (scipy curve_fit) on target durations across ISL=500 to ISL=100K yields exponent -0.526 ≈ -0.5 = inverse square root.
 
-**Why × 20 minimum?** P90 requires at least ~50 data points for statistical stability. At `57 concurrent × 20 rounds = 1140 requests`, even with wave-based completion, there are enough data points. Fewer rounds risk noisy P90; more rounds waste time without improving accuracy.
+**Why 7000?** Calibrated so decode at TP=8 with OSL=2K gives ~1250 requests (~5 min at 4 req/s) and prefill at TP=8 with ISL=100K gives ~177 requests (~6.5 min at 0.45 req/s).
+
+**Example: Gemma 4 26B on H200, ISL=100K/OSL=2K:**
+```
+Decode (seq=2001):   TP=1→156, TP=2→312, TP=4→625, TP=8→1251
+Prefill (seq=100001): TP=1→22, TP=2→44, TP=4→88, TP=8→177
+```
 
 ### Throughput Parsing (guidellm 0.7.x)
 
