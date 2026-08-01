@@ -178,7 +178,6 @@ def create_app():
             ).fetchone()
         if not cluster:
             return jsonify({'error': 'Cluster not found'}), 404
-        _scan_lock.acquire(timeout=120)
         try:
             result = scan_cluster_resources(dict(cluster), namespace)
             with get_db() as conn:
@@ -189,8 +188,6 @@ def create_app():
             return jsonify(result)
         except Exception as e:
             return jsonify({'error': str(e)}), 500
-        finally:
-            _scan_lock.release()
 
     # ── Instance API ──
 
