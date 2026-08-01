@@ -31,15 +31,15 @@ class TPCalibrationMixin:
         decode_candidates = []
         prefill_candidates = []
 
-        model_size_b = getattr(self, '_model_size_b', 8)
-        tokens_per_gpu = 2_000_000 if model_size_b < 100 else (1_000_000 if model_size_b < 200 else 400_000)
+        import math as _math
 
         def _calibration_max_requests(safe_c, seq_len, tp):
-            """Calculate max requests from a per-GPU token budget."""
-            budget = tokens_per_gpu * tp
-            reqs = max(1, budget // seq_len)
-            reqs = max(reqs, safe_c * 3)  # at least 3 full batches
-            reqs = min(reqs, safe_c * 120)  # never more than 120 batches
+            """Calculate max requests: 7000 * tp / sqrt(seq_len).
+
+            Scales inversely with sqrt of sequence length so both short
+            (decode ISL=1) and long (prefill ISL=100K) tests run ~5-7 min.
+            """
+            reqs = max(tp * 3, int(7000 * tp / _math.sqrt(max(seq_len, 1))))
             return reqs
 
         # Pre-compute max requests and KV cap across all TPs to size calibration datasets
