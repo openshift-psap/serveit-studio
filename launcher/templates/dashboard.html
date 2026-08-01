@@ -752,7 +752,13 @@ function loadInstances(clusterId, isRefresh, userId){
     var url = '/api/instances?cluster_id='+clusterId;
     if(userId) url += '&user_id='+userId;
     fetch(url)
-    .then(function(r){return r.json()})
+    .then(function(r){
+        var ct = r.headers.get('content-type') || '';
+        if(r.redirected || ct.indexOf('text/html') !== -1){
+            _showSessionExpiredOverlay(); throw 'session_expired';
+        }
+        return r.json();
+    })
     .then(function(instances){
         var countEl = document.querySelector('.cluster-item.active .count');
         if(countEl) countEl.textContent = instances.length;
