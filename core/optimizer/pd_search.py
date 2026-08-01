@@ -476,7 +476,6 @@ class PDSearchMixin:
 
                 if not result or not result.guidellm_success:
                     self.log(f"    ⚠️  Test failed — restarting infra and retrying", 'warning')
-                    import time as _time; _time.sleep(30)
                     result = self.orchestrator.run_test(
                         test_config, cleanup=True,
                         log_callback=lambda msg: self.log(msg, 'info'),
