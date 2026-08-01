@@ -1516,25 +1516,6 @@ class RecipeOptimizer(
         except Exception:
             pass
 
-        try:
-            import subprocess
-            for arch in ('aggregated', 'pd', 'ep'):
-                for prefix in (f'gaie-{arch}-epp', f'infra-{arch}-inference-gateway-istio'):
-                    # Scale to 0 then back to 1 — clean restart, no overlapping pods
-                    subprocess.run(
-                        ['kubectl', 'scale', 'deployment', prefix,
-                         '--replicas=0', '-n', self.config.namespace],
-                        capture_output=True, text=True, timeout=15, check=False
-                    )
-                    r = subprocess.run(
-                        ['kubectl', 'scale', 'deployment', prefix,
-                         '--replicas=1', '-n', self.config.namespace],
-                        capture_output=True, text=True, timeout=15, check=False
-                    )
-                    if r.returncode == 0:
-                        self.log(f"   🔄 Restarted: {prefix}", 'info')
-        except Exception:
-            pass
 
     def _wait_for_all_test_pods_terminated(self, timeout: int = 120):
         """Wait for all serveit-test pods to terminate."""
