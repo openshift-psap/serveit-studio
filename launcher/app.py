@@ -398,7 +398,69 @@ def create_app():
         instances = instance_manager.get_user_assigned_instances(user_id)
         return jsonify(instances)
 
+    # ── Settings API ──
+
+    @app.route('/api/settings', methods=['GET'])
+    @admin_required
+    def api_get_settings():
+        with get_db() as conn:
+            rows = conn.execute('SELECT key, value FROM settings').fetchall()
+            return jsonify({r['key']: r['value'] for r in rows})
+
+    @app.route('/api/settings', methods=['POST'])
+    @admin_required
+    def api_save_settings():
+        data = request.get_json()
+        with get_db() as conn:
+            for key, value in data.items():
+                conn.execute(
+                    'INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)',
+                    (key, str(value))
+                )
+        return jsonify({'success': True})
+
     return app
+
+
+def _auto_rescan_loop(app, namespace):
+    """Background thread: periodically rescan all clusters."""
+    import time
+    from datetime import datetime
+    from launcher.cluster_scanner import scan_cluster_resources
+
+    with app.app_context():
+        time.sleep(30)
+        while True:
+            try:
+                with get_db() as conn:
+                    rows = conn.execute('SELECT key, value FROM settings').fetchall()
+                    settings = {r['key']: r['value'] for r in rows}
+
+                enabled = settings.get('auto_rescan', 'true').lower() == 'true'
+                interval = max(1, int(settings.get('rescan_interval_min', '10'))) * 60
+
+                if not enabled:
+                    time.sleep(60)
+                    continue
+
+                with get_db() as conn:
+                    clusters = conn.execute('SELECT * FROM clusters').fetchall()
+
+                for cluster in clusters:
+                    try:
+                        result = scan_cluster_resources(dict(cluster), namespace)
+                        with get_db() as conn:
+                            conn.execute(
+                                'UPDATE clusters SET scan_data = ?, scanned_at = ? WHERE id = ?',
+                                (json.dumps(result), datetime.now().isoformat(), cluster['id'])
+                            )
+                    except Exception as e:
+                        print(f"  Auto-rescan failed for cluster {cluster['name']}: {e}")
+
+                time.sleep(interval)
+            except Exception as e:
+                print(f"  Auto-rescan loop error: {e}")
+                time.sleep(60)
 
 
 def main():
@@ -409,6 +471,13 @@ def main():
     init_db()
 
     app = create_app()
+
+    import threading
+    namespace = os.environ.get('NAMESPACE', 'inftune')
+    t = threading.Thread(target=_auto_rescan_loop, args=(app, namespace), daemon=True)
+    t.start()
+    print(f"  Auto-rescan thread started (default: every 10 min)")
+
     app.run(host='0.0.0.0', port=5000, debug=False)
 
 

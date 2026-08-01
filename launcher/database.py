@@ -132,6 +132,16 @@ def init_db():
     except Exception:
         pass
 
+    # Settings table
+    conn.execute('''
+        CREATE TABLE IF NOT EXISTS settings (
+            key TEXT PRIMARY KEY,
+            value TEXT
+        )
+    ''')
+    conn.execute("INSERT OR IGNORE INTO settings (key, value) VALUES ('auto_rescan', 'true')")
+    conn.execute("INSERT OR IGNORE INTO settings (key, value) VALUES ('rescan_interval_min', '10')")
+
     conn.commit()
     conn.close()
     print(f"  Launcher DB: {DB_PATH}")

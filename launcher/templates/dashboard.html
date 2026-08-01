@@ -244,6 +244,10 @@
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75"/></svg>
             Users
         </button>
+        <button class="nav-item" id="nav-settings" onclick="showSettings()">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
+            Settings
+        </button>
     </div>
     {% endif %}
     <div class="sidebar-footer">
@@ -715,6 +719,8 @@ function selectCluster(id){
     if(navUsers) navUsers.classList.remove('active');
     var navRestore = document.getElementById('nav-restore');
     if(navRestore) navRestore.classList.remove('active');
+    var navSettings = document.getElementById('nav-settings');
+    if(navSettings) navSettings.classList.remove('active');
     document.querySelectorAll('.cluster-item').forEach(function(el){ el.classList.toggle('active', parseInt(el.dataset.id)===id); });
     var active = document.querySelector('.cluster-item.active');
     if(active){
@@ -1216,6 +1222,8 @@ function showRestore(){
     document.querySelectorAll('.cluster-item').forEach(function(el){el.classList.remove('active')});
     var navUsers = document.getElementById('nav-users');
     if(navUsers) navUsers.classList.remove('active');
+    var navSettings = document.getElementById('nav-settings');
+    if(navSettings) navSettings.classList.remove('active');
     var navRestore = document.getElementById('nav-restore');
     if(navRestore) navRestore.classList.add('active');
     document.getElementById('topbar-title').innerHTML = '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="opacity:0.5"><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/></svg> Restore Data';
@@ -1339,6 +1347,10 @@ function showUsers(){
     currentClusterId = null;
     viewingUserId = null;
     document.querySelectorAll('.cluster-item').forEach(function(el){el.classList.remove('active')});
+    var navSettings = document.getElementById('nav-settings');
+    if(navSettings) navSettings.classList.remove('active');
+    var navRestore = document.getElementById('nav-restore');
+    if(navRestore) navRestore.classList.remove('active');
     var navUsers = document.getElementById('nav-users');
     if(navUsers) navUsers.classList.add('active');
     document.getElementById('topbar-title').innerHTML = '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="opacity:0.5"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75"/></svg> User Management';
@@ -1376,6 +1388,62 @@ function showUsers(){
         });
         html += '</div></div>';
         list.innerHTML = html;
+    });
+}
+
+function showSettings(){
+    currentClusterId = null;
+    viewingUserId = null;
+    document.querySelectorAll('.cluster-item').forEach(function(el){el.classList.remove('active')});
+    var navUsers = document.getElementById('nav-users');
+    if(navUsers) navUsers.classList.remove('active');
+    var navRestore = document.getElementById('nav-restore');
+    if(navRestore) navRestore.classList.remove('active');
+    var navSettings = document.getElementById('nav-settings');
+    if(navSettings) navSettings.classList.add('active');
+    document.getElementById('topbar-title').innerHTML = '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="opacity:0.5"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09"/></svg> Settings';
+    document.getElementById('new-instance-btn').style.display='none';
+    var _vp=document.getElementById('cluster-viz-panel');if(_vp)_vp.style.display='none';
+    var list = document.getElementById('instance-list');
+    list.style.display = 'block';
+    list.innerHTML = '<div style="text-align:center;padding:40px;color:#999">Loading settings&hellip;</div>';
+
+    fetch('/api/settings').then(function(r){return r.json()}).then(function(settings){
+        var autoRescan = (settings.auto_rescan || 'true') === 'true';
+        var interval = parseInt(settings.rescan_interval_min || '10');
+        var html = '<div style="padding:0;max-width:500px;">';
+        html += '<h3 style="color:#1e293b;font-size:1em;margin:0 0 20px">Settings</h3>';
+
+        html += '<div style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:10px;padding:20px;margin-bottom:16px;">';
+        html += '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;">';
+        html += '<div><div style="font-weight:600;font-size:0.95em;color:#1e293b;">Auto Rescan Clusters</div>';
+        html += '<div style="font-size:0.8em;color:#64748b;margin-top:2px;">Periodically rescan all clusters for GPU availability changes</div></div>';
+        html += '<label style="position:relative;display:inline-block;width:44px;height:24px;cursor:pointer;">';
+        html += '<input type="checkbox" id="settings-auto-rescan" '+(autoRescan?'checked':'')+' onchange="saveSettings()" style="opacity:0;width:0;height:0;">';
+        html += '<span style="position:absolute;top:0;left:0;right:0;bottom:0;background:'+(autoRescan?'#2A7B88':'#cbd5e1')+';border-radius:24px;transition:0.2s;" onclick="this.previousElementSibling.click();"></span>';
+        html += '<span style="position:absolute;left:'+(autoRescan?'22':'2')+'px;top:2px;width:20px;height:20px;background:#fff;border-radius:50%;transition:0.2s;box-shadow:0 1px 3px rgba(0,0,0,0.2);" onclick="this.previousElementSibling.previousElementSibling.click();"></span>';
+        html += '</label></div>';
+
+        html += '<div style="display:flex;align-items:center;gap:10px;">';
+        html += '<label style="font-size:0.85em;color:#475569;white-space:nowrap;">Interval:</label>';
+        html += '<input type="number" id="settings-rescan-interval" value="'+interval+'" min="1" max="60" style="width:70px;padding:6px 10px;border:1px solid #d1d5db;border-radius:6px;font-size:0.9em;" onchange="saveSettings()">';
+        html += '<span style="font-size:0.85em;color:#64748b;">minutes</span>';
+        html += '</div></div>';
+
+        html += '</div>';
+        list.innerHTML = html;
+    });
+}
+
+function saveSettings(){
+    var autoRescan = document.getElementById('settings-auto-rescan').checked;
+    var interval = parseInt(document.getElementById('settings-rescan-interval').value) || 10;
+    fetch('/api/settings', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({auto_rescan: autoRescan ? 'true' : 'false', rescan_interval_min: String(interval)})
+    }).then(function(r){return r.json()}).then(function(){
+        showSettings();
     });
 }
 
