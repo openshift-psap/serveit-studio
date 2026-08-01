@@ -138,8 +138,7 @@ class TPCalibrationMixin:
                         # Retry once after restarting infra (gateway/EPP cert rotation)
                         err = getattr(decode_result, 'error_message', '') or ''
                         self.log(f"    ⚠️  Decode TP={tp} failed ({err[:80]}) — restarting infra and retrying", 'warning')
-                        self._restart_infra_pods()
-                        import time as _time; _time.sleep(15)
+                        import time as _time; _time.sleep(30)
                         decode_result = self.orchestrator.run_test(
                             decode_config,
                             cleanup=not needs_prefill_after,
