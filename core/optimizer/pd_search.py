@@ -474,8 +474,11 @@ class PDSearchMixin:
                 self.all_test_results.append((test_config, result))
                 self._save_test_to_database(test_config, result)
 
+                if self._should_stop():
+                    break
+
                 if not result or not result.guidellm_success:
-                    self.log(f"    ⚠️  Test failed — restarting infra and retrying", 'warning')
+                    self.log(f"    ⚠️  Test failed — retrying", 'warning')
                     result = self.orchestrator.run_test(
                         test_config, cleanup=True,
                         log_callback=lambda msg: self.log(msg, 'info'),
@@ -815,7 +818,9 @@ class PDSearchMixin:
                 test_num += 1
 
                 result = self._run_split_test(current_split, test_num, total_planned)
-                if result is None:
+                if result is None or self._should_stop():
+                    if result:
+                        self.pareto_results.append((current_split, result))
                     break
                 self.pareto_results.append((current_split, result))
 
