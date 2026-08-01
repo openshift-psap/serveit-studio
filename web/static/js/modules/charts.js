@@ -450,7 +450,7 @@ function renderCharts(data, runId) {
         '</div></div>';
     secCfg += chartCard('Throughput vs Latency', chartDesc.scatter, 'chart-scatter');
     secCfg += chartCard('GPU Efficiency (req/s per GPU)', chartDesc.efficiency, 'chart-efficiency');
-    secCfg += chartCard('User Efficiency (req/s per concurrent user)', 'Shows how many requests each concurrent user completes per second. <strong>Higher = faster per-user turnaround.</strong>', 'chart-per-user-efficiency');
+    secCfg += chartCard('Per-User Token Throughput (tokens/s per user)', 'Shows how many output tokens each concurrent user receives per second. <strong>Higher = faster streaming for each user.</strong>', 'chart-per-user-efficiency');
     if (coreResults.some(r => r.architecture === 'PD' || r.architecture === 'EP') && coreResults.some(r => r.architecture === 'AGGREGATED')) {
         secPareto += '<div class="chart-card" style="border-left:6px solid #8b5cf6;">' +
             '<div class="chart-card-header" style="background:linear-gradient(135deg,#8b5cf6,#a78bfa); color:white;">Pareto Frontier Analysis</div>' +
@@ -2167,11 +2167,11 @@ function renderCharts(data, runId) {
         Plotly.newPlot(cid('chart-per-user-efficiency'), [{
             x: puConfigs, y: puValues,
             type: 'bar', marker: { color: puColors },
-            text: puValues.map(v => v != null ? v.toFixed(4) : ''),
+            text: puValues.map(v => v != null ? v.toFixed(1) : ''),
             textposition: 'outside', textfont: { size: 11, color: '#333' },
             cliponaxis: false, constraintext: 'none',
-            hovertemplate: '<b>%{x}</b><br>%{y:.4f} req/s/user<extra></extra>'
-        }], { ...plotlyLayout, margin: { ...plotlyLayout.margin, b: 120 }, xaxis: { tickangle: -45 }, yaxis: { title: 'Mean req/s per concurrent user - higher is better' } }, plotlyConfig);
+            hovertemplate: '<b>%{x}</b><br>%{y:.1f} tokens/s/user<extra></extra>'
+        }], { ...plotlyLayout, margin: { ...plotlyLayout.margin, b: 120 }, xaxis: { tickangle: -45 }, yaxis: { title: 'Output tokens/s per concurrent user - higher is better' } }, plotlyConfig);
     }
 
     // Throughput–Interactivity Pareto Frontier (normalized 0-1)
