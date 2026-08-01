@@ -189,16 +189,18 @@ function scanAndRenderCluster(clusterId, container, forceRescan) {
     fetch('/api/clusters/' + clusterId + '/scan')
     .then(_handleScanResponse)
     .then(function(data) {
-        if (data.not_scanned || data.error) {
-            // No cached data — trigger a fresh scan
-            scanAndRenderCluster(clusterId, container, true);
+        if (data.not_scanned) {
+            container.innerHTML = '<div style="text-align:center;padding:40px;color:#94a3b8"><div style="margin-bottom:8px;font-size:1.2em;">📡</div>Cluster not scanned yet. Click <strong>Rescan</strong> above.</div>';
+            return;
+        }
+        if (data.error) {
+            container.innerHTML = '<div style="text-align:center;padding:40px;color:#dc2626">Scan failed: ' + data.error + '</div>';
             return;
         }
         renderClusterDiagram(container, data);
     })
     .catch(function(err) {
         if (err === 'session_expired') { _showSessionExpired(container); return; }
-        // GET failed — trigger a fresh scan
-        scanAndRenderCluster(clusterId, container, true);
+        container.innerHTML = '<div style="text-align:center;padding:40px;color:#94a3b8">Could not load cluster data</div>';
     });
 }
