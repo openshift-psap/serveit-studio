@@ -71,46 +71,60 @@ function renderCharts(data, runId) {
         html += '<div style="padding:12px 20px 4px; color:#475569; font-size:0.9em;">Best configurations found during optimization. Each architecture\'s best TTFT is shown at P90, P95, and P99 — the config on the left has the lowest latency at that percentile.</div>';
         html += '<div class="chart-card-body" style="padding: 24px;">';
 
-        // Recommendation cards — 2 columns sorted by TTFT (best left, second right), P90/P95/P99 stacked
+        // Recommendation cards — one per category, best across ALL architectures
         const bp = rec.best_by_percentile || {};
         const selTypes = [
             { key: 'balanced', label: 'Best Balanced', desc: 'Best TTFT-to-throughput ratio — the sweet spot', color: '#059669', icon: '&#9878;' },
             { key: 'lowest_ttft', label: 'Lowest TTFT', desc: 'Fastest time to first token', color: '#3b82f6', icon: '&#9201;' },
             { key: 'highest_tput', label: 'Highest Throughput', desc: 'Maximum requests per second', color: '#f59e0b', icon: '&#9889;' },
+            { key: 'most_efficient', label: 'Most Efficient', desc: 'Best throughput per GPU — cost optimized', color: '#8b5cf6', icon: '&#128176;' },
         ];
         const fallbackTs = (rec.recommendations.response_time || rec.recommendations.throughput || {}).config?.test_settings;
         const archColors = { pd: '#2563eb', aggregated: '#059669', ep: '#7c3aed' };
 
-        // Loop: architecture → 3 cards in a row (balanced, lowest TTFT, highest throughput)
-        ['pd', 'aggregated', 'ep'].forEach(archKey => {
-            const hasData = ['p90', 'p95', 'p99'].some(p => (bp[p] || {})[archKey]);
-            if (!hasData) return;
-
-            const archLabel = archKey.toUpperCase();
-            const aColor = archColors[archKey] || '#64748b';
-            html += `<div style="display:flex;align-items:center;gap:10px;margin:24px 0 12px;">`;
-            html += `<div style="background:${aColor};color:white;font-weight:700;font-size:0.8em;padding:4px 12px;border-radius:20px;letter-spacing:0.5px;">${archLabel}</div>`;
-            html += `<div style="flex:1;height:1px;background:${aColor}30;"></div>`;
-            html += `</div>`;
-            html += `<div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(280px, 1fr)); gap:16px; margin-bottom:20px;">`;
-
-            const p90Data = (bp.p90 || {})[archKey];
-            if (!p90Data) { html += '</div>'; return; }
-            const isNewFormat = p90Data.balanced || p90Data.lowest_ttft || p90Data.highest_tput;
-
-            const seen = new Set();
-            selTypes.forEach(sel => {
-                const cfg = isNewFormat ? p90Data[sel.key] : (sel.key === 'balanced' ? p90Data : null);
+        // Find global best per category across all architectures
+        const globalBest = {};
+        selTypes.forEach(sel => {
+            let best = null, bestArch = null;
+            ['pd', 'aggregated', 'ep'].forEach(archKey => {
+                const p90Data = (bp.p90 || {})[archKey];
+                if (!p90Data) return;
+                const isNew = p90Data.balanced || p90Data.lowest_ttft || p90Data.highest_tput;
+                const cfg = isNew ? p90Data[sel.key] : (sel.key === 'balanced' ? p90Data : null);
                 if (!cfg) return;
-
-                const testId = cfg.test_id || cfg.config_name || '';
-                let dupNote = '';
-                if (seen.has(testId)) return;
-                seen.add(testId);
-                if (isNewFormat) {
-                    const otherMatches = selTypes.filter(s => s.key !== sel.key && p90Data[s.key] && (p90Data[s.key].test_id || p90Data[s.key].config_name) === testId);
-                    if (otherMatches.length) dupNote = otherMatches.map(s => s.label).join(', ');
+                const ttft = cfg.ttft_p90 || cfg.ttft || 1e9;
+                const tput = cfg.throughput_mean || cfg.throughput || cfg.throughput_p90 || 0;
+                const gpus = cfg.gpus || cfg.total_gpus || 1;
+                let score;
+                if (sel.key === 'lowest_ttft') score = -ttft;
+                else if (sel.key === 'highest_tput') score = tput;
+                else if (sel.key === 'most_efficient') score = tput / gpus;
+                else score = -ttft / Math.max(tput, 0.001);
+                if (!best || score > best.score) {
+                    best = { cfg, score, archKey };
+                    bestArch = archKey;
                 }
+            });
+            if (best) globalBest[sel.key] = best;
+        });
+
+        html += `<div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(280px, 1fr)); gap:16px; margin-bottom:20px;">`;
+
+        const seen = new Set();
+        selTypes.forEach(sel => {
+            const entry = globalBest[sel.key];
+            if (!entry) return;
+            const cfg = entry.cfg;
+            const archKey = entry.archKey;
+
+            const testId = cfg.test_id || cfg.config_name || '';
+            let dupNote = '';
+            if (seen.has(testId)) {
+                const otherLabels = selTypes.filter(s => s.key !== sel.key && globalBest[s.key] && (globalBest[s.key].cfg.test_id || globalBest[s.key].cfg.config_name) === testId).map(s => s.label);
+                if (otherLabels.length) dupNote = otherLabels.join(', ');
+                else return;
+            }
+            seen.add(testId);
 
                 let deploy;
                 if (cfg.prefill_pods && cfg.decode_pods) {
@@ -132,10 +146,14 @@ function renderCharts(data, runId) {
 
                 // Colored header bar
                 html += `<div style="background:linear-gradient(135deg,${sel.color},${sel.color}cc);padding:12px 16px;color:white;">`;
+                const aColor = archColors[archKey] || '#64748b';
+                const archLabel = archKey.toUpperCase();
                 html += `<div style="display:flex;align-items:center;justify-content:space-between;">`;
                 html += `<div style="font-weight:700;font-size:0.9em;letter-spacing:0.3px;">${sel.icon} ${sel.label}</div>`;
-                if (dupNote) html += `<div style="font-size:0.7em;opacity:0.85;background:rgba(255,255,255,0.2);padding:2px 8px;border-radius:10px;">+ ${dupNote}</div>`;
-                html += `</div>`;
+                html += `<div style="display:flex;gap:4px;">`;
+                html += `<div style="font-size:0.68em;background:${aColor};padding:2px 8px;border-radius:10px;font-weight:600;">${archLabel}</div>`;
+                if (dupNote) html += `<div style="font-size:0.68em;opacity:0.85;background:rgba(255,255,255,0.2);padding:2px 8px;border-radius:10px;">+ ${dupNote}</div>`;
+                html += `</div></div>`;
                 html += `<div style="font-size:0.75em;opacity:0.9;margin-top:2px;">${sel.desc}</div>`;
                 html += `</div>`;
 
@@ -163,7 +181,8 @@ function renderCharts(data, runId) {
                 html += '<table style="width:100%;border-collapse:collapse;font-size:0.82em;">';
                 html += '<tr style="background:#f8fafc;"><th style="text-align:center;padding:6px 8px;color:#94a3b8;font-weight:500;font-size:0.9em;"></th><th style="text-align:center;padding:6px 8px;color:#94a3b8;font-weight:500;font-size:0.9em;">TTFT</th><th style="text-align:center;padding:6px 8px;color:#94a3b8;font-weight:500;font-size:0.9em;">ITL</th></tr>';
                 ['p90', 'p95', 'p99'].forEach((p, pi) => {
-                    const pCfg = isNewFormat ? ((bp[p] || {})[archKey] || {})[sel.key] : (bp[p] || {})[archKey];
+                    const pArchData = (bp[p] || {})[archKey] || {};
+                    const pCfg = pArchData[sel.key] || pArchData;
                     const ttft = pCfg ? (pCfg.ttft || pCfg['ttft_' + p]) : null;
                     const itl = pCfg ? (pCfg.itl || pCfg['itl_' + p]) : null;
                     const bg = pi % 2 === 0 ? 'white' : '#fafbfc';
@@ -196,7 +215,6 @@ function renderCharts(data, runId) {
             });
 
             html += '</div>';
-        });
 
         // Optimal TP values and test counts (outside the grid)
         if (rec.optimal_decode_tp || rec.optimal_prefill_tp || rec.pd_tests_count || rec.ep_tests_count) {

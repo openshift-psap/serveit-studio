@@ -516,14 +516,16 @@ class ReportAnalyzer:
             return entry
 
         def _select_3(valid, ttft_field, tput_field):
-            """Select 3 best configs: balanced, lowest_ttft, highest_tput."""
+            """Select 4 best configs: balanced, lowest_ttft, highest_tput, most_efficient."""
             by_balanced = min(valid, key=lambda r: (getattr(r, ttft_field) or 1e9) / (r.throughput_mean or 0.001))
             by_ttft = min(valid, key=lambda r: getattr(r, ttft_field) or 1e9)
             by_tput = max(valid, key=lambda r: r.throughput_mean or 0)
+            by_eff = max(valid, key=lambda r: (r.throughput_mean or 0) / max(r.total_gpus, 1))
             result = {
                 'balanced': _pctl_entry(by_balanced, ttft_field, tput_field),
                 'lowest_ttft': _pctl_entry(by_ttft, ttft_field, tput_field),
                 'highest_tput': _pctl_entry(by_tput, ttft_field, tput_field),
+                'most_efficient': _pctl_entry(by_eff, ttft_field, tput_field),
             }
             return result
 
