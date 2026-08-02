@@ -219,7 +219,7 @@
                                         <div id="sweep-max-configs-row" style="display:none;align-items:center;gap:8px;margin-top:8px;padding-left:12px;">
                                             <div style="font-weight:600;font-size:0.85em;color:#065f46;">Max configs:</div>
                                             <input type="number" id="sweep-max-configs" min="1" max="50" placeholder="all" style="width:80px;padding:4px 8px;border:1px solid #86efac;border-radius:6px;font-size:0.85em;" onchange="var v=parseInt(this.value);config.concurrency_sweep_max_configs=v>0?v:null;saveConfig();">
-                                            <div style="font-size:0.75em;color:#6b7280;">Leave empty = sweep all configs. Set a number = top N by TTFT-to-throughput ratio.</div>
+                                            <div style="font-size:0.75em;color:#6b7280;">Total configs to sweep. 4 = just the 4 recommendations. Higher = adds more configs ranked by score. Empty = all tested configs.</div>
                                         </div>
                                     </div>
                                 </div>
@@ -323,7 +323,7 @@
                                 <div id="cache-sweep-max-row" style="display:none;align-items:center;gap:8px;margin-top:8px;padding-left:14px;">
                                     <div style="font-weight:600;font-size:0.82em;color:#5b21b6;">Max configs:</div>
                                     <input type="number" id="cache-sweep-max-configs" min="1" max="50" placeholder="all" style="width:60px;padding:4px 8px;border:1px solid #c4b5fd;border-radius:6px;font-size:0.85em;" onchange="var v=parseInt(this.value);config.cache_sweep_max_configs=v>0?v:null;saveConfig();">
-                                    <div style="font-size:0.75em;color:#6b7280;">Leave empty = sweep all configs.</div>
+                                    <div style="font-size:0.75em;color:#6b7280;">Total configs to sweep. 4 = just the 4 recommendations. Higher = adds more configs ranked by score. Empty = all tested configs.</div>
                                 </div>
                             </div>
                         </div>
