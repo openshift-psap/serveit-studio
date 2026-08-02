@@ -1453,10 +1453,17 @@ function showSettings(){
         html += '<span style="font-size:0.85em;color:#64748b;">minutes</span>';
         html += '</div></div>';
 
+        var statusEnabled = (settings.status_refresh_enabled || 'true') === 'true';
         var statusInterval = parseInt(settings.status_refresh_sec || '60');
         html += '<div style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:10px;padding:20px;margin-bottom:16px;">';
-        html += '<div style="font-weight:600;font-size:0.95em;color:#1e293b;margin-bottom:4px;">Instance Status Refresh</div>';
-        html += '<div style="font-size:0.8em;color:#64748b;margin-bottom:12px;">How often to refresh instance status (Running/Pending/Error) in the sidebar</div>';
+        html += '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;">';
+        html += '<div><div style="font-weight:600;font-size:0.95em;color:#1e293b;">Instance Status Refresh</div>';
+        html += '<div style="font-size:0.8em;color:#64748b;margin-top:2px;">Periodically refresh instance status (Running/Pending/Error)</div></div>';
+        html += '<label style="position:relative;display:inline-block;width:44px;height:24px;cursor:pointer;">';
+        html += '<input type="checkbox" id="settings-status-enabled" '+(statusEnabled?'checked':'')+' onchange="saveSettings()" style="opacity:0;width:0;height:0;">';
+        html += '<span style="position:absolute;top:0;left:0;right:0;bottom:0;background:'+(statusEnabled?'#2A7B88':'#cbd5e1')+';border-radius:24px;transition:0.2s;" onclick="this.previousElementSibling.click();"></span>';
+        html += '<span style="position:absolute;left:'+(statusEnabled?'22':'2')+'px;top:2px;width:20px;height:20px;background:#fff;border-radius:50%;transition:0.2s;box-shadow:0 1px 3px rgba(0,0,0,0.2);" onclick="this.previousElementSibling.previousElementSibling.click();"></span>';
+        html += '</label></div>';
         html += '<div style="display:flex;align-items:center;gap:10px;">';
         html += '<label style="font-size:0.85em;color:#475569;white-space:nowrap;">Interval:</label>';
         html += '<input type="number" id="settings-status-interval" value="'+statusInterval+'" min="60" style="width:70px;padding:6px 10px;border:1px solid #d1d5db;border-radius:6px;font-size:0.9em;" onchange="saveSettings()">';
@@ -1471,21 +1478,24 @@ function showSettings(){
 function saveSettings(){
     var autoRescan = document.getElementById('settings-auto-rescan').checked;
     var interval = parseInt(document.getElementById('settings-rescan-interval').value) || 10;
+    var statusEnabled = document.getElementById('settings-status-enabled').checked;
     var statusInterval = parseInt(document.getElementById('settings-status-interval').value) || 60;
     fetch('/api/settings', {
         method: 'POST',
         headers: {'Content-Type': 'application/json'},
-        body: JSON.stringify({auto_rescan: autoRescan ? 'true' : 'false', rescan_interval_min: String(interval), status_refresh_sec: String(statusInterval)})
+        body: JSON.stringify({auto_rescan: autoRescan ? 'true' : 'false', rescan_interval_min: String(interval), status_refresh_enabled: statusEnabled ? 'true' : 'false', status_refresh_sec: String(statusInterval)})
     }).then(function(r){return r.json()}).then(function(){
         showSettings();
-        _applyStatusInterval(statusInterval);
+        _applyStatusInterval(statusEnabled ? statusInterval : 0);
     });
 }
 
 var _statusIntervalId = null;
 function _applyStatusInterval(sec){
-    sec = Math.max(60, sec || 60);
     if(_statusIntervalId) clearInterval(_statusIntervalId);
+    _statusIntervalId = null;
+    if(!sec || sec <= 0) return;
+    sec = Math.max(60, sec);
     _statusIntervalId = setInterval(function(){
         if(currentClusterId) loadInstances(currentClusterId, true);
         fetch('/api/clusters', {redirect:'manual'})
@@ -1664,7 +1674,8 @@ function revokeUser(instId, userId){
 // Auto-refresh (status only, no flicker) + session health check
 // Load saved interval from settings, fallback to 60s
 fetch('/api/settings').then(function(r){return r.json()}).then(function(s){
-    _applyStatusInterval(parseInt(s.status_refresh_sec || '60'));
+    var enabled = (s.status_refresh_enabled || 'true') === 'true';
+    _applyStatusInterval(enabled ? parseInt(s.status_refresh_sec || '60') : 0);
 }).catch(function(){ _applyStatusInterval(60); });
 
 function _showSessionExpiredOverlay(){
