@@ -1453,7 +1453,7 @@ function showSettings(){
         html += '<div style="font-size:0.8em;color:#64748b;margin-bottom:12px;">How often to refresh instance status (Running/Pending/Error) in the sidebar</div>';
         html += '<div style="display:flex;align-items:center;gap:10px;">';
         html += '<label style="font-size:0.85em;color:#475569;white-space:nowrap;">Interval:</label>';
-        html += '<input type="number" id="settings-status-interval" value="'+statusInterval+'" min="5" max="300" style="width:70px;padding:6px 10px;border:1px solid #d1d5db;border-radius:6px;font-size:0.9em;" onchange="saveSettings()">';
+        html += '<input type="number" id="settings-status-interval" value="'+statusInterval+'" min="60" max="300" style="width:70px;padding:6px 10px;border:1px solid #d1d5db;border-radius:6px;font-size:0.9em;" onchange="saveSettings()">';
         html += '<span style="font-size:0.85em;color:#64748b;">seconds</span>';
         html += '</div></div>';
 
@@ -1478,6 +1478,7 @@ function saveSettings(){
 
 var _statusIntervalId = null;
 function _applyStatusInterval(sec){
+    sec = Math.max(60, Math.min(300, sec || 60));
     if(_statusIntervalId) clearInterval(_statusIntervalId);
     _statusIntervalId = setInterval(function(){
         if(currentClusterId) loadInstances(currentClusterId, true);
