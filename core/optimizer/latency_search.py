@@ -547,28 +547,26 @@ class LatencySearchMixin:
                 selected.append(candidate)
 
         if all_candidates:
-            # Best Balanced (lowest TTFT/throughput ratio)
-            _add_unique(min(all_candidates, key=lambda x: _score(x[2])))
-            # Lowest TTFT
-            _add_unique(min(all_candidates, key=lambda x: x[2].ttft_p90 or 1e9))
-            # Highest Throughput
-            _add_unique(max(all_candidates, key=lambda x: _tput_of(x[2])))
-            # Most Efficient (throughput per GPU)
-            def _gpus(c):
-                if c[0] == 'pd':
-                    return c[1].prefill_pods * c[1].prefill_tp + c[1].decode_pods * c[1].decode_tp
-                else:
-                    return c[1] * (self.config.total_gpus // c[1]) if c[1] else self.config.total_gpus
-            _add_unique(max(all_candidates, key=lambda x: _tput_of(x[2]) / max(_gpus(x), 1)))
-
-        # Fill remaining slots with next best by balanced score
-        if all_configs:
-            limit = int(max_configs) if max_configs else len(all_candidates)
-            remaining = sorted(all_candidates, key=lambda x: _score(x[2]))
-            for c in remaining:
-                if len(selected) >= limit:
-                    break
-                _add_unique(c)
+            if all_configs:
+                # All 4 recommendation configs first
+                _add_unique(min(all_candidates, key=lambda x: _score(x[2])))
+                _add_unique(min(all_candidates, key=lambda x: x[2].ttft_p90 or 1e9))
+                _add_unique(max(all_candidates, key=lambda x: _tput_of(x[2])))
+                def _gpus(c):
+                    if c[0] == 'pd':
+                        return c[1].prefill_pods * c[1].prefill_tp + c[1].decode_pods * c[1].decode_tp
+                    else:
+                        return c[1] * (self.config.total_gpus // c[1]) if c[1] else self.config.total_gpus
+                _add_unique(max(all_candidates, key=lambda x: _tput_of(x[2]) / max(_gpus(x), 1)))
+                # Fill remaining slots by score
+                limit = int(max_configs) if max_configs else len(all_candidates)
+                for c in sorted(all_candidates, key=lambda x: _score(x[2])):
+                    if len(selected) >= limit:
+                        break
+                    _add_unique(c)
+            else:
+                # Single best (balanced score)
+                _add_unique(min(all_candidates, key=lambda x: _score(x[2])))
 
         self.log(f"Concurrency sweep: {len(selected)} configs selected", 'info')
         for c in selected:
