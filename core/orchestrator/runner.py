@@ -1396,6 +1396,9 @@ class TestOrchestrator(ParserMixin, GuidellmMixin):
                         self._parse_guidellm_results(guidellm_output, result)
 
                     if not result.guidellm_success or (result.request_successful or 0) == 0:
+                        if stop_check and stop_check():
+                            result.error_message = "Stopped by user"
+                            return result
                         if guidellm_attempt < max_guidellm_retries:
                             if log_callback:
                                 log_callback(f"⚠️  guidellm failed ({result.request_successful or 0} completed requests) — retrying ({guidellm_attempt}/{max_guidellm_retries})")
