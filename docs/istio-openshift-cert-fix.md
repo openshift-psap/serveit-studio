@@ -215,6 +215,56 @@ kubectl delete subscription $OLD_SUBSCRIPTION -n $OLD_NAMESPACE
 kubectl delete csv $OLD_CSV -n $OLD_NAMESPACE
 ```
 
+## Installing Upstream Istio on OpenShift
+
+If reinstalling Istio from scratch, follow these steps:
+
+### Download and install
+
+```bash
+ISTIO_VERSION=1.29.2
+curl -L https://istio.io/downloadIstio | ISTIO_VERSION=${ISTIO_VERSION} sh -
+export PATH="$PWD/istio-${ISTIO_VERSION}/bin:$PATH"
+
+istioctl install -y \
+  --set values.pilot.env.ENABLE_GATEWAY_API_INFERENCE_EXTENSION=true
+```
+
+**Do NOT use `--set values.global.platform=openshift`** — this changes the gateway pod initialization and causes crash loops on clusters with the OpenShift Ingress Operator already running its own istiod.
+
+### Update CRDs
+
+Gateway API CRDs are managed by OpenShift's Ingress Operator and cannot be updated manually. Only update the Inference Extension CRDs:
+
+```bash
+kubectl apply -f https://github.com/kubernetes-sigs/gateway-api-inference-extension/releases/download/v1.5.0/v1-manifests.yaml
+```
+
+### After install — sync CAs
+
+After installing upstream Istio, the new istiod generates a fresh CA. This will NOT match the OpenShift istiod's CA. You MUST follow Steps 1-5 above to synchronize the CAs, or the cert rotation problem will start within 30 minutes.
+
+## Cleanup (Uninstalling Istio)
+
+```bash
+istioctl uninstall --purge -y
+kubectl delete namespace istio-system
+kubectl delete gatewayclass istio istio-remote
+```
+
+## Things That Don't Work
+
+- **`PLATFORM=openshift` flag**: Causes gateway pods to crash-loop on clusters with OpenShift's own istiod already running.
+- **Deleting `istio-ca-root-cert` ConfigMap**: istiod recreates it, but the OpenShift istiod may overwrite it with its own CA before your gateways read it.
+- **Removing `service.beta.openshift.io/inject-cabundle` annotation**: The service-ca-operator immediately re-adds it.
+- **Deleting `openshift-service-ca.crt` ConfigMap**: Gets recreated automatically.
+
+## Persistence
+
+The `rootNamespace` config change on the OpenShift istiod ConfigMap may be reverted by the OpenShift Ingress Operator during cluster upgrades or reconciliation. Monitor for cert disconnects after cluster upgrades and re-apply if needed.
+
+The CA synchronization (Step 2) persists across istiod restarts as long as neither istiod regenerates its `istio-ca-secret`. If either secret is deleted, both must be re-synchronized.
+
 ## Environment
 
 - OpenShift 4.19+
