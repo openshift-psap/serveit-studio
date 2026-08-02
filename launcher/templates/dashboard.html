@@ -283,8 +283,9 @@
         <div id="cluster-viz"></div>
     </div>
 
-    <div style="display:flex;justify-content:flex-end;padding:4px 0;">
-        <button class="btn" style="font-size:0.78em;padding:4px 10px;background:#f8fafc;border:1px solid #e2e8f0;border-radius:6px;color:#475569;cursor:pointer;" onclick="if(currentClusterId) loadInstances(currentClusterId);">Instance Rescan</button>
+    <div class="cluster-viz-header" style="margin-top:24px;">
+        <h3>Instances</h3>
+        <button onclick="if(currentClusterId) loadInstances(currentClusterId);">Instance Rescan</button>
     </div>
     <div class="grid" id="instance-list">
         {% if not clusters %}
