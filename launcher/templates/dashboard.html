@@ -283,7 +283,7 @@
         <div id="cluster-viz"></div>
     </div>
 
-    <div class="cluster-viz-panel" style="margin-top:16px;">
+    <div class="cluster-viz-panel" id="instances-panel" style="margin-top:16px;">
         <div class="cluster-viz-header">
             <h3>Instances</h3>
             <button onclick="if(currentClusterId) loadInstances(currentClusterId);">Instance Rescan</button>
@@ -742,6 +742,8 @@ function selectCluster(id){
     document.getElementById('new-instance-btn').style.display='';
     var vizPanel = document.getElementById('cluster-viz-panel');
     if(vizPanel) vizPanel.style.display='';
+    var instPanel = document.getElementById('instances-panel');
+    if(instPanel) instPanel.style.display='';
     loadInstances(id);
     var vizContainer = document.getElementById('cluster-viz');
     if(vizContainer && typeof scanAndRenderCluster === 'function') scanAndRenderCluster(id, vizContainer);
@@ -1241,7 +1243,7 @@ function showRestore(){
     if(navRestore) navRestore.classList.add('active');
     document.getElementById('topbar-title').innerHTML = '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="opacity:0.5"><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/></svg> Restore Data';
     document.getElementById('new-instance-btn').style.display='none';
-    var _vp=document.getElementById('cluster-viz-panel');if(_vp)_vp.style.display='none';
+    var _vp=document.getElementById('cluster-viz-panel');if(_vp)_vp.style.display='none';var _ip=document.getElementById('instances-panel');if(_ip)_ip.style.display='none';
     var list = document.getElementById('instance-list');
     list.style.display = 'block';
     list.innerHTML = '<div style="text-align:center;padding:40px;color:#999">Loading backups&hellip;</div>';
@@ -1377,7 +1379,7 @@ function showUsers(){
     var navUsers = document.getElementById('nav-users');
     if(navUsers) navUsers.classList.add('active');
     document.getElementById('topbar-title').innerHTML = '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="opacity:0.5"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75"/></svg> User Management';
-    document.getElementById('new-instance-btn').style.display='none';var _vp=document.getElementById('cluster-viz-panel');if(_vp)_vp.style.display='none';
+    document.getElementById('new-instance-btn').style.display='none';var _vp=document.getElementById('cluster-viz-panel');if(_vp)_vp.style.display='none';var _ip=document.getElementById('instances-panel');if(_ip)_ip.style.display='none';
     var list = document.getElementById('instance-list');
     list.style.display = 'block';
     list.innerHTML = '<div style="text-align:center;padding:40px;color:#999">Loading&hellip;</div>';
@@ -1426,7 +1428,7 @@ function showSettings(){
     if(navSettings) navSettings.classList.add('active');
     document.getElementById('topbar-title').innerHTML = '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="opacity:0.5"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09"/></svg> Settings';
     document.getElementById('new-instance-btn').style.display='none';
-    var _vp=document.getElementById('cluster-viz-panel');if(_vp)_vp.style.display='none';
+    var _vp=document.getElementById('cluster-viz-panel');if(_vp)_vp.style.display='none';var _ip=document.getElementById('instances-panel');if(_ip)_ip.style.display='none';
     var list = document.getElementById('instance-list');
     list.style.display = 'block';
     list.innerHTML = '<div style="text-align:center;padding:40px;color:#999">Loading settings&hellip;</div>';
@@ -1571,7 +1573,7 @@ function viewUserClusters(uid, uname){
     var navUsers = document.getElementById('nav-users');
     if(navUsers) navUsers.classList.remove('active');
     document.getElementById('topbar-title').innerHTML = 'Viewing: <strong>'+uname+'</strong>';
-    document.getElementById('new-instance-btn').style.display='none';var _vp=document.getElementById('cluster-viz-panel');if(_vp)_vp.style.display='none';
+    document.getElementById('new-instance-btn').style.display='none';var _vp=document.getElementById('cluster-viz-panel');if(_vp)_vp.style.display='none';var _ip=document.getElementById('instances-panel');if(_ip)_ip.style.display='none';
     // Load that user's clusters into sidebar
     fetch('/api/clusters?user_id='+uid).then(function(r){return r.json()}).then(function(clusters){
         var glist = document.getElementById('cluster-list');
