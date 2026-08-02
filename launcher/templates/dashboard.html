@@ -283,11 +283,12 @@
         <div id="cluster-viz"></div>
     </div>
 
-    <div class="cluster-viz-header" style="margin-top:24px;">
-        <h3>Instances</h3>
-        <button onclick="if(currentClusterId) loadInstances(currentClusterId);">Instance Rescan</button>
-    </div>
-    <div class="grid" id="instance-list">
+    <div class="cluster-viz-panel" style="margin-top:16px;">
+        <div class="cluster-viz-header">
+            <h3>Instances</h3>
+            <button onclick="if(currentClusterId) loadInstances(currentClusterId);">Instance Rescan</button>
+        </div>
+        <div class="grid" id="instance-list">
         {% if not clusters %}
         <div class="empty">
             <div class="empty-icon">
@@ -297,6 +298,7 @@
             <p>Add a local or remote cluster to start deploying instances. Click the + button in the sidebar.</p>
         </div>
         {% endif %}
+    </div>
     </div>
 </div>
 
