@@ -1656,8 +1656,10 @@ function revokeUser(instId, userId){
 }
 
 // Auto-refresh (status only, no flicker) + session health check
-// Start with default 60s, settings page can override
-_applyStatusInterval(60);
+// Load saved interval from settings, fallback to 60s
+fetch('/api/settings').then(function(r){return r.json()}).then(function(s){
+    _applyStatusInterval(parseInt(s.status_refresh_sec || '60'));
+}).catch(function(){ _applyStatusInterval(60); });
 
 function _showSessionExpiredOverlay(){
     if(document.getElementById('session-expired-overlay')) return;
