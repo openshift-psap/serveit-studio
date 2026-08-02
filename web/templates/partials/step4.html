@@ -311,7 +311,7 @@
                                 <div style="display:flex;align-items:center;justify-content:space-between;gap:12px;padding:10px 14px;background:#f5f3ff;border:1px solid #ddd6fe;border-radius:8px;margin-top:10px;">
                                     <div style="flex:1;">
                                         <div style="font-weight:600;font-size:0.85em;color:#5b21b6;">Multi-Config Sweep</div>
-                                        <div style="font-size:0.78em;color:#6d28d9;margin-top:2px;">By default, sweeps the 4 recommendation configs (Best Balanced, Lowest TTFT, Highest Throughput, Most Efficient). Enable to add more configs by score.</div>
+                                        <div style="font-size:0.78em;color:#6d28d9;margin-top:2px;">Sweep all 4 recommendation configs (Best Balanced, Lowest TTFT, Highest Throughput, Most Efficient) instead of just the single best.</div>
                                     </div>
                                     <div style="display:flex;align-items:center;gap:8px;flex-shrink:0;">
                                         <div style="width:40px;height:22px;background:#ccc;border-radius:11px;position:relative;transition:background-color 0.2s;cursor:pointer;" id="cache-sweep-multi-switch" onclick="var cb=document.getElementById('cache-sweep-multi-enabled');cb.checked=!cb.checked;this.style.background=cb.checked?'#7c3aed':'#ccc';this.querySelector('span').style.transform=cb.checked?'translateX(18px)':'translateX(0)';document.getElementById('cache-sweep-max-row').style.display=cb.checked?'flex':'none';config.cache_sweep_all_configs=cb.checked;saveConfig();">

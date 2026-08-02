@@ -295,25 +295,30 @@ class CacheSweepMixin:
                 seen_ids.add(rid)
                 selected.append(candidate)
 
-        if all_candidates:
-            _add_unique(min(all_candidates, key=lambda x: _score(x[2])))
-            _add_unique(min(all_candidates, key=lambda x: x[2].ttft_p90 or 1e9))
-            _add_unique(max(all_candidates, key=lambda x: _tput_of(x[2])))
-            def _gpus(c):
-                if c[0] == 'pd':
-                    return c[1].prefill_pods * c[1].prefill_tp + c[1].decode_pods * c[1].decode_tp
-                else:
-                    return c[1] * (self.config.total_gpus // c[1]) if c[1] else self.config.total_gpus
-            _add_unique(max(all_candidates, key=lambda x: _tput_of(x[2]) / max(_gpus(x), 1)))
-
         cache_sweep_all = getattr(self.config, 'cache_sweep_all_configs', False)
         cache_sweep_max = getattr(self.config, 'cache_sweep_max_configs', None)
-        if cache_sweep_all:
-            limit = int(cache_sweep_max) if cache_sweep_max else len(all_candidates)
-            for c in sorted(all_candidates, key=lambda x: _score(x[2])):
-                if len(selected) >= limit:
-                    break
-                _add_unique(c)
+
+        if all_candidates:
+            if cache_sweep_all:
+                # All 4 recommendation configs first
+                _add_unique(min(all_candidates, key=lambda x: _score(x[2])))
+                _add_unique(min(all_candidates, key=lambda x: x[2].ttft_p90 or 1e9))
+                _add_unique(max(all_candidates, key=lambda x: _tput_of(x[2])))
+                def _gpus(c):
+                    if c[0] == 'pd':
+                        return c[1].prefill_pods * c[1].prefill_tp + c[1].decode_pods * c[1].decode_tp
+                    else:
+                        return c[1] * (self.config.total_gpus // c[1]) if c[1] else self.config.total_gpus
+                _add_unique(max(all_candidates, key=lambda x: _tput_of(x[2]) / max(_gpus(x), 1)))
+                # Fill remaining slots by score
+                limit = int(cache_sweep_max) if cache_sweep_max else len(all_candidates)
+                for c in sorted(all_candidates, key=lambda x: _score(x[2])):
+                    if len(selected) >= limit:
+                        break
+                    _add_unique(c)
+            else:
+                # Single best (balanced score)
+                _add_unique(min(all_candidates, key=lambda x: _score(x[2])))
 
         self.log(f"Cache sweep: {len(selected)} configs selected", 'info')
 
