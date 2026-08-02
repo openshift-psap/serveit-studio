@@ -565,8 +565,13 @@ class LatencySearchMixin:
                         break
                     _add_unique(c)
             else:
-                # Single best (balanced score)
-                _add_unique(min(all_candidates, key=lambda x: _score(x[2])))
+                # Best PD and best aggregated by balanced score
+                pd_candidates = [c for c in all_candidates if c[0] == 'pd']
+                agg_candidates = [c for c in all_candidates if c[0] == 'agg']
+                if pd_candidates:
+                    _add_unique(min(pd_candidates, key=lambda x: _score(x[2])))
+                if agg_candidates:
+                    _add_unique(min(agg_candidates, key=lambda x: _score(x[2])))
 
         self.log(f"Concurrency sweep: {len(selected)} configs selected", 'info')
         for c in selected:
