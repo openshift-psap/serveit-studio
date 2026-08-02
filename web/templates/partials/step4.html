@@ -307,6 +307,24 @@
                                         <span style="position:absolute;top:2px;left:2px;width:18px;height:18px;background:white;border-radius:50%;transition:transform 0.2s;box-shadow:0 1px 3px rgba(0,0,0,0.2);display:block;"></span>
                                     </div>
                                 </div>
+                                <!-- Multi-Config Sweep toggle -->
+                                <div style="display:flex;align-items:center;justify-content:space-between;gap:12px;padding:10px 14px;background:#f5f3ff;border:1px solid #ddd6fe;border-radius:8px;margin-top:10px;">
+                                    <div style="flex:1;">
+                                        <div style="font-weight:600;font-size:0.85em;color:#5b21b6;">Multi-Config Sweep</div>
+                                        <div style="font-size:0.78em;color:#6d28d9;margin-top:2px;">By default, sweeps the 4 recommendation configs (Best Balanced, Lowest TTFT, Highest Throughput, Most Efficient). Enable to add more configs by score.</div>
+                                    </div>
+                                    <div style="display:flex;align-items:center;gap:8px;flex-shrink:0;">
+                                        <div style="width:40px;height:22px;background:#ccc;border-radius:11px;position:relative;transition:background-color 0.2s;cursor:pointer;" id="cache-sweep-multi-switch" onclick="var cb=document.getElementById('cache-sweep-multi-enabled');cb.checked=!cb.checked;this.style.background=cb.checked?'#7c3aed':'#ccc';this.querySelector('span').style.transform=cb.checked?'translateX(18px)':'translateX(0)';document.getElementById('cache-sweep-max-row').style.display=cb.checked?'flex':'none';config.cache_sweep_all_configs=cb.checked;saveConfig();">
+                                            <span style="position:absolute;top:2px;left:2px;width:18px;height:18px;background:white;border-radius:50%;transition:transform 0.2s;box-shadow:0 1px 3px rgba(0,0,0,0.2);display:block;"></span>
+                                        </div>
+                                        <input type="checkbox" id="cache-sweep-multi-enabled" style="display:none;">
+                                    </div>
+                                </div>
+                                <div id="cache-sweep-max-row" style="display:none;align-items:center;gap:8px;margin-top:8px;padding-left:14px;">
+                                    <div style="font-weight:600;font-size:0.82em;color:#5b21b6;">Max configs:</div>
+                                    <input type="number" id="cache-sweep-max-configs" min="1" max="50" placeholder="all" style="width:60px;padding:4px 8px;border:1px solid #c4b5fd;border-radius:6px;font-size:0.85em;" onchange="var v=parseInt(this.value);config.cache_sweep_max_configs=v>0?v:null;saveConfig();">
+                                    <div style="font-size:0.75em;color:#6b7280;">Leave empty = sweep all configs.</div>
+                                </div>
                             </div>
                         </div>
 
