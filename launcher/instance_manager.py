@@ -1201,9 +1201,13 @@ def list_instances(owner_id: int, cluster_id: int = None) -> List[Dict]:
         r = _kubectl(['get', 'pod', '-l', f"app={inst['deployment_name']}",
                       '-n', inst['namespace'],
                       '-o', 'jsonpath={.items[0].status.phase}:{.items[0].status.containerStatuses[0].state.waiting.reason}:{.items[0].status.containerStatuses[0].restartCount}'])
-        raw = r.stdout.strip() if r.returncode == 0 else ''
+        if r.returncode != 0:
+            inst['pod_status'] = 'Unknown'
+            instances.append(inst)
+            continue
+        raw = r.stdout.strip()
         parts = raw.split(':')
-        phase = parts[0] if parts else 'Unknown'
+        phase = parts[0] if parts else ''
         waiting_reason = parts[1] if len(parts) > 1 else ''
         restarts = int(parts[2]) if len(parts) > 2 and parts[2].isdigit() else 0
         if waiting_reason in ('CrashLoopBackOff', 'Error', 'ImagePullBackOff'):
@@ -1215,10 +1219,12 @@ def list_instances(owner_id: int, cluster_id: int = None) -> List[Dict]:
         elif not raw or not phase:
             dep_r = _kubectl(['get', 'deployment', inst['deployment_name'],
                               '-n', inst['namespace'], '--ignore-not-found', '-o', 'name'])
-            if not dep_r.stdout.strip():
+            if dep_r.returncode == 0 and not dep_r.stdout.strip():
                 inst['pod_status'] = 'Deleted'
-            else:
+            elif dep_r.returncode == 0:
                 inst['pod_status'] = 'Starting'
+            else:
+                inst['pod_status'] = 'Unknown'
         else:
             inst['pod_status'] = phase or 'Unknown'
         # If service_url is missing, try to get it from the Route (OpenShift)
