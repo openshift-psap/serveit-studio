@@ -111,7 +111,7 @@ def register_auth_routes(app):
             password = request.form.get('password', '')
             user_id, admin, must_reset = check_auth(username, password)
             if user_id:
-                session.permanent = bool(request.form.get('remember'))
+                session.permanent = True
                 session['user_id'] = user_id
                 session['username'] = username
                 session['is_admin'] = admin

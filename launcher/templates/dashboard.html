@@ -1639,7 +1639,7 @@ setInterval(function(){
     // Session health check
     fetch('/api/clusters', {redirect:'manual'})
     .then(function(r){
-        if(r.status === 302 || r.status === 0 || r.type === 'opaqueredirect'){
+        if(r.status === 302 || r.type === 'opaqueredirect'){
             _showSessionExpiredOverlay();
         }
     })
