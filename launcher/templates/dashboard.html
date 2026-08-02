@@ -278,11 +278,14 @@
     <div class="cluster-viz-panel" id="cluster-viz-panel" {% if not clusters %}style="display:none"{% endif %}>
         <div class="cluster-viz-header">
             <h3>Cluster Resources</h3>
-            <button onclick="scanAndRenderCluster(currentClusterId, document.getElementById('cluster-viz'), true)">Rescan</button>
+            <button onclick="scanAndRenderCluster(currentClusterId, document.getElementById('cluster-viz'), true)">Cluster Rescan</button>
         </div>
         <div id="cluster-viz"></div>
     </div>
 
+    <div style="display:flex;justify-content:flex-end;padding:4px 0;">
+        <button class="btn" style="font-size:0.78em;padding:4px 10px;background:#f8fafc;border:1px solid #e2e8f0;border-radius:6px;color:#475569;cursor:pointer;" onclick="if(currentClusterId) loadInstances(currentClusterId);">Instance Rescan</button>
+    </div>
     <div class="grid" id="instance-list">
         {% if not clusters %}
         <div class="empty">
