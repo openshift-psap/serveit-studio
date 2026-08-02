@@ -521,22 +521,65 @@ class LatencySearchMixin:
             tput = _tput_of(result) or 0.001
             return ttft / tput
 
-        # --- Build list of PD configs to sweep ---
-        pd_configs = []
+        # --- Build unified config list: recommendation configs first, then by score ---
+        # Collect all candidates: ('pd', split, result) or ('agg', tp, result)
+        all_candidates = []
         if self.pareto_results:
-            if all_configs:
-                configs = sorted(self.pareto_results, key=lambda x: _score(x[1]))
-                if max_configs:
-                    configs = configs[:int(max_configs)]
-                pd_configs = configs
-            else:
-                def _pd_score(x):
-                    ttft = x[1].ttft_p90 if x[1].ttft_p90 else 1e9
-                    tput = _tput_of(x[1]) or 0.001
-                    return ttft / tput
-                pd_configs = [min(self.pareto_results, key=_pd_score)]
+            for split, result in self.pareto_results:
+                if result.ttft_p90 and _tput_of(result) > 0:
+                    all_candidates.append(('pd', split, result))
+        if hasattr(self, 'aggregated_search_results') and self.aggregated_search_results:
+            for tp, result in self.aggregated_search_results:
+                if result.ttft_p90 and _tput_of(result) > 0:
+                    all_candidates.append(('agg', tp, result))
+        elif self.aggregated_tp and self.aggregated_result:
+            if self.aggregated_result.ttft_p90 and _tput_of(self.aggregated_result) > 0:
+                all_candidates.append(('agg', self.aggregated_tp, self.aggregated_result))
 
-        # --- Sweep each PD config ---
+        # Pick the 4 recommendation configs (deduplicated)
+        selected = []
+        seen_ids = set()
+
+        def _add_unique(candidate):
+            rid = id(candidate[2])
+            if rid not in seen_ids:
+                seen_ids.add(rid)
+                selected.append(candidate)
+
+        if all_candidates:
+            # Best Balanced (lowest TTFT/throughput ratio)
+            _add_unique(min(all_candidates, key=lambda x: _score(x[2])))
+            # Lowest TTFT
+            _add_unique(min(all_candidates, key=lambda x: x[2].ttft_p90 or 1e9))
+            # Highest Throughput
+            _add_unique(max(all_candidates, key=lambda x: _tput_of(x[2])))
+            # Most Efficient (throughput per GPU)
+            def _gpus(c):
+                if c[0] == 'pd':
+                    return c[1].prefill_pods * c[1].prefill_tp + c[1].decode_pods * c[1].decode_tp
+                else:
+                    return c[1] * (self.config.total_gpus // c[1]) if c[1] else self.config.total_gpus
+            _add_unique(max(all_candidates, key=lambda x: _tput_of(x[2]) / max(_gpus(x), 1)))
+
+        # Fill remaining slots with next best by balanced score
+        if all_configs:
+            limit = int(max_configs) if max_configs else len(all_candidates)
+            remaining = sorted(all_candidates, key=lambda x: _score(x[2]))
+            for c in remaining:
+                if len(selected) >= limit:
+                    break
+                _add_unique(c)
+
+        self.log(f"Concurrency sweep: {len(selected)} configs selected", 'info')
+        for c in selected:
+            if c[0] == 'pd':
+                self.log(f"  {c[1].prefill_pods}P×TP{c[1].prefill_tp} + {c[1].decode_pods}D×TP{c[1].decode_tp} (PD)", 'info')
+            else:
+                replicas = self.config.total_gpus // c[1] if c[1] else self.config.total_gpus
+                self.log(f"  {replicas}×TP{c[1]} (Aggregated)", 'info')
+
+        # --- Sweep PD configs ---
+        pd_configs = [(c[1], c[2]) for c in selected if c[0] == 'pd']
         cal_results = []
         for cfg_idx, (split, pd_result) in enumerate(pd_configs):
             if self._should_stop():
@@ -571,18 +614,8 @@ class LatencySearchMixin:
         if self._should_stop():
             return
 
-        # --- Build list of Aggregated configs to sweep ---
-        agg_configs = []
-        if hasattr(self, 'aggregated_search_results') and self.aggregated_search_results:
-            if all_configs:
-                configs = sorted(self.aggregated_search_results, key=lambda x: _score(x[1]))
-                if max_configs:
-                    configs = configs[:int(max_configs)]
-                agg_configs = configs
-            elif self.aggregated_tp and self.aggregated_result:
-                agg_configs = [(self.aggregated_tp, self.aggregated_result)]
-        elif self.aggregated_tp and self.aggregated_result:
-            agg_configs = [(self.aggregated_tp, self.aggregated_result)]
+        # --- Sweep Aggregated configs ---
+        agg_configs = [(c[1], c[2]) for c in selected if c[0] == 'agg']
 
         if not agg_configs:
             self.log("⚠️  No aggregated baseline — skipping aggregated sweep", 'warning')
