@@ -265,27 +265,57 @@ class CacheSweepMixin:
         else:
             self.log(f"Using concurrency: {default_concurrency}", 'info')
 
-        # --- Find best configs ---
-        best_split = None
-        best_pd_result = None
-        total_gpus_pd = 0
-        if hasattr(self, 'pareto_results') and self.pareto_results:
-            def _pd_score(x):
-                ttft = x[1].ttft_p90 if x[1].ttft_p90 else 1e9
-                tput = x[1].throughput_mean or x[1].throughput_p90 or 0.001
-                return ttft / tput
-            best_split, best_pd_result = min(self.pareto_results, key=_pd_score)
-            total_gpus_pd = (best_split.prefill_pods * best_split.prefill_tp +
-                             best_split.decode_pods * best_split.decode_tp)
-        elif hasattr(self, 'best_ep_config') and self.best_ep_config:
-            best_split = self.best_ep_config
-            best_pd_result = self.best_ep_result
-            total_gpus_pd = (best_split.prefill_pods * best_split.prefill_tp +
-                             best_split.decode_pods * best_split.decode_tp)
+        # --- Select configs using same recommendation logic as concurrency sweep ---
+        def _tput_of(result):
+            return result.throughput_mean or result.throughput_p90 or 0
 
-        agg_tp = getattr(self, 'aggregated_tp', None)
-        agg_result = getattr(self, 'aggregated_result', None)
-        total_gpus_agg = getattr(self, 'aggregated_gpus', 0) or self.config.total_gpus
+        def _score(result):
+            ttft = result.ttft_p90 if result.ttft_p90 else 1e9
+            tput = _tput_of(result) or 0.001
+            return ttft / tput
+
+        all_candidates = []
+        if hasattr(self, 'pareto_results') and self.pareto_results:
+            for split, result in self.pareto_results:
+                if result.ttft_p90 and _tput_of(result) > 0:
+                    all_candidates.append(('pd', split, result))
+        if hasattr(self, 'aggregated_search_results') and self.aggregated_search_results:
+            for tp, result in self.aggregated_search_results:
+                if result.ttft_p90 and _tput_of(result) > 0:
+                    all_candidates.append(('agg', tp, result))
+        elif getattr(self, 'aggregated_tp', None) and getattr(self, 'aggregated_result', None):
+            if self.aggregated_result.ttft_p90 and _tput_of(self.aggregated_result) > 0:
+                all_candidates.append(('agg', self.aggregated_tp, self.aggregated_result))
+
+        selected = []
+        seen_ids = set()
+        def _add_unique(candidate):
+            rid = id(candidate[2])
+            if rid not in seen_ids:
+                seen_ids.add(rid)
+                selected.append(candidate)
+
+        if all_candidates:
+            _add_unique(min(all_candidates, key=lambda x: _score(x[2])))
+            _add_unique(min(all_candidates, key=lambda x: x[2].ttft_p90 or 1e9))
+            _add_unique(max(all_candidates, key=lambda x: _tput_of(x[2])))
+            def _gpus(c):
+                if c[0] == 'pd':
+                    return c[1].prefill_pods * c[1].prefill_tp + c[1].decode_pods * c[1].decode_tp
+                else:
+                    return c[1] * (self.config.total_gpus // c[1]) if c[1] else self.config.total_gpus
+            _add_unique(max(all_candidates, key=lambda x: _tput_of(x[2]) / max(_gpus(x), 1)))
+
+        cache_sweep_all = getattr(self.config, 'cache_sweep_all_configs', False)
+        cache_sweep_max = getattr(self.config, 'cache_sweep_max_configs', None)
+        if cache_sweep_all:
+            limit = int(cache_sweep_max) if cache_sweep_max else len(all_candidates)
+            for c in sorted(all_candidates, key=lambda x: _score(x[2])):
+                if len(selected) >= limit:
+                    break
+                _add_unique(c)
+
+        self.log(f"Cache sweep: {len(selected)} configs selected", 'info')
 
         # --- Sweep at default concurrency (calibrated if available, otherwise user-defined) ---
         if self.config.cache_sweep_enabled:
@@ -294,33 +324,43 @@ class CacheSweepMixin:
                      (f" (calibrated)" if calibrated_concurrency else ""), 'decision')
             self.log(f"{'='*60}", 'info')
 
-            if best_split:
-                pd_label = 'EP' if getattr(best_split, 'enable_expert_parallel', False) else 'PD'
-                pd_config_label = f"{best_split.prefill_pods}P×TP{best_split.prefill_tp} + {best_split.decode_pods}D×TP{best_split.decode_tp}"
-                sweep = self._run_cache_sweep_for_arch(
-                    pd_label, default_concurrency, levels,
-                    lambda: self._create_pd_config(best_split) if pd_label == 'PD' else self._create_ep_config(split=best_split),
-                    total_gpus_pd
-                )
-                for r in sweep:
-                    r['config_label'] = pd_config_label
-                self.cache_sweep_results[pd_label.lower()] = sweep
-
-            if agg_tp and agg_result and not self._should_stop():
-                agg_replicas = total_gpus_agg // agg_tp if agg_tp else total_gpus_agg
-                agg_config_label = f"{agg_replicas}×TP{agg_tp}"
-                sweep = self._run_cache_sweep_for_arch(
-                    'Aggregated', default_concurrency, levels,
-                    lambda: self._create_aggregated_config(
-                        tp=agg_tp, num_gpus=total_gpus_agg,
-                        isl=self.config.isl, osl=self.config.osl,
-                        test_id='_placeholder_', use_concurrency=True
-                    ),
-                    total_gpus_agg
-                )
-                for r in sweep:
-                    r['config_label'] = agg_config_label
-                self.cache_sweep_results['aggregated'] = sweep
+            for c in selected:
+                if self._should_stop():
+                    break
+                if c[0] == 'pd':
+                    split = c[1]
+                    pd_label = 'EP' if getattr(split, 'enable_expert_parallel', False) else 'PD'
+                    config_label = f"{split.prefill_pods}P×TP{split.prefill_tp} + {split.decode_pods}D×TP{split.decode_tp}"
+                    total_gpus = split.prefill_pods * split.prefill_tp + split.decode_pods * split.decode_tp
+                    current_split = split
+                    sweep = self._run_cache_sweep_for_arch(
+                        f"{pd_label}-{config_label}", default_concurrency, levels,
+                        lambda: self._create_pd_config(current_split) if pd_label == 'PD' else self._create_ep_config(split=current_split),
+                        total_gpus
+                    )
+                    for r in sweep:
+                        r['config_label'] = config_label
+                    sweep_key = f"{pd_label.lower()}-{split.prefill_pods}p{split.decode_pods}d"
+                    self.cache_sweep_results[sweep_key] = sweep
+                else:
+                    tp = c[1]
+                    total_gpus_agg = self.config.total_gpus
+                    agg_replicas = total_gpus_agg // tp if tp else total_gpus_agg
+                    config_label = f"{agg_replicas}×TP{tp}"
+                    current_tp = tp
+                    sweep = self._run_cache_sweep_for_arch(
+                        f"Aggregated-{config_label}", default_concurrency, levels,
+                        lambda: self._create_aggregated_config(
+                            tp=current_tp, num_gpus=total_gpus_agg,
+                            isl=self.config.isl, osl=self.config.osl,
+                            test_id='_placeholder_', use_concurrency=True
+                        ),
+                        total_gpus_agg
+                    )
+                    for r in sweep:
+                        r['config_label'] = config_label
+                    sweep_key = f"aggregated-tp{tp}"
+                    self.cache_sweep_results[sweep_key] = sweep
 
         # --- Optional second sweep at user-defined concurrency (if different from calibrated) ---
         if self.config.cache_sweep_use_calibrated and calibrated_concurrency and user_concurrency != calibrated_concurrency and not self._should_stop():
@@ -328,33 +368,42 @@ class CacheSweepMixin:
             self.log(f"Cache Sweep at user-defined concurrency ({user_concurrency})", 'decision')
             self.log(f"{'='*60}", 'info')
 
-            if best_split:
-                pd_label = 'EP' if getattr(best_split, 'enable_expert_parallel', False) else 'PD'
-                pd_config_label = f"{best_split.prefill_pods}P×TP{best_split.prefill_tp} + {best_split.decode_pods}D×TP{best_split.decode_tp}"
-                sweep = self._run_cache_sweep_for_arch(
-                    pd_label, user_concurrency, levels,
-                    lambda: self._create_pd_config(best_split) if pd_label == 'PD' else self._create_ep_config(split=best_split),
-                    total_gpus_pd, concurrency_tag='user'
-                )
-                for r in sweep:
-                    r['config_label'] = pd_config_label
-                self.cache_sweep_results[f'{pd_label.lower()}_calibrated'] = sweep
-
-            if agg_tp and agg_result and not self._should_stop():
-                agg_replicas = total_gpus_agg // agg_tp if agg_tp else total_gpus_agg
-                agg_config_label = f"{agg_replicas}×TP{agg_tp}"
-                sweep = self._run_cache_sweep_for_arch(
-                    'Aggregated', user_concurrency, levels,
-                    lambda: self._create_aggregated_config(
-                        tp=agg_tp, num_gpus=total_gpus_agg,
-                        isl=self.config.isl, osl=self.config.osl,
-                        test_id='_placeholder_', use_concurrency=True
-                    ),
-                    total_gpus_agg, concurrency_tag='user'
-                )
-                for r in sweep:
-                    r['config_label'] = agg_config_label
-                self.cache_sweep_results['aggregated_calibrated'] = sweep
+            for c in selected:
+                if self._should_stop():
+                    break
+                if c[0] == 'pd':
+                    split = c[1]
+                    pd_label = 'EP' if getattr(split, 'enable_expert_parallel', False) else 'PD'
+                    config_label = f"{split.prefill_pods}P×TP{split.prefill_tp} + {split.decode_pods}D×TP{split.decode_tp}"
+                    total_gpus = split.prefill_pods * split.prefill_tp + split.decode_pods * split.decode_tp
+                    current_split = split
+                    sweep = self._run_cache_sweep_for_arch(
+                        f"{pd_label}-{config_label}", user_concurrency, levels,
+                        lambda: self._create_pd_config(current_split) if pd_label == 'PD' else self._create_ep_config(split=current_split),
+                        total_gpus, concurrency_tag='user'
+                    )
+                    for r in sweep:
+                        r['config_label'] = config_label
+                    sweep_key = f"{pd_label.lower()}-{split.prefill_pods}p{split.decode_pods}d-user"
+                    self.cache_sweep_results[sweep_key] = sweep
+                else:
+                    tp = c[1]
+                    total_gpus_agg = self.config.total_gpus
+                    agg_replicas = total_gpus_agg // tp if tp else total_gpus_agg
+                    config_label = f"{agg_replicas}×TP{tp}"
+                    current_tp = tp
+                    sweep = self._run_cache_sweep_for_arch(
+                        f"Aggregated-{config_label}", user_concurrency, levels,
+                        lambda: self._create_aggregated_config(
+                            tp=current_tp, num_gpus=total_gpus_agg,
+                            isl=self.config.isl, osl=self.config.osl,
+                            test_id='_placeholder_', use_concurrency=True
+                        ),
+                        total_gpus_agg, concurrency_tag='user'
+                    )
+                    for r in sweep:
+                        r['config_label'] = config_label
+                    self.cache_sweep_results[f"aggregated-tp{tp}-user"] = sweep
 
         # --- Restore user's EPP preset ---
         try:
