@@ -77,6 +77,8 @@ class RecipeOptimizerConfig:
     cache_sweep_count: Optional[int] = None  # Number of levels to generate
     cache_sweep_step_pct: int = 10  # Step in percentage points
     cache_sweep_groups: int = 5  # Groups for multi_group mode
+    cache_sweep_all_configs: bool = False  # Sweep all 4 recommendation configs + more
+    cache_sweep_max_configs: Optional[int] = None  # Max configs to sweep (None = all)
 
     # EPP configuration
     epp_custom_enabled: bool = True  # False = use llm-d default EPP config

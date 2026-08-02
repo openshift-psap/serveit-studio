@@ -324,6 +324,8 @@ def stream_job_logs(job_name: str, namespace: str):
                     'cache_sweep_count': saved_config.get('cache_sweep_count', None),
                     'cache_sweep_step_pct': saved_config.get('cache_sweep_step_pct', 10),
                     'cache_sweep_groups': saved_config.get('cache_sweep_groups', 5),
+                    'cache_sweep_all_configs': saved_config.get('cache_sweep_all_configs', False),
+                    'cache_sweep_max_configs': saved_config.get('cache_sweep_max_configs', None),
                     'run_description': saved_config.get('run_description', ''),
                     'advanced_vllm_custom_enabled': saved_config.get('advanced_vllm_custom_enabled', True),
                     'epp_custom_enabled': saved_config.get('epp_custom_enabled', True),
@@ -736,6 +738,10 @@ def run_optimization_background(data):
             cache_sweep_count = int(cache_sweep_count) if cache_sweep_count else None
         cache_sweep_step_pct = int(_get('cache_sweep_step_pct', 10))
         cache_sweep_groups = int(_get('cache_sweep_groups', 5))
+        cache_sweep_all_configs = _get('cache_sweep_all_configs', False)
+        cache_sweep_max_configs = _get('cache_sweep_max_configs', None)
+        if cache_sweep_max_configs is not None:
+            cache_sweep_max_configs = int(cache_sweep_max_configs) if cache_sweep_max_configs else None
         run_description = _get('run_description', '')
         advanced_vllm_custom_enabled = _get('advanced_vllm_custom_enabled', True)
         epp_custom_enabled = _get('epp_custom_enabled', True)
@@ -1011,6 +1017,8 @@ data:
                 cache_sweep_count=cache_sweep_count,
                 cache_sweep_step_pct=cache_sweep_step_pct,
                 cache_sweep_groups=cache_sweep_groups,
+                cache_sweep_all_configs=cache_sweep_all_configs,
+                cache_sweep_max_configs=cache_sweep_max_configs,
                 latency_constraint_enabled=latency_constraint_enabled,
                 latency_constraint_ms=latency_constraint_ms,
                 latency_constraint_percentile=latency_constraint_percentile,
