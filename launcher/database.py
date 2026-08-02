@@ -141,6 +141,7 @@ def init_db():
     ''')
     conn.execute("INSERT OR IGNORE INTO settings (key, value) VALUES ('auto_rescan', 'true')")
     conn.execute("INSERT OR IGNORE INTO settings (key, value) VALUES ('rescan_interval_min', '10')")
+    conn.execute("INSERT OR IGNORE INTO settings (key, value) VALUES ('status_refresh_sec', '60')")
 
     conn.commit()
     conn.close()

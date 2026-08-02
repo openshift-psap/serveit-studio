@@ -1447,6 +1447,16 @@ function showSettings(){
         html += '<span style="font-size:0.85em;color:#64748b;">minutes</span>';
         html += '</div></div>';
 
+        var statusInterval = parseInt(settings.status_refresh_sec || '60');
+        html += '<div style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:10px;padding:20px;margin-bottom:16px;">';
+        html += '<div style="font-weight:600;font-size:0.95em;color:#1e293b;margin-bottom:4px;">Instance Status Refresh</div>';
+        html += '<div style="font-size:0.8em;color:#64748b;margin-bottom:12px;">How often to refresh instance status (Running/Pending/Error) in the sidebar</div>';
+        html += '<div style="display:flex;align-items:center;gap:10px;">';
+        html += '<label style="font-size:0.85em;color:#475569;white-space:nowrap;">Interval:</label>';
+        html += '<input type="number" id="settings-status-interval" value="'+statusInterval+'" min="5" max="300" style="width:70px;padding:6px 10px;border:1px solid #d1d5db;border-radius:6px;font-size:0.9em;" onchange="saveSettings()">';
+        html += '<span style="font-size:0.85em;color:#64748b;">seconds</span>';
+        html += '</div></div>';
+
         html += '</div>';
         list.innerHTML = html;
     });
@@ -1455,13 +1465,30 @@ function showSettings(){
 function saveSettings(){
     var autoRescan = document.getElementById('settings-auto-rescan').checked;
     var interval = parseInt(document.getElementById('settings-rescan-interval').value) || 10;
+    var statusInterval = parseInt(document.getElementById('settings-status-interval').value) || 60;
     fetch('/api/settings', {
         method: 'POST',
         headers: {'Content-Type': 'application/json'},
-        body: JSON.stringify({auto_rescan: autoRescan ? 'true' : 'false', rescan_interval_min: String(interval)})
+        body: JSON.stringify({auto_rescan: autoRescan ? 'true' : 'false', rescan_interval_min: String(interval), status_refresh_sec: String(statusInterval)})
     }).then(function(r){return r.json()}).then(function(){
         showSettings();
+        _applyStatusInterval(statusInterval);
     });
+}
+
+var _statusIntervalId = null;
+function _applyStatusInterval(sec){
+    if(_statusIntervalId) clearInterval(_statusIntervalId);
+    _statusIntervalId = setInterval(function(){
+        if(currentClusterId) loadInstances(currentClusterId, true);
+        fetch('/api/clusters', {redirect:'manual'})
+        .then(function(r){
+            if(r.status === 302 || r.type === 'opaqueredirect'){
+                _showSessionExpiredOverlay();
+            }
+        })
+        .catch(function(){});
+    }, sec * 1000);
 }
 
 function showAddUserModal(){
@@ -1628,17 +1655,8 @@ function revokeUser(instId, userId){
 }
 
 // Auto-refresh (status only, no flicker) + session health check
-setInterval(function(){
-    if(currentClusterId) loadInstances(currentClusterId, true);
-    // Session health check
-    fetch('/api/clusters', {redirect:'manual'})
-    .then(function(r){
-        if(r.status === 302 || r.type === 'opaqueredirect'){
-            _showSessionExpiredOverlay();
-        }
-    })
-    .catch(function(){});
-}, 15000);
+// Start with default 60s, settings page can override
+_applyStatusInterval(60);
 
 function _showSessionExpiredOverlay(){
     if(document.getElementById('session-expired-overlay')) return;
