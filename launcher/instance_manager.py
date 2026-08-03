@@ -33,8 +33,20 @@ def _kubectl(args: list, input_data: str = None, proxy: str = None) -> subproces
     return subprocess.run(['kubectl'] + args, input=input_data, capture_output=True, text=True, timeout=60, env=env)
 
 
+_is_oc_cached = None
+
+
 def _is_oc() -> bool:
-    return False
+    global _is_oc_cached
+    if _is_oc_cached is not None:
+        return _is_oc_cached
+    try:
+        r = subprocess.run(['kubectl', 'api-resources', '--api-group=route.openshift.io'],
+                          capture_output=True, text=True, timeout=10)
+        _is_oc_cached = r.returncode == 0 and 'Route' in r.stdout
+    except (FileNotFoundError, subprocess.TimeoutExpired):
+        _is_oc_cached = False
+    return _is_oc_cached
 
 
 def _render(template_name: str, **ctx) -> str:
@@ -1066,6 +1078,103 @@ def backup_instance(instance_id: int, owner_id: int) -> Dict:
         'timestamp': timestamp,
         'warnings': errors if errors else None
     }
+
+
+def cleanup_workloads(instance_id: int, owner_id: int, launcher_namespace: str) -> dict:
+    """Clean up all workload resources in the instance's workload namespace.
+
+    Deletes LWS, deployments (EPP, gateway, workload), services, inference pools,
+    and any orphaned pods — everything except the instance pod itself.
+    For remote clusters, uses the cluster's kubeconfig secret and proxy.
+    """
+    import base64
+    import tempfile
+
+    with get_db() as conn:
+        row = conn.execute(
+            'SELECT * FROM instances WHERE id = ? AND owner_id = ?',
+            (instance_id, owner_id)
+        ).fetchone()
+    if not row:
+        return {'error': 'Instance not found or not owned by you'}
+
+    inst = dict(row)
+    wl_ns = inst.get('workload_namespace') or f"serveit-{inst['name']}"
+    if not wl_ns or wl_ns == launcher_namespace:
+        wl_ns = f"serveit-{inst['name']}"
+
+    # Get cluster info for remote kubeconfig + proxy
+    cluster_proxy = None
+    kubeconfig_path = None
+    if inst.get('cluster_id'):
+        with get_db() as conn:
+            cluster = conn.execute('SELECT * FROM clusters WHERE id = ?', (inst['cluster_id'],)).fetchone()
+            if cluster:
+                cluster = dict(cluster)
+                cluster_proxy = cluster.get('proxy')
+                kc_secret = cluster.get('kubeconfig_secret')
+                if kc_secret:
+                    r = _kubectl(['get', 'secret', kc_secret, '-n', launcher_namespace,
+                                  '-o', 'jsonpath={.data.kubeconfig}'])
+                    if r.returncode == 0 and r.stdout.strip():
+                        try:
+                            kc_data = base64.b64decode(r.stdout.strip()).decode()
+                            tmp = tempfile.NamedTemporaryFile(mode='w', suffix='.kubeconfig', delete=False)
+                            tmp.write(kc_data)
+                            tmp.close()
+                            kubeconfig_path = tmp.name
+                        except Exception:
+                            pass
+
+    def _run(args):
+        cmd = ['kubectl']
+        if kubeconfig_path:
+            cmd += ['--kubeconfig', kubeconfig_path]
+        env = None
+        if cluster_proxy:
+            env = os.environ.copy()
+            env['HTTPS_PROXY'] = cluster_proxy
+            env['https_proxy'] = cluster_proxy
+        return subprocess.run(cmd + args, capture_output=True, text=True, timeout=60, env=env)
+
+    deleted = []
+    errors = []
+
+    resource_types = [
+        ('leaderworkersets.leaderworkerset.x-k8s.io', 'LWS'),
+        ('deployments', 'Deployments'),
+        ('services', 'Services'),
+        ('inferencepools.inference.networking.k8s.io', 'InferencePools'),
+        ('inferencepools.inference.networking.x-k8s.io', 'InferencePools (legacy)'),
+        ('httproutes.gateway.networking.k8s.io', 'HTTPRoutes'),
+        ('gateways.gateway.networking.k8s.io', 'Gateways'),
+        ('destinationrules.networking.istio.io', 'DestinationRules'),
+    ]
+
+    try:
+        for resource, label in resource_types:
+            try:
+                r = _run(['delete', resource, '--all', '-n', wl_ns, '--ignore-not-found=true'])
+                if r.returncode == 0:
+                    output = r.stdout.strip()
+                    if output and 'deleted' in output:
+                        count = output.count('deleted')
+                        deleted.append(f"{count} {label}")
+            except Exception as e:
+                errors.append(f"{label}: {str(e)[:100]}")
+    finally:
+        if kubeconfig_path:
+            os.unlink(kubeconfig_path)
+
+    msg_parts = []
+    if deleted:
+        msg_parts.append('Deleted: ' + ', '.join(deleted))
+    else:
+        msg_parts.append('No workload resources found')
+    if errors:
+        msg_parts.append('Errors: ' + '; '.join(errors))
+
+    return {'ok': True, 'message': '. '.join(msg_parts), 'namespace': wl_ns}
 
 
 def delete_instance(instance_id: int, owner_id: int, backup: bool = True) -> bool:

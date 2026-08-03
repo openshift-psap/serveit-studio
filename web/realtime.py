@@ -299,9 +299,10 @@ def _kill_existing_run():
     state['_stop_requested'] = True
     state['optimization_running'] = False
     save_state()
-    # Kill kubectl subprocesses first to unblock the greenlet
+    # Kill kubectl subprocesses (except port-forward) to unblock the greenlet
     try:
-        subprocess.run(['pkill', '-f', 'kubectl exec'], capture_output=True, timeout=5, check=False)
+        subprocess.run(['bash', '-c', "ps aux | grep kubectl | grep -v port-forward | grep -v grep | awk '{print $2}' | xargs -r kill -9"],
+                       capture_output=True, timeout=5, check=False)
     except Exception:
         pass
     for _ in range(10):
@@ -520,21 +521,24 @@ def handle_stop_optimization():
         greenlet = state.get('_optimization_greenlet')
         save_state()
 
-    # 2. Kill local kubectl exec processes immediately (frees the greenlet from subprocess.run)
-    try:
-        subprocess.run(['pkill', '-f', 'kubectl exec'], capture_output=True, timeout=5, check=False)
-    except Exception:
-        pass
+    # 2. Force kill greenlet + all kubectl subprocesses (except port-forward)
+    def _kill_kubectl():
+        try:
+            subprocess.run(['bash', '-c', "ps aux | grep kubectl | grep -v port-forward | grep -v grep | awk '{print $2}' | xargs -r kill -9"],
+                           capture_output=True, timeout=5, check=False)
+        except Exception:
+            pass
 
-    # 3. Wait briefly for greenlet to exit, then force kill
     if greenlet and not greenlet.dead:
-        for _ in range(10):
-            gsleep(0.2)
-            if greenlet.dead:
-                break
+        # Kill kubectl first to unblock subprocess.run, then kill greenlet
+        _kill_kubectl()
+        gsleep(0.5)
+        greenlet.kill(block=True, timeout=2)
         if not greenlet.dead:
-            greenlet.kill()
-            gsleep(0.1)
+            _kill_kubectl()
+            greenlet.kill(block=True, timeout=2)
+    else:
+        _kill_kubectl()
 
     with state_lock:
         state['_optimization_greenlet'] = None
@@ -965,7 +969,6 @@ def read_config_from_pvc(pvc_name: str, model_name: str, namespace: Optional[str
     if namespace is None:
         namespace = TARGET_NAMESPACE
     import json
-    import time
     from core.k8s_utils import KubectlRunner
 
     kubectl = KubectlRunner(namespace=namespace)

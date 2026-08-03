@@ -212,6 +212,13 @@ class ThroughputStrategy(OptimizationStrategy):
 
         total_gpus = self.opt.config.total_gpus
         valid_tp = self.opt._get_valid_tp_options()
+        # Add multi-node TP options for EP (e.g., TP16 across 2 nodes)
+        if self.opt.cluster_resources and self.opt.cluster_resources.gpu_node_count >= 2:
+            multi_tp = self.opt.cluster_resources.get_multi_node_tp_options()
+            for tp in multi_tp:
+                if tp <= total_gpus and tp not in valid_tp:
+                    valid_tp.append(tp)
+            valid_tp.sort()
 
         best_tpsg = max(
             (r['tpsg'] for r in self.opt.decode_tp_results),
@@ -561,10 +568,11 @@ class ThroughputStrategy(OptimizationStrategy):
 
 
 class BalancedStrategy(OptimizationStrategy):
-    """Balanced Performance: Aggregated search + PD + EP (three-way comparison).
+    """Full Coverage: Tests ALL architectures — Standard, PD, EP, PD-EP.
 
-    Runs aggregated search first, then both PD and EP optimization paths,
-    followed by a three-way comparison using stored results.
+    Runs aggregated search first, then PD and EP optimization paths
+    (including multi-node TEP/DP+EP when available), followed by a
+    comprehensive comparison using stored results.
     """
 
     def execute(self):

@@ -101,6 +101,17 @@ class ClusterResources:
             tp *= 2
         return options
 
+    def get_multi_node_tp_options(self) -> List[int]:
+        """Get TP options that span multiple nodes (powers of 2 from 2*gpus_per_node up to total_gpus)."""
+        if self.gpu_node_count < 2:
+            return []
+        options = []
+        tp = self.max_gpus_per_node * 2
+        while tp <= self.total_gpus:
+            options.append(tp)
+            tp *= 2
+        return options
+
     def estimate_model_gpu_requirement(self, model_size_gb: float, dtype: str = 'fp16',
                                         is_moe: bool = False,
                                         model_config: dict = None,

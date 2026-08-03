@@ -230,14 +230,17 @@ function renderCharts(data, runId) {
             html += '</div>';
         }
 
-        // Constraint notes
+        // Constraint notes (filter out restart messages — those aren't real constraints)
         if (rec.constraint_notes && rec.constraint_notes.length) {
-            html += '<div style="background:#fffbeb; border:2px solid #f59e0b; border-left:6px solid #f59e0b; border-radius:8px; padding:14px 18px; margin-top:12px;">';
-            html += '<div style="font-weight:700; color:#92400e; margin-bottom:8px; font-size:0.95em;">&#9888; Configuration Constraints</div>';
-            for (const note of rec.constraint_notes) {
-                html += `<p style="color:#78350f; margin:0 0 8px; font-size:0.88em; line-height:1.6;">${note}</p>`;
+            var realConstraints = rec.constraint_notes.filter(function(n) { return n.indexOf('Server restarted') === -1; });
+            if (realConstraints.length) {
+                html += '<div style="background:#fffbeb; border:2px solid #f59e0b; border-left:6px solid #f59e0b; border-radius:8px; padding:14px 18px; margin-top:12px;">';
+                html += '<div style="font-weight:700; color:#92400e; margin-bottom:8px; font-size:0.95em;">&#9888; Configuration Constraints</div>';
+                for (const note of realConstraints) {
+                    html += `<p style="color:#78350f; margin:0 0 8px; font-size:0.88em; line-height:1.6;">${note}</p>`;
+                }
+                html += '</div>';
             }
-            html += '</div>';
         }
 
         // Grab test_settings from the first available P90 recommendation for EPP cards
@@ -326,6 +329,80 @@ function renderCharts(data, runId) {
         html += '</div></div>';
 
     } // end Deployment Recommendation card
+
+    // --- Calibrated Recommendations (Step 11) — separate card ---
+    const calBest = data.summary && data.summary.calibrated_best;
+    if (calBest) {
+        html += '<div class="chart-card" style="margin-top:20px; border:2px solid #0ea5e9; border-left:6px solid #0ea5e9;">';
+        html += '<div class="chart-card-header" style="background:linear-gradient(135deg,#0ea5e9,#06b6d4); color:white; font-size:1.1em; font-weight:800;">Calibrated Recommendations (Step 11)</div>';
+        html += '<div style="padding:12px 20px 4px; color:#475569; font-size:0.9em;">Performance at sustainable production load — calibrated concurrency where queue wait is reasonable. These numbers reflect realistic production conditions, not stress-test peaks.</div>';
+        html += `<div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(280px, 1fr)); gap:16px; padding:16px 20px;">`;
+
+        const calTypes = [
+            { key: 'balanced', label: 'Best Balanced', desc: 'Best TTFT-to-throughput ratio', color: '#0ea5e9', icon: '&#9878;' },
+            { key: 'lowest_ttft', label: 'Lowest TTFT', desc: 'Fastest first token at calibrated load', color: '#3b82f6', icon: '&#9201;' },
+            { key: 'highest_tput', label: 'Highest Throughput', desc: 'Maximum req/s at calibrated load', color: '#f59e0b', icon: '&#9889;' },
+            { key: 'most_efficient', label: 'Most Efficient', desc: 'Best throughput per GPU', color: '#8b5cf6', icon: '&#128176;' },
+        ];
+        const archColors2 = { pd: '#2563eb', aggregated: '#059669', ep: '#7c3aed' };
+
+        const calSeen = new Set();
+        calTypes.forEach(sel => {
+            const cfg = calBest[sel.key];
+            if (!cfg) return;
+
+            const calId = cfg.test_id || cfg.config_name || '';
+            let dupNote = '';
+            if (calSeen.has(calId)) {
+                const otherLabels = calTypes.filter(s => s.key !== sel.key && calBest[s.key] && (calBest[s.key].test_id || calBest[s.key].config_name) === calId).map(s => s.label);
+                if (otherLabels.length) dupNote = otherLabels.join(', ');
+                else return;
+            }
+            calSeen.add(calId);
+
+            const archKey = cfg.architecture || 'aggregated';
+            const aColor = archColors2[archKey] || '#64748b';
+
+            let deploy;
+            if (cfg.prefill_pods && cfg.decode_pods) {
+                deploy = cfg.prefill_tp === cfg.decode_tp
+                    ? `${cfg.prefill_pods}P+${cfg.decode_pods}D TP=${cfg.prefill_tp || cfg.tp || '?'}`
+                    : `${cfg.prefill_pods}P+${cfg.decode_pods}D PTP=${cfg.prefill_tp || cfg.tp || '?'} DTP=${cfg.decode_tp || '?'}`;
+            } else {
+                deploy = cfg.name || cfg.config_name;
+            }
+
+            const concStr = cfg.concurrency ? `c=${cfg.concurrency}` : '';
+            const tput = cfg.throughput_mean || cfg.throughput_p90 || '-';
+
+            html += `<div style="background:white;border-radius:12px;overflow:hidden;box-shadow:0 1px 3px rgba(0,0,0,0.08);border:2px solid #cbd5e1;">`;
+            html += `<div style="background:linear-gradient(135deg,${sel.color},${sel.color}cc);padding:10px 14px;color:white;">`;
+            html += `<div style="display:flex;align-items:center;justify-content:space-between;">`;
+            html += `<div style="font-weight:700;font-size:0.85em;">${sel.icon} ${sel.label}</div>`;
+            html += `<div style="display:flex;gap:4px;">`;
+            html += `<div style="font-size:0.65em;background:${aColor};padding:2px 6px;border-radius:10px;font-weight:600;">${archKey.toUpperCase()}</div>`;
+            if (dupNote) html += `<div style="font-size:0.65em;opacity:0.85;background:rgba(255,255,255,0.2);padding:2px 6px;border-radius:10px;">+ ${dupNote}</div>`;
+            html += `</div></div>`;
+            html += `<div style="font-size:0.7em;opacity:0.9;margin-top:1px;">${sel.desc}</div>`;
+            html += `</div>`;
+            html += `<div style="padding:12px 14px;">`;
+            html += `<div style="font-size:1.1em;font-weight:800;color:#0f172a;margin-bottom:8px;">${deploy}</div>`;
+            html += `<div style="display:flex;gap:12px;font-size:0.85em;color:#475569;margin-bottom:4px;">`;
+            html += `<span>Throughput: <strong>${typeof tput === 'number' ? tput + ' req/s' : tput}</strong></span>`;
+            html += `<span>GPUs: <strong>${cfg.gpus || '?'}</strong></span>`;
+            if (concStr) html += `<span style="color:#0ea5e9;font-weight:600;">${concStr}</span>`;
+            html += `</div>`;
+            // Latency percentiles table
+            html += `<table style="width:100%;font-size:0.8em;border-collapse:collapse;margin-top:6px;">`;
+            html += `<tr style="color:#94a3b8;font-weight:600;"><td></td><td>TTFT</td><td>ITL</td></tr>`;
+            html += `<tr><td style="font-weight:600;color:#475569;">P90</td><td style="font-weight:700;color:#1e293b;">${cfg.ttft_p90 ? Math.round(cfg.ttft_p90).toLocaleString() + ' ms' : '-'}</td><td>${cfg.itl_p90 ? cfg.itl_p90 + ' ms' : '-'}</td></tr>`;
+            if (cfg.ttft_p95) html += `<tr><td style="font-weight:600;color:#475569;">P95</td><td style="color:#64748b;">${Math.round(cfg.ttft_p95).toLocaleString()} ms</td><td>${cfg.itl_p95 ? cfg.itl_p95 + ' ms' : '-'}</td></tr>`;
+            if (cfg.ttft_p99) html += `<tr><td style="font-weight:600;color:#475569;">P99</td><td style="color:#64748b;">${Math.round(cfg.ttft_p99).toLocaleString()} ms</td><td>${cfg.itl_p99 ? cfg.itl_p99 + ' ms' : '-'}</td></tr>`;
+            html += `</table>`;
+            html += `</div></div>`;
+        });
+
+        html += '</div></div>';
 
     // Flush recommendation part 1 (goal banner + deployment cards)
     secRec = html; html = '';
@@ -1326,89 +1403,106 @@ function renderCharts(data, runId) {
             return key;
         }
 
+        // Collect all configs with their labels and colors
+        var allSweepConfigs = [];
+        var configColors = ['#3b82f6', '#ef4444', '#10b981', '#f59e0b', '#8b5cf6', '#ec4899', '#06b6d4', '#84cc16', '#f97316', '#6366f1'];
+        var colorIdx = 0;
         Object.keys(sweep).forEach(function(arch) {
             var points = sweep[arch];
             if (!points || !points.length) return;
             var label = points[0] && points[0].config_label ? points[0].config_label : sweepLabel(arch);
-            var color = sweepColor(arch);
-            archIdx++;
+            allSweepConfigs.push({ key: arch, label: label, points: points, color: configColors[colorIdx % configColors.length] });
+            colorIdx++;
+        });
 
-            // --- Architecture header ---
-            var configLabel = (points[0] && points[0].config_label) ? points[0].config_label : (sweepConfigLabels[arch] || '');
-            var configSuffix = configLabel ? ' — ' + configLabel : '';
-            html += '<div class="chart-card" style="margin-top:20px; border:2px solid ' + color + '; border-left:6px solid ' + color + ';">';
-            html += '<div class="chart-card-header" style="background:linear-gradient(135deg,' + color + ',' + color + '99); color:white; font-size:1.2em;">' + label + configSuffix + ' — Concurrency Sweep</div>';
+        if (allSweepConfigs.length > 0) {
+            // --- TTFT charts: one per percentile, all configs as lines ---
+            [{ key: 'ttft_p90', label: 'TTFT P90', title: 'TTFT P90 vs Concurrency' },
+             { key: 'ttft_p95', label: 'TTFT P95', title: 'TTFT P95 vs Concurrency' },
+             { key: 'ttft_p99', label: 'TTFT P99', title: 'TTFT P99 vs Concurrency' }].forEach(function(pct) {
+                var chartId = 'chart-sweep-' + pct.key;
+                html += '<div class="chart-card" style="margin-top:16px;">';
+                html += '<div class="chart-card-header">' + pct.title + '</div>';
+                html += '<div style="padding:8px 20px 4px; font-size:0.85em; color:#64748b;">' + pct.label + ' across all tested configurations. Each line is a different deployment config. Lower is better.</div>';
+                html += '<div id="' + chartId + '" style="width:100%; height:400px;"></div>';
+                html += '</div>';
 
-            // --- TTFT P90/P95/P99 on same chart ---
-            var ttftChartId = 'chart-sweep-ttft-' + arch;
-            html += '<div style="padding:8px 20px 4px; font-size:0.85em; color:#64748b;">TTFT percentiles vs concurrent users. Lower is better.</div>';
-            html += '<div id="' + ttftChartId + '" style="width:100%; height:400px;"></div>';
+                chartQueue.push(function() {
+                    var traces = [];
+                    var calShapes = [];
+                    allSweepConfigs.forEach(function(cfg) {
+                        var hasData = cfg.points.some(function(p) { return p[pct.key]; });
+                        if (!hasData) return;
+                        traces.push({
+                            x: cfg.points.map(function(p) { return p.concurrency; }),
+                            y: cfg.points.map(function(p) { return p[pct.key] || 0; }),
+                            text: cfg.points.map(function(p) { return Math.round(p[pct.key] || 0).toLocaleString(); }),
+                            textposition: 'top center', textfont: { size: 9, color: cfg.color },
+                            mode: 'lines+markers+text', name: cfg.label,
+                            line: { color: cfg.color, width: 3 },
+                            marker: { size: 8 },
+                            hovertemplate: '<b>' + cfg.label + '</b><br>%{x} users<br>' + pct.label + ': %{y:.0f}ms<extra></extra>'
+                        });
+                        cfg.points.forEach(function(p) {
+                            if (p.is_calibrated) {
+                                calShapes.push({ type: 'line', x0: p.concurrency, x1: p.concurrency, y0: 0, y1: 1, yref: 'paper',
+                                    line: { color: '#059669', width: 1.5, dash: 'dash' } });
+                            }
+                        });
+                    });
+                    if (calShapes.length) {
+                        var calC = calShapes[0].x0;
+                        traces.push({ x: [calC, calC], y: [null, null], mode: 'lines', name: 'Calibrated (' + calC + ' users)',
+                            line: { color: '#059669', width: 1.5, dash: 'dash' }, showlegend: true });
+                    }
+                    var allXvals = []; traces.forEach(function(t){ if(t.x) t.x.forEach(function(v){ if(allXvals.indexOf(v)===-1) allXvals.push(v); }); }); allXvals.sort(function(a,b){return a-b;});
+                    Plotly.newPlot(chartId, traces, {
+                        xaxis: { title: 'Concurrent Users', gridcolor: '#e2e8f0', tickmode: 'array', tickvals: allXvals },
+                        yaxis: { title: pct.label + ' (ms)', gridcolor: '#e2e8f0' },
+                        plot_bgcolor: '#f8fafc', paper_bgcolor: '#fff',
+                        margin: { t: 20, b: 60, l: 70, r: 20 },
+                        legend: { x: 0, y: 1, bgcolor: 'rgba(255,255,255,0.9)' },
+                        shapes: calShapes, hovermode: 'closest'
+                    }, { responsive: true });
+                });
+            });
+
+            // --- Throughput per GPU chart: all configs as lines ---
+            html += '<div class="chart-card" style="margin-top:16px;">';
+            html += '<div class="chart-card-header">Throughput per GPU vs Concurrency</div>';
+            html += '<div style="padding:8px 20px 4px; font-size:0.85em; color:#64748b;">Token throughput per GPU across all configs. Each line is a different deployment config. Higher is better.</div>';
+            html += '<div id="chart-sweep-tput-all" style="width:100%; height:400px;"></div>';
+            html += '</div>';
 
             chartQueue.push(function() {
                 var traces = [];
                 var calShapes = [];
-                [{ key: 'ttft_p90', label: 'P90' },
-                 { key: 'ttft_p95', label: 'P95' },
-                 { key: 'ttft_p99', label: 'P99' }].forEach(function(pct) {
-                    if (!points[0][pct.key]) return;
+                allSweepConfigs.forEach(function(cfg) {
                     traces.push({
-                        x: points.map(function(p) { return p.concurrency; }),
-                        y: points.map(function(p) { return p[pct.key] || 0; }),
-                        text: points.map(function(p) { return Math.round(p[pct.key] || 0).toLocaleString(); }),
-                        textposition: 'top center', textfont: { size: 9, color: pctColors[pct.key] },
-                        mode: 'lines+markers+text', name: pct.label,
-                        line: { color: pctColors[pct.key], width: 3 },
+                        x: cfg.points.map(function(p) { return p.concurrency; }),
+                        y: cfg.points.map(function(p) { return p.throughput_per_gpu; }),
+                        text: cfg.points.map(function(p) { return Math.round(p.throughput_per_gpu).toLocaleString(); }),
+                        textposition: 'top center', textfont: { size: 9, color: cfg.color },
+                        mode: 'lines+markers+text', name: cfg.label,
+                        line: { color: cfg.color, width: 3 },
                         marker: { size: 8 },
-                        hovertemplate: '<b>%{x} users</b><br>' + pct.label + ': %{y:.0f}ms<extra></extra>'
+                        hovertemplate: '<b>' + cfg.label + '</b><br>%{x} users<br>%{y:.0f} tok/s/gpu<extra></extra>'
+                    });
+                    cfg.points.forEach(function(p) {
+                        if (p.is_calibrated) {
+                            calShapes.push({ type: 'line', x0: p.concurrency, x1: p.concurrency, y0: 0, y1: 1, yref: 'paper',
+                                line: { color: '#059669', width: 1.5, dash: 'dash' } });
+                        }
                     });
                 });
-                points.forEach(function(p) {
-                    if (p.is_calibrated) {
-                        calShapes.push({ type: 'line', x0: p.concurrency, x1: p.concurrency, y0: 0, y1: 1, yref: 'paper',
-                            line: { color: '#059669', width: 1.5, dash: 'dash' } });
-                        traces.push({ x: [p.concurrency, p.concurrency], y: [null, null], mode: 'lines', name: 'Calibrated (' + p.concurrency + ' users)',
-                            line: { color: '#059669', width: 1.5, dash: 'dash' }, showlegend: true });
-                    }
-                });
-                Plotly.newPlot(ttftChartId, traces, {
-                    xaxis: { title: 'Concurrent Users', gridcolor: '#e2e8f0' },
-                    yaxis: { title: 'TTFT (ms)', gridcolor: '#e2e8f0' },
-                    plot_bgcolor: '#f8fafc', paper_bgcolor: '#fff',
-                    margin: { t: 20, b: 60, l: 70, r: 20 },
-                    legend: { x: 0, y: 1, bgcolor: 'rgba(255,255,255,0.9)' },
-                    shapes: calShapes, hovermode: 'closest'
-                }, { responsive: true });
-            });
-
-            // --- Throughput Mean vs Concurrency ---
-            var tputChartId = 'chart-sweep-tput-' + arch;
-            html += '<div style="padding:8px 20px 4px; font-size:0.85em; color:#64748b;">Token throughput per GPU vs concurrent users. Higher is better.</div>';
-            html += '<div id="' + tputChartId + '" style="width:100%; height:400px;"></div>';
-
-            chartQueue.push(function() {
-                var calShapes = [];
-                var calTraces = [];
-                points.forEach(function(p) {
-                    if (p.is_calibrated) {
-                        calShapes.push({ type: 'line', x0: p.concurrency, x1: p.concurrency, y0: 0, y1: 1, yref: 'paper',
-                            line: { color: '#059669', width: 1.5, dash: 'dash' } });
-                        calTraces.push({ x: [p.concurrency, p.concurrency], y: [null, null], mode: 'lines', name: 'Calibrated (' + p.concurrency + ' users)',
-                            line: { color: '#059669', width: 1.5, dash: 'dash' }, showlegend: true });
-                    }
-                });
-                Plotly.newPlot(tputChartId, [{
-                    x: points.map(function(p) { return p.concurrency; }),
-                    y: points.map(function(p) { return p.throughput_per_gpu; }),
-                    text: points.map(function(p) { return Math.round(p.throughput_per_gpu).toLocaleString(); }),
-                    textposition: 'top center', textfont: { size: 9, color: '#334155' },
-                    mode: 'lines+markers+text', name: 'Throughput/GPU',
-                    line: { color: color, width: 3 },
-                    marker: { size: points.map(function(p) { return p.is_calibrated ? 14 : 8; }),
-                              color: points.map(function(p) { return p.is_calibrated ? '#fff' : color; }),
-                              line: { color: color, width: points.map(function(p) { return p.is_calibrated ? 3 : 0; }) } },
-                    hovertemplate: '<b>%{x} users</b><br>%{y:.0f} tok/s/gpu<extra></extra>'
-                }].concat(calTraces), {
-                    xaxis: { title: 'Concurrent Users', gridcolor: '#e2e8f0' },
+                if (calShapes.length) {
+                    var calC = calShapes[0].x0;
+                    traces.push({ x: [calC, calC], y: [null, null], mode: 'lines', name: 'Calibrated (' + calC + ' users)',
+                        line: { color: '#059669', width: 1.5, dash: 'dash' }, showlegend: true });
+                }
+                var allXvals2 = []; traces.forEach(function(t){ if(t.x) t.x.forEach(function(v){ if(allXvals2.indexOf(v)===-1) allXvals2.push(v); }); }); allXvals2.sort(function(a,b){return a-b;});
+                Plotly.newPlot('chart-sweep-tput-all', traces, {
+                    xaxis: { title: 'Concurrent Users', gridcolor: '#e2e8f0', tickmode: 'array', tickvals: allXvals2 },
                     yaxis: { title: 'Token Throughput per GPU (tok/s/gpu)', gridcolor: '#e2e8f0' },
                     plot_bgcolor: '#f8fafc', paper_bgcolor: '#fff',
                     margin: { t: 20, b: 60, l: 70, r: 20 },
@@ -1416,9 +1510,7 @@ function renderCharts(data, runId) {
                     shapes: calShapes, hovermode: 'closest'
                 }, { responsive: true });
             });
-
-            html += '</div>';
-        });
+        }
 
         // --- Sweep Pareto charts ---
         html += '<div class="chart-card" style="margin-top:20px;"><div class="chart-card-header">Throughput vs Interactivity</div>' +
@@ -1510,7 +1602,9 @@ function renderCharts(data, runId) {
         Object.keys(sweep).forEach(function(arch) {
             var points = sweep[arch];
             if (!points || !points.length) return;
-            var archLabel = arch.startsWith('pd') ? 'PD' : (arch.startsWith('aggregated') ? 'Aggregated' : 'EP');
+            var archBase = arch.startsWith('pd') ? 'PD' : (arch.startsWith('aggregated') ? 'Aggregated' : 'EP');
+            var configLbl = (points[0] && points[0].config_label) ? points[0].config_label : '';
+            var archLabel = configLbl ? archBase + ' (' + configLbl + ')' : archBase;
             points.forEach(function(p) {
                 var isWinner = winners[p.concurrency] === arch;
                 var isStandout = false;
@@ -2068,6 +2162,10 @@ function renderCharts(data, runId) {
                     icon = '&#9989;';
                     title = 'EPP tuning skipped — preset is optimal';
                     desc = 'Smart weight derivation analyzed the measured Prometheus metrics (cache hit rate, KV pressure, queue depth) and concluded the current EPP preset weights are already optimal. No test needed.';
+                } else if (reason === 'no_metrics') {
+                    icon = '&#9888;';
+                    title = 'EPP tuning skipped — no Prometheus metrics';
+                    desc = 'Prometheus/Thanos metrics were not available for this architecture. EPP weight derivation requires measured KV cache pressure, queue depth, and cache hit rate data. Check that Thanos is accessible and User Workload Monitoring is enabled.';
                 }
                 eppHtml += `<div class="chart-card" style="margin-top:16px; border:2px solid #7c3aed40; border-left:6px solid #7c3aed80;">`;
                 eppHtml += `<div class="chart-card-header" style="background:linear-gradient(135deg,#94a3b8,#64748b);">Step 9: EPP Tuning — ${archLabel}</div>`;
@@ -2715,9 +2813,10 @@ function renderCharts(data, runId) {
                     }
                 });
                 if (envTraces.length) {
+                    var envXvals = []; envTraces.forEach(function(t){ if(t.x) t.x.forEach(function(v){ if(envXvals.indexOf(v)===-1) envXvals.push(v); }); }); envXvals.sort(function(a,b){return a-b;});
                     Plotly.newPlot(cid('chart-sweep-envelope'), envTraces, {
                         ...plotlyLayout, height: 600,
-                        xaxis: { title: 'Concurrent Users', gridcolor: '#d1d5db' },
+                        xaxis: { title: 'Concurrent Users', gridcolor: '#d1d5db', tickmode: 'array', tickvals: envXvals },
                         yaxis: { title: 'Best Throughput per GPU (tok/s/GPU)', gridcolor: '#d1d5db' },
                         showlegend: true,
                         legend: { x: 0.02, y: 0.98, bgcolor: 'rgba(255,255,255,0.9)', bordercolor: '#e2e8f0', borderwidth: 1 },
@@ -2774,9 +2873,10 @@ function renderCharts(data, runId) {
                     });
                 }
                 if (olTraces.length) {
+                    var olXvals = []; olTraces.forEach(function(t){ if(t.x) t.x.forEach(function(v){ if(olXvals.indexOf(v)===-1) olXvals.push(v); }); }); olXvals.sort(function(a,b){return a-b;});
                     Plotly.newPlot(cid('chart-sweep-overlaid'), olTraces, {
                         ...plotlyLayout, height: 700,
-                        xaxis: { title: 'Concurrent Users', gridcolor: '#d1d5db' },
+                        xaxis: { title: 'Concurrent Users', gridcolor: '#d1d5db', tickmode: 'array', tickvals: olXvals },
                         yaxis: { title: 'Best Throughput per GPU (tok/s/GPU)', gridcolor: '#d1d5db' },
                         showlegend: true,
                         legend: { x: 0.02, y: 0.98, bgcolor: 'rgba(255,255,255,0.9)', bordercolor: '#e2e8f0', borderwidth: 1 },
@@ -3307,5 +3407,6 @@ function renderCharts(data, runId) {
             if (plot.offsetParent !== null) Plotly.Plots.resize(plot);
         });
     }, 100);
+}
 }
 

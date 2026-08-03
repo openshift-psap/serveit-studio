@@ -462,6 +462,13 @@ class EPPTuningMixin:
             elif arch == 'ep' and self.best_ep_config:
                 arch_pods = self.best_ep_config.prefill_pods + self.best_ep_config.decode_pods
 
+            prom_data = self._get_best_result_prom(arch)
+            if not prom_data:
+                self.log(f"  ⚠️  Skipping {arch.upper()} EPP tuning — no Prometheus metrics available from Step 6/7", 'warning')
+                self.log(f"     Check that Thanos/Prometheus is accessible and metrics are being scraped", 'warning')
+                self.epp_benchmark_results[arch] = [('_skipped_no_metrics', {}, None)]
+                continue
+
             smart_weights = self._compute_smart_epp_weights(num_pods=arch_pods, arch=arch)
 
             # Baseline TTFT from Step 6/7 (ran with default EPP weights)
@@ -511,7 +518,6 @@ class EPPTuningMixin:
                         check=False
                     )
                     # Wait for pods to fully terminate before deploying new ones
-                    import time
                     time.sleep(5)
                 except Exception:
                     pass
@@ -702,6 +708,16 @@ class EPPTuningMixin:
                                 decode_gpu_memory_utilization=base_cfg.decode_gpu_memory_utilization,
                                 selected_nodes=base_cfg.selected_nodes,
                                 prefill_decode_ratio=base_cfg.prefill_decode_ratio, epp_config=repp_cfg,
+                                selected_dra_classes=getattr(base_cfg, 'selected_dra_classes', None) or getattr(self.config, 'selected_dra_classes', []),
+                                dra_gpu_resource_key=getattr(base_cfg, 'dra_gpu_resource_key', None) or getattr(self.config, 'dra_gpu_resource_key', None),
+                                gateway_class=getattr(base_cfg, 'gateway_class', None) or getattr(self.config, 'gateway_class', 'istio'),
+                                per_node_storage=getattr(base_cfg, 'per_node_storage', None) or getattr(self.config, 'per_node_storage', False),
+                                node_nfs_pvcs=getattr(base_cfg, 'node_nfs_pvcs', None) or getattr(self.config, 'node_nfs_pvcs', []),
+                                storage_class=getattr(base_cfg, 'storage_class', None) or getattr(self.config, 'storage_class', None),
+                                pvc_size=getattr(base_cfg, 'pvc_size', None) or getattr(self.config, 'pvc_size', None),
+                                rdma_network_annotation=getattr(base_cfg, 'rdma_network_annotation', None) or getattr(self.config, 'rdma_network_annotation', None),
+                                exclusive_pf=getattr(base_cfg, 'exclusive_pf', False) or getattr(self.config, 'exclusive_pf', False),
+                                scheduler_image=getattr(base_cfg, 'scheduler_image', None) or getattr(self.config, 'scheduler_image', None),
                             )
                             rresult = self.orchestrator.run_test(rtest_config, cleanup=True,
                                                                  log_callback=lambda msg: self.log(msg, 'info'),
@@ -770,6 +786,16 @@ class EPPTuningMixin:
                         decode_gpu_memory_utilization=base_cfg.decode_gpu_memory_utilization,
                         selected_nodes=base_cfg.selected_nodes,
                         prefill_decode_ratio=base_cfg.prefill_decode_ratio, epp_config=fb_epp_cfg,
+                        selected_dra_classes=getattr(base_cfg, 'selected_dra_classes', None) or getattr(self.config, 'selected_dra_classes', []),
+                        dra_gpu_resource_key=getattr(base_cfg, 'dra_gpu_resource_key', None) or getattr(self.config, 'dra_gpu_resource_key', None),
+                        gateway_class=getattr(base_cfg, 'gateway_class', None) or getattr(self.config, 'gateway_class', 'istio'),
+                        per_node_storage=getattr(base_cfg, 'per_node_storage', None) or getattr(self.config, 'per_node_storage', False),
+                        node_nfs_pvcs=getattr(base_cfg, 'node_nfs_pvcs', None) or getattr(self.config, 'node_nfs_pvcs', []),
+                        storage_class=getattr(base_cfg, 'storage_class', None) or getattr(self.config, 'storage_class', None),
+                        pvc_size=getattr(base_cfg, 'pvc_size', None) or getattr(self.config, 'pvc_size', None),
+                        rdma_network_annotation=getattr(base_cfg, 'rdma_network_annotation', None) or getattr(self.config, 'rdma_network_annotation', None),
+                        exclusive_pf=getattr(base_cfg, 'exclusive_pf', False) or getattr(self.config, 'exclusive_pf', False),
+                        scheduler_image=getattr(base_cfg, 'scheduler_image', None) or getattr(self.config, 'scheduler_image', None),
                     )
                     fb_result = self.orchestrator.run_test(fb_config, cleanup=True,
                                                            log_callback=lambda msg: self.log(msg, 'info'),
@@ -784,22 +810,44 @@ class EPPTuningMixin:
 
             self.epp_benchmark_results[arch] = arch_results
 
-            if arch_results:
-                best_name = min(arch_results, key=lambda x: x[2].ttft_p90 or float('inf'))[0]
+            valid_arch = [r for r in arch_results if r[2] is not None]
+            if valid_arch:
+                best_name = min(valid_arch, key=lambda x: x[2].ttft_p90 or float('inf'))[0]
                 self.log(f"  Best {arch}: {best_name}", 'success')
 
     def _apply_best_epp_config(self):
-        """After EPP tuning, deploy the best-performing EPP weights for subsequent steps."""
+        """After EPP tuning, deploy the best-performing EPP weights for subsequent steps.
+        Only applies if the best EPP result beats the Step 6/7 baseline."""
         if not self.epp_benchmark_results:
             return
         for arch, results in self.epp_benchmark_results.items():
             valid = [r for r in results if r[2] is not None]
             if not valid:
                 continue
-            best_name, best_weights, _ = min(valid, key=lambda x: x[2].ttft_p90 or float('inf'))
+            best_name, best_weights, best_result = min(valid, key=lambda x: x[2].ttft_p90 or float('inf'))
+
+            # Compare against Step 6/7 baseline — only apply if EPP result is better
+            baseline_ttft = None
+            if arch == 'aggregated' and self.aggregated_result:
+                baseline_ttft = self.aggregated_result.ttft_p90
+            elif arch == 'pd' and self.pareto_results:
+                best_pd = min(self.pareto_results, key=lambda x: x[1].ttft_p90 if x[1].ttft_p90 else 1e9)
+                baseline_ttft = best_pd[1].ttft_p90
+            elif arch == 'ep' and getattr(self, 'best_ep_result', None):
+                baseline_ttft = self.best_ep_result.ttft_p90
+            if not baseline_ttft:
+                prom = self._get_best_result_prom(arch)
+                if not prom:
+                    baseline_ttft = best_result.ttft_p90
+
+            epp_ttft = best_result.ttft_p90 or float('inf')
+            if baseline_ttft and epp_ttft >= baseline_ttft:
+                self.log(f"  ⏩ Keeping original preset for {arch} — smart-derived TTFT {epp_ttft:.0f}ms >= baseline {baseline_ttft:.0f}ms", 'info')
+                continue
+
             self.log(f"  Applying best EPP config for {arch}: {best_name} "
                      f"(cache={best_weights['prefix_cache_weight']}, kv={best_weights['kv_cache_weight']}, "
-                     f"queue={best_weights['queue_weight']})", 'success')
+                     f"queue={best_weights['queue_weight']}) — TTFT {epp_ttft:.0f}ms vs baseline {baseline_ttft:.0f}ms", 'success')
             epp_config = {
                 'preset': 'custom',
                 'plugins': {
@@ -818,17 +866,6 @@ class EPPTuningMixin:
             )
             mgr.update_epp_config(arch, epp_config, log_callback=self.log)
 
-        winner = self.epp_benchmark_results.get('aggregated') or self.epp_benchmark_results.get('pd')
-        if winner:
-            _, best_w, _ = min(winner, key=lambda x: x[2].ttft_p90 or float('inf'))
-            self.config.epp_preset = 'custom'
-            if not self.config.epp_config:
-                self.config.epp_config = {}
-            self.config.epp_config['preset'] = 'custom'
-            self.config.epp_config['plugins'] = {
-                'prefix_cache': {'enabled': True, 'weight': best_w['prefix_cache_weight']},
-                'kv_cache': {'enabled': True, 'weight': best_w['kv_cache_weight']},
-                'queue': {'enabled': True, 'weight': best_w['queue_weight']},
-                'slo': {'enabled': False},
-            }
+        # Only update global config if a non-baseline winner was actually applied above
+        # (the per-arch loop skips architectures where EPP didn't beat baseline)
 

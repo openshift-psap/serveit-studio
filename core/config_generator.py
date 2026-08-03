@@ -133,6 +133,13 @@ class TestConfig:
     use_deep_gemm: Optional[bool] = None  # None = let vLLM decide, True/False = explicit override
     has_hybrid_attention: bool = False  # Model uses mixed attention types (chunked/GDN + full)
 
+    # Multi-node parallelism
+    data_parallel_size: Optional[int] = None       # total DP world size (--data-parallel-size)
+    data_parallel_size_local: Optional[int] = None  # per-node DP count (--data-parallel-size-local)
+    nnodes: Optional[int] = None                   # number of nodes for multi-node TP (--nnodes)
+    lws_size: Optional[int] = None                 # LWS leaderWorkerTemplate.size (pods per group)
+    gpus_per_pod: Optional[int] = None             # GPU count per pod (when != TP, e.g. multi-node)
+
     # Decode KV cache memory control
     kv_cache_memory_bytes: Optional[str] = None  # e.g. '10GiB' — explicit KV cache budget for decode
 

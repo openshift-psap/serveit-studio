@@ -487,7 +487,6 @@ class PrereqManager:
             else:
                 log(f'⚠️  Could not restart EPP pod: {result.stderr}')
 
-            import time
             # Wait for rollout to complete (new EPP pod ready with updated configmap)
             rollout_result = self.kubectl.run(
                 ['rollout', 'status', f'deployment/{config["gaie_name"]}', '-n', self.namespace,

@@ -68,6 +68,7 @@ class RecipeOptimizerConfig:
     concurrency_sweep_step_pct: int = 20  # Step as % of calibrated load
     concurrency_sweep_all_configs: bool = False  # Sweep all discovered configs, not just best
     concurrency_sweep_max_configs: Optional[int] = None  # Limit multi-config sweep to top N
+    concurrency_sweep_use_epp_tuned: bool = False  # Re-run sweep with EPP-tuned weights if Step 9 improved
 
     # Step 13: Cache hit sweep
     cache_sweep_enabled: bool = False  # Sweep cache hit levels at user-defined concurrency

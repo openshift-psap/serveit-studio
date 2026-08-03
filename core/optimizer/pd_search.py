@@ -73,13 +73,23 @@ class PDSearchMixin:
             self.log(f"  ✅ {label}{tag}", 'success')
 
     def _usable_gpus_for_tp(self, tp: int) -> int:
-        """Count GPUs on nodes that can actually host pods with this TP."""
+        """Count GPUs on nodes that can actually host pods with this TP.
+
+        For multi-node TP (tp > gpus_per_node), groups of nodes are used
+        together. A pod with TP=16 on 8-GPU nodes spans 2 nodes.
+        """
         if not self.cluster_resources:
             return self.config.total_gpus
         gpu_nodes = [n for n in self.cluster_resources.nodes if n.gpus > 0]
         if not gpu_nodes:
             return self.config.total_gpus
-        usable = sum(n.gpus for n in gpu_nodes if n.gpus >= tp)
+        gpus_per_node = self.cluster_resources.max_gpus_per_node
+        if tp > gpus_per_node:
+            nodes_per_pod = tp // gpus_per_node
+            usable_node_groups = len(gpu_nodes) // nodes_per_pod
+            usable = usable_node_groups * tp
+        else:
+            usable = sum(n.gpus for n in gpu_nodes if n.gpus >= tp)
         return min(usable, self.config.total_gpus)
 
     def _generate_splits_for_tp_pair(self, prefill_tp: int, decode_tp: int) -> List[FeasibleSplit]:

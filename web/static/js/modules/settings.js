@@ -541,7 +541,7 @@ document.getElementById('next-step1').addEventListener('click', () => {
     const goalNames = {
         'throughput': 'Throughput Priority',
         'ttft': 'Response Time Priority',
-        'balanced': 'Balanced Performance',
+        'balanced': 'Full Coverage',
         'aggregated_only': 'Aggregated Only',
         'pd_only': 'Prefill/Decode Only',
         'ep_only': 'Expert Parallelism Only',

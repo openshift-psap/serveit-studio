@@ -603,6 +603,13 @@ class ConfigBuilderMixin:
         min_tp = min(split.prefill_tp, split.decode_tp)
         mem, cpu = self._get_pod_resources(tp=min_tp, total_pods=total_pods)
 
+        # Multi-node: if TP > gpus_per_node, use LWS multi-pod groups
+        gpus_per_node = self.cluster_resources.max_gpus_per_node if self.cluster_resources else 8
+        prefill_lws = max(1, split.prefill_tp // gpus_per_node) if split.prefill_tp > gpus_per_node else 1
+        decode_lws = max(1, split.decode_tp // gpus_per_node) if split.decode_tp > gpus_per_node else 1
+        pd_lws_size = max(prefill_lws, decode_lws)
+        pd_gpus_per_pod = min(max(split.prefill_tp, split.decode_tp), gpus_per_node) if pd_lws_size > 1 else None
+
         cfg = TestConfig(
             test_id=f"step7-{split.prefill_pods}p{split.decode_pods}d-ptp{split.prefill_tp}-dtp{split.decode_tp}",
             architecture='pd',
@@ -681,6 +688,9 @@ class ConfigBuilderMixin:
             all2all_backend=None,
             use_deep_gemm=getattr(self, '_use_deep_gemm', None),
             has_hybrid_attention=getattr(self, '_has_hybrid_attention', False),
+            lws_size=pd_lws_size if pd_lws_size > 1 else None,
+            gpus_per_pod=pd_gpus_per_pod,
+            nnodes=pd_lws_size if pd_lws_size > 1 else None,
         )
         cfg = self._apply_advanced_vllm(cfg)
         cfg = self._auto_tune_model_loader(cfg)
@@ -782,6 +792,13 @@ class ConfigBuilderMixin:
             self._model_config.get('max_position_embeddings', 1048576) if self._model_config else 1048576
         )
 
+        # Multi-node: if TP > gpus_per_node, use LWS multi-pod groups
+        gpus_per_node = self.cluster_resources.max_gpus_per_node if self.cluster_resources else 8
+        prefill_lws_size = max(1, split.prefill_tp // gpus_per_node) if split.prefill_tp > gpus_per_node else 1
+        decode_lws_size = max(1, split.decode_tp // gpus_per_node) if split.decode_tp > gpus_per_node else 1
+        lws_size = max(prefill_lws_size, decode_lws_size)
+        gpus_per_pod = min(split.prefill_tp, gpus_per_node) if lws_size > 1 else None
+
         cfg = TestConfig(
             test_id=f"step7-ep-{split.prefill_pods}p{split.decode_pods}d-ptp{split.prefill_tp}-dtp{split.decode_tp}",
             architecture='ep',
@@ -859,6 +876,9 @@ class ConfigBuilderMixin:
             nvshmem_symmetric_size=nvshmem_size,
             use_deep_gemm=getattr(self, '_use_deep_gemm', None),
             has_hybrid_attention=getattr(self, '_has_hybrid_attention', False),
+            lws_size=lws_size if lws_size > 1 else None,
+            gpus_per_pod=gpus_per_pod,
+            nnodes=lws_size if lws_size > 1 else None,
         )
         cfg = self._apply_advanced_vllm(cfg)
         cfg = self._auto_tune_model_loader(cfg)

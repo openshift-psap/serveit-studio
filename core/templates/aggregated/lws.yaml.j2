@@ -15,7 +15,7 @@ metadata:
 spec:
   replicas: {{ replicas }}
   leaderWorkerTemplate:
-    size: 1
+    size: {{ lws_size | default(1) }}
     leaderTemplate:
       metadata:
         labels:
@@ -154,7 +154,14 @@ spec:
                   --trust-remote-code \
                   --api-server-count 1 \
                   --tensor-parallel-size {{ tensor_parallelism }} \
-{% if pipeline_parallel_size %}                  --pipeline-parallel-size {{ pipeline_parallel_size }} \
+{% if lws_size | default(1) > 1 %}                  --nnodes {{ lws_size }} \
+                  --node-rank ${LWS_WORKER_INDEX:-0} \
+                  --master-addr ${LWS_LEADER_ADDRESS} \
+{% endif %}{% if data_parallelism | default(1) > 1 %}                  --data-parallel-size {{ data_parallelism }} \
+                  --data-parallel-size-local {{ data_parallel_size_local | default(data_parallelism) }} \
+                  --data-parallel-multi-port-external-lb \
+                  --data-parallel-start-rank $(( ${LWS_WORKER_INDEX:-0} * {{ data_parallel_size_local | default(data_parallelism) }} )) \
+{% endif %}{% if pipeline_parallel_size %}                  --pipeline-parallel-size {{ pipeline_parallel_size }} \
 {% endif %}                  --block-size {{ block_size or 16 }} \
 {% if max_model_len %}                  --max-model-len {{ max_model_len }} \
 {% endif %}                  --gpu-memory-utilization {{ gpu_memory_utilization or 0.90 }} \
@@ -165,6 +172,12 @@ spec:
 {% endif %}{% if max_num_batched_tokens %}                  --max-num-batched-tokens {{ max_num_batched_tokens }} \
 {% endif %}{% if max_num_seqs %}                  --max-num-seqs {{ max_num_seqs }} \
 {% endif %}{% if enable_expert_parallel %}                  --enable-expert-parallel \
+{% endif %}{% if enable_dbo %}                  --enable-dbo \
+                  --dbo-prefill-token-threshold {{ dbo_prefill_token_threshold | default(32) }} \
+{% endif %}{% if enable_eplb %}                  --enable-eplb \
+                  --eplb-config '{"window_size":"1000","step_interval":"3000","num_redundant_experts":"{{ num_redundant_experts | default(1) }}","log_balancedness":"False"}' \
+{% endif %}{% if moe_backend %}                  --moe-backend {{ moe_backend }} \
+{% endif %}{% if all2all_backend %}                  --all2all-backend {{ all2all_backend }} \
 {% endif %}{% if speculative_method %}                  --speculative-config.method {{ speculative_method }} \
                   --speculative-config.num_speculative_tokens {{ speculative_num_tokens | default(3) }} \
 {% endif %}{% if enable_auto_tool_choice %}                  --enable-auto-tool-choice \
@@ -202,6 +215,16 @@ spec:
 {% endif %}
               - name: NVIDIA_GDRCOPY
                 value: "enabled"
+{% if enable_expert_parallel and nvshmem_symmetric_size %}
+              - name: NVSHMEM_SYMMETRIC_SIZE
+                value: "{{ nvshmem_symmetric_size }}"
+              - name: NVSHMEM_DISABLE_CUDA_VMM
+                value: "1"
+{% endif %}
+{% if moe_dp_chunk_size %}
+              - name: VLLM_MOE_DP_CHUNK_SIZE
+                value: "{{ moe_dp_chunk_size }}"
+{% endif %}
               - name: VLLM_MEMORY_PROFILER_ESTIMATE_CUDAGRAPHS
                 value: "1"
               - name: TRITON_LIBCUDA_PATH

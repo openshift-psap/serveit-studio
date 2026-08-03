@@ -19,39 +19,40 @@ function saveConsoleMessage(message, type) {
     localStorage.setItem('serveit-console', JSON.stringify(consoleHistory));
 }
 
-// Save console log to txt file
+// Save full console log from database to txt file
 function saveConsoleToFile() {
-    const consoleHistory = JSON.parse(localStorage.getItem('serveit-console') || '[]');
-
-    if (consoleHistory.length === 0) {
-        alert('Console is empty, nothing to save.');
-        return;
-    }
-
-    // Format console history as text
-    const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
-    let content = `ServeIt Studio Console Log\n`;
-    content += `Generated: ${new Date().toLocaleString()}\n`;
-    content += `Total Messages: ${consoleHistory.length}\n`;
-    content += `${'='.repeat(80)}\n\n`;
-
-    consoleHistory.forEach((entry, index) => {
-        const date = new Date(entry.timestamp);
-        const timeStr = date.toLocaleTimeString();
-        const typeLabel = entry.type.toUpperCase().padEnd(8);
-        content += `[${timeStr}] [${typeLabel}] ${entry.message}\n`;
-    });
-
-    // Create download link
-    const blob = new Blob([content], { type: 'text/plain' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `serveit-console-log-${timestamp}.txt`;
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
-    URL.revokeObjectURL(url);
+    fetch('/api/logs?limit=100000')
+        .then(function(r) { return r.json(); })
+        .then(function(logs) {
+            if (!logs || !logs.length) {
+                alert('Console is empty, nothing to save.');
+                return;
+            }
+            var timestamp = new Date().toISOString().replace(/[:.]/g, '-');
+            var content = 'ServeIt Studio Console Log\n';
+            content += 'Generated: ' + new Date().toLocaleString() + '\n';
+            content += 'Total Messages: ' + logs.length + '\n';
+            content += '='.repeat(80) + '\n\n';
+            logs.forEach(function(entry) {
+                var ts = entry.timestamp || '';
+                var typeLabel = (entry.log_type || 'info').toUpperCase();
+                while (typeLabel.length < 8) typeLabel += ' ';
+                content += '[' + ts + '] [' + typeLabel + '] ' + (entry.message || '') + '\n';
+            });
+            var blob = new Blob([content], { type: 'text/plain' });
+            var url = URL.createObjectURL(blob);
+            var a = document.createElement('a');
+            a.href = url;
+            a.download = 'serveit-console-log-' + timestamp + '.txt';
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            URL.revokeObjectURL(url);
+        })
+        .catch(function(err) {
+            console.error('Failed to download logs:', err);
+            alert('Failed to download console logs.');
+        });
 }
 
 // Restore console from localStorage

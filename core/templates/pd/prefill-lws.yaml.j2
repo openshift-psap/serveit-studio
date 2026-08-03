@@ -16,7 +16,7 @@ metadata:
 spec:
   replicas: {{ prefill_replicas }}
   leaderWorkerTemplate:
-    size: 1
+    size: {{ lws_size | default(1) }}
     leaderTemplate:
       metadata:
         labels:
@@ -185,7 +185,10 @@ spec:
                   --port 8000 \
                   --trust-remote-code \
                   --tensor-parallel-size {{ prefill_tp }} \
-{% if data_parallelism > 1 %}                  --data-parallel-size ${DP_SIZE} \
+{% if lws_size | default(1) > 1 %}                  --nnodes {{ lws_size }} \
+                  --node-rank ${LWS_WORKER_INDEX:-0} \
+                  --master-addr ${LWS_LEADER_ADDRESS} \
+{% endif %}{% if data_parallelism > 1 %}                  --data-parallel-size ${DP_SIZE} \
                   --data-parallel-size-local ${DP_SIZE_LOCAL} \
                   --data-parallel-multi-port-external-lb \
                   --data-parallel-supervisor-port=8208 \

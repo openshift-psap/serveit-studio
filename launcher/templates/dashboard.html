@@ -828,8 +828,9 @@ function loadInstances(clusterId, isRefresh, userId, forceRefresh){
         }
         list.innerHTML = '';
         instances.forEach(function(inst){
-            var ps = inst.status === 'deleting' ? 'Deleting' : (inst.pod_status || inst.status);
-            var cls = ps==='Running'?'running':(ps==='Pending'||ps==='Creating'||ps==='Starting'||ps==='Deleting'?'creating':(ps==='Error'||ps==='CrashLoopBackOff'||ps==='Failed'||ps==='Deleted'?'error':'unknown'));
+            if(inst.status === 'deleting') return;
+            var ps = inst.pod_status || inst.status;
+            var cls = ps==='Running'?'running':(ps==='Pending'||ps==='Creating'||ps==='Starting'?'creating':(ps==='Error'||ps==='CrashLoopBackOff'||ps==='Failed'||ps==='Deleted'?'error':'unknown'));
             var hasHttps = inst.service_url && inst.service_url.indexOf('https://')===0;
             var localPort = 8080 + inst.id;
             var baseUrl = hasHttps ? inst.service_url : 'http://localhost:'+localPort;
@@ -845,11 +846,6 @@ function loadInstances(clusterId, isRefresh, userId, forceRefresh){
             }
             var card = document.createElement('div');
             card.className='card';card.id='instance-'+inst.id;card.style.position='relative';
-            if(ps==='Deleting'){
-                card.style.opacity='0.5';card.style.pointerEvents='none';
-                card.innerHTML='<div class="card-body" style="align-items:center;justify-content:center;text-align:center"><div class="card-icon" style="background:white"><svg width="34" height="34" viewBox="0 0 24 24" fill="none" stroke="#dc2626" stroke-width="1.5" style="animation:spin 2s linear infinite"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/><path d="M3.27 6.96 12 12.01l8.73-5.05M12 22.08V12"/></svg></div><div class="card-name">'+(inst.display_name||inst.name)+'</div><div style="color:#dc2626;font-size:0.9em;font-weight:600">Deleting…</div></div>';
-                list.appendChild(card);return;
-            }
             var iconColor = cls==='running' ? '#2A7B88' : (cls==='error' ? '#dc2626' : '#999');
             var iconBg = 'white';
             var infoData = JSON.stringify({
@@ -880,11 +876,12 @@ function loadInstances(clusterId, isRefresh, userId, forceRefresh){
                 '<span>📅 '+inst.created_at.slice(0,10)+'</span>' +
                 '</div>' +
                 '</div>' +
-                '<div class="card-actions">'+openBtn+
-                (inst.is_owner === 0 ? '<span style="font-size:0.75em;background:#eff6ff;color:#3b82f6;padding:3px 8px;border-radius:10px;font-weight:600">Shared</span>' :
-                '<button class="btn" style="background:#475569;color:white;font-size:0.78em;padding:5px 10px" onclick="event.stopPropagation();backupInstance('+inst.id+',\''+((inst.display_name||inst.name).replace(/'/g,"\\'"))+'\')">&#128190; Backup</button> ' +
-                '<button class="btn btn-danger" onclick="deleteInstance('+inst.id+',\''+((inst.display_name||inst.name).replace(/'/g,"\\'"))+'\')">Delete</button>') +
-                (IS_ADMIN ? ' <button class="btn btn-cancel" style="font-size:0.78em;padding:5px 10px" onclick="showAssignModal('+inst.id+',\''+((inst.display_name||inst.name).replace(/'/g,"\\'"))+'\')">&#128101;</button>' : '') +
+                '<div class="card-actions" style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:6px;">'+openBtn+
+                (inst.is_owner === 0 ? '<span style="font-size:0.75em;background:#eff6ff;color:#3b82f6;padding:3px 8px;border-radius:10px;font-weight:600;text-align:center">Shared</span><span></span>' :
+                '<button class="btn" style="background:#475569;color:white;font-size:0.75em;padding:5px 8px;width:100%" onclick="event.stopPropagation();backupInstance('+inst.id+',\''+((inst.display_name||inst.name).replace(/'/g,"\\'"))+'\')">&#128190; Backup</button>' +
+                '<button class="btn" style="background:#f59e0b;color:white;font-size:0.75em;padding:5px 8px;width:100%" onclick="event.stopPropagation();cleanupInstance('+inst.id+',\''+((inst.display_name||inst.name).replace(/'/g,"\\'"))+'\')">&#128465; Cleanup</button>' +
+                '<button class="btn btn-danger" style="font-size:0.75em;padding:5px 8px;width:100%;display:flex;align-items:center;justify-content:center;gap:3px" onclick="deleteInstance('+inst.id+',\''+((inst.display_name||inst.name).replace(/'/g,"\\'"))+'\')">&#9888; Delete</button>' +
+                (IS_ADMIN ? '<button class="btn btn-cancel" style="font-size:0.75em;padding:5px 8px;width:100%;display:flex;align-items:center;justify-content:center;gap:3px" onclick="showAssignModal('+inst.id+',\''+((inst.display_name||inst.name).replace(/'/g,"\\'"))+'\')">&#128101; Users</button>' : '')) +
                 '</div>' +
                 connectBar;
             list.appendChild(card);
@@ -1096,7 +1093,7 @@ function createInstance(e){
                         clearInterval(pollInterval);
                         overlay.remove();
                         hideCreateModal();
-                        if(currentClusterId === pollClusterId) loadInstances(pollClusterId);
+                        if(currentClusterId === pollClusterId) loadInstances(pollClusterId, false, null, true);
                         loadClusters();
                     } else if(ps === 'Error' || ps === 'CrashLoopBackOff' || ps === 'Failed' || inst.status === 'error'){
                         clearInterval(pollInterval);
@@ -1110,14 +1107,14 @@ function createInstance(e){
                     clearInterval(pollInterval);
                     overlay.remove();
                     hideCreateModal();
-                    if(currentClusterId === pollClusterId) loadInstances(pollClusterId);
+                    if(currentClusterId === pollClusterId) loadInstances(pollClusterId, false, null, true);
                     loadClusters();
                 }
                 if(pollCount > 120){
                     clearInterval(pollInterval);
                     overlay.remove();
                     hideCreateModal();
-                    if(currentClusterId === pollClusterId) loadInstances(pollClusterId);
+                    if(currentClusterId === pollClusterId) loadInstances(pollClusterId, false, null, true);
                     loadClusters();
                 }
             }).catch(function(){
@@ -1125,7 +1122,7 @@ function createInstance(e){
                     clearInterval(pollInterval);
                     overlay.remove();
                     hideCreateModal();
-                    if(currentClusterId === pollClusterId) loadInstances(pollClusterId);
+                    if(currentClusterId === pollClusterId) loadInstances(pollClusterId, false, null, true);
                 }
             });
         }, 3000);
@@ -1179,6 +1176,28 @@ function backupInstance(id,name){
     });
 }
 
+function cleanupInstance(id,name){
+    showConfirm('Cleanup Workloads', 'Clean up all workloads for "'+name+'"?', 'This deletes all inference pods, gateways, EPP, and test deployments in the workload namespace. The instance itself and its data are kept.', 'Cleanup', function(){
+        var card=document.getElementById('instance-'+id);
+        if(card){
+            var ov=document.createElement('div');ov.className='delete-overlay';
+            ov.innerHTML='<div style="display:flex;align-items:center;gap:10px"><svg width="20" height="20" viewBox="0 0 24 24" aria-hidden="true" style="animation:spin 1s linear infinite"><circle cx="12" cy="12" r="10" stroke="#2A7B88" stroke-width="3" fill="none" stroke-dasharray="31.4 31.4" stroke-linecap="round"/></svg><span style="color:#4A4A4A;font-weight:600;font-size:0.9em">Cleaning up…</span></div>';
+            card.appendChild(ov);
+        }
+        fetch('/api/instances/'+id+'/cleanup',{method:'POST'}).then(function(r){return r.json()}).then(function(data){
+            if(card){var o=card.querySelector('.delete-overlay');if(o)o.remove();}
+            if(data.ok){
+                showWarn('Cleanup Complete', '<strong>'+name+'</strong>: '+data.message);
+            } else {
+                showWarn('Cleanup Failed', data.error||'Unknown error');
+            }
+        }).catch(function(e){
+            if(card){var o=card.querySelector('.delete-overlay');if(o)o.remove();}
+            showWarn('Cleanup Failed', e.message);
+        });
+    });
+}
+
 function deleteInstance(id,name){
     showConfirm('Delete Instance', 'Delete instance "'+name+'"?', 'This removes the deployment, PVC, and all data. This cannot be undone.', 'Delete Instance', function(){
         var backup = document.getElementById('confirm-backup-cb').checked;
@@ -1187,11 +1206,10 @@ function deleteInstance(id,name){
 }
 function _doDeleteInstance(id, name, backup){
     var card=document.getElementById('instance-'+id);
-    if(card){card.querySelectorAll('.btn').forEach(function(b){b.disabled=true;b.style.opacity='0.4';});
-        var ov=document.createElement('div');ov.className='delete-overlay';ov.innerHTML='<div style="display:flex;align-items:center;gap:10px"><svg width="20" height="20" viewBox="0 0 24 24" aria-hidden="true" style="animation:spin 1s linear infinite"><circle cx="12" cy="12" r="10" stroke="#2A7B88" stroke-width="3" fill="none" stroke-dasharray="31.4 31.4" stroke-linecap="round"/></svg><span style="color:#4A4A4A;font-weight:600;font-size:0.9em">'+(backup?'Backing up & deleting…':'Deleting…')+'</span></div>';card.appendChild(ov);}
+    if(card){card.style.transition='opacity 0.3s';card.style.opacity='0';setTimeout(function(){card.remove()},300);}
     fetch('/api/instances/'+id+'?backup='+(backup?'1':'0'),{method:'DELETE'}).then(function(r){return r.json()}).then(function(data){
-        if(data.ok){if(card){card.style.transition='opacity 0.3s';card.style.opacity='0';setTimeout(function(){card.remove()},300);}loadClusters();if(currentClusterId)loadInstances(currentClusterId);}
-        else{showCreateError(data.error||'Failed');if(card){var o=card.querySelector('.delete-overlay');if(o)o.remove();card.querySelectorAll('.btn').forEach(function(b){b.disabled=false;b.style.opacity='';});}}
+        if(data.ok){loadClusters();if(currentClusterId)loadInstances(currentClusterId);}
+        else{showCreateError(data.error||'Failed');}
     });
 }
 
@@ -1859,8 +1877,32 @@ if(currentClusterId) {
                 <li><span style="background:#164E58;color:white;padding:1px 5px;border-radius:3px;font-size:0.8em;">RDMA</span> — Node has InfiniBand/RoCE for fast GPU-to-GPU networking</li>
             </ul>
 
-            <div style="font-weight:700;color:#1B5E6B;font-size:1.05em;margin:16px 0 6px;">Deleting Instances</div>
-            <p>When deleting, you'll be asked whether to <strong>backup the optimization database</strong>. If enabled, the results are copied to the launcher's storage at <code style="background:#f1f5f9;padding:2px 6px;border-radius:3px;font-size:0.9em;">/mnt/storage/backups/</code> before the instance is removed.</p>
+            <div style="font-weight:700;color:#1B5E6B;font-size:1.05em;margin:16px 0 6px;">Instance Actions</div>
+            <p>Each instance card has the following action buttons:</p>
+            <div style="background:#f8fafc;border:1.5px solid #E0E0E0;border-radius:8px;padding:12px;margin:8px 0;display:flex;flex-direction:column;gap:10px;">
+                <div style="display:flex;align-items:center;gap:10px;">
+                    <span style="background:#2A7B88;color:white;padding:4px 12px;border-radius:6px;font-size:0.8em;font-weight:600;white-space:nowrap;">Open</span>
+                    <span style="font-size:0.9em;">Opens the ServeIt Studio wizard UI for this instance. On OpenShift, connects via Route URL. On vanilla K8s, requires port-forward first.</span>
+                </div>
+                <div style="display:flex;align-items:center;gap:10px;">
+                    <span style="background:#475569;color:white;padding:4px 12px;border-radius:6px;font-size:0.8em;font-weight:600;white-space:nowrap;">&#128190; Backup</span>
+                    <span style="font-size:0.9em;">Compresses and downloads the instance's optimization database to the launcher's backup storage at <code style="background:#f1f5f9;padding:1px 4px;border-radius:3px;font-size:0.85em;">/mnt/storage/backups/</code>.</span>
+                </div>
+                <div style="display:flex;align-items:center;gap:10px;">
+                    <span style="background:#f59e0b;color:white;padding:4px 12px;border-radius:6px;font-size:0.8em;font-weight:600;white-space:nowrap;">&#128465; Cleanup</span>
+                    <span style="font-size:0.9em;">Deletes all workload resources (inference pods, EPP, gateways, LWS) in the instance's namespace. Keeps the instance pod, PVC, and database intact. Use this to free GPUs after a test run.</span>
+                </div>
+                <div style="display:flex;align-items:center;gap:10px;">
+                    <span style="background:#dc2626;color:white;padding:4px 12px;border-radius:6px;font-size:0.8em;font-weight:600;white-space:nowrap;">Delete</span>
+                    <span style="font-size:0.9em;">Permanently removes the instance — deployment, PVC, and all data. Optionally backs up the database before deletion.</span>
+                </div>
+                {% if is_admin %}
+                <div style="display:flex;align-items:center;gap:10px;">
+                    <span style="background:#64748b;color:white;padding:4px 12px;border-radius:6px;font-size:0.8em;font-weight:600;white-space:nowrap;">&#128101;</span>
+                    <span style="font-size:0.9em;">Manage user access — share this instance with other users or revoke access. Admin only.</span>
+                </div>
+                {% endif %}
+            </div>
 
             {% if is_admin %}
             <div style="font-weight:700;color:#1B5E6B;font-size:1.05em;margin:16px 0 6px;">Admin: User Management</div>

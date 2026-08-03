@@ -34,17 +34,18 @@ def scan_cluster_resources(cluster: Dict, namespace: str = 'serveit', proxy: str
         kubeconfig_path = tmp.name
 
     try:
-        # Set proxy env before scanning if configured
+        # Pass proxy to scanner via env — scoped to the scanner's subprocess calls only
         proxy_url = proxy or cluster.get('proxy')
-        if proxy_url:
-            os.environ['HTTPS_PROXY'] = proxy_url
-            os.environ['https_proxy'] = proxy_url
 
         from core.system_scanner import SystemScanner
         scanner = SystemScanner(
             namespace=namespace,
             kubeconfig=kubeconfig_path
         )
+        # Inject proxy into the scanner's kubectl env (not os.environ)
+        if proxy_url and hasattr(scanner, 'kubectl') and hasattr(scanner.kubectl, '_env'):
+            scanner.kubectl._env['HTTPS_PROXY'] = proxy_url
+            scanner.kubectl._env['https_proxy'] = proxy_url
 
         try:
             resources = scanner.scan_cluster()
@@ -179,9 +180,4 @@ def scan_cluster_resources(cluster: Dict, namespace: str = 'serveit', proxy: str
 
 
 def _is_oc() -> bool:
-    try:
-        r = subprocess.run(['kubectl', 'api-resources', '--api-group=route.openshift.io'],
-                          capture_output=True, text=True, timeout=60)
-        return r.returncode == 0 and 'Route' in r.stdout
-    except (FileNotFoundError, subprocess.TimeoutExpired):
-        return False
+    return False

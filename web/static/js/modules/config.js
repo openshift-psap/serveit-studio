@@ -193,6 +193,12 @@ function updateUIFromConfig() {
                 document.getElementById('sweep-max-configs').value = config.concurrency_sweep_max_configs;
             }
         }
+        if (document.getElementById('sweep-epp-tuned')) {
+            var eppOn = config.concurrency_sweep_use_epp_tuned === true;
+            document.getElementById('sweep-epp-tuned').checked = eppOn;
+            var eppSw = document.getElementById('sweep-epp-switch');
+            if (eppSw) { eppSw.style.background = eppOn ? '#059669' : '#ccc'; eppSw.querySelector('span').style.transform = eppOn ? 'translateX(18px)' : 'translateX(0)'; }
+        }
     }
 
     // Restore cache sweep toggles
@@ -808,7 +814,7 @@ function restoreConfigSummary() {
     const goalNames = {
         'throughput': 'Throughput Priority',
         'ttft': 'Response Time Priority',
-        'balanced': 'Balanced Performance'
+        'balanced': 'Full Coverage'
     };
 
     const storageClassSelect = document.getElementById('storage-class-select');

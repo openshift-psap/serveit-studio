@@ -127,7 +127,7 @@ def sync_code(cmd: str, namespace: str, pod_name: str):
 
     # Try git pull on PVC first (/mnt/storage/app/), then legacy /app/
     r = kubectl_run(cmd, ['exec', '-n', namespace, pod_name, '--',
-                          'bash', '-c', 'cd /mnt/storage/app 2>/dev/null && git pull --ff-only 2>&1 || cd /app && git pull --ff-only 2>&1'])
+                          'bash', '-c', 'cd /mnt/storage/app 2>/dev/null || cd /app; git fetch origin && git reset --hard origin/main 2>&1'])
     if r.returncode == 0:
         print(f"   {r.stdout.strip()}", file=sys.stderr)
     else:

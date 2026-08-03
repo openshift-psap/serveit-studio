@@ -56,10 +56,12 @@ class TestOrchestrator(ParserMixin, GuidellmMixin):
         self._enable_namespace_monitoring(namespace)
 
         # Auto-discover Thanos URL if not provided
-        if thanos_url is None:
+        # For remote clusters (kubeconfig set or KUBECONFIG env), skip local Thanos — it won't have the remote metrics
+        is_remote = kubeconfig or os.environ.get('KUBECONFIG')
+        if thanos_url is None and not is_remote:
             thanos_url = self._get_thanos_url()
 
-        # Fallback: port-forward to remote Prometheus on vanilla K8s
+        # Port-forward to remote Prometheus (remote clusters or when local Thanos not found)
         if thanos_url is None:
             thanos_url = self._start_prometheus_port_forward(kubeconfig)
 
@@ -67,21 +69,33 @@ class TestOrchestrator(ParserMixin, GuidellmMixin):
         if thanos_url:
             logger.info(f"Initializing MetricsCollector with Thanos URL: {thanos_url}")
 
-            # Port-forwarded Prometheus doesn't need auth tokens
-            token = None
-            if not thanos_url.startswith('http://localhost'):
-                # For remote clusters, use the token from kubeconfig (not local SA)
+            # Use bearer token from port-forward setup if available, or create one
+            token = getattr(self, '_prom_bearer', None)
+            if not token and not thanos_url.startswith('http://localhost'):
+                # Best: create a token for the instance namespace SA (has monitoring RBAC)
                 try:
                     r = subprocess.run(
-                        ['kubectl', 'config', 'view', '--raw', '-o', 'jsonpath={.users[0].user.token}'],
-                        capture_output=True, text=True, timeout=5
+                        ['kubectl', 'create', 'token', 'default', '-n', namespace, '--duration=24h'],
+                        capture_output=True, text=True, timeout=10
                     )
                     if r.returncode == 0 and r.stdout.strip():
                         token = r.stdout.strip()
-                        logger.info("Loaded token from kubeconfig for Thanos authentication")
+                        logger.info(f"Created token for SA default in namespace {namespace}")
                 except Exception:
                     pass
-                # Fallback to local SA token
+                # Fallback: kubeconfig token
+                if not token:
+                    try:
+                        r = subprocess.run(
+                            ['kubectl', 'config', 'view', '--raw', '-o', 'jsonpath={.users[0].user.token}'],
+                            capture_output=True, text=True, timeout=5
+                        )
+                        if r.returncode == 0 and r.stdout.strip():
+                            token = r.stdout.strip()
+                            logger.info("Loaded token from kubeconfig for Thanos authentication")
+                    except Exception:
+                        pass
+                # Last resort: local SA token
                 if not token:
                     token_file = '/run/secrets/kubernetes.io/serviceaccount/token'
                     if os.path.exists(token_file):
@@ -117,37 +131,99 @@ class TestOrchestrator(ParserMixin, GuidellmMixin):
         env = os.environ.copy()
         env['KUBECONFIG'] = os.path.expanduser(kubeconfig)
 
-        try:
-            self._pf_process = subprocess.Popen(
-                ['kubectl', 'port-forward', '-n', 'monitoring',
-                 'svc/prometheus', f'{port}:9090'],
-                stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
-                env=env
-            )
+        # Auto-discover Prometheus/Thanos services and port-forward
+        import urllib.request, ssl, json as _json
 
-            import urllib.request
-            for _ in range(10):
-                time.sleep(1)
+        # Discover services with prometheus/thanos in the name across all namespaces
+        prom_services = []
+        try:
+            r = subprocess.run(
+                ['kubectl', 'get', 'svc', '-A', '-o', 'json'],
+                capture_output=True, text=True, timeout=15, env=env, check=False
+            )
+            if r.returncode == 0:
+                svcs = _json.loads(r.stdout)
+                for svc in svcs.get('items', []):
+                    name = svc['metadata']['name']
+                    ns = svc['metadata']['namespace']
+                    if 'thanos-querier' in name or 'prometheus' in name:
+                        for p in svc.get('spec', {}).get('ports', []):
+                            prom_services.append((ns, name, p['port'], p.get('name', '')))
+        except Exception:
+            pass
+
+        # Prioritize: thanos-querier first, then user-workload prometheus, then platform, then vanilla
+        def _sort_key(entry):
+            ns, name, port_num, port_name = entry
+            if 'thanos-querier' in name: return (0, port_num)
+            if 'user-workload' in ns: return (1, port_num)
+            if 'openshift-monitoring' in ns: return (2, port_num)
+            return (3, port_num)
+        prom_services.sort(key=_sort_key)
+
+        if prom_services:
+            logger.info(f"Discovered {len(prom_services)} Prometheus/Thanos service ports")
+
+        # Get bearer token for OpenShift auth
+        bearer = None
+        try:
+            token_r = subprocess.run(
+                ['kubectl', 'create', 'token', 'default', '-n', self.namespace, '--duration=12h'],
+                capture_output=True, text=True, timeout=10, env=env, check=False
+            )
+            if token_r.returncode == 0:
+                bearer = token_r.stdout.strip()
+        except Exception:
+            pass
+
+        ctx = ssl.create_default_context()
+        ctx.check_hostname = False
+        ctx.verify_mode = ssl.CERT_NONE
+
+        for svc_ns, svc_name, svc_port, port_name in prom_services:
+            try:
+                self._pf_process = subprocess.Popen(
+                    ['kubectl', 'port-forward', '-n', svc_ns,
+                     f'svc/{svc_name}', f'{port}:{svc_port}'],
+                    stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, env=env
+                )
+                time.sleep(2)
                 if self._pf_process.poll() is not None:
-                    logger.warning("Prometheus port-forward exited early")
                     self._pf_process = None
-                    return None
-                try:
-                    r = urllib.request.urlopen(
-                        f'http://localhost:{port}/api/v1/status/config', timeout=2)
-                    if r.status == 200:
-                        url = f'http://localhost:{port}'
-                        logger.info(f"Port-forwarding to Prometheus at {url}")
-                        return url
-                except Exception:
                     continue
 
-            logger.warning("Prometheus port-forward: could not connect within 10s")
-            self._pf_process.terminate()
-            self._pf_process = None
-        except Exception as e:
-            logger.warning(f"Failed to start Prometheus port-forward: {e}")
-            self._pf_process = None
+                # Try HTTPS with bearer, then HTTPS without, then HTTP
+                for scheme, headers in [
+                    ('https', {'Authorization': f'Bearer {bearer}'} if bearer else {}),
+                    ('https', {}),
+                    ('http', {}),
+                ]:
+                    try:
+                        req = urllib.request.Request(
+                            f'{scheme}://localhost:{port}/api/v1/query?query=up',
+                            headers=headers
+                        )
+                        kw = {'timeout': 3}
+                        if scheme == 'https':
+                            kw['context'] = ctx
+                        r = urllib.request.urlopen(req, **kw)
+                        if r.status == 200:
+                            if bearer and 'Authorization' in headers:
+                                self._prom_bearer = bearer
+                            url = f'{scheme}://localhost:{port}'
+                            logger.info(f"Port-forwarding to {svc_ns}/{svc_name}:{svc_port} at {url}")
+                            return url
+                    except Exception:
+                        continue
+
+                self._pf_process.terminate()
+                self._pf_process = None
+            except Exception:
+                if self._pf_process and self._pf_process.poll() is None:
+                    self._pf_process.terminate()
+                self._pf_process = None
+
+        logger.warning("Prometheus port-forward: could not connect to any Prometheus service")
         return None
 
     def cleanup(self):
@@ -925,6 +1001,19 @@ class TestOrchestrator(ParserMixin, GuidellmMixin):
             if log_callback:
                 log_callback(f"✅ Metrics saved to {output_file}")
 
+            # Check if any vLLM metrics were actually collected
+            try:
+                import json as _mj
+                with open(output_file) as _mf:
+                    saved = _mj.load(_mf)
+                prom = saved.get('prometheus_metrics', {})
+                vllm_vals = [v for k, v in prom.items() if k.startswith('vllm_') and v is not None]
+                if not vllm_vals:
+                    if log_callback:
+                        log_callback("⚠️  Prometheus returned no vLLM metrics — Thanos auth may have failed (401)")
+            except Exception:
+                pass
+
             return str(output_file)
 
         except Exception as e:
@@ -1212,6 +1301,7 @@ class TestOrchestrator(ParserMixin, GuidellmMixin):
                         )
 
             if not skip_deploy:
+                deploy_start_time = time.time()
                 deployment_success = self.deployment_manager.deploy_config(
                     config,
                     log_callback=log_callback
@@ -1264,7 +1354,8 @@ class TestOrchestrator(ParserMixin, GuidellmMixin):
                     result.error_message = "vLLM model did not finish loading in time"
                     return result
 
-                result.model_load_time_s = model_load_time
+                # Total time from deploy start to model loaded (includes pod scheduling + model load)
+                result.model_load_time_s = int(time.time() - deploy_start_time)
 
                 pod_timings = self._collect_pod_timings(config.test_id, log_callback=log_callback)
                 if pod_timings:
@@ -1403,14 +1494,14 @@ class TestOrchestrator(ParserMixin, GuidellmMixin):
                             if log_callback:
                                 log_callback(f"⚠️  guidellm failed ({result.request_successful or 0} completed requests) — retrying ({guidellm_attempt}/{max_guidellm_retries})")
                             # Wait for pods to be ready before retrying
-                            import time
                             if log_callback:
                                 log_callback("   ⏳ Waiting for inference pods to be ready...")
                             for _wait in range(60):
                                 if stop_check and stop_check():
                                     result.error_message = "Stopped by user"
                                     return result
-                                if self.deployment_manager._verify_pods_ready(config.test_id, config.total_pods):
+                                expected_pods = (config.prefill_replicas or 0) + (config.decode_replicas or 0) or config.replicas or 1
+                                if self.deployment_manager._verify_pods_ready(config.test_id, expected_pods):
                                     break
                                 time.sleep(5)
                             else:

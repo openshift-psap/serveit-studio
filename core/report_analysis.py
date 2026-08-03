@@ -91,9 +91,14 @@ class ReportAnalyzer:
                 'error': 'No successful tests'
             }
 
+        # Core results only (step6/7 — the actual architecture comparison tests)
+        core_results = [r for r in successful if not r.config_name.startswith(('step2', 'step3', 'step9', 'step10', 'step11', 'step12', 'step13'))]
+        if not core_results:
+            core_results = successful
+
         by_arch = {}
         for arch in ['aggregated', 'pd', 'ep']:
-            arch_results = [r for r in successful if r.architecture == arch]
+            arch_results = [r for r in core_results if r.architecture == arch]
             if arch_results:
                 by_arch[arch] = {
                     'count': len(arch_results),
@@ -105,9 +110,9 @@ class ReportAnalyzer:
                     'best_throughput': max((r.throughput_mean or r.throughput_p90) for r in arch_results),
                 }
 
-        best_ttft_config = min(successful, key=lambda r: r.ttft_p90)
-        best_throughput_config = max(successful, key=lambda r: r.throughput_p90)
-        best_efficiency_config = max(successful, key=lambda r: r.throughput_p90 / r.total_gpus)
+        best_ttft_config = min(core_results, key=lambda r: r.ttft_p90)
+        best_throughput_config = max(core_results, key=lambda r: r.throughput_p90)
+        best_efficiency_config = max(core_results, key=lambda r: r.throughput_p90 / r.total_gpus)
 
         return {
             'total_tests': len(results),
@@ -152,9 +157,62 @@ class ReportAnalyzer:
                     'best_name_ttft': min(arch_rs, key=lambda r: r.ttft_p90).display_label,
                     'best_name_tput': max(arch_rs, key=lambda r: r.throughput_mean or 0).display_label,
                 } for arch in ['aggregated', 'pd', 'ep']
-                  for arch_rs in [[r for r in successful if r.architecture == arch]]
+                  for arch_rs in [[r for r in core_results if r.architecture == arch]]
                   if arch_rs},
+            },
+            # Calibrated recommendations from sweep (step11) — realistic production performance
+            'calibrated_best': self._build_calibrated_best(successful),
+        }
+
+    def _build_calibrated_best(self, successful):
+        """Build best configs from calibrated sweep (step11) results.
+
+        Uses the same 4-category selection as the main recommendations:
+        balanced, lowest TTFT, highest throughput, most efficient.
+        Groups by architecture (PD, aggregated, EP) then flattens to global best.
+        """
+        sweep = [r for r in successful if r.config_name.startswith('step11-sweep-') and r.ttft_p90 and r.ttft_p90 > 0]
+        if not sweep:
+            return None
+
+        import json as _cj
+        def _to_dict(r):
+            conc = None
+            if r.test_config_json:
+                try:
+                    conc = _cj.loads(r.test_config_json).get('num_users')
+                except Exception:
+                    pass
+            ptp = r.prefill_tp or r.tensor_parallelism
+            dtp = r.decode_tp or r.tensor_parallelism
+            entry = {
+                'name': r.display_label, 'architecture': r.architecture,
+                'config_name': r.config_name, 'test_id': r.config_name,
+                'ttft_p90': round(r.ttft_p90, 1),
+                'ttft_p99': round(r.ttft_p99, 1) if r.ttft_p99 else None,
+                'itl_p90': round(r.itl_p90, 2) if r.itl_p90 else None,
+                'throughput_mean': round(r.throughput_mean, 2) if r.throughput_mean else None,
+                'throughput_p90': round(r.throughput_p90, 2) if r.throughput_p90 else None,
+                'gpus': r.total_gpus, 'concurrency': conc,
+                'tp': r.tensor_parallelism if r.architecture == 'aggregated' else ptp,
             }
+            if r.architecture != 'aggregated':
+                entry.update({
+                    'prefill_pods': r.prefill_pods, 'decode_pods': r.decode_pods,
+                    'prefill_tp': ptp, 'decode_tp': dtp,
+                })
+            return entry
+
+        balanced = min(sweep, key=lambda r: (r.ttft_p90 or 1e9) / (r.throughput_mean or 0.001))
+        lowest_ttft = min(sweep, key=lambda r: r.ttft_p90 or 1e9)
+        highest_tput = max(sweep, key=lambda r: r.throughput_mean or 0)
+        most_eff = max(sweep, key=lambda r: (r.throughput_mean or 0) / max(r.total_gpus, 1))
+
+        return {
+            'balanced': _to_dict(balanced),
+            'lowest_ttft': _to_dict(lowest_ttft),
+            'highest_tput': _to_dict(highest_tput),
+            'most_efficient': {**_to_dict(most_eff), 'efficiency': round((most_eff.throughput_mean or 0) / max(most_eff.total_gpus, 1), 4)},
         }
 
     def build_recommendation(self, run_id, results, conn):
@@ -1555,7 +1613,7 @@ class ReportAnalyzer:
                                             reason = 'weights_match'
                             except Exception:
                                 pass
-                            # Determine reason from best config's pod count
+                            # Determine reason from best config's pod count and metrics availability
                             if reason == 'not_tested':
                                 arch_results_for_key = [r for r in non_epp if r.architecture.lower() == arch_key]
                                 if arch_results_for_key:
@@ -1568,7 +1626,22 @@ class ReportAnalyzer:
                                     if total_pods <= 1:
                                         reason = 'single_pod'
                                     else:
-                                        reason = 'weights_match'
+                                        # Check if Prometheus metrics exist for this arch
+                                        has_metrics = False
+                                        try:
+                                            step_prefix = 'step6-' if arch_key == 'aggregated' else 'step7-'
+                                            mrow = loader.conn.execute('''
+                                                SELECT metrics_json FROM test_configurations
+                                                WHERE run_id = ? AND config_name LIKE ? AND status = 'completed'
+                                                ORDER BY ttft_p90 ASC LIMIT 1
+                                            ''', (run_id, f'{step_prefix}%')).fetchone()
+                                            if mrow and mrow[0]:
+                                                import json as _mj
+                                                prom = _mj.loads(mrow[0]).get('prometheus_metrics', {})
+                                                has_metrics = any(v is not None for k, v in prom.items() if k.startswith('vllm_'))
+                                        except Exception:
+                                            pass
+                                        reason = 'weights_match' if has_metrics else 'no_metrics'
                             skipped.append({'arch': arch_key, 'reason': reason})
 
             epp_tuning_data = {
@@ -1595,7 +1668,21 @@ class ReportAnalyzer:
                         if total_pods <= 1:
                             reason = 'single_pod'
                         else:
-                            reason = 'weights_match'
+                            has_metrics = False
+                            try:
+                                step_prefix = 'step6-' if arch_key == 'aggregated' else 'step7-'
+                                mrow = loader.conn.execute('''
+                                    SELECT metrics_json FROM test_configurations
+                                    WHERE run_id = ? AND config_name LIKE ? AND status = 'completed'
+                                    ORDER BY ttft_p90 ASC LIMIT 1
+                                ''', (run_id, f'{step_prefix}%')).fetchone()
+                                if mrow and mrow[0]:
+                                    import json as _mj2
+                                    prom = _mj2.loads(mrow[0]).get('prometheus_metrics', {})
+                                    has_metrics = any(v is not None for k, v in prom.items() if k.startswith('vllm_'))
+                            except Exception:
+                                pass
+                            reason = 'weights_match' if has_metrics else 'no_metrics'
                     skipped.append({'arch': arch_key, 'reason': reason})
             if skipped:
                 epp_tuning_data = {

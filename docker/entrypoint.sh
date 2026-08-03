@@ -6,7 +6,7 @@
 set -e
 
 APP_DIR="/mnt/storage/app"
-REPO="git@github.com:bbenshab/inftune-studio.git"
+REPO="git@github.com:bbenshab/serveit-studio.git"
 BRANCH="${GIT_BRANCH:-main}"
 
 echo "--- Starting Inftune Studio ---"

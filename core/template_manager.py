@@ -116,8 +116,10 @@ class TemplateManager:
         # CPU limit defaults to request
         vars_dict['cpu_limit'] = config.cpu_limit or config.cpu_request
 
-        # Data parallelism (not in TestConfig)
-        vars_dict.setdefault('data_parallelism', 1)
+        # Multi-node / data parallelism
+        vars_dict['lws_size'] = getattr(config, 'lws_size', None) or 1
+        vars_dict['data_parallelism'] = getattr(config, 'data_parallel_size', None) or 1
+        vars_dict['data_parallel_size_local'] = getattr(config, 'data_parallel_size_local', None) or vars_dict['data_parallelism']
 
         # Routing proxy image — derive from scheduler image
         sched_image = vars_dict.get('scheduler_image') or getattr(config, 'scheduler_image', '') or 'ghcr.io/llm-d/llm-d-router-endpoint-picker:v0.9.0'

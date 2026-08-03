@@ -261,6 +261,8 @@ def create_app():
                     safe = instance_manager._sanitize(f"{username}-{name}")
                     conn.execute("UPDATE instances SET status = 'error' WHERE name = ? AND owner_id = ?",
                                  (safe, owner_id))
+            # Rescan cluster after instance creation to update GPU availability
+            _rescan_cluster(int(cluster_id))
 
         threading.Thread(target=_create, daemon=True).start()
         return jsonify({'ok': True, 'status': 'creating', 'name': name})
@@ -297,8 +299,17 @@ def create_app():
     @app.route('/api/instances/<int:instance_id>', methods=['DELETE'])
     def api_delete_instance(instance_id):
         backup = request.args.get('backup', '1') == '1'
+        # Get cluster_id before deletion for rescan
+        del_cluster_id = None
+        with get_db() as conn:
+            row = conn.execute('SELECT cluster_id FROM instances WHERE id = ?', (instance_id,)).fetchone()
+            if row:
+                del_cluster_id = row['cluster_id']
         success = instance_manager.delete_instance(instance_id, get_user_id(), backup=backup)
         if success:
+            if del_cluster_id:
+                import threading
+                threading.Thread(target=_rescan_cluster, args=(del_cluster_id,), daemon=True).start()
             return jsonify({'ok': True})
         with get_db() as conn:
             access = conn.execute(
@@ -308,6 +319,13 @@ def create_app():
         if access:
             return jsonify({'error': 'Only the instance owner can delete it'}), 403
         return jsonify({'error': 'Instance not found or not owned by you'}), 404
+
+    @app.route('/api/instances/<int:instance_id>/cleanup', methods=['POST'])
+    def api_cleanup_instance(instance_id):
+        result = instance_manager.cleanup_workloads(instance_id, get_user_id(), namespace)
+        if result.get('ok'):
+            return jsonify(result)
+        return jsonify(result), 400
 
     @app.route('/api/instances/<int:instance_id>/backup', methods=['POST'])
     def api_backup_instance(instance_id):
@@ -449,6 +467,23 @@ def create_app():
                     (key, str(value))
                 )
         return jsonify({'success': True})
+
+    def _rescan_cluster(cluster_id):
+        """Background rescan of a single cluster after instance create/delete."""
+        try:
+            from launcher.cluster_scanner import scan_cluster_resources
+            with get_db() as conn:
+                cluster = conn.execute('SELECT * FROM clusters WHERE id = ?', (cluster_id,)).fetchone()
+            if not cluster:
+                return
+            result = scan_cluster_resources(dict(cluster), namespace)
+            with get_db() as conn:
+                conn.execute(
+                    'UPDATE clusters SET scan_data = ?, scanned_at = ? WHERE id = ?',
+                    (json.dumps(result), __import__('datetime').datetime.now().isoformat(), cluster_id)
+                )
+        except Exception as e:
+            print(f"  Post-action rescan failed for cluster {cluster_id}: {e}")
 
     return app
 

@@ -62,18 +62,9 @@ def api_stop_optimization():
 
 @app.route('/api/clear_console', methods=['POST'])
 def api_clear_console():
-    """Clear console logs from database."""
-    try:
-        with get_db() as conn:
-            conn.execute('DELETE FROM console_logs')
-            conn.commit()
-
-        # Notify all connected clients to clear their console
-        socketio.emit('clear_console', {})
-
-        return jsonify({'success': True, 'message': 'Console logs cleared'})
-    except Exception as e:
-        return jsonify({'success': False, 'error': str(e)}), 500
+    """Clear console display (UI only — logs are preserved in database)."""
+    socketio.emit('clear_console', {})
+    return jsonify({'success': True, 'message': 'Console display cleared'})
 
 @app.route('/api/runs')
 def get_runs():
@@ -397,7 +388,7 @@ def get_console_logs():
         run_id = request.args.get('run_id', type=int)
         job_name = request.args.get('job_name')
         since = request.args.get('since')
-        limit = min(request.args.get('limit', default=100, type=int), 1000)
+        limit = min(request.args.get('limit', default=100, type=int), 100000)
 
         # Build query
         query = 'SELECT id, timestamp, log_type, message, run_id, job_name FROM console_logs WHERE 1=1'

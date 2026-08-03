@@ -83,7 +83,7 @@ function generateTestPlan() {
     const goalNames = {
         'throughput': 'Throughput Priority',
         'ttft': 'Response Time Priority',
-        'balanced': 'Balanced Performance'
+        'balanced': 'Full Coverage'
     };
 
     // Update configuration summary spans
@@ -236,7 +236,8 @@ document.getElementById('start-optimization').addEventListener('click', () => {
         concurrency_sweep_count: config.concurrency_sweep_count || null,
         concurrency_sweep_step_pct: config.concurrency_sweep_step_pct || 20,
         concurrency_sweep_all_configs: !!config.concurrency_sweep_all_configs,
-        concurrency_sweep_max_configs: config.concurrency_sweep_max_configs || null
+        concurrency_sweep_max_configs: config.concurrency_sweep_max_configs || null,
+        concurrency_sweep_use_epp_tuned: !!config.concurrency_sweep_use_epp_tuned
     });
 });
 

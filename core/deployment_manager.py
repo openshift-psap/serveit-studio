@@ -165,7 +165,6 @@ class DeploymentManager:
         Works around the DRA webhook's greedy node allocator by giving it
         time to see updated allocation state between pod creations.
         """
-        import time
         import re
 
         # Patch the LWS manifest to start with 1 replica

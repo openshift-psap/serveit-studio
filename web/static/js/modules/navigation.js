@@ -1158,37 +1158,22 @@ socket.on('compression_complete', function(data) {
     sizeEl.textContent = origMb + ' MB -> ' + compMb + ' MB (' + data.ratio + '% smaller)';
     logToConsole('   Compressed: ' + origMb + ' MB -> ' + compMb + ' MB (' + data.ratio + '% reduction)', 'info');
 
-    fetch('/api/download_database')
-        .then(function(response) {
-            if (!response.ok) throw new Error('Download failed');
-            return response.blob();
-        })
-        .then(function(blob) {
-            var url = window.URL.createObjectURL(blob);
-            var a = document.createElement('a');
-            a.href = url;
-            var dbNs = (config.namespace || '').replace(/^serveit-/, '') || 'optimizer';
-            var dbDate = new Date().toISOString().slice(0, 10);
-            a.download = 'serveit-' + dbNs + '-' + dbDate + '.db.gz';
-            document.body.appendChild(a);
-            a.click();
-            window.URL.revokeObjectURL(url);
-            document.body.removeChild(a);
+    var a = document.createElement('a');
+    a.href = '/api/download_database';
+    a.download = '';
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
 
-            logToConsole('   Database downloaded successfully', 'success');
-            if (_downloadEverythingPending) {
-                _downloadEverythingPending = false;
-                setTimeout(function() { _startArtifactsDownload(); }, 500);
-            } else {
-                setTimeout(function() {
-                    document.getElementById('compress-modal').classList.remove('active');
-                }, 1000);
-            }
-        })
-        .catch(function(err) {
-            logToConsole('   Failed to download: ' + err.message, 'error');
+    logToConsole('   Database download started', 'success');
+    if (_downloadEverythingPending) {
+        _downloadEverythingPending = false;
+        setTimeout(function() { _startArtifactsDownload(); }, 2000);
+    } else {
+        setTimeout(function() {
             document.getElementById('compress-modal').classList.remove('active');
-        });
+        }, 1000);
+    }
 });
 
 socket.on('compression_error', function(data) {
@@ -1228,32 +1213,17 @@ socket.on('raw_compression_complete', function(data) {
     sizeEl.textContent = origMb + ' MB -> ' + compMb + ' MB (' + data.ratio + '% smaller)';
     logToConsole('   Compressed: ' + origMb + ' MB -> ' + compMb + ' MB (' + data.ratio + '% reduction)', 'info');
 
-    fetch('/api/download_raw_data')
-        .then(function(response) {
-            if (!response.ok) throw new Error('Download failed');
-            return response.blob();
-        })
-        .then(function(blob) {
-            var url = window.URL.createObjectURL(blob);
-            var a = document.createElement('a');
-            a.href = url;
-            var dbNs = (config.namespace || '').replace(/^serveit-/, '') || 'optimizer';
-            var dbDate = new Date().toISOString().slice(0, 10);
-            a.download = 'serveit-' + dbNs + '-raw-data-' + dbDate + '.tar.gz';
-            document.body.appendChild(a);
-            a.click();
-            window.URL.revokeObjectURL(url);
-            document.body.removeChild(a);
+    var a = document.createElement('a');
+    a.href = '/api/download_raw_data';
+    a.download = '';
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
 
-            logToConsole('   Raw data downloaded successfully', 'success');
-            setTimeout(function() {
-                document.getElementById('compress-modal').classList.remove('active');
-            }, 1000);
-        })
-        .catch(function(err) {
-            logToConsole('   Failed to download: ' + err.message, 'error');
-            document.getElementById('compress-modal').classList.remove('active');
-        });
+    logToConsole('   Raw data download started', 'success');
+    setTimeout(function() {
+        document.getElementById('compress-modal').classList.remove('active');
+    }, 1000);
 });
 
 socket.on('raw_compression_error', function(data) {

@@ -90,7 +90,6 @@ def stream_job_logs(job_name: str, namespace: str):
         job_name: Name of the job
         namespace: Kubernetes namespace
     """
-    import time
 
     # Register as the active streamer — any previous greenlet will see
     # _active_stream_job[0] != its job_name and exit silently.
@@ -368,7 +367,6 @@ def deploy_and_test_inference(model_name: str, namespace: str, job_name: str = N
         namespace: Kubernetes namespace
         job_name: Optional job name for log context
     """
-    import time
 
     try:
         # Step 1: Deploy prerequisite infrastructure (GAIE, Gateway, etc.)
@@ -912,7 +910,7 @@ data:
                     ]
                 },
                 'balanced': {
-                    'label': 'Balanced Performance (PD + EP + Aggregated)',
+                    'label': 'Full Coverage (PD + EP + PD-EP + Aggregated)',
                     'steps': [
                         "Steps 2-3: Find optimal TP (exhaustive sweep)",
                         "Steps 4-5: Resource sizing for PD + EP",
@@ -1526,7 +1524,6 @@ data:
                 log_to_ui('🧪 Waiting for vLLM to finish loading model...', 'info')
 
                 inference_validated = False
-                import time
                 import subprocess
 
                 # Get all pod IPs for this deployment
