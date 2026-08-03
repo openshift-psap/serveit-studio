@@ -10,7 +10,9 @@ import logging
 import os
 import re
 import subprocess
+import threading
 import time
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import datetime
 from pathlib import Path
 from typing import Optional, List, Dict
@@ -23,22 +25,16 @@ TEMPLATES_DIR = Path(__file__).parent.parent / 'deployment' / 'templates'
 
 
 def _kubectl(args: list, input_data: str = None, proxy: str = None) -> subprocess.CompletedProcess:
-    cmd = 'oc' if _is_oc() else 'kubectl'
     env = None
     if proxy:
         env = os.environ.copy()
         env['HTTPS_PROXY'] = proxy
         env['https_proxy'] = proxy
-    return subprocess.run([cmd] + args, input=input_data, capture_output=True, text=True, timeout=60, env=env)
+    return subprocess.run(['kubectl'] + args, input=input_data, capture_output=True, text=True, timeout=60, env=env)
 
 
 def _is_oc() -> bool:
-    try:
-        r = subprocess.run(['kubectl', 'api-resources', '--api-group=route.openshift.io'],
-                          capture_output=True, text=True, timeout=15)
-        return r.returncode == 0 and 'Route' in r.stdout
-    except (FileNotFoundError, subprocess.TimeoutExpired):
-        return False
+    return False
 
 
 def _render(template_name: str, **ctx) -> str:
@@ -1149,7 +1145,103 @@ def _cleanup_remote_cluster(kubeconfig_secret: str, namespace: str, workload_nam
         os.unlink(tmp_path)
 
 
+_instances_cache = {}
+_instances_cache_lock = threading.Lock()
+_INSTANCES_CACHE_TTL = 30
+
+
+_STATUS_TIMEOUT = 15
+
+
+def _get_pod_status_for_instance(inst: dict, cluster_sc: dict) -> dict:
+    """Get pod status for a single instance via kubectl (runs in thread pool)."""
+    cmd = 'kubectl'
+    if not inst.get('storage_class'):
+        inst['storage_class'] = cluster_sc.get(inst.get('cluster_id'), '')
+
+    if inst.get('status') == 'deleting':
+        inst['pod_status'] = 'Deleting'
+        return inst
+
+    last_known = inst.get('status', 'Unknown').capitalize()
+    if last_known == 'Creating':
+        last_known = 'Pending'
+    elif last_known not in ('Running', 'Pending', 'Error', 'Failed', 'Unknown'):
+        last_known = 'Unknown'
+
+    try:
+        r = subprocess.run(
+            [cmd, 'get', 'pod', '-l', f"app={inst['deployment_name']}",
+             '-n', inst['namespace'],
+             '-o', 'jsonpath={.items[0].status.phase}:{.items[0].status.containerStatuses[0].state.waiting.reason}:{.items[0].status.containerStatuses[0].restartCount}'],
+            capture_output=True, text=True, timeout=_STATUS_TIMEOUT)
+    except subprocess.TimeoutExpired:
+        logger.warning(f"Pod status TIMEOUT for {inst['deployment_name']}, using last known: {last_known}")
+        inst['pod_status'] = last_known
+        return inst
+
+    if r.returncode != 0:
+        logger.warning(f"Pod status FAILED for {inst['deployment_name']}: rc={r.returncode} stderr={r.stderr.strip()}")
+        inst['pod_status'] = last_known
+        return inst
+
+    raw = r.stdout.strip()
+    parts = raw.split(':')
+    phase = parts[0] if parts else ''
+    waiting_reason = parts[1] if len(parts) > 1 else ''
+    restarts = int(parts[2]) if len(parts) > 2 and parts[2].isdigit() else 0
+    if waiting_reason in ('CrashLoopBackOff', 'Error', 'ImagePullBackOff'):
+        inst['pod_status'] = waiting_reason
+    elif phase == 'Running' and restarts > 2:
+        inst['pod_status'] = 'CrashLoop'
+    elif phase in ('Terminating', 'Pending', 'Failed', 'Succeeded', 'Running'):
+        inst['pod_status'] = phase
+    elif not raw or not phase:
+        try:
+            dep_r = subprocess.run(
+                [cmd, 'get', 'deployment', inst['deployment_name'],
+                 '-n', inst['namespace'], '--ignore-not-found', '-o', 'name'],
+                capture_output=True, text=True, timeout=_STATUS_TIMEOUT)
+            if dep_r.returncode == 0 and not dep_r.stdout.strip():
+                inst['pod_status'] = 'Deleted'
+            elif dep_r.returncode == 0:
+                inst['pod_status'] = 'Starting'
+            else:
+                inst['pod_status'] = 'Unknown'
+        except subprocess.TimeoutExpired:
+            inst['pod_status'] = 'Unknown'
+    else:
+        inst['pod_status'] = phase or 'Unknown'
+
+    if not inst.get('service_url') and inst['pod_status'] == 'Running':
+        try:
+            r = subprocess.run(
+                [cmd, 'get', 'route', f"{inst['deployment_name']}-ui", '-n', inst['namespace'],
+                 '-o', 'jsonpath={.spec.host}'],
+                capture_output=True, text=True, timeout=_STATUS_TIMEOUT)
+            if r.returncode == 0 and r.stdout.strip():
+                inst['service_url'] = f"https://{r.stdout.strip()}"
+                with get_db() as conn:
+                    conn.execute('UPDATE instances SET service_url = ? WHERE id = ?',
+                                 (inst['service_url'], inst['id']))
+        except Exception:
+            pass
+
+    return inst
+
+
+def invalidate_instances_cache(owner_id: int, cluster_id: int = None):
+    with _instances_cache_lock:
+        _instances_cache.pop((owner_id, cluster_id), None)
+
+
 def list_instances(owner_id: int, cluster_id: int = None) -> List[Dict]:
+    cache_key = (owner_id, cluster_id)
+    with _instances_cache_lock:
+        cached = _instances_cache.get(cache_key)
+        if cached and time.time() - cached['ts'] < _INSTANCES_CACHE_TTL:
+            return cached['data']
+
     with get_db() as conn:
         if cluster_id is not None:
             rows = conn.execute('''
@@ -1171,75 +1263,39 @@ def list_instances(owner_id: int, cluster_id: int = None) -> List[Dict]:
                 ORDER BY i.created_at DESC
             ''', (owner_id, owner_id, owner_id, owner_id)).fetchall()
 
-    # Look up cluster names and storage classes
     cluster_info = {}
     with get_db() as conn:
         for cr in conn.execute('SELECT id, name, storage_class FROM clusters').fetchall():
             cluster_info[cr['id']] = {'name': cr['name'], 'storage_class': cr['storage_class'] or ''}
     cluster_sc = {k: v['storage_class'] for k, v in cluster_info.items()}
 
-    instances = []
+    raw_instances = []
     for row in rows:
         inst = dict(row)
         ci = cluster_info.get(inst.get('cluster_id'), {})
         inst['cluster_name'] = ci.get('name', 'local')
-        if not inst.get('storage_class'):
-            try:
-                r = _kubectl(['get', 'pvc', inst.get('pvc_name', ''), '-n', inst['namespace'],
-                              '-o', 'jsonpath={.spec.storageClassName}'])
-                if r.returncode == 0 and r.stdout.strip():
-                    inst['storage_class'] = r.stdout.strip()
-                    with get_db() as conn:
-                        conn.execute('UPDATE instances SET storage_class = ? WHERE id = ?',
-                                     (inst['storage_class'], inst['id']))
-            except Exception:
-                inst['storage_class'] = cluster_sc.get(inst.get('cluster_id'), '')
-        if inst.get('status') == 'deleting':
-            inst['pod_status'] = 'Deleting'
-            instances.append(inst)
-            continue
-        r = _kubectl(['get', 'pod', '-l', f"app={inst['deployment_name']}",
-                      '-n', inst['namespace'],
-                      '-o', 'jsonpath={.items[0].status.phase}:{.items[0].status.containerStatuses[0].state.waiting.reason}:{.items[0].status.containerStatuses[0].restartCount}'])
-        if r.returncode != 0:
-            inst['pod_status'] = 'Unknown'
-            instances.append(inst)
-            continue
-        raw = r.stdout.strip()
-        parts = raw.split(':')
-        phase = parts[0] if parts else ''
-        waiting_reason = parts[1] if len(parts) > 1 else ''
-        restarts = int(parts[2]) if len(parts) > 2 and parts[2].isdigit() else 0
-        if waiting_reason in ('CrashLoopBackOff', 'Error', 'ImagePullBackOff'):
-            inst['pod_status'] = waiting_reason
-        elif phase == 'Running' and restarts > 2:
-            inst['pod_status'] = 'CrashLoop'
-        elif phase in ('Terminating', 'Pending', 'Failed', 'Succeeded', 'Running'):
-            inst['pod_status'] = phase
-        elif not raw or not phase:
-            dep_r = _kubectl(['get', 'deployment', inst['deployment_name'],
-                              '-n', inst['namespace'], '--ignore-not-found', '-o', 'name'])
-            if dep_r.returncode == 0 and not dep_r.stdout.strip():
-                inst['pod_status'] = 'Deleted'
-            elif dep_r.returncode == 0:
-                inst['pod_status'] = 'Starting'
-            else:
-                inst['pod_status'] = 'Unknown'
-        else:
-            inst['pod_status'] = phase or 'Unknown'
-        # If service_url is missing, try to get it from the Route (OpenShift)
-        if not inst.get('service_url') and inst['pod_status'] == 'Running':
-            try:
-                r = _kubectl(['get', 'route', f"{inst['deployment_name']}-ui", '-n', inst['namespace'],
-                              '-o', 'jsonpath={.spec.host}'])
-                if r.returncode == 0 and r.stdout.strip():
-                    inst['service_url'] = f"https://{r.stdout.strip()}"
-                    with get_db() as conn:
-                        conn.execute('UPDATE instances SET service_url = ? WHERE id = ?',
-                                     (inst['service_url'], inst['id']))
-            except Exception:
-                pass
+        raw_instances.append(inst)
 
-        instances.append(inst)
+    if not raw_instances:
+        with _instances_cache_lock:
+            _instances_cache[cache_key] = {'ts': time.time(), 'data': []}
+        return []
+
+    instances = []
+    with ThreadPoolExecutor(max_workers=min(len(raw_instances), 8)) as pool:
+        futures = {pool.submit(_get_pod_status_for_instance, inst, cluster_sc): inst
+                   for inst in raw_instances}
+        for future in as_completed(futures):
+            try:
+                instances.append(future.result(timeout=15))
+            except Exception:
+                inst = futures[future]
+                inst['pod_status'] = 'Unknown'
+                instances.append(inst)
+
+    instances.sort(key=lambda x: x.get('created_at', ''), reverse=True)
+
+    with _instances_cache_lock:
+        _instances_cache[cache_key] = {'ts': time.time(), 'data': instances}
 
     return instances

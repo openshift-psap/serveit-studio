@@ -2,7 +2,7 @@
 
 import sqlite3
 from datetime import datetime
-from flask import render_template, request, redirect, url_for, session
+from flask import render_template, request, redirect, url_for, session, jsonify
 from werkzeug.security import generate_password_hash, check_password_hash
 
 from launcher.database import DB_PATH
@@ -148,6 +148,10 @@ def register_auth_routes(app):
         if request.endpoint in ('login', 'setup', 'reset_password_page', 'static'):
             return
         if not has_any_users():
+            if request.path.startswith('/api/'):
+                return jsonify({'error': 'setup_required'}), 401
             return redirect(url_for('setup'))
         if 'user_id' not in session:
+            if request.path.startswith('/api/'):
+                return jsonify({'error': 'session_expired'}), 401
             return redirect(url_for('login'))

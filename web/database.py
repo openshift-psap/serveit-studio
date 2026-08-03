@@ -742,9 +742,18 @@ def check_pods_exist(namespace: str, pod_names: List[str]) -> Dict[str, bool]:
 
 
 def cleanup_stale_optimizations():
-    """Clean up stale 'running' optimization runs on server startup."""
+    """Clean up stale 'running' optimization runs and orphaned processes on server startup."""
     try:
         import subprocess
+        # Kill orphaned kubectl exec / guidellm subprocesses from the previous server
+        for pattern in ['kubectl exec', 'guidellm run']:
+            try:
+                r = subprocess.run(['pkill', '-f', pattern], capture_output=True, timeout=5, check=False)
+                if r.returncode == 0:
+                    print(f"  Killed orphaned '{pattern}' processes")
+            except Exception:
+                pass
+
         optimizer_alive = False
         try:
             result = subprocess.run(

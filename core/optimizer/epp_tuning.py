@@ -7,6 +7,7 @@ from typing import Dict, Optional, Tuple
 
 
 from core.config_generator import TestConfig
+from core.optimizer.config import FeasibleSplit
 from core.template_manager import TemplateManager
 
 class EPPTuningMixin:
@@ -18,23 +19,15 @@ class EPPTuningMixin:
         if not self.db_manager or not self.run_id:
             return None
 
-        test_id = None
-        if arch == 'aggregated' and self.aggregated_result:
-            test_id = getattr(self.aggregated_result, 'test_id', None)
-        elif arch == 'pd' and self.pareto_results:
-            best = min(self.pareto_results, key=lambda x: x[1].ttft_p99 or x[1].ttft_p90 or 1e9)
-            test_id = getattr(best[1], 'test_id', None)
-        elif arch == 'ep' and self.best_ep_result:
-            test_id = getattr(self.best_ep_result, 'test_id', None)
-        if not test_id:
-            return None
-
+        step_prefix = 'step6-' if arch == 'aggregated' else ('step7-ep-' if arch == 'ep' else 'step7-')
         try:
             with self.db_manager.get_connection() as conn:
-                row = conn.execute(
-                    'SELECT metrics_json FROM test_configurations WHERE config_name = ? AND run_id = ?',
-                    (test_id, self.run_id)
-                ).fetchone()
+                row = conn.execute('''
+                    SELECT metrics_json FROM test_configurations
+                    WHERE run_id = ? AND architecture = ? AND status = 'completed'
+                      AND config_name LIKE ? AND ttft_p90 IS NOT NULL AND ttft_p90 > 0
+                    ORDER BY ttft_p90 ASC LIMIT 1
+                ''', (self.run_id, 'pd' if arch in ('pd', 'ep') else arch, f'{step_prefix}%')).fetchone()
                 if row and row[0]:
                     full = _json.loads(row[0])
                     prom = full.get('prometheus_metrics', {})
@@ -335,61 +328,108 @@ class EPPTuningMixin:
         else:
             fallback_combos.append(('equal', {'prefix_cache_weight': 2.0, 'kv_cache_weight': 2.0, 'queue_weight': 2.0, 'slo_enabled': has_sla}))
 
-        # Collect best configs per architecture
+        # Collect best configs per architecture from DB (resume-safe)
         configs_to_test = []
+        default_concurrency = int(self.config.qps)
+        if hasattr(self, 'effective_concurrency') and self.effective_concurrency:
+            default_concurrency = self.effective_concurrency
 
-        # Best PD config
-        if self.pareto_results:
-            best_split, best_pd_result = min(self.pareto_results, key=lambda x: x[1].ttft_p99 or x[1].ttft_p90 or 1e9)
-            pd_cfg = self._create_pd_config(best_split)
-            # Use optimal concurrency from Step 10 if available
-            pd_concurrency = int(self.config.qps)
-            for arch_key, sr in getattr(self, 'latency_search_results', {}).items():
-                if 'pd' in arch_key and sr and sr.optimal_concurrency:
-                    pd_concurrency = sr.optimal_concurrency
-                    break
-            if hasattr(self, 'effective_concurrency') and self.effective_concurrency and pd_concurrency == int(self.config.qps):
-                pd_concurrency = self.effective_concurrency
-            configs_to_test.append(('pd', pd_cfg, pd_concurrency))
-            self.log(f"  PD: {best_split.prefill_pods}P×TP{best_split.prefill_tp} + {best_split.decode_pods}D×TP{best_split.decode_tp} at c={pd_concurrency}", 'info')
+        import json as _json
+        def _best_from_db(arch, step_prefix):
+            """Find best config for an architecture from DB test results."""
+            if not self.db_manager or not self.run_id:
+                return None
+            try:
+                with self.db_manager.get_connection() as conn:
+                    rows = conn.execute('''
+                        SELECT config_name, tensor_parallelism, decode_tp, prefill_pods, decode_pods,
+                               ttft_p90, ttft_p99, throughput_p90, test_config_json
+                        FROM test_configurations
+                        WHERE run_id = ? AND architecture = ? AND status = 'completed'
+                          AND config_name LIKE ? AND ttft_p90 IS NOT NULL AND ttft_p90 > 0
+                        ORDER BY ttft_p90 ASC
+                        LIMIT 1
+                    ''', (self.run_id, arch, f'{step_prefix}%')).fetchall()
+                return rows[0] if rows else None
+            except Exception:
+                return None
 
-        # Best Aggregated config
-        if self.aggregated_result and self.aggregated_tp:
+        # Best PD config from step7 DB results
+        pd_row = _best_from_db('pd', 'step7-')
+        if pd_row:
+            tc_raw = pd_row[8]
+            tc = _json.loads(tc_raw) if tc_raw else {}
+            split = FeasibleSplit(
+                prefill_pods=tc.get('prefill_replicas', pd_row[3]),
+                decode_pods=tc.get('decode_replicas', pd_row[4]),
+                prefill_tp=tc.get('prefill_tp', pd_row[1]),
+                decode_tp=tc.get('decode_tp', pd_row[2] or pd_row[1]),
+                prefill_gpus=tc.get('prefill_replicas', pd_row[3]) * tc.get('prefill_tp', pd_row[1]),
+                decode_gpus=tc.get('decode_replicas', pd_row[4]) * tc.get('decode_tp', pd_row[2] or pd_row[1]),
+                total_gpus=self.config.total_gpus,
+                prefill_pct=0,
+            )
+            pd_cfg = self._create_pd_config(split)
+            configs_to_test.append(('pd', pd_cfg, default_concurrency))
+            self.log(f"  PD: {split.prefill_pods}P×TP{split.prefill_tp} + {split.decode_pods}D×TP{split.decode_tp} at c={default_concurrency}", 'info')
+
+        # Best Aggregated config from step6 DB results
+        agg_row = _best_from_db('aggregated', 'step6-')
+        if agg_row:
+            agg_tp = agg_row[1]
             agg_cfg = self._create_aggregated_config(
-                tp=self.aggregated_tp,
+                tp=agg_tp,
                 num_gpus=self.config.total_gpus,
                 isl=self.config.isl,
                 osl=self.config.osl,
                 test_id=f"step11-epp-aggregated",
                 use_concurrency=True,
             )
-            agg_concurrency = int(self.config.qps)
-            for arch_key, sr in getattr(self, 'latency_search_results', {}).items():
-                if 'aggregated' in arch_key and sr and sr.optimal_concurrency:
-                    agg_concurrency = sr.optimal_concurrency
-                    break
-            if hasattr(self, 'effective_concurrency') and self.effective_concurrency and agg_concurrency == int(self.config.qps):
-                agg_concurrency = self.effective_concurrency
-            configs_to_test.append(('aggregated', agg_cfg, agg_concurrency))
-            self.log(f"  Aggregated: {self.config.total_gpus // self.aggregated_tp}×TP{self.aggregated_tp} at c={agg_concurrency}", 'info')
+            configs_to_test.append(('aggregated', agg_cfg, default_concurrency))
+            self.log(f"  Aggregated: {self.config.total_gpus // agg_tp}×TP{agg_tp} at c={default_concurrency}", 'info')
 
-        # Best EP config
-        if self.best_ep_config and self.best_ep_result:
-            ep_split = self.best_ep_config
+        # Best EP config from step7-ep DB results
+        ep_row = _best_from_db('pd', 'step7-ep-')
+        if ep_row:
+            tc_raw = ep_row[8]
+            tc = _json.loads(tc_raw) if tc_raw else {}
+            ep_split = FeasibleSplit(
+                prefill_pods=tc.get('prefill_replicas', ep_row[3]),
+                decode_pods=tc.get('decode_replicas', ep_row[4]),
+                prefill_tp=tc.get('prefill_tp', ep_row[1]),
+                decode_tp=tc.get('decode_tp', ep_row[2] or ep_row[1]),
+                prefill_gpus=tc.get('prefill_replicas', ep_row[3]) * tc.get('prefill_tp', ep_row[1]),
+                decode_gpus=tc.get('decode_replicas', ep_row[4]) * tc.get('decode_tp', ep_row[2] or ep_row[1]),
+                total_gpus=self.config.total_gpus,
+                prefill_pct=0,
+            )
             ep_cfg = self._create_ep_config(ep_split)
-            ep_concurrency = int(self.config.qps)
-            for arch_key, sr in getattr(self, 'latency_search_results', {}).items():
-                if 'ep' in arch_key and sr and sr.optimal_concurrency:
-                    ep_concurrency = sr.optimal_concurrency
-                    break
-            if hasattr(self, 'effective_concurrency') and self.effective_concurrency and ep_concurrency == int(self.config.qps):
-                ep_concurrency = self.effective_concurrency
-            configs_to_test.append(('ep', ep_cfg, ep_concurrency))
+            configs_to_test.append(('ep', ep_cfg, default_concurrency))
             self.log(f"  EP: {ep_split.prefill_pods}P+{ep_split.decode_pods}D "
-                     f"PTP={ep_split.prefill_tp} DTP={ep_split.decode_tp} at c={ep_concurrency}", 'info')
+                     f"PTP={ep_split.prefill_tp} DTP={ep_split.decode_tp} at c={default_concurrency}", 'info')
+
+        # Skip single-pod configs — EPP routing is meaningless with 1 backend
+        filtered = []
+        for arch, cfg, conc in configs_to_test:
+            total_pods = 1
+            if arch == 'aggregated' and agg_row:
+                agg_tp = agg_row[1]
+                total_pods = self.config.total_gpus // agg_tp if agg_tp else 1
+            elif arch == 'pd' and pd_row:
+                total_pods = pd_row[3] + pd_row[4]
+            elif arch == 'ep' and ep_row:
+                total_pods = ep_row[3] + ep_row[4]
+            if total_pods <= 1:
+                self.log(f"  ⏩ Skipping {arch.upper()} EPP tuning — single pod, nothing to route", 'info')
+                if not self.epp_benchmark_results:
+                    self.epp_benchmark_results = {}
+                self.epp_benchmark_results[arch] = [('_skipped_single_pod', {}, None)]
+                continue
+            filtered.append((arch, cfg, conc))
+        configs_to_test = filtered
 
         if not configs_to_test:
-            self.log("⚠️  No successful configs for EPP tuning", 'warning')
+            self.log("⚠️  No multi-pod configs for EPP tuning — skipping", 'warning')
             return
 
         if not self.epp_benchmark_results:
@@ -448,7 +488,7 @@ class EPPTuningMixin:
                 )
                 if weights_unchanged:
                     self.log(f"  ✅ Smart-derived weights match user preset — skipping EPP test for {arch}.", 'success')
-                    self.epp_benchmark_results[arch] = []
+                    self.epp_benchmark_results[arch] = [('_skipped_weights_match', base_w, None)]
                     continue
                 self.log(f"  ↔ Weights differ from preset — running EPP test for {arch}", 'info')
                 weight_combos = [('smart-derived', smart_weights)]
@@ -542,6 +582,16 @@ class EPPTuningMixin:
                     selected_nodes=base_cfg.selected_nodes,
                     prefill_decode_ratio=base_cfg.prefill_decode_ratio,
                     epp_config=epp_cfg,
+                    selected_dra_classes=getattr(base_cfg, 'selected_dra_classes', None) or getattr(self.config, 'selected_dra_classes', []),
+                    dra_gpu_resource_key=getattr(base_cfg, 'dra_gpu_resource_key', None) or getattr(self.config, 'dra_gpu_resource_key', None),
+                    gateway_class=getattr(base_cfg, 'gateway_class', None) or getattr(self.config, 'gateway_class', 'istio'),
+                    per_node_storage=getattr(base_cfg, 'per_node_storage', None) or getattr(self.config, 'per_node_storage', False),
+                    node_nfs_pvcs=getattr(base_cfg, 'node_nfs_pvcs', None) or getattr(self.config, 'node_nfs_pvcs', []),
+                    storage_class=getattr(base_cfg, 'storage_class', None) or getattr(self.config, 'storage_class', None),
+                    pvc_size=getattr(base_cfg, 'pvc_size', None) or getattr(self.config, 'pvc_size', None),
+                    rdma_network_annotation=getattr(base_cfg, 'rdma_network_annotation', None) or getattr(self.config, 'rdma_network_annotation', None),
+                    exclusive_pf=getattr(base_cfg, 'exclusive_pf', False) or getattr(self.config, 'exclusive_pf', False),
+                    scheduler_image=getattr(base_cfg, 'scheduler_image', None) or getattr(self.config, 'scheduler_image', None),
                 )
 
                 result = self.orchestrator.run_test(
@@ -743,9 +793,10 @@ class EPPTuningMixin:
         if not self.epp_benchmark_results:
             return
         for arch, results in self.epp_benchmark_results.items():
-            if not results:
+            valid = [r for r in results if r[2] is not None]
+            if not valid:
                 continue
-            best_name, best_weights, _ = min(results, key=lambda x: x[2].ttft_p90 or float('inf'))
+            best_name, best_weights, _ = min(valid, key=lambda x: x[2].ttft_p90 or float('inf'))
             self.log(f"  Applying best EPP config for {arch}: {best_name} "
                      f"(cache={best_weights['prefix_cache_weight']}, kv={best_weights['kv_cache_weight']}, "
                      f"queue={best_weights['queue_weight']})", 'success')

@@ -288,11 +288,16 @@ class CacheSweepMixin:
                 all_candidates.append(('agg', self.aggregated_tp, self.aggregated_result))
 
         selected = []
-        seen_ids = set()
+        seen_keys = set()
+        def _config_key(c):
+            if c[0] == 'pd':
+                s = c[1]
+                return ('pd', s.prefill_pods, s.prefill_tp, s.decode_pods, s.decode_tp)
+            return ('agg', c[1])
         def _add_unique(candidate):
-            rid = id(candidate[2])
-            if rid not in seen_ids:
-                seen_ids.add(rid)
+            key = _config_key(candidate)
+            if key not in seen_keys:
+                seen_keys.add(key)
                 selected.append(candidate)
 
         cache_sweep_all = getattr(self.config, 'cache_sweep_all_configs', False)

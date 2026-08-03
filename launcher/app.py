@@ -37,6 +37,13 @@ def create_app():
 
     register_auth_routes(app)
 
+    @app.after_request
+    def add_no_cache(response):
+        if 'text/html' in response.content_type:
+            response.headers['Cache-Control'] = 'no-cache, no-store, must-revalidate'
+            response.headers['Pragma'] = 'no-cache'
+        return response
+
     namespace = os.environ.get('TARGET_NAMESPACE', 'serveit')
     image = os.environ.get('INFTUNE_IMAGE', 'quay.io/bbenshab/serveit-studio:server')
 
@@ -195,11 +202,11 @@ def create_app():
     def api_list_instances():
         cluster_id = request.args.get('cluster_id', type=int)
         uid = request.args.get('user_id', type=int)
-        if uid and is_admin():
-            instances = instance_manager.list_instances(uid, cluster_id=cluster_id)
-        else:
-            instances = instance_manager.list_instances(get_user_id(), cluster_id=cluster_id)
-        return jsonify(instances)
+        nocache = request.args.get('nocache')
+        if nocache:
+            instance_manager.invalidate_instances_cache(uid or get_user_id(), cluster_id)
+        owner = uid if (uid and is_admin()) else get_user_id()
+        return jsonify(instance_manager.list_instances(owner, cluster_id=cluster_id))
 
     @app.route('/api/instances', methods=['POST'])
     def api_create_instance():

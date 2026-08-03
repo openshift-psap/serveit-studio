@@ -1185,9 +1185,11 @@ class ReportAnalyzer:
     def _is_run_finished(run_id, loader):
         try:
             row = loader.conn.execute(
-                'SELECT completed_at FROM optimization_runs WHERE id = ?', (run_id,)
+                'SELECT status, completed_at FROM optimization_runs WHERE id = ?', (run_id,)
             ).fetchone()
-            return bool(row and row[0])
+            if not row:
+                return False
+            return row[0] in ('completed', 'stopped', 'failed', 'error_stopped', 'interrupted') or bool(row[1])
         except Exception:
             return False
 
@@ -1410,6 +1412,7 @@ class ReportAnalyzer:
 
         # Step 11: EPP tuning results (grouped by architecture)
         epp_tuning_data = None
+        has_post_step9 = any(r.config_name.startswith(('step10', 'step11', 'step12', 'step13')) for r in results)
         epp_results = [r for r in results if r.config_name.startswith('step11-epp-') and r.is_successful]
         if epp_results:
             import json as _json2
@@ -1529,14 +1532,44 @@ class ReportAnalyzer:
                     }
                     by_arch[arch_key].insert(0, baseline_entry)
 
-            # Detect skipped architectures (EPP tuning ran but smart-derived matched preset)
+            # Detect skipped architectures — only if pipeline reached past Step 9
             skipped = []
-            if run_config and run_config.get('epp_benchmark'):
+            if run_config and run_config.get('epp_benchmark') and has_post_step9:
                 for arch_key in ['pd', 'aggregated', 'ep']:
                     if arch_key not in by_arch:
                         has_configs = any(r.architecture.lower() == arch_key for r in non_epp)
                         if has_configs:
-                            skipped.append(arch_key)
+                            # Determine skip reason from optimal_config
+                            reason = 'not_tested'
+                            try:
+                                if row and row['optimal_config']:
+                                    import json as _rj
+                                    opt = _rj.loads(row['optimal_config'])
+                                    epp_data = opt.get('epp_tuning', {}) or {}
+                                    arch_epp = epp_data.get(arch_key, [])
+                                    if arch_epp and len(arch_epp) == 1:
+                                        entry = arch_epp[0]
+                                        if isinstance(entry, dict) and entry.get('name') == '_skipped_single_pod':
+                                            reason = 'single_pod'
+                                        elif isinstance(entry, dict) and entry.get('name') == '_skipped_weights_match':
+                                            reason = 'weights_match'
+                            except Exception:
+                                pass
+                            # Determine reason from best config's pod count
+                            if reason == 'not_tested':
+                                arch_results_for_key = [r for r in non_epp if r.architecture.lower() == arch_key]
+                                if arch_results_for_key:
+                                    best = min(arch_results_for_key, key=lambda r: r.ttft_p90 if r.ttft_p90 else 1e9)
+                                    total_pods = 1
+                                    if arch_key == 'aggregated' and best.tensor_parallelism:
+                                        total_pods = (best.total_gpus or 8) // best.tensor_parallelism
+                                    elif arch_key in ('pd', 'ep'):
+                                        total_pods = (best.prefill_pods or 0) + (best.decode_pods or 0)
+                                    if total_pods <= 1:
+                                        reason = 'single_pod'
+                                    else:
+                                        reason = 'weights_match'
+                            skipped.append({'arch': arch_key, 'reason': reason})
 
             epp_tuning_data = {
                 'by_architecture': by_arch,
@@ -1545,13 +1578,25 @@ class ReportAnalyzer:
                 'target_ms': target_ms,
                 'target_percentile': target_pct,
             }
-        elif run_config and run_config.get('epp_benchmark') and self._is_run_finished(run_id, loader):
-            # EPP was enabled and run finished but all architectures were skipped
+        elif run_config and run_config.get('epp_benchmark') and has_post_step9:
             skipped = []
             successful = [r for r in results if r.is_successful and not r.config_name.startswith(('step2', 'step3', 'step9', 'step10', 'step11'))]
             for arch_key in ['pd', 'aggregated', 'ep']:
                 if any(r.architecture.lower() == arch_key for r in successful):
-                    skipped.append(arch_key)
+                    arch_results_for_key = [r for r in successful if r.architecture.lower() == arch_key]
+                    reason = 'not_tested'
+                    if arch_results_for_key:
+                        best = min(arch_results_for_key, key=lambda r: r.ttft_p90 if r.ttft_p90 else 1e9)
+                        total_pods = 1
+                        if arch_key == 'aggregated' and best.tensor_parallelism:
+                            total_pods = (best.total_gpus or 8) // best.tensor_parallelism
+                        elif arch_key in ('pd', 'ep'):
+                            total_pods = (best.prefill_pods or 0) + (best.decode_pods or 0)
+                        if total_pods <= 1:
+                            reason = 'single_pod'
+                        else:
+                            reason = 'weights_match'
+                    skipped.append({'arch': arch_key, 'reason': reason})
             if skipped:
                 epp_tuning_data = {
                     'by_architecture': {},

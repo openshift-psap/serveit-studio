@@ -1402,7 +1402,21 @@ class TestOrchestrator(ParserMixin, GuidellmMixin):
                         if guidellm_attempt < max_guidellm_retries:
                             if log_callback:
                                 log_callback(f"⚠️  guidellm failed ({result.request_successful or 0} completed requests) — retrying ({guidellm_attempt}/{max_guidellm_retries})")
-                            import time; time.sleep(10)
+                            # Wait for pods to be ready before retrying
+                            import time
+                            if log_callback:
+                                log_callback("   ⏳ Waiting for inference pods to be ready...")
+                            for _wait in range(60):
+                                if stop_check and stop_check():
+                                    result.error_message = "Stopped by user"
+                                    return result
+                                if self.deployment_manager._verify_pods_ready(config.test_id, config.total_pods):
+                                    break
+                                time.sleep(5)
+                            else:
+                                if log_callback:
+                                    log_callback("   ⚠️  Pods not ready after 5 min — retrying anyway")
+                            time.sleep(10)
                             continue
                         result.error_message = "guidellm test failed after retries"
                         break

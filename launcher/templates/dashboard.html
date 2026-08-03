@@ -269,10 +269,6 @@
             Instances
             {% endif %}
         </h2>
-        <button class="btn btn-primary" id="new-instance-btn" onclick="showCreateModal()" {% if not clusters %}style="display:none"{% endif %}>
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>
-            New Instance
-        </button>
     </div>
 
     <div class="cluster-viz-panel" id="cluster-viz-panel" {% if not clusters %}style="display:none"{% endif %}>
@@ -286,7 +282,13 @@
     <div class="cluster-viz-panel" id="instances-panel" style="margin-top:16px;">
         <div class="cluster-viz-header">
             <h3>Instances</h3>
-            <button onclick="if(currentClusterId) loadInstances(currentClusterId);">Instance Rescan</button>
+            <div style="display:flex;gap:8px;align-items:center">
+                <button onclick="if(currentClusterId) loadInstances(currentClusterId, false, null, true);">Instance Rescan</button>
+                <button class="btn btn-primary" id="new-instance-btn" onclick="showCreateModal()" {% if not clusters %}style="display:none"{% endif %} style="font-size:0.85em;padding:6px 14px;">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>
+                    New Instance
+                </button>
+            </div>
         </div>
         <div class="grid" id="instance-list">
         {% if not clusters %}
@@ -702,7 +704,11 @@ function _processDeleteQueue(){
     .then(function(r){return r.json()})
     .then(function(data){
         if(data.ok){
-            if(item.id===currentClusterId) localStorage.removeItem('selectedClusterId');
+            if(item.id===currentClusterId){
+                localStorage.removeItem('selectedClusterId');
+                currentClusterId = null;
+                _lastLoadedClusterId = null;
+            }
             if(btn){btn.style.transition='opacity 0.3s';btn.style.opacity='0';setTimeout(function(){btn.remove()},300);}
         } else {
             showWarn('Error', 'Failed to delete "'+item.name+'": '+(data.error||'unknown'));
@@ -739,7 +745,7 @@ function selectCluster(id){
         var targetHtml = (targetText && targetText !== 'local') ? '<span style="font-size:0.55em;color:#999;margin-left:8px;font-weight:400">'+targetText+'</span>' : '';
         document.getElementById('topbar-title').innerHTML = '<span class="g-icon">'+icon+'</span>'+name+targetHtml+'<span class="count"></span>';
     }
-    document.getElementById('new-instance-btn').style.display='';
+    var _nib=document.getElementById('new-instance-btn');if(_nib)_nib.style.display='';
     var vizPanel = document.getElementById('cluster-viz-panel');
     if(vizPanel) vizPanel.style.display='';
     var instPanel = document.getElementById('instances-panel');
@@ -750,25 +756,57 @@ function selectCluster(id){
 }
 
 var _lastLoadedClusterId = null;
-function loadInstances(clusterId, isRefresh, userId){
+var _instancesAbort = null;
+var _instancesLoading = false;
+var _instancesHtmlCache = {};
+function loadInstances(clusterId, isRefresh, userId, forceRefresh){
+    if(!clusterId) return;
     var list = document.getElementById('instance-list');
+    if(!list) return;
+    // Don't load instances when an admin panel is active (they reuse instance-list)
+    if(document.querySelector('#nav-users.active, #nav-restore.active, #nav-settings.active')) return;
+    // Skip refresh if a full load is already in progress
+    if(isRefresh && _instancesLoading) return;
+    // Cancel any previous in-flight request
+    if(_instancesAbort) { try { _instancesAbort.abort(); } catch(e){} }
+    _instancesAbort = new AbortController();
+    var myAbort = _instancesAbort;
     list.style.display = '';
-    if(!isRefresh && (_lastLoadedClusterId !== clusterId || !list.querySelector('.card'))) {
-        list.innerHTML = '<div style="text-align:center;padding:40px;color:#999">Loading&hellip;</div>';
+    if(!isRefresh && _lastLoadedClusterId !== clusterId) {
+        if(_lastLoadedClusterId) _instancesHtmlCache[_lastLoadedClusterId] = list.innerHTML;
+        if(_instancesHtmlCache[clusterId]) {
+            list.innerHTML = _instancesHtmlCache[clusterId];
+        } else {
+            list.innerHTML = '<div style="text-align:center;padding:40px;color:#999">Loading&hellip;</div>';
+        }
+    }
+    if(!isRefresh) {
         _lastLoadedClusterId = clusterId;
+        _instancesLoading = true;
     }
     var url = '/api/instances?cluster_id='+clusterId;
     if(userId) url += '&user_id='+userId;
-    fetch(url)
-    .then(function(r){ return r.json(); })
+    if(forceRefresh) url += '&nocache=1';
+    var timeoutId = setTimeout(function(){ myAbort.abort(); }, 30000);
+    fetch(url, {signal: myAbort.signal})
+    .then(function(r){
+        clearTimeout(timeoutId);
+        if(r.status === 401) { _showSessionExpiredOverlay(); throw new Error('Session expired'); }
+        if(!r.ok) throw new Error('HTTP ' + r.status);
+        var ct = r.headers.get('content-type') || '';
+        if(ct.indexOf('application/json') === -1) throw new Error('Not JSON');
+        return r.json();
+    })
     .then(function(instances){
+        _instancesLoading = false;
+        if(myAbort !== _instancesAbort) return;
+        if(!Array.isArray(instances)) throw new Error('Invalid response');
         var countEl = document.querySelector('.cluster-item.active .count');
         if(countEl) countEl.textContent = instances.length;
         var topCount = document.querySelector('#topbar-title .count');
         if(topCount) topCount.textContent = '('+instances.length+')';
 
-        if(isRefresh){
-            // Update status in-place without rebuilding
+        if(isRefresh && list.querySelector('.card')){
             instances.forEach(function(inst){
                 var card = document.getElementById('instance-'+inst.id);
                 if(card){
@@ -852,7 +890,15 @@ function loadInstances(clusterId, isRefresh, userId){
             list.appendChild(card);
         });
     }).catch(function(err){
-        list.innerHTML = '<div style="text-align:center;padding:40px;color:#dc2626">Failed to load instances</div>';
+        _instancesLoading = false;
+        if(myAbort !== _instancesAbort) return;
+        if(err && err.name === 'AbortError'){
+            if(!isRefresh) list.innerHTML = '<div style="text-align:center;padding:40px;color:#f59e0b">Request timed out — click Instance Rescan to retry</div>';
+        } else if(err && err.message === 'Not JSON'){
+            _showSessionExpiredOverlay();
+        } else {
+            if(!isRefresh) list.innerHTML = '<div style="text-align:center;padding:40px;color:#dc2626">Failed to load instances: '+(err&&err.message||err)+'</div>';
+        }
     });
 }
 
@@ -1031,11 +1077,18 @@ function createInstance(e){
 
         // Poll until instance is running or error
         var pollCount = 0;
+        var pollClusterId = currentClusterId;
         var pollInterval = setInterval(function(){
             pollCount++;
-            fetch('/api/instances?cluster_id=' + currentClusterId)
-            .then(function(r){return r.json()})
+            fetch('/api/instances?cluster_id=' + pollClusterId)
+            .then(function(r){
+                if(!r.ok) throw new Error('HTTP ' + r.status);
+                var ct = r.headers.get('content-type') || '';
+                if(ct.indexOf('application/json') === -1) throw new Error('Not JSON');
+                return r.json();
+            })
             .then(function(instances){
+                if(!Array.isArray(instances)) return;
                 var inst = instances.find(function(i){return i.status !== 'deleting' && (i.display_name === name || i.name === name || i.name.indexOf(name) !== -1)});
                 if(inst){
                     var ps = inst.pod_status || inst.status;
@@ -1043,7 +1096,7 @@ function createInstance(e){
                         clearInterval(pollInterval);
                         overlay.remove();
                         hideCreateModal();
-                        loadInstances(currentClusterId);
+                        if(currentClusterId === pollClusterId) loadInstances(pollClusterId);
                         loadClusters();
                     } else if(ps === 'Error' || ps === 'CrashLoopBackOff' || ps === 'Failed' || inst.status === 'error'){
                         clearInterval(pollInterval);
@@ -1057,15 +1110,22 @@ function createInstance(e){
                     clearInterval(pollInterval);
                     overlay.remove();
                     hideCreateModal();
-                    loadInstances(currentClusterId);
+                    if(currentClusterId === pollClusterId) loadInstances(pollClusterId);
                     loadClusters();
                 }
                 if(pollCount > 120){
                     clearInterval(pollInterval);
                     overlay.remove();
                     hideCreateModal();
-                    loadInstances(currentClusterId);
+                    if(currentClusterId === pollClusterId) loadInstances(pollClusterId);
                     loadClusters();
+                }
+            }).catch(function(){
+                if(pollCount > 10){
+                    clearInterval(pollInterval);
+                    overlay.remove();
+                    hideCreateModal();
+                    if(currentClusterId === pollClusterId) loadInstances(pollClusterId);
                 }
             });
         }, 3000);
@@ -1130,7 +1190,7 @@ function _doDeleteInstance(id, name, backup){
     if(card){card.querySelectorAll('.btn').forEach(function(b){b.disabled=true;b.style.opacity='0.4';});
         var ov=document.createElement('div');ov.className='delete-overlay';ov.innerHTML='<div style="display:flex;align-items:center;gap:10px"><svg width="20" height="20" viewBox="0 0 24 24" aria-hidden="true" style="animation:spin 1s linear infinite"><circle cx="12" cy="12" r="10" stroke="#2A7B88" stroke-width="3" fill="none" stroke-dasharray="31.4 31.4" stroke-linecap="round"/></svg><span style="color:#4A4A4A;font-weight:600;font-size:0.9em">'+(backup?'Backing up & deleting…':'Deleting…')+'</span></div>';card.appendChild(ov);}
     fetch('/api/instances/'+id+'?backup='+(backup?'1':'0'),{method:'DELETE'}).then(function(r){return r.json()}).then(function(data){
-        if(data.ok){if(card){card.style.transition='opacity 0.3s';card.style.opacity='0';setTimeout(function(){card.remove()},300);}loadClusters();if(currentClusterId)setTimeout(function(){loadInstances(currentClusterId)},500);}
+        if(data.ok){if(card){card.style.transition='opacity 0.3s';card.style.opacity='0';setTimeout(function(){card.remove()},300);}loadClusters();if(currentClusterId)loadInstances(currentClusterId);}
         else{showCreateError(data.error||'Failed');if(card){var o=card.querySelector('.delete-overlay');if(o)o.remove();card.querySelectorAll('.btn').forEach(function(b){b.disabled=false;b.style.opacity='';});}}
     });
 }
@@ -1150,7 +1210,11 @@ function loadClusters(){
             b.innerHTML='<span class="icon">'+g.icon+'</span><span class="name">'+g.name+'<span class="target">'+(g.description||'')+'</span></span><span class="count">'+g.instance_count+'</span>'+actions;
             list.appendChild(b);
         });
-    });
+        // Auto-select first cluster if current was deleted
+        if(!currentClusterId && clusters.length > 0) {
+            selectCluster(clusters[0].id);
+        }
+    }).catch(function(){});
 }
 
 function openInstance(url, instId, localPort, isHttps){
@@ -1234,6 +1298,8 @@ function deleteBackup(path){
 function showRestore(){
     currentClusterId = null;
     viewingUserId = null;
+    _lastLoadedClusterId = null;
+    if(_instancesAbort) { try { _instancesAbort.abort(); } catch(e){} }
     document.querySelectorAll('.cluster-item').forEach(function(el){el.classList.remove('active')});
     var navUsers = document.getElementById('nav-users');
     if(navUsers) navUsers.classList.remove('active');
@@ -1242,7 +1308,7 @@ function showRestore(){
     var navRestore = document.getElementById('nav-restore');
     if(navRestore) navRestore.classList.add('active');
     document.getElementById('topbar-title').innerHTML = '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="opacity:0.5"><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/></svg> Restore Data';
-    document.getElementById('new-instance-btn').style.display='none';
+    var _nib=document.getElementById('new-instance-btn');if(_nib)_nib.style.display='none';
     var _vp=document.getElementById('cluster-viz-panel');if(_vp)_vp.style.display='none';var _ip=document.getElementById('instances-panel');if(_ip){_ip.style.display='';_ip.querySelector('.cluster-viz-header').style.display='none';}
     var list = document.getElementById('instance-list');
     list.style.display = 'block';
@@ -1371,6 +1437,8 @@ function restoreBackup(path, instanceName, hasDb, hasArtifacts){
 function showUsers(){
     currentClusterId = null;
     viewingUserId = null;
+    _lastLoadedClusterId = null;
+    if(_instancesAbort) { try { _instancesAbort.abort(); } catch(e){} }
     document.querySelectorAll('.cluster-item').forEach(function(el){el.classList.remove('active')});
     var navSettings = document.getElementById('nav-settings');
     if(navSettings) navSettings.classList.remove('active');
@@ -1379,7 +1447,7 @@ function showUsers(){
     var navUsers = document.getElementById('nav-users');
     if(navUsers) navUsers.classList.add('active');
     document.getElementById('topbar-title').innerHTML = '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="opacity:0.5"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75"/></svg> User Management';
-    document.getElementById('new-instance-btn').style.display='none';var _vp=document.getElementById('cluster-viz-panel');if(_vp)_vp.style.display='none';var _ip=document.getElementById('instances-panel');if(_ip){_ip.style.display='';_ip.querySelector('.cluster-viz-header').style.display='none';}
+    var _nib=document.getElementById('new-instance-btn');if(_nib)_nib.style.display='none';var _vp=document.getElementById('cluster-viz-panel');if(_vp)_vp.style.display='none';var _ip=document.getElementById('instances-panel');if(_ip){_ip.style.display='';_ip.querySelector('.cluster-viz-header').style.display='none';}
     var list = document.getElementById('instance-list');
     list.style.display = 'block';
     list.innerHTML = '<div style="text-align:center;padding:40px;color:#999">Loading&hellip;</div>';
@@ -1419,6 +1487,8 @@ function showUsers(){
 function showSettings(){
     currentClusterId = null;
     viewingUserId = null;
+    _lastLoadedClusterId = null;
+    if(_instancesAbort) { try { _instancesAbort.abort(); } catch(e){} }
     document.querySelectorAll('.cluster-item').forEach(function(el){el.classList.remove('active')});
     var navUsers = document.getElementById('nav-users');
     if(navUsers) navUsers.classList.remove('active');
@@ -1427,7 +1497,7 @@ function showSettings(){
     var navSettings = document.getElementById('nav-settings');
     if(navSettings) navSettings.classList.add('active');
     document.getElementById('topbar-title').innerHTML = '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="opacity:0.5"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09"/></svg> Settings';
-    document.getElementById('new-instance-btn').style.display='none';
+    var _nib=document.getElementById('new-instance-btn');if(_nib)_nib.style.display='none';
     var _vp=document.getElementById('cluster-viz-panel');if(_vp)_vp.style.display='none';var _ip=document.getElementById('instances-panel');if(_ip){_ip.style.display='';_ip.querySelector('.cluster-viz-header').style.display='none';}
     var list = document.getElementById('instance-list');
     list.style.display = 'block';
@@ -1499,10 +1569,13 @@ function _applyStatusInterval(sec){
     if(!sec || sec <= 0) return;
     sec = Math.max(60, sec);
     _statusIntervalId = setInterval(function(){
-        if(currentClusterId) loadInstances(currentClusterId, true);
-        fetch('/api/clusters', {redirect:'manual'})
+        if(document.getElementById('session-expired-overlay')) return;
+        if(currentClusterId && !document.querySelector('#nav-users.active, #nav-restore.active, #nav-settings.active')) {
+            loadInstances(currentClusterId, true, viewingUserId);
+        }
+        fetch('/api/clusters')
         .then(function(r){
-            if(r.status === 302 || r.type === 'opaqueredirect'){
+            if(r.status === 401 || r.status === 302 || r.type === 'opaqueredirect'){
                 _showSessionExpiredOverlay();
             }
         })
@@ -1570,10 +1643,13 @@ function deleteUser(id, name){
 
 function viewUserClusters(uid, uname){
     viewingUserId = uid;
+    _lastLoadedClusterId = null;
+    currentClusterId = null;
+    if(_instancesAbort) { try { _instancesAbort.abort(); } catch(e){} }
     var navUsers = document.getElementById('nav-users');
     if(navUsers) navUsers.classList.remove('active');
     document.getElementById('topbar-title').innerHTML = 'Viewing: <strong>'+uname+'</strong>';
-    document.getElementById('new-instance-btn').style.display='none';var _vp=document.getElementById('cluster-viz-panel');if(_vp)_vp.style.display='none';var _ip=document.getElementById('instances-panel');if(_ip){_ip.style.display='';_ip.querySelector('.cluster-viz-header').style.display='none';}
+    var _nib=document.getElementById('new-instance-btn');if(_nib)_nib.style.display='none';var _vp=document.getElementById('cluster-viz-panel');if(_vp)_vp.style.display='none';var _ip=document.getElementById('instances-panel');if(_ip){_ip.style.display='';_ip.querySelector('.cluster-viz-header').style.display='none';}
     // Load that user's clusters into sidebar
     fetch('/api/clusters?user_id='+uid).then(function(r){return r.json()}).then(function(clusters){
         var glist = document.getElementById('cluster-list');

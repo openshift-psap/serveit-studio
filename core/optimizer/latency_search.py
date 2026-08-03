@@ -326,7 +326,7 @@ class LatencySearchMixin:
             n = int(custom[0]) if isinstance(custom, list) else int(custom)
             if n < 1:
                 n = 6
-            step = max(10, math.ceil(calibrated * step_pct / 100 / 10) * 10)
+            step = max(1, round(calibrated * step_pct / 100))
 
             below_count = (n - 1) // 2
             above_count = n - 1 - below_count
@@ -349,7 +349,7 @@ class LatencySearchMixin:
         # Count-based generation (from UI count + step% inputs)
         if count and int(count) > 0:
             n = int(count)
-            step = max(10, math.ceil(calibrated * step_pct / 100 / 10) * 10)
+            step = max(1, round(calibrated * step_pct / 100))
 
             below_count = (n - 1) // 2
             above_count = n - 1 - below_count
@@ -536,14 +536,20 @@ class LatencySearchMixin:
             if self.aggregated_result.ttft_p90 and _tput_of(self.aggregated_result) > 0:
                 all_candidates.append(('agg', self.aggregated_tp, self.aggregated_result))
 
-        # Pick the 4 recommendation configs (deduplicated)
+        # Pick the 4 recommendation configs (deduplicated by config identity)
         selected = []
-        seen_ids = set()
+        seen_keys = set()
+
+        def _config_key(c):
+            if c[0] == 'pd':
+                s = c[1]
+                return ('pd', s.prefill_pods, s.prefill_tp, s.decode_pods, s.decode_tp)
+            return ('agg', c[1])
 
         def _add_unique(candidate):
-            rid = id(candidate[2])
-            if rid not in seen_ids:
-                seen_ids.add(rid)
+            key = _config_key(candidate)
+            if key not in seen_keys:
+                seen_keys.add(key)
                 selected.append(candidate)
 
         if all_candidates:

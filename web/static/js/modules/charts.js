@@ -2053,14 +2053,28 @@ function renderCharts(data, runId) {
 
         // Show skipped architectures
         if (eppData.skipped_architectures && eppData.skipped_architectures.length) {
-            eppData.skipped_architectures.forEach(arch => {
+            eppData.skipped_architectures.forEach(entry => {
+                const arch = typeof entry === 'string' ? entry : entry.arch;
+                const reason = typeof entry === 'string' ? 'not_tested' : (entry.reason || 'not_tested');
                 const archLabel = arch.toUpperCase();
+                let icon = '&#9989;';
+                let title = 'EPP tuning skipped';
+                let desc = 'No EPP weight variations were tested for this architecture. The current EPP preset was used as-is.';
+                if (reason === 'single_pod') {
+                    icon = '&#128279;';
+                    title = 'EPP tuning skipped — single pod';
+                    desc = 'The best configuration for this architecture uses only 1 pod. EPP routing requires multiple pods to distribute requests between — with a single backend there is nothing to optimize.';
+                } else if (reason === 'weights_match') {
+                    icon = '&#9989;';
+                    title = 'EPP tuning skipped — preset is optimal';
+                    desc = 'Smart weight derivation analyzed the measured Prometheus metrics (cache hit rate, KV pressure, queue depth) and concluded the current EPP preset weights are already optimal. No test needed.';
+                }
                 eppHtml += `<div class="chart-card" style="margin-top:16px; border:2px solid #7c3aed40; border-left:6px solid #7c3aed80;">`;
                 eppHtml += `<div class="chart-card-header" style="background:linear-gradient(135deg,#94a3b8,#64748b);">Step 9: EPP Tuning — ${archLabel}</div>`;
                 eppHtml += '<div style="padding:24px; text-align:center; color:#64748b;">';
-                eppHtml += '<div style="font-size:1.5em; margin-bottom:8px;">&#9989;</div>';
-                eppHtml += '<div style="font-weight:700; font-size:1em; color:#1e293b; margin-bottom:6px;">EPP tuning skipped — user preset is already optimal</div>';
-                eppHtml += '<div style="font-size:0.88em; max-width:500px; margin:0 auto;">Measured Prometheus metrics (cache hit rate, KV pressure, queue depth, active requests) confirm the selected EPP weights are well-matched for this architecture. No adjustment would improve routing.</div>';
+                eppHtml += `<div style="font-size:1.5em; margin-bottom:8px;">${icon}</div>`;
+                eppHtml += `<div style="font-weight:700; font-size:1em; color:#1e293b; margin-bottom:6px;">${title}</div>`;
+                eppHtml += `<div style="font-size:0.88em; max-width:500px; margin:0 auto;">${desc}</div>`;
                 eppHtml += '</div></div>';
             });
         }

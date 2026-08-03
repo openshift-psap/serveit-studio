@@ -12,7 +12,7 @@ from typing import Optional, Dict, List
 
 from flask import session, request, jsonify, send_file
 from flask_socketio import emit
-from gevent import spawn
+from gevent import spawn, sleep as gsleep
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
@@ -287,15 +287,51 @@ def handle_load_config():
         print(f"Error loading config: {e}")
         emit('load_config_result', {'success': False, 'error': str(e)})
 
+def _kill_existing_run():
+    """Kill any running optimization greenlet and clean up state.
+    NOTE: caller must NOT hold state_lock when calling this."""
+    import subprocess
+    greenlet = state.get('_optimization_greenlet')
+    if not greenlet or greenlet.dead:
+        state['optimization_running'] = False
+        return
+    socketio.emit('console_log', {'type': 'warning', 'message': '🛑 Stopping previous run before starting new one...'})
+    state['_stop_requested'] = True
+    state['optimization_running'] = False
+    save_state()
+    # Kill kubectl subprocesses first to unblock the greenlet
+    try:
+        subprocess.run(['pkill', '-f', 'kubectl exec'], capture_output=True, timeout=5, check=False)
+    except Exception:
+        pass
+    for _ in range(10):
+        gsleep(0.2)
+        if greenlet.dead:
+            break
+    if not greenlet.dead:
+        greenlet.kill()
+        gsleep(0.1)
+    try:
+        with get_db() as conn:
+            conn.execute('''
+                UPDATE optimization_runs SET status = 'stopped', completed_at = ?
+                WHERE status = 'running'
+            ''', (datetime.now().isoformat(),))
+    except Exception:
+        pass
+    state['_stop_requested'] = False
+    state['_optimization_greenlet'] = None
+
+
 @socketio.on('start_optimization')
 def handle_start_optimization(data):
     """Start an optimization run."""
 
-    with state_lock:
-        if state['optimization_running']:
-            emit('error', {'message': 'Optimization already running'})
-            return
+    _gl = state.get('_optimization_greenlet')
+    if state['optimization_running'] or (_gl and not _gl.dead):
+        _kill_existing_run()
 
+    with state_lock:
         # Validate that test plan exists and is ready
         if not state['current_test_plan'] or not state['current_test_plan'].can_proceed:
             error_msg = 'Cannot start: No valid test plan. Please generate a test plan first.'
@@ -331,10 +367,9 @@ def handle_start_optimization(data):
 def handle_resume_optimization(data):
     """Resume a previous optimization run directly from DB state."""
 
-    with state_lock:
-        if state['optimization_running']:
-            emit('error', {'message': 'Optimization already running. Stop it first before resuming another run.'})
-            return
+    _gl = state.get('_optimization_greenlet')
+    if state['optimization_running'] or (_gl and not _gl.dead):
+        _kill_existing_run()
 
     run_id = data.get('run_id')
     if not run_id:
@@ -476,27 +511,64 @@ def handle_resume_optimization(data):
 @socketio.on('stop_optimization')
 def handle_stop_optimization():
     """Stop the running optimization. Idempotent — always resets state and notifies UI."""
+    import subprocess
 
+    # 1. Set stop flag and update DB (quick, release lock fast)
     with state_lock:
         state['_stop_requested'] = True
         state['optimization_running'] = False
+        greenlet = state.get('_optimization_greenlet')
         save_state()
 
-        try:
-            with get_db() as conn:
-                conn.execute('''
-                    UPDATE ui_session_state
-                    SET optimization_running = 0,
-                        updated_at = ?
-                    WHERE id = 1
-                ''', (datetime.now().isoformat(),))
-                conn.execute('''
-                    UPDATE optimization_runs
-                    SET status = 'stopped', completed_at = ?
-                    WHERE status = 'running'
-                ''', (datetime.now().isoformat(),))
-        except Exception as e:
-            print(f"Warning: Failed to update optimization state in database: {e}")
+    # 2. Kill local kubectl exec processes immediately (frees the greenlet from subprocess.run)
+    try:
+        subprocess.run(['pkill', '-f', 'kubectl exec'], capture_output=True, timeout=5, check=False)
+    except Exception:
+        pass
+
+    # 3. Wait briefly for greenlet to exit, then force kill
+    if greenlet and not greenlet.dead:
+        for _ in range(10):
+            gsleep(0.2)
+            if greenlet.dead:
+                break
+        if not greenlet.dead:
+            greenlet.kill()
+            gsleep(0.1)
+
+    with state_lock:
+        state['_optimization_greenlet'] = None
+
+    # 4. Update DB — mark all running runs as stopped
+    try:
+        with get_db() as conn:
+            conn.execute('''
+                UPDATE ui_session_state
+                SET optimization_running = 0, updated_at = ?
+                WHERE id = 1
+            ''', (datetime.now().isoformat(),))
+            conn.execute('''
+                UPDATE optimization_runs
+                SET status = 'stopped', completed_at = ?
+                WHERE status = 'running'
+            ''', (datetime.now().isoformat(),))
+    except Exception as e:
+        print(f"Warning: Failed to update optimization state in database: {e}")
+
+    # 5. Kill remote guidellm on workload pod
+    ns = state.get('current_config', {}).get('namespace') or TARGET_NAMESPACE
+    try:
+        r = subprocess.run(
+            ['kubectl', 'get', 'pod', '-l', 'app=serveit-workload', '-n', ns,
+             '-o', 'jsonpath={.items[0].metadata.name}'],
+            capture_output=True, text=True, timeout=10, check=False)
+        wl_pod = r.stdout.strip()
+        if wl_pod:
+            subprocess.run(
+                ['kubectl', 'exec', wl_pod, '-n', ns, '--', 'pkill', '-f', 'guidellm run'],
+                capture_output=True, timeout=10, check=False)
+    except Exception:
+        pass
 
     socketio.emit('status_update', {'running': False, 'message': 'Optimization stopped'})
     socketio.emit('console_log', {'type': 'warning', 'message': '🛑 Optimization stopped by user'})
@@ -1870,11 +1942,11 @@ def handle_setup_storage(data):
             if resume_run_id:
                 optimization_data['resume_run_id'] = resume_run_id
 
-            # Start optimization in background (with guard against duplicates)
+            # Start optimization in background (kill any existing run first)
+            _gl = state.get('_optimization_greenlet')
+            if state['optimization_running'] or (_gl and not _gl.dead):
+                _kill_existing_run()
             with state_lock:
-                if state['optimization_running']:
-                    log_to_ui('⚠️  Optimization already running — ignoring duplicate start', 'warning')
-                    return
                 state['optimization_running'] = True
             state['_optimization_greenlet'] = spawn(run_optimization_background, optimization_data)
             return

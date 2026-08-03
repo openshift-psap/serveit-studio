@@ -170,13 +170,20 @@ function _showSessionExpired(container) {
     container.innerHTML = '<div style="text-align:center;padding:40px;"><div style="font-size:2em;margin-bottom:12px">🔒</div><div style="color:#4A4A4A;font-weight:600;margin-bottom:8px">Session expired</div><div style="color:#999;font-size:0.9em">Please <a href="/logout" style="color:#2A7B88;font-weight:600">log in again</a> to continue.</div></div>';
 }
 
+var _vizCache = {};
+var _VIZ_COOLDOWN = 30000;
 function scanAndRenderCluster(clusterId, container, forceRescan) {
+    if (!forceRescan && _vizCache[clusterId] && Date.now() - _vizCache[clusterId].ts < _VIZ_COOLDOWN) {
+        renderClusterDiagram(container, _vizCache[clusterId].data);
+        return;
+    }
     if (forceRescan) {
         container.innerHTML = '<div style="text-align:center;padding:40px;color:#999"><div style="margin-bottom:12px">🔍</div>Scanning cluster resources…</div>';
         fetch('/api/clusters/' + clusterId + '/scan', { method: 'POST' })
         .then(_handleScanResponse)
         .then(function(data) {
             if (data.error) { container.innerHTML = '<div style="text-align:center;padding:40px;color:#dc2626">Scan failed: ' + data.error + '</div>'; return; }
+            _vizCache[clusterId] = {ts: Date.now(), data: data};
             renderClusterDiagram(container, data);
         })
         .catch(function(err) {
@@ -197,6 +204,7 @@ function scanAndRenderCluster(clusterId, container, forceRescan) {
             container.innerHTML = '<div style="text-align:center;padding:40px;color:#dc2626">Scan failed: ' + data.error + '</div>';
             return;
         }
+        _vizCache[clusterId] = {ts: Date.now(), data: data};
         renderClusterDiagram(container, data);
     })
     .catch(function(err) {

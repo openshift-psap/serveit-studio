@@ -1084,24 +1084,49 @@ document.getElementById('reset-modal').addEventListener('click', (e) => {
     }
 });
 
-// Download database button — compress first, then download
+// Download button — show choice modal
 document.getElementById('download-indicator').addEventListener('click', () => {
-    logToConsole('\n💾 Compressing database for download...', 'info');
+    document.getElementById('download-choice-modal').classList.add('active');
+});
 
+function _startDbDownload() {
+    document.getElementById('download-choice-modal').classList.remove('active');
+    logToConsole('\n💾 Compressing database for download...', 'info');
     var modal = document.getElementById('compress-modal');
     var bar = document.getElementById('compress-bar');
     var pctEl = document.getElementById('compress-percent');
     var statusEl = document.getElementById('compress-status');
     var sizeEl = document.getElementById('compress-size-info');
-
-    bar.style.width = '0%';
-    pctEl.textContent = '0%';
-    statusEl.textContent = 'Compressing...';
-    sizeEl.textContent = '';
+    bar.style.width = '0%'; pctEl.textContent = '0%';
+    statusEl.textContent = 'Compressing...'; sizeEl.textContent = '';
     modal.classList.add('active');
-
     socket.emit('compress_database');
-});
+}
+
+function _startArtifactsDownload() {
+    document.getElementById('download-choice-modal').classList.remove('active');
+    logToConsole('\n📦 Compressing raw test data for download...', 'info');
+    var modal = document.getElementById('compress-modal');
+    var bar = document.getElementById('compress-bar');
+    var pctEl = document.getElementById('compress-percent');
+    var statusEl = document.getElementById('compress-status');
+    var sizeEl = document.getElementById('compress-size-info');
+    bar.style.width = '0%'; pctEl.textContent = '0%';
+    statusEl.textContent = 'Compressing raw data...'; sizeEl.textContent = '';
+    modal.classList.add('active');
+    socket.emit('compress_raw_data');
+}
+
+var _downloadEverythingPending = false;
+function _startEverythingDownload() {
+    document.getElementById('download-choice-modal').classList.remove('active');
+    _downloadEverythingPending = true;
+    _startDbDownload();
+}
+
+document.getElementById('dl-database-btn').addEventListener('click', _startDbDownload);
+document.getElementById('dl-artifacts-btn').addEventListener('click', _startArtifactsDownload);
+document.getElementById('dl-everything-btn').addEventListener('click', _startEverythingDownload);
 
 socket.on('compression_progress', function(data) {
     var bar = document.getElementById('compress-bar');
@@ -1151,9 +1176,14 @@ socket.on('compression_complete', function(data) {
             document.body.removeChild(a);
 
             logToConsole('   Database downloaded successfully', 'success');
-            setTimeout(function() {
-                document.getElementById('compress-modal').classList.remove('active');
-            }, 1000);
+            if (_downloadEverythingPending) {
+                _downloadEverythingPending = false;
+                setTimeout(function() { _startArtifactsDownload(); }, 500);
+            } else {
+                setTimeout(function() {
+                    document.getElementById('compress-modal').classList.remove('active');
+                }, 1000);
+            }
         })
         .catch(function(err) {
             logToConsole('   Failed to download: ' + err.message, 'error');
@@ -1166,24 +1196,7 @@ socket.on('compression_error', function(data) {
     document.getElementById('compress-modal').classList.remove('active');
 });
 
-// Download raw data button — compress test artifacts + results, then download
-document.getElementById('download-raw-indicator').addEventListener('click', () => {
-    logToConsole('\n📦 Compressing raw test data for download...', 'info');
-
-    var modal = document.getElementById('compress-modal');
-    var bar = document.getElementById('compress-bar');
-    var pctEl = document.getElementById('compress-percent');
-    var statusEl = document.getElementById('compress-status');
-    var sizeEl = document.getElementById('compress-size-info');
-
-    bar.style.width = '0%';
-    pctEl.textContent = '0%';
-    statusEl.textContent = 'Compressing raw data...';
-    sizeEl.textContent = '';
-    modal.classList.add('active');
-
-    socket.emit('compress_raw_data');
-});
+// (Artifacts download is now handled via the download choice modal)
 
 socket.on('raw_compression_progress', function(data) {
     var bar = document.getElementById('compress-bar');
