@@ -46,6 +46,28 @@
         </div>
     </div>
 
+    <!-- Storage Class Selection Modal -->
+    <div class="modal-overlay" id="storage-class-modal">
+        <div class="modal-content" style="max-width:420px;">
+            <div class="modal-header" style="background: linear-gradient(135deg, #0ea5e9 0%, #0284c7 100%);">
+                <div class="modal-header-icon">💾</div>
+                <div class="modal-header-text">
+                    <h3>Select Storage Class</h3>
+                    <p>Choose a storage class for PVC creation</p>
+                </div>
+            </div>
+            <div class="modal-body" style="padding:24px;">
+                <div style="margin-bottom:16px;color:#475569;font-size:0.9em;">The saved run config does not include a storage class. Select one from the available options on this cluster.</div>
+                <select id="storage-class-select" style="width:100%;padding:10px 12px;border:1px solid #d1d5db;border-radius:8px;font-size:0.95em;background:white;color:#1e293b;cursor:pointer;outline:none;" onfocus="this.style.borderColor='#0ea5e9'" onblur="this.style.borderColor='#d1d5db'">
+                </select>
+            </div>
+            <div class="modal-footer" style="display:flex;gap:8px;justify-content:flex-end;">
+                <button class="modal-button" id="storage-class-cancel" style="background:#f1f5f9;color:#64748b;">Cancel</button>
+                <button class="modal-button" id="storage-class-confirm" style="background:linear-gradient(135deg,#0ea5e9,#0284c7);color:white;">Create Storage</button>
+            </div>
+        </div>
+    </div>
+
     <!-- Reset Confirmation Modal -->
     <div class="modal-overlay" id="reset-modal">
         <div class="modal-content">

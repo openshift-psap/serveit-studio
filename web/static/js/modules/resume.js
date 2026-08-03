@@ -115,7 +115,7 @@ function loadResumeRuns() {
                     html += `<span style="color: #9ca3af; font-size: 0.85em;">No tests</span>`;
                 }
                 html += `</td>`;
-                html += `<td style="white-space: nowrap;"><button class="restart-run-btn" data-run-id="${run.id}" data-run-name="${run.run_name || ''}" title="Restart run #${run.id} from beginning">🔄</button> <button class="delete-run-btn" data-run-id="${run.id}" title="Delete run #${run.id}">🗑</button></td>`;
+                html += `<td style="white-space: nowrap;"><button class="recreate-storage-btn" data-run-id="${run.id}" title="Recreate PVCs and download model for run #${run.id}" style="font-size:0.8em;padding:3px 8px;background:#0ea5e9;color:white;border:none;border-radius:4px;cursor:pointer;">💾 Regenerate Storage</button> <button class="restart-run-btn" data-run-id="${run.id}" data-run-name="${run.run_name || ''}" title="Restart run #${run.id} from beginning">🔄</button> <button class="delete-run-btn" data-run-id="${run.id}" title="Delete run #${run.id}">🗑</button></td>`;
                 html += '</tr>';
             });
 
@@ -199,6 +199,68 @@ function loadResumeRuns() {
                     }, { once: true });
                 });
             });
+            // Attach click handlers to recreate storage buttons
+            content.querySelectorAll('.recreate-storage-btn').forEach(btn => {
+                btn.addEventListener('click', () => {
+                    const runId = parseInt(btn.dataset.runId);
+                    btn.disabled = true;
+                    btn.textContent = '⏳ Working...';
+                    logToConsole(`\n💾 Recreating storage for run #${runId}...`, 'info');
+                    socket.emit('recreate_storage', { run_id: runId, hf_token: config.hf_token });
+                });
+            });
+
+            socket.off('recreate_storage_done');
+            socket.on('recreate_storage_done', function(data) {
+                var btn = content.querySelector('.recreate-storage-btn[data-run-id="' + data.run_id + '"]');
+                if (data.need_storage_class) {
+                    var classes = data.available_classes || [];
+                    var modal = document.getElementById('storage-class-modal');
+                    var sel = document.getElementById('storage-class-select');
+                    sel.innerHTML = '';
+                    classes.forEach(function(sc) {
+                        var opt = document.createElement('option');
+                        opt.value = sc; opt.textContent = sc;
+                        sel.appendChild(opt);
+                    });
+                    if (!classes.length) {
+                        sel.innerHTML = '<option value="">No storage classes found</option>';
+                    }
+                    modal.classList.add('active');
+                    var runId = data.run_id;
+                    var confirmBtn = document.getElementById('storage-class-confirm');
+                    var cancelBtn = document.getElementById('storage-class-cancel');
+                    var cleanup = function() {
+                        modal.classList.remove('active');
+                        confirmBtn.replaceWith(confirmBtn.cloneNode(true));
+                        cancelBtn.replaceWith(cancelBtn.cloneNode(true));
+                    };
+                    document.getElementById('storage-class-cancel').addEventListener('click', function() {
+                        cleanup();
+                        if (btn) { btn.disabled = false; btn.textContent = '💾 Regenerate Storage'; }
+                        logToConsole('   ⚠️ Storage class required — cancelled', 'warning');
+                    }, { once: true });
+                    document.getElementById('storage-class-confirm').addEventListener('click', function() {
+                        var chosen = sel.value;
+                        cleanup();
+                        if (chosen) {
+                            logToConsole('   Using storage class: ' + chosen, 'info');
+                            socket.emit('recreate_storage', { run_id: runId, hf_token: config.hf_token, storage_class: chosen });
+                        } else {
+                            if (btn) { btn.disabled = false; btn.textContent = '💾 Regenerate Storage'; }
+                            logToConsole('   ⚠️ No storage class selected — cancelled', 'warning');
+                        }
+                    }, { once: true });
+                    return;
+                }
+                if (btn) { btn.disabled = false; btn.textContent = '💾 Regenerate Storage'; }
+                if (data.error) {
+                    logToConsole('   ❌ ' + data.error, 'error');
+                } else {
+                    logToConsole('   ✅ Storage ready — you can now resume this run', 'success');
+                }
+            });
+
             // Attach click handlers to edit-notes icons
             content.querySelectorAll('.run-notes-edit').forEach(icon => {
                 icon.addEventListener('click', () => {

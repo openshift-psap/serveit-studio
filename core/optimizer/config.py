@@ -179,7 +179,7 @@ class RecipeOptimizerConfig:
         d = {}
         for f in dc_fields(self):
             v = getattr(self, f.name)
-            if f.name in ('hf_token', 'kubeconfig'):
+            if f.name == 'kubeconfig':
                 d[f.name] = '***' if v else None
             else:
                 d[f.name] = v

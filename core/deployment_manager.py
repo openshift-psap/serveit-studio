@@ -653,7 +653,12 @@ class DeploymentManager:
                         return False
                 last_pending_check = now
 
-            time.sleep(5)
+            for _ in range(5):
+                time.sleep(1)
+                if stop_check and stop_check():
+                    if log_callback:
+                        log_callback("🛑 Deployment wait cancelled — optimization stopped")
+                    return False
 
         if log_callback:
             log_callback(f"⏱️ Timeout waiting for deployment to be ready ({timeout}s)")

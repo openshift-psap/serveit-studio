@@ -982,6 +982,29 @@ class TestOrchestrator(ParserMixin, GuidellmMixin):
             start_dt = datetime.fromisoformat(start_time)
             end_dt = datetime.fromisoformat(end_time)
 
+            # Reconnect port-forward if it died (e.g., server restart during run)
+            if not self._pf_process:
+                logger.warning("No port-forward process — establishing connection")
+                kubeconfig_path = os.environ.get('KUBECONFIG')
+                new_url = self._start_prometheus_port_forward(kubeconfig_path)
+                if new_url and self.metrics_collector:
+                    self.metrics_collector.config.thanos_url = new_url
+                    token = getattr(self, '_prom_bearer', None)
+                    if token:
+                        self.metrics_collector.session.headers['Authorization'] = f'Bearer {token}'
+                    logger.info(f"Prometheus connected at {new_url}")
+            elif self._pf_process and self._pf_process.poll() is not None:
+                logger.warning("Prometheus port-forward died — reconnecting")
+                self._pf_process = None
+                kubeconfig_path = os.environ.get('KUBECONFIG')
+                new_url = self._start_prometheus_port_forward(kubeconfig_path)
+                if new_url and self.metrics_collector:
+                    self.metrics_collector.config.thanos_url = new_url
+                    token = getattr(self, '_prom_bearer', None)
+                    if token:
+                        self.metrics_collector.session.headers['Authorization'] = f'Bearer {token}'
+                    logger.info(f"Prometheus reconnected at {new_url}")
+
             # Update the pod_name_pattern — per_node_storage uses stable LWS names
             if getattr(config, 'per_node_storage', False):
                 if config.architecture == 'aggregated':
@@ -1006,11 +1029,15 @@ class TestOrchestrator(ParserMixin, GuidellmMixin):
                 import json as _mj
                 with open(output_file) as _mf:
                     saved = _mj.load(_mf)
-                prom = saved.get('prometheus_metrics', {})
-                vllm_vals = [v for k, v in prom.items() if k.startswith('vllm_') and v is not None]
+                # Metrics can be at top level or under 'metrics' key
+                check = saved.get('metrics', saved)
+                if isinstance(check, dict):
+                    vllm_vals = [k for k in check if 'vllm' in k.lower() and check[k]]
+                else:
+                    vllm_vals = []
                 if not vllm_vals:
                     if log_callback:
-                        log_callback("⚠️  Prometheus returned no vLLM metrics — Thanos auth may have failed (401)")
+                        log_callback("⚠️  Prometheus returned no vLLM metrics for this test (pods may have terminated before scrape)")
             except Exception:
                 pass
 
@@ -1530,6 +1557,10 @@ class TestOrchestrator(ParserMixin, GuidellmMixin):
                     result.guidellm_retries = guidellm_attempt - 1
                     break
 
+                if stop_check and stop_check():
+                    result.error_message = "Stopped by user"
+                    return result
+
                 # Step 6: Collect metrics (if configured)
                 if self.metrics_collector and result.test_start_time and result.test_end_time:
                     if log_callback:
@@ -1545,8 +1576,16 @@ class TestOrchestrator(ParserMixin, GuidellmMixin):
                     result.metrics_file = metrics_file
                     result.metrics_collected = metrics_file is not None
 
+                if stop_check and stop_check():
+                    result.error_message = "Stopped by user"
+                    return result
+
                 # Archive test artifacts to PVC for MLflow/analysis
                 self._archive_test_artifacts(config, result, log_callback=log_callback)
+
+                if stop_check and stop_check():
+                    result.error_message = "Stopped by user"
+                    return result
 
                 # Scan pod logs for critical errors
                 try:
