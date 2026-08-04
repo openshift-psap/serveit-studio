@@ -720,6 +720,7 @@ def run_optimization_background(data):
             concurrency_sweep_count = int(concurrency_sweep_count) if concurrency_sweep_count else None
         concurrency_sweep_step_pct = int(_get('concurrency_sweep_step_pct', 20))
         concurrency_sweep_all_configs = _get('concurrency_sweep_all_configs', False)
+        concurrency_sweep_use_epp_tuned = _get('concurrency_sweep_use_epp_tuned', False)
         concurrency_sweep_max_configs = _get('concurrency_sweep_max_configs', None)
         if concurrency_sweep_max_configs is not None:
             concurrency_sweep_max_configs = int(concurrency_sweep_max_configs) if concurrency_sweep_max_configs else None
@@ -1027,6 +1028,7 @@ data:
                 concurrency_sweep_count=concurrency_sweep_count,
                 concurrency_sweep_step_pct=concurrency_sweep_step_pct,
                 concurrency_sweep_all_configs=concurrency_sweep_all_configs,
+                concurrency_sweep_use_epp_tuned=concurrency_sweep_use_epp_tuned,
                 concurrency_sweep_max_configs=concurrency_sweep_max_configs,
                 cache_sweep_enabled=cache_sweep_enabled,
                 cache_sweep_use_calibrated=cache_sweep_use_calibrated,
