@@ -96,7 +96,13 @@ function addReportTab(runId) {
                 return;
             }
             tabDataCache[tabId] = data;
-            renderChartsInPanel(data, runId, tabId);
+            try {
+                renderChartsInPanel(data, runId, tabId);
+            } catch (renderErr) {
+                console.error('Chart render error:', renderErr);
+                panel.innerHTML = '<div class="charts-loading">Render error: ' + renderErr.message + '</div>';
+                return;
+            }
             // Update download link if this is still the active tab
             if (activeTabId === tabId) {
                 const dlLink = document.getElementById('chart-download-link');
