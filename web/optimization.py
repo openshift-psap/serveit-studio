@@ -775,17 +775,36 @@ def run_optimization_background(data):
 
         # Auto-resolve dra_gpu_resource_key from the cluster if missing
         if network_type == 'dra' and selected_dra_classes and not dra_gpu_resource_key:
-            for dc_name in selected_dra_classes:
-                try:
-                    r = scanner.kubectl.run(
-                        ['get', 'deviceclass', dc_name, '-o', 'jsonpath={.spec.extendedResourceName}'],
-                        check=False)
-                    if r.returncode == 0 and r.stdout.strip():
-                        dra_gpu_resource_key = r.stdout.strip()
-                        log_to_ui(f'Auto-resolved DRA resource key: {dra_gpu_resource_key}', 'info')
-                        break
-                except Exception:
-                    pass
+            # Try reading from a previous run in this namespace
+            try:
+                with get_db() as _conn:
+                    prev = _conn.execute(
+                        "SELECT config_json FROM optimization_runs WHERE status != 'running' ORDER BY id DESC LIMIT 10"
+                    ).fetchall()
+                    for prow in prev:
+                        if prow['config_json']:
+                            import json as _j
+                            pcfg = _j.loads(prow['config_json'])
+                            if pcfg.get('dra_gpu_resource_key'):
+                                dra_gpu_resource_key = pcfg['dra_gpu_resource_key']
+                                log_to_ui(f'Restored DRA resource key from previous run: {dra_gpu_resource_key}', 'info')
+                                break
+            except Exception:
+                pass
+
+            # Fallback: query the device class on the cluster
+            if not dra_gpu_resource_key:
+                for dc_name in selected_dra_classes:
+                    try:
+                        r = scanner.kubectl.run(
+                            ['get', 'deviceclass', dc_name, '-o', 'jsonpath={.spec.extendedResourceName}'],
+                            check=False)
+                        if r.returncode == 0 and r.stdout.strip():
+                            dra_gpu_resource_key = r.stdout.strip()
+                            log_to_ui(f'Auto-resolved DRA resource key: {dra_gpu_resource_key}', 'info')
+                            break
+                    except Exception:
+                        pass
         gateway_class = _get('gateway_class', 'istio')
         per_node_storage = _get('per_node_storage', False)
         node_nfs_pvcs = _get('node_nfs_pvcs') or []

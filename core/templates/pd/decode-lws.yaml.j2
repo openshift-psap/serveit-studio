@@ -239,7 +239,6 @@ spec:
 {% endif %}{% if decode_moe_backend %}                  --moe-backend {{ decode_moe_backend }} \
 {% endif %}{% if decode_all2all_backend %}                  --all2all-backend {{ decode_all2all_backend }} \
 {% endif %}{% if max_model_len %}                  --max-model-len {{ max_model_len }} \
-{% endif %}{% if enable_chunked_prefill %}                  --enable-chunked-prefill \
 {% endif %}{% if enable_prefix_caching %}                  --enable-prefix-caching \
 {% endif %}{% if disable_custom_all_reduce %}                  --disable-custom-all-reduce \
 {% endif %}{% if dtype %}                  --dtype {{ dtype }} \
@@ -393,16 +392,20 @@ spec:
               limits:
                 cpu: "{{ cpu_limit }}"
                 memory: "{{ memory_limit }}"
-{% if not selected_dra_classes %}
+{% if selected_dra_classes %}
+                {{ gpu_resource_key }}: "{{ decode_gpu_count }}"
+{% else %}
                 {{ gpu_resource_key }}: "{{ decode_gpu_count }}"
                 {% for r in decode_extra_device_resources %}
                 {{ r.key }}: "{{ r.value }}"
                 {% endfor %}
 {% endif %}
               requests:
-                cpu: "{{ cpu_request }}"
-                memory: "{{ memory_request }}"
-{% if not selected_dra_classes %}
+                cpu: "{{ cpu_limit }}"
+                memory: "{{ memory_limit }}"
+{% if selected_dra_classes %}
+                {{ gpu_resource_key }}: "{{ decode_gpu_count }}"
+{% else %}
                 {{ gpu_resource_key }}: "{{ decode_gpu_count }}"
                 {% for r in decode_extra_device_resources %}
                 {{ r.key }}: "{{ r.value }}"
