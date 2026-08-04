@@ -17,9 +17,12 @@ function _renderChartsImpl(data, runId, content) {
 
     // Download link handled by tab management
     const dlLink = document.getElementById('chart-download-link');
-    dlLink.style.display = 'inline';
-    dlLink.href = '#';
-    dlLink.onclick = (e) => { e.preventDefault(); downloadHTMLReport(runId, data); };
+    if (dlLink) {
+        dlLink.style.display = 'inline';
+        dlLink.href = '#';
+        dlLink.onclick = (e) => { e.preventDefault(); downloadHTMLReport(runId, data); };
+    }
+    console.log('[charts] checkpoint 0: dlLink=' + !!dlLink);
 
     let html = '';
     let secRec = '', secTP = '', secCfg = '', secCmp = '', secStep9 = '', secCal = '', secCacheSweep = '', secVLLM = '', secTestCfg = '', secEppTuning = '', secDeployTiming = '', secPareto = '', secTraffic = '';
@@ -41,6 +44,7 @@ function _renderChartsImpl(data, runId, content) {
         testIdLookup[r.config_name] = tid;
     });
 
+    console.log('[charts] checkpoint 1: coreResults=' + coreResults.length);
     // ============================================================
     // GOAL BANNER — what was this run optimizing for
     // ============================================================
@@ -68,6 +72,7 @@ function _renderChartsImpl(data, runId, content) {
         html += '</div></div>';
     }
 
+    console.log('[charts] checkpoint 2: goal banner done');
     // ============================================================
     // Store recommendation configs for single test re-run
     window._recConfigs = {};
