@@ -413,6 +413,7 @@ function _renderChartsImpl(data, runId, content) {
 
         html += '</div></div>';
 
+    console.log('[charts] checkpoint A: goal banner done');
     // Flush recommendation part 1 (goal banner + deployment cards)
     secRec = html; html = '';
 
@@ -531,6 +532,7 @@ function _renderChartsImpl(data, runId, content) {
         html += statCard(best.most_efficient.efficiency.toFixed(3) + ' req/s/GPU', 'Best Efficiency', best.most_efficient.name);
     html += '</div>';
 
+    console.log('[charts] checkpoint B: summary cards done');
     // Flush recommendation part 2 (percentile breakdown + summary cards)
     secRec += html; html = '';
 
@@ -695,6 +697,7 @@ function _renderChartsImpl(data, runId, content) {
     secCfg += html; html = '';
 
     // ============================================================
+    console.log('[charts] checkpoint C: chart cards done');
     // USER DEFINED TEST SETTINGS tab — run-level configuration
     // ============================================================
     if (data.run_config) {
@@ -1214,6 +1217,7 @@ function _renderChartsImpl(data, runId, content) {
     secStep9 = html; html = '';
 
     // ============================================================
+    console.log('[charts] checkpoint D: test settings done');
     // STEP 10: Calibrated Load Validation (separate card)
     // Handles PD, EP, or both depending on goal
     // ============================================================
