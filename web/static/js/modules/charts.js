@@ -8,12 +8,11 @@ function renderCharts(data, runId) {
     }
 }
 function _renderChartsImpl(data, runId, content) {
-    console.log('[charts] _renderChartsImpl entered, content:', content ? content.id : 'null');
+
     const summary = data.summary;
     const chartQueue = [];
     const charts = data.charts;
     const rec = data.recommendation;
-    console.log('[charts] summary:', summary, 'charts keys:', Object.keys(charts));
 
     // Download link handled by tab management
     const dlLink = document.getElementById('chart-download-link');
@@ -22,7 +21,6 @@ function _renderChartsImpl(data, runId, content) {
         dlLink.href = '#';
         dlLink.onclick = (e) => { e.preventDefault(); downloadHTMLReport(runId, data); };
     }
-    console.log('[charts] checkpoint 0: dlLink=' + !!dlLink);
 
     let html = '';
     let secRec = '', secTP = '', secCfg = '', secCmp = '', secStep9 = '', secCal = '', secCacheSweep = '', secVLLM = '', secTestCfg = '', secEppTuning = '', secDeployTiming = '', secPareto = '', secTraffic = '';
@@ -44,7 +42,6 @@ function _renderChartsImpl(data, runId, content) {
         testIdLookup[r.config_name] = tid;
     });
 
-    console.log('[charts] checkpoint 1: coreResults=' + coreResults.length);
     // ============================================================
     // GOAL BANNER — what was this run optimizing for
     // ============================================================
@@ -72,7 +69,6 @@ function _renderChartsImpl(data, runId, content) {
         html += '</div></div>';
     }
 
-    console.log('[charts] checkpoint 2: goal banner done');
     // ============================================================
     // Store recommendation configs for single test re-run
     window._recConfigs = {};
@@ -417,8 +413,8 @@ function _renderChartsImpl(data, runId, content) {
         });
 
         html += '</div></div>';
+    }
 
-    console.log('[charts] checkpoint A: goal banner done');
     // Flush recommendation part 1 (goal banner + deployment cards)
     secRec = html; html = '';
 
@@ -537,7 +533,6 @@ function _renderChartsImpl(data, runId, content) {
         html += statCard(best.most_efficient.efficiency.toFixed(3) + ' req/s/GPU', 'Best Efficiency', best.most_efficient.name);
     html += '</div>';
 
-    console.log('[charts] checkpoint B: summary cards done');
     // Flush recommendation part 2 (percentile breakdown + summary cards)
     secRec += html; html = '';
 
@@ -702,7 +697,6 @@ function _renderChartsImpl(data, runId, content) {
     secCfg += html; html = '';
 
     // ============================================================
-    console.log('[charts] checkpoint C: chart cards done');
     // USER DEFINED TEST SETTINGS tab — run-level configuration
     // ============================================================
     if (data.run_config) {
@@ -1222,7 +1216,6 @@ function _renderChartsImpl(data, runId, content) {
     secStep9 = html; html = '';
 
     // ============================================================
-    console.log('[charts] checkpoint D: test settings done');
     // STEP 10: Calibrated Load Validation (separate card)
     // Handles PD, EP, or both depending on goal
     // ============================================================
@@ -2379,9 +2372,7 @@ function _renderChartsImpl(data, runId, content) {
         for (const sec of Object.values(sectionMap)) html += sec;
     }
 
-    console.log('[charts] Setting innerHTML, html length:', html.length, 'content id:', content.id, 'subtabs:', subtabDefs.length);
     content.innerHTML = html;
-    console.log('[charts] innerHTML set, children:', content.children.length);
 
     // --- Plotly chart config (must be before EPP chart rendering) ---
     const plotlyLayout = { margin: { t: 10, b: 40, l: 50, r: 20 }, height: 430, paper_bgcolor: 'transparent', plot_bgcolor: 'transparent', font: { family: 'Inter, sans-serif' } };
@@ -3579,6 +3570,5 @@ function _renderChartsImpl(data, runId, content) {
             if (plot.offsetParent !== null) Plotly.Plots.resize(plot);
         });
     }, 100);
-}
 }
 
