@@ -534,7 +534,7 @@ class PDSearchMixin:
                     )
                     test_config.data_parallel_size = dp_size
                     test_config.data_parallel_size_local = dp_local
-                    test_config.replicas = 1  # single LWS group, DP handles distribution
+                    test_config.replicas = dp_size  # one pod per DP rank
                     test_config.enable_expert_parallel = True
 
                     result = self.orchestrator.run_test(
