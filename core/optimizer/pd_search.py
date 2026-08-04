@@ -829,10 +829,13 @@ class PDSearchMixin:
 
                 result = self._run_split_test(current_split, test_num, total_planned)
                 if result is None or self._should_stop():
-                    if result:
+                    if result and not getattr(result, 'nixl_degraded', False):
                         self.pareto_results.append((current_split, result))
                     break
-                self.pareto_results.append((current_split, result))
+                if not getattr(result, 'nixl_degraded', False):
+                    self.pareto_results.append((current_split, result))
+                else:
+                    self.log(f"  ⚠️  Discarded from Pareto — NIXL-degraded result", 'warning')
 
                 # Analyze waiting ratio to decide next split
                 waiting = self._get_waiting_ratio(result)

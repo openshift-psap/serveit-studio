@@ -476,9 +476,31 @@ class RecipeOptimizer(
         return False
 
     def _check_pod_errors(self, test_config: TestConfig, test_result: TestResult):
-        """Check for pod errors after a test. Raise on critical errors, log NIXL warnings."""
+        """Check for pod errors after a test. Flag NIXL-degraded results, raise on critical errors."""
         if test_result.nixl_errors > 0:
-            self.log(f"  ⚠️  NIXL transfer errors: {test_result.nixl_errors} (non-critical)", 'warning')
+            total = test_result.request_total or 0
+            error_pct = (test_result.nixl_errors / total * 100) if total > 0 else 0
+            self.log(f"  ⚠️  NIXL transfer errors: {test_result.nixl_errors}/{total} requests ({error_pct:.1f}%)", 'warning')
+
+            # 1-3%: warning (results may be slightly affected)
+            # >3%: discard (results unreliable, excluded from charts)
+            quality = 'ok'
+            if error_pct > 3:
+                quality = 'discard'
+                test_result.nixl_degraded = True
+                self.log(f"  🚨 Test quality: DISCARD ({error_pct:.1f}% NIXL errors) — excluded from comparison charts", 'error')
+            elif error_pct > 1:
+                quality = 'warning'
+                self.log(f"  ⚠️  Test quality: WARNING ({error_pct:.1f}% NIXL errors) — results may be slightly affected", 'warning')
+
+            if self.db_manager and self.run_id and total > 0:
+                try:
+                    with self.db_manager.get_connection() as conn:
+                        conn.execute(
+                            'UPDATE test_configurations SET quality = ? WHERE run_id = ? AND config_name = ?',
+                            (quality, self.run_id, test_config.test_id))
+                except Exception:
+                    pass
 
         if not test_result.pod_errors_detected:
             return
@@ -517,6 +539,23 @@ class RecipeOptimizer(
         if total == 0 or errored == 0:
             return
         error_pct = errored / total * 100
+        # Set quality based on HTTP error rate
+        if error_pct > 3:
+            if self.db_manager and self.run_id:
+                try:
+                    with self.db_manager.get_connection() as conn:
+                        conn.execute('UPDATE test_configurations SET quality = ? WHERE run_id = ? AND config_name = ?',
+                                     ('discard', self.run_id, test_config.test_id))
+                except Exception:
+                    pass
+        elif error_pct > 1:
+            if self.db_manager and self.run_id:
+                try:
+                    with self.db_manager.get_connection() as conn:
+                        conn.execute('UPDATE test_configurations SET quality = ? WHERE run_id = ? AND config_name = ?',
+                                     ('warning', self.run_id, test_config.test_id))
+                except Exception:
+                    pass
         if error_pct > 2.0:
             self.log(f"🚨 {errored}/{total} requests failed ({error_pct:.1f}%) — cluster overloaded (503 from EPP)", 'error')
             self.log(f"   Results under heavy overload are unreliable for performance comparison.", 'error')
@@ -855,10 +894,10 @@ class RecipeOptimizer(
                     ttft_p90=best['ttft_p90'], throughput_p90=best['throughput_p90'])
                 self.log(f"   🔄 Rebuilt prefill_tp_results ({len(candidates)} TPs), optimal: TP={best['tp']} TPSG={best['tpsg']:.0f}", 'info')
 
-        # 3. Rebuild aggregated_result + aggregated_tp from step6 tests
+        # 3. Rebuild aggregated_result + aggregated_tp from step6 tests (exclude discarded)
         if not self.aggregated_result:
             step6 = [(name, row) for name, row in self.completed_tests.items()
-                     if name.startswith('step6-agg-')]
+                     if name.startswith('step6-agg-') and row.get('quality', 'ok') != 'discard']
             if step6:
                 use_ttft = self.config.objective == 'ttft'
                 if use_ttft:
@@ -871,10 +910,11 @@ class RecipeOptimizer(
                 self.log(f"   🔄 Rebuilt aggregated_result: TP={self.aggregated_tp}, "
                          f"TTFT={best_row.get('ttft_p90', 0):.1f}ms", 'info')
 
-        # 4. Rebuild pareto_results from step7 PD tests
+        # 4. Rebuild pareto_results from step7 PD tests (exclude discarded)
         if not self.pareto_results:
             step7 = [(name, row) for name, row in self.completed_tests.items()
-                     if name.startswith('step7-') and not name.startswith('step7-ep-')]
+                     if name.startswith('step7-') and not name.startswith('step7-ep-')
+                     and row.get('quality', 'ok') != 'discard']
             if step7:
                 for name, row in step7:
                     tc_raw = row.get('test_config_json')
@@ -899,10 +939,10 @@ class RecipeOptimizer(
                         continue
                 self.log(f"   🔄 Rebuilt pareto_results ({len(self.pareto_results)} PD splits)", 'info')
 
-        # 5. Rebuild EP results from step7-ep tests
+        # 5. Rebuild EP results from step7-ep tests (exclude discarded)
         if not self.ep_results:
             step7_ep = [(name, row) for name, row in self.completed_tests.items()
-                        if name.startswith('step7-ep-')]
+                        if name.startswith('step7-ep-') and row.get('quality', 'ok') != 'discard']
             if step7_ep:
                 for name, row in step7_ep:
                     tc_raw = row.get('test_config_json')

@@ -52,6 +52,7 @@ class TestResult:
     metrics_json: Optional[str]
     manifests_yaml: Optional[str]
     test_config_json: Optional[str] = None
+    quality: str = 'ok'  # 'ok', 'warning', 'discard'
 
     @property
     def throughput_mean(self) -> Optional[float]:
@@ -205,6 +206,10 @@ class ReportDataLoader:
                 test_config_json = row['test_config_json']
             except (IndexError, KeyError):
                 test_config_json = None
+            try:
+                quality = row['quality'] or 'ok'
+            except (IndexError, KeyError):
+                quality = 'ok'
 
             results.append(TestResult(
                 id=row['id'],
@@ -234,7 +239,8 @@ class ReportDataLoader:
                 completed_at=row['completed_at'],
                 metrics_json=row['metrics_json'],
                 manifests_yaml=manifests_yaml,
-                test_config_json=test_config_json
+                test_config_json=test_config_json,
+                quality=quality
             ))
 
         return results

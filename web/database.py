@@ -295,6 +295,12 @@ def init_db():
     except sqlite3.OperationalError:
         pass
 
+    # quality: 'ok' (default), 'warning' (1-3% errors), 'discard' (>3% errors)
+    try:
+        cursor.execute("ALTER TABLE test_configurations ADD COLUMN quality TEXT DEFAULT 'ok'")
+    except sqlite3.OperationalError:
+        pass
+
     for col, typ in [
         ('workload_mode', 'TEXT'),
         ('dataset_source', 'TEXT'),

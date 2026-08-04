@@ -14,10 +14,11 @@ function renderCharts(data, runId) {
     dlLink.onclick = (e) => { e.preventDefault(); downloadHTMLReport(runId, data); };
 
     let html = '';
-    let secRec = '', secTP = '', secCfg = '', secCmp = '', secStep9 = '', secCal = '', secCacheSweep = '', secVLLM = '', secTestCfg = '', secEppTuning = '', secDeployTiming = '', secPareto = '';
+    let secRec = '', secTP = '', secCfg = '', secCmp = '', secStep9 = '', secCal = '', secCacheSweep = '', secVLLM = '', secTestCfg = '', secEppTuning = '', secDeployTiming = '', secPareto = '', secTraffic = '';
 
-    // Filter out calibration and sweep tests from configuration charts
+    // Filter out calibration, sweep tests, and discarded tests from configuration charts
     var coreResults = (data.all_results || []).filter(function(r) {
+        if (r.quality === 'discard') return false;
         var tid = r.test_id || r.config_name || '';
         return tid.indexOf('step2-') !== 0 && tid.indexOf('step3-') !== 0 &&
                tid.indexOf('step11-') !== 0 && tid.indexOf('step12-') !== 0 && tid.indexOf('step13-') !== 0;
@@ -556,13 +557,13 @@ function renderCharts(data, runId) {
             'The architecture whose frontier is further to the top-right dominates.</div></div>';
 
         // Throughput–Interactivity chart
-        secPareto += '<div class="chart-card"><div class="chart-card-header">Throughput vs Interactivity</div>' +
+        secPareto += '<div class="chart-card"><div class="chart-card-header">Pareto — Throughput vs Interactivity</div>' +
             '<div style="padding:8px 20px 0; color:#1e293b; font-size:0.92em; line-height:1.5;">' +
             'Trade-off between how fast each user gets tokens (X) and how efficiently GPUs are used (Y). Top-right is ideal.</div>' +
             '<div class="chart-card-body"><div id="chart-pareto-frontier' + _chartSuffix + '" style="width:100%;height:850px;"></div></div></div>';
 
         // Throughput–TTFT chart
-        secPareto += '<div class="chart-card"><div class="chart-card-header">Throughput vs TTFT</div>' +
+        secPareto += '<div class="chart-card"><div class="chart-card-header">Pareto — Throughput vs TTFT</div>' +
             '<div style="padding:8px 20px 0; color:#1e293b; font-size:0.92em; line-height:1.5;">' +
             'Trade-off between time to first token (X, lower is better) and throughput efficiency (Y, higher is better). Top-left is ideal.</div>' +
             '<div class="chart-card-body"><div id="chart-pareto-ttft' + _chartSuffix + '" style="width:100%;height:850px;"></div></div></div>';
@@ -1387,7 +1388,14 @@ function renderCharts(data, runId) {
     if (!sweepConfigLabels.ep) sweepConfigLabels.ep = findSweepConfigLabel('step13-cache-ep');
 
     if (data.concurrency_sweep) {
-        const sweep = data.concurrency_sweep;
+        // Filter discarded tests from sweep charts
+        var _discIds = {};
+        (data.all_results || []).forEach(function(r) { if (r.quality === 'discard') _discIds[r.test_id || r.config_name] = true; });
+        var sweep = {};
+        Object.keys(data.concurrency_sweep).forEach(function(k) {
+            var pts = data.concurrency_sweep[k];
+            if (pts) sweep[k] = pts.filter(function(p) { return !_discIds[p.test_id || '']; });
+        });
         var pctColors = { ttft_p90: '#3b82f6', ttft_p95: '#f59e0b', ttft_p99: '#ef4444' };
         var archIdx = 0;
         function sweepColor(key) {
@@ -1437,7 +1445,7 @@ function renderCharts(data, runId) {
                             x: cfg.points.map(function(p) { return p.concurrency; }),
                             y: cfg.points.map(function(p) { return p[pct.key] || 0; }),
                             text: cfg.points.map(function(p) { return Math.round(p[pct.key] || 0).toLocaleString(); }),
-                            textposition: 'top center', textfont: { size: 9, color: cfg.color },
+                            textposition: 'top center', textfont: { size: 10, color: cfg.color },
                             mode: 'lines+markers+text', name: cfg.label,
                             line: { color: cfg.color, width: 3 },
                             marker: { size: 8 },
@@ -1447,13 +1455,18 @@ function renderCharts(data, runId) {
                             if (p.is_calibrated) {
                                 calShapes.push({ type: 'line', x0: p.concurrency, x1: p.concurrency, y0: 0, y1: 1, yref: 'paper',
                                     line: { color: '#059669', width: 1.5, dash: 'dash' } });
+                                calShapes._annotations = calShapes._annotations || [];
+                                calShapes._annotations.push({
+                                    x: p.concurrency, y: 0.5, yref: 'paper', text: cfg.label,
+                                    showarrow: false, textangle: -90, xshift: -12,
+                                    font: { size: 10, color: cfg.color }, yanchor: 'middle'
+                                });
                             }
                         });
                     });
                     if (calShapes.length) {
-                        var calC = calShapes[0].x0;
-                        traces.push({ x: [calC, calC], y: [null, null], mode: 'lines', name: 'Calibrated (' + calC + ' users)',
-                            line: { color: '#059669', width: 1.5, dash: 'dash' }, showlegend: true });
+                        traces.push({ x: [calShapes[0].x0, calShapes[0].x0], y: [null, null], mode: 'lines',
+                            name: 'Calibrated', line: { color: '#059669', width: 1.5, dash: 'dash' }, showlegend: true });
                     }
                     var allXvals = []; traces.forEach(function(t){ if(t.x) t.x.forEach(function(v){ if(allXvals.indexOf(v)===-1) allXvals.push(v); }); }); allXvals.sort(function(a,b){return a-b;});
                     Plotly.newPlot(chartId, traces, {
@@ -1462,7 +1475,7 @@ function renderCharts(data, runId) {
                         plot_bgcolor: '#f8fafc', paper_bgcolor: '#fff',
                         margin: { t: 20, b: 60, l: 70, r: 20 },
                         legend: { x: 0, y: 1, bgcolor: 'rgba(255,255,255,0.9)' },
-                        shapes: calShapes, hovermode: 'closest'
+                        shapes: calShapes, annotations: calShapes._annotations || [], hovermode: 'closest'
                     }, { responsive: true });
                 });
             });
@@ -1482,7 +1495,7 @@ function renderCharts(data, runId) {
                         x: cfg.points.map(function(p) { return p.concurrency; }),
                         y: cfg.points.map(function(p) { return p.throughput_per_gpu; }),
                         text: cfg.points.map(function(p) { return Math.round(p.throughput_per_gpu).toLocaleString(); }),
-                        textposition: 'top center', textfont: { size: 9, color: cfg.color },
+                        textposition: 'top center', textfont: { size: 10, color: cfg.color },
                         mode: 'lines+markers+text', name: cfg.label,
                         line: { color: cfg.color, width: 3 },
                         marker: { size: 8 },
@@ -1492,13 +1505,18 @@ function renderCharts(data, runId) {
                         if (p.is_calibrated) {
                             calShapes.push({ type: 'line', x0: p.concurrency, x1: p.concurrency, y0: 0, y1: 1, yref: 'paper',
                                 line: { color: '#059669', width: 1.5, dash: 'dash' } });
+                            calShapes._annotations = calShapes._annotations || [];
+                            calShapes._annotations.push({
+                                x: p.concurrency, y: 1, yref: 'paper', text: cfg.label,
+                                showarrow: false, textangle: -90, xshift: 10,
+                                font: { size: 10, color: cfg.color }, yanchor: 'top'
+                            });
                         }
                     });
                 });
                 if (calShapes.length) {
-                    var calC = calShapes[0].x0;
-                    traces.push({ x: [calC, calC], y: [null, null], mode: 'lines', name: 'Calibrated (' + calC + ' users)',
-                        line: { color: '#059669', width: 1.5, dash: 'dash' }, showlegend: true });
+                    traces.push({ x: [calShapes[0].x0, calShapes[0].x0], y: [null, null], mode: 'lines',
+                        name: 'Calibrated', line: { color: '#059669', width: 1.5, dash: 'dash' }, showlegend: true });
                 }
                 var allXvals2 = []; traces.forEach(function(t){ if(t.x) t.x.forEach(function(v){ if(allXvals2.indexOf(v)===-1) allXvals2.push(v); }); }); allXvals2.sort(function(a,b){return a-b;});
                 Plotly.newPlot('chart-sweep-tput-all', traces, {
@@ -1507,18 +1525,18 @@ function renderCharts(data, runId) {
                     plot_bgcolor: '#f8fafc', paper_bgcolor: '#fff',
                     margin: { t: 20, b: 60, l: 70, r: 20 },
                     legend: { x: 0, y: 1, bgcolor: 'rgba(255,255,255,0.9)' },
-                    shapes: calShapes, hovermode: 'closest'
+                    shapes: calShapes, annotations: calShapes._annotations || [], hovermode: 'closest'
                 }, { responsive: true });
             });
         }
 
         // --- Sweep Pareto charts ---
-        html += '<div class="chart-card" style="margin-top:20px;"><div class="chart-card-header">Throughput vs Interactivity</div>' +
+        html += '<div class="chart-card" style="margin-top:20px;"><div class="chart-card-header">Pareto — Throughput vs Interactivity</div>' +
             '<div style="padding:8px 20px 0; color:#1e293b; font-size:0.92em; line-height:1.5;">' +
             'Trade-off between per-user token speed (X) and GPU throughput efficiency (Y) across concurrency levels. Top-right is ideal.</div>' +
             '<div class="chart-card-body"><div id="chart-pareto-sweep-interactivity' + _chartSuffix + '" style="width:100%;height:850px;"></div></div></div>';
 
-        html += '<div class="chart-card" style="margin-top:16px;"><div class="chart-card-header">Throughput vs TTFT</div>' +
+        html += '<div class="chart-card" style="margin-top:16px;"><div class="chart-card-header">Pareto — Throughput vs TTFT</div>' +
             '<div style="padding:8px 20px 0; color:#1e293b; font-size:0.92em; line-height:1.5;">' +
             'Trade-off between time to first token (X, lower/right is better) and GPU throughput efficiency (Y). Top-right is ideal.</div>' +
             '<div class="chart-card-body"><div id="chart-pareto-sweep-ttft' + _chartSuffix + '" style="width:100%;height:850px;"></div></div></div>';
@@ -1685,7 +1703,7 @@ function renderCharts(data, runId) {
                         x: pts.map(function(p) { return p.hit_pct; }),
                         y: pts.map(function(p) { return p[pct.key] || 0; }),
                         text: pts.map(function(p) { return Math.round(p[pct.key] || 0).toLocaleString(); }),
-                        textposition: 'top center', textfont: { size: 9, color: csPctColors[pct.key] },
+                        textposition: 'top center', textfont: { size: 10, color: csPctColors[pct.key] },
                         mode: 'lines+markers+text', name: pct.label,
                         line: { color: csPctColors[pct.key], width: 3 },
                         marker: { size: 8 },
@@ -1697,7 +1715,7 @@ function renderCharts(data, runId) {
                     x: pts.map(function(p) { return p.hit_pct; }),
                     y: pts.map(function(p) { return p.throughput_mean || 0; }),
                     text: pts.map(function(p) { return (p.throughput_mean || 0).toFixed(1); }),
-                    textposition: 'top center', textfont: { size: 9, color: '#d97706' },
+                    textposition: 'top center', textfont: { size: 10, color: '#d97706' },
                     mode: 'lines+markers+text', name: 'Throughput Mean',
                     yaxis: 'y2',
                     line: { color: '#d97706', width: 3, dash: 'dash' },
@@ -1711,7 +1729,7 @@ function renderCharts(data, runId) {
                         x: pts.map(function(p) { return p.hit_pct; }),
                         y: pts.map(function(p) { return p.actual_hit_rate != null ? p.actual_hit_rate : 0; }),
                         text: pts.map(function(p) { return p.actual_hit_rate != null ? p.actual_hit_rate.toFixed(1) + '%' : ''; }),
-                        textposition: 'top center', textfont: { size: 9, color: '#059669' },
+                        textposition: 'top center', textfont: { size: 10, color: '#059669' },
                         xaxis: 'x2', yaxis: 'y3',
                         mode: 'lines+markers+text', name: 'Actual Hit % (hits/queries)',
                         line: { color: '#059669', width: 3 },
@@ -2180,6 +2198,133 @@ function renderCharts(data, runId) {
         secEppTuning = eppHtml;
     }
 
+    // --- Traffic & Errors tab ---
+    if (data.all_results && data.all_results.length) {
+        var stepGroups = {
+            'TP Calibration': { prefix: ['step2-', 'step3-'], results: [] },
+            'Aggregated': { prefix: ['step6-'], results: [] },
+            'PD/EP Splits': { prefix: ['step7-'], results: [] },
+            'EPP Tuning': { prefix: ['step9-', 'step11-epp-'], results: [] },
+            'Concurrency Sweep': { prefix: ['step11-sweep-'], results: [] },
+            'Cache Sweep': { prefix: ['step13-'], results: [] },
+        };
+        data.all_results.forEach(function(r) {
+            var tid = r.test_id || r.config_name || '';
+            Object.keys(stepGroups).forEach(function(group) {
+                stepGroups[group].prefix.forEach(function(pfx) {
+                    if (tid.indexOf(pfx) === 0) stepGroups[group].results.push(r);
+                });
+            });
+        });
+
+        var trafficHtml = '';
+        var trafficChartIds = [];
+        var _trafficSuffix = runId ? '-' + runId : '';
+
+        // For concurrency sweep, sub-group by config
+        function splitByConfig(results) {
+            var byConfig = {};
+            results.forEach(function(r) {
+                var tid = r.test_id || '';
+                // Extract config part: step11-sweep-pd-3p1d-tp2-2-c5 -> pd-3p1d-tp2-2
+                var cfgMatch = tid.replace('step11-sweep-', '').replace(/-c\d+$/, '');
+                var label = r.config_name || cfgMatch;
+                if (!byConfig[cfgMatch]) byConfig[cfgMatch] = { label: label, results: [] };
+                byConfig[cfgMatch].results.push(r);
+            });
+            return byConfig;
+        }
+
+        Object.keys(stepGroups).forEach(function(group) {
+            var results = stepGroups[group].results;
+            if (!results.length) return;
+
+            if (group === 'Concurrency Sweep') {
+                var byConfig = splitByConfig(results);
+                Object.keys(byConfig).sort().forEach(function(cfgKey) {
+                    var cfg = byConfig[cfgKey];
+                    var hasErrors = cfg.results.some(function(r) { return (r.request_errored || 0) > 0 || (r.nixl_errors || 0) > 0; });
+                    var chartId = 'chart-traffic-sweep-' + cfgKey.replace(/[^a-z0-9]/g, '-') + _trafficSuffix;
+                    trafficChartIds.push({ id: chartId, group: group, results: cfg.results, hasErrors: hasErrors, isSweep: true });
+                    trafficHtml += '<div class="chart-card" style="margin-top:16px;' + (hasErrors ? 'border-left:4px solid #dc2626;' : '') + '">';
+                    trafficHtml += '<div class="chart-card-header">Sweep: ' + cfg.label + (hasErrors ? ' <span style="color:#dc2626;font-size:0.8em;">&#9888; errors</span>' : '') + '</div>';
+                    trafficHtml += '<div id="' + chartId + '" style="width:100%;height:350px;"></div></div>';
+                });
+            } else {
+                var hasErrors = results.some(function(r) { return (r.request_errored || 0) > 0 || (r.nixl_errors || 0) > 0; });
+                var chartId = 'chart-traffic-' + group.toLowerCase().replace(/[^a-z]/g, '-') + _trafficSuffix;
+                trafficChartIds.push({ id: chartId, group: group, results: results, hasErrors: hasErrors });
+                trafficHtml += '<div class="chart-card" style="margin-top:16px;' + (hasErrors ? 'border-left:4px solid #dc2626;' : '') + '">';
+                trafficHtml += '<div class="chart-card-header">' + group + ' Traffic' + (hasErrors ? ' <span style="color:#dc2626;font-size:0.8em;">&#9888; errors detected</span>' : '') + '</div>';
+                trafficHtml += '<div style="padding:4px 16px;font-size:0.82em;color:#64748b;">Request totals, HTTP errors, and NIXL transfer errors per test configuration.</div>';
+                trafficHtml += '<div id="' + chartId + '" style="width:100%;height:400px;"></div></div>';
+            }
+        });
+
+        if (trafficHtml) {
+            secTraffic = trafficHtml;
+            chartQueue.push(function() {
+                trafficChartIds.forEach(function(tc) {
+                    // Sort sweep results by concurrency
+                    if (tc.isSweep) {
+                        tc.results.sort(function(a, b) {
+                            var ca = parseInt((a.test_id || '').match(/c(\d+)$/)?.[1] || '0');
+                            var cb = parseInt((b.test_id || '').match(/c(\d+)$/)?.[1] || '0');
+                            return ca - cb;
+                        });
+                    }
+                    var labels = tc.results.map(function(r) {
+                        var tid = r.test_id || '';
+                        if (tid.indexOf('step11-sweep-') === 0) {
+                            var cMatch = tid.match(/c(\d+)$/);
+                            return cMatch ? 'c=' + cMatch[1] : tid.replace('step11-sweep-', '');
+                        }
+                        return tid.replace(/^step\d+-/, '');
+                    });
+                    var totals = tc.results.map(function(r) { return r.request_total || 0; });
+                    var errors = tc.results.map(function(r) { return r.request_errored || 0; });
+                    var nixl = tc.results.map(function(r) { return r.nixl_errors || 0; });
+
+                    var degraded = tc.results.map(function(r) { return r.nixl_degraded ? 1 : 0; });
+                    var hasDegraded = degraded.some(function(d) { return d; });
+                    var traces = [
+                        { x: labels, y: totals, name: 'Total Requests', mode: 'lines+markers',
+                          line: { color: '#059669', width: 2 }, marker: { size: 8 } },
+                        { x: labels, y: errors, name: 'HTTP Errors', mode: 'lines+markers',
+                          line: { color: '#dc2626', width: 2 }, marker: { size: 8 } },
+                        { x: labels, y: nixl, name: 'NIXL Errors', mode: 'lines+markers',
+                          line: { color: '#f59e0b', width: 2 }, marker: { size: 8 } }
+                    ];
+                    if (hasDegraded) {
+                        var dgLabels = [], dgY = [], dgText = [];
+                        tc.results.forEach(function(r, i) {
+                            if (r.nixl_degraded) {
+                                dgLabels.push(labels[i]);
+                                dgY.push(totals[i]);
+                                dgText.push('DEGRADED — results unreliable');
+                            }
+                        });
+                        traces.push({
+                            x: dgLabels, y: dgY, text: dgText,
+                            name: 'NIXL Degraded', mode: 'markers',
+                            marker: { color: '#dc2626', size: 16, symbol: 'x', line: { width: 3, color: '#dc2626' } },
+                            hovertemplate: '<b>%{x}</b><br>%{text}<extra></extra>'
+                        });
+                    }
+                    Plotly.newPlot(tc.id, traces, {
+                        ...plotlyLayout, height: 400,
+                        xaxis: { title: '', gridcolor: '#e2e8f0', tickangle: -35 },
+                        yaxis: { title: 'Count', gridcolor: '#e2e8f0' },
+                        showlegend: true,
+                        legend: { x: 0, y: 1, bgcolor: 'rgba(255,255,255,0.9)' },
+                        margin: { t: 20, b: 100, l: 60, r: 20 },
+                        plot_bgcolor: '#f8fafc', paper_bgcolor: '#fff',
+                    }, { responsive: true });
+                });
+            });
+        }
+    }
+
     if (secRec) subtabDefs.push({ id: 'recommendation', label: 'Recommendation', icon: '&#9733;' });
     if (secTP) subtabDefs.push({ id: 'tp-calibration', label: 'TP Calibration', icon: '&#9881;' });
     if (secCfg) subtabDefs.push({ id: 'configurations', label: 'Configurations', icon: '&#9776;' });
@@ -2191,6 +2336,7 @@ function renderCharts(data, runId) {
     if (secVLLM) subtabDefs.push({ id: 'vllm-metrics', label: 'vLLM Metrics', icon: '&#9889;' });
     if (secEppTuning) subtabDefs.push({ id: 'epp-tuning', label: 'EPP Tuning', icon: '&#9881;' });
     if (secPareto) subtabDefs.push({ id: 'pareto-frontier', label: 'Pareto Frontier', icon: '&#128200;' });
+    if (secTraffic) subtabDefs.push({ id: 'traffic', label: 'Traffic', icon: '&#128678;' });
     if (secTestCfg) subtabDefs.push({ id: 'test-settings', label: 'Test Settings', icon: '&#9881;' });
     subtabDefs.push({ id: 'estimator', label: 'Estimator', icon: '&#128200;' });
 
@@ -2198,7 +2344,7 @@ function renderCharts(data, runId) {
         'recommendation': secRec, 'tp-calibration': secTP, 'configurations': secCfg,
         'test-settings': secTestCfg, 'comparison': secCmp, 'latency-search': secStep9,
         'calibrated-load': secCal, 'cache-sweep': secCacheSweep, 'deploy-timing': secDeployTiming, 'vllm-metrics': secVLLM, 'epp-tuning': secEppTuning,
-        'pareto-frontier': secPareto, 'estimator': secEst
+        'pareto-frontier': secPareto, 'traffic': secTraffic, 'estimator': secEst
     };
 
     if (subtabDefs.length > 1) {
@@ -2309,6 +2455,7 @@ function renderCharts(data, runId) {
         var runOsl = (rec && rec.workload) ? rec.workload.osl : 100;
         // Use ALL results including sweeps for maximum data spread
         var allCfgResults = (data.all_results || []).filter(function(r) {
+            if (r.quality === 'discard') return false;
             var tid = r.test_id || r.config_name || '';
             return tid.indexOf('step2-') !== 0 && tid.indexOf('step3-') !== 0 &&
                    (r.output_tps_mean > 0 || r.throughput_mean > 0);
@@ -2403,14 +2550,18 @@ function renderCharts(data, runId) {
 
             // Annotate frontier points with config name
             function addFrontierAnnotations(points, color) {
-                points.forEach(function(p) {
+                var positions = [
+                    [80, -15], [-80, -15], [70, -45], [-70, -45],
+                    [90, -30], [-90, -30], [60, -60], [-60, -60],
+                    [100, -10], [-100, -10], [50, -50], [-50, -50]
+                ];
+                points.forEach(function(p, i) {
                     if (!p.label) return;
-                    annotIdx++;
-                    var side = annotIdx % 2 === 0 ? 1 : -1;
+                    var pos = positions[i % positions.length];
                     paretoAnnotations.push({
-                        x: p.nx, y: p.ny, text: p.cfgKey.replace('Agg ','').replace('PD ',''),
+                        x: p.nx, y: p.ny, text: p.cfgKey + '<br>c=' + p.conc,
                         showarrow: true, arrowhead: 0, arrowwidth: 1, arrowcolor: color,
-                        ax: 60 * side, ay: -30 - (annotIdx % 3) * 15,
+                        ax: pos[0], ay: pos[1],
                         font: { size: 10, color: color },
                         bgcolor: 'rgba(255,255,255,0)', borderpad: 2,
                     });
@@ -2500,14 +2651,14 @@ function renderCharts(data, runId) {
                     if (ttftAggPareto.length) {
                         ttftTraces.push({
                             x: ttftAggPareto.map(function(p) { return p.nx; }), y: ttftAggPareto.map(function(p) { return p.ny; }),
-                            name: 'Aggregated — Pareto', mode: ttftAggPareto.length > 1 ? 'lines+markers' : 'markers',
+                            name: 'Aggregated — Frontier', mode: ttftAggPareto.length > 1 ? 'lines+markers' : 'markers',
                             line: { color: '#dc2626', width: 3 }, marker: { color: '#dc2626', size: 6 }
                         });
                     }
                     if (ttftPdPareto.length) {
                         ttftTraces.push({
                             x: ttftPdPareto.map(function(p) { return p.nx; }), y: ttftPdPareto.map(function(p) { return p.ny; }),
-                            name: 'Disaggregation — Pareto', mode: ttftPdPareto.length > 1 ? 'lines+markers' : 'markers',
+                            name: 'Disaggregation — Frontier', mode: ttftPdPareto.length > 1 ? 'lines+markers' : 'markers',
                             line: { color: '#2563eb', width: 3 }, marker: { color: '#2563eb', size: 6 }
                         });
                     }
@@ -2550,7 +2701,21 @@ function renderCharts(data, runId) {
 
     // --- Concurrency Sweep Pareto charts (rendered into Concurrency Sweep tab) ---
     if (data.concurrency_sweep && document.getElementById(cid('chart-pareto-sweep-interactivity'))) {
-        var csw = data.concurrency_sweep;
+        // Build set of discarded test_ids to filter from sweep charts
+        var discardedIds = {};
+        (data.all_results || []).forEach(function(r) {
+            if (r.quality === 'discard') discardedIds[r.test_id || r.config_name] = true;
+        });
+        // Filter sweep data — remove points whose test_id matches a discarded test
+        var csw = {};
+        Object.keys(data.concurrency_sweep).forEach(function(arch) {
+            var pts = data.concurrency_sweep[arch];
+            if (!pts) return;
+            csw[arch] = pts.filter(function(p) {
+                var tid = p.test_id || '';
+                return !discardedIds[tid];
+            });
+        });
         function sweepArchLabel(key) {
             if (key.startsWith('pd')) return 'PD';
             if (key.startsWith('aggregated')) return 'AGGREGATED';
@@ -2629,30 +2794,36 @@ function renderCharts(data, runId) {
             if (swAggPareto.length > 1) {
                 swTraces.push({
                     x: swAggPareto.map(function(p) { return p.nx; }), y: swAggPareto.map(function(p) { return p.ny; }),
-                    name: 'Aggregated — Pareto', mode: 'lines',
+                    name: 'Aggregated — Frontier', mode: 'lines',
                     line: { color: '#dc2626', width: 3, dash: 'dot' }, showlegend: true
                 });
             }
             if (swPdPareto.length > 1) {
                 swTraces.push({
                     x: swPdPareto.map(function(p) { return p.nx; }), y: swPdPareto.map(function(p) { return p.ny; }),
-                    name: 'Disaggregation — Pareto', mode: 'lines',
+                    name: 'Disaggregation — Frontier', mode: 'lines',
                     line: { color: '#2563eb', width: 3, dash: 'dot' }, showlegend: true
                 });
             }
 
             var swAnnotations = [];
             var swIdx = 0;
+            var swPositions = [
+                [80, -15], [-80, -15], [70, -45], [-70, -45],
+                [90, -30], [-90, -30], [60, -60], [-60, -60],
+                [100, -10], [-100, -10], [50, -50], [-50, -50]
+            ];
             function addSwLabels(points, color) {
                 points.forEach(function(p) {
+                    var cfgName = p.label.replace(/ c=\d+$/, '');
+                    var pos = swPositions[swIdx % swPositions.length];
                     swIdx++;
-                    var side = swIdx % 2 === 0 ? 1 : -1;
                     swAnnotations.push({
                         x: p.nx, y: p.ny,
-                        text: p.x.toFixed(1) + ' tok/s/user<br>' + p.y.toFixed(0) + ' tok/s/GPU',
+                        text: cfgName + '<br>' + p.x.toFixed(1) + ' tok/s/user<br>' + p.y.toFixed(0) + ' tok/s/GPU',
                         showarrow: true, arrowhead: 0, arrowwidth: 1, arrowcolor: color,
-                        ax: 70 * side, ay: -25 - (swIdx % 3) * 12,
-                        font: { size: 8, color: color },
+                        ax: pos[0], ay: pos[1],
+                        font: { size: 10, color: color },
                         bgcolor: 'rgba(255,255,255,0)', borderpad: 2,
                     });
                 });
@@ -2722,7 +2893,7 @@ function renderCharts(data, runId) {
                     ttftAnnotations.push({
                         x: c, y: b.ttft, text: b.label,
                         showarrow: true, arrowhead: 0, arrowwidth: 1, arrowcolor: getEnvColor(b.label),
-                        ax: a[0], ay: a[1], font: { size: 9, color: getEnvColor(b.label) },
+                        ax: a[0], ay: a[1], font: { size: 10, color: getEnvColor(b.label) },
                         bgcolor: 'rgba(255,255,255,0)', borderpad: 2,
                     });
                 });
@@ -2801,7 +2972,7 @@ function renderCharts(data, runId) {
                         x: c, y: b.tputGpu, text: b.label,
                         showarrow: true, arrowhead: 0, arrowwidth: 1, arrowcolor: getEnvColor(b.label),
                         ax: a[0], ay: a[1],
-                        font: { size: 9, color: getEnvColor(b.label) },
+                        font: { size: 10, color: getEnvColor(b.label) },
                         bgcolor: 'rgba(255,255,255,0)', borderpad: 2,
                     });
                 });
@@ -2855,7 +3026,7 @@ function renderCharts(data, runId) {
                         x: c, y: b.tputGpu, text: b.label,
                         showarrow: true, arrowhead: 0, arrowwidth: 1, arrowcolor: getEnvColor(b.label),
                         ax: 60 * side, ay: -25 - (i % 3) * 15,
-                        font: { size: 9, color: getEnvColor(b.label) },
+                        font: { size: 10, color: getEnvColor(b.label) },
                         bgcolor: 'rgba(255,255,255,0)', borderpad: 2,
                     });
                 });
@@ -3268,56 +3439,55 @@ function renderCharts(data, runId) {
     // ============================================================
     if (charts.vllm && charts.vllm.configs.length) {
         const vllm = charts.vllm;
-        const vllmLayout = { ...plotlyLayout, margin: { ...plotlyLayout.margin, b: 100 }, barmode: 'group', showlegend: true, legend: { x: 0, y: 1.15, orientation: 'h' } };
+        const vllmLayout = { ...plotlyLayout, margin: { ...plotlyLayout.margin, b: 100 }, showlegend: true, legend: { x: 0, y: 1.15, orientation: 'h' } };
         const pColors = { p50: '#60a5fa', p90: '#3b82f6', p95: '#f59e0b', p99: '#ef4444' };
+        const pctiles = ['P50', 'P90', 'P95', 'P99'];
 
-        const barText = (vals, fmt) => vals.map(v => v != null ? (fmt === 'int' ? Math.round(v).toLocaleString() : v.toFixed(1)) : '');
-        const barTextCfg = { textposition: 'outside', textfont: { size: 10, color: '#334155' }, cliponaxis: false, constraintext: 'none' };
+        function makePercentileLines(data, unit) {
+            return [
+                { x: vllm.configs, y: data.p50, name: 'P50', mode: 'lines+markers', line: { color: pColors.p50, width: 2 }, marker: { size: 8 },
+                  hovertemplate: '<b>%{x}</b><br>P50: %{y:,.0f} ' + unit + '<extra></extra>' },
+                { x: vllm.configs, y: data.p90, name: 'P90', mode: 'lines+markers', line: { color: pColors.p90, width: 3 }, marker: { size: 10 },
+                  hovertemplate: '<b>%{x}</b><br>P90: %{y:,.0f} ' + unit + '<extra></extra>' },
+                { x: vllm.configs, y: data.p95, name: 'P95', mode: 'lines+markers', line: { color: pColors.p95, width: 2 }, marker: { size: 8 },
+                  hovertemplate: '<b>%{x}</b><br>P95: %{y:,.0f} ' + unit + '<extra></extra>' },
+                { x: vllm.configs, y: data.p99, name: 'P99', mode: 'lines+markers', line: { color: pColors.p99, width: 2 }, marker: { size: 8 },
+                  hovertemplate: '<b>%{x}</b><br>P99: %{y:,.0f} ' + unit + '<extra></extra>' },
+            ];
+        }
 
-        // Chart 1: TTFT Percentiles (grouped bar)
-        Plotly.newPlot(cid('chart-vllm-ttft'), [
-            { x: vllm.configs, y: vllm.ttft.p50, name: 'P50', type: 'bar', marker: { color: pColors.p50 }, text: barText(vllm.ttft.p50, 'int'), ...barTextCfg },
-            { x: vllm.configs, y: vllm.ttft.p90, name: 'P90', type: 'bar', marker: { color: pColors.p90 }, text: barText(vllm.ttft.p90, 'int'), ...barTextCfg },
-            { x: vllm.configs, y: vllm.ttft.p95, name: 'P95', type: 'bar', marker: { color: pColors.p95 }, text: barText(vllm.ttft.p95, 'int'), ...barTextCfg },
-            { x: vllm.configs, y: vllm.ttft.p99, name: 'P99', type: 'bar', marker: { color: pColors.p99 }, text: barText(vllm.ttft.p99, 'int'), ...barTextCfg },
-        ], { ...vllmLayout, xaxis: { tickangle: -35 }, yaxis: { title: 'TTFT (ms) — lower is better', tickformat: '.2s' } }, plotlyConfig);
+        // Chart 1: TTFT Percentiles (line chart)
+        Plotly.newPlot(cid('chart-vllm-ttft'), makePercentileLines(vllm.ttft, 'ms'),
+            { ...vllmLayout, xaxis: { tickangle: -35 }, yaxis: { title: 'TTFT (ms) — lower is better' } }, plotlyConfig);
 
-        // Chart 2: ITL Percentiles (grouped bar)
-        Plotly.newPlot(cid('chart-vllm-itl'), [
-            { x: vllm.configs, y: vllm.itl.p50, name: 'P50', type: 'bar', marker: { color: pColors.p50 }, text: barText(vllm.itl.p50), ...barTextCfg },
-            { x: vllm.configs, y: vllm.itl.p90, name: 'P90', type: 'bar', marker: { color: pColors.p90 }, text: barText(vllm.itl.p90), ...barTextCfg },
-            { x: vllm.configs, y: vllm.itl.p95, name: 'P95', type: 'bar', marker: { color: pColors.p95 }, text: barText(vllm.itl.p95), ...barTextCfg },
-            { x: vllm.configs, y: vllm.itl.p99, name: 'P99', type: 'bar', marker: { color: pColors.p99 }, text: barText(vllm.itl.p99), ...barTextCfg },
-        ], { ...vllmLayout, xaxis: { tickangle: -35 }, yaxis: { title: 'ITL (ms) — lower is better', tickformat: '.2s' } }, plotlyConfig);
+        // Chart 2: ITL Percentiles (line chart)
+        Plotly.newPlot(cid('chart-vllm-itl'), makePercentileLines(vllm.itl, 'ms'),
+            { ...vllmLayout, xaxis: { tickangle: -35 }, yaxis: { title: 'ITL (ms) — lower is better' } }, plotlyConfig);
 
-        // Chart 3: E2E Latency (grouped bar)
-        Plotly.newPlot(cid('chart-vllm-e2e'), [
-            { x: vllm.configs, y: vllm.e2e.p50, name: 'P50', type: 'bar', marker: { color: pColors.p50 }, text: barText(vllm.e2e.p50), ...barTextCfg },
-            { x: vllm.configs, y: vllm.e2e.p90, name: 'P90', type: 'bar', marker: { color: pColors.p90 }, text: barText(vllm.e2e.p90), ...barTextCfg },
-            { x: vllm.configs, y: vllm.e2e.p95, name: 'P95', type: 'bar', marker: { color: pColors.p95 }, text: barText(vllm.e2e.p95), ...barTextCfg },
-            { x: vllm.configs, y: vllm.e2e.p99, name: 'P99', type: 'bar', marker: { color: pColors.p99 }, text: barText(vllm.e2e.p99), ...barTextCfg },
-        ], { ...vllmLayout, xaxis: { tickangle: -35 }, yaxis: { title: 'E2E Latency (seconds) — lower is better', tickformat: '.2s' } }, plotlyConfig);
+        // Chart 3: E2E Latency (line chart)
+        Plotly.newPlot(cid('chart-vllm-e2e'), makePercentileLines(vllm.e2e, 's'),
+            { ...vllmLayout, xaxis: { tickangle: -35 }, yaxis: { title: 'E2E Latency (s) — lower is better' } }, plotlyConfig);
 
-        // Chart 4: Token Throughput (grouped bar)
+        // Chart 4: Token Throughput (line chart)
         Plotly.newPlot(cid('chart-vllm-tokens'), [
-            { x: vllm.configs, y: vllm.token_rates.prompt, name: 'Prompt Tokens/s', type: 'bar', marker: { color: '#6366f1' },
-              text: barText(vllm.token_rates.prompt, 'int'), ...barTextCfg,
-              hovertemplate: '<b>%{x}</b><br>Prompt: %{y:.0f} tokens/s<extra></extra>' },
-            { x: vllm.configs, y: vllm.token_rates.generation, name: 'Generation Tokens/s', type: 'bar', marker: { color: '#10b981' },
-              text: barText(vllm.token_rates.generation, 'int'), ...barTextCfg,
-              hovertemplate: '<b>%{x}</b><br>Generation: %{y:.0f} tokens/s<extra></extra>' },
+            { x: vllm.configs, y: vllm.token_rates.prompt, name: 'Prompt Tokens/s', mode: 'lines+markers',
+              line: { color: '#6366f1', width: 2 }, marker: { size: 8 },
+              hovertemplate: '<b>%{x}</b><br>Prompt: %{y:,.0f} tok/s<extra></extra>' },
+            { x: vllm.configs, y: vllm.token_rates.generation, name: 'Generation Tokens/s', mode: 'lines+markers',
+              line: { color: '#10b981', width: 2 }, marker: { size: 8 },
+              hovertemplate: '<b>%{x}</b><br>Generation: %{y:,.0f} tok/s<extra></extra>' },
         ], { ...vllmLayout, xaxis: { tickangle: -35 }, yaxis: { title: 'Tokens/second — higher is better' } }, plotlyConfig);
 
-        // Chart 5: Request Queue & KV Cache (dual axis)
+        // Chart 5: Request Queue & KV Cache (dual axis — lines)
         Plotly.newPlot(cid('chart-vllm-queue'), [
-            { x: vllm.configs, y: vllm.request_state.running, name: 'Avg Running', type: 'bar', marker: { color: '#3b82f6' },
-              text: barText(vllm.request_state.running), ...barTextCfg,
+            { x: vllm.configs, y: vllm.request_state.running, name: 'Avg Running', mode: 'lines+markers',
+              line: { color: '#3b82f6', width: 2 }, marker: { size: 8 },
               hovertemplate: '<b>%{x}</b><br>Running: %{y:.1f}<extra></extra>' },
-            { x: vllm.configs, y: vllm.request_state.waiting, name: 'Avg Waiting', type: 'bar', marker: { color: '#ef4444' },
-              text: barText(vllm.request_state.waiting), ...barTextCfg,
+            { x: vllm.configs, y: vllm.request_state.waiting, name: 'Avg Waiting', mode: 'lines+markers',
+              line: { color: '#ef4444', width: 2 }, marker: { size: 8 },
               hovertemplate: '<b>%{x}</b><br>Waiting: %{y:.1f}<extra></extra>' },
-            { x: vllm.configs, y: vllm.request_state.kv_cache, name: 'KV Cache %', type: 'scatter', mode: 'lines+markers', yaxis: 'y2',
-              line: { color: '#f59e0b', width: 3 }, marker: { size: 10, symbol: 'diamond', color: '#f59e0b', line: { width: 2, color: 'white' } },
+            { x: vllm.configs, y: vllm.request_state.kv_cache, name: 'KV Cache %', mode: 'lines+markers', yaxis: 'y2',
+              line: { color: '#f59e0b', width: 3 }, marker: { size: 10, symbol: 'diamond' },
               hovertemplate: '<b>%{x}</b><br>KV Cache: %{y:.1f}%<extra></extra>' },
         ], {
             ...vllmLayout,
@@ -3327,48 +3497,45 @@ function renderCharts(data, runId) {
             yaxis2: { title: 'KV Cache Usage (%)', side: 'right', overlaying: 'y', range: [0, 105], titlefont: { color: '#f59e0b' }, tickfont: { color: '#f59e0b' } },
         }, plotlyConfig);
 
-        // Chart 6: Processing Time Breakdown (stacked bar) + Preemptions line
+        // Chart 6: Processing Time Breakdown (lines) + Preemptions
         Plotly.newPlot(cid('chart-vllm-time'), [
-            { x: vllm.configs, y: vllm.time_breakdown.prefill, name: 'Prefill Time', type: 'bar', marker: { color: '#6366f1' },
+            { x: vllm.configs, y: vllm.time_breakdown.prefill, name: 'Prefill Time', mode: 'lines+markers',
+              line: { color: '#6366f1', width: 2 }, marker: { size: 8 },
               hovertemplate: '<b>%{x}</b><br>Prefill: %{y:.2f}<extra></extra>' },
-            { x: vllm.configs, y: vllm.time_breakdown.decode, name: 'Decode Time', type: 'bar', marker: { color: '#3b82f6' },
+            { x: vllm.configs, y: vllm.time_breakdown.decode, name: 'Decode Time', mode: 'lines+markers',
+              line: { color: '#3b82f6', width: 2 }, marker: { size: 8 },
               hovertemplate: '<b>%{x}</b><br>Decode: %{y:.2f}<extra></extra>' },
-            { x: vllm.configs, y: vllm.time_breakdown.queue, name: 'Queue Time', type: 'bar', marker: { color: '#94a3b8' },
+            { x: vllm.configs, y: vllm.time_breakdown.queue, name: 'Queue Time', mode: 'lines+markers',
+              line: { color: '#94a3b8', width: 2 }, marker: { size: 8 },
               hovertemplate: '<b>%{x}</b><br>Queue: %{y:.2f}<extra></extra>' },
-            { x: vllm.configs, y: vllm.time_breakdown.preemptions, name: 'Preemptions/s', type: 'scatter', mode: 'lines+markers', yaxis: 'y2',
-              line: { color: '#ef4444', width: 3 }, marker: { size: 10, symbol: 'triangle-up', color: '#ef4444', line: { width: 2, color: 'white' } },
+            { x: vllm.configs, y: vllm.time_breakdown.preemptions, name: 'Preemptions/s', mode: 'lines+markers', yaxis: 'y2',
+              line: { color: '#ef4444', width: 2 }, marker: { size: 8, symbol: 'triangle-up' },
               hovertemplate: '<b>%{x}</b><br>Preemptions: %{y:.1f}/s<extra></extra>' },
-            { x: vllm.configs, y: vllm.time_breakdown.waiting || [], name: 'Requests Waiting', type: 'scatter', mode: 'lines+markers', yaxis: 'y3',
-              line: { color: '#f59e0b', width: 3, dash: 'dash' }, marker: { size: 8, symbol: 'circle', color: '#f59e0b', line: { width: 2, color: 'white' } },
-              hovertemplate: '<b>%{x}</b><br>Waiting: %{y:.1f} avg<extra></extra>' },
         ], {
             ...vllmLayout,
-            barmode: 'stack',
-            margin: { ...vllmLayout.margin, r: 120 },
+            margin: { ...vllmLayout.margin, r: 60 },
             xaxis: { tickangle: -35 },
             yaxis: { title: 'Time Rate (s/s)', side: 'left' },
-            yaxis2: { title: 'Preemptions/s', side: 'right', overlaying: 'y', position: 0.95, titlefont: { color: '#ef4444' }, tickfont: { color: '#ef4444' } },
-            yaxis3: { title: 'Requests Waiting', side: 'right', overlaying: 'y', position: 1.0, titlefont: { color: '#f59e0b' }, tickfont: { color: '#f59e0b' } },
+            yaxis2: { title: 'Preemptions/s', side: 'right', overlaying: 'y', titlefont: { color: '#ef4444' }, tickfont: { color: '#ef4444' } },
         }, plotlyConfig);
 
-        // Chart 7: Pod Network Throughput
+        // Chart 7: Pod Network Throughput (lines)
         if (vllm.network && vllm.network.pod_tx.some(v => v > 0)) {
             Plotly.newPlot(cid('chart-net-pod'), [
-                { x: vllm.configs, y: vllm.network.pod_tx, name: 'TX (MB/s)', type: 'bar', marker: { color: '#3b82f6' },
+                { x: vllm.configs, y: vllm.network.pod_tx, name: 'TX (MB/s)', mode: 'lines+markers',
+                  line: { color: '#3b82f6', width: 2 }, marker: { size: 8 },
                   hovertemplate: '<b>%{x}</b><br>TX: %{y:.2f} MB/s<extra></extra>' },
-                { x: vllm.configs, y: vllm.network.pod_rx, name: 'RX (MB/s)', type: 'bar', marker: { color: '#10b981' },
+                { x: vllm.configs, y: vllm.network.pod_rx, name: 'RX (MB/s)', mode: 'lines+markers',
+                  line: { color: '#10b981', width: 2 }, marker: { size: 8 },
                   hovertemplate: '<b>%{x}</b><br>RX: %{y:.2f} MB/s<extra></extra>' },
             ], { ...vllmLayout, xaxis: { tickangle: -35 }, yaxis: { title: 'Throughput (MB/s)' } }, plotlyConfig);
         }
 
-        // Chart 8: InfiniBand RDMA Throughput
+        // Chart 8: InfiniBand RDMA Throughput (line)
         if (vllm.network && vllm.network.ib_rx.some(v => v > 0)) {
             Plotly.newPlot(cid('chart-net-ib'), [
-                { x: vllm.configs, y: vllm.network.ib_rx, name: 'IB RX (GB/s)', type: 'bar',
-                  marker: { color: vllm.network.ib_rx.map(v => v > 0 ? '#8b5cf6' : '#cbd5e1') },
-                  text: vllm.network.ib_rx.map(v => v > 0 ? v.toFixed(2) : ''),
-                  textposition: 'outside', textfont: { size: 11, color: '#1e293b' },
-                  cliponaxis: false, constraintext: 'none',
+                { x: vllm.configs, y: vllm.network.ib_rx, name: 'IB RX (GB/s)', mode: 'lines+markers',
+                  line: { color: '#8b5cf6', width: 2 }, marker: { size: 8 },
                   hovertemplate: '<b>%{x}</b><br>IB RX: %{y:.2f} GB/s<extra></extra>' },
             ], { ...vllmLayout, xaxis: { tickangle: -35 }, yaxis: { title: 'RDMA Throughput (GB/s)' } }, plotlyConfig);
         }

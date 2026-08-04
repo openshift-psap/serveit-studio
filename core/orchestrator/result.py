@@ -135,6 +135,7 @@ class TestResult:
     pod_errors_detected: bool = False
     pod_errors_json: Optional[str] = None
     nixl_errors: int = 0
+    nixl_degraded: bool = False
     guidellm_retries: int = 0
     model_load_time_s: Optional[int] = None
     pod_timings: Optional[dict] = None

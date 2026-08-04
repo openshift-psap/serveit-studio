@@ -189,8 +189,11 @@ class ReportAnalyzer:
                 'name': r.display_label, 'architecture': r.architecture,
                 'config_name': r.config_name, 'test_id': r.config_name,
                 'ttft_p90': round(r.ttft_p90, 1),
+                'ttft_p95': round(r.ttft_p95, 1) if r.ttft_p95 else None,
                 'ttft_p99': round(r.ttft_p99, 1) if r.ttft_p99 else None,
                 'itl_p90': round(r.itl_p90, 2) if r.itl_p90 else None,
+                'itl_p95': round(r.itl_p95, 2) if r.itl_p95 else None,
+                'itl_p99': round(r.itl_p99, 2) if r.itl_p99 else None,
                 'throughput_mean': round(r.throughput_mean, 2) if r.throughput_mean else None,
                 'throughput_p90': round(r.throughput_p90, 2) if r.throughput_p90 else None,
                 'gpus': r.total_gpus, 'concurrency': conc,
@@ -948,6 +951,7 @@ class ReportAnalyzer:
     def _build_vllm_metrics(self, successful):
         """Extract vLLM Prometheus metrics from each test for charting."""
         import json
+        successful = [r for r in successful if getattr(r, 'quality', 'ok') != 'discard']
 
         configs = []
         ttft = {'p50': [], 'p90': [], 'p95': [], 'p99': []}
@@ -1236,7 +1240,23 @@ class ReportAnalyzer:
                 'manifest_types': manifest_types,
                 'test_config': test_config,
                 'metrics_json': r.metrics_json,
+                'request_total': None,
+                'request_errored': None,
+                'nixl_errors': 0,
+                'nixl_degraded': False,
+                'quality': getattr(r, 'quality', 'ok') or 'ok',
             })
+            if r.metrics_json:
+                try:
+                    _mj = json.loads(r.metrics_json) if isinstance(r.metrics_json, str) else r.metrics_json
+                    all_results[-1]['request_total'] = _mj.get('request_total')
+                    all_results[-1]['request_errored'] = _mj.get('request_errored')
+                    all_results[-1]['nixl_errors'] = _mj.get('nixl_errors', 0)
+                    all_results[-1]['nixl_degraded'] = _mj.get('nixl_degraded', False)
+                    all_results[-1]['nixl_warning'] = _mj.get('nixl_warning', False)
+                    all_results[-1]['nixl_error_rate'] = _mj.get('nixl_error_rate', 0)
+                except Exception:
+                    pass
         return all_results
 
     @staticmethod
