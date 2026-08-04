@@ -78,8 +78,11 @@ function renderClusterDiagram(container, data) {
         html += '<div class="viz-summary">';
         versionItems.forEach(function(item) {
             if (iv[item.key]) {
+                var val = iv[item.key];
+                var displayVal = val.length > 16 ? val.substring(0, 14) + '…' : val;
                 var style = item.wide ? 'flex:2;min-width:160px;' : 'flex:0.8;min-width:60px;';
-                html += '<div class="viz-stat" style="' + style + '"><div class="viz-stat-value" style="font-size:1.1em;">' + iv[item.key] + '</div><div class="viz-stat-label">' + item.label + '</div></div>';
+                var titleAttr = val.length > 16 ? ' title="' + val + '"' : '';
+                html += '<div class="viz-stat" style="' + style + '"><div class="viz-stat-value" style="font-size:1.1em;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:100%;"' + titleAttr + '>' + displayVal + '</div><div class="viz-stat-label">' + item.label + '</div></div>';
             }
         });
         html += '</div>';

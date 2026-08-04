@@ -250,6 +250,16 @@ def handle_load_config():
 
             is_running = bool(running_opt)
 
+            if is_running:
+                greenlet = state.get('_optimization_greenlet')
+                if greenlet is None or greenlet.dead:
+                    is_running = False
+                    with state_lock:
+                        state['optimization_running'] = False
+                        save_state()
+                    conn.execute('UPDATE ui_session_state SET optimization_running = 0 WHERE id = 1')
+                    conn.execute("UPDATE optimization_runs SET status = 'stopped' WHERE status = 'running'")
+
             if row:
                 config = json.loads(row['config_json']) if row['config_json'] else {}
                 current_step = row['current_step']

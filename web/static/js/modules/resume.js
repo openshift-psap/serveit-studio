@@ -216,7 +216,7 @@ function loadResumeRuns() {
                 if (data.need_storage_class) {
                     var classes = data.available_classes || [];
                     var modal = document.getElementById('storage-class-modal');
-                    var sel = document.getElementById('storage-class-select');
+                    var sel = document.getElementById('storage-class-select-modal');
                     sel.innerHTML = '';
                     classes.forEach(function(sc) {
                         var opt = document.createElement('option');

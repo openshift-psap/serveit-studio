@@ -1918,7 +1918,6 @@ data:
             state['optimization_running'] = False
             save_state()
 
-            # Update database to reflect optimization finished
             try:
                 with get_db() as conn:
                     conn.execute('''
@@ -1927,8 +1926,15 @@ data:
                             updated_at = ?
                         WHERE id = 1
                     ''', (datetime.now().isoformat(),))
+                    if run_id:
+                        conn.execute('''
+                            UPDATE optimization_runs
+                            SET status = CASE WHEN status = 'running' THEN 'stopped' ELSE status END,
+                                completed_at = COALESCE(completed_at, ?)
+                            WHERE id = ?
+                        ''', (datetime.now().isoformat(), run_id))
             except Exception as e:
-                print(f"Warning: Failed to update optimization_running in database: {e}")
+                print(f"Warning: Failed to update optimization state in database: {e}")
 
         socketio.emit('status_update', {'running': False, 'message': 'Optimization finished'})
 

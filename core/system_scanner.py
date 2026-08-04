@@ -725,7 +725,7 @@ class SystemScanner:
         """
         try:
             configmap_name = f"hardware-info-{node_name}"
-            result = self.kubectl.run_json(['get', 'configmap', configmap_name])
+            result = self.kubectl.run_json(['get', 'configmap', configmap_name, '-n', self.namespace])
 
             if result and 'data' in result:
                 hardware_json = result['data'].get('hardware.json', '{}')

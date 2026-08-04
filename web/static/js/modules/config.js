@@ -376,17 +376,15 @@ function updateUIFromConfig() {
 
     // Restore RHAIIS version dropdown and sync images
     if (document.getElementById('rhaiis-version-select')) {
-        if (config.rhaiis_version) {
-            document.getElementById('rhaiis-version-select').value = config.rhaiis_version;
-            // If the saved image doesn't match the preset, apply the preset
-            var preset = (typeof RHAIIS_VERSIONS !== 'undefined') ? RHAIIS_VERSIONS[config.rhaiis_version] : null;
-            if (preset) {
-                var currentTag = (config.image || '').split(':').pop();
-                if (currentTag !== preset.cuda) {
-                    applyRhaiisVersion(config.rhaiis_version);
-                }
+        var rhaiisVer = config.rhaiis_version || '3.5.1';
+        document.getElementById('rhaiis-version-select').value = rhaiisVer;
+        var preset = (typeof RHAIIS_VERSIONS !== 'undefined') ? RHAIIS_VERSIONS[rhaiisVer] : null;
+        if (preset) {
+            var currentTag = (config.image || '').split(':').pop();
+            if (currentTag !== preset.cuda) {
+                applyRhaiisVersion(rhaiisVer);
             }
-        } else if (typeof markImagesCustom === 'function') {
+        } else if (rhaiisVer === 'custom' && typeof markImagesCustom === 'function') {
             markImagesCustom();
         }
     }
