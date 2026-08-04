@@ -71,6 +71,11 @@ class ConfigBuilderMixin:
         self.log(f"   Memory: gpu_memory_utilization={gpu_memory_utilization:.4f} "
                  f"→ {allocated_gb:.0f}GB allocated, {reserve_gb:.0f}GB reserved for overhead (per GPU)")
 
+        # Multi-node: if TP > gpus_per_node, use LWS multi-pod groups
+        gpus_per_node = self.cluster_resources.max_gpus_per_node if self.cluster_resources else 8
+        agg_lws_size = max(1, tp // gpus_per_node) if tp > gpus_per_node else 1
+        agg_gpus_per_pod = min(tp, gpus_per_node) if agg_lws_size > 1 else None
+
         replicas = num_gpus // tp
         mem, cpu = self._get_pod_resources(tp=tp, total_pods=replicas)
 
@@ -123,6 +128,9 @@ class ConfigBuilderMixin:
             dra_gpu_resource_key=getattr(self.config, 'dra_gpu_resource_key', None),
             gateway_class=self.config.gateway_class,
             exclusive_pf=getattr(self.config, 'exclusive_pf', False),
+            lws_size=agg_lws_size if agg_lws_size > 1 else None,
+            gpus_per_pod=agg_gpus_per_pod,
+            nnodes=agg_lws_size if agg_lws_size > 1 else None,
 
             memory_request=mem,
             memory_limit=mem,
