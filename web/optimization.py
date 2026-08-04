@@ -315,6 +315,7 @@ def stream_job_logs(job_name: str, namespace: str):
                     'concurrency_sweep_count': saved_config.get('concurrency_sweep_count', None),
                     'concurrency_sweep_step_pct': saved_config.get('concurrency_sweep_step_pct', 20),
                     'concurrency_sweep_all_configs': saved_config.get('concurrency_sweep_all_configs', False),
+                    'concurrency_sweep_use_epp_tuned': saved_config.get('concurrency_sweep_use_epp_tuned', False),
                     'concurrency_sweep_max_configs': saved_config.get('concurrency_sweep_max_configs', None),
                     'cache_sweep_enabled': saved_config.get('cache_sweep_enabled', False),
                     'cache_sweep_use_calibrated': saved_config.get('cache_sweep_use_calibrated', False),
