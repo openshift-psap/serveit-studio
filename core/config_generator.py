@@ -57,6 +57,7 @@ class TestConfig:
     decode_max_num_seqs: Optional[int] = None   # For PD decode pods
     max_num_batched_tokens: Optional[int] = None  # Limits tokens per forward pass
     # Advanced vLLM flags
+    enable_chunked_prefill: bool = False
     enable_prefix_caching: bool = True
     disable_custom_all_reduce: bool = False
     enable_auto_tool_choice: bool = False

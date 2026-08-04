@@ -79,7 +79,8 @@ class ConfigBuilderMixin:
         # Only apply stdev when using the full workload ISL/OSL (Steps 7-8),
         # not for calibration tests (Steps 2-3) where ISL or OSL is fixed to 1
         is_calibration = (isl != self.config.isl) or (osl != self.config.osl)
-        max_batched = None if is_calibration else self._compute_max_num_batched_tokens(tp)
+        max_batched = None if is_calibration else self._compute_max_num_batched_tokens(tp, role='aggregated')
+        enable_chunked = not is_calibration and max_batched is not None and self.config.max_model_len > max_batched
 
         cfg = TestConfig(
             test_id=test_id,
@@ -97,6 +98,7 @@ class ConfigBuilderMixin:
             stop_mode=self.config.stop_mode,
             max_requests=self.config.max_requests,
             max_num_batched_tokens=max_batched,
+            enable_chunked_prefill=enable_chunked,
             isl_stdev=None if is_calibration else self.config.isl_stdev,
             osl_stdev=None if is_calibration else self.config.osl_stdev,
             turns=1 if is_calibration else self.config.turns,
@@ -381,20 +383,27 @@ class ConfigBuilderMixin:
                  f"hidden={hidden}, experts={num_experts}, batch={max_tokens})")
         return f'{nvshmem_env_gb}G', total_gb
 
-    def _compute_max_num_batched_tokens(self, tp: int) -> Optional[int]:
-        """Compute max_num_batched_tokens from calibration prefill TPSG.
+    def _compute_max_num_batched_tokens(self, tp: int, role: str = 'aggregated') -> Optional[int]:
+        """Compute max_num_batched_tokens tuned for ISL/OSL and architecture role.
 
-        Limits how many tokens vLLM processes in a single forward pass.
-        Uses the measured prefill throughput to compute a batch size that
-        completes within a target latency budget (~100ms), preventing
-        large batches from causing latency spikes.
+        For PD prefill: process the entire prompt in as few iterations as possible.
+          Formula: min(ISL, kv_available_tokens × 0.8)
+          The prefill pod only does prefill — no decode interference — so we can
+          use large batches. Safety margin of 0.8 for activation memory.
+
+        For PD decode: optimize for decode throughput, small batches are fine.
+          Formula: min(OSL × max_num_seqs_cap, kv_available_tokens × 0.8)
+
+        For aggregated: balance prefill and decode sharing the same engine.
+          Scale batch latency target with ISL: short prompts use 200ms,
+          long prompts use up to 2s to reduce iteration overhead.
         """
         if not self.optimal_prefill_tp or self.optimal_prefill_tp.tpsg <= 0:
             return None
 
-        target_batch_latency_s = 0.2
-        tokens_per_second_per_gpu = self.optimal_prefill_tp.tpsg
-        batch_budget = int(tokens_per_second_per_gpu * tp * target_batch_latency_s)
+        isl = self.config.isl
+        osl = self.config.osl
+        seq_len = isl + osl
 
         # Floor: must be >= vLLM's max_tokens_per_mm_item for multimodal models
         floor = 2048
@@ -412,12 +421,68 @@ class ConfigBuilderMixin:
                     else:
                         floor = max(floor, 4096)
 
-        clamped = max(floor, min(batch_budget, self.config.max_model_len))
+        if role == 'prefill':
+            # PD prefill: cap at optimal GEMM saturation point for inter-request interleaving.
+            # Setting this to ISL defeats chunked prefill — the scheduler does one monolithic
+            # pass instead of interleaving chunks from multiple requests.
+            #
+            # For ISL <= 16K: use ISL (single pass is fine, no queuing benefit from chunking)
+            # For ISL > 16K: cap at 16K × TP to allow chunked prefill interleaving.
+            #   At TP2 on H200: 16K tokens already achieves >90% Tensor Core utilization.
+            #   Going from 16K to 100K gives zero marginal GEMM efficiency but ruins scheduling.
+            #
+            # Memory ceiling from KV capacity as safety check.
+            gemm_cap = 16384  # fixed per scheduler step — TP splits heads, not sequence length
+            kv_bytes = self._get_profiled_kv_cache_bytes(tp)
+            if kv_bytes:
+                num_layers = self._model_config.get('num_hidden_layers', 32) if self._model_config else 32
+                num_kv_heads = (self._model_config.get('num_key_value_heads', 32) if self._model_config else 32)
+                head_dim = (self._model_config.get('head_dim',
+                            self._model_config.get('hidden_size', 4096) //
+                            self._model_config.get('num_attention_heads', 32)) if self._model_config else 128)
+                kv_heads_per_gpu = max(1, num_kv_heads // tp)
+                bytes_per_token = 2 * num_layers * kv_heads_per_gpu * head_dim * 2
+                kv_cap_tokens = int(kv_bytes / bytes_per_token) if bytes_per_token > 0 else isl
+                mem_budget = int(kv_cap_tokens * 0.8)
+            else:
+                mem_budget = gemm_cap
 
-        self.log(f"   max_num_batched_tokens(TP={tp}): {clamped} "
-                 f"(prefill_TPSG={tokens_per_second_per_gpu:.0f} × TP={tp} × {target_batch_latency_s}s "
-                 f"= {batch_budget}, clamped to [{2048}, {self.config.max_model_len}])")
-        return clamped
+            if isl <= 16384:
+                result = max(floor, min(isl, mem_budget, self.config.max_model_len))
+            else:
+                result = max(floor, min(gemm_cap, mem_budget, self.config.max_model_len))
+
+            self.log(f"   max_num_batched_tokens(TP={tp}, prefill): {result} "
+                     f"(ISL={isl}, gemm_cap={gemm_cap}, mem_budget={mem_budget}, floor={floor})")
+            return result
+
+        elif role == 'decode':
+            # PD decode: small batches, optimize for decode throughput
+            result = max(floor, min(osl * 64, self.config.max_model_len))
+            self.log(f"   max_num_batched_tokens(TP={tp}, decode): {result} "
+                     f"(OSL={osl})")
+            return result
+
+        else:
+            # Aggregated: scale batch latency with ISL
+            # Short ISL (<4K): 200ms target (low latency)
+            # Long ISL (>32K): up to 2s target (reduce iteration overhead)
+            tpsg = self.optimal_prefill_tp.tpsg
+            if isl < 4000:
+                target_s = 0.2
+            elif isl < 32000:
+                target_s = 0.2 + (isl - 4000) / 28000 * 0.8  # 0.2s to 1.0s
+            else:
+                target_s = 1.0 + min((isl - 32000) / 68000, 1.0)  # 1.0s to 2.0s
+            budget = int(tpsg * tp * target_s)
+            # Cap at 16K for aggregated to prevent decode ITL spikes when
+            # a large prefill enters the shared engine
+            agg_cap = 16384
+            result = max(floor, min(budget, agg_cap, self.config.max_model_len))
+            self.log(f"   max_num_batched_tokens(TP={tp}, aggregated): {result} "
+                     f"(TPSG={tpsg:.0f} × TP={tp} × {target_s:.1f}s = {budget}, "
+                     f"cap={agg_cap}, ISL={isl}, floor={floor})")
+            return result
 
     def _apply_advanced_vllm(self, cfg: TestConfig) -> TestConfig:
         """Apply user's advanced vLLM overrides to a TestConfig."""
@@ -480,6 +545,7 @@ class ConfigBuilderMixin:
 
         toggle_fields = {
             'enable_prefix_caching': 'enable_prefix_caching',
+            'enable_chunked_prefill': 'enable_chunked_prefill',
             'disable_custom_all_reduce': 'disable_custom_all_reduce',
             'enable_auto_tool_choice': 'enable_auto_tool_choice',
             'enable_expert_parallel': 'enable_expert_parallel',
@@ -597,7 +663,10 @@ class ConfigBuilderMixin:
         decode_max_num_seqs = self._compute_max_num_seqs(
             split.decode_tp, role='decode',
             gpu_mem_util_override=decode_gmu, num_pods=split.decode_pods)
-        max_batched = self._compute_max_num_batched_tokens(split.prefill_tp)
+        max_batched = self._compute_max_num_batched_tokens(split.prefill_tp, role='prefill')
+
+        # vLLM requires chunked prefill when max_model_len > max_num_batched_tokens
+        enable_chunked = max_batched is not None and self.config.max_model_len > max_batched
 
         total_pods = split.prefill_pods + split.decode_pods
         min_tp = min(split.prefill_tp, split.decode_tp)
@@ -644,6 +713,7 @@ class ConfigBuilderMixin:
             prefill_max_num_seqs=prefill_max_num_seqs,
             decode_max_num_seqs=decode_max_num_seqs,
             max_num_batched_tokens=max_batched,
+            enable_chunked_prefill=enable_chunked,
             kv_cache_memory_bytes=self._get_profiled_kv_cache_bytes(split.decode_tp),
             isl_stdev=self.config.isl_stdev,
             osl_stdev=self.config.osl_stdev,
@@ -711,7 +781,7 @@ class ConfigBuilderMixin:
         chunk_size = self._compute_moe_dp_chunk_size(split.decode_tp, decode_max_num_seqs_prelim) if self._is_moe else 384
 
         # Compute NVSHMEM symmetric heap from model architecture.
-        max_batched = self._compute_max_num_batched_tokens(split.prefill_tp) or self.config.max_model_len
+        max_batched = self._compute_max_num_batched_tokens(split.prefill_tp, role='prefill') or self.config.max_model_len
         nvshmem_size, ep_mem_gb = self._compute_ep_memory_gb(max_batched)
 
         # EPLB redundant experts: must equal ep_ranks for divisibility
@@ -778,7 +848,8 @@ class ConfigBuilderMixin:
         decode_max_num_seqs = self._compute_max_num_seqs(
             split.decode_tp, role='decode',
             gpu_mem_util_override=decode_gmu, num_pods=split.decode_pods)
-        max_batched = self._compute_max_num_batched_tokens(split.prefill_tp)
+        max_batched = self._compute_max_num_batched_tokens(split.prefill_tp, role='prefill')
+        enable_chunked = max_batched is not None and self.config.max_model_len > max_batched
 
         total_pods = split.prefill_pods + split.decode_pods
         min_tp = min(split.prefill_tp, split.decode_tp)

@@ -466,8 +466,8 @@ class LatencySearchMixin:
             osl = getattr(self.config, 'osl', 100)
             output_tps = tput * osl
         ttft = result.ttft_p90 or 0
-        interactivity = output_tps if output_tps > 0 else 0
-        throughput_per_gpu = (output_tps * concurrency / gpus) if gpus > 0 and output_tps > 0 else 0
+        interactivity = (output_tps / concurrency) if output_tps > 0 and concurrency > 0 else 0
+        throughput_per_gpu = (output_tps / gpus) if gpus > 0 and output_tps > 0 else 0
 
         results.append({
             'concurrency': concurrency,

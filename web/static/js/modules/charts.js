@@ -2534,7 +2534,7 @@ function renderCharts(data, runId) {
 
                     Plotly.newPlot(cid('chart-pareto-ttft'), ttftTraces, {
                         ...plotlyLayout, height: 850,
-                        xaxis: { title: 'TTFT P90 (ms) — lower/right is better →', autorange: 'reversed', gridcolor: '#d1d5db', rangemode: 'tozero' },
+                        xaxis: { title: 'TTFT P90 (ms)', gridcolor: '#d1d5db', rangemode: 'tozero' },
                         yaxis: { title: 'Token Throughput per GPU (tok/s/GPU)', gridcolor: '#d1d5db', rangemode: 'tozero' },
                         showlegend: true,
                         legend: { x: 1.02, y: 1, xanchor: 'left', bgcolor: 'rgba(255,255,255,0.95)', bordercolor: '#e2e8f0', borderwidth: 1 },
@@ -2600,37 +2600,44 @@ function renderCharts(data, runId) {
             var swAggPareto = swFrontierLine(swAgg);
             var swPdPareto = swFrontierLine(swPd);
 
+            // Group points by config for individual legend entries
+            var swCfgGroups = {};
+            swAllPts.forEach(function(p) {
+                var key = p.label.replace(/ c=\d+$/, '');
+                if (!swCfgGroups[key]) swCfgGroups[key] = { pts: [], arch: p.arch };
+                swCfgGroups[key].pts.push(p);
+            });
+            var swCfgColors = [
+                '#dc2626', '#f59e0b', '#ea580c', '#db2777',
+                '#2563eb', '#059669', '#7c3aed', '#0891b2', '#65a30d', '#6d28d9'
+            ];
             var swTraces = [];
-            if (swAgg.length) {
+            var swColorIdx = 0;
+            Object.keys(swCfgGroups).sort().forEach(function(key) {
+                var g = swCfgGroups[key];
+                var color = swCfgColors[swColorIdx % swCfgColors.length];
+                swColorIdx++;
                 swTraces.push({
-                    x: swAgg.map(function(p) { return p.nx; }), y: swAgg.map(function(p) { return p.ny; }),
-                    customdata: swAgg.map(function(p) { return p.label + '<br>c=' + p.conc + '<br>' + p.x.toFixed(1) + ' tok/s/user<br>' + p.y.toFixed(0) + ' tok/s/GPU'; }),
-                    name: 'Aggregated', mode: 'markers',
-                    marker: { color: '#dc2626', size: 12 },
+                    x: g.pts.map(function(p) { return p.nx; }), y: g.pts.map(function(p) { return p.ny; }),
+                    customdata: g.pts.map(function(p) { return p.label + '<br>' + p.x.toFixed(1) + ' tok/s/user<br>' + p.y.toFixed(0) + ' tok/s/GPU'; }),
+                    name: key, mode: 'markers',
+                    marker: { color: color, size: 12 },
                     hovertemplate: '<b>%{customdata}</b><extra></extra>'
                 });
-            }
-            if (swPd.length) {
-                swTraces.push({
-                    x: swPd.map(function(p) { return p.nx; }), y: swPd.map(function(p) { return p.ny; }),
-                    customdata: swPd.map(function(p) { return p.label + '<br>c=' + p.conc + '<br>' + p.x.toFixed(1) + ' tok/s/user<br>' + p.y.toFixed(0) + ' tok/s/GPU'; }),
-                    name: 'Disaggregation', mode: 'markers',
-                    marker: { color: '#2563eb', size: 12 },
-                    hovertemplate: '<b>%{customdata}</b><extra></extra>'
-                });
-            }
-            if (swAggPareto.length) {
+            });
+            // Pareto frontier lines (aggregated vs PD)
+            if (swAggPareto.length > 1) {
                 swTraces.push({
                     x: swAggPareto.map(function(p) { return p.nx; }), y: swAggPareto.map(function(p) { return p.ny; }),
-                    name: 'Aggregated — Pareto', mode: swAggPareto.length > 1 ? 'lines+markers' : 'markers',
-                    line: { color: '#dc2626', width: 3 }, marker: { color: '#dc2626', size: 6 }
+                    name: 'Aggregated — Pareto', mode: 'lines',
+                    line: { color: '#dc2626', width: 3, dash: 'dot' }, showlegend: true
                 });
             }
-            if (swPdPareto.length) {
+            if (swPdPareto.length > 1) {
                 swTraces.push({
                     x: swPdPareto.map(function(p) { return p.nx; }), y: swPdPareto.map(function(p) { return p.ny; }),
-                    name: 'Disaggregation — Pareto', mode: swPdPareto.length > 1 ? 'lines+markers' : 'markers',
-                    line: { color: '#2563eb', width: 3 }, marker: { color: '#2563eb', size: 6 }
+                    name: 'Disaggregation — Pareto', mode: 'lines',
+                    line: { color: '#2563eb', width: 3, dash: 'dot' }, showlegend: true
                 });
             }
 
@@ -2650,8 +2657,8 @@ function renderCharts(data, runId) {
                     });
                 });
             }
-            addSwLabels(swAgg, '#dc2626');
-            addSwLabels(swPd, '#2563eb');
+            addSwLabels(swAggPareto, '#dc2626');
+            addSwLabels(swPdPareto, '#2563eb');
 
             Plotly.newPlot(cid('chart-pareto-sweep-interactivity'), swTraces, {
                 ...plotlyLayout, height: 850,
@@ -2665,106 +2672,71 @@ function renderCharts(data, runId) {
             }, swParetoConfig);
         }
 
-        // --- Concurrency Sweep: Throughput vs TTFT ---
-        var swTtftPts = [];
-        Object.keys(csw).forEach(function(arch) {
-            var pts = csw[arch];
-            if (!pts || !pts.length) return;
-            var archLabel = sweepArchLabel(arch);
-            pts.forEach(function(p) {
-                var tputGpu = p.throughput_per_gpu || 0;
-                var ttft = p.ttft_p90 || 0;
-                if (tputGpu > 0 && ttft > 0) {
-                    swTtftPts.push({
-                        x: ttft, y: tputGpu, nx: ttft, ny: tputGpu,
-                        label: (p.config_label || archLabel) + ' c=' + p.concurrency,
-                        arch: archLabel, conc: p.concurrency
-                    });
-                }
+        // Shared color function for envelope charts
+        var _envColorList = ['#dc2626', '#2563eb', '#059669', '#f59e0b', '#7c3aed', '#db2777', '#0891b2', '#65a30d', '#ea580c', '#6d28d9'];
+        var _envColorMap = {};
+        var _envCIdx = 0;
+        function getEnvColor(label) {
+            if (!_envColorMap[label]) { _envColorMap[label] = _envColorList[_envCIdx % _envColorList.length]; _envCIdx++; }
+            return _envColorMap[label];
+        }
+
+        // --- Best TTFT vs Concurrency (envelope style, dual axis with throughput) ---
+        if (document.getElementById(cid('chart-pareto-sweep-ttft'))) {
+            var bestTtftByConc = {};
+            Object.keys(csw).forEach(function(arch) {
+                var pts = csw[arch];
+                if (!pts) return;
+                pts.forEach(function(p) {
+                    var c = p.concurrency;
+                    var ttft = p.ttft_p90 || 0;
+                    var tput = p.throughput_mean || 0;
+                    var label = p.config_label || sweepArchLabel(arch);
+                    if (ttft > 0 && (!bestTtftByConc[c] || ttft < bestTtftByConc[c].ttft)) {
+                        bestTtftByConc[c] = { ttft: ttft, tput: tput, label: label };
+                    }
+                });
             });
-        });
-
-        if (swTtftPts.length > 1 && document.getElementById(cid('chart-pareto-sweep-ttft'))) {
-            var swTtftAgg = swTtftPts.filter(function(p) { return p.arch === 'AGGREGATED'; });
-            var swTtftPd = swTtftPts.filter(function(p) { return p.arch === 'PD' || p.arch === 'EP'; });
-
-            function swTtftFrontier(points) {
-                if (!points.length) return [];
-                var sorted = points.slice().sort(function(a, b) { return a.nx - b.nx; });
-                var frontier = [];
-                var maxY = -Infinity;
-                for (var i = 0; i < sorted.length; i++) {
-                    if (sorted[i].ny > maxY) { frontier.push(sorted[i]); maxY = sorted[i].ny; }
-                }
-                frontier.sort(function(a, b) { return a.nx - b.nx; });
-                return frontier;
-            }
-            var swTtftAggPareto = swTtftFrontier(swTtftAgg);
-            var swTtftPdPareto = swTtftFrontier(swTtftPd);
-
-            var swTtftTraces = [];
-            if (swTtftAgg.length) {
-                swTtftTraces.push({
-                    x: swTtftAgg.map(function(p) { return p.nx; }), y: swTtftAgg.map(function(p) { return p.ny; }),
-                    customdata: swTtftAgg.map(function(p) { return p.label + '<br>c=' + p.conc + '<br>TTFT P90: ' + p.x.toFixed(0) + 'ms<br>' + p.y.toFixed(0) + ' tok/s/GPU'; }),
-                    name: 'Aggregated', mode: 'markers',
-                    marker: { color: '#dc2626', size: 12 },
-                    hovertemplate: '<b>%{customdata}</b><extra></extra>'
+            var ttftConcs = Object.keys(bestTtftByConc).map(Number).sort(function(a,b){return a-b;});
+            if (ttftConcs.length > 1) {
+                var ttftXs = [], ttftYs = [], tputYs = [], ttftColors = [], ttftTexts = [];
+                ttftConcs.forEach(function(c) {
+                    var b = bestTtftByConc[c];
+                    ttftXs.push(c); ttftYs.push(b.ttft); tputYs.push(b.tput);
+                    ttftColors.push(getEnvColor(b.label));
+                    ttftTexts.push(b.label + '<br>TTFT: ' + b.ttft.toFixed(0) + 'ms<br>Tput: ' + b.tput.toFixed(3) + ' req/s');
                 });
-            }
-            if (swTtftPd.length) {
-                swTtftTraces.push({
-                    x: swTtftPd.map(function(p) { return p.nx; }), y: swTtftPd.map(function(p) { return p.ny; }),
-                    customdata: swTtftPd.map(function(p) { return p.label + '<br>c=' + p.conc + '<br>TTFT P90: ' + p.x.toFixed(0) + 'ms<br>' + p.y.toFixed(0) + ' tok/s/GPU'; }),
-                    name: 'Disaggregation', mode: 'markers',
-                    marker: { color: '#2563eb', size: 12 },
-                    hovertemplate: '<b>%{customdata}</b><extra></extra>'
-                });
-            }
-            if (swTtftAggPareto.length) {
-                swTtftTraces.push({
-                    x: swTtftAggPareto.map(function(p) { return p.nx; }), y: swTtftAggPareto.map(function(p) { return p.ny; }),
-                    name: 'Aggregated — Pareto', mode: swTtftAggPareto.length > 1 ? 'lines+markers' : 'markers',
-                    line: { color: '#dc2626', width: 3 }, marker: { color: '#dc2626', size: 6 }
-                });
-            }
-            if (swTtftPdPareto.length) {
-                swTtftTraces.push({
-                    x: swTtftPdPareto.map(function(p) { return p.nx; }), y: swTtftPdPareto.map(function(p) { return p.ny; }),
-                    name: 'Disaggregation — Pareto', mode: swTtftPdPareto.length > 1 ? 'lines+markers' : 'markers',
-                    line: { color: '#2563eb', width: 3 }, marker: { color: '#2563eb', size: 6 }
-                });
-            }
-
-            var swTtftAnnotations = [];
-            var swTtftIdx = 0;
-            function addSwTtftLabels(points, color) {
-                points.forEach(function(p) {
-                    swTtftIdx++;
-                    var side = swTtftIdx % 2 === 0 ? 1 : -1;
-                    swTtftAnnotations.push({
-                        x: p.nx, y: p.ny,
-                        text: p.x.toFixed(0) + 'ms<br>' + p.y.toFixed(0) + ' tok/s/GPU',
-                        showarrow: true, arrowhead: 0, arrowwidth: 1, arrowcolor: color,
-                        ax: 70 * side, ay: -25 - (swTtftIdx % 3) * 12,
-                        font: { size: 8, color: color },
+                var ttftTraces = [
+                    { x: ttftXs, y: ttftYs, text: ttftTexts, name: 'Best TTFT P90', mode: 'lines+markers',
+                      line: { color: '#3b82f6', width: 3 }, marker: { color: ttftColors, size: 14, line: { color: '#fff', width: 2 } },
+                      yaxis: 'y', hovertemplate: '<b>%{text}</b><extra></extra>' },
+                    { x: ttftXs, y: tputYs, name: 'Throughput (req/s)', mode: 'lines+markers',
+                      line: { color: '#f59e0b', width: 2, dash: 'dot' }, marker: { color: '#f59e0b', size: 6 },
+                      yaxis: 'y2', hovertemplate: '<b>c=%{x}</b><br>%{y:.3f} req/s<extra></extra>' }
+                ];
+                var ttftAnnotations = [];
+                ttftConcs.forEach(function(c, i) {
+                    var b = bestTtftByConc[c];
+                    var angles = [[-70,-20],[70,-20],[-50,-40],[50,-40],[-80,-10],[80,-10],[-60,-50],[60,-50]];
+                    var a = angles[i % angles.length];
+                    ttftAnnotations.push({
+                        x: c, y: b.ttft, text: b.label,
+                        showarrow: true, arrowhead: 0, arrowwidth: 1, arrowcolor: getEnvColor(b.label),
+                        ax: a[0], ay: a[1], font: { size: 9, color: getEnvColor(b.label) },
                         bgcolor: 'rgba(255,255,255,0)', borderpad: 2,
                     });
                 });
+                Plotly.newPlot(cid('chart-pareto-sweep-ttft'), ttftTraces, {
+                    ...plotlyLayout, height: 600,
+                    xaxis: { title: 'Concurrent Users', gridcolor: '#d1d5db', tickmode: 'array', tickvals: ttftConcs },
+                    yaxis: { title: 'TTFT P90 (ms)', gridcolor: '#d1d5db', titlefont: { color: '#3b82f6' } },
+                    yaxis2: { title: 'Throughput (req/s)', overlaying: 'y', side: 'right', gridcolor: 'transparent', titlefont: { color: '#f59e0b' } },
+                    showlegend: true,
+                    legend: { x: 0.02, y: 0.98, bgcolor: 'rgba(255,255,255,0.9)', bordercolor: '#e2e8f0', borderwidth: 1 },
+                    plot_bgcolor: 'white', paper_bgcolor: 'white',
+                    annotations: ttftAnnotations,
+                }, swParetoConfig);
             }
-            addSwTtftLabels(swTtftAgg, '#dc2626');
-            addSwTtftLabels(swTtftPd, '#2563eb');
-
-            Plotly.newPlot(cid('chart-pareto-sweep-ttft'), swTtftTraces, {
-                ...plotlyLayout, height: 850,
-                xaxis: { title: 'TTFT P90 (ms) — lower/right is better →', autorange: 'reversed', gridcolor: '#d1d5db' },
-                yaxis: { title: 'Token Throughput per GPU (tok/s/GPU)', gridcolor: '#d1d5db' },
-                showlegend: true,
-                legend: { x: 1.02, y: 1, xanchor: 'left', bgcolor: 'rgba(255,255,255,0.95)', bordercolor: '#e2e8f0', borderwidth: 1 },
-                margin: { t: 40, b: 70, l: 70, r: 160 },
-                plot_bgcolor: 'white', paper_bgcolor: 'white',
-                annotations: swTtftAnnotations,
-            }, swParetoConfig);
         }
 
         // --- Architecture Comparison Charts (PD vs Aggregated at same concurrency) ---
@@ -2788,101 +2760,115 @@ function renderCharts(data, runId) {
                 });
             });
 
-            // Chart 1: Best envelope per arch
-            if (document.getElementById(cid('chart-sweep-envelope'))) {
-                var envTraces = [];
-                ['agg', 'disagg'].forEach(function(cat) {
-                    var color = cat === 'agg' ? '#dc2626' : '#2563eb';
-                    var name = cat === 'agg' ? 'Aggregated' : 'PD/EP';
-                    var xs = [], ys = [], texts = [];
-                    Object.keys(bestByConc).sort(function(a,b){return a-b;}).forEach(function(c) {
-                        if (bestByConc[c][cat]) {
-                            xs.push(parseInt(c));
-                            ys.push(bestByConc[c][cat].tputGpu);
-                            texts.push(bestByConc[c][cat].label);
-                        }
-                    });
-                    if (xs.length) {
-                        envTraces.push({
-                            x: xs, y: ys, text: texts,
-                            name: name, mode: 'lines+markers',
-                            line: { color: color, width: 3 },
-                            marker: { color: color, size: 8 },
-                            hovertemplate: '<b>c=%{x}</b><br>%{y:.0f} tok/s/GPU<br>%{text}<extra></extra>'
-                        });
+            // Build best-overall per concurrency (across ALL configs)
+            var bestOverall = {};
+            archKeys.forEach(function(arch) {
+                var pts = csw[arch];
+                if (!pts) return;
+                pts.forEach(function(p) {
+                    var c = p.concurrency;
+                    var tputGpu = p.throughput_per_gpu || 0;
+                    var label = p.config_label || sweepArchLabel(arch);
+                    if (!bestOverall[c] || tputGpu > bestOverall[c].tputGpu) {
+                        bestOverall[c] = { tputGpu: tputGpu, label: label, arch: sweepArchLabel(arch), conc: c };
                     }
                 });
-                if (envTraces.length) {
-                    var envXvals = []; envTraces.forEach(function(t){ if(t.x) t.x.forEach(function(v){ if(envXvals.indexOf(v)===-1) envXvals.push(v); }); }); envXvals.sort(function(a,b){return a-b;});
-                    Plotly.newPlot(cid('chart-sweep-envelope'), envTraces, {
-                        ...plotlyLayout, height: 600,
-                        xaxis: { title: 'Concurrent Users', gridcolor: '#d1d5db', tickmode: 'array', tickvals: envXvals },
-                        yaxis: { title: 'Best Throughput per GPU (tok/s/GPU)', gridcolor: '#d1d5db' },
-                        showlegend: true,
-                        legend: { x: 0.02, y: 0.98, bgcolor: 'rgba(255,255,255,0.9)', bordercolor: '#e2e8f0', borderwidth: 1 },
-                        plot_bgcolor: 'white', paper_bgcolor: 'white',
-                    }, swParetoConfig);
-                }
+            });
+
+            // Chart 1: Best config per concurrency
+            if (document.getElementById(cid('chart-sweep-envelope'))) {
+                var concs = Object.keys(bestOverall).map(Number).sort(function(a,b){return a-b;});
+                var xs = [], ys = [], colors = [], texts = [];
+                concs.forEach(function(c) {
+                    var b = bestOverall[c];
+                    xs.push(c); ys.push(b.tputGpu);
+                    colors.push(getEnvColor(b.label));
+                    texts.push(b.label + '<br>c=' + c + '<br>' + b.tputGpu.toFixed(0) + ' tok/s/GPU');
+                });
+                var envTraces = [{
+                    x: xs, y: ys, text: texts,
+                    name: 'Best Config', mode: 'lines+markers',
+                    line: { color: '#475569', width: 2 },
+                    marker: { color: colors, size: 14, line: { color: '#fff', width: 2 } },
+                    hovertemplate: '<b>%{text}</b><extra></extra>'
+                }];
+                var envAnnotations = [];
+                concs.forEach(function(c, i) {
+                    var b = bestOverall[c];
+                    var angles = [[-70,-20],[70,-20],[-50,-40],[50,-40],[-80,-10],[80,-10],[-60,-50],[60,-50]];
+                    var a = angles[i % angles.length];
+                    envAnnotations.push({
+                        x: c, y: b.tputGpu, text: b.label,
+                        showarrow: true, arrowhead: 0, arrowwidth: 1, arrowcolor: getEnvColor(b.label),
+                        ax: a[0], ay: a[1],
+                        font: { size: 9, color: getEnvColor(b.label) },
+                        bgcolor: 'rgba(255,255,255,0)', borderpad: 2,
+                    });
+                });
+                var envXvals = concs.slice();
+                Plotly.newPlot(cid('chart-sweep-envelope'), envTraces, {
+                    ...plotlyLayout, height: 600,
+                    xaxis: { title: 'Concurrent Users', gridcolor: '#d1d5db', tickmode: 'array', tickvals: envXvals },
+                    yaxis: { title: 'Best Throughput per GPU (tok/s/GPU)', gridcolor: '#d1d5db' },
+                    showlegend: false,
+                    margin: { t: 40, b: 70, l: 70, r: 40 },
+                    plot_bgcolor: 'white', paper_bgcolor: 'white',
+                    annotations: envAnnotations,
+                }, swParetoConfig);
             }
 
-            // Chart 3: Overlaid — envelope lines + winner dots
+            // Chart 3: Overlaid — same best-config line + winner comparison
             if (document.getElementById(cid('chart-sweep-overlaid'))) {
-                var olTraces = [];
+                var olConcs = Object.keys(bestOverall).map(Number).sort(function(a,b){return a-b;});
+                var olXs = [], olYs = [], olColors = [], olTexts = [];
+                olConcs.forEach(function(c) {
+                    var b = bestOverall[c];
+                    olXs.push(c); olYs.push(b.tputGpu);
+                    olColors.push(getEnvColor(b.label));
+                    olTexts.push(b.label);
+                });
+                var olTraces = [{
+                    x: olXs, y: olYs, text: olTexts,
+                    name: 'Best Config', mode: 'lines+markers',
+                    line: { color: '#475569', width: 2 },
+                    marker: { color: olColors, size: 14, line: { color: '#fff', width: 2 } },
+                    hovertemplate: '<b>%{text}</b><br>c=%{x}<br>%{y:.0f} tok/s/GPU<extra></extra>'
+                }];
+                // Envelope lines for PD vs Agg comparison
                 ['agg', 'disagg'].forEach(function(cat) {
-                    var color = cat === 'agg' ? '#dc2626' : '#2563eb';
-                    var name = cat === 'agg' ? 'Aggregated' : 'PD/EP';
-                    var xs = [], ys = [], texts = [];
+                    var eColor = cat === 'agg' ? '#dc2626' : '#2563eb';
+                    var eName = cat === 'agg' ? 'Aggregated — Best' : 'PD/EP — Best';
+                    var exs = [], eys = [];
                     Object.keys(bestByConc).sort(function(a,b){return a-b;}).forEach(function(c) {
-                        if (bestByConc[c][cat]) {
-                            xs.push(parseInt(c));
-                            ys.push(bestByConc[c][cat].tputGpu);
-                            texts.push(bestByConc[c][cat].label);
-                        }
+                        if (bestByConc[c][cat]) { exs.push(parseInt(c)); eys.push(bestByConc[c][cat].tputGpu); }
                     });
-                    if (xs.length) {
-                        olTraces.push({
-                            x: xs, y: ys, text: texts,
-                            name: name + ' (best)', mode: 'lines+markers',
-                            line: { color: color, width: 2.5 },
-                            marker: { color: color, size: 6 },
-                            hovertemplate: '<b>c=%{x}</b><br>%{y:.0f} tok/s/GPU<br>%{text}<extra></extra>'
-                        });
+                    if (exs.length > 1) {
+                        olTraces.push({ x: exs, y: eys, name: eName, mode: 'lines',
+                            line: { color: eColor, width: 2, dash: 'dot' }, showlegend: true });
                     }
                 });
-                // Winner dots
-                var wConcs = [], wTputs = [], wColors = [], wTexts = [], wSizes = [];
-                Object.keys(bestByConc).sort(function(a,b){return a-b;}).forEach(function(c) {
-                    var e = bestByConc[c];
-                    if (!e.disagg || !e.agg) return;
-                    var winner = e.disagg.tputGpu > e.agg.tputGpu ? e.disagg : e.agg;
-                    var isDisagg = winner === e.disagg;
-                    var loser = isDisagg ? e.agg : e.disagg;
-                    var pct = (winner.tputGpu - loser.tputGpu) / loser.tputGpu * 100;
-                    wConcs.push(parseInt(c));
-                    wTputs.push(winner.tputGpu);
-                    wColors.push(isDisagg ? '#2563eb' : '#dc2626');
-                    wTexts.push(winner.label + ' wins (+' + pct.toFixed(0) + '%)');
-                    wSizes.push(Math.max(10, Math.min(25, 10 + pct / 5)));
-                });
-                if (wConcs.length) {
-                    olTraces.push({
-                        x: wConcs, y: wTputs, text: wTexts,
-                        name: 'Winner', mode: 'markers',
-                        marker: { color: wColors, size: wSizes, line: { color: '#fff', width: 2 } },
-                        hovertemplate: '<b>c=%{x}</b><br>%{y:.0f} tok/s/GPU<br>%{text}<extra></extra>'
+                var olAnnotations = [];
+                olConcs.forEach(function(c, i) {
+                    var b = bestOverall[c];
+                    var side = i % 2 === 0 ? 1 : -1;
+                    olAnnotations.push({
+                        x: c, y: b.tputGpu, text: b.label,
+                        showarrow: true, arrowhead: 0, arrowwidth: 1, arrowcolor: getEnvColor(b.label),
+                        ax: 60 * side, ay: -25 - (i % 3) * 15,
+                        font: { size: 9, color: getEnvColor(b.label) },
+                        bgcolor: 'rgba(255,255,255,0)', borderpad: 2,
                     });
-                }
-                if (olTraces.length) {
-                    var olXvals = []; olTraces.forEach(function(t){ if(t.x) t.x.forEach(function(v){ if(olXvals.indexOf(v)===-1) olXvals.push(v); }); }); olXvals.sort(function(a,b){return a-b;});
-                    Plotly.newPlot(cid('chart-sweep-overlaid'), olTraces, {
-                        ...plotlyLayout, height: 700,
-                        xaxis: { title: 'Concurrent Users', gridcolor: '#d1d5db', tickmode: 'array', tickvals: olXvals },
-                        yaxis: { title: 'Best Throughput per GPU (tok/s/GPU)', gridcolor: '#d1d5db' },
-                        showlegend: true,
-                        legend: { x: 0.02, y: 0.98, bgcolor: 'rgba(255,255,255,0.9)', bordercolor: '#e2e8f0', borderwidth: 1 },
-                        plot_bgcolor: 'white', paper_bgcolor: 'white',
-                    }, swParetoConfig);
-                }
+                });
+                var olXvals = olConcs.slice();
+                Plotly.newPlot(cid('chart-sweep-overlaid'), olTraces, {
+                    ...plotlyLayout, height: 700,
+                    xaxis: { title: 'Concurrent Users', gridcolor: '#d1d5db', tickmode: 'array', tickvals: olXvals },
+                    yaxis: { title: 'Throughput per GPU (tok/s/GPU)', gridcolor: '#d1d5db' },
+                    showlegend: true,
+                    legend: { x: 0.02, y: 0.98, bgcolor: 'rgba(255,255,255,0.9)', bordercolor: '#e2e8f0', borderwidth: 1 },
+                    plot_bgcolor: 'white', paper_bgcolor: 'white',
+                    annotations: olAnnotations,
+                }, swParetoConfig);
             }
         }
     }

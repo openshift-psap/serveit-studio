@@ -207,6 +207,7 @@ spec:
 {% endif %}{% if prefill_moe_backend %}                  --moe-backend {{ prefill_moe_backend }} \
 {% endif %}{% if prefill_all2all_backend %}                  --all2all-backend {{ prefill_all2all_backend }} \
 {% endif %}{% if max_model_len %}                  --max-model-len {{ max_model_len }} \
+{% endif %}{% if enable_chunked_prefill %}                  --enable-chunked-prefill \
 {% endif %}{% if enable_prefix_caching %}                  --enable-prefix-caching \
 {% endif %}{% if disable_custom_all_reduce %}                  --disable-custom-all-reduce \
 {% endif %}{% if dtype %}                  --dtype {{ dtype }} \
