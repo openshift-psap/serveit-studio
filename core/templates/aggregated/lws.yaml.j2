@@ -277,8 +277,8 @@ spec:
                 {% endfor %}
 {% endif %}
               requests:
-                cpu: "{{ cpu_limit }}"
-                memory: "{{ memory_limit }}"
+                cpu: "{{ cpu_request }}"
+                memory: "{{ memory_request }}"
 {% if not selected_dra_classes %}
                 {{ gpu_resource_key }}: "{{ gpu_count }}"
                 {% for r in extra_device_resources %}
