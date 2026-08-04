@@ -215,8 +215,8 @@ class DatasetMixin:
 
             structured_prefix = getattr(self.config, 'structured_prefix', False)
             if structured_prefix and hit_pct > 0:
-                prefix_tokens = int(isl * hit_pct / 100)
                 prefix_groups = groups if groups > 0 else 5
+                max_isl = isl + (int(isl_stdev) if isl_stdev > 0 else 0)
                 cmd = (
                     f'generate_dataset'
                     f' --model "{self.config.model_name}"'
@@ -224,10 +224,10 @@ class DatasetMixin:
                     f' --seed {seed} --rows {pool_size}'
                     f' --output {dataset_path}'
                     f' --mode prefix_group'
-                    f' --prefix-tokens {prefix_tokens}'
+                    f' --hit-pct {hit_pct}'
                     f' --prefix-groups {prefix_groups}'
                 )
-                self.log(f"   Structured prefix mode: {prefix_groups} groups, {prefix_tokens} prefix tokens + {isl - prefix_tokens} suffix tokens", 'info')
+                self.log(f"   Structured prefix mode: {prefix_groups} groups, {hit_pct}% prefix per row (ISL {isl}-{max_isl})", 'info')
             else:
                 cmd = (
                     f'generate_dataset'

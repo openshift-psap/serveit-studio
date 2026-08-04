@@ -165,18 +165,30 @@ def generate_cache_parallel(args):
 
 def _generate_prefix_group_chunk(chunk_args):
     """Generate a chunk of prefix-group rows: shared prefix + unique suffix per row."""
-    start_idx, count, seed, prefix_tokens, suffix_tokens, osl, osl_stdev, model_name, group_prefixes = chunk_args
+    start_idx, count, seed, isl, isl_stdev, osl, osl_stdev, prefix_pct, model_name, group_prefixes = chunk_args
     pid = os.getpid()
     tokenizer, vocab = _load_tokenizer(model_name)
     num_groups = len(group_prefixes)
-    print(f"Worker {pid}: generating {count} prefix-group rows ({num_groups} groups, {prefix_tokens}+{suffix_tokens} tokens)...", file=sys.stderr, flush=True)
+    print(f"Worker {pid}: generating {count} prefix-group rows ({num_groups} groups, {prefix_pct}% prefix, ISL {isl}+{isl_stdev})...", file=sys.stderr, flush=True)
 
     rows = []
     for i in range(count):
         rng = random.Random(seed + start_idx + i + 1)
+        row_isl = isl + int(rng.random() * isl_stdev) if isl_stdev > 0 else isl
+        row_prefix_tokens = max(1, int(row_isl * prefix_pct / 100))
+        row_suffix_tokens = max(1, row_isl - row_prefix_tokens)
+
         group_idx = (start_idx + i) % num_groups
-        prefix = group_prefixes[group_idx]
-        suffix = _make_prompt(suffix_tokens, rng, tokenizer, vocab)
+        full_prefix = group_prefixes[group_idx]
+
+        if tokenizer:
+            prefix_toks = tokenizer.encode(full_prefix, add_special_tokens=False)[:row_prefix_tokens]
+            prefix = tokenizer.decode(prefix_toks, skip_special_tokens=True)
+        else:
+            words = full_prefix.split()
+            prefix = ' '.join(words[:max(1, int(row_prefix_tokens * 0.8))])
+
+        suffix = _make_prompt(row_suffix_tokens, rng, tokenizer, vocab)
         prompt = prefix + '\n' + suffix
         row_osl = osl + int(rng.random() * osl_stdev) if osl_stdev > 0 else osl
         rows.append(json.dumps({'prompt': prompt, 'output_tokens_count': row_osl}))
@@ -191,17 +203,18 @@ def generate_prefix_group_parallel(args):
     """Generate prefix-group dataset: N groups, each with a shared prefix + unique suffix per row."""
     num_workers = min(multiprocessing.cpu_count(), 8)
     num_groups = args.prefix_groups
-    prefix_tokens = args.prefix_tokens
-    suffix_tokens = max(1, args.isl - prefix_tokens)
+    prefix_pct = args.hit_pct if args.hit_pct > 0 else 60
+    max_isl = args.isl + (int(args.isl_stdev) if args.isl_stdev > 0 else 0)
+    max_prefix_tokens = max(1, int(max_isl * prefix_pct / 100))
 
     tokenizer, vocab = _load_tokenizer(args.model)
 
-    print(f"Generating {num_groups} group prefixes ({prefix_tokens} tokens each)...", file=sys.stderr, flush=True)
+    print(f"Generating {num_groups} group prefixes ({max_prefix_tokens} max tokens, {prefix_pct}% of ISL)...", file=sys.stderr, flush=True)
     group_prefixes = []
     for g in range(num_groups):
         grng = random.Random(args.seed + g * 10000)
-        group_prefixes.append(_make_prompt(prefix_tokens, grng, tokenizer, vocab))
-    print(f"Generated {num_groups} group prefixes, suffix={suffix_tokens} tokens", file=sys.stderr, flush=True)
+        group_prefixes.append(_make_prompt(max_prefix_tokens, grng, tokenizer, vocab))
+    print(f"Generated {num_groups} group prefixes (max {max_prefix_tokens} tokens, ISL range {args.isl}-{max_isl})", file=sys.stderr, flush=True)
 
     chunk_size = args.rows // num_workers
     remainder = args.rows % num_workers
@@ -209,7 +222,7 @@ def generate_prefix_group_parallel(args):
     offset = 0
     for w in range(num_workers):
         n = chunk_size + (1 if w < remainder else 0)
-        chunks.append((offset, n, args.seed, prefix_tokens, suffix_tokens, args.osl, args.osl_stdev, args.model, group_prefixes))
+        chunks.append((offset, n, args.seed, args.isl, args.isl_stdev, args.osl, args.osl_stdev, prefix_pct, args.model, group_prefixes))
         offset += n
 
     print(f"Using {num_workers} workers for {args.rows} rows...", file=sys.stderr, flush=True)
@@ -250,8 +263,8 @@ def main():
     if args.mode == 'random':
         rows = generate_random_parallel(args)
     elif args.mode == 'prefix_group':
-        if args.prefix_tokens <= 0:
-            args.prefix_tokens = int(args.isl * 0.43)
+        if args.hit_pct <= 0:
+            args.hit_pct = 60
         rows = generate_prefix_group_parallel(args)
     else:
         rows = generate_cache_parallel(args)
