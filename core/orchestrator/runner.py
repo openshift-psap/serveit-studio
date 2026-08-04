@@ -396,10 +396,12 @@ class TestOrchestrator(ParserMixin, GuidellmMixin):
         test_id: str,
         timeout: int = 3600,
         log_callback: Optional[Callable[[str], None]] = None,
-        stop_check: Optional[Callable[[], bool]] = None
+        stop_check: Optional[Callable[[], bool]] = None,
+        config=None
     ) -> int:
-        """Wait for all vLLM pods to finish loading the model by checking logs
-        for 'Application startup complete'."""
+        """Wait for vLLM pods to finish loading the model by checking logs
+        for 'Application startup complete'. For multi-node (lws_size > 1),
+        only waits for leader pods since workers run --headless."""
         start_time = time.time()
         ready_pods = set()
 
@@ -410,9 +412,12 @@ class TestOrchestrator(ParserMixin, GuidellmMixin):
                 return -1
 
             try:
+                label_selector = f'llm-d.ai/test-id={test_id}'
+                if config and getattr(config, 'lws_size', None) and config.lws_size > 1:
+                    label_selector += ',leaderworkerset.sigs.k8s.io/worker-index=0'
                 result = subprocess.run(
                     ['kubectl', 'get', 'pods', '-n', self.namespace,
-                     '-l', f'llm-d.ai/test-id={test_id}',
+                     '-l', label_selector,
                      '-o', 'jsonpath={range .items[*]}{.metadata.name}{" "}{end}'],
                     capture_output=True, text=True, timeout=15, check=False
                 )
@@ -1371,7 +1376,8 @@ class TestOrchestrator(ParserMixin, GuidellmMixin):
                     config.test_id,
                     timeout=self.deployment_timeout,
                     log_callback=log_callback,
-                    stop_check=stop_check
+                    stop_check=stop_check,
+                    config=config
                 )
 
                 if model_load_time == -2:

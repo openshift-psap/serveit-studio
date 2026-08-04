@@ -302,6 +302,256 @@ spec:
                 mountPath: /nfs-{{ nfs.suffix }}
 {% endfor %}
 {% endif %}
+    restartPolicy: RecreateGroupOnPodRestart
+{% if lws_size | default(1) > 1 %}
+    workerTemplate:
+      spec:
+        serviceAccountName: llm-d-modelserver
+        {% if selected_nodes %}
+        affinity:
+          nodeAffinity:
+            requiredDuringSchedulingIgnoredDuringExecution:
+              nodeSelectorTerms:
+              - matchExpressions:
+                - key: kubernetes.io/hostname
+                  operator: In
+                  values:
+                  {% for node in selected_nodes %}
+                  - "{{ node }}"
+                  {% endfor %}
+        {% endif %}
+        volumes:
+          - name: dshm
+            emptyDir:
+              medium: Memory
+              sizeLimit: 2Gi
+{% if per_node_storage %}
+          - name: hf-cache
+            emptyDir: {}
+{% for nfs in node_nfs_pvcs %}
+          - name: nfs-{{ nfs.suffix }}
+            persistentVolumeClaim:
+              claimName: {{ nfs.pvc_name }}
+{% endfor %}
+{% else %}
+          - name: hf-cache
+            persistentVolumeClaim:
+              claimName: {{ pvc_name }}
+{% endif %}
+          - name: jit-cache
+            emptyDir: {}
+{% if per_node_storage %}
+        initContainers:
+          - name: select-nfs
+            image: busybox:stable
+            resources:
+              requests:
+                cpu: "100m"
+                memory: "64Mi"
+              limits:
+                cpu: "100m"
+                memory: "64Mi"
+            command: ["/bin/sh", "-c"]
+            args:
+              - |
+                echo "Node: $NODE_NAME"
+                case "$NODE_NAME" in
+{% for nfs in node_nfs_pvcs %}
+                  *{{ nfs.suffix }}*) ln -sf /nfs-{{ nfs.suffix }}/huggingface /model-cache/huggingface; echo "Linked to nfs-{{ nfs.suffix }}/huggingface" ;;
+{% endfor %}
+                  *) echo "ERROR: No NFS mount matches node $NODE_NAME"; ls -d /nfs-* 2>/dev/null; exit 1 ;;
+                esac
+            env:
+              - name: NODE_NAME
+                valueFrom:
+                  fieldRef:
+                    fieldPath: spec.nodeName
+            volumeMounts:
+              - name: hf-cache
+                mountPath: /model-cache
+{% for nfs in node_nfs_pvcs %}
+              - name: nfs-{{ nfs.suffix }}
+                mountPath: /nfs-{{ nfs.suffix }}
+{% endfor %}
+{% endif %}
+        containers:
+          - name: vllm
+            image: {{ image }}
+            securityContext:
+              capabilities:
+                add:
+                  - IPC_LOCK
+                  - SYS_RAWIO
+              runAsGroup: 0
+              runAsUser: 0
+            imagePullPolicy: Always
+            command:
+              - /bin/bash
+              - -c
+            args:
+              - |-
+                find /dev/shm -type f -delete
+
+                if [ -d /var/run/nvidia-container-devices ]; then
+                  GPU_INDICES=""
+                  for uuid in $(ls /var/run/nvidia-container-devices/); do
+                    idx=$(nvidia-smi --query-gpu=index,uuid --format=csv,noheader | grep "$uuid" | cut -d',' -f1 | tr -d ' ')
+                    [ -n "$idx" ] && GPU_INDICES="${GPU_INDICES:+$GPU_INDICES,}$idx"
+                  done
+                  if [ -n "$GPU_INDICES" ]; then
+                    export CUDA_VISIBLE_DEVICES="$GPU_INDICES"
+                    echo "--- CUDA_VISIBLE_DEVICES=$CUDA_VISIBLE_DEVICES ---"
+                  fi
+                fi
+
+                echo "========================================="
+                echo "ServeIt Studio Test: {{ test_id }} (worker)"
+                echo "Architecture: Aggregated (Multi-Node Worker)"
+                echo "Model: {{ model_name }}"
+                echo "TP: {{ tensor_parallelism }}, nnodes: {{ lws_size }}"
+                echo "node-rank: ${LWS_WORKER_INDEX:-0}"
+                echo "master-addr: ${LWS_LEADER_ADDRESS}"
+                echo "========================================="
+
+                # Patch vllm#43396: FP8 MoE CUTLASS OOB at batch 8192
+                _MOE_FILE=$(python3 -c "import vllm; print(vllm.__path__[0])" 2>/dev/null)/model_executor/layers/fused_moe/moe_permute_unpermute.py
+                if [ -f "$_MOE_FILE" ] && grep -q 'a1q_scale\[permuted_idx.clamp' "$_MOE_FILE"; then
+                  sed -i 's|a1q_scale = a1q_scale\[permuted_idx.clamp(max=n_token \* topk - 1) // topk\]|scale_idx = permuted_idx.clamp(max=n_token * topk - 1) // topk; scale_idx = scale_idx.clamp(max=a1q_scale.shape[0] - 1); a1q_scale = a1q_scale[scale_idx]|' "$_MOE_FILE"
+                  echo "--- Applied vllm#43396 FP8 MoE patch ---"
+                fi
+
+                exec vllm serve \
+                  {{ model_name }} \
+                  --port 8000 \
+                  --trust-remote-code \
+                  --headless \
+                  --tensor-parallel-size {{ tensor_parallelism }} \
+                  --nnodes {{ lws_size }} \
+                  --node-rank ${LWS_WORKER_INDEX:-0} \
+                  --master-addr ${LWS_LEADER_ADDRESS} \
+{% if pipeline_parallel_size %}                  --pipeline-parallel-size {{ pipeline_parallel_size }} \
+{% endif %}                  --block-size {{ block_size or 16 }} \
+{% if max_model_len %}                  --max-model-len {{ max_model_len }} \
+{% endif %}                  --gpu-memory-utilization {{ gpu_memory_utilization or 0.90 }} \
+{% if enable_chunked_prefill %}                  --enable-chunked-prefill \
+{% endif %}{% if enable_prefix_caching %}                  --enable-prefix-caching \
+{% endif %}{% if disable_custom_all_reduce %}                  --disable-custom-all-reduce \
+{% endif %}{% if dtype %}                  --dtype {{ dtype }} \
+{% endif %}{% if kv_cache_dtype %}                  --kv-cache-dtype {{ kv_cache_dtype }} \
+{% endif %}{% if max_num_batched_tokens %}                  --max-num-batched-tokens {{ max_num_batched_tokens }} \
+{% endif %}{% if max_num_seqs %}                  --max-num-seqs {{ max_num_seqs }} \
+{% endif %}{% if enable_expert_parallel %}                  --enable-expert-parallel \
+{% endif %}{% if enable_dbo %}                  --enable-dbo \
+                  --dbo-prefill-token-threshold {{ dbo_prefill_token_threshold | default(32) }} \
+{% endif %}{% if enable_eplb %}                  --enable-eplb \
+                  --eplb-config '{"window_size":"1000","step_interval":"3000","num_redundant_experts":"{{ num_redundant_experts | default(1) }}","log_balancedness":"False"}' \
+{% endif %}{% if moe_backend %}                  --moe-backend {{ moe_backend }} \
+{% endif %}{% if all2all_backend %}                  --all2all-backend {{ all2all_backend }} \
+{% endif %}{% if model_loader_extra_config %}                  --model-loader-extra-config '{{ model_loader_extra_config }}' \
+{% endif %}{% if extra_vllm_args %}                  {{ extra_vllm_args }} \
+{% endif %}                  --disable-uvicorn-access-log \
+                  || sleep infinity
+            env:
+              - name: HF_TOKEN
+                valueFrom:
+                  secretKeyRef:
+                    name: llm-d-hf-token
+                    key: HF_TOKEN
+                    optional: true
+{% if selected_dra_classes %}
+              - name: RDMA_NETWORK_MODE
+                value: "dra-net"
+{% endif %}
+              - name: NCCL_IB_HCA
+                value: "{{ nccl_ib_hca }}"
+              - name: NCCL_SOCKET_IFNAME
+                value: "eth0"
+              - name: GLOO_SOCKET_IFNAME
+                value: "eth0"
+              - name: VLLM_SKIP_P2P_CHECK
+                value: "1"
+{% if use_deep_gemm is not none %}
+              - name: VLLM_USE_DEEP_GEMM
+                value: "{{ '1' if use_deep_gemm else '0' }}"
+{% endif %}
+              - name: NVIDIA_GDRCOPY
+                value: "enabled"
+{% if enable_expert_parallel and nvshmem_symmetric_size %}
+              - name: NVSHMEM_SYMMETRIC_SIZE
+                value: "{{ nvshmem_symmetric_size }}"
+              - name: NVSHMEM_DISABLE_CUDA_VMM
+                value: "1"
+{% endif %}
+{% if moe_dp_chunk_size %}
+              - name: VLLM_MOE_DP_CHUNK_SIZE
+                value: "{{ moe_dp_chunk_size }}"
+{% endif %}
+              - name: VLLM_MEMORY_PROFILER_ESTIMATE_CUDAGRAPHS
+                value: "1"
+              - name: TRITON_LIBCUDA_PATH
+                value: /usr/lib64
+              - name: VLLM_LOGGING_LEVEL
+                value: "{{ 'DEBUG' if vllm_debug_logs else 'ERROR' }}"
+              - name: CUDA_CACHE_PATH
+                value: /var/cache/vllm/cuda
+              - name: CCACHE_DIR
+                value: /var/cache/vllm/ccache
+              - name: VLLM_CACHE_ROOT
+                value: /var/cache/vllm/vllm
+              - name: FLASHINFER_WORKSPACE_BASE
+                value: /var/cache/vllm/flashinfer
+              - name: HF_HUB_CACHE
+                value: /model-cache/huggingface
+              - name: HF_HOME
+                value: /model-cache/huggingface
+              - name: RAYON_NUM_THREADS
+                value: "1"
+{% if extra_env_vars %}{% for env in extra_env_vars %}
+              - name: {{ env.name }}
+                value: "{{ env.value }}"
+{% endfor %}{% endif %}
+            ports:
+              - containerPort: 8000
+                name: vllm
+                protocol: TCP
+            resources:
+              limits:
+                cpu: "{{ cpu_limit }}"
+                memory: "{{ memory_limit }}"
+{% if selected_dra_classes %}
+                {{ gpu_resource_key }}: "{{ gpu_count }}"
+{% else %}
+                {{ gpu_resource_key }}: "{{ gpu_count }}"
+                {% for r in extra_device_resources %}
+                {{ r.key }}: "{{ r.value }}"
+                {% endfor %}
+{% endif %}
+              requests:
+                cpu: "{{ cpu_limit }}"
+                memory: "{{ memory_limit }}"
+{% if selected_dra_classes %}
+                {{ gpu_resource_key }}: "{{ gpu_count }}"
+{% else %}
+                {{ gpu_resource_key }}: "{{ gpu_count }}"
+                {% for r in extra_device_resources %}
+                {{ r.key }}: "{{ r.value }}"
+                {% endfor %}
+{% endif %}
+            volumeMounts:
+              - name: dshm
+                mountPath: /dev/shm
+              - name: hf-cache
+                mountPath: /model-cache
+              - name: jit-cache
+                mountPath: /var/cache/vllm
+{% if per_node_storage %}
+{% for nfs in node_nfs_pvcs %}
+              - name: nfs-{{ nfs.suffix }}
+                mountPath: /nfs-{{ nfs.suffix }}
+{% endfor %}
+{% endif %}
+{% else %}
     workerTemplate:
       spec:
         containers: []
+{% endif %}

@@ -1649,9 +1649,10 @@ class RecipeOptimizer(
         finally:
             self.orchestrator.cleanup()
 
-    def _get_valid_tp_options(self, role: str = 'aggregated') -> List[int]:
+    def _get_valid_tp_options(self, role: str = 'aggregated', max_tp: int = 16) -> List[int]:
         """
         Get valid TP options based on cluster GPUs per node and model size.
+        max_tp caps the highest TP tested (default 16 for calibration sweep).
 
         Args:
             role: 'prefill', 'decode', or 'aggregated'. Determines the
@@ -1689,8 +1690,7 @@ class RecipeOptimizer(
                 gpu_memory_utilization=gmu
             )
             tp_options = [tp for tp in tp_options if tp >= min_tp]
-            # Cap TP by the instance's GPU limit
-            tp_options = [tp for tp in tp_options if tp <= self.config.total_gpus]
+            tp_options = [tp for tp in tp_options if tp <= min(self.config.total_gpus, max_tp)]
         else:
             tp_options = list(self.config.tp_options)
 
