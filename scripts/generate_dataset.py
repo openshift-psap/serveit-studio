@@ -103,15 +103,22 @@ def _generate_cache_chunk(chunk_args):
     start_idx, count, seed, isl, osl, isl_stdev, osl_stdev, model_name, shared_prompt, hit_pct = chunk_args
     pid = os.getpid()
     tokenizer, vocab = _load_tokenizer(model_name)
-    print(f"Worker {pid}: generating {count} cache rows...", file=sys.stderr, flush=True)
+    print(f"Worker {pid}: generating {count} cache rows (ISL {isl}+{isl_stdev})...", file=sys.stderr, flush=True)
 
     hit_count = int(count * hit_pct / 100)
     unique_count = count - hit_count
 
     rows = []
     for i in range(hit_count):
-        row_osl = osl + int(random.Random(seed + start_idx + i).random() * osl_stdev) if osl_stdev > 0 else osl
-        rows.append(json.dumps({'prompt': shared_prompt, 'output_tokens_count': row_osl}))
+        rng = random.Random(seed + start_idx + i)
+        row_isl = isl + int(rng.random() * isl_stdev) if isl_stdev > 0 else isl
+        row_osl = osl + int(rng.random() * osl_stdev) if osl_stdev > 0 else osl
+        if isl_stdev > 0 and tokenizer:
+            toks = tokenizer.encode(shared_prompt, add_special_tokens=False)[:row_isl]
+            prompt = tokenizer.decode(toks, skip_special_tokens=True)
+        else:
+            prompt = shared_prompt
+        rows.append(json.dumps({'prompt': prompt, 'output_tokens_count': row_osl}))
 
     for i in range(unique_count):
         rng = random.Random(seed + start_idx + hit_count + i + 1)
@@ -130,11 +137,12 @@ def generate_cache_parallel(args):
     """Generate cache dataset using multiprocessing."""
     num_workers = min(multiprocessing.cpu_count(), 8)
 
-    # Generate shared prompt in main process
+    # Generate shared prompt at max ISL so shorter rows can truncate from it
     tokenizer, vocab = _load_tokenizer(args.model)
     shared_rng = random.Random(args.seed)
-    shared_prompt = _make_prompt(args.isl, shared_rng, tokenizer, vocab)
-    print(f"Shared prompt generated ({len(shared_prompt)} chars)", file=sys.stderr, flush=True)
+    max_isl = args.isl + (int(args.isl_stdev) if args.isl_stdev > 0 else 0)
+    shared_prompt = _make_prompt(max_isl, shared_rng, tokenizer, vocab)
+    print(f"Shared prompt generated ({len(shared_prompt)} chars, max ISL {max_isl})", file=sys.stderr, flush=True)
 
     chunk_size = args.rows // num_workers
     remainder = args.rows % num_workers
