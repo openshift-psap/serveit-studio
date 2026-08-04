@@ -507,7 +507,9 @@ class PDSearchMixin:
             self.aggregated_search_results.append((tp, result))
 
         # Also test DP (data parallel) variants for MoE models on multi-node clusters
-        if self._is_moe and self.cluster_resources and self.cluster_resources.gpu_node_count >= 2:
+        # Skip if model fits on 1 GPU (TP=1 valid) — independent replicas are simpler and faster
+        min_valid_tp = min(valid_tp) if valid_tp else 1
+        if self._is_moe and min_valid_tp > 1 and self.cluster_resources and self.cluster_resources.gpu_node_count >= 2:
             gpus_per_node = self.cluster_resources.max_gpus_per_node
             for tp in valid_tp:
                 if self._should_stop():
