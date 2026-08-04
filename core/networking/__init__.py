@@ -160,6 +160,8 @@ def scan_available_networks(kubectl_runner, namespace: str = None) -> List[Dict[
     queries = {
         'nad_api': ['api-resources', '--api-group=k8s.cni.cncf.io'],
         'dra_classes': ['get', 'deviceclass', '-o', 'json'],
+        'dra_webhooks': ['get', 'deploy', '-A', '-l', 'app.kubernetes.io/component=webhook',
+                         '-o', 'json'],
         'nodes': ['get', 'nodes', '-o', 'json'],
         'nmstate_api': ['api-resources', '--api-group=nmstate.io'],
     }
@@ -209,12 +211,42 @@ def scan_available_networks(kubectl_runner, namespace: str = None) -> List[Dict[
             else:
                 kind = 'unknown'
             extended_resource = item.get('spec', {}).get('extendedResourceName', '')
-            if not extended_resource and 'gpu-nic-pair' in name:
-                prefix = name.replace('-gpu-nic-pair', '')
-                extended_resource = f'{prefix}.dra.io/gpu-nic-pair'
             dra_device_classes.append({'name': name, 'kind': kind, 'extendedResourceName': extended_resource})
         dra_device_classes = sorted(dra_device_classes, key=lambda x: x['name'])
         dra_available = any(c['kind'] in ('gpu_nic_pair', 'nic') for c in dra_device_classes)
+
+        # Fill missing extendedResourceName from DRA webhook --resource-mapping args
+        missing = [c for c in dra_device_classes if not c['extendedResourceName']]
+        if missing:
+            wh_r = results.get('dra_webhooks')
+            resource_map = {}
+            if wh_r and wh_r.returncode == 0 and wh_r.stdout.strip():
+                try:
+                    for deploy in json.loads(wh_r.stdout).get('items', []):
+                        for c in deploy.get('spec', {}).get('template', {}).get('spec', {}).get('containers', []):
+                            for arg in c.get('args', []):
+                                if arg.startswith('--resource-mapping='):
+                                    parts = arg.split('=', 1)[1].split('=')
+                                    if len(parts) == 2:
+                                        resource_map[parts[1]] = parts[0]
+                except Exception:
+                    pass
+            if not resource_map:
+                try:
+                    wh2 = kubectl_runner.run(['get', 'deploy', '-A',
+                        '-o', 'jsonpath={range .items[*].spec.template.spec.containers[*].args[*]}{@}{"\\n"}{end}'],
+                        check=False)
+                    if wh2.returncode == 0:
+                        for line in wh2.stdout.splitlines():
+                            if line.startswith('--resource-mapping='):
+                                parts = line.split('=', 1)[1].split('=')
+                                if len(parts) == 2:
+                                    resource_map[parts[1]] = parts[0]
+                except Exception:
+                    pass
+            for c in missing:
+                if c['name'] in resource_map:
+                    c['extendedResourceName'] = resource_map[c['name']]
 
     nodes_r = results.get('nodes')
     shared_available = False
