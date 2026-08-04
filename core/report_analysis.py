@@ -1307,7 +1307,7 @@ class ReportAnalyzer:
         charts = self.build_chart_data(
             test_results, pareto, stats, calibration_results
         )
-        all_results = self.build_all_results_table(test_results)
+        all_results = self.build_all_results_table(results)
         recommendation = self.build_recommendation(run_id, results, loader.conn)
 
         # Load calibrated concurrency and capacity info from optimal_config JSON
