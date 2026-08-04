@@ -506,6 +506,51 @@ class PDSearchMixin:
             self.log(f"    ✅ TTFT p90: {ttft:.1f}ms, Throughput mean: {throughput:.2f} req/s", 'success')
             self.aggregated_search_results.append((tp, result))
 
+        # Also test DP (data parallel) variants for MoE models on multi-node clusters
+        if self._is_moe and self.cluster_resources and self.cluster_resources.gpu_node_count >= 2:
+            gpus_per_node = self.cluster_resources.max_gpus_per_node
+            for tp in valid_tp:
+                if self._should_stop():
+                    break
+                if tp > gpus_per_node:
+                    continue  # DP doesn't apply to multi-node TP
+                dp_size = total_gpus // tp
+                if dp_size <= 1:
+                    continue  # No DP benefit with single replica
+                dp_local = gpus_per_node // tp if tp <= gpus_per_node else 1
+
+                test_id = f"step6-agg-tp{tp}-dp{dp_size}"
+                self.log(f"  DP Test: TP={tp}, DP={dp_size} (dp_local={dp_local})", 'info')
+
+                if test_id in self.completed_tests:
+                    row = self.completed_tests[test_id]
+                    result = self._make_test_result_from_db(row)
+                    self.log("    ⏩ Resuming from DB (already completed)", 'info')
+                else:
+                    test_config = self._create_aggregated_config(
+                        tp=tp, num_gpus=total_gpus,
+                        isl=self.config.isl, osl=self.config.osl,
+                        test_id=test_id, use_concurrency=True
+                    )
+                    test_config.data_parallel_size = dp_size
+                    test_config.data_parallel_size_local = dp_local
+                    test_config.replicas = 1  # single LWS group, DP handles distribution
+                    test_config.enable_expert_parallel = True
+
+                    result = self.orchestrator.run_test(
+                        test_config, cleanup=True,
+                        log_callback=lambda msg: self.log(msg, 'info'),
+                        stop_check=self._should_stop
+                    )
+                    self.all_test_results.append((test_config, result))
+                    self._save_test_to_database(test_config, result)
+
+                if result and result.guidellm_success:
+                    ttft = result.ttft_p90 or 1e6
+                    tput = result.throughput_mean or result.throughput_p90 or 0
+                    self.log(f"    ✅ TTFT p90: {ttft:.1f}ms, Throughput mean: {tput:.2f} req/s", 'success')
+                    self.aggregated_search_results.append((tp, result))
+
         if not self.aggregated_search_results:
             self.log("❌ No aggregated test results!", 'error')
             return
