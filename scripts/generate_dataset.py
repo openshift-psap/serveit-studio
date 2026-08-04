@@ -108,14 +108,24 @@ def _generate_cache_chunk(chunk_args):
     hit_count = int(count * hit_pct / 100)
     unique_count = count - hit_count
 
+    if tokenizer:
+        shared_toks = tokenizer.encode(shared_prompt, add_special_tokens=False)
+    else:
+        shared_toks = None
+    max_isl = isl + (int(isl_stdev) if isl_stdev > 0 else 0)
+
     rows = []
     for i in range(hit_count):
         rng = random.Random(seed + start_idx + i)
         row_isl = isl + int(rng.random() * isl_stdev) if isl_stdev > 0 else isl
         row_osl = osl + int(rng.random() * osl_stdev) if osl_stdev > 0 else osl
-        if isl_stdev > 0 and tokenizer:
-            toks = tokenizer.encode(shared_prompt, add_special_tokens=False)[:row_isl]
-            prompt = tokenizer.decode(toks, skip_special_tokens=True)
+        if isl_stdev > 0 and row_isl < max_isl:
+            if shared_toks is not None:
+                prompt = tokenizer.decode(shared_toks[:row_isl], skip_special_tokens=True)
+            else:
+                words = shared_prompt.split()
+                cut = max(1, int(len(words) * row_isl / max_isl))
+                prompt = ' '.join(words[:cut])
         else:
             prompt = shared_prompt
         rows.append(json.dumps({'prompt': prompt, 'output_tokens_count': row_osl}))
