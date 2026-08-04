@@ -1,7 +1,13 @@
 // charts.js — Plotly chart rendering for all report visualizations
 
 function renderCharts(data, runId) {
-    const content = document.getElementById('charts-content');
+    var content = document.getElementById('charts-content');
+    try { _renderChartsImpl(data, runId, content); } catch(e) {
+        console.error('renderCharts error:', e);
+        if (content) content.innerHTML = '<div class="charts-loading" style="color:red;">Chart render error: ' + e.message + '<br><pre style="white-space:pre-wrap;font-size:11px;">' + e.stack + '</pre></div>';
+    }
+}
+function _renderChartsImpl(data, runId, content) {
     const summary = data.summary;
     const chartQueue = [];
     const charts = data.charts;
