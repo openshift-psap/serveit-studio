@@ -89,7 +89,12 @@ function addReportTab(runId) {
 
     // Fetch data and render
     fetch('/api/runs/' + runId + '/charts')
-        .then(r => r.json())
+        .then(r => {
+            if (!r.ok) {
+                return r.text().then(t => { throw new Error('HTTP ' + r.status + ': ' + t.substring(0, 200)); });
+            }
+            return r.json();
+        })
         .then(data => {
             if (data.error) {
                 panel.innerHTML = '<div class="charts-loading">' + data.error + '</div>';
