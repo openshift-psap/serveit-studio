@@ -209,6 +209,9 @@ def scan_available_networks(kubectl_runner, namespace: str = None) -> List[Dict[
             else:
                 kind = 'unknown'
             extended_resource = item.get('spec', {}).get('extendedResourceName', '')
+            if not extended_resource and 'gpu-nic-pair' in name:
+                prefix = name.replace('-gpu-nic-pair', '')
+                extended_resource = f'{prefix}.dra.io/gpu-nic-pair'
             dra_device_classes.append({'name': name, 'kind': kind, 'extendedResourceName': extended_resource})
         dra_device_classes = sorted(dra_device_classes, key=lambda x: x['name'])
         dra_available = any(c['kind'] in ('gpu_nic_pair', 'nic') for c in dra_device_classes)

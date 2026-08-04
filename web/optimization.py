@@ -805,6 +805,15 @@ def run_optimization_background(data):
                             break
                     except Exception:
                         pass
+
+            # Fallback: derive from class name convention (composite-gpu-nic-pair → composite.dra.io/gpu-nic-pair)
+            if not dra_gpu_resource_key:
+                for dc_name in selected_dra_classes:
+                    if 'gpu-nic-pair' in dc_name:
+                        prefix = dc_name.replace('-gpu-nic-pair', '')
+                        dra_gpu_resource_key = f'{prefix}.dra.io/gpu-nic-pair'
+                        log_to_ui(f'Derived DRA resource key from class name: {dra_gpu_resource_key}', 'info')
+                        break
         gateway_class = _get('gateway_class', 'istio')
         per_node_storage = _get('per_node_storage', False)
         node_nfs_pvcs = _get('node_nfs_pvcs') or []
