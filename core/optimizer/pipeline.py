@@ -1669,7 +1669,7 @@ class RecipeOptimizer(
         else:
             gmu = 0.90
         if self.cluster_resources:
-            tp_options = self.cluster_resources.get_tp_options()
+            tp_options = self.cluster_resources.get_tp_options() + self.cluster_resources.get_multi_node_tp_options()
             seq_len = self.config.isl + self.config.osl if hasattr(self.config, 'isl') else 0
             if seq_len < 4000:
                 min_conc = 4
