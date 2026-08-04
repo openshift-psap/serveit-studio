@@ -1468,6 +1468,18 @@ class RecipeOptimizer(
             except Exception as e:
                 logger.debug(f"Could not query node resources: {e}")
 
+        # Detect NUMA topology for resource capping
+        numa_nodes = max(n.numa_nodes for n in gpu_nodes) if gpu_nodes else 2
+        if not cpu_override:
+            if self._cached_free_cpus:
+                usable_cpus = self._cached_free_cpus * 0.75
+            else:
+                avg_node_cpus = sum(n.cpu_cores for n in gpu_nodes) / num_gpu_nodes
+                usable_cpus = avg_node_cpus * 0.80
+            # Fallback: if NUMA detection didn't run but node has many CPUs, assume 2 NUMA nodes
+            if numa_nodes <= 1 and usable_cpus > 80:
+                numa_nodes = 2
+
         if not mem_override:
             if self._cached_free_mem_gb:
                 usable_memory_gb = self._cached_free_mem_gb * 0.80
@@ -1475,22 +1487,16 @@ class RecipeOptimizer(
                 avg_node_memory_gb = sum(n.memory_gb for n in gpu_nodes) / num_gpu_nodes
                 usable_memory_gb = avg_node_memory_gb * 0.85
             memory_per_pod_gb = int(usable_memory_gb / pods_per_node)
+            max_mem_per_numa = int(usable_memory_gb / numa_nodes)
+            if memory_per_pod_gb > max_mem_per_numa:
+                logger.info(f"Capping memory per pod from {memory_per_pod_gb}Gi to {max_mem_per_numa}Gi (single NUMA node limit)")
+                memory_per_pod_gb = max_mem_per_numa
             mem_str = f"{memory_per_pod_gb}Gi"
         else:
             mem_str = mem_override
 
         if not cpu_override:
-            if self._cached_free_cpus:
-                usable_cpus = self._cached_free_cpus * 0.75
-            else:
-                avg_node_cpus = sum(n.cpu_cores for n in gpu_nodes) / num_gpu_nodes
-                usable_cpus = avg_node_cpus * 0.80
             cpus_per_pod = int(usable_cpus / pods_per_node)
-            # Cap to fit within a single NUMA node for Topology Manager alignment
-            numa_nodes = max(n.numa_nodes for n in gpu_nodes) if gpu_nodes else 2
-            # Fallback: if NUMA detection didn't run but node has many CPUs, assume 2 NUMA nodes
-            if numa_nodes <= 1 and usable_cpus > 80:
-                numa_nodes = 2
             max_cpus_per_numa = int(usable_cpus / numa_nodes)
             if cpus_per_pod > max_cpus_per_numa:
                 logger.info(f"Capping CPUs per pod from {cpus_per_pod} to {max_cpus_per_numa} (single NUMA node limit)")
