@@ -59,8 +59,8 @@ def _generate_random_chunk(chunk_args):
     rows = []
     for i in range(count):
         rng = random.Random(seed + start_idx + i + 1)
-        row_isl = max(10, int(rng.gauss(isl, isl_stdev))) if isl_stdev > 0 else isl
-        row_osl = max(1, int(rng.gauss(osl, osl_stdev))) if osl_stdev > 0 else osl
+        row_isl = isl + int(rng.random() * isl_stdev) if isl_stdev > 0 else isl
+        row_osl = osl + int(rng.random() * osl_stdev) if osl_stdev > 0 else osl
         prompt = _make_prompt(row_isl, rng, tokenizer, vocab)
         rows.append(json.dumps({'prompt': prompt, 'output_tokens_count': row_osl}))
         if (i + 1) % 2000 == 0:
@@ -110,13 +110,13 @@ def _generate_cache_chunk(chunk_args):
 
     rows = []
     for i in range(hit_count):
-        row_osl = max(1, int(random.Random(seed + start_idx + i).gauss(osl, osl_stdev))) if osl_stdev > 0 else osl
+        row_osl = osl + int(random.Random(seed + start_idx + i).random() * osl_stdev) if osl_stdev > 0 else osl
         rows.append(json.dumps({'prompt': shared_prompt, 'output_tokens_count': row_osl}))
 
     for i in range(unique_count):
         rng = random.Random(seed + start_idx + hit_count + i + 1)
-        row_isl = max(10, int(rng.gauss(isl, isl_stdev))) if isl_stdev > 0 else isl
-        row_osl = max(1, int(rng.gauss(osl, osl_stdev))) if osl_stdev > 0 else osl
+        row_isl = isl + int(rng.random() * isl_stdev) if isl_stdev > 0 else isl
+        row_osl = osl + int(rng.random() * osl_stdev) if osl_stdev > 0 else osl
         prompt = _make_prompt(row_isl, rng, tokenizer, vocab)
         rows.append(json.dumps({'prompt': prompt, 'output_tokens_count': row_osl}))
         if (i + 1) % 2000 == 0:
@@ -178,7 +178,7 @@ def _generate_prefix_group_chunk(chunk_args):
         prefix = group_prefixes[group_idx]
         suffix = _make_prompt(suffix_tokens, rng, tokenizer, vocab)
         prompt = prefix + '\n' + suffix
-        row_osl = max(1, int(rng.gauss(osl, osl_stdev))) if osl_stdev > 0 else osl
+        row_osl = osl + int(rng.random() * osl_stdev) if osl_stdev > 0 else osl
         rows.append(json.dumps({'prompt': prompt, 'output_tokens_count': row_osl}))
         if (i + 1) % 2000 == 0:
             print(f"Worker {pid}: {i+1}/{count}", file=sys.stderr, flush=True)

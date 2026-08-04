@@ -73,15 +73,15 @@ def calculate_engine_memory_config(
             logger.warning(f"Could not load model config from {model_name}: {e}")
             logger.warning("Skipping model context length validation")
 
-    # 2. Calculate stdev-adjusted max sequence lengths
-    # When stdev is set, guidellm generates normally-distributed lengths.
-    # Use mean + 3*stdev to cover 99.87% of the distribution on the high end.
-    effective_isl = isl + 3 * isl_stdev if isl_stdev else isl
-    effective_osl = osl + 3 * osl_stdev if osl_stdev else osl
+    # 2. Calculate variation-adjusted max sequence lengths
+    # ISL/OSL is the minimum, variation adds uniform random on top.
+    # max_model_len must accommodate the longest possible sequence.
+    effective_isl = isl + isl_stdev if isl_stdev else isl
+    effective_osl = osl + osl_stdev if osl_stdev else osl
 
     if isl_stdev or osl_stdev:
-        logger.info(f"Stdev adjustment: ISL {isl}→{effective_isl} (stdev={isl_stdev}), "
-                    f"OSL {osl}→{effective_osl} (stdev={osl_stdev})")
+        logger.info(f"Length variation: ISL {isl}–{effective_isl} (+{isl_stdev or 0}), "
+                    f"OSL {osl}–{effective_osl} (+{osl_stdev or 0})")
 
     # 3. Validate against model's absolute max context length
     CHAT_TEMPLATE_OVERHEAD = 200
