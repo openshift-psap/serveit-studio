@@ -88,14 +88,17 @@ function addReportTab(runId) {
     switchReportTab(tabId);
 
     // Fetch data and render
+    console.log('[charts] Fetching /api/runs/' + runId + '/charts');
     fetch('/api/runs/' + runId + '/charts')
         .then(r => {
+            console.log('[charts] Response:', r.status, r.headers.get('content-type'));
             if (!r.ok) {
                 return r.text().then(t => { throw new Error('HTTP ' + r.status + ': ' + t.substring(0, 200)); });
             }
             return r.json();
         })
         .then(data => {
+            console.log('[charts] Data received, keys:', Object.keys(data), 'all_results:', (data.all_results||[]).length);
             if (data.error) {
                 panel.innerHTML = '<div class="charts-loading">' + data.error + '</div>';
                 return;

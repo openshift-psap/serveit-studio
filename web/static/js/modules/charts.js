@@ -8,10 +8,12 @@ function renderCharts(data, runId) {
     }
 }
 function _renderChartsImpl(data, runId, content) {
+    console.log('[charts] _renderChartsImpl entered, content:', content ? content.id : 'null');
     const summary = data.summary;
     const chartQueue = [];
     const charts = data.charts;
     const rec = data.recommendation;
+    console.log('[charts] summary:', summary, 'charts keys:', Object.keys(charts));
 
     // Download link handled by tab management
     const dlLink = document.getElementById('chart-download-link');
@@ -2368,7 +2370,9 @@ function _renderChartsImpl(data, runId, content) {
         for (const sec of Object.values(sectionMap)) html += sec;
     }
 
+    console.log('[charts] Setting innerHTML, html length:', html.length, 'content id:', content.id, 'subtabs:', subtabDefs.length);
     content.innerHTML = html;
+    console.log('[charts] innerHTML set, children:', content.children.length);
 
     // --- Plotly chart config (must be before EPP chart rendering) ---
     const plotlyLayout = { margin: { t: 10, b: 40, l: 50, r: 20 }, height: 430, paper_bgcolor: 'transparent', plot_bgcolor: 'transparent', font: { family: 'Inter, sans-serif' } };
