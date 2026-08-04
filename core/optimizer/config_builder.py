@@ -72,7 +72,7 @@ class ConfigBuilderMixin:
                  f"→ {allocated_gb:.0f}GB allocated, {reserve_gb:.0f}GB reserved for overhead (per GPU)")
 
         replicas = num_gpus // tp
-        mem, cpu = self._get_pod_resources(tp=tp, total_pods=replicas)
+        mem, cpu, mem_req, cpu_req = self._get_pod_resources(tp=tp, total_pods=replicas)
 
         max_num_seqs = self._compute_max_num_seqs(tp)
 
@@ -124,9 +124,9 @@ class ConfigBuilderMixin:
             gateway_class=self.config.gateway_class,
             exclusive_pf=getattr(self.config, 'exclusive_pf', False),
 
-            memory_request=mem,
+            memory_request=mem_req,
             memory_limit=mem,
-            cpu_request=cpu,
+            cpu_request=cpu_req,
             cpu_limit=cpu,
             selected_nodes=self.config.selected_nodes or [],
             workload_mode='synthetic' if is_calibration else (self.config.workload_mode or 'synthetic'),
@@ -670,7 +670,7 @@ class ConfigBuilderMixin:
 
         total_pods = split.prefill_pods + split.decode_pods
         min_tp = min(split.prefill_tp, split.decode_tp)
-        mem, cpu = self._get_pod_resources(tp=min_tp, total_pods=total_pods)
+        mem, cpu, mem_req, cpu_req = self._get_pod_resources(tp=min_tp, total_pods=total_pods)
 
         # Multi-node: if TP > gpus_per_node, use LWS multi-pod groups
         gpus_per_node = self.cluster_resources.max_gpus_per_node if self.cluster_resources else 8
@@ -737,9 +737,9 @@ class ConfigBuilderMixin:
             gateway_class=self.config.gateway_class,
             exclusive_pf=getattr(self.config, 'exclusive_pf', False),
 
-            memory_request=mem,
+            memory_request=mem_req,
             memory_limit=mem,
-            cpu_request=cpu,
+            cpu_request=cpu_req,
             cpu_limit=cpu,
             selected_nodes=self.config.selected_nodes or [],
             workload_mode=self.config.workload_mode or 'synthetic',
@@ -853,7 +853,7 @@ class ConfigBuilderMixin:
 
         total_pods = split.prefill_pods + split.decode_pods
         min_tp = min(split.prefill_tp, split.decode_tp)
-        mem, cpu = self._get_pod_resources(tp=min_tp, total_pods=total_pods)
+        mem, cpu, mem_req, cpu_req = self._get_pod_resources(tp=min_tp, total_pods=total_pods)
 
         dbo_threshold = getattr(self, '_dbo_threshold', 32)
 
@@ -923,9 +923,9 @@ class ConfigBuilderMixin:
             gateway_class=self.config.gateway_class,
             exclusive_pf=getattr(self.config, 'exclusive_pf', False),
 
-            memory_request=mem,
+            memory_request=mem_req,
             memory_limit=mem,
-            cpu_request=cpu,
+            cpu_request=cpu_req,
             cpu_limit=cpu,
             selected_nodes=self.config.selected_nodes or [],
             workload_mode=self.config.workload_mode or 'synthetic',
