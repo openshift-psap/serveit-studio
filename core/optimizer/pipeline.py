@@ -1499,28 +1499,13 @@ class RecipeOptimizer(
         else:
             cpu_str = cpu_override
 
-        # When TP spans NUMA zones (TP > GPUs-per-NUMA), set requests < limits
-        # to make pod Burstable QoS. Topology manager only enforces on Guaranteed
-        # (requests == limits), so Burstable pods can use GPUs across NUMA zones.
-        gpus_per_numa = max_gpus_per_node // numa_nodes if numa_nodes > 0 else max_gpus_per_node
-        spans_numa = tp > gpus_per_numa
-        if spans_numa:
-            mem_request_str = '1Gi'
-            cpu_request_str = '1'
-            logger.info(
-                f"Resource calculation: {total_pods} pods, TP={tp} spans NUMA "
-                f"({gpus_per_numa} GPUs/NUMA) → Burstable QoS: "
-                f"requests={cpu_request_str}cpu/{mem_request_str}, "
-                f"limits={cpu_str}cpu/{mem_str}")
-        else:
-            mem_request_str = mem_str
-            cpu_request_str = cpu_str
-            logger.info(
-                f"Resource calculation: {total_pods} pods, TP={tp}, "
-                f"{num_gpu_nodes} GPU nodes → {pods_per_node} pods/node → "
-                f"{mem_str} memory, {cpu_str} CPUs per pod")
+        logger.info(
+            f"Resource calculation: {total_pods} pods, TP={tp}, "
+            f"{num_gpu_nodes} GPU nodes → {pods_per_node} pods/node → "
+            f"{mem_str} memory, {cpu_str} CPUs per pod"
+        )
 
-        return mem_str, cpu_str, mem_request_str, cpu_request_str
+        return mem_str, cpu_str
 
     def clear_previous_results(self):
         """Clear all previous test results for this run (start fresh).

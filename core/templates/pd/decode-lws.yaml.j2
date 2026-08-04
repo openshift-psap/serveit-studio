@@ -393,9 +393,7 @@ spec:
               limits:
                 cpu: "{{ cpu_limit }}"
                 memory: "{{ memory_limit }}"
-{% if selected_dra_classes %}
-                {{ gpu_resource_key }}: "{{ decode_gpu_count }}"
-{% else %}
+{% if not selected_dra_classes %}
                 {{ gpu_resource_key }}: "{{ decode_gpu_count }}"
                 {% for r in decode_extra_device_resources %}
                 {{ r.key }}: "{{ r.value }}"
@@ -404,9 +402,7 @@ spec:
               requests:
                 cpu: "{{ cpu_request }}"
                 memory: "{{ memory_request }}"
-{% if selected_dra_classes %}
-                {{ gpu_resource_key }}: "{{ decode_gpu_count }}"
-{% else %}
+{% if not selected_dra_classes %}
                 {{ gpu_resource_key }}: "{{ decode_gpu_count }}"
                 {% for r in decode_extra_device_resources %}
                 {{ r.key }}: "{{ r.value }}"
