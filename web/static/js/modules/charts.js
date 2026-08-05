@@ -2298,11 +2298,17 @@ function _renderChartsImpl(data, runId, content) {
                     var degraded = tc.results.map(function(r) { return r.nixl_degraded ? 1 : 0; });
                     var hasDegraded = degraded.some(function(d) { return d; });
                     var traces = [
-                        { x: labels, y: totals, name: 'Total Requests', mode: 'lines+markers',
+                        { x: labels, y: totals, name: 'Total Requests', mode: 'lines+markers+text',
+                          text: totals.map(function(v) { return v > 0 ? v.toLocaleString() : ''; }),
+                          textposition: 'top center', textfont: { size: 10, color: '#059669' },
                           line: { color: '#059669', width: 2 }, marker: { size: 8 } },
-                        { x: labels, y: errors, name: 'HTTP Errors', mode: 'lines+markers',
+                        { x: labels, y: errors, name: 'HTTP Errors', mode: 'lines+markers+text',
+                          text: errors.map(function(v) { return v > 0 ? v.toLocaleString() : ''; }),
+                          textposition: 'top center', textfont: { size: 10, color: '#dc2626' },
                           line: { color: '#dc2626', width: 2 }, marker: { size: 8 } },
-                        { x: labels, y: nixl, name: 'NIXL Errors', mode: 'lines+markers',
+                        { x: labels, y: nixl, name: 'NIXL Errors', mode: 'lines+markers+text',
+                          text: nixl.map(function(v) { return v > 0 ? v.toLocaleString() : ''; }),
+                          textposition: 'top center', textfont: { size: 10, color: '#f59e0b' },
                           line: { color: '#f59e0b', width: 2 }, marker: { size: 8 } }
                     ];
                     if (hasDegraded) {
