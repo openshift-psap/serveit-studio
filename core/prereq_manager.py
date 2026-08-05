@@ -155,7 +155,7 @@ class PrereqManager:
                 'ep': {
                     'gaie_name': 'gaie-ep-epp',
                     'gaie_pool_name': 'gaie-ep',
-                    'gaie_guide_label': 'serveit-pd',
+                    'gaie_guide_label': 'serveit-ep',
                     'config_file': 'ep-config.yaml',
                     'gateway_name': 'infra-ep-inference-gateway'
                 },

@@ -24,7 +24,7 @@ spec:
           llm-d.ai/inference-serving: "true"
           llm-d.ai/model: {{ model_name_label }}
           llm-d.ai/role: prefill
-          llm-d.ai/guide: serveit-pd
+          llm-d.ai/guide: serveit-{{ architecture | default('pd') }}
           llm-d.ai/test-id: {{ test_id }}
 {% if rdma_network_annotation %}
         annotations:
