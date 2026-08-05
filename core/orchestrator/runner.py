@@ -521,6 +521,18 @@ class TestOrchestrator(ParserMixin, GuidellmMixin):
         except Exception:
             return False
 
+    def _get_first_error(self, guidellm_output: str) -> Optional[str]:
+        """Extract the first error message from guidellm output for debugging."""
+        try:
+            import json as _json
+            data = _json.loads(guidellm_output)
+            for bm in data.get('benchmarks', []):
+                for e in bm.get('requests', {}).get('errored', []):
+                    return str(e.get('info', {}).get('error', ''))[:200]
+        except Exception:
+            pass
+        return None
+
     def _collect_pod_timings(self, test_id: str, log_callback=None) -> Optional[dict]:
         """Collect per-pod creation time and model load time.
 
@@ -1556,7 +1568,10 @@ class TestOrchestrator(ParserMixin, GuidellmMixin):
                                     log_callback(f"⚠️  Error rate {error_pct:.1f}% ({errored}/{total}) — all 503/disconnect errors, config at capacity")
                                 result.guidellm_retries = guidellm_attempt - 1
                                 break
+                            sample_err = self._get_first_error(guidellm_output)
                             if log_callback:
+                                if sample_err:
+                                    log_callback(f"⚠️  Error rate {error_pct:.1f}% ({errored}/{total}) — sample: {sample_err[:150]}")
                                 log_callback(f"⚠️  Error rate {error_pct:.1f}% ({errored}/{total}) — retrying guidellm")
                             result.guidellm_retries = guidellm_attempt
                             continue
