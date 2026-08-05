@@ -185,13 +185,11 @@ class PDSearchMixin:
                 if d in valid_by_decode:
                     selected.append(valid_by_decode[d])
 
-            # Include edge splits only if they're within 3× of the ideal
-            min_decode = min(valid_by_decode.keys())
+            # Include max-decode edge split (most decode-heavy) if within 1.5× of ideal
             max_decode = max(valid_by_decode.keys())
-            for edge_d in [min_decode, max_decode]:
-                if edge_d in valid_by_decode and valid_by_decode[edge_d] not in selected:
-                    if 0.3 * d_ideal <= edge_d <= 3 * d_ideal:
-                        selected.append(valid_by_decode[edge_d])
+            if max_decode in valid_by_decode and valid_by_decode[max_decode] not in selected:
+                if max_decode <= 1.5 * d_ideal:
+                    selected.append(valid_by_decode[max_decode])
 
             # If too few candidates, add by proximity to ideal (not extreme edges)
             if len(selected) < 2 and all_valid:

@@ -2471,26 +2471,30 @@ function _renderChartsImpl(data, runId, content) {
             (rec.prefill_tp_all || []).forEach(function(d) { tpsgLookup['prefill-' + d.tp] = d.tpsg; });
         }
         var traces = [];
+        var roleColors = { decode: '#3b82f6', prefill: '#f59e0b' };
         charts.pareto.traces.forEach(function(t) {
             if (t.yaxis === 'y2') return;
             var role = t.name.toLowerCase().indexOf('decode') >= 0 ? 'decode' : 'prefill';
+            var color = roleColors[role];
             var tpsgVals = t.x.map(function(tp) { return tpsgLookup[role + '-' + tp] || 0; });
-            var bestTpsg = Math.max.apply(null, tpsgVals);
-            var barColors = tpsgVals.map(function(v) { return v === bestTpsg ? '#10b981' : t.color; });
             traces.push({
-                x: t.x, y: tpsgVals, name: t.name.replace('TTFT', 'TPSG'),
+                x: t.x, y: tpsgVals, name: role.charAt(0).toUpperCase() + role.slice(1) + ' TPSG',
                 type: 'bar',
-                marker: { color: barColors },
+                marker: { color: color },
                 text: tpsgVals.map(function(v) { return v > 0 ? Math.round(v).toLocaleString() : ''; }),
-                textposition: 'outside', textfont: { size: 10, color: '#1e293b' },
+                textposition: 'outside', textfont: { size: 10, color: color },
                 cliponaxis: false, constraintext: 'none',
                 hovertemplate: '<b>TP=%{x}</b><br>TPSG: %{y:,.0f} tok/s/GPU<extra></extra>'
             });
             traces.push({
-                x: t.x, y: t.y, name: t.name, yaxis: 'y2',
-                mode: 'markers+lines', text: t.text,
-                marker: { size: 10, color: t.color, symbol: 'circle', line: { width: 2, color: 'white' } },
-                line: { width: 2, dash: 'dash' },
+                x: t.x, y: t.y, name: role.charAt(0).toUpperCase() + role.slice(1) + ' TTFT', yaxis: 'y2',
+                mode: 'markers+lines+text', text: t.text,
+                customdata: t.y.map(function(v) { return v >= 1000 ? (v/1000).toFixed(1) + 's' : Math.round(v) + 'ms'; }),
+                texttemplate: '%{customdata}',
+                textposition: 'top center',
+                textfont: { size: 10, color: '#1e293b' },
+                marker: { size: 10, color: color, symbol: 'circle', line: { width: 2, color: 'white' } },
+                line: { width: 2, dash: 'dash', color: color },
                 hovertemplate: '<b>%{text}</b><extra></extra>'
             });
         });
@@ -2500,7 +2504,7 @@ function _renderChartsImpl(data, runId, content) {
             barmode: 'group',
             xaxis: { title: 'Total GPUs (= TP)', tickvals: paretoXvals },
             yaxis: { title: 'TPSG (tok/s/GPU) — higher is better', side: 'left', tickformat: ',.0f' },
-            yaxis2: { title: 'TTFT P90 (ms) — lower is better', side: 'right', overlaying: 'y' },
+            yaxis2: { title: 'TTFT P90 (ms) — lower is better', side: 'right', overlaying: 'y', type: 'log' },
             showlegend: true
         }, plotlyConfig);
     }
