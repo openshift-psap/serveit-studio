@@ -202,11 +202,11 @@ class PDSearchMixin:
                 if max_decode <= 1.5 * d_ideal:
                     selected.append(valid_by_decode[max_decode])
 
-            # If too few candidates, add by proximity to ideal (not extreme edges)
+            # If too few candidates, add by proximity to ideal (respecting prefill cap)
             if len(selected) < 2 and all_valid:
                 by_distance = sorted(all_valid, key=lambda s: abs(s.decode_pods - d_ideal))
                 for s in by_distance:
-                    if s not in selected:
+                    if s not in selected and s.prefill_pct <= max_prefill_pct:
                         selected.append(s)
                     if len(selected) >= 3:
                         break
