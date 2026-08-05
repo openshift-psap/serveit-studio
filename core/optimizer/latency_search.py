@@ -353,6 +353,13 @@ class LatencySearchMixin:
             user_concurrency = int(self.config.qps)
             step = max(1, round(user_concurrency * step_pct / 100))
 
+            def _round(v):
+                if step >= 20:
+                    return int(round(v / 10) * 10)
+                elif step >= 5:
+                    return int(round(v / 5) * 5)
+                return v
+
             below_count = (n - 1) // 2
             above_count = n - 1 - below_count
 
@@ -362,10 +369,10 @@ class LatencySearchMixin:
 
             levels = []
             for i in range(actual_below, 0, -1):
-                levels.append(calibrated - i * step)
+                levels.append(_round(calibrated - i * step))
             levels.append(calibrated)
             for i in range(1, actual_above + 1):
-                levels.append(calibrated + i * step)
+                levels.append(_round(calibrated + i * step))
 
             return [l for l in levels if l > 0]
 
