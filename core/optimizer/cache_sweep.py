@@ -116,6 +116,7 @@ class CacheSweepMixin:
             if self._should_stop():
                 break
 
+            is_first = (i == 0)
             test_id = f"step13-cache{tag}-{arch_label.lower()}-h{hit_pct}"
             dataset_path = self._generate_cache_dataset_for_level(hit_pct)
 
