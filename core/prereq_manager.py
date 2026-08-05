@@ -148,18 +148,21 @@ class PrereqManager:
                 'aggregated': {
                     'gaie_name': 'gaie-aggregated-epp',
                     'gaie_pool_name': 'gaie-aggregated',
+                    'gaie_guide_label': 'serveit-aggregated',
                     'config_file': 'aggregated-config.yaml',
                     'gateway_name': 'infra-aggregated-inference-gateway'
                 },
                 'ep': {
                     'gaie_name': 'gaie-ep-epp',
                     'gaie_pool_name': 'gaie-ep',
+                    'gaie_guide_label': 'serveit-pd',
                     'config_file': 'ep-config.yaml',
                     'gateway_name': 'infra-ep-inference-gateway'
                 },
                 'pd': {
                     'gaie_name': 'gaie-pd-epp',
                     'gaie_pool_name': 'gaie-pd',
+                    'gaie_guide_label': 'serveit-pd',
                     'config_file': 'pd-config.yaml',
                     'gateway_name': 'infra-pd-inference-gateway'
                 }
@@ -221,6 +224,7 @@ class PrereqManager:
                 'data_parallel_size': data_parallel_size,
                 'gaie_name': config['gaie_name'],
                 'gaie_pool_name': config['gaie_pool_name'],
+                'gaie_guide_label': config.get('gaie_guide_label', 'serveit-aggregated'),
                 'config_file': 'default-plugins.yaml' if epp_use_defaults else config['config_file'],
                 'gaie_replicas': 1,
                 'gaie_image': self.scheduler_image or 'ghcr.io/llm-d/llm-d-router-endpoint-picker:v0.9.0',

@@ -11,6 +11,7 @@ spec:
   selector:
     matchLabels:
       llm-d.ai/inferenceServing: "true"
+      llm-d.ai/guide: "{{ gaie_guide_label | default('serveit-aggregated') }}"
   endpointPickerRef:
     name: {{ gaie_name | default('gaie-pd-epp') }}
     failureMode: FailOpen
