@@ -347,9 +347,11 @@ class LatencySearchMixin:
             return [l for l in levels if l > 0]
 
         # Count-based generation (from UI count + step% inputs)
+        # Step is percentage of user-requested concurrency, not calibrated
         if count and int(count) > 0:
             n = int(count)
-            step = max(1, round(calibrated * step_pct / 100))
+            user_concurrency = int(self.config.qps)
+            step = max(1, round(user_concurrency * step_pct / 100))
 
             below_count = (n - 1) // 2
             above_count = n - 1 - below_count
