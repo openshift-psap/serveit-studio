@@ -46,14 +46,23 @@ class PDSearchMixin:
         primary = (top_prefill[0], top_decode[0])
 
         allow_asymmetric = getattr(self.config, 'allow_asymmetric_tp', False)
+        allow_decode_gt = getattr(self.config, 'asymmetric_allow_decode_gt_prefill', True)
+        allow_prefill_gt = getattr(self.config, 'asymmetric_allow_prefill_gt_decode', True)
         all_pairs = [primary] + [(ptp, dtp) for ptp in top_prefill for dtp in top_decode if (ptp, dtp) != primary]
         for ptp, dtp in all_pairs:
             if (ptp, dtp) in seen:
                 continue
             seen.add((ptp, dtp))
-            if ptp != dtp and not allow_asymmetric:
-                skipped.append((ptp, dtp))
-                continue
+            if ptp != dtp:
+                if not allow_asymmetric:
+                    skipped.append((ptp, dtp))
+                    continue
+                if dtp > ptp and not allow_decode_gt:
+                    skipped.append((ptp, dtp))
+                    continue
+                if ptp > dtp and not allow_prefill_gt:
+                    skipped.append((ptp, dtp))
+                    continue
             self._selected_tp_pairs.append((ptp, dtp))
 
         if skipped:

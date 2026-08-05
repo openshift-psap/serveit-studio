@@ -149,6 +149,12 @@ function updateUIFromConfig() {
             atpSw.style.background = atpOn ? '#d97706' : '#ccc';
             atpSw.querySelector('span').style.transform = atpOn ? 'translateX(18px)' : 'translateX(0)';
         }
+        var atpOpts = document.getElementById('asymmetric-tp-options');
+        if (atpOpts) atpOpts.style.display = atpOn ? 'flex' : 'none';
+        var dgp = document.getElementById('asymmetric-decode-gt-prefill');
+        if (dgp) dgp.checked = config.asymmetric_allow_decode_gt_prefill !== false;
+        var pgd = document.getElementById('asymmetric-prefill-gt-decode');
+        if (pgd) pgd.checked = config.asymmetric_allow_prefill_gt_decode !== false;
     }
 
     // Restore calibrated load toggles

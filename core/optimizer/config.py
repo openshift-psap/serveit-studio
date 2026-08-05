@@ -123,6 +123,8 @@ class RecipeOptimizerConfig:
     # TP options to explore
     tp_options: List[int] = field(default_factory=lambda: [1, 2, 4, 8])
     allow_asymmetric_tp: bool = False
+    asymmetric_allow_decode_gt_prefill: bool = True
+    asymmetric_allow_prefill_gt_decode: bool = True
 
     # Optimization objective for Step 7
     objective: str = 'balanced'  # 'ttft', 'throughput', or 'balanced'
