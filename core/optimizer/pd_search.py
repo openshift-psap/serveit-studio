@@ -234,8 +234,16 @@ class PDSearchMixin:
             self.log("   This indicates benchmark failures. Check gateway configuration and pod health.", 'error')
             raise ValueError(f"Invalid TPSG values: prefill={prefill_tpsg}, decode={decode_tpsg}")
 
-        prefill_cost = self.config.isl / prefill_tpsg
+        raw_prefill_cost = self.config.isl / prefill_tpsg
         decode_cost = self.config.osl / decode_tpsg
+
+        cache_hit_pct = getattr(self.config, 'prefix_cache_hit_pct', 0) or 0
+        if cache_hit_pct > 0:
+            active_prefill_fraction = 1.0 - cache_hit_pct / 100.0
+            prefill_cost = raw_prefill_cost * active_prefill_fraction
+        else:
+            prefill_cost = raw_prefill_cost
+
         total_cost = prefill_cost + decode_cost
 
         max_throughput_pct = (prefill_cost / total_cost) * 100
@@ -248,7 +256,10 @@ class PDSearchMixin:
         self.log("Step 4: Cluster Capacity Analysis", 'info')
         self.log(f"  Concurrency (simultaneous requests): {concurrency:.0f}", 'info')
         self.log(f"  GPU cost per request:", 'info')
-        self.log(f"    Prefill: {self.config.isl} ISL ÷ {prefill_tpsg:.0f} TPSG = {prefill_cost:.2f} GPU-sec", 'info')
+        self.log(f"    Prefill: {self.config.isl} ISL ÷ {prefill_tpsg:.0f} TPSG = {raw_prefill_cost:.2f} GPU-sec", 'info')
+        if cache_hit_pct > 0:
+            self.log(f"    Prefill (cache-adjusted): {raw_prefill_cost:.2f} × {active_prefill_fraction:.1%} active = {prefill_cost:.2f} GPU-sec "
+                     f"({cache_hit_pct}% prefix cache hit)", 'info')
         self.log(f"    Decode:  {self.config.osl} OSL ÷ {decode_tpsg:.0f} TPSG = {decode_cost:.2f} GPU-sec", 'info')
         self.log(f"    Total:   {total_cost:.2f} GPU-sec/request", 'info')
         self.log(f"  Max-throughput prefill ratio: {max_throughput_pct:.1f}%", 'info')
