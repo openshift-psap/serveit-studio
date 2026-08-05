@@ -94,6 +94,7 @@ function updateUIFromConfig() {
             if (lvSw) { lvSw.style.background = '#15803d'; lvSw.querySelector('span').style.transform = 'translateX(18px)'; }
         }
     }
+    if (config.length_unit) setLengthUnit(config.length_unit, true);
     if (document.getElementById('multi-turn-enabled')) {
         if (config.turns && config.turns > 1) {
             document.getElementById('multi-turn-enabled').checked = true;
@@ -437,6 +438,49 @@ function updateUIFromConfig() {
 }
 
 // Load config from server (with localStorage fallback)
+function setLengthUnit(unit, skipSave) {
+    config.length_unit = unit;
+    var toggle = document.getElementById('length-unit-toggle');
+    if (toggle) {
+        toggle.querySelectorAll('button').forEach(function(btn) {
+            if (btn.dataset.unit === unit) {
+                btn.style.background = '#059669';
+                btn.style.color = 'white';
+            } else {
+                btn.style.background = 'white';
+                btn.style.color = '#6b7280';
+            }
+        });
+    }
+    var hint = document.getElementById('length-unit-hint');
+    var isChars = unit === 'characters';
+    if (hint) hint.textContent = isChars ? '1 token ≈ 4 characters' : 'Tokens are the internal units LLMs process';
+
+    var islLabel = document.getElementById('isl-label');
+    var oslLabel = document.getElementById('osl-label');
+    var islHelp = document.getElementById('isl-help');
+    var oslHelp = document.getElementById('osl-help');
+    var islVarHelp = document.getElementById('isl-var-help');
+    var oslVarHelp = document.getElementById('osl-var-help');
+
+    if (isChars) {
+        if (islLabel) islLabel.textContent = 'Average Input Length (characters)';
+        if (oslLabel) oslLabel.textContent = 'Average Output Length (characters)';
+        if (islHelp) islHelp.textContent = 'How many characters of text your users typically send. For example, a 500-word prompt is about 2500 characters.';
+        if (oslHelp) oslHelp.textContent = 'How many characters of text you want the AI to write. For example, a 200-word response is about 1000 characters.';
+        if (islVarHelp) islVarHelp.textContent = 'Adds random variation in characters. For example, ISL=10000 with variation=5000 means prompts range from 10000 to 15000 characters.';
+        if (oslVarHelp) oslVarHelp.textContent = 'Adds random variation in characters. For example, OSL=500 with variation=200 means replies range from 500 to 700 characters.';
+    } else {
+        if (islLabel) islLabel.textContent = 'Average Input Length (ISL)';
+        if (oslLabel) oslLabel.textContent = 'Average Output Length (OSL)';
+        if (islHelp) islHelp.textContent = 'How long is the text your users typically send? A word is roughly 1.3 tokens. For example, a 500-word prompt is about 650 tokens.';
+        if (oslHelp) oslHelp.textContent = 'How long is the reply you want the AI to write? A 200-word response is roughly 260 tokens.';
+        if (islVarHelp) islVarHelp.textContent = 'Adds random variation around your Average Input Length above. For example, ISL=3000 with variation=1000 means prompts range from 3000 to 4000 tokens. Leave empty for fixed-length prompts.';
+        if (oslVarHelp) oslVarHelp.textContent = 'Adds random variation around your Average Output Length above. For example, OSL=100 with variation=50 means replies range from 100 to 150 tokens. Leave empty for fixed-length replies.';
+    }
+    if (!skipSave) saveConfig();
+}
+
 function loadConfig() {
     // Server config is authoritative — only use localStorage if server fails
     socket.emit('load_config');
