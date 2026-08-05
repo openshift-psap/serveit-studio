@@ -23,9 +23,10 @@ function saveConsoleMessage(message, type) {
 function saveConsoleToFile() {
     fetch('/api/logs?limit=100000')
         .then(function(r) { return r.json(); })
-        .then(function(logs) {
+        .then(function(data) {
+            var logs = data.logs || data;
             if (!logs || !logs.length) {
-                alert('Console is empty, nothing to save.');
+                _showConsoleNotice('Console is empty, nothing to save.', 'warning');
                 return;
             }
             var timestamp = new Date().toISOString().replace(/[:.]/g, '-');
@@ -48,11 +49,26 @@ function saveConsoleToFile() {
             a.click();
             document.body.removeChild(a);
             URL.revokeObjectURL(url);
+            _showConsoleNotice('Console log saved (' + logs.length + ' messages)', 'success');
         })
         .catch(function(err) {
             console.error('Failed to download logs:', err);
-            alert('Failed to download console logs.');
+            _showConsoleNotice('Failed to download console logs.', 'error');
         });
+}
+
+function _showConsoleNotice(message, type) {
+    var existing = document.getElementById('console-notice-toast');
+    if (existing) existing.remove();
+    var colors = { success: '#059669', warning: '#d97706', error: '#dc2626', info: '#0ea5e9' };
+    var icons = { success: '&#10003;', warning: '&#9888;', error: '&#10007;', info: '&#8505;' };
+    var color = colors[type] || colors.info;
+    var toast = document.createElement('div');
+    toast.id = 'console-notice-toast';
+    toast.innerHTML = '<span style="font-size:1.2em;margin-right:8px;">' + (icons[type] || '') + '</span>' + message;
+    toast.style.cssText = 'position:fixed;bottom:24px;right:24px;z-index:10000;background:' + color + ';color:white;padding:12px 20px;border-radius:10px;font-size:0.92em;font-weight:600;box-shadow:0 4px 16px rgba(0,0,0,0.2);display:flex;align-items:center;animation:fadeIn 0.2s;';
+    document.body.appendChild(toast);
+    setTimeout(function() { toast.style.opacity = '0'; toast.style.transition = 'opacity 0.3s'; setTimeout(function() { toast.remove(); }, 300); }, 3000);
 }
 
 // Restore console from localStorage
