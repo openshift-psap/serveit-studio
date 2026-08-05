@@ -34,7 +34,7 @@ function loadResumeRuns() {
                     goalLabel = 'Throughput';
                     goalClass = 'throughput';
                 } else if (goal === 'balanced') {
-                    goalLabel = 'Balanced';
+                    goalLabel = 'Full Coverage';
                     goalClass = 'throughput';
                 } else if (goal === 'aggregated_only') {
                     goalLabel = 'Aggregated Only';

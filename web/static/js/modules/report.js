@@ -29,7 +29,7 @@ function loadRunList() {
                 const opt = document.createElement('option');
                 opt.value = run.id;
                 const modelShort = (run.model || '').split('/').pop() || '?';
-                const goalMap = { ttft: 'TTFT', throughput: 'Throughput', balanced: 'Balanced' };
+                const goalMap = { ttft: 'TTFT', throughput: 'Throughput', balanced: 'Full Coverage' };
                 const goal = goalMap[(run.goal || '').toLowerCase()] || run.goal || '?';
                 let workload = '';
                 if (run.isl && run.osl) {
