@@ -665,6 +665,8 @@ class BalancedStrategy(OptimizationStrategy):
             self.opt.log("STEP 11: Calibrated Load Validation & Concurrency Sweep", 'decision')
             self.opt.log("-" * 80, 'info')
             self.opt._validate_at_calibrated_load()
+            if self.opt.ep_results:
+                self._validate_ep_at_calibrated_load()
             self.opt.log("", 'info')
 
         # Step 12: Speculative decoding comparison (conditional)
