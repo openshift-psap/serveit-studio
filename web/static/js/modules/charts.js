@@ -2463,40 +2463,44 @@ function _renderChartsImpl(data, runId, content) {
     // Render estimator methodology explanation
     updateEstimatorScaling(_chartSuffix);
 
-    // Pareto frontier — add TPSG to hover and as data labels on TTFT traces
+    // Pareto frontier — TPSG bars (left) + TTFT line (right), no ITL
     if (charts.pareto.traces.length) {
         var tpsgLookup = {};
         if (rec) {
             (rec.decode_tp_all || []).forEach(function(d) { tpsgLookup['decode-' + d.tp] = d.tpsg; });
             (rec.prefill_tp_all || []).forEach(function(d) { tpsgLookup['prefill-' + d.tp] = d.tpsg; });
         }
-        const traces = charts.pareto.traces.map(t => {
-            var isITL = t.yaxis === 'y2';
+        var traces = [];
+        charts.pareto.traces.forEach(function(t) {
+            if (t.yaxis === 'y2') return;
             var role = t.name.toLowerCase().indexOf('decode') >= 0 ? 'decode' : 'prefill';
-            var tpsgTexts = t.x.map(function(gpus) {
-                var tp = gpus;
-                var tpsg = tpsgLookup[role + '-' + tp];
-                return tpsg ? Math.round(tpsg).toLocaleString() + ' TPSG' : '';
+            var tpsgVals = t.x.map(function(tp) { return tpsgLookup[role + '-' + tp] || 0; });
+            var bestTpsg = Math.max.apply(null, tpsgVals);
+            var barColors = tpsgVals.map(function(v) { return v === bestTpsg ? '#10b981' : t.color; });
+            traces.push({
+                x: t.x, y: tpsgVals, name: t.name.replace('TTFT', 'TPSG'),
+                type: 'bar',
+                marker: { color: barColors },
+                text: tpsgVals.map(function(v) { return v > 0 ? Math.round(v).toLocaleString() : ''; }),
+                textposition: 'outside', textfont: { size: 10, color: '#1e293b' },
+                cliponaxis: false, constraintext: 'none',
+                hovertemplate: '<b>TP=%{x}</b><br>TPSG: %{y:,.0f} tok/s/GPU<extra></extra>'
             });
-            return {
-                x: t.x, y: t.y, text: t.text, name: t.name,
-                yaxis: t.yaxis || 'y',
-                mode: isITL ? 'markers+lines' : 'markers+lines+text',
-                customdata: isITL ? undefined : tpsgTexts,
-                texttemplate: isITL ? undefined : '%{customdata}',
-                textposition: isITL ? undefined : 'top center',
-                textfont: isITL ? undefined : { size: 10, color: t.color },
-                marker: { size: isITL ? 10 : 14, color: t.color, symbol: isITL ? 'circle' : 'diamond', line: { width: 2, color: 'white' } },
-                line: { width: 2, dash: isITL ? 'dash' : 'dot' },
+            traces.push({
+                x: t.x, y: t.y, name: t.name, yaxis: 'y2',
+                mode: 'markers+lines', text: t.text,
+                marker: { size: 10, color: t.color, symbol: 'circle', line: { width: 2, color: 'white' } },
+                line: { width: 2, dash: 'dash' },
                 hovertemplate: '<b>%{text}</b><extra></extra>'
-            };
+            });
         });
-        const paretoXvals = [...new Set(traces.flatMap(t => t.x))].sort((a, b) => a - b);
+        const paretoXvals = [...new Set(charts.pareto.traces.filter(t => t.yaxis !== 'y2').flatMap(t => t.x))].sort((a, b) => a - b);
         Plotly.newPlot(cid('chart-pareto'), traces, {
             ...plotlyLayout, margin: { ...plotlyLayout.margin, r: 60, t: 30 },
+            barmode: 'group',
             xaxis: { title: 'Total GPUs (= TP)', tickvals: paretoXvals },
-            yaxis: { title: 'TTFT P90 (ms) — lower is better', side: 'left' },
-            yaxis2: { title: 'ITL P90 (ms) — lower is better', side: 'right', overlaying: 'y', titlefont: { color: '#ef4444' }, tickfont: { color: '#ef4444' } },
+            yaxis: { title: 'TPSG (tok/s/GPU) — higher is better', side: 'left', tickformat: ',.0f' },
+            yaxis2: { title: 'TTFT P90 (ms) — lower is better', side: 'right', overlaying: 'y' },
             showlegend: true
         }, plotlyConfig);
     }
