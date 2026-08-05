@@ -236,8 +236,10 @@ class GuidellmMixin:
         # Output path on the workload pod — use PVC to avoid node disk pressure
         output_path = f'/mnt/storage/tmp/guidellm-{config.test_id}.json'
 
+        fail_path = output_path.replace('.json', '_fail.json')
         exec_cmd = (
             f'mkdir -p /mnt/storage/tmp && '
+            f'[ -f {output_path} ] && mv {output_path} {fail_path} 2>/dev/null; '
             f'rm -f {output_path} && '
             f'export TMPDIR=/mnt/storage/tmp && '
             f'guidellm run'
