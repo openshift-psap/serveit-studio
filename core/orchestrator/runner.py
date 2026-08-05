@@ -511,7 +511,8 @@ class TestOrchestrator(ParserMixin, GuidellmMixin):
                     return True
                 overload_patterns = ['503', 'service unavailable', 'disconnect',
                                      'jsondecodeerror', 'unterminated string',
-                                     'remotedisconnected', 'readtimeout']
+                                     'remotedisconnected', 'readtimeout',
+                                     '400', 'bad request']
                 for e in errored:
                     info = e.get('info', {})
                     err = str(info.get('error', '')).lower()
