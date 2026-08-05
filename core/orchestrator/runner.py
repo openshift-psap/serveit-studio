@@ -503,7 +503,12 @@ class TestOrchestrator(ParserMixin, GuidellmMixin):
         """Check if all sampled errors are 503/disconnect (overload, not infra failure)."""
         try:
             import json as _json
-            data = _json.loads(guidellm_output)
+            from pathlib import Path
+            if Path(guidellm_output).exists():
+                with open(guidellm_output) as f:
+                    data = _json.load(f)
+            else:
+                data = _json.loads(guidellm_output)
             for bm in data.get('benchmarks', []):
                 reqs = bm.get('requests', {})
                 errored = reqs.get('errored', [])
@@ -526,7 +531,12 @@ class TestOrchestrator(ParserMixin, GuidellmMixin):
         """Extract the first error message from guidellm output for debugging."""
         try:
             import json as _json
-            data = _json.loads(guidellm_output)
+            from pathlib import Path
+            if Path(guidellm_output).exists():
+                with open(guidellm_output) as f:
+                    data = _json.load(f)
+            else:
+                data = _json.loads(guidellm_output)
             for bm in data.get('benchmarks', []):
                 for e in bm.get('requests', {}).get('errored', []):
                     return str(e.get('info', {}).get('error', ''))[:200]
