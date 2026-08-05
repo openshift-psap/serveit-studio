@@ -180,10 +180,14 @@ class PDSearchMixin:
             self.log(f"    Balanced ratio P:D = {r_adjusted:.2f}:1, ideal decode pods = {d_ideal:.1f}", 'info')
 
             valid_by_decode = {s.decode_pods: s for s in all_valid}
+            max_prefill_pct = max(self.max_throughput_pct * 2, 40)
             selected = []
             for d in candidates_d:
                 if d in valid_by_decode:
-                    selected.append(valid_by_decode[d])
+                    s = valid_by_decode[d]
+                    if s.prefill_pct > max_prefill_pct:
+                        continue
+                    selected.append(s)
 
             # Include max-decode edge split (most decode-heavy) if within 1.5× of ideal
             max_decode = max(valid_by_decode.keys())
