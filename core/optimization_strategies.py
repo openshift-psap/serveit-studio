@@ -662,9 +662,9 @@ class BalancedStrategy(OptimizationStrategy):
         # Step 11: Calibrated load / InferenceX sweep (user-controlled)
         if self.opt.config.calibrated_load_enabled and (len(self.opt.pareto_results) > 0 or len(self.opt.ep_results) > 0):
             self.opt._recalculate_achievable_concurrency()
-            self.opt.log("STEP 11: Calibrated Load Validation (All Architectures)", 'decision')
+            self.opt.log("STEP 11: Calibrated Load Validation & Concurrency Sweep", 'decision')
             self.opt.log("-" * 80, 'info')
-            self._validate_all_at_calibrated_load()
+            self.opt._validate_at_calibrated_load()
             self.opt.log("", 'info')
 
         # Step 12: Speculative decoding comparison (conditional)
