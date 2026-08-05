@@ -158,7 +158,13 @@ class PDSearchMixin:
 
             usable_gpus = self._usable_gpus_for_tp(max(ptp, dtp))
             r = decode_thr / prefill_thr
-            d_ideal = usable_gpus / (r * ptp + dtp)
+            cache_hit_pct = getattr(self.config, 'prefix_cache_hit_pct', 0) or 0
+            if cache_hit_pct > 0:
+                active_fraction = 1.0 - cache_hit_pct / 100.0
+                r_adjusted = r * active_fraction
+            else:
+                r_adjusted = r
+            d_ideal = usable_gpus / (r_adjusted * ptp + dtp)
 
             candidates_d = sorted({
                 max(1, math.floor(d_ideal) - 1),
@@ -169,7 +175,9 @@ class PDSearchMixin:
 
             self.log(f"  Smart search PTP={ptp}/DTP={dtp}:", 'info')
             self.log(f"    Prefill: {prefill_thr:.2f} req/s/pod, Decode: {decode_thr:.2f} req/s/pod", 'info')
-            self.log(f"    Balanced ratio P:D = {r:.2f}:1, ideal decode pods = {d_ideal:.1f}", 'info')
+            if cache_hit_pct > 0:
+                self.log(f"    Raw ratio P:D = {r:.2f}:1, cache-adjusted = {r_adjusted:.2f}:1 ({cache_hit_pct}% cache hit)", 'info')
+            self.log(f"    Balanced ratio P:D = {r_adjusted:.2f}:1, ideal decode pods = {d_ideal:.1f}", 'info')
 
             valid_by_decode = {s.decode_pods: s for s in all_valid}
             selected = []
