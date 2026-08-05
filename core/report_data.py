@@ -80,21 +80,24 @@ class TestResult:
     @property
     def total_gpus(self) -> int:
         """Calculate total GPUs used."""
-        if self.architecture == 'pd':
+        if self.architecture in ('pd', 'ep'):
             prefill_gpus = self.prefill_pods * (self.prefill_tp or self.tensor_parallelism)
             decode_gpus = self.decode_pods * (self.decode_tp or self.tensor_parallelism)
             return prefill_gpus + decode_gpus
-        else:  # aggregated or ep
+        else:  # aggregated
             total_pods = self.prefill_pods + self.decode_pods
             return total_pods * self.tensor_parallelism
 
     @property
     def display_label(self) -> str:
         """Human-readable label for charts (e.g. '3P×TP8 + 1D×TP8')."""
-        if self.architecture == 'pd':
+        if self.architecture in ('pd', 'ep'):
             ptp = self.prefill_tp or self.tensor_parallelism
             dtp = self.decode_tp or self.tensor_parallelism
-            return f"{self.prefill_pods}P×TP{ptp} + {self.decode_pods}D×TP{dtp}"
+            label = f"{self.prefill_pods}P×TP{ptp} + {self.decode_pods}D×TP{dtp}"
+            if self.architecture == 'ep':
+                label += ' (ep)'
+            return label
         else:
             total_pods = self.prefill_pods + self.decode_pods
             arch = self.architecture or 'aggregated'
