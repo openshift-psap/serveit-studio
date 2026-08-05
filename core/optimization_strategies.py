@@ -220,20 +220,29 @@ class ThroughputStrategy(OptimizationStrategy):
                     valid_tp.append(tp)
             valid_tp.sort()
 
-        best_tpsg = max(
-            (r['tpsg'] for r in self.opt.decode_tp_results),
-            default=0
-        )
-        if best_tpsg > 0:
-            total_cost = (self.opt.config.isl + self.opt.config.osl) / best_tpsg
+        prefill_tpsg = self.opt.optimal_prefill_tp.tpsg if self.opt.optimal_prefill_tp else 0
+        decode_tpsg = self.opt.optimal_decode_tp.tpsg if self.opt.optimal_decode_tp else 0
+        if prefill_tpsg > 0 and decode_tpsg > 0:
+            raw_prefill_cost = self.opt.config.isl / prefill_tpsg
+            decode_cost = self.opt.config.osl / decode_tpsg
+            cache_hit_pct = getattr(self.opt.config, 'prefix_cache_hit_pct', 0) or 0
+            if cache_hit_pct > 0:
+                prefill_cost = raw_prefill_cost * (1.0 - cache_hit_pct / 100.0)
+            else:
+                prefill_cost = raw_prefill_cost
+            total_cost = prefill_cost + decode_cost
             sustainable_qps = total_gpus / total_cost / self.opt.config.headroom
             sustainable_concurrency = max(1, int(total_gpus / (total_cost * self.opt.config.headroom)))
             concurrency = int(self.opt.config.qps)
 
             self.opt.log("Step 4: Cluster Capacity Analysis (EP)", 'info')
             self.opt.log(f"  Concurrency (simultaneous requests): {concurrency}", 'info')
-            self.opt.log(f"  Best TPSG from calibration: {best_tpsg:.0f} tokens/s/GPU", 'info')
-            self.opt.log(f"  GPU cost per request: ({self.opt.config.isl} + {self.opt.config.osl}) ÷ {best_tpsg:.0f} = {total_cost:.2f} GPU-sec", 'info')
+            self.opt.log(f"  GPU cost per request:", 'info')
+            self.opt.log(f"    Prefill: {self.opt.config.isl} ISL ÷ {prefill_tpsg:.0f} TPSG = {raw_prefill_cost:.2f} GPU-sec", 'info')
+            if cache_hit_pct > 0:
+                self.opt.log(f"    Prefill (cache-adjusted): {raw_prefill_cost:.2f} × {1.0 - cache_hit_pct/100:.0%} active = {prefill_cost:.2f} GPU-sec ({cache_hit_pct}% cache hit)", 'info')
+            self.opt.log(f"    Decode:  {self.opt.config.osl} OSL ÷ {decode_tpsg:.0f} TPSG = {decode_cost:.2f} GPU-sec", 'info')
+            self.opt.log(f"    Total:   {total_cost:.2f} GPU-sec/request", 'info')
             self.opt.log("", 'info')
 
             self.opt.log(f"Step 5: Sustainable Throughput & EP Configurations", 'info')
