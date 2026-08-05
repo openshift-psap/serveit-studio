@@ -84,7 +84,7 @@ def calculate_engine_memory_config(
                     f"OSL {osl}–{effective_osl} (+{osl_stdev or 0})")
 
     # 3. Validate against model's absolute max context length
-    CHAT_TEMPLATE_OVERHEAD = 200
+    CHAT_TEMPLATE_OVERHEAD = 500
 
     if model_config:
         model_max_position_embeddings = model_config.get('max_position_embeddings', 4096)
