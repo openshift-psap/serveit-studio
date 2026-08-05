@@ -180,12 +180,14 @@ class PDSearchMixin:
             self.log(f"    Balanced ratio P:D = {r_adjusted:.2f}:1, ideal decode pods = {d_ideal:.1f}", 'info')
 
             valid_by_decode = {s.decode_pods: s for s in all_valid}
-            max_prefill_pct = max(self.max_throughput_pct * 2, 40)
+            max_prefill_pct = max(getattr(self, 'max_throughput_pct', 50) * 2, 40)
+            self.log(f"    Filter: max_prefill_pct={max_prefill_pct:.1f}% (max_throughput_pct={getattr(self, 'max_throughput_pct', 'NOT SET')})", 'info')
             selected = []
             for d in candidates_d:
                 if d in valid_by_decode:
                     s = valid_by_decode[d]
                     if s.prefill_pct > max_prefill_pct:
+                        self.log(f"    ✂️  Filtered {s.prefill_pods}P+{s.decode_pods}D ({s.prefill_pct:.1f}% > {max_prefill_pct:.1f}%)", 'info')
                         continue
                     selected.append(s)
 
