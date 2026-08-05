@@ -189,6 +189,11 @@ class PDSearchMixin:
                         continue
                     selected.append(s)
 
+            # Always include the closest-to-ideal split per TP pair
+            if not selected and all_valid:
+                best = min(all_valid, key=lambda s: abs(s.decode_pods - d_ideal))
+                selected.append(best)
+
             # Include max-decode edge split (most decode-heavy) if within 1.5× of ideal
             max_decode = max(valid_by_decode.keys())
             if max_decode in valid_by_decode and valid_by_decode[max_decode] not in selected:
