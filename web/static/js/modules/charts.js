@@ -557,6 +557,39 @@ function _renderChartsImpl(data, runId, content) {
     secCfg += chartCard('Throughput vs Latency', chartDesc.scatter, 'chart-scatter');
     secCfg += chartCard('GPU Efficiency (req/s per GPU)', chartDesc.efficiency, 'chart-efficiency');
     secCfg += chartCard('Per-User Token Throughput (tokens/s per user)', 'Shows how many output tokens each concurrent user receives per second. <strong>Higher = faster streaming for each user.</strong>', 'chart-per-user-efficiency');
+
+    // Cache Hit Rate per configuration
+    var cfgCacheData = coreResults.filter(function(r) { return r.cache_hit_pct != null; });
+    if (cfgCacheData.length) {
+        secCfg += '<div class="chart-card"><div class="chart-card-header">Prefix Cache Hit Rate per Configuration</div>';
+        secCfg += '<div style="padding:8px 20px 0;color:#1e293b;font-size:0.92em;">Actual prefix cache hit percentage measured by vLLM during each test. Higher = more requests served from cached KV data.</div>';
+        secCfg += '<div class="chart-card-body"><div id="chart-cfg-cache-hit' + _chartSuffix + '" style="width:100%;height:400px;"></div></div></div>';
+        var archColors3 = { AGGREGATED: '#1f77b4', PD: '#ff7f0e', EP: '#2ca02c' };
+        chartQueue.push(function() {
+            var traces = [];
+            ['AGGREGATED', 'PD', 'EP'].forEach(function(arch) {
+                var ar = cfgCacheData.filter(function(r) { return r.architecture === arch; });
+                if (!ar.length) return;
+                traces.push({
+                    x: ar.map(function(r) { return r.config_name; }),
+                    y: ar.map(function(r) { return r.cache_hit_pct; }),
+                    text: ar.map(function(r) { return r.cache_hit_pct.toFixed(1) + '%'; }),
+                    textposition: 'outside', textfont: { size: 10 },
+                    name: arch, type: 'bar',
+                    marker: { color: archColors3[arch] }
+                });
+            });
+            Plotly.newPlot('chart-cfg-cache-hit' + _chartSuffix, traces, {
+                ...plotlyLayout, height: 400, barmode: 'group',
+                xaxis: { tickangle: -35, gridcolor: '#e2e8f0' },
+                yaxis: { title: 'Cache Hit %', gridcolor: '#e2e8f0', range: [0, 100] },
+                showlegend: true, legend: { x: 0, y: 1, bgcolor: 'rgba(255,255,255,0.9)' },
+                margin: { t: 20, b: 120, l: 60, r: 20 },
+                plot_bgcolor: '#f8fafc', paper_bgcolor: '#fff',
+            }, { responsive: true });
+        });
+    }
+
     if (coreResults.some(r => r.architecture === 'PD' || r.architecture === 'EP') && coreResults.some(r => r.architecture === 'AGGREGATED')) {
         secPareto += '<div class="chart-card" style="border-left:6px solid #8b5cf6;">' +
             '<div class="chart-card-header" style="background:linear-gradient(135deg,#8b5cf6,#a78bfa); color:white;">Pareto Frontier Analysis</div>' +
@@ -1536,6 +1569,43 @@ function _renderChartsImpl(data, runId, content) {
                     margin: { t: 20, b: 60, l: 70, r: 20 },
                     legend: { x: 0, y: 1, bgcolor: 'rgba(255,255,255,0.9)' },
                     shapes: calShapes, annotations: calShapes._annotations || [], hovermode: 'closest'
+                }, { responsive: true });
+            });
+        }
+
+        // --- Cache Hit Rate vs Concurrency ---
+        var hasSweepCacheHit = false;
+        Object.keys(sweep).forEach(function(k) { if (sweep[k] && sweep[k].some(function(p) { return p.cache_hit_pct != null; })) hasSweepCacheHit = true; });
+        if (hasSweepCacheHit) {
+            html += '<div class="chart-card" style="margin-top:20px;">';
+            html += '<div class="chart-card-header">Prefix Cache Hit Rate vs Concurrency</div>';
+            html += '<div style="padding:8px 20px 0;color:#1e293b;font-size:0.92em;">How prefix cache hit rate changes with load. Higher hit rates mean more requests served from cached KV data.</div>';
+            html += '<div id="chart-sweep-cache-hit' + _chartSuffix + '" style="width:100%;height:400px;"></div></div>';
+            chartQueue.push(function() {
+                var traces = [];
+                var cIdx = 0;
+                var colors = ['#059669', '#3b82f6', '#f59e0b', '#8b5cf6', '#dc2626', '#0ea5e9'];
+                Object.keys(sweep).forEach(function(k) {
+                    var pts = sweep[k];
+                    if (!pts || !pts.some(function(p) { return p.cache_hit_pct != null; })) return;
+                    var label = pts[0] && pts[0].config_label ? pts[0].config_label : k;
+                    var color = colors[cIdx % colors.length]; cIdx++;
+                    traces.push({
+                        x: pts.map(function(p) { return p.concurrency; }),
+                        y: pts.map(function(p) { return p.cache_hit_pct != null ? p.cache_hit_pct : 0; }),
+                        text: pts.map(function(p) { return p.cache_hit_pct != null ? p.cache_hit_pct.toFixed(1) + '%' : ''; }),
+                        textposition: 'top center', textfont: { size: 10, color: color },
+                        mode: 'lines+markers+text', name: label,
+                        line: { color: color, width: 3 }, marker: { size: 8 }
+                    });
+                });
+                Plotly.newPlot('chart-sweep-cache-hit' + _chartSuffix, traces, {
+                    ...plotlyLayout, height: 400,
+                    xaxis: { title: 'Concurrency', gridcolor: '#e2e8f0' },
+                    yaxis: { title: 'Cache Hit %', gridcolor: '#e2e8f0', range: [0, 100] },
+                    showlegend: true, legend: { x: 0, y: 1, bgcolor: 'rgba(255,255,255,0.9)' },
+                    margin: { t: 20, b: 60, l: 60, r: 20 },
+                    plot_bgcolor: '#f8fafc', paper_bgcolor: '#fff',
                 }, { responsive: true });
             });
         }

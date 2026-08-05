@@ -78,6 +78,24 @@ class TestResult:
         return None
 
     @property
+    def cache_hit_pct(self) -> Optional[float]:
+        """Prefix cache hit percentage from Prometheus metrics."""
+        if self.metrics_json:
+            try:
+                import json
+                mj = json.loads(self.metrics_json)
+                pm = mj.get('prometheus_metrics', {})
+                hits = pm.get('vllm_prefix_cache_hits_rate', {})
+                queries = pm.get('vllm_prefix_cache_queries_rate', {})
+                h = hits.get('avg', 0) if isinstance(hits, dict) else 0
+                q = queries.get('avg', 0) if isinstance(queries, dict) else 0
+                if q > 0:
+                    return round(h / q * 100, 1)
+            except Exception:
+                pass
+        return None
+
+    @property
     def total_gpus(self) -> int:
         """Calculate total GPUs used."""
         if self.architecture in ('pd', 'ep'):

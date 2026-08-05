@@ -1244,6 +1244,7 @@ class ReportAnalyzer:
                 'request_errored': None,
                 'nixl_errors': 0,
                 'nixl_degraded': False,
+                'cache_hit_pct': None,
                 'quality': getattr(r, 'quality', 'ok') or 'ok',
             })
             if r.metrics_json:
@@ -1255,6 +1256,13 @@ class ReportAnalyzer:
                     all_results[-1]['nixl_degraded'] = _mj.get('nixl_degraded', False)
                     all_results[-1]['nixl_warning'] = _mj.get('nixl_warning', False)
                     all_results[-1]['nixl_error_rate'] = _mj.get('nixl_error_rate', 0)
+                    _pm = _mj.get('prometheus_metrics', {})
+                    _hits = _pm.get('vllm_prefix_cache_hits_rate', {})
+                    _queries = _pm.get('vllm_prefix_cache_queries_rate', {})
+                    _h_avg = _hits.get('avg', 0) if isinstance(_hits, dict) else 0
+                    _q_avg = _queries.get('avg', 0) if isinstance(_queries, dict) else 0
+                    if _q_avg > 0:
+                        all_results[-1]['cache_hit_pct'] = round(_h_avg / _q_avg * 100, 1)
                 except Exception:
                     pass
         return all_results

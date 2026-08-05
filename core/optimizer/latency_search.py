@@ -495,6 +495,7 @@ class LatencySearchMixin:
             'gpus': gpus,
             'test_id': test_id,
             'config_label': config_label,
+            'cache_hit_pct': result.cache_hit_pct,
         })
 
         self.log(f"  ✅ c={concurrency}: TTFT={ttft:.0f}ms, "
