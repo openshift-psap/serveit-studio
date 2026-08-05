@@ -673,10 +673,33 @@ def run_optimization_background(data):
         # Parse configuration — _get() falls back to ui_session_state for
         # any field the caller omitted (e.g. stale browser JS cache)
         model = data.get('model')
+        length_unit = _get('length_unit', 'tokens')
         isl = int(_get('isl', 3000))
         osl = int(_get('osl', 100))
         isl_stdev = _get('isl_stdev')
         osl_stdev = _get('osl_stdev')
+
+        # Convert characters to tokens if needed
+        if length_unit == 'characters':
+            chars_per_token = 4.0
+            try:
+                from transformers import AutoTokenizer
+                hf_token_val = _get('hf_token') or os.environ.get('HF_TOKEN')
+                tok = AutoTokenizer.from_pretrained(model, trust_remote_code=True, token=hf_token_val)
+                sample = "The quick brown fox jumps over the lazy dog. " * 100
+                sample_tokens = len(tok.encode(sample, add_special_tokens=False))
+                chars_per_token = len(sample) / sample_tokens
+                log_to_ui(f'Character mode: measured {chars_per_token:.2f} chars/token for {model}', 'info')
+            except Exception:
+                log_to_ui(f'Character mode: using default {chars_per_token:.1f} chars/token', 'info')
+
+            isl = max(1, int(isl / chars_per_token))
+            osl = max(1, int(osl / chars_per_token))
+            if isl_stdev:
+                isl_stdev = max(0, int(int(isl_stdev) / chars_per_token))
+            if osl_stdev:
+                osl_stdev = max(0, int(int(osl_stdev) / chars_per_token))
+            log_to_ui(f'Converted: ISL={isl} tokens, OSL={osl} tokens, ISL_var={isl_stdev}, OSL_var={osl_stdev}', 'info')
         turns = int(_get('turns', 1))
         num_users = int(_get('num_users', 100, ui_key='users'))
         optimization_goal = _get('optimization_metric', 'ttft', ui_key='goal') or 'ttft'
