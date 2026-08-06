@@ -201,8 +201,8 @@ function buildRecSection(runId, data, rec, summary, best, allRes) {
         });
 
         s += '<div style="border:2px solid #10b981;border-left:6px solid #10b981;border-radius:10px;margin:20px 0;overflow:hidden;">';
-        s += '<div style="background:linear-gradient(135deg,#059669,#10b981);padding:14px 20px;font-size:1.1em;font-weight:800;color:white;">Deployment Recommendation</div>';
-        s += '<div style="padding:12px 20px 4px;color:#475569;font-size:0.9em;">Best configurations found during optimization across all architectures.</div>';
+        s += '<div style="background:linear-gradient(135deg,#059669,#10b981);padding:14px 20px;font-size:1.1em;font-weight:800;color:white;">Deployment Recommendation &mdash; User-Defined Workload</div>';
+        s += '<div style="padding:12px 20px 4px;color:#475569;font-size:0.9em;">Best configurations found at the user-configured concurrency. These results reflect peak-load performance at the workload settings you defined.</div>';
         s += '<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:16px;padding:20px;">';
 
         selTypes.forEach(sel => {
@@ -603,8 +603,8 @@ function buildCalSection(data) {
         const calSeen = new Set();
 
         s += '<div style="border:2px solid #0ea5e9;border-left:6px solid #0ea5e9;border-radius:10px;margin:0 0 20px;overflow:hidden;">';
-        s += '<div style="background:linear-gradient(135deg,#0ea5e9,#06b6d4);padding:14px 20px;font-size:1.1em;font-weight:800;color:white;">Calibrated Recommendations</div>';
-        s += '<div style="padding:12px 20px 4px;color:#475569;font-size:0.9em;">Performance at sustainable production load — calibrated concurrency where queue wait is reasonable.</div>';
+        s += '<div style="background:linear-gradient(135deg,#0ea5e9,#06b6d4);padding:14px 20px;font-size:1.1em;font-weight:800;color:white;">Deployment Recommendation &mdash; Calibrated Load</div>';
+        s += '<div style="padding:12px 20px 4px;color:#475569;font-size:0.9em;">Performance at sustainable production load — calibrated concurrency where queue wait is reasonable. These results reflect realistic production conditions.</div>';
         s += '<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:16px;padding:16px 20px;">';
 
         calTypes.forEach(sel => {

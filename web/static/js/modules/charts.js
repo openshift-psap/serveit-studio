@@ -158,8 +158,8 @@ function _renderChartsImpl(data, runId, content) {
     // ============================================================
     if (rec && rec.recommendations && Object.keys(rec.recommendations).length) {
         html += '<div class="chart-card" style="border: 2px solid #10b981; border-left: 6px solid #10b981;">';
-        html += '<div class="chart-card-header" style="background: linear-gradient(135deg, #059669, #10b981); color: white; font-size: 1.1em; font-weight: 800;">Deployment Recommendation</div>';
-        html += '<div style="padding:12px 20px 4px; color:#475569; font-size:0.9em;">Best configurations found during optimization. Each architecture\'s best TTFT is shown at P90, P95, and P99 — the config on the left has the lowest latency at that percentile.</div>';
+        html += '<div class="chart-card-header" style="background: linear-gradient(135deg, #059669, #10b981); color: white; font-size: 1.1em; font-weight: 800;">Deployment Recommendation &mdash; User-Defined Workload</div>';
+        html += '<div style="padding:12px 20px 4px; color:#475569; font-size:0.9em;">Best configurations found at the user-configured concurrency. These results reflect peak-load performance at the workload settings you defined.</div>';
         html += '<div class="chart-card-body" style="padding: 24px;">';
 
         // Recommendation cards — one per category, best across ALL architectures
@@ -302,8 +302,8 @@ function _renderChartsImpl(data, runId, content) {
     const calBest = data.summary && data.summary.calibrated_best;
     if (calBest) {
         html += '<div class="chart-card" style="margin-top:20px; border:2px solid #0ea5e9; border-left:6px solid #0ea5e9;">';
-        html += '<div class="chart-card-header" style="background:linear-gradient(135deg,#0ea5e9,#06b6d4); color:white; font-size:1.1em; font-weight:800;">Calibrated Recommendations (Step 11)</div>';
-        html += '<div style="padding:12px 20px 4px; color:#475569; font-size:0.9em;">Performance at sustainable production load — calibrated concurrency where queue wait is reasonable. These numbers reflect realistic production conditions, not stress-test peaks.</div>';
+        html += '<div class="chart-card-header" style="background:linear-gradient(135deg,#0ea5e9,#06b6d4); color:white; font-size:1.1em; font-weight:800;">Deployment Recommendation &mdash; Calibrated Load</div>';
+        html += '<div style="padding:12px 20px 4px; color:#475569; font-size:0.9em;">Performance at sustainable production load — calibrated concurrency where queue wait is reasonable. These results reflect realistic production conditions.</div>';
         html += `<div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(280px, 1fr)); gap:16px; padding:16px 20px;">`;
 
         const calTypes = [
