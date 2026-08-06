@@ -718,10 +718,21 @@ function restoreClusterResources() {
     const storageSelect = document.getElementById('storage-class-select');
     if (storageSelect && data.storage_classes && data.storage_classes.length > 0) {
         storageSelect.innerHTML = '<option value="">-- Select a Storage Class --</option>';
+        const gpuNodeCount = data.gpu_node_count || 0;
         data.storage_classes.forEach(sc => {
             const option = document.createElement('option');
             option.value = sc.name;
-            option.textContent = `${sc.name} (${sc.provisioner})`;
+            if (sc.is_local) {
+                if (sc.gpu_nodes_covered >= gpuNodeCount && gpuNodeCount > 0) {
+                    option.textContent = `${sc.name} — Local Disk (${sc.gpu_nodes_covered} GPU nodes)`;
+                } else {
+                    option.textContent = `${sc.name} — Local Disk (${sc.gpu_nodes_covered}/${gpuNodeCount} GPU nodes)`;
+                    option.disabled = true;
+                    option.title = 'Not all GPU nodes have local storage available';
+                }
+            } else {
+                option.textContent = `${sc.name} (${sc.provisioner})`;
+            }
             storageSelect.appendChild(option);
         });
         // Restore selected storage class

@@ -929,11 +929,14 @@ def handle_scan_cluster(data):
                     'provisioner': sc.provisioner,
                     'reclaim_policy': sc.reclaim_policy,
                     'volume_binding_mode': sc.volume_binding_mode,
-                    'allow_volume_expansion': sc.allow_volume_expansion
+                    'allow_volume_expansion': sc.allow_volume_expansion,
+                    'is_local': getattr(sc, 'is_local', False),
+                    'gpu_nodes_covered': getattr(sc, 'gpu_nodes_covered', 0),
                 }
                 for sc in resources.storage_classes
                 if not any(blk in sc.name.lower() for blk in ('block', 'raw', 'iscsi-block'))
             ],
+            'gpu_node_count': resources.gpu_node_count,
             # Provider and network information
             'provider': provider_name,
             'network_type': network_type,

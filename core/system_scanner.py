@@ -58,6 +58,8 @@ class StorageClassInfo:
     reclaim_policy: str
     volume_binding_mode: str
     allow_volume_expansion: bool
+    is_local: bool = False  # True for local-disk/hostPath provisioners
+    gpu_nodes_covered: int = 0  # How many GPU nodes have available PVs for this SC
 
 @dataclass
 class ClusterResources:
@@ -866,15 +868,54 @@ class SystemScanner:
     def scan_storage_classes(self) -> List[StorageClassInfo]:
         """
         Scan available storage classes in the cluster.
+        Detects local-disk provisioners and checks GPU node coverage.
 
         Returns:
             List of StorageClassInfo
         """
         logger.info("Scanning storage classes...")
 
+        LOCAL_PROVISIONERS = {
+            'topolvm.io', 'kubernetes.io/no-provisioner', 'rancher.io/local-path',
+            'microk8s.io/hostpath', 'openebs.io/local', 'local.csi.k8s.io',
+        }
+
         try:
             sc_data = self.kubectl.run_json(['get', 'storageclasses'])
             storage_classes = []
+
+            # Get GPU node names for local disk coverage check
+            gpu_nodes = set()
+            try:
+                r = self.kubectl.run([
+                    'get', 'nodes', '-l', 'nvidia.com/gpu.present=true',
+                    '-o', 'jsonpath={range .items[*]}{.metadata.name}{"\\n"}{end}'
+                ], check=False)
+                if r.returncode == 0:
+                    gpu_nodes = {n.strip() for n in r.stdout.strip().splitlines() if n.strip()}
+            except Exception:
+                pass
+
+            # Get PVs to check local disk availability per GPU node
+            pv_by_sc = {}
+            try:
+                pv_data = self.kubectl.run_json(['get', 'pv'])
+                for pv in pv_data.get('items', []):
+                    sc_name = pv.get('spec', {}).get('storageClassName', '')
+                    phase = pv.get('status', {}).get('phase', '')
+                    if phase not in ('Available', 'Bound'):
+                        continue
+                    # Extract node affinity
+                    na = pv.get('spec', {}).get('nodeAffinity', {})
+                    terms = na.get('required', {}).get('nodeSelectorTerms', [])
+                    for term in terms:
+                        for expr in term.get('matchExpressions', []):
+                            if expr.get('key') == 'kubernetes.io/hostname':
+                                for node in expr.get('values', []):
+                                    if node in gpu_nodes:
+                                        pv_by_sc.setdefault(sc_name, set()).add(node)
+            except Exception:
+                pass
 
             for sc in sc_data.get('items', []):
                 name = sc['metadata']['name']
@@ -882,17 +923,22 @@ class SystemScanner:
                 reclaim_policy = sc.get('reclaimPolicy', 'Delete')
                 volume_binding_mode = sc.get('volumeBindingMode', 'Immediate')
                 allow_expansion = sc.get('allowVolumeExpansion', False)
+                is_local = provisioner in LOCAL_PROVISIONERS or provisioner.endswith('/local-path')
+                gpu_covered = len(pv_by_sc.get(name, set())) if is_local else 0
 
                 sc_info = StorageClassInfo(
                     name=name,
                     provisioner=provisioner,
                     reclaim_policy=reclaim_policy,
                     volume_binding_mode=volume_binding_mode,
-                    allow_volume_expansion=allow_expansion
+                    allow_volume_expansion=allow_expansion,
+                    is_local=is_local,
+                    gpu_nodes_covered=gpu_covered
                 )
 
                 storage_classes.append(sc_info)
-                logger.info(f"StorageClass: {name} (provisioner: {provisioner})")
+                local_tag = f" [LOCAL DISK - {gpu_covered}/{len(gpu_nodes)} GPU nodes]" if is_local else ""
+                logger.info(f"StorageClass: {name} (provisioner: {provisioner}){local_tag}")
 
             return storage_classes
 
