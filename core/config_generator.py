@@ -97,6 +97,7 @@ class TestConfig:
     node_nfs_pvcs: List[dict] = field(default_factory=list)  # [{suffix, pvc_name}]
     storage_class: Optional[str] = None
     pvc_size: Optional[str] = None  # e.g. '50Gi'
+    local_disk_path: Optional[str] = None  # hostPath mount for local-disk storage (e.g. '/mnt/local-storage')
 
     # Benchmark load parameters
     request_type: str = 'constant'  # 'constant', 'concurrent', 'throughput', 'poisson'

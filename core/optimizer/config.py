@@ -111,6 +111,7 @@ class RecipeOptimizerConfig:
     node_nfs_pvcs: Optional[list] = None  # [{suffix, pvc_name}] per-node NFS PVC mapping
     storage_class: Optional[str] = None  # Storage class for per-node PVCs
     pvc_size: Optional[str] = None  # PVC size for per-node storage
+    local_disk_path: Optional[str] = None  # hostPath for local-disk storage
 
     # Resources (auto-calculated if not set)
     memory_per_pod: Optional[str] = None  # e.g., '191Gi', auto-calculated from cluster resources

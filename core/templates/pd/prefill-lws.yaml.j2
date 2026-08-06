@@ -74,7 +74,12 @@ spec:
             emptyDir:
               medium: Memory
               sizeLimit: 2Gi
-{% if per_node_storage %}
+{% if local_disk_path %}
+          - name: hf-cache
+            hostPath:
+              path: {{ local_disk_path }}/model-cache
+              type: DirectoryOrCreate
+{% elif per_node_storage %}
           - name: hf-cache
             emptyDir: {}
 {% for nfs in node_nfs_pvcs %}
