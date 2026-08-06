@@ -693,7 +693,7 @@ def run_optimization_background(data):
         osl_stdev_original = osl_stdev
         chars_per_token = None
         if resume_run_id and _saved.get('chars_per_token'):
-            # Resume: ISL/OSL already in tokens from run_config, restore original char values
+            # Resume with no browser override: ISL/OSL already in tokens from run_config
             chars_per_token = _saved.get('chars_per_token')
             isl_original = _saved.get('isl_original_chars', isl)
             osl_original = _saved.get('osl_original_chars', osl)
