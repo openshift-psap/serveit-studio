@@ -281,12 +281,7 @@ function buildRecSection(runId, data, rec, summary, best, allRes) {
         }
 
         // Constraint notes
-        if (rec.constraint_notes && rec.constraint_notes.length) {
-            s += '<div style="background:#fffbeb;border:2px solid #f59e0b;border-left:6px solid #f59e0b;border-radius:8px;padding:14px 18px;margin-top:12px;">';
-            s += '<div style="font-weight:700;color:#92400e;margin-bottom:8px;font-size:0.95em;">&#9888; Configuration Constraints</div>';
-            rec.constraint_notes.forEach(n => { s += `<p style="color:#78350f;margin:0 0 8px;font-size:0.88em;line-height:1.6;">${n}</p>`; });
-            s += '</div>';
-        }
+        // Constraint notes filtered out — not useful in downloaded report
 
         s += '</div></div>';
     }
