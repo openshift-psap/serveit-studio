@@ -1,7 +1,11 @@
 apiVersion: leaderworkerset.x-k8s.io/v1
 kind: LeaderWorkerSet
 metadata:
+{% if per_node_storage %}
+  name: prefill-tp{{ prefill_tp }}
+{% else %}
   name: {{ test_id }}-prefill
+{% endif %}
   namespace: {{ namespace }}
   labels:
     app: llm-d
@@ -70,7 +74,15 @@ spec:
             emptyDir:
               medium: Memory
               sizeLimit: 2Gi
-{% if single_pvc %}
+{% if per_node_storage %}
+          - name: hf-cache
+            emptyDir: {}
+{% for nfs in node_nfs_pvcs %}
+          - name: nfs-{{ nfs.suffix }}
+            persistentVolumeClaim:
+              claimName: {{ nfs.pvc_name }}
+{% endfor %}
+{% else %}
           - name: hf-cache
             persistentVolumeClaim:
               claimName: {{ pvc_name }}
@@ -84,6 +96,40 @@ spec:
           - name: dev-infiniband
             hostPath:
               path: /dev/infiniband
+{% if per_node_storage %}
+        initContainers:
+          - name: select-nfs
+            image: busybox:stable
+            resources:
+              requests:
+                cpu: "100m"
+                memory: "64Mi"
+              limits:
+                cpu: "100m"
+                memory: "64Mi"
+            command: ["/bin/sh", "-c"]
+            args:
+              - |
+                echo "Node: $NODE_NAME"
+                case "$NODE_NAME" in
+{% for nfs in node_nfs_pvcs %}
+                  *{{ nfs.suffix }}*) ln -sf /nfs-{{ nfs.suffix }}/huggingface /model-cache/huggingface; echo "Linked to nfs-{{ nfs.suffix }}/huggingface" ;;
+{% endfor %}
+                  *) echo "ERROR: No NFS mount matches node $NODE_NAME"; ls -d /nfs-* 2>/dev/null; exit 1 ;;
+                esac
+            env:
+              - name: NODE_NAME
+                valueFrom:
+                  fieldRef:
+                    fieldPath: spec.nodeName
+            volumeMounts:
+              - name: hf-cache
+                mountPath: /model-cache
+{% for nfs in node_nfs_pvcs %}
+              - name: nfs-{{ nfs.suffix }}
+                mountPath: /nfs-{{ nfs.suffix }}
+{% endfor %}
+{% endif %}
         containers:
           - name: vllm
             image: {{ image }}
@@ -323,17 +369,11 @@ spec:
                 mountPath: /scripts
               - name: dev-infiniband
                 mountPath: /dev/infiniband
-{% if not single_pvc %}
-    volumeClaimTemplates:
-    - metadata:
-        name: hf-cache
-      spec:
-        accessModes:
-        - ReadWriteOnce
-        resources:
-          requests:
-            storage: {{ pvc_size | default('200Gi') }}
-        storageClassName: {{ storage_class }}
+{% if per_node_storage %}
+{% for nfs in node_nfs_pvcs %}
+              - name: nfs-{{ nfs.suffix }}
+                mountPath: /nfs-{{ nfs.suffix }}
+{% endfor %}
 {% endif %}
     workerTemplate:
       spec:

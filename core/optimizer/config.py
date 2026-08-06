@@ -107,9 +107,10 @@ class RecipeOptimizerConfig:
     selected_dra_classes: Optional[List[str]] = None  # User-selected DRA device classes
     dra_gpu_resource_key: Optional[str] = None  # extendedResourceName from selected DeviceClass
     gateway_class: str = 'istio'  # GatewayClass name (detected from cluster)
-    storage_class: Optional[str] = None  # Storage class for PVC provisioning
-    pvc_size: Optional[str] = None  # PVC size
-    single_pvc: bool = False  # True = shared RWX PVC on all pods
+    per_node_storage: bool = False  # Use per-node NFS PVCs with symlink
+    node_nfs_pvcs: Optional[list] = None  # [{suffix, pvc_name}] per-node NFS PVC mapping
+    storage_class: Optional[str] = None  # Storage class for per-node PVCs
+    pvc_size: Optional[str] = None  # PVC size for per-node storage
 
     # Resources (auto-calculated if not set)
     memory_per_pod: Optional[str] = None  # e.g., '191Gi', auto-calculated from cluster resources

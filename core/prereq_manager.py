@@ -271,6 +271,12 @@ class PrereqManager:
             if optimizer_config:
                 self._ensure_network_resources(optimizer_config, log)
 
+            # Create per-node NFS PVCs if per-node storage is enabled
+            if optimizer_config and getattr(optimizer_config, 'per_node_storage', False):
+                node_nfs_pvcs = self._ensure_per_node_pvcs(optimizer_config, log)
+                if node_nfs_pvcs:
+                    optimizer_config.node_nfs_pvcs = node_nfs_pvcs
+
             # Deploy in order (RBAC -> ConfigMap -> Service -> Deployment -> InferencePool -> Gateway)
             configmap_template = f'prereq/gaie-configmap-{architecture}.yaml.j2'
 
@@ -800,6 +806,116 @@ class PrereqManager:
 
         log(f'   ❌ Timeout waiting for {deployment_name} ({timeout}s)')
         return False
+
+    def _ensure_per_node_pvcs(self, config, log_callback=None) -> list:
+        """Create per-node NFS PVCs for per-node storage mode.
+
+        Creates one PVC per GPU node using the user-selected storage class.
+        Node suffixes are extracted from GPU node names.
+        """
+        def log(msg):
+            if log_callback:
+                log_callback(msg)
+
+        import json
+
+        # Get GPU node names
+        r = self.kubectl.run([
+            'get', 'nodes', '-l', 'nvidia.com/gpu.present=true',
+            '-o', 'jsonpath={range .items[*]}{.metadata.name}{"\\n"}{end}'
+        ], check=False)
+        if r.returncode != 0 or not r.stdout.strip():
+            log('   ⚠️  No GPU nodes found for per-node storage')
+            return []
+
+        gpu_nodes = [n.strip() for n in r.stdout.strip().splitlines() if n.strip()]
+
+        storage_class = getattr(config, 'storage_class', None)
+        nfs_classes = {}
+        if not storage_class:
+            r = self.kubectl.run([
+                'get', 'sc', '-o', 'jsonpath={range .items[*]}{.metadata.name}{"\\n"}{end}'
+            ], check=False)
+            if r.returncode == 0:
+                for sc in r.stdout.strip().splitlines():
+                    sc = sc.strip()
+                    if sc.startswith('nfs-') and sc != 'nfs':
+                        nfs_classes[sc[4:]] = sc
+                        self._ensure_nfs_mount_options(sc, log)
+
+        node_nfs_pvcs = []
+        pvc_size = getattr(config, 'pvc_size', None) or '200Gi'
+        for node in gpu_nodes:
+            # Match the node to an nfs-<suffix> storage class
+            short_name = node.split('.')[0]
+            suffix = None
+            for nfs_suffix in nfs_classes:
+                if nfs_suffix in node:
+                    suffix = nfs_suffix
+                    break
+            if not suffix:
+                suffix = short_name.split('-')[-1]
+            pvc_name = f"model-cache-{suffix}"
+            node_nfs_pvcs.append({'suffix': suffix, 'pvc_name': pvc_name})
+
+            # Check if PVC already exists
+            r = self.kubectl.run(
+                ['get', 'pvc', pvc_name, '-n', self.namespace], check=False)
+            if r.returncode == 0:
+                continue
+
+            # Use user-selected storage class, fallback to nfs-<suffix> if available
+            sc = storage_class or nfs_classes.get(suffix)
+            if not sc:
+                log(f'   ⚠️  No storage class for node {node} (suffix {suffix})')
+                continue
+
+            pvc_yaml = json.dumps({
+                'apiVersion': 'v1',
+                'kind': 'PersistentVolumeClaim',
+                'metadata': {
+                    'name': pvc_name,
+                    'namespace': self.namespace,
+                    'labels': {'app': 'serveit-cache', 'node-suffix': suffix}
+                },
+                'spec': {
+                    'accessModes': ['ReadWriteMany'],
+                    'storageClassName': sc,
+                    'resources': {'requests': {'storage': pvc_size}}
+                }
+            })
+            r = self.kubectl.run(
+                ['apply', '-f', '-', '-n', self.namespace], input_data=pvc_yaml, check=False)
+            if r.returncode == 0:
+                log(f'   ✅ Created PVC {pvc_name} ({sc})')
+            else:
+                log(f'   ❌ Failed to create PVC {pvc_name}: {r.stderr}')
+
+        if node_nfs_pvcs:
+            log(f'   📦 Per-node NFS storage: {len(node_nfs_pvcs)} PVCs for {len(gpu_nodes)} GPU nodes')
+        else:
+            log('   ⚠️  No matching NFS storage classes found for GPU nodes')
+
+        return node_nfs_pvcs
+
+    def _ensure_nfs_mount_options(self, sc_name, log=None):
+        """Ensure NFS storage class has vers=3 mount option (NFSv3 fallback)."""
+        r = self.kubectl.run([
+            'get', 'sc', sc_name, '-o', 'jsonpath={.mountOptions}'], check=False)
+        if r.returncode == 0 and 'vers=3' not in (r.stdout or ''):
+            import json as _json
+            r2 = self.kubectl.run(['get', 'sc', sc_name, '-o', 'json'], check=False)
+            if r2.returncode == 0:
+                sc_obj = _json.loads(r2.stdout)
+                sc_obj['mountOptions'] = ['vers=3']
+                sc_obj['metadata'] = {'name': sc_name}
+                for k in ['uid', 'resourceVersion', 'creationTimestamp', 'managedFields']:
+                    sc_obj.get('metadata', {}).pop(k, None)
+                sc_obj.pop('status', None)
+                self.kubectl.run(['delete', 'sc', sc_name], check=False)
+                self.kubectl.run(['apply', '-f', '-'], input_data=_json.dumps(sc_obj), check=False)
+                if log:
+                    log(f'   🔧 Patched {sc_name} with mountOptions: [vers=3]')
 
     def cleanup_prereqs(self, architecture: str = 'aggregated', log_callback=None) -> bool:
         """
