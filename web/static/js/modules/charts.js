@@ -134,11 +134,11 @@ function _renderChartsImpl(data, runId, content) {
         var bCpt = rec.workload.chars_per_token || 4.5;
         var bIslC = rec.workload.isl_original_chars || Math.round(rec.workload.isl * bCpt);
         var bOslC = rec.workload.osl_original_chars || Math.round(rec.workload.osl * bCpt);
-        let wlLabel = `Prompt: <strong>${bIslC.toLocaleString()} chars</strong>`;
+        let wlLabel = `Prompt: <strong>${bIslC.toLocaleString()}</strong>`;
         var bIslStdC = rec.workload.isl_stdev ? (rec.workload.isl_stdev_original_chars || Math.round(rec.workload.isl_stdev * bCpt)) : null;
-        if (bIslStdC) wlLabel += ` (σ=${bIslStdC.toLocaleString()})`;
-        wlLabel += ` | Output: <strong>${bOslC.toLocaleString()} chars</strong>`;
-        if (rec.workload.osl_stdev) wlLabel += ` (σ=${Math.round(rec.workload.osl_stdev * bCpt).toLocaleString()})`;
+        if (bIslStdC) wlLabel += ` + σ=${bIslStdC.toLocaleString()}`;
+        wlLabel += ` | Output: <strong>${bOslC.toLocaleString()}</strong>`;
+        if (rec.workload.osl_stdev) wlLabel += ` + σ=${Math.round(rec.workload.osl_stdev * bCpt).toLocaleString()}`;
         if (rec.workload.turns && rec.workload.turns > 1) wlLabel += ` | Turns: <strong>${rec.workload.turns}</strong>`;
         html += `<span>${wlLabel}</span>`;
         html += `<span>Users: <strong>${rec.workload.users}</strong></span>`;
@@ -712,8 +712,8 @@ function _renderChartsImpl(data, runId, content) {
             islStdevChars = rc.isl_stdev ? Math.round(rc.isl_stdev * cpt) : null;
             oslStdevChars = rc.osl_stdev ? Math.round(rc.osl_stdev * cpt) : null;
         }
-        var islDisplay = islChars.toLocaleString() + ' characters' + (islStdevChars ? ' (&sigma;=' + islStdevChars.toLocaleString() + ')' : '');
-        var oslDisplay = oslChars.toLocaleString() + ' characters' + (oslStdevChars ? ' (&sigma;=' + oslStdevChars.toLocaleString() + ')' : '');
+        var islDisplay = islChars.toLocaleString() + (islStdevChars ? ' + &sigma;=' + islStdevChars.toLocaleString() : '');
+        var oslDisplay = oslChars.toLocaleString() + (oslStdevChars ? ' + &sigma;=' + oslStdevChars.toLocaleString() : '');
 
         const rv = rc._resolved || {};
         const eppPresetLabels = {balanced:'Balanced', cache_optimized:'Cache Optimized', queue_balanced:'Queue Balanced', latency_aware:'Latency Aware', custom:'Custom'};

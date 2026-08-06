@@ -156,10 +156,10 @@ function buildRecSection(runId, data, rec, summary, best, allRes) {
         const wIslC = rec.workload.isl_original_chars || rc2.isl_original_chars || Math.round(rec.workload.isl * wCpt);
         const wOslC = rec.workload.osl_original_chars || rc2.osl_original_chars || Math.round(rec.workload.osl * wCpt);
         const wIslStdC = rec.workload.isl_stdev ? (rec.workload.isl_stdev_original_chars || (rc2.isl_stdev_original_chars) || Math.round(rec.workload.isl_stdev * wCpt)) : null;
-        s += `Model: <strong>${rec.model}</strong> &nbsp;|&nbsp; Prompt: <strong>${wIslC.toLocaleString()} chars</strong>`;
-        if (wIslStdC) s += ` (&sigma;=${wIslStdC.toLocaleString()})`;
-        s += ` | Output: <strong>${wOslC.toLocaleString()} chars</strong>`;
-        if (rec.workload.osl_stdev) s += ` (&sigma;=${Math.round(rec.workload.osl_stdev * wCpt).toLocaleString()})`;
+        s += `Model: <strong>${rec.model}</strong> &nbsp;|&nbsp; Prompt: <strong>${wIslC.toLocaleString()}</strong>`;
+        if (wIslStdC) s += ` + &sigma;=${wIslStdC.toLocaleString()}`;
+        s += ` | Output: <strong>${wOslC.toLocaleString()}</strong>`;
+        if (rec.workload.osl_stdev) s += ` + &sigma;=${Math.round(rec.workload.osl_stdev * wCpt).toLocaleString()}`;
         if (rec.workload.turns && rec.workload.turns > 1) s += ` | Turns: <strong>${rec.workload.turns}</strong>`;
         s += ` &nbsp;|&nbsp; Users: <strong>${rec.workload.users}</strong> &nbsp;|&nbsp; Tests: <strong>${rec.total_tests}</strong>`;
         if (rec.total_duration) s += ` &nbsp;|&nbsp; Duration: <strong>${rec.total_duration}</strong>`;
@@ -826,8 +826,8 @@ function buildTestSettingsSection(data) {
         islStdevC = rc.isl_stdev ? Math.round(rc.isl_stdev * cpt) : null;
         oslStdevC = rc.osl_stdev ? Math.round(rc.osl_stdev * cpt) : null;
     }
-    const islDisp = islChars.toLocaleString() + ' characters' + (islStdevC ? ' (&sigma;=' + islStdevC.toLocaleString() + ')' : '');
-    const oslDisp = oslChars.toLocaleString() + ' characters' + (oslStdevC ? ' (&sigma;=' + oslStdevC.toLocaleString() + ')' : '');
+    const islDisp = islChars.toLocaleString() + (islStdevC ? ' + &sigma;=' + islStdevC.toLocaleString() : '');
+    const oslDisp = oslChars.toLocaleString() + (oslStdevC ? ' + &sigma;=' + oslStdevC.toLocaleString() : '');
     const eppLabels = { balanced: 'Balanced', cache_optimized: 'Cache Optimized', queue_balanced: 'Queue Balanced', latency_aware: 'Latency Aware', custom: 'Custom' };
 
     const settSections = [
