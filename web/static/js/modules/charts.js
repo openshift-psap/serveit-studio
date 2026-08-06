@@ -87,10 +87,11 @@ function _renderChartsImpl(data, runId, content) {
                 h += '</div>';
             }
             if (opts.manifests && opts.manifests.length && opts.runId && opts.testId) {
+                var _ml = { lws: 'LWS', prefill: 'Prefill LWS', decode: 'Decode LWS', 'epp-configmap': 'EPP Config' };
                 h += '<div style="display:flex;align-items:center;flex-wrap:wrap;gap:4px;">';
                 opts.manifests.forEach(function(t) {
                     if (t.includes('service')) return;
-                    h += '<a href="/api/run/' + opts.runId + '/config/' + opts.testId + '/manifest/' + t + '" target="_blank" style="color:#0ea5e9;font-size:10px;padding:2px 6px;background:#f0f9ff;border-radius:4px;border:1px solid #bae6fd;font-weight:500;text-decoration:none;">' + t.toUpperCase() + '</a>';
+                    h += '<a href="/api/run/' + opts.runId + '/config/' + opts.testId + '/manifest/' + t + '" target="_blank" style="color:#0ea5e9;font-size:10px;padding:2px 6px;background:#f0f9ff;border-radius:4px;border:1px solid #bae6fd;font-weight:500;text-decoration:none;">' + (_ml[t] || t) + ' &#8595;</a>';
                 });
                 h += '</div>';
             }
@@ -600,8 +601,9 @@ function _renderChartsImpl(data, runId, content) {
             const pTestId = p.test_id || testIdLookup[p.config_name] || p.config_name;
             const mTypes = manifestLookup[pTestId];
             if (mTypes && mTypes.length) {
+                const mlabels2 = { lws: 'LWS', prefill: 'Prefill LWS', decode: 'Decode LWS', 'epp-configmap': 'EPP Config' };
                 manifestLinks = mTypes.filter(t => !t.includes('service')).map(t => {
-                    return `<a href="/api/run/${runId}/config/${pTestId}/manifest/${t}" title="Download ${t}.yaml" style="color:#0ea5e9; text-decoration:none; font-size:12px; padding:2px 6px; background:#f0f9ff; border-radius:4px; border:1px solid #bae6fd; margin:1px; display:inline-block;">${t}</a>`;
+                    return `<a href="/api/run/${runId}/config/${pTestId}/manifest/${t}" title="Download ${t}.yaml" target="_blank" style="color:#0ea5e9; text-decoration:none; font-size:11px; padding:2px 6px; background:#f0f9ff; border-radius:4px; border:1px solid #bae6fd; margin:1px; display:inline-block;">${mlabels2[t] || t} &#8595;</a>`;
                 }).join(' ');
             }
             const borderTop = idx > 0 ? ' border-top:2px solid #cbd5e1;' : '';
@@ -662,8 +664,9 @@ function _renderChartsImpl(data, runId, content) {
             const rTestId = r.test_id || testIdLookup[r.config_name] || r.config_name;
             let manifestLinks = '-';
             if (r.manifest_types && r.manifest_types.length > 0) {
+                const mlabels = { lws: 'LWS', prefill: 'Prefill LWS', decode: 'Decode LWS', 'epp-configmap': 'EPP Config' };
                 manifestLinks = r.manifest_types.filter(t => !t.includes('service')).map(t => {
-                    return `<a href="/api/run/${runId}/config/${rTestId}/manifest/${t}" title="Download ${t}.yaml" style="color:#0ea5e9; text-decoration:none; font-size:12px; padding:2px 6px; background:#f0f9ff; border-radius:4px; border:1px solid #bae6fd; margin:1px; display:inline-block;">${t}</a>`;
+                    return `<a href="/api/run/${runId}/config/${rTestId}/manifest/${t}" title="Download ${t}.yaml" target="_blank" style="color:#0ea5e9; text-decoration:none; font-size:11px; padding:2px 6px; background:#f0f9ff; border-radius:4px; border:1px solid #bae6fd; margin:1px; display:inline-block;">${mlabels[t] || t} &#8595;</a>`;
                 }).join(' ');
             }
             const na = 'N/A';

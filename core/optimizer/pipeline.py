@@ -389,16 +389,35 @@ class RecipeOptimizer(
 
     def _render_manifests_json(self, test_config: TestConfig) -> Optional[str]:
         """
-        Render LWS templates for a test config and return as JSON string.
+        Render LWS + EPP configmap templates for a test config and return as JSON string.
 
         Returns JSON dict of manifest_name -> rendered_yaml, e.g.:
-          Aggregated: {"lws": "...", "service": "..."}
-          PD: {"prefill": "...", "decode": "...", "prefill-service": "...", "decode-service": "..."}
+          Aggregated: {"lws": "...", "service": "...", "epp-configmap": "..."}
+          PD: {"prefill": "...", "decode": "...", "prefill-service": "...", "decode-service": "...", "epp-configmap": "..."}
         """
         try:
             import json
             tmgr = TemplateManager()
             manifests = tmgr.render_config(test_config)
+            # Add EPP configmap from run-level EPP config
+            epp_cfg = getattr(self.config, 'epp_config', None) or {}
+            epp_preset = getattr(self.config, 'epp_preset', 'balanced')
+            presets = {
+                'balanced': {'pcw':3,'kvw':2,'qw':2,'arw':2,'sw':0},
+                'cache_optimized': {'pcw':5,'kvw':1,'qw':2,'arw':1,'sw':0},
+                'queue_balanced': {'pcw':1,'kvw':1,'qw':3,'arw':3,'sw':0},
+                'latency_aware': {'pcw':3,'kvw':2,'qw':2,'arw':2,'sw':0},
+            }
+            w = presets.get(epp_preset, presets['balanced'])
+            ns = test_config.namespace or 'serveit'
+            manifests['epp-configmap'] = (
+                f"apiVersion: v1\nkind: ConfigMap\nmetadata:\n  name: scheduler-config\n  namespace: {ns}\ndata:\n  config.yaml: |\n"
+                f"    prefixCacheWeight: {w['pcw']}\n    kvCacheWeight: {w['kvw']}\n    queueWeight: {w['qw']}\n"
+                f"    activeRequestWeight: {w['arw']}\n    sloWeight: {w['sw']}\n"
+                f"    maxPrefixBlocksToMatch: {epp_cfg.get('maxPrefixBlocksToMatch', 256)}\n"
+                f"    lruCapacityPerServer: {epp_cfg.get('lruCapacityPerServer', 31250)}\n"
+                f"    nonCachedTokens: {epp_cfg.get('nonCachedTokens', 16)}\n"
+            )
             return json.dumps(manifests)
         except Exception as e:
             self.log(f"  ⚠️  Failed to render templates for DB: {e}", 'warning')
