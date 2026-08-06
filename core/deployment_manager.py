@@ -58,51 +58,63 @@ class DeploymentManager:
     def deploy_manifest(
         self,
         manifest_content: str,
-        log_callback: Optional[Callable[[str], None]] = None
+        log_callback: Optional[Callable[[str], None]] = None,
+        retries: int = 3
     ) -> bool:
         """
-        Deploy a manifest to Kubernetes.
+        Deploy a manifest to Kubernetes with retry on transient errors.
 
         Args:
             manifest_content: YAML manifest content
             log_callback: Optional callback for logging (func(message))
+            retries: Number of retries on transient failures (webhook EOF, etc.)
 
         Returns:
             True if deployment succeeded
         """
-        try:
-            if log_callback:
-                log_callback("📦 Applying manifest to cluster...")
+        for attempt in range(retries + 1):
+            try:
+                if log_callback and attempt == 0:
+                    log_callback("📦 Applying manifest to cluster...")
 
-            result = self.kubectl.run(
-                ['apply', '-f', '-', '-n', self.namespace],
-                input_data=manifest_content
-            )
+                result = self.kubectl.run(
+                    ['apply', '-f', '-', '-n', self.namespace],
+                    input_data=manifest_content
+                )
 
-            if log_callback:
-                log_callback(f"✅ {result.stdout.strip()}")
+                if log_callback:
+                    log_callback(f"✅ {result.stdout.strip()}")
 
-            logger.info(f"Manifest deployed successfully: {result.stdout.strip()}")
-            return True
+                logger.info(f"Manifest deployed successfully: {result.stdout.strip()}")
+                return True
 
-        except subprocess.CalledProcessError as e:
-            error_msg = f"kubectl apply failed (exit {e.returncode})"
-            logger.error(error_msg)
-            logger.error(f"stderr: {e.stderr}")
-            logger.error(f"manifest first 500 chars: {manifest_content[:500]}")
-            if log_callback:
-                log_callback(f"❌ {error_msg}")
-                # Show actual error from kubectl
-                if e.stderr:
-                    for line in e.stderr.strip().split('\n'):
-                        log_callback(f"   {line}")
-            return False
-        except Exception as e:
-            error_msg = f"Failed to deploy manifest: {str(e)}"
-            logger.error(error_msg)
-            if log_callback:
-                log_callback(f"❌ {error_msg}")
-            return False
+            except subprocess.CalledProcessError as e:
+                stderr = e.stderr or ''
+                is_transient = any(s in stderr for s in ['EOF', 'webhook', 'timeout', 'connection refused', 'TLS handshake'])
+                if is_transient and attempt < retries:
+                    wait = 5 * (attempt + 1)
+                    if log_callback:
+                        log_callback(f"⚠️  Transient error, retrying in {wait}s ({attempt + 1}/{retries})...")
+                    import time
+                    time.sleep(wait)
+                    continue
+
+                error_msg = f"kubectl apply failed (exit {e.returncode})"
+                logger.error(error_msg)
+                logger.error(f"stderr: {stderr}")
+                if log_callback:
+                    log_callback(f"❌ {error_msg}")
+                    if stderr:
+                        for line in stderr.strip().split('\n'):
+                            log_callback(f"   {line}")
+                return False
+            except Exception as e:
+                error_msg = f"Failed to deploy manifest: {str(e)}"
+                logger.error(error_msg)
+                if log_callback:
+                    log_callback(f"❌ {error_msg}")
+                return False
+        return False
 
     def deploy_config(
         self,
