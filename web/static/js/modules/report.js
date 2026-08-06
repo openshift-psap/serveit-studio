@@ -33,10 +33,15 @@ function loadRunList() {
                 const goal = goalMap[(run.goal || '').toLowerCase()] || run.goal || '?';
                 let workload = '';
                 if (run.isl && run.osl) {
-                    workload = `ISL=${run.isl}`;
-                    if (run.isl_stdev) workload += `±${run.isl_stdev}`;
-                    workload += ` OSL=${run.osl}`;
-                    if (run.osl_stdev) workload += `±${run.osl_stdev}`;
+                    let rcfg = null;
+                    try { rcfg = run.config_json ? JSON.parse(run.config_json) : null; } catch(e) {}
+                    const cpt2 = (rcfg && rcfg.chars_per_token) || 4.5;
+                    const dIsl = (rcfg && rcfg.isl_original_chars) || Math.round(run.isl * cpt2);
+                    const dOsl = (rcfg && rcfg.osl_original_chars) || Math.round(run.osl * cpt2);
+                    const dIslStd = run.isl_stdev ? ((rcfg && rcfg.isl_stdev_original_chars) || Math.round(run.isl_stdev * cpt2)) : null;
+                    workload = `${dIsl.toLocaleString()}`;
+                    if (dIslStd) workload += `+${dIslStd.toLocaleString()}`;
+                    workload += ` / ${dOsl.toLocaleString()}`;
                     if (run.turns && run.turns > 1) workload += ` ${run.turns}T`;
                 }
                 const users = run.num_users ? `${run.num_users}u` : '';
