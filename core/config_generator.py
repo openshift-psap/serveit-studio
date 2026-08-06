@@ -92,9 +92,10 @@ class TestConfig:
     gateway_class: str = 'istio'  # GatewayClass name (detected from cluster)
     exclusive_pf: bool = False  # 1 VF per PF — each pod gets dedicated NICs
 
-    # Storage: storage_class triggers LWS volumeClaimTemplates (per-replica PVC)
+    # Storage
     storage_class: Optional[str] = None
     pvc_size: Optional[str] = None  # e.g. '200Gi'
+    single_pvc: bool = False  # True = shared RWX PVC on all pods, False = per-replica PVC via volumeClaimTemplates
 
     # Benchmark load parameters
     request_type: str = 'constant'  # 'constant', 'concurrent', 'throughput', 'poisson'
