@@ -378,35 +378,41 @@ function buildCfgSection(runId, data, charts, allRes, hasPD) {
         s += '</table></div>';
     }
 
-    // All results table
-    if (allRes.length) {
+    // All results table (exclude step2/step3 calibration tests)
+    const coreRes = allRes.filter(r => {
+        const tid = r.test_id || '';
+        return tid.indexOf('step2-') !== 0 && tid.indexOf('step3-') !== 0;
+    });
+    if (coreRes.length) {
         const pn = new Set(charts.pareto.pareto_table.map(p => p.config_name));
         const tid = 'dl-all-configs';
-        s += `<div class="chart-box"><h3>All Results (sorted by TTFT)</h3><table id="${tid}"><tr>`;
-        s += `<th style="cursor:pointer;" onclick="sortReportTable('${tid}',0,'str')">Config &#x21C5;</th>`;
-        s += `<th style="cursor:pointer;" onclick="sortReportTable('${tid}',1,'str')">Arch &#x21C5;</th>`;
+        s += `<div class="chart-box"><h3>All Successful Configurations</h3>`;
+        s += `<p style="color:#64748b;font-size:0.9em;margin:0 0 8px;">Complete results from every test that ran successfully. <strong style="color:#059669;">Green highlighted rows</strong> are Pareto optimal.</p>`;
+        s += `<table id="${tid}"><tr>`;
+        s += `<th style="cursor:pointer;" onclick="sortReportTable('${tid}',0,'str')">Configuration &#x21C5;</th>`;
+        s += `<th style="cursor:pointer;" onclick="sortReportTable('${tid}',1,'str')">Architecture &#x21C5;</th>`;
         s += `<th style="cursor:pointer;" onclick="sortReportTable('${tid}',2,'num')">TTFT P90 &#x21C5;</th>`;
         s += `<th style="cursor:pointer;" onclick="sortReportTable('${tid}',3,'num')">TTFT P95 &#x21C5;</th>`;
         s += `<th style="cursor:pointer;" onclick="sortReportTable('${tid}',4,'num')">TTFT P99 &#x21C5;</th>`;
-        s += `<th style="cursor:pointer;" onclick="sortReportTable('${tid}',5,'num')">Tput P90 &#x21C5;</th>`;
-        s += `<th style="cursor:pointer;" onclick="sortReportTable('${tid}',6,'num')">Tput P95 &#x21C5;</th>`;
-        s += `<th style="cursor:pointer;" onclick="sortReportTable('${tid}',7,'num')">Tput P99 &#x21C5;</th>`;
-        s += `<th style="cursor:pointer;" onclick="sortReportTable('${tid}',8,'num')">ITL P90 &#x21C5;</th>`;
-        s += `<th style="cursor:pointer;" onclick="sortReportTable('${tid}',9,'num')">GPUs &#x21C5;</th>`;
-        s += `<th style="cursor:pointer;" onclick="sortReportTable('${tid}',10,'num')">Efficiency &#x21C5;</th>`;
+        s += `<th style="cursor:pointer;" onclick="sortReportTable('${tid}',5,'num')">Tput Mean &#x21C5;</th>`;
+        s += `<th style="cursor:pointer;" onclick="sortReportTable('${tid}',6,'num')">ITL P90 &#x21C5;</th>`;
+        s += `<th style="cursor:pointer;" onclick="sortReportTable('${tid}',7,'num')">GPUs &#x21C5;</th>`;
+        s += `<th style="cursor:pointer;" onclick="sortReportTable('${tid}',8,'num')">Efficiency &#x21C5;<br><span style="font-weight:400;font-size:0.75em;color:#64748b;">req/s per GPU</span></th>`;
         s += `<th>Manifests</th>`;
         s += '</tr>';
-        allRes.forEach(r => {
+        const mlabels = { lws: 'LWS', prefill: 'Prefill LWS', decode: 'Decode LWS', 'epp-configmap': 'EPP Config' };
+        coreRes.forEach(r => {
             const cls = pn.has(r.config_name) ? ' class="pareto"' : '';
             const na = 'N/A';
             const eppBadge = (r.test_id && r.test_id.startsWith('step11-epp-')) ? ' <span style="background:#7c3aed;color:white;font-size:0.65em;padding:1px 5px;border-radius:3px;">EPP TUNED</span>' : '';
             let manifestLinks = '-';
             if (r.manifest_types && r.manifest_types.length > 0) {
                 manifestLinks = r.manifest_types.filter(t => !t.includes('service')).map(t => {
-                    return `<a href="#" onclick="dlManifest('${r.test_id}','${t}');return false;" title="Download ${t}.yaml" style="color:#0ea5e9;text-decoration:none;font-size:11px;padding:2px 6px;background:#f0f9ff;border-radius:4px;border:1px solid #bae6fd;display:inline-block;margin:1px;cursor:pointer;">${t.toUpperCase()}</a>`;
+                    return `<a href="#" onclick="dlManifest('${r.test_id}','${t}');return false;" title="Download ${t}.yaml" style="color:#0ea5e9;text-decoration:none;font-size:11px;padding:2px 6px;background:#f0f9ff;border-radius:4px;border:1px solid #bae6fd;display:inline-block;margin:1px;cursor:pointer;">${mlabels[t] || t} &#8595;</a>`;
                 }).join(' ');
             }
-            s += `<tr${cls}><td>${r.config_name}${eppBadge}</td><td>${r.architecture}</td><td data-val="${r.ttft_p90}">${r.ttft_p90}</td><td data-val="${r.ttft_p95 ?? ''}">${r.ttft_p95 ?? na}</td><td data-val="${r.ttft_p99 ?? ''}">${r.ttft_p99 ?? na}</td><td data-val="${r.throughput_p90}">${r.throughput_p90}</td><td data-val="${r.throughput_p95 ?? ''}">${r.throughput_p95 ?? na}</td><td data-val="${r.throughput_p99 ?? ''}">${r.throughput_p99 ?? na}</td><td data-val="${r.itl_p90 ?? ''}">${r.itl_p90 ?? na}</td><td data-val="${r.gpus}">${r.gpus}</td><td data-val="${r.efficiency}">${r.efficiency}</td><td>${manifestLinks}</td></tr>`;
+            const tputMean = r.throughput_mean ?? r.throughput_p90 ?? na;
+            s += `<tr${cls}><td>${r.config_name}${eppBadge}</td><td>${r.architecture}</td><td data-val="${r.ttft_p90}">${r.ttft_p90}</td><td data-val="${r.ttft_p95 ?? ''}">${r.ttft_p95 ?? na}</td><td data-val="${r.ttft_p99 ?? ''}">${r.ttft_p99 ?? na}</td><td data-val="${tputMean}">${tputMean}</td><td data-val="${r.itl_p90 ?? ''}">${r.itl_p90 ?? na}</td><td data-val="${r.gpus}">${r.gpus}</td><td data-val="${r.efficiency}">${r.efficiency}</td><td>${manifestLinks}</td></tr>`;
         });
         s += '</table></div>';
     }
