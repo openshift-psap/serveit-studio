@@ -140,4 +140,7 @@ class TestResult:
     model_load_time_s: Optional[int] = None
     pod_timings: Optional[dict] = None
 
+    # Prefix cache hit rate (from Prometheus metrics)
+    cache_hit_pct: Optional[float] = None
+
 
