@@ -421,6 +421,14 @@ function updateUIFromConfig() {
         }
     }
 
+    // Restore single_pvc toggle
+    var singlePvcToggle = document.getElementById('single-pvc-toggle');
+    if (singlePvcToggle && config.single_pvc) {
+        singlePvcToggle.classList.add('active');
+        var singlePvcCb = document.getElementById('enable-single-pvc');
+        if (singlePvcCb) singlePvcCb.checked = true;
+    }
+
     // Restore cluster resources if available (Step 4)
     if (config.cluster_resources && currentStep >= 4) {
         restoreClusterResources();

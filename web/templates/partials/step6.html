@@ -190,15 +190,15 @@
                                         </div>
                                     </div>
 
-                                    <!-- Per-Node Storage toggle -->
-                                    <div id="per-node-storage-group" style="margin-top:16px; border-top:1px solid #e2e8f0; padding-top:12px;">
-                                        <div class="vllm-toggle" id="per-node-storage-toggle" onclick="var t=this;var on=!t.classList.contains('active');if(on)t.classList.add('active');else t.classList.remove('active');config.per_node_storage=on;saveConfig();">
-                                            <div style="font-size:1.5em;flex-shrink:0;">📦</div>
+                                    <!-- Single Shared PVC toggle -->
+                                    <div id="single-pvc-group" style="margin-top:16px; border-top:1px solid #e2e8f0; padding-top:12px;">
+                                        <div class="vllm-toggle" id="single-pvc-toggle" onclick="var t=this;var on=!t.classList.contains('active');if(on)t.classList.add('active');else t.classList.remove('active');config.single_pvc=on;saveConfig();">
+                                            <div style="font-size:1.5em;flex-shrink:0;">🔗</div>
                                             <div>
-                                                <div style="font-weight:600;color:#1e293b;font-size:0.95em;">Per-Node Storage</div>
-                                                <div style="color:#64748b;font-size:0.82em;margin-top:2px;">Each node gets its own NFS-backed PVC for model caching. Pods are automatically linked to their node's local NFS share via symlink. The model is downloaded once per node and shared by all pods on that node.</div>
+                                                <div style="font-weight:600;color:#1e293b;font-size:0.95em;">Single Shared PVC</div>
+                                                <div style="color:#64748b;font-size:0.82em;margin-top:2px;">All pods share one PVC (requires RWX storage class). When off, each pod gets its own PVC via LWS volumeClaimTemplates — recommended for local disks and better I/O isolation.</div>
                                             </div>
-                                            <input type="checkbox" id="enable-per-node-storage" style="display:none;">
+                                            <input type="checkbox" id="enable-single-pvc" style="display:none;">
                                             <div class="tgl-sw"></div>
                                         </div>
                                     </div>
@@ -212,10 +212,10 @@
                                                     Automatic Storage Setup
                                                 </div>
                                                 <div style="font-size: 14px; color: #6b7280; line-height: 1.6;">
-                                                    Storage setup and model download will begin automatically when you start the optimization in the next step. The system will:
+                                                    Storage setup and model download will begin automatically when you start the optimization. The system will:
                                                 </div>
                                                 <ul style="margin: 8px 0 0 20px; font-size: 14px; color: #6b7280; line-height: 1.8;">
-                                                    <li>Create PVC if it doesn't exist</li>
+                                                    <li>Create PVCs per replica (or shared PVC if Single Shared PVC is enabled)</li>
                                                     <li>Download model from HuggingFace (if not using existing PVC)</li>
                                                     <li>Validate model architecture and configuration</li>
                                                 </ul>
