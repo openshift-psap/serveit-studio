@@ -787,7 +787,7 @@ function _renderChartsImpl(data, runId, content) {
                 html += `<tr><td style="color:#64748b;padding:4px 16px;width:35%;white-space:nowrap;">${r[0]}</td><td style="padding:4px 16px;word-break:break-all;"><strong>${r[1]}</strong></td></tr>`;
             });
         });
-        html += '</table></div></div>';
+        html += '</table></div></div></div>';
 
         // Per-Config Tuning Comparison Table
         const allConfigs = [];
@@ -916,7 +916,6 @@ function _renderChartsImpl(data, runId, content) {
             html += '</table></div></div>';
         }
 
-        html += '</div></div>';
         secTestCfg = html; html = '';
     }
 
