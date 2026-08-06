@@ -452,15 +452,15 @@ class EPPTuningMixin:
 
             self.log(f"\n  --- EPP Tuning: {arch.upper()} (c={concurrency}) ---", 'decision')
 
-            # Compute per-architecture smart weights using measured Step 6/7 data
+            # Compute per-architecture pod count from DB rows (resume-safe)
             arch_pods = 1
-            if arch == 'pd' and self.pareto_results:
-                best_split = min(self.pareto_results, key=lambda x: x[1].ttft_p90 if x[1].ttft_p90 else 1e9)[0]
-                arch_pods = best_split.prefill_pods + best_split.decode_pods
-            elif arch == 'aggregated' and self.aggregated_tp:
-                arch_pods = self.config.total_gpus // self.aggregated_tp
-            elif arch == 'ep' and self.best_ep_config:
-                arch_pods = self.best_ep_config.prefill_pods + self.best_ep_config.decode_pods
+            if arch == 'pd' and pd_row:
+                arch_pods = pd_row[3] + pd_row[4]
+            elif arch == 'aggregated' and agg_row:
+                agg_tp_val = agg_row[1]
+                arch_pods = self.config.total_gpus // agg_tp_val if agg_tp_val else 1
+            elif arch == 'ep' and ep_row:
+                arch_pods = ep_row[3] + ep_row[4]
 
             prom_data = self._get_best_result_prom(arch)
             if not prom_data:
