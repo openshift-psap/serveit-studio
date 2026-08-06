@@ -670,10 +670,12 @@ function buildVLLMSection(charts, hasVLLM) {
 
 // ── EPP Tuning Tab (Step 9) ────────────────────────────────────────────────
 function buildEppTuningSection(runId, data) {
-    if (!data.epp_tuning || !data.epp_tuning.by_architecture) return '';
+    if (!data.epp_tuning) return '';
     const eppData = data.epp_tuning;
-    const archKeys = Object.keys(eppData.by_architecture);
-    if (!archKeys.some(k => (eppData.by_architecture[k] || []).length > 0)) return '';
+    const archKeys = Object.keys(eppData.by_architecture || {});
+    const hasTrials = archKeys.some(k => (eppData.by_architecture[k] || []).length > 0);
+    const hasSkipped = eppData.skipped_architectures && eppData.skipped_architectures.length > 0;
+    if (!hasTrials && !hasSkipped) return '';
 
     let s = '';
     archKeys.forEach((arch, archIdx) => {
@@ -713,6 +715,27 @@ function buildEppTuningSection(runId, data) {
         });
         s += '</table></div>';
     });
+
+    // Skipped architectures
+    if (eppData.skipped_architectures && eppData.skipped_architectures.length) {
+        const reasonLabels = {
+            'weights_match': { title: 'EPP tuning skipped — preset is optimal', desc: 'Smart weight derivation analyzed the measured Prometheus metrics (cache hit rate, KV pressure, queue depth) and concluded the current EPP preset weights are already optimal. No test needed.' },
+            'single_pod': { title: 'EPP tuning skipped — single pod', desc: 'This architecture uses a single inference pod. EPP routing optimization requires multiple pods to balance requests across.' },
+            'few_pods': { title: 'EPP tuning skipped — too few pods', desc: 'This architecture has 3 or fewer pods. Smart weight derivation adds noise with so few routing targets — using the user preset as-is.' },
+            'no_metrics': { title: 'EPP tuning skipped — no metrics', desc: 'No Prometheus metrics were available from the Step 6/7 tests for this architecture. Smart weight derivation requires measured data.' },
+            'not_tested': { title: 'EPP tuning not run', desc: 'This architecture was not tested during EPP tuning.' },
+        };
+        eppData.skipped_architectures.forEach(skip => {
+            const archLabel = (skip.arch || '').toUpperCase();
+            const info = reasonLabels[skip.reason] || reasonLabels['not_tested'];
+            s += `<div class="chart-box" style="border-left:4px solid #7c3aed;">`;
+            s += `<h3 style="color:#7c3aed;">Step 9: EPP Tuning &mdash; ${archLabel}</h3>`;
+            s += `<div style="background:#f0fdf4;border-radius:10px;padding:16px;border:1px solid #bbf7d0;">`;
+            s += `<div style="font-weight:700;color:#059669;">&#10004; ${info.title}</div>`;
+            s += `<div style="color:#475569;font-size:0.9em;margin-top:4px;">${info.desc}</div>`;
+            s += '</div></div>';
+        });
+    }
 
     return s;
 }
