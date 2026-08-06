@@ -921,8 +921,8 @@ function _renderChartsImpl(data, runId, content) {
                 ]},
             ];
 
-            html += '<div style="overflow-x:auto;"><table class="results-table" style="font-size:0.85em;">';
-            html += '<tr><th style="text-align:left;min-width:180px;">Parameter</th><th style="min-width:80px;">Default</th>';
+            html += '<div style="overflow-x:auto;"><table class="results-table" style="font-size:0.85em;table-layout:fixed;width:100%;">';
+            html += '<tr><th style="text-align:left;width:220px;">Parameter</th><th style="width:100px;">Default</th>';
             for (const arch of archOrder) {
                 const color = arch === 'AGGREGATED' ? '#6366f1' : arch === 'PD' ? '#0ea5e9' : '#10b981';
                 html += `<th style="color:${color};min-width:100px;">${arch}</th>`;
