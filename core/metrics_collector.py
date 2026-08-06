@@ -184,7 +184,6 @@ class MetricsCollector:
         ib_queries = [
             f'sum by (instance) (rate(node_infiniband_port_data_transmitted_bytes_total[{rate_window}]))',
             f'sum by (instance) (rate(node_infiniband_port_data_received_bytes_total[{rate_window}]))',
-            'sum by (instance) (node_infiniband_port_data_transmitted_bytes_total + node_infiniband_port_data_received_bytes_total)',
         ]
 
         for query in ib_queries:
