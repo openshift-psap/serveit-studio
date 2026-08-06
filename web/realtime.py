@@ -1848,9 +1848,6 @@ def handle_recreate_storage(data):
         storage_class = cfg.get('storage_class') or ''
         pvc_size = str(cfg.get('pvc_size') or '256').replace('Gi', '').replace('gi', '')
         pvc_name = cfg.get('pvc_name') or 'serveit-cache'
-        per_node_storage = cfg.get('per_node_storage', False)
-        node_nfs_pvcs = cfg.get('node_nfs_pvcs') or []
-
         # Use storage class from frontend if user selected one
         if data.get('storage_class'):
             storage_class = data['storage_class']
@@ -1888,139 +1885,41 @@ def handle_recreate_storage(data):
             return
 
         log_to_ui(f"💾 Recreating storage for run #{run_id} ({model_name})", 'info')
-        # Inherit per-node config from other runs in same namespace if this run doesn't have it
-        if not per_node_storage or not node_nfs_pvcs:
-            try:
-                with get_db() as conn:
-                    other_rows = conn.execute(
-                        'SELECT id, config_json FROM optimization_runs WHERE id != ? ORDER BY id DESC', (run_id,)
-                    ).fetchall()
-                for other in other_rows:
-                    if not other[1]:
-                        continue
-                    other_cfg = _json.loads(other[1])
-                    if other_cfg.get('namespace') == namespace and other_cfg.get('per_node_storage') and other_cfg.get('node_nfs_pvcs'):
-                        per_node_storage = True
-                        node_nfs_pvcs = other_cfg['node_nfs_pvcs']
-                        if not pvc_size or pvc_size == '256':
-                            pvc_size = str(other_cfg.get('pvc_size', '256')).replace('Gi', '').replace('gi', '')
-                        log_to_ui(f"   Inherited per-node storage config from run #{other[0]}", 'info')
-                        break
-            except Exception:
-                pass
-
         log_to_ui(f"   Namespace: {namespace}", 'info')
-        log_to_ui(f"   Storage: {'per-node NFS' if per_node_storage else 'shared PVC'} ({storage_class})", 'info')
+        log_to_ui(f"   Storage: {storage_class or 'shared PVC'}", 'info')
 
         from core.template_manager import TemplateManager
         tm = TemplateManager()
         kubectl_cmd = 'kubectl'
         test_id = f'storage-recreate-run{run_id}'
 
-        if per_node_storage and node_nfs_pvcs:
-            from core import PrereqManager
-            from core.k8s_utils import KubectlRunner
-            prereq = PrereqManager(namespace=namespace, kubectl_runner=KubectlRunner(namespace=namespace))
-            # Build a simple config object with the attrs _ensure_per_node_pvcs needs
-            class _Cfg:
-                pass
-            _cfg = _Cfg()
-            _cfg.storage_class = storage_class
-            _cfg.pvc_size = pvc_size
-            _cfg.node_nfs_pvcs = node_nfs_pvcs
-            prereq._ensure_per_node_pvcs(_cfg, log_callback=lambda msg: log_to_ui(msg, 'info'))
-
-            # Create serveit-cache PVC for benchmark results
-            import subprocess
-            r = subprocess.run([kubectl_cmd, 'get', 'pvc', pvc_name, '-n', namespace,
-                               '-o', 'jsonpath={.status.phase}'],
-                              capture_output=True, text=True, timeout=10, check=False)
-            pvc_phase = r.stdout.strip() if r.returncode == 0 else ''
-            if pvc_phase == 'Pending':
-                r_sc = subprocess.run([kubectl_cmd, 'get', 'pvc', pvc_name, '-n', namespace,
-                                      '-o', 'jsonpath={.spec.storageClassName}'],
-                                     capture_output=True, text=True, timeout=10, check=False)
-                existing_sc = r_sc.stdout.strip() if r_sc.returncode == 0 else 'unknown'
-                log_to_ui(f"   ❌ PVC {pvc_name} exists but is Pending (storage class: {existing_sc})", 'error')
-                log_to_ui(f"   Delete it manually first: kubectl delete pvc {pvc_name} -n {namespace}", 'error')
-                emit('recreate_storage_done', {'run_id': run_id, 'error': f'PVC {pvc_name} is stuck in Pending state (storage class: {existing_sc}). Delete it manually and retry.'})
-                return
-            if not pvc_phase or r.returncode != 0:
-                pvc_yaml = tm.render_template('prereq/model-cache-pvc.yaml.j2',
-                    pvc_name=pvc_name, namespace=namespace, test_id=test_id,
-                    model_name=model_name, storage_class=storage_class,
-                    storage_size=pvc_size, pvc_access_mode='ReadWriteMany')
-                r_pvc = subprocess.run([kubectl_cmd, 'apply', '-f', '-', '-n', namespace],
-                              input=pvc_yaml, capture_output=True, text=True, timeout=30, check=False)
-                if r_pvc.returncode == 0:
-                    log_to_ui(f"   ✅ Created PVC {pvc_name}", 'info')
-                else:
-                    log_to_ui(f"   ❌ Failed to create PVC {pvc_name}: {r_pvc.stderr.strip()[:200]}", 'error')
-            else:
-                log_to_ui(f"   ✓ PVC {pvc_name} already exists", 'info')
-
-            # Download model to per-node NFS
-            job_name = f'model-download-recreate-{run_id}'
-            job_yaml = tm.render_template('prereq/model-download-pernode-job.yaml.j2',
-                job_name=job_name, namespace=namespace, test_id=test_id,
-                model_name=model_name, node_nfs_pvcs=node_nfs_pvcs, hf_token=hf_token)
-            subprocess.run([kubectl_cmd, 'delete', 'job', job_name, '-n', namespace, '--ignore-not-found'],
-                          capture_output=True, text=True, timeout=15, check=False)
-            subprocess.run([kubectl_cmd, 'apply', '-f', '-', '-n', namespace],
-                          input=job_yaml, capture_output=True, text=True, timeout=30, check=False)
-            log_to_ui(f"   🚀 Model download job started ({job_name})", 'info')
-            def _wait_for_job():
-                import subprocess as _sp
-                log_to_ui(f"   ⏳ Waiting for model download to complete...", 'info')
-                for _ in range(1800):
-                    gsleep(5)
-                    r = _sp.run(['kubectl', 'get', 'job', job_name, '-n', namespace,
-                                 '-o', 'jsonpath={.status.succeeded},{.status.failed}'],
-                                capture_output=True, text=True, timeout=10, check=False)
-                    parts = r.stdout.strip().split(',')
-                    succeeded = parts[0] if parts else ''
-                    failed = parts[1] if len(parts) > 1 else ''
-                    if succeeded == '1':
-                        log_to_ui(f"   ✅ Model download completed", 'success')
-                        socketio.emit('recreate_storage_done', {'run_id': run_id})
-                        return
-                    if failed and failed != '' and int(failed) > 0:
-                        log_to_ui(f"   ❌ Model download failed", 'error')
-                        socketio.emit('recreate_storage_done', {'run_id': run_id, 'error': 'Download job failed'})
-                        return
-                log_to_ui(f"   ⚠️  Model download timed out (2.5h)", 'warning')
-                socketio.emit('recreate_storage_done', {'run_id': run_id, 'error': 'Timed out'})
-            spawn(_wait_for_job)
+        # Create serveit-cache PVC for benchmark results
+        import subprocess
+        r = subprocess.run([kubectl_cmd, 'get', 'pvc', pvc_name, '-n', namespace,
+                           '-o', 'jsonpath={.status.phase}'],
+                          capture_output=True, text=True, timeout=10, check=False)
+        pvc_phase = r.stdout.strip() if r.returncode == 0 else ''
+        if pvc_phase == 'Pending':
+            r_sc = subprocess.run([kubectl_cmd, 'get', 'pvc', pvc_name, '-n', namespace,
+                                  '-o', 'jsonpath={.spec.storageClassName}'],
+                                 capture_output=True, text=True, timeout=10, check=False)
+            existing_sc = r_sc.stdout.strip() if r_sc.returncode == 0 else 'unknown'
+            log_to_ui(f"   ❌ PVC {pvc_name} exists but is Pending (storage class: {existing_sc})", 'error')
+            emit('recreate_storage_done', {'run_id': run_id, 'error': f'PVC {pvc_name} is stuck in Pending state (storage class: {existing_sc}). Delete it manually and retry.'})
             return
-        else:
-            # Regular shared PVC
-            import subprocess
-            r = subprocess.run([kubectl_cmd, 'get', 'pvc', pvc_name, '-n', namespace,
-                               '-o', 'jsonpath={.status.phase}'],
-                              capture_output=True, text=True, timeout=10, check=False)
-            pvc_phase = r.stdout.strip() if r.returncode == 0 else ''
-            if pvc_phase == 'Pending':
-                r_sc = subprocess.run([kubectl_cmd, 'get', 'pvc', pvc_name, '-n', namespace,
-                                      '-o', 'jsonpath={.spec.storageClassName}'],
-                                     capture_output=True, text=True, timeout=10, check=False)
-                existing_sc = r_sc.stdout.strip() if r_sc.returncode == 0 else 'unknown'
-                log_to_ui(f"   ❌ PVC {pvc_name} exists but is Pending (storage class: {existing_sc})", 'error')
-                log_to_ui(f"   Delete it manually first: kubectl delete pvc {pvc_name} -n {namespace}", 'error')
-                emit('recreate_storage_done', {'run_id': run_id, 'error': f'PVC {pvc_name} is stuck in Pending state (storage class: {existing_sc}). Delete it manually and retry.'})
-                return
-            if not pvc_phase or r.returncode != 0:
-                pvc_yaml = tm.render_template('prereq/model-cache-pvc.yaml.j2',
-                    pvc_name=pvc_name, namespace=namespace, test_id=test_id,
-                    model_name=model_name, storage_class=storage_class,
-                    storage_size=pvc_size, pvc_access_mode='ReadWriteMany')
-                r_pvc = subprocess.run([kubectl_cmd, 'apply', '-f', '-', '-n', namespace],
-                              input=pvc_yaml, capture_output=True, text=True, timeout=30, check=False)
-                if r_pvc.returncode == 0:
-                    log_to_ui(f"   ✅ Created PVC {pvc_name}", 'info')
-                else:
-                    log_to_ui(f"   ❌ Failed to create PVC {pvc_name}: {r_pvc.stderr.strip()[:200]}", 'error')
+        if not pvc_phase or r.returncode != 0:
+            pvc_yaml = tm.render_template('prereq/model-cache-pvc.yaml.j2',
+                pvc_name=pvc_name, namespace=namespace, test_id=test_id,
+                model_name=model_name, storage_class=storage_class,
+                storage_size=pvc_size, pvc_access_mode='ReadWriteMany')
+            r_pvc = subprocess.run([kubectl_cmd, 'apply', '-f', '-', '-n', namespace],
+                          input=pvc_yaml, capture_output=True, text=True, timeout=30, check=False)
+            if r_pvc.returncode == 0:
+                log_to_ui(f"   ✅ Created PVC {pvc_name}", 'info')
             else:
-                log_to_ui(f"   ✓ PVC {pvc_name} already exists", 'info')
+                log_to_ui(f"   ❌ Failed to create PVC {pvc_name}: {r_pvc.stderr.strip()[:200]}", 'error')
+        else:
+            log_to_ui(f"   ✓ PVC {pvc_name} already exists", 'info')
 
             # Download model
             job_name = f'model-download-recreate-{run_id}'

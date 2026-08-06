@@ -1033,14 +1033,7 @@ class TestOrchestrator(ParserMixin, GuidellmMixin):
                         self.metrics_collector.session.headers['Authorization'] = f'Bearer {token}'
                     logger.info(f"Prometheus reconnected at {new_url}")
 
-            # Update the pod_name_pattern — per_node_storage uses stable LWS names
-            if getattr(config, 'per_node_storage', False):
-                if config.architecture == 'aggregated':
-                    self.metrics_collector.config.pod_name_pattern = f'aggregated-tp{config.tensor_parallelism}'
-                else:
-                    self.metrics_collector.config.pod_name_pattern = f'(prefill-tp{getattr(config, "prefill_tp", config.tensor_parallelism)}|decode-tp{getattr(config, "decode_tp", config.tensor_parallelism)})'
-            else:
-                self.metrics_collector.config.pod_name_pattern = config.test_id
+            self.metrics_collector.config.pod_name_pattern = config.test_id
 
             # Collect metrics
             self.metrics_collector.collect_all_metrics(
