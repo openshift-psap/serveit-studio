@@ -25,6 +25,82 @@ function _renderChartsImpl(data, runId, content) {
     let html = '';
     let secRec = '', secTP = '', secCfg = '', secCmp = '', secStep9 = '', secCal = '', secCacheSweep = '', secVLLM = '', secTestCfg = '', secEppTuning = '', secDeployTiming = '', secPareto = '', secTraffic = '';
 
+    // Shared recommendation card builder
+    function _buildRecCard(opts) {
+        // opts: label, icon, desc, color, archKey, deploy, tput, gpus, conc,
+        //       ttft_p90, ttft_p95, ttft_p99, itl_p90, itl_p95, itl_p99,
+        //       recId, testId, manifests, runId, extraBadges (array of {text, bg, color}),
+        //       extraInfo
+        var archColors = { pd: '#2563eb', aggregated: '#059669', ep: '#7c3aed' };
+        var aColor = archColors[opts.archKey] || '#64748b';
+        var archLabel = (opts.archKey || 'aggregated').toUpperCase();
+
+        var h = '';
+        h += '<div style="background:white;border-radius:12px;overflow:hidden;box-shadow:0 1px 3px rgba(0,0,0,0.08);border:2px solid #cbd5e1;">';
+
+        // Header
+        h += '<div style="background:linear-gradient(135deg,' + opts.color + ',' + opts.color + 'cc);padding:10px 14px;color:white;">';
+        h += '<div style="display:flex;align-items:center;justify-content:space-between;">';
+        h += '<div>';
+        h += '<div style="font-weight:700;font-size:0.85em;">' + (opts.icon || '') + ' ' + opts.label + '</div>';
+        h += '<div style="display:flex;gap:4px;margin-top:2px;">';
+        h += '<div style="font-size:0.65em;background:' + aColor + ';padding:2px 6px;border-radius:10px;font-weight:600;">' + archLabel + '</div>';
+        if (opts.extraBadges) {
+            opts.extraBadges.forEach(function(b) {
+                h += '<div style="font-size:0.65em;background:' + (b.bg || 'rgba(255,255,255,0.2)') + ';color:' + (b.color || 'white') + ';padding:2px 6px;border-radius:10px;font-weight:600;">' + b.text + '</div>';
+            });
+        }
+        h += '</div>';
+        h += '</div></div>';
+        if (opts.desc) h += '<div style="font-size:0.7em;opacity:0.9;margin-top:1px;">' + opts.desc + '</div>';
+        h += '</div>';
+
+        // Body
+        h += '<div style="padding:12px 14px;">';
+        h += '<div style="font-size:1.1em;font-weight:800;color:#0f172a;margin-bottom:8px;">' + (opts.deploy || '') + '</div>';
+
+        // Metrics line
+        h += '<div style="display:flex;gap:12px;font-size:0.85em;color:#475569;margin-bottom:4px;">';
+        if (opts.tput != null) h += '<span>Throughput: <strong>' + (typeof opts.tput === 'number' ? opts.tput.toFixed(2) + ' req/s' : opts.tput) + '</strong></span>';
+        if (opts.gpus) h += '<span>GPUs: <strong>' + opts.gpus + '</strong></span>';
+        if (opts.conc) h += '<span style="color:#0ea5e9;font-weight:600;">' + opts.conc + '</span>';
+        h += '</div>';
+
+        // Extra info line (for EPP weights etc)
+        if (opts.extraInfo) h += '<div style="font-size:0.8em;color:#7c3aed;margin-top:2px;">' + opts.extraInfo + '</div>';
+
+        // Percentile table
+        h += '<table style="width:100%;font-size:0.8em;border-collapse:collapse;margin-top:6px;">';
+        h += '<tr style="color:#94a3b8;font-weight:600;"><td></td><td>TTFT</td><td>ITL</td></tr>';
+        h += '<tr><td style="font-weight:600;color:#475569;">P90</td><td style="font-weight:700;color:#1e293b;">' + (opts.ttft_p90 != null ? Math.round(opts.ttft_p90).toLocaleString() + ' ms' : '-') + '</td><td>' + (opts.itl_p90 ? opts.itl_p90 + ' ms' : '-') + '</td></tr>';
+        if (opts.ttft_p95) h += '<tr><td style="font-weight:600;color:#475569;">P95</td><td style="color:#64748b;">' + Math.round(opts.ttft_p95).toLocaleString() + ' ms</td><td>' + (opts.itl_p95 ? opts.itl_p95 + ' ms' : '-') + '</td></tr>';
+        if (opts.ttft_p99) h += '<tr><td style="font-weight:600;color:#475569;">P99</td><td style="color:#64748b;">' + Math.round(opts.ttft_p99).toLocaleString() + ' ms</td><td>' + (opts.itl_p99 ? opts.itl_p99 + ' ms' : '-') + '</td></tr>';
+        h += '</table>';
+
+        // Action buttons
+        if (opts.recId || (opts.manifests && opts.manifests.length)) {
+            h += '<div style="margin-top:10px;padding-top:8px;border-top:1px solid #f1f5f9;">';
+            if (opts.recId) {
+                h += '<div style="display:flex;gap:6px;margin-bottom:6px;">';
+                h += '<button onclick="applyReportConfig(\'' + opts.recId + '\')" style="flex:1;background:' + opts.color + '0a;border:1.5px solid ' + opts.color + '40;border-radius:6px;padding:5px 8px;font-size:11px;font-weight:600;color:' + opts.color + ';cursor:pointer;" onmouseover="this.style.background=\'' + opts.color + '15\'" onmouseout="this.style.background=\'' + opts.color + '0a\'">&#128260; Reuse</button>';
+                h += '<button onclick="showSingleTestModal(\'' + opts.recId + '\')" style="flex:1;background:#f8fafc;border:1.5px solid #e2e8f0;border-radius:6px;padding:5px 8px;font-size:11px;font-weight:600;color:#475569;cursor:pointer;" onmouseover="this.style.background=\'#f1f5f9\'" onmouseout="this.style.background=\'#f8fafc\'">&#129514; Test</button>';
+                h += '</div>';
+            }
+            if (opts.manifests && opts.manifests.length && opts.runId && opts.testId) {
+                h += '<div style="display:flex;align-items:center;flex-wrap:wrap;gap:4px;">';
+                opts.manifests.forEach(function(t) {
+                    if (t.includes('service')) return;
+                    h += '<a href="/api/run/' + opts.runId + '/config/' + opts.testId + '/manifest/' + t + '" target="_blank" style="color:#0ea5e9;font-size:10px;padding:2px 6px;background:#f0f9ff;border-radius:4px;border:1px solid #bae6fd;font-weight:500;text-decoration:none;">' + t.toUpperCase() + '</a>';
+                });
+                h += '</div>';
+            }
+            h += '</div>';
+        }
+
+        h += '</div></div>';
+        return h;
+    }
+
     // Filter out calibration, sweep tests, and discarded tests from configuration charts
     var coreResults = (data.all_results || []).filter(function(r) {
         if (r.quality === 'discard') return false;
@@ -151,77 +227,31 @@ function _renderChartsImpl(data, runId, content) {
                 const gpus = cfg.gpus || cfg.total_gpus;
                 const tputMean = cfg.throughput_mean || cfg.throughput || cfg.throughput_p90 || '-';
 
-                // Card container with colored top accent
-                html += `<div style="background:white;border-radius:12px;overflow:hidden;box-shadow:0 1px 3px rgba(0,0,0,0.08),0 1px 2px rgba(0,0,0,0.06);border:2px solid #cbd5e1;">`;
+                // Extract percentile data from best_by_percentile
+                const _p90d = ((bp.p90 || {})[archKey] || {})[sel.key] || (bp.p90 || {})[archKey] || {};
+                const _p95d = ((bp.p95 || {})[archKey] || {})[sel.key] || (bp.p95 || {})[archKey] || {};
+                const _p99d = ((bp.p99 || {})[archKey] || {})[sel.key] || (bp.p99 || {})[archKey] || {};
 
-                // Colored header bar
-                html += `<div style="background:linear-gradient(135deg,${sel.color},${sel.color}cc);padding:12px 16px;color:white;">`;
-                const aColor = archColors[archKey] || '#64748b';
-                const archLabel = archKey.toUpperCase();
-                html += `<div style="display:flex;align-items:center;justify-content:space-between;">`;
-                html += `<div style="font-weight:700;font-size:0.9em;letter-spacing:0.3px;">${sel.icon} ${sel.label}</div>`;
-                html += `<div style="display:flex;gap:4px;">`;
-                html += `<div style="font-size:0.68em;background:${aColor};padding:2px 8px;border-radius:10px;font-weight:600;">${archLabel}</div>`;
-                if (dupNote) html += `<div style="font-size:0.68em;opacity:0.85;background:rgba(255,255,255,0.2);padding:2px 8px;border-radius:10px;">+ ${dupNote}</div>`;
-                html += `</div></div>`;
-                html += `<div style="font-size:0.75em;opacity:0.9;margin-top:2px;">${sel.desc}</div>`;
-                html += `</div>`;
-
-                // Body
-                html += `<div style="padding:16px;">`;
-
-                // Deploy config — large and prominent
-                html += `<div style="font-size:1.2em;font-weight:800;color:#0f172a;padding-bottom:10px;border-bottom:1px solid #e2e8f0;margin-bottom:10px;">${deploy}</div>`;
-
-                // Key metrics row
-                html += `<div style="display:flex;gap:12px;margin:0 0 12px;">`;
-                html += `<div style="flex:1;text-align:center;padding:8px;background:#f8fafc;border-radius:8px;border:2px solid #cbd5e1;">`;
-                html += `<div style="font-size:0.7em;color:#64748b;text-transform:uppercase;letter-spacing:0.5px;margin-bottom:2px;">Throughput</div>`;
-                html += `<div style="font-size:1.1em;font-weight:700;color:#0f172a;">${tputMean} <span style="font-size:0.7em;font-weight:400;color:#64748b;">req/s</span></div>`;
-                html += `</div>`;
-                html += `<div style="flex:1;text-align:center;padding:8px;background:#f8fafc;border-radius:8px;border:2px solid #cbd5e1;">`;
-                html += `<div style="font-size:0.7em;color:#64748b;text-transform:uppercase;letter-spacing:0.5px;margin-bottom:2px;">GPUs</div>`;
-                html += `<div style="font-size:1.1em;font-weight:700;color:#0f172a;">${gpus}</div>`;
-                html += `</div>`;
-                html += `</div>`;
-
-                // P90/P95/P99 table in a bordered box
-                html += '<div style="border:2px solid #cbd5e1;border-radius:8px;overflow:hidden;margin-bottom:12px;">';
-                html += '<div style="background:#f8fafc;padding:6px 8px;font-size:0.75em;font-weight:600;color:#64748b;text-transform:uppercase;letter-spacing:0.5px;text-align:center;border-bottom:2px solid #cbd5e1;">Latency Percentiles</div>';
-                html += '<table style="width:100%;border-collapse:collapse;font-size:0.82em;">';
-                html += '<tr style="background:#f8fafc;"><th style="text-align:center;padding:6px 8px;color:#94a3b8;font-weight:500;font-size:0.9em;"></th><th style="text-align:center;padding:6px 8px;color:#94a3b8;font-weight:500;font-size:0.9em;">TTFT</th><th style="text-align:center;padding:6px 8px;color:#94a3b8;font-weight:500;font-size:0.9em;">ITL</th></tr>';
-                ['p90', 'p95', 'p99'].forEach((p, pi) => {
-                    const pArchData = (bp[p] || {})[archKey] || {};
-                    const pCfg = pArchData[sel.key] || pArchData;
-                    const ttft = pCfg ? (pCfg.ttft || pCfg['ttft_' + p]) : null;
-                    const itl = pCfg ? (pCfg.itl || pCfg['itl_' + p]) : null;
-                    const bg = pi % 2 === 0 ? 'white' : '#fafbfc';
-                    html += `<tr style="background:${bg};border-top:1px solid #f1f5f9;"><td style="text-align:center;padding:6px 8px;font-weight:600;color:#334155;">${p.toUpperCase()}</td>`;
-                    html += `<td style="text-align:center;padding:6px 8px;color:#1e293b;">${ttft != null ? '<strong>' + ttft + '</strong> ms' : '<span style="color:#cbd5e1;">-</span>'}</td>`;
-                    html += `<td style="text-align:center;padding:6px 8px;color:#1e293b;">${itl != null ? '<strong>' + itl + '</strong> ms' : '<span style="color:#cbd5e1;">-</span>'}</td></tr>`;
-                });
-                html += '</table></div>';
-
-                // Action buttons
-                html += '<div style="border-top:1px solid #e2e8f0;margin-bottom:10px;"></div>';
-                html += `<div style="display:flex;gap:8px;">`;
-                html += `<button onclick="applyReportConfig('${recId}')" style="flex:1;background:${sel.color}0a;border:1.5px solid ${sel.color}40;border-radius:8px;padding:6px 8px;cursor:pointer;color:${sel.color};font-size:12px;font-weight:600;transition:all 0.15s;" onmouseover="this.style.background='${sel.color}18';this.style.borderColor='${sel.color}'" onmouseout="this.style.background='${sel.color}0a';this.style.borderColor='${sel.color}40'">&#128260; Reuse</button>`;
-                html += `<button onclick="showSingleTestModal('${recId}')" style="flex:1;background:#f8fafc;border:1.5px solid #e2e8f0;border-radius:8px;padding:6px 8px;cursor:pointer;color:#64748b;font-size:12px;font-weight:600;transition:all 0.15s;" onmouseover="this.style.background='#f1f5f9';this.style.borderColor='#94a3b8'" onmouseout="this.style.background='#f8fafc';this.style.borderColor='#e2e8f0'">&#129514; Test</button>`;
-                html += `</div>`;
-
-                // YAML downloads
                 const recTestId = cfg.test_id || testIdLookup[cfg.config_name] || cfg.config_name;
                 const recManifests = manifestLookup[recTestId] || cfg.manifest_types || [];
-                if (recManifests.length) {
-                    html += '<div style="margin-top:10px;padding-top:8px;border-top:1px solid #f1f5f9;display:flex;align-items:center;flex-wrap:wrap;gap:4px;">';
-                    html += '<span style="font-size:0.72em;color:#94a3b8;">YAML</span>';
-                    recManifests.filter(t => !t.includes('service')).forEach(t => {
-                        html += `<a href="/api/run/${runId}/config/${recTestId}/manifest/${t}" style="color:#0ea5e9;text-decoration:none;font-size:11px;padding:2px 8px;background:#f0f9ff;border-radius:4px;border:1px solid #bae6fd;font-weight:500;">${t}</a>`;
-                    });
-                    html += '</div>';
-                }
 
-                html += '</div></div>'; // close body + card
+                const badges = [];
+                if (dupNote) badges.push({ text: '+ ' + dupNote, bg: 'rgba(255,255,255,0.2)', color: 'white' });
+
+                html += _buildRecCard({
+                    label: sel.label, icon: sel.icon, desc: sel.desc, color: sel.color,
+                    archKey: archKey, deploy: deploy,
+                    tput: tputMean, gpus: gpus || '?',
+                    ttft_p90: _p90d.ttft || _p90d.ttft_p90,
+                    ttft_p95: _p95d.ttft || _p95d.ttft_p95,
+                    ttft_p99: _p99d.ttft || _p99d.ttft_p99,
+                    itl_p90: _p90d.itl || _p90d.itl_p90,
+                    itl_p95: _p95d.itl || _p95d.itl_p95,
+                    itl_p99: _p99d.itl || _p99d.itl_p99,
+                    recId: recId, testId: recTestId,
+                    manifests: recManifests, runId: runId,
+                    extraBadges: badges.length ? badges : null
+                });
             });
 
             html += '</div>';
@@ -265,71 +295,50 @@ function _renderChartsImpl(data, runId, content) {
                 html += '<div style="margin-top:24px; border:2px solid #7c3aed; border-left:6px solid #7c3aed; border-radius:10px; overflow:hidden;">';
                 html += '<div style="background:linear-gradient(135deg,#7c3aed,#8b5cf6); color:white; padding:14px 20px; font-size:1.1em; font-weight:800;">EPP-Optimized Recommendation (Step 9)</div>';
                 html += '<div style="padding:12px 20px 4px; color:#475569; font-size:0.9em;">These results use the same deployment as above but with tuned EPP scoring weights. The gateway routes requests more efficiently, improving latency without changing the inference pods.</div>';
-                html += '<div style="padding:16px 20px;">';
+                html += '<div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(280px, 1fr)); gap:16px; padding:16px 20px;">';
 
-                // Render row by row for each percentile — both architectures sorted by TTFT
-                ['p90', 'p95', 'p99'].forEach(p => {
-                    const pLabel = p.toUpperCase();
-                    html += `<div style="display:grid; grid-template-columns:1fr 1fr; gap:16px; margin-bottom:12px;">`;
+                // Best EPP config per architecture (best P90 TTFT)
+                ['aggregated', 'pd'].forEach(function(arch) {
+                    const trials = eppArch[arch] || [];
+                    if (!trials.length) return;
+                    const best = trials.reduce(function(a, b) { return ((a.ttft_p90 || Infinity) < (b.ttft_p90 || Infinity)) ? a : b; });
+                    if (!best || !best.ttft_p90) return;
 
-                    // Collect best EPP result per architecture at this percentile
-                    const candidates = [];
-                    ['aggregated', 'pd'].forEach(arch => {
-                        const trials = eppArch[arch] || [];
-                        if (!trials.length) return;
-                        const best = trials.reduce((a, b) => ((a[`ttft_${p}`] || Infinity) < (b[`ttft_${p}`] || Infinity)) ? a : b);
-                        if (best && best[`ttft_${p}`]) {
-                            candidates.push({ arch, best });
-                        }
+                    const w = best.weights || {};
+                    const eppId = 'epp-' + arch + '-best';
+                    const recArch = arch === 'pd' ? 'pd' : 'aggregated';
+                    window._recConfigs[eppId] = { ...best, architecture: recArch, test_settings: _baseTestSettings };
+
+                    let deployLabel;
+                    if ((arch === 'pd' || arch === 'ep') && best.prefill_pods) {
+                        deployLabel = best.prefill_tp === best.decode_tp
+                            ? `${best.prefill_pods}P+${best.decode_pods}D TP=${best.prefill_tp || best.tp || '?'}`
+                            : `${best.prefill_pods}P+${best.decode_pods}D PTP=${best.prefill_tp || best.tp || '?'} DTP=${best.decode_tp || '?'}`;
+                    } else if (best.replicas) {
+                        deployLabel = `${best.replicas} Aggregated pods, TP=${best.tp || '?'}`;
+                    } else {
+                        deployLabel = best.config_name;
+                    }
+
+                    const concStr = best.concurrency ? `c=${best.concurrency}` : '';
+                    const tputMean = best.throughput_mean || best.throughput_p90;
+                    const eppWeights = `EPP: ${best.name} (${w.prefix_cache || '?'}:${w.kv_cache || '?'}:${w.queue || '?'})`;
+
+                    const eppTestId = best.test_id || best.config_name;
+                    const eppManifests = best.manifest_types || manifestLookup[eppTestId] || [];
+
+                    html += _buildRecCard({
+                        label: 'Best TTFT P90', icon: '&#9201;', desc: 'Best EPP-tuned latency', color: '#7c3aed',
+                        archKey: recArch, deploy: deployLabel,
+                        tput: tputMean, gpus: best.gpus || best.total_gpus || '?',
+                        conc: concStr,
+                        ttft_p90: best.ttft_p90, ttft_p95: best.ttft_p95, ttft_p99: best.ttft_p99,
+                        itl_p90: best.itl_p90, itl_p95: best.itl_p95, itl_p99: best.itl_p99,
+                        recId: eppId, testId: eppTestId,
+                        manifests: eppManifests, runId: runId,
+                        extraBadges: [{ text: 'EPP TUNED', bg: '#7c3aed', color: 'white' }],
+                        extraInfo: eppWeights
                     });
-                    // Sort by TTFT — best (lowest) first
-                    candidates.sort((a, b) => (a.best[`ttft_${p}`] || Infinity) - (b.best[`ttft_${p}`] || Infinity));
-
-                    candidates.forEach(({arch, best}, ci) => {
-                        const w = best.weights || {};
-                        const archLabel = arch.toUpperCase();
-                        const eppId = `epp-${arch}-${p}`;
-                        const recArch = arch === 'pd' ? 'pd' : 'aggregated';
-                        window._recConfigs[eppId] = { ...best, architecture: recArch, test_settings: _baseTestSettings };
-
-                        const borderStyle = ci === 0 ? '3px solid #7c3aed; border-left:6px solid #7c3aed' : '2px solid #7c3aed40; border-left:5px solid #7c3aed80';
-                        const winnerBadge = ci === 0 ? '<span style="background:#059669; color:white; font-size:0.65em; padding:2px 6px; border-radius:3px; margin-left:6px;">BEST TTFT</span>' : '';
-
-                        let deployLabel;
-                        if ((arch === 'pd' || arch === 'ep') && best.prefill_pods) {
-                            deployLabel = best.prefill_tp === best.decode_tp
-                                ? `${best.prefill_pods}P+${best.decode_pods}D TP=${best.prefill_tp || best.tp || '?'}`
-                                : `${best.prefill_pods}P+${best.decode_pods}D PTP=${best.prefill_tp || best.tp || '?'} DTP=${best.decode_tp || '?'}`;
-                        } else if (best.replicas) {
-                            deployLabel = `${best.replicas} Aggregated pods, TP=${best.tp || '?'}`;
-                        } else {
-                            deployLabel = best.config_name;
-                        }
-
-                        html += `<div style="background:white; border:${borderStyle}; border-radius:10px; padding:16px; position:relative;">`;
-                        html += `<div style="position:absolute;top:12px;right:12px;display:flex;gap:4px;">`;
-                        html += `<button onclick="applyReportConfig('${eppId}')" title="Use this configuration" style="background:none;border:1.5px solid #d1d5db;border-radius:6px;padding:4px 8px;cursor:pointer;color:#6b7280;font-size:14px;display:flex;align-items:center;gap:4px;transition:all 0.15s;" onmouseover="this.style.borderColor='#2563eb';this.style.color='#2563eb';this.style.background='#eff6ff'" onmouseout="this.style.borderColor='#d1d5db';this.style.color='#6b7280';this.style.background='none'">&#128260; Reuse</button>`;
-                        html += `<button onclick="showSingleTestModal('${eppId}')" title="Run this exact configuration" style="background:none;border:1.5px solid #d1d5db;border-radius:6px;padding:4px 8px;cursor:pointer;color:#6b7280;font-size:14px;display:flex;align-items:center;gap:4px;transition:all 0.15s;" onmouseover="this.style.borderColor='#8b5cf6';this.style.color='#8b5cf6';this.style.background='#f5f3ff'" onmouseout="this.style.borderColor='#d1d5db';this.style.color='#6b7280';this.style.background='none'">&#129514; Test</button>`;
-                        html += `</div>`;
-                        html += `<div style="font-weight:800; color:#7c3aed; font-size:0.85em; text-transform:uppercase; margin-bottom:8px;">&#9201; TTFT ${pLabel} <span style="background:#7c3aed; color:white; font-size:0.7em; padding:2px 8px; border-radius:4px; margin-left:6px;">EPP TUNED</span> <span style="background:#64748b; color:white; font-size:0.65em; padding:2px 6px; border-radius:3px; margin-left:4px;">${archLabel}</span>${winnerBadge}</div>`;
-                        html += `<div style="font-size:1.3em; font-weight:800; color:#1e293b; margin-bottom:4px;">${deployLabel}</div>`;
-                        const concStr = best.concurrency ? ` | c=${best.concurrency}` : '';
-                        const tputMean = best.throughput_mean || best.throughput_p90;
-                        html += `<div style="font-size:0.9em; color:#475569;">TTFT ${pLabel}: <strong>${best[`ttft_${p}`]} ms</strong> | Throughput Mean: <strong>${tputMean} req/s</strong>${concStr}</div>`;
-                        html += `<div style="font-size:0.8em; color:#7c3aed; margin-top:4px;">EPP: ${best.name} (${w.prefix_cache || '?'}:${w.kv_cache || '?'}:${w.queue || '?'})</div>`;
-                        if (best.manifest_types && best.manifest_types.length) {
-                            html += '<div style="margin-top:8px;">';
-                            best.manifest_types.forEach(t => {
-                                html += `<a href="/api/run/${runId}/config/${best.test_id}/manifest/${t}" style="color:#7c3aed;text-decoration:none;font-size:11px;padding:2px 6px;background:#f5f3ff;border-radius:4px;border:1px solid #c4b5fd;display:inline-block;">${t}</a> `;
-                            });
-                            html += '</div>';
-                        }
-                        html += '</div>';
-                    });
-                    // Fill empty slot if only one architecture
-                    if (candidates.length < 2) html += '<div></div>';
-
-                    html += '</div>'; // Close row grid
                 });
 
                 html += '</div></div>';
@@ -354,8 +363,6 @@ function _renderChartsImpl(data, runId, content) {
             { key: 'highest_tput', label: 'Highest Throughput', desc: 'Maximum req/s at calibrated load', color: '#f59e0b', icon: '&#9889;' },
             { key: 'most_efficient', label: 'Most Efficient', desc: 'Best throughput per GPU', color: '#8b5cf6', icon: '&#128176;' },
         ];
-        const archColors2 = { pd: '#2563eb', aggregated: '#059669', ep: '#7c3aed' };
-
         const calSeen = new Set();
         calTypes.forEach(sel => {
             const cfg = calBest[sel.key];
@@ -371,7 +378,6 @@ function _renderChartsImpl(data, runId, content) {
             calSeen.add(calId);
 
             const archKey = cfg.architecture || 'aggregated';
-            const aColor = archColors2[archKey] || '#64748b';
 
             let deploy;
             if (cfg.prefill_pods && cfg.decode_pods) {
@@ -385,31 +391,26 @@ function _renderChartsImpl(data, runId, content) {
             const concStr = cfg.concurrency ? `c=${cfg.concurrency}` : '';
             const tput = cfg.throughput_mean || cfg.throughput_p90 || '-';
 
-            html += `<div style="background:white;border-radius:12px;overflow:hidden;box-shadow:0 1px 3px rgba(0,0,0,0.08);border:2px solid #cbd5e1;">`;
-            html += `<div style="background:linear-gradient(135deg,${sel.color},${sel.color}cc);padding:10px 14px;color:white;">`;
-            html += `<div style="display:flex;align-items:center;justify-content:space-between;">`;
-            html += `<div style="font-weight:700;font-size:0.85em;">${sel.icon} ${sel.label}</div>`;
-            html += `<div style="display:flex;gap:4px;">`;
-            html += `<div style="font-size:0.65em;background:${aColor};padding:2px 6px;border-radius:10px;font-weight:600;">${archKey.toUpperCase()}</div>`;
-            if (dupNote) html += `<div style="font-size:0.65em;opacity:0.85;background:rgba(255,255,255,0.2);padding:2px 6px;border-radius:10px;">+ ${dupNote}</div>`;
-            html += `</div></div>`;
-            html += `<div style="font-size:0.7em;opacity:0.9;margin-top:1px;">${sel.desc}</div>`;
-            html += `</div>`;
-            html += `<div style="padding:12px 14px;">`;
-            html += `<div style="font-size:1.1em;font-weight:800;color:#0f172a;margin-bottom:8px;">${deploy}</div>`;
-            html += `<div style="display:flex;gap:12px;font-size:0.85em;color:#475569;margin-bottom:4px;">`;
-            html += `<span>Throughput: <strong>${typeof tput === 'number' ? tput + ' req/s' : tput}</strong></span>`;
-            html += `<span>GPUs: <strong>${cfg.gpus || '?'}</strong></span>`;
-            if (concStr) html += `<span style="color:#0ea5e9;font-weight:600;">${concStr}</span>`;
-            html += `</div>`;
-            // Latency percentiles table
-            html += `<table style="width:100%;font-size:0.8em;border-collapse:collapse;margin-top:6px;">`;
-            html += `<tr style="color:#94a3b8;font-weight:600;"><td></td><td>TTFT</td><td>ITL</td></tr>`;
-            html += `<tr><td style="font-weight:600;color:#475569;">P90</td><td style="font-weight:700;color:#1e293b;">${cfg.ttft_p90 ? Math.round(cfg.ttft_p90).toLocaleString() + ' ms' : '-'}</td><td>${cfg.itl_p90 ? cfg.itl_p90 + ' ms' : '-'}</td></tr>`;
-            if (cfg.ttft_p95) html += `<tr><td style="font-weight:600;color:#475569;">P95</td><td style="color:#64748b;">${Math.round(cfg.ttft_p95).toLocaleString()} ms</td><td>${cfg.itl_p95 ? cfg.itl_p95 + ' ms' : '-'}</td></tr>`;
-            if (cfg.ttft_p99) html += `<tr><td style="font-weight:600;color:#475569;">P99</td><td style="color:#64748b;">${Math.round(cfg.ttft_p99).toLocaleString()} ms</td><td>${cfg.itl_p99 ? cfg.itl_p99 + ' ms' : '-'}</td></tr>`;
-            html += `</table>`;
-            html += `</div></div>`;
+            const calRecId = 'cal-' + archKey + '-' + sel.key;
+            window._recConfigs[calRecId] = { ...cfg, architecture: archKey, model: rec ? rec.model : '', image: (data.run_config || {}).image, test_settings: cfg.test_settings };
+
+            const calTestId = cfg.test_id || testIdLookup[cfg.config_name] || cfg.config_name;
+            const calManifests = manifestLookup[calTestId] || cfg.manifest_types || [];
+
+            const badges = [];
+            if (dupNote) badges.push({ text: '+ ' + dupNote, bg: 'rgba(255,255,255,0.2)', color: 'white' });
+
+            html += _buildRecCard({
+                label: sel.label, icon: sel.icon, desc: sel.desc, color: sel.color,
+                archKey: archKey, deploy: deploy,
+                tput: tput, gpus: cfg.gpus || '?',
+                conc: concStr,
+                ttft_p90: cfg.ttft_p90, ttft_p95: cfg.ttft_p95, ttft_p99: cfg.ttft_p99,
+                itl_p90: cfg.itl_p90, itl_p95: cfg.itl_p95, itl_p99: cfg.itl_p99,
+                recId: calRecId, testId: calTestId,
+                manifests: calManifests, runId: runId,
+                extraBadges: badges.length ? badges : null
+            });
         });
 
         html += '</div></div>';
