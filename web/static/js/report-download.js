@@ -587,12 +587,12 @@ function buildStep9Section(data) {
 
 // ── Calibrated Load Tab (Step 11) ───────────────────────────────────────────
 function buildCalSection(data) {
-    if (!data.calibrated_qps) return '';
     const cal = data.calibrated_qps;
+    const calBest = data.summary && data.summary.calibrated_best;
+    if (!cal && !calBest) return '';
     let s = '';
 
     // Calibrated Recommendation cards (same design as Deployment Recommendation)
-    const calBest = data.summary && data.summary.calibrated_best;
     if (calBest) {
         const bp = data.recommendation ? data.recommendation.best_by_percentile || {} : {};
         const calTypes = [
@@ -663,7 +663,7 @@ function buildCalSection(data) {
     }
 
     // GPU sizing analysis
-    if (cal.gpu_sizing) {
+    if (cal && cal.gpu_sizing) {
         const g = cal.gpu_sizing;
         s += '<div style="padding:12px 20px;background:#ecfdf5;border:1px solid #6ee7b7;border-radius:8px;margin-bottom:16px;font-size:0.9em;color:#065f46;">';
         s += '<div style="font-weight:700;margin-bottom:8px;">Cluster Capacity Analysis</div>';
@@ -681,13 +681,14 @@ function buildCalSection(data) {
 
     // Percentile breakdown table
     const entries = [];
-    if (cal.pd) entries.push({ label: 'PD', entry: cal.pd });
-    if (cal.aggregated) entries.push({ label: 'Aggregated', entry: cal.aggregated });
-    if (cal.ep) entries.push({ label: 'EP', entry: cal.ep });
-    if (cal.epp_pd) entries.push({ label: 'PD (EPP Tuned)', entry: cal.epp_pd });
-    if (cal.epp_agg) entries.push({ label: 'Aggregated (EPP Tuned)', entry: cal.epp_agg });
-
-    const dlRequestedRps = cal.requested_rps != null ? cal.requested_rps : null;
+    if (cal) {
+        if (cal.pd) entries.push({ label: 'PD', entry: cal.pd });
+        if (cal.aggregated) entries.push({ label: 'Aggregated', entry: cal.aggregated });
+        if (cal.ep) entries.push({ label: 'EP', entry: cal.ep });
+        if (cal.epp_pd) entries.push({ label: 'PD (EPP Tuned)', entry: cal.epp_pd });
+        if (cal.epp_agg) entries.push({ label: 'Aggregated (EPP Tuned)', entry: cal.epp_agg });
+    }
+    const dlRequestedRps = cal && cal.requested_rps != null ? cal.requested_rps : null;
     const rpsLabel = dlRequestedRps != null ? ` at ${Math.round(dlRequestedRps)} concurrent` : '';
 
     if (entries.length) {
@@ -712,14 +713,14 @@ function buildCalSection(data) {
     }
 
     // Overload impact
-    const primary = cal.pd || cal.ep;
-    const primaryLabel = cal.pd ? 'PD' : 'EP';
-    const dlOverload = cal.overloaded_pd || cal.overloaded_ep;
+    const primary = cal ? (cal.pd || cal.ep) : null;
+    const primaryLabel = cal && cal.pd ? 'PD' : 'EP';
+    const dlOverload = cal ? (cal.overloaded_pd || cal.overloaded_ep) : null;
     if (dlOverload && primary) {
         s += `<div class="chart-box"><h3>Overload Impact: ${primaryLabel} at Calibrated vs Overloaded Load</h3>`;
         s += '<table><tr><th>Configuration</th><th>Load</th><th>TTFT P90</th><th>Throughput P90</th></tr>';
         s += `<tr><td><strong>${primaryLabel} (calibrated)</strong></td><td>${dlRequestedRps != null ? Math.round(dlRequestedRps) + ' concurrent' : '-'}</td><td style="color:#059669;font-weight:700;">${primary.ttft_p90} ms</td><td style="color:#059669;font-weight:700;">${primary.throughput_p90} req/s</td></tr>`;
-        s += `<tr><td><strong>${primaryLabel} (overloaded)</strong></td><td>${cal.concurrency != null ? cal.concurrency + ' concurrent' : '-'}</td><td style="color:#94a3b8;">${dlOverload.ttft_p90} ms</td><td style="color:#94a3b8;">${dlOverload.throughput_p90} req/s</td></tr>`;
+        s += `<tr><td><strong>${primaryLabel} (overloaded)</strong></td><td>${cal && cal.concurrency != null ? cal.concurrency + ' concurrent' : '-'}</td><td style="color:#94a3b8;">${dlOverload.ttft_p90} ms</td><td style="color:#94a3b8;">${dlOverload.throughput_p90} req/s</td></tr>`;
         s += '</table></div>';
     }
 
