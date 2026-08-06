@@ -213,8 +213,8 @@ class ReportAnalyzer:
                 })
             return entry
 
-        # For TTFT: only consider results at ≥50% of user concurrency
-        min_conc = int(user_concurrency * 0.5) if user_concurrency else 1
+        # For TTFT: only consider results at ≥75% of user concurrency
+        min_conc = int(user_concurrency * 0.75) if user_concurrency else 1
         ttft_eligible = [r for r in sweep if (_get_conc(r) or 0) >= min_conc]
         if not ttft_eligible:
             ttft_eligible = sweep
