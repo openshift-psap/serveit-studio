@@ -809,9 +809,10 @@ function _renderChartsImpl(data, runId, content) {
         const hasEpConfig = allConfigs.some(c => c.arch === 'EP');
 
         if (allConfigs.length > 0) {
-            html += '<div style="margin-top:24px;">';
-            html += '<div style="font-weight:700;font-size:1.05em;color:#1e293b;margin-bottom:8px;padding:8px 12px;background:#ecfdf5;border:1px solid #059669;border-radius:4px;text-align:center;">Tuned Settings vs Upstream Defaults</div>';
-            html += '<div style="font-size:0.85em;color:#64748b;margin-bottom:12px;text-align:center;">Green = auto-tuned by ServeIt Studio. Gray = upstream default (unchanged).</div>';
+            html += '<div class="chart-card" style="margin-top:24px;">';
+            html += '<div class="chart-card-header">Tuned Settings vs Upstream Defaults</div>';
+            html += '<div style="font-size:0.85em;color:#64748b;padding:8px 20px;text-align:center;">Green = auto-tuned by ServeIt Studio. Gray = upstream default (unchanged).</div>';
+            html += '<div class="chart-card-body" style="padding:0;">';
 
             const hasEp = hasEpConfig;
             const na = '<span style="color:#cbd5e1;">N/A</span>';
@@ -913,7 +914,7 @@ function _renderChartsImpl(data, runId, content) {
                 }
             }
 
-            html += '</table></div></div>';
+            html += '</table></div></div></div>';
         }
 
         secTestCfg = html; html = '';
