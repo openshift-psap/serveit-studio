@@ -60,6 +60,12 @@ def log_to_ui(message: str, log_type: str = 'info', run_id: int = None, job_name
                    VALUES (?, ?, ?, ?, ?, ?)''',
                 (datetime.now().isoformat(), log_type, message, run_id, job_name, session_id)
             )
+            # Trim old logs to prevent unbounded growth (keep last 5000)
+            conn.execute('''
+                DELETE FROM console_logs WHERE id NOT IN (
+                    SELECT id FROM console_logs ORDER BY id DESC LIMIT 5000
+                )
+            ''')
     except Exception as e:
         # Don't fail the operation if logging fails, but print error
         print(f"Warning: Failed to persist log to database: {e}")
