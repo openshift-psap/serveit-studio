@@ -39,9 +39,10 @@ function loadRunList() {
                     const dIsl = (rcfg && rcfg.isl_original_chars) || Math.round(run.isl * cpt2);
                     const dOsl = (rcfg && rcfg.osl_original_chars) || Math.round(run.osl * cpt2);
                     const dIslStd = run.isl_stdev ? ((rcfg && rcfg.isl_stdev_original_chars) || Math.round(run.isl_stdev * cpt2)) : null;
-                    workload = `${dIsl.toLocaleString()}`;
-                    if (dIslStd) workload += `+${dIslStd.toLocaleString()}`;
-                    workload += ` / ${dOsl.toLocaleString()}`;
+                    workload = `${run.isl}`;
+                    if (run.isl_stdev) workload += `+${run.isl_stdev}`;
+                    workload += ` (${dIsl.toLocaleString()} chars)`;
+                    workload += ` / ${run.osl} (${dOsl.toLocaleString()} chars)`;
                     if (run.turns && run.turns > 1) workload += ` ${run.turns}T`;
                 }
                 const users = run.num_users ? `${run.num_users}u` : '';
