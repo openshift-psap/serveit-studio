@@ -151,10 +151,11 @@ function buildRecSection(runId, data, rec, summary, best, allRes) {
         s += `<div style="border:3px solid ${gc};border-left:8px solid ${gc};border-radius:10px;margin:20px 0;overflow:hidden;">`;
         s += `<div style="background:${gc};color:white;padding:14px 20px;font-size:1.3em;font-weight:800;">Deployment Recommendation <span style="font-size:0.7em;font-weight:400;opacity:0.85;">&mdash; ${rec.goal_info.name}</span></div>`;
         s += `<div style="background:${gc}dd;color:white;padding:8px 20px;font-size:0.92em;">`;
-        const wCpt = rec.workload.chars_per_token || 4.5;
-        const wIslC = rec.workload.isl_original_chars || Math.round(rec.workload.isl * wCpt);
-        const wOslC = rec.workload.osl_original_chars || Math.round(rec.workload.osl * wCpt);
-        const wIslStdC = rec.workload.isl_stdev ? (rec.workload.length_unit === 'characters' ? rec.workload.isl_stdev : Math.round(rec.workload.isl_stdev * wCpt)) : null;
+        const rc2 = data.run_config || {};
+        const wCpt = rec.workload.chars_per_token || rc2.chars_per_token || 4.5;
+        const wIslC = rec.workload.isl_original_chars || rc2.isl_original_chars || Math.round(rec.workload.isl * wCpt);
+        const wOslC = rec.workload.osl_original_chars || rc2.osl_original_chars || Math.round(rec.workload.osl * wCpt);
+        const wIslStdC = rec.workload.isl_stdev ? (rec.workload.isl_stdev_original_chars || (rc2.isl_stdev_original_chars) || Math.round(rec.workload.isl_stdev * wCpt)) : null;
         s += `Model: <strong>${rec.model}</strong> &nbsp;|&nbsp; Prompt: <strong>${wIslC.toLocaleString()} chars</strong>`;
         if (wIslStdC) s += ` (&sigma;=${wIslStdC.toLocaleString()})`;
         s += ` | Output: <strong>${wOslC.toLocaleString()} chars</strong>`;
