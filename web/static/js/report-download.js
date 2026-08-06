@@ -816,111 +816,73 @@ function buildTestSettingsSection(data) {
     const advVal = (key, fallback) => { const s = adv[key]; return s && s.mode === 'custom' && s.value != null ? s.value : (fallback != null ? fallback : 'auto'); };
     const advToggle = (key, fallback) => { const s = adv[key]; return s ? (s.mode === 'on' ? 'On' : s.mode === 'off' ? 'Off' : fallback) : fallback; };
 
-    let s = '<div class="chart-box"><h3>User Defined Test Settings</h3>';
-    s += '<p style="font-size:0.9em;color:#475569;">All settings configured for this optimization run. These apply to every test &mdash; only the architecture, TP values, and pod counts vary between tests.</p>';
-    s += '<div class="section-grid">';
-
-    // Left: Workload + Search Strategy
-    s += '<div>';
-    s += '<div class="section-hdr" style="border-bottom:2px solid #10b981;">Workload</div><div style="line-height:2.2;margin-bottom:20px;">';
-    s += `<div><span style="color:#64748b;">Model:</span> <strong>${rc.model_name || na}</strong></div>`;
     const cpt = rc.chars_per_token || 4.5;
     let islChars, oslChars, islStdevC, oslStdevC;
     if (rc.length_unit === 'characters' && rc.isl_original_chars) {
-        islChars = rc.isl_original_chars;
-        oslChars = rc.osl_original_chars;
-        islStdevC = rc.isl_stdev_original_chars;
-        oslStdevC = rc.osl_stdev_original_chars;
+        islChars = rc.isl_original_chars; oslChars = rc.osl_original_chars;
+        islStdevC = rc.isl_stdev_original_chars; oslStdevC = rc.osl_stdev_original_chars;
     } else {
-        islChars = Math.round(rc.isl * cpt);
-        oslChars = Math.round(rc.osl * cpt);
+        islChars = Math.round(rc.isl * cpt); oslChars = Math.round(rc.osl * cpt);
         islStdevC = rc.isl_stdev ? Math.round(rc.isl_stdev * cpt) : null;
         oslStdevC = rc.osl_stdev ? Math.round(rc.osl_stdev * cpt) : null;
     }
-    s += `<div><span style="color:#64748b;">Prompt Length:</span> ${islChars.toLocaleString()} characters${islStdevC ? ' (&sigma;=' + islStdevC.toLocaleString() + ')' : ''}</div>`;
-    s += `<div><span style="color:#64748b;">Prompt Output:</span> ${oslChars.toLocaleString()} characters${oslStdevC ? ' (&sigma;=' + oslStdevC.toLocaleString() + ')' : ''}</div>`;
-    s += `<div><span style="color:#64748b;">Concurrent Users:</span> ${rc.qps != null ? Math.round(rc.qps) : na}</div>`;
-    s += `<div><span style="color:#64748b;">Rate Type:</span> ${rc.rate_type || 'concurrent'}</div>`;
-    s += `<div><span style="color:#64748b;">Test Duration:</span> ${rc.test_duration || 300}s</div>`;
-    s += `<div><span style="color:#64748b;">Stop Mode:</span> ${rc.stop_mode || 'duration'}</div>`;
-    if (rc.max_requests) s += `<div><span style="color:#64748b;">Max Requests:</span> ${rc.max_requests}</div>`;
-    if (rc.turns > 1) s += `<div><span style="color:#64748b;">Turns:</span> ${rc.turns}</div>`;
-    s += `<div><span style="color:#64748b;">Workload Mode:</span> ${rc.workload_mode || 'synthetic'}</div>`;
-    if (rc.dataset_source) s += `<div><span style="color:#64748b;">Dataset:</span> <span style="word-break:break-all;">${rc.dataset_source}</span></div>`;
-    if (rc.dataset_column) s += `<div><span style="color:#64748b;">Dataset Column:</span> ${rc.dataset_column}</div>`;
-    if (rc.prefix_cache_hit_pct > 0) s += `<div><span style="color:#64748b;">Prefix Cache Hit:</span> ${rc.prefix_cache_hit_pct}%</div>`;
-    s += '</div>';
+    const islDisp = islChars.toLocaleString() + ' characters' + (islStdevC ? ' (&sigma;=' + islStdevC.toLocaleString() + ')' : '');
+    const oslDisp = oslChars.toLocaleString() + ' characters' + (oslStdevC ? ' (&sigma;=' + oslStdevC.toLocaleString() + ')' : '');
+    const eppLabels = { balanced: 'Balanced', cache_optimized: 'Cache Optimized', queue_balanced: 'Queue Balanced', latency_aware: 'Latency Aware', custom: 'Custom' };
 
-    s += '<div class="section-hdr" style="border-bottom:2px solid #6366f1;">Search Strategy</div><div style="line-height:2.2;">';
-    s += `<div><span style="color:#64748b;">Optimization Goal:</span> <strong>${(rc.objective || 'ttft').toUpperCase()}</strong></div>`;
-    s += `<div><span style="color:#64748b;">Total GPUs:</span> ${rc.total_gpus || na}</div>`;
-    s += `<div><span style="color:#64748b;">TP Options:</span> ${(rc.tp_options || []).join(', ') || na}</div>`;
-    s += `<div><span style="color:#64748b;">TP Pair Breadth:</span> Top-${rc.tp_pair_top_n || 4}</div>`;
-    s += `<div><span style="color:#64748b;">P/D Ratio Search:</span> ${rc.pd_search_mode === 'exhaustive' ? 'Exhaustive' : 'Smart'}</div>`;
-    s += `<div><span style="color:#64748b;">Use Achievable Concurrency:</span> ${rc.use_achievable_qps ? 'Yes' : 'No'}</div>`;
-    s += `<div><span style="color:#64748b;">Headroom:</span> ${rc.headroom || 1.3}x</div>`;
-    if (rc.latency_constraint_enabled) {
-        s += `<div><span style="color:#64748b;">Latency SLA:</span> ${rc.latency_constraint_ms}ms @ ${rc.latency_constraint_percentile}</div>`;
-    } else {
-        s += `<div><span style="color:#64748b;">Latency SLA:</span> Disabled</div>`;
-    }
-    s += '</div></div>';
-
-    // Right: Infrastructure + Advanced + EPP
-    s += '<div>';
-    s += '<div class="section-hdr" style="border-bottom:2px solid #f59e0b;">Infrastructure</div><div style="line-height:2.2;margin-bottom:20px;">';
-    s += `<div><span style="color:#64748b;">Image:</span> <span style="word-break:break-all;font-size:0.9em;">${rc.image || na}</span></div>`;
-    if (rc.scheduler_image) s += `<div><span style="color:#64748b;">Scheduler Image:</span> <span style="word-break:break-all;font-size:0.9em;">${rc.scheduler_image}</span></div>`;
-    s += `<div><span style="color:#64748b;">Namespace:</span> ${rc.namespace || na}</div>`;
-    s += `<div><span style="color:#64748b;">PVC:</span> ${rc.pvc_name || na}</div>`;
-    s += `<div><span style="color:#64748b;">Network Type:</span> ${rc.network_type || na}</div>`;
-    s += `<div><span style="color:#64748b;">NCCL IB HCA:</span> ${rc.nccl_ib_hca || na}</div>`;
-    if (rc.rdma_nics_per_node) s += `<div><span style="color:#64748b;">RDMA NICs/Node:</span> ${rc.rdma_nics_per_node}</div>`;
-    s += '</div>';
-
-    // Component Versions
+    const settSections = [
+        { title: 'Workload', color: '#059669', rows: [
+            ['Model', rc.model_name || na], ['Prompt Length', islDisp], ['Prompt Output', oslDisp],
+            ['Concurrent Users', rc.qps != null ? Math.round(rc.qps) : na],
+            ['Rate Type', rc.rate_type || 'concurrent'], ['Test Duration', (rc.test_duration || 300) + 's'],
+            ['Stop Mode', rc.stop_mode || 'duration'],
+            rc.max_requests ? ['Max Requests', rc.max_requests] : null,
+            rc.turns > 1 ? ['Turns', rc.turns] : null,
+            ['Workload Mode', rc.workload_mode || 'synthetic'],
+            rc.dataset_source ? ['Dataset', '<span style="word-break:break-all;font-size:0.9em;">' + rc.dataset_source + '</span>'] : null,
+            rc.prefix_cache_hit_pct > 0 ? ['Prefix Cache Hit', rc.prefix_cache_hit_pct + '%'] : null,
+        ]},
+        { title: 'Search Strategy', color: '#4f46e5', rows: [
+            ['Optimization Goal', (rc.objective || 'ttft').toUpperCase()],
+            ['Total GPUs', rc.total_gpus || na], ['TP Options', (rc.tp_options || []).join(', ') || na],
+            ['TP Pair Breadth', 'Top-' + (rc.tp_pair_top_n || 4)],
+            ['P/D Ratio Search', rc.pd_search_mode === 'exhaustive' ? 'Exhaustive' : 'Adaptive'],
+            ['Auto-Scale Concurrency', rc.use_achievable_qps ? 'Yes' : 'No'],
+            ['Headroom', (rc.headroom || 1.3) + 'x'],
+            ['Latency SLA', rc.latency_constraint_enabled ? rc.latency_constraint_ms + 'ms @ ' + rc.latency_constraint_percentile : 'Disabled'],
+        ]},
+        { title: 'Infrastructure', color: '#d97706', rows: [
+            ['Inference Image', '<span style="word-break:break-all;font-size:0.9em;">' + (rc.image || na) + '</span>'],
+            rc.scheduler_image ? ['Scheduler Image', '<span style="word-break:break-all;font-size:0.9em;">' + rc.scheduler_image + '</span>'] : null,
+            ['Namespace', rc.namespace || na], ['PVC', rc.pvc_name || na],
+            ['Network Type', rc.network_type || na], ['NCCL IB HCA', rc.nccl_ib_hca || na],
+            rc.rdma_nics_per_node ? ['RDMA NICs/Node', rc.rdma_nics_per_node] : null,
+        ]},
+        { title: 'EPP Configuration', color: '#6d28d9', rows: [
+            ['Scoring Preset', eppLabels[rc.epp_preset] || rc.epp_preset || 'Balanced'],
+            ['EPP Tuning', rc.epp_benchmark ? 'Enabled' : 'Disabled'],
+            rc.epp_config && rc.epp_config.maxPrefixBlocksToMatch ? ['Max Prefix Blocks', rc.epp_config.maxPrefixBlocksToMatch] : null,
+            rc.epp_config && rc.epp_config.lruCapacityPerServer ? ['LRU Capacity/Server', rc.epp_config.lruCapacityPerServer] : null,
+        ]},
+    ];
     if (data.infra_versions && Object.keys(data.infra_versions).length > 0) {
         const iv = data.infra_versions;
-        const vLabels = { openshift: 'OpenShift', k8s: 'Kubernetes', gpu_operator: 'GPU Operator', gpu_driver: 'GPU Driver', cuda_runtime: 'CUDA Runtime', network_operator: 'Network Operator', mofed: 'MOFED/DOCA', istio: 'Istio', service_mesh: 'Service Mesh', epp: 'EPP Scheduler', nfd: 'NFD', lws: 'LWS' };
-        s += '<div class="section-hdr" style="border-bottom:2px solid #059669;">Component Versions</div><div style="line-height:2.2;margin-bottom:20px;">';
-        Object.keys(iv).forEach(k => {
-            if (iv[k]) s += `<div><span style="color:#64748b;">${vLabels[k] || k}:</span> ${iv[k]}</div>`;
+        const vLabels = { openshift:'OpenShift', k8s:'Kubernetes', gpu_operator:'GPU Operator', gpu_driver:'GPU Driver', cuda_runtime:'CUDA Runtime', network_operator:'Network Operator', mofed:'MOFED/DOCA', istio:'Istio', service_mesh:'Service Mesh', epp:'EPP Scheduler', nfd:'NFD', lws:'LWS' };
+        const vRows = [];
+        Object.keys(iv).forEach(k => { if (iv[k]) vRows.push([vLabels[k] || k, iv[k]]); });
+        settSections.push({ title: 'Component Versions', color: '#059669', rows: vRows });
+    }
+
+    let s = '<div class="chart-box"><h3>User Defined Test Settings</h3>';
+    s += '<table><tbody>';
+    settSections.forEach(section => {
+        s += `<tr><td colspan="2" style="background:#f1f5f9;font-weight:700;color:${section.color};padding:8px 16px;font-size:1em;">${section.title}</td></tr>`;
+        section.rows.forEach(r => {
+            if (!r) return;
+            s += `<tr><td style="color:#64748b;padding:4px 16px;width:35%;white-space:nowrap;">${r[0]}</td><td style="padding:4px 16px;word-break:break-all;"><strong>${r[1]}</strong></td></tr>`;
         });
-        s += '</div>';
-    }
-
-    s += '<div class="section-hdr" style="border-bottom:2px solid #8b5cf6;">Advanced vLLM Settings</div><div style="line-height:2.2;">';
-    s += `<div><span style="color:#64748b;">Max Model Len:</span> ${advVal('max_model_len', rc.max_model_len)}</div>`;
-    s += `<div><span style="color:#64748b;">GPU Memory Utilization:</span> ${advVal('gpu_memory_utilization', rc.gpu_memory_utilization)}</div>`;
-    s += `<div><span style="color:#64748b;">Block Size:</span> ${advVal('block_size', 'auto')}</div>`;
-    s += `<div><span style="color:#64748b;">Max Num Seqs:</span> ${advVal('max_num_seqs', 'auto')}</div>`;
-    s += `<div><span style="color:#64748b;">Max Batched Tokens:</span> ${advVal('max_num_batched_tokens', 'auto')}</div>`;
-    s += `<div><span style="color:#64748b;">Dtype:</span> ${advVal('dtype', 'auto')}</div>`;
-    s += `<div><span style="color:#64748b;">KV Cache Dtype:</span> ${advVal('kv_cache_dtype', 'auto')}</div>`;
-    s += `<div><span style="color:#64748b;">Pipeline Parallel:</span> ${advVal('pipeline_parallel_size', 'auto')}</div>`;
-    s += `<div><span style="color:#64748b;">Tool Call Parser:</span> ${advVal('tool_call_parser', 'auto')}</div>`;
-    s += `<div><span style="color:#64748b;">Prefix Caching:</span> ${advToggle('enable_prefix_caching', 'On (auto)')}</div>`;
-    s += `<div><span style="color:#64748b;">Custom All-Reduce:</span> ${advToggle('disable_custom_all_reduce', 'Enabled (auto)')}</div>`;
-    s += `<div><span style="color:#64748b;">Trust Remote Code:</span> ${advToggle('trust_remote_code', 'On (auto)')}</div>`;
-    s += `<div><span style="color:#64748b;">Disable Log Requests:</span> ${advToggle('disable_log_requests', 'On (auto)')}</div>`;
-    s += `<div><span style="color:#64748b;">Auto Tool Choice:</span> ${advToggle('enable_auto_tool_choice', 'Off (auto)')}</div>`;
-    s += `<div><span style="color:#64748b;">vLLM Debug Logs:</span> ${advToggle('vllm_debug_logs', 'Off (auto)')}</div>`;
-    s += `<div><span style="color:#64748b;">NCCL Debug Logs:</span> ${advToggle('nccl_debug_logs', 'Off (auto)')}</div>`;
-    s += '</div>';
-
-    const eppLabels = { balanced: 'Balanced', cache_optimized: 'Cache Optimized', queue_balanced: 'Queue Balanced', latency_aware: 'Latency Aware', custom: 'Custom' };
-    s += '<div class="section-hdr" style="border-bottom:2px solid #7c3aed;">EPP Configuration</div><div style="line-height:2.2;">';
-    s += `<div><span style="color:#64748b;">Scoring Preset:</span> <strong>${eppLabels[rc.epp_preset] || rc.epp_preset || 'Balanced'}</strong></div>`;
-    s += `<div><span style="color:#64748b;">EPP Tuning (Step 9):</span> ${rc.epp_benchmark ? 'Enabled' : 'Disabled'}</div>`;
-    if (rc.epp_config) {
-        const ec = rc.epp_config;
-        if (ec.maxPrefixBlocksToMatch) s += `<div><span style="color:#64748b;">Max Prefix Blocks:</span> ${ec.maxPrefixBlocksToMatch}</div>`;
-        if (ec.lruCapacityPerServer) s += `<div><span style="color:#64748b;">LRU Capacity/Server:</span> ${ec.lruCapacityPerServer}</div>`;
-        if (ec.nonCachedTokens) s += `<div><span style="color:#64748b;">Non-Cached Tokens:</span> ${ec.nonCachedTokens}</div>`;
-    }
-    s += '</div></div>';
-
-    s += '</div></div>';
+    });
+    s += '</tbody></table></div>';
 
     // Tuned Settings vs Upstream Defaults — per-config columns
     const allResults = data.all_results || [];

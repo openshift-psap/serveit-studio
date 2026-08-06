@@ -698,21 +698,6 @@ function _renderChartsImpl(data, runId, content) {
             'Complete configuration used for this optimization run — workload parameters, search strategy, infrastructure details, and component versions. ' +
             'These settings apply to every test; only the architecture, TP values, and pod counts vary between configurations.' +
             '</div></div>';
-        html += '<div class="chart-card"><div class="chart-card-header">User Defined Test Settings</div>';
-        html += '<div style="padding:12px 20px 4px; color:#1e293b; font-size:0.92em;">All settings configured for this optimization run. These apply to every test — only the architecture, TP values, and pod counts vary between tests.</div>';
-        html += '<div class="chart-card-body" style="padding:16px 20px;">';
-        html += '<div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;">';
-
-        function settingsTable(title, color, rows) {
-            let t = `<table class="results-table" style="font-size:0.85em;margin-bottom:16px;width:100%;">`;
-            t += `<tr><th colspan="2" style="background:${color};text-align:center;font-size:1.05em;">${title}</th></tr>`;
-            rows.forEach(function(r) {
-                if (r) t += `<tr><td style="color:#64748b;white-space:nowrap;width:45%;">${r[0]}</td><td style="word-break:break-all;"><strong>${r[1]}</strong></td></tr>`;
-            });
-            t += '</table>';
-            return t;
-        }
-
         // Settings tables — always display prompt length in characters
         var cpt = rc.chars_per_token || 4.5;
         var islChars, oslChars, islStdevChars, oslStdevChars;
@@ -729,40 +714,54 @@ function _renderChartsImpl(data, runId, content) {
         }
         var islDisplay = islChars.toLocaleString() + ' characters' + (islStdevChars ? ' (&sigma;=' + islStdevChars.toLocaleString() + ')' : '');
         var oslDisplay = oslChars.toLocaleString() + ' characters' + (oslStdevChars ? ' (&sigma;=' + oslStdevChars.toLocaleString() + ')' : '');
-        html += settingsTable('Workload', '#059669', [
-            ['Model', rc.model_name || na],
-            ['Prompt Length', islDisplay],
-            ['Prompt Output', oslDisplay],
-            ['Concurrent Users', rc.qps != null ? Math.round(rc.qps) : na],
-            ['Rate Type', rc.rate_type || 'concurrent'],
-            ['Test Duration', (rc.test_duration || 300) + 's'],
-            ['Stop Mode', rc.stop_mode || 'duration'],
-            rc.max_requests ? ['Max Requests', rc.max_requests] : null,
-            rc.turns > 1 ? ['Turns', rc.turns] : null,
-            ['Workload Mode', rc.workload_mode || 'synthetic'],
-            rc.dataset_source ? ['Dataset', '<span style="word-break:break-all;font-size:0.9em;">' + rc.dataset_source + '</span>'] : null,
-            rc.prefix_cache_hit_pct > 0 ? ['Prefix Cache Hit', rc.prefix_cache_hit_pct + '%'] : null,
-        ]);
-        html += settingsTable('Search Strategy', '#4f46e5', [
-            ['Optimization Goal', (rc.objective || 'ttft').toUpperCase()],
-            ['Total GPUs', rc.total_gpus || na],
-            ['TP Options', (rc.tp_options || []).join(', ') || na],
-            ['TP Pair Breadth', 'Top-' + (rc.tp_pair_top_n || 4)],
-            ['P/D Ratio Search', rc.pd_search_mode === 'exhaustive' ? 'Exhaustive' : 'Adaptive'],
-            ['Auto-Scale Concurrency', rc.use_achievable_qps ? 'Yes' : 'No'],
-            ['Headroom', (rc.headroom || 1.3) + 'x'],
-            ['Latency SLA', rc.latency_constraint_enabled ? rc.latency_constraint_ms + 'ms @ ' + rc.latency_constraint_percentile : 'Disabled'],
-        ]);
-        html += settingsTable('Infrastructure', '#d97706', [
-            ['Inference Image', '<span style="word-break:break-all;font-size:0.9em;">' + (rc.image || na) + '</span>'],
-            ['Scheduler Image', '<span style="word-break:break-all;font-size:0.9em;">' + (rc.scheduler_image || na) + '</span>'],
-            ['Namespace', rc.namespace || na],
-            ['PVC', rc.pvc_name || na],
-            ['Network Type', rc.network_type || na],
-            ['NCCL IB HCA', rc.nccl_ib_hca || na],
-            rc.rdma_nics_per_node ? ['RDMA NICs/Node', rc.rdma_nics_per_node] : null,
-        ]);
-        // Infrastructure Versions
+
+        const rv = rc._resolved || {};
+        const eppPresetLabels = {balanced:'Balanced', cache_optimized:'Cache Optimized', queue_balanced:'Queue Balanced', latency_aware:'Latency Aware', custom:'Custom'};
+
+        // Build unified settings sections
+        var settingsSections = [
+            { title: 'Workload', color: '#059669', rows: [
+                ['Model', rc.model_name || na],
+                ['Prompt Length', islDisplay],
+                ['Prompt Output', oslDisplay],
+                ['Concurrent Users', rc.qps != null ? Math.round(rc.qps) : na],
+                ['Rate Type', rc.rate_type || 'concurrent'],
+                ['Test Duration', (rc.test_duration || 300) + 's'],
+                ['Stop Mode', rc.stop_mode || 'duration'],
+                rc.max_requests ? ['Max Requests', rc.max_requests] : null,
+                rc.turns > 1 ? ['Turns', rc.turns] : null,
+                ['Workload Mode', rc.workload_mode || 'synthetic'],
+                rc.dataset_source ? ['Dataset', '<span style="word-break:break-all;font-size:0.9em;">' + rc.dataset_source + '</span>'] : null,
+                rc.prefix_cache_hit_pct > 0 ? ['Prefix Cache Hit', rc.prefix_cache_hit_pct + '%'] : null,
+            ]},
+            { title: 'Search Strategy', color: '#4f46e5', rows: [
+                ['Optimization Goal', (rc.objective || 'ttft').toUpperCase()],
+                ['Total GPUs', rc.total_gpus || na],
+                ['TP Options', (rc.tp_options || []).join(', ') || na],
+                ['TP Pair Breadth', 'Top-' + (rc.tp_pair_top_n || 4)],
+                ['P/D Ratio Search', rc.pd_search_mode === 'exhaustive' ? 'Exhaustive' : 'Adaptive'],
+                ['Auto-Scale Concurrency', rc.use_achievable_qps ? 'Yes' : 'No'],
+                ['Headroom', (rc.headroom || 1.3) + 'x'],
+                ['Latency SLA', rc.latency_constraint_enabled ? rc.latency_constraint_ms + 'ms @ ' + rc.latency_constraint_percentile : 'Disabled'],
+            ]},
+            { title: 'Infrastructure', color: '#d97706', rows: [
+                ['Inference Image', '<span style="word-break:break-all;font-size:0.9em;">' + (rc.image || na) + '</span>'],
+                ['Scheduler Image', '<span style="word-break:break-all;font-size:0.9em;">' + (rc.scheduler_image || na) + '</span>'],
+                ['Namespace', rc.namespace || na],
+                ['PVC', rc.pvc_name || na],
+                ['Network Type', rc.network_type || na],
+                ['NCCL IB HCA', rc.nccl_ib_hca || na],
+                rc.rdma_nics_per_node ? ['RDMA NICs/Node', rc.rdma_nics_per_node] : null,
+            ]},
+            { title: 'EPP Configuration', color: '#6d28d9', rows: [
+                ['Scoring Preset', (rc.epp_custom_enabled !== false) ? (eppPresetLabels[rc.epp_preset] || rc.epp_preset || 'Balanced') : 'llm-d upstream'],
+                ['EPP Tuning', rc.epp_benchmark ? 'Enabled' : 'Disabled'],
+                rc.epp_config && rc.epp_config.maxPrefixBlocksToMatch ? ['Max Prefix Blocks', rc.epp_config.maxPrefixBlocksToMatch] : null,
+                rc.epp_config && rc.epp_config.lruCapacityPerServer ? ['LRU Capacity/Server', rc.epp_config.lruCapacityPerServer] : null,
+            ]},
+        ];
+
+        // Component Versions
         if (data.infra_versions && Object.keys(data.infra_versions).length > 0) {
             var iv = data.infra_versions;
             var versionLabels = {
@@ -773,64 +772,22 @@ function _renderChartsImpl(data, runId, content) {
                 nfd: 'NFD', lws: 'LWS'
             };
             var vRows = [];
-            Object.keys(iv).forEach(function(k) { vRows.push([versionLabels[k] || k, iv[k]]); });
-            html += settingsTable('Component Versions', '#059669', vRows);
-        }
-        const vllmCustomEnabled = rc.advanced_vllm_custom_enabled !== false;
-        const rv = rc._resolved || {};
-        const hasPdTests = (data.all_results || []).some(r => r.architecture === 'PD');
-        const hasAggTests = (data.all_results || []).some(r => r.architecture === 'AGGREGATED');
-        const hasEpTests = (data.all_results || []).some(r => r.architecture === 'EP');
-
-        // GPU Memory Utilization display
-        let gmuDisplay = '-';
-        if (hasPdTests || hasEpTests) {
-            let gmuParts = [];
-            if (rv.prefill_gpu_memory_utilization) gmuParts.push(`P=${rv.prefill_gpu_memory_utilization}`);
-            if (rv.decode_gpu_memory_utilization) gmuParts.push(`D=${rv.decode_gpu_memory_utilization}`);
-            if (hasAggTests) {
-                const aggTc = ((data.all_results || []).find(r => r.architecture === 'AGGREGATED') || {}).test_config || {};
-                if (aggTc.gpu_memory_utilization) gmuParts.push(`Agg=${aggTc.gpu_memory_utilization}`);
-            }
-            gmuDisplay = gmuParts.join(', ') || '-';
-        } else {
-            gmuDisplay = rv.gpu_memory_utilization || rc.gpu_memory_utilization || '-';
+            Object.keys(iv).forEach(function(k) { if (iv[k]) vRows.push([versionLabels[k] || k, iv[k]]); });
+            settingsSections.push({ title: 'Component Versions', color: '#059669', rows: vRows });
         }
 
-        var vllmRows = [
-            !vllmCustomEnabled ? ['Mode', '<span style="color:#059669;">Upstream defaults (no tuning)</span>'] : null,
-            ['Max Model Len', rv.max_model_len || rc.max_model_len || '-'],
-            ['GPU Memory Utilization', gmuDisplay],
-            rv.gpu_vram_gb ? ['GPU VRAM', rv.gpu_vram_gb.toFixed(1) + ' GB'] : null,
-            ['Block Size', rv.block_size || 'auto (16)'],
-            ['Max Num Seqs', (rv.max_num_seqs || '256') + (rv.decode_max_num_seqs ? ' (decode: ' + rv.decode_max_num_seqs + ')' : '')],
-            ['Max Batched Tokens', rv.max_num_batched_tokens || rv.max_model_len || 'auto'],
-            ['Prefix Caching', rv.enable_prefix_caching === true ? 'Enabled' : (rv.enable_prefix_caching === false ? 'Disabled' : 'auto (Disabled)')],
-            ['Expert Parallel', hasEpTests ? 'Enabled (EP) / Disabled (PD, Agg)' : (rv.enable_expert_parallel === true ? 'Enabled' : 'Disabled')],
-            ['Trust Remote Code', rv.trust_remote_code === true ? 'Enabled' : 'Disabled'],
-        ];
-        if (vllmCustomEnabled) {
-            const adv2 = rc.advanced_vllm || {};
-            if (adv2.dtype) vllmRows.push(['Dtype', adv2.dtype]);
-            if (adv2.kv_cache_dtype) vllmRows.push(['KV Cache Dtype', adv2.kv_cache_dtype]);
-            if (adv2.pipeline_parallel_size) vllmRows.push(['Pipeline Parallel', adv2.pipeline_parallel_size]);
-        }
-        html += settingsTable('Advanced vLLM Settings', '#7c3aed', vllmRows);
-
-        // EPP Configuration
-        const eppCustomEnabled = rc.epp_custom_enabled !== false;
-        const eppPresetLabels = {balanced:'Balanced', cache_optimized:'Cache Optimized', queue_balanced:'Queue Balanced', latency_aware:'Latency Aware', custom:'Custom'};
-        var eppRows = [
-            ['Scoring Preset', eppCustomEnabled ? (eppPresetLabels[rc.epp_preset] || rc.epp_preset || 'Balanced') : 'llm-d upstream'],
-            ['EPP Tuning (Step 9)', rc.epp_benchmark ? 'Enabled' : 'Disabled'],
-        ];
-        if (rc.epp_config) {
-            const ec = rc.epp_config;
-            if (ec.maxPrefixBlocksToMatch) eppRows.push(['Max Prefix Blocks', ec.maxPrefixBlocksToMatch]);
-            if (ec.lruCapacityPerServer) eppRows.push(['LRU Capacity/Server', ec.lruCapacityPerServer]);
-        }
-        html += settingsTable('EPP Configuration', '#6d28d9', eppRows);
-        html += '</div>'; // close 2-column grid
+        // Render as single unified table
+        html += '<div class="chart-card"><div class="chart-card-header">User Defined Test Settings</div>';
+        html += '<div class="chart-card-body" style="padding:0;">';
+        html += '<div style="overflow-x:auto;"><table class="results-table" style="font-size:0.9em;">';
+        settingsSections.forEach(function(section) {
+            html += `<tr><td colspan="2" style="background:#f1f5f9;font-weight:700;color:${section.color};padding:8px 16px;font-size:1em;">${section.title}</td></tr>`;
+            section.rows.forEach(function(r) {
+                if (!r) return;
+                html += `<tr><td style="color:#64748b;padding:4px 16px;width:35%;white-space:nowrap;">${r[0]}</td><td style="padding:4px 16px;word-break:break-all;"><strong>${r[1]}</strong></td></tr>`;
+            });
+        });
+        html += '</table></div></div>';
 
         // Per-Config Tuning Comparison Table
         const allConfigs = [];
