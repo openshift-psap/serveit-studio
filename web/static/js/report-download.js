@@ -246,13 +246,14 @@ function buildRecSection(runId, data, rec, summary, best, allRes) {
             s += '</div>';
             // Percentile table
             s += '<table style="width:100%;font-size:0.8em;border-collapse:collapse;margin-top:6px;">';
-            s += '<tr style="color:#94a3b8;font-weight:600;"><td></td><td>TTFT</td><td>ITL</td></tr>';
+            s += '<tr style="color:#94a3b8;font-weight:600;"><td></td><td>TTFT</td><td>E2E</td><td>ITL</td></tr>';
             const t90 = _p90d.ttft || _p90d.ttft_p90;
             const t95 = _p95d.ttft || _p95d.ttft_p95;
             const t99 = _p99d.ttft || _p99d.ttft_p99;
-            s += `<tr><td style="font-weight:600;color:#475569;">P90</td><td style="font-weight:700;color:#1e293b;">${t90 != null ? Math.round(t90).toLocaleString() + ' ms' : '-'}</td><td>${_p90d.itl || _p90d.itl_p90 ? (_p90d.itl || _p90d.itl_p90) + ' ms' : '-'}</td></tr>`;
-            if (t95) s += `<tr><td style="font-weight:600;color:#475569;">P95</td><td style="color:#64748b;">${Math.round(t95).toLocaleString()} ms</td><td>${_p95d.itl || _p95d.itl_p95 ? (_p95d.itl || _p95d.itl_p95) + ' ms' : '-'}</td></tr>`;
-            if (t99) s += `<tr><td style="font-weight:600;color:#475569;">P99</td><td style="color:#64748b;">${Math.round(t99).toLocaleString()} ms</td><td>${_p99d.itl || _p99d.itl_p99 ? (_p99d.itl || _p99d.itl_p99) + ' ms' : '-'}</td></tr>`;
+            const fmtE2e = v => v != null ? (v >= 1000 ? (v/1000).toFixed(1) + ' s' : Math.round(v) + ' ms') : '-';
+            s += `<tr><td style="font-weight:600;color:#475569;">P90</td><td style="font-weight:700;color:#1e293b;">${t90 != null ? Math.round(t90).toLocaleString() + ' ms' : '-'}</td><td>${fmtE2e(_p90d.e2e_p90)}</td><td>${_p90d.itl || _p90d.itl_p90 ? (_p90d.itl || _p90d.itl_p90) + ' ms' : '-'}</td></tr>`;
+            if (t95) s += `<tr><td style="font-weight:600;color:#475569;">P95</td><td style="color:#64748b;">${Math.round(t95).toLocaleString()} ms</td><td style="color:#64748b;">${fmtE2e(_p95d.e2e_p95)}</td><td>${_p95d.itl || _p95d.itl_p95 ? (_p95d.itl || _p95d.itl_p95) + ' ms' : '-'}</td></tr>`;
+            if (t99) s += `<tr><td style="font-weight:600;color:#475569;">P99</td><td style="color:#64748b;">${Math.round(t99).toLocaleString()} ms</td><td style="color:#64748b;">${fmtE2e(_p99d.e2e_p99)}</td><td>${_p99d.itl || _p99d.itl_p99 ? (_p99d.itl || _p99d.itl_p99) + ' ms' : '-'}</td></tr>`;
             s += '</table>';
             // Manifest links
             const mTypes = cfg.manifest_types || [];

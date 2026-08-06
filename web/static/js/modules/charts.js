@@ -71,10 +71,10 @@ function _renderChartsImpl(data, runId, content) {
 
         // Percentile table
         h += '<table style="width:100%;font-size:0.8em;border-collapse:collapse;margin-top:6px;">';
-        h += '<tr style="color:#94a3b8;font-weight:600;"><td></td><td>TTFT</td><td>ITL</td></tr>';
-        h += '<tr><td style="font-weight:600;color:#475569;">P90</td><td style="font-weight:700;color:#1e293b;">' + (opts.ttft_p90 != null ? Math.round(opts.ttft_p90).toLocaleString() + ' ms' : '-') + '</td><td>' + (opts.itl_p90 ? opts.itl_p90 + ' ms' : '-') + '</td></tr>';
-        if (opts.ttft_p95) h += '<tr><td style="font-weight:600;color:#475569;">P95</td><td style="color:#64748b;">' + Math.round(opts.ttft_p95).toLocaleString() + ' ms</td><td>' + (opts.itl_p95 ? opts.itl_p95 + ' ms' : '-') + '</td></tr>';
-        if (opts.ttft_p99) h += '<tr><td style="font-weight:600;color:#475569;">P99</td><td style="color:#64748b;">' + Math.round(opts.ttft_p99).toLocaleString() + ' ms</td><td>' + (opts.itl_p99 ? opts.itl_p99 + ' ms' : '-') + '</td></tr>';
+        h += '<tr style="color:#94a3b8;font-weight:600;"><td></td><td>TTFT</td><td>E2E</td><td>ITL</td></tr>';
+        h += '<tr><td style="font-weight:600;color:#475569;">P90</td><td style="font-weight:700;color:#1e293b;">' + (opts.ttft_p90 != null ? Math.round(opts.ttft_p90).toLocaleString() + ' ms' : '-') + '</td><td>' + (opts.e2e_p90 != null ? (opts.e2e_p90 >= 1000 ? (opts.e2e_p90/1000).toFixed(1) + ' s' : Math.round(opts.e2e_p90) + ' ms') : '-') + '</td><td>' + (opts.itl_p90 ? opts.itl_p90 + ' ms' : '-') + '</td></tr>';
+        if (opts.ttft_p95) h += '<tr><td style="font-weight:600;color:#475569;">P95</td><td style="color:#64748b;">' + Math.round(opts.ttft_p95).toLocaleString() + ' ms</td><td style="color:#64748b;">' + (opts.e2e_p95 != null ? (opts.e2e_p95 >= 1000 ? (opts.e2e_p95/1000).toFixed(1) + ' s' : Math.round(opts.e2e_p95) + ' ms') : '-') + '</td><td>' + (opts.itl_p95 ? opts.itl_p95 + ' ms' : '-') + '</td></tr>';
+        if (opts.ttft_p99) h += '<tr><td style="font-weight:600;color:#475569;">P99</td><td style="color:#64748b;">' + Math.round(opts.ttft_p99).toLocaleString() + ' ms</td><td style="color:#64748b;">' + (opts.e2e_p99 != null ? (opts.e2e_p99 >= 1000 ? (opts.e2e_p99/1000).toFixed(1) + ' s' : Math.round(opts.e2e_p99) + ' ms') : '-') + '</td><td>' + (opts.itl_p99 ? opts.itl_p99 + ' ms' : '-') + '</td></tr>';
         h += '</table>';
 
         // Action buttons
@@ -250,6 +250,7 @@ function _renderChartsImpl(data, runId, content) {
                     ttft_p90: _p90d.ttft || _p90d.ttft_p90,
                     ttft_p95: _p95d.ttft || _p95d.ttft_p95,
                     ttft_p99: _p99d.ttft || _p99d.ttft_p99,
+                    e2e_p90: _p90d.e2e_p90, e2e_p95: _p95d.e2e_p95, e2e_p99: _p99d.e2e_p99,
                     itl_p90: _p90d.itl || _p90d.itl_p90,
                     itl_p95: _p95d.itl || _p95d.itl_p95,
                     itl_p99: _p99d.itl || _p99d.itl_p99,
@@ -354,6 +355,7 @@ function _renderChartsImpl(data, runId, content) {
                 tput: tput, gpus: cfg.gpus || '?',
                 conc: concStr,
                 ttft_p90: cfg.ttft_p90, ttft_p95: cfg.ttft_p95, ttft_p99: cfg.ttft_p99,
+                e2e_p90: cfg.e2e_p90, e2e_p95: cfg.e2e_p95, e2e_p99: cfg.e2e_p99,
                 itl_p90: cfg.itl_p90, itl_p95: cfg.itl_p95, itl_p99: cfg.itl_p99,
                 recId: calRecId, testId: calTestId,
                 manifests: calManifests, runId: runId,
