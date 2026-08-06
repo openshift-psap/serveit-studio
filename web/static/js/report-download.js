@@ -888,7 +888,7 @@ function buildTestSettingsSection(data) {
             ]},
         ];
 
-        s += '<table><tr><th style="text-align:left;">Parameter</th><th>Default</th>';
+        s += '<table><tr><th style="text-align:center;">Parameter</th><th style="text-align:center;">Default</th>';
         archOrder.forEach(arch => {
             const color = arch === 'AGGREGATED' ? '#6366f1' : arch === 'PD' ? '#0ea5e9' : '#10b981';
             s += `<th style="color:${color};">${arch}</th>`;
@@ -896,10 +896,10 @@ function buildTestSettingsSection(data) {
         s += '</tr>';
 
         sections.forEach(section => {
-            s += `<tr><td colspan="${2 + archOrder.length}" style="background:#f1f5f9;font-weight:700;color:#475569;padding:6px 10px;">${section.title}</td></tr>`;
+            s += `<tr><td colspan="${2 + archOrder.length}" style="background:#f1f5f9;font-weight:700;color:#475569;padding:6px 10px;text-align:center;">${section.title}</td></tr>`;
             section.params.forEach(param => {
                 if (param.ep_only && !hasEp) return;
-                s += `<tr><td style="color:#334155;padding-left:16px;"><code style="font-size:0.9em;">${param.label}</code></td>`;
+                s += `<tr><td style="color:#334155;text-align:center;"><code style="font-size:0.9em;">${param.label}</code></td>`;
                 s += `<td style="color:#94a3b8;text-align:center;">${param.def}</td>`;
                 archOrder.forEach(arch => {
                     const tc = archConfigs[arch];
