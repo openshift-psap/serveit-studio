@@ -960,7 +960,7 @@ class ReportAnalyzer:
         token_rates = {'prompt': [], 'generation': []}
         request_state = {'running': [], 'waiting': [], 'kv_cache': []}
         time_breakdown = {'prefill': [], 'decode': [], 'queue': [], 'preemptions': [], 'waiting': []}
-        network = {'pod_tx': [], 'pod_rx': [], 'ib_rx': []}
+        network = {'pod_tx': [], 'pod_rx': [], 'ib_rx': [], 'nixl_tx': []}
 
         for r in successful:
             if not r.metrics_json:
@@ -1026,6 +1026,12 @@ class ReportAnalyzer:
             ib_rx_raw = get_avg('ib_rx_rate')
             ib_rx_gbps = round(ib_rx_raw / 1_000_000_000, 2) if ib_rx_raw else 0
             network['ib_rx'].append(ib_rx_gbps if ib_rx_gbps < 100 else 0)
+
+            # NIXL KV transfer: pod network TX for PD/EP configs (GB/s)
+            is_pd_ep = r.architecture in ('pd', 'ep')
+            pod_tx_raw = get_avg('pod_network_tx_rate')
+            nixl_gbps = round(pod_tx_raw / 1_000_000_000, 2) if (is_pd_ep and pod_tx_raw) else 0
+            network['nixl_tx'].append(nixl_gbps)
 
         if not configs:
             return None

@@ -1938,7 +1938,8 @@ function _renderChartsImpl(data, runId, content) {
 
         // Network throughput row
         if (charts.vllm.network && charts.vllm.network.pod_tx.some(v => v > 0)) {
-            const hasIB = charts.vllm.network.ib_rx.some(v => v > 0);
+            const hasNIXL = charts.vllm.network.nixl_tx && charts.vllm.network.nixl_tx.some(v => v > 0);
+            const hasIB = charts.vllm.network.ib_rx.some(v => v > 0) || hasNIXL;
             html += chartCard(
                 'Pod Network Throughput',
                 'Average network transmit (TX) and receive (RX) rates aggregated across all pods in each configuration. Higher TX indicates more data being sent to clients (generated tokens). Higher RX reflects incoming requests and model weight loading.',
@@ -1946,8 +1947,8 @@ function _renderChartsImpl(data, runId, content) {
             );
             if (hasIB) {
                 html += chartCard(
-                    'InfiniBand RDMA Throughput',
-                    'InfiniBand receive throughput across pods. In PD configurations this captures KV cache transfer from prefill to decode pods over RDMA. Higher values indicate more data flowing through the high-speed interconnect.',
+                    'NIXL KV Transfer Throughput',
+                    'Network throughput for KV cache transfer between prefill and decode pods. In PD/EP configurations, NIXL transfers the computed KV cache from prefill to decode pods over RDMA or pod network. Higher values indicate more data flowing between pods.',
                     'chart-net-ib'
                 );
             }
@@ -3587,13 +3588,31 @@ function _renderChartsImpl(data, runId, content) {
             ], { ...vllmLayout, xaxis: { tickangle: -35 }, yaxis: { title: 'Throughput (MB/s)' } }, plotlyConfig);
         }
 
-        // Chart 8: InfiniBand RDMA Throughput (line)
-        if (vllm.network && vllm.network.ib_rx.some(v => v > 0)) {
-            Plotly.newPlot(cid('chart-net-ib'), [
-                { x: vllm.configs, y: vllm.network.ib_rx, name: 'IB RX (GB/s)', mode: 'lines+markers',
-                  line: { color: '#8b5cf6', width: 2 }, marker: { size: 8 },
-                  hovertemplate: '<b>%{x}</b><br>IB RX: %{y:.2f} GB/s<extra></extra>' },
-            ], { ...vllmLayout, xaxis: { tickangle: -35 }, yaxis: { title: 'RDMA Throughput (GB/s)' } }, plotlyConfig);
+        // Chart 8: NIXL KV Transfer Throughput (line)
+        var nixlData = vllm.network.nixl_tx || [];
+        var ibData = vllm.network.ib_rx || [];
+        if (nixlData.some(v => v > 0) || ibData.some(v => v > 0)) {
+            var nixlTraces = [];
+            if (nixlData.some(v => v > 0)) {
+                nixlTraces.push({
+                    x: vllm.configs, y: nixlData, name: 'NIXL TX (GB/s)', mode: 'lines+markers+text',
+                    text: nixlData.map(function(v) { return v > 0 ? v.toFixed(2) : ''; }),
+                    textposition: 'top center', textfont: { size: 10, color: '#8b5cf6' },
+                    line: { color: '#8b5cf6', width: 3 }, marker: { size: 8 },
+                    hovertemplate: '<b>%{x}</b><br>NIXL TX: %{y:.2f} GB/s<extra></extra>'
+                });
+            }
+            if (ibData.some(v => v > 0)) {
+                nixlTraces.push({
+                    x: vllm.configs, y: ibData, name: 'IB RX (GB/s)', mode: 'lines+markers+text',
+                    text: ibData.map(function(v) { return v > 0 ? v.toFixed(2) : ''; }),
+                    textposition: 'top center', textfont: { size: 10, color: '#f59e0b' },
+                    line: { color: '#f59e0b', width: 2, dash: 'dash' }, marker: { size: 8 },
+                    hovertemplate: '<b>%{x}</b><br>IB RX: %{y:.2f} GB/s<extra></extra>'
+                });
+            }
+            Plotly.newPlot(cid('chart-net-ib'), nixlTraces,
+                { ...vllmLayout, xaxis: { tickangle: -35 }, yaxis: { title: 'Throughput (GB/s)' } }, plotlyConfig);
         }
     }
 
