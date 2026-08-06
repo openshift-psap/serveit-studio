@@ -166,83 +166,108 @@ function buildRecSection(runId, data, rec, summary, best, allRes) {
         s += `<div style="padding:20px;"><p style="color:#334155;margin:0;font-size:0.95em;line-height:1.6;">${rec.goal_info.description}</p></div></div>`;
     }
 
-    // Per-percentile recommendation cards
-    if (rec.recommendations && Object.keys(rec.recommendations).length) {
-        const goalIcons = { response_time: '&#9201;', throughput: '&#9889;' };
-        const goalColors = { response_time: '#3b82f6', throughput: '#f59e0b' };
-        const goalExplain = {
-            response_time: 'Best for chatbots, real-time assistants, and interactive applications where users are waiting for a reply.',
-            throughput: 'Best for batch processing, API services, and high-volume workloads where you need to handle the most requests per second.',
-        };
-        const bp = rec.best_by_percentile || {};
-        const pctls = ['p90', 'p95', 'p99'];
-        const goalOrder = ['response_time', 'throughput'];
+    // Recommendation cards — same design as live UI
+    if (rec.best_by_percentile && Object.keys(rec.best_by_percentile).length) {
+        const bp = rec.best_by_percentile;
+        const selTypes = [
+            { key: 'balanced', label: 'Best Balanced', desc: 'Best TTFT-to-throughput ratio — the sweet spot', color: '#059669', icon: '&#9878;' },
+            { key: 'lowest_ttft', label: 'Lowest TTFT', desc: 'Fastest time to first token', color: '#3b82f6', icon: '&#9201;' },
+            { key: 'highest_tput', label: 'Highest Throughput', desc: 'Maximum requests per second', color: '#f59e0b', icon: '&#9889;' },
+            { key: 'most_efficient', label: 'Most Efficient', desc: 'Best throughput per GPU — cost optimized', color: '#8b5cf6', icon: '&#128176;' },
+        ];
+        const archColors = { pd: '#2563eb', aggregated: '#059669', ep: '#7c3aed' };
+
+        // Find global best per category across all architectures
+        const globalBest = {};
+        selTypes.forEach(sel => {
+            let best = null;
+            ['pd', 'aggregated', 'ep'].forEach(archKey => {
+                const p90Data = (bp.p90 || {})[archKey];
+                if (!p90Data) return;
+                const cfg = p90Data[sel.key] || (sel.key === 'balanced' ? p90Data : null);
+                if (!cfg) return;
+                const ttft = cfg.ttft_p90 || cfg.ttft || 1e9;
+                const tput = cfg.throughput_mean || cfg.throughput || cfg.throughput_p90 || 0;
+                const gpus = cfg.gpus || cfg.total_gpus || 1;
+                let score;
+                if (sel.key === 'lowest_ttft') score = -ttft;
+                else if (sel.key === 'highest_tput') score = tput;
+                else if (sel.key === 'most_efficient') score = tput / gpus;
+                else score = -ttft / Math.max(tput, 0.001);
+                if (!best || score > best.score) best = { cfg, score, archKey };
+            });
+            if (best) globalBest[sel.key] = best;
+        });
 
         s += '<div style="border:2px solid #10b981;border-left:6px solid #10b981;border-radius:10px;margin:20px 0;overflow:hidden;">';
-        s += '<div style="background:linear-gradient(135deg,#ecfdf5,#d1fae5);padding:14px 20px;font-size:1.2em;font-weight:800;color:#1e293b;">Deployment Recommendation</div>';
-        s += '<div style="padding:24px;">';
+        s += '<div style="background:linear-gradient(135deg,#059669,#10b981);padding:14px 20px;font-size:1.1em;font-weight:800;color:white;">Deployment Recommendation</div>';
+        s += '<div style="padding:12px 20px 4px;color:#475569;font-size:0.9em;">Best configurations found during optimization across all architectures.</div>';
+        s += '<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:16px;padding:20px;">';
 
-        pctls.forEach((p, pi) => {
-            s += '<div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:12px;">';
-            for (const key of goalOrder) {
-                const r = rec.recommendations[key];
-                if (!r) { s += '<div></div>'; continue; }
-                const c = r.config;
-                const isPrimary = (rec.goal === 'ttft' && key === 'response_time') || (rec.goal === 'throughput' && key === 'throughput');
-                const archKey = (r.architecture || '').toLowerCase() === 'pd' ? 'pd' : 'aggregated';
+        selTypes.forEach(sel => {
+            const entry = globalBest[sel.key];
+            if (!entry) return;
+            const cfg = entry.cfg;
+            const archKey = entry.archKey;
+            const aColor = archColors[archKey] || '#64748b';
+            const archLabel = archKey.toUpperCase();
 
-                let cardConfig, cardDeploy, cardArch;
-                if (key === 'throughput') {
-                    // Throughput: always show the same config (best by mean) across all percentiles
-                    cardConfig = c; cardDeploy = r.deploy; cardArch = r.architecture;
-                } else if (pi === 0) {
-                    cardConfig = c; cardDeploy = r.deploy; cardArch = r.architecture;
-                } else {
-                    // TTFT: allow different configs per percentile (users may care about tail latency)
-                    const bpData = (bp[p] || {})[archKey];
-                    if (!bpData) { s += '<div></div>'; continue; }
-                    cardConfig = bpData;
-                    if (bpData.prefill_pods && bpData.decode_pods) {
-                        const bpTp = bpData.tp || c.tp || c.prefill_tp || '?';
-                        cardDeploy = `${bpData.prefill_pods} Prefill + ${bpData.decode_pods} Decode pods, TP=${bpTp}`;
-                    } else {
-                        cardDeploy = bpData.config_name || bpData.name || c.config_name || '';
-                    }
-                    cardArch = archKey.toUpperCase();
-                }
+            let deploy;
+            if (cfg.prefill_pods && cfg.decode_pods) {
+                deploy = cfg.prefill_tp === cfg.decode_tp
+                    ? `${cfg.prefill_pods}P+${cfg.decode_pods}D TP=${cfg.prefill_tp || cfg.tp || '?'}`
+                    : `${cfg.prefill_pods}P+${cfg.decode_pods}D PTP=${cfg.prefill_tp || '?'} DTP=${cfg.decode_tp || '?'}`;
+            } else {
+                deploy = cfg.config_name || '';
+            }
 
-                const border = (pi === 0 && isPrimary) ? `3px solid ${goalColors[key]}` : `2px solid ${goalColors[key]}40`;
-                const badge = (pi === 0 && isPrimary) ? `<span style="background:${goalColors[key]};color:white;font-size:0.7em;padding:2px 8px;border-radius:4px;margin-left:8px;">PRIMARY</span>` : '';
-                const archBadge = cardArch ? `<span style="background:#64748b;color:white;font-size:0.65em;padding:2px 6px;border-radius:3px;margin-left:6px;">${cardArch}</span>` : '';
-                const pLabel = p.toUpperCase();
+            const tput = cfg.throughput_mean || cfg.throughput || cfg.throughput_p90 || '-';
+            const gpus = cfg.gpus || cfg.total_gpus || '?';
 
-                s += `<div style="background:white;border:${border};border-radius:10px;padding:16px;">`;
-                s += `<div style="font-weight:800;color:${goalColors[key]};font-size:0.85em;text-transform:uppercase;margin-bottom:8px;">${goalIcons[key] || ''} ${r.goal} &mdash; ${pLabel}${badge}${archBadge}</div>`;
-                s += `<div style="font-size:1.4em;font-weight:800;color:#1e293b;margin-bottom:4px;">${cardDeploy}</div>`;
+            const _p90d = ((bp.p90 || {})[archKey] || {})[sel.key] || (bp.p90 || {})[archKey] || {};
+            const _p95d = ((bp.p95 || {})[archKey] || {})[sel.key] || (bp.p95 || {})[archKey] || {};
+            const _p99d = ((bp.p99 || {})[archKey] || {})[sel.key] || (bp.p99 || {})[archKey] || {};
 
-                const gpus = c.gpus;
-                const conc = c.concurrency;
-                const userConc = rec.workload ? rec.workload.users : null;
-                const concStr = conc ? ` | c=${conc}${userConc && userConc !== conc ? ' (from ' + userConc + ')' : ''}` : '';
-
-                if (key === 'throughput') {
-                    // Throughput cards: show mean throughput + TTFT at this percentile
-                    const tputMean = c.throughput_mean || c.throughput_p90 || '-';
-                    const ttftAtPctl = c[`ttft_${p}`] || c.ttft_p90 || '-';
-                    const ratio = (c.ratio && c.decode_pods > 0) ? `P:D ratio ${c.ratio} | ` : '';
-                    s += `<div style="font-size:0.9em;color:#475569;">${ratio}TTFT ${pLabel}: <strong>${ttftAtPctl != null ? ttftAtPctl : '-'} ms</strong> | Throughput Mean: <strong>${tputMean} req/s</strong> | ${gpus || '?'} GPUs${concStr}</div>`;
-                } else {
-                    // TTFT cards: show TTFT at this percentile + throughput mean
-                    const ttftVal = pi === 0 ? c.ttft_p90 : (cardConfig[`ttft_${p}`] || cardConfig.ttft_p90 || '-');
-                    const tputMean = pi === 0 ? (c.throughput_mean || c.throughput_p90 || '-') : (cardConfig.throughput_mean || cardConfig.throughput_p90 || '-');
-                    const ratio = (pi === 0 && c.ratio && c.decode_pods > 0) ? `P:D ratio ${c.ratio} | ` : '';
-                    s += `<div style="font-size:0.9em;color:#475569;">${ratio}TTFT ${pLabel}: <strong>${ttftVal != null ? ttftVal : '-'} ms</strong> | Throughput Mean: <strong>${tputMean} req/s</strong> | ${gpus || '?'} GPUs${concStr}</div>`;
-                }
-                if (pi === 0) s += `<div style="font-size:0.82em;color:#64748b;margin-top:8px;line-height:1.5;">${goalExplain[key] || ''}</div>`;
+            // Card
+            s += '<div style="background:white;border-radius:12px;overflow:hidden;box-shadow:0 1px 3px rgba(0,0,0,0.08);border:2px solid #cbd5e1;">';
+            // Header
+            s += `<div style="background:linear-gradient(135deg,${sel.color},${sel.color}cc);padding:10px 14px;color:white;">`;
+            s += `<div style="font-weight:700;font-size:0.85em;">${sel.icon} ${sel.label}</div>`;
+            s += `<div style="display:flex;gap:4px;margin-top:2px;"><div style="font-size:0.65em;background:${aColor};padding:2px 6px;border-radius:10px;font-weight:600;">${archLabel}</div></div>`;
+            if (sel.desc) s += `<div style="font-size:0.7em;opacity:0.9;margin-top:1px;">${sel.desc}</div>`;
+            s += '</div>';
+            // Body
+            s += '<div style="padding:12px 14px;">';
+            s += `<div style="font-size:1.1em;font-weight:800;color:#0f172a;margin-bottom:8px;">${deploy}</div>`;
+            s += '<div style="display:flex;gap:12px;font-size:0.85em;color:#475569;margin-bottom:4px;">';
+            s += `<span>Throughput: <strong>${typeof tput === 'number' ? tput.toFixed(2) + ' req/s' : tput}</strong></span>`;
+            s += `<span>GPUs: <strong>${gpus}</strong></span>`;
+            s += '</div>';
+            // Percentile table
+            s += '<table style="width:100%;font-size:0.8em;border-collapse:collapse;margin-top:6px;">';
+            s += '<tr style="color:#94a3b8;font-weight:600;"><td></td><td>TTFT</td><td>ITL</td></tr>';
+            const t90 = _p90d.ttft || _p90d.ttft_p90;
+            const t95 = _p95d.ttft || _p95d.ttft_p95;
+            const t99 = _p99d.ttft || _p99d.ttft_p99;
+            s += `<tr><td style="font-weight:600;color:#475569;">P90</td><td style="font-weight:700;color:#1e293b;">${t90 != null ? Math.round(t90).toLocaleString() + ' ms' : '-'}</td><td>${_p90d.itl || _p90d.itl_p90 ? (_p90d.itl || _p90d.itl_p90) + ' ms' : '-'}</td></tr>`;
+            if (t95) s += `<tr><td style="font-weight:600;color:#475569;">P95</td><td style="color:#64748b;">${Math.round(t95).toLocaleString()} ms</td><td>${_p95d.itl || _p95d.itl_p95 ? (_p95d.itl || _p95d.itl_p95) + ' ms' : '-'}</td></tr>`;
+            if (t99) s += `<tr><td style="font-weight:600;color:#475569;">P99</td><td style="color:#64748b;">${Math.round(t99).toLocaleString()} ms</td><td>${_p99d.itl || _p99d.itl_p99 ? (_p99d.itl || _p99d.itl_p99) + ' ms' : '-'}</td></tr>`;
+            s += '</table>';
+            // Manifest links
+            const mTypes = cfg.manifest_types || [];
+            if (mTypes.length) {
+                const ml = { lws: 'LWS', prefill: 'Prefill LWS', decode: 'Decode LWS', 'epp-configmap': 'EPP Config' };
+                s += '<div style="margin-top:10px;padding-top:8px;border-top:1px solid #f1f5f9;display:flex;flex-wrap:wrap;gap:4px;">';
+                mTypes.filter(t => !t.includes('service')).forEach(t => {
+                    const tid = cfg.test_id || cfg.config_name || '';
+                    s += `<a href="#" onclick="dlManifest('${tid}','${t}');return false;" style="color:#0ea5e9;font-size:10px;padding:2px 6px;background:#f0f9ff;border-radius:4px;border:1px solid #bae6fd;font-weight:500;text-decoration:none;cursor:pointer;">${ml[t] || t} &#8595;</a>`;
+                });
                 s += '</div>';
             }
-            s += '</div>';
+            s += '</div></div>';
         });
+
+        s += '</div>';
 
         // Optimal TP + test counts
         if (rec.optimal_decode_tp || rec.optimal_prefill_tp || rec.pd_tests_count || rec.ep_tests_count) {
