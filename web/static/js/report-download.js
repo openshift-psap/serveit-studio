@@ -1010,7 +1010,7 @@ function buildTestSettingsSection(data) {
             ]},
         ];
 
-        s += '<table><tr><th style="text-align:center;">Parameter</th><th style="text-align:center;">Default</th>';
+        s += '<table style="table-layout:fixed;width:100%;"><tr><th style="text-align:center;width:220px;">Parameter</th><th style="text-align:center;width:100px;">Default</th>';
         archOrder.forEach(arch => {
             const color = arch === 'AGGREGATED' ? '#6366f1' : arch === 'PD' ? '#0ea5e9' : '#10b981';
             s += `<th style="color:${color};">${arch}</th>`;
