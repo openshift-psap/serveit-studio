@@ -60,6 +60,7 @@ class StorageClassInfo:
     allow_volume_expansion: bool
     is_local: bool = False  # True for local-disk/hostPath provisioners
     gpu_nodes_covered: int = 0  # How many GPU nodes have available PVs for this SC
+    access_mode: str = 'ReadWriteOnce'  # Inferred: ReadWriteOnce or ReadWriteMany
 
 @dataclass
 class ClusterResources:
@@ -926,6 +927,16 @@ class SystemScanner:
                 is_local = provisioner in LOCAL_PROVISIONERS or provisioner.endswith('/local-path')
                 gpu_covered = len(pv_by_sc.get(name, set())) if is_local else 0
 
+                # Infer access mode from provisioner type
+                RWX_PROVISIONERS = {'nfs', 'example.com/nfs', 'nfs.csi.k8s.io',
+                    'openshift-storage.cephfs.csi.ceph.com', 'efs.csi.aws.com',
+                    'file.csi.azure.com', 'filestore.csi.storage.gke.io',
+                    'ibm.io/ibmc-file', 'ibm-spectrum-scale-csi'}
+                access_mode = 'ReadWriteMany' if (provisioner in RWX_PROVISIONERS or
+                    'nfs' in provisioner.lower() or 'file' in provisioner.lower() or
+                    'cephfs' in provisioner.lower() or 'spectrum-scale' in provisioner.lower()
+                ) else 'ReadWriteOnce'
+
                 sc_info = StorageClassInfo(
                     name=name,
                     provisioner=provisioner,
@@ -933,7 +944,8 @@ class SystemScanner:
                     volume_binding_mode=volume_binding_mode,
                     allow_volume_expansion=allow_expansion,
                     is_local=is_local,
-                    gpu_nodes_covered=gpu_covered
+                    gpu_nodes_covered=gpu_covered,
+                    access_mode=access_mode
                 )
 
                 storage_classes.append(sc_info)

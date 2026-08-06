@@ -731,8 +731,10 @@ function restoreClusterResources() {
                     option.title = 'Not all GPU nodes have local storage available';
                 }
             } else {
-                option.textContent = `${sc.name} (${sc.provisioner})`;
+                const rwx = sc.access_mode === 'ReadWriteMany' ? 'RWX' : 'RWO';
+                option.textContent = `${sc.name} (${sc.provisioner}) [${rwx}]`;
             }
+            option.dataset.accessMode = sc.access_mode || 'ReadWriteOnce';
             storageSelect.appendChild(option);
         });
         // Restore selected storage class

@@ -932,6 +932,7 @@ def handle_scan_cluster(data):
                     'allow_volume_expansion': sc.allow_volume_expansion,
                     'is_local': getattr(sc, 'is_local', False),
                     'gpu_nodes_covered': getattr(sc, 'gpu_nodes_covered', 0),
+                    'access_mode': getattr(sc, 'access_mode', 'ReadWriteOnce'),
                 }
                 for sc in resources.storage_classes
                 if not any(blk in sc.name.lower() for blk in ('block', 'raw', 'iscsi-block'))
