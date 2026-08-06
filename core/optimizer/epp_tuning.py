@@ -610,7 +610,19 @@ class EPPTuningMixin:
                 if result and result.guidellm_success:
                     ttft = result.ttft_p90 or 0
                     tput = result.throughput_p90 or 0
-                    self.log(f"  ✅ {name}: TTFT p90={ttft:.1f}ms, Throughput p90={tput:.2f} req/s", 'success')
+                    # Compare against Step 6/7 baseline
+                    baseline_ttft = None
+                    if arch == 'pd' and self.pareto_results:
+                        baseline_ttft = min((r.ttft_p90 for _, r in self.pareto_results if r.ttft_p90), default=None)
+                    elif arch == 'ep' and hasattr(self, 'ep_results') and self.ep_results:
+                        baseline_ttft = min((r.ttft_p90 for _, r in self.ep_results if r.ttft_p90), default=None)
+                    elif arch == 'aggregated' and self.aggregated_result:
+                        baseline_ttft = self.aggregated_result.ttft_p90
+                    if baseline_ttft and ttft > baseline_ttft * 1.5:
+                        self.log(f"  ⚠️  {name}: TTFT {ttft:.0f}ms is {ttft/baseline_ttft:.1f}x worse than baseline ({baseline_ttft:.0f}ms) — EPP weights degraded performance", 'warning')
+                    else:
+                        improvement = ((baseline_ttft - ttft) / baseline_ttft * 100) if baseline_ttft else 0
+                        self.log(f"  ✅ {name}: TTFT p90={ttft:.1f}ms ({improvement:+.1f}% vs baseline), Throughput p90={tput:.2f} req/s", 'success')
                     arch_results.append((name, weights, result))
                     self.all_test_results.append((epp_test_config, result))
                     try:
