@@ -686,12 +686,21 @@ def run_optimization_background(data):
         osl_stdev = _get('osl_stdev')
 
         # Convert characters to tokens if needed
+        # On resume, run_config already has token values — skip conversion
         isl_original = isl
         osl_original = osl
         isl_stdev_original = isl_stdev
         osl_stdev_original = osl_stdev
         chars_per_token = None
-        if length_unit == 'characters':
+        if resume_run_id and _saved.get('chars_per_token'):
+            # Resume: ISL/OSL already in tokens from run_config, restore original char values
+            chars_per_token = _saved.get('chars_per_token')
+            isl_original = _saved.get('isl_original_chars', isl)
+            osl_original = _saved.get('osl_original_chars', osl)
+            isl_stdev_original = _saved.get('isl_stdev_original_chars', isl_stdev)
+            osl_stdev_original = _saved.get('osl_stdev_original_chars', osl_stdev)
+            log_to_ui(f'Resume: using stored token values ISL={isl}, OSL={osl} (from {isl_original} / {osl_original} chars)', 'info')
+        elif length_unit == 'characters':
             chars_per_token = 4.0
             try:
                 from transformers import AutoTokenizer
