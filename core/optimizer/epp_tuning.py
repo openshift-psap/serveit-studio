@@ -389,7 +389,7 @@ class EPPTuningMixin:
             self.log(f"  Aggregated: {self.config.total_gpus // agg_tp}×TP{agg_tp} at c={default_concurrency}", 'info')
 
         # Best EP config from step7-ep DB results
-        ep_row = _best_from_db('pd', 'step7-ep-')
+        ep_row = _best_from_db('ep', 'step7-ep-')
         if ep_row:
             tc_raw = ep_row[8]
             tc = _json.loads(tc_raw) if tc_raw else {}
