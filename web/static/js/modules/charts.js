@@ -922,18 +922,18 @@ function _renderChartsImpl(data, runId, content) {
             ];
 
             html += '<div style="overflow-x:auto;"><table class="results-table" style="font-size:0.85em;table-layout:fixed;width:100%;">';
-            html += '<tr><th style="text-align:left;width:220px;">Parameter</th><th style="width:100px;">Default</th>';
+            html += '<tr><th style="text-align:center;width:220px;">Parameter</th><th style="text-align:center;width:100px;">Default</th>';
             for (const arch of archOrder) {
                 const color = arch === 'AGGREGATED' ? '#6366f1' : arch === 'PD' ? '#0ea5e9' : '#10b981';
-                html += `<th style="color:${color};min-width:100px;">${arch}</th>`;
+                html += `<th style="color:${color};text-align:center;">${arch}</th>`;
             }
             html += '</tr>';
 
             for (const section of sections) {
-                html += `<tr><td colspan="${2 + archOrder.length}" style="background:#f1f5f9;font-weight:700;color:#475569;padding:6px 10px;font-size:0.95em;">${section.title}</td></tr>`;
+                html += `<tr><td colspan="${2 + archOrder.length}" style="background:#f1f5f9;font-weight:700;color:#475569;padding:6px 10px;font-size:0.95em;text-align:center;">${section.title}</td></tr>`;
                 for (const param of section.params) {
                     if (param.ep_only && !hasEp) continue;
-                    html += `<tr><td style="color:#334155;padding-left:16px;"><code style="font-size:0.9em;">${param.label}</code></td>`;
+                    html += `<tr><td style="color:#334155;text-align:center;"><code style="font-size:0.9em;">${param.label}</code></td>`;
                     html += `<td style="color:#94a3b8;text-align:center;">${param.def}</td>`;
                     for (const arch of archOrder) {
                         const tc = archConfigs[arch];
