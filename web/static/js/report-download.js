@@ -243,6 +243,8 @@ function buildRecSection(runId, data, rec, summary, best, allRes) {
             s += '<div style="display:flex;gap:12px;font-size:0.85em;color:#475569;margin-bottom:4px;">';
             s += `<span>Throughput: <strong>${typeof tput === 'number' ? tput.toFixed(2) + ' req/s' : tput}</strong></span>`;
             s += `<span>GPUs: <strong>${gpus}</strong></span>`;
+            const userConc = rec.workload ? rec.workload.users : null;
+            if (userConc) s += `<span style="color:#0ea5e9;font-weight:600;">c=${userConc}</span>`;
             s += '</div>';
             // Percentile table
             s += '<table style="width:100%;font-size:0.8em;border-collapse:collapse;margin-top:6px;">';

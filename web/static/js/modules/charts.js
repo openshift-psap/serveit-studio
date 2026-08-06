@@ -243,10 +243,11 @@ function _renderChartsImpl(data, runId, content) {
                 const badges = [];
                 if (dupNote) badges.push({ text: '+ ' + dupNote, bg: 'rgba(255,255,255,0.2)', color: 'white' });
 
+                const userConc = rec.workload ? 'c=' + rec.workload.users : '';
                 html += _buildRecCard({
                     label: sel.label, icon: sel.icon, desc: sel.desc, color: sel.color,
                     archKey: archKey, deploy: deploy,
-                    tput: tputMean, gpus: gpus || '?',
+                    tput: tputMean, gpus: gpus || '?', conc: userConc,
                     ttft_p90: _p90d.ttft || _p90d.ttft_p90,
                     ttft_p95: _p95d.ttft || _p95d.ttft_p95,
                     ttft_p99: _p99d.ttft || _p99d.ttft_p99,
