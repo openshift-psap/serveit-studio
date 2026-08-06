@@ -22,7 +22,7 @@ socket.on('session_granted', function() {
     if (_takeoverTimeout) { clearTimeout(_takeoverTimeout); _takeoverTimeout = null; }
     var btn = document.querySelector('#session-lock-modal .modal-footer button:last-child');
     if (btn) { btn.disabled = false; btn.textContent = 'Take Over'; }
-    if (!window._serverConfigReceived) loadConfig();
+    if (typeof loadConfig === 'function' && !window._serverConfigReceived) loadConfig();
 });
 
 // Load config as soon as socket connects — defer to ensure config.js is loaded
