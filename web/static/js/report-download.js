@@ -36,6 +36,10 @@ function buildFullReport(runId, data, charts, rec, summary, best, allRes, hasPD,
     const secVLLM = buildVLLMSection(charts, hasVLLM);
     const secEpp = buildEppTuningSection(runId, data);
     const secTestCfg = buildTestSettingsSection(data);
+    const secSweep = buildConcurrencySweepSection(data);
+    const secCacheSweep = buildCacheSweepSection(data);
+    const secTraffic = buildTrafficSection(data, allRes);
+    const secDeploy = buildDeployTimingSection(data, allRes);
 
     const dlTabs = [];
     if (secRec) dlTabs.push({ id: 'rec', label: '&#9733; Recommendation', html: secRec });
@@ -44,8 +48,12 @@ function buildFullReport(runId, data, charts, rec, summary, best, allRes, hasPD,
     if (secCmp) dlTabs.push({ id: 'cmp', label: '&#8596; Comparison', html: secCmp });
     if (secStep9) dlTabs.push({ id: 'step9', label: '&#128269; Latency Search', html: secStep9 });
     if (secCal) dlTabs.push({ id: 'cal', label: '&#9878; Calibrated Load', html: secCal });
+    if (secSweep) dlTabs.push({ id: 'sweep', label: '&#128200; Concurrency Sweep', html: secSweep });
+    if (secCacheSweep) dlTabs.push({ id: 'cachesweep', label: '&#128203; Cache Sweep', html: secCacheSweep });
     if (secVLLM) dlTabs.push({ id: 'vllm', label: '&#9889; vLLM Metrics', html: secVLLM });
     if (secEpp) dlTabs.push({ id: 'epp', label: '&#9881; EPP Tuning', html: secEpp });
+    if (secTraffic) dlTabs.push({ id: 'traffic', label: '&#128230; Traffic', html: secTraffic });
+    if (secDeploy) dlTabs.push({ id: 'deploy', label: '&#9202; Deploy Timing', html: secDeploy });
     if (secTestCfg) dlTabs.push({ id: 'settings', label: '&#9881; Test Settings', html: secTestCfg });
 
     let out = buildHead(runId);
@@ -727,6 +735,267 @@ function buildTestSettingsSection(data) {
     return s;
 }
 
+// ── Concurrency Sweep Tab ──────────────────────────────────────────────────
+function buildConcurrencySweepSection(data) {
+    if (!data.concurrency_sweep || !Object.keys(data.concurrency_sweep).length) return '';
+    const sweep = data.concurrency_sweep;
+    const configKeys = Object.keys(sweep);
+    let s = '';
+
+    s += '<div style="border-radius:10px;overflow:hidden;border:2px solid #0ea5e9;border-left:6px solid #0ea5e9;margin-bottom:20px;">';
+    s += '<div style="background:linear-gradient(135deg,#0ea5e9,#38bdf8);padding:12px 20px;color:white;font-weight:700;">Concurrency Sweep</div>';
+    s += '<div style="padding:12px 20px;font-size:0.95em;">Sweep concurrency levels per configuration to measure latency and throughput scaling.</div>';
+
+    let totalPoints = 0;
+    let calibratedPoints = 0;
+    configKeys.forEach(k => {
+        totalPoints += sweep[k].length;
+        calibratedPoints += sweep[k].filter(p => p.is_calibrated).length;
+    });
+    s += '<div class="stats">';
+    s += dlStatCard(configKeys.length, 'Configurations');
+    s += dlStatCard(totalPoints, 'Data Points');
+    if (calibratedPoints > 0) s += dlStatCard(calibratedPoints, 'Calibrated Points');
+    s += '</div>';
+
+    ['p90', 'p95', 'p99'].forEach(pctl => {
+        s += `<div class="chart-box"><h3>TTFT ${pctl.toUpperCase()} vs Concurrency</h3><div id="dl-sweep-ttft-${pctl}" style="height:430px"></div></div>`;
+    });
+    s += '<div class="chart-box"><h3>Throughput per GPU vs Concurrency</h3><div id="dl-sweep-tput-gpu" style="height:430px"></div></div>';
+
+    const hasCache = configKeys.some(k => sweep[k].some(p => p.cache_hit_pct != null));
+    if (hasCache) {
+        s += '<div class="chart-box"><h3>Cache Hit % vs Concurrency</h3><div id="dl-sweep-cache-hit" style="height:430px"></div></div>';
+    }
+
+    const tid = 'dl-sweep-table';
+    s += `<div class="chart-box"><h3>All Sweep Data Points</h3>`;
+    s += `<table id="${tid}"><tr>`;
+    s += `<th style="cursor:pointer;" onclick="sortReportTable('${tid}',0,'str')">Config &#x21C5;</th>`;
+    s += `<th style="cursor:pointer;" onclick="sortReportTable('${tid}',1,'num')">Concurrency &#x21C5;</th>`;
+    s += `<th style="cursor:pointer;" onclick="sortReportTable('${tid}',2,'num')">TTFT P90 &#x21C5;</th>`;
+    s += `<th style="cursor:pointer;" onclick="sortReportTable('${tid}',3,'num')">TTFT P95 &#x21C5;</th>`;
+    s += `<th style="cursor:pointer;" onclick="sortReportTable('${tid}',4,'num')">TTFT P99 &#x21C5;</th>`;
+    s += `<th style="cursor:pointer;" onclick="sortReportTable('${tid}',5,'num')">Tput Mean &#x21C5;</th>`;
+    s += `<th style="cursor:pointer;" onclick="sortReportTable('${tid}',6,'num')">Tput/GPU &#x21C5;</th>`;
+    s += `<th style="cursor:pointer;" onclick="sortReportTable('${tid}',7,'num')">ITL P90 &#x21C5;</th>`;
+    s += `<th style="cursor:pointer;" onclick="sortReportTable('${tid}',8,'num')">GPUs &#x21C5;</th>`;
+    s += '<th>Calibrated</th>';
+    s += '</tr>';
+    configKeys.forEach(cfgKey => {
+        const points = [...sweep[cfgKey]].sort((a, b) => a.concurrency - b.concurrency);
+        points.forEach(p => {
+            const cls = p.is_calibrated ? ' class="pareto"' : '';
+            const label = p.config_label || cfgKey;
+            s += `<tr${cls}>`;
+            s += `<td>${label}</td>`;
+            s += `<td data-val="${p.concurrency}">${p.concurrency}</td>`;
+            s += `<td data-val="${p.ttft_p90 ?? ''}">${dlFmt(p.ttft_p90)}</td>`;
+            s += `<td data-val="${p.ttft_p95 ?? ''}">${dlFmt(p.ttft_p95)}</td>`;
+            s += `<td data-val="${p.ttft_p99 ?? ''}">${dlFmt(p.ttft_p99)}</td>`;
+            s += `<td data-val="${p.throughput_mean ?? ''}">${dlFmt(p.throughput_mean, 2)}</td>`;
+            s += `<td data-val="${p.throughput_per_gpu ?? ''}">${dlFmt(p.throughput_per_gpu, 3)}</td>`;
+            s += `<td data-val="${p.itl_p90 ?? ''}">${dlFmt(p.itl_p90)}</td>`;
+            s += `<td data-val="${p.gpus ?? ''}">${p.gpus ?? '-'}</td>`;
+            s += `<td>${p.is_calibrated ? '<span style="color:#059669;">&#10003;</span>' : ''}</td>`;
+            s += '</tr>';
+        });
+    });
+    s += '</table></div>';
+
+    s += '</div>';
+    return s;
+}
+
+// ── Cache Sweep Tab ────────────────────────────────────────────────────────
+function buildCacheSweepSection(data) {
+    if (!data.cache_sweep || !Object.keys(data.cache_sweep).length) return '';
+    const sweep = data.cache_sweep;
+    const configKeys = Object.keys(sweep);
+    let s = '';
+
+    s += '<div style="border-radius:10px;overflow:hidden;border:2px solid #8b5cf6;border-left:6px solid #8b5cf6;margin-bottom:20px;">';
+    s += '<div style="background:linear-gradient(135deg,#8b5cf6,#a78bfa);padding:12px 20px;color:white;font-weight:700;">Cache Sweep</div>';
+    s += '<div style="padding:12px 20px;font-size:0.95em;">Sweep prefix cache hit rates to measure the impact of caching on latency and throughput.</div>';
+
+    let totalPoints = 0;
+    configKeys.forEach(k => { totalPoints += sweep[k].length; });
+    s += '<div class="stats">';
+    s += dlStatCard(configKeys.length, 'Configurations');
+    s += dlStatCard(totalPoints, 'Data Points');
+    s += '</div>';
+
+    ['p90', 'p95', 'p99'].forEach(pctl => {
+        s += `<div class="chart-box"><h3>TTFT ${pctl.toUpperCase()} vs Cache Hit %</h3><div id="dl-cache-ttft-${pctl}" style="height:430px"></div></div>`;
+    });
+    s += '<div class="chart-box"><h3>Throughput Mean vs Cache Hit %</h3><div id="dl-cache-tput" style="height:430px"></div></div>';
+    s += '<div class="chart-box"><h3>Actual Hit Rate vs Configured Hit %</h3><div id="dl-cache-actual-hit" style="height:430px"></div></div>';
+
+    const tid = 'dl-cache-sweep-table';
+    s += `<div class="chart-box"><h3>All Cache Sweep Data</h3>`;
+    s += `<table id="${tid}"><tr>`;
+    s += `<th style="cursor:pointer;" onclick="sortReportTable('${tid}',0,'str')">Config &#x21C5;</th>`;
+    s += `<th style="cursor:pointer;" onclick="sortReportTable('${tid}',1,'num')">Hit % &#x21C5;</th>`;
+    s += `<th style="cursor:pointer;" onclick="sortReportTable('${tid}',2,'num')">Actual Hit Rate &#x21C5;</th>`;
+    s += `<th style="cursor:pointer;" onclick="sortReportTable('${tid}',3,'num')">TTFT P90 &#x21C5;</th>`;
+    s += `<th style="cursor:pointer;" onclick="sortReportTable('${tid}',4,'num')">TTFT P95 &#x21C5;</th>`;
+    s += `<th style="cursor:pointer;" onclick="sortReportTable('${tid}',5,'num')">TTFT P99 &#x21C5;</th>`;
+    s += `<th style="cursor:pointer;" onclick="sortReportTable('${tid}',6,'num')">Tput Mean &#x21C5;</th>`;
+    s += `<th style="cursor:pointer;" onclick="sortReportTable('${tid}',7,'num')">Output TPS &#x21C5;</th>`;
+    s += `<th style="cursor:pointer;" onclick="sortReportTable('${tid}',8,'num')">ITL P90 &#x21C5;</th>`;
+    s += `<th style="cursor:pointer;" onclick="sortReportTable('${tid}',9,'num')">Concurrency &#x21C5;</th>`;
+    s += `<th style="cursor:pointer;" onclick="sortReportTable('${tid}',10,'num')">GPUs &#x21C5;</th>`;
+    s += '</tr>';
+    configKeys.forEach(cfgKey => {
+        const points = [...sweep[cfgKey]].sort((a, b) => (a.hit_pct ?? 0) - (b.hit_pct ?? 0));
+        points.forEach(p => {
+            s += '<tr>';
+            s += `<td>${cfgKey}</td>`;
+            s += `<td data-val="${p.hit_pct ?? ''}">${p.hit_pct != null ? p.hit_pct + '%' : '-'}</td>`;
+            s += `<td data-val="${p.actual_hit_rate ?? ''}">${dlFmt(p.actual_hit_rate, 2)}</td>`;
+            s += `<td data-val="${p.ttft_p90 ?? ''}">${dlFmt(p.ttft_p90)}</td>`;
+            s += `<td data-val="${p.ttft_p95 ?? ''}">${dlFmt(p.ttft_p95)}</td>`;
+            s += `<td data-val="${p.ttft_p99 ?? ''}">${dlFmt(p.ttft_p99)}</td>`;
+            s += `<td data-val="${p.throughput_mean ?? ''}">${dlFmt(p.throughput_mean, 2)}</td>`;
+            s += `<td data-val="${p.output_tps_mean ?? ''}">${dlFmt(p.output_tps_mean, 1)}</td>`;
+            s += `<td data-val="${p.itl_p90 ?? ''}">${dlFmt(p.itl_p90)}</td>`;
+            s += `<td data-val="${p.concurrency ?? ''}">${p.concurrency ?? '-'}</td>`;
+            s += `<td data-val="${p.gpus ?? ''}">${p.gpus ?? '-'}</td>`;
+            s += '</tr>';
+        });
+    });
+    s += '</table></div>';
+
+    s += '</div>';
+    return s;
+}
+
+// ── Traffic Tab ────────────────────────────────────────────────────────────
+function buildTrafficSection(data, allRes) {
+    const hasTraffic = allRes.some(r => r.request_total != null || r.request_errored != null);
+    if (!hasTraffic) return '';
+
+    const trafficPrefixes = ['step11-sweep', 'step13', 'step9', 'step7', 'step6', 'step3', 'step2'];
+    const trafficLabelMap = {'tp-cal':'TP Calibration','step6':'Aggregated','step7':'PD/EP','step9':'EPP Tuning','step11-sweep':'Concurrency Sweep','step13':'Cache Sweep','other':'Other'};
+    const groups = {};
+    allRes.forEach(r => {
+        if (!r.test_id) return;
+        let gk = 'other';
+        for (const p of trafficPrefixes) {
+            if (r.test_id.startsWith(p)) { gk = p; break; }
+        }
+        if (!groups[gk]) groups[gk] = [];
+        groups[gk].push(r);
+    });
+    if (groups['step2'] || groups['step3']) {
+        groups['tp-cal'] = (groups['step2'] || []).concat(groups['step3'] || []);
+        delete groups['step2'];
+        delete groups['step3'];
+    }
+
+    const groupOrder = ['tp-cal', 'step6', 'step7', 'step9', 'step11-sweep', 'step13', 'other'];
+    const groupKeys = groupOrder.filter(k => groups[k] && groups[k].length);
+    if (!groupKeys.length) return '';
+
+    let s = '';
+    s += '<div style="border-radius:10px;overflow:hidden;border:2px solid #64748b;border-left:6px solid #64748b;margin-bottom:20px;">';
+    s += '<div style="background:linear-gradient(135deg,#475569,#64748b);padding:12px 20px;color:white;font-weight:700;">Traffic Overview</div>';
+    s += '<div style="padding:12px 20px;font-size:0.95em;">Request counts, errors, and NIXL issues per test phase.</div>';
+
+    let totalRequests = 0, totalErrors = 0, totalNixl = 0;
+    allRes.forEach(r => {
+        totalRequests += r.request_total || 0;
+        totalErrors += r.request_errored || 0;
+        totalNixl += r.nixl_errors || 0;
+    });
+    s += '<div class="stats">';
+    s += dlStatCard(totalRequests.toLocaleString(), 'Total Requests');
+    s += dlStatCard(totalErrors.toLocaleString(), 'Total Errors');
+    if (totalNixl > 0) s += dlStatCard(totalNixl.toLocaleString(), 'NIXL Errors');
+    const errorRate = totalRequests > 0 ? (totalErrors / totalRequests * 100).toFixed(2) : '0';
+    s += dlStatCard(errorRate + '%', 'Error Rate');
+    s += '</div>';
+
+    groupKeys.forEach(gk => {
+        const label = trafficLabelMap[gk] || gk;
+        s += `<div class="chart-box"><h3>Traffic: ${label}</h3><div id="dl-traffic-${gk}" style="height:400px"></div></div>`;
+    });
+
+    const tid = 'dl-traffic-table';
+    s += `<div class="chart-box"><h3>Per-Test Traffic</h3>`;
+    s += `<table id="${tid}"><tr>`;
+    s += `<th style="cursor:pointer;" onclick="sortReportTable('${tid}',0,'str')">Test ID &#x21C5;</th>`;
+    s += `<th style="cursor:pointer;" onclick="sortReportTable('${tid}',1,'str')">Config &#x21C5;</th>`;
+    s += `<th style="cursor:pointer;" onclick="sortReportTable('${tid}',2,'num')">Requests &#x21C5;</th>`;
+    s += `<th style="cursor:pointer;" onclick="sortReportTable('${tid}',3,'num')">Errors &#x21C5;</th>`;
+    s += `<th style="cursor:pointer;" onclick="sortReportTable('${tid}',4,'num')">NIXL Errors &#x21C5;</th>`;
+    s += `<th style="cursor:pointer;" onclick="sortReportTable('${tid}',5,'num')">NIXL Degraded &#x21C5;</th>`;
+    s += `<th style="cursor:pointer;" onclick="sortReportTable('${tid}',6,'num')">Quality &#x21C5;</th>`;
+    s += '</tr>';
+    allRes.forEach(r => {
+        if (r.request_total == null && r.request_errored == null) return;
+        const errStyle = (r.request_errored || 0) > 0 ? 'color:#dc2626;font-weight:700;' : '';
+        const nixlStyle = (r.nixl_errors || 0) > 0 ? 'color:#dc2626;font-weight:700;' : '';
+        s += '<tr>';
+        s += `<td>${r.test_id || '-'}</td>`;
+        s += `<td>${r.config_name || '-'}</td>`;
+        s += `<td data-val="${r.request_total ?? 0}">${r.request_total ?? '-'}</td>`;
+        s += `<td data-val="${r.request_errored ?? 0}" style="${errStyle}">${r.request_errored ?? 0}</td>`;
+        s += `<td data-val="${r.nixl_errors ?? 0}" style="${nixlStyle}">${r.nixl_errors ?? 0}</td>`;
+        s += `<td data-val="${r.nixl_degraded ?? 0}">${r.nixl_degraded ?? 0}</td>`;
+        s += `<td data-val="${r.quality ?? ''}">${r.quality ?? '-'}</td>`;
+        s += '</tr>';
+    });
+    s += '</table></div>';
+
+    s += '</div>';
+    return s;
+}
+
+// ── Deploy Timing Tab ──────────────────────────────────────────────────────
+function buildDeployTimingSection(data, allRes) {
+    const timings = [];
+    allRes.forEach(r => {
+        const dt = r.test_config && r.test_config.deploy_timing;
+        if (dt && (dt.pod_creation_s != null || dt.model_load_s != null)) {
+            timings.push({
+                config: r.config_name || r.test_id || 'Unknown',
+                pod_creation_s: dt.pod_creation_s || 0,
+                model_load_s: dt.model_load_s || 0,
+                total_s: (dt.pod_creation_s || 0) + (dt.model_load_s || 0)
+            });
+        }
+    });
+    if (!timings.length) return '';
+
+    let s = '';
+    s += '<div style="border-radius:10px;overflow:hidden;border:2px solid #f59e0b;border-left:6px solid #f59e0b;margin-bottom:20px;">';
+    s += '<div style="background:linear-gradient(135deg,#f59e0b,#fbbf24);padding:12px 20px;color:white;font-weight:700;">Deploy Timing</div>';
+    s += '<div style="padding:12px 20px;font-size:0.95em;">Time taken for pod creation and model loading per configuration.</div>';
+
+    const avgTotal = timings.reduce((a, t) => a + t.total_s, 0) / timings.length;
+    const minTotal = Math.min(...timings.map(t => t.total_s));
+    const maxTotal = Math.max(...timings.map(t => t.total_s));
+    s += '<div class="stats">';
+    s += dlStatCard(timings.length, 'Deployments');
+    s += dlStatCard(dlFmt(avgTotal, 0) + 's', 'Avg Deploy Time');
+    s += dlStatCard(dlFmt(minTotal, 0) + 's', 'Fastest Deploy');
+    s += dlStatCard(dlFmt(maxTotal, 0) + 's', 'Slowest Deploy');
+    s += '</div>';
+
+    s += '<div class="chart-box"><h3>Deploy Time per Configuration</h3><div id="dl-deploy-timing" style="height:430px"></div></div>';
+
+    s += '<div class="chart-box"><h3>Deploy Timing Details</h3>';
+    s += '<table><tr><th>Configuration</th><th>Pod Creation (s)</th><th>Model Load (s)</th><th>Total (s)</th></tr>';
+    [...timings].sort((a, b) => a.total_s - b.total_s).forEach(t => {
+        s += `<tr><td>${t.config}</td><td>${dlFmt(t.pod_creation_s, 1)}</td><td>${dlFmt(t.model_load_s, 1)}</td><td><strong>${dlFmt(t.total_s, 1)}</strong></td></tr>`;
+    });
+    s += '</table></div>';
+
+    s += '</div>';
+    return s;
+}
+
 // ── Chart Rendering Script ──────────────────────────────────────────────────
 function buildChartScript(data, charts, allRes) {
     let s = '<script>';
@@ -854,6 +1123,146 @@ function buildChartScript(data, charts, allRes) {
         s += '  });';
         s += '});';
     }
+
+    // Concurrency Sweep charts
+    if (data.concurrency_sweep && Object.keys(data.concurrency_sweep).length) {
+        s += 'var csData=' + JSON.stringify(data.concurrency_sweep) + ';';
+        s += 'var csColors=["#3b82f6","#10b981","#f59e0b","#ef4444","#8b5cf6","#0ea5e9","#ec4899","#14b8a6"];';
+        s += '[{k:"p90"},{k:"p95"},{k:"p99"}].forEach(function(pctl){';
+        s += '  var el=document.getElementById("dl-sweep-ttft-"+pctl.k);if(!el)return;';
+        s += '  var traces=[];var ci=0;';
+        s += '  Object.keys(csData).forEach(function(cfgKey){';
+        s += '    var pts=[].concat(csData[cfgKey]).sort(function(a,b){return a.concurrency-b.concurrency});';
+        s += '    var cx=pts.map(function(p){return p.concurrency});';
+        s += '    var lats=pts.map(function(p){return p["ttft_"+pctl.k]});';
+        s += '    var color=csColors[ci%csColors.length];ci++;';
+        s += '    var label=pts[0]&&pts[0].config_label?pts[0].config_label:cfgKey;';
+        s += '    traces.push({x:cx,y:lats,name:label,type:"scatter",mode:"lines+markers",line:{color:color,width:2},marker:{color:color,size:8}});';
+        s += '    var calPts=pts.filter(function(p){return p.is_calibrated});';
+        s += '    if(calPts.length){traces.push({x:calPts.map(function(p){return p.concurrency}),y:calPts.map(function(p){return p["ttft_"+pctl.k]}),name:label+" (calibrated)",type:"scatter",mode:"markers",marker:{color:color,size:16,symbol:"star",line:{width:2,color:"white"}},showlegend:false});}';
+        s += '  });';
+        s += '  Plotly.newPlot(el,traces,{...lo,xaxis:{title:"Concurrent Users"},yaxis:{title:"TTFT "+pctl.k.toUpperCase()+" (ms)"},showlegend:true,legend:{x:0,y:1.15,orientation:"h"}},co);';
+        s += '});';
+        s += '(function(){var el=document.getElementById("dl-sweep-tput-gpu");if(!el)return;';
+        s += '  var traces=[];var ci=0;';
+        s += '  Object.keys(csData).forEach(function(cfgKey){';
+        s += '    var pts=[].concat(csData[cfgKey]).sort(function(a,b){return a.concurrency-b.concurrency});';
+        s += '    var cx=pts.map(function(p){return p.concurrency});';
+        s += '    var tpg=pts.map(function(p){return p.throughput_per_gpu});';
+        s += '    var color=csColors[ci%csColors.length];ci++;';
+        s += '    var label=pts[0]&&pts[0].config_label?pts[0].config_label:cfgKey;';
+        s += '    traces.push({x:cx,y:tpg,name:label,type:"scatter",mode:"lines+markers",line:{color:color,width:2},marker:{color:color,size:8}});';
+        s += '  });';
+        s += '  Plotly.newPlot(el,traces,{...lo,xaxis:{title:"Concurrent Users"},yaxis:{title:"Throughput per GPU (req/s/GPU)"},showlegend:true,legend:{x:0,y:1.15,orientation:"h"}},co);';
+        s += '})();';
+        s += '(function(){var el=document.getElementById("dl-sweep-cache-hit");if(!el)return;';
+        s += '  var traces=[];var ci=0;';
+        s += '  Object.keys(csData).forEach(function(cfgKey){';
+        s += '    var pts=[].concat(csData[cfgKey]).filter(function(p){return p.cache_hit_pct!=null}).sort(function(a,b){return a.concurrency-b.concurrency});';
+        s += '    if(!pts.length)return;';
+        s += '    var cx=pts.map(function(p){return p.concurrency});';
+        s += '    var ch=pts.map(function(p){return p.cache_hit_pct});';
+        s += '    var color=csColors[ci%csColors.length];ci++;';
+        s += '    var label=pts[0].config_label||cfgKey;';
+        s += '    traces.push({x:cx,y:ch,name:label,type:"scatter",mode:"lines+markers",line:{color:color,width:2},marker:{color:color,size:8}});';
+        s += '  });';
+        s += '  if(traces.length)Plotly.newPlot(el,traces,{...lo,xaxis:{title:"Concurrent Users"},yaxis:{title:"Cache Hit %",range:[0,105]},showlegend:true,legend:{x:0,y:1.15,orientation:"h"}},co);';
+        s += '})();';
+    }
+
+    // Cache Sweep charts
+    if (data.cache_sweep && Object.keys(data.cache_sweep).length) {
+        s += 'var cacheSweepData=' + JSON.stringify(data.cache_sweep) + ';';
+        s += 'var cacheColors=["#8b5cf6","#10b981","#3b82f6","#ef4444","#f59e0b","#0ea5e9","#ec4899","#14b8a6"];';
+        s += '[{k:"p90"},{k:"p95"},{k:"p99"}].forEach(function(pctl){';
+        s += '  var el=document.getElementById("dl-cache-ttft-"+pctl.k);if(!el)return;';
+        s += '  var traces=[];var ci=0;';
+        s += '  Object.keys(cacheSweepData).forEach(function(cfgKey){';
+        s += '    var pts=[].concat(cacheSweepData[cfgKey]).sort(function(a,b){return(a.hit_pct||0)-(b.hit_pct||0)});';
+        s += '    var cx=pts.map(function(p){return p.hit_pct});';
+        s += '    var lats=pts.map(function(p){return p["ttft_"+pctl.k]});';
+        s += '    var color=cacheColors[ci%cacheColors.length];ci++;';
+        s += '    traces.push({x:cx,y:lats,name:cfgKey,type:"scatter",mode:"lines+markers",line:{color:color,width:2},marker:{color:color,size:8}});';
+        s += '  });';
+        s += '  Plotly.newPlot(el,traces,{...lo,xaxis:{title:"Configured Cache Hit %"},yaxis:{title:"TTFT "+pctl.k.toUpperCase()+" (ms)"},showlegend:true,legend:{x:0,y:1.15,orientation:"h"}},co);';
+        s += '});';
+        s += '(function(){var el=document.getElementById("dl-cache-tput");if(!el)return;';
+        s += '  var traces=[];var ci=0;';
+        s += '  Object.keys(cacheSweepData).forEach(function(cfgKey){';
+        s += '    var pts=[].concat(cacheSweepData[cfgKey]).sort(function(a,b){return(a.hit_pct||0)-(b.hit_pct||0)});';
+        s += '    var cx=pts.map(function(p){return p.hit_pct});';
+        s += '    var tps=pts.map(function(p){return p.throughput_mean});';
+        s += '    var color=cacheColors[ci%cacheColors.length];ci++;';
+        s += '    traces.push({x:cx,y:tps,name:cfgKey,type:"scatter",mode:"lines+markers",line:{color:color,width:2},marker:{color:color,size:8}});';
+        s += '  });';
+        s += '  Plotly.newPlot(el,traces,{...lo,xaxis:{title:"Configured Cache Hit %"},yaxis:{title:"Throughput Mean (req/s)"},showlegend:true,legend:{x:0,y:1.15,orientation:"h"}},co);';
+        s += '})();';
+        s += '(function(){var el=document.getElementById("dl-cache-actual-hit");if(!el)return;';
+        s += '  var traces=[];var ci=0;';
+        s += '  Object.keys(cacheSweepData).forEach(function(cfgKey){';
+        s += '    var pts=[].concat(cacheSweepData[cfgKey]).filter(function(p){return p.actual_hit_rate!=null}).sort(function(a,b){return(a.hit_pct||0)-(b.hit_pct||0)});';
+        s += '    if(!pts.length)return;';
+        s += '    var cx=pts.map(function(p){return p.hit_pct});';
+        s += '    var ahr=pts.map(function(p){return p.actual_hit_rate});';
+        s += '    var color=cacheColors[ci%cacheColors.length];ci++;';
+        s += '    traces.push({x:cx,y:ahr,name:cfgKey,type:"scatter",mode:"lines+markers",line:{color:color,width:2},marker:{color:color,size:8}});';
+        s += '  });';
+        s += '  traces.push({x:[0,100],y:[0,100],name:"Ideal (y=x)",type:"scatter",mode:"lines",line:{color:"#94a3b8",width:1,dash:"dash"},showlegend:true});';
+        s += '  if(traces.length>1)Plotly.newPlot(el,traces,{...lo,xaxis:{title:"Configured Cache Hit %",range:[-5,105]},yaxis:{title:"Actual Hit Rate",range:[-5,105]},showlegend:true,legend:{x:0,y:1.15,orientation:"h"}},co);';
+        s += '})();';
+    }
+
+    // Traffic charts
+    {
+        const hasTraffic = allRes.some(r => r.request_total != null || r.request_errored != null);
+        if (hasTraffic) {
+            const trafficGroupMap = {};
+            const trafficPrefixes = ['step11-sweep', 'step13', 'step9', 'step7', 'step6', 'step3', 'step2'];
+            allRes.forEach(r => {
+                if (!r.test_id) return;
+                let gk = 'other';
+                for (const p of trafficPrefixes) {
+                    if (r.test_id.startsWith(p)) { gk = p; break; }
+                }
+                if (!trafficGroupMap[gk]) trafficGroupMap[gk] = [];
+                trafficGroupMap[gk].push({
+                    label: r.config_name || r.test_id || '?',
+                    request_total: r.request_total || 0,
+                    request_errored: r.request_errored || 0,
+                    nixl_errors: r.nixl_errors || 0
+                });
+            });
+            if (trafficGroupMap['step2'] || trafficGroupMap['step3']) {
+                trafficGroupMap['tp-cal'] = (trafficGroupMap['step2'] || []).concat(trafficGroupMap['step3'] || []);
+                delete trafficGroupMap['step2'];
+                delete trafficGroupMap['step3'];
+            }
+            const trafficLabelMap = {'tp-cal':'TP Calibration','step6':'Aggregated','step7':'PD/EP','step9':'EPP Tuning','step11-sweep':'Concurrency Sweep','step13':'Cache Sweep','other':'Other'};
+            s += 'var trafGrps=' + JSON.stringify(trafficGroupMap) + ';';
+            s += 'var trafLabels=' + JSON.stringify(trafficLabelMap) + ';';
+            s += '["tp-cal","step6","step7","step9","step11-sweep","step13","other"].forEach(function(gk){';
+            s += '  if(!trafGrps[gk])return;';
+            s += '  var el=document.getElementById("dl-traffic-"+gk);if(!el)return;';
+            s += '  var pts=trafGrps[gk];';
+            s += '  var labels=pts.map(function(r){return r.label});';
+            s += '  var traces=[{x:labels,y:pts.map(function(r){return r.request_total}),name:"Requests",type:"scatter",mode:"lines+markers",line:{color:"#3b82f6",width:2},marker:{color:"#3b82f6",size:8}},';
+            s += '    {x:labels,y:pts.map(function(r){return r.request_errored}),name:"Errors",type:"scatter",mode:"lines+markers",line:{color:"#ef4444",width:2},marker:{color:"#ef4444",size:8}}];';
+            s += '  var hasNixl=pts.some(function(r){return r.nixl_errors>0});';
+            s += '  if(hasNixl){traces.push({x:labels,y:pts.map(function(r){return r.nixl_errors}),name:"NIXL Errors",type:"scatter",mode:"lines+markers",line:{color:"#f59e0b",width:2},marker:{color:"#f59e0b",size:8}});}';
+            s += '  var label=trafLabels[gk]||gk;';
+            s += '  Plotly.newPlot(el,traces,{...lo,height:400,margin:{...lo.margin,b:100},xaxis:{tickangle:-35},yaxis:{title:"Count"},showlegend:true,legend:{x:0,y:1.15,orientation:"h"},title:{text:"Traffic: "+label}},co);';
+            s += '});';
+        }
+    }
+
+    // Deploy Timing chart
+    s += '(function(){var el=document.getElementById("dl-deploy-timing");if(!el)return;';
+    s += '  var timings=[];ar.forEach(function(r){var dt=r.test_config&&r.test_config.deploy_timing;if(dt&&(dt.pod_creation_s!=null||dt.model_load_s!=null)){timings.push({config:r.config_name||r.test_id||"Unknown",pod:dt.pod_creation_s||0,model:dt.model_load_s||0});}});';
+    s += '  if(!timings.length)return;';
+    s += '  timings.sort(function(a,b){return(a.pod+a.model)-(b.pod+b.model)});';
+    s += '  var labels=timings.map(function(t){return t.config});';
+    s += '  Plotly.newPlot(el,[{x:labels,y:timings.map(function(t){return t.pod}),name:"Pod Creation",type:"bar",marker:{color:"#3b82f6"}},{x:labels,y:timings.map(function(t){return t.model}),name:"Model Load",type:"bar",marker:{color:"#f59e0b"}}],{...vl,barmode:"stack",title:{text:"Deploy Time per Configuration"},xaxis:{tickangle:-45},yaxis:{title:"Time (seconds)"}},co);';
+    s += '})();';
 
     // Hide non-active panes after rendering
     s += 'setTimeout(function(){document.querySelectorAll(".dl-pane").forEach(function(p){p.style.display="";});},100);';
