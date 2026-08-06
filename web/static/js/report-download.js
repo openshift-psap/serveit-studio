@@ -1018,7 +1018,7 @@ function buildTestSettingsSection(data) {
         s += '</tr>';
 
         sections.forEach(section => {
-            s += `<tr><td colspan="${2 + archOrder.length}" style="background:#f1f5f9;font-weight:700;color:#475569;padding:6px 10px;text-align:center;">${section.title}</td></tr>`;
+            s += `<tr><td colspan="${2 + archOrder.length}" style="background:#f1f5f9;font-weight:700;color:#475569;padding:8px 10px;font-size:1em;text-align:center;">${section.title}</td></tr>`;
             section.params.forEach(param => {
                 if (param.ep_only && !hasEp) return;
                 s += `<tr><td style="color:#334155;text-align:center;"><code style="font-size:0.9em;">${param.label}</code></td>`;

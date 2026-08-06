@@ -930,7 +930,7 @@ function _renderChartsImpl(data, runId, content) {
             html += '</tr>';
 
             for (const section of sections) {
-                html += `<tr><td colspan="${2 + archOrder.length}" style="background:#f1f5f9;font-weight:700;color:#475569;padding:6px 10px;font-size:0.95em;text-align:center;">${section.title}</td></tr>`;
+                html += `<tr><td colspan="${2 + archOrder.length}" style="background:#f1f5f9;font-weight:700;color:#475569;padding:8px 10px;font-size:1em;text-align:center;">${section.title}</td></tr>`;
                 for (const param of section.params) {
                     if (param.ep_only && !hasEp) continue;
                     html += `<tr><td style="color:#334155;text-align:center;"><code style="font-size:0.9em;">${param.label}</code></td>`;
