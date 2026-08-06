@@ -95,6 +95,23 @@ class TestResult:
                 pass
         return None
 
+    def _metrics_val(self, key):
+        if self.metrics_json:
+            try:
+                import json
+                m = json.loads(self.metrics_json) if isinstance(self.metrics_json, str) else self.metrics_json
+                return m.get(key)
+            except Exception:
+                pass
+        return None
+
+    @property
+    def e2e_latency_p90(self): return self._metrics_val('e2e_latency_p90')
+    @property
+    def e2e_latency_p95(self): return self._metrics_val('e2e_latency_p95')
+    @property
+    def e2e_latency_p99(self): return self._metrics_val('e2e_latency_p99')
+
     @property
     def total_gpus(self) -> int:
         """Calculate total GPUs used."""
