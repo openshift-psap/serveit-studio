@@ -161,7 +161,7 @@ class ReportAnalyzer:
                   if arch_rs},
             },
             # Calibrated recommendations from sweep (step11) — realistic production performance
-            'calibrated_best': self._build_calibrated_best(successful, run_meta.get('num_users')),
+            'calibrated_best': self._build_calibrated_best(successful),
         }
 
     def _build_calibrated_best(self, successful, user_concurrency=None):
