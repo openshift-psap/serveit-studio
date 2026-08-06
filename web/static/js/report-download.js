@@ -589,6 +589,77 @@ function buildCalSection(data) {
     const cal = data.calibrated_qps;
     let s = '';
 
+    // Calibrated Recommendation cards (same design as Deployment Recommendation)
+    const calBest = data.summary && data.summary.calibrated_best;
+    if (calBest) {
+        const bp = data.recommendation ? data.recommendation.best_by_percentile || {} : {};
+        const calTypes = [
+            { key: 'balanced', label: 'Best Balanced', desc: 'Best TTFT-to-throughput ratio at calibrated load', color: '#0ea5e9', icon: '&#9878;' },
+            { key: 'lowest_ttft', label: 'Lowest TTFT', desc: 'Fastest first token at calibrated load', color: '#3b82f6', icon: '&#9201;' },
+            { key: 'highest_tput', label: 'Highest Throughput', desc: 'Maximum req/s at calibrated load', color: '#f59e0b', icon: '&#9889;' },
+            { key: 'most_efficient', label: 'Most Efficient', desc: 'Best throughput per GPU at calibrated load', color: '#8b5cf6', icon: '&#128176;' },
+        ];
+        const archColors = { pd: '#2563eb', aggregated: '#059669', ep: '#7c3aed' };
+        const calSeen = new Set();
+
+        s += '<div style="border:2px solid #0ea5e9;border-left:6px solid #0ea5e9;border-radius:10px;margin:0 0 20px;overflow:hidden;">';
+        s += '<div style="background:linear-gradient(135deg,#0ea5e9,#06b6d4);padding:14px 20px;font-size:1.1em;font-weight:800;color:white;">Calibrated Recommendations</div>';
+        s += '<div style="padding:12px 20px 4px;color:#475569;font-size:0.9em;">Performance at sustainable production load — calibrated concurrency where queue wait is reasonable.</div>';
+        s += '<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:16px;padding:16px 20px;">';
+
+        calTypes.forEach(sel => {
+            const cfg = calBest[sel.key];
+            if (!cfg) return;
+            const calId = cfg.test_id || cfg.config_name || '';
+            let dupNote = '';
+            if (calSeen.has(calId)) {
+                const others = calTypes.filter(s2 => s2.key !== sel.key && calBest[s2.key] && (calBest[s2.key].test_id || calBest[s2.key].config_name) === calId).map(s2 => s2.label);
+                if (others.length) dupNote = others.join(', ');
+                else return;
+            }
+            calSeen.add(calId);
+
+            const archKey = cfg.architecture || 'aggregated';
+            const aColor = archColors[archKey] || '#64748b';
+            let deploy;
+            if (cfg.prefill_pods && cfg.decode_pods) {
+                deploy = cfg.prefill_tp === cfg.decode_tp
+                    ? `${cfg.prefill_pods}P+${cfg.decode_pods}D TP=${cfg.prefill_tp || cfg.tp || '?'}`
+                    : `${cfg.prefill_pods}P+${cfg.decode_pods}D PTP=${cfg.prefill_tp || '?'} DTP=${cfg.decode_tp || '?'}`;
+            } else {
+                deploy = cfg.name || cfg.config_name || '';
+            }
+            const tput = cfg.throughput_mean || cfg.throughput_p90 || '-';
+            const concStr = cfg.concurrency ? `c=${cfg.concurrency}` : '';
+            const fmtE2e = v => v != null ? (v >= 1000 ? (v/1000).toFixed(1) + ' s' : Math.round(v) + ' ms') : '-';
+
+            s += '<div style="background:white;border-radius:12px;overflow:hidden;box-shadow:0 1px 3px rgba(0,0,0,0.08);border:2px solid #cbd5e1;">';
+            s += `<div style="background:linear-gradient(135deg,${sel.color},${sel.color}cc);padding:10px 14px;color:white;">`;
+            s += `<div style="font-weight:700;font-size:0.85em;">${sel.icon} ${sel.label}</div>`;
+            s += `<div style="display:flex;gap:4px;margin-top:2px;"><div style="font-size:0.65em;background:${aColor};padding:2px 6px;border-radius:10px;font-weight:600;">${archKey.toUpperCase()}</div>`;
+            if (dupNote) s += `<div style="font-size:0.65em;background:rgba(255,255,255,0.2);padding:2px 6px;border-radius:10px;">+ ${dupNote}</div>`;
+            s += '</div>';
+            if (sel.desc) s += `<div style="font-size:0.7em;opacity:0.9;margin-top:1px;">${sel.desc}</div>`;
+            s += '</div>';
+            s += '<div style="padding:12px 14px;">';
+            s += `<div style="font-size:1.1em;font-weight:800;color:#0f172a;margin-bottom:8px;">${deploy}</div>`;
+            s += '<div style="display:flex;gap:12px;font-size:0.85em;color:#475569;margin-bottom:4px;">';
+            s += `<span>Throughput: <strong>${typeof tput === 'number' ? tput.toFixed(2) + ' req/s' : tput}</strong></span>`;
+            s += `<span>GPUs: <strong>${cfg.gpus || '?'}</strong></span>`;
+            if (concStr) s += `<span style="color:#0ea5e9;font-weight:600;">${concStr}</span>`;
+            s += '</div>';
+            s += '<table style="width:100%;font-size:0.8em;border-collapse:collapse;margin-top:6px;">';
+            s += '<tr style="color:#94a3b8;font-weight:600;"><td></td><td>TTFT</td><td>E2E</td><td>ITL</td></tr>';
+            s += `<tr><td style="font-weight:600;color:#475569;">P90</td><td style="font-weight:700;color:#1e293b;">${cfg.ttft_p90 != null ? Math.round(cfg.ttft_p90).toLocaleString() + ' ms' : '-'}</td><td>${fmtE2e(cfg.e2e_p90)}</td><td>${cfg.itl_p90 ? cfg.itl_p90 + ' ms' : '-'}</td></tr>`;
+            if (cfg.ttft_p95) s += `<tr><td style="font-weight:600;color:#475569;">P95</td><td style="color:#64748b;">${Math.round(cfg.ttft_p95).toLocaleString()} ms</td><td style="color:#64748b;">${fmtE2e(cfg.e2e_p95)}</td><td>${cfg.itl_p95 ? cfg.itl_p95 + ' ms' : '-'}</td></tr>`;
+            if (cfg.ttft_p99) s += `<tr><td style="font-weight:600;color:#475569;">P99</td><td style="color:#64748b;">${Math.round(cfg.ttft_p99).toLocaleString()} ms</td><td style="color:#64748b;">${fmtE2e(cfg.e2e_p99)}</td><td>${cfg.itl_p99 ? cfg.itl_p99 + ' ms' : '-'}</td></tr>`;
+            s += '</table>';
+            s += '</div></div>';
+        });
+
+        s += '</div></div>';
+    }
+
     // GPU sizing analysis
     if (cal.gpu_sizing) {
         const g = cal.gpu_sizing;

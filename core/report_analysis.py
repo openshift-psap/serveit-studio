@@ -328,8 +328,8 @@ class ReportAnalyzer:
                 step6_agg_tests.append(r)
             elif r.config_name.startswith('step8'):
                 step8_tests.append(r)
-            # Build comprehensive pools: all results except calibration (step2/3) and cache sweep (step13)
-            if r.config_name.startswith(('step2', 'step3', 'step13')):
+            # Build comprehensive pools: step6/7/8/9 results only (exclude calibration, sweep, cache sweep)
+            if r.config_name.startswith(('step2', 'step3', 'step11', 'step13')):
                 continue
             if r.architecture == 'aggregated':
                 all_agg_tests.append(r)
