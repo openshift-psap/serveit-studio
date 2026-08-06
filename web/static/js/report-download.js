@@ -1004,6 +1004,14 @@ function buildConcurrencySweepSection(data) {
         s += '<div class="chart-box"><h3>Cache Hit % vs Concurrency</h3><div id="dl-sweep-cache-hit" style="height:430px"></div></div>';
     }
 
+    // Sweep Pareto charts
+    s += '<div class="chart-box"><h3>Pareto &mdash; Throughput vs Interactivity</h3>';
+    s += '<p style="color:#64748b;font-size:0.85em;margin:0 0 4px;">Each architecture\'s best throughput/GPU at each concurrency level. Higher curve = better architecture.</p>';
+    s += '<div id="dl-sweep-pareto-inter" style="height:600px"></div></div>';
+    s += '<div class="chart-box"><h3>Pareto &mdash; Throughput vs TTFT</h3>';
+    s += '<p style="color:#64748b;font-size:0.85em;margin:0 0 4px;">Trade-off between latency and throughput per GPU across concurrency levels.</p>';
+    s += '<div id="dl-sweep-pareto-ttft" style="height:600px"></div></div>';
+
     const tid = 'dl-sweep-table';
     s += `<div class="chart-box"><h3>All Sweep Data Points</h3>`;
     s += `<table id="${tid}"><tr>`;
@@ -1521,6 +1529,46 @@ function buildChartScript(data, charts, allRes) {
         s += '  if(traces.length)Plotly.newPlot(el,traces,{...lo,xaxis:{title:"Concurrent Users"},yaxis:{title:"Cache Hit %",range:[0,105]},showlegend:true,legend:{x:0,y:1.15,orientation:"h"}},co);';
         s += '})();';
     }
+
+    // Sweep Pareto: Throughput vs Interactivity
+    s += '(function(){var el=document.getElementById("dl-sweep-pareto-inter");if(!el||!csData)return;';
+    s += '  var allPts=[];';
+    s += '  Object.keys(csData).forEach(function(cfgKey){';
+    s += '    csData[cfgKey].forEach(function(p){';
+    s += '      var tputGpu=p.throughput_per_gpu||0;var inter=p.interactivity||0;';
+    s += '      if(tputGpu>0&&inter>0){allPts.push({x:inter,y:tputGpu,label:p.config_label||cfgKey,conc:p.concurrency,arch:cfgKey});}';
+    s += '    });';
+    s += '  });';
+    s += '  if(allPts.length<2)return;';
+    s += '  var byArch={};allPts.forEach(function(p){if(!byArch[p.arch])byArch[p.arch]=[];byArch[p.arch].push(p);});';
+    s += '  var traces=[];var ci=0;';
+    s += '  Object.keys(byArch).forEach(function(arch){';
+    s += '    var pts=byArch[arch].sort(function(a,b){return a.x-b.x});';
+    s += '    var color=csColors[ci%csColors.length];ci++;';
+    s += '    traces.push({x:pts.map(function(p){return p.x}),y:pts.map(function(p){return p.y}),text:pts.map(function(p){return p.label+"<br>c="+p.conc+"<br>"+p.y.toFixed(0)+" tok/s/GPU"}),name:pts[0].label,mode:"lines+markers",line:{color:color,width:2},marker:{color:color,size:10},hovertemplate:"<b>%{text}</b><extra></extra>"});';
+    s += '  });';
+    s += '  Plotly.newPlot(el,traces,{...lo,height:600,xaxis:{title:"Interactivity (tok/s/user)"},yaxis:{title:"Throughput per GPU (tok/s/GPU)"},showlegend:true,legend:{x:0,y:1.15,orientation:"h"}},co);';
+    s += '})();';
+
+    // Sweep Pareto: Throughput vs TTFT
+    s += '(function(){var el=document.getElementById("dl-sweep-pareto-ttft");if(!el||!csData)return;';
+    s += '  var allPts=[];';
+    s += '  Object.keys(csData).forEach(function(cfgKey){';
+    s += '    csData[cfgKey].forEach(function(p){';
+    s += '      var tputGpu=p.throughput_per_gpu||0;var ttft=p.ttft_p90||0;';
+    s += '      if(tputGpu>0&&ttft>0){allPts.push({x:ttft,y:tputGpu,label:p.config_label||cfgKey,conc:p.concurrency,arch:cfgKey});}';
+    s += '    });';
+    s += '  });';
+    s += '  if(allPts.length<2)return;';
+    s += '  var byArch={};allPts.forEach(function(p){if(!byArch[p.arch])byArch[p.arch]=[];byArch[p.arch].push(p);});';
+    s += '  var traces=[];var ci=0;';
+    s += '  Object.keys(byArch).forEach(function(arch){';
+    s += '    var pts=byArch[arch].sort(function(a,b){return a.x-b.x});';
+    s += '    var color=csColors[ci%csColors.length];ci++;';
+    s += '    traces.push({x:pts.map(function(p){return p.x}),y:pts.map(function(p){return p.y}),text:pts.map(function(p){return p.label+"<br>c="+p.conc+"<br>TTFT="+p.x.toFixed(0)+"ms"}),name:pts[0].label,mode:"lines+markers",line:{color:color,width:2},marker:{color:color,size:10},hovertemplate:"<b>%{text}</b><extra></extra>"});';
+    s += '  });';
+    s += '  Plotly.newPlot(el,traces,{...lo,height:600,xaxis:{title:"TTFT P90 (ms)"},yaxis:{title:"Throughput per GPU (tok/s/GPU)"},showlegend:true,legend:{x:0,y:1.15,orientation:"h"}},co);';
+    s += '})();';
 
     // Cache Sweep charts
     if (data.cache_sweep && Object.keys(data.cache_sweep).length) {
