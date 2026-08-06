@@ -161,28 +161,32 @@ class ReportAnalyzer:
                   if arch_rs},
             },
             # Calibrated recommendations from sweep (step11) — realistic production performance
-            'calibrated_best': self._build_calibrated_best(successful),
+            'calibrated_best': self._build_calibrated_best(successful, run_meta.get('num_users')),
         }
 
-    def _build_calibrated_best(self, successful):
+    def _build_calibrated_best(self, successful, user_concurrency=None):
         """Build best configs from calibrated sweep (step11) results.
 
         Uses the same 4-category selection as the main recommendations:
         balanced, lowest TTFT, highest throughput, most efficient.
-        Groups by architecture (PD, aggregated, EP) then flattens to global best.
+        For TTFT recommendation, only considers results at ≥50% of user concurrency
+        to avoid recommending unrealistically low-load configs.
         """
         sweep = [r for r in successful if r.config_name.startswith('step11-sweep-') and r.ttft_p90 and r.ttft_p90 > 0]
         if not sweep:
             return None
 
         import json as _cj
-        def _to_dict(r):
-            conc = None
+        def _get_conc(r):
             if r.test_config_json:
                 try:
-                    conc = _cj.loads(r.test_config_json).get('num_users')
+                    return _cj.loads(r.test_config_json).get('num_users')
                 except Exception:
                     pass
+            return None
+
+        def _to_dict(r):
+            conc = _get_conc(r)
             ptp = r.prefill_tp or r.tensor_parallelism
             dtp = r.decode_tp or r.tensor_parallelism
             entry = {
@@ -191,6 +195,9 @@ class ReportAnalyzer:
                 'ttft_p90': round(r.ttft_p90, 1),
                 'ttft_p95': round(r.ttft_p95, 1) if r.ttft_p95 else None,
                 'ttft_p99': round(r.ttft_p99, 1) if r.ttft_p99 else None,
+                'e2e_p90': round(r.e2e_latency_p90 * 1000, 1) if getattr(r, 'e2e_latency_p90', None) else None,
+                'e2e_p95': round(r.e2e_latency_p95 * 1000, 1) if getattr(r, 'e2e_latency_p95', None) else None,
+                'e2e_p99': round(r.e2e_latency_p99 * 1000, 1) if getattr(r, 'e2e_latency_p99', None) else None,
                 'itl_p90': round(r.itl_p90, 2) if r.itl_p90 else None,
                 'itl_p95': round(r.itl_p95, 2) if r.itl_p95 else None,
                 'itl_p99': round(r.itl_p99, 2) if r.itl_p99 else None,
@@ -206,8 +213,14 @@ class ReportAnalyzer:
                 })
             return entry
 
+        # For TTFT: only consider results at ≥50% of user concurrency
+        min_conc = int(user_concurrency * 0.5) if user_concurrency else 1
+        ttft_eligible = [r for r in sweep if (_get_conc(r) or 0) >= min_conc]
+        if not ttft_eligible:
+            ttft_eligible = sweep
+
         balanced = min(sweep, key=lambda r: (r.ttft_p90 or 1e9) / (r.throughput_mean or 0.001))
-        lowest_ttft = min(sweep, key=lambda r: r.ttft_p90 or 1e9)
+        lowest_ttft = min(ttft_eligible, key=lambda r: r.ttft_p90 or 1e9)
         highest_tput = max(sweep, key=lambda r: r.throughput_mean or 0)
         most_eff = max(sweep, key=lambda r: (r.throughput_mean or 0) / max(r.total_gpus, 1))
 
