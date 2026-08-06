@@ -213,14 +213,8 @@ class ReportAnalyzer:
                 })
             return entry
 
-        # For TTFT: only consider results at ≥75% of user concurrency
-        min_conc = int(user_concurrency * 0.75) if user_concurrency else 1
-        ttft_eligible = [r for r in sweep if (_get_conc(r) or 0) >= min_conc]
-        if not ttft_eligible:
-            ttft_eligible = sweep
-
         balanced = min(sweep, key=lambda r: (r.ttft_p90 or 1e9) / (r.throughput_mean or 0.001))
-        lowest_ttft = min(ttft_eligible, key=lambda r: r.ttft_p90 or 1e9)
+        lowest_ttft = min(sweep, key=lambda r: r.ttft_p90 or 1e9)
         highest_tput = max(sweep, key=lambda r: r.throughput_mean or 0)
         most_eff = max(sweep, key=lambda r: (r.throughput_mean or 0) / max(r.total_gpus, 1))
 
