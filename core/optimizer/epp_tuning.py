@@ -469,6 +469,12 @@ class EPPTuningMixin:
                 self.epp_benchmark_results[arch] = [('_skipped_no_metrics', {}, None)]
                 continue
 
+            # For ≤3 pods, smart weight derivation adds noise — use preset as-is
+            if arch_pods <= 3:
+                self.log(f"  ✅ {arch.upper()}: {arch_pods} pods — using preset weights (too few pods for smart derivation)", 'success')
+                self.epp_benchmark_results[arch] = [('_skipped_few_pods', self._get_user_baseline_weights(), None)]
+                continue
+
             smart_weights = self._compute_smart_epp_weights(num_pods=arch_pods, arch=arch)
 
             # Baseline TTFT from Step 6/7 (ran with default EPP weights)
