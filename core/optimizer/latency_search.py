@@ -532,7 +532,7 @@ class LatencySearchMixin:
             return ttft / tput
 
         # --- Build unified config list: recommendation configs first, then by score ---
-        # Collect all candidates: ('pd', split, result) or ('agg', tp, result)
+        # Collect all candidates: ('pd', split, result), ('agg', tp, result), or ('ep', split, result)
         all_candidates = []
         if self.pareto_results:
             for split, result in self.pareto_results:
@@ -545,15 +545,19 @@ class LatencySearchMixin:
         elif self.aggregated_tp and self.aggregated_result:
             if self.aggregated_result.ttft_p90 and _tput_of(self.aggregated_result) > 0:
                 all_candidates.append(('agg', self.aggregated_tp, self.aggregated_result))
+        if hasattr(self, 'ep_results') and self.ep_results:
+            for split, result in self.ep_results:
+                if result.ttft_p90 and _tput_of(result) > 0:
+                    all_candidates.append(('ep', split, result))
 
         # Pick the 4 recommendation configs (deduplicated by config identity)
         selected = []
         seen_keys = set()
 
         def _config_key(c):
-            if c[0] == 'pd':
+            if c[0] in ('pd', 'ep'):
                 s = c[1]
-                return ('pd', s.prefill_pods, s.prefill_tp, s.decode_pods, s.decode_tp)
+                return (c[0], s.prefill_pods, s.prefill_tp, s.decode_pods, s.decode_tp)
             return ('agg', c[1])
 
         def _add_unique(candidate):
@@ -584,15 +588,19 @@ class LatencySearchMixin:
                 # Best PD and best aggregated by balanced score
                 pd_candidates = [c for c in all_candidates if c[0] == 'pd']
                 agg_candidates = [c for c in all_candidates if c[0] == 'agg']
+                ep_candidates = [c for c in all_candidates if c[0] == 'ep']
                 if pd_candidates:
                     _add_unique(min(pd_candidates, key=lambda x: _score(x[2])))
+                if ep_candidates:
+                    _add_unique(min(ep_candidates, key=lambda x: _score(x[2])))
                 if agg_candidates:
                     _add_unique(min(agg_candidates, key=lambda x: _score(x[2])))
 
         self.log(f"Concurrency sweep: {len(selected)} configs selected", 'info')
         for c in selected:
-            if c[0] == 'pd':
-                self.log(f"  {c[1].prefill_pods}P×TP{c[1].prefill_tp} + {c[1].decode_pods}D×TP{c[1].decode_tp} (PD)", 'info')
+            if c[0] in ('pd', 'ep'):
+                arch_label = c[0].upper()
+                self.log(f"  {c[1].prefill_pods}P×TP{c[1].prefill_tp} + {c[1].decode_pods}D×TP{c[1].decode_tp} ({arch_label})", 'info')
             else:
                 replicas = self.config.total_gpus // c[1] if c[1] else self.config.total_gpus
                 self.log(f"  {replicas}×TP{c[1]} (Aggregated)", 'info')
@@ -682,6 +690,35 @@ class LatencySearchMixin:
                 agg_c = cal_agg_results[0]
                 self.log(f"  PD  (c={pd_c['concurrency']}): TTFT={pd_c['ttft_p90']:.0f}ms, {pd_c['throughput_per_gpu']:.0f} tok/s/gpu", 'info')
                 self.log(f"  Agg (c={agg_c['concurrency']}): TTFT={agg_c['ttft_p90']:.0f}ms, {agg_c['throughput_per_gpu']:.0f} tok/s/gpu", 'info')
+
+        # --- Sweep EP configs ---
+        ep_configs = [(c[1], c[2]) for c in selected if c[0] == 'ep']
+        cal_ep_results = []
+        for cfg_idx, (split, ep_result) in enumerate(ep_configs):
+            if self._should_stop():
+                break
+            ep_tput_mean = _tput_of(ep_result)
+            label = f"{split.prefill_pods}P×TP{split.prefill_tp} + {split.decode_pods}D×TP{split.decode_tp} (EP)"
+            ep_calibrated = self._compute_calibrated_concurrency(ep_tput_mean, original_concurrency, f'EP ({label})')
+            if sweep_on:
+                ep_levels = self._generate_sweep_levels(ep_calibrated)
+            else:
+                ep_levels = [ep_calibrated]
+
+            total_gpus_ep = (split.prefill_pods * split.prefill_tp +
+                             split.decode_pods * split.decode_tp)
+
+            sweep_key = f"ep-{split.prefill_pods}p{split.decode_pods}d-ptp{split.prefill_tp}-dtp{split.decode_tp}"
+            current_split = split
+            ep_sweep = self._run_sweep_for_arch(
+                sweep_key, ep_calibrated, ep_levels,
+                lambda: self._create_ep_config(current_split),
+                total_gpus_ep, config_label=label
+            )
+
+            cr = [r for r in ep_sweep if r['is_calibrated']]
+            if cr:
+                cal_ep_results.extend(cr)
 
         # Compare with original (overloaded) result
         if pd_configs and cal_results:

@@ -680,6 +680,11 @@ def run_optimization_background(data):
         osl_stdev = _get('osl_stdev')
 
         # Convert characters to tokens if needed
+        isl_original = isl
+        osl_original = osl
+        isl_stdev_original = isl_stdev
+        osl_stdev_original = osl_stdev
+        chars_per_token = None
         if length_unit == 'characters':
             chars_per_token = 4.0
             try:
@@ -903,6 +908,11 @@ data:
         # Create or resume database entry
         if resume_run_id:
             run_id = resume_run_id
+            log_to_ui("", 'info')
+            log_to_ui("=" * 80, 'success')
+            log_to_ui(f"🔄 RESUMING RUN #{run_id} — completed tests will be skipped", 'success')
+            log_to_ui("=" * 80, 'success')
+            log_to_ui("", 'info')
             with get_db() as conn:
                 conn.execute(
                     'UPDATE optimization_runs SET status = ? WHERE id = ?',
@@ -1106,10 +1116,18 @@ data:
             )
 
             # Save full config to DB for resume
+            cfg_dict = recipe_config.to_dict()
+            cfg_dict['length_unit'] = length_unit
+            if length_unit == 'characters':
+                cfg_dict['isl_original_chars'] = isl_original
+                cfg_dict['osl_original_chars'] = osl_original
+                cfg_dict['isl_stdev_original_chars'] = isl_stdev_original
+                cfg_dict['osl_stdev_original_chars'] = osl_stdev_original
+                cfg_dict['chars_per_token'] = round(chars_per_token, 2)
             with get_db() as conn:
                 conn.execute(
                     'UPDATE optimization_runs SET config_json = ? WHERE id = ?',
-                    (json.dumps(recipe_config.to_dict()), run_id))
+                    (json.dumps(cfg_dict), run_id))
 
             # Run optimization with database persistence
             # Use a dedicated stop flag — only set by explicit user stop action,
@@ -1131,10 +1149,18 @@ data:
 
             # Re-save config after optimizer init — auto-detection (network_type,
             # RDMA, MoE) updates recipe_config fields that were None before
+            cfg_dict2 = recipe_config.to_dict()
+            cfg_dict2['length_unit'] = length_unit
+            if length_unit == 'characters':
+                cfg_dict2['isl_original_chars'] = isl_original
+                cfg_dict2['osl_original_chars'] = osl_original
+                cfg_dict2['isl_stdev_original_chars'] = isl_stdev_original
+                cfg_dict2['osl_stdev_original_chars'] = osl_stdev_original
+                cfg_dict2['chars_per_token'] = round(chars_per_token, 2)
             with get_db() as conn:
                 conn.execute(
                     'UPDATE optimization_runs SET config_json = ? WHERE id = ?',
-                    (json.dumps(recipe_config.to_dict()), run_id))
+                    (json.dumps(cfg_dict2), run_id))
 
             try:
                 results = optimizer.optimize(resume=bool(resume_run_id))

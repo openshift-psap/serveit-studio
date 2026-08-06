@@ -27,7 +27,7 @@ class EPPTuningMixin:
                     WHERE run_id = ? AND architecture = ? AND status = 'completed'
                       AND config_name LIKE ? AND ttft_p90 IS NOT NULL AND ttft_p90 > 0
                     ORDER BY ttft_p90 ASC LIMIT 1
-                ''', (self.run_id, 'pd' if arch in ('pd', 'ep') else arch, f'{step_prefix}%')).fetchone()
+                ''', (self.run_id, arch, f'{step_prefix}%')).fetchone()
                 if row and row[0]:
                     full = _json.loads(row[0])
                     prom = full.get('prometheus_metrics', {})

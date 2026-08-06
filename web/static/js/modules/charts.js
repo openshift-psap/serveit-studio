@@ -127,13 +127,17 @@ function _renderChartsImpl(data, runId, content) {
         const gc = gColors[rec.goal] || '#10b981';
         html += `<div class="chart-card" style="border: 3px solid ${gc}; border-left: 8px solid ${gc};">`;
         html += `<div class="chart-card-header" style="background: ${gc}; color: white; font-size: 1.3em;">`;
-        html += `${gIcons[rec.goal] || ''} ${rec.goal_info.name}</div>`;
+        html += `Deployment Recommendation <span style="font-size:0.7em;font-weight:400;opacity:0.85;">&mdash; ${rec.goal_info.name}</span></div>`;
         html += `<div style="background:${gc}dd; color:white; padding:8px 20px; font-size:0.92em; display:flex; flex-wrap:wrap; gap:6px 20px;">`;
         html += `<span>Model: <strong>${rec.model}</strong></span>`;
-        let wlLabel = `ISL: <strong>${rec.workload.isl}</strong>`;
-        if (rec.workload.isl_stdev) wlLabel += ` (σ=${rec.workload.isl_stdev})`;
-        wlLabel += ` | OSL: <strong>${rec.workload.osl}</strong>`;
-        if (rec.workload.osl_stdev) wlLabel += ` (σ=${rec.workload.osl_stdev})`;
+        var bCpt = rec.workload.chars_per_token || 4.5;
+        var bIslC = rec.workload.isl_original_chars || Math.round(rec.workload.isl * bCpt);
+        var bOslC = rec.workload.osl_original_chars || Math.round(rec.workload.osl * bCpt);
+        let wlLabel = `Prompt: <strong>${bIslC.toLocaleString()} chars</strong>`;
+        var bIslStdC = rec.workload.isl_stdev ? (rec.workload.isl_stdev_original_chars || Math.round(rec.workload.isl_stdev * bCpt)) : null;
+        if (bIslStdC) wlLabel += ` (σ=${bIslStdC.toLocaleString()})`;
+        wlLabel += ` | Output: <strong>${bOslC.toLocaleString()} chars</strong>`;
+        if (rec.workload.osl_stdev) wlLabel += ` (σ=${Math.round(rec.workload.osl_stdev * bCpt).toLocaleString()})`;
         if (rec.workload.turns && rec.workload.turns > 1) wlLabel += ` | Turns: <strong>${rec.workload.turns}</strong>`;
         html += `<span>${wlLabel}</span>`;
         html += `<span>Users: <strong>${rec.workload.users}</strong></span>`;
@@ -153,7 +157,7 @@ function _renderChartsImpl(data, runId, content) {
     // ============================================================
     if (rec && rec.recommendations && Object.keys(rec.recommendations).length) {
         html += '<div class="chart-card" style="border: 2px solid #10b981; border-left: 6px solid #10b981;">';
-        html += '<div class="chart-card-header" style="background: linear-gradient(135deg, #059669, #10b981); color: white; font-size: 1.1em; font-weight: 800;">Deployment Recommendation (Steps 6-8)</div>';
+        html += '<div class="chart-card-header" style="background: linear-gradient(135deg, #059669, #10b981); color: white; font-size: 1.1em; font-weight: 800;">Deployment Recommendation</div>';
         html += '<div style="padding:12px 20px 4px; color:#475569; font-size:0.9em;">Best configurations found during optimization. Each architecture\'s best TTFT is shown at P90, P95, and P99 — the config on the left has the lowest latency at that percentile.</div>';
         html += '<div class="chart-card-body" style="padding: 24px;">';
 
@@ -704,11 +708,26 @@ function _renderChartsImpl(data, runId, content) {
             return t;
         }
 
-        // Settings tables
+        // Settings tables — always display prompt length in characters
+        var cpt = rc.chars_per_token || 4.5;
+        var islChars, oslChars, islStdevChars, oslStdevChars;
+        if (rc.length_unit === 'characters' && rc.isl_original_chars) {
+            islChars = rc.isl_original_chars;
+            oslChars = rc.osl_original_chars;
+            islStdevChars = rc.isl_stdev_original_chars;
+            oslStdevChars = rc.osl_stdev_original_chars;
+        } else {
+            islChars = Math.round(rc.isl * cpt);
+            oslChars = Math.round(rc.osl * cpt);
+            islStdevChars = rc.isl_stdev ? Math.round(rc.isl_stdev * cpt) : null;
+            oslStdevChars = rc.osl_stdev ? Math.round(rc.osl_stdev * cpt) : null;
+        }
+        var islDisplay = islChars.toLocaleString() + ' characters' + (islStdevChars ? ' (&sigma;=' + islStdevChars.toLocaleString() + ')' : '');
+        var oslDisplay = oslChars.toLocaleString() + ' characters' + (oslStdevChars ? ' (&sigma;=' + oslStdevChars.toLocaleString() + ')' : '');
         html += settingsTable('Workload', '#059669', [
             ['Model', rc.model_name || na],
-            ['ISL', rc.isl + (rc.isl_stdev ? ' (&sigma;=' + rc.isl_stdev + ')' : '')],
-            ['OSL', rc.osl + (rc.osl_stdev ? ' (&sigma;=' + rc.osl_stdev + ')' : '')],
+            ['Prompt Length', islDisplay],
+            ['Prompt Output', oslDisplay],
             ['Concurrent Users', rc.qps != null ? Math.round(rc.qps) : na],
             ['Rate Type', rc.rate_type || 'concurrent'],
             ['Test Duration', (rc.test_duration || 300) + 's'],
@@ -1936,23 +1955,7 @@ function _renderChartsImpl(data, runId, content) {
             'chart-vllm-time'
         );
 
-        // Network throughput row
-        if (charts.vllm.network && charts.vllm.network.pod_tx.some(v => v > 0)) {
-            const hasNIXL = charts.vllm.network.nixl_tx && charts.vllm.network.nixl_tx.some(v => v > 0);
-            const hasIB = charts.vllm.network.ib_rx.some(v => v > 0) || hasNIXL;
-            html += chartCard(
-                'Pod Network Throughput',
-                'Average network transmit (TX) and receive (RX) rates aggregated across all pods in each configuration. Higher TX indicates more data being sent to clients (generated tokens). Higher RX reflects incoming requests and model weight loading.',
-                'chart-net-pod'
-            );
-            if (hasIB) {
-                html += chartCard(
-                    'NIXL KV Transfer Throughput',
-                    'Network throughput for KV cache transfer between prefill and decode pods. In PD/EP configurations, NIXL transfers the computed KV cache from prefill to decode pods over RDMA or pod network. Higher values indicate more data flowing between pods.',
-                    'chart-net-ib'
-                );
-            }
-        }
+        // Network charts moved to Traffic tab
     }
 
     // Flush vLLM metrics
@@ -2286,6 +2289,46 @@ function _renderChartsImpl(data, runId, content) {
             }
         });
 
+        // Traffic Overview stat cards
+        var totalReqs = 0, totalErrs = 0, totalNixlErrs = 0;
+        coreResults.forEach(function(r) {
+            totalReqs += r.request_total || 0;
+            totalErrs += r.request_errored || 0;
+            totalNixlErrs += r.nixl_errors || 0;
+        });
+        var errRate = totalReqs > 0 ? (totalErrs / totalReqs * 100).toFixed(2) : '0';
+        var overviewHtml = '<div class="chart-card" style="border-left:6px solid #475569;">' +
+            '<div class="chart-card-header" style="background:linear-gradient(135deg,#475569,#64748b); color:white;">Traffic Overview</div>' +
+            '<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:16px;padding:20px;">' +
+            '<div style="text-align:center;"><div style="font-size:2em;font-weight:800;color:#1e293b;">' + totalReqs.toLocaleString() + '</div><div style="color:#64748b;font-size:0.85em;">Total Requests</div></div>' +
+            '<div style="text-align:center;"><div style="font-size:2em;font-weight:800;color:' + (totalErrs > 0 ? '#dc2626' : '#1e293b') + ';">' + totalErrs.toLocaleString() + '</div><div style="color:#64748b;font-size:0.85em;">HTTP Request Errors</div></div>';
+        if (totalNixlErrs > 0) {
+            overviewHtml += '<div style="text-align:center;"><div style="font-size:2em;font-weight:800;color:#f59e0b;">' + totalNixlErrs.toLocaleString() + '</div><div style="color:#64748b;font-size:0.85em;">NIXL Transfer Retries</div></div>';
+        }
+        overviewHtml += '<div style="text-align:center;"><div style="font-size:2em;font-weight:800;color:#1e293b;">' + errRate + '%</div><div style="color:#64748b;font-size:0.85em;">Error Rate</div></div>' +
+            '</div></div>';
+        trafficHtml = overviewHtml + trafficHtml;
+
+        // Prepend network throughput charts to traffic section
+        if (charts.vllm && charts.vllm.network && charts.vllm.network.pod_tx && charts.vllm.network.pod_tx.some(v => v > 0)) {
+            var netHtml = '';
+            netHtml += chartCard(
+                'Pod Network Throughput',
+                'Management (eth0) network traffic per configuration.',
+                'chart-net-pod'
+            );
+            var hasNIXL2 = (charts.vllm.network.nixl_tx && charts.vllm.network.nixl_tx.some(v => v > 0)) ||
+                           (charts.vllm.network.ib_rx && charts.vllm.network.ib_rx.some(v => v > 0));
+            if (hasNIXL2) {
+                netHtml += chartCard(
+                    'NIXL KV Transfer Throughput',
+                    'RDMA traffic for KV cache transfer between prefill and decode pods.',
+                    'chart-net-ib'
+                );
+            }
+            trafficHtml = netHtml + trafficHtml;
+        }
+
         if (trafficHtml) {
             secTraffic = trafficHtml;
             chartQueue.push(function() {
@@ -2321,7 +2364,7 @@ function _renderChartsImpl(data, runId, content) {
                           text: errors.map(function(v) { return v > 0 ? v.toLocaleString() : ''; }),
                           textposition: 'top center', textfont: { size: 10, color: '#dc2626' },
                           line: { color: '#dc2626', width: 2 }, marker: { size: 8 } },
-                        { x: labels, y: nixl, name: 'NIXL Errors', mode: 'lines+markers+text',
+                        { x: labels, y: nixl, name: 'NIXL Retries', mode: 'lines+markers+text',
                           text: nixl.map(function(v) { return v > 0 ? v.toLocaleString() : ''; }),
                           textposition: 'top center', textfont: { size: 10, color: '#f59e0b' },
                           line: { color: '#f59e0b', width: 2 }, marker: { size: 8 } }
@@ -2661,13 +2704,11 @@ function _renderChartsImpl(data, runId, content) {
 
                 var ttftAllPts = makeTtftPoints(ttftAllResults);
                 if (ttftAllPts.length > 1) {
-                    // Use actual values — no normalization
                     ttftAllPts.forEach(function(p) { p.nx = p.x; p.ny = p.y; });
 
                     var ttftPd = ttftAllPts.filter(function(p) { return p.arch === 'PD' || p.arch === 'EP'; });
                     var ttftAgg = ttftAllPts.filter(function(p) { return p.arch === 'AGGREGATED'; });
 
-                    // Reuse same frontierLine logic: bucket by Y, keep LOWEST X per bucket
                     function ttftFrontierLine(points) {
                         if (!points.length) return [];
                         var sorted = points.slice().sort(function(a, b) { return a.nx - b.nx; });
@@ -2686,69 +2727,65 @@ function _renderChartsImpl(data, runId, content) {
                     var ttftPdPareto = ttftFrontierLine(ttftPd);
                     var ttftAggPareto = ttftFrontierLine(ttftAgg);
 
+                    // Auto-zoom: use the P95 of X values to clip outliers
+                    var allX = ttftAllPts.map(function(p) { return p.nx; }).sort(function(a,b){ return a-b; });
+                    var p95Idx = Math.min(Math.floor(allX.length * 0.95), allX.length - 1);
+                    var xMax = allX[p95Idx] * 1.2;
+                    // Ensure all frontier points are visible
+                    var frontierMaxX = 0;
+                    ttftAggPareto.concat(ttftPdPareto).forEach(function(p) { if (p.nx > frontierMaxX) frontierMaxX = p.nx; });
+                    if (frontierMaxX > xMax) xMax = frontierMaxX * 1.1;
+
                     var ttftTraces = [];
                     if (ttftAgg.length) {
+                        var visAgg = ttftAgg.filter(function(p) { return p.nx <= xMax; });
                         ttftTraces.push({
-                            x: ttftAgg.map(function(p) { return p.nx; }), y: ttftAgg.map(function(p) { return p.ny; }),
-                            text: ttftAgg.map(function(p) { return p.label + '<br>TTFT P90: ' + p.x.toFixed(0) + 'ms<br>' + p.y.toFixed(0) + ' tok/s/GPU'; }),
-                            name: 'Aggregated — All points', mode: 'markers',
-                            marker: { color: '#fca5a5', size: 18, opacity: 0.5 },
+                            x: visAgg.map(function(p) { return p.nx; }), y: visAgg.map(function(p) { return p.ny; }),
+                            text: visAgg.map(function(p) { return p.label + '<br>TTFT P90: ' + p.x.toFixed(0) + 'ms<br>' + p.y.toFixed(0) + ' tok/s/GPU'; }),
+                            name: 'Aggregated', mode: 'markers',
+                            marker: { color: '#fca5a5', size: 14, opacity: 0.5 },
                             hovertemplate: '<b>%{text}</b><extra></extra>'
                         });
                     }
                     if (ttftPd.length) {
+                        var visPd = ttftPd.filter(function(p) { return p.nx <= xMax; });
                         ttftTraces.push({
-                            x: ttftPd.map(function(p) { return p.nx; }), y: ttftPd.map(function(p) { return p.ny; }),
-                            text: ttftPd.map(function(p) { return p.label + '<br>TTFT P90: ' + p.x.toFixed(0) + 'ms<br>' + p.y.toFixed(0) + ' tok/s/GPU'; }),
-                            name: 'Disaggregation — All points', mode: 'markers',
-                            marker: { color: '#93c5fd', size: 18, opacity: 0.5 },
+                            x: visPd.map(function(p) { return p.nx; }), y: visPd.map(function(p) { return p.ny; }),
+                            text: visPd.map(function(p) { return p.label + '<br>TTFT P90: ' + p.x.toFixed(0) + 'ms<br>' + p.y.toFixed(0) + ' tok/s/GPU'; }),
+                            name: 'Disaggregation', mode: 'markers',
+                            marker: { color: '#93c5fd', size: 14, opacity: 0.5 },
                             hovertemplate: '<b>%{text}</b><extra></extra>'
                         });
                     }
                     if (ttftAggPareto.length) {
                         ttftTraces.push({
                             x: ttftAggPareto.map(function(p) { return p.nx; }), y: ttftAggPareto.map(function(p) { return p.ny; }),
-                            name: 'Aggregated — Frontier', mode: ttftAggPareto.length > 1 ? 'lines+markers' : 'markers',
-                            line: { color: '#dc2626', width: 3 }, marker: { color: '#dc2626', size: 6 }
+                            text: ttftAggPareto.map(function(p) { return p.label + '<br>' + p.x.toFixed(0) + 'ms / ' + p.y.toFixed(0) + ' tok/s/GPU'; }),
+                            name: 'Aggregated — Frontier', mode: ttftAggPareto.length > 1 ? 'lines+markers+text' : 'markers+text',
+                            line: { color: '#dc2626', width: 3 }, marker: { color: '#dc2626', size: 8 },
+                            textposition: 'top right', textfont: { size: 10, color: '#dc2626' },
+                            hovertemplate: '<b>%{text}</b><extra></extra>'
                         });
                     }
                     if (ttftPdPareto.length) {
                         ttftTraces.push({
                             x: ttftPdPareto.map(function(p) { return p.nx; }), y: ttftPdPareto.map(function(p) { return p.ny; }),
-                            name: 'Disaggregation — Frontier', mode: ttftPdPareto.length > 1 ? 'lines+markers' : 'markers',
-                            line: { color: '#2563eb', width: 3 }, marker: { color: '#2563eb', size: 6 }
+                            text: ttftPdPareto.map(function(p) { return p.label + '<br>' + p.x.toFixed(0) + 'ms / ' + p.y.toFixed(0) + ' tok/s/GPU'; }),
+                            name: 'Disaggregation — Frontier', mode: ttftPdPareto.length > 1 ? 'lines+markers+text' : 'markers+text',
+                            line: { color: '#2563eb', width: 3 }, marker: { color: '#2563eb', size: 8 },
+                            textposition: 'top left', textfont: { size: 10, color: '#2563eb' },
+                            hovertemplate: '<b>%{text}</b><extra></extra>'
                         });
                     }
-
-                    var ttftAnnotations = [];
-                    var ttftAnnotIdx = 0;
-                    function addTtftAnnotations(points, color) {
-                        points.forEach(function(p) {
-                            if (!p.label) return;
-                            ttftAnnotIdx++;
-                            var side = ttftAnnotIdx % 2 === 0 ? 1 : -1;
-                            ttftAnnotations.push({
-                                x: p.nx, y: p.ny,
-                                text: p.label,
-                                showarrow: true, arrowhead: 0, arrowwidth: 1, arrowcolor: color,
-                                ax: 60 * side, ay: -30 - (ttftAnnotIdx % 3) * 15,
-                                font: { size: 10, color: color },
-                                bgcolor: 'rgba(255,255,255,0)', borderpad: 2,
-                            });
-                        });
-                    }
-                    addTtftAnnotations(ttftAggPareto, '#dc2626');
-                    addTtftAnnotations(ttftPdPareto, '#2563eb');
 
                     Plotly.newPlot(cid('chart-pareto-ttft'), ttftTraces, {
                         ...plotlyLayout, height: 850,
-                        xaxis: { title: 'TTFT P90 (ms)', gridcolor: '#d1d5db', rangemode: 'tozero' },
+                        xaxis: { title: 'TTFT P90 (ms)', gridcolor: '#d1d5db', range: [0, xMax] },
                         yaxis: { title: 'Token Throughput per GPU (tok/s/GPU)', gridcolor: '#d1d5db', rangemode: 'tozero' },
                         showlegend: true,
                         legend: { x: 1.02, y: 1, xanchor: 'left', bgcolor: 'rgba(255,255,255,0.95)', bordercolor: '#e2e8f0', borderwidth: 1 },
                         margin: { t: 40, b: 70, l: 70, r: 220 },
                         plot_bgcolor: 'white', paper_bgcolor: 'white',
-                        annotations: ttftAnnotations,
                     }, paretoConfig);
                 }
             }

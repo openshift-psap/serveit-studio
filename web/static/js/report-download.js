@@ -1,7 +1,7 @@
 // report-download.js — Self-contained HTML report generator for ServeIt Studio
 // Extracted from app.js to keep the download report maintainable separately.
 
-function downloadHTMLReport(runId, data) {
+async function downloadHTMLReport(runId, data) {
     const charts = data.charts;
     const rec = data.recommendation || {};
     const summary = data.summary;
@@ -10,6 +10,25 @@ function downloadHTMLReport(runId, data) {
     const pdResults = allRes.filter(r => r.architecture === 'PD');
     const hasVLLM = charts.vllm && charts.vllm.configs.length;
     const hasPD = pdResults.length > 0;
+
+    // Fetch manifests if not already embedded in data
+    const needsManifests = allRes.some(r => r.manifest_types && r.manifest_types.length > 0 && (!r.manifests || !Object.keys(r.manifests).length));
+    if (needsManifests) {
+        try {
+            const resp = await fetch(`/api/runs/${runId}/charts`);
+            if (resp.ok) {
+                const fresh = await resp.json();
+                if (fresh.all_results) {
+                    fresh.all_results.forEach(fr => {
+                        if (fr.manifests && Object.keys(fr.manifests).length) {
+                            const match = allRes.find(r => r.test_id === fr.test_id);
+                            if (match) match.manifests = fr.manifests;
+                        }
+                    });
+                }
+            }
+        } catch(e) { /* offline — manifests won't be available */ }
+    }
 
     const html = buildFullReport(runId, data, charts, rec, summary, best, allRes, hasPD, hasVLLM);
 
@@ -40,6 +59,7 @@ function buildFullReport(runId, data, charts, rec, summary, best, allRes, hasPD,
     const secCacheSweep = buildCacheSweepSection(data);
     const secTraffic = buildTrafficSection(data, allRes);
     const secDeploy = buildDeployTimingSection(data, allRes);
+    const secPareto = buildParetoFrontierSection(data, allRes);
 
     const dlTabs = [];
     if (secRec) dlTabs.push({ id: 'rec', label: '&#9733; Recommendation', html: secRec });
@@ -52,6 +72,7 @@ function buildFullReport(runId, data, charts, rec, summary, best, allRes, hasPD,
     if (secCacheSweep) dlTabs.push({ id: 'cachesweep', label: '&#128203; Cache Sweep', html: secCacheSweep });
     if (secVLLM) dlTabs.push({ id: 'vllm', label: '&#9889; vLLM Metrics', html: secVLLM });
     if (secEpp) dlTabs.push({ id: 'epp', label: '&#9881; EPP Tuning', html: secEpp });
+    if (secPareto) dlTabs.push({ id: 'pareto', label: '&#128200; Pareto Frontier', html: secPareto });
     if (secTraffic) dlTabs.push({ id: 'traffic', label: '&#128230; Traffic', html: secTraffic });
     if (secDeploy) dlTabs.push({ id: 'deploy', label: '&#9202; Deploy Timing', html: secDeploy });
     if (secTestCfg) dlTabs.push({ id: 'settings', label: '&#9881; Test Settings', html: secTestCfg });
@@ -128,12 +149,16 @@ function buildRecSection(runId, data, rec, summary, best, allRes) {
         const gIcons = { ttft: '&#9201;', throughput: '&#9889;', balanced: '&#9878;', aggregated_only: '&#9634;', pd_only: '&#8644;', ep_only: '&#9881;' };
         const gc = gColors[rec.goal] || '#10b981';
         s += `<div style="border:3px solid ${gc};border-left:8px solid ${gc};border-radius:10px;margin:20px 0;overflow:hidden;">`;
-        s += `<div style="background:${gc};color:white;padding:14px 20px;font-size:1.3em;font-weight:800;">${gIcons[rec.goal] || ''} ${rec.goal_info.name}</div>`;
+        s += `<div style="background:${gc};color:white;padding:14px 20px;font-size:1.3em;font-weight:800;">Deployment Recommendation <span style="font-size:0.7em;font-weight:400;opacity:0.85;">&mdash; ${rec.goal_info.name}</span></div>`;
         s += `<div style="background:${gc}dd;color:white;padding:8px 20px;font-size:0.92em;">`;
-        s += `Model: <strong>${rec.model}</strong> &nbsp;|&nbsp; ISL: <strong>${rec.workload.isl}</strong>`;
-        if (rec.workload.isl_stdev) s += ` (&sigma;=${rec.workload.isl_stdev})`;
-        s += ` | OSL: <strong>${rec.workload.osl}</strong>`;
-        if (rec.workload.osl_stdev) s += ` (&sigma;=${rec.workload.osl_stdev})`;
+        const wCpt = rec.workload.chars_per_token || 4.5;
+        const wIslC = rec.workload.isl_original_chars || Math.round(rec.workload.isl * wCpt);
+        const wOslC = rec.workload.osl_original_chars || Math.round(rec.workload.osl * wCpt);
+        const wIslStdC = rec.workload.isl_stdev ? (rec.workload.length_unit === 'characters' ? rec.workload.isl_stdev : Math.round(rec.workload.isl_stdev * wCpt)) : null;
+        s += `Model: <strong>${rec.model}</strong> &nbsp;|&nbsp; Prompt: <strong>${wIslC.toLocaleString()} chars</strong>`;
+        if (wIslStdC) s += ` (&sigma;=${wIslStdC.toLocaleString()})`;
+        s += ` | Output: <strong>${wOslC.toLocaleString()} chars</strong>`;
+        if (rec.workload.osl_stdev) s += ` (&sigma;=${Math.round(rec.workload.osl_stdev * wCpt).toLocaleString()})`;
         if (rec.workload.turns && rec.workload.turns > 1) s += ` | Turns: <strong>${rec.workload.turns}</strong>`;
         s += ` &nbsp;|&nbsp; Users: <strong>${rec.workload.users}</strong> &nbsp;|&nbsp; Tests: <strong>${rec.total_tests}</strong>`;
         if (rec.total_duration) s += ` &nbsp;|&nbsp; Duration: <strong>${rec.total_duration}</strong>`;
@@ -181,7 +206,7 @@ function buildRecSection(runId, data, rec, summary, best, allRes) {
                         const bpTp = bpData.tp || c.tp || c.prefill_tp || '?';
                         cardDeploy = `${bpData.prefill_pods} Prefill + ${bpData.decode_pods} Decode pods, TP=${bpTp}`;
                     } else {
-                        cardDeploy = bpData.config_name;
+                        cardDeploy = bpData.config_name || bpData.name || c.config_name || '';
                     }
                     cardArch = archKey.toUpperCase();
                 }
@@ -202,16 +227,16 @@ function buildRecSection(runId, data, rec, summary, best, allRes) {
 
                 if (key === 'throughput') {
                     // Throughput cards: show mean throughput + TTFT at this percentile
-                    const tputMean = c.throughput_mean || c.throughput_p90;
-                    const ttftAtPctl = c[`ttft_${p}`] || c.ttft_p90;
+                    const tputMean = c.throughput_mean || c.throughput_p90 || '-';
+                    const ttftAtPctl = c[`ttft_${p}`] || c.ttft_p90 || '-';
                     const ratio = (c.ratio && c.decode_pods > 0) ? `P:D ratio ${c.ratio} | ` : '';
-                    s += `<div style="font-size:0.9em;color:#475569;">${ratio}TTFT ${pLabel}: <strong>${ttftAtPctl} ms</strong> | Throughput Mean: <strong>${tputMean} req/s</strong> | ${gpus} GPUs${concStr}</div>`;
+                    s += `<div style="font-size:0.9em;color:#475569;">${ratio}TTFT ${pLabel}: <strong>${ttftAtPctl != null ? ttftAtPctl : '-'} ms</strong> | Throughput Mean: <strong>${tputMean} req/s</strong> | ${gpus || '?'} GPUs${concStr}</div>`;
                 } else {
                     // TTFT cards: show TTFT at this percentile + throughput mean
-                    const ttftVal = pi === 0 ? c.ttft_p90 : cardConfig.ttft;
-                    const tputMean = pi === 0 ? (c.throughput_mean || c.throughput_p90) : (cardConfig.throughput_mean || cardConfig.throughput);
+                    const ttftVal = pi === 0 ? c.ttft_p90 : (cardConfig[`ttft_${p}`] || cardConfig.ttft_p90 || '-');
+                    const tputMean = pi === 0 ? (c.throughput_mean || c.throughput_p90 || '-') : (cardConfig.throughput_mean || cardConfig.throughput_p90 || '-');
                     const ratio = (pi === 0 && c.ratio && c.decode_pods > 0) ? `P:D ratio ${c.ratio} | ` : '';
-                    s += `<div style="font-size:0.9em;color:#475569;">${ratio}TTFT ${pLabel}: <strong>${ttftVal} ms</strong> | Throughput Mean: <strong>${tputMean} req/s</strong> | ${gpus} GPUs${concStr}</div>`;
+                    s += `<div style="font-size:0.9em;color:#475569;">${ratio}TTFT ${pLabel}: <strong>${ttftVal != null ? ttftVal : '-'} ms</strong> | Throughput Mean: <strong>${tputMean} req/s</strong> | ${gpus || '?'} GPUs${concStr}</div>`;
                 }
                 if (pi === 0) s += `<div style="font-size:0.82em;color:#64748b;margin-top:8px;line-height:1.5;">${goalExplain[key] || ''}</div>`;
                 s += '</div>';
@@ -314,6 +339,14 @@ function buildCfgSection(runId, data, charts, allRes, hasPD) {
     s += '<div class="chart-box"><h3>GPU Efficiency</h3><div id="p3" style="height:430px"></div></div></div>';
     s += '<div class="chart-box"><h3>Architecture Comparison</h3><div id="p4" style="height:430px"></div></div>';
 
+    // Cache hit rate chart
+    const cacheData = allRes.filter(r => r.cache_hit_pct != null);
+    if (cacheData.length) {
+        s += '<div class="chart-box"><h3>Prefix Cache Hit Rate per Configuration</h3>';
+        s += '<p style="color:#64748b;font-size:0.9em;margin:0 0 8px;">Actual prefix cache hit percentage measured by vLLM during each test.</p>';
+        s += '<div id="dl-cfg-cache-hit" style="height:400px"></div></div>';
+    }
+
     // Per-percentile PD charts
     if (hasPD) {
         ['P90', 'P95', 'P99'].forEach(p => {
@@ -361,12 +394,19 @@ function buildCfgSection(runId, data, charts, allRes, hasPD) {
         s += `<th style="cursor:pointer;" onclick="sortReportTable('${tid}',8,'num')">ITL P90 &#x21C5;</th>`;
         s += `<th style="cursor:pointer;" onclick="sortReportTable('${tid}',9,'num')">GPUs &#x21C5;</th>`;
         s += `<th style="cursor:pointer;" onclick="sortReportTable('${tid}',10,'num')">Efficiency &#x21C5;</th>`;
+        s += `<th>Manifests</th>`;
         s += '</tr>';
         allRes.forEach(r => {
             const cls = pn.has(r.config_name) ? ' class="pareto"' : '';
             const na = 'N/A';
             const eppBadge = (r.test_id && r.test_id.startsWith('step11-epp-')) ? ' <span style="background:#7c3aed;color:white;font-size:0.65em;padding:1px 5px;border-radius:3px;">EPP TUNED</span>' : '';
-            s += `<tr${cls}><td>${r.config_name}${eppBadge}</td><td>${r.architecture}</td><td data-val="${r.ttft_p90}">${r.ttft_p90}</td><td data-val="${r.ttft_p95 ?? ''}">${r.ttft_p95 ?? na}</td><td data-val="${r.ttft_p99 ?? ''}">${r.ttft_p99 ?? na}</td><td data-val="${r.throughput_p90}">${r.throughput_p90}</td><td data-val="${r.throughput_p95 ?? ''}">${r.throughput_p95 ?? na}</td><td data-val="${r.throughput_p99 ?? ''}">${r.throughput_p99 ?? na}</td><td data-val="${r.itl_p90 ?? ''}">${r.itl_p90 ?? na}</td><td data-val="${r.gpus}">${r.gpus}</td><td data-val="${r.efficiency}">${r.efficiency}</td></tr>`;
+            let manifestLinks = '-';
+            if (r.manifest_types && r.manifest_types.length > 0) {
+                manifestLinks = r.manifest_types.filter(t => !t.includes('service')).map(t => {
+                    return `<a href="#" onclick="dlManifest('${r.test_id}','${t}');return false;" title="Download ${t}.yaml" style="color:#0ea5e9;text-decoration:none;font-size:11px;padding:2px 6px;background:#f0f9ff;border-radius:4px;border:1px solid #bae6fd;display:inline-block;margin:1px;cursor:pointer;">${t.toUpperCase()}</a>`;
+                }).join(' ');
+            }
+            s += `<tr${cls}><td>${r.config_name}${eppBadge}</td><td>${r.architecture}</td><td data-val="${r.ttft_p90}">${r.ttft_p90}</td><td data-val="${r.ttft_p95 ?? ''}">${r.ttft_p95 ?? na}</td><td data-val="${r.ttft_p99 ?? ''}">${r.ttft_p99 ?? na}</td><td data-val="${r.throughput_p90}">${r.throughput_p90}</td><td data-val="${r.throughput_p95 ?? ''}">${r.throughput_p95 ?? na}</td><td data-val="${r.throughput_p99 ?? ''}">${r.throughput_p99 ?? na}</td><td data-val="${r.itl_p90 ?? ''}">${r.itl_p90 ?? na}</td><td data-val="${r.gpus}">${r.gpus}</td><td data-val="${r.efficiency}">${r.efficiency}</td><td>${manifestLinks}</td></tr>`;
         });
         s += '</table></div>';
     }
@@ -378,6 +418,12 @@ function buildCfgSection(runId, data, charts, allRes, hasPD) {
 function buildCmpSection(runId, rec, data) {
     if (!rec || (!rec.pd_vs_agg && !rec.ep_vs_agg)) return '';
     let s = '';
+
+    // Architecture comparison charts
+    s += '<div class="grid2">';
+    s += '<div class="chart-box"><h3>Architecture Comparison</h3><div id="dl-chart-arch" style="height:430px"></div></div>';
+    s += '<div class="chart-box"><h3>Percentile Comparison: Winner vs Aggregated</h3><div id="dl-chart-pctile" style="height:430px"></div></div>';
+    s += '</div>';
 
     // PD vs Aggregated
     if (rec.pd_vs_agg) {
@@ -586,11 +632,7 @@ function buildVLLMSection(charts, hasVLLM) {
     s += '<div class="grid2"><div class="chart-box"><h3>TTFT Percentiles</h3><div id="v1" style="height:430px"></div></div><div class="chart-box"><h3>ITL Percentiles</h3><div id="v2" style="height:430px"></div></div></div>';
     s += '<div class="grid2"><div class="chart-box"><h3>E2E Latency</h3><div id="v3" style="height:430px"></div></div><div class="chart-box"><h3>Token Throughput</h3><div id="v4" style="height:430px"></div></div></div>';
     s += '<div class="grid2"><div class="chart-box"><h3>Request Queue & KV Cache</h3><div id="v5" style="height:430px"></div></div><div class="chart-box"><h3>Time Breakdown & Preemptions</h3><div id="v6" style="height:430px"></div></div></div>';
-    if (charts.vllm.network && charts.vllm.network.pod_tx.some(v => v > 0)) {
-        s += '<div class="grid2"><div class="chart-box"><h3>Pod Network</h3><div id="v7" style="height:430px"></div></div>';
-        if (charts.vllm.network.ib_rx.some(v => v > 0)) s += '<div class="chart-box"><h3>InfiniBand RDMA</h3><div id="v8" style="height:430px"></div></div>';
-        s += '</div>';
-    }
+    // Network charts moved to Traffic tab
     return s;
 }
 
@@ -660,8 +702,21 @@ function buildTestSettingsSection(data) {
     s += '<div>';
     s += '<div class="section-hdr" style="border-bottom:2px solid #10b981;">Workload</div><div style="line-height:2.2;margin-bottom:20px;">';
     s += `<div><span style="color:#64748b;">Model:</span> <strong>${rc.model_name || na}</strong></div>`;
-    s += `<div><span style="color:#64748b;">ISL:</span> ${rc.isl}${rc.isl_stdev ? ' (&sigma;=' + rc.isl_stdev + ')' : ''}</div>`;
-    s += `<div><span style="color:#64748b;">OSL:</span> ${rc.osl}${rc.osl_stdev ? ' (&sigma;=' + rc.osl_stdev + ')' : ''}</div>`;
+    const cpt = rc.chars_per_token || 4.5;
+    let islChars, oslChars, islStdevC, oslStdevC;
+    if (rc.length_unit === 'characters' && rc.isl_original_chars) {
+        islChars = rc.isl_original_chars;
+        oslChars = rc.osl_original_chars;
+        islStdevC = rc.isl_stdev_original_chars;
+        oslStdevC = rc.osl_stdev_original_chars;
+    } else {
+        islChars = Math.round(rc.isl * cpt);
+        oslChars = Math.round(rc.osl * cpt);
+        islStdevC = rc.isl_stdev ? Math.round(rc.isl_stdev * cpt) : null;
+        oslStdevC = rc.osl_stdev ? Math.round(rc.osl_stdev * cpt) : null;
+    }
+    s += `<div><span style="color:#64748b;">Prompt Length:</span> ${islChars.toLocaleString()} characters${islStdevC ? ' (&sigma;=' + islStdevC.toLocaleString() + ')' : ''}</div>`;
+    s += `<div><span style="color:#64748b;">Prompt Output:</span> ${oslChars.toLocaleString()} characters${oslStdevC ? ' (&sigma;=' + oslStdevC.toLocaleString() + ')' : ''}</div>`;
     s += `<div><span style="color:#64748b;">Concurrent Users:</span> ${rc.qps != null ? Math.round(rc.qps) : na}</div>`;
     s += `<div><span style="color:#64748b;">Rate Type:</span> ${rc.rate_type || 'concurrent'}</div>`;
     s += `<div><span style="color:#64748b;">Test Duration:</span> ${rc.test_duration || 300}s</div>`;
@@ -693,12 +748,24 @@ function buildTestSettingsSection(data) {
     s += '<div>';
     s += '<div class="section-hdr" style="border-bottom:2px solid #f59e0b;">Infrastructure</div><div style="line-height:2.2;margin-bottom:20px;">';
     s += `<div><span style="color:#64748b;">Image:</span> <span style="word-break:break-all;font-size:0.9em;">${rc.image || na}</span></div>`;
+    if (rc.scheduler_image) s += `<div><span style="color:#64748b;">Scheduler Image:</span> <span style="word-break:break-all;font-size:0.9em;">${rc.scheduler_image}</span></div>`;
     s += `<div><span style="color:#64748b;">Namespace:</span> ${rc.namespace || na}</div>`;
     s += `<div><span style="color:#64748b;">PVC:</span> ${rc.pvc_name || na}</div>`;
     s += `<div><span style="color:#64748b;">Network Type:</span> ${rc.network_type || na}</div>`;
     s += `<div><span style="color:#64748b;">NCCL IB HCA:</span> ${rc.nccl_ib_hca || na}</div>`;
     if (rc.rdma_nics_per_node) s += `<div><span style="color:#64748b;">RDMA NICs/Node:</span> ${rc.rdma_nics_per_node}</div>`;
     s += '</div>';
+
+    // Component Versions
+    if (data.infra_versions && Object.keys(data.infra_versions).length > 0) {
+        const iv = data.infra_versions;
+        const vLabels = { openshift: 'OpenShift', k8s: 'Kubernetes', gpu_operator: 'GPU Operator', gpu_driver: 'GPU Driver', cuda_runtime: 'CUDA Runtime', network_operator: 'Network Operator', mofed: 'MOFED/DOCA', istio: 'Istio', service_mesh: 'Service Mesh', epp: 'EPP Scheduler', nfd: 'NFD', lws: 'LWS' };
+        s += '<div class="section-hdr" style="border-bottom:2px solid #059669;">Component Versions</div><div style="line-height:2.2;margin-bottom:20px;">';
+        Object.keys(iv).forEach(k => {
+            if (iv[k]) s += `<div><span style="color:#64748b;">${vLabels[k] || k}:</span> ${iv[k]}</div>`;
+        });
+        s += '</div>';
+    }
 
     s += '<div class="section-hdr" style="border-bottom:2px solid #8b5cf6;">Advanced vLLM Settings</div><div style="line-height:2.2;">';
     s += `<div><span style="color:#64748b;">Max Model Len:</span> ${advVal('max_model_len', rc.max_model_len)}</div>`;
@@ -732,6 +799,125 @@ function buildTestSettingsSection(data) {
     s += '</div></div>';
 
     s += '</div></div>';
+
+    // Tuned Settings vs Upstream Defaults (full version matching live report)
+    const allResults = data.all_results || [];
+    const archConfigs = {};
+    const archOrder = [];
+    for (const r of allResults) {
+        const arch = (r.architecture || '').toUpperCase();
+        if (archConfigs[arch]) continue;
+        let tc = r.test_config;
+        if (!tc) continue;
+        if (typeof tc === 'string') try { tc = JSON.parse(tc); } catch(e) { continue; }
+        if (tc && typeof tc === 'object') { archConfigs[arch] = tc; archOrder.push(arch); }
+    }
+
+    if (archOrder.length > 0) {
+        s += '<div class="chart-box"><h3>Tuned Settings vs Upstream Defaults</h3>';
+        s += '<p style="font-size:0.9em;color:#475569;"><span style="color:#059669;font-weight:600;">Green</span> = auto-tuned by ServeIt Studio. <span style="color:#94a3b8;">Gray</span> = upstream default.</p>';
+
+        const hasEp = archOrder.includes('EP');
+        const naS = '<span style="color:#cbd5e1;">N/A</span>';
+
+        const _eppPresets = {
+            balanced: {prefix_cache_weight:3, kv_cache_weight:2, queue_weight:2, active_request_weight:2, decode_prefix_cache_weight:1, decode_active_request_weight:3},
+            cache_optimized: {prefix_cache_weight:5, kv_cache_weight:1, queue_weight:2, active_request_weight:1, decode_prefix_cache_weight:1, decode_active_request_weight:3},
+            queue_balanced: {prefix_cache_weight:1, kv_cache_weight:1, queue_weight:3, active_request_weight:3, decode_prefix_cache_weight:1, decode_active_request_weight:3},
+            latency_aware: {prefix_cache_weight:3, kv_cache_weight:2, queue_weight:2, active_request_weight:2, decode_prefix_cache_weight:1, decode_active_request_weight:3},
+        };
+        function _eppW(tc) {
+            if (!tc.epp_config) return null;
+            const preset = tc.epp_config.preset || rc.epp_preset || 'balanced';
+            return _eppPresets[preset] || _eppPresets.balanced;
+        }
+
+        function getVal(tc, key) { return tc[key] != null ? String(tc[key]) : null; }
+        function pdVal(tc, pKey, dKey) {
+            const p = tc[pKey], d = tc[dKey];
+            if (p != null && d != null && p !== d) return `P=${p} D=${d}`;
+            return p != null ? String(p) : (d != null ? String(d) : null);
+        }
+        function boolVal(tc, key) { return tc[key] === true ? 'On' : tc[key] === false ? 'Off' : null; }
+
+        const sections = [
+            { title: 'Memory & Batching', params: [
+                { label: 'gpu-memory-utilization', def: '0.90', get: tc => pdVal(tc, 'prefill_gpu_memory_utilization', 'decode_gpu_memory_utilization') || getVal(tc, 'gpu_memory_utilization') },
+                { label: 'max-model-len', def: 'auto', get: tc => getVal(tc, 'max_model_len') },
+                { label: 'max-num-seqs', def: '256', get: tc => pdVal(tc, 'prefill_max_num_seqs', 'decode_max_num_seqs') || getVal(tc, 'max_num_seqs') },
+                { label: 'max-num-batched-tokens', def: 'auto', get: tc => getVal(tc, 'max_num_batched_tokens') },
+                { label: 'block-size', def: '16', get: tc => getVal(tc, 'block_size') },
+                { label: 'kv-cache-memory-bytes', def: 'auto', get: tc => getVal(tc, 'kv_cache_memory_bytes'), pd_only: true },
+            ]},
+            { title: 'Precision & Compute', params: [
+                { label: 'dtype', def: 'auto', get: tc => getVal(tc, 'dtype') },
+                { label: 'kv-cache-dtype', def: 'auto', get: tc => getVal(tc, 'kv_cache_dtype') },
+                { label: 'pipeline-parallel-size', def: '1', get: tc => getVal(tc, 'pipeline_parallel_size') },
+            ]},
+            { title: 'Feature Flags', params: [
+                { label: 'enable-prefix-caching', def: 'Off', get: tc => boolVal(tc, 'enable_prefix_caching') },
+                { label: 'enable-expert-parallel', def: 'Off', get: tc => boolVal(tc, 'enable_expert_parallel') },
+                { label: 'enable-dbo', def: 'Off', get: tc => boolVal(tc, 'enable_dbo') },
+                { label: 'enable-eplb', def: 'Off', get: tc => boolVal(tc, 'enable_eplb') },
+                { label: 'trust-remote-code', def: 'Off', get: tc => boolVal(tc, 'trust_remote_code') },
+            ]},
+            { title: 'MoE / Expert Parallel', params: [
+                { label: 'moe-dp-chunk-size', def: '256', get: tc => getVal(tc, 'moe_dp_chunk_size'), ep_only: true },
+                { label: 'all2all-backend', def: 'auto', get: tc => getVal(tc, 'all2all_backend') || (tc.decode_all2all_backend ? `HT / ${tc.decode_all2all_backend}` : null), ep_only: true },
+                { label: 'moe-backend', def: 'auto', get: tc => getVal(tc, 'moe_backend'), ep_only: true },
+                { label: 'use-deep-gemm', def: 'auto', get: tc => tc.use_deep_gemm === true ? 'On' : tc.use_deep_gemm === false ? 'Off' : null },
+                { label: 'dbo-prefill-threshold', def: '32', get: tc => getVal(tc, 'dbo_prefill_token_threshold') },
+                { label: 'dbo-decode-threshold', def: '32', get: tc => getVal(tc, 'dbo_decode_token_threshold') },
+                { label: 'num-redundant-experts', def: '32', get: tc => getVal(tc, 'num_redundant_experts'), ep_only: true },
+                { label: 'NVSHMEM_SYMMETRIC_SIZE', def: '16G', get: tc => getVal(tc, 'nvshmem_symmetric_size'), ep_only: true },
+            ]},
+            { title: 'EPP Prefill Routing Weights', params: [
+                { label: 'prefix-cache-weight', def: '3', get: tc => { const w = _eppW(tc); return w ? String(w.prefix_cache_weight) : null; } },
+                { label: 'kv-cache-weight', def: '2', get: tc => { const w = _eppW(tc); return w ? String(w.kv_cache_weight) : null; } },
+                { label: 'queue-weight', def: '2', get: tc => { const w = _eppW(tc); return w ? String(w.queue_weight) : null; } },
+                { label: 'active-request-weight', def: '2', get: tc => { const w = _eppW(tc); return w ? String(w.active_request_weight) : null; } },
+            ]},
+            { title: 'EPP Decode Routing Weights', params: [
+                { label: 'decode-prefix-cache-weight', def: '3', get: tc => { const w = _eppW(tc); return w ? String(w.decode_prefix_cache_weight) : null; } },
+                { label: 'decode-active-request-weight', def: '2', get: tc => { const w = _eppW(tc); return w ? String(w.decode_active_request_weight) : null; } },
+            ]},
+            { title: 'EPP Auto-Calculated', params: [
+                { label: 'maxPrefixBlocksToMatch', def: 'auto', get: tc => tc.epp_config ? String(tc.epp_config.max_prefix_blocks || tc.epp_config.maxPrefixBlocksToMatch || '-') : null },
+                { label: 'lruCapacityPerServer', def: 'auto', get: tc => tc.epp_config ? String(tc.epp_config.lru_capacity || tc.epp_config.lruCapacityPerServer || '-') : null },
+                { label: 'nonCachedTokens', def: '16', get: tc => tc.epp_config ? String(tc.epp_config.non_cached_tokens || tc.epp_config.nonCachedTokens || '-') : null },
+            ]},
+        ];
+
+        s += '<table><tr><th style="text-align:left;">Parameter</th><th>Default</th>';
+        archOrder.forEach(arch => {
+            const color = arch === 'AGGREGATED' ? '#6366f1' : arch === 'PD' ? '#0ea5e9' : '#10b981';
+            s += `<th style="color:${color};">${arch}</th>`;
+        });
+        s += '</tr>';
+
+        sections.forEach(section => {
+            s += `<tr><td colspan="${2 + archOrder.length}" style="background:#f1f5f9;font-weight:700;color:#475569;padding:6px 10px;">${section.title}</td></tr>`;
+            section.params.forEach(param => {
+                if (param.ep_only && !hasEp) return;
+                s += `<tr><td style="color:#334155;padding-left:16px;"><code style="font-size:0.9em;">${param.label}</code></td>`;
+                s += `<td style="color:#94a3b8;text-align:center;">${param.def}</td>`;
+                archOrder.forEach(arch => {
+                    const tc = archConfigs[arch];
+                    if (param.ep_only && arch !== 'EP') { s += `<td style="text-align:center;">${naS}</td>`; return; }
+                    if (param.pd_only && arch === 'AGGREGATED') { s += `<td style="text-align:center;">${naS}</td>`; return; }
+                    const val = param.get(tc);
+                    const display = val || param.def;
+                    const changed = val && val !== param.def && val !== 'null';
+                    const style = changed ? 'font-weight:700;color:#059669;' : '';
+                    s += `<td style="text-align:center;${style}">${display}</td>`;
+                });
+                s += '</tr>';
+            });
+        });
+
+        s += '</table></div>';
+    }
+
     return s;
 }
 
@@ -910,11 +1096,24 @@ function buildTrafficSection(data, allRes) {
     });
     s += '<div class="stats">';
     s += dlStatCard(totalRequests.toLocaleString(), 'Total Requests');
-    s += dlStatCard(totalErrors.toLocaleString(), 'Total Errors');
-    if (totalNixl > 0) s += dlStatCard(totalNixl.toLocaleString(), 'NIXL Errors');
+    s += dlStatCard(totalErrors.toLocaleString(), 'HTTP Request Errors');
+    if (totalNixl > 0) s += dlStatCard(totalNixl.toLocaleString(), 'NIXL Transfer Retries');
     const errorRate = totalRequests > 0 ? (totalErrors / totalRequests * 100).toFixed(2) : '0';
     s += dlStatCard(errorRate + '%', 'Error Rate');
     s += '</div>';
+
+    // Network throughput charts (moved from vLLM tab)
+    if (data.charts && data.charts.vllm && data.charts.vllm.network) {
+        const net = data.charts.vllm.network;
+        const hasPodNet = net.pod_tx && net.pod_tx.some(v => v > 0);
+        const hasNIXL = (net.nixl_tx && net.nixl_tx.some(v => v > 0)) || (net.ib_rx && net.ib_rx.some(v => v > 0));
+        if (hasPodNet || hasNIXL) {
+            s += '<div class="grid2">';
+            if (hasPodNet) s += '<div class="chart-box"><h3>Pod Network Throughput</h3><p style="color:#64748b;font-size:0.85em;margin:0 0 4px;">Management (eth0) network traffic per configuration.</p><div id="v7" style="height:430px"></div></div>';
+            if (hasNIXL) s += '<div class="chart-box"><h3>NIXL KV Transfer Throughput</h3><p style="color:#64748b;font-size:0.85em;margin:0 0 4px;">RDMA traffic for KV cache transfer between prefill and decode pods.</p><div id="v8" style="height:430px"></div></div>';
+            s += '</div>';
+        }
+    }
 
     groupKeys.forEach(gk => {
         const label = trafficLabelMap[gk] || gk;
@@ -927,8 +1126,8 @@ function buildTrafficSection(data, allRes) {
     s += `<th style="cursor:pointer;" onclick="sortReportTable('${tid}',0,'str')">Test ID &#x21C5;</th>`;
     s += `<th style="cursor:pointer;" onclick="sortReportTable('${tid}',1,'str')">Config &#x21C5;</th>`;
     s += `<th style="cursor:pointer;" onclick="sortReportTable('${tid}',2,'num')">Requests &#x21C5;</th>`;
-    s += `<th style="cursor:pointer;" onclick="sortReportTable('${tid}',3,'num')">Errors &#x21C5;</th>`;
-    s += `<th style="cursor:pointer;" onclick="sortReportTable('${tid}',4,'num')">NIXL Errors &#x21C5;</th>`;
+    s += `<th style="cursor:pointer;" onclick="sortReportTable('${tid}',3,'num')">HTTP Errors &#x21C5;</th>`;
+    s += `<th style="cursor:pointer;" onclick="sortReportTable('${tid}',4,'num')">NIXL Retries &#x21C5;</th>`;
     s += `<th style="cursor:pointer;" onclick="sortReportTable('${tid}',5,'num')">NIXL Degraded &#x21C5;</th>`;
     s += `<th style="cursor:pointer;" onclick="sortReportTable('${tid}',6,'num')">Quality &#x21C5;</th>`;
     s += '</tr>';
@@ -956,7 +1155,7 @@ function buildTrafficSection(data, allRes) {
 function buildDeployTimingSection(data, allRes) {
     const timings = [];
     allRes.forEach(r => {
-        const dt = r.test_config && r.test_config.deploy_timing;
+        const dt = r.deploy_timing || (r.test_config && r.test_config.deploy_timing);
         if (dt && (dt.pod_creation_s != null || dt.model_load_s != null)) {
             timings.push({
                 config: r.config_name || r.test_id || 'Unknown',
@@ -996,13 +1195,52 @@ function buildDeployTimingSection(data, allRes) {
     return s;
 }
 
+// ── Pareto Frontier Tab ────────────────────────────────────────────────────
+function buildParetoFrontierSection(data, allRes) {
+    const valid = (allRes || []).filter(r => {
+        const tid = r.test_id || r.config_name || '';
+        return tid.indexOf('step2-') !== 0 && tid.indexOf('step3-') !== 0 &&
+               r.ttft_p90 > 0 && (r.throughput_mean > 0 || r.throughput_p90 > 0);
+    });
+    if (valid.length < 2) return '';
+    let s = '';
+    s += '<div class="chart-box"><h3>Pareto &mdash; Throughput vs TTFT</h3>';
+    s += '<p style="color:#64748b;font-size:0.9em;margin:0 0 4px;">Higher throughput per GPU (Y) and lower TTFT (X) is better. Frontier lines show the best achievable trade-offs.</p>';
+    s += '<div id="dl-pareto-ttft" style="height:700px"></div></div>';
+    s += '<div class="chart-box"><h3>Pareto &mdash; Throughput vs Interactivity</h3>';
+    s += '<p style="color:#64748b;font-size:0.9em;margin:0 0 4px;">Higher interactivity (tok/s/user, X) and higher throughput/GPU (Y) is better.</p>';
+    s += '<div id="dl-pareto-interactivity" style="height:700px"></div></div>';
+    return s;
+}
+
 // ── Chart Rendering Script ──────────────────────────────────────────────────
 function buildChartScript(data, charts, allRes) {
     let s = '<script>';
     s += `function switchDlTab(id){document.querySelectorAll('.dl-tab').forEach(function(t){t.classList.remove('active')});document.querySelectorAll('.dl-pane').forEach(function(p){p.classList.remove('active')});var tab=document.querySelector('.dl-tab[onclick*=\"'+id+'\"]');if(tab)tab.classList.add('active');var pane=document.getElementById('dl-pane-'+id);if(pane){pane.classList.add('active');pane.querySelectorAll('[class*="js-plotly"]').forEach(function(p){Plotly.Plots.resize(p)});}}`;
     s += 'function sortReportTable(tableId,colIdx,type){var table=document.getElementById(tableId);if(!table)return;var rows=Array.from(table.querySelectorAll("tr")).slice(1);var baselineRows=rows.filter(function(r){return r.classList.contains("baseline-row")});var dataRows=rows.filter(function(r){return !r.classList.contains("baseline-row")});var dir=table.getAttribute("data-sort-col")===String(colIdx)&&table.getAttribute("data-sort-dir")==="asc"?"desc":"asc";table.setAttribute("data-sort-col",colIdx);table.setAttribute("data-sort-dir",dir);dataRows.sort(function(a,b){var aCell=a.cells[colIdx],bCell=b.cells[colIdx];var aVal,bVal;if(type==="num"){aVal=parseFloat(aCell.getAttribute("data-val")||aCell.textContent.replace(/[^0-9.\\-]/g,""))||0;bVal=parseFloat(bCell.getAttribute("data-val")||bCell.textContent.replace(/[^0-9.\\-]/g,""))||0}else{aVal=aCell.textContent.trim().toLowerCase();bVal=bCell.textContent.trim().toLowerCase()}if(aVal<bVal)return dir==="asc"?-1:1;if(aVal>bVal)return dir==="asc"?1:-1;return 0});var tbody=table.querySelector("tbody")||table;dataRows.forEach(function(r){tbody.appendChild(r)});baselineRows.forEach(function(r){tbody.appendChild(r)})}';
-    s += 'var cd=' + JSON.stringify(charts) + ';';
-    s += 'var ar=' + JSON.stringify(allRes) + ';';
+    // Escape strings for safe embedding in <script> tags
+    function safeJson(obj) {
+        return JSON.stringify(obj).replace(/<\//g, '<\\/').replace(/<!--/g, '<\\!--');
+    }
+    // Strip large fields from allRes to keep HTML size manageable
+    const arLite = allRes.map(r => {
+        const copy = Object.assign({}, r);
+        delete copy.metrics_json;
+        delete copy.manifests;
+        delete copy.test_config;
+        return copy;
+    });
+    s += 'var cd=' + safeJson(charts) + ';';
+    s += 'var ar=' + safeJson(arLite) + ';';
+    // Build embedded manifest lookup for offline YAML download
+    const manifestMap = {};
+    allRes.forEach(r => {
+        if (r.manifests && typeof r.manifests === 'object' && Object.keys(r.manifests).length) {
+            manifestMap[r.test_id] = r.manifests;
+        }
+    });
+    s += 'var _manifests=' + safeJson(manifestMap) + ';';
+    s += 'function dlManifest(testId,type){var m=_manifests[testId];if(!m||!m[type]){alert("Manifest not available for "+testId+" / "+type);return;}var blob=new Blob([m[type]],{type:"text/yaml"});var url=URL.createObjectURL(blob);var a=document.createElement("a");a.href=url;a.download=testId+"-"+type+".yaml";a.click();URL.revokeObjectURL(url);}';
     s += 'var lo={margin:{t:30,b:40,l:50,r:20},height:430,font:{family:"sans-serif"}};';
     s += 'var co={responsive:true};';
     s += 'function fmtSI(v,d){if(v==null)return"-";d=d!=null?d:1;if(Math.abs(v)>=1e6)return(v/1e6).toFixed(d)+"M";if(Math.abs(v)>=1e3)return(v/1e3).toFixed(d)+"K";return v.toFixed(d)}';
@@ -1013,19 +1251,74 @@ function buildChartScript(data, charts, allRes) {
     // Show all panes for initial rendering
     s += 'document.querySelectorAll(".dl-pane").forEach(function(p){p.style.display="block"});';
 
-    // TP calibration charts
-    s += 'if(cd.pareto&&cd.pareto.traces){cd.pareto.traces.forEach(function(t){';
-    s += '  var tgt=t.name==="Decode"?"tp-dec":"tp-pre";';
-    s += '  if(document.getElementById(tgt)){';
-    s += '    var tps=t.x.map(function(_,i){return"TP"+t.x[i]});';
-    s += '    Plotly.newPlot(tgt,[{x:tps,y:t.y,type:"bar",marker:{color:t.color},hovertext:t.text,hoverinfo:"text",text:t.y.map(function(v){return fmtSI(v)}),textposition:"outside",textfont:{size:11,color:"#1e293b"},cliponaxis:false,constraintext:"none"}],{...lo,title:{text:t.name+" TP Sweep"},yaxis:{title:"TTFT P90 (ms)",tickformat:".2s"}},co);';
-    s += '}});}';
+    // TP calibration charts — use rec.decode_tp_all / rec.prefill_tp_all
+    s += 'var recData=' + JSON.stringify(data.recommendation || {}) + ';';
+
+    // Decode TP Sweep (dual-axis: TPSG bars + ITL P90 line)
+    s += 'if(recData.decode_tp_all&&recData.decode_tp_all.length&&document.getElementById("tp-dec")){';
+    s += '  var dtp=recData.decode_tp_all;';
+    s += '  var tpLabels=dtp.map(function(d){return"TP="+d.tp});';
+    s += '  var tpsgVals=dtp.map(function(d){return d.tpsg});';
+    s += '  var bestTpsg=Math.max.apply(null,tpsgVals);';
+    s += '  var barColors=tpsgVals.map(function(v){return v===bestTpsg?"#10b981":"#6366f1"});';
+    s += '  var itlVals=dtp.map(function(d){return d.itl_p90!=null?d.itl_p90:0});';
+    s += '  var dTraces=[{x:tpLabels,y:tpsgVals,name:"Tokens/s/GPU",type:"bar",marker:{color:barColors},text:tpsgVals.map(function(v){return fmtSI(v)}),textposition:"outside",textfont:{size:11,color:"#1e293b"},cliponaxis:false,constraintext:"none",hovertemplate:"<b>%{x}</b><br>%{y:.1f} tokens/s/GPU<extra></extra>"}];';
+    s += '  if(itlVals.some(function(v){return v>0})){dTraces.push({x:tpLabels,y:itlVals,name:"ITL P90 (ms)",type:"scatter",mode:"lines+markers",yaxis:"y2",line:{color:"#ef4444",width:3},marker:{size:10,symbol:"circle",color:"#ef4444",line:{width:2,color:"white"}},hovertemplate:"<b>%{x}</b><br>ITL P90: %{y:.2f} ms<extra></extra>"});}';
+    s += '  Plotly.newPlot("tp-dec",dTraces,{...lo,barmode:"group",showlegend:true,legend:{x:0,y:1.15,orientation:"h"},yaxis:{title:"Tokens/s/GPU",side:"left",tickformat:".2s"},yaxis2:{title:"ITL P90 (ms)",side:"right",overlaying:"y",titlefont:{color:"#ef4444"},tickfont:{color:"#ef4444"}}},co);';
+    s += '}';
+
+    // Prefill TP Sweep (dual-axis: TPSG bars + TTFT P90 line)
+    s += 'if(recData.prefill_tp_all&&recData.prefill_tp_all.length&&document.getElementById("tp-pre")){';
+    s += '  var ptp=recData.prefill_tp_all;';
+    s += '  var ptpLabels=ptp.map(function(d){return"TP="+d.tp});';
+    s += '  var ptpsgVals=ptp.map(function(d){return d.tpsg});';
+    s += '  var pBestTpsg=Math.max.apply(null,ptpsgVals);';
+    s += '  var pBarColors=ptpsgVals.map(function(v){return v===pBestTpsg?"#10b981":"#f59e0b"});';
+    s += '  var ttftVals=ptp.map(function(d){return d.ttft_p90!=null?d.ttft_p90:0});';
+    s += '  var pTraces=[{x:ptpLabels,y:ptpsgVals,name:"Tokens/s/GPU",type:"bar",marker:{color:pBarColors},text:ptpsgVals.map(function(v){return fmtSI(v)}),textposition:"outside",textfont:{size:11,color:"#1e293b"},cliponaxis:false,constraintext:"none",hovertemplate:"<b>%{x}</b><br>%{y:.1f} tokens/s/GPU<extra></extra>"}];';
+    s += '  if(ttftVals.some(function(v){return v>0})){pTraces.push({x:ptpLabels,y:ttftVals,name:"TTFT P90 (ms)",type:"scatter",mode:"lines+markers",yaxis:"y2",line:{color:"#3b82f6",width:3},marker:{size:10,symbol:"circle",color:"#3b82f6",line:{width:2,color:"white"}},hovertemplate:"<b>%{x}</b><br>TTFT P90: %{y:.1f} ms<extra></extra>"});}';
+    s += '  Plotly.newPlot("tp-pre",pTraces,{...lo,barmode:"group",showlegend:true,legend:{x:0,y:1.15,orientation:"h"},yaxis:{title:"Tokens/s/GPU",side:"left",tickformat:".2s"},yaxis2:{title:"TTFT P90 (ms)",side:"right",overlaying:"y",titlefont:{color:"#3b82f6"},tickfont:{color:"#3b82f6"}}},co);';
+    s += '}';
 
     // Pareto + scatter + efficiency + architecture charts
-    s += 'if(cd.pareto.traces.length){var pxv=[...new Set(cd.pareto.traces.flatMap(function(t){return t.x}))].sort(function(a,b){return a-b});Plotly.newPlot("p1",cd.pareto.traces.map(function(t){return{x:t.x,y:t.y,text:t.text,name:t.name,mode:"markers+lines",marker:{size:14,color:t.color,symbol:"diamond",line:{width:2,color:"white"}},line:{width:2,dash:"dot"},hovertemplate:"<b>%{text}</b><extra></extra>"}}),{...lo,xaxis:{title:"GPUs",tickvals:pxv},yaxis:{title:"TTFT P90 (ms)"},showlegend:true},co);}';
+    s += 'if(cd.pareto&&cd.pareto.traces&&cd.pareto.traces.length){var pxv=[...new Set(cd.pareto.traces.flatMap(function(t){return t.x}))].sort(function(a,b){return a-b});Plotly.newPlot("p1",cd.pareto.traces.map(function(t){return{x:t.x,y:t.y,text:t.text,name:t.name,mode:"markers+lines",marker:{size:14,color:t.color,symbol:"diamond",line:{width:2,color:"white"}},line:{width:2,dash:"dot"},hovertemplate:"<b>%{text}</b><extra></extra>"}}),{...lo,xaxis:{title:"GPUs",tickvals:pxv},yaxis:{title:"TTFT P90 (ms)"},showlegend:true},co);}';
     s += 'if(cd.scatter.traces.length){Plotly.newPlot("p2",cd.scatter.traces.map(function(t){return{x:t.x,y:t.y,text:t.text,name:t.name,mode:"markers",marker:{size:t.sizes,color:t.color,opacity:0.7,line:{width:1,color:"white"}},hovertemplate:"<b>%{text}</b><extra></extra>"}}),{...lo,xaxis:{title:"TTFT P90 (ms)"},yaxis:{title:"Throughput P90 (req/s)"},showlegend:true},co);}';
     s += 'if(cd.efficiency.configs.length){Plotly.newPlot("p3",[{x:cd.efficiency.configs,y:cd.efficiency.values,type:"bar",marker:{color:cd.efficiency.colors},text:cd.efficiency.values.map(function(v){return v!=null?v.toFixed(3):""}),textposition:"outside",textfont:{size:11,color:"#333"},cliponaxis:false,constraintext:"none"}],{...lo,margin:{...lo.margin,b:120},xaxis:{tickangle:-45},yaxis:{title:"req/s/GPU"}},co);}';
     s += 'if(cd.architecture.architectures.length){var a=cd.architecture;Plotly.newPlot("p4",[{x:a.architectures,y:a.avg_ttft,type:"bar",marker:{color:"#3b82f6"},text:a.avg_ttft.map(function(v){return fmtSI(v)+" ms"}),textposition:"auto",name:"Avg TTFT P90",xaxis:"x",yaxis:"y"},{x:a.architectures,y:a.best_ttft,type:"bar",marker:{color:"#93c5fd"},text:a.best_ttft.map(function(v){return fmtSI(v)+" ms"}),textposition:"auto",name:"Best TTFT P90",xaxis:"x",yaxis:"y"},{x:a.architectures,y:a.avg_throughput,type:"bar",marker:{color:"#f59e0b"},text:a.avg_throughput.map(function(v){return v.toFixed(2)+" req/s"}),textposition:"auto",name:"Avg Throughput P90",xaxis:"x2",yaxis:"y2"}],{...lo,margin:{t:30,b:50,l:60,r:60},barmode:"group",showlegend:true,legend:{x:0,y:1.18,orientation:"h"},xaxis:{domain:[0,0.45]},yaxis:{title:"TTFT (ms)",titlefont:{color:"#3b82f6"},tickformat:".2s"},xaxis2:{domain:[0.55,1],anchor:"y2"},yaxis2:{title:"Throughput (req/s)",anchor:"x2",titlefont:{color:"#f59e0b"}}},co);}';
+
+    // Comparison tab: Architecture Comparison (reuse same data as p4 but in separate div)
+    s += 'if(cd.architecture&&cd.architecture.architectures.length&&document.getElementById("dl-chart-arch")){var a2=cd.architecture;Plotly.newPlot("dl-chart-arch",[{x:a2.architectures,y:a2.avg_ttft,type:"bar",marker:{color:"#3b82f6"},text:a2.avg_ttft.map(function(v){return fmtSI(v)+" ms"}),textposition:"auto",name:"Avg TTFT P90",xaxis:"x",yaxis:"y"},{x:a2.architectures,y:a2.best_ttft,type:"bar",marker:{color:"#93c5fd"},text:a2.best_ttft.map(function(v){return fmtSI(v)+" ms"}),textposition:"auto",name:"Best TTFT P90",xaxis:"x",yaxis:"y"},{x:a2.architectures,y:a2.avg_throughput,type:"bar",marker:{color:"#f59e0b"},text:a2.avg_throughput.map(function(v){return v.toFixed(2)+" req/s"}),textposition:"auto",name:"Avg Throughput P90",xaxis:"x2",yaxis:"y2"}],{...lo,margin:{t:30,b:50,l:60,r:60},barmode:"group",showlegend:true,legend:{x:0,y:1.18,orientation:"h"},xaxis:{domain:[0,0.45]},yaxis:{title:"TTFT (ms)",titlefont:{color:"#3b82f6"},tickformat:".2s"},xaxis2:{domain:[0.55,1],anchor:"y2"},yaxis2:{title:"Throughput (req/s)",anchor:"x2",titlefont:{color:"#f59e0b"}}},co);}';
+
+    // Comparison tab: Percentile Comparison (Winner vs Aggregated)
+    s += '(function(){';
+    s += '  var el=document.getElementById("dl-chart-pctile");if(!el)return;';
+    s += '  if(!recData||!recData.recommendations||!recData.aggregated_baseline)return;';
+    s += '  var primaryKey=recData.goal==="ttft"?"response_time":"throughput";';
+    s += '  var pr=recData.recommendations[primaryKey];';
+    s += '  var ab=recData.aggregated_baseline;';
+    s += '  if(!pr||!pr.config||!pr.config.percentiles||!ab||!ab.percentiles)return;';
+    s += '  var pp=pr.config.percentiles;var ap=ab.percentiles;';
+    s += '  var pArch=pr.architecture||"PD";';
+    s += '  var pctls=["p50","p90","p95","p99"];';
+    s += '  var ttftT=[{x:pctls,y:pctls.map(function(p){return pp.ttft[p]}),name:pArch+" TTFT",type:"bar",marker:{color:"#3b82f6"}},{x:pctls,y:pctls.map(function(p){return ap.ttft[p]}),name:"Aggregated TTFT",type:"bar",marker:{color:"#94a3b8"}}];';
+    s += '  var tputT=[{x:pctls,y:pctls.map(function(p){return pp.throughput[p]}),name:pArch+" Throughput",type:"bar",marker:{color:"#10b981"},xaxis:"x2",yaxis:"y2"},{x:pctls,y:pctls.map(function(p){return ap.throughput[p]}),name:"Aggregated Throughput",type:"bar",marker:{color:"#d1d5db"},xaxis:"x2",yaxis:"y2"}];';
+    s += '  Plotly.newPlot(el,ttftT.concat(tputT),{...lo,margin:{t:30,b:50,l:60,r:60},barmode:"group",showlegend:true,legend:{x:0,y:1.18,orientation:"h"},xaxis:{domain:[0,0.45],title:"Percentile"},yaxis:{title:"TTFT (ms)",titlefont:{color:"#3b82f6"}},xaxis2:{domain:[0.55,1],title:"Percentile",anchor:"y2"},yaxis2:{title:"Throughput (req/s)",anchor:"x2",titlefont:{color:"#10b981"}}},co);';
+    s += '})();';
+
+    // Cache hit rate chart (exclude step2/step3 calibration runs)
+    s += 'if(document.getElementById("dl-cfg-cache-hit")){';
+    s += '  var chd=ar.filter(function(r){var tid=r.test_id||r.config_name||"";return tid.indexOf("step2-")!==0&&tid.indexOf("step3-")!==0&&r.cache_hit_pct!=null&&r.cache_hit_pct>0});';
+    s += '  if(chd.length){';
+    s += '    var chTraces=[];';
+    s += '    var archCols={AGGREGATED:"#1f77b4",PD:"#ff7f0e",EP:"#2ca02c"};';
+    s += '    ["AGGREGATED","PD","EP"].forEach(function(arch){';
+    s += '      var filtered=chd.filter(function(r){return r.architecture===arch});';
+    s += '      if(!filtered.length)return;';
+    s += '      chTraces.push({x:filtered.map(function(r){return r.config_name}),y:filtered.map(function(r){return r.cache_hit_pct}),text:filtered.map(function(r){return r.cache_hit_pct.toFixed(1)+"%"}),textposition:"outside",textfont:{size:10},name:arch,type:"bar",marker:{color:archCols[arch]}});';
+    s += '    });';
+    s += '    Plotly.newPlot("dl-cfg-cache-hit",chTraces,{...lo,height:400,barmode:"group",xaxis:{tickangle:-35},yaxis:{title:"Cache Hit %",range:[0,100]},showlegend:true,legend:{x:0,y:1,bgcolor:"rgba(255,255,255,0.9)"},margin:{t:20,b:120,l:60,r:20}},co);';
+    s += '  }';
+    s += '}';
 
     // Per-percentile PD charts
     s += 'var pd=ar.filter(function(r){return r.architecture==="PD"});';
@@ -1083,14 +1376,23 @@ function buildChartScript(data, charts, allRes) {
 
     // vLLM charts
     s += 'if(cd.vllm&&cd.vllm.configs.length){var v=cd.vllm;';
-    s += 'Plotly.newPlot("v1",[{x:v.configs,y:v.ttft.p50,name:"P50",type:"bar",marker:{color:pc.p50}},{x:v.configs,y:v.ttft.p90,name:"P90",type:"bar",marker:{color:pc.p90}},{x:v.configs,y:v.ttft.p95,name:"P95",type:"bar",marker:{color:pc.p95}},{x:v.configs,y:v.ttft.p99,name:"P99",type:"bar",marker:{color:pc.p99}}],{...vl,title:{text:"TTFT Percentiles"},xaxis:{tickangle:-35},yaxis:{title:"TTFT (ms)"}},co);';
-    s += 'Plotly.newPlot("v2",[{x:v.configs,y:v.itl.p50,name:"P50",type:"bar",marker:{color:pc.p50}},{x:v.configs,y:v.itl.p90,name:"P90",type:"bar",marker:{color:pc.p90}},{x:v.configs,y:v.itl.p95,name:"P95",type:"bar",marker:{color:pc.p95}},{x:v.configs,y:v.itl.p99,name:"P99",type:"bar",marker:{color:pc.p99}}],{...vl,title:{text:"ITL Percentiles"},xaxis:{tickangle:-35},yaxis:{title:"ITL (ms)"}},co);';
-    s += 'Plotly.newPlot("v3",[{x:v.configs,y:v.e2e.p50,name:"P50",type:"bar",marker:{color:pc.p50}},{x:v.configs,y:v.e2e.p90,name:"P90",type:"bar",marker:{color:pc.p90}},{x:v.configs,y:v.e2e.p95,name:"P95",type:"bar",marker:{color:pc.p95}},{x:v.configs,y:v.e2e.p99,name:"P99",type:"bar",marker:{color:pc.p99}}],{...vl,title:{text:"E2E Latency"},xaxis:{tickangle:-35},yaxis:{title:"E2E (seconds)"}},co);';
-    s += 'Plotly.newPlot("v4",[{x:v.configs,y:v.token_rates.prompt,name:"Prompt Tokens/s",type:"bar",marker:{color:"#6366f1"}},{x:v.configs,y:v.token_rates.generation,name:"Generation Tokens/s",type:"bar",marker:{color:"#10b981"}}],{...vl,title:{text:"Token Throughput"},xaxis:{tickangle:-35},yaxis:{title:"Tokens/s"}},co);';
-    s += 'Plotly.newPlot("v5",[{x:v.configs,y:v.request_state.running,name:"Running",type:"bar",marker:{color:"#3b82f6"}},{x:v.configs,y:v.request_state.waiting,name:"Waiting",type:"bar",marker:{color:"#ef4444"}},{x:v.configs,y:v.request_state.kv_cache,name:"KV Cache %",type:"scatter",mode:"lines+markers",yaxis:"y2",line:{color:"#f59e0b",width:3},marker:{size:10,symbol:"diamond",color:"#f59e0b"}}],{...vl,title:{text:"Request Queue & KV Cache"},margin:{...vl.margin,r:60},xaxis:{tickangle:-35},yaxis:{title:"Count"},yaxis2:{title:"KV Cache %",side:"right",overlaying:"y",range:[0,105]}},co);';
-    s += 'Plotly.newPlot("v6",[{x:v.configs,y:v.time_breakdown.prefill,name:"Prefill",type:"bar",marker:{color:"#6366f1"}},{x:v.configs,y:v.time_breakdown.decode,name:"Decode",type:"bar",marker:{color:"#3b82f6"}},{x:v.configs,y:v.time_breakdown.queue,name:"Queue",type:"bar",marker:{color:"#94a3b8"}},{x:v.configs,y:v.time_breakdown.preemptions,name:"Preemptions/s",type:"scatter",mode:"lines+markers",yaxis:"y2",line:{color:"#ef4444",width:3},marker:{size:10,symbol:"triangle-up",color:"#ef4444"}}],{...vl,barmode:"stack",title:{text:"Time Breakdown & Preemptions"},margin:{...vl.margin,r:60},xaxis:{tickangle:-35},yaxis:{title:"Time Rate (s/s)"},yaxis2:{title:"Preemptions/s",side:"right",overlaying:"y"}},co);';
-    s += 'if(v.network&&v.network.pod_tx.some(function(x){return x>0})){Plotly.newPlot("v7",[{x:v.configs,y:v.network.pod_tx,name:"TX (MB/s)",type:"bar",marker:{color:"#3b82f6"}},{x:v.configs,y:v.network.pod_rx,name:"RX (MB/s)",type:"bar",marker:{color:"#10b981"}}],{...vl,title:{text:"Pod Network Throughput"},xaxis:{tickangle:-35},yaxis:{title:"MB/s"}},co);}';
-    s += 'if(v.network&&v.network.ib_rx.some(function(x){return x>0})){Plotly.newPlot("v8",[{x:v.configs,y:v.network.ib_rx,name:"IB RX (GB/s)",type:"bar",marker:{color:"#8b5cf6"},text:v.network.ib_rx.map(function(x){return x>0?x.toFixed(2):""}),textposition:"outside",textfont:{size:11,color:"#1e293b"},cliponaxis:false,constraintext:"none"}],{...vl,title:{text:"InfiniBand RDMA Throughput"},xaxis:{tickangle:-35},yaxis:{title:"GB/s"}},co);}';
+    s += 'Plotly.newPlot("v1",[{x:v.configs,y:v.ttft.p50,name:"P50",mode:"lines+markers",line:{color:pc.p50,width:2},marker:{size:8}},{x:v.configs,y:v.ttft.p90,name:"P90",mode:"lines+markers",line:{color:pc.p90,width:3},marker:{size:10}},{x:v.configs,y:v.ttft.p95,name:"P95",mode:"lines+markers",line:{color:pc.p95,width:2},marker:{size:8}},{x:v.configs,y:v.ttft.p99,name:"P99",mode:"lines+markers",line:{color:pc.p99,width:2},marker:{size:8}}],{...vl,xaxis:{tickangle:-35},yaxis:{title:"TTFT (ms)"}},co);';
+    s += 'Plotly.newPlot("v2",[{x:v.configs,y:v.itl.p50,name:"P50",mode:"lines+markers",line:{color:pc.p50,width:2},marker:{size:8}},{x:v.configs,y:v.itl.p90,name:"P90",mode:"lines+markers",line:{color:pc.p90,width:3},marker:{size:10}},{x:v.configs,y:v.itl.p95,name:"P95",mode:"lines+markers",line:{color:pc.p95,width:2},marker:{size:8}},{x:v.configs,y:v.itl.p99,name:"P99",mode:"lines+markers",line:{color:pc.p99,width:2},marker:{size:8}}],{...vl,xaxis:{tickangle:-35},yaxis:{title:"ITL (ms)"}},co);';
+    s += 'Plotly.newPlot("v3",[{x:v.configs,y:v.e2e.p50,name:"P50",mode:"lines+markers",line:{color:pc.p50,width:2},marker:{size:8}},{x:v.configs,y:v.e2e.p90,name:"P90",mode:"lines+markers",line:{color:pc.p90,width:3},marker:{size:10}},{x:v.configs,y:v.e2e.p95,name:"P95",mode:"lines+markers",line:{color:pc.p95,width:2},marker:{size:8}},{x:v.configs,y:v.e2e.p99,name:"P99",mode:"lines+markers",line:{color:pc.p99,width:2},marker:{size:8}}],{...vl,xaxis:{tickangle:-35},yaxis:{title:"E2E (seconds)"}},co);';
+    s += 'Plotly.newPlot("v4",[{x:v.configs,y:v.token_rates.prompt,name:"Prompt Tokens/s",mode:"lines+markers",line:{color:"#6366f1",width:3},marker:{size:10}},{x:v.configs,y:v.token_rates.generation,name:"Generation Tokens/s",mode:"lines+markers",line:{color:"#10b981",width:3},marker:{size:10}}],{...vl,xaxis:{tickangle:-35},yaxis:{title:"Tokens/s"}},co);';
+    s += 'Plotly.newPlot("v5",[{x:v.configs,y:v.request_state.running,name:"Running",type:"bar",marker:{color:"#3b82f6"}},{x:v.configs,y:v.request_state.waiting,name:"Waiting",type:"bar",marker:{color:"#ef4444"}},{x:v.configs,y:v.request_state.kv_cache,name:"KV Cache %",type:"scatter",mode:"lines+markers",yaxis:"y2",line:{color:"#f59e0b",width:3},marker:{size:10,symbol:"diamond",color:"#f59e0b"}}],{...vl,margin:{...vl.margin,r:60},xaxis:{tickangle:-35},yaxis:{title:"Count"},yaxis2:{title:"KV Cache %",side:"right",overlaying:"y",range:[0,105]}},co);';
+    s += 'Plotly.newPlot("v6",[{x:v.configs,y:v.time_breakdown.prefill,name:"Prefill",type:"bar",marker:{color:"#6366f1"}},{x:v.configs,y:v.time_breakdown.decode,name:"Decode",type:"bar",marker:{color:"#3b82f6"}},{x:v.configs,y:v.time_breakdown.queue,name:"Queue",type:"bar",marker:{color:"#94a3b8"}},{x:v.configs,y:v.time_breakdown.preemptions,name:"Preemptions/s",type:"scatter",mode:"lines+markers",yaxis:"y2",line:{color:"#ef4444",width:3},marker:{size:10,symbol:"triangle-up",color:"#ef4444"}}],{...vl,barmode:"stack",margin:{...vl.margin,r:60},xaxis:{tickangle:-35},yaxis:{title:"Time Rate (s/s)"},yaxis2:{title:"Preemptions/s",side:"right",overlaying:"y"}},co);';
+    // Pod network (eth0 management traffic)
+    s += 'if(v.network&&v.network.pod_tx&&v.network.pod_tx.some(function(x){return x>0})&&document.getElementById("v7")){Plotly.newPlot("v7",[{x:v.configs,y:v.network.pod_tx,name:"TX (MB/s)",mode:"lines+markers",line:{color:"#3b82f6",width:3},marker:{size:8}},{x:v.configs,y:v.network.pod_rx,name:"RX (MB/s)",mode:"lines+markers",line:{color:"#10b981",width:3},marker:{size:8}}],{...vl,xaxis:{tickangle:-35},yaxis:{title:"MB/s"}},co);}';
+    // NIXL KV Transfer (RDMA traffic)
+    s += 'if(document.getElementById("v8")){';
+    s += '  var nixlTraces=[];';
+    s += '  var nixlData=v.network&&v.network.nixl_tx?v.network.nixl_tx:[];';
+    s += '  var ibData=v.network&&v.network.ib_rx?v.network.ib_rx:[];';
+    s += '  if(nixlData.some(function(x){return x>0})){nixlTraces.push({x:v.configs,y:nixlData,name:"NIXL TX (GB/s)",mode:"lines+markers+text",text:nixlData.map(function(x){return x>0?x.toFixed(2):""}),textposition:"top center",textfont:{size:10,color:"#8b5cf6"},line:{color:"#8b5cf6",width:3},marker:{size:8},hovertemplate:"<b>%{x}</b><br>NIXL TX: %{y:.2f} GB/s<extra></extra>"});}';
+    s += '  if(ibData.some(function(x){return x>0})){nixlTraces.push({x:v.configs,y:ibData,name:"IB RX (GB/s)",mode:"lines+markers",line:{color:"#f59e0b",width:2,dash:"dash"},marker:{size:8},hovertemplate:"<b>%{x}</b><br>IB RX: %{y:.2f} GB/s<extra></extra>"});}';
+    s += '  if(nixlTraces.length){Plotly.newPlot("v8",nixlTraces,{...vl,xaxis:{tickangle:-35},yaxis:{title:"Throughput (GB/s)"}},co);}';
+    s += '}';
     s += '}';
 
     // EPP Tuning charts (per-architecture, per-percentile)
@@ -1248,7 +1550,7 @@ function buildChartScript(data, charts, allRes) {
             s += '  var traces=[{x:labels,y:pts.map(function(r){return r.request_total}),name:"Requests",type:"scatter",mode:"lines+markers",line:{color:"#3b82f6",width:2},marker:{color:"#3b82f6",size:8}},';
             s += '    {x:labels,y:pts.map(function(r){return r.request_errored}),name:"Errors",type:"scatter",mode:"lines+markers",line:{color:"#ef4444",width:2},marker:{color:"#ef4444",size:8}}];';
             s += '  var hasNixl=pts.some(function(r){return r.nixl_errors>0});';
-            s += '  if(hasNixl){traces.push({x:labels,y:pts.map(function(r){return r.nixl_errors}),name:"NIXL Errors",type:"scatter",mode:"lines+markers",line:{color:"#f59e0b",width:2},marker:{color:"#f59e0b",size:8}});}';
+            s += '  if(hasNixl){traces.push({x:labels,y:pts.map(function(r){return r.nixl_errors}),name:"NIXL Retries",type:"scatter",mode:"lines+markers",line:{color:"#f59e0b",width:2},marker:{color:"#f59e0b",size:8}});}';
             s += '  var label=trafLabels[gk]||gk;';
             s += '  Plotly.newPlot(el,traces,{...lo,height:400,margin:{...lo.margin,b:100},xaxis:{tickangle:-35},yaxis:{title:"Count"},showlegend:true,legend:{x:0,y:1.15,orientation:"h"},title:{text:"Traffic: "+label}},co);';
             s += '});';
@@ -1257,11 +1559,56 @@ function buildChartScript(data, charts, allRes) {
 
     // Deploy Timing chart
     s += '(function(){var el=document.getElementById("dl-deploy-timing");if(!el)return;';
-    s += '  var timings=[];ar.forEach(function(r){var dt=r.test_config&&r.test_config.deploy_timing;if(dt&&(dt.pod_creation_s!=null||dt.model_load_s!=null)){timings.push({config:r.config_name||r.test_id||"Unknown",pod:dt.pod_creation_s||0,model:dt.model_load_s||0});}});';
+    s += '  var timings=[];ar.forEach(function(r){var dt=r.deploy_timing;if(dt&&(dt.pod_creation_s!=null||dt.model_load_s!=null)){timings.push({config:r.config_name||r.test_id||"Unknown",pod:dt.pod_creation_s||0,model:dt.model_load_s||0});}});';
     s += '  if(!timings.length)return;';
     s += '  timings.sort(function(a,b){return(a.pod+a.model)-(b.pod+b.model)});';
     s += '  var labels=timings.map(function(t){return t.config});';
     s += '  Plotly.newPlot(el,[{x:labels,y:timings.map(function(t){return t.pod}),name:"Pod Creation",type:"bar",marker:{color:"#3b82f6"}},{x:labels,y:timings.map(function(t){return t.model}),name:"Model Load",type:"bar",marker:{color:"#f59e0b"}}],{...vl,barmode:"stack",title:{text:"Deploy Time per Configuration"},xaxis:{tickangle:-45},yaxis:{title:"Time (seconds)"}},co);';
+    s += '})();';
+
+    // Pareto Frontier charts
+    s += '(function(){';
+    s += '  var runOsl=' + JSON.stringify((data.recommendation && data.recommendation.workload) ? data.recommendation.workload.osl : 100) + ';';
+    s += '  var paretoResults=ar.filter(function(r){var tid=r.test_id||r.config_name||"";return tid.indexOf("step2-")!==0&&tid.indexOf("step3-")!==0&&r.ttft_p90>0&&(r.throughput_mean>0||r.throughput_p90>0)});';
+    s += '  if(paretoResults.length<2)return;';
+
+    // Throughput vs TTFT
+    s += '  var ttftEl=document.getElementById("dl-pareto-ttft");';
+    s += '  if(ttftEl){';
+    s += '    var pts=paretoResults.map(function(r){var tput=r.throughput_mean||r.throughput_p90||0;var tpsGpu=tput*runOsl/(r.gpus||1);return{x:r.ttft_p90,y:tpsGpu,label:r.config_name,arch:r.architecture}}).filter(function(p){return p.x>0&&p.y>0});';
+    s += '    var pdPts=pts.filter(function(p){return p.arch==="PD"||p.arch==="EP"});';
+    s += '    var aggPts=pts.filter(function(p){return p.arch==="AGGREGATED"});';
+    s += '    function ttftFrontier(points){if(!points.length)return[];var s=points.slice().sort(function(a,b){return a.x-b.x});var f=[];var maxY=-Infinity;for(var i=0;i<s.length;i++){if(s[i].y>maxY){f.push(s[i]);maxY=s[i].y}}f.sort(function(a,b){return a.x-b.x});return f}';
+    s += '    var aggF=ttftFrontier(aggPts);var pdF=ttftFrontier(pdPts);';
+    // Auto-zoom: P95 of X
+    s += '    var allX=pts.map(function(p){return p.x}).sort(function(a,b){return a-b});';
+    s += '    var p95Idx=Math.min(Math.floor(allX.length*0.95),allX.length-1);';
+    s += '    var xMax=allX[p95Idx]*1.2;';
+    s += '    var fMaxX=0;aggF.concat(pdF).forEach(function(p){if(p.x>fMaxX)fMaxX=p.x});';
+    s += '    if(fMaxX>xMax)xMax=fMaxX*1.1;';
+    s += '    var traces=[];';
+    s += '    if(aggPts.length){var va=aggPts.filter(function(p){return p.x<=xMax});traces.push({x:va.map(function(p){return p.x}),y:va.map(function(p){return p.y}),text:va.map(function(p){return p.label+"<br>TTFT: "+p.x.toFixed(0)+"ms<br>"+p.y.toFixed(0)+" tok/s/GPU"}),name:"Aggregated",mode:"markers",marker:{color:"#fca5a5",size:14,opacity:0.5},hovertemplate:"<b>%{text}</b><extra></extra>"});}';
+    s += '    if(pdPts.length){var vp=pdPts.filter(function(p){return p.x<=xMax});traces.push({x:vp.map(function(p){return p.x}),y:vp.map(function(p){return p.y}),text:vp.map(function(p){return p.label+"<br>TTFT: "+p.x.toFixed(0)+"ms<br>"+p.y.toFixed(0)+" tok/s/GPU"}),name:"Disaggregation",mode:"markers",marker:{color:"#93c5fd",size:14,opacity:0.5},hovertemplate:"<b>%{text}</b><extra></extra>"});}';
+    s += '    if(aggF.length){traces.push({x:aggF.map(function(p){return p.x}),y:aggF.map(function(p){return p.y}),text:aggF.map(function(p){return p.label}),name:"Aggregated Frontier",mode:aggF.length>1?"lines+markers+text":"markers+text",line:{color:"#dc2626",width:3},marker:{color:"#dc2626",size:8},textposition:"top right",textfont:{size:10,color:"#dc2626"},hovertemplate:"<b>%{text}</b><extra></extra>"});}';
+    s += '    if(pdF.length){traces.push({x:pdF.map(function(p){return p.x}),y:pdF.map(function(p){return p.y}),text:pdF.map(function(p){return p.label}),name:"Disaggregation Frontier",mode:pdF.length>1?"lines+markers+text":"markers+text",line:{color:"#2563eb",width:3},marker:{color:"#2563eb",size:8},textposition:"top left",textfont:{size:10,color:"#2563eb"},hovertemplate:"<b>%{text}</b><extra></extra>"});}';
+    s += '    Plotly.newPlot(ttftEl,traces,{...lo,height:700,xaxis:{title:"TTFT P90 (ms)",gridcolor:"#d1d5db",range:[0,xMax]},yaxis:{title:"Token Throughput per GPU (tok/s/GPU)",gridcolor:"#d1d5db",rangemode:"tozero"},showlegend:true,legend:{x:1.02,y:1,xanchor:"left",bgcolor:"rgba(255,255,255,0.95)"},margin:{t:40,b:70,l:70,r:200},plot_bgcolor:"white",paper_bgcolor:"white"},co);';
+    s += '  }';
+
+    // Throughput vs Interactivity
+    s += '  var intEl=document.getElementById("dl-pareto-interactivity");';
+    s += '  if(intEl){';
+    s += '    var iPts=paretoResults.map(function(r){var tput=r.throughput_mean||r.throughput_p90||0;var conc=r.concurrency||100;var totalTps=r.output_tps_mean||(tput*runOsl);var inter=totalTps/conc;var tpsGpu=totalTps/(r.gpus||1);return{x:inter,y:tpsGpu,label:r.config_name,arch:r.architecture,conc:conc}}).filter(function(p){return p.x>0&&p.y>0});';
+    s += '    var iPd=iPts.filter(function(p){return p.arch==="PD"||p.arch==="EP"});';
+    s += '    var iAgg=iPts.filter(function(p){return p.arch==="AGGREGATED"});';
+    s += '    function intFrontier(points){if(!points.length)return[];var s=points.slice().sort(function(a,b){return b.x-a.x});var f=[];var maxY=-Infinity;for(var i=0;i<s.length;i++){if(s[i].y>maxY){f.push(s[i]);maxY=s[i].y}}f.sort(function(a,b){return a.x-b.x});return f}';
+    s += '    var iAggF=intFrontier(iAgg);var iPdF=intFrontier(iPd);';
+    s += '    var iTraces=[];';
+    s += '    if(iAgg.length){iTraces.push({x:iAgg.map(function(p){return p.x}),y:iAgg.map(function(p){return p.y}),text:iAgg.map(function(p){return p.label+"<br>"+p.x.toFixed(1)+" tok/s/user<br>"+p.y.toFixed(0)+" tok/s/GPU<br>c="+p.conc}),name:"Aggregated",mode:"markers",marker:{color:"#fca5a5",size:14,opacity:0.5},hovertemplate:"<b>%{text}</b><extra></extra>"});}';
+    s += '    if(iPd.length){iTraces.push({x:iPd.map(function(p){return p.x}),y:iPd.map(function(p){return p.y}),text:iPd.map(function(p){return p.label+"<br>"+p.x.toFixed(1)+" tok/s/user<br>"+p.y.toFixed(0)+" tok/s/GPU<br>c="+p.conc}),name:"Disaggregation",mode:"markers",marker:{color:"#93c5fd",size:14,opacity:0.5},hovertemplate:"<b>%{text}</b><extra></extra>"});}';
+    s += '    if(iAggF.length>1){iTraces.push({x:iAggF.map(function(p){return p.x}),y:iAggF.map(function(p){return p.y}),name:"Aggregated Frontier",mode:"lines",line:{color:"#dc2626",width:3,dash:"dot"},hoverinfo:"skip"});}';
+    s += '    if(iPdF.length>1){iTraces.push({x:iPdF.map(function(p){return p.x}),y:iPdF.map(function(p){return p.y}),name:"Disaggregation Frontier",mode:"lines",line:{color:"#2563eb",width:3,dash:"dot"},hoverinfo:"skip"});}';
+    s += '    Plotly.newPlot(intEl,iTraces,{...lo,height:700,xaxis:{title:"Interactivity (tok/s/user)",gridcolor:"#d1d5db",rangemode:"tozero"},yaxis:{title:"Token Throughput per GPU (tok/s/GPU)",gridcolor:"#d1d5db",rangemode:"tozero"},showlegend:true,legend:{x:1.02,y:1,xanchor:"left",bgcolor:"rgba(255,255,255,0.95)"},margin:{t:40,b:70,l:70,r:200},plot_bgcolor:"white",paper_bgcolor:"white"},co);';
+    s += '  }';
     s += '})();';
 
     // Hide non-active panes after rendering

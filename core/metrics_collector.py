@@ -159,10 +159,14 @@ class MetricsCollector:
             # Memory
             f'container_memory_working_set_bytes{{pod=~"{self.config.pod_name_pattern}.*", namespace="{self.config.namespace}"}}',
 
-            # Network
-            f'sum by (pod) (irate(container_network_transmit_bytes_total{{pod=~"{self.config.pod_name_pattern}.*", namespace="{self.config.namespace}"}}[{rate_window}]))',
-            f'sum by (pod) (irate(container_network_receive_bytes_total{{pod=~"{self.config.pod_name_pattern}.*", namespace="{self.config.namespace}"}}[{rate_window}]))',
-            f'sum by (pod) (irate(container_network_receive_bytes_total{{pod=~"{self.config.pod_name_pattern}.*", namespace="{self.config.namespace}"}}[{rate_window}]) + irate(container_network_transmit_bytes_total{{pod=~"{self.config.pod_name_pattern}.*", namespace="{self.config.namespace}"}}[{rate_window}]))',
+            # Network — eth0 only (management traffic, excludes RDMA/DRA interfaces)
+            f'sum by (pod) (irate(container_network_transmit_bytes_total{{pod=~"{self.config.pod_name_pattern}.*", namespace="{self.config.namespace}", interface="eth0"}}[{rate_window}]))',
+            f'sum by (pod) (irate(container_network_receive_bytes_total{{pod=~"{self.config.pod_name_pattern}.*", namespace="{self.config.namespace}", interface="eth0"}}[{rate_window}]))',
+            f'sum by (pod) (irate(container_network_receive_bytes_total{{pod=~"{self.config.pod_name_pattern}.*", namespace="{self.config.namespace}", interface="eth0"}}[{rate_window}]) + irate(container_network_transmit_bytes_total{{pod=~"{self.config.pod_name_pattern}.*", namespace="{self.config.namespace}", interface="eth0"}}[{rate_window}]))',
+
+            # RDMA/NIXL network — non-eth0 interfaces (DRA-injected enp* NICs)
+            f'sum by (pod) (irate(container_network_transmit_bytes_total{{pod=~"{self.config.pod_name_pattern}.*", namespace="{self.config.namespace}", interface!="eth0"}}[{rate_window}]))',
+            f'sum by (pod) (irate(container_network_receive_bytes_total{{pod=~"{self.config.pod_name_pattern}.*", namespace="{self.config.namespace}", interface!="eth0"}}[{rate_window}]))',
         ]
 
         for query in pod_queries:

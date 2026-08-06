@@ -428,6 +428,12 @@ class MetricsAnalyzer:
             ('e2e_request_latency_seconds_bucket', '0.50'): 'vllm_e2e_p50',
         }
 
+        # RDMA network queries have interface!="eth0" — must match before generic network patterns
+        rdma_patterns = {
+            ('network_transmit_bytes_total', 'interface!="eth0"'): 'rdma_network_tx_rate',
+            ('network_receive_bytes_total', 'interface!="eth0"'): 'rdma_network_rx_rate',
+        }
+
         for query_str, query_result in raw_metrics.items():
             # Determine the short name for this query
             short_name = None
@@ -437,6 +443,13 @@ class MetricsAnalyzer:
                 if bucket_substr in query_str and f'histogram_quantile({quantile_val}' in query_str:
                     short_name = name
                     break
+
+            # Check RDMA network patterns (before generic network match)
+            if not short_name:
+                for (metric_substr, filter_substr), name in rdma_patterns.items():
+                    if metric_substr in query_str and filter_substr in query_str:
+                        short_name = name
+                        break
 
             # Check regular metric patterns
             if not short_name:

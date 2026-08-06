@@ -309,6 +309,10 @@ class ReportAnalyzer:
         step7_ep_tests = []   # step7-ep-tp{tp}-{r}r (EP configs)
         step6_agg_tests = []
         step8_tests = []
+        # All eligible results for recommendation (excludes step2/3 calibration and step13 cache sweep)
+        all_agg_tests = []
+        all_pd_tests = []
+        all_ep_tests = []
         for r in results:
             if not r.is_successful:
                 continue
@@ -324,6 +328,15 @@ class ReportAnalyzer:
                 step6_agg_tests.append(r)
             elif r.config_name.startswith('step8'):
                 step8_tests.append(r)
+            # Build comprehensive pools: all results except calibration (step2/3) and cache sweep (step13)
+            if r.config_name.startswith(('step2', 'step3', 'step13')):
+                continue
+            if r.architecture == 'aggregated':
+                all_agg_tests.append(r)
+            elif r.architecture == 'ep':
+                all_ep_tests.append(r)
+            elif r.architecture == 'pd':
+                all_pd_tests.append(r)
 
         # Backward compatibility: combine PD tests for existing code
         step7_tests = step7_pd_tests
@@ -479,19 +492,20 @@ class ReportAnalyzer:
                 d['efficiency'] = round(r.throughput_p90 / r.total_gpus, 3)
             return d
 
-        # --- Best PD configuration (from step 7) ---
+        # --- Best PD configuration (across all PD results) ---
         best_pd_ttft = None
         best_pd_throughput = None
         best_pd_balanced = None
 
-        if step7_tests:
-            by_ttft = min(step7_tests, key=lambda r: r.ttft_p99 or r.ttft_p90 or 1e9)
+        pd_pool = all_pd_tests if all_pd_tests else step7_tests
+        if pd_pool:
+            by_ttft = min(pd_pool, key=lambda r: r.ttft_p99 or r.ttft_p90 or 1e9)
             best_pd_ttft = _config_dict(by_ttft)
 
-            by_tput = max(step7_tests, key=lambda r: r.throughput_mean or r.throughput_p90 or 0)
+            by_tput = max(pd_pool, key=lambda r: r.throughput_mean or r.throughput_p90 or 0)
             best_pd_throughput = _config_dict(by_tput)
 
-            by_balanced = min(step7_tests, key=lambda r: (r.ttft_p90 or 1e9) / (r.throughput_mean or 0.001))
+            by_balanced = min(pd_pool, key=lambda r: (r.ttft_p90 or 1e9) / (r.throughput_mean or 0.001))
             best_pd_balanced = _config_dict(by_balanced)
 
         # --- Best EP configuration (from step7-ep tests) ---
@@ -499,7 +513,8 @@ class ReportAnalyzer:
         best_ep_ttft = None
         ep_all_configs = []
 
-        if step7_ep_tests:
+        ep_pool = all_ep_tests if all_ep_tests else step7_ep_tests
+        if ep_pool:
             def _ep_entry(r):
                 ptp = r.prefill_tp or r.tensor_parallelism
                 dtp = r.decode_tp or r.tensor_parallelism
@@ -519,18 +534,18 @@ class ReportAnalyzer:
                     'percentiles': _percentiles(r),
                 }
 
-            for r in step7_ep_tests:
+            for r in ep_pool:
                 ep_all_configs.append(_ep_entry(r))
 
-            by_tput = max(step7_ep_tests, key=lambda r: r.throughput_mean or r.throughput_p90 or 0)
+            by_tput = max(ep_pool, key=lambda r: r.throughput_mean or r.throughput_p90 or 0)
             best_ep_throughput = _ep_entry(by_tput)
 
-            by_ttft = min(step7_ep_tests, key=lambda r: r.ttft_p90 if r.ttft_p90 else 1000000.0)
+            by_ttft = min(ep_pool, key=lambda r: r.ttft_p90 if r.ttft_p90 else 1000000.0)
             best_ep_ttft = _ep_entry(by_ttft)
 
-        # --- Aggregated baseline (from step 6 search, or legacy step 8) ---
+        # --- Aggregated baseline (best across all aggregated results) ---
         aggregated_baseline = None
-        agg_tests = step6_agg_tests if step6_agg_tests else step8_tests
+        agg_tests = all_agg_tests if all_agg_tests else (step6_agg_tests if step6_agg_tests else step8_tests)
         if agg_tests:
             agg = min(agg_tests, key=lambda r: r.ttft_p90 if r.ttft_p90 else 1000000.0)
             aggregated_baseline = _config_dict(agg)
@@ -595,18 +610,16 @@ class ReportAnalyzer:
             ttft_field = f'ttft_{pctl}'
             tput_field = f'throughput_{pctl}'
             pctl_data = {}
-            if agg_tests:
-                valid_agg = [r for r in agg_tests if getattr(r, ttft_field, None)]
-                if valid_agg:
-                    pctl_data['aggregated'] = _select_3(valid_agg, ttft_field, tput_field)
-            if step7_tests:
-                valid_pd = [r for r in step7_tests if getattr(r, ttft_field, None)]
-                if valid_pd:
-                    pctl_data['pd'] = _select_3(valid_pd, ttft_field, tput_field)
-            if step7_ep_tests:
-                valid_ep = [r for r in step7_ep_tests if getattr(r, ttft_field, None)]
-                if valid_ep:
-                    pctl_data['ep'] = _select_3(valid_ep, ttft_field, tput_field)
+            # Use comprehensive pools (all results except calibration/cache sweep)
+            valid_agg = [r for r in all_agg_tests if getattr(r, ttft_field, None)]
+            if valid_agg:
+                pctl_data['aggregated'] = _select_3(valid_agg, ttft_field, tput_field)
+            valid_pd = [r for r in all_pd_tests if getattr(r, ttft_field, None)]
+            if valid_pd:
+                pctl_data['pd'] = _select_3(valid_pd, ttft_field, tput_field)
+            valid_ep = [r for r in all_ep_tests if getattr(r, ttft_field, None)]
+            if valid_ep:
+                pctl_data['ep'] = _select_3(valid_ep, ttft_field, tput_field)
             if pctl_data:
                 best_by_percentile[pctl] = pctl_data
 
@@ -764,6 +777,10 @@ class ReportAnalyzer:
                 'isl': isl, 'osl': osl, 'users': run_meta['num_users'],
                 'isl_stdev': run_meta.get('isl_stdev'), 'osl_stdev': run_meta.get('osl_stdev'),
                 'turns': run_meta.get('turns', 1),
+                'length_unit': run_config.get('length_unit', 'tokens'),
+                'isl_original_chars': run_config.get('isl_original_chars'),
+                'osl_original_chars': run_config.get('osl_original_chars'),
+                'chars_per_token': run_config.get('chars_per_token'),
             },
             'total_duration': total_duration_str,
             'goal': goal,
@@ -1027,10 +1044,14 @@ class ReportAnalyzer:
             ib_rx_gbps = round(ib_rx_raw / 1_000_000_000, 2) if ib_rx_raw else 0
             network['ib_rx'].append(ib_rx_gbps if ib_rx_gbps < 100 else 0)
 
-            # NIXL KV transfer: pod network TX for PD/EP configs (GB/s)
-            is_pd_ep = r.architecture in ('pd', 'ep')
-            pod_tx_raw = get_avg('pod_network_tx_rate')
-            nixl_gbps = round(pod_tx_raw / 1_000_000_000, 2) if (is_pd_ep and pod_tx_raw) else 0
+            # NIXL KV transfer: RDMA network TX for PD/EP configs (GB/s)
+            rdma_tx_raw = get_avg('rdma_network_tx_rate')
+            if rdma_tx_raw:
+                nixl_gbps = round(rdma_tx_raw / 1_000_000_000, 2)
+            else:
+                is_pd_ep = r.architecture in ('pd', 'ep')
+                pod_tx_raw = get_avg('pod_network_tx_rate')
+                nixl_gbps = round(pod_tx_raw / 1_000_000_000, 2) if (is_pd_ep and pod_tx_raw) else 0
             network['nixl_tx'].append(nixl_gbps)
 
         if not configs:
@@ -1204,10 +1225,11 @@ class ReportAnalyzer:
         for r in sorted(successful, key=lambda r: r.ttft_p90):
             # Parse manifest types available for download
             manifest_types = []
+            manifests_data = {}
             if r.manifests_yaml:
                 try:
-                    manifests = json.loads(r.manifests_yaml)
-                    manifest_types = list(manifests.keys())
+                    manifests_data = json.loads(r.manifests_yaml)
+                    manifest_types = list(manifests_data.keys())
                 except (json.JSONDecodeError, TypeError):
                     pass
 
@@ -1244,6 +1266,7 @@ class ReportAnalyzer:
                 'decode_tp': r.decode_tp or r.tensor_parallelism,
                 'concurrency': r.num_users if hasattr(r, 'num_users') and r.num_users else None,
                 'manifest_types': manifest_types,
+                'manifests': manifests_data,
                 'test_config': test_config,
                 'metrics_json': r.metrics_json,
                 'request_total': None,
@@ -1252,6 +1275,7 @@ class ReportAnalyzer:
                 'nixl_degraded': False,
                 'cache_hit_pct': None,
                 'quality': getattr(r, 'quality', 'ok') or 'ok',
+                'deploy_timing': None,
             })
             if r.metrics_json:
                 try:
@@ -1262,6 +1286,21 @@ class ReportAnalyzer:
                     all_results[-1]['nixl_degraded'] = _mj.get('nixl_degraded', False)
                     all_results[-1]['nixl_warning'] = _mj.get('nixl_warning', False)
                     all_results[-1]['nixl_error_rate'] = _mj.get('nixl_error_rate', 0)
+                    # Deploy timing
+                    _mlt = _mj.get('model_load_time_s')
+                    _pt = _mj.get('pod_timings')
+                    if _mlt is not None:
+                        pod_s = 0
+                        model_s = _mlt
+                        if _pt and isinstance(_pt, dict):
+                            load_times = [v.get('model_load_s', 0) for v in _pt.values() if isinstance(v, dict) and v.get('model_load_s')]
+                            if load_times:
+                                model_s = max(load_times)
+                                pod_s = max(0, _mlt - model_s)
+                        all_results[-1]['deploy_timing'] = {
+                            'pod_creation_s': pod_s,
+                            'model_load_s': model_s,
+                        }
                     _pm = _mj.get('prometheus_metrics', {})
                     _hits = _pm.get('vllm_prefix_cache_hits_rate', {})
                     _queries = _pm.get('vllm_prefix_cache_queries_rate', {})
