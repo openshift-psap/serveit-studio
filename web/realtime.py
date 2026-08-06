@@ -1962,34 +1962,43 @@ def handle_recreate_storage(data):
             else:
                 log_to_ui(f"   ✓ PVC {pvc_name} already exists", 'info')
 
-            # Download model to per-node NFS
-            job_name = f'model-download-recreate-{run_id}'
-            job_yaml = tm.render_template('prereq/model-download-pernode-job.yaml.j2',
-                job_name=job_name, namespace=namespace, test_id=test_id,
-                model_name=model_name, node_nfs_pvcs=node_nfs_pvcs, hf_token=hf_token)
-            subprocess.run([kubectl_cmd, 'delete', 'job', job_name, '-n', namespace, '--ignore-not-found'],
-                          capture_output=True, text=True, timeout=15, check=False)
-            subprocess.run([kubectl_cmd, 'apply', '-f', '-', '-n', namespace],
-                          input=job_yaml, capture_output=True, text=True, timeout=30, check=False)
-            log_to_ui(f"   🚀 Model download job started ({job_name})", 'info')
+            # Download model to each per-node PVC independently (parallel jobs)
+            download_jobs = []
+            for nfs in node_nfs_pvcs:
+                job_name = f'model-download-{nfs["suffix"]}-{run_id}'
+                job_yaml = tm.render_template('prereq/model-download-job.yaml.j2',
+                    job_name=job_name, namespace=namespace, test_id=test_id,
+                    model_name=model_name, pvc_name=nfs['pvc_name'], hf_token=hf_token)
+                subprocess.run([kubectl_cmd, 'delete', 'job', job_name, '-n', namespace, '--ignore-not-found'],
+                              capture_output=True, text=True, timeout=15, check=False)
+                subprocess.run([kubectl_cmd, 'apply', '-f', '-', '-n', namespace],
+                              input=job_yaml, capture_output=True, text=True, timeout=30, check=False)
+                download_jobs.append(job_name)
+            log_to_ui(f"   🚀 {len(download_jobs)} parallel download jobs started (one per node)", 'info')
             def _wait_for_job():
                 import subprocess as _sp
-                log_to_ui(f"   ⏳ Waiting for model download to complete...", 'info')
+                log_to_ui(f"   ⏳ Waiting for {len(download_jobs)} download jobs to complete...", 'info')
+                remaining = set(download_jobs)
                 for _ in range(1800):
                     gsleep(5)
-                    r = _sp.run(['kubectl', 'get', 'job', job_name, '-n', namespace,
-                                 '-o', 'jsonpath={.status.succeeded},{.status.failed}'],
-                                capture_output=True, text=True, timeout=10, check=False)
-                    parts = r.stdout.strip().split(',')
-                    succeeded = parts[0] if parts else ''
-                    failed = parts[1] if len(parts) > 1 else ''
-                    if succeeded == '1':
-                        log_to_ui(f"   ✅ Model download completed", 'success')
+                    done = set()
+                    for jn in remaining:
+                        r = _sp.run(['kubectl', 'get', 'job', jn, '-n', namespace,
+                                     '-o', 'jsonpath={.status.succeeded},{.status.failed}'],
+                                    capture_output=True, text=True, timeout=10, check=False)
+                        parts = r.stdout.strip().split(',')
+                        succeeded = parts[0] if parts else ''
+                        failed = parts[1] if len(parts) > 1 else ''
+                        if succeeded == '1':
+                            done.add(jn)
+                        elif failed and failed != '' and int(failed) > 0:
+                            log_to_ui(f"   ❌ Download job {jn} failed", 'error')
+                            socketio.emit('recreate_storage_done', {'run_id': run_id, 'error': f'Download job {jn} failed'})
+                            return
+                    remaining -= done
+                    if not remaining:
+                        log_to_ui(f"   ✅ All {len(download_jobs)} model downloads completed", 'success')
                         socketio.emit('recreate_storage_done', {'run_id': run_id})
-                        return
-                    if failed and failed != '' and int(failed) > 0:
-                        log_to_ui(f"   ❌ Model download failed", 'error')
-                        socketio.emit('recreate_storage_done', {'run_id': run_id, 'error': 'Download job failed'})
                         return
                 log_to_ui(f"   ⚠️  Model download timed out (2.5h)", 'warning')
                 socketio.emit('recreate_storage_done', {'run_id': run_id, 'error': 'Timed out'})
@@ -2265,28 +2274,28 @@ def handle_setup_storage(data):
                     log_to_ui('   ✅ Created serveit-cache PVC (benchmark results)', 'info')
 
             timestamp = datetime.now().strftime('%Y%m%d-%H%M%S')
-            job_name = f'serveit-model-download-{timestamp}'
             test_id = f'serveit-setup-{timestamp}'
 
             template_mgr = TemplateManager()
 
-            job_yaml = template_mgr.render_template(
-                'prereq/model-download-pernode-job.yaml.j2',
-                job_name=job_name,
-                namespace=namespace,
-                test_id=test_id,
-                model_name=model,
-                node_nfs_pvcs=node_nfs_pvcs,
-                hf_token=hf_token,
-            )
+            # Launch parallel download jobs — one per PVC, each downloads independently
+            download_job_names = []
+            for nfs in node_nfs_pvcs:
+                jn = f'serveit-download-{nfs["suffix"]}-{timestamp}'
+                job_yaml = template_mgr.render_template(
+                    'prereq/model-download-job.yaml.j2',
+                    job_name=jn, namespace=namespace, test_id=test_id,
+                    model_name=model, pvc_name=nfs['pvc_name'], hf_token=hf_token,
+                )
+                cmd = ['kubectl', 'apply', '-f', '-']
+                proc = subprocess.run(cmd, input=job_yaml.encode(), capture_output=True, timeout=30)
+                if proc.returncode == 0:
+                    download_job_names.append(jn)
+                else:
+                    log_to_ui(f'   ⚠️  Failed to start download on {nfs["suffix"]}: {proc.stderr.decode()[:100]}', 'warning')
 
-            cmd = ['kubectl', 'apply', '-f', '-']
-            proc = subprocess.run(cmd, input=job_yaml.encode(), capture_output=True, timeout=30)
-            if proc.returncode != 0:
-                raise Exception(f"Per-node download job failed: {proc.stderr.decode()}")
-
-            log_to_ui(f'✅ Per-node download job {job_name} started', 'success')
-            log_to_ui('⏳ Streaming download + distribution progress...', 'info')
+            log_to_ui(f'✅ {len(download_job_names)} parallel download jobs started (one per node)', 'success')
+            log_to_ui('⏳ Each node downloads the model independently...', 'info')
 
             _sc_display = storage_class or ('nfs-' + node_nfs_pvcs[0]['suffix'] if node_nfs_pvcs else 'unknown')
             emit('storage_setup_result', {
