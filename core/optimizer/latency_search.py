@@ -263,17 +263,21 @@ class LatencySearchMixin:
             return self.achievable_concurrency or max(1, int(self.config.total_gpus / 1.3))
 
         decode_tpsg = self.optimal_decode_tp.tpsg if self.optimal_decode_tp else 500
-        service_time = (self.config.isl / (self.optimal_prefill_tp.tpsg if self.optimal_prefill_tp else 5000)) + (self.config.osl / decode_tpsg)
+        prefill_tpsg = self.optimal_prefill_tp.tpsg if self.optimal_prefill_tp else 5000
+        service_time = (self.config.isl / prefill_tpsg) + (self.config.osl / decode_tpsg)
         response_time = concurrency / throughput_mean
         queue_time = max(0, response_time - service_time)
         utilization = service_time / response_time if response_time > 0 else 1
 
-        # Target: 3x service time as total response time (2x queuing headroom)
-        target_response = service_time * 3
-        # Scale concurrency proportionally: new_c = old_c × (target_response / actual_response)
-        cal_concurrency = max(1, int(concurrency * target_response / response_time))
-        # Cap at measured throughput (can't exceed cluster capacity)
-        cal_concurrency = min(cal_concurrency, int(throughput_mean * target_response))
+        # Calibrated concurrency = throughput × target_latency
+        # Use 1s as the target latency floor — enough headroom for real workloads
+        # but not so aggressive that it drops to unrealistically low concurrency
+        target_response = max(service_time * 3, 1.0)
+        cal_concurrency = max(1, int(throughput_mean * target_response))
+        # Floor at 50% of user concurrency — never recommend less than half
+        cal_concurrency = max(cal_concurrency, int(concurrency * 0.5))
+        # Cap at 120% of user concurrency
+        cal_concurrency = min(cal_concurrency, int(concurrency * 1.2))
 
         self.log(f"  📊 {arch_label} Load Analysis:", 'info')
         self.log(f"    Measured: {throughput_mean:.1f} req/s at c={concurrency:.0f}", 'info')
