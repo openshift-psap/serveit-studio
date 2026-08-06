@@ -761,9 +761,12 @@ function restoreClusterResources() {
             storageSelect.value = config.storage_class;
         }
     } else if (storageSelect && (!data.storage_classes || data.storage_classes.length === 0)) {
-        // Stale config has no storage classes — trigger a fresh scan
-        logToConsole('🔍 Storage classes missing from saved config, re-scanning...', 'info');
-        socket.emit('scan_cluster', {});
+        // Stale config has no storage classes — trigger a fresh scan (skip if already scanning)
+        if (!window._clusterScanInProgress) {
+            logToConsole('🔍 Storage classes missing from saved config, re-scanning...', 'info');
+            window._clusterScanInProgress = true;
+            socket.emit('scan_cluster', {});
+        }
     }
 
     // Check if running from launcher with presets
