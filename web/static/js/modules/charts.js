@@ -287,63 +287,6 @@ function _renderChartsImpl(data, runId, content) {
         const _baseTestSettings = (rec.recommendations.response_time || rec.recommendations.throughput || {}).config?.test_settings || {};
         const _baseEppConfig = (rec.recommendations.response_time || rec.recommendations.throughput || {}).config?.epp_config || null;
 
-        // --- EPP-Optimized Recommendation (from Step 11) ---
-        if (data.epp_tuning && data.epp_tuning.by_architecture) {
-            const eppArch = data.epp_tuning.by_architecture;
-            const hasEppData = Object.values(eppArch).some(t => t && t.length > 0);
-            if (hasEppData) {
-                html += '<div style="margin-top:24px; border:2px solid #7c3aed; border-left:6px solid #7c3aed; border-radius:10px; overflow:hidden;">';
-                html += '<div style="background:linear-gradient(135deg,#7c3aed,#8b5cf6); color:white; padding:14px 20px; font-size:1.1em; font-weight:800;">EPP-Optimized Recommendation (Step 9)</div>';
-                html += '<div style="padding:12px 20px 4px; color:#475569; font-size:0.9em;">These results use the same deployment as above but with tuned EPP scoring weights. The gateway routes requests more efficiently, improving latency without changing the inference pods.</div>';
-                html += '<div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(280px, 1fr)); gap:16px; padding:16px 20px;">';
-
-                // Best EPP config per architecture (best P90 TTFT)
-                ['aggregated', 'pd'].forEach(function(arch) {
-                    const trials = eppArch[arch] || [];
-                    if (!trials.length) return;
-                    const best = trials.reduce(function(a, b) { return ((a.ttft_p90 || Infinity) < (b.ttft_p90 || Infinity)) ? a : b; });
-                    if (!best || !best.ttft_p90) return;
-
-                    const w = best.weights || {};
-                    const eppId = 'epp-' + arch + '-best';
-                    const recArch = arch === 'pd' ? 'pd' : 'aggregated';
-                    window._recConfigs[eppId] = { ...best, architecture: recArch, test_settings: _baseTestSettings };
-
-                    let deployLabel;
-                    if ((arch === 'pd' || arch === 'ep') && best.prefill_pods) {
-                        deployLabel = best.prefill_tp === best.decode_tp
-                            ? `${best.prefill_pods}P+${best.decode_pods}D TP=${best.prefill_tp || best.tp || '?'}`
-                            : `${best.prefill_pods}P+${best.decode_pods}D PTP=${best.prefill_tp || best.tp || '?'} DTP=${best.decode_tp || '?'}`;
-                    } else if (best.replicas) {
-                        deployLabel = `${best.replicas} Aggregated pods, TP=${best.tp || '?'}`;
-                    } else {
-                        deployLabel = best.config_name;
-                    }
-
-                    const concStr = best.concurrency ? `c=${best.concurrency}` : '';
-                    const tputMean = best.throughput_mean || best.throughput_p90;
-                    const eppWeights = `EPP: ${best.name} (${w.prefix_cache || '?'}:${w.kv_cache || '?'}:${w.queue || '?'})`;
-
-                    const eppTestId = best.test_id || best.config_name;
-                    const eppManifests = best.manifest_types || manifestLookup[eppTestId] || [];
-
-                    html += _buildRecCard({
-                        label: 'Best TTFT P90', icon: '&#9201;', desc: 'Best EPP-tuned latency', color: '#7c3aed',
-                        archKey: recArch, deploy: deployLabel,
-                        tput: tputMean, gpus: best.gpus || best.total_gpus || '?',
-                        conc: concStr,
-                        ttft_p90: best.ttft_p90, ttft_p95: best.ttft_p95, ttft_p99: best.ttft_p99,
-                        itl_p90: best.itl_p90, itl_p95: best.itl_p95, itl_p99: best.itl_p99,
-                        recId: eppId, testId: eppTestId,
-                        manifests: eppManifests, runId: runId,
-                        extraBadges: [{ text: 'EPP TUNED', bg: '#7c3aed', color: 'white' }],
-                        extraInfo: eppWeights
-                    });
-                });
-
-                html += '</div></div>';
-            }
-        }
 
         html += '</div></div>';
 
