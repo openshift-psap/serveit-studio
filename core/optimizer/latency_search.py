@@ -573,7 +573,7 @@ class LatencySearchMixin:
                 _add_unique(min(all_candidates, key=lambda x: x[2].ttft_p90 or 1e9))
                 _add_unique(max(all_candidates, key=lambda x: _tput_of(x[2])))
                 def _gpus(c):
-                    if c[0] == 'pd':
+                    if c[0] in ('pd', 'ep'):
                         return c[1].prefill_pods * c[1].prefill_tp + c[1].decode_pods * c[1].decode_tp
                     else:
                         return c[1] * (self.config.total_gpus // c[1]) if c[1] else self.config.total_gpus
