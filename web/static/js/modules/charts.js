@@ -832,25 +832,31 @@ function _renderChartsImpl(data, runId, content) {
         html += settingsTable('EPP Configuration', '#6d28d9', eppRows);
         html += '</div>'; // close 2-column grid
 
-        // Per-Architecture Tuning Comparison Table
-        const archConfigs = {};
-        const archOrder = [];
+        // Per-Config Tuning Comparison Table
+        const allConfigs = [];
         for (const r of (data.all_results || [])) {
-            const arch = (r.architecture || '').toUpperCase();
-            if (archConfigs[arch]) continue;
+            const tid = r.test_id || r.config_name || '';
+            if (tid.startsWith('step2-') || tid.startsWith('step3-') || tid.startsWith('step9-') || tid.startsWith('step11-') || tid.startsWith('step13-')) continue;
             let tc = null;
             if (r.test_config) {
                 try { tc = typeof r.test_config === 'string' ? JSON.parse(r.test_config) : r.test_config; } catch(e) {}
             }
-            if (tc) { archConfigs[arch] = tc; archOrder.push(arch); }
+            if (tc) {
+                const arch = (r.architecture || '').toUpperCase();
+                allConfigs.push({ label: r.config_name, arch: arch, tc: tc, ttft: r.ttft_p90 || 1e9 });
+            }
         }
+        // Sort: AGGREGATED first (by TP), then EP (by TTFT), then PD (by TTFT)
+        const archSortOrder = { 'AGGREGATED': 0, 'EP': 1, 'PD': 2 };
+        allConfigs.sort((a, b) => (archSortOrder[a.arch] || 3) - (archSortOrder[b.arch] || 3) || a.ttft - b.ttft);
+        const hasEpConfig = allConfigs.some(c => c.arch === 'EP');
 
-        if (archOrder.length > 0) {
+        if (allConfigs.length > 0) {
             html += '<div style="margin-top:24px;">';
             html += '<div style="font-weight:700;font-size:1.05em;color:#1e293b;margin-bottom:8px;padding:8px 12px;background:#ecfdf5;border:1px solid #059669;border-radius:4px;text-align:center;">Tuned Settings vs Upstream Defaults</div>';
             html += '<div style="font-size:0.85em;color:#64748b;margin-bottom:12px;text-align:center;">Green = auto-tuned by ServeIt Studio. Gray = upstream default (unchanged).</div>';
 
-            const hasEp = archOrder.includes('EP');
+            const hasEp = hasEpConfig;
             const na = '<span style="color:#cbd5e1;">N/A</span>';
 
             const _eppPresets = {
@@ -921,24 +927,25 @@ function _renderChartsImpl(data, runId, content) {
                 ]},
             ];
 
-            html += '<div style="overflow-x:auto;"><table class="results-table" style="font-size:0.85em;table-layout:fixed;width:100%;">';
-            html += '<tr><th style="text-align:center;width:220px;">Parameter</th><th style="text-align:center;width:100px;">Default</th>';
-            for (const arch of archOrder) {
-                const color = arch === 'AGGREGATED' ? '#6366f1' : arch === 'PD' ? '#0ea5e9' : '#10b981';
-                html += `<th style="color:${color};text-align:center;">${arch}</th>`;
+            const archColors2 = { 'AGGREGATED': '#6366f1', 'PD': '#0ea5e9', 'EP': '#10b981' };
+            html += '<div style="overflow-x:auto;"><table class="results-table" style="font-size:0.85em;">';
+            html += '<tr><th style="text-align:center;min-width:180px;position:sticky;left:0;background:#1e293b;z-index:1;">Parameter</th><th style="text-align:center;min-width:70px;">Default</th>';
+            for (const cfg of allConfigs) {
+                const color = archColors2[cfg.arch] || '#64748b';
+                html += `<th style="color:${color};text-align:center;min-width:90px;font-size:0.85em;white-space:nowrap;">${cfg.label}</th>`;
             }
             html += '</tr>';
 
             for (const section of sections) {
-                html += `<tr><td colspan="${2 + archOrder.length}" style="background:#f1f5f9;font-weight:700;color:#475569;padding:8px 10px;font-size:1em;text-align:center;">${section.title}</td></tr>`;
+                html += `<tr><td colspan="${2 + allConfigs.length}" style="background:#f1f5f9;font-weight:700;color:#475569;padding:8px 10px;font-size:1em;text-align:center;">${section.title}</td></tr>`;
                 for (const param of section.params) {
                     if (param.ep_only && !hasEp) continue;
-                    html += `<tr><td style="color:#334155;text-align:center;"><code style="font-size:0.9em;">${param.label}</code></td>`;
+                    html += `<tr><td style="color:#334155;text-align:center;position:sticky;left:0;background:white;z-index:1;"><code style="font-size:0.9em;">${param.label}</code></td>`;
                     html += `<td style="color:#94a3b8;text-align:center;">${param.def}</td>`;
-                    for (const arch of archOrder) {
-                        const tc = archConfigs[arch];
-                        if (param.ep_only && arch !== 'EP') { html += `<td style="text-align:center;">${na}</td>`; continue; }
-                        if (param.pd_only && arch === 'AGGREGATED') { html += `<td style="text-align:center;">${na}</td>`; continue; }
+                    for (const cfg of allConfigs) {
+                        const tc = cfg.tc;
+                        if (param.ep_only && cfg.arch !== 'EP') { html += `<td style="text-align:center;">${na}</td>`; continue; }
+                        if (param.pd_only && cfg.arch === 'AGGREGATED') { html += `<td style="text-align:center;">${na}</td>`; continue; }
                         const val = param.get(tc);
                         const display = val || param.def;
                         const changed = val && val !== param.def && val !== 'null';
