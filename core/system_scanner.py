@@ -89,6 +89,7 @@ class ClusterResources:
     host_model: str = 'unknown'  # Host/instance type
     nic_models: List[str] = None  # List of NIC model names
     nic_speeds: Dict[str, float] = None  # NIC name -> speed in Gbps
+    lws_volume_claim_templates: bool = False  # True if LWS supports volumeClaimTemplates
 
     def get_max_tp(self) -> int:
         """Get maximum tensor parallelism value based on max GPUs per node."""
@@ -960,6 +961,18 @@ class SystemScanner:
         nodes = self.scan_nodes()
         storage_classes = self.scan_storage_classes()
 
+        # Check if LWS supports volumeClaimTemplates
+        lws_vct = False
+        try:
+            r = self.kubectl.run([
+                'get', 'crd', 'leaderworkersets.leaderworkerset.x-k8s.io',
+                '-o', 'jsonpath={.spec.versions[0].schema.openAPIV3Schema.properties.spec.properties.leaderWorkerTemplate.properties.volumeClaimTemplates}'
+            ], check=False)
+            lws_vct = r.returncode == 0 and r.stdout.strip() != ''
+            logger.info(f"LWS volumeClaimTemplates support: {lws_vct}")
+        except Exception:
+            pass
+
         if not nodes:
             logger.warning("No nodes found in cluster!")
             return ClusterResources(
@@ -1091,7 +1104,8 @@ class SystemScanner:
             cpu_model=cpu_model,
             host_model=host_model,
             nic_models=nic_models,
-            nic_speeds=nic_speeds
+            nic_speeds=nic_speeds,
+            lws_volume_claim_templates=lws_vct
         )
 
         logger.info("=" * 60)

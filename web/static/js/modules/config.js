@@ -716,6 +716,19 @@ function restoreClusterResources() {
 
     // Populate storage class dropdown
     const storageSelect = document.getElementById('storage-class-select');
+    // Check LWS volumeClaimTemplates support
+    window._lwsVolumeClaimTemplates = data.lws_volume_claim_templates || false;
+    const lwsWarning = document.getElementById('lws-vct-warning');
+    if (lwsWarning) {
+        if (!window._lwsVolumeClaimTemplates) {
+            lwsWarning.style.display = 'block';
+            lwsWarning.innerHTML = '<div style="background:#fffbeb;border:2px solid #f59e0b;border-radius:8px;padding:12px 16px;margin-bottom:12px;"><strong style="color:#92400e;">&#9888; LWS version does not support per-replica storage</strong><br><span style="color:#78350f;font-size:0.9em;">LeaderWorkerSet on this cluster does not support volumeClaimTemplates (requires LWS v0.6+). All pods will share a single RWX PVC. Upgrade LWS for per-replica storage.</span></div>';
+            config.single_pvc = true;
+            saveConfig();
+        } else {
+            lwsWarning.style.display = 'none';
+        }
+    }
     if (storageSelect && data.storage_classes && data.storage_classes.length > 0) {
         storageSelect.innerHTML = '<option value="">-- Select a Storage Class --</option>';
         const gpuNodeCount = data.gpu_node_count || 0;

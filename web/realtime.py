@@ -937,6 +937,7 @@ def handle_scan_cluster(data):
                 if not any(blk in sc.name.lower() for blk in ('block', 'raw', 'iscsi-block'))
             ],
             'gpu_node_count': resources.gpu_node_count,
+            'lws_volume_claim_templates': getattr(resources, 'lws_volume_claim_templates', False),
             # Provider and network information
             'provider': provider_name,
             'network_type': network_type,
