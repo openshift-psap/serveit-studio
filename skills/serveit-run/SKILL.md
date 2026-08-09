@@ -425,11 +425,9 @@ Note: Calibrated load validation must be enabled for concurrency sweep to work �
 
 If the user enables concurrency sweep, explain:
 
-**"Now that we know which configurations work best, we'll test each one at different numbers of simultaneous users to find the real sweet spot. Think of it like test-driving a car at different speeds — a car might feel great at 60 mph but struggle at 90. Same with inference: a config that's amazing at 50 users might fall apart at 80, while another config that looked worse in the stress test actually performs better at medium load.**
+**"Now that we know which configurations work best, we'll test each one by simulating different numbers of users working in parallel — for example 20 users, 40 users, 60 users, 80 users, and so on. Think of it like test-driving a car at different speeds — a car might feel great at 60 mph but struggle at 90. Same with inference: a config that's amazing at 50 users might fall apart at 80, while another config that looked worse in the stress test actually performs better at medium load.**
 
-**We'll take the top 4 configs — the ones our recommendation engine picked as Best Balanced, Lowest TTFT, Highest Throughput, and Most Efficient — and run each of them at 8-10 different user counts. That gives us a complete performance map for each config.**
-
-**If during EPP tuning we found better routing weights, we'll also re-run with those tuned weights so you can see the difference."**
+**We'll take the top 4 configs — the ones our recommendation engine picked as Best Balanced, Lowest TTFT, Highest Throughput, and Most Efficient — and simulate 8-10 different user loads for each one. That gives us a complete performance map: you'll see exactly how each config handles light, medium, and heavy traffic."**
 
 Then set:
 - `concurrency_sweep_count: 8` (or 10 for more detail)
