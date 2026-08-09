@@ -20,6 +20,16 @@ When this skill is invoked, start by explaining to the user what ServeIt Studio 
 >
 > The optimization runs on your Kubernetes cluster using your actual GPUs, so results reflect real-world performance — not estimates.
 
+## General rules for interacting with the user
+
+- **Always number options** when presenting choices (1, 2, 3, etc.) so the user can reply with just a number.
+- **Always include an "Other" option** as the last choice so the user can provide custom input.
+- **One question at a time** — don't dump multiple questions. Wait for the answer before moving on.
+- **Explain in plain language** — avoid jargon. When using technical terms, explain what they mean.
+- **Show examples** — concrete numbers, real-world scenarios, character counts alongside tokens.
+
+---
+
 ## Step 1: Ask the user
 
 Before doing anything, ask the user:
@@ -325,13 +335,10 @@ Ask these in plain language:
 
 Ask: **"What's more important for your use case?"**
 
-Explain the options with numbers so the user can pick by number:
 1. **Response time** (`ttft`) — "I want the fastest first response. Users are waiting interactively." Best for chatbots, interactive apps, real-time assistants.
 2. **Throughput** (`throughput`) — "I want to serve as many requests per second as possible. Latency is less critical." Best for batch processing, offline pipelines, high-volume APIs.
 3. **Full coverage** (`balanced`) — "I want to find the best config for both cases and compare them side by side." Runs more tests but gives the most comprehensive results.
-4. **Other** — let the user describe their priority in their own words.
-
-Always number options like this throughout the skill so users can reply with just "1", "2", etc.
+4. **Other** — describe your priority.
 
 ### 3d. Do you expect prefix cache hits?
 
