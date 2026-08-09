@@ -46,6 +46,26 @@ ServeIt Studio exposes three API surfaces:
 
 ### Status & Config
 
+#### `POST /api/set_state`
+
+Set the UI wizard step and optimization running state. Persists to database.
+
+```bash
+# Set UI to running (step 7)
+curl -s -X POST $BASE_URL/api/set_state \
+  -H 'Content-Type: application/json' \
+  -d '{"current_step": 7, "running": true}'
+
+# Set UI to stopped
+curl -s -X POST $BASE_URL/api/set_state \
+  -H 'Content-Type: application/json' \
+  -d '{"running": false}'
+```
+
+**Request body:** `{"current_step": int (0-7), "running": bool}` — both optional, only provided fields are updated.
+
+**Response:** `{"success": true}`
+
 #### `POST /api/scan`
 
 Trigger a cluster scan and return GPU, storage, network, and infrastructure details.
