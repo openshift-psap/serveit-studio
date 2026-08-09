@@ -936,6 +936,7 @@ def handle_scan_cluster(data):
                 }
                 for sc in resources.storage_classes
                 if not any(blk in sc.name.lower() for blk in ('block', 'raw', 'iscsi-block'))
+                and sc.provisioner != 'kubernetes.io/no-provisioner'
             ],
             'gpu_node_count': resources.gpu_node_count,
             # Provider and network information
