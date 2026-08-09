@@ -417,10 +417,11 @@ Explain: **"The optimization stress-tests each configuration at full load to fin
 
 Ask: **"Do you want to run both of these? It adds extra tests but gives you the full picture of how each config performs across different load levels — not just at maximum stress."**
 
-- **Both** → Set `calibrated_load_enabled: true` and `inferencex_sweep_enabled: true`. Full production-grade results.
-- **Just calibrated validation** → Shows realistic performance but no sweep charts.
-- **Just concurrency sweep** → Maps the curve but uses the stress-test concurrency as the center point.
+- **Yes, full production analysis** → Set `calibrated_load_enabled: true` and `inferencex_sweep_enabled: true`. Calibrated validation finds the sweet spot, then concurrency sweep maps the curve around it.
+- **Just calibrated validation** → Set `calibrated_load_enabled: true`. Shows realistic performance at the sweet spot but no sweep charts across multiple levels.
 - **Skip** → Use the stress-test results as-is. Faster, but you only see max-load performance.
+
+Note: Calibrated load validation must be enabled for concurrency sweep to work — the sweep centers its levels around the calibrated concurrency. You cannot enable concurrency sweep without calibrated load.
 
 If the user enables concurrency sweep, ask about these options:
 
