@@ -312,7 +312,7 @@ Ask these in plain language:
   - A one-liner fix or short answer: ~50-100 tokens (~200-400 characters)
   - A function with explanation: ~200-500 tokens (~800-2,000 characters)
   - A full class or module: ~500-2,000 tokens (~2,000-8,000 characters)
-- Default: 100 tokens
+- Default: 2,000 tokens
 
 **"How many users do you expect to be using this at the same time?"**
 - This is the number of concurrent requests hitting the model simultaneously
