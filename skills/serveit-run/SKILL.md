@@ -649,10 +649,31 @@ Tell the user which one was auto-detected as the best fit and why. For multi-nod
 
 **Storage class for model cache:**
 
-Already determined during setup (Step 2). Confirm with the user:
-- Which SC is being used (hostpath-nvme, nfs, etc.)
-- Whether per-node storage is enabled (for local disk)
-- The local disk path (for hostPath mounts)
+The scan returns all available storage classes. Show them to the user and explain the trade-offs:
+
+Ask: **"Where should the model weights be stored? This matters a lot for large models — a 70B model is ~140GB, and downloading it over the network to each pod can take 30+ minutes on NFS but only 2-3 minutes on local NVMe."**
+
+Explain the options based on what the scan found:
+
+- **Local NVMe / hostPath** (e.g., `hostpath-nvme`) — the model is stored directly on each GPU node's local NVMe disk. Fastest option (~2-3 GB/s read speed). Each node has its own copy. **Best for large models (30B+) and multi-node setups.** Requires the HostPath Provisioner (HPP) or similar operator to be installed, and local disks must be available on ALL GPU nodes the user plans to use. If local disk doesn't cover all GPU nodes, warn the user.
+- **NFS / shared filesystem** (e.g., `nfs`, CephFS, EFS) — the model is stored once on a shared volume. All pods read from the same copy. Simpler setup, but network I/O becomes a bottleneck for large models. **Fine for small models (under 15-20GB) or when local disk isn't available.** For large models on NFS, the initial model loading can take 20-40 minutes per pod as each pod reads the full model over the network.
+- **Block storage** (e.g., `ibmc-vpc-block`, `gp3`, LVMS) — cloud or local block devices. Usually RWO (one pod at a time). Fast reads but can't be shared across nodes. Works for single-node setups or when each pod gets its own PVC.
+
+If the scan found a local disk SC with `is_local: true` and `gpu_nodes_covered >= gpu_node_count`, suggest it:
+
+**"I found local NVMe storage (`hostpath-nvme`) available on all your GPU nodes. This gives the fastest model loading — the model is read directly from each node's NVMe drive instead of over the network. I'd suggest using this."**
+
+If local disk is available but doesn't cover all GPU nodes, warn:
+
+**"Local NVMe storage is only available on X of Y GPU nodes. For multi-node inference, every GPU node needs local storage. You can either limit your tests to the X nodes with local disk, or use shared storage (NFS) for all nodes."**
+
+If no local disk is available and the model is large (30B+), suggest:
+
+**"This is a large model (~XGB). With network-based storage (NFS), each pod will need to download the full model over the network, which can take 20-40 minutes. If you're able to set up local disk storage using the HostPath Provisioner (HPP) or a similar solution, it would significantly speed up model loading. See `docs/local-nvme-hostpath-setup.md` for setup instructions."**
+
+Set the chosen SC in the config:
+- If local disk: set `storage_class`, `per_node_storage: true`, `local_disk_path` from the SC's `local_path` field
+- If shared/NFS: set `storage_class`, `per_node_storage: false`
 
 **GPU allocation:**
 
