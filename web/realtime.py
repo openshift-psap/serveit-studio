@@ -222,24 +222,23 @@ def handle_save_config(data):
         config = data.get('config', {})
         current_step = data.get('current_step', 0)
 
-        # If config is locked by REST/API, only update current_step (not config_json)
+        # If config is locked by REST/API, skip all DB writes — API controls state
         with state_lock:
             config_locked = state.get('config_locked', False)
 
+        if config_locked:
+            emit('save_config_result', {'success': True})
+            return
+
         with get_db() as conn:
-            if config_locked:
-                conn.execute('''
-                    UPDATE ui_session_state SET current_step = ?, updated_at = ? WHERE id = 1
-                ''', (current_step, datetime.now().isoformat()))
-            else:
-                conn.execute('''
-                    INSERT INTO ui_session_state (id, config_json, current_step, optimization_running, updated_at)
-                    VALUES (1, ?, ?, 0, ?)
-                    ON CONFLICT(id) DO UPDATE SET
-                        config_json = excluded.config_json,
-                        current_step = excluded.current_step,
-                        updated_at = excluded.updated_at
-                ''', (json.dumps(config), current_step, datetime.now().isoformat()))
+            conn.execute('''
+                INSERT INTO ui_session_state (id, config_json, current_step, optimization_running, updated_at)
+                VALUES (1, ?, ?, 0, ?)
+                ON CONFLICT(id) DO UPDATE SET
+                    config_json = excluded.config_json,
+                    current_step = excluded.current_step,
+                    updated_at = excluded.updated_at
+            ''', (json.dumps(config), current_step, datetime.now().isoformat()))
 
         # Broadcast config update to all connected clients (except sender)
         socketio.emit('config_updated', {
