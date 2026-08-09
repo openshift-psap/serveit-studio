@@ -491,12 +491,12 @@ Explain: **"When you have multiple pods serving your model, the EPP (Endpoint Pi
 
 If the user selected prefix cache > 0%, suggest: **"Since you're using shared prefix caching, I'd suggest `cache_optimized` — it routes requests to pods that already have the prefix cached, which maximizes the benefit of caching."**
 
-Presets (predefined scoring weight combinations):
-- **`balanced`** — Cache(3) + KV(2) + Queue(2) + Active(2). Good default for most workloads.
-- **`cache_optimized`** — Cache(5) + KV(1) + Queue(2) + Active(1). Best when prefix cache is enabled — heavily favors pods with cached prompts.
-- **`queue_balanced`** — Cache(1) + KV(1) + Queue(3) + Active(3). Best for diverse prompts with low cache hits — focuses on spreading load evenly.
-- **`latency_aware`** — Uses latency prediction to route to pods that can meet the SLO target. Requires a latency SLA to be set.
-- **`custom`** — Build your own scoring weights from individual plugins (see below).
+Presets:
+- **`cache_optimized`** — prioritizes routing requests to pods that already have the prompt prefix cached. Best when prefix cache is enabled.
+- **`balanced`** — equal weight across cache, memory, queue depth, and active requests. Good default for most workloads.
+- **`queue_balanced`** — prioritizes routing to the least busy pod. Best for diverse prompts with low cache hits.
+- **`latency_aware`** — uses latency prediction to route to pods that can meet the SLO target. Requires a latency SLA to be set.
+- **`custom`** — build your own scoring weights from individual plugins (see below).
 
 If the user wants custom, or wants to understand what the presets actually do under the hood, show the scoring plugins:
 
