@@ -25,6 +25,8 @@ When this skill is invoked, start by explaining to the user what ServeIt Studio 
 - Can be limited to specific GPUs, nodes, or namespaces
 - Runs independently — multiple optimizations can run in parallel on different clusters
 - Can be backed up and restored — download the database and artifacts, then restore on another instance or after a redeployment
+- Supports **HTTPS proxy** for clusters behind a corporate proxy
+- Supports **API server IP override** for clusters whose API server isn't resolvable via DNS (e.g., private clusters with IP-only access)
 
 ## General rules for interacting with the user
 
