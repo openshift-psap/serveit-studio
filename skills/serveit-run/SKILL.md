@@ -691,7 +691,7 @@ The instance namespace is set during instance creation. No need to ask again.
 
 ### Summary before starting
 
-Before proceeding, confirm ALL choices with the user:
+Before proceeding, show a complete summary of ALL choices and ask the user to confirm. Include every setting — do not skip any. This is the user's last chance to change something before a potentially multi-hour optimization run.
 
 ```
 Ready to optimize:
@@ -703,25 +703,30 @@ Ready to optimize:
   Priority:         <response time / throughput / full coverage>
   Prefix cache:     <off / X% identical / X% shared prefix / multi-group with N groups>
   Search depth:     <top 1/2/3/all combinations>
+  P/D search:       <smart / exhaustive>
+  Asymmetric TP:    <yes / no>
   Latency SLA:      <none / Xms at PYY>
-  Calibrated load:  <yes/no> + concurrency sweep <details>
-  Cache sweep:      <yes/no>
-  vLLM auto-tune:   <on/off + any overrides>
-  EPP preset:       <preset name + weights>
+  Calibrated load:  <yes / no>
+  Concurrency sweep: <yes — top N configs + M extra, K user loads / no>
+  EPP tuned sweep:  <yes / no>
+  Cache sweep:      <yes / no>
+  vLLM auto-tune:   <on / off + any overrides listed>
+  EPP preset:       <preset name — Plugin(W) + Plugin(W) + ...>
 
   Infrastructure:
-    Engine image:   <vLLM image:tag>
+    Engine image:    <vLLM image:tag>
     Scheduler image: <EPP image:tag>
-    Network:        <DRA / SR-IOV / Host Network / TCP>
-    Storage:        <SC name> (<local NVMe / shared NFS>)
-    Local disk:     <path or N/A>
-    GPUs:           <N>x <GPU_MODEL> across <M> nodes
-    Gateway:        <Istio / other>
+    Network:         <type> — <device class or details>
+    Storage:         <SC name> (<local NVMe X/Y nodes / shared NFS / block>)
+    Local disk:      <path or N/A — using shared storage>
+    GPUs:            <N>x <GPU_MODEL> across <M> nodes
+    Nodes:           <all / pinned to specific nodes>
+    Gateway:         <Istio / other>
 
 Shall I start the optimization?
 ```
 
-Wait for the user to confirm before proceeding.
+Wait for the user to confirm before proceeding. If they want to change anything, go back to that specific section.
 
 ---
 
