@@ -923,8 +923,19 @@ curl -sk -b /tmp/serveit-cookies.txt "$URL/api/run/$RUN_ID/config/<CONFIG_NAME>/
 ## Step 10: Stop / Resume / Sync
 
 ```bash
-# Stop
+# Stop optimization
 curl -sk -b /tmp/serveit-cookies.txt -X POST "$URL/api/stop_optimization"
+# Also update UI state
+curl -sk -b /tmp/serveit-cookies.txt -X POST "$URL/api/set_state" \
+  -H 'Content-Type: application/json' -d '{"running": false}'
+
+# Resume a stopped run (provide run_id)
+curl -sk -b /tmp/serveit-cookies.txt -X POST "$URL/api/resume_optimization" \
+  -H 'Content-Type: application/json' \
+  -d '{"run_id": <RUN_ID>, "hf_token": ""}'
+# Set UI back to running
+curl -sk -b /tmp/serveit-cookies.txt -X POST "$URL/api/set_state" \
+  -H 'Content-Type: application/json' -d '{"current_step": 7, "running": true}'
 
 # Sync code updates
 git add -A && git commit -m "updates" && git push
