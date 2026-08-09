@@ -99,15 +99,18 @@ function checkApiControlStatus() {
     fetch('/api/status')
         .then(r => r.json())
         .then(d => {
-            var cfg = d.config || {};
-            if (cfg.config_locked) {
-                document.getElementById('rest-control-indicator').style.display = '';
+            var indicator = document.getElementById('rest-control-indicator');
+            if (d.config_locked) {
+                indicator.style.display = '';
+            } else {
+                indicator.style.display = 'none';
             }
         })
         .catch(() => {});
 }
 
 socket.on('status_update', function() { setTimeout(checkApiControlStatus, 1000); });
+setTimeout(checkApiControlStatus, 2000);
 
 // Re-load config on reconnect (e.g. after server restart)
 // The server's connect handler will either grant access or send session_locked
