@@ -46,6 +46,70 @@ ServeIt Studio exposes three API surfaces:
 
 ### Status & Config
 
+#### `POST /api/scan`
+
+Trigger a cluster scan and return GPU, storage, network, and infrastructure details.
+
+```bash
+curl -s -X POST $BASE_URL/api/scan | jq '{total_gpus, gpu_model, gpu_node_count, network_type, storage_classes}'
+```
+
+#### `POST /api/setup_storage`
+
+Setup storage and start model download. Returns immediately — work runs async. Poll `GET /api/logs` and `GET /api/status` to track.
+
+```bash
+curl -s -X POST $BASE_URL/api/setup_storage \
+  -H 'Content-Type: application/json' \
+  -d '{"model": "google/gemma-4-26B-A4B", "storage_class": "hostpath-nvme", "pvc_size": 256, "per_node_storage": true, "local_disk_path": "/var/hpvolumes/local-nvme"}'
+```
+
+#### `POST /api/start_optimization`
+
+Start a new optimization run. Returns immediately — poll `GET /api/status` to track.
+
+```bash
+curl -s -X POST $BASE_URL/api/start_optimization \
+  -H 'Content-Type: application/json' \
+  -d '{"model": "google/gemma-4-26B-A4B", "isl": 2000, "osl": 100, "num_users": 100, "optimization_metric": "ttft", "max_gpus": 16, ...}'
+```
+
+#### `POST /api/resume_optimization`
+
+Resume a stopped optimization run. Poll `GET /api/status` to track.
+
+```bash
+curl -s -X POST $BASE_URL/api/resume_optimization \
+  -H 'Content-Type: application/json' \
+  -d '{"run_id": 42, "hf_token": "hf_xxx"}'
+```
+
+#### `POST /api/generate_test_plan`
+
+Generate a test plan based on model and cluster resources. Poll `GET /api/logs` to track.
+
+```bash
+curl -s -X POST $BASE_URL/api/generate_test_plan \
+  -H 'Content-Type: application/json' \
+  -d '{"model": "google/gemma-4-26B-A4B", "optimization_goal": "ttft", "max_gpus": 16, "isl": 2000, "osl": 100, "num_users": 100}'
+```
+
+#### `POST /api/cleanup`
+
+Clean up deployed test pods and LWS resources.
+
+```bash
+curl -s -X POST $BASE_URL/api/cleanup
+```
+
+#### `GET /api/pvcs`
+
+List PVCs in the target namespace.
+
+```bash
+curl -s $BASE_URL/api/pvcs | jq '.pvcs[] | {name, size, storage_class, status}'
+```
+
 #### `GET /api/status`
 
 Current optimization state.
