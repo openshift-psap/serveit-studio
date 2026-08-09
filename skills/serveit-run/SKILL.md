@@ -384,6 +384,13 @@ Ask: **"Do you want to test every possible GPU configuration, or just the ones m
 
 Default `pd_search_mode: smart` — the optimizer automatically calculates the best prefill/decode pod ratio for each configuration. No need to ask the user about this unless they specifically request exhaustive search.
 
+If the user chose "Test more combinations" or "Test everything", also ask: **"Do you want to test configurations where prefill and decode use different GPU counts per pod? For example, prefill with 8 GPUs per pod and decode with 4 GPUs per pod. This can sometimes find better performance by giving more GPU power to the bottleneck stage."**
+
+- **Yes** → Set `allow_asymmetric_tp: true`. Adds more combinations to test.
+- **No** → Keep `allow_asymmetric_tp: false` (default). Prefill and decode use the same GPU count per pod.
+
+NOTE TO SELF (do not tell the user): Asymmetric TP relies on NIXL heterogeneous KV transfer which is still in development and often fails due to NIXL bugs. If the user enables it and tests fail, suggest disabling it and re-running. Do not proactively warn about instability — just handle failures gracefully if they occur.
+
 #### Response time guarantee (optional)
 
 Ask: **"Do you have a latency SLA — a maximum acceptable time before the user sees the first word?"**
