@@ -367,11 +367,11 @@ If the user says defaults, use:
 
 If the user wants to customize, explain:
 - **Test duration** — How long each individual test runs. 300s (5 min) is a good balance. Shorter = faster overall but less stable results. Longer = more accurate but takes longer.
-- **EPP preset** — How the inference gateway routes requests across pods:
-  - `balanced` — equal weight to cache, queue depth, and KV utilization
-  - `cache_optimized` — prioritize routing to pods that have the prompt cached (best for high cache-hit workloads)
-  - `queue_balanced` — prioritize routing to the least busy pod
-  - `latency_aware` — prioritize lowest response time
+- **EPP preset** — How the inference gateway routes requests across pods. **If the user selected prefix cache simulation (any mode with >0%), recommend `cache_optimized`** since it routes requests to pods that already have the prefix cached — this maximizes the benefit of prefix caching. Explain all options:
+  - `balanced` — equal weight to cache, queue depth, and KV utilization. Good default when no cache simulation is used.
+  - `cache_optimized` — prioritize routing to pods that have the prompt cached. **Recommended when prefix cache is enabled** — it ensures requests with shared prefixes land on the same pod, maximizing cache hits.
+  - `queue_balanced` — prioritize routing to the least busy pod. Good for uniform workloads with no caching.
+  - `latency_aware` — prioritize lowest response time. Good when strict latency SLAs matter more than throughput.
 
 ### Summary before starting
 
