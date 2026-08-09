@@ -450,13 +450,34 @@ Only relevant if the user enabled prefix cache simulation. Ask: **"Do you want t
 
 Default: off.
 
-#### EPP preset
+#### EPP (Endpoint Picker) — request routing
 
-How the inference gateway routes requests across pods. **If the user selected prefix cache simulation (any mode with >0%), recommend `cache_optimized`** since it routes requests to pods that already have the prefix cached. Explain all options:
+Explain: **"When you have multiple pods serving your model, the EPP (Endpoint Picker) decides which pod handles each request. This matters a lot — especially with prefix caching, because sending a request to a pod that already has the prompt prefix cached means it doesn't need to reprocess it, saving time and GPU compute."**
+
+If the user selected prefix cache > 0%, suggest: **"Since you're using shared prefix caching, I'd suggest `cache_optimized` — it routes requests to pods that already have the prefix cached, which maximizes the benefit of caching."**
+
+Presets:
 - `balanced` — equal weight to cache, queue depth, and KV utilization. Good default when no cache simulation is used.
-- `cache_optimized` — prioritize routing to pods that have the prompt cached. **Recommended when prefix cache is enabled.**
+- `cache_optimized` — prioritize routing to pods that have the prompt cached. Best for workloads with shared prefixes.
 - `queue_balanced` — prioritize routing to the least busy pod. Good for uniform workloads with no caching.
 - `latency_aware` — prioritize lowest response time. Good when strict latency SLAs matter more than throughput.
+- `custom` — build your own scoring weights from individual plugins (see below).
+
+If the user wants custom, or wants to understand what the presets actually do under the hood, show the scoring plugins:
+
+**EPP Scoring Plugins:**
+| Plugin | Description | Default Weight |
+|--------|-------------|---------------|
+| `prefix-cache-scorer` | Routes to pods that already have parts of the prompt cached in GPU memory. | 3 |
+| `kv-cache-utilization-scorer` | Favors pods with more free GPU memory for KV cache (can handle longer sequences). | 2 |
+| `queue-scorer` | Favors pods with shorter request queues. Prevents overloading a single pod. | 2 |
+| `latency-scorer` | Uses predicted latency to route to pods that can meet the SLO target. Requires latency SLA to be enabled. | 3 |
+| `precise-prefix-cache-scorer` | Tracks KV cache state in real time for exact prefix match scoring. More accurate than approximate prefix-cache-scorer but higher overhead. | 3 |
+| `active-request-scorer` | Scores by number of in-flight requests. Load-aware alternative to queue-scorer. | 2 |
+| `no-hit-lru-scorer` | For cold requests with no cache hits, ranks pods by least-recently-used to spread load across underutilized pods. | 1 |
+| `session-affinity-scorer` | Routes requests from the same session/user to the same pod for better cache reuse across a conversation. | 2 |
+
+Each plugin can be enabled/disabled and given a weight (higher = more influence on routing decisions). For example, a user might say "I want cache-optimized but also add session affinity for my chat app" — in that case set `prefix-cache-scorer: 3, session-affinity-scorer: 2, kv-cache-utilization-scorer: 1`.
 
 #### vLLM engine settings
 
