@@ -23,8 +23,6 @@ spec:
       restartPolicy: OnFailure
 {% if local_disk_path is defined and local_disk_path %}
       serviceAccountName: llm-d-modelserver
-      securityContext:
-        runAsUser: 0
 {% if target_node is defined and target_node %}
       nodeSelector:
         kubernetes.io/hostname: {{ target_node }}
@@ -34,6 +32,11 @@ spec:
         - name: model-downloader
           image: {{ image | default('registry.access.redhat.com/ubi9/python-311:latest') }}
           imagePullPolicy: Always
+{% if local_disk_path is defined and local_disk_path %}
+          securityContext:
+            runAsUser: 0
+            runAsGroup: 0
+{% endif %}
           command:
             - /bin/bash
             - -c
