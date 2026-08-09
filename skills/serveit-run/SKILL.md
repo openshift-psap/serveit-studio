@@ -237,22 +237,95 @@ Same steps as quick setup, but ask the user at each decision point:
 
 ## Step 3: Model & Workload Selection
 
-Once the instance is running, ask the user:
+Guide the user through these questions one at a time. Be friendly and explain each concept — many users won't know what ISL/OSL means. Don't dump all questions at once.
 
-1. **Model** — HuggingFace model path (e.g., `google/gemma-4-26B-A4B`, `RedHatAI/Meta-Llama-3.1-70B-Instruct-FP8-dynamic`)
-2. **Workload** (or use defaults):
-   - ISL (input sequence length, default: 2000)
-   - OSL (output sequence length, default: 100)
-   - Concurrent users (default: 100)
-3. **Optimization goal** (or default to `ttft`):
-   - `ttft` — minimize response time
-   - `throughput` — maximize requests/second
-   - `balanced` — test all architectures
-4. **Any advanced settings?** (or use defaults):
-   - Test duration (default: 300s)
-   - EPP preset (default: balanced)
-   - Prefix cache simulation (default: off)
-   - Auto-tune vLLM (default: on)
+### 3a. Which model?
+
+Ask: **"Which model do you want to optimize?"**
+
+Give examples: `google/gemma-4-26B-A4B`, `RedHatAI/Meta-Llama-3.1-70B-Instruct-FP8-dynamic`, `meta-llama/Llama-3.1-8B-Instruct`
+
+If the model is gated (requires HuggingFace login), ask for an HF token or check if `$HF_TOKEN` is set.
+
+### 3b. What's your expected workload?
+
+Ask these in plain language:
+
+**"How long are the prompts your users will send?"**
+- This is the Input Sequence Length (ISL) — measured in tokens (roughly 1 token = 4 characters of English text)
+- Examples: A short chat message is ~50-200 tokens. A document summary prompt with context is ~2,000-4,000 tokens. RAG with large context windows can be 8,000-32,000 tokens.
+- Default: 2,000 tokens
+
+**"How long should the model's responses be?"**
+- This is the Output Sequence Length (OSL) — how many tokens the model generates per response
+- Examples: A short answer is ~50-100 tokens. A detailed explanation is ~200-500 tokens. Code generation can be 500-2,000 tokens.
+- Default: 100 tokens
+
+**"How many users do you expect to be using this at the same time?"**
+- This is the number of concurrent requests hitting the model simultaneously
+- Examples: An internal tool might have 5-20 concurrent users. A customer-facing API might have 50-200. A high-traffic service could have 500+.
+- Default: 100 concurrent users
+
+### 3c. What matters most?
+
+Ask: **"What's more important for your use case?"**
+
+Explain the options:
+- **Response time** (`ttft`) — "I want the fastest first response. Users are waiting interactively." Best for chatbots, interactive apps, real-time assistants.
+- **Throughput** (`throughput`) — "I want to serve as many requests per second as possible. Latency is less critical." Best for batch processing, offline pipelines, high-volume APIs.
+- **Full coverage** (`balanced`) — "I want to find the best config for both cases and compare them side by side." Runs more tests but gives the most comprehensive results. **Recommended if unsure.**
+
+### 3d. Do you expect prefix cache hits?
+
+Explain: **"Prefix caching speeds up requests that share the same beginning — like a system prompt. If many of your users' requests start with the same text, prefix caching can significantly reduce latency."**
+
+Ask: **"Do your requests share a common prefix (system prompt, instructions, context)?"**
+
+- **No / Not sure** → Set prefix cache to 0% (default). The optimization will still enable vLLM's prefix caching, but the benchmark won't simulate cache hits.
+- **Yes, most requests share a system prompt** → Explain the options:
+  - **Identical mode** — All requests use the exact same prompt. Good for: FAQ bots, fixed-instruction APIs. Set cache hit % to how many requests you expect to repeat (e.g., 50-80%).
+  - **Shared prefix mode** — All requests share the first N% of tokens (like a system prompt), but the rest is unique. Good for: Chat apps with a system prompt, RAG with shared context. Set cache hit % to the fraction of the prompt that's shared.
+  - **Multi-group mode** — Requests come in groups (like different tenants or conversation threads), and requests within a group share a prefix. Good for: Multi-tenant platforms, agentic workflows with multiple tools. Set the number of groups (e.g., 5-20 groups).
+
+For **agentic models** (tool-calling, function-calling, multi-step reasoning): there's typically a very high shared prefix because the system prompt includes tool definitions, instructions, and conversation history. Recommend **shared prefix mode at 50-80%** or **multi-group mode with 5-10 groups** if multiple agents/tools are involved.
+
+### 3e. Any advanced settings?
+
+Ask: **"Do you want to customize any advanced settings, or use the recommended defaults?"**
+
+If the user says defaults, use:
+- Test duration: 300s
+- EPP preset: balanced
+- Auto-tune vLLM: on (automatically adjusts GPU memory utilization, batch sizes, block sizes)
+
+If the user wants to customize, explain:
+- **Test duration** — How long each individual test runs. 300s (5 min) is a good balance. Shorter = faster overall but less stable results. Longer = more accurate but takes longer.
+- **EPP preset** — How the inference gateway routes requests across pods:
+  - `balanced` — equal weight to cache, queue depth, and KV utilization
+  - `cache_optimized` — prioritize routing to pods that have the prompt cached (best for high cache-hit workloads)
+  - `queue_balanced` — prioritize routing to the least busy pod
+  - `latency_aware` — prioritize lowest response time
+
+### Summary before starting
+
+Before proceeding, confirm the choices with the user:
+
+```
+Ready to optimize:
+
+  Model:          <model>
+  Prompt length:  <ISL> tokens (~<ISL*4> characters)
+  Response length: <OSL> tokens (~<OSL*4> characters)
+  Concurrent users: <users>
+  Priority:       <response time / throughput / full coverage>
+  Prefix cache:   <off / X% identical / X% shared prefix / multi-group with N groups>
+  Test duration:  <duration>s per test
+  Auto-tune:      on
+
+Shall I start the optimization?
+```
+
+Wait for the user to confirm before proceeding.
 
 ---
 
