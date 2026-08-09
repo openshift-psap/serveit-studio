@@ -20,6 +20,12 @@ When this skill is invoked, start by explaining to the user what ServeIt Studio 
 >
 > The optimization runs on your Kubernetes cluster using your actual GPUs, so results reflect real-world performance — not estimates.
 
+**The launcher is a multi-tenant control plane** — it can manage multiple instances across multiple clusters from a single dashboard. Each instance:
+- Connects to a different cluster (or the same cluster with different resource limits)
+- Can be limited to specific GPUs, nodes, or namespaces
+- Runs independently — multiple optimizations can run in parallel on different clusters
+- Can be backed up and restored — download the database and artifacts, then restore on another instance or after a redeployment
+
 ## General rules for interacting with the user
 
 - **Always number options** when presenting choices (1, 2, 3, etc.) so the user can reply with just a number.
