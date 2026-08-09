@@ -422,6 +422,24 @@ Ask: **"Do you want to run both of these? It adds extra tests but gives you the 
 - **Just concurrency sweep** → Maps the curve but uses the stress-test concurrency as the center point.
 - **Skip** → Use the stress-test results as-is. Faster, but you only see max-load performance.
 
+If the user enables concurrency sweep, ask about these options:
+
+**"How many concurrency levels do you want to test?"**
+- **Auto (~6 levels)** → The system picks ~6 levels centered on the calibrated concurrency, going up to 1.5x. Good default.
+- **Custom count** → Specify a number (e.g., 8 or 10 levels). More levels = finer curve, but more tests.
+- **Explicit levels** → Specify exact concurrency values (e.g., "10, 30, 50, 80, 100, 150"). Overrides auto calculation. Useful if you know exactly which load levels matter to you.
+
+**Spacing between levels** — default is 20% of the calibrated concurrency. For example, if the sweet spot is 50 users, levels would be spaced 10 users apart (30, 40, 50, 60, 70, 80). Only relevant if using auto count, not explicit levels.
+
+**"Which configs do you want to include in the sweep?"**
+- **Just the best PD and best Aggregated** → Default. Tests the two winning architectures.
+- **Include all 4 recommendation configs** → Also adds Best Balanced, Lowest TTFT, Highest Throughput, Most Efficient. Shows how each recommendation performs across load levels.
+- **Add extra configs** → Include N more configs ranked by score. Useful if you want to compare near-winners too.
+
+**"If we find better routing weights during EPP tuning, do you want to re-run the sweep with those tuned weights?"** This compares the tuned EPP vs baseline to show if routing optimization made a difference across load levels.
+- Yes → Set `concurrency_sweep_use_epp_tuned: true`
+- No → Only sweep with the baseline EPP weights.
+
 #### Cache hit sweep (optional)
 
 Only relevant if the user enabled prefix cache simulation. Ask: **"Do you want to test how different cache hit ratios affect performance?"**
