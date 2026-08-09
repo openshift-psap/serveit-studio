@@ -2097,6 +2097,29 @@ def handle_setup_storage(data):
     try:
         from core import TemplateManager
 
+        # Persist optimization params from the request to DB so auto-start picks them up
+        _opt_keys = ['model', 'isl', 'osl', 'isl_stdev', 'osl_stdev', 'users', 'num_users',
+                     'goal', 'optimization_goal', 'max_gpus', 'duration', 'stop_mode',
+                     'storage_class', 'per_node_storage', 'local_disk_path',
+                     'advanced_vllm_custom_enabled', 'epp_custom_enabled', 'epp_preset',
+                     'image', 'scheduler_image', 'network_type', 'selected_dra_classes',
+                     'prefix_cache_hit_pct', 'prefix_cache_mode', 'prefix_cache_groups',
+                     'tp_pair_top_n', 'pd_search_mode', 'calibrated_load_enabled',
+                     'inferencex_sweep_enabled', 'concurrency_sweep_count',
+                     'concurrency_sweep_all_configs', 'concurrency_sweep_max_configs',
+                     'concurrency_sweep_use_epp_tuned', 'hf_token']
+        _opt_data = {k: data[k] for k in _opt_keys if k in data}
+        if _opt_data:
+            try:
+                with get_db() as conn:
+                    row = conn.execute('SELECT config_json FROM ui_session_state WHERE id = 1').fetchone()
+                    existing = json.loads(row['config_json']) if row and row['config_json'] else {}
+                    existing.update(_opt_data)
+                    conn.execute('UPDATE ui_session_state SET config_json = ?, updated_at = ? WHERE id = 1',
+                                 (json.dumps(existing), datetime.now().isoformat()))
+            except Exception as e:
+                print(f"Warning: Could not persist setup_storage params to DB: {e}")
+
         existing_pvc = data.get('existing_pvc')
         storage_class = data.get('storage_class')
         pvc_size = int(data.get('pvc_size', 256))
