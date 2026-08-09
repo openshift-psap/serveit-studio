@@ -679,9 +679,7 @@ def create_instance(owner_id: int, username: str, name: str,
             os.unlink(tmp_path)
     else:
         # Local cluster: create workload namespace and RBAC using launcher's kubectl
-        _kubectl(['create', 'namespace', workload_namespace, '--dry-run=client', '-o', 'yaml',
-                  '|', 'kubectl', 'apply', '-f', '-'], check=False)
-        _kubectl(['apply', '-f', '-', '-n', workload_namespace], input_data=json.dumps({
+        _kubectl(['apply', '-f', '-'], input_data=json.dumps({
             "apiVersion": "v1", "kind": "Namespace",
             "metadata": {"name": workload_namespace}
         }))
