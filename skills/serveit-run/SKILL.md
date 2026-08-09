@@ -176,12 +176,34 @@ while true; do
   sleep 5
 done
 
-# Get instance URL
-URL=https://$(kubectl get route -n serveit -l component=serveit-instance -o jsonpath='{.items[0].spec.host}')
+# Get instance URL (exclude the launcher route)
+URL=https://$(kubectl get route -n serveit -o jsonpath='{.items[?(@.metadata.name!="serveit-launcher-ui")].spec.host}')
 echo "Instance URL: $URL"
 ```
 
-After the instance is running, **summarize all choices made** to the user:
+After the instance is running, gather all the deployment details and present a summary. Use the scan data and the choices you made:
+
+```bash
+# Gather info for summary
+LAUNCHER_URL="<launcher URL>"
+INSTANCE_URL="<instance URL>"
+LAUNCHER_SC="<SC used for launcher>"
+INSTANCE_SC="<SC used for instance>"
+MODEL_CACHE_SC="<SC chosen for model cache>"
+LOCAL_DISK_PATH="<path or empty>"
+CREDENTIALS="<username> / <password>"
+
+# Get GPU info from scan
+curl -sk -b /tmp/launcher-cookies.txt -X POST "$LAUNCHER_URL/api/clusters/$CLUSTER_ID/scan" | python3 -c "
+import json, sys
+s = json.load(sys.stdin).get('summary', {})
+print(f'GPUS={s.get(\"total_gpus\",0)}')
+print(f'GPU_NODES={s.get(\"gpu_node_count\",0)}')
+print(f'GPU_MODEL={s.get(\"gpu_model\",\"unknown\")}')
+"
+```
+
+Then present to the user:
 
 ```
 Setup Complete:
@@ -190,16 +212,16 @@ Setup Complete:
   Instance URL:     <INSTANCE_URL>
   Credentials:      <username> / <password>
   Namespace:        serveit
-  Launcher SC:      <SC used for launcher PVC>
-  Instance SC:      <SC used for instance PVC>
-  Model cache SC:   <SC that will be used for model weights> (hostpath-nvme / nfs / etc.)
-  GPU access:       <N> GPUs across <M> nodes (or "limited to X GPUs" / "pinned to nodes: ...")
+  Launcher SC:      <LAUNCHER_SC> (RWO)
+  Instance SC:      <INSTANCE_SC> (RWO)
+  Model cache SC:   <MODEL_CACHE_SC> (<local NVMe X/Y nodes | shared NFS | etc.>)
+  GPU access:       <N> GPUs across <M> nodes (<GPU_MODEL>)
   Local disk path:  <path or "N/A — using shared storage">
 
-You can access the full web UI at the Instance URL above.
+You can access the full web UI at the Instance URL.
 ```
 
-This lets the user verify the choices before proceeding to model selection.
+This lets the user verify the choices before proceeding to model selection. Wait for the user to confirm or ask for changes before continuing.
 
 ### Step-by-step mode
 
