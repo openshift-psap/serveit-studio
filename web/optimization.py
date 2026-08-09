@@ -857,6 +857,7 @@ def run_optimization_background(data):
         per_node_storage = _get('per_node_storage', False)
         node_nfs_pvcs = _get('node_nfs_pvcs') or []
         storage_class = _get('storage_class')
+        local_disk_path = _get('local_disk_path')
         pvc_size_raw = _get('pvc_size')
         if pvc_size_raw:
             pvc_size_str = str(pvc_size_raw).replace('Gi', '').replace('G', '').strip()
@@ -1119,6 +1120,7 @@ data:
                 node_nfs_pvcs=node_nfs_pvcs,
                 storage_class=storage_class,
                 pvc_size=pvc_size,
+                local_disk_path=local_disk_path,
                 advanced_vllm=advanced_vllm,
                 extra_env_vars=extra_env_vars,
                 single_test_architecture=single_test_architecture,

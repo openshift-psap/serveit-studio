@@ -933,6 +933,7 @@ def handle_scan_cluster(data):
                     'is_local': getattr(sc, 'is_local', False),
                     'gpu_nodes_covered': getattr(sc, 'gpu_nodes_covered', 0),
                     'access_mode': getattr(sc, 'access_mode', 'ReadWriteOnce'),
+                    'local_path': getattr(sc, 'local_path', ''),
                 }
                 for sc in resources.storage_classes
                 if not any(blk in sc.name.lower() for blk in ('block', 'raw', 'iscsi-block'))
@@ -2119,6 +2120,7 @@ def handle_setup_storage(data):
 
         # Per-node storage check BEFORE existing_pvc (per-node has its own download flow)
         per_node_storage = data.get('per_node_storage') or saved.get('per_node_storage', False)
+        local_disk_path = data.get('local_disk_path') or saved.get('local_disk_path')
 
         # Fallback to saved config if frontend didn't send existing_pvc
         if not existing_pvc and not per_node_storage:
@@ -2227,13 +2229,95 @@ def handle_setup_storage(data):
             state['_optimization_greenlet'] = spawn(run_optimization_background, optimization_data)
             return
 
+        if local_disk_path and per_node_storage:
+            # Local disk (hostPath) — download directly to each GPU node's local NVMe
+            log_to_ui(f'📦 Local disk storage: {local_disk_path}/model-cache on each GPU node', 'info')
+
+            from core import TemplateManager
+            from core.k8s_utils import KubectlRunner
+
+            # Get GPU node names for per-node download jobs
+            gpu_nodes = []
+            try:
+                kubectl = KubectlRunner(namespace=namespace)
+                r = kubectl.run([
+                    'get', 'nodes', '-l', 'nvidia.com/gpu.present=true',
+                    '-o', 'jsonpath={range .items[*]}{.metadata.name}{"\\n"}{end}'
+                ], check=False)
+                if r.returncode == 0:
+                    gpu_nodes = [n.strip() for n in r.stdout.strip().splitlines() if n.strip()]
+            except Exception:
+                pass
+
+            if not gpu_nodes:
+                raise Exception('No GPU nodes found for local disk download')
+
+            log_to_ui(f'   Found {len(gpu_nodes)} GPU nodes', 'info')
+
+            # Create serveit-cache PVC for benchmark results (workload pod needs it)
+            check_cmd = ['kubectl', 'get', 'pvc', 'serveit-cache', '-n', namespace]
+            proc = subprocess.run(check_cmd, capture_output=True, timeout=10)
+            if proc.returncode != 0:
+                _tm = TemplateManager()
+                _pvc_yaml = _tm.render_template(
+                    'prereq/model-cache-pvc.yaml.j2',
+                    pvc_name='serveit-cache', namespace=namespace,
+                    test_id='serveit-cache', model_name=model,
+                    storage_class=storage_class or 'gp2', storage_size=50,
+                    pvc_access_mode='ReadWriteMany',
+                )
+                subprocess.run(['kubectl', 'apply', '-f', '-'], input=_pvc_yaml.encode(), capture_output=True, timeout=30)
+                log_to_ui('   ✅ Created serveit-cache PVC (benchmark results)', 'info')
+
+            timestamp = datetime.now().strftime('%Y%m%d-%H%M%S')
+            test_id = f'serveit-setup-{timestamp}'
+            template_mgr = TemplateManager()
+
+            # Launch one download job per GPU node using hostPath
+            download_job_names = []
+            for node in gpu_nodes:
+                short = node.split('.')[-1] if '.' in node else node[-5:]
+                jn = f'serveit-download-{short}-{timestamp}'
+                job_yaml = template_mgr.render_template(
+                    'prereq/model-download-job.yaml.j2',
+                    job_name=jn, namespace=namespace, test_id=test_id,
+                    model_name=model, hf_token=hf_token,
+                    local_disk_path=local_disk_path, target_node=node,
+                )
+                cmd = ['kubectl', 'apply', '-f', '-']
+                proc = subprocess.run(cmd, input=job_yaml.encode(), capture_output=True, timeout=30)
+                if proc.returncode == 0:
+                    download_job_names.append(jn)
+                    log_to_ui(f'   ✅ Download job started on {node}', 'info')
+                else:
+                    log_to_ui(f'   ⚠️  Failed to start download on {node}: {proc.stderr.decode()[:100]}', 'warning')
+
+            log_to_ui(f'✅ {len(download_job_names)} parallel download jobs started (one per GPU node)', 'success')
+            log_to_ui('⏳ Each node downloads the model independently to local NVMe...', 'info')
+
+            emit('storage_setup_result', {
+                'success': True,
+                'pvc_name': f'{len(gpu_nodes)}x local-disk',
+                'pvc_size': 'local',
+                'storage_class': storage_class or 'hostpath',
+                'model': model,
+                'existing': False,
+                'per_node': True,
+                'local_disk_path': local_disk_path,
+                'job_name': download_job_names[0] if download_job_names else '',
+            })
+
+            for djn in download_job_names:
+                spawn(stream_job_logs, djn, namespace)
+            return
+
         if per_node_storage:
             node_nfs_pvcs = data.get('node_nfs_pvcs') or saved.get('node_nfs_pvcs', [])
 
             if not node_nfs_pvcs:
                 raise Exception('Per-node storage enabled but no NFS PVC mapping found')
 
-            log_to_ui(f'📦 Per-node storage: downloading model once, then distributing to {len(node_nfs_pvcs)} nodes', 'info')
+            log_to_ui(f'📦 Per-node NFS storage: downloading model to {len(node_nfs_pvcs)} nodes', 'info')
 
             # Create per-node NFS PVCs before launching download job
             from core.prereq_manager import PrereqManager
@@ -2308,10 +2392,11 @@ def handle_setup_storage(data):
                 'model': model,
                 'existing': False,
                 'per_node': True,
-                'job_name': job_name,
+                'job_name': download_job_names[0] if download_job_names else '',
             })
 
-            spawn(stream_job_logs, job_name, namespace)
+            for djn in download_job_names:
+                spawn(stream_job_logs, djn, namespace)
             return
 
         # Create new PVC and download model

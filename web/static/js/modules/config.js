@@ -717,6 +717,7 @@ function restoreClusterResources() {
     // Populate storage class dropdown
     const storageSelect = document.getElementById('storage-class-select');
     if (storageSelect && data.storage_classes && data.storage_classes.length > 0) {
+        window._storageClassList = data.storage_classes;
         storageSelect.innerHTML = '<option value="">-- Select a Storage Class --</option>';
         const gpuNodeCount = data.gpu_node_count || 0;
         const gpusPerNode = data.max_gpus_per_node || 0;
@@ -744,6 +745,8 @@ function restoreClusterResources() {
                 option.textContent = `${sc.name} (${sc.provisioner}) [${rwx}]`;
             }
             option.dataset.accessMode = sc.access_mode || 'ReadWriteOnce';
+            option.dataset.isLocal = sc.is_local ? '1' : '';
+            option.dataset.localPath = sc.local_path || '';
             storageSelect.appendChild(option);
         });
         // Restore selected storage class (reset if no longer available)
@@ -754,6 +757,9 @@ function restoreClusterResources() {
                 storageSelect.value = '';
             }
         }
+        // Auto-toggle per-node storage for local disk SCs
+        const selOpt = storageSelect.options[storageSelect.selectedIndex];
+        if (selOpt) window.handleStorageClassChange && window.handleStorageClassChange(selOpt);
     } else if (storageSelect && (!data.storage_classes || data.storage_classes.length === 0)) {
         if (!window._clusterScanInProgress) {
             logToConsole('🔍 Storage classes missing from saved config, re-scanning...', 'info');

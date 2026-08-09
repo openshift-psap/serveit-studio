@@ -69,7 +69,7 @@ spec:
 {% endif %}
           - name: jit-cache
             emptyDir: {}
-{% if per_node_storage %}
+{% if per_node_storage and not local_disk_path %}
         initContainers:
           - name: select-nfs
             image: busybox:stable
@@ -350,7 +350,7 @@ spec:
 {% endif %}
           - name: jit-cache
             emptyDir: {}
-{% if per_node_storage %}
+{% if per_node_storage and not local_disk_path %}
         initContainers:
           - name: select-nfs
             image: busybox:stable
@@ -554,7 +554,7 @@ spec:
                 mountPath: /model-cache
               - name: jit-cache
                 mountPath: /var/cache/vllm
-{% if per_node_storage %}
+{% if per_node_storage and not local_disk_path %}
 {% for nfs in node_nfs_pvcs %}
               - name: nfs-{{ nfs.suffix }}
                 mountPath: /nfs-{{ nfs.suffix }}

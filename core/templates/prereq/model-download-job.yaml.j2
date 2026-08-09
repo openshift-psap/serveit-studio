@@ -21,6 +21,13 @@ spec:
         test-id: {{ test_id }}
     spec:
       restartPolicy: OnFailure
+{% if local_disk_path is defined and local_disk_path %}
+      serviceAccountName: llm-d-modelserver
+{% if target_node is defined and target_node %}
+      nodeSelector:
+        kubernetes.io/hostname: {{ target_node }}
+{% endif %}
+{% endif %}
       containers:
         - name: model-downloader
           image: {{ image | default('registry.access.redhat.com/ubi9/python-311:latest') }}
@@ -187,8 +194,14 @@ spec:
               memory: {{ memory_limit | default('32Gi') }}
       volumes:
         - name: model-cache
+{% if local_disk_path is defined and local_disk_path %}
+          hostPath:
+            path: {{ local_disk_path }}/model-cache
+            type: DirectoryOrCreate
+{% else %}
           persistentVolumeClaim:
             claimName: {{ pvc_name | default('serveit-cache') }}
+{% endif %}
         - name: tmp-mem
           emptyDir:
             medium: Memory

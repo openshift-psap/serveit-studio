@@ -61,6 +61,7 @@ class StorageClassInfo:
     is_local: bool = False  # True for local-disk/hostPath provisioners
     gpu_nodes_covered: int = 0  # How many GPU nodes have available PVs for this SC
     access_mode: str = 'ReadWriteOnce'  # Inferred: ReadWriteOnce or ReadWriteMany
+    local_path: str = ''  # hostPath base directory for local-disk SCs (e.g. /var/hpvolumes/local-nvme)
 
 @dataclass
 class ClusterResources:
@@ -959,6 +960,13 @@ class SystemScanner:
                     'cephfs' in provisioner.lower() or 'spectrum-scale' in provisioner.lower()
                 ) else 'ReadWriteOnce'
 
+                # Detect hostPath base for local provisioners
+                local_path = ''
+                if is_local and 'hostpath-provisioner' in provisioner.lower():
+                    pool_name = sc.get('parameters', {}).get('storagePool', '')
+                    if pool_name:
+                        local_path = f'/var/hpvolumes/{pool_name}'
+
                 sc_info = StorageClassInfo(
                     name=name,
                     provisioner=provisioner,
@@ -967,7 +975,8 @@ class SystemScanner:
                     allow_volume_expansion=allow_expansion,
                     is_local=is_local,
                     gpu_nodes_covered=gpu_covered,
-                    access_mode=access_mode
+                    access_mode=access_mode,
+                    local_path=local_path
                 )
 
                 storage_classes.append(sc_info)

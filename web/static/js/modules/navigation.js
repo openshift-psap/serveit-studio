@@ -43,6 +43,36 @@ function selectSharedDevice(resource) {
     saveConfig();
 }
 
+window._storageClassList = [];
+
+window.handleStorageClassChange = function(selectedOption) {
+    var scName = selectedOption ? selectedOption.value : '';
+    var sc = window._storageClassList.find(function(s) { return s.name === scName; });
+    var isLocal = sc && sc.is_local;
+    var localPath = sc ? sc.local_path : '';
+    var perNodeGroup = document.getElementById('per-node-storage-group');
+    var toggle = document.getElementById('per-node-storage-toggle');
+    var descEl = perNodeGroup ? perNodeGroup.querySelector('div[style*="color:#64748b"]') : null;
+    if (!perNodeGroup || !toggle) return;
+
+    if (isLocal) {
+        config.per_node_storage = true;
+        if (localPath) config.local_disk_path = localPath;
+        toggle.classList.add('active');
+        perNodeGroup.style.opacity = '1';
+        perNodeGroup.style.pointerEvents = 'none';
+        perNodeGroup.title = 'Local disk storage is always per-node';
+        var pathNote = localPath ? ' (' + localPath + ')' : '';
+        if (descEl) descEl.textContent = 'Local disk storage — each node uses its own NVMe-backed volume' + pathNote + '. Enabled automatically for local storage classes.';
+    } else {
+        config.local_disk_path = null;
+        perNodeGroup.style.pointerEvents = 'auto';
+        perNodeGroup.title = '';
+        if (descEl) descEl.textContent = 'Each node gets its own NFS-backed PVC for model caching. Pods are automatically linked to their node\'s local NFS share via symlink. The model is downloaded once per node and shared by all pods on that node.';
+    }
+    saveConfig();
+};
+
 function _toggleSwitch(id, checked, onChange) {
     var bg = checked ? '#2A7B88' : '#ccc';
     var tx = checked ? 'translateX(18px)' : 'translateX(0)';
@@ -732,24 +762,54 @@ socket.on('cluster_scan_result', function(data) {
         </table>
     `;
 
-    // Populate storage class dropdown
+    // Populate storage class dropdown (with local disk detection)
     const select = document.getElementById('storage-class-select');
-    select.innerHTML = '<option value="">-- Select a Storage Class --</option>';
-    data.storage_classes.forEach(sc => {
-        const option = document.createElement('option');
-        option.value = sc.name;
-        option.textContent = `${sc.name} (${sc.provisioner})`;
-        select.appendChild(option);
-    });
-    if (config.storage_class) {
-        select.value = config.storage_class;
+    if (select) {
+        select.innerHTML = '<option value="">-- Select a Storage Class --</option>';
+        const gpuNodeCount = data.gpu_node_count || 0;
+        const gpusPerNode = data.max_gpus_per_node || 0;
+        window._storageClassList = data.storage_classes || [];
+        data.storage_classes.forEach(sc => {
+            const option = document.createElement('option');
+            option.value = sc.name;
+            if (sc.is_local) {
+                const gpuInfo = gpusPerNode ? ` × ${gpusPerNode} GPUs` : '';
+                if (sc.gpu_nodes_covered >= gpuNodeCount && gpuNodeCount > 0) {
+                    option.textContent = `${sc.name} — Local Disk (${sc.gpu_nodes_covered} nodes${gpuInfo})`;
+                } else if (sc.gpu_nodes_covered > 0) {
+                    option.textContent = `${sc.name} — Local Disk (${sc.gpu_nodes_covered}/${gpuNodeCount} nodes${gpuInfo})`;
+                } else {
+                    option.textContent = `${sc.name} — Local Disk (no nodes ready)`;
+                    option.disabled = true;
+                }
+            } else {
+                const rwx = sc.access_mode === 'ReadWriteMany' ? 'RWX' : 'RWO';
+                option.textContent = `${sc.name} (${sc.provisioner}) [${rwx}]`;
+            }
+            option.dataset.accessMode = sc.access_mode || 'ReadWriteOnce';
+            option.dataset.isLocal = sc.is_local ? '1' : '';
+            option.dataset.localPath = sc.local_path || '';
+            select.appendChild(option);
+        });
+        if (config.storage_class) {
+            select.value = config.storage_class;
+            if (!select.value) config.storage_class = '';
+        }
+        // Trigger per-node auto-toggle for the current selection
+        const selOpt = select.options[select.selectedIndex];
+        if (selOpt) window.handleStorageClassChange && window.handleStorageClassChange(selOpt);
     }
 
-    // Per-node storage toggle — requires per-node NFS classes on the cluster
+    // Per-node storage toggle
     var perNodeGroup = document.getElementById('per-node-storage-group');
     if (perNodeGroup) {
         var hasNodeNfs = data.node_nfs_classes && data.node_nfs_classes.length > 0;
-        if (!hasNodeNfs) {
+        var selectedScName = select ? select.value : '';
+        var selectedSc = (window._storageClassList || []).find(function(s) { return s.name === selectedScName; });
+        var selectedIsLocal = selectedSc && selectedSc.is_local;
+        if (selectedIsLocal) {
+            // handleStorageClassChange already ran from the auto-trigger above
+        } else if (!hasNodeNfs) {
             perNodeGroup.style.opacity = '0.4';
             perNodeGroup.style.pointerEvents = 'none';
             perNodeGroup.title = 'No per-node NFS storage classes found (nfs-<node-suffix>).';
@@ -766,7 +826,7 @@ socket.on('cluster_scan_result', function(data) {
                 return {suffix: c.suffix, pvc_name: 'model-cache-' + c.suffix};
             });
         }
-        if (config.per_node_storage && hasNodeNfs) {
+        if (config.per_node_storage) {
             var toggle = document.getElementById('per-node-storage-toggle');
             if (toggle) toggle.classList.add('active');
         }

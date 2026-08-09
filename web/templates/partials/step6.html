@@ -170,7 +170,7 @@
                                             <label style="display: block; font-weight: 600; margin-bottom: 8px; color: #374151;">
                                                 🗄️ Storage Class
                                             </label>
-                                            <select id="storage-class-select" onchange="config.storage_class=this.value;var sel=this.options[this.selectedIndex];config.storage_access_mode=sel.dataset.accessMode||'ReadWriteOnce';saveConfig();" style="width: 100%; padding: 12px 16px; border: 2px solid #d1d5db; border-radius: 8px; font-size: 15px; background: white; cursor: pointer; transition: border-color 0.2s;">
+                                            <select id="storage-class-select" onchange="config.storage_class=this.value;var sel=this.options[this.selectedIndex];config.storage_access_mode=sel.dataset.accessMode||'ReadWriteOnce';window.handleStorageClassChange&&window.handleStorageClassChange(sel);saveConfig();" style="width: 100%; padding: 12px 16px; border: 2px solid #d1d5db; border-radius: 8px; font-size: 15px; background: white; cursor: pointer; transition: border-color 0.2s;">
                                                 <option value="">-- Select a Storage Class --</option>
                                             </select>
                                             <div style="margin-top: 8px; font-size: 13px; color: #6b7280;">
@@ -191,7 +191,7 @@
 
                                     <!-- Per-Node Storage toggle -->
                                     <div id="per-node-storage-group" style="margin-top:16px; border-top:1px solid #e2e8f0; padding-top:12px;">
-                                        <div class="vllm-toggle" id="per-node-storage-toggle" onclick="var t=this;var on=!t.classList.contains('active');if(on)t.classList.add('active');else t.classList.remove('active');config.per_node_storage=on;saveConfig();">
+                                        <div class="vllm-toggle" id="per-node-storage-toggle" onclick="if(this.parentElement.style.pointerEvents==='none')return;var t=this;var on=!t.classList.contains('active');if(on)t.classList.add('active');else t.classList.remove('active');config.per_node_storage=on;saveConfig();">
                                             <div style="font-size:1.5em;flex-shrink:0;">📦</div>
                                             <div>
                                                 <div style="font-weight:600;color:#1e293b;font-size:0.95em;">Per-Node Storage</div>

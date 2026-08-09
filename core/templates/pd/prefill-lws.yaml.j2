@@ -101,7 +101,7 @@ spec:
           - name: dev-infiniband
             hostPath:
               path: /dev/infiniband
-{% if per_node_storage %}
+{% if per_node_storage and not local_disk_path %}
         initContainers:
           - name: select-nfs
             image: busybox:stable
@@ -374,7 +374,7 @@ spec:
                 mountPath: /scripts
               - name: dev-infiniband
                 mountPath: /dev/infiniband
-{% if per_node_storage %}
+{% if per_node_storage and not local_disk_path %}
 {% for nfs in node_nfs_pvcs %}
               - name: nfs-{{ nfs.suffix }}
                 mountPath: /nfs-{{ nfs.suffix }}
