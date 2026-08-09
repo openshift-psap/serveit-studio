@@ -337,7 +337,11 @@ Ask these in plain language:
 
 **"How many users do you expect to be using this at the same time?"**
 - This is the number of concurrent requests hitting the model simultaneously
-- Examples: An internal tool might have 5-20 concurrent users. A customer-facing API might have 50-200. A high-traffic service could have 500+.
+- Examples:
+  1. **Internal dev team**: ~5-20 concurrent users
+  2. **Company-wide coding assistant**: ~50-100 concurrent users
+  3. **Platform API / high-traffic service**: ~200+ concurrent users
+  4. **Custom** — enter a specific number
 - Default: 100 concurrent users
 
 ### 3d. What matters most?
