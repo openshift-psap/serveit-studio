@@ -715,6 +715,36 @@ def create_instance(owner_id: int, username: str, name: str,
         if r.returncode != 0:
             raise RuntimeError(f"PVC creation failed: {r.stderr}")
 
+        # For local clusters without a kubeconfig secret, generate one from in-cluster SA
+        if not kubeconfig_secret:
+            import base64 as _b64
+            sa_token_path = '/var/run/secrets/kubernetes.io/serviceaccount/token'
+            ca_path = '/var/run/secrets/kubernetes.io/serviceaccount/ca.crt'
+            api_host = os.environ.get('KUBERNETES_SERVICE_HOST', 'kubernetes.default.svc')
+            api_port = os.environ.get('KUBERNETES_SERVICE_PORT', '443')
+            if os.path.exists(sa_token_path):
+                with open(sa_token_path) as f:
+                    sa_token = f.read().strip()
+                with open(ca_path) as f:
+                    ca_data = _b64.b64encode(f.read().encode()).decode()
+                local_kc = (
+                    f"apiVersion: v1\nkind: Config\nclusters:\n- cluster:\n"
+                    f"    certificate-authority-data: {ca_data}\n"
+                    f"    server: https://{api_host}:{api_port}\n"
+                    f"  name: local\ncontexts:\n- context:\n    cluster: local\n"
+                    f"    namespace: {workload_namespace}\n  name: local\n"
+                    f"current-context: local\nusers:\n- name: local\n  user:\n"
+                    f"    token: {sa_token}\n"
+                )
+                kubeconfig_secret = f"serveit-kubeconfig-local-{deployment_name}"
+                secret_yaml = json.dumps({
+                    "apiVersion": "v1", "kind": "Secret",
+                    "metadata": {"name": kubeconfig_secret, "namespace": namespace},
+                    "type": "Opaque",
+                    "stringData": {"kubeconfig": local_kc}
+                })
+                _kubectl(['apply', '-f', '-', '-n', namespace], input_data=secret_yaml)
+
         deploy_yaml = _render('instance-deployment.yaml.j2',
             name=deployment_name, namespace=namespace, image=image,
             pvc_name=pvc_name, code_pvc_name='',
@@ -722,7 +752,7 @@ def create_instance(owner_id: int, username: str, name: str,
             dev_mode='false', force_nad='false',
             auth_disabled='false',
             kubeconfig_secret=kubeconfig_secret or '',
-            has_kubeconfig='true' if kubeconfig_secret else 'false',
+            has_kubeconfig='true',
             preset_gpus=preset_gpus or '',
             preset_nodes=','.join(preset_nodes) if preset_nodes else '',
             auto_login_token=auto_login_token,
