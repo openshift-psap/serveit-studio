@@ -460,13 +460,49 @@ How the inference gateway routes requests across pods. **If the user selected pr
 
 #### vLLM engine settings
 
-Ask: **"Do you want to auto-tune the vLLM engine, or use upstream defaults?"**
+Explain: **"The vLLM engine has many settings that affect how your GPU memory is used, how many requests can run in parallel, and how the model processes tokens. ServeIt Studio can automatically tune these based on your model, GPU, and workload — or you can use the upstream vLLM defaults as a baseline."**
 
-- **Auto-tune (recommended, default: on)** — ServeIt Studio automatically optimizes `gpu_memory_utilization`, `max_num_seqs`, `max_num_batched_tokens`, `block_size`, and `max_model_len` based on your model, GPU, and workload. This typically gives 20-40% better performance than upstream defaults.
-- **Upstream defaults** — Use vLLM's built-in defaults. Good for comparing against a baseline.
-- **Custom overrides** — The user can override specific settings (e.g., force a specific `gpu_memory_utilization` or `dtype`). Only for advanced users who know what they're tuning.
+Ask: **"Do you want ServeIt Studio to auto-tune the engine settings, or start with upstream defaults?"**
 
-Most users should keep auto-tune on and not touch individual settings.
+- **Auto-tune (default: on)** → Set `advanced_vllm_custom_enabled: true`. ServeIt Studio calculates optimal values for memory utilization, batch sizes, block sizes, and sequence limits based on your specific model + GPU + workload combination.
+- **Upstream defaults** → Set `advanced_vllm_custom_enabled: false`. Uses vLLM's built-in defaults. Good for comparing "what does tuning actually improve?"
+
+If the user picks auto-tune, ask: **"Do you want to override any specific engine settings, or let ServeIt Studio handle everything?"**
+
+Most users should let auto-tune handle everything. Only offer overrides if the user asks. The key settings a user might want to override:
+
+- **max-model-len** — max total text length (input + output) per request. Larger = more GPU memory reserved, fewer concurrent users. Auto = calculated from ISL + OSL.
+- **gpu-memory-utilization** — fraction of GPU memory the engine can use (0.0-0.99). Higher = more room for concurrent requests, less safety margin. Auto = calculated from model size and GPU VRAM.
+- **dtype** — precision for model weights (auto, float16, bfloat16). Lower precision = less memory but slightly lower quality. Auto = detected from model config.
+- **kv-cache-dtype** — precision for KV cache. FP8 halves cache memory, fitting more concurrent users. Auto = same as model dtype.
+- **block-size** — tokens per KV cache block. Larger blocks reduce overhead for long sequences and improve NIXL transfer efficiency in P/D mode. Auto = calculated from sequence length.
+- **tool-call-parser** — needed if the app uses function/tool calling (e.g., hermes, mistral). Auto = disabled.
+- **reasoning-parser** — needed for reasoning models (DeepSeek-R1, Qwen3 thinking mode). Auto = disabled.
+
+Advanced settings most users should NOT touch (only mention if asked):
+- `pipeline-parallel-size` — splitting model across GPU groups in sequence. Only for models too large for TP alone.
+- `max-num-seqs` — max simultaneous requests. Auto-calculated.
+- `max-num-batched-tokens` — max tokens per batch. Auto-calculated.
+- `headroom` — safety margin for throughput calculation. Default 1.3 (30% headroom).
+- `memory-reserve-pct` — extra GPU memory reserve for OOM safety. Default 0%.
+- `cpu-offload-gb` — offload KV cache to CPU RAM for long agentic sessions. Only for PD mode.
+- `weight-cpu-offload-gb` — offload model weights to CPU. For models that barely fit in GPU.
+- `http-timeout-keep-alive` — increase for long-running agentic requests that idle between tool calls.
+- MoE-specific: `dbo-prefill-token-threshold`, `dbo-decode-token-threshold`, `moe-backend`, `all2all-backend` — auto-detected for MoE models.
+- Nemotron-specific: `prefix-cache-retention`, `ssm-conv-state-layout` — only for Mamba-hybrid models.
+- `model-loader-extra-config` — multi-threaded loading for 550B+ models.
+
+Toggle flags (auto-managed, only mention if asked):
+- `enable-prefix-caching` — auto on. Reuses computation for shared prompt prefixes.
+- `enable-expert-parallel` — auto on when MoE model detected. Splits experts across GPUs.
+- `enable-dbo` — auto on for MoE. Overlaps communication with compute.
+- `enable-eplb` — auto on for MoE. Balances expert load across GPUs.
+- `trust-remote-code` — auto on. Required by some models.
+- `disable-log-requests` — auto on. Reduces log noise during benchmarks.
+- `enable-auto-tool-choice` — auto off. Enable for tool-calling apps.
+- `enable-bidirectional-kv` — auto off. Required for Nemotron and agentic serving.
+- `disable-custom-all-reduce` — auto off. Only enable if NCCL errors occur.
+- Debug: `vllm-debug-logs`, `nccl-debug-logs` — auto off. Very verbose, only for troubleshooting.
 
 ### Summary before starting
 
