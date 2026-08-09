@@ -742,7 +742,13 @@ curl -sk -c /tmp/serveit-cookies.txt "$URL/login" \
 
 ## Step 5: Save Configuration
 
-Save ALL the settings the user confirmed. Include every field — missing fields will use server defaults which may not match what was agreed.
+**First, lock the config** to prevent the browser UI from overwriting our settings. The UI auto-saves on every page load and navigation — without locking, it will clobber the config we set via REST.
+
+```bash
+curl -sk -b /tmp/serveit-cookies.txt -X POST "$URL/api/config/lock"
+```
+
+Then save ALL the settings the user confirmed. Include every field — missing fields will use server defaults which may not match what was agreed.
 
 ```bash
 curl -sk -b /tmp/serveit-cookies.txt -X POST "$URL/api/config" \
@@ -887,6 +893,14 @@ done
 ---
 
 ## Step 8: Get Results
+
+Unlock the config so the UI can save normally again:
+
+```bash
+curl -sk -b /tmp/serveit-cookies.txt -X POST "$URL/api/config/unlock"
+```
+
+Then fetch results:
 
 ```bash
 RUN_ID=$(curl -sk -b /tmp/serveit-cookies.txt "$URL/api/runs" | python3 -c "import json,sys; print(json.load(sys.stdin)[0]['id'])")

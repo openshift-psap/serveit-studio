@@ -125,6 +125,22 @@ def _emit_socketio_event(event_name, data):
     socketio.emit(event_name, data)
 
 
+@app.route('/api/config/lock', methods=['POST'])
+def api_lock_config():
+    """Lock config to prevent UI from overwriting it. Use before saving config via REST."""
+    with state_lock:
+        state['config_locked'] = True
+    return jsonify({'success': True, 'locked': True})
+
+
+@app.route('/api/config/unlock', methods=['POST'])
+def api_unlock_config():
+    """Unlock config so the UI can save normally again."""
+    with state_lock:
+        state['config_locked'] = False
+    return jsonify({'success': True, 'locked': False})
+
+
 @app.route('/api/set_state', methods=['POST'])
 def api_set_state():
     """Set the UI wizard step and running state. Persists to DB so the UI reflects the change."""
