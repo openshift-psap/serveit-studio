@@ -628,7 +628,7 @@ The cluster scan detects installed infrastructure versions. Show what was detect
   - EPP scheduler: `ghcr.io/llm-d/llm-d-router-endpoint-picker:<latest_tag>`
 - **Custom images** — the user provides their own image URLs (e.g., for testing a pre-release, internal build, or a different registry).
 
-To find the latest available tags, use the `fetch_image_tags` Socket.IO event or check the registry. Show the user the top 3-5 stable tags (exclude `latest`, `dev`, `nightly` — prefer versioned tags like `v0.8.0`, `v0.9.0`).
+To find the latest available tags, check the container registry. Show the user the top 3-5 stable tags (exclude `latest`, `dev`, `nightly` — prefer versioned tags like `v0.8.0`, `v0.9.0`).
 
 **Network type:**
 
