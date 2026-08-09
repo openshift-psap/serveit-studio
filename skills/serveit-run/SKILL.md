@@ -325,10 +325,13 @@ Ask these in plain language:
 
 Ask: **"What's more important for your use case?"**
 
-Explain the options:
-- **Response time** (`ttft`) — "I want the fastest first response. Users are waiting interactively." Best for chatbots, interactive apps, real-time assistants.
-- **Throughput** (`throughput`) — "I want to serve as many requests per second as possible. Latency is less critical." Best for batch processing, offline pipelines, high-volume APIs.
-- **Full coverage** (`balanced`) — "I want to find the best config for both cases and compare them side by side." Runs more tests but gives the most comprehensive results. **Recommended if unsure.**
+Explain the options with numbers so the user can pick by number:
+1. **Response time** (`ttft`) — "I want the fastest first response. Users are waiting interactively." Best for chatbots, interactive apps, real-time assistants.
+2. **Throughput** (`throughput`) — "I want to serve as many requests per second as possible. Latency is less critical." Best for batch processing, offline pipelines, high-volume APIs.
+3. **Full coverage** (`balanced`) — "I want to find the best config for both cases and compare them side by side." Runs more tests but gives the most comprehensive results.
+4. **Other** — let the user describe their priority in their own words.
+
+Always number options like this throughout the skill so users can reply with just "1", "2", etc.
 
 ### 3d. Do you expect prefix cache hits?
 
