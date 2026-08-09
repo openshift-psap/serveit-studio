@@ -612,21 +612,80 @@ Toggle flags (auto-managed, only mention if asked):
 - `disable-custom-all-reduce` — auto off. Only enable if NCCL errors occur.
 - Debug: `vllm-debug-logs`, `nccl-debug-logs` — auto off. Very verbose, only for troubleshooting.
 
+#### Infrastructure & Deployment
+
+This section configures how pods are deployed and communicate. Most of this is auto-detected from the cluster scan — only ask the user if something needs changing.
+
+**Container images:**
+
+The cluster scan detects installed versions. Show the user what will be used:
+- **Inference engine image** — the vLLM container (e.g., `ghcr.io/llm-d/llm-d-cuda:v0.8.0`). Use the version matching the cluster's installed llm-d version if detected.
+- **EPP scheduler image** — the request router (e.g., `ghcr.io/llm-d/llm-d-router-endpoint-picker:v0.9.0`).
+
+Ask: **"The cluster is running llm-d <version>. I'll use matching images. Want to override with a different version?"**
+
+**Network type:**
+
+Auto-detected from cluster scan. The scan identifies which networking is available:
+- **DRA (Dynamic Resource Allocation)** — modern GPU+NIC affinity via device classes. Auto-detected when DRA device classes exist.
+- **SR-IOV** — dedicated virtual NIC per pod for RDMA. Auto-detected when SR-IOV policies exist.
+- **Host Network** — pods share the host's network stack. Simplest but no isolation.
+- **NAD (Network Attachment Definition)** — Multus secondary networks. Auto-detected when NADs exist.
+- **Default (TCP)** — standard Kubernetes networking, no RDMA. Slowest for multi-node.
+
+Tell the user: **"Your cluster supports <detected_type> networking. This will be used for GPU-to-GPU communication between pods. For multi-node inference, RDMA-capable networking (DRA, SR-IOV) is important for performance."**
+
+Only ask if multiple network types are available and the user needs to choose.
+
+**Storage class for model cache:**
+
+Already determined during setup (Step 2). Confirm with the user:
+- Which SC is being used (hostpath-nvme, nfs, etc.)
+- Whether per-node storage is enabled (for local disk)
+- The local disk path (for hostPath mounts)
+
+**GPU allocation:**
+
+Already determined during setup. Confirm:
+- Total GPUs available and how many will be used
+- Which nodes are selected (all or specific)
+
+**Gateway class:**
+
+Auto-detected (usually Istio). Only mention if the user needs to know or if there's an issue.
+
+**Namespace:**
+
+The instance namespace is set during instance creation. No need to ask again.
+
 ### Summary before starting
 
-Before proceeding, confirm the choices with the user:
+Before proceeding, confirm ALL choices with the user:
 
 ```
 Ready to optimize:
 
-  Model:          <model>
-  Prompt length:  <ISL> tokens (~<ISL*4> characters)
-  Response length: <OSL> tokens (~<OSL*4> characters)
+  Model:            <model>
+  Prompt length:    <ISL> tokens (~<ISL*4> characters)
+  Response length:  <OSL> tokens (~<OSL*4> characters)
   Concurrent users: <users>
-  Priority:       <response time / throughput / full coverage>
-  Prefix cache:   <off / X% identical / X% shared prefix / multi-group with N groups>
-  Test duration:  <duration>s per test
-  Auto-tune:      on
+  Priority:         <response time / throughput / full coverage>
+  Prefix cache:     <off / X% identical / X% shared prefix / multi-group with N groups>
+  Search depth:     <top 1/2/3/all combinations>
+  Latency SLA:      <none / Xms at PYY>
+  Calibrated load:  <yes/no> + concurrency sweep <details>
+  Cache sweep:      <yes/no>
+  vLLM auto-tune:   <on/off + any overrides>
+  EPP preset:       <preset name + weights>
+
+  Infrastructure:
+    Engine image:   <vLLM image:tag>
+    Scheduler image: <EPP image:tag>
+    Network:        <DRA / SR-IOV / Host Network / TCP>
+    Storage:        <SC name> (<local NVMe / shared NFS>)
+    Local disk:     <path or N/A>
+    GPUs:           <N>x <GPU_MODEL> across <M> nodes
+    Gateway:        <Istio / other>
 
 Shall I start the optimization?
 ```
