@@ -171,8 +171,11 @@ function goToStep(step, skipSave) {
             document.getElementById('scanning-status').style.display = 'block';
 
             // Trigger cluster scan
-            logToConsole('🔍 Auto-scanning cluster resources...', 'info');
-            socket.emit('scan_cluster', {});
+            if (!window._clusterScanInProgress) {
+                logToConsole('🔍 Auto-scanning cluster resources...', 'info');
+                window._clusterScanInProgress = true;
+                socket.emit('scan_cluster', {});
+            }
         }
     }
     if (step === 7) {
@@ -293,6 +296,7 @@ socket.on('load_config_result', function(data) {
 });
 
 socket.on('cluster_scan_result', function(data) {
+    window._clusterScanInProgress = false;
     logToConsole('✅ Cluster scan complete!', 'success');
     logToConsole(`   Total GPUs: ${data.total_gpus}`, 'info');
 
