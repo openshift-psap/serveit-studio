@@ -713,9 +713,40 @@ def create_instance(owner_id: int, username: str, name: str,
                  "subjects": [{"kind": "ServiceAccount", "name": "default", "namespace": namespace}],
                  "roleRef": {"kind": "Role", "name": "serveit-full-access",
                              "apiGroup": "rbac.authorization.k8s.io"}},
+                {"apiVersion": "v1", "kind": "ServiceAccount",
+                 "metadata": {"name": "llm-d-modelserver", "namespace": workload_namespace}},
             ]
         })
         _kubectl(['apply', '-f', '-'], input_data=local_rbac)
+
+        # Create SCC for modelserver SA (privileged access for hostPath, RDMA)
+        is_openshift = False
+        try:
+            r_oc = _kubectl(['api-resources', '--api-group=security.openshift.io'])
+            is_openshift = r_oc.returncode == 0 and 'SecurityContextConstraints' in r_oc.stdout
+        except Exception:
+            pass
+        if is_openshift:
+            scc_name = f"llm-d-modelserver-scc-{workload_namespace}"
+            scc_yaml = json.dumps({
+                "apiVersion": "security.openshift.io/v1",
+                "kind": "SecurityContextConstraints",
+                "metadata": {"name": scc_name},
+                "allowHostDirVolumePlugin": True,
+                "allowHostIPC": False,
+                "allowHostNetwork": False,
+                "allowHostPID": False,
+                "allowHostPorts": False,
+                "allowPrivilegedContainer": True,
+                "allowedCapabilities": ["IPC_LOCK", "SYS_RAWIO", "SYS_RESOURCE"],
+                "fsGroup": {"type": "RunAsAny"},
+                "runAsUser": {"type": "RunAsAny"},
+                "seLinuxContext": {"type": "RunAsAny"},
+                "supplementalGroups": {"type": "RunAsAny"},
+                "users": [f"system:serviceaccount:{workload_namespace}:llm-d-modelserver"],
+                "volumes": ["*"]
+            })
+            _kubectl(['apply', '-f', '-'], input_data=scc_yaml)
 
     import secrets
     auto_login_token = secrets.token_urlsafe(32)
