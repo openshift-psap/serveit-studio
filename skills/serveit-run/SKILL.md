@@ -327,6 +327,16 @@ Ask these in plain language:
   - System prompt + conversation history + tools (agentic): ~2,000-6,000 tokens (~8,000-24,000 characters)
 - Default: 2,000 tokens (input), 2,000 tokens (output)
 
+After the user picks ISL/OSL, ask about variation:
+
+**"Do you want variable-length prompts? In real life, not all prompts are the same length. Adding standard deviation makes the benchmark more realistic."**
+
+1. **Moderate variation** — stdev = 50% of ISL/OSL (e.g., ISL=2000±1000, prompts range ~1000-3000)
+2. **High variation** — stdev = 100% of ISL/OSL (e.g., ISL=2000±2000, prompts range ~0-4000)
+3. **Light variation** — stdev = 25% of ISL/OSL (e.g., ISL=2000±500, prompts range ~1500-2500)
+4. **Custom** — enter specific stdev values
+5. **No variation** — fixed length (stdev=0)
+
 **"How long should the model's responses be?"**
 - This is the Output Sequence Length (OSL) — how many tokens the model generates per response
 - Real-world examples:
