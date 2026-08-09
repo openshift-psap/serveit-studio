@@ -626,16 +626,18 @@ Ask: **"The cluster is running llm-d <version>. I'll use matching images. Want t
 
 **Network type:**
 
-Auto-detected from cluster scan. The scan identifies which networking is available:
-- **DRA (Dynamic Resource Allocation)** — modern GPU+NIC affinity via device classes. Auto-detected when DRA device classes exist.
-- **SR-IOV** — dedicated virtual NIC per pod for RDMA. Auto-detected when SR-IOV policies exist.
-- **Host Network** — pods share the host's network stack. Simplest but no isolation.
-- **NAD (Network Attachment Definition)** — Multus secondary networks. Auto-detected when NADs exist.
-- **Default (TCP)** — standard Kubernetes networking, no RDMA. Slowest for multi-node.
+The cluster scan detects which networking options are actually available on this cluster. Only show what was found — do not list options that don't exist on the cluster.
 
-Tell the user: **"Your cluster supports <detected_type> networking. This will be used for GPU-to-GPU communication between pods. For multi-node inference, RDMA-capable networking (DRA, SR-IOV) is important for performance."**
+Ask: **"How would you like the pods to communicate? Based on the cluster scan, these options are available:"**
 
-Only ask if multiple network types are available and the user needs to choose.
+Then list only the detected options. The scan result contains `network_type` (the auto-detected best option) and `available_networks` / `dranet_available` fields. Common detected options:
+- **DRA** — GPU+NIC affinity via device classes. Fastest, modern approach.
+- **SR-IOV** — dedicated virtual NIC per pod for RDMA.
+- **Host Network** — pods share the host's network stack.
+- **NAD** — Multus secondary networks.
+- **TCP** — standard Kubernetes networking. Always available as a fallback.
+
+Tell the user which one was auto-detected as the best fit and why. For multi-node inference, RDMA-capable networking (DRA, SR-IOV) makes a significant performance difference.
 
 **Storage class for model cache:**
 
