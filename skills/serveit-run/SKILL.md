@@ -382,14 +382,7 @@ Ask: **"Do you want to test every possible GPU configuration, or just the ones m
 - **"Test everything"** → Set `tp_pair_top_n: 4`. Tests all possible combinations (up to 16). Most thorough but takes significantly longer.
 - **"I'm in a hurry"** → Set `tp_pair_top_n: 1`. Only tests the single best combination. Fastest, but might miss a better config.
 
-**How should we balance prefill vs decode pods?**
-
-Explain: For each GPU configuration, there are many ways to split pods between "understanding the prompt" (prefill) and "generating the response" (decode). The optimizer can figure out the best split automatically, or test every possible one.
-
-Ask: **"Let the optimizer figure out the best split (faster), or test every possible ratio (slower but exhaustive)?"**
-
-- **"Figure it out"** → Set `pd_search_mode: smart`. Uses the measured throughput to calculate the optimal split, then tests ~3 ratios around it. Much faster.
-- **"Test everything"** → Set `pd_search_mode: exhaustive`. Tests every valid split. Can run many more tests on large clusters.
+Default `pd_search_mode: smart` — the optimizer automatically calculates the best prefill/decode pod ratio for each configuration. No need to ask the user about this unless they specifically request exhaustive search.
 
 #### Response time guarantee (optional)
 
