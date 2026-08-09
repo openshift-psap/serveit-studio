@@ -412,10 +412,10 @@ Explain: The optimizer splits your GPUs in different ways — different numbers 
 
 Ask: **"Do you want to test every possible GPU configuration, or just the ones most likely to be the best?"**
 
-- **"Just the best ones"** → Set `tp_pair_top_n: 2`. The optimizer first measures all TP sizes to find which work best on your hardware, then only tests the top 2 combinations. Runs ~4 TP pair tests.
-- **"Test more combinations"** → Set `tp_pair_top_n: 3`. Tests top 3 x top 3 = up to 9 combinations. More thorough, takes longer.
-- **"Test everything"** → Set `tp_pair_top_n: 4`. Tests all possible combinations (up to 16). Most thorough but takes significantly longer.
-- **"I'm in a hurry"** → Set `tp_pair_top_n: 1`. Only tests the single best combination. Fastest, but might miss a better config.
+- **"Just the best ones"** → Set `tp_pair_top_n: 2`. The optimizer first measures all GPU-per-pod sizes (TP) to find which work best on your hardware, then picks the top 2 for deeper testing. Each "config" can be a different architecture — Aggregated (all pods do everything), PD (separate prefill and decode pods), or EP (expert parallel for MoE models). So the top 2 might be "Aggregated with 8 GPUs/pod" and "PD with 4 GPUs/pod" for example.
+- **"Test more combinations"** → Set `tp_pair_top_n: 3`. Picks the top 3 GPU sizes and crosses them = up to 9 configs across architectures. More thorough, takes longer.
+- **"Test everything"** → Set `tp_pair_top_n: 4`. Tests all GPU sizes across all architectures (up to 16 configs). Most thorough but takes significantly longer.
+- **"I'm in a hurry"** → Set `tp_pair_top_n: 1`. Only tests the single best GPU size per architecture. Fastest, but might miss a better config.
 
 Default `pd_search_mode: smart` — the optimizer automatically calculates the best prefill/decode pod ratio for each configuration. No need to ask the user about this unless they specifically request exhaustive search.
 
