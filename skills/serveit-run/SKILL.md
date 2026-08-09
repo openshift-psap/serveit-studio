@@ -377,10 +377,10 @@ Explain: The optimizer splits your GPUs in different ways — different numbers 
 
 Ask: **"Do you want to test every possible GPU configuration, or just the ones most likely to be the best?"**
 
-- **"Just the best ones" (recommended for most users)** → Set `tp_pair_top_n: 2`. The optimizer first measures all TP sizes to find which work best on your hardware, then only tests the top 2 combinations. Runs ~4 TP pair tests. Takes a few hours.
+- **"Just the best ones"** → Set `tp_pair_top_n: 2`. The optimizer first measures all TP sizes to find which work best on your hardware, then only tests the top 2 combinations. Runs ~4 TP pair tests.
 - **"Test more combinations"** → Set `tp_pair_top_n: 3`. Tests top 3 x top 3 = up to 9 combinations. More thorough, takes longer.
-- **"Test everything"** → Set `tp_pair_top_n: 4`. Tests all possible combinations (up to 16). Most thorough but can take 6-12+ hours on large clusters. Only needed if you want absolute certainty.
-- **"I'm in a hurry"** → Set `tp_pair_top_n: 1`. Only tests the single best combination. Fastest — done in ~1 hour — but might miss a better config.
+- **"Test everything"** → Set `tp_pair_top_n: 4`. Tests all possible combinations (up to 16). Most thorough but takes significantly longer.
+- **"I'm in a hurry"** → Set `tp_pair_top_n: 1`. Only tests the single best combination. Fastest, but might miss a better config.
 
 **How should we balance prefill vs decode pods?**
 
@@ -388,8 +388,8 @@ Explain: For each GPU configuration, there are many ways to split pods between "
 
 Ask: **"Let the optimizer figure out the best split (faster), or test every possible ratio (slower but exhaustive)?"**
 
-- **"Figure it out" (recommended)** → Set `pd_search_mode: smart`. Uses the measured throughput to calculate the optimal split, then tests ~3 ratios around it. Same accuracy in practice, much faster.
-- **"Test everything"** → Set `pd_search_mode: exhaustive`. Tests every valid split. Can run 50+ tests on large clusters. Only needed for research or if smart mode's recommendation seems off.
+- **"Figure it out"** → Set `pd_search_mode: smart`. Uses the measured throughput to calculate the optimal split, then tests ~3 ratios around it. Much faster.
+- **"Test everything"** → Set `pd_search_mode: exhaustive`. Tests every valid split. Can run many more tests on large clusters.
 
 #### Response time guarantee (optional)
 
