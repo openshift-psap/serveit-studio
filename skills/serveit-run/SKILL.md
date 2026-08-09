@@ -423,26 +423,25 @@ Ask: **"Do you want to run both of these? It adds extra tests but gives you the 
 
 Note: Calibrated load validation must be enabled for concurrency sweep to work — the sweep centers its levels around the calibrated concurrency. You cannot enable concurrency sweep without calibrated load.
 
-If the user enables concurrency sweep, ask about these options:
+If the user enables concurrency sweep, explain:
 
-**"How many different user loads do you want to test?"**
+**"Now that we know which configurations work best, we'll test each one at different numbers of simultaneous users to find the real sweet spot. Think of it like test-driving a car at different speeds — a car might feel great at 60 mph but struggle at 90. Same with inference: a config that's amazing at 50 users might fall apart at 80, while another config that looked worse in the stress test actually performs better at medium load.**
 
-Each "level" is a separate benchmark run at a specific number of concurrent users. For example, if the sweet spot is 50 users, the system might test at 20, 30, 40, 50, 60, and 70 users — that's 6 tests per config. More tests = smoother performance curve, but takes longer.
+**We'll take the top 4 configs — the ones our recommendation engine picked as Best Balanced, Lowest TTFT, Highest Throughput, and Most Efficient — and run each of them at 8-10 different user counts. That gives us a complete performance map for each config.**
 
-- **Auto (~6 tests per config)** → The system picks ~6 user loads centered on the sweet spot, going up to 1.5x.
-- **Custom count** → Specify how many tests (e.g., 8 or 10). More = finer curve.
-- **Explicit user counts** → Specify exact values (e.g., "10, 30, 50, 80, 100, 150"). Useful if you know exactly which load levels matter to you.
+**If during EPP tuning we found better routing weights, we'll also re-run with those tuned weights so you can see the difference."**
 
-**Spacing** — default is 20% of the sweet spot concurrency. For example, if the sweet spot is 50 users, tests are spaced 10 users apart (20, 30, 40, 50, 60, 70). Only relevant when using auto count.
+Then set:
+- `concurrency_sweep_count: 8` (or 10 for more detail)
+- `concurrency_sweep_step_pct: 20`
+- `concurrency_sweep_all_configs: true` (include all 4 recommendation configs)
+- `concurrency_sweep_use_epp_tuned: true`
 
-**"Which configs do you want to include in the sweep?"**
-- **One best config from each architecture** → Default. Tests only the single best Aggregated, single best PD, and single best EP (if tested).
-- **Include all 4 recommendation configs** → Also adds the Best Balanced, Lowest TTFT, Highest Throughput, and Most Efficient configs. These could be any architecture — for example all 4 might be PD configs if PD dominated. Shows how each recommendation holds up across load levels.
-- **Add extra configs** → Include N more configs ranked by score from the results pool, even ones that didn't perform as well. Useful for comparing near-winners or understanding why a config that looked worse under stress might actually be better at lower loads.
-
-**"If we find better routing weights during EPP tuning, do you want to re-run the sweep with those tuned weights?"** This compares the tuned EPP vs baseline to show if routing optimization made a difference across load levels.
-- Yes → Set `concurrency_sweep_use_epp_tuned: true`
-- No → Only sweep with the baseline EPP weights.
+If the user wants to customize:
+- They can change the number of user loads (fewer = faster, more = smoother curve)
+- They can specify exact user counts instead (e.g., "10, 30, 50, 80, 100, 150")
+- They can test only one best config per architecture instead of all 4 recommendations
+- They can add extra configs beyond the top 4 — even ones that didn't perform well, to see if they shine at lower loads
 
 #### Cache hit sweep (optional)
 
