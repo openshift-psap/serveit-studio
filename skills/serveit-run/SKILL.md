@@ -623,13 +623,12 @@ This section configures how pods are deployed and communicate. Most of this is a
 The cluster scan detects installed infrastructure versions. Show what was detected and ask:
 
 **"Which container images would you like to use?"**
-- **Latest GA release** — use the newest stable versions:
+- **Latest GA release** — show the user the latest stable versions available and mention them by version number:
   - Inference engine: `ghcr.io/llm-d/llm-d-cuda:<latest_tag>`
   - EPP scheduler: `ghcr.io/llm-d/llm-d-router-endpoint-picker:<latest_tag>`
-- **Match cluster versions** — if the scan detected specific versions already installed, use those for consistency.
-- **Custom images** — provide your own image URLs (e.g., for testing a pre-release or custom build).
+- **Custom images** — the user provides their own image URLs (e.g., for testing a pre-release, internal build, or a different registry).
 
-To find the latest available tags, use the `fetch_image_tags` API or check the registry directly. Show the user the top 3-5 stable tags (exclude `latest`, `dev`, `nightly` — prefer versioned tags like `v0.8.0`, `v0.9.0`).
+To find the latest available tags, use the `fetch_image_tags` Socket.IO event or check the registry. Show the user the top 3-5 stable tags (exclude `latest`, `dev`, `nightly` — prefer versioned tags like `v0.8.0`, `v0.9.0`).
 
 **Network type:**
 
