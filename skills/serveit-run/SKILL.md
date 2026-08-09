@@ -306,7 +306,7 @@ Ask these in plain language:
   - A code file with context: ~1,000-2,000 tokens (~4,000-8,000 characters)
   - A large codebase context / RAG: ~4,000-8,000 tokens (~16,000-32,000 characters)
   - System prompt + conversation history + tools (agentic): ~2,000-6,000 tokens (~8,000-24,000 characters)
-- Default: 2,000 tokens
+- Default: 2,000 tokens (input), 2,000 tokens (output)
 
 **"How long should the model's responses be?"**
 - This is the Output Sequence Length (OSL) — how many tokens the model generates per response
