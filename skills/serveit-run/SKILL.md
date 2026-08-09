@@ -425,12 +425,15 @@ Note: Calibrated load validation must be enabled for concurrency sweep to work �
 
 If the user enables concurrency sweep, ask about these options:
 
-**"How many concurrency levels do you want to test?"**
-- **Auto (~6 levels)** → The system picks ~6 levels centered on the calibrated concurrency, going up to 1.5x. Good default.
-- **Custom count** → Specify a number (e.g., 8 or 10 levels). More levels = finer curve, but more tests.
-- **Explicit levels** → Specify exact concurrency values (e.g., "10, 30, 50, 80, 100, 150"). Overrides auto calculation. Useful if you know exactly which load levels matter to you.
+**"How many different user loads do you want to test?"**
 
-**Spacing between levels** — default is 20% of the calibrated concurrency. For example, if the sweet spot is 50 users, levels would be spaced 10 users apart (30, 40, 50, 60, 70, 80). Only relevant if using auto count, not explicit levels.
+Each "level" is a separate benchmark run at a specific number of concurrent users. For example, if the sweet spot is 50 users, the system might test at 20, 30, 40, 50, 60, and 70 users — that's 6 tests per config. More tests = smoother performance curve, but takes longer.
+
+- **Auto (~6 tests per config)** → The system picks ~6 user loads centered on the sweet spot, going up to 1.5x.
+- **Custom count** → Specify how many tests (e.g., 8 or 10). More = finer curve.
+- **Explicit user counts** → Specify exact values (e.g., "10, 30, 50, 80, 100, 150"). Useful if you know exactly which load levels matter to you.
+
+**Spacing** — default is 20% of the sweet spot concurrency. For example, if the sweet spot is 50 users, tests are spaced 10 users apart (20, 30, 40, 50, 60, 70). Only relevant when using auto count.
 
 **"Which configs do you want to include in the sweep?"**
 - **One best config from each architecture** → Default. Tests only the single best Aggregated, single best PD, and single best EP (if tested).
