@@ -877,7 +877,7 @@ class SystemScanner:
         logger.info("Scanning storage classes...")
 
         LOCAL_PROVISIONERS = {
-            'topolvm.io', 'kubernetes.io/no-provisioner', 'rancher.io/local-path',
+            'kubernetes.io/no-provisioner', 'rancher.io/local-path',
             'microk8s.io/hostpath', 'openebs.io/local', 'local.csi.k8s.io',
             'kubevirt.io.hostpath-provisioner', 'kubevirt.io/hostpath-provisioner',
         }
