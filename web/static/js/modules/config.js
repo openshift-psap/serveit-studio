@@ -746,9 +746,13 @@ function restoreClusterResources() {
             option.dataset.accessMode = sc.access_mode || 'ReadWriteOnce';
             storageSelect.appendChild(option);
         });
-        // Restore selected storage class
+        // Restore selected storage class (reset if no longer available)
         if (config.storage_class) {
             storageSelect.value = config.storage_class;
+            if (!storageSelect.value) {
+                config.storage_class = '';
+                storageSelect.value = '';
+            }
         }
     } else if (storageSelect && (!data.storage_classes || data.storage_classes.length === 0)) {
         if (!window._clusterScanInProgress) {
