@@ -834,6 +834,20 @@ else:
 
 If any field doesn't match, re-save before proceeding. Do NOT start the optimization with incorrect settings.
 
+After verification passes, remind the user:
+
+**"Everything is set. Here are your URLs:**
+- **Launcher**: <LAUNCHER_URL>
+- **Instance (wizard UI)**: <INSTANCE_URL>
+
+**You can track the optimization progress in two ways:**
+1. **Open the wizard UI** in your browser — it shows live console output, progress bars, and will display interactive charts and results as tests complete.
+2. **Stream the console here** — I can poll the logs and show you progress updates right in this terminal.
+
+**Important: if the optimization stops or fails at any point, it can always be resumed from where it left off. There is never a need to restart from scratch — all completed tests are saved and the optimizer picks up from the last successful step.**
+
+**Would you like me to start the optimization and stream the console output here?"**
+
 ---
 
 ## Step 6: Check Status & Poll
