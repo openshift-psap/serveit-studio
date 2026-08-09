@@ -476,7 +476,71 @@ Ask: **"Do you want ServeIt Studio to auto-tune the engine settings, or start wi
 
 If the user picks auto-tune, ask: **"Do you want to see all available engine settings, or let ServeIt Studio handle everything?"**
 
-If the user wants to see all options, show them and let them override specific values. **Validate overrides before applying:**
+If the user wants to see all options, print these tables:
+
+**Core memory & batching:**
+| Setting | Description | Auto value |
+|---------|-------------|------------|
+| `max-model-len` | Max total text length (input + output) per request. Larger = more GPU memory reserved, fewer concurrent users. | Calculated from ISL + OSL |
+| `gpu-memory-utilization` | Fraction of GPU memory the engine can use (0.5-0.99). Higher = more room for concurrent requests, less safety margin. | Calculated from model size + GPU VRAM |
+| `max-num-seqs` | Max requests processed simultaneously. Too high = OOM, too low = wasted GPU. | Calculated from concurrent users + GPU count |
+| `max-num-batched-tokens` | Max tokens in a single batch. Larger batches = better throughput, more memory. | Calculated from workload |
+| `block-size` | Tokens per KV cache block. Larger blocks reduce overhead. Must be power of 2. Min 128 for P/D mode. | Calculated from sequence length |
+
+**Precision:**
+| Setting | Description | Auto value |
+|---------|-------------|------------|
+| `dtype` | Model weight precision (auto, float16, bfloat16). Lower = less memory, slightly lower quality. | Detected from model config |
+| `kv-cache-dtype` | KV cache precision. FP8 halves cache memory, fitting more concurrent users. | Same as model dtype |
+
+**Parallelism:**
+| Setting | Description | Auto value |
+|---------|-------------|------------|
+| `pipeline-parallel-size` | Split model across GPU groups in sequence. Only for models too large for TP alone. | 1 |
+
+**Tool calling & reasoning:**
+| Setting | Description | Auto value |
+|---------|-------------|------------|
+| `tool-call-parser` | How the engine parses function/tool calls (hermes, mistral, etc.). Only if your app uses tool calling. | Disabled |
+| `reasoning-parser` | Chain-of-thought extraction. For reasoning models (DeepSeek-R1, Qwen3). | Disabled |
+| `chat-template-content-format` | How chat content is formatted. Some models (GLM) need 'string'. | Auto |
+
+**Performance tuning:**
+| Setting | Description | Auto value |
+|---------|-------------|------------|
+| `headroom` | Safety margin for throughput calculation. Higher = more conservative. | 1.3 (30%) |
+| `memory-reserve-pct` | Extra GPU memory reserve for OOM safety. | 0% |
+| `http-timeout-keep-alive` | Keep-alive timeout. Increase for agentic requests that idle between tool calls. | 5s |
+
+**Offloading (for very large models):**
+| Setting | Description | Auto value |
+|---------|-------------|------------|
+| `cpu-offload-gb` | Offload KV cache to CPU RAM. Extends prefix cache for long sessions. PD mode only. | Disabled |
+| `weight-cpu-offload-gb` | Offload model weights to CPU. Frees GPU for KV cache, slower inference. | Disabled |
+| `model-loader-extra-config` | Multi-threaded model loading for 550B+ models. | Disabled |
+
+**MoE-specific (auto-detected for MoE models):**
+| Setting | Description | Auto value |
+|---------|-------------|------------|
+| `dbo-prefill-token-threshold` | Min tokens to trigger Dual Batch Overlap on prefill. | 32 |
+| `dbo-decode-token-threshold` | Min tokens to trigger Dual Batch Overlap on decode. | 32 |
+| `moe-backend` | MoE expert computation backend. | deep_gemm when MoE detected |
+| `all2all-backend` | MoE all-to-all communication backend. | Auto per role |
+
+**Toggle flags:**
+| Flag | Description | Auto |
+|------|-------------|------|
+| `enable-prefix-caching` | Reuse computation for shared prompt prefixes. | On |
+| `enable-expert-parallel` | Split MoE experts across GPUs. | On when MoE detected |
+| `enable-dbo` | Overlap MoE communication with compute. | On when MoE detected |
+| `enable-eplb` | Balance expert load across GPUs. | On when MoE detected |
+| `trust-remote-code` | Allow custom Python from HuggingFace. Required by some models. | On |
+| `disable-log-requests` | Reduce log noise during benchmarks. | On |
+| `enable-auto-tool-choice` | Auto tool/function calling. | Off |
+| `enable-bidirectional-kv` | Bidirectional KV transfer. For Nemotron and agentic serving. | Off |
+| `disable-custom-all-reduce` | Disable optimized GPU-to-GPU comms. Only if NCCL errors. | Off |
+
+Let the user override specific values. **Validate overrides before applying:**
 - `gpu-memory-utilization` must be between 0.5 and 0.99. Below 0.5 wastes GPU. Above 0.99 will OOM.
 - `max-model-len` must be at least ISL + OSL. Setting it too high wastes memory.
 - `max-num-seqs` should not exceed concurrent users by more than 2x — oversized values cause OOM.
