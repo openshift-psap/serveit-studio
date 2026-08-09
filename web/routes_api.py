@@ -125,18 +125,26 @@ def _emit_socketio_event(event_name, data):
     socketio.emit(event_name, data)
 
 
+def _call_handler_with_emit(handler, data):
+    """Call a Socket.IO handler, replacing bare emit() with socketio.emit() for REST context."""
+    import flask_socketio
+    original_emit = flask_socketio.emit
+    flask_socketio.emit = lambda event, *args, **kwargs: socketio.emit(event, *args, **kwargs)
+    try:
+        handler(data)
+    finally:
+        flask_socketio.emit = original_emit
+
+
 @app.route('/api/setup_storage', methods=['POST'])
 def api_setup_storage():
     """Setup storage and start model download. Returns immediately, work runs async.
     Progress is logged to the console_logs DB table — poll GET /api/logs to track."""
     try:
         data = request.get_json() or {}
-        socketio.start_background_task(
-            lambda: socketio.emit('__internal_setup_storage', data))
-        # Trigger the handler directly in a greenlet
-        from gevent import spawn as gspawn
         from web.realtime import handle_setup_storage
-        gspawn(handle_setup_storage, data)
+        from gevent import spawn as gspawn
+        gspawn(_call_handler_with_emit, handle_setup_storage, data)
         return jsonify({'success': True, 'message': 'Storage setup started. Poll GET /api/logs and GET /api/status to track progress.'})
     except Exception as e:
         return jsonify({'success': False, 'error': str(e)}), 500
@@ -147,9 +155,9 @@ def api_start_optimization():
     """Start a new optimization run. Returns immediately, optimization runs async."""
     try:
         data = request.get_json() or {}
-        from gevent import spawn as gspawn
         from web.realtime import handle_start_optimization
-        gspawn(handle_start_optimization, data)
+        from gevent import spawn as gspawn
+        gspawn(_call_handler_with_emit, handle_start_optimization, data)
         return jsonify({'success': True, 'message': 'Optimization started. Poll GET /api/status to track.'})
     except Exception as e:
         return jsonify({'success': False, 'error': str(e)}), 500
@@ -160,9 +168,9 @@ def api_resume_optimization():
     """Resume a stopped optimization run."""
     try:
         data = request.get_json() or {}
-        from gevent import spawn as gspawn
         from web.realtime import handle_resume_optimization
-        gspawn(handle_resume_optimization, data)
+        from gevent import spawn as gspawn
+        gspawn(_call_handler_with_emit, handle_resume_optimization, data)
         return jsonify({'success': True, 'message': 'Optimization resumed. Poll GET /api/status to track.'})
     except Exception as e:
         return jsonify({'success': False, 'error': str(e)}), 500
@@ -173,9 +181,9 @@ def api_generate_test_plan():
     """Generate a test plan based on model and cluster resources."""
     try:
         data = request.get_json() or {}
-        from gevent import spawn as gspawn
         from web.realtime import handle_generate_test_plan
-        gspawn(handle_generate_test_plan, data)
+        from gevent import spawn as gspawn
+        gspawn(_call_handler_with_emit, handle_generate_test_plan, data)
         return jsonify({'success': True, 'message': 'Test plan generation started. Poll GET /api/logs to track.'})
     except Exception as e:
         return jsonify({'success': False, 'error': str(e)}), 500
@@ -185,9 +193,9 @@ def api_generate_test_plan():
 def api_cleanup_deployment():
     """Clean up deployed test pods and LWS resources."""
     try:
-        from gevent import spawn as gspawn
         from web.realtime import handle_cleanup_deployment
-        gspawn(handle_cleanup_deployment, {})
+        from gevent import spawn as gspawn
+        gspawn(_call_handler_with_emit, handle_cleanup_deployment, {})
         return jsonify({'success': True, 'message': 'Cleanup started.'})
     except Exception as e:
         return jsonify({'success': False, 'error': str(e)}), 500
