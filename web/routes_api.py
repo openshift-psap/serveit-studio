@@ -225,12 +225,29 @@ def api_list_pvcs():
 
 @app.route('/api/config', methods=['GET', 'POST'])
 def handle_config():
-    """Get or update configuration."""
+    """Get or update configuration. POST saves to both in-memory state AND database."""
 
     if request.method == 'POST':
+        data = request.json or {}
         with state_lock:
-            state['current_config'] = request.json
+            if state['current_config']:
+                state['current_config'].update(data)
+            else:
+                state['current_config'] = data
             save_state()
+
+        # Also persist to DB so the config survives restarts and isn't overwritten by UI
+        try:
+            with get_db() as conn:
+                row = conn.execute('SELECT config_json FROM ui_session_state WHERE id = 1').fetchone()
+                existing = json.loads(row['config_json']) if row and row['config_json'] else {}
+                existing.update(data)
+                conn.execute(
+                    'UPDATE ui_session_state SET config_json = ?, updated_at = ? WHERE id = 1',
+                    (json.dumps(existing), datetime.now().isoformat()))
+        except Exception as e:
+            print(f"Warning: Could not persist config to DB: {e}")
+
         return jsonify({'success': True, 'config': state['current_config']})
     else:
         with state_lock:
