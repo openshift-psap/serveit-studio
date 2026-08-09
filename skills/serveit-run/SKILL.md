@@ -433,9 +433,9 @@ If the user enables concurrency sweep, ask about these options:
 **Spacing between levels** — default is 20% of the calibrated concurrency. For example, if the sweet spot is 50 users, levels would be spaced 10 users apart (30, 40, 50, 60, 70, 80). Only relevant if using auto count, not explicit levels.
 
 **"Which configs do you want to include in the sweep?"**
-- **Just the best PD and best Aggregated** → Default. Tests the two winning architectures.
-- **Include all 4 recommendation configs** → Also adds Best Balanced, Lowest TTFT, Highest Throughput, Most Efficient. Shows how each recommendation performs across load levels.
-- **Add extra configs** → Include N more configs ranked by score. Useful if you want to compare near-winners too.
+- **Just the best config from each architecture** → Default. Tests the best Aggregated, best PD, and best EP (if tested). One winner per architecture.
+- **Include all 4 recommendation configs** → Also adds the Best Balanced, Lowest TTFT, Highest Throughput, and Most Efficient configs. These could be any architecture — for example all 4 might be PD configs if PD dominated. Shows how each recommendation holds up across load levels.
+- **Add extra configs** → Include N more configs ranked by score from the results pool, even ones that didn't perform as well. Useful for comparing near-winners or understanding why a config that looked worse under stress might actually be better at lower loads.
 
 **"If we find better routing weights during EPP tuning, do you want to re-run the sweep with those tuned weights?"** This compares the tuned EPP vs baseline to show if routing optimization made a difference across load levels.
 - Yes → Set `concurrency_sweep_use_epp_tuned: true`
