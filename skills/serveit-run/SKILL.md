@@ -460,14 +460,29 @@ How the inference gateway routes requests across pods. **If the user selected pr
 
 #### vLLM engine settings
 
-Explain: **"The vLLM engine has many settings that affect how your GPU memory is used, how many requests can run in parallel, and how the model processes tokens. ServeIt Studio can automatically tune these based on your model, GPU, and workload — or you can use the upstream vLLM defaults as a baseline."**
+Explain: **"The vLLM engine has many settings that affect how your GPU memory is used, how many requests can run in parallel, how tokens are batched, and much more. ServeIt Studio can automatically tune all of these based on your model, GPU, and workload — or you can use the upstream vLLM defaults as a baseline."**
+
+Before asking, check if the model is very large and might benefit from offloading. A model needs offloading when it can barely fit in GPU memory:
+- On H100 (80GB): models requiring TP8 or higher (roughly 400B+ parameters)
+- On H200 (140GB): models requiring TP8 or higher (roughly 550B+ parameters)
+- On A100 (80GB): models requiring TP4 or higher (roughly 200B+ parameters)
+
+If the model is in this range, mention: **"This is a very large model. If it's tight on GPU memory, we can offload some model weights or KV cache to CPU RAM to free up space for more concurrent users. Auto-tune will handle this if needed, but let me know if you want to configure it explicitly."**
 
 Ask: **"Do you want ServeIt Studio to auto-tune the engine settings, or start with upstream defaults?"**
 
-- **Auto-tune (default: on)** → Set `advanced_vllm_custom_enabled: true`. ServeIt Studio calculates optimal values for memory utilization, batch sizes, block sizes, and sequence limits based on your specific model + GPU + workload combination.
+- **Auto-tune (default: on)** → Set `advanced_vllm_custom_enabled: true`. ServeIt Studio calculates optimal values for memory utilization, batch sizes, block sizes, sequence limits, and more based on your specific model + GPU + workload combination.
 - **Upstream defaults** → Set `advanced_vllm_custom_enabled: false`. Uses vLLM's built-in defaults. Good for comparing "what does tuning actually improve?"
 
-If the user picks auto-tune, ask: **"Do you want to override any specific engine settings, or let ServeIt Studio handle everything?"**
+If the user picks auto-tune, ask: **"Do you want to see all available engine settings, or let ServeIt Studio handle everything?"**
+
+If the user wants to see all options, show them and let them override specific values. **Validate overrides before applying:**
+- `gpu-memory-utilization` must be between 0.5 and 0.99. Below 0.5 wastes GPU. Above 0.99 will OOM.
+- `max-model-len` must be at least ISL + OSL. Setting it too high wastes memory.
+- `max-num-seqs` should not exceed concurrent users by more than 2x — oversized values cause OOM.
+- `pipeline-parallel-size` must evenly divide the number of GPUs.
+- `block-size` must be a power of 2 (8, 16, 32, 64, 128, 256).
+- `dtype` must match what the model supports — FP8 models can't run in float32.
 
 Most users should let auto-tune handle everything. Only offer overrides if the user asks. The key settings a user might want to override:
 
