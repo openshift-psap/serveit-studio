@@ -1300,3 +1300,24 @@ python3 cli/inftune.py run \
 # Resume if interrupted
 python3 cli/inftune.py run --resume 42 --cluster janus
 ```
+
+#### `POST /api/config/lock`
+
+Lock the configuration to prevent UI from overwriting REST-set values. Auto-unlocks on optimization stop/complete/failure.
+
+```bash
+curl -s -X POST $BASE_URL/api/config/lock
+```
+
+**Response:** `{"success": true, "locked": true}`
+
+#### `POST /api/config/unlock`
+
+Unlock the configuration so the UI can save normally again.
+
+```bash
+curl -s -X POST $BASE_URL/api/config/unlock
+```
+
+**Response:** `{"success": true, "locked": false}`
+
