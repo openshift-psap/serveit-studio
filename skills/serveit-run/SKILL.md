@@ -524,8 +524,14 @@ If the user wants to see all options, print these tables:
 |---------|-------------|------------|
 | `dbo-prefill-token-threshold` | Min tokens to trigger Dual Batch Overlap on prefill. | 32 |
 | `dbo-decode-token-threshold` | Min tokens to trigger Dual Batch Overlap on decode. | 32 |
-| `moe-backend` | MoE expert computation backend. | deep_gemm when MoE detected |
-| `all2all-backend` | MoE all-to-all communication backend. | Auto per role |
+| `moe-backend` | MoE expert computation backend (deep_gemm for DeepSeek-style). | deep_gemm when MoE detected |
+| `all2all-backend` | MoE all-to-all communication backend. High-throughput for prefill, low-latency for decode. | Auto per role |
+
+**Nemotron / Mamba-hybrid specific:**
+| Setting | Description | Auto value |
+|---------|-------------|------------|
+| `prefix-cache-retention` | Prefix cache retention interval. Set to 0 for Mamba-hybrid models to improve multi-turn cache hit rates. | vLLM default (set 0 for Nemotron) |
+| `ssm-conv-state-layout` | SSM convolution state layout. Required for Mamba-hybrid models like Nemotron. | vLLM default (set DS for Nemotron) |
 
 **Toggle flags:**
 | Flag | Description | Auto |
@@ -539,6 +545,8 @@ If the user wants to see all options, print these tables:
 | `enable-auto-tool-choice` | Auto tool/function calling. | Off |
 | `enable-bidirectional-kv` | Bidirectional KV transfer. For Nemotron and agentic serving. | Off |
 | `disable-custom-all-reduce` | Disable optimized GPU-to-GPU comms. Only if NCCL errors. | Off |
+| `vllm-debug-logs` | Verbose vLLM engine logs. Very noisy, only for troubleshooting. | Off |
+| `nccl-debug-logs` | Verbose NCCL communication logs. Very noisy, only for multi-GPU networking issues. | Off |
 
 Let the user override specific values. **Validate overrides before applying:**
 - `gpu-memory-utilization` must be between 0.5 and 0.99. Below 0.5 wastes GPU. Above 0.99 will OOM.
