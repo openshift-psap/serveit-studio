@@ -365,13 +365,71 @@ If the user says defaults, use:
 - EPP preset: balanced
 - Auto-tune vLLM: on (automatically adjusts GPU memory utilization, batch sizes, block sizes)
 
-If the user wants to customize, explain:
-- **Test duration** — How long each individual test runs. 300s (5 min) is a good balance. Shorter = faster overall but less stable results. Longer = more accurate but takes longer.
-- **EPP preset** — How the inference gateway routes requests across pods. **If the user selected prefix cache simulation (any mode with >0%), recommend `cache_optimized`** since it routes requests to pods that already have the prefix cached — this maximizes the benefit of prefix caching. Explain all options:
-  - `balanced` — equal weight to cache, queue depth, and KV utilization. Good default when no cache simulation is used.
-  - `cache_optimized` — prioritize routing to pods that have the prompt cached. **Recommended when prefix cache is enabled** — it ensures requests with shared prefixes land on the same pod, maximizing cache hits.
-  - `queue_balanced` — prioritize routing to the least busy pod. Good for uniform workloads with no caching.
-  - `latency_aware` — prioritize lowest response time. Good when strict latency SLAs matter more than throughput.
+If the user wants to customize, walk through these sections. For each, explain the default and ask if they want to change it. **Most users should keep defaults** — only change if they have a specific reason.
+
+#### Search strategy
+
+**Test duration** — How long each individual test runs. Default: 300s (5 min). Shorter = faster overall but less stable results. Longer = more accurate.
+
+**GPU split combinations (TP pair depth)** — How many Prefill TP x Decode TP combinations to explore. The optimizer first measures all TP values, then crosses the best ones for P/D testing.
+- `1` — Only the single best pair. Fastest.
+- `2` — Top-2 x Top-2 = up to 4 pairs. Good balance.
+- `3` — Top-3 x Top-3 = up to 9 pairs. More coverage.
+- `4` — All combinations = up to 16 pairs. Most thorough. **(Default)**
+
+**P/D pod balance search** — For each TP pair, how many prefill-vs-decode pod ratios to test.
+- `smart` — Calculates the optimal ratio from throughput data, tests ~3 ratios around it. Much faster, same accuracy. **(Default, recommended)**
+- `exhaustive` — Tests every valid ratio. Guarantees nothing is missed but can run 50+ tests.
+
+#### Response time guarantee (optional)
+
+Ask: **"Do you have a latency SLA — a maximum acceptable time before the user sees the first word?"**
+
+If yes:
+- **Max response time in ms** — e.g., 500ms, 1000ms, 2000ms
+- **Apply to which percentile:**
+  - P50 = typical request
+  - P90 = 90% of requests (recommended)
+  - P95 = 95% of requests
+  - P99 = almost every request (strictest)
+
+If no, skip this — no latency constraint.
+
+#### Calibrated load testing (optional)
+
+Ask: **"After finding the best config, do you want to re-test it at realistic production load levels?"**
+
+- **Calibrated load validation** — The optimization stress-tests configs at max load (which inflates latency). This step computes a sustainable concurrency where queuing stays reasonable, then re-tests at that realistic load. **Recommended for production deployments.**
+- **Concurrency sweep** — Runs the best configs at multiple concurrency levels to map the full performance curve. Generates charts showing where latency degrades (the "knee point"). **Recommended for capacity planning.**
+
+Default: both off (faster). Turn on if the user wants production-grade results.
+
+#### Cache hit sweep (optional)
+
+Only relevant if the user enabled prefix cache simulation. Ask: **"Do you want to test how different cache hit ratios affect performance?"**
+
+- **Cache hit sweep** — Tests best configs at multiple cache hit levels (e.g., 0%, 20%, 40%, 60%, 80%). Shows how much prefix caching helps.
+- **Cache hit sweep at calibrated concurrency** — Same but at realistic production load.
+
+Default: off.
+
+#### EPP preset
+
+How the inference gateway routes requests across pods. **If the user selected prefix cache simulation (any mode with >0%), recommend `cache_optimized`** since it routes requests to pods that already have the prefix cached. Explain all options:
+- `balanced` — equal weight to cache, queue depth, and KV utilization. Good default when no cache simulation is used.
+- `cache_optimized` — prioritize routing to pods that have the prompt cached. **Recommended when prefix cache is enabled.**
+- `queue_balanced` — prioritize routing to the least busy pod. Good for uniform workloads with no caching.
+- `latency_aware` — prioritize lowest response time. Good when strict latency SLAs matter more than throughput.
+
+#### vLLM engine settings
+
+Ask: **"Do you want to auto-tune the vLLM engine, or use upstream defaults?"**
+
+- **Auto-tune (recommended, default: on)** — ServeIt Studio automatically optimizes `gpu_memory_utilization`, `max_num_seqs`, `max_num_batched_tokens`, `block_size`, and `max_model_len` based on your model, GPU, and workload. This typically gives 20-40% better performance than upstream defaults.
+- **Upstream defaults** — Use vLLM's built-in defaults. Good for comparing against a baseline.
+- **Custom overrides** — The user can override specific settings (e.g., force a specific `gpu_memory_utilization` or `dtype`). Only for advanced users who know what they're tuning.
+
+Most users should keep auto-tune on and not touch individual settings.
 
 ### Summary before starting
 
