@@ -306,7 +306,17 @@ for m in matches[:10]:
 
 **Recommend FP8 quantized models** (names containing `FP8`) when available — they use half the GPU memory of FP16/BF16 while maintaining quality, which means more room for KV cache and higher throughput.
 
-After the user picks a model, confirm: "Great, I'll optimize **<model>** on your **<N>x <GPU_MODEL>** cluster."
+After the user picks a model, **validate it exists on HuggingFace** before proceeding:
+
+```bash
+curl -sk -o /dev/null -w "%{http_code}" "https://huggingface.co/api/models/<MODEL_ID>"
+```
+
+- **200** — model exists, proceed
+- **401** — model is gated, needs HF token. Retry with token: `curl -sk -H "Authorization: Bearer <TOKEN>" ...`
+- **404** — model doesn't exist. Check for typos, suggest the closest match from the gallery.
+
+Then confirm: "Great, I'll optimize **<model>** on your **<N>x <GPU_MODEL>** cluster."
 
 ### 3c. What's your expected workload?
 
