@@ -271,8 +271,8 @@ class PrereqManager:
             if optimizer_config:
                 self._ensure_network_resources(optimizer_config, log)
 
-            # Create per-node NFS PVCs if per-node storage is enabled
-            if optimizer_config and getattr(optimizer_config, 'per_node_storage', False):
+            # Create per-node NFS PVCs if per-node storage is enabled (skip for hostPath/local disk)
+            if optimizer_config and getattr(optimizer_config, 'per_node_storage', False) and not getattr(optimizer_config, 'local_disk_path', None):
                 node_nfs_pvcs = self._ensure_per_node_pvcs(optimizer_config, log)
                 if node_nfs_pvcs:
                     optimizer_config.node_nfs_pvcs = node_nfs_pvcs
