@@ -23,6 +23,8 @@ spec:
       restartPolicy: OnFailure
 {% if local_disk_path is defined and local_disk_path %}
       serviceAccountName: llm-d-modelserver
+      securityContext:
+        runAsUser: 0
 {% if target_node is defined and target_node %}
       nodeSelector:
         kubernetes.io/hostname: {{ target_node }}
