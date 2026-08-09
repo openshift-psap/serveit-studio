@@ -879,6 +879,7 @@ class SystemScanner:
         LOCAL_PROVISIONERS = {
             'topolvm.io', 'kubernetes.io/no-provisioner', 'rancher.io/local-path',
             'microk8s.io/hostpath', 'openebs.io/local', 'local.csi.k8s.io',
+            'kubevirt.io.hostpath-provisioner', 'kubevirt.io/hostpath-provisioner',
         }
 
         try:
@@ -897,7 +898,7 @@ class SystemScanner:
             except Exception:
                 pass
 
-            # Get PVs to check local disk availability per GPU node
+            # Get PVs to check local disk availability per node
             pv_by_sc = {}
             try:
                 pv_data = self.kubectl.run_json(['get', 'pv'])
@@ -906,15 +907,36 @@ class SystemScanner:
                     phase = pv.get('status', {}).get('phase', '')
                     if phase not in ('Available', 'Bound'):
                         continue
-                    # Extract node affinity
+                    # Extract node from nodeAffinity
                     na = pv.get('spec', {}).get('nodeAffinity', {})
                     terms = na.get('required', {}).get('nodeSelectorTerms', [])
                     for term in terms:
                         for expr in term.get('matchExpressions', []):
                             if expr.get('key') == 'kubernetes.io/hostname':
                                 for node in expr.get('values', []):
-                                    if node in gpu_nodes:
-                                        pv_by_sc.setdefault(sc_name, set()).add(node)
+                                    pv_by_sc.setdefault(sc_name, set()).add(node)
+            except Exception:
+                pass
+
+            # Also check HPP backing PVCs for hostpath provisioners
+            try:
+                hpp_pvcs = self.kubectl.run_json(['get', 'pvc', '-n', 'hostpath-provisioner'])
+                for pvc in hpp_pvcs.get('items', []):
+                    sc_name = pvc.get('spec', {}).get('storageClassName', '')
+                    phase = pvc.get('status', {}).get('phase', '')
+                    if phase != 'Bound':
+                        continue
+                    # HPP PVC names contain the node name
+                    pvc_name = pvc['metadata']['name']
+                    for node in gpu_nodes:
+                        short = node.split('.')[-1] if '.' in node else node
+                        if short in pvc_name or node in pvc_name:
+                            # Find which SC this HPP pool serves
+                            for sc_item in sc_data.get('items', []):
+                                params = sc_item.get('parameters', {})
+                                prov = sc_item.get('provisioner', '')
+                                if 'hostpath-provisioner' in prov:
+                                    pv_by_sc.setdefault(sc_item['metadata']['name'], set()).add(node)
             except Exception:
                 pass
 
@@ -924,8 +946,8 @@ class SystemScanner:
                 reclaim_policy = sc.get('reclaimPolicy', 'Delete')
                 volume_binding_mode = sc.get('volumeBindingMode', 'Immediate')
                 allow_expansion = sc.get('allowVolumeExpansion', False)
-                is_local = provisioner in LOCAL_PROVISIONERS or provisioner.endswith('/local-path')
-                gpu_covered = len(pv_by_sc.get(name, set())) if is_local else 0
+                is_local = provisioner in LOCAL_PROVISIONERS or provisioner.endswith('/local-path') or 'hostpath' in provisioner.lower()
+                gpu_covered = len(pv_by_sc.get(name, set()) & gpu_nodes) if is_local and gpu_nodes else len(pv_by_sc.get(name, set())) if is_local else 0
 
                 # Infer access mode from provisioner type
                 RWX_PROVISIONERS = {'nfs', 'example.com/nfs', 'nfs.csi.k8s.io',
