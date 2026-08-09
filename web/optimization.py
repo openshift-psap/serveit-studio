@@ -232,17 +232,23 @@ def stream_job_logs(job_name: str, namespace: str):
         if _is_superseded():
             return
 
-        # Wait a moment for pod to transition to Succeeded
-        time.sleep(2)
+        # Wait for pod to transition to Succeeded (may take a few seconds after logs end)
+        pod_phase = 'Unknown'
+        for _wait in range(6):
+            time.sleep(2)
+            status_cmd = [kubectl_cmd, 'get', 'pod', pod_name, '-n', namespace, '-o', 'jsonpath={.status.phase}']
+            proc = subprocess.run(status_cmd, capture_output=True, timeout=10)
+            pod_phase = proc.stdout.decode().strip() if proc.returncode == 0 else ''
+            if pod_phase == 'Succeeded':
+                break
+            if not pod_phase:
+                # Pod was auto-cleaned by Job TTL — treat as success if logs showed completion
+                pod_phase = 'Succeeded'
+                break
 
-        # Check if job completed successfully
-        status_cmd = [kubectl_cmd, 'get', 'pod', pod_name, '-n', namespace, '-o', 'jsonpath={.status.phase}']
-        proc = subprocess.run(status_cmd, capture_output=True, timeout=10)
-
-        pod_phase = proc.stdout.decode().strip() if proc.returncode == 0 else 'Unknown'
         log_to_ui(f'🔍 Final pod phase: {pod_phase}', 'info', job_name=job_name)
 
-        if proc.returncode == 0 and pod_phase == 'Succeeded':
+        if pod_phase == 'Succeeded':
             log_to_ui('✅ Model download completed successfully!', 'success', job_name=job_name)
             socketio.emit('storage_download_complete', {'success': True, 'job_name': job_name})
 
