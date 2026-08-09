@@ -34,6 +34,175 @@ def get_status():
             'config': state['current_config']
         })
 
+@app.route('/api/scan', methods=['POST'])
+def api_scan_cluster():
+    """Trigger a cluster scan and return results (REST alternative to Socket.IO scan_cluster)."""
+    try:
+        from core.system_scanner import SystemScanner
+        from core.version_scanner import scan_versions
+        from core.providers import ProviderRegistry
+        from core.web_deployer import NetworkIntegrator
+
+        scanner = SystemScanner(namespace=TARGET_NAMESPACE)
+        resources = scanner.scan_cluster()
+
+        provider_name = 'unknown'
+        network_type = 'tcp'
+        dranet_available = False
+        try:
+            provider = ProviderRegistry.detect_provider(kubectl_runner=scanner.kubectl)
+            provider_name = provider.get_provider_id()
+            integrator = NetworkIntegrator(provider, scanner.kubectl)
+            selected_network = integrator._select_network_type()
+            network_type = selected_network.value
+            dranet_available = (network_type == 'dra')
+        except Exception:
+            pass
+
+        infra_versions = {}
+        try:
+            infra_versions = scan_versions(scanner.kubectl)
+        except Exception:
+            pass
+
+        nodes_detail = []
+        for node in resources.nodes:
+            node_nics = [{'name': n.name, 'type': n.type, 'vendor': n.vendor,
+                          'model': n.model, 'speed_gbps': n.speed_gbps, 'count': n.count}
+                         for n in node.network_interfaces]
+            nodes_detail.append({
+                'name': node.name, 'gpus': node.gpus, 'gpu_model': node.gpu_model,
+                'gpu_memory_mb': node.gpu_memory_mb, 'cpu_cores': node.cpu_cores,
+                'memory_gb': node.memory_gb, 'has_rdma': node.has_rdma, 'nics': node_nics,
+            })
+
+        from web.realtime import _scan_networks, _check_lws_vct, _detect_node_nfs_classes, _detect_gateway_class
+
+        result = {
+            'total_gpus': resources.total_gpus,
+            'gpus_per_node': resources.gpus_per_node,
+            'max_gpus_per_node': resources.max_gpus_per_node,
+            'gpu_node_count': resources.gpu_node_count,
+            'gpu_model': resources.gpu_model,
+            'gpu_memory_per_gpu_mb': resources.gpu_memory_per_gpu_mb,
+            'total_cpu_cores': resources.total_cpu_cores,
+            'total_memory_gb': resources.total_memory_gb,
+            'node_count': resources.node_count,
+            'has_rdma': resources.has_rdma,
+            'tp_options': resources.get_tp_options(),
+            'nodes_detail': nodes_detail,
+            'storage_classes': [
+                {'name': sc.name, 'provisioner': sc.provisioner, 'is_local': getattr(sc, 'is_local', False),
+                 'gpu_nodes_covered': getattr(sc, 'gpu_nodes_covered', 0),
+                 'access_mode': getattr(sc, 'access_mode', 'ReadWriteOnce'),
+                 'local_path': getattr(sc, 'local_path', '')}
+                for sc in resources.storage_classes
+                if sc.provisioner != 'kubernetes.io/no-provisioner'
+            ],
+            'provider': provider_name,
+            'network_type': network_type,
+            'dranet_available': dranet_available,
+            'available_networks': _scan_networks(scanner),
+            'gateway_class': _detect_gateway_class(scanner),
+            'infra_versions': infra_versions,
+        }
+
+        # Save to config so UI can use it
+        with state_lock:
+            if not state['current_config']:
+                state['current_config'] = {}
+            state['current_config']['cluster_resources'] = result
+            save_state()
+
+        return jsonify(result)
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+
+@app.route('/api/setup_storage', methods=['POST'])
+def api_setup_storage():
+    """Setup storage and start model download (REST alternative to Socket.IO setup_storage).
+    Triggers the same flow as the Socket.IO event — returns immediately, download runs async."""
+    try:
+        from web.realtime import handle_setup_storage
+        data = request.get_json() or {}
+        handle_setup_storage(data)
+        return jsonify({'success': True, 'message': 'Storage setup started'})
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+
+@app.route('/api/start_optimization', methods=['POST'])
+def api_start_optimization():
+    """Start a new optimization run (REST alternative to Socket.IO start_optimization)."""
+    try:
+        from web.realtime import handle_start_optimization
+        data = request.get_json() or {}
+        handle_start_optimization(data)
+        return jsonify({'success': True, 'message': 'Optimization started'})
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+
+@app.route('/api/resume_optimization', methods=['POST'])
+def api_resume_optimization():
+    """Resume a stopped optimization run (REST alternative to Socket.IO resume_optimization)."""
+    try:
+        from web.realtime import handle_resume_optimization
+        data = request.get_json() or {}
+        handle_resume_optimization(data)
+        return jsonify({'success': True, 'message': 'Optimization resumed'})
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+
+@app.route('/api/generate_test_plan', methods=['POST'])
+def api_generate_test_plan():
+    """Generate a test plan (REST alternative to Socket.IO generate_test_plan)."""
+    try:
+        from web.realtime import handle_generate_test_plan
+        data = request.get_json() or {}
+        handle_generate_test_plan(data)
+        return jsonify({'success': True, 'message': 'Test plan generation started'})
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+
+@app.route('/api/cleanup', methods=['POST'])
+def api_cleanup_deployment():
+    """Clean up deployed test pods and LWS resources (REST alternative to Socket.IO cleanup_deployment)."""
+    try:
+        from web.realtime import handle_cleanup_deployment
+        handle_cleanup_deployment({})
+        return jsonify({'success': True, 'message': 'Cleanup started'})
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+
+@app.route('/api/pvcs')
+def api_list_pvcs():
+    """List PVCs in the target namespace."""
+    try:
+        import subprocess
+        r = subprocess.run(
+            ['kubectl', 'get', 'pvc', '-n', TARGET_NAMESPACE, '-o', 'json'],
+            capture_output=True, text=True, timeout=15)
+        if r.returncode != 0:
+            return jsonify({'success': False, 'pvcs': [], 'error': r.stderr[:200]}), 500
+        data = json.loads(r.stdout)
+        pvcs = []
+        for pvc in data.get('items', []):
+            pvcs.append({
+                'name': pvc['metadata']['name'],
+                'size': pvc['spec']['resources']['requests'].get('storage', '?'),
+                'storage_class': pvc['spec'].get('storageClassName', '?'),
+                'status': pvc['status'].get('phase', '?'),
+            })
+        return jsonify({'success': True, 'pvcs': pvcs})
+    except Exception as e:
+        return jsonify({'success': False, 'pvcs': [], 'error': str(e)}), 500
+
+
 @app.route('/api/config', methods=['GET', 'POST'])
 def handle_config():
     """Get or update configuration."""
