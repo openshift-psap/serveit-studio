@@ -620,11 +620,16 @@ This section configures how pods are deployed and communicate. Most of this is a
 
 **Container images:**
 
-The cluster scan detects installed versions. Show the user what will be used:
-- **Inference engine image** — the vLLM container (e.g., `ghcr.io/llm-d/llm-d-cuda:v0.8.0`). Use the version matching the cluster's installed llm-d version if detected.
-- **EPP scheduler image** — the request router (e.g., `ghcr.io/llm-d/llm-d-router-endpoint-picker:v0.9.0`).
+The cluster scan detects installed infrastructure versions. Show what was detected and ask:
 
-Ask: **"The cluster is running llm-d <version>. I'll use matching images. Want to override with a different version?"**
+**"Which container images would you like to use?"**
+- **Latest GA release** — use the newest stable versions:
+  - Inference engine: `ghcr.io/llm-d/llm-d-cuda:<latest_tag>`
+  - EPP scheduler: `ghcr.io/llm-d/llm-d-router-endpoint-picker:<latest_tag>`
+- **Match cluster versions** — if the scan detected specific versions already installed, use those for consistency.
+- **Custom images** — provide your own image URLs (e.g., for testing a pre-release or custom build).
+
+To find the latest available tags, use the `fetch_image_tags` API or check the registry directly. Show the user the top 3-5 stable tags (exclude `latest`, `dev`, `nightly` — prefer versioned tags like `v0.8.0`, `v0.9.0`).
 
 **Network type:**
 
