@@ -125,6 +125,30 @@ def _emit_socketio_event(event_name, data):
     socketio.emit(event_name, data)
 
 
+@app.route('/api/set_state', methods=['POST'])
+def api_set_state():
+    """Set the UI wizard step and running state. Persists to DB so the UI reflects the change."""
+    data = request.get_json() or {}
+    current_step = data.get('current_step')
+    running = data.get('running')
+    try:
+        from datetime import datetime
+        with get_db() as conn:
+            if current_step is not None:
+                conn.execute('UPDATE ui_session_state SET current_step = ?, updated_at = ? WHERE id = 1',
+                             (current_step, datetime.now().isoformat()))
+            if running is not None:
+                conn.execute('UPDATE ui_session_state SET optimization_running = ?, updated_at = ? WHERE id = 1',
+                             (1 if running else 0, datetime.now().isoformat()))
+                with state_lock:
+                    state['optimization_running'] = bool(running)
+                    save_state()
+                socketio.emit('status_update', {'running': bool(running)})
+        return jsonify({'success': True})
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+
 @app.route('/api/setup_storage', methods=['POST'])
 def api_setup_storage():
     """Setup storage and start model download. Returns immediately, work runs async.

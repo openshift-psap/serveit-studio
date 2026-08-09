@@ -852,12 +852,12 @@ After verification passes, remind the user:
 
 ## Step 6: Set UI to Running State
 
-Before polling, set the UI to step 7 (Review & Run) and mark optimization as running. This prevents users from changing settings in the wizard while tests are executing.
+Before polling, set the UI to step 7 (Review & Run) and mark optimization as running. This prevents users from changing settings in the wizard while tests are executing. Use `/api/set_state` which persists to the database — not `/api/config` which only updates in-memory state.
 
 ```bash
-curl -sk -b /tmp/serveit-cookies.txt -X POST "$URL/api/config" \
+curl -sk -b /tmp/serveit-cookies.txt -X POST "$URL/api/set_state" \
   -H 'Content-Type: application/json' \
-  -d '{"current_step": 7, "optimization_running": true}'
+  -d '{"current_step": 7, "running": true}'
 ```
 
 ---
