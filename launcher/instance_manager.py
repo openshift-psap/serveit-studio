@@ -698,9 +698,19 @@ def create_instance(owner_id: int, username: str, name: str,
         instance_id = conn.execute('SELECT last_insert_rowid()').fetchone()[0]
 
     try:
+        sc_name = storage_class_override or storage_class or ''
+        access_mode = 'ReadWriteOnce'
+        if sc_name:
+            r_sc = _kubectl(['get', 'sc', sc_name, '-o', 'jsonpath={.provisioner}'])
+            if r_sc.returncode == 0:
+                prov = r_sc.stdout.strip().lower()
+                if any(k in prov for k in ('nfs', 'cephfs', 'file', 'spectrum-scale', 'efs')):
+                    access_mode = 'ReadWriteMany'
+
         pvc_yaml = _render('pvc.yaml.j2',
             pvc_name=pvc_name, namespace=namespace,
-            storage_size=f'{storage_size or 5}Gi', storage_class=storage_class_override or storage_class or '')
+            storage_size=f'{storage_size or 5}Gi', storage_class=sc_name,
+            access_mode=access_mode)
         r = _kubectl(['apply', '-f', '-', '-n', namespace], input_data=pvc_yaml)
         if r.returncode != 0:
             raise RuntimeError(f"PVC creation failed: {r.stderr}")
