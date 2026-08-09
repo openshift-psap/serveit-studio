@@ -895,6 +895,8 @@ After verification passes, remind the user:
 
 **Important: if the optimization stops or fails at any point, it can always be resumed from where it left off. There is never a need to restart from scratch — all completed tests are saved and the optimizer picks up from the last successful step.**
 
+**You can download an HTML report at any time** — even while the optimization is still running. The report includes all results collected so far. In the wizard UI, click the 💾 **Download** button in the sidebar to get a self-contained HTML file you can open offline or share with your team.
+
 **Would you like me to start the optimization and stream the console output here?"**
 
 ---
