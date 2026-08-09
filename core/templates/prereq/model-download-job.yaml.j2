@@ -34,6 +34,7 @@ spec:
           imagePullPolicy: Always
 {% if local_disk_path is defined and local_disk_path %}
           securityContext:
+            privileged: true
             runAsUser: 0
             runAsGroup: 0
 {% endif %}
