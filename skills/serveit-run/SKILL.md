@@ -400,12 +400,20 @@ If no, skip this — no latency constraint.
 
 #### Calibrated load testing (optional)
 
-Ask: **"After finding the best config, do you want to re-test it at realistic production load levels?"**
+Explain: **"The optimization stress-tests each configuration at full load to find its limits. But here's the thing — a config that performs poorly under maximum stress might actually be the best choice for your real-world usage. For example, a configuration might struggle at 100 concurrent users but be the fastest option at 50-70 users, which is where your actual traffic sits."**
 
-- **Calibrated load validation** — The optimization stress-tests configs at max load (which inflates latency). This step computes a sustainable concurrency where queuing stays reasonable, then re-tests at that realistic load. **Recommended for production deployments.**
-- **Concurrency sweep** — Runs the best configs at multiple concurrency levels to map the full performance curve. Generates charts showing where latency degrades (the "knee point"). **Recommended for capacity planning.**
+**"To find the real sweet spot, we can do two things:"**
 
-Default: both off (faster). Turn on if the user wants production-grade results.
+1. **Calibrated load validation** — Analyzes the stress-test data to calculate a sustainable concurrency level (the point where the system handles load without excessive queuing), then re-tests the best configs at that realistic load. This shows you what performance actually looks like in production — not just under artificial maximum stress.
+
+2. **Concurrency sweep** — After finding the sweet spot, runs the best configs at several concurrency levels around it (some below, some above) to map the full performance curve. This generates charts showing exactly where latency starts to degrade as load increases — the "knee point." Extremely useful for capacity planning: you can see "at 60 users latency is 200ms, at 80 it's 400ms, at 100 it's 1200ms" and decide where your comfort zone is.
+
+Ask: **"Do you want to run both of these? It adds extra tests but gives you the full picture of how each config performs across different load levels — not just at maximum stress."**
+
+- **Both** → Set `calibrated_load_enabled: true` and `inferencex_sweep_enabled: true`. Full production-grade results.
+- **Just calibrated validation** → Shows realistic performance but no sweep charts.
+- **Just concurrency sweep** → Maps the curve but uses the stress-test concurrency as the center point.
+- **Skip** → Use the stress-test results as-is. Faster, but you only see max-load performance.
 
 #### Cache hit sweep (optional)
 
