@@ -251,7 +251,16 @@ Same steps as quick setup, but ask the user at each decision point:
 
 Guide the user through these questions one at a time. Be friendly and explain each concept — many users won't know what ISL/OSL means. Don't dump all questions at once.
 
-### 3a. Which model?
+### 3a. HuggingFace token
+
+Before selecting a model, ask: **"Some models on HuggingFace require an access token (gated models like Llama, Gemma, etc.). Do you have a HuggingFace token, or is `$HF_TOKEN` already set in your environment?"**
+
+1. **Yes, here's my token** — the user provides a token string
+2. **It's set in my environment** — check `$HF_TOKEN`
+3. **No, I'll only use open models** — skip token, only ungated models will work
+4. **I don't know** — explain that they can get a token at https://huggingface.co/settings/tokens and that RedHatAI models are generally open (no token needed)
+
+### 3b. Which model?
 
 Ask: **"Do you already have a specific model in mind, or would you like help choosing one?"**
 
@@ -299,7 +308,7 @@ for m in matches[:10]:
 
 After the user picks a model, confirm: "Great, I'll optimize **<model>** on your **<N>x <GPU_MODEL>** cluster."
 
-### 3b. What's your expected workload?
+### 3c. What's your expected workload?
 
 Ask these in plain language:
 
@@ -331,7 +340,7 @@ Ask these in plain language:
 - Examples: An internal tool might have 5-20 concurrent users. A customer-facing API might have 50-200. A high-traffic service could have 500+.
 - Default: 100 concurrent users
 
-### 3c. What matters most?
+### 3d. What matters most?
 
 Ask: **"What's more important for your use case?"**
 
@@ -340,7 +349,7 @@ Ask: **"What's more important for your use case?"**
 3. **Full coverage** (`balanced`) — "I want to find the best config for both cases and compare them side by side." Runs more tests but gives the most comprehensive results.
 4. **Other** — describe your priority.
 
-### 3d. Do you expect prefix cache hits?
+### 3e. Do you expect prefix cache hits?
 
 Explain: **"Prefix caching speeds up requests that share the same beginning — like a system prompt. If many of your users' requests start with the same text, prefix caching can significantly reduce latency."**
 
@@ -368,7 +377,7 @@ Ask: **"Do your requests share a common prefix (system prompt, instructions, con
 
 For **agentic models** (tool-calling, function-calling, multi-step reasoning): there's typically a very high shared prefix because the system prompt includes tool definitions, instructions, and conversation history. Recommend **shared prefix mode at 60-80%** or **multi-group mode with 5-10 groups at 60-80%** if multiple agents/tools are involved.
 
-### 3e. Any advanced settings?
+### 3f. Any advanced settings?
 
 Ask: **"Do you want to customize any advanced settings, or use the recommended defaults?"**
 
