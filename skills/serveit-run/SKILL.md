@@ -91,7 +91,9 @@ curl -sk -b /tmp/launcher-cookies.txt -X POST "$LAUNCHER_URL/api/clusters" \
   -d "{\"name\": \"gpu-cluster\", \"kubeconfig_data\": $(python3 -c "import json; print(json.dumps(open('/path/to/kubeconfig').read()))")}"
 ```
 
-6. **Scan cluster** and show findings:
+6. **Scan cluster** — tell the user: **"Scanning your cluster to detect GPUs, networking, storage, and installed infrastructure. This may take a moment..."**
+
+Then show findings:
 
 ```bash
 CLUSTER_ID=$(curl -sk -b /tmp/launcher-cookies.txt "$LAUNCHER_URL/api/clusters" | python3 -c "import json,sys; print(json.load(sys.stdin)[0]['id'])")
