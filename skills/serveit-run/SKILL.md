@@ -441,7 +441,7 @@ If the user wants to customize:
 - They can change the number of user loads (fewer = faster, more = smoother curve)
 - They can specify exact user counts instead (e.g., "10, 30, 50, 80, 100, 150")
 - They can test only one best config per architecture instead of all 4 recommendations
-- They can add extra configs beyond the top 4 — even ones that didn't perform well, to see if they shine at lower loads
+- They can add extra configs beyond the top 4. For example, the user might say "take the top 4 and add the next best 2 as well" — in that case set `concurrency_sweep_max_configs: 2` to add 2 more configs ranked by score from the results pool. These extras can reveal configs that looked mediocre under stress but actually perform better at realistic loads.
 
 #### Cache hit sweep (optional)
 
