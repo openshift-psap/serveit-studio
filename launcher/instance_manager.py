@@ -710,7 +710,7 @@ def create_instance(owner_id: int, username: str, name: str,
                  ]},
                 {"apiVersion": "rbac.authorization.k8s.io/v1", "kind": "RoleBinding",
                  "metadata": {"name": "serveit-access", "namespace": workload_namespace},
-                 "subjects": [{"kind": "ServiceAccount", "name": "default", "namespace": workload_namespace}],
+                 "subjects": [{"kind": "ServiceAccount", "name": "default", "namespace": namespace}],
                  "roleRef": {"kind": "Role", "name": "serveit-full-access",
                              "apiGroup": "rbac.authorization.k8s.io"}},
             ]
