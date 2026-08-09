@@ -59,7 +59,7 @@ class DeploymentManager:
         self,
         manifest_content: str,
         log_callback: Optional[Callable[[str], None]] = None,
-        retries: int = 3
+        retries: int = 5
     ) -> bool:
         """
         Deploy a manifest to Kubernetes with retry on transient errors.
@@ -92,7 +92,7 @@ class DeploymentManager:
                 stderr = e.stderr or ''
                 is_transient = any(s in stderr for s in ['EOF', 'webhook', 'timeout', 'connection refused', 'TLS handshake'])
                 if is_transient and attempt < retries:
-                    wait = 5 * (attempt + 1)
+                    wait = 2 + 3 * attempt
                     if log_callback:
                         log_callback(f"⚠️  Transient error, retrying in {wait}s ({attempt + 1}/{retries})...")
                     import time
