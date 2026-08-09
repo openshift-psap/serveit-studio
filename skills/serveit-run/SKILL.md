@@ -742,6 +742,8 @@ curl -sk -c /tmp/serveit-cookies.txt "$URL/login" \
 
 ## Step 5: Save Configuration
 
+Save ALL the settings the user confirmed. Include every field — missing fields will use server defaults which may not match what was agreed.
+
 ```bash
 curl -sk -b /tmp/serveit-cookies.txt -X POST "$URL/api/config" \
   -H 'Content-Type: application/json' \
@@ -749,28 +751,88 @@ curl -sk -b /tmp/serveit-cookies.txt -X POST "$URL/api/config" \
     "model": "<MODEL>",
     "isl": <ISL>,
     "osl": <OSL>,
+    "isl_stdev": <ISL_STDEV or null>,
+    "osl_stdev": <OSL_STDEV or null>,
     "users": <USERS>,
     "goal": "<OBJECTIVE>",
     "max_gpus": <GPUS>,
     "duration": <DURATION>,
     "stop_mode": "duration",
     "storage_class": "<MODEL_CACHE_SC>",
-    "per_node_storage": <true if local disk>,
+    "per_node_storage": <true/false>,
     "local_disk_path": "<path or null>",
     "use_achievable_qps": false,
-    "advanced_vllm_custom_enabled": true,
+    "advanced_vllm_custom_enabled": <true/false>,
     "epp_custom_enabled": true,
     "epp_preset": "<EPP_PRESET>",
     "epp_benchmark": false,
-    "image": "ghcr.io/llm-d/llm-d-cuda:v0.8.0",
-    "scheduler_image": "ghcr.io/llm-d/llm-d-router-endpoint-picker:v0.9.0",
-    "prefix_cache_hit_pct": 0,
-    "tp_pair_top_n": 4,
-    "pd_search_mode": "smart",
+    "image": "<ENGINE_IMAGE>",
+    "scheduler_image": "<SCHEDULER_IMAGE>",
+    "network_type": "<dra/nad/eth0/etc>",
+    "selected_dra_classes": [{"name": "<DEVICE_CLASS>"}],
+    "prefix_cache_hit_pct": <0-100>,
+    "prefix_cache_mode": "<identical/shared_prefix/multi_group>",
+    "prefix_cache_groups": <N>,
+    "tp_pair_top_n": <1-4>,
+    "pd_search_mode": "<smart/exhaustive>",
+    "allow_asymmetric_tp": <true/false>,
+    "latency_constraint_enabled": <true/false>,
+    "latency_constraint_ms": <MS or 500>,
+    "latency_constraint_percentile": "<p50/p90/p95/p99>",
+    "calibrated_load_enabled": <true/false>,
+    "inferencex_sweep_enabled": <true/false>,
+    "concurrency_sweep_count": <N or null>,
+    "concurrency_sweep_step_pct": <20>,
+    "concurrency_sweep_all_configs": <true/false>,
+    "concurrency_sweep_max_configs": <N or null>,
+    "concurrency_sweep_use_epp_tuned": <true/false>,
+    "cache_sweep_enabled": <true/false>,
     "workload_mode": "synthetic",
     "rate_type": "concurrent"
   }'
 ```
+
+### Verify configuration was saved
+
+After saving, read back the config and verify the critical fields match what was agreed:
+
+```bash
+curl -sk -b /tmp/serveit-cookies.txt "$URL/api/config" | python3 -c "
+import json, sys
+cfg = json.load(sys.stdin)
+checks = {
+    'model': '<MODEL>',
+    'isl': <ISL>,
+    'osl': <OSL>,
+    'users': <USERS>,
+    'goal': '<OBJECTIVE>',
+    'max_gpus': <GPUS>,
+    'storage_class': '<SC>',
+    'per_node_storage': <true/false>,
+    'local_disk_path': '<PATH or None>',
+    'network_type': '<NETWORK>',
+    'epp_preset': '<EPP_PRESET>',
+    'prefix_cache_hit_pct': <PCT>,
+    'tp_pair_top_n': <DEPTH>,
+    'calibrated_load_enabled': <true/false>,
+    'inferencex_sweep_enabled': <true/false>,
+}
+ok = True
+for k, expected in checks.items():
+    actual = cfg.get(k)
+    match = str(actual) == str(expected)
+    status = '✅' if match else '❌'
+    if not match:
+        ok = False
+        print(f'{status} {k}: expected {expected}, got {actual}')
+if ok:
+    print('✅ All settings verified — ready to start')
+else:
+    print('❌ Some settings did not save correctly — fix before starting')
+"
+```
+
+If any field doesn't match, re-save before proceeding. Do NOT start the optimization with incorrect settings.
 
 ---
 
