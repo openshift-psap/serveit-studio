@@ -645,6 +645,8 @@ Then list only the detected options. The scan result contains `network_type` (th
 
 Tell the user which one was auto-detected as the best fit and why. For multi-node inference, RDMA-capable networking (DRA, SR-IOV) makes a significant performance difference.
 
+**When using DRA:** The scan returns `device_classes` for each DRA option. Look for a device class with `kind: gpu_nic_pair` — this ensures each pod gets a GPU and NIC that are on the same PCIe bus, giving the best RDMA performance. If a `gpu_nic_pair` class exists (e.g., `composite-gpu-nic-pair`), use it. If only `gpu` classes exist (no NIC pairing), the pod will get a GPU but the NIC assignment won't be topology-aware — still works but may have lower RDMA throughput. Set the chosen device class in `selected_dra_classes` config field.
+
 **Storage class for model cache:**
 
 Already determined during setup (Step 2). Confirm with the user:
