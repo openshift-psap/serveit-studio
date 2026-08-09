@@ -1,3 +1,31 @@
+    <!-- REST/API Control Overlay -->
+    <div class="modal-overlay" id="rest-control-modal">
+        <div class="modal-content">
+            <div class="modal-header" style="background: linear-gradient(135deg, #7c3aed 0%, #5b21b6 100%);">
+                <div class="modal-header-icon">🤖</div>
+                <div class="modal-header-text">
+                    <h3>API Control Active</h3>
+                    <p>Configuration is managed externally</p>
+                </div>
+            </div>
+            <div class="modal-body">
+                <div class="modal-warning" style="background: linear-gradient(135deg, #f5f3ff 0%, #ede9fe 100%); border-left-color: #7c3aed;">
+                    <div class="modal-warning-title" style="color: #5b21b6;">This session is currently being controlled via the REST API</div>
+                    <p style="color: #4c1d95; font-size: 14px; margin: 8px 0 0 0;">
+                        Configuration changes from the UI are disabled to prevent conflicts with the API. Any running optimization will continue uninterrupted.
+                    </p>
+                    <p style="color: #4c1d95; font-size: 14px; margin: 8px 0 0 0;">
+                        <strong>Are you sure you want to take over?</strong> This will unlock the configuration and allow UI changes. The API will no longer be able to protect its settings.
+                    </p>
+                </div>
+            </div>
+            <div class="modal-footer" style="display: flex; gap: 12px;">
+                <button class="modal-button" style="background: #e2e8f0; color: #475569;" onclick="document.getElementById('rest-control-modal').classList.remove('active')">Cancel</button>
+                <button class="modal-button" style="background: linear-gradient(135deg, #7c3aed 0%, #5b21b6 100%); color: white; box-shadow: 0 4px 12px rgba(124, 58, 237, 0.3);" onclick="takeOverFromApi()">Take Over</button>
+            </div>
+        </div>
+    </div>
+
     <!-- Session Lock Overlay -->
     <div class="modal-overlay" id="session-lock-modal" style="z-index:10000;">
         <div class="modal-content">

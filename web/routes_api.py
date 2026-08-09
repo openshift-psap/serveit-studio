@@ -31,6 +31,7 @@ def get_status():
     with state_lock:
         return jsonify({
             'running': state['optimization_running'],
+            'config_locked': state.get('config_locked', False),
             'config': state['current_config']
         })
 

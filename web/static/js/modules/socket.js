@@ -84,6 +84,31 @@ function takeOverSession() {
     }, 5000);
 }
 
+function takeOverFromApi() {
+    fetch('/api/config/unlock', {method: 'POST'})
+        .then(r => r.json())
+        .then(d => {
+            document.getElementById('rest-control-modal').classList.remove('active');
+            document.getElementById('rest-control-indicator').style.display = 'none';
+            logToConsole('🔓 API control released — UI is now in control', 'success');
+        })
+        .catch(e => logToConsole('Failed to unlock: ' + e, 'error'));
+}
+
+function checkApiControlStatus() {
+    fetch('/api/status')
+        .then(r => r.json())
+        .then(d => {
+            var cfg = d.config || {};
+            if (cfg.config_locked) {
+                document.getElementById('rest-control-indicator').style.display = '';
+            }
+        })
+        .catch(() => {});
+}
+
+socket.on('status_update', function() { setTimeout(checkApiControlStatus, 1000); });
+
 // Re-load config on reconnect (e.g. after server restart)
 // The server's connect handler will either grant access or send session_locked
 socket.on('connect', () => {
