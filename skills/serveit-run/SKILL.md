@@ -850,7 +850,19 @@ After verification passes, remind the user:
 
 ---
 
-## Step 6: Check Status & Poll
+## Step 6: Set UI to Running State
+
+Before polling, set the UI to step 7 (Review & Run) and mark optimization as running. This prevents users from changing settings in the wizard while tests are executing.
+
+```bash
+curl -sk -b /tmp/serveit-cookies.txt -X POST "$URL/api/config" \
+  -H 'Content-Type: application/json' \
+  -d '{"current_step": 7, "optimization_running": true}'
+```
+
+---
+
+## Step 7: Check Status & Poll
 
 ```bash
 # Check if running
@@ -874,7 +886,7 @@ done
 
 ---
 
-## Step 7: Get Results
+## Step 8: Get Results
 
 ```bash
 RUN_ID=$(curl -sk -b /tmp/serveit-cookies.txt "$URL/api/runs" | python3 -c "import json,sys; print(json.load(sys.stdin)[0]['id'])")
@@ -899,7 +911,7 @@ if best.get('most_efficient'):
 
 ---
 
-## Step 8: Download Manifests
+## Step 9: Download Manifests
 
 ```bash
 curl -sk -b /tmp/serveit-cookies.txt "$URL/api/run/$RUN_ID/config/<CONFIG_NAME>/manifests"
@@ -908,7 +920,7 @@ curl -sk -b /tmp/serveit-cookies.txt "$URL/api/run/$RUN_ID/config/<CONFIG_NAME>/
 
 ---
 
-## Step 9: Stop / Resume / Sync
+## Step 10: Stop / Resume / Sync
 
 ```bash
 # Stop
