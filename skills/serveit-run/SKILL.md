@@ -241,11 +241,51 @@ Guide the user through these questions one at a time. Be friendly and explain ea
 
 ### 3a. Which model?
 
-Ask: **"Which model do you want to optimize?"**
+Ask: **"Do you already have a specific model in mind, or would you like help choosing one?"**
 
-Give examples: `google/gemma-4-26B-A4B`, `RedHatAI/Meta-Llama-3.1-70B-Instruct-FP8-dynamic`, `meta-llama/Llama-3.1-8B-Instruct`
+#### If the user has a model in mind
 
-If the model is gated (requires HuggingFace login), ask for an HF token or check if `$HF_TOKEN` is set.
+Great — just confirm the HuggingFace model path (e.g., `google/gemma-4-26B-A4B`). If the model is gated (requires HuggingFace login), ask for an HF token or check if `$HF_TOKEN` is set.
+
+#### If the user needs help choosing
+
+Walk them through it by asking about their use case:
+
+**"What will you use this model for?"**
+- **General chat / assistant** → Recommend Llama, Gemma, Qwen, or Granite instruct models
+- **Code generation / coding assistant** → Recommend Code Specialists (Codestral, DeepSeek-Coder, StarCoder) or Devstral
+- **Document processing / summarization** → Recommend larger context models (Llama 70B, Qwen 32B, Granite)
+- **Agentic / tool calling** → Recommend models with tool-call support (Llama 3.1+, Qwen 2.5+, Mistral, Granite)
+- **Reasoning / math** → Recommend DeepSeek R1, Qwen3 (thinking mode), Phi
+- **Multilingual** → Recommend Aya Expanse, Qwen, Mistral
+- **Embedding / RAG** → Recommend Embedding models (BGE, nomic-embed)
+
+Then ask about size preference based on the available GPUs:
+
+**"How large a model do you want to run?"**
+- **Small (1-4B)** — Runs on 1 GPU. Fast, good for simple tasks. Examples: Gemma 4B, Granite 2B, Phi-3 Mini
+- **Medium (7-14B)** — Runs on 1-2 GPUs. Good balance of quality and speed. Examples: Llama 8B, Gemma 12B, Mistral Nemo 12B
+- **Large (27-70B)** — Needs 2-8 GPUs. High quality, slower. Examples: Llama 70B, Qwen 32B, Gemma 27B
+- **Extra Large (70B+)** — Needs 8+ GPUs. Best quality. Examples: Llama 405B, Nemotron 120B, GPT-OSS 120B
+- **MoE (Mixture of Experts)** — Large model with faster inference (only activates some parameters per token). Examples: Gemma 4 26B-A4B, Qwen3 MoE, DeepSeek V3/V4
+
+Query the Model Gallery for suggestions:
+
+```bash
+curl -sk -b /tmp/serveit-cookies.txt "$URL/api/models" | python3 -c "
+import json, sys
+models = json.load(sys.stdin)
+category = '<CATEGORY>'  # e.g., 'Code', 'Llama', 'Medium (8B)', etc.
+matches = [m for m in models if category.lower() in m.get('category','').lower() or category.lower() in m.get('name','').lower()]
+for m in matches[:10]:
+    print(f'  {m[\"id\"]}')
+    print(f'    {m[\"description\"]} [{m[\"category\"]}]')
+"
+```
+
+**Recommend FP8 quantized models** (names containing `FP8`) when available — they use half the GPU memory of FP16/BF16 while maintaining quality, which means more room for KV cache and higher throughput.
+
+After the user picks a model, confirm: "Great, I'll optimize **<model>** on your **<N>x <GPU_MODEL>** cluster."
 
 ### 3b. What's your expected workload?
 
