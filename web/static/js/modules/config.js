@@ -719,16 +719,25 @@ function restoreClusterResources() {
     if (storageSelect && data.storage_classes && data.storage_classes.length > 0) {
         storageSelect.innerHTML = '<option value="">-- Select a Storage Class --</option>';
         const gpuNodeCount = data.gpu_node_count || 0;
+        const gpusPerNode = data.max_gpus_per_node || 0;
+        // Hide internal backing SCs (LSO local-nvme is internal to HPP)
+        const hiddenSCs = new Set();
         data.storage_classes.forEach(sc => {
+            if (sc.provisioner === 'kubernetes.io/no-provisioner') hiddenSCs.add(sc.name);
+        });
+        data.storage_classes.forEach(sc => {
+            if (hiddenSCs.has(sc.name)) return;
             const option = document.createElement('option');
             option.value = sc.name;
             if (sc.is_local) {
+                const gpuInfo = gpusPerNode ? ` × ${gpusPerNode} GPUs` : '';
                 if (sc.gpu_nodes_covered >= gpuNodeCount && gpuNodeCount > 0) {
-                    option.textContent = `${sc.name} — Local Disk (${sc.gpu_nodes_covered} GPU nodes)`;
+                    option.textContent = `${sc.name} — Local Disk (${sc.gpu_nodes_covered} nodes${gpuInfo})`;
+                } else if (sc.gpu_nodes_covered > 0) {
+                    option.textContent = `${sc.name} — Local Disk (${sc.gpu_nodes_covered}/${gpuNodeCount} nodes${gpuInfo})`;
                 } else {
-                    option.textContent = `${sc.name} — Local Disk (${sc.gpu_nodes_covered}/${gpuNodeCount} GPU nodes)`;
+                    option.textContent = `${sc.name} — Local Disk (no nodes ready)`;
                     option.disabled = true;
-                    option.title = 'Not all GPU nodes have local storage available';
                 }
             } else {
                 const rwx = sc.access_mode === 'ReadWriteMany' ? 'RWX' : 'RWO';
