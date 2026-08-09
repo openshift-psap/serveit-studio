@@ -727,15 +727,23 @@ def create_instance(owner_id: int, username: str, name: str,
                     sa_token = f.read().strip()
                 with open(ca_path) as f:
                     ca_data = _b64.b64encode(f.read().encode()).decode()
-                local_kc = (
-                    f"apiVersion: v1\nkind: Config\nclusters:\n- cluster:\n"
-                    f"    certificate-authority-data: {ca_data}\n"
-                    f"    server: https://{api_host}:{api_port}\n"
-                    f"  name: local\ncontexts:\n- context:\n    cluster: local\n"
-                    f"    namespace: {workload_namespace}\n  name: local\n"
-                    f"current-context: local\nusers:\n- name: local\n  user:\n"
-                    f"    token: {sa_token}\n"
-                )
+                import yaml as _yaml
+                local_kc_dict = {
+                    'apiVersion': 'v1',
+                    'kind': 'Config',
+                    'clusters': [{'cluster': {
+                        'certificate-authority-data': ca_data,
+                        'server': f'https://{api_host}:{api_port}',
+                    }, 'name': 'local'}],
+                    'contexts': [{'context': {
+                        'cluster': 'local',
+                        'namespace': workload_namespace,
+                        'user': 'local',
+                    }, 'name': 'local'}],
+                    'current-context': 'local',
+                    'users': [{'name': 'local', 'user': {'token': sa_token}}],
+                }
+                local_kc = _yaml.dump(local_kc_dict, default_flow_style=False)
                 kubeconfig_secret = f"serveit-kubeconfig-local-{deployment_name}"
                 secret_yaml = json.dumps({
                     "apiVersion": "v1", "kind": "Secret",
