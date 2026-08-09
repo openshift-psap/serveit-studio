@@ -551,6 +551,7 @@ def handle_stop_optimization():
     with state_lock:
         state['_stop_requested'] = True
         state['optimization_running'] = False
+        state['config_locked'] = False
         greenlet = state.get('_optimization_greenlet')
         save_state()
 

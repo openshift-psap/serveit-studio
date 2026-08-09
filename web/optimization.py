@@ -71,9 +71,10 @@ def log_to_ui(message: str, log_type: str = 'info', run_id: int = None, job_name
         print(f"Warning: Failed to persist log to database: {e}")
 
 def _reset_optimization_state(reason: str = ''):
-    """Reset optimization running state and notify the UI."""
+    """Reset optimization running state, unlock config, and notify the UI."""
     with state_lock:
         state['optimization_running'] = False
+        state['config_locked'] = False
         save_state()
     try:
         with get_db() as conn:
