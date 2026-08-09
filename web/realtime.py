@@ -10,9 +10,23 @@ import subprocess
 from datetime import datetime
 from typing import Optional, Dict, List
 
-from flask import session, request, jsonify, send_file
-from flask_socketio import emit
+from flask import session, request, jsonify, send_file, has_request_context
+from flask_socketio import emit as _socketio_emit
 from gevent import spawn, sleep as gsleep
+
+
+def emit(event, *args, **kwargs):
+    """Emit a Socket.IO event. Uses flask_socketio.emit when in a Socket.IO request context,
+    falls back to socketio.emit (broadcast) when called from REST or background tasks."""
+    try:
+        if has_request_context():
+            return _socketio_emit(event, *args, **kwargs)
+    except RuntimeError:
+        pass
+    from web.app_context import socketio
+    kwargs.pop('room', None)
+    kwargs.pop('to', None)
+    return socketio.emit(event, *args, **kwargs)
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
