@@ -292,13 +292,31 @@ After the user picks a model, confirm: "Great, I'll optimize **<model>** on your
 Ask these in plain language:
 
 **"How long are the prompts your users will send?"**
-- This is the Input Sequence Length (ISL) — measured in tokens (roughly 1 token = 4 characters of English text)
-- Examples: A short chat message is ~50-200 tokens. A document summary prompt with context is ~2,000-4,000 tokens. RAG with large context windows can be 8,000-32,000 tokens.
+- This is the Input Sequence Length (ISL) — measured in tokens
+- A token is roughly 4 characters of English text, or about ¾ of a word. So:
+  - 100 tokens ≈ 75 words ≈ a short paragraph
+  - 500 tokens ≈ 375 words ≈ about 1 page of text
+  - 2,000 tokens ≈ 1,500 words ≈ about 4 pages of text
+  - 8,000 tokens ≈ 6,000 words ≈ about 15 pages of text
+- For code, tokens map differently — code has more special characters, so 1 token ≈ 3 characters of code
+- Real-world examples:
+  - "Fix this bug" + a short function: ~100-300 tokens
+  - A code file with context and instructions: ~1,000-2,000 tokens
+  - A full codebase context with multiple files (RAG/copilot): ~4,000-8,000 tokens
+  - System prompt + conversation history + tool definitions (agentic): ~2,000-6,000 tokens
 - Default: 2,000 tokens
 
 **"How long should the model's responses be?"**
 - This is the Output Sequence Length (OSL) — how many tokens the model generates per response
-- Examples: A short answer is ~50-100 tokens. A detailed explanation is ~200-500 tokens. Code generation can be 500-2,000 tokens.
+- Using the same scale:
+  - 50 tokens ≈ 2-3 sentences (a quick answer)
+  - 200 tokens ≈ a short paragraph (an explanation with a code snippet)
+  - 500 tokens ≈ 1 page (a detailed code block with comments)
+  - 2,000 tokens ≈ 4 pages (a full implementation with multiple functions)
+- Real-world examples:
+  - A one-liner fix or short answer: ~50-100 tokens
+  - A function implementation with explanation: ~200-500 tokens
+  - A full class or module generation: ~500-2,000 tokens
 - Default: 100 tokens
 
 **"How many users do you expect to be using this at the same time?"**
