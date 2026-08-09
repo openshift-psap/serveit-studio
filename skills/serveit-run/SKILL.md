@@ -335,12 +335,26 @@ Explain: **"Prefix caching speeds up requests that share the same beginning — 
 Ask: **"Do your requests share a common prefix (system prompt, instructions, context)?"**
 
 - **No / Not sure** → Set prefix cache to 0% (default). The optimization will still enable vLLM's prefix caching, but the benchmark won't simulate cache hits.
-- **Yes, most requests share a system prompt** → Explain the options:
-  - **Identical mode** — All requests use the exact same prompt. Good for: FAQ bots, fixed-instruction APIs. Set cache hit % to how many requests you expect to repeat (e.g., 50-80%).
-  - **Shared prefix mode** — All requests share the first N% of tokens (like a system prompt), but the rest is unique. Good for: Chat apps with a system prompt, RAG with shared context. Set cache hit % to the fraction of the prompt that's shared.
-  - **Multi-group mode** — Requests come in groups (like different tenants or conversation threads), and requests within a group share a prefix. Good for: Multi-tenant platforms, agentic workflows with multiple tools. Set the number of groups (e.g., 5-20 groups).
+- **Yes, most requests share a system prompt** → Explain the options with recommended percentages:
 
-For **agentic models** (tool-calling, function-calling, multi-step reasoning): there's typically a very high shared prefix because the system prompt includes tool definitions, instructions, and conversation history. Recommend **shared prefix mode at 50-80%** or **multi-group mode with 5-10 groups** if multiple agents/tools are involved.
+  - **Identical mode** — All requests use the exact same prompt. The percentage is how many requests are duplicates.
+    - FAQ bot / fixed prompts: **80-90%** (most questions repeat)
+    - Customer support with templates: **50-70%** (many similar queries)
+    - General chat: **20-40%** (some repeat questions)
+
+  - **Shared prefix mode** — All requests share the first N% of tokens (like a system prompt), but the rest is unique. The percentage is the fraction of the prompt that's shared across all requests.
+    - Coding assistant with system prompt: **50-70%** (system prompt is ~half the total input)
+    - RAG with shared context document: **60-80%** (large shared context, small unique query)
+    - Chat with short system prompt: **20-30%** (small system prompt, large user message)
+    - Agentic with tool definitions: **60-80%** (tool schemas + instructions dominate the prompt)
+
+  - **Multi-group mode** — Requests come in groups (different tenants, projects, or conversation threads). Within each group, requests share a prefix. Set the number of groups and the cache hit percentage.
+    - Multi-tenant platform (5-10 customers): **5-10 groups, 60-80%**
+    - Multi-repo coding assistant: **5-10 groups, 50-70%** (each repo has its own context)
+    - Agentic with multiple tools/workflows: **3-5 groups, 70-80%** (each workflow shares a tool set)
+    - Large enterprise with many teams: **10-20 groups, 40-60%**
+
+For **agentic models** (tool-calling, function-calling, multi-step reasoning): there's typically a very high shared prefix because the system prompt includes tool definitions, instructions, and conversation history. Recommend **shared prefix mode at 60-80%** or **multi-group mode with 5-10 groups at 60-80%** if multiple agents/tools are involved.
 
 ### 3e. Any advanced settings?
 
