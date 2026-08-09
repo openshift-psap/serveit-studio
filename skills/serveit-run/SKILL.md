@@ -300,23 +300,18 @@ Ask these in plain language:
   - 8,000 tokens ≈ 6,000 words ≈ about 15 pages of text
 - For code, tokens map differently — code has more special characters, so 1 token ≈ 3 characters of code
 - Real-world examples:
-  - "Fix this bug" + a short function: ~100-300 tokens
-  - A code file with context and instructions: ~1,000-2,000 tokens
-  - A full codebase context with multiple files (RAG/copilot): ~4,000-8,000 tokens
-  - System prompt + conversation history + tool definitions (agentic): ~2,000-6,000 tokens
+  - A short code question: ~100-300 tokens (~400-1,200 characters)
+  - A code file with context: ~1,000-2,000 tokens (~4,000-8,000 characters)
+  - A large codebase context / RAG: ~4,000-8,000 tokens (~16,000-32,000 characters)
+  - System prompt + conversation history + tools (agentic): ~2,000-6,000 tokens (~8,000-24,000 characters)
 - Default: 2,000 tokens
 
 **"How long should the model's responses be?"**
 - This is the Output Sequence Length (OSL) — how many tokens the model generates per response
-- Using the same scale:
-  - 50 tokens ≈ 2-3 sentences (a quick answer)
-  - 200 tokens ≈ a short paragraph (an explanation with a code snippet)
-  - 500 tokens ≈ 1 page (a detailed code block with comments)
-  - 2,000 tokens ≈ 4 pages (a full implementation with multiple functions)
 - Real-world examples:
-  - A one-liner fix or short answer: ~50-100 tokens
-  - A function implementation with explanation: ~200-500 tokens
-  - A full class or module generation: ~500-2,000 tokens
+  - A one-liner fix or short answer: ~50-100 tokens (~200-400 characters)
+  - A function with explanation: ~200-500 tokens (~800-2,000 characters)
+  - A full class or module: ~500-2,000 tokens (~2,000-8,000 characters)
 - Default: 100 tokens
 
 **"How many users do you expect to be using this at the same time?"**
