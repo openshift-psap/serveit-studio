@@ -677,6 +677,47 @@ def create_instance(owner_id: int, username: str, name: str,
             _remote(['apply', '-f', '-'], input=remote_rbac)
         finally:
             os.unlink(tmp_path)
+    else:
+        # Local cluster: create workload namespace and RBAC using launcher's kubectl
+        _kubectl(['create', 'namespace', workload_namespace, '--dry-run=client', '-o', 'yaml',
+                  '|', 'kubectl', 'apply', '-f', '-'], check=False)
+        _kubectl(['apply', '-f', '-', '-n', workload_namespace], input_data=json.dumps({
+            "apiVersion": "v1", "kind": "Namespace",
+            "metadata": {"name": workload_namespace}
+        }))
+        local_rbac = json.dumps({
+            "apiVersion": "v1", "kind": "List", "items": [
+                {"apiVersion": "rbac.authorization.k8s.io/v1", "kind": "Role",
+                 "metadata": {"name": "serveit-full-access", "namespace": workload_namespace},
+                 "rules": [
+                     {"apiGroups": [""], "resources": ["pods", "pods/log", "pods/exec", "services",
+                      "persistentvolumeclaims", "serviceaccounts", "configmaps", "secrets"],
+                      "verbs": ["get", "list", "create", "delete", "patch", "watch"]},
+                     {"apiGroups": ["apps"], "resources": ["deployments", "statefulsets"],
+                      "verbs": ["get", "list", "create", "delete", "patch", "update"]},
+                     {"apiGroups": ["batch"], "resources": ["jobs"],
+                      "verbs": ["get", "list", "create", "delete", "patch", "watch"]},
+                     {"apiGroups": ["leaderworkerset.x-k8s.io"], "resources": ["leaderworkersets"],
+                      "verbs": ["get", "list", "create", "delete", "patch", "update"]},
+                     {"apiGroups": ["rbac.authorization.k8s.io"], "resources": ["roles", "rolebindings"],
+                      "verbs": ["get", "list", "create", "delete", "patch"]},
+                     {"apiGroups": ["inference.networking.k8s.io"], "resources": ["inferencepools"],
+                      "verbs": ["get", "list", "create", "delete", "patch", "watch"]},
+                     {"apiGroups": ["gateway.networking.k8s.io"], "resources": ["gateways", "httproutes"],
+                      "verbs": ["get", "list", "create", "delete", "patch"]},
+                     {"apiGroups": ["networking.istio.io"], "resources": ["destinationrules"],
+                      "verbs": ["get", "list", "create", "delete", "patch"]},
+                     {"apiGroups": ["resource.k8s.io"], "resources": ["resourceclaimtemplates", "resourceclaims"],
+                      "verbs": ["get", "list", "create", "delete", "patch", "update"]},
+                 ]},
+                {"apiVersion": "rbac.authorization.k8s.io/v1", "kind": "RoleBinding",
+                 "metadata": {"name": "serveit-access", "namespace": workload_namespace},
+                 "subjects": [{"kind": "ServiceAccount", "name": "default", "namespace": workload_namespace}],
+                 "roleRef": {"kind": "Role", "name": "serveit-full-access",
+                             "apiGroup": "rbac.authorization.k8s.io"}},
+            ]
+        })
+        _kubectl(['apply', '-f', '-'], input_data=local_rbac)
 
     import secrets
     auto_login_token = secrets.token_urlsafe(32)
