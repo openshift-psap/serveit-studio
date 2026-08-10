@@ -11,6 +11,25 @@
 
 ServeIt Studio deploys real vLLM instances on your cluster, sweeps configurations across aggregated, prefill/decode disaggregated (PD), and expert parallel (EP) architectures, tunes engine parameters from first principles, and returns the optimal setup — ranked by TTFT, throughput, or both.
 
+### Table of Contents
+
+- [Screenshots](#screenshots)
+- [How It Works](#how-it-works)
+- [Prerequisites](#prerequisites)
+- [Deployment](#deployment)
+  - [Quick Start](#quick-start)
+  - [Deployment Modes](#deployment-modes)
+  - [Common Commands](#common-commands)
+  - [Remote Clusters](#remote-clusters)
+- [AI-Assisted Deployment](#ai-assisted-deployment)
+  - [Setup (Claude Code / Cursor)](#setup)
+  - [What the Skill Does](#what-the-skill-does)
+  - [API Reference](#api-reference)
+- [Network Types & Prerequisites](#network-types--prerequisites)
+- [Metrics](#metrics)
+- [Project Structure](#project-structure)
+- [License](#license)
+
 ## Screenshots
 
 ### Multi-Cluster Launcher
