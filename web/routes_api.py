@@ -539,11 +539,16 @@ const data = {data_json};
 const runId = {run_id};
 const hasPD = {str(has_pd).lower()};
 const hasVllm = {str(has_vllm).lower()};
-document.body.innerHTML = buildFullReport(
-    runId, data, data.charts, data.recommendation || {{}},
-    data.summary, data.summary.best_configs || {{}},
-    data.all_results || [], hasPD, hasVllm
-);
+try {{
+    document.body.innerHTML = buildFullReport(
+        runId, data, data.charts, data.recommendation || {{}},
+        data.summary, data.summary.best_configs || {{}},
+        data.all_results || [], hasPD, hasVllm
+    );
+}} catch(e) {{
+    document.body.innerHTML = '<h1>Report Error</h1><pre>' + e.stack + '</pre><h2>Data Summary</h2><pre>' +
+        JSON.stringify({{total_tests: data.summary.total_tests, successful: data.summary.successful_tests, all_results: (data.all_results||[]).length, best_configs: data.summary.best_configs}}, null, 2) + '</pre>';
+}}
 </script>
 </body></html>"""
 
