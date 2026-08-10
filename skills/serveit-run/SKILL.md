@@ -495,7 +495,8 @@ If the user enables concurrency sweep, explain:
 Then set:
 - `concurrency_sweep_count: 8` (or 10 for more detail)
 - `concurrency_sweep_step_pct: 20`
-- `concurrency_sweep_all_configs: true` (include all 4 recommendation configs)
+- `concurrency_sweep_all_configs: true` (include the 4 recommendation configs: Best Balanced, Lowest TTFT, Highest Throughput, Most Efficient)
+- `concurrency_sweep_max_configs: 0` (default — no extra configs beyond the 4 recommendations. User can increase to add more.)
 - `concurrency_sweep_use_epp_tuned: true`
 
 If the user wants to customize:
