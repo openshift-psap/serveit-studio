@@ -2116,7 +2116,8 @@ def handle_setup_storage(data):
                      'tp_pair_top_n', 'pd_search_mode', 'calibrated_load_enabled',
                      'inferencex_sweep_enabled', 'concurrency_sweep_count',
                      'concurrency_sweep_all_configs', 'concurrency_sweep_max_configs',
-                     'concurrency_sweep_use_epp_tuned', 'hf_token']
+                     'concurrency_sweep_step_pct', 'concurrency_sweep_use_epp_tuned',
+                     'max_requests', 'hf_token']
         _opt_data = {k: data[k] for k in _opt_keys if k in data}
         if _opt_data:
             try:
@@ -2219,18 +2220,18 @@ def handle_setup_storage(data):
             resume_run_id = data.get('resume_run_id')
             optimization_data = {
                 'model': model,
-                'isl': data.get('isl', 3000),
-                'osl': data.get('osl', 100),
-                'isl_stdev': data.get('isl_stdev'),
-                'osl_stdev': data.get('osl_stdev'),
-                'turns': data.get('turns', 1),
-                'num_users': data.get('num_users', 100),
-                'optimization_metric': data.get('optimization_goal', 'ttft'),
-                'max_test_duration': data.get('duration', 300),
-                'stop_mode': data.get('stop_mode', 'duration'),
-                'max_requests': data.get('max_requests'),
+                'isl': data.get('isl') or saved.get('isl', 2000),
+                'osl': data.get('osl') or saved.get('osl', 2000),
+                'isl_stdev': data.get('isl_stdev') or saved.get('isl_stdev'),
+                'osl_stdev': data.get('osl_stdev') or saved.get('osl_stdev'),
+                'turns': data.get('turns') or saved.get('turns', 1),
+                'num_users': data.get('num_users') or saved.get('users', 100),
+                'optimization_metric': data.get('optimization_goal') or saved.get('goal', 'ttft'),
+                'max_test_duration': data.get('duration') or saved.get('duration', 300),
+                'stop_mode': data.get('stop_mode') or saved.get('stop_mode', 'duration'),
+                'max_requests': data.get('max_requests') or saved.get('max_requests'),
                 'hf_token': hf_token,
-                'max_gpus': data.get('max_gpus', 16),
+                'max_gpus': data.get('max_gpus') or saved.get('max_gpus', 16),
                 'use_achievable_qps': data.get('use_achievable_qps', False),
                 'latency_constraint_enabled': data.get('latency_constraint_enabled', False),
                 'latency_constraint_ms': data.get('latency_constraint_ms', 500),
