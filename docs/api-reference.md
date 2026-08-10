@@ -300,6 +300,16 @@ curl -s $BASE_URL/api/runs/42/charts | jq '.summary'
 }
 ```
 
+#### `GET /api/runs/<run_id>/report`
+
+Download a self-contained HTML report. Available at any time — includes all results collected so far.
+
+```bash
+curl -s $BASE_URL/api/runs/42/report -o report.html
+```
+
+**Response:** HTML file download (`Content-Disposition: attachment`).
+
 #### `GET /api/runs/<run_id>/configurations`
 
 All test configurations for a run.

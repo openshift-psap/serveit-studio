@@ -1067,7 +1067,15 @@ if best.get('most_efficient'):
 
 ---
 
-## Step 9: Download Manifests
+## Step 9: Download Report & Manifests
+
+Download the HTML report (available at any time, even mid-run):
+
+```bash
+curl -sk -b /tmp/serveit-cookies.txt "$URL/api/runs/$RUN_ID/report" -o report.html
+```
+
+Download deployment manifests for a specific config:
 
 ```bash
 curl -sk -b /tmp/serveit-cookies.txt "$URL/api/run/$RUN_ID/config/<CONFIG_NAME>/manifests"

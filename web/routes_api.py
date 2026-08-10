@@ -498,6 +498,60 @@ def get_run_charts(run_id):
         return jsonify({'error': str(e)}), 500
 
 
+@app.route('/api/runs/<int:run_id>/report')
+def get_run_report(run_id):
+    """Download a self-contained HTML report for an optimization run.
+    Available at any time — includes all results collected so far."""
+    try:
+        from core.report_data import ReportDataLoader
+        from core.report_analysis import ReportAnalyzer
+
+        analyzer = ReportAnalyzer()
+        with ReportDataLoader(DB_PATH) as loader:
+            data = analyzer.build_full_report_data(run_id, loader)
+            if not data:
+                return jsonify({'error': 'No results found for this run'}), 404
+
+        app_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+        js_path = os.path.join(app_root, 'web', 'static', 'js', 'report-download.js')
+
+        html = None
+        if os.path.exists(js_path):
+            try:
+                with open(js_path) as f:
+                    js_code = f.read()
+                import subprocess as _sp
+                node_script = f"""
+const data = {json.dumps(data)};
+{js_code}
+const html = buildFullReport({run_id}, data, data.charts, data.recommendation || {{}}, data.summary, data.summary.best_configs || {{}}, data.all_results || [], (data.all_results || []).some(r => r.architecture === 'PD'), !!(data.charts.vllm && data.charts.vllm.configs.length));
+process.stdout.write(html);
+"""
+                result = _sp.run(['node', '-e', node_script],
+                                 capture_output=True, text=True, timeout=30)
+                if result.returncode == 0 and result.stdout.strip():
+                    html = result.stdout
+            except Exception:
+                pass
+
+        if not html:
+            # Python fallback — minimal report
+            from cli.inftune import build_python_html_report
+            html = build_python_html_report(run_id, data)
+
+        model = data.get('recommendation', {}).get('model', 'report')
+        model_short = model.split('/')[-1] if '/' in model else model
+        filename = f'serveit-report-run{run_id}-{model_short}.html'
+
+        return Response(html, mimetype='text/html',
+                        headers={'Content-Disposition': f'attachment; filename="{filename}"'})
+
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        return jsonify({'error': str(e)}), 500
+
+
 @app.route('/api/models')
 def get_models():
     """Get available Red Hat AI models from JSON file."""
