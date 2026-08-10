@@ -570,12 +570,29 @@ Should return `true`.
 
 ---
 
-## How ServeIt Studio Uses DRA-NET
+## Alternative: Composite DRA Driver
+
+Some clusters use a **composite DRA driver** (`composite.dra.io`) instead of the admission webhook. This driver pre-composes GPU+NIC pairs as a single device class, eliminating the need for a webhook.
+
+Device classes:
+- `composite-gpu` — GPU only (no NIC pairing)
+- `composite-gpu-nic-pair` — GPU + RDMA NIC with PCIe affinity (equivalent to the webhook approach)
+
+Check if your cluster uses composite DRA:
+```bash
+kubectl get deviceclass | grep composite
+```
+
+If `composite-gpu-nic-pair` exists, ServeIt Studio will auto-detect it and use it directly — no webhook setup needed. The composite driver is managed by a Helm chart in the `composite-dra-system` namespace.
+
+---
+
+## How ServeIt Studio Uses DRA
 
 ServeIt Studio auto-detects DRA device classes on the cluster. When DRA is available and selected as the network type, the optimizer:
 
-1. Detects `gpu.nvidia.com` and `dranet` device classes via `kubectl get deviceclass`
-2. Sets `dra.llm-d.io/gpu-nic-pair: N` in the vLLM pod spec (where N = tensor parallelism)
-3. The admission webhook handles all ResourceClaimTemplate generation
+1. Detects available device classes via `kubectl get deviceclass`
+2. Prefers `composite-gpu-nic-pair` (composite driver) or falls back to `dra.llm-d.io/gpu-nic-pair` (webhook)
+3. Configures the vLLM pod spec with the appropriate DRA resource claims
 4. NCCL auto-discovers the injected `netN` interfaces for inter-node communication
 5. No manual ResourceClaimTemplate or constraint configuration needed
