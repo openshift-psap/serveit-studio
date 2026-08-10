@@ -570,29 +570,124 @@ Should return `true`.
 
 ---
 
-## Alternative: Composite DRA Driver
+## Choosing Your Approach: Webhook vs Composite DRA
 
-Some clusters use a **composite DRA driver** (`composite.dra.io`) instead of the admission webhook. This driver pre-composes GPU+NIC pairs as a single device class, eliminating the need for a webhook.
+There are two ways to achieve GPU+NIC PCIe affinity with DRA. Both deliver the same result — each GPU gets the RDMA NIC on the same PCIe root complex — but they work differently.
 
-Device classes:
-- `composite-gpu` — GPU only (no NIC pairing)
-- `composite-gpu-nic-pair` — GPU + RDMA NIC with PCIe affinity (equivalent to the webhook approach)
+### Comparison
 
-Check if your cluster uses composite DRA:
-```bash
-kubectl get deviceclass | grep composite
-```
+| | Webhook Approach | Composite DRA Driver |
+|---|---|---|
+| **How it works** | Admission webhook intercepts pods at creation, generates ResourceClaimTemplates on-the-fly | DaemonSet pre-discovers and pairs devices, publishes composite ResourceSlices |
+| **Pod spec** | `dra.llm-d.io/gpu-nic-pair: "8"` (synthetic extended resource) | `composite.dra.io/gpu-nic-pair: "8"` (synthetic extended resource) |
+| **Device pairing** | Done at admission time by the webhook | Done continuously by the DaemonSet — pairs are pre-computed |
+| **Latency** | Adds admission latency (webhook call per pod create) | No admission latency for pairing — webhook only converts resource to DRA claim |
+| **Visibility** | Pairs are created on-demand, not visible until pod is scheduled | Pairs visible as ResourceSlices — can inspect with `kubectl get resourceslice` |
+| **Dependencies** | Webhook + reconciler + TLS certs | DaemonSet + webhook + TLS certs (cert-manager) |
+| **Configuration** | ConfigMap with rail subnets, NIC config | ConfigMap with sources, compositions, and network params |
+| **Maturity** | Original approach, battle-tested | Newer approach, simpler architecture |
+| **Best for** | Clusters already using the DRA-NET webhook | New deployments, clusters wanting pre-computed device inventory |
 
-If `composite-gpu-nic-pair` exists, ServeIt Studio will auto-detect it and use it directly — no webhook setup needed. The composite driver is managed by a Helm chart in the `composite-dra-system` namespace.
+### When to use the Webhook approach
+
+- You already have the `dra-rail-admission-webhook` deployed
+- You want on-demand pairing without a persistent DaemonSet
+- Your cluster uses InfiniBand (the webhook has explicit IB rail support)
+
+### When to use the Composite DRA Driver
+
+- New deployment from scratch
+- You want to see available GPU+NIC pairs before scheduling pods (`kubectl get resourceslice`)
+- You prefer Helm-based deployment
+- Your cluster uses RoCE/Ethernet RDMA
+- You want the driver to continuously validate pairings (it recomputes every 30 seconds)
+
+### Can I run both?
+
+No — don't run both simultaneously. They both try to intercept the same resource requests and will conflict. Choose one approach per cluster.
 
 ---
 
-## How ServeIt Studio Uses DRA
+## Composite DRA Driver Setup
 
-ServeIt Studio auto-detects DRA device classes on the cluster. When DRA is available and selected as the network type, the optimizer:
+For the full step-by-step deployment guide, see [`composite-dra-setup.md`](composite-dra-setup.md).
 
-1. Detects available device classes via `kubectl get deviceclass`
-2. Prefers `composite-gpu-nic-pair` (composite driver) or falls back to `dra.llm-d.io/gpu-nic-pair` (webhook)
-3. Configures the vLLM pod spec with the appropriate DRA resource claims
-4. NCCL auto-discovers the injected `netN` interfaces for inter-node communication
-5. No manual ResourceClaimTemplate or constraint configuration needed
+Quick overview:
+
+1. **Prerequisites**: NVIDIA DRA GPU driver, dranet driver, GPU Operator, Network Operator, cert-manager
+2. **Create namespace**: `composite-dra-system`
+3. **Create cert-manager Issuer**: self-signed for webhook TLS
+4. **Configure sources and compositions**: ConfigMap defining how GPUs and NICs are discovered and paired by PCIe root
+5. **Configure network parameters**: Per-rail subnets, gateways, routing tables for RDMA
+6. **Install via Helm**: DaemonSet (device discovery), webhook (resource conversion), DeviceClasses
+
+### Verify composite devices
+
+```bash
+# Check device classes
+kubectl get deviceclass | grep composite
+
+# Check published pairs per node
+kubectl get resourceslice -o json | python3 -c "
+import json, sys, collections
+data = json.load(sys.stdin)
+per_node = collections.defaultdict(lambda: {'gpu-nic-pair': 0, 'gpu': 0})
+for item in data.get('items', []):
+    if item.get('spec', {}).get('driver') != 'composite.dra.io':
+        continue
+    node = item['spec'].get('nodeName', '')
+    for d in item['spec'].get('devices', []):
+        comp = d.get('attributes', {}).get('composite/compositionName', {}).get('string', '')
+        if comp:
+            per_node[node][comp] += 1
+for node, counts in sorted(per_node.items()):
+    print(f'{node}: {counts[\"gpu-nic-pair\"]} GPU+NIC pairs, {counts[\"gpu\"]} standalone GPUs')
+"
+```
+
+### Use in pods
+
+```yaml
+resources:
+  requests:
+    composite.dra.io/gpu-nic-pair: "8"
+  limits:
+    composite.dra.io/gpu-nic-pair: "8"
+```
+
+---
+
+## Common Issues (Both Approaches)
+
+### TopologyAffinityError
+
+Pods requesting 8 GPUs on nodes with `topologyManagerPolicy: single-numa-node` will fail because 8 GPUs span 2 NUMA zones. Fix:
+
+```bash
+kubectl patch kubeletconfig <config-name> --type merge \
+  -p '{"spec":{"kubeletConfig":{"topologyManagerPolicy":"best-effort"}}}'
+```
+
+GPU nodes will reboot to apply the new policy.
+
+### No RDMA NICs detected
+
+If GPU+NIC pairs show 0 but standalone GPUs work:
+1. Check NVIDIA Network Operator is running: `kubectl get pods -n nvidia-network-operator`
+2. Check MOFED driver pods: `kubectl get pods -n nvidia-network-operator | grep mofed`
+3. Verify RDMA devices on the node: `kubectl debug node/<node> -- rdma link show`
+4. Check dranet sees RDMA NICs: `kubectl get resourceslice -o json | python3 -c "..."` (filter for `dra.net/rdma == true`)
+
+### NRI plugin timeout (CRI-O)
+
+When using multiple RDMA NICs per pod, CRI-O may disconnect the DRA-NET NRI plugin during multi-NIC setup. On every GPU worker node:
+
+```bash
+cat > /etc/crio/crio.conf.d/10-nri-timeout.conf << 'EOF'
+[crio.nri]
+enable_nri = true
+nri_plugin_request_timeout = "60s"
+nri_plugin_registration_timeout = "10s"
+EOF
+systemctl restart crio
+```
