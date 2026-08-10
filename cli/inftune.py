@@ -11,8 +11,8 @@ Usage:
     serveit cluster remove prod
 
     # Run optimization
-    serveit run --model RedHatAI/gpt-oss-20b --cluster local
-    serveit run --model RedHatAI/gpt-oss-20b --cluster prod \\
+    serveit run --model RedHatAI/Qwen2.5-Coder-7B-Instruct-FP8-dynamic --cluster local
+    serveit run --model RedHatAI/Qwen2.5-Coder-7B-Instruct-FP8-dynamic --cluster prod \\
         --isl 9000 --osl 50 --users 100 --gpus 16 --objective ttft
 
     # Resume a previous run
@@ -474,7 +474,7 @@ def resume_run(args, db, kubeconfig_path=None):
         'latency_constraint_enabled': bool(row.get('latency_constraint_enabled', 0)),
         'latency_constraint_ms': row.get('latency_constraint_ms', 500),
         'latency_constraint_percentile': row.get('latency_constraint_percentile', 'p99'),
-        'image': saved_config.get('image', 'ghcr.io/llm-d/llm-d-cuda:v0.6.0'),
+        'image': saved_config.get('image', 'ghcr.io/llm-d/llm-d-cuda:v0.8.0'),
         'pvc_name': saved_config.get('pvc_name', 'serveit-cache'),
         'nccl_ib_hca': saved_config.get('nccl_ib_hca', 'mlx'),
         'hf_token': saved_config.get('hf_token') or os.environ.get('HF_TOKEN'),
@@ -825,14 +825,14 @@ def build_run_parser(parser):
     parser.add_argument('--resume', type=int, metavar='RUN_ID',
                         help='Resume a previous run by ID instead of starting a new one')
     parser.add_argument('--model', type=str,
-                        help='Model name or HuggingFace path (e.g., RedHatAI/gpt-oss-20b)')
+                        help='Model name or HuggingFace path (e.g., RedHatAI/Qwen2.5-Coder-7B-Instruct-FP8-dynamic)')
     parser.add_argument('--cluster', type=str, metavar='NAME',
                         help='Run against a registered cluster (see: serveit cluster list)')
 
     wl = parser.add_argument_group('Workload')
-    wl.add_argument('--isl', type=int, default=3000, help='Input sequence length (default: 3000)')
+    wl.add_argument('--isl', type=int, default=2000, help='Input sequence length (default: 2000)')
     wl.add_argument('--isl-stdev', type=int, default=None, help='ISL standard deviation')
-    wl.add_argument('--osl', type=int, default=256, help='Output sequence length (default: 256)')
+    wl.add_argument('--osl', type=int, default=2000, help='Output sequence length (default: 2000)')
     wl.add_argument('--osl-stdev', type=int, default=None, help='OSL standard deviation')
     wl.add_argument('--users', type=int, default=100, help='Concurrent users (default: 100)')
     wl.add_argument('--rate-type', choices=['concurrent', 'constant', 'poisson'],
@@ -861,7 +861,7 @@ def build_run_parser(parser):
     hw.add_argument('--gpus', type=int, default=16, help='Total GPUs to use (default: 16)')
     hw.add_argument('--tp-options', type=str, default='1,2,4,8',
                     help='Comma-separated TP values to explore (default: 1,2,4,8)')
-    hw.add_argument('--image', type=str, default='ghcr.io/llm-d/llm-d-cuda:v0.6.0',
+    hw.add_argument('--image', type=str, default='ghcr.io/llm-d/llm-d-cuda:v0.8.0',
                     help='vLLM container image')
     hw.add_argument('--namespace', type=str, default=None,
                     help='Kubernetes namespace (default: from cluster or serveit)')
@@ -874,7 +874,7 @@ def build_run_parser(parser):
     hw.add_argument('--nodes', type=str, default=None,
                     help='Comma-separated node names to pin tests to')
     hw.add_argument('--scheduler-image', type=str, default=None,
-                    help='EPP scheduler image (default: ghcr.io/llm-d/llm-d-inference-scheduler:v0.7.1)')
+                    help='EPP scheduler image (default: ghcr.io/llm-d/llm-d-router-endpoint-picker:v0.9.0)')
     hw.add_argument('--thanos-url', type=str, default=None,
                     help='Prometheus/Thanos URL for metrics collection (auto-detected if not set)')
     hw.add_argument('--extra-env-vars', type=str, default=None,

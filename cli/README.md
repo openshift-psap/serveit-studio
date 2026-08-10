@@ -8,14 +8,14 @@ and can be viewed in the web UI report.
 
 ```bash
 # Run from inside the optimizer pod
-kubectl exec -it -n llm-d deploy/serveit-optimizer -- bash
+kubectl exec -it -n serveit deploy/serveit-launcher -- bash
 cd /mnt/storage/app
 
 # Register the current cluster
 serveit cluster add --name local
 
 # Minimal run — only --model and --cluster are required
-serveit run --model RedHatAI/gpt-oss-20b --cluster local
+serveit run --model RedHatAI/Qwen2.5-Coder-7B-Instruct-FP8-dynamic --cluster local
 ```
 
 ## Commands
@@ -69,15 +69,15 @@ serveit cluster remove staging
 ### Basic Optimization
 
 ```bash
-# Optimize with default settings (16 GPUs, ISL=3000, OSL=256, 100 users)
-serveit run --model RedHatAI/gpt-oss-20b --cluster local
+# Optimize with default settings (16 GPUs, ISL=2000, OSL=2000, 100 users)
+serveit run --model RedHatAI/Qwen2.5-Coder-7B-Instruct-FP8-dynamic --cluster local
 
 # Specify workload parameters
-serveit run --model RedHatAI/gpt-oss-20b --cluster prod \
+serveit run --model RedHatAI/Qwen2.5-Coder-7B-Instruct-FP8-dynamic --cluster prod \
     --isl 9000 --osl 50 --users 100 --gpus 16
 
 # With ISL/OSL standard deviation (realistic variable-length prompts)
-serveit run --model RedHatAI/gpt-oss-20b --cluster local \
+serveit run --model RedHatAI/Qwen2.5-Coder-7B-Instruct-FP8-dynamic --cluster local \
     --isl 9000 --isl-stdev 4000 --osl 50 --osl-stdev 20 --users 100
 ```
 
@@ -85,34 +85,34 @@ serveit run --model RedHatAI/gpt-oss-20b --cluster local \
 
 ```bash
 # Minimize response time (TTFT) — default
-serveit run --model RedHatAI/gpt-oss-20b --cluster local --objective ttft
+serveit run --model RedHatAI/Qwen2.5-Coder-7B-Instruct-FP8-dynamic --cluster local --objective ttft
 
 # Maximize throughput
-serveit run --model RedHatAI/gpt-oss-20b --cluster local --objective throughput
+serveit run --model RedHatAI/Qwen2.5-Coder-7B-Instruct-FP8-dynamic --cluster local --objective throughput
 
 # Balanced — test PD, EP, and Aggregated architectures
-serveit run --model RedHatAI/gpt-oss-20b --cluster local --objective balanced
+serveit run --model RedHatAI/Qwen2.5-Coder-7B-Instruct-FP8-dynamic --cluster local --objective balanced
 
 # Only test aggregated (no PD disaggregation)
-serveit run --model RedHatAI/gpt-oss-20b --cluster local --objective aggregated_only
+serveit run --model RedHatAI/Qwen2.5-Coder-7B-Instruct-FP8-dynamic --cluster local --objective aggregated_only
 
 # Only test PD disaggregation
-serveit run --model RedHatAI/gpt-oss-20b --cluster local --objective pd_only
+serveit run --model RedHatAI/Qwen2.5-Coder-7B-Instruct-FP8-dynamic --cluster local --objective pd_only
 ```
 
 ### Latency SLA
 
 ```bash
 # Find max throughput under 2000ms TTFT at P99
-serveit run --model RedHatAI/gpt-oss-20b --cluster local \
+serveit run --model RedHatAI/Qwen2.5-Coder-7B-Instruct-FP8-dynamic --cluster local \
     --latency-sla 2000 --latency-percentile p99
 
 # Strict SLA: 500ms at P95
-serveit run --model RedHatAI/gpt-oss-20b --cluster local \
+serveit run --model RedHatAI/Qwen2.5-Coder-7B-Instruct-FP8-dynamic --cluster local \
     --latency-sla 500 --latency-percentile p95
 
 # Auto-scale concurrency to sustainable level
-serveit run --model RedHatAI/gpt-oss-20b --cluster local \
+serveit run --model RedHatAI/Qwen2.5-Coder-7B-Instruct-FP8-dynamic --cluster local \
     --use-achievable-qps
 ```
 
@@ -120,19 +120,19 @@ serveit run --model RedHatAI/gpt-oss-20b --cluster local \
 
 ```bash
 # Use cache-optimized EPP preset
-serveit run --model RedHatAI/gpt-oss-20b --cluster local \
+serveit run --model RedHatAI/Qwen2.5-Coder-7B-Instruct-FP8-dynamic --cluster local \
     --epp-preset cache_optimized
 
 # Benchmark EPP strategies to find optimal routing
-serveit run --model RedHatAI/gpt-oss-20b --cluster local \
+serveit run --model RedHatAI/Qwen2.5-Coder-7B-Instruct-FP8-dynamic --cluster local \
     --epp-benchmark
 
 # Custom EPP weights (cache:kv:queue)
-serveit run --model RedHatAI/gpt-oss-20b --cluster local \
+serveit run --model RedHatAI/Qwen2.5-Coder-7B-Instruct-FP8-dynamic --cluster local \
     --epp-weights 5:1:1
 
 # Override EPP auto-calculated parameters
-serveit run --model RedHatAI/gpt-oss-20b --cluster local \
+serveit run --model RedHatAI/Qwen2.5-Coder-7B-Instruct-FP8-dynamic --cluster local \
     --epp-max-prefix-blocks 512 \
     --epp-lru-capacity 50000 \
     --epp-non-cached-tokens 32
@@ -142,15 +142,15 @@ serveit run --model RedHatAI/gpt-oss-20b --cluster local \
 
 ```bash
 # 80% identical prompts (FAQ/popular query pattern)
-serveit run --model RedHatAI/gpt-oss-20b --cluster local \
+serveit run --model RedHatAI/Qwen2.5-Coder-7B-Instruct-FP8-dynamic --cluster local \
     --prefix-cache-pct 80 --prefix-cache-mode identical
 
 # Shared prefix — all prompts share 80% common prefix (system prompt pattern)
-serveit run --model RedHatAI/gpt-oss-20b --cluster local \
+serveit run --model RedHatAI/Qwen2.5-Coder-7B-Instruct-FP8-dynamic --cluster local \
     --prefix-cache-pct 80 --prefix-cache-mode shared_prefix
 
 # Multi-group — 10 distinct tenant groups with 80% cache hit rate
-serveit run --model RedHatAI/gpt-oss-20b --cluster local \
+serveit run --model RedHatAI/Qwen2.5-Coder-7B-Instruct-FP8-dynamic --cluster local \
     --prefix-cache-pct 80 --prefix-cache-mode multi_group --prefix-cache-groups 10
 ```
 
@@ -158,23 +158,23 @@ serveit run --model RedHatAI/gpt-oss-20b --cluster local \
 
 ```bash
 # Fast search — 1 TP pair, smart PD splits
-serveit run --model RedHatAI/gpt-oss-20b --cluster local \
+serveit run --model RedHatAI/Qwen2.5-Coder-7B-Instruct-FP8-dynamic --cluster local \
     --tp-pair-depth 1 --pd-search smart
 
 # Thorough search — all TP pairs, exhaustive PD splits
-serveit run --model RedHatAI/gpt-oss-20b --cluster local \
+serveit run --model RedHatAI/Qwen2.5-Coder-7B-Instruct-FP8-dynamic --cluster local \
     --tp-pair-depth 4 --pd-search exhaustive
 
 # Specific TP values only
-serveit run --model RedHatAI/gpt-oss-20b --cluster local \
+serveit run --model RedHatAI/Qwen2.5-Coder-7B-Instruct-FP8-dynamic --cluster local \
     --tp-options 1,2,4
 
 # Short test duration (quick validation)
-serveit run --model RedHatAI/gpt-oss-20b --cluster local \
+serveit run --model RedHatAI/Qwen2.5-Coder-7B-Instruct-FP8-dynamic --cluster local \
     --duration 120
 
 # Stop after N requests instead of duration
-serveit run --model RedHatAI/gpt-oss-20b --cluster local \
+serveit run --model RedHatAI/Qwen2.5-Coder-7B-Instruct-FP8-dynamic --cluster local \
     --stop-mode max_requests --max-requests 1000
 ```
 
@@ -182,15 +182,15 @@ serveit run --model RedHatAI/gpt-oss-20b --cluster local \
 
 ```bash
 # Concurrent users (default)
-serveit run --model RedHatAI/gpt-oss-20b --cluster local \
+serveit run --model RedHatAI/Qwen2.5-Coder-7B-Instruct-FP8-dynamic --cluster local \
     --users 100 --rate-type concurrent
 
 # Constant requests per second
-serveit run --model RedHatAI/gpt-oss-20b --cluster local \
+serveit run --model RedHatAI/Qwen2.5-Coder-7B-Instruct-FP8-dynamic --cluster local \
     --users 50 --rate-type constant
 
 # Poisson-distributed arrivals
-serveit run --model RedHatAI/gpt-oss-20b --cluster local \
+serveit run --model RedHatAI/Qwen2.5-Coder-7B-Instruct-FP8-dynamic --cluster local \
     --users 50 --rate-type poisson
 ```
 
@@ -198,13 +198,13 @@ serveit run --model RedHatAI/gpt-oss-20b --cluster local \
 
 ```bash
 # HuggingFace dataset
-serveit run --model RedHatAI/gpt-oss-20b --cluster local \
+serveit run --model RedHatAI/Qwen2.5-Coder-7B-Instruct-FP8-dynamic --cluster local \
     --workload-mode dataset \
     --dataset openai/gsm8k \
     --dataset-column question
 
 # Local JSONL file
-serveit run --model RedHatAI/gpt-oss-20b --cluster local \
+serveit run --model RedHatAI/Qwen2.5-Coder-7B-Instruct-FP8-dynamic --cluster local \
     --workload-mode dataset \
     --dataset /mnt/storage/my-prompts.jsonl \
     --dataset-column prompt \
@@ -215,7 +215,7 @@ serveit run --model RedHatAI/gpt-oss-20b --cluster local \
 
 ```bash
 # 3-turn conversation simulation
-serveit run --model RedHatAI/gpt-oss-20b --cluster local \
+serveit run --model RedHatAI/Qwen2.5-Coder-7B-Instruct-FP8-dynamic --cluster local \
     --turns 3 --isl 2000 --osl 200
 ```
 
@@ -223,30 +223,30 @@ serveit run --model RedHatAI/gpt-oss-20b --cluster local \
 
 ```bash
 # Custom vLLM image
-serveit run --model RedHatAI/gpt-oss-20b --cluster local \
-    --image ghcr.io/llm-d/llm-d-cuda:v0.6.0
+serveit run --model RedHatAI/Qwen2.5-Coder-7B-Instruct-FP8-dynamic --cluster local \
+    --image ghcr.io/llm-d/llm-d-cuda:v0.8.0
 
 # Different namespace and PVC
-serveit run --model RedHatAI/gpt-oss-20b --cluster local \
+serveit run --model RedHatAI/Qwen2.5-Coder-7B-Instruct-FP8-dynamic --cluster local \
     --namespace my-namespace --pvc my-model-cache
 
 # Pin to specific nodes
-serveit run --model RedHatAI/gpt-oss-20b --cluster local \
+serveit run --model RedHatAI/Qwen2.5-Coder-7B-Instruct-FP8-dynamic --cluster local \
     --nodes worker-gpu-01,worker-gpu-02
 
 # Gated model with HuggingFace token
-serveit run --model meta-llama/Llama-3-70b --cluster local \
+serveit run --model meta-llama/Llama-3.1-70B-Instruct --cluster local \
     --hf-token hf_xxxxxxxxxxxxx
 # Or set HF_TOKEN environment variable
 export HF_TOKEN=hf_xxxxxxxxxxxxx
-serveit run --model meta-llama/Llama-3-70b --cluster local
+serveit run --model meta-llama/Llama-3.1-70B-Instruct --cluster local
 ```
 
 ### Advanced vLLM Settings
 
 ```bash
 # Override engine parameters
-serveit run --model RedHatAI/gpt-oss-20b --cluster local \
+serveit run --model RedHatAI/Qwen2.5-Coder-7B-Instruct-FP8-dynamic --cluster local \
     --max-model-len 16384 \
     --gpu-mem-util 0.92 \
     --block-size 256 \
@@ -254,15 +254,15 @@ serveit run --model RedHatAI/gpt-oss-20b --cluster local \
     --kv-cache-dtype fp8
 
 # Enable debug logs for troubleshooting
-serveit run --model RedHatAI/gpt-oss-20b --cluster local \
+serveit run --model RedHatAI/Qwen2.5-Coder-7B-Instruct-FP8-dynamic --cluster local \
     --vllm-debug-logs --nccl-debug-logs
 
 # Disable prefix caching
-serveit run --model RedHatAI/gpt-oss-20b --cluster local \
+serveit run --model RedHatAI/Qwen2.5-Coder-7B-Instruct-FP8-dynamic --cluster local \
     --no-prefix-caching
 
 # Tool calling support
-serveit run --model RedHatAI/gpt-oss-20b --cluster local \
+serveit run --model RedHatAI/Qwen2.5-Coder-7B-Instruct-FP8-dynamic --cluster local \
     --tool-call-parser hermes --enable-auto-tool-choice
 ```
 
@@ -273,18 +273,18 @@ serveit run --model RedHatAI/gpt-oss-20b --cluster local \
 serveit run --resume 7 --cluster local
 
 # Generate HTML report after optimization
-serveit run --model RedHatAI/gpt-oss-20b --cluster local \
+serveit run --model RedHatAI/Qwen2.5-Coder-7B-Instruct-FP8-dynamic --cluster local \
     --html-report results.html
 
 # Generate report from an existing completed run
 serveit run --resume 7 --cluster local --html-report run7-report.html
 
 # Run with description
-serveit run --model RedHatAI/gpt-oss-20b --cluster local \
+serveit run --model RedHatAI/Qwen2.5-Coder-7B-Instruct-FP8-dynamic --cluster local \
     --description "Production baseline test with 80% cache hit"
 
 # Quiet mode (no progress output)
-serveit run --model RedHatAI/gpt-oss-20b --cluster local --quiet
+serveit run --model RedHatAI/Qwen2.5-Coder-7B-Instruct-FP8-dynamic --cluster local --quiet
 ```
 
 ### Full Production Example
@@ -292,7 +292,7 @@ serveit run --model RedHatAI/gpt-oss-20b --cluster local --quiet
 ```bash
 # Complete production optimization run
 serveit run \
-    --model RedHatAI/gpt-oss-20b \
+    --model RedHatAI/Qwen2.5-Coder-7B-Instruct-FP8-dynamic \
     --cluster prod \
     --isl 9000 --isl-stdev 4000 \
     --osl 50 --osl-stdev 20 \
@@ -332,9 +332,9 @@ serveit run \
 | `--cluster` | — | Registered cluster name |
 | `--resume` | — | Resume a previous run by ID |
 | **Workload** | | |
-| `--isl` | 3000 | Input sequence length |
+| `--isl` | 2000 | Input sequence length |
 | `--isl-stdev` | — | ISL standard deviation |
-| `--osl` | 256 | Output sequence length |
+| `--osl` | 2000 | Output sequence length |
 | `--osl-stdev` | — | OSL standard deviation |
 | `--users` | 100 | Concurrent users |
 | `--rate-type` | concurrent | Load profile: concurrent, constant, poisson |
@@ -350,9 +350,9 @@ serveit run \
 | **Hardware** | | |
 | `--gpus` | 16 | Total GPUs |
 | `--tp-options` | 1,2,4,8 | TP values to explore |
-| `--image` | ghcr.io/llm-d/llm-d-cuda:v0.5.1 | vLLM container image |
+| `--image` | ghcr.io/llm-d/llm-d-cuda:v0.8.0 | vLLM container image |
 | `--namespace` | from cluster | Kubernetes namespace |
-| `--pvc` | serveit-model-cache | PVC name |
+| `--pvc` | serveit-cache | PVC name |
 | `--nccl-ib-hca` | mlx | NCCL IB HCA prefix |
 | `--hf-token` | — | HuggingFace token (or HF_TOKEN env) |
 | `--nodes` | — | Comma-separated node names |
