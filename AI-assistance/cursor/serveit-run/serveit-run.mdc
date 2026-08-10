@@ -390,7 +390,7 @@ Then confirm: "Great, I'll optimize **<model>** on your **<N>x <GPU_MODEL>** clu
 Ask these in plain language:
 
 **"How long are the prompts your users will send?"**
-- This is the Input Sequence Length (ISL) — measured in tokens
+- This is the Input Sequence Length (ISL) — the length of text a user types, pastes, or sends to the model (including system prompts, code snippets, context). Measured in tokens
 - A token is roughly 4 characters of English text, or about ¾ of a word. So:
   - 100 tokens ≈ 75 words ≈ a short paragraph
   - 500 tokens ≈ 375 words ≈ about 1 page of text
@@ -406,7 +406,7 @@ Ask these in plain language:
 
 After the user picks ISL/OSL, ask about variation:
 
-**"Do you want variable-length prompts? In real life, not all prompts are the same length. Adding standard deviation makes the benchmark more realistic."**
+**"Do you want variable-length inputs and outputs? In real life, not every user sends the same amount of text and the model doesn't always respond with the same length. Adding variation makes the benchmark more realistic — some requests will be short, some long, centered around your chosen ISL/OSL."**
 
 1. **Moderate variation** — stdev = 50% of ISL/OSL (e.g., ISL=2000±1000, prompts range ~1000-3000)
 2. **High variation** — stdev = 100% of ISL/OSL (e.g., ISL=2000±2000, prompts range ~0-4000)
@@ -415,7 +415,7 @@ After the user picks ISL/OSL, ask about variation:
 5. **No variation** — fixed length (stdev=0)
 
 **"How long should the model's responses be?"**
-- This is the Output Sequence Length (OSL) — how many tokens the model generates per response
+- This is the Output Sequence Length (OSL) — the length of text the model generates back to the user
 - Real-world examples:
   - A one-liner fix or short answer: ~50-100 tokens (~200-400 characters)
   - A function with explanation: ~200-500 tokens (~800-2,000 characters)
