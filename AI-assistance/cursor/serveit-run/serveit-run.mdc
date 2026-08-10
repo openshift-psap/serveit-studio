@@ -29,7 +29,7 @@ When this skill is invoked, start by explaining to the user what ServeIt Studio 
 > The optimization runs on your Kubernetes cluster using your actual GPUs, so results reflect real-world performance — not estimates.
 
 **The launcher is a multi-tenant control plane** — it can manage multiple instances across multiple clusters from a single dashboard. Each instance:
-- Connects to a different cluster (or the same cluster with different resource limits)
+- Connects to a different cluster (or the same cluster with different resource allocations)
 - Can be limited to specific GPUs, nodes, or namespaces
 - Runs independently — multiple optimizations can run in parallel on different clusters
 - Can be backed up and restored — download the database and artifacts, then restore on another instance or after a redeployment
@@ -64,7 +64,7 @@ Before doing anything, ask the user:
      ```
 
    - **Launcher mode (multi-tenant control plane)** — deploys a launcher that manages multiple instances across clusters. Each instance can be:
-     - Limited to specific GPUs or nodes
+     - Allocated specific GPUs or nodes (resource allocation system)
      - Connected to a different cluster via kubeconfig
      - Backed up and restored — download the database and test artifacts from any instance and restore them on a different instance or cluster. This means you can run tests on cluster A, then restore the results on cluster B to compare, or migrate between environments.
      - Managed from a single dashboard
