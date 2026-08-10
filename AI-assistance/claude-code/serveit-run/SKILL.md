@@ -742,8 +742,13 @@ Ask: **"Where should the model weights be stored? This matters a lot for large m
 Explain the options based on what the scan found:
 
 - **Local NVMe / hostPath** (e.g., `hostpath-nvme`) — the model is stored directly on each GPU node's local NVMe disk. Fastest option (~2-3 GB/s read speed). Each node has its own copy. **Best for large models (30B+) and multi-node setups.** Requires the HostPath Provisioner (HPP) or similar operator to be installed, and local disks must be available on ALL GPU nodes the user plans to use. If local disk doesn't cover all GPU nodes, warn the user.
-- **NFS / shared filesystem** (e.g., `nfs`, CephFS, EFS) — the model is stored once on a shared volume. All pods read from the same copy. Simpler setup, but network I/O becomes a bottleneck for large models. **Fine for small models (under 15-20GB) or when local disk isn't available.** For large models on NFS, the initial model loading can take 20-40 minutes per pod as each pod reads the full model over the network.
-- **Block storage** (e.g., `ibmc-vpc-block`, `gp3`, LVMS) — cloud or local block devices. Usually RWO (one pod at a time). Fast reads but can't be shared across nodes. Works for single-node setups or when each pod gets its own PVC.
+- **NFS / shared filesystem** (e.g., `nfs`, CephFS, EFS) — the model is stored once on a shared volume. All pods read from the same copy. Two options:
+  1. **Single shared PVC** — simplest, but creates contention when multiple pods load the model simultaneously. Fine for small models or few pods.
+  2. **Per-node PVCs** — one RWX PVC per GPU node. Reduces contention, model is downloaded once per node. More setup but better for large models.
+  For large models on NFS, initial model loading can take 20-40 minutes per pod as each pod reads the full model over the network.
+- **Block storage** (e.g., `ibmc-vpc-block`, `gp3`, LVMS) — cloud or local block devices. Usually RWO (one pod at a time). **Can only support single-node deployments** — each PVC can only be mounted on one node, so multi-node inference won't work with RWO alone.
+
+**If no local disk is available and the model is large (30B+)**, suggest: "For the best performance with large models, I'd recommend setting up local NVMe storage using the HostPath Provisioner (HPP). This gives each node direct access to its NVMe drives — a 70B model loads in ~2 minutes vs 30+ minutes on NFS. See `docs/local-nvme-hostpath-setup.md` for setup instructions."
 
 If the scan found a local disk SC with `is_local: true` and `gpu_nodes_covered >= gpu_node_count`, suggest it:
 
