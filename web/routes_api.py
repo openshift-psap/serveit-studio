@@ -522,8 +522,9 @@ def get_run_report(run_id):
             with open(js_path) as f:
                 js_code = f.read()
 
-            has_pd = any(r.get('architecture') == 'PD' for r in data.get('all_results', []))
-            has_vllm = bool(data.get('charts', {}).get('vllm', {}).get('configs'))
+            has_pd = any(r.get('architecture') == 'PD' for r in (data.get('all_results') or []))
+            vllm_charts = (data.get('charts') or {}).get('vllm') or {}
+            has_vllm = bool(vllm_charts.get('configs'))
             data_json = json.dumps(data)
 
             html = f"""<!DOCTYPE html>
@@ -550,7 +551,8 @@ document.body.innerHTML = buildFullReport(
             from cli.inftune import build_python_html_report
             html = build_python_html_report(run_id, data)
 
-        model = data.get('recommendation', {}).get('model', 'report')
+        rec = data.get('recommendation') or {}
+        model = rec.get('model', 'report') or 'report'
         model_short = model.split('/')[-1] if '/' in model else model
         filename = f'serveit-report-run{run_id}-{model_short}.html'
 
