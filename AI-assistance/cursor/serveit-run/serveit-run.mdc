@@ -82,10 +82,12 @@ Before doing anything, ask the user:
 
 Requires: `kubectl`/`oc` configured with cluster access.
 
-1. **List storage classes** and auto-select. **Never use S3-backed, object storage, or slow remote storage.**
+1. **List storage classes** and pick one that has capacity on a Ready node. The instance PVC only needs RWO — any fast block or LVM storage works. Verify the SC has available capacity before deploying (same verification as launcher mode).
 
 ```bash
 kubectl get sc --no-headers
+# Verify SC has capacity on ready nodes
+kubectl get pv --no-headers | grep <SC_NAME>
 
 # Deploy directly
 python3 deployment/deploy.py --mode local -n serveit --storage-class <SC>
