@@ -427,9 +427,9 @@ After the user picks ISL/OSL, ask about variation:
 
 Ask: **"What's more important for your use case?"**
 
-1. **Response time** (`ttft`) — "I want the fastest first response. Users are waiting interactively." Best for chatbots, interactive apps, real-time assistants.
-2. **Throughput** (`throughput`) — "I want to serve as many requests per second as possible. Latency is less critical." Best for batch processing, offline pipelines, high-volume APIs.
-3. **Full coverage** (`balanced`) — "I want to find the best config for both cases and compare them side by side." Runs more tests but gives the most comprehensive results.
+1. **Response time** (`ttft`) — how fast does the first word appear after a user hits send? If your users are staring at their screen waiting for a response (chat, IDE, real-time apps), this is what matters. We'll optimize for the shortest wait time.
+2. **Throughput** (`throughput`) — how many requests can the system handle per second? If you care more about serving the most users possible and latency is secondary (batch processing, background pipelines, high-volume APIs), this is your priority.
+3. **Full coverage** (`balanced`) — not sure which matters more? We'll test for both and show you the best config for each — so you can compare and decide based on real data. Runs more tests but gives the most complete picture.
 4. **Other** — describe your priority.
 
 ### 3e. Do you expect prefix cache hits?
