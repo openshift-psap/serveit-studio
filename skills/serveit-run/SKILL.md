@@ -425,7 +425,14 @@ Ask: **"Do you want to customize any advanced settings, or use the recommended d
 
 If the user says defaults, use:
 - Test duration: 300s
-- EPP preset: balanced
+- Search depth: top 2 configs per architecture
+- P/D search: smart
+- Latency SLA: none
+- Calibrated load: yes
+- Concurrency sweep: yes — tests the top 4 recommendation configs (Best Balanced, Lowest TTFT, Highest Throughput, Most Efficient) at 8 different user loads to map performance across light, medium, and heavy traffic
+- EPP tuned sweep: yes
+- Cache sweep: no
+- EPP preset: `cache_optimized` if prefix cache > 0%, otherwise `balanced`
 - Auto-tune vLLM: on (automatically adjusts GPU memory utilization, batch sizes, block sizes)
 
 If the user wants to customize, walk through these sections. For each, explain the default and ask if they want to change it. **Most users should keep defaults** — only change if they have a specific reason.
