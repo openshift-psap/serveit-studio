@@ -141,6 +141,7 @@ curl -s $BASE_URL/api/status | jq
 ```json
 {
   "running": false,
+  "config_locked": false,
   "config": { "model": "google/gemma-4-26B-A4B", "isl": 2000, ... }
 }
 ```
