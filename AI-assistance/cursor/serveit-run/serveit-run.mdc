@@ -495,7 +495,7 @@ If the user says defaults, use:
 - P/D search: smart
 - Latency SLA: none
 - Calibrated load: yes
-- Concurrency sweep: yes — tests the top 4 recommendation configs (Best Balanced, Lowest TTFT, Highest Throughput, Most Efficient) across 8 stress scenarios from light to heavy load, mapping how each config handles increasing traffic
+- Concurrency sweep: yes — after finding the optimal configs, the tool calculates the ideal load for your setup, then tests the top 4 recommendations (Best Balanced, Lowest TTFT, Highest Throughput, Most Efficient) across 8 stress scenarios from light to heavy traffic to show exactly where each config starts to struggle
 - EPP tuned sweep: yes
 - Cache sweep: no
 - EPP preset: `cache_optimized` if prefix cache > 0%, otherwise `balanced`
