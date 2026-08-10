@@ -421,7 +421,24 @@ For **agentic models** (tool-calling, function-calling, multi-step reasoning): t
 
 ### 3f. Any advanced settings?
 
-Ask: **"Do you want to customize any advanced settings, or use the recommended defaults?"**
+Ask: **"Do you want to customize any advanced settings, or use defaults?"**
+
+List the defaults and all customizable options with numbers:
+
+1. **Use all defaults** — start with the settings listed below
+2. **Test duration** — how long each individual test runs (default: 300s / 5 min)
+3. **Search depth** — how many GPU configurations to test (default: top 2 per architecture)
+4. **Latency SLA** — set a maximum acceptable response time (default: none)
+5. **Production load analysis** — re-test at realistic loads + sweep multiple user counts (default: on, top 4 configs at 8 user loads)
+6. **Cache hit sweep** — test different cache hit ratios to see impact (default: off)
+7. **vLLM auto-tune** — automatically optimize engine settings vs upstream defaults (default: on)
+8. **EPP routing** — how the gateway routes requests across pods (default: cache_optimized when prefix cache enabled, balanced otherwise)
+9. **Container images** — which vLLM and EPP versions to use (default: latest GA)
+10. **Network** — how pods communicate, RDMA options (default: auto-detected from cluster)
+11. **Storage** — where model weights are stored (default: auto-detected, prefers local NVMe)
+12. **Other** — describe what you want to change
+
+If the user picks a number, jump to that specific section. If they pick 1, use defaults:
 
 If the user says defaults, use:
 - Test duration: 300s
