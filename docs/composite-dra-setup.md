@@ -364,16 +364,6 @@ resources:
     composite.dra.io/gpu: "4"
 ```
 
-## How ServeIt Studio Uses It
-
-ServeIt Studio auto-detects composite DRA device classes during cluster scan. When `composite-gpu-nic-pair` is found:
-
-1. The scan reports it as an available network option with `kind: gpu_nic_pair`
-2. The user selects DRA networking in the wizard or API
-3. The optimizer sets `selected_dra_classes: [{"name": "composite-gpu-nic-pair"}]`
-4. Each vLLM pod spec gets `composite.dra.io/gpu-nic-pair: N` (where N = tensor parallelism)
-5. The webhook handles all DRA claim generation automatically
-
 ## Troubleshooting
 
 ### No GPU+NIC pairs on a node
