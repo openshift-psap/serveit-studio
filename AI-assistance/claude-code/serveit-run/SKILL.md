@@ -43,16 +43,55 @@ When this skill is invoked, start by explaining to the user what ServeIt Studio 
 Before doing anything, ask the user:
 
 1. **Quick setup or step-by-step?**
-   - **Quick setup**: Auto-detect everything, deploy launcher, create instance, pick best storage. User only needs to provide the model name at the end.
+   - **Quick setup**: Auto-detect everything, deploy and configure. User only needs to pick the model at the end.
    - **Step-by-step**: Ask for each choice (namespace, storage class, GPU limits, instance name, etc.)
 
 2. **Do they already have a running instance?** If yes, skip to Step 3 (model selection). They just need to provide the instance URL.
+
+3. **Deployment mode** — explain the two options:
+
+   - **Local mode (single instance)** — deploys ServeIt Studio directly as a standalone instance. Simplest setup — one command, no launcher overhead. Best for: single user, single cluster, quick testing.
+     ```bash
+     python3 deployment/deploy.py --mode local -n serveit --storage-class <SC>
+     ```
+
+   - **Launcher mode (multi-tenant control plane)** — deploys a launcher that manages multiple instances across clusters. Each instance can be:
+     - Limited to specific GPUs or nodes
+     - Connected to a different cluster via kubeconfig
+     - Backed up and restored — download the database and test artifacts from any instance and restore them on a different instance or cluster. This means you can run tests on cluster A, then restore the results on cluster B to compare, or migrate between environments.
+     - Managed from a single dashboard
+     Best for: teams sharing GPU resources, multi-cluster setups, production environments where you need backup/restore.
+
+   If the user is unsure, ask: **"Are you the only one using this cluster, or do multiple people/teams need separate optimization environments?"**
+   - Single user → suggest **local mode**
+   - Multiple users or clusters → suggest **launcher mode**
 
 ---
 
 ## Step 2: Deploy & Setup (skip if instance already exists)
 
-### Quick setup mode
+### Local mode (single instance)
+
+Requires: `kubectl`/`oc` configured with cluster access.
+
+1. **List storage classes** and auto-select. **Never use S3-backed, object storage, or slow remote storage.**
+
+```bash
+kubectl get sc --no-headers
+
+# Deploy directly
+python3 deployment/deploy.py --mode local -n serveit --storage-class <SC>
+
+# Get URL
+URL=https://$(kubectl get route -n serveit -o jsonpath='{.items[0].spec.host}')
+echo "Instance URL: $URL"
+```
+
+2. **Create admin account** — same as launcher mode (see below).
+
+3. Skip to Step 3 (model selection) — no cluster registration or instance creation needed.
+
+### Launcher mode (multi-tenant)
 
 Requires: `kubectl`/`oc` configured with cluster access.
 
