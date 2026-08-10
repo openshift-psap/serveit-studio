@@ -201,6 +201,51 @@ The launcher supports optimizing models on remote clusters. When creating a new 
 
 The wizard pod runs on the launcher cluster; only the inference workload runs remotely.
 
+## AI-Assisted Deployment
+
+ServeIt Studio includes skills for **Claude Code** and **Cursor** that automate the entire deployment and optimization flow through a guided conversation. The AI assistant walks you through cluster setup, model selection, workload configuration, and monitors the optimization — no need to memorize CLI flags or API calls.
+
+### Setup
+
+**Claude Code:**
+```bash
+# Copy the skill to your Claude Code skills directory
+cp -r AI-assistance/claude-code/serveit-run ~/.claude/skills/serveit-run
+
+# Then invoke it in Claude Code
+/serveit-run
+```
+
+**Cursor:**
+```bash
+# Copy the rule to your project's Cursor rules directory
+mkdir -p .cursor/rules
+cp AI-assistance/cursor/serveit-run/serveit-run.mdc .cursor/rules/
+```
+
+### What the skill does
+
+The AI assistant guides you through:
+
+1. **Deployment mode** — choose between local (single instance) or launcher (multi-tenant with backup/restore, resource limits, multi-cluster)
+2. **Cluster scanning** — auto-detects GPUs, RDMA, storage classes, networking, and installed infrastructure
+3. **Model selection** — helps choose from the 700+ model gallery based on your use case, or validates a specific model
+4. **Workload configuration** — explains ISL/OSL in plain language with real-world examples, prefix caching modes, and concurrency
+5. **Advanced tuning** — search depth, latency SLAs, production load analysis, EPP routing, vLLM engine settings
+6. **Infrastructure** — auto-detects networking (DRA, SR-IOV, NAD), storage (hostpath-nvme, NFS, block), container images
+7. **Execution** — saves config, locks UI, starts optimization via REST API, monitors progress
+8. **Results** — fetches best configs, presents summary, offers manifest downloads
+
+All operations use the REST API (`docs/api-reference.md`) — no Socket.IO dependency for the AI-driven flow.
+
+### API Reference
+
+Full REST API documentation is available at [`docs/api-reference.md`](docs/api-reference.md), covering:
+- Cluster scanning, storage setup, optimization lifecycle
+- Config lock/unlock for API-driven workflows
+- Run management, chart data, manifest downloads
+- MLflow export, database backup/restore
+
 ## Network Types & Prerequisites
 
 ServeIt Studio supports five network types for GPU-to-GPU communication. The wizard auto-detects available types and lets you choose. Each type has different cluster prerequisites:
