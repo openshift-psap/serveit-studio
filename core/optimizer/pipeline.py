@@ -1721,6 +1721,20 @@ class RecipeOptimizer(
                 self.log(f"  FP8 block quantization: max TP={max_tp_fp8} "
                          f"(shared/MoE intermediate too small for higher TP)", 'warning')
 
+        # Filter TP values that don't divide attention heads evenly
+        # vLLM requires: num_attention_heads % tp == 0
+        # KV heads can be replicated (GQA) so tp > num_kv_heads is fine,
+        # but num_kv_heads % tp must be 0 OR tp must be a multiple of num_kv_heads
+        if self._model_config:
+            num_heads = self._model_config.get('num_attention_heads', 0)
+            num_kv_heads = self._model_config.get('num_key_value_heads', num_heads)
+            if num_heads > 0:
+                before = len(tp_options)
+                tp_options = [tp for tp in tp_options if num_heads % tp == 0]
+                if len(tp_options) < before:
+                    self.log(f"  Attention heads filter: {num_heads} heads, {num_kv_heads} KV heads — "
+                             f"valid TP values: {tp_options}", 'info')
+
         return tp_options or self.config.tp_options
 
     def _fp8_max_tp(self) -> int:
