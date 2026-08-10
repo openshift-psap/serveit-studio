@@ -1035,8 +1035,6 @@ Common issues and how to handle them:
 
 **Server restart clears state** — Syncing code (`deploy.py --sync-all`) restarts the server, clearing in-memory config lock and running state. Re-apply with `POST /api/config/lock` and `POST /api/set_state`.
 
-**Quota exceeded (IBM Cloud)** — Old VMs still consuming quota while deleting. Wait for cloud to reclaim, or check `kubectl get machines -n openshift-machine-api` for stuck `Deleting` machines and remove their finalizers.
-
 **Pod stuck in ContainerCreating** — Usually pulling the vLLM image (~1.7GB). First pull takes 3-5 minutes. Check with `kubectl describe pod <name>`.
 
 **FailedUpdate on Machine** — The VM was created but is stuck booting. Monitor events with `kubectl get events -A | grep "Update machine"`. If `FailedUpdate` persists for more than 15-20 minutes with no `Normal Update`, delete the machine and let the MachineSet recreate it.
