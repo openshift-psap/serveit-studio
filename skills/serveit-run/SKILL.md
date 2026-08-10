@@ -61,6 +61,16 @@ Requires: `kubectl`/`oc` configured with cluster access.
    - For the **instance PVC** (small DB + config): same as launcher — any fast RWO SC. **Must pass `storage_class` explicitly** when creating the instance, otherwise it falls back to the cluster default SC which may not schedule correctly.
    - For the **model cache** (set later in config): pick `hostpath-nvme` or any local disk SC IF it covers ALL GPU nodes. For multi-node inference, every GPU node must have local storage available. If local disk doesn't cover all GPU nodes, fall back to an RWX SC (NFS/CephFS). Warn the user about slower model loading with shared storage.
 
+Before deploying, verify the chosen storage class actually has capacity and nodes that can use it:
+
+```bash
+# Check if the SC has available PVs or can provision on available nodes
+kubectl get pv --no-headers | grep <SC_NAME>
+kubectl get nodes --no-headers | grep Ready
+```
+
+For LVMS/topolvm SCs, verify the volume group exists on at least one Ready node. For hostpath, verify HPP backing PVCs exist on Ready nodes. If the SC has no capacity (e.g., its backing node is down), pick a different one.
+
 2. **Deploy launcher** in the default `serveit` namespace:
 
 ```bash
