@@ -98,9 +98,9 @@ def generate_yaml(namespace: str, image: str, pvc_name: str,
     rbac_template = 'rbac-launcher.yaml.j2' if mode == 'launcher' else 'rbac.yaml.j2'
     parts.append(render_template(rbac_template, namespace=namespace))
 
-    # PVC (conditional) — launcher only needs RWO, optimizer needs RWX for shared workload pod access
+    # PVC (conditional) — both modes only need RWO (single pod per instance)
     if create_pvc:
-        access_mode = 'ReadWriteOnce' if mode == 'launcher' else 'ReadWriteMany'
+        access_mode = 'ReadWriteOnce'
         parts.append(render_template('pvc.yaml.j2',
             pvc_name=pvc_name, namespace=namespace,
             storage_size=storage_size, storage_class=storage_class,
