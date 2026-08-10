@@ -531,24 +531,28 @@ def get_run_report(run_id):
 <html><head><meta charset="UTF-8">
 <title>ServeIt Studio Report — Run #{run_id}</title>
 <script src="https://cdn.plot.ly/plotly-2.35.2.min.js"></script>
-</head><body>
 <script>
 {js_code}
-
-const data = {data_json};
-const runId = {run_id};
-const hasPD = {str(has_pd).lower()};
-const hasVllm = {str(has_vllm).lower()};
-try {{
-    document.body.innerHTML = buildFullReport(
-        runId, data, data.charts, data.recommendation || {{}},
-        data.summary, data.summary.best_configs || {{}},
-        data.all_results || [], hasPD, hasVllm
-    );
-}} catch(e) {{
-    document.body.innerHTML = '<h1>Report Error</h1><pre>' + e.stack + '</pre><h2>Data Summary</h2><pre>' +
-        JSON.stringify({{total_tests: data.summary.total_tests, successful: data.summary.successful_tests, all_results: (data.all_results||[]).length, best_configs: data.summary.best_configs}}, null, 2) + '</pre>';
-}}
+</script>
+</head><body>
+<script>
+window.addEventListener('load', function() {{
+    var data = {data_json};
+    var runId = {run_id};
+    var hasPD = {str(has_pd).lower()};
+    var hasVllm = {str(has_vllm).lower()};
+    var summary = data.summary || {{}};
+    var rec = data.recommendation || {{}};
+    var best = summary.best_configs || {{}};
+    var allRes = data.all_results || [];
+    try {{
+        document.body.innerHTML = buildFullReport(
+            runId, data, data.charts, rec, summary, best, allRes, hasPD, hasVllm
+        );
+    }} catch(e) {{
+        document.body.innerHTML = '<h1>Report Error</h1><pre>' + e.stack + '</pre>';
+    }}
+}});
 </script>
 </body></html>"""
 
