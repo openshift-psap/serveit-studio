@@ -426,7 +426,7 @@ Ask: **"Do you want to customize any advanced settings, or use defaults?"**
 List the defaults and all customizable options with numbers:
 
 1. **Use all defaults** — start with the settings listed below
-2. **Test duration** — how long each individual test runs (default: 300s / 5 min)
+2. **Test duration** — how long each individual test runs (default: 300s / 5 min), or stop after a specific number of requests instead of time
 3. **Search depth** — how many GPU configurations to test (default: top 2 per architecture)
 4. **Latency SLA** — set a maximum acceptable response time (default: none)
 5. **Production load analysis** — re-test at realistic loads + sweep multiple user counts (default: on, top 4 configs at 8 user loads)
