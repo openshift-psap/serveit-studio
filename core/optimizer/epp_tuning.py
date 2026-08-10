@@ -1,7 +1,5 @@
 """Step 9: EPP tuning — smart weight derivation + optional sweep."""
 
-import math
-import os
 import time
 from typing import Dict, Optional, Tuple
 
@@ -137,9 +135,6 @@ class EPPTuningMixin:
         if not prefill_tpsg or not decode_tpsg:
             self.log("🚨 BUG: TPSG data missing — Steps 2-3 should always produce this. "
                      f"prefill_tpsg={prefill_tpsg}, decode_tpsg={decode_tpsg}", 'error')
-
-        isl = self.config.isl
-        osl = self.config.osl
 
         tp = self.optimal_decode_tp.tp if self.optimal_decode_tp else 1
         max_seqs = self._compute_max_num_seqs(tp) or 256
@@ -382,7 +377,7 @@ class EPPTuningMixin:
                 num_gpus=self.config.total_gpus,
                 isl=self.config.isl,
                 osl=self.config.osl,
-                test_id=f"step11-epp-aggregated",
+                test_id="step11-epp-aggregated",
                 use_concurrency=True,
             )
             configs_to_test.append(('aggregated', agg_cfg, default_concurrency))
@@ -465,7 +460,7 @@ class EPPTuningMixin:
             prom_data = self._get_best_result_prom(arch)
             if not prom_data:
                 self.log(f"  ⚠️  Skipping {arch.upper()} EPP tuning — no Prometheus metrics available from Step 6/7", 'warning')
-                self.log(f"     Check that Thanos/Prometheus is accessible and metrics are being scraped", 'warning')
+                self.log("     Check that Thanos/Prometheus is accessible and metrics are being scraped", 'warning')
                 self.epp_benchmark_results[arch] = [('_skipped_no_metrics', {}, None)]
                 continue
 
@@ -506,7 +501,7 @@ class EPPTuningMixin:
                 self.log(f"  ↔ Weights differ from preset — running EPP test for {arch}", 'info')
                 weight_combos = [('smart-derived', smart_weights)]
             else:
-                self.log(f"  ⚠️  Smart weight derivation returned None — using fallback combos", 'warning')
+                self.log("  ⚠️  Smart weight derivation returned None — using fallback combos", 'warning')
                 weight_combos = list(fallback_combos)
 
             self.log(f"  Weight combos: {', '.join(n for n, _ in weight_combos)}", 'info')
@@ -666,12 +661,12 @@ class EPPTuningMixin:
             # Smart EPP: try to refine from measured metrics after first test
             if smart_weights and arch_results and not self._should_stop():
                 first_result = arch_results[0][2]
-                self.log(f"\n  Attempting metrics-based refinement...", 'info')
+                self.log("\n  Attempting metrics-based refinement...", 'info')
                 refined = self._refine_epp_from_metrics(first_result, arch=arch, base_weights=smart_weights)
                 if refined and (refined['prefix_cache_weight'] != smart_weights['prefix_cache_weight'] or
                                 refined['kv_cache_weight'] != smart_weights['kv_cache_weight'] or
                                 refined['queue_weight'] != smart_weights['queue_weight']):
-                    self.log(f"  Weights changed — running validation test", 'info')
+                    self.log("  Weights changed — running validation test", 'info')
                     # Run the refined combo through the same test loop
                     refined_combos = [('smart-refined', refined)]
                     for rname, rweights in refined_combos:
@@ -750,7 +745,7 @@ class EPPTuningMixin:
                             else:
                                 self.log(f"  ❌ {rname}: benchmark failed", 'error')
                 else:
-                    self.log(f"  Metrics confirm derived weights — no refinement needed", 'success')
+                    self.log("  Metrics confirm derived weights — no refinement needed", 'success')
 
             # A/B guardrail: if smart-derived is worse than Step 6/7 baseline, test balanced
             if (baseline_ttft and arch_results and not self._should_stop()):
@@ -827,7 +822,7 @@ class EPPTuningMixin:
                         self.all_test_results.append((fb_config, fb_result))
                         self._save_epp_test_to_database(fb_config, fb_result)
                     else:
-                        self.log(f"  ❌ balanced-fallback: benchmark failed", 'error')
+                        self.log("  ❌ balanced-fallback: benchmark failed", 'error')
 
             self.epp_benchmark_results[arch] = arch_results
 

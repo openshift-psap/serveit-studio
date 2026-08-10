@@ -7,7 +7,7 @@ and total pod count. Used by config_generator and template_values.
 
 import math
 import logging
-from typing import Tuple, Optional
+from typing import Tuple
 
 logger = logging.getLogger(__name__)
 

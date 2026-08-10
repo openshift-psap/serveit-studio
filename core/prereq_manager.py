@@ -378,7 +378,7 @@ class PrereqManager:
                     log('❌ Gateway deployment did not become ready')
                     return False
             else:
-                log(f'✅ Gateway deployment not found in namespace — managed externally')
+                log('✅ Gateway deployment not found in namespace — managed externally')
 
             log('✅ All prerequisite infrastructure deployed and ready')
             return True
@@ -487,7 +487,7 @@ class PrereqManager:
                 check=False
             )
             if result.returncode == 0:
-                log(f'✅ EPP pod restarting...')
+                log('✅ EPP pod restarting...')
             else:
                 log(f'⚠️  Could not restart EPP pod: {result.stderr}')
 
@@ -497,9 +497,9 @@ class PrereqManager:
                  '--timeout=60s'], check=False
             )
             if rollout_result.returncode == 0:
-                log(f'✅ EPP pod ready')
+                log('✅ EPP pod ready')
             else:
-                log(f'⚠️  EPP rollout timeout — waiting 15s')
+                log('⚠️  EPP rollout timeout — waiting 15s')
                 time.sleep(15)
             time.sleep(5)
             return True
@@ -550,7 +550,7 @@ class PrereqManager:
                 manifest = self.template_mgr.render_template('prereq/modelserver-scc.yaml.j2', **context)
                 result = self.kubectl.run(['apply', '-f', '-'], input_data=manifest, check=False)
                 if result.returncode == 0:
-                    log(f'   ✅ SCC llm-d-modelserver created (OpenShift)')
+                    log('   ✅ SCC llm-d-modelserver created (OpenShift)')
                 else:
                     log(f'   ⚠️  Failed to create SCC: {result.stderr[:100]}')
 

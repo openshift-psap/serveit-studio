@@ -13,7 +13,6 @@ from typing import Dict, List, Any
 
 from .base import (
     BaseNetworkCreator,
-    NetworkConfig,
     NetworkResource,
     NetworkType,
     RDMAType

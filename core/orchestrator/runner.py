@@ -1,7 +1,6 @@
 """TestOrchestrator — main test runner and infrastructure management."""
 
 import os
-import sys
 import json
 import time
 import socket
@@ -9,7 +8,9 @@ import logging
 import subprocess
 from datetime import datetime
 from pathlib import Path
-from typing import List, Optional, Callable, Dict, Any
+from typing import List, Optional, Callable
+
+from dataclasses import asdict
 
 from core.orchestrator.result import TestResult
 from core.config_generator import TestConfig, OptimizationPlan
@@ -640,7 +641,6 @@ class TestOrchestrator(ParserMixin, GuidellmMixin):
         start_time = time.time()
         last_ready_count = -1
         models_ok = False
-        elapsed_logged = set()
         self._pool_wait_logged = False
         self._gw_wait_logged = False
         self._routing_wait_logged = False
@@ -1637,7 +1637,7 @@ class TestOrchestrator(ParserMixin, GuidellmMixin):
                                     log_callback(f"   Pod: {report.pod_name}")
                                     for err in report.errors[:5]:
                                         log_callback(f"      [{err.pattern_name}] {err.line[:150]}")
-                                log_callback(f"\n⚠️  Pods left running for investigation:")
+                                log_callback("\n⚠️  Pods left running for investigation:")
                                 log_callback(f"   kubectl logs -n {self.namespace} -l llm-d.ai/test-id={config.test_id} -c vllm")
                         else:
                             if log_callback:
@@ -1672,7 +1672,7 @@ class TestOrchestrator(ParserMixin, GuidellmMixin):
             elif high_error_rate:
                 if log_callback:
                     log_callback(f"\n⚠️  Skipping cleanup — high request error rate ({result.request_errored}/{result.request_total} errored)")
-                    log_callback(f"   Pods left running for investigation.")
+                    log_callback("   Pods left running for investigation.")
                     log_callback(f"🧹 Manual cleanup: kubectl delete lws -n {self.namespace} -l test-id={config.test_id}")
             elif cleanup and result.guidellm_success:
                 if log_callback:

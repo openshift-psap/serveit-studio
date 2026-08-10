@@ -11,8 +11,8 @@ Two strategies:
 """
 
 import logging
-from dataclasses import dataclass, field
-from typing import Optional, Callable, Tuple, List, Dict
+from dataclasses import dataclass
+from typing import Optional, Callable, List, Dict
 
 logger = logging.getLogger(__name__)
 
@@ -204,7 +204,7 @@ class LatencyBinarySearch:
         if result and not result.guidellm_success:
             err_msg = getattr(result, 'error_message', '') or 'unknown error'
             self.log(f"    ❌ c={concurrency}: test failed — {err_msg}", 'error')
-            self.log(f"    🛑 Stopping search — deployment left running for investigation", 'error')
+            self.log("    🛑 Stopping search — deployment left running for investigation", 'error')
             self._zero_result_abort = True
 
         if success:
@@ -219,11 +219,11 @@ class LatencyBinarySearch:
                 if err_msg:
                     self.log(f"       {err_msg}", 'error')
                 if self._zero_result_count >= 2:
-                    self.log(f"    🛑 Multiple zero-result tests — stopping search. Investigate pod logs:", 'error')
+                    self.log("    🛑 Multiple zero-result tests — stopping search. Investigate pod logs:", 'error')
                     self.log(f"       kubectl logs -n {self.create_config(concurrency, 'debug').namespace} -l component=serveit-test -c vllm --tail=50", 'info')
                     self._zero_result_abort = True
                 else:
-                    self.log(f"    ⚠️  Treating as upper bound — search will try lower concurrency", 'warning')
+                    self.log("    ⚠️  Treating as upper bound — search will try lower concurrency", 'warning')
 
         self._tested_concurrencies.add(concurrency)
 
@@ -334,7 +334,7 @@ class LatencyBinarySearch:
                     break
                 c = max(1, c // 2)
             if low is None:
-                self.log(f"  ❌ Cannot meet SLA even at c=1", 'error')
+                self.log("  ❌ Cannot meet SLA even at c=1", 'error')
                 return self._build_result()
         else:
             # --- Fresh start: Phase 1 ramp-up ---
@@ -370,7 +370,7 @@ class LatencyBinarySearch:
                         break
                     c = max(1, c // 2)
                 if low is None:
-                    self.log(f"  ❌ Cannot meet SLA even at c=1", 'error')
+                    self.log("  ❌ Cannot meet SLA even at c=1", 'error')
                     return self._build_result()
             else:
                 low = c

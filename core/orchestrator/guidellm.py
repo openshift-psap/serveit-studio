@@ -74,7 +74,7 @@ class GuidellmMixin:
             if phase == 'Running':
                 self._resolve_guidellm_pod_name()
                 if log_callback:
-                    log_callback(f'✅ Guidellm pod ready')
+                    log_callback('✅ Guidellm pod ready')
                 return True
             if phase in ('Failed', 'Error'):
                 if log_callback:
@@ -351,7 +351,7 @@ class GuidellmMixin:
 
                 # Extract metrics from the workload pod using parse_guidellm
                 if log_callback:
-                    log_callback(f'   Extracting results from workload pod...')
+                    log_callback('   Extracting results from workload pod...')
 
                 extract_cmd = [
                     kubectl.kubectl_cmd, 'exec', self._guidellm_pod_name,
@@ -371,7 +371,7 @@ class GuidellmMixin:
                     local_path = Path(output_path)
                     if local_path.exists() and local_path.stat().st_size > 0:
                         if log_callback:
-                            log_callback(f'   Using local results file')
+                            log_callback('   Using local results file')
                         result_file = str(local_path)
                     else:
                         if log_callback:

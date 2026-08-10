@@ -1,23 +1,20 @@
 """RecipeOptimizer — main pipeline orchestrator."""
 
 import os
-import sys
 import time
 import json
 import math
 import logging
 from typing import Dict, List, Tuple, Optional, Any, Callable
-from dataclasses import field
 
 from core.optimizer.config import (
-    RecipeOptimizerConfig, OptimalTP, FeasibleSplit, EPConfig
+    RecipeOptimizerConfig, OptimalTP, FeasibleSplit
 )
 from core.config_generator import TestConfig
 from core.test_orchestrator import TestOrchestrator, TestResult
 from core.system_scanner import SystemScanner
 from core.database_manager import DatabaseManager
 from core.template_manager import TemplateManager
-from core.cloud_constraints import CloudProvider
 from core.networking import detect_rdma_device_resources
 from core.test_planner import calculate_engine_memory_config
 from core.optimizer.tp_calibration import TPCalibrationMixin
@@ -239,7 +236,6 @@ class RecipeOptimizer(
         self._has_hybrid_attention = False
         if self._model_config:
             has_chunk = self._model_config.get('attention_chunk_size') is not None
-            has_sliding = self._model_config.get('sliding_window') is not None
             hybrid_archs = ['Qwen3NextForCausalLM', 'Llama4ForConditionalGeneration',
                             'Qwen3_5ForCausalLM', 'Bamba2ForCausalLM']
             model_archs = self._model_config.get('architectures', [])
@@ -252,7 +248,7 @@ class RecipeOptimizer(
                 if has_hybrid_arch:
                     reason.append(f"architecture={model_archs[0]}")
                 self.log(f"  Hybrid attention detected ({', '.join(reason)})")
-                self.log(f"    PD disaggregation requires NixlConnector with HMA support (vLLM >= v0.19)")
+                self.log("    PD disaggregation requires NixlConnector with HMA support (vLLM >= v0.19)")
 
         # Detect DeepGemm compatibility from quantization config
         self._use_deep_gemm = None  # None = let vLLM decide
@@ -467,7 +463,7 @@ class RecipeOptimizer(
             import json as _json
             with self.db_manager.get_connection() as conn:
                 row = conn.execute('SELECT optimal_config FROM optimization_runs WHERE id=?', (self.run_id,)).fetchone()
-                opt = _json.loads(row[0]) if row and row[0] else {}
+                opt = json.loads(row[0]) if row and row[0] else {}
                 if hasattr(self, 'concurrency_sweep_results') and self.concurrency_sweep_results:
                     opt['concurrency_sweep'] = self.concurrency_sweep_results
                 if hasattr(self, 'cache_sweep_results') and self.cache_sweep_results:
@@ -539,9 +535,8 @@ class RecipeOptimizer(
                 self.log(f"  ⚠️  Failed to save pod errors: {e}", 'warning')
         self.log("🚨 Critical pod errors detected — stopping for investigation", 'error')
         self.log("   Pods left running. Investigate then resume from the Resume page.", 'error')
-        import json as _json
         raise PodErrorsDetected(
-            scan_result=_json.loads(test_result.pod_errors_json) if isinstance(test_result.pod_errors_json, str) else test_result.pod_errors_json,
+            scan_result=json.loads(test_result.pod_errors_json) if isinstance(test_result.pod_errors_json, str) else test_result.pod_errors_json,
             test_id=test_config.test_id
         )
 
@@ -577,10 +572,10 @@ class RecipeOptimizer(
                     pass
         if error_pct > 2.0:
             self.log(f"🚨 {errored}/{total} requests failed ({error_pct:.1f}%) — cluster overloaded (503 from EPP)", 'error')
-            self.log(f"   Results under heavy overload are unreliable for performance comparison.", 'error')
-            self.log(f"   To fix, start a new run with one of these options:", 'error')
-            self.log(f"   1. Lower the concurrent users in Workload Configuration", 'error')
-            self.log(f"   2. Enable 'Auto-Scale Concurrency' to let the optimizer find sustainable load", 'error')
+            self.log("   Results under heavy overload are unreliable for performance comparison.", 'error')
+            self.log("   To fix, start a new run with one of these options:", 'error')
+            self.log("   1. Lower the concurrent users in Workload Configuration", 'error')
+            self.log("   2. Enable 'Auto-Scale Concurrency' to let the optimizer find sustainable load", 'error')
             if self.db_manager and self.run_id:
                 try:
                     with self.db_manager.get_connection() as conn:
@@ -643,7 +638,7 @@ class RecipeOptimizer(
 
         if old is not None and measured_concurrency > old:
             self.achievable_concurrency = min(measured_concurrency, requested)
-            self.log(f"  📊 Recalculated achievable concurrency from measured throughput:", 'info')
+            self.log("  📊 Recalculated achievable concurrency from measured throughput:", 'info')
             self.log(f"     Best throughput: {best_tput:.1f} req/s ({source}), avg E2E: {best_e2e:.1f}s", 'info')
             self.log(f"     Old estimate (TPSG): {old} → Measured: {measured_concurrency} → Using: {self.achievable_concurrency}", 'info')
         elif old is None and measured_concurrency < requested:
@@ -673,7 +668,6 @@ class RecipeOptimizer(
         _compute_gpu_mem_util and _compute_max_num_seqs work on resume.
         """
         try:
-            import json as _json
             with self.db_manager.get_connection() as conn:
                 conn.row_factory = __import__('sqlite3').Row
                 rows = conn.execute(
@@ -689,7 +683,7 @@ class RecipeOptimizer(
                     metrics_raw = row_dict.get('metrics_json')
                     if metrics_raw:
                         try:
-                            metrics = _json.loads(metrics_raw)
+                            metrics = json.loads(metrics_raw)
                             avail_kv = metrics.get('vllm_available_kv_gb')
                             overhead = metrics.get('vllm_fixed_overhead_gb')
                             if avail_kv is not None or overhead is not None:
@@ -813,7 +807,7 @@ class RecipeOptimizer(
                             tc_raw = row_data.get('test_config_json')
                             if tc_raw:
                                 try:
-                                    tc = _json.loads(tc_raw)
+                                    tc = json.loads(tc_raw)
                                     ec = tc.get('epp_config', {})
                                     plugins = ec.get('plugins', {})
                                     if plugins:
@@ -829,7 +823,7 @@ class RecipeOptimizer(
                                 manifest_raw = row_data.get('manifests_yaml')
                                 if manifest_raw:
                                     try:
-                                        manifests = _json.loads(manifest_raw)
+                                        manifests = json.loads(manifest_raw)
                                         for mk, mv in manifests.items():
                                             if 'configmap' in mk:
                                                 import re as _re2
@@ -863,7 +857,6 @@ class RecipeOptimizer(
         On resume, Steps 2-7 are skipped but later steps (EPP, Step 10) depend
         on state set during those steps. This reconstructs that state from DB rows.
         """
-        import re as _re
 
         # 1. Rebuild decode_tp_results + optimal_decode_tp from step2 tests
         if not self.decode_tp_results:
@@ -940,7 +933,7 @@ class RecipeOptimizer(
                     if not tc_raw:
                         continue
                     try:
-                        tc = _json.loads(tc_raw)
+                        tc = json.loads(tc_raw)
                         split = FeasibleSplit(
                             prefill_pods=tc.get('prefill_replicas', 1),
                             decode_pods=tc.get('decode_replicas', 1),
@@ -968,7 +961,7 @@ class RecipeOptimizer(
                     if not tc_raw:
                         continue
                     try:
-                        tc = _json.loads(tc_raw)
+                        tc = json.loads(tc_raw)
                         split = FeasibleSplit(
                             prefill_pods=tc.get('prefill_replicas', 1),
                             decode_pods=tc.get('decode_replicas', 1),
@@ -997,7 +990,7 @@ class RecipeOptimizer(
         mj_raw = row.get('metrics_json')
         if mj_raw:
             try:
-                mj = _json.loads(mj_raw)
+                mj = json.loads(mj_raw)
             except Exception:
                 pass
 
@@ -1206,7 +1199,6 @@ class RecipeOptimizer(
         For PD goals (ttft, balanced, pd_only), floor is 128 because NIXL
         transfers KV cache in blocks — larger blocks reduce transfer count.
         """
-        import math
         seq_len = self.config.isl + self.config.osl
         raw = math.sqrt(seq_len)
         from core.utils import next_power_of_2
@@ -1219,7 +1211,6 @@ class RecipeOptimizer(
         """Build EPP config dict for prereq_manager from optimizer config."""
         if not getattr(self.config, 'epp_custom_enabled', True):
             return {'preset': 'default'}
-        import math
         block_size = self._compute_block_size()
         lru_capacity = self._compute_lru_capacity(block_size)
         plugins = None
@@ -1336,7 +1327,6 @@ class RecipeOptimizer(
         Returns:
             (memory_str, cpu_str) — e.g. ("64Gi", "16")
         """
-        import math
 
         mem_override = self.config.memory_per_pod
         cpu_override = self.config.cpu_per_pod
@@ -1386,7 +1376,6 @@ class RecipeOptimizer(
                     logger.debug(f"Could not load resource pool from DB: {e}")
             try:
                 if hasattr(self, 'scanner') and self.scanner and hasattr(self.scanner, 'kubectl'):
-                    import json as _json
                     import re as _re
 
                     def _parse_mem(s):
@@ -1417,7 +1406,7 @@ class RecipeOptimizer(
                     r = self.scanner.kubectl.run(['get', 'nodes', '-o', 'json'], check=False)
                     node_alloc = {}
                     if r.returncode == 0:
-                        for nd in _json.loads(r.stdout).get('items', []):
+                        for nd in json.loads(r.stdout).get('items', []):
                             name = nd['metadata']['name']
                             if selected and name not in selected:
                                 continue
@@ -1433,7 +1422,7 @@ class RecipeOptimizer(
                     if node_alloc:
                         r = self.scanner.kubectl.run(['get', 'pods', '-A', '-o', 'json'], check=False)
                         if r.returncode == 0:
-                            for pod in _json.loads(r.stdout).get('items', []):
+                            for pod in json.loads(r.stdout).get('items', []):
                                 phase = pod.get('status', {}).get('phase', '')
                                 if phase not in ('Running', 'Pending'):
                                     continue

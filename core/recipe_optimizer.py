@@ -5,5 +5,5 @@ Import from here continues to work:
     from core.recipe_optimizer import RecipeOptimizer, RecipeOptimizerConfig
 """
 
-from core.optimizer.config import RecipeOptimizerConfig, OptimalTP, FeasibleSplit, EPConfig
-from core.optimizer.pipeline import RecipeOptimizer
+from core.optimizer.pipeline import RecipeOptimizer  # noqa: F401
+from core.optimizer.config import RecipeOptimizerConfig, FeasibleSplit  # noqa: F401

@@ -9,7 +9,7 @@ No network CRDs are needed — the device plugin handles RDMA access.
 import logging
 from typing import Dict, List, Any
 
-from .base import BaseNetworkCreator, NetworkConfig, NetworkType, NetworkResource
+from .base import BaseNetworkCreator, NetworkType, NetworkResource
 
 logger = logging.getLogger(__name__)
 

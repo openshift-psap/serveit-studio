@@ -7,23 +7,20 @@ import time
 import logging
 import subprocess
 from datetime import datetime
-from threading import RLock
-from typing import Optional, Dict, List
 
 from gevent import spawn
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from web.app_context import (
-    app, socketio, get_db, DB_PATH, TARGET_NAMESPACE,
-    OPTIMIZATION_OUTPUT_DIR, state, state_lock, APP_PATH
+    socketio, get_db, DB_PATH, TARGET_NAMESPACE,
+    state, state_lock
 )
 from web.database import save_state, load_state, get_deployment_template
 
-from core import SystemScanner, TestResult, DeploymentManager, TestConfig, TestOrchestrator
+from core import TestResult, DeploymentManager, TestConfig, TestOrchestrator
 from core.web_deployer import DeploymentOrchestrator
 from core.k8s_utils import KubectlRunner
-from core.template_manager import TemplateManager
 
 logger = logging.getLogger(__name__)
 
@@ -878,11 +875,16 @@ def run_optimization_background(data):
 
             # Fallback: query the device class on the cluster
             if not dra_gpu_resource_key:
+                _kc = 'oc'
+                try:
+                    subprocess.run(['oc', 'version'], capture_output=True, timeout=5, check=True)
+                except (FileNotFoundError, subprocess.CalledProcessError):
+                    _kc = 'kubectl'
                 for dc_name in selected_dra_classes:
                     try:
-                        r = scanner.kubectl.run(
-                            ['get', 'deviceclass', dc_name, '-o', 'jsonpath={.spec.extendedResourceName}'],
-                            check=False)
+                        r = subprocess.run(
+                            [_kc, 'get', 'deviceclass', dc_name, '-o', 'jsonpath={.spec.extendedResourceName}'],
+                            capture_output=True, text=True, timeout=15)
                         if r.returncode == 0 and r.stdout.strip():
                             dra_gpu_resource_key = r.stdout.strip()
                             log_to_ui(f'Auto-resolved DRA resource key: {dra_gpu_resource_key}', 'info')

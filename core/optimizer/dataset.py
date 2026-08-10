@@ -1,11 +1,7 @@
 """Dataset generation for optimization workloads."""
 
 import os
-import json as _json
 import hashlib
-import random
-from pathlib import Path
-from typing import Optional
 
 
 class DatasetMixin:
@@ -104,7 +100,7 @@ class DatasetMixin:
             )
             if result.returncode != 0:
                 self.log(f"   ❌ Dataset generation failed: {result.stderr[:200]}", 'error')
-                raise RuntimeError(f"Failed to generate random dataset on workload pod")
+                raise RuntimeError("Failed to generate random dataset on workload pod")
             if result.stderr:
                 for line in result.stderr.strip().splitlines():
                     self.log(f"   {line}", 'info')
@@ -153,7 +149,7 @@ class DatasetMixin:
                     check=False, timeout=3600
                 )
                 if result.returncode != 0:
-                    self.log(f"   ⚠️  Calibration dataset generation failed, falling back to synthetic", 'warning')
+                    self.log("   ⚠️  Calibration dataset generation failed, falling back to synthetic", 'warning')
                     return None
 
             return dataset_path
@@ -248,7 +244,7 @@ class DatasetMixin:
             )
             if result.returncode != 0:
                 self.log(f"   ❌ Dataset generation failed: {result.stderr[:200]}", 'error')
-                raise RuntimeError(f"Failed to generate prefix cache dataset on workload pod")
+                raise RuntimeError("Failed to generate prefix cache dataset on workload pod")
             if result.stderr:
                 for line in result.stderr.strip().splitlines():
                     self.log(f"   {line}", 'info')
@@ -257,7 +253,7 @@ class DatasetMixin:
         self.config.dataset_source = dataset_path
         self.config.dataset_column = 'prompt'
         self.config.dataset_max_output = osl
-        self.log(f"   Workload switched to dataset mode for prefix cache simulation", 'info')
+        self.log("   Workload switched to dataset mode for prefix cache simulation", 'info')
 
         # Persist seed to DB so resume regenerates the same dataset
         if self.run_id and self.db_manager:

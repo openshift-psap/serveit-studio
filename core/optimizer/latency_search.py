@@ -1,7 +1,5 @@
 """Steps 10-11: Latency-bounded throughput search and calibrated load."""
 
-import time
-from typing import Dict, Optional
 
 
 class LatencySearchMixin:
@@ -312,7 +310,6 @@ class LatencySearchMixin:
           step = ceil(calibrated * 0.2 / 10) * 10, overflow shifts above
         - List of ints: use those exact levels (calibrated always included)
         """
-        import math
         custom = getattr(self.config, 'concurrency_sweep_levels', None)
         count = getattr(self.config, 'concurrency_sweep_count', None)
         step_pct = getattr(self.config, 'concurrency_sweep_step_pct', 20)
@@ -689,7 +686,7 @@ class LatencySearchMixin:
             # --- Summary comparison at calibrated point ---
             if cal_results and cal_agg_results:
                 self.log("", 'info')
-                self.log(f"📊 Calibrated Load Comparison:", 'decision')
+                self.log("📊 Calibrated Load Comparison:", 'decision')
                 pd_c = cal_results[0]
                 agg_c = cal_agg_results[0]
                 self.log(f"  PD  (c={pd_c['concurrency']}): TTFT={pd_c['ttft_p90']:.0f}ms, {pd_c['throughput_per_gpu']:.0f} tok/s/gpu", 'info')
@@ -778,7 +775,7 @@ class LatencySearchMixin:
                         best_split = pd_configs[0][0]
                         epp_test_id = f"step10-epp-{best_split.prefill_pods}p{best_split.decode_pods}d-ptp{best_split.prefill_tp}-dtp{best_split.decode_tp}"
                         if epp_test_id in self.completed_tests:
-                            self.log(f"  ⏩ EPP PD test: resuming from DB", 'info')
+                            self.log("  ⏩ EPP PD test: resuming from DB", 'info')
                             continue
                         epp_config = self._create_pd_config(best_split)
                         epp_config.test_id = epp_test_id
@@ -795,7 +792,7 @@ class LatencySearchMixin:
                     elif arch == 'aggregated' and self.aggregated_tp:
                         epp_test_id = f"step10-epp-aggregated-tp{self.aggregated_tp}"
                         if epp_test_id in self.completed_tests:
-                            self.log(f"  ⏩ EPP Aggregated test: resuming from DB", 'info')
+                            self.log("  ⏩ EPP Aggregated test: resuming from DB", 'info')
                             continue
                         epp_config = self._create_aggregated_config(
                             tp=self.aggregated_tp,

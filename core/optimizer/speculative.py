@@ -1,7 +1,5 @@
 """Step 12: Speculative decoding comparison."""
 
-import copy
-from typing import Optional
 
 
 class SpeculativeMixin:

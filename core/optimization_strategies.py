@@ -16,7 +16,7 @@ testing, so that Step 8 comparisons require no additional tests.
 
 import logging
 from abc import ABC, abstractmethod
-from typing import List, Tuple, TYPE_CHECKING
+from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
     from .recipe_optimizer import RecipeOptimizer
@@ -237,7 +237,7 @@ class ThroughputStrategy(OptimizationStrategy):
 
             self.opt.log("Step 4: Cluster Capacity Analysis (EP)", 'info')
             self.opt.log(f"  Concurrency (simultaneous requests): {concurrency}", 'info')
-            self.opt.log(f"  GPU cost per request:", 'info')
+            self.opt.log("  GPU cost per request:", 'info')
             self.opt.log(f"    Prefill: {self.opt.config.isl} ISL ÷ {prefill_tpsg:.0f} TPSG = {raw_prefill_cost:.2f} GPU-sec", 'info')
             if cache_hit_pct > 0:
                 self.opt.log(f"    Prefill (cache-adjusted): {raw_prefill_cost:.2f} × {1.0 - cache_hit_pct/100:.0%} active = {prefill_cost:.2f} GPU-sec ({cache_hit_pct}% cache hit)", 'info')
@@ -245,7 +245,7 @@ class ThroughputStrategy(OptimizationStrategy):
             self.opt.log(f"    Total:   {total_cost:.2f} GPU-sec/request", 'info')
             self.opt.log("", 'info')
 
-            self.opt.log(f"Step 5: Sustainable Throughput & EP Configurations", 'info')
+            self.opt.log("Step 5: Sustainable Throughput & EP Configurations", 'info')
             self.opt.log(f"  Available: {total_gpus} GPUs", 'info')
             self.opt.log(f"  Sustainable: {sustainable_concurrency} users ({sustainable_qps:.2f} req/s)", 'info')
 
@@ -381,7 +381,7 @@ class ThroughputStrategy(OptimizationStrategy):
             best_tput = best_result.throughput_mean or best_result.throughput_p90 or 0
 
             self.opt.log("", 'info')
-            self.opt.log(f"✅ Best EP Configuration (by throughput):", 'success')
+            self.opt.log("✅ Best EP Configuration (by throughput):", 'success')
             self.opt.log(f"  PTP={best_split.prefill_tp} DTP={best_split.decode_tp}, "
                          f"{best_split.prefill_pods}P+{best_split.decode_pods}D ({best_split.total_gpus} GPUs)", 'info')
             self.opt.log(f"  TTFT p90: {best_ttft:.1f}ms, Throughput mean: {best_tput:.2f} req/s", 'info')

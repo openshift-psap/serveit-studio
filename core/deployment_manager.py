@@ -633,7 +633,7 @@ class DeploymentManager:
                 else:
                     if log_callback and status_changed:
                         log_callback(
-                            f"   ⏳ Pods running but not yet serving — waiting for model load..."
+                            "   ⏳ Pods running but not yet serving — waiting for model load..."
                         )
 
             # Periodically check for pods stuck in Pending (DRA allocation failure)
@@ -703,7 +703,7 @@ class DeploymentManager:
                 check=False
             )
             # Services are NOT owned by LWS and must be deleted separately
-            svc_result = self.kubectl.run(
+            self.kubectl.run(
                 ['delete', 'service', '-l', f'test-id={test_id}', '-n', self.namespace],
                 check=False
             )

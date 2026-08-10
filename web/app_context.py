@@ -9,7 +9,6 @@ Every web module imports from here. Never define app/socketio/state elsewhere.
 # server.py handles this before importing anything.
 
 import os
-import json
 import sqlite3
 import logging
 from contextlib import contextmanager

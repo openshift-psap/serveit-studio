@@ -342,16 +342,17 @@ Results are stored in SQLite at `/mnt/storage/serveit.db`.
 
 ```
 core/                              # Optimization engine
-├── recipe_optimizer.py            #   Main optimizer (mixes in all modules below)
+├── recipe_optimizer.py            #   Re-export shim (backward compat)
 ├── optimization_strategies.py     #   Goal strategies: TTFT, Throughput, Balanced, EP-only
 ├── optimizer/                     #   Pipeline steps
-│   ├── pipeline.py                #     Orchestration, resume, network/RDMA detection
+│   ├── pipeline.py                #     Main orchestrator, resume, network/RDMA detection
 │   ├── config_builder.py          #     Auto-tune vLLM params (gmu, max_num_seqs, EP memory)
 │   ├── config.py                  #     RecipeOptimizerConfig dataclass
 │   ├── tp_calibration.py          #     Steps 2-3: TP sweep
 │   ├── pd_search.py               #     Steps 4-7: Smart PD split search, Pareto front
 │   ├── epp_tuning.py              #     Step 9: Smart EPP weight derivation
 │   ├── latency_search.py          #     Step 10: Binary search under latency SLA
+│   ├── cache_sweep.py             #     Step 11: Prefix cache % sweep
 │   ├── speculative.py             #     Step 12: MTP/speculative decoding comparison
 │   └── dataset.py                 #     Prefix cache dataset generation
 ├── orchestrator/                  #   Test execution
@@ -360,58 +361,126 @@ core/                              # Optimization engine
 │   ├── parser.py                  #     Parse guidellm JSON + Prometheus metrics
 │   └── result.py                  #     TestResult dataclass
 ├── templates/                     #   Jinja2 K8s manifests
-│   ├── aggregated/                #     Single-pool LWS
-│   ├── pd/                        #     Prefill + Decode LWS (also used for EP)
-│   ├── prereq/                    #     Gateway, EPP, RDMA discovery, RBAC
-│   └── benchmark/                 #     Workload pod
+│   ├── aggregated/                #     Single-pool LWS + service
+│   ├── pd/                        #     Prefill + Decode LWS + services
+│   ├── prereq/                    #     Gateway, EPP, model download, RBAC, SCC
+│   └── benchmark/                 #     guidellm job + pod
 ├── networking/                    #   Network type detection + template value computation
+│   ├── base.py                    #     Base class + eth0
+│   ├── dra.py                     #     DRA (Dynamic Resource Allocation)
+│   ├── nad.py                     #     Network Attachment Definitions (Multus)
+│   ├── shared_device.py           #     RDMA shared device plugin
+│   └── sriov.py                   #     SR-IOV network
 ├── providers/                     #   Cloud provider adapters
-├── system_scanner.py              #   Cluster scan: GPUs, RDMA, nodes, resources
+│   ├── aws/                       #     AWS (EKS)
+│   ├── azure/                     #     Azure (AKS)
+│   ├── baremetal/                  #     Bare metal / on-prem
+│   ├── coreweave/                 #     CoreWeave
+│   ├── gcp/                       #     GCP (GKE)
+│   └── ibm_cloud/                 #     IBM Cloud (RHOAI)
+├── system_scanner.py              #   Cluster scan: GPUs, RDMA, nodes, storage, DRA
 ├── config_generator.py            #   TestConfig dataclass + config generation
 ├── template_manager.py            #   Render templates with network/role-aware vars
 ├── database_manager.py            #   SQLite persistence for runs and test results
 ├── report_analysis.py             #   Build report data from DB (recommendations, charts)
 ├── report_data.py                 #   Report data model + SQL queries
+├── report_generator.py            #   HTML report generation
+├── report_renderer.py             #   Plotly chart rendering for reports
 ├── metrics_collector.py           #   Prometheus/Thanos metric collection
-├── prereq_manager.py              #   EPP configmap + gateway deployment
-├── mlflow_exporter.py             #   Export results to MLflow (params, metrics, artifacts)
+├── metrics_analyzer.py            #   Post-collection metric analysis
+├── prereq_manager.py              #   EPP configmap + gateway + model download
+├── resource_calculator.py         #   GPU memory + resource estimation
+├── progress_tracker.py            #   Progress bar + formatting utilities
+├── cleanup_manager.py             #   Resource cleanup (LWS, services, pods)
+├── mlflow_exporter.py             #   Export results to MLflow
 ├── deployment_manager.py          #   LWS apply/delete/wait
 ├── pod_error_scanner.py           #   Detect OOM, CUDA errors, crash loops in pod logs
+├── cloud_constraints.py           #   Cloud-specific TP/PD constraints
+├── user_defined_tuning.py         #   User-defined vLLM parameter overrides
+├── version_scanner.py             #   Detect llm-d / vLLM image versions
+├── web_deployer.py                #   Network integrator for web UI
+├── utils.py                       #   Shared utilities (Architecture enum, math helpers)
 └── k8s_utils.py                   #   KubectlRunner, cloud detection
 
 web/                               # Flask + SocketIO web UI (wizard)
 ├── server.py                      #   App factory + startup
+├── app_context.py                 #   Flask app + SocketIO initialization
 ├── optimization.py                #   Background optimization runner + UI logging
 ├── routes_api.py                  #   REST API (runs, configs, manifests, reports)
-├── realtime.py                    #   SocketIO event handlers
-├── static/js/modules/             #   Frontend JS modules
-│   ├── charts.js                  #     Plotly chart rendering (all report tabs)
-│   ├── config.js                  #     Config save/load, wizard state
-│   ├── report.js                  #     Report page orchestration
-│   ├── settings.js                #     Advanced vLLM + EPP settings UI
-│   ├── wizard.js                  #     Step navigation, model gallery
-│   ├── mlflow.js                  #     MLflow export dialog + sequential export with stop
-│   └── ...                        #     console, resume, socket, navigation, cluster
-└── templates/partials/            #   HTML wizard steps (step1-step7)
+├── realtime.py                    #   SocketIO event handlers (scan, config, storage)
+├── database.py                    #   Web UI SQLite (config, state)
+├── auth.py                        #   Web UI authentication
+├── data/models.json               #   Model gallery catalog
+├── static/js/
+│   ├── app.js                     #   Main app entry point
+│   ├── report-download.js         #   Report download handler
+│   └── modules/                   #   Frontend JS modules
+│       ├── charts.js              #     Plotly chart rendering (all report tabs)
+│       ├── config.js              #     Config save/load, wizard state
+│       ├── report.js              #     Report page orchestration
+│       ├── settings.js            #     Advanced vLLM + EPP settings UI
+│       ├── wizard.js              #     Step navigation, model gallery
+│       ├── mlflow.js              #     MLflow export dialog
+│       ├── socket.js              #     SocketIO client + API control takeover
+│       ├── cluster.js             #     Cluster scan results display
+│       ├── console.js             #     Live log console
+│       ├── resume.js              #     Run resume logic
+│       ├── navigation.js          #     Page navigation
+│       └── ui-helpers.js          #     Shared UI utilities
+├── templates/
+│   ├── index.html                 #   Main wizard page
+│   ├── login.html                 #   Login page
+│   ├── setup.html                 #   Initial setup page
+│   └── partials/                  #   Wizard step fragments
+│       ├── step1-step7.html       #     Wizard steps
+│       ├── console.html           #     Log console panel
+│       ├── modals.html            #     Dialog modals
+│       └── overlays.html          #     Loading overlays
+└── static/css/style.css           #   Main stylesheet
 
 launcher/                          # Multi-user launcher dashboard
 ├── app.py                         #   Flask API + dashboard routes
-├── instance_manager.py            #   Instance CRUD, cluster CRUD, proxy support
+├── instance_manager.py            #   Instance CRUD, cluster CRUD, proxy, kubeconfig
 ├── cluster_scanner.py             #   Scan remote clusters via kubeconfig
 ├── database.py                    #   Launcher SQLite (users, clusters, instances)
 ├── auth.py                        #   Authentication + session management
-└── templates/dashboard.html       #   Launcher single-page dashboard
+├── templates/
+│   ├── dashboard.html             #   Launcher single-page dashboard
+│   └── login.html                 #   Launcher login page
+└── static/js/cluster-viz.js       #   Cluster visualization
 
 cli/
 └── inftune.py                     #   CLI interface (serveit run, cluster add/scan)
 
 deployment/
 ├── deploy.py                      #   Deploy, sync, port-forward CLI
-└── templates/                     #   Instance deployment + PVC + service manifests
+└── templates/                     #   Helm-style templates
+    ├── deployment.yaml.j2         #     Local mode deployment
+    ├── instance-deployment.yaml.j2 #    Launcher instance deployment
+    ├── pvc.yaml.j2                #     PersistentVolumeClaim
+    ├── service.yaml.j2            #     Service
+    ├── rbac.yaml.j2               #     Local mode RBAC (Role + ClusterRole)
+    └── rbac-launcher.yaml.j2      #     Launcher mode RBAC
+
+docker/
+├── Dockerfile.server              #   Server image (web UI + optimizer)
+├── Dockerfile.workload            #   Workload image (guidellm benchmarks)
+├── Dockerfile                     #   Base/dev Dockerfile
+└── entrypoint.sh                  #   Container entrypoint
+
+AI-assistance/                     #   AI coding assistant skills
+├── claude-code/serveit-run/       #     Claude Code skill (SKILL.md + run.py)
+└── cursor/serveit-run/            #     Cursor-compatible skill (.mdc)
+
+tests/
+├── test_imports.py                #   Import validation for all 66 modules
+└── __init__.py
 
 docs/
-├── optimization-math.md           #   All formulas and parameter computation docs
-└── screenshots/                   #   README screenshots
+└── api-reference.md               #   REST + Socket.IO + CLI API reference
+
+.github/workflows/ci.yml           # CI: ruff lint + pytest on push/PR
+ruff.toml                          # Ruff linter configuration
 ```
 
 ## License

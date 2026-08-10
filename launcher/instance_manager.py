@@ -15,7 +15,7 @@ import time
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import datetime
 from pathlib import Path
-from typing import Optional, List, Dict
+from typing import List, Dict
 
 logger = logging.getLogger(__name__)
 
@@ -1158,7 +1158,7 @@ def backup_instance(instance_id: int, owner_id: int) -> Dict:
                     dest.unlink(missing_ok=True)
                 else:
                     return True
-            except Exception as e:
+            except Exception:
                 continue
         errors.append(f'{label}: download failed from all URLs')
         return False

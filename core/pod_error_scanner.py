@@ -11,7 +11,7 @@ import subprocess
 import json
 from dataclasses import dataclass, field, asdict
 from datetime import datetime
-from typing import List, Optional
+from typing import List
 
 
 ERROR_PATTERNS = [
@@ -126,7 +126,6 @@ def scan_pod_logs(namespace: str, test_id: str, tail_lines: int = 500) -> ErrorS
         result.nixl_error_count = sum(1 for name, _ in all_errors if name == 'NIXL_ERROR')
         result.has_critical_errors = len(critical_errors) > 0
 
-        total_errors = len(all_errors)
         affected_pods = len(result.pod_reports)
         error_types = sorted(set(name for name, _ in all_errors))
         parts = []

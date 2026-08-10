@@ -8,14 +8,12 @@ Creates ResourceClaimTemplates for:
 """
 
 import logging
-from typing import Dict, List, Any, Optional
+from typing import Dict, List, Any
 
 from .base import (
     BaseNetworkCreator,
-    NetworkConfig,
     NetworkResource,
-    NetworkType,
-    RDMAType
+    NetworkType
 )
 
 logger = logging.getLogger(__name__)

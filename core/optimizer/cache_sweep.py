@@ -1,6 +1,5 @@
 """Step 13: Cache hit sweep — measure performance across prefix cache hit ratios."""
 
-import copy
 from typing import Dict, List, Optional
 
 
@@ -337,7 +336,7 @@ class CacheSweepMixin:
         if self.config.cache_sweep_enabled:
             self.log(f"\n{'='*60}", 'info')
             self.log(f"Cache Sweep at concurrency {default_concurrency}" +
-                     (f" (calibrated)" if calibrated_concurrency else ""), 'decision')
+                     (" (calibrated)" if calibrated_concurrency else ""), 'decision')
             self.log(f"{'='*60}", 'info')
 
             for c in selected:
@@ -443,7 +442,7 @@ class CacheSweepMixin:
 
         # --- Summary ---
         if self.cache_sweep_results:
-            self.log(f"\n📊 Cache Hit Sweep Summary:", 'decision')
+            self.log("\n📊 Cache Hit Sweep Summary:", 'decision')
             for arch_key, sweep in self.cache_sweep_results.items():
                 if not sweep:
                     continue

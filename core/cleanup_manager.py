@@ -132,7 +132,7 @@ class CleanupManager:
             )
             if result.returncode == 0 and 'deleted' in result.stdout.lower():
                 if log_callback:
-                    log_callback(f'✅ Cleaned up DRA ResourceClaimTemplates')
+                    log_callback('✅ Cleaned up DRA ResourceClaimTemplates')
 
             if log_callback:
                 log_callback('✅ Cleanup complete')

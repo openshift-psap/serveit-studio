@@ -8,9 +8,9 @@ import sqlite3
 import logging
 import subprocess
 from datetime import datetime
-from typing import Optional, Dict, List
+from typing import Optional, Dict
 
-from flask import session, request, jsonify, send_file, has_request_context
+from flask import session, request, jsonify, has_request_context
 from flask_socketio import emit as _socketio_emit
 from gevent import spawn, sleep as gsleep
 
@@ -32,15 +32,13 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from web.app_context import (
     app, socketio, get_db, DB_PATH, TARGET_NAMESPACE,
-    OPTIMIZATION_OUTPUT_DIR, STATE_DIR, STATE_FILE,
+    STATE_FILE,
     state, state_lock, APP_PATH,
     _session_lock, _SESSION_TIMEOUT_SECS
 )
 
-from core import SystemScanner, TestResult, DeploymentManager, TestConfig, TestOrchestrator
-from core.web_deployer import DeploymentOrchestrator
+from core import SystemScanner
 from core.k8s_utils import KubectlRunner
-from core.template_manager import TemplateManager
 
 from web.optimization import log_to_ui, run_optimization_background, stream_job_logs
 from web.database import save_state, save_deployment_template, get_resumable_run
@@ -962,7 +960,6 @@ def handle_scan_cluster(data):
                 if not any(blk in sc.name.lower() for blk in ('block', 'raw', 'iscsi-block'))
                 and sc.provisioner != 'kubernetes.io/no-provisioner'
             ],
-            'gpu_node_count': resources.gpu_node_count,
             # Provider and network information
             'provider': provider_name,
             'network_type': network_type,
@@ -1020,7 +1017,6 @@ def read_config_from_pvc(pvc_name: str, model_name: str, namespace: Optional[str
     if namespace is None:
         namespace = TARGET_NAMESPACE
     import json
-    from core.k8s_utils import KubectlRunner
 
     kubectl = KubectlRunner(namespace=namespace)
     pod_name = f"config-reader-{int(time.time())}"
@@ -2026,7 +2022,7 @@ def handle_recreate_storage(data):
                         log_to_ui(f"   ✅ All {len(download_jobs)} model downloads completed", 'success')
                         socketio.emit('recreate_storage_done', {'run_id': run_id})
                         return
-                log_to_ui(f"   ⚠️  Model download timed out (2.5h)", 'warning')
+                log_to_ui("   ⚠️  Model download timed out (2.5h)", 'warning')
                 socketio.emit('recreate_storage_done', {'run_id': run_id, 'error': 'Timed out'})
             spawn(_wait_for_job)
             return
@@ -2072,7 +2068,7 @@ def handle_recreate_storage(data):
             log_to_ui(f"   🚀 Model download job started ({job_name})", 'info')
             def _wait_for_job():
                 import subprocess as _sp
-                log_to_ui(f"   ⏳ Waiting for model download to complete...", 'info')
+                log_to_ui("   ⏳ Waiting for model download to complete...", 'info')
                 for _ in range(1800):
                     gsleep(5)
                     r = _sp.run(['kubectl', 'get', 'job', job_name, '-n', namespace,
@@ -2082,14 +2078,14 @@ def handle_recreate_storage(data):
                     succeeded = parts[0] if parts else ''
                     failed = parts[1] if len(parts) > 1 else ''
                     if succeeded == '1':
-                        log_to_ui(f"   ✅ Model download completed", 'success')
+                        log_to_ui("   ✅ Model download completed", 'success')
                         socketio.emit('recreate_storage_done', {'run_id': run_id})
                         return
                     if failed and failed != '' and int(failed) > 0:
-                        log_to_ui(f"   ❌ Model download failed", 'error')
+                        log_to_ui("   ❌ Model download failed", 'error')
                         socketio.emit('recreate_storage_done', {'run_id': run_id, 'error': 'Download job failed'})
                         return
-                log_to_ui(f"   ⚠️  Model download timed out (2.5h)", 'warning')
+                log_to_ui("   ⚠️  Model download timed out (2.5h)", 'warning')
                 socketio.emit('recreate_storage_done', {'run_id': run_id, 'error': 'Timed out'})
             spawn(_wait_for_job)
             return

@@ -492,7 +492,6 @@ class ReportAnalyzer:
                     'epp_preset': run_config.get('epp_preset'),
                     'epp_benchmark': run_config.get('epp_benchmark'),
                     'epp_custom_enabled': run_config.get('epp_custom_enabled'),
-                    'advanced_vllm_custom_enabled': run_config.get('advanced_vllm_custom_enabled'),
                 },
             }
             if include_eff:
@@ -1649,7 +1648,7 @@ class ReportAnalyzer:
                     }
                     # Insert baseline as first row in EPP table for comparison
                     baseline_entry = {
-                        'name': f'baseline (default)',
+                        'name': 'baseline (default)',
                         'test_id': best.config_name,
                         'config_name': best.display_label,
                         'ttft_p50': round(best.ttft_p50, 2) if best.ttft_p50 else None,

@@ -4,7 +4,7 @@ import os
 import json
 from datetime import timedelta
 from functools import wraps
-from flask import Flask, render_template, jsonify, request, session
+from flask import Flask, render_template, jsonify, request
 
 from launcher.database import init_db, get_db
 from launcher.auth import register_auth_routes, get_user_id, get_username, is_admin, create_user, reset_password
@@ -550,7 +550,7 @@ def main():
     namespace = os.environ.get('NAMESPACE', 'inftune')
     t = threading.Thread(target=_auto_rescan_loop, args=(app, namespace), daemon=True)
     t.start()
-    print(f"  Auto-rescan thread started (default: every 10 min)")
+    print("  Auto-rescan thread started (default: every 10 min)")
 
     app.run(host='0.0.0.0', port=5000, debug=False, threaded=True)
 

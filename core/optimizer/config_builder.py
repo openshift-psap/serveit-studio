@@ -1,8 +1,7 @@
 """Test config creation and vLLM parameter computation."""
 
-import os
 import math
-from typing import List, Tuple, Optional, Dict
+from typing import List, Tuple, Optional
 
 
 from core.optimizer.config import FeasibleSplit
@@ -412,7 +411,6 @@ class ConfigBuilderMixin:
 
         isl = self.config.isl
         osl = self.config.osl
-        seq_len = isl + osl
 
         # Floor: must be >= vLLM's max_tokens_per_mm_item for multimodal models
         floor = 2048
@@ -858,8 +856,7 @@ class ConfigBuilderMixin:
         decode_max_num_seqs = self._compute_max_num_seqs(
             split.decode_tp, role='decode',
             gpu_mem_util_override=decode_gmu, num_pods=split.decode_pods)
-        max_batched = self._compute_max_num_batched_tokens(split.prefill_tp, role='prefill')
-        enable_chunked = max_batched is not None and self.config.max_model_len > max_batched
+        self._compute_max_num_batched_tokens(split.prefill_tp, role='prefill')
 
         total_pods = split.prefill_pods + split.decode_pods
         min_tp = min(split.prefill_tp, split.decode_tp)

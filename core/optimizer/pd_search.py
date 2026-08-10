@@ -1,8 +1,6 @@
 """Steps 4-7: PD split search — feasible splits, pareto, validation."""
 
-import os
-import time
-from typing import List, Tuple, Optional
+from typing import List
 
 
 from core.optimizer.config import FeasibleSplit
@@ -69,7 +67,7 @@ class PDSearchMixin:
             skipped_str = ', '.join(f'(PTP={p}, DTP={d})' for p, d in skipped)
             self.log(f"  ⚠️  Skipped {len(skipped)} asymmetric TP pairs", 'warning')
             self.log(f"     Affected: [{skipped_str}]", 'warning')
-            self.log(f"     Enable 'Allow Asymmetric TP' in Test Config to override", 'warning')
+            self.log("     Enable 'Allow Asymmetric TP' in Test Config to override", 'warning')
 
         # Fall back to symmetric if everything was filtered
         if not self._selected_tp_pairs:
@@ -107,7 +105,6 @@ class PDSearchMixin:
         if usable_gpus < prefill_tp + decode_tp:
             return []
 
-        import math
         min_prefill_pods = 1
 
         splits = []
@@ -272,7 +269,7 @@ class PDSearchMixin:
 
         self.log("Step 4: Cluster Capacity Analysis", 'info')
         self.log(f"  Concurrency (simultaneous requests): {concurrency:.0f}", 'info')
-        self.log(f"  GPU cost per request:", 'info')
+        self.log("  GPU cost per request:", 'info')
         self.log(f"    Prefill: {self.config.isl} ISL ÷ {prefill_tpsg:.0f} TPSG = {raw_prefill_cost:.2f} GPU-sec", 'info')
         if cache_hit_pct > 0:
             self.log(f"    Prefill (cache-adjusted): {raw_prefill_cost:.2f} × {active_prefill_fraction:.1%} active = {prefill_cost:.2f} GPU-sec "
@@ -321,7 +318,6 @@ class PDSearchMixin:
         # Sustainable concurrency: max concurrent users before overload.
         # Each request uses total_cost GPU-seconds, so max concurrent = GPUs / (cost × headroom)
         sustainable_concurrency = max(1, int(total_gpus / (total_cost * self.config.headroom)))
-        implied_throughput = sustainable_qps  # cluster max in req/s
 
         if concurrency > sustainable_concurrency:
             self.sustainable_throughput_rps = sustainable_qps
@@ -336,7 +332,7 @@ class PDSearchMixin:
                 self.effective_concurrency = int(self.config.qps)
                 self.log(f"  ℹ️  Using original concurrency ({concurrency:.0f}) for Steps 7-8 — expect overload", 'info')
                 if self.config.latency_constraint_enabled:
-                    self.log(f"  ℹ️  Step 10 will find max throughput under latency SLA", 'info')
+                    self.log("  ℹ️  Step 10 will find max throughput under latency SLA", 'info')
                 else:
                     self.log(f"  ℹ️  Step 11 will re-test at sustainable load ({sustainable_concurrency} users)", 'info')
         else:
@@ -372,7 +368,7 @@ class PDSearchMixin:
         resumed_step7 = {name: row for name, row in self.completed_tests.items() if name.startswith('step7-')}
 
         if self.config.pd_search_mode == 'smart':
-            self.log(f"\n  Search mode: Smart (calculated ~3 splits per TP pair)", 'info')
+            self.log("\n  Search mode: Smart (calculated ~3 splits per TP pair)", 'info')
             planned = self._smart_pd_search(tp_pairs_to_test)
 
             if resumed_step7:
@@ -397,7 +393,7 @@ class PDSearchMixin:
             self.feasible_splits.sort(key=lambda s: (s.prefill_tp, s.decode_tp, s.prefill_pct))
         else:
             # Exhaustive mode: test all valid splits (original behavior)
-            self.log(f"\n  Search mode: Exhaustive (all valid splits)", 'info')
+            self.log("\n  Search mode: Exhaustive (all valid splits)", 'info')
             max_splits = self.config.max_pd_splits
 
             if resumed_step7:
@@ -525,7 +521,7 @@ class PDSearchMixin:
                     break
 
                 if not result or not result.guidellm_success:
-                    self.log(f"    ⚠️  Test failed — retrying", 'warning')
+                    self.log("    ⚠️  Test failed — retrying", 'warning')
                     result = self.orchestrator.run_test(
                         test_config, cleanup=True,
                         log_callback=lambda msg: self.log(msg, 'info'),
@@ -808,7 +804,7 @@ class PDSearchMixin:
                 if self._is_memory_failure(result):
                     self.log(f"    ❌ OOM failure — skipping {test_id} (needs higher TP)", 'warning')
                     return None
-                self.log(f"    ⚠️  Test failed — restarting infra and retrying", 'warning')
+                self.log("    ⚠️  Test failed — restarting infra and retrying", 'warning')
                 self._restart_infra_pods()
                 import time as _time; _time.sleep(15)
                 result = self.orchestrator.run_test(
@@ -919,7 +915,7 @@ class PDSearchMixin:
                 if not getattr(result, 'nixl_degraded', False):
                     self.pareto_results.append((current_split, result))
                 else:
-                    self.log(f"  ⚠️  Discarded from Pareto — NIXL-degraded result", 'warning')
+                    self.log("  ⚠️  Discarded from Pareto — NIXL-degraded result", 'warning')
 
                 # Analyze waiting ratio to decide next split
                 waiting = self._get_waiting_ratio(result)
@@ -927,7 +923,7 @@ class PDSearchMixin:
                     test_id = f"step7-{current_split.prefill_pods}p{current_split.decode_pods}d-ptp{ptp}-dtp{dtp}"
                     self._save_waiting_ratio(test_id, waiting)
                 if waiting is None:
-                    self.log(f"    ℹ️  No vLLM waiting metrics — testing remaining planned splits", 'info')
+                    self.log("    ℹ️  No vLLM waiting metrics — testing remaining planned splits", 'info')
                     # Fall back to testing remaining planned splits
                     for s in tp_splits[1:]:
                         if self._should_stop():
@@ -952,7 +948,7 @@ class PDSearchMixin:
 
                 # Both sides truly idle — no queue pressure anywhere, split is fine
                 if decode_wait < 0.05 and prefill_wait < 0.05:
-                    self.log(f"    ✅ No queue pressure on either side — split is balanced", 'info')
+                    self.log("    ✅ No queue pressure on either side — split is balanced", 'info')
                     break
 
                 # One side at 0 means it's over-provisioned — shift pods to the other side
@@ -964,7 +960,7 @@ class PDSearchMixin:
                 # Compute rebalanced split
                 next_split = self._compute_balanced_split(ptp, dtp, current_split, decode_wait, prefill_wait)
                 if next_split is None or (next_split.prefill_pods, next_split.decode_pods) in tested_keys:
-                    self.log(f"    ℹ️  No new split to test — stopping iteration", 'info')
+                    self.log("    ℹ️  No new split to test — stopping iteration", 'info')
                     break
 
                 direction = "more decode" if ratio > 1.1 else "more prefill"

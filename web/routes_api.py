@@ -4,11 +4,9 @@ import os
 import sys
 import json
 import shutil
-import subprocess
 import logging
 from datetime import datetime
 from pathlib import Path
-from typing import Optional, Dict
 from flask import jsonify, request, render_template, Response
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -77,7 +75,7 @@ def api_scan_cluster():
                 'memory_gb': node.memory_gb, 'has_rdma': node.has_rdma, 'nics': node_nics,
             })
 
-        from web.realtime import _scan_networks, _check_lws_vct, _detect_node_nfs_classes, _detect_gateway_class
+        from web.realtime import _scan_networks, _detect_gateway_class
 
         result = {
             'total_gpus': resources.total_gpus,
@@ -546,9 +544,17 @@ window.addEventListener('load', function() {{
     var best = summary.best_configs || {{}};
     var allRes = data.all_results || [];
     try {{
-        document.body.innerHTML = buildFullReport(
+        var reportHtml = buildFullReport(
             runId, data, data.charts, rec, summary, best, allRes, hasPD, hasVllm
         );
+        // innerHTML doesn't execute <script> tags — extract and run them separately
+        document.body.innerHTML = reportHtml;
+        var scripts = document.body.querySelectorAll('script');
+        scripts.forEach(function(s) {{
+            var newScript = document.createElement('script');
+            newScript.textContent = s.textContent;
+            s.parentNode.replaceChild(newScript, s);
+        }});
     }} catch(e) {{
         document.body.innerHTML = '<h1>Report Error</h1><pre>' + e.stack + '</pre>';
     }}

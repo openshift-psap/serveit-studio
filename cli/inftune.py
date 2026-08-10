@@ -250,7 +250,6 @@ def cmd_run(args):
         print('Error: --model is required (or use --resume RUN_ID)')
         return 1
 
-    from core.recipe_optimizer import RecipeOptimizer, RecipeOptimizerConfig
     from core.database_manager import DatabaseManager
 
     db = DatabaseManager(db_path=args.db)
@@ -546,7 +545,7 @@ def ensure_model_ready(config, log_fn):
 
         pvc_yaml = tmgr.render_template('prereq/model-cache-pvc.yaml.j2',
             pvc_name=pvc_name, namespace=namespace,
-            test_id=f'cli-setup', model_name=model,
+            test_id='cli-setup', model_name=model,
             storage_class=storage_class, storage_size=512)
 
         r = _sp.run(['kubectl', 'apply', '-f', '-'], input=pvc_yaml.encode(),
@@ -574,7 +573,7 @@ def ensure_model_ready(config, log_fn):
         log_fn(f'Failed to create download job: {r.stderr.decode()}', 'error')
         return False
 
-    log_fn(f'Waiting for model download (this may take several minutes)...', 'info')
+    log_fn('Waiting for model download (this may take several minutes)...', 'info')
     import time as _time
     for i in range(360):  # 30 min max
         r = _sp.run(['kubectl', 'get', 'job', job_name, '-n', namespace,
@@ -582,10 +581,10 @@ def ensure_model_ready(config, log_fn):
                     capture_output=True, timeout=10)
         status = r.stdout.decode().strip() if r.returncode == 0 else ''
         if status == 'Complete':
-            log_fn(f'Model download complete', 'success')
+            log_fn('Model download complete', 'success')
             return True
         if status == 'Failed':
-            log_fn(f'Model download failed', 'error')
+            log_fn('Model download failed', 'error')
             return False
         if r.returncode != 0 and i > 5:
             pod_r = _sp.run(['kubectl', 'get', 'pods', '-l', f'job-name={job_name}', '-n', namespace,
@@ -593,13 +592,13 @@ def ensure_model_ready(config, log_fn):
                            capture_output=True, timeout=10)
             pod_phase = pod_r.stdout.decode().strip() if pod_r.returncode == 0 else ''
             if not pod_phase:
-                log_fn(f'Model download complete (Job auto-cleaned)', 'success')
+                log_fn('Model download complete (Job auto-cleaned)', 'success')
                 return True
             if pod_phase == 'Succeeded':
-                log_fn(f'Model download complete', 'success')
+                log_fn('Model download complete', 'success')
                 return True
             if pod_phase == 'Failed':
-                log_fn(f'Model download failed', 'error')
+                log_fn('Model download failed', 'error')
                 return False
         if i > 0 and i % 12 == 0:
             log_fn(f'   Still downloading... ({i * 5}s)', 'info')
@@ -797,7 +796,7 @@ td{{padding:8px 10px;border-bottom:1px solid #f1f5f9}}
         html += '<h2>Deployment Recommendation</h2>'
         for key, r in recs.items():
             c = r.get('config', {})
-            html += f'<div style="background:white;border:2px solid #10b981;border-radius:10px;padding:16px;margin:12px 0;">'
+            html += '<div style="background:white;border:2px solid #10b981;border-radius:10px;padding:16px;margin:12px 0;">'
             html += f'<div style="font-weight:800;color:#1e293b;font-size:1.2em;">{r.get("deploy", "")}</div>'
             html += f'<div style="color:#475569;">TTFT P90: <strong>{c.get("ttft_p90", "N/A")} ms</strong> | '
             html += f'Throughput Mean: <strong>{c.get("throughput_mean", "N/A")} req/s</strong> | '

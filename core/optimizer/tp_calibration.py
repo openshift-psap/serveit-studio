@@ -1,6 +1,5 @@
 """Steps 2-3: Combined TP calibration — decode and prefill in a single sweep."""
 
-from typing import Optional
 
 
 from core.optimizer.config import OptimalTP

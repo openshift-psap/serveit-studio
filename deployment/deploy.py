@@ -37,7 +37,6 @@ import subprocess
 import sys
 import time
 from pathlib import Path
-from typing import Optional
 
 SCRIPT_DIR = Path(__file__).parent.resolve()
 REPO_ROOT = SCRIPT_DIR.parent
@@ -188,7 +187,7 @@ def start_port_forward(cmd: str, namespace: str, port: int, svc_name: str = 'ser
     if proc.poll() is None:
         print(f"✅ Port-forward running (PID: {proc.pid})", file=sys.stderr)
         print(f"   Web UI: http://localhost:{port}", file=sys.stderr)
-        print(f"   Stop with: python3 deployment/deploy.py --stop-port-forward", file=sys.stderr)
+        print("   Stop with: python3 deployment/deploy.py --stop-port-forward", file=sys.stderr)
     else:
         print("⚠️  Port-forward failed to start", file=sys.stderr)
         PF_PID_FILE.unlink(missing_ok=True)

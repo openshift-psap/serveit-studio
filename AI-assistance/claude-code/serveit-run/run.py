@@ -106,7 +106,7 @@ def main():
     url = args.url.rstrip('/')
     hf_token = args.hf_token or os.environ.get('HF_TOKEN', '')
 
-    log(f'ServeIt Studio Automation', 'step')
+    log('ServeIt Studio Automation', 'step')
     log(f'Instance: {url}')
     log(f'Model:    {args.model}')
     log(f'Workload: ISL={args.isl} OSL={args.osl} Users={args.users}')

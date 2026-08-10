@@ -569,7 +569,6 @@ class SystemScanner:
             ds_data = json_mod.loads(result.stdout)
 
             for ds in ds_data.get('items', []):
-                ds_name = ds['metadata']['name']
                 ds_ns = ds['metadata']['namespace']
 
                 # Find RDMA shared device plugin DaemonSets
@@ -934,7 +933,6 @@ class SystemScanner:
                         if short in pvc_name or node in pvc_name:
                             # Find which SC this HPP pool serves
                             for sc_item in sc_data.get('items', []):
-                                params = sc_item.get('parameters', {})
                                 prov = sc_item.get('provisioner', '')
                                 if 'hostpath-provisioner' in prov:
                                     pv_by_sc.setdefault(sc_item['metadata']['name'], set()).add(node)
