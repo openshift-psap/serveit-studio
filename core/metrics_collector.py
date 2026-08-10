@@ -60,6 +60,8 @@ class MetricsCollector:
         self.session = requests.Session()
         if config.token:
             self.session.headers['Authorization'] = f'Bearer {config.token}'
+        if config.thanos_url and config.thanos_url.startswith('https'):
+            self.session.verify = False
 
     def _query_prometheus(
         self,

@@ -744,14 +744,36 @@ def run_optimization_background(data):
         thanos_url = data.get('thanos_url', os.environ.get('THANOS_URL'))
         # Auto-detect Prometheus if not configured
         if not thanos_url:
+            import ssl
+            import urllib.request
+
+            # Read SA token for authenticated requests to OpenShift monitoring
+            sa_token = None
+            token_file = '/var/run/secrets/kubernetes.io/serviceaccount/token'
+            if os.path.exists(token_file):
+                try:
+                    with open(token_file) as f:
+                        sa_token = f.read().strip()
+                except Exception:
+                    pass
+
+            ssl_ctx = ssl.create_default_context()
+            ssl_ctx.check_hostname = False
+            ssl_ctx.verify_mode = ssl.CERT_NONE
+
             for candidate in [
-                'http://prometheus.monitoring.svc.cluster.local:9090',
-                'http://prometheus-k8s.openshift-monitoring.svc:9091',
+                'https://thanos-querier.openshift-monitoring.svc:9091',
                 'http://thanos-querier.openshift-monitoring.svc:9091',
+                'https://prometheus-k8s.openshift-monitoring.svc:9091',
+                'http://prometheus-k8s.openshift-monitoring.svc:9091',
+                'http://prometheus.monitoring.svc.cluster.local:9090',
             ]:
                 try:
-                    import urllib.request
-                    r = urllib.request.urlopen(candidate + '/api/v1/status/config', timeout=3)
+                    req = urllib.request.Request(candidate + '/api/v1/status/config')
+                    if sa_token:
+                        req.add_header('Authorization', f'Bearer {sa_token}')
+                    ctx = ssl_ctx if candidate.startswith('https') else None
+                    r = urllib.request.urlopen(req, timeout=3, context=ctx)
                     if r.status == 200:
                         thanos_url = candidate
                         log_to_ui(f'📊 Auto-detected Prometheus at {candidate}', 'info')
