@@ -364,6 +364,11 @@ def cmd_run(args):
         'latency_constraint_percentile': args.latency_percentile,
         'image': args.image,
         'pvc_name': args.pvc,
+        'storage_class': args.storage_class,
+        'per_node_storage': args.per_node_storage,
+        'local_disk_path': args.local_disk_path,
+        'network_type': args.network_type,
+        'selected_dra_classes': [{'name': args.dra_device_class}] if args.dra_device_class else None,
         'nccl_ib_hca': args.nccl_ib_hca,
         'hf_token': args.hf_token or os.environ.get('HF_TOKEN'),
         'selected_nodes': selected_nodes,
@@ -386,6 +391,14 @@ def cmd_run(args):
         'thanos_url': args.thanos_url,
         'extra_env_vars': [{'name': kv.split('=', 1)[0], 'value': kv.split('=', 1)[1]}
                            for kv in args.extra_env_vars.split(',') if '=' in kv] if args.extra_env_vars else None,
+        'calibrated_load_enabled': args.calibrated_load,
+        'inferencex_sweep_enabled': args.concurrency_sweep,
+        'concurrency_sweep_count': args.concurrency_sweep_count,
+        'concurrency_sweep_step_pct': args.concurrency_sweep_step_pct,
+        'concurrency_sweep_all_configs': args.concurrency_sweep_all_configs,
+        'concurrency_sweep_max_configs': args.concurrency_sweep_max_configs,
+        'concurrency_sweep_use_epp_tuned': args.concurrency_sweep_use_epp_tuned,
+        'cache_sweep_enabled': args.cache_sweep,
         'kubeconfig': kubeconfig_path,
         'single_test_architecture': args.single_test_arch,
         'single_test_tp': args.single_test_tp,
@@ -857,7 +870,7 @@ def build_run_parser(parser):
     pc.add_argument('--prefix-cache-seed', type=int, default=None,
                     help='Random seed for reproducible prefix cache dataset generation')
 
-    hw = parser.add_argument_group('Hardware')
+    hw = parser.add_argument_group('Hardware & Infrastructure')
     hw.add_argument('--gpus', type=int, default=16, help='Total GPUs to use (default: 16)')
     hw.add_argument('--tp-options', type=str, default='1,2,4,8',
                     help='Comma-separated TP values to explore (default: 1,2,4,8)')
@@ -867,6 +880,17 @@ def build_run_parser(parser):
                     help='Kubernetes namespace (default: from cluster or serveit)')
     hw.add_argument('--pvc', type=str, default='serveit-cache',
                     help='PVC name for model cache (default: serveit-cache)')
+    hw.add_argument('--storage-class', type=str, default=None,
+                    help='Storage class for model cache PVC (auto-detected if not set)')
+    hw.add_argument('--per-node-storage', action='store_true',
+                    help='Enable per-node storage (required for local disk / hostPath)')
+    hw.add_argument('--local-disk-path', type=str, default=None,
+                    help='hostPath base for local disk storage (e.g., /var/hpvolumes/local-nvme)')
+    hw.add_argument('--network-type', type=str, default=None,
+                    choices=['dra', 'nad', 'sriov_multinic', 'shared_device', 'eth0'],
+                    help='Pod networking type (auto-detected if not set)')
+    hw.add_argument('--dra-device-class', type=str, default=None,
+                    help='DRA device class name (e.g., composite-gpu-nic-pair). Requires --network-type dra')
     hw.add_argument('--nccl-ib-hca', type=str, default='mlx',
                     help='NCCL IB HCA device prefix (default: mlx)')
     hw.add_argument('--hf-token', type=str, default=None,
@@ -902,6 +926,24 @@ def build_run_parser(parser):
                     default='duration', help='Stop mode (default: duration)')
     ss.add_argument('--max-requests', type=int, default=None,
                     help='Max requests per test (requires --stop-mode max_requests)')
+
+    pl = parser.add_argument_group('Production Load Analysis')
+    pl.add_argument('--calibrated-load', action='store_true',
+                    help='Re-test best configs at realistic (calibrated) concurrency')
+    pl.add_argument('--concurrency-sweep', action='store_true',
+                    help='Sweep multiple concurrency levels to map performance curve')
+    pl.add_argument('--concurrency-sweep-count', type=int, default=8,
+                    help='Number of concurrency levels to test (default: 8)')
+    pl.add_argument('--concurrency-sweep-step-pct', type=int, default=20,
+                    help='Spacing between levels as %% of calibrated concurrency (default: 20)')
+    pl.add_argument('--concurrency-sweep-all-configs', action='store_true', default=True,
+                    help='Include all 4 recommendation configs in sweep (default: on)')
+    pl.add_argument('--concurrency-sweep-max-configs', type=int, default=0,
+                    help='Extra configs beyond recommendations to include (default: 0)')
+    pl.add_argument('--concurrency-sweep-use-epp-tuned', action='store_true', default=True,
+                    help='Re-run sweep with EPP-tuned weights if available (default: on)')
+    pl.add_argument('--cache-sweep', action='store_true',
+                    help='Test different prefix cache hit ratios')
 
     la = parser.add_argument_group('Latency SLA')
     la.add_argument('--latency-sla', type=int, default=None, metavar='MS',
