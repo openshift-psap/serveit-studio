@@ -515,27 +515,38 @@ def get_run_report(run_id):
         app_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
         js_path = os.path.join(app_root, 'web', 'static', 'js', 'report-download.js')
 
+        # Generate a self-contained HTML that embeds the data + JS
+        # The report renders client-side when opened in a browser — same as the UI download
         html = None
         if os.path.exists(js_path):
-            try:
-                with open(js_path) as f:
-                    js_code = f.read()
-                import subprocess as _sp
-                node_script = f"""
-const data = {json.dumps(data)};
+            with open(js_path) as f:
+                js_code = f.read()
+
+            has_pd = any(r.get('architecture') == 'PD' for r in data.get('all_results', []))
+            has_vllm = bool(data.get('charts', {}).get('vllm', {}).get('configs'))
+            data_json = json.dumps(data)
+
+            html = f"""<!DOCTYPE html>
+<html><head><meta charset="UTF-8">
+<title>ServeIt Studio Report — Run #{run_id}</title>
+<script src="https://cdn.plot.ly/plotly-2.35.2.min.js"></script>
+</head><body>
+<script>
 {js_code}
-const html = buildFullReport({run_id}, data, data.charts, data.recommendation || {{}}, data.summary, data.summary.best_configs || {{}}, data.all_results || [], (data.all_results || []).some(r => r.architecture === 'PD'), !!(data.charts.vllm && data.charts.vllm.configs.length));
-process.stdout.write(html);
-"""
-                result = _sp.run(['node', '-e', node_script],
-                                 capture_output=True, text=True, timeout=30)
-                if result.returncode == 0 and result.stdout.strip():
-                    html = result.stdout
-            except Exception:
-                pass
+
+const data = {data_json};
+const runId = {run_id};
+const hasPD = {str(has_pd).lower()};
+const hasVllm = {str(has_vllm).lower()};
+document.body.innerHTML = buildFullReport(
+    runId, data, data.charts, data.recommendation || {{}},
+    data.summary, data.summary.best_configs || {{}},
+    data.all_results || [], hasPD, hasVllm
+);
+</script>
+</body></html>"""
 
         if not html:
-            # Python fallback — minimal report
             from cli.inftune import build_python_html_report
             html = build_python_html_report(run_id, data)
 
