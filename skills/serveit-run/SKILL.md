@@ -987,6 +987,16 @@ curl -sk -b /tmp/serveit-cookies.txt "$URL/api/run/$RUN_ID/config/<CONFIG_NAME>/
 
 ---
 
+**Important: syncing code (`deploy.py --sync-all`) restarts the server, which clears the in-memory config lock and running state. The optimization continues running in the background, but the UI will show it as stopped. After any sync while optimization is running, re-apply the lock and state:**
+
+```bash
+curl -sk -b /tmp/serveit-cookies.txt -X POST "$URL/api/config/lock"
+curl -sk -b /tmp/serveit-cookies.txt -X POST "$URL/api/set_state" \
+  -H 'Content-Type: application/json' -d '{"current_step":7,"running":true}'
+```
+
+---
+
 ## Step 10: Stop / Resume / Sync
 
 ```bash
@@ -1008,6 +1018,30 @@ curl -sk -b /tmp/serveit-cookies.txt -X POST "$URL/api/set_state" \
 git add -A && git commit -m "updates" && git push
 python3 deployment/deploy.py --sync-all -n serveit --mode launcher
 ```
+
+---
+
+## Troubleshooting
+
+Common issues and how to handle them:
+
+**TopologyAffinityError** — Pod can't be scheduled because GPUs span multiple NUMA nodes. Fix: patch the kubelet config to `best-effort` topology manager: `kubectl patch kubeletconfig <name> --type merge -p '{"spec":{"kubeletConfig":{"topologyManagerPolicy":"best-effort"}}}'`. GPU nodes will reboot to apply.
+
+**Permission denied on hostPath** — vLLM pod can't write to `/model-cache`. Fix: ensure the pod's `securityContext` has `privileged: true` and the `llm-d-modelserver` SA has an SCC that allows hostPath with `RunAsAny`.
+
+**Model download fails (404)** — Model ID doesn't exist on HuggingFace. Validate with `curl -sk -o /dev/null -w "%{http_code}" "https://huggingface.co/api/models/<MODEL_ID>"`. Check for typos, try the `-dynamic` suffix variant.
+
+**Config overwritten by UI** — The browser UI auto-saves config on every page load. Use `POST /api/config/lock` before saving config via REST to prevent this. Auto-unlocks on stop/complete/failure.
+
+**Server restart clears state** — Syncing code (`deploy.py --sync-all`) restarts the server, clearing in-memory config lock and running state. Re-apply with `POST /api/config/lock` and `POST /api/set_state`.
+
+**Quota exceeded (IBM Cloud)** — Old VMs still consuming quota while deleting. Wait for cloud to reclaim, or check `kubectl get machines -n openshift-machine-api` for stuck `Deleting` machines and remove their finalizers.
+
+**Pod stuck in ContainerCreating** — Usually pulling the vLLM image (~1.7GB). First pull takes 3-5 minutes. Check with `kubectl describe pod <name>`.
+
+**FailedUpdate on Machine** — The VM was created but is stuck booting. Monitor events with `kubectl get events -A | grep "Update machine"`. If `FailedUpdate` persists for more than 15-20 minutes with no `Normal Update`, delete the machine and let the MachineSet recreate it.
+
+**NFS volume mount errors with local disk** — Template is generating NFS volume mounts despite `local_disk_path` being set. Ensure `per_node_storage: true` AND `local_disk_path` are both set in the config. The prereq manager skips NFS PVC creation when `local_disk_path` is set.
 
 ---
 
