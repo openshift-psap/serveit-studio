@@ -495,7 +495,7 @@ If the user says defaults, use:
 - P/D search: smart
 - Latency SLA: none
 - Calibrated load: yes
-- Concurrency sweep: yes — tests the top 4 recommendation configs (Best Balanced, Lowest TTFT, Highest Throughput, Most Efficient) at 8 different user loads to map performance across light, medium, and heavy traffic
+- Concurrency sweep: yes — tests the top 4 recommendation configs (Best Balanced, Lowest TTFT, Highest Throughput, Most Efficient) across 8 stress scenarios from light to heavy load, mapping how each config handles increasing traffic
 - EPP tuned sweep: yes
 - Cache sweep: no
 - EPP preset: `cache_optimized` if prefix cache > 0%, otherwise `balanced`
@@ -563,10 +563,10 @@ If the user enables concurrency sweep, explain:
 
 **"Now that we know which configurations work best, we'll test each one by simulating different numbers of users working in parallel — for example 20 users, 40 users, 60 users, 80 users, and so on. Think of it like test-driving a car at different speeds — a car might feel great at 60 mph but struggle at 90. Same with inference: a config that's amazing at 50 users might fall apart at 80, while another config that looked worse in the stress test actually performs better at medium load.**
 
-**We'll take the top 4 configs — the ones our recommendation engine picked as Best Balanced, Lowest TTFT, Highest Throughput, and Most Efficient — and simulate 8-10 different user loads for each one. That gives us a complete performance map: you'll see exactly how each config handles light, medium, and heavy traffic."**
+**We'll take the top 4 configs — the ones our recommendation engine picked as Best Balanced, Lowest TTFT, Highest Throughput, and Most Efficient — and run each through 8-10 stress scenarios, from light traffic all the way up to heavy load. That gives us a complete performance map: you'll see exactly where each config starts to struggle and where it shines."**
 
 Then set:
-- `concurrency_sweep_count: 8` (or 10 for more detail)
+- `concurrency_sweep_count: 8` (8 stress scenarios from light to heavy load)
 - `concurrency_sweep_step_pct: 20`
 - `concurrency_sweep_all_configs: true` (include the 4 recommendation configs: Best Balanced, Lowest TTFT, Highest Throughput, Most Efficient)
 - `concurrency_sweep_max_configs: 0` (default — no extra configs beyond the 4 recommendations. User can increase to add more.)
