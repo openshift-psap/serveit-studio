@@ -646,6 +646,14 @@ def run_optimization_background(data):
     # page reload between handle_storage_setup and this greenlet starting.
     with state_lock:
         state['optimization_running'] = True
+    try:
+        with get_db() as conn:
+            conn.execute(
+                'UPDATE ui_session_state SET optimization_running = 1, current_step = 7, updated_at = ? WHERE id = 1',
+                (datetime.now().isoformat(),))
+    except Exception:
+        pass
+    socketio.emit('status_update', {'running': True})
 
     resume_run_id = data.get('resume_run_id')  # If set, resume this run instead of creating new
     run_name = data.get('run_name', f"run-{datetime.now().strftime('%Y%m%d-%H%M%S')}")
