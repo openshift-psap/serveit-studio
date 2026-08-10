@@ -358,7 +358,7 @@ def stream_job_logs(job_name: str, namespace: str):
                 }
 
                 # Start optimization in background
-                spawn(run_optimization_background, optimization_data)
+                state['_optimization_greenlet'] = spawn(run_optimization_background, optimization_data)
             else:
                 log_to_ui('⚠️ Could not determine model name for deployment', 'warning', job_name=job_name)
                 log_to_ui('   CURRENT_TEST_PLAN is None or has no model_name', 'warning', job_name=job_name)
