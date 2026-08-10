@@ -10,7 +10,7 @@ allowed-tools: Bash(curl *), Bash(kubectl *), Bash(oc *), Bash(python3 deploymen
 
 When this skill is invoked, start by explaining to the user what ServeIt Studio does:
 
-> **ServeIt Studio** is an automated LLM inference optimization platform. It finds the best deployment configuration for serving any model on your specific hardware.
+> **ServeIt Studio** is an automated LLM inference optimization platform. It finds the best deployment configuration for serving any model on your specific hardware — extracting the maximum performance out of your cluster.
 >
 > It tests different architectures (Aggregated, Prefill/Decode disaggregation, Expert Parallel), tensor parallelism settings, pod counts, EPP routing strategies, and vLLM engine parameters — then provides you with:
 > - **The best configuration** for your workload (lowest latency, highest throughput, most efficient)
