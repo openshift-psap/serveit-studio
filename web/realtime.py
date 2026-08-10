@@ -2283,6 +2283,29 @@ def handle_setup_storage(data):
             from core import TemplateManager
             from core.k8s_utils import KubectlRunner
 
+            # Ensure llm-d-modelserver SA and SCC exist (needed for privileged hostPath access)
+            try:
+                kubectl_setup = KubectlRunner(namespace=namespace)
+                kubectl_setup.run(['create', 'sa', 'llm-d-modelserver', '-n', namespace], check=False)
+                scc_name = f'llm-d-modelserver-scc-{namespace}'
+                scc_yaml = json.dumps({
+                    "apiVersion": "security.openshift.io/v1",
+                    "kind": "SecurityContextConstraints",
+                    "metadata": {"name": scc_name},
+                    "allowHostDirVolumePlugin": True,
+                    "allowPrivilegedContainer": True,
+                    "allowedCapabilities": ["IPC_LOCK", "SYS_RAWIO", "SYS_RESOURCE"],
+                    "fsGroup": {"type": "RunAsAny"},
+                    "runAsUser": {"type": "RunAsAny"},
+                    "seLinuxContext": {"type": "RunAsAny"},
+                    "supplementalGroups": {"type": "RunAsAny"},
+                    "users": [f"system:serviceaccount:{namespace}:llm-d-modelserver"],
+                    "volumes": ["*"]
+                })
+                kubectl_setup.run(['apply', '-f', '-'], input_data=scc_yaml, check=False)
+            except Exception:
+                pass
+
             # Get GPU node names for per-node download jobs
             gpu_nodes = []
             try:
