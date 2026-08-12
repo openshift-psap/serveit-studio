@@ -22,3 +22,4 @@ ignore = [
 "scripts/*" = ["F401", "E402"]
 "AI-assistance/*" = ["F401"]
 "deployment/deploy.py" = ["F401"]
+"web/server.py" = ["F401"]

@@ -32,10 +32,13 @@ register_auth_routes()
 from web.database import init_db, load_state, cleanup_stale_optimizations
 
 # Import API routes (registers on import via @app.route decorators)
+import web.routes_api  # noqa: F401
 
 # Import optimization runner (provides log_to_ui, run_optimization_background, etc.)
+import web.optimization  # noqa: F401
 
 # Import SocketIO event handlers (registers on import via @socketio.on decorators)
+import web.realtime  # noqa: F401
 
 
 def main():

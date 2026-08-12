@@ -2103,7 +2103,9 @@ def handle_setup_storage(data):
         from core import TemplateManager
 
         # Persist optimization params from the request to DB so auto-start picks them up
-        _opt_keys = ['model', 'isl', 'osl', 'isl_stdev', 'osl_stdev', 'users', 'num_users',
+        _opt_keys = ['model', 'isl', 'osl', 'isl_stdev', 'osl_stdev',
+                     'isl_min', 'isl_max', 'osl_min', 'osl_max',
+                     'users', 'num_users',
                      'goal', 'optimization_goal', 'max_gpus', 'duration', 'stop_mode',
                      'storage_class', 'per_node_storage', 'local_disk_path',
                      'advanced_vllm_custom_enabled', 'epp_custom_enabled', 'epp_preset',
@@ -2220,6 +2222,10 @@ def handle_setup_storage(data):
                 'osl': data.get('osl') or saved.get('osl', 2000),
                 'isl_stdev': data.get('isl_stdev') or saved.get('isl_stdev'),
                 'osl_stdev': data.get('osl_stdev') or saved.get('osl_stdev'),
+                'isl_min': data.get('isl_min') or saved.get('isl_min'),
+                'isl_max': data.get('isl_max') or saved.get('isl_max'),
+                'osl_min': data.get('osl_min') or saved.get('osl_min'),
+                'osl_max': data.get('osl_max') or saved.get('osl_max'),
                 'turns': data.get('turns') or saved.get('turns', 1),
                 'num_users': data.get('num_users') or saved.get('users', 100),
                 'optimization_metric': data.get('optimization_goal') or saved.get('goal', 'ttft'),

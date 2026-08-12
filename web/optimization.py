@@ -304,6 +304,10 @@ def stream_job_logs(job_name: str, namespace: str):
                     'osl': test_plan.model_requirements.osl if test_plan else saved_config.get('osl', 100),
                     'isl_stdev': saved_config.get('isl_stdev'),
                     'osl_stdev': saved_config.get('osl_stdev'),
+                    'isl_min': saved_config.get('isl_min'),
+                    'isl_max': saved_config.get('isl_max'),
+                    'osl_min': saved_config.get('osl_min'),
+                    'osl_max': saved_config.get('osl_max'),
                     'turns': saved_config.get('turns', 1),
                     'num_users': saved_config.get('users', 100),
                     'optimization_metric': test_plan.optimization_goal if test_plan else saved_config.get('goal', 'ttft'),
@@ -696,6 +700,10 @@ def run_optimization_background(data):
         osl = int(_get('osl', 100))
         isl_stdev = _get('isl_stdev')
         osl_stdev = _get('osl_stdev')
+        isl_min = _get('isl_min')
+        isl_max = _get('isl_max')
+        osl_min = _get('osl_min')
+        osl_max = _get('osl_max')
 
         # Convert characters to tokens if needed
         # On resume, run_config already has token values — skip conversion
@@ -1087,6 +1095,10 @@ data:
                 osl=osl,
                 isl_stdev=int(isl_stdev) if isl_stdev else None,
                 osl_stdev=int(osl_stdev) if osl_stdev else None,
+                isl_min=int(isl_min) if isl_min else None,
+                isl_max=int(isl_max) if isl_max else None,
+                osl_min=int(osl_min) if osl_min else None,
+                osl_max=int(osl_max) if osl_max else None,
                 turns=turns,
                 qps=float(num_users),
                 total_gpus=max_gpus,

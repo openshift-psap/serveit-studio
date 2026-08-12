@@ -59,14 +59,30 @@
                                                 <div id="length-variation-inner" style="opacity:0.4;transition:all 0.2s;padding:0 20px 16px;">
                                                 <div class="input-grid">
                                                     <div class="input-group">
-                                                        <label id="isl-var-label">Input Length Variation</label>
-                                                        <input type="number" id="isl-stdev-input" value="" min="0" max="32000" placeholder="e.g. 3000">
-                                                        <div class="help-text" id="isl-var-help">Adds random variation around your Average Input Length above. For example, ISL=3000 with variation=1000 means prompts range from 3000 to 4000 tokens. Leave empty for fixed-length prompts.</div>
+                                                        <label id="isl-var-label">Input Length Variation (stdev)</label>
+                                                        <input type="number" id="isl-stdev-input" value="" min="0" max="32000" placeholder="e.g. 3000" oninput="config.isl_stdev=this.value?parseInt(this.value):null;saveConfig();">
+                                                        <div class="help-text" id="isl-var-help">Standard deviation around the average input length.</div>
                                                     </div>
                                                     <div class="input-group">
-                                                        <label id="osl-var-label">Output Length Variation</label>
-                                                        <input type="number" id="osl-stdev-input" value="" min="0" max="8000" placeholder="e.g. 64">
-                                                        <div class="help-text" id="osl-var-help">Adds random variation around your Average Output Length above. For example, OSL=100 with variation=50 means replies range from 100 to 150 tokens. Leave empty for fixed-length replies.</div>
+                                                        <label id="osl-var-label">Output Length Variation (stdev)</label>
+                                                        <input type="number" id="osl-stdev-input" value="" min="0" max="8000" placeholder="e.g. 64" oninput="config.osl_stdev=this.value?parseInt(this.value):null;saveConfig();">
+                                                        <div class="help-text" id="osl-var-help">Standard deviation around the average output length.</div>
+                                                    </div>
+                                                    <div class="input-group">
+                                                        <label>Input Length Range (min / max)</label>
+                                                        <div style="display:flex;gap:8px;">
+                                                            <input type="number" id="isl-min-input" value="" min="1" max="1000000" placeholder="min" style="width:50%;" oninput="config.isl_min=this.value?parseInt(this.value):null;saveConfig();">
+                                                            <input type="number" id="isl-max-input" value="" min="1" max="1000000" placeholder="max" style="width:50%;" oninput="config.isl_max=this.value?parseInt(this.value):null;saveConfig();">
+                                                        </div>
+                                                        <div class="help-text">Optional hard limits on input token count. Leave empty for no limits.</div>
+                                                    </div>
+                                                    <div class="input-group">
+                                                        <label>Output Length Range (min / max)</label>
+                                                        <div style="display:flex;gap:8px;">
+                                                            <input type="number" id="osl-min-input" value="" min="1" max="1000000" placeholder="min" style="width:50%;" oninput="config.osl_min=this.value?parseInt(this.value):null;saveConfig();">
+                                                            <input type="number" id="osl-max-input" value="" min="1" max="1000000" placeholder="max" style="width:50%;" oninput="config.osl_max=this.value?parseInt(this.value):null;saveConfig();">
+                                                        </div>
+                                                        <div class="help-text">Optional hard limits on output token count. Leave empty for no limits.</div>
                                                     </div>
                                                 </div>
                                                 </div>

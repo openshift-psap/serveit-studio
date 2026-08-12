@@ -81,11 +81,15 @@ function updateUIFromConfig() {
         document.getElementById('duration-input').value = config.duration;
     }
     if (document.getElementById('length-variation-enabled')) {
-        var hasStdev = (config.isl_stdev && config.isl_stdev > 0) || (config.osl_stdev && config.osl_stdev > 0);
-        document.getElementById('length-variation-enabled').checked = hasStdev;
-        if (hasStdev) {
+        var hasVariation = (config.isl_stdev && config.isl_stdev > 0) || (config.osl_stdev && config.osl_stdev > 0) || config.isl_min || config.isl_max || config.osl_min || config.osl_max;
+        document.getElementById('length-variation-enabled').checked = hasVariation;
+        if (hasVariation) {
             if (config.isl_stdev) document.getElementById('isl-stdev-input').value = config.isl_stdev;
             if (config.osl_stdev) document.getElementById('osl-stdev-input').value = config.osl_stdev;
+            if (config.isl_min) document.getElementById('isl-min-input').value = config.isl_min;
+            if (config.isl_max) document.getElementById('isl-max-input').value = config.isl_max;
+            if (config.osl_min) document.getElementById('osl-min-input').value = config.osl_min;
+            if (config.osl_max) document.getElementById('osl-max-input').value = config.osl_max;
             var lvBody = document.getElementById('length-variation-body');
             if (lvBody) lvBody.style.display = 'block';
             var lvInner = document.getElementById('length-variation-inner');
@@ -1139,6 +1143,10 @@ function confirmSingleTest() {
     if (ts.osl != null) config.osl = ts.osl;
     if (ts.isl_stdev != null) config.isl_stdev = ts.isl_stdev;
     if (ts.osl_stdev != null) config.osl_stdev = ts.osl_stdev;
+    if (ts.isl_min != null) config.isl_min = ts.isl_min;
+    if (ts.isl_max != null) config.isl_max = ts.isl_max;
+    if (ts.osl_min != null) config.osl_min = ts.osl_min;
+    if (ts.osl_max != null) config.osl_max = ts.osl_max;
     if (ts.num_users != null) config.users = ts.num_users;
     if (ts.turns != null) config.turns = ts.turns;
     if (ts.rate_type) config.rate_type = ts.rate_type;
@@ -1242,6 +1250,10 @@ function applyReportConfig(recId) {
     config.osl = ts.osl || 512;
     config.isl_stdev = ts.isl_stdev || null;
     config.osl_stdev = ts.osl_stdev || null;
+    config.isl_min = ts.isl_min || null;
+    config.isl_max = ts.isl_max || null;
+    config.osl_min = ts.osl_min || null;
+    config.osl_max = ts.osl_max || null;
     config.users = ts.num_users || 100;
     config.rate_type = ts.rate_type || 'concurrent';
     config.turns = ts.turns || 1;

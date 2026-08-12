@@ -99,7 +99,7 @@ function setLatencyPercentile(pctl) {
 }
 
 // Advanced vLLM settings
-var advValueFields = ['max-model-len','gpu-memory-utilization','max-num-seqs','max-num-batched-tokens','dtype','kv-cache-dtype','pipeline-parallel-size','block-size','tool-call-parser','reasoning-parser','chat-template-content-format','dbo-prefill-token-threshold','dbo-decode-token-threshold','moe-backend','all2all-backend','headroom','memory-reserve-pct','model-loader-extra-config','cpu-offload-gb','weight-cpu-offload-gb','http-timeout-keep-alive','prefix-cache-retention','ssm-conv-state-layout'];
+var advValueFields = ['max-model-len','gpu-memory-utilization','max-num-seqs','max-num-batched-tokens','dtype','kv-cache-dtype','pipeline-parallel-size','block-size','tool-call-parser','reasoning-parser','chat-template-content-format','dbo-prefill-token-threshold','dbo-decode-token-threshold','moe-backend','all2all-backend','headroom','memory-reserve-pct','model-loader-extra-config','cpu-offload-gb','weight-cpu-offload-gb','disk-offload-kv','http-timeout-keep-alive','prefix-cache-retention','ssm-conv-state-layout'];
 var advToggleFields = ['enable-prefix-caching','disable-custom-all-reduce','enable-auto-tool-choice','enable-expert-parallel','enable-dbo','enable-eplb','trust-remote-code','disable-log-requests','vllm-debug-logs','nccl-debug-logs','enable-bidirectional-kv'];
 
 function updateAdvVllm() {
@@ -109,9 +109,26 @@ function updateAdvVllm() {
         var valEl = document.getElementById('adv-' + f + '-val');
         if (!modeEl) return;
         var mode = modeEl.value;
+        var key = f.replace(/-/g, '_');
+
+        // Special handling for disk-offload-kv (on/off + thread counts, no path — uses local_disk_path)
+        if (f === 'disk-offload-kv') {
+            var readEl = document.getElementById('adv-disk-offload-kv-read-threads');
+            var writeEl = document.getElementById('adv-disk-offload-kv-write-threads');
+            var isAuto = (mode === 'auto');
+            readEl.disabled = isAuto;
+            writeEl.disabled = isAuto;
+            if (isAuto) { readEl.value = ''; writeEl.value = ''; }
+            if (mode === 'custom') {
+                adv[key] = { mode: mode, value: { enabled: true, read_threads: readEl.value ? parseInt(readEl.value) : 32, write_threads: writeEl.value ? parseInt(writeEl.value) : 16 } };
+            } else {
+                adv[key] = { mode: mode, value: null };
+            }
+            return;
+        }
+
         valEl.disabled = (mode === 'auto');
         if (mode === 'auto') valEl.value = '';
-        var key = f.replace(/-/g, '_');
         var txtEl = document.getElementById('adv-' + f + '-txt');
         var effectiveValue = null;
         if (mode === 'custom') {
@@ -149,6 +166,21 @@ function restoreAdvVllm() {
         var modeEl = document.getElementById('adv-' + f + '-mode');
         var valEl = document.getElementById('adv-' + f + '-val');
         if (modeEl) modeEl.value = setting.mode || 'auto';
+
+        // Special handling for disk-offload-kv (on/off + thread counts)
+        if (f === 'disk-offload-kv') {
+            var readEl = document.getElementById('adv-disk-offload-kv-read-threads');
+            var writeEl = document.getElementById('adv-disk-offload-kv-write-threads');
+            var isCustom = (setting.mode === 'custom');
+            if (readEl) readEl.disabled = !isCustom;
+            if (writeEl) writeEl.disabled = !isCustom;
+            if (isCustom && setting.value && typeof setting.value === 'object') {
+                if (readEl) readEl.value = setting.value.read_threads || '';
+                if (writeEl) writeEl.value = setting.value.write_threads || '';
+            }
+            return;
+        }
+
         if (valEl) {
             valEl.disabled = (setting.mode !== 'custom');
             var txtEl = document.getElementById('adv-' + f + '-txt');
@@ -197,6 +229,12 @@ function resetAdvVllm() {
         var valEl = document.getElementById('adv-' + f + '-val');
         if (modeEl) modeEl.value = 'auto';
         if (valEl) { valEl.disabled = true; valEl.value = ''; }
+        if (f === 'disk-offload-kv') {
+            var readEl = document.getElementById('adv-disk-offload-kv-read-threads');
+            var writeEl = document.getElementById('adv-disk-offload-kv-write-threads');
+            if (readEl) { readEl.disabled = true; readEl.value = ''; }
+            if (writeEl) { writeEl.disabled = true; writeEl.value = ''; }
+        }
     });
     advToggleFields.forEach(function(f) {
         var modeEl = document.getElementById('adv-' + f + '-mode');

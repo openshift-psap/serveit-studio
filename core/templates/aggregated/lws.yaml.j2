@@ -69,6 +69,12 @@ spec:
 {% endif %}
           - name: jit-cache
             emptyDir: {}
+{% if disk_offload_kv_path %}
+          - name: kv-cache-disk
+            hostPath:
+              path: {{ disk_offload_kv_path }}
+              type: DirectoryOrCreate
+{% endif %}
 {% if per_node_storage and not local_disk_path %}
         initContainers:
           - name: select-nfs
@@ -192,6 +198,7 @@ spec:
 {% endif %}{% if reasoning_parser %}                  --reasoning-parser {{ reasoning_parser }} \
 {% endif %}{% if chat_template_content_format %}                  --chat-template-content-format {{ chat_template_content_format }} \
 {% endif %}{% if weight_cpu_offload_gb %}                  --cpu-offload-gb {{ weight_cpu_offload_gb }} \
+{% endif %}{% if disk_offload_kv_path %}                  --kv-transfer-config '{"kv_connector":"OffloadingConnector","kv_role":"kv_both","kv_connector_extra_config":{"spec_name":"TieringOffloadingSpec","block_size":16,"eviction_policy":"lru","secondary_tiers":[{"type":"fs","root_dir":"{{ disk_offload_kv_path }}","n_read_threads":{{ disk_offload_kv_read_threads | default(32) }},"n_write_threads":{{ disk_offload_kv_write_threads | default(16) }}}]}}' \
 {% endif %}{% if model_loader_extra_config %}                  --model-loader-extra-config '{{ model_loader_extra_config }}' \
 {% endif %}{% if extra_vllm_args %}                  {{ extra_vllm_args }} \
 {% endif %}                  --disable-uvicorn-access-log \
@@ -302,6 +309,10 @@ spec:
                 mountPath: /model-cache
               - name: jit-cache
                 mountPath: /var/cache/vllm
+{% if disk_offload_kv_path %}
+              - name: kv-cache-disk
+                mountPath: {{ disk_offload_kv_path }}
+{% endif %}
 {% if per_node_storage %}
 {% for nfs in node_nfs_pvcs %}
               - name: nfs-{{ nfs.suffix }}
@@ -351,6 +362,12 @@ spec:
 {% endif %}
           - name: jit-cache
             emptyDir: {}
+{% if disk_offload_kv_path %}
+          - name: kv-cache-disk
+            hostPath:
+              path: {{ disk_offload_kv_path }}
+              type: DirectoryOrCreate
+{% endif %}
 {% if per_node_storage and not local_disk_path %}
         initContainers:
           - name: select-nfs
@@ -556,6 +573,10 @@ spec:
                 mountPath: /model-cache
               - name: jit-cache
                 mountPath: /var/cache/vllm
+{% if disk_offload_kv_path %}
+              - name: kv-cache-disk
+                mountPath: {{ disk_offload_kv_path }}
+{% endif %}
 {% if per_node_storage and not local_disk_path %}
 {% for nfs in node_nfs_pvcs %}
               - name: nfs-{{ nfs.suffix }}

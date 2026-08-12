@@ -198,13 +198,23 @@ class GuidellmMixin:
                 data_arg += f',prompt_tokens_stdev={config.isl_stdev}'
             if getattr(config, 'osl_stdev', None):
                 data_arg += f',output_tokens_stdev={config.osl_stdev}'
+            if getattr(config, 'isl_min', None):
+                data_arg += f',prompt_tokens_min={config.isl_min}'
+            if getattr(config, 'osl_min', None):
+                data_arg += f',output_tokens_min={config.osl_min}'
+            if getattr(config, 'osl_max', None):
+                data_arg += f',output_tokens_max={config.osl_max}'
             if turns > 1:
                 data_arg += f',turns={turns}'
-            max_model_len = getattr(config, 'max_model_len', 0)
-            if max_model_len and (getattr(config, 'isl_stdev', None) or getattr(config, 'osl_stdev', None)):
-                prompt_max = max_model_len - config.osl - 200
-                if prompt_max > 0:
-                    data_arg += f',prompt_tokens_max={prompt_max}'
+            # prompt_tokens_max: explicit isl_max takes precedence, else safety cap from max_model_len
+            if getattr(config, 'isl_max', None):
+                data_arg += f',prompt_tokens_max={config.isl_max}'
+            else:
+                max_model_len = getattr(config, 'max_model_len', 0)
+                if max_model_len and (getattr(config, 'isl_stdev', None) or getattr(config, 'osl_stdev', None)):
+                    prompt_max = max_model_len - config.osl - 200
+                    if prompt_max > 0:
+                        data_arg += f',prompt_tokens_max={prompt_max}'
 
         # Profile argument (rate type + rate)
         request_format = '/v1/chat/completions' if turns > 1 else '/v1/completions'
@@ -544,13 +554,23 @@ class GuidellmMixin:
                     data_arg += f',prompt_tokens_stdev={config.isl_stdev}'
                 if getattr(config, 'osl_stdev', None):
                     data_arg += f',output_tokens_stdev={config.osl_stdev}'
+                if getattr(config, 'isl_min', None):
+                    data_arg += f',prompt_tokens_min={config.isl_min}'
+                if getattr(config, 'osl_min', None):
+                    data_arg += f',output_tokens_min={config.osl_min}'
+                if getattr(config, 'osl_max', None):
+                    data_arg += f',output_tokens_max={config.osl_max}'
                 if turns > 1:
                     data_arg += f',turns={turns}'
-                max_model_len = getattr(config, 'max_model_len', 0)
-                if max_model_len and (getattr(config, 'isl_stdev', None) or getattr(config, 'osl_stdev', None)):
-                    prompt_max = max_model_len - config.osl - 200
-                    if prompt_max > 0:
-                        data_arg += f',prompt_tokens_max={prompt_max}'
+                # prompt_tokens_max: explicit isl_max takes precedence, else safety cap from max_model_len
+                if getattr(config, 'isl_max', None):
+                    data_arg += f',prompt_tokens_max={config.isl_max}'
+                else:
+                    max_model_len = getattr(config, 'max_model_len', 0)
+                    if max_model_len and (getattr(config, 'isl_stdev', None) or getattr(config, 'osl_stdev', None)):
+                        prompt_max = max_model_len - config.osl - 200
+                        if prompt_max > 0:
+                            data_arg += f',prompt_tokens_max={prompt_max}'
 
             request_format = '/v1/chat/completions' if turns > 1 else '/v1/completions'
             warmup = min(60, max(0, config.test_duration - 30)) if hasattr(config, 'test_duration') else 60

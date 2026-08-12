@@ -45,6 +45,10 @@ class RecipeOptimizerConfig:
     max_requests: Optional[int] = None  # Alternative to test_duration
     isl_stdev: Optional[int] = None  # ISL standard deviation (for guidellm)
     osl_stdev: Optional[int] = None  # OSL standard deviation (for guidellm)
+    isl_min: Optional[int] = None  # ISL minimum (prompt_tokens_min for guidellm)
+    isl_max: Optional[int] = None  # ISL maximum (prompt_tokens_max for guidellm)
+    osl_min: Optional[int] = None  # OSL minimum (output_tokens_min for guidellm)
+    osl_max: Optional[int] = None  # OSL maximum (output_tokens_max for guidellm)
     turns: int = 1  # Number of conversation turns (1 = single-turn)
 
     # Step 7: P/D split search

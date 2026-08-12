@@ -110,6 +110,10 @@ class TestConfig:
     max_requests: Optional[int] = None  # Alternative to test_duration
     isl_stdev: Optional[int] = None  # ISL standard deviation
     osl_stdev: Optional[int] = None  # OSL standard deviation
+    isl_min: Optional[int] = None  # ISL minimum (prompt_tokens_min)
+    isl_max: Optional[int] = None  # ISL maximum (prompt_tokens_max)
+    osl_min: Optional[int] = None  # OSL minimum (output_tokens_min)
+    osl_max: Optional[int] = None  # OSL maximum (output_tokens_max)
     turns: int = 1  # Number of conversation turns (1 = single-turn)
 
     # Node pinning
@@ -155,6 +159,9 @@ class TestConfig:
     model_loader_extra_config: Optional[str] = None
     cpu_offload_gb: Optional[int] = None  # OffloadingConnector CPU KV cache (NIXL)
     weight_cpu_offload_gb: Optional[int] = None  # vLLM --cpu-offload-gb (model weights to CPU)
+    disk_offload_kv_path: Optional[str] = None  # NVMe/disk KV cache offload path
+    disk_offload_kv_read_threads: int = 32
+    disk_offload_kv_write_threads: int = 16
     http_timeout_keep_alive: Optional[int] = None
     prefix_cache_retention: Optional[int] = None
     ssm_conv_state_layout: Optional[str] = None

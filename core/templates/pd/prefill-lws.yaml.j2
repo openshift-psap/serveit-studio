@@ -101,6 +101,12 @@ spec:
           - name: dev-infiniband
             hostPath:
               path: /dev/infiniband
+{% if disk_offload_kv_path %}
+          - name: kv-cache-disk
+            hostPath:
+              path: {{ disk_offload_kv_path }}
+              type: DirectoryOrCreate
+{% endif %}
 {% if per_node_storage and not local_disk_path %}
         initContainers:
           - name: select-nfs
@@ -202,8 +208,9 @@ spec:
 {% endif %}                  --api-server-count 1 \
                   --block-size {{ block_size or 16 }} \
                   --gpu-memory-utilization {{ prefill_gpu_memory_utilization or 0.80 }} \
-                  --kv-transfer-config '{"kv_connector":"{{ kv_connector }}","kv_role":"kv_both","kv_load_failure_policy":"fail"}' \
-{% if has_hybrid_attention %}                  --no-disable-hybrid-kv-cache-manager \
+{% if disk_offload_kv_path %}                  --kv-transfer-config '{"kv_connector":"OffloadingConnector","kv_role":"kv_both","kv_connector_extra_config":{"spec_name":"TieringOffloadingSpec","block_size":16,"eviction_policy":"lru","secondary_tiers":[{"type":"fs","root_dir":"{{ disk_offload_kv_path }}","n_read_threads":{{ disk_offload_kv_read_threads | default(32) }},"n_write_threads":{{ disk_offload_kv_write_threads | default(16) }}}]}}' \
+{% else %}                  --kv-transfer-config '{"kv_connector":"{{ kv_connector }}","kv_role":"kv_both","kv_load_failure_policy":"fail"}' \
+{% endif %}{% if has_hybrid_attention %}                  --no-disable-hybrid-kv-cache-manager \
 {% endif %}{% if prefill_enable_expert_parallel %}                  --enable-expert-parallel \
 {% endif %}{% if prefill_enable_dbo %}                  --enable-dbo \
                   --dbo-prefill-token-threshold {{ dbo_prefill_token_threshold | default(32) }} \
@@ -374,6 +381,10 @@ spec:
                 mountPath: /scripts
               - name: dev-infiniband
                 mountPath: /dev/infiniband
+{% if disk_offload_kv_path %}
+              - name: kv-cache-disk
+                mountPath: {{ disk_offload_kv_path }}
+{% endif %}
 {% if per_node_storage and not local_disk_path %}
 {% for nfs in node_nfs_pvcs %}
               - name: nfs-{{ nfs.suffix }}

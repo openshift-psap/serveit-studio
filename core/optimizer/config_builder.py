@@ -105,6 +105,10 @@ class ConfigBuilderMixin:
             enable_chunked_prefill=enable_chunked,
             isl_stdev=None if is_calibration else self.config.isl_stdev,
             osl_stdev=None if is_calibration else self.config.osl_stdev,
+            isl_min=None if is_calibration else getattr(self.config, 'isl_min', None),
+            isl_max=None if is_calibration else getattr(self.config, 'isl_max', None),
+            osl_min=None if is_calibration else getattr(self.config, 'osl_min', None),
+            osl_max=None if is_calibration else getattr(self.config, 'osl_max', None),
             turns=1 if is_calibration else self.config.turns,
             image=self.config.image,
             scheduler_image=self.config.scheduler_image,
@@ -550,6 +554,16 @@ class ConfigBuilderMixin:
                     val = float(val)
                 setattr(cfg, attr, val)
 
+        # Disk KV cache offloading — only when local_disk_path is set (hostPath NVMe)
+        disk_offload = adv.get('disk_offload_kv') or adv.get('disk-offload-kv')
+        local_disk = getattr(self.config, 'local_disk_path', None)
+        if disk_offload and disk_offload.get('mode') == 'custom' and local_disk:
+            val = disk_offload.get('value', {})
+            cfg.disk_offload_kv_path = f"{local_disk}/kv-cache"
+            if isinstance(val, dict):
+                cfg.disk_offload_kv_read_threads = int(val.get('read_threads', 32))
+                cfg.disk_offload_kv_write_threads = int(val.get('write_threads', 16))
+
         toggle_fields = {
             'enable_prefix_caching': 'enable_prefix_caching',
             'enable_chunked_prefill': 'enable_chunked_prefill',
@@ -724,6 +738,10 @@ class ConfigBuilderMixin:
             kv_cache_memory_bytes=self._get_profiled_kv_cache_bytes(split.decode_tp),
             isl_stdev=self.config.isl_stdev,
             osl_stdev=self.config.osl_stdev,
+            isl_min=getattr(self.config, 'isl_min', None),
+            isl_max=getattr(self.config, 'isl_max', None),
+            osl_min=getattr(self.config, 'osl_min', None),
+            osl_max=getattr(self.config, 'osl_max', None),
             turns=self.config.turns,
             image=self.config.image,
             scheduler_image=self.config.scheduler_image,
@@ -908,6 +926,10 @@ class ConfigBuilderMixin:
             kv_cache_memory_bytes=self._get_profiled_kv_cache_bytes(split.decode_tp),
             isl_stdev=self.config.isl_stdev,
             osl_stdev=self.config.osl_stdev,
+            isl_min=getattr(self.config, 'isl_min', None),
+            isl_max=getattr(self.config, 'isl_max', None),
+            osl_min=getattr(self.config, 'osl_min', None),
+            osl_max=getattr(self.config, 'osl_max', None),
             turns=self.config.turns,
             image=self.config.image,
             scheduler_image=self.config.scheduler_image,

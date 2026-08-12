@@ -18,6 +18,15 @@ spec:
         app: {{ name }}
     spec:
       serviceAccountName: default
+      initContainers:
+        - name: fix-permissions
+          image: registry.access.redhat.com/ubi9/ubi-minimal:9.4
+          command: ["sh", "-c", "chmod 777 /mnt/storage"]
+          volumeMounts:
+            - name: storage-volume
+              mountPath: /mnt/storage
+          securityContext:
+            runAsUser: 0
       volumes:
         - name: storage-volume
           persistentVolumeClaim:
