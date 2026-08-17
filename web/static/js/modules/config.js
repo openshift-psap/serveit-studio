@@ -1430,10 +1430,10 @@ function updateSingleTestGpuSummary() {
 // Image tag fetching — unified handler for engine, vllm, scheduler, sidecar
 function fetchImageTags(target) {
     var repoMap = {
-        'engine': document.getElementById('image-repo-input').value.split(':')[0] || 'ghcr.io/llm-d/llm-d-cuda',
+        'engine': 'ghcr.io/llm-d/llm-d-cuda',
         'vllm': 'docker.io/vllm/vllm-openai',
-        'scheduler': document.getElementById('scheduler-image-input').value.split(':')[0] || 'ghcr.io/llm-d/llm-d-router-endpoint-picker',
-        'sidecar': document.getElementById('sidecar-image-input').value.split(':')[0] || 'ghcr.io/llm-d/llm-d-router-disagg-sidecar',
+        'scheduler': 'ghcr.io/llm-d/llm-d-router-endpoint-picker',
+        'sidecar': 'ghcr.io/llm-d/llm-d-router-disagg-sidecar',
     };
     var statusMap = {
         'engine': 'image-tag-status', 'vllm': 'image-tag-status',
@@ -1496,6 +1496,177 @@ socket.on('image_tags_result', function(data) {
         };
     }
 });
+
+// Workload presets
+var WORKLOAD_PRESETS = {
+    chat: {
+        isl: 500, osl: 200, isl_stdev: 250, osl_stdev: 100,
+        users: 50, turns: null, turn_delay: null, turn_delay_stdev: null,
+        first_prompt_tokens: null, first_prompt_tokens_stdev: null,
+        prefix_tokens: 0, prefix_count: 1,
+        prefix_cache_hit_pct: 0, prefix_cache_mode: 'identical',
+    },
+    code: {
+        isl: 2000, osl: 2000, isl_stdev: 1000, osl_stdev: 1000,
+        users: 30, turns: null, turn_delay: null, turn_delay_stdev: null,
+        first_prompt_tokens: null, first_prompt_tokens_stdev: null,
+        prefix_tokens: 0, prefix_count: 1,
+        prefix_cache_hit_pct: 50, prefix_cache_mode: 'shared_prefix',
+    },
+    rag: {
+        isl: 4000, osl: 500, isl_stdev: 2000, osl_stdev: 250,
+        users: 100, turns: null, turn_delay: null, turn_delay_stdev: null,
+        first_prompt_tokens: null, first_prompt_tokens_stdev: null,
+        prefix_tokens: 0, prefix_count: 1,
+        prefix_cache_hit_pct: 60, prefix_cache_mode: 'multi_group', prefix_cache_groups: 5,
+    },
+    agentic_light: {
+        isl: 1500, osl: 425, isl_stdev: 1200, osl_stdev: 825,
+        isl_min: 100, isl_max: 10000, osl_min: 50, osl_max: 10000,
+        users: 30, turns: 30,
+        turn_delay: 15, turn_delay_stdev: 55, turn_delay_min: 1, turn_delay_max: 100,
+        first_prompt_tokens: 10000, first_prompt_tokens_stdev: 14600,
+        first_prompt_tokens_min: 1000, first_prompt_tokens_max: 100000,
+        prefix_tokens: 3000, prefix_count: 1,
+        prefix_cache_hit_pct: 0, prefix_cache_mode: 'identical',
+    },
+    agentic_full: {
+        isl: 1500, osl: 425, isl_stdev: 1200, osl_stdev: 825,
+        isl_min: 100, isl_max: 10000, osl_min: 50, osl_max: 10000,
+        users: 30, turns: 540,
+        turn_delay: 15, turn_delay_stdev: 55, turn_delay_min: 1, turn_delay_max: 100,
+        first_prompt_tokens: 160000, first_prompt_tokens_stdev: 233600,
+        first_prompt_tokens_min: 10000, first_prompt_tokens_max: 990000,
+        prefix_tokens: 3000, prefix_count: 1,
+        prefix_cache_hit_pct: 0, prefix_cache_mode: 'identical',
+    },
+    multiturn_chat: {
+        isl: 1000, osl: 500, isl_stdev: 500, osl_stdev: 250,
+        users: 50, turns: 10,
+        turn_delay: null, turn_delay_stdev: null,
+        turn_delay_min: null, turn_delay_max: null,
+        first_prompt_tokens: null, first_prompt_tokens_stdev: null,
+        first_prompt_tokens_min: null, first_prompt_tokens_max: null,
+        prefix_tokens: 2000, prefix_count: 1,
+        prefix_cache_hit_pct: 0, prefix_cache_mode: 'identical',
+    },
+    batch: {
+        isl: 4000, osl: 4000, isl_stdev: 2000, osl_stdev: 2000,
+        users: 200, turns: null, turn_delay: null, turn_delay_stdev: null,
+        first_prompt_tokens: null, first_prompt_tokens_stdev: null,
+        prefix_tokens: 0, prefix_count: 1,
+        prefix_cache_hit_pct: 0, prefix_cache_mode: 'identical',
+    },
+};
+
+function applyWorkloadPreset(name) {
+    var p = WORKLOAD_PRESETS[name];
+    if (!p) return;
+
+    var fields = {
+        'isl-input': 'isl', 'osl-input': 'osl',
+        'isl-stdev-input': 'isl_stdev', 'osl-stdev-input': 'osl_stdev',
+        'isl-min-input': 'isl_min', 'isl-max-input': 'isl_max',
+        'osl-min-input': 'osl_min', 'osl-max-input': 'osl_max',
+        'users-input': 'users',
+        'turns-input': 'turns',
+        'turn-delay-input': 'turn_delay', 'turn-delay-stdev-input': 'turn_delay_stdev',
+        'turn-delay-min-input': 'turn_delay_min', 'turn-delay-max-input': 'turn_delay_max',
+        'first-prompt-tokens-input': 'first_prompt_tokens',
+        'first-prompt-tokens-stdev-input': 'first_prompt_tokens_stdev',
+        'first-prompt-tokens-min-input': 'first_prompt_tokens_min',
+        'first-prompt-tokens-max-input': 'first_prompt_tokens_max',
+        'prefix-tokens-input': 'prefix_tokens', 'prefix-count-input': 'prefix_count',
+    };
+
+    for (var elId in fields) {
+        var key = fields[elId];
+        var el = document.getElementById(elId);
+        if (el) {
+            var val = p[key] != null ? p[key] : '';
+            el.value = val;
+            config[key] = p[key] != null ? p[key] : null;
+        }
+    }
+
+    // Set turns on/off
+    var turnsToggle = document.getElementById('multi-turn-toggle');
+    if (p.turns && p.turns > 1) {
+        config.turns = p.turns;
+        if (turnsToggle && !turnsToggle.classList.contains('active')) turnsToggle.click();
+    } else {
+        config.turns = 1;
+        if (turnsToggle && turnsToggle.classList.contains('active')) turnsToggle.click();
+    }
+
+    // Set prefix cache
+    config.prefix_cache_hit_pct = p.prefix_cache_hit_pct || 0;
+    var cacheSlider = document.getElementById('prefix-cache-slider');
+    var cacheValue = document.getElementById('prefix-cache-value');
+    if (cacheSlider) cacheSlider.value = config.prefix_cache_hit_pct;
+    if (cacheValue) cacheValue.textContent = config.prefix_cache_hit_pct + '%';
+
+    if (p.prefix_cache_mode) {
+        config.prefix_cache_mode = p.prefix_cache_mode;
+        var modeRadios = document.querySelectorAll('input[name="prefix-cache-mode"]');
+        modeRadios.forEach(function(r) { r.checked = r.value === p.prefix_cache_mode; });
+    }
+    if (p.prefix_cache_groups) {
+        config.prefix_cache_groups = p.prefix_cache_groups;
+        var groupsSlider = document.getElementById('prefix-cache-groups-slider');
+        var groupsValue = document.getElementById('prefix-cache-groups-value');
+        if (groupsSlider) groupsSlider.value = p.prefix_cache_groups;
+        if (groupsValue) groupsValue.textContent = p.prefix_cache_groups;
+    }
+
+    // Open/close collapsible sections based on preset
+    var sections = [
+        { toggle: 'length-variation-switch', body: 'length-variation-body', open: !!(p.isl_stdev || p.osl_stdev) },
+        { toggle: 'multi-turn-toggle', body: 'multi-turn-body', open: !!(p.turns && p.turns > 1) },
+        { toggle: 'prefix-cache-switch', body: 'prefix-cache-body', open: !!(p.prefix_cache_hit_pct > 0) },
+    ];
+    sections.forEach(function(s) {
+        var toggle = document.getElementById(s.toggle);
+        var body = document.getElementById(s.body);
+        if (!toggle) return;
+        var isOpen = toggle.classList.contains('active');
+        if (s.open && !isOpen) toggle.click();
+        else if (!s.open && isOpen) toggle.click();
+    });
+
+    // Highlight selected preset button
+    var presetBtns = document.querySelectorAll('[onclick^="applyWorkloadPreset"]');
+    presetBtns.forEach(function(btn) {
+        btn.style.outline = 'none';
+        btn.style.boxShadow = 'none';
+        btn.style.transform = 'scale(1)';
+    });
+    var clickedBtn = document.querySelector('[onclick="applyWorkloadPreset(\'' + name + '\')"]');
+    if (clickedBtn) {
+        clickedBtn.style.outline = '2px solid #6366f1';
+        clickedBtn.style.boxShadow = '0 0 0 4px rgba(99,102,241,0.2)';
+        clickedBtn.style.transform = 'scale(1.05)';
+    }
+
+    // Show description
+    var descriptions = {
+        chat: '💬 <strong>Quick Chat</strong> — FAQ bot, customer support, short Q&A conversations. Short prompts (500 tokens), short responses (200 tokens), 50 concurrent users.',
+        code: '💻 <strong>Code Assistant</strong> — IDE copilot, code completion, function generation with repo context. Medium prompts and responses (2000 tokens each), 30 users, 50% shared prefix cache.',
+        rag: '📄 <strong>RAG / Document QA</strong> — Retrieved documents + question, summarization, knowledge base queries. Long prompts (4000 tokens), short responses (500 tokens), 100 users, 60% cache across 5 groups.',
+        multiturn_chat: '🔄 <strong>Multi-turn Chat</strong> — Conversational assistant with history. Customer support, tutoring, therapy bots. 10 turns per session, 2K shared system prompt, 50 concurrent users.',
+        agentic_light: '🤖 <strong>Agentic (Light)</strong> — Tool-calling agent with 30 turns per session. Simulates tool call latency (15s avg), 10K first-turn context, 3K shared system prompt, 30 concurrent sessions.',
+        agentic_full: '🧠 <strong>Agentic (Full)</strong> — Long agentic coding sessions based on the Nemotron guide workload. 540 turns, 160K first-turn context (repo/tool definitions), 3K shared system prompt, 15s tool call delay, 30 concurrent sessions.',
+        batch: '📦 <strong>Batch / Pipeline</strong> — Offline processing, large documents, CI/CD pipelines. Long prompts and responses (4000 tokens each), 200 concurrent requests for maximum throughput.',
+    };
+    var descEl = document.getElementById('preset-description');
+    if (descEl && descriptions[name]) {
+        descEl.innerHTML = descriptions[name];
+        descEl.style.display = 'block';
+    }
+
+    saveConfig();
+    logToConsole('Applied workload preset: ' + name, 'success');
+}
 
 // Load models from API
 var allModels = [];

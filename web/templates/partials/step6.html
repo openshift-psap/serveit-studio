@@ -22,11 +22,9 @@
                                     <label style="display:block;font-weight:600;margin-bottom:6px;color:#374151;font-size:0.9em;">Inference Engine</label>
                                     <div style="display:flex;gap:8px;">
                                         <input type="text" id="image-repo-input" value="ghcr.io/llm-d/llm-d-cuda:v0.8.1" placeholder="ghcr.io/llm-d/llm-d-cuda:v0.8.1" style="flex:1;padding:10px 14px;border:2px solid #d1d5db;border-radius:8px;font-size:14px;font-family:monospace;" onchange="config.image=this.value;saveConfig();">
-                                        <button type="button" onclick="fetchImageTags('engine')" style="padding:10px 16px;background:#0ea5e9;color:white;border:none;border-radius:8px;font-weight:600;font-size:0.85em;cursor:pointer;white-space:nowrap;">Fetch Tags</button>
                                     </div>
                                     <div style="margin-top:6px;display:flex;gap:6px;flex-wrap:wrap;">
-                                        <button type="button" onclick="document.getElementById('image-repo-input').value='vllm/vllm-openai:v0.26.0';config.image='vllm/vllm-openai:v0.26.0';saveConfig();" style="padding:4px 10px;font-size:11px;background:#f0f9ff;border:1px solid #bae6fd;border-radius:4px;cursor:pointer;color:#0369a1;">vLLM v0.26.0</button>
-                                        <button type="button" onclick="document.getElementById('image-repo-input').value='vllm/vllm-openai:v0.27.1';config.image='vllm/vllm-openai:v0.27.1';saveConfig();" style="padding:4px 10px;font-size:11px;background:#f0f9ff;border:1px solid #bae6fd;border-radius:4px;cursor:pointer;color:#0369a1;">vLLM v0.27.1</button>
+                                        <button type="button" onclick="fetchImageTags('engine')" style="padding:4px 10px;font-size:11px;background:#ecfdf5;border:1px solid #6ee7b7;border-radius:4px;cursor:pointer;color:#047857;">Fetch llm-d Tags</button>
                                         <button type="button" onclick="fetchImageTags('vllm')" style="padding:4px 10px;font-size:11px;background:#fef3c7;border:1px solid #fcd34d;border-radius:4px;cursor:pointer;color:#92400e;">Fetch vLLM Tags</button>
                                     </div>
                                     <select id="image-tag-select" style="display:none;width:100%;padding:10px 14px;border:2px solid #d1d5db;border-radius:8px;font-size:14px;font-family:monospace;background:white;margin-top:8px;" onchange="var v=this.value;if(v){var repo=this.dataset.repo||'ghcr.io/llm-d/llm-d-cuda';document.getElementById('image-repo-input').value=repo+':'+v;config.image=repo+':'+v;saveConfig();}">
@@ -38,7 +36,7 @@
                                 <div style="border-top:1px solid #e2e8f0;margin-top:16px;padding-top:16px;margin-bottom:16px;">
                                     <label style="display:block;font-weight:600;margin-bottom:6px;color:#374151;font-size:0.9em;">EPP Router</label>
                                     <div style="display:flex;gap:8px;">
-                                        <input type="text" id="scheduler-image-input" value="ghcr.io/llm-d/llm-d-router-endpoint-picker:main" placeholder="ghcr.io/llm-d/llm-d-router-endpoint-picker:main" style="flex:1;padding:10px 14px;border:2px solid #d1d5db;border-radius:8px;font-size:14px;font-family:monospace;" onchange="config.scheduler_image=this.value;saveConfig();">
+                                        <input type="text" id="scheduler-image-input" value="ghcr.io/llm-d/llm-d-router-endpoint-picker:v0.9.0" placeholder="ghcr.io/llm-d/llm-d-router-endpoint-picker:v0.9.0" style="flex:1;padding:10px 14px;border:2px solid #d1d5db;border-radius:8px;font-size:14px;font-family:monospace;" onchange="config.scheduler_image=this.value;saveConfig();">
                                         <button type="button" onclick="fetchImageTags('scheduler')" style="padding:10px 16px;background:#0ea5e9;color:white;border:none;border-radius:8px;font-weight:600;font-size:0.85em;cursor:pointer;white-space:nowrap;">Fetch Tags</button>
                                     </div>
                                     <div style="margin-top:6px;font-size:0.8em;color:#64748b;">Routes requests to inference pods. Uses llm-d EPP (Endpoint Picker).</div>
@@ -49,12 +47,12 @@
 
                                 <!-- Routing Sidecar Image -->
                                 <div style="border-top:1px solid #e2e8f0;padding-top:16px;">
-                                    <label style="display:block;font-weight:600;margin-bottom:6px;color:#374151;font-size:0.9em;">Routing Sidecar (PD mode)</label>
+                                    <label style="display:block;font-weight:600;margin-bottom:6px;color:#374151;font-size:0.9em;">Routing Sidecar</label>
                                     <div style="display:flex;gap:8px;">
-                                        <input type="text" id="sidecar-image-input" value="ghcr.io/llm-d/llm-d-router-disagg-sidecar:main" placeholder="ghcr.io/llm-d/llm-d-router-disagg-sidecar:main" style="flex:1;padding:10px 14px;border:2px solid #d1d5db;border-radius:8px;font-size:14px;font-family:monospace;" onchange="config.sidecar_image=this.value;saveConfig();">
+                                        <input type="text" id="sidecar-image-input" value="ghcr.io/llm-d/llm-d-router-disagg-sidecar:v0.9.0" placeholder="ghcr.io/llm-d/llm-d-router-disagg-sidecar:v0.9.0" style="flex:1;padding:10px 14px;border:2px solid #d1d5db;border-radius:8px;font-size:14px;font-family:monospace;" onchange="config.sidecar_image=this.value;saveConfig();">
                                         <button type="button" onclick="fetchImageTags('sidecar')" style="padding:10px 16px;background:#0ea5e9;color:white;border:none;border-radius:8px;font-weight:600;font-size:0.85em;cursor:pointer;white-space:nowrap;">Fetch Tags</button>
                                     </div>
-                                    <div style="margin-top:6px;font-size:0.8em;color:#64748b;">Disaggregation routing sidecar for Prefill/Decode mode. Only used in PD deployments.</div>
+                                    <div style="margin-top:6px;font-size:0.8em;color:#64748b;">Disaggregation routing sidecar for prefill/decode split deployments.</div>
                                     <select id="sidecar-tag-select" style="display:none;width:100%;padding:10px 14px;border:2px solid #d1d5db;border-radius:8px;font-size:14px;font-family:monospace;background:white;margin-top:8px;" onchange="var v=this.value;if(v){document.getElementById('sidecar-image-input').value='ghcr.io/llm-d/llm-d-router-disagg-sidecar:'+v;config.sidecar_image='ghcr.io/llm-d/llm-d-router-disagg-sidecar:'+v;saveConfig();}">
                                     </select>
                                     <div id="sidecar-tag-status" style="margin-top:6px;font-size:0.8em;color:#64748b;"></div>

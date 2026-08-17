@@ -75,6 +75,12 @@ TTFT, throughput, and inter-token latency (ITL) across all tested prefill/decode
 
 ![PD Configurations](images/report-pd-configurations.png)
 
+### TP Calibration
+
+Before running full benchmarks, the optimizer sweeps all valid Tensor Parallelism values to find which TP works best for each role. Lower TP means fewer GPUs per pod — allowing more replicas and higher total throughput. Higher TP reduces latency for large models but uses more GPUs per pod. The decode sweep measures tokens/s/GPU efficiency and inter-token latency (ITL), while the prefill sweep measures tokens/s/GPU and time-to-first-token (TTFT). The optimal TP for each role is selected from these results and used for all subsequent tests.
+
+![TP Calibration](images/report-tp-calibration.png)
+
 ### GPU Estimator
 
 Estimate how many GPUs you need for a different workload without re-running tests. Adjust concurrency, ISL/OSL, and set a latency SLA — the estimator scales your tested results and shows which configurations meet the target and how many GPUs each would need.
@@ -132,17 +138,18 @@ Steps 2-3 and 6-11 deploy real workloads. Steps 4-5 are pure math.
 ### Smart Features
 
 #### Model Intelligence
-- **Config from HuggingFace** — Reads `config.json` for model size, dtype, MoE detection, hybrid attention, FP8 compatibility. Handles multimodal nested configs (Llama-4 `text_config`), interleaved MoE layers, and compressed-tensors quantization
-- **Per-role min TP** — Computes minimum TP separately for prefill (0.80 gpu_memory_utilization) and decode (0.85 after NIXL reserve) from model weights + overhead + KV cache. MoE FP4 models use 0.55x weight multiplier (dense FP4: 0.7x)
-- **FP8 block quantization filter** — Auto-excludes TP values where `shared_expert_intermediate_size / TP < 128` (FP8 block_n constraint)
-- **DeepGemm compatibility** — Detects compressed-tensors per-channel FP8 and disables DeepGemm; enables for standard per-tensor FP8
-- **Hybrid attention detection** — Detects `attention_chunk_size` and hybrid architectures, passes `--no-disable-hybrid-kv-cache-manager` for PD
+- **Config from HuggingFace** — Reads `config.json` for model size, dtype, MoE detection, hybrid attention, FP8 compatibility. Handles multimodal nested configs, interleaved MoE layers, and compressed-tensors quantization
+- **Per-role min TP** — Computes minimum TP separately for prefill and decode from model weights + overhead + KV cache, with quantization-aware weight multipliers
+- **TP compatibility filters** — Auto-excludes invalid TP values based on model architecture: attention head divisibility, Mamba SSM group count (`n_groups`), FP8 block quantization shard size, and NVFP4 Marlin kernel alignment
+- **Kernel compatibility** — Detects quantization strategy (per-channel vs per-tensor FP8) and configures compute kernels accordingly
+- **Hybrid attention detection** — Detects hybrid architectures (Mamba-transformer, sliding window) and configures KV cache management for PD mode
+- **Auto-disable flags** — Automatically disables model-specific flags (expert parallelism, tool-call parsers) when the model doesn't support them
 
 #### Auto-Computed vLLM Parameters
 - **gpu_memory_utilization** — Profiled from actual VRAM usage after model load, or estimated from model size and GPU capacity. Always computed and passed (even when auto-tune is off) to prevent OOM from template defaults
-- **max_num_seqs** — Multi-factor formula: `min(S_activation, S_kv, S_concurrency, 512)` — adapts per model (Qwen gets 192, Llama gets 1,433 at same TP)
+- **max_num_seqs** — Multi-factor formula: `min(S_activation, S_kv, S_concurrency, 512)` — adapts per model architecture and quantization
 - **max_num_batched_tokens** — Computed from measured prefill TPSG × target batch latency
-- **block_size** — Auto-tuned from sequence length: `next_power_of_2(sqrt(ISL+OSL))`, min 128 for PD (NIXL block transfer)
+- **block_size** — Auto-tuned from sequence length: `next_power_of_2(sqrt(ISL+OSL))`, min 128 for PD (KV block transfer)
 - **moe_dp_chunk_size** — Smart formula for EP decode: `min(S_seq, S_expert_capacity, S_dispatch, 512)`
 - **kv_cache_memory_bytes** — Profiled decode KV cache budget from calibration memory data
 - **DBO threshold** — Scaled by expert count: 32 for 128+ experts, 48 for 32+, 64 for smaller MoE
@@ -160,7 +167,7 @@ Steps 2-3 and 6-11 deploy real workloads. Steps 4-5 are pure math.
 - **MultiConnector** — Wraps NixlConnector (P/D KV transfer) + OffloadingConnector (CPU/disk offload) for disaggregated serving with KV cache offloading. Prefill uses `kv_producer`, decode uses `kv_consumer`.
 - **CPU KV cache offload** — Offload KV cache to CPU DRAM via OffloadingConnector with `lazy_offload`. Extends cacheable working set beyond GPU HBM for long agentic sessions.
 - **Disk KV cache offload** — Offload KV cache to local NVMe via TieringOffloadingSpec. Uses hostPath volume when local disk is available.
-- **Bidirectional KV transfer** — Enable bidirectional NIXL KV transfer for models that benefit from it (Nemotron, agentic serving).
+- **Bidirectional KV transfer** — Enable bidirectional KV transfer for models that benefit from it (e.g., agentic serving with long context reuse).
 
 #### EPP Routing
 - **Disagg-aware profiles** — Separate prefill and decode scheduling profiles with independent scorer chains. Prefill profile uses `token-load-scorer` + `prefix-cache-affinity-filter`, decode profile uses `active-request-scorer`.
@@ -178,12 +185,12 @@ Steps 2-3 and 6-11 deploy real workloads. Steps 4-5 are pure math.
 - **Downloadable reports** — HTML and raw artifact download for offline analysis and sharing
 - **Prefix cache simulation** — Generate multi-group prefix cache datasets with configurable hit rate, group count, and seed for reproducible workloads
 - **Wide-EP support** — Dynamic multi-port targetPorts on InferencePool, data-parallel sidecar and vLLM ports, supervisor port for DP > 1
-- **Pod error detection** — Auto-detects OOM, CUDA errors, and crash loops during tests; NIXL transfer errors logged as warnings (non-critical). Stops on critical errors, preserves pods for investigation
+- **Pod error detection** — Auto-detects OOM, CUDA errors, and crash loops during tests; KV transfer errors logged as warnings (non-critical). Stops on critical errors, preserves pods for investigation
 - **Guidellm retry** — Retries guidellm up to 3 times on 2-4% error rate while pods are still running, avoiding expensive redeploy cycles. Stops with actionable guidance on >2% overload (503s)
-- **Speculative decoding** — Auto-detects MTP-capable models (DeepSeek-V3, GLM-4) and compares performance with and without speculative decoding
+- **Speculative decoding** — Auto-detects MTP-capable models and compares performance with and without speculative decoding
 - **Stop at any time** — Stop checks at every stage of test execution (before deploy, after deploy, during model load, before benchmark)
 - **Vanilla Kubernetes support** — Prometheus auto-discovery via in-cluster DNS (no OpenShift required). Automatic port-forward fallback for external access.
-- **Upstream vLLM images** — Version dropdown includes upstream `vllm/vllm-openai` images alongside llm-d CUDA images.
+- **Container image management** — Direct image inputs for engine, EPP router, and routing sidecar. Fetch tags from any registry. Quick buttons for upstream vLLM versions.
 - **Block size control** — Three modes: Auto (ServeIt computed), Default (vLLM auto-detection), Custom.
 - **Turn dataset generator** — Pre-generates multi-turn conversation datasets using guidellm's SyntheticTextDataset for consistent, reusable workloads across tests.
 
