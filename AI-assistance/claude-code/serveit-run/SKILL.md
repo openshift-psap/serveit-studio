@@ -1131,6 +1131,32 @@ For `goal: "single_test"` — add the single test fields:
 
 // Single test — PD with PTP4/DTP8, 2P+1D
 {"goal": "single_test", "single_test_architecture": "pd", "single_test_prefill_tp": 4, "single_test_decode_tp": 8, "single_test_prefill_pods": 2, "single_test_decode_pods": 1, "model": "RedHatAI/Meta-Llama-3.1-70B-Instruct-FP8-dynamic", "isl": 2000, "osl": 2000, "users": 50, "max_gpus": 16}
+
+// Agentic workload — Nemotron-3-Ultra-550B (replicates llm-d guide)
+// Multi-turn with 160K dynamic system prompt, tool call delays, CPU KV offload
+{"goal": "single_test", "single_test_architecture": "pd",
+ "single_test_prefill_tp": 8, "single_test_decode_tp": 8,
+ "single_test_prefill_pods": 3, "single_test_decode_pods": 1,
+ "model": "RedHatAI/NVIDIA-Nemotron-3-Ultra-550B-A55B-FP8-block",
+ "isl": 1500, "osl": 425, "isl_stdev": 1200, "osl_stdev": 825,
+ "isl_min": 100, "isl_max": 10000, "osl_min": 50, "osl_max": 10000,
+ "first_prompt_tokens": 160000, "first_prompt_tokens_stdev": 233600,
+ "first_prompt_tokens_min": 10000, "first_prompt_tokens_max": 990000,
+ "prefix_tokens": 3000, "prefix_count": 1,
+ "users": 30, "turns": 540,
+ "stop_mode": "requests", "max_requests": 100,
+ "turn_delay": 15, "turn_delay_stdev": 55, "turn_delay_min": 1, "turn_delay_max": 100,
+ "max_gpus": 32, "image": "vllm/vllm-openai:v0.26.0",
+ "advanced_vllm": {
+   "max_model_len": {"mode": "custom", "value": 262144},
+   "block_size": {"mode": "default"},
+   "kv_cache_dtype": {"mode": "custom", "value": "fp8"},
+   "cpu_offload_gb": {"mode": "custom", "value": 200},
+   "enable_expert_parallel": {"mode": "on"},
+   "enable_bidirectional_kv": {"mode": "on"},
+   "prefix_cache_retention": {"mode": "custom", "value": 0},
+   "ssm_conv_state_layout": {"mode": "custom", "value": "DS"}
+ }}
 ```
 
 ### Verify configuration was saved
@@ -1194,19 +1220,62 @@ After verification passes, show the confirmation summary (same format as the sum
 
 ---
 
-## Step 6: Set UI to Running State
+## Step 6: Generate Test Plan (Setup Storage)
 
-Before polling, set the UI to step 7 (Review & Run) and mark optimization as running. This prevents users from changing settings in the wizard while tests are executing. Use `/api/set_state` which persists to the database — not `/api/config` which only updates in-memory state.
+**This step is mandatory before starting the optimization.** The test plan is generated in-memory by the optimizer — it is NOT persisted to disk. If the optimizer pod restarts (due to a code sync, pod eviction, or manual restart), the test plan is lost and must be regenerated before you can start or resume optimization. Calling `start_optimization` without a test plan will fail with: `❌ Cannot start: No valid test plan.`
+
+The `setup_storage` endpoint handles three things in sequence:
+1. Creates the model cache PVC (if it doesn't already exist)
+2. Downloads the model weights (if not already cached)
+3. **Generates the test plan** — calculates all TP/pod/architecture combinations to test based on the saved config
+
+If the model is already downloaded and storage exists, steps 1-2 are skipped and only the test plan is generated (~30 seconds).
+
+```bash
+curl -sk -b /tmp/serveit-cookies.txt -X POST "$URL/api/setup_storage" \
+  -H 'Content-Type: application/json' \
+  -d "{
+    \"hf_token\": \"$HF_TOKEN\",
+    \"model\": \"<MODEL>\",
+    \"storage_class\": \"<MODEL_CACHE_SC>\",
+    \"local_disk_path\": \"<PATH or null>\"
+  }"
+```
+
+Wait for the test plan to be generated before starting the optimization:
+
+```bash
+while true; do
+  RESULT=$(curl -sk -b /tmp/serveit-cookies.txt "$URL/api/status" 2>/dev/null)
+  RUNNING=$(echo "$RESULT" | python3 -c "import json,sys; print(json.load(sys.stdin).get('running', False))" 2>/dev/null)
+  echo "$(date +%H:%M:%S) Running: $RUNNING"
+  # If optimization auto-started after setup, we're done
+  [ "$RUNNING" = "True" ] && echo "Optimization auto-started!" && break
+  sleep 10
+done
+```
+
+If the optimization does NOT auto-start, proceed to Step 7 to start it manually.
+
+---
+
+## Step 7: Start Optimization
+
+Set the UI to step 7 (Review & Run) and start the optimization. Use `/api/set_state` which persists to the database — not `/api/config` which only updates in-memory state.
 
 ```bash
 curl -sk -b /tmp/serveit-cookies.txt -X POST "$URL/api/set_state" \
   -H 'Content-Type: application/json' \
   -d '{"current_step": 7, "running": true}'
+
+curl -sk -b /tmp/serveit-cookies.txt -X POST "$URL/api/start_optimization" \
+  -H 'Content-Type: application/json' \
+  -d "{\"hf_token\": \"$HF_TOKEN\"}"
 ```
 
 ---
 
-## Step 7: Check Status & Poll
+## Step 8: Check Status & Poll
 
 ```bash
 # Check if running
@@ -1230,7 +1299,7 @@ done
 
 ---
 
-## Step 8: Get Results
+## Step 9: Get Results
 
 Unlock the config so the UI can save normally again:
 
@@ -1263,7 +1332,7 @@ if best.get('most_efficient'):
 
 ---
 
-## Step 9: Download Report & Manifests
+## Step 10: Download Report & Manifests
 
 Download the HTML report (available at any time, even mid-run):
 
@@ -1290,7 +1359,7 @@ curl -sk -b /tmp/serveit-cookies.txt -X POST "$URL/api/set_state" \
 
 ---
 
-## Step 10: Stop / Resume / Sync
+## Step 11: Stop / Resume / Sync
 
 ```bash
 # Stop optimization
@@ -1326,7 +1395,9 @@ Common issues and how to handle them:
 
 **Config overwritten by UI** — The browser UI auto-saves config on every page load. Use `POST /api/config/lock` before saving config via REST to prevent this. Auto-unlocks on stop/complete/failure.
 
-**Server restart clears state** — Syncing code (`deploy.py --sync-all`) restarts the server, clearing in-memory config lock and running state. Re-apply with `POST /api/config/lock` and `POST /api/set_state`.
+**"Cannot start: No valid test plan"** — The test plan is held in memory, not on disk. Any optimizer pod restart (code sync, eviction, manual restart) clears it. Fix: re-run `POST /api/setup_storage` with the model name, HF token, and storage class — this regenerates the test plan in ~30 seconds if the model is already downloaded. Then retry `POST /api/start_optimization`.
+
+**Server restart clears state** — Syncing code (`deploy.py --sync-all`) restarts the server, clearing in-memory config lock, running state, AND the test plan. Re-apply lock and state with `POST /api/config/lock` and `POST /api/set_state`. If the optimization was running, it continues in the background but cannot be restarted without regenerating the test plan via `POST /api/setup_storage`.
 
 **Pod stuck in ContainerCreating** — Usually pulling the vLLM image (~1.7GB). First pull takes 3-5 minutes. Check with `kubectl describe pod <name>`.
 

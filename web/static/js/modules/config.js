@@ -110,6 +110,16 @@ function updateUIFromConfig() {
             var mtSw = document.getElementById('multi-turn-switch');
             if (mtSw) { mtSw.style.background = '#15803d'; mtSw.querySelector('span').style.transform = 'translateX(18px)'; }
             toggleMultiTurn();
+            if (config.turn_delay) document.getElementById('turn-delay-input').value = config.turn_delay;
+            if (config.turn_delay_stdev) document.getElementById('turn-delay-stdev-input').value = config.turn_delay_stdev;
+            if (config.turn_delay_min) document.getElementById('turn-delay-min-input').value = config.turn_delay_min;
+            if (config.turn_delay_max) document.getElementById('turn-delay-max-input').value = config.turn_delay_max;
+            if (config.first_prompt_tokens) document.getElementById('first-prompt-tokens-input').value = config.first_prompt_tokens;
+            if (config.first_prompt_tokens_stdev) document.getElementById('first-prompt-tokens-stdev-input').value = config.first_prompt_tokens_stdev;
+            if (config.first_prompt_tokens_min) document.getElementById('first-prompt-tokens-min-input').value = config.first_prompt_tokens_min;
+            if (config.first_prompt_tokens_max) document.getElementById('first-prompt-tokens-max-input').value = config.first_prompt_tokens_max;
+            if (config.prefix_tokens) document.getElementById('prefix-tokens-input').value = config.prefix_tokens;
+            if (config.prefix_count) document.getElementById('prefix-count-input').value = config.prefix_count;
         }
     }
     if (config.max_requests && document.getElementById('max-requests-input')) {
@@ -385,19 +395,9 @@ function updateUIFromConfig() {
         document.getElementById('scheduler-image-input').value = config.scheduler_image;
     }
 
-    // Restore RHAIIS version dropdown and sync images
-    if (document.getElementById('rhaiis-version-select')) {
-        var rhaiisVer = config.rhaiis_version || '3.5.1';
-        document.getElementById('rhaiis-version-select').value = rhaiisVer;
-        var preset = (typeof RHAIIS_VERSIONS !== 'undefined') ? RHAIIS_VERSIONS[rhaiisVer] : null;
-        if (preset) {
-            var currentTag = (config.image || '').split(':').pop();
-            if (currentTag !== preset.cuda) {
-                applyRhaiisVersion(rhaiisVer);
-            }
-        } else if (rhaiisVer === 'custom' && typeof markImagesCustom === 'function') {
-            markImagesCustom();
-        }
+    // Restore sidecar image
+    if (config.sidecar_image && document.getElementById('sidecar-image-input')) {
+        document.getElementById('sidecar-image-input').value = config.sidecar_image;
     }
 
     // Restore run description
@@ -1427,171 +1427,75 @@ function updateSingleTestGpuSummary() {
     if (el) el.addEventListener('change', updateSingleTestGpuSummary);
 });
 
-// Image tag fetching
-function fetchImageTags() {
-    var full = (document.getElementById('image-repo-input').value || 'ghcr.io/llm-d/llm-d-cuda:v0.8.0').trim();
-    var repo = full.split(':')[0];
-    var statusEl = document.getElementById('image-tag-status');
-    statusEl.textContent = 'Fetching tags...';
-    statusEl.style.color = '#0369a1';
-
-    socket.emit('fetch_image_tags', { repo: repo });
+// Image tag fetching — unified handler for engine, vllm, scheduler, sidecar
+function fetchImageTags(target) {
+    var repoMap = {
+        'engine': document.getElementById('image-repo-input').value.split(':')[0] || 'ghcr.io/llm-d/llm-d-cuda',
+        'vllm': 'docker.io/vllm/vllm-openai',
+        'scheduler': document.getElementById('scheduler-image-input').value.split(':')[0] || 'ghcr.io/llm-d/llm-d-router-endpoint-picker',
+        'sidecar': document.getElementById('sidecar-image-input').value.split(':')[0] || 'ghcr.io/llm-d/llm-d-router-disagg-sidecar',
+    };
+    var statusMap = {
+        'engine': 'image-tag-status', 'vllm': 'image-tag-status',
+        'scheduler': 'scheduler-tag-status', 'sidecar': 'sidecar-tag-status',
+    };
+    var statusEl = document.getElementById(statusMap[target] || 'image-tag-status');
+    if (statusEl) { statusEl.textContent = 'Fetching tags...'; statusEl.style.color = '#0369a1'; }
+    socket.emit('fetch_image_tags', { repo: repoMap[target] || repoMap.engine, target: target });
 }
 
 socket.on('image_tags_result', function(data) {
-    var selectEl = document.getElementById('image-tag-select');
-    var statusEl = document.getElementById('image-tag-status');
+    var target = data.target || 'engine';
+    var selectMap = {
+        'engine': 'image-tag-select', 'vllm': 'image-tag-select',
+        'scheduler': 'scheduler-tag-select', 'sidecar': 'sidecar-tag-select',
+    };
+    var statusMap = {
+        'engine': 'image-tag-status', 'vllm': 'image-tag-status',
+        'scheduler': 'scheduler-tag-status', 'sidecar': 'sidecar-tag-status',
+    };
+    var inputMap = {
+        'engine': 'image-repo-input', 'vllm': 'image-repo-input',
+        'scheduler': 'scheduler-image-input', 'sidecar': 'sidecar-image-input',
+    };
+    var configMap = {
+        'engine': 'image', 'vllm': 'image',
+        'scheduler': 'scheduler_image', 'sidecar': 'sidecar_image',
+    };
+
+    var selectEl = document.getElementById(selectMap[target]);
+    var statusEl = document.getElementById(statusMap[target]);
+    var inputEl = document.getElementById(inputMap[target]);
 
     if (data.error) {
-        statusEl.textContent = 'Failed to fetch tags: ' + data.error;
-        statusEl.style.color = '#dc2626';
+        if (statusEl) { statusEl.textContent = 'Failed: ' + data.error; statusEl.style.color = '#dc2626'; }
         return;
     }
 
     var tags = data.tags || [];
-    statusEl.textContent = tags.length + ' tags found';
-    statusEl.style.color = '#22c55e';
+    var repo = data.repo || '';
+    if (statusEl) { statusEl.textContent = tags.length + ' tags found'; statusEl.style.color = '#22c55e'; }
 
-    var currentTag = config.image ? config.image.split(':').pop() : 'v0.6.0';
-    selectEl.innerHTML = '';
-    tags.forEach(function(tag) {
-        var opt = document.createElement('option');
-        opt.value = tag;
-        opt.textContent = tag;
-        if (tag === currentTag) opt.selected = true;
-        selectEl.appendChild(opt);
-    });
-    selectEl.style.display = 'block';
-
-    updateSelectedImage();
-});
-
-function updateSelectedImage() {
-    var input = document.getElementById('image-repo-input');
-    var repo = input.value.split(':')[0] || 'ghcr.io/llm-d/llm-d-cuda';
-    var selectEl = document.getElementById('image-tag-select');
-    if (selectEl && selectEl.value) {
-        input.value = repo + ':' + selectEl.value;
-    }
-    config.image = input.value;
-    saveConfig();
-}
-
-var RHAIIS_VERSIONS = {
-    '3.3.4': { cuda: 'v0.4.0', scheduler: 'v0.4.0', vllm: '0.13.0' },
-    '3.4.0': { cuda: 'v0.6.0', scheduler: 'v0.7.1', vllm: '0.18.0' },
-    '3.4.1': { cuda: 'v0.6.0', scheduler: 'v0.7.1', vllm: '0.18.0' },
-    '3.5.0': { cuda: 'v0.8.0', scheduler: 'v0.8.0', vllm: '0.24.0' },
-    '3.5.1': { cuda: 'v0.8.1', scheduler: 'v0.9.0', vllm: '0.24.0' },
-};
-
-function applyRhaiisVersion(version) {
-    var preset = RHAIIS_VERSIONS[version];
-    if (!preset) return; // 'custom' selected — do nothing
-
-    // Set cuda image (full path in single input)
-    var cudaInput = document.getElementById('image-repo-input');
-    var cudaRepo = cudaInput.value.split(':')[0] || 'ghcr.io/llm-d/llm-d-cuda';
-    cudaInput.value = cudaRepo + ':' + preset.cuda;
-    config.image = cudaInput.value;
-
-    // Update tag dropdown if populated
-    var tagSelect = document.getElementById('image-tag-select');
-    if (tagSelect && tagSelect.options.length > 0) {
-        for (var i = 0; i < tagSelect.options.length; i++) {
-            if (tagSelect.options[i].value === preset.cuda) {
-                tagSelect.selectedIndex = i;
-                break;
+    if (selectEl) {
+        selectEl.innerHTML = '<option value="">Select a tag...</option>';
+        selectEl.dataset.repo = repo;
+        tags.forEach(function(tag) {
+            var opt = document.createElement('option');
+            opt.value = tag;
+            opt.textContent = tag;
+            selectEl.appendChild(opt);
+        });
+        selectEl.style.display = 'block';
+        selectEl.onchange = function() {
+            var v = this.value;
+            if (v && inputEl) {
+                inputEl.value = repo + ':' + v;
+                config[configMap[target]] = repo + ':' + v;
+                saveConfig();
             }
-        }
+        };
     }
-
-    // Set scheduler image
-    var schedInput = document.getElementById('scheduler-image-input');
-    var schedRepo = schedInput.value.split(':')[0] || 'ghcr.io/llm-d/llm-d-router-endpoint-picker';
-    schedInput.value = schedRepo + ':' + preset.scheduler;
-    config.scheduler_image = schedInput.value;
-
-    // Update scheduler tag dropdown if populated
-    var schedSelect = document.getElementById('scheduler-tag-select');
-    if (schedSelect && schedSelect.options.length > 0) {
-        for (var j = 0; j < schedSelect.options.length; j++) {
-            if (schedSelect.options[j].value === preset.scheduler) {
-                schedSelect.selectedIndex = j;
-                break;
-            }
-        }
-    }
-
-    config.rhaiis_version = version;
-    saveConfig();
-}
-
-function markImagesCustom() {
-    var sel = document.getElementById('rhaiis-version-select');
-    if (!sel) return;
-    var currentCuda = (document.getElementById('image-repo-input').value || '').split(':').pop();
-    var currentSched = (document.getElementById('scheduler-image-input').value || '').split(':').pop();
-
-    // Check if current images match any preset
-    var matched = false;
-    for (var ver in RHAIIS_VERSIONS) {
-        var p = RHAIIS_VERSIONS[ver];
-        if (p.cuda === currentCuda && p.scheduler === currentSched) {
-            sel.value = ver;
-            matched = true;
-            break;
-        }
-    }
-    if (!matched) sel.value = 'custom';
-    config.rhaiis_version = sel.value;
-    saveConfig();
-}
-
-function fetchSchedulerTags() {
-    var input = document.getElementById('scheduler-image-input');
-    var full = (input.value || 'ghcr.io/llm-d/llm-d-router-endpoint-picker:v0.9.0').trim();
-    var repo = full.split(':')[0];
-    var statusEl = document.getElementById('scheduler-tag-status');
-    statusEl.textContent = 'Fetching tags...';
-    statusEl.style.color = '#0369a1';
-    socket.emit('fetch_image_tags', { repo: repo, target: 'scheduler' });
-}
-
-socket.on('scheduler_tags_result', function(data) {
-    var selectEl = document.getElementById('scheduler-tag-select');
-    var statusEl = document.getElementById('scheduler-tag-status');
-    if (data.error) {
-        statusEl.textContent = 'Failed: ' + data.error;
-        statusEl.style.color = '#dc2626';
-        return;
-    }
-    var tags = data.tags || [];
-    statusEl.textContent = tags.length + ' tags found';
-    statusEl.style.color = '#22c55e';
-    var currentTag = config.scheduler_image ? config.scheduler_image.split(':').pop() : 'v0.9.0';
-    selectEl.innerHTML = '';
-    tags.forEach(function(tag) {
-        var opt = document.createElement('option');
-        opt.value = tag;
-        opt.textContent = tag;
-        if (tag === currentTag) opt.selected = true;
-        selectEl.appendChild(opt);
-    });
-    selectEl.style.display = 'block';
-    updateSelectedScheduler();
 });
-
-function updateSelectedScheduler() {
-    var input = document.getElementById('scheduler-image-input');
-    var repo = input.value.split(':')[0] || 'ghcr.io/llm-d/llm-d-router-endpoint-picker';
-    var selectEl = document.getElementById('scheduler-tag-select');
-    if (selectEl && selectEl.value) {
-        input.value = repo + ':' + selectEl.value;
-    }
-    config.scheduler_image = input.value;
-    saveConfig();
-}
 
 // Load models from API
 var allModels = [];

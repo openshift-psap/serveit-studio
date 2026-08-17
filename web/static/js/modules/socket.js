@@ -105,12 +105,30 @@ function checkApiControlStatus() {
             } else {
                 indicator.style.display = 'none';
             }
+            if (d.running && typeof updateRunningState === 'function') {
+                updateRunningState(true);
+            }
         })
         .catch(() => {});
 }
 
-socket.on('status_update', function() { setTimeout(checkApiControlStatus, 1000); });
+socket.on('status_update', function(data) {
+    setTimeout(checkApiControlStatus, 1000);
+    if (data && data.running !== undefined) {
+        var startBtn = document.getElementById('start-optimization');
+        var stopBtn = document.getElementById('stop-optimization');
+        if (data.running) {
+            if (startBtn) startBtn.style.display = 'none';
+            if (stopBtn) stopBtn.style.display = 'block';
+            if (typeof goToStep === 'function') goToStep(7, true);
+        } else {
+            if (startBtn) startBtn.style.display = 'block';
+            if (stopBtn) stopBtn.style.display = 'none';
+        }
+    }
+});
 setTimeout(checkApiControlStatus, 2000);
+setInterval(checkApiControlStatus, 10000);
 
 // Re-load config on reconnect (e.g. after server restart)
 // The server's connect handler will either grant access or send session_locked

@@ -45,7 +45,7 @@ data:
         NETWORK_MODE="sriov_multinic"
         SOCKET_IFNAME="eth0"
         echo "--- SR-IOV multi-nic mode detected ($MULTINIC_COUNT net1-X interfaces) ---" >&2
-    elif ip link show net0 &>/dev/null; then
+    elif [ -d /sys/class/net/net0 ]; then
         NETWORK_MODE="dra-net"
         SOCKET_IFNAME="net0"
         echo "--- DRA-NET mode detected (interface: net0) ---" >&2
@@ -324,7 +324,14 @@ data:
     # --- STEP 3: DEFINE NETWORK SPLIT ---
 
     # Management IP (eth0 for NAD, net0 for DRA-NET)
-    MGMT_IP=$(ip -4 addr show "$SOCKET_IFNAME" | grep -oP '(?<=inet\s)\d+(\.\d+){3}' | head -n 1 || true)
+    # Try ip, fall back to /proc/net, fall back to hostname -I
+    if command -v ip &>/dev/null; then
+      MGMT_IP=$(ip -4 addr show "$SOCKET_IFNAME" 2>/dev/null | grep -oP '(?<=inet\s)\d+(\.\d+){3}' | head -n 1 || true)
+    elif [ -f /proc/net/fib_trie ]; then
+      MGMT_IP=$(awk '/32 host/{print f} {f=$2}' /proc/net/fib_trie | grep -v '127.0.0' | head -n 1 || true)
+    else
+      MGMT_IP=$(hostname -I 2>/dev/null | awk '{print $1}' || true)
+    fi
 
     # Data IPs (From InfiniBand interfaces, if they have IPs)
     ALL_DATA_IPS=""

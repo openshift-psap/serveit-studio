@@ -26,11 +26,18 @@ def index():
 @app.route('/api/status')
 def get_status():
     """Get current optimization status."""
+    _goal_labels = {'balanced': 'full_coverage', 'ttft': 'ttft', 'throughput': 'throughput',
+                    'aggregated_only': 'aggregated_only', 'pd_only': 'pd_only',
+                    'ep_only': 'ep_only', 'single_test': 'single_test'}
     with state_lock:
+        cfg = state['current_config'] or {}
+        if cfg.get('goal') in _goal_labels:
+            cfg = dict(cfg)
+            cfg['goal'] = _goal_labels[cfg['goal']]
         return jsonify({
             'running': state['optimization_running'],
             'config_locked': state.get('config_locked', False),
-            'config': state['current_config']
+            'config': cfg
         })
 
 @app.route('/api/scan', methods=['POST'])
@@ -172,16 +179,21 @@ def api_setup_storage():
     from gevent import spawn as gspawn
     from web.realtime import handle_setup_storage
     gspawn(handle_setup_storage, data)
+    socketio.emit('status_update', {'running': True, 'message': 'Storage setup started'})
     return jsonify({'success': True, 'message': 'Storage setup started. Poll GET /api/logs and GET /api/status to track progress.'})
 
 
 @app.route('/api/start_optimization', methods=['POST'])
 def api_start_optimization():
     """Start a new optimization run. Returns immediately, optimization runs async."""
+    with state_lock:
+        if state.get('optimization_running'):
+            return jsonify({'success': False, 'message': 'Optimization already running'}), 409
     data = request.get_json() or {}
     from gevent import spawn as gspawn
     from web.realtime import handle_start_optimization
     gspawn(handle_start_optimization, data)
+    socketio.emit('status_update', {'running': True, 'message': 'Optimization started'})
     return jsonify({'success': True, 'message': 'Optimization started. Poll GET /api/status to track.'})
 
 
@@ -270,11 +282,54 @@ def handle_config():
 
 @app.route('/api/stop_optimization', methods=['POST'])
 def api_stop_optimization():
-    """Stop the running optimization (REST endpoint). Idempotent — safe to call even if not running."""
+    """Stop the running optimization (REST endpoint). Kills all backend processes."""
+    import subprocess
 
     with state_lock:
+        state['_stop_requested'] = True
         state['optimization_running'] = False
+        state['config_locked'] = False
+        greenlet = state.get('_optimization_greenlet')
         save_state()
+
+    # Kill remote guidellm on workload pod
+    ns = TARGET_NAMESPACE
+    try:
+        r = subprocess.run(
+            ['kubectl', 'get', 'pod', '-l', 'app=serveit-workload', '-n', ns,
+             '-o', 'jsonpath={.items[0].metadata.name}'],
+            capture_output=True, text=True, timeout=10, check=False)
+        wl_pod = r.stdout.strip()
+        if wl_pod:
+            subprocess.run(
+                ['kubectl', 'exec', wl_pod, '-n', ns, '--', 'pkill', '-9', '-f', 'guidellm'],
+                capture_output=True, timeout=10, check=False)
+    except Exception:
+        pass
+
+    # Kill local kubectl subprocesses (except port-forward)
+    try:
+        subprocess.run(['bash', '-c', "ps aux | grep kubectl | grep -v port-forward | grep -v grep | awk '{print $2}' | xargs -r kill -9"],
+                       capture_output=True, timeout=5, check=False)
+    except Exception:
+        pass
+
+    # Kill the optimization greenlet
+    if greenlet and not greenlet.dead:
+        greenlet.kill(block=False)
+
+    with state_lock:
+        state['_optimization_greenlet'] = None
+
+    # Update DB
+    try:
+        with get_db() as conn:
+            conn.execute('UPDATE ui_session_state SET optimization_running = 0, updated_at = ? WHERE id = 1',
+                         (datetime.now().isoformat(),))
+            conn.execute("UPDATE optimization_runs SET status = 'stopped', completed_at = ? WHERE status = 'running'",
+                         (datetime.now().isoformat(),))
+    except Exception:
+        pass
 
     socketio.emit('status_update', {'running': False, 'message': 'Optimization stopped'})
     socketio.emit('console_log', {'type': 'warning', 'message': '🛑 Optimization stopped by user'})
@@ -283,9 +338,14 @@ def api_stop_optimization():
 
 @app.route('/api/clear_console', methods=['POST'])
 def api_clear_console():
-    """Clear console display (UI only — logs are preserved in database)."""
+    """Clear console display and stored logs."""
+    try:
+        with get_db() as conn:
+            conn.execute('DELETE FROM console_logs')
+    except Exception:
+        pass
     socketio.emit('clear_console', {})
-    return jsonify({'success': True, 'message': 'Console display cleared'})
+    return jsonify({'success': True, 'message': 'Console cleared'})
 
 @app.route('/api/runs')
 def get_runs():
@@ -510,7 +570,8 @@ def get_run_report(run_id):
             if not data:
                 return jsonify({'error': 'No results found for this run'}), 404
 
-        app_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+        # Prefer synced code on PVC, fall back to bundled image code
+        app_root = '/mnt/storage/app' if os.path.isdir('/mnt/storage/app/web') else os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
         js_path = os.path.join(app_root, 'web', 'static', 'js', 'report-download.js')
 
         # Generate a self-contained HTML that embeds the data + JS
@@ -656,7 +717,7 @@ def update_deployment_template():
             replicas=data.get('replicas', 1),
             max_model_len=data.get('max_model_len', 8192),
             gpu_memory_utilization=data.get('gpu_memory_utilization', 0.95),
-            image=data.get('image', 'ghcr.io/llm-d/llm-d-cuda:v0.8.0'),
+            image=data.get('image', 'vllm/vllm-openai:v0.26.0'),
             pvc_name=data.get('pvc_name', 'serveit-cache'),
             nccl_ib_hca=data.get('nccl_ib_hca', 'mlx'),
             isl=data.get('isl', 2000),

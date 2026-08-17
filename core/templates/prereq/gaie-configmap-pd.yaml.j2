@@ -12,31 +12,40 @@ data:
     apiVersion: llm-d.ai/v1alpha1
     kind: EndpointPickerConfig
     plugins:
-      - type: approx-prefix-cache-producer
+      - type: disagg-headers-handler
+      - type: always-disagg-pd-decider
+      - type: disagg-profile-handler
         parameters:
-          maxPrefixBlocksToMatch: {{ max_prefix_blocks | default(256) }}
-          lruCapacityPerServer: {{ lru_capacity | default(31250) }}
-      - type: prefix-cache-scorer
-      - type: queue-scorer
-      - type: prefill-filter
-      - type: decode-filter
-      - type: max-score-picker
+          deciderPluginName: always-disagg-pd-decider
+{% if use_prefix_based_decider | default(true) %}
       - type: prefix-based-pd-decider
         parameters:
           nonCachedTokens: {{ non_cached_tokens | default(16) }}
-      - type: disagg-profile-handler
+{% endif %}
+      - type: prefill-filter
+      - type: decode-filter
+      - type: max-score-picker
+      - type: approx-prefix-cache-producer
         parameters:
-          deciders:
-            prefill: prefix-based-pd-decider
+          autoTune: {{ prefix_cache_auto_tune | default('false') }}
+          maxPrefixBlocksToMatch: {{ max_prefix_blocks | default(256) }}
+          lruCapacityPerServer: {{ lru_capacity | default(4000000) }}
+      - type: prefix-cache-scorer
+      - type: queue-scorer
+      - type: token-load-scorer
+      - type: active-request-scorer
+      - type: inflight-load-producer
+{% if prefix_cache_affinity_enabled | default(false) %}
+      - type: prefix-cache-affinity-filter
+        parameters:
+          peakPrefillThroughput: {{ peak_prefill_throughput | default(9866) }}
+{% endif %}
 {% if kv_cache_enabled | default(false) %}
       - type: kv-cache-utilization-scorer
 {% endif %}
 {% if slo_enabled | default(false) %}
       - type: slo-request-tracker
       - type: latency-scorer
-{% endif %}
-{% if active_request_enabled | default(false) %}
-      - type: active-request-scorer
 {% endif %}
 {% if no_hit_lru_enabled | default(false) %}
       - type: no-hit-lru-scorer
@@ -49,10 +58,16 @@ data:
         plugins:
           - pluginRef: prefill-filter
           - pluginRef: max-score-picker
+{% if prefix_cache_affinity_enabled | default(false) %}
+          - pluginRef: token-load-scorer
+            weight: {{ prefill_token_load_weight | default(1.0) }}
+          - pluginRef: prefix-cache-affinity-filter
+{% else %}
           - pluginRef: prefix-cache-scorer
             weight: {{ prefix_cache_weight | default(2.0) }}
           - pluginRef: queue-scorer
             weight: {{ queue_weight | default(1.0) }}
+{% endif %}
 {% if kv_cache_enabled | default(false) %}
           - pluginRef: kv-cache-utilization-scorer
             weight: {{ kv_cache_weight | default(2.0) }}
@@ -60,10 +75,6 @@ data:
 {% if slo_enabled | default(false) %}
           - pluginRef: latency-scorer
             weight: {{ slo_weight | default(3.0) }}
-{% endif %}
-{% if active_request_enabled | default(false) %}
-          - pluginRef: active-request-scorer
-            weight: {{ active_request_weight | default(2.0) }}
 {% endif %}
 {% if no_hit_lru_enabled | default(false) %}
           - pluginRef: no-hit-lru-scorer
@@ -77,11 +88,11 @@ data:
         plugins:
           - pluginRef: decode-filter
           - pluginRef: max-score-picker
+          - pluginRef: active-request-scorer
+            weight: {{ decode_active_request_weight | default(1.0) }}
+{% if not prefix_cache_affinity_enabled | default(false) %}
           - pluginRef: prefix-cache-scorer
             weight: {{ decode_prefix_cache_weight | default(2.0) }}
           - pluginRef: queue-scorer
             weight: {{ decode_queue_weight | default(1.0) }}
-{% if active_request_enabled | default(false) %}
-          - pluginRef: active-request-scorer
-            weight: {{ decode_active_request_weight | default(2.0) }}
 {% endif %}

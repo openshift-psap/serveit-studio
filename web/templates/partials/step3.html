@@ -69,20 +69,32 @@
                                                         <div class="help-text" id="osl-var-help">Standard deviation around the average output length.</div>
                                                     </div>
                                                     <div class="input-group">
-                                                        <label>Input Length Range (min / max)</label>
-                                                        <div style="display:flex;gap:8px;">
-                                                            <input type="number" id="isl-min-input" value="" min="1" max="1000000" placeholder="min" style="width:50%;" oninput="config.isl_min=this.value?parseInt(this.value):null;saveConfig();">
-                                                            <input type="number" id="isl-max-input" value="" min="1" max="1000000" placeholder="max" style="width:50%;" oninput="config.isl_max=this.value?parseInt(this.value):null;saveConfig();">
+                                                        <label>Input Length Range</label>
+                                                        <div style="display:flex;gap:8px;align-items:center;">
+                                                            <div style="flex:1;">
+                                                                <div style="font-size:0.75em;color:#64748b;margin-bottom:2px;">Minimum tokens</div>
+                                                                <input type="number" id="isl-min-input" value="" min="1" max="1000000" placeholder="e.g. 100" style="width:100%;" oninput="config.isl_min=this.value?parseInt(this.value):null;saveConfig();">
+                                                            </div>
+                                                            <div style="flex:1;">
+                                                                <div style="font-size:0.75em;color:#64748b;margin-bottom:2px;">Maximum tokens</div>
+                                                                <input type="number" id="isl-max-input" value="" min="1" max="1000000" placeholder="e.g. 10000" style="width:100%;" oninput="config.isl_max=this.value?parseInt(this.value):null;saveConfig();">
+                                                            </div>
                                                         </div>
-                                                        <div class="help-text">Optional hard limits on input token count. Leave empty for no limits.</div>
+                                                        <div class="help-text">Hard limits on input token count. Prompts shorter than min or longer than max are clamped. Leave empty for no limits.</div>
                                                     </div>
                                                     <div class="input-group">
-                                                        <label>Output Length Range (min / max)</label>
-                                                        <div style="display:flex;gap:8px;">
-                                                            <input type="number" id="osl-min-input" value="" min="1" max="1000000" placeholder="min" style="width:50%;" oninput="config.osl_min=this.value?parseInt(this.value):null;saveConfig();">
-                                                            <input type="number" id="osl-max-input" value="" min="1" max="1000000" placeholder="max" style="width:50%;" oninput="config.osl_max=this.value?parseInt(this.value):null;saveConfig();">
+                                                        <label>Output Length Range</label>
+                                                        <div style="display:flex;gap:8px;align-items:center;">
+                                                            <div style="flex:1;">
+                                                                <div style="font-size:0.75em;color:#64748b;margin-bottom:2px;">Minimum tokens</div>
+                                                                <input type="number" id="osl-min-input" value="" min="1" max="1000000" placeholder="e.g. 50" style="width:100%;" oninput="config.osl_min=this.value?parseInt(this.value):null;saveConfig();">
+                                                            </div>
+                                                            <div style="flex:1;">
+                                                                <div style="font-size:0.75em;color:#64748b;margin-bottom:2px;">Maximum tokens</div>
+                                                                <input type="number" id="osl-max-input" value="" min="1" max="1000000" placeholder="e.g. 10000" style="width:100%;" oninput="config.osl_max=this.value?parseInt(this.value):null;saveConfig();">
+                                                            </div>
                                                         </div>
-                                                        <div class="help-text">Optional hard limits on output token count. Leave empty for no limits.</div>
+                                                        <div class="help-text">Hard limits on output token count. Responses shorter than min or longer than max are clamped. Leave empty for no limits.</div>
                                                     </div>
                                                 </div>
                                                 </div>
@@ -112,6 +124,64 @@
                                                             <div class="help-text">How many back-and-forth exchanges per conversation (e.g., 3 = user asks, AI replies, user follows up, AI replies, user asks again, AI replies).</div>
                                                         </div>
                                                         <div class="help-text" style="margin-top: 8px;">Each turn sends the entire conversation history as context. For example, with ISL=3000 and 3 turns, the final message sends ~9000 tokens (3 x 3000) because it includes all previous exchanges. This means later turns use significantly more GPU memory and take longer to process.</div>
+                                                        <div class="input-group" style="margin-top:12px;">
+                                                            <label style="font-size:0.85em;margin-bottom:6px;display:block;">Inter-Turn Delay (seconds) — Tool Call Latency</label>
+                                                            <div style="display:flex;gap:8px;align-items:flex-start;">
+                                                                <div style="flex:1;">
+                                                                    <div style="font-size:0.75em;color:#64748b;margin-bottom:2px;">Average delay</div>
+                                                                    <input type="number" id="turn-delay-input" value="" min="0" max="600" step="0.5" placeholder="e.g. 15" style="width:100%;" oninput="config.turn_delay=this.value?parseFloat(this.value):null;saveConfig();">
+                                                                </div>
+                                                                <div style="flex:1;">
+                                                                    <div style="font-size:0.75em;color:#64748b;margin-bottom:2px;">Std deviation</div>
+                                                                    <input type="number" id="turn-delay-stdev-input" value="" min="0" max="600" step="0.5" placeholder="e.g. 55" style="width:100%;" oninput="config.turn_delay_stdev=this.value?parseFloat(this.value):null;saveConfig();">
+                                                                </div>
+                                                                <div style="flex:1;">
+                                                                    <div style="font-size:0.75em;color:#64748b;margin-bottom:2px;">Min delay</div>
+                                                                    <input type="number" id="turn-delay-min-input" value="" min="0" max="600" step="0.5" placeholder="e.g. 1" style="width:100%;" oninput="config.turn_delay_min=this.value?parseFloat(this.value):null;saveConfig();">
+                                                                </div>
+                                                                <div style="flex:1;">
+                                                                    <div style="font-size:0.75em;color:#64748b;margin-bottom:2px;">Max delay</div>
+                                                                    <input type="number" id="turn-delay-max-input" value="" min="0" max="600" step="0.5" placeholder="e.g. 100" style="width:100%;" oninput="config.turn_delay_max=this.value?parseFloat(this.value):null;saveConfig();">
+                                                                </div>
+                                                            </div>
+                                                            <div class="help-text">Simulates tool call latency — the pause between receiving a response and sending the next turn. Models real agentic workloads where the application executes tools between turns (e.g., web search, code execution). Leave empty for no delay (back-to-back turns).</div>
+                                                        </div>
+                                                        <div class="input-group" style="margin-top:12px;">
+                                                            <label style="font-size:0.85em;margin-bottom:6px;display:block;">First Turn Prompt Override (Agentic Context)</label>
+                                                            <div style="display:flex;gap:8px;align-items:flex-start;">
+                                                                <div style="flex:1;">
+                                                                    <div style="font-size:0.75em;color:#64748b;margin-bottom:2px;">Average tokens</div>
+                                                                    <input type="number" id="first-prompt-tokens-input" value="" min="0" max="1000000" placeholder="e.g. 160000" style="width:100%;" oninput="config.first_prompt_tokens=this.value?parseInt(this.value):null;saveConfig();">
+                                                                </div>
+                                                                <div style="flex:1;">
+                                                                    <div style="font-size:0.75em;color:#64748b;margin-bottom:2px;">Std deviation</div>
+                                                                    <input type="number" id="first-prompt-tokens-stdev-input" value="" min="0" max="1000000" placeholder="e.g. 233600" style="width:100%;" oninput="config.first_prompt_tokens_stdev=this.value?parseInt(this.value):null;saveConfig();">
+                                                                </div>
+                                                                <div style="flex:1;">
+                                                                    <div style="font-size:0.75em;color:#64748b;margin-bottom:2px;">Minimum</div>
+                                                                    <input type="number" id="first-prompt-tokens-min-input" value="" min="0" max="1000000" placeholder="e.g. 10000" style="width:100%;" oninput="config.first_prompt_tokens_min=this.value?parseInt(this.value):null;saveConfig();">
+                                                                </div>
+                                                                <div style="flex:1;">
+                                                                    <div style="font-size:0.75em;color:#64748b;margin-bottom:2px;">Maximum</div>
+                                                                    <input type="number" id="first-prompt-tokens-max-input" value="" min="0" max="1000000" placeholder="e.g. 990000" style="width:100%;" oninput="config.first_prompt_tokens_max=this.value?parseInt(this.value):null;saveConfig();">
+                                                                </div>
+                                                            </div>
+                                                            <div class="help-text">Override prompt length for the first turn only. Simulates large initial context injection (e.g., repository code, file indexes, dynamic system prompt). Subsequent turns use the standard ISL above. Leave empty to use ISL for all turns.</div>
+                                                        </div>
+                                                        <div class="input-group" style="margin-top:12px;">
+                                                            <label style="font-size:0.85em;margin-bottom:6px;display:block;">Shared System Prompt (Prefix)</label>
+                                                            <div style="display:flex;gap:8px;align-items:flex-start;">
+                                                                <div style="flex:1;">
+                                                                    <div style="font-size:0.75em;color:#64748b;margin-bottom:2px;">Prefix tokens</div>
+                                                                    <input type="number" id="prefix-tokens-input" value="" min="0" max="100000" placeholder="e.g. 3000" style="width:100%;" oninput="config.prefix_tokens=this.value?parseInt(this.value):null;saveConfig();">
+                                                                </div>
+                                                                <div style="flex:1;">
+                                                                    <div style="font-size:0.75em;color:#64748b;margin-bottom:2px;">Unique prefixes</div>
+                                                                    <input type="number" id="prefix-count-input" value="" min="1" max="1000" placeholder="e.g. 1" style="width:100%;" oninput="config.prefix_count=this.value?parseInt(this.value):null;saveConfig();">
+                                                                </div>
+                                                            </div>
+                                                            <div class="help-text">A fixed system prompt prepended to every conversation. All conversations with the same prefix share KV cache (prefix caching). Set unique prefixes to 1 for maximum cache reuse, or higher to simulate different system prompts per tenant/agent.</div>
+                                                        </div>
                                                     </div>
                                             </div>
                                         </div>

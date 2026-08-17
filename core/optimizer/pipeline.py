@@ -1214,15 +1214,20 @@ class RecipeOptimizer(
         block_size = self._compute_block_size()
         lru_capacity = self._compute_lru_capacity(block_size)
         plugins = None
-        if self.config.epp_preset == 'custom' and self.config.epp_config:
-            plugins = self.config.epp_config.get('plugins', self.config.epp_config)
-        return {
+        user_epp = self.config.epp_config or {}
+        if self.config.epp_preset == 'custom' and user_epp:
+            plugins = user_epp.get('plugins', user_epp)
+        result = {
             'preset': self.config.epp_preset,
             'plugins': plugins,
-            'maxPrefixBlocksToMatch': math.ceil(self.config.isl / block_size),
-            'lruCapacityPerServer': lru_capacity,
-            'nonCachedTokens': min(16, max(1, self.config.isl // 100)),
+            'maxPrefixBlocksToMatch': user_epp.get('maxPrefixBlocksToMatch') or math.ceil(self.config.isl / block_size),
+            'lruCapacityPerServer': user_epp.get('lruCapacityPerServer') or lru_capacity,
+            'nonCachedTokens': user_epp.get('nonCachedTokens') or min(16, max(1, self.config.isl // 100)),
         }
+        for k in ('prefixCacheAffinityEnabled', 'peakPrefillThroughput', 'prefixCacheAutoTune', 'usePrefixBasedDecider'):
+            if k in user_epp:
+                result[k] = user_epp[k]
+        return result
 
     def _compute_lru_capacity(self, block_size: int) -> int:
         """Compute EPP LRU cache capacity from GPU VRAM and model architecture.
@@ -1483,6 +1488,10 @@ class RecipeOptimizer(
                 avg_node_memory_gb = sum(n.memory_gb for n in gpu_nodes) / num_gpu_nodes
                 usable_memory_gb = avg_node_memory_gb * 0.85
             memory_per_pod_gb = int(usable_memory_gb / pods_per_node)
+            # TP fills entire node — give the pod all usable node memory
+            if tp >= max_gpus_per_node and pods_per_node == 1:
+                node_mem_gb = min(n.memory_gb for n in gpu_nodes)
+                memory_per_pod_gb = max(memory_per_pod_gb, int(node_mem_gb * 0.85))
             mem_str = f"{memory_per_pod_gb}Gi"
         else:
             mem_str = mem_override
@@ -1546,6 +1555,39 @@ class RecipeOptimizer(
             self.log(f"⚠️  Failed to clean up orphaned pods: {e}", 'warning')
 
         # Stale guidellm output files are cleaned per-test (rm -f before each run)
+
+    def _ensure_workload_pvc(self):
+        """Ensure the workload PVC (serveit-cache) exists, create if missing."""
+        pvc_name = 'serveit-cache'
+        r = self.scanner.kubectl.run(
+            ['get', 'pvc', pvc_name, '-n', self.config.namespace],
+            check=False
+        )
+        if r.returncode == 0:
+            return
+        self.log(f"📦 Creating workload PVC {pvc_name}...", 'info')
+        sc = self.config.storage_class or 'gp2'
+        pvc_yaml = f"""apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: {pvc_name}
+  namespace: {self.config.namespace}
+spec:
+  accessModes: [ReadWriteMany]
+  resources:
+    requests:
+      storage: 50Gi
+  storageClassName: {sc}
+"""
+        r = self.scanner.kubectl.run(
+            ['apply', '-f', '-'],
+            input_data=pvc_yaml,
+            check=False
+        )
+        if r.returncode == 0:
+            self.log(f"   ✅ PVC {pvc_name} created", 'success')
+        else:
+            self.log(f"   ⚠️  Failed to create PVC {pvc_name}: {r.stderr[:200]}", 'warning')
 
     def _restart_infra_pods(self):
         """Restart EPP and gateway pods, kill orphaned guidellm processes."""
@@ -1619,26 +1661,38 @@ class RecipeOptimizer(
             self.log("Mode: FRESH START", 'info')
         self.log("", 'info')
 
+        # Ensure workload PVC exists (serveit-cache — used for datasets, results, tmp)
+        self._ensure_workload_pvc()
+
         # Restart EPP and gateways for fresh Istio certs and clean datastore
         self._restart_infra_pods()
 
         try:
-            # Single test: skip TP calibration, go straight to strategy
-            if self.config.objective == 'single_test':
-                strategy = self._get_strategy()
-                strategy.execute()
-                return self._build_results()
-
             # Generate datasets for the workload
+            # Skip pre-generation for multi-turn workloads — guidellm handles turns/delay natively
+            is_multi_turn = getattr(self.config, 'turns', 1) > 1
             if self.config.prefix_cache_hit_pct > 0 and self.config.workload_mode == 'synthetic':
                 self._generate_prefix_cache_dataset()
-            elif self.config.workload_mode == 'synthetic':
+            elif self.config.workload_mode == 'synthetic' and not is_multi_turn:
                 self._generate_random_dataset()
                 self.config.workload_mode = 'dataset'
                 self.config.dataset_source = self.random_dataset_path
                 self.config.dataset_column = 'prompt'
                 self.config.dataset_max_output = self.config.osl
                 self.log("   Workload switched to random dataset mode for reproducible testing", 'info')
+            elif is_multi_turn:
+                # Multi-turn: guidellm generates conversations in-memory with context accumulation,
+                # first_prompt_tokens, prefix_buckets, and inter-turn delays. The conversation_turns
+                # JSONL format from generate_turn_dataset is not compatible with guidellm's file-based
+                # data loader (it uses a graph structure that requires the native deserializer).
+                # TODO: add support for saving/loading native guidellm conversation datasets from file
+                self.log(f"   Multi-turn workload ({self.config.turns} turns) — using guidellm synthetic generation", 'info')
+
+            # Single test: skip TP calibration, go straight to strategy
+            if self.config.objective == 'single_test':
+                strategy = self._get_strategy()
+                strategy.execute()
+                return self._build_results()
 
             # Steps 2-3: Combined TP sweep (decode + prefill, single deploy per TP)
             self.log("STEPS 2-3: Combined TP Sweep (Decode + Prefill)", 'decision')
@@ -1724,6 +1778,35 @@ class RecipeOptimizer(
                     self.log(f"  Attention heads filter: {num_heads} heads, {num_kv_heads} KV heads — "
                              f"valid TP values: {tp_options}", 'info')
 
+            # Mamba-hybrid models: n_groups must be divisible by TP
+            n_groups = self._model_config.get('n_groups', 0)
+            if n_groups > 1:
+                before = len(tp_options)
+                tp_options = [tp for tp in tp_options if n_groups % tp == 0]
+                if len(tp_options) < before:
+                    self.log(f"  Mamba n_groups filter: n_groups={n_groups} — "
+                             f"valid TP values: {tp_options}", 'info')
+
+            # NVFP4/Marlin quantization: sharded dimensions must be divisible by 4
+            # Marlin FP4 packs 2 values per byte, so effective dim = dim / (tp * 2)
+            # and that must be divisible by 4 for the int32 view
+            qcfg = self._model_config.get('quantization_config', {})
+            is_fp4 = 'fp4' in str(qcfg.get('quant_method', '')).lower() or \
+                     'nvfp4' in str(qcfg.get('quant_method', '')).lower() or \
+                     'w4a4' in str(qcfg.get('quant_method', '')).lower() or \
+                     any('fp4' in str(v).lower() for v in qcfg.values() if isinstance(v, (str, dict)))
+            if is_fp4:
+                inter = self._model_config.get('intermediate_size', 0)
+                moe_inter = self._model_config.get('moe_intermediate_size', 0)
+                check_dims = [d for d in [inter, moe_inter] if d > 0]
+                if check_dims:
+                    before = len(tp_options)
+                    tp_options = [tp for tp in tp_options
+                                 if all((d // tp) % 4 == 0 for d in check_dims)]
+                    if len(tp_options) < before:
+                        self.log(f"  NVFP4 Marlin filter: intermediate={inter}, moe_intermediate={moe_inter} — "
+                                 f"valid TP values: {tp_options}", 'info')
+
         return tp_options or self.config.tp_options
 
     def _fp8_max_tp(self) -> int:
@@ -1736,6 +1819,20 @@ class RecipeOptimizer(
         Returns max safe TP, or a large value if no constraint applies.
         """
         if not (self._model_config and self._model_dtype == 'fp8'):
+            return 9999
+        # Only applies to FP8 block quantization — skip for dynamic/per-channel
+        # Block quantization: model name contains "block" or block_structure is set
+        model_name = str(getattr(self.config, 'model_name', '') or '')
+        is_block = 'block' in model_name.lower()
+        if not is_block:
+            qcfg = self._model_config.get('quantization_config', {})
+            for group in (qcfg.get('config_groups') or {}).values():
+                if isinstance(group, dict):
+                    w = group.get('weights', {})
+                    if w.get('block_structure') or w.get('strategy') == 'block':
+                        is_block = True
+                        break
+        if not is_block:
             return 9999
         fp8_block_n = 128
         dims = [self._model_config.get('intermediate_size', 0)]

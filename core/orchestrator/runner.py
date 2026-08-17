@@ -56,13 +56,12 @@ class TestOrchestrator(ParserMixin, GuidellmMixin):
         # Enable namespace monitoring for metrics collection (OpenShift only)
         self._enable_namespace_monitoring(namespace)
 
-        # Auto-discover Thanos URL if not provided
-        # For remote clusters (kubeconfig set or KUBECONFIG env), skip local Thanos — it won't have the remote metrics
+        # Auto-discover Thanos/Prometheus URL if not provided
         is_remote = kubeconfig or os.environ.get('KUBECONFIG')
         if thanos_url is None and not is_remote:
             thanos_url = self._get_thanos_url()
 
-        # Port-forward to remote Prometheus (remote clusters or when local Thanos not found)
+        # Port-forward to Prometheus (remote clusters, vanilla K8s, or when local Thanos not found)
         if thanos_url is None:
             thanos_url = self._start_prometheus_port_forward(kubeconfig)
 
@@ -119,10 +118,8 @@ class TestOrchestrator(ParserMixin, GuidellmMixin):
             logger.warning("No Thanos URL provided - metrics collection will be disabled")
 
     def _start_prometheus_port_forward(self, kubeconfig: Optional[str]) -> Optional[str]:
-        """Start kubectl port-forward to Prometheus on a remote cluster."""
+        """Start kubectl port-forward to Prometheus. Works with explicit kubeconfig or in-cluster SA."""
         kubeconfig = kubeconfig or os.environ.get('KUBECONFIG')
-        if not kubeconfig:
-            return None
 
         s = socket.socket()
         s.bind(('', 0))
@@ -130,7 +127,8 @@ class TestOrchestrator(ParserMixin, GuidellmMixin):
         s.close()
 
         env = os.environ.copy()
-        env['KUBECONFIG'] = os.path.expanduser(kubeconfig)
+        if kubeconfig:
+            env['KUBECONFIG'] = os.path.expanduser(kubeconfig)
 
         # Auto-discover Prometheus/Thanos services and port-forward
         import urllib.request, ssl, json as _json
@@ -181,6 +179,28 @@ class TestOrchestrator(ParserMixin, GuidellmMixin):
         ctx.check_hostname = False
         ctx.verify_mode = ssl.CERT_NONE
 
+        # First try direct in-cluster connection (no port-forward needed)
+        for svc_ns, svc_name, svc_port, port_name in prom_services:
+            for scheme in ('http', 'https'):
+                try:
+                    direct_url = f'{scheme}://{svc_name}.{svc_ns}.svc:{svc_port}'
+                    req = urllib.request.Request(
+                        f'{direct_url}/api/v1/query?query=up',
+                        headers={'Authorization': f'Bearer {bearer}'} if bearer else {}
+                    )
+                    kw = {'timeout': 3}
+                    if scheme == 'https':
+                        kw['context'] = ctx
+                    r = urllib.request.urlopen(req, **kw)
+                    if r.status == 200:
+                        if bearer:
+                            self._prom_bearer = bearer
+                        logger.info(f"Direct connection to {svc_ns}/{svc_name}:{svc_port} at {direct_url}")
+                        return direct_url
+                except Exception:
+                    continue
+
+        # Fallback: port-forward (needed when running outside the cluster)
         for svc_ns, svc_name, svc_port, port_name in prom_services:
             try:
                 self._pf_process = subprocess.Popen(
@@ -193,7 +213,6 @@ class TestOrchestrator(ParserMixin, GuidellmMixin):
                     self._pf_process = None
                     continue
 
-                # Try HTTPS with bearer, then HTTPS without, then HTTP
                 for scheme, headers in [
                     ('https', {'Authorization': f'Bearer {bearer}'} if bearer else {}),
                     ('https', {}),

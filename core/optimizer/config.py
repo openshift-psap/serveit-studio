@@ -50,6 +50,18 @@ class RecipeOptimizerConfig:
     osl_min: Optional[int] = None  # OSL minimum (output_tokens_min for guidellm)
     osl_max: Optional[int] = None  # OSL maximum (output_tokens_max for guidellm)
     turns: int = 1  # Number of conversation turns (1 = single-turn)
+    first_prompt_tokens: Optional[int] = None  # First turn prompt override (dynamic system prompt)
+    first_prompt_tokens_stdev: Optional[int] = None
+    first_prompt_tokens_min: Optional[int] = None
+    first_prompt_tokens_max: Optional[int] = None
+    first_output_tokens: Optional[int] = None
+    first_output_tokens_stdev: Optional[int] = None
+    prefix_tokens: Optional[int] = None  # Shared system prompt token count
+    prefix_count: Optional[int] = None  # Number of unique prefixes
+    turn_delay: Optional[float] = None  # Inter-turn delay mean (seconds)
+    turn_delay_stdev: Optional[float] = None
+    turn_delay_min: Optional[float] = None
+    turn_delay_max: Optional[float] = None
 
     # Step 7: P/D split search
     max_pd_splits: int = 0  # 0 = full coverage, >0 = limit splits
@@ -85,7 +97,7 @@ class RecipeOptimizerConfig:
 
     # Infrastructure
     thanos_url: Optional[str] = None
-    image: str = 'ghcr.io/llm-d/llm-d-cuda:v0.8.0'
+    image: str = 'vllm/vllm-openai:v0.26.0'
     scheduler_image: str = ''
     pvc_name: str = 'serveit-cache'
     nccl_ib_hca: str = 'mlx'

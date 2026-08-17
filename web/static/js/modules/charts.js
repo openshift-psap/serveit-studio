@@ -60,21 +60,28 @@ function _renderChartsImpl(data, runId, content) {
         h += '<div style="font-size:1.1em;font-weight:800;color:#0f172a;margin-bottom:8px;">' + (opts.deploy || '') + '</div>';
 
         // Metrics line
-        h += '<div style="display:flex;gap:12px;font-size:0.85em;color:#475569;margin-bottom:4px;">';
+        h += '<div style="display:flex;gap:12px;font-size:0.85em;color:#475569;margin-bottom:4px;flex-wrap:wrap;">';
         if (opts.tput != null) h += '<span>Throughput: <strong>' + (typeof opts.tput === 'number' ? opts.tput.toFixed(2) + ' req/s' : opts.tput) + '</strong></span>';
         if (opts.gpus) h += '<span>GPUs: <strong>' + opts.gpus + '</strong></span>';
         if (opts.conc) h += '<span style="color:#0ea5e9;font-weight:600;">' + opts.conc + '</span>';
         h += '</div>';
+        if (opts.vllm_tps != null) {
+            h += '<div style="font-size:0.8em;color:#475569;margin-bottom:4px;">';
+            h += '<span>vLLM: <strong style="color:#3b82f6;">' + Math.round(opts.vllm_tps).toLocaleString() + ' tok/s</strong> <span style="font-size:0.85em;color:#94a3b8;">(computed)</span></span>';
+            h += '</div>';
+        }
 
         // Extra info line (for EPP weights etc)
         if (opts.extraInfo) h += '<div style="font-size:0.8em;color:#7c3aed;margin-top:2px;">' + opts.extraInfo + '</div>';
 
         // Percentile table
+        var _fmtE2e = function(v) { return v != null ? (v >= 1000 ? (v/1000).toFixed(1) + ' s' : Math.round(v) + ' ms') : '-'; };
         h += '<table style="width:100%;font-size:0.8em;border-collapse:collapse;margin-top:6px;">';
         h += '<tr style="color:#94a3b8;font-weight:600;"><td></td><td>TTFT</td><td>E2E</td><td>ITL</td></tr>';
-        h += '<tr><td style="font-weight:600;color:#475569;">P90</td><td style="font-weight:700;color:#1e293b;">' + (opts.ttft_p90 != null ? Math.round(opts.ttft_p90).toLocaleString() + ' ms' : '-') + '</td><td>' + (opts.e2e_p90 != null ? (opts.e2e_p90 >= 1000 ? (opts.e2e_p90/1000).toFixed(1) + ' s' : Math.round(opts.e2e_p90) + ' ms') : '-') + '</td><td>' + (opts.itl_p90 ? opts.itl_p90 + ' ms' : '-') + '</td></tr>';
-        if (opts.ttft_p95) h += '<tr><td style="font-weight:600;color:#475569;">P95</td><td style="color:#64748b;">' + Math.round(opts.ttft_p95).toLocaleString() + ' ms</td><td style="color:#64748b;">' + (opts.e2e_p95 != null ? (opts.e2e_p95 >= 1000 ? (opts.e2e_p95/1000).toFixed(1) + ' s' : Math.round(opts.e2e_p95) + ' ms') : '-') + '</td><td>' + (opts.itl_p95 ? opts.itl_p95 + ' ms' : '-') + '</td></tr>';
-        if (opts.ttft_p99) h += '<tr><td style="font-weight:600;color:#475569;">P99</td><td style="color:#64748b;">' + Math.round(opts.ttft_p99).toLocaleString() + ' ms</td><td style="color:#64748b;">' + (opts.e2e_p99 != null ? (opts.e2e_p99 >= 1000 ? (opts.e2e_p99/1000).toFixed(1) + ' s' : Math.round(opts.e2e_p99) + ' ms') : '-') + '</td><td>' + (opts.itl_p99 ? opts.itl_p99 + ' ms' : '-') + '</td></tr>';
+        if (opts.ttft_p50 != null) h += '<tr><td style="font-weight:600;color:#94a3b8;">P50</td><td style="color:#64748b;">' + Math.round(opts.ttft_p50).toLocaleString() + ' ms</td><td style="color:#64748b;">' + _fmtE2e(opts.e2e_p50) + '</td><td style="color:#64748b;">' + (opts.itl_p50 ? opts.itl_p50 + ' ms' : '-') + '</td></tr>';
+        h += '<tr><td style="font-weight:600;color:#475569;">P90</td><td style="font-weight:700;color:#1e293b;">' + (opts.ttft_p90 != null ? Math.round(opts.ttft_p90).toLocaleString() + ' ms' : '-') + '</td><td>' + _fmtE2e(opts.e2e_p90) + '</td><td>' + (opts.itl_p90 ? opts.itl_p90 + ' ms' : '-') + '</td></tr>';
+        if (opts.ttft_p95) h += '<tr><td style="font-weight:600;color:#475569;">P95</td><td style="color:#64748b;">' + Math.round(opts.ttft_p95).toLocaleString() + ' ms</td><td style="color:#64748b;">' + _fmtE2e(opts.e2e_p95) + '</td><td>' + (opts.itl_p95 ? opts.itl_p95 + ' ms' : '-') + '</td></tr>';
+        if (opts.ttft_p99) h += '<tr><td style="font-weight:600;color:#475569;">P99</td><td style="color:#64748b;">' + Math.round(opts.ttft_p99).toLocaleString() + ' ms</td><td style="color:#64748b;">' + _fmtE2e(opts.e2e_p99) + '</td><td>' + (opts.itl_p99 ? opts.itl_p99 + ' ms' : '-') + '</td></tr>';
         h += '</table>';
 
         // Action buttons
@@ -141,7 +148,12 @@ function _renderChartsImpl(data, runId, content) {
         wlLabel += ` | Output: <strong>${rec.workload.osl.toLocaleString()}</strong>`;
         if (rec.workload.osl_stdev) wlLabel += ` + σ=${rec.workload.osl_stdev.toLocaleString()}`;
         wlLabel += ` <span style="opacity:0.8;">(${bOslC.toLocaleString()} chars)</span>`;
-        if (rec.workload.turns && rec.workload.turns > 1) wlLabel += ` | Turns: <strong>${rec.workload.turns}</strong>`;
+        var _rc = data.run_config || {};
+        var _turns = rec.workload.turns > 1 ? rec.workload.turns : (_rc.turns > 1 ? _rc.turns : null);
+        if (_turns) wlLabel += ` | Turns: <strong>${_turns}</strong>`;
+        if (_rc.first_prompt_tokens) wlLabel += ` | 1st Prompt: <strong>${_rc.first_prompt_tokens.toLocaleString()}</strong>` + (_rc.first_prompt_tokens_stdev ? ` σ=${_rc.first_prompt_tokens_stdev.toLocaleString()}` : '');
+        if (_rc.prefix_tokens) wlLabel += ` | Prefix: <strong>${_rc.prefix_tokens.toLocaleString()}</strong>×${_rc.prefix_count || 1}`;
+        if (_rc.turn_delay) wlLabel += ` | Delay: <strong>${_rc.turn_delay}s</strong>` + (_rc.turn_delay_stdev ? ` σ=${_rc.turn_delay_stdev}s` : '');
         html += `<span>${wlLabel}</span>`;
         html += `<span>Users: <strong>${rec.workload.users}</strong></span>`;
         html += `<span>Tests: <strong>${rec.total_tests}</strong></span>`;
@@ -203,6 +215,12 @@ function _renderChartsImpl(data, runId, content) {
 
         html += `<div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(280px, 1fr)); gap:16px; margin-bottom:20px;">`;
 
+        // Build lookup from test_id/config_name to all_results entry for metrics_json
+        const _allResLookup = {};
+        (data.all_results || []).forEach(function(r) {
+            _allResLookup[r.test_id || r.config_name] = r;
+        });
+
         const seen = new Set();
         selTypes.forEach(sel => {
             const entry = globalBest[sel.key];
@@ -245,15 +263,29 @@ function _renderChartsImpl(data, runId, content) {
                 const badges = [];
                 if (dupNote) badges.push({ text: '+ ' + dupNote, bg: 'rgba(255,255,255,0.2)', color: 'white' });
 
+                // Extract vLLM metrics from all_results
+                const _resEntry = _allResLookup[recTestId] || {};
+                const _mj = _resEntry.metrics_json ? (typeof _resEntry.metrics_json === 'string' ? JSON.parse(_resEntry.metrics_json) : _resEntry.metrics_json) : {};
+                const _pm = _mj.prometheus_metrics || {};
+                const _vllmTps = ((_pm.vllm_prompt_tokens_rate || {}).avg || 0) + ((_pm.vllm_generation_tokens_rate || {}).avg || 0);
+                const _outputTps = _mj.output_tps_mean || _resEntry.output_tps_mean || null;
+
+                // P50 data — not in best_by_percentile, pull from raw metrics_json
+                const _p50mj = _mj;
+                const _p50d = { ttft_p50: _p50mj.ttft_p50, e2e_p50: _p50mj.e2e_latency_p50 != null ? _p50mj.e2e_latency_p50 * 1000 : null, itl_p50: _p50mj.itl_p50 };
+
                 const userConc = rec.workload ? 'c=' + rec.workload.users : '';
                 html += _buildRecCard({
                     label: sel.label, icon: sel.icon, desc: sel.desc, color: sel.color,
                     archKey: archKey, deploy: deploy,
                     tput: tputMean, gpus: gpus || '?', conc: userConc,
+                    vllm_tps: _vllmTps > 0 ? _vllmTps : null,
+                    ttft_p50: _p50d.ttft || _p50d.ttft_p50,
                     ttft_p90: _p90d.ttft || _p90d.ttft_p90,
                     ttft_p95: _p95d.ttft || _p95d.ttft_p95,
                     ttft_p99: _p99d.ttft || _p99d.ttft_p99,
-                    e2e_p90: _p90d.e2e_p90, e2e_p95: _p95d.e2e_p95, e2e_p99: _p99d.e2e_p99,
+                    e2e_p50: _p50d.e2e_p50, e2e_p90: _p90d.e2e_p90, e2e_p95: _p95d.e2e_p95, e2e_p99: _p99d.e2e_p99,
+                    itl_p50: _p50d.itl || _p50d.itl_p50,
                     itl_p90: _p90d.itl || _p90d.itl_p90,
                     itl_p95: _p95d.itl || _p95d.itl_p95,
                     itl_p99: _p99d.itl || _p99d.itl_p99,
@@ -352,14 +384,22 @@ function _renderChartsImpl(data, runId, content) {
             const badges = [];
             if (dupNote) badges.push({ text: '+ ' + dupNote, bg: 'rgba(255,255,255,0.2)', color: 'white' });
 
+            // Extract vLLM metrics
+            const _calResEntry = _allResLookup[calTestId] || {};
+            const _calMj = _calResEntry.metrics_json ? (typeof _calResEntry.metrics_json === 'string' ? JSON.parse(_calResEntry.metrics_json) : _calResEntry.metrics_json) : {};
+            const _calPm = _calMj.prometheus_metrics || {};
+            const _calVllmTps = ((_calPm.vllm_prompt_tokens_rate || {}).avg || 0) + ((_calPm.vllm_generation_tokens_rate || {}).avg || 0);
+            const _calOutputTps = _calMj.output_tps_mean || _calResEntry.output_tps_mean || null;
+
             html += _buildRecCard({
                 label: sel.label, icon: sel.icon, desc: sel.desc, color: sel.color,
                 archKey: archKey, deploy: deploy,
                 tput: tput, gpus: cfg.gpus || '?',
                 conc: concStr,
-                ttft_p90: cfg.ttft_p90, ttft_p95: cfg.ttft_p95, ttft_p99: cfg.ttft_p99,
-                e2e_p90: cfg.e2e_p90, e2e_p95: cfg.e2e_p95, e2e_p99: cfg.e2e_p99,
-                itl_p90: cfg.itl_p90, itl_p95: cfg.itl_p95, itl_p99: cfg.itl_p99,
+                vllm_tps: _calVllmTps > 0 ? _calVllmTps : null,
+                ttft_p50: cfg.ttft_p50 || _calMj.ttft_p50, ttft_p90: cfg.ttft_p90, ttft_p95: cfg.ttft_p95, ttft_p99: cfg.ttft_p99,
+                e2e_p50: cfg.e2e_p50 || (_calMj.e2e_latency_p50 != null ? _calMj.e2e_latency_p50 * 1000 : null), e2e_p90: cfg.e2e_p90, e2e_p95: cfg.e2e_p95, e2e_p99: cfg.e2e_p99,
+                itl_p50: cfg.itl_p50 || _calMj.itl_p50, itl_p90: cfg.itl_p90, itl_p95: cfg.itl_p95, itl_p99: cfg.itl_p99,
                 recId: calRecId, testId: calTestId,
                 manifests: calManifests, runId: runId,
                 extraBadges: badges.length ? badges : null
@@ -498,8 +538,8 @@ function _renderChartsImpl(data, runId, content) {
         arch: 'Side-by-side comparison of <strong>Aggregated</strong> (single pool of GPUs) vs <strong>PD</strong> (dedicated prefill and decode GPUs) architectures. Lower TTFT is better for responsiveness. Higher throughput means more users served.'
     };
 
-    // TP Pareto chart → TP Calibration subtab
-    secTP += chartCard('TP Calibration: Latency vs GPU Count', chartDesc.pareto, 'chart-pareto');
+    // TP Pareto chart → TP Calibration subtab (only if TP data exists)
+    if (secTP) secTP += chartCard('TP Calibration: Latency vs GPU Count', chartDesc.pareto, 'chart-pareto');
 
     // Scatter, efficiency → Configurations subtab
     secCfg += '<div class="chart-card" style="border-left:6px solid #6366f1;">' +
@@ -645,6 +685,70 @@ function _renderChartsImpl(data, runId, content) {
         html += '</table></div></div>';
     }
 
+    // --- Token Throughput section ---
+    var tokenResults = coreResults.filter(function(r) {
+        var m = r.metrics_json ? (typeof r.metrics_json === 'string' ? JSON.parse(r.metrics_json) : r.metrics_json) : {};
+        var pm = m.prometheus_metrics || {};
+        return r.output_tps_mean || m.output_tps_mean || pm.vllm_generation_tokens_rate;
+    });
+    if (tokenResults.length) {
+        var tkTableId = 'token-tput-table-' + runId;
+        html += '<div class="chart-card"><div class="chart-card-header">Token Throughput — vLLM (computed) vs guidellm (all tokens)</div>';
+        html += '<div style="padding:12px 20px 4px; color:#1e293b; font-size:0.93em; line-height:1.6;">' +
+            '<strong>Blue bar (vLLM):</strong> Tokens that required actual GPU compute — prompt tokens that were <em>not</em> served from prefix cache, plus generated output tokens. Measured server-side via Prometheus (<code>vllm:prompt_tokens</code> + <code>vllm:generation_tokens</code>). Cached/transferred tokens are excluded.<br>' +
+            '<strong>Gold bar (guidellm):</strong> All tokens in every request — the full prompt length (including tokens served from cache) plus output tokens. Measured client-side by guidellm (<code>prompt_tokens_mean &times; throughput + output_tokens_mean &times; throughput</code>).<br>' +
+            '<strong>The gap between the bars reflects prefix cache efficiency.</strong> With a high cache hit rate, most prompt tokens are served from cache without GPU compute, so the vLLM bar is much smaller than the guidellm bar. If there were no caching, the bars would be nearly equal.' +
+            '</div>';
+        html += '<div class="chart-card-body"><div id="chart-token-tput' + cid('') + '" style="height:400px;margin-bottom:16px;"></div></div></div>';
+
+        html += '<div class="chart-card"><div class="chart-card-header">Throughput &amp; Utilization Details</div>';
+        html += '<div class="chart-card-body" style="padding:0;">';
+        html += '<table class="results-table" id="' + tkTableId + '"><tr>';
+        html += '<th style="cursor:pointer;" onclick="sortReportTable(\'' + tkTableId + '\',0,\'str\')">Configuration &#x21C5;</th>';
+        html += '<th style="cursor:pointer;" onclick="sortReportTable(\'' + tkTableId + '\',1,\'num\')">Prompt tok/s &#x21C5;<br><span style="font-weight:400;font-size:0.75em;color:#64748b;">avg (peak)</span></th>';
+        html += '<th style="cursor:pointer;" onclick="sortReportTable(\'' + tkTableId + '\',2,\'num\')">Generation tok/s &#x21C5;<br><span style="font-weight:400;font-size:0.75em;color:#64748b;">avg (peak)</span></th>';
+        html += '<th style="cursor:pointer;" onclick="sortReportTable(\'' + tkTableId + '\',3,\'num\')">Total tok/s &#x21C5;</th>';
+        html += '<th style="cursor:pointer;" onclick="sortReportTable(\'' + tkTableId + '\',4,\'num\')">vLLM req/s &#x21C5;</th>';
+        html += '<th style="cursor:pointer;" onclick="sortReportTable(\'' + tkTableId + '\',5,\'num\')">guidellm req/s &#x21C5;</th>';
+        html += '<th style="cursor:pointer;" onclick="sortReportTable(\'' + tkTableId + '\',6,\'num\')">Avg Running &#x21C5;</th>';
+        html += '<th style="cursor:pointer;" onclick="sortReportTable(\'' + tkTableId + '\',7,\'num\')">Avg Waiting &#x21C5;</th>';
+        html += '<th style="cursor:pointer;" onclick="sortReportTable(\'' + tkTableId + '\',8,\'num\')">Cache Hit &#x21C5;</th>';
+        html += '<th style="cursor:pointer;" onclick="sortReportTable(\'' + tkTableId + '\',9,\'num\')">KV Cache &#x21C5;</th>';
+        html += '</tr>';
+        tokenResults.forEach(function(r) {
+            var m = r.metrics_json ? (typeof r.metrics_json === 'string' ? JSON.parse(r.metrics_json) : r.metrics_json) : {};
+            var pm = m.prometheus_metrics || {};
+            var promptRate = pm.vllm_prompt_tokens_rate || {};
+            var genRate = pm.vllm_generation_tokens_rate || {};
+            var promptAvg = promptRate.avg != null ? Math.round(promptRate.avg) : null;
+            var promptMax = promptRate.max != null ? Math.round(promptRate.max) : null;
+            var genAvg = genRate.avg != null ? Math.round(genRate.avg) : null;
+            var genMax = genRate.max != null ? Math.round(genRate.max) : null;
+            var totalAvg = (promptAvg != null && genAvg != null) ? promptAvg + genAvg : null;
+            var vllmReqRate = (pm.vllm_e2e_count_rate || {}).avg;
+            var vllmReqStr = vllmReqRate != null ? vllmReqRate.toFixed(2) : 'N/A';
+            var guidellmReq = r.throughput_mean != null ? r.throughput_mean.toFixed(2) : 'N/A';
+            var avgRunning = (pm.vllm_requests_running || {}).avg;
+            var avgWaiting = (pm.vllm_requests_waiting || {}).avg;
+            var cacheHit = r.cache_hit_pct != null ? r.cache_hit_pct + '%' : 'N/A';
+            var kvUsage = m.kv_cache_usage != null ? (m.kv_cache_usage * 100).toFixed(1) + '%' : 'N/A';
+            var na = 'N/A';
+            var fmtRate = function(avg, max) { return avg != null ? avg.toLocaleString() + ' (' + (max != null ? max.toLocaleString() : '?') + ')' : na; };
+            html += '<tr><td>' + r.config_name + '</td>';
+            html += '<td data-val="' + (promptAvg || '') + '">' + fmtRate(promptAvg, promptMax) + '</td>';
+            html += '<td data-val="' + (genAvg || '') + '">' + fmtRate(genAvg, genMax) + '</td>';
+            html += '<td data-val="' + (totalAvg || '') + '">' + (totalAvg != null ? totalAvg.toLocaleString() : na) + '</td>';
+            html += '<td data-val="' + (vllmReqRate || '') + '">' + vllmReqStr + '</td>';
+            html += '<td data-val="' + (r.throughput_mean || '') + '">' + guidellmReq + '</td>';
+            html += '<td data-val="' + (avgRunning || '') + '">' + (avgRunning != null ? avgRunning.toFixed(1) : na) + '</td>';
+            html += '<td data-val="' + (avgWaiting || '') + '">' + (avgWaiting != null ? avgWaiting.toFixed(1) : na) + '</td>';
+            html += '<td data-val="' + (r.cache_hit_pct || '') + '">' + cacheHit + '</td>';
+            html += '<td data-val="' + (m.kv_cache_usage || '') + '">' + kvUsage + '</td>';
+            html += '</tr>';
+        });
+        html += '</table></div></div>';
+    }
+
     // --- All results table ---
     if (coreResults.length) {
         var allCfgTableId = 'all-configs-table-' + runId;
@@ -721,21 +825,28 @@ function _renderChartsImpl(data, runId, content) {
         const rv = rc._resolved || {};
         const eppPresetLabels = {balanced:'Balanced', cache_optimized:'Cache Optimized', queue_balanced:'Queue Balanced', latency_aware:'Latency Aware', custom:'Custom'};
 
+        // Build ISL/OSL range display
+        var islRange = rc.isl_min || rc.isl_max ? ' [' + (rc.isl_min || '?') + '–' + (rc.isl_max || '?') + ']' : '';
+        var oslRange = rc.osl_min || rc.osl_max ? ' [' + (rc.osl_min || '?') + '–' + (rc.osl_max || '?') + ']' : '';
+
         // Build unified settings sections
         var settingsSections = [
             { title: 'Workload', color: '#059669', rows: [
                 ['Model', rc.model_name || na],
-                ['Prompt Length', islDisplay],
-                ['Prompt Output', oslDisplay],
+                ['Prompt Length (ISL)', islDisplay + islRange],
+                ['Output Length (OSL)', oslDisplay + oslRange],
+                rc.first_prompt_tokens ? ['First Prompt Tokens', rc.first_prompt_tokens.toLocaleString() + (rc.first_prompt_tokens_stdev ? ' &sigma;=' + rc.first_prompt_tokens_stdev.toLocaleString() : '') + (rc.first_prompt_tokens_min || rc.first_prompt_tokens_max ? ' [' + (rc.first_prompt_tokens_min || '?') + '–' + (rc.first_prompt_tokens_max || '?') + ']' : '')] : null,
+                rc.prefix_tokens ? ['Shared Prefix', rc.prefix_tokens.toLocaleString() + ' tokens &times; ' + (rc.prefix_count || 1) + ' prefix(es)'] : null,
                 ['Concurrent Users', rc.qps != null ? Math.round(rc.qps) : na],
                 ['Rate Type', rc.rate_type || 'concurrent'],
+                rc.turns > 1 ? ['Turns per Conversation', rc.turns] : null,
+                rc.turn_delay ? ['Inter-Turn Delay', rc.turn_delay + 's' + (rc.turn_delay_stdev ? ' &sigma;=' + rc.turn_delay_stdev + 's' : '') + (rc.turn_delay_min || rc.turn_delay_max ? ' [' + (rc.turn_delay_min || '?') + '–' + (rc.turn_delay_max || '?') + 's]' : '')] : null,
                 ['Test Duration', (rc.test_duration || 300) + 's'],
                 ['Stop Mode', rc.stop_mode || 'duration'],
                 rc.max_requests ? ['Max Requests', rc.max_requests] : null,
-                rc.turns > 1 ? ['Turns', rc.turns] : null,
                 ['Workload Mode', rc.workload_mode || 'synthetic'],
                 rc.dataset_source ? ['Dataset', '<span style="word-break:break-all;font-size:0.9em;">' + rc.dataset_source + '</span>'] : null,
-                rc.prefix_cache_hit_pct > 0 ? ['Prefix Cache Hit', rc.prefix_cache_hit_pct + '%'] : null,
+                rc.prefix_cache_hit_pct > 0 ? ['Prefix Cache Hit', rc.prefix_cache_hit_pct + '% (' + (rc.prefix_cache_mode || 'identical') + (rc.prefix_cache_groups > 1 ? ', ' + rc.prefix_cache_groups + ' groups' : '') + ')'] : null,
             ]},
             { title: 'Search Strategy', color: '#4f46e5', rows: [
                 ['Optimization Goal', (rc.objective || 'ttft').toUpperCase()],
@@ -743,25 +854,65 @@ function _renderChartsImpl(data, runId, content) {
                 ['TP Options', (rc.tp_options || []).join(', ') || na],
                 ['TP Pair Breadth', 'Top-' + (rc.tp_pair_top_n || 4)],
                 ['P/D Ratio Search', rc.pd_search_mode === 'exhaustive' ? 'Exhaustive' : 'Adaptive'],
+                ['Asymmetric TP', rc.allow_asymmetric_tp ? 'Yes' : 'No'],
                 ['Auto-Scale Concurrency', rc.use_achievable_qps ? 'Yes' : 'No'],
                 ['Headroom', (rc.headroom || 1.3) + 'x'],
                 ['Latency SLA', rc.latency_constraint_enabled ? rc.latency_constraint_ms + 'ms @ ' + rc.latency_constraint_percentile : 'Disabled'],
+                ['Calibrated Load', rc.calibrated_load_enabled ? 'Enabled' : 'Disabled'],
+                ['Concurrency Sweep', rc.inferencex_sweep_enabled ? 'Enabled' + (rc.concurrency_sweep_levels ? ' [' + rc.concurrency_sweep_levels.join(', ') + ']' : (rc.concurrency_sweep_count ? ' (' + rc.concurrency_sweep_count + ' levels)' : '')) : 'Disabled'],
+                ['Cache Sweep', rc.cache_sweep_enabled ? 'Enabled' : 'Disabled'],
+            ]},
+            { title: 'vLLM Engine', color: '#0891b2', rows: [
+                ['Max Model Length', advVal('max_model_len', 'auto')],
+                ['Block Size', adv.block_size ? (adv.block_size.mode === 'default' ? 'vLLM Default' : adv.block_size.mode === 'custom' ? adv.block_size.value : 'Auto') : 'Auto'],
+                ['KV Cache Dtype', advVal('kv_cache_dtype', 'auto')],
+                ['GPU Memory Utilization', advVal('gpu_memory_utilization', 'auto')],
+                ['Prefix Caching', advToggle('enable_prefix_caching', 'Auto')],
+                ['Expert Parallel', advToggle('enable_expert_parallel', 'Off')],
+                ['Auto Tool Choice', advToggle('enable_auto_tool_choice', 'Off')],
+                adv.tool_call_parser && adv.tool_call_parser.mode === 'custom' ? ['Tool Call Parser', adv.tool_call_parser.value] : null,
+                adv.reasoning_parser && adv.reasoning_parser.mode === 'custom' ? ['Reasoning Parser', adv.reasoning_parser.value] : null,
+                ['Bidirectional KV', advToggle('enable_bidirectional_kv', 'Off')],
+                adv.cpu_offload_gb && adv.cpu_offload_gb.mode === 'custom' ? ['CPU KV Offload', adv.cpu_offload_gb.value + ' GB'] : null,
+                adv.prefix_cache_retention && adv.prefix_cache_retention.mode === 'custom' ? ['Prefix Cache Retention', adv.prefix_cache_retention.value] : null,
+                adv.ssm_conv_state_layout && adv.ssm_conv_state_layout.mode === 'custom' ? ['SSM Conv State Layout', adv.ssm_conv_state_layout.value] : null,
+                adv.http_timeout_keep_alive && adv.http_timeout_keep_alive.mode === 'custom' ? ['HTTP Keep-Alive Timeout', adv.http_timeout_keep_alive.value + 's'] : null,
+                adv.model_loader_extra_config && adv.model_loader_extra_config.mode === 'custom' ? ['Model Loader Config', '<span style="font-size:0.85em;">' + adv.model_loader_extra_config.value + '</span>'] : null,
+                advToggle('enable_dbo', null) !== null ? ['Dual Batch Overlap', advToggle('enable_dbo', 'Off')] : null,
+                advToggle('enable_eplb', null) !== null ? ['Expert Load Balancing', advToggle('enable_eplb', 'Off')] : null,
             ]},
             { title: 'Infrastructure', color: '#d97706', rows: [
                 ['Inference Image', '<span style="word-break:break-all;font-size:0.9em;">' + (rc.image || na) + '</span>'],
                 ['Scheduler Image', '<span style="word-break:break-all;font-size:0.9em;">' + (rc.scheduler_image || na) + '</span>'],
                 ['Namespace', rc.namespace || na],
+                ['Storage Class', rc.storage_class || na],
+                rc.local_disk_path ? ['Local Disk Path', rc.local_disk_path] : null,
+                rc.per_node_storage ? ['Per-Node Storage', 'Yes'] : null,
                 ['PVC', rc.pvc_name || na],
                 ['Network Type', rc.network_type || na],
+                rc.selected_shared_device ? ['Shared Device', rc.selected_shared_device] : null,
+                rc.gateway_class ? ['Gateway Class', rc.gateway_class] : null,
                 ['NCCL IB HCA', rc.nccl_ib_hca || na],
                 rc.rdma_nics_per_node ? ['RDMA NICs/Node', rc.rdma_nics_per_node] : null,
             ]},
-            { title: 'EPP Configuration', color: '#6d28d9', rows: [
-                ['Scoring Preset', (rc.epp_custom_enabled !== false) ? (eppPresetLabels[rc.epp_preset] || rc.epp_preset || 'Balanced') : 'llm-d upstream'],
-                ['EPP Tuning', rc.epp_benchmark ? 'Enabled' : 'Disabled'],
-                rc.epp_config && rc.epp_config.maxPrefixBlocksToMatch ? ['Max Prefix Blocks', rc.epp_config.maxPrefixBlocksToMatch] : null,
-                rc.epp_config && rc.epp_config.lruCapacityPerServer ? ['LRU Capacity/Server', rc.epp_config.lruCapacityPerServer] : null,
-            ]},
+            { title: 'EPP Configuration', color: '#6d28d9', rows: (function() {
+                var rows = [
+                    ['Scoring Preset', (rc.epp_custom_enabled !== false) ? (eppPresetLabels[rc.epp_preset] || rc.epp_preset || 'Balanced') : 'llm-d upstream'],
+                    ['EPP Tuning', rc.epp_benchmark ? 'Enabled' : 'Disabled'],
+                ];
+                var ec = rc.epp_config || {};
+                var plugins = ['prefix_cache', 'kv_cache', 'queue', 'slo', 'active_request', 'token_load', 'no_hit_lru', 'session_aware', 'precise_prefix_cache'];
+                var enabledPlugins = plugins.filter(function(p) { return ec[p] && ec[p].enabled; }).map(function(p) { return p.replace(/_/g, '-') + '(' + ec[p].weight + ')'; });
+                if (enabledPlugins.length) rows.push(['Scoring Plugins', enabledPlugins.join(', ')]);
+                if (ec.prefixCacheAffinityEnabled) rows.push(['Prefix Cache Affinity', 'Enabled']);
+                if (ec.peakPrefillThroughput) rows.push(['Peak Prefill Throughput', ec.peakPrefillThroughput]);
+                if (ec.lruCapacityPerServer) rows.push(['LRU Capacity/Server', ec.lruCapacityPerServer.toLocaleString()]);
+                if (ec.maxPrefixBlocksToMatch) rows.push(['Max Prefix Blocks', ec.maxPrefixBlocksToMatch]);
+                if (ec.nonCachedTokens) rows.push(['Non-Cached Tokens', ec.nonCachedTokens]);
+                if (ec.prefixCacheAutoTune != null) rows.push(['Prefix Cache Auto-Tune', ec.prefixCacheAutoTune ? 'On' : 'Off']);
+                if (ec.usePrefixBasedDecider != null) rows.push(['Prefix-Based Decider', ec.usePrefixBasedDecider ? 'On' : 'Off']);
+                return rows;
+            })()},
         ];
 
         // Component Versions
@@ -2520,6 +2671,44 @@ function _renderChartsImpl(data, runId, content) {
             cliponaxis: false, constraintext: 'none',
             hovertemplate: '<b>%{x}</b><br>%{y:.1f} tokens/s/user<extra></extra>'
         }], { ...plotlyLayout, margin: { ...plotlyLayout.margin, b: 120 }, xaxis: { tickangle: -45 }, yaxis: { title: 'Output tokens/s per concurrent user - higher is better' } }, plotlyConfig);
+    }
+
+    // Token Throughput charts (Configurations tab)
+    if (document.getElementById(cid('chart-token-tput'))) {
+        var tkRes = (data.all_results || []).filter(function(r) {
+            var tid = r.test_id || '';
+            if (tid.indexOf('step2-') === 0 || tid.indexOf('step3-') === 0) return false;
+            var m = r.metrics_json ? (typeof r.metrics_json === 'string' ? JSON.parse(r.metrics_json) : r.metrics_json) : {};
+            var pm = m.prometheus_metrics || {};
+            return (pm.vllm_generation_tokens_rate || {}).avg || r.output_tps_mean;
+        });
+        if (tkRes.length) {
+            var tkLabels = tkRes.map(function(r) { return r.config_name; });
+            var tkPrompt = [], tkGen = [], tkTotal = [], tkGuidellm = [];
+            tkRes.forEach(function(r) {
+                var m = r.metrics_json ? (typeof r.metrics_json === 'string' ? JSON.parse(r.metrics_json) : r.metrics_json) : {};
+                var pm = m.prometheus_metrics || {};
+                var pAvg = (pm.vllm_prompt_tokens_rate || {}).avg || 0;
+                var gAvg = (pm.vllm_generation_tokens_rate || {}).avg || 0;
+                tkPrompt.push(Math.round(pAvg));
+                tkGen.push(Math.round(gAvg));
+                tkTotal.push(Math.round(pAvg + gAvg));
+                tkGuidellm.push(Math.round(m.output_tps_mean || r.output_tps_mean || 0));
+            });
+            // guidellm total = prompt_tokens_mean * throughput + output_tokens_mean * throughput
+            var tkGuidellmTotal = [];
+            tkRes.forEach(function(r) {
+                var m = r.metrics_json ? (typeof r.metrics_json === 'string' ? JSON.parse(r.metrics_json) : r.metrics_json) : {};
+                var tput = m.throughput_mean || r.throughput_mean || 0;
+                var pTps = (m.prompt_tokens_mean || 0) * tput;
+                var gTps = (m.output_tokens_mean || 0) * tput;
+                tkGuidellmTotal.push(Math.round(pTps + gTps));
+            });
+            Plotly.newPlot(cid('chart-token-tput'), [
+                { x: tkLabels, y: tkTotal, name: 'vLLM — computed tok/s', type: 'bar', marker: { color: '#3b82f6' }, text: tkTotal.map(function(v) { return v.toLocaleString(); }), textposition: 'outside', textfont: { size: 11, color: '#1e293b' } },
+                { x: tkLabels, y: tkGuidellmTotal, name: 'guidellm — all tok/s (incl. cached)', type: 'bar', marker: { color: '#f59e0b' }, text: tkGuidellmTotal.map(function(v) { return v.toLocaleString(); }), textposition: 'outside', textfont: { size: 11, color: '#1e293b' } }
+            ], { ...plotlyLayout, height: 400, barmode: 'group', xaxis: { tickangle: -35 }, yaxis: { title: 'Total Tokens/s (Prompt + Generation)' }, showlegend: true, legend: { x: 0, y: 1.15, orientation: 'h' } }, plotlyConfig);
+        }
     }
 
     // Throughput–Interactivity Pareto Frontier (normalized 0-1)

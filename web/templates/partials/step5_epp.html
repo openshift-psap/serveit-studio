@@ -102,7 +102,22 @@
                                             <td style="text-align:center;"><input type="checkbox" id="epp-plugin-session-aware" onchange="updateEppCustom()"></td>
                                             <td style="text-align:center;"><input type="number" id="epp-weight-session-aware" value="2" min="0" max="10" step="0.5" style="width:60px;text-align:center;padding:4px;border:1px solid #d1d5db;border-radius:4px;" onchange="updateEppCustom()"></td>
                                         </tr>
+                                        <tr style="border-bottom:1px solid #f1f5f9;">
+                                            <td style="padding:8px;"><strong>token-load-scorer</strong><br><span style="color:#64748b;font-size:0.85em;">Scores pods by total token load (prefill + decode). Used in disagg-aware routing for prefill scheduling.</span></td>
+                                            <td style="text-align:center;"><input type="checkbox" id="epp-plugin-token-load" onchange="updateEppCustom()"></td>
+                                            <td style="text-align:center;"><input type="number" id="epp-weight-token-load" value="1" min="0" max="10" step="0.5" style="width:60px;text-align:center;padding:4px;border:1px solid #d1d5db;border-radius:4px;" onchange="updateEppCustom()"></td>
+                                        </tr>
+                                        <tr style="border-bottom:1px solid #f1f5f9;">
+                                            <td style="padding:8px;"><strong>prefix-cache-affinity-filter</strong><br><span style="color:#64748b;font-size:0.85em;">Routes prefill requests to replicas with the best prefix cache match. Filters based on peak prefill throughput.</span></td>
+                                            <td style="text-align:center;"><input type="checkbox" id="epp-plugin-prefix-cache-affinity" onchange="updateEppCustom()"></td>
+                                            <td style="text-align:center;"><input type="number" id="epp-param-peak-prefill-throughput" value="9866" min="0" max="100000" step="1" style="width:80px;text-align:center;padding:4px;border:1px solid #d1d5db;border-radius:4px;" onchange="updateEppCustom()" title="peakPrefillThroughput"></td>
+                                        </tr>
                                     </table>
+                                    <div style="margin-top:12px;padding:10px;background:#f8fafc;border-radius:6px;">
+                                        <label style="font-weight:600;font-size:0.85em;color:#374151;">LRU Capacity Per Server</label>
+                                        <input type="number" id="epp-param-lru-capacity" value="4000000" min="1000" max="100000000" step="1000" style="width:120px;margin-left:8px;padding:4px 8px;border:1px solid #d1d5db;border-radius:4px;font-size:0.9em;" onchange="updateEppCustom()">
+                                        <span style="font-size:0.8em;color:#64748b;margin-left:4px;">blocks (approx-prefix-cache-producer)</span>
+                                    </div>
                                 </div>
                             </div>
                         </div>

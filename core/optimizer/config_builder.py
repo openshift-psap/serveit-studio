@@ -11,6 +11,24 @@ from core.test_orchestrator import TestResult
 class ConfigBuilderMixin:
     """Mixin providing config creation methods for RecipeOptimizer."""
 
+    def _resolve_block_size(self):
+        """Resolve block_size: user custom > auto-computed > None (vLLM default).
+
+        When advanced_vllm block_size mode is:
+          - 'custom': use user's value
+          - 'auto': use ServeIt auto-computed value
+          - 'default': None — let vLLM use its own default
+        """
+        adv = getattr(self.config, 'advanced_vllm', None) or {}
+        bs_setting = adv.get('block_size', {})
+        if isinstance(bs_setting, dict):
+            mode = bs_setting.get('mode', 'auto')
+            if mode == 'custom' and bs_setting.get('value') is not None:
+                return int(bs_setting['value'])
+            if mode == 'default':
+                return None
+        return self._compute_block_size()
+
     def _find_pareto_front(self) -> List[Tuple[FeasibleSplit, 'TestResult']]:
         """
         Find Pareto front from P/D split results.
@@ -110,6 +128,18 @@ class ConfigBuilderMixin:
             osl_min=None if is_calibration else getattr(self.config, 'osl_min', None),
             osl_max=None if is_calibration else getattr(self.config, 'osl_max', None),
             turns=1 if is_calibration else self.config.turns,
+            first_prompt_tokens=None if is_calibration else getattr(self.config, 'first_prompt_tokens', None),
+            first_prompt_tokens_stdev=None if is_calibration else getattr(self.config, 'first_prompt_tokens_stdev', None),
+            first_prompt_tokens_min=None if is_calibration else getattr(self.config, 'first_prompt_tokens_min', None),
+            first_prompt_tokens_max=None if is_calibration else getattr(self.config, 'first_prompt_tokens_max', None),
+            first_output_tokens=None if is_calibration else getattr(self.config, 'first_output_tokens', None),
+            first_output_tokens_stdev=None if is_calibration else getattr(self.config, 'first_output_tokens_stdev', None),
+            prefix_tokens=None if is_calibration else getattr(self.config, 'prefix_tokens', None),
+            prefix_count=None if is_calibration else getattr(self.config, 'prefix_count', None),
+            turn_delay=None if is_calibration else getattr(self.config, 'turn_delay', None),
+            turn_delay_stdev=None if is_calibration else getattr(self.config, 'turn_delay_stdev', None),
+            turn_delay_min=None if is_calibration else getattr(self.config, 'turn_delay_min', None),
+            turn_delay_max=None if is_calibration else getattr(self.config, 'turn_delay_max', None),
             image=self.config.image,
             scheduler_image=self.config.scheduler_image,
             pvc_name=self.config.pvc_name,
@@ -146,7 +176,7 @@ class ConfigBuilderMixin:
             dataset_column=None if is_calibration else self.config.dataset_column,
             dataset_max_output=self.config.dataset_max_output or 256,
             epp_config=self._build_epp_config(),
-            block_size=self._compute_block_size(),
+            block_size=self._resolve_block_size(),
             extra_env_vars=self.config.extra_env_vars,
             enable_expert_parallel=False,
             enable_dbo=False,
@@ -545,7 +575,11 @@ class ConfigBuilderMixin:
         }
         for key, attr in val_fields.items():
             setting = adv.get(key)
-            if setting and setting.get('mode') == 'custom' and setting.get('value') is not None:
+            if not setting:
+                continue
+            if setting.get('mode') == 'off':
+                setattr(cfg, attr, None)
+            elif setting.get('mode') == 'custom' and setting.get('value') is not None:
                 val = setting['value']
                 if attr in ('max_model_len', 'max_num_seqs', 'max_num_batched_tokens', 'pipeline_parallel_size', 'block_size',
                             'cpu_offload_gb', 'weight_cpu_offload_gb', 'http_timeout_keep_alive', 'prefix_cache_retention'):
@@ -583,8 +617,8 @@ class ConfigBuilderMixin:
             if setting and setting.get('mode') in ('on', 'off'):
                 setattr(cfg, attr, setting['mode'] == 'on')
 
-        # EP requires TP > 1 — no GPUs to split experts across at TP=1
-        if cfg.tensor_parallelism <= 1:
+        # EP requires TP > 1 and a MoE model
+        if cfg.tensor_parallelism <= 1 or not self._is_moe:
             cfg.enable_expert_parallel = False
 
         return cfg
@@ -743,6 +777,18 @@ class ConfigBuilderMixin:
             osl_min=getattr(self.config, 'osl_min', None),
             osl_max=getattr(self.config, 'osl_max', None),
             turns=self.config.turns,
+            first_prompt_tokens=getattr(self.config, 'first_prompt_tokens', None),
+            first_prompt_tokens_stdev=getattr(self.config, 'first_prompt_tokens_stdev', None),
+            first_prompt_tokens_min=getattr(self.config, 'first_prompt_tokens_min', None),
+            first_prompt_tokens_max=getattr(self.config, 'first_prompt_tokens_max', None),
+            first_output_tokens=getattr(self.config, 'first_output_tokens', None),
+            first_output_tokens_stdev=getattr(self.config, 'first_output_tokens_stdev', None),
+            prefix_tokens=getattr(self.config, 'prefix_tokens', None),
+            prefix_count=getattr(self.config, 'prefix_count', None),
+            turn_delay=getattr(self.config, 'turn_delay', None),
+            turn_delay_stdev=getattr(self.config, 'turn_delay_stdev', None),
+            turn_delay_min=getattr(self.config, 'turn_delay_min', None),
+            turn_delay_max=getattr(self.config, 'turn_delay_max', None),
             image=self.config.image,
             scheduler_image=self.config.scheduler_image,
             pvc_name=self.config.pvc_name,
@@ -773,7 +819,7 @@ class ConfigBuilderMixin:
             dataset_column=self.config.dataset_column,
             dataset_max_output=self.config.dataset_max_output or 256,
             epp_config=self._build_epp_config(),
-            block_size=self._compute_block_size(),
+            block_size=self._resolve_block_size(),
             extra_env_vars=self.config.extra_env_vars,
             enable_expert_parallel=False,
             enable_dbo=False,
@@ -931,6 +977,18 @@ class ConfigBuilderMixin:
             osl_min=getattr(self.config, 'osl_min', None),
             osl_max=getattr(self.config, 'osl_max', None),
             turns=self.config.turns,
+            first_prompt_tokens=getattr(self.config, 'first_prompt_tokens', None),
+            first_prompt_tokens_stdev=getattr(self.config, 'first_prompt_tokens_stdev', None),
+            first_prompt_tokens_min=getattr(self.config, 'first_prompt_tokens_min', None),
+            first_prompt_tokens_max=getattr(self.config, 'first_prompt_tokens_max', None),
+            first_output_tokens=getattr(self.config, 'first_output_tokens', None),
+            first_output_tokens_stdev=getattr(self.config, 'first_output_tokens_stdev', None),
+            prefix_tokens=getattr(self.config, 'prefix_tokens', None),
+            prefix_count=getattr(self.config, 'prefix_count', None),
+            turn_delay=getattr(self.config, 'turn_delay', None),
+            turn_delay_stdev=getattr(self.config, 'turn_delay_stdev', None),
+            turn_delay_min=getattr(self.config, 'turn_delay_min', None),
+            turn_delay_max=getattr(self.config, 'turn_delay_max', None),
             image=self.config.image,
             scheduler_image=self.config.scheduler_image,
             pvc_name=self.config.pvc_name,
@@ -963,7 +1021,7 @@ class ConfigBuilderMixin:
             dataset_column=self.config.dataset_column,
             dataset_max_output=self.config.dataset_max_output or 256,
             epp_config=self._build_epp_config(),
-            block_size=self._compute_block_size(),
+            block_size=self._resolve_block_size(),
             extra_env_vars=self.config.extra_env_vars,
             enable_expert_parallel=(max(split.prefill_tp, split.decode_tp) > 1),
             enable_dbo=(max(split.prefill_tp, split.decode_tp) > 1),

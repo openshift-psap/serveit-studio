@@ -15,6 +15,7 @@ ServeIt Studio deploys real vLLM instances on your cluster, sweeps configuration
 
 - [Screenshots](#screenshots)
 - [How It Works](#how-it-works)
+- [Workload Configuration](#workload-configuration)
 - [Prerequisites](#prerequisites)
 - [Deployment](#deployment)
   - [Quick Start](#quick-start)
@@ -97,6 +98,16 @@ The optimizer selects which architectures to test based on the goal:
 - **Balanced** — All three
 - **Aggregated Only / PD Only / EP Only** — Test a single architecture
 
+| Mode | Config Value | Description |
+|---|---|---|
+| Response Time | `ttft` | Optimize for lowest TTFT. Tests Aggregated vs PD. |
+| Throughput | `throughput` | Optimize for max req/s. Tests Aggregated vs EP. |
+| Full Coverage | `balanced` | Test all architectures, find best for both metrics. |
+| Aggregated Only | `aggregated_only` | Only test aggregated configs. |
+| PD Only | `pd_only` | Only test prefill/decode disaggregated configs. |
+| EP Only | `ep_only` | Only test expert parallel configs (MoE models). |
+| Single Test | `single_test` | Run one exact user-specified config (architecture, TP, pods). |
+
 ### The 11-Step Pipeline
 
 1. **Prerequisite Infrastructure** — Deploy gateway, EPP, RBAC, RDMA discovery
@@ -112,6 +123,11 @@ The optimizer selects which architectures to test based on the goal:
 11. **Calibrated Load Validation** — Re-test at sustainable QPS computed via Little's Law (optional)
 
 Steps 2-3 and 6-11 deploy real workloads. Steps 4-5 are pure math.
+
+**Additional steps (after the main pipeline):**
+- **Concurrency Sweep** — Re-test top configs at multiple concurrency levels (e.g., 20, 30, 40, 60, 80) to map the performance curve. Shows exactly where each config starts to degrade.
+- **Cache Hit Sweep** — Test different prefix cache hit ratios on best configs (optional).
+- **EPP Smart Tuning** — Derive optimal routing weights from measured metrics (optional).
 
 ### Smart Features
 
@@ -140,6 +156,17 @@ Steps 2-3 and 6-11 deploy real workloads. Steps 4-5 are pure math.
 - **Asymmetric TP** — Prefill and decode can use different TP sizes in both directions (e.g., Prefill TP8 / Decode TP4 or vice versa). Disabled by default to reduce search space; enable via the "Allow Asymmetric TP" toggle
 - **Cache hit sweep** — Tests performance at multiple prefix cache hit ratios (0-100%) on the best configs. Supports Identical, Shared Prefix, and Multi-Group cache modes. Optional calibrated concurrency
 
+#### KV Cache Management
+- **MultiConnector** — Wraps NixlConnector (P/D KV transfer) + OffloadingConnector (CPU/disk offload) for disaggregated serving with KV cache offloading. Prefill uses `kv_producer`, decode uses `kv_consumer`.
+- **CPU KV cache offload** — Offload KV cache to CPU DRAM via OffloadingConnector with `lazy_offload`. Extends cacheable working set beyond GPU HBM for long agentic sessions.
+- **Disk KV cache offload** — Offload KV cache to local NVMe via TieringOffloadingSpec. Uses hostPath volume when local disk is available.
+- **Bidirectional KV transfer** — Enable bidirectional NIXL KV transfer for models that benefit from it (Nemotron, agentic serving).
+
+#### EPP Routing
+- **Disagg-aware profiles** — Separate prefill and decode scheduling profiles with independent scorer chains. Prefill profile uses `token-load-scorer` + `prefix-cache-affinity-filter`, decode profile uses `active-request-scorer`.
+- **Preset + Custom** — Choose from presets (`balanced`, `cache_optimized`, `queue_balanced`, `latency_aware`) or configure individual plugin weights.
+- **New plugins** — `token-load-scorer`, `prefix-cache-affinity-filter` (with `peakPrefillThroughput`), `inflight-load-producer`, `active-request-scorer`.
+
 #### Infrastructure & Operations
 - **Multi-cluster launcher** — Manage optimization instances across multiple Kubernetes/OpenShift clusters from a single dashboard
 - **Resume** — Resume interrupted runs from the last completed test. Per-architecture resume skips completed architectures, not the entire step
@@ -155,14 +182,61 @@ Steps 2-3 and 6-11 deploy real workloads. Steps 4-5 are pure math.
 - **Guidellm retry** — Retries guidellm up to 3 times on 2-4% error rate while pods are still running, avoiding expensive redeploy cycles. Stops with actionable guidance on >2% overload (503s)
 - **Speculative decoding** — Auto-detects MTP-capable models (DeepSeek-V3, GLM-4) and compares performance with and without speculative decoding
 - **Stop at any time** — Stop checks at every stage of test execution (before deploy, after deploy, during model load, before benchmark)
+- **Vanilla Kubernetes support** — Prometheus auto-discovery via in-cluster DNS (no OpenShift required). Automatic port-forward fallback for external access.
+- **Upstream vLLM images** — Version dropdown includes upstream `vllm/vllm-openai` images alongside llm-d CUDA images.
+- **Block size control** — Three modes: Auto (ServeIt computed), Default (vLLM auto-detection), Custom.
+- **Turn dataset generator** — Pre-generates multi-turn conversation datasets using guidellm's SyntheticTextDataset for consistent, reusable workloads across tests.
+
+## Workload Configuration
+
+### Synthetic Workloads
+
+ServeIt Studio supports guidellm's full synthetic workload configuration:
+
+| Parameter | Description |
+|---|---|
+| ISL / OSL | Average input/output sequence length (tokens) |
+| ISL/OSL stdev | Standard deviation for lognormal distribution |
+| ISL/OSL min/max | Hard token count limits |
+| Turns | Multi-turn conversations (1 = single-turn) |
+| First Prompt Tokens | Override first turn prompt length (e.g., 160K for agentic repo context) |
+| Prefix Tokens | Shared system prompt (cached across conversations) |
+| Prefix Count | Number of unique prefixes (1 = max cache reuse) |
+| Inter-Turn Delay | Tool call latency simulation (mean/stdev/min/max seconds) |
+| Concurrency | Number of concurrent users/sessions |
+
+### Multi-Turn Conversations
+
+GuideLLM accumulates conversation history across turns — each turn sends all previous prompts and responses as context. Combined with `first_prompt_tokens` for large initial context and `turn_delay` for tool call pauses, this simulates real agentic workloads:
+
+```
+Turn 1: [3K prefix] + [160K first_prompt] → heavy prefill
+Turn 2: [3K prefix] + [160K] + [425 response] + [1500 new prompt] → cached context reuse  
+Turn N: accumulated history grows ~1925 tokens/turn
+```
+
+### Agentic Workload Example
+
+Replicating the llm-d Nemotron agentic serving benchmark:
+
+```json
+{
+  "isl": 1500, "osl": 425,
+  "first_prompt_tokens": 160000,
+  "prefix_tokens": 3000, "prefix_count": 1,
+  "turns": 540,
+  "turn_delay": 15, "turn_delay_stdev": 55, "turn_delay_min": 1, "turn_delay_max": 100
+}
+```
 
 ## Prerequisites
 
 - Kubernetes or OpenShift cluster with NVIDIA GPUs
 - [LeaderWorkerSet](https://github.com/kubernetes-sigs/lws) CRD installed
-- [Istio](https://istio.io/) gateway provider (for EPP routing)
+- Gateway API CRDs + a gateway provider ([Istio](https://istio.io/), Cilium Gateway, or similar)
 - `kubectl` (or `oc`) CLI configured
-- A HuggingFace token (only required for gated models — entered in the wizard, which creates the Secret automatically)
+- Optional: Prometheus (auto-discovered for vLLM/DCGM metrics collection)
+- Optional: HuggingFace token (for gated models)
 
 ## Deployment
 

@@ -69,6 +69,13 @@ spec:
 {% endif %}
           - name: jit-cache
             emptyDir: {}
+          - name: rdma-script
+            configMap:
+              name: rdma-discovery-script
+              defaultMode: 0755
+          - name: dev-infiniband
+            hostPath:
+              path: /dev/infiniband
 {% if disk_offload_kv_path %}
           - name: kv-cache-disk
             hostPath:
@@ -142,6 +149,14 @@ spec:
                   fi
                 fi
 
+                # Source RDMA discovery script if available
+                if [ -f /scripts/discover_ib_hca.sh ]; then
+                  source /scripts/discover_ib_hca.sh
+                  echo "--- NCCL_SOCKET_IFNAME: ${NCCL_SOCKET_IFNAME:-not set} ---"
+                  echo "--- UCX_NET_DEVICES: ${UCX_NET_DEVICES:-not set} ---"
+                  echo "--- Loaded RDMA environment ---"
+                fi
+
                 echo "========================================="
                 echo "ServeIt Studio Test: {{ test_id }}"
                 echo "Architecture: Aggregated"
@@ -164,7 +179,6 @@ spec:
                   {{ model_name }} \
                   --port 8000 \
                   --trust-remote-code \
-                  --api-server-count 1 \
                   --tensor-parallel-size {{ tensor_parallelism }} \
 {% if lws_size | default(1) > 1 %}                  --nnodes {{ lws_size }} \
                   --node-rank ${LWS_WORKER_INDEX:-0} \
@@ -174,7 +188,8 @@ spec:
                   --data-parallel-multi-port-external-lb \
                   --data-parallel-start-rank $(( ${LWS_WORKER_INDEX:-0} * {{ data_parallel_size_local | default(data_parallelism) }} )) \
 {% endif %}{% if pipeline_parallel_size %}                  --pipeline-parallel-size {{ pipeline_parallel_size }} \
-{% endif %}                  --block-size {{ block_size or 16 }} \
+{% endif %}{% if block_size %}                  --block-size {{ block_size }} \
+{% endif %}
 {% if max_model_len %}                  --max-model-len {{ max_model_len }} \
 {% endif %}                  --gpu-memory-utilization {{ gpu_memory_utilization or 0.90 }} \
 {% if enable_chunked_prefill %}                  --enable-chunked-prefill \
@@ -201,7 +216,7 @@ spec:
 {% endif %}{% if disk_offload_kv_path %}                  --kv-transfer-config '{"kv_connector":"OffloadingConnector","kv_role":"kv_both","kv_connector_extra_config":{"spec_name":"TieringOffloadingSpec","block_size":16,"eviction_policy":"lru","secondary_tiers":[{"type":"fs","root_dir":"{{ disk_offload_kv_path }}","n_read_threads":{{ disk_offload_kv_read_threads | default(32) }},"n_write_threads":{{ disk_offload_kv_write_threads | default(16) }}}]}}' \
 {% endif %}{% if model_loader_extra_config %}                  --model-loader-extra-config '{{ model_loader_extra_config }}' \
 {% endif %}{% if extra_vllm_args %}                  {{ extra_vllm_args }} \
-{% endif %}                  --disable-uvicorn-access-log \
+{% endif %}
                   || sleep infinity
 
             env:
@@ -309,6 +324,10 @@ spec:
                 mountPath: /model-cache
               - name: jit-cache
                 mountPath: /var/cache/vllm
+              - name: rdma-script
+                mountPath: /scripts
+              - name: dev-infiniband
+                mountPath: /dev/infiniband
 {% if disk_offload_kv_path %}
               - name: kv-cache-disk
                 mountPath: {{ disk_offload_kv_path }}
@@ -362,6 +381,13 @@ spec:
 {% endif %}
           - name: jit-cache
             emptyDir: {}
+          - name: rdma-script
+            configMap:
+              name: rdma-discovery-script
+              defaultMode: 0755
+          - name: dev-infiniband
+            hostPath:
+              path: /dev/infiniband
 {% if disk_offload_kv_path %}
           - name: kv-cache-disk
             hostPath:
@@ -433,6 +459,14 @@ spec:
                   fi
                 fi
 
+                # Source RDMA discovery script if available
+                if [ -f /scripts/discover_ib_hca.sh ]; then
+                  source /scripts/discover_ib_hca.sh
+                  echo "--- NCCL_SOCKET_IFNAME: ${NCCL_SOCKET_IFNAME:-not set} ---"
+                  echo "--- UCX_NET_DEVICES: ${UCX_NET_DEVICES:-not set} ---"
+                  echo "--- Loaded RDMA environment ---"
+                fi
+
                 echo "========================================="
                 echo "ServeIt Studio Test: {{ test_id }} (worker)"
                 echo "Architecture: Aggregated (Multi-Node Worker)"
@@ -459,7 +493,8 @@ spec:
                   --node-rank ${LWS_WORKER_INDEX:-0} \
                   --master-addr ${LWS_LEADER_ADDRESS} \
 {% if pipeline_parallel_size %}                  --pipeline-parallel-size {{ pipeline_parallel_size }} \
-{% endif %}                  --block-size {{ block_size or 16 }} \
+{% endif %}{% if block_size %}                  --block-size {{ block_size }} \
+{% endif %}
 {% if max_model_len %}                  --max-model-len {{ max_model_len }} \
 {% endif %}                  --gpu-memory-utilization {{ gpu_memory_utilization or 0.90 }} \
 {% if enable_chunked_prefill %}                  --enable-chunked-prefill \
@@ -478,7 +513,7 @@ spec:
 {% endif %}{% if all2all_backend %}                  --all2all-backend {{ all2all_backend }} \
 {% endif %}{% if model_loader_extra_config %}                  --model-loader-extra-config '{{ model_loader_extra_config }}' \
 {% endif %}{% if extra_vllm_args %}                  {{ extra_vllm_args }} \
-{% endif %}                  --disable-uvicorn-access-log \
+{% endif %}
                   || sleep infinity
             env:
               - name: HF_TOKEN
@@ -573,6 +608,10 @@ spec:
                 mountPath: /model-cache
               - name: jit-cache
                 mountPath: /var/cache/vllm
+              - name: rdma-script
+                mountPath: /scripts
+              - name: dev-infiniband
+                mountPath: /dev/infiniband
 {% if disk_offload_kv_path %}
               - name: kv-cache-disk
                 mountPath: {{ disk_offload_kv_path }}

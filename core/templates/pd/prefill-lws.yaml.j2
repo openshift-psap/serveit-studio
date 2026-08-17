@@ -205,11 +205,11 @@ spec:
                   --data-parallel-supervisor-port=8208 \
                   --data-parallel-start-rank $(( ${LWS_WORKER_INDEX:-0} * DP_SIZE_LOCAL )) \
 {% endif %}{% if pipeline_parallel_size %}                  --pipeline-parallel-size {{ pipeline_parallel_size }} \
-{% endif %}                  --api-server-count 1 \
-                  --block-size {{ block_size or 16 }} \
+{% endif %}{% if block_size %}                  --block-size {{ block_size }} \
+{% endif %}
                   --gpu-memory-utilization {{ prefill_gpu_memory_utilization or 0.80 }} \
-{% if disk_offload_kv_path %}                  --kv-transfer-config '{"kv_connector":"OffloadingConnector","kv_role":"kv_both","kv_connector_extra_config":{"spec_name":"TieringOffloadingSpec","block_size":16,"eviction_policy":"lru","secondary_tiers":[{"type":"fs","root_dir":"{{ disk_offload_kv_path }}","n_read_threads":{{ disk_offload_kv_read_threads | default(32) }},"n_write_threads":{{ disk_offload_kv_write_threads | default(16) }}}]}}' \
-{% else %}                  --kv-transfer-config '{"kv_connector":"{{ kv_connector }}","kv_role":"kv_both","kv_load_failure_policy":"fail"}' \
+{% if cpu_offload_gb or disk_offload_kv_path %}                  --kv-transfer-config '{"kv_connector":"MultiConnector","kv_role":"kv_both","kv_load_failure_policy":"fail","kv_connector_extra_config":{"connectors":[{"kv_connector":"NixlConnector","kv_role":"kv_producer","kv_connector_extra_config":{"bidirectional_kv_xfer":{{ "true" if enable_bidirectional_kv else "false" }}}},{"kv_connector":"OffloadingConnector","kv_role":"kv_both","kv_connector_extra_config":{% if disk_offload_kv_path %}{"spec_name":"TieringOffloadingSpec","block_size":16,"eviction_policy":"lru","secondary_tiers":[{"type":"fs","root_dir":"{{ disk_offload_kv_path }}","n_read_threads":{{ disk_offload_kv_read_threads | default(32) }},"n_write_threads":{{ disk_offload_kv_write_threads | default(16) }}}]}{% else %}{"cpu_bytes_to_use":{{ cpu_offload_gb * 1073741824 }},"lazy_offload":true}{% endif %}}]}}' \
+{% else %}                  --kv-transfer-config '{"kv_connector":"{{ kv_connector }}","kv_role":"kv_both","kv_load_failure_policy":"fail"{% if enable_bidirectional_kv %},"kv_connector_extra_config":{"bidirectional_kv_xfer":true}{% endif %}}' \
 {% endif %}{% if has_hybrid_attention %}                  --no-disable-hybrid-kv-cache-manager \
 {% endif %}{% if prefill_enable_expert_parallel %}                  --enable-expert-parallel \
 {% endif %}{% if prefill_enable_dbo %}                  --enable-dbo \
@@ -235,7 +235,7 @@ spec:
 {% endif %}{% if weight_cpu_offload_gb %}                  --cpu-offload-gb {{ weight_cpu_offload_gb }} \
 {% endif %}{% if model_loader_extra_config %}                  --model-loader-extra-config '{{ model_loader_extra_config }}' \
 {% endif %}{% if extra_vllm_args %}                  {{ extra_vllm_args }} \
-{% endif %}                  --disable-uvicorn-access-log \
+{% endif %}
                   || sleep infinity
             env:
               - name: VLLM_NIXL_SIDE_CHANNEL_HOST

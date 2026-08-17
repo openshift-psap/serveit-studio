@@ -279,7 +279,7 @@ class ReportAnalyzer:
                                 'the optimal balance between per-pod efficiency and replica count.'),
             },
             'balanced': {
-                'name': 'Balanced Performance',
+                'name': 'Full Coverage',
                 'description': ('This optimization compared all three architectures: '
                                 'Aggregated (baseline), Prefill/Decode disaggregation (PD), '
                                 'and Expert Parallelism (EP). It finds the best architecture '

@@ -178,15 +178,15 @@ class PrereqManager:
 
             # Resolve EPP plugin weights from preset
             epp = epp_config or {}
-            epp_preset = epp.get('preset', 'balanced')
+            epp_preset = epp.get('preset') or optimizer_config.epp_preset if optimizer_config and hasattr(optimizer_config, 'epp_preset') else epp.get('preset', 'balanced')
             epp_presets = {
                 'balanced': {'prefix_cache_weight': 2.0, 'queue_weight': 1.0, 'kv_cache_enabled': False, 'active_request_enabled': False, 'decode_prefix_cache_weight': 2.0, 'decode_queue_weight': 1.0, 'slo_enabled': False, 'slo_weight': 0},
                 'cache_optimized': {'prefix_cache_weight': 5.0, 'queue_weight': 1.0, 'kv_cache_enabled': True, 'kv_cache_weight': 1.0, 'active_request_enabled': True, 'active_request_weight': 1.0, 'decode_prefix_cache_weight': 2.0, 'decode_queue_weight': 1.0, 'slo_enabled': False, 'slo_weight': 0},
                 'queue_balanced': {'prefix_cache_weight': 1.0, 'queue_weight': 3.0, 'kv_cache_enabled': True, 'kv_cache_weight': 1.0, 'active_request_enabled': True, 'active_request_weight': 3.0, 'decode_prefix_cache_weight': 1.0, 'decode_queue_weight': 3.0, 'slo_enabled': False, 'slo_weight': 0},
                 'latency_aware': {'prefix_cache_weight': 2.0, 'queue_weight': 1.0, 'kv_cache_enabled': False, 'active_request_enabled': False, 'decode_prefix_cache_weight': 2.0, 'decode_queue_weight': 1.0, 'slo_enabled': True, 'slo_weight': 3.0},
             }
-            if epp_preset == 'custom' and epp.get('plugins'):
-                plugins = epp['plugins']
+            plugins = epp.get('plugins') or epp
+            if epp_preset == 'custom' and (epp.get('plugins') or epp.get('prefix_cache') or epp.get('active_request')):
                 epp_weights = {
                     'prefix_cache_weight': plugins.get('prefix_cache', {}).get('weight', 3.0) if plugins.get('prefix_cache', {}).get('enabled', True) else 0,
                     'kv_cache_weight': plugins.get('kv_cache', {}).get('weight', 2.0) if plugins.get('kv_cache', {}).get('enabled', True) else 0,
@@ -248,8 +248,12 @@ class PrereqManager:
                 'session_aware_enabled': epp_weights['session_aware_enabled'],
                 'session_aware_weight': epp_weights['session_aware_weight'],
                 'max_prefix_blocks': epp.get('maxPrefixBlocksToMatch', 256),
-                'lru_capacity': epp.get('lruCapacityPerServer', 31250),
+                'lru_capacity': epp.get('lruCapacityPerServer', 4000000),
                 'non_cached_tokens': epp.get('nonCachedTokens', 16),
+                'prefix_cache_affinity_enabled': epp.get('prefixCacheAffinityEnabled', False),
+                'peak_prefill_throughput': epp.get('peakPrefillThroughput', 9866),
+                'prefix_cache_auto_tune': str(epp.get('prefixCacheAutoTune', False)).lower(),
+                'use_prefix_based_decider': epp.get('usePrefixBasedDecider', True),
             }
 
             # Label namespace for DRA webhook (if DRA is in use)
@@ -469,8 +473,12 @@ class PrereqManager:
             'session_aware_enabled': epp_weights['session_aware_enabled'],
             'session_aware_weight': epp_weights['session_aware_weight'],
             'max_prefix_blocks': epp.get('maxPrefixBlocksToMatch', 256),
-            'lru_capacity': epp.get('lruCapacityPerServer', 31250),
+            'lru_capacity': epp.get('lruCapacityPerServer', 4000000),
             'non_cached_tokens': epp.get('nonCachedTokens', 16),
+            'prefix_cache_affinity_enabled': epp.get('prefixCacheAffinityEnabled', False),
+            'peak_prefill_throughput': epp.get('peakPrefillThroughput', 9866),
+            'prefix_cache_auto_tune': str(epp.get('prefixCacheAutoTune', False)).lower(),
+            'use_prefix_based_decider': epp.get('usePrefixBasedDecider', True),
         }
 
         try:

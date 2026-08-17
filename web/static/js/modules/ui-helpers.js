@@ -110,7 +110,7 @@ function generateComparison() {
     html += '<tr><td><strong>Goal</strong></td>';
     runs.forEach(r => {
         const rec = r.data.recommendation || {};
-        const goalMap = { ttft: 'TTFT', throughput: 'Throughput', balanced: 'Balanced' };
+        const goalMap = { ttft: 'TTFT', throughput: 'Throughput', balanced: 'Full Coverage' };
         html += '<td>' + (goalMap[rec.goal] || rec.goal || '-') + '</td>';
     });
     html += '</tr>';

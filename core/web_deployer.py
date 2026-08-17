@@ -750,7 +750,6 @@ vllm serve {config.model_name} \\
   --block-size 128 \\
   --kv-transfer-config '{{"kv_connector":"{config.kv_connector}", "kv_role":"{kv_role}"}}' \\
   --disable-log-requests \\
-  --disable-uvicorn-access-log \\
   --gpu-memory-utilization {config.gpu_memory_utilization} \\
   --trust-remote-code || sleep infinity
 """

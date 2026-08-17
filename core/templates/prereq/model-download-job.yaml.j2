@@ -165,7 +165,7 @@ spec:
 
               echo ""
               echo "📊 Cache directory size:"
-              du -sh /model-cache
+              du -sh /model-cache 2>/dev/null || true
               echo ""
               echo "✅ Download job completed successfully"
           env:

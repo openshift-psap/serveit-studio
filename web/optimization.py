@@ -498,7 +498,7 @@ def deploy_and_test_inference(model_name: str, namespace: str, job_name: str = N
             replicas = 1
             max_model_len = 8192
             gpu_memory_utilization = 0.95
-            image = 'ghcr.io/llm-d/llm-d-cuda:v0.8.0'
+            image = 'vllm/vllm-openai:v0.26.0'
             pvc_name = 'serveit-cache'
             nccl_ib_hca = 'mlx'
             gpus_per_pod = tp
@@ -741,6 +741,18 @@ def run_optimization_background(data):
                 osl_stdev = max(0, int(int(osl_stdev) / chars_per_token))
             log_to_ui(f'Converted: ISL={isl} tokens, OSL={osl} tokens, ISL_var={isl_stdev}, OSL_var={osl_stdev}', 'info')
         turns = int(_get('turns', 1))
+        first_prompt_tokens = _get('first_prompt_tokens')
+        first_prompt_tokens_stdev = _get('first_prompt_tokens_stdev')
+        first_prompt_tokens_min = _get('first_prompt_tokens_min')
+        first_prompt_tokens_max = _get('first_prompt_tokens_max')
+        first_output_tokens = _get('first_output_tokens')
+        first_output_tokens_stdev = _get('first_output_tokens_stdev')
+        prefix_tokens = _get('prefix_tokens')
+        prefix_count = _get('prefix_count')
+        turn_delay = _get('turn_delay')
+        turn_delay_stdev = _get('turn_delay_stdev')
+        turn_delay_min = _get('turn_delay_min')
+        turn_delay_max = _get('turn_delay_max')
         num_users = int(_get('num_users', 100, ui_key='users'))
         optimization_goal = _get('optimization_metric', 'ttft', ui_key='goal') or 'ttft'
         stop_mode = _get('stop_mode', 'duration')
@@ -911,8 +923,8 @@ def run_optimization_background(data):
             pvc_size = f"{int(pvc_size_str)}Gi" if pvc_size_str.isdigit() else str(pvc_size_raw)
         else:
             pvc_size = None
-        vllm_image = _get('image') or 'ghcr.io/llm-d/llm-d-cuda:v0.8.0'
-        scheduler_image = _get('scheduler_image') or 'ghcr.io/llm-d/llm-d-router-endpoint-picker:v0.9.0'
+        vllm_image = _get('image') or 'vllm/vllm-openai:v0.26.0'
+        scheduler_image = _get('scheduler_image') or 'ghcr.io/llm-d/llm-d-router-endpoint-picker:main'
         single_test_architecture = _get('single_test_architecture')
         single_test_tp = _get('single_test_tp')
         single_test_replicas = _get('single_test_replicas')
@@ -1100,6 +1112,18 @@ data:
                 osl_min=int(osl_min) if osl_min else None,
                 osl_max=int(osl_max) if osl_max else None,
                 turns=turns,
+                first_prompt_tokens=int(first_prompt_tokens) if first_prompt_tokens else None,
+                first_prompt_tokens_stdev=int(first_prompt_tokens_stdev) if first_prompt_tokens_stdev else None,
+                first_prompt_tokens_min=int(first_prompt_tokens_min) if first_prompt_tokens_min else None,
+                first_prompt_tokens_max=int(first_prompt_tokens_max) if first_prompt_tokens_max else None,
+                first_output_tokens=int(first_output_tokens) if first_output_tokens else None,
+                first_output_tokens_stdev=int(first_output_tokens_stdev) if first_output_tokens_stdev else None,
+                prefix_tokens=int(prefix_tokens) if prefix_tokens else None,
+                prefix_count=int(prefix_count) if prefix_count else None,
+                turn_delay=float(turn_delay) if turn_delay else None,
+                turn_delay_stdev=float(turn_delay_stdev) if turn_delay_stdev else None,
+                turn_delay_min=float(turn_delay_min) if turn_delay_min else None,
+                turn_delay_max=float(turn_delay_max) if turn_delay_max else None,
                 qps=float(num_users),
                 total_gpus=max_gpus,
                 max_model_len=8192,

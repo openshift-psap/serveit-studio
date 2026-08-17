@@ -460,8 +460,6 @@ def handle_resume_optimization(data):
         saved_epp_config = None
         saved_prefix_cache_mode = 'identical'
         saved_prefix_cache_groups = 5
-        saved_image = None
-        saved_scheduler_image = None
         if run.get('config_json'):
             try:
                 import json as _json
@@ -476,8 +474,6 @@ def handle_resume_optimization(data):
                 saved_epp_config = saved_cfg.get('epp_config')
                 saved_prefix_cache_mode = saved_cfg.get('prefix_cache_mode', 'identical')
                 saved_prefix_cache_groups = saved_cfg.get('prefix_cache_groups', 5)
-                saved_image = saved_cfg.get('image')
-                saved_scheduler_image = saved_cfg.get('scheduler_image') or None
             except Exception:
                 pass
 
@@ -523,8 +519,6 @@ def handle_resume_optimization(data):
             'epp_benchmark': saved_epp_benchmark,
             'epp_config': saved_epp_config,
             'advanced_vllm': saved_advanced_vllm,
-            'image': saved_image,
-            'scheduler_image': saved_scheduler_image,
             'resume_run_id': run_id
         }
 
@@ -1788,20 +1782,34 @@ def handle_list_pvcs(data):
 @socketio.on('fetch_image_tags')
 def handle_fetch_image_tags(data):
     """Fetch available container image tags from a registry."""
-    repo = data.get('repo', 'ghcr.io/llm-d/llm-d-cuda').strip()
+    target = data.get('target', 'engine')
+    # Map target to default repo
+    target_repos = {
+        'engine': 'ghcr.io/llm-d/llm-d-cuda',
+        'vllm': 'docker.io/vllm/vllm-openai',
+        'scheduler': 'ghcr.io/llm-d/llm-d-router-endpoint-picker',
+        'sidecar': 'ghcr.io/llm-d/llm-d-router-disagg-sidecar',
+    }
+    repo = data.get('repo', target_repos.get(target, 'ghcr.io/llm-d/llm-d-cuda')).strip()
+    if repo in target_repos.values():
+        pass
+    elif '/' not in repo:
+        repo = target_repos.get(target, repo)
     try:
         import requests as _req
 
-        # Parse registry, namespace, and image from repo string
         parts = repo.split('/')
-        if len(parts) >= 3:
+        if len(parts) >= 2:
             registry = parts[0]
             image_path = '/'.join(parts[1:])
         else:
-            emit('image_tags_result', {'error': 'Invalid repo format. Use registry/org/image'})
+            emit('image_tags_result', {'error': 'Invalid repo format', 'target': target})
             return
 
-        # Get anonymous token (works for public repos on ghcr.io, quay.io, docker.io)
+        # Docker Hub uses library/ prefix for official images
+        if registry in ('docker.io', 'registry-1.docker.io') and '/' not in image_path:
+            image_path = f'library/{image_path}'
+
         token = None
         if 'ghcr.io' in registry:
             r = _req.get(f'https://ghcr.io/token?scope=repository:{image_path}:pull', timeout=10)
@@ -1810,13 +1818,12 @@ def handle_fetch_image_tags(data):
             api_url = f'https://ghcr.io/v2/{image_path}/tags/list'
         elif 'quay.io' in registry:
             api_url = f'https://quay.io/v2/{image_path}/tags/list'
-        elif 'docker.io' in registry or 'registry-1.docker.io' in registry:
+        elif registry in ('docker.io', 'registry-1.docker.io') or '.' not in registry:
             r = _req.get(f'https://auth.docker.io/token?service=registry.docker.io&scope=repository:{image_path}:pull', timeout=10)
             if r.ok:
                 token = r.json().get('token')
             api_url = f'https://registry-1.docker.io/v2/{image_path}/tags/list'
         else:
-            # Generic v2 registry (internal registries)
             api_url = f'https://{registry}/v2/{image_path}/tags/list'
 
         headers = {}
@@ -1825,11 +1832,10 @@ def handle_fetch_image_tags(data):
 
         r = _req.get(api_url, headers=headers, timeout=15)
         if not r.ok:
-            emit('image_tags_result', {'error': f'Registry returned {r.status_code}'})
+            emit('image_tags_result', {'error': f'Registry returned {r.status_code}', 'target': target})
             return
 
         tags = r.json().get('tags', [])
-        # Sort: stable releases first (vX.Y.Z), then RCs, then others
         import re
         def tag_sort_key(t):
             if re.match(r'^v\d+\.\d+\.\d+$', t):
@@ -1840,13 +1846,9 @@ def handle_fetch_image_tags(data):
                 return (2, t)
         tags = sorted(tags, key=tag_sort_key, reverse=True)
 
-        target = data.get('target', 'image')
-        event = 'scheduler_tags_result' if target == 'scheduler' else 'image_tags_result'
-        emit(event, {'tags': tags, 'repo': repo})
+        emit('image_tags_result', {'tags': tags, 'repo': repo, 'target': target})
     except Exception as e:
-        target = data.get('target', 'image')
-        event = 'scheduler_tags_result' if target == 'scheduler' else 'image_tags_result'
-        emit(event, {'error': str(e)[:200]})
+        emit('image_tags_result', {'error': str(e)[:200], 'target': target})
 
 
 @socketio.on('recreate_storage')
@@ -2133,14 +2135,13 @@ def handle_setup_storage(data):
         pvc_size = int(data.get('pvc_size', 256))
         model = data.get('model')
 
-        # Calculate minimum PVC size from model size estimate
-        if model:
+        # Calculate minimum PVC size from model size estimate (skip for local disk — no PVC needed)
+        if model and not data.get('local_disk_path'):
             try:
                 from core.test_planner import TestPlanner
                 planner = TestPlanner()
                 model_size_b = planner.extract_model_size_from_name(model)
                 if model_size_b:
-                    # Model weights in GB (FP8 = 1 byte/param) + 50% overhead for HF cache structure
                     min_pvc_gb = int(model_size_b * 1.5) + 5
                     if pvc_size < min_pvc_gb:
                         log_to_ui(f'⚠️ PVC size {pvc_size}Gi is too small for {model} (~{int(model_size_b)}B params = ~{int(model_size_b)}GB weights). Increasing to {min_pvc_gb}Gi.', 'warning')
@@ -2166,6 +2167,8 @@ def handle_setup_storage(data):
         # Per-node storage check BEFORE existing_pvc (per-node has its own download flow)
         per_node_storage = data.get('per_node_storage') or saved.get('per_node_storage', False)
         local_disk_path = data.get('local_disk_path') or saved.get('local_disk_path')
+        if local_disk_path and not per_node_storage:
+            per_node_storage = True
 
         # Fallback to saved config if frontend didn't send existing_pvc
         if not existing_pvc and not per_node_storage:
@@ -2256,8 +2259,8 @@ def handle_setup_storage(data):
                 'prefix_cache_mode': data.get('prefix_cache_mode', 'identical'),
                 'prefix_cache_groups': data.get('prefix_cache_groups', 5),
                 'advanced_vllm': data.get('advanced_vllm'),
-                'image': data.get('image'),
-                'scheduler_image': data.get('scheduler_image'),
+                'image': data.get('image') or saved.get('image'),
+                'scheduler_image': data.get('scheduler_image') or saved.get('scheduler_image'),
                 'single_test_architecture': data.get('single_test_architecture'),
                 'single_test_tp': data.get('single_test_tp'),
                 'single_test_replicas': data.get('single_test_replicas'),

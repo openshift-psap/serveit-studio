@@ -12,36 +12,56 @@ data:
     apiVersion: llm-d.ai/v1alpha1
     kind: EndpointPickerConfig
     plugins:
-    - type: approx-prefix-cache-producer
+    - type: disagg-headers-handler
+    - type: always-disagg-pd-decider
+    - type: disagg-profile-handler
       parameters:
-        maxPrefixBlocksToMatch: 256
-        lruCapacityPerServer: 31250
-    - type: prefix-cache-scorer
-    - type: queue-scorer
-    - type: prefill-filter
-    - type: decode-filter
-    - type: max-score-picker
+        deciderPluginName: always-disagg-pd-decider
     - type: prefix-based-pd-decider
       parameters:
         nonCachedTokens: 16
-    - type: disagg-profile-handler
+    - type: prefill-filter
+    - type: decode-filter
+    - type: max-score-picker
+    - type: approx-prefix-cache-producer
       parameters:
-        deciders:
-          prefill: prefix-based-pd-decider
+        autoTune: false
+        maxPrefixBlocksToMatch: 256
+        lruCapacityPerServer: {{ lru_capacity | default(4000000) }}
+    - type: prefix-cache-scorer
+    - type: queue-scorer
+    - type: token-load-scorer
+    - type: active-request-scorer
+    - type: inflight-load-producer
+{% if prefix_cache_affinity_enabled | default(false) %}
+    - type: prefix-cache-affinity-filter
+      parameters:
+        peakPrefillThroughput: {{ peak_prefill_throughput | default(9866) }}
+{% endif %}
     schedulingProfiles:
     - name: prefill
       plugins:
       - pluginRef: prefill-filter
       - pluginRef: max-score-picker
+{% if prefix_cache_affinity_enabled | default(false) %}
+      - pluginRef: token-load-scorer
+        weight: 1
+      - pluginRef: prefix-cache-affinity-filter
+{% else %}
       - pluginRef: prefix-cache-scorer
         weight: 2
       - pluginRef: queue-scorer
         weight: 1
+{% endif %}
     - name: decode
       plugins:
       - pluginRef: decode-filter
       - pluginRef: max-score-picker
+      - pluginRef: active-request-scorer
+        weight: 1
+{% if not prefix_cache_affinity_enabled | default(false) %}
       - pluginRef: prefix-cache-scorer
         weight: 2
       - pluginRef: queue-scorer
         weight: 1
+{% endif %}

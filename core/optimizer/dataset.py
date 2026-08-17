@@ -108,6 +108,87 @@ class DatasetMixin:
         self.random_dataset_path = dataset_path
         return dataset_path
 
+    def _generate_turn_dataset(self):
+        """Generate a multi-turn conversation dataset using guidellm's SyntheticTextDataset.
+
+        Runs generate_turn_dataset script on the workload pod. The dataset uses
+        guidellm's native conversation format (conversation_turns JSONL) and supports
+        first_prompt_tokens, prefix_buckets, and all distribution parameters.
+        """
+        import hashlib
+        cfg = self.config
+        seed_input = f"{cfg.model_name}:{cfg.isl}:{cfg.osl}:{cfg.turns}:{getattr(cfg, 'first_prompt_tokens', 0)}"
+        seed = int(hashlib.md5(seed_input.encode()).hexdigest()[:8], 16)
+
+        max_reqs = getattr(cfg, 'max_requests', None) or int(getattr(cfg, 'qps', 100) * getattr(cfg, 'test_duration', 300))
+        rows = max(max_reqs * 2, 100)
+
+        dataset_path = f'/mnt/storage/prefix-cache-datasets/turn-workload-{cfg.isl}-{cfg.osl}-t{cfg.turns}-{seed}.jsonl'
+
+        self.orchestrator.ensure_guidellm_pod(cfg, log_callback=lambda msg: self.log(msg, 'info'))
+        kubectl = self.orchestrator.deployment_manager.kubectl
+        pod_name = self.orchestrator._guidellm_pod_name
+
+        exists = kubectl.run(
+            ['exec', pod_name, '-n', cfg.namespace, '--',
+             'test', '-f', dataset_path], check=False
+        ).returncode == 0
+
+        if exists:
+            self.log(f"   Reusing existing turn dataset: {os.path.basename(dataset_path)}", 'info')
+        else:
+            self.log(f"Generating turn dataset: {rows} conversations, {cfg.turns} turns each", 'info')
+            cmd = (
+                f'generate_turn_dataset'
+                f' --model "{cfg.model_name}"'
+                f' --prompt-tokens {cfg.isl} --output-tokens {cfg.osl}'
+                f' --turns {cfg.turns}'
+                f' --rows {rows} --seed {seed}'
+                f' --output {dataset_path}'
+            )
+            if cfg.isl_stdev:
+                cmd += f' --prompt-tokens-stdev {cfg.isl_stdev}'
+            if getattr(cfg, 'isl_min', None):
+                cmd += f' --prompt-tokens-min {cfg.isl_min}'
+            if getattr(cfg, 'isl_max', None):
+                cmd += f' --prompt-tokens-max {cfg.isl_max}'
+            if cfg.osl_stdev:
+                cmd += f' --output-tokens-stdev {cfg.osl_stdev}'
+            if getattr(cfg, 'osl_min', None):
+                cmd += f' --output-tokens-min {cfg.osl_min}'
+            if getattr(cfg, 'osl_max', None):
+                cmd += f' --output-tokens-max {cfg.osl_max}'
+            if getattr(cfg, 'first_prompt_tokens', None):
+                cmd += f' --first-prompt-tokens {cfg.first_prompt_tokens}'
+            if getattr(cfg, 'first_prompt_tokens_stdev', None):
+                cmd += f' --first-prompt-tokens-stdev {cfg.first_prompt_tokens_stdev}'
+            if getattr(cfg, 'first_prompt_tokens_min', None):
+                cmd += f' --first-prompt-tokens-min {cfg.first_prompt_tokens_min}'
+            if getattr(cfg, 'first_prompt_tokens_max', None):
+                cmd += f' --first-prompt-tokens-max {cfg.first_prompt_tokens_max}'
+            if getattr(cfg, 'first_output_tokens', None):
+                cmd += f' --first-output-tokens {cfg.first_output_tokens}'
+            if getattr(cfg, 'first_output_tokens_stdev', None):
+                cmd += f' --first-output-tokens-stdev {cfg.first_output_tokens_stdev}'
+            if getattr(cfg, 'prefix_tokens', None):
+                cmd += f' --prefix-tokens {cfg.prefix_tokens}'
+            if getattr(cfg, 'prefix_count', None):
+                cmd += f' --prefix-count {cfg.prefix_count}'
+
+            result = kubectl.run(
+                ['exec', pod_name, '-n', cfg.namespace, '--', 'bash', '-c', cmd],
+                check=False, timeout=7200
+            )
+            if result.returncode != 0:
+                self.log(f"   ❌ Turn dataset generation failed: {result.stderr[:200]}", 'error')
+                raise RuntimeError("Failed to generate turn dataset on workload pod")
+            if result.stderr:
+                for line in result.stderr.strip().splitlines()[-5:]:
+                    self.log(f"   {line}", 'info')
+
+        self.turn_dataset_path = dataset_path
+        return dataset_path
+
     def _generate_calibration_dataset(self, isl: int, osl: int, label: str = 'calibration', pool_size: int = 0):
         """Generate a dataset for calibration tests.
 
@@ -160,11 +241,38 @@ class DatasetMixin:
     def _generate_prefix_cache_dataset(self):
         """Generate a prefix cache dataset on the workload pod.
 
-        Uses the generate_dataset script on the workload pod for speed.
+        For single-turn: uses the fast generate_dataset script.
+        For multi-turn: delegates to generate_turn_dataset with prefix_buckets
+        mapped from the prefix cache mode settings.
         """
         hit_pct = self.config.prefix_cache_hit_pct
         isl = self.config.isl
         osl = self.config.osl
+        is_multi_turn = getattr(self.config, 'turns', 1) > 1
+
+        # Multi-turn with prefix cache: map prefix cache modes to prefix_buckets
+        # and delegate to _generate_turn_dataset
+        if is_multi_turn:
+            cache_mode = self.config.prefix_cache_mode or 'identical'
+            prefix_tokens = int(isl * hit_pct / 100)
+            if cache_mode == 'identical':
+                self.config.prefix_tokens = prefix_tokens
+                self.config.prefix_count = 1
+            elif cache_mode == 'shared_prefix':
+                self.config.prefix_tokens = prefix_tokens
+                self.config.prefix_count = 1
+            elif cache_mode == 'multi_group':
+                groups = int(self.config.prefix_cache_groups or 5)
+                self.config.prefix_tokens = prefix_tokens
+                self.config.prefix_count = groups
+            self.log(f"   Multi-turn prefix cache: {cache_mode}, {hit_pct}% → prefix_tokens={prefix_tokens}, prefix_count={self.config.prefix_count}", 'info')
+            self._generate_turn_dataset()
+            self.config.workload_mode = 'dataset'
+            self.config.dataset_source = self.turn_dataset_path
+            self.config.dataset_column = 'conversation_turns'
+            self.config.dataset_max_output = osl
+            self.log("   Workload switched to multi-turn dataset with prefix cache", 'info')
+            return
 
         cache_mode = self.config.prefix_cache_mode or 'identical'
         groups_str = str(self.config.prefix_cache_groups or 5) if cache_mode == 'multi_group' else '0'

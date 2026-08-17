@@ -193,28 +193,37 @@ class GuidellmMixin:
                 data_arg = f'kind=csv_file,path={dataset_path}'
             column_args = f' --data-column-mapper \'{{\"kind\":\"generative_column_mapper\",\"column_mappings\":{{\"text_column\":\"{col}\",\"output_tokens_count_column\":\"output_tokens_count\"}}}}\''
         else:
-            data_arg = f'kind=synthetic_text,prompt_tokens={config.isl},output_tokens={config.osl}'
-            if getattr(config, 'isl_stdev', None):
-                data_arg += f',prompt_tokens_stdev={config.isl_stdev}'
-            if getattr(config, 'osl_stdev', None):
-                data_arg += f',output_tokens_stdev={config.osl_stdev}'
-            if getattr(config, 'isl_min', None):
-                data_arg += f',prompt_tokens_min={config.isl_min}'
-            if getattr(config, 'osl_min', None):
-                data_arg += f',output_tokens_min={config.osl_min}'
-            if getattr(config, 'osl_max', None):
-                data_arg += f',output_tokens_max={config.osl_max}'
+            import json as _dj
+            data_dict = {"kind": "synthetic_text", "prompt_tokens": config.isl, "output_tokens": config.osl}
+            for attr, key in [
+                ('isl_stdev', 'prompt_tokens_stdev'), ('osl_stdev', 'output_tokens_stdev'),
+                ('isl_min', 'prompt_tokens_min'), ('osl_min', 'output_tokens_min'),
+                ('osl_max', 'output_tokens_max'),
+                ('first_prompt_tokens', 'first_prompt_tokens'),
+                ('first_prompt_tokens_stdev', 'first_prompt_tokens_stdev'),
+                ('first_prompt_tokens_min', 'first_prompt_tokens_min'),
+                ('first_prompt_tokens_max', 'first_prompt_tokens_max'),
+                ('first_output_tokens', 'first_output_tokens'),
+                ('first_output_tokens_stdev', 'first_output_tokens_stdev'),
+                ('turn_delay', 'delay'), ('turn_delay_stdev', 'delay_stdev'),
+                ('turn_delay_min', 'delay_min'), ('turn_delay_max', 'delay_max'),
+            ]:
+                val = getattr(config, attr, None)
+                if val is not None:
+                    data_dict[key] = val
             if turns > 1:
-                data_arg += f',turns={turns}'
-            # prompt_tokens_max: explicit isl_max takes precedence, else safety cap from max_model_len
+                data_dict['turns'] = turns
+            if getattr(config, 'prefix_tokens', None):
+                data_dict['prefix_buckets'] = [{"bucket_weight": 100, "prefix_count": getattr(config, 'prefix_count', 1) or 1, "prefix_tokens": config.prefix_tokens}]
             if getattr(config, 'isl_max', None):
-                data_arg += f',prompt_tokens_max={config.isl_max}'
+                data_dict['prompt_tokens_max'] = config.isl_max
             else:
                 max_model_len = getattr(config, 'max_model_len', 0)
                 if max_model_len and (getattr(config, 'isl_stdev', None) or getattr(config, 'osl_stdev', None)):
                     prompt_max = max_model_len - config.osl - 200
                     if prompt_max > 0:
-                        data_arg += f',prompt_tokens_max={prompt_max}'
+                        data_dict['prompt_tokens_max'] = prompt_max
+            data_arg = _dj.dumps(data_dict)
 
         # Profile argument (rate type + rate)
         request_format = '/v1/chat/completions' if turns > 1 else '/v1/completions'
@@ -233,9 +242,9 @@ class GuidellmMixin:
             profile_arg = f'kind=constant,rate={request_rate},warmup={warmup}'
 
         # Constraint argument (stop condition)
-        stop_mode = getattr(config, 'stop_mode', 'duration')
+        # Use max_requests when set — multi-turn workloads have unpredictable duration
         max_requests = getattr(config, 'max_requests', None)
-        if stop_mode == 'max_requests' and max_requests:
+        if max_requests:
             constraint_arg = f'kind=max_requests,count={max_requests}'
         else:
             constraint_arg = f'kind=max_duration,seconds={config.test_duration}'
@@ -272,7 +281,8 @@ class GuidellmMixin:
             log_callback(f'   Load: {rate_label}')
 
         benchmark_start = time.time()
-        monitor_timeout = 3600 if (stop_mode == 'max_requests' and max_requests) else config.test_duration
+        max_requests = getattr(config, 'max_requests', None)
+        monitor_timeout = 3600 if max_requests else config.test_duration
         monitor_timeout += warmup + 1800
 
         try:
@@ -560,8 +570,32 @@ class GuidellmMixin:
                     data_arg += f',output_tokens_min={config.osl_min}'
                 if getattr(config, 'osl_max', None):
                     data_arg += f',output_tokens_max={config.osl_max}'
+                if getattr(config, 'first_prompt_tokens', None):
+                    data_arg += f',first_prompt_tokens={config.first_prompt_tokens}'
+                if getattr(config, 'first_prompt_tokens_stdev', None):
+                    data_arg += f',first_prompt_tokens_stdev={config.first_prompt_tokens_stdev}'
+                if getattr(config, 'first_prompt_tokens_min', None):
+                    data_arg += f',first_prompt_tokens_min={config.first_prompt_tokens_min}'
+                if getattr(config, 'first_prompt_tokens_max', None):
+                    data_arg += f',first_prompt_tokens_max={config.first_prompt_tokens_max}'
+                if getattr(config, 'first_output_tokens', None):
+                    data_arg += f',first_output_tokens={config.first_output_tokens}'
+                if getattr(config, 'first_output_tokens_stdev', None):
+                    data_arg += f',first_output_tokens_stdev={config.first_output_tokens_stdev}'
+                if getattr(config, 'prefix_tokens', None):
+                    data_arg += f',prefix_tokens={config.prefix_tokens}'
+                if getattr(config, 'prefix_count', None):
+                    data_arg += f',prefix_count={config.prefix_count}'
                 if turns > 1:
                     data_arg += f',turns={turns}'
+                if getattr(config, 'turn_delay', None):
+                    data_arg += f',delay={config.turn_delay}'
+                if getattr(config, 'turn_delay_stdev', None):
+                    data_arg += f',delay_stdev={config.turn_delay_stdev}'
+                if getattr(config, 'turn_delay_min', None):
+                    data_arg += f',delay_min={config.turn_delay_min}'
+                if getattr(config, 'turn_delay_max', None):
+                    data_arg += f',delay_max={config.turn_delay_max}'
                 # prompt_tokens_max: explicit isl_max takes precedence, else safety cap from max_model_len
                 if getattr(config, 'isl_max', None):
                     data_arg += f',prompt_tokens_max={config.isl_max}'
@@ -589,10 +623,9 @@ class GuidellmMixin:
             else:
                 profile_arg = f'kind=constant,rate={request_rate},warmup={warmup}'
 
-            # Constraint
-            stop_mode = getattr(config, 'stop_mode', 'duration')
+            # Constraint — use max_requests when set, fall back to duration
             max_requests = getattr(config, 'max_requests', None)
-            if stop_mode == 'max_requests' and max_requests:
+            if max_requests:
                 constraint_arg = f'kind=max_requests,count={max_requests}'
             else:
                 constraint_arg = f'kind=max_duration,seconds={config.test_duration}'

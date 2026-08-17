@@ -495,7 +495,17 @@ function updateEppCustom() {
         active_request: { enabled: document.getElementById('epp-plugin-active-request').checked, weight: parseFloat(document.getElementById('epp-weight-active-request').value) },
         no_hit_lru: { enabled: document.getElementById('epp-plugin-no-hit-lru').checked, weight: parseFloat(document.getElementById('epp-weight-no-hit-lru').value) },
         session_aware: { enabled: document.getElementById('epp-plugin-session-aware').checked, weight: parseFloat(document.getElementById('epp-weight-session-aware').value) },
+        token_load: { enabled: document.getElementById('epp-plugin-token-load').checked, weight: parseFloat(document.getElementById('epp-weight-token-load').value) },
     };
+    var affinityEl = document.getElementById('epp-plugin-prefix-cache-affinity');
+    if (affinityEl) {
+        config.epp_config.prefixCacheAffinityEnabled = affinityEl.checked;
+        config.epp_config.peakPrefillThroughput = parseInt(document.getElementById('epp-param-peak-prefill-throughput').value) || 9866;
+    }
+    var lruEl = document.getElementById('epp-param-lru-capacity');
+    if (lruEl) {
+        config.epp_config.lruCapacityPerServer = parseInt(lruEl.value) || 4000000;
+    }
     saveConfig();
 }
 

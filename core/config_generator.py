@@ -76,8 +76,8 @@ class TestConfig:
     cpu_limit: Optional[str] = None  # CPU limit (defaults to cpu_request if not set)
 
     # Infrastructure
-    image: str = 'ghcr.io/llm-d/llm-d-cuda:v0.8.0'
-    scheduler_image: str = 'ghcr.io/llm-d/llm-d-router-endpoint-picker:v0.9.0'
+    image: str = 'vllm/vllm-openai:v0.26.0'
+    scheduler_image: str = 'ghcr.io/llm-d/llm-d-router-endpoint-picker:main'
     pvc_name: str = 'model-cache'
     nccl_ib_hca: str = 'mlx'
     kv_connector: str = 'NixlConnector'
@@ -115,6 +115,18 @@ class TestConfig:
     osl_min: Optional[int] = None  # OSL minimum (output_tokens_min)
     osl_max: Optional[int] = None  # OSL maximum (output_tokens_max)
     turns: int = 1  # Number of conversation turns (1 = single-turn)
+    first_prompt_tokens: Optional[int] = None  # First turn prompt override (e.g., dynamic system prompt)
+    first_prompt_tokens_stdev: Optional[int] = None
+    first_prompt_tokens_min: Optional[int] = None
+    first_prompt_tokens_max: Optional[int] = None
+    first_output_tokens: Optional[int] = None  # First turn output override
+    first_output_tokens_stdev: Optional[int] = None
+    prefix_tokens: Optional[int] = None  # Shared system prompt token count
+    prefix_count: Optional[int] = None  # Number of unique prefixes
+    turn_delay: Optional[float] = None  # Inter-turn delay mean (seconds)
+    turn_delay_stdev: Optional[float] = None
+    turn_delay_min: Optional[float] = None
+    turn_delay_max: Optional[float] = None
 
     # Node pinning
     selected_nodes: List[str] = field(default_factory=list)

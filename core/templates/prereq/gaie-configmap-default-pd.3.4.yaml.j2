@@ -19,27 +19,46 @@ data:
         deciderPluginName: always-disagg-pd-decider
     - type: prefill-filter
     - type: decode-filter
+    - type: approx-prefix-cache-producer
+      parameters:
+        autoTune: false
+        lruCapacityPerServer: {{ lru_capacity | default(4000000) }}
     - type: prefix-cache-scorer
     - type: queue-scorer
-    - type: kv-cache-utilization-scorer
+    - type: token-load-scorer
     - type: active-request-scorer
+    - type: inflight-load-producer
+    - type: kv-cache-utilization-scorer
     - type: max-score-picker
+{% if prefix_cache_affinity_enabled | default(false) %}
+    - type: prefix-cache-affinity-filter
+      parameters:
+        peakPrefillThroughput: {{ peak_prefill_throughput | default(9866) }}
+{% endif %}
     schedulingProfiles:
     - name: prefill
       plugins:
       - pluginRef: prefill-filter
+{% if prefix_cache_affinity_enabled | default(false) %}
+      - pluginRef: token-load-scorer
+        weight: 1
+      - pluginRef: prefix-cache-affinity-filter
+{% else %}
       - pluginRef: prefix-cache-scorer
         weight: 3
       - pluginRef: queue-scorer
         weight: 2
       - pluginRef: kv-cache-utilization-scorer
         weight: 2
+{% endif %}
       - pluginRef: max-score-picker
     - name: decode
       plugins:
       - pluginRef: decode-filter
       - pluginRef: active-request-scorer
         weight: 2
+{% if not prefix_cache_affinity_enabled | default(false) %}
       - pluginRef: prefix-cache-scorer
         weight: 3
+{% endif %}
       - pluginRef: max-score-picker
