@@ -1021,7 +1021,7 @@ data:
         log_to_ui(f"   Optimization goal: {optimization_goal}", 'info')
 
         # Use Recipe-based optimization for all goals
-        if optimization_goal in ('ttft', 'throughput', 'balanced', 'aggregated_only', 'pd_only', 'ep_only', 'single_test'):
+        if optimization_goal in ('ttft', 'throughput', 'balanced', 'full_coverage', 'aggregated_only', 'pd_only', 'ep_only', 'single_test'):
             goal_descriptions = {
                 'ttft': {
                     'label': 'Response Time Priority (PD vs Aggregated)',
@@ -1080,7 +1080,7 @@ data:
                     ]
                 },
             }
-            goal_info = goal_descriptions[optimization_goal]
+            goal_info = goal_descriptions.get(optimization_goal) or goal_descriptions['balanced']
             log_to_ui("", 'info')
             log_to_ui(f"✨ Using Recipe-based optimization — {goal_info['label']}", 'success')
             for step_desc in goal_info['steps']:

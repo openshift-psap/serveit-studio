@@ -18,6 +18,15 @@ rules:
       - watch
       - list
   - apiGroups:
+      - llm-d.ai
+    resources:
+      - inferenceobjectives
+      - inferencemodelrewrites
+    verbs:
+      - get
+      - watch
+      - list
+  - apiGroups:
       - inference.networking.k8s.io
     resources:
       - inferencepools

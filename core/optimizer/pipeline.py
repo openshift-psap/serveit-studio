@@ -117,6 +117,12 @@ class RecipeOptimizer(
             if self.config.rdma_network_annotation:
                 self.log(f"Auto-detected RDMA network annotation: {self.config.rdma_network_annotation}")
 
+        # Auto-select DRA device classes if network_type is dra but none selected
+        if self.config.network_type == 'dra' and not self.config.selected_dra_classes:
+            self.config.selected_dra_classes = self._detect_dra_device_classes()
+            if self.config.selected_dra_classes:
+                self.log(f"Auto-selected DRA device classes: {', '.join(self.config.selected_dra_classes)}")
+
         # Memory and CPU per pod are calculated dynamically per deployment
         # based on actual TP and total_pods (see _get_pod_resources).
         # Users can still override via config.memory_per_pod / cpu_per_pod.
@@ -275,7 +281,8 @@ class RecipeOptimizer(
             os.environ['HF_TOKEN'] = self.config.hf_token
 
         # Compute stdev-adjusted max_model_len so vLLM can handle the longest sequences
-        # guidellm generates (mean + 2*stdev covers 97.7% of the distribution)
+        # guidellm generates (mean + 2*stdev covers 97.7% of the distribution).
+        # Only bump UP if current value is too small — never override a larger user-set value.
         computed_max_model_len, _ = calculate_engine_memory_config(
             isl=config.isl,
             osl=config.osl,
@@ -288,7 +295,9 @@ class RecipeOptimizer(
             isl_stdev=config.isl_stdev,
             osl_stdev=config.osl_stdev
         )
-        if computed_max_model_len != self.config.max_model_len:
+        if self.config.max_model_len and self.config.max_model_len >= computed_max_model_len:
+            self.log(f"max_model_len: {self.config.max_model_len} (user-set, ≥ computed {computed_max_model_len})")
+        elif computed_max_model_len != self.config.max_model_len:
             self.log(f"Adjusted max_model_len: {self.config.max_model_len} → {computed_max_model_len}"
                      + (f" (includes stdev: ISL±{config.isl_stdev}, OSL±{config.osl_stdev})"
                         if config.isl_stdev or config.osl_stdev else ""))
@@ -366,6 +375,7 @@ class RecipeOptimizer(
             'ttft': TTFTStrategy,
             'throughput': ThroughputStrategy,
             'balanced': BalancedStrategy,
+            'full_coverage': BalancedStrategy,
             'aggregated_only': AggregatedOnlyStrategy,
             'pd_only': PDOnlyStrategy,
             'ep_only': EPOnlyStrategy,
@@ -1185,6 +1195,33 @@ class RecipeOptimizer(
         self.log("Network: No RDMA or NAD detected, using pod network (eth0)")
         return 'eth0'
 
+    def _detect_dra_device_classes(self) -> List[str]:
+        """Auto-select DRA device classes: prefer gpu_nic_pair, fall back to gpu-only."""
+        try:
+            r = self.scanner.kubectl.run(
+                ['get', 'deviceclass', '-o',
+                 'jsonpath={range .items[*]}{.metadata.name}{"\\t"}{.spec.selectors[0].cel.expression}{"\\n"}{end}'],
+                check=False)
+            if r.returncode != 0 or not r.stdout.strip():
+                return []
+            gpu_nic_pairs = []
+            gpu_only = []
+            for line in r.stdout.strip().splitlines():
+                parts = line.split('\t', 1)
+                name = parts[0].strip()
+                _ = parts[1].strip() if len(parts) > 1 else ''
+                if 'gpu' in name.lower() and 'nic' in name.lower():
+                    gpu_nic_pairs.append(name)
+                elif 'gpu' in name.lower() and 'nic' not in name.lower():
+                    gpu_only.append(name)
+            if gpu_nic_pairs:
+                return gpu_nic_pairs
+            if gpu_only:
+                return gpu_only
+        except Exception:
+            pass
+        return []
+
     def _detect_rdma_device_resources(self) -> List[str]:
         if not self.cluster_resources:
             return []
@@ -1203,7 +1240,7 @@ class RecipeOptimizer(
         raw = math.sqrt(seq_len)
         from core.utils import next_power_of_2
         bs = next_power_of_2(max(1, int(raw)))
-        pd_goals = ('ttft', 'balanced', 'pd_only')
+        pd_goals = ('ttft', 'balanced', 'full_coverage', 'pd_only')
         floor = 128 if self.config.objective in pd_goals else 8
         return max(floor, min(512, bs))
 

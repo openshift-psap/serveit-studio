@@ -192,10 +192,16 @@ spec:
                   echo "--- Applied vllm#43396 FP8 MoE patch ---"
                 fi
 
-                vllm serve {{ model_name }} \
+                # Patch transformers 5.15+ AmbiguousGlobalPerLayerAttributeError for heterogeneous models (Gemma 4)
+                printf '#!/usr/bin/env python3\ntry:\n import transformers.integrations.heterogeneity.configuration_utils as _hc\n _p=_hc.HeterogeneousConfigMixin.allow_global_per_layer_attribute_access\n _hc.HeterogeneousConfigMixin.allow_global_per_layer_attribute_access=property(lambda s:s.__dict__.get("allow_global_per_layer_attribute_access",True),_p.fset)\nexcept Exception:\n pass\nif __name__=="__main__":\n import sys;sys.argv[0]="vllm"\n from vllm.entrypoints.cli.main import main;main()\n' > /tmp/_vllm_patched && chmod +x /tmp/_vllm_patched
+                echo "--- Patched transformers per-layer attribute access ---"
+
+                /tmp/_vllm_patched serve {{ model_name }} \
                   --port 8000 \
                   --trust-remote-code \
-                  --tensor-parallel-size {{ prefill_tp }} \
+{% if 'llm-d' in image %}                  --disable-uvicorn-access-log \
+{% else %}{% if disable_log_requests %}                  --disable-log-requests \
+{% endif %}{% endif %}                  --tensor-parallel-size {{ prefill_tp }} \
 {% if lws_size | default(1) > 1 %}                  --nnodes {{ lws_size }} \
                   --node-rank ${LWS_WORKER_INDEX:-0} \
                   --master-addr ${LWS_LEADER_ADDRESS} \

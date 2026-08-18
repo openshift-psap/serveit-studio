@@ -99,7 +99,7 @@ function setLatencyPercentile(pctl) {
 }
 
 // Advanced vLLM settings
-var advValueFields = ['max-model-len','gpu-memory-utilization','max-num-seqs','max-num-batched-tokens','dtype','kv-cache-dtype','pipeline-parallel-size','block-size','tool-call-parser','reasoning-parser','chat-template-content-format','dbo-prefill-token-threshold','dbo-decode-token-threshold','moe-backend','all2all-backend','headroom','memory-reserve-pct','model-loader-extra-config','cpu-offload-gb','weight-cpu-offload-gb','disk-offload-kv','http-timeout-keep-alive','prefix-cache-retention','ssm-conv-state-layout'];
+var advValueFields = ['max-model-len','gpu-memory-utilization','max-num-seqs','max-num-batched-tokens','dtype','kv-cache-dtype','pipeline-parallel-size','block-size','tool-call-parser','reasoning-parser','chat-template-content-format','dbo-prefill-token-threshold','dbo-decode-token-threshold','moe-backend','all2all-backend','headroom','memory-reserve-pct','model-loader-extra-config','cpu-offload-gb','weight-cpu-offload-gb','disk-offload-kv','http-timeout-keep-alive','prefix-cache-retention','ssm-conv-state-layout','num-speculative-tokens'];
 var advToggleFields = ['enable-prefix-caching','disable-custom-all-reduce','enable-auto-tool-choice','enable-expert-parallel','enable-dbo','enable-eplb','trust-remote-code','disable-log-requests','vllm-debug-logs','nccl-debug-logs','enable-bidirectional-kv'];
 
 function updateAdvVllm() {

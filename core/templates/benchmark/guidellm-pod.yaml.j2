@@ -18,11 +18,20 @@ spec:
         app: serveit-workload
     spec:
       serviceAccountName: llm-d-modelserver
+      securityContext:
+        fsGroup: 0
+        seLinuxOptions:
+          type: spc_t
       containers:
       - name: guidellm
         image: {{ image }}
         imagePullPolicy: IfNotPresent
-        command: ["sleep", "infinity"]
+        command: ["/bin/bash", "-c"]
+        args:
+        - |
+          mkdir -p /mnt/storage/tmp /mnt/storage/prefix-cache-datasets /mnt/storage/.cache 2>/dev/null
+          chmod -R a+rwX /mnt/storage/tmp /mnt/storage/prefix-cache-datasets /mnt/storage/.cache 2>/dev/null || true
+          exec sleep infinity
         env:
         - name: TMPDIR
           value: "/mnt/storage/tmp"

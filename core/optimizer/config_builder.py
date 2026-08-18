@@ -572,6 +572,7 @@ class ConfigBuilderMixin:
             'http_timeout_keep_alive': 'http_timeout_keep_alive',
             'prefix_cache_retention': 'prefix_cache_retention',
             'ssm_conv_state_layout': 'ssm_conv_state_layout',
+            'num_speculative_tokens': 'speculative_num_tokens',
         }
         for key, attr in val_fields.items():
             setting = adv.get(key)
@@ -582,7 +583,8 @@ class ConfigBuilderMixin:
             elif setting.get('mode') == 'custom' and setting.get('value') is not None:
                 val = setting['value']
                 if attr in ('max_model_len', 'max_num_seqs', 'max_num_batched_tokens', 'pipeline_parallel_size', 'block_size',
-                            'cpu_offload_gb', 'weight_cpu_offload_gb', 'http_timeout_keep_alive', 'prefix_cache_retention'):
+                            'cpu_offload_gb', 'weight_cpu_offload_gb', 'http_timeout_keep_alive', 'prefix_cache_retention',
+                            'speculative_num_tokens'):
                     val = int(val)
                 elif attr == 'gpu_memory_utilization':
                     val = float(val)
@@ -653,6 +655,7 @@ class ConfigBuilderMixin:
             '--all2all-backend': ('all2all_backend', str),
             '--dbo-prefill-token-threshold': ('dbo_prefill_token_threshold', int),
             '--dbo-decode-token-threshold': ('dbo_decode_token_threshold', int),
+            '--speculative-config.num_speculative_tokens': ('speculative_num_tokens', int),
         }
         known_toggles = {
             '--enable-prefix-caching': ('enable_prefix_caching', True),
