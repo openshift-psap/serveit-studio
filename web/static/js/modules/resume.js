@@ -14,7 +14,7 @@ function loadResumeRuns() {
 
             let html = '<table class="resume-table"><thead><tr>';
             html += '<th>ID</th><th>Date</th><th>Description</th><th>Priority</th><th>Model</th>';
-            html += '<th>Workload</th><th>GPUs</th><th>Status</th><th>Progress</th><th></th><th></th>';
+            html += '<th>Workload</th><th>GPUs</th><th>Status</th><th>Progress</th><th>Actions</th>';
             html += '</tr></thead><tbody>';
 
             runs.forEach(run => {
@@ -106,16 +106,16 @@ function loadResumeRuns() {
                 html += `<td style="text-align: center; font-weight: 600;">${gpus}</td>`;
                 html += `<td><span class="resume-status ${statusClass}">${run.status || 'unknown'}</span></td>`;
                 html += `<td style="white-space: nowrap;" title="${completedSteps.map(s => stepNames[s] || s).join(', ')}">${progressLabel}</td>`;
-                html += `<td>`;
+                html += `<td style="white-space: nowrap;">`;
                 if (canResume) {
-                    html += `<button class="resume-btn" data-run-id="${run.id}" data-run-name="${run.run_name || ''}">Resume</button>`;
+                    html += `<button class="resume-btn" data-run-id="${run.id}" data-run-name="${run.run_name || ''}" title="Resume from last completed test">▶ Resume</button> `;
                 } else if (run.status === 'completed') {
-                    html += `<span style="color: #059669; font-weight: 600; font-size: 0.85em;">Done</span>`;
-                } else {
-                    html += `<span style="color: #9ca3af; font-size: 0.85em;">No tests</span>`;
+                    html += `<span style="color: #059669; font-weight: 600; font-size: 0.85em;">✓ Done</span> `;
                 }
+                html += `<button class="restart-run-btn" data-run-id="${run.id}" data-run-name="${run.run_name || ''}" title="Restart run #${run.id} from beginning" style="font-size:0.85em;padding:2px 6px;background:none;border:1px solid #d1d5db;border-radius:4px;cursor:pointer;">🔄</button> `;
+                html += `<button class="recreate-storage-btn" data-run-id="${run.id}" title="Recreate PVCs and download model" style="font-size:0.8em;padding:2px 8px;background:#f0f9ff;color:#0284c7;border:1px solid #bae6fd;border-radius:4px;cursor:pointer;">💾 Storage</button> `;
+                html += `<button class="delete-run-btn" data-run-id="${run.id}" title="Delete run #${run.id}" style="font-size:0.85em;padding:2px 6px;background:none;border:1px solid #fecaca;border-radius:4px;cursor:pointer;color:#dc2626;">🗑</button>`;
                 html += `</td>`;
-                html += `<td style="white-space: nowrap;"><button class="recreate-storage-btn" data-run-id="${run.id}" title="Recreate PVCs and download model for run #${run.id}" style="font-size:0.8em;padding:3px 8px;background:#0ea5e9;color:white;border:none;border-radius:4px;cursor:pointer;">💾 Regenerate Storage</button> <button class="restart-run-btn" data-run-id="${run.id}" data-run-name="${run.run_name || ''}" title="Restart run #${run.id} from beginning">🔄</button> <button class="delete-run-btn" data-run-id="${run.id}" title="Delete run #${run.id}">🗑</button></td>`;
                 html += '</tr>';
             });
 

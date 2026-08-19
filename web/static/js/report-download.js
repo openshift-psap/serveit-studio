@@ -383,6 +383,7 @@ function buildTPSection(rec, charts) {
 
 // ── Configurations Tab ──────────────────────────────────────────────────────
 function buildCfgSection(runId, data, charts, allRes, hasPD) {
+    if (!allRes || !allRes.length) return '';
     let s = '';
     s += '<div class="grid2"><div class="chart-box"><h3>Throughput vs Latency</h3><div id="p2" style="height:430px"></div></div>';
     s += '<div class="chart-box"><h3>GPU Efficiency</h3><div id="p3" style="height:430px"></div></div></div>';

@@ -788,6 +788,7 @@ function _renderChartsImpl(data, runId, content) {
 
     // Flush configurations (PD charts + pareto table + all results)
     secCfg += html; html = '';
+    if (!coreResults.length) secCfg = '';
 
     // ============================================================
     // USER DEFINED TEST SETTINGS tab — run-level configuration
@@ -1217,6 +1218,8 @@ function _renderChartsImpl(data, runId, content) {
 
     // Flush comparison (Step 8)
     secCmp = html; html = '';
+    var hasCmpData = coreResults.some(r => r.architecture === 'PD' || r.architecture === 'EP') && coreResults.some(r => r.architecture === 'AGGREGATED');
+    if (!hasCmpData) secCmp = '';
 
     // ============================================================
     // STEP 9: Latency-Bounded Throughput Search

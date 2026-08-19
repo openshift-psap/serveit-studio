@@ -25,6 +25,9 @@ jobs:
       - uses: actions/setup-python@v7
         with:
           python-version: "3.11"
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
       - name: Create state directory
         run: sudo mkdir -p /mnt/serveit-state && sudo chmod 777 /mnt/serveit-state
       - name: Install dependencies
