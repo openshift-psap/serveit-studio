@@ -164,6 +164,7 @@ class TestConfig:
     # Speculative decoding
     speculative_method: Optional[str] = None  # 'mtp', 'draft', None
     speculative_num_tokens: Optional[int] = None
+    speculative_model: Optional[str] = None  # MTP assistant model (e.g., google/gemma-4-26B-A4B-it-assistant)
 
     # Model-specific flags
     reasoning_parser: Optional[str] = None

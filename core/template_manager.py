@@ -5,6 +5,7 @@ Renders Jinja2 templates for Kubernetes deployments based on test configurations
 Generates YAML manifests for Aggregated, PD, and EP architectures.
 """
 
+import json
 import logging
 from pathlib import Path
 from typing import Dict, List, Optional
@@ -174,6 +175,17 @@ class TemplateManager:
         vars_dict['moe_dp_chunk_size'] = getattr(config, 'moe_dp_chunk_size', None)
         vars_dict['nvshmem_symmetric_size'] = getattr(config, 'nvshmem_symmetric_size', None)
         vars_dict['num_redundant_experts'] = getattr(config, 'num_redundant_experts', None)
+
+        # Build speculative config JSON for --speculative-config flag
+        # Example: Gemma 4 MTP uses a separate assistant model:
+        #   speculative_method='mtp', speculative_num_tokens=1,
+        #   speculative_model='google/gemma-4-26B-A4B-it-assistant'
+        spec = {}
+        if config.speculative_num_tokens:
+            spec['method'] = config.speculative_method or 'mtp'
+            spec['model'] = getattr(config, 'speculative_model', None) or config.model_name
+            spec['num_speculative_tokens'] = config.speculative_num_tokens
+        vars_dict['speculative_config_json'] = json.dumps(spec) if spec else None
 
         return vars_dict
 

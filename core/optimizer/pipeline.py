@@ -1844,6 +1844,18 @@ spec:
                         self.log(f"  NVFP4 Marlin filter: intermediate={inter}, moe_intermediate={moe_inter} — "
                                  f"valid TP values: {tp_options}", 'info')
 
+            # MoE Triton alignment: sharded moe_intermediate_size must be divisible by 16
+            # for vectorized memory access in Triton MoE kernels. Applies to all MoE models
+            # regardless of quantization (FP8-dynamic, NVFP4, bf16).
+            if self._is_moe:
+                moe_inter = self._model_config.get('moe_intermediate_size', 0)
+                if moe_inter > 0:
+                    before = len(tp_options)
+                    tp_options = [tp for tp in tp_options if (moe_inter // tp) % 16 == 0]
+                    if len(tp_options) < before:
+                        self.log(f"  MoE Triton alignment filter: moe_intermediate={moe_inter} — "
+                                 f"valid TP values: {tp_options} (sharded dim must be divisible by 16)", 'info')
+
         return tp_options or self.config.tp_options
 
     def _fp8_max_tp(self) -> int:

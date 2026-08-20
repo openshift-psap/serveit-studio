@@ -67,7 +67,7 @@ function _renderChartsImpl(data, runId, content) {
         h += '</div>';
         if (opts.vllm_tps != null) {
             h += '<div style="font-size:0.8em;color:#475569;margin-bottom:4px;">';
-            h += '<span>vLLM: <strong style="color:#3b82f6;">' + Math.round(opts.vllm_tps).toLocaleString() + ' tok/s</strong> <span style="font-size:0.85em;color:#94a3b8;">(computed)</span></span>';
+            h += '<span>vLLM: <strong style="color:#3b82f6;">' + Math.round(opts.vllm_tps).toLocaleString() + ' tok/s</strong> <span style="font-size:0.85em;color:#94a3b8;">(server total)</span></span>';
             h += '</div>';
         }
 
@@ -693,13 +693,14 @@ function _renderChartsImpl(data, runId, content) {
     });
     if (tokenResults.length) {
         var tkTableId = 'token-tput-table-' + runId;
-        html += '<div class="chart-card"><div class="chart-card-header">Token Throughput — vLLM (computed) vs guidellm (all tokens)</div>';
+        html += '<div class="chart-card"><div class="chart-card-header">Token Throughput — GPU Computed vs Server Total vs Client</div>';
         html += '<div style="padding:12px 20px 4px; color:#1e293b; font-size:0.93em; line-height:1.6;">' +
-            '<strong>Blue bar (vLLM):</strong> Tokens that required actual GPU compute — prompt tokens that were <em>not</em> served from prefix cache, plus generated output tokens. Measured server-side via Prometheus (<code>vllm:prompt_tokens</code> + <code>vllm:generation_tokens</code>). Cached/transferred tokens are excluded.<br>' +
-            '<strong>Gold bar (guidellm):</strong> All tokens in every request — the full prompt length (including tokens served from cache) plus output tokens. Measured client-side by guidellm (<code>prompt_tokens_mean &times; throughput + output_tokens_mean &times; throughput</code>).<br>' +
-            '<strong>The gap between the bars reflects prefix cache efficiency.</strong> With a high cache hit rate, most prompt tokens are served from cache without GPU compute, so the vLLM bar is much smaller than the guidellm bar. If there were no caching, the bars would be nearly equal.' +
+            '<strong>Blue bar (GPU computed):</strong> Tokens that required actual GPU compute — prompt tokens that were <em>not</em> served from prefix cache, plus generated output tokens. Calculated as: <code>prompt_tps &times; (1 - cache_hit_rate) + generation_tps</code>.<br>' +
+            '<strong>Light blue bar (server total):</strong> All tokens processed by vLLM server-side, including cached prefix tokens. Measured via Prometheus (<code>vllm:prompt_tokens + vllm:generation_tokens</code>).<br>' +
+            '<strong>Gold bar (client):</strong> All tokens measured client-side by guidellm (<code>prompt_tokens_mean &times; throughput + output_tokens_mean &times; throughput</code>).<br>' +
+            '<strong>The gap between blue and light blue reflects prefix cache efficiency.</strong> The gap between light blue and gold reflects measurement differences (network overhead, timing windows).' +
             '</div>';
-        html += '<div class="chart-card-body"><div id="chart-token-tput' + cid('') + '" style="height:400px;margin-bottom:16px;"></div></div></div>';
+        html += '<div class="chart-card-body"><div id="chart-token-tput' + cid('') + '" style="height:500px;margin-bottom:16px;"></div></div></div>';
 
         html += '<div class="chart-card"><div class="chart-card-header">Throughput &amp; Utilization Details</div>';
         html += '<div class="chart-card-body" style="padding:0;">';
@@ -2566,6 +2567,8 @@ function _renderChartsImpl(data, runId, content) {
 
     // --- Plotly chart config (must be before EPP chart rendering) ---
     const plotlyLayout = { margin: { t: 10, b: 40, l: 50, r: 20 }, height: 430, paper_bgcolor: 'transparent', plot_bgcolor: 'transparent', font: { family: 'Inter, sans-serif' } };
+    // Safe Plotly wrapper — skips if the DOM element doesn't exist (hidden tab)
+    function safePlot(id, data, layout, config) { var el = document.getElementById(id); if (el) Plotly.newPlot(id, data, layout, config); }
     const plotlyConfig = { responsive: true, displayModeBar: true, modeBarButtonsToRemove: ['select2d', 'lasso2d', 'autoScale2d'], toImageButtonOptions: { format: 'png', height: 600, width: 1200, scale: 2 } };
 
     // Render EPP tuning charts now (before subtabs-ready hides non-active panes)
@@ -2613,7 +2616,7 @@ function _renderChartsImpl(data, runId, content) {
             });
         });
         const paretoXvals = [...new Set(charts.pareto.traces.filter(t => t.yaxis !== 'y2').flatMap(t => t.x))].sort((a, b) => a - b);
-        Plotly.newPlot(cid('chart-pareto'), traces, {
+        safePlot(cid('chart-pareto'), traces, {
             ...plotlyLayout, margin: { ...plotlyLayout.margin, r: 60, t: 30 },
             barmode: 'group',
             xaxis: { title: 'Total GPUs (= TP)', tickvals: paretoXvals },
@@ -2641,7 +2644,7 @@ function _renderChartsImpl(data, runId, content) {
             marker: { size: (t.sizes || []).map(s => 8 + (s / maxSize) * 22), color: t.color, opacity: 0.7, line: { width: 1, color: 'white' } },
             hovertemplate: '<b>%{text}</b><extra></extra>'
         }));
-        Plotly.newPlot(cid('chart-scatter'), traces, { ...plotlyLayout, xaxis: { title: 'TTFT P90 (ms) - lower is better' }, yaxis: { title: 'Throughput Mean (req/s) - higher is better' }, showlegend: true }, plotlyConfig);
+        safePlot(cid('chart-scatter'), traces, { ...plotlyLayout, xaxis: { title: 'TTFT P90 (ms) - lower is better' }, yaxis: { title: 'Throughput Mean (req/s) - higher is better' }, showlegend: true }, plotlyConfig);
     }
 
     // Efficiency bar
@@ -2650,7 +2653,7 @@ function _renderChartsImpl(data, runId, content) {
         var effValues = charts.efficiency.values;
         var effColors = charts.efficiency.colors;
         if (effConfigs.length) {
-            Plotly.newPlot(cid('chart-efficiency'), [{
+            safePlot(cid('chart-efficiency'), [{
                 x: effConfigs, y: effValues,
                 type: 'bar', marker: { color: effColors },
                 text: effValues.map(v => v != null ? v.toFixed(3) : ''),
@@ -2666,7 +2669,7 @@ function _renderChartsImpl(data, runId, content) {
         var puConfigs = charts.per_user_efficiency.configs;
         var puValues = charts.per_user_efficiency.values;
         var puColors = charts.per_user_efficiency.colors;
-        Plotly.newPlot(cid('chart-per-user-efficiency'), [{
+        safePlot(cid('chart-per-user-efficiency'), [{
             x: puConfigs, y: puValues,
             type: 'bar', marker: { color: puColors },
             text: puValues.map(v => v != null ? v.toFixed(1) : ''),
@@ -2687,30 +2690,31 @@ function _renderChartsImpl(data, runId, content) {
         });
         if (tkRes.length) {
             var tkLabels = tkRes.map(function(r) { return r.config_name; });
-            var tkPrompt = [], tkGen = [], tkTotal = [], tkGuidellm = [];
+            var tkComputed = [], tkServer = [], tkGuidellmTotal = [];
             tkRes.forEach(function(r) {
                 var m = r.metrics_json ? (typeof r.metrics_json === 'string' ? JSON.parse(r.metrics_json) : r.metrics_json) : {};
                 var pm = m.prometheus_metrics || {};
                 var pAvg = (pm.vllm_prompt_tokens_rate || {}).avg || 0;
                 var gAvg = (pm.vllm_generation_tokens_rate || {}).avg || 0;
-                tkPrompt.push(Math.round(pAvg));
-                tkGen.push(Math.round(gAvg));
-                tkTotal.push(Math.round(pAvg + gAvg));
-                tkGuidellm.push(Math.round(m.output_tps_mean || r.output_tps_mean || 0));
-            });
-            // guidellm total = prompt_tokens_mean * throughput + output_tokens_mean * throughput
-            var tkGuidellmTotal = [];
-            tkRes.forEach(function(r) {
-                var m = r.metrics_json ? (typeof r.metrics_json === 'string' ? JSON.parse(r.metrics_json) : r.metrics_json) : {};
+                var serverTotal = Math.round(pAvg + gAvg);
+                tkServer.push(serverTotal);
+                // Compute truly computed tok/s: subtract cached prompt tokens
+                var cacheHits = (pm.vllm_prefix_cache_hits_rate || {}).avg || 0;
+                var cacheQueries = (pm.vllm_prefix_cache_queries_rate || {}).avg || 0;
+                var cacheHitRate = cacheQueries > 0 ? cacheHits / cacheQueries : 0;
+                var computedPrompt = Math.round(pAvg * (1 - cacheHitRate));
+                tkComputed.push(computedPrompt + Math.round(gAvg));
+                // guidellm total = prompt_tokens_mean * throughput + output_tokens_mean * throughput
                 var tput = m.throughput_mean || r.throughput_mean || 0;
                 var pTps = (m.prompt_tokens_mean || 0) * tput;
                 var gTps = (m.output_tokens_mean || 0) * tput;
                 tkGuidellmTotal.push(Math.round(pTps + gTps));
             });
-            Plotly.newPlot(cid('chart-token-tput'), [
-                { x: tkLabels, y: tkTotal, name: 'vLLM — computed tok/s', type: 'bar', marker: { color: '#3b82f6' }, text: tkTotal.map(function(v) { return v.toLocaleString(); }), textposition: 'outside', textfont: { size: 11, color: '#1e293b' } },
-                { x: tkLabels, y: tkGuidellmTotal, name: 'guidellm — all tok/s (incl. cached)', type: 'bar', marker: { color: '#f59e0b' }, text: tkGuidellmTotal.map(function(v) { return v.toLocaleString(); }), textposition: 'outside', textfont: { size: 11, color: '#1e293b' } }
-            ], { ...plotlyLayout, height: 400, barmode: 'group', xaxis: { tickangle: -35 }, yaxis: { title: 'Total Tokens/s (Prompt + Generation)' }, showlegend: true, legend: { x: 0, y: 1.15, orientation: 'h' } }, plotlyConfig);
+            safePlot(cid('chart-token-tput'), [
+                { x: tkLabels, y: tkComputed, name: 'GPU computed', type: 'bar', marker: { color: '#3b82f6' }, text: tkComputed.map(function(v) { return v.toLocaleString(); }), textposition: 'outside', textfont: { size: 10, color: '#1e293b' } },
+                { x: tkLabels, y: tkServer, name: 'Server total (incl. cached)', type: 'bar', marker: { color: '#93c5fd' }, text: tkServer.map(function(v) { return v.toLocaleString(); }), textposition: 'outside', textfont: { size: 10, color: '#1e293b' } },
+                { x: tkLabels, y: tkGuidellmTotal, name: 'Client (guidellm)', type: 'bar', marker: { color: '#f59e0b' }, text: tkGuidellmTotal.map(function(v) { return v.toLocaleString(); }), textposition: 'outside', textfont: { size: 10, color: '#1e293b' } }
+            ], { ...plotlyLayout, height: 530, margin: { t: 60, b: 140, l: 60, r: 20 }, barmode: 'group', xaxis: { tickangle: -35 }, yaxis: { title: 'Total Tokens/s (Prompt + Generation)' }, showlegend: true, legend: { x: 0, y: 1.15, orientation: 'h' } }, plotlyConfig);
         }
     }
 
@@ -2839,7 +2843,7 @@ function _renderChartsImpl(data, runId, content) {
                 modeBarButtonsToRemove: ['select2d', 'lasso2d', 'autoScale2d'],
                 toImageButtonOptions: { format: 'png', height: 1200, width: 1600, scale: 2 }
             };
-            Plotly.newPlot(cid('chart-pareto-frontier'), traces, {
+            safePlot(cid('chart-pareto-frontier'), traces, {
                 ...plotlyLayout, height: 850,
                 xaxis: { title: 'Interactivity (tok/s/user)', gridcolor: '#d1d5db', rangemode: 'tozero' },
                 yaxis: { title: 'Token Throughput per GPU (tok/s/GPU)', gridcolor: '#d1d5db', rangemode: 'tozero' },
@@ -2942,7 +2946,7 @@ function _renderChartsImpl(data, runId, content) {
                         });
                     }
 
-                    Plotly.newPlot(cid('chart-pareto-ttft'), ttftTraces, {
+                    safePlot(cid('chart-pareto-ttft'), ttftTraces, {
                         ...plotlyLayout, height: 850,
                         xaxis: { title: 'TTFT P90 (ms)', gridcolor: '#d1d5db', range: [0, xMax] },
                         yaxis: { title: 'Token Throughput per GPU (tok/s/GPU)', gridcolor: '#d1d5db', rangemode: 'tozero' },
@@ -3089,7 +3093,7 @@ function _renderChartsImpl(data, runId, content) {
             addSwLabels(swAggPareto, '#dc2626');
             addSwLabels(swPdPareto, '#2563eb');
 
-            Plotly.newPlot(cid('chart-pareto-sweep-interactivity'), swTraces, {
+            safePlot(cid('chart-pareto-sweep-interactivity'), swTraces, {
                 ...plotlyLayout, height: 850,
                 xaxis: { title: 'Interactivity (tok/s/user)', gridcolor: '#d1d5db' },
                 yaxis: { title: 'Token Throughput per GPU (tok/s/GPU)', gridcolor: '#d1d5db' },
@@ -3155,7 +3159,7 @@ function _renderChartsImpl(data, runId, content) {
                         bgcolor: 'rgba(255,255,255,0)', borderpad: 2,
                     });
                 });
-                Plotly.newPlot(cid('chart-pareto-sweep-ttft'), ttftTraces, {
+                safePlot(cid('chart-pareto-sweep-ttft'), ttftTraces, {
                     ...plotlyLayout, height: 600,
                     xaxis: { title: 'Concurrent Users', gridcolor: '#d1d5db', tickmode: 'array', tickvals: ttftConcs },
                     yaxis: { title: 'TTFT P90 (ms)', gridcolor: '#d1d5db', titlefont: { color: '#3b82f6' } },
@@ -3235,7 +3239,7 @@ function _renderChartsImpl(data, runId, content) {
                     });
                 });
                 var envXvals = concs.slice();
-                Plotly.newPlot(cid('chart-sweep-envelope'), envTraces, {
+                safePlot(cid('chart-sweep-envelope'), envTraces, {
                     ...plotlyLayout, height: 600,
                     xaxis: { title: 'Concurrent Users', gridcolor: '#d1d5db', tickmode: 'array', tickvals: envXvals },
                     yaxis: { title: 'Best Throughput per GPU (tok/s/GPU)', gridcolor: '#d1d5db' },
@@ -3289,7 +3293,7 @@ function _renderChartsImpl(data, runId, content) {
                     });
                 });
                 var olXvals = olConcs.slice();
-                Plotly.newPlot(cid('chart-sweep-overlaid'), olTraces, {
+                safePlot(cid('chart-sweep-overlaid'), olTraces, {
                     ...plotlyLayout, height: 700,
                     xaxis: { title: 'Concurrent Users', gridcolor: '#d1d5db', tickmode: 'array', tickvals: olXvals },
                     yaxis: { title: 'Throughput per GPU (tok/s/GPU)', gridcolor: '#d1d5db' },
@@ -3303,7 +3307,7 @@ function _renderChartsImpl(data, runId, content) {
     }
 
     // Architecture comparison — use subplots side by side instead of overlaying
-    if (charts.architecture.architectures.length) {
+    if (charts.architecture.architectures.length && document.getElementById(cid('chart-arch'))) {
         const arch = charts.architecture;
         const archLabels = arch.architectures;
         const ttftTrace = {
@@ -3324,7 +3328,7 @@ function _renderChartsImpl(data, runId, content) {
             text: arch.avg_throughput.map(v => v.toFixed(2) + ' req/s'), textposition: 'auto',
             name: 'Avg Throughput P90', xaxis: 'x2', yaxis: 'y2'
         };
-        Plotly.newPlot(cid('chart-arch'), [ttftTrace, bestTtftTrace, tputTrace], {
+        safePlot(cid('chart-arch'), [ttftTrace, bestTtftTrace, tputTrace], {
             ...plotlyLayout,
             margin: { t: 30, b: 50, l: 60, r: 60 },
             barmode: 'group',
@@ -3354,7 +3358,7 @@ function _renderChartsImpl(data, runId, content) {
                 { x: pctls, y: pctls.map(p => pp.throughput[p]), name: primaryArch + ' Throughput', type: 'bar', marker: { color: '#10b981' }, xaxis: 'x2', yaxis: 'y2' },
                 { x: pctls, y: pctls.map(p => ap.throughput[p]), name: 'Aggregated Throughput', type: 'bar', marker: { color: '#d1d5db' }, xaxis: 'x2', yaxis: 'y2' },
             ];
-            Plotly.newPlot(cid('chart-percentile-bars'), [...ttftTraces, ...tputTraces], {
+            safePlot(cid('chart-percentile-bars'), [...ttftTraces, ...tputTraces], {
                 ...plotlyLayout,
                 margin: { t: 30, b: 50, l: 60, r: 60 },
                 barmode: 'group',
@@ -3370,7 +3374,7 @@ function _renderChartsImpl(data, runId, content) {
     // TP Calibration charts (Step 2 decode, Step 3 prefill)
     // Render empty chart when no data so the card isn't blank
     if (rec && document.getElementById(cid('chart-tp-decode')) && !(rec.decode_tp_all && rec.decode_tp_all.length)) {
-        Plotly.newPlot(cid('chart-tp-decode'), [], {
+        safePlot(cid('chart-tp-decode'), [], {
             ...plotlyLayout, margin: { ...plotlyLayout.margin, r: 60 },
             xaxis: { title: 'TP Value' },
             yaxis: { title: 'Tokens/s/GPU — higher is better', side: 'left' },
@@ -3378,7 +3382,7 @@ function _renderChartsImpl(data, runId, content) {
         }, plotlyConfig);
     }
     if (rec && document.getElementById(cid('chart-tp-prefill')) && !(rec.prefill_tp_all && rec.prefill_tp_all.length)) {
-        Plotly.newPlot(cid('chart-tp-prefill'), [], {
+        safePlot(cid('chart-tp-prefill'), [], {
             ...plotlyLayout, margin: { ...plotlyLayout.margin, r: 60 },
             xaxis: { title: 'TP Value' },
             yaxis: { title: 'Tokens/s/GPU — higher is better', side: 'left' },
@@ -3405,7 +3409,7 @@ function _renderChartsImpl(data, runId, content) {
                 hovertemplate: '<b>%{x}</b><br>ITL P90: %{y:.2f} ms<extra></extra>',
             });
         }
-        Plotly.newPlot(cid('chart-tp-decode'), traces, {
+        safePlot(cid('chart-tp-decode'), traces, {
             ...plotlyLayout, margin: { ...plotlyLayout.margin, r: 60 },
             barmode: 'group', showlegend: true, legend: { x: 0, y: 1.15, orientation: 'h' },
             yaxis: { title: 'Tokens/s/GPU — higher is better', side: 'left', tickformat: '.2s' },
@@ -3433,7 +3437,7 @@ function _renderChartsImpl(data, runId, content) {
                 hovertemplate: '<b>%{x}</b><br>TTFT P90: %{y:.1f} ms<extra></extra>',
             });
         }
-        Plotly.newPlot(cid('chart-tp-prefill'), traces, {
+        safePlot(cid('chart-tp-prefill'), traces, {
             ...plotlyLayout, margin: { ...plotlyLayout.margin, r: 60 },
             barmode: 'group', showlegend: true, legend: { x: 0, y: 1.15, orientation: 'h' },
             yaxis: { title: 'Tokens/s/GPU — higher is better', side: 'left', tickformat: '.2s' },
@@ -3548,7 +3552,7 @@ function _renderChartsImpl(data, runId, content) {
                 });
             });
         }
-        Plotly.newPlot(cid('chart-agg-ttft-all'), traces, {
+        safePlot(cid('chart-agg-ttft-all'), traces, {
             ...plotlyLayout,
             height: hasAggItl ? 520 : 450,
             barmode: 'group',
@@ -3715,19 +3719,19 @@ function _renderChartsImpl(data, runId, content) {
         }
 
         // Chart 1: TTFT Percentiles (line chart)
-        Plotly.newPlot(cid('chart-vllm-ttft'), makePercentileLines(vllm.ttft, 'ms'),
+        safePlot(cid('chart-vllm-ttft'), makePercentileLines(vllm.ttft, 'ms'),
             { ...vllmLayout, xaxis: { tickangle: -35 }, yaxis: { title: 'TTFT (ms) — lower is better' } }, plotlyConfig);
 
         // Chart 2: ITL Percentiles (line chart)
-        Plotly.newPlot(cid('chart-vllm-itl'), makePercentileLines(vllm.itl, 'ms'),
+        safePlot(cid('chart-vllm-itl'), makePercentileLines(vllm.itl, 'ms'),
             { ...vllmLayout, xaxis: { tickangle: -35 }, yaxis: { title: 'ITL (ms) — lower is better' } }, plotlyConfig);
 
         // Chart 3: E2E Latency (line chart)
-        Plotly.newPlot(cid('chart-vllm-e2e'), makePercentileLines(vllm.e2e, 's'),
+        safePlot(cid('chart-vllm-e2e'), makePercentileLines(vllm.e2e, 's'),
             { ...vllmLayout, xaxis: { tickangle: -35 }, yaxis: { title: 'E2E Latency (s) — lower is better' } }, plotlyConfig);
 
         // Chart 4: Token Throughput (line chart)
-        Plotly.newPlot(cid('chart-vllm-tokens'), [
+        safePlot(cid('chart-vllm-tokens'), [
             { x: vllm.configs, y: vllm.token_rates.prompt, name: 'Prompt Tokens/s', mode: 'lines+markers',
               line: { color: '#6366f1', width: 2 }, marker: { size: 8 },
               hovertemplate: '<b>%{x}</b><br>Prompt: %{y:,.0f} tok/s<extra></extra>' },
@@ -3737,7 +3741,7 @@ function _renderChartsImpl(data, runId, content) {
         ], { ...vllmLayout, xaxis: { tickangle: -35 }, yaxis: { title: 'Tokens/second — higher is better' } }, plotlyConfig);
 
         // Chart 5: Request Queue & KV Cache (dual axis — lines)
-        Plotly.newPlot(cid('chart-vllm-queue'), [
+        safePlot(cid('chart-vllm-queue'), [
             { x: vllm.configs, y: vllm.request_state.running, name: 'Avg Running', mode: 'lines+markers',
               line: { color: '#3b82f6', width: 2 }, marker: { size: 8 },
               hovertemplate: '<b>%{x}</b><br>Running: %{y:.1f}<extra></extra>' },
@@ -3756,7 +3760,7 @@ function _renderChartsImpl(data, runId, content) {
         }, plotlyConfig);
 
         // Chart 6: Processing Time Breakdown (lines) + Preemptions
-        Plotly.newPlot(cid('chart-vllm-time'), [
+        safePlot(cid('chart-vllm-time'), [
             { x: vllm.configs, y: vllm.time_breakdown.prefill, name: 'Prefill Time', mode: 'lines+markers',
               line: { color: '#6366f1', width: 2 }, marker: { size: 8 },
               hovertemplate: '<b>%{x}</b><br>Prefill: %{y:.2f}<extra></extra>' },
@@ -3779,7 +3783,7 @@ function _renderChartsImpl(data, runId, content) {
 
         // Chart 7: Pod Network Throughput (lines)
         if (vllm.network && vllm.network.pod_tx.some(v => v > 0)) {
-            Plotly.newPlot(cid('chart-net-pod'), [
+            safePlot(cid('chart-net-pod'), [
                 { x: vllm.configs, y: vllm.network.pod_tx, name: 'TX (MB/s)', mode: 'lines+markers',
                   line: { color: '#3b82f6', width: 2 }, marker: { size: 8 },
                   hovertemplate: '<b>%{x}</b><br>TX: %{y:.2f} MB/s<extra></extra>' },
@@ -3812,7 +3816,7 @@ function _renderChartsImpl(data, runId, content) {
                     hovertemplate: '<b>%{x}</b><br>IB RX: %{y:.2f} GB/s<extra></extra>'
                 });
             }
-            Plotly.newPlot(cid('chart-net-ib'), nixlTraces,
+            safePlot(cid('chart-net-ib'), nixlTraces,
                 { ...vllmLayout, xaxis: { tickangle: -35 }, yaxis: { title: 'Throughput (GB/s)' } }, plotlyConfig);
         }
     }

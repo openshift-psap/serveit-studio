@@ -467,16 +467,43 @@ class MetricsAnalyzer:
                 summaries[short_name] = None
                 continue
 
-            # Collect all numeric values across all series
-            all_values = []
-            for series in result_data:
-                for _timestamp, value in series.get('values', []):
-                    try:
-                        v = float(value)
-                        if v != float('inf') and v != float('-inf') and v == v:  # skip inf/nan
-                            all_values.append(v)
-                    except (ValueError, TypeError):
-                        continue
+            # Rate metrics that should be summed across pods (not averaged)
+            sum_across_pods = short_name in (
+                'vllm_prompt_tokens_rate', 'vllm_generation_tokens_rate',
+                'vllm_ttft_sum_rate', 'vllm_ttft_count_rate',
+                'vllm_itl_sum_rate', 'vllm_itl_count_rate',
+                'vllm_e2e_sum_rate', 'vllm_e2e_count_rate',
+                'vllm_request_success', 'vllm_max_gen_tokens_rate',
+                'vllm_prefix_cache_hits_rate', 'vllm_prefix_cache_queries_rate',
+                'vllm_preemptions_rate',
+                'gw_request_count_rate', 'gw_request_duration_rate',
+                'gw_output_tokens_rate', 'gw_request_total_rate', 'gw_request_error_rate',
+            )
+
+            if sum_across_pods and len(result_data) > 1:
+                # Sum values across pods at each timestamp, then summarize
+                from collections import defaultdict
+                ts_sums = defaultdict(float)
+                for series in result_data:
+                    for timestamp, value in series.get('values', []):
+                        try:
+                            v = float(value)
+                            if v != float('inf') and v != float('-inf') and v == v:
+                                ts_sums[timestamp] += v
+                        except (ValueError, TypeError):
+                            continue
+                all_values = list(ts_sums.values()) if ts_sums else []
+            else:
+                # Single series or per-pod metrics: collect all values
+                all_values = []
+                for series in result_data:
+                    for _timestamp, value in series.get('values', []):
+                        try:
+                            v = float(value)
+                            if v != float('inf') and v != float('-inf') and v == v:
+                                all_values.append(v)
+                        except (ValueError, TypeError):
+                            continue
 
             if not all_values:
                 summaries[short_name] = None

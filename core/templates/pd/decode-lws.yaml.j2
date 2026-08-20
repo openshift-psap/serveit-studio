@@ -262,8 +262,7 @@ spec:
 {% endif %}{% if disable_custom_all_reduce %}                  --disable-custom-all-reduce \
 {% endif %}{% if dtype %}                  --dtype {{ dtype }} \
 {% endif %}{% if kv_cache_dtype %}                  --kv-cache-dtype {{ kv_cache_dtype }} \
-{% endif %}{% if speculative_method %}                  --speculative-config.method {{ speculative_method }} \
-                  --speculative-config.num_speculative_tokens {{ speculative_num_tokens | default(3) }} \
+{% endif %}{% if speculative_config_json %}                  --speculative-config '{{ speculative_config_json }}' \
 {% endif %}{% if enable_auto_tool_choice %}                  --enable-auto-tool-choice \
 {% endif %}{% if tool_call_parser %}                  --tool-call-parser {{ tool_call_parser }} \
 {% endif %}{% if reasoning_parser %}                  --reasoning-parser {{ reasoning_parser }} \

@@ -46,19 +46,15 @@ When this skill is invoked, start by explaining to the user what ServeIt Studio 
 
 ## Step 1: Ask the user
 
-Ask these questions **one at a time** — wait for the answer before asking the next one. Never combine multiple questions in a single message.
+Before doing anything, ask the user:
 
-**First, ask:** "Do you already have a running ServeIt Studio instance, or do we need to deploy one?"
+1. **Quick setup or step-by-step?**
+   - **Quick setup**: Auto-detect everything, deploy and configure. User only needs to pick the model at the end.
+   - **Step-by-step**: Ask for each choice (namespace, storage class, GPU limits, instance name, etc.)
 
-1. **I have a running instance** — ask for the URL, then skip to Step 3 (model selection)
-2. **Deploy a new one** — continue to the next question
+2. **Do they already have a running instance?** If yes, skip to Step 3 (model selection). They just need to provide the instance URL.
 
-**If deploying, ask:** "Quick setup or step-by-step?"
-
-1. **Quick setup** — auto-detect everything, deploy and configure. User only picks the model.
-2. **Step-by-step** — ask for each choice (namespace, storage class, GPU limits, instance name, etc.)
-
-**Then ask:** "Which deployment mode?"
+3. **Deployment mode** — explain the two options:
 
    - **Local mode (single instance)** — deploys ServeIt Studio directly as a standalone instance. Simplest setup — one command, no launcher overhead. Best for: single user, single cluster, quick testing.
      ```bash
@@ -80,59 +76,17 @@ Ask these questions **one at a time** — wait for the answer before asking the 
 
 ## Step 2: Deploy & Setup (skip if instance already exists)
 
-### Clone the repo
-
-If you don't already have the repo cloned locally, clone it first:
-
-```bash
-git clone https://github.com/openshift-psap/serveit-studio.git
-cd serveit-studio
-```
-
-All `deployment/deploy.py` commands below assume you are in the repo root.
-
 ### Local mode (single instance)
 
 Requires: `kubectl`/`oc` configured with cluster access.
 
-1. **Choose a storage class for the instance PVC.** This PVC stores the wizard UI's SQLite database, collected metrics, optimization logs, and test results. It does NOT store model weights — that is configured separately later in the optimization settings (Step 3f, Storage section), where the user also picks the model cache SC and optionally enables disk KV cache offloading. Make this distinction clear to the user when asking.
-
-**Investigate ALL storage classes** before presenting them. Do NOT just list SC names — actually check what each one is backed by so you can give the user accurate descriptions.
+1. **List storage classes** and pick one that has capacity on a Ready node. The instance PVC only needs RWO — any fast block or LVM storage works. Verify the SC has available capacity before deploying (same verification as launcher mode).
 
 ```bash
-# Get full SC details (provisioner, parameters, backing)
-kubectl get sc -o json | python3 -c "
-import json, sys
-data = json.load(sys.stdin)
-for sc in data['items']:
-    name = sc['metadata']['name']
-    prov = sc.get('provisioner', '')
-    params = sc.get('parameters', {})
-    pool = params.get('storagePool', '')
-    device_class = params.get('topolvm.io/device-class', '')
-    print(f'{name}: provisioner={prov}' + (f' pool={pool}' if pool else '') + (f' device-class={device_class}' if device_class else ''))
-"
+kubectl get sc --no-headers
+# Verify SC has capacity on ready nodes
+kubectl get pv --no-headers | grep <SC_NAME>
 
-# Check PVs to understand what backs each SC (especially local disk SCs)
-kubectl get pv --no-headers
-```
-
-Analyze the results to understand:
-- **Which SCs share the same physical backing** — if one SC's `storagePool` parameter references another SC's name (e.g., `hostpath-nvme` has `storagePool: local-nvme`), they use the same physical disks. In that case, **present them as a single option** and explain the relationship (e.g., "hostpath-nvme (dynamically provisions from local NVMe disks)"). Do NOT show both as separate options — that confuses the user.
-- Which SCs are dynamically provisioned vs static, and what size PVs they create
-- **Whether each SC's provisioner is actually running and functional** — check that the provisioner pods exist and are healthy. For example, an NFS SC is useless if the NFS server pod isn't running. A CSI driver SC won't work if the CSI pods are missing.
-- **Local disk support uses HostPath Provisioner (HPP) only** — ServeIt Studio's local disk feature (`local_disk_path`) requires an HPP-backed SC (provisioner `kubevirt.io.hostpath-provisioner`). Static local PV SCs (`kubernetes.io/no-provisioner`) are consumed by HPP as its backing pool — they should NOT be presented as a separate option. When you see a static local SC whose PVs are bound by HPP, merge it with the HPP SC into one option.
-
-```bash
-# Verify provisioners are running (check for provisioner pods across all namespaces)
-kubectl get pods -A --no-headers | grep -i 'provisioner\|csi\|nfs\|topolvm'
-```
-
-Mark any SC whose provisioner is not running as "⚠️ provisioner not running" when presenting to the user. Still show it in the list — do NOT hide it — but warn clearly so the user can make an informed choice.
-
-If the user picks an SC that has a broken provisioner and the PVC gets stuck Pending, explain what happened, clean up, and re-present ALL remaining SCs (not just a subset — always show the full list).
-
-```bash
 # Deploy directly
 python3 deployment/deploy.py --mode local -n serveit --storage-class <SC>
 
@@ -141,77 +95,17 @@ URL=https://$(kubectl get route -n serveit -o jsonpath='{.items[0].spec.host}')
 echo "Instance URL: $URL"
 ```
 
-2. **Create admin account** (default: `admin / serveit`):
+2. **Create admin account** — same as launcher mode (see below).
 
-```bash
-curl -sk -c /tmp/serveit-cookies.txt "$URL/setup" \
-  -d "username=admin&password=serveit&confirm_password=serveit" -L -o /dev/null
-```
-
-Tell the user their credentials so they can login to the UI later.
-
-3. **Scan the cluster** — this is mandatory for BOTH local and launcher modes. The scan detects GPUs, networking, storage, and installed infrastructure. Show the results to the user:
-
-```bash
-# Login first
-curl -sk -c /tmp/serveit-cookies.txt "$URL/login" \
-  -d "username=admin&password=serveit" -L -o /dev/null
-
-# Scan
-curl -sk -b /tmp/serveit-cookies.txt -X POST "$URL/api/scan" | python3 -c "
-import json, sys
-# IMPORTANT: The /api/scan response returns fields at the TOP LEVEL — not nested
-# under 'resources' or 'cluster_resources'. Do NOT wrap with data.get('resources', ...).
-data = json.load(sys.stdin)
-print(f'GPU Model:      {data.get(\"gpu_model\", \"unknown\")}')
-print(f'Total GPUs:     {data.get(\"total_gpus\", 0)}')
-print(f'GPU Nodes:      {data.get(\"gpu_node_count\", 0)}')
-print(f'GPU VRAM:       {round(data.get(\"gpu_memory_per_gpu_mb\", 0) / 1024, 1)} GB per GPU')
-print(f'Max GPUs/node:  {data.get(\"max_gpus_per_node\", 0)}')
-print(f'TP options:     {data.get(\"tp_options\", [])}')
-print(f'RDMA:           {\"yes\" if data.get(\"has_rdma\") else \"no\"}')
-print()
-print('GPU Nodes:')
-for n in data.get('nodes_detail', []):
-    if n.get('gpus', 0) > 0:
-        nics = ', '.join(f'{nic[\"count\"]}x {nic[\"type\"]}' for nic in n.get('nics', []))
-        print(f'  {n[\"name\"]}: {n[\"gpus\"]}x {n.get(\"gpu_model\",\"?\")} ({nics})')
-print()
-print('Available Networks:')
-for net in data.get('available_networks', []):
-    status = '✅' if net.get('available') else '❌'
-    print(f'  {status} {net[\"name\"]} ({net[\"id\"]})')
-"
-```
-
-Present the scan results to the user clearly — GPUs, nodes, RDMA capability, available networks, and any warnings.
-
-4. **Ask the user to choose the network type** — present ONLY the networks that the scan found as available. Explain what each one does and which is best for their setup:
-
-```
-Which network type for pod communication?
-1. DRA — GPU+NIC PCIe affinity via device classes (best RDMA performance)
-2. NAD — Multus secondary networks
-3. TCP — standard pod networking (no RDMA)
-... (only show what's available)
-```
-
-If DRA is available with a `gpu_nic_pair` device class, recommend it. If only TCP is available, note that multi-node inference performance will be limited.
-
-5. **Ask the user to choose model cache storage** — this is separate from the instance PVC. The model cache stores the actual model weights (can be 10-140GB+). Present all SCs again (same investigation as step 1) and explain the trade-offs for model storage specifically:
-   - Local NVMe (hostpath-nvme): fastest model loading (~2-3 GB/s), per-node copy
-   - NFS/shared: one copy shared across nodes, slower loading (20-40 min for large models)
-   - Block storage: RWO only, won't work for multi-node
-
-6. Continue to Step 3 (model selection).
+3. Skip to Step 3 (model selection) — no cluster registration or instance creation needed.
 
 ### Launcher mode (multi-tenant)
 
 Requires: `kubectl`/`oc` configured with cluster access.
 
-1. **Investigate ALL storage classes** before presenting them — same as local mode: get full SC details (`kubectl get sc -o json`), check PVs (`kubectl get pv`), understand which SCs share the same physical backing, then present ALL as numbered options with accurate descriptions. Do NOT guess from provisioner names alone.
-   - For the **launcher PVC** (small DB): any fast RWO SC works (LVMS, block storage, local disk).
-   - For the **instance PVC**: stores the wizard UI's SQLite database, collected metrics, optimization logs, and test results. All data persists across pod restarts. Any fast RWO SC works. **Must pass `storage_class` explicitly** when creating the instance, otherwise it falls back to the cluster default SC which may not schedule correctly. When presenting this choice to the user, explain what the PVC is for: "This volume stores the wizard UI's database, collected metrics, optimization logs, and test results."
+1. **List storage classes** and auto-select. **Never use S3-backed, object storage, or slow remote storage** — ServeIt needs fast local I/O for SQLite databases and large model weights.
+   - For the **launcher PVC** (small DB): any fast RWO SC works (LVMS, block storage, local disk). Avoid GPU-local disks (waste of NVMe for a small DB).
+   - For the **instance PVC** (small DB + config): same as launcher — any fast RWO SC. **Must pass `storage_class` explicitly** when creating the instance, otherwise it falls back to the cluster default SC which may not schedule correctly.
    - For the **model cache** (set later in config): pick `hostpath-nvme` or any local disk SC IF it covers ALL GPU nodes. For multi-node inference, every GPU node must have local storage available. If local disk doesn't cover all GPU nodes, fall back to an RWX SC (NFS/CephFS). Warn the user about slower model loading with shared storage.
 
 Before deploying, verify the chosen storage class actually has capacity and nodes that can use it:
@@ -537,54 +431,12 @@ After the user picks ISL/OSL, ask about variation:
 
 ### 3d. What matters most?
 
-Ask: **"What optimization mode do you want to run?"**
+Ask: **"What's more important for your use case?"**
 
-**Full optimization modes** — these sweep TP values, pod counts, and architectures to find the best config:
-
-1. **Response time** (`ttft`) — optimize for the shortest time to first token. Best for: chat, IDE, real-time apps where users wait for a response.
-2. **Throughput** (`throughput`) — optimize for maximum requests per second. Best for: batch processing, CI pipelines, high-volume APIs.
-3. **Full coverage** (`balanced`) — test for both latency and throughput across all architectures (Aggregated, PD, EP). Most tests, most complete picture. Best when you're not sure what matters most.
-
-**Architecture-specific modes** — restrict the search to one architecture only:
-
-4. **Aggregated only** (`aggregated_only`) — only test standard aggregated configs (all pods do both prefill and decode). Skips PD and EP.
-5. **PD only** (`pd_only`) — only test prefill/decode disaggregated configs. Skips aggregated and EP.
-6. **EP only** (`ep_only`) — only test expert parallel configs. Only for MoE models (Qwen3 MoE, DeepSeek V3/V4, Gemma 4, etc.).
-
-**Single test mode** — run one exact configuration you specify, no sweeps:
-
-7. **Single test** (`single_test`) — you specify the exact architecture, TP, and pod counts. Useful for re-testing a known config, validating a specific setup, or benchmarking a config from a previous run.
-
-If the user picks **Single test (7)**, ask these follow-up questions one at a time:
-
-**"Which architecture?"**
-   1. Aggregated — all pods do everything
-   2. PD — separate prefill and decode pods
-   3. EP — expert parallel (MoE models only)
-
-**For Aggregated or EP:**
-   - "How many GPUs per pod (TP)?" — e.g., 1, 2, 4, 8
-   - "How many replicas?" — e.g., 1, 2, 4
-
-**For PD:**
-   - "Prefill TP?" — GPUs per prefill pod (e.g., 4)
-   - "Decode TP?" — GPUs per decode pod (e.g., 8)
-   - "Prefill pods?" — number of prefill pods (e.g., 1, 2, 3)
-   - "Decode pods?" — number of decode pods (e.g., 1)
-
-   Example: PTP4 DTP8 with 3 prefill pods and 1 decode pod = `single_test_prefill_tp: 4, single_test_decode_tp: 8, single_test_prefill_pods: 3, single_test_decode_pods: 1`
-
-Set in config:
-- `goal: "single_test"`
-- `single_test_architecture: "aggregated" | "pd" | "ep"`
-- `single_test_tp: N` (for aggregated/EP)
-- `single_test_replicas: N` (for aggregated/EP)
-- `single_test_prefill_tp: N` (for PD)
-- `single_test_decode_tp: N` (for PD)
-- `single_test_prefill_pods: N` (for PD)
-- `single_test_decode_pods: N` (for PD)
-
-8. **Other** — describe your priority.
+1. **Response time** (`ttft`) — how fast does the first word appear after a user hits send? If your users are staring at their screen waiting for a response (chat, IDE, real-time apps), this is what matters. We'll optimize for the shortest wait time.
+2. **Throughput** (`throughput`) — how many requests can the system handle per second? If you care more about serving the most users possible and latency is secondary (batch processing, background pipelines, high-volume APIs), this is your priority.
+3. **Full coverage** (`balanced`) — not sure which matters more? We'll test for both and show you the best config for each — so you can compare and decide based on real data. Runs more tests but gives the most complete picture.
+4. **Other** — describe your priority.
 
 ### 3e. Do you expect prefix cache hits?
 
@@ -601,7 +453,7 @@ Ask: **"Do your requests share a common prefix (system prompt, instructions, con
     - General chat: **20-40%** (some repeat questions)
 
   - **Shared prefix mode** — All requests share the first N% of tokens (like a system prompt), but the rest is unique. The percentage is the fraction of the prompt that's shared across all requests.
-    - Coding assistant with shared repo/project context: **50-70%** (project context is ~half the total input)
+    - Coding assistant with system prompt: **50-70%** (system prompt is ~half the total input)
     - RAG with shared context document: **60-80%** (large shared context, small unique query)
     - Chat with short system prompt: **20-30%** (small system prompt, large user message)
     - Agentic with tool definitions: **60-80%** (tool schemas + instructions dominate the prompt)
@@ -618,35 +470,22 @@ For **agentic models** (tool-calling, function-calling, multi-step reasoning): t
 
 Ask: **"Do you want to customize any advanced settings, or use defaults?"**
 
-Show the defaults first, then present the FULL options menu exactly as written below. Do NOT abbreviate, summarize, or compress this list — always show every single option with its number. This is the main settings menu that the user will reference throughout configuration.
+List the defaults and all customizable options with numbers:
 
-```
-Defaults:
-- Test duration: 300s (5 min per test)
-- Search depth: top 2 configs per architecture
-- P/D search: smart (auto-calculated ratios)
-- Latency SLA: none
-- Calibrated load + concurrency sweep: yes (top 4 configs at 8 load levels)
-- Cache sweep: no
-- vLLM auto-tune: on
-- EPP preset: cache_optimized (when prefix cache enabled), balanced (otherwise)
-- Container images: latest GA
+1. **Use all defaults** — start with the settings listed below
+2. **Test duration** — how long each individual test runs (default: 300s / 5 min), or stop after a specific number of requests instead of time
+3. **Search depth** — how many GPU configurations to test (default: top 2 per architecture)
+4. **Latency SLA** — set a maximum acceptable response time (default: none)
+5. **Production load analysis** — re-test at realistic loads + sweep multiple user counts (default: on, top 4 configs at 8 user loads)
+6. **Cache hit sweep** — test different cache hit ratios to see impact (default: off)
+7. **vLLM auto-tune** — automatically optimize engine settings vs upstream defaults (default: on)
+8. **EPP routing** — how the gateway routes requests across pods (default: cache_optimized when prefix cache enabled, balanced otherwise)
+9. **Container images** — which vLLM and EPP versions to use (default: latest GA)
+10. **Network** — how pods communicate, RDMA options (default: auto-detected from cluster)
+11. **Storage** — where model weights are stored (default: auto-detected, prefers local NVMe)
+12. **Other** — describe what you want to change
 
-1. Use all defaults — start the optimization
-2. Test duration — change how long each test runs
-3. Search depth — how many GPU configurations to test
-4. Latency SLA — set a maximum acceptable response time
-5. Production load analysis — calibrated load + concurrency sweep settings
-6. Cache hit sweep — test different cache hit ratios
-7. vLLM auto-tune — engine settings
-8. EPP routing — request routing strategy
-9. Container images — vLLM and EPP versions
-10. Network — pod communication, RDMA options
-11. Storage — where model weights are stored
-12. Other
-```
-
-If the user picks a number, jump to that specific section. After handling that section, show the FULL menu again so they can pick another option or choose 1 to start. If they pick 1, use defaults:
+If the user picks a number, jump to that specific section. If they pick 1, use defaults:
 
 If the user says defaults, use:
 - Test duration: 300s
@@ -1097,73 +936,91 @@ curl -sk -b /tmp/serveit-cookies.txt -X POST "$URL/api/config" \
   }'
 ```
 
-**Goal-specific fields** — add these to the config JSON above depending on the `goal` value:
-
-For `goal: "aggregated_only"`, `"pd_only"`, or `"ep_only"` — no extra fields needed, just set the goal.
-
-For `goal: "single_test"` — add the single test fields:
+### Example: Gemma 4 26B on Fire-athena (8× H200, single node)
 
 ```json
-// Single test: Aggregated TP4 with 2 replicas (8 GPUs)
-{"goal": "single_test", "single_test_architecture": "aggregated", "single_test_tp": 4, "single_test_replicas": 2}
-
-// Single test: PD with 3 prefill pods × TP4 + 1 decode pod × TP8 (20 GPUs)
-{"goal": "single_test", "single_test_architecture": "pd", "single_test_prefill_tp": 4, "single_test_decode_tp": 8, "single_test_prefill_pods": 3, "single_test_decode_pods": 1}
-
-// Single test: EP TP2 with 4 replicas (8 GPUs, MoE only)
-{"goal": "single_test", "single_test_architecture": "ep", "single_test_tp": 2, "single_test_replicas": 4}
+{
+    "model": "google/gemma-4-26B-A4B",
+    "isl": 15000, "osl": 1000, "isl_stdev": 5000, "osl_stdev": 500,
+    "isl_min": 10000, "isl_max": 20000, "osl_min": 50, "osl_max": 2000,
+    "first_prompt_tokens": 5000, "first_prompt_tokens_stdev": 0,
+    "first_prompt_tokens_min": 5000, "first_prompt_tokens_max": 5000,
+    "prefix_tokens": 5000, "prefix_count": 1,
+    "prefix_cache_hit_pct": 40, "prefix_cache_mode": "identical",
+    "users": 30, "turns": 1,
+    "stop_mode": "duration", "duration": 900,
+    "goal": "full_coverage",
+    "max_gpus": 8,
+    "allow_asymmetric_tp": true,
+    "storage_class": "lvms-vg-gpu-node",
+    "per_node_storage": false,
+    "advanced_vllm_custom_enabled": true,
+    "advanced_vllm": {
+        "max_model_len": {"mode": "custom", "value": 262144},
+        "block_size": {"mode": "custom", "value": 32},
+        "kv_cache_dtype": {"mode": "custom", "value": "fp8"},
+        "gpu_memory_utilization": {"mode": "auto"},
+        "enable_expert_parallel": {"mode": "auto"},
+        "enable_prefix_caching": {"mode": "on"},
+        "enable_chunked_prefill": {"mode": "on"},
+        "enable_auto_tool_choice": {"mode": "on"},
+        "tool_call_parser": {"mode": "custom", "value": "gemma4"},
+        "reasoning_parser": {"mode": "off"},
+        "cpu_offload_gb": {"mode": "off"},
+        "enable_bidirectional_kv": {"mode": "off"},
+        "prefix_cache_retention": {"mode": "off"},
+        "ssm_conv_state_layout": {"mode": "off"},
+        "http_timeout_keep_alive": {"mode": "custom", "value": 120},
+        "model_loader_extra_config": {"mode": "off"},
+        "num_speculative_tokens": {"mode": "off"}
+    },
+    "epp_custom_enabled": true, "epp_preset": "custom",
+    "epp_config": {
+        "preset": "custom",
+        "prefix_cache": {"enabled": true, "weight": 2},
+        "kv_cache": {"enabled": false, "weight": 0},
+        "queue": {"enabled": false, "weight": 0},
+        "slo": {"enabled": false, "weight": 0},
+        "active_request": {"enabled": true, "weight": 1},
+        "token_load": {"enabled": true, "weight": 1},
+        "no_hit_lru": {"enabled": false, "weight": 0},
+        "session_aware": {"enabled": false, "weight": 0},
+        "precise_prefix_cache": {"enabled": false, "weight": 0},
+        "prefixCacheAffinityEnabled": true,
+        "peakPrefillThroughput": 40000,
+        "lruCapacityPerServer": 4000000,
+        "maxPrefixBlocksToMatch": 256,
+        "nonCachedTokens": 16,
+        "prefixCacheAutoTune": false,
+        "usePrefixBasedDecider": false
+    },
+    "epp_benchmark": false,
+    "image": "ghcr.io/llm-d/llm-d-cuda:v0.8.1",
+    "scheduler_image": "ghcr.io/llm-d/llm-d-router-endpoint-picker:v0.9.0",
+    "sidecar_image": "ghcr.io/llm-d/llm-d-router-disagg-sidecar:v0.9.0",
+    "network_type": "dra", "selected_dra_classes": ["gpu.nvidia.com"],
+    "tp_pair_top_n": 2, "pd_search_mode": "smart",
+    "latency_constraint_enabled": false,
+    "calibrated_load_enabled": true,
+    "inferencex_sweep_enabled": true,
+    "concurrency_sweep_count": 5,
+    "concurrency_sweep_all_configs": true,
+    "concurrency_sweep_max_configs": 0,
+    "concurrency_sweep_use_epp_tuned": false,
+    "cache_sweep_enabled": true,
+    "cache_sweep_levels": [0, 20, 40, 60, 80],
+    "cache_sweep_all_configs": true,
+    "workload_mode": "synthetic", "rate_type": "concurrent",
+    "gateway_class": "istio"
+}
 ```
 
-**Quick reference — complete config examples by goal:**
-
-```json
-// Balanced (default) — full sweep across all architectures
-{"goal": "balanced", "model": "RedHatAI/Qwen2.5-Coder-32B-Instruct-FP8-dynamic", "isl": 2000, "osl": 2000, "users": 50, "max_gpus": 8, "tp_pair_top_n": 2, "calibrated_load_enabled": true, "inferencex_sweep_enabled": true}
-
-// TTFT — optimize for latency only
-{"goal": "ttft", "model": "meta-llama/Llama-3.1-8B-Instruct", "isl": 4000, "osl": 500, "users": 20, "max_gpus": 8}
-
-// Throughput — optimize for req/s
-{"goal": "throughput", "model": "RedHatAI/Meta-Llama-3.1-70B-Instruct-FP8-dynamic", "isl": 2000, "osl": 2000, "users": 100, "max_gpus": 16}
-
-// Aggregated only — skip PD/EP
-{"goal": "aggregated_only", "model": "Qwen/Qwen3-32B", "isl": 2000, "osl": 2000, "users": 50, "max_gpus": 8}
-
-// PD only — skip aggregated/EP
-{"goal": "pd_only", "model": "RedHatAI/Meta-Llama-3.1-70B-Instruct-FP8-dynamic", "isl": 2000, "osl": 2000, "users": 100, "max_gpus": 16}
-
-// EP only — MoE models only
-{"goal": "ep_only", "model": "RedHatAI/Qwen3-Coder-480B-A35B-Instruct-FP8", "isl": 2000, "osl": 2000, "users": 50, "max_gpus": 16}
-
-// Single test — PD with PTP4/DTP8, 2P+1D
-{"goal": "single_test", "single_test_architecture": "pd", "single_test_prefill_tp": 4, "single_test_decode_tp": 8, "single_test_prefill_pods": 2, "single_test_decode_pods": 1, "model": "RedHatAI/Meta-Llama-3.1-70B-Instruct-FP8-dynamic", "isl": 2000, "osl": 2000, "users": 50, "max_gpus": 16}
-
-// Agentic workload — Nemotron-3-Ultra-550B (replicates llm-d guide)
-// Multi-turn with 160K dynamic system prompt, tool call delays, CPU KV offload
-{"goal": "single_test", "single_test_architecture": "pd",
- "single_test_prefill_tp": 8, "single_test_decode_tp": 8,
- "single_test_prefill_pods": 3, "single_test_decode_pods": 1,
- "model": "RedHatAI/NVIDIA-Nemotron-3-Ultra-550B-A55B-FP8-block",
- "isl": 1500, "osl": 425, "isl_stdev": 1200, "osl_stdev": 825,
- "isl_min": 100, "isl_max": 10000, "osl_min": 50, "osl_max": 10000,
- "first_prompt_tokens": 160000, "first_prompt_tokens_stdev": 233600,
- "first_prompt_tokens_min": 10000, "first_prompt_tokens_max": 990000,
- "prefix_tokens": 3000, "prefix_count": 1,
- "users": 30, "turns": 540,
- "stop_mode": "requests", "max_requests": 100,
- "turn_delay": 15, "turn_delay_stdev": 55, "turn_delay_min": 1, "turn_delay_max": 100,
- "max_gpus": 32, "image": "vllm/vllm-openai:v0.26.0",
- "advanced_vllm": {
-   "max_model_len": {"mode": "custom", "value": 262144},
-   "block_size": {"mode": "default"},
-   "kv_cache_dtype": {"mode": "custom", "value": "fp8"},
-   "cpu_offload_gb": {"mode": "custom", "value": 200},
-   "enable_expert_parallel": {"mode": "on"},
-   "enable_bidirectional_kv": {"mode": "on"},
-   "prefix_cache_retention": {"mode": "custom", "value": 0},
-   "ssm_conv_state_layout": {"mode": "custom", "value": "DS"}
- }}
-```
+Key notes for Gemma 4:
+- **Image compatibility**: `ghcr.io/llm-d/llm-d-cuda:v0.8.1` (vLLM 0.1.dev) works with `google/gemma-4-26B-A4B` (bf16). The `v0.9.0-rc.2` image (vLLM 0.26.0) fails with weight shape mismatch on Gemma 4's heterogeneous layers. `RedHatAI/gemma-4-26B-A4B-it-FP8-Dynamic` requires testing on v0.8.1 or `vllm/vllm-openai:v0.27.1`.
+- **Transformers patch**: v0.9.0-rc.2 and v0.27.1 images include transformers 5.15 which raises `AmbiguousGlobalPerLayerAttributeError` on Gemma 4. The templates include a runtime patch (`spc_t` SELinux + sed on disk). Not needed for v0.8.1 (transformers 5.12.1).
+- **DRA on Fire-athena**: `composite-gpu-nic-pair` device class fails with `pci-0000-e9-00-0` NIC mapping error. Use `gpu.nvidia.com` (GPU-only, no NIC pairing) instead.
+- **SELinux on OpenShift**: Workload pod needs `spc_t` SELinux type and `fsGroup: 0` to access the PVC across pod restarts (MCS label mismatch). Template handles this automatically.
+- **`--disable-log-requests` vs `--disable-uvicorn-access-log`**: llm-d images use `--disable-uvicorn-access-log`, upstream vLLM uses `--disable-log-requests`. Template detects image and uses the correct flag.
 
 ### Verify configuration was saved
 
@@ -1207,12 +1064,11 @@ else:
 
 If any field doesn't match, re-save before proceeding. Do NOT start the optimization with incorrect settings.
 
-After verification passes, show the confirmation summary (same format as the summary block in the skill — model, workload, settings, infrastructure) and include the wizard URL. Then remind the user:
+After verification passes, remind the user:
 
-**"Everything is set. You can access the wizard UI at:**
-- **Wizard URL**: <INSTANCE_URL>
-
-(In launcher mode, also show: **Launcher URL**: <LAUNCHER_URL>)
+**"Everything is set. Here are your URLs:**
+- **Launcher**: <LAUNCHER_URL>
+- **Instance (wizard UI)**: <INSTANCE_URL>
 
 **You can track the optimization progress in two ways:**
 1. **Open the wizard UI** in your browser — it shows live console output, progress bars, and will display interactive charts and results as tests complete.
@@ -1226,62 +1082,19 @@ After verification passes, show the confirmation summary (same format as the sum
 
 ---
 
-## Step 6: Generate Test Plan (Setup Storage)
+## Step 6: Set UI to Running State
 
-**This step is mandatory before starting the optimization.** The test plan is generated in-memory by the optimizer — it is NOT persisted to disk. If the optimizer pod restarts (due to a code sync, pod eviction, or manual restart), the test plan is lost and must be regenerated before you can start or resume optimization. Calling `start_optimization` without a test plan will fail with: `❌ Cannot start: No valid test plan.`
-
-The `setup_storage` endpoint handles three things in sequence:
-1. Creates the model cache PVC (if it doesn't already exist)
-2. Downloads the model weights (if not already cached)
-3. **Generates the test plan** — calculates all TP/pod/architecture combinations to test based on the saved config
-
-If the model is already downloaded and storage exists, steps 1-2 are skipped and only the test plan is generated (~30 seconds).
-
-```bash
-curl -sk -b /tmp/serveit-cookies.txt -X POST "$URL/api/setup_storage" \
-  -H 'Content-Type: application/json' \
-  -d "{
-    \"hf_token\": \"$HF_TOKEN\",
-    \"model\": \"<MODEL>\",
-    \"storage_class\": \"<MODEL_CACHE_SC>\",
-    \"local_disk_path\": \"<PATH or null>\"
-  }"
-```
-
-Wait for the test plan to be generated before starting the optimization:
-
-```bash
-while true; do
-  RESULT=$(curl -sk -b /tmp/serveit-cookies.txt "$URL/api/status" 2>/dev/null)
-  RUNNING=$(echo "$RESULT" | python3 -c "import json,sys; print(json.load(sys.stdin).get('running', False))" 2>/dev/null)
-  echo "$(date +%H:%M:%S) Running: $RUNNING"
-  # If optimization auto-started after setup, we're done
-  [ "$RUNNING" = "True" ] && echo "Optimization auto-started!" && break
-  sleep 10
-done
-```
-
-If the optimization does NOT auto-start, proceed to Step 7 to start it manually.
-
----
-
-## Step 7: Start Optimization
-
-Set the UI to step 7 (Review & Run) and start the optimization. Use `/api/set_state` which persists to the database — not `/api/config` which only updates in-memory state.
+Before polling, set the UI to step 7 (Review & Run) and mark optimization as running. This prevents users from changing settings in the wizard while tests are executing. Use `/api/set_state` which persists to the database — not `/api/config` which only updates in-memory state.
 
 ```bash
 curl -sk -b /tmp/serveit-cookies.txt -X POST "$URL/api/set_state" \
   -H 'Content-Type: application/json' \
   -d '{"current_step": 7, "running": true}'
-
-curl -sk -b /tmp/serveit-cookies.txt -X POST "$URL/api/start_optimization" \
-  -H 'Content-Type: application/json' \
-  -d "{\"hf_token\": \"$HF_TOKEN\"}"
 ```
 
 ---
 
-## Step 8: Check Status & Poll
+## Step 7: Check Status & Poll
 
 ```bash
 # Check if running
@@ -1305,7 +1118,7 @@ done
 
 ---
 
-## Step 9: Get Results
+## Step 8: Get Results
 
 Unlock the config so the UI can save normally again:
 
@@ -1338,7 +1151,7 @@ if best.get('most_efficient'):
 
 ---
 
-## Step 10: Download Report & Manifests
+## Step 9: Download Report & Manifests
 
 Download the HTML report (available at any time, even mid-run):
 
@@ -1365,7 +1178,7 @@ curl -sk -b /tmp/serveit-cookies.txt -X POST "$URL/api/set_state" \
 
 ---
 
-## Step 11: Stop / Resume / Sync
+## Step 10: Stop / Resume / Sync
 
 ```bash
 # Stop optimization
@@ -1401,9 +1214,7 @@ Common issues and how to handle them:
 
 **Config overwritten by UI** — The browser UI auto-saves config on every page load. Use `POST /api/config/lock` before saving config via REST to prevent this. Auto-unlocks on stop/complete/failure.
 
-**"Cannot start: No valid test plan"** — The test plan is held in memory, not on disk. Any optimizer pod restart (code sync, eviction, manual restart) clears it. Fix: re-run `POST /api/setup_storage` with the model name, HF token, and storage class — this regenerates the test plan in ~30 seconds if the model is already downloaded. Then retry `POST /api/start_optimization`.
-
-**Server restart clears state** — Syncing code (`deploy.py --sync-all`) restarts the server, clearing in-memory config lock, running state, AND the test plan. Re-apply lock and state with `POST /api/config/lock` and `POST /api/set_state`. If the optimization was running, it continues in the background but cannot be restarted without regenerating the test plan via `POST /api/setup_storage`.
+**Server restart clears state** — Syncing code (`deploy.py --sync-all`) restarts the server, clearing in-memory config lock and running state. Re-apply with `POST /api/config/lock` and `POST /api/set_state`.
 
 **Pod stuck in ContainerCreating** — Usually pulling the vLLM image (~1.7GB). First pull takes 3-5 minutes. Check with `kubectl describe pod <name>`.
 

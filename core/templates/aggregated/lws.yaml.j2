@@ -212,8 +212,7 @@ spec:
                   --eplb-config '{"window_size":"1000","step_interval":"3000","num_redundant_experts":"{{ num_redundant_experts | default(1) }}","log_balancedness":"False"}' \
 {% endif %}{% if moe_backend %}                  --moe-backend {{ moe_backend }} \
 {% endif %}{% if all2all_backend %}                  --all2all-backend {{ all2all_backend }} \
-{% endif %}{% if speculative_method %}                  --speculative-config.method {{ speculative_method }} \
-                  --speculative-config.num_speculative_tokens {{ speculative_num_tokens | default(3) }} \
+{% endif %}{% if speculative_config_json %}                  --speculative-config '{{ speculative_config_json }}' \
 {% endif %}{% if enable_auto_tool_choice %}                  --enable-auto-tool-choice \
 {% endif %}{% if tool_call_parser %}                  --tool-call-parser {{ tool_call_parser }} \
 {% endif %}{% if reasoning_parser %}                  --reasoning-parser {{ reasoning_parser }} \

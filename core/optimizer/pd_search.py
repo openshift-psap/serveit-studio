@@ -530,8 +530,8 @@ class PDSearchMixin:
                     self.all_test_results.append((test_config, result))
                     self._save_test_to_database(test_config, result)
                     if not result or not result.guidellm_success:
-                        self.log("    ❌ Test failed after retry - STOPPING", 'error')
-                        raise RuntimeError(f"Test {test_id} failed after retry - stopping optimization")
+                        self.log(f"    ⚠️  PD test {test_id} failed after retries — skipping this config", 'warning')
+                        continue
 
             ttft = result.ttft_p90 or result.ttft_p50 or 1000000.0
             throughput = result.throughput_mean or result.throughput_p90 or 0.0
@@ -815,8 +815,8 @@ class PDSearchMixin:
                 self.all_test_results.append((test_config, result))
                 self._save_test_to_database(test_config, result)
                 if not result or not result.guidellm_success:
-                    self.log("    ❌ Test failed after retry - STOPPING", 'error')
-                    raise RuntimeError(f"Test {test_id} failed after retry - stopping optimization")
+                    self.log(f"    ⚠️  PD test {test_id} failed after retries — skipping this config", 'warning')
+                    return None
 
         ttft = result.ttft_p90 or result.ttft_p50 or 1000000.0
         throughput = result.throughput_mean or result.throughput_p90 or 0.0

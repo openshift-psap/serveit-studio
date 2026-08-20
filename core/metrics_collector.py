@@ -254,10 +254,13 @@ class MetricsCollector:
             f'vllm:kv_cache_usage_perc{{namespace="{self.config.namespace}"}}',
         ]
 
-        # Token Throughput
+        # Token Throughput — sum across pods, split prefill/decode for PD configs
+        # For aggregated: all pods count both prompt and generation
+        # For PD: prompt_tokens from prefill pods only, generation_tokens from decode pods only
+        # (decode pods also report prompt_tokens but those are double-counted)
         throughput_queries = [
-            f'rate(vllm:prompt_tokens_total{{namespace="{self.config.namespace}"}}[{rate_window}])',
-            f'rate(vllm:generation_tokens_total{{namespace="{self.config.namespace}"}}[{rate_window}])',
+            f'sum(rate(vllm:prompt_tokens_total{{namespace="{self.config.namespace}",pod!~".*decode.*"}}[{rate_window}]))',
+            f'sum(rate(vllm:generation_tokens_total{{namespace="{self.config.namespace}",pod!~".*prefill.*"}}[{rate_window}]))',
         ]
 
         # Request Success

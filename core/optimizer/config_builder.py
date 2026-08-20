@@ -573,6 +573,7 @@ class ConfigBuilderMixin:
             'prefix_cache_retention': 'prefix_cache_retention',
             'ssm_conv_state_layout': 'ssm_conv_state_layout',
             'num_speculative_tokens': 'speculative_num_tokens',
+            'speculative_model': 'speculative_model',
         }
         for key, attr in val_fields.items():
             setting = adv.get(key)
@@ -619,9 +620,14 @@ class ConfigBuilderMixin:
             if setting and setting.get('mode') in ('on', 'off'):
                 setattr(cfg, attr, setting['mode'] == 'on')
 
-        # EP requires TP > 1 and a MoE model
-        if cfg.tensor_parallelism <= 1 or not self._is_moe:
-            cfg.enable_expert_parallel = False
+        # EP requires TP > 1 and a MoE model (for aggregated configs only).
+        # For PD configs, the template_manager handles per-role EP filtering
+        # based on prefill_tp/decode_tp independently.
+        if not cfg.architecture or cfg.architecture == 'aggregated':
+            if cfg.tensor_parallelism <= 1 or not self._is_moe:
+                cfg.enable_expert_parallel = False
+                cfg.enable_eplb = False
+                cfg.enable_dbo = False
 
         return cfg
 

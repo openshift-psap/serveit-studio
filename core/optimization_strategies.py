@@ -358,10 +358,8 @@ class ThroughputStrategy(OptimizationStrategy):
                 self.opt._check_request_errors(test_config, result)
 
                 if not result or not result.guidellm_success:
-                    self.opt.log("    ❌ Test failed - STOPPING optimization", 'error')
-                    self.opt.log(f"    🔍 Debug: kubectl get pods -n {self.opt.config.namespace} "
-                                 f"-l test-id={test_id}", 'error')
-                    raise RuntimeError(f"Test {test_id} failed - stopping optimization")
+                    self.opt.log(f"    ⚠️  EP test {test_id} failed — skipping this config", 'warning')
+                    continue
 
             ttft = result.ttft_p90 or result.ttft_p50 or 1000000.0
             throughput = result.throughput_mean or result.throughput_p90 or 0.0
