@@ -25,6 +25,10 @@ function _renderChartsImpl(data, runId, content) {
     let html = '';
     let secRec = '', secTP = '', secCfg = '', secCmp = '', secStep9 = '', secCal = '', secCacheSweep = '', secVLLM = '', secTestCfg = '', secEppTuning = '', secDeployTiming = '', secPareto = '', secTraffic = '';
 
+    // Lookup from test_id/config_name to all_results entry (used across multiple sections)
+    const _allResLookup = {};
+    (data.all_results || []).forEach(function(r) { _allResLookup[r.test_id || r.config_name] = r; });
+
     // Shared recommendation card builder
     function _buildRecCard(opts) {
         // opts: label, icon, desc, color, archKey, deploy, tput, gpus, conc,
@@ -215,11 +219,7 @@ function _renderChartsImpl(data, runId, content) {
 
         html += `<div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(280px, 1fr)); gap:16px; margin-bottom:20px;">`;
 
-        // Build lookup from test_id/config_name to all_results entry for metrics_json
-        const _allResLookup = {};
-        (data.all_results || []).forEach(function(r) {
-            _allResLookup[r.test_id || r.config_name] = r;
-        });
+        // _allResLookup already built at outer scope
 
         const seen = new Set();
         selTypes.forEach(sel => {
