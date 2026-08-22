@@ -24,7 +24,7 @@
                                 <div style="margin-bottom:16px;">
                                     <label style="font-weight:600;font-size:0.9em;margin-bottom:8px;display:block;">Load Profile</label>
                                     <!-- Constant RPS and Poisson RPS hidden: calibration math (Little's Law),
-                                         concurrency sweep levels, and InferenceX charts all assume concurrent users.
+                                         concurrency sweep levels, and Pareto charts all assume concurrent users.
                                          Using constant/poisson would produce incorrect calibration and misleading results.
                                          Re-enable when the pipeline supports rate-based calibration. -->
                                     <div style="display: grid; grid-template-columns: repeat(1, 1fr); gap: 6px;">
@@ -169,12 +169,12 @@
                             </div>
                         </div>
 
-                        <!-- Calibrated Load / InferenceX Sweep -->
+                        <!-- Calibrated Load / Concurrency Sweep -->
                         <div id="sweep-calibrated-section" style="border:2px solid #059669;border-radius:12px;overflow:hidden;margin-bottom:20px;">
                             <div style="background:linear-gradient(135deg,#ecfdf5,#d1fae5);padding:14px 20px;cursor:pointer;display:flex;align-items:center;justify-content:space-between;" onclick="var b=document.getElementById('calibrated-body');var a=document.getElementById('calibrated-arrow');if(b.style.display==='none'){b.style.display='block';a.textContent='&#9662;';}else{b.style.display='none';a.textContent='&#9656;';}">
                                 <div>
                                     <div style="font-weight:700;color:#065f46;font-size:1.05em;">📊 Calibrated Load Testing</div>
-                                    <div style="color:#047857;font-size:0.92em;margin-top:4px;">After finding the best configuration, re-test it at realistic load levels to measure true production performance</div>
+                                    <div style="color:#047857;font-size:0.92em;margin-top:4px;">After finding the best configs, sweep concurrency and cache hit levels to map the full performance curve</div>
                                 </div>
                                 <div id="calibrated-arrow" style="font-size:1.4em;color:#065f46;font-weight:700;">&#9656;</div>
                             </div>
@@ -183,18 +183,18 @@
                                 <div style="display:flex;align-items:center;justify-content:space-between;gap:12px;padding:10px 14px;background:#f0fdf4;border:1px solid #bbf7d0;border-radius:8px;cursor:pointer;margin-bottom:10px;" onclick="var on=!document.getElementById('calibrated-load-enabled').checked;document.getElementById('calibrated-load-enabled').checked=on;config.calibrated_load_enabled=on;var sw=document.getElementById('calibrated-load-switch');sw.style.background=on?'#059669':'#ccc';sw.querySelector('span').style.transform=on?'translateX(18px)':'translateX(0)';document.getElementById('inferencex-sweep-row').style.opacity=on?'1':'0.4';document.getElementById('inferencex-sweep-row').style.pointerEvents=on?'auto':'none';if(!on){config.inferencex_sweep_enabled=false;document.getElementById('inferencex-sweep-enabled').checked=false;var ixSw=document.getElementById('inferencex-sweep-switch');ixSw.style.background='#ccc';ixSw.querySelector('span').style.transform='translateX(0)';}saveConfig();">
                                     <div>
                                         <div style="font-weight:600;font-size:0.9em;color:#065f46;">Calibrated Load Validation</div>
-                                        <div style="font-size:0.8em;color:#047857;margin-top:2px;">The optimization steps stress-test configs to find their limits, which inflates latency due to queuing. This step computes a sustainable concurrency where queue wait stays reasonable by analyzing measured service time and response time, then re-runs the best PD and Aggregated configs at that realistic load.</div>
+                                        <div style="font-size:0.8em;color:#047857;margin-top:2px;">Computes a per-config calibrated concurrency from each config's measured throughput and decode speed (ITL). Configs with headroom at the test concurrency get a higher calibrated value; overloaded configs get a lower one. Re-tests at this calibrated load to measure realistic production performance.</div>
                                     </div>
                                     <input type="checkbox" id="calibrated-load-enabled" style="display:none;">
                                     <div id="calibrated-load-switch" style="width:40px;height:22px;background:#ccc;border-radius:11px;position:relative;transition:background-color 0.2s;flex-shrink:0;margin-left:16px;">
                                         <span style="position:absolute;top:2px;left:2px;width:18px;height:18px;background:white;border-radius:50%;transition:transform 0.2s;box-shadow:0 1px 3px rgba(0,0,0,0.2);display:block;"></span>
                                     </div>
                                 </div>
-                                <!-- InferenceX Sweep toggle -->
+                                <!-- Concurrency Sweep toggle -->
                                 <div id="inferencex-sweep-row" style="display:flex;align-items:center;justify-content:space-between;gap:12px;padding:10px 14px;background:#f0fdf4;border:1px solid #bbf7d0;border-radius:8px;cursor:pointer;opacity:0.4;pointer-events:none;" onclick="var on=!document.getElementById('inferencex-sweep-enabled').checked;document.getElementById('inferencex-sweep-enabled').checked=on;config.inferencex_sweep_enabled=on;var sw=document.getElementById('inferencex-sweep-switch');sw.style.background=on?'#059669':'#ccc';sw.querySelector('span').style.transform=on?'translateX(18px)':'translateX(0)';document.getElementById('concurrency-sweep-levels-row').style.display=on?'block':'none';saveConfig();">
                                     <div>
-                                        <div style="font-weight:600;font-size:0.9em;color:#065f46;">Concurrency Sweep (InferenceX Charts)</div>
-                                        <div style="font-size:0.8em;color:#047857;margin-top:2px;">Runs the best configs at multiple concurrency levels to map the full performance curve. Levels are centered on the calibrated concurrency with half below and half above. Each level runs a full benchmark. Generates separate TTFT P90/P95/P99 vs Concurrency charts with all configs overlaid, plus Throughput-per-GPU vs Concurrency — so you can compare architectures and find the knee point where latency degrades.</div>
+                                        <div style="font-weight:600;font-size:0.9em;color:#065f46;">Concurrency Sweep</div>
+                                        <div style="font-size:0.8em;color:#047857;margin-top:2px;">Runs selected configs at multiple concurrency levels centered on each config's calibrated value. Maps the full throughput/latency curve so you can see how each architecture degrades under load and find the optimal operating point.</div>
                                     </div>
                                     <input type="checkbox" id="inferencex-sweep-enabled" style="display:none;">
                                     <div id="inferencex-sweep-switch" style="width:40px;height:22px;background:#ccc;border-radius:11px;position:relative;transition:background-color 0.2s;flex-shrink:0;margin-left:16px;">
@@ -214,26 +214,31 @@
                                     </div>
                                     <div style="font-weight:600;font-size:0.85em;color:#065f46;margin-bottom:4px;">Or: Explicit Levels</div>
                                     <input type="text" id="concurrency-sweep-levels" placeholder="e.g. 10, 50, 100, 200 (overrides count + step%)" style="width:100%;padding:6px 10px;border:1px solid #86efac;border-radius:6px;font-size:0.85em;font-family:var(--font-mono);" onchange="var v=this.value.trim();if(v){config.concurrency_sweep_levels=v.split(',').map(function(x){return parseInt(x.trim())}).filter(function(x){return !isNaN(x)&&x>0});}else{config.concurrency_sweep_levels=null;}saveConfig();">
-                                    <div style="font-size:0.75em;color:#6b7280;margin-top:4px;">Levels are centered on calibrated concurrency with half below and half above. Step % controls spacing (e.g., 20% of calibrated = step of 10 users if calibrated is 50). Overflow shifts upward when there isn't room below. Or type exact comma-separated values. Empty = auto ~6 levels up to 1.5x calibrated.</div>
+                                    <div style="font-size:0.75em;color:#6b7280;margin-top:4px;">Levels are centered on each config's calibrated concurrency. Step % controls spacing (e.g., 20% = step of 6 users if calibrated is 28). Or type exact comma-separated values. Empty = auto.</div>
                                     <div id="multi-config-sweep-row" style="margin-top:12px;padding-top:10px;border-top:1px solid #bbf7d0;">
-                                        <div style="display:flex;align-items:center;justify-content:space-between;gap:12px;padding:8px 12px;background:#f0fdf4;border:1px solid #bbf7d0;border-radius:8px;cursor:pointer;" onclick="if(config.goal==='single_test')return;var on=!document.getElementById('sweep-all-configs').checked;document.getElementById('sweep-all-configs').checked=on;config.concurrency_sweep_all_configs=on;var sw=document.getElementById('sweep-all-switch');sw.style.background=on?'#059669':'#ccc';sw.querySelector('span').style.transform=on?'translateX(18px)':'translateX(0)';saveConfig();">
-                                            <div>
-                                                <div style="font-weight:600;font-size:0.85em;color:#065f46;">Recommendation Sweep</div>
-                                                <div style="font-size:0.75em;color:#047857;margin-top:2px;">Add the 4 recommendation configs (Best Balanced, Lowest TTFT, Highest Throughput, Most Efficient). Without this, only the best PD and best Aggregated are tested.</div>
-                                            </div>
-                                            <input type="checkbox" id="sweep-all-configs" style="display:none;">
-                                            <div id="sweep-all-switch" style="width:40px;height:22px;background:#ccc;border-radius:11px;position:relative;transition:background-color 0.2s;flex-shrink:0;">
-                                                <span style="position:absolute;top:2px;left:2px;width:18px;height:18px;background:white;border-radius:50%;transition:transform 0.2s;box-shadow:0 1px 3px rgba(0,0,0,0.2);display:block;"></span>
-                                            </div>
-                                        </div>
-                                    </div>
-                                    <div style="margin-top:10px;padding-top:10px;border-top:1px solid #bbf7d0;">
-                                        <div style="display:flex;align-items:center;gap:8px;padding:8px 12px;background:#f0fdf4;border:1px solid #bbf7d0;border-radius:8px;">
-                                            <div style="flex:1;">
-                                                <div style="font-weight:600;font-size:0.85em;color:#065f46;">Extra Configs</div>
-                                                <div style="font-size:0.75em;color:#047857;margin-top:2px;">Add N more configs ranked by score from the results pool. Works independently — with or without Recommendation Sweep.</div>
-                                            </div>
-                                            <input type="number" id="sweep-max-configs" min="0" max="50" placeholder="0" style="width:70px;padding:6px 10px;border:1px solid #86efac;border-radius:6px;font-size:0.85em;flex-shrink:0;" onchange="var v=parseInt(this.value);config.concurrency_sweep_max_configs=v>0?v:null;saveConfig();">
+                                        <div style="font-weight:600;font-size:0.85em;color:#065f46;margin-bottom:6px;">Config Selection Mode</div>
+                                        <div style="display:flex;flex-direction:column;gap:6px;">
+                                            <label style="display:flex;align-items:flex-start;gap:8px;padding:8px 12px;background:#f0fdf4;border:1px solid #bbf7d0;border-radius:8px;cursor:pointer;">
+                                                <input type="radio" name="sweep-mode" value="architecture_aware" checked onchange="config.concurrency_sweep_mode='architecture_aware';config.concurrency_sweep_all_configs=false;saveConfig();" style="margin-top:2px;">
+                                                <div>
+                                                    <div style="font-weight:600;font-size:0.85em;color:#065f46;">Architecture-Aware</div>
+                                                    <div style="font-size:0.75em;color:#047857;margin-top:2px;">Best config from each architecture (Agg, PD, EP) + 4 overall recommendations (Best Balanced, Lowest TTFT, Highest Throughput, Most Efficient). Deduplicated — typically 4 unique configs.</div>
+                                                </div>
+                                            </label>
+                                            <label style="display:flex;align-items:flex-start;gap:8px;padding:8px 12px;background:#f0fdf4;border:1px solid #bbf7d0;border-radius:8px;cursor:pointer;">
+                                                <input type="radio" name="sweep-mode" value="all_recommendations" onchange="config.concurrency_sweep_mode='all_recommendations';config.concurrency_sweep_all_configs=false;saveConfig();" style="margin-top:2px;">
+                                                <div>
+                                                    <div style="font-weight:600;font-size:0.85em;color:#065f46;">All Recommendations Per Architecture</div>
+                                                    <div style="font-size:0.75em;color:#047857;margin-top:2px;">4 recommendation configs (Balanced, TTFT, Throughput, Efficient) for each architecture independently. Up to 12 unique configs.</div>
+                                                </div>
+                                            </label>
+                                            <label style="display:flex;align-items:flex-start;gap:8px;padding:8px 12px;background:#f0fdf4;border:1px solid #bbf7d0;border-radius:8px;cursor:pointer;">
+                                                <input type="radio" name="sweep-mode" value="all" onchange="config.concurrency_sweep_mode='all';config.concurrency_sweep_all_configs=true;saveConfig();" style="margin-top:2px;">
+                                                <div>
+                                                    <div style="font-weight:600;font-size:0.85em;color:#065f46;">All Configurations</div>
+                                                    <div style="font-size:0.75em;color:#047857;margin-top:2px;">Sweep every configuration that produced valid results. Thorough but time-intensive.</div>
+                                                </div>
+                                            </label>
                                         </div>
                                     </div>
                                     <div id="sweep-epp-tuned-row" style="margin-top:10px;padding-top:10px;border-top:1px solid #bbf7d0;">
@@ -262,79 +267,58 @@
                                 <div id="cache-sweep-arrow" style="font-size:1.4em;color:#5b21b6;font-weight:700;">&#9656;</div>
                             </div>
                             <div id="cache-sweep-body" style="display:none;padding:16px 20px;">
-                                <!-- Toggle 1: Cache Hit Sweep at user concurrency -->
-                                <div style="display:flex;align-items:center;justify-content:space-between;gap:12px;padding:10px 14px;background:#f5f3ff;border:1px solid #ddd6fe;border-radius:8px;cursor:pointer;margin-bottom:10px;" onclick="var on=!document.getElementById('cache-sweep-enabled').checked;document.getElementById('cache-sweep-enabled').checked=on;config.cache_sweep_enabled=on;if(!config.cache_sweep_mode)config.cache_sweep_mode=document.querySelector('input[name=cache-sweep-mode]:checked').value||'identical';if(!config.cache_sweep_levels){var lv=document.getElementById('cache-sweep-levels').value;config.cache_sweep_levels=lv.split(',').map(function(v){return parseInt(v.trim())}).filter(function(v){return !isNaN(v)});}if(!config.cache_sweep_groups)config.cache_sweep_groups=parseInt(document.getElementById('cache-sweep-groups').value)||5;var sw=document.getElementById('cache-sweep-switch');sw.style.background=on?'#7c3aed':'#ccc';sw.querySelector('span').style.transform=on?'translateX(18px)':'translateX(0)';saveConfig();">
+                                <!-- Toggle 1: Cache Hit Sweep -->
+                                <div style="display:flex;align-items:center;justify-content:space-between;gap:12px;padding:10px 14px;background:#f5f3ff;border:1px solid #ddd6fe;border-radius:8px;cursor:pointer;margin-bottom:10px;" onclick="var on=!document.getElementById('cache-sweep-enabled').checked;document.getElementById('cache-sweep-enabled').checked=on;config.cache_sweep_enabled=on;var sw=document.getElementById('cache-sweep-switch');sw.style.background=on?'#7c3aed':'#ccc';sw.querySelector('span').style.transform=on?'translateX(18px)':'translateX(0)';saveConfig();">
                                     <div>
                                         <div style="font-weight:600;font-size:0.9em;color:#5b21b6;">Cache Hit Sweep</div>
-                                        <div style="font-size:0.8em;color:#6d28d9;margin-top:2px;">Test the best configs at multiple cache hit ratios using your workload concurrency. Generates datasets with controlled prefix sharing.</div>
+                                        <div style="font-size:0.8em;color:#6d28d9;margin-top:2px;">Takes the best configs and concurrency levels from the Concurrency Sweep and tests them at multiple cache hit ratios. Uses your exact workload settings — only the cache hit percentage changes.</div>
                                     </div>
                                     <input type="checkbox" id="cache-sweep-enabled" style="display:none;">
                                     <div id="cache-sweep-switch" style="width:40px;height:22px;background:#ccc;border-radius:11px;position:relative;transition:background-color 0.2s;flex-shrink:0;margin-left:16px;">
                                         <span style="position:absolute;top:2px;left:2px;width:18px;height:18px;background:white;border-radius:50%;transition:transform 0.2s;box-shadow:0 1px 3px rgba(0,0,0,0.2);display:block;"></span>
                                     </div>
                                 </div>
-                                <!-- Toggle 2: Cache Hit Sweep at calibrated concurrency -->
-                                <div style="display:flex;align-items:center;justify-content:space-between;gap:12px;padding:10px 14px;background:#f5f3ff;border:1px solid #ddd6fe;border-radius:8px;cursor:pointer;margin-bottom:12px;" onclick="var on=!document.getElementById('cache-sweep-calibrated').checked;document.getElementById('cache-sweep-calibrated').checked=on;config.cache_sweep_use_calibrated=on;if(!config.cache_sweep_mode)config.cache_sweep_mode=document.querySelector('input[name=cache-sweep-mode]:checked').value||'identical';if(!config.cache_sweep_levels){var lv=document.getElementById('cache-sweep-levels').value;config.cache_sweep_levels=lv.split(',').map(function(v){return parseInt(v.trim())}).filter(function(v){return !isNaN(v)});}if(!config.cache_sweep_groups)config.cache_sweep_groups=parseInt(document.getElementById('cache-sweep-groups').value)||5;var sw=document.getElementById('cache-sweep-cal-switch');sw.style.background=on?'#7c3aed':'#ccc';sw.querySelector('span').style.transform=on?'translateX(18px)':'translateX(0)';saveConfig();">
+                                <!-- Toggle 2: Also sweep at user's original concurrency -->
+                                <div style="display:flex;align-items:center;justify-content:space-between;gap:12px;padding:10px 14px;background:#f5f3ff;border:1px solid #ddd6fe;border-radius:8px;cursor:pointer;margin-bottom:12px;" onclick="var on=!document.getElementById('cache-sweep-calibrated').checked;document.getElementById('cache-sweep-calibrated').checked=on;config.cache_sweep_use_calibrated=on;var sw=document.getElementById('cache-sweep-cal-switch');sw.style.background=on?'#7c3aed':'#ccc';sw.querySelector('span').style.transform=on?'translateX(18px)':'translateX(0)';saveConfig();">
                                     <div>
-                                        <div style="font-weight:600;font-size:0.9em;color:#5b21b6;">Cache Hit Sweep (Calibrated Concurrency)</div>
-                                        <div style="font-size:0.8em;color:#6d28d9;margin-top:2px;">Same sweep but using the calibrated concurrency from Step 11. Falls back to user concurrency if Step 11 didn't run.</div>
+                                        <div style="font-weight:600;font-size:0.9em;color:#5b21b6;">Also Sweep at User Concurrency</div>
+                                        <div style="font-size:0.8em;color:#6d28d9;margin-top:2px;">Run a second cache sweep at your original concurrency setting (c={{ '{{' }} config.users {{ '}}' }}) for comparison. Only useful when the best throughput concurrency differs from your setting.</div>
                                     </div>
                                     <input type="checkbox" id="cache-sweep-calibrated" style="display:none;">
                                     <div id="cache-sweep-cal-switch" style="width:40px;height:22px;background:#ccc;border-radius:11px;position:relative;transition:background-color 0.2s;flex-shrink:0;margin-left:16px;">
                                         <span style="position:absolute;top:2px;left:2px;width:18px;height:18px;background:white;border-radius:50%;transition:transform 0.2s;box-shadow:0 1px 3px rgba(0,0,0,0.2);display:block;"></span>
                                     </div>
                                 </div>
-                                <!-- Recommendation Sweep toggle -->
-                                <div style="display:flex;align-items:center;justify-content:space-between;gap:12px;padding:10px 14px;background:#f5f3ff;border:1px solid #ddd6fe;border-radius:8px;cursor:pointer;margin-top:10px;" onclick="var cb=document.getElementById('cache-sweep-multi-enabled');cb.checked=!cb.checked;var sw=document.getElementById('cache-sweep-multi-switch');sw.style.background=cb.checked?'#7c3aed':'#ccc';sw.querySelector('span').style.transform=cb.checked?'translateX(18px)':'translateX(0)';config.cache_sweep_all_configs=cb.checked;saveConfig();">
-                                    <div style="flex:1;">
-                                        <div style="font-weight:600;font-size:0.85em;color:#5b21b6;">Recommendation Sweep</div>
-                                        <div style="font-size:0.78em;color:#6d28d9;margin-top:2px;">Add the 4 recommendation configs (Best Balanced, Lowest TTFT, Highest Throughput, Most Efficient). Without this, only the best PD and best Aggregated are tested.</div>
-                                    </div>
-                                    <input type="checkbox" id="cache-sweep-multi-enabled" style="display:none;">
-                                    <div id="cache-sweep-multi-switch" style="width:40px;height:22px;background:#ccc;border-radius:11px;position:relative;transition:background-color 0.2s;flex-shrink:0;margin-left:16px;">
-                                        <span style="position:absolute;top:2px;left:2px;width:18px;height:18px;background:white;border-radius:50%;transition:transform 0.2s;box-shadow:0 1px 3px rgba(0,0,0,0.2);display:block;"></span>
-                                    </div>
-                                </div>
-                                <!-- Extra Configs -->
                                 <div style="margin-top:10px;">
-                                    <div style="display:flex;align-items:center;gap:8px;padding:10px 14px;background:#f5f3ff;border:1px solid #ddd6fe;border-radius:8px;">
-                                        <div style="flex:1;">
-                                            <div style="font-weight:600;font-size:0.85em;color:#5b21b6;">Extra Configs</div>
-                                            <div style="font-size:0.75em;color:#6d28d9;margin-top:2px;">Add N more configs ranked by score from the results pool. Works independently — with or without Recommendation Sweep.</div>
-                                        </div>
-                                        <input type="number" id="cache-sweep-max-configs" min="0" max="50" placeholder="0" style="width:70px;padding:6px 10px;border:1px solid #c4b5fd;border-radius:6px;font-size:0.85em;flex-shrink:0;" onchange="var v=parseInt(this.value);config.cache_sweep_max_configs=v>0?v:null;saveConfig();">
+                                    <div style="font-weight:600;font-size:0.85em;color:#5b21b6;margin-bottom:6px;">Config Selection Mode</div>
+                                    <div style="display:flex;flex-direction:column;gap:6px;">
+                                        <label style="display:flex;align-items:flex-start;gap:8px;padding:8px 12px;background:#f5f3ff;border:1px solid #ddd6fe;border-radius:8px;cursor:pointer;">
+                                            <input type="radio" name="cache-sweep-mode-sel" value="architecture_aware" checked onchange="config.cache_sweep_selection_mode='architecture_aware';config.cache_sweep_all_configs=false;saveConfig();" style="margin-top:2px;">
+                                            <div>
+                                                <div style="font-weight:600;font-size:0.85em;color:#5b21b6;">Architecture-Aware</div>
+                                                <div style="font-size:0.75em;color:#6d28d9;margin-top:2px;">Best config from each architecture + 4 overall recommendations. Typically 4 unique configs.</div>
+                                            </div>
+                                        </label>
+                                        <label style="display:flex;align-items:flex-start;gap:8px;padding:8px 12px;background:#f5f3ff;border:1px solid #ddd6fe;border-radius:8px;cursor:pointer;">
+                                            <input type="radio" name="cache-sweep-mode-sel" value="all_recommendations" onchange="config.cache_sweep_selection_mode='all_recommendations';config.cache_sweep_all_configs=false;saveConfig();" style="margin-top:2px;">
+                                            <div>
+                                                <div style="font-weight:600;font-size:0.85em;color:#5b21b6;">All Recommendations Per Architecture</div>
+                                                <div style="font-size:0.75em;color:#6d28d9;margin-top:2px;">4 recommendation configs for each architecture independently. Up to 12 unique configs.</div>
+                                            </div>
+                                        </label>
+                                        <label style="display:flex;align-items:flex-start;gap:8px;padding:8px 12px;background:#f5f3ff;border:1px solid #ddd6fe;border-radius:8px;cursor:pointer;">
+                                            <input type="radio" name="cache-sweep-mode-sel" value="all" onchange="config.cache_sweep_selection_mode='all';config.cache_sweep_all_configs=true;saveConfig();" style="margin-top:2px;">
+                                            <div>
+                                                <div style="font-weight:600;font-size:0.85em;color:#5b21b6;">All Configurations</div>
+                                                <div style="font-size:0.75em;color:#6d28d9;margin-top:2px;">Sweep every configuration that produced valid results. Thorough but time-intensive.</div>
+                                            </div>
+                                        </label>
                                     </div>
                                 </div>
-                                <!-- Workload Settings -->
+                                <!-- Cache Hit Levels -->
                                 <div style="margin-top:14px;padding-top:12px;border-top:2px solid #c4b5fd;">
-                                    <div style="font-weight:700;font-size:0.85em;color:#5b21b6;margin-bottom:8px;">Workload Settings</div>
-                                    <!-- Structured prefix toggle -->
-                                    <div style="display:flex;align-items:center;justify-content:space-between;gap:12px;padding:10px 14px;background:#f5f3ff;border:1px solid #ddd6fe;border-radius:8px;cursor:pointer;margin-bottom:10px;" onclick="var on=!document.getElementById('cache-sweep-structured-prefix').checked;document.getElementById('cache-sweep-structured-prefix').checked=on;config.structured_prefix=on;var sw=document.getElementById('cache-sweep-structured-switch');sw.style.background=on?'#7c3aed':'#ccc';sw.querySelector('span').style.transform=on?'translateX(18px)':'translateX(0)';var sp3=document.getElementById('structured-prefix-enabled');if(sp3){sp3.checked=on;var sw3=document.getElementById('structured-prefix-switch');if(sw3){sw3.style.background=on?'#15803d':'#ccc';sw3.querySelector('span').style.transform=on?'translateX(18px)':'translateX(0)';}}saveConfig();">
-                                        <div>
-                                            <div style="font-weight:600;font-size:0.85em;color:#5b21b6;">Structured Prefix Prompts</div>
-                                            <div style="font-size:0.78em;color:#6d28d9;margin-top:2px;">Generate prompts with a shared system-prompt prefix + unique question suffix instead of random tokens. The cache hit ratio at each level controls the prefix/suffix split. Better simulates real agentic and chat workloads.</div>
-                                        </div>
-                                        <input type="checkbox" id="cache-sweep-structured-prefix" style="display:none;">
-                                        <div id="cache-sweep-structured-switch" style="width:40px;height:22px;background:#ccc;border-radius:11px;position:relative;transition:background-color 0.2s;flex-shrink:0;margin-left:16px;">
-                                            <span style="position:absolute;top:2px;left:2px;width:18px;height:18px;background:white;border-radius:50%;transition:transform 0.2s;box-shadow:0 1px 3px rgba(0,0,0,0.2);display:block;"></span>
-                                        </div>
-                                    </div>
-                                    <!-- Cache mode selector -->
-                                    <div style="margin-bottom:10px;">
-                                        <div style="font-weight:600;font-size:0.85em;color:#5b21b6;margin-bottom:6px;">Cache Simulation Mode</div>
-                                        <div style="display:flex;gap:8px;flex-wrap:wrap;">
-                                            <label style="display:flex;align-items:center;gap:4px;padding:6px 12px;background:#ede9fe;border:1px solid #c4b5fd;border-radius:6px;cursor:pointer;font-size:0.85em;">
-                                                <input type="radio" name="cache-sweep-mode" value="identical" checked onchange="config.cache_sweep_mode='identical';document.getElementById('cache-sweep-groups-row').style.display='none';saveConfig();"> Identical Prompts
-                                            </label>
-                                            <label style="display:flex;align-items:center;gap:4px;padding:6px 12px;background:#ede9fe;border:1px solid #c4b5fd;border-radius:6px;cursor:pointer;font-size:0.85em;">
-                                                <input type="radio" name="cache-sweep-mode" value="shared_prefix" onchange="config.cache_sweep_mode='shared_prefix';document.getElementById('cache-sweep-groups-row').style.display='none';saveConfig();"> Shared Prefix
-                                            </label>
-                                            <label style="display:flex;align-items:center;gap:4px;padding:6px 12px;background:#ede9fe;border:1px solid #c4b5fd;border-radius:6px;cursor:pointer;font-size:0.85em;">
-                                                <input type="radio" name="cache-sweep-mode" value="multi_group" onchange="config.cache_sweep_mode='multi_group';document.getElementById('cache-sweep-groups-row').style.display='flex';saveConfig();"> Multi-Group
-                                            </label>
-                                        </div>
-                                    </div>
-                                    <!-- Cache hit levels -->
+                                    <div style="font-weight:700;font-size:0.85em;color:#5b21b6;margin-bottom:8px;">Cache Hit Levels</div>
+                                    <div style="font-size:0.75em;color:#6d28d9;margin-bottom:8px;">Uses the same workload settings as your test — only the cache hit percentage changes at each level.</div>
                                     <div style="margin-bottom:10px;">
                                         <div style="display:flex;gap:6px;margin-bottom:8px;">
                                             <button type="button" id="cache-levels-mode-step" onclick="document.getElementById('cache-levels-step-row').style.display='';document.getElementById('cache-levels-explicit-row').style.display='none';this.classList.add('active');document.getElementById('cache-levels-mode-explicit').classList.remove('active');config.cache_sweep_levels=null;saveConfig();"
@@ -351,11 +335,6 @@
                                             <input type="text" id="cache-sweep-levels" value="0, 10, 30, 50, 70, 100" style="width:100%;padding:6px 10px;border:1px solid #c4b5fd;border-radius:6px;font-size:0.85em;font-family:var(--font-mono);" onchange="config.cache_sweep_levels=this.value.split(',').map(function(v){return parseInt(v.trim())}).filter(function(v){return !isNaN(v)});saveConfig();">
                                             <div style="font-size:0.75em;color:#6b7280;margin-top:2px;">Comma-separated cache hit percentages to test.</div>
                                         </div>
-                                    </div>
-                                    <!-- Groups (for multi_group) -->
-                                    <div id="cache-sweep-groups-row" style="display:none;align-items:center;gap:8px;">
-                                        <div style="font-weight:600;font-size:0.85em;color:#5b21b6;">Groups:</div>
-                                        <input type="number" id="cache-sweep-groups" value="5" min="2" max="50" style="width:60px;padding:4px 8px;border:1px solid #c4b5fd;border-radius:6px;font-size:0.85em;" onchange="config.cache_sweep_groups=parseInt(this.value)||5;saveConfig();">
                                     </div>
                                 </div>
                             </div>

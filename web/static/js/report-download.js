@@ -46,7 +46,14 @@ async function downloadHTMLReport(runId, data) {
 }
 
 function buildFullReport(runId, data, charts, rec, summary, best, allRes, hasPD, hasVLLM) {
-    const secRec = buildRecSection(runId, data, rec, summary, best, allRes);
+    let secRec = buildRecSection(runId, data, rec, summary, best, allRes);
+    // Append calibrated load recommendations to the Recommendation tab
+    const calRecCards = buildCalRecCards(data);
+    if (calRecCards) secRec += calRecCards;
+    const cacheRecCards = buildCacheRecCards(data);
+    if (cacheRecCards) secRec += cacheRecCards;
+    // Stat cards and percentile breakdown go at the very bottom of the rec tab
+    secRec += buildRecFooter(rec, summary, best);
     const secTP = buildTPSection(rec, charts);
     const secCfg = buildCfgSection(runId, data, charts, allRes, hasPD);
     const secCmp = buildCmpSection(runId, rec, data);
@@ -120,8 +127,9 @@ td{padding:8px 10px;border-bottom:1px solid #f1f5f9}
 .dl-tab{padding:8px 16px;font-size:13px;font-weight:600;color:#6b7280;cursor:pointer;border-radius:8px 8px 0 0;border-bottom:2px solid transparent;margin-bottom:-2px;user-select:none}
 .dl-tab:hover{color:#374151;background:#f3f4f6}
 .dl-tab.active{color:#1e293b;border-bottom-color:#3b82f6;background:#eff6ff}
-.dl-pane{display:none;padding-top:16px}
-.dl-pane.active{display:block}
+.dl-pane{padding-top:16px}
+.dl-pane-ready .dl-pane{display:none}
+.dl-pane-ready .dl-pane.active{display:block}
 .section-grid{display:grid;grid-template-columns:repeat(2,1fr);gap:24px;font-size:0.9em}
 .section-hdr{font-weight:700;color:#1e293b;margin-bottom:10px;padding-bottom:4px}
 </style></head><body>`;
@@ -167,7 +175,7 @@ function buildRecSection(runId, data, rec, summary, best, allRes) {
         if (_dlTurns) s += ` | Turns: <strong>${_dlTurns}</strong>`;
         if (_rc2.first_prompt_tokens) s += ` | 1st Prompt: <strong>${_rc2.first_prompt_tokens.toLocaleString()}</strong>` + (_rc2.first_prompt_tokens_stdev ? ` &sigma;=${_rc2.first_prompt_tokens_stdev.toLocaleString()}` : '');
         if (_rc2.prefix_tokens) s += ` | Prefix: <strong>${_rc2.prefix_tokens.toLocaleString()}</strong>&times;${_rc2.prefix_count || 1}`;
-        if (_rc2.turn_delay) s += ` | Delay: <strong>${_rc2.turn_delay}s</strong>` + (_rc2.turn_delay_stdev ? ` &sigma;=${_rc2.turn_delay_stdev}s` : '');
+        if (_dlTurns && _rc2.turn_delay) s += ` | Delay: <strong>${_rc2.turn_delay}s</strong>` + (_rc2.turn_delay_stdev ? ` &sigma;=${_rc2.turn_delay_stdev}s` : '');
         s += ` &nbsp;|&nbsp; Users: <strong>${rec.workload.users}</strong> &nbsp;|&nbsp; Tests: <strong>${rec.total_tests}</strong>`;
         if (rec.total_duration) s += ` &nbsp;|&nbsp; Duration: <strong>${rec.total_duration}</strong>`;
         s += '</div>';
@@ -180,6 +188,7 @@ function buildRecSection(runId, data, rec, summary, best, allRes) {
         const selTypes = [
             { key: 'balanced', label: 'Best Balanced', desc: 'Best TTFT-to-throughput ratio — the sweet spot', color: '#059669', icon: '&#9878;' },
             { key: 'lowest_ttft', label: 'Lowest TTFT', desc: 'Fastest time to first token', color: '#3b82f6', icon: '&#9201;' },
+            { key: 'lowest_itl', label: 'Lowest ITL', desc: 'Smoothest token streaming', color: '#0891b2', icon: '&#9881;' },
             { key: 'highest_tput', label: 'Highest Throughput', desc: 'Maximum requests per second', color: '#f59e0b', icon: '&#9889;' },
             { key: 'most_efficient', label: 'Most Efficient', desc: 'Best throughput per GPU — cost optimized', color: '#8b5cf6', icon: '&#128176;' },
         ];
@@ -307,7 +316,7 @@ function buildRecSection(runId, data, rec, summary, best, allRes) {
         // Constraint notes
         // Constraint notes filtered out — not useful in downloaded report
 
-        s += '</div></div>';
+        s += '</div>';
     }
 
     // EPP-Optimized Recommendation (from Step 11)
@@ -349,22 +358,77 @@ function buildRecSection(runId, data, rec, summary, best, allRes) {
         }
     }
 
+    return s;
+}
+
+function buildRecFooter(rec, summary, best) {
+    let s = '';
     // Summary stat cards
     s += '<div class="stats">';
-    s += dlStatCard(summary.successful_tests, `Successful Tests (${summary.total_tests} total)`);
+    s += dlStatCard(summary.successful_tests, 'Successful Tests');
+    if (summary.discarded_tests > 0) {
+        s += dlStatCard(summary.discarded_tests, 'Discarded Tests (not viable)');
+    }
     if (best.lowest_latency) {
         s += dlStatCard(best.lowest_latency.ttft_p90.toFixed(1) + ' ms', 'Best TTFT P90');
         if (best.lowest_latency.ttft_p95) s += dlStatCard(best.lowest_latency.ttft_p95.toFixed(1) + ' ms', 'Best TTFT P95');
         if (best.lowest_latency.ttft_p99) s += dlStatCard(best.lowest_latency.ttft_p99.toFixed(1) + ' ms', 'Best TTFT P99');
     }
+    if (best.lowest_itl) {
+        s += dlStatCard(best.lowest_itl.itl_p90.toFixed(2) + ' ms', `Best ITL P90 (${best.lowest_itl.name})`);
+    }
     if (best.highest_throughput) {
-        s += dlStatCard(best.highest_throughput.throughput_p90.toFixed(2) + ' req/s', 'Best Throughput P90');
-        if (best.highest_throughput.throughput_p95) s += dlStatCard(best.highest_throughput.throughput_p95.toFixed(2) + ' req/s', 'Best Throughput P95');
-        if (best.highest_throughput.throughput_p99) s += dlStatCard(best.highest_throughput.throughput_p99.toFixed(2) + ' req/s', 'Best Throughput P99');
+        const htVal = best.highest_throughput.throughput_mean || best.highest_throughput.throughput_p90;
+        s += dlStatCard(htVal.toFixed(2) + ' req/s', `Best Throughput Mean (${best.highest_throughput.name})`);
     }
     if (best.most_efficient) s += dlStatCard(best.most_efficient.efficiency.toFixed(3), 'Best Efficiency (req/s/GPU)');
     s += '</div>';
 
+    // Percentile Breakdown: PD/EP vs Aggregated (skip if primary is Aggregated)
+    if (rec && rec.recommendations) {
+        const primaryKey = (rec.goal === 'ttft' || rec.goal === 'pd_only' || rec.goal === 'full_coverage') ? 'response_time' : 'throughput';
+        const primaryRec = rec.recommendations[primaryKey];
+        const aggBase = rec.aggregated_baseline;
+        const primaryArch = primaryRec && primaryRec.architecture ? primaryRec.architecture : 'PD';
+        const hasPrimary = primaryRec && primaryRec.config && primaryRec.config.percentiles;
+        const hasAgg = aggBase && aggBase.percentiles && (!primaryRec || aggBase.config_name !== (primaryRec.config || {}).config_name);
+
+        if (hasPrimary && primaryArch !== 'Aggregated') {
+            const p = primaryRec.config.percentiles;
+            const a = hasAgg ? aggBase.percentiles : null;
+            s += `<div class="chart-box"><h3>Percentile Breakdown: ${primaryArch} vs Aggregated</h3>`;
+            s += `<p style="color:#64748b;font-size:0.9em;margin:0 0 8px;">Full percentile distribution (P50 through P99) for TTFT, ITL, and Throughput — comparing the best ${primaryArch} configuration against the Aggregated baseline. Green-highlighted P90 values indicate the winner.</p>`;
+            s += '<table><tr><th>Configuration</th><th>Metric</th><th>P50</th><th>P90</th><th>P95</th><th>P99</th></tr>';
+            const metricDefs = [
+                { name: 'TTFT (ms)', key: 'ttft', lowerBetter: true },
+                { name: 'ITL (ms)', key: 'itl', lowerBetter: true },
+                { name: 'Throughput (req/s)', key: 'throughput', lowerBetter: false },
+            ];
+            const entries = [{label: primaryArch, pctl: p}];
+            if (a) entries.push({label: 'Aggregated', pctl: a});
+            entries.forEach(({label, pctl}, idx) => {
+                metricDefs.forEach((m, mi) => {
+                    const d = pctl[m.key] || {};
+                    const bs = mi === 0 && idx > 0 ? 'border-top:2px solid #cbd5e1;' : '';
+                    let p90Style = '';
+                    if (a) {
+                        const other = idx === 0 ? (a[m.key] || {}) : (p[m.key] || {});
+                        const wins = m.lowerBetter ? (d.p90 != null && other.p90 != null && d.p90 < other.p90) : (d.p90 != null && other.p90 != null && d.p90 > other.p90);
+                        if (wins) p90Style = 'color:#10b981;font-weight:700;';
+                    }
+                    s += '<tr>';
+                    if (mi === 0) s += `<td rowspan="3" style="vertical-align:middle;font-weight:700;${bs}">${label}</td>`;
+                    s += `<td style="color:#64748b;${bs}">${m.name}</td>`;
+                    s += `<td style="${bs}">${d.p50 ?? '-'}</td>`;
+                    s += `<td style="${p90Style}${bs}">${d.p90 ?? '-'}</td>`;
+                    s += `<td style="${bs}">${d.p95 ?? '-'}</td>`;
+                    s += `<td style="${bs}">${d.p99 ?? '-'}</td>`;
+                    s += '</tr>';
+                });
+            });
+            s += '</table></div>';
+        }
+    }
     return s;
 }
 
@@ -428,10 +492,11 @@ function buildCfgSection(runId, data, charts, allRes, hasPD) {
         s += '</table></div>';
     }
 
-    // Token Throughput table
+    // Token Throughput table (exclude calibration/sweep tests)
     const tokenRes = allRes.filter(r => {
         const tid = r.test_id || '';
-        if (tid.indexOf('step2-') === 0 || tid.indexOf('step3-') === 0) return false;
+        if (tid.indexOf('step2-') === 0 || tid.indexOf('step3-') === 0 ||
+            tid.indexOf('step11-') === 0 || tid.indexOf('step12-') === 0 || tid.indexOf('step13-') === 0) return false;
         const m = r.metrics_json ? (typeof r.metrics_json === 'string' ? JSON.parse(r.metrics_json) : r.metrics_json) : {};
         const pm = m.prometheus_metrics || {};
         return r.output_tps_mean || m.output_tps_mean || pm.vllm_generation_tokens_rate;
@@ -443,7 +508,7 @@ function buildCfgSection(runId, data, charts, allRes, hasPD) {
             `<strong>Blue bar (vLLM):</strong> Tokens that required actual GPU compute — prompt tokens that were <em>not</em> served from prefix cache, plus generated output tokens. Measured server-side via Prometheus (<code>vllm:prompt_tokens</code> + <code>vllm:generation_tokens</code>). Cached/transferred tokens are excluded.<br>` +
             `<strong>Gold bar (guidellm):</strong> All tokens in every request — the full prompt length (including tokens served from cache) plus output tokens. Measured client-side by guidellm.<br>` +
             `<strong>The gap between the bars reflects prefix cache efficiency.</strong> With a high cache hit rate, most prompt tokens are served from cache without GPU compute, so the vLLM bar is much smaller than the guidellm bar.</p>`;
-        s += `<div id="dl-token-tput-chart" style="height:400px;margin-bottom:16px;"></div>`;
+        s += `<div id="dl-token-tput-chart" style="height:600px;margin-bottom:16px;"></div>`;
         s += `</div>`;
 
 
@@ -494,10 +559,12 @@ function buildCfgSection(runId, data, charts, allRes, hasPD) {
         s += '</table></div>';
     }
 
-    // All results table (exclude step2/step3 calibration tests)
+    // All results table (match UI coreResults filter)
     const coreRes = allRes.filter(r => {
+        if (r.quality === 'discard') return false;
         const tid = r.test_id || '';
-        return tid.indexOf('step2-') !== 0 && tid.indexOf('step3-') !== 0;
+        return tid.indexOf('step2-') !== 0 && tid.indexOf('step3-') !== 0 &&
+               tid.indexOf('step11-') !== 0 && tid.indexOf('step12-') !== 0 && tid.indexOf('step13-') !== 0;
     });
     if (coreRes.length) {
         const pn = new Set(charts.pareto.pareto_table.map(p => p.config_name));
@@ -562,7 +629,11 @@ function buildCmpSection(runId, rec, data) {
         // % change table: all PD configs vs baseline
         if (rec.aggregated_baseline && data.all_results && data.all_results.length > 1) {
             const bl = rec.aggregated_baseline;
-            const configs = data.all_results.filter(r => r.architecture === 'PD' && r.ttft_p90 && r.throughput_p90);
+            const configs = data.all_results.filter(r => {
+                if (r.architecture !== 'PD' || !r.ttft_p90 || !r.throughput_p90) return false;
+                const tid = r.test_id || '';
+                return tid.indexOf('step11-') !== 0 && tid.indexOf('step12-') !== 0 && tid.indexOf('step13-') !== 0;
+            });
             if (configs.length && bl.ttft_p90 && bl.throughput_p90) {
                 s += `<div style="padding:16px 20px 4px;"><div style="font-weight:700;font-size:0.95em;color:#1e293b;margin-bottom:4px;">All PD Configurations vs Aggregated Baseline</div>`;
                 s += `<div style="color:#1e293b;font-size:0.92em;margin-bottom:12px;">% change relative to ${bl.config_name}. TTFT: negative (green) = better. Throughput: positive (green) = better.</div>`;
@@ -677,19 +748,17 @@ function buildStep9Section(data) {
     return s;
 }
 
-// ── Calibrated Load Tab (Step 11) ───────────────────────────────────────────
-function buildCalSection(data) {
-    const cal = data.calibrated_qps;
+// ── Calibrated Load Recommendation Cards (reused in Recommendation tab and Calibrated tab)
+function buildCalRecCards(data) {
     const calBest = data.summary && data.summary.calibrated_best;
-    if (!cal && !calBest) return '';
+    if (!calBest) return '';
     let s = '';
-
-    // Calibrated Recommendation cards (same design as Deployment Recommendation)
-    if (calBest) {
+    {
         const bp = data.recommendation ? data.recommendation.best_by_percentile || {} : {};
         const calTypes = [
-            { key: 'balanced', label: 'Best Balanced', desc: 'Best TTFT-to-throughput ratio at calibrated load', color: '#0ea5e9', icon: '&#9878;' },
+            { key: 'balanced', label: 'Best Balanced', desc: 'Best TTFT-to-throughput ratio at calibrated load', color: '#059669', icon: '&#9878;' },
             { key: 'lowest_ttft', label: 'Lowest TTFT', desc: 'Fastest first token at calibrated load', color: '#3b82f6', icon: '&#9201;' },
+            { key: 'lowest_itl', label: 'Lowest ITL', desc: 'Smoothest streaming at calibrated load', color: '#0891b2', icon: '&#9881;' },
             { key: 'highest_tput', label: 'Highest Throughput', desc: 'Maximum req/s at calibrated load', color: '#f59e0b', icon: '&#9889;' },
             { key: 'most_efficient', label: 'Most Efficient', desc: 'Best throughput per GPU at calibrated load', color: '#8b5cf6', icon: '&#128176;' },
         ];
@@ -742,8 +811,14 @@ function buildCalSection(data) {
             s += `<span>GPUs: <strong>${cfg.gpus || '?'}</strong></span>`;
             if (concStr) s += `<span style="color:#0ea5e9;font-weight:600;">${concStr}</span>`;
             s += '</div>';
+            // vLLM tok/s
+            const calVllmTps = cfg.vllm_tps || cfg.prompt_tps_avg || null;
+            if (calVllmTps != null) {
+                s += `<div style="font-size:0.8em;color:#475569;margin-bottom:4px;"><span>vLLM: <strong style="color:#3b82f6;">${Math.round(calVllmTps).toLocaleString()} tok/s</strong> <span style="font-size:0.85em;color:#94a3b8;">(server total)</span></span></div>`;
+            }
             s += '<table style="width:100%;font-size:0.8em;border-collapse:collapse;margin-top:6px;">';
             s += '<tr style="color:#94a3b8;font-weight:600;"><td></td><td>TTFT</td><td>E2E</td><td>ITL</td></tr>';
+            if (cfg.ttft_p50) s += `<tr><td style="font-weight:600;color:#475569;">P50</td><td style="color:#64748b;">${Math.round(cfg.ttft_p50).toLocaleString()} ms</td><td style="color:#64748b;">${fmtE2e(cfg.e2e_p50)}</td><td>${cfg.itl_p50 ? cfg.itl_p50 + ' ms' : '-'}</td></tr>`;
             s += `<tr><td style="font-weight:600;color:#475569;">P90</td><td style="font-weight:700;color:#1e293b;">${cfg.ttft_p90 != null ? Math.round(cfg.ttft_p90).toLocaleString() + ' ms' : '-'}</td><td>${fmtE2e(cfg.e2e_p90)}</td><td>${cfg.itl_p90 ? cfg.itl_p90 + ' ms' : '-'}</td></tr>`;
             if (cfg.ttft_p95) s += `<tr><td style="font-weight:600;color:#475569;">P95</td><td style="color:#64748b;">${Math.round(cfg.ttft_p95).toLocaleString()} ms</td><td style="color:#64748b;">${fmtE2e(cfg.e2e_p95)}</td><td>${cfg.itl_p95 ? cfg.itl_p95 + ' ms' : '-'}</td></tr>`;
             if (cfg.ttft_p99) s += `<tr><td style="font-weight:600;color:#475569;">P99</td><td style="color:#64748b;">${Math.round(cfg.ttft_p99).toLocaleString()} ms</td><td style="color:#64748b;">${fmtE2e(cfg.e2e_p99)}</td><td>${cfg.itl_p99 ? cfg.itl_p99 + ' ms' : '-'}</td></tr>`;
@@ -753,6 +828,94 @@ function buildCalSection(data) {
 
         s += '</div></div>';
     }
+    return s;
+}
+
+// ── Cache Sweep Recommendation Cards ────────────────────────────────────────
+function buildCacheRecCards(data) {
+    const cacheBest = data.summary && data.summary.cache_sweep_best;
+    if (!cacheBest) return '';
+    let s = '';
+    const cacheTypes = [
+        { key: 'balanced', label: 'Best Balanced', desc: 'Best TTFT-to-throughput ratio with cache', color: '#059669', icon: '&#9878;' },
+        { key: 'lowest_ttft', label: 'Lowest TTFT', desc: 'Fastest first token with cache', color: '#3b82f6', icon: '&#9201;' },
+        { key: 'highest_tput', label: 'Highest Throughput', desc: 'Maximum req/s with cache', color: '#f59e0b', icon: '&#9889;' },
+        { key: 'most_efficient', label: 'Most Efficient', desc: 'Best throughput per GPU with cache', color: '#8b5cf6', icon: '&#128176;' },
+    ];
+    const archColors = { pd: '#2563eb', aggregated: '#059669', ep: '#7c3aed' };
+    const cacheSeen = new Set();
+
+    s += '<div style="border:2px solid #8b5cf6;border-left:6px solid #8b5cf6;border-radius:10px;margin:20px 0;overflow:hidden;">';
+    s += '<div style="background:linear-gradient(135deg,#7c3aed,#8b5cf6);padding:14px 20px;font-size:1.1em;font-weight:800;color:white;">Deployment Recommendation &mdash; Cache Hit Sweep</div>';
+    s += '<div style="padding:12px 20px 4px;color:#475569;font-size:0.9em;">Performance with varying prefix cache hit rates — showing how cache efficiency affects throughput and latency at calibrated load.</div>';
+    s += '<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:16px;padding:16px 20px;">';
+
+    cacheTypes.forEach(sel => {
+        const cfg = cacheBest[sel.key];
+        if (!cfg) return;
+        const cacheId = cfg.test_id || cfg.config_name || '';
+        let dupNote = '';
+        if (cacheSeen.has(cacheId)) {
+            const others = cacheTypes.filter(s2 => s2.key !== sel.key && cacheBest[s2.key] && (cacheBest[s2.key].test_id || cacheBest[s2.key].config_name) === cacheId).map(s2 => s2.label);
+            if (others.length) dupNote = others.join(', ');
+            else return;
+        }
+        cacheSeen.add(cacheId);
+
+        const archKey = cfg.architecture || 'aggregated';
+        const aColor = archColors[archKey] || '#64748b';
+        let deploy;
+        if (cfg.prefill_pods && cfg.decode_pods) {
+            deploy = cfg.prefill_tp === cfg.decode_tp
+                ? `${cfg.prefill_pods}P+${cfg.decode_pods}D TP=${cfg.prefill_tp || cfg.tp || '?'}`
+                : `${cfg.prefill_pods}P+${cfg.decode_pods}D PTP=${cfg.prefill_tp || '?'} DTP=${cfg.decode_tp || '?'}`;
+        } else {
+            deploy = cfg.name || cfg.config_name || '';
+        }
+        const tput = cfg.throughput_mean || cfg.throughput_p90 || '-';
+        const concStr = cfg.concurrency ? `c=${cfg.concurrency}` : '';
+        const cacheStr = cfg.cache_hit_pct != null ? cfg.cache_hit_pct + '% cache hit' : '';
+        const fmtE2e = v => v != null ? (v >= 1000 ? (v/1000).toFixed(1) + ' s' : Math.round(v) + ' ms') : '-';
+
+        s += '<div style="background:white;border-radius:12px;overflow:hidden;box-shadow:0 1px 3px rgba(0,0,0,0.08);border:2px solid #cbd5e1;">';
+        s += `<div style="background:linear-gradient(135deg,${sel.color},${sel.color}cc);padding:10px 14px;color:white;">`;
+        s += `<div style="font-weight:700;font-size:0.85em;">${sel.icon} ${sel.label}</div>`;
+        s += `<div style="display:flex;gap:4px;margin-top:2px;"><div style="font-size:0.65em;background:${aColor};padding:2px 6px;border-radius:10px;font-weight:600;">${archKey.toUpperCase()}</div>`;
+        if (cacheStr) s += `<div style="font-size:0.65em;background:rgba(139,92,246,0.15);padding:2px 6px;border-radius:10px;color:#7c3aed;font-weight:600;">${cacheStr}</div>`;
+        if (dupNote) s += `<div style="font-size:0.65em;background:rgba(255,255,255,0.2);padding:2px 6px;border-radius:10px;">+ ${dupNote}</div>`;
+        s += '</div>';
+        if (sel.desc) s += `<div style="font-size:0.7em;opacity:0.9;margin-top:1px;">${sel.desc}</div>`;
+        s += '</div>';
+        s += '<div style="padding:12px 14px;">';
+        s += `<div style="font-size:1.1em;font-weight:800;color:#0f172a;margin-bottom:8px;">${deploy}</div>`;
+        s += '<div style="display:flex;gap:12px;font-size:0.85em;color:#475569;margin-bottom:4px;">';
+        s += `<span>Throughput: <strong>${typeof tput === 'number' ? tput.toFixed(2) + ' req/s' : tput}</strong></span>`;
+        s += `<span>GPUs: <strong>${cfg.gpus || '?'}</strong></span>`;
+        if (concStr) s += `<span style="color:#7c3aed;font-weight:600;">${concStr}</span>`;
+        s += '</div>';
+        if (cfg.vllm_tps != null) {
+            s += `<div style="font-size:0.8em;color:#475569;margin-bottom:4px;"><span>vLLM: <strong style="color:#7c3aed;">${Math.round(cfg.vllm_tps).toLocaleString()} tok/s</strong> <span style="font-size:0.85em;color:#94a3b8;">(server total)</span></span></div>`;
+        }
+        s += '<table style="width:100%;font-size:0.8em;border-collapse:collapse;margin-top:6px;">';
+        s += '<tr style="color:#94a3b8;font-weight:600;"><td></td><td>TTFT</td><td>E2E</td><td>ITL</td></tr>';
+        if (cfg.ttft_p50) s += `<tr><td style="font-weight:600;color:#475569;">P50</td><td style="color:#64748b;">${Math.round(cfg.ttft_p50).toLocaleString()} ms</td><td style="color:#64748b;">${fmtE2e(cfg.e2e_p50)}</td><td>${cfg.itl_p50 ? cfg.itl_p50 + ' ms' : '-'}</td></tr>`;
+        s += `<tr><td style="font-weight:600;color:#475569;">P90</td><td style="font-weight:700;color:#1e293b;">${cfg.ttft_p90 != null ? Math.round(cfg.ttft_p90).toLocaleString() + ' ms' : '-'}</td><td>${fmtE2e(cfg.e2e_p90)}</td><td>${cfg.itl_p90 ? cfg.itl_p90 + ' ms' : '-'}</td></tr>`;
+        if (cfg.ttft_p95) s += `<tr><td style="font-weight:600;color:#475569;">P95</td><td style="color:#64748b;">${Math.round(cfg.ttft_p95).toLocaleString()} ms</td><td style="color:#64748b;">${fmtE2e(cfg.e2e_p95)}</td><td>${cfg.itl_p95 ? cfg.itl_p95 + ' ms' : '-'}</td></tr>`;
+        if (cfg.ttft_p99) s += `<tr><td style="font-weight:600;color:#475569;">P99</td><td style="color:#64748b;">${Math.round(cfg.ttft_p99).toLocaleString()} ms</td><td style="color:#64748b;">${fmtE2e(cfg.e2e_p99)}</td><td>${cfg.itl_p99 ? cfg.itl_p99 + ' ms' : '-'}</td></tr>`;
+        s += '</table>';
+        s += '</div></div>';
+    });
+
+    s += '</div></div>';
+    return s;
+}
+
+// ── Calibrated Load Tab (Step 11) ───────────────────────────────────────────
+function buildCalSection(data) {
+    const cal = data.calibrated_qps;
+    const calBest = data.summary && data.summary.calibrated_best;
+    if (!cal && !calBest) return '';
+    let s = '';
 
     // GPU sizing analysis
     if (cal && cal.gpu_sizing) {
@@ -938,7 +1101,7 @@ function buildTestSettingsSection(data) {
             ['Concurrent Users', rc.qps != null ? Math.round(rc.qps) : na],
             ['Rate Type', rc.rate_type || 'concurrent'],
             rc.turns > 1 ? ['Turns per Conversation', rc.turns] : null,
-            rc.turn_delay ? ['Inter-Turn Delay', rc.turn_delay + 's' + (rc.turn_delay_stdev ? ' &sigma;=' + rc.turn_delay_stdev + 's' : '') + (rc.turn_delay_min || rc.turn_delay_max ? ' [' + (rc.turn_delay_min || '?') + '–' + (rc.turn_delay_max || '?') + 's]' : '')] : null,
+            rc.turns > 1 && rc.turn_delay ? ['Inter-Turn Delay', rc.turn_delay + 's' + (rc.turn_delay_stdev ? ' &sigma;=' + rc.turn_delay_stdev + 's' : '') + (rc.turn_delay_min || rc.turn_delay_max ? ' [' + (rc.turn_delay_min || '?') + '–' + (rc.turn_delay_max || '?') + 's]' : '')] : null,
             ['Test Duration', (rc.test_duration || 300) + 's'],
             ['Stop Mode', rc.stop_mode || 'duration'],
             rc.max_requests ? ['Max Requests', rc.max_requests] : null,
@@ -956,7 +1119,7 @@ function buildTestSettingsSection(data) {
             ['Headroom', (rc.headroom || 1.3) + 'x'],
             ['Latency SLA', rc.latency_constraint_enabled ? rc.latency_constraint_ms + 'ms @ ' + rc.latency_constraint_percentile : 'Disabled'],
             ['Calibrated Load', rc.calibrated_load_enabled ? 'Enabled' : 'Disabled'],
-            ['Concurrency Sweep', rc.inferencex_sweep_enabled ? 'Enabled' + (rc.concurrency_sweep_levels ? ' [' + rc.concurrency_sweep_levels.join(', ') + ']' : (rc.concurrency_sweep_count ? ' (' + rc.concurrency_sweep_count + ' levels)' : '')) : 'Disabled'],
+            ['Concurrency Sweep', rc.inferencex_sweep_enabled ? 'Enabled — ' + ({'architecture_aware':'Architecture-Aware','all_recommendations':'All Recommendations','all':'All Configs'}[rc.concurrency_sweep_mode] || 'Architecture-Aware') + (rc.concurrency_sweep_count ? ' (' + rc.concurrency_sweep_count + ' levels)' : '') + (rc.concurrency_sweep_levels ? ' [' + rc.concurrency_sweep_levels.join(', ') + ']' : '') : 'Disabled'],
             ['Cache Sweep', rc.cache_sweep_enabled ? 'Enabled' : 'Disabled'],
         ]},
         { title: 'vLLM Engine', color: '#0891b2', rows: [
@@ -977,6 +1140,8 @@ function buildTestSettingsSection(data) {
             adv.model_loader_extra_config && adv.model_loader_extra_config.mode === 'custom' ? ['Model Loader Config', '<span style="font-size:0.85em;">' + adv.model_loader_extra_config.value + '</span>'] : null,
             advToggle('enable_dbo', null) !== null ? ['Dual Batch Overlap', advToggle('enable_dbo', 'Off')] : null,
             advToggle('enable_eplb', null) !== null ? ['Expert Load Balancing', advToggle('enable_eplb', 'Off')] : null,
+            adv.num_speculative_tokens && adv.num_speculative_tokens.mode === 'custom' ? ['Speculative Tokens (MTP)', adv.num_speculative_tokens.value] : null,
+            adv.speculative_model && adv.speculative_model.mode === 'custom' ? ['Speculative Model', adv.speculative_model.value] : null,
         ]},
         { title: 'Infrastructure', color: '#d97706', rows: [
             ['Inference Image', '<span style="word-break:break-all;font-size:0.9em;">' + (rc.image || na) + '</span>'],
@@ -1184,6 +1349,10 @@ function buildConcurrencySweepSection(data) {
     });
     s += '<div class="chart-box"><h3>Throughput per GPU vs Concurrency</h3><div id="dl-sweep-tput-gpu" style="height:430px"></div></div>';
 
+    s += '<div class="chart-box"><h3>Token Throughput &mdash; GPU Computed vs Server Total vs Client</h3>';
+    s += '<p style="color:#64748b;font-size:0.85em;margin:0 0 4px;"><strong>GPU computed:</strong> Prompt tokens actually computed (excludes cached) + generation. <strong>Server total:</strong> All tokens processed by vLLM (incl. cached prefixes). <strong>Client:</strong> Tokens measured by the load tester.</p>';
+    s += '<div id="dl-sweep-token-tput" style="height:530px"></div></div>';
+
     const hasCache = configKeys.some(k => sweep[k].some(p => p.cache_hit_pct != null));
     if (hasCache) {
         s += '<div class="chart-box"><h3>Cache Hit % vs Concurrency</h3><div id="dl-sweep-cache-hit" style="height:430px"></div></div>';
@@ -1191,11 +1360,11 @@ function buildConcurrencySweepSection(data) {
 
     // Sweep Pareto charts
     s += '<div class="chart-box"><h3>Pareto &mdash; Throughput vs Interactivity</h3>';
-    s += '<p style="color:#64748b;font-size:0.85em;margin:0 0 4px;">Each architecture\'s best throughput/GPU at each concurrency level. Higher curve = better architecture.</p>';
-    s += '<div id="dl-sweep-pareto-inter" style="height:600px"></div></div>';
+    s += '<p style="color:#64748b;font-size:0.85em;margin:0 0 4px;">Trade-off between per-user token speed (X) and GPU throughput efficiency (Y) across concurrency levels. Top-right is ideal. Each point is annotated with config name, interactivity, and throughput/GPU.</p>';
+    s += '<div id="dl-sweep-pareto-inter" style="height:700px"></div></div>';
     s += '<div class="chart-box"><h3>Pareto &mdash; Throughput vs TTFT</h3>';
-    s += '<p style="color:#64748b;font-size:0.85em;margin:0 0 4px;">Trade-off between latency and throughput per GPU across concurrency levels.</p>';
-    s += '<div id="dl-sweep-pareto-ttft" style="height:600px"></div></div>';
+    s += '<p style="color:#64748b;font-size:0.85em;margin:0 0 4px;">Trade-off between time to first token (X, lower is better) and GPU throughput efficiency (Y). Top-left is ideal.</p>';
+    s += '<div id="dl-sweep-pareto-ttft" style="height:700px"></div></div>';
 
     const tid = 'dl-sweep-table';
     s += `<div class="chart-box"><h3>All Sweep Data Points</h3>`;
@@ -1215,7 +1384,9 @@ function buildConcurrencySweepSection(data) {
         const points = [...sweep[cfgKey]].sort((a, b) => a.concurrency - b.concurrency);
         points.forEach(p => {
             const cls = p.is_calibrated ? ' class="pareto"' : '';
-            const label = p.config_label || cfgKey;
+            var _rawLbl = p.config_label || cfgKey;
+            var _aTag = cfgKey.startsWith('ep') ? ' (EP)' : cfgKey.startsWith('pd') ? ' (PD)' : ' (AG)';
+            const label = _rawLbl.indexOf('(') >= 0 ? _rawLbl : _rawLbl + _aTag;
             s += `<tr${cls}>`;
             s += `<td>${label}</td>`;
             s += `<td data-val="${p.concurrency}">${p.concurrency}</td>`;
@@ -1243,59 +1414,62 @@ function buildCacheSweepSection(data) {
     const configKeys = Object.keys(sweep);
     let s = '';
 
-    s += '<div style="border-radius:10px;overflow:hidden;border:2px solid #8b5cf6;border-left:6px solid #8b5cf6;margin-bottom:20px;">';
-    s += '<div style="background:linear-gradient(135deg,#8b5cf6,#a78bfa);padding:12px 20px;color:white;font-weight:700;">Cache Sweep</div>';
-    s += '<div style="padding:12px 20px;font-size:0.95em;">Sweep prefix cache hit rates to measure the impact of caching on latency and throughput.</div>';
+    const archColors = {pd: '#2563eb', aggregated: '#059669', ep: '#7c3aed'};
+    const archLabels = {pd: 'PD', aggregated: 'Aggregated', ep: 'EP'};
+    function csArchKey(k) { return k.startsWith('pd') ? 'pd' : k.startsWith('ep') ? 'ep' : 'aggregated'; }
 
-    let totalPoints = 0;
-    configKeys.forEach(k => { totalPoints += sweep[k].length; });
-    s += '<div class="stats">';
-    s += dlStatCard(configKeys.length, 'Configurations');
-    s += dlStatCard(totalPoints, 'Data Points');
-    s += '</div>';
-
-    ['p90', 'p95', 'p99'].forEach(pctl => {
-        s += `<div class="chart-box"><h3>TTFT ${pctl.toUpperCase()} vs Cache Hit %</h3><div id="dl-cache-ttft-${pctl}" style="height:430px"></div></div>`;
-    });
-    s += '<div class="chart-box"><h3>Throughput Mean vs Cache Hit %</h3><div id="dl-cache-tput" style="height:430px"></div></div>';
-    s += '<div class="chart-box"><h3>Actual Hit Rate vs Configured Hit %</h3><div id="dl-cache-actual-hit" style="height:430px"></div></div>';
-
-    const tid = 'dl-cache-sweep-table';
-    s += `<div class="chart-box"><h3>All Cache Sweep Data</h3>`;
-    s += `<table id="${tid}"><tr>`;
-    s += `<th style="cursor:pointer;" onclick="sortReportTable('${tid}',0,'str')">Config &#x21C5;</th>`;
-    s += `<th style="cursor:pointer;" onclick="sortReportTable('${tid}',1,'num')">Hit % &#x21C5;</th>`;
-    s += `<th style="cursor:pointer;" onclick="sortReportTable('${tid}',2,'num')">Actual Hit Rate &#x21C5;</th>`;
-    s += `<th style="cursor:pointer;" onclick="sortReportTable('${tid}',3,'num')">TTFT P90 &#x21C5;</th>`;
-    s += `<th style="cursor:pointer;" onclick="sortReportTable('${tid}',4,'num')">TTFT P95 &#x21C5;</th>`;
-    s += `<th style="cursor:pointer;" onclick="sortReportTable('${tid}',5,'num')">TTFT P99 &#x21C5;</th>`;
-    s += `<th style="cursor:pointer;" onclick="sortReportTable('${tid}',6,'num')">Tput Mean &#x21C5;</th>`;
-    s += `<th style="cursor:pointer;" onclick="sortReportTable('${tid}',7,'num')">Output TPS &#x21C5;</th>`;
-    s += `<th style="cursor:pointer;" onclick="sortReportTable('${tid}',8,'num')">ITL P90 &#x21C5;</th>`;
-    s += `<th style="cursor:pointer;" onclick="sortReportTable('${tid}',9,'num')">Concurrency &#x21C5;</th>`;
-    s += `<th style="cursor:pointer;" onclick="sortReportTable('${tid}',10,'num')">GPUs &#x21C5;</th>`;
-    s += '</tr>';
+    // Per-config sections (matching UI style)
     configKeys.forEach(cfgKey => {
+        const ak = csArchKey(cfgKey);
+        const color = archColors[ak] || '#888';
+        const label = archLabels[ak] || cfgKey;
         const points = [...sweep[cfgKey]].sort((a, b) => (a.hit_pct ?? 0) - (b.hit_pct ?? 0));
+        const configLabel = (points[0] && points[0].config_label) || cfgKey;
+        const conc = points[0] && points[0].concurrency ? ' (c=' + points[0].concurrency + ')' : '';
+
+        s += `<div style="border-radius:10px;overflow:hidden;border:2px solid ${color};border-left:6px solid ${color};margin-bottom:20px;">`;
+        s += `<div style="background:linear-gradient(135deg,${color},${color}99);padding:12px 20px;color:white;font-weight:700;font-size:1.2em;">${label} — ${configLabel}${conc} — Cache Hit Sweep</div>`;
+        s += `<div style="padding:8px 20px;font-size:0.85em;color:#64748b;">TTFT percentiles &amp; throughput vs cache hit ratio.</div>`;
+
+        // Charts per config
+        const chartBase = `dl-cache-${cfgKey.replace(/[^a-z0-9]/g, '-')}`;
+        s += `<div class="grid2">`;
+        s += `<div class="chart-box"><h3>TTFT P90/P95/P99 vs Cache Hit %</h3><div id="${chartBase}-ttft" style="height:400px"></div></div>`;
+        s += `<div class="chart-box"><h3>Throughput vs Cache Hit %</h3><div id="${chartBase}-tput" style="height:400px"></div></div>`;
+        s += `</div>`;
+        s += `<div class="chart-box"><h3>Actual Hit Rate vs Configured</h3><div id="${chartBase}-hit" style="height:350px"></div></div>`;
+
+        // Data table per config
+        const tid = `dl-cache-tbl-${cfgKey.replace(/[^a-z0-9]/g, '-')}`;
+        s += `<div class="chart-box"><table id="${tid}"><tr>`;
+        s += `<th style="cursor:pointer;" onclick="sortReportTable('${tid}',0,'num')">Cache Hit % &#x21C5;</th>`;
+        s += `<th style="cursor:pointer;" onclick="sortReportTable('${tid}',1,'num')">Actual Hit % &#x21C5;</th>`;
+        s += `<th style="cursor:pointer;" onclick="sortReportTable('${tid}',2,'num')">Concurrency &#x21C5;</th>`;
+        s += `<th style="cursor:pointer;" onclick="sortReportTable('${tid}',3,'num')">TTFT P50 &#x21C5;</th>`;
+        s += `<th style="cursor:pointer;" onclick="sortReportTable('${tid}',4,'num')">TTFT P90 &#x21C5;</th>`;
+        s += `<th style="cursor:pointer;" onclick="sortReportTable('${tid}',5,'num')">TTFT P95 &#x21C5;</th>`;
+        s += `<th style="cursor:pointer;" onclick="sortReportTable('${tid}',6,'num')">TTFT P99 &#x21C5;</th>`;
+        s += `<th style="cursor:pointer;" onclick="sortReportTable('${tid}',7,'num')">Throughput &#x21C5;</th>`;
+        s += `<th style="cursor:pointer;" onclick="sortReportTable('${tid}',8,'num')">vLLM tok/s &#x21C5;</th>`;
+        s += `<th style="cursor:pointer;" onclick="sortReportTable('${tid}',9,'num')">ITL P90 &#x21C5;</th>`;
+        s += '</tr>';
         points.forEach(p => {
             s += '<tr>';
-            s += `<td>${cfgKey}</td>`;
             s += `<td data-val="${p.hit_pct ?? ''}">${p.hit_pct != null ? p.hit_pct + '%' : '-'}</td>`;
-            s += `<td data-val="${p.actual_hit_rate ?? ''}">${dlFmt(p.actual_hit_rate, 2)}</td>`;
+            s += `<td data-val="${p.actual_hit_rate ?? ''}">${p.actual_hit_rate != null ? p.actual_hit_rate.toFixed(1) + '%' : '-'}</td>`;
+            s += `<td data-val="${p.concurrency ?? ''}">${p.concurrency ?? '-'}</td>`;
+            s += `<td data-val="${p.ttft_p50 ?? ''}">${dlFmt(p.ttft_p50)}</td>`;
             s += `<td data-val="${p.ttft_p90 ?? ''}">${dlFmt(p.ttft_p90)}</td>`;
             s += `<td data-val="${p.ttft_p95 ?? ''}">${dlFmt(p.ttft_p95)}</td>`;
             s += `<td data-val="${p.ttft_p99 ?? ''}">${dlFmt(p.ttft_p99)}</td>`;
             s += `<td data-val="${p.throughput_mean ?? ''}">${dlFmt(p.throughput_mean, 2)}</td>`;
-            s += `<td data-val="${p.output_tps_mean ?? ''}">${dlFmt(p.output_tps_mean, 1)}</td>`;
+            s += `<td data-val="${p.vllm_tps ?? ''}">${p.vllm_tps ? p.vllm_tps.toLocaleString() : dlFmt(p.output_tps_mean, 0)}</td>`;
             s += `<td data-val="${p.itl_p90 ?? ''}">${dlFmt(p.itl_p90)}</td>`;
-            s += `<td data-val="${p.concurrency ?? ''}">${p.concurrency ?? '-'}</td>`;
-            s += `<td data-val="${p.gpus ?? ''}">${p.gpus ?? '-'}</td>`;
             s += '</tr>';
         });
+        s += '</table></div>';
+        s += '</div>';
     });
-    s += '</table></div>';
-
-    s += '</div>';
     return s;
 }
 
@@ -1443,6 +1617,7 @@ function buildParetoFrontierSection(data, allRes) {
     const valid = (allRes || []).filter(r => {
         const tid = r.test_id || r.config_name || '';
         return tid.indexOf('step2-') !== 0 && tid.indexOf('step3-') !== 0 &&
+               tid.indexOf('step11-') !== 0 && tid.indexOf('step12-') !== 0 && tid.indexOf('step13-') !== 0 &&
                r.ttft_p90 > 0 && (r.throughput_mean > 0 || r.throughput_p90 > 0);
     });
     if (valid.length < 2) return '';
@@ -1453,6 +1628,9 @@ function buildParetoFrontierSection(data, allRes) {
     s += '<div class="chart-box"><h3>Pareto &mdash; Throughput vs Interactivity</h3>';
     s += '<p style="color:#64748b;font-size:0.9em;margin:0 0 4px;">Higher interactivity (tok/s/user, X) and higher throughput/GPU (Y) is better.</p>';
     s += '<div id="dl-pareto-interactivity" style="height:700px"></div></div>';
+    s += '<div class="chart-box"><h3>Pareto &mdash; Throughput vs ITL</h3>';
+    s += '<p style="color:#64748b;font-size:0.9em;margin:0 0 4px;">Lower ITL (X) means faster token streaming. Higher throughput/GPU (Y) is better. Top-left is ideal.</p>';
+    s += '<div id="dl-pareto-itl" style="height:700px"></div></div>';
     return s;
 }
 
@@ -1482,6 +1660,9 @@ function buildChartScript(data, charts, allRes) {
         copy._kv_cache_usage = mj.kv_cache_usage || null;
         copy._prompt_tokens_mean = mj.prompt_tokens_mean || null;
         copy._output_tokens_mean = mj.output_tokens_mean || null;
+        copy._throughput_mean_mj = mj.throughput_mean || null;
+        copy._cache_hits_avg = (pm.vllm_prefix_cache_hits_rate || {}).avg || null;
+        copy._cache_queries_avg = (pm.vllm_prefix_cache_queries_rate || {}).avg || null;
         delete copy.metrics_json;
         delete copy.manifests;
         delete copy.test_config;
@@ -1500,13 +1681,13 @@ function buildChartScript(data, charts, allRes) {
     s += 'function dlManifest(testId,type){var m=_manifests[testId];if(!m||!m[type]){alert("Manifest not available for "+testId+" / "+type);return;}var blob=new Blob([m[type]],{type:"text/yaml"});var url=URL.createObjectURL(blob);var a=document.createElement("a");a.href=url;a.download=testId+"-"+type+".yaml";a.click();URL.revokeObjectURL(url);}';
     s += 'var lo={margin:{t:30,b:40,l:50,r:20},height:430,font:{family:"sans-serif"}};';
     s += 'var co={responsive:true};';
+    s += 'function _tL(n,a){if(!n||n.indexOf("(")>=0)return n||"";a=(a||"").toUpperCase();if(a==="PD")return n+" (PD)";if(a==="EP")return n+" (EP)";return n+" (AG)"}';
     s += 'function fmtSI(v,d){if(v==null)return"-";d=d!=null?d:1;if(Math.abs(v)>=1e6)return(v/1e6).toFixed(d)+"M";if(Math.abs(v)>=1e3)return(v/1e3).toFixed(d)+"K";return v.toFixed(d)}';
     s += 'function arrAnn(xs,ys,o){o=o||{};var c=o.color||"#333",d=o.decimals!=null?o.decimals:1,sp=o.suffix||"",spr=o.spread||30;var offs=[{ax:0,ay:-spr},{ax:spr*0.9,ay:spr*0.7},{ax:-spr*0.8,ay:-spr*1.2},{ax:spr*1.1,ay:-spr*0.5},{ax:0,ay:spr*1.1},{ax:-spr,ay:spr*0.8},{ax:spr*1.3,ay:-spr*1.3},{ax:-spr*1.2,ay:spr*1.3}];return ys.map(function(v,i){if(v==null)return null;var p=offs[i%offs.length];return{x:xs[i],y:v,xref:"x",yref:o.yref||"y",text:fmtSI(v,d)+sp,showarrow:true,arrowhead:0,arrowwidth:1,arrowcolor:"#94a3b8",ax:p.ax,ay:p.ay,font:{size:10,color:c},borderpad:2}}).filter(Boolean)}';
     s += 'var vl={...lo,margin:{...lo.margin,b:100},barmode:"group",showlegend:true,legend:{x:0,y:1.15,orientation:"h"}};';
     s += 'var pc={p50:"#60a5fa",p90:"#3b82f6",p95:"#f59e0b",p99:"#ef4444"};';
 
-    // Show all panes for initial rendering
-    s += 'document.querySelectorAll(".dl-pane").forEach(function(p){p.style.display="block"});';
+    // Panes are all visible initially for Plotly rendering; hidden after charts are done
 
     // TP calibration charts — use rec.decode_tp_all / rec.prefill_tp_all
     s += 'var recData=' + JSON.stringify(data.recommendation || {}) + ';';
@@ -1521,7 +1702,7 @@ function buildChartScript(data, charts, allRes) {
     s += '  var itlVals=dtp.map(function(d){return d.itl_p90!=null?d.itl_p90:0});';
     s += '  var dTraces=[{x:tpLabels,y:tpsgVals,name:"Tokens/s/GPU",type:"bar",marker:{color:barColors},text:tpsgVals.map(function(v){return fmtSI(v)}),textposition:"outside",textfont:{size:11,color:"#1e293b"},cliponaxis:false,constraintext:"none",hovertemplate:"<b>%{x}</b><br>%{y:.1f} tokens/s/GPU<extra></extra>"}];';
     s += '  if(itlVals.some(function(v){return v>0})){dTraces.push({x:tpLabels,y:itlVals,name:"ITL P90 (ms)",type:"scatter",mode:"lines+markers",yaxis:"y2",line:{color:"#ef4444",width:3},marker:{size:10,symbol:"circle",color:"#ef4444",line:{width:2,color:"white"}},hovertemplate:"<b>%{x}</b><br>ITL P90: %{y:.2f} ms<extra></extra>"});}';
-    s += '  Plotly.newPlot("tp-dec",dTraces,{...lo,barmode:"group",showlegend:true,legend:{x:0,y:1.15,orientation:"h"},yaxis:{title:"Tokens/s/GPU",side:"left",tickformat:".2s"},yaxis2:{title:"ITL P90 (ms)",side:"right",overlaying:"y",titlefont:{color:"#ef4444"},tickfont:{color:"#ef4444"}}},co);';
+    s += '  Plotly.newPlot("tp-dec",dTraces,{...lo,barmode:"group",margin:{t:30,b:40,l:50,r:60},showlegend:true,legend:{x:0,y:1.15,orientation:"h"},yaxis:{title:"Tokens/s/GPU",side:"left",tickformat:".2s"},yaxis2:{title:"ITL P90 (ms)",side:"right",overlaying:"y",titlefont:{color:"#ef4444"},tickfont:{color:"#ef4444"}}},co);';
     s += '}';
 
     // Prefill TP Sweep (dual-axis: TPSG bars + TTFT P90 line)
@@ -1534,7 +1715,7 @@ function buildChartScript(data, charts, allRes) {
     s += '  var ttftVals=ptp.map(function(d){return d.ttft_p90!=null?d.ttft_p90:0});';
     s += '  var pTraces=[{x:ptpLabels,y:ptpsgVals,name:"Tokens/s/GPU",type:"bar",marker:{color:pBarColors},text:ptpsgVals.map(function(v){return fmtSI(v)}),textposition:"outside",textfont:{size:11,color:"#1e293b"},cliponaxis:false,constraintext:"none",hovertemplate:"<b>%{x}</b><br>%{y:.1f} tokens/s/GPU<extra></extra>"}];';
     s += '  if(ttftVals.some(function(v){return v>0})){pTraces.push({x:ptpLabels,y:ttftVals,name:"TTFT P90 (ms)",type:"scatter",mode:"lines+markers",yaxis:"y2",line:{color:"#3b82f6",width:3},marker:{size:10,symbol:"circle",color:"#3b82f6",line:{width:2,color:"white"}},hovertemplate:"<b>%{x}</b><br>TTFT P90: %{y:.1f} ms<extra></extra>"});}';
-    s += '  Plotly.newPlot("tp-pre",pTraces,{...lo,barmode:"group",showlegend:true,legend:{x:0,y:1.15,orientation:"h"},yaxis:{title:"Tokens/s/GPU",side:"left",tickformat:".2s"},yaxis2:{title:"TTFT P90 (ms)",side:"right",overlaying:"y",titlefont:{color:"#3b82f6"},tickfont:{color:"#3b82f6"}}},co);';
+    s += '  Plotly.newPlot("tp-pre",pTraces,{...lo,barmode:"group",margin:{t:30,b:40,l:50,r:60},showlegend:true,legend:{x:0,y:1.15,orientation:"h"},yaxis:{title:"Tokens/s/GPU",side:"left",tickformat:".2s"},yaxis2:{title:"TTFT P90 (ms)",side:"right",overlaying:"y",titlefont:{color:"#3b82f6"},tickfont:{color:"#3b82f6"}}},co);';
     s += '}';
 
     // Pareto + scatter + efficiency + architecture charts
@@ -1564,14 +1745,14 @@ function buildChartScript(data, charts, allRes) {
 
     // Cache hit rate chart (exclude step2/step3 calibration runs)
     s += 'if(document.getElementById("dl-cfg-cache-hit")){';
-    s += '  var chd=ar.filter(function(r){var tid=r.test_id||r.config_name||"";return tid.indexOf("step2-")!==0&&tid.indexOf("step3-")!==0&&r.cache_hit_pct!=null&&r.cache_hit_pct>0});';
+    s += '  var chd=ar.filter(function(r){var tid=r.test_id||r.config_name||"";return tid.indexOf("step2-")!==0&&tid.indexOf("step3-")!==0&&tid.indexOf("step11-")!==0&&tid.indexOf("step12-")!==0&&tid.indexOf("step13-")!==0&&r.cache_hit_pct!=null&&r.cache_hit_pct>0});';
     s += '  if(chd.length){';
     s += '    var chTraces=[];';
     s += '    var archCols={AGGREGATED:"#1f77b4",PD:"#ff7f0e",EP:"#2ca02c"};';
     s += '    ["AGGREGATED","PD","EP"].forEach(function(arch){';
     s += '      var filtered=chd.filter(function(r){return r.architecture===arch});';
     s += '      if(!filtered.length)return;';
-    s += '      chTraces.push({x:filtered.map(function(r){return r.config_name}),y:filtered.map(function(r){return r.cache_hit_pct}),text:filtered.map(function(r){return r.cache_hit_pct.toFixed(1)+"%"}),textposition:"outside",textfont:{size:10},name:arch,type:"bar",marker:{color:archCols[arch]}});';
+    s += '      chTraces.push({x:filtered.map(function(r){return _tL(r.config_name,r.architecture)}),y:filtered.map(function(r){return r.cache_hit_pct}),text:filtered.map(function(r){return r.cache_hit_pct.toFixed(1)+"%"}),textposition:"outside",textfont:{size:10},name:arch,type:"bar",marker:{color:archCols[arch]}});';
     s += '    });';
     s += '    Plotly.newPlot("dl-cfg-cache-hit",chTraces,{...lo,height:400,barmode:"group",xaxis:{tickangle:-35},yaxis:{title:"Cache Hit %",range:[0,100]},showlegend:true,legend:{x:0,y:1,bgcolor:"rgba(255,255,255,0.9)"},margin:{t:20,b:120,l:60,r:20}},co);';
     s += '  }';
@@ -1579,9 +1760,9 @@ function buildChartScript(data, charts, allRes) {
 
     // Token throughput chart
     s += 'if(document.getElementById("dl-token-tput-chart")){';
-    s += '  var tkRes=ar.filter(function(r){var tid=r.test_id||"";return tid.indexOf("step2-")!==0&&tid.indexOf("step3-")!==0&&(r._gen_tps_avg||r.output_tps_mean);});';
+    s += '  var tkRes=ar.filter(function(r){var tid=r.test_id||"";return tid.indexOf("step2-")!==0&&tid.indexOf("step3-")!==0&&tid.indexOf("step11-")!==0&&tid.indexOf("step12-")!==0&&tid.indexOf("step13-")!==0&&(r._gen_tps_avg||r.output_tps_mean);});';
     s += '  if(tkRes.length){';
-    s += '    var tkLabels=tkRes.map(function(r){return r.config_name});';
+    s += '    var tkLabels=tkRes.map(function(r){return _tL(r.config_name,r.architecture)});';
     s += '    var tkVllmTotal=[],tkGuidellmTotal=[];';
     s += '    tkRes.forEach(function(r){';
     s += '      tkVllmTotal.push(Math.round((r._prompt_tps_avg||0)+(r._gen_tps_avg||0)));';
@@ -1591,13 +1772,13 @@ function buildChartScript(data, charts, allRes) {
     s += '    Plotly.newPlot("dl-token-tput-chart",[';
     s += '      {x:tkLabels,y:tkVllmTotal,name:"vLLM — computed tok/s",type:"bar",marker:{color:"#3b82f6"},text:tkVllmTotal.map(function(v){return v.toLocaleString()}),textposition:"outside",textfont:{size:11,color:"#1e293b"}},';
     s += '      {x:tkLabels,y:tkGuidellmTotal,name:"guidellm — all tok/s (incl. cached)",type:"bar",marker:{color:"#f59e0b"},text:tkGuidellmTotal.map(function(v){return v.toLocaleString()}),textposition:"outside",textfont:{size:11,color:"#1e293b"}}';
-    s += '    ],{...lo,height:400,barmode:"group",xaxis:{tickangle:-35},yaxis:{title:"Total Tokens/s (Prompt + Generation)"},showlegend:true,legend:{x:0,y:1.15,orientation:"h"}},co);';
+    s += '    ],{...lo,height:600,barmode:"group",margin:{t:30,b:160,l:60,r:20},xaxis:{tickangle:-45},yaxis:{title:"Total Tokens/s (Prompt + Generation)"},showlegend:true,legend:{x:0,y:1.15,orientation:"h"}},co);';
     s += '  }';
     s += '}';
 
 
     // Per-percentile PD charts
-    s += 'var pd=ar.filter(function(r){return r.architecture==="PD"});';
+    s += 'var pd=ar.filter(function(r){if(r.architecture!=="PD")return false;var tid=r.test_id||"";return tid.indexOf("step2-")!==0&&tid.indexOf("step3-")!==0&&tid.indexOf("step11-")!==0&&tid.indexOf("step12-")!==0&&tid.indexOf("step13-")!==0});';
     s += 'if(pd.length){';
     s += '  pd.sort(function(a,b){return a.prefill_pods-b.prefill_pods});';
     s += '  var lbls=pd.map(function(r){return r.prefill_pods+"P : "+r.decode_pods+"D"});';
@@ -1614,7 +1795,7 @@ function buildChartScript(data, charts, allRes) {
     s += '    var traces=[{x:lbls,y:ttft,name:"TTFT "+pctl.k.toUpperCase(),type:"scatter",mode:"lines+markers",line:{color:pctl.c,width:3,shape:"spline"},marker:{color:clrs,size:szs,symbol:"circle",line:{width:2,color:"white"}},fill:"tozeroy",fillcolor:pctl.c+"14"},';
     s += '      {x:lbls,y:tput,name:"Throughput Mean",type:"scatter",mode:"lines+markers",yaxis:"y2",line:{color:"#f59e0b",width:3,shape:"spline"},marker:{color:"#f59e0b",size:10,symbol:"diamond",line:{width:2,color:"white"}}}];';
     // Aggregated baseline
-    s += '    var aggr=ar.filter(function(r){return r.architecture==="Aggregated"});';
+    s += '    var aggr=ar.filter(function(r){if(r.architecture!=="Aggregated")return false;var tid=r.test_id||"";return tid.indexOf("step11-")!==0&&tid.indexOf("step12-")!==0&&tid.indexOf("step13-")!==0});';
     s += '    if(aggr.length){var ab=aggr[0];var abl=ab["ttft_"+pctl.k];var abt=ab.throughput_mean||ab.throughput_p90;';
     s += '      if(abl!=null){traces.push({x:["Agg Baseline"],y:[abl],name:"Aggregated",type:"scatter",mode:"markers+text",marker:{color:"#94a3b8",size:16,symbol:"star",line:{width:2,color:"white"}},text:[abl.toFixed(0)+"ms"],textposition:"top center",textfont:{size:10,color:"#64748b"},showlegend:true});}';
     s += '      if(abt!=null){traces.push({x:["Agg Baseline"],y:[abt],name:"Agg Throughput",type:"scatter",mode:"markers",yaxis:"y2",marker:{color:"#d4d4d8",size:12,symbol:"star",line:{width:2,color:"white"}},showlegend:false});}}';
@@ -1650,24 +1831,55 @@ function buildChartScript(data, charts, allRes) {
         s += '});}';
     }
 
-    // vLLM charts
+    // vLLM charts — architecture-grouped lines, deduped by config name
     s += 'if(cd.vllm&&cd.vllm.configs.length){var v=cd.vllm;';
-    s += 'Plotly.newPlot("v1",[{x:v.configs,y:v.ttft.p50,name:"P50",mode:"lines+markers",line:{color:pc.p50,width:2},marker:{size:8}},{x:v.configs,y:v.ttft.p90,name:"P90",mode:"lines+markers",line:{color:pc.p90,width:3},marker:{size:10}},{x:v.configs,y:v.ttft.p95,name:"P95",mode:"lines+markers",line:{color:pc.p95,width:2},marker:{size:8}},{x:v.configs,y:v.ttft.p99,name:"P99",mode:"lines+markers",line:{color:pc.p99,width:2},marker:{size:8}}],{...vl,xaxis:{tickangle:-35},yaxis:{title:"TTFT (ms)"}},co);';
-    s += 'Plotly.newPlot("v2",[{x:v.configs,y:v.itl.p50,name:"P50",mode:"lines+markers",line:{color:pc.p50,width:2},marker:{size:8}},{x:v.configs,y:v.itl.p90,name:"P90",mode:"lines+markers",line:{color:pc.p90,width:3},marker:{size:10}},{x:v.configs,y:v.itl.p95,name:"P95",mode:"lines+markers",line:{color:pc.p95,width:2},marker:{size:8}},{x:v.configs,y:v.itl.p99,name:"P99",mode:"lines+markers",line:{color:pc.p99,width:2},marker:{size:8}}],{...vl,xaxis:{tickangle:-35},yaxis:{title:"ITL (ms)"}},co);';
-    s += 'Plotly.newPlot("v3",[{x:v.configs,y:v.e2e.p50,name:"P50",mode:"lines+markers",line:{color:pc.p50,width:2},marker:{size:8}},{x:v.configs,y:v.e2e.p90,name:"P90",mode:"lines+markers",line:{color:pc.p90,width:3},marker:{size:10}},{x:v.configs,y:v.e2e.p95,name:"P95",mode:"lines+markers",line:{color:pc.p95,width:2},marker:{size:8}},{x:v.configs,y:v.e2e.p99,name:"P99",mode:"lines+markers",line:{color:pc.p99,width:2},marker:{size:8}}],{...vl,xaxis:{tickangle:-35},yaxis:{title:"E2E (seconds)"}},co);';
-    s += 'Plotly.newPlot("v4",[{x:v.configs,y:v.token_rates.prompt,name:"Prompt Tokens/s",mode:"lines+markers",line:{color:"#6366f1",width:3},marker:{size:10}},{x:v.configs,y:v.token_rates.generation,name:"Generation Tokens/s",mode:"lines+markers",line:{color:"#10b981",width:3},marker:{size:10}}],{...vl,xaxis:{tickangle:-35},yaxis:{title:"Tokens/s"}},co);';
-    s += 'Plotly.newPlot("v5",[{x:v.configs,y:v.request_state.running,name:"Running",type:"bar",marker:{color:"#3b82f6"}},{x:v.configs,y:v.request_state.waiting,name:"Waiting",type:"bar",marker:{color:"#ef4444"}},{x:v.configs,y:v.request_state.kv_cache,name:"KV Cache %",type:"scatter",mode:"lines+markers",yaxis:"y2",line:{color:"#f59e0b",width:3},marker:{size:10,symbol:"diamond",color:"#f59e0b"}}],{...vl,margin:{...vl.margin,r:60},xaxis:{tickangle:-35},yaxis:{title:"Count"},yaxis2:{title:"KV Cache %",side:"right",overlaying:"y",range:[0,105]}},co);';
-    s += 'Plotly.newPlot("v6",[{x:v.configs,y:v.time_breakdown.prefill,name:"Prefill",type:"bar",marker:{color:"#6366f1"}},{x:v.configs,y:v.time_breakdown.decode,name:"Decode",type:"bar",marker:{color:"#3b82f6"}},{x:v.configs,y:v.time_breakdown.queue,name:"Queue",type:"bar",marker:{color:"#94a3b8"}},{x:v.configs,y:v.time_breakdown.preemptions,name:"Preemptions/s",type:"scatter",mode:"lines+markers",yaxis:"y2",line:{color:"#ef4444",width:3},marker:{size:10,symbol:"triangle-up",color:"#ef4444"}}],{...vl,barmode:"stack",margin:{...vl.margin,r:60},xaxis:{tickangle:-35},yaxis:{title:"Time Rate (s/s)"},yaxis2:{title:"Preemptions/s",side:"right",overlaying:"y"}},co);';
-    // Pod network (eth0 management traffic)
-    s += 'if(v.network&&v.network.pod_tx&&v.network.pod_tx.some(function(x){return x>0})&&document.getElementById("v7")){Plotly.newPlot("v7",[{x:v.configs,y:v.network.pod_tx,name:"TX (MB/s)",mode:"lines+markers",line:{color:"#3b82f6",width:3},marker:{size:8}},{x:v.configs,y:v.network.pod_rx,name:"RX (MB/s)",mode:"lines+markers",line:{color:"#10b981",width:3},marker:{size:8}}],{...vl,xaxis:{tickangle:-35},yaxis:{title:"MB/s"}},co);}';
-    // NIXL KV Transfer (RDMA traffic)
+    s += 'var aC={aggregated:"#059669",pd:"#2563eb",ep:"#7c3aed"};';
+    s += 'var aL={aggregated:"Aggregated",pd:"PD",ep:"EP"};';
+    s += 'function gA(l){if(l.indexOf("(AG)")>=0||l.indexOf("(aggregated)")>=0)return"aggregated";if(l.indexOf("(EP)")>=0||l.indexOf("(ep)")>=0)return"ep";return"pd";}';
+    s += 'function ddCfg(){var b={};v.configs.forEach(function(c,i){if(!b[c])b[c]=i});var r={};Object.keys(b).forEach(function(c){var a=gA(c);if(!r[a])r[a]=[];r[a].push({c:c,i:b[c]})});return r;}';
+    s += 'function archPctl(elId,data,unit){var ba=ddCfg();var t=[];["aggregated","pd","ep"].forEach(function(a){var p=ba[a];if(!p||!p.length)return;';
+    s += '  var best={};p.forEach(function(x){if(!best[x.c]||(data.p90[x.i]||1e9)<(data.p90[best[x.c].i]||1e9))best[x.c]=x});';
+    s += '  var pts=Object.values(best);pts.sort(function(x,y){return(data.p90[x.i]||0)-(data.p90[y.i]||0)});';
+    s += '  var c=aC[a];t.push({x:pts.map(function(x){return x.c}),y:pts.map(function(x){return data.p90[x.i]}),name:aL[a]+" P90",mode:"lines+markers",line:{color:c,width:3},marker:{size:10,color:c}});';
+    s += '  t.push({x:pts.map(function(x){return x.c}),y:pts.map(function(x){return data.p99[x.i]}),name:aL[a]+" P99",mode:"lines+markers",line:{color:c,width:2,dash:"dot"},marker:{size:8,color:c,symbol:"diamond"}});';
+    s += '});Plotly.newPlot(elId,t,{...vl,xaxis:{tickangle:-35},yaxis:{title:unit}},co);}';
+    s += 'archPctl("v1",v.ttft,"TTFT (ms)");';
+    s += 'archPctl("v2",v.itl,"ITL (ms)");';
+    s += 'archPctl("v3",v.e2e,"E2E (s)");';
+    // Token throughput — arch grouped
+    s += 'var ba4=ddCfg();var t4=[];["aggregated","pd","ep"].forEach(function(a){var p=ba4[a];if(!p)return;p.sort(function(x,y){return(v.token_rates.generation[x.i]||0)-(v.token_rates.generation[y.i]||0)});var c=aC[a];';
+    s += '  t4.push({x:p.map(function(x){return x.c}),y:p.map(function(x){return v.token_rates.prompt[x.i]}),name:aL[a]+" Prompt",mode:"lines+markers",line:{color:c,width:2,dash:"dot"},marker:{size:8,color:c}});';
+    s += '  t4.push({x:p.map(function(x){return x.c}),y:p.map(function(x){return v.token_rates.generation[x.i]}),name:aL[a]+" Gen",mode:"lines+markers",line:{color:c,width:3},marker:{size:10,color:c}});';
+    s += '});Plotly.newPlot("v4",t4,{...vl,xaxis:{tickangle:-35},yaxis:{title:"Tokens/s"}},co);';
+    // Queue & KV — arch grouped
+    s += 'var ba5=ddCfg();var t5=[];["aggregated","pd","ep"].forEach(function(a){var p=ba5[a];if(!p)return;var c=aC[a];';
+    s += '  t5.push({x:p.map(function(x){return x.c}),y:p.map(function(x){return v.request_state.running[x.i]}),name:aL[a]+" Running",mode:"lines+markers",line:{color:c,width:3},marker:{size:10,color:c}});';
+    s += '  t5.push({x:p.map(function(x){return x.c}),y:p.map(function(x){return v.request_state.waiting[x.i]}),name:aL[a]+" Waiting",mode:"lines+markers",line:{color:c,width:2,dash:"dot"},marker:{size:8,color:c,symbol:"diamond"}});';
+    s += '});var allIdx5=[];Object.values(ba5).forEach(function(p){p.forEach(function(x){allIdx5.push(x)})});';
+    s += 't5.push({x:allIdx5.map(function(x){return x.c}),y:allIdx5.map(function(x){return v.request_state.kv_cache[x.i]}),name:"KV Cache %",mode:"lines+markers",yaxis:"y2",line:{color:"#f59e0b",width:2},marker:{size:10,color:"#f59e0b",symbol:"diamond"}});';
+    s += 'Plotly.newPlot("v5",t5,{...vl,margin:{...vl.margin,r:60},xaxis:{tickangle:-35},yaxis:{title:"Count"},yaxis2:{title:"KV Cache %",side:"right",overlaying:"y",range:[0,105]}},co);';
+    // Processing time — arch grouped
+    s += 'var ba6=ddCfg();var t6=[];["aggregated","pd","ep"].forEach(function(a){var p=ba6[a];if(!p)return;var c=aC[a];';
+    s += '  t6.push({x:p.map(function(x){return x.c}),y:p.map(function(x){return v.time_breakdown.prefill[x.i]}),name:aL[a]+" Prefill",mode:"lines+markers",line:{color:c,width:3},marker:{size:10,color:c}});';
+    s += '  t6.push({x:p.map(function(x){return x.c}),y:p.map(function(x){return v.time_breakdown.decode[x.i]}),name:aL[a]+" Decode",mode:"lines+markers",line:{color:c,width:2,dash:"dot"},marker:{size:8,color:c}});';
+    s += '});var allIdx6=[];Object.values(ba6).forEach(function(p){p.forEach(function(x){allIdx6.push(x)})});';
+    s += 't6.push({x:allIdx6.map(function(x){return x.c}),y:allIdx6.map(function(x){return v.time_breakdown.preemptions[x.i]}),name:"Preemptions/s",mode:"markers",yaxis:"y2",marker:{size:10,color:"#ef4444",symbol:"triangle-up"}});';
+    s += 'Plotly.newPlot("v6",t6,{...vl,margin:{...vl.margin,r:60},xaxis:{tickangle:-35},yaxis:{title:"Time Rate (s/s)"},yaxis2:{title:"Preemptions/s",side:"right",overlaying:"y"}},co);';
+    // Pod network — arch grouped
+    s += 'if(v.network&&v.network.pod_tx&&v.network.pod_tx.some(function(x){return x>0})&&document.getElementById("v7")){';
+    s += '  var ba7=ddCfg();var t7=[];["aggregated","pd","ep"].forEach(function(a){var p=ba7[a];if(!p)return;var c=aC[a];';
+    s += '  t7.push({x:p.map(function(x){return x.c}),y:p.map(function(x){return v.network.pod_tx[x.i]}),name:aL[a]+" TX",mode:"lines+markers",line:{color:c,width:3},marker:{size:10,color:c}});';
+    s += '  t7.push({x:p.map(function(x){return x.c}),y:p.map(function(x){return v.network.pod_rx[x.i]}),name:aL[a]+" RX",mode:"lines+markers",line:{color:c,width:2,dash:"dot"},marker:{size:8,color:c}});';
+    s += '  });Plotly.newPlot("v7",t7,{...vl,xaxis:{tickangle:-35},yaxis:{title:"MB/s"}},co);}';
+    // NIXL — arch grouped
     s += 'if(document.getElementById("v8")){';
-    s += '  var nixlTraces=[];';
     s += '  var nixlData=v.network&&v.network.nixl_tx?v.network.nixl_tx:[];';
     s += '  var ibData=v.network&&v.network.ib_rx?v.network.ib_rx:[];';
-    s += '  if(nixlData.some(function(x){return x>0})){nixlTraces.push({x:v.configs,y:nixlData,name:"NIXL TX (GB/s)",mode:"lines+markers+text",text:nixlData.map(function(x){return x>0?x.toFixed(2):""}),textposition:"top center",textfont:{size:10,color:"#8b5cf6"},line:{color:"#8b5cf6",width:3},marker:{size:8},hovertemplate:"<b>%{x}</b><br>NIXL TX: %{y:.2f} GB/s<extra></extra>"});}';
-    s += '  if(ibData.some(function(x){return x>0})){nixlTraces.push({x:v.configs,y:ibData,name:"IB RX (GB/s)",mode:"lines+markers",line:{color:"#f59e0b",width:2,dash:"dash"},marker:{size:8},hovertemplate:"<b>%{x}</b><br>IB RX: %{y:.2f} GB/s<extra></extra>"});}';
-    s += '  if(nixlTraces.length){Plotly.newPlot("v8",nixlTraces,{...vl,xaxis:{tickangle:-35},yaxis:{title:"Throughput (GB/s)"}},co);}';
+    s += '  if(nixlData.some(function(x){return x>0})||ibData.some(function(x){return x>0})){';
+    s += '    var ba8=ddCfg();var t8=[];["aggregated","pd","ep"].forEach(function(a){var p=ba8[a];if(!p)return;var c=aC[a];';
+    s += '    if(nixlData.some(function(x){return x>0})){t8.push({x:p.map(function(x){return x.c}),y:p.map(function(x){return nixlData[x.i]}),name:aL[a]+" NIXL TX",mode:"lines+markers+text",text:p.map(function(x){var vv=nixlData[x.i];return vv>0?vv.toFixed(2):""}),textposition:"top center",textfont:{size:10,color:c},line:{color:c,width:3},marker:{size:10,color:c}});}';
+    s += '    if(ibData.some(function(x){return x>0})){t8.push({x:p.map(function(x){return x.c}),y:p.map(function(x){return ibData[x.i]}),name:aL[a]+" IB RX",mode:"lines+markers",line:{color:c,width:2,dash:"dot"},marker:{size:8,color:c}});}';
+    s += '    });if(t8.length){Plotly.newPlot("v8",t8,{...vl,xaxis:{tickangle:-35},yaxis:{title:"Throughput (GB/s)"}},co);}}';
     s += '}';
     s += '}';
 
@@ -1708,30 +1920,71 @@ function buildChartScript(data, charts, allRes) {
         s += 'var csColors=["#3b82f6","#10b981","#f59e0b","#ef4444","#8b5cf6","#0ea5e9","#ec4899","#14b8a6"];';
         s += '[{k:"p90"},{k:"p95"},{k:"p99"}].forEach(function(pctl){';
         s += '  var el=document.getElementById("dl-sweep-ttft-"+pctl.k);if(!el)return;';
-        s += '  var traces=[];var ci=0;';
+        s += '  var traces=[];var ci=0;var calShapes=[];';
         s += '  Object.keys(csData).forEach(function(cfgKey){';
         s += '    var pts=[].concat(csData[cfgKey]).sort(function(a,b){return a.concurrency-b.concurrency});';
         s += '    var cx=pts.map(function(p){return p.concurrency});';
         s += '    var lats=pts.map(function(p){return p["ttft_"+pctl.k]});';
         s += '    var color=csColors[ci%csColors.length];ci++;';
         s += '    var label=pts[0]&&pts[0].config_label?pts[0].config_label:cfgKey;';
-        s += '    traces.push({x:cx,y:lats,name:label,type:"scatter",mode:"lines+markers",line:{color:color,width:2},marker:{color:color,size:8}});';
-        s += '    var calPts=pts.filter(function(p){return p.is_calibrated});';
-        s += '    if(calPts.length){traces.push({x:calPts.map(function(p){return p.concurrency}),y:calPts.map(function(p){return p["ttft_"+pctl.k]}),name:label+" (calibrated)",type:"scatter",mode:"markers",marker:{color:color,size:16,symbol:"star",line:{width:2,color:"white"}},showlegend:false});}';
+        s += '    traces.push({x:cx,y:lats,name:label,type:"scatter",mode:"lines+markers+text",';
+        s += '      text:lats.map(function(v){return v?Math.round(v).toLocaleString():""}),';
+        s += '      textposition:"top center",textfont:{size:10,color:color},';
+        s += '      line:{color:color,width:3},marker:{color:color,size:8},';
+        s += '      hovertemplate:"<b>"+label+"</b><br>%{x} users<br>TTFT "+pctl.k.toUpperCase()+": %{y:.0f}ms<extra></extra>"});';
+        s += '    pts.forEach(function(p){if(p.is_calibrated){';
+        s += '      calShapes.push({type:"line",x0:p.concurrency,x1:p.concurrency,y0:0,y1:1,yref:"paper",line:{color:"#059669",width:1.5,dash:"dash"}});';
+        s += '    }});';
         s += '  });';
-        s += '  Plotly.newPlot(el,traces,{...lo,xaxis:{title:"Concurrent Users"},yaxis:{title:"TTFT "+pctl.k.toUpperCase()+" (ms)"},showlegend:true,legend:{x:0,y:1.15,orientation:"h"}},co);';
+        s += '  if(calShapes.length){traces.push({x:[calShapes[0].x0],y:[null],mode:"lines",name:"Calibrated",line:{color:"#059669",width:1.5,dash:"dash"},showlegend:true});}';
+        s += '  var allX=[];traces.forEach(function(t){if(t.x)t.x.forEach(function(v){if(v!=null&&allX.indexOf(v)===-1)allX.push(v)})});allX.sort(function(a,b){return a-b});';
+        s += '  Plotly.newPlot(el,traces,{xaxis:{title:"Concurrent Users",gridcolor:"#e2e8f0",tickmode:"array",tickvals:allX},';
+        s += '    yaxis:{title:"TTFT "+pctl.k.toUpperCase()+" (ms)",gridcolor:"#e2e8f0"},';
+        s += '    plot_bgcolor:"#f8fafc",paper_bgcolor:"#fff",margin:{t:20,b:60,l:70,r:20},';
+        s += '    legend:{x:0,y:1,bgcolor:"rgba(255,255,255,0.9)"},shapes:calShapes,hovermode:"closest"},co);';
         s += '});';
         s += '(function(){var el=document.getElementById("dl-sweep-tput-gpu");if(!el)return;';
-        s += '  var traces=[];var ci=0;';
+        s += '  var traces=[];var ci=0;var calShapes=[];';
         s += '  Object.keys(csData).forEach(function(cfgKey){';
         s += '    var pts=[].concat(csData[cfgKey]).sort(function(a,b){return a.concurrency-b.concurrency});';
         s += '    var cx=pts.map(function(p){return p.concurrency});';
         s += '    var tpg=pts.map(function(p){return p.throughput_per_gpu});';
         s += '    var color=csColors[ci%csColors.length];ci++;';
         s += '    var label=pts[0]&&pts[0].config_label?pts[0].config_label:cfgKey;';
-        s += '    traces.push({x:cx,y:tpg,name:label,type:"scatter",mode:"lines+markers",line:{color:color,width:2},marker:{color:color,size:8}});';
+        s += '    traces.push({x:cx,y:tpg,name:label,type:"scatter",mode:"lines+markers+text",';
+        s += '      text:tpg.map(function(v){return v?Math.round(v).toLocaleString():""}),';
+        s += '      textposition:"top center",textfont:{size:10,color:color},';
+        s += '      line:{color:color,width:3},marker:{color:color,size:8},';
+        s += '      hovertemplate:"<b>"+label+"</b><br>%{x} users<br>%{y:.0f} tok/s/gpu<extra></extra>"});';
+        s += '    pts.forEach(function(p){if(p.is_calibrated){';
+        s += '      calShapes.push({type:"line",x0:p.concurrency,x1:p.concurrency,y0:0,y1:1,yref:"paper",line:{color:"#059669",width:1.5,dash:"dash"}});';
+        s += '    }});';
         s += '  });';
-        s += '  Plotly.newPlot(el,traces,{...lo,xaxis:{title:"Concurrent Users"},yaxis:{title:"Throughput per GPU (req/s/GPU)"},showlegend:true,legend:{x:0,y:1.15,orientation:"h"}},co);';
+        s += '  if(calShapes.length){traces.push({x:[calShapes[0].x0],y:[null],mode:"lines",name:"Calibrated",line:{color:"#059669",width:1.5,dash:"dash"},showlegend:true});}';
+        s += '  var allX=[];traces.forEach(function(t){if(t.x)t.x.forEach(function(v){if(v!=null&&allX.indexOf(v)===-1)allX.push(v)})});allX.sort(function(a,b){return a-b});';
+        s += '  Plotly.newPlot(el,traces,{xaxis:{title:"Concurrent Users",gridcolor:"#e2e8f0",tickmode:"array",tickvals:allX},';
+        s += '    yaxis:{title:"Token Throughput per GPU (tok/s/gpu)",gridcolor:"#e2e8f0"},';
+        s += '    plot_bgcolor:"#f8fafc",paper_bgcolor:"#fff",margin:{t:20,b:60,l:70,r:20},';
+        s += '    legend:{x:0,y:1,bgcolor:"rgba(255,255,255,0.9)"},shapes:calShapes,hovermode:"closest"},co);';
+        s += '})();';
+        s += '(function(){var el=document.getElementById("dl-sweep-token-tput");if(!el)return;';
+        s += '  var sweepTk=ar.filter(function(r){if(r.quality==="discard")return false;var tid=r.test_id||"";if(tid.indexOf("step11-")!==0&&tid.indexOf("step12-")!==0)return false;return r._gen_tps_avg||r.output_tps_mean;});';
+        s += '  if(!sweepTk.length)return;';
+        s += '  sweepTk.sort(function(a,b){var aa=a.architecture||"";var ba=b.architecture||"";if(aa!==ba)return aa.localeCompare(ba);return(a.concurrency||0)-(b.concurrency||0)});';
+        s += '  var labels=sweepTk.map(function(r){return _tL(r.config_name,r.architecture)+" c="+(r.concurrency||"?")});';
+        s += '  var comp=[],srv=[],cli=[];';
+        s += '  sweepTk.forEach(function(r){';
+        s += '    var pA=r._prompt_tps_avg||0;var gA=r._gen_tps_avg||0;';
+        s += '    srv.push(Math.round(pA+gA));';
+        s += '    var cH=r._cache_hits_avg||0;var cQ=r._cache_queries_avg||0;';
+        s += '    var cR=cQ>0?cH/cQ:0;comp.push(Math.round(pA*(1-cR))+Math.round(gA));';
+        s += '    var tp=r._throughput_mean_mj||r.throughput_mean||0;cli.push(Math.round((r._prompt_tokens_mean||0)*tp+(r._output_tokens_mean||0)*tp));';
+        s += '  });';
+        s += '  Plotly.newPlot(el,[';
+        s += '    {x:labels,y:comp,name:"GPU computed",type:"bar",marker:{color:"#3b82f6"},text:comp.map(function(v){return v.toLocaleString()}),textposition:"outside",textfont:{size:9,color:"#1e293b"}},';
+        s += '    {x:labels,y:srv,name:"Server total (incl. cached)",type:"bar",marker:{color:"#93c5fd"},text:srv.map(function(v){return v.toLocaleString()}),textposition:"outside",textfont:{size:9,color:"#1e293b"}},';
+        s += '    {x:labels,y:cli,name:"Client (guidellm)",type:"bar",marker:{color:"#f59e0b"},text:cli.map(function(v){return v.toLocaleString()}),textposition:"outside",textfont:{size:9,color:"#1e293b"}}';
+        s += '  ],{...lo,height:530,margin:{t:60,b:160,l:60,r:20},barmode:"group",xaxis:{tickangle:-45},yaxis:{title:"Total Tokens/s (Prompt + Generation)"},showlegend:true,legend:{x:0,y:1.15,orientation:"h"}},co);';
         s += '})();';
         s += '(function(){var el=document.getElementById("dl-sweep-cache-hit");if(!el)return;';
         s += '  var traces=[];var ci=0;';
@@ -1748,86 +2001,140 @@ function buildChartScript(data, charts, allRes) {
         s += '})();';
     }
 
-    // Sweep Pareto: Throughput vs Interactivity
+    // Sweep Pareto: Throughput vs Interactivity (1:1 with UI charts.js)
     s += '(function(){var el=document.getElementById("dl-sweep-pareto-inter");if(!el||!csData)return;';
     s += '  var allPts=[];';
     s += '  Object.keys(csData).forEach(function(cfgKey){';
+    s += '    var isPd=cfgKey.indexOf("pd")===0;var isEp=cfgKey.indexOf("ep")===0;';
+    s += '    var arch=(isPd||isEp)?"PD":"AGGREGATED";';
+    s += '    var aTag=isEp?" (EP)":isPd?" (PD)":" (AG)";';
     s += '    csData[cfgKey].forEach(function(p){';
-    s += '      var tputGpu=p.throughput_per_gpu||0;var inter=p.interactivity||0;';
-    s += '      if(tputGpu>0&&inter>0){allPts.push({x:inter,y:tputGpu,label:p.config_label||cfgKey,conc:p.concurrency,arch:cfgKey});}';
-    s += '    });';
-    s += '  });';
+    s += '      var tputGpu=p.throughput_per_gpu||0;var inter=(p.vllm_tps||p.output_tps_mean||0)/(p.concurrency||1);';
+    s += '      var lbl=p.config_label||cfgKey;if(lbl.indexOf("(")<0)lbl+=aTag;';
+    s += '      if(tputGpu>0&&inter>0){allPts.push({x:inter,y:tputGpu,nx:inter,ny:tputGpu,label:lbl,conc:p.concurrency,arch:arch,cfgKey:cfgKey});}';
+    s += '    });});';
     s += '  if(allPts.length<2)return;';
-    s += '  var byArch={};allPts.forEach(function(p){if(!byArch[p.arch])byArch[p.arch]=[];byArch[p.arch].push(p);});';
-    s += '  var traces=[];var ci=0;';
-    s += '  Object.keys(byArch).forEach(function(arch){';
-    s += '    var pts=byArch[arch].sort(function(a,b){return a.x-b.x});';
-    s += '    var color=csColors[ci%csColors.length];ci++;';
-    s += '    traces.push({x:pts.map(function(p){return p.x}),y:pts.map(function(p){return p.y}),text:pts.map(function(p){return p.label+"<br>c="+p.conc+"<br>"+p.y.toFixed(0)+" tok/s/GPU"}),name:pts[0].label,mode:"lines+markers",line:{color:color,width:2},marker:{color:color,size:10},hovertemplate:"<b>%{text}</b><extra></extra>"});';
+    s += '  function frontierLine(points){';
+    s += '    if(!points.length)return[];';
+    s += '    var sorted=points.slice().sort(function(a,b){return b.nx-a.nx});';
+    s += '    var frontier=[];var maxY=-Infinity;';
+    s += '    for(var i=0;i<sorted.length;i++){if(sorted[i].ny>maxY){frontier.push(sorted[i]);maxY=sorted[i].ny;}}';
+    s += '    frontier.sort(function(a,b){return a.nx-b.nx});';
+    s += '    return frontier;}';
+    s += '  var cfgColors=["#dc2626","#2563eb","#059669","#d97706","#7c3aed","#db2777","#0891b2","#65a30d","#ea580c","#6d28d9"];';
+    s += '  var cfgGroups={};allPts.forEach(function(p){if(!cfgGroups[p.cfgKey])cfgGroups[p.cfgKey]=[];cfgGroups[p.cfgKey].push(p);});';
+    s += '  var traces=[];var annotations=[];var ci=0;';
+    s += '  Object.keys(cfgGroups).sort().forEach(function(key){';
+    s += '    var pts=cfgGroups[key];var color=cfgColors[ci%cfgColors.length];ci++;';
+    s += '    traces.push({x:pts.map(function(p){return p.nx}),y:pts.map(function(p){return p.ny}),';
+    s += '      text:pts.map(function(p){return p.label+"<br>"+p.x.toFixed(1)+" tok/s/user<br>"+p.y.toFixed(0)+" tok/s/GPU<br>c="+p.conc;}),';
+    s += '      name:key,mode:"markers",marker:{color:color,size:14},hovertemplate:"<b>%{text}</b><extra></extra>"});';
     s += '  });';
-    s += '  Plotly.newPlot(el,traces,{...lo,height:600,xaxis:{title:"Interactivity (tok/s/user)"},yaxis:{title:"Throughput per GPU (tok/s/GPU)"},showlegend:true,legend:{x:0,y:1.15,orientation:"h"}},co);';
+    s += '  var pdAll=allPts.filter(function(p){return p.arch==="PD"});';
+    s += '  var aggAll=allPts.filter(function(p){return p.arch==="AGGREGATED"});';
+    s += '  var aggPareto=frontierLine(aggAll),pdPareto=frontierLine(pdAll);';
+    s += '  if(aggPareto.length>1){traces.push({x:aggPareto.map(function(p){return p.nx}),y:aggPareto.map(function(p){return p.ny}),';
+    s += '    name:"Aggregated — Frontier",mode:"lines",line:{color:"#dc2626",width:3,dash:"dot"},hoverinfo:"skip"});}';
+    s += '  if(pdPareto.length>1){traces.push({x:pdPareto.map(function(p){return p.nx}),y:pdPareto.map(function(p){return p.ny}),';
+    s += '    name:"Disaggregation — Frontier",mode:"lines",line:{color:"#2563eb",width:3,dash:"dot"},hoverinfo:"skip"});}';
+    s += '  var positions=[[80,-15],[-80,-15],[70,-45],[-70,-45],[90,-30],[-90,-30],[60,-60],[-60,-60]];';
+    s += '  function addAnnot(pts,color){pts.forEach(function(p,i){';
+    s += '    var pos=positions[i%positions.length];';
+    s += '    annotations.push({x:p.nx,y:p.ny,text:p.cfgKey+"<br>c="+p.conc,showarrow:true,arrowhead:0,arrowwidth:1,arrowcolor:color,';
+    s += '      ax:pos[0],ay:pos[1],font:{size:10,color:color},bgcolor:"rgba(255,255,255,0)",borderpad:2});});}';
+    s += '  addAnnot(aggPareto,"#dc2626");addAnnot(pdPareto,"#2563eb");';
+    s += '  Plotly.newPlot(el,traces,{...lo,height:700,';
+    s += '    xaxis:{title:"Interactivity (tok/s/user)",gridcolor:"#d1d5db",rangemode:"tozero"},';
+    s += '    yaxis:{title:"Token Throughput per GPU (tok/s/GPU)",gridcolor:"#d1d5db",rangemode:"tozero"},';
+    s += '    plot_bgcolor:"white",paper_bgcolor:"white",';
+    s += '    showlegend:true,legend:{x:1.02,y:1,xanchor:"left",bgcolor:"rgba(255,255,255,0.95)",bordercolor:"#e2e8f0",borderwidth:1},';
+    s += '    margin:{t:40,b:70,l:70,r:220},annotations:annotations},co);';
     s += '})();';
 
-    // Sweep Pareto: Throughput vs TTFT
+    // Sweep Pareto: Throughput vs TTFT (matching UI style)
     s += '(function(){var el=document.getElementById("dl-sweep-pareto-ttft");if(!el||!csData)return;';
-    s += '  var allPts=[];';
+    s += '  var aggPts=[],pdPts=[];';
     s += '  Object.keys(csData).forEach(function(cfgKey){';
+    s += '    var isPd=cfgKey.indexOf("pd")===0;var isEp=cfgKey.indexOf("ep")===0;';
+    s += '    var aTag=isEp?" (EP)":isPd?" (PD)":" (AG)";';
     s += '    csData[cfgKey].forEach(function(p){';
     s += '      var tputGpu=p.throughput_per_gpu||0;var ttft=p.ttft_p90||0;';
-    s += '      if(tputGpu>0&&ttft>0){allPts.push({x:ttft,y:tputGpu,label:p.config_label||cfgKey,conc:p.concurrency,arch:cfgKey});}';
-    s += '    });';
-    s += '  });';
-    s += '  if(allPts.length<2)return;';
-    s += '  var byArch={};allPts.forEach(function(p){if(!byArch[p.arch])byArch[p.arch]=[];byArch[p.arch].push(p);});';
-    s += '  var traces=[];var ci=0;';
-    s += '  Object.keys(byArch).forEach(function(arch){';
-    s += '    var pts=byArch[arch].sort(function(a,b){return a.x-b.x});';
-    s += '    var color=csColors[ci%csColors.length];ci++;';
-    s += '    traces.push({x:pts.map(function(p){return p.x}),y:pts.map(function(p){return p.y}),text:pts.map(function(p){return p.label+"<br>c="+p.conc+"<br>TTFT="+p.x.toFixed(0)+"ms"}),name:pts[0].label,mode:"lines+markers",line:{color:color,width:2},marker:{color:color,size:10},hovertemplate:"<b>%{text}</b><extra></extra>"});';
-    s += '  });';
-    s += '  Plotly.newPlot(el,traces,{...lo,height:600,xaxis:{title:"TTFT P90 (ms)"},yaxis:{title:"Throughput per GPU (tok/s/GPU)"},showlegend:true,legend:{x:0,y:1.15,orientation:"h"}},co);';
+    s += '      var lbl=p.config_label||cfgKey;if(lbl.indexOf("(")<0)lbl+=aTag;';
+    s += '      if(tputGpu>0&&ttft>0){var pt={x:ttft,y:tputGpu,label:lbl,conc:p.concurrency};';
+    s += '        if(isPd){pdPts.push(pt);}else{aggPts.push(pt);}}';
+    s += '    });});';
+    s += '  if(aggPts.length+pdPts.length<2)return;';
+    s += '  function ttftFrontier(points){';
+    s += '    if(!points.length)return[];';
+    s += '    var sorted=points.slice().sort(function(a,b){return a.x-b.x});';
+    s += '    var frontier=[];var maxY=-Infinity;';
+    s += '    for(var i=0;i<sorted.length;i++){if(sorted[i].y>maxY){frontier.push(sorted[i]);maxY=sorted[i].y;}}';
+    s += '    return frontier;}';
+    s += '  var aggPareto=ttftFrontier(aggPts),pdPareto=ttftFrontier(pdPts);';
+    s += '  var allTtftPts=aggPts.concat(pdPts);';
+    s += '  var allX=allTtftPts.map(function(p){return p.x}).sort(function(a,b){return a-b});';
+    s += '  var p95Idx=Math.min(Math.floor(allX.length*0.95),allX.length-1);';
+    s += '  var xMax=allX[p95Idx]*1.2;';
+    s += '  var frontierMaxX=0;';
+    s += '  aggPareto.concat(pdPareto).forEach(function(p){if(p.x>frontierMaxX)frontierMaxX=p.x;});';
+    s += '  if(frontierMaxX>xMax)xMax=frontierMaxX*1.1;';
+    s += '  var traces=[];';
+    s += '  if(aggPts.length){var visAgg=aggPts.filter(function(p){return p.x<=xMax});';
+    s += '    traces.push({x:visAgg.map(function(p){return p.x}),y:visAgg.map(function(p){return p.y}),';
+    s += '    text:visAgg.map(function(p){return p.label+"<br>TTFT P90: "+p.x.toFixed(0)+"ms<br>"+p.y.toFixed(0)+" tok/s/GPU";}),';
+    s += '    name:"Aggregated",mode:"markers",marker:{color:"#fca5a5",size:14,opacity:0.5},';
+    s += '    hovertemplate:"<b>%{text}</b><extra></extra>"});}';
+    s += '  if(pdPts.length){var visPd=pdPts.filter(function(p){return p.x<=xMax});';
+    s += '    traces.push({x:visPd.map(function(p){return p.x}),y:visPd.map(function(p){return p.y}),';
+    s += '    text:visPd.map(function(p){return p.label+"<br>TTFT P90: "+p.x.toFixed(0)+"ms<br>"+p.y.toFixed(0)+" tok/s/GPU";}),';
+    s += '    name:"Disaggregation",mode:"markers",marker:{color:"#93c5fd",size:14,opacity:0.5},';
+    s += '    hovertemplate:"<b>%{text}</b><extra></extra>"});}';
+    s += '  if(aggPareto.length){traces.push({x:aggPareto.map(function(p){return p.x}),y:aggPareto.map(function(p){return p.y}),';
+    s += '    text:aggPareto.map(function(p){return p.label+"<br>"+p.x.toFixed(0)+"ms / "+p.y.toFixed(0)+" tok/s/GPU";}),';
+    s += '    name:"Aggregated — Frontier",mode:aggPareto.length>1?"lines+markers+text":"markers+text",';
+    s += '    line:{color:"#dc2626",width:3},marker:{color:"#dc2626",size:8},';
+    s += '    textposition:"top right",textfont:{size:10,color:"#dc2626"},hovertemplate:"<b>%{text}</b><extra></extra>"});}';
+    s += '  if(pdPareto.length){traces.push({x:pdPareto.map(function(p){return p.x}),y:pdPareto.map(function(p){return p.y}),';
+    s += '    text:pdPareto.map(function(p){return p.label+"<br>"+p.x.toFixed(0)+"ms / "+p.y.toFixed(0)+" tok/s/GPU";}),';
+    s += '    name:"Disaggregation — Frontier",mode:pdPareto.length>1?"lines+markers+text":"markers+text",';
+    s += '    line:{color:"#2563eb",width:3},marker:{color:"#2563eb",size:8},';
+    s += '    textposition:"top left",textfont:{size:10,color:"#2563eb"},hovertemplate:"<b>%{text}</b><extra></extra>"});}';
+    s += '  Plotly.newPlot(el,traces,{...lo,height:700,';
+    s += '    xaxis:{title:"TTFT P90 (ms)",gridcolor:"#d1d5db",range:[0,xMax]},';
+    s += '    yaxis:{title:"Token Throughput per GPU (tok/s/GPU)",gridcolor:"#d1d5db",rangemode:"tozero"},';
+    s += '    plot_bgcolor:"white",paper_bgcolor:"white",';
+    s += '    showlegend:true,legend:{x:1,y:1,xanchor:"right",bgcolor:"rgba(255,255,255,0.95)",bordercolor:"#e2e8f0",borderwidth:1},';
+    s += '    margin:{t:40,b:70,l:70,r:160}},co);';
     s += '})();';
 
-    // Cache Sweep charts
+    // Cache Sweep charts — per config
     if (data.cache_sweep && Object.keys(data.cache_sweep).length) {
         s += 'var cacheSweepData=' + JSON.stringify(data.cache_sweep) + ';';
-        s += 'var cacheColors=["#8b5cf6","#10b981","#3b82f6","#ef4444","#f59e0b","#0ea5e9","#ec4899","#14b8a6"];';
-        s += '[{k:"p90"},{k:"p95"},{k:"p99"}].forEach(function(pctl){';
-        s += '  var el=document.getElementById("dl-cache-ttft-"+pctl.k);if(!el)return;';
-        s += '  var traces=[];var ci=0;';
-        s += '  Object.keys(cacheSweepData).forEach(function(cfgKey){';
-        s += '    var pts=[].concat(cacheSweepData[cfgKey]).sort(function(a,b){return(a.hit_pct||0)-(b.hit_pct||0)});';
-        s += '    var cx=pts.map(function(p){return p.hit_pct});';
-        s += '    var lats=pts.map(function(p){return p["ttft_"+pctl.k]});';
-        s += '    var color=cacheColors[ci%cacheColors.length];ci++;';
-        s += '    traces.push({x:cx,y:lats,name:cfgKey,type:"scatter",mode:"lines+markers",line:{color:color,width:2},marker:{color:color,size:8}});';
-        s += '  });';
-        s += '  Plotly.newPlot(el,traces,{...lo,xaxis:{title:"Configured Cache Hit %"},yaxis:{title:"TTFT "+pctl.k.toUpperCase()+" (ms)"},showlegend:true,legend:{x:0,y:1.15,orientation:"h"}},co);';
+        s += 'Object.keys(cacheSweepData).forEach(function(cfgKey){';
+        s += '  var pts=[].concat(cacheSweepData[cfgKey]).sort(function(a,b){return(a.hit_pct||0)-(b.hit_pct||0)});';
+        s += '  if(!pts.length)return;';
+        s += '  var base="dl-cache-"+cfgKey.replace(/[^a-z0-9]/g,"-");';
+        s += '  var cx=pts.map(function(p){return p.hit_pct+"%"});';
+        // TTFT P90/P95/P99 combined chart
+        s += '  var ttftEl=document.getElementById(base+"-ttft");';
+        s += '  if(ttftEl){Plotly.newPlot(ttftEl,[';
+        s += '    {x:cx,y:pts.map(function(p){return p.ttft_p90}),name:"P90",type:"scatter",mode:"lines+markers",line:{color:"#3b82f6",width:3},marker:{size:8}},';
+        s += '    {x:cx,y:pts.map(function(p){return p.ttft_p95}),name:"P95",type:"scatter",mode:"lines+markers",line:{color:"#f59e0b",width:2},marker:{size:8}},';
+        s += '    {x:cx,y:pts.map(function(p){return p.ttft_p99}),name:"P99",type:"scatter",mode:"lines+markers",line:{color:"#ef4444",width:2},marker:{size:8}}';
+        s += '  ],{...lo,height:400,xaxis:{title:"Cache Hit %"},yaxis:{title:"TTFT (ms)"},showlegend:true,legend:{x:0,y:1.15,orientation:"h"}},co);}';
+        // Throughput chart
+        s += '  var tputEl=document.getElementById(base+"-tput");';
+        s += '  if(tputEl){Plotly.newPlot(tputEl,[';
+        s += '    {x:cx,y:pts.map(function(p){return p.throughput_mean}),name:"Throughput",type:"scatter",mode:"lines+markers",line:{color:"#10b981",width:3},marker:{size:10}}';
+        s += '  ],{...lo,height:400,xaxis:{title:"Cache Hit %"},yaxis:{title:"Throughput (req/s)"},showlegend:false},co);}';
+        // Actual hit rate chart
+        s += '  var hitEl=document.getElementById(base+"-hit");';
+        s += '  var hitPts=pts.filter(function(p){return p.actual_hit_rate!=null});';
+        s += '  if(hitEl&&hitPts.length){Plotly.newPlot(hitEl,[';
+        s += '    {x:hitPts.map(function(p){return p.hit_pct+"%"}),y:hitPts.map(function(p){return p.actual_hit_rate}),name:"Actual",type:"scatter",mode:"lines+markers",line:{color:"#8b5cf6",width:3},marker:{size:10}},';
+        s += '    {x:["0%","100%"],y:[0,100],name:"Ideal",type:"scatter",mode:"lines",line:{color:"#94a3b8",width:1,dash:"dash"}}';
+        s += '  ],{...lo,height:350,xaxis:{title:"Configured Cache Hit %"},yaxis:{title:"Actual Hit Rate %",range:[-5,105]},showlegend:true,legend:{x:0,y:1.15,orientation:"h"}},co);}';
         s += '});';
-        s += '(function(){var el=document.getElementById("dl-cache-tput");if(!el)return;';
-        s += '  var traces=[];var ci=0;';
-        s += '  Object.keys(cacheSweepData).forEach(function(cfgKey){';
-        s += '    var pts=[].concat(cacheSweepData[cfgKey]).sort(function(a,b){return(a.hit_pct||0)-(b.hit_pct||0)});';
-        s += '    var cx=pts.map(function(p){return p.hit_pct});';
-        s += '    var tps=pts.map(function(p){return p.throughput_mean});';
-        s += '    var color=cacheColors[ci%cacheColors.length];ci++;';
-        s += '    traces.push({x:cx,y:tps,name:cfgKey,type:"scatter",mode:"lines+markers",line:{color:color,width:2},marker:{color:color,size:8}});';
-        s += '  });';
-        s += '  Plotly.newPlot(el,traces,{...lo,xaxis:{title:"Configured Cache Hit %"},yaxis:{title:"Throughput Mean (req/s)"},showlegend:true,legend:{x:0,y:1.15,orientation:"h"}},co);';
-        s += '})();';
-        s += '(function(){var el=document.getElementById("dl-cache-actual-hit");if(!el)return;';
-        s += '  var traces=[];var ci=0;';
-        s += '  Object.keys(cacheSweepData).forEach(function(cfgKey){';
-        s += '    var pts=[].concat(cacheSweepData[cfgKey]).filter(function(p){return p.actual_hit_rate!=null}).sort(function(a,b){return(a.hit_pct||0)-(b.hit_pct||0)});';
-        s += '    if(!pts.length)return;';
-        s += '    var cx=pts.map(function(p){return p.hit_pct});';
-        s += '    var ahr=pts.map(function(p){return p.actual_hit_rate});';
-        s += '    var color=cacheColors[ci%cacheColors.length];ci++;';
-        s += '    traces.push({x:cx,y:ahr,name:cfgKey,type:"scatter",mode:"lines+markers",line:{color:color,width:2},marker:{color:color,size:8}});';
-        s += '  });';
-        s += '  traces.push({x:[0,100],y:[0,100],name:"Ideal (y=x)",type:"scatter",mode:"lines",line:{color:"#94a3b8",width:1,dash:"dash"},showlegend:true});';
-        s += '  if(traces.length>1)Plotly.newPlot(el,traces,{...lo,xaxis:{title:"Configured Cache Hit %",range:[-5,105]},yaxis:{title:"Actual Hit Rate",range:[-5,105]},showlegend:true,legend:{x:0,y:1.15,orientation:"h"}},co);';
-        s += '})();';
     }
 
     // Traffic charts
@@ -1863,12 +2170,12 @@ function buildChartScript(data, charts, allRes) {
             s += '  var el=document.getElementById("dl-traffic-"+gk);if(!el)return;';
             s += '  var pts=trafGrps[gk];';
             s += '  var labels=pts.map(function(r){return r.label});';
-            s += '  var traces=[{x:labels,y:pts.map(function(r){return r.request_total}),name:"Requests",type:"scatter",mode:"lines+markers",line:{color:"#3b82f6",width:2},marker:{color:"#3b82f6",size:8}},';
-            s += '    {x:labels,y:pts.map(function(r){return r.request_errored}),name:"Errors",type:"scatter",mode:"lines+markers",line:{color:"#ef4444",width:2},marker:{color:"#ef4444",size:8}}];';
+            s += '  var traces=[{x:labels,y:pts.map(function(r){return r.request_total}),name:"Requests",type:"bar",marker:{color:"#3b82f6"}},';
+            s += '    {x:labels,y:pts.map(function(r){return r.request_errored}),name:"Errors",type:"bar",marker:{color:"#ef4444"}}];';
             s += '  var hasNixl=pts.some(function(r){return r.nixl_errors>0});';
-            s += '  if(hasNixl){traces.push({x:labels,y:pts.map(function(r){return r.nixl_errors}),name:"NIXL Retries",type:"scatter",mode:"lines+markers",line:{color:"#f59e0b",width:2},marker:{color:"#f59e0b",size:8}});}';
+            s += '  if(hasNixl){traces.push({x:labels,y:pts.map(function(r){return r.nixl_errors}),name:"NIXL Retries",type:"bar",marker:{color:"#f59e0b"}});}';
             s += '  var label=trafLabels[gk]||gk;';
-            s += '  Plotly.newPlot(el,traces,{...lo,height:400,margin:{...lo.margin,b:100},xaxis:{tickangle:-35},yaxis:{title:"Count"},showlegend:true,legend:{x:0,y:1.15,orientation:"h"},title:{text:"Traffic: "+label}},co);';
+            s += '  Plotly.newPlot(el,traces,{...lo,height:400,barmode:"group",margin:{...lo.margin,b:100},xaxis:{tickangle:-35},yaxis:{title:"Count"},showlegend:true,legend:{x:0,y:1.15,orientation:"h"},title:{text:"Traffic: "+label}},co);';
             s += '});';
         }
     }
@@ -1885,13 +2192,14 @@ function buildChartScript(data, charts, allRes) {
     // Pareto Frontier charts
     s += '(function(){';
     s += '  var runOsl=' + JSON.stringify((data.recommendation && data.recommendation.workload) ? data.recommendation.workload.osl : 100) + ';';
+    s += '  function getVT(r){var pA=r._prompt_tps_avg||0;var gA=r._gen_tps_avg||0;return(pA+gA>0)?(pA+gA):0;}';
     s += '  var paretoResults=ar.filter(function(r){var tid=r.test_id||r.config_name||"";return tid.indexOf("step2-")!==0&&tid.indexOf("step3-")!==0&&r.ttft_p90>0&&(r.throughput_mean>0||r.throughput_p90>0)});';
     s += '  if(paretoResults.length<2)return;';
 
     // Throughput vs TTFT
     s += '  var ttftEl=document.getElementById("dl-pareto-ttft");';
     s += '  if(ttftEl){';
-    s += '    var pts=paretoResults.map(function(r){var tput=r.throughput_mean||r.throughput_p90||0;var tpsGpu=tput*runOsl/(r.gpus||1);return{x:r.ttft_p90,y:tpsGpu,label:r.config_name,arch:r.architecture}}).filter(function(p){return p.x>0&&p.y>0});';
+    s += '    var pts=paretoResults.map(function(r){var tput=r.throughput_mean||r.throughput_p90||0;var totalTps=getVT(r)||r.output_tps_mean||(tput*runOsl);var tpsGpu=totalTps/(r.gpus||1);return{x:r.ttft_p90,y:tpsGpu,label:r.config_name,arch:r.architecture}}).filter(function(p){return p.x>0&&p.y>0});';
     s += '    var pdPts=pts.filter(function(p){return p.arch==="PD"||p.arch==="EP"});';
     s += '    var aggPts=pts.filter(function(p){return p.arch==="AGGREGATED"});';
     s += '    function ttftFrontier(points){if(!points.length)return[];var s=points.slice().sort(function(a,b){return a.x-b.x});var f=[];var maxY=-Infinity;for(var i=0;i<s.length;i++){if(s[i].y>maxY){f.push(s[i]);maxY=s[i].y}}f.sort(function(a,b){return a.x-b.x});return f}';
@@ -1913,7 +2221,7 @@ function buildChartScript(data, charts, allRes) {
     // Throughput vs Interactivity
     s += '  var intEl=document.getElementById("dl-pareto-interactivity");';
     s += '  if(intEl){';
-    s += '    var iPts=paretoResults.map(function(r){var tput=r.throughput_mean||r.throughput_p90||0;var conc=r.concurrency||100;var totalTps=r.output_tps_mean||(tput*runOsl);var inter=totalTps/conc;var tpsGpu=totalTps/(r.gpus||1);return{x:inter,y:tpsGpu,label:r.config_name,arch:r.architecture,conc:conc}}).filter(function(p){return p.x>0&&p.y>0});';
+    s += '    var iPts=paretoResults.map(function(r){var tput=r.throughput_mean||r.throughput_p90||0;var conc=r.concurrency||100;var totalTps=getVT(r)||r.output_tps_mean||(tput*runOsl);var inter=totalTps/conc;var tpsGpu=totalTps/(r.gpus||1);return{x:inter,y:tpsGpu,label:r.config_name,arch:r.architecture,conc:conc}}).filter(function(p){return p.x>0&&p.y>0});';
     s += '    var iPd=iPts.filter(function(p){return p.arch==="PD"||p.arch==="EP"});';
     s += '    var iAgg=iPts.filter(function(p){return p.arch==="AGGREGATED"});';
     s += '    function intFrontier(points){if(!points.length)return[];var s=points.slice().sort(function(a,b){return b.x-a.x});var f=[];var maxY=-Infinity;for(var i=0;i<s.length;i++){if(s[i].y>maxY){f.push(s[i]);maxY=s[i].y}}f.sort(function(a,b){return a.x-b.x});return f}';
@@ -1923,13 +2231,31 @@ function buildChartScript(data, charts, allRes) {
     s += '    if(iPd.length){iTraces.push({x:iPd.map(function(p){return p.x}),y:iPd.map(function(p){return p.y}),text:iPd.map(function(p){return p.label+"<br>"+p.x.toFixed(1)+" tok/s/user<br>"+p.y.toFixed(0)+" tok/s/GPU<br>c="+p.conc}),name:"Disaggregation",mode:"markers",marker:{color:"#93c5fd",size:14,opacity:0.5},hovertemplate:"<b>%{text}</b><extra></extra>"});}';
     s += '    if(iAggF.length>1){iTraces.push({x:iAggF.map(function(p){return p.x}),y:iAggF.map(function(p){return p.y}),name:"Aggregated Frontier",mode:"lines",line:{color:"#dc2626",width:3,dash:"dot"},hoverinfo:"skip"});}';
     s += '    if(iPdF.length>1){iTraces.push({x:iPdF.map(function(p){return p.x}),y:iPdF.map(function(p){return p.y}),name:"Disaggregation Frontier",mode:"lines",line:{color:"#2563eb",width:3,dash:"dot"},hoverinfo:"skip"});}';
-    s += '    Plotly.newPlot(intEl,iTraces,{...lo,height:700,xaxis:{title:"Interactivity (tok/s/user)",gridcolor:"#d1d5db",rangemode:"tozero"},yaxis:{title:"Token Throughput per GPU (tok/s/GPU)",gridcolor:"#d1d5db",rangemode:"tozero"},showlegend:true,legend:{x:1.02,y:1,xanchor:"left",bgcolor:"rgba(255,255,255,0.95)"},margin:{t:40,b:70,l:70,r:200},plot_bgcolor:"white",paper_bgcolor:"white"},co);';
+    s += '    var iAnns=[];var iPos=[[80,-15],[-80,-15],[70,-45],[-70,-45],[90,-30],[-90,-30],[60,-60],[-60,-60]];';
+    s += '    function iAddAnn(pts,color){pts.forEach(function(p,i){var pos=iPos[i%iPos.length];iAnns.push({x:p.x,y:p.y,text:p.label+"<br>c="+p.conc,showarrow:true,arrowhead:0,arrowwidth:1,arrowcolor:color,ax:pos[0],ay:pos[1],font:{size:10,color:color},bgcolor:"rgba(255,255,255,0)",borderpad:2})})};';
+    s += '    iAddAnn(iAggF,"#dc2626");iAddAnn(iPdF,"#2563eb");';
+    s += '    Plotly.newPlot(intEl,iTraces,{...lo,height:700,xaxis:{title:"Interactivity (tok/s/user)",gridcolor:"#d1d5db",rangemode:"tozero"},yaxis:{title:"Token Throughput per GPU (tok/s/GPU)",gridcolor:"#d1d5db",rangemode:"tozero"},showlegend:true,legend:{x:1.02,y:1,xanchor:"left",bgcolor:"rgba(255,255,255,0.95)"},margin:{t:40,b:70,l:70,r:200},plot_bgcolor:"white",paper_bgcolor:"white",annotations:iAnns},co);';
+    s += '  }';
+
+    // ITL vs Throughput Pareto (same IIFE — shares paretoResults, runOsl, getVT)
+    s += '  var itlEl=document.getElementById("dl-pareto-itl");';
+    s += '  if(itlEl){';
+    s += '    var itlPts=paretoResults.filter(function(r){return r.itl_p90>0}).map(function(r){var tput=r.throughput_mean||r.throughput_p90||0;var conc=r.concurrency||100;var totalTps=getVT(r)||r.output_tps_mean||(tput*runOsl);var tpsGpu=totalTps/(r.gpus||1);return{x:r.itl_p90,y:tpsGpu,label:_tL(r.config_name,r.architecture),arch:r.architecture,conc:conc}}).filter(function(p){return p.x>0&&p.y>0});';
+    s += '    var itlPd=itlPts.filter(function(p){return p.arch==="PD"||p.arch==="EP"});';
+    s += '    var itlAgg=itlPts.filter(function(p){return p.arch==="AGGREGATED"});';
+    s += '    function itlFrontier(points){if(!points.length)return[];var s=points.slice().sort(function(a,b){return a.x-b.x});var f=[];var maxY=-Infinity;for(var i=0;i<s.length;i++){if(s[i].y>maxY){f.push(s[i]);maxY=s[i].y}}return f}';
+    s += '    var itlAggF=itlFrontier(itlAgg);var itlPdF=itlFrontier(itlPd);';
+    s += '    var itlTraces=[];';
+    s += '    if(itlAgg.length){itlTraces.push({x:itlAgg.map(function(p){return p.x}),y:itlAgg.map(function(p){return p.y}),text:itlAgg.map(function(p){return p.label+"<br>ITL P90: "+p.x.toFixed(2)+"ms<br>"+p.y.toFixed(0)+" tok/s/GPU"}),name:"Aggregated",mode:"markers",marker:{color:"#fca5a5",size:14,opacity:0.5},hovertemplate:"<b>%{text}</b><extra></extra>"});}';
+    s += '    if(itlPd.length){itlTraces.push({x:itlPd.map(function(p){return p.x}),y:itlPd.map(function(p){return p.y}),text:itlPd.map(function(p){return p.label+"<br>ITL P90: "+p.x.toFixed(2)+"ms<br>"+p.y.toFixed(0)+" tok/s/GPU"}),name:"Disaggregation",mode:"markers",marker:{color:"#93c5fd",size:14,opacity:0.5},hovertemplate:"<b>%{text}</b><extra></extra>"});}';
+    s += '    if(itlAggF.length){itlTraces.push({x:itlAggF.map(function(p){return p.x}),y:itlAggF.map(function(p){return p.y}),text:itlAggF.map(function(p){return p.label+"<br>"+p.x.toFixed(2)+"ms / "+p.y.toFixed(0)+" tok/s/GPU"}),name:"Aggregated — Frontier",mode:itlAggF.length>1?"lines+markers+text":"markers+text",line:{color:"#dc2626",width:3},marker:{color:"#dc2626",size:8},textposition:"top right",textfont:{size:10,color:"#dc2626"},hovertemplate:"<b>%{text}</b><extra></extra>"});}';
+    s += '    if(itlPdF.length){itlTraces.push({x:itlPdF.map(function(p){return p.x}),y:itlPdF.map(function(p){return p.y}),text:itlPdF.map(function(p){return p.label+"<br>"+p.x.toFixed(2)+"ms / "+p.y.toFixed(0)+" tok/s/GPU"}),name:"Disaggregation — Frontier",mode:itlPdF.length>1?"lines+markers+text":"markers+text",line:{color:"#2563eb",width:3},marker:{color:"#2563eb",size:8},textposition:"top left",textfont:{size:10,color:"#2563eb"},hovertemplate:"<b>%{text}</b><extra></extra>"});}';
+    s += '    Plotly.newPlot(itlEl,itlTraces,{...lo,height:700,xaxis:{title:"ITL P90 (ms)",gridcolor:"#d1d5db"},yaxis:{title:"Token Throughput per GPU (tok/s/GPU)",gridcolor:"#d1d5db",rangemode:"tozero"},showlegend:true,legend:{x:1.02,y:1,xanchor:"left",bgcolor:"rgba(255,255,255,0.95)"},margin:{t:40,b:70,l:70,r:200},plot_bgcolor:"white",paper_bgcolor:"white"},co);';
     s += '  }';
     s += '})();';
 
-    // Hide non-active panes after rendering
-    s += 'setTimeout(function(){document.querySelectorAll(".dl-pane").forEach(function(p){p.style.display="";});},100);';
-
     s += '<\/script>';
+    // Separate script so it runs even if chart rendering throws an error
+    s += '<script>setTimeout(function(){document.body.classList.add("dl-pane-ready");},500);<\/script>';
     return s;
 }

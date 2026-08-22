@@ -1188,9 +1188,76 @@ function _startEverythingDownload() {
     _startDbDownload();
 }
 
+function _showDatasetCmd() {
+    document.getElementById('download-choice-modal').classList.remove('active');
+    fetch('/api/runs').then(r => r.json()).then(runs => {
+        var cfg = null;
+        for (var i = 0; i < runs.length; i++) {
+            if (runs[i].config_json) {
+                try { cfg = JSON.parse(runs[i].config_json); break; } catch(e) {}
+            }
+        }
+        if (!cfg) { alert('No run config found'); return; }
+        var isl = cfg.isl || 2000;
+        var osl = cfg.osl || 100;
+        var model = cfg.model_name || cfg.model || 'unknown';
+        var islStd = cfg.isl_stdev || 0;
+        var oslStd = cfg.osl_stdev || 0;
+        var mode = cfg.prefix_cache_mode || 'identical';
+        var hitPct = cfg.prefix_cache_hit_pct || 0;
+        var groups = cfg.prefix_cache_groups || 5;
+        var prefixTokens = cfg.prefix_tokens || 0;
+        var turns = cfg.turns || 1;
+        var firstPrompt = cfg.first_prompt_tokens || 0;
+
+        var hashInput = model + ':' + isl + ':' + osl + ':' + hitPct + ':' + islStd + ':' + oslStd + ':' + mode + ':' + (mode === 'multi_group' ? groups : 0);
+        // SHA-256 first 8 hex chars → seed (matches Python hashlib.sha256)
+        crypto.subtle.digest('SHA-256', new TextEncoder().encode(hashInput)).then(function(buf) {
+            var hex = Array.from(new Uint8Array(buf)).map(function(b) { return b.toString(16).padStart(2, '0'); }).join('');
+            var seed = parseInt(hex.substring(0, 8), 16);
+
+            var cmd = '';
+            if (turns > 1) {
+                cmd += '# Multi-turn dataset generator: docker/scripts/generate_turn_dataset.py\n';
+                cmd += '# Single-turn dataset generator: docker/scripts/generate_dataset.py\n\n';
+                cmd += 'generate_turn_dataset \\\n';
+                cmd += '  --model "' + model + '" \\\n';
+                cmd += '  --prompt-tokens ' + isl + ' --output-tokens ' + osl + ' \\\n';
+                cmd += '  --turns ' + turns + ' \\\n';
+                if (islStd > 0) cmd += '  --prompt-tokens-stdev ' + islStd + ' \\\n';
+                if (oslStd > 0) cmd += '  --output-tokens-stdev ' + oslStd + ' \\\n';
+                if (firstPrompt > 0) cmd += '  --first-prompt-tokens ' + firstPrompt + ' \\\n';
+                if (prefixTokens > 0) cmd += '  --prefix-tokens ' + prefixTokens + ' \\\n';
+                cmd += '  --rows 100000 --seed ' + seed + ' \\\n';
+                cmd += '  --output /mnt/storage/prefix-cache-datasets/turn-workload-' + isl + '-' + osl + '-t' + turns + '-' + seed + '.jsonl';
+            } else {
+                cmd += '# Single-turn dataset generator: docker/scripts/generate_dataset.py\n';
+                cmd += '# Multi-turn dataset generator: docker/scripts/generate_turn_dataset.py\n\n';
+                cmd += 'generate_dataset \\\n';
+                cmd += '  --model "' + model + '" \\\n';
+                cmd += '  --isl ' + isl + ' --osl ' + osl + ' \\\n';
+                if (islStd > 0) cmd += '  --isl-stdev ' + islStd + ' \\\n';
+                if (oslStd > 0) cmd += '  --osl-stdev ' + oslStd + ' \\\n';
+                cmd += '  --seed ' + seed + ' \\\n';
+                cmd += '  --rows 100000 \\\n';
+                if (hitPct > 0) {
+                    cmd += '  --mode cache --hit-pct ' + hitPct + ' \\\n';
+                } else {
+                    cmd += '  --mode random \\\n';
+                }
+                cmd += '  --output /mnt/storage/prefix-cache-datasets/prefix-cache-' + mode + '-' + seed + '.jsonl';
+            }
+
+            document.getElementById('dataset-cmd-text').textContent = cmd;
+            document.getElementById('dataset-cmd-modal').classList.add('active');
+        });
+    });
+}
+
 document.getElementById('dl-database-btn').addEventListener('click', _startDbDownload);
 document.getElementById('dl-artifacts-btn').addEventListener('click', _startArtifactsDownload);
 document.getElementById('dl-everything-btn').addEventListener('click', _startEverythingDownload);
+document.getElementById('dl-dataset-cmd-btn').addEventListener('click', _showDatasetCmd);
 
 socket.on('compression_progress', function(data) {
     var bar = document.getElementById('compress-bar');

@@ -21,10 +21,15 @@ class CacheSweepMixin:
     def _generate_cache_dataset_for_level(self, hit_pct: int) -> Optional[str]:
         """Generate a prefix cache dataset for a specific hit percentage.
 
-        Temporarily overrides config fields, generates the dataset via the
-        existing _generate_prefix_cache_dataset(), then restores originals.
-        Returns the dataset file path, or None on failure.
+        Uses a fixed BASE seed (independent of hit_pct) so all levels share
+        deterministic random content, but includes hit_pct in the file path
+        so each level gets its own dataset with the appropriate prefix structure.
+        Zeroes out ISL/OSL stdev for consistent prompt lengths across levels.
+
+        For 0%: generates a dataset with hit_pct=1 (minimal prefix) to keep the
+        same prompt structure as other levels, rather than using synthetic mode.
         """
+        import hashlib
         saved = {
             'prefix_cache_hit_pct': self.config.prefix_cache_hit_pct,
             'prefix_cache_mode': self.config.prefix_cache_mode,
@@ -32,17 +37,23 @@ class CacheSweepMixin:
             'prefix_cache_seed': self.config.prefix_cache_seed,
             'workload_mode': self.config.workload_mode,
             'dataset_source': getattr(self.config, 'dataset_source', None),
+            'prefix_tokens': getattr(self.config, 'prefix_tokens', None),
+            'prefix_count': getattr(self.config, 'prefix_count', None),
+            'isl_stdev': self.config.isl_stdev,
+            'osl_stdev': self.config.osl_stdev,
         }
         try:
-            self.config.prefix_cache_hit_pct = hit_pct
-            self.config.prefix_cache_mode = self.config.cache_sweep_mode or 'identical'
-            self.config.prefix_cache_groups = self.config.cache_sweep_groups or 5
-            self.config.prefix_cache_seed = None
+            # Fixed base seed — model/ISL/OSL determine base content, hit_pct varies
+            # the prefix structure. Same seed across architectures → reuse datasets.
+            cache_mode = self.config.prefix_cache_mode or 'identical'
+            groups_str = str(self.config.prefix_cache_groups or 5) if cache_mode == 'multi_group' else '0'
+            seed_input = f"{self.config.model_name}:{self.config.isl}:{self.config.osl}:cache_sweep:{hit_pct}:{cache_mode}:{groups_str}"
+            level_seed = int(hashlib.sha256(seed_input.encode()).hexdigest()[:8], 16)
 
-            if hit_pct == 0:
-                if hasattr(self, 'random_dataset_path') and self.random_dataset_path:
-                    return self.random_dataset_path
-                return self._generate_random_dataset()
+            self.config.prefix_cache_seed = level_seed
+            self.config.isl_stdev = 0
+            self.config.osl_stdev = 0
+            self.config.prefix_cache_hit_pct = hit_pct
 
             self._generate_prefix_cache_dataset()
             return getattr(self.config, 'dataset_source', None)
@@ -52,16 +63,27 @@ class CacheSweepMixin:
 
     def _run_cache_sweep_for_arch(self, arch_label: str, concurrency: int,
                                    levels: List[int], create_config_fn,
-                                   gpus: int, concurrency_tag: str = '') -> List[Dict]:
+                                   gpus: int, concurrency_tag: str = '',
+                                   sweep_key: str = '') -> List[Dict]:
         """Run cache hit sweep for one architecture, return list of results."""
-        results = []
+        if not hasattr(self, 'cache_sweep_results'):
+            self.cache_sweep_results = {}
+        if sweep_key and sweep_key not in self.cache_sweep_results:
+            self.cache_sweep_results[sweep_key] = []
+        results = self.cache_sweep_results[sweep_key] if sweep_key else []
         tag = f"-{concurrency_tag}" if concurrency_tag else ""
+        import re as _re
+        _clean = _re.sub(r'\s*\((AG|PD|EP|aggregated|pd|ep)\)\s*$', '', arch_label)
+        safe_label = _re.sub(r'[^a-z0-9-]', '', _clean.lower().replace('×', 'x').replace(' ', '-').replace('+', '-'))
+        safe_label = _re.sub(r'-+', '-', safe_label).strip('-')
+        if len(f"step13-cache{tag}-{safe_label}-h100-prefill") > 58:
+            safe_label = safe_label[:30]
         self.log(f"\n🗂️  Cache Sweep: {arch_label} ({len(levels)} levels, c={concurrency}{tag})", 'info')
 
         # Check which levels need testing vs already completed
         levels_to_run = []
         for hit_pct in levels:
-            test_id = f"step13-cache{tag}-{arch_label.lower()}-h{hit_pct}"
+            test_id = f"step13-cache{tag}-{safe_label}-h{hit_pct}"
             if test_id in self.completed_tests:
                 row = self.completed_tests[test_id]
                 result = self._make_test_result_from_db(row)
@@ -73,6 +95,7 @@ class CacheSweepMixin:
                 _actual_hr = None
                 _hits_r = None
                 _queries_r = None
+                _vllm_tps = None
                 if self.db_manager and self.run_id:
                     try:
                         import json as _json
@@ -88,12 +111,17 @@ class CacheSweepMixin:
                                 _actual_hr = round(_h / _q * 100, 1) if _q > 0 else 0.0
                                 _hits_r = round(_h, 1)
                                 _queries_r = round(_q, 1)
+                                _ptps = (_pm.get('vllm_prompt_tokens_rate') or {}).get('avg', 0)
+                                _gtps = (_pm.get('vllm_generation_tokens_rate') or {}).get('avg', 0)
+                                if _ptps + _gtps > 0:
+                                    _vllm_tps = round(_ptps + _gtps)
                     except Exception:
                         pass
                 results.append({'hit_pct': hit_pct, 'actual_hit_rate': _actual_hr,
                     'cache_hits_rate': _hits_r, 'cache_queries_rate': _queries_r,
                     'throughput_mean': round(tput, 2),
                     'output_tps_mean': round(output_tps, 2),
+                    'vllm_tps': _vllm_tps,
                     'ttft_p50': round(result.ttft_p50 or 0, 1),
                     'ttft_p90': round(ttft, 1),
                     'ttft_p95': round(result.ttft_p95 or 0, 1),
@@ -109,14 +137,14 @@ class CacheSweepMixin:
             return results
 
         # All levels share the same pods — use first level's test_id for deployment
-        deploy_test_id = f"step13-cache{tag}-{arch_label.lower()}-h{levels_to_run[0]}"
+        deploy_test_id = f"step13-cache{tag}-{safe_label}-h{levels_to_run[0]}"
 
         for i, hit_pct in enumerate(levels_to_run):
             if self._should_stop():
                 break
 
             is_first = (i == 0)
-            test_id = f"step13-cache{tag}-{arch_label.lower()}-h{hit_pct}"
+            test_id = f"step13-cache{tag}-{safe_label}-h{hit_pct}"
             dataset_path = self._generate_cache_dataset_for_level(hit_pct)
 
             config = create_config_fn()
@@ -125,12 +153,10 @@ class CacheSweepMixin:
             config.request_rate = concurrency
             config.enable_prefix_caching = True
 
-            # Override EPP to cache_optimized for cache sweep — prefix-cache-scorer
-            # must have high weight for requests to route to pods with cached prefixes
+            # Use the user's EPP config (or Step 9 tuned weights) — don't force cache_optimized
+            # which causes request pileup on pods with cached prefixes
             if is_first:
                 epp = config.epp_config or self._build_epp_config() or {}
-                cache_epp = dict(epp)
-                cache_epp['preset'] = 'cache_optimized'
                 try:
                     from core import PrereqManager
                     prereq = PrereqManager(
@@ -138,13 +164,13 @@ class CacheSweepMixin:
                         kubectl_runner=self.orchestrator.deployment_manager.kubectl,
                     )
                     prereq.update_epp_config(
-                        config.architecture, cache_epp,
+                        config.architecture, epp,
                         log_callback=lambda msg: self.log(msg, 'info')
                     )
                 except Exception as e:
                     self.log(f"  ⚠️  Failed to update EPP for cache sweep: {e}", 'warning')
 
-            if dataset_path and hit_pct > 0:
+            if dataset_path:
                 config.workload_mode = 'dataset'
                 config.dataset_source = dataset_path
                 config.dataset_column = 'prompt'
@@ -203,6 +229,25 @@ class CacheSweepMixin:
                 except Exception:
                     pass
 
+            # Compute server total tok/s from DB (prometheus data is added during save)
+            vllm_tps = None
+            if self.db_manager and self.run_id:
+                try:
+                    import json as _j2
+                    with self.db_manager.get_connection() as _conn2:
+                        _row2 = _conn2.execute(
+                            'SELECT metrics_json FROM test_configurations WHERE run_id=? AND config_name=?',
+                            (self.run_id, test_id)).fetchone()
+                        if _row2 and _row2[0]:
+                            _m2 = _j2.loads(_row2[0])
+                            _pm2 = _m2.get('prometheus_metrics', {})
+                            _ptps = (_pm2.get('vllm_prompt_tokens_rate') or {}).get('avg', 0)
+                            _gtps = (_pm2.get('vllm_generation_tokens_rate') or {}).get('avg', 0)
+                            if _ptps + _gtps > 0:
+                                vllm_tps = round(_ptps + _gtps)
+                except Exception:
+                    pass
+
             results.append({
                 'hit_pct': hit_pct,
                 'actual_hit_rate': actual_hit_rate,
@@ -210,6 +255,7 @@ class CacheSweepMixin:
                 'cache_queries_rate': cache_queries_rate,
                 'throughput_mean': round(tput, 2),
                 'output_tps_mean': round(output_tps, 2),
+                'vllm_tps': vllm_tps,
                 'ttft_p50': round(result.ttft_p50 or 0, 1),
                 'ttft_p90': round(ttft, 1),
                 'ttft_p95': round(result.ttft_p95 or 0, 1),
@@ -254,123 +300,110 @@ class CacheSweepMixin:
         self.log(f"Cache mode: {mode}", 'info')
 
         user_concurrency = int(self.config.qps)
-        calibrated_concurrency = getattr(self, 'achievable_concurrency', None)
-        if calibrated_concurrency:
-            calibrated_concurrency = int(calibrated_concurrency)
 
-        # Use calibrated concurrency as default when available
-        default_concurrency = calibrated_concurrency or user_concurrency
-        if calibrated_concurrency and calibrated_concurrency != user_concurrency:
-            self.log(f"Using calibrated concurrency: {calibrated_concurrency} (from Step 11, user requested {user_concurrency})", 'info')
-        else:
-            self.log(f"Using concurrency: {default_concurrency}", 'info')
+        # --- Pull configs + calibrated concurrency from Step 11 concurrency sweep ---
+        sweep_configs = []
+        sweep_results = getattr(self, 'concurrency_sweep_results', {})
 
-        # --- Select configs using same recommendation logic as concurrency sweep ---
-        def _tput_of(result):
-            return result.throughput_mean or result.throughput_p90 or 0
-
-        def _score(result):
-            ttft = result.ttft_p90 if result.ttft_p90 else 1e9
-            tput = _tput_of(result) or 0.001
-            return ttft / tput
-
-        all_candidates = []
-        if hasattr(self, 'pareto_results') and self.pareto_results:
-            for split, result in self.pareto_results:
-                if result.ttft_p90 and _tput_of(result) > 0:
-                    all_candidates.append(('pd', split, result))
-        if hasattr(self, 'aggregated_search_results') and self.aggregated_search_results:
-            for tp, result in self.aggregated_search_results:
-                if result.ttft_p90 and _tput_of(result) > 0:
-                    all_candidates.append(('agg', tp, result))
-        elif getattr(self, 'aggregated_tp', None) and getattr(self, 'aggregated_result', None):
-            if self.aggregated_result.ttft_p90 and _tput_of(self.aggregated_result) > 0:
-                all_candidates.append(('agg', self.aggregated_tp, self.aggregated_result))
-
-        selected = []
-        seen_keys = set()
-        def _config_key(c):
-            if c[0] == 'pd':
-                s = c[1]
-                return ('pd', s.prefill_pods, s.prefill_tp, s.decode_pods, s.decode_tp)
-            return ('agg', c[1])
-        def _add_unique(candidate):
-            key = _config_key(candidate)
-            if key not in seen_keys:
-                seen_keys.add(key)
-                selected.append(candidate)
-
-        cache_sweep_all = getattr(self.config, 'cache_sweep_all_configs', False)
-        cache_sweep_max = getattr(self.config, 'cache_sweep_max_configs', None)
-
-        if all_candidates:
-            if cache_sweep_all:
-                # All 4 recommendation configs first
-                _add_unique(min(all_candidates, key=lambda x: _score(x[2])))
-                _add_unique(min(all_candidates, key=lambda x: x[2].ttft_p90 or 1e9))
-                _add_unique(max(all_candidates, key=lambda x: _tput_of(x[2])))
-                def _gpus(c):
-                    if c[0] == 'pd':
-                        return c[1].prefill_pods * c[1].prefill_tp + c[1].decode_pods * c[1].decode_tp
+        if sweep_results:
+            for sweep_key, points in sweep_results.items():
+                if not points:
+                    continue
+                # Skip configs that started with 2+ consecutive discards (fundamentally broken)
+                # Check both throughput and quality from DB
+                _disc_ids = set()
+                if self.db_manager:
+                    try:
+                        with self.db_manager.get_connection() as _conn:
+                            _rows = _conn.execute("SELECT config_name FROM test_configurations WHERE run_id=? AND quality='discard'", (self.run_id,)).fetchall()
+                            _disc_ids = {r[0] for r in _rows}
+                    except Exception:
+                        pass
+                _start_discards = 0
+                for p in points:
+                    tid = p.get('test_id', '')
+                    if p.get('throughput_mean', 0) <= 0 or tid in _disc_ids:
+                        _start_discards += 1
                     else:
-                        return c[1] * (self.config.total_gpus // c[1]) if c[1] else self.config.total_gpus
-                _add_unique(max(all_candidates, key=lambda x: _tput_of(x[2]) / max(_gpus(x), 1)))
-                # Fill remaining slots by score
-                limit = int(cache_sweep_max) if cache_sweep_max else len(all_candidates)
-                for c in sorted(all_candidates, key=lambda x: _score(x[2])):
-                    if len(selected) >= limit:
                         break
-                    _add_unique(c)
-            else:
-                # Best PD and best aggregated by balanced score
-                pd_candidates = [c for c in all_candidates if c[0] == 'pd']
-                agg_candidates = [c for c in all_candidates if c[0] == 'agg']
-                if pd_candidates:
-                    _add_unique(min(pd_candidates, key=lambda x: _score(x[2])))
-                if agg_candidates:
-                    _add_unique(min(agg_candidates, key=lambda x: _score(x[2])))
+                if _start_discards >= 2:
+                    self.log(f"  ⚠️  Skipping {sweep_key}: first {_start_discards} tests all discarded (not viable)", 'warning')
+                    continue
+                viable_points = [p for p in points if p.get('throughput_mean', 0) > 0]
+                if not viable_points:
+                    self.log(f"  ⚠️  Skipping {sweep_key}: no viable sweep results", 'warning')
+                    continue
+                best_point = max(viable_points, key=lambda p: p.get('throughput_mean', 0))
+                cal_c = best_point['concurrency']
+                first = points[0]
+                config_label = first.get('config_label') or sweep_key
+                gpus = first.get('gpus', self.config.total_gpus)
 
-        self.log(f"Cache sweep: {len(selected)} configs selected", 'info')
+                if sweep_key.startswith('pd-') or sweep_key.startswith('ep-'):
+                    arch = 'ep' if sweep_key.startswith('ep-') else 'pd'
+                    matching = None
+                    pool = self.ep_results if arch == 'ep' else (self.pareto_results or [])
+                    for split, result in pool:
+                        sk = f"{arch}-{split.prefill_pods}p{split.decode_pods}d-tp{split.prefill_tp}-{split.decode_tp}"
+                        if sk == sweep_key or f"{arch}-{split.prefill_pods}p{split.decode_pods}d-ptp{split.prefill_tp}-dtp{split.decode_tp}" == sweep_key:
+                            matching = (split, result)
+                            break
+                    if matching:
+                        sweep_configs.append(('pd' if arch == 'pd' else 'ep', matching[0], cal_c, gpus, config_label))
+                elif sweep_key.startswith('agg-'):
+                    import re
+                    m = re.search(r'tp(\d+)', sweep_key)
+                    tp = int(m.group(1)) if m else self.config.total_gpus
+                    sweep_configs.append(('agg', tp, cal_c, gpus, config_label))
 
-        # --- Sweep at default concurrency (calibrated if available, otherwise user-defined) ---
-        if self.config.cache_sweep_enabled:
+            self.log(f"Cache sweep: {len(sweep_configs)} configs from concurrency sweep", 'info')
+            for sc in sweep_configs:
+                self.log(f"  {sc[4]} at c={sc[2]}", 'info')
+        else:
+            self.log("⚠️  No concurrency sweep results — using user concurrency for all configs", 'warning')
+            default_concurrency = user_concurrency
+            if getattr(self, 'aggregated_tp', None) and getattr(self, 'aggregated_result', None):
+                sweep_configs.append(('agg', self.aggregated_tp, default_concurrency, self.config.total_gpus, f"Aggregated TP{self.aggregated_tp}"))
+
+        # --- Run cache sweep using configs + calibrated concurrency from Step 11 ---
+        if self.config.cache_sweep_enabled and sweep_configs:
             self.log(f"\n{'='*60}", 'info')
-            self.log(f"Cache Sweep at concurrency {default_concurrency}" +
-                     (" (calibrated)" if calibrated_concurrency else ""), 'decision')
+            self.log("Cache Sweep (using calibrated concurrency from Step 11)", 'decision')
             self.log(f"{'='*60}", 'info')
 
-            for c in selected:
+            for sc in sweep_configs:
                 if self._should_stop():
                     break
-                if c[0] == 'pd':
-                    split = c[1]
-                    pd_label = 'EP' if getattr(split, 'enable_expert_parallel', False) else 'PD'
-                    config_label = f"{split.prefill_pods}P×TP{split.prefill_tp} + {split.decode_pods}D×TP{split.decode_tp}"
-                    total_gpus = split.prefill_pods * split.prefill_tp + split.decode_pods * split.decode_tp
+                if sc[0] in ('pd', 'ep'):
+                    split = sc[1]
+                    cal_c = sc[2]
+                    total_gpus = sc[3]
+                    config_label = sc[4]
+                    pd_label = 'EP' if sc[0] == 'ep' else 'PD'
                     current_split = split
+                    sweep_key = f"{pd_label.lower()}-{split.prefill_pods}p{split.decode_pods}d"
                     sweep = self._run_cache_sweep_for_arch(
-                        f"{pd_label}-{config_label}", default_concurrency, levels,
+                        f"{pd_label}-{config_label}", cal_c, levels,
                         lambda: self._create_pd_config(current_split) if pd_label == 'PD' else self._create_ep_config(split=current_split),
-                        total_gpus
+                        total_gpus, sweep_key=sweep_key
                     )
                     for r in sweep:
                         r['config_label'] = config_label
-                    sweep_key = f"{pd_label.lower()}-{split.prefill_pods}p{split.decode_pods}d"
-                    self.cache_sweep_results[sweep_key] = sweep
                 else:
-                    tp = c[1]
+                    tp = sc[1]
+                    cal_c = sc[2]
                     total_gpus_agg = self.config.total_gpus
-                    agg_replicas = total_gpus_agg // tp if tp else total_gpus_agg
-                    config_label = f"{agg_replicas}×TP{tp}"
+                    config_label = sc[4]
                     current_tp = tp
+                    sweep_key = f"aggregated-tp{tp}"
                     sweep = self._run_cache_sweep_for_arch(
-                        f"Aggregated-{config_label}", default_concurrency, levels,
+                        f"Aggregated-{config_label}", cal_c, levels,
                         lambda: self._create_aggregated_config(
                             tp=current_tp, num_gpus=total_gpus_agg,
                             isl=self.config.isl, osl=self.config.osl,
                             test_id='_placeholder_', use_concurrency=True
                         ),
-                        total_gpus_agg
+                        total_gpus_agg, sweep_key=sweep_key
                     )
                     for r in sweep:
                         r['config_label'] = config_label
@@ -378,35 +411,37 @@ class CacheSweepMixin:
                     self.cache_sweep_results[sweep_key] = sweep
 
         # --- Optional second sweep at user-defined concurrency (if different from calibrated) ---
+        calibrated_concurrency = getattr(self, 'achievable_concurrency', None)
+        if calibrated_concurrency:
+            calibrated_concurrency = int(calibrated_concurrency)
         if self.config.cache_sweep_use_calibrated and calibrated_concurrency and user_concurrency != calibrated_concurrency and not self._should_stop():
             self.log(f"\n{'='*60}", 'info')
             self.log(f"Cache Sweep at user-defined concurrency ({user_concurrency})", 'decision')
             self.log(f"{'='*60}", 'info')
 
-            for c in selected:
+            for sc in sweep_configs:
                 if self._should_stop():
                     break
-                if c[0] == 'pd':
-                    split = c[1]
-                    pd_label = 'EP' if getattr(split, 'enable_expert_parallel', False) else 'PD'
-                    config_label = f"{split.prefill_pods}P×TP{split.prefill_tp} + {split.decode_pods}D×TP{split.decode_tp}"
-                    total_gpus = split.prefill_pods * split.prefill_tp + split.decode_pods * split.decode_tp
+                if sc[0] in ('pd', 'ep'):
+                    split = sc[1]
+                    config_label = sc[4]
+                    total_gpus = sc[3]
+                    pd_label = 'EP' if sc[0] == 'ep' else 'PD'
                     current_split = split
+                    sweep_key = f"{pd_label.lower()}-{split.prefill_pods}p{split.decode_pods}d-user"
                     sweep = self._run_cache_sweep_for_arch(
                         f"{pd_label}-{config_label}", user_concurrency, levels,
                         lambda: self._create_pd_config(current_split) if pd_label == 'PD' else self._create_ep_config(split=current_split),
-                        total_gpus, concurrency_tag='user'
+                        total_gpus, concurrency_tag='user', sweep_key=sweep_key
                     )
                     for r in sweep:
                         r['config_label'] = config_label
-                    sweep_key = f"{pd_label.lower()}-{split.prefill_pods}p{split.decode_pods}d-user"
-                    self.cache_sweep_results[sweep_key] = sweep
                 else:
-                    tp = c[1]
+                    tp = sc[1]
                     total_gpus_agg = self.config.total_gpus
-                    agg_replicas = total_gpus_agg // tp if tp else total_gpus_agg
-                    config_label = f"{agg_replicas}×TP{tp}"
+                    config_label = sc[4]
                     current_tp = tp
+                    sweep_key = f"aggregated-tp{tp}-user"
                     sweep = self._run_cache_sweep_for_arch(
                         f"Aggregated-{config_label}", user_concurrency, levels,
                         lambda: self._create_aggregated_config(
@@ -414,11 +449,10 @@ class CacheSweepMixin:
                             isl=self.config.isl, osl=self.config.osl,
                             test_id='_placeholder_', use_concurrency=True
                         ),
-                        total_gpus_agg, concurrency_tag='user'
+                        total_gpus_agg, concurrency_tag='user', sweep_key=sweep_key
                     )
                     for r in sweep:
                         r['config_label'] = config_label
-                    self.cache_sweep_results[f"aggregated-tp{tp}-user"] = sweep
 
         # --- Restore user's EPP preset ---
         try:

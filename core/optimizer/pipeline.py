@@ -2189,6 +2189,7 @@ spec:
             } if self.calibrated_agg_result else None,
             'concurrency_sweep': getattr(self, 'concurrency_sweep_results', None),
             'cache_sweep': getattr(self, 'cache_sweep_results', None),
+            'skipped_tests': getattr(self, '_skipped_tests', 0),
             # EP results (populated by ThroughputStrategy/BalancedStrategy)
             'ep_configurations': [
                 {

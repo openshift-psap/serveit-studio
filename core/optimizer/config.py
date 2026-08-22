@@ -68,14 +68,15 @@ class RecipeOptimizerConfig:
     tp_pair_top_n: int = 4  # Top-N prefill/decode TPs to cross-product (1=fast, 4=full)
     pd_search_mode: str = 'smart'  # 'smart' (calculated ~3/pair) or 'exhaustive' (all splits)
 
-    # Step 11: Calibrated load / InferenceX sweep
+    # Step 11: Calibrated load / Concurrency sweep
     calibrated_load_enabled: bool = False  # Re-test best configs at sustainable concurrency
-    inferencex_sweep_enabled: bool = False  # Full concurrency sweep for InferenceX chart
+    inferencex_sweep_enabled: bool = False  # Full concurrency sweep for Pareto charts
     concurrency_sweep_levels: Optional[List[int]] = None  # Explicit levels; None = auto
     concurrency_sweep_count: Optional[int] = None  # Number of levels to generate
     concurrency_sweep_step_pct: int = 20  # Step as % of calibrated load
-    concurrency_sweep_all_configs: bool = False  # Sweep all discovered configs, not just best
-    concurrency_sweep_max_configs: Optional[int] = None  # Limit multi-config sweep to top N
+    concurrency_sweep_all_configs: bool = False  # Legacy — mapped to sweep_mode='all'
+    concurrency_sweep_max_configs: Optional[int] = None  # Legacy — ignored
+    concurrency_sweep_mode: str = 'architecture_aware'  # 'architecture_aware' | 'all_recommendations' | 'all'
     concurrency_sweep_use_epp_tuned: bool = False  # Re-run sweep with EPP-tuned weights if Step 9 improved
 
     # Step 13: Cache hit sweep
@@ -86,8 +87,9 @@ class RecipeOptimizerConfig:
     cache_sweep_count: Optional[int] = None  # Number of levels to generate
     cache_sweep_step_pct: int = 10  # Step in percentage points
     cache_sweep_groups: int = 5  # Groups for multi_group mode
-    cache_sweep_all_configs: bool = False  # Sweep all 4 recommendation configs + more
-    cache_sweep_max_configs: Optional[int] = None  # Max configs to sweep (None = all)
+    cache_sweep_all_configs: bool = False  # Legacy — mapped to selection_mode='all'
+    cache_sweep_max_configs: Optional[int] = None  # Legacy — ignored
+    cache_sweep_selection_mode: str = 'architecture_aware'  # 'architecture_aware' | 'all_recommendations' | 'all'
 
     # EPP configuration
     epp_custom_enabled: bool = True  # False = use llm-d default EPP config

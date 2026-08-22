@@ -249,60 +249,63 @@ class LatencySearchMixin:
             and len(self.pareto_results) > 0
         )
 
-    def _compute_calibrated_concurrency(self, throughput_mean, concurrency, arch_label):
-        """Compute sustainable concurrency from measured Step 7 data.
+    def _compute_calibrated_concurrency(self, throughput_mean, concurrency, arch_label, result=None):
+        """Compute sustainable concurrency from the config's own Step 6/7 data.
 
-        Uses Little's Law: at the tested concurrency, each user produces
-        throughput_mean/concurrency req/s. The service time without queuing
-        is estimated from the decode TPSG. Sustainable concurrency is where
-        queue time stays reasonable (~2x service time).
+        Uses Little's Law with per-config generation time:
+        calibrated = throughput × generation_time, where
+        generation_time = OSL × ITL_p50 (decode time per request).
+        This gives per-config values driven by each config's throughput
+        and decode speed — no shared TP calibration data.
         """
         if not throughput_mean or throughput_mean <= 0:
             return self.achievable_concurrency or max(1, int(self.config.total_gpus / 1.3))
 
-        decode_tpsg = self.optimal_decode_tp.tpsg if self.optimal_decode_tp else 500
-        prefill_tpsg = self.optimal_prefill_tp.tpsg if self.optimal_prefill_tp else 5000
-        service_time = (self.config.isl / prefill_tpsg) + (self.config.osl / decode_tpsg)
-        response_time = concurrency / throughput_mean
-        queue_time = max(0, response_time - service_time)
-        utilization = service_time / response_time if response_time > 0 else 1
+        osl = getattr(self.config, 'osl', 100)
+        itl_p50 = getattr(result, 'itl_p50', None) if result else None
+        itl_p90 = getattr(result, 'itl_p90', None) if result else None
+        itl = itl_p50 or itl_p90
+        if itl and itl > 0:
+            generation_time = osl * itl / 1000.0
+        else:
+            decode_tpsg = self.optimal_decode_tp.tpsg if self.optimal_decode_tp else None
+            if decode_tpsg and decode_tpsg > 0:
+                generation_time = osl / decode_tpsg
+            else:
+                generation_time = concurrency / throughput_mean * 0.7
 
-        # Calibrated concurrency = throughput × target_latency
-        # Use 1s as the target latency floor — enough headroom for real workloads
-        # but not so aggressive that it drops to unrealistically low concurrency
-        target_response = max(service_time * 3, 1.0)
-        cal_concurrency = max(1, int(throughput_mean * target_response))
-        # Floor at 50% of user concurrency — never recommend less than half
-        cal_concurrency = max(cal_concurrency, int(concurrency * 0.5))
-        # Cap at 120% of user concurrency
-        cal_concurrency = min(cal_concurrency, int(concurrency * 1.2))
+        base_cal = max(1, int(throughput_mean * generation_time))
+
+        response_time = concurrency / throughput_mean
+        ttft_p50 = getattr(result, 'ttft_p50', None) if result else None
+        ttft_frac = (ttft_p50 / 1000.0) / response_time if ttft_p50 and response_time > 0 else 0.5
+        headroom = (concurrency - base_cal) * (1 - ttft_frac) * 0.75
+        cal_concurrency = max(base_cal, int(base_cal + headroom))
 
         self.log(f"  📊 {arch_label} Load Analysis:", 'info')
         self.log(f"    Measured: {throughput_mean:.1f} req/s at c={concurrency:.0f}", 'info')
-        self.log(f"    Response time: {concurrency:.0f} / {throughput_mean:.1f} = {response_time:.2f}s", 'info')
-        self.log(f"    Service time (no queue): {service_time*1000:.0f}ms", 'info')
-        self.log(f"    Queue time: {queue_time*1000:.0f}ms ({queue_time/response_time*100:.0f}% of response)", 'info')
-        self.log(f"    Utilization: {utilization*100:.0f}%", 'info')
-        self.log(f"    → Calibrated concurrency: {cal_concurrency} users (target {target_response*1000:.0f}ms response)", 'info')
+        self.log(f"    Generation time: OSL={osl} × ITL={'p50' if itl_p50 else 'p90'}={itl:.1f}ms = {generation_time:.1f}s" if itl else f"    Generation time: fallback {generation_time:.1f}s", 'info')
+        self.log(f"    Response time: {response_time:.1f}s, TTFT_p50: {ttft_p50:.0f}ms ({ttft_frac*100:.0f}% of response)" if ttft_p50 else f"    Response time: {response_time:.1f}s", 'info')
+        self.log(f"    Base (zero-queue): {base_cal}, headroom: +{headroom:.0f} (75% of {(1-ttft_frac)*100:.0f}% available)", 'info')
+        self.log(f"    → Calibrated concurrency: {cal_concurrency} users", 'info')
 
-        # Store for report display
         if not hasattr(self, '_calibration_analysis'):
             self._calibration_analysis = {}
         self._calibration_analysis[arch_label.lower()] = {
             'throughput_mean': round(throughput_mean, 2),
             'concurrency_tested': int(concurrency),
             'response_time_s': round(response_time, 3),
-            'service_time_ms': round(service_time * 1000, 1),
-            'queue_time_ms': round(queue_time * 1000, 1),
-            'queue_pct': round(queue_time / response_time * 100 if response_time > 0 else 0, 1),
-            'utilization_pct': round(utilization * 100, 1),
+            'generation_time_s': round(generation_time, 3),
+            'itl_ms': round(itl, 1) if itl else None,
+            'ttft_pct_of_response': round(ttft_frac * 100, 1),
+            'base_cal': base_cal,
             'calibrated_concurrency': cal_concurrency,
         }
 
         return cal_concurrency
 
     def _generate_sweep_levels(self, calibrated):
-        """Generate concurrency levels for the InferenceX sweep.
+        """Generate concurrency levels for the concurrency sweep.
 
         Supports three modes via config.concurrency_sweep_levels:
         - None: auto-generate ~6 levels up to 1.5× calibrated
@@ -404,18 +407,32 @@ class LatencySearchMixin:
         if arch_key not in self.concurrency_sweep_results:
             self.concurrency_sweep_results[arch_key] = []
         results = self.concurrency_sweep_results[arch_key]
-        self.log(f"\n📊 InferenceX Sweep: {arch_label} ({len(levels)} levels: {levels})", 'info')
+        self.log(f"\n📊 Concurrency Sweep: {arch_label} ({len(levels)} levels: {levels})", 'info')
         self.log(f"   Calibrated load: {calibrated} users", 'info')
 
         # Check which levels need testing vs already completed
         levels_to_run = []
+        consecutive_discards = 0
         for concurrency in levels:
             test_id = f"step11-sweep-{arch_label.lower()}-c{concurrency}"
             if test_id in self.completed_tests:
                 row = self.completed_tests[test_id]
                 result = self._make_test_result_from_db(row)
-                self.log(f"  ⏩ c={concurrency}: resuming from DB", 'info')
+                quality = row.get('quality', 'ok')
+                if quality == 'discard':
+                    consecutive_discards += 1
+                    self.log(f"  ⏩ c={concurrency}: resuming from DB (discarded)", 'info')
+                else:
+                    consecutive_discards = 0
+                    self.log(f"  ⏩ c={concurrency}: resuming from DB", 'info')
                 self._append_sweep_result(results, result, concurrency, calibrated, gpus, test_id, config_label)
+                if consecutive_discards >= 2:
+                    skipped = len(levels) - len(results)
+                    if not hasattr(self, '_skipped_tests'):
+                        self._skipped_tests = 0
+                    self._skipped_tests += skipped
+                    self.log(f"  ⚠️  {consecutive_discards} consecutive discarded results — skipping {skipped} remaining levels (not viable)", 'warning')
+                    return results
             else:
                 levels_to_run.append(concurrency)
 
@@ -424,7 +441,6 @@ class LatencySearchMixin:
 
         # All levels share the same pods — use first level's test_id for deployment
         deploy_test_id = f"step11-sweep-{arch_label.lower()}-c{levels_to_run[0]}"
-
         for i, concurrency in enumerate(levels_to_run):
             if self._should_stop():
                 break
@@ -455,7 +471,27 @@ class LatencySearchMixin:
 
             if not result or not result.guidellm_success:
                 self.log(f"  ❌ c={concurrency}: test failed, skipping", 'warning')
+                consecutive_discards += 1
+                if consecutive_discards >= 2:
+                    skipped = len(levels_to_run) - i - 1
+                    if not hasattr(self, '_skipped_tests'):
+                        self._skipped_tests = 0
+                    self._skipped_tests += skipped + consecutive_discards
+                    self.log(f"  ⚠️  {consecutive_discards} consecutive failures — skipping {skipped} remaining levels (not viable)", 'warning')
+                    break
                 continue
+
+            if getattr(result, 'quality', 'ok') == 'discard':
+                consecutive_discards += 1
+                if consecutive_discards >= 2:
+                    skipped = len(levels_to_run) - i - 1
+                    if not hasattr(self, '_skipped_tests'):
+                        self._skipped_tests = 0
+                    self._skipped_tests += skipped + consecutive_discards
+                    self.log(f"  ⚠️  {consecutive_discards} consecutive discarded results — skipping {skipped} remaining levels (not viable)", 'warning')
+                    break
+            else:
+                consecutive_discards = 0
 
             self._append_sweep_result(results, result, concurrency, calibrated, gpus, test_id, config_label)
 
@@ -476,14 +512,29 @@ class LatencySearchMixin:
             osl = getattr(self.config, 'osl', 100)
             output_tps = tput * osl
         ttft = result.ttft_p90 or 0
-        interactivity = (output_tps / concurrency) if output_tps > 0 and concurrency > 0 else 0
-        throughput_per_gpu = (output_tps / gpus) if gpus > 0 and output_tps > 0 else 0
+        # Compute vLLM server total tok/s (prompt + generation from Prometheus)
+        vllm_tps = None
+        try:
+            if result.metrics_json:
+                import json as _jm
+                _mj = _jm.loads(result.metrics_json) if isinstance(result.metrics_json, str) else result.metrics_json
+                _pm = _mj.get('prometheus_metrics', {}) if isinstance(_mj, dict) else {}
+                _ptps = (_pm.get('vllm_prompt_tokens_rate') or {}).get('avg', 0)
+                _gtps = (_pm.get('vllm_generation_tokens_rate') or {}).get('avg', 0)
+                if _ptps + _gtps > 0:
+                    vllm_tps = round(_ptps + _gtps)
+        except Exception:
+            pass
+        total_tps = vllm_tps or output_tps
+        interactivity = (total_tps / concurrency) if total_tps > 0 and concurrency > 0 else 0
+        throughput_per_gpu = (total_tps / gpus) if total_tps > 0 and gpus > 0 else 0
 
         results.append({
             'concurrency': concurrency,
             'is_calibrated': concurrency == calibrated,
             'throughput_mean': round(tput, 2),
             'output_tps_mean': round(output_tps, 2),
+            'vllm_tps': vllm_tps,
             'interactivity': round(interactivity, 2),
             'throughput_per_gpu': round(throughput_per_gpu, 2),
             'ttft_p50': round(result.ttft_p50 or 0, 1),
@@ -510,7 +561,7 @@ class LatencySearchMixin:
 
     def _validate_at_calibrated_load(self):
         """
-        Step 11: Concurrency sweep for InferenceX charts.
+        Step 11: Concurrency sweep for Pareto charts.
 
         Computes calibrated concurrency from measured Step 7 throughput using
         Little's Law, then runs a sweep from low to 1.5× calibrated for both
@@ -521,8 +572,9 @@ class LatencySearchMixin:
 
         original_concurrency = int(self.config.qps)
         sweep_on = self.config.inferencex_sweep_enabled or getattr(self.config, 'concurrency_sweep_count', None)
-        all_configs = getattr(self.config, 'concurrency_sweep_all_configs', False)
-        max_configs = getattr(self.config, 'concurrency_sweep_max_configs', None)
+        sweep_mode = getattr(self.config, 'concurrency_sweep_mode', 'architecture_aware')
+        if getattr(self.config, 'concurrency_sweep_all_configs', False) and sweep_mode == 'architecture_aware':
+            sweep_mode = 'all'
 
         def _tput_of(result):
             return result.throughput_mean or result.throughput_p90 or 0
@@ -567,35 +619,39 @@ class LatencySearchMixin:
                 seen_keys.add(key)
                 selected.append(candidate)
 
-        if all_candidates:
-            if all_configs:
-                # All 4 recommendation configs first
-                _add_unique(min(all_candidates, key=lambda x: _score(x[2])))
-                _add_unique(min(all_candidates, key=lambda x: x[2].ttft_p90 or 1e9))
-                _add_unique(max(all_candidates, key=lambda x: _tput_of(x[2])))
-                def _gpus(c):
-                    if c[0] in ('pd', 'ep'):
-                        return c[1].prefill_pods * c[1].prefill_tp + c[1].decode_pods * c[1].decode_tp
-                    else:
-                        return c[1] * (self.config.total_gpus // c[1]) if c[1] else self.config.total_gpus
-                _add_unique(max(all_candidates, key=lambda x: _tput_of(x[2]) / max(_gpus(x), 1)))
-                # Fill remaining slots by score
-                limit = int(max_configs) if max_configs else len(all_candidates)
-                for c in sorted(all_candidates, key=lambda x: _score(x[2])):
-                    if len(selected) >= limit:
-                        break
-                    _add_unique(c)
+        def _gpus(c):
+            if c[0] in ('pd', 'ep'):
+                return c[1].prefill_pods * c[1].prefill_tp + c[1].decode_pods * c[1].decode_tp
             else:
-                # Best PD and best aggregated by balanced score
-                pd_candidates = [c for c in all_candidates if c[0] == 'pd']
-                agg_candidates = [c for c in all_candidates if c[0] == 'agg']
-                ep_candidates = [c for c in all_candidates if c[0] == 'ep']
-                if pd_candidates:
-                    _add_unique(min(pd_candidates, key=lambda x: _score(x[2])))
-                if ep_candidates:
-                    _add_unique(min(ep_candidates, key=lambda x: _score(x[2])))
-                if agg_candidates:
-                    _add_unique(min(agg_candidates, key=lambda x: _score(x[2])))
+                return c[1] * (self.config.total_gpus // c[1]) if c[1] else self.config.total_gpus
+
+        def _add_4_recommendations(pool):
+            """Add Best Balanced, Lowest TTFT, Highest Throughput, Most Efficient from a pool."""
+            if not pool:
+                return
+            _add_unique(min(pool, key=lambda x: _score(x[2])))
+            _add_unique(min(pool, key=lambda x: x[2].ttft_p90 or 1e9))
+            _add_unique(max(pool, key=lambda x: _tput_of(x[2])))
+            _add_unique(max(pool, key=lambda x: _tput_of(x[2]) / max(_gpus(x), 1)))
+
+        if all_candidates:
+            pd_candidates = [c for c in all_candidates if c[0] == 'pd']
+            agg_candidates = [c for c in all_candidates if c[0] == 'agg']
+            ep_candidates = [c for c in all_candidates if c[0] == 'ep']
+
+            if sweep_mode == 'all':
+                for c in sorted(all_candidates, key=lambda x: _score(x[2])):
+                    _add_unique(c)
+            elif sweep_mode == 'all_recommendations':
+                _add_4_recommendations(pd_candidates)
+                _add_4_recommendations(ep_candidates)
+                _add_4_recommendations(agg_candidates)
+            else:
+                # architecture_aware: best from each arch + overall 4 recommendations
+                for pool in [pd_candidates, ep_candidates, agg_candidates]:
+                    if pool:
+                        _add_unique(min(pool, key=lambda x: _score(x[2])))
+                _add_4_recommendations(all_candidates)
 
         self.log(f"Concurrency sweep: {len(selected)} configs selected", 'info')
         for c in selected:
@@ -614,7 +670,7 @@ class LatencySearchMixin:
                 break
             pd_tput_mean = _tput_of(pd_result)
             label = f"{split.prefill_pods}P×TP{split.prefill_tp} + {split.decode_pods}D×TP{split.decode_tp}"
-            pd_calibrated = self._compute_calibrated_concurrency(pd_tput_mean, original_concurrency, f'PD ({label})')
+            pd_calibrated = self._compute_calibrated_concurrency(pd_tput_mean, original_concurrency, f'PD ({label})', result=pd_result)
             if sweep_on:
                 pd_levels = self._generate_sweep_levels(pd_calibrated)
             else:
@@ -657,13 +713,13 @@ class LatencySearchMixin:
                 agg_tput_mean = _tput_of(agg_result)
                 agg_replicas = total_gpus_agg // agg_tp if agg_tp else total_gpus_agg
                 label = f"{agg_replicas}×TP{agg_tp}"
-                agg_calibrated = self._compute_calibrated_concurrency(agg_tput_mean, original_concurrency, f'Aggregated ({label})')
+                agg_calibrated = self._compute_calibrated_concurrency(agg_tput_mean, original_concurrency, f'Aggregated ({label})', result=agg_result)
                 if sweep_on:
                     agg_levels = self._generate_sweep_levels(agg_calibrated)
                 else:
                     agg_levels = [agg_calibrated]
 
-                sweep_key = f"aggregated-tp{agg_tp}"
+                sweep_key = f"agg-tp{agg_tp}"
                 current_tp = agg_tp
                 agg_sweep = self._run_sweep_for_arch(
                     sweep_key, agg_calibrated, agg_levels,
@@ -700,7 +756,7 @@ class LatencySearchMixin:
                 break
             ep_tput_mean = _tput_of(ep_result)
             label = f"{split.prefill_pods}P×TP{split.prefill_tp} + {split.decode_pods}D×TP{split.decode_tp} (EP)"
-            ep_calibrated = self._compute_calibrated_concurrency(ep_tput_mean, original_concurrency, f'EP ({label})')
+            ep_calibrated = self._compute_calibrated_concurrency(ep_tput_mean, original_concurrency, f'EP ({label})', result=ep_result)
             if sweep_on:
                 ep_levels = self._generate_sweep_levels(ep_calibrated)
             else:
@@ -709,7 +765,7 @@ class LatencySearchMixin:
             total_gpus_ep = (split.prefill_pods * split.prefill_tp +
                              split.decode_pods * split.decode_tp)
 
-            sweep_key = f"ep-{split.prefill_pods}p{split.decode_pods}d-ptp{split.prefill_tp}-dtp{split.decode_tp}"
+            sweep_key = f"ep-{split.prefill_pods}p{split.decode_pods}d-tp{split.prefill_tp}-{split.decode_tp}"
             current_split = split
             ep_sweep = self._run_sweep_for_arch(
                 sweep_key, ep_calibrated, ep_levels,

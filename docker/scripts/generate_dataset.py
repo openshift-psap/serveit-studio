@@ -35,9 +35,15 @@ def _load_tokenizer(model_name):
 def _make_prompt(length_tokens, rng_instance, tokenizer, vocab):
     """Generate a prompt of approximately length_tokens tokens."""
     if vocab and tokenizer:
-        words = [rng_instance.choice(vocab) for _ in range(length_tokens * 2)]
+        target = int(length_tokens * 1.1)
+        words = [rng_instance.choice(vocab) for _ in range(target)]
         text = ' '.join(words)
         tokens = tokenizer.encode(text, add_special_tokens=False)
+        while len(tokens) < length_tokens:
+            extra = length_tokens - len(tokens)
+            words = [rng_instance.choice(vocab) for _ in range(extra + 10)]
+            text += ' ' + ' '.join(words)
+            tokens = tokenizer.encode(text, add_special_tokens=False)
         if len(tokens) > length_tokens:
             text = tokenizer.decode(tokens[:length_tokens], skip_special_tokens=True)
     else:

@@ -120,7 +120,7 @@ class TTFTStrategy(OptimizationStrategy):
         # Recalculate achievable concurrency from actual Step 7 throughput
         self.opt._recalculate_achievable_concurrency()
 
-        # Step 11: Calibrated load / InferenceX sweep (user-controlled)
+        # Step 11: Calibrated load / Concurrency sweep (user-controlled)
         if self.opt.config.calibrated_load_enabled and len(self.opt.pareto_results) > 0:
             self.opt._recalculate_achievable_concurrency()
             self.opt.log("STEP 11: Calibrated Load Validation", 'decision')
@@ -188,7 +188,7 @@ class ThroughputStrategy(OptimizationStrategy):
             self.opt._run_latency_bounded_search()
             self.opt.log("", 'info')
 
-        # Step 11: Calibrated load / InferenceX sweep (user-controlled)
+        # Step 11: Calibrated load / Concurrency sweep (user-controlled)
         if self.opt.config.calibrated_load_enabled and len(self.opt.ep_results) > 0:
             self.opt._recalculate_achievable_concurrency()
             self.opt.log("STEP 11: Calibrated Load Validation", 'decision')
@@ -666,14 +666,12 @@ class BalancedStrategy(OptimizationStrategy):
             self.opt._run_latency_bounded_search()
             self.opt.log("", 'info')
 
-        # Step 11: Calibrated load / InferenceX sweep (user-controlled)
+        # Step 11: Calibrated load / Concurrency sweep (user-controlled)
         if self.opt.config.calibrated_load_enabled and (len(self.opt.pareto_results) > 0 or len(self.opt.ep_results) > 0):
             self.opt._recalculate_achievable_concurrency()
             self.opt.log("STEP 11: Calibrated Load Validation & Concurrency Sweep", 'decision')
             self.opt.log("-" * 80, 'info')
             self.opt._validate_at_calibrated_load()
-            if self.opt.ep_results:
-                self._validate_ep_at_calibrated_load()
             self.opt.log("", 'info')
 
         # Step 12: Speculative decoding comparison (conditional)

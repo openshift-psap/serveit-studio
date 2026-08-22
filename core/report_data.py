@@ -56,19 +56,7 @@ class TestResult:
 
     @property
     def throughput_mean(self) -> Optional[float]:
-        """Actual requests per second (request_successful / test_duration)."""
-        if self.metrics_json and self.test_config_json:
-            try:
-                import json
-                m = json.loads(self.metrics_json)
-                tc = json.loads(self.test_config_json)
-                req_ok = m.get('request_successful', 0)
-                duration = tc.get('test_duration', 0)
-                if req_ok > 0 and duration > 0:
-                    return round(req_ok / duration, 2)
-            except Exception:
-                pass
-        # Fallback to guidellm metric if no request count available
+        """Mean throughput from guidellm's measurement window (req/s)."""
         if self.metrics_json:
             try:
                 import json
@@ -106,6 +94,8 @@ class TestResult:
         return None
 
     @property
+    def e2e_latency_p50(self): return self._metrics_val('e2e_latency_p50')
+    @property
     def e2e_latency_p90(self): return self._metrics_val('e2e_latency_p90')
     @property
     def e2e_latency_p95(self): return self._metrics_val('e2e_latency_p95')
@@ -129,14 +119,11 @@ class TestResult:
         if self.architecture in ('pd', 'ep'):
             ptp = self.prefill_tp or self.tensor_parallelism
             dtp = self.decode_tp or self.tensor_parallelism
-            label = f"{self.prefill_pods}P×TP{ptp} + {self.decode_pods}D×TP{dtp}"
-            if self.architecture == 'ep':
-                label += ' (ep)'
-            return label
+            tag = 'EP' if self.architecture == 'ep' else 'PD'
+            return f"{self.prefill_pods}P×TP{ptp} + {self.decode_pods}D×TP{dtp} ({tag})"
         else:
             total_pods = self.prefill_pods + self.decode_pods
-            arch = self.architecture or 'aggregated'
-            return f"{total_pods}×TP{self.tensor_parallelism} ({arch})"
+            return f"{total_pods}×TP{self.tensor_parallelism} (AG)"
 
     @property
     def is_successful(self) -> bool:

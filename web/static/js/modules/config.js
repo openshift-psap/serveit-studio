@@ -203,17 +203,9 @@ function updateUIFromConfig() {
         if (config.concurrency_sweep_levels && document.getElementById('concurrency-sweep-levels')) {
             document.getElementById('concurrency-sweep-levels').value = config.concurrency_sweep_levels.join(', ');
         }
-        if (document.getElementById('sweep-all-configs')) {
-            var allOn = config.concurrency_sweep_all_configs === true;
-            document.getElementById('sweep-all-configs').checked = allOn;
-            var allSw = document.getElementById('sweep-all-switch');
-            if (allSw) { allSw.style.background = allOn ? '#059669' : '#ccc'; allSw.querySelector('span').style.transform = allOn ? 'translateX(18px)' : 'translateX(0)'; }
-            var maxRow = document.getElementById('sweep-max-configs-row');
-            if (maxRow) maxRow.style.display = allOn ? 'flex' : 'none';
-            if (config.concurrency_sweep_max_configs && document.getElementById('sweep-max-configs')) {
-                document.getElementById('sweep-max-configs').value = config.concurrency_sweep_max_configs;
-            }
-        }
+        var sweepMode = config.concurrency_sweep_mode || (config.concurrency_sweep_all_configs ? 'all' : 'architecture_aware');
+        var sweepRadios = document.querySelectorAll('input[name="sweep-mode"]');
+        sweepRadios.forEach(function(r) { r.checked = r.value === sweepMode; });
         if (document.getElementById('sweep-epp-tuned')) {
             var eppOn = config.concurrency_sweep_use_epp_tuned === true;
             document.getElementById('sweep-epp-tuned').checked = eppOn;
@@ -249,6 +241,9 @@ function updateUIFromConfig() {
             if (gr) gr.style.display = 'flex';
         }
     }
+    var cacheSelMode = config.cache_sweep_selection_mode || (config.cache_sweep_all_configs ? 'all' : 'architecture_aware');
+    var cacheSelRadios = document.querySelectorAll('input[name="cache-sweep-mode-sel"]');
+    cacheSelRadios.forEach(function(r) { r.checked = r.value === cacheSelMode; });
     if (config.structured_prefix) {
         var csSpEl = document.getElementById('cache-sweep-structured-prefix');
         if (csSpEl) {
@@ -944,7 +939,7 @@ function restoreConfigSummary() {
     const atpEl = document.getElementById('config-summary-asymmetric-tp');
     if (atpEl) atpEl.textContent = config.allow_asymmetric_tp ? 'Enabled' : 'Disabled';
     const clEl = document.getElementById('config-summary-calibrated-load');
-    if (clEl) clEl.textContent = config.calibrated_load_enabled ? (config.inferencex_sweep_enabled ? 'Enabled + InferenceX Sweep' : 'Enabled') : 'Disabled';
+    if (clEl) clEl.textContent = config.calibrated_load_enabled ? (config.inferencex_sweep_enabled ? 'Enabled + Concurrency Sweep' : 'Enabled') : 'Disabled';
     const ixEl = document.getElementById('config-summary-inferencex-sweep');
     if (ixEl) ixEl.textContent = config.inferencex_sweep_enabled ? 'Enabled' : 'Disabled';
     const csEl = document.getElementById('config-summary-cache-sweep');
@@ -1048,18 +1043,15 @@ function updateSingleTestVisibility() {
         var s = document.getElementById(id);
         if (s) s.style.display = isSingle ? 'none' : '';
     });
-    var mcRow = document.getElementById('multi-config-sweep-toggle');
+    var mcRow = document.getElementById('multi-config-sweep-row');
     if (mcRow) {
         mcRow.style.opacity = isSingle ? '0.4' : '1';
         mcRow.style.pointerEvents = isSingle ? 'none' : 'auto';
         if (isSingle) {
+            config.concurrency_sweep_mode = 'architecture_aware';
             config.concurrency_sweep_all_configs = false;
-            var cb = document.getElementById('sweep-all-configs');
-            if (cb) cb.checked = false;
-            var sw = document.getElementById('sweep-all-switch');
-            if (sw) { sw.style.background = '#ccc'; sw.querySelector('span').style.transform = 'translateX(0)'; }
-            var mr = document.getElementById('sweep-max-configs-row');
-            if (mr) mr.style.display = 'none';
+            var radios = document.querySelectorAll('input[name="sweep-mode"]');
+            radios.forEach(function(r) { r.checked = r.value === 'architecture_aware'; });
         }
     }
     _singleTestVisLock = false;

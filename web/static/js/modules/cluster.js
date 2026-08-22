@@ -212,6 +212,7 @@ document.getElementById('start-optimization').addEventListener('click', () => {
         cache_sweep_count: config.cache_sweep_count || null,
         cache_sweep_step_pct: config.cache_sweep_step_pct || 10,
         cache_sweep_groups: config.cache_sweep_groups || 5,
+        cache_sweep_selection_mode: config.cache_sweep_selection_mode || 'architecture_aware',
         run_description: config.run_description || '',
         epp_custom_enabled: config.epp_custom_enabled === true,
         epp_preset: config.epp_preset || 'balanced',
@@ -238,6 +239,7 @@ document.getElementById('start-optimization').addEventListener('click', () => {
         concurrency_sweep_step_pct: config.concurrency_sweep_step_pct || 20,
         concurrency_sweep_all_configs: !!config.concurrency_sweep_all_configs,
         concurrency_sweep_max_configs: config.concurrency_sweep_max_configs || null,
+        concurrency_sweep_mode: config.concurrency_sweep_mode || 'architecture_aware',
         concurrency_sweep_use_epp_tuned: !!config.concurrency_sweep_use_epp_tuned
     });
 });

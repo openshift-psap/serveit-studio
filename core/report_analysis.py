@@ -91,10 +91,12 @@ class ReportAnalyzer:
                 'error': 'No successful tests'
             }
 
-        # Core results only (step6/7 — the actual architecture comparison tests)
+        # Core results: step6/7 for architecture averages, all non-calibration for best configs
         core_results = [r for r in successful if not r.config_name.startswith(('step2', 'step3', 'step9', 'step10', 'step11', 'step12', 'step13'))]
         if not core_results:
             core_results = successful
+        # Include sweep results for best-of comparisons (sweep often finds better operating points)
+        all_valid = [r for r in successful if not r.config_name.startswith(('step2', 'step3'))]
 
         by_arch = {}
         for arch in ['aggregated', 'pd', 'ep']:
@@ -110,14 +112,17 @@ class ReportAnalyzer:
                     'best_throughput': max((r.throughput_mean or r.throughput_p90) for r in arch_results),
                 }
 
-        best_ttft_config = min(core_results, key=lambda r: r.ttft_p90)
-        best_throughput_config = max(core_results, key=lambda r: r.throughput_p90)
-        best_efficiency_config = max(core_results, key=lambda r: r.throughput_p90 / r.total_gpus)
+        best_ttft_config = min(all_valid, key=lambda r: r.ttft_p90)
+        best_itl_valid = [r for r in all_valid if r.itl_p90 and r.itl_p90 > 0]
+        best_itl_config = min(best_itl_valid, key=lambda r: r.itl_p90) if best_itl_valid else None
+        best_throughput_config = max(all_valid, key=lambda r: r.throughput_mean or r.throughput_p90 or 0)
+        best_efficiency_config = max(all_valid, key=lambda r: (r.throughput_mean or r.throughput_p90 or 0) / max(r.total_gpus, 1))
 
         return {
             'total_tests': len(results),
             'successful_tests': len(successful),
             'failed_tests': len([r for r in results if r.status == 'failed']),
+            'discarded_tests': len([r for r in results if r.quality == 'discard']) + len([r for r in results if r.status == 'failed']),
             'broken_tests': len(broken),
             'by_architecture': by_arch,
             'best_configs': {
@@ -141,13 +146,21 @@ class ReportAnalyzer:
                     'throughput_p99': best_throughput_config.throughput_p99,
                     'gpus': best_throughput_config.total_gpus,
                 },
+                'lowest_itl': {
+                    'name': best_itl_config.display_label,
+                    'architecture': best_itl_config.architecture,
+                    'itl_p90': best_itl_config.itl_p90,
+                    'itl_p95': best_itl_config.itl_p95,
+                    'itl_p99': best_itl_config.itl_p99,
+                    'gpus': best_itl_config.total_gpus,
+                } if best_itl_config else None,
                 'most_efficient': {
                     'name': best_efficiency_config.display_label,
                     'architecture': best_efficiency_config.architecture,
                     'ttft_p90': best_efficiency_config.ttft_p90,
                     'throughput_p90': best_efficiency_config.throughput_p90,
                     'gpus': best_efficiency_config.total_gpus,
-                    'efficiency': best_efficiency_config.throughput_p90 / best_efficiency_config.total_gpus,
+                    'efficiency': (best_efficiency_config.throughput_mean or best_efficiency_config.throughput_p90 or 0) / max(best_efficiency_config.total_gpus, 1),
                 },
                 'by_architecture': {arch.upper(): {
                     'best_ttft_p90': min(r.ttft_p90 for r in arch_rs),
@@ -157,11 +170,13 @@ class ReportAnalyzer:
                     'best_name_ttft': min(arch_rs, key=lambda r: r.ttft_p90).display_label,
                     'best_name_tput': max(arch_rs, key=lambda r: r.throughput_mean or 0).display_label,
                 } for arch in ['aggregated', 'pd', 'ep']
-                  for arch_rs in [[r for r in core_results if r.architecture == arch]]
+                  for arch_rs in [[r for r in all_valid if r.architecture == arch]]
                   if arch_rs},
             },
             # Calibrated recommendations from sweep (step11) — realistic production performance
             'calibrated_best': self._build_calibrated_best(successful),
+            # Cache sweep recommendations (step13)
+            'cache_sweep_best': self._build_cache_sweep_best(successful),
         }
 
     def _build_calibrated_best(self, successful, user_concurrency=None):
@@ -172,9 +187,17 @@ class ReportAnalyzer:
         For TTFT recommendation, only considers results at ≥50% of user concurrency
         to avoid recommending unrealistically low-load configs.
         """
-        sweep = [r for r in successful if r.config_name.startswith('step11-sweep-') and r.ttft_p90 and r.ttft_p90 > 0]
-        if not sweep:
+        all_sweep = [r for r in successful if r.config_name.startswith('step11-sweep-') and r.ttft_p90 and r.ttft_p90 > 0 and r.quality != 'discard']
+        if not all_sweep:
             return None
+        # Only use results from configs in concurrency_sweep (the selected configs)
+        sweep_keys = self._sweep_config_keys or []
+        if sweep_keys:
+            sweep = [r for r in all_sweep if any(r.config_name.startswith(f"step11-sweep-{sk}") for sk in sweep_keys)]
+        else:
+            sweep = all_sweep
+        if not sweep:
+            sweep = all_sweep
 
         import json as _cj
         def _get_conc(r):
@@ -189,15 +212,30 @@ class ReportAnalyzer:
             conc = _get_conc(r)
             ptp = r.prefill_tp or r.tensor_parallelism
             dtp = r.decode_tp or r.tensor_parallelism
+            # Extract vLLM tok/s from prometheus_metrics
+            pm = {}
+            if r.metrics_json:
+                try:
+                    mj = _cj.loads(r.metrics_json) if isinstance(r.metrics_json, str) else r.metrics_json
+                    pm = mj.get('prometheus_metrics', {}) if isinstance(mj, dict) else {}
+                except Exception:
+                    pass
+            vllm_prompt = (pm.get('vllm_prompt_tokens_rate') or {}).get('avg', 0)
+            vllm_gen = (pm.get('vllm_generation_tokens_rate') or {}).get('avg', 0)
+            vllm_tps = round(vllm_prompt + vllm_gen) if (vllm_prompt + vllm_gen) > 0 else None
+
             entry = {
                 'name': r.display_label, 'architecture': r.architecture,
                 'config_name': r.config_name, 'test_id': r.config_name,
+                'ttft_p50': round(r.ttft_p50, 1) if getattr(r, 'ttft_p50', None) else None,
                 'ttft_p90': round(r.ttft_p90, 1),
                 'ttft_p95': round(r.ttft_p95, 1) if r.ttft_p95 else None,
                 'ttft_p99': round(r.ttft_p99, 1) if r.ttft_p99 else None,
+                'e2e_p50': round(r.e2e_latency_p50 * 1000, 1) if getattr(r, 'e2e_latency_p50', None) else None,
                 'e2e_p90': round(r.e2e_latency_p90 * 1000, 1) if getattr(r, 'e2e_latency_p90', None) else None,
                 'e2e_p95': round(r.e2e_latency_p95 * 1000, 1) if getattr(r, 'e2e_latency_p95', None) else None,
                 'e2e_p99': round(r.e2e_latency_p99 * 1000, 1) if getattr(r, 'e2e_latency_p99', None) else None,
+                'itl_p50': round(r.itl_p50, 2) if getattr(r, 'itl_p50', None) else None,
                 'itl_p90': round(r.itl_p90, 2) if r.itl_p90 else None,
                 'itl_p95': round(r.itl_p95, 2) if r.itl_p95 else None,
                 'itl_p99': round(r.itl_p99, 2) if r.itl_p99 else None,
@@ -205,6 +243,7 @@ class ReportAnalyzer:
                 'throughput_p90': round(r.throughput_p90, 2) if r.throughput_p90 else None,
                 'gpus': r.total_gpus, 'concurrency': conc,
                 'tp': r.tensor_parallelism if r.architecture == 'aggregated' else ptp,
+                'vllm_tps': vllm_tps,
             }
             if r.architecture != 'aggregated':
                 entry.update({
@@ -215,8 +254,83 @@ class ReportAnalyzer:
 
         balanced = min(sweep, key=lambda r: (r.ttft_p90 or 1e9) / (r.throughput_mean or 0.001))
         lowest_ttft = min(sweep, key=lambda r: r.ttft_p90 or 1e9)
+        itl_valid = [r for r in sweep if r.itl_p90 and r.itl_p90 > 0]
+        lowest_itl = min(itl_valid, key=lambda r: r.itl_p90) if itl_valid else None
         highest_tput = max(sweep, key=lambda r: r.throughput_mean or 0)
         most_eff = max(sweep, key=lambda r: (r.throughput_mean or 0) / max(r.total_gpus, 1))
+
+        result = {
+            'balanced': _to_dict(balanced),
+            'lowest_ttft': _to_dict(lowest_ttft),
+            'lowest_itl': _to_dict(lowest_itl) if lowest_itl else None,
+            'highest_tput': _to_dict(highest_tput),
+            'most_efficient': {**_to_dict(most_eff), 'efficiency': round((most_eff.throughput_mean or 0) / max(most_eff.total_gpus, 1), 4)},
+        }
+        return result
+
+    def _build_cache_sweep_best(self, successful):
+        """Build best configs from cache sweep (step13) results."""
+        cache_results = [r for r in successful if r.config_name.startswith('step13-') and r.ttft_p90 and r.ttft_p90 > 0 and r.quality != 'discard']
+        if not cache_results:
+            return None
+
+        import json as _cj
+
+        def _to_dict(r):
+            conc = None
+            if r.test_config_json:
+                try:
+                    conc = _cj.loads(r.test_config_json).get('num_users')
+                except Exception:
+                    pass
+            ptp = r.prefill_tp or r.tensor_parallelism
+            dtp = r.decode_tp or r.tensor_parallelism
+            pm = {}
+            if r.metrics_json:
+                try:
+                    mj = _cj.loads(r.metrics_json) if isinstance(r.metrics_json, str) else r.metrics_json
+                    pm = mj.get('prometheus_metrics', {}) if isinstance(mj, dict) else {}
+                except Exception:
+                    pass
+            vllm_prompt = (pm.get('vllm_prompt_tokens_rate') or {}).get('avg', 0)
+            vllm_gen = (pm.get('vllm_generation_tokens_rate') or {}).get('avg', 0)
+            vllm_tps = round(vllm_prompt + vllm_gen) if (vllm_prompt + vllm_gen) > 0 else None
+            cache_hits = (pm.get('vllm_prefix_cache_hits_rate') or {}).get('avg', 0)
+            cache_queries = (pm.get('vllm_prefix_cache_queries_rate') or {}).get('avg', 0)
+            cache_hit_pct = round(cache_hits / cache_queries * 100, 1) if cache_queries > 0 else None
+
+            entry = {
+                'name': r.display_label, 'architecture': r.architecture,
+                'config_name': r.config_name, 'test_id': r.config_name,
+                'ttft_p50': round(r.ttft_p50, 1) if getattr(r, 'ttft_p50', None) else None,
+                'ttft_p90': round(r.ttft_p90, 1),
+                'ttft_p95': round(r.ttft_p95, 1) if r.ttft_p95 else None,
+                'ttft_p99': round(r.ttft_p99, 1) if r.ttft_p99 else None,
+                'e2e_p50': round(r.e2e_latency_p50 * 1000, 1) if getattr(r, 'e2e_latency_p50', None) else None,
+                'e2e_p90': round(r.e2e_latency_p90 * 1000, 1) if getattr(r, 'e2e_latency_p90', None) else None,
+                'e2e_p95': round(r.e2e_latency_p95 * 1000, 1) if getattr(r, 'e2e_latency_p95', None) else None,
+                'e2e_p99': round(r.e2e_latency_p99 * 1000, 1) if getattr(r, 'e2e_latency_p99', None) else None,
+                'itl_p50': round(r.itl_p50, 2) if getattr(r, 'itl_p50', None) else None,
+                'itl_p90': round(r.itl_p90, 2) if r.itl_p90 else None,
+                'itl_p95': round(r.itl_p95, 2) if r.itl_p95 else None,
+                'itl_p99': round(r.itl_p99, 2) if r.itl_p99 else None,
+                'throughput_mean': round(r.throughput_mean, 2) if r.throughput_mean else None,
+                'throughput_p90': round(r.throughput_p90, 2) if r.throughput_p90 else None,
+                'gpus': r.total_gpus, 'concurrency': conc,
+                'tp': r.tensor_parallelism if r.architecture == 'aggregated' else ptp,
+                'vllm_tps': vllm_tps, 'cache_hit_pct': cache_hit_pct,
+            }
+            if r.architecture != 'aggregated':
+                entry.update({
+                    'prefill_pods': r.prefill_pods, 'decode_pods': r.decode_pods,
+                    'prefill_tp': ptp, 'decode_tp': dtp,
+                })
+            return entry
+
+        balanced = min(cache_results, key=lambda r: (r.ttft_p90 or 1e9) / (r.throughput_mean or 0.001))
+        highest_tput = max(cache_results, key=lambda r: r.throughput_mean or 0)
+        lowest_ttft = min(cache_results, key=lambda r: r.ttft_p90 or 1e9)
+        most_eff = max(cache_results, key=lambda r: (r.throughput_mean or 0) / max(r.total_gpus, 1))
 
         return {
             'balanced': _to_dict(balanced),
@@ -253,7 +367,7 @@ class ReportAnalyzer:
             pass
 
 
-        goal = run_meta.get('goal')
+        goal = run_meta.get('goal') or run_meta.get('optimization_goal')
         if not goal:
             has_step7 = any(r.config_name.startswith('step7') for r in results)
             if has_step7:
@@ -278,7 +392,7 @@ class ReportAnalyzer:
                                 'load balancing (EPLB). EP varies tensor parallelism to find '
                                 'the optimal balance between per-pod efficiency and replica count.'),
             },
-            'balanced': {
+            'full_coverage': {
                 'name': 'Full Coverage',
                 'description': ('This optimization compared all three architectures: '
                                 'Aggregated (baseline), Prefill/Decode disaggregation (PD), '
@@ -601,14 +715,18 @@ class ReportAnalyzer:
             return entry
 
         def _select_3(valid, ttft_field, tput_field):
-            """Select 4 best configs: balanced, lowest_ttft, highest_tput, most_efficient."""
+            """Select 5 best configs: balanced, lowest_ttft, lowest_itl, highest_tput, most_efficient."""
+            itl_field = ttft_field.replace('ttft_', 'itl_')
             by_balanced = min(valid, key=lambda r: (getattr(r, ttft_field) or 1e9) / (r.throughput_mean or 0.001))
             by_ttft = min(valid, key=lambda r: getattr(r, ttft_field) or 1e9)
+            itl_valid = [r for r in valid if getattr(r, itl_field, None) and getattr(r, itl_field) > 0]
+            by_itl = min(itl_valid, key=lambda r: getattr(r, itl_field)) if itl_valid else None
             by_tput = max(valid, key=lambda r: r.throughput_mean or 0)
             by_eff = max(valid, key=lambda r: (r.throughput_mean or 0) / max(r.total_gpus, 1))
             result = {
                 'balanced': _pctl_entry(by_balanced, ttft_field, tput_field),
                 'lowest_ttft': _pctl_entry(by_ttft, ttft_field, tput_field),
+                'lowest_itl': _pctl_entry(by_itl, ttft_field, tput_field) if by_itl else None,
                 'highest_tput': _pctl_entry(by_tput, ttft_field, tput_field),
                 'most_efficient': _pctl_entry(by_eff, ttft_field, tput_field),
             }
@@ -749,7 +867,7 @@ class ReportAnalyzer:
         # Asymmetric TP / NIXL constraints only apply to PD architecture.
         # Suppress them when the primary recommendation is Aggregated or EP.
         constraint_notes = []
-        primary_key = 'response_time' if goal in ('ttft', 'pd_only') else 'throughput'
+        primary_key = 'response_time' if goal in ('ttft', 'pd_only', 'full_coverage') else 'throughput'
         primary_arch = (recommendations.get(primary_key, {}).get('architecture') or '').upper()
         if primary_arch == 'PD':
             raw_notes = run_meta.get('constraint_notes')
@@ -977,7 +1095,9 @@ class ReportAnalyzer:
     def _build_vllm_metrics(self, successful):
         """Extract vLLM Prometheus metrics from each test for charting."""
         import json
-        successful = [r for r in successful if getattr(r, 'quality', 'ok') != 'discard']
+        successful = [r for r in successful
+                      if getattr(r, 'quality', 'ok') != 'discard'
+                      and not r.config_name.startswith(('step2-', 'step3-', 'step11-', 'step12-', 'step13-'))]
 
         configs = []
         ttft = {'p50': [], 'p90': [], 'p95': [], 'p99': []}
@@ -1211,6 +1331,17 @@ class ReportAnalyzer:
 
         return data
 
+    def _get_concurrency(self, r):
+        """Extract concurrency from metrics_json fallback."""
+        if r.metrics_json:
+            try:
+                import json as _jc
+                mj = _jc.loads(r.metrics_json) if isinstance(r.metrics_json, str) else r.metrics_json
+                return int(mj.get('concurrency_mean') or mj.get('concurrency_p50') or 0) or None
+            except Exception:
+                pass
+        return None
+
     def _get_output_tps(self, r):
         """Extract output_tps_mean from result object or metrics_json."""
         if getattr(r, 'output_tps_mean', None):
@@ -1273,7 +1404,7 @@ class ReportAnalyzer:
                 'tp': r.tensor_parallelism,
                 'prefill_tp': r.prefill_tp or r.tensor_parallelism,
                 'decode_tp': r.decode_tp or r.tensor_parallelism,
-                'concurrency': r.num_users if hasattr(r, 'num_users') and r.num_users else None,
+                'concurrency': (test_config.get('num_users') if test_config else None) or self._get_concurrency(r),
                 'manifest_types': manifest_types,
                 'manifests': manifests_data,
                 'test_config': test_config,
@@ -1339,6 +1470,7 @@ class ReportAnalyzer:
 
         Returns a dict with charts, summary, all_results, and recommendation.
         """
+        self._sweep_config_keys = []
         results = loader.get_all_test_results(run_id)
         if not results:
             return None
@@ -1366,6 +1498,7 @@ class ReportAnalyzer:
 
         pareto = self.calculate_pareto_frontier(test_results)
         stats = self.get_summary_statistics(test_results)
+        stats['discarded_tests'] = stats.get('discarded_tests', 0) + getattr(self, '_skipped_tests', 0)
         charts = self.build_chart_data(
             test_results, pareto, stats, calibration_results
         )
@@ -1426,7 +1559,7 @@ class ReportAnalyzer:
         except Exception:
             pass
 
-        # InferenceX concurrency sweep data (Step 11)
+        # Concurrency sweep data (Step 11)
         concurrency_sweep = None
         cache_sweep = None
         try:
@@ -1435,6 +1568,9 @@ class ReportAnalyzer:
                 opt = _json.loads(row['optimal_config'])
                 concurrency_sweep = opt.get('concurrency_sweep')
                 cache_sweep = opt.get('cache_sweep')
+                self._skipped_tests = opt.get('skipped_tests', 0)
+                if concurrency_sweep:
+                    self._sweep_config_keys = list(concurrency_sweep.keys())
         except Exception:
             pass
 

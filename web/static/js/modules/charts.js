@@ -82,20 +82,18 @@ function _renderChartsImpl(data, runId, content) {
         var _fmtE2e = function(v) { return v != null ? (v >= 1000 ? (v/1000).toFixed(1) + ' s' : Math.round(v) + ' ms') : '-'; };
         h += '<table style="width:100%;font-size:0.8em;border-collapse:collapse;margin-top:6px;">';
         h += '<tr style="color:#94a3b8;font-weight:600;"><td></td><td>TTFT</td><td>E2E</td><td>ITL</td></tr>';
-        if (opts.ttft_p50 != null) h += '<tr><td style="font-weight:600;color:#94a3b8;">P50</td><td style="color:#64748b;">' + Math.round(opts.ttft_p50).toLocaleString() + ' ms</td><td style="color:#64748b;">' + _fmtE2e(opts.e2e_p50) + '</td><td style="color:#64748b;">' + (opts.itl_p50 ? opts.itl_p50 + ' ms' : '-') + '</td></tr>';
-        h += '<tr><td style="font-weight:600;color:#475569;">P90</td><td style="font-weight:700;color:#1e293b;">' + (opts.ttft_p90 != null ? Math.round(opts.ttft_p90).toLocaleString() + ' ms' : '-') + '</td><td>' + _fmtE2e(opts.e2e_p90) + '</td><td>' + (opts.itl_p90 ? opts.itl_p90 + ' ms' : '-') + '</td></tr>';
-        if (opts.ttft_p95) h += '<tr><td style="font-weight:600;color:#475569;">P95</td><td style="color:#64748b;">' + Math.round(opts.ttft_p95).toLocaleString() + ' ms</td><td style="color:#64748b;">' + _fmtE2e(opts.e2e_p95) + '</td><td>' + (opts.itl_p95 ? opts.itl_p95 + ' ms' : '-') + '</td></tr>';
-        if (opts.ttft_p99) h += '<tr><td style="font-weight:600;color:#475569;">P99</td><td style="color:#64748b;">' + Math.round(opts.ttft_p99).toLocaleString() + ' ms</td><td style="color:#64748b;">' + _fmtE2e(opts.e2e_p99) + '</td><td>' + (opts.itl_p99 ? opts.itl_p99 + ' ms' : '-') + '</td></tr>';
+        if (opts.ttft_p50 != null) h += '<tr><td style="font-weight:600;color:#94a3b8;">P50</td><td style="color:#64748b;">' + Math.round(opts.ttft_p50).toLocaleString() + ' ms</td><td style="color:#64748b;">' + _fmtE2e(opts.e2e_p50) + '</td><td style="color:#64748b;">' + (opts.itl_p50 ? parseFloat(opts.itl_p50).toFixed(2) + ' ms' : '-') + '</td></tr>';
+        h += '<tr><td style="font-weight:600;color:#475569;">P90</td><td style="font-weight:700;color:#1e293b;">' + (opts.ttft_p90 != null ? Math.round(opts.ttft_p90).toLocaleString() + ' ms' : '-') + '</td><td>' + _fmtE2e(opts.e2e_p90) + '</td><td>' + (opts.itl_p90 ? parseFloat(opts.itl_p90).toFixed(2) + ' ms' : '-') + '</td></tr>';
+        if (opts.ttft_p95) h += '<tr><td style="font-weight:600;color:#475569;">P95</td><td style="color:#64748b;">' + Math.round(opts.ttft_p95).toLocaleString() + ' ms</td><td style="color:#64748b;">' + _fmtE2e(opts.e2e_p95) + '</td><td>' + (opts.itl_p95 ? parseFloat(opts.itl_p95).toFixed(2) + ' ms' : '-') + '</td></tr>';
+        if (opts.ttft_p99) h += '<tr><td style="font-weight:600;color:#475569;">P99</td><td style="color:#64748b;">' + Math.round(opts.ttft_p99).toLocaleString() + ' ms</td><td style="color:#64748b;">' + _fmtE2e(opts.e2e_p99) + '</td><td>' + (opts.itl_p99 ? parseFloat(opts.itl_p99).toFixed(2) + ' ms' : '-') + '</td></tr>';
         h += '</table>';
 
         // Action buttons
         if (opts.recId || (opts.manifests && opts.manifests.length)) {
             h += '<div style="margin-top:10px;padding-top:8px;border-top:1px solid #f1f5f9;">';
             if (opts.recId) {
-                h += '<div style="display:flex;gap:6px;margin-bottom:6px;">';
-                h += '<button onclick="applyReportConfig(\'' + opts.recId + '\')" style="flex:1;background:' + opts.color + '0a;border:1.5px solid ' + opts.color + '40;border-radius:6px;padding:5px 8px;font-size:11px;font-weight:600;color:' + opts.color + ';cursor:pointer;" onmouseover="this.style.background=\'' + opts.color + '15\'" onmouseout="this.style.background=\'' + opts.color + '0a\'">&#128260; Reuse</button>';
-                h += '<button onclick="showSingleTestModal(\'' + opts.recId + '\')" style="flex:1;background:#f8fafc;border:1.5px solid #e2e8f0;border-radius:6px;padding:5px 8px;font-size:11px;font-weight:600;color:#475569;cursor:pointer;" onmouseover="this.style.background=\'#f1f5f9\'" onmouseout="this.style.background=\'#f8fafc\'">&#129514; Test</button>';
-                h += '</div>';
+                h += '<button onclick="applyReportConfig(\'' + opts.recId + '\')" style="width:100%;background:' + opts.color + '0a;border:1.5px solid ' + opts.color + '40;border-radius:6px;padding:5px 8px;font-size:11px;font-weight:600;color:' + opts.color + ';cursor:pointer;margin-bottom:4px;" onmouseover="this.style.background=\'' + opts.color + '15\'" onmouseout="this.style.background=\'' + opts.color + '0a\'">&#128260; Reuse</button>';
+                h += '<button onclick="showSingleTestModal(\'' + opts.recId + '\')" style="width:100%;background:#f8fafc;border:1.5px solid #e2e8f0;border-radius:6px;padding:5px 8px;font-size:11px;font-weight:600;color:#475569;cursor:pointer;margin-bottom:4px;" onmouseover="this.style.background=\'#f1f5f9\'" onmouseout="this.style.background=\'#f8fafc\'">&#129514; Test</button>';
             }
             if (opts.manifests && opts.manifests.length && opts.runId && opts.testId) {
                 var _ml = { lws: 'LWS', prefill: 'Prefill LWS', decode: 'Decode LWS', 'epp-configmap': 'EPP Config' };
@@ -111,6 +109,14 @@ function _renderChartsImpl(data, runId, content) {
 
         h += '</div></div>';
         return h;
+    }
+
+    function _tagLabel(name, arch) {
+        if (!name || name.indexOf('(') >= 0) return name || '';
+        var a = (arch || '').toUpperCase();
+        if (a === 'PD') return name + ' (PD)';
+        if (a === 'EP') return name + ' (EP)';
+        return name + ' (AG)';
     }
 
     // Filter out calibration, sweep tests, and discarded tests from configuration charts
@@ -157,7 +163,7 @@ function _renderChartsImpl(data, runId, content) {
         if (_turns) wlLabel += ` | Turns: <strong>${_turns}</strong>`;
         if (_rc.first_prompt_tokens) wlLabel += ` | 1st Prompt: <strong>${_rc.first_prompt_tokens.toLocaleString()}</strong>` + (_rc.first_prompt_tokens_stdev ? ` σ=${_rc.first_prompt_tokens_stdev.toLocaleString()}` : '');
         if (_rc.prefix_tokens) wlLabel += ` | Prefix: <strong>${_rc.prefix_tokens.toLocaleString()}</strong>×${_rc.prefix_count || 1}`;
-        if (_rc.turn_delay) wlLabel += ` | Delay: <strong>${_rc.turn_delay}s</strong>` + (_rc.turn_delay_stdev ? ` σ=${_rc.turn_delay_stdev}s` : '');
+        if (_turns && _rc.turn_delay) wlLabel += ` | Delay: <strong>${_rc.turn_delay}s</strong>` + (_rc.turn_delay_stdev ? ` σ=${_rc.turn_delay_stdev}s` : '');
         html += `<span>${wlLabel}</span>`;
         html += `<span>Users: <strong>${rec.workload.users}</strong></span>`;
         html += `<span>Tests: <strong>${rec.total_tests}</strong></span>`;
@@ -185,6 +191,7 @@ function _renderChartsImpl(data, runId, content) {
         const selTypes = [
             { key: 'balanced', label: 'Best Balanced', desc: 'Best TTFT-to-throughput ratio — the sweet spot', color: '#059669', icon: '&#9878;' },
             { key: 'lowest_ttft', label: 'Lowest TTFT', desc: 'Fastest time to first token', color: '#3b82f6', icon: '&#9201;' },
+            { key: 'lowest_itl', label: 'Lowest ITL', desc: 'Smoothest token streaming — lowest inter-token latency', color: '#0891b2', icon: '&#9881;' },
             { key: 'highest_tput', label: 'Highest Throughput', desc: 'Maximum requests per second', color: '#f59e0b', icon: '&#9889;' },
             { key: 'most_efficient', label: 'Most Efficient', desc: 'Best throughput per GPU — cost optimized', color: '#8b5cf6', icon: '&#128176;' },
         ];
@@ -342,10 +349,11 @@ function _renderChartsImpl(data, runId, content) {
         html += `<div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(280px, 1fr)); gap:16px; padding:16px 20px;">`;
 
         const calTypes = [
-            { key: 'balanced', label: 'Best Balanced', desc: 'Best TTFT-to-throughput ratio', color: '#0ea5e9', icon: '&#9878;' },
+            { key: 'balanced', label: 'Best Balanced', desc: 'Best TTFT-to-throughput ratio at calibrated load', color: '#059669', icon: '&#9878;' },
             { key: 'lowest_ttft', label: 'Lowest TTFT', desc: 'Fastest first token at calibrated load', color: '#3b82f6', icon: '&#9201;' },
+            { key: 'lowest_itl', label: 'Lowest ITL', desc: 'Smoothest streaming at calibrated load', color: '#0891b2', icon: '&#9881;' },
             { key: 'highest_tput', label: 'Highest Throughput', desc: 'Maximum req/s at calibrated load', color: '#f59e0b', icon: '&#9889;' },
-            { key: 'most_efficient', label: 'Most Efficient', desc: 'Best throughput per GPU', color: '#8b5cf6', icon: '&#128176;' },
+            { key: 'most_efficient', label: 'Most Efficient', desc: 'Best throughput per GPU at calibrated load', color: '#8b5cf6', icon: '&#128176;' },
         ];
         const calSeen = new Set();
         calTypes.forEach(sel => {
@@ -402,6 +410,81 @@ function _renderChartsImpl(data, runId, content) {
                 itl_p50: cfg.itl_p50 || _calMj.itl_p50, itl_p90: cfg.itl_p90, itl_p95: cfg.itl_p95, itl_p99: cfg.itl_p99,
                 recId: calRecId, testId: calTestId,
                 manifests: calManifests, runId: runId,
+                extraBadges: badges.length ? badges : null
+            });
+        });
+
+        html += '</div></div>';
+    }
+
+    // Cache Sweep Recommendation
+    const cacheBest = data.summary && data.summary.cache_sweep_best;
+    if (cacheBest) {
+        html += '<div class="chart-card" style="margin-top:20px; border:2px solid #8b5cf6; border-left:6px solid #8b5cf6;">';
+        html += '<div class="chart-card-header" style="background:linear-gradient(135deg,#7c3aed,#8b5cf6); color:white; font-size:1.1em; font-weight:800;">Deployment Recommendation &mdash; Cache Hit Sweep</div>';
+        html += '<div style="padding:12px 20px 4px; color:#475569; font-size:0.9em;">Performance with varying prefix cache hit rates — showing how cache efficiency affects throughput and latency at calibrated load.</div>';
+        html += `<div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(280px, 1fr)); gap:16px; padding:16px 20px;">`;
+
+        const cacheTypes = [
+            { key: 'balanced', label: 'Best Balanced', desc: 'Best TTFT-to-throughput ratio with cache', color: '#059669', icon: '&#9878;' },
+            { key: 'lowest_ttft', label: 'Lowest TTFT', desc: 'Fastest first token with cache', color: '#3b82f6', icon: '&#9201;' },
+            { key: 'highest_tput', label: 'Highest Throughput', desc: 'Maximum req/s with cache', color: '#f59e0b', icon: '&#9889;' },
+            { key: 'most_efficient', label: 'Most Efficient', desc: 'Best throughput per GPU with cache', color: '#8b5cf6', icon: '&#128176;' },
+        ];
+        const cacheSeen = new Set();
+        cacheTypes.forEach(sel => {
+            const cfg = cacheBest[sel.key];
+            if (!cfg) return;
+
+            const cacheId = cfg.test_id || cfg.config_name || '';
+            let dupNote = '';
+            if (cacheSeen.has(cacheId)) {
+                const otherLabels = cacheTypes.filter(s => s.key !== sel.key && cacheBest[s.key] && (cacheBest[s.key].test_id || cacheBest[s.key].config_name) === cacheId).map(s => s.label);
+                if (otherLabels.length) dupNote = otherLabels.join(', ');
+                else return;
+            }
+            cacheSeen.add(cacheId);
+
+            const archKey = cfg.architecture || 'aggregated';
+            let deploy;
+            if (cfg.prefill_pods && cfg.decode_pods) {
+                deploy = cfg.prefill_tp === cfg.decode_tp
+                    ? `${cfg.prefill_pods}P+${cfg.decode_pods}D TP=${cfg.prefill_tp || cfg.tp || '?'}`
+                    : `${cfg.prefill_pods}P+${cfg.decode_pods}D PTP=${cfg.prefill_tp || cfg.tp || '?'} DTP=${cfg.decode_tp || '?'}`;
+            } else {
+                deploy = cfg.name || cfg.config_name;
+            }
+
+            const concStr = cfg.concurrency ? `c=${cfg.concurrency}` : '';
+            const tput = cfg.throughput_mean || cfg.throughput_p90 || '-';
+            const cacheStr = cfg.cache_hit_pct != null ? cfg.cache_hit_pct + '% cache hit' : '';
+
+            const cacheRecId = 'cache-' + archKey + '-' + sel.key;
+            window._recConfigs[cacheRecId] = { ...cfg, architecture: archKey, model: rec ? rec.model : '', image: (data.run_config || {}).image };
+
+            const cacheTestId = cfg.test_id || cfg.config_name;
+            const cacheManifests = manifestLookup[cacheTestId] || [];
+
+            const badges = [];
+            if (dupNote) badges.push({ text: '+ ' + dupNote, bg: 'rgba(255,255,255,0.2)', color: 'white' });
+            if (cacheStr) badges.push({ text: cacheStr, bg: 'rgba(139,92,246,0.15)', color: '#7c3aed' });
+
+            const _cacheResEntry = _allResLookup[cacheTestId] || {};
+            const _cacheMj = _cacheResEntry.metrics_json ? (typeof _cacheResEntry.metrics_json === 'string' ? JSON.parse(_cacheResEntry.metrics_json) : _cacheResEntry.metrics_json) : {};
+            const _cachePm = _cacheMj.prometheus_metrics || {};
+            const _cacheVllmTps = ((_cachePm.vllm_prompt_tokens_rate || {}).avg || 0) + ((_cachePm.vllm_generation_tokens_rate || {}).avg || 0);
+
+            html += _buildRecCard({
+                label: sel.label, icon: sel.icon, desc: sel.desc, color: sel.color,
+                archKey: archKey, deploy: deploy,
+                tput: tput, gpus: cfg.gpus || '?',
+                conc: concStr,
+                vllm_tps: cfg.vllm_tps || (_cacheVllmTps > 0 ? _cacheVllmTps : null),
+                ttft_p50: cfg.ttft_p50, ttft_p90: cfg.ttft_p90, ttft_p95: cfg.ttft_p95, ttft_p99: cfg.ttft_p99,
+                e2e_p50: cfg.e2e_p50, e2e_p90: cfg.e2e_p90, e2e_p95: cfg.e2e_p95, e2e_p99: cfg.e2e_p99,
+                itl_p50: cfg.itl_p50, itl_p90: cfg.itl_p90, itl_p95: cfg.itl_p95, itl_p99: cfg.itl_p99,
+                recId: cacheRecId, testId: cacheTestId,
+                manifests: cacheManifests, runId: runId,
                 extraBadges: badges.length ? badges : null
             });
         });
@@ -511,12 +594,18 @@ function _renderChartsImpl(data, runId, content) {
     // --- Summary cards ---
     const best = summary.best_configs || {};
     html += '<div class="charts-summary">';
-    html += statCard(summary.successful_tests, 'Successful Tests', `${summary.total_tests} total`);
+    html += statCard(summary.successful_tests, 'Successful Tests');
+    if (summary.discarded_tests > 0) {
+        html += statCard(summary.discarded_tests, 'Discarded Tests', 'not viable');
+    }
     if (best.lowest_latency) {
         const ll = best.lowest_latency;
         html += statCard(ll.ttft_p90.toFixed(1) + ' ms', 'Best TTFT P90', ll.name);
         if (ll.ttft_p95) html += statCard(ll.ttft_p95.toFixed(1) + ' ms', 'Best TTFT P95', ll.name);
         if (ll.ttft_p99) html += statCard(ll.ttft_p99.toFixed(1) + ' ms', 'Best TTFT P99', ll.name);
+    }
+    if (best.lowest_itl) {
+        html += statCard(best.lowest_itl.itl_p90.toFixed(2) + ' ms', 'Best ITL P90', best.lowest_itl.name);
     }
     if (best.highest_throughput) {
         const ht = best.highest_throughput;
@@ -524,7 +613,7 @@ function _renderChartsImpl(data, runId, content) {
         html += statCard(htVal.toFixed(2) + ' req/s', 'Best Throughput Mean', ht.name);
     }
     if (best.most_efficient)
-        html += statCard(best.most_efficient.efficiency.toFixed(3) + ' req/s/GPU', 'Best Efficiency', best.most_efficient.name);
+        html += statCard(best.most_efficient.efficiency.toFixed(3), 'Best Efficiency (req/s/GPU)', best.most_efficient.name);
     html += '</div>';
 
     // Flush recommendation part 2 (percentile breakdown + summary cards)
@@ -565,7 +654,7 @@ function _renderChartsImpl(data, runId, content) {
                 var ar = cfgCacheData.filter(function(r) { return r.architecture === arch; });
                 if (!ar.length) return;
                 traces.push({
-                    x: ar.map(function(r) { return r.config_name; }),
+                    x: ar.map(function(r) { return _tagLabel(r.config_name, r.architecture); }),
                     y: ar.map(function(r) { return r.cache_hit_pct; }),
                     text: ar.map(function(r) { return r.cache_hit_pct.toFixed(1) + '%'; }),
                     textposition: 'outside', textfont: { size: 10 },
@@ -604,6 +693,11 @@ function _renderChartsImpl(data, runId, content) {
             '<div style="padding:8px 20px 0; color:#1e293b; font-size:0.92em; line-height:1.5;">' +
             'Trade-off between time to first token (X, lower is better) and throughput efficiency (Y, higher is better). Top-left is ideal.</div>' +
             '<div class="chart-card-body"><div id="chart-pareto-ttft' + _chartSuffix + '" style="width:100%;height:850px;"></div></div></div>';
+
+        secPareto += '<div class="chart-card"><div class="chart-card-header">Pareto — Throughput vs ITL</div>' +
+            '<div style="padding:8px 20px 0; color:#1e293b; font-size:0.92em; line-height:1.5;">' +
+            'Trade-off between inter-token latency (X, lower is better) and throughput efficiency (Y, higher is better). Top-left means fast streaming with high throughput.</div>' +
+            '<div class="chart-card-body"><div id="chart-pareto-itl' + _chartSuffix + '" style="width:100%;height:850px;"></div></div></div>';
 
     }
 
@@ -842,7 +936,7 @@ function _renderChartsImpl(data, runId, content) {
                 ['Concurrent Users', rc.qps != null ? Math.round(rc.qps) : na],
                 ['Rate Type', rc.rate_type || 'concurrent'],
                 rc.turns > 1 ? ['Turns per Conversation', rc.turns] : null,
-                rc.turn_delay ? ['Inter-Turn Delay', rc.turn_delay + 's' + (rc.turn_delay_stdev ? ' &sigma;=' + rc.turn_delay_stdev + 's' : '') + (rc.turn_delay_min || rc.turn_delay_max ? ' [' + (rc.turn_delay_min || '?') + '–' + (rc.turn_delay_max || '?') + 's]' : '')] : null,
+                rc.turns > 1 && rc.turn_delay ? ['Inter-Turn Delay', rc.turn_delay + 's' + (rc.turn_delay_stdev ? ' &sigma;=' + rc.turn_delay_stdev + 's' : '') + (rc.turn_delay_min || rc.turn_delay_max ? ' [' + (rc.turn_delay_min || '?') + '–' + (rc.turn_delay_max || '?') + 's]' : '')] : null,
                 ['Test Duration', (rc.test_duration || 300) + 's'],
                 ['Stop Mode', rc.stop_mode || 'duration'],
                 rc.max_requests ? ['Max Requests', rc.max_requests] : null,
@@ -861,7 +955,7 @@ function _renderChartsImpl(data, runId, content) {
                 ['Headroom', (rc.headroom || 1.3) + 'x'],
                 ['Latency SLA', rc.latency_constraint_enabled ? rc.latency_constraint_ms + 'ms @ ' + rc.latency_constraint_percentile : 'Disabled'],
                 ['Calibrated Load', rc.calibrated_load_enabled ? 'Enabled' : 'Disabled'],
-                ['Concurrency Sweep', rc.inferencex_sweep_enabled ? 'Enabled' + (rc.concurrency_sweep_levels ? ' [' + rc.concurrency_sweep_levels.join(', ') + ']' : (rc.concurrency_sweep_count ? ' (' + rc.concurrency_sweep_count + ' levels)' : '')) : 'Disabled'],
+                ['Concurrency Sweep', rc.inferencex_sweep_enabled ? 'Enabled — ' + ({'architecture_aware':'Architecture-Aware','all_recommendations':'All Recommendations','all':'All Configs'}[rc.concurrency_sweep_mode] || 'Architecture-Aware') + (rc.concurrency_sweep_count ? ' (' + rc.concurrency_sweep_count + ' levels)' : '') + (rc.concurrency_sweep_levels ? ' [' + rc.concurrency_sweep_levels.join(', ') + ']' : '') : 'Disabled'],
                 ['Cache Sweep', rc.cache_sweep_enabled ? 'Enabled' : 'Disabled'],
             ]},
             { title: 'vLLM Engine', color: '#0891b2', rows: [
@@ -882,6 +976,8 @@ function _renderChartsImpl(data, runId, content) {
                 adv.model_loader_extra_config && adv.model_loader_extra_config.mode === 'custom' ? ['Model Loader Config', '<span style="font-size:0.85em;">' + adv.model_loader_extra_config.value + '</span>'] : null,
                 advToggle('enable_dbo', null) !== null ? ['Dual Batch Overlap', advToggle('enable_dbo', 'Off')] : null,
                 advToggle('enable_eplb', null) !== null ? ['Expert Load Balancing', advToggle('enable_eplb', 'Off')] : null,
+                adv.num_speculative_tokens && adv.num_speculative_tokens.mode === 'custom' ? ['Speculative Tokens (MTP)', adv.num_speculative_tokens.value] : null,
+                adv.speculative_model && adv.speculative_model.mode === 'custom' ? ['Speculative Model', adv.speculative_model.value] : null,
             ]},
             { title: 'Infrastructure', color: '#d97706', rows: [
                 ['Inference Image', '<span style="word-break:break-all;font-size:0.9em;">' + (rc.image || na) + '</span>'],
@@ -956,7 +1052,7 @@ function _renderChartsImpl(data, runId, content) {
             }
             if (tc) {
                 const arch = (r.architecture || '').toUpperCase();
-                allConfigs.push({ label: r.config_name, arch: arch, tc: tc, ttft: r.ttft_p90 || 1e9 });
+                allConfigs.push({ label: _tagLabel(r.config_name, r.architecture), arch: arch, tc: tc, ttft: r.ttft_p90 || 1e9 });
             }
         }
         // Sort: AGGREGATED first (by TP), then EP (by TTFT), then PD (by TTFT)
@@ -1533,13 +1629,13 @@ function _renderChartsImpl(data, runId, content) {
         var archIdx = 0;
         function sweepColor(key) {
             if (key.startsWith('pd')) return '#10b981';
-            if (key.startsWith('aggregated')) return '#6366f1';
+            if (key.startsWith('agg')) return '#6366f1';
             if (key.startsWith('ep')) return '#f59e0b';
             return '#888';
         }
         function sweepLabel(key) {
             if (key.startsWith('pd')) return 'PD';
-            if (key.startsWith('aggregated')) return 'Aggregated';
+            if (key.startsWith('agg')) return 'AG';
             if (key.startsWith('ep')) return 'EP';
             return key;
         }
@@ -1551,7 +1647,9 @@ function _renderChartsImpl(data, runId, content) {
         Object.keys(sweep).forEach(function(arch) {
             var points = sweep[arch];
             if (!points || !points.length) return;
-            var label = points[0] && points[0].config_label ? points[0].config_label : sweepLabel(arch);
+            var rawLabel = points[0] && points[0].config_label ? points[0].config_label : sweepLabel(arch);
+            var archTag = arch.startsWith('pd') ? ' (PD)' : arch.startsWith('ep') ? ' (EP)' : ' (AG)';
+            var label = rawLabel.indexOf('(') >= 0 ? rawLabel : rawLabel + archTag;
             allSweepConfigs.push({ key: arch, label: label, points: points, color: configColors[colorIdx % configColors.length] });
             colorIdx++;
         });
@@ -1586,13 +1684,15 @@ function _renderChartsImpl(data, runId, content) {
                         });
                         cfg.points.forEach(function(p) {
                             if (p.is_calibrated) {
+                                var calIdx = calShapes.length;
                                 calShapes.push({ type: 'line', x0: p.concurrency, x1: p.concurrency, y0: 0, y1: 1, yref: 'paper',
-                                    line: { color: '#059669', width: 1.5, dash: 'dash' } });
+                                    line: { color: cfg.color, width: 2, dash: 'dash' } });
                                 calShapes._annotations = calShapes._annotations || [];
                                 calShapes._annotations.push({
-                                    x: p.concurrency, y: 0.5, yref: 'paper', text: cfg.label,
-                                    showarrow: false, textangle: -90, xshift: -12,
-                                    font: { size: 10, color: cfg.color }, yanchor: 'middle'
+                                    x: p.concurrency, y: 1.0 - calIdx * 0.06, yref: 'paper',
+                                    text: cfg.label + ' c=' + p.concurrency,
+                                    showarrow: false, xshift: 8,
+                                    font: { size: 9, color: cfg.color }, xanchor: 'left'
                                 });
                             }
                         });
@@ -1636,13 +1736,15 @@ function _renderChartsImpl(data, runId, content) {
                     });
                     cfg.points.forEach(function(p) {
                         if (p.is_calibrated) {
+                            var calIdx = calShapes.length;
                             calShapes.push({ type: 'line', x0: p.concurrency, x1: p.concurrency, y0: 0, y1: 1, yref: 'paper',
-                                line: { color: '#059669', width: 1.5, dash: 'dash' } });
+                                line: { color: cfg.color, width: 2, dash: 'dash' } });
                             calShapes._annotations = calShapes._annotations || [];
                             calShapes._annotations.push({
-                                x: p.concurrency, y: 1, yref: 'paper', text: cfg.label,
-                                showarrow: false, textangle: -90, xshift: 10,
-                                font: { size: 10, color: cfg.color }, yanchor: 'top'
+                                x: p.concurrency, y: 1.0 - calIdx * 0.06, yref: 'paper',
+                                text: cfg.label + ' c=' + p.concurrency,
+                                showarrow: false, xshift: 8,
+                                font: { size: 9, color: cfg.color }, xanchor: 'left'
                             });
                         }
                     });
@@ -1659,6 +1761,104 @@ function _renderChartsImpl(data, runId, content) {
                     margin: { t: 20, b: 60, l: 70, r: 20 },
                     legend: { x: 0, y: 1, bgcolor: 'rgba(255,255,255,0.9)' },
                     shapes: calShapes, annotations: calShapes._annotations || [], hovermode: 'closest'
+                }, { responsive: true });
+            });
+        }
+
+        // --- vLLM Token Throughput chart (GPU Computed vs Server Total) per config ---
+        if (allSweepConfigs.some(function(cfg) { return cfg.points.some(function(p) { return p.vllm_tps; }); })) {
+            html += '<div class="chart-card" style="margin-top:16px;">';
+            html += '<div class="chart-card-header">vLLM Token Throughput vs Concurrency</div>';
+            html += '<div style="padding:8px 20px 4px; font-size:0.85em; color:#64748b;">' +
+                '<strong>Solid line:</strong> Server total (prompt + generation from Prometheus). ' +
+                '<strong>Dashed line:</strong> Output tokens only (generation). ' +
+                'The gap reflects prefix cache efficiency — cached prompt tokens inflate the server total.</div>';
+            html += '<div id="chart-sweep-vllm-tps" style="width:100%; height:450px;"></div>';
+            html += '</div>';
+
+            chartQueue.push(function() {
+                var vtTraces = [];
+                allSweepConfigs.forEach(function(cfg) {
+                    vtTraces.push({
+                        x: cfg.points.map(function(p) { return p.concurrency; }),
+                        y: cfg.points.map(function(p) { return p.vllm_tps || 0; }),
+                        name: cfg.label + ' (server total)',
+                        mode: 'lines+markers', line: { color: cfg.color, width: 3 }, marker: { size: 8, color: cfg.color },
+                        hovertemplate: '<b>' + cfg.label + '</b><br>%{x} users<br>Server: %{y:,.0f} tok/s<extra></extra>'
+                    });
+                    vtTraces.push({
+                        x: cfg.points.map(function(p) { return p.concurrency; }),
+                        y: cfg.points.map(function(p) { return p.output_tps_mean || 0; }),
+                        name: cfg.label + ' (output only)',
+                        mode: 'lines+markers', line: { color: cfg.color, width: 2, dash: 'dot' }, marker: { size: 6, color: cfg.color },
+                        hovertemplate: '<b>' + cfg.label + '</b><br>%{x} users<br>Output: %{y:,.0f} tok/s<extra></extra>',
+                        showlegend: false
+                    });
+                });
+                Plotly.newPlot('chart-sweep-vllm-tps', vtTraces, {
+                    xaxis: { title: 'Concurrent Users', gridcolor: '#e2e8f0' },
+                    yaxis: { title: 'Total Tokens/s', gridcolor: '#e2e8f0' },
+                    plot_bgcolor: '#f8fafc', paper_bgcolor: '#fff',
+                    margin: { t: 20, b: 60, l: 70, r: 20 },
+                    legend: { x: 0, y: 1, bgcolor: 'rgba(255,255,255,0.9)' },
+                    hovermode: 'closest'
+                }, { responsive: true });
+            });
+        }
+
+        // --- Token Throughput: GPU Computed vs Server Total vs Client (sweep tests only) ---
+        var sweepTkRes = (data.all_results || []).filter(function(r) {
+            if (r.quality === 'discard') return false;
+            var tid = r.test_id || '';
+            if (tid.indexOf('step11-') !== 0 && tid.indexOf('step12-') !== 0) return false;
+            var m = r.metrics_json ? (typeof r.metrics_json === 'string' ? JSON.parse(r.metrics_json) : r.metrics_json) : {};
+            var pm = m.prometheus_metrics || {};
+            return (pm.vllm_generation_tokens_rate || {}).avg || r.output_tps_mean;
+        });
+        if (sweepTkRes.length) {
+            html += '<div class="chart-card" style="margin-top:16px;">';
+            html += '<div class="chart-card-header">Token Throughput — GPU Computed vs Server Total vs Client</div>';
+            html += '<div style="padding:8px 20px 4px; font-size:0.85em; color:#64748b;">' +
+                '<strong>GPU computed:</strong> Prompt tokens actually computed (excludes cached) + generation. ' +
+                '<strong>Server total:</strong> All tokens processed by vLLM (incl. cached prefixes). ' +
+                '<strong>Client:</strong> Tokens measured by the load tester.</div>';
+            html += '<div id="chart-sweep-token-tput" style="width:100%; height:530px;"></div>';
+            html += '</div>';
+
+            chartQueue.push(function() {
+                sweepTkRes.sort(function(a, b) {
+                    var aArch = a.architecture || ''; var bArch = b.architecture || '';
+                    if (aArch !== bArch) return aArch.localeCompare(bArch);
+                    return (a.concurrency || 0) - (b.concurrency || 0);
+                });
+                var tkLabels = sweepTkRes.map(function(r) {
+                    return _tagLabel(r.config_name, r.architecture) + ' c=' + (r.concurrency || '?');
+                });
+                var tkComputed = [], tkServer = [], tkClient = [];
+                sweepTkRes.forEach(function(r) {
+                    var m = r.metrics_json ? (typeof r.metrics_json === 'string' ? JSON.parse(r.metrics_json) : r.metrics_json) : {};
+                    var pm = m.prometheus_metrics || {};
+                    var pAvg = (pm.vllm_prompt_tokens_rate || {}).avg || 0;
+                    var gAvg = (pm.vllm_generation_tokens_rate || {}).avg || 0;
+                    tkServer.push(Math.round(pAvg + gAvg));
+                    var cacheHits = (pm.vllm_prefix_cache_hits_rate || {}).avg || 0;
+                    var cacheQueries = (pm.vllm_prefix_cache_queries_rate || {}).avg || 0;
+                    var cacheHitRate = cacheQueries > 0 ? cacheHits / cacheQueries : 0;
+                    tkComputed.push(Math.round(pAvg * (1 - cacheHitRate)) + Math.round(gAvg));
+                    var tput = m.throughput_mean || r.throughput_mean || 0;
+                    var pTps = (m.prompt_tokens_mean || 0) * tput;
+                    var gTps = (m.output_tokens_mean || 0) * tput;
+                    tkClient.push(Math.round(pTps + gTps));
+                });
+                Plotly.newPlot('chart-sweep-token-tput', [
+                    { x: tkLabels, y: tkComputed, name: 'GPU computed', type: 'bar', marker: { color: '#3b82f6' }, text: tkComputed.map(function(v) { return v.toLocaleString(); }), textposition: 'outside', textfont: { size: 9, color: '#1e293b' } },
+                    { x: tkLabels, y: tkServer, name: 'Server total (incl. cached)', type: 'bar', marker: { color: '#93c5fd' }, text: tkServer.map(function(v) { return v.toLocaleString(); }), textposition: 'outside', textfont: { size: 9, color: '#1e293b' } },
+                    { x: tkLabels, y: tkClient, name: 'Client (guidellm)', type: 'bar', marker: { color: '#f59e0b' }, text: tkClient.map(function(v) { return v.toLocaleString(); }), textposition: 'outside', textfont: { size: 9, color: '#1e293b' } }
+                ], {
+                    ...plotlyLayout, height: 530, margin: { t: 60, b: 160, l: 60, r: 20 },
+                    barmode: 'group', xaxis: { tickangle: -45 },
+                    yaxis: { title: 'Total Tokens/s (Prompt + Generation)' },
+                    showlegend: true, legend: { x: 0, y: 1.15, orientation: 'h' }
                 }, { responsive: true });
             });
         }
@@ -1790,7 +1990,7 @@ function _renderChartsImpl(data, runId, content) {
         Object.keys(sweep).forEach(function(arch) {
             var points = sweep[arch];
             if (!points || !points.length) return;
-            var archBase = arch.startsWith('pd') ? 'PD' : (arch.startsWith('aggregated') ? 'Aggregated' : 'EP');
+            var archBase = arch.startsWith('pd') ? 'PD' : (arch.startsWith('agg') ? 'AG' : 'EP');
             var configLbl = (points[0] && points[0].config_label) ? points[0].config_label : '';
             var archLabel = configLbl ? archBase + ' (' + configLbl + ')' : archBase;
             points.forEach(function(p) {
@@ -1847,10 +2047,19 @@ function _renderChartsImpl(data, runId, content) {
         Object.keys(csweep).forEach(function(arch) {
             var pts = csweep[arch];
             if (!pts || !pts.length) return;
-            var csLabel = csArchLabels[arch] || arch;
-            var csColor = csArchColors[arch] || '#888';
+            var csArchKey = arch.startsWith('pd') ? 'pd' : arch.startsWith('agg') ? 'aggregated' : arch.startsWith('ep') ? 'ep' : arch;
+            var csLabel = csArchLabels[csArchKey] || arch;
+            var csColor = csArchColors[csArchKey] || '#888';
 
-            var csConfigLbl = (pts[0] && pts[0].config_label) ? pts[0].config_label : (sweepConfigLabels[arch.replace('_calibrated','')] || '');
+            var csConfigLbl = (pts[0] && pts[0].config_label) ? pts[0].config_label : '';
+            if (!csConfigLbl) {
+                var _csBase = arch.replace('_calibrated','');
+                csConfigLbl = sweepConfigLabels[_csBase] || '';
+                if (!csConfigLbl && data.concurrency_sweep && data.concurrency_sweep[_csBase]) {
+                    var _csPts = data.concurrency_sweep[_csBase];
+                    csConfigLbl = (_csPts[0] && _csPts[0].config_label) ? _csPts[0].config_label : _csBase;
+                }
+            }
             var csConfigSuffix = csConfigLbl ? ' — ' + csConfigLbl : '';
             html += '<div class="chart-card" style="margin-top:20px; border:2px solid ' + csColor + '; border-left:6px solid ' + csColor + ';">';
             html += '<div class="chart-card-header" style="background:linear-gradient(135deg,' + csColor + ',' + csColor + '99); color:white; font-size:1.2em;">' + csLabel + csConfigSuffix + ' — Cache Hit Sweep</div>';
@@ -1948,7 +2157,7 @@ function _renderChartsImpl(data, runId, content) {
             html += '<th style="cursor:pointer;" onclick="sortReportTable(\'' + csCacheTblId + '\',5,\'num\')">TTFT P95 &#x21C5;</th>';
             html += '<th style="cursor:pointer;" onclick="sortReportTable(\'' + csCacheTblId + '\',6,\'num\')">TTFT P99 &#x21C5;</th>';
             html += '<th style="cursor:pointer;" onclick="sortReportTable(\'' + csCacheTblId + '\',7,\'num\')">Throughput &#x21C5;</th>';
-            html += '<th style="cursor:pointer;" onclick="sortReportTable(\'' + csCacheTblId + '\',8,\'num\')">Output tok/s &#x21C5;</th>';
+            html += '<th style="cursor:pointer;" onclick="sortReportTable(\'' + csCacheTblId + '\',8,\'num\')">vLLM tok/s &#x21C5;</th>';
             html += '<th style="cursor:pointer;" onclick="sortReportTable(\'' + csCacheTblId + '\',9,\'num\')">ITL P90 &#x21C5;</th>';
             html += '</tr>';
             pts.forEach(function(p) {
@@ -1961,7 +2170,7 @@ function _renderChartsImpl(data, runId, content) {
                 html += '<td>' + (p.ttft_p95 ? p.ttft_p95.toFixed(0) : '-') + '</td>';
                 html += '<td>' + (p.ttft_p99 ? p.ttft_p99.toFixed(0) : '-') + '</td>';
                 html += '<td>' + (p.throughput_mean ? p.throughput_mean.toFixed(2) : '-') + '</td>';
-                html += '<td>' + (p.output_tps_mean ? p.output_tps_mean.toFixed(1) : '-') + '</td>';
+                html += '<td>' + (p.vllm_tps ? p.vllm_tps.toLocaleString() : (p.output_tps_mean ? p.output_tps_mean.toFixed(0) : '-')) + '</td>';
                 html += '<td>' + (p.itl_p90 ? p.itl_p90.toFixed(1) : '-') + '</td>';
                 html += '</tr>';
             });
@@ -2434,11 +2643,9 @@ function _renderChartsImpl(data, runId, content) {
         }
         overviewHtml += '<div style="text-align:center;"><div style="font-size:2em;font-weight:800;color:#1e293b;">' + errRate + '%</div><div style="color:#64748b;font-size:0.85em;">Error Rate</div></div>' +
             '</div></div>';
-        trafficHtml = overviewHtml + trafficHtml;
-
-        // Prepend network throughput charts to traffic section
+        // Prepend network throughput charts before overview
+        var netHtml = '';
         if (charts.vllm && charts.vllm.network && charts.vllm.network.pod_tx && charts.vllm.network.pod_tx.some(v => v > 0)) {
-            var netHtml = '';
             netHtml += chartCard(
                 'Pod Network Throughput',
                 'Management (eth0) network traffic per configuration.',
@@ -2453,8 +2660,8 @@ function _renderChartsImpl(data, runId, content) {
                     'chart-net-ib'
                 );
             }
-            trafficHtml = netHtml + trafficHtml;
         }
+        trafficHtml = overviewHtml + netHtml + trafficHtml;
 
         if (trafficHtml) {
             secTraffic = trafficHtml;
@@ -2682,14 +2889,16 @@ function _renderChartsImpl(data, runId, content) {
     // Token Throughput charts (Configurations tab)
     if (document.getElementById(cid('chart-token-tput'))) {
         var tkRes = (data.all_results || []).filter(function(r) {
+            if (r.quality === 'discard') return false;
             var tid = r.test_id || '';
-            if (tid.indexOf('step2-') === 0 || tid.indexOf('step3-') === 0) return false;
+            if (tid.indexOf('step2-') === 0 || tid.indexOf('step3-') === 0 ||
+                tid.indexOf('step11-') === 0 || tid.indexOf('step12-') === 0 || tid.indexOf('step13-') === 0) return false;
             var m = r.metrics_json ? (typeof r.metrics_json === 'string' ? JSON.parse(r.metrics_json) : r.metrics_json) : {};
             var pm = m.prometheus_metrics || {};
             return (pm.vllm_generation_tokens_rate || {}).avg || r.output_tps_mean;
         });
         if (tkRes.length) {
-            var tkLabels = tkRes.map(function(r) { return r.config_name; });
+            var tkLabels = tkRes.map(function(r) { return _tagLabel(r.config_name, r.architecture); });
             var tkComputed = [], tkServer = [], tkGuidellmTotal = [];
             tkRes.forEach(function(r) {
                 var m = r.metrics_json ? (typeof r.metrics_json === 'string' ? JSON.parse(r.metrics_json) : r.metrics_json) : {};
@@ -2729,22 +2938,31 @@ function _renderChartsImpl(data, runId, content) {
                    (r.output_tps_mean > 0 || r.throughput_mean > 0);
         });
 
+        function getVllmTotalTps(r) {
+            var m = r.metrics_json ? (typeof r.metrics_json === 'string' ? JSON.parse(r.metrics_json) : r.metrics_json) : {};
+            var pm = (m && typeof m === 'object') ? (m.prometheus_metrics || {}) : {};
+            var pAvg = (pm.vllm_prompt_tokens_rate || {}).avg || 0;
+            var gAvg = (pm.vllm_generation_tokens_rate || {}).avg || 0;
+            return (pAvg + gAvg > 0) ? (pAvg + gAvg) : 0;
+        }
+
         function makeRawPoints(results) {
             return results.map(function(r) {
                 var tput = r.throughput_mean || r.throughput_p90 || 0;
                 var conc = r.concurrency || 100;
-                var totalOutputTps = r.output_tps_mean || (tput * runOsl);
+                var totalOutputTps = getVllmTotalTps(r) || r.output_tps_mean || (tput * runOsl);
                 var interactivity = totalOutputTps / conc;
                 var tpsGpu = totalOutputTps / (r.gpus || 1);
                 var cfgKey;
                 if (r.architecture === 'AGGREGATED') {
                     var total = (r.prefill_pods || 0) + (r.decode_pods || 0);
-                    cfgKey = 'Agg ' + total + '×TP' + (r.tp || '?');
+                    cfgKey = total + '×TP' + (r.tp || '?') + ' (AG)';
                 } else {
-                    cfgKey = 'PD ' + (r.prefill_pods || 0) + 'P+' + (r.decode_pods || 0) + 'D ×TP' + (r.tp || '?');
+                    var _tag = r.architecture === 'EP' ? 'EP' : 'PD';
+                    cfgKey = (r.prefill_pods || 0) + 'P+' + (r.decode_pods || 0) + 'D TP=' + (r.tp || '?') + ' (' + _tag + ')';
                 }
                 return { x: interactivity, y: tpsGpu, nx: interactivity, ny: tpsGpu,
-                         label: r.config_name, arch: r.architecture, conc: conc, cfgKey: cfgKey };
+                         label: _tagLabel(r.config_name, r.architecture), arch: r.architecture, conc: conc, cfgKey: cfgKey };
             }).filter(p => p.x > 0 && p.y > 0);
         }
 
@@ -2810,9 +3028,11 @@ function _renderChartsImpl(data, runId, content) {
             if (pdPareto.length > 1) {
                 traces.push({
                     x: pdPareto.map(p => p.nx), y: pdPareto.map(p => p.ny),
-                    name: 'Disaggregation — Frontier', mode: 'lines',
-                    line: { color: '#2563eb', width: 3, dash: 'dot' },
-                    hoverinfo: 'skip'
+                    name: 'Disaggregation — Frontier', mode: 'lines+markers',
+                    line: { color: '#2563eb', width: 4 },
+                    marker: { color: '#2563eb', size: 8 },
+                    hovertemplate: '<b>%{text}</b><extra></extra>',
+                    text: pdPareto.map(p => p.cfgKey + '<br>' + p.nx.toFixed(1) + ' tok/s/user<br>' + p.ny.toFixed(0) + ' tok/s/GPU')
                 });
             }
 
@@ -2865,8 +3085,9 @@ function _renderChartsImpl(data, runId, content) {
                 function makeTtftPoints(results) {
                     return results.map(function(r) {
                         var tput = r.throughput_mean || r.throughput_p90 || 0;
-                        var tpsGpu = tput * runOsl / (r.gpus || 1);
-                        return { x: r.ttft_p90, y: tpsGpu, label: r.config_name, arch: r.architecture };
+                        var totalTps = getVllmTotalTps(r) || r.output_tps_mean || (tput * runOsl);
+                        var tpsGpu = totalTps / (r.gpus || 1);
+                        return { x: r.ttft_p90, y: tpsGpu, label: _tagLabel(r.config_name, r.architecture), arch: r.architecture };
                     }).filter(function(p) { return p.x > 0 && p.y > 0; });
                 }
 
@@ -2958,6 +3179,91 @@ function _renderChartsImpl(data, runId, content) {
                 }
             }
 
+            // --- ITL vs Throughput Pareto chart ---
+            if (document.getElementById(cid('chart-pareto-itl'))) {
+                var itlAllResults = (data.all_results || []).filter(function(r) {
+                    var tid = r.test_id || r.config_name || '';
+                    return tid.indexOf('step2-') !== 0 && tid.indexOf('step3-') !== 0 &&
+                           r.itl_p90 > 0 && (r.throughput_mean > 0 || r.throughput_p90 > 0);
+                });
+
+                var itlAllPts = itlAllResults.map(function(r) {
+                    var tput = r.throughput_mean || r.throughput_p90 || 0;
+                    var totalTps = getVllmTotalTps(r) || r.output_tps_mean || (tput * runOsl);
+                    var tpsGpu = totalTps / (r.gpus || 1);
+                    return { x: r.itl_p90, y: tpsGpu, nx: r.itl_p90, ny: tpsGpu, label: _tagLabel(r.config_name, r.architecture), arch: r.architecture };
+                }).filter(function(p) { return p.x > 0 && p.y > 0; });
+
+                if (itlAllPts.length > 1) {
+                    var itlPd = itlAllPts.filter(function(p) { return p.arch === 'PD' || p.arch === 'EP'; });
+                    var itlAgg = itlAllPts.filter(function(p) { return p.arch === 'AGGREGATED'; });
+
+                    function itlFrontierLine(points) {
+                        if (!points.length) return [];
+                        var sorted = points.slice().sort(function(a, b) { return a.nx - b.nx; });
+                        var frontier = [];
+                        var maxY = -Infinity;
+                        for (var i = 0; i < sorted.length; i++) {
+                            if (sorted[i].ny > maxY) { frontier.push(sorted[i]); maxY = sorted[i].ny; }
+                        }
+                        return frontier;
+                    }
+
+                    var itlPdPareto = itlFrontierLine(itlPd);
+                    var itlAggPareto = itlFrontierLine(itlAgg);
+
+                    var itlTraces = [];
+                    if (itlAgg.length) {
+                        itlTraces.push({
+                            x: itlAgg.map(function(p) { return p.nx; }), y: itlAgg.map(function(p) { return p.ny; }),
+                            text: itlAgg.map(function(p) { return p.label + '<br>ITL P90: ' + p.x.toFixed(2) + 'ms<br>' + p.y.toFixed(0) + ' tok/s/GPU'; }),
+                            name: 'Aggregated', mode: 'markers',
+                            marker: { color: '#fca5a5', size: 14, opacity: 0.5 },
+                            hovertemplate: '<b>%{text}</b><extra></extra>'
+                        });
+                    }
+                    if (itlPd.length) {
+                        itlTraces.push({
+                            x: itlPd.map(function(p) { return p.nx; }), y: itlPd.map(function(p) { return p.ny; }),
+                            text: itlPd.map(function(p) { return p.label + '<br>ITL P90: ' + p.x.toFixed(2) + 'ms<br>' + p.y.toFixed(0) + ' tok/s/GPU'; }),
+                            name: 'Disaggregation', mode: 'markers',
+                            marker: { color: '#93c5fd', size: 14, opacity: 0.5 },
+                            hovertemplate: '<b>%{text}</b><extra></extra>'
+                        });
+                    }
+                    if (itlAggPareto.length) {
+                        itlTraces.push({
+                            x: itlAggPareto.map(function(p) { return p.nx; }), y: itlAggPareto.map(function(p) { return p.ny; }),
+                            text: itlAggPareto.map(function(p) { return p.label + '<br>' + p.x.toFixed(2) + 'ms / ' + p.y.toFixed(0) + ' tok/s/GPU'; }),
+                            name: 'Aggregated — Frontier', mode: itlAggPareto.length > 1 ? 'lines+markers+text' : 'markers+text',
+                            line: { color: '#dc2626', width: 3 }, marker: { color: '#dc2626', size: 8 },
+                            textposition: 'top right', textfont: { size: 10, color: '#dc2626' },
+                            hovertemplate: '<b>%{text}</b><extra></extra>'
+                        });
+                    }
+                    if (itlPdPareto.length) {
+                        itlTraces.push({
+                            x: itlPdPareto.map(function(p) { return p.nx; }), y: itlPdPareto.map(function(p) { return p.ny; }),
+                            text: itlPdPareto.map(function(p) { return p.label + '<br>' + p.x.toFixed(2) + 'ms / ' + p.y.toFixed(0) + ' tok/s/GPU'; }),
+                            name: 'Disaggregation — Frontier', mode: itlPdPareto.length > 1 ? 'lines+markers+text' : 'markers+text',
+                            line: { color: '#2563eb', width: 3 }, marker: { color: '#2563eb', size: 8 },
+                            textposition: 'top left', textfont: { size: 10, color: '#2563eb' },
+                            hovertemplate: '<b>%{text}</b><extra></extra>'
+                        });
+                    }
+
+                    safePlot(cid('chart-pareto-itl'), itlTraces, {
+                        ...plotlyLayout, height: 850,
+                        xaxis: { title: 'ITL P90 (ms)', gridcolor: '#d1d5db' },
+                        yaxis: { title: 'Token Throughput per GPU (tok/s/GPU)', gridcolor: '#d1d5db', rangemode: 'tozero' },
+                        showlegend: true,
+                        legend: { x: 1.02, y: 1, xanchor: 'left', bgcolor: 'rgba(255,255,255,0.95)', bordercolor: '#e2e8f0', borderwidth: 1 },
+                        margin: { t: 40, b: 70, l: 70, r: 220 },
+                        plot_bgcolor: 'white', paper_bgcolor: 'white',
+                    }, paretoConfig);
+                }
+            }
+
         }
     }
 
@@ -2980,7 +3286,7 @@ function _renderChartsImpl(data, runId, content) {
         });
         function sweepArchLabel(key) {
             if (key.startsWith('pd')) return 'PD';
-            if (key.startsWith('aggregated')) return 'AGGREGATED';
+            if (key.startsWith('agg')) return 'AGGREGATED';
             if (key.startsWith('ep')) return 'EP';
             return key.toUpperCase();
         }
@@ -3002,13 +3308,16 @@ function _renderChartsImpl(data, runId, content) {
             var pts = csw[arch];
             if (!pts || !pts.length) return;
             var archLabel = sweepArchLabel(arch);
+            var archTag = arch.startsWith('pd') ? ' (PD)' : arch.startsWith('ep') ? ' (EP)' : ' (AG)';
             pts.forEach(function(p) {
-                var interPerUser = (p.output_tps_mean || 0) / (p.concurrency || 1);
+                var interPerUser = (p.vllm_tps || p.output_tps_mean || 0) / (p.concurrency || 1);
                 var tputGpu = p.throughput_per_gpu || 0;
+                var cfgLabel = p.config_label || archLabel;
+                if (cfgLabel.indexOf('(') < 0) cfgLabel += archTag;
                 if (interPerUser > 0 && tputGpu > 0) {
                     swAllPts.push({
                         x: interPerUser, y: tputGpu, nx: interPerUser, ny: tputGpu,
-                        label: (p.config_label || archLabel) + ' c=' + p.concurrency,
+                        label: cfgLabel + ' c=' + p.concurrency,
                         arch: archLabel, conc: p.concurrency
                     });
                 }
@@ -3125,6 +3434,8 @@ function _renderChartsImpl(data, runId, content) {
                     var ttft = p.ttft_p90 || 0;
                     var tput = p.throughput_mean || 0;
                     var label = p.config_label || sweepArchLabel(arch);
+                    var _at = arch.startsWith('pd') ? ' (PD)' : arch.startsWith('ep') ? ' (EP)' : ' (AG)';
+                    if (label.indexOf('(') < 0) label += _at;
                     if (ttft > 0 && (!bestTtftByConc[c] || ttft < bestTtftByConc[c].ttft)) {
                         bestTtftByConc[c] = { ttft: ttft, tput: tput, label: label };
                     }
@@ -3188,7 +3499,10 @@ function _renderChartsImpl(data, runId, content) {
                     if (!bestByConc[c]) bestByConc[c] = {};
                     var cat = isDisagg ? 'disagg' : 'agg';
                     if (!bestByConc[c][cat] || p.throughput_per_gpu > bestByConc[c][cat].throughput_per_gpu) {
-                        bestByConc[c][cat] = { tputGpu: p.throughput_per_gpu, ttft: p.ttft_p90, label: p.config_label || archLabel, arch: archLabel, conc: c };
+                        var _lbl = p.config_label || archLabel;
+                        var _at2 = arch.startsWith('pd') ? ' (PD)' : arch.startsWith('ep') ? ' (EP)' : ' (AG)';
+                        if (_lbl.indexOf('(') < 0) _lbl += _at2;
+                        bestByConc[c][cat] = { tputGpu: p.throughput_per_gpu, ttft: p.ttft_p90, label: _lbl, arch: archLabel, conc: c };
                     }
                 });
             });
@@ -3707,115 +4021,215 @@ function _renderChartsImpl(data, runId, content) {
 
         function makePercentileLines(data, unit) {
             return [
-                { x: vllm.configs, y: data.p50, name: 'P50', mode: 'lines+markers', line: { color: pColors.p50, width: 2 }, marker: { size: 8 },
+                { x: vllm.configs, y: data.p50, name: 'P50', mode: 'markers', marker: { size: 10, color: pColors.p50 },
                   hovertemplate: '<b>%{x}</b><br>P50: %{y:,.0f} ' + unit + '<extra></extra>' },
-                { x: vllm.configs, y: data.p90, name: 'P90', mode: 'lines+markers', line: { color: pColors.p90, width: 3 }, marker: { size: 10 },
+                { x: vllm.configs, y: data.p90, name: 'P90', mode: 'markers', marker: { size: 12, color: pColors.p90 },
                   hovertemplate: '<b>%{x}</b><br>P90: %{y:,.0f} ' + unit + '<extra></extra>' },
-                { x: vllm.configs, y: data.p95, name: 'P95', mode: 'lines+markers', line: { color: pColors.p95, width: 2 }, marker: { size: 8 },
+                { x: vllm.configs, y: data.p95, name: 'P95', mode: 'markers', marker: { size: 10, color: pColors.p95 },
                   hovertemplate: '<b>%{x}</b><br>P95: %{y:,.0f} ' + unit + '<extra></extra>' },
-                { x: vllm.configs, y: data.p99, name: 'P99', mode: 'lines+markers', line: { color: pColors.p99, width: 2 }, marker: { size: 8 },
+                { x: vllm.configs, y: data.p99, name: 'P99', mode: 'markers', marker: { size: 10, color: pColors.p99 },
                   hovertemplate: '<b>%{x}</b><br>P99: %{y:,.0f} ' + unit + '<extra></extra>' },
             ];
         }
 
-        // Chart 1: TTFT Percentiles (line chart)
-        safePlot(cid('chart-vllm-ttft'), makePercentileLines(vllm.ttft, 'ms'),
-            { ...vllmLayout, xaxis: { tickangle: -35 }, yaxis: { title: 'TTFT (ms) — lower is better' } }, plotlyConfig);
-
-        // Chart 2: ITL Percentiles (line chart)
-        safePlot(cid('chart-vllm-itl'), makePercentileLines(vllm.itl, 'ms'),
-            { ...vllmLayout, xaxis: { tickangle: -35 }, yaxis: { title: 'ITL (ms) — lower is better' } }, plotlyConfig);
-
-        // Chart 3: E2E Latency (line chart)
-        safePlot(cid('chart-vllm-e2e'), makePercentileLines(vllm.e2e, 's'),
-            { ...vllmLayout, xaxis: { tickangle: -35 }, yaxis: { title: 'E2E Latency (s) — lower is better' } }, plotlyConfig);
-
-        // Chart 4: Token Throughput (line chart)
-        safePlot(cid('chart-vllm-tokens'), [
-            { x: vllm.configs, y: vllm.token_rates.prompt, name: 'Prompt Tokens/s', mode: 'lines+markers',
-              line: { color: '#6366f1', width: 2 }, marker: { size: 8 },
-              hovertemplate: '<b>%{x}</b><br>Prompt: %{y:,.0f} tok/s<extra></extra>' },
-            { x: vllm.configs, y: vllm.token_rates.generation, name: 'Generation Tokens/s', mode: 'lines+markers',
-              line: { color: '#10b981', width: 2 }, marker: { size: 8 },
-              hovertemplate: '<b>%{x}</b><br>Generation: %{y:,.0f} tok/s<extra></extra>' },
-        ], { ...vllmLayout, xaxis: { tickangle: -35 }, yaxis: { title: 'Tokens/second — higher is better' } }, plotlyConfig);
-
-        // Chart 5: Request Queue & KV Cache (dual axis — lines)
-        safePlot(cid('chart-vllm-queue'), [
-            { x: vllm.configs, y: vllm.request_state.running, name: 'Avg Running', mode: 'lines+markers',
-              line: { color: '#3b82f6', width: 2 }, marker: { size: 8 },
-              hovertemplate: '<b>%{x}</b><br>Running: %{y:.1f}<extra></extra>' },
-            { x: vllm.configs, y: vllm.request_state.waiting, name: 'Avg Waiting', mode: 'lines+markers',
-              line: { color: '#ef4444', width: 2 }, marker: { size: 8 },
-              hovertemplate: '<b>%{x}</b><br>Waiting: %{y:.1f}<extra></extra>' },
-            { x: vllm.configs, y: vllm.request_state.kv_cache, name: 'KV Cache %', mode: 'lines+markers', yaxis: 'y2',
-              line: { color: '#f59e0b', width: 3 }, marker: { size: 10, symbol: 'diamond' },
-              hovertemplate: '<b>%{x}</b><br>KV Cache: %{y:.1f}%<extra></extra>' },
-        ], {
-            ...vllmLayout,
-            margin: { ...vllmLayout.margin, r: 60 },
-            xaxis: { tickangle: -35 },
-            yaxis: { title: 'Request Count (avg)', side: 'left' },
-            yaxis2: { title: 'KV Cache Usage (%)', side: 'right', overlaying: 'y', range: [0, 105], titlefont: { color: '#f59e0b' }, tickfont: { color: '#f59e0b' } },
-        }, plotlyConfig);
-
-        // Chart 6: Processing Time Breakdown (lines) + Preemptions
-        safePlot(cid('chart-vllm-time'), [
-            { x: vllm.configs, y: vllm.time_breakdown.prefill, name: 'Prefill Time', mode: 'lines+markers',
-              line: { color: '#6366f1', width: 2 }, marker: { size: 8 },
-              hovertemplate: '<b>%{x}</b><br>Prefill: %{y:.2f}<extra></extra>' },
-            { x: vllm.configs, y: vllm.time_breakdown.decode, name: 'Decode Time', mode: 'lines+markers',
-              line: { color: '#3b82f6', width: 2 }, marker: { size: 8 },
-              hovertemplate: '<b>%{x}</b><br>Decode: %{y:.2f}<extra></extra>' },
-            { x: vllm.configs, y: vllm.time_breakdown.queue, name: 'Queue Time', mode: 'lines+markers',
-              line: { color: '#94a3b8', width: 2 }, marker: { size: 8 },
-              hovertemplate: '<b>%{x}</b><br>Queue: %{y:.2f}<extra></extra>' },
-            { x: vllm.configs, y: vllm.time_breakdown.preemptions, name: 'Preemptions/s', mode: 'lines+markers', yaxis: 'y2',
-              line: { color: '#ef4444', width: 2 }, marker: { size: 8, symbol: 'triangle-up' },
-              hovertemplate: '<b>%{x}</b><br>Preemptions: %{y:.1f}/s<extra></extra>' },
-        ], {
-            ...vllmLayout,
-            margin: { ...vllmLayout.margin, r: 60 },
-            xaxis: { tickangle: -35 },
-            yaxis: { title: 'Time Rate (s/s)', side: 'left' },
-            yaxis2: { title: 'Preemptions/s', side: 'right', overlaying: 'y', titlefont: { color: '#ef4444' }, tickfont: { color: '#ef4444' } },
-        }, plotlyConfig);
-
-        // Chart 7: Pod Network Throughput (lines)
-        if (vllm.network && vllm.network.pod_tx.some(v => v > 0)) {
-            safePlot(cid('chart-net-pod'), [
-                { x: vllm.configs, y: vllm.network.pod_tx, name: 'TX (MB/s)', mode: 'lines+markers',
-                  line: { color: '#3b82f6', width: 2 }, marker: { size: 8 },
-                  hovertemplate: '<b>%{x}</b><br>TX: %{y:.2f} MB/s<extra></extra>' },
-                { x: vllm.configs, y: vllm.network.pod_rx, name: 'RX (MB/s)', mode: 'lines+markers',
-                  line: { color: '#10b981', width: 2 }, marker: { size: 8 },
-                  hovertemplate: '<b>%{x}</b><br>RX: %{y:.2f} MB/s<extra></extra>' },
-            ], { ...vllmLayout, xaxis: { tickangle: -35 }, yaxis: { title: 'Throughput (MB/s)' } }, plotlyConfig);
+        // Sort configs by architecture group then P90 value
+        function sortedIndices(p90arr, cfgs) {
+            var indices = cfgs.map(function(_, i) { return i; });
+            var archOrder = { 'aggregated': 0, 'pd': 1, 'ep': 2 };
+            function getArch(label) {
+                if (label.indexOf('(AG)') >= 0 || label.indexOf('(aggregated)') >= 0) return 'aggregated';
+                if (label.indexOf('(EP)') >= 0 || label.indexOf('(ep)') >= 0) return 'ep';
+                return 'pd';
+            }
+            indices.sort(function(a, b) {
+                var aa = archOrder[getArch(cfgs[a])] || 1, ba = archOrder[getArch(cfgs[b])] || 1;
+                if (aa !== ba) return aa - ba;
+                return (p90arr[a] || 0) - (p90arr[b] || 0);
+            });
+            return indices;
+        }
+        function reorder(arr, idx) { return idx.map(function(i) { return arr[i]; }); }
+        // Group configs by architecture, sort by P90 within each
+        var archColors = { aggregated: '#059669', pd: '#2563eb', ep: '#7c3aed' };
+        var archLabels = { aggregated: 'Aggregated', pd: 'PD', ep: 'EP' };
+        function getArch(label) {
+            if (label.indexOf('(aggregated)') >= 0) return 'aggregated';
+            if (label.indexOf('(ep)') >= 0) return 'ep';
+            return 'pd';
+        }
+        function makeArchLines(data, unit) {
+            var byArch = {};
+            var bestByCfg = {};
+            vllm.configs.forEach(function(cfg, i) {
+                var existing = bestByCfg[cfg];
+                if (!existing || (data.p90[i] || 1e9) < (existing.p90 || 1e9)) {
+                    bestByCfg[cfg] = { cfg: cfg, p50: data.p50[i], p90: data.p90[i], p95: data.p95[i], p99: data.p99[i] };
+                }
+            });
+            Object.keys(bestByCfg).forEach(function(cfg) {
+                var a = getArch(cfg);
+                if (!byArch[a]) byArch[a] = [];
+                byArch[a].push(bestByCfg[cfg]);
+            });
+            var traces = [];
+            ['aggregated', 'pd', 'ep'].forEach(function(a) {
+                var pts = byArch[a];
+                if (!pts || !pts.length) return;
+                pts.sort(function(x, y) { return (x.p90 || 0) - (y.p90 || 0); });
+                var color = archColors[a];
+                var label = archLabels[a];
+                traces.push({ x: pts.map(function(p) { return p.cfg; }), y: pts.map(function(p) { return p.p90; }),
+                    name: label + ' P90', mode: 'lines+markers', line: { color: color, width: 3 }, marker: { size: 10, color: color },
+                    hovertemplate: '<b>%{x}</b><br>P90: %{y:,.0f} ' + unit + '<extra></extra>' });
+                traces.push({ x: pts.map(function(p) { return p.cfg; }), y: pts.map(function(p) { return p.p99; }),
+                    name: label + ' P99', mode: 'lines+markers', line: { color: color, width: 2, dash: 'dot' }, marker: { size: 8, color: color, symbol: 'diamond' },
+                    hovertemplate: '<b>%{x}</b><br>P99: %{y:,.0f} ' + unit + '<extra></extra>' });
+            });
+            return traces;
         }
 
-        // Chart 8: NIXL KV Transfer Throughput (line)
+        // Chart 1: TTFT — lines per architecture, sorted by P90
+        safePlot(cid('chart-vllm-ttft'), makeArchLines(vllm.ttft, 'ms'),
+            { ...vllmLayout, xaxis: { tickangle: -35 }, yaxis: { title: 'TTFT (ms) — lower is better' } }, plotlyConfig);
+
+        // Chart 2: ITL — lines per architecture, sorted by P90
+        safePlot(cid('chart-vllm-itl'), makeArchLines(vllm.itl, 'ms'),
+            { ...vllmLayout, xaxis: { tickangle: -35 }, yaxis: { title: 'ITL (ms) — lower is better' } }, plotlyConfig);
+
+        // Chart 3: E2E Latency — lines per architecture, sorted by P90
+        safePlot(cid('chart-vllm-e2e'), makeArchLines(vllm.e2e, 's'),
+            { ...vllmLayout, xaxis: { tickangle: -35 }, yaxis: { title: 'E2E Latency (s) — lower is better' } }, plotlyConfig);
+
+        // Dedup helper for non-percentile metrics: best by lowest P90-equivalent (or first seen)
+        function dedupByConfig(arrays) {
+            var best = {};
+            vllm.configs.forEach(function(cfg, i) {
+                if (!best[cfg]) { best[cfg] = i; }
+            });
+            var cfgs = Object.keys(best);
+            var byArch = {};
+            cfgs.forEach(function(cfg) {
+                var a = getArch(cfg);
+                if (!byArch[a]) byArch[a] = [];
+                byArch[a].push({ cfg: cfg, idx: best[cfg] });
+            });
+            return { cfgs: cfgs, byArch: byArch };
+        }
+
+        // Chart 4: Token Throughput — lines per architecture
+        (function() {
+            var dd = dedupByConfig();
+            var traces = [];
+            ['aggregated', 'pd', 'ep'].forEach(function(a) {
+                var pts = dd.byArch[a];
+                if (!pts || !pts.length) return;
+                pts.sort(function(x, y) { return (vllm.token_rates.generation[x.idx] || 0) - (vllm.token_rates.generation[y.idx] || 0); });
+                var color = archColors[a];
+                traces.push({ x: pts.map(function(p) { return p.cfg; }), y: pts.map(function(p) { return vllm.token_rates.prompt[p.idx]; }),
+                    name: archLabels[a] + ' Prompt', mode: 'lines+markers', line: { color: color, width: 2, dash: 'dot' }, marker: { size: 8, color: color },
+                    hovertemplate: '<b>%{x}</b><br>Prompt: %{y:,.0f} tok/s<extra></extra>' });
+                traces.push({ x: pts.map(function(p) { return p.cfg; }), y: pts.map(function(p) { return vllm.token_rates.generation[p.idx]; }),
+                    name: archLabels[a] + ' Generation', mode: 'lines+markers', line: { color: color, width: 3 }, marker: { size: 10, color: color },
+                    hovertemplate: '<b>%{x}</b><br>Generation: %{y:,.0f} tok/s<extra></extra>' });
+            });
+            safePlot(cid('chart-vllm-tokens'), traces, { ...vllmLayout, xaxis: { tickangle: -35 }, yaxis: { title: 'Tokens/second — higher is better' } }, plotlyConfig);
+        })();
+
+        // Chart 5: Request Queue & KV Cache — lines per architecture
+        (function() {
+            var dd = dedupByConfig();
+            var traces = [];
+            ['aggregated', 'pd', 'ep'].forEach(function(a) {
+                var pts = dd.byArch[a];
+                if (!pts || !pts.length) return;
+                var color = archColors[a];
+                traces.push({ x: pts.map(function(p) { return p.cfg; }), y: pts.map(function(p) { return vllm.request_state.running[p.idx]; }),
+                    name: archLabels[a] + ' Running', mode: 'lines+markers', line: { color: color, width: 3 }, marker: { size: 10, color: color },
+                    hovertemplate: '<b>%{x}</b><br>Running: %{y:.1f}<extra></extra>' });
+                traces.push({ x: pts.map(function(p) { return p.cfg; }), y: pts.map(function(p) { return vllm.request_state.waiting[p.idx]; }),
+                    name: archLabels[a] + ' Waiting', mode: 'lines+markers', line: { color: color, width: 2, dash: 'dot' }, marker: { size: 8, color: color, symbol: 'diamond' },
+                    hovertemplate: '<b>%{x}</b><br>Waiting: %{y:.1f}<extra></extra>' });
+            });
+            traces.push({ x: dd.cfgs, y: dd.cfgs.map(function(c) { return vllm.request_state.kv_cache[dedupByConfig().byArch[getArch(c)].find(function(p){return p.cfg===c}).idx]; }),
+                name: 'KV Cache %', mode: 'lines+markers', yaxis: 'y2', line: { color: '#f59e0b', width: 2 }, marker: { size: 10, color: '#f59e0b', symbol: 'diamond' },
+                hovertemplate: '<b>%{x}</b><br>KV Cache: %{y:.1f}%<extra></extra>' });
+            safePlot(cid('chart-vllm-queue'), traces, {
+                ...vllmLayout, margin: { ...vllmLayout.margin, r: 60 }, xaxis: { tickangle: -35 },
+                yaxis: { title: 'Request Count (avg)', side: 'left' },
+                yaxis2: { title: 'KV Cache Usage (%)', side: 'right', overlaying: 'y', range: [0, 105], titlefont: { color: '#f59e0b' }, tickfont: { color: '#f59e0b' } },
+            }, plotlyConfig);
+        })();
+
+        // Chart 6: Processing Time — lines per architecture
+        (function() {
+            var dd = dedupByConfig();
+            var traces = [];
+            ['aggregated', 'pd', 'ep'].forEach(function(a) {
+                var pts = dd.byArch[a];
+                if (!pts || !pts.length) return;
+                var color = archColors[a];
+                traces.push({ x: pts.map(function(p) { return p.cfg; }), y: pts.map(function(p) { return vllm.time_breakdown.prefill[p.idx]; }),
+                    name: archLabels[a] + ' Prefill', mode: 'lines+markers', line: { color: color, width: 3 }, marker: { size: 10, color: color },
+                    hovertemplate: '<b>%{x}</b><br>Prefill: %{y:.2f}<extra></extra>' });
+                traces.push({ x: pts.map(function(p) { return p.cfg; }), y: pts.map(function(p) { return vllm.time_breakdown.decode[p.idx]; }),
+                    name: archLabels[a] + ' Decode', mode: 'lines+markers', line: { color: color, width: 2, dash: 'dot' }, marker: { size: 8, color: color },
+                    hovertemplate: '<b>%{x}</b><br>Decode: %{y:.2f}<extra></extra>' });
+            });
+            var allPts = [];
+            Object.keys(dd.byArch).forEach(function(a) { dd.byArch[a].forEach(function(p) { allPts.push(p); }); });
+            traces.push({ x: allPts.map(function(p) { return p.cfg; }), y: allPts.map(function(p) { return vllm.time_breakdown.preemptions[p.idx]; }),
+                name: 'Preemptions/s', mode: 'markers', yaxis: 'y2', marker: { size: 10, color: '#ef4444', symbol: 'triangle-up' },
+                hovertemplate: '<b>%{x}</b><br>Preemptions: %{y:.1f}/s<extra></extra>' });
+            safePlot(cid('chart-vllm-time'), traces, {
+                ...vllmLayout, margin: { ...vllmLayout.margin, r: 60 }, xaxis: { tickangle: -35 },
+                yaxis: { title: 'Time Rate (s/s)', side: 'left' },
+                yaxis2: { title: 'Preemptions/s', side: 'right', overlaying: 'y', titlefont: { color: '#ef4444' }, tickfont: { color: '#ef4444' } },
+            }, plotlyConfig);
+        })();
+
+        // Chart 7: Pod Network Throughput — lines per architecture
+        if (vllm.network && vllm.network.pod_tx.some(v => v > 0)) {
+            var dd = dedupByConfig();
+            var netTraces = [];
+            ['aggregated', 'pd', 'ep'].forEach(function(a) {
+                var pts = dd.byArch[a];
+                if (!pts || !pts.length) return;
+                var color = archColors[a];
+                netTraces.push({ x: pts.map(function(p) { return p.cfg; }), y: pts.map(function(p) { return vllm.network.pod_tx[p.idx]; }),
+                    name: archLabels[a] + ' TX', mode: 'lines+markers', line: { color: color, width: 3 }, marker: { size: 10, color: color },
+                    hovertemplate: '<b>%{x}</b><br>TX: %{y:.2f} MB/s<extra></extra>' });
+                netTraces.push({ x: pts.map(function(p) { return p.cfg; }), y: pts.map(function(p) { return vllm.network.pod_rx[p.idx]; }),
+                    name: archLabels[a] + ' RX', mode: 'lines+markers', line: { color: color, width: 2, dash: 'dot' }, marker: { size: 8, color: color },
+                    hovertemplate: '<b>%{x}</b><br>RX: %{y:.2f} MB/s<extra></extra>' });
+            });
+            safePlot(cid('chart-net-pod'), netTraces, { ...vllmLayout, xaxis: { tickangle: -35 }, yaxis: { title: 'Throughput (MB/s)' } }, plotlyConfig);
+        }
+
+        // Chart 8: NIXL KV Transfer Throughput — lines per architecture
         var nixlData = vllm.network.nixl_tx || [];
         var ibData = vllm.network.ib_rx || [];
         if (nixlData.some(v => v > 0) || ibData.some(v => v > 0)) {
+            var dd8 = dedupByConfig();
             var nixlTraces = [];
-            if (nixlData.some(v => v > 0)) {
-                nixlTraces.push({
-                    x: vllm.configs, y: nixlData, name: 'NIXL TX (GB/s)', mode: 'lines+markers+text',
-                    text: nixlData.map(function(v) { return v > 0 ? v.toFixed(2) : ''; }),
-                    textposition: 'top center', textfont: { size: 10, color: '#8b5cf6' },
-                    line: { color: '#8b5cf6', width: 3 }, marker: { size: 8 },
-                    hovertemplate: '<b>%{x}</b><br>NIXL TX: %{y:.2f} GB/s<extra></extra>'
-                });
-            }
-            if (ibData.some(v => v > 0)) {
-                nixlTraces.push({
-                    x: vllm.configs, y: ibData, name: 'IB RX (GB/s)', mode: 'lines+markers+text',
-                    text: ibData.map(function(v) { return v > 0 ? v.toFixed(2) : ''; }),
-                    textposition: 'top center', textfont: { size: 10, color: '#f59e0b' },
-                    line: { color: '#f59e0b', width: 2, dash: 'dash' }, marker: { size: 8 },
-                    hovertemplate: '<b>%{x}</b><br>IB RX: %{y:.2f} GB/s<extra></extra>'
-                });
-            }
+            ['aggregated', 'pd', 'ep'].forEach(function(a) {
+                var pts = dd8.byArch[a];
+                if (!pts || !pts.length) return;
+                var color = archColors[a];
+                if (nixlData.some(v => v > 0)) {
+                    nixlTraces.push({ x: pts.map(function(p) { return p.cfg; }), y: pts.map(function(p) { return nixlData[p.idx]; }),
+                        name: archLabels[a] + ' NIXL TX', mode: 'lines+markers+text',
+                        text: pts.map(function(p) { var v = nixlData[p.idx]; return v > 0 ? v.toFixed(2) : ''; }),
+                        textposition: 'top center', textfont: { size: 10, color: color },
+                        line: { color: color, width: 3 }, marker: { size: 10, color: color },
+                        hovertemplate: '<b>%{x}</b><br>NIXL TX: %{y:.2f} GB/s<extra></extra>' });
+                }
+                if (ibData.some(v => v > 0)) {
+                    nixlTraces.push({ x: pts.map(function(p) { return p.cfg; }), y: pts.map(function(p) { return ibData[p.idx]; }),
+                        name: archLabels[a] + ' IB RX', mode: 'lines+markers',
+                        line: { color: color, width: 2, dash: 'dot' }, marker: { size: 8, color: color },
+                        hovertemplate: '<b>%{x}</b><br>IB RX: %{y:.2f} GB/s<extra></extra>' });
+                }
+            });
             safePlot(cid('chart-net-ib'), nixlTraces,
                 { ...vllmLayout, xaxis: { tickangle: -35 }, yaxis: { title: 'Throughput (GB/s)' } }, plotlyConfig);
         }

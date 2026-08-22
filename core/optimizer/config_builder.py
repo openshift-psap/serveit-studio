@@ -190,6 +190,9 @@ class ConfigBuilderMixin:
         )
         cfg = self._apply_advanced_vllm(cfg)
         cfg = self._auto_tune_model_loader(cfg)
+        if is_calibration:
+            cfg.speculative_num_tokens = None
+            cfg.speculative_model = None
         return cfg
 
     def _get_profiled_kv_cache_bytes(self, tp: int) -> Optional[int]:
