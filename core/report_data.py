@@ -198,7 +198,11 @@ class ReportDataLoader:
             prefill_tp = None
             decode_tp = None
 
-            # Try to extract ptp value (e.g., "ptp4" -> 4)
+            # Read decode_tp from DB column first, fall back to config_name parsing
+            try:
+                decode_tp = row['decode_tp']
+            except (IndexError, KeyError):
+                pass
             if 'ptp' in config_name:
                 try:
                     start = config_name.index('ptp') + 3
@@ -209,9 +213,7 @@ class ReportDataLoader:
                         prefill_tp = int(config_name[start:end])
                 except (ValueError, IndexError):
                     pass
-
-            # Try to extract dtp value (e.g., "dtp2" -> 2)
-            if 'dtp' in config_name:
+            if not decode_tp and 'dtp' in config_name:
                 try:
                     start = config_name.index('dtp') + 3
                     end = start
