@@ -786,9 +786,7 @@ function buildCalRecCards(data) {
             const aColor = archColors[archKey] || '#64748b';
             let deploy;
             if (cfg.prefill_pods && cfg.decode_pods) {
-                deploy = cfg.prefill_tp === cfg.decode_tp
-                    ? `${cfg.prefill_pods}P+${cfg.decode_pods}D TP=${cfg.prefill_tp || cfg.tp || '?'}`
-                    : `${cfg.prefill_pods}P+${cfg.decode_pods}D PTP=${cfg.prefill_tp || '?'} DTP=${cfg.decode_tp || '?'}`;
+                deploy = `${cfg.prefill_pods}P×TP${cfg.prefill_tp || cfg.tp || '?'} + ${cfg.decode_pods}D×TP${cfg.decode_tp || cfg.tp || '?'}`;
             } else {
                 deploy = cfg.name || cfg.config_name || '';
             }
@@ -867,9 +865,7 @@ function buildCacheRecCards(data) {
         const aColor = archColors[archKey] || '#64748b';
         let deploy;
         if (cfg.prefill_pods && cfg.decode_pods) {
-            deploy = cfg.prefill_tp === cfg.decode_tp
-                ? `${cfg.prefill_pods}P+${cfg.decode_pods}D TP=${cfg.prefill_tp || cfg.tp || '?'}`
-                : `${cfg.prefill_pods}P+${cfg.decode_pods}D PTP=${cfg.prefill_tp || '?'} DTP=${cfg.decode_tp || '?'}`;
+            deploy = `${cfg.prefill_pods}P×TP${cfg.prefill_tp || cfg.tp || '?'} + ${cfg.decode_pods}D×TP${cfg.decode_tp || cfg.tp || '?'}`;
         } else {
             deploy = cfg.name || cfg.config_name || '';
         }
