@@ -2297,66 +2297,50 @@ function _renderChartsImpl(data, runId, content) {
     // === Build Estimator section ===
     const wl = data.recommendation ? data.recommendation.workload : {};
     const estSuffix = _chartSuffix;
+    var wlDesc = 'Tested with <strong>' + (wl.users || '?') + ' users</strong>, ISL <strong>' + (wl.isl || '?') + '</strong>';
+    if (wl.isl_stdev) wlDesc += '&plusmn;' + wl.isl_stdev;
+    wlDesc += ', OSL <strong>' + (wl.osl || '?') + '</strong>';
+    if (wl.osl_stdev) wlDesc += '&plusmn;' + wl.osl_stdev;
+    if (wl.turns > 1) wlDesc += ', <strong>' + wl.turns + ' turns</strong>';
+    wlDesc += '.';
     let secEst = '<div class="chart-card" style="margin-top:16px; border:2px solid #d97706; border-left:6px solid #d97706;">' +
         '<div class="chart-card-header" style="background:linear-gradient(135deg,#d97706,#b45309);">GPU Estimator</div>' +
         '<div style="padding:12px 20px 4px; color:#1e293b; font-size:0.95em;">' +
-            'Estimate how many GPUs each tested configuration would need for a different workload. ' +
-            'Tested with <strong>' + (wl.users || '?') + ' users</strong>, ISL <strong>' + (wl.isl || '?') + '</strong>, OSL <strong>' + (wl.osl || '?') + '</strong>.' +
+            'Estimate how many GPUs/replicas are needed to meet your SLA targets using the measured performance data. ' + wlDesc +
         '</div>' +
         '<div style="padding:12px 20px 0;">' +
             '<div class="estimator-form">' +
                 '<div class="estimator-row">' +
                     '<div class="estimator-group">' +
-                        '<div class="estimator-group-label">Workload</div>' +
+                        '<div class="estimator-group-label">Throughput SLA</div>' +
                         '<label class="estimator-field">' +
-                            '<span>Concurrency</span>' +
-                            '<div class="estimator-input-wrap"><span class="estimator-icon">&#128101;</span><input type="number" id="est-concurrency' + estSuffix + '" value="' + (wl.users || 100) + '" min="1"><span class="estimator-unit">users</span></div>' +
-                        '</label>' +
-                        '<label class="estimator-field">' +
-                            '<span>ISL</span>' +
-                            '<div class="estimator-input-wrap"><span class="estimator-icon">&#128229;</span><input type="number" id="est-isl' + estSuffix + '" value="' + (wl.isl || 1024) + '" min="1"><span class="estimator-unit">tokens</span></div>' +
-                        '</label>' +
-                        '<label class="estimator-field">' +
-                            '<span>OSL</span>' +
-                            '<div class="estimator-input-wrap"><span class="estimator-icon">&#128228;</span><input type="number" id="est-osl' + estSuffix + '" value="' + (wl.osl || 256) + '" min="1"><span class="estimator-unit">tokens</span></div>' +
+                            '<span>Target Throughput</span>' +
+                            '<div class="estimator-input-wrap"><span class="estimator-icon">&#9889;</span><input type="number" id="est-tput-target' + estSuffix + '" value="100" min="1" step="1"><span class="estimator-unit">req/s</span></div>' +
                         '</label>' +
                     '</div>' +
                     '<div class="estimator-group">' +
-                        '<div class="estimator-group-label">Variance</div>' +
+                        '<div class="estimator-group-label">TTFT SLA</div>' +
                         '<label class="estimator-field">' +
-                            '<span>ISL StdDev</span>' +
-                            '<div class="estimator-input-wrap"><span class="estimator-icon">&#177;</span><input type="number" id="est-isl-stdev' + estSuffix + '" value="' + (wl.isl_stdev || 0) + '" min="0"><span class="estimator-unit">tokens</span></div>' +
-                        '</label>' +
-                        '<label class="estimator-field">' +
-                            '<span>OSL StdDev</span>' +
-                            '<div class="estimator-input-wrap"><span class="estimator-icon">&#177;</span><input type="number" id="est-osl-stdev' + estSuffix + '" value="' + (wl.osl_stdev || 0) + '" min="0"><span class="estimator-unit">tokens</span></div>' +
-                        '</label>' +
-                    '</div>' +
-                    '<div class="estimator-group">' +
-                        '<div class="estimator-group-label">' +
-                            '<label style="cursor:pointer;display:flex;align-items:center;gap:6px;">' +
-                                '<input type="checkbox" id="est-turns-toggle' + estSuffix + '"' + ((wl.turns || 1) > 1 ? ' checked' : '') + ' onchange="document.getElementById(\'est-turns' + estSuffix + '\').disabled=!this.checked;"> Multi-turn' +
-                            '</label>' +
-                        '</div>' +
-                        '<label class="estimator-field">' +
-                            '<span>Turns</span>' +
-                            '<div class="estimator-input-wrap"><span class="estimator-icon">&#128260;</span><input type="number" id="est-turns' + estSuffix + '" value="' + (wl.turns || 1) + '" min="1"' + ((wl.turns || 1) <= 1 ? ' disabled' : '') + '><span class="estimator-unit">per user</span></div>' +
-                        '</label>' +
-                    '</div>' +
-                    '<div class="estimator-group">' +
-                        '<div class="estimator-group-label">' +
-                            '<label style="cursor:pointer;display:flex;align-items:center;gap:6px;">' +
-                                '<input type="checkbox" id="est-sla-toggle' + estSuffix + '" onchange="document.getElementById(\'est-sla-ms' + estSuffix + '\').disabled=!this.checked;document.getElementById(\'est-sla-pctl' + estSuffix + '\').disabled=!this.checked;"> Latency SLA' +
-                            '</label>' +
-                        '</div>' +
-                        '<label class="estimator-field">' +
-                            '<span>Target TTFT</span>' +
-                            '<div class="estimator-input-wrap"><span class="estimator-icon">&#9201;</span><input type="number" id="est-sla-ms' + estSuffix + '" value="500" min="1" disabled><span class="estimator-unit">ms</span></div>' +
+                            '<span>Max TTFT</span>' +
+                            '<div class="estimator-input-wrap"><span class="estimator-icon">&#9201;</span><input type="number" id="est-ttft-target' + estSuffix + '" value="500" min="1"><span class="estimator-unit">ms</span></div>' +
                         '</label>' +
                         '<label class="estimator-field">' +
                             '<span>Percentile</span>' +
-                            '<select id="est-sla-pctl' + estSuffix + '" disabled style="padding:10px 12px;border:2px solid #e2e8f0;border-radius:10px;font-size:0.95em;background:#f8fafc;">' +
+                            '<select id="est-ttft-pctl' + estSuffix + '" style="padding:10px 12px;border:2px solid #e2e8f0;border-radius:10px;font-size:0.95em;background:#f8fafc;">' +
                                 '<option value="p90">P90</option><option value="p95">P95</option><option value="p99" selected>P99</option>' +
+                            '</select>' +
+                        '</label>' +
+                    '</div>' +
+                    '<div class="estimator-group">' +
+                        '<div class="estimator-group-label">ITL SLA</div>' +
+                        '<label class="estimator-field">' +
+                            '<span>Max ITL</span>' +
+                            '<div class="estimator-input-wrap"><span class="estimator-icon">&#9881;</span><input type="number" id="est-itl-target' + estSuffix + '" value="20" min="0.1" step="0.1"><span class="estimator-unit">ms</span></div>' +
+                        '</label>' +
+                        '<label class="estimator-field">' +
+                            '<span>Percentile</span>' +
+                            '<select id="est-itl-pctl' + estSuffix + '" style="padding:10px 12px;border:2px solid #e2e8f0;border-radius:10px;font-size:0.95em;background:#f8fafc;">' +
+                                '<option value="p90" selected>P90</option><option value="p95">P95</option><option value="p99">P99</option>' +
                             '</select>' +
                         '</label>' +
                     '</div>' +

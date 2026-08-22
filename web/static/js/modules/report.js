@@ -183,277 +183,145 @@ function updateEstimatorScaling(suffix) {
     var el = document.getElementById('est-scaling-info' + suffix);
     if (!el) return;
 
-    var gpuSizing = data.gpu_sizing || {};
-    var pTPSG = gpuSizing.prefill_tpsg || 0;
-    var dTPSG = gpuSizing.decode_tpsg || 0;
-    var hasTpsg = pTPSG > 0 && dTPSG > 0;
+    var allResults = (data.all_results || []).filter(function(r) {
+        return r.quality !== 'discard' && r.gpus > 0 && (r.throughput_mean > 0 || r.throughput_p90 > 0);
+    });
+    var hasSweep = allResults.some(function(r) { return (r.test_id || '').indexOf('step11-') === 0; });
+
+    if (!hasSweep) {
+        el.innerHTML = '<div style="text-align:center;color:#92400e;padding:8px;"><strong>Not enough data yet.</strong> The GPU estimator requires completed concurrency sweep (Step 11) results to provide accurate estimates. Resume or wait for the sweep to complete.</div>';
+        var btn = el.parentElement.querySelector('button.action-button');
+        if (btn) btn.disabled = true;
+        return;
+    }
 
     var bullets = '';
-    bullets += '<li><strong>GPU cost per request</strong> = ISL &divide; Prefill TPSG + OSL &divide; Decode TPSG (GPU-seconds)</li>';
-    if (hasTpsg) {
-        bullets += '<li><strong>Prefill TPSG</strong> = ' + Math.round(pTPSG).toLocaleString() + ' tokens/s/GPU (measured in Step 3 calibration)</li>';
-        bullets += '<li><strong>Decode TPSG</strong> = ' + Math.round(dTPSG).toLocaleString() + ' tokens/s/GPU (measured in Step 2 calibration)</li>';
-    }
-    bullets += '<li><strong>Estimated GPUs</strong> = Tested GPUs &times; (new cost / tested cost) &times; (new concurrency / tested concurrency) &times; turns ratio</li>';
-    bullets += '<li>Final GPU count rounded up to nearest <strong>Tensor Parallelism</strong> multiple</li>';
-    bullets += '<li>Variance adjusts effective sequence length: effective = mean &times; (1 + CV&sup2;), CV = stdev/mean</li>';
-    bullets += '<li><strong>Latency SLA</strong>: compares the tested TTFT at your chosen percentile against your target — workload changes may affect actual latency</li>';
+    bullets += '<li><strong>Throughput SLA</strong>: Replicas = ceil(target req/s &divide; measured req/s per replica). GPUs = replicas &times; GPUs per replica.</li>';
+    bullets += '<li><strong>TTFT SLA</strong>: Filters configs where measured TTFT at the chosen percentile exceeds the target. Configs that fail are marked.</li>';
+    bullets += '<li><strong>ITL SLA</strong>: Filters configs where measured ITL at the chosen percentile exceeds the target. Configs that fail are marked.</li>';
+    bullets += '<li>Uses the <strong>best measured throughput</strong> per config from concurrency sweep data — no workload scaling or estimation.</li>';
 
     el.innerHTML = '<div style="text-align:left;"><strong>How GPU estimation works</strong>' +
         '<ul style="margin:8px 0 0 16px;padding:0;list-style:disc;line-height:1.7;">' + bullets + '</ul></div>';
 }
 
 function runEstimator(suffix) {
-    // Find which report tab owns this estimator via the suffix (e.g., '-rt1')
-    const tabId = suffix.replace(/^-/, '');
-    const data = tabDataCache[tabId];
+    var tabId = suffix.replace(/^-/, '');
+    var data = tabDataCache[tabId];
     if (!data) return;
 
-    const userConc = parseFloat(document.getElementById('est-concurrency' + suffix).value) || 1;
-    const userISL = parseFloat(document.getElementById('est-isl' + suffix).value) || 1;
-    const userOSL = parseFloat(document.getElementById('est-osl' + suffix).value) || 1;
-    const userIslStdev = parseFloat(document.getElementById('est-isl-stdev' + suffix).value) || 0;
-    const userOslStdev = parseFloat(document.getElementById('est-osl-stdev' + suffix).value) || 0;
-    const turnsToggle = document.getElementById('est-turns-toggle' + suffix);
-    const userTurns = (turnsToggle && turnsToggle.checked) ? (parseFloat(document.getElementById('est-turns' + suffix).value) || 1) : 1;
+    var targetTput = parseFloat(document.getElementById('est-tput-target' + suffix).value) || 100;
+    var ttftTarget = parseFloat(document.getElementById('est-ttft-target' + suffix).value) || 500;
+    var ttftPctl = document.getElementById('est-ttft-pctl' + suffix).value || 'p99';
+    var itlTarget = parseFloat(document.getElementById('est-itl-target' + suffix).value) || 20;
+    var itlPctl = document.getElementById('est-itl-pctl' + suffix).value || 'p90';
 
-    const wl = data.recommendation ? data.recommendation.workload : {};
-    const testedISL = wl.isl || userISL;
-    const testedOSL = wl.osl || userOSL;
-    const testedUsers = wl.users || userConc;
-    const testedTurns = wl.turns || 1;
-    const testedIslStdev = wl.isl_stdev || 0;
-    const testedOslStdev = wl.osl_stdev || 0;
+    var allResults = (data.all_results || []).filter(function(r) {
+        return r.quality !== 'discard' && r.gpus > 0 && (r.throughput_mean > 0 || r.throughput_p90 > 0);
+    });
 
-    const slaToggle = document.getElementById('est-sla-toggle' + suffix);
-    const slaEnabled = slaToggle && slaToggle.checked;
-    const slaMs = slaEnabled ? (parseFloat(document.getElementById('est-sla-ms' + suffix).value) || 500) : null;
-    const slaPctl = slaEnabled ? (document.getElementById('est-sla-pctl' + suffix).value || 'p99') : null;
-
-    const gpuSizing = data.gpu_sizing || {};
-    const latencySearch = data.latency_search || null;
-    const eppTuning = data.epp_tuning || null;
-    const estData = estimateGPUs(data.all_results || [], testedISL, testedOSL, testedUsers, testedTurns, testedIslStdev, testedOslStdev, userConc, userISL, userOSL, userIslStdev, userOslStdev, userTurns, gpuSizing, slaMs, slaPctl, latencySearch, eppTuning);
-    renderEstimatorResults(estData.base, estData.epp, suffix, testedISL, testedOSL, testedUsers, testedTurns, testedIslStdev, testedOslStdev, slaMs, slaPctl);
-}
-
-function estimateGPUs(allResults, testedISL, testedOSL, testedUsers, testedTurns, testedIslStdev, testedOslStdev, userConcurrency, userISL, userOSL, userIslStdev, userOslStdev, userTurns, gpuSizing, slaMs, slaPctl, latencySearch, eppTuning) {
-    // GPU estimation using additive cost model with TPSG from calibration.
-    //
-    // GPU cost per request = ISL/prefill_TPSG + OSL/decode_TPSG (GPU-seconds)
-    // Total GPUs = cost_per_request × concurrency × headroom × turns
-    //
-    // Variance increases effective sequence length using Pollaczek-Khinchine:
-    //   effective_length = mean × (1 + CV²), where CV = stdev/mean
-
-    function effectiveLen(mean, stdev) {
-        if (!stdev || !mean) return mean;
-        var cv = stdev / mean;
-        return mean * (1 + cv * cv);
-    }
-
-    const prefillTPSG = gpuSizing && gpuSizing.prefill_tpsg ? gpuSizing.prefill_tpsg : 0;
-    const decodeTPSG = gpuSizing && gpuSizing.decode_tpsg ? gpuSizing.decode_tpsg : 0;
-    const headroom = gpuSizing && gpuSizing.headroom ? gpuSizing.headroom : 1.3;
-
-    const testedEffISL = effectiveLen(testedISL, testedIslStdev);
-    const testedEffOSL = effectiveLen(testedOSL, testedOslStdev);
-    const userEffISL = effectiveLen(userISL, userIslStdev);
-    const userEffOSL = effectiveLen(userOSL, userOslStdev);
-
-    // Use TPSG-based additive cost model when calibration data is available
-    const hasTpsg = prefillTPSG > 0 && decodeTPSG > 0;
-    var costScale;
-    if (hasTpsg) {
-        var testedCost = testedEffISL / prefillTPSG + testedEffOSL / decodeTPSG;
-        var userCost = userEffISL / prefillTPSG + userEffOSL / decodeTPSG;
-        costScale = userCost / testedCost;
-    } else {
-        // Fallback: proportional scaling (less accurate)
-        costScale = (userEffISL / testedEffISL) * (userEffOSL / testedEffOSL);
-    }
-
-    const concScale = userConcurrency / (testedUsers || userConcurrency);
-    const turnsScale = (userTurns || 1) / (testedTurns || 1);
-    const totalScale = concScale * costScale * turnsScale;
-
-    // Keep best throughput per architecture
-    const bestByArch = {};
-    allResults.filter(r => r.throughput_p90 >= 1 && r.gpus > 0).forEach(r => {
-        const arch = (r.architecture || 'UNKNOWN').toUpperCase();
-        if (!bestByArch[arch] || r.throughput_p90 > bestByArch[arch].throughput_p90) {
-            bestByArch[arch] = r;
+    var bestByConfig = {};
+    allResults.forEach(function(r) {
+        var tid = r.test_id || '';
+        if (tid.indexOf('step2-') === 0 || tid.indexOf('step3-') === 0) return;
+        var key = r.config_name || tid;
+        var tput = r.throughput_mean || r.throughput_p90 || 0;
+        if (!bestByConfig[key] || tput > (bestByConfig[key].throughput_mean || bestByConfig[key].throughput_p90 || 0)) {
+            bestByConfig[key] = r;
         }
     });
 
-    // Build EPP entries separately
-    const eppByArch = {};
-    if (eppTuning && eppTuning.by_architecture) {
-        ['aggregated', 'pd'].forEach(function(arch) {
-            var trials = (eppTuning.by_architecture || {})[arch];
-            if (!trials || !trials.length) return;
-            var best = trials.reduce(function(a, b) {
-                return (a.throughput_mean || a.throughput_p90 || 0) > (b.throughput_mean || b.throughput_p90 || 0) ? a : b;
-            });
-            var archKey = arch.toUpperCase();
-            var baseEntry = bestByArch[archKey];
-            if (best && baseEntry) {
-                eppByArch[archKey] = {
-                    config_name: best.config_name,
-                    architecture: archKey,
-                    gpus: baseEntry.gpus,
-                    tp: baseEntry.tp || baseEntry.prefill_tp || 1,
-                    prefill_tp: baseEntry.prefill_tp,
-                    throughput_p50: best.throughput_p50, throughput_p90: best.throughput_p90,
-                    throughput_p95: best.throughput_p95, throughput_p99: best.throughput_p99,
-                    throughput_mean: best.throughput_mean,
-                    ttft_p50: best.ttft_p50, ttft_p90: best.ttft_p90,
-                    ttft_p95: best.ttft_p95, ttft_p99: best.ttft_p99,
-                };
-            }
+    var results = [];
+    Object.keys(bestByConfig).forEach(function(key) {
+        var r = bestByConfig[key];
+        var tput = r.throughput_mean || r.throughput_p90 || 0;
+        if (tput <= 0) return;
+        var gpusPerReplica = r.gpus;
+        var replicas = Math.ceil(targetTput / tput);
+        var totalGpus = replicas * gpusPerReplica;
+
+        var ttftVal = ttftPctl === 'p50' ? r.ttft_p50 : (ttftPctl === 'p90' ? r.ttft_p90 : (ttftPctl === 'p95' ? r.ttft_p95 : r.ttft_p99));
+        var ttftMeets = ttftVal != null ? ttftVal <= ttftTarget : null;
+
+        var itlVal = itlPctl === 'p50' ? r.itl_p50 : (itlPctl === 'p90' ? r.itl_p90 : (itlPctl === 'p95' ? r.itl_p95 : r.itl_p99));
+        var itlMeets = itlVal != null && itlVal > 0 ? itlVal <= itlTarget : null;
+
+        results.push({
+            config_name: key, architecture: (r.architecture || 'UNKNOWN').toUpperCase(),
+            gpus_per_replica: gpusPerReplica, replicas: replicas, total_gpus: totalGpus,
+            measured_tput: tput, target_tput: targetTput,
+            ttft_p50: r.ttft_p50, ttft_p90: r.ttft_p90, ttft_p95: r.ttft_p95, ttft_p99: r.ttft_p99,
+            ttft_val: ttftVal, ttft_meets: ttftMeets, ttft_target: ttftTarget, ttft_pctl: ttftPctl,
+            itl_p90: r.itl_p90, itl_p95: r.itl_p95, itl_p99: r.itl_p99,
+            itl_val: itlVal, itl_meets: itlMeets, itl_target: itlTarget, itl_pctl: itlPctl,
+            concurrency: r.concurrency,
         });
-    }
+    });
 
-    function buildEntry(r) {
-        var rawGpus = r.gpus * totalScale;
-        var tp = r.tp || r.prefill_tp || 1;
-        var estGpus = Math.max(tp, Math.ceil(rawGpus / tp) * tp);
-        var islScale = userEffISL / testedEffISL;
-        var concRatio = userConcurrency / (testedUsers || userConcurrency);
-        var ttftScale = islScale * Math.sqrt(concRatio);
-        var tputScale = (estGpus / r.gpus) / costScale / turnsScale;
-
-        var est_ttft_p50 = r.ttft_p50 != null ? Math.round(r.ttft_p50 * ttftScale * 10) / 10 : null;
-        var est_ttft_p90 = r.ttft_p90 != null ? Math.round(r.ttft_p90 * ttftScale * 10) / 10 : null;
-        var est_ttft_p95 = r.ttft_p95 != null ? Math.round(r.ttft_p95 * ttftScale * 10) / 10 : null;
-        var est_ttft_p99 = r.ttft_p99 != null ? Math.round(r.ttft_p99 * ttftScale * 10) / 10 : null;
-        var est_tput_mean = r.throughput_mean != null ? Math.round(r.throughput_mean * tputScale * 100) / 100 : null;
-        var est_tput_p90 = r.throughput_p90 != null ? Math.round(r.throughput_p90 * tputScale * 100) / 100 : null;
-
-        var sla_ttft = null, sla_meets = null, sla_gpus_needed = null;
-        if (slaMs && slaPctl) {
-            var estTtftAtPctl = slaPctl === 'p50' ? est_ttft_p50 : (slaPctl === 'p90' ? est_ttft_p90 : (slaPctl === 'p95' ? est_ttft_p95 : est_ttft_p99));
-            sla_ttft = estTtftAtPctl;
-            if (sla_ttft != null) {
-                sla_meets = sla_ttft <= slaMs;
-                if (!sla_meets) {
-                    var slaRatio = sla_ttft / slaMs;
-                    var rawSlaGpus = estGpus * slaRatio;
-                    sla_gpus_needed = Math.max(tp, Math.ceil(rawSlaGpus / tp) * tp);
-                }
-            }
-        }
-        return {
-            config_name: r.config_name, chart_label: r.config_name,
-            architecture: r.architecture, tested_gpus: r.gpus,
-            estimated_gpus: estGpus, tp: tp,
-            cost_model: hasTpsg ? 'tpsg' : 'proportional',
-            prefill_tpsg: prefillTPSG, decode_tpsg: decodeTPSG,
-            ttft_p50: est_ttft_p50, ttft_p90: est_ttft_p90, ttft_p95: est_ttft_p95, ttft_p99: est_ttft_p99,
-            throughput_mean: est_tput_mean, throughput_p90: est_tput_p90,
-            sla_target_ms: slaMs, sla_percentile: slaPctl,
-            sla_ttft: sla_ttft, sla_meets: sla_meets, sla_gpus_needed: sla_gpus_needed,
-        };
-    }
-
-    var baseResults = Object.values(bestByArch).map(buildEntry).sort(function(a, b) { return a.estimated_gpus - b.estimated_gpus; });
-    var eppResults = Object.values(eppByArch).map(buildEntry).sort(function(a, b) { return a.estimated_gpus - b.estimated_gpus; });
-    return { base: baseResults, epp: eppResults };
+    results.sort(function(a, b) { return a.total_gpus - b.total_gpus; });
+    renderEstimatorResults(results, suffix);
 }
 
-function renderEstimatorResults(results, eppResults, suffix, testedISL, testedOSL, testedUsers, testedTurns, testedIslStdev, testedOslStdev, slaMs, slaPctl) {
-    if (results.length === 0 && eppResults.length === 0) {
+function renderEstimatorResults(results, suffix) {
+    if (!results.length) {
         document.getElementById('est-results' + suffix).innerHTML = '<p style="color:#6b7280;padding:16px;">No valid configurations to estimate.</p>';
         return;
     }
 
-    const bestGpus = results.length ? results[0].estimated_gpus : (eppResults.length ? eppResults[0].estimated_gpus : 0);
-
-    var v = function(x, u) { return x != null ? x + ' ' + u : '-'; };
+    var bestGpus = results[0].total_gpus;
     var sep = 'border-left:3px solid #e2e8f0;';
-    var hasSla = slaMs && slaPctl;
+    var fmtMs = function(v) { return v != null ? Math.round(v).toLocaleString() : '-'; };
 
-    function buildTable(rows, title) {
-        var t = '';
-        if (title) t += '<div style="font-weight:700;font-size:0.9em;color:#1e293b;margin:16px 0 8px;padding-top:12px;border-top:1px solid #e2e8f0;">' + title + '</div>';
-        t += '<table class="estimator-table"><thead>' +
-            '<tr><th rowspan="2">Configuration</th><th rowspan="2">Arch</th><th rowspan="2">TP</th>' +
-            '<th rowspan="2">Tested<br>GPUs</th><th rowspan="2">Est.<br>GPUs</th>' +
-            '<th colspan="4" style="text-align:center;' + sep + '">Est. TTFT (ms)</th>' +
-            '<th rowspan="2" style="text-align:center;' + sep + '">Est. Throughput<br>Mean (req/s)</th>' +
-            (hasSla ? '<th rowspan="2" style="' + sep + '">SLA<br>' + slaPctl.toUpperCase() + ' &le; ' + slaMs + 'ms</th>' : '') +
-            '</tr><tr>' +
-            '<th style="' + sep + '">P50</th><th>P90</th><th>P95</th><th>P99</th>' +
-            '</tr></thead><tbody>';
-        rows.forEach(function(r) {
-            var isBest = r.estimated_gpus === bestGpus;
-            var slaCell = '';
-            if (hasSla) {
-                if (r.sla_meets === true) {
-                    slaCell = '<td style="' + sep + 'color:#059669;font-weight:700;text-align:center;">PASS<br><span style="font-weight:400;font-size:0.85em;">' + (r.sla_ttft != null ? r.sla_ttft.toFixed(1) + ' ms' : '-') + '</span></td>';
-                } else if (r.sla_meets === false) {
-                    var gpuHint = r.sla_gpus_needed ? '<br><span style="font-weight:400;font-size:0.82em;">Need ' + r.sla_gpus_needed + ' GPUs</span>' : '';
-                    slaCell = '<td style="' + sep + 'color:#d97706;font-weight:700;text-align:center;">' + (r.sla_ttft != null ? r.sla_ttft.toFixed(1) + ' ms' : '-') + gpuHint + '</td>';
-                } else {
-                    slaCell = '<td style="' + sep + 'color:#64748b;text-align:center;">N/A</td>';
-                }
-            }
-            var tputMean = r.throughput_mean != null ? r.throughput_mean.toFixed(2) : (r.throughput_p90 != null ? r.throughput_p90.toFixed(2) : '-');
-            t += '<tr class="' + (isBest ? 'estimator-best' : '') + '">' +
-                '<td>' + r.config_name + '</td>' +
-                '<td><span class="arch-badge arch-' + r.architecture.toLowerCase() + '">' + r.architecture + '</span></td>' +
-                '<td>' + r.tp + '</td><td>' + r.tested_gpus + '</td>' +
-                '<td><strong>' + r.estimated_gpus + '</strong></td>' +
-                '<td style="' + sep + '">' + v(r.ttft_p50, '') + '</td>' +
-                '<td>' + v(r.ttft_p90, '') + '</td><td>' + v(r.ttft_p95, '') + '</td>' +
-                '<td>' + v(r.ttft_p99, '') + '</td>' +
-                '<td style="' + sep + 'text-align:center;font-weight:600;">' + tputMean + '</td>' +
-                slaCell + '</tr>';
-        });
-        t += '</tbody></table>';
-        return t;
-    }
+    var t = '<table class="estimator-table" style="margin-top:16px;"><thead>';
+    t += '<tr><th>Configuration</th><th>Arch</th><th>GPUs/replica</th><th>Measured req/s</th>';
+    t += '<th style="' + sep + '">Replicas</th><th><strong>Total GPUs</strong></th>';
+    t += '<th style="' + sep + '">TTFT ' + results[0].ttft_pctl.toUpperCase() + '</th>';
+    t += '<th>ITL ' + results[0].itl_pctl.toUpperCase() + '</th>';
+    t += '<th style="' + sep + '">SLA Status</th></tr></thead><tbody>';
 
-    let html = buildTable(results, null);
-    if (eppResults.length > 0) {
-        html += buildTable(eppResults, 'With EPP-Tuned Routing');
-    }
-    document.getElementById('est-results' + suffix).innerHTML = html;
+    results.forEach(function(r) {
+        var isBest = r.total_gpus === bestGpus && r.ttft_meets !== false && r.itl_meets !== false;
+        var ttftColor = r.ttft_meets === true ? '#059669' : (r.ttft_meets === false ? '#ef4444' : '#64748b');
+        var itlColor = r.itl_meets === true ? '#059669' : (r.itl_meets === false ? '#ef4444' : '#64748b');
 
-    // Grouped bar chart: tested vs estimated GPUs (combined base + EPP)
-    var allForChart = results.concat(eppResults.map(function(r) { return Object.assign({}, r, { chart_label: r.chart_label + ' (EPP)' }); }));
-    const labels = allForChart.map(r => r.chart_label);
-    Plotly.newPlot('est-chart' + suffix, [
-        {
-            type: 'bar',
-            name: 'Tested GPUs',
-            y: labels,
-            x: allForChart.map(r => r.tested_gpus),
-            text: allForChart.map(r => r.tested_gpus + ' GPUs'),
-            textposition: 'inside',
-            orientation: 'h',
-            marker: { color: '#94a3b8' },
-            hovertemplate: '%{y}<br>Tested: %{x} GPUs<extra></extra>',
-        },
-        {
-            type: 'bar',
-            name: 'Estimated GPUs',
-            y: labels,
-            x: allForChart.map(r => r.sla_gpus_needed || r.estimated_gpus),
-            text: allForChart.map(r => (r.sla_gpus_needed || r.estimated_gpus) + ' GPUs'),
-            textposition: 'outside',
-            orientation: 'h',
-            marker: { color: allForChart.map(r => r.sla_gpus_needed ? '#ef4444' : '#d97706') },
-            hovertemplate: '%{y}<br>Estimated: %{x} GPUs<extra></extra>',
-        }
-    ], {
-        title: { text: 'GPU Requirements: Tested vs Estimated', font: { size: 15 } },
-        xaxis: { title: 'GPUs' },
+        var slaStatus = '';
+        if (r.ttft_meets === false && r.itl_meets === false) slaStatus = '<span style="color:#ef4444;font-weight:700;">TTFT + ITL FAIL</span>';
+        else if (r.ttft_meets === false) slaStatus = '<span style="color:#ef4444;font-weight:700;">TTFT FAIL</span>';
+        else if (r.itl_meets === false) slaStatus = '<span style="color:#ef4444;font-weight:700;">ITL FAIL</span>';
+        else slaStatus = '<span style="color:#059669;font-weight:700;">PASS</span>';
+
+        t += '<tr class="' + (isBest ? 'estimator-best' : '') + '" style="' + (r.ttft_meets === false || r.itl_meets === false ? 'opacity:0.6;' : '') + '">';
+        t += '<td>' + r.config_name + '</td>';
+        t += '<td><span class="arch-badge arch-' + r.architecture.toLowerCase() + '">' + r.architecture + '</span></td>';
+        t += '<td>' + r.gpus_per_replica + '</td>';
+        t += '<td>' + r.measured_tput.toFixed(2) + '</td>';
+        t += '<td style="' + sep + '">' + r.replicas + '</td>';
+        t += '<td><strong>' + r.total_gpus.toLocaleString() + '</strong></td>';
+        t += '<td style="' + sep + 'color:' + ttftColor + ';font-weight:600;">' + fmtMs(r.ttft_val) + ' ms</td>';
+        t += '<td style="color:' + itlColor + ';font-weight:600;">' + (r.itl_val != null ? r.itl_val.toFixed(2) : '-') + ' ms</td>';
+        t += '<td style="' + sep + '">' + slaStatus + '</td>';
+        t += '</tr>';
+    });
+    t += '</tbody></table>';
+
+    document.getElementById('est-results' + suffix).innerHTML = t;
+
+    var passing = results.filter(function(r) { return r.ttft_meets !== false && r.itl_meets !== false; });
+    var chartData = passing.length ? passing : results;
+    var labels = chartData.map(function(r) { return r.config_name; });
+    Plotly.newPlot('est-chart' + suffix, [{
+        type: 'bar', orientation: 'h',
+        y: labels, x: chartData.map(function(r) { return r.total_gpus; }),
+        text: chartData.map(function(r) { return r.total_gpus.toLocaleString() + ' GPUs (' + r.replicas + ' replicas)'; }),
+        textposition: 'outside',
+        marker: { color: chartData.map(function(r) { return r.total_gpus === bestGpus ? '#059669' : '#d97706'; }) },
+        hovertemplate: '<b>%{y}</b><br>%{x} GPUs<br>%{text}<extra></extra>',
+    }], {
+        title: { text: 'GPUs needed for ' + results[0].target_tput + ' req/s', font: { size: 15 } },
+        xaxis: { title: 'Total GPUs' },
         yaxis: { automargin: true },
-        barmode: 'group',
         margin: { l: 200, r: 140, t: 50, b: 40 },
-        height: Math.max(300, allForChart.length * 80 + 80),
-        legend: { orientation: 'v', x: 1.02, y: 1, xanchor: 'left' },
+        height: Math.max(300, chartData.length * 60 + 80),
     }, { responsive: true, displayModeBar: false });
 }
 
