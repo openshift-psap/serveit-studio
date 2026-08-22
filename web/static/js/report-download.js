@@ -878,7 +878,7 @@ function buildCacheRecCards(data) {
         s += `<div style="background:linear-gradient(135deg,${sel.color},${sel.color}cc);padding:10px 14px;color:white;">`;
         s += `<div style="font-weight:700;font-size:0.85em;">${sel.icon} ${sel.label}</div>`;
         s += `<div style="display:flex;gap:4px;margin-top:2px;"><div style="font-size:0.65em;background:${aColor};padding:2px 6px;border-radius:10px;font-weight:600;">${archKey.toUpperCase()}</div>`;
-        if (cacheStr) s += `<div style="font-size:0.65em;background:rgba(139,92,246,0.15);padding:2px 6px;border-radius:10px;color:#7c3aed;font-weight:600;">${cacheStr}</div>`;
+        if (cacheStr) s += `<div style="font-size:0.65em;background:rgba(255,255,255,0.2);padding:2px 6px;border-radius:10px;font-weight:600;">${cacheStr}</div>`;
         if (dupNote) s += `<div style="font-size:0.65em;background:rgba(255,255,255,0.2);padding:2px 6px;border-radius:10px;">+ ${dupNote}</div>`;
         s += '</div>';
         if (sel.desc) s += `<div style="font-size:0.7em;opacity:0.9;margin-top:1px;">${sel.desc}</div>`;

@@ -276,6 +276,7 @@ function _renderChartsImpl(data, runId, content) {
                 const _pm = _mj.prometheus_metrics || {};
                 const _vllmTps = ((_pm.vllm_prompt_tokens_rate || {}).avg || 0) + ((_pm.vllm_generation_tokens_rate || {}).avg || 0);
                 const _outputTps = _mj.output_tps_mean || _resEntry.output_tps_mean || null;
+                if (_resEntry.cache_hit_pct != null) badges.push({ text: _resEntry.cache_hit_pct + '% cache hit', bg: 'rgba(255,255,255,0.2)', color: 'white' });
 
                 // P50 data — not in best_by_percentile, pull from raw metrics_json
                 const _p50mj = _mj;
@@ -396,6 +397,7 @@ function _renderChartsImpl(data, runId, content) {
             const _calPm = _calMj.prometheus_metrics || {};
             const _calVllmTps = ((_calPm.vllm_prompt_tokens_rate || {}).avg || 0) + ((_calPm.vllm_generation_tokens_rate || {}).avg || 0);
             const _calOutputTps = _calMj.output_tps_mean || _calResEntry.output_tps_mean || null;
+            if (_calResEntry.cache_hit_pct != null) badges.push({ text: _calResEntry.cache_hit_pct + '% cache hit', bg: 'rgba(255,255,255,0.2)', color: 'white' });
 
             html += _buildRecCard({
                 label: sel.label, icon: sel.icon, desc: sel.desc, color: sel.color,
@@ -464,7 +466,7 @@ function _renderChartsImpl(data, runId, content) {
 
             const badges = [];
             if (dupNote) badges.push({ text: '+ ' + dupNote, bg: 'rgba(255,255,255,0.2)', color: 'white' });
-            if (cacheStr) badges.push({ text: cacheStr, bg: 'rgba(139,92,246,0.15)', color: '#7c3aed' });
+            if (cacheStr) badges.push({ text: cacheStr, bg: 'rgba(255,255,255,0.2)', color: 'white' });
 
             const _cacheResEntry = _allResLookup[cacheTestId] || {};
             const _cacheMj = _cacheResEntry.metrics_json ? (typeof _cacheResEntry.metrics_json === 'string' ? JSON.parse(_cacheResEntry.metrics_json) : _cacheResEntry.metrics_json) : {};
