@@ -330,14 +330,19 @@ class ReportAnalyzer:
         balanced = min(cache_results, key=lambda r: (r.ttft_p90 or 1e9) / (r.throughput_mean or 0.001))
         highest_tput = max(cache_results, key=lambda r: r.throughput_mean or 0)
         lowest_ttft = min(cache_results, key=lambda r: r.ttft_p90 or 1e9)
+        itl_valid = [r for r in cache_results if r.itl_p90 and r.itl_p90 > 0]
+        lowest_itl = min(itl_valid, key=lambda r: r.itl_p90) if itl_valid else None
         most_eff = max(cache_results, key=lambda r: (r.throughput_mean or 0) / max(r.total_gpus, 1))
 
-        return {
+        result = {
             'balanced': _to_dict(balanced),
             'lowest_ttft': _to_dict(lowest_ttft),
             'highest_tput': _to_dict(highest_tput),
             'most_efficient': {**_to_dict(most_eff), 'efficiency': round((most_eff.throughput_mean or 0) / max(most_eff.total_gpus, 1), 4)},
         }
+        if lowest_itl:
+            result['lowest_itl'] = _to_dict(lowest_itl)
+        return result
 
     def build_recommendation(self, run_id, results, conn):
         """

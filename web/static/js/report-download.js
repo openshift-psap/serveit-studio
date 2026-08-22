@@ -839,6 +839,7 @@ function buildCacheRecCards(data) {
     const cacheTypes = [
         { key: 'balanced', label: 'Best Balanced', desc: 'Best TTFT-to-throughput ratio with cache', color: '#059669', icon: '&#9878;' },
         { key: 'lowest_ttft', label: 'Lowest TTFT', desc: 'Fastest first token with cache', color: '#3b82f6', icon: '&#9201;' },
+        { key: 'lowest_itl', label: 'Lowest ITL', desc: 'Smoothest streaming with cache', color: '#0891b2', icon: '&#9881;' },
         { key: 'highest_tput', label: 'Highest Throughput', desc: 'Maximum req/s with cache', color: '#f59e0b', icon: '&#9889;' },
         { key: 'most_efficient', label: 'Most Efficient', desc: 'Best throughput per GPU with cache', color: '#8b5cf6', icon: '&#128176;' },
     ];
