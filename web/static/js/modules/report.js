@@ -183,18 +183,6 @@ function updateEstimatorScaling(suffix) {
     var el = document.getElementById('est-scaling-info' + suffix);
     if (!el) return;
 
-    var allResults = (data.all_results || []).filter(function(r) {
-        return r.quality !== 'discard' && r.gpus > 0 && (r.throughput_mean > 0 || r.throughput_p90 > 0);
-    });
-    var hasSweep = allResults.some(function(r) { return (r.test_id || '').indexOf('step11-') === 0; });
-
-    if (!hasSweep) {
-        el.innerHTML = '<div style="text-align:center;color:#92400e;padding:8px;"><strong>Not enough data yet.</strong> The GPU estimator requires completed concurrency sweep (Step 11) results to provide accurate estimates. Resume or wait for the sweep to complete.</div>';
-        var btn = el.parentElement.querySelector('button.action-button');
-        if (btn) btn.disabled = true;
-        return;
-    }
-
     var bullets = '';
     bullets += '<li><strong>Throughput SLA</strong>: Replicas = ceil(target req/s &divide; measured req/s per replica). GPUs = replicas &times; GPUs per replica.</li>';
     bullets += '<li><strong>TTFT SLA</strong>: Filters configs where measured TTFT at the chosen percentile exceeds the target. Configs that fail are marked.</li>';
@@ -263,6 +251,7 @@ function runEstimator(suffix) {
 }
 
 function renderEstimatorResults(results, suffix) {
+    _lastEstResults[suffix] = results;
     if (!results.length) {
         document.getElementById('est-results' + suffix).innerHTML = '<p style="color:#6b7280;padding:16px;">No valid configurations to estimate.</p>';
         return;
@@ -306,23 +295,70 @@ function renderEstimatorResults(results, suffix) {
 
     document.getElementById('est-results' + suffix).innerHTML = t;
 
-    var passing = results.filter(function(r) { return r.ttft_meets !== false && r.itl_meets !== false; });
-    var chartData = passing.length ? passing : results;
-    var labels = chartData.map(function(r) { return r.config_name; });
+    var labels = results.map(function(r) { return r.config_name; });
+    var barColors = results.map(function(r) {
+        var passes = r.ttft_meets !== false && r.itl_meets !== false;
+        if (r.total_gpus === bestGpus && passes) return '#059669';
+        if (!passes) return '#ef4444';
+        return '#d97706';
+    });
     Plotly.newPlot('est-chart' + suffix, [{
         type: 'bar', orientation: 'h',
-        y: labels, x: chartData.map(function(r) { return r.total_gpus; }),
-        text: chartData.map(function(r) { return r.total_gpus.toLocaleString() + ' GPUs (' + r.replicas + ' replicas)'; }),
+        y: labels, x: results.map(function(r) { return r.total_gpus; }),
+        text: results.map(function(r) {
+            var t = r.total_gpus.toLocaleString() + ' GPUs (' + r.replicas + ' replicas)';
+            if (r.ttft_meets === false) t += ' [TTFT FAIL]';
+            if (r.itl_meets === false) t += ' [ITL FAIL]';
+            return t;
+        }),
         textposition: 'outside',
-        marker: { color: chartData.map(function(r) { return r.total_gpus === bestGpus ? '#059669' : '#d97706'; }) },
+        marker: { color: barColors },
         hovertemplate: '<b>%{y}</b><br>%{x} GPUs<br>%{text}<extra></extra>',
     }], {
         title: { text: 'GPUs needed for ' + results[0].target_tput + ' req/s', font: { size: 15 } },
         xaxis: { title: 'Total GPUs' },
         yaxis: { automargin: true },
-        margin: { l: 200, r: 140, t: 50, b: 40 },
-        height: Math.max(300, chartData.length * 60 + 80),
+        margin: { l: 200, r: 180, t: 50, b: 40 },
+        height: Math.max(300, results.length * 60 + 80),
     }, { responsive: true, displayModeBar: false });
+
+}
+
+var _lastEstResults = {};
+function downloadEstimatorReport(suffix) {
+    var results = _lastEstResults[suffix];
+    if (!results || !results.length) { alert('Run the estimator first'); return; }
+    var bestGpus = results[0].total_gpus;
+    var chartEl = document.getElementById('est-chart' + suffix);
+    Plotly.toImage(chartEl, { format: 'svg', width: 1200, height: Math.max(400, results.length * 60 + 80) }).then(function(chartSvg) {
+        var html = '<!DOCTYPE html><html><head><meta charset="UTF-8"><title>GPU Estimate Report</title>';
+        html += '<style>body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;max-width:1200px;margin:0 auto;padding:20px;color:#1e293b;}';
+        html += 'table{width:100%;border-collapse:collapse;font-size:0.9em;margin:16px 0;}th,td{padding:8px 12px;border:1px solid #e2e8f0;text-align:left;}';
+        html += 'th{background:#f8fafc;font-weight:700;}.best{background:#f0fdf4;}.fail{opacity:0.6;}';
+        html += '.pass{color:#059669;font-weight:700;}.ttft-fail{color:#ef4444;font-weight:700;}</style></head><body>';
+        html += '<h1 style="color:#b45309;">GPU Estimate Report</h1>';
+        html += '<p style="color:#64748b;">Target: <strong>' + results[0].target_tput + ' req/s</strong> | TTFT SLA: <strong>' + results[0].ttft_target + 'ms ' + results[0].ttft_pctl.toUpperCase() + '</strong> | ITL SLA: <strong>' + results[0].itl_target + 'ms ' + results[0].itl_pctl.toUpperCase() + '</strong></p>';
+        html += '<table><thead><tr><th>Configuration</th><th>Arch</th><th>GPUs/replica</th><th>Measured req/s</th><th>Replicas</th><th>Total GPUs</th><th>TTFT ' + results[0].ttft_pctl.toUpperCase() + '</th><th>ITL ' + results[0].itl_pctl.toUpperCase() + '</th><th>SLA</th></tr></thead><tbody>';
+        results.forEach(function(r) {
+            var cls = (r.total_gpus === bestGpus && r.ttft_meets !== false && r.itl_meets !== false) ? ' class="best"' : (r.ttft_meets === false || r.itl_meets === false ? ' class="fail"' : '');
+            var sla = r.ttft_meets === false ? 'TTFT FAIL' : (r.itl_meets === false ? 'ITL FAIL' : 'PASS');
+            var slaCls = sla === 'PASS' ? 'pass' : 'ttft-fail';
+            html += '<tr' + cls + '><td>' + r.config_name + '</td><td>' + r.architecture + '</td><td>' + r.gpus_per_replica + '</td><td>' + r.measured_tput.toFixed(2) + '</td><td>' + r.replicas + '</td><td><strong>' + r.total_gpus.toLocaleString() + '</strong></td>';
+            html += '<td>' + (r.ttft_val != null ? Math.round(r.ttft_val) + ' ms' : '-') + '</td>';
+            html += '<td>' + (r.itl_val != null ? r.itl_val.toFixed(2) + ' ms' : '-') + '</td>';
+            html += '<td class="' + slaCls + '">' + sla + '</td></tr>';
+        });
+        html += '</tbody></table>';
+        html += '<img src="' + chartSvg + '" style="width:100%;margin-top:20px;">';
+        html += '<p style="color:#94a3b8;font-size:0.8em;margin-top:20px;">Generated ' + new Date().toLocaleString() + '</p>';
+        html += '</body></html>';
+        var blob = new Blob([html], { type: 'text/html' });
+        var a = document.createElement('a');
+        a.href = URL.createObjectURL(blob);
+        a.download = 'gpu-estimate-' + results[0].target_tput + 'rps.html';
+        a.click();
+        URL.revokeObjectURL(a.href);
+    });
 }
 
 function switchReportTab(tabId) {

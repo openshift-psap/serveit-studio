@@ -2048,13 +2048,30 @@ function _renderChartsImpl(data, runId, content) {
             var csLabel = csArchLabels[csArchKey] || arch;
             var csColor = csArchColors[csArchKey] || '#888';
 
-            var csConfigLbl = (pts[0] && pts[0].config_label) ? pts[0].config_label : '';
+            var csConfigLbl = '';
+            for (var _ci = 0; _ci < pts.length && !csConfigLbl; _ci++) {
+                csConfigLbl = pts[_ci].config_label || '';
+            }
             if (!csConfigLbl) {
                 var _csBase = arch.replace('_calibrated','');
                 csConfigLbl = sweepConfigLabels[_csBase] || '';
                 if (!csConfigLbl && data.concurrency_sweep && data.concurrency_sweep[_csBase]) {
                     var _csPts = data.concurrency_sweep[_csBase];
-                    csConfigLbl = (_csPts[0] && _csPts[0].config_label) ? _csPts[0].config_label : _csBase;
+                    csConfigLbl = (_csPts[0] && _csPts[0].config_label) ? _csPts[0].config_label : '';
+                }
+            }
+            if (!csConfigLbl) {
+                var _tpMatch = arch.match(/tp(\d+)/);
+                if (_tpMatch) {
+                    var _tp = _tpMatch[1];
+                    if (csArchKey === 'aggregated') {
+                        var _totalPods = Math.floor((pts[0] && pts[0].gpus || 8) / parseInt(_tp));
+                        csConfigLbl = _totalPods + '×TP' + _tp;
+                    } else {
+                        csConfigLbl = 'TP' + _tp;
+                    }
+                } else {
+                    csConfigLbl = arch;
                 }
             }
             var csConfigSuffix = csConfigLbl ? ' — ' + csConfigLbl : '';
@@ -2347,9 +2364,12 @@ function _renderChartsImpl(data, runId, content) {
                 '</div>' +
             '</div>' +
             '<div id="est-scaling-info' + estSuffix + '" style="background:#fffbeb;border-top:1px solid #fde68a;border-bottom:1px solid #fde68a;padding:14px 20px;margin:0 -20px;font-size:0.9em;color:#92400e;width:calc(100% + 40px);"></div>' +
-            '<div style="padding:0 20px;"><button class="action-button" onclick="runEstimator(\'' + estSuffix + '\')" style="margin-top:16px;padding:10px 28px;font-size:0.95em;border-radius:8px;background:linear-gradient(135deg,#d97706,#b45309);border:none;color:white;cursor:pointer;font-weight:600;box-shadow:0 2px 8px rgba(217,119,6,0.3);">Estimate</button></div>' +
+            '<div style="padding:0 20px;display:flex;gap:12px;align-items:center;">' +
+                '<button class="action-button" onclick="runEstimator(\'' + estSuffix + '\')" style="margin-top:16px;padding:10px 28px;font-size:0.95em;border-radius:8px;background:linear-gradient(135deg,#d97706,#b45309);border:none;color:white;cursor:pointer;font-weight:600;box-shadow:0 2px 8px rgba(217,119,6,0.3);">Estimate</button>' +
+                '<button onclick="downloadEstimatorReport(\'' + estSuffix + '\')" style="margin-top:16px;padding:10px 24px;font-size:0.9em;border-radius:8px;background:#f1f5f9;border:1px solid #cbd5e1;color:#475569;cursor:pointer;font-weight:600;">Download Report</button>' +
+            '</div>' +
             '<div id="est-results' + estSuffix + '"></div>' +
-            '<div id="est-chart' + estSuffix + '" style="width:100%;height:400px;margin-top:16px;"></div>' +
+            '<div id="est-chart' + estSuffix + '" style="width:100%;margin-top:16px;"></div>' +
         '</div></div>';
 
     // === Build subtab structure ===
