@@ -562,13 +562,7 @@ function buildCfgSection(runId, data, charts, allRes, hasPD) {
     // Engine metrics chart
     s += '<div class="chart-box"><h3>vLLM Engine Metrics</h3>';
     s += '<p style="color:#64748b;font-size:0.85em;margin:0 0 4px;">KV cache usage, running/waiting requests, prefill/decode time across tested configurations.</p>';
-    s += '<div id="dl-cfg-engine" style="height:600px"></div>';
-    s += '<div style="font-size:0.85em;color:#64748b;line-height:1.7;padding:8px 0;">' +
-        '<strong>KV Cache Avg/Max %</strong>: How full the KV cache is across pods.<br>' +
-        '<strong>Avg Running Reqs</strong>: Average requests actively being processed per pod over time.<br>' +
-        '<strong>Max Running Reqs</strong>: Peak concurrent requests on a single pod. Large gap vs avg indicates EPP routing imbalance.<br>' +
-        '<strong>Load Spread</strong>: Gap between peak and average. High values indicate traffic bursts, not per-pod imbalance.<br>' +
-        '<strong>Decode/Prefill req-s/s</strong>: Total accumulated time across all concurrent requests per wall-second.</div></div>';
+    s += '<div id="dl-cfg-engine" style="height:600px"></div></div>';
 
     // All results table (match UI coreResults filter)
     const coreRes = allRes.filter(r => {
@@ -1359,13 +1353,7 @@ function buildConcurrencySweepSection(data) {
 
     s += '<div class="chart-box"><h3>vLLM Engine Metrics vs Concurrency</h3>';
     s += '<p style="color:#64748b;font-size:0.85em;margin:0 0 4px;">KV cache usage, running/waiting requests, prefill/decode GPU time across concurrency levels.</p>';
-    s += '<div id="dl-sweep-engine" style="height:600px"></div>';
-    s += '<div style="font-size:0.85em;color:#64748b;line-height:1.7;padding:8px 0;">' +
-        '<strong>KV Cache Avg/Max %</strong>: How full the KV cache is across pods.<br>' +
-        '<strong>Avg Running Reqs</strong>: Requests actively being processed (cluster total).<br>' +
-        '<strong>Avg Waiting Reqs</strong>: Requests queued waiting for a slot.<br>' +
-        '<strong>Decode req-s/s</strong>: Aggregate GPU-seconds in decode per wall-second.<br>' +
-        '<strong>Prefill req-s/s</strong>: Aggregate GPU-seconds in prefill per wall-second.</div></div>';
+    s += '<div id="dl-sweep-engine" style="height:600px"></div></div>';
 
     s += '<div class="chart-box"><h3>Token Throughput &mdash; GPU Computed vs Server Total vs Client</h3>';
     s += '<p style="color:#64748b;font-size:0.85em;margin:0 0 4px;"><strong>GPU computed:</strong> Prompt tokens actually computed (excludes cached) + generation. <strong>Server total:</strong> All tokens processed by vLLM (incl. cached prefixes). <strong>Client:</strong> Tokens measured by the load tester.</p>';
@@ -1513,13 +1501,7 @@ function buildCacheSweepSection(data, allRes) {
         // Engine metrics chart
         s += `<div class="chart-box"><h3>vLLM Engine Metrics</h3>`;
         s += `<p style="color:#64748b;font-size:0.85em;margin:0 0 4px;">KV cache usage, running/waiting requests, prefill/decode GPU time across cache hit levels.</p>`;
-        s += `<div id="${chartBase}-engine" style="height:500px"></div>`;
-        s += `<div style="font-size:0.85em;color:#64748b;line-height:1.7;padding:8px 0;">` +
-            `<strong>KV Cache Avg/Max %</strong>: How full the KV cache is across pods.<br>` +
-            `<strong>Avg Running Reqs</strong>: Requests actively being processed (cluster total).<br>` +
-            `<strong>Avg Waiting Reqs</strong>: Requests queued waiting for a slot.<br>` +
-            `<strong>Decode req-s/s</strong>: Aggregate GPU-seconds in decode per wall-second.<br>` +
-            `<strong>Prefill req-s/s</strong>: Aggregate GPU-seconds in prefill per wall-second.</div></div>`;
+        s += `<div id="${chartBase}-engine" style="height:500px"></div></div>`;
 
         s += '</div>';
     });
