@@ -1010,6 +1010,9 @@ class SingleTestStrategy(OptimizationStrategy):
 
             # Run calibrated load / concurrency sweep if enabled
             if cfg.calibrated_load_enabled and result:
+                # Clean up the single test deployment before sweep deploys new pods
+                self.opt.log("🧹 Cleaning up single test deployment before sweep...", 'info')
+                self.opt.orchestrator.cleanup_deployment(test_config, log_callback=lambda msg: self.opt.log(msg, 'info'))
                 self.opt.log("", 'info')
                 self.opt.log("STEP 11: Calibrated Load / Concurrency Sweep", 'decision')
                 self.opt.log("-" * 80, 'info')

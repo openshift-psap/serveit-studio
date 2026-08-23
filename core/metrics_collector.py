@@ -252,6 +252,10 @@ class MetricsCollector:
             f'vllm:num_requests_running{{namespace="{self.config.namespace}"}}',
             f'vllm:num_requests_waiting{{namespace="{self.config.namespace}"}}',
             f'vllm:kv_cache_usage_perc{{namespace="{self.config.namespace}"}}',
+            # Pod-to-pod routing imbalance: max - min running at each instant
+            f'max(vllm:num_requests_running{{namespace="{self.config.namespace}"}}) - min(vllm:num_requests_running{{namespace="{self.config.namespace}"}})',
+            # Load distribution CV: stddev/avg (0 = perfect balance, >1 = severe imbalance)
+            f'stddev(vllm:num_requests_running{{namespace="{self.config.namespace}"}}) / clamp_min(avg(vllm:num_requests_running{{namespace="{self.config.namespace}"}}), 0.01)',
         ]
 
         # Token Throughput — sum across pods, split prefill/decode for PD configs

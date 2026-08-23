@@ -49,7 +49,7 @@ function loadRunList() {
                 const gpus = run.max_gpus ? `${run.max_gpus}GPU` : '';
                 const date = run.created_at ? new Date(run.created_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' }) : '';
                 const _st = run.status || 'unknown';
-                const statusLabel = _st.indexOf('completed') === 0 ? '\u2705 completed' : _st === 'running' ? '\u23F3 running' : '\u274C ' + _st;
+                const statusLabel = _st.indexOf('completed') === 0 ? '\u2705 completed' : _st === 'running' ? '\u23F3 running' : _st === 'stopped' ? '\u23F9 stopped' : _st === 'interrupted' ? '\u23F9 interrupted' : '\u274C ' + _st;
                 const desc = run.notes ? `"${run.notes}"` : '';
                 let imgTag = '';
                 if (run.config_json) {
@@ -97,7 +97,10 @@ function addReportTab(runId) {
     fetch('/api/runs/' + runId + '/charts')
         .then(r => {
             if (!r.ok) {
-                return r.text().then(t => { throw new Error('HTTP ' + r.status + ': ' + t.substring(0, 200)); });
+                return r.json().catch(() => ({})).then(j => {
+                    var msg = j.error || 'No results found for this run';
+                    throw new Error(msg);
+                });
             }
             return r.json();
         })
@@ -123,7 +126,7 @@ function addReportTab(runId) {
             }
         })
         .catch(err => {
-            panel.innerHTML = '<div class="charts-loading">Error: ' + err.message + '</div>';
+            panel.innerHTML = '<div class="charts-loading">' + err.message + '</div>';
         });
 }
 

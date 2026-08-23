@@ -276,6 +276,7 @@ function _renderChartsImpl(data, runId, content) {
                 const _pm = _mj.prometheus_metrics || {};
                 const _vllmTps = ((_pm.vllm_prompt_tokens_rate || {}).avg || 0) + ((_pm.vllm_generation_tokens_rate || {}).avg || 0);
                 const _outputTps = _mj.output_tps_mean || _resEntry.output_tps_mean || null;
+                if (_resEntry.cache_hit_pct != null) badges.push({ text: _resEntry.cache_hit_pct + '% cache hit', bg: 'rgba(255,255,255,0.2)', color: 'white' });
 
                 // P50 data — not in best_by_percentile, pull from raw metrics_json
                 const _p50mj = _mj;
@@ -396,6 +397,7 @@ function _renderChartsImpl(data, runId, content) {
             const _calPm = _calMj.prometheus_metrics || {};
             const _calVllmTps = ((_calPm.vllm_prompt_tokens_rate || {}).avg || 0) + ((_calPm.vllm_generation_tokens_rate || {}).avg || 0);
             const _calOutputTps = _calMj.output_tps_mean || _calResEntry.output_tps_mean || null;
+            if (_calResEntry.cache_hit_pct != null) badges.push({ text: _calResEntry.cache_hit_pct + '% cache hit', bg: 'rgba(255,255,255,0.2)', color: 'white' });
 
             html += _buildRecCard({
                 label: sel.label, icon: sel.icon, desc: sel.desc, color: sel.color,
@@ -464,7 +466,7 @@ function _renderChartsImpl(data, runId, content) {
 
             const badges = [];
             if (dupNote) badges.push({ text: '+ ' + dupNote, bg: 'rgba(255,255,255,0.2)', color: 'white' });
-            if (cacheStr) badges.push({ text: cacheStr, bg: 'rgba(139,92,246,0.15)', color: '#7c3aed' });
+            if (cacheStr) badges.push({ text: cacheStr, bg: 'rgba(255,255,255,0.2)', color: 'white' });
 
             const _cacheResEntry = _allResLookup[cacheTestId] || {};
             const _cacheMj = _cacheResEntry.metrics_json ? (typeof _cacheResEntry.metrics_json === 'string' ? JSON.parse(_cacheResEntry.metrics_json) : _cacheResEntry.metrics_json) : {};
@@ -876,6 +878,71 @@ function _renderChartsImpl(data, runId, content) {
             html += `<tr${cls}><td>${r.config_name}${eppBadge}</td><td>${r.architecture}</td><td data-val="${r.ttft_p90}">${r.ttft_p90}</td><td data-val="${r.ttft_p95 ?? ''}">${r.ttft_p95 ?? na}</td><td data-val="${r.ttft_p99 ?? ''}">${r.ttft_p99 ?? na}</td><td data-val="${tputMeanVal}">${tputMeanVal}</td><td data-val="${r.itl_p90 ?? ''}">${r.itl_p90 ?? na}</td><td data-val="${r.gpus}">${r.gpus}</td><td data-val="${r.efficiency}">${r.efficiency}</td><td>${manifestLinks}</td></tr>`;
         });
         html += '</table></div></div>';
+    }
+
+    // --- vLLM Engine Metrics for configuration tests ---
+    var cfgEngineRes = (data.all_results || []).filter(function(r) {
+        if (r.quality === 'discard') return false;
+        var tid = r.test_id || '';
+        return tid.indexOf('step2-') !== 0 && tid.indexOf('step3-') !== 0 &&
+               tid.indexOf('step11-') !== 0 && tid.indexOf('step12-') !== 0 && tid.indexOf('step13-') !== 0;
+    });
+    if (cfgEngineRes.length >= 1) {
+        html += '<div class="chart-card" style="margin-top:16px;"><div class="chart-card-header">vLLM Engine Metrics</div>';
+        html += '<div style="padding:8px 20px 4px; font-size:0.85em; color:#64748b;">KV cache usage, running/waiting requests, prefill/decode time across tested configurations.</div>';
+        html += '<div id="chart-cfg-engine' + _chartSuffix + '" style="width:100%;"></div>';
+        html += '<div style="padding:8px 20px 12px; font-size:0.85em; color:#64748b; line-height:1.7;">' +
+            '<strong>KV Cache Avg/Max %</strong>: How full the KV cache is across pods. Low values mean KV capacity is not the bottleneck.<br>' +
+            '<strong>Avg Running Reqs</strong>: Average requests actively being processed per pod over time (flattened across all pods and all timestamps).<br>' +
+            '<strong>Max Running Reqs</strong>: Peak concurrent requests on a single pod at any point during the test. Large gap between avg and max indicates EPP routing imbalance (e.g. prefix affinity concentrating requests on one pod).<br>' +
+            '<strong>Load Spread</strong>: Gap between peak and average running requests (Max-Avg). High values indicate traffic bursts — requests arriving simultaneously rather than staggered. Not a direct measure of per-pod routing imbalance.<br>' +
+            '<strong>Avg Waiting Reqs</strong>: Requests queued waiting for a processing slot. High values indicate saturation.<br>' +
+            '<strong>Decode req-s/s</strong>: Total accumulated decode time across all concurrent requests per wall-second. Proportional to running request count, not GPU count.<br>' +
+            '<strong>Prefill req-s/s</strong>: Total accumulated prefill time across all concurrent requests per wall-second. Low values with high cache hit mean prefill is served from cache.</div></div>';
+
+        chartQueue.push(function() {
+            var labels = [], kvAvg = [], kvMax = [], runAvg = [], runMax = [], runSpread = [], waitAvg = [], prefillT = [], decodeT = [], preempt = [];
+            cfgEngineRes.forEach(function(r) {
+                var mj = r.metrics_json ? (typeof r.metrics_json === 'string' ? JSON.parse(r.metrics_json) : r.metrics_json) : {};
+                var pm = mj.prometheus_metrics || {};
+                labels.push(_tagLabel(r.config_name, r.architecture));
+                var _rAvg = (pm.vllm_requests_running || {}).avg || 0;
+                var _rMax = (pm.vllm_requests_running || {}).max || 0;
+                kvAvg.push(((pm.vllm_kv_cache_pct || {}).avg || 0) * 100);
+                kvMax.push(((pm.vllm_kv_cache_pct || {}).max || 0) * 100);
+                runAvg.push(_rAvg);
+                runMax.push(_rMax);
+                runSpread.push(_rMax - _rAvg);
+                waitAvg.push((pm.vllm_requests_waiting || {}).avg || 0);
+                prefillT.push((pm.vllm_prefill_time_rate || {}).avg || 0);
+                decodeT.push((pm.vllm_decode_time_rate || {}).avg || 0);
+                preempt.push((pm.vllm_preemptions_rate || {}).avg || 0);
+            });
+            var traces = [
+                { x: labels, y: kvAvg, name: 'KV Cache Avg %', type: 'bar', marker: { color: '#3b82f6' } },
+                { x: labels, y: kvMax, name: 'KV Cache Max %', type: 'bar', marker: { color: '#93c5fd' } },
+                { x: labels, y: runAvg, name: 'Avg Running Reqs', type: 'scatter', mode: 'lines+markers', yaxis: 'y2', line: { color: '#059669', width: 3 }, marker: { size: 8 } },
+                { x: labels, y: runMax, name: 'Max Running Reqs', type: 'scatter', mode: 'lines+markers', yaxis: 'y2', line: { color: '#059669', width: 2, dash: 'dash' }, marker: { size: 6, symbol: 'triangle-up' } },
+                { x: labels, y: runSpread, name: 'Load Spread', type: 'scatter', mode: 'lines+markers', yaxis: 'y2', line: { color: '#dc2626', width: 2, dash: 'dashdot' }, marker: { size: 6, symbol: 'diamond' } },
+                { x: labels, y: waitAvg, name: 'Avg Waiting Reqs', type: 'scatter', mode: 'lines+markers', yaxis: 'y2', line: { color: '#ef4444', width: 2, dash: 'dot' }, marker: { size: 6 } },
+                { x: labels, y: decodeT, name: 'Decode req-s/s', type: 'scatter', mode: 'lines+markers', yaxis: 'y2', line: { color: '#f59e0b', width: 2 }, marker: { size: 6 } },
+                { x: labels, y: prefillT, name: 'Prefill req-s/s', type: 'scatter', mode: 'lines+markers', yaxis: 'y2', line: { color: '#8b5cf6', width: 2 }, marker: { size: 6 } },
+            ];
+            if (preempt.some(function(v) { return v > 0; })) {
+                traces.push({ x: labels, y: preempt, name: 'Preemptions/s', type: 'scatter', mode: 'lines+markers', yaxis: 'y2', line: { color: '#dc2626', width: 3 }, marker: { size: 8, symbol: 'x' } });
+            }
+            Plotly.newPlot('chart-cfg-engine' + _chartSuffix, traces, {
+                barmode: 'group',
+                xaxis: { tickangle: -35 },
+                yaxis: { title: 'KV Cache %', side: 'left', rangemode: 'tozero', gridcolor: '#e2e8f0' },
+                yaxis2: { title: 'Count / Rate', overlaying: 'y', side: 'right', rangemode: 'tozero' },
+                legend: { x: 0, y: 1.15, orientation: 'h' },
+                margin: { t: 40, b: 140, l: 60, r: 60 },
+                plot_bgcolor: '#f8fafc', paper_bgcolor: '#fff',
+                hovermode: 'x unified',
+                height: 600,
+            }, { responsive: true });
+        });
     }
 
     // Flush configurations (PD charts + pareto table + all results)
@@ -1919,6 +1986,80 @@ function _renderChartsImpl(data, runId, content) {
             'Combined view: frontier lines for each architecture plus markers showing which won at each concurrency level.</div>' +
             '<div class="chart-card-body"><div id="chart-sweep-overlaid' + _chartSuffix + '" style="width:100%;height:700px;"></div></div></div>';
 
+        // --- vLLM Engine Metrics per config ---
+        html += '<div class="chart-card" style="margin-top:16px;"><div class="chart-card-header">vLLM Engine Metrics vs Concurrency</div>';
+        html += '<div style="padding:8px 20px 4px; font-size:0.85em; color:#64748b;">KV cache usage and running requests across concurrency levels per config.</div>';
+        html += '<div id="chart-sweep-engine' + _chartSuffix + '" style="width:100%;height:550px;"></div>';
+        html += '<div style="padding:8px 20px 12px; font-size:0.85em; color:#64748b; line-height:1.7;">' +
+            '<strong>KV Cache %</strong> (bars, left axis): How full the KV cache is across pods. Low values mean KV capacity is not the bottleneck.<br>' +
+            '<strong>Avg Running Reqs</strong>: Average requests actively being processed per pod over time (flattened across all pods and all timestamps).<br>' +
+            '<strong>Max Running Reqs</strong>: Peak concurrent requests on a single pod at any point during the test. Large gap between avg and max indicates EPP routing imbalance.<br>' +
+            '<strong>Avg Waiting Reqs</strong>: Requests queued waiting for a processing slot. High values indicate saturation.<br>' +
+            '<strong>Decode req-s/s</strong>: Total accumulated decode time across all concurrent requests per wall-second. Proportional to running request count, not GPU count.<br>' +
+            '<strong>Prefill req-s/s</strong>: Total accumulated prefill time across all concurrent requests per wall-second. Low values with high cache hit mean prefill is served from cache.</div></div>';
+
+        chartQueue.push(function() {
+            var _arLookup = {};
+            (data.all_results || []).forEach(function(r) { _arLookup[r.test_id] = r; });
+            var labels = [], tickColors = [], kvAvg = [], kvMax = [], runAvg = [], runMax = [], runSpread = [], waitAvg = [], prefillT = [], decodeT = [], preempt = [];
+            allSweepConfigs.forEach(function(cfg) {
+                cfg.points.forEach(function(p) {
+                    var r = _arLookup[p.test_id] || {};
+                    var mj = r.metrics_json ? (typeof r.metrics_json === 'string' ? JSON.parse(r.metrics_json) : r.metrics_json) : {};
+                    var pm = mj.prometheus_metrics || {};
+                    labels.push(cfg.label + ' c=' + p.concurrency);
+                    tickColors.push(cfg.color);
+                    kvAvg.push(((pm.vllm_kv_cache_pct || {}).avg || 0) * 100);
+                    kvMax.push(((pm.vllm_kv_cache_pct || {}).max || 0) * 100);
+                    runAvg.push((pm.vllm_requests_running || {}).avg || 0);
+                    runMax.push((pm.vllm_requests_running || {}).max || 0);
+                    var _rAvg = (pm.vllm_requests_running || {}).avg || 0;
+                    var _rMax = (pm.vllm_requests_running || {}).max || 0;
+                    runSpread.push(_rMax - _rAvg);
+                    waitAvg.push((pm.vllm_requests_waiting || {}).avg || 0);
+                    prefillT.push((pm.vllm_prefill_time_rate || {}).avg || 0);
+                    decodeT.push((pm.vllm_decode_time_rate || {}).avg || 0);
+                    preempt.push((pm.vllm_preemptions_rate || {}).avg || 0);
+                });
+            });
+            if (!labels.length) return;
+            var traces = [
+                { x: labels, y: kvAvg, name: 'KV Cache Avg %', type: 'bar', marker: { color: '#3b82f6' } },
+                { x: labels, y: kvMax, name: 'KV Cache Max %', type: 'bar', marker: { color: '#93c5fd' } },
+                { x: labels, y: runAvg, name: 'Avg Running Reqs', type: 'scatter', mode: 'lines+markers', yaxis: 'y2', line: { color: '#059669', width: 3 }, marker: { size: 8 } },
+                { x: labels, y: runMax, name: 'Max Running Reqs', type: 'scatter', mode: 'lines+markers', yaxis: 'y2', line: { color: '#059669', width: 2, dash: 'dash' }, marker: { size: 6, symbol: 'triangle-up' } },
+                { x: labels, y: runSpread, name: 'Load Spread', type: 'scatter', mode: 'lines+markers', yaxis: 'y2', line: { color: '#dc2626', width: 2, dash: 'dashdot' }, marker: { size: 6, symbol: 'diamond' } },
+                { x: labels, y: waitAvg, name: 'Avg Waiting Reqs', type: 'scatter', mode: 'lines+markers', yaxis: 'y2', line: { color: '#ef4444', width: 2, dash: 'dot' }, marker: { size: 6 } },
+                { x: labels, y: decodeT, name: 'Decode req-s/s', type: 'scatter', mode: 'lines+markers', yaxis: 'y2', line: { color: '#f59e0b', width: 2 }, marker: { size: 6 } },
+                { x: labels, y: prefillT, name: 'Prefill req-s/s', type: 'scatter', mode: 'lines+markers', yaxis: 'y2', line: { color: '#8b5cf6', width: 2 }, marker: { size: 6 } },
+            ];
+            if (preempt.some(function(v) { return v > 0; })) {
+                traces.push({ x: labels, y: preempt, name: 'Preemptions/s', type: 'scatter', mode: 'lines+markers', yaxis: 'y2', line: { color: '#dc2626', width: 3 }, marker: { size: 8, symbol: 'x' } });
+            }
+            // Use numeric x positions so we can color tick labels via annotations
+            var xIdx = labels.map(function(_, i) { return i; });
+            traces.forEach(function(t) { t.x = xIdx; });
+            var tickAnns = labels.map(function(lbl, i) {
+                return {
+                    x: i, y: -0.02, xref: 'x', yref: 'paper', text: lbl,
+                    showarrow: false, font: { size: 11, color: tickColors[i] || '#333', weight: 700 },
+                    textangle: -45, xanchor: 'right', yanchor: 'top'
+                };
+            });
+            Plotly.newPlot('chart-sweep-engine' + _chartSuffix, traces, {
+                barmode: 'group',
+                xaxis: { showticklabels: false, title: '' },
+                yaxis: { title: 'KV Cache %', side: 'left', rangemode: 'tozero', gridcolor: '#e2e8f0' },
+                yaxis2: { title: 'Count / Rate', overlaying: 'y', side: 'right', rangemode: 'tozero' },
+                legend: { x: 0, y: 1.15, orientation: 'h' },
+                margin: { t: 40, b: 180, l: 60, r: 60 },
+                plot_bgcolor: '#f8fafc', paper_bgcolor: '#fff',
+                hovermode: 'x unified',
+                height: 650,
+                annotations: tickAnns,
+            }, { responsive: true });
+        });
+
         // --- Sweep Results Table ---
         html += '<div class="chart-card" style="margin-top:16px; border-left:6px solid #64748b;">';
         html += '<div class="chart-card-header" style="background:linear-gradient(135deg,#475569,#64748b); color:white; font-size:1.1em;">Concurrency Sweep Data</div>';
@@ -2164,17 +2305,34 @@ function _renderChartsImpl(data, runId, content) {
             html += '<div style="padding:12px 20px;"><div style="overflow-x:auto;"><table class="results-table" id="' + csCacheTblId + '" style="font-size:0.85em;">';
             html += '<tr>';
             html += '<th style="cursor:pointer;" onclick="sortReportTable(\'' + csCacheTblId + '\',0,\'num\')">Cache Hit % &#x21C5;</th>';
-            html += '<th style="cursor:pointer;" onclick="sortReportTable(\'' + csCacheTblId + '\',1,\'num\')">Actual Hit % &#x21C5;</th>';
-            html += '<th style="cursor:pointer;" onclick="sortReportTable(\'' + csCacheTblId + '\',2,\'num\')">Concurrency &#x21C5;</th>';
-            html += '<th style="cursor:pointer;" onclick="sortReportTable(\'' + csCacheTblId + '\',3,\'num\')">TTFT P50 &#x21C5;</th>';
-            html += '<th style="cursor:pointer;" onclick="sortReportTable(\'' + csCacheTblId + '\',4,\'num\')">TTFT P90 &#x21C5;</th>';
-            html += '<th style="cursor:pointer;" onclick="sortReportTable(\'' + csCacheTblId + '\',5,\'num\')">TTFT P95 &#x21C5;</th>';
-            html += '<th style="cursor:pointer;" onclick="sortReportTable(\'' + csCacheTblId + '\',6,\'num\')">TTFT P99 &#x21C5;</th>';
-            html += '<th style="cursor:pointer;" onclick="sortReportTable(\'' + csCacheTblId + '\',7,\'num\')">Throughput &#x21C5;</th>';
-            html += '<th style="cursor:pointer;" onclick="sortReportTable(\'' + csCacheTblId + '\',8,\'num\')">vLLM tok/s &#x21C5;</th>';
-            html += '<th style="cursor:pointer;" onclick="sortReportTable(\'' + csCacheTblId + '\',9,\'num\')">ITL P90 &#x21C5;</th>';
+            var _col = 0;
+            function _th(label) { html += '<th style="cursor:pointer;" onclick="sortReportTable(\'' + csCacheTblId + '\',' + (_col++) + ',\'num\')">' + label + ' &#x21C5;</th>'; }
+            _th('Actual Hit %'); _th('Concurrency');
+            _th('TTFT P50'); _th('TTFT P90'); _th('TTFT P95'); _th('TTFT P99');
+            _th('Throughput'); _th('vLLM tok/s'); _th('ITL P90');
+            _th('E2E P50'); _th('E2E P90');
+            _th('KV Cache %'); _th('Running'); _th('Run Max'); _th('Load Spread'); _th('Waiting');
+            _th('Prefill t'); _th('Decode t');
             html += '</tr>';
+
+            var _csTblLookup = {};
+            (data.all_results || []).forEach(function(r) { _csTblLookup[r.test_id] = r; });
+
             pts.forEach(function(p) {
+                var _r = _csTblLookup[p.test_id] || {};
+                var _mj = _r.metrics_json ? (typeof _r.metrics_json === 'string' ? JSON.parse(_r.metrics_json) : _r.metrics_json) : {};
+                var _pm = _mj.prometheus_metrics || {};
+                var _kvAvg = ((_pm.vllm_kv_cache_pct || {}).avg || 0) * 100;
+                var _running = (_pm.vllm_requests_running || {}).avg || 0;
+                var _runMax = (_pm.vllm_requests_running || {}).max || 0;
+                var _runMin = (_pm.vllm_requests_running || {}).min || 0;
+                var _waiting = (_pm.vllm_requests_waiting || {}).avg || 0;
+                var _routingCV = (_pm.vllm_routing_cv || {}).avg || null;
+                var _prefillT = (_pm.vllm_prefill_time_rate || {}).avg || 0;
+                var _decodeT = (_pm.vllm_decode_time_rate || {}).avg || 0;
+                var _e2eP50 = (_pm.vllm_e2e_p50 || {}).avg || _mj.e2e_latency_p50 || null;
+                var _e2eP90 = (_pm.vllm_e2e_p90 || {}).avg || _mj.e2e_latency_p90 || null;
+                var fmtE2e = function(v) { return v != null ? (v >= 1 ? v.toFixed(1) + 's' : Math.round(v * 1000) + 'ms') : '-'; };
                 html += '<tr>';
                 html += '<td>' + p.hit_pct + '%</td>';
                 html += '<td>' + (p.actual_hit_rate != null ? p.actual_hit_rate.toFixed(1) + '%' : '-') + '</td>';
@@ -2186,9 +2344,87 @@ function _renderChartsImpl(data, runId, content) {
                 html += '<td>' + (p.throughput_mean ? p.throughput_mean.toFixed(2) : '-') + '</td>';
                 html += '<td>' + (p.vllm_tps ? p.vllm_tps.toLocaleString() : (p.output_tps_mean ? p.output_tps_mean.toFixed(0) : '-')) + '</td>';
                 html += '<td>' + (p.itl_p90 ? p.itl_p90.toFixed(1) : '-') + '</td>';
+                html += '<td>' + fmtE2e(_e2eP50) + '</td>';
+                html += '<td>' + fmtE2e(_e2eP90) + '</td>';
+                html += '<td>' + _kvAvg.toFixed(1) + '%</td>';
+                html += '<td>' + _running.toFixed(1) + '</td>';
+                html += '<td>' + _runMax.toFixed(0) + '</td>';
+                html += '<td>' + (_runMax - _running).toFixed(1) + '</td>';
+                html += '<td>' + _waiting.toFixed(1) + '</td>';
+                html += '<td>' + _prefillT.toFixed(3) + '</td>';
+                html += '<td>' + _decodeT.toFixed(2) + '</td>';
                 html += '</tr>';
             });
-            html += '</table></div></div>';
+            html += '</table>';
+            html += '<div style="padding:8px 20px 12px; font-size:0.85em; color:#64748b; line-height:1.7;">' +
+                '<strong>KV Cache Avg/Max %</strong>: How full the KV cache is across pods. Low values mean KV capacity is not the bottleneck.<br>' +
+                '<strong>Avg Running Reqs</strong>: Average requests actively being processed per pod over time (flattened across all pods and all timestamps).<br>' +
+                '<strong>Max Running Reqs</strong>: Peak concurrent requests on a single pod at any point during the test. Large gap between avg and max indicates EPP routing imbalance (e.g. prefix affinity concentrating requests on one pod).<br>' +
+                '<strong>Load Spread</strong>: Gap between peak and average running requests (Max-Avg). High values indicate traffic bursts — requests arriving simultaneously rather than staggered.<br>' +
+                '<strong>Avg Waiting Reqs</strong>: Requests queued waiting for a processing slot. High values indicate saturation.<br>' +
+                '<strong>Decode req-s/s</strong>: Total accumulated decode time across all concurrent requests per wall-second. Proportional to running request count, not GPU count.<br>' +
+                '<strong>Prefill req-s/s</strong>: Total accumulated prefill time across all concurrent requests per wall-second. Low values with high cache hit mean prefill is served from cache.</div>' +
+            '</div></div>';
+
+            // --- vLLM Engine Metrics chart for this config ---
+            var csEngineId = 'cache-sweep-engine-' + arch;
+            html += '<div style="padding:8px 20px 4px; font-size:0.85em; color:#64748b; margin-top:12px;">vLLM engine metrics across cache hit levels — KV cache usage, running/waiting requests, prefill/decode GPU time, and preemptions.</div>';
+            html += '<div id="' + csEngineId + '" style="width:100%;height:550px;"></div>';
+            html += '<div style="padding:8px 20px 12px; font-size:0.85em; color:#64748b; line-height:1.7;">' +
+                '<strong>KV Cache Avg/Max %</strong>: How full the KV cache is across pods. Low values mean KV capacity is not the bottleneck.<br>' +
+                '<strong>Avg Running Reqs</strong>: Average requests actively being processed per pod over time (flattened across all pods and all timestamps).<br>' +
+                '<strong>Max Running Reqs</strong>: Peak concurrent requests on a single pod at any point during the test. Large gap between avg and max indicates EPP routing imbalance (e.g. prefix affinity concentrating requests on one pod).<br>' +
+                '<strong>Load Spread</strong>: Gap between peak and average running requests (Max-Avg). High values indicate traffic bursts — requests arriving simultaneously rather than staggered.<br>' +
+                '<strong>Avg Waiting Reqs</strong>: Requests queued waiting for a processing slot. High values indicate saturation.<br>' +
+                '<strong>Decode req-s/s</strong>: Total accumulated decode time across all concurrent requests per wall-second. Proportional to running request count, not GPU count.<br>' +
+                '<strong>Prefill req-s/s</strong>: Total accumulated prefill time across all concurrent requests per wall-second. Low values with high cache hit mean prefill is served from cache.</div>';
+
+            chartQueue.push((function(chartId, points) { return function() {
+                var _arLookup = {};
+                (data.all_results || []).forEach(function(r) { _arLookup[r.test_id] = r; });
+                var xVals = [], kvAvg = [], kvMax = [], runAvg = [], runMax = [], runSpread = [], waitAvg = [], prefillT = [], decodeT = [], preempt = [];
+                points.forEach(function(p) {
+                    var tid = p.test_id || '';
+                    var r = _arLookup[tid] || {};
+                    var mj = r.metrics_json ? (typeof r.metrics_json === 'string' ? JSON.parse(r.metrics_json) : r.metrics_json) : {};
+                    var pm = mj.prometheus_metrics || {};
+                    xVals.push(p.hit_pct + '%');
+                    kvAvg.push(((pm.vllm_kv_cache_pct || {}).avg || 0) * 100);
+                    kvMax.push(((pm.vllm_kv_cache_pct || {}).max || 0) * 100);
+                    runAvg.push((pm.vllm_requests_running || {}).avg || 0);
+                    runMax.push((pm.vllm_requests_running || {}).max || 0);
+                    runSpread.push(((pm.vllm_requests_running || {}).max || 0) - ((pm.vllm_requests_running || {}).avg || 0));
+                    waitAvg.push((pm.vllm_requests_waiting || {}).avg || 0);
+                    prefillT.push((pm.vllm_prefill_time_rate || {}).avg || 0);
+                    decodeT.push((pm.vllm_decode_time_rate || {}).avg || 0);
+                    preempt.push((pm.vllm_preemptions_rate || {}).avg || 0);
+                });
+                if (!xVals.length) return;
+                var traces = [
+                    { x: xVals, y: kvAvg, name: 'KV Cache Avg %', type: 'bar', marker: { color: '#3b82f6' } },
+                    { x: xVals, y: kvMax, name: 'KV Cache Max %', type: 'bar', marker: { color: '#93c5fd' } },
+                    { x: xVals, y: runAvg, name: 'Avg Running Reqs', type: 'scatter', mode: 'lines+markers', yaxis: 'y2', line: { color: '#059669', width: 3 }, marker: { size: 8 } },
+                    { x: xVals, y: runMax, name: 'Max Running Reqs', type: 'scatter', mode: 'lines+markers', yaxis: 'y2', line: { color: '#059669', width: 2, dash: 'dash' }, marker: { size: 6, symbol: 'triangle-up' } },
+                    { x: xVals, y: runSpread, name: 'Load Spread', type: 'scatter', mode: 'lines+markers', yaxis: 'y2', line: { color: '#dc2626', width: 2, dash: 'dashdot' }, marker: { size: 6, symbol: 'diamond' } },
+                    { x: xVals, y: waitAvg, name: 'Avg Waiting Reqs', type: 'scatter', mode: 'lines+markers', yaxis: 'y2', line: { color: '#ef4444', width: 2, dash: 'dot' }, marker: { size: 6 } },
+                    { x: xVals, y: decodeT, name: 'Decode req-s/s', type: 'scatter', mode: 'lines+markers', yaxis: 'y2', line: { color: '#f59e0b', width: 2 }, marker: { size: 6 } },
+                    { x: xVals, y: prefillT, name: 'Prefill req-s/s', type: 'scatter', mode: 'lines+markers', yaxis: 'y2', line: { color: '#8b5cf6', width: 2 }, marker: { size: 6 } },
+                ];
+                if (preempt.some(function(v) { return v > 0; })) {
+                    traces.push({ x: xVals, y: preempt, name: 'Preemptions/s', type: 'scatter', mode: 'lines+markers', yaxis: 'y2', line: { color: '#dc2626', width: 3 }, marker: { size: 8, symbol: 'x' } });
+                }
+                Plotly.newPlot(chartId, traces, {
+                    barmode: 'group',
+                    xaxis: { title: 'Cache Hit %' },
+                    yaxis: { title: 'KV Cache %', side: 'left', rangemode: 'tozero', gridcolor: '#e2e8f0' },
+                    yaxis2: { title: 'Count / Rate', overlaying: 'y', side: 'right', rangemode: 'tozero' },
+                    legend: { x: 0, y: 1.15, orientation: 'h' },
+                    margin: { t: 40, b: 60, l: 60, r: 60 },
+                    plot_bgcolor: '#f8fafc', paper_bgcolor: '#fff',
+                    hovermode: 'x unified',
+                }, { responsive: true });
+            }; })(csEngineId, pts));
+
             html += '</div>';
         });
     }

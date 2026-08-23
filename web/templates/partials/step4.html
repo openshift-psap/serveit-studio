@@ -222,14 +222,14 @@
                                                 <input type="radio" name="sweep-mode" value="architecture_aware" checked onchange="config.concurrency_sweep_mode='architecture_aware';config.concurrency_sweep_all_configs=false;saveConfig();" style="margin-top:2px;">
                                                 <div>
                                                     <div style="font-weight:600;font-size:0.85em;color:#065f46;">Architecture-Aware</div>
-                                                    <div style="font-size:0.75em;color:#047857;margin-top:2px;">Best config from each architecture (Agg, PD, EP) + 4 overall recommendations (Best Balanced, Lowest TTFT, Highest Throughput, Most Efficient). Deduplicated — typically 4 unique configs.</div>
+                                                    <div style="font-size:0.75em;color:#047857;margin-top:2px;">Best config from each architecture (Agg, PD, EP) + 5 overall recommendations (Best Balanced, Lowest TTFT, Lowest ITL, Highest Throughput, Most Efficient). Deduplicated — typically 4-5 unique configs.</div>
                                                 </div>
                                             </label>
                                             <label style="display:flex;align-items:flex-start;gap:8px;padding:8px 12px;background:#f0fdf4;border:1px solid #bbf7d0;border-radius:8px;cursor:pointer;">
                                                 <input type="radio" name="sweep-mode" value="all_recommendations" onchange="config.concurrency_sweep_mode='all_recommendations';config.concurrency_sweep_all_configs=false;saveConfig();" style="margin-top:2px;">
                                                 <div>
                                                     <div style="font-weight:600;font-size:0.85em;color:#065f46;">All Recommendations Per Architecture</div>
-                                                    <div style="font-size:0.75em;color:#047857;margin-top:2px;">4 recommendation configs (Balanced, TTFT, Throughput, Efficient) for each architecture independently. Up to 12 unique configs.</div>
+                                                    <div style="font-size:0.75em;color:#047857;margin-top:2px;">5 recommendation configs (Balanced, TTFT, ITL, Throughput, Efficient) for each architecture independently. Up to 15 unique configs.</div>
                                                 </div>
                                             </label>
                                             <label style="display:flex;align-items:flex-start;gap:8px;padding:8px 12px;background:#f0fdf4;border:1px solid #bbf7d0;border-radius:8px;cursor:pointer;">
@@ -296,7 +296,7 @@
                                             <input type="radio" name="cache-sweep-mode-sel" value="architecture_aware" checked onchange="config.cache_sweep_selection_mode='architecture_aware';config.cache_sweep_all_configs=false;saveConfig();" style="margin-top:2px;">
                                             <div>
                                                 <div style="font-weight:600;font-size:0.85em;color:#5b21b6;">Architecture-Aware</div>
-                                                <div style="font-size:0.75em;color:#6d28d9;margin-top:2px;">Best config from each architecture + 4 overall recommendations. Typically 4 unique configs.</div>
+                                                <div style="font-size:0.75em;color:#6d28d9;margin-top:2px;">Best config from each architecture + 5 overall recommendations. Typically 4-5 unique configs.</div>
                                             </div>
                                         </label>
                                         <label style="display:flex;align-items:flex-start;gap:8px;padding:8px 12px;background:#f5f3ff;border:1px solid #ddd6fe;border-radius:8px;cursor:pointer;">

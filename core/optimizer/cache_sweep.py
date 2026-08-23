@@ -72,12 +72,10 @@ class CacheSweepMixin:
             self.cache_sweep_results[sweep_key] = []
         results = self.cache_sweep_results[sweep_key] if sweep_key else []
         tag = f"-{concurrency_tag}" if concurrency_tag else ""
+        safe_label = sweep_key if sweep_key else arch_label.lower().replace(' ', '-')
         import re as _re
-        _clean = _re.sub(r'\s*\((AG|PD|EP|aggregated|pd|ep)\)\s*$', '', arch_label)
-        safe_label = _re.sub(r'[^a-z0-9-]', '', _clean.lower().replace('×', 'x').replace(' ', '-').replace('+', '-'))
+        safe_label = _re.sub(r'[^a-z0-9-]', '', safe_label)
         safe_label = _re.sub(r'-+', '-', safe_label).strip('-')
-        if len(f"step13-cache{tag}-{safe_label}-h100-prefill") > 58:
-            safe_label = safe_label[:30]
         self.log(f"\n🗂️  Cache Sweep: {arch_label} ({len(levels)} levels, c={concurrency}{tag})", 'info')
 
         # Check which levels need testing vs already completed

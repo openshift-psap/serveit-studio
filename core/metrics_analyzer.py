@@ -451,6 +451,13 @@ class MetricsAnalyzer:
                         short_name = name
                         break
 
+            # Check computed imbalance queries (before generic patterns since they contain the same substrings)
+            if not short_name:
+                if 'max(' in query_str and 'min(' in query_str and 'num_requests_running' in query_str:
+                    short_name = 'vllm_routing_imbalance'
+                elif 'stddev(' in query_str and 'num_requests_running' in query_str:
+                    short_name = 'vllm_routing_cv'
+
             # Check regular metric patterns
             if not short_name:
                 for substr, name in metric_name_map.items():

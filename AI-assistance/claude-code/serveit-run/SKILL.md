@@ -1132,6 +1132,32 @@ For `goal: "single_test"` — add the single test fields:
 // Single test — PD with PTP4/DTP8, 2P+1D
 {"goal": "single_test", "single_test_architecture": "pd", "single_test_prefill_tp": 4, "single_test_decode_tp": 8, "single_test_prefill_pods": 2, "single_test_decode_pods": 1, "model": "RedHatAI/Meta-Llama-3.1-70B-Instruct-FP8-dynamic", "isl": 2000, "osl": 2000, "users": 50, "max_gpus": 16}
 
+// Single test — Aggregated 8xTP1 with custom EPP and pre-built dataset
+// Use case: A/B testing EPP routing strategies on a specific config with a specific dataset
+{"goal": "single_test", "single_test_architecture": "aggregated", "single_test_tp": 1, "single_test_replicas": 8,
+ "model": "RedHatAI/gemma-4-26B-A4B-it-FP8-Dynamic",
+ "isl": 15000, "osl": 1000, "users": 50, "max_gpus": 8,
+ "test_duration": 480,
+ "workload_mode": "dataset",
+ "dataset_source": "/mnt/storage/prefix-cache-datasets/prefix-cache-identical-3780180771.jsonl",
+ "dataset_column": "prompt",
+ "dataset_max_output": 1000,
+ "prefix_cache_hit_pct": 100,
+ "epp_preset": "balanced",
+ "epp_custom_enabled": true,
+ "epp_config": {
+   "preset": "balanced",
+   "plugins": {
+     "prefix_cache": {"enabled": true, "weight": 3},
+     "kv_cache": {"enabled": true, "weight": 2},
+     "queue": {"enabled": true, "weight": 2},
+     "active_request": {"enabled": true, "weight": 2},
+     "token_load": {"enabled": false, "weight": 0},
+     "slo": {"enabled": false, "weight": 0},
+     "prefixCacheAffinityEnabled": true
+   }
+ }}
+
 // Agentic workload — Nemotron-3-Ultra-550B (replicates llm-d guide)
 // Multi-turn with 160K dynamic system prompt, tool call delays, CPU KV offload
 {"goal": "single_test", "single_test_architecture": "pd",
