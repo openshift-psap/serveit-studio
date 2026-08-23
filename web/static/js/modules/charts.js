@@ -890,15 +890,7 @@ function _renderChartsImpl(data, runId, content) {
     if (cfgEngineRes.length >= 1) {
         html += '<div class="chart-card" style="margin-top:16px;"><div class="chart-card-header">vLLM Engine Metrics</div>';
         html += '<div style="padding:8px 20px 4px; font-size:0.85em; color:#64748b;">KV cache usage, running/waiting requests, prefill/decode time across tested configurations.</div>';
-        html += '<div id="chart-cfg-engine' + _chartSuffix + '" style="width:100%;"></div>';
-        html += '<div style="padding:8px 20px 12px; font-size:0.85em; color:#64748b; line-height:1.7;">' +
-            '<strong>KV Cache Avg/Max %</strong>: How full the KV cache is across pods. Low values mean KV capacity is not the bottleneck.<br>' +
-            '<strong>Avg Running Reqs</strong>: Average requests actively being processed per pod over time (flattened across all pods and all timestamps).<br>' +
-            '<strong>Max Running Reqs</strong>: Peak concurrent requests on a single pod at any point during the test. Large gap between avg and max indicates EPP routing imbalance (e.g. prefix affinity concentrating requests on one pod).<br>' +
-            '<strong>Load Spread</strong>: Gap between peak and average running requests (Max-Avg). High values indicate traffic bursts — requests arriving simultaneously rather than staggered. Not a direct measure of per-pod routing imbalance.<br>' +
-            '<strong>Avg Waiting Reqs</strong>: Requests queued waiting for a processing slot. High values indicate saturation.<br>' +
-            '<strong>Decode req-s/s</strong>: Total accumulated decode time across all concurrent requests per wall-second. Proportional to running request count, not GPU count.<br>' +
-            '<strong>Prefill req-s/s</strong>: Total accumulated prefill time across all concurrent requests per wall-second. Low values with high cache hit mean prefill is served from cache.</div></div>';
+        html += '<div id="chart-cfg-engine' + _chartSuffix + '" style="width:100%;"></div></div>';
 
         chartQueue.push(function() {
             var labels = [], kvAvg = [], kvMax = [], runAvg = [], runMax = [], runSpread = [], waitAvg = [], prefillT = [], decodeT = [], preempt = [];
@@ -1989,14 +1981,7 @@ function _renderChartsImpl(data, runId, content) {
         // --- vLLM Engine Metrics per config ---
         html += '<div class="chart-card" style="margin-top:16px;"><div class="chart-card-header">vLLM Engine Metrics vs Concurrency</div>';
         html += '<div style="padding:8px 20px 4px; font-size:0.85em; color:#64748b;">KV cache usage and running requests across concurrency levels per config.</div>';
-        html += '<div id="chart-sweep-engine' + _chartSuffix + '" style="width:100%;height:550px;"></div>';
-        html += '<div style="padding:8px 20px 12px; font-size:0.85em; color:#64748b; line-height:1.7;">' +
-            '<strong>KV Cache %</strong> (bars, left axis): How full the KV cache is across pods. Low values mean KV capacity is not the bottleneck.<br>' +
-            '<strong>Avg Running Reqs</strong>: Average requests actively being processed per pod over time (flattened across all pods and all timestamps).<br>' +
-            '<strong>Max Running Reqs</strong>: Peak concurrent requests on a single pod at any point during the test. Large gap between avg and max indicates EPP routing imbalance.<br>' +
-            '<strong>Avg Waiting Reqs</strong>: Requests queued waiting for a processing slot. High values indicate saturation.<br>' +
-            '<strong>Decode req-s/s</strong>: Total accumulated decode time across all concurrent requests per wall-second. Proportional to running request count, not GPU count.<br>' +
-            '<strong>Prefill req-s/s</strong>: Total accumulated prefill time across all concurrent requests per wall-second. Low values with high cache hit mean prefill is served from cache.</div></div>';
+        html += '<div id="chart-sweep-engine' + _chartSuffix + '" style="width:100%;height:550px;"></div></div>';
 
         chartQueue.push(function() {
             var _arLookup = {};
@@ -2370,14 +2355,6 @@ function _renderChartsImpl(data, runId, content) {
             var csEngineId = 'cache-sweep-engine-' + arch;
             html += '<div style="padding:8px 20px 4px; font-size:0.85em; color:#64748b; margin-top:12px;">vLLM engine metrics across cache hit levels — KV cache usage, running/waiting requests, prefill/decode GPU time, and preemptions.</div>';
             html += '<div id="' + csEngineId + '" style="width:100%;height:550px;"></div>';
-            html += '<div style="padding:8px 20px 12px; font-size:0.85em; color:#64748b; line-height:1.7;">' +
-                '<strong>KV Cache Avg/Max %</strong>: How full the KV cache is across pods. Low values mean KV capacity is not the bottleneck.<br>' +
-                '<strong>Avg Running Reqs</strong>: Average requests actively being processed per pod over time (flattened across all pods and all timestamps).<br>' +
-                '<strong>Max Running Reqs</strong>: Peak concurrent requests on a single pod at any point during the test. Large gap between avg and max indicates EPP routing imbalance (e.g. prefix affinity concentrating requests on one pod).<br>' +
-                '<strong>Load Spread</strong>: Gap between peak and average running requests (Max-Avg). High values indicate traffic bursts — requests arriving simultaneously rather than staggered.<br>' +
-                '<strong>Avg Waiting Reqs</strong>: Requests queued waiting for a processing slot. High values indicate saturation.<br>' +
-                '<strong>Decode req-s/s</strong>: Total accumulated decode time across all concurrent requests per wall-second. Proportional to running request count, not GPU count.<br>' +
-                '<strong>Prefill req-s/s</strong>: Total accumulated prefill time across all concurrent requests per wall-second. Low values with high cache hit mean prefill is served from cache.</div>';
 
             chartQueue.push((function(chartId, points) { return function() {
                 var _arLookup = {};
