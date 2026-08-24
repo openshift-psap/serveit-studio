@@ -42,6 +42,14 @@ RUN KUBECTL_VERSION="1.30.2" && \
 
 WORKDIR /app
 
+# Bundle wikitext-103 corpus for corpus-mode dataset generation
+# Real prose (not word salad) — needed for speculative decoding benchmarks
+COPY docker/scripts/prepare_corpus.py /tmp/prepare_corpus.py
+RUN python3.11 -m pip install --no-cache-dir datasets \
+    && python3.11 /tmp/prepare_corpus.py --output /app/corpus/wikitext-103.txt \
+    && python3.11 -m pip uninstall -y datasets \
+    && rm -f /tmp/prepare_corpus.py
+
 # Add results parser script
 COPY docker/scripts/parse_guidellm.py /usr/local/bin/parse_guidellm
 RUN chmod +x /usr/local/bin/parse_guidellm

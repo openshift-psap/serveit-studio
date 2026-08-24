@@ -206,6 +206,23 @@
                                             </div>
                                         </div>
 
+                                        <!-- Corpus Dataset toggle -->
+                                        <div style="border-top:1px solid #dcfce7;">
+                                            <div style="padding:12px 20px;cursor:pointer;display:flex;align-items:center;justify-content:space-between;" onclick="var on=!document.getElementById('use-corpus-enabled').checked;document.getElementById('use-corpus-enabled').checked=on;config.use_corpus=on;var sw=document.getElementById('use-corpus-switch');sw.style.background=on?'#15803d':'#ccc';sw.querySelector('span').style.transform=on?'translateX(18px)':'translateX(0)';saveConfig();">
+                                                <div style="display:flex;align-items:center;gap:10px;">
+                                                    <div style="font-size:1.3em;flex-shrink:0;">📖</div>
+                                                    <div>
+                                                        <div style="font-weight:600;color:#15803d;font-size:0.95em;">Use Real Text Corpus</div>
+                                                        <div style="color:#166534;font-size:0.82em;margin-top:2px;">Use contiguous English prose (Wikipedia) instead of synthetic word salad. Required for meaningful speculative decoding acceptance rates.</div>
+                                                    </div>
+                                                </div>
+                                                <input type="checkbox" id="use-corpus-enabled" style="display:none;">
+                                                <div id="use-corpus-switch" style="width:40px;height:22px;background:#ccc;border-radius:11px;position:relative;transition:background-color 0.2s;flex-shrink:0;margin-left:16px;">
+                                                    <span style="position:absolute;top:2px;left:2px;width:18px;height:18px;background:white;border-radius:50%;transition:transform 0.2s;box-shadow:0 1px 3px rgba(0,0,0,0.2);display:block;"></span>
+                                                </div>
+                                            </div>
+                                        </div>
+
                                         <!-- Prefix Cache Simulation toggle -->
                                         <div style="border-top:1px solid #dcfce7;">
                                             <div style="padding:12px 20px;cursor:pointer;display:flex;align-items:center;justify-content:space-between;" onclick="var on=!document.getElementById('prefix-cache-enabled').checked;document.getElementById('prefix-cache-enabled').checked=on;document.getElementById('prefix-cache-body').style.display=on?'block':'none';document.getElementById('prefix-cache-inner').style.opacity=on?'1':'0.4';var sw=document.getElementById('prefix-cache-switch');sw.style.background=on?'#15803d':'#ccc';sw.querySelector('span').style.transform=on?'translateX(18px)':'translateX(0)';if(!on){document.getElementById('prefix-cache-slider').value=0;document.getElementById('prefix-cache-value').textContent='0%';config.prefix_cache_hit_pct=0;saveConfig();}">

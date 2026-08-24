@@ -509,6 +509,7 @@ def handle_resume_optimization(data):
             'prefix_cache_mode': saved_prefix_cache_mode,
             'prefix_cache_groups': saved_prefix_cache_groups,
             'prefix_cache_seed': run.get('prefix_cache_seed'),
+            'use_corpus': bool(saved_cfg.get('use_corpus', False)) if saved_cfg else False,
             'latency_constraint_enabled': bool(run.get('latency_constraint_enabled', 0)),
             'latency_constraint_ms': run.get('latency_constraint_ms', 500),
             'latency_constraint_percentile': run.get('latency_constraint_percentile', 'p90'),
@@ -1172,15 +1173,30 @@ def handle_generate_test_plan(data):
         from core import TestPlanner
         from core.system_scanner import SystemScanner
 
-        model = data.get('model')
-        optimization_goal = data.get('optimization_goal')
-        max_gpus = data.get('max_gpus')
-        isl = data.get('isl', 2048)
-        osl = data.get('osl', 512)
-        num_users = data.get('num_users', 100)
+        # Fall back to saved config for any missing fields
+        saved_cfg = {}
+        try:
+            with get_db() as conn:
+                row = conn.execute('SELECT config_json FROM ui_session_state WHERE id = 1').fetchone()
+                if row and row['config_json']:
+                    saved_cfg = json.loads(row['config_json'])
+        except Exception:
+            pass
+        _cfg = lambda k, default=None: data.get(k) or saved_cfg.get(k) or (state.get('current_config') or {}).get(k) or default
+
+        model = _cfg('model')
+        optimization_goal = _cfg('optimization_goal', _cfg('goal', 'balanced'))
+        max_gpus = _cfg('max_gpus')
+        isl = _cfg('isl', 2048)
+        osl = _cfg('osl', 512)
+        num_users = _cfg('num_users', _cfg('users', 100))
         use_existing_pvc = data.get('use_existing_pvc', False)
         existing_pvc_name = data.get('existing_pvc_name')
         hf_token = data.get('hf_token')
+
+        if not model:
+            log_to_ui('❌ Cannot generate test plan: no model specified. Please run a cluster scan first.', 'error')
+            return
 
         # Get cluster info to cap TP at max_gpus_per_node
         scanner = SystemScanner(namespace=TARGET_NAMESPACE)
@@ -2258,6 +2274,7 @@ def handle_setup_storage(data):
                 'prefix_cache_hit_pct': int(data.get('prefix_cache_hit_pct', 0)),
                 'prefix_cache_mode': data.get('prefix_cache_mode', 'identical'),
                 'prefix_cache_groups': data.get('prefix_cache_groups', 5),
+                'use_corpus': bool(data.get('use_corpus', False)),
                 'advanced_vllm': data.get('advanced_vllm'),
                 'image': data.get('image') or saved.get('image'),
                 'scheduler_image': data.get('scheduler_image') or saved.get('scheduler_image'),

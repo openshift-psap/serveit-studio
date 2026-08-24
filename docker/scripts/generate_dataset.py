@@ -2,7 +2,14 @@
 """Generate benchmark datasets for ServeIt Studio.
 
 Usage:
-    generate_dataset.py --model MODEL --isl ISL --osl OSL --seed SEED --rows ROWS --output PATH [--mode random|cache] [--hit-pct PCT] [--isl-stdev S] [--osl-stdev S]
+    generate_dataset.py --model MODEL --isl ISL --osl OSL --seed SEED --rows ROWS --output PATH [--mode random|cache|corpus] [--hit-pct PCT] [--isl-stdev S] [--osl-stdev S]
+
+Modes:
+    random        — synthetic word-salad prompts (fast, tokenizer-aware)
+    cache         — shared prefix with hit_pct cache hits
+    prefix_group  — N groups with shared prefix + unique suffix
+    corpus        — contiguous prose windows from bundled wikitext-103 corpus;
+                    meaningful text for speculative decoding acceptance measurement
 """
 import argparse
 import json
@@ -266,6 +273,144 @@ def generate_prefix_group_parallel(args):
     return rows
 
 
+CORPUS_PATHS = [
+    '/app/corpus/wikitext-103.txt',
+    '/mnt/storage/corpus/wikitext-103.txt',
+]
+
+
+def _find_corpus():
+    """Find the bundled wikitext-103 corpus file."""
+    for path in CORPUS_PATHS:
+        if os.path.exists(path):
+            return path
+    print(f"ERROR: corpus not found at any of: {CORPUS_PATHS}", file=sys.stderr, flush=True)
+    sys.exit(1)
+
+
+def _corpus_worker(worker_args):
+    """Worker: cut windows from the tokenized corpus."""
+    worker_id, starts, book_tokens, isl, osl, model_name = worker_args
+    from transformers import AutoTokenizer
+    hf_home = os.environ.get('HF_HOME', '/mnt/storage/.cache/huggingface')
+    hf_token = os.environ.get('HF_TOKEN')
+    tokenizer = AutoTokenizer.from_pretrained(
+        model_name, trust_remote_code=True,
+        cache_dir=hf_home, token=hf_token
+    )
+    print(f"Worker {worker_id}: cutting {len(starts)} windows...", file=sys.stderr, flush=True)
+
+    rows = []
+    skipped = 0
+    for start in starts:
+        end = start + isl
+        for _ in range(8):
+            if end <= start or end > len(book_tokens):
+                break
+            prompt = tokenizer.decode(
+                book_tokens[start:end],
+                skip_special_tokens=False,
+                clean_up_tokenization_spaces=False,
+            )
+            actual = len(tokenizer.encode(prompt, add_special_tokens=False))
+            if actual == isl:
+                rows.append(json.dumps({
+                    'prompt': prompt,
+                    'prompt_tokens_count': isl,
+                    'output_tokens_count': osl,
+                }))
+                break
+            end += isl - actual
+        else:
+            skipped += 1
+
+    print(f"Worker {worker_id}: done ({len(rows)} windows, {skipped} skipped)", file=sys.stderr, flush=True)
+    return rows
+
+
+def generate_corpus(args):
+    """Generate dataset from bundled wikitext-103 corpus with evenly-spaced windows."""
+    from transformers import AutoTokenizer
+    hf_home = os.environ.get('HF_HOME', '/mnt/storage/.cache/huggingface')
+    hf_token = os.environ.get('HF_TOKEN')
+
+    print(f"Tokenizing corpus with {args.model}...", file=sys.stderr, flush=True)
+    tokenizer = AutoTokenizer.from_pretrained(
+        args.model, trust_remote_code=True,
+        cache_dir=hf_home, token=hf_token
+    )
+
+    # Tokenize in chunks to avoid OOM on the full 500MB corpus.
+    # Read only enough text to cover all requested windows.
+    # Estimate: ~4 chars per token, need ISL * rows tokens minimum,
+    # but windows are spaced across the corpus so read proportionally.
+    needed_tokens = args.isl * args.rows * 2  # 2x headroom
+    chars_estimate = needed_tokens * 5  # ~5 chars/token conservative
+
+    corpus_path = _find_corpus()
+    print(f"Loading corpus from {corpus_path}...", file=sys.stderr, flush=True)
+    corpus_size = os.path.getsize(corpus_path)
+
+    book_tokens = []
+    with open(corpus_path, 'r', encoding='utf-8') as f:
+        chunk_size = 10_000_000  # 10MB chunks
+        while len(book_tokens) < needed_tokens:
+            chunk = f.read(chunk_size)
+            if not chunk:
+                break
+            book_tokens.extend(tokenizer.encode(chunk, add_special_tokens=False))
+            print(f"  tokenized {len(book_tokens):,} tokens...", file=sys.stderr, flush=True)
+            if chars_estimate < corpus_size and len(book_tokens) >= needed_tokens:
+                break
+
+    print(f"Corpus: {len(book_tokens):,} tokens (read until sufficient)", file=sys.stderr, flush=True)
+
+    if len(book_tokens) < args.isl:
+        print(f"ERROR: corpus has only {len(book_tokens)} tokens, need at least {args.isl}", file=sys.stderr, flush=True)
+        sys.exit(1)
+
+    max_start = len(book_tokens) - args.isl
+    if args.rows == 1:
+        starts = [0]
+    else:
+        starts = [round(i * max_start / (args.rows - 1)) for i in range(args.rows)]
+
+    stride = starts[1] - starts[0] if len(starts) > 1 else max_start
+    print(f"Cutting {args.rows} windows (ISL={args.isl}, stride={stride} tokens, overlap={'yes' if stride < args.isl else 'no'})",
+          file=sys.stderr, flush=True)
+
+    num_workers = min(multiprocessing.cpu_count(), 8, args.rows)
+    chunk_size = args.rows // num_workers
+    remainder = args.rows % num_workers
+
+    worker_args = []
+    offset = 0
+    for w in range(num_workers):
+        n = chunk_size + (1 if w < remainder else 0)
+        worker_starts = starts[offset:offset + n]
+        worker_args.append((w, worker_starts, book_tokens, args.isl, args.osl, args.model))
+        offset += n
+
+    print(f"Using {num_workers} workers...", file=sys.stderr, flush=True)
+    t0 = time.time()
+
+    with multiprocessing.Pool(num_workers) as pool:
+        results = pool.map(_corpus_worker, worker_args)
+
+    rows = []
+    for chunk_rows in results:
+        rows.extend(chunk_rows)
+
+    elapsed = time.time() - t0
+    print(f"Generation complete: {len(rows)} windows in {elapsed:.1f}s", file=sys.stderr, flush=True)
+
+    if not rows:
+        print("ERROR: no windows generated", file=sys.stderr, flush=True)
+        sys.exit(1)
+
+    return rows
+
+
 def main():
     parser = argparse.ArgumentParser(description='Generate benchmark dataset')
     parser.add_argument('--model', required=True, help='HuggingFace model name')
@@ -274,7 +419,7 @@ def main():
     parser.add_argument('--seed', type=int, required=True, help='Random seed')
     parser.add_argument('--rows', type=int, required=True, help='Number of rows')
     parser.add_argument('--output', required=True, help='Output JSONL path')
-    parser.add_argument('--mode', default='random', choices=['random', 'cache', 'prefix_group'], help='Dataset mode')
+    parser.add_argument('--mode', default='random', choices=['random', 'cache', 'prefix_group', 'corpus'], help='Dataset mode')
     parser.add_argument('--hit-pct', type=int, default=100, help='Cache hit percentage (cache mode)')
     parser.add_argument('--prefix-tokens', type=int, default=0, help='Shared prefix length in tokens (prefix_group mode)')
     parser.add_argument('--prefix-groups', type=int, default=10, help='Number of prefix groups (prefix_group mode)')
@@ -286,6 +431,8 @@ def main():
 
     if args.mode == 'random':
         rows = generate_random_parallel(args)
+    elif args.mode == 'corpus':
+        rows = generate_corpus(args)
     elif args.mode == 'prefix_group':
         if args.hit_pct <= 0:
             args.hit_pct = 60

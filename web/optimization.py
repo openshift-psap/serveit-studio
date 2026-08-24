@@ -355,6 +355,7 @@ def stream_job_logs(job_name: str, namespace: str):
                     'prefix_cache_hit_pct': saved_config.get('prefix_cache_hit_pct', 0),
                     'prefix_cache_mode': saved_config.get('prefix_cache_mode', 'identical'),
                     'prefix_cache_groups': saved_config.get('prefix_cache_groups', 5),
+                    'use_corpus': saved_config.get('use_corpus', False),
                     'advanced_vllm': saved_config.get('advanced_vllm'),
                 }
 
@@ -857,6 +858,7 @@ def run_optimization_background(data):
         prefix_cache_mode = _get('prefix_cache_mode', 'identical')
         prefix_cache_groups = int(_get('prefix_cache_groups', 5))
         structured_prefix = _get('structured_prefix', False)
+        use_corpus = bool(_get('use_corpus', False))
         advanced_vllm = _get('advanced_vllm')
         extra_env_vars = _get('extra_env_vars')
         headroom_setting = (advanced_vllm or {}).get('headroom', {})
@@ -1181,6 +1183,7 @@ data:
                 prefix_cache_mode=prefix_cache_mode,
                 prefix_cache_groups=prefix_cache_groups,
                 structured_prefix=structured_prefix,
+                use_corpus=use_corpus,
                 headroom=headroom,
                 memory_reserve_pct=memory_reserve_pct,
                 rdma_network_annotation=rdma_network_annotation,

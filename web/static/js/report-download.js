@@ -136,6 +136,7 @@ td{padding:8px 10px;border-bottom:1px solid #f1f5f9}
 }
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
+function fmtItl(v) { return v != null ? parseFloat(v).toFixed(2) + ' ms' : '-'; }
 function dlStatCard(val, lbl) {
     return `<div class="stat-card"><div class="val">${val}</div><div class="lbl">${lbl}</div></div>`;
 }
@@ -282,10 +283,10 @@ function buildRecSection(runId, data, rec, summary, best, allRes) {
             const t95 = _p95d.ttft || _p95d.ttft_p95;
             const t99 = _p99d.ttft || _p99d.ttft_p99;
             const fmtE2e = v => v != null ? (v >= 1000 ? (v/1000).toFixed(1) + ' s' : Math.round(v) + ' ms') : '-';
-            if (t50 != null) s += `<tr><td style="font-weight:600;color:#94a3b8;">P50</td><td style="color:#64748b;">${Math.round(t50).toLocaleString()} ms</td><td style="color:#64748b;">${fmtE2e(_p50d.e2e_p50)}</td><td style="color:#64748b;">${_p50d.itl || _p50d.itl_p50 ? (_p50d.itl || _p50d.itl_p50) + ' ms' : '-'}</td></tr>`;
-            s += `<tr><td style="font-weight:600;color:#475569;">P90</td><td style="font-weight:700;color:#1e293b;">${t90 != null ? Math.round(t90).toLocaleString() + ' ms' : '-'}</td><td>${fmtE2e(_p90d.e2e_p90)}</td><td>${_p90d.itl || _p90d.itl_p90 ? (_p90d.itl || _p90d.itl_p90) + ' ms' : '-'}</td></tr>`;
-            if (t95) s += `<tr><td style="font-weight:600;color:#475569;">P95</td><td style="color:#64748b;">${Math.round(t95).toLocaleString()} ms</td><td style="color:#64748b;">${fmtE2e(_p95d.e2e_p95)}</td><td>${_p95d.itl || _p95d.itl_p95 ? (_p95d.itl || _p95d.itl_p95) + ' ms' : '-'}</td></tr>`;
-            if (t99) s += `<tr><td style="font-weight:600;color:#475569;">P99</td><td style="color:#64748b;">${Math.round(t99).toLocaleString()} ms</td><td style="color:#64748b;">${fmtE2e(_p99d.e2e_p99)}</td><td>${_p99d.itl || _p99d.itl_p99 ? (_p99d.itl || _p99d.itl_p99) + ' ms' : '-'}</td></tr>`;
+            if (t50 != null) s += `<tr><td style="font-weight:600;color:#94a3b8;">P50</td><td style="color:#64748b;">${Math.round(t50).toLocaleString()} ms</td><td style="color:#64748b;">${fmtE2e(_p50d.e2e_p50)}</td><td style="color:#64748b;">${fmtItl(_p50d.itl || _p50d.itl_p50)}</td></tr>`;
+            s += `<tr><td style="font-weight:600;color:#475569;">P90</td><td style="font-weight:700;color:#1e293b;">${t90 != null ? Math.round(t90).toLocaleString() + ' ms' : '-'}</td><td>${fmtE2e(_p90d.e2e_p90)}</td><td>${fmtItl(_p90d.itl || _p90d.itl_p90)}</td></tr>`;
+            if (t95) s += `<tr><td style="font-weight:600;color:#475569;">P95</td><td style="color:#64748b;">${Math.round(t95).toLocaleString()} ms</td><td style="color:#64748b;">${fmtE2e(_p95d.e2e_p95)}</td><td>${fmtItl(_p95d.itl || _p95d.itl_p95)}</td></tr>`;
+            if (t99) s += `<tr><td style="font-weight:600;color:#475569;">P99</td><td style="color:#64748b;">${Math.round(t99).toLocaleString()} ms</td><td style="color:#64748b;">${fmtE2e(_p99d.e2e_p99)}</td><td>${fmtItl(_p99d.itl || _p99d.itl_p99)}</td></tr>`;
             s += '</table>';
             // Manifest links
             const mTypes = cfg.manifest_types || [];
@@ -483,8 +484,9 @@ function buildCfgSection(runId, data, charts, allRes, hasPD) {
                     const pEpp = (p.test_id && p.test_id.startsWith('step11-epp-')) ? '<br><span style="background:#7c3aed;color:white;font-size:0.65em;padding:1px 5px;border-radius:3px;">EPP TUNED</span>' : '';
                     s += `<td rowspan="3" style="vertical-align:middle;font-weight:700;${bs}">${p.config_name}<br><span style="font-weight:400;font-size:0.85em;color:#64748b;">${p.architecture}</span>${pEpp}</td>`;
                 }
+                const fmtV = v => v == null ? '-' : mi === 1 ? parseFloat(v).toFixed(2) : (mi === 2 ? parseFloat(v).toFixed(2) : Math.round(v).toLocaleString());
                 s += `<td style="color:#64748b;${bs}">${m.name}</td>`;
-                s += `<td style="${bs}">${m.p50 ?? '-'}</td><td style="${bs}">${m.p90 ?? '-'}</td><td style="${bs}">${m.p95 ?? '-'}</td><td style="${bs}">${m.p99 ?? '-'}</td>`;
+                s += `<td style="${bs}">${fmtV(m.p50)}</td><td style="${bs}">${fmtV(m.p90)}</td><td style="${bs}">${fmtV(m.p95)}</td><td style="${bs}">${fmtV(m.p99)}</td>`;
                 if (mi === 0) s += `<td rowspan="3" style="vertical-align:middle;${bs}">${p.gpus}</td><td rowspan="3" style="vertical-align:middle;${bs}">${p.efficiency}</td>`;
                 s += '</tr>';
             });
@@ -600,7 +602,7 @@ function buildCfgSection(runId, data, charts, allRes, hasPD) {
                 }).join(' ');
             }
             const tputMean = r.throughput_mean ?? r.throughput_p90 ?? na;
-            s += `<tr${cls}><td>${r.config_name}${eppBadge}</td><td>${r.architecture}</td><td data-val="${r.ttft_p90}">${r.ttft_p90}</td><td data-val="${r.ttft_p95 ?? ''}">${r.ttft_p95 ?? na}</td><td data-val="${r.ttft_p99 ?? ''}">${r.ttft_p99 ?? na}</td><td data-val="${tputMean}">${tputMean}</td><td data-val="${r.itl_p90 ?? ''}">${r.itl_p90 ?? na}</td><td data-val="${r.gpus}">${r.gpus}</td><td data-val="${r.efficiency}">${r.efficiency}</td><td>${manifestLinks}</td></tr>`;
+            s += `<tr${cls}><td>${r.config_name}${eppBadge}</td><td>${r.architecture}</td><td data-val="${r.ttft_p90}">${r.ttft_p90}</td><td data-val="${r.ttft_p95 ?? ''}">${r.ttft_p95 ?? na}</td><td data-val="${r.ttft_p99 ?? ''}">${r.ttft_p99 ?? na}</td><td data-val="${tputMean}">${tputMean}</td><td data-val="${r.itl_p90 ?? ''}">${r.itl_p90 != null ? parseFloat(r.itl_p90).toFixed(2) : na}</td><td data-val="${r.gpus}">${r.gpus}</td><td data-val="${r.efficiency}">${r.efficiency}</td><td>${manifestLinks}</td></tr>`;
         });
         s += '</table></div>';
     }
@@ -821,10 +823,10 @@ function buildCalRecCards(data) {
             }
             s += '<table style="width:100%;font-size:0.8em;border-collapse:collapse;margin-top:6px;">';
             s += '<tr style="color:#94a3b8;font-weight:600;"><td></td><td>TTFT</td><td>E2E</td><td>ITL</td></tr>';
-            if (cfg.ttft_p50) s += `<tr><td style="font-weight:600;color:#475569;">P50</td><td style="color:#64748b;">${Math.round(cfg.ttft_p50).toLocaleString()} ms</td><td style="color:#64748b;">${fmtE2e(cfg.e2e_p50)}</td><td>${cfg.itl_p50 ? cfg.itl_p50 + ' ms' : '-'}</td></tr>`;
-            s += `<tr><td style="font-weight:600;color:#475569;">P90</td><td style="font-weight:700;color:#1e293b;">${cfg.ttft_p90 != null ? Math.round(cfg.ttft_p90).toLocaleString() + ' ms' : '-'}</td><td>${fmtE2e(cfg.e2e_p90)}</td><td>${cfg.itl_p90 ? cfg.itl_p90 + ' ms' : '-'}</td></tr>`;
-            if (cfg.ttft_p95) s += `<tr><td style="font-weight:600;color:#475569;">P95</td><td style="color:#64748b;">${Math.round(cfg.ttft_p95).toLocaleString()} ms</td><td style="color:#64748b;">${fmtE2e(cfg.e2e_p95)}</td><td>${cfg.itl_p95 ? cfg.itl_p95 + ' ms' : '-'}</td></tr>`;
-            if (cfg.ttft_p99) s += `<tr><td style="font-weight:600;color:#475569;">P99</td><td style="color:#64748b;">${Math.round(cfg.ttft_p99).toLocaleString()} ms</td><td style="color:#64748b;">${fmtE2e(cfg.e2e_p99)}</td><td>${cfg.itl_p99 ? cfg.itl_p99 + ' ms' : '-'}</td></tr>`;
+            if (cfg.ttft_p50) s += `<tr><td style="font-weight:600;color:#475569;">P50</td><td style="color:#64748b;">${Math.round(cfg.ttft_p50).toLocaleString()} ms</td><td style="color:#64748b;">${fmtE2e(cfg.e2e_p50)}</td><td>${fmtItl(cfg.itl_p50)}</td></tr>`;
+            s += `<tr><td style="font-weight:600;color:#475569;">P90</td><td style="font-weight:700;color:#1e293b;">${cfg.ttft_p90 != null ? Math.round(cfg.ttft_p90).toLocaleString() + ' ms' : '-'}</td><td>${fmtE2e(cfg.e2e_p90)}</td><td>${fmtItl(cfg.itl_p90)}</td></tr>`;
+            if (cfg.ttft_p95) s += `<tr><td style="font-weight:600;color:#475569;">P95</td><td style="color:#64748b;">${Math.round(cfg.ttft_p95).toLocaleString()} ms</td><td style="color:#64748b;">${fmtE2e(cfg.e2e_p95)}</td><td>${fmtItl(cfg.itl_p95)}</td></tr>`;
+            if (cfg.ttft_p99) s += `<tr><td style="font-weight:600;color:#475569;">P99</td><td style="color:#64748b;">${Math.round(cfg.ttft_p99).toLocaleString()} ms</td><td style="color:#64748b;">${fmtE2e(cfg.e2e_p99)}</td><td>${fmtItl(cfg.itl_p99)}</td></tr>`;
             s += '</table>';
             s += '</div></div>';
         });
@@ -900,10 +902,10 @@ function buildCacheRecCards(data) {
         }
         s += '<table style="width:100%;font-size:0.8em;border-collapse:collapse;margin-top:6px;">';
         s += '<tr style="color:#94a3b8;font-weight:600;"><td></td><td>TTFT</td><td>E2E</td><td>ITL</td></tr>';
-        if (cfg.ttft_p50) s += `<tr><td style="font-weight:600;color:#475569;">P50</td><td style="color:#64748b;">${Math.round(cfg.ttft_p50).toLocaleString()} ms</td><td style="color:#64748b;">${fmtE2e(cfg.e2e_p50)}</td><td>${cfg.itl_p50 ? cfg.itl_p50 + ' ms' : '-'}</td></tr>`;
-        s += `<tr><td style="font-weight:600;color:#475569;">P90</td><td style="font-weight:700;color:#1e293b;">${cfg.ttft_p90 != null ? Math.round(cfg.ttft_p90).toLocaleString() + ' ms' : '-'}</td><td>${fmtE2e(cfg.e2e_p90)}</td><td>${cfg.itl_p90 ? cfg.itl_p90 + ' ms' : '-'}</td></tr>`;
-        if (cfg.ttft_p95) s += `<tr><td style="font-weight:600;color:#475569;">P95</td><td style="color:#64748b;">${Math.round(cfg.ttft_p95).toLocaleString()} ms</td><td style="color:#64748b;">${fmtE2e(cfg.e2e_p95)}</td><td>${cfg.itl_p95 ? cfg.itl_p95 + ' ms' : '-'}</td></tr>`;
-        if (cfg.ttft_p99) s += `<tr><td style="font-weight:600;color:#475569;">P99</td><td style="color:#64748b;">${Math.round(cfg.ttft_p99).toLocaleString()} ms</td><td style="color:#64748b;">${fmtE2e(cfg.e2e_p99)}</td><td>${cfg.itl_p99 ? cfg.itl_p99 + ' ms' : '-'}</td></tr>`;
+        if (cfg.ttft_p50) s += `<tr><td style="font-weight:600;color:#475569;">P50</td><td style="color:#64748b;">${Math.round(cfg.ttft_p50).toLocaleString()} ms</td><td style="color:#64748b;">${fmtE2e(cfg.e2e_p50)}</td><td>${fmtItl(cfg.itl_p50)}</td></tr>`;
+        s += `<tr><td style="font-weight:600;color:#475569;">P90</td><td style="font-weight:700;color:#1e293b;">${cfg.ttft_p90 != null ? Math.round(cfg.ttft_p90).toLocaleString() + ' ms' : '-'}</td><td>${fmtE2e(cfg.e2e_p90)}</td><td>${fmtItl(cfg.itl_p90)}</td></tr>`;
+        if (cfg.ttft_p95) s += `<tr><td style="font-weight:600;color:#475569;">P95</td><td style="color:#64748b;">${Math.round(cfg.ttft_p95).toLocaleString()} ms</td><td style="color:#64748b;">${fmtE2e(cfg.e2e_p95)}</td><td>${fmtItl(cfg.itl_p95)}</td></tr>`;
+        if (cfg.ttft_p99) s += `<tr><td style="font-weight:600;color:#475569;">P99</td><td style="color:#64748b;">${Math.round(cfg.ttft_p99).toLocaleString()} ms</td><td style="color:#64748b;">${fmtE2e(cfg.e2e_p99)}</td><td>${fmtItl(cfg.itl_p99)}</td></tr>`;
         s += '</table>';
         s += '</div></div>';
     });
@@ -963,7 +965,8 @@ function buildCalSection(data) {
                 const bs = mi === 0 && idx > 0 ? ' border-top:2px solid #cbd5e1;' : '';
                 s += '<tr>';
                 if (mi === 0) s += `<td rowspan="3" style="vertical-align:middle;font-weight:700;${bs}">${label}</td>`;
-                s += `<td style="color:#64748b;${bs}">${m.name}</td><td style="${bs}">${m.p50 ?? '-'}</td><td style="${hl(entry[m.k], m.b)}${bs}">${m.p90 ?? '-'}</td><td style="${bs}">${m.p95 ?? '-'}</td><td style="${bs}">${m.p99 ?? '-'}</td></tr>`;
+                const fmtV = v => v == null ? '-' : mi === 1 ? parseFloat(v).toFixed(2) : (mi === 2 ? parseFloat(v).toFixed(2) : Math.round(v).toLocaleString());
+                s += `<td style="color:#64748b;${bs}">${m.name}</td><td style="${bs}">${fmtV(m.p50)}</td><td style="${hl(entry[m.k], m.b)}${bs}">${fmtV(m.p90)}</td><td style="${bs}">${fmtV(m.p95)}</td><td style="${bs}">${fmtV(m.p99)}</td></tr>`;
             });
         });
         s += '</table></div>';
@@ -1038,7 +1041,7 @@ function buildEppTuningSection(runId, data) {
             const na = 'N/A';
             s += `<tr${cls}><td><strong>${e.name}</strong>${isBest ? ' *' : ''}</td><td>${wStr}</td>`;
             s += `<td>${e.ttft_p50 ?? na}</td><td>${e.ttft_p90 ?? na}</td><td>${e.ttft_p95 ?? na}</td><td>${e.ttft_p99 ?? na}</td>`;
-            s += `<td>${e.throughput_p90 ?? na}</td><td>${e.itl_p90 ?? na}</td></tr>`;
+            s += `<td>${e.throughput_p90 != null ? parseFloat(e.throughput_p90).toFixed(2) : na}</td><td>${e.itl_p90 != null ? parseFloat(e.itl_p90).toFixed(2) : na}</td></tr>`;
         });
         s += '</table></div>';
     });

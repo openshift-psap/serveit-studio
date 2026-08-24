@@ -47,6 +47,10 @@ class DatasetMixin:
 
         return make_prompt
 
+    def _dataset_mode(self):
+        """Return the dataset generation mode based on config."""
+        return 'corpus' if getattr(self.config, 'use_corpus', False) else 'random'
+
     def _generate_random_dataset(self):
         """Generate a dataset with unique random prompts on the workload pod.
 
@@ -55,15 +59,16 @@ class DatasetMixin:
         """
         isl = self.config.isl
         osl = self.config.osl
+        mode = self._dataset_mode()
         seed = getattr(self.config, 'prefix_cache_seed', None)
         if not seed:
-            seed_input = f"{self.config.model_name}:{isl}:{osl}:random"
+            seed_input = f"{self.config.model_name}:{isl}:{osl}:{mode}"
             seed = int(hashlib.md5(seed_input.encode()).hexdigest()[:8], 16)
 
         max_reqs = getattr(self.config, 'max_requests', None) or int(getattr(self.config, 'qps', 100) * getattr(self.config, 'test_duration', 300))
         pool_size = max(max_reqs * 3, 100)  # 3× max_requests for cache churn
 
-        dataset_path = f'/mnt/storage/prefix-cache-datasets/random-workload-{isl}-{osl}-{seed}.jsonl'
+        dataset_path = f'/mnt/storage/prefix-cache-datasets/{mode}-workload-{isl}-{osl}-{seed}.jsonl'
 
         # Ensure workload pod is running
         self.orchestrator.ensure_guidellm_pod(self.config, log_callback=lambda msg: self.log(msg, 'info'))
@@ -78,7 +83,7 @@ class DatasetMixin:
         if exists:
             self.log(f"   Reusing existing random dataset on workload pod: {os.path.basename(dataset_path)}", 'info')
         else:
-            self.log(f"Generating random dataset on workload pod: {pool_size} rows, ISL={isl}, OSL={osl}", 'info')
+            self.log(f"Generating {mode} dataset on workload pod: {pool_size} rows, ISL={isl}, OSL={osl}", 'info')
             isl_stdev = self.config.isl_stdev or 0
             osl_stdev = self.config.osl_stdev or 0
             cmd = (
@@ -87,7 +92,7 @@ class DatasetMixin:
                 f' --isl {isl} --osl {osl}'
                 f' --seed {seed} --rows {pool_size}'
                 f' --output {dataset_path}'
-                f' --mode random'
+                f' --mode {mode}'
             )
             if isl_stdev > 0:
                 cmd += f' --isl-stdev {isl_stdev}'
@@ -216,14 +221,15 @@ class DatasetMixin:
             if exists:
                 self.log(f"   Reusing calibration dataset ({label}): {os.path.basename(dataset_path)}", 'info')
             else:
-                self.log(f"   Generating calibration dataset ({label}): {pool_size} rows, ISL={isl}, OSL={osl}", 'info')
+                mode = self._dataset_mode()
+                self.log(f"   Generating calibration dataset ({label}, {mode}): {pool_size} rows, ISL={isl}, OSL={osl}", 'info')
                 cmd = (
                     f'generate_dataset'
                     f' --model "{self.config.model_name}"'
                     f' --isl {isl} --osl {osl}'
                     f' --seed {seed} --rows {pool_size}'
                     f' --output {dataset_path}'
-                    f' --mode random'
+                    f' --mode {mode}'
                 )
                 result = kubectl.run(
                     ['exec', pod_name, '-n', self.config.namespace, '--', 'bash', '-c', cmd],

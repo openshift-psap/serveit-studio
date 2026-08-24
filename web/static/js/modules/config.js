@@ -304,6 +304,14 @@ function updateUIFromConfig() {
             if (spSw) { spSw.style.background = '#15803d'; spSw.querySelector('span').style.transform = 'translateX(18px)'; }
         }
     }
+    if (config.use_corpus) {
+        var ucEl = document.getElementById('use-corpus-enabled');
+        if (ucEl) {
+            ucEl.checked = true;
+            var ucSw = document.getElementById('use-corpus-switch');
+            if (ucSw) { ucSw.style.background = '#15803d'; ucSw.querySelector('span').style.transform = 'translateX(18px)'; }
+        }
+    }
     if (config.prefix_cache_groups && document.getElementById('prefix-cache-groups-slider')) {
         document.getElementById('prefix-cache-groups-slider').value = config.prefix_cache_groups;
         document.getElementById('prefix-cache-groups-value').textContent = config.prefix_cache_groups;

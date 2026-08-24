@@ -164,6 +164,9 @@ class RecipeOptimizerConfig:
     prefix_cache_seed: Optional[int] = None  # Deterministic seed, stored in DB for reproducibility
     structured_prefix: bool = False  # Generate shared prefix + unique suffix instead of random tokens
 
+    # Corpus-based dataset (wikitext-103 real prose instead of synthetic word salad)
+    use_corpus: bool = False
+
     # Speculative decoding
     speculative_config_method: Optional[str] = None  # 'mtp', 'draft', None
     speculative_config_num_tokens: int = 3
