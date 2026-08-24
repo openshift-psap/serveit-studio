@@ -973,7 +973,8 @@ socket.on('test_plan_result', function(data) {
             </div>
         `;
 
-        document.getElementById('resource-validation').innerHTML = '';
+        var rvEl = document.getElementById('resource-validation');
+        if (rvEl) rvEl.innerHTML = '';
 
         // Store test plan in config
         config.test_plan = data;
@@ -983,7 +984,8 @@ socket.on('test_plan_result', function(data) {
         // Show error
         logToConsole('❌ ' + data.error_message, 'error');
 
-        document.getElementById('resource-validation').innerHTML = `
+        var rvEl2 = document.getElementById('resource-validation');
+        if (rvEl2) rvEl2.innerHTML = `
             <div style="background: #fee2e2; border: 1px solid #dc2626; padding: 12px; border-radius: 6px;">
                 <pre style="margin: 0; white-space: pre-wrap; font-family: monospace; font-size: 0.9em;">${data.error_message}</pre>
             </div>
@@ -996,9 +998,13 @@ socket.on('test_plan_ready', function(data) {
     if (data.ready) {
         // Enable the Start Optimization button
         const startButton = document.getElementById('start-optimization');
-        startButton.disabled = false;
-        startButton.textContent = '🚀 Start Optimization';
-        startButton.style.opacity = '1';
+        if (startButton) {
+            startButton.disabled = false;
+            startButton.textContent = '🚀 Start Optimization';
+            startButton.style.opacity = '1';
+        }
+
+        if (!config.test_plan || !config.test_plan.tests) return;
 
         // Update the validation status in the UI
         const reportHtml = `

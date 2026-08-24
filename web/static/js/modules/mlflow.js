@@ -205,6 +205,15 @@ function exportAllMlflow() {
         remaining = queue.length;
         stopBtn.innerHTML = '<span class="mlflow-spinner"></span> Exporting run ' + (selectedRuns.length - remaining) + '/' + selectedRuns.length + '... Click to stop';
 
+        var _mlflowDone = function(data) {
+            socket.off('mlflow_export_complete', _mlflowDone);
+            if (data.success) totalExported += (data.total || 0);
+            else errors.push(data.error || 'Unknown error');
+            status.textContent = totalExported + ' tests exported so far...';
+            processNext();
+        };
+        socket.on('mlflow_export_complete', _mlflowDone);
+
         fetch('/api/mlflow/export', {
             method: 'POST',
             headers: {'Content-Type': 'application/json'},
@@ -217,12 +226,14 @@ function exportAllMlflow() {
         })
         .then(function(r) { return r.json(); })
         .then(function(data) {
-            if (data.success) totalExported += data.total;
-            else errors.push(data.error);
-            status.textContent = totalExported + ' tests exported so far...';
-            processNext();
+            if (data.error) {
+                socket.off('mlflow_export_complete', _mlflowDone);
+                errors.push(data.error);
+                processNext();
+            }
         })
         .catch(function(err) {
+            socket.off('mlflow_export_complete', _mlflowDone);
             if (err.name === 'AbortError') return;
             errors.push(String(err));
             processNext();

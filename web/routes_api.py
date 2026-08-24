@@ -861,9 +861,8 @@ def export_to_mlflow():
         if not cfg:
             return jsonify({'success': False, 'error': 'MLflow not configured'}), 400
 
-        from core.mlflow_exporter import export_to_mlflow as do_export
         cfg_dict = dict(cfg)
-        result = do_export(
+        export_args = dict(
             db_path=DB_PATH,
             tracking_uri=cfg_dict['tracking_uri'],
             username=cfg_dict.get('username'),
@@ -873,7 +872,18 @@ def export_to_mlflow():
             test_ids=data.get('test_ids'),
             insecure_tls=bool(cfg_dict.get('insecure_tls', 1)),
         )
-        return jsonify(result)
+
+        def _run_export():
+            try:
+                from core.mlflow_exporter import export_to_mlflow as do_export
+                result = do_export(**export_args)
+                socketio.emit('mlflow_export_complete', result)
+            except Exception as e:
+                socketio.emit('mlflow_export_complete', {'success': False, 'error': str(e)})
+
+        from gevent import spawn as gspawn
+        gspawn(_run_export)
+        return jsonify({'success': True, 'message': 'MLflow export started in background'})
     except Exception as e:
         return jsonify({'success': False, 'error': str(e)}), 500
 
