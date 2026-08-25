@@ -121,6 +121,23 @@
                                             </div>
                                         </div>
 
+                                        <!-- Corpus Dataset toggle -->
+                                        <div style="border-top:1px solid #dcfce7;">
+                                            <div style="padding:12px 20px;cursor:pointer;display:flex;align-items:center;justify-content:space-between;" onclick="var on=!document.getElementById('use-corpus-enabled').checked;document.getElementById('use-corpus-enabled').checked=on;config.use_corpus=on;var sw=document.getElementById('use-corpus-switch');sw.style.background=on?'#15803d':'#ccc';sw.querySelector('span').style.transform=on?'translateX(18px)':'translateX(0)';saveConfig();">
+                                                <div style="display:flex;align-items:center;gap:10px;">
+                                                    <div style="font-size:1.3em;flex-shrink:0;">📖</div>
+                                                    <div>
+                                                        <div style="font-weight:600;color:#15803d;font-size:0.95em;">Use Real Text Corpus</div>
+                                                        <div style="color:#166534;font-size:0.82em;margin-top:2px;">Use contiguous English prose (Wikipedia) instead of synthetic word salad. Required for meaningful speculative decoding acceptance rates.</div>
+                                                    </div>
+                                                </div>
+                                                <input type="checkbox" id="use-corpus-enabled" style="display:none;">
+                                                <div id="use-corpus-switch" style="width:40px;height:22px;background:#ccc;border-radius:11px;position:relative;transition:background-color 0.2s;flex-shrink:0;margin-left:16px;">
+                                                    <span style="position:absolute;top:2px;left:2px;width:18px;height:18px;background:white;border-radius:50%;transition:transform 0.2s;box-shadow:0 1px 3px rgba(0,0,0,0.2);display:block;"></span>
+                                                </div>
+                                            </div>
+                                        </div>
+
                                         <!-- Multi-Turn Conversation toggle -->
                                         <div style="border-top:1px solid #dcfce7;">
                                             <div id="multi-turn-toggle" style="padding:12px 20px;cursor:pointer;display:flex;align-items:center;justify-content:space-between;" onclick="var on=!document.getElementById('multi-turn-enabled').checked;document.getElementById('multi-turn-enabled').checked=on;toggleMultiTurn();document.getElementById('multi-turn-body').style.display=on?'block':'none';document.getElementById('multi-turn-inner').style.opacity=on?'1':'0.4';var sw=document.getElementById('multi-turn-switch');sw.style.background=on?'#15803d':'#ccc';sw.querySelector('span').style.transform=on?'translateX(18px)':'translateX(0)';">
@@ -203,23 +220,6 @@
                                                             <div class="help-text">A fixed system prompt prepended to every conversation. All conversations with the same prefix share KV cache (prefix caching). Set unique prefixes to 1 for maximum cache reuse, or higher to simulate different system prompts per tenant/agent.</div>
                                                         </div>
                                                     </div>
-                                            </div>
-                                        </div>
-
-                                        <!-- Corpus Dataset toggle -->
-                                        <div style="border-top:1px solid #dcfce7;">
-                                            <div style="padding:12px 20px;cursor:pointer;display:flex;align-items:center;justify-content:space-between;" onclick="var on=!document.getElementById('use-corpus-enabled').checked;document.getElementById('use-corpus-enabled').checked=on;config.use_corpus=on;var sw=document.getElementById('use-corpus-switch');sw.style.background=on?'#15803d':'#ccc';sw.querySelector('span').style.transform=on?'translateX(18px)':'translateX(0)';saveConfig();">
-                                                <div style="display:flex;align-items:center;gap:10px;">
-                                                    <div style="font-size:1.3em;flex-shrink:0;">📖</div>
-                                                    <div>
-                                                        <div style="font-weight:600;color:#15803d;font-size:0.95em;">Use Real Text Corpus</div>
-                                                        <div style="color:#166534;font-size:0.82em;margin-top:2px;">Use contiguous English prose (Wikipedia) instead of synthetic word salad. Required for meaningful speculative decoding acceptance rates.</div>
-                                                    </div>
-                                                </div>
-                                                <input type="checkbox" id="use-corpus-enabled" style="display:none;">
-                                                <div id="use-corpus-switch" style="width:40px;height:22px;background:#ccc;border-radius:11px;position:relative;transition:background-color 0.2s;flex-shrink:0;margin-left:16px;">
-                                                    <span style="position:absolute;top:2px;left:2px;width:18px;height:18px;background:white;border-radius:50%;transition:transform 0.2s;box-shadow:0 1px 3px rgba(0,0,0,0.2);display:block;"></span>
-                                                </div>
                                             </div>
                                         </div>
 

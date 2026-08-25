@@ -648,6 +648,17 @@ class ConfigBuilderMixin:
             })
         return cfg
 
+    def _auto_enable_bidirectional_kv(self, cfg: TestConfig) -> TestConfig:
+        """Auto-enable bidirectional KV transfer for multi-turn PD/EP configs."""
+        if cfg.enable_bidirectional_kv:
+            return cfg
+        turns = getattr(self.config, 'turns', 1) or 1
+        if turns > 1 and cfg.architecture in ('pd', 'ep'):
+            cfg.enable_bidirectional_kv = True
+            self.log(f"   Bidirectional KV transfer auto-enabled (multi-turn on {cfg.architecture.upper()}). "
+                     f"If this causes issues with your model, disable it in Advanced Settings.", 'warning')
+        return cfg
+
     def _apply_raw_vllm_args(self, cfg: TestConfig, raw_text: str) -> TestConfig:
         """Parse raw text flags: set known flags on TestConfig, extras go to extra_vllm_args."""
         known_flags = {
@@ -850,6 +861,7 @@ class ConfigBuilderMixin:
         )
         cfg = self._apply_advanced_vllm(cfg)
         cfg = self._auto_tune_model_loader(cfg)
+        cfg = self._auto_enable_bidirectional_kv(cfg)
         return cfg
 
     def _create_ep_config(self, split: 'FeasibleSplit') -> TestConfig:
@@ -1055,5 +1067,6 @@ class ConfigBuilderMixin:
         )
         cfg = self._apply_advanced_vllm(cfg)
         cfg = self._auto_tune_model_loader(cfg)
+        cfg = self._auto_enable_bidirectional_kv(cfg)
         return cfg
 
