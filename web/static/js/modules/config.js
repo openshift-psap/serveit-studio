@@ -312,6 +312,13 @@ function updateUIFromConfig() {
             if (ucSw) { ucSw.style.background = '#15803d'; ucSw.querySelector('span').style.transform = 'translateX(18px)'; }
         }
     }
+    if (config.speculative_preset && config.speculative_preset !== 'off') {
+        var spSel = document.getElementById('adv-speculative-preset');
+        if (spSel) {
+            spSel.value = config.speculative_preset;
+            if (typeof applySpeculativePreset === 'function') applySpeculativePreset(config.speculative_preset);
+        }
+    }
     if (config.prefix_cache_groups && document.getElementById('prefix-cache-groups-slider')) {
         document.getElementById('prefix-cache-groups-slider').value = config.prefix_cache_groups;
         document.getElementById('prefix-cache-groups-value').textContent = config.prefix_cache_groups;

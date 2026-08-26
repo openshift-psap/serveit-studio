@@ -1,5 +1,6 @@
 """SocketIO event handlers — real-time browser communication."""
 
+import dataclasses
 import os
 import sys
 import json
@@ -363,14 +364,49 @@ def handle_start_optimization(data):
         _kill_existing_run()
 
     with state_lock:
-        # Validate that test plan exists and is ready
+        # If no test plan, auto-generate one if network/storage are already configured
         if not state['current_test_plan'] or not state['current_test_plan'].can_proceed:
-            error_msg = 'Cannot start: No valid test plan. Please generate a test plan first.'
-            if state['current_test_plan'] and state['current_test_plan'].error_message:
-                error_msg = f"Cannot start: {state['current_test_plan'].error_message}"
-            log_to_ui(f'❌ {error_msg}', 'error')
-            emit('error', {'message': error_msg})
-            return
+            saved_cfg = {}
+            try:
+                with get_db() as conn:
+                    row = conn.execute('SELECT config_json FROM ui_session_state WHERE id = 1').fetchone()
+                    if row and row['config_json']:
+                        saved_cfg = json.loads(row['config_json'])
+            except Exception:
+                pass
+            merged = {**saved_cfg, **data}
+            has_model = merged.get('model')
+            has_infra = merged.get('storage_class') or merged.get('existing_pvc_name')
+
+            if has_model and has_infra:
+                log_to_ui('🔄 No test plan found — auto-generating (cluster scan + test plan)...', 'info')
+                try:
+                    handle_generate_test_plan(merged)
+                    import gevent
+                    for _ in range(60):
+                        if state['current_test_plan'] and state['current_test_plan'].can_proceed:
+                            break
+                        gevent.sleep(1)
+                except Exception as e:
+                    log_to_ui(f'❌ Auto-scan failed: {e}', 'error')
+
+            if not state['current_test_plan'] or not state['current_test_plan'].can_proceed:
+                missing = []
+                if not has_model:
+                    missing.append('model name')
+                if not has_infra:
+                    missing.append('storage class')
+                if not merged.get('network_type'):
+                    missing.append('network type')
+                if missing:
+                    error_msg = f"Cannot start: missing configuration — {', '.join(missing)}. Please complete the setup wizard (Steps 1-2) first."
+                else:
+                    error_msg = 'Cannot start: test plan generation failed. Check the console for details.'
+                if state.get('current_test_plan') and state['current_test_plan'].error_message:
+                    error_msg = f"Cannot start: {state['current_test_plan'].error_message}"
+                log_to_ui(f'❌ {error_msg}', 'error')
+                emit('error', {'message': error_msg})
+                return
 
         state['optimization_running'] = True
         state['current_config'] = data
@@ -1286,7 +1322,7 @@ def handle_generate_test_plan(data):
                 if cached_params == test_plan_params:
                     log_to_ui('✅ Using cached test plan (parameters unchanged)', 'success')
                     socketio.emit('test_plan_ready', {
-                        'test_plan': state['current_test_plan'].to_dict(),
+                        'test_plan': dataclasses.asdict(state['current_test_plan']),
                         'can_proceed': state['current_test_plan'].can_proceed,
                         'estimated_total_tests': state['current_test_plan'].estimated_total_tests,
                         'model_requirements': state['current_test_plan'].model_requirements.__dict__

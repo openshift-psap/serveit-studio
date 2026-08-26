@@ -1692,6 +1692,12 @@ spec:
                  f"{', prefix caching' if self.config.prefix_cache_hit_pct > 0 else ''})", 'info')
         pd_mode = 'Smart (~3/pair)' if self.config.pd_search_mode == 'smart' else 'Exhaustive (all splits)'
         self.log(f"PD search: {pd_mode}", 'info')
+        if getattr(self.config, 'use_corpus', False):
+            self.log("Dataset: Real text corpus (wikitext-103)", 'info')
+        if getattr(self.config, 'speculative_config_method', None) or (getattr(self.config, 'advanced_vllm', None) or {}).get('speculative_method'):
+            spec_method = getattr(self.config, 'speculative_config_method', None) or (self.config.advanced_vllm or {}).get('speculative_method', 'mtp')
+            spec_tokens = getattr(self.config, 'speculative_config_num_tokens', None) or ((self.config.advanced_vllm or {}).get('num_speculative_tokens', {}) or {}).get('value', '?')
+            self.log(f"Speculative decoding: {spec_method}, {spec_tokens} tokens/step", 'info')
         if self.completed_tests:
             self.log(f"Mode: RESUME ({len(self.completed_tests)} completed tests will be skipped)", 'info')
         else:

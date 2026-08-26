@@ -25,6 +25,7 @@ ServeIt Studio exposes three API surfaces:
   - [Data Management](#data-management)
   - [Manifests](#manifests)
   - [MLflow Integration](#mlflow-integration)
+  - [Dataset Reproduction](#dataset-reproduction)
 - [Socket.IO Events](#socketio-events)
   - [Session Management](#session-management)
   - [Configuration](#configuration)
@@ -525,6 +526,39 @@ curl -s -X POST $BASE_URL/api/mlflow/export \
   -H 'Content-Type: application/json' \
   -d '{"run_id": 42}'
 ```
+
+---
+
+### Dataset Reproduction
+
+#### `GET /api/dataset/seed/<seed>`
+
+Look up a dataset seed and return the full generation config and reproduction command. Seeds are stored automatically whenever the optimization pipeline generates a dataset.
+
+```bash
+curl -s $BASE_URL/api/dataset/seed/2000460915 | jq '.'
+```
+
+**Response:**
+```json
+{
+  "success": true,
+  "seed": 2000460915,
+  "config": {
+    "type": "single_turn",
+    "model": "RedHatAI/gemma-4-26B-A4B-it-FP8-Dynamic",
+    "isl": 15000, "osl": 1000,
+    "isl_stdev": 5000, "osl_stdev": 500,
+    "mode": "cache", "hit_pct": 40,
+    "rows": 100000, "use_corpus": false
+  },
+  "command": "generate_dataset --model \"RedHatAI/gemma-4-26B-A4B-it-FP8-Dynamic\" --isl 15000 --osl 1000 --isl-stdev 5000 --osl-stdev 500 --seed 2000460915 --rows 100000 --mode cache --hit-pct 40 --output <output_path>"
+}
+```
+
+**Reproduction options:**
+- From seed: use the `command` field from this endpoint
+- From existing file: `generate_dataset --reproduce <existing.jsonl> --output <new.jsonl>` (reads embedded metadata from the first line)
 
 ---
 

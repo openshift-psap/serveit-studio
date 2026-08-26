@@ -596,6 +596,11 @@ class ConfigBuilderMixin:
                     val = float(val)
                 setattr(cfg, attr, val)
 
+        # Speculative decoding method (set by preset dropdown, not mode/value dict)
+        spec_method = adv.get('speculative_method')
+        if spec_method:
+            cfg.speculative_method = spec_method
+
         # Disk KV cache offloading — only when local_disk_path is set (hostPath NVMe)
         disk_offload = adv.get('disk_offload_kv') or adv.get('disk-offload-kv')
         local_disk = getattr(self.config, 'local_disk_path', None)

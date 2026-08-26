@@ -473,11 +473,23 @@ class ReportAnalyzer:
             tput = r.throughput_p90 or r.throughput_p50 or 0
             if tput > 0:
                 tpsg = (tput * osl) / r.tensor_parallelism
+                tcfg = r.test_config_json if hasattr(r, 'test_config_json') else None
+                if isinstance(tcfg, str):
+                    import json as _tcj
+                    try:
+                        tcfg = _tcj.loads(tcfg)
+                    except Exception:
+                        tcfg = {}
+                tcfg = tcfg or {}
                 decode_tp_results.append({
                     'tp': r.tensor_parallelism,
                     'tpsg': round(tpsg, 1),
                     'itl_p90': round(r.itl_p90, 2) if r.itl_p90 else None,
                     'ttft_p90': round(r.ttft_p90, 2) if r.ttft_p90 else None,
+                    'cal_isl': tcfg.get('isl'),
+                    'cal_osl': tcfg.get('osl'),
+                    'cal_concurrency': tcfg.get('num_users'),
+                    'cal_max_requests': tcfg.get('max_requests'),
                 })
 
         optimal_decode = None
@@ -496,10 +508,22 @@ class ReportAnalyzer:
             tput = r.throughput_p90 or r.throughput_p50 or 0
             if tput > 0:
                 tpsg = (tput * isl) / r.tensor_parallelism
+                tcfg = r.test_config_json if hasattr(r, 'test_config_json') else None
+                if isinstance(tcfg, str):
+                    import json as _tcj
+                    try:
+                        tcfg = _tcj.loads(tcfg)
+                    except Exception:
+                        tcfg = {}
+                tcfg = tcfg or {}
                 prefill_tp_results.append({
                     'tp': r.tensor_parallelism,
                     'tpsg': round(tpsg, 1),
                     'ttft_p90': round(r.ttft_p90, 2) if r.ttft_p90 else None,
+                    'cal_isl': tcfg.get('isl'),
+                    'cal_osl': tcfg.get('osl'),
+                    'cal_concurrency': tcfg.get('num_users'),
+                    'cal_max_requests': tcfg.get('max_requests'),
                 })
 
         optimal_prefill = None

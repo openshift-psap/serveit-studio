@@ -51,6 +51,49 @@ class DatasetMixin:
         """Return the dataset generation mode based on config."""
         return 'corpus' if getattr(self.config, 'use_corpus', False) else 'random'
 
+    def _compute_dataset_seed(self, **overrides):
+        """Compute a deterministic seed from ALL dataset parameters.
+
+        Includes model, ISL, OSL, stdev, mode, hit_pct, turns, corpus,
+        first_prompt_tokens, prefix_tokens — everything that affects
+        the generated dataset. Two different configs always produce
+        different seeds.
+        """
+        cfg = self.config
+        parts = [
+            str(overrides.get('model', cfg.model_name)),
+            str(overrides.get('isl', cfg.isl)),
+            str(overrides.get('osl', cfg.osl)),
+            str(overrides.get('isl_stdev', cfg.isl_stdev or 0)),
+            str(overrides.get('osl_stdev', cfg.osl_stdev or 0)),
+            str(overrides.get('mode', self._dataset_mode())),
+            str(overrides.get('hit_pct', cfg.prefix_cache_hit_pct or 0)),
+            str(overrides.get('cache_mode', cfg.prefix_cache_mode or 'identical')),
+            str(overrides.get('groups', cfg.prefix_cache_groups or 0)),
+            str(overrides.get('turns', getattr(cfg, 'turns', 1) or 1)),
+            str(overrides.get('first_prompt_tokens', getattr(cfg, 'first_prompt_tokens', 0) or 0)),
+            str(overrides.get('prefix_tokens', getattr(cfg, 'prefix_tokens', 0) or 0)),
+            str(overrides.get('prefix_count', getattr(cfg, 'prefix_count', 1) or 1)),
+            str(overrides.get('use_corpus', getattr(cfg, 'use_corpus', False))),
+        ]
+        seed_input = ':'.join(parts)
+        return int(hashlib.sha256(seed_input.encode()).hexdigest()[:8], 16)
+
+    def _save_seed_config(self, seed, config_dict):
+        """Save seed → config mapping to database for reproduction."""
+        if not self.db_manager:
+            return
+        try:
+            import json
+            from datetime import datetime
+            with self.db_manager.get_connection() as conn:
+                conn.execute(
+                    'INSERT OR REPLACE INTO dataset_seeds (seed, config_json, created_at) VALUES (?, ?, ?)',
+                    (seed, json.dumps(config_dict), datetime.now().isoformat())
+                )
+        except Exception as e:
+            self.log(f"   Warning: failed to save seed config: {e}", 'warning')
+
     def _generate_random_dataset(self):
         """Generate a dataset with unique random prompts on the workload pod.
 
@@ -62,8 +105,7 @@ class DatasetMixin:
         mode = self._dataset_mode()
         seed = getattr(self.config, 'prefix_cache_seed', None)
         if not seed:
-            seed_input = f"{self.config.model_name}:{isl}:{osl}:{mode}"
-            seed = int(hashlib.md5(seed_input.encode()).hexdigest()[:8], 16)
+            seed = self._compute_dataset_seed(mode=mode)
 
         max_reqs = getattr(self.config, 'max_requests', None) or int(getattr(self.config, 'qps', 100) * getattr(self.config, 'test_duration', 300))
         pool_size = max(max_reqs * 3, 100)  # 3× max_requests for cache churn
@@ -83,7 +125,8 @@ class DatasetMixin:
         if exists:
             self.log(f"   Reusing existing random dataset on workload pod: {os.path.basename(dataset_path)}", 'info')
         else:
-            self.log(f"Generating {mode} dataset on workload pod: {pool_size} rows, ISL={isl}, OSL={osl}", 'info')
+            corpus_note = ' (real text corpus)' if mode == 'corpus' else ''
+            self.log(f"Generating {mode} dataset on workload pod: {pool_size} rows, ISL={isl}, OSL={osl}{corpus_note}", 'info')
             isl_stdev = self.config.isl_stdev or 0
             osl_stdev = self.config.osl_stdev or 0
             cmd = (
@@ -111,6 +154,11 @@ class DatasetMixin:
                     self.log(f"   {line}", 'info')
 
         self.random_dataset_path = dataset_path
+        self._save_seed_config(seed, {
+            'type': 'single_turn', 'model': self.config.model_name,
+            'isl': isl, 'osl': osl, 'isl_stdev': isl_stdev, 'osl_stdev': osl_stdev,
+            'mode': mode, 'rows': pool_size, 'use_corpus': getattr(self.config, 'use_corpus', False),
+        })
         return dataset_path
 
     def _generate_turn_dataset(self):
@@ -120,10 +168,8 @@ class DatasetMixin:
         guidellm's native conversation format (conversation_turns JSONL) and supports
         first_prompt_tokens, prefix_buckets, and all distribution parameters.
         """
-        import hashlib
         cfg = self.config
-        seed_input = f"{cfg.model_name}:{cfg.isl}:{cfg.osl}:{cfg.turns}:{getattr(cfg, 'first_prompt_tokens', 0)}"
-        seed = int(hashlib.md5(seed_input.encode()).hexdigest()[:8], 16)
+        seed = self._compute_dataset_seed(turns=cfg.turns)
 
         max_reqs = getattr(cfg, 'max_requests', None) or int(getattr(cfg, 'qps', 100) * getattr(cfg, 'test_duration', 300))
         rows = max(max_reqs * 2, 100)
@@ -179,6 +225,8 @@ class DatasetMixin:
                 cmd += f' --prefix-tokens {cfg.prefix_tokens}'
             if getattr(cfg, 'prefix_count', None):
                 cmd += f' --prefix-count {cfg.prefix_count}'
+            if getattr(cfg, 'use_corpus', False):
+                cmd += ' --use-corpus'
 
             result = kubectl.run(
                 ['exec', pod_name, '-n', cfg.namespace, '--', 'bash', '-c', cmd],
@@ -192,6 +240,19 @@ class DatasetMixin:
                     self.log(f"   {line}", 'info')
 
         self.turn_dataset_path = dataset_path
+        self._save_seed_config(seed, {
+            'type': 'multi_turn', 'model': cfg.model_name,
+            'prompt_tokens': cfg.isl, 'output_tokens': cfg.osl,
+            'prompt_tokens_stdev': cfg.isl_stdev, 'output_tokens_stdev': cfg.osl_stdev,
+            'turns': cfg.turns, 'rows': rows,
+            'first_prompt_tokens': getattr(cfg, 'first_prompt_tokens', None),
+            'first_prompt_tokens_stdev': getattr(cfg, 'first_prompt_tokens_stdev', None),
+            'first_prompt_tokens_min': getattr(cfg, 'first_prompt_tokens_min', None),
+            'first_prompt_tokens_max': getattr(cfg, 'first_prompt_tokens_max', None),
+            'prefix_tokens': getattr(cfg, 'prefix_tokens', 0),
+            'prefix_count': getattr(cfg, 'prefix_count', 1),
+            'use_corpus': getattr(cfg, 'use_corpus', False),
+        })
         return dataset_path
 
     def _generate_calibration_dataset(self, isl: int, osl: int, label: str = 'calibration', pool_size: int = 0):
@@ -201,9 +262,7 @@ class DatasetMixin:
         tokens for every test in the sweep. Especially important for
         long-context prefill (ISL=100K) where synthetic generation is slow.
         """
-        import hashlib
-        seed_input = f"{self.config.model_name}:{isl}:{osl}:calibration"
-        seed = int(hashlib.md5(seed_input.encode()).hexdigest()[:8], 16)
+        seed = self._compute_dataset_seed(isl=isl, osl=osl, mode='calibration')
 
         pool_size = max(pool_size, 10)
         dataset_path = f'/mnt/storage/prefix-cache-datasets/calibration-{label}-{isl}-{osl}-{seed}.jsonl'
@@ -282,11 +341,10 @@ class DatasetMixin:
 
         cache_mode = self.config.prefix_cache_mode or 'identical'
         groups_str = str(self.config.prefix_cache_groups or 5) if cache_mode == 'multi_group' else '0'
-        seed_input = f"{self.config.model_name}:{isl}:{osl}:{hit_pct}:{self.config.isl_stdev or 0}:{self.config.osl_stdev or 0}:{cache_mode}:{groups_str}"
         if self.config.prefix_cache_seed is not None:
             seed = self.config.prefix_cache_seed
         else:
-            seed = int(hashlib.sha256(seed_input.encode()).hexdigest()[:8], 16)
+            seed = self._compute_dataset_seed(hit_pct=hit_pct, cache_mode=cache_mode, groups=int(groups_str))
             self.config.prefix_cache_seed = seed
 
         gpu_vram_gb = getattr(self, '_gpu_vram_gb', 80.0)
@@ -302,7 +360,8 @@ class DatasetMixin:
 
         dataset_path = f'/mnt/storage/prefix-cache-datasets/prefix-cache-{cache_mode}-{seed}.jsonl'
 
-        self.log(f"Generating prefix cache dataset: {hit_pct}% hit ratio, {pool_size} rows, seed={seed}", 'info')
+        corpus_label = ' (real text corpus)' if getattr(self.config, 'use_corpus', False) else ''
+        self.log(f"Generating prefix cache dataset: {hit_pct}% hit ratio, {pool_size} rows, seed={seed}{corpus_label}", 'info')
         self.log(f"   Estimated cacheable sequences: {cacheable_sequences}", 'info')
         self.log(f"   Mode: {cache_mode}", 'info')
 
@@ -351,6 +410,8 @@ class DatasetMixin:
                 cmd += f' --isl-stdev {isl_stdev}'
             if osl_stdev > 0:
                 cmd += f' --osl-stdev {osl_stdev}'
+            if getattr(self.config, 'use_corpus', False):
+                cmd += ' --use-corpus'
 
             result = kubectl.run(
                 ['exec', pod_name, '-n', self.config.namespace, '--', 'bash', '-c', cmd],
@@ -368,6 +429,14 @@ class DatasetMixin:
         self.config.dataset_column = 'prompt'
         self.config.dataset_max_output = osl
         self.log("   Workload switched to dataset mode for prefix cache simulation", 'info')
+
+        self._save_seed_config(seed, {
+            'type': 'single_turn', 'model': self.config.model_name,
+            'isl': isl, 'osl': osl, 'isl_stdev': isl_stdev, 'osl_stdev': osl_stdev,
+            'mode': 'prefix_group' if (structured_prefix and hit_pct > 0) else 'cache',
+            'hit_pct': hit_pct, 'prefix_groups': groups if cache_mode == 'multi_group' else 0,
+            'rows': pool_size, 'use_corpus': getattr(self.config, 'use_corpus', False),
+        })
 
         # Persist seed to DB so resume regenerates the same dataset
         if self.run_id and self.db_manager:
