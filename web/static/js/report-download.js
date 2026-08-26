@@ -443,6 +443,31 @@ function buildTPSection(rec, charts) {
     s += '<div class="grid2"><div class="chart-box"><h3>Decode TP Sweep</h3><div id="tp-dec" style="height:430px"></div></div>';
     s += '<div class="chart-box"><h3>Prefill TP Sweep</h3><div id="tp-pre" style="height:430px"></div></div></div>';
     s += '<div class="chart-box"><h3>TP Calibration (Pareto)</h3><div id="p1" style="height:430px"></div></div>';
+
+    // Calibration parameters table (after all charts)
+    const calRows = [];
+    if (hasDecodeTP) {
+        rec.decode_tp_all.forEach(d => {
+            calRows.push({ role: 'Decode', tp: d.tp, isl: d.cal_isl, osl: d.cal_osl, conc: d.cal_concurrency, reqs: d.cal_max_requests, result: d.tpsg ? d.tpsg.toLocaleString() + ' tok/s/GPU' : '-' });
+        });
+    }
+    if (hasPrefillTP) {
+        rec.prefill_tp_all.forEach(d => {
+            calRows.push({ role: 'Prefill', tp: d.tp, isl: d.cal_isl, osl: d.cal_osl, conc: d.cal_concurrency, reqs: d.cal_max_requests, result: d.ttft_p90 != null ? d.ttft_p90.toLocaleString() + ' ms TTFT' : '-' });
+        });
+    }
+    if (calRows.length) {
+        s += '<div style="margin:16px 0;padding:16px 20px;background:#f8fafc;border:1px solid #e2e8f0;border-radius:8px;">';
+        s += '<div style="font-weight:700;font-size:0.95em;color:#1e293b;margin-bottom:8px;">Calibration Test Parameters</div>';
+        s += '<p style="color:#64748b;font-size:0.82em;margin:0 0 10px;">Each TP value is tested with isolated workloads: <strong>ISL=1</strong> for decode (measures pure token generation) and <strong>OSL=1</strong> for prefill (measures pure prompt processing). Concurrency is estimated from KV cache capacity to avoid OOM.</p>';
+        s += '<table style="width:100%;font-size:0.85em;text-align:center;"><tr><th style="text-align:center">Role</th><th style="text-align:center">TP</th><th style="text-align:center">ISL</th><th style="text-align:center">OSL</th><th style="text-align:center">Concurrency</th><th style="text-align:center">Max Requests</th><th style="text-align:center">Result</th></tr>';
+        calRows.forEach(r => {
+            const cls = r.role === 'Decode' ? ' style="color:#6366f1;text-align:center;"' : ' style="color:#0d9488;text-align:center;"';
+            s += `<tr><td${cls}><strong>${r.role}</strong></td><td>${r.tp}</td><td>${r.isl != null ? r.isl.toLocaleString() : '-'}</td><td>${r.osl != null ? r.osl.toLocaleString() : '-'}</td><td>${r.conc || '-'}</td><td>${r.reqs || '-'}</td><td>${r.result}</td></tr>`;
+        });
+        s += '</table></div>';
+    }
+
     return s;
 }
 

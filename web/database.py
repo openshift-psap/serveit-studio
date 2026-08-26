@@ -319,6 +319,15 @@ def init_db():
         except sqlite3.OperationalError:
             pass
 
+    # Dataset seed registry — maps seed → full generation config for reproduction
+    cursor.execute('''
+        CREATE TABLE IF NOT EXISTS dataset_seeds (
+            seed INTEGER PRIMARY KEY,
+            config_json TEXT NOT NULL,
+            created_at TEXT NOT NULL
+        )
+    ''')
+
     # Create Optuna tables if they don't exist
     cursor.execute('''
         CREATE TABLE IF NOT EXISTS optuna_trials (

@@ -1,5 +1,6 @@
 """SocketIO event handlers — real-time browser communication."""
 
+import dataclasses
 import os
 import sys
 import json
@@ -1286,7 +1287,7 @@ def handle_generate_test_plan(data):
                 if cached_params == test_plan_params:
                     log_to_ui('✅ Using cached test plan (parameters unchanged)', 'success')
                     socketio.emit('test_plan_ready', {
-                        'test_plan': state['current_test_plan'].to_dict(),
+                        'test_plan': dataclasses.asdict(state['current_test_plan']),
                         'can_proceed': state['current_test_plan'].can_proceed,
                         'estimated_total_tests': state['current_test_plan'].estimated_total_tests,
                         'model_requirements': state['current_test_plan'].model_requirements.__dict__

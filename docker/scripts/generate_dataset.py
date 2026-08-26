@@ -113,13 +113,14 @@ def generate_random_parallel(args):
 
 def _generate_cache_chunk(chunk_args):
     """Generate a chunk of cache dataset rows in a worker process."""
-    start_idx, count, seed, isl, osl, isl_stdev, osl_stdev, model_name, shared_prompt, hit_pct = chunk_args
+    start_idx, count, seed, isl, osl, isl_stdev, osl_stdev, model_name, shared_prompt, hit_count, unique_count, use_corpus = chunk_args
     pid = os.getpid()
     tokenizer, vocab = _load_tokenizer(model_name)
-    print(f"Worker {pid}: generating {count} cache rows (ISL {isl}+{isl_stdev})...", file=sys.stderr, flush=True)
-
-    hit_count = int(count * hit_pct / 100)
-    unique_count = count - hit_count
+    corpus_tokens = None
+    if use_corpus:
+        max_isl = isl + (int(isl_stdev) if isl_stdev > 0 else 0)
+        _, corpus_tokens = _load_corpus_tokens(model_name, max_isl * (count + 10))
+    print(f"Worker {pid}: generating {count} cache rows ({hit_count} hits, {unique_count} unique, ISL {isl}+{isl_stdev})...", file=sys.stderr, flush=True)
 
     if tokenizer:
         shared_toks = tokenizer.encode(shared_prompt, add_special_tokens=False)
@@ -147,7 +148,13 @@ def _generate_cache_chunk(chunk_args):
         rng = random.Random(seed + start_idx + hit_count + i + 1)
         row_isl = isl + int(rng.random() * isl_stdev) if isl_stdev > 0 else isl
         row_osl = osl + int(rng.random() * osl_stdev) if osl_stdev > 0 else osl
-        prompt = _make_prompt(row_isl, rng, tokenizer, vocab)
+        if corpus_tokens is not None and tokenizer:
+            offset = ((start_idx + hit_count + i) * max_isl * 3) % max(1, len(corpus_tokens) - row_isl)
+            prompt = _corpus_window(tokenizer, corpus_tokens, offset, row_isl)
+            if not prompt:
+                prompt = _make_prompt(row_isl, rng, tokenizer, vocab)
+        else:
+            prompt = _make_prompt(row_isl, rng, tokenizer, vocab)
         rows.append(json.dumps({'prompt': prompt, 'output_tokens_count': row_osl}))
         if (i + 1) % 2000 == 0:
             print(f"Worker {pid}: {i+1}/{unique_count} unique rows", file=sys.stderr, flush=True)
@@ -159,22 +166,47 @@ def _generate_cache_chunk(chunk_args):
 def generate_cache_parallel(args):
     """Generate cache dataset using multiprocessing."""
     num_workers = min(multiprocessing.cpu_count(), 8)
-
-    # Generate shared prompt at max ISL so shorter rows can truncate from it
-    tokenizer, vocab = _load_tokenizer(args.model)
-    shared_rng = random.Random(args.seed)
     max_isl = args.isl + (int(args.isl_stdev) if args.isl_stdev > 0 else 0)
-    shared_prompt = _make_prompt(max_isl, shared_rng, tokenizer, vocab)
-    print(f"Shared prompt generated ({len(shared_prompt)} chars, max ISL {max_isl})", file=sys.stderr, flush=True)
+
+    if getattr(args, 'use_corpus', False):
+        needed = max_isl * (args.rows + 10)
+        corpus_tok, corpus_tokens = _load_corpus_tokens(args.model, needed)
+        shared_prompt = _corpus_window(corpus_tok, corpus_tokens, 0, max_isl)
+        if not shared_prompt:
+            print("ERROR: could not cut shared prompt from corpus", file=sys.stderr, flush=True)
+            sys.exit(1)
+        print(f"Shared prompt from corpus ({len(shared_prompt)} chars, {max_isl} tokens)", file=sys.stderr, flush=True)
+    else:
+        tokenizer, vocab = _load_tokenizer(args.model)
+        shared_rng = random.Random(args.seed)
+        shared_prompt = _make_prompt(max_isl, shared_rng, tokenizer, vocab)
+        print(f"Shared prompt generated ({len(shared_prompt)} chars, max ISL {max_isl})", file=sys.stderr, flush=True)
+
+    total_hits = int(args.rows * args.hit_pct / 100)
+    total_unique = args.rows - total_hits
 
     chunk_size = args.rows // num_workers
     remainder = args.rows % num_workers
 
+    uc = getattr(args, 'use_corpus', False)
+    # Distribute hits round-robin across workers for exact count
+    worker_hits = [0] * num_workers
+    worker_sizes = []
+    for w in range(num_workers):
+        worker_sizes.append(chunk_size + (1 if w < remainder else 0))
+    for i in range(total_hits):
+        worker_hits[i % num_workers] += 1
+    # Clamp hits to worker size
+    for w in range(num_workers):
+        worker_hits[w] = min(worker_hits[w], worker_sizes[w])
+
     chunks = []
     offset = 0
     for w in range(num_workers):
-        n = chunk_size + (1 if w < remainder else 0)
-        chunks.append((offset, n, args.seed, args.isl, args.osl, args.isl_stdev, args.osl_stdev, args.model, shared_prompt, args.hit_pct))
+        n = worker_sizes[w]
+        wh = worker_hits[w]
+        wu = n - wh
+        chunks.append((offset, n, args.seed, args.isl, args.osl, args.isl_stdev, args.osl_stdev, args.model, shared_prompt, wh, wu, uc))
         offset += n
 
     print(f"Using {num_workers} workers for {args.rows} rows...", file=sys.stderr, flush=True)
@@ -196,9 +228,13 @@ def generate_cache_parallel(args):
 
 def _generate_prefix_group_chunk(chunk_args):
     """Generate a chunk of prefix-group rows: shared prefix + unique suffix per row."""
-    start_idx, count, seed, isl, isl_stdev, osl, osl_stdev, prefix_pct, model_name, group_prefixes = chunk_args
+    start_idx, count, seed, isl, isl_stdev, osl, osl_stdev, prefix_pct, model_name, group_prefixes, use_corpus = chunk_args
     pid = os.getpid()
     tokenizer, vocab = _load_tokenizer(model_name)
+    corpus_tokens = None
+    if use_corpus:
+        max_isl = isl + (int(isl_stdev) if isl_stdev > 0 else 0)
+        _, corpus_tokens = _load_corpus_tokens(model_name, max_isl * (count + 10))
     num_groups = len(group_prefixes)
     print(f"Worker {pid}: generating {count} prefix-group rows ({num_groups} groups, {prefix_pct}% prefix, ISL {isl}+{isl_stdev})...", file=sys.stderr, flush=True)
 
@@ -219,7 +255,13 @@ def _generate_prefix_group_chunk(chunk_args):
             words = full_prefix.split()
             prefix = ' '.join(words[:max(1, int(row_prefix_tokens * 0.8))])
 
-        suffix = _make_prompt(row_suffix_tokens, rng, tokenizer, vocab)
+        if corpus_tokens is not None and tokenizer:
+            offset = ((start_idx + i) * isl * 3) % max(1, len(corpus_tokens) - row_suffix_tokens)
+            suffix = _corpus_window(tokenizer, corpus_tokens, offset, row_suffix_tokens)
+            if not suffix:
+                suffix = _make_prompt(row_suffix_tokens, rng, tokenizer, vocab)
+        else:
+            suffix = _make_prompt(row_suffix_tokens, rng, tokenizer, vocab)
         prompt = prefix + '\n' + suffix
         row_osl = osl + int(rng.random() * osl_stdev) if osl_stdev > 0 else osl
         rows.append(json.dumps({'prompt': prompt, 'output_tokens_count': row_osl}))
@@ -238,13 +280,26 @@ def generate_prefix_group_parallel(args):
     max_isl = args.isl + (int(args.isl_stdev) if args.isl_stdev > 0 else 0)
     max_prefix_tokens = max(1, int(max_isl * prefix_pct / 100))
 
-    tokenizer, vocab = _load_tokenizer(args.model)
-
-    print(f"Generating {num_groups} group prefixes ({max_prefix_tokens} max tokens, {prefix_pct}% of ISL)...", file=sys.stderr, flush=True)
-    group_prefixes = []
-    for g in range(num_groups):
-        grng = random.Random(args.seed + g * 10000)
-        group_prefixes.append(_make_prompt(max_prefix_tokens, grng, tokenizer, vocab))
+    if getattr(args, 'use_corpus', False):
+        needed = max_prefix_tokens * (num_groups + 1) * 3
+        corpus_tok, corpus_tokens = _load_corpus_tokens(args.model, needed)
+        print(f"Generating {num_groups} group prefixes from corpus ({max_prefix_tokens} tokens each)...", file=sys.stderr, flush=True)
+        group_prefixes = []
+        for g in range(num_groups):
+            offset = g * max_prefix_tokens * 3
+            prefix = _corpus_window(corpus_tok, corpus_tokens, offset, max_prefix_tokens)
+            if not prefix:
+                tokenizer, vocab = _load_tokenizer(args.model)
+                grng = random.Random(args.seed + g * 10000)
+                prefix = _make_prompt(max_prefix_tokens, grng, tokenizer, vocab)
+            group_prefixes.append(prefix)
+    else:
+        tokenizer, vocab = _load_tokenizer(args.model)
+        print(f"Generating {num_groups} group prefixes ({max_prefix_tokens} max tokens, {prefix_pct}% of ISL)...", file=sys.stderr, flush=True)
+        group_prefixes = []
+        for g in range(num_groups):
+            grng = random.Random(args.seed + g * 10000)
+            group_prefixes.append(_make_prompt(max_prefix_tokens, grng, tokenizer, vocab))
     print(f"Generated {num_groups} group prefixes (max {max_prefix_tokens} tokens, ISL range {args.isl}-{max_isl})", file=sys.stderr, flush=True)
 
     chunk_size = args.rows // num_workers
@@ -253,7 +308,7 @@ def generate_prefix_group_parallel(args):
     offset = 0
     for w in range(num_workers):
         n = chunk_size + (1 if w < remainder else 0)
-        chunks.append((offset, n, args.seed, args.isl, args.isl_stdev, args.osl, args.osl_stdev, prefix_pct, args.model, group_prefixes))
+        chunks.append((offset, n, args.seed, args.isl, args.isl_stdev, args.osl, args.osl_stdev, prefix_pct, args.model, group_prefixes, getattr(args, 'use_corpus', False)))
         offset += n
 
     print(f"Using {num_workers} workers for {args.rows} rows...", file=sys.stderr, flush=True)
@@ -288,9 +343,49 @@ def _find_corpus():
     sys.exit(1)
 
 
+def _load_corpus_tokens(model_name, min_tokens):
+    """Load and tokenize enough corpus text to provide the requested tokens."""
+    from transformers import AutoTokenizer
+    hf_home = os.environ.get('HF_HOME', '/mnt/storage/.cache/huggingface')
+    hf_token = os.environ.get('HF_TOKEN')
+    tokenizer = AutoTokenizer.from_pretrained(
+        model_name, trust_remote_code=True,
+        cache_dir=hf_home, token=hf_token
+    )
+    corpus_path = _find_corpus()
+    print(f"Loading corpus from {corpus_path}...", file=sys.stderr, flush=True)
+    book_tokens = []
+    with open(corpus_path, 'r', encoding='utf-8') as f:
+        while len(book_tokens) < min_tokens:
+            chunk = f.read(10_000_000)
+            if not chunk:
+                break
+            book_tokens.extend(tokenizer.encode(chunk, add_special_tokens=False))
+    print(f"Corpus: {len(book_tokens):,} tokens", file=sys.stderr, flush=True)
+    return tokenizer, book_tokens
+
+
+def _corpus_window(tokenizer, book_tokens, start, length):
+    """Cut an exact-length window from the tokenized corpus."""
+    end = start + length
+    for _ in range(8):
+        if end <= start or end > len(book_tokens):
+            return None
+        prompt = tokenizer.decode(
+            book_tokens[start:end],
+            skip_special_tokens=False,
+            clean_up_tokenization_spaces=False,
+        )
+        actual = len(tokenizer.encode(prompt, add_special_tokens=False))
+        if actual == length:
+            return prompt
+        end += length - actual
+    return None
+
+
 def _corpus_worker(worker_args):
     """Worker: cut windows from the tokenized corpus."""
-    worker_id, starts, book_tokens, isl, osl, model_name = worker_args
+    worker_id, starts, book_tokens, isl, osl, model_name, isl_stdev, osl_stdev, seed = worker_args
     from transformers import AutoTokenizer
     hf_home = os.environ.get('HF_HOME', '/mnt/storage/.cache/huggingface')
     hf_token = os.environ.get('HF_TOKEN')
@@ -302,25 +397,22 @@ def _corpus_worker(worker_args):
 
     rows = []
     skipped = 0
-    for start in starts:
-        end = start + isl
-        for _ in range(8):
-            if end <= start or end > len(book_tokens):
-                break
-            prompt = tokenizer.decode(
-                book_tokens[start:end],
-                skip_special_tokens=False,
-                clean_up_tokenization_spaces=False,
-            )
-            actual = len(tokenizer.encode(prompt, add_special_tokens=False))
-            if actual == isl:
-                rows.append(json.dumps({
-                    'prompt': prompt,
-                    'prompt_tokens_count': isl,
-                    'output_tokens_count': osl,
-                }))
-                break
-            end += isl - actual
+    for idx, start in enumerate(starts):
+        rng = random.Random(seed + idx)
+        row_isl = isl
+        if isl_stdev > 0:
+            row_isl = max(isl // 4, int(isl + rng.gauss(0, isl_stdev)))
+        row_osl = osl
+        if osl_stdev > 0:
+            row_osl = max(osl // 4, int(osl + rng.gauss(0, osl_stdev)))
+
+        prompt = _corpus_window(tokenizer, book_tokens, start, row_isl)
+        if prompt:
+            rows.append(json.dumps({
+                'prompt': prompt,
+                'prompt_tokens_count': row_isl,
+                'output_tokens_count': row_osl,
+            }))
         else:
             skipped += 1
 
@@ -388,7 +480,7 @@ def generate_corpus(args):
     for w in range(num_workers):
         n = chunk_size + (1 if w < remainder else 0)
         worker_starts = starts[offset:offset + n]
-        worker_args.append((w, worker_starts, book_tokens, args.isl, args.osl, args.model))
+        worker_args.append((w, worker_starts, book_tokens, args.isl, args.osl, args.model, args.isl_stdev, args.osl_stdev, args.seed + offset))
         offset += n
 
     print(f"Using {num_workers} workers...", file=sys.stderr, flush=True)
@@ -411,13 +503,43 @@ def generate_corpus(args):
     return rows
 
 
+def _build_meta(args):
+    """Build metadata dict from all generation parameters."""
+    return {
+        '_meta': True,
+        'model': args.model,
+        'isl': args.isl,
+        'osl': args.osl,
+        'seed': args.seed,
+        'rows': args.rows,
+        'mode': args.mode,
+        'hit_pct': args.hit_pct,
+        'prefix_tokens': args.prefix_tokens,
+        'prefix_groups': args.prefix_groups,
+        'isl_stdev': args.isl_stdev,
+        'osl_stdev': args.osl_stdev,
+        'use_corpus': getattr(args, 'use_corpus', False),
+    }
+
+
+def _load_meta(path):
+    """Read metadata from the first line of a JSONL dataset."""
+    with open(path, 'r') as f:
+        first = f.readline().strip()
+        if first:
+            meta = json.loads(first)
+            if meta.get('_meta'):
+                return meta
+    return None
+
+
 def main():
     parser = argparse.ArgumentParser(description='Generate benchmark dataset')
-    parser.add_argument('--model', required=True, help='HuggingFace model name')
-    parser.add_argument('--isl', type=int, required=True, help='Input sequence length (prefix + suffix)')
-    parser.add_argument('--osl', type=int, required=True, help='Output sequence length')
-    parser.add_argument('--seed', type=int, required=True, help='Random seed')
-    parser.add_argument('--rows', type=int, required=True, help='Number of rows')
+    parser.add_argument('--model', default=None, help='HuggingFace model name')
+    parser.add_argument('--isl', type=int, default=None, help='Input sequence length')
+    parser.add_argument('--osl', type=int, default=None, help='Output sequence length')
+    parser.add_argument('--seed', type=int, default=None, help='Random seed')
+    parser.add_argument('--rows', type=int, default=None, help='Number of rows')
     parser.add_argument('--output', required=True, help='Output JSONL path')
     parser.add_argument('--mode', default='random', choices=['random', 'cache', 'prefix_group', 'corpus'], help='Dataset mode')
     parser.add_argument('--hit-pct', type=int, default=100, help='Cache hit percentage (cache mode)')
@@ -425,7 +547,52 @@ def main():
     parser.add_argument('--prefix-groups', type=int, default=10, help='Number of prefix groups (prefix_group mode)')
     parser.add_argument('--isl-stdev', type=float, default=0, help='ISL standard deviation')
     parser.add_argument('--osl-stdev', type=float, default=0, help='OSL standard deviation')
+    parser.add_argument('--use-corpus', action='store_true', default=False, help='Use real prose from bundled corpus')
+    parser.add_argument('--reproduce', type=str, default=None, help='Base64 workload seed or path to existing dataset file')
     args = parser.parse_args()
+
+    # Reproduce mode: decode base64 seed or read metadata from file
+    if args.reproduce:
+        meta = None
+        # Try base64 decode first
+        try:
+            import base64
+            decoded = base64.b64decode(args.reproduce).decode('utf-8')
+            meta = json.loads(decoded)
+            print(f"Reproducing from seed", file=sys.stderr, flush=True)
+        except Exception:
+            pass
+        # Fall back to file
+        if not meta and os.path.isfile(args.reproduce):
+            meta = _load_meta(args.reproduce)
+            if meta:
+                print(f"Reproducing from file: {args.reproduce}", file=sys.stderr, flush=True)
+        if not meta:
+            print(f"ERROR: invalid seed or file: {args.reproduce}", file=sys.stderr, flush=True)
+            sys.exit(1)
+        for key in ['model', 'isl', 'osl', 'seed', 'rows', 'mode', 'hit_pct',
+                     'prefix_tokens', 'prefix_groups', 'isl_stdev', 'osl_stdev', 'use_corpus']:
+            if meta.get(key) is not None:
+                setattr(args, key.replace('-', '_'), meta.get(key))
+        # Infer mode from seed if not explicitly set
+        if args.mode == 'random' and meta.get('hit_pct') and meta['hit_pct'] > 0:
+            if meta.get('prefix_cache_mode') == 'multi_group' or meta.get('structured_prefix'):
+                args.mode = 'prefix_group'
+            else:
+                args.mode = 'cache'
+        elif args.mode == 'random' and meta.get('use_corpus') and not meta.get('hit_pct'):
+            args.mode = 'corpus'
+        if not args.seed:
+            import hashlib
+            seed_input = ':'.join(str(meta.get(k, '')) for k in ['model','isl','osl','isl_stdev','osl_stdev','mode','hit_pct'])
+            args.seed = int(hashlib.sha256(seed_input.encode()).hexdigest()[:8], 16)
+        if not args.rows:
+            args.rows = 100000
+        print(f"Config: model={args.model}, ISL={args.isl}, OSL={args.osl}, seed={args.seed}, "
+              f"mode={args.mode}, rows={args.rows}, corpus={args.use_corpus}", file=sys.stderr, flush=True)
+
+    if not args.model or not args.isl or not args.osl or args.seed is None or not args.rows:
+        parser.error("--model, --isl, --osl, --seed, and --rows are required (or use --reproduce)")
 
     print(f"Generating {args.mode} dataset: {args.rows} rows, ISL={args.isl}, OSL={args.osl}, seed={args.seed}", file=sys.stderr, flush=True)
 
@@ -441,11 +608,14 @@ def main():
         rows = generate_cache_parallel(args)
 
     os.makedirs(os.path.dirname(args.output) or '.', exist_ok=True)
+    meta_line = json.dumps(_build_meta(args))
     with open(args.output, 'w') as f:
+        f.write(meta_line + '\n')
         f.write('\n'.join(rows) + '\n')
 
     size_mb = os.path.getsize(args.output) / (1024 * 1024)
     print(f"Generated {args.output} ({size_mb:.1f} MB, {len(rows)} rows)", file=sys.stderr, flush=True)
+    print(f"Reproduce with: generate_dataset --reproduce {args.output} --output <new_path>", file=sys.stderr, flush=True)
 
 
 if __name__ == '__main__':

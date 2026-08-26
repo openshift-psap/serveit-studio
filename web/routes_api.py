@@ -888,6 +888,49 @@ def export_to_mlflow():
         return jsonify({'success': False, 'error': str(e)}), 500
 
 
+@app.route('/api/dataset/seed/<int:seed>')
+def get_dataset_seed_config(seed):
+    """Look up a dataset seed and return the full generation config."""
+    try:
+        with get_db() as conn:
+            row = conn.execute('SELECT config_json, created_at FROM dataset_seeds WHERE seed = ?', (seed,)).fetchone()
+            if not row:
+                return jsonify({'success': False, 'error': f'Seed {seed} not found'}), 404
+            config = json.loads(row['config_json'])
+            config['seed'] = seed
+            # Build the reproduction command
+            if config.get('type') == 'multi_turn':
+                cmd = f'generate_turn_dataset --model "{config["model"]}" --prompt-tokens {config["prompt_tokens"]} --output-tokens {config["output_tokens"]}'
+                if config.get('prompt_tokens_stdev'): cmd += f' --prompt-tokens-stdev {config["prompt_tokens_stdev"]}'
+                if config.get('output_tokens_stdev'): cmd += f' --output-tokens-stdev {config["output_tokens_stdev"]}'
+                if config.get('first_prompt_tokens'): cmd += f' --first-prompt-tokens {config["first_prompt_tokens"]}'
+                if config.get('first_prompt_tokens_stdev'): cmd += f' --first-prompt-tokens-stdev {config["first_prompt_tokens_stdev"]}'
+                if config.get('first_prompt_tokens_min'): cmd += f' --first-prompt-tokens-min {config["first_prompt_tokens_min"]}'
+                if config.get('first_prompt_tokens_max'): cmd += f' --first-prompt-tokens-max {config["first_prompt_tokens_max"]}'
+                if config.get('prefix_tokens'): cmd += f' --prefix-tokens {config["prefix_tokens"]} --prefix-count {config.get("prefix_count", 1)}'
+                cmd += f' --turns {config.get("turns", 1)} --rows {config.get("rows", 100)} --seed {seed}'
+                if config.get('use_corpus'): cmd += ' --use-corpus'
+            else:
+                cmd = f'generate_dataset --model "{config["model"]}" --isl {config["isl"]} --osl {config["osl"]}'
+                if config.get('isl_stdev'): cmd += f' --isl-stdev {config["isl_stdev"]}'
+                if config.get('osl_stdev'): cmd += f' --osl-stdev {config["osl_stdev"]}'
+                cmd += f' --seed {seed} --rows {config.get("rows", 100)}'
+                mode = config.get('mode', 'random')
+                if mode == 'cache':
+                    cmd += f' --mode cache --hit-pct {config.get("hit_pct", 100)}'
+                elif mode == 'prefix_group':
+                    cmd += f' --mode prefix_group --hit-pct {config.get("hit_pct", 60)} --prefix-groups {config.get("prefix_groups", 10)}'
+                elif mode == 'corpus':
+                    cmd += ' --mode corpus'
+                else:
+                    cmd += ' --mode random'
+                if config.get('use_corpus') and mode not in ('corpus', 'random'): cmd += ' --use-corpus'
+            cmd += ' --output <output_path>'
+            return jsonify({'success': True, 'seed': seed, 'config': config, 'command': cmd, 'created_at': row['created_at']})
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+
 # --- Backup/Restore endpoints (for launcher integration) ---
 
 @app.route('/api/backup/database')

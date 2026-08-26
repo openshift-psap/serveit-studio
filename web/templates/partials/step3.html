@@ -22,6 +22,72 @@
                             </div>
                         </div>
 
+                        <!-- Seed Import -->
+                        <div style="border:2px solid #0ea5e9;border-radius:12px;overflow:hidden;margin-bottom:20px;">
+                            <div style="background:linear-gradient(135deg,#f0f9ff,#e0f2fe);padding:12px 20px;display:flex;align-items:center;justify-content:space-between;">
+                                <div>
+                                    <div style="font-weight:700;color:#0369a1;font-size:0.95em;">🔑 Import from Seed</div>
+                                    <div style="color:#0284c7;font-size:0.82em;margin-top:2px;">Paste a dataset seed from a previous run to auto-fill all workload settings.</div>
+                                </div>
+                            </div>
+                            <div style="padding:12px 20px;display:flex;gap:8px;align-items:center;">
+                                <input type="text" id="seed-import-input" placeholder="e.g. 2000460915" style="flex:1;padding:8px 12px;border:2px solid #d1d5db;border-radius:8px;font-size:14px;font-family:monospace;">
+                                <button type="button" onclick="importFromSeed()" style="padding:8px 16px;background:#0ea5e9;color:white;border:none;border-radius:8px;font-weight:600;cursor:pointer;font-size:13px;white-space:nowrap;" onmouseover="this.style.background='#0284c7'" onmouseout="this.style.background='#0ea5e9'">Apply Seed</button>
+                            </div>
+                            <div id="seed-import-status" style="display:none;padding:0 20px 12px;font-size:0.82em;"></div>
+                        </div>
+                        <script>
+                        function importFromSeed() {
+                            var seedVal = document.getElementById('seed-import-input').value.trim();
+                            if (!seedVal) return;
+                            var statusEl = document.getElementById('seed-import-status');
+                            statusEl.style.display = 'block';
+                            try {
+                                var c = JSON.parse(atob(seedVal));
+                            } catch(e) {
+                                statusEl.innerHTML = '<span style="color:#dc2626;">Invalid seed — must be a base64-encoded workload config.</span>';
+                                return;
+                            }
+                            config.isl = c.isl || c.prompt_tokens;
+                            config.osl = c.osl || c.output_tokens;
+                            config.isl_stdev = c.isl_stdev || c.prompt_tokens_stdev || null;
+                            config.osl_stdev = c.osl_stdev || c.output_tokens_stdev || null;
+                            config.turns = c.turns || 1;
+                            config.first_prompt_tokens = c.first_prompt_tokens || null;
+                            config.first_prompt_tokens_stdev = c.first_prompt_tokens_stdev || null;
+                            config.first_prompt_tokens_min = c.first_prompt_tokens_min || null;
+                            config.first_prompt_tokens_max = c.first_prompt_tokens_max || null;
+                            config.prefix_tokens = c.prefix_tokens || 0;
+                            config.prefix_count = c.prefix_count || 1;
+                            config.use_corpus = c.use_corpus || false;
+                            config.prefix_cache_hit_pct = c.hit_pct || c.prefix_cache_hit_pct || 0;
+                            config.prefix_cache_mode = c.prefix_cache_mode || c.cache_mode || 'identical';
+                            config.prefix_cache_groups = c.prefix_cache_groups || c.prefix_groups || 5;
+                            config.structured_prefix = c.structured_prefix || false;
+                            if (c.model) config.model = c.model;
+
+                            // Reset collapsed sections before loadSavedConfig re-expands them
+                            var resetToggles = [
+                                ['length-variation-enabled', 'length-variation-body', 'length-variation-inner', 'length-variation-switch'],
+                                ['multi-turn-enabled', 'multi-turn-body', 'multi-turn-inner', 'multi-turn-switch'],
+                                ['prefix-cache-enabled', 'prefix-cache-body', null, 'prefix-cache-switch'],
+                            ];
+                            resetToggles.forEach(function(ids) {
+                                var cb = document.getElementById(ids[0]); if (cb) cb.checked = false;
+                                var body = document.getElementById(ids[1]); if (body) body.style.display = 'none';
+                                if (ids[2]) { var inner = document.getElementById(ids[2]); if (inner) inner.style.opacity = '0.4'; }
+                                var sw = document.getElementById(ids[3]); if (sw) { sw.style.background = '#ccc'; var sp = sw.querySelector('span'); if (sp) sp.style.transform = 'translateX(0)'; }
+                            });
+                            var ucEl = document.getElementById('use-corpus-enabled'); if (ucEl) { ucEl.checked = false; var ucSw = document.getElementById('use-corpus-switch'); if (ucSw) { ucSw.style.background = '#ccc'; ucSw.querySelector('span').style.transform = 'translateX(0)'; } }
+                            if (config.prefix_cache_hit_pct > 0) { var pcSlider = document.getElementById('prefix-cache-slider'); if (pcSlider) pcSlider.value = config.prefix_cache_hit_pct; var pcVal = document.getElementById('prefix-cache-value'); if (pcVal) pcVal.textContent = config.prefix_cache_hit_pct + '%'; }
+
+                            saveConfig();
+                            if (typeof loadConfig === 'function') loadConfig();
+                            var isl = config.isl, osl = config.osl;
+                            statusEl.innerHTML = '<span style="color:#059669;">Applied!' + (c.model ? ' Model: <strong>' + c.model + '</strong>,' : '') + ' ISL=' + isl + ', OSL=' + osl + (config.turns > 1 ? ', ' + config.turns + ' turns' : '') + (config.use_corpus ? ', corpus' : '') + (config.prefix_cache_hit_pct > 0 ? ', ' + config.prefix_cache_hit_pct + '% cache' : '') + '</span>';
+                        }
+                        </script>
+
                         <!-- Full-card flip: Synthetic ↔ Dataset -->
                         <div class="workload-flip-wrapper">
 
@@ -128,7 +194,7 @@
                                                     <div style="font-size:1.3em;flex-shrink:0;">📖</div>
                                                     <div>
                                                         <div style="font-weight:600;color:#15803d;font-size:0.95em;">Use Real Text Corpus</div>
-                                                        <div style="color:#166534;font-size:0.82em;margin-top:2px;">Use contiguous English prose (Wikipedia) instead of synthetic word salad. Required for meaningful speculative decoding acceptance rates.</div>
+                                                        <div style="color:#166534;font-size:0.82em;margin-top:2px;">Use contiguous English prose instead of synthetic word salad. Required for meaningful speculative decoding acceptance rates.</div>
                                                     </div>
                                                 </div>
                                                 <input type="checkbox" id="use-corpus-enabled" style="display:none;">
