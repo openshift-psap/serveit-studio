@@ -356,7 +356,10 @@ class DatasetMixin:
         pool_size = max(1000, int(cacheable_sequences * 1.5))
         min_rows = int(getattr(self.config, 'qps', 100) * getattr(self.config, 'test_duration', 300) * 1.5)
         pool_size = max(pool_size, min_rows)
-        pool_size = min(pool_size, 100000)
+        if getattr(self.config, 'use_corpus', False):
+            pool_size = min(pool_size, min_rows)  # corpus: cap at actual need, no excess
+        else:
+            pool_size = min(pool_size, 100000)
 
         dataset_path = f'/mnt/storage/prefix-cache-datasets/prefix-cache-{cache_mode}-{seed}.jsonl'
 
@@ -375,12 +378,13 @@ class DatasetMixin:
              'test', '-f', dataset_path], check=False
         ).returncode == 0
 
+        isl_stdev = self.config.isl_stdev or 0
+        osl_stdev = self.config.osl_stdev or 0
+        groups = int(self.config.prefix_cache_groups or 5) if cache_mode == 'multi_group' else 0
+
         if exists:
             self.log(f"   Reusing existing dataset: {os.path.basename(dataset_path)}", 'info')
         else:
-            isl_stdev = self.config.isl_stdev or 0
-            osl_stdev = self.config.osl_stdev or 0
-            groups = int(self.config.prefix_cache_groups or 5) if cache_mode == 'multi_group' else 0
 
             structured_prefix = getattr(self.config, 'structured_prefix', False)
             if structured_prefix and hit_pct > 0:

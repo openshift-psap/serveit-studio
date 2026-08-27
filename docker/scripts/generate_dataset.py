@@ -271,64 +271,136 @@ def _generate_prefix_group_chunk(chunk_args):
     return rows
 
 
+def _corpus_prefix_group_worker(worker_args):
+    """Worker: build prefix-group rows from fork-shared corpus, streaming to a part file."""
+    (worker_id, start_idx, count, temp_path, seed, isl, isl_stdev, osl, osl_stdev,
+     prefix_pct, num_groups, max_isl, group_prefixes, model_name) = worker_args
+    os.environ['TOKENIZERS_PARALLELISM'] = 'false'
+    corpus_tokens = _SHARED_CORPUS
+    tokenizer = _bare_tokenizer(model_name)
+    group_prefix_toks = [tokenizer.encode(gp, add_special_tokens=False) for gp in group_prefixes]
+    print(f"Worker {worker_id}: {count} prefix-group rows → {os.path.basename(temp_path)}...", file=sys.stderr, flush=True)
+
+    written = 0
+    with open(temp_path, 'w') as f:
+        for j in range(count):
+            i = start_idx + j
+            rng = random.Random(seed + i + 1)
+            row_isl = isl + int(rng.random() * isl_stdev) if isl_stdev > 0 else isl
+            row_osl = osl + int(rng.random() * osl_stdev) if osl_stdev > 0 else osl
+            row_prefix_tokens = max(1, int(row_isl * prefix_pct / 100))
+            row_suffix_tokens = max(1, row_isl - row_prefix_tokens)
+
+            group_idx = i % num_groups
+            prefix = tokenizer.decode(group_prefix_toks[group_idx][:row_prefix_tokens], skip_special_tokens=True)
+
+            soffset = (i * max_isl * 3) % max(1, len(corpus_tokens) - row_suffix_tokens)
+            suffix = _corpus_window(tokenizer, corpus_tokens, soffset, row_suffix_tokens)
+            if not suffix:
+                suffix = tokenizer.decode(corpus_tokens[soffset:soffset + row_suffix_tokens], skip_special_tokens=True)
+
+            f.write(json.dumps({'prompt': prefix + '\n' + suffix, 'output_tokens_count': row_osl}) + '\n')
+            written += 1
+            if (j + 1) % 2000 == 0:
+                print(f"Worker {worker_id}: {j + 1}/{count}", file=sys.stderr, flush=True)
+
+    print(f"Worker {worker_id}: done ({written} rows)", file=sys.stderr, flush=True)
+    return temp_path, written
+
+
 def generate_prefix_group_parallel(args):
     """Generate prefix-group dataset: N groups, each with a shared prefix + unique suffix per row."""
-    # Fewer workers for corpus mode — each worker loads a tokenizer (~1-2GB)
-    num_workers = min(multiprocessing.cpu_count(), 8)
     num_groups = args.prefix_groups
     prefix_pct = args.hit_pct if args.hit_pct > 0 else 60
     max_isl = args.isl + (int(args.isl_stdev) if args.isl_stdev > 0 else 0)
     max_prefix_tokens = max(1, int(max_isl * prefix_pct / 100))
+    use_corpus = getattr(args, 'use_corpus', False)
 
-    shared_corpus_tokens = None
-    if getattr(args, 'use_corpus', False):
-        # Cap at 5M tokens (~140MB) — workers wrap around for larger datasets
-        needed = min(5_000_000, max_isl * min(args.rows, 500) * 2)
+    if use_corpus:
+        # Corpus mode: tokenize once in parent, fork-share via _SHARED_CORPUS, and let each
+        # worker stream its rows to a part file on the PVC. Memory stays flat regardless of row
+        # count (no 7GB in-memory list), and generation is parallel across workers.
+        global _SHARED_CORPUS
+        needed = min(60_000_000, max_isl * min(args.rows, 2000) * 2)
         needed = max(needed, max_prefix_tokens * (num_groups + 1) * 3)
-        corpus_tok, shared_corpus_tokens = _load_corpus_tokens(args.model, needed)
+        corpus_tok, corpus_tokens = _load_corpus_tokens(args.model, needed)
+
         print(f"Generating {num_groups} group prefixes from corpus ({max_prefix_tokens} tokens each)...", file=sys.stderr, flush=True)
         group_prefixes = []
         for g in range(num_groups):
-            offset = g * max_prefix_tokens * 3
-            prefix = _corpus_window(corpus_tok, shared_corpus_tokens, offset, max_prefix_tokens)
+            goffset = g * max_prefix_tokens * 3
+            prefix = _corpus_window(corpus_tok, corpus_tokens, goffset, max_prefix_tokens)
             if not prefix:
-                tokenizer, vocab = _load_tokenizer(args.model)
                 grng = random.Random(args.seed + g * 10000)
-                prefix = _make_prompt(max_prefix_tokens, grng, tokenizer, vocab)
+                vocab = [t for t in corpus_tok.get_vocab().keys() if len(t) > 2 and t.isascii() and t.isalpha()]
+                prefix = _make_prompt(max_prefix_tokens, grng, corpus_tok, vocab)
             group_prefixes.append(prefix)
+
+        num_workers = min(multiprocessing.cpu_count(), 8, args.rows)
+        chunk_size = args.rows // num_workers
+        remainder = args.rows % num_workers
+        worker_args = []
+        start_idx = 0
+        for w in range(num_workers):
+            n = chunk_size + (1 if w < remainder else 0)
+            worker_args.append((
+                w, start_idx, n, f'{args.output}.part{w}', args.seed,
+                args.isl, args.isl_stdev, args.osl, args.osl_stdev,
+                prefix_pct, num_groups, max_isl, group_prefixes, args.model,
+            ))
+            start_idx += n
+
+        _SHARED_CORPUS = corpus_tokens
+        print(f"Using {num_workers} workers (streaming to part files)...", file=sys.stderr, flush=True)
+        t0 = time.time()
+        try:
+            with multiprocessing.Pool(num_workers) as pool:
+                results = pool.map(_corpus_prefix_group_worker, worker_args)
+        finally:
+            _SHARED_CORPUS = None
+
+        total = sum(c for _, c in results)
+        os.makedirs(os.path.dirname(args.output) or '.', exist_ok=True)
+        meta = _build_meta(args)
+        meta['rows'] = total
+        _concat_parts(args.output, [wa[3] for wa in worker_args], meta)
+
+        size_mb = os.path.getsize(args.output) / (1024 * 1024)
+        elapsed = time.time() - t0
+        print(f"Generated {num_groups} group prefixes (max {max_prefix_tokens} tokens, ISL range {args.isl}-{max_isl})", file=sys.stderr, flush=True)
+        print(f"Generation complete: {total} rows in {elapsed:.1f}s ({total/max(elapsed,0.1):.0f} rows/s, {size_mb:.1f} MB)", file=sys.stderr, flush=True)
+        return None  # Already written to file, skip the common write path
     else:
+        num_workers = min(multiprocessing.cpu_count(), 8)
         tokenizer, vocab = _load_tokenizer(args.model)
         print(f"Generating {num_groups} group prefixes ({max_prefix_tokens} max tokens, {prefix_pct}% of ISL)...", file=sys.stderr, flush=True)
         group_prefixes = []
         for g in range(num_groups):
             grng = random.Random(args.seed + g * 10000)
             group_prefixes.append(_make_prompt(max_prefix_tokens, grng, tokenizer, vocab))
+
+        chunk_size = args.rows // num_workers
+        remainder = args.rows % num_workers
+        chunks = []
+        offset = 0
+        for w in range(num_workers):
+            n = chunk_size + (1 if w < remainder else 0)
+            chunks.append((offset, n, args.seed, args.isl, args.isl_stdev, args.osl, args.osl_stdev, prefix_pct, args.model, group_prefixes, False))
+            offset += n
+
+        print(f"Using {num_workers} workers for {args.rows} rows...", file=sys.stderr, flush=True)
+        t0 = time.time()
+
+        with multiprocessing.Pool(num_workers) as pool:
+            results = pool.map(_generate_prefix_group_chunk, chunks)
+
+        rows = []
+        for chunk_rows in results:
+            rows.extend(chunk_rows)
+
+        random.Random(args.seed + 999).shuffle(rows)
+
     print(f"Generated {num_groups} group prefixes (max {max_prefix_tokens} tokens, ISL range {args.isl}-{max_isl})", file=sys.stderr, flush=True)
-
-    chunk_size = args.rows // num_workers
-    remainder = args.rows % num_workers
-    chunks = []
-    offset = 0
-    for w in range(num_workers):
-        n = chunk_size + (1 if w < remainder else 0)
-        chunks.append((offset, n, args.seed, args.isl, args.isl_stdev, args.osl, args.osl_stdev, prefix_pct, args.model, group_prefixes, getattr(args, 'use_corpus', False)))
-        offset += n
-
-    global _SHARED_CORPUS
-    if getattr(args, 'use_corpus', False):
-        _SHARED_CORPUS = shared_corpus_tokens
-    print(f"Using {num_workers} workers for {args.rows} rows...", file=sys.stderr, flush=True)
-    t0 = time.time()
-
-    with multiprocessing.Pool(num_workers) as pool:
-        results = pool.map(_generate_prefix_group_chunk, chunks)
-
-    _SHARED_CORPUS = None
-    rows = []
-    for chunk_rows in results:
-        rows.extend(chunk_rows)
-
-    random.Random(args.seed + 999).shuffle(rows)
 
     elapsed = time.time() - t0
     print(f"Generation complete: {len(rows)} rows in {elapsed:.1f}s ({len(rows)/max(elapsed,0.1):.0f} rows/s)", file=sys.stderr, flush=True)
@@ -390,79 +462,90 @@ def _corpus_window(tokenizer, book_tokens, start, length):
     return None
 
 
-def _corpus_worker(worker_args):
-    """Worker: cut windows from the tokenized corpus."""
-    worker_id, starts, book_tokens, isl, osl, model_name, isl_stdev, osl_stdev, seed = worker_args
+def _bare_tokenizer(model_name):
+    """Load just the tokenizer (no vocab filtering) for corpus decode/encode."""
     from transformers import AutoTokenizer
     hf_home = os.environ.get('HF_HOME', '/mnt/storage/.cache/huggingface')
     hf_token = os.environ.get('HF_TOKEN')
-    tokenizer = AutoTokenizer.from_pretrained(
+    return AutoTokenizer.from_pretrained(
         model_name, trust_remote_code=True,
         cache_dir=hf_home, token=hf_token
     )
-    print(f"Worker {worker_id}: cutting {len(starts)} windows...", file=sys.stderr, flush=True)
 
-    rows = []
+
+def _concat_parts(output_path, part_paths, meta):
+    """Stream-concatenate worker part files into the final dataset, then remove parts.
+
+    Writes the metadata line first, then copies each part in order. Streaming copy
+    keeps memory flat regardless of dataset size (no in-memory row list). Part files
+    live in the output directory, so they are guaranteed to be on the same PVC.
+    """
+    import shutil
+    with open(output_path, 'w') as out:
+        out.write(json.dumps(meta) + '\n')
+        for part in part_paths:
+            if not os.path.exists(part):
+                continue
+            with open(part, 'r') as pf:
+                shutil.copyfileobj(pf, out, 1024 * 1024)
+    for part in part_paths:
+        try:
+            os.remove(part)
+        except OSError:
+            pass
+
+
+def _corpus_worker(worker_args):
+    """Worker: cut windows from the fork-shared tokenized corpus, streaming to a part file."""
+    worker_id, starts, temp_path, isl, osl, model_name, isl_stdev, osl_stdev, seed = worker_args
+    os.environ['TOKENIZERS_PARALLELISM'] = 'false'
+    book_tokens = _SHARED_CORPUS
+    tokenizer = _bare_tokenizer(model_name)
+    print(f"Worker {worker_id}: cutting {len(starts)} windows → {os.path.basename(temp_path)}...", file=sys.stderr, flush=True)
+
+    count = 0
     skipped = 0
-    for idx, start in enumerate(starts):
-        rng = random.Random(seed + idx)
-        row_isl = isl
-        if isl_stdev > 0:
-            row_isl = max(isl // 4, int(isl + rng.gauss(0, isl_stdev)))
-        row_osl = osl
-        if osl_stdev > 0:
-            row_osl = max(osl // 4, int(osl + rng.gauss(0, osl_stdev)))
+    with open(temp_path, 'w') as f:
+        for idx, start in enumerate(starts):
+            rng = random.Random(seed + idx)
+            row_isl = isl
+            if isl_stdev > 0:
+                row_isl = max(isl // 4, int(isl + rng.gauss(0, isl_stdev)))
+            row_osl = osl
+            if osl_stdev > 0:
+                row_osl = max(osl // 4, int(osl + rng.gauss(0, osl_stdev)))
 
-        prompt = _corpus_window(tokenizer, book_tokens, start, row_isl)
-        if prompt:
-            rows.append(json.dumps({
-                'prompt': prompt,
-                'prompt_tokens_count': row_isl,
-                'output_tokens_count': row_osl,
-            }))
-        else:
-            skipped += 1
+            prompt = _corpus_window(tokenizer, book_tokens, start, row_isl)
+            if prompt:
+                f.write(json.dumps({
+                    'prompt': prompt,
+                    'prompt_tokens_count': row_isl,
+                    'output_tokens_count': row_osl,
+                }) + '\n')
+                count += 1
+            else:
+                skipped += 1
+            if (idx + 1) % 2000 == 0:
+                print(f"Worker {worker_id}: {idx + 1}/{len(starts)}", file=sys.stderr, flush=True)
 
-    print(f"Worker {worker_id}: done ({len(rows)} windows, {skipped} skipped)", file=sys.stderr, flush=True)
-    return rows
+    print(f"Worker {worker_id}: done ({count} windows, {skipped} skipped)", file=sys.stderr, flush=True)
+    return temp_path, count
 
 
 def generate_corpus(args):
-    """Generate dataset from bundled wikitext-103 corpus with evenly-spaced windows."""
-    from transformers import AutoTokenizer
-    hf_home = os.environ.get('HF_HOME', '/mnt/storage/.cache/huggingface')
-    hf_token = os.environ.get('HF_TOKEN')
+    """Generate dataset from bundled wikitext-103 corpus with evenly-spaced windows.
 
-    print(f"Tokenizing corpus with {args.model}...", file=sys.stderr, flush=True)
-    tokenizer = AutoTokenizer.from_pretrained(
-        args.model, trust_remote_code=True,
-        cache_dir=hf_home, token=hf_token
-    )
+    Parallel: the corpus is tokenized once in the parent and fork-shared (copy-on-write)
+    via _SHARED_CORPUS. Each worker streams its rows to a part file on the PVC, so memory
+    stays flat no matter how many rows are requested. Returns None (written directly).
+    """
+    global _SHARED_CORPUS
 
-    # Tokenize in chunks to avoid OOM on the full 500MB corpus.
-    # Read only enough text to cover all requested windows.
-    # Estimate: ~4 chars per token, need ISL * rows tokens minimum,
-    # but windows are spaced across the corpus so read proportionally.
-    needed_tokens = args.isl * args.rows * 2  # 2x headroom
-    chars_estimate = needed_tokens * 5  # ~5 chars/token conservative
-
-    corpus_path = _find_corpus()
-    print(f"Loading corpus from {corpus_path}...", file=sys.stderr, flush=True)
-    corpus_size = os.path.getsize(corpus_path)
-
-    book_tokens = []
-    with open(corpus_path, 'r', encoding='utf-8') as f:
-        chunk_size = 10_000_000  # 10MB chunks
-        while len(book_tokens) < needed_tokens:
-            chunk = f.read(chunk_size)
-            if not chunk:
-                break
-            book_tokens.extend(tokenizer.encode(chunk, add_special_tokens=False))
-            print(f"  tokenized {len(book_tokens):,} tokens...", file=sys.stderr, flush=True)
-            if chars_estimate < corpus_size and len(book_tokens) >= needed_tokens:
-                break
-
-    print(f"Corpus: {len(book_tokens):,} tokens (read until sufficient)", file=sys.stderr, flush=True)
+    # Read enough corpus to span the requested windows, capped so we never load the
+    # entire 130M-token corpus. Above the cap, windows just overlap more (still real prose).
+    needed_tokens = min(args.isl * args.rows * 2, 60_000_000)
+    needed_tokens = max(needed_tokens, args.isl * 4)
+    tokenizer, book_tokens = _load_corpus_tokens(args.model, needed_tokens)
 
     if len(book_tokens) < args.isl:
         print(f"ERROR: corpus has only {len(book_tokens)} tokens, need at least {args.isl}", file=sys.stderr, flush=True)
@@ -487,27 +570,38 @@ def generate_corpus(args):
     for w in range(num_workers):
         n = chunk_size + (1 if w < remainder else 0)
         worker_starts = starts[offset:offset + n]
-        worker_args.append((w, worker_starts, book_tokens, args.isl, args.osl, args.model, args.isl_stdev, args.osl_stdev, args.seed + offset))
+        worker_args.append((w, worker_starts, f'{args.output}.part{w}', args.isl, args.osl, args.model, args.isl_stdev, args.osl_stdev, args.seed + offset))
         offset += n
 
-    print(f"Using {num_workers} workers...", file=sys.stderr, flush=True)
+    _SHARED_CORPUS = book_tokens
+    print(f"Using {num_workers} workers (streaming to part files)...", file=sys.stderr, flush=True)
     t0 = time.time()
 
-    with multiprocessing.Pool(num_workers) as pool:
-        results = pool.map(_corpus_worker, worker_args)
+    try:
+        with multiprocessing.Pool(num_workers) as pool:
+            results = pool.map(_corpus_worker, worker_args)
+    finally:
+        _SHARED_CORPUS = None
 
-    rows = []
-    for chunk_rows in results:
-        rows.extend(chunk_rows)
-
-    elapsed = time.time() - t0
-    print(f"Generation complete: {len(rows)} windows in {elapsed:.1f}s", file=sys.stderr, flush=True)
-
-    if not rows:
+    total = sum(c for _, c in results)
+    if total == 0:
+        for wa in worker_args:
+            try:
+                os.remove(wa[2])
+            except OSError:
+                pass
         print("ERROR: no windows generated", file=sys.stderr, flush=True)
         sys.exit(1)
 
-    return rows
+    os.makedirs(os.path.dirname(args.output) or '.', exist_ok=True)
+    meta = _build_meta(args)
+    meta['rows'] = total
+    _concat_parts(args.output, [wa[2] for wa in worker_args], meta)
+
+    elapsed = time.time() - t0
+    size_mb = os.path.getsize(args.output) / (1024 * 1024)
+    print(f"Generation complete: {total} windows in {elapsed:.1f}s ({total / max(elapsed, 0.1):.0f} rows/s, {size_mb:.1f} MB)", file=sys.stderr, flush=True)
+    return None
 
 
 def _build_meta(args):
@@ -614,14 +708,16 @@ def main():
     else:
         rows = generate_cache_parallel(args)
 
-    os.makedirs(os.path.dirname(args.output) or '.', exist_ok=True)
-    meta_line = json.dumps(_build_meta(args))
-    with open(args.output, 'w') as f:
-        f.write(meta_line + '\n')
-        f.write('\n'.join(rows) + '\n')
+    # Corpus generators stream directly to disk and return None; nothing left to write.
+    if rows is not None:
+        os.makedirs(os.path.dirname(args.output) or '.', exist_ok=True)
+        meta_line = json.dumps(_build_meta(args))
+        with open(args.output, 'w') as f:
+            f.write(meta_line + '\n')
+            f.write('\n'.join(rows) + '\n')
 
     size_mb = os.path.getsize(args.output) / (1024 * 1024)
-    print(f"Generated {args.output} ({size_mb:.1f} MB, {len(rows)} rows)", file=sys.stderr, flush=True)
+    print(f"Generated {args.output} ({size_mb:.1f} MB)", file=sys.stderr, flush=True)
     print(f"Reproduce with: generate_dataset --reproduce {args.output} --output <new_path>", file=sys.stderr, flush=True)
 
 
