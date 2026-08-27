@@ -227,7 +227,7 @@ class PrereqManager:
                 'gaie_guide_label': config.get('gaie_guide_label', 'serveit-aggregated'),
                 'config_file': 'default-plugins.yaml' if epp_use_defaults else config['config_file'],
                 'gaie_replicas': 1,
-                'gaie_image': self.scheduler_image or 'ghcr.io/llm-d/llm-d-router-endpoint-picker:v0.9.0',
+                'gaie_image': self.scheduler_image or 'ghcr.io/llm-d/llm-d-router-endpoint-picker@sha256:873179822ab0895a37ea09f2112ca39a6ae50a26612561c8bfad7f9a8c5af6f5',
                 'gateway_name': config['gateway_name'],
                 'gateway_class': self.gateway_class,
                 'prefix_cache_weight': epp_weights.get('prefix_cache_weight', 2.0),

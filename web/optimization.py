@@ -926,7 +926,7 @@ def run_optimization_background(data):
         else:
             pvc_size = None
         vllm_image = _get('image') or 'vllm/vllm-openai:v0.26.0'
-        scheduler_image = _get('scheduler_image') or 'ghcr.io/llm-d/llm-d-router-endpoint-picker:main'
+        scheduler_image = _get('scheduler_image') or 'ghcr.io/llm-d/llm-d-router-endpoint-picker@sha256:873179822ab0895a37ea09f2112ca39a6ae50a26612561c8bfad7f9a8c5af6f5'
         single_test_architecture = _get('single_test_architecture')
         single_test_tp = _get('single_test_tp')
         single_test_replicas = _get('single_test_replicas')

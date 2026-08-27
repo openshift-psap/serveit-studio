@@ -123,8 +123,8 @@ class TemplateManager:
         vars_dict['data_parallel_size_local'] = getattr(config, 'data_parallel_size_local', None) or vars_dict['data_parallelism']
 
         # Routing proxy image — derive from scheduler image
-        sched_image = vars_dict.get('scheduler_image') or getattr(config, 'scheduler_image', '') or 'ghcr.io/llm-d/llm-d-router-endpoint-picker:v0.9.0'
-        sched_tag = sched_image.split(':')[-1] if ':' in sched_image else 'v0.9.0'
+        sched_image = vars_dict.get('scheduler_image') or getattr(config, 'scheduler_image', '') or 'ghcr.io/llm-d/llm-d-router-endpoint-picker@sha256:873179822ab0895a37ea09f2112ca39a6ae50a26612561c8bfad7f9a8c5af6f5'
+        sched_tag = sched_image.split(':')[-1] if ':' in sched_image else 'latest'
         vars_dict.setdefault('routing_proxy_image', f'ghcr.io/llm-d/llm-d-router-disagg-sidecar:{sched_tag}')
         vars_dict.setdefault('sidecar_connector_flag', '--kv-connector')
 
