@@ -122,13 +122,14 @@ class DatasetMixin:
              'test', '-f', dataset_path], check=False
         ).returncode == 0
 
+        isl_stdev = self.config.isl_stdev or 0
+        osl_stdev = self.config.osl_stdev or 0
+
         if exists:
             self.log(f"   Reusing existing random dataset on workload pod: {os.path.basename(dataset_path)}", 'info')
         else:
             corpus_note = ' (real text corpus)' if mode == 'corpus' else ''
             self.log(f"Generating {mode} dataset on workload pod: {pool_size} rows, ISL={isl}, OSL={osl}{corpus_note}", 'info')
-            isl_stdev = self.config.isl_stdev or 0
-            osl_stdev = self.config.osl_stdev or 0
             cmd = (
                 f'generate_dataset'
                 f' --model "{self.config.model_name}"'
@@ -381,12 +382,11 @@ class DatasetMixin:
         isl_stdev = self.config.isl_stdev or 0
         osl_stdev = self.config.osl_stdev or 0
         groups = int(self.config.prefix_cache_groups or 5) if cache_mode == 'multi_group' else 0
+        structured_prefix = getattr(self.config, 'structured_prefix', False)
 
         if exists:
             self.log(f"   Reusing existing dataset: {os.path.basename(dataset_path)}", 'info')
         else:
-
-            structured_prefix = getattr(self.config, 'structured_prefix', False)
             if structured_prefix and hit_pct > 0:
                 prefix_groups = groups if groups > 0 else 5
                 max_isl = isl + (int(isl_stdev) if isl_stdev > 0 else 0)
