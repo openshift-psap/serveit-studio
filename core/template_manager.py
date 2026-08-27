@@ -124,7 +124,13 @@ class TemplateManager:
 
         # Routing proxy image — derive from scheduler image
         sched_image = vars_dict.get('scheduler_image') or getattr(config, 'scheduler_image', '') or 'ghcr.io/llm-d/llm-d-router-endpoint-picker@sha256:873179822ab0895a37ea09f2112ca39a6ae50a26612561c8bfad7f9a8c5af6f5'
-        sched_tag = sched_image.split(':')[-1] if ':' in sched_image else 'latest'
+        # Extract tag; digest refs (image@sha256:...) have no usable tag — fall back to 'main'
+        if '@sha256:' in sched_image:
+            sched_tag = 'main'
+        elif ':' in sched_image:
+            sched_tag = sched_image.split(':')[-1]
+        else:
+            sched_tag = 'main'
         vars_dict.setdefault('routing_proxy_image', f'ghcr.io/llm-d/llm-d-router-disagg-sidecar:{sched_tag}')
         vars_dict.setdefault('sidecar_connector_flag', '--kv-connector')
 
