@@ -656,6 +656,46 @@ class PrereqManager:
             else:
                 log(f'   ⚠️  EPP PodMonitor creation failed: {r.stderr}')
 
+        # Istio gateway metrics PodMonitor — scrapes istio_request_duration etc.
+        # from the per-architecture inference gateways (infra-{arch}-inference-gateway-istio)
+        r = self.kubectl.run(
+            ['get', 'podmonitor', 'istio-gateway-metrics', '-n', self.namespace],
+            check=False)
+        if r.returncode != 0:
+            gateway_names = [
+                f'infra-{arch}-inference-gateway-istio'
+                for arch in ('aggregated', 'ep', 'pd')
+            ]
+            istio_manifest = json.dumps({
+                'apiVersion': 'monitoring.coreos.com/v1',
+                'kind': 'PodMonitor',
+                'metadata': {
+                    'name': 'istio-gateway-metrics',
+                    'namespace': self.namespace,
+                },
+                'spec': {
+                    'selector': {
+                        'matchExpressions': [{
+                            'key': 'service.istio.io/canonical-name',
+                            'operator': 'In',
+                            'values': gateway_names,
+                        }]
+                    },
+                    'podMetricsEndpoints': [{
+                        'port': 'metrics',
+                        'path': '/metrics',
+                        'interval': '15s',
+                    }]
+                }
+            })
+            r = self.kubectl.run(
+                ['apply', '-f', '-', '-n', self.namespace],
+                input_data=istio_manifest, check=False)
+            if r.returncode == 0:
+                log('   ✅ PodMonitor created (Istio gateway metrics scraping)')
+            else:
+                log(f'   ⚠️  Istio Gateway PodMonitor creation failed: {r.stderr}')
+
     def _ensure_rdma_discovery(self, context, log_callback=None):
         """Deploy rdma-discovery-script ConfigMap if missing."""
         def log(msg):

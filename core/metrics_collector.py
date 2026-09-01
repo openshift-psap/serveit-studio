@@ -117,6 +117,29 @@ class MetricsCollector:
             return ''
         return f'pod=~"{pattern}", '
 
+    def _get_istio_gateway_filter(self) -> str:
+        """
+        Return a PromQL filter that scopes Istio gateway metrics to the
+        per-architecture inference gateway (infra-{arch}-inference-gateway).
+
+        Istio request metrics carry a `gateway_name` label (the Gateway
+        resource name, e.g. infra-pd-inference-gateway) and a `namespace`
+        label. When no architecture is known, fall back to namespace scoping
+        only (all Istio gateways in the namespace).
+
+        Returns:
+            PromQL filter fragment or empty string
+        """
+        filters = []
+        if self.config.namespace:
+            filters.append(f'namespace="{self.config.namespace}"')
+        if self.config.architecture:
+            gateway_name = f'infra-{self.config.architecture}-inference-gateway'
+            filters.append(f'gateway_name="{gateway_name}"')
+        if filters:
+            return ', '.join(filters) + ', '
+        return ''
+
     def _get_rate_window(self, start_time: int, end_time: int) -> str:
         """
         Calculate rate window as 1/8 of benchmark duration.
@@ -352,6 +375,56 @@ class MetricsCollector:
 
         return metrics
 
+    def collect_gateway_network_metrics(
+        self,
+        start_time: int,
+        end_time: int,
+        rate_window: str
+    ) -> Dict[str, Any]:
+        """Collect network/TCP-level latency to the inference gateways.
+
+        Covers two sources:
+        1. Istio gateway request duration histogram
+           (istio_request_duration_milliseconds_*) — the time a request spends
+           traversing the Istio gateway (includes connection handling).
+        2. OpenShift network diagnostics TCP connect latency gauge
+           (pod_network_connectivity_check_tcp_connect_latency_gauge) — the
+           cluster's own measurement of TCP connect latency between components.
+        """
+        logger.info("--- Collecting Gateway network latency metrics ---")
+
+        istio_filter = self._get_istio_gateway_filter()
+        metrics = {}
+
+        # Istio gateway request duration (histogram, ms) — scoped to the active
+        # architecture's gateway so other gateways in the namespace don't leak in.
+        istio_queries = [
+            f'sum(rate(istio_request_duration_milliseconds_bucket{{{istio_filter}}}[{rate_window}])) by (le)',
+            f'sum(rate(istio_request_duration_milliseconds_sum{{{istio_filter}}}[{rate_window}]))',
+            f'sum(rate(istio_request_duration_milliseconds_count{{{istio_filter}}}[{rate_window}]))',
+            f'histogram_quantile(0.99, sum by(le) (rate(istio_request_duration_milliseconds_bucket{{{istio_filter}}}[{rate_window}])))',
+            f'histogram_quantile(0.95, sum by(le) (rate(istio_request_duration_milliseconds_bucket{{{istio_filter}}}[{rate_window}])))',
+            f'histogram_quantile(0.90, sum by(le) (rate(istio_request_duration_milliseconds_bucket{{{istio_filter}}}[{rate_window}])))',
+            f'histogram_quantile(0.50, sum by(le) (rate(istio_request_duration_milliseconds_bucket{{{istio_filter}}}[{rate_window}])))',
+        ]
+
+        for query in istio_queries:
+            result = self._query_prometheus(query, start_time, end_time)
+            metrics[query] = result
+
+        # OpenShift network diagnostics — TCP connect latency gauge (ms).
+        # Cluster-wide; no namespace scoping (lives in openshift-network-diagnostics).
+        tcp_queries = [
+            'pod_network_connectivity_check_tcp_connect_latency_gauge',
+            'sum by (checkName) (pod_network_connectivity_check_tcp_connect_latency_gauge)',
+        ]
+
+        for query in tcp_queries:
+            result = self._query_prometheus(query, start_time, end_time)
+            metrics[query] = result
+
+        return metrics
+
     def collect_all_metrics(
         self,
         start_time: datetime,
@@ -405,6 +478,11 @@ class MetricsCollector:
         # Inference gateway metrics
         all_metrics['metrics'].update(
             self.collect_inference_metrics(start_unix, end_unix, rate_window)
+        )
+
+        # Gateway network latency metrics (Istio + TCP connect)
+        all_metrics['metrics'].update(
+            self.collect_gateway_network_metrics(start_unix, end_unix, rate_window)
         )
 
         # Save to file

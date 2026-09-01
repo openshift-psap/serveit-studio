@@ -410,6 +410,13 @@ class MetricsAnalyzer:
             # Gateway histograms (bucket distributions)
             'inference_objective_request_duration_seconds_bucket': 'gw_request_duration_hist',
             'inference_extension_scheduler_e2e_duration_seconds_bucket': 'gw_scheduler_duration_hist',
+            # Istio gateway request duration (ms) — request traversal through gateway
+            'istio_request_duration_milliseconds_sum': 'istio_request_duration_rate',
+            'istio_request_duration_milliseconds_count': 'istio_request_count_rate',
+            'istio_request_duration_milliseconds_bucket': 'istio_request_duration_hist',
+            # Cluster TCP connect latency (ms) — OpenShift network diagnostics
+            'sum by (checkName) (pod_network_connectivity_check_tcp_connect_latency_gauge)': 'tcp_connect_latency_by_check',
+            'pod_network_connectivity_check_tcp_connect_latency_gauge': 'tcp_connect_latency_gauge',
         }
 
         # Detect histogram quantile queries (e.g., histogram_quantile(0.99, ...bucket...))
@@ -426,6 +433,10 @@ class MetricsAnalyzer:
             ('e2e_request_latency_seconds_bucket', '0.95'): 'vllm_e2e_p95',
             ('e2e_request_latency_seconds_bucket', '0.90'): 'vllm_e2e_p90',
             ('e2e_request_latency_seconds_bucket', '0.50'): 'vllm_e2e_p50',
+            ('istio_request_duration_milliseconds_bucket', '0.99'): 'istio_request_duration_p99',
+            ('istio_request_duration_milliseconds_bucket', '0.95'): 'istio_request_duration_p95',
+            ('istio_request_duration_milliseconds_bucket', '0.90'): 'istio_request_duration_p90',
+            ('istio_request_duration_milliseconds_bucket', '0.50'): 'istio_request_duration_p50',
         }
 
         # RDMA network queries have interface!="eth0" — must match before generic network patterns
@@ -485,6 +496,7 @@ class MetricsAnalyzer:
                 'vllm_preemptions_rate',
                 'gw_request_count_rate', 'gw_request_duration_rate',
                 'gw_output_tokens_rate', 'gw_request_total_rate', 'gw_request_error_rate',
+                'istio_request_count_rate', 'istio_request_duration_rate',
             )
 
             if sum_across_pods and len(result_data) > 1:
