@@ -28,6 +28,8 @@ class MetricsConfig:
     pod_name_pattern: str
     step_seconds: int = 5
     token: Optional[str] = None
+    architecture: Optional[str] = None
+    gateway_pod_pattern: Optional[str] = None
 
     @classmethod
     def from_env(cls) -> 'MetricsConfig':
@@ -97,6 +99,23 @@ class MetricsCollector:
         except requests.RequestException as e:
             logger.error(f"Query failed for '{query[:50]}...': {e}")
             return {}
+
+    def _get_gateway_pod_filter(self) -> str:
+        """
+        Return a PromQL pod filter that scopes inference gateway metrics to the
+        EPP pod for the active architecture. If no architecture/gateway pod
+        pattern is set, returns an empty filter (collect across the namespace).
+
+        Returns:
+            PromQL filter fragment or empty string
+        """
+        pattern = self.config.gateway_pod_pattern
+        if not pattern and self.config.architecture:
+            # EPP pod naming convention: gaie-{arch}-epp
+            pattern = f'gaie-{self.config.architecture}-epp.*'
+        if not pattern:
+            return ''
+        return f'pod=~"{pattern}", '
 
     def _get_rate_window(self, start_time: int, end_time: int) -> str:
         """
@@ -304,22 +323,27 @@ class MetricsCollector:
         """Collect inference gateway/GAIE metrics."""
         logger.info("--- Collecting Inference Gateway metrics ---")
 
+        gw_filter = self._get_gateway_pod_filter()
         metrics = {}
+
+        # Gateway/EPP request latency — scoped to the active gateway pod so
+        # latency from other architectures' gateways is not mixed in.
         inference_queries = [
-            f'sum(rate(inference_objective_request_duration_seconds_bucket{{namespace="{self.config.namespace}"}}[{rate_window}])) by (le)',
-            f'sum(rate(inference_extension_scheduler_e2e_duration_seconds_bucket{{namespace="{self.config.namespace}"}}[{rate_window}])) by (le)',
-            f'sum(rate(inference_objective_request_duration_seconds_count{{namespace="{self.config.namespace}"}}[{rate_window}]))',
-            f'sum(rate(inference_objective_request_duration_seconds_sum{{namespace="{self.config.namespace}"}}[{rate_window}]))',
-            f'sum(rate(inference_extension_scheduler_e2e_duration_seconds_count{{namespace="{self.config.namespace}"}}[{rate_window}]))',
-            f'sum(rate(inference_extension_scheduler_e2e_duration_seconds_sum{{namespace="{self.config.namespace}"}}[{rate_window}]))',
-            f'sum by (pod) (irate(inference_objective_output_tokens_sum{{namespace="{self.config.namespace}"}}[{rate_window}]))',
-            f'sum by (pod) (irate(inference_objective_request_total{{namespace="{self.config.namespace}"}}[{rate_window}]))',
-            f'sum by (pod) (irate(inference_objective_request_error_total{{namespace="{self.config.namespace}"}}[{rate_window}]))',
-            f'inference_objective_running_requests{{namespace="{self.config.namespace}"}}',
-            f'inference_pool_average_kv_cache_utilization{{namespace="{self.config.namespace}"}}',
-            f'inference_pool_average_queue_size{{namespace="{self.config.namespace}"}}',
-            f'sum by (pod) (inference_pool_per_pod_queue_size{{namespace="{self.config.namespace}"}})',
-            f'inference_pool_ready_pods{{namespace="{self.config.namespace}"}}',
+            f'sum(rate(inference_objective_request_duration_seconds_bucket{{{gw_filter}namespace="{self.config.namespace}"}}[{rate_window}])) by (le)',
+            f'sum(rate(inference_extension_scheduler_e2e_duration_seconds_bucket{{{gw_filter}namespace="{self.config.namespace}"}}[{rate_window}])) by (le)',
+            f'sum(rate(inference_objective_request_duration_seconds_count{{{gw_filter}namespace="{self.config.namespace}"}}[{rate_window}]))',
+            f'sum(rate(inference_objective_request_duration_seconds_sum{{{gw_filter}namespace="{self.config.namespace}"}}[{rate_window}]))',
+            f'sum(rate(inference_extension_scheduler_e2e_duration_seconds_count{{{gw_filter}namespace="{self.config.namespace}"}}[{rate_window}]))',
+            f'sum(rate(inference_extension_scheduler_e2e_duration_seconds_sum{{{gw_filter}namespace="{self.config.namespace}"}}[{rate_window}]))',
+            # Cross-pod gateway metrics — keep per-pod breakdown
+            f'sum by (pod) (irate(inference_objective_output_tokens_sum{{{gw_filter}namespace="{self.config.namespace}"}}[{rate_window}]))',
+            f'sum by (pod) (irate(inference_objective_request_total{{{gw_filter}namespace="{self.config.namespace}"}}[{rate_window}]))',
+            f'sum by (pod) (irate(inference_objective_request_error_total{{{gw_filter}namespace="{self.config.namespace}"}}[{rate_window}]))',
+            f'inference_objective_running_requests{{{gw_filter}namespace="{self.config.namespace}"}}',
+            f'inference_pool_average_kv_cache_utilization{{{gw_filter}namespace="{self.config.namespace}"}}',
+            f'inference_pool_average_queue_size{{{gw_filter}namespace="{self.config.namespace}"}}',
+            f'sum by (pod) (inference_pool_per_pod_queue_size{{{gw_filter}namespace="{self.config.namespace}"}})',
+            f'inference_pool_ready_pods{{{gw_filter}namespace="{self.config.namespace}"}}',
         ]
 
         for query in inference_queries:

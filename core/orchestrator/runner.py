@@ -1061,6 +1061,9 @@ class TestOrchestrator(ParserMixin, GuidellmMixin):
             else:
                 self.metrics_collector.config.pod_name_pattern = config.test_id
 
+            # Scope gateway latency metrics to the active architecture's EPP gateway
+            self.metrics_collector.config.architecture = config.architecture
+
             # Collect metrics
             self.metrics_collector.collect_all_metrics(
                 start_time=start_dt,

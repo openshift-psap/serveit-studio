@@ -465,6 +465,7 @@ class GuidellmMixin:
                             results_dir.mkdir(parents=True, exist_ok=True)
                             metrics_file = str(results_dir / 'metrics.json')
                             self.metrics_collector.config.pod_name_pattern = config.test_id
+                            self.metrics_collector.config.architecture = config.architecture
                             self.metrics_collector.collect_all_metrics(
                                 start_time=datetime.fromtimestamp(benchmark_start),
                                 end_time=datetime.now(),
