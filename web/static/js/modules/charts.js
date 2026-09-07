@@ -721,7 +721,7 @@ function _renderChartsImpl(data, runId, content) {
             var _tdSm = 'padding:6px 8px;border:1px solid #e2e8f0;font-size:0.8em;text-align:center;white-space:nowrap;';
             var _tdSmL = 'padding:6px 8px;border:1px solid #e2e8f0;font-size:0.8em;';
 
-            secCfg += '<div style="display:flex;gap:14px;align-items:flex-start;">';
+            secCfg += '<div style="display:flex;gap:14px;">';
             _archDefs.forEach(function(arch) {
                 var ad = _bbpSel[arch.key];
                 if (!ad) return;
