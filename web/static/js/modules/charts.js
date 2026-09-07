@@ -4023,7 +4023,7 @@ function _renderChartsImpl(data, runId, content) {
         var archResults = coreResults.filter(r => r.architecture === 'PD');
         if (!archResults.length) return;
         var sorted = archResults.slice().sort((a, b) => a.prefill_pods - b.prefill_pods);
-        var labels = sorted.map(r => r.prefill_pods + 'P:' + r.decode_pods + 'D');
+        var labels = sorted.map(r => _tagLabel(r.config_name, r.architecture));
         var ttftVals = sorted.map(r => r[pctl.field]);
         var tputVals = sorted.map(r => r.throughput_mean || r.throughput_p90);
         var itlVals = sorted.map(r => r[pctl.itlField] != null ? r[pctl.itlField] : null);
