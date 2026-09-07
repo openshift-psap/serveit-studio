@@ -718,36 +718,35 @@ function _renderChartsImpl(data, runId, content) {
             secCfg += '<button onclick="downloadTableAsPng(\'' + _selTableId + '\',\'configuration-selection.png\')" style="flex-shrink:0;margin-left:12px;font-size:0.78em;padding:4px 10px;border:1px solid #cbd5e1;border-radius:6px;background:#fff;color:#475569;cursor:pointer;">&#11015; Download PNG</button>';
             secCfg += '</div>';
 
-            var _tdSm = 'padding:6px 8px;border:1px solid #e2e8f0;font-size:0.8em;text-align:center;white-space:nowrap;';
-            var _tdSmL = 'padding:6px 8px;border:1px solid #e2e8f0;font-size:0.8em;';
-
-            secCfg += '<div style="display:flex;gap:14px;">';
             _archDefs.forEach(function(arch) {
                 var ad = _bbpSel[arch.key];
                 if (!ad) return;
+                secCfg += '<div style="margin-bottom:18px;">';
+                secCfg += '<div style="font-weight:700;font-size:0.85em;color:' + arch.color + ';text-transform:uppercase;letter-spacing:0.06em;border-bottom:2px solid ' + arch.color + ';padding-bottom:4px;margin-bottom:6px;">' + arch.label + ' Architecture</div>';
+                secCfg += '<table style="width:100%;font-size:0.83em;border-collapse:collapse;">';
+                var _tdNow = _tdBase + 'white-space:nowrap;';
+                secCfg += '<tr style="background:#f1f5f9;">' +
+                    '<th style="' + _tdLeft + 'font-weight:700;">Category</th>' +
+                    '<th style="' + _tdLeft + 'font-weight:700;">Config</th>' +
+                    '<th style="' + _tdNow + 'font-weight:700;">TTFT P90</th>' +
+                    '<th style="' + _tdNow + 'font-weight:700;">ITL P90</th>' +
+                    '<th style="' + _tdNow + 'font-weight:700;">Throughput</th>' +
+                    '<th style="' + _tdNow + 'font-weight:700;">GPUs</th>' +
+                    '</tr>';
 
-                // Deduplicate rows
+                // Deduplicate: group categories by config_name, preserving category order
                 var _seen = {}, _deduped = [];
                 _catDefs.forEach(function(cat) {
                     var e = ad[cat.key];
                     if (!e) return;
                     var cn = e.config_name;
-                    if (_seen[cn]) { _seen[cn].cats.push(cat.label); }
-                    else { _seen[cn] = { entry: e, cats: [cat.label] }; _deduped.push(cn); }
+                    if (_seen[cn]) {
+                        _seen[cn].cats.push(cat.label);
+                    } else {
+                        _seen[cn] = { entry: e, cats: [cat.label] };
+                        _deduped.push(cn);
+                    }
                 });
-
-                secCfg += '<div style="flex:1;min-width:0;border-radius:6px;overflow:hidden;background:' + arch.bg + ';">';
-                secCfg += '<div style="font-weight:700;font-size:0.82em;color:' + arch.color + ';text-transform:uppercase;letter-spacing:0.05em;border-bottom:2px solid ' + arch.color + ';padding:6px 8px;text-align:center;background:' + arch.bg + ';">' + arch.label + ' Architecture</div>';
-                secCfg += '<table style="width:100%;border-collapse:collapse;table-layout:auto;">';
-                secCfg += '<tr style="background:#f1f5f9;">' +
-                    '<th style="' + _tdSmL + 'font-weight:700;">Category</th>' +
-                    '<th style="' + _tdSmL + 'font-weight:700;">Config</th>' +
-                    '<th style="' + _tdSm  + 'font-weight:700;">TTFT</th>' +
-                    '<th style="' + _tdSm  + 'font-weight:700;">ITL</th>' +
-                    '<th style="' + _tdSm  + 'font-weight:700;">Tput</th>' +
-                    '<th style="' + _tdSm  + 'font-weight:700;">GPUs</th>' +
-                    '</tr>';
-
                 _deduped.forEach(function(cn) {
                     var e      = _seen[cn].entry;
                     var cats   = _seen[cn].cats;
@@ -755,22 +754,22 @@ function _renderChartsImpl(data, runId, content) {
                     var isRec  = !!recLbl;
                     var rowBg  = isRec ? 'background:#fffbeb;' : '';
                     var catBadges = cats.map(function(lbl) {
-                        return '<span style="display:inline-block;background:' + arch.bg + ';color:' + arch.color + ';font-size:0.72em;font-weight:600;padding:1px 5px;border-radius:6px;margin:1px 1px 1px 0;white-space:nowrap;">' + lbl + '</span>';
+                        return '<span style="display:inline-block;background:' + arch.bg + ';color:' + arch.color + ';font-size:0.78em;font-weight:600;padding:1px 7px;border-radius:8px;margin:1px 2px 1px 0;">' + lbl + '</span>';
                     }).join('');
-                    var recBadge = isRec ? '<br><span style="display:inline-block;background:#fef3c7;color:#b45309;font-size:0.72em;font-weight:700;padding:1px 5px;border-radius:6px;margin-top:2px;">' + recLbl + '</span>' : '';
+                    var recBadge = isRec ? ' <span style="display:inline-block;background:#fef3c7;color:#b45309;font-size:0.78em;font-weight:700;padding:1px 7px;border-radius:8px;">' + recLbl + '</span>' : '';
                     secCfg += '<tr style="' + rowBg + '">';
-                    secCfg += '<td style="' + _tdSmL + '">' + catBadges + recBadge + '</td>';
-                    secCfg += '<td style="' + _tdSmL + 'font-weight:' + (isRec?'700':'400') + ';font-size:0.78em;word-break:break-word;">' + cn + '</td>';
-                    secCfg += '<td style="' + _tdSm + '">' + _fmtMs(e.ttft) + '</td>';
-                    secCfg += '<td style="' + _tdSm + '">' + _fmtMs(e.itl)  + '</td>';
-                    secCfg += '<td style="' + _tdSm + '">' + _fmtTput(e.throughput_mean || e.throughput) + '</td>';
-                    secCfg += '<td style="' + _tdSm + '">' + (e.gpus != null ? e.gpus : '—') + '</td>';
+                    secCfg += '<td style="' + _tdLeft + '">' + catBadges + recBadge + '</td>';
+                    secCfg += '<td style="' + _tdLeft + 'font-weight:' + (isRec?'700':'400') + ';">' + cn + '</td>';
+                    secCfg += '<td style="' + _tdNow + '">' + _fmtMs(e.ttft)                         + '</td>';
+                    secCfg += '<td style="' + _tdNow + '">' + _fmtMs(e.itl)                          + '</td>';
+                    secCfg += '<td style="' + _tdNow + '">' + _fmtTput(e.throughput_mean || e.throughput) + '</td>';
+                    secCfg += '<td style="' + _tdNow + '">' + (e.gpus != null ? e.gpus : '—')        + '</td>';
                     secCfg += '</tr>';
                 });
+
                 secCfg += '</table></div>';
             });
-            secCfg += '</div>'; // flex row
-            secCfg += '</div></div>'; // padding + chart-card
+            secCfg += '</div></div>';
         }
     }
     secCfg += chartCard('Throughput vs Latency', chartDesc.scatter, 'chart-scatter');
