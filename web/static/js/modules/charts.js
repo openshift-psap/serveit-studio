@@ -736,7 +736,7 @@ function _renderChartsImpl(data, runId, content) {
                     else { _seen[cn] = { entry: e, cats: [cat.label] }; _deduped.push(cn); }
                 });
 
-                secCfg += '<div style="flex:1;min-width:0;border:1px solid #e2e8f0;border-radius:6px;overflow:hidden;">';
+                secCfg += '<div style="flex:1;min-width:0;border-radius:6px;overflow:hidden;background:' + arch.bg + ';">';
                 secCfg += '<div style="font-weight:700;font-size:0.82em;color:' + arch.color + ';text-transform:uppercase;letter-spacing:0.05em;border-bottom:2px solid ' + arch.color + ';padding:6px 8px;text-align:center;background:' + arch.bg + ';">' + arch.label + ' Architecture</div>';
                 secCfg += '<table style="width:100%;border-collapse:collapse;table-layout:auto;">';
                 secCfg += '<tr style="background:#f1f5f9;">' +
