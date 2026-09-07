@@ -366,48 +366,116 @@ function downloadEstimatorReport(suffix) {
 
 function downloadTableAsPng(elementId, filename) {
     var container = document.getElementById(elementId);
-    if (!container) { alert('Table element not found: ' + elementId); return; }
-    var width = Math.max(container.scrollWidth, 960);
-    var height = container.scrollHeight + 8;
+    if (!container) { alert('Element not found: ' + elementId); return; }
+
     var scale = 2;
-    // Inline all computed styles on every element before serializing so SVG renders faithfully
-    var clone = container.cloneNode(true);
-    clone.style.background = '#ffffff';
-    clone.style.fontFamily = '-apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif';
-    clone.style.fontSize = '13px';
-    // Ensure table borders show
-    clone.querySelectorAll('table').forEach(function(t) { t.style.borderCollapse = 'collapse'; });
-    clone.querySelectorAll('th, td').forEach(function(c) {
-        if (!c.style.border) c.style.border = '1px solid #e2e8f0';
-        if (!c.style.padding) c.style.padding = '7px 10px';
+    var W = Math.max(container.offsetWidth, 960);
+    var PAD = 20;
+    var ROW_H = 34;
+    var SECTION_H = 38;
+    var font = 'system-ui, -apple-system, sans-serif';
+
+    // Collect drawing items by walking the DOM
+    var items = [];
+    function walk(node) {
+        Array.from(node.children).forEach(function(el) {
+            var tag = el.tagName;
+            if (tag === 'TABLE') {
+                Array.from(el.querySelectorAll('tr')).forEach(function(tr) {
+                    var isHeader = !!tr.querySelector('th');
+                    var bg = isHeader ? '#f1f5f9' : (tr.style.background || '#ffffff');
+                    var cells = Array.from(tr.querySelectorAll('th,td')).map(function(td) {
+                        return { text: td.textContent.trim(), bold: isHeader || td.style.fontWeight === '700' };
+                    });
+                    if (cells.length) items.push({ type: 'row', cells: cells, bg: bg });
+                });
+            } else if (tag === 'DIV') {
+                var txt = el.textContent.trim();
+                if (el.style.borderBottom && el.style.color) {
+                    // Architecture section heading
+                    items.push({ type: 'section', text: txt, color: el.style.color });
+                } else if (el.children.length) {
+                    walk(el);
+                } else if (el.tagName === 'P' || el.style.color === '#64748b') {
+                    items.push({ type: 'desc', text: txt });
+                }
+            } else if (tag === 'P') {
+                items.push({ type: 'desc', text: el.textContent.trim() });
+            } else {
+                walk(el);
+            }
+        });
+    }
+    walk(container);
+
+    // Calculate total canvas height
+    var totalH = PAD;
+    items.forEach(function(it) {
+        totalH += it.type === 'section' ? SECTION_H : it.type === 'desc' ? 30 : ROW_H;
     });
-    var svgData = [
-        '<svg xmlns="http://www.w3.org/2000/svg" width="', width, '" height="', height, '">',
-        '<foreignObject width="', width, '" height="', height, '">',
-        '<div xmlns="http://www.w3.org/1999/xhtml">',
-        clone.outerHTML,
-        '</div></foreignObject></svg>'
-    ].join('');
+    totalH += PAD;
+
     var canvas = document.createElement('canvas');
-    canvas.width = width * scale;
-    canvas.height = height * scale;
+    canvas.width  = W * scale;
+    canvas.height = totalH * scale;
     var ctx = canvas.getContext('2d');
-    ctx.fillStyle = '#ffffff';
-    ctx.fillRect(0, 0, canvas.width, canvas.height);
     ctx.scale(scale, scale);
-    var img = new Image();
-    img.onerror = function() { alert('Failed to render table as image. Try a screenshot instead.'); };
-    img.onload = function() {
-        ctx.drawImage(img, 0, 0);
-        var dataUrl = canvas.toDataURL('image/png');
-        var a = document.createElement('a');
-        a.download = filename || 'table.png';
-        a.href = dataUrl;
-        document.body.appendChild(a);
-        a.click();
-        document.body.removeChild(a);
-    };
-    img.src = 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(svgData);
+
+    // White background
+    ctx.fillStyle = '#ffffff';
+    ctx.fillRect(0, 0, W, totalH);
+
+    // Column widths (must sum to W - 2*PAD)
+    var inner = W - 2 * PAD;
+    var colPcts = [0.26, 0.30, 0.11, 0.10, 0.15, 0.08];
+    var colW = colPcts.map(function(p) { return Math.round(inner * p); });
+
+    var y = PAD;
+    items.forEach(function(it) {
+        if (it.type === 'section') {
+            ctx.fillStyle = it.color || '#334155';
+            ctx.font = 'bold 12px ' + font;
+            ctx.fillText(it.text, PAD, y + 20);
+            ctx.strokeStyle = it.color || '#334155';
+            ctx.lineWidth = 1.5;
+            ctx.beginPath(); ctx.moveTo(PAD, y + 26); ctx.lineTo(W - PAD, y + 26); ctx.stroke();
+            y += SECTION_H;
+        } else if (it.type === 'desc') {
+            ctx.fillStyle = '#64748b';
+            ctx.font = '11px ' + font;
+            ctx.fillText(it.text, PAD, y + 18, W - PAD * 2);
+            y += 30;
+        } else if (it.type === 'row') {
+            // Row background
+            ctx.fillStyle = it.bg || '#ffffff';
+            ctx.fillRect(PAD, y, inner, ROW_H);
+            // Cells
+            var x = PAD;
+            it.cells.forEach(function(cell, ci) {
+                var cw = colW[ci] != null ? colW[ci] : 80;
+                ctx.strokeStyle = '#e2e8f0';
+                ctx.lineWidth = 0.5;
+                ctx.strokeRect(x + 0.5, y + 0.5, cw - 1, ROW_H - 1);
+                ctx.fillStyle = cell.bold ? '#0f172a' : '#334155';
+                ctx.font = (cell.bold ? 'bold ' : '') + '11px ' + font;
+                // Clip text to column width
+                var txt = cell.text;
+                var maxW = cw - 12;
+                while (txt.length > 3 && ctx.measureText(txt).width > maxW) txt = txt.slice(0, -1);
+                if (txt.length < cell.text.length) txt += '…';
+                ctx.fillText(txt, x + 6, y + ROW_H / 2 + 4);
+                x += cw;
+            });
+            y += ROW_H;
+        }
+    });
+
+    var a = document.createElement('a');
+    a.download = filename || 'table.png';
+    a.href = canvas.toDataURL('image/png');
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
 }
 
 function downloadCalParamsTablePng(suffix) {
