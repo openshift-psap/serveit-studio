@@ -366,15 +366,28 @@ function downloadEstimatorReport(suffix) {
 
 function downloadTableAsPng(elementId, filename) {
     var container = document.getElementById(elementId);
-    if (!container) return;
-    var width = Math.max(container.scrollWidth, 900);
+    if (!container) { alert('Table element not found: ' + elementId); return; }
+    var width = Math.max(container.scrollWidth, 960);
     var height = container.scrollHeight + 8;
     var scale = 2;
-    var svgData = '<svg xmlns="http://www.w3.org/2000/svg" width="' + width + '" height="' + height + '">' +
-        '<foreignObject width="' + width + '" height="' + height + '">' +
-        '<div xmlns="http://www.w3.org/1999/xhtml" style="font-family:-apple-system,BlinkMacSystemFont,\'Segoe UI\',sans-serif;font-size:14px;">' +
-        container.outerHTML +
-        '</div></foreignObject></svg>';
+    // Inline all computed styles on every element before serializing so SVG renders faithfully
+    var clone = container.cloneNode(true);
+    clone.style.background = '#ffffff';
+    clone.style.fontFamily = '-apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif';
+    clone.style.fontSize = '13px';
+    // Ensure table borders show
+    clone.querySelectorAll('table').forEach(function(t) { t.style.borderCollapse = 'collapse'; });
+    clone.querySelectorAll('th, td').forEach(function(c) {
+        if (!c.style.border) c.style.border = '1px solid #e2e8f0';
+        if (!c.style.padding) c.style.padding = '7px 10px';
+    });
+    var svgData = [
+        '<svg xmlns="http://www.w3.org/2000/svg" width="', width, '" height="', height, '">',
+        '<foreignObject width="', width, '" height="', height, '">',
+        '<div xmlns="http://www.w3.org/1999/xhtml">',
+        clone.outerHTML,
+        '</div></foreignObject></svg>'
+    ].join('');
     var canvas = document.createElement('canvas');
     canvas.width = width * scale;
     canvas.height = height * scale;
@@ -383,43 +396,22 @@ function downloadTableAsPng(elementId, filename) {
     ctx.fillRect(0, 0, canvas.width, canvas.height);
     ctx.scale(scale, scale);
     var img = new Image();
+    img.onerror = function() { alert('Failed to render table as image. Try a screenshot instead.'); };
     img.onload = function() {
         ctx.drawImage(img, 0, 0);
+        var dataUrl = canvas.toDataURL('image/png');
         var a = document.createElement('a');
         a.download = filename || 'table.png';
-        a.href = canvas.toDataURL('image/png');
+        a.href = dataUrl;
+        document.body.appendChild(a);
         a.click();
+        document.body.removeChild(a);
     };
     img.src = 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(svgData);
 }
 
 function downloadCalParamsTablePng(suffix) {
-    var container = document.getElementById('cal-params-table' + suffix);
-    if (!container) return;
-    var width = Math.max(container.scrollWidth, 900);
-    var height = container.scrollHeight + 8;
-    var scale = 2;
-    var svgData = '<svg xmlns="http://www.w3.org/2000/svg" width="' + width + '" height="' + height + '">' +
-        '<foreignObject width="' + width + '" height="' + height + '">' +
-        '<div xmlns="http://www.w3.org/1999/xhtml" style="font-family:-apple-system,BlinkMacSystemFont,\'Segoe UI\',sans-serif;font-size:14px;">' +
-        container.outerHTML +
-        '</div></foreignObject></svg>';
-    var canvas = document.createElement('canvas');
-    canvas.width = width * scale;
-    canvas.height = height * scale;
-    var ctx = canvas.getContext('2d');
-    ctx.fillStyle = '#ffffff';
-    ctx.fillRect(0, 0, canvas.width, canvas.height);
-    ctx.scale(scale, scale);
-    var img = new Image();
-    img.onload = function() {
-        ctx.drawImage(img, 0, 0);
-        var a = document.createElement('a');
-        a.download = 'calibration-test-parameters.png';
-        a.href = canvas.toDataURL('image/png');
-        a.click();
-    };
-    img.src = 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(svgData);
+    downloadTableAsPng('cal-params-table' + suffix, 'calibration-test-parameters.png');
 }
 
 function switchReportTab(tabId) {
