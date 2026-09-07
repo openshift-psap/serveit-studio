@@ -723,15 +723,15 @@ function _renderChartsImpl(data, runId, content) {
                 if (!ad) return;
                 secCfg += '<div style="margin-bottom:18px;">';
                 secCfg += '<div style="font-weight:700;font-size:0.85em;color:' + arch.color + ';text-transform:uppercase;letter-spacing:0.06em;border-bottom:2px solid ' + arch.color + ';padding-bottom:4px;margin-bottom:6px;">' + arch.label + ' Architecture</div>';
-                secCfg += '<table style="width:100%;font-size:0.83em;border-collapse:collapse;table-layout:fixed;">';
-                secCfg += '<colgroup><col style="width:26%"><col style="width:30%"><col style="width:11%"><col style="width:10%"><col style="width:15%"><col style="width:8%"></colgroup>';
+                secCfg += '<table style="width:100%;font-size:0.83em;border-collapse:collapse;">';
+                var _tdNow = _tdBase + 'white-space:nowrap;';
                 secCfg += '<tr style="background:#f1f5f9;">' +
                     '<th style="' + _tdLeft + 'font-weight:700;">Category</th>' +
                     '<th style="' + _tdLeft + 'font-weight:700;">Config</th>' +
-                    '<th style="' + _tdBase + 'font-weight:700;">TTFT P90</th>' +
-                    '<th style="' + _tdBase + 'font-weight:700;">ITL P90</th>' +
-                    '<th style="' + _tdBase + 'font-weight:700;">Throughput</th>' +
-                    '<th style="' + _tdBase + 'font-weight:700;">GPUs</th>' +
+                    '<th style="' + _tdNow + 'font-weight:700;">TTFT P90</th>' +
+                    '<th style="' + _tdNow + 'font-weight:700;">ITL P90</th>' +
+                    '<th style="' + _tdNow + 'font-weight:700;">Throughput</th>' +
+                    '<th style="' + _tdNow + 'font-weight:700;">GPUs</th>' +
                     '</tr>';
 
                 // Deduplicate: group categories by config_name, preserving category order
@@ -760,10 +760,10 @@ function _renderChartsImpl(data, runId, content) {
                     secCfg += '<tr style="' + rowBg + '">';
                     secCfg += '<td style="' + _tdLeft + '">' + catBadges + recBadge + '</td>';
                     secCfg += '<td style="' + _tdLeft + 'font-weight:' + (isRec?'700':'400') + ';">' + cn + '</td>';
-                    secCfg += '<td style="' + _tdBase + '">' + _fmtMs(e.ttft)                         + '</td>';
-                    secCfg += '<td style="' + _tdBase + '">' + _fmtMs(e.itl)                          + '</td>';
-                    secCfg += '<td style="' + _tdBase + '">' + _fmtTput(e.throughput_mean || e.throughput) + '</td>';
-                    secCfg += '<td style="' + _tdBase + '">' + (e.gpus != null ? e.gpus : '—')        + '</td>';
+                    secCfg += '<td style="' + _tdNow + '">' + _fmtMs(e.ttft)                         + '</td>';
+                    secCfg += '<td style="' + _tdNow + '">' + _fmtMs(e.itl)                          + '</td>';
+                    secCfg += '<td style="' + _tdNow + '">' + _fmtTput(e.throughput_mean || e.throughput) + '</td>';
+                    secCfg += '<td style="' + _tdNow + '">' + (e.gpus != null ? e.gpus : '—')        + '</td>';
                     secCfg += '</tr>';
                 });
 
