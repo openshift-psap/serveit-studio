@@ -4052,9 +4052,9 @@ function _renderChartsImpl(data, runId, content) {
         ];
 
         var layout = {
-            height: hasItl ? 620 : 500,
-            margin: { t: 30, b: 60, l: 60, r: 60 },
-            xaxis: { title: 'Prefill : Decode Pod Ratio', anchor: hasItl ? 'y3' : 'y' },
+            height: hasItl ? 780 : 660,
+            margin: { t: 30, b: 180, l: 60, r: 60 },
+            xaxis: { title: { text: 'Configuration', standoff: 20 }, tickangle: -40, anchor: hasItl ? 'y3' : 'y' },
             yaxis: { title: 'TTFT ' + pLabel + ' (ms)', side: 'left', titlefont: { color: pctl.color }, tickfont: { color: pctl.color }, tickformat: '.2s', domain: hasItl ? [0.28, 1] : [0, 1] },
             yaxis2: { title: 'Throughput Mean (req/s)', side: 'right', overlaying: 'y', titlefont: { color: '#f59e0b' }, tickfont: { color: '#f59e0b' } },
             showlegend: true,
@@ -4074,7 +4074,7 @@ function _renderChartsImpl(data, runId, content) {
             layout.yaxis3 = { title: 'ITL ' + pLabel + ' (ms)', side: 'left', titlefont: { color: '#ef4444', size: 11 }, tickfont: { color: '#ef4444', size: 10 }, domain: [0, 0.22] };
         }
 
-        Plotly.newPlot(el, traces, layout, plotlyConfig);
+        Plotly.newPlot(el, traces, layout, { ...plotlyConfig, toImageButtonOptions: { format: 'png', width: 1400, height: hasItl ? 780 : 660, scale: 2 } });
     });
 
     // ============================================================
