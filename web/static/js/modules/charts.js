@@ -709,9 +709,12 @@ function _renderChartsImpl(data, runId, content) {
 
         var _anyArch = _archDefs.some(function(a) { return !!_bbpSel[a.key]; });
         if (_anyArch) {
-            secCfg += '<div class="chart-card">';
-            secCfg += '<div class="chart-card-header">Configuration Selection — Top 5 per Architecture</div>';
-            secCfg += '<div style="padding:10px 20px 16px;">';
+            var _selTableId = 'cfg-selection-table' + _chartSuffix;
+            secCfg += '<div class="chart-card" id="' + _selTableId + '-card">';
+            secCfg += '<div class="chart-card-header" style="display:flex;align-items:center;justify-content:space-between;">Configuration Selection — Top 5 per Architecture' +
+                '<button onclick="downloadTableAsPng(\'' + _selTableId + '\',\'configuration-selection.png\')" style="font-size:0.75em;padding:3px 10px;border:1px solid rgba(255,255,255,0.5);border-radius:6px;background:rgba(255,255,255,0.15);color:white;cursor:pointer;">&#11015; Download PNG</button>' +
+                '</div>';
+            secCfg += '<div id="' + _selTableId + '" style="padding:10px 20px 16px;">';
             secCfg += '<p style="color:#64748b;font-size:0.82em;margin:0 0 14px;">The optimizer selects up to 5 configurations per architecture for the concurrency sweep — one per category. ★ = final primary recommendation.</p>';
 
             _archDefs.forEach(function(arch) {

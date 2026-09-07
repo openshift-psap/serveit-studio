@@ -364,6 +364,35 @@ function downloadEstimatorReport(suffix) {
     });
 }
 
+function downloadTableAsPng(elementId, filename) {
+    var container = document.getElementById(elementId);
+    if (!container) return;
+    var width = Math.max(container.scrollWidth, 900);
+    var height = container.scrollHeight + 8;
+    var scale = 2;
+    var svgData = '<svg xmlns="http://www.w3.org/2000/svg" width="' + width + '" height="' + height + '">' +
+        '<foreignObject width="' + width + '" height="' + height + '">' +
+        '<div xmlns="http://www.w3.org/1999/xhtml" style="font-family:-apple-system,BlinkMacSystemFont,\'Segoe UI\',sans-serif;font-size:14px;">' +
+        container.outerHTML +
+        '</div></foreignObject></svg>';
+    var canvas = document.createElement('canvas');
+    canvas.width = width * scale;
+    canvas.height = height * scale;
+    var ctx = canvas.getContext('2d');
+    ctx.fillStyle = '#ffffff';
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+    ctx.scale(scale, scale);
+    var img = new Image();
+    img.onload = function() {
+        ctx.drawImage(img, 0, 0);
+        var a = document.createElement('a');
+        a.download = filename || 'table.png';
+        a.href = canvas.toDataURL('image/png');
+        a.click();
+    };
+    img.src = 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(svgData);
+}
+
 function downloadCalParamsTablePng(suffix) {
     var container = document.getElementById('cal-params-table' + suffix);
     if (!container) return;
