@@ -709,16 +709,18 @@ function _renderChartsImpl(data, runId, content) {
 
         var _anyArch = _archDefs.some(function(a) { return !!_bbpSel[a.key]; });
         if (_anyArch) {
-            secCfg += '<div style="margin:16px 0;padding:16px 20px;background:#f8fafc;border:1px solid #e2e8f0;border-radius:8px;">';
-            secCfg += '<div style="font-weight:700;font-size:0.95em;color:#1e293b;margin-bottom:4px;">Configuration Selection — Top 5 per Architecture</div>';
-            secCfg += '<p style="color:#64748b;font-size:0.82em;margin:0 0 14px;">The optimizer selects the top 5 configurations per architecture for the concurrency sweep — one per category. ★ = final primary recommendation.</p>';
+            secCfg += '<div class="chart-card">';
+            secCfg += '<div class="chart-card-header">Configuration Selection — Top 5 per Architecture</div>';
+            secCfg += '<div style="padding:10px 20px 16px;">';
+            secCfg += '<p style="color:#64748b;font-size:0.82em;margin:0 0 14px;">The optimizer selects up to 5 configurations per architecture for the concurrency sweep — one per category. ★ = final primary recommendation.</p>';
 
             _archDefs.forEach(function(arch) {
                 var ad = _bbpSel[arch.key];
                 if (!ad) return;
                 secCfg += '<div style="margin-bottom:18px;">';
                 secCfg += '<div style="font-weight:700;font-size:0.85em;color:' + arch.color + ';text-transform:uppercase;letter-spacing:0.06em;border-bottom:2px solid ' + arch.color + ';padding-bottom:4px;margin-bottom:6px;">' + arch.label + ' Architecture</div>';
-                secCfg += '<table style="width:100%;font-size:0.83em;border-collapse:collapse;">';
+                secCfg += '<table style="width:100%;font-size:0.83em;border-collapse:collapse;table-layout:fixed;">';
+                secCfg += '<colgroup><col style="width:26%"><col style="width:30%"><col style="width:11%"><col style="width:10%"><col style="width:15%"><col style="width:8%"></colgroup>';
                 secCfg += '<tr style="background:#f1f5f9;">' +
                     '<th style="' + _tdLeft + 'font-weight:700;">Category</th>' +
                     '<th style="' + _tdLeft + 'font-weight:700;">Config</th>' +
@@ -763,7 +765,7 @@ function _renderChartsImpl(data, runId, content) {
 
                 secCfg += '</table></div>';
             });
-            secCfg += '</div>';
+            secCfg += '</div></div>';
         }
     }
     secCfg += chartCard('Throughput vs Latency', chartDesc.scatter, 'chart-scatter');
