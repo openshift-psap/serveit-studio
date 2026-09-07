@@ -678,6 +678,15 @@ function _renderChartsImpl(data, runId, content) {
         'All tested configurations across PD, EP, and Aggregated architectures. Charts show TTFT vs Throughput trade-offs at each percentile. ' +
         'The <strong>Pareto Optimal</strong> table highlights configurations that offer the best trade-offs — no other config is better on both latency and throughput simultaneously.' +
         '</div></div>';
+    if (rec) {
+        secCfg += chartCard(
+            'Configuration Selection — Why Each Config Was Chosen',
+            '<strong style="color:#cbd5e1;">Gray dots</strong> were tested but not advanced. ' +
+            '<strong style="color:#0ea5e9;">Colored stars</strong> were selected for the concurrency sweep — hover to see what made them stand out. ' +
+            'Ideal position is <strong>top-left</strong> (low latency, high throughput).',
+            'chart-cfg-selection'
+        );
+    }
     secCfg += chartCard('Throughput vs Latency', chartDesc.scatter, 'chart-scatter');
     secCfg += chartCard('GPU Efficiency (req/s per GPU)', chartDesc.efficiency, 'chart-efficiency');
     secCfg += chartCard('Per-User Token Throughput (tokens/s per user)', 'Shows how many output tokens each concurrent user receives per second. <strong>Higher = faster streaming for each user.</strong>', 'chart-per-user-efficiency');
@@ -3086,6 +3095,77 @@ function _renderChartsImpl(data, runId, content) {
             yaxis: { title: 'TPSG (tok/s/GPU) — higher is better', side: 'left', tickformat: ',.0f' },
             yaxis2: { title: 'TTFT P90 (ms) — lower is better', side: 'right', overlaying: 'y', type: 'log' },
             showlegend: true
+        }, plotlyConfig);
+    }
+
+    // Configuration Selection chart
+    if (rec && document.getElementById(cid('chart-cfg-selection'))) {
+        var _selMap = {};
+        function _markSel(entry, reason) {
+            var cn = entry && entry.config_name;
+            if (!cn) return;
+            if (!_selMap[cn]) _selMap[cn] = [];
+            if (_selMap[cn].indexOf(reason) < 0) _selMap[cn].push(reason);
+        }
+        if (rec.recommendations) {
+            var _rRt = rec.recommendations.response_time;
+            var _rTp = rec.recommendations.throughput;
+            if (_rRt && _rRt.config) _markSel(_rRt.config, '★ Recommended: Best TTFT');
+            if (_rTp && _rTp.config) _markSel(_rTp.config, '★ Recommended: Best Throughput');
+        }
+        var _bbp = rec.best_by_percentile && rec.best_by_percentile.p90;
+        if (_bbp) {
+            [['pd','PD'],['ep','EP'],['aggregated','AG']].forEach(function(ap) {
+                var ad = _bbp[ap[0]];
+                if (!ad) return;
+                _markSel(ad.balanced,       'Best Balanced ('      + ap[1] + ')');
+                _markSel(ad.lowest_ttft,    'Best TTFT ('          + ap[1] + ')');
+                _markSel(ad.highest_tput,   'Best Throughput ('    + ap[1] + ')');
+                _markSel(ad.most_efficient, 'Most Efficient ('     + ap[1] + ')');
+                _markSel(ad.lowest_itl,     'Best ITL ('          + ap[1] + ')');
+            });
+        }
+        var _crLookup = {};
+        coreResults.forEach(function(r) { _crLookup[r.config_name] = r; });
+        var _archColSel = { AGGREGATED: '#6366f1', PD: '#0ea5e9', EP: '#10b981' };
+        var _selTraces = [];
+        var _bgR = coreResults.filter(function(r) { return !_selMap[r.config_name]; });
+        if (_bgR.length) {
+            _selTraces.push({
+                x: _bgR.map(function(r) { return r.ttft_p90; }),
+                y: _bgR.map(function(r) { return r.throughput_mean || r.throughput_p90; }),
+                text: _bgR.map(function(r) { return _tagLabel(r.config_name, r.architecture); }),
+                mode: 'markers', name: 'Tested — not selected',
+                marker: { color: '#cbd5e1', size: 9, opacity: 0.55, line: { width: 1, color: '#94a3b8' } },
+                hovertemplate: '<b>%{text}</b><br>TTFT P90: %{x:.0f} ms<br>Throughput: %{y:.2f} req/s<extra></extra>'
+            });
+        }
+        Object.keys(_selMap).forEach(function(cn) {
+            var r = _crLookup[cn];
+            if (!r || r.ttft_p90 == null) return;
+            var reasons = _selMap[cn];
+            var isRec = reasons.some(function(rs) { return rs.indexOf('★') >= 0; });
+            var color = _archColSel[r.architecture] || '#64748b';
+            var lbl = _tagLabel(r.config_name, r.architecture);
+            _selTraces.push({
+                x: [r.ttft_p90],
+                y: [r.throughput_mean || r.throughput_p90],
+                text: [lbl],
+                customdata: [reasons.join('<br>')],
+                mode: 'markers+text', name: lbl,
+                textposition: 'top center',
+                textfont: { size: 9, color: color },
+                marker: { color: color, size: isRec ? 20 : 13, symbol: isRec ? 'star' : 'diamond', opacity: 1, line: { width: 2, color: 'white' } },
+                hovertemplate: '<b>%{text}</b><br>TTFT P90: %{x:.0f} ms<br>Throughput: %{y:.2f} req/s<br><b>Selected as:</b> %{customdata}<extra></extra>'
+            });
+        });
+        safePlot(cid('chart-cfg-selection'), _selTraces, {
+            ...plotlyLayout, height: 520,
+            margin: { t: 20, b: 60, l: 70, r: 220 },
+            xaxis: { title: 'TTFT P90 (ms) — lower is better', gridcolor: '#e2e8f0' },
+            yaxis: { title: 'Throughput Mean (req/s) — higher is better', gridcolor: '#e2e8f0' },
+            showlegend: true,
+            legend: { x: 1.02, y: 1, xanchor: 'left', font: { size: 10 } }
         }, plotlyConfig);
     }
 
