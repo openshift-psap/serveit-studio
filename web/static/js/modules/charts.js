@@ -678,81 +678,77 @@ function _renderChartsImpl(data, runId, content) {
         'All tested configurations across PD, EP, and Aggregated architectures. Charts show TTFT vs Throughput trade-offs at each percentile. ' +
         'The <strong>Pareto Optimal</strong> table highlights configurations that offer the best trade-offs — no other config is better on both latency and throughput simultaneously.' +
         '</div></div>';
-    if (rec) {
-        // Build selection map: config_name -> [reasons]
-        var _selMapCfg = {};
-        function _addSelReason(entry, reason) {
-            var cn = entry && entry.config_name;
-            if (!cn) return;
-            if (!_selMapCfg[cn]) _selMapCfg[cn] = [];
-            if (_selMapCfg[cn].indexOf(reason) < 0) _selMapCfg[cn].push(reason);
-        }
+    if (rec && rec.best_by_percentile && rec.best_by_percentile.p90) {
+        var _bbpSel = rec.best_by_percentile.p90;
+        // Mark primary recommendation config names
+        var _recLabel = {};
         if (rec.recommendations) {
-            if (rec.recommendations.response_time && rec.recommendations.response_time.config)
-                _addSelReason(rec.recommendations.response_time.config, '★ Best TTFT recommendation');
-            if (rec.recommendations.throughput && rec.recommendations.throughput.config)
-                _addSelReason(rec.recommendations.throughput.config, '★ Best throughput recommendation');
-        }
-        var _bbpCfg = rec.best_by_percentile && rec.best_by_percentile.p90;
-        if (_bbpCfg) {
-            [['pd','PD'],['ep','EP'],['aggregated','AG']].forEach(function(ap) {
-                var ad = _bbpCfg[ap[0]];
-                if (!ad) return;
-                _addSelReason(ad.balanced,       'Best balanced ('   + ap[1] + ')');
-                _addSelReason(ad.lowest_ttft,    'Best TTFT ('       + ap[1] + ')');
-                _addSelReason(ad.highest_tput,   'Best throughput ('  + ap[1] + ')');
-                _addSelReason(ad.most_efficient, 'Most efficient ('   + ap[1] + ')');
-                _addSelReason(ad.lowest_itl,     'Best ITL ('        + ap[1] + ')');
-            });
+            var _rtCfg = rec.recommendations.response_time && rec.recommendations.response_time.config;
+            var _tpCfg = rec.recommendations.throughput    && rec.recommendations.throughput.config;
+            if (_rtCfg) _recLabel[_rtCfg.config_name] = '★ Primary TTFT recommendation';
+            if (_tpCfg) _recLabel[_tpCfg.config_name] = '★ Primary throughput recommendation';
         }
 
-        var _selKeys = Object.keys(_selMapCfg);
-        if (_selKeys.length) {
-            // Build lookup from config_name -> result
-            var _selResultLookup = {};
-            coreResults.forEach(function(r) { _selResultLookup[r.config_name] = r; });
+        function _fmtMs(v) { return v == null ? '—' : (v >= 1000 ? (v/1000).toFixed(1)+'s' : Math.round(v)+'ms'); }
+        function _fmtTput(v) { return v == null ? '—' : v.toFixed(2)+' req/s'; }
+        var _tdBase = 'padding:7px 10px;border:1px solid #e2e8f0;text-align:center;';
+        var _tdLeft = 'padding:7px 10px;border:1px solid #e2e8f0;';
 
-            var _archBadge = {
-                AGGREGATED: 'background:#6366f1;color:white;',
-                PD:         'background:#0ea5e9;color:white;',
-                EP:         'background:#10b981;color:white;'
-            };
-            var _reasonColors = {
-                '★ Best TTFT recommendation':     '#2563eb',
-                '★ Best throughput recommendation':'#d97706',
-            };
-            function _reasonBadge(reason) {
-                var isRec = reason.charAt(0) === '★';
-                var col = isRec ? (_reasonColors[reason] || '#7c3aed') : '#475569';
-                var bg  = isRec ? (reason.indexOf('TTFT') >= 0 ? '#dbeafe' : '#fef3c7') : '#f1f5f9';
-                return '<span style="display:inline-block;background:' + bg + ';color:' + col + ';font-size:0.75em;font-weight:' + (isRec?'700':'500') + ';padding:2px 7px;border-radius:10px;margin:2px 3px 2px 0;white-space:nowrap;">' + reason + '</span>';
-            }
+        var _archDefs = [
+            { key: 'pd',          label: 'PD',          color: '#0ea5e9', bg: '#f0f9ff' },
+            { key: 'ep',          label: 'EP',          color: '#10b981', bg: '#f0fdf4' },
+            { key: 'aggregated',  label: 'Aggregated',  color: '#6366f1', bg: '#eef2ff' }
+        ];
+        var _catDefs = [
+            { key: 'balanced',       label: 'Best balanced'   },
+            { key: 'lowest_ttft',    label: 'Best TTFT'       },
+            { key: 'highest_tput',   label: 'Best throughput' },
+            { key: 'most_efficient', label: 'Most efficient'  },
+            { key: 'lowest_itl',     label: 'Best ITL'        }
+        ];
 
+        var _anyArch = _archDefs.some(function(a) { return !!_bbpSel[a.key]; });
+        if (_anyArch) {
             secCfg += '<div style="margin:16px 0;padding:16px 20px;background:#f8fafc;border:1px solid #e2e8f0;border-radius:8px;">';
-            secCfg += '<div style="font-weight:700;font-size:0.95em;color:#1e293b;margin-bottom:4px;">Configuration Selection — Why Each Config Was Chosen</div>';
-            secCfg += '<p style="color:#64748b;font-size:0.82em;margin:0 0 10px;">Configs that were selected for the concurrency sweep and why. ★ badges = primary recommendations. Other badges = why the optimizer considered them best in their category.</p>';
-            secCfg += '<table style="width:100%;font-size:0.85em;border-collapse:collapse;">';
-            secCfg += '<tr style="background:#f1f5f9;"><th style="padding:8px 12px;border:1px solid #e2e8f0;text-align:left;">Config</th><th style="padding:8px 12px;border:1px solid #e2e8f0;">Arch</th><th style="padding:8px 12px;border:1px solid #e2e8f0;">TTFT P90</th><th style="padding:8px 12px;border:1px solid #e2e8f0;">Throughput</th><th style="padding:8px 12px;border:1px solid #e2e8f0;">GPUs</th><th style="padding:8px 12px;border:1px solid #e2e8f0;text-align:left;">Why selected</th></tr>';
-            _selKeys.forEach(function(cn) {
-                var r = _selResultLookup[cn];
-                var reasons = _selMapCfg[cn];
-                var isRec = reasons.some(function(rs) { return rs.charAt(0) === '★'; });
-                var rowBg = isRec ? 'background:#fffbeb;' : '';
-                var ttft  = r && r.ttft_p90   != null ? (r.ttft_p90   >= 1000 ? (r.ttft_p90/1000).toFixed(1)+'s' : Math.round(r.ttft_p90)+'ms') : '—';
-                var tput  = r && r.throughput_mean != null ? r.throughput_mean.toFixed(2)+' req/s' : (r && r.throughput_p90 != null ? r.throughput_p90.toFixed(2)+' req/s' : '—');
-                var gpus  = r && r.gpus != null ? r.gpus : '—';
-                var arch  = r ? r.architecture : '';
-                var archSt = _archBadge[arch] || 'background:#94a3b8;color:white;';
-                secCfg += '<tr style="' + rowBg + '">';
-                secCfg += '<td style="padding:8px 12px;border:1px solid #e2e8f0;font-weight:600;">' + cn + '</td>';
-                secCfg += '<td style="padding:8px 12px;border:1px solid #e2e8f0;text-align:center;"><span style="' + archSt + 'font-size:0.75em;padding:2px 7px;border-radius:10px;font-weight:700;">' + arch + '</span></td>';
-                secCfg += '<td style="padding:8px 12px;border:1px solid #e2e8f0;text-align:center;">' + ttft + '</td>';
-                secCfg += '<td style="padding:8px 12px;border:1px solid #e2e8f0;text-align:center;">' + tput + '</td>';
-                secCfg += '<td style="padding:8px 12px;border:1px solid #e2e8f0;text-align:center;">' + gpus + '</td>';
-                secCfg += '<td style="padding:8px 12px;border:1px solid #e2e8f0;">' + reasons.map(_reasonBadge).join('') + '</td>';
-                secCfg += '</tr>';
+            secCfg += '<div style="font-weight:700;font-size:0.95em;color:#1e293b;margin-bottom:4px;">Configuration Selection — Top 5 per Architecture</div>';
+            secCfg += '<p style="color:#64748b;font-size:0.82em;margin:0 0 14px;">The optimizer selects the top 5 configurations per architecture for the concurrency sweep — one per category. ★ = final primary recommendation.</p>';
+
+            _archDefs.forEach(function(arch) {
+                var ad = _bbpSel[arch.key];
+                if (!ad) return;
+                secCfg += '<div style="margin-bottom:18px;">';
+                secCfg += '<div style="font-weight:700;font-size:0.85em;color:' + arch.color + ';text-transform:uppercase;letter-spacing:0.06em;border-bottom:2px solid ' + arch.color + ';padding-bottom:4px;margin-bottom:6px;">' + arch.label + ' Architecture</div>';
+                secCfg += '<table style="width:100%;font-size:0.83em;border-collapse:collapse;">';
+                secCfg += '<tr style="background:#f1f5f9;">' +
+                    '<th style="' + _tdLeft + 'font-weight:700;">Category</th>' +
+                    '<th style="' + _tdLeft + 'font-weight:700;">Config</th>' +
+                    '<th style="' + _tdBase + 'font-weight:700;">TTFT P90</th>' +
+                    '<th style="' + _tdBase + 'font-weight:700;">ITL P90</th>' +
+                    '<th style="' + _tdBase + 'font-weight:700;">Throughput</th>' +
+                    '<th style="' + _tdBase + 'font-weight:700;">GPUs</th>' +
+                    '</tr>';
+
+                _catDefs.forEach(function(cat) {
+                    var e = ad[cat.key];
+                    if (!e) return;
+                    var recLbl = _recLabel[e.config_name];
+                    var isRec  = !!recLbl;
+                    var rowBg  = isRec ? 'background:#fffbeb;' : '';
+                    var catBadge = '<span style="display:inline-block;background:' + arch.bg + ';color:' + arch.color + ';font-size:0.78em;font-weight:600;padding:1px 7px;border-radius:8px;">' + cat.label + '</span>';
+                    var recBadge = isRec ? ' <span style="display:inline-block;background:#fef3c7;color:#b45309;font-size:0.78em;font-weight:700;padding:1px 7px;border-radius:8px;">' + recLbl + '</span>' : '';
+                    secCfg += '<tr style="' + rowBg + '">';
+                    secCfg += '<td style="' + _tdLeft + '">' + catBadge + recBadge + '</td>';
+                    secCfg += '<td style="' + _tdLeft + 'font-weight:' + (isRec?'700':'400') + ';">' + e.config_name + '</td>';
+                    secCfg += '<td style="' + _tdBase + '">' + _fmtMs(e.ttft)          + '</td>';
+                    secCfg += '<td style="' + _tdBase + '">' + _fmtMs(e.itl)           + '</td>';
+                    secCfg += '<td style="' + _tdBase + '">' + _fmtTput(e.throughput_mean || e.throughput) + '</td>';
+                    secCfg += '<td style="' + _tdBase + '">' + (e.gpus != null ? e.gpus : '—') + '</td>';
+                    secCfg += '</tr>';
+                });
+
+                secCfg += '</table></div>';
             });
-            secCfg += '</table></div>';
+            secCfg += '</div>';
         }
     }
     secCfg += chartCard('Throughput vs Latency', chartDesc.scatter, 'chart-scatter');
