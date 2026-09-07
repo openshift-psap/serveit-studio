@@ -728,21 +728,36 @@ function _renderChartsImpl(data, runId, content) {
                     '<th style="' + _tdBase + 'font-weight:700;">GPUs</th>' +
                     '</tr>';
 
+                // Deduplicate: group categories by config_name, preserving category order
+                var _seen = {}, _deduped = [];
                 _catDefs.forEach(function(cat) {
                     var e = ad[cat.key];
                     if (!e) return;
-                    var recLbl = _recLabel[e.config_name];
+                    var cn = e.config_name;
+                    if (_seen[cn]) {
+                        _seen[cn].cats.push(cat.label);
+                    } else {
+                        _seen[cn] = { entry: e, cats: [cat.label] };
+                        _deduped.push(cn);
+                    }
+                });
+                _deduped.forEach(function(cn) {
+                    var e      = _seen[cn].entry;
+                    var cats   = _seen[cn].cats;
+                    var recLbl = _recLabel[cn];
                     var isRec  = !!recLbl;
                     var rowBg  = isRec ? 'background:#fffbeb;' : '';
-                    var catBadge = '<span style="display:inline-block;background:' + arch.bg + ';color:' + arch.color + ';font-size:0.78em;font-weight:600;padding:1px 7px;border-radius:8px;">' + cat.label + '</span>';
+                    var catBadges = cats.map(function(lbl) {
+                        return '<span style="display:inline-block;background:' + arch.bg + ';color:' + arch.color + ';font-size:0.78em;font-weight:600;padding:1px 7px;border-radius:8px;margin:1px 2px 1px 0;">' + lbl + '</span>';
+                    }).join('');
                     var recBadge = isRec ? ' <span style="display:inline-block;background:#fef3c7;color:#b45309;font-size:0.78em;font-weight:700;padding:1px 7px;border-radius:8px;">' + recLbl + '</span>' : '';
                     secCfg += '<tr style="' + rowBg + '">';
-                    secCfg += '<td style="' + _tdLeft + '">' + catBadge + recBadge + '</td>';
-                    secCfg += '<td style="' + _tdLeft + 'font-weight:' + (isRec?'700':'400') + ';">' + e.config_name + '</td>';
-                    secCfg += '<td style="' + _tdBase + '">' + _fmtMs(e.ttft)          + '</td>';
-                    secCfg += '<td style="' + _tdBase + '">' + _fmtMs(e.itl)           + '</td>';
+                    secCfg += '<td style="' + _tdLeft + '">' + catBadges + recBadge + '</td>';
+                    secCfg += '<td style="' + _tdLeft + 'font-weight:' + (isRec?'700':'400') + ';">' + cn + '</td>';
+                    secCfg += '<td style="' + _tdBase + '">' + _fmtMs(e.ttft)                         + '</td>';
+                    secCfg += '<td style="' + _tdBase + '">' + _fmtMs(e.itl)                          + '</td>';
                     secCfg += '<td style="' + _tdBase + '">' + _fmtTput(e.throughput_mean || e.throughput) + '</td>';
-                    secCfg += '<td style="' + _tdBase + '">' + (e.gpus != null ? e.gpus : '—') + '</td>';
+                    secCfg += '<td style="' + _tdBase + '">' + (e.gpus != null ? e.gpus : '—')        + '</td>';
                     secCfg += '</tr>';
                 });
 
