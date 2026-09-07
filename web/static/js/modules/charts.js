@@ -679,13 +679,81 @@ function _renderChartsImpl(data, runId, content) {
         'The <strong>Pareto Optimal</strong> table highlights configurations that offer the best trade-offs — no other config is better on both latency and throughput simultaneously.' +
         '</div></div>';
     if (rec) {
-        secCfg += chartCard(
-            'Configuration Selection — Why Each Config Was Chosen',
-            '<strong style="color:#cbd5e1;">Gray dots</strong> were tested but not advanced. ' +
-            '<strong style="color:#0ea5e9;">Colored stars</strong> were selected for the concurrency sweep — hover to see what made them stand out. ' +
-            'Ideal position is <strong>top-left</strong> (low latency, high throughput).',
-            'chart-cfg-selection'
-        );
+        // Build selection map: config_name -> [reasons]
+        var _selMapCfg = {};
+        function _addSelReason(entry, reason) {
+            var cn = entry && entry.config_name;
+            if (!cn) return;
+            if (!_selMapCfg[cn]) _selMapCfg[cn] = [];
+            if (_selMapCfg[cn].indexOf(reason) < 0) _selMapCfg[cn].push(reason);
+        }
+        if (rec.recommendations) {
+            if (rec.recommendations.response_time && rec.recommendations.response_time.config)
+                _addSelReason(rec.recommendations.response_time.config, '★ Best TTFT recommendation');
+            if (rec.recommendations.throughput && rec.recommendations.throughput.config)
+                _addSelReason(rec.recommendations.throughput.config, '★ Best throughput recommendation');
+        }
+        var _bbpCfg = rec.best_by_percentile && rec.best_by_percentile.p90;
+        if (_bbpCfg) {
+            [['pd','PD'],['ep','EP'],['aggregated','AG']].forEach(function(ap) {
+                var ad = _bbpCfg[ap[0]];
+                if (!ad) return;
+                _addSelReason(ad.balanced,       'Best balanced ('   + ap[1] + ')');
+                _addSelReason(ad.lowest_ttft,    'Best TTFT ('       + ap[1] + ')');
+                _addSelReason(ad.highest_tput,   'Best throughput ('  + ap[1] + ')');
+                _addSelReason(ad.most_efficient, 'Most efficient ('   + ap[1] + ')');
+                _addSelReason(ad.lowest_itl,     'Best ITL ('        + ap[1] + ')');
+            });
+        }
+
+        var _selKeys = Object.keys(_selMapCfg);
+        if (_selKeys.length) {
+            // Build lookup from config_name -> result
+            var _selResultLookup = {};
+            coreResults.forEach(function(r) { _selResultLookup[r.config_name] = r; });
+
+            var _archBadge = {
+                AGGREGATED: 'background:#6366f1;color:white;',
+                PD:         'background:#0ea5e9;color:white;',
+                EP:         'background:#10b981;color:white;'
+            };
+            var _reasonColors = {
+                '★ Best TTFT recommendation':     '#2563eb',
+                '★ Best throughput recommendation':'#d97706',
+            };
+            function _reasonBadge(reason) {
+                var isRec = reason.charAt(0) === '★';
+                var col = isRec ? (_reasonColors[reason] || '#7c3aed') : '#475569';
+                var bg  = isRec ? (reason.indexOf('TTFT') >= 0 ? '#dbeafe' : '#fef3c7') : '#f1f5f9';
+                return '<span style="display:inline-block;background:' + bg + ';color:' + col + ';font-size:0.75em;font-weight:' + (isRec?'700':'500') + ';padding:2px 7px;border-radius:10px;margin:2px 3px 2px 0;white-space:nowrap;">' + reason + '</span>';
+            }
+
+            secCfg += '<div style="margin:16px 0;padding:16px 20px;background:#f8fafc;border:1px solid #e2e8f0;border-radius:8px;">';
+            secCfg += '<div style="font-weight:700;font-size:0.95em;color:#1e293b;margin-bottom:4px;">Configuration Selection — Why Each Config Was Chosen</div>';
+            secCfg += '<p style="color:#64748b;font-size:0.82em;margin:0 0 10px;">Configs that were selected for the concurrency sweep and why. ★ badges = primary recommendations. Other badges = why the optimizer considered them best in their category.</p>';
+            secCfg += '<table style="width:100%;font-size:0.85em;border-collapse:collapse;">';
+            secCfg += '<tr style="background:#f1f5f9;"><th style="padding:8px 12px;border:1px solid #e2e8f0;text-align:left;">Config</th><th style="padding:8px 12px;border:1px solid #e2e8f0;">Arch</th><th style="padding:8px 12px;border:1px solid #e2e8f0;">TTFT P90</th><th style="padding:8px 12px;border:1px solid #e2e8f0;">Throughput</th><th style="padding:8px 12px;border:1px solid #e2e8f0;">GPUs</th><th style="padding:8px 12px;border:1px solid #e2e8f0;text-align:left;">Why selected</th></tr>';
+            _selKeys.forEach(function(cn) {
+                var r = _selResultLookup[cn];
+                var reasons = _selMapCfg[cn];
+                var isRec = reasons.some(function(rs) { return rs.charAt(0) === '★'; });
+                var rowBg = isRec ? 'background:#fffbeb;' : '';
+                var ttft  = r && r.ttft_p90   != null ? (r.ttft_p90   >= 1000 ? (r.ttft_p90/1000).toFixed(1)+'s' : Math.round(r.ttft_p90)+'ms') : '—';
+                var tput  = r && r.throughput_mean != null ? r.throughput_mean.toFixed(2)+' req/s' : (r && r.throughput_p90 != null ? r.throughput_p90.toFixed(2)+' req/s' : '—');
+                var gpus  = r && r.gpus != null ? r.gpus : '—';
+                var arch  = r ? r.architecture : '';
+                var archSt = _archBadge[arch] || 'background:#94a3b8;color:white;';
+                secCfg += '<tr style="' + rowBg + '">';
+                secCfg += '<td style="padding:8px 12px;border:1px solid #e2e8f0;font-weight:600;">' + cn + '</td>';
+                secCfg += '<td style="padding:8px 12px;border:1px solid #e2e8f0;text-align:center;"><span style="' + archSt + 'font-size:0.75em;padding:2px 7px;border-radius:10px;font-weight:700;">' + arch + '</span></td>';
+                secCfg += '<td style="padding:8px 12px;border:1px solid #e2e8f0;text-align:center;">' + ttft + '</td>';
+                secCfg += '<td style="padding:8px 12px;border:1px solid #e2e8f0;text-align:center;">' + tput + '</td>';
+                secCfg += '<td style="padding:8px 12px;border:1px solid #e2e8f0;text-align:center;">' + gpus + '</td>';
+                secCfg += '<td style="padding:8px 12px;border:1px solid #e2e8f0;">' + reasons.map(_reasonBadge).join('') + '</td>';
+                secCfg += '</tr>';
+            });
+            secCfg += '</table></div>';
+        }
     }
     secCfg += chartCard('Throughput vs Latency', chartDesc.scatter, 'chart-scatter');
     secCfg += chartCard('GPU Efficiency (req/s per GPU)', chartDesc.efficiency, 'chart-efficiency');
@@ -3095,123 +3163,6 @@ function _renderChartsImpl(data, runId, content) {
             yaxis: { title: 'TPSG (tok/s/GPU) — higher is better', side: 'left', tickformat: ',.0f' },
             yaxis2: { title: 'TTFT P90 (ms) — lower is better', side: 'right', overlaying: 'y', type: 'log' },
             showlegend: true
-        }, plotlyConfig);
-    }
-
-    // Configuration Selection chart
-    if (rec && document.getElementById(cid('chart-cfg-selection'))) {
-        var _selMap = {};
-        function _markSel(entry, reason) {
-            var cn = entry && entry.config_name;
-            if (!cn) return;
-            if (!_selMap[cn]) _selMap[cn] = [];
-            if (_selMap[cn].indexOf(reason) < 0) _selMap[cn].push(reason);
-        }
-        if (rec.recommendations) {
-            var _rRt = rec.recommendations.response_time;
-            var _rTp = rec.recommendations.throughput;
-            if (_rRt && _rRt.config) _markSel(_rRt.config, '★ Recommended: Best TTFT');
-            if (_rTp && _rTp.config) _markSel(_rTp.config, '★ Recommended: Best Throughput');
-        }
-        var _bbp = rec.best_by_percentile && rec.best_by_percentile.p90;
-        if (_bbp) {
-            [['pd','PD'],['ep','EP'],['aggregated','AG']].forEach(function(ap) {
-                var ad = _bbp[ap[0]];
-                if (!ad) return;
-                _markSel(ad.balanced,       'Best Balanced ('      + ap[1] + ')');
-                _markSel(ad.lowest_ttft,    'Best TTFT ('          + ap[1] + ')');
-                _markSel(ad.highest_tput,   'Best Throughput ('    + ap[1] + ')');
-                _markSel(ad.most_efficient, 'Most Efficient ('     + ap[1] + ')');
-                _markSel(ad.lowest_itl,     'Best ITL ('          + ap[1] + ')');
-            });
-        }
-        var _crLookup = {};
-        coreResults.forEach(function(r) { _crLookup[r.config_name] = r; });
-
-        // Assign each selected config a single primary reason (★ wins, then category order)
-        var _reasonPriority = [
-            '★ Recommended: Best TTFT', '★ Recommended: Best Throughput',
-            'Best Balanced (PD)', 'Best Balanced (EP)', 'Best Balanced (AG)',
-            'Best TTFT (PD)', 'Best TTFT (EP)', 'Best TTFT (AG)',
-            'Best Throughput (PD)', 'Best Throughput (EP)', 'Best Throughput (AG)',
-            'Most Efficient (PD)', 'Most Efficient (EP)', 'Most Efficient (AG)',
-            'Best ITL (PD)', 'Best ITL (EP)', 'Best ITL (AG)'
-        ];
-        var _reasonStyle = {
-            '★ Recommended: Best TTFT':     { color: '#2563eb', symbol: 'star',          size: 22 },
-            '★ Recommended: Best Throughput':{ color: '#d97706', symbol: 'star-diamond',  size: 22 },
-            'Best Balanced (PD)':           { color: '#0ea5e9', symbol: 'diamond',        size: 14 },
-            'Best Balanced (EP)':           { color: '#10b981', symbol: 'diamond',        size: 14 },
-            'Best Balanced (AG)':           { color: '#6366f1', symbol: 'diamond',        size: 14 },
-            'Best TTFT (PD)':              { color: '#0ea5e9', symbol: 'triangle-down',   size: 13 },
-            'Best TTFT (EP)':              { color: '#10b981', symbol: 'triangle-down',   size: 13 },
-            'Best TTFT (AG)':              { color: '#6366f1', symbol: 'triangle-down',   size: 13 },
-            'Best Throughput (PD)':         { color: '#0ea5e9', symbol: 'triangle-up',    size: 13 },
-            'Best Throughput (EP)':         { color: '#10b981', symbol: 'triangle-up',    size: 13 },
-            'Best Throughput (AG)':         { color: '#6366f1', symbol: 'triangle-up',    size: 13 },
-            'Most Efficient (PD)':          { color: '#0ea5e9', symbol: 'square',         size: 12 },
-            'Most Efficient (EP)':          { color: '#10b981', symbol: 'square',         size: 12 },
-            'Most Efficient (AG)':          { color: '#6366f1', symbol: 'square',         size: 12 },
-            'Best ITL (PD)':               { color: '#0ea5e9', symbol: 'circle',          size: 12 },
-            'Best ITL (EP)':               { color: '#10b981', symbol: 'circle',          size: 12 },
-            'Best ITL (AG)':               { color: '#6366f1', symbol: 'circle',          size: 12 },
-        };
-
-        // Group configs by their primary reason
-        var _byReason = {};
-        Object.keys(_selMap).forEach(function(cn) {
-            var r = _crLookup[cn];
-            if (!r || r.ttft_p90 == null) return;
-            var reasons = _selMap[cn];
-            var primary = null;
-            for (var pi = 0; pi < _reasonPriority.length; pi++) {
-                if (reasons.indexOf(_reasonPriority[pi]) >= 0) { primary = _reasonPriority[pi]; break; }
-            }
-            if (!primary) primary = reasons[0];
-            if (!_byReason[primary]) _byReason[primary] = [];
-            _byReason[primary].push({ r: r, allReasons: reasons });
-        });
-
-        var _selTraces = [];
-
-        // Background: non-selected
-        var _bgR = coreResults.filter(function(r) { return !_selMap[r.config_name]; });
-        if (_bgR.length) {
-            _selTraces.push({
-                x: _bgR.map(function(r) { return r.ttft_p90; }),
-                y: _bgR.map(function(r) { return r.throughput_mean || r.throughput_p90; }),
-                text: _bgR.map(function(r) { return _tagLabel(r.config_name, r.architecture); }),
-                mode: 'markers', name: 'Tested — not selected',
-                marker: { color: '#cbd5e1', size: 9, opacity: 0.55, line: { width: 1, color: '#94a3b8' } },
-                hovertemplate: '<b>%{text}</b><br>TTFT P90: %{x:.0f} ms<br>Throughput: %{y:.2f} req/s<extra></extra>'
-            });
-        }
-
-        // One trace per reason — legend entry IS the reason
-        _reasonPriority.forEach(function(reason) {
-            var entries = _byReason[reason];
-            if (!entries || !entries.length) return;
-            var st = _reasonStyle[reason] || { color: '#64748b', symbol: 'circle', size: 12 };
-            _selTraces.push({
-                x: entries.map(function(e) { return e.r.ttft_p90; }),
-                y: entries.map(function(e) { return e.r.throughput_mean || e.r.throughput_p90; }),
-                text: entries.map(function(e) { return _tagLabel(e.r.config_name, e.r.architecture); }),
-                customdata: entries.map(function(e) { return e.allReasons.join(', '); }),
-                mode: 'markers+text', name: reason,
-                textposition: 'top center',
-                textfont: { size: 9, color: st.color },
-                marker: { color: st.color, size: st.size, symbol: st.symbol, opacity: 1, line: { width: 2, color: 'white' } },
-                hovertemplate: '<b>%{text}</b><br>TTFT P90: %{x:.0f} ms<br>Throughput: %{y:.2f} req/s<br><b>Why selected:</b> %{customdata}<extra></extra>'
-            });
-        });
-
-        safePlot(cid('chart-cfg-selection'), _selTraces, {
-            ...plotlyLayout, height: 520,
-            margin: { t: 20, b: 60, l: 70, r: 260 },
-            xaxis: { title: 'TTFT P90 (ms) — lower is better', gridcolor: '#e2e8f0' },
-            yaxis: { title: 'Throughput Mean (req/s) — higher is better', gridcolor: '#e2e8f0' },
-            showlegend: true,
-            legend: { x: 1.02, y: 1, xanchor: 'left', font: { size: 10 } }
         }, plotlyConfig);
     }
 
