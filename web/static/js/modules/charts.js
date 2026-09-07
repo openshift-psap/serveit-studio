@@ -534,22 +534,35 @@ function _renderChartsImpl(data, runId, content) {
         var calRows = [];
         if (hasDecodeTP2) {
             rec.decode_tp_all.forEach(function(d) {
-                calRows.push({ role: 'Decode', tp: d.tp, isl: d.cal_isl, osl: d.cal_osl, conc: d.cal_concurrency, reqs: d.cal_max_requests, result: d.tpsg ? d.tpsg.toLocaleString() + ' tok/s/GPU' : '-' });
+                calRows.push({ role: 'Decode', tp: d.tp, isl: d.cal_isl, osl: d.cal_osl, conc: d.cal_concurrency, reqs: d.cal_max_requests, tspg: d.tpsg != null ? d.tpsg : null, ttft: null });
             });
         }
         if (hasPrefillTP2) {
             rec.prefill_tp_all.forEach(function(d) {
-                calRows.push({ role: 'Prefill', tp: d.tp, isl: d.cal_isl, osl: d.cal_osl, conc: d.cal_concurrency, reqs: d.cal_max_requests, result: d.ttft_p90 != null ? d.ttft_p90.toLocaleString() + ' ms TTFT' : '-' });
+                calRows.push({ role: 'Prefill', tp: d.tp, isl: d.cal_isl, osl: d.cal_osl, conc: d.cal_concurrency, reqs: d.cal_max_requests, tspg: d.tpsg != null ? d.tpsg : null, ttft: d.ttft_p90 != null ? d.ttft_p90 : null });
             });
         }
         if (calRows.length) {
-            html += '<div style="margin:16px 0;padding:16px 20px;background:#f8fafc;border:1px solid #e2e8f0;border-radius:8px;">';
-            html += '<div style="font-weight:700;font-size:0.95em;color:#1e293b;margin-bottom:8px;">Calibration Test Parameters</div>';
+            var calTableId = 'cal-params-table' + _chartSuffix;
+            html += '<div id="' + calTableId + '" style="margin:16px 0;padding:16px 20px;background:#f8fafc;border:1px solid #e2e8f0;border-radius:8px;">';
+            html += '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;">';
+            html += '<div style="font-weight:700;font-size:0.95em;color:#1e293b;">Calibration Test Parameters</div>';
+            html += '<button onclick="downloadCalParamsTablePng(\'' + _chartSuffix + '\')" style="font-size:0.78em;padding:4px 10px;border:1px solid #cbd5e1;border-radius:6px;background:#fff;color:#475569;cursor:pointer;">&#11015; Download PNG</button>';
+            html += '</div>';
             html += '<p style="color:#64748b;font-size:0.82em;margin:0 0 10px;">Each TP value is tested with isolated workloads: <strong>ISL=1</strong> for decode (measures pure token generation) and <strong>OSL=1</strong> for prefill (measures pure prompt processing). Concurrency is estimated from KV cache capacity to avoid OOM.</p>';
-            html += '<table style="width:100%;font-size:0.85em;text-align:center;"><tr><th>Role</th><th>TP</th><th>ISL</th><th>OSL</th><th>Concurrency</th><th>Max Requests</th><th>Result</th></tr>';
+            html += '<table style="width:100%;font-size:0.85em;text-align:center;border-collapse:collapse;"><tr style="background:#f1f5f9;"><th style="padding:8px 12px;border:1px solid #e2e8f0;">Role</th><th style="padding:8px 12px;border:1px solid #e2e8f0;">TP</th><th style="padding:8px 12px;border:1px solid #e2e8f0;">ISL</th><th style="padding:8px 12px;border:1px solid #e2e8f0;">OSL</th><th style="padding:8px 12px;border:1px solid #e2e8f0;">Concurrency</th><th style="padding:8px 12px;border:1px solid #e2e8f0;">Max Requests</th><th style="padding:8px 12px;border:1px solid #e2e8f0;">TSPG (tok/s/GPU)</th><th style="padding:8px 12px;border:1px solid #e2e8f0;">TTFT P90</th></tr>';
             calRows.forEach(function(r) {
-                var cls = r.role === 'Decode' ? ' style="color:#6366f1;text-align:center;"' : ' style="color:#0d9488;text-align:center;"';
-                html += '<tr><td' + cls + '><strong>' + r.role + '</strong></td><td>' + r.tp + '</td><td>' + (r.isl != null ? r.isl.toLocaleString() : '-') + '</td><td>' + (r.osl != null ? r.osl.toLocaleString() : '-') + '</td><td>' + (r.conc || '-') + '</td><td>' + (r.reqs || '-') + '</td><td>' + r.result + '</td></tr>';
+                var roleStyle = r.role === 'Decode' ? ' style="color:#6366f1;text-align:center;"' : ' style="color:#0d9488;text-align:center;"';
+                var tspgStr = r.tspg != null ? r.tspg.toLocaleString() : '-';
+                var ttftStr = r.ttft != null ? r.ttft.toLocaleString() + ' ms' : '-';
+                html += '<tr><td' + roleStyle + '><strong>' + r.role + '</strong></td>' +
+                    '<td style="padding:8px 12px;border:1px solid #e2e8f0;">' + r.tp + '</td>' +
+                    '<td style="padding:8px 12px;border:1px solid #e2e8f0;">' + (r.isl != null ? r.isl.toLocaleString() : '-') + '</td>' +
+                    '<td style="padding:8px 12px;border:1px solid #e2e8f0;">' + (r.osl != null ? r.osl.toLocaleString() : '-') + '</td>' +
+                    '<td style="padding:8px 12px;border:1px solid #e2e8f0;">' + (r.conc || '-') + '</td>' +
+                    '<td style="padding:8px 12px;border:1px solid #e2e8f0;">' + (r.reqs || '-') + '</td>' +
+                    '<td style="padding:8px 12px;border:1px solid #e2e8f0;font-weight:600;">' + tspgStr + '</td>' +
+                    '<td style="padding:8px 12px;border:1px solid #e2e8f0;">' + ttftStr + '</td></tr>';
             });
             html += '</table></div>';
         }
