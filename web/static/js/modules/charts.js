@@ -723,7 +723,8 @@ function _renderChartsImpl(data, runId, content) {
                 if (!ad) return;
                 secCfg += '<div style="margin-bottom:18px;">';
                 secCfg += '<div style="font-weight:700;font-size:0.85em;color:' + arch.color + ';text-transform:uppercase;letter-spacing:0.06em;border-bottom:2px solid ' + arch.color + ';padding-bottom:4px;margin-bottom:6px;">' + arch.label + ' Architecture</div>';
-                secCfg += '<table style="width:100%;font-size:0.83em;border-collapse:collapse;">';
+                secCfg += '<table style="width:100%;font-size:0.83em;border-collapse:collapse;table-layout:fixed;">';
+                secCfg += '<colgroup><col style="width:20%"><col style="width:22%"><col style="width:13%"><col style="width:11%"><col style="width:17%"><col style="width:17%"></colgroup>';
                 var _tdNow = _tdBase + 'white-space:nowrap;';
                 secCfg += '<tr style="background:#f1f5f9;">' +
                     '<th style="' + _tdLeft + 'font-weight:700;">Category</th>' +
