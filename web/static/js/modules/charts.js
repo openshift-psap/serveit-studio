@@ -3127,8 +3127,54 @@ function _renderChartsImpl(data, runId, content) {
         }
         var _crLookup = {};
         coreResults.forEach(function(r) { _crLookup[r.config_name] = r; });
-        var _archColSel = { AGGREGATED: '#6366f1', PD: '#0ea5e9', EP: '#10b981' };
+
+        // Assign each selected config a single primary reason (★ wins, then category order)
+        var _reasonPriority = [
+            '★ Recommended: Best TTFT', '★ Recommended: Best Throughput',
+            'Best Balanced (PD)', 'Best Balanced (EP)', 'Best Balanced (AG)',
+            'Best TTFT (PD)', 'Best TTFT (EP)', 'Best TTFT (AG)',
+            'Best Throughput (PD)', 'Best Throughput (EP)', 'Best Throughput (AG)',
+            'Most Efficient (PD)', 'Most Efficient (EP)', 'Most Efficient (AG)',
+            'Best ITL (PD)', 'Best ITL (EP)', 'Best ITL (AG)'
+        ];
+        var _reasonStyle = {
+            '★ Recommended: Best TTFT':     { color: '#2563eb', symbol: 'star',          size: 22 },
+            '★ Recommended: Best Throughput':{ color: '#d97706', symbol: 'star-diamond',  size: 22 },
+            'Best Balanced (PD)':           { color: '#0ea5e9', symbol: 'diamond',        size: 14 },
+            'Best Balanced (EP)':           { color: '#10b981', symbol: 'diamond',        size: 14 },
+            'Best Balanced (AG)':           { color: '#6366f1', symbol: 'diamond',        size: 14 },
+            'Best TTFT (PD)':              { color: '#0ea5e9', symbol: 'triangle-down',   size: 13 },
+            'Best TTFT (EP)':              { color: '#10b981', symbol: 'triangle-down',   size: 13 },
+            'Best TTFT (AG)':              { color: '#6366f1', symbol: 'triangle-down',   size: 13 },
+            'Best Throughput (PD)':         { color: '#0ea5e9', symbol: 'triangle-up',    size: 13 },
+            'Best Throughput (EP)':         { color: '#10b981', symbol: 'triangle-up',    size: 13 },
+            'Best Throughput (AG)':         { color: '#6366f1', symbol: 'triangle-up',    size: 13 },
+            'Most Efficient (PD)':          { color: '#0ea5e9', symbol: 'square',         size: 12 },
+            'Most Efficient (EP)':          { color: '#10b981', symbol: 'square',         size: 12 },
+            'Most Efficient (AG)':          { color: '#6366f1', symbol: 'square',         size: 12 },
+            'Best ITL (PD)':               { color: '#0ea5e9', symbol: 'circle',          size: 12 },
+            'Best ITL (EP)':               { color: '#10b981', symbol: 'circle',          size: 12 },
+            'Best ITL (AG)':               { color: '#6366f1', symbol: 'circle',          size: 12 },
+        };
+
+        // Group configs by their primary reason
+        var _byReason = {};
+        Object.keys(_selMap).forEach(function(cn) {
+            var r = _crLookup[cn];
+            if (!r || r.ttft_p90 == null) return;
+            var reasons = _selMap[cn];
+            var primary = null;
+            for (var pi = 0; pi < _reasonPriority.length; pi++) {
+                if (reasons.indexOf(_reasonPriority[pi]) >= 0) { primary = _reasonPriority[pi]; break; }
+            }
+            if (!primary) primary = reasons[0];
+            if (!_byReason[primary]) _byReason[primary] = [];
+            _byReason[primary].push({ r: r, allReasons: reasons });
+        });
+
         var _selTraces = [];
+
+        // Background: non-selected
         var _bgR = coreResults.filter(function(r) { return !_selMap[r.config_name]; });
         if (_bgR.length) {
             _selTraces.push({
@@ -3140,28 +3186,28 @@ function _renderChartsImpl(data, runId, content) {
                 hovertemplate: '<b>%{text}</b><br>TTFT P90: %{x:.0f} ms<br>Throughput: %{y:.2f} req/s<extra></extra>'
             });
         }
-        Object.keys(_selMap).forEach(function(cn) {
-            var r = _crLookup[cn];
-            if (!r || r.ttft_p90 == null) return;
-            var reasons = _selMap[cn];
-            var isRec = reasons.some(function(rs) { return rs.indexOf('★') >= 0; });
-            var color = _archColSel[r.architecture] || '#64748b';
-            var lbl = _tagLabel(r.config_name, r.architecture);
+
+        // One trace per reason — legend entry IS the reason
+        _reasonPriority.forEach(function(reason) {
+            var entries = _byReason[reason];
+            if (!entries || !entries.length) return;
+            var st = _reasonStyle[reason] || { color: '#64748b', symbol: 'circle', size: 12 };
             _selTraces.push({
-                x: [r.ttft_p90],
-                y: [r.throughput_mean || r.throughput_p90],
-                text: [lbl],
-                customdata: [reasons.join('<br>')],
-                mode: 'markers+text', name: lbl,
+                x: entries.map(function(e) { return e.r.ttft_p90; }),
+                y: entries.map(function(e) { return e.r.throughput_mean || e.r.throughput_p90; }),
+                text: entries.map(function(e) { return _tagLabel(e.r.config_name, e.r.architecture); }),
+                customdata: entries.map(function(e) { return e.allReasons.join(', '); }),
+                mode: 'markers+text', name: reason,
                 textposition: 'top center',
-                textfont: { size: 9, color: color },
-                marker: { color: color, size: isRec ? 20 : 13, symbol: isRec ? 'star' : 'diamond', opacity: 1, line: { width: 2, color: 'white' } },
-                hovertemplate: '<b>%{text}</b><br>TTFT P90: %{x:.0f} ms<br>Throughput: %{y:.2f} req/s<br><b>Selected as:</b> %{customdata}<extra></extra>'
+                textfont: { size: 9, color: st.color },
+                marker: { color: st.color, size: st.size, symbol: st.symbol, opacity: 1, line: { width: 2, color: 'white' } },
+                hovertemplate: '<b>%{text}</b><br>TTFT P90: %{x:.0f} ms<br>Throughput: %{y:.2f} req/s<br><b>Why selected:</b> %{customdata}<extra></extra>'
             });
         });
+
         safePlot(cid('chart-cfg-selection'), _selTraces, {
             ...plotlyLayout, height: 520,
-            margin: { t: 20, b: 60, l: 70, r: 220 },
+            margin: { t: 20, b: 60, l: 70, r: 260 },
             xaxis: { title: 'TTFT P90 (ms) — lower is better', gridcolor: '#e2e8f0' },
             yaxis: { title: 'Throughput Mean (req/s) — higher is better', gridcolor: '#e2e8f0' },
             showlegend: true,
