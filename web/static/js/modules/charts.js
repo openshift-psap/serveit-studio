@@ -723,7 +723,8 @@ function _renderChartsImpl(data, runId, content) {
                 if (!ad) return;
                 secCfg += '<div style="margin-bottom:18px;">';
                 secCfg += '<div style="font-weight:700;font-size:0.85em;color:' + arch.color + ';text-transform:uppercase;letter-spacing:0.06em;border-bottom:2px solid ' + arch.color + ';padding-bottom:4px;margin-bottom:6px;">' + arch.label + ' Architecture</div>';
-                secCfg += '<table style="width:100%;font-size:0.83em;border-collapse:collapse;">';
+                secCfg += '<table style="font-size:0.83em;border-collapse:collapse;table-layout:fixed;width:760px;">';
+                secCfg += '<colgroup><col style="width:185px"><col style="width:200px"><col style="width:90px"><col style="width:80px"><col style="width:140px"><col style="width:65px"></colgroup>';
                 var _tdNow = _tdBase + 'white-space:nowrap;';
                 secCfg += '<tr style="background:#f1f5f9;">' +
                     '<th style="' + _tdLeft + 'font-weight:700;">Category</th>' +
@@ -758,8 +759,8 @@ function _renderChartsImpl(data, runId, content) {
                     }).join('');
                     var recBadge = isRec ? ' <span style="display:inline-block;background:#fef3c7;color:#b45309;font-size:0.78em;font-weight:700;padding:1px 7px;border-radius:8px;">' + recLbl + '</span>' : '';
                     secCfg += '<tr style="' + rowBg + '">';
-                    secCfg += '<td style="' + _tdLeft + '">' + catBadges + recBadge + '</td>';
-                    secCfg += '<td style="' + _tdLeft + 'font-weight:' + (isRec?'700':'400') + ';">' + cn + '</td>';
+                    secCfg += '<td style="' + _tdLeft + 'overflow-wrap:break-word;">' + catBadges + recBadge + '</td>';
+                    secCfg += '<td style="' + _tdLeft + 'font-weight:' + (isRec?'700':'400') + ';overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">' + cn + '</td>';
                     secCfg += '<td style="' + _tdNow + '">' + _fmtMs(e.ttft)                         + '</td>';
                     secCfg += '<td style="' + _tdNow + '">' + _fmtMs(e.itl)                          + '</td>';
                     secCfg += '<td style="' + _tdNow + '">' + _fmtTput(e.throughput_mean || e.throughput) + '</td>';
