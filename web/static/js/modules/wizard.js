@@ -80,11 +80,14 @@ function applyModelFilters() {
     const modelList = document.getElementById('model-list');
     modelList.innerHTML = '';
     displayedModels = 0;
-    renderModels(filtered.slice(0, modelsPerPage));
-    if (!searchTerm && !activeCategory && filtered.length > modelsPerPage) {
-        document.getElementById('load-more-models').style.display = 'inline-block';
-    } else {
+    if (searchTerm || activeCategory) {
+        // When searching or filtering, show ALL matching models — no pagination.
+        renderModels(filtered);
         document.getElementById('load-more-models').style.display = 'none';
+    } else {
+        renderModels(filtered.slice(0, modelsPerPage));
+        document.getElementById('load-more-models').style.display =
+            filtered.length > modelsPerPage ? 'inline-block' : 'none';
     }
 }
 
