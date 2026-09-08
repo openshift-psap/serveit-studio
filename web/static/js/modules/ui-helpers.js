@@ -236,7 +236,7 @@ function generateComparison() {
         x: runLabels, y: t.vals, name: 'TTFT ' + t.label, type: 'bar',
         marker: { color: t.color, opacity: 0.85 },
         text: t.vals.map(v => v != null ? fmtSI(v) + ' ms' : ''), textposition: 'outside',
-        textfont: { size: 10, color: '#333' }, cliponaxis: false, constraintext: 'none',
+        textfont: { size: 13, color: '#333' }, cliponaxis: false, constraintext: 'none',
         hovertemplate: '<b>%{x}</b><br>TTFT ' + t.label + ': %{y:.1f} ms<extra></extra>'
     }));
     Plotly.newPlot('cmp-ttft' + cmpSfx, ttftTraces, { ...plotlyLayout, barmode: 'group', yaxis: { title: 'TTFT (ms) - lower is better', tickformat: '.2s' }, showlegend: true, legend: { x: 0, y: 1.15, orientation: 'h' } }, plotlyConfig);
@@ -246,7 +246,7 @@ function generateComparison() {
         x: runLabels, y: tputVals, type: 'bar',
         marker: { color: barColors },
         text: tputVals.map(v => v != null ? v.toFixed(2) + ' req/s' : ''), textposition: 'outside',
-        textfont: { size: 11, color: '#333' }, cliponaxis: false, constraintext: 'none',
+        textfont: { size: 14, color: '#333' }, cliponaxis: false, constraintext: 'none',
         hovertemplate: '<b>%{x}</b><br>%{y:.2f} req/s<extra></extra>'
     }], { ...plotlyLayout, yaxis: { title: 'Throughput Mean (req/s) - higher is better' } }, plotlyConfig);
 

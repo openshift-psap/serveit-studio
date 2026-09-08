@@ -1754,7 +1754,7 @@ function buildChartScript(data, charts, allRes) {
     s += 'var co={responsive:true};';
     s += 'function _tL(n,a){if(!n||n.indexOf("(")>=0)return n||"";a=(a||"").toUpperCase();if(a==="PD")return n+" (PD)";if(a==="EP")return n+" (EP)";return n+" (AG)"}';
     s += 'function fmtSI(v,d){if(v==null)return"-";d=d!=null?d:1;if(Math.abs(v)>=1e6)return(v/1e6).toFixed(d)+"M";if(Math.abs(v)>=1e3)return(v/1e3).toFixed(d)+"K";return v.toFixed(d)}';
-    s += 'function arrAnn(xs,ys,o){o=o||{};var c=o.color||"#333",d=o.decimals!=null?o.decimals:1,sp=o.suffix||"",spr=o.spread||30;var offs=[{ax:0,ay:-spr},{ax:spr*0.9,ay:spr*0.7},{ax:-spr*0.8,ay:-spr*1.2},{ax:spr*1.1,ay:-spr*0.5},{ax:0,ay:spr*1.1},{ax:-spr,ay:spr*0.8},{ax:spr*1.3,ay:-spr*1.3},{ax:-spr*1.2,ay:spr*1.3}];return ys.map(function(v,i){if(v==null)return null;var p=offs[i%offs.length];return{x:xs[i],y:v,xref:"x",yref:o.yref||"y",text:fmtSI(v,d)+sp,showarrow:true,arrowhead:0,arrowwidth:1,arrowcolor:"#94a3b8",ax:p.ax,ay:p.ay,font:{size:10,color:c},borderpad:2}}).filter(Boolean)}';
+    s += 'function arrAnn(xs,ys,o){o=o||{};var c=o.color||"#333",d=o.decimals!=null?o.decimals:1,sp=o.suffix||"",spr=o.spread||30;var offs=[{ax:0,ay:-spr},{ax:spr*0.9,ay:spr*0.7},{ax:-spr*0.8,ay:-spr*1.2},{ax:spr*1.1,ay:-spr*0.5},{ax:0,ay:spr*1.1},{ax:-spr,ay:spr*0.8},{ax:spr*1.3,ay:-spr*1.3},{ax:-spr*1.2,ay:spr*1.3}];return ys.map(function(v,i){if(v==null)return null;var p=offs[i%offs.length];return{x:xs[i],y:v,xref:"x",yref:o.yref||"y",text:fmtSI(v,d)+sp,showarrow:true,arrowhead:0,arrowwidth:1,arrowcolor:"#94a3b8",ax:p.ax,ay:p.ay,font:{size:13,color:c},borderpad:2}}).filter(Boolean)}';
     s += 'var vl={...lo,margin:{...lo.margin,b:100},barmode:"group",showlegend:true,legend:{x:0,y:1.15,orientation:"h"}};';
     s += 'var pc={p50:"#60a5fa",p90:"#3b82f6",p95:"#f59e0b",p99:"#ef4444"};';
 
@@ -1771,7 +1771,7 @@ function buildChartScript(data, charts, allRes) {
     s += '  var bestTpsg=Math.max.apply(null,tpsgVals);';
     s += '  var barColors=tpsgVals.map(function(v){return v===bestTpsg?"#10b981":"#6366f1"});';
     s += '  var itlVals=dtp.map(function(d){return d.itl_p90!=null?d.itl_p90:0});';
-    s += '  var dTraces=[{x:tpLabels,y:tpsgVals,name:"Tokens/s/GPU",type:"bar",marker:{color:barColors},text:tpsgVals.map(function(v){return fmtSI(v)}),textposition:"outside",textfont:{size:11,color:"#1e293b"},cliponaxis:false,constraintext:"none",hovertemplate:"<b>%{x}</b><br>%{y:.1f} tokens/s/GPU<extra></extra>"}];';
+    s += '  var dTraces=[{x:tpLabels,y:tpsgVals,name:"Tokens/s/GPU",type:"bar",marker:{color:barColors},text:tpsgVals.map(function(v){return fmtSI(v)}),textposition:"outside",textfont:{size:14,color:"#1e293b"},cliponaxis:false,constraintext:"none",hovertemplate:"<b>%{x}</b><br>%{y:.1f} tokens/s/GPU<extra></extra>"}];';
     s += '  if(itlVals.some(function(v){return v>0})){dTraces.push({x:tpLabels,y:itlVals,name:"ITL P90 (ms)",type:"scatter",mode:"lines+markers",yaxis:"y2",line:{color:"#ef4444",width:3},marker:{size:10,symbol:"circle",color:"#ef4444",line:{width:2,color:"white"}},hovertemplate:"<b>%{x}</b><br>ITL P90: %{y:.2f} ms<extra></extra>"});}';
     s += '  Plotly.newPlot("tp-dec",dTraces,{...lo,barmode:"group",margin:{t:30,b:40,l:50,r:60},showlegend:true,legend:{x:0,y:1.15,orientation:"h"},yaxis:{title:"Tokens/s/GPU",side:"left",tickformat:".2s"},yaxis2:{title:"ITL P90 (ms)",side:"right",overlaying:"y",titlefont:{color:"#ef4444"},tickfont:{color:"#ef4444"}}},co);';
     s += '}';
@@ -1784,7 +1784,7 @@ function buildChartScript(data, charts, allRes) {
     s += '  var pBestTpsg=Math.max.apply(null,ptpsgVals);';
     s += '  var pBarColors=ptpsgVals.map(function(v){return v===pBestTpsg?"#10b981":"#f59e0b"});';
     s += '  var ttftVals=ptp.map(function(d){return d.ttft_p90!=null?d.ttft_p90:0});';
-    s += '  var pTraces=[{x:ptpLabels,y:ptpsgVals,name:"Tokens/s/GPU",type:"bar",marker:{color:pBarColors},text:ptpsgVals.map(function(v){return fmtSI(v)}),textposition:"outside",textfont:{size:11,color:"#1e293b"},cliponaxis:false,constraintext:"none",hovertemplate:"<b>%{x}</b><br>%{y:.1f} tokens/s/GPU<extra></extra>"}];';
+    s += '  var pTraces=[{x:ptpLabels,y:ptpsgVals,name:"Tokens/s/GPU",type:"bar",marker:{color:pBarColors},text:ptpsgVals.map(function(v){return fmtSI(v)}),textposition:"outside",textfont:{size:14,color:"#1e293b"},cliponaxis:false,constraintext:"none",hovertemplate:"<b>%{x}</b><br>%{y:.1f} tokens/s/GPU<extra></extra>"}];';
     s += '  if(ttftVals.some(function(v){return v>0})){pTraces.push({x:ptpLabels,y:ttftVals,name:"TTFT P90 (ms)",type:"scatter",mode:"lines+markers",yaxis:"y2",line:{color:"#3b82f6",width:3},marker:{size:10,symbol:"circle",color:"#3b82f6",line:{width:2,color:"white"}},hovertemplate:"<b>%{x}</b><br>TTFT P90: %{y:.1f} ms<extra></extra>"});}';
     s += '  Plotly.newPlot("tp-pre",pTraces,{...lo,barmode:"group",margin:{t:30,b:40,l:50,r:60},showlegend:true,legend:{x:0,y:1.15,orientation:"h"},yaxis:{title:"Tokens/s/GPU",side:"left",tickformat:".2s"},yaxis2:{title:"TTFT P90 (ms)",side:"right",overlaying:"y",titlefont:{color:"#3b82f6"},tickfont:{color:"#3b82f6"}}},co);';
     s += '}';
@@ -1792,7 +1792,7 @@ function buildChartScript(data, charts, allRes) {
     // Pareto + scatter + efficiency + architecture charts
     s += 'if(cd.pareto&&cd.pareto.traces&&cd.pareto.traces.length){var pxv=[...new Set(cd.pareto.traces.flatMap(function(t){return t.x}))].sort(function(a,b){return a-b});Plotly.newPlot("p1",cd.pareto.traces.map(function(t){return{x:t.x,y:t.y,text:t.text,name:t.name,mode:"markers+lines",marker:{size:14,color:t.color,symbol:"diamond",line:{width:2,color:"white"}},line:{width:2,dash:"dot"},hovertemplate:"<b>%{text}</b><extra></extra>"}}),{...lo,xaxis:{title:"GPUs",tickvals:pxv},yaxis:{title:"TTFT P90 (ms)"},showlegend:true},co);}';
     s += 'if(cd.scatter.traces.length){Plotly.newPlot("p2",cd.scatter.traces.map(function(t){return{x:t.x,y:t.y,text:t.text,name:t.name,mode:"markers",marker:{size:t.sizes,color:t.color,opacity:0.7,line:{width:1,color:"white"}},hovertemplate:"<b>%{text}</b><extra></extra>"}}),{...lo,xaxis:{title:"TTFT P90 (ms)"},yaxis:{title:"Throughput P90 (req/s)"},showlegend:true},co);}';
-    s += 'if(cd.efficiency.configs.length){Plotly.newPlot("p3",[{x:cd.efficiency.configs,y:cd.efficiency.values,type:"bar",marker:{color:cd.efficiency.colors},text:cd.efficiency.values.map(function(v){return v!=null?v.toFixed(3):""}),textposition:"outside",textfont:{size:11,color:"#333"},cliponaxis:false,constraintext:"none"}],{...lo,margin:{...lo.margin,b:120},xaxis:{tickangle:-45},yaxis:{title:"req/s/GPU"}},co);}';
+    s += 'if(cd.efficiency.configs.length){Plotly.newPlot("p3",[{x:cd.efficiency.configs,y:cd.efficiency.values,type:"bar",marker:{color:cd.efficiency.colors},text:cd.efficiency.values.map(function(v){return v!=null?v.toFixed(3):""}),textposition:"outside",textfont:{size:14,color:"#333"},cliponaxis:false,constraintext:"none"}],{...lo,margin:{...lo.margin,b:120},xaxis:{tickangle:-45},yaxis:{title:"req/s/GPU"}},co);}';
     s += 'if(cd.architecture.architectures.length){var a=cd.architecture;Plotly.newPlot("p4",[{x:a.architectures,y:a.avg_ttft,type:"bar",marker:{color:"#3b82f6"},text:a.avg_ttft.map(function(v){return fmtSI(v)+" ms"}),textposition:"auto",name:"Avg TTFT P90",xaxis:"x",yaxis:"y"},{x:a.architectures,y:a.best_ttft,type:"bar",marker:{color:"#93c5fd"},text:a.best_ttft.map(function(v){return fmtSI(v)+" ms"}),textposition:"auto",name:"Best TTFT P90",xaxis:"x",yaxis:"y"},{x:a.architectures,y:a.avg_throughput,type:"bar",marker:{color:"#f59e0b"},text:a.avg_throughput.map(function(v){return v.toFixed(2)+" req/s"}),textposition:"auto",name:"Avg Throughput P90",xaxis:"x2",yaxis:"y2"}],{...lo,margin:{t:30,b:50,l:60,r:60},barmode:"group",showlegend:true,legend:{x:0,y:1.18,orientation:"h"},xaxis:{domain:[0,0.45]},yaxis:{title:"TTFT (ms)",titlefont:{color:"#3b82f6"},tickformat:".2s"},xaxis2:{domain:[0.55,1],anchor:"y2"},yaxis2:{title:"Throughput (req/s)",anchor:"x2",titlefont:{color:"#f59e0b"}}},co);}';
 
     // Comparison tab: Architecture Comparison (reuse same data as p4 but in separate div)
@@ -1823,7 +1823,7 @@ function buildChartScript(data, charts, allRes) {
     s += '    ["AGGREGATED","PD","EP"].forEach(function(arch){';
     s += '      var filtered=chd.filter(function(r){return r.architecture===arch});';
     s += '      if(!filtered.length)return;';
-    s += '      chTraces.push({x:filtered.map(function(r){return _tL(r.config_name,r.architecture)}),y:filtered.map(function(r){return r.cache_hit_pct}),text:filtered.map(function(r){return r.cache_hit_pct.toFixed(1)+"%"}),textposition:"outside",textfont:{size:10},name:arch,type:"bar",marker:{color:archCols[arch]}});';
+    s += '      chTraces.push({x:filtered.map(function(r){return _tL(r.config_name,r.architecture)}),y:filtered.map(function(r){return r.cache_hit_pct}),text:filtered.map(function(r){return r.cache_hit_pct.toFixed(1)+"%"}),textposition:"outside",textfont:{size:13},name:arch,type:"bar",marker:{color:archCols[arch]}});';
     s += '    });';
     s += '    Plotly.newPlot("dl-cfg-cache-hit",chTraces,{...lo,height:600,barmode:"group",xaxis:{tickangle:-35},yaxis:{title:"Cache Hit %",range:[0,100]},showlegend:true,legend:{x:0,y:1,bgcolor:"rgba(255,255,255,0.9)"},margin:{t:20,b:120,l:60,r:20}},co);';
     s += '  }';
@@ -1841,8 +1841,8 @@ function buildChartScript(data, charts, allRes) {
     s += '      tkGuidellmTotal.push(Math.round((r._prompt_tokens_mean||0)*tput+(r._output_tokens_mean||0)*tput));';
     s += '    });';
     s += '    Plotly.newPlot("dl-token-tput-chart",[';
-    s += '      {x:tkLabels,y:tkVllmTotal,name:"vLLM — computed tok/s",type:"bar",marker:{color:"#3b82f6"},text:tkVllmTotal.map(function(v){return v.toLocaleString()}),textposition:"outside",textfont:{size:11,color:"#1e293b"}},';
-    s += '      {x:tkLabels,y:tkGuidellmTotal,name:"guidellm — all tok/s (incl. cached)",type:"bar",marker:{color:"#f59e0b"},text:tkGuidellmTotal.map(function(v){return v.toLocaleString()}),textposition:"outside",textfont:{size:11,color:"#1e293b"}}';
+    s += '      {x:tkLabels,y:tkVllmTotal,name:"vLLM — computed tok/s",type:"bar",marker:{color:"#3b82f6"},text:tkVllmTotal.map(function(v){return v.toLocaleString()}),textposition:"outside",textfont:{size:14,color:"#1e293b"}},';
+    s += '      {x:tkLabels,y:tkGuidellmTotal,name:"guidellm — all tok/s (incl. cached)",type:"bar",marker:{color:"#f59e0b"},text:tkGuidellmTotal.map(function(v){return v.toLocaleString()}),textposition:"outside",textfont:{size:14,color:"#1e293b"}}';
     s += '    ],{...lo,height:600,barmode:"group",margin:{t:30,b:160,l:60,r:20},xaxis:{tickangle:-45},yaxis:{title:"Total Tokens/s (Prompt + Generation)"},showlegend:true,legend:{x:0,y:1.15,orientation:"h"}},co);';
     s += '  }';
     s += '}';
@@ -1862,13 +1862,13 @@ function buildChartScript(data, charts, allRes) {
     s += '    var clrs=ttft.map(function(v){return v===best?"#10b981":pctl.c});';
     s += '    var szs=ttft.map(function(v){return v===best?22:14});';
     s += '    var ttftAnn=arrAnn(lbls,ttft,{color:"#1e40af",decimals:0,suffix:"ms",spread:35});';
-    s += '    var eppAnns=[];pd.forEach(function(r,i){if(r.test_id&&r.test_id.indexOf("step11-epp-")===0){eppAnns.push({x:lbls[i],y:ttft[i],yref:"y",text:"<b>EPP TUNED</b>",showarrow:true,arrowhead:0,arrowwidth:1,arrowcolor:"#7c3aed",ax:55,ay:0,font:{size:9,color:"white"},bgcolor:"#7c3aed",borderpad:3,bordercolor:"#7c3aed",borderwidth:1});eppAnns.push({x:lbls[i],y:tput[i],yref:"y2",text:"<b>EPP TUNED</b>",showarrow:true,arrowhead:0,arrowwidth:1,arrowcolor:"#7c3aed",ax:55,ay:0,font:{size:9,color:"white"},bgcolor:"#7c3aed",borderpad:3,bordercolor:"#7c3aed",borderwidth:1})}});';
+    s += '    var eppAnns=[];pd.forEach(function(r,i){if(r.test_id&&r.test_id.indexOf("step11-epp-")===0){eppAnns.push({x:lbls[i],y:ttft[i],yref:"y",text:"<b>EPP TUNED</b>",showarrow:true,arrowhead:0,arrowwidth:1,arrowcolor:"#7c3aed",ax:55,ay:0,font:{size:12,color:"white"},bgcolor:"#7c3aed",borderpad:3,bordercolor:"#7c3aed",borderwidth:1});eppAnns.push({x:lbls[i],y:tput[i],yref:"y2",text:"<b>EPP TUNED</b>",showarrow:true,arrowhead:0,arrowwidth:1,arrowcolor:"#7c3aed",ax:55,ay:0,font:{size:12,color:"white"},bgcolor:"#7c3aed",borderpad:3,bordercolor:"#7c3aed",borderwidth:1})}});';
     s += '    var traces=[{x:lbls,y:ttft,name:"TTFT "+pctl.k.toUpperCase(),type:"scatter",mode:"lines+markers",line:{color:pctl.c,width:3,shape:"spline"},marker:{color:clrs,size:szs,symbol:"circle",line:{width:2,color:"white"}},fill:"tozeroy",fillcolor:pctl.c+"14"},';
     s += '      {x:lbls,y:tput,name:"Throughput Mean",type:"scatter",mode:"lines+markers",yaxis:"y2",line:{color:"#f59e0b",width:3,shape:"spline"},marker:{color:"#f59e0b",size:10,symbol:"diamond",line:{width:2,color:"white"}}}];';
     // Aggregated baseline
     s += '    var aggr=ar.filter(function(r){if(r.architecture!=="Aggregated")return false;var tid=r.test_id||"";return tid.indexOf("step11-")!==0&&tid.indexOf("step12-")!==0&&tid.indexOf("step13-")!==0});';
     s += '    if(aggr.length){var ab=aggr[0];var abl=ab["ttft_"+pctl.k];var abt=ab.throughput_mean||ab.throughput_p90;';
-    s += '      if(abl!=null){traces.push({x:["Agg Baseline"],y:[abl],name:"Aggregated",type:"scatter",mode:"markers+text",marker:{color:"#94a3b8",size:16,symbol:"star",line:{width:2,color:"white"}},text:[abl.toFixed(0)+"ms"],textposition:"top center",textfont:{size:10,color:"#64748b"},showlegend:true});}';
+    s += '      if(abl!=null){traces.push({x:["Agg Baseline"],y:[abl],name:"Aggregated",type:"scatter",mode:"markers+text",marker:{color:"#94a3b8",size:16,symbol:"star",line:{width:2,color:"white"}},text:[abl.toFixed(0)+"ms"],textposition:"top center",textfont:{size:13,color:"#64748b"},showlegend:true});}';
     s += '      if(abt!=null){traces.push({x:["Agg Baseline"],y:[abt],name:"Agg Throughput",type:"scatter",mode:"markers",yaxis:"y2",marker:{color:"#d4d4d8",size:12,symbol:"star",line:{width:2,color:"white"}},showlegend:false});}}';
     s += '    Plotly.newPlot(el,traces,{...lo,height:600,margin:{t:30,b:80,l:60,r:60},xaxis:{title:"Prefill : Decode Pod Ratio"},yaxis:{title:"TTFT "+pctl.k.toUpperCase()+" (ms)",titlefont:{color:pctl.c},tickfont:{color:pctl.c}},yaxis2:{title:"Throughput Mean (req/s)",side:"right",overlaying:"y",titlefont:{color:"#f59e0b"},tickfont:{color:"#f59e0b"}},showlegend:true,legend:{x:0,y:1.18,orientation:"h"},annotations:ttftAnn.concat(eppAnns)},co);';
     s += '  });';
@@ -1918,8 +1918,8 @@ function buildChartScript(data, charts, allRes) {
         s += '    var tpText=tps.map(function(v){return v!=null?v.toFixed(1):""});';
         // Find best meeting SLA
         s += '    var bestIdx=-1;var bestConc=-1;st.forEach(function(t,i){var v=t["ttft_"+pctl.k];if(v!=null&&v<=tgtMs&&t.concurrency>bestConc){bestConc=t.concurrency;bestIdx=i;}});';
-        s += '    var traces=[{x:cx,y:lats,name:"TTFT "+pctl.k.toUpperCase(),type:"scatter",mode:"lines+markers+text",line:{color:pctl.c,width:3},marker:{color:mc,size:12,symbol:"circle",line:{width:2,color:"white"}},text:latText,textposition:"top center",textfont:{size:10,color:pctl.c}},';
-        s += '      {x:cx,y:tps,name:"Throughput "+pctl.k.toUpperCase(),type:"scatter",mode:"lines+markers+text",yaxis:"y2",line:{color:"#f59e0b",width:2,dash:"dot"},marker:{color:"#f59e0b",size:8,symbol:"square"},text:tpText,textposition:"bottom center",textfont:{size:9,color:"#f59e0b"}}];';
+        s += '    var traces=[{x:cx,y:lats,name:"TTFT "+pctl.k.toUpperCase(),type:"scatter",mode:"lines+markers+text",line:{color:pctl.c,width:3},marker:{color:mc,size:12,symbol:"circle",line:{width:2,color:"white"}},text:latText,textposition:"top center",textfont:{size:13,color:pctl.c}},';
+        s += '      {x:cx,y:tps,name:"Throughput "+pctl.k.toUpperCase(),type:"scatter",mode:"lines+markers+text",yaxis:"y2",line:{color:"#f59e0b",width:2,dash:"dot"},marker:{color:"#f59e0b",size:8,symbol:"square"},text:tpText,textposition:"bottom center",textfont:{size:12,color:"#f59e0b"}}];';
         s += '    if(bestIdx>=0){traces.push({x:[cx[bestIdx]],y:[lats[bestIdx]],name:"Optimal",type:"scatter",mode:"markers",marker:{color:"#10b981",size:22,symbol:"circle",line:{width:3,color:"white"}},showlegend:true});}';
         s += '    Plotly.newPlot(el,traces,{...lo,height:600,margin:{t:40,b:70,l:60,r:60},title:{text:cl+" — "+pctl.k.toUpperCase()+" Concurrency vs Latency",font:{size:14}},xaxis:{title:"Concurrent Users"},yaxis:{title:"TTFT "+pctl.k.toUpperCase()+" (ms)",side:"left",titlefont:{color:pctl.c}},yaxis2:{title:"Throughput (req/s)",side:"right",overlaying:"y",titlefont:{color:"#f59e0b"},tickfont:{color:"#f59e0b"}},showlegend:true,legend:{x:0,y:1.15,orientation:"h"},shapes:[{type:"line",x0:cx[0],x1:cx[cx.length-1],y0:tgtMs,y1:tgtMs,yref:"y",line:{color:"#ef4444",width:pctl.k===tgtPct?2:1.5,dash:"dash"}}],annotations:[{x:cx[cx.length-1],y:tgtMs,yref:"y",text:"SLA: "+tgtMs+"ms",showarrow:false,font:{color:"#ef4444",size:11},xanchor:"right",yanchor:"bottom",yshift:5,bgcolor:"rgba(255,255,255,0.85)"}]},co);';
         s += '  });';
@@ -1972,7 +1972,7 @@ function buildChartScript(data, charts, allRes) {
     s += '  var ibData=v.network&&v.network.ib_rx?v.network.ib_rx:[];';
     s += '  if(nixlData.some(function(x){return x>0})||ibData.some(function(x){return x>0})){';
     s += '    var ba8=ddCfg();var t8=[];["aggregated","pd","ep"].forEach(function(a){var p=ba8[a];if(!p)return;var c=aC[a];';
-    s += '    if(nixlData.some(function(x){return x>0})){t8.push({x:p.map(function(x){return x.c}),y:p.map(function(x){return nixlData[x.i]}),name:aL[a]+" NIXL TX",mode:"lines+markers+text",text:p.map(function(x){var vv=nixlData[x.i];return vv>0?vv.toFixed(2):""}),textposition:"top center",textfont:{size:10,color:c},line:{color:c,width:3},marker:{size:10,color:c}});}';
+    s += '    if(nixlData.some(function(x){return x>0})){t8.push({x:p.map(function(x){return x.c}),y:p.map(function(x){return nixlData[x.i]}),name:aL[a]+" NIXL TX",mode:"lines+markers+text",text:p.map(function(x){var vv=nixlData[x.i];return vv>0?vv.toFixed(2):""}),textposition:"top center",textfont:{size:13,color:c},line:{color:c,width:3},marker:{size:10,color:c}});}';
     s += '    if(ibData.some(function(x){return x>0})){t8.push({x:p.map(function(x){return x.c}),y:p.map(function(x){return ibData[x.i]}),name:aL[a]+" IB RX",mode:"lines+markers",line:{color:c,width:2,dash:"dot"},marker:{size:8,color:c}});}';
     s += '    });if(t8.length){Plotly.newPlot("v8",t8,{...vl,xaxis:{tickangle:-35},yaxis:{title:"Throughput (GB/s)"}},co);}}';
     s += '}';
@@ -1994,13 +1994,13 @@ function buildChartScript(data, charts, allRes) {
         s += '    var mc=lats.map(function(v){if(tgtMs&&v!=null)return v<=tgtMs?"#10b981":"#ef4444";return pctl.c});';
         s += '    var latText=lats.map(function(v){return v!=null?v.toFixed(0)+"ms":""});';
         s += '    var tpText=tps.map(function(v){return v!=null?v.toFixed(1):""});';
-        s += '    var traces=[{x:xLabels,y:lats,name:"TTFT "+pctl.l,type:"scatter",mode:"lines+markers+text",line:{color:pctl.c,width:3,shape:"spline"},marker:{color:mc,size:12,symbol:"circle",line:{width:2,color:"white"}},text:latText,textposition:"top center",textfont:{size:11,color:pctl.c},fill:"tozeroy",fillcolor:pctl.c+"14"},';
-        s += '      {x:xLabels,y:tps,name:"Throughput "+pctl.l,type:"scatter",mode:"lines+markers+text",yaxis:"y2",line:{color:"#f59e0b",width:3,shape:"spline"},marker:{color:"#f59e0b",size:10,symbol:"diamond",line:{width:2,color:"white"}},text:tpText,textposition:"bottom center",textfont:{size:10,color:"#f59e0b"}}];';
+        s += '    var traces=[{x:xLabels,y:lats,name:"TTFT "+pctl.l,type:"scatter",mode:"lines+markers+text",line:{color:pctl.c,width:3,shape:"spline"},marker:{color:mc,size:12,symbol:"circle",line:{width:2,color:"white"}},text:latText,textposition:"top center",textfont:{size:14,color:pctl.c},fill:"tozeroy",fillcolor:pctl.c+"14"},';
+        s += '      {x:xLabels,y:tps,name:"Throughput "+pctl.l,type:"scatter",mode:"lines+markers+text",yaxis:"y2",line:{color:"#f59e0b",width:3,shape:"spline"},marker:{color:"#f59e0b",size:10,symbol:"diamond",line:{width:2,color:"white"}},text:tpText,textposition:"bottom center",textfont:{size:13,color:"#f59e0b"}}];';
         s += '    if(bestIdx>=0){traces.push({x:[xLabels[bestIdx]],y:[lats[bestIdx]],name:"Best EPP",type:"scatter",mode:"markers",marker:{color:"#10b981",size:22,symbol:"circle",line:{width:3,color:"white"}},showlegend:true});}';
         // Baseline
         s += '    var bl=(eppD.baselines||{})[arch];';
         s += '    if(bl){var blT=bl["ttft_"+pctl.k];var blP=bl["throughput_"+pctl.k]||bl.throughput_p90;';
-        s += '      if(blT!=null){traces.push({x:["Baseline"],y:[blT],name:"Baseline ("+bl.config_name+")",type:"scatter",mode:"markers+text",marker:{color:"#94a3b8",size:18,symbol:"star",line:{width:2,color:"white"}},text:[blT.toFixed(0)+"ms"],textposition:"top center",textfont:{size:11,color:"#64748b"},showlegend:true});}';
+        s += '      if(blT!=null){traces.push({x:["Baseline"],y:[blT],name:"Baseline ("+bl.config_name+")",type:"scatter",mode:"markers+text",marker:{color:"#94a3b8",size:18,symbol:"star",line:{width:2,color:"white"}},text:[blT.toFixed(0)+"ms"],textposition:"top center",textfont:{size:14,color:"#64748b"},showlegend:true});}';
         s += '      if(blP!=null){traces.push({x:["Baseline"],y:[blP],name:"Baseline Tput",type:"scatter",mode:"markers",yaxis:"y2",marker:{color:"#d4d4d8",size:14,symbol:"star",line:{width:2,color:"white"}},showlegend:false});}}';
         s += '    var shapes=[];var annotations=[];';
         s += '    if(tgtMs){shapes.push({type:"line",x0:-0.5,x1:xLabels.length-0.5,y0:tgtMs,y1:tgtMs,yref:"y",line:{color:"#ef4444",width:2,dash:"dash"}});annotations.push({x:xLabels.length-1,y:tgtMs,yref:"y",text:"SLA: "+tgtMs+"ms",showarrow:false,font:{color:"#ef4444",size:11},xanchor:"right",yanchor:"bottom",yshift:5,bgcolor:"rgba(255,255,255,0.85)"});}';
@@ -2024,7 +2024,7 @@ function buildChartScript(data, charts, allRes) {
         s += '    var label=pts[0]&&pts[0].config_label?pts[0].config_label:cfgKey;';
         s += '    traces.push({x:cx,y:lats,name:label,type:"scatter",mode:"lines+markers+text",';
         s += '      text:lats.map(function(v){return v?Math.round(v).toLocaleString():""}),';
-        s += '      textposition:"top center",textfont:{size:10,color:color},';
+        s += '      textposition:"top center",textfont:{size:13,color:color},';
         s += '      line:{color:color,width:3},marker:{color:color,size:8},';
         s += '      hovertemplate:"<b>"+label+"</b><br>%{x} users<br>TTFT "+pctl.k.toUpperCase()+": %{y:.0f}ms<extra></extra>"});';
         s += '    pts.forEach(function(p){if(p.is_calibrated){';
@@ -2048,7 +2048,7 @@ function buildChartScript(data, charts, allRes) {
         s += '    var label=pts[0]&&pts[0].config_label?pts[0].config_label:cfgKey;';
         s += '    traces.push({x:cx,y:tpg,name:label,type:"scatter",mode:"lines+markers+text",';
         s += '      text:tpg.map(function(v){return v?Math.round(v).toLocaleString():""}),';
-        s += '      textposition:"top center",textfont:{size:10,color:color},';
+        s += '      textposition:"top center",textfont:{size:13,color:color},';
         s += '      line:{color:color,width:3},marker:{color:color,size:8},';
         s += '      hovertemplate:"<b>"+label+"</b><br>%{x} users<br>%{y:.0f} tok/s/gpu<extra></extra>"});';
         s += '    pts.forEach(function(p){if(p.is_calibrated){';
@@ -2076,9 +2076,9 @@ function buildChartScript(data, charts, allRes) {
         s += '    var tp=r._throughput_mean_mj||r.throughput_mean||0;cli.push(Math.round((r._prompt_tokens_mean||0)*tp+(r._output_tokens_mean||0)*tp));';
         s += '  });';
         s += '  Plotly.newPlot(el,[';
-        s += '    {x:labels,y:comp,name:"GPU computed",type:"bar",marker:{color:"#3b82f6"},text:comp.map(function(v){return v.toLocaleString()}),textposition:"outside",textfont:{size:9,color:"#1e293b"}},';
-        s += '    {x:labels,y:srv,name:"Server total (incl. cached)",type:"bar",marker:{color:"#93c5fd"},text:srv.map(function(v){return v.toLocaleString()}),textposition:"outside",textfont:{size:9,color:"#1e293b"}},';
-        s += '    {x:labels,y:cli,name:"Client (guidellm)",type:"bar",marker:{color:"#f59e0b"},text:cli.map(function(v){return v.toLocaleString()}),textposition:"outside",textfont:{size:9,color:"#1e293b"}}';
+        s += '    {x:labels,y:comp,name:"GPU computed",type:"bar",marker:{color:"#3b82f6"},text:comp.map(function(v){return v.toLocaleString()}),textposition:"outside",textfont:{size:12,color:"#1e293b"}},';
+        s += '    {x:labels,y:srv,name:"Server total (incl. cached)",type:"bar",marker:{color:"#93c5fd"},text:srv.map(function(v){return v.toLocaleString()}),textposition:"outside",textfont:{size:12,color:"#1e293b"}},';
+        s += '    {x:labels,y:cli,name:"Client (guidellm)",type:"bar",marker:{color:"#f59e0b"},text:cli.map(function(v){return v.toLocaleString()}),textposition:"outside",textfont:{size:12,color:"#1e293b"}}';
         s += '  ],{...lo,height:600,margin:{t:60,b:160,l:60,r:20},barmode:"group",xaxis:{tickangle:-45},yaxis:{title:"Total Tokens/s (Prompt + Generation)"},showlegend:true,legend:{x:0,y:1.15,orientation:"h"}},co);';
         s += '})();';
         // Sweep engine metrics chart
@@ -2110,7 +2110,7 @@ function buildChartScript(data, charts, allRes) {
         s += '    {x:xIdx,y:eDec,name:"Decode req-s/s",type:"scatter",mode:"lines+markers",yaxis:"y2",line:{color:"#f59e0b",width:2},marker:{size:6}},';
         s += '    {x:xIdx,y:ePre,name:"Prefill req-s/s",type:"scatter",mode:"lines+markers",yaxis:"y2",line:{color:"#8b5cf6",width:2},marker:{size:6}}];';
         s += '  if(ePreempt.some(function(v){return v>0})){traces.push({x:xIdx,y:ePreempt,name:"Preemptions/s",type:"scatter",mode:"lines+markers",yaxis:"y2",line:{color:"#dc2626",width:3},marker:{size:8,symbol:"x"}});}';
-        s += '  var anns=labels.map(function(lbl,i){return{x:i,y:-0.02,xref:"x",yref:"paper",text:lbl,showarrow:false,font:{size:10,color:tColors[i]||"#333"},textangle:-45,xanchor:"right",yanchor:"top"}});';
+        s += '  var anns=labels.map(function(lbl,i){return{x:i,y:-0.02,xref:"x",yref:"paper",text:lbl,showarrow:false,font:{size:13,color:tColors[i]||"#333"},textangle:-45,xanchor:"right",yanchor:"top"}});';
         s += '  Plotly.newPlot(el,traces,{barmode:"group",xaxis:{showticklabels:false},yaxis:{title:"KV Cache %",rangemode:"tozero",gridcolor:"#e2e8f0"},yaxis2:{title:"Count / Rate",overlaying:"y",side:"right",rangemode:"tozero"},legend:{x:0,y:1.15,orientation:"h"},margin:{t:40,b:180,l:60,r:60},plot_bgcolor:"#f8fafc",paper_bgcolor:"#fff",hovermode:"x unified",height:600,annotations:anns},co);';
         s += '})();';
         s += '(function(){var el=document.getElementById("dl-sweep-cache-hit");if(!el)return;';
@@ -2168,7 +2168,7 @@ function buildChartScript(data, charts, allRes) {
     s += '  function addAnnot(pts,color){pts.forEach(function(p,i){';
     s += '    var pos=positions[i%positions.length];';
     s += '    annotations.push({x:p.nx,y:p.ny,text:p.cfgKey+"<br>c="+p.conc,showarrow:true,arrowhead:0,arrowwidth:1,arrowcolor:color,';
-    s += '      ax:pos[0],ay:pos[1],font:{size:10,color:color},bgcolor:"rgba(255,255,255,0)",borderpad:2});});}';
+    s += '      ax:pos[0],ay:pos[1],font:{size:13,color:color},bgcolor:"rgba(255,255,255,0)",borderpad:2});});}';
     s += '  addAnnot(aggPareto,"#dc2626");addAnnot(pdPareto,"#2563eb");';
     s += '  Plotly.newPlot(el,traces,{...lo,height:700,';
     s += '    xaxis:{title:"Interactivity (tok/s/user)",gridcolor:"#d1d5db",rangemode:"tozero"},';
@@ -2220,12 +2220,12 @@ function buildChartScript(data, charts, allRes) {
     s += '    text:aggPareto.map(function(p){return p.label+"<br>"+p.x.toFixed(0)+"ms / "+p.y.toFixed(0)+" tok/s/GPU";}),';
     s += '    name:"Aggregated — Frontier",mode:aggPareto.length>1?"lines+markers+text":"markers+text",';
     s += '    line:{color:"#dc2626",width:3},marker:{color:"#dc2626",size:8},';
-    s += '    textposition:"top right",textfont:{size:10,color:"#dc2626"},hovertemplate:"<b>%{text}</b><extra></extra>"});}';
+    s += '    textposition:"top right",textfont:{size:13,color:"#dc2626"},hovertemplate:"<b>%{text}</b><extra></extra>"});}';
     s += '  if(pdPareto.length){traces.push({x:pdPareto.map(function(p){return p.x}),y:pdPareto.map(function(p){return p.y}),';
     s += '    text:pdPareto.map(function(p){return p.label+"<br>"+p.x.toFixed(0)+"ms / "+p.y.toFixed(0)+" tok/s/GPU";}),';
     s += '    name:"Disaggregation — Frontier",mode:pdPareto.length>1?"lines+markers+text":"markers+text",';
     s += '    line:{color:"#2563eb",width:3},marker:{color:"#2563eb",size:8},';
-    s += '    textposition:"top left",textfont:{size:10,color:"#2563eb"},hovertemplate:"<b>%{text}</b><extra></extra>"});}';
+    s += '    textposition:"top left",textfont:{size:13,color:"#2563eb"},hovertemplate:"<b>%{text}</b><extra></extra>"});}';
     s += '  Plotly.newPlot(el,traces,{...lo,height:700,';
     s += '    xaxis:{title:"TTFT P90 (ms)",gridcolor:"#d1d5db",range:[0,xMax]},';
     s += '    yaxis:{title:"Token Throughput per GPU (tok/s/GPU)",gridcolor:"#d1d5db",rangemode:"tozero"},';
@@ -2361,8 +2361,8 @@ function buildChartScript(data, charts, allRes) {
     s += '    var traces=[];';
     s += '    if(aggPts.length){var va=aggPts.filter(function(p){return p.x<=xMax});traces.push({x:va.map(function(p){return p.x}),y:va.map(function(p){return p.y}),text:va.map(function(p){return p.label+"<br>TTFT: "+p.x.toFixed(0)+"ms<br>"+p.y.toFixed(0)+" tok/s/GPU"}),name:"Aggregated",mode:"markers",marker:{color:"#fca5a5",size:14,opacity:0.5},hovertemplate:"<b>%{text}</b><extra></extra>"});}';
     s += '    if(pdPts.length){var vp=pdPts.filter(function(p){return p.x<=xMax});traces.push({x:vp.map(function(p){return p.x}),y:vp.map(function(p){return p.y}),text:vp.map(function(p){return p.label+"<br>TTFT: "+p.x.toFixed(0)+"ms<br>"+p.y.toFixed(0)+" tok/s/GPU"}),name:"Disaggregation",mode:"markers",marker:{color:"#93c5fd",size:14,opacity:0.5},hovertemplate:"<b>%{text}</b><extra></extra>"});}';
-    s += '    if(aggF.length){traces.push({x:aggF.map(function(p){return p.x}),y:aggF.map(function(p){return p.y}),text:aggF.map(function(p){return p.label}),name:"Aggregated Frontier",mode:aggF.length>1?"lines+markers+text":"markers+text",line:{color:"#dc2626",width:3},marker:{color:"#dc2626",size:8},textposition:"top right",textfont:{size:10,color:"#dc2626"},hovertemplate:"<b>%{text}</b><extra></extra>"});}';
-    s += '    if(pdF.length){traces.push({x:pdF.map(function(p){return p.x}),y:pdF.map(function(p){return p.y}),text:pdF.map(function(p){return p.label}),name:"Disaggregation Frontier",mode:pdF.length>1?"lines+markers+text":"markers+text",line:{color:"#2563eb",width:3},marker:{color:"#2563eb",size:8},textposition:"top left",textfont:{size:10,color:"#2563eb"},hovertemplate:"<b>%{text}</b><extra></extra>"});}';
+    s += '    if(aggF.length){traces.push({x:aggF.map(function(p){return p.x}),y:aggF.map(function(p){return p.y}),text:aggF.map(function(p){return p.label}),name:"Aggregated Frontier",mode:aggF.length>1?"lines+markers+text":"markers+text",line:{color:"#dc2626",width:3},marker:{color:"#dc2626",size:8},textposition:"top right",textfont:{size:13,color:"#dc2626"},hovertemplate:"<b>%{text}</b><extra></extra>"});}';
+    s += '    if(pdF.length){traces.push({x:pdF.map(function(p){return p.x}),y:pdF.map(function(p){return p.y}),text:pdF.map(function(p){return p.label}),name:"Disaggregation Frontier",mode:pdF.length>1?"lines+markers+text":"markers+text",line:{color:"#2563eb",width:3},marker:{color:"#2563eb",size:8},textposition:"top left",textfont:{size:13,color:"#2563eb"},hovertemplate:"<b>%{text}</b><extra></extra>"});}';
     s += '    Plotly.newPlot(ttftEl,traces,{...lo,height:700,xaxis:{title:"TTFT P90 (ms)",gridcolor:"#d1d5db",range:[0,xMax]},yaxis:{title:"Token Throughput per GPU (tok/s/GPU)",gridcolor:"#d1d5db",rangemode:"tozero"},showlegend:true,legend:{x:1.02,y:1,xanchor:"left",bgcolor:"rgba(255,255,255,0.95)"},margin:{t:40,b:70,l:70,r:200},plot_bgcolor:"white",paper_bgcolor:"white"},co);';
     s += '  }';
 
@@ -2380,7 +2380,7 @@ function buildChartScript(data, charts, allRes) {
     s += '    if(iAggF.length>1){iTraces.push({x:iAggF.map(function(p){return p.x}),y:iAggF.map(function(p){return p.y}),name:"Aggregated Frontier",mode:"lines",line:{color:"#dc2626",width:3,dash:"dot"},hoverinfo:"skip"});}';
     s += '    if(iPdF.length>1){iTraces.push({x:iPdF.map(function(p){return p.x}),y:iPdF.map(function(p){return p.y}),name:"Disaggregation Frontier",mode:"lines",line:{color:"#2563eb",width:3,dash:"dot"},hoverinfo:"skip"});}';
     s += '    var iAnns=[];var iPos=[[80,-15],[-80,-15],[70,-45],[-70,-45],[90,-30],[-90,-30],[60,-60],[-60,-60]];';
-    s += '    function iAddAnn(pts,color){pts.forEach(function(p,i){var pos=iPos[i%iPos.length];iAnns.push({x:p.x,y:p.y,text:p.label+"<br>c="+p.conc,showarrow:true,arrowhead:0,arrowwidth:1,arrowcolor:color,ax:pos[0],ay:pos[1],font:{size:10,color:color},bgcolor:"rgba(255,255,255,0)",borderpad:2})})};';
+    s += '    function iAddAnn(pts,color){pts.forEach(function(p,i){var pos=iPos[i%iPos.length];iAnns.push({x:p.x,y:p.y,text:p.label+"<br>c="+p.conc,showarrow:true,arrowhead:0,arrowwidth:1,arrowcolor:color,ax:pos[0],ay:pos[1],font:{size:13,color:color},bgcolor:"rgba(255,255,255,0)",borderpad:2})})};';
     s += '    iAddAnn(iAggF,"#dc2626");iAddAnn(iPdF,"#2563eb");';
     s += '    Plotly.newPlot(intEl,iTraces,{...lo,height:700,xaxis:{title:"Interactivity (tok/s/user)",gridcolor:"#d1d5db",rangemode:"tozero"},yaxis:{title:"Token Throughput per GPU (tok/s/GPU)",gridcolor:"#d1d5db",rangemode:"tozero"},showlegend:true,legend:{x:1.02,y:1,xanchor:"left",bgcolor:"rgba(255,255,255,0.95)"},margin:{t:40,b:70,l:70,r:200},plot_bgcolor:"white",paper_bgcolor:"white",annotations:iAnns},co);';
     s += '  }';
@@ -2396,8 +2396,8 @@ function buildChartScript(data, charts, allRes) {
     s += '    var itlTraces=[];';
     s += '    if(itlAgg.length){itlTraces.push({x:itlAgg.map(function(p){return p.x}),y:itlAgg.map(function(p){return p.y}),text:itlAgg.map(function(p){return p.label+"<br>ITL P90: "+p.x.toFixed(2)+"ms<br>"+p.y.toFixed(0)+" tok/s/GPU"}),name:"Aggregated",mode:"markers",marker:{color:"#fca5a5",size:14,opacity:0.5},hovertemplate:"<b>%{text}</b><extra></extra>"});}';
     s += '    if(itlPd.length){itlTraces.push({x:itlPd.map(function(p){return p.x}),y:itlPd.map(function(p){return p.y}),text:itlPd.map(function(p){return p.label+"<br>ITL P90: "+p.x.toFixed(2)+"ms<br>"+p.y.toFixed(0)+" tok/s/GPU"}),name:"Disaggregation",mode:"markers",marker:{color:"#93c5fd",size:14,opacity:0.5},hovertemplate:"<b>%{text}</b><extra></extra>"});}';
-    s += '    if(itlAggF.length){itlTraces.push({x:itlAggF.map(function(p){return p.x}),y:itlAggF.map(function(p){return p.y}),text:itlAggF.map(function(p){return p.label+"<br>"+p.x.toFixed(2)+"ms / "+p.y.toFixed(0)+" tok/s/GPU"}),name:"Aggregated — Frontier",mode:itlAggF.length>1?"lines+markers+text":"markers+text",line:{color:"#dc2626",width:3},marker:{color:"#dc2626",size:8},textposition:"top right",textfont:{size:10,color:"#dc2626"},hovertemplate:"<b>%{text}</b><extra></extra>"});}';
-    s += '    if(itlPdF.length){itlTraces.push({x:itlPdF.map(function(p){return p.x}),y:itlPdF.map(function(p){return p.y}),text:itlPdF.map(function(p){return p.label+"<br>"+p.x.toFixed(2)+"ms / "+p.y.toFixed(0)+" tok/s/GPU"}),name:"Disaggregation — Frontier",mode:itlPdF.length>1?"lines+markers+text":"markers+text",line:{color:"#2563eb",width:3},marker:{color:"#2563eb",size:8},textposition:"top left",textfont:{size:10,color:"#2563eb"},hovertemplate:"<b>%{text}</b><extra></extra>"});}';
+    s += '    if(itlAggF.length){itlTraces.push({x:itlAggF.map(function(p){return p.x}),y:itlAggF.map(function(p){return p.y}),text:itlAggF.map(function(p){return p.label+"<br>"+p.x.toFixed(2)+"ms / "+p.y.toFixed(0)+" tok/s/GPU"}),name:"Aggregated — Frontier",mode:itlAggF.length>1?"lines+markers+text":"markers+text",line:{color:"#dc2626",width:3},marker:{color:"#dc2626",size:8},textposition:"top right",textfont:{size:13,color:"#dc2626"},hovertemplate:"<b>%{text}</b><extra></extra>"});}';
+    s += '    if(itlPdF.length){itlTraces.push({x:itlPdF.map(function(p){return p.x}),y:itlPdF.map(function(p){return p.y}),text:itlPdF.map(function(p){return p.label+"<br>"+p.x.toFixed(2)+"ms / "+p.y.toFixed(0)+" tok/s/GPU"}),name:"Disaggregation — Frontier",mode:itlPdF.length>1?"lines+markers+text":"markers+text",line:{color:"#2563eb",width:3},marker:{color:"#2563eb",size:8},textposition:"top left",textfont:{size:13,color:"#2563eb"},hovertemplate:"<b>%{text}</b><extra></extra>"});}';
     s += '    Plotly.newPlot(itlEl,itlTraces,{...lo,height:700,xaxis:{title:"ITL P90 (ms)",gridcolor:"#d1d5db"},yaxis:{title:"Token Throughput per GPU (tok/s/GPU)",gridcolor:"#d1d5db",rangemode:"tozero"},showlegend:true,legend:{x:1.02,y:1,xanchor:"left",bgcolor:"rgba(255,255,255,0.95)"},margin:{t:40,b:70,l:70,r:200},plot_bgcolor:"white",paper_bgcolor:"white"},co);';
     s += '  }';
     s += '})();';

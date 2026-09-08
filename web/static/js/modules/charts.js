@@ -794,7 +794,7 @@ function _renderChartsImpl(data, runId, content) {
                     x: ar.map(function(r) { return _tagLabel(r.config_name, r.architecture); }),
                     y: ar.map(function(r) { return r.cache_hit_pct; }),
                     text: ar.map(function(r) { return r.cache_hit_pct.toFixed(1) + '%'; }),
-                    textposition: 'outside', textfont: { size: 10 },
+                    textposition: 'outside', textfont: { size: 13 },
                     name: arch, type: 'bar',
                     marker: { color: archColors3[arch] }
                 });
@@ -1870,7 +1870,7 @@ function _renderChartsImpl(data, runId, content) {
                             x: cfg.points.map(function(p) { return p.concurrency; }),
                             y: cfg.points.map(function(p) { return p[pct.key] || 0; }),
                             text: cfg.points.map(function(p) { return Math.round(p[pct.key] || 0).toLocaleString(); }),
-                            textposition: 'top center', textfont: { size: 10, color: cfg.color },
+                            textposition: 'top center', textfont: { size: 13, color: cfg.color },
                             mode: 'lines+markers+text', name: cfg.label,
                             line: { color: cfg.color, width: 3 },
                             marker: { size: 8 },
@@ -1886,7 +1886,7 @@ function _renderChartsImpl(data, runId, content) {
                                     x: p.concurrency, y: 1.0 - calIdx * 0.06, yref: 'paper',
                                     text: cfg.label + ' c=' + p.concurrency,
                                     showarrow: false, xshift: 8,
-                                    font: { size: 9, color: cfg.color }, xanchor: 'left'
+                                    font: { size: 12, color: cfg.color }, xanchor: 'left'
                                 });
                             }
                         });
@@ -1922,7 +1922,7 @@ function _renderChartsImpl(data, runId, content) {
                         x: cfg.points.map(function(p) { return p.concurrency; }),
                         y: cfg.points.map(function(p) { return p.throughput_per_gpu; }),
                         text: cfg.points.map(function(p) { return Math.round(p.throughput_per_gpu).toLocaleString(); }),
-                        textposition: 'top center', textfont: { size: 10, color: cfg.color },
+                        textposition: 'top center', textfont: { size: 13, color: cfg.color },
                         mode: 'lines+markers+text', name: cfg.label,
                         line: { color: cfg.color, width: 3 },
                         marker: { size: 8 },
@@ -1938,7 +1938,7 @@ function _renderChartsImpl(data, runId, content) {
                                 x: p.concurrency, y: 1.0 - calIdx * 0.06, yref: 'paper',
                                 text: cfg.label + ' c=' + p.concurrency,
                                 showarrow: false, xshift: 8,
-                                font: { size: 9, color: cfg.color }, xanchor: 'left'
+                                font: { size: 12, color: cfg.color }, xanchor: 'left'
                             });
                         }
                     });
@@ -2045,9 +2045,9 @@ function _renderChartsImpl(data, runId, content) {
                     tkClient.push(Math.round(pTps + gTps));
                 });
                 Plotly.newPlot('chart-sweep-token-tput', [
-                    { x: tkLabels, y: tkComputed, name: 'GPU computed', type: 'bar', marker: { color: '#3b82f6' }, text: tkComputed.map(function(v) { return v.toLocaleString(); }), textposition: 'outside', textfont: { size: 9, color: '#1e293b' } },
-                    { x: tkLabels, y: tkServer, name: 'Server total (incl. cached)', type: 'bar', marker: { color: '#93c5fd' }, text: tkServer.map(function(v) { return v.toLocaleString(); }), textposition: 'outside', textfont: { size: 9, color: '#1e293b' } },
-                    { x: tkLabels, y: tkClient, name: 'Client (guidellm)', type: 'bar', marker: { color: '#f59e0b' }, text: tkClient.map(function(v) { return v.toLocaleString(); }), textposition: 'outside', textfont: { size: 9, color: '#1e293b' } }
+                    { x: tkLabels, y: tkComputed, name: 'GPU computed', type: 'bar', marker: { color: '#3b82f6' }, text: tkComputed.map(function(v) { return v.toLocaleString(); }), textposition: 'outside', textfont: { size: 12, color: '#1e293b' } },
+                    { x: tkLabels, y: tkServer, name: 'Server total (incl. cached)', type: 'bar', marker: { color: '#93c5fd' }, text: tkServer.map(function(v) { return v.toLocaleString(); }), textposition: 'outside', textfont: { size: 12, color: '#1e293b' } },
+                    { x: tkLabels, y: tkClient, name: 'Client (guidellm)', type: 'bar', marker: { color: '#f59e0b' }, text: tkClient.map(function(v) { return v.toLocaleString(); }), textposition: 'outside', textfont: { size: 12, color: '#1e293b' } }
                 ], {
                     ...plotlyLayout, height: 600, margin: { t: 60, b: 160, l: 60, r: 20 },
                     barmode: 'group', xaxis: { tickangle: -45 },
@@ -2078,7 +2078,7 @@ function _renderChartsImpl(data, runId, content) {
                         x: pts.map(function(p) { return p.concurrency; }),
                         y: pts.map(function(p) { return p.cache_hit_pct != null ? p.cache_hit_pct : 0; }),
                         text: pts.map(function(p) { return p.cache_hit_pct != null ? p.cache_hit_pct.toFixed(1) + '%' : ''; }),
-                        textposition: 'top center', textfont: { size: 10, color: color },
+                        textposition: 'top center', textfont: { size: 13, color: color },
                         mode: 'lines+markers+text', name: label,
                         line: { color: color, width: 3 }, marker: { size: 8 }
                     });
@@ -2165,7 +2165,7 @@ function _renderChartsImpl(data, runId, content) {
             var tickAnns = labels.map(function(lbl, i) {
                 return {
                     x: i, y: -0.02, xref: 'x', yref: 'paper', text: lbl,
-                    showarrow: false, font: { size: 11, color: tickColors[i] || '#333', weight: 700 },
+                    showarrow: false, font: { size: 14, color: tickColors[i] || '#333', weight: 700 },
                     textangle: -45, xanchor: 'right', yanchor: 'top'
                 };
             });
@@ -2360,7 +2360,7 @@ function _renderChartsImpl(data, runId, content) {
                         x: pts.map(function(p) { return p.hit_pct; }),
                         y: pts.map(function(p) { return p[pct.key] || 0; }),
                         text: pts.map(function(p) { return Math.round(p[pct.key] || 0).toLocaleString(); }),
-                        textposition: 'top center', textfont: { size: 10, color: csPctColors[pct.key] },
+                        textposition: 'top center', textfont: { size: 13, color: csPctColors[pct.key] },
                         mode: 'lines+markers+text', name: pct.label,
                         line: { color: csPctColors[pct.key], width: 3 },
                         marker: { size: 8 },
@@ -2372,7 +2372,7 @@ function _renderChartsImpl(data, runId, content) {
                     x: pts.map(function(p) { return p.hit_pct; }),
                     y: pts.map(function(p) { return p.throughput_mean || 0; }),
                     text: pts.map(function(p) { return (p.throughput_mean || 0).toFixed(1); }),
-                    textposition: 'top center', textfont: { size: 10, color: '#d97706' },
+                    textposition: 'top center', textfont: { size: 13, color: '#d97706' },
                     mode: 'lines+markers+text', name: 'Throughput Mean',
                     yaxis: 'y2',
                     line: { color: '#d97706', width: 3, dash: 'dash' },
@@ -2386,7 +2386,7 @@ function _renderChartsImpl(data, runId, content) {
                         x: pts.map(function(p) { return p.hit_pct; }),
                         y: pts.map(function(p) { return p.actual_hit_rate != null ? p.actual_hit_rate : 0; }),
                         text: pts.map(function(p) { return p.actual_hit_rate != null ? p.actual_hit_rate.toFixed(1) + '%' : ''; }),
-                        textposition: 'top center', textfont: { size: 10, color: '#059669' },
+                        textposition: 'top center', textfont: { size: 13, color: '#059669' },
                         xaxis: 'x2', yaxis: 'y3',
                         mode: 'lines+markers+text', name: 'Actual Hit % (hits/queries)',
                         line: { color: '#059669', width: 3 },
@@ -2583,7 +2583,7 @@ function _renderChartsImpl(data, runId, content) {
                     marker: { color: sorted.map(function(d) { return archColorsDT[d.arch] || '#94a3b8'; }) },
                     text: sorted.map(function(d) { return d.load_s + 's'; }),
                     textposition: 'outside',
-                    textfont: { size: 10, color: '#334155' },
+                    textfont: { size: 13, color: '#334155' },
                     cliponaxis: false,
                     constraintext: 'none',
                     hovertemplate: '<b>%{x}</b><br>Load time: %{y}s<extra></extra>'
@@ -2832,12 +2832,12 @@ function _renderChartsImpl(data, runId, content) {
                         {x: xLabels, y: latencies, name: `TTFT ${pctl.label}`, type: 'scatter', mode: 'lines+markers+text',
                          line: {color: pctl.color, width: 3, shape: 'spline'},
                          marker: {color: markerColors, size: 12, symbol: 'circle', line: {width: 2, color: 'white'}},
-                         text: latText, textposition: 'top center', textfont: {size: 11, color: pctl.color},
+                         text: latText, textposition: 'top center', textfont: {size: 14, color: pctl.color},
                          fill: 'tozeroy', fillcolor: pctl.color + '14'},
                         {x: xLabels, y: throughputs, name: `Throughput Mean`, type: 'scatter', mode: 'lines+markers+text', yaxis: 'y2',
                          line: {color: '#f59e0b', width: 3, shape: 'spline'},
                          marker: {color: '#f59e0b', size: 10, symbol: 'diamond', line: {width: 2, color: 'white'}},
-                         text: tputText, textposition: 'bottom center', textfont: {size: 10, color: '#f59e0b'}},
+                         text: tputText, textposition: 'bottom center', textfont: {size: 13, color: '#f59e0b'}},
                     ];
                     if (bestIdx >= 0) {
                         traces.push({x: [xLabels[bestIdx]], y: [latencies[bestIdx]], name: 'Best EPP', type: 'scatter', mode: 'markers',
@@ -3044,15 +3044,15 @@ function _renderChartsImpl(data, runId, content) {
                     var traces = [
                         { x: labels, y: totals, name: 'Total Requests', mode: 'lines+markers+text',
                           text: totals.map(function(v) { return v > 0 ? v.toLocaleString() : ''; }),
-                          textposition: 'top center', textfont: { size: 10, color: '#059669' },
+                          textposition: 'top center', textfont: { size: 13, color: '#059669' },
                           line: { color: '#059669', width: 2 }, marker: { size: 8 } },
                         { x: labels, y: errors, name: 'HTTP Errors', mode: 'lines+markers+text',
                           text: errors.map(function(v) { return v > 0 ? v.toLocaleString() : ''; }),
-                          textposition: 'top center', textfont: { size: 10, color: '#dc2626' },
+                          textposition: 'top center', textfont: { size: 13, color: '#dc2626' },
                           line: { color: '#dc2626', width: 2 }, marker: { size: 8 } },
                         { x: labels, y: nixl, name: 'NIXL Retries', mode: 'lines+markers+text',
                           text: nixl.map(function(v) { return v > 0 ? v.toLocaleString() : ''; }),
-                          textposition: 'top center', textfont: { size: 10, color: '#f59e0b' },
+                          textposition: 'top center', textfont: { size: 13, color: '#f59e0b' },
                           line: { color: '#f59e0b', width: 2 }, marker: { size: 8 } }
                     ];
                     if (hasDegraded) {
@@ -3158,7 +3158,7 @@ function _renderChartsImpl(data, runId, content) {
                 type: 'bar',
                 marker: { color: color },
                 text: tpsgVals.map(function(v) { return v > 0 ? Math.round(v).toLocaleString() : ''; }),
-                textposition: 'outside', textfont: { size: 10, color: color },
+                textposition: 'outside', textfont: { size: 13, color: color },
                 cliponaxis: false, constraintext: 'none',
                 hovertemplate: '<b>TP=%{x}</b><br>TPSG: %{y:,.0f} tok/s/GPU<extra></extra>'
             });
@@ -3168,7 +3168,7 @@ function _renderChartsImpl(data, runId, content) {
                 customdata: t.y.map(function(v) { return v >= 1000 ? (v/1000).toFixed(1) + 's' : Math.round(v) + 'ms'; }),
                 texttemplate: '%{customdata}',
                 textposition: 'top center',
-                textfont: { size: 10, color: '#1e293b' },
+                textfont: { size: 13, color: '#1e293b' },
                 marker: { size: 10, color: color, symbol: 'circle', line: { width: 2, color: 'white' } },
                 line: { width: 2, dash: 'dash', color: color },
                 hovertemplate: '<b>%{text}</b><extra></extra>'
@@ -3216,7 +3216,7 @@ function _renderChartsImpl(data, runId, content) {
                 x: effConfigs, y: effValues,
                 type: 'bar', marker: { color: effColors },
                 text: effValues.map(v => v != null ? v.toFixed(3) : ''),
-                textposition: 'outside', textfont: { size: 11, color: '#333' },
+                textposition: 'outside', textfont: { size: 14, color: '#333' },
                 cliponaxis: false, constraintext: 'none',
                 hovertemplate: '<b>%{x}</b><br>%{y:.3f} req/s/GPU<extra></extra>'
             }], { ...plotlyLayout, margin: { ...plotlyLayout.margin, b: 120 }, xaxis: { tickangle: -45 }, yaxis: { title: 'Mean req/s per GPU - higher is better' } }, plotlyConfig);
@@ -3232,7 +3232,7 @@ function _renderChartsImpl(data, runId, content) {
             x: puConfigs, y: puValues,
             type: 'bar', marker: { color: puColors },
             text: puValues.map(v => v != null ? v.toFixed(1) : ''),
-            textposition: 'outside', textfont: { size: 11, color: '#333' },
+            textposition: 'outside', textfont: { size: 14, color: '#333' },
             cliponaxis: false, constraintext: 'none',
             hovertemplate: '<b>%{x}</b><br>%{y:.1f} tokens/s/user<extra></extra>'
         }], { ...plotlyLayout, margin: { ...plotlyLayout.margin, b: 120 }, xaxis: { tickangle: -45 }, yaxis: { title: 'Output tokens/s per concurrent user - higher is better' } }, plotlyConfig);
@@ -3272,9 +3272,9 @@ function _renderChartsImpl(data, runId, content) {
                 tkGuidellmTotal.push(Math.round(pTps + gTps));
             });
             safePlot(cid('chart-token-tput'), [
-                { x: tkLabels, y: tkComputed, name: 'GPU computed', type: 'bar', marker: { color: '#3b82f6' }, text: tkComputed.map(function(v) { return v.toLocaleString(); }), textposition: 'outside', textfont: { size: 10, color: '#1e293b' } },
-                { x: tkLabels, y: tkServer, name: 'Server total (incl. cached)', type: 'bar', marker: { color: '#93c5fd' }, text: tkServer.map(function(v) { return v.toLocaleString(); }), textposition: 'outside', textfont: { size: 10, color: '#1e293b' } },
-                { x: tkLabels, y: tkGuidellmTotal, name: 'Client (guidellm)', type: 'bar', marker: { color: '#f59e0b' }, text: tkGuidellmTotal.map(function(v) { return v.toLocaleString(); }), textposition: 'outside', textfont: { size: 10, color: '#1e293b' } }
+                { x: tkLabels, y: tkComputed, name: 'GPU computed', type: 'bar', marker: { color: '#3b82f6' }, text: tkComputed.map(function(v) { return v.toLocaleString(); }), textposition: 'outside', textfont: { size: 13, color: '#1e293b' } },
+                { x: tkLabels, y: tkServer, name: 'Server total (incl. cached)', type: 'bar', marker: { color: '#93c5fd' }, text: tkServer.map(function(v) { return v.toLocaleString(); }), textposition: 'outside', textfont: { size: 13, color: '#1e293b' } },
+                { x: tkLabels, y: tkGuidellmTotal, name: 'Client (guidellm)', type: 'bar', marker: { color: '#f59e0b' }, text: tkGuidellmTotal.map(function(v) { return v.toLocaleString(); }), textposition: 'outside', textfont: { size: 13, color: '#1e293b' } }
             ], { ...plotlyLayout, height: 600, margin: { t: 60, b: 140, l: 60, r: 20 }, barmode: 'group', xaxis: { tickangle: -35 }, yaxis: { title: 'Total Tokens/s (Prompt + Generation)' }, showlegend: true, legend: { x: 0, y: 1.15, orientation: 'h' } }, plotlyConfig);
         }
     }
@@ -3402,7 +3402,7 @@ function _renderChartsImpl(data, runId, content) {
                         x: p.nx, y: p.ny, text: p.cfgKey + '<br>c=' + p.conc,
                         showarrow: true, arrowhead: 0, arrowwidth: 1, arrowcolor: color,
                         ax: pos[0], ay: pos[1],
-                        font: { size: 10, color: color },
+                        font: { size: 13, color: color },
                         bgcolor: 'rgba(255,255,255,0)', borderpad: 2,
                     });
                 });
@@ -3504,7 +3504,7 @@ function _renderChartsImpl(data, runId, content) {
                             text: ttftAggPareto.map(function(p) { return p.label + '<br>' + p.x.toFixed(0) + 'ms / ' + p.y.toFixed(0) + ' tok/s/GPU'; }),
                             name: 'Aggregated — Frontier', mode: ttftAggPareto.length > 1 ? 'lines+markers+text' : 'markers+text',
                             line: { color: '#dc2626', width: 3 }, marker: { color: '#dc2626', size: 8 },
-                            textposition: 'top right', textfont: { size: 10, color: '#dc2626' },
+                            textposition: 'top right', textfont: { size: 13, color: '#dc2626' },
                             hovertemplate: '<b>%{text}</b><extra></extra>'
                         });
                     }
@@ -3514,7 +3514,7 @@ function _renderChartsImpl(data, runId, content) {
                             text: ttftPdPareto.map(function(p) { return p.label + '<br>' + p.x.toFixed(0) + 'ms / ' + p.y.toFixed(0) + ' tok/s/GPU'; }),
                             name: 'Disaggregation — Frontier', mode: ttftPdPareto.length > 1 ? 'lines+markers+text' : 'markers+text',
                             line: { color: '#2563eb', width: 3 }, marker: { color: '#2563eb', size: 8 },
-                            textposition: 'top left', textfont: { size: 10, color: '#2563eb' },
+                            textposition: 'top left', textfont: { size: 13, color: '#2563eb' },
                             hovertemplate: '<b>%{text}</b><extra></extra>'
                         });
                     }
@@ -3589,7 +3589,7 @@ function _renderChartsImpl(data, runId, content) {
                             text: itlAggPareto.map(function(p) { return p.label + '<br>' + p.x.toFixed(2) + 'ms / ' + p.y.toFixed(0) + ' tok/s/GPU'; }),
                             name: 'Aggregated — Frontier', mode: itlAggPareto.length > 1 ? 'lines+markers+text' : 'markers+text',
                             line: { color: '#dc2626', width: 3 }, marker: { color: '#dc2626', size: 8 },
-                            textposition: 'top right', textfont: { size: 10, color: '#dc2626' },
+                            textposition: 'top right', textfont: { size: 13, color: '#dc2626' },
                             hovertemplate: '<b>%{text}</b><extra></extra>'
                         });
                     }
@@ -3599,7 +3599,7 @@ function _renderChartsImpl(data, runId, content) {
                             text: itlPdPareto.map(function(p) { return p.label + '<br>' + p.x.toFixed(2) + 'ms / ' + p.y.toFixed(0) + ' tok/s/GPU'; }),
                             name: 'Disaggregation — Frontier', mode: itlPdPareto.length > 1 ? 'lines+markers+text' : 'markers+text',
                             line: { color: '#2563eb', width: 3 }, marker: { color: '#2563eb', size: 8 },
-                            textposition: 'top left', textfont: { size: 10, color: '#2563eb' },
+                            textposition: 'top left', textfont: { size: 13, color: '#2563eb' },
                             hovertemplate: '<b>%{text}</b><extra></extra>'
                         });
                     }
@@ -3746,7 +3746,7 @@ function _renderChartsImpl(data, runId, content) {
                         text: cfgName + '<br>' + p.x.toFixed(1) + ' tok/s/user<br>' + p.y.toFixed(0) + ' tok/s/GPU',
                         showarrow: true, arrowhead: 0, arrowwidth: 1, arrowcolor: color,
                         ax: pos[0], ay: pos[1],
-                        font: { size: 10, color: color },
+                        font: { size: 13, color: color },
                         bgcolor: 'rgba(255,255,255,0)', borderpad: 2,
                     });
                 });
@@ -3818,7 +3818,7 @@ function _renderChartsImpl(data, runId, content) {
                     ttftAnnotations.push({
                         x: c, y: b.ttft, text: b.label,
                         showarrow: true, arrowhead: 0, arrowwidth: 1, arrowcolor: getEnvColor(b.label),
-                        ax: a[0], ay: a[1], font: { size: 10, color: getEnvColor(b.label) },
+                        ax: a[0], ay: a[1], font: { size: 13, color: getEnvColor(b.label) },
                         bgcolor: 'rgba(255,255,255,0)', borderpad: 2,
                     });
                 });
@@ -3900,7 +3900,7 @@ function _renderChartsImpl(data, runId, content) {
                         x: c, y: b.tputGpu, text: b.label,
                         showarrow: true, arrowhead: 0, arrowwidth: 1, arrowcolor: getEnvColor(b.label),
                         ax: a[0], ay: a[1],
-                        font: { size: 10, color: getEnvColor(b.label) },
+                        font: { size: 13, color: getEnvColor(b.label) },
                         bgcolor: 'rgba(255,255,255,0)', borderpad: 2,
                     });
                 });
@@ -3954,7 +3954,7 @@ function _renderChartsImpl(data, runId, content) {
                         x: c, y: b.tputGpu, text: b.label,
                         showarrow: true, arrowhead: 0, arrowwidth: 1, arrowcolor: getEnvColor(b.label),
                         ax: 60 * side, ay: -25 - (i % 3) * 15,
-                        font: { size: 10, color: getEnvColor(b.label) },
+                        font: { size: 13, color: getEnvColor(b.label) },
                         bgcolor: 'rgba(255,255,255,0)', borderpad: 2,
                     });
                 });
@@ -4065,7 +4065,7 @@ function _renderChartsImpl(data, runId, content) {
         const traces = [
             { x: tpLabels, y: tpsgVals, name: 'Tokens/s/GPU', type: 'bar', marker: { color: barColors },
               text: tpsgVals.map(v => fmtSI(v)), textposition: 'outside',
-              textfont: { size: 11, color: '#1e293b' }, cliponaxis: false, constraintext: 'none',
+              textfont: { size: 14, color: '#1e293b' }, cliponaxis: false, constraintext: 'none',
               hovertemplate: '<b>%{x}</b><br>%{y:.1f} tokens/s/GPU<extra></extra>' },
         ];
         if (itlVals.some(v => v > 0)) {
@@ -4093,7 +4093,7 @@ function _renderChartsImpl(data, runId, content) {
         const traces = [
             { x: tpLabels, y: tpsgVals, name: 'Tokens/s/GPU', type: 'bar', marker: { color: barColors },
               text: tpsgVals.map(v => fmtSI(v)), textposition: 'outside',
-              textfont: { size: 11, color: '#1e293b' }, cliponaxis: false, constraintext: 'none',
+              textfont: { size: 14, color: '#1e293b' }, cliponaxis: false, constraintext: 'none',
               hovertemplate: '<b>%{x}</b><br>%{y:.1f} tokens/s/GPU<extra></extra>' },
         ];
         if (ttftVals.some(v => v > 0)) {
@@ -4571,7 +4571,7 @@ function _renderChartsImpl(data, runId, content) {
                     nixlTraces.push({ x: pts.map(function(p) { return p.cfg; }), y: pts.map(function(p) { return nixlData[p.idx]; }),
                         name: archLabels[a] + ' NIXL TX', mode: 'lines+markers+text',
                         text: pts.map(function(p) { var v = nixlData[p.idx]; return v > 0 ? v.toFixed(2) : ''; }),
-                        textposition: 'top center', textfont: { size: 10, color: color },
+                        textposition: 'top center', textfont: { size: 13, color: color },
                         line: { color: color, width: 3 }, marker: { size: 10, color: color },
                         hovertemplate: '<b>%{x}</b><br>NIXL TX: %{y:.2f} GB/s<extra></extra>' });
                 }

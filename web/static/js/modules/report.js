@@ -562,7 +562,7 @@ function arrowAnnotations(xs, ys, opts) {
             text: fmtSI(v, decimals) + suffix,
             showarrow: true, arrowhead: 0, arrowwidth: 1, arrowcolor: '#94a3b8',
             ax: o.ax, ay: o.ay,
-            font: { size: 10, color: color },
+            font: { size: 13, color: color },
             borderpad: 2,
         };
     }).filter(Boolean);

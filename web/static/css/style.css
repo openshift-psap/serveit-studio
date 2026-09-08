@@ -1104,6 +1104,8 @@
         }
         .chart-plot {
             width: 100%;
+            max-width: 1066px;
+            margin: 0 auto;
             height: 600px;
         }
 
