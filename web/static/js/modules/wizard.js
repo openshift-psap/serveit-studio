@@ -23,20 +23,6 @@ function renderModels(models) {
         });
         modelList.appendChild(card);
     });
-    displayedModels += models.length;
-
-    // Show/hide "Load More" button
-    const loadMoreBtn = document.getElementById('load-more-models');
-    if (displayedModels < allModels.length) {
-        loadMoreBtn.style.display = 'inline-block';
-    } else {
-        loadMoreBtn.style.display = 'none';
-    }
-}
-
-function loadMoreModels() {
-    const nextBatch = allModels.slice(displayedModels, displayedModels + modelsPerPage);
-    renderModels(nextBatch);
 }
 
 var activeCategory = null;
@@ -79,16 +65,7 @@ function applyModelFilters() {
     }
     const modelList = document.getElementById('model-list');
     modelList.innerHTML = '';
-    displayedModels = 0;
-    if (searchTerm || activeCategory) {
-        // When searching or filtering, show ALL matching models — no pagination.
-        renderModels(filtered);
-        document.getElementById('load-more-models').style.display = 'none';
-    } else {
-        renderModels(filtered.slice(0, modelsPerPage));
-        document.getElementById('load-more-models').style.display =
-            filtered.length > modelsPerPage ? 'inline-block' : 'none';
-    }
+    renderModels(filtered);
 }
 
 // Fetch models on page load
@@ -97,15 +74,12 @@ fetch('/api/models')
     .then(models => {
         allModels = models;
         buildCategoryFilters();
-        renderModels(models.slice(0, modelsPerPage));
+        renderModels(models);
     })
     .catch(error => {
         console.error('Failed to load models:', error);
         document.getElementById('model-list').innerHTML = '<div style="padding: 20px; text-align: center; color: #e53e3e;">Failed to load models. Please refresh the page.</div>';
     });
-
-// Load More button
-document.getElementById('load-more-models').addEventListener('click', loadMoreModels);
 
 // Model search
 document.getElementById('model-search').addEventListener('input', () => applyModelFilters());

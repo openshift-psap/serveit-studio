@@ -1677,5 +1677,3 @@ function applyWorkloadPreset(name) {
 
 // Load models from API
 var allModels = [];
-var displayedModels = 0;
-var modelsPerPage = 16;
