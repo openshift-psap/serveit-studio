@@ -221,7 +221,7 @@ function generateComparison() {
     panel.innerHTML = html;
 
     // Render comparison Plotly charts
-    const plotlyLayout = { margin: { t: 10, b: 60, l: 50, r: 20 }, height: 430, paper_bgcolor: 'transparent', plot_bgcolor: 'transparent', font: { family: 'Inter, sans-serif' } };
+    const plotlyLayout = { margin: { t: 10, b: 60, l: 50, r: 20 }, height: 600, paper_bgcolor: 'transparent', plot_bgcolor: 'transparent', font: { family: 'Inter, sans-serif' } };
     const plotlyConfig = { responsive: true, displayModeBar: true };
 
     const runLabels = runs.map(r => 'Run #' + r.runId);

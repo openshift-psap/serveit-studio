@@ -322,7 +322,7 @@ function renderEstimatorResults(results, suffix) {
         xaxis: { title: 'Total GPUs' },
         yaxis: { automargin: true },
         margin: { l: 200, r: 180, t: 50, b: 40 },
-        height: Math.max(300, results.length * 60 + 80),
+        height: Math.max(600, results.length * 60 + 80),
     }, { responsive: true, displayModeBar: false });
 
 }
