@@ -692,7 +692,7 @@ function _renderChartsImpl(data, runId, content) {
         function _fmtMs(v) { return v == null ? '—' : (v >= 1000 ? (v/1000).toFixed(1)+'s' : Math.round(v)+'ms'); }
         function _fmtTput(v) { return v == null ? '—' : v.toFixed(2)+' req/s'; }
         var _tdBase = 'padding:7px 10px;border:1px solid #e2e8f0;text-align:center;';
-        var _tdLeft = 'padding:7px 10px;border:1px solid #e2e8f0;';
+        var _tdLeft = 'padding:7px 10px;border:1px solid #e2e8f0;text-align:center;';
 
         var _archDefs = [
             { key: 'pd',          label: 'PD',          color: '#0ea5e9', bg: '#f0f9ff' },
