@@ -2180,7 +2180,7 @@ function _renderChartsImpl(data, runId, content) {
                 hovermode: 'x unified',
                 height: 850,
                 annotations: tickAnns,
-            }, { responsive: true });
+            }, { responsive: true, toImageButtonOptions: { format: 'png', height: 1100, width: 1600, scale: 2 } });
         });
 
         // --- Sweep Results Table ---
