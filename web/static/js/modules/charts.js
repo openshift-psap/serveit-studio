@@ -800,7 +800,7 @@ function _renderChartsImpl(data, runId, content) {
                 });
             });
             Plotly.newPlot('chart-cfg-cache-hit' + _chartSuffix, traces, {
-                ...plotlyLayout, height: 600, barmode: 'group',
+                ...plotlyLayout, height: 850, barmode: 'group',
                 xaxis: { tickangle: -35, gridcolor: '#e2e8f0' },
                 yaxis: { title: 'Cache Hit %', gridcolor: '#e2e8f0', range: [0, 100] },
                 showlegend: true, legend: { x: 0, y: 1, bgcolor: 'rgba(255,255,255,0.9)' },
@@ -1070,7 +1070,7 @@ function _renderChartsImpl(data, runId, content) {
                 margin: { t: 40, b: 140, l: 60, r: 60 },
                 plot_bgcolor: '#f8fafc', paper_bgcolor: '#fff',
                 hovermode: 'x unified',
-                height: 600,
+                height: 850,
             }, { responsive: true });
         });
     }
@@ -2049,7 +2049,7 @@ function _renderChartsImpl(data, runId, content) {
                     { x: tkLabels, y: tkServer, name: 'Server total (incl. cached)', type: 'bar', marker: { color: '#93c5fd' }, text: tkServer.map(function(v) { return v.toLocaleString(); }), textposition: 'outside', textfont: { size: 12, color: '#1e293b' } },
                     { x: tkLabels, y: tkClient, name: 'Client (guidellm)', type: 'bar', marker: { color: '#f59e0b' }, text: tkClient.map(function(v) { return v.toLocaleString(); }), textposition: 'outside', textfont: { size: 12, color: '#1e293b' } }
                 ], {
-                    ...plotlyLayout, height: 600, margin: { t: 60, b: 160, l: 60, r: 20 },
+                    ...plotlyLayout, height: 850, margin: { t: 60, b: 160, l: 60, r: 20 },
                     barmode: 'group', xaxis: { tickangle: -45 },
                     yaxis: { title: 'Total Tokens/s (Prompt + Generation)' },
                     showlegend: true, legend: { x: 0, y: 1.15, orientation: 'h' }
@@ -2084,7 +2084,7 @@ function _renderChartsImpl(data, runId, content) {
                     });
                 });
                 Plotly.newPlot('chart-sweep-cache-hit' + _chartSuffix, traces, {
-                    ...plotlyLayout, height: 600,
+                    ...plotlyLayout, height: 850,
                     xaxis: { title: 'Concurrency', gridcolor: '#e2e8f0' },
                     yaxis: { title: 'Cache Hit %', gridcolor: '#e2e8f0', range: [0, 100] },
                     showlegend: true, legend: { x: 0, y: 1, bgcolor: 'rgba(255,255,255,0.9)' },
@@ -2178,7 +2178,7 @@ function _renderChartsImpl(data, runId, content) {
                 margin: { t: 40, b: 180, l: 60, r: 60 },
                 plot_bgcolor: '#f8fafc', paper_bgcolor: '#fff',
                 hovermode: 'x unified',
-                height: 650,
+                height: 850,
                 annotations: tickAnns,
             }, { responsive: true });
         });
@@ -2869,7 +2869,7 @@ function _renderChartsImpl(data, runId, content) {
                             font: {color: '#ef4444', size: 11}, xanchor: 'right', yanchor: 'bottom', yshift: 5, bgcolor: 'rgba(255,255,255,0.85)'});
                     }
                     Plotly.newPlot(el, traces, {
-                        ...plotlyLayout, height: 600, margin: {t: 30, b: 80, l: 60, r: 60},
+                        ...plotlyLayout, height: 850, margin: {t: 30, b: 80, l: 60, r: 60},
                         xaxis: {title: 'EPP Strategy'},
                         yaxis: {title: `TTFT ${pctl.label} (ms)`, side: 'left', titlefont: {color: pctl.color}, tickfont: {color: pctl.color}},
                         yaxis2: {title: `Throughput Mean (req/s)`, side: 'right', overlaying: 'y', titlefont: {color: '#f59e0b'}, tickfont: {color: '#f59e0b'}},
@@ -3072,7 +3072,7 @@ function _renderChartsImpl(data, runId, content) {
                         });
                     }
                     Plotly.newPlot(tc.id, traces, {
-                        ...plotlyLayout, height: 600,
+                        ...plotlyLayout, height: 850,
                         xaxis: { title: '', gridcolor: '#e2e8f0', tickangle: -35 },
                         yaxis: { title: 'Count', gridcolor: '#e2e8f0' },
                         showlegend: true,
@@ -3125,7 +3125,7 @@ function _renderChartsImpl(data, runId, content) {
     content.innerHTML = html;
 
     // --- Plotly chart config (must be before EPP chart rendering) ---
-    const plotlyLayout = { margin: { t: 10, b: 40, l: 50, r: 20 }, height: 600, paper_bgcolor: 'transparent', plot_bgcolor: 'transparent', font: { family: 'Inter, sans-serif' } };
+    const plotlyLayout = { margin: { t: 10, b: 40, l: 50, r: 20 }, height: 850, paper_bgcolor: 'transparent', plot_bgcolor: 'transparent', font: { family: 'Inter, sans-serif' } };
     // Safe Plotly wrapper — skips if the DOM element doesn't exist (hidden tab)
     function safePlot(id, data, layout, config) { var el = document.getElementById(id); if (el) Plotly.newPlot(id, data, layout, config); }
     const plotlyConfig = { responsive: true, displayModeBar: true, modeBarButtonsToRemove: ['select2d', 'lasso2d', 'autoScale2d'], toImageButtonOptions: { format: 'png', height: 780, width: 1200, scale: 2 } };
@@ -3275,7 +3275,7 @@ function _renderChartsImpl(data, runId, content) {
                 { x: tkLabels, y: tkComputed, name: 'GPU computed', type: 'bar', marker: { color: '#3b82f6' }, text: tkComputed.map(function(v) { return v.toLocaleString(); }), textposition: 'outside', textfont: { size: 13, color: '#1e293b' } },
                 { x: tkLabels, y: tkServer, name: 'Server total (incl. cached)', type: 'bar', marker: { color: '#93c5fd' }, text: tkServer.map(function(v) { return v.toLocaleString(); }), textposition: 'outside', textfont: { size: 13, color: '#1e293b' } },
                 { x: tkLabels, y: tkGuidellmTotal, name: 'Client (guidellm)', type: 'bar', marker: { color: '#f59e0b' }, text: tkGuidellmTotal.map(function(v) { return v.toLocaleString(); }), textposition: 'outside', textfont: { size: 13, color: '#1e293b' } }
-            ], { ...plotlyLayout, height: 600, margin: { t: 60, b: 140, l: 60, r: 20 }, barmode: 'group', xaxis: { tickangle: -35 }, yaxis: { title: 'Total Tokens/s (Prompt + Generation)' }, showlegend: true, legend: { x: 0, y: 1.15, orientation: 'h' } }, plotlyConfig);
+            ], { ...plotlyLayout, height: 850, margin: { t: 60, b: 140, l: 60, r: 20 }, barmode: 'group', xaxis: { tickangle: -35 }, yaxis: { title: 'Total Tokens/s (Prompt + Generation)' }, showlegend: true, legend: { x: 0, y: 1.15, orientation: 'h' } }, plotlyConfig);
         }
     }
 
@@ -3823,7 +3823,7 @@ function _renderChartsImpl(data, runId, content) {
                     });
                 });
                 safePlot(cid('chart-pareto-sweep-ttft'), ttftTraces, {
-                    ...plotlyLayout, height: 600,
+                    ...plotlyLayout, height: 850,
                     xaxis: { title: 'Concurrent Users', gridcolor: '#d1d5db', tickmode: 'array', tickvals: ttftConcs },
                     yaxis: { title: 'TTFT P90 (ms)', gridcolor: '#d1d5db', titlefont: { color: '#3b82f6' } },
                     yaxis2: { title: 'Throughput (req/s)', overlaying: 'y', side: 'right', gridcolor: 'transparent', titlefont: { color: '#f59e0b' } },
@@ -3906,7 +3906,7 @@ function _renderChartsImpl(data, runId, content) {
                 });
                 var envXvals = concs.slice();
                 safePlot(cid('chart-sweep-envelope'), envTraces, {
-                    ...plotlyLayout, height: 600,
+                    ...plotlyLayout, height: 850,
                     xaxis: { title: 'Concurrent Users', gridcolor: '#d1d5db', tickmode: 'array', tickvals: envXvals },
                     yaxis: { title: 'Best Throughput per GPU (tok/s/GPU)', gridcolor: '#d1d5db' },
                     showlegend: false,
@@ -3960,7 +3960,7 @@ function _renderChartsImpl(data, runId, content) {
                 });
                 var olXvals = olConcs.slice();
                 safePlot(cid('chart-sweep-overlaid'), olTraces, {
-                    ...plotlyLayout, height: 700,
+                    ...plotlyLayout, height: 850,
                     xaxis: { title: 'Concurrent Users', gridcolor: '#d1d5db', tickmode: 'array', tickvals: olXvals },
                     yaxis: { title: 'Throughput per GPU (tok/s/GPU)', gridcolor: '#d1d5db' },
                     showlegend: true,
@@ -4148,7 +4148,7 @@ function _renderChartsImpl(data, runId, content) {
         ];
 
         var layout = {
-            height: hasItl ? 780 : 660,
+            height: 850,
             margin: { t: 30, b: 180, l: 60, r: 60 },
             xaxis: { title: { text: 'Configuration', standoff: 20 }, tickangle: -40, anchor: hasItl ? 'y3' : 'y' },
             yaxis: { title: 'TTFT ' + pLabel + ' (ms)', side: 'left', titlefont: { color: pctl.color }, tickfont: { color: pctl.color }, tickformat: '.2s', domain: hasItl ? [0.28, 1] : [0, 1] },
@@ -4170,7 +4170,7 @@ function _renderChartsImpl(data, runId, content) {
             layout.yaxis3 = { title: 'ITL ' + pLabel + ' (ms)', side: 'left', titlefont: { color: '#ef4444', size: 11 }, tickfont: { color: '#ef4444', size: 10 }, domain: [0, 0.22] };
         }
 
-        Plotly.newPlot(el, traces, layout, { ...plotlyConfig, toImageButtonOptions: { format: 'png', width: 1400, height: hasItl ? 780 : 660, scale: 2 } });
+        Plotly.newPlot(el, traces, layout, { ...plotlyConfig, toImageButtonOptions: { format: 'png', width: 1400, height: 850, scale: 2 } });
     });
 
     // ============================================================
@@ -4220,7 +4220,7 @@ function _renderChartsImpl(data, runId, content) {
         }
         safePlot(cid('chart-agg-ttft-all'), traces, {
             ...plotlyLayout,
-            height: 600,
+            height: 850,
             barmode: 'group',
             margin: { t: 30, b: 80, l: 60, r: hasAggItl ? 110 : 60 },
             xaxis: { title: 'Aggregated Configuration', domain: hasAggItl ? [0, 0.96] : [0, 1] },
@@ -4350,7 +4350,7 @@ function _renderChartsImpl(data, runId, content) {
                 });
 
                 Plotly.newPlot(el, traces, {
-                    ...plotlyLayout, height: 600,
+                    ...plotlyLayout, height: 850,
                     margin: { t: 30, b: 80, l: 60, r: 60 },
                     xaxis: { title: 'Concurrent Users' },
                     yaxis: { title: `TTFT ${pLabel} (ms) — lower is better`, side: 'left', titlefont: { color: pctl.color }, tickfont: { color: pctl.color }, tickformat: '.2s' },

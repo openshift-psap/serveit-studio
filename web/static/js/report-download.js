@@ -440,9 +440,9 @@ function buildTPSection(rec, charts) {
     const hasPrefillTP = rec.prefill_tp_all && rec.prefill_tp_all.length;
     if (!hasDecodeTP && !hasPrefillTP) return '';
     let s = '';
-    s += '<div class="grid2"><div class="chart-box"><h3>Decode TP Sweep</h3><div id="tp-dec" style="height:600px"></div></div>';
-    s += '<div class="chart-box"><h3>Prefill TP Sweep</h3><div id="tp-pre" style="height:600px"></div></div></div>';
-    s += '<div class="chart-box"><h3>TP Calibration (Pareto)</h3><div id="p1" style="height:600px"></div></div>';
+    s += '<div class="grid2"><div class="chart-box"><h3>Decode TP Sweep</h3><div id="tp-dec" style="height:850px"></div></div>';
+    s += '<div class="chart-box"><h3>Prefill TP Sweep</h3><div id="tp-pre" style="height:850px"></div></div></div>';
+    s += '<div class="chart-box"><h3>TP Calibration (Pareto)</h3><div id="p1" style="height:850px"></div></div>';
 
     // Calibration parameters table (after all charts)
     const calRows = [];
@@ -475,22 +475,22 @@ function buildTPSection(rec, charts) {
 function buildCfgSection(runId, data, charts, allRes, hasPD) {
     if (!allRes || !allRes.length) return '';
     let s = '';
-    s += '<div class="grid2"><div class="chart-box"><h3>Throughput vs Latency</h3><div id="p2" style="height:600px"></div></div>';
-    s += '<div class="chart-box"><h3>GPU Efficiency</h3><div id="p3" style="height:600px"></div></div></div>';
-    s += '<div class="chart-box"><h3>Architecture Comparison</h3><div id="p4" style="height:600px"></div></div>';
+    s += '<div class="grid2"><div class="chart-box"><h3>Throughput vs Latency</h3><div id="p2" style="height:850px"></div></div>';
+    s += '<div class="chart-box"><h3>GPU Efficiency</h3><div id="p3" style="height:850px"></div></div></div>';
+    s += '<div class="chart-box"><h3>Architecture Comparison</h3><div id="p4" style="height:850px"></div></div>';
 
     // Cache hit rate chart
     const cacheData = allRes.filter(r => r.cache_hit_pct != null);
     if (cacheData.length) {
         s += '<div class="chart-box"><h3>Prefix Cache Hit Rate per Configuration</h3>';
         s += '<p style="color:#64748b;font-size:0.9em;margin:0 0 8px;">Actual prefix cache hit percentage measured by vLLM during each test.</p>';
-        s += '<div id="dl-cfg-cache-hit" style="height:600px"></div></div>';
+        s += '<div id="dl-cfg-cache-hit" style="height:850px"></div></div>';
     }
 
     // Per-percentile PD charts
     if (hasPD) {
         ['P90', 'P95', 'P99'].forEach(p => {
-            s += `<div class="chart-box"><h3>PD Configurations &mdash; TTFT &amp; Throughput (${p})</h3><div id="pd-ttft-${p.toLowerCase()}" style="height:600px"></div></div>`;
+            s += `<div class="chart-box"><h3>PD Configurations &mdash; TTFT &amp; Throughput (${p})</h3><div id="pd-ttft-${p.toLowerCase()}" style="height:850px"></div></div>`;
         });
     }
 
@@ -535,7 +535,7 @@ function buildCfgSection(runId, data, charts, allRes, hasPD) {
             `<strong>Blue bar (vLLM):</strong> Tokens that required actual GPU compute — prompt tokens that were <em>not</em> served from prefix cache, plus generated output tokens. Measured server-side via Prometheus (<code>vllm:prompt_tokens</code> + <code>vllm:generation_tokens</code>). Cached/transferred tokens are excluded.<br>` +
             `<strong>Gold bar (guidellm):</strong> All tokens in every request — the full prompt length (including tokens served from cache) plus output tokens. Measured client-side by guidellm.<br>` +
             `<strong>The gap between the bars reflects prefix cache efficiency.</strong> With a high cache hit rate, most prompt tokens are served from cache without GPU compute, so the vLLM bar is much smaller than the guidellm bar.</p>`;
-        s += `<div id="dl-token-tput-chart" style="height:600px;margin-bottom:16px;"></div>`;
+        s += `<div id="dl-token-tput-chart" style="height:850px;margin-bottom:16px;"></div>`;
         s += `</div>`;
 
 
@@ -589,7 +589,7 @@ function buildCfgSection(runId, data, charts, allRes, hasPD) {
     // Engine metrics chart
     s += '<div class="chart-box"><h3>vLLM Engine Metrics</h3>';
     s += '<p style="color:#64748b;font-size:0.85em;margin:0 0 4px;">KV cache usage, running/waiting requests, prefill/decode time across tested configurations.</p>';
-    s += '<div id="dl-cfg-engine" style="height:600px"></div></div>';
+    s += '<div id="dl-cfg-engine" style="height:850px"></div></div>';
 
     // All results table (match UI coreResults filter)
     const coreRes = allRes.filter(r => {
@@ -642,8 +642,8 @@ function buildCmpSection(runId, rec, data) {
 
     // Architecture comparison charts
     s += '<div class="grid2">';
-    s += '<div class="chart-box"><h3>Architecture Comparison</h3><div id="dl-chart-arch" style="height:600px"></div></div>';
-    s += '<div class="chart-box"><h3>Percentile Comparison: Winner vs Aggregated</h3><div id="dl-chart-pctile" style="height:600px"></div></div>';
+    s += '<div class="chart-box"><h3>Architecture Comparison</h3><div id="dl-chart-arch" style="height:850px"></div></div>';
+    s += '<div class="chart-box"><h3>Percentile Comparison: Winner vs Aggregated</h3><div id="dl-chart-pctile" style="height:850px"></div></div>';
     s += '</div>';
 
     // PD vs Aggregated
@@ -763,7 +763,7 @@ function buildStep9Section(data) {
 
         // Per-percentile chart divs
         ['p90', 'p95', 'p99'].forEach(pctl => {
-            s += `<div id="dl-step9-${pctl}-${ai}" style="height:600px;background:#fff;border-radius:8px;border:1px solid #e2e8f0;margin-top:12px;"></div>`;
+            s += `<div id="dl-step9-${pctl}-${ai}" style="height:850px;background:#fff;border-radius:8px;border:1px solid #e2e8f0;margin-top:12px;"></div>`;
         });
 
         // Trial table
@@ -1016,9 +1016,9 @@ function buildCalSection(data) {
 function buildVLLMSection(charts, hasVLLM) {
     if (!hasVLLM) return '';
     let s = '';
-    s += '<div class="grid2"><div class="chart-box"><h3>TTFT Percentiles</h3><div id="v1" style="height:600px"></div></div><div class="chart-box"><h3>ITL Percentiles</h3><div id="v2" style="height:600px"></div></div></div>';
-    s += '<div class="grid2"><div class="chart-box"><h3>E2E Latency</h3><div id="v3" style="height:600px"></div></div><div class="chart-box"><h3>Token Throughput</h3><div id="v4" style="height:600px"></div></div></div>';
-    s += '<div class="grid2"><div class="chart-box"><h3>Request Queue & KV Cache</h3><div id="v5" style="height:600px"></div></div><div class="chart-box"><h3>Time Breakdown & Preemptions</h3><div id="v6" style="height:600px"></div></div></div>';
+    s += '<div class="grid2"><div class="chart-box"><h3>TTFT Percentiles</h3><div id="v1" style="height:850px"></div></div><div class="chart-box"><h3>ITL Percentiles</h3><div id="v2" style="height:850px"></div></div></div>';
+    s += '<div class="grid2"><div class="chart-box"><h3>E2E Latency</h3><div id="v3" style="height:850px"></div></div><div class="chart-box"><h3>Token Throughput</h3><div id="v4" style="height:850px"></div></div></div>';
+    s += '<div class="grid2"><div class="chart-box"><h3>Request Queue & KV Cache</h3><div id="v5" style="height:850px"></div></div><div class="chart-box"><h3>Time Breakdown & Preemptions</h3><div id="v6" style="height:850px"></div></div></div>';
     // Network charts moved to Traffic tab
     return s;
 }
@@ -1053,7 +1053,7 @@ function buildEppTuningSection(runId, data) {
 
         // Chart divs for P90/P95/P99
         ['p90', 'p95', 'p99'].forEach(pctl => {
-            s += `<div id="dl-epp-${arch}-${pctl}" style="height:600px;background:#fff;border-radius:8px;border:1px solid #e2e8f0;margin-top:8px;"></div>`;
+            s += `<div id="dl-epp-${arch}-${pctl}" style="height:850px;background:#fff;border-radius:8px;border:1px solid #e2e8f0;margin-top:8px;"></div>`;
         });
 
         // Results table
@@ -1375,30 +1375,30 @@ function buildConcurrencySweepSection(data) {
     s += '</div>';
 
     ['p90', 'p95', 'p99'].forEach(pctl => {
-        s += `<div class="chart-box"><h3>TTFT ${pctl.toUpperCase()} vs Concurrency</h3><div id="dl-sweep-ttft-${pctl}" style="height:600px"></div></div>`;
+        s += `<div class="chart-box"><h3>TTFT ${pctl.toUpperCase()} vs Concurrency</h3><div id="dl-sweep-ttft-${pctl}" style="height:850px"></div></div>`;
     });
-    s += '<div class="chart-box"><h3>Throughput per GPU vs Concurrency</h3><div id="dl-sweep-tput-gpu" style="height:600px"></div></div>';
+    s += '<div class="chart-box"><h3>Throughput per GPU vs Concurrency</h3><div id="dl-sweep-tput-gpu" style="height:850px"></div></div>';
 
     s += '<div class="chart-box"><h3>vLLM Engine Metrics vs Concurrency</h3>';
     s += '<p style="color:#64748b;font-size:0.85em;margin:0 0 4px;">KV cache usage, running/waiting requests, prefill/decode GPU time across concurrency levels.</p>';
-    s += '<div id="dl-sweep-engine" style="height:600px"></div></div>';
+    s += '<div id="dl-sweep-engine" style="height:850px"></div></div>';
 
     s += '<div class="chart-box"><h3>Token Throughput &mdash; GPU Computed vs Server Total vs Client</h3>';
     s += '<p style="color:#64748b;font-size:0.85em;margin:0 0 4px;"><strong>GPU computed:</strong> Prompt tokens actually computed (excludes cached) + generation. <strong>Server total:</strong> All tokens processed by vLLM (incl. cached prefixes). <strong>Client:</strong> Tokens measured by the load tester.</p>';
-    s += '<div id="dl-sweep-token-tput" style="height:600px"></div></div>';
+    s += '<div id="dl-sweep-token-tput" style="height:850px"></div></div>';
 
     const hasCache = configKeys.some(k => sweep[k].some(p => p.cache_hit_pct != null));
     if (hasCache) {
-        s += '<div class="chart-box"><h3>Cache Hit % vs Concurrency</h3><div id="dl-sweep-cache-hit" style="height:600px"></div></div>';
+        s += '<div class="chart-box"><h3>Cache Hit % vs Concurrency</h3><div id="dl-sweep-cache-hit" style="height:850px"></div></div>';
     }
 
     // Sweep Pareto charts
     s += '<div class="chart-box"><h3>Pareto &mdash; Throughput vs Interactivity</h3>';
     s += '<p style="color:#64748b;font-size:0.85em;margin:0 0 4px;">Trade-off between per-user token speed (X) and GPU throughput efficiency (Y) across concurrency levels. Top-right is ideal. Each point is annotated with config name, interactivity, and throughput/GPU.</p>';
-    s += '<div id="dl-sweep-pareto-inter" style="height:700px"></div></div>';
+    s += '<div id="dl-sweep-pareto-inter" style="height:850px"></div></div>';
     s += '<div class="chart-box"><h3>Pareto &mdash; Throughput vs TTFT</h3>';
     s += '<p style="color:#64748b;font-size:0.85em;margin:0 0 4px;">Trade-off between time to first token (X, lower is better) and GPU throughput efficiency (Y). Top-left is ideal.</p>';
-    s += '<div id="dl-sweep-pareto-ttft" style="height:700px"></div></div>';
+    s += '<div id="dl-sweep-pareto-ttft" style="height:850px"></div></div>';
 
     const tid = 'dl-sweep-table';
     s += `<div class="chart-box"><h3>All Sweep Data Points</h3>`;
@@ -1468,10 +1468,10 @@ function buildCacheSweepSection(data, allRes) {
         // Charts per config
         const chartBase = `dl-cache-${cfgKey.replace(/[^a-z0-9]/g, '-')}`;
         s += `<div class="grid2">`;
-        s += `<div class="chart-box"><h3>TTFT P90/P95/P99 vs Cache Hit %</h3><div id="${chartBase}-ttft" style="height:600px"></div></div>`;
-        s += `<div class="chart-box"><h3>Throughput vs Cache Hit %</h3><div id="${chartBase}-tput" style="height:600px"></div></div>`;
+        s += `<div class="chart-box"><h3>TTFT P90/P95/P99 vs Cache Hit %</h3><div id="${chartBase}-ttft" style="height:850px"></div></div>`;
+        s += `<div class="chart-box"><h3>Throughput vs Cache Hit %</h3><div id="${chartBase}-tput" style="height:850px"></div></div>`;
         s += `</div>`;
-        s += `<div class="chart-box"><h3>Actual Hit Rate vs Configured</h3><div id="${chartBase}-hit" style="height:600px"></div></div>`;
+        s += `<div class="chart-box"><h3>Actual Hit Rate vs Configured</h3><div id="${chartBase}-hit" style="height:850px"></div></div>`;
 
         // Data table per config
         const tid = `dl-cache-tbl-${cfgKey.replace(/[^a-z0-9]/g, '-')}`;
@@ -1529,7 +1529,7 @@ function buildCacheSweepSection(data, allRes) {
         // Engine metrics chart
         s += `<div class="chart-box"><h3>vLLM Engine Metrics</h3>`;
         s += `<p style="color:#64748b;font-size:0.85em;margin:0 0 4px;">KV cache usage, running/waiting requests, prefill/decode GPU time across cache hit levels.</p>`;
-        s += `<div id="${chartBase}-engine" style="height:600px"></div></div>`;
+        s += `<div id="${chartBase}-engine" style="height:850px"></div></div>`;
 
         s += '</div>';
     });
@@ -1589,15 +1589,15 @@ function buildTrafficSection(data, allRes) {
         const hasNIXL = (net.nixl_tx && net.nixl_tx.some(v => v > 0)) || (net.ib_rx && net.ib_rx.some(v => v > 0));
         if (hasPodNet || hasNIXL) {
             s += '<div class="grid2">';
-            if (hasPodNet) s += '<div class="chart-box"><h3>Pod Network Throughput</h3><p style="color:#64748b;font-size:0.85em;margin:0 0 4px;">Management (eth0) network traffic per configuration.</p><div id="v7" style="height:600px"></div></div>';
-            if (hasNIXL) s += '<div class="chart-box"><h3>NIXL KV Transfer Throughput</h3><p style="color:#64748b;font-size:0.85em;margin:0 0 4px;">RDMA traffic for KV cache transfer between prefill and decode pods.</p><div id="v8" style="height:600px"></div></div>';
+            if (hasPodNet) s += '<div class="chart-box"><h3>Pod Network Throughput</h3><p style="color:#64748b;font-size:0.85em;margin:0 0 4px;">Management (eth0) network traffic per configuration.</p><div id="v7" style="height:850px"></div></div>';
+            if (hasNIXL) s += '<div class="chart-box"><h3>NIXL KV Transfer Throughput</h3><p style="color:#64748b;font-size:0.85em;margin:0 0 4px;">RDMA traffic for KV cache transfer between prefill and decode pods.</p><div id="v8" style="height:850px"></div></div>';
             s += '</div>';
         }
     }
 
     groupKeys.forEach(gk => {
         const label = trafficLabelMap[gk] || gk;
-        s += `<div class="chart-box"><h3>Traffic: ${label}</h3><div id="dl-traffic-${gk}" style="height:600px"></div></div>`;
+        s += `<div class="chart-box"><h3>Traffic: ${label}</h3><div id="dl-traffic-${gk}" style="height:850px"></div></div>`;
     });
 
     const tid = 'dl-traffic-table';
@@ -1662,7 +1662,7 @@ function buildDeployTimingSection(data, allRes) {
     s += dlStatCard(dlFmt(maxTotal, 0) + 's', 'Slowest Deploy');
     s += '</div>';
 
-    s += '<div class="chart-box"><h3>Deploy Time per Configuration</h3><div id="dl-deploy-timing" style="height:600px"></div></div>';
+    s += '<div class="chart-box"><h3>Deploy Time per Configuration</h3><div id="dl-deploy-timing" style="height:850px"></div></div>';
 
     s += '<div class="chart-box"><h3>Deploy Timing Details</h3>';
     s += '<table><tr><th>Configuration</th><th>Pod Creation (s)</th><th>Model Load (s)</th><th>Total (s)</th></tr>';
@@ -1687,13 +1687,13 @@ function buildParetoFrontierSection(data, allRes) {
     let s = '';
     s += '<div class="chart-box"><h3>Pareto &mdash; Throughput vs TTFT</h3>';
     s += '<p style="color:#64748b;font-size:0.9em;margin:0 0 4px;">Higher throughput per GPU (Y) and lower TTFT (X) is better. Frontier lines show the best achievable trade-offs.</p>';
-    s += '<div id="dl-pareto-ttft" style="height:700px"></div></div>';
+    s += '<div id="dl-pareto-ttft" style="height:850px"></div></div>';
     s += '<div class="chart-box"><h3>Pareto &mdash; Throughput vs Interactivity</h3>';
     s += '<p style="color:#64748b;font-size:0.9em;margin:0 0 4px;">Higher interactivity (tok/s/user, X) and higher throughput/GPU (Y) is better.</p>';
-    s += '<div id="dl-pareto-interactivity" style="height:700px"></div></div>';
+    s += '<div id="dl-pareto-interactivity" style="height:850px"></div></div>';
     s += '<div class="chart-box"><h3>Pareto &mdash; Throughput vs ITL</h3>';
     s += '<p style="color:#64748b;font-size:0.9em;margin:0 0 4px;">Lower ITL (X) means faster token streaming. Higher throughput/GPU (Y) is better. Top-left is ideal.</p>';
-    s += '<div id="dl-pareto-itl" style="height:700px"></div></div>';
+    s += '<div id="dl-pareto-itl" style="height:850px"></div></div>';
     return s;
 }
 
@@ -1750,7 +1750,7 @@ function buildChartScript(data, charts, allRes) {
     });
     s += 'var _manifests=' + safeJson(manifestMap) + ';';
     s += 'function dlManifest(testId,type){var m=_manifests[testId];if(!m||!m[type]){alert("Manifest not available for "+testId+" / "+type);return;}var blob=new Blob([m[type]],{type:"text/yaml"});var url=URL.createObjectURL(blob);var a=document.createElement("a");a.href=url;a.download=testId+"-"+type+".yaml";a.click();URL.revokeObjectURL(url);}';
-    s += 'var lo={margin:{t:30,b:40,l:50,r:20},height:600,font:{family:"sans-serif"}};';
+    s += 'var lo={margin:{t:30,b:40,l:50,r:20},height:850,font:{family:"sans-serif"}};';
     s += 'var co={responsive:true};';
     s += 'function _tL(n,a){if(!n||n.indexOf("(")>=0)return n||"";a=(a||"").toUpperCase();if(a==="PD")return n+" (PD)";if(a==="EP")return n+" (EP)";return n+" (AG)"}';
     s += 'function fmtSI(v,d){if(v==null)return"-";d=d!=null?d:1;if(Math.abs(v)>=1e6)return(v/1e6).toFixed(d)+"M";if(Math.abs(v)>=1e3)return(v/1e3).toFixed(d)+"K";return v.toFixed(d)}';
@@ -1825,7 +1825,7 @@ function buildChartScript(data, charts, allRes) {
     s += '      if(!filtered.length)return;';
     s += '      chTraces.push({x:filtered.map(function(r){return _tL(r.config_name,r.architecture)}),y:filtered.map(function(r){return r.cache_hit_pct}),text:filtered.map(function(r){return r.cache_hit_pct.toFixed(1)+"%"}),textposition:"outside",textfont:{size:13},name:arch,type:"bar",marker:{color:archCols[arch]}});';
     s += '    });';
-    s += '    Plotly.newPlot("dl-cfg-cache-hit",chTraces,{...lo,height:600,barmode:"group",xaxis:{tickangle:-35},yaxis:{title:"Cache Hit %",range:[0,100]},showlegend:true,legend:{x:0,y:1,bgcolor:"rgba(255,255,255,0.9)"},margin:{t:20,b:120,l:60,r:20}},co);';
+    s += '    Plotly.newPlot("dl-cfg-cache-hit",chTraces,{...lo,height:850,barmode:"group",xaxis:{tickangle:-35},yaxis:{title:"Cache Hit %",range:[0,100]},showlegend:true,legend:{x:0,y:1,bgcolor:"rgba(255,255,255,0.9)"},margin:{t:20,b:120,l:60,r:20}},co);';
     s += '  }';
     s += '}';
 
@@ -1843,7 +1843,7 @@ function buildChartScript(data, charts, allRes) {
     s += '    Plotly.newPlot("dl-token-tput-chart",[';
     s += '      {x:tkLabels,y:tkVllmTotal,name:"vLLM — computed tok/s",type:"bar",marker:{color:"#3b82f6"},text:tkVllmTotal.map(function(v){return v.toLocaleString()}),textposition:"outside",textfont:{size:14,color:"#1e293b"}},';
     s += '      {x:tkLabels,y:tkGuidellmTotal,name:"guidellm — all tok/s (incl. cached)",type:"bar",marker:{color:"#f59e0b"},text:tkGuidellmTotal.map(function(v){return v.toLocaleString()}),textposition:"outside",textfont:{size:14,color:"#1e293b"}}';
-    s += '    ],{...lo,height:600,barmode:"group",margin:{t:30,b:160,l:60,r:20},xaxis:{tickangle:-45},yaxis:{title:"Total Tokens/s (Prompt + Generation)"},showlegend:true,legend:{x:0,y:1.15,orientation:"h"}},co);';
+    s += '    ],{...lo,height:850,barmode:"group",margin:{t:30,b:160,l:60,r:20},xaxis:{tickangle:-45},yaxis:{title:"Total Tokens/s (Prompt + Generation)"},showlegend:true,legend:{x:0,y:1.15,orientation:"h"}},co);';
     s += '  }';
     s += '}';
 
@@ -1870,7 +1870,7 @@ function buildChartScript(data, charts, allRes) {
     s += '    if(aggr.length){var ab=aggr[0];var abl=ab["ttft_"+pctl.k];var abt=ab.throughput_mean||ab.throughput_p90;';
     s += '      if(abl!=null){traces.push({x:["Agg Baseline"],y:[abl],name:"Aggregated",type:"scatter",mode:"markers+text",marker:{color:"#94a3b8",size:16,symbol:"star",line:{width:2,color:"white"}},text:[abl.toFixed(0)+"ms"],textposition:"top center",textfont:{size:13,color:"#64748b"},showlegend:true});}';
     s += '      if(abt!=null){traces.push({x:["Agg Baseline"],y:[abt],name:"Agg Throughput",type:"scatter",mode:"markers",yaxis:"y2",marker:{color:"#d4d4d8",size:12,symbol:"star",line:{width:2,color:"white"}},showlegend:false});}}';
-    s += '    Plotly.newPlot(el,traces,{...lo,height:600,margin:{t:30,b:80,l:60,r:60},xaxis:{title:"Prefill : Decode Pod Ratio"},yaxis:{title:"TTFT "+pctl.k.toUpperCase()+" (ms)",titlefont:{color:pctl.c},tickfont:{color:pctl.c}},yaxis2:{title:"Throughput Mean (req/s)",side:"right",overlaying:"y",titlefont:{color:"#f59e0b"},tickfont:{color:"#f59e0b"}},showlegend:true,legend:{x:0,y:1.18,orientation:"h"},annotations:ttftAnn.concat(eppAnns)},co);';
+    s += '    Plotly.newPlot(el,traces,{...lo,height:850,margin:{t:30,b:80,l:60,r:60},xaxis:{title:"Prefill : Decode Pod Ratio"},yaxis:{title:"TTFT "+pctl.k.toUpperCase()+" (ms)",titlefont:{color:pctl.c},tickfont:{color:pctl.c}},yaxis2:{title:"Throughput Mean (req/s)",side:"right",overlaying:"y",titlefont:{color:"#f59e0b"},tickfont:{color:"#f59e0b"}},showlegend:true,legend:{x:0,y:1.18,orientation:"h"},annotations:ttftAnn.concat(eppAnns)},co);';
     s += '  });';
     s += '}';
 
@@ -1895,7 +1895,7 @@ function buildChartScript(data, charts, allRes) {
     s += '    {x:labels,y:decT,name:"Decode req-s/s",type:"scatter",mode:"lines+markers",yaxis:"y2",line:{color:"#f59e0b",width:2},marker:{size:6}},';
     s += '    {x:labels,y:preT,name:"Prefill req-s/s",type:"scatter",mode:"lines+markers",yaxis:"y2",line:{color:"#8b5cf6",width:2},marker:{size:6}}];';
     s += '  if(preempt.some(function(v){return v>0})){traces.push({x:labels,y:preempt,name:"Preemptions/s",type:"scatter",mode:"lines+markers",yaxis:"y2",line:{color:"#dc2626",width:3},marker:{size:8,symbol:"x"}});}';
-    s += '  Plotly.newPlot(el,traces,{barmode:"group",xaxis:{tickangle:-35},yaxis:{title:"KV Cache %",rangemode:"tozero",gridcolor:"#e2e8f0"},yaxis2:{title:"Count / Rate",overlaying:"y",side:"right",rangemode:"tozero"},legend:{x:0,y:1.15,orientation:"h"},margin:{t:40,b:140,l:60,r:60},plot_bgcolor:"#f8fafc",paper_bgcolor:"#fff",hovermode:"x unified",height:600},co);';
+    s += '  Plotly.newPlot(el,traces,{barmode:"group",xaxis:{tickangle:-35},yaxis:{title:"KV Cache %",rangemode:"tozero",gridcolor:"#e2e8f0"},yaxis2:{title:"Count / Rate",overlaying:"y",side:"right",rangemode:"tozero"},legend:{x:0,y:1.15,orientation:"h"},margin:{t:40,b:140,l:60,r:60},plot_bgcolor:"#f8fafc",paper_bgcolor:"#fff",hovermode:"x unified",height:850},co);';
     s += '})();';
 
     // Step 9 latency search charts (per-percentile per-architecture)
@@ -1921,7 +1921,7 @@ function buildChartScript(data, charts, allRes) {
         s += '    var traces=[{x:cx,y:lats,name:"TTFT "+pctl.k.toUpperCase(),type:"scatter",mode:"lines+markers+text",line:{color:pctl.c,width:3},marker:{color:mc,size:12,symbol:"circle",line:{width:2,color:"white"}},text:latText,textposition:"top center",textfont:{size:13,color:pctl.c}},';
         s += '      {x:cx,y:tps,name:"Throughput "+pctl.k.toUpperCase(),type:"scatter",mode:"lines+markers+text",yaxis:"y2",line:{color:"#f59e0b",width:2,dash:"dot"},marker:{color:"#f59e0b",size:8,symbol:"square"},text:tpText,textposition:"bottom center",textfont:{size:12,color:"#f59e0b"}}];';
         s += '    if(bestIdx>=0){traces.push({x:[cx[bestIdx]],y:[lats[bestIdx]],name:"Optimal",type:"scatter",mode:"markers",marker:{color:"#10b981",size:22,symbol:"circle",line:{width:3,color:"white"}},showlegend:true});}';
-        s += '    Plotly.newPlot(el,traces,{...lo,height:600,margin:{t:40,b:70,l:60,r:60},title:{text:cl+" — "+pctl.k.toUpperCase()+" Concurrency vs Latency",font:{size:14}},xaxis:{title:"Concurrent Users"},yaxis:{title:"TTFT "+pctl.k.toUpperCase()+" (ms)",side:"left",titlefont:{color:pctl.c}},yaxis2:{title:"Throughput (req/s)",side:"right",overlaying:"y",titlefont:{color:"#f59e0b"},tickfont:{color:"#f59e0b"}},showlegend:true,legend:{x:0,y:1.15,orientation:"h"},shapes:[{type:"line",x0:cx[0],x1:cx[cx.length-1],y0:tgtMs,y1:tgtMs,yref:"y",line:{color:"#ef4444",width:pctl.k===tgtPct?2:1.5,dash:"dash"}}],annotations:[{x:cx[cx.length-1],y:tgtMs,yref:"y",text:"SLA: "+tgtMs+"ms",showarrow:false,font:{color:"#ef4444",size:11},xanchor:"right",yanchor:"bottom",yshift:5,bgcolor:"rgba(255,255,255,0.85)"}]},co);';
+        s += '    Plotly.newPlot(el,traces,{...lo,height:850,margin:{t:40,b:70,l:60,r:60},title:{text:cl+" — "+pctl.k.toUpperCase()+" Concurrency vs Latency",font:{size:14}},xaxis:{title:"Concurrent Users"},yaxis:{title:"TTFT "+pctl.k.toUpperCase()+" (ms)",side:"left",titlefont:{color:pctl.c}},yaxis2:{title:"Throughput (req/s)",side:"right",overlaying:"y",titlefont:{color:"#f59e0b"},tickfont:{color:"#f59e0b"}},showlegend:true,legend:{x:0,y:1.15,orientation:"h"},shapes:[{type:"line",x0:cx[0],x1:cx[cx.length-1],y0:tgtMs,y1:tgtMs,yref:"y",line:{color:"#ef4444",width:pctl.k===tgtPct?2:1.5,dash:"dash"}}],annotations:[{x:cx[cx.length-1],y:tgtMs,yref:"y",text:"SLA: "+tgtMs+"ms",showarrow:false,font:{color:"#ef4444",size:11},xanchor:"right",yanchor:"bottom",yshift:5,bgcolor:"rgba(255,255,255,0.85)"}]},co);';
         s += '  });';
         s += '});}';
     }
@@ -2004,7 +2004,7 @@ function buildChartScript(data, charts, allRes) {
         s += '      if(blP!=null){traces.push({x:["Baseline"],y:[blP],name:"Baseline Tput",type:"scatter",mode:"markers",yaxis:"y2",marker:{color:"#d4d4d8",size:14,symbol:"star",line:{width:2,color:"white"}},showlegend:false});}}';
         s += '    var shapes=[];var annotations=[];';
         s += '    if(tgtMs){shapes.push({type:"line",x0:-0.5,x1:xLabels.length-0.5,y0:tgtMs,y1:tgtMs,yref:"y",line:{color:"#ef4444",width:2,dash:"dash"}});annotations.push({x:xLabels.length-1,y:tgtMs,yref:"y",text:"SLA: "+tgtMs+"ms",showarrow:false,font:{color:"#ef4444",size:11},xanchor:"right",yanchor:"bottom",yshift:5,bgcolor:"rgba(255,255,255,0.85)"});}';
-        s += '    Plotly.newPlot(el,traces,{...lo,height:600,margin:{t:30,b:80,l:60,r:60},xaxis:{title:"EPP Strategy"},yaxis:{title:"TTFT "+pctl.l+" (ms)",side:"left",titlefont:{color:pctl.c},tickfont:{color:pctl.c}},yaxis2:{title:"Throughput "+pctl.l+" (req/s)",side:"right",overlaying:"y",titlefont:{color:"#f59e0b"},tickfont:{color:"#f59e0b"}},showlegend:true,legend:{x:0,y:1.18,orientation:"h"},shapes:shapes,annotations:annotations},co);';
+        s += '    Plotly.newPlot(el,traces,{...lo,height:850,margin:{t:30,b:80,l:60,r:60},xaxis:{title:"EPP Strategy"},yaxis:{title:"TTFT "+pctl.l+" (ms)",side:"left",titlefont:{color:pctl.c},tickfont:{color:pctl.c}},yaxis2:{title:"Throughput "+pctl.l+" (req/s)",side:"right",overlaying:"y",titlefont:{color:"#f59e0b"},tickfont:{color:"#f59e0b"}},showlegend:true,legend:{x:0,y:1.18,orientation:"h"},shapes:shapes,annotations:annotations},co);';
         s += '  });';
         s += '});';
     }
@@ -2079,7 +2079,7 @@ function buildChartScript(data, charts, allRes) {
         s += '    {x:labels,y:comp,name:"GPU computed",type:"bar",marker:{color:"#3b82f6"},text:comp.map(function(v){return v.toLocaleString()}),textposition:"outside",textfont:{size:12,color:"#1e293b"}},';
         s += '    {x:labels,y:srv,name:"Server total (incl. cached)",type:"bar",marker:{color:"#93c5fd"},text:srv.map(function(v){return v.toLocaleString()}),textposition:"outside",textfont:{size:12,color:"#1e293b"}},';
         s += '    {x:labels,y:cli,name:"Client (guidellm)",type:"bar",marker:{color:"#f59e0b"},text:cli.map(function(v){return v.toLocaleString()}),textposition:"outside",textfont:{size:12,color:"#1e293b"}}';
-        s += '  ],{...lo,height:600,margin:{t:60,b:160,l:60,r:20},barmode:"group",xaxis:{tickangle:-45},yaxis:{title:"Total Tokens/s (Prompt + Generation)"},showlegend:true,legend:{x:0,y:1.15,orientation:"h"}},co);';
+        s += '  ],{...lo,height:850,margin:{t:60,b:160,l:60,r:20},barmode:"group",xaxis:{tickangle:-45},yaxis:{title:"Total Tokens/s (Prompt + Generation)"},showlegend:true,legend:{x:0,y:1.15,orientation:"h"}},co);';
         s += '})();';
         // Sweep engine metrics chart
         s += '(function(){var el=document.getElementById("dl-sweep-engine");if(!el||!csData)return;';
@@ -2111,7 +2111,7 @@ function buildChartScript(data, charts, allRes) {
         s += '    {x:xIdx,y:ePre,name:"Prefill req-s/s",type:"scatter",mode:"lines+markers",yaxis:"y2",line:{color:"#8b5cf6",width:2},marker:{size:6}}];';
         s += '  if(ePreempt.some(function(v){return v>0})){traces.push({x:xIdx,y:ePreempt,name:"Preemptions/s",type:"scatter",mode:"lines+markers",yaxis:"y2",line:{color:"#dc2626",width:3},marker:{size:8,symbol:"x"}});}';
         s += '  var anns=labels.map(function(lbl,i){return{x:i,y:-0.02,xref:"x",yref:"paper",text:lbl,showarrow:false,font:{size:13,color:tColors[i]||"#333"},textangle:-45,xanchor:"right",yanchor:"top"}});';
-        s += '  Plotly.newPlot(el,traces,{barmode:"group",xaxis:{showticklabels:false},yaxis:{title:"KV Cache %",rangemode:"tozero",gridcolor:"#e2e8f0"},yaxis2:{title:"Count / Rate",overlaying:"y",side:"right",rangemode:"tozero"},legend:{x:0,y:1.15,orientation:"h"},margin:{t:40,b:180,l:60,r:60},plot_bgcolor:"#f8fafc",paper_bgcolor:"#fff",hovermode:"x unified",height:600,annotations:anns},co);';
+        s += '  Plotly.newPlot(el,traces,{barmode:"group",xaxis:{showticklabels:false},yaxis:{title:"KV Cache %",rangemode:"tozero",gridcolor:"#e2e8f0"},yaxis2:{title:"Count / Rate",overlaying:"y",side:"right",rangemode:"tozero"},legend:{x:0,y:1.15,orientation:"h"},margin:{t:40,b:180,l:60,r:60},plot_bgcolor:"#f8fafc",paper_bgcolor:"#fff",hovermode:"x unified",height:850,annotations:anns},co);';
         s += '})();';
         s += '(function(){var el=document.getElementById("dl-sweep-cache-hit");if(!el)return;';
         s += '  var traces=[];var ci=0;';
@@ -2170,7 +2170,7 @@ function buildChartScript(data, charts, allRes) {
     s += '    annotations.push({x:p.nx,y:p.ny,text:p.cfgKey+"<br>c="+p.conc,showarrow:true,arrowhead:0,arrowwidth:1,arrowcolor:color,';
     s += '      ax:pos[0],ay:pos[1],font:{size:13,color:color},bgcolor:"rgba(255,255,255,0)",borderpad:2});});}';
     s += '  addAnnot(aggPareto,"#dc2626");addAnnot(pdPareto,"#2563eb");';
-    s += '  Plotly.newPlot(el,traces,{...lo,height:700,';
+    s += '  Plotly.newPlot(el,traces,{...lo,height:850,';
     s += '    xaxis:{title:"Interactivity (tok/s/user)",gridcolor:"#d1d5db",rangemode:"tozero"},';
     s += '    yaxis:{title:"Token Throughput per GPU (tok/s/GPU)",gridcolor:"#d1d5db",rangemode:"tozero"},';
     s += '    plot_bgcolor:"white",paper_bgcolor:"white",';
@@ -2226,7 +2226,7 @@ function buildChartScript(data, charts, allRes) {
     s += '    name:"Disaggregation — Frontier",mode:pdPareto.length>1?"lines+markers+text":"markers+text",';
     s += '    line:{color:"#2563eb",width:3},marker:{color:"#2563eb",size:8},';
     s += '    textposition:"top left",textfont:{size:13,color:"#2563eb"},hovertemplate:"<b>%{text}</b><extra></extra>"});}';
-    s += '  Plotly.newPlot(el,traces,{...lo,height:700,';
+    s += '  Plotly.newPlot(el,traces,{...lo,height:850,';
     s += '    xaxis:{title:"TTFT P90 (ms)",gridcolor:"#d1d5db",range:[0,xMax]},';
     s += '    yaxis:{title:"Token Throughput per GPU (tok/s/GPU)",gridcolor:"#d1d5db",rangemode:"tozero"},';
     s += '    plot_bgcolor:"white",paper_bgcolor:"white",';
@@ -2248,19 +2248,19 @@ function buildChartScript(data, charts, allRes) {
         s += '    {x:cx,y:pts.map(function(p){return p.ttft_p90}),name:"P90",type:"scatter",mode:"lines+markers",line:{color:"#3b82f6",width:3},marker:{size:8}},';
         s += '    {x:cx,y:pts.map(function(p){return p.ttft_p95}),name:"P95",type:"scatter",mode:"lines+markers",line:{color:"#f59e0b",width:2},marker:{size:8}},';
         s += '    {x:cx,y:pts.map(function(p){return p.ttft_p99}),name:"P99",type:"scatter",mode:"lines+markers",line:{color:"#ef4444",width:2},marker:{size:8}}';
-        s += '  ],{...lo,height:600,xaxis:{title:"Cache Hit %"},yaxis:{title:"TTFT (ms)"},showlegend:true,legend:{x:0,y:1.15,orientation:"h"}},co);}';
+        s += '  ],{...lo,height:850,xaxis:{title:"Cache Hit %"},yaxis:{title:"TTFT (ms)"},showlegend:true,legend:{x:0,y:1.15,orientation:"h"}},co);}';
         // Throughput chart
         s += '  var tputEl=document.getElementById(base+"-tput");';
         s += '  if(tputEl){Plotly.newPlot(tputEl,[';
         s += '    {x:cx,y:pts.map(function(p){return p.throughput_mean}),name:"Throughput",type:"scatter",mode:"lines+markers",line:{color:"#10b981",width:3},marker:{size:10}}';
-        s += '  ],{...lo,height:600,xaxis:{title:"Cache Hit %"},yaxis:{title:"Throughput (req/s)"},showlegend:false},co);}';
+        s += '  ],{...lo,height:850,xaxis:{title:"Cache Hit %"},yaxis:{title:"Throughput (req/s)"},showlegend:false},co);}';
         // Actual hit rate chart
         s += '  var hitEl=document.getElementById(base+"-hit");';
         s += '  var hitPts=pts.filter(function(p){return p.actual_hit_rate!=null});';
         s += '  if(hitEl&&hitPts.length){Plotly.newPlot(hitEl,[';
         s += '    {x:hitPts.map(function(p){return p.hit_pct+"%"}),y:hitPts.map(function(p){return p.actual_hit_rate}),name:"Actual",type:"scatter",mode:"lines+markers",line:{color:"#8b5cf6",width:3},marker:{size:10}},';
         s += '    {x:["0%","100%"],y:[0,100],name:"Ideal",type:"scatter",mode:"lines",line:{color:"#94a3b8",width:1,dash:"dash"}}';
-        s += '  ],{...lo,height:600,xaxis:{title:"Configured Cache Hit %"},yaxis:{title:"Actual Hit Rate %",range:[-5,105]},showlegend:true,legend:{x:0,y:1.15,orientation:"h"}},co);}';
+        s += '  ],{...lo,height:850,xaxis:{title:"Configured Cache Hit %"},yaxis:{title:"Actual Hit Rate %",range:[-5,105]},showlegend:true,legend:{x:0,y:1.15,orientation:"h"}},co);}';
         // Engine metrics chart
         s += '  var engEl=document.getElementById(base+"-engine");';
         s += '  if(engEl){';
@@ -2323,7 +2323,7 @@ function buildChartScript(data, charts, allRes) {
             s += '  var hasNixl=pts.some(function(r){return r.nixl_errors>0});';
             s += '  if(hasNixl){traces.push({x:labels,y:pts.map(function(r){return r.nixl_errors}),name:"NIXL Retries",type:"bar",marker:{color:"#f59e0b"}});}';
             s += '  var label=trafLabels[gk]||gk;';
-            s += '  Plotly.newPlot(el,traces,{...lo,height:600,barmode:"group",margin:{...lo.margin,b:100},xaxis:{tickangle:-35},yaxis:{title:"Count"},showlegend:true,legend:{x:0,y:1.15,orientation:"h"},title:{text:"Traffic: "+label}},co);';
+            s += '  Plotly.newPlot(el,traces,{...lo,height:850,barmode:"group",margin:{...lo.margin,b:100},xaxis:{tickangle:-35},yaxis:{title:"Count"},showlegend:true,legend:{x:0,y:1.15,orientation:"h"},title:{text:"Traffic: "+label}},co);';
             s += '});';
         }
     }
@@ -2363,7 +2363,7 @@ function buildChartScript(data, charts, allRes) {
     s += '    if(pdPts.length){var vp=pdPts.filter(function(p){return p.x<=xMax});traces.push({x:vp.map(function(p){return p.x}),y:vp.map(function(p){return p.y}),text:vp.map(function(p){return p.label+"<br>TTFT: "+p.x.toFixed(0)+"ms<br>"+p.y.toFixed(0)+" tok/s/GPU"}),name:"Disaggregation",mode:"markers",marker:{color:"#93c5fd",size:14,opacity:0.5},hovertemplate:"<b>%{text}</b><extra></extra>"});}';
     s += '    if(aggF.length){traces.push({x:aggF.map(function(p){return p.x}),y:aggF.map(function(p){return p.y}),text:aggF.map(function(p){return p.label}),name:"Aggregated Frontier",mode:aggF.length>1?"lines+markers+text":"markers+text",line:{color:"#dc2626",width:3},marker:{color:"#dc2626",size:8},textposition:"top right",textfont:{size:13,color:"#dc2626"},hovertemplate:"<b>%{text}</b><extra></extra>"});}';
     s += '    if(pdF.length){traces.push({x:pdF.map(function(p){return p.x}),y:pdF.map(function(p){return p.y}),text:pdF.map(function(p){return p.label}),name:"Disaggregation Frontier",mode:pdF.length>1?"lines+markers+text":"markers+text",line:{color:"#2563eb",width:3},marker:{color:"#2563eb",size:8},textposition:"top left",textfont:{size:13,color:"#2563eb"},hovertemplate:"<b>%{text}</b><extra></extra>"});}';
-    s += '    Plotly.newPlot(ttftEl,traces,{...lo,height:700,xaxis:{title:"TTFT P90 (ms)",gridcolor:"#d1d5db",range:[0,xMax]},yaxis:{title:"Token Throughput per GPU (tok/s/GPU)",gridcolor:"#d1d5db",rangemode:"tozero"},showlegend:true,legend:{x:1.02,y:1,xanchor:"left",bgcolor:"rgba(255,255,255,0.95)"},margin:{t:40,b:70,l:70,r:200},plot_bgcolor:"white",paper_bgcolor:"white"},co);';
+    s += '    Plotly.newPlot(ttftEl,traces,{...lo,height:850,xaxis:{title:"TTFT P90 (ms)",gridcolor:"#d1d5db",range:[0,xMax]},yaxis:{title:"Token Throughput per GPU (tok/s/GPU)",gridcolor:"#d1d5db",rangemode:"tozero"},showlegend:true,legend:{x:1.02,y:1,xanchor:"left",bgcolor:"rgba(255,255,255,0.95)"},margin:{t:40,b:70,l:70,r:200},plot_bgcolor:"white",paper_bgcolor:"white"},co);';
     s += '  }';
 
     // Throughput vs Interactivity
@@ -2382,7 +2382,7 @@ function buildChartScript(data, charts, allRes) {
     s += '    var iAnns=[];var iPos=[[80,-15],[-80,-15],[70,-45],[-70,-45],[90,-30],[-90,-30],[60,-60],[-60,-60]];';
     s += '    function iAddAnn(pts,color){pts.forEach(function(p,i){var pos=iPos[i%iPos.length];iAnns.push({x:p.x,y:p.y,text:p.label+"<br>c="+p.conc,showarrow:true,arrowhead:0,arrowwidth:1,arrowcolor:color,ax:pos[0],ay:pos[1],font:{size:13,color:color},bgcolor:"rgba(255,255,255,0)",borderpad:2})})};';
     s += '    iAddAnn(iAggF,"#dc2626");iAddAnn(iPdF,"#2563eb");';
-    s += '    Plotly.newPlot(intEl,iTraces,{...lo,height:700,xaxis:{title:"Interactivity (tok/s/user)",gridcolor:"#d1d5db",rangemode:"tozero"},yaxis:{title:"Token Throughput per GPU (tok/s/GPU)",gridcolor:"#d1d5db",rangemode:"tozero"},showlegend:true,legend:{x:1.02,y:1,xanchor:"left",bgcolor:"rgba(255,255,255,0.95)"},margin:{t:40,b:70,l:70,r:200},plot_bgcolor:"white",paper_bgcolor:"white",annotations:iAnns},co);';
+    s += '    Plotly.newPlot(intEl,iTraces,{...lo,height:850,xaxis:{title:"Interactivity (tok/s/user)",gridcolor:"#d1d5db",rangemode:"tozero"},yaxis:{title:"Token Throughput per GPU (tok/s/GPU)",gridcolor:"#d1d5db",rangemode:"tozero"},showlegend:true,legend:{x:1.02,y:1,xanchor:"left",bgcolor:"rgba(255,255,255,0.95)"},margin:{t:40,b:70,l:70,r:200},plot_bgcolor:"white",paper_bgcolor:"white",annotations:iAnns},co);';
     s += '  }';
 
     // ITL vs Throughput Pareto (same IIFE — shares paretoResults, runOsl, getVT)
@@ -2398,7 +2398,7 @@ function buildChartScript(data, charts, allRes) {
     s += '    if(itlPd.length){itlTraces.push({x:itlPd.map(function(p){return p.x}),y:itlPd.map(function(p){return p.y}),text:itlPd.map(function(p){return p.label+"<br>ITL P90: "+p.x.toFixed(2)+"ms<br>"+p.y.toFixed(0)+" tok/s/GPU"}),name:"Disaggregation",mode:"markers",marker:{color:"#93c5fd",size:14,opacity:0.5},hovertemplate:"<b>%{text}</b><extra></extra>"});}';
     s += '    if(itlAggF.length){itlTraces.push({x:itlAggF.map(function(p){return p.x}),y:itlAggF.map(function(p){return p.y}),text:itlAggF.map(function(p){return p.label+"<br>"+p.x.toFixed(2)+"ms / "+p.y.toFixed(0)+" tok/s/GPU"}),name:"Aggregated — Frontier",mode:itlAggF.length>1?"lines+markers+text":"markers+text",line:{color:"#dc2626",width:3},marker:{color:"#dc2626",size:8},textposition:"top right",textfont:{size:13,color:"#dc2626"},hovertemplate:"<b>%{text}</b><extra></extra>"});}';
     s += '    if(itlPdF.length){itlTraces.push({x:itlPdF.map(function(p){return p.x}),y:itlPdF.map(function(p){return p.y}),text:itlPdF.map(function(p){return p.label+"<br>"+p.x.toFixed(2)+"ms / "+p.y.toFixed(0)+" tok/s/GPU"}),name:"Disaggregation — Frontier",mode:itlPdF.length>1?"lines+markers+text":"markers+text",line:{color:"#2563eb",width:3},marker:{color:"#2563eb",size:8},textposition:"top left",textfont:{size:13,color:"#2563eb"},hovertemplate:"<b>%{text}</b><extra></extra>"});}';
-    s += '    Plotly.newPlot(itlEl,itlTraces,{...lo,height:700,xaxis:{title:"ITL P90 (ms)",gridcolor:"#d1d5db"},yaxis:{title:"Token Throughput per GPU (tok/s/GPU)",gridcolor:"#d1d5db",rangemode:"tozero"},showlegend:true,legend:{x:1.02,y:1,xanchor:"left",bgcolor:"rgba(255,255,255,0.95)"},margin:{t:40,b:70,l:70,r:200},plot_bgcolor:"white",paper_bgcolor:"white"},co);';
+    s += '    Plotly.newPlot(itlEl,itlTraces,{...lo,height:850,xaxis:{title:"ITL P90 (ms)",gridcolor:"#d1d5db"},yaxis:{title:"Token Throughput per GPU (tok/s/GPU)",gridcolor:"#d1d5db",rangemode:"tozero"},showlegend:true,legend:{x:1.02,y:1,xanchor:"left",bgcolor:"rgba(255,255,255,0.95)"},margin:{t:40,b:70,l:70,r:200},plot_bgcolor:"white",paper_bgcolor:"white"},co);';
     s += '  }';
     s += '})();';
 
