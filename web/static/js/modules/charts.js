@@ -783,7 +783,7 @@ function _renderChartsImpl(data, runId, content) {
     if (cfgCacheData.length) {
         secCfg += '<div class="chart-card"><div class="chart-card-header">Prefix Cache Hit Rate per Configuration</div>';
         secCfg += '<div style="padding:8px 20px 0;color:#1e293b;font-size:0.92em;">Actual prefix cache hit percentage measured by vLLM during each test. Higher = more requests served from cached KV data.</div>';
-        secCfg += '<div class="chart-card-body"><div id="chart-cfg-cache-hit' + _chartSuffix + '" style="width:100%;height:600px;"></div></div></div>';
+        secCfg += '<div class="chart-card-body"><div id="chart-cfg-cache-hit' + _chartSuffix + '" style="width:100%;height:850px;"></div></div></div>';
         var archColors3 = { AGGREGATED: '#1f77b4', PD: '#ff7f0e', EP: '#2ca02c' };
         chartQueue.push(function() {
             var traces = [];
@@ -931,7 +931,7 @@ function _renderChartsImpl(data, runId, content) {
             '<strong>Gold bar (client):</strong> All tokens measured client-side by guidellm (<code>prompt_tokens_mean &times; throughput + output_tokens_mean &times; throughput</code>).<br>' +
             '<strong>The gap between blue and light blue reflects prefix cache efficiency.</strong> The gap between light blue and gold reflects measurement differences (network overhead, timing windows).' +
             '</div>';
-        html += '<div class="chart-card-body"><div id="chart-token-tput' + cid('') + '" style="height:600px;margin-bottom:16px;"></div></div></div>';
+        html += '<div class="chart-card-body"><div id="chart-token-tput' + cid('') + '" style="height:850px;margin-bottom:16px;"></div></div></div>';
 
         html += '<div class="chart-card"><div class="chart-card-header">Throughput &amp; Utilization Details</div>';
         html += '<div class="chart-card-body" style="padding:0;">';
@@ -1566,9 +1566,9 @@ function _renderChartsImpl(data, runId, content) {
             }
 
             // Per-percentile charts (P90, P95, P99)
-            html += `<div id="step9-chart-p90-${ai}${_chartSuffix}" style="height:600px; background:#fff; border-radius:8px; border:1px solid #e2e8f0;"></div>`;
-            html += `<div id="step9-chart-p95-${ai}${_chartSuffix}" style="height:600px; background:#fff; border-radius:8px; border:1px solid #e2e8f0; margin-top:16px;"></div>`;
-            html += `<div id="step9-chart-p99-${ai}${_chartSuffix}" style="height:600px; background:#fff; border-radius:8px; border:1px solid #e2e8f0; margin-top:16px;"></div>`;
+            html += `<div id="step9-chart-p90-${ai}${_chartSuffix}" style="height:850px; background:#fff; border-radius:8px; border:1px solid #e2e8f0;"></div>`;
+            html += `<div id="step9-chart-p95-${ai}${_chartSuffix}" style="height:850px; background:#fff; border-radius:8px; border:1px solid #e2e8f0; margin-top:16px;"></div>`;
+            html += `<div id="step9-chart-p99-${ai}${_chartSuffix}" style="height:850px; background:#fff; border-radius:8px; border:1px solid #e2e8f0; margin-top:16px;"></div>`;
             // Legacy div for backward compat (hidden)
             html += `<div id="step9-chart-${ai}${_chartSuffix}" style="display:none;"></div>`;
 
@@ -1857,7 +1857,7 @@ function _renderChartsImpl(data, runId, content) {
                 html += '<div class="chart-card" style="margin-top:16px;">';
                 html += '<div class="chart-card-header">' + pct.title + '</div>';
                 html += '<div style="padding:8px 20px 4px; font-size:0.85em; color:#64748b;">' + pct.label + ' across all tested configurations. Each line is a different deployment config. Lower is better.</div>';
-                html += '<div id="' + chartId + '" style="width:100%; height:600px;"></div>';
+                html += '<div id="' + chartId + '" style="width:100%; height:850px;"></div>';
                 html += '</div>';
 
                 chartQueue.push(function() {
@@ -1911,7 +1911,7 @@ function _renderChartsImpl(data, runId, content) {
             html += '<div class="chart-card" style="margin-top:16px;">';
             html += '<div class="chart-card-header">Throughput per GPU vs Concurrency</div>';
             html += '<div style="padding:8px 20px 4px; font-size:0.85em; color:#64748b;">Token throughput per GPU across all configs. Each line is a different deployment config. Higher is better.</div>';
-            html += '<div id="chart-sweep-tput-all" style="width:100%; height:600px;"></div>';
+            html += '<div id="chart-sweep-tput-all" style="width:100%; height:850px;"></div>';
             html += '</div>';
 
             chartQueue.push(function() {
@@ -1967,7 +1967,7 @@ function _renderChartsImpl(data, runId, content) {
                 '<strong>Solid line:</strong> Server total (prompt + generation from Prometheus). ' +
                 '<strong>Dashed line:</strong> Output tokens only (generation). ' +
                 'The gap reflects prefix cache efficiency — cached prompt tokens inflate the server total.</div>';
-            html += '<div id="chart-sweep-vllm-tps" style="width:100%; height:600px;"></div>';
+            html += '<div id="chart-sweep-vllm-tps" style="width:100%; height:850px;"></div>';
             html += '</div>';
 
             chartQueue.push(function() {
@@ -2016,7 +2016,7 @@ function _renderChartsImpl(data, runId, content) {
                 '<strong>GPU computed:</strong> Prompt tokens actually computed (excludes cached) + generation. ' +
                 '<strong>Server total:</strong> All tokens processed by vLLM (incl. cached prefixes). ' +
                 '<strong>Client:</strong> Tokens measured by the load tester.</div>';
-            html += '<div id="chart-sweep-token-tput" style="width:100%; height:600px;"></div>';
+            html += '<div id="chart-sweep-token-tput" style="width:100%; height:850px;"></div>';
             html += '</div>';
 
             chartQueue.push(function() {
@@ -2064,7 +2064,7 @@ function _renderChartsImpl(data, runId, content) {
             html += '<div class="chart-card" style="margin-top:20px;">';
             html += '<div class="chart-card-header">Prefix Cache Hit Rate vs Concurrency</div>';
             html += '<div style="padding:8px 20px 0;color:#1e293b;font-size:0.92em;">How prefix cache hit rate changes with load. Higher hit rates mean more requests served from cached KV data.</div>';
-            html += '<div id="chart-sweep-cache-hit' + _chartSuffix + '" style="width:100%;height:600px;"></div></div>';
+            html += '<div id="chart-sweep-cache-hit' + _chartSuffix + '" style="width:100%;height:850px;"></div></div>';
             chartQueue.push(function() {
                 var traces = [];
                 var cIdx = 0;
@@ -2109,17 +2109,17 @@ function _renderChartsImpl(data, runId, content) {
         html += '<div class="chart-card" style="margin-top:20px;"><div class="chart-card-header">Best Envelope — PD vs Aggregated</div>' +
             '<div style="padding:8px 20px 0; color:#1e293b; font-size:0.92em; line-height:1.5;">' +
             'Pareto frontier of each architecture\'s best throughput/GPU at each concurrency level. The higher curve is the better architecture.</div>' +
-            '<div class="chart-card-body"><div id="chart-sweep-envelope' + _chartSuffix + '" style="width:100%;height:600px;"></div></div></div>';
+            '<div class="chart-card-body"><div id="chart-sweep-envelope' + _chartSuffix + '" style="width:100%;height:850px;"></div></div></div>';
 
         html += '<div class="chart-card" style="margin-top:16px;"><div class="chart-card-header">Architecture Comparison — Overlaid</div>' +
             '<div style="padding:8px 20px 0; color:#1e293b; font-size:0.92em; line-height:1.5;">' +
             'Combined view: frontier lines for each architecture plus markers showing which won at each concurrency level.</div>' +
-            '<div class="chart-card-body"><div id="chart-sweep-overlaid' + _chartSuffix + '" style="width:100%;height:700px;"></div></div></div>';
+            '<div class="chart-card-body"><div id="chart-sweep-overlaid' + _chartSuffix + '" style="width:100%;height:850px;"></div></div></div>';
 
         // --- vLLM Engine Metrics per config ---
         html += '<div class="chart-card" style="margin-top:16px;"><div class="chart-card-header">vLLM Engine Metrics vs Concurrency</div>';
         html += '<div style="padding:8px 20px 4px; font-size:0.85em; color:#64748b;">KV cache usage and running requests across concurrency levels per config.</div>';
-        html += '<div id="chart-sweep-engine' + _chartSuffix + '" style="width:100%;height:600px;"></div></div>';
+        html += '<div id="chart-sweep-engine' + _chartSuffix + '" style="width:100%;height:850px;"></div></div>';
 
         chartQueue.push(function() {
             var _arLookup = {};
@@ -2345,7 +2345,7 @@ function _renderChartsImpl(data, runId, content) {
             // --- TTFT P90/P95/P99 on same chart ---
             var csTtftId = 'cache-sweep-ttft-' + arch;
             html += '<div style="padding:8px 20px 4px; font-size:0.85em; color:#64748b;">TTFT percentiles &amp; throughput vs cache hit ratio. Lower TTFT is better, higher throughput is better. Subplot shows actual vs configured cache hit rate from vLLM.</div>';
-            html += '<div id="' + csTtftId + '" style="width:100%;height:600px;"></div>';
+            html += '<div id="' + csTtftId + '" style="width:100%;height:850px;"></div>';
 
             var hasActualHitRate = pts.some(function(p) { return p.actual_hit_rate != null; });
 
@@ -2492,7 +2492,7 @@ function _renderChartsImpl(data, runId, content) {
             // --- vLLM Engine Metrics chart for this config ---
             var csEngineId = 'cache-sweep-engine-' + arch;
             html += '<div style="padding:8px 20px 4px; font-size:0.85em; color:#64748b; margin-top:12px;">vLLM engine metrics across cache hit levels — KV cache usage, running/waiting requests, prefill/decode GPU time, and preemptions.</div>';
-            html += '<div id="' + csEngineId + '" style="width:100%;height:600px;"></div>';
+            html += '<div id="' + csEngineId + '" style="width:100%;height:850px;"></div>';
 
             chartQueue.push((function(chartId, points) { return function() {
                 var _arLookup = {};
@@ -2572,7 +2572,7 @@ function _renderChartsImpl(data, runId, content) {
             html += '<div style="padding:8px 20px; color:#1e293b; font-size:0.95em;">Time from pod deployment to model fully loaded and serving. Includes scheduling, image pull, model weight loading, and CUDA graph capture.</div>';
 
             // Bar chart
-            html += '<div id="chart-deploy-timing" style="width:100%;height:600px;"></div>';
+            html += '<div id="chart-deploy-timing" style="width:100%;height:850px;"></div>';
             var archColorsDT = { AGGREGATED: '#6366f1', PD: '#10b981', EP: '#f59e0b' };
             chartQueue.push(function() {
                 var sorted = timingData.sort(function(a, b) { return b.load_s - a.load_s; });
@@ -2764,7 +2764,7 @@ function _renderChartsImpl(data, runId, content) {
             const baselineTrial = trials.find(t => t.is_baseline);
             const pctls = [{key:'p90',label:'P90',color:'#3b82f6'},{key:'p95',label:'P95',color:'#dc2626'},{key:'p99',label:'P99',color:'#7c3aed'}];
             pctls.forEach(pctl => {
-                eppHtml += `<div id="${eppCardId}-${pctl.key}${_chartSuffix}" style="height:600px; margin:8px 20px; background:#fff; border-radius:8px; border:1px solid #e2e8f0;"></div>`;
+                eppHtml += `<div id="${eppCardId}-${pctl.key}${_chartSuffix}" style="height:850px; margin:8px 20px; background:#fff; border-radius:8px; border:1px solid #e2e8f0;"></div>`;
                 eppHtml += `<div style="padding:4px 20px 12px; font-size:0.85em; line-height:1.7; color:#1e293b;">`;
                 trials.forEach(t => {
                     const ttftKey = `ttft_${pctl.key}`;
@@ -2964,7 +2964,7 @@ function _renderChartsImpl(data, runId, content) {
                     trafficChartIds.push({ id: chartId, group: group, results: cfg.results, hasErrors: hasErrors, isSweep: true });
                     trafficHtml += '<div class="chart-card" style="margin-top:16px;' + (hasErrors ? 'border-left:4px solid #dc2626;' : '') + '">';
                     trafficHtml += '<div class="chart-card-header">Sweep: ' + cfg.label + (hasErrors ? ' <span style="color:#dc2626;font-size:0.8em;">&#9888; errors</span>' : '') + '</div>';
-                    trafficHtml += '<div id="' + chartId + '" style="width:100%;height:600px;"></div></div>';
+                    trafficHtml += '<div id="' + chartId + '" style="width:100%;height:850px;"></div></div>';
                 });
             } else {
                 var hasErrors = results.some(function(r) { return (r.request_errored || 0) > 0 || (r.nixl_errors || 0) > 0; });
@@ -2973,7 +2973,7 @@ function _renderChartsImpl(data, runId, content) {
                 trafficHtml += '<div class="chart-card" style="margin-top:16px;' + (hasErrors ? 'border-left:4px solid #dc2626;' : '') + '">';
                 trafficHtml += '<div class="chart-card-header">' + group + ' Traffic' + (hasErrors ? ' <span style="color:#dc2626;font-size:0.8em;">&#9888; errors detected</span>' : '') + '</div>';
                 trafficHtml += '<div style="padding:4px 16px;font-size:0.82em;color:#64748b;">Request totals, HTTP errors, and NIXL transfer errors per test configuration.</div>';
-                trafficHtml += '<div id="' + chartId + '" style="width:100%;height:600px;"></div></div>';
+                trafficHtml += '<div id="' + chartId + '" style="width:100%;height:850px;"></div></div>';
             }
         });
 
