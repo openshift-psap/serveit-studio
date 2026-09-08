@@ -534,12 +534,12 @@ function _renderChartsImpl(data, runId, content) {
         var calRows = [];
         if (hasDecodeTP2) {
             rec.decode_tp_all.forEach(function(d) {
-                calRows.push({ role: 'Decode', tp: d.tp, isl: d.cal_isl, osl: d.cal_osl, conc: d.cal_concurrency, reqs: d.cal_max_requests, tspg: d.tpsg != null ? d.tpsg : null, ttft: null });
+                calRows.push({ role: 'Decode', tp: d.tp, isl: d.cal_isl, osl: d.cal_osl, conc: d.cal_concurrency, reqs: d.cal_max_requests, tspg: d.tpsg != null ? d.tpsg : null, ttft: null, itl: d.itl_p90 != null ? d.itl_p90 : null });
             });
         }
         if (hasPrefillTP2) {
             rec.prefill_tp_all.forEach(function(d) {
-                calRows.push({ role: 'Prefill', tp: d.tp, isl: d.cal_isl, osl: d.cal_osl, conc: d.cal_concurrency, reqs: d.cal_max_requests, tspg: d.tpsg != null ? d.tpsg : null, ttft: d.ttft_p90 != null ? d.ttft_p90 : null });
+                calRows.push({ role: 'Prefill', tp: d.tp, isl: d.cal_isl, osl: d.cal_osl, conc: d.cal_concurrency, reqs: d.cal_max_requests, tspg: d.tpsg != null ? d.tpsg : null, ttft: d.ttft_p90 != null ? d.ttft_p90 : null, itl: null });
             });
         }
         if (calRows.length) {
@@ -550,7 +550,7 @@ function _renderChartsImpl(data, runId, content) {
             html += '<button onclick="downloadCalParamsTablePng(\'' + _chartSuffix + '\')" style="font-size:0.78em;padding:4px 10px;border:1px solid #cbd5e1;border-radius:6px;background:#fff;color:#475569;cursor:pointer;">&#11015; Download PNG</button>';
             html += '</div>';
             html += '<p style="color:#64748b;font-size:0.82em;margin:0 0 10px;">Each TP value is tested with isolated workloads: <strong>ISL=1</strong> for decode (measures pure token generation) and <strong>OSL=1</strong> for prefill (measures pure prompt processing). Concurrency is estimated from KV cache capacity to avoid OOM.</p>';
-            html += '<table style="width:100%;font-size:0.85em;text-align:center;border-collapse:collapse;"><tr style="background:#f1f5f9;"><th style="padding:8px 12px;border:1px solid #e2e8f0;">Role</th><th style="padding:8px 12px;border:1px solid #e2e8f0;">TP</th><th style="padding:8px 12px;border:1px solid #e2e8f0;">ISL</th><th style="padding:8px 12px;border:1px solid #e2e8f0;">OSL</th><th style="padding:8px 12px;border:1px solid #e2e8f0;">Concurrency</th><th style="padding:8px 12px;border:1px solid #e2e8f0;">Max Requests</th><th style="padding:8px 12px;border:1px solid #e2e8f0;">TSPG (tok/s/GPU)</th><th style="padding:8px 12px;border:1px solid #e2e8f0;">TTFT P90</th></tr>';
+            html += '<table style="width:100%;font-size:0.85em;text-align:center;border-collapse:collapse;"><tr style="background:#f1f5f9;"><th style="padding:8px 12px;border:1px solid #e2e8f0;">Role</th><th style="padding:8px 12px;border:1px solid #e2e8f0;">TP</th><th style="padding:8px 12px;border:1px solid #e2e8f0;">ISL</th><th style="padding:8px 12px;border:1px solid #e2e8f0;">OSL</th><th style="padding:8px 12px;border:1px solid #e2e8f0;">Concurrency</th><th style="padding:8px 12px;border:1px solid #e2e8f0;">Max Requests</th><th style="padding:8px 12px;border:1px solid #e2e8f0;">TSPG (tok/s/GPU)</th><th style="padding:8px 12px;border:1px solid #e2e8f0;">ITL P90</th><th style="padding:8px 12px;border:1px solid #e2e8f0;">TTFT P90</th></tr>';
             calRows.forEach(function(r) {
                 var roleStyle = r.role === 'Decode' ? ' style="color:#6366f1;text-align:center;"' : ' style="color:#0d9488;text-align:center;"';
                 var tspgStr = r.tspg != null ? r.tspg.toLocaleString() : '-';
@@ -562,6 +562,7 @@ function _renderChartsImpl(data, runId, content) {
                     '<td style="padding:8px 12px;border:1px solid #e2e8f0;">' + (r.conc || '-') + '</td>' +
                     '<td style="padding:8px 12px;border:1px solid #e2e8f0;">' + (r.reqs || '-') + '</td>' +
                     '<td style="padding:8px 12px;border:1px solid #e2e8f0;font-weight:600;">' + tspgStr + '</td>' +
+                    '<td style="padding:8px 12px;border:1px solid #e2e8f0;">' + (r.itl != null ? r.itl.toLocaleString() + ' ms' : '-') + '</td>' +
                     '<td style="padding:8px 12px;border:1px solid #e2e8f0;">' + ttftStr + '</td></tr>';
             });
             html += '</table></div>';
