@@ -8,6 +8,7 @@ Supports multiple network types:
 """
 
 from __future__ import annotations
+import json
 from typing import Dict, List, Any, Optional, TYPE_CHECKING
 
 from .base import BaseNetworkCreator, NetworkConfig, NetworkType, RDMAType, NetworkResource
@@ -131,6 +132,59 @@ def compute_network_values(
     return values
 
 
+def _nad_is_rdma(item: Dict[str, Any], cluster_rdma: bool = False) -> bool:
+    """Determine whether a NetworkAttachmentDefinition actually uses RDMA.
+
+    A NAD is only RDMA if its CNI config enables an RDMA-capable plugin
+    (host-device with isRdma, SR-IOV VF, or references to RoCE/InfiniBand
+    interfaces) OR it attaches a physical NIC on a node that advertises
+    RDMA resources (e.g. rdma/* device plugin keys), which is how IBM Cloud
+    VirtIO RoCE NICs are exposed. Merely having Multus registered does not
+    make a NAD RDMA — plain overlay/bridging NADs (e.g. ovn-k8s-cni-overlay)
+    are not.
+    """
+    try:
+        labels = item.get('metadata', {}).get('labels', {}) or {}
+        if labels.get('rdma-enabled') == 'true':
+            return True
+
+        config_raw = (item.get('spec', {}) or {}).get('config') or ''
+        if not config_raw:
+            return False
+
+        try:
+            cfg = json.loads(config_raw)
+        except (TypeError, ValueError):
+            # Unparseable config — fall back to text-level markers.
+            cfg = None
+
+        attaches_nic = False
+        if isinstance(cfg, dict):
+            plugins = cfg.get('plugins')
+            if isinstance(plugins, list):
+                for plugin in plugins:
+                    if plugin.get('isRdma') is True:
+                        return True
+                    if plugin.get('type') in ('host-device', 'sriov'):
+                        attaches_nic = True
+            if cfg.get('isRdma') is True:
+                return True
+            if cfg.get('type') == 'host-device':
+                attaches_nic = True
+
+        low = config_raw.lower()
+        if any(marker in low for marker in (
+            '"isrdma":true', "'isrdma': true", 'roce', 'infiniband',
+        )):
+            return True
+
+        # A NAD that hands a physical NIC to the pod on an RDMA-capable
+        # node is RDMA (e.g. VirtIO RoCE exposed via rdma/* device plugin).
+        return attaches_nic and cluster_rdma
+    except Exception:
+        return False
+
+
 def scan_available_networks(kubectl_runner, namespace: str = None) -> List[Dict[str, Any]]:
     """Scan the cluster and return ALL available network types.
 
@@ -144,7 +198,6 @@ def scan_available_networks(kubectl_runner, namespace: str = None) -> List[Dict[
     Returns:
         List of dicts: {id, name, description, available, reason, rdma}
     """
-    import json
     from concurrent.futures import ThreadPoolExecutor, as_completed
 
     results = {}
@@ -270,8 +323,13 @@ def scan_available_networks(kubectl_runner, namespace: str = None) -> List[Dict[
             for item in json.loads(nads_r.stdout).get('items', []):
                 nad_name = item['metadata']['name']
                 nad_ns = item['metadata']['namespace']
+                nad_is_rdma = _nad_is_rdma(item, cluster_rdma=shared_available)
                 if nad_name not in seen:
-                    available_nads.append({'name': nad_name, 'namespace': nad_ns})
+                    available_nads.append({
+                        'name': nad_name,
+                        'namespace': nad_ns,
+                        'is_rdma': nad_is_rdma,
+                    })
                     seen.add(nad_name)
                 if nad_name in ('multi-nic-inference', 'multi-nic-compute'):
                     sriov_multinic_available = True
@@ -310,7 +368,8 @@ def scan_available_networks(kubectl_runner, namespace: str = None) -> List[Dict[
          'available': True, 'reason': '', 'rdma': False},
         {'id': 'nad', 'name': 'NAD (Multus CNI)',
          'description': 'Network Attachment Definitions via Multus. Supports SR-IOV, host-device, and macvlan plugins for RDMA.',
-         'available': nad_available, 'reason': '' if nad_available else 'Multus CNI not installed', 'rdma': True},
+         'available': nad_available, 'reason': '' if nad_available else 'Multus CNI not installed',
+         'rdma': any(n.get('is_rdma') for n in available_nads) if available_nads else False},
         {'id': 'dra', 'name': 'DRA (DRANET)',
          'description': 'Dynamic Resource Allocation with GPU+NIC PCIe affinity.',
          'available': dra_available, 'reason': '' if dra_available else 'No DRA device classes found', 'rdma': True,
