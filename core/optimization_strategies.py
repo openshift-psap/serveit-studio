@@ -408,7 +408,7 @@ class ThroughputStrategy(OptimizationStrategy):
                      f"{best_cfg.prefill_pods}P+{best_cfg.decode_pods}D ({best_cfg.total_gpus} GPUs)", 'info')
         self.opt.log(f"  TTFT p90: {best_ep_ttft:.1f}ms, Throughput mean: {best_ep_tput:.2f} req/s", 'info')
         self.opt.log(f"Best Aggregated: TP={self.opt.aggregated_tp}, "
-                     f"{self.opt.aggregated_gpus // self.opt.aggregated_tp} replicas", 'info')
+                     f"{self.opt.aggregated_gpus // (self.opt.aggregated_tp * (self.opt.aggregated_pp or 1))} replicas", 'info')
         self.opt.log(f"  TTFT p90: {agg_ttft:.1f}ms, Throughput mean: {agg_tput:.2f} req/s", 'info')
         self.opt.log("", 'info')
 
@@ -522,7 +522,8 @@ class ThroughputStrategy(OptimizationStrategy):
                 isl=self.opt.config.isl,
                 osl=self.opt.config.osl,
                 test_id=agg_test_id,
-                use_concurrency=True
+                use_concurrency=True,
+                pipeline_parallel_size=getattr(self.opt, 'aggregated_pp', None) or 1
             )
             agg_config.num_users = int(calibrated_concurrency)
             agg_config.request_rate = int(calibrated_concurrency)
@@ -723,7 +724,7 @@ class BalancedStrategy(OptimizationStrategy):
         agg_ttft = self.opt.aggregated_result.ttft_p90 or self.opt.aggregated_result.ttft_p50 or 1000000.0
         agg_tput = self.opt.aggregated_result.throughput_mean or self.opt.aggregated_result.throughput_p90 or 0.0
         self.opt.log(f"Best Aggregated: TP={self.opt.aggregated_tp}, "
-                     f"{self.opt.aggregated_gpus // self.opt.aggregated_tp} replicas", 'info')
+                     f"{self.opt.aggregated_gpus // (self.opt.aggregated_tp * (self.opt.aggregated_pp or 1))} replicas", 'info')
         self.opt.log(f"  TTFT p90: {agg_ttft:.1f}ms, Throughput mean: {agg_tput:.2f} req/s", 'info')
         self.opt.log("", 'info')
 
@@ -865,7 +866,8 @@ class BalancedStrategy(OptimizationStrategy):
                 agg_config = self.opt._create_aggregated_config(
                     tp=agg_tp, num_gpus=total_gpus,
                     isl=self.opt.config.isl, osl=self.opt.config.osl,
-                    test_id=agg_test_id, use_concurrency=True
+                    test_id=agg_test_id, use_concurrency=True,
+                    pipeline_parallel_size=getattr(self.opt, 'aggregated_pp', None) or 1
                 )
                 agg_config.num_users = int(calibrated_concurrency)
                 agg_config.request_rate = int(calibrated_concurrency)
@@ -929,16 +931,19 @@ class SingleTestStrategy(OptimizationStrategy):
         if arch == 'aggregated':
             tp = cfg.single_test_tp or 1
             replicas = cfg.single_test_replicas or 1
-            num_gpus = tp * replicas
-            self.opt.log(f"TP={tp}, {replicas} replicas ({num_gpus} GPUs)", 'info')
+            pp = cfg.single_test_pipeline_parallelism or 1
+            num_gpus = tp * pp * replicas
+            pp_str = f", PP={pp}" if pp > 1 else ""
+            self.opt.log(f"TP={tp}{pp_str}, {replicas} replicas ({num_gpus} GPUs)", 'info')
 
             test_config = self.opt._create_aggregated_config(
                 tp=tp,
                 num_gpus=num_gpus,
                 isl=cfg.isl,
                 osl=cfg.osl,
-                test_id=f"single-agg-tp{tp}-{replicas}r",
+                test_id=f"single-agg-tp{tp}-pp{pp}-{replicas}r",
                 use_concurrency=True,
+                pipeline_parallel_size=pp,
             )
 
         elif arch == 'pd':
@@ -1018,6 +1023,7 @@ class SingleTestStrategy(OptimizationStrategy):
                 self.opt.log("-" * 80, 'info')
                 if arch == 'aggregated':
                     self.opt.aggregated_tp = tp
+                    self.opt.aggregated_pp = cfg.single_test_pipeline_parallelism or None
                     self.opt.aggregated_gpus = num_gpus
                     self.opt.aggregated_result = result
                 elif arch == 'pd':

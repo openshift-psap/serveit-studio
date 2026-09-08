@@ -98,6 +98,14 @@ class RecipeOptimizer(
         if self.config.network_type is None:
             self.config.network_type = self._detect_network_type()
             self.log(f"Auto-detected network type: {self.config.network_type}")
+        elif self.config.network_type == 'dra':
+            # Defensive: don't trust a stale 'dra' claim (e.g. from a saved config
+            # captured under an old provider heuristic) if the cluster no longer
+            # reports any DRA support.
+            detected = self._detect_network_type()
+            if detected != 'dra':
+                self.log(f"Network: cluster does not report DRA (detected {detected}) - overriding stale network_type")
+                self.config.network_type = detected
 
         # Auto-detect RDMA device resources if not provided
         if self.config.rdma_device_resources is None:
@@ -323,9 +331,10 @@ class RecipeOptimizer(
         self.effective_concurrency: int = int(config.qps)
 
         # Step 6: Aggregated configuration search (full-workload tests at each TP)
-        self.aggregated_search_results: List[Tuple[int, TestResult]] = []
+        self.aggregated_search_results: List[Tuple[int, int, TestResult]] = []
         self.aggregated_result: Optional[TestResult] = None
         self.aggregated_tp: Optional[int] = None
+        self.aggregated_pp: Optional[int] = None
         self.aggregated_gpus: Optional[int] = None
 
         # Step 10: Latency-bounded throughput maximization
@@ -929,7 +938,16 @@ class RecipeOptimizer(
                 self.aggregated_result = self._make_test_result_from_db(best_row)
                 self.aggregated_tp = best_row.get('tensor_parallelism', 8)
                 self.aggregated_gpus = self.config.total_gpus
-                self.log(f"   🔄 Rebuilt aggregated_result: TP={self.aggregated_tp}, "
+                self.aggregated_pp = None
+                tc_raw = best_row.get('test_config_json')
+                if tc_raw:
+                    try:
+                        tc = json.loads(tc_raw)
+                        self.aggregated_pp = tc.get('pipeline_parallel_size') or None
+                    except Exception:
+                        pass
+                pp_str = f" xPP={self.aggregated_pp}" if self.aggregated_pp else ""
+                self.log(f"   🔄 Rebuilt aggregated_result: TP={self.aggregated_tp}{pp_str}, "
                          f"TTFT={best_row.get('ttft_p90', 0):.1f}ms", 'info')
 
         # 4. Rebuild pareto_results from step7 PD tests (exclude discarded)
@@ -2145,19 +2163,21 @@ spec:
             'aggregated_search': [
                 {
                     'tp': tp,
-                    'replicas': self.config.total_gpus // tp,
+                    'pp': pp,
+                    'replicas': self.config.total_gpus // (tp * pp) if pp > 1 else self.config.total_gpus // tp,
                     'total_gpus': self.config.total_gpus,
                     'ttft_p90': result.ttft_p90,
                     'throughput_p90': result.throughput_p90,
                     'throughput_mean': result.throughput_mean or result.throughput_p90,
                 }
-                for tp, result in self.aggregated_search_results
+                for tp, pp, result in self.aggregated_search_results
             ],
             # Best aggregated (from Step 6)
             'aggregated_result': {
                 'tp': self.aggregated_tp,
+                'pp': self.aggregated_pp,
                 'gpus': self.aggregated_gpus,
-                'pods': self.aggregated_gpus // self.aggregated_tp if self.aggregated_tp else None,
+                'pods': self.aggregated_gpus // (self.aggregated_tp * (self.aggregated_pp or 1)) if self.aggregated_tp else None,
                 'ttft_p90': self.aggregated_result.ttft_p90 if self.aggregated_result else None,
                 'throughput_p90': self.aggregated_result.throughput_p90 if self.aggregated_result else None,
                 'throughput_mean': (self.aggregated_result.throughput_mean or self.aggregated_result.throughput_p90) if self.aggregated_result else None,

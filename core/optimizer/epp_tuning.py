@@ -261,7 +261,7 @@ class EPPTuningMixin:
             best_split = min(self.pareto_results, key=lambda x: x[1].ttft_p90 if x[1].ttft_p90 else 1e9)[0]
             num_pods = best_split.prefill_pods + best_split.decode_pods
         elif arch == 'aggregated' and self.aggregated_tp:
-            num_pods = self.config.total_gpus // self.aggregated_tp
+            num_pods = self.config.total_gpus // (self.aggregated_tp * (self.aggregated_pp or 1))
 
         # Compute adjustment signals from the test's own metrics
         cache_mode = getattr(self.config, 'prefix_cache_mode', 'identical') or 'identical'
@@ -372,6 +372,13 @@ class EPPTuningMixin:
         agg_row = _best_from_db('aggregated', 'step6-')
         if agg_row:
             agg_tp = agg_row[1]
+            agg_pp = None
+            tc_raw = agg_row[8]
+            if tc_raw:
+                try:
+                    agg_pp = _json.loads(tc_raw).get('pipeline_parallel_size')
+                except Exception:
+                    pass
             agg_cfg = self._create_aggregated_config(
                 tp=agg_tp,
                 num_gpus=self.config.total_gpus,
@@ -379,9 +386,11 @@ class EPPTuningMixin:
                 osl=self.config.osl,
                 test_id="step11-epp-aggregated",
                 use_concurrency=True,
+                pipeline_parallel_size=agg_pp or 1,
             )
             configs_to_test.append(('aggregated', agg_cfg, default_concurrency))
-            self.log(f"  Aggregated: {self.config.total_gpus // agg_tp}×TP{agg_tp} at c={default_concurrency}", 'info')
+            pp_str = f"xPP={agg_pp} " if agg_pp and agg_pp > 1 else ""
+            self.log(f"  Aggregated: {self.config.total_gpus // (agg_tp * (agg_pp or 1))}×TP{agg_tp}{pp_str}at c={default_concurrency}", 'info')
 
         # Best EP config from step7-ep DB results
         ep_row = _best_from_db('ep', 'step7-ep-')

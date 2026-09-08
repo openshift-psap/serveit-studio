@@ -441,7 +441,14 @@ socket.on('cluster_scan_result', function(data) {
     const networkCards = document.getElementById('network-select-cards');
     const networks = data.available_networks || [];
     const autoDetected = data.network_type || 'eth0';
-    const savedNetwork = config.network_type || autoDetected;
+    // Prefer the saved selection only if it's actually available on this cluster;
+    // otherwise fall back to what the scan truly detected (stale provider heuristics
+    // may have persisted an unavailable type like 'dra').
+    let savedNetwork = config.network_type || autoDetected;
+    if (!(networks.length > 0 && networks.some(n => n.id === savedNetwork && n.available)) && config.network_type) {
+        savedNetwork = autoDetected;
+        config.network_type = autoDetected;
+    }
 
     if (networkCards && networks.length > 0) {
         let cardsHtml = '';

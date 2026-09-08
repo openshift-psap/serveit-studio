@@ -39,6 +39,8 @@ function updateUIFromConfig() {
         if (el && config.single_test_tp) el.value = config.single_test_tp;
         el = document.getElementById('single-test-replicas');
         if (el && config.single_test_replicas) el.value = config.single_test_replicas;
+        el = document.getElementById('single-test-pp');
+        if (el && config.single_test_pipeline_parallelism) el.value = config.single_test_pipeline_parallelism;
         selectSingleTestArch(config.single_test_architecture);
     }
 
@@ -584,7 +586,7 @@ function restoreClusterResources() {
         networkName = 'DRA (DRANET)';
     } else if (data.network_type === 'nad') {
         networkName = 'NAD (Multus)';
-    } else if (data.network_type === 'sriov') {
+    } else if (data.network_type === 'sriov' || data.network_type === 'sriov_multinic') {
         networkName = 'SR-IOV';
     }
 
@@ -1204,7 +1206,10 @@ function confirmSingleTest() {
         var tpEl = document.getElementById('single-test-tp');
         var repEl = document.getElementById('single-test-replicas');
         if (tpEl) tpEl.value = tp;
-        if (repEl) repEl.value = rc.replicas || (rc.gpus ? Math.floor(rc.gpus / tp) : 1);
+        if (repEl) repEl.value = Math.floor((rc.gpus || tp) / (tp * (rc.pp && rc.pp > 1 ? rc.pp : 1)));
+        config.single_test_pipeline_parallelism = rc.pp && rc.pp > 1 ? rc.pp : null;
+        var stppEl = document.getElementById('single-test-pp');
+        if (stppEl) stppEl.value = rc.pp && rc.pp > 1 ? rc.pp : 1;
     }
 
     selectSingleTestArch(arch);
@@ -1244,7 +1249,8 @@ function applyReportConfig(recId) {
         config.single_test_decode_pods = rc.decode_pods || 1;
     } else {
         config.single_test_tp = tp;
-        config.single_test_replicas = rc.replicas || (rc.gpus ? Math.floor(rc.gpus / tp) : 1);
+        config.single_test_pipeline_parallelism = (rc.pp && rc.pp > 1) ? rc.pp : null;
+        config.single_test_replicas = rc.replicas || (rc.gpus ? Math.floor(rc.gpus / (tp * (rc.pp && rc.pp > 1 ? rc.pp : 1))) : 1);
     }
 
     // Restore model and image (prefer per-test image over run-level)
@@ -1390,6 +1396,8 @@ function syncSingleTestToConfig() {
         if (el) config.single_test_tp = parseInt(el.value) || 1;
         el = document.getElementById('single-test-replicas');
         if (el) config.single_test_replicas = parseInt(el.value) || 1;
+        el = document.getElementById('single-test-pp');
+        if (el) config.single_test_pipeline_parallelism = Math.max(1, parseInt(el.value) || 1);
         config.single_test_prefill_tp = null;
         config.single_test_decode_tp = null;
         config.single_test_prefill_pods = null;
@@ -1416,16 +1424,18 @@ function updateSingleTestGpuSummary() {
     } else {
         var tpEl = document.getElementById('single-test-tp');
         var repEl = document.getElementById('single-test-replicas');
+        var ppEl = document.getElementById('single-test-pp');
         if (!tpEl || !repEl) return;
         var tp = parseInt(tpEl.value) || 4;
+        var pp = ppEl ? Math.max(1, parseInt(ppEl.value) || 1) : 1;
         var reps = parseInt(repEl.value) || 1;
-        var total = tp * reps;
+        var total = tp * pp * reps;
         var el = document.getElementById('single-test-gpu-summary');
-        if (el) el.textContent = 'Total GPUs: ' + total + ' (' + reps + ' pods × TP' + tp + ')';
+        if (el) el.textContent = 'Total GPUs: ' + total + ' (' + reps + ' pods × TP' + tp + ' × PP' + pp + ')';
     }
 }
 
-['single-test-tp', 'single-test-replicas'].forEach(function(id) {
+['single-test-tp', 'single-test-replicas', 'single-test-pp'].forEach(function(id) {
     var el = document.getElementById(id);
     if (el) el.addEventListener('change', updateSingleTestGpuSummary);
 });

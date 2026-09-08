@@ -67,7 +67,8 @@ class ConfigBuilderMixin:
         osl: int,
         test_id: str,
         use_concurrency: bool = False,
-        concurrency_override: int = None
+        concurrency_override: int = None,
+        pipeline_parallel_size: int = 1
     ) -> TestConfig:
         """Create aggregated architecture test config.
 
@@ -88,13 +89,21 @@ class ConfigBuilderMixin:
         self.log(f"   Memory: gpu_memory_utilization={gpu_memory_utilization:.4f} "
                  f"→ {allocated_gb:.0f}GB allocated, {reserve_gb:.0f}GB reserved for overhead (per GPU)")
 
-        # Multi-node: if TP > gpus_per_node, use LWS multi-pod groups
+        # Multi-node: if TP > gpus_per_node, use LWS multi-pod groups.
+        # PP: one pod per pipeline stage, sitting on its own node with node-local TP.
         gpus_per_node = self.cluster_resources.max_gpus_per_node if self.cluster_resources else 8
-        agg_lws_size = max(1, tp // gpus_per_node) if tp > gpus_per_node else 1
-        agg_gpus_per_pod = min(tp, gpus_per_node) if agg_lws_size > 1 else None
+        if pipeline_parallel_size and pipeline_parallel_size > 1:
+            agg_lws_size = pipeline_parallel_size
+            agg_gpus_per_pod = tp
+            replicas = num_gpus // (tp * pipeline_parallel_size)
+            total_pods = replicas * pipeline_parallel_size
+        else:
+            agg_lws_size = max(1, tp // gpus_per_node) if tp > gpus_per_node else 1
+            agg_gpus_per_pod = min(tp, gpus_per_node) if agg_lws_size > 1 else None
+            replicas = num_gpus // tp
+            total_pods = replicas
 
-        replicas = num_gpus // tp
-        mem, cpu = self._get_pod_resources(tp=tp, total_pods=replicas)
+        mem, cpu = self._get_pod_resources(tp=tp, total_pods=total_pods)
 
         max_num_seqs = self._compute_max_num_seqs(tp)
 
@@ -165,6 +174,7 @@ class ConfigBuilderMixin:
             lws_size=agg_lws_size if agg_lws_size > 1 else None,
             gpus_per_pod=agg_gpus_per_pod,
             nnodes=agg_lws_size if agg_lws_size > 1 else None,
+            pipeline_parallel_size=pipeline_parallel_size if pipeline_parallel_size and pipeline_parallel_size > 1 else None,
 
             memory_request=mem,
             memory_limit=mem,

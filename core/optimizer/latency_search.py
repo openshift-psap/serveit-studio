@@ -129,21 +129,21 @@ class LatencySearchMixin:
         # AND the best-throughput TP if different, since Step 10 maximizes throughput under SLA
         agg_configs_to_test = []
         if self.aggregated_tp:
-            agg_configs_to_test.append((self.aggregated_tp, self.aggregated_gpus, f"aggregated-tp{self.aggregated_tp}"))
+            cur_pp = self.aggregated_pp or 1
+            agg_configs_to_test.append((self.aggregated_tp, cur_pp, self.aggregated_gpus, f"aggregated-tp{self.aggregated_tp}"))
 
             if self.aggregated_search_results:
-                best_tput_tp, _ = max(
+                best_tput_tp, best_tput_pp, _ = max(
                     self.aggregated_search_results,
-                    key=lambda x: x[1].throughput_p90 if x[1].throughput_p90 else 0.0
+                    key=lambda x: x[2].throughput_p90 if x[2].throughput_p90 else 0.0
                 )
-                if best_tput_tp != self.aggregated_tp:
-                    tput_gpus = self.config.total_gpus
-                    replicas = tput_gpus // best_tput_tp
-                    actual_gpus = best_tput_tp * replicas
-                    agg_configs_to_test.append((best_tput_tp, actual_gpus, f"aggregated-tp{best_tput_tp}"))
+                if best_tput_tp != self.aggregated_tp or best_tput_pp != cur_pp:
+                    replicas = self.config.total_gpus // (best_tput_tp * best_tput_pp)
+                    actual_gpus = best_tput_tp * best_tput_pp * replicas
+                    agg_configs_to_test.append((best_tput_tp, best_tput_pp, actual_gpus, f"aggregated-tp{best_tput_tp}"))
                     self.log(f"  Also testing best-throughput aggregated TP={best_tput_tp}", 'info')
 
-        for agg_tp, agg_gpus, agg_arch in agg_configs_to_test:
+        for agg_tp, agg_pp, agg_gpus, agg_arch in agg_configs_to_test:
             if self._should_stop():
                 break
 
@@ -153,8 +153,8 @@ class LatencySearchMixin:
             # Estimate starting concurrency from Step 6 aggregated result
             agg_starting_c = default_c
             agg_step6_result = None
-            for tp_val, res in (self.aggregated_search_results or []):
-                if tp_val == agg_tp:
+            for tp_val, pp_val, res in (self.aggregated_search_results or []):
+                if tp_val == agg_tp and pp_val == agg_pp:
                     agg_step6_result = res
                     break
             if agg_step6_result:
@@ -170,14 +170,15 @@ class LatencySearchMixin:
                              f"→ estimated start c={est}", 'info')
                     agg_starting_c = est
 
-            def create_agg_config(concurrency, test_id, _tp=agg_tp, _gpus=agg_gpus):
+            def create_agg_config(concurrency, test_id, _tp=agg_tp, _pp=agg_pp, _gpus=agg_gpus):
                 cfg = self._create_aggregated_config(
                     tp=_tp,
                     num_gpus=_gpus,
                     isl=self.config.isl,
                     osl=self.config.osl,
                     test_id=test_id,
-                    use_concurrency=True
+                    use_concurrency=True,
+                    pipeline_parallel_size=_pp
                 )
                 cfg.num_users = concurrency
                 cfg.request_rate = concurrency
@@ -592,12 +593,12 @@ class LatencySearchMixin:
                 if result.ttft_p90 and _tput_of(result) > 0:
                     all_candidates.append(('pd', split, result))
         if hasattr(self, 'aggregated_search_results') and self.aggregated_search_results:
-            for tp, result in self.aggregated_search_results:
+            for tp, pp, result in self.aggregated_search_results:
                 if result.ttft_p90 and _tput_of(result) > 0:
-                    all_candidates.append(('agg', tp, result))
+                    all_candidates.append(('agg', (tp, pp), result))
         elif self.aggregated_tp and self.aggregated_result:
             if self.aggregated_result.ttft_p90 and _tput_of(self.aggregated_result) > 0:
-                all_candidates.append(('agg', self.aggregated_tp, self.aggregated_result))
+                all_candidates.append(('agg', (self.aggregated_tp, self.aggregated_pp or 1), self.aggregated_result))
         if hasattr(self, 'ep_results') and self.ep_results:
             for split, result in self.ep_results:
                 if result.ttft_p90 and _tput_of(result) > 0:
@@ -611,7 +612,7 @@ class LatencySearchMixin:
             if c[0] in ('pd', 'ep'):
                 s = c[1]
                 return (c[0], s.prefill_pods, s.prefill_tp, s.decode_pods, s.decode_tp)
-            return ('agg', c[1])
+            return ('agg', c[1][0], c[1][1])
 
         def _add_unique(candidate):
             key = _config_key(candidate)
@@ -623,7 +624,8 @@ class LatencySearchMixin:
             if c[0] in ('pd', 'ep'):
                 return c[1].prefill_pods * c[1].prefill_tp + c[1].decode_pods * c[1].decode_tp
             else:
-                return c[1] * (self.config.total_gpus // c[1]) if c[1] else self.config.total_gpus
+                tp, pp = c[1]
+                return tp * pp * (self.config.total_gpus // (tp * pp)) if tp else self.config.total_gpus
 
         def _add_4_recommendations(pool):
             """Add Best Balanced, Lowest TTFT, Highest Throughput, Most Efficient from a pool."""
@@ -659,8 +661,10 @@ class LatencySearchMixin:
                 arch_label = c[0].upper()
                 self.log(f"  {c[1].prefill_pods}P×TP{c[1].prefill_tp} + {c[1].decode_pods}D×TP{c[1].decode_tp} ({arch_label})", 'info')
             else:
-                replicas = self.config.total_gpus // c[1] if c[1] else self.config.total_gpus
-                self.log(f"  {replicas}×TP{c[1]} (Aggregated)", 'info')
+                tp, pp = c[1]
+                replicas = self.config.total_gpus // (tp * pp) if tp else self.config.total_gpus
+                pp_label = f" xPP={pp}" if pp and pp > 1 else ""
+                self.log(f"  {replicas}×TP{tp}{pp_label} (Aggregated)", 'info')
 
         # --- Sweep PD configs ---
         pd_configs = [(c[1], c[2]) for c in selected if c[0] == 'pd']
@@ -707,26 +711,30 @@ class LatencySearchMixin:
         else:
             total_gpus_agg = self.aggregated_gpus or self.config.total_gpus
             cal_agg_results = []
-            for cfg_idx, (agg_tp, agg_result) in enumerate(agg_configs):
+            for cfg_idx, (agg_cfg, agg_result) in enumerate(agg_configs):
                 if self._should_stop():
                     break
+                agg_tp, agg_pp = agg_cfg
                 agg_tput_mean = _tput_of(agg_result)
-                agg_replicas = total_gpus_agg // agg_tp if agg_tp else total_gpus_agg
-                label = f"{agg_replicas}×TP{agg_tp}"
+                agg_replicas = (total_gpus_agg // (agg_tp * agg_pp)) if agg_tp else total_gpus_agg
+                pp_label = f" xPP={agg_pp}" if agg_pp and agg_pp > 1 else ""
+                label = f"{agg_replicas}×TP{agg_tp}{pp_label}"
                 agg_calibrated = self._compute_calibrated_concurrency(agg_tput_mean, original_concurrency, f'Aggregated ({label})', result=agg_result)
                 if sweep_on:
                     agg_levels = self._generate_sweep_levels(agg_calibrated)
                 else:
                     agg_levels = [agg_calibrated]
 
-                sweep_key = f"agg-tp{agg_tp}"
+                sweep_key = f"agg-tp{agg_tp}-pp{agg_pp}"
                 current_tp = agg_tp
+                current_pp = agg_pp
                 agg_sweep = self._run_sweep_for_arch(
                     sweep_key, agg_calibrated, agg_levels,
                     lambda: self._create_aggregated_config(
                         tp=current_tp, num_gpus=total_gpus_agg,
                         isl=self.config.isl, osl=self.config.osl,
-                        test_id='_placeholder_', use_concurrency=True
+                        test_id='_placeholder_', use_concurrency=True,
+                        pipeline_parallel_size=current_pp
                     ),
                     total_gpus_agg, config_label=label
                 )
@@ -856,7 +864,8 @@ class LatencySearchMixin:
                             isl=self.config.isl,
                             osl=self.config.osl,
                             test_id=epp_test_id,
-                            use_concurrency=True
+                            use_concurrency=True,
+                            pipeline_parallel_size=getattr(self, 'aggregated_pp', None) or 1
                         )
                         cal_conc = cal_agg_results[0]['concurrency'] if cal_agg_results else int(self.config.qps)
                         epp_config.num_users = int(cal_conc)

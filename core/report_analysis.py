@@ -243,8 +243,14 @@ class ReportAnalyzer:
                 'throughput_p90': round(r.throughput_p90, 2) if r.throughput_p90 else None,
                 'gpus': r.total_gpus, 'concurrency': conc,
                 'tp': r.tensor_parallelism if r.architecture == 'aggregated' else ptp,
+                'pp': None,
                 'vllm_tps': vllm_tps,
             }
+            if r.architecture == 'aggregated' and r.test_config_json:
+                try:
+                    entry['pp'] = _cj.loads(r.test_config_json).get('pipeline_parallel_size')
+                except Exception:
+                    pass
             if r.architecture != 'aggregated':
                 entry.update({
                     'prefill_pods': r.prefill_pods, 'decode_pods': r.decode_pods,

@@ -845,28 +845,30 @@ def handle_scan_cluster(data):
             import traceback
             traceback.print_exc()
 
-        # Detect provider and network type
+        # Detect provider and network type from actual cluster resources
         provider_name = 'unknown'
-        network_type = 'nad'  # default
+        network_type = 'eth0'  # default
         dranet_available = False
+        available_networks = _scan_networks(scanner)
 
         try:
             from core.providers import ProviderRegistry
-            from core.web_deployer import NetworkIntegrator
 
             provider = ProviderRegistry.detect_provider(kubectl_runner=scanner.kubectl)
             provider_name = provider.get_provider_id()
-
-            # Detect network type
-            integrator = NetworkIntegrator(provider, scanner.kubectl)
-            selected_network = integrator._select_network_type()
-            network_type = selected_network.value
-            dranet_available = (network_type == 'dra')
-
             log_to_ui(f'   Provider: {provider.get_display_name()}', 'info')
+        except Exception as e:
+            print(f"Could not detect provider: {e}")
+
+        # Real network detection based on cluster resources (DRA/RDMA/NAD/SR-IOV),
+        # not a provider-name heuristic.
+        try:
+            from core.networking import pick_best_network_type
+            network_type = pick_best_network_type(available_networks)
+            dranet_available = (network_type == 'dra')
             log_to_ui(f'   Network type: {network_type.upper()}', 'info')
         except Exception as e:
-            print(f"Could not detect provider/network: {e}")
+            print(f"Could not detect network type: {e}")
 
         # Build per-node NIC details for database and UI
         nodes_detail = []
@@ -996,7 +998,7 @@ def handle_scan_cluster(data):
             'network_type': network_type,
             'dranet_available': dranet_available,
             # All available network options for user selection
-            'available_networks': _scan_networks(scanner),
+            'available_networks': available_networks,
             # LWS volumeClaimTemplates support (v0.8.0+)
             'lws_supports_vct': _check_lws_vct(scanner),
             # Per-node NFS storage classes (nfs-<suffix> matching GPU nodes)
@@ -1351,6 +1353,7 @@ def handle_generate_test_plan(data):
             max_gpus_per_node=max_gpus_per_node,
             cloud_provider=cluster_resources.cloud_provider,
             node_count=cluster_resources.gpu_node_count,
+            has_rdma=cluster_resources.has_rdma,
             kubectl_runner=scanner.kubectl
         )
 
@@ -1627,6 +1630,7 @@ def handle_generate_test_plan(data):
                     'architecture': test.architecture.value,
                     'gpus_required': test.gpus_required,
                     'tp': test.tp,
+                    'pp': getattr(test, 'pipeline_parallelism', 1),
                     'prefill_pods': test.prefill_pods,
                     'decode_pods': test.decode_pods,
                     'ep_pods': test.ep_pods,
@@ -1720,6 +1724,7 @@ def handle_generate_test_plan(data):
                         role=None,
                         tensor_parallelism=test.tp,
                         replicas=1,  # Single replica for initial deployment
+                        pipeline_parallelism=getattr(test, 'pipeline_parallelism', 1) or 1,
                         max_model_len=8192,
                         gpu_memory_utilization=0.95,
                         isl=test_plan.model_requirements.isl,
@@ -1728,7 +1733,8 @@ def handle_generate_test_plan(data):
                         memory_limit=memory_limit,
                         cpu_request=cpu_request_str
                     )
-                    log_to_ui(f'   ✅ Saved {arch.upper()} template (TP={test.tp}, CPU={cpu_request}, Memory={memory_limit})', 'success')
+                    pp_str = f"xPP={test.pipeline_parallelism} " if getattr(test, 'pipeline_parallelism', 1) and test.pipeline_parallelism > 1 else ""
+                    log_to_ui(f'   ✅ Saved {arch.upper()} template (TP={test.tp}{pp_str}, CPU={cpu_request}, Memory={memory_limit})', 'success')
 
                 elif arch == 'pd':
                     # Two templates for PD: prefill and decode
@@ -2317,6 +2323,7 @@ def handle_setup_storage(data):
                 'single_test_architecture': data.get('single_test_architecture'),
                 'single_test_tp': data.get('single_test_tp'),
                 'single_test_replicas': data.get('single_test_replicas'),
+                'single_test_pipeline_parallelism': data.get('single_test_pipeline_parallelism'),
                 'single_test_prefill_tp': data.get('single_test_prefill_tp'),
                 'single_test_decode_tp': data.get('single_test_decode_tp'),
                 'single_test_prefill_pods': data.get('single_test_prefill_pods'),

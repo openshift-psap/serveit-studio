@@ -184,6 +184,7 @@ class RecipeOptimizerConfig:
     single_test_architecture: Optional[str] = None  # 'aggregated', 'pd', 'ep'
     single_test_tp: Optional[int] = None
     single_test_replicas: Optional[int] = None
+    single_test_pipeline_parallelism: Optional[int] = None  # PP for aggregated single test
     single_test_prefill_tp: Optional[int] = None
     single_test_decode_tp: Optional[int] = None
     single_test_prefill_pods: Optional[int] = None

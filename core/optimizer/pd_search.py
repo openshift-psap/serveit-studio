@@ -537,7 +537,75 @@ class PDSearchMixin:
             throughput = result.throughput_mean or result.throughput_p90 or 0.0
 
             self.log(f"    ✅ TTFT p90: {ttft:.1f}ms, Throughput mean: {throughput:.2f} req/s", 'success')
-            self.aggregated_search_results.append((tp, result))
+            self.aggregated_search_results.append((tp, 1, result))
+
+        # Also test pipeline parallelism variants (Aggregated Only, multi-node, no RDMA).
+        # Each pipeline stage sits on its own node with node-local TP; PP capped at node_count.
+        gpu_node_count = self.cluster_resources.gpu_node_count if self.cluster_resources else 1
+        has_rdma = self.cluster_resources.has_rdma if self.cluster_resources else False
+        gpus_per_node = self.cluster_resources.max_gpus_per_node if self.cluster_resources else 8
+        if (self.config.objective == 'aggregated_only' and gpu_node_count >= 2 and not has_rdma):
+            self.log(f"Testing aggregated PP variants (no RDMA, {gpu_node_count} nodes):", 'info')
+            for tp in valid_tp:
+                if self._should_stop():
+                    break
+                if tp > gpus_per_node:
+                    continue  # PP uses node-local TP; multi-node TP already covered above
+                for pp in range(2, min(gpu_node_count, total_gpus // tp) + 1):
+                    replicas = total_gpus // (tp * pp)
+                    if replicas < 1:
+                        continue
+                    actual_gpus = tp * pp * replicas
+
+                    test_id = f"step6-agg-tp{tp}-pp{pp}-{replicas}r"
+                    self.log(f"  PP Test: TP={tp}, PP={pp}, {replicas} replicas ({actual_gpus} GPUs)", 'info')
+
+                    if test_id in self.completed_tests:
+                        row = self.completed_tests[test_id]
+                        result = self._make_test_result_from_db(row)
+                        self.log("    ⏩ Resuming from DB (already completed)", 'info')
+                    else:
+                        test_config = self._create_aggregated_config(
+                            tp=tp,
+                            num_gpus=actual_gpus,
+                            isl=self.config.isl,
+                            osl=self.config.osl,
+                            test_id=test_id,
+                            use_concurrency=True,
+                            pipeline_parallel_size=pp
+                        )
+
+                        result = self.orchestrator.run_test(
+                            test_config,
+                            cleanup=True,
+                            log_callback=lambda msg: self.log(msg, 'info'),
+                            stop_check=self._should_stop
+                        )
+
+                        self.all_test_results.append((test_config, result))
+                        self._save_test_to_database(test_config, result)
+
+                        if self._should_stop():
+                            break
+
+                        if not result or not result.guidellm_success:
+                            self.log("    ⚠️  Test failed — retrying", 'warning')
+                            result = self.orchestrator.run_test(
+                                test_config, cleanup=True,
+                                log_callback=lambda msg: self.log(msg, 'info'),
+                                stop_check=self._should_stop
+                            )
+                            self.all_test_results.append((test_config, result))
+                            self._save_test_to_database(test_config, result)
+                            if not result or not result.guidellm_success:
+                                self.log(f"    ⚠️  PP test {test_id} failed after retries — skipping this config", 'warning')
+                                continue
+
+                    if result and result.guidellm_success:
+                        ttft = result.ttft_p90 or result.ttft_p50 or 1000000.0
+                        throughput = result.throughput_mean or result.throughput_p90 or 0.0
+                        self.log(f"    ✅ TTFT p90: {ttft:.1f}ms, Throughput mean: {throughput:.2f} req/s", 'success')
+                        self.aggregated_search_results.append((tp, pp, result))
 
         # Also test DP (data parallel) variants for MoE models on multi-node clusters
         # Skip if model fits on 1 GPU (TP=1 valid) — independent replicas are simpler and faster
@@ -584,7 +652,7 @@ class PDSearchMixin:
                     ttft = result.ttft_p90 or 1e6
                     tput = result.throughput_mean or result.throughput_p90 or 0
                     self.log(f"    ✅ TTFT p90: {ttft:.1f}ms, Throughput mean: {tput:.2f} req/s", 'success')
-                    self.aggregated_search_results.append((tp, result))
+                    self.aggregated_search_results.append((tp, 1, result))
 
         if not self.aggregated_search_results:
             self.log("❌ No aggregated test results!", 'error')
@@ -592,27 +660,29 @@ class PDSearchMixin:
 
         # Select best based on optimization objective
         if self.config.objective == 'throughput':
-            best_tp, best_result = max(
+            best_tp, best_pp, best_result = max(
                 self.aggregated_search_results,
-                key=lambda x: x[1].throughput_p90 if x[1].throughput_p90 else 0.0
+                key=lambda x: x[2].throughput_p90 if x[2].throughput_p90 else 0.0
             )
             criterion = "highest throughput"
         else:
-            best_tp, best_result = min(
+            best_tp, best_pp, best_result = min(
                 self.aggregated_search_results,
-                key=lambda x: x[1].ttft_p90 if x[1].ttft_p90 else 1000000.0
+                key=lambda x: x[2].ttft_p90 if x[2].ttft_p90 else 1000000.0
             )
             criterion = "lowest TTFT"
 
         self.aggregated_result = best_result
         self.aggregated_tp = best_tp
+        self.aggregated_pp = best_pp if best_pp and best_pp > 1 else None
         self.aggregated_gpus = total_gpus
 
         best_ttft = best_result.ttft_p90 or best_result.ttft_p50 or 0
         best_tput = best_result.throughput_mean or best_result.throughput_p90 or 0
 
+        pp_str = f" xPP={best_pp}" if best_pp and best_pp > 1 else ""
         self.log("", 'info')
-        self.log(f"✅ Best Aggregated: TP={best_tp}, {total_gpus // best_tp} replicas "
+        self.log(f"✅ Best Aggregated: TP={best_tp}{pp_str}, {total_gpus // (best_tp * best_pp) if best_pp and best_pp > 1 else total_gpus // best_tp} replicas "
                  f"(selected by {criterion})", 'success')
         self.log(f"   TTFT p90: {best_ttft:.1f}ms, Throughput mean: {best_tput:.2f} req/s", 'info')
 
@@ -1011,7 +1081,7 @@ class PDSearchMixin:
                 f"{best_split.decode_pods}D×TP{best_split.decode_tp}", 'info')
         self.log(f"  TTFT p90: {best_pd_ttft:.1f}ms, Throughput mean: {best_pd_tput:.2f} req/s", 'info')
         self.log(f"Best Aggregated: TP={self.aggregated_tp}, "
-                f"{self.aggregated_gpus // self.aggregated_tp} replicas", 'info')
+                f"{self.aggregated_gpus // (self.aggregated_tp * (self.aggregated_pp or 1))} replicas", 'info')
         self.log(f"  TTFT p90: {agg_ttft:.1f}ms, Throughput mean: {agg_tput:.2f} req/s", 'info')
         self.log("", 'info')
 

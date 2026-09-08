@@ -393,13 +393,15 @@ class CacheSweepMixin:
                     total_gpus_agg = self.config.total_gpus
                     config_label = sc[4]
                     current_tp = tp
+                    agg_pp = getattr(self, 'aggregated_pp', None) or 1
                     sweep_key = f"aggregated-tp{tp}"
                     sweep = self._run_cache_sweep_for_arch(
                         f"Aggregated-{config_label}", cal_c, levels,
                         lambda: self._create_aggregated_config(
                             tp=current_tp, num_gpus=total_gpus_agg,
                             isl=self.config.isl, osl=self.config.osl,
-                            test_id='_placeholder_', use_concurrency=True
+                            test_id='_placeholder_', use_concurrency=True,
+                            pipeline_parallel_size=agg_pp
                         ),
                         total_gpus_agg, sweep_key=sweep_key
                     )
@@ -439,13 +441,15 @@ class CacheSweepMixin:
                     total_gpus_agg = self.config.total_gpus
                     config_label = sc[4]
                     current_tp = tp
+                    agg_pp = getattr(self, 'aggregated_pp', None) or 1
                     sweep_key = f"aggregated-tp{tp}-user"
                     sweep = self._run_cache_sweep_for_arch(
                         f"Aggregated-{config_label}", user_concurrency, levels,
                         lambda: self._create_aggregated_config(
                             tp=current_tp, num_gpus=total_gpus_agg,
                             isl=self.config.isl, osl=self.config.osl,
-                            test_id='_placeholder_', use_concurrency=True
+                            test_id='_placeholder_', use_concurrency=True,
+                            pipeline_parallel_size=agg_pp
                         ),
                         total_gpus_agg, concurrency_tag='user', sweep_key=sweep_key
                     )

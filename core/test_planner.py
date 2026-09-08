@@ -13,9 +13,6 @@ from dataclasses import dataclass
 from typing import List, Dict, Optional, Tuple
 from core.utils import Architecture, next_power_of_2
 from core.cloud_constraints import CloudProvider, CloudConstraints, validate_pd_config
-from core.providers import ProviderRegistry
-from core.web_deployer import NetworkIntegrator
-from core.networking import NetworkType
 
 logger = logging.getLogger(__name__)
 
@@ -256,6 +253,7 @@ class TestConfiguration:
     workload_osl: Optional[int] = None  # Override OSL for this test
     adaptive_guided: bool = False  # Whether adaptive optimizer will select this test
     decode_tp: Optional[int] = None  # TP for decode pods (PD architecture only)
+    pipeline_parallelism: int = 1  # Pipeline parallelism (Aggregated Only, multi-node)
 
 
 @dataclass
@@ -748,6 +746,7 @@ class TestPlanner:
         max_gpus_per_node: int = 8,
         cloud_provider: CloudProvider = CloudProvider.UNKNOWN,
         node_count: int = 1,
+        has_rdma: bool = False,
         kubectl_runner=None
     ) -> TestPlan:
         """
@@ -796,14 +795,14 @@ class TestPlanner:
         dranet_available = False
         if kubectl_runner and cloud_provider == CloudProvider.IBM_CLOUD:
             try:
-                provider = ProviderRegistry.detect_provider(kubectl_runner=kubectl_runner)
-                integrator = NetworkIntegrator(provider, kubectl_runner)
-                network_type = integrator._select_network_type()
-                dranet_available = (network_type == NetworkType.DRA)
+                from core.networking import scan_available_networks, pick_best_network_type
+                networks = scan_available_networks(kubectl_runner, namespace='serveit')
+                network_type = pick_best_network_type(networks)
+                dranet_available = (network_type == 'dra' )
                 if dranet_available:
                     logger.info("✅ DRANET detected - IBM Cloud pod-per-node constraint bypassed")
                 else:
-                    logger.info("⚠️  NAD network - IBM Cloud pod-per-node constraint applies")
+                    logger.info("⚠️  NAD/eth0 network - IBM Cloud pod-per-node constraint applies")
             except Exception as e:
                 logger.debug(f"Could not detect DRANET: {e}")
                 dranet_available = False
@@ -872,6 +871,33 @@ class TestPlanner:
             )
             step2_tests.append(test)
 
+            # Pipeline parallelism variants (Aggregated Only, multi-node, no RDMA).
+            # PP caps at node_count; TP stays node-local so each stage fits one node.
+            if optimization_goal == 'aggregated_only' and node_count >= 2 and not has_rdma and tp <= max_gpus_per_node:
+                for pp in range(2, node_count + 1):
+                    if tp * pp > max_gpus_to_use:
+                        continue
+                    replicas = max(1, max_gpus_to_use // (tp * pp))
+                    total_gpus = tp * pp * replicas
+
+                    pp_test = TestConfiguration(
+                        test_name=f"Step 2: Decode Pareto - TP={tp}xPP={pp}",
+                        architecture=test_arch,
+                        gpus_required=total_gpus,
+                        tp=tp,
+                        pipeline_parallelism=pp,
+                        prefill_pods=0,
+                        decode_pods=0,
+                        ep_pods=replicas,
+                        description=f"Decode-focused: PP, ISL=1, OSL={osl}, TP={tp}xPP={pp}×{replicas} = {total_gpus} GPUs",
+                        recipe_step=2,
+                        recipe_phase='decode_pareto',
+                        workload_isl=1,
+                        workload_osl=osl,
+                        adaptive_guided=True
+                    )
+                    step2_tests.append(pp_test)
+
         logger.info(f"Step 2 (Decode Pareto): Generated {len(step2_tests)} candidate tests")
         logger.info("  Optimizer will intelligently select tests from this search space")
 
@@ -908,6 +934,32 @@ class TestPlanner:
                     adaptive_guided=True
                 )
                 step3_tests.append(test)
+
+            # Pipeline parallelism variants (Aggregated Only, multi-node, no RDMA)
+            if optimization_goal == 'aggregated_only' and node_count >= 2 and not has_rdma and tp <= max_gpus_per_node:
+                for pp in range(2, node_count + 1):
+                    if tp * pp > max_gpus_to_use:
+                        continue
+                    replicas = max(1, max_gpus_to_use // (tp * pp))
+                    total_gpus = tp * pp * replicas
+
+                    pp_test = TestConfiguration(
+                        test_name=f"Step 3: Prefill Efficiency - TP={tp}xPP={pp}",
+                        architecture=test_arch,
+                        gpus_required=total_gpus,
+                        tp=tp,
+                        pipeline_parallelism=pp,
+                        prefill_pods=0,
+                        decode_pods=0,
+                        ep_pods=replicas,
+                        description=f"Prefill-focused: PP, ISL={isl}, OSL=1, TP={tp}xPP={pp}×{replicas} = {total_gpus} GPUs",
+                        recipe_step=3,
+                        recipe_phase='prefill_efficiency',
+                        workload_isl=isl,
+                        workload_osl=1,
+                        adaptive_guided=True
+                    )
+                    step3_tests.append(pp_test)
 
         logger.info(f"Step 3 (Prefill Efficiency): Generated {len(step3_tests)} candidate tests")
         if step3_tests:

@@ -715,6 +715,7 @@ def update_deployment_template():
             role=data.get('role'),
             tensor_parallelism=data['tensor_parallelism'],
             replicas=data.get('replicas', 1),
+            pipeline_parallelism=data.get('pipeline_parallelism', 1),
             max_model_len=data.get('max_model_len', 8192),
             gpu_memory_utilization=data.get('gpu_memory_utilization', 0.95),
             image=data.get('image', 'vllm/vllm-openai:v0.26.0'),

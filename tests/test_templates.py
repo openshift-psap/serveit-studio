@@ -178,6 +178,18 @@ def test_aggregated_has_rdma_discovery(tm):
     assert 'rdma-script' in result
 
 
+def test_aggregated_pipeline_parallelism_renders(tm):
+    """PP > 1 must emit --pipeline-parallel-size and --nnodes."""
+    vars_pp = {**MOCK_VARS, 'pipeline_parallel_size': 2, 'lws_size': 2, 'nnodes': 2}
+    result = tm.render_template('aggregated/lws.yaml.j2', **vars_pp)
+    assert '--pipeline-parallel-size 2' in result
+    assert '--nnodes 2' in result
+
+    vars_pp1 = {**MOCK_VARS, 'pipeline_parallel_size': 1}
+    result_pp1 = tm.render_template('aggregated/lws.yaml.j2', **vars_pp1)
+    assert '--pipeline-parallel-size' not in result_pp1
+
+
 def test_download_job_local_disk_uses_hostpath(tm):
     """Download job with local_disk_path should use hostPath, not PVC."""
     result = tm.render_template('prereq/model-download-job.yaml.j2',

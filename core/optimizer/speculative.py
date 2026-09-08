@@ -49,6 +49,7 @@ class SpeculativeMixin:
                 osl=self.config.osl,
                 test_id=f"step12-spec-aggregated-{method}",
                 use_concurrency=True,
+                pipeline_parallel_size=getattr(self, 'aggregated_pp', None) or 1
             )
             configs_to_test.append(('aggregated', agg_cfg, self.aggregated_result))
 

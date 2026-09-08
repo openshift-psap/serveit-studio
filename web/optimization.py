@@ -494,6 +494,7 @@ def deploy_and_test_inference(model_name: str, namespace: str, job_name: str = N
             log_to_ui('⚠️ No deployment template found in database. Using defaults.', 'warning', job_name=job_name)
             # Fallback to defaults
             tp = 2
+            pp = 1
             isl = 2000
             osl = 100
             replicas = 1
@@ -506,6 +507,7 @@ def deploy_and_test_inference(model_name: str, namespace: str, job_name: str = N
         else:
             # Use template from database
             tp = template['tensor_parallelism']
+            pp = template.get('pipeline_parallelism', 1) or 1
             isl = template['isl']
             osl = template['osl']
             replicas = template['replicas']
@@ -518,6 +520,8 @@ def deploy_and_test_inference(model_name: str, namespace: str, job_name: str = N
             log_to_ui('   ✅ Template loaded from database', 'success', job_name=job_name)
             log_to_ui('   • Architecture: aggregated', 'info', job_name=job_name)
             log_to_ui(f'   • Tensor Parallelism: TP={tp}', 'info', job_name=job_name)
+            if pp and pp > 1:
+                log_to_ui(f'   • Pipeline Parallelism: PP={pp}', 'info', job_name=job_name)
             log_to_ui(f'   • GPUs per pod: {gpus_per_pod}', 'info', job_name=job_name)
             log_to_ui(f'   • Max model length: {max_model_len} tokens', 'info', job_name=job_name)
             log_to_ui(f'   • GPU memory utilization: {gpu_memory_utilization}', 'info', job_name=job_name)
@@ -534,6 +538,10 @@ def deploy_and_test_inference(model_name: str, namespace: str, job_name: str = N
             num_users=50,
             tensor_parallelism=tp,
             replicas=replicas,
+            pipeline_parallel_size=pp if pp and pp > 1 else None,
+            lws_size=pp if pp and pp > 1 else None,
+            nnodes=pp if pp and pp > 1 else None,
+            gpus_per_pod=gpus_per_pod if pp and pp > 1 else None,
             pvc_name=pvc_name,
             nccl_ib_hca=nccl_ib_hca,
             max_model_len=max_model_len,
@@ -930,12 +938,14 @@ def run_optimization_background(data):
         single_test_architecture = _get('single_test_architecture')
         single_test_tp = _get('single_test_tp')
         single_test_replicas = _get('single_test_replicas')
+        single_test_pipeline_parallelism = _get('single_test_pipeline_parallelism')
         single_test_prefill_tp = _get('single_test_prefill_tp')
         single_test_decode_tp = _get('single_test_decode_tp')
         single_test_prefill_pods = _get('single_test_prefill_pods')
         single_test_decode_pods = _get('single_test_decode_pods')
         if optimization_goal == 'single_test':
             log_to_ui(f"Single test config: arch={single_test_architecture}, tp={single_test_tp}, "
+                      f"pp={single_test_pipeline_parallelism}, "
                       f"prefill_tp={single_test_prefill_tp}, decode_tp={single_test_decode_tp}, "
                       f"prefill_pods={single_test_prefill_pods}, decode_pods={single_test_decode_pods}", 'info')
 
@@ -1204,6 +1214,7 @@ data:
                 single_test_architecture=single_test_architecture,
                 single_test_tp=int(single_test_tp) if single_test_tp else None,
                 single_test_replicas=int(single_test_replicas) if single_test_replicas else None,
+                single_test_pipeline_parallelism=int(single_test_pipeline_parallelism) if single_test_pipeline_parallelism else None,
                 single_test_prefill_tp=int(single_test_prefill_tp) if single_test_prefill_tp else None,
                 single_test_decode_tp=int(single_test_decode_tp) if single_test_decode_tp else None,
                 single_test_prefill_pods=int(single_test_prefill_pods) if single_test_prefill_pods else None,

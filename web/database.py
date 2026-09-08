@@ -106,6 +106,7 @@ def init_db():
             -- Deployment settings
             replicas INTEGER,
             tensor_parallelism INTEGER,
+            pipeline_parallelism INTEGER DEFAULT 1,
             image TEXT,
             pvc_name TEXT,
             namespace TEXT DEFAULT 'serveit',
@@ -298,6 +299,12 @@ def init_db():
     # quality: 'ok' (default), 'warning' (1-3% errors), 'discard' (>3% errors)
     try:
         cursor.execute("ALTER TABLE test_configurations ADD COLUMN quality TEXT DEFAULT 'ok'")
+    except sqlite3.OperationalError:
+        pass
+
+    # Migration: pipeline parallelism column for deployment_templates
+    try:
+        cursor.execute('ALTER TABLE deployment_templates ADD COLUMN pipeline_parallelism INTEGER DEFAULT 1')
     except sqlite3.OperationalError:
         pass
 
@@ -535,6 +542,7 @@ def save_deployment_template(
     role: Optional[str],
     tensor_parallelism: int,
     replicas: int = 1,
+    pipeline_parallelism: int = 1,
     max_model_len: int = 8192,
     gpu_memory_utilization: float = 0.95,
     image: str = 'vllm/vllm-openai:v0.26.0',
@@ -599,7 +607,7 @@ def save_deployment_template(
             cursor.execute('''
                 INSERT INTO deployment_templates (
                 model_name, architecture, role,
-                replicas, tensor_parallelism, image, pvc_name, namespace,
+                replicas, tensor_parallelism, pipeline_parallelism, image, pvc_name, namespace,
                 port, trust_remote_code, disable_log_requests, disable_uvicorn_access_log,
                 max_model_len, gpu_memory_utilization,
                 max_num_batched_tokens,
@@ -607,10 +615,10 @@ def save_deployment_template(
                 gpus_per_pod, memory_limit, memory_request, cpu_request,
                 isl, osl,
                 created_at, is_active
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         ''', (
             model_name, architecture, role,
-            replicas, tensor_parallelism, image, pvc_name, namespace,
+            replicas, tensor_parallelism, pipeline_parallelism, image, pvc_name, namespace,
             8000, 1, 1, 1,
             max_model_len, gpu_memory_utilization,
             max_num_batched_tokens,

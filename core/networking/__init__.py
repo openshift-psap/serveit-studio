@@ -397,6 +397,32 @@ def scan_available_networks(kubectl_runner, namespace: str = None) -> List[Dict[
     return networks
 
 
+# Priority order for auto-selecting the best available network type.
+# Mirrors OptimizerMixin._detect_network_type (core/optimizer/pipeline.py).
+_AUTO_NETWORK_PRIORITY = ('dra', 'shared_device', 'sriov_multinic', 'nad', 'nmstate', 'eth0')
+
+
+def pick_best_network_type(networks: List[Dict[str, Any]]) -> str:
+    """Pick the best actually-available network type from scan_available_networks().
+
+    Returns the first available network id in preference order, falling back to
+    'eth0'. This reflects what the cluster truly supports (DRA device classes,
+    RDMA resources, NAD/Multus, SR-IOV), not a provider-name heuristic.
+
+    Args:
+        networks: Output of scan_available_networks().
+
+    Returns:
+        One of 'dra', 'shared_device', 'sriov_multinic', 'nad', 'nmstate', 'eth0'.
+    """
+    by_id = {n.get('id'): n for n in networks}
+    for net_id in _AUTO_NETWORK_PRIORITY:
+        net = by_id.get(net_id)
+        if net and net.get('available'):
+            return net_id
+    return 'eth0'
+
+
 __all__ = [
     'BaseNetworkCreator',
     'NetworkConfig',
@@ -409,4 +435,5 @@ __all__ = [
     'detect_rdma_device_resources',
     'compute_network_values',
     'scan_available_networks',
+    'pick_best_network_type',
 ]

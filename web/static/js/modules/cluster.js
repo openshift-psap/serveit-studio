@@ -225,6 +225,7 @@ document.getElementById('start-optimization').addEventListener('click', () => {
         single_test_architecture: config.single_test_architecture || null,
         single_test_tp: config.single_test_tp || (document.getElementById('single-test-tp') ? parseInt(document.getElementById('single-test-tp').value) || null : null),
         single_test_replicas: config.single_test_replicas || (document.getElementById('single-test-replicas') ? parseInt(document.getElementById('single-test-replicas').value) || null : null),
+        single_test_pipeline_parallelism: config.single_test_pipeline_parallelism || (document.getElementById('single-test-pp') && config.goal === 'single_test' ? parseInt(document.getElementById('single-test-pp').value) || null : null),
         single_test_prefill_tp: config.single_test_prefill_tp || (document.getElementById('single-test-prefill-tp') ? parseInt(document.getElementById('single-test-prefill-tp').value) || null : null),
         single_test_decode_tp: config.single_test_decode_tp || (document.getElementById('single-test-decode-tp') ? parseInt(document.getElementById('single-test-decode-tp').value) || null : null),
         single_test_prefill_pods: config.single_test_prefill_pods || (document.getElementById('single-test-prefill-pods') ? parseInt(document.getElementById('single-test-prefill-pods').value) || null : null),
