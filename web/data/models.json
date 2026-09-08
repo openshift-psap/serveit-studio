@@ -432,6 +432,24 @@
     "category": "Large (32B-70B)"
   },
   {
+    "id": "RedHatAI/Qwen3.8-27B",
+    "name": "Qwen 3.8 27B",
+    "description": "27B model with native precision",
+    "category": "Large (32B-70B)"
+  },
+  {
+    "id": "RedHatAI/Qwen3.8-27B-INT4",
+    "name": "Qwen 3.8 27B INT4",
+    "description": "27B model with INT4 quantization",
+    "category": "Large (32B-70B)"
+  },
+  {
+    "id": "RedHatAI/Qwen3.8-27B-NVFP4",
+    "name": "Qwen 3.8 27B NVFP4",
+    "description": "27B model with NVIDIA FP4 quantization",
+    "category": "Large (32B-70B)"
+  },
+  {
     "id": "RedHatAI/Apertus-70B-Instruct-2509-FP8-dynamic",
     "name": "Apertus 70B FP8 Dynamic",
     "description": "Apertus 70B instruction model",
