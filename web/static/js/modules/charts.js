@@ -2175,12 +2175,12 @@ function _renderChartsImpl(data, runId, content) {
                 yaxis: { title: 'KV Cache %', side: 'left', rangemode: 'tozero', gridcolor: '#e2e8f0' },
                 yaxis2: { title: 'Count / Rate', overlaying: 'y', side: 'right', rangemode: 'tozero' },
                 legend: { x: 0, y: 1.15, orientation: 'h' },
-                margin: { t: 40, b: 180, l: 60, r: 60 },
+                margin: { t: 40, b: 320, l: 60, r: 60 },
                 plot_bgcolor: '#f8fafc', paper_bgcolor: '#fff',
                 hovermode: 'x unified',
                 height: 850,
                 annotations: tickAnns,
-            }, { responsive: true, toImageButtonOptions: { format: 'png', height: 1100, width: 1600, scale: 2 } });
+            }, { responsive: true, toImageButtonOptions: { format: 'png', height: 1400, width: 1600, scale: 2 } });
         });
 
         // --- Sweep Results Table ---
