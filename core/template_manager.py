@@ -122,6 +122,9 @@ class TemplateManager:
         vars_dict['data_parallelism'] = getattr(config, 'data_parallel_size', None) or 1
         vars_dict['data_parallel_size_local'] = getattr(config, 'data_parallel_size_local', None) or vars_dict['data_parallelism']
 
+        # Pipeline parallelism: normalize None -> 0 so templates can compare safely
+        vars_dict['pipeline_parallel_size'] = getattr(config, 'pipeline_parallel_size', None) or 0
+
         # Routing proxy image — derive from scheduler image
         sched_image = vars_dict.get('scheduler_image') or getattr(config, 'scheduler_image', '') or 'ghcr.io/llm-d/llm-d-router-endpoint-picker@sha256:873179822ab0895a37ea09f2112ca39a6ae50a26612561c8bfad7f9a8c5af6f5'
         # Extract tag; digest refs (image@sha256:...) have no usable tag — fall back to 'main'

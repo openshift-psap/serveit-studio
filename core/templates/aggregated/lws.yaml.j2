@@ -193,7 +193,7 @@ spec:
                   --data-parallel-size-local {{ data_parallel_size_local | default(data_parallelism) }} \
                   --data-parallel-multi-port-external-lb \
                   --data-parallel-start-rank $(( ${LWS_WORKER_INDEX:-0} * {{ data_parallel_size_local | default(data_parallelism) }} )) \
-{% endif %}{% if pipeline_parallel_size | default(0) > 1 %}                  --pipeline-parallel-size {{ pipeline_parallel_size }} \
+{% endif %}{% if (pipeline_parallel_size or 0) > 1 %}                  --pipeline-parallel-size {{ pipeline_parallel_size }} \
 {% endif %}{% if block_size %}                  --block-size {{ block_size }} \
 {% endif %}
 {% if max_model_len %}                  --max-model-len {{ max_model_len }} \
@@ -501,7 +501,7 @@ spec:
                   --nnodes {{ lws_size }} \
                   --node-rank ${LWS_WORKER_INDEX:-0} \
                   --master-addr ${LWS_LEADER_ADDRESS} \
-{% if pipeline_parallel_size | default(0) > 1 %}                  --pipeline-parallel-size {{ pipeline_parallel_size }} \
+{% if (pipeline_parallel_size or 0) > 1 %}                  --pipeline-parallel-size {{ pipeline_parallel_size }} \
 {% endif %}{% if block_size %}                  --block-size {{ block_size }} \
 {% endif %}
 {% if max_model_len %}                  --max-model-len {{ max_model_len }} \
