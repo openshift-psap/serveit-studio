@@ -1423,6 +1423,7 @@ class ReportAnalyzer:
                 'ttft_p90': round(r.ttft_p90, 2),
                 'ttft_p95': round(r.ttft_p95, 2) if r.ttft_p95 else None,
                 'ttft_p99': round(r.ttft_p99, 2) if r.ttft_p99 else None,
+                'e2e_latency_p90': round(r.e2e_latency_p90 * 1000, 1) if getattr(r, 'e2e_latency_p90', None) else None,
                 'itl_p90': round(r.itl_p90, 2) if r.itl_p90 else None,
                 'itl_p95': round(r.itl_p95, 2) if r.itl_p95 else None,
                 'itl_p99': round(r.itl_p99, 2) if r.itl_p99 else None,
