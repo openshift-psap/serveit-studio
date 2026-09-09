@@ -984,7 +984,7 @@ function _renderChartsImpl(data, runId, content) {
     // --- All results table ---
     if (coreResults.length) {
         var allCfgTableId = 'all-configs-table-' + runId;
-        html += '<div class="chart-card"><div class="chart-card-header">Complete Test Results</div>';
+        html += '<div class="chart-card"><div class="chart-card-header">Latency and Efficiency</div>';
         html += '<div style="padding:12px 20px 4px; color:#1e293b; font-size:0.95em;">Complete results from every test that ran successfully. <strong>Green highlighted rows</strong> are Pareto optimal (the best trade-offs). Click any column header to sort.</div>';
         html += '<div class="chart-card-body" style="padding:0;">';
         html += '<table class="results-table" id="' + allCfgTableId + '"><tr>';
@@ -1014,7 +1014,7 @@ function _renderChartsImpl(data, runId, content) {
             const na = 'N/A';
             const eppBadge = (rTestId && rTestId.startsWith('step11-epp-')) ? ' <span style="background:#7c3aed;color:white;font-size:0.65em;padding:1px 5px;border-radius:3px;">EPP TUNED</span>' : '';
             const tputMeanVal = r.throughput_mean ?? r.throughput_p90 ?? na;
-            const e2eVal = r.e2e_p90 != null ? Math.round(r.e2e_p90) : na;
+            const e2eVal = r.e2e_latency_p90 != null ? Math.round(r.e2e_latency_p90) : na;
             html += `<tr${cls}><td>${r.config_name}${eppBadge}</td><td>${r.architecture}</td><td data-val="${r.ttft_p90}">${r.ttft_p90}</td><td data-val="${e2eVal === na ? '' : e2eVal}">${e2eVal}${e2eVal !== na ? ' ms' : ''}</td><td data-val="${r.ttft_p95 ?? ''}">${r.ttft_p95 ?? na}</td><td data-val="${r.ttft_p99 ?? ''}">${r.ttft_p99 ?? na}</td><td data-val="${tputMeanVal}">${tputMeanVal}</td><td data-val="${r.itl_p90 ?? ''}">${r.itl_p90 ?? na}</td><td data-val="${r.gpus}">${r.gpus}</td><td data-val="${r.efficiency}">${r.efficiency}</td><td>${manifestLinks}</td></tr>`;
         });
         html += '</table></div></div>';
