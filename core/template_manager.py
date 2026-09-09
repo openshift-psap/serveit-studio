@@ -7,6 +7,7 @@ Generates YAML manifests for Aggregated, PD, and EP architectures.
 
 import json
 import logging
+import re
 from pathlib import Path
 from typing import Dict, List, Optional
 from dataclasses import asdict
@@ -21,6 +22,39 @@ logging.basicConfig(
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
 )
 logger = logging.getLogger(__name__)
+
+
+def resolve_vllm_log_request_flag(image: str, disabled: Optional[bool]) -> str:
+    """
+    Select the vLLM access-log flag that matches the runtime image.
+
+    Upstream vLLM deprecated/removed ``--disable-log-requests`` (gone by ~v0.13);
+    newer upstream and llm-d images both accept ``--disable-uvicorn-access-log``.
+
+    Args:
+        image: Container image reference (e.g. ``vllm/vllm-openai:v0.11.0``).
+        disabled: Whether request logging should be suppressed.
+
+    Returns:
+        The exact CLI flag to pass, or ``''`` when request logging is enabled.
+    """
+    if not disabled:
+        return ''
+
+    if 'llm-d' in image:
+        return '--disable-uvicorn-access-log'
+
+    # Upstream vllm/vllm-openai — parse the version tag
+    m = re.search(r':v?(\d+)\.(\d+)', image)
+    if m:
+        major, minor = int(m.group(1)), int(m.group(2))
+        if (major, minor) >= (0, 13):
+            return '--disable-uvicorn-access-log'
+        return '--disable-log-requests'
+
+    # No parseable tag — upstream `--disable-log-requests` is only valid on old
+    # images; prefer the flag accepted by current upstream AND llm-d images.
+    return '--disable-uvicorn-access-log'
 
 
 class TemplateManager:
@@ -124,6 +158,12 @@ class TemplateManager:
 
         # Pipeline parallelism: normalize None -> 0 so templates can compare safely
         vars_dict['pipeline_parallel_size'] = getattr(config, 'pipeline_parallel_size', None) or 0
+
+        # vLLM access-log flag — version-aware across upstream vllm AND llm-d images
+        vars_dict['vllm_log_request_flag'] = resolve_vllm_log_request_flag(
+            vars_dict.get('image') or '',
+            vars_dict.get('disable_log_requests'),
+        )
 
         # Routing proxy image — derive from scheduler image
         sched_image = vars_dict.get('scheduler_image') or getattr(config, 'scheduler_image', '') or 'ghcr.io/llm-d/llm-d-router-endpoint-picker@sha256:873179822ab0895a37ea09f2112ca39a6ae50a26612561c8bfad7f9a8c5af6f5'

@@ -21,6 +21,7 @@ from .networking import (
     NADNetworkCreator, DRANetworkCreator, SharedDeviceNetworkCreator,
     compute_network_values,
 )
+from .template_manager import resolve_vllm_log_request_flag
 
 logger = logging.getLogger(__name__)
 
@@ -726,6 +727,7 @@ class PDDeploymentGenerator(BaseDeploymentGenerator):
     def _build_vllm_command(self, config: DeploymentConfig, role: str) -> str:
         tp = config.prefill_tp if role == 'prefill' else config.decode_tp
         kv_role = "kv_producer" if role == 'prefill' else "kv_consumer"
+        log_flag = resolve_vllm_log_request_flag(config.image, True)
 
         cmd = f"""
 ulimit -l unlimited || true
@@ -749,7 +751,7 @@ vllm serve {config.model_name} \\
   --tensor-parallel-size {tp} \\
   --block-size 128 \\
   --kv-transfer-config '{{"kv_connector":"{config.kv_connector}", "kv_role":"{kv_role}"}}' \\
-  --disable-log-requests \\
+  {log_flag} \\
   --gpu-memory-utilization {config.gpu_memory_utilization} \\
   --trust-remote-code || sleep infinity
 """

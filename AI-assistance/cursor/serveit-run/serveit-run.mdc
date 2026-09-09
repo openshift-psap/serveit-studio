@@ -1020,7 +1020,7 @@ Key notes for Gemma 4:
 - **Transformers patch**: v0.9.0-rc.2 and v0.27.1 images include transformers 5.15 which raises `AmbiguousGlobalPerLayerAttributeError` on Gemma 4. The templates include a runtime patch (`spc_t` SELinux + sed on disk). Not needed for v0.8.1 (transformers 5.12.1).
 - **DRA on Fire-athena**: `composite-gpu-nic-pair` device class fails with `pci-0000-e9-00-0` NIC mapping error. Use `gpu.nvidia.com` (GPU-only, no NIC pairing) instead.
 - **SELinux on OpenShift**: Workload pod needs `spc_t` SELinux type and `fsGroup: 0` to access the PVC across pod restarts (MCS label mismatch). Template handles this automatically.
-- **`--disable-log-requests` vs `--disable-uvicorn-access-log`**: llm-d images use `--disable-uvicorn-access-log`, upstream vLLM uses `--disable-log-requests`. Template detects image and uses the correct flag.
+- **`--disable-log-requests` vs `--disable-uvicorn-access-log`**: llm-d images and upstream vLLM ≥ v0.13 use `--disable-uvicorn-access-log`; old upstream vLLM (< v0.13) uses `--disable-log-requests`. `template_manager` detects image + version and picks the correct flag automatically.
 
 ### Verify configuration was saved
 

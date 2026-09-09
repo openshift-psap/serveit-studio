@@ -227,9 +227,8 @@ spec:
                 /tmp/_vllm_patched serve {{ model_name }} \
                   --port 8200 \
                   --trust-remote-code \
-{% if 'llm-d' in image %}                  --disable-uvicorn-access-log \
-{% else %}{% if disable_log_requests %}                  --disable-log-requests \
-{% endif %}{% endif %}                  --tensor-parallel-size ${TP_SIZE} \
+{% if vllm_log_request_flag %}                  {{ vllm_log_request_flag }} \
+{% endif %}                  --tensor-parallel-size ${TP_SIZE} \
 {% if lws_size | default(1) > 1 %}                  --nnodes {{ lws_size }} \
                   --node-rank ${LWS_WORKER_INDEX:-0} \
                   --master-addr ${LWS_LEADER_ADDRESS} \
