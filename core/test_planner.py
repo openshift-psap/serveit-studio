@@ -825,7 +825,14 @@ class TestPlanner:
         # ==========================================
         # Route to correct architecture based on optimization goal
         # ==========================================
-        if optimization_goal == 'ttft':
+        # Without RDMA, PD and EP are not valid (KV transfer / expert routing
+        # fall back to slow eth0) — only aggregated configs are tested,
+        # regardless of the optimization goal.
+        if not has_rdma:
+            logger.info("No RDMA detected → Aggregated architecture only (PD/EP require RDMA)")
+            _primary_architecture = Architecture.AGGREGATED
+            _baseline_architecture = None
+        elif optimization_goal == 'ttft':
             logger.info("TTFT optimization → Using PD (Prefill/Decode) architecture as primary")
             _primary_architecture = Architecture.PD
             _baseline_architecture = Architecture.AGGREGATED
@@ -843,17 +850,23 @@ class TestPlanner:
         # ==========================================
         step2_tests = []
 
-        # For TTFT/PD: Skip aggregated decode tests, go straight to PD
-        if optimization_goal == 'ttft':
+        # For TTFT/PD: Skip aggregated decode tests, go straight to PD.
+        # When no RDMA, PD isn't valid — run aggregated instead.
+        if optimization_goal == 'ttft' and has_rdma:
             # PD decode-focused tests will be in Step 7
             logger.info("Step 2: Skipping aggregated decode tests (using PD instead)")
         else:
-            # For throughput/balanced: Use aggregated or EP
-            test_arch = Architecture.EP if optimization_goal == 'throughput' else Architecture.AGGREGATED
+            # For throughput/balanced: Use aggregated or EP.
+            # Without RDMA, EP isn't valid — always aggregated.
+            if not has_rdma:
+                test_arch = Architecture.AGGREGATED
+            else:
+                test_arch = Architecture.EP if optimization_goal == 'throughput' else Architecture.AGGREGATED
             for tp in tp_options:
                 replicas = max(1, max_gpus_to_use // tp)
                 total_gpus = tp * replicas
 
+                arch_name = 'aggregated' if test_arch == Architecture.AGGREGATED else 'EP'
                 test = TestConfiguration(
                     test_name=f"Step 2: Decode Pareto - TP={tp}",
                     architecture=test_arch,
@@ -862,7 +875,7 @@ class TestPlanner:
                 prefill_pods=0,
                 decode_pods=0,
                 ep_pods=replicas,  # In aggregated mode, ep_pods = replicas
-                description=f"Decode-focused: aggregated, ISL=1, OSL={osl}, TP={tp}×{replicas} = {total_gpus} GPUs",
+                description=f"Decode-focused: {arch_name}, ISL=1, OSL={osl}, TP={tp}×{replicas} = {total_gpus} GPUs",
                 recipe_step=2,
                 recipe_phase='decode_pareto',
                 workload_isl=1,  # Minimal prefill
@@ -871,9 +884,11 @@ class TestPlanner:
             )
             step2_tests.append(test)
 
-            # Pipeline parallelism variants (Aggregated Only, multi-node, no RDMA).
-            # PP caps at node_count; TP stays node-local so each stage fits one node.
-            if optimization_goal == 'aggregated_only' and node_count >= 2 and not has_rdma and tp <= max_gpus_per_node:
+            # Pipeline parallelism variants (multi-node, no RDMA).
+            # Without RDMA, multi-node TP falls back to slow eth0, so multi-node
+            # scaling is done via PP. PP caps at node_count; TP stays node-local
+            # so each stage fits one node. Applies to all optimization goals.
+            if node_count >= 2 and not has_rdma and tp <= max_gpus_per_node:
                 for pp in range(2, node_count + 1):
                     if tp * pp > max_gpus_to_use:
                         continue
@@ -906,13 +921,18 @@ class TestPlanner:
         # ==========================================
         step3_tests = []
 
-        # For TTFT/PD: Skip aggregated prefill tests, go straight to PD
-        if optimization_goal == 'ttft':
+        # For TTFT/PD: Skip aggregated prefill tests, go straight to PD.
+        # When no RDMA, PD isn't valid — run aggregated instead.
+        if optimization_goal == 'ttft' and has_rdma:
             # PD prefill-focused tests will be in Step 7
             logger.info("Step 3: Skipping aggregated prefill tests (using PD instead)")
         else:
-            # For throughput/balanced: Use aggregated or EP
-            test_arch = Architecture.EP if optimization_goal == 'throughput' else Architecture.AGGREGATED
+            # For throughput/balanced: Use aggregated or EP.
+            # Without RDMA, EP isn't valid — always aggregated.
+            if not has_rdma:
+                test_arch = Architecture.AGGREGATED
+            else:
+                test_arch = Architecture.EP if optimization_goal == 'throughput' else Architecture.AGGREGATED
             for tp in tp_options:
                 replicas = max(1, max_gpus_to_use // tp)
                 total_gpus = tp * replicas
@@ -935,8 +955,11 @@ class TestPlanner:
                 )
                 step3_tests.append(test)
 
-            # Pipeline parallelism variants (Aggregated Only, multi-node, no RDMA)
-            if optimization_goal == 'aggregated_only' and node_count >= 2 and not has_rdma and tp <= max_gpus_per_node:
+            # Pipeline parallelism variants (multi-node, no RDMA).
+            # Without RDMA, multi-node TP falls back to slow eth0, so multi-node
+            # scaling is done via PP. PP caps at node_count; TP stays node-local
+            # so each stage fits one node. Applies to all optimization goals.
+            if node_count >= 2 and not has_rdma and tp <= max_gpus_per_node:
                 for pp in range(2, node_count + 1):
                     if tp * pp > max_gpus_to_use:
                         continue
@@ -992,7 +1015,7 @@ class TestPlanner:
         # ==========================================
         step7_tests = []
 
-        if optimization_goal == 'ttft':
+        if optimization_goal == 'ttft' and has_rdma:
             # For TTFT: Generate PD tests as primary optimization target
             logger.info("Step 7: Generating PD tests for TTFT optimization")
 

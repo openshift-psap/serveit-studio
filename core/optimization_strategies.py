@@ -212,8 +212,11 @@ class ThroughputStrategy(OptimizationStrategy):
 
         total_gpus = self.opt.config.total_gpus
         valid_tp = self.opt._get_valid_tp_options()
-        # Add multi-node TP options for EP (e.g., TP16 across 2 nodes)
-        if self.opt.cluster_resources and self.opt.cluster_resources.gpu_node_count >= 2:
+        # Add multi-node TP options for EP (e.g., TP16 across 2 nodes).
+        # Only when RDMA is available — without RDMA, multi-node TP uses slow
+        # eth0 and PP is preferred for multi-node scaling.
+        has_rdma = bool(self.opt.cluster_resources and self.opt.cluster_resources.has_rdma)
+        if has_rdma and self.opt.cluster_resources and self.opt.cluster_resources.gpu_node_count >= 2:
             multi_tp = self.opt.cluster_resources.get_multi_node_tp_options()
             for tp in multi_tp:
                 if tp <= total_gpus and tp not in valid_tp:
@@ -926,6 +929,16 @@ class SingleTestStrategy(OptimizationStrategy):
 
         cfg = self.opt.config
         arch = cfg.single_test_architecture or 'aggregated'
+
+        # Without RDMA, PD and EP are not valid (KV transfer / expert routing
+        # fall back to slow eth0) — only aggregated configs are tested.
+        has_rdma = bool(self.opt.cluster_resources and self.opt.cluster_resources.has_rdma)
+        if not has_rdma and arch in ('pd', 'ep'):
+            self.opt.log(f"⛔ No RDMA detected — architecture '{arch}' is not valid "
+                         f"without RDMA; forcing aggregated instead", 'warning')
+            arch = 'aggregated'
+            cfg.single_test_architecture = 'aggregated'
+
         self.opt.log(f"Architecture: {arch}", 'info')
 
         if arch == 'aggregated':

@@ -390,6 +390,15 @@ class RecipeOptimizer(
             'ep_only': EPOnlyStrategy,
             'single_test': SingleTestStrategy,
         }
+        # Without RDMA, PD and EP are not valid: KV transfer (NIXL) and expert
+        # routing fall back to slow eth0. Only aggregated configs are tested.
+        # single_test is preserved (SingleTestStrategy guards pd/ep itself);
+        # aggregated_only already maps to AggregatedOnlyStrategy.
+        if (self.cluster_resources and not self.cluster_resources.has_rdma
+                and self.config.objective not in ('single_test', 'aggregated_only')):
+            self.log("No RDMA detected — forcing AggregatedOnly strategy "
+                     "(PD/EP require RDMA; only aggregated configs are valid)", 'warning')
+            return AggregatedOnlyStrategy(self)
         cls = strategies.get(self.config.objective, TTFTStrategy)
         self.log(f"Using {cls.__name__} for objective '{self.config.objective}'", 'info')
         return cls(self)
@@ -1785,6 +1794,10 @@ spec:
         Returns powers of 2 up to max GPUs per node, filtered to exclude:
         - TP values too small to fit the model in VRAM
         - TP values that break FP8 block quantization (partition < block_n=128)
+
+        Multi-node TP values (TP spanning 2+ nodes) are included only when the
+        cluster has RDMA; without RDMA, multi-node TP falls back to the slow
+        eth0 path, so PP is preferred for multi-node scaling.
         """
         if role == 'prefill':
             gmu = 0.80
@@ -1793,7 +1806,13 @@ spec:
         else:
             gmu = 0.90
         if self.cluster_resources:
-            tp_options = self.cluster_resources.get_tp_options() + self.cluster_resources.get_multi_node_tp_options()
+            tp_options = self.cluster_resources.get_tp_options()
+            multi_node_tp = self.cluster_resources.get_multi_node_tp_options()
+            if multi_node_tp and not self.cluster_resources.has_rdma:
+                self.log(f"  Skipping multi-node TP options {multi_node_tp} — no RDMA "
+                         f"(multi-node TP on eth0; use PP for multi-node)", 'warning')
+                multi_node_tp = []
+            tp_options = tp_options + multi_node_tp
             seq_len = self.config.isl + self.config.osl if hasattr(self.config, 'isl') else 0
             if seq_len < 4000:
                 min_conc = 4
