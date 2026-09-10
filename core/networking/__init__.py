@@ -323,6 +323,10 @@ def scan_available_networks(kubectl_runner, namespace: str = None) -> List[Dict[
             for item in json.loads(nads_r.stdout).get('items', []):
                 nad_name = item['metadata']['name']
                 nad_ns = item['metadata']['namespace']
+                # OCP ships a default NAD (openshift-ovn-kubernetes/default) that
+                # just describes the pod network — it is not a usable RDMA path.
+                if nad_name == 'default' and nad_ns == 'openshift-ovn-kubernetes':
+                    continue
                 nad_is_rdma = _nad_is_rdma(item, cluster_rdma=shared_available)
                 if nad_name not in seen:
                     available_nads.append({
@@ -361,6 +365,12 @@ def scan_available_networks(kubectl_runner, namespace: str = None) -> List[Dict[
         except Exception:
             pass
 
+    # A NAD (Multus) option is only usable if there is actually something to
+    # attach: a real NAD in the namespace, configured SR-IOV policies, or
+    # cluster-level RDMA resources (rdma/* or nvidia.com/roce). Merely having
+    # Multus installed (default on all OpenShift) does not make NAD usable.
+    nad_usable = (bool(available_nads) or bool(sriov_policies) or shared_available)
+
     # Build network list
     networks = [
         {'id': 'eth0', 'name': 'Pod Network (TCP)',
@@ -368,7 +378,8 @@ def scan_available_networks(kubectl_runner, namespace: str = None) -> List[Dict[
          'available': True, 'reason': '', 'rdma': False},
         {'id': 'nad', 'name': 'NAD (Multus CNI)',
          'description': 'Network Attachment Definitions via Multus. Supports SR-IOV, host-device, and macvlan plugins for RDMA.',
-         'available': nad_available, 'reason': '' if nad_available else 'Multus CNI not installed',
+         'available': nad_available and nad_usable, 'reason': '' if (nad_available and nad_usable) else (
+             'No usable NAD/SR-IOV/RDMA resources found' if nad_available else 'Multus CNI not installed'),
          'rdma': any(n.get('is_rdma') for n in available_nads) if available_nads else False},
         {'id': 'dra', 'name': 'DRA (DRANET)',
          'description': 'Dynamic Resource Allocation with GPU+NIC PCIe affinity.',

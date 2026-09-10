@@ -1214,17 +1214,49 @@ class RecipeOptimizer(
             self.log("Network: RDMA detected (shared_device mode)")
             return 'shared_device'
 
-        # NAD (Multus CNI)
+        # NAD (Multus CNI): only usable if a real NAD exists, SR-IOV policies
+        # are configured, or the cluster advertises RDMA resources. Multus being
+        # installed (default on OpenShift) alone is not sufficient.
         try:
             r = self.scanner.kubectl.run(
                 ['api-resources', '--api-group=k8s.cni.cncf.io'], check=False)
-            if r.returncode == 0 and 'network-attachment-definitions' in r.stdout:
-                self.log("Network: NAD (Multus) detected")
-                return 'nad'
+            multus_present = r.returncode == 0 and 'network-attachment-definitions' in r.stdout
         except Exception:
-            pass
+            multus_present = False
 
-        self.log("Network: No RDMA or NAD detected, using pod network (eth0)")
+        if multus_present:
+            usable = False
+            try:
+                r = self.scanner.kubectl.run(
+                    ['get', 'net-attach-def', '-n', self.config.namespace,
+                     '-o', 'json'], check=False)
+                if r.returncode == 0 and r.stdout.strip():
+                    import json as _nad_json
+                    for item in _nad_json.loads(r.stdout).get('items', []):
+                        ns = item.get('metadata', {}).get('namespace', '')
+                        name = item.get('metadata', {}).get('name', '')
+                        if name == 'default' and ns == 'openshift-ovn-kubernetes':
+                            continue
+                        usable = True
+                        break
+            except Exception:
+                usable = False
+            if not usable:
+                try:
+                    r = self.scanner.kubectl.run(
+                        ['get', 'sriovnetworknodepolicies', '-n', 'openshift-sriov-network-operator',
+                         '-o', 'jsonpath={.items[*].metadata.name}'], check=False)
+                    if r.returncode == 0 and r.stdout.strip():
+                        usable = True
+                except Exception:
+                    pass
+            if not usable and self.cluster_resources and self.cluster_resources.has_rdma:
+                usable = True
+            if usable:
+                self.log("Network: NAD (Multus) detected with usable NAD/SR-IOV/RDMA resources")
+                return 'nad'
+
+        self.log("Network: No RDMA or usable NAD detected, using pod network (eth0)")
         return 'eth0'
 
     def _detect_dra_device_classes(self) -> List[str]:
