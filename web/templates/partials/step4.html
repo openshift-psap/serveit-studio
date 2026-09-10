@@ -530,7 +530,8 @@
                                             <option value="deepseek-r1">DeepSeek-R1</option>
                                         </optgroup>
                                         <optgroup label="Qwen (Built-in MTP)">
-                                            <option value="qwen35">Qwen 3.5 / 3.6</option>
+                                            <option value="qwen3">Qwen 3 (Qwen3ForCausalLM)</option>
+                                            <option value="qwen3next">Qwen 3 Next (Qwen3NextForCausalLM)</option>
                                         </optgroup>
                                         <optgroup label="GLM (Built-in MTP)">
                                             <option value="glm45">GLM-4.5</option>
@@ -556,6 +557,7 @@
                                 </div>
                                 <script>
                                 function applySpeculativePreset(preset) {
+                                    if (preset === 'qwen35') preset = 'qwen3';  // legacy alias
                                     var fields = document.getElementById('speculative-fields');
                                     var method = document.getElementById('adv-speculative-method-val');
                                     var model = document.getElementById('adv-speculative-model-val');
@@ -569,7 +571,9 @@
                                         'gemma4-31b':         {method:'mtp', model:'google/gemma-4-31B-it-assistant', tokens:3},
                                         'deepseek-v3':        {method:'deepseek_mtp', model:'', tokens:1},
                                         'deepseek-r1':        {method:'deepseek_mtp', model:'', tokens:1},
-                                        'qwen35':             {method:'mtp', model:'', tokens:1},
+                                        'qwen35':             {method:'mtp', model:'', tokens:1},  // legacy alias → qwen3
+                                        'qwen3':              {method:'mtp', model:'', tokens:1},
+                                        'qwen3next':          {method:'mtp', model:'', tokens:1},
                                         'glm45':              {method:'mtp', model:'', tokens:3},
                                         'glm52':              {method:'mtp', model:'', tokens:5},
                                         'nemotron35':         {method:'mtp', model:'', tokens:3},

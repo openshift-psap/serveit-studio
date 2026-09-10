@@ -171,7 +171,7 @@ class RecipeOptimizer(
                            'n_shared_experts', 'num_experts_per_tok',
                            'intermediate_size_mlp', 'interleave_moe_layer_step',
                            'max_position_embeddings', 'attention_chunk_size',
-                           'num_nextn_predict_layers', 'layer_types',
+                           'num_nextn_predict_layers', 'mtp_num_hidden_layers', 'layer_types',
                            'top_k_experts', 'head_dim']:
                     if k in tcfg and k not in self._model_config:
                         self._model_config[k] = tcfg[k]
@@ -236,11 +236,15 @@ class RecipeOptimizer(
                 self._dbo_threshold = self._compute_dbo_threshold(num_experts)
                 self.log(f"MoE model detected ({num_experts} experts) — expert parallel will be enabled")
                 self.log(f"  DBO token threshold: {self._dbo_threshold} (based on {num_experts} experts)")
-            if self._model_config.get('num_nextn_predict_layers'):
+            mtp_layers = (self._model_config.get('num_nextn_predict_layers')
+                          or self._model_config.get('mtp_num_hidden_layers'))
+            if mtp_layers:
                 self._supports_mtp = True
-                self.log(f"MTP support detected ({self._model_config['num_nextn_predict_layers']} prediction layers)")
+                self.log(f"MTP support detected ({mtp_layers} prediction layers)")
             else:
-                mtp_archs = ['Glm4ForCausalLM', 'DeepseekV3ForCausalLM']
+                mtp_archs = ['Glm4ForCausalLM', 'DeepseekV3ForCausalLM',
+                             'Qwen3ForCausalLM', 'Qwen3NextForCausalLM',
+                             'Qwen3_5ForConditionalGeneration', 'Qwen3_5ForCausalLM']
                 model_archs = self._model_config.get('architectures', [])
                 if any(a in mtp_archs for a in model_archs):
                     self._supports_mtp = True
@@ -251,7 +255,8 @@ class RecipeOptimizer(
         if self._model_config:
             has_chunk = self._model_config.get('attention_chunk_size') is not None
             hybrid_archs = ['Qwen3NextForCausalLM', 'Llama4ForConditionalGeneration',
-                            'Qwen3_5ForCausalLM', 'Bamba2ForCausalLM']
+                            'Qwen3_5ForCausalLM', 'Qwen3_5ForConditionalGeneration',
+                            'Bamba2ForCausalLM']
             model_archs = self._model_config.get('architectures', [])
             has_hybrid_arch = any(a in hybrid_archs for a in model_archs)
             if has_chunk or has_hybrid_arch:
