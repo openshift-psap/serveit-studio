@@ -111,6 +111,9 @@ class TestResult:
             return prefill_gpus + decode_gpus
         else:  # aggregated
             total_pods = self.prefill_pods + self.decode_pods
+            pp = self.pipeline_parallelism
+            if pp and pp > 1:
+                total_pods *= pp
             return total_pods * self.tensor_parallelism
 
     @property
@@ -125,6 +128,7 @@ class TestResult:
             total_pods = self.prefill_pods + self.decode_pods
             pp = self.pipeline_parallelism
             if pp and pp > 1:
+                total_pods *= pp
                 return f"{total_pods}×TP{self.tensor_parallelism} (AG PPx{pp})"
             return f"{total_pods}×TP{self.tensor_parallelism} (AG)"
 
