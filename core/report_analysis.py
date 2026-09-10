@@ -1440,6 +1440,7 @@ class ReportAnalyzer:
                 'tp': r.tensor_parallelism,
                 'prefill_tp': r.prefill_tp or r.tensor_parallelism,
                 'decode_tp': r.decode_tp or r.tensor_parallelism,
+                'pp': (test_config.get('pipeline_parallel_size') if test_config and r.architecture == 'aggregated' else None) or getattr(r, 'pipeline_parallelism', None),
                 'concurrency': (test_config.get('num_users') if test_config else None) or self._get_concurrency(r),
                 'manifest_types': manifest_types,
                 'manifests': manifests_data,

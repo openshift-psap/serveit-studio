@@ -1802,7 +1802,7 @@ function _renderChartsImpl(data, runId, content) {
             return match.prefill_pods + 'P×TP' + match.prefill_tp + ' + ' + match.decode_pods + 'D×TP' + match.decode_tp;
         }
         var reps = match.replicas || (match.gpus && match.tp ? Math.floor(match.gpus / match.tp) : '?');
-        return reps + '×TP' + (match.tp || '?');
+        return reps + '×TP' + (match.tp || '?') + ((match.pp && match.pp > 1) ? ' PPx' + match.pp : '');
     }
     sweepConfigLabels.pd = findSweepConfigLabel('step11-sweep-pd');
     sweepConfigLabels.aggregated = findSweepConfigLabel('step11-sweep-aggregated');
@@ -3310,7 +3310,7 @@ function _renderChartsImpl(data, runId, content) {
                 var cfgKey;
                 if (r.architecture === 'AGGREGATED') {
                     var total = (r.prefill_pods || 0) + (r.decode_pods || 0);
-                    cfgKey = total + '×TP' + (r.tp || '?') + ' (AG)';
+                    cfgKey = total + '×TP' + (r.tp || '?') + ' (AG' + ((r.pp && r.pp > 1) ? ' PPx' + r.pp : '') + ')';
                 } else {
                     var _tag = r.architecture === 'EP' ? 'EP' : 'PD';
                     cfgKey = (r.prefill_pods || 0) + 'P+' + (r.decode_pods || 0) + 'D TP=' + (r.tp || '?') + ' (' + _tag + ')';
@@ -4181,7 +4181,7 @@ function _renderChartsImpl(data, runId, content) {
     const aggResults = coreResults.filter(r => r.architecture === 'AGGREGATED' && r.ttft_p90);
     if (aggResults.length > 1 && document.getElementById(cid('chart-agg-ttft-all'))) {
         const aggSorted = [...aggResults].sort((a, b) => (a.tp || 1) - (b.tp || 1));
-        const aggLabels = aggSorted.map(r => `${r.replicas || Math.floor(r.gpus / (r.tp || 1))}×TP${r.tp || '?'}`);
+        const aggLabels = aggSorted.map(r => `${r.replicas || Math.floor(r.gpus / (r.tp || 1))}×TP${r.tp || '?'}${(r.pp && r.pp > 1) ? ' PPx' + r.pp : ''}`);
         const aggColors = { p90: '#3b82f6', p95: '#dc2626', p99: '#7c3aed' };
         const traces = [];
         ['p90', 'p95', 'p99'].forEach(p => {

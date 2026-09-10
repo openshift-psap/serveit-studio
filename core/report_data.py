@@ -123,7 +123,21 @@ class TestResult:
             return f"{self.prefill_pods}P×TP{ptp} + {self.decode_pods}D×TP{dtp} ({tag})"
         else:
             total_pods = self.prefill_pods + self.decode_pods
+            pp = self.pipeline_parallelism
+            if pp and pp > 1:
+                return f"{total_pods}×TP{self.tensor_parallelism} (AG PPx{pp})"
             return f"{total_pods}×TP{self.tensor_parallelism} (AG)"
+
+    @property
+    def pipeline_parallelism(self) -> Optional[int]:
+        """Pipeline parallelism size for aggregated configs (from PP variants)."""
+        if self.architecture != 'aggregated' or not self.test_config_json:
+            return None
+        try:
+            import json
+            return json.loads(self.test_config_json).get('pipeline_parallel_size')
+        except Exception:
+            return None
 
     @property
     def is_successful(self) -> bool:
