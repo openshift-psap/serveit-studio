@@ -309,13 +309,44 @@ class RecipeOptimizer(
             osl_stdev=config.osl_stdev
         )
         # Also account for first_prompt_tokens — turn-0 uses this instead of isl,
-        # so max_model_len must be large enough to fit the first prompt + osl + margin.
+        # so max_model_len must be large enough to fit the first prompt + output + margin.
+        # The budget must cover every item vLLM counts against max_model_len:
+        #   prefix (system message) + prompt + sampled max_tokens + chat template overhead.
+        # output_tokens is sampled per request (normal dist when osl_stdev set), so the
+        # tail — not the mean — must fit. Otherwise vLLM rejects with a 400 context error.
         fpt = getattr(config, 'first_prompt_tokens', None) or 0
-        fpt_max = getattr(config, 'first_prompt_tokens_max', None)
-        fpt_needed = max(fpt, fpt_max or 0) + (config.osl or 0) + 200
+        fpt_max = getattr(config, 'first_prompt_tokens_max', None) or 0
+        prefix = getattr(config, 'prefix_tokens', None) or 0
+        osl = config.osl or 0
+        osl_stdev = config.osl_stdev or 0
+        first_out = getattr(config, 'first_output_tokens', None)
+        first_out_stdev = getattr(config, 'first_output_tokens_stdev', None)
+        base_out = first_out if first_out is not None else osl
+        out_stdev = first_out_stdev if first_out_stdev is not None else osl_stdev
+        max_out = base_out + (4 * out_stdev if out_stdev else 0)  # 4-sigma tail (99.99%)
+        if first_out is None and out_stdev and getattr(config, 'osl_max', None) is None:
+            config.osl_max = max_out
+            self.log(f"output_tokens_max set to {max_out} (osl={osl} + 4×stdev={out_stdev}) so samples fit max_model_len")
+        ctx_margin = 512  # chat template markers + re-encode drift
+        fpt_needed = max(fpt, fpt_max) + prefix + max_out + ctx_margin
+        # Multi-turn: later requests carry the full history ((turns-1) prompt+output pairs),
+        # so the longest request grows with turn count.
+        turns = getattr(config, 'turns', 1) or 1
+        if turns > 1:
+            isl = config.isl or 0
+            isl_stdev = config.isl_stdev or 0
+            max_isl = isl + (4 * isl_stdev if isl_stdev else 0)
+            isl_cap = getattr(config, 'isl_max', None)
+            if isl_cap is not None:
+                max_isl = min(max_isl, isl_cap)
+            max_osl_hist = osl + (4 * osl_stdev if osl_stdev else 0)
+            hist_needed = prefix + (turns - 1) * (max_isl + max_osl_hist) + max_isl + max_out + ctx_margin
+            if hist_needed > fpt_needed:
+                fpt_needed = hist_needed
         if fpt_needed > computed_max_model_len:
             computed_max_model_len = fpt_needed
-            self.log(f"max_model_len raised to fit first_prompt_tokens: {fpt_needed} (first_prompt_tokens={fpt}, osl={config.osl})")
+            self.log(f"max_model_len raised to fit workload: {fpt_needed} (fpt={fpt}, prefix={prefix}, "
+                     f"max_output={max_out}, turns={turns}, margin={ctx_margin})")
         if self.config.max_model_len and self.config.max_model_len >= computed_max_model_len:
             self.log(f"max_model_len: {self.config.max_model_len} (user-set, ≥ computed {computed_max_model_len})")
         elif computed_max_model_len != self.config.max_model_len:
@@ -329,7 +360,7 @@ class RecipeOptimizer(
         # if the user or a preset set it without considering max_model_len.
         # Clamp mean, min, max, and stdev so the entire distribution fits context.
         max_model_len = self.config.max_model_len or 8192
-        fpt_ceiling = max(0, max_model_len - (config.osl or 0) - 200)
+        fpt_ceiling = max(0, max_model_len - prefix - max_out - ctx_margin)
         if fpt_ceiling > 0:
             for attr, label in [
                 ('first_prompt_tokens', 'first_prompt_tokens'),
@@ -338,7 +369,7 @@ class RecipeOptimizer(
             ]:
                 val = getattr(config, attr, None)
                 if val is not None and int(val) > fpt_ceiling:
-                    self.log(f"Clamped {label}: {val} → {fpt_ceiling} (fits max_model_len={max_model_len}, osl={config.osl})", 'warning')
+                    self.log(f"Clamped {label}: {val} → {fpt_ceiling} (fits max_model_len={max_model_len}, prefix={prefix}, max_output={max_out})", 'warning')
                     setattr(config, attr, fpt_ceiling)
             # Also clamp stdev: mean + 2*stdev must not exceed ceiling
             fpt_mean = getattr(config, 'first_prompt_tokens', None)

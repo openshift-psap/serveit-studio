@@ -13,6 +13,15 @@ from core.config_generator import TestConfig
 logger = logging.getLogger(__name__)
 
 
+def _ctx_max_output(config) -> int:
+    """Worst-case sampled output tokens: explicit cap if set, else 4-sigma tail."""
+    osl = config.osl or 0
+    if getattr(config, 'osl_max', None) is not None:
+        return config.osl_max
+    osl_stdev = config.osl_stdev or 0
+    return osl + (4 * osl_stdev if osl_stdev else 0)
+
+
 class GuidellmMixin:
     """Mixin providing guidellm pod management and benchmark execution."""
 
@@ -220,7 +229,10 @@ class GuidellmMixin:
             else:
                 max_model_len = getattr(config, 'max_model_len', 0)
                 if max_model_len and (getattr(config, 'isl_stdev', None) or getattr(config, 'osl_stdev', None)):
-                    prompt_max = max_model_len - config.osl - 200
+                    # Budget for prefix + sampled output tail + template overhead,
+                    # same terms used by the pipeline's max_model_len bump.
+                    ctx_budget = (getattr(config, 'prefix_tokens', None) or 0) + _ctx_max_output(config) + 512
+                    prompt_max = max_model_len - ctx_budget
                     if prompt_max > 0:
                         data_dict['prompt_tokens_max'] = prompt_max
             # Cap first_prompt_tokens_max so turn-0 prompts fit the model context.
@@ -230,7 +242,8 @@ class GuidellmMixin:
             if getattr(config, 'first_prompt_tokens', None):
                 max_model_len = getattr(config, 'max_model_len', 0)
                 if max_model_len:
-                    fpt_ceiling = max_model_len - config.osl - 200
+                    ctx_budget = (getattr(config, 'prefix_tokens', None) or 0) + _ctx_max_output(config) + 512
+                    fpt_ceiling = max_model_len - ctx_budget
                     if fpt_ceiling > 0:
                         fpt_max = getattr(config, 'first_prompt_tokens_max', None)
                         if fpt_max is not None and int(fpt_max) > fpt_ceiling:
