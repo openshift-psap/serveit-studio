@@ -318,7 +318,12 @@ function updateUIFromConfig() {
         var spSel = document.getElementById('adv-speculative-preset');
         if (spSel) {
             spSel.value = config.speculative_preset;
-            if (typeof applySpeculativePreset === 'function') applySpeculativePreset(config.speculative_preset);
+            // Only re-apply preset defaults when the saved advanced_vllm does not
+            // already carry explicit speculative settings (legacy configs).
+            // Otherwise restoreAdvVllm() populates the exact saved values so a
+            // user-edited token count (e.g. 3) isn't clobbered by the preset default (1).
+            var savedHasSpec = config.advanced_vllm && config.advanced_vllm.speculative_method;
+            if (!savedHasSpec && typeof applySpeculativePreset === 'function') applySpeculativePreset(config.speculative_preset);
         }
     }
     if (config.prefix_cache_groups && document.getElementById('prefix-cache-groups-slider')) {
