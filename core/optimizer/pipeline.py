@@ -316,6 +316,31 @@ class RecipeOptimizer(
                         if config.isl_stdev or config.osl_stdev else ""))
             self.config.max_model_len = computed_max_model_len
 
+        # Reconcile first_prompt_tokens against the (possibly adjusted) max_model_len.
+        # Turn-0 uses first_prompt_tokens (not isl), so it can exceed the model context
+        # if the user or a preset set it without considering max_model_len.
+        # Clamp mean, min, max, and stdev so the entire distribution fits context.
+        max_model_len = self.config.max_model_len or 8192
+        fpt_ceiling = max(0, max_model_len - (config.osl or 0) - 200)
+        if fpt_ceiling > 0:
+            for attr, label in [
+                ('first_prompt_tokens', 'first_prompt_tokens'),
+                ('first_prompt_tokens_min', 'first_prompt_tokens_min'),
+                ('first_prompt_tokens_max', 'first_prompt_tokens_max'),
+            ]:
+                val = getattr(config, attr, None)
+                if val is not None and int(val) > fpt_ceiling:
+                    self.log(f"Clamped {label}: {val} → {fpt_ceiling} (fits max_model_len={max_model_len}, osl={config.osl})", 'warning')
+                    setattr(config, attr, fpt_ceiling)
+            # Also clamp stdev: mean + 2*stdev must not exceed ceiling
+            fpt_mean = getattr(config, 'first_prompt_tokens', None)
+            fpt_stdev = getattr(config, 'first_prompt_tokens_stdev', None)
+            if fpt_mean is not None and fpt_stdev is not None:
+                max_stdev = max(0, (fpt_ceiling - int(fpt_mean)) / 2)
+                if int(fpt_stdev) > max_stdev:
+                    self.log(f"Clamped first_prompt_tokens_stdev: {fpt_stdev} → {int(max_stdev)} (mean + 2*stdev ≤ {fpt_ceiling})", 'warning')
+                    config.first_prompt_tokens_stdev = int(max_stdev)
+
         # Results storage
         self.optimal_decode_tp: Optional[OptimalTP] = None
         self.optimal_prefill_tp: Optional[OptimalTP] = None

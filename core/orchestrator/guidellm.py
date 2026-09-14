@@ -223,6 +223,18 @@ class GuidellmMixin:
                     prompt_max = max_model_len - config.osl - 200
                     if prompt_max > 0:
                         data_dict['prompt_tokens_max'] = prompt_max
+            # Cap first_prompt_tokens_max so turn-0 prompts fit the model context.
+            # The sampler uses first_prompt_tokens_max as its upper bound; if it
+            # exceeds max_model_len, the synthetic generator will produce prompts
+            # that vLLM rejects with a context-length error.
+            if getattr(config, 'first_prompt_tokens', None):
+                max_model_len = getattr(config, 'max_model_len', 0)
+                if max_model_len:
+                    fpt_ceiling = max_model_len - config.osl - 200
+                    if fpt_ceiling > 0:
+                        fpt_max = getattr(config, 'first_prompt_tokens_max', None)
+                        if fpt_max is not None and int(fpt_max) > fpt_ceiling:
+                            data_dict['first_prompt_tokens_max'] = fpt_ceiling
             data_arg = _dj.dumps(data_dict)
 
         # Profile argument (rate type + rate)
@@ -578,7 +590,13 @@ class GuidellmMixin:
                 if getattr(config, 'first_prompt_tokens_min', None):
                     data_arg += f',first_prompt_tokens_min={config.first_prompt_tokens_min}'
                 if getattr(config, 'first_prompt_tokens_max', None):
-                    data_arg += f',first_prompt_tokens_max={config.first_prompt_tokens_max}'
+                    fpt_max = int(config.first_prompt_tokens_max)
+                    max_model_len = getattr(config, 'max_model_len', 0)
+                    if max_model_len:
+                        fpt_ceiling = max_model_len - config.osl - 200
+                        if fpt_ceiling > 0 and fpt_max > fpt_ceiling:
+                            fpt_max = fpt_ceiling
+                    data_arg += f',first_prompt_tokens_max={fpt_max}'
                 if getattr(config, 'first_output_tokens', None):
                     data_arg += f',first_output_tokens={config.first_output_tokens}'
                 if getattr(config, 'first_output_tokens_stdev', None):
