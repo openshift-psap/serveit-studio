@@ -485,6 +485,22 @@ class PDSearchMixin:
             if self._should_stop():
                 break
 
+            # Clean up any leftover test deployments from a previous iteration.
+            # When a test fails (pod errors or guidellm failure), run_test skips
+            # cleanup and leaves the LWS running. The next iteration deploys a
+            # different test_id, so the pre-deploy check doesn't find or remove
+            # the old deployment. Delete all serveit-test resources to start clean.
+            self.orchestrator.deployment_manager.kubectl.run(
+                ['delete', 'leaderworkerset', '-l', 'component=serveit-test',
+                 '-n', self.config.namespace, '--ignore-not-found=true'],
+                check=False
+            )
+            self.orchestrator.deployment_manager.kubectl.run(
+                ['delete', 'service', '-l', 'component=serveit-test',
+                 '-n', self.config.namespace, '--ignore-not-found=true'],
+                check=False
+            )
+
             replicas = total_gpus // tp
             if replicas < 1:
                 continue
