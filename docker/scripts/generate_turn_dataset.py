@@ -303,7 +303,7 @@ def generate_corpus_turns(args):
     start = time.time()
 
     with multiprocessing.Pool(num_workers) as pool:
-        counts = pool.map(_corpus_turn_worker, worker_args)
+        pool.map(_corpus_turn_worker, worker_args)
 
     os.makedirs(os.path.dirname(args.output) or '.', exist_ok=True)
     total = 0
