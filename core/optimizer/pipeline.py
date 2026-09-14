@@ -308,6 +308,14 @@ class RecipeOptimizer(
             isl_stdev=config.isl_stdev,
             osl_stdev=config.osl_stdev
         )
+        # Also account for first_prompt_tokens — turn-0 uses this instead of isl,
+        # so max_model_len must be large enough to fit the first prompt + osl + margin.
+        fpt = getattr(config, 'first_prompt_tokens', None) or 0
+        fpt_max = getattr(config, 'first_prompt_tokens_max', None)
+        fpt_needed = max(fpt, fpt_max or 0) + (config.osl or 0) + 200
+        if fpt_needed > computed_max_model_len:
+            computed_max_model_len = fpt_needed
+            self.log(f"max_model_len raised to fit first_prompt_tokens: {fpt_needed} (first_prompt_tokens={fpt}, osl={config.osl})")
         if self.config.max_model_len and self.config.max_model_len >= computed_max_model_len:
             self.log(f"max_model_len: {self.config.max_model_len} (user-set, ≥ computed {computed_max_model_len})")
         elif computed_max_model_len != self.config.max_model_len:
