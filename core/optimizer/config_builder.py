@@ -29,6 +29,29 @@ class ConfigBuilderMixin:
                 return None
         return self._compute_block_size()
 
+    def _clamp_first_prompt_tokens(self, isl: int, osl: int) -> Optional[int]:
+        """Clamp first_prompt_tokens so turn-0 prompts fit the model context.
+
+        Turn-0 uses first_prompt_tokens (not isl), so it is decoupled from the
+        ISL bounds. If user set it above the model's context window the run
+        would fail on every first prompt (vLLM context-length rejection).
+        Mirrors the prompt_tokens_max margin used for ISL.
+        """
+        value = getattr(self.config, 'first_prompt_tokens', None)
+        if value is None:
+            return None
+        value = int(value)
+        max_model_len = getattr(self.config, 'max_model_len', 0) or 0
+        if max_model_len:
+            ceiling = max(0, max_model_len - osl - 200)
+            if ceiling <= 0:
+                self.log(f"   ⚠️  max_model_len={max_model_len} too small for osl={osl}+200 margin; first_prompt_tokens cleared", 'warning')
+                return None
+            if value > ceiling:
+                self.log(f"   ⚠️  first_prompt_tokens={value} exceeds model context (max_model_len={max_model_len}), clamped to {ceiling}", 'warning')
+                value = ceiling
+        return value
+
     def _find_pareto_front(self) -> List[Tuple[FeasibleSplit, 'TestResult']]:
         """
         Find Pareto front from P/D split results.
@@ -113,6 +136,8 @@ class ConfigBuilderMixin:
         max_batched = None if is_calibration else self._compute_max_num_batched_tokens(tp, role='aggregated')
         enable_chunked = not is_calibration and max_batched is not None and self.config.max_model_len > max_batched
 
+        first_prompt_tokens = self._clamp_first_prompt_tokens(isl, osl)
+
         cfg = TestConfig(
             test_id=test_id,
             architecture='aggregated',
@@ -137,7 +162,7 @@ class ConfigBuilderMixin:
             osl_min=None if is_calibration else getattr(self.config, 'osl_min', None),
             osl_max=None if is_calibration else getattr(self.config, 'osl_max', None),
             turns=1 if is_calibration else self.config.turns,
-            first_prompt_tokens=None if is_calibration else getattr(self.config, 'first_prompt_tokens', None),
+            first_prompt_tokens=None if is_calibration else first_prompt_tokens,
             first_prompt_tokens_stdev=None if is_calibration else getattr(self.config, 'first_prompt_tokens_stdev', None),
             first_prompt_tokens_min=None if is_calibration else getattr(self.config, 'first_prompt_tokens_min', None),
             first_prompt_tokens_max=None if is_calibration else getattr(self.config, 'first_prompt_tokens_max', None),
@@ -822,7 +847,7 @@ class ConfigBuilderMixin:
             osl_min=getattr(self.config, 'osl_min', None),
             osl_max=getattr(self.config, 'osl_max', None),
             turns=self.config.turns,
-            first_prompt_tokens=getattr(self.config, 'first_prompt_tokens', None),
+            first_prompt_tokens=self._clamp_first_prompt_tokens(self.config.isl, self.config.osl),
             first_prompt_tokens_stdev=getattr(self.config, 'first_prompt_tokens_stdev', None),
             first_prompt_tokens_min=getattr(self.config, 'first_prompt_tokens_min', None),
             first_prompt_tokens_max=getattr(self.config, 'first_prompt_tokens_max', None),
@@ -1023,7 +1048,7 @@ class ConfigBuilderMixin:
             osl_min=getattr(self.config, 'osl_min', None),
             osl_max=getattr(self.config, 'osl_max', None),
             turns=self.config.turns,
-            first_prompt_tokens=getattr(self.config, 'first_prompt_tokens', None),
+            first_prompt_tokens=self._clamp_first_prompt_tokens(self.config.isl, self.config.osl),
             first_prompt_tokens_stdev=getattr(self.config, 'first_prompt_tokens_stdev', None),
             first_prompt_tokens_min=getattr(self.config, 'first_prompt_tokens_min', None),
             first_prompt_tokens_max=getattr(self.config, 'first_prompt_tokens_max', None),

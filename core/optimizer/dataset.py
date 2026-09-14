@@ -319,8 +319,12 @@ class DatasetMixin:
         osl = self.config.osl
         is_multi_turn = getattr(self.config, 'turns', 1) > 1
 
-        # Multi-turn with prefix cache: map prefix cache modes to prefix_buckets
-        # and delegate to _generate_turn_dataset
+        # Multi-turn with prefix cache: map prefix cache modes to prefix_buckets.
+        # Keep workload in synthetic mode — guidellm generates conversations
+        # natively (turns, delays, first_prompt_tokens, prefix_buckets) and its
+        # file-based loader cannot consume generate_turn_dataset's flat
+        # conversation_turns JSONL (see pipeline.py TODO). The prefix buckets are
+        # plumbed into the synthetic data args by the orchestrator.
         if is_multi_turn:
             cache_mode = self.config.prefix_cache_mode or 'identical'
             prefix_tokens = int(isl * hit_pct / 100)
@@ -335,12 +339,7 @@ class DatasetMixin:
                 self.config.prefix_tokens = prefix_tokens
                 self.config.prefix_count = groups
             self.log(f"   Multi-turn prefix cache: {cache_mode}, {hit_pct}% → prefix_tokens={prefix_tokens}, prefix_count={self.config.prefix_count}", 'info')
-            self._generate_turn_dataset()
-            self.config.workload_mode = 'dataset'
-            self.config.dataset_source = self.turn_dataset_path
-            self.config.dataset_column = 'conversation_turns'
-            self.config.dataset_max_output = osl
-            self.log("   Workload switched to multi-turn dataset with prefix cache", 'info')
+            self.log("   Multi-turn workload stays in synthetic mode — guidellm handles turns, delays, and prefix buckets natively", 'info')
             return
 
         cache_mode = self.config.prefix_cache_mode or 'identical'
