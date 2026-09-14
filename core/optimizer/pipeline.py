@@ -1655,6 +1655,13 @@ class RecipeOptimizer(
             f"{num_gpu_nodes} GPU nodes → {pods_per_node} pods/node → "
             f"{mem_str} memory, {cpu_str} CPUs per pod"
         )
+        free_pool = self._cached_free_mem_gb if getattr(self, '_cached_free_mem_gb', None) else 0.0
+        self.log(
+            f"🧮 Pod resources for this test: MEMORY={mem_str}, CPU={cpu_str} "
+            f"({total_pods} pods, TP={tp}, {pods_per_node} pods/node over "
+            f"{num_gpu_nodes} GPU nodes, free pool {free_pool:.1f}Gi)",
+            'success'
+        )
 
         return mem_str, cpu_str
 
