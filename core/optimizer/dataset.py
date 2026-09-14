@@ -234,8 +234,11 @@ class DatasetMixin:
                 check=False, timeout=7200
             )
             if result.returncode != 0:
-                self.log(f"   ❌ Turn dataset generation failed: {result.stderr[:200]}", 'error')
-                raise RuntimeError("Failed to generate turn dataset on workload pod")
+                tail = (result.stderr or '').strip().splitlines()[-15:]
+                self.log(f"   ❌ Turn dataset generation failed (exit {result.returncode})", 'error')
+                for line in tail:
+                    self.log(f"      {line}", 'error')
+                raise RuntimeError(f"Failed to generate turn dataset on workload pod (exit {result.returncode})")
             if result.stderr:
                 for line in result.stderr.strip().splitlines()[-5:]:
                     self.log(f"   {line}", 'info')

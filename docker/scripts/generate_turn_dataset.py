@@ -19,6 +19,7 @@ Usage:
 """
 
 import argparse
+import array
 import json
 import multiprocessing
 import os
@@ -109,6 +110,13 @@ def _worker_generate(worker_args):
 
 CORPUS_PATHS = ['/app/corpus/wikitext-103.txt', '/mnt/storage/corpus/wikitext-103.txt']
 
+# Full tokenized corpus, shared with fork workers via copy-on-write inheritance.
+# Stored as a compact array('I') so 120M token ids use ~480MB instead of ~4.3GB
+# as Python int objects. Set by the parent in generate_corpus_turns BEFORE the
+# Pool is created. NEVER pass this through pool.map args: pickling it into every
+# worker reconstructs per-worker copies that OOM the pod (24Gi cap, 8 workers).
+_CORPUS_TOKENS = None
+
 
 def _find_corpus():
     for path in CORPUS_PATHS:
@@ -134,12 +142,15 @@ def _corpus_window(tokenizer, tokens, start, length):
 
 
 def _corpus_turn_worker(worker_args):
-    """Worker: build conversations from corpus windows."""
+    """Worker: build conversations from corpus windows, streaming to its own file."""
     worker_id, num_rows, start_idx, model_name, prompt_tokens, output_tokens, turns, \
-        first_prompt_tokens, prefix_text, corpus_tokens_slice_start, corpus_tokens, stdev_args = worker_args
+        first_prompt_tokens, prefix_text, corpus_tokens_slice_start, stdev_args, output_path = worker_args
 
     import sys, random
     from transformers import AutoTokenizer
+
+    global _CORPUS_TOKENS
+    corpus_tokens = _CORPUS_TOKENS
     print(f"Worker {worker_id}: building {num_rows} conversations...", file=sys.stderr, flush=True)
 
     hf_home = os.environ.get('HF_HOME', '/mnt/storage/.cache/huggingface')
@@ -168,50 +179,59 @@ def _corpus_turn_worker(worker_args):
             val = min(val, hi)
         return max(10, val)
 
-    results = []
+    part_path = f"{output_path}.worker{worker_id}"
     offset = corpus_tokens_slice_start
-    for row in range(num_rows):
-        rng = random.Random(start_idx + row)
-        conversation = []
-        for t in range(turns):
-            if t == 0 and first_prompt_tokens:
-                isl = _vary(first_prompt_tokens, fp_stdev, fp_min, fp_max, rng)
-            else:
-                isl = _vary(prompt_tokens, isl_stdev, isl_min, isl_max, rng)
-            osl = _vary(output_tokens, osl_stdev, osl_min, osl_max, rng)
+    count = 0
+    prefix_len = 0
+    if prefix_text:
+        prefix_len = len(tokenizer.encode(prefix_text, add_special_tokens=False))
+    with open(part_path, 'w') as out:
+        for row in range(num_rows):
+            rng = random.Random(start_idx + row)
+            conversation = []
+            for t in range(turns):
+                if t == 0 and first_prompt_tokens:
+                    isl = _vary(first_prompt_tokens, fp_stdev, fp_min, fp_max, rng)
+                else:
+                    isl = _vary(prompt_tokens, isl_stdev, isl_min, isl_max, rng)
+                osl = _vary(output_tokens, osl_stdev, osl_min, osl_max, rng)
 
-            prompt = _corpus_window(tokenizer, corpus_tokens, offset, isl)
-            if not prompt:
-                offset = 0
                 prompt = _corpus_window(tokenizer, corpus_tokens, offset, isl)
-            if not prompt:
-                print(f"Worker {worker_id}: could not cut {isl}-token window, skipping", file=sys.stderr, flush=True)
-                break
+                if not prompt:
+                    offset = 0
+                    prompt = _corpus_window(tokenizer, corpus_tokens, offset, isl)
+                if not prompt:
+                    print(f"Worker {worker_id}: could not cut {isl}-token window, skipping", file=sys.stderr, flush=True)
+                    break
 
-            if prefix_text and t == 0:
-                prompt = prefix_text + '\n' + prompt
+                if prefix_text and t == 0:
+                    prompt = prefix_text + '\n' + prompt
 
-            conversation.append({
-                'prompt': prompt,
-                'prompt_tokens_count': isl + (len(tokenizer.encode(prefix_text, add_special_tokens=False)) if prefix_text and t == 0 else 0),
-                'output_tokens_count': osl,
-            })
-            offset += isl + prompt_tokens
+                conversation.append({
+                    'prompt': prompt,
+                    'prompt_tokens_count': isl + prefix_len,
+                    'output_tokens_count': osl,
+                })
+                offset += isl + prompt_tokens
 
-        if conversation:
-            results.append(json.dumps({'conversation_turns': conversation}))
+            if conversation:
+                out.write(json.dumps({'conversation_turns': conversation}) + '\n')
+                out.flush()
+                count += 1
 
-        if (row + 1) % max(num_rows // 5, 1) == 0:
-            print(f"Worker {worker_id}: {row + 1}/{num_rows}", file=sys.stderr, flush=True)
+            if (row + 1) % max(num_rows // 5, 1) == 0:
+                print(f"Worker {worker_id}: {row + 1}/{num_rows}", file=sys.stderr, flush=True)
 
-    print(f"Worker {worker_id}: done ({len(results)} conversations)", file=sys.stderr, flush=True)
-    return results
+    print(f"Worker {worker_id}: done ({count} conversations)", file=sys.stderr, flush=True)
+    return count
 
 
 def generate_corpus_turns(args):
     """Generate multi-turn conversations using corpus text."""
     import sys
     from transformers import AutoTokenizer
+
+    global _CORPUS_TOKENS
 
     hf_home = os.environ.get('HF_HOME', '/mnt/storage/.cache/huggingface')
     hf_token = os.environ.get('HF_TOKEN')
@@ -226,7 +246,7 @@ def generate_corpus_turns(args):
     print(f"Loading corpus from {corpus_path}...", file=sys.stderr, flush=True)
     tokenizer = AutoTokenizer.from_pretrained(args.model, trust_remote_code=True, cache_dir=hf_home, token=hf_token)
 
-    corpus_tokens = []
+    corpus_tokens = array.array('I')
     with open(corpus_path, 'r', encoding='utf-8') as f:
         while len(corpus_tokens) < needed:
             chunk = f.read(10_000_000)
@@ -235,6 +255,9 @@ def generate_corpus_turns(args):
             corpus_tokens.extend(tokenizer.encode(chunk, add_special_tokens=False))
             print(f"  tokenized {len(corpus_tokens):,} tokens...", file=sys.stderr, flush=True)
     print(f"Corpus: {len(corpus_tokens):,} tokens", file=sys.stderr, flush=True)
+    if needed > len(corpus_tokens):
+        print(f"WARNING: needed ~{needed:,} tokens but corpus has only {len(corpus_tokens):,}; "
+              f"windows will wrap/reuse corpus content", file=sys.stderr, flush=True)
 
     prefix_text = None
     if args.prefix_tokens > 0:
@@ -258,6 +281,11 @@ def generate_corpus_turns(args):
         'fp_max': args.first_prompt_tokens_max,
     }
 
+    # Share the tokenized corpus with workers via fork COW inheritance (set the
+    # global BEFORE creating the Pool). Passing it in worker_args would pickle a
+    # copy into every worker and blow the pod memory limit.
+    _CORPUS_TOKENS = corpus_tokens
+
     worker_args = []
     start_idx = 0
     corpus_offset = args.prefix_tokens * 2 if prefix_text else 0
@@ -266,7 +294,7 @@ def generate_corpus_turns(args):
         worker_args.append((
             w, n, start_idx, args.model, args.prompt_tokens, args.output_tokens,
             args.turns, args.first_prompt_tokens, prefix_text,
-            corpus_offset, corpus_tokens, stdev_args
+            corpus_offset, stdev_args, args.output
         ))
         corpus_offset += n * tokens_per_conv * 2
         start_idx += n
@@ -275,16 +303,19 @@ def generate_corpus_turns(args):
     start = time.time()
 
     with multiprocessing.Pool(num_workers) as pool:
-        chunks = pool.map(_corpus_turn_worker, worker_args)
+        counts = pool.map(_corpus_turn_worker, worker_args)
 
     os.makedirs(os.path.dirname(args.output) or '.', exist_ok=True)
     total = 0
     with open(args.output, 'w') as f:
         f.write(json.dumps(_build_turn_meta(args)) + '\n')
-        for chunk in chunks:
-            for line in chunk:
-                f.write(line + '\n')
-                total += 1
+        for w in range(num_workers):
+            part_path = f"{args.output}.worker{w}"
+            with open(part_path, 'r') as part:
+                for line in part:
+                    f.write(line)
+                    total += 1
+            os.remove(part_path)
 
     elapsed = time.time() - start
     file_size = os.path.getsize(args.output)
