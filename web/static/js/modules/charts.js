@@ -1172,8 +1172,9 @@ function _renderChartsImpl(data, runId, content) {
                 adv.model_loader_extra_config && adv.model_loader_extra_config.mode === 'custom' ? ['Model Loader Config', '<span style="font-size:0.85em;">' + adv.model_loader_extra_config.value + '</span>'] : null,
                 advToggle('enable_dbo', null) !== null ? ['Dual Batch Overlap', advToggle('enable_dbo', 'Off')] : null,
                 advToggle('enable_eplb', null) !== null ? ['Expert Load Balancing', advToggle('enable_eplb', 'Off')] : null,
-                adv.num_speculative_tokens && adv.num_speculative_tokens.mode === 'custom' ? ['Speculative Tokens (MTP)', adv.num_speculative_tokens.value] : null,
-                adv.speculative_model && adv.speculative_model.mode === 'custom' ? ['Speculative Model', adv.speculative_model.value] : null,
+                adv.speculative_method ? ['Speculative Method', adv.speculative_method] : null,
+                adv.num_speculative_tokens && adv.num_speculative_tokens.mode === 'custom' ? ['Speculative Tokens', adv.num_speculative_tokens.value] : null,
+                adv.speculative_model && adv.speculative_model.mode === 'custom' && adv.speculative_model.value ? ['Speculative Model', adv.speculative_model.value] : null,
             ]},
             { title: 'Infrastructure', color: '#d97706', rows: [
                 ['Inference Image', '<span style="word-break:break-all;font-size:0.9em;">' + (rc.image || na) + '</span>'],

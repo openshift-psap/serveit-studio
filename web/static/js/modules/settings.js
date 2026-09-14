@@ -149,6 +149,24 @@ function updateAdvVllm() {
         var key = f.replace(/-/g, '_');
         adv[key] = { mode: modeEl.value };
     });
+    // Speculative decoding fields — driven by the preset dropdown and -val inputs
+    // (no -mode element exists, so they're not captured by the advValueFields loop).
+    var specFields = document.getElementById('speculative-fields');
+    if (specFields) {
+        if (specFields.style.display !== 'none') {
+            var specMethodVal = document.getElementById('adv-speculative-method-val');
+            var specModelVal = document.getElementById('adv-speculative-model-val');
+            var specTokensVal = document.getElementById('adv-num-speculative-tokens-val');
+            adv.speculative_method = specMethodVal ? specMethodVal.value : null;
+            var specTokens = specTokensVal ? parseInt(specTokensVal.value, 10) : 0;
+            adv.num_speculative_tokens = (specTokens > 0) ? { mode: 'custom', value: specTokens } : { mode: 'off', value: null };
+            adv.speculative_model = (specModelVal && specModelVal.value) ? { mode: 'custom', value: specModelVal.value } : { mode: 'auto' };
+        } else {
+            adv.speculative_method = null;
+            adv.num_speculative_tokens = { mode: 'off', value: null };
+            adv.speculative_model = { mode: 'auto', value: null };
+        }
+    }
     // Include raw text mode info
     adv._mode = config.advanced_vllm_mode || 'form';
     adv._raw_text = config.advanced_vllm_raw || '';
@@ -213,6 +231,23 @@ function restoreAdvVllm() {
         var modeEl = document.getElementById('adv-' + f + '-mode');
         if (modeEl) modeEl.value = setting.mode || 'auto';
     });
+    // Restore speculative decoding fields (method/model/tokens — no mode element)
+    if (adv.speculative_method && adv.speculative_method !== 'off') {
+        var specFields = document.getElementById('speculative-fields');
+        var specMethod = document.getElementById('adv-speculative-method-val');
+        var specModel = document.getElementById('adv-speculative-model-val');
+        var specTokens = document.getElementById('adv-num-speculative-tokens-val');
+        if (specFields) specFields.style.display = 'block';
+        if (specMethod) specMethod.value = adv.speculative_method;
+        if (specModel && adv.speculative_model && adv.speculative_model.mode === 'custom' && adv.speculative_model.value) {
+            specModel.value = adv.speculative_model.value;
+        }
+        if (specTokens) {
+            var tokVal = (adv.num_speculative_tokens && adv.num_speculative_tokens.mode === 'custom' && adv.num_speculative_tokens.value != null)
+                ? adv.num_speculative_tokens.value : 3;
+            specTokens.value = tokVal;
+        }
+    }
     // Restore raw text mode
     var advMode = config.advanced_vllm_mode || (adv && adv._mode) || 'form';
     var advRaw = config.advanced_vllm_raw || (adv && adv._raw_text) || '';

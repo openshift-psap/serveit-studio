@@ -201,8 +201,13 @@ class ConfigBuilderMixin:
         cfg = self._apply_advanced_vllm(cfg)
         cfg = self._auto_tune_model_loader(cfg)
         if is_calibration:
-            cfg.speculative_num_tokens = None
-            cfg.speculative_model = None
+            # Keep calibration runs clean UNLESS the user explicitly configured
+            # speculative decoding (MTP / EAGLE / draft model) in advanced_vllm.
+            _adv = getattr(self.config, 'advanced_vllm', None) or {}
+            _spec_explicit = bool(_adv.get('speculative_method')) or _adv.get('num_speculative_tokens', {}).get('mode') == 'custom'
+            if not _spec_explicit:
+                cfg.speculative_num_tokens = None
+                cfg.speculative_model = None
         return cfg
 
     def _get_profiled_kv_cache_bytes(self, tp: int) -> Optional[int]:
