@@ -4075,7 +4075,7 @@ function _renderChartsImpl(data, runId, content) {
                 x: tpLabels, y: itlVals, name: 'ITL P90 (ms)', type: 'scatter', mode: 'lines+markers+text', yaxis: 'y2',
                 line: { color: '#ef4444', width: 3 }, marker: { size: 10, symbol: 'circle', color: '#ef4444', line: { width: 2, color: 'white' } },
                 text: itlVals.map((v, idx) => dtp[idx].itl_p90 != null ? v.toFixed(1) : ''),
-                textposition: 'top center', textfont: { size: 14, color: '#ef4444' },
+                textposition: 'bottom center', textfont: { size: 14, color: '#ef4444' },
                 hovertemplate: '<b>%{x}</b><br>ITL P90: %{y:.2f} ms<extra></extra>',
             });
         }
