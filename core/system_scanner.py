@@ -156,8 +156,19 @@ class ClusterResources:
 
         print(f"[estimate_model_gpu_requirement] gpu={gpu_memory_gb:.0f}GB, overhead={overhead_gb:.1f}GB, kv={kv_cache_gb:.2f}GB, required={required_memory_gb:.0f}GB, usable={usable_gpu_memory_gb:.0f}GB", file=sys.stderr)
         print(f"[estimate_model_gpu_requirement] ratio={ratio:.2f}, int={int(ratio)}, min_gpus={min_gpus}, min_tp={tp}", file=sys.stderr)
-        sys.stderr.flush()
 
+        # Check if model fits in a single node
+        if tp > self.max_gpus_per_node:
+            print(f"\n❌ MODEL DOES NOT FIT IN CLUSTER", file=sys.stderr)
+            print(f"   Required: TP={tp} ({required_memory_gb:.0f}GB ÷ {usable_gpu_memory_gb:.0f}GB/GPU)", file=sys.stderr)
+            print(f"   Cluster: {self.max_gpus_per_node} GPUs per node", file=sys.stderr)
+            sys.stderr.flush()
+            raise ValueError(
+                f"Model requires TP={tp} but cluster only has {self.max_gpus_per_node} GPUs per node. "
+                f"Model is too large for this cluster."
+            )
+
+        sys.stderr.flush()
         return tp
 
 
