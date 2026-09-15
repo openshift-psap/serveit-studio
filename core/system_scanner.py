@@ -123,14 +123,34 @@ class ClusterResources:
                                         min_concurrency: int = 4,
                                         extra_reserve_pct: float = 0.0,
                                         gpu_memory_utilization: float = 0.80) -> int:
-        """Estimate minimum number of GPUs needed to load a model AND serve a workload."""
-        import sys
-        print(f"\n[estimate_model_gpu_requirement] model={model_size_gb:.0f}GB, gmu={gpu_memory_utilization:.2f}, seq_len={seq_len}, min_conc={min_concurrency}", file=sys.stderr)
-        sys.stderr.flush()
+        """
+        Estimate minimum number of GPUs needed to load a model AND serve
+        a workload with reasonable concurrency.
 
+        Accounts for:
+        - Model weights
+        - Framework/CUDA overhead (5% of VRAM)
+        - KV cache for min_concurrency users at seq_len tokens each
+        - gpu_memory_utilization budget (vLLM only uses this fraction of VRAM)
+
+        Args:
+            model_size_gb: Model weight size in GB
+            dtype: Weight data type (fp16, fp8)
+            is_moe: MoE model flag (unused, kept for API compat)
+            model_config: Model config dict from HuggingFace (for KV cache sizing)
+            seq_len: Total sequence length per user (ISL + OSL)
+            min_concurrency: Minimum concurrent users to support (default 4)
+            gpu_memory_utilization: vLLM memory budget fraction (0.80 for prefill, 0.90 for decode)
+
+        Returns:
+            Minimum number of GPUs required (power of 2)
+        """
         gpu_memory_gb = self.gpu_memory_per_gpu_mb / 1024
+
+        # Framework/CUDA overhead: ~5% of VRAM
         overhead_gb = gpu_memory_gb * 0.05
 
+        # KV cache requirement from model architecture and workload
         kv_cache_gb = 0
         if model_config and seq_len > 0 and min_concurrency > 0:
             layers = model_config.get('num_hidden_layers', 0)
@@ -140,35 +160,29 @@ class ClusterResources:
             hidden_size = model_config.get('hidden_size', 0)
             num_attention_heads = model_config.get('num_attention_heads', 1)
             head_dim = model_config.get('head_dim', hidden_size // num_attention_heads if num_attention_heads else 128)
+
+            # 2 tensors (K + V) × layers × kv_heads × head_dim × dtype_bytes per token
             kv_dtype_bytes = 1 if dtype == 'fp8' else 2
             bytes_per_token = 2 * layers * kv_heads * head_dim * kv_dtype_bytes
             total_tokens = seq_len * min_concurrency
             kv_cache_gb = (bytes_per_token * total_tokens) / (1024 ** 3)
 
         required_memory_gb = model_size_gb + overhead_gb + kv_cache_gb
+        # User-specified extra safety margin
         if extra_reserve_pct > 0:
             required_memory_gb *= (1 + extra_reserve_pct / 100.0)
-
         usable_gpu_memory_gb = gpu_memory_gb * gpu_memory_utilization
-        ratio = required_memory_gb / usable_gpu_memory_gb
-        min_gpus = int(ratio) + 1
-        tp = next_power_of_2(min_gpus)
+        min_gpus = int(required_memory_gb / usable_gpu_memory_gb) + 1
 
-        print(f"[estimate_model_gpu_requirement] gpu={gpu_memory_gb:.0f}GB, overhead={overhead_gb:.1f}GB, kv={kv_cache_gb:.2f}GB, required={required_memory_gb:.0f}GB, usable={usable_gpu_memory_gb:.0f}GB", file=sys.stderr)
-        print(f"[estimate_model_gpu_requirement] ratio={ratio:.2f}, int={int(ratio)}, min_gpus={min_gpus}, min_tp={tp}", file=sys.stderr)
+        tp = next_power_of_2(min_gpus)
 
         # Check if model fits in a single node
         if tp > self.max_gpus_per_node:
-            print(f"\n❌ MODEL DOES NOT FIT IN CLUSTER", file=sys.stderr)
-            print(f"   Required: TP={tp} ({required_memory_gb:.0f}GB ÷ {usable_gpu_memory_gb:.0f}GB/GPU)", file=sys.stderr)
-            print(f"   Cluster: {self.max_gpus_per_node} GPUs per node", file=sys.stderr)
-            sys.stderr.flush()
             raise ValueError(
                 f"Model requires TP={tp} but cluster only has {self.max_gpus_per_node} GPUs per node. "
                 f"Model is too large for this cluster."
             )
 
-        sys.stderr.flush()
         return tp
 
 
