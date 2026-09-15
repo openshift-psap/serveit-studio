@@ -286,17 +286,33 @@ class RecipeOptimizer(
                 self.log(f"⚠️  Pipeline Parallelism (PP) NOT supported (architecture: {model_archs[0] if model_archs else 'unknown'})")
                 self.log("    PP tests will be skipped. Use Tensor Parallelism (TP) for multi-GPU scaling.")
 
-        # Detect DeepSeek V4 Flash which requires explicit FP8 KV cache
+        # Detect when model uses FP8 quantization that requires explicit FP8 KV cache
+        # (e.g., DeepSeek V4 Flash with mixed-precision compressed-tensors)
         self._requires_fp8_kv_cache = False
         if self._model_config:
-            model_archs = self._model_config.get('architectures', [])
             qcfg = self._model_config.get('quantization_config', {})
             quant_format = qcfg.get('format', '').lower()
             quant_method = qcfg.get('quant_method', '').lower()
 
-            if 'DeepseekV4ForCausalLM' in model_archs and quant_format == 'mixed-precision' and quant_method == 'compressed-tensors':
+            # Check if mixed-precision quantization uses FP8 in any config group
+            uses_fp8_quant = False
+            if quant_format == 'mixed-precision' and quant_method == 'compressed-tensors':
+                config_groups = qcfg.get('config_groups', {})
+                for group_name, group_cfg in config_groups.items():
+                    if isinstance(group_cfg, dict):
+                        # Check weights or input_activations for FP8
+                        for part in ['weights', 'input_activations']:
+                            part_cfg = group_cfg.get(part, {})
+                            if isinstance(part_cfg, dict):
+                                if part_cfg.get('num_bits') == 8 and part_cfg.get('type', '').lower() == 'float':
+                                    uses_fp8_quant = True
+                                    break
+                    if uses_fp8_quant:
+                        break
+
+            if uses_fp8_quant:
                 self._requires_fp8_kv_cache = True
-                self.log("🔧 DeepSeek V4 Flash detected — FP8 KV cache required for FlashMLA attention")
+                self.log("🔧 Mixed-precision FP8 quantization detected — FP8 KV cache required")
 
         # Detect DeepGemm compatibility from quantization config
         self._use_deep_gemm = None  # None = let vLLM decide
