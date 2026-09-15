@@ -460,17 +460,18 @@ function setPrefixCacheMode(mode) {
     config.prefix_cache_mode = mode;
     var btnMap = {identical: 'pcm-identical', shared_prefix: 'pcm-shared', multi_group: 'pcm-multi'};
     Object.keys(btnMap).forEach(m => {
-        var btn = document.getElementById(btnMap[m]);
-        if (!btn) return;
-        if (m === mode) {
-            btn.style.background = 'var(--rh-red-primary)';
-            btn.style.color = 'white';
-            btn.style.borderColor = 'var(--rh-red-primary)';
-        } else {
-            btn.style.background = '#FAFAFA';
-            btn.style.color = '#475569';
-            btn.style.borderColor = '#cbd5e1';
-        }
+        var btns = document.querySelectorAll('#' + btnMap[m]);
+        btns.forEach(btn => {
+            if (m === mode) {
+                btn.style.background = 'var(--rh-red-primary)';
+                btn.style.color = 'white';
+                btn.style.borderColor = 'var(--rh-red-primary)';
+            } else {
+                btn.style.background = '#FAFAFA';
+                btn.style.color = '#475569';
+                btn.style.borderColor = '#cbd5e1';
+            }
+        });
     });
     var groupsWrap = document.getElementById('prefix-cache-groups-wrap');
     if (groupsWrap) groupsWrap.style.display = mode === 'multi_group' ? 'block' : 'none';
