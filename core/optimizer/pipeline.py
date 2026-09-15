@@ -2231,24 +2231,53 @@ spec:
 
         # Determine per-layer quantization from config
         qcfg = cfg.get('quantization_config', {})
-        ql = qcfg.get('quantized_layers', {})
-        has_nvfp4 = any(v.get('quant_algo') == 'NVFP4' for v in ql.values()) if ql else False
-        has_fp8 = any(v.get('quant_algo') == 'FP8' for v in ql.values()) if ql else False
-        fp4_group_size = 16
-        for v in ql.values():
-            if v.get('quant_algo') == 'NVFP4' and v.get('group_size'):
-                fp4_group_size = v['group_size']
-                break
 
-        # Byte costs
-        if has_nvfp4:
+        # Try new format first (compressed-tensors with config_groups)
+        has_nvfp4 = False
+        has_fp8 = False
+        fp4_group_size = 16
+
+        config_groups = qcfg.get('config_groups', {})
+        if config_groups:
+            for group_cfg in config_groups.values():
+                if isinstance(group_cfg, dict):
+                    for part in ['weights', 'input_activations']:
+                        part_cfg = group_cfg.get(part, {})
+                        if isinstance(part_cfg, dict):
+                            num_bits = part_cfg.get('num_bits')
+                            quant_type = part_cfg.get('type', '').lower()
+                            if num_bits == 8 and quant_type == 'float':
+                                has_fp8 = True
+                            elif num_bits == 4 and quant_type == 'float':
+                                has_nvfp4 = True
+
+        # Fallback to old format (quantized_layers)
+        if not config_groups:
+            ql = qcfg.get('quantized_layers', {})
+            has_nvfp4 = any(v.get('quant_algo') == 'NVFP4' for v in ql.values()) if ql else False
+            has_fp8 = any(v.get('quant_algo') == 'FP8' for v in ql.values()) if ql else False
+            for v in ql.values():
+                if v.get('quant_algo') == 'NVFP4' and v.get('group_size'):
+                    fp4_group_size = v['group_size']
+                    break
+
+        # Byte costs (prioritize quantization config, fallback to dtype)
+        if has_nvfp4 and has_fp8:
+            # Mixed FP8 + NVFP4: average ~4.8 bits per param
+            expert_bpp = 0.75
+            non_expert_bpp = 0.75
+        elif has_nvfp4:
             expert_bpp = 0.5 + (1.0 / fp4_group_size)  # NVFP4 + scale overhead
+            non_expert_bpp = 0.5 + (1.0 / fp4_group_size)
+        elif has_fp8:
+            expert_bpp = 1.0
+            non_expert_bpp = 1.0
         elif self._model_dtype == 'fp8':
             expert_bpp = 1.0
+            non_expert_bpp = 1.0
         else:
             expert_bpp = 2.0
-
-        non_expert_bpp = 1.0 if (has_fp8 or self._model_dtype == 'fp8') else 2.0
+            non_expert_bpp = 2.0
 
         total_bytes = 0
 

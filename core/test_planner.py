@@ -747,8 +747,10 @@ class TestPlanner:
         logger.info(f"  Total target: {total_target_gb:.1f} GB")
         logger.info(f"  GPU memory utilization: {gpu_memory_utilization:.2f} ({gpu_memory_utilization*100:.0f}%)")
 
-        # Calculate minimum GPUs needed (round up)
-        min_gpus = max(1, int((total_vram_gb + gpu_vram_gb - 0.01) / gpu_vram_gb))
+        # Calculate minimum GPUs needed based on model weights only (not cached workload)
+        # Add small CUDA/framework overhead but exclude KV cache (can be managed separately)
+        model_and_overhead_gb = model_weights_gb + cuda_overhead_gb + activations_gb
+        min_gpus = max(1, int(model_and_overhead_gb / gpu_vram_gb + 0.99))  # Ceiling division
 
         # TP must be power of 2
         min_tp = next_power_of_2(min_gpus)
@@ -763,8 +765,11 @@ class TestPlanner:
         # VRAM per GPU when using min_tp
         vram_per_gpu = total_vram_gb / min_tp
 
-        logger.info("Model requirements:")
-        logger.info(f"  Total VRAM needed: {total_vram_gb:.1f} GB")
+        logger.info("Model requirements (min_tp calculation):")
+        logger.info(f"  Model weights: {model_weights_gb:.1f} GB")
+        logger.info(f"  CUDA overhead: {cuda_overhead_gb:.1f} GB")
+        logger.info(f"  Activations: {activations_gb:.1f} GB")
+        logger.info(f"  Model + overhead: {model_and_overhead_gb:.1f} GB (used for min_tp)")
         logger.info(f"  GPU VRAM available: {gpu_vram_gb:.1f} GB per GPU")
         logger.info(f"  Minimum GPUs: {min_gpus}")
         logger.info(f"  Minimum TP: {min_tp}")
