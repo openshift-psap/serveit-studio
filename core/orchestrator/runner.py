@@ -1768,6 +1768,17 @@ class TestOrchestrator(ParserMixin, GuidellmMixin):
 
         results = []
 
+        # Errors that indicate critical infrastructure failure — stop entire run
+        critical_error_patterns = {
+            "vLLM model did not finish loading",
+            "Deployment failed",
+            "Deployment did not become ready",
+            "Failed to deploy prerequisite infrastructure",
+            "Failed to get service endpoint",
+            "Gateway did not register all pods",
+            "OOM: No available memory for the cache blocks"
+        }
+
         for i, config in enumerate(plan.test_configs, 1):
             if log_callback:
                 log_callback(f"\n>>> Test {i}/{len(plan.test_configs)} <<<\n")
@@ -1779,6 +1790,15 @@ class TestOrchestrator(ParserMixin, GuidellmMixin):
             )
 
             results.append(result)
+
+            # Check for critical failure that means infrastructure is broken
+            if result.error_message:
+                is_critical = any(pattern in result.error_message for pattern in critical_error_patterns)
+                if is_critical:
+                    if log_callback:
+                        log_callback(f"\n🛑 CRITICAL ERROR: {result.error_message}")
+                        log_callback("🛑 Stopping optimization run — infrastructure failure detected")
+                    break
 
             # Brief pause between tests for API server to settle
             if cleanup_between_tests and i < len(plan.test_configs):
