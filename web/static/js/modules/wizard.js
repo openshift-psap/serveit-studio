@@ -251,6 +251,30 @@ function setWorkloadType(type) {
     }
 }
 
+function workloadTypeHover(btn, type) {
+    if (type === 'continuous' && workloadType === 'continuous') {
+        btn.style.background = '#1d4ed8';
+    } else if (type === 'multiturn' && workloadType === 'multiturn') {
+        btn.style.background = '#1d4ed8';
+    } else if (type === 'continuous' && workloadType !== 'continuous') {
+        btn.style.background = '#e5e7eb';
+    } else if (type === 'multiturn' && workloadType !== 'multiturn') {
+        btn.style.background = '#e5e7eb';
+    }
+}
+
+function workloadTypeOut(btn, type) {
+    if (type === 'continuous' && workloadType === 'continuous') {
+        btn.style.background = '#3b82f6';
+    } else if (type === 'multiturn' && workloadType === 'multiturn') {
+        btn.style.background = '#3b82f6';
+    } else if (type === 'continuous' && workloadType !== 'continuous') {
+        btn.style.background = '#f3f4f6';
+    } else if (type === 'multiturn' && workloadType !== 'multiturn') {
+        btn.style.background = '#f3f4f6';
+    }
+}
+
 // Initialize workload type button styles on page load
 document.addEventListener('DOMContentLoaded', function() {
     setTimeout(function() {
