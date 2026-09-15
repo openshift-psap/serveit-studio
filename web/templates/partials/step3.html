@@ -206,30 +206,9 @@
                                                     </div>
                                                 </div>
 
-                                                <!-- Shared System Prompt (always available, independent of corpus) -->
-                                                <div style="border-top:1px solid #dcfce7;margin-top:16px;">
-                                                    <div style="padding:12px 20px;">
-                                                        <div class="input-group">
-                                                            <label style="font-size:0.85em;margin-bottom:6px;display:block;">📌 Shared System Prompt</label>
-                                                            <div style="margin-bottom:12px;">
-                                                                <div style="font-size:0.75em;color:#64748b;margin-bottom:4px;">Shared Prefix %: <span id="prefix-pct-value" style="font-weight:700;">0%</span></div>
-                                                                <input type="range" id="prefix-pct-slider" min="0" max="100" value="0" style="width:100%;accent-color:#15803d;" oninput="updateSharedPrefixPercentage(this.value);">
-                                                                <div style="display:flex;justify-content:space-between;font-size:0.75em;color:#94a3b8;margin-top:2px;"><span>0% — none</span><span>100% — entire ISL</span></div>
-                                                                <div id="prefix-tokens-display" style="font-size:0.8em;color:#64748b;margin-top:4px;"></div>
-                                                            </div>
-                                                            <div style="margin-bottom:12px;">
-                                                                <div style="font-size:0.75em;color:#64748b;margin-bottom:4px;">Unique Prefixes: <span id="prefix-count-value" style="font-weight:700;">1</span></div>
-                                                                <input type="range" id="prefix-count-slider" min="1" max="100" value="1" style="width:100%;accent-color:#15803d;" oninput="updatePrefixCount(this.value);">
-                                                                <div style="display:flex;justify-content:space-between;font-size:0.75em;color:#94a3b8;margin-top:2px;"><span>1 — max reuse</span><span>100 — many variants</span></div>
-                                                            </div>
-                                                            <div class="help-text">A fixed system prompt prepended to every request. The shared prefix % is calculated as a portion of your ISL. Works with both synthetic and real text corpus. All requests with the same prefix share KV cache. Set unique prefixes to 1 for maximum cache reuse, or higher to simulate different system prompts per tenant/agent.</div>
-                                                        </div>
-                                                    </div>
-                                                </div>
-
                                                 <!-- Corpus Dataset toggle -->
                                                 <div style="border-top:1px solid #dcfce7;margin-top:16px;">
-                                                    <div style="padding:12px 20px;cursor:pointer;display:flex;align-items:center;justify-content:space-between;margin:-16px -20px 0 -20px;" onclick="var on=!document.getElementById('use-corpus-enabled').checked;document.getElementById('use-corpus-enabled').checked=on;config.use_corpus=on;var sw=document.getElementById('use-corpus-switch');sw.style.background=on?'#15803d':'#ccc';sw.querySelector('span').style.transform=on?'translateX(18px)':'translateX(0)';saveConfig();">
+                                                    <div style="padding:12px 20px;cursor:pointer;display:flex;align-items:center;justify-content:space-between;margin:-16px -20px 0 -20px;" onclick="var on=!document.getElementById('use-corpus-enabled').checked;document.getElementById('use-corpus-enabled').checked=on;config.use_corpus=on;var sw=document.getElementById('use-corpus-switch');sw.style.background=on?'#15803d':'#ccc';sw.querySelector('span').style.transform=on?'translateX(18px)':'translateX(0)';var spw=document.getElementById('structured-prefix-wrapper');if(spw)spw.style.display=on?'none':'flex';saveConfig();">
                                                         <div style="display:flex;align-items:center;gap:10px;padding:12px 20px;">
                                                             <div style="font-size:1.3em;flex-shrink:0;">📖</div>
                                                             <div>
@@ -266,8 +245,13 @@
                                                             <input type="range" id="prefix-cache-slider" min="0" max="100" value="0" style="width:100%;accent-color:var(--rh-red-primary);" oninput="config.prefix_cache_hit_pct=parseInt(this.value);document.getElementById('prefix-cache-value').textContent=this.value+'%';saveConfig();updatePrefixCacheModeDesc();">
                                                             <div style="display:flex;justify-content:space-between;font-size:0.75em;color:#94a3b8;margin-top:2px;"><span>0% — all unique prompts</span><span>100% — all identical</span></div>
                                                         </div>
+                                                        <div class="input-group" style="margin-top:12px;">
+                                                            <label>Unique Prefixes: <span id="prefix-count-value" style="font-weight:700;">1</span></label>
+                                                            <input type="range" id="prefix-count-slider" min="1" max="100" value="1" style="width:100%;accent-color:var(--rh-red-primary);" oninput="updatePrefixCount(this.value);">
+                                                            <div style="display:flex;justify-content:space-between;font-size:0.75em;color:#94a3b8;margin-top:2px;"><span>1 — max reuse</span><span>100 — many variants</span></div>
+                                                        </div>
                                                         <!-- Structured prefix toggle -->
-                                                        <div style="display:flex;align-items:center;justify-content:space-between;gap:12px;padding:10px 14px;background:#f0fdf4;border:1px solid #bbf7d0;border-radius:8px;cursor:pointer;margin-top:10px;" onclick="var on=!document.getElementById('structured-prefix-enabled').checked;document.getElementById('structured-prefix-enabled').checked=on;config.structured_prefix=on;var sw=document.getElementById('structured-prefix-switch');sw.style.background=on?'#15803d':'#ccc';sw.querySelector('span').style.transform=on?'translateX(18px)':'translateX(0)';saveConfig();">
+                                                        <div id="structured-prefix-wrapper" style="display:flex;align-items:center;justify-content:space-between;gap:12px;padding:10px 14px;background:#f0fdf4;border:1px solid #bbf7d0;border-radius:8px;cursor:pointer;margin-top:10px;" onclick="var on=!document.getElementById('structured-prefix-enabled').checked;document.getElementById('structured-prefix-enabled').checked=on;config.structured_prefix=on;var sw=document.getElementById('structured-prefix-switch');sw.style.background=on?'#15803d':'#ccc';sw.querySelector('span').style.transform=on?'translateX(18px)':'translateX(0)';saveConfig();">
                                                             <div>
                                                                 <div style="font-weight:600;font-size:0.88em;color:#15803d;">Structured Prefix Prompts</div>
                                                                 <div style="font-size:0.78em;color:#166534;margin-top:2px;">Instead of random tokens, generate prompts with a shared system-prompt prefix + unique question suffix per request. The hit ratio controls the prefix/suffix split (e.g., 43% = first 43% of tokens are the shared prefix, rest is a unique question). Better simulates real agentic and chat workloads.</div>
@@ -314,7 +298,7 @@
 
                                                 <!-- Corpus Dataset toggle (Multi-Turn) -->
                                                 <div style="border-top:1px solid #dcfce7;margin-top:16px;">
-                                                    <div style="padding:12px 20px;cursor:pointer;display:flex;align-items:center;justify-content:space-between;margin:-16px -20px 0 -20px;" onclick="var on=!document.getElementById('use-corpus-enabled-mt').checked;document.getElementById('use-corpus-enabled-mt').checked=on;config.use_corpus=on;var sw=document.getElementById('use-corpus-switch-mt');sw.style.background=on?'#15803d':'#ccc';sw.querySelector('span').style.transform=on?'translateX(18px)':'translateX(0)';saveConfig();">
+                                                    <div style="padding:12px 20px;cursor:pointer;display:flex;align-items:center;justify-content:space-between;margin:-16px -20px 0 -20px;" onclick="var on=!document.getElementById('use-corpus-enabled-mt').checked;document.getElementById('use-corpus-enabled-mt').checked=on;config.use_corpus=on;var sw=document.getElementById('use-corpus-switch-mt');sw.style.background=on?'#15803d':'#ccc';sw.querySelector('span').style.transform=on?'translateX(18px)':'translateX(0)';var spw=document.getElementById('structured-prefix-wrapper');if(spw)spw.style.display=on?'none':'flex';saveConfig();">
                                                         <div style="display:flex;align-items:center;gap:10px;padding:12px 20px;">
                                                             <div style="font-size:1.3em;flex-shrink:0;">📖</div>
                                                             <div>
@@ -497,8 +481,13 @@
                                                             <input type="range" id="prefix-cache-slider" min="0" max="100" value="0" style="width:100%;accent-color:var(--rh-red-primary);" oninput="config.prefix_cache_hit_pct=parseInt(this.value);document.getElementById('prefix-cache-value').textContent=this.value+'%';saveConfig();updatePrefixCacheModeDesc();">
                                                             <div style="display:flex;justify-content:space-between;font-size:0.75em;color:#94a3b8;margin-top:2px;"><span>0% — all unique prompts</span><span>100% — all identical</span></div>
                                                         </div>
+                                                        <div class="input-group" style="margin-top:12px;">
+                                                            <label>Unique Prefixes: <span id="prefix-count-value" style="font-weight:700;">1</span></label>
+                                                            <input type="range" id="prefix-count-slider" min="1" max="100" value="1" style="width:100%;accent-color:var(--rh-red-primary);" oninput="updatePrefixCount(this.value);">
+                                                            <div style="display:flex;justify-content:space-between;font-size:0.75em;color:#94a3b8;margin-top:2px;"><span>1 — max reuse</span><span>100 — many variants</span></div>
+                                                        </div>
                                                         <!-- Structured prefix toggle -->
-                                                        <div style="display:flex;align-items:center;justify-content:space-between;gap:12px;padding:10px 14px;background:#f0fdf4;border:1px solid #bbf7d0;border-radius:8px;cursor:pointer;margin-top:10px;" onclick="var on=!document.getElementById('structured-prefix-enabled').checked;document.getElementById('structured-prefix-enabled').checked=on;config.structured_prefix=on;var sw=document.getElementById('structured-prefix-switch');sw.style.background=on?'#15803d':'#ccc';sw.querySelector('span').style.transform=on?'translateX(18px)':'translateX(0)';saveConfig();">
+                                                        <div id="structured-prefix-wrapper" style="display:flex;align-items:center;justify-content:space-between;gap:12px;padding:10px 14px;background:#f0fdf4;border:1px solid #bbf7d0;border-radius:8px;cursor:pointer;margin-top:10px;" onclick="var on=!document.getElementById('structured-prefix-enabled').checked;document.getElementById('structured-prefix-enabled').checked=on;config.structured_prefix=on;var sw=document.getElementById('structured-prefix-switch');sw.style.background=on?'#15803d':'#ccc';sw.querySelector('span').style.transform=on?'translateX(18px)':'translateX(0)';saveConfig();">
                                                             <div>
                                                                 <div style="font-weight:600;font-size:0.88em;color:#15803d;">Structured Prefix Prompts</div>
                                                                 <div style="font-size:0.78em;color:#166534;margin-top:2px;">Instead of random tokens, generate prompts with a shared system-prompt prefix + unique question suffix per request. The hit ratio controls the prefix/suffix split (e.g., 43% = first 43% of tokens are the shared prefix, rest is a unique question). Better simulates real agentic and chat workloads.</div>
