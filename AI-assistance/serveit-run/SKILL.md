@@ -565,13 +565,20 @@ After the user picks ISL/OSL, ask about variation:
 
 **"Do you want to use a real text corpus or synthetically generated prompts?"**
 - **Synthetic (default)**: The system generates random prompt text at the specified ISL/OSL lengths.
-- **Real corpus**: Use actual English prose. Required if you want meaningful speculative decoding results. Also allows configuring a shared system prompt that applies to all requests.
-  - If corpus is enabled, ask: **"Do you want a shared system prompt prepended to every request/turn?"**
-    - Specify: prefix token count and uniqueness (how many variations of the prefix)
-    - Examples:
-      - Chat bot with fixed instructions: 1 prefix, 1,000 tokens
-      - Multi-tenant service: 5 unique prefixes, 500 tokens each
-      - Agentic with tool definitions: 1 prefix, 3,000 tokens (tool schemas dominate)
+- **Real corpus**: Use actual English prose. Required if you want meaningful speculative decoding results.
+
+**"Do you want to simulate prefix caching behavior?"** (Available for both synthetic and real corpus)
+- Prefix caching simulates scenarios where some or all requests share common prefixes that stay in KV cache.
+- Ask: **"How much cache reuse do you expect?"** (0-100%)
+  - 0%: All requests are unique (no cache reuse)
+  - 30%: A common system prompt or few-shot examples are reused
+  - 60%: High overlap in context (e.g., multi-tenant, many similar queries)
+  - 100%: Many requests are identical (FAQ, repeated API calls)
+- Then ask: **"How should this be distributed across requests?"**
+  - **Identical Prompts**: X% of requests are fully identical, rest are unique (simulates popular queries, FAQ-style)
+  - **Shared Prefix**: Every request starts with X% shared tokens, followed by unique suffix (simulates system prompts, few-shot examples)
+  - **Multi-Group**: Split requests into N distinct prompt groups, each with X% internal reuse (simulates multi-tenant deployments)
+- If corpus is enabled and you choose a caching mode, the system can optionally use **Structured Prefix Prompts** to generate realistic prefix/suffix splits instead of random tokens.
 
 **"How many users do you expect at the same time?"**
 - This is the number of concurrent requests hitting the model simultaneously (for continuous) or concurrent conversation sessions (for multi-turn)
