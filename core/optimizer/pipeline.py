@@ -2002,6 +2002,11 @@ spec:
                 min_conc = 1
             reserve_pct = getattr(self.config, 'memory_reserve_pct', 0.0)
             model_size = self._estimate_model_size_gb()
+            self.log(f"DEBUG _get_valid_tp_options: role={role}, gmu={gmu:.2f}")
+            self.log(f"  model_size={model_size:.0f}GB, dtype={self._model_dtype}, is_moe={self._is_moe}")
+            self.log(f"  workload: seq_len={seq_len}, min_conc={min_conc}, reserve_pct={reserve_pct}")
+            self.log(f"  tp_options before filtering: {tp_options}, max_tp={max_tp}")
+
             min_tp = self.cluster_resources.estimate_model_gpu_requirement(
                 model_size_gb=model_size,
                 dtype=self._model_dtype,
@@ -2012,9 +2017,15 @@ spec:
                 extra_reserve_pct=reserve_pct,
                 gpu_memory_utilization=gmu
             )
-            self.log(f"DEBUG _get_valid_tp_options: model_size={model_size:.0f}GB, seq_len={seq_len}, min_conc={min_conc}, gmu={gmu:.2f} → min_tp={min_tp}")
+            self.log(f"DEBUG _get_valid_tp_options: estimate_model_gpu_requirement returned min_tp={min_tp}")
+
+            tp_options_before_min = tp_options.copy()
             tp_options = [tp for tp in tp_options if tp >= min_tp]
+            self.log(f"  Filter by min_tp={min_tp}: {tp_options_before_min} → {tp_options}")
+
+            tp_options_before_max = tp_options.copy()
             tp_options = [tp for tp in tp_options if tp <= min(self.config.total_gpus, max_tp)]
+            self.log(f"  Filter by max_tp={min(self.config.total_gpus, max_tp)}: {tp_options_before_max} → {tp_options}")
         else:
             self.log(f"DEBUG: cluster_resources is None, using config.tp_options directly")
             tp_options = list(self.config.tp_options)

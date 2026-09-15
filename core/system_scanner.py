@@ -145,10 +145,16 @@ class ClusterResources:
         Returns:
             Minimum number of GPUs required (power of 2)
         """
+        import logging
+        logger = logging.getLogger(__name__)
+        logger.info(f"DEBUG estimate_model_gpu_requirement ENTRY: model_size_gb={model_size_gb:.0f}, dtype={dtype}, seq_len={seq_len}, min_conc={min_concurrency}, gmu={gpu_memory_utilization:.2f}")
+
         gpu_memory_gb = self.gpu_memory_per_gpu_mb / 1024
+        logger.info(f"  GPU VRAM per GPU: {gpu_memory_gb:.1f}GB")
 
         # Framework/CUDA overhead: ~5% of VRAM
         overhead_gb = gpu_memory_gb * 0.05
+        logger.info(f"  CUDA overhead (5%): {overhead_gb:.1f}GB")
 
         # KV cache requirement from model architecture and workload
         kv_cache_gb = 0
@@ -166,18 +172,25 @@ class ClusterResources:
             bytes_per_token = 2 * layers * kv_heads * head_dim * kv_dtype_bytes
             total_tokens = seq_len * min_concurrency
             kv_cache_gb = (bytes_per_token * total_tokens) / (1024 ** 3)
+            logger.info(f"  KV cache: layers={layers}, kv_heads={kv_heads}, head_dim={head_dim}, kv_dtype={kv_dtype_bytes}B, bytes_per_token={bytes_per_token}, total_tokens={total_tokens} → {kv_cache_gb:.2f}GB")
+        else:
+            logger.info(f"  KV cache: skipped (config={model_config is not None}, seq_len={seq_len}, min_conc={min_concurrency})")
 
         required_memory_gb = model_size_gb + overhead_gb + kv_cache_gb
+        logger.info(f"  Required memory before reserve: {required_memory_gb:.0f}GB = {model_size_gb:.0f} + {overhead_gb:.1f} + {kv_cache_gb:.2f}")
+
         # User-specified extra safety margin
         if extra_reserve_pct > 0:
             required_memory_gb *= (1 + extra_reserve_pct / 100.0)
-        usable_gpu_memory_gb = gpu_memory_gb * gpu_memory_utilization
-        min_gpus = int(required_memory_gb / usable_gpu_memory_gb) + 1
+            logger.info(f"  After {extra_reserve_pct}% reserve: {required_memory_gb:.0f}GB")
 
-        import logging
-        logger = logging.getLogger(__name__)
-        logger.info(f"DEBUG estimate_model_gpu_requirement: model={model_size_gb:.0f}GB, overhead={overhead_gb:.1f}GB, kv_cache={kv_cache_gb:.2f}GB, required={required_memory_gb:.0f}GB, usable_per_gpu={usable_gpu_memory_gb:.1f}GB, min_gpus={min_gpus}, tp={next_power_of_2(min_gpus)}")
+        usable_gpu_memory_gb = gpu_memory_gb * gpu_memory_utilization
+        logger.info(f"  Usable GPU memory: {gpu_memory_gb:.1f}GB × {gpu_memory_utilization:.2f} = {usable_gpu_memory_gb:.1f}GB")
+
+        min_gpus = int(required_memory_gb / usable_gpu_memory_gb) + 1
         tp = next_power_of_2(min_gpus)
+
+        logger.info(f"DEBUG estimate_model_gpu_requirement RESULT: required={required_memory_gb:.0f}GB ÷ {usable_gpu_memory_gb:.1f}GB/GPU = {required_memory_gb/usable_gpu_memory_gb:.2f} → min_gpus={min_gpus}, min_tp={tp}")
 
         return min(tp, self.max_gpus_per_node)
 
