@@ -208,7 +208,7 @@
 
                                                 <!-- Corpus Dataset toggle -->
                                                 <div style="border-top:1px solid #dcfce7;margin-top:16px;">
-                                                    <div style="padding:12px 20px;cursor:pointer;display:flex;align-items:center;justify-content:space-between;margin:-16px -20px 0 -20px;" onclick="var on=!document.getElementById('use-corpus-enabled').checked;document.getElementById('use-corpus-enabled').checked=on;config.use_corpus=on;var sw=document.getElementById('use-corpus-switch');sw.style.background=on?'#15803d':'#ccc';sw.querySelector('span').style.transform=on?'translateX(18px)':'translateX(0)';var spw=document.getElementById('structured-prefix-wrapper');if(spw)spw.style.display=on?'none':'flex';saveConfig();">
+                                                    <div style="padding:12px 20px;cursor:pointer;display:flex;align-items:center;justify-content:space-between;margin:-16px -20px 0 -20px;" onclick="var on=!document.getElementById('use-corpus-enabled').checked;document.getElementById('use-corpus-enabled').checked=on;config.use_corpus=on;var sw=document.getElementById('use-corpus-switch');sw.style.background=on?'#15803d':'#ccc';sw.querySelector('span').style.transform=on?'translateX(18px)':'translateX(0)';document.querySelectorAll('#structured-prefix-wrapper').forEach(el => el.style.display=on?'none':'flex');saveConfig();">
                                                         <div style="display:flex;align-items:center;gap:10px;padding:12px 20px;">
                                                             <div style="font-size:1.3em;flex-shrink:0;">📖</div>
                                                             <div>
@@ -298,7 +298,7 @@
 
                                                 <!-- Corpus Dataset toggle (Multi-Turn) -->
                                                 <div style="border-top:1px solid #dcfce7;margin-top:16px;">
-                                                    <div style="padding:12px 20px;cursor:pointer;display:flex;align-items:center;justify-content:space-between;margin:-16px -20px 0 -20px;" onclick="var on=!document.getElementById('use-corpus-enabled-mt').checked;document.getElementById('use-corpus-enabled-mt').checked=on;config.use_corpus=on;var sw=document.getElementById('use-corpus-switch-mt');sw.style.background=on?'#15803d':'#ccc';sw.querySelector('span').style.transform=on?'translateX(18px)':'translateX(0)';var spw=document.getElementById('structured-prefix-wrapper');if(spw)spw.style.display=on?'none':'flex';saveConfig();">
+                                                    <div style="padding:12px 20px;cursor:pointer;display:flex;align-items:center;justify-content:space-between;margin:-16px -20px 0 -20px;" onclick="var on=!document.getElementById('use-corpus-enabled-mt').checked;document.getElementById('use-corpus-enabled-mt').checked=on;config.use_corpus=on;var sw=document.getElementById('use-corpus-switch-mt');sw.style.background=on?'#15803d':'#ccc';sw.querySelector('span').style.transform=on?'translateX(18px)':'translateX(0)';document.querySelectorAll('#structured-prefix-wrapper').forEach(el => el.style.display=on?'none':'flex');saveConfig();">
                                                         <div style="display:flex;align-items:center;gap:10px;padding:12px 20px;">
                                                             <div style="font-size:1.3em;flex-shrink:0;">📖</div>
                                                             <div>
