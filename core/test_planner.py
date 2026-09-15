@@ -574,16 +574,55 @@ class TestPlanner:
         Returns:
             Tuple of (total_vram_gb, kv_cache_gb, activations_gb, cuda_overhead_gb)
         """
-        bytes_per_param = {
-            'fp16': 2,
-            'fp8': 1,
-            'int8': 1,
-            'int4': 0.5,
-            'fp32': 4,
-        }
+        # Determine weight bytes per param, prioritizing quantization config if available
+        weight_bytes_per_param = 2.0  # Default: FP16 = 2 bytes per param
 
-        byte_size = bytes_per_param.get(dtype, 2)
-        model_weights_gb = (model_size_b * 1e9 * byte_size) / (1024**3)
+        if model_config:
+            qcfg = model_config.get('quantization_config', {})
+            quant_format = qcfg.get('format', '').lower()
+            quant_method = qcfg.get('quant_method', '').lower()
+
+            # Mixed-precision quantization: detect if using FP8 + NVFP4
+            if quant_format == 'mixed-precision' and quant_method == 'compressed-tensors':
+                config_groups = qcfg.get('config_groups', {})
+                has_fp8 = False
+                has_nvfp4 = False
+
+                for group_cfg in config_groups.values():
+                    if isinstance(group_cfg, dict):
+                        for part in ['weights', 'input_activations']:
+                            part_cfg = group_cfg.get(part, {})
+                            if isinstance(part_cfg, dict):
+                                num_bits = part_cfg.get('num_bits')
+                                quant_type = part_cfg.get('type', '').lower()
+                                if num_bits == 8 and quant_type == 'float':
+                                    has_fp8 = True
+                                elif num_bits == 4 and quant_type == 'float':
+                                    has_nvfp4 = True
+
+                # Mixed FP8 + NVFP4: ~0.5-0.6x of FP16 (average 4-5 bits per param)
+                if has_fp8 and has_nvfp4:
+                    weight_bytes_per_param = 0.75  # 4.8 bits average = 0.6 bytes per param
+                elif has_fp8:
+                    weight_bytes_per_param = 1.0  # 8-bit = 1 byte per param
+                elif has_nvfp4:
+                    weight_bytes_per_param = 0.5  # 4-bit = 0.5 bytes per param
+            elif quant_method in ('fp8', 'bitsandbytes', 'int8'):
+                weight_bytes_per_param = 1.0  # 8-bit quantization
+            elif 'int4' in quant_method or 'awq' in quant_method or 'gptq' in quant_method:
+                weight_bytes_per_param = 0.5  # 4-bit quantization
+        else:
+            # Fallback to dtype if config unavailable
+            bytes_per_param = {
+                'fp16': 2,
+                'fp8': 1,
+                'int8': 1,
+                'int4': 0.5,
+                'fp32': 4,
+            }
+            weight_bytes_per_param = bytes_per_param.get(dtype, 2)
+
+        model_weights_gb = (model_size_b * 1e9 * weight_bytes_per_param) / (1024**3)
         total_sequence_length = isl + osl
 
         # Try to calculate KV cache from config first
@@ -616,10 +655,9 @@ class TestPlanner:
         kv_cache_percent = (kv_cache_gb / model_weights_gb) * 100 if model_weights_gb > 0 else 0
 
         logger.info("Model VRAM calculation:")
-        logger.info(f"  Size: {model_size_b}B parameters")
-        logger.info(f"  dtype: {dtype} ({byte_size} bytes/param)")
-        logger.info(f"  Sequence: ISL={isl}, OSL={osl}, Total={total_sequence_length}")
+        logger.info(f"  Size: {model_size_b}B parameters × {weight_bytes_per_param} bytes/param")
         logger.info(f"  Weights: {model_weights_gb:.1f} GB")
+        logger.info(f"  Sequence: ISL={isl}, OSL={osl}, Total={total_sequence_length}")
         logger.info(f"  KV cache ({kv_cache_percent:.1f}%): {kv_cache_gb:.1f} GB")
         logger.info(f"  Activations (15%): {activations_gb:.1f} GB")
         logger.info(f"  CUDA overhead (5%): {cuda_overhead_gb:.1f} GB")
