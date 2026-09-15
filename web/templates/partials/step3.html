@@ -206,9 +206,29 @@
                                                     </div>
                                                 </div>
 
+                                                <!-- Shared System Prompt (always available, independent of corpus) -->
+                                                <div style="border-top:1px solid #dcfce7;margin-top:16px;">
+                                                    <div style="padding:12px 20px;">
+                                                        <div class="input-group">
+                                                            <label style="font-size:0.85em;margin-bottom:6px;display:block;">📌 Shared System Prompt</label>
+                                                            <div style="margin-bottom:12px;">
+                                                                <div style="font-size:0.75em;color:#64748b;margin-bottom:4px;">Shared Prefix %: <span id="prefix-pct-value" style="font-weight:700;">0%</span></div>
+                                                                <input type="range" id="prefix-pct-slider" min="0" max="100" value="0" style="width:100%;accent-color:#15803d;" oninput="updateSharedPrefixPercentage(this.value);">
+                                                                <div style="display:flex;justify-content:space-between;font-size:0.75em;color:#94a3b8;margin-top:2px;"><span>0% — none</span><span>100% — entire ISL</span></div>
+                                                                <div id="prefix-tokens-display" style="font-size:0.8em;color:#64748b;margin-top:4px;"></div>
+                                                            </div>
+                                                            <div style="margin-bottom:12px;">
+                                                                <div style="font-size:0.75em;color:#64748b;margin-bottom:2px;">Unique prefixes</div>
+                                                                <input type="number" id="prefix-count-input" value="" min="1" max="1000" placeholder="e.g. 1" style="width:100%;" oninput="config.prefix_count=this.value?parseInt(this.value):null;saveConfig();">
+                                                            </div>
+                                                            <div class="help-text">A fixed system prompt prepended to every request. The shared prefix % is calculated as a portion of your ISL. Works with both synthetic and real text corpus. All requests with the same prefix share KV cache. Set unique prefixes to 1 for maximum cache reuse, or higher to simulate different system prompts per tenant/agent.</div>
+                                                        </div>
+                                                    </div>
+                                                </div>
+
                                                 <!-- Corpus Dataset toggle -->
                                                 <div style="border-top:1px solid #dcfce7;margin-top:16px;">
-                                                    <div style="padding:12px 20px;cursor:pointer;display:flex;align-items:center;justify-content:space-between;margin:-16px -20px 0 -20px;" onclick="var on=!document.getElementById('use-corpus-enabled').checked;document.getElementById('use-corpus-enabled').checked=on;config.use_corpus=on;document.getElementById('shared-prefix-body').style.display=on?'block':'none';var sw=document.getElementById('use-corpus-switch');sw.style.background=on?'#15803d':'#ccc';sw.querySelector('span').style.transform=on?'translateX(18px)':'translateX(0)';saveConfig();">
+                                                    <div style="padding:12px 20px;cursor:pointer;display:flex;align-items:center;justify-content:space-between;margin:-16px -20px 0 -20px;" onclick="var on=!document.getElementById('use-corpus-enabled').checked;document.getElementById('use-corpus-enabled').checked=on;config.use_corpus=on;var sw=document.getElementById('use-corpus-switch');sw.style.background=on?'#15803d':'#ccc';sw.querySelector('span').style.transform=on?'translateX(18px)':'translateX(0)';saveConfig();">
                                                         <div style="display:flex;align-items:center;gap:10px;padding:12px 20px;">
                                                             <div style="font-size:1.3em;flex-shrink:0;">📖</div>
                                                             <div>
@@ -219,25 +239,6 @@
                                                         <input type="checkbox" id="use-corpus-enabled" style="display:none;">
                                                         <div id="use-corpus-switch" style="width:40px;height:22px;background:#ccc;border-radius:11px;position:relative;transition:background-color 0.2s;flex-shrink:0;margin-right:20px;">
                                                             <span style="position:absolute;top:2px;left:2px;width:18px;height:18px;background:white;border-radius:50%;transition:transform 0.2s;box-shadow:0 1px 3px rgba(0,0,0,0.2);display:block;"></span>
-                                                        </div>
-                                                    </div>
-                                                    <!-- Shared System Prompt (inside corpus toggle) -->
-                                                    <div id="shared-prefix-body" style="display:none;padding-top:12px;">
-                                                        <div style="padding:0 20px 16px;border-top:1px solid #dcfce7;margin-top:12px;padding-top:12px;">
-                                                        <div class="input-group">
-                                                            <label style="font-size:0.85em;margin-bottom:6px;display:block;">Shared System Prompt Configuration</label>
-                                                            <div style="margin-bottom:12px;">
-                                                                <div style="font-size:0.75em;color:#64748b;margin-bottom:4px;">Shared Prefix %: <span id="prefix-pct-value" style="font-weight:700;">0%</span></div>
-                                                                <input type="range" id="prefix-pct-slider" min="0" max="100" value="0" style="width:100%;accent-color:#15803d;" oninput="updateSharedPrefixPercentage(this.value);">
-                                                                <div style="display:flex;justify-content:space-between;font-size:0.75em;color:#94a3b8;margin-top:2px;"><span>0% — none</span><span>100% — entire ISL</span></div>
-                                                                <div id="prefix-tokens-display" style="font-size:0.8em;color:#64748b;margin-top:4px;"></div>
-                                                            </div>
-                                                            <div style="flex:1;">
-                                                                <div style="font-size:0.75em;color:#64748b;margin-bottom:2px;">Unique prefixes</div>
-                                                                <input type="number" id="prefix-count-input" value="" min="1" max="1000" placeholder="e.g. 1" style="width:100%;" oninput="config.prefix_count=this.value?parseInt(this.value):null;saveConfig();">
-                                                            </div>
-                                                            <div class="help-text">A fixed system prompt prepended to every request. The shared prefix % is calculated as a portion of your ISL. All requests with the same prefix share KV cache (prefix caching). Set unique prefixes to 1 for maximum cache reuse, or higher to simulate different system prompts per tenant/agent.</div>
-                                                        </div>
                                                         </div>
                                                     </div>
                                                 </div>
@@ -309,9 +310,29 @@
                                                     </div>
                                                 </div>
 
+                                                <!-- Shared System Prompt (always available, independent of corpus) -->
+                                                <div style="border-top:1px solid #dcfce7;margin-top:16px;">
+                                                    <div style="padding:12px 20px;">
+                                                        <div class="input-group">
+                                                            <label style="font-size:0.85em;margin-bottom:6px;display:block;">📌 Shared System Prompt</label>
+                                                            <div style="margin-bottom:12px;">
+                                                                <div style="font-size:0.75em;color:#64748b;margin-bottom:4px;">Shared Prefix %: <span id="prefix-pct-value-mt" style="font-weight:700;">0%</span></div>
+                                                                <input type="range" id="prefix-pct-slider-mt" min="0" max="100" value="0" style="width:100%;accent-color:#15803d;" oninput="updateSharedPrefixPercentageMT(this.value);">
+                                                                <div style="display:flex;justify-content:space-between;font-size:0.75em;color:#94a3b8;margin-top:2px;"><span>0% — none</span><span>100% — entire ISL</span></div>
+                                                                <div id="prefix-tokens-display-mt" style="font-size:0.8em;color:#64748b;margin-top:4px;"></div>
+                                                            </div>
+                                                            <div style="margin-bottom:12px;">
+                                                                <div style="font-size:0.75em;color:#64748b;margin-bottom:2px;">Unique prefixes</div>
+                                                                <input type="number" id="prefix-count-input-mt" value="" min="1" max="1000" placeholder="e.g. 1" style="width:100%;" oninput="config.prefix_count=this.value?parseInt(this.value):null;saveConfig();">
+                                                            </div>
+                                                            <div class="help-text">A fixed system prompt prepended to every turn. The shared prefix % is calculated as a portion of your per-turn ISL. Works with both synthetic and real text corpus. All turns with the same prefix share KV cache. Set unique prefixes to 1 for maximum cache reuse, or higher to simulate different system prompts per tenant/agent.</div>
+                                                        </div>
+                                                    </div>
+                                                </div>
+
                                                 <!-- Corpus Dataset toggle (Multi-Turn) -->
                                                 <div style="border-top:1px solid #dcfce7;margin-top:16px;">
-                                                    <div style="padding:12px 20px;cursor:pointer;display:flex;align-items:center;justify-content:space-between;margin:-16px -20px 0 -20px;" onclick="var on=!document.getElementById('use-corpus-enabled-mt').checked;document.getElementById('use-corpus-enabled-mt').checked=on;config.use_corpus=on;document.getElementById('shared-prefix-mt-body').style.display=on?'block':'none';var sw=document.getElementById('use-corpus-switch-mt');sw.style.background=on?'#15803d':'#ccc';sw.querySelector('span').style.transform=on?'translateX(18px)':'translateX(0)';saveConfig();">
+                                                    <div style="padding:12px 20px;cursor:pointer;display:flex;align-items:center;justify-content:space-between;margin:-16px -20px 0 -20px;" onclick="var on=!document.getElementById('use-corpus-enabled-mt').checked;document.getElementById('use-corpus-enabled-mt').checked=on;config.use_corpus=on;var sw=document.getElementById('use-corpus-switch-mt');sw.style.background=on?'#15803d':'#ccc';sw.querySelector('span').style.transform=on?'translateX(18px)':'translateX(0)';saveConfig();">
                                                         <div style="display:flex;align-items:center;gap:10px;padding:12px 20px;">
                                                             <div style="font-size:1.3em;flex-shrink:0;">📖</div>
                                                             <div>
@@ -322,25 +343,6 @@
                                                         <input type="checkbox" id="use-corpus-enabled-mt" style="display:none;">
                                                         <div id="use-corpus-switch-mt" style="width:40px;height:22px;background:#ccc;border-radius:11px;position:relative;transition:background-color 0.2s;flex-shrink:0;margin-right:20px;">
                                                             <span style="position:absolute;top:2px;left:2px;width:18px;height:18px;background:white;border-radius:50%;transition:transform 0.2s;box-shadow:0 1px 3px rgba(0,0,0,0.2);display:block;"></span>
-                                                        </div>
-                                                    </div>
-                                                    <!-- Shared System Prompt (inside corpus toggle) -->
-                                                    <div id="shared-prefix-mt-body" style="display:none;padding-top:12px;">
-                                                        <div style="padding:0 20px 16px;border-top:1px solid #dcfce7;margin-top:12px;padding-top:12px;">
-                                                        <div class="input-group">
-                                                            <label style="font-size:0.85em;margin-bottom:6px;display:block;">Shared System Prompt Configuration</label>
-                                                            <div style="margin-bottom:12px;">
-                                                                <div style="font-size:0.75em;color:#64748b;margin-bottom:4px;">Shared Prefix %: <span id="prefix-pct-value-mt" style="font-weight:700;">0%</span></div>
-                                                                <input type="range" id="prefix-pct-slider-mt" min="0" max="100" value="0" style="width:100%;accent-color:#15803d;" oninput="updateSharedPrefixPercentageMT(this.value);">
-                                                                <div style="display:flex;justify-content:space-between;font-size:0.75em;color:#94a3b8;margin-top:2px;"><span>0% — none</span><span>100% — entire ISL</span></div>
-                                                                <div id="prefix-tokens-display-mt" style="font-size:0.8em;color:#64748b;margin-top:4px;"></div>
-                                                            </div>
-                                                            <div style="flex:1;">
-                                                                <div style="font-size:0.75em;color:#64748b;margin-bottom:2px;">Unique prefixes</div>
-                                                                <input type="number" id="prefix-count-input-mt" value="" min="1" max="1000" placeholder="e.g. 1" style="width:100%;" oninput="config.prefix_count=this.value?parseInt(this.value):null;saveConfig();">
-                                                            </div>
-                                                            <div class="help-text">A fixed system prompt prepended to every turn. The shared prefix % is calculated as a portion of your per-turn ISL. All turns with the same prefix share KV cache (prefix caching). Set unique prefixes to 1 for maximum cache reuse, or higher to simulate different system prompts per tenant/agent.</div>
-                                                        </div>
                                                         </div>
                                                     </div>
                                                 </div>
