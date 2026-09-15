@@ -482,6 +482,7 @@
                                                             <label>Prefix Cache Hit Ratio: <span id="prefix-cache-value-mt" style="font-weight:800;color:var(--rh-red-primary);">0%</span></label>
                                                             <input type="range" id="prefix-cache-slider-mt" min="0" max="100" value="0" style="width:100%;accent-color:var(--rh-red-primary);" oninput="config.prefix_cache_hit_pct=parseInt(this.value);document.getElementById('prefix-cache-value-mt').textContent=this.value+'%';saveConfig();updatePrefixCacheModeDesc();">
                                                             <div style="display:flex;justify-content:space-between;font-size:0.75em;color:#94a3b8;margin-top:2px;"><span>0% — all unique prompts</span><span>100% — all identical</span></div>
+                                                            <div class="help-text" style="margin-top:8px;">Percentage of requests that can reuse KV cache from previous requests. How this plays out depends on your cache mode (see below). Examples: 0% = every request is fresh; 30% = roughly 3 in 10 requests hit cache; 100% = all requests are identical (full cache reuse).</div>
                                                         </div>
                                                         <div class="input-group" style="margin-top:12px;">
                                                             <label>Unique Prefixes: <span id="prefix-count-value-mt" style="font-weight:700;">1</span></label>
