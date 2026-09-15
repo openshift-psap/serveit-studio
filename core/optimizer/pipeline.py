@@ -5,6 +5,7 @@ import time
 import json
 import math
 import logging
+import yaml
 from typing import Dict, List, Tuple, Optional, Any, Callable
 
 from core.optimizer.config import (
@@ -273,12 +274,8 @@ class RecipeOptimizer(
         self._supports_pp = False
         if self._model_config:
             model_archs = self._model_config.get('architectures', [])
-            pp_supported_archs = [
-                'LlamaForCausalLM', 'MistralForCausalLM', 'PhiForCausalLM',
-                'DeepseekForCausalLM', 'LLaMAForCausalLM',
-                'GPT2LMHeadModel', 'GPTNeoForCausalLM', 'GPTNeoXForCausalLM',
-                'BloomForCausalLM', 'Falcon', 'FalconForCausalLM'
-            ]
+            pp_supported_archs = self._load_pp_supported_architectures()
+
             if any(a in pp_supported_archs for a in model_archs):
                 self._supports_pp = True
                 self.log(f"Pipeline Parallelism (PP) supported (architecture: {model_archs[0]})")
@@ -476,6 +473,35 @@ class RecipeOptimizer(
         self.completed_tests: Dict[str, Dict[str, Any]] = {}
         if self.db_manager and self.run_id:
             self._load_completed_tests()
+
+    def _load_pp_supported_architectures(self) -> List[str]:
+        """Load PP-supported model architectures from config file."""
+        config_path = os.path.join(
+            os.path.dirname(__file__),
+            'pp_supported_models.yaml'
+        )
+
+        try:
+            with open(config_path, 'r') as f:
+                config = yaml.safe_load(f)
+                supported = []
+                if config.get('dense_models'):
+                    supported.extend(config['dense_models'])
+                if config.get('moe_models'):
+                    supported.extend(config['moe_models'])
+                return supported
+        except FileNotFoundError:
+            self.log(f"⚠️  PP config file not found at {config_path}, using fallback list", 'warning')
+            return [
+                'LlamaForCausalLM', 'MistralForCausalLM', 'PhiForCausalLM',
+                'DeepseekForCausalLM', 'DeepseekV4ForCausalLM',
+                'QwenForCausalLM', 'GemmaForCausalLM', 'GLMForCausalLM',
+                'GPT2LMHeadModel', 'GPTNeoForCausalLM', 'GPTNeoXForCausalLM',
+                'BloomForCausalLM', 'Falcon', 'FalconForCausalLM'
+            ]
+        except Exception as e:
+            self.log(f"⚠️  Error loading PP config: {e}, using fallback list", 'warning')
+            return []
 
     def _should_stop(self) -> bool:
         """Check if optimization should stop."""

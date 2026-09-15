@@ -1,0 +1,29 @@
+# Pipeline Parallelism (PP) Support Matrix
+# List of model architectures that support vLLM Pipeline Parallelism
+# Update this file when testing new models instead of modifying pipeline.py
+
+# Dense transformer models (general PP support)
+dense_models:
+  - LlamaForCausalLM
+  - MistralForCausalLM
+  - PhiForCausalLM
+  - QwenForCausalLM
+  - GemmaForCausalLM
+  - GLMForCausalLM
+  - GPT2LMHeadModel
+  - GPTNeoForCausalLM
+  - GPTNeoXForCausalLM
+  - BloomForCausalLM
+  - Falcon
+  - FalconForCausalLM
+  - Yi
+  - YiForCausalLM
+
+# MoE models with confirmed PP support
+moe_models:
+  - DeepseekForCausalLM      # DeepSeek v2/v3
+  - DeepseekV4ForCausalLM    # DeepSeek V4 Flash
+  - MixtralForCausalLM       # Mixtral (expert parallelism)
+
+# Models without PP support (even if they might look like they should)
+no_pp_support: []
