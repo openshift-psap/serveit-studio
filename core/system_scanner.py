@@ -158,7 +158,7 @@ class ClusterResources:
         print(f"[estimate_model_gpu_requirement] ratio={ratio:.2f}, int={int(ratio)}, min_gpus={min_gpus}, min_tp={tp}", file=sys.stderr)
         sys.stderr.flush()
 
-        return min(tp, self.max_gpus_per_node)
+        return tp
 
 
 class SystemScanner:
