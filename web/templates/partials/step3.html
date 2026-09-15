@@ -226,17 +226,17 @@
                                                         <div style="padding:0 20px 16px;border-top:1px solid #dcfce7;margin-top:12px;padding-top:12px;">
                                                         <div class="input-group">
                                                             <label style="font-size:0.85em;margin-bottom:6px;display:block;">Shared System Prompt Configuration</label>
-                                                            <div style="display:flex;gap:8px;align-items:flex-start;">
-                                                                <div style="flex:1;">
-                                                                    <div style="font-size:0.75em;color:#64748b;margin-bottom:2px;">Prefix tokens</div>
-                                                                    <input type="number" id="prefix-tokens-input" value="" min="0" max="100000" placeholder="e.g. 1000" style="width:100%;" oninput="config.prefix_tokens=this.value?parseInt(this.value):null;saveConfig();">
-                                                                </div>
-                                                                <div style="flex:1;">
-                                                                    <div style="font-size:0.75em;color:#64748b;margin-bottom:2px;">Unique prefixes</div>
-                                                                    <input type="number" id="prefix-count-input" value="" min="1" max="1000" placeholder="e.g. 1" style="width:100%;" oninput="config.prefix_count=this.value?parseInt(this.value):null;saveConfig();">
-                                                                </div>
+                                                            <div style="margin-bottom:12px;">
+                                                                <div style="font-size:0.75em;color:#64748b;margin-bottom:4px;">Shared Prefix %: <span id="prefix-pct-value" style="font-weight:700;">0%</span></div>
+                                                                <input type="range" id="prefix-pct-slider" min="0" max="100" value="0" style="width:100%;accent-color:#15803d;" oninput="updateSharedPrefixPercentage(this.value);">
+                                                                <div style="display:flex;justify-content:space-between;font-size:0.75em;color:#94a3b8;margin-top:2px;"><span>0% — none</span><span>100% — entire ISL</span></div>
+                                                                <div id="prefix-tokens-display" style="font-size:0.8em;color:#64748b;margin-top:4px;"></div>
                                                             </div>
-                                                            <div class="help-text">A fixed system prompt prepended to every request. All requests with the same prefix share KV cache (prefix caching). Set unique prefixes to 1 for maximum cache reuse, or higher to simulate different system prompts per tenant/agent.</div>
+                                                            <div style="flex:1;">
+                                                                <div style="font-size:0.75em;color:#64748b;margin-bottom:2px;">Unique prefixes</div>
+                                                                <input type="number" id="prefix-count-input" value="" min="1" max="1000" placeholder="e.g. 1" style="width:100%;" oninput="config.prefix_count=this.value?parseInt(this.value):null;saveConfig();">
+                                                            </div>
+                                                            <div class="help-text">A fixed system prompt prepended to every request. The shared prefix % is calculated as a portion of your ISL. All requests with the same prefix share KV cache (prefix caching). Set unique prefixes to 1 for maximum cache reuse, or higher to simulate different system prompts per tenant/agent.</div>
                                                         </div>
                                                         </div>
                                                     </div>
@@ -329,17 +329,17 @@
                                                         <div style="padding:0 20px 16px;border-top:1px solid #dcfce7;margin-top:12px;padding-top:12px;">
                                                         <div class="input-group">
                                                             <label style="font-size:0.85em;margin-bottom:6px;display:block;">Shared System Prompt Configuration</label>
-                                                            <div style="display:flex;gap:8px;align-items:flex-start;">
-                                                                <div style="flex:1;">
-                                                                    <div style="font-size:0.75em;color:#64748b;margin-bottom:2px;">Prefix tokens</div>
-                                                                    <input type="number" id="prefix-tokens-input-mt" value="" min="0" max="100000" placeholder="e.g. 1000" style="width:100%;" oninput="config.prefix_tokens=this.value?parseInt(this.value):null;saveConfig();">
-                                                                </div>
-                                                                <div style="flex:1;">
-                                                                    <div style="font-size:0.75em;color:#64748b;margin-bottom:2px;">Unique prefixes</div>
-                                                                    <input type="number" id="prefix-count-input-mt" value="" min="1" max="1000" placeholder="e.g. 1" style="width:100%;" oninput="config.prefix_count=this.value?parseInt(this.value):null;saveConfig();">
-                                                                </div>
+                                                            <div style="margin-bottom:12px;">
+                                                                <div style="font-size:0.75em;color:#64748b;margin-bottom:4px;">Shared Prefix %: <span id="prefix-pct-value-mt" style="font-weight:700;">0%</span></div>
+                                                                <input type="range" id="prefix-pct-slider-mt" min="0" max="100" value="0" style="width:100%;accent-color:#15803d;" oninput="updateSharedPrefixPercentageMT(this.value);">
+                                                                <div style="display:flex;justify-content:space-between;font-size:0.75em;color:#94a3b8;margin-top:2px;"><span>0% — none</span><span>100% — entire ISL</span></div>
+                                                                <div id="prefix-tokens-display-mt" style="font-size:0.8em;color:#64748b;margin-top:4px;"></div>
                                                             </div>
-                                                            <div class="help-text">A fixed system prompt prepended to every turn. All turns with the same prefix share KV cache (prefix caching). Set unique prefixes to 1 for maximum cache reuse, or higher to simulate different system prompts per tenant/agent.</div>
+                                                            <div style="flex:1;">
+                                                                <div style="font-size:0.75em;color:#64748b;margin-bottom:2px;">Unique prefixes</div>
+                                                                <input type="number" id="prefix-count-input-mt" value="" min="1" max="1000" placeholder="e.g. 1" style="width:100%;" oninput="config.prefix_count=this.value?parseInt(this.value):null;saveConfig();">
+                                                            </div>
+                                                            <div class="help-text">A fixed system prompt prepended to every turn. The shared prefix % is calculated as a portion of your per-turn ISL. All turns with the same prefix share KV cache (prefix caching). Set unique prefixes to 1 for maximum cache reuse, or higher to simulate different system prompts per tenant/agent.</div>
                                                         </div>
                                                         </div>
                                                     </div>

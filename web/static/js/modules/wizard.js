@@ -310,3 +310,34 @@ if (turnsInputMt) {
         saveConfig();
     });
 }
+
+// Shared Prefix Percentage - Continuous Workload
+function updateSharedPrefixPercentage(pct) {
+    var isl = parseInt(document.getElementById('isl-input').value) || 3000;
+    var prefixTokens = Math.floor(isl * pct / 100);
+    config.prefix_tokens = prefixTokens > 0 ? prefixTokens : null;
+    document.getElementById('prefix-pct-value').textContent = pct + '%';
+    document.getElementById('prefix-tokens-display').textContent = 'Calculated: ' + prefixTokens + ' tokens of ' + isl;
+    saveConfig();
+}
+
+// Shared Prefix Percentage - Multi-Turn Workload
+function updateSharedPrefixPercentageMT(pct) {
+    var isl = parseInt(document.getElementById('isl-input-mt').value) || 2000;
+    var prefixTokens = Math.floor(isl * pct / 100);
+    config.prefix_tokens = prefixTokens > 0 ? prefixTokens : null;
+    document.getElementById('prefix-pct-value-mt').textContent = pct + '%';
+    document.getElementById('prefix-tokens-display-mt').textContent = 'Calculated: ' + prefixTokens + ' tokens of ' + isl;
+    saveConfig();
+}
+
+// Update shared prefix display when ISL changes
+document.getElementById('isl-input').addEventListener('change', function() {
+    var pct = parseInt(document.getElementById('prefix-pct-slider').value) || 0;
+    if (pct > 0) updateSharedPrefixPercentage(pct);
+});
+
+document.getElementById('isl-input-mt').addEventListener('change', function() {
+    var pct = parseInt(document.getElementById('prefix-pct-slider-mt').value) || 0;
+    if (pct > 0) updateSharedPrefixPercentageMT(pct);
+});
