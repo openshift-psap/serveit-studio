@@ -210,7 +210,6 @@ function setWorkloadType(type) {
     const multiturnBtn = document.getElementById('workload-type-multiturn');
     const continuousSettings = document.getElementById('continuous-settings');
     const multiturnSettings = document.getElementById('multiturn-settings');
-    const prefixCacheContinuous = document.getElementById('prefix-cache-continuous');
 
     if (type === 'continuous') {
         continuousBtn.style.background = '#3b82f6';
@@ -221,7 +220,6 @@ function setWorkloadType(type) {
         multiturnBtn.style.borderColor = '#cbd5e1';
         continuousSettings.style.display = 'block';
         multiturnSettings.style.display = 'none';
-        if (prefixCacheContinuous) prefixCacheContinuous.style.display = 'block';
         // Sync inputs from multi-turn to continuous if needed
         var isl_mt = document.getElementById('isl-input-mt');
         var osl_mt = document.getElementById('osl-input-mt');
@@ -238,7 +236,6 @@ function setWorkloadType(type) {
         continuousBtn.style.borderColor = '#cbd5e1';
         continuousSettings.style.display = 'none';
         multiturnSettings.style.display = 'block';
-        if (prefixCacheContinuous) prefixCacheContinuous.style.display = 'none';
         // Sync inputs from continuous to multi-turn if needed
         var isl = document.getElementById('isl-input');
         var osl = document.getElementById('osl-input');
