@@ -2354,8 +2354,15 @@ spec:
         total_bytes += hidden * num_layers * 4 * 2
 
         total_gb = total_bytes / (1024 ** 3)
-        self.log(f"Weight memory from config: {total_gb:.0f} GB "
-                 f"({'NVFP4' if has_nvfp4 else 'FP8' if has_fp8 else self._model_dtype})")
+        quant_desc = (
+            'NVFP4+FP8 mixed' if (has_nvfp4 and has_fp8) else
+            'NVFP4' if has_nvfp4 else
+            'FP8' if has_fp8 else
+            self._model_dtype
+        )
+        self.log(f"Weight memory from config: {total_gb:.0f} GB ({quant_desc})")
+        self.log(f"  DEBUG: has_nvfp4={has_nvfp4}, has_fp8={has_fp8}, expert_bpp={expert_bpp}, non_expert_bpp={non_expert_bpp}")
+        self.log(f"  DEBUG: n_experts={n_experts}, n_shared={n_shared}, attn_count={attn_count}, moe_count={moe_count if moe_count > 0 else 0}")
         return total_gb
 
 
