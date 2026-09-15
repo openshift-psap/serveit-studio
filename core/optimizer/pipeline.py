@@ -269,6 +269,23 @@ class RecipeOptimizer(
                 self.log(f"  Hybrid attention detected ({', '.join(reason)})")
                 self.log("    PD disaggregation requires NixlConnector with HMA support (vLLM >= v0.19)")
 
+        # Detect Pipeline Parallelism (PP) support from model architecture
+        self._supports_pp = False
+        if self._model_config:
+            model_archs = self._model_config.get('architectures', [])
+            pp_supported_archs = [
+                'LlamaForCausalLM', 'MistralForCausalLM', 'PhiForCausalLM',
+                'DeepseekForCausalLM', 'LLaMAForCausalLM',
+                'GPT2LMHeadModel', 'GPTNeoForCausalLM', 'GPTNeoXForCausalLM',
+                'BloomForCausalLM', 'Falcon', 'FalconForCausalLM'
+            ]
+            if any(a in pp_supported_archs for a in model_archs):
+                self._supports_pp = True
+                self.log(f"Pipeline Parallelism (PP) supported (architecture: {model_archs[0]})")
+            else:
+                self.log(f"⚠️  Pipeline Parallelism (PP) NOT supported (architecture: {model_archs[0] if model_archs else 'unknown'})")
+                self.log("    PP tests will be skipped. Use Tensor Parallelism (TP) for multi-GPU scaling.")
+
         # Detect DeepGemm compatibility from quantization config
         self._use_deep_gemm = None  # None = let vLLM decide
         if self._model_config and self._model_dtype == 'fp8':

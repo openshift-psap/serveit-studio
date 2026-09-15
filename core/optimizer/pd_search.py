@@ -563,67 +563,72 @@ class PDSearchMixin:
         has_rdma = self.cluster_resources.has_rdma if self.cluster_resources else False
         gpus_per_node = self.cluster_resources.max_gpus_per_node if self.cluster_resources else 8
         if (gpu_node_count >= 2 and not has_rdma):
-            self.log(f"Testing aggregated PP variants (no RDMA, {gpu_node_count} nodes):", 'info')
-            for tp in valid_tp:
-                if self._should_stop():
-                    break
-                if tp > gpus_per_node:
-                    continue  # PP uses node-local TP; multi-node TP already covered above
-                for pp in range(2, min(gpu_node_count, total_gpus // tp) + 1):
-                    replicas = total_gpus // (tp * pp)
-                    if replicas < 1:
-                        continue
-                    actual_gpus = tp * pp * replicas
+            # Check if model supports Pipeline Parallelism before testing
+            if not self._supports_pp:
+                self.log(f"⚠️  Skipping PP tests — model does not support Pipeline Parallelism", 'warning')
+                self.log(f"    Use Tensor Parallelism (TP) for {gpu_node_count}-node scaling", 'info')
+            else:
+                self.log(f"Testing aggregated PP variants (no RDMA, {gpu_node_count} nodes):", 'info')
+                for tp in valid_tp:
+                    if self._should_stop():
+                        break
+                    if tp > gpus_per_node:
+                        continue  # PP uses node-local TP; multi-node TP already covered above
+                    for pp in range(2, min(gpu_node_count, total_gpus // tp) + 1):
+                        replicas = total_gpus // (tp * pp)
+                        if replicas < 1:
+                            continue
+                        actual_gpus = tp * pp * replicas
 
-                    test_id = f"step6-agg-tp{tp}-pp{pp}-{replicas}r"
-                    self.log(f"  PP Test: TP={tp}, PP={pp}, {replicas} replicas ({actual_gpus} GPUs)", 'info')
+                        test_id = f"step6-agg-tp{tp}-pp{pp}-{replicas}r"
+                        self.log(f"  PP Test: TP={tp}, PP={pp}, {replicas} replicas ({actual_gpus} GPUs)", 'info')
 
-                    if test_id in self.completed_tests:
-                        row = self.completed_tests[test_id]
-                        result = self._make_test_result_from_db(row)
-                        self.log("    ⏩ Resuming from DB (already completed)", 'info')
-                    else:
-                        test_config = self._create_aggregated_config(
-                            tp=tp,
-                            num_gpus=actual_gpus,
-                            isl=self.config.isl,
-                            osl=self.config.osl,
-                            test_id=test_id,
-                            use_concurrency=True,
-                            pipeline_parallel_size=pp
-                        )
+                        if test_id in self.completed_tests:
+                            row = self.completed_tests[test_id]
+                            result = self._make_test_result_from_db(row)
+                            self.log("    ⏩ Resuming from DB (already completed)", 'info')
+                        else:
+                            test_config = self._create_aggregated_config(
+                                tp=tp,
+                                num_gpus=actual_gpus,
+                                isl=self.config.isl,
+                                osl=self.config.osl,
+                                test_id=test_id,
+                                use_concurrency=True,
+                                pipeline_parallel_size=pp
+                            )
 
-                        result = self.orchestrator.run_test(
-                            test_config,
-                            cleanup=True,
-                            log_callback=lambda msg: self.log(msg, 'info'),
-                            stop_check=self._should_stop
-                        )
-
-                        self.all_test_results.append((test_config, result))
-                        self._save_test_to_database(test_config, result)
-
-                        if self._should_stop():
-                            break
-
-                        if not result or not result.guidellm_success:
-                            self.log("    ⚠️  Test failed — retrying", 'warning')
                             result = self.orchestrator.run_test(
-                                test_config, cleanup=True,
+                                test_config,
+                                cleanup=True,
                                 log_callback=lambda msg: self.log(msg, 'info'),
                                 stop_check=self._should_stop
                             )
+
                             self.all_test_results.append((test_config, result))
                             self._save_test_to_database(test_config, result)
-                            if not result or not result.guidellm_success:
-                                self.log(f"    ⚠️  PP test {test_id} failed after retries — skipping this config", 'warning')
-                                continue
 
-                    if result and result.guidellm_success:
-                        ttft = result.ttft_p90 or result.ttft_p50 or 1000000.0
-                        throughput = result.throughput_mean or result.throughput_p90 or 0.0
-                        self.log(f"    ✅ TTFT p90: {ttft:.1f}ms, Throughput mean: {throughput:.2f} req/s", 'success')
-                        self.aggregated_search_results.append((tp, pp, result))
+                            if self._should_stop():
+                                break
+
+                            if not result or not result.guidellm_success:
+                                self.log("    ⚠️  Test failed — retrying", 'warning')
+                                result = self.orchestrator.run_test(
+                                    test_config, cleanup=True,
+                                    log_callback=lambda msg: self.log(msg, 'info'),
+                                    stop_check=self._should_stop
+                                )
+                                self.all_test_results.append((test_config, result))
+                                self._save_test_to_database(test_config, result)
+                                if not result or not result.guidellm_success:
+                                    self.log(f"    ⚠️  PP test {test_id} failed after retries — skipping this config", 'warning')
+                                    continue
+
+                        if result and result.guidellm_success:
+                            ttft = result.ttft_p90 or result.ttft_p50 or 1000000.0
+                            throughput = result.throughput_mean or result.throughput_p90 or 0.0
+                            self.log(f"    ✅ TTFT p90: {ttft:.1f}ms, Throughput mean: {throughput:.2f} req/s", 'success')
+                            self.aggregated_search_results.append((tp, pp, result))
 
         # Also test DP (data parallel) variants for MoE models on multi-node clusters
         # Skip if model fits on 1 GPU (TP=1 valid) — independent replicas are simpler and faster
