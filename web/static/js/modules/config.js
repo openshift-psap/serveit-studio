@@ -101,6 +101,12 @@ function updateUIFromConfig() {
         }
     }
     if (config.length_unit) setLengthUnit(config.length_unit, true);
+
+    // Restore workload type selection
+    if (config.workload_type) {
+        setWorkloadType(config.workload_type);
+    }
+
     if (document.getElementById('multi-turn-enabled')) {
         if (config.turns && config.turns > 1) {
             document.getElementById('multi-turn-enabled').checked = true;

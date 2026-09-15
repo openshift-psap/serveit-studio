@@ -197,3 +197,92 @@ if (turnsInput) {
         saveConfig();
     });
 }
+
+// Workload Type Selector (Continuous vs Multi-Turn)
+var workloadType = config.workload_type || 'continuous';
+
+function setWorkloadType(type) {
+    workloadType = type;
+    config.workload_type = type;
+    saveConfig();
+
+    const continuousBtn = document.getElementById('workload-type-continuous');
+    const multiturnBtn = document.getElementById('workload-type-multiturn');
+    const continuousSettings = document.getElementById('continuous-settings');
+    const multiturnSettings = document.getElementById('multiturn-settings');
+    const prefixCacheContinuous = document.getElementById('prefix-cache-continuous');
+
+    if (type === 'continuous') {
+        continuousBtn.style.background = '#3b82f6';
+        continuousBtn.style.color = 'white';
+        continuousBtn.style.borderColor = '#3b82f6';
+        multiturnBtn.style.background = '#f3f4f6';
+        multiturnBtn.style.color = '#1f2937';
+        multiturnBtn.style.borderColor = '#cbd5e1';
+        continuousSettings.style.display = 'block';
+        multiturnSettings.style.display = 'none';
+        prefixCacheContinuous.style.display = 'block';
+        // Sync inputs from multi-turn to continuous if needed
+        var isl_mt = document.getElementById('isl-input-mt');
+        var osl_mt = document.getElementById('osl-input-mt');
+        if (isl_mt && osl_mt) {
+            document.getElementById('isl-input').value = isl_mt.value || 3000;
+            document.getElementById('osl-input').value = osl_mt.value || 100;
+        }
+    } else {
+        multiturnBtn.style.background = '#3b82f6';
+        multiturnBtn.style.color = 'white';
+        multiturnBtn.style.borderColor = '#3b82f6';
+        continuousBtn.style.background = '#f3f4f6';
+        continuousBtn.style.color = '#1f2937';
+        continuousBtn.style.borderColor = '#cbd5e1';
+        continuousSettings.style.display = 'none';
+        multiturnSettings.style.display = 'block';
+        prefixCacheContinuous.style.display = 'none';
+        // Sync inputs from continuous to multi-turn if needed
+        var isl = document.getElementById('isl-input');
+        var osl = document.getElementById('osl-input');
+        if (isl && osl) {
+            document.getElementById('isl-input-mt').value = isl.value || 2000;
+            document.getElementById('osl-input-mt').value = osl.value || 500;
+        }
+        // Ensure turns is set
+        config.turns = Math.max(2, parseInt(document.getElementById('turns-input-mt').value) || 10);
+    }
+}
+
+// Initialize workload type button styles on page load
+document.addEventListener('DOMContentLoaded', function() {
+    setTimeout(function() {
+        setWorkloadType(workloadType);
+    }, 100);
+});
+
+// Add event listeners for multi-turn inputs
+['isl', 'osl'].forEach(field => {
+    var el = document.getElementById(`${field}-input-mt`);
+    if (el) {
+        el.addEventListener('change', (e) => {
+            config[field] = parseInt(e.target.value);
+            saveConfig();
+        });
+    }
+});
+
+// Multi-turn stdev listeners
+document.getElementById('isl-stdev-input-mt').addEventListener('change', (e) => {
+    config.isl_stdev = e.target.value ? parseInt(e.target.value) : null;
+    saveConfig();
+});
+document.getElementById('osl-stdev-input-mt').addEventListener('change', (e) => {
+    config.osl_stdev = e.target.value ? parseInt(e.target.value) : null;
+    saveConfig();
+});
+
+var turnsInputMt = document.getElementById('turns-input-mt');
+if (turnsInputMt) {
+    turnsInputMt.addEventListener('change', (e) => {
+        config.turns = Math.max(2, parseInt(e.target.value) || 10);
+        saveConfig();
+    });
+}
