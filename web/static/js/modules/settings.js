@@ -482,22 +482,26 @@ function setPrefixCacheMode(mode) {
 }
 
 function updatePrefixCacheModeDesc() {
-    var desc = document.getElementById('prefix-cache-mode-desc');
-    if (!desc) return;
+    var descs = document.querySelectorAll('#prefix-cache-mode-desc, #prefix-cache-mode-desc-mt');
+    if (!descs || descs.length === 0) return;
     var pct = config.prefix_cache_hit_pct || 0;
     var mode = config.prefix_cache_mode || 'identical';
     var unique = 100 - pct;
+    var html;
     if (mode === 'shared_prefix') {
-        desc.innerHTML = '<strong style="color:#0369a1;">Shared Prefix</strong> &mdash; Every prompt starts with the same <strong>' + pct + '%</strong> of tokens (the shared prefix), followed by <strong>' + unique + '%</strong> unique tokens. All requests get partial cache hits &mdash; the shared portion is served from KV cache, only the unique suffix needs computation.<br><br>' +
+        html = '<strong style="color:#0369a1;">Shared Prefix</strong> &mdash; Every prompt starts with the same <strong>' + pct + '%</strong> of tokens (the shared prefix), followed by <strong>' + unique + '%</strong> unique tokens. All requests get partial cache hits &mdash; the shared portion is served from KV cache, only the unique suffix needs computation.<br><br>' +
             '<span style="color:#64748b;">Simulates: system prompts, few-shot examples, or shared context that is common across all requests.</span>';
     } else if (mode === 'multi_group') {
         var groups = config.prefix_cache_groups || 5;
-        desc.innerHTML = '<strong style="color:#0369a1;">Multi-Group</strong> &mdash; <strong>' + groups + ' distinct prompt groups</strong>, each with its own shared prefix. <strong>' + pct + '%</strong> of requests belong to one of the groups (cache hit if routed to the right pod). The remaining <strong>' + unique + '%</strong> are fully unique (cache miss).<br><br>' +
+        html = '<strong style="color:#0369a1;">Multi-Group</strong> &mdash; <strong>' + groups + ' distinct prompt groups</strong>, each with its own shared prefix. <strong>' + pct + '%</strong> of requests belong to one of the groups (cache hit if routed to the right pod). The remaining <strong>' + unique + '%</strong> are fully unique (cache miss).<br><br>' +
             '<span style="color:#64748b;">Simulates: multi-tenant deployments where different applications or users have different system prompts. Tests EPP routing precision &mdash; the gateway must route each request to the pod that has that specific group\'s prefix cached.</span>';
     } else {
-        desc.innerHTML = '<strong style="color:#0369a1;">Identical Prompts</strong> &mdash; <strong>' + pct + '%</strong> of requests use the exact same prompt (full cache hit). The remaining <strong>' + unique + '%</strong> are completely unique prompts (cache miss).<br><br>' +
+        html = '<strong style="color:#0369a1;">Identical Prompts</strong> &mdash; <strong>' + pct + '%</strong> of requests use the exact same prompt (full cache hit). The remaining <strong>' + unique + '%</strong> are completely unique prompts (cache miss).<br><br>' +
             '<span style="color:#64748b;">Simulates: popular queries, FAQ-style workloads, or repeated API calls with the same input.</span>';
     }
+    descs.forEach(desc => {
+        desc.innerHTML = html;
+    });
 }
 
 function toggleEppCustomMode(enabled) {
