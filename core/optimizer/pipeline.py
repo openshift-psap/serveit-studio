@@ -2313,10 +2313,15 @@ spec:
             mamba_params = 4 * hidden * hidden  # in_proj + out_proj + conv + dt
             total_bytes += mamba_params * non_expert_bpp * mamba_count
 
-        # Attention layers
+        # Attention layers (count all attention variants: standard, sliding, compressed, etc.)
         attn_count = block_counts.get('attention', 0) if blocks else num_layers
-        # Also count sliding_attention and full_attention (Gemma 4 layer_types)
-        attn_count += block_counts.get('sliding_attention', 0) + block_counts.get('full_attention', 0)
+        # Also count all attention variants (Gemma 4, DeepSeek V4, etc. use specialized attention types)
+        attn_count += (
+            block_counts.get('sliding_attention', 0) +
+            block_counts.get('full_attention', 0) +
+            block_counts.get('compressed_sparse_attention', 0) +
+            block_counts.get('heavily_compressed_attention', 0)
+        )
         attn_params = hidden * (num_heads * head_dim + 2 * num_kv_heads * head_dim) + num_heads * head_dim * hidden
 
         if attn_count > 0 and n_experts <= 1:
