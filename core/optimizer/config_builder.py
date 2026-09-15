@@ -679,9 +679,13 @@ class ConfigBuilderMixin:
                 cfg.enable_eplb = False
                 cfg.enable_dbo = False
 
-        # DeepSeek V4 Flash with mixed-precision quantization requires FP8 KV cache
+        # DeepSeek V4 Flash with mixed-precision quantization requires FP8 KV cache.
+        # Only override if user left it on Auto (mode != 'custom').
+        # If user explicitly set a value, respect their choice.
         if self._requires_fp8_kv_cache:
-            cfg.kv_cache_dtype = 'fp8'
+            kv_setting = adv.get('kv_cache_dtype') if adv else None
+            if not kv_setting or kv_setting.get('mode') != 'custom':
+                cfg.kv_cache_dtype = 'fp8'
 
         return cfg
 
