@@ -2000,8 +2000,9 @@ spec:
             else:
                 min_conc = 1
             reserve_pct = getattr(self.config, 'memory_reserve_pct', 0.0)
+            model_size = self._estimate_model_size_gb()
             min_tp = self.cluster_resources.estimate_model_gpu_requirement(
-                model_size_gb=self._estimate_model_size_gb(),
+                model_size_gb=model_size,
                 dtype=self._model_dtype,
                 is_moe=self._is_moe,
                 model_config=self._model_config,
@@ -2010,6 +2011,7 @@ spec:
                 extra_reserve_pct=reserve_pct,
                 gpu_memory_utilization=gmu
             )
+            self.log(f"DEBUG _get_valid_tp_options: model_size={model_size:.0f}GB, seq_len={seq_len}, min_conc={min_conc}, gmu={gmu:.2f} → min_tp={min_tp}")
             tp_options = [tp for tp in tp_options if tp >= min_tp]
             tp_options = [tp for tp in tp_options if tp <= min(self.config.total_gpus, max_tp)]
         else:
@@ -2209,9 +2211,11 @@ spec:
         """
         if self._model_config:
             try:
-                return self._estimate_weight_memory_from_config()
-            except Exception:
-                pass
+                result = self._estimate_weight_memory_from_config()
+                self.log(f"DEBUG _estimate_model_size_gb: from config = {result:.0f}GB")
+                return result
+            except Exception as e:
+                self.log(f"DEBUG _estimate_model_size_gb: exception in config calculation: {e}")
 
         params_b = self._model_size_b
         if self._model_dtype in ('fp4', 'int4'):
