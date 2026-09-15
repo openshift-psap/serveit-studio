@@ -174,7 +174,9 @@ class ClusterResources:
         usable_gpu_memory_gb = gpu_memory_gb * gpu_memory_utilization
         min_gpus = int(required_memory_gb / usable_gpu_memory_gb) + 1
 
-        print(f"DEBUG estimate_model_gpu_requirement: model={model_size_gb:.0f}GB, overhead={overhead_gb:.1f}GB, kv_cache={kv_cache_gb:.2f}GB, required={required_memory_gb:.0f}GB, usable_per_gpu={usable_gpu_memory_gb:.1f}GB, min_gpus={min_gpus}, tp={next_power_of_2(min_gpus)}")
+        import logging
+        logger = logging.getLogger(__name__)
+        logger.info(f"DEBUG estimate_model_gpu_requirement: model={model_size_gb:.0f}GB, overhead={overhead_gb:.1f}GB, kv_cache={kv_cache_gb:.2f}GB, required={required_memory_gb:.0f}GB, usable_per_gpu={usable_gpu_memory_gb:.1f}GB, min_gpus={min_gpus}, tp={next_power_of_2(min_gpus)}")
         tp = next_power_of_2(min_gpus)
 
         return min(tp, self.max_gpus_per_node)
