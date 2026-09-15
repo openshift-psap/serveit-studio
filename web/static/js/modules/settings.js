@@ -474,6 +474,8 @@ function setPrefixCacheMode(mode) {
     });
     var groupsWrap = document.getElementById('prefix-cache-groups-wrap');
     if (groupsWrap) groupsWrap.style.display = mode === 'multi_group' ? 'block' : 'none';
+    var groupsWrapMt = document.getElementById('prefix-cache-groups-wrap-mt');
+    if (groupsWrapMt) groupsWrapMt.style.display = mode === 'multi_group' ? 'block' : 'none';
     updatePrefixCacheModeDesc();
     saveConfig();
 }
