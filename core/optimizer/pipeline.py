@@ -286,6 +286,18 @@ class RecipeOptimizer(
                 self.log(f"⚠️  Pipeline Parallelism (PP) NOT supported (architecture: {model_archs[0] if model_archs else 'unknown'})")
                 self.log("    PP tests will be skipped. Use Tensor Parallelism (TP) for multi-GPU scaling.")
 
+        # Detect DeepSeek V4 Flash which requires explicit FP8 KV cache
+        self._requires_fp8_kv_cache = False
+        if self._model_config:
+            model_archs = self._model_config.get('architectures', [])
+            qcfg = self._model_config.get('quantization_config', {})
+            quant_format = qcfg.get('format', '').lower()
+            quant_method = qcfg.get('quant_method', '').lower()
+
+            if 'DeepseekV4ForCausalLM' in model_archs and quant_format == 'mixed-precision' and quant_method == 'compressed-tensors':
+                self._requires_fp8_kv_cache = True
+                self.log("🔧 DeepSeek V4 Flash detected — FP8 KV cache required for FlashMLA attention")
+
         # Detect DeepGemm compatibility from quantization config
         self._use_deep_gemm = None  # None = let vLLM decide
         if self._model_config and self._model_dtype == 'fp8':

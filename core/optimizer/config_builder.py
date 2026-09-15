@@ -679,6 +679,10 @@ class ConfigBuilderMixin:
                 cfg.enable_eplb = False
                 cfg.enable_dbo = False
 
+        # DeepSeek V4 Flash with mixed-precision quantization requires FP8 KV cache
+        if self._requires_fp8_kv_cache:
+            cfg.kv_cache_dtype = 'fp8'
+
         return cfg
 
     @staticmethod
