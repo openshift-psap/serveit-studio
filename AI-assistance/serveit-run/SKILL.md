@@ -483,7 +483,19 @@ curl -sk -o /dev/null -w "%{http_code}" "https://huggingface.co/api/models/<MODE
 
 Then confirm: "Great, I'll optimize **<model>** on your **<N>x <GPU_MODEL>** cluster."
 
-### 3c. What's your expected workload?
+### 3c. Workload Type & Configuration
+
+First, ask the user what type of workload pattern they're optimizing for. This determines which UI fields appear and what gets tested:
+
+**"Are you optimizing for stateless requests (each request is independent), or conversation-based workloads (back-and-forth exchanges with full history)?"**
+
+1. **Continuous Workload** — stateless requests. Each request is independent. Examples: API service, batch processing, individual Q&A, code completion. User configures: ISL, OSL, and optionally length variation and prefix caching.
+
+2. **Multi-Turn Conversation** — back-and-forth exchanges. Each turn sends the entire conversation history as context. Examples: chat app, iterative debugging, multi-step reasoning. User configures: ISL/OSL per turn, number of turns, inter-turn delays (tool latency), first-turn override (large context injection), and optional prefix caching.
+
+Based on their answer, guide them through the relevant fields:
+
+#### For Continuous Workload:
 
 Ask these in plain language:
 
@@ -499,18 +511,7 @@ Ask these in plain language:
   - A short code question: ~100-300 tokens (~400-1,200 characters)
   - A code file with context: ~1,000-2,000 tokens (~4,000-8,000 characters)
   - A large codebase context / RAG: ~4,000-8,000 tokens (~16,000-32,000 characters)
-  - System prompt + conversation history + tools (agentic): ~2,000-6,000 tokens (~8,000-24,000 characters)
-- Default: 2,000 tokens (input), 2,000 tokens (output)
-
-After the user picks ISL/OSL, ask about variation:
-
-**"Do you want variable-length inputs and outputs? In real life, not every user sends the same amount of text and the model doesn't always respond with the same length. Adding variation makes the benchmark more realistic — some requests will be short, some long, centered around your chosen ISL/OSL."**
-
-1. **Moderate variation** — stdev = 50% of ISL/OSL (e.g., ISL=2000±1000, prompts range ~1000-3000)
-2. **High variation** — stdev = 100% of ISL/OSL (e.g., ISL=2000±2000, prompts range ~0-4000)
-3. **Light variation** — stdev = 25% of ISL/OSL (e.g., ISL=2000±500, prompts range ~1500-2500)
-4. **Custom** — enter specific stdev values
-5. **No variation** — fixed length (stdev=0)
+- Default: 3,000 tokens (input), 100 tokens (output)
 
 **"How long should the model's responses be?"**
 - This is the Output Sequence Length (OSL) — the length of text the model generates back to the user
@@ -518,16 +519,68 @@ After the user picks ISL/OSL, ask about variation:
   - A one-liner fix or short answer: ~50-100 tokens (~200-400 characters)
   - A function with explanation: ~200-500 tokens (~800-2,000 characters)
   - A full class or module: ~500-2,000 tokens (~2,000-8,000 characters)
-- Default: 2,000 tokens
+- Default: 100 tokens
 
-**"How many users do you expect to be using this at the same time?"**
-- This is the number of concurrent requests hitting the model simultaneously
+After the user picks ISL/OSL, ask about variation:
+
+**"Do you want variable-length inputs and outputs? In real life, not every user sends the same amount of text and the model doesn't always respond with the same length. Adding variation makes the benchmark more realistic — some requests will be short, some long, centered around your chosen ISL/OSL."**
+
+1. **Moderate variation** — stdev = 50% of ISL/OSL (e.g., ISL=3000±1500, prompts range ~1500-4500)
+2. **High variation** — stdev = 100% of ISL/OSL (e.g., ISL=3000±3000, prompts range ~0-6000)
+3. **Light variation** — stdev = 25% of ISL/OSL (e.g., ISL=3000±750, prompts range ~2250-3750)
+4. **Custom** — enter specific stdev values
+5. **No variation** — fixed length (stdev=0)
+
+#### For Multi-Turn Conversation:
+
+**"How many back-and-forth exchanges per conversation?"**
+- This is the number of turns. Each turn sends the entire conversation history as context.
+- Examples:
+  - **2-3 turns**: Quick Q&A or one follow-up question
+  - **5-10 turns**: Typical chat session or iterative debugging
+  - **20+ turns**: Long conversations with context buildup
+- Default: 10 turns
+
+**"How long should the first turn prompt be?"** (Optional override)
+- By default, the first turn uses the same ISL as subsequent turns. But agentic workloads often start with large context (repository code, tool definitions, system instructions) and then send shorter follow-ups.
+- If they want to override: specify the first-turn token count (e.g., 50,000 for a full repo) and subsequent turns will use the standard ISL.
+- If they skip this: all turns use the same ISL.
+- Default: no override (all turns use standard ISL)
+
+**"How long are inputs and outputs per turn (after the first turn)?"**
+- Same as Continuous Workload: ISL and OSL for turns 2 onwards
+- Default: ISL=2,000, OSL=500
+
+**"How long is the delay between turns?"** (Simulates tool call latency)
+- In real agentic workloads, there's a pause between receiving a response and sending the next turn. The application may be executing tools (web search, code execution), fetching data, or processing results.
+- Ask for: average delay, standard deviation, min, max (in seconds)
+- Examples:
+  - Light tool latency (quick DB lookups): 1-2 seconds average
+  - Medium latency (API calls, file system): 5-15 seconds average
+  - Heavy latency (complex tool chains, code execution): 30+ seconds average
+- If they skip this: back-to-back turns with no delay
+- Default: 15s average, 5s stdev, 1s min, 30s max
+
+#### Shared configuration (Continuous & Multi-Turn):
+
+**"Do you want to use a real text corpus or synthetically generated prompts?"**
+- **Synthetic (default)**: The system generates random prompt text at the specified ISL/OSL lengths.
+- **Real corpus**: Use actual English prose. Required if you want meaningful speculative decoding results. Also allows configuring a shared system prompt that applies to all requests.
+  - If corpus is enabled, ask: **"Do you want a shared system prompt prepended to every request/turn?"**
+    - Specify: prefix token count and uniqueness (how many variations of the prefix)
+    - Examples:
+      - Chat bot with fixed instructions: 1 prefix, 1,000 tokens
+      - Multi-tenant service: 5 unique prefixes, 500 tokens each
+      - Agentic with tool definitions: 1 prefix, 3,000 tokens (tool schemas dominate)
+
+**"How many users do you expect at the same time?"**
+- This is the number of concurrent requests hitting the model simultaneously (for continuous) or concurrent conversation sessions (for multi-turn)
 - Examples:
   1. **Internal dev team**: ~5-20 concurrent users
-  2. **Company-wide coding assistant**: ~50-100 concurrent users
+  2. **Company-wide assistant**: ~50-100 concurrent users
   3. **Platform API / high-traffic service**: ~200+ concurrent users
   4. **Custom** — enter a specific number
-- Default: 100 concurrent users
+- Default: 100 concurrent
 
 ### 3d. What matters most?
 
