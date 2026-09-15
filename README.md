@@ -310,17 +310,10 @@ ServeIt Studio includes skills for **Claude Code** and **Cursor** that automate 
 **Claude Code:**
 ```bash
 # Copy the skill to your Claude Code skills directory
-cp -r AI-assistance/claude-code/serveit-run ~/.claude/skills/serveit-run
+cp -r AI-assistance/serveit-run ~/.claude/skills/serveit-run
 
 # Then invoke it in Claude Code
 /serveit-run
-```
-
-**Cursor:**
-```bash
-# Copy the rule to your project's Cursor rules directory
-mkdir -p .cursor/rules
-cp AI-assistance/cursor/serveit-run/serveit-run.mdc .cursor/rules/
 ```
 
 ### What the skill does
@@ -550,8 +543,7 @@ docker/
 └── entrypoint.sh                  #   Container entrypoint
 
 AI-assistance/                     #   AI coding assistant skills
-├── claude-code/serveit-run/       #     Claude Code skill (SKILL.md + run.py)
-└── cursor/serveit-run/            #     Cursor-compatible skill (.mdc)
+└── serveit-run/                   #     Unified skill (SKILL.md + run.py)
 
 tests/
 ├── test_imports.py                #   Import validation for all 66 modules
