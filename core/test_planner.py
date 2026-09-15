@@ -136,6 +136,48 @@ def calculate_engine_memory_config(
 
     kv_cache_for_batch_gb = estimated_batch_size * kv_cache_per_seq_gb
 
+    # 7b. Model weight memory (account for quantization)
+    # Quantized models need less VRAM: detect from config.json and apply reduction
+    weight_bytes_per_param = 2.0  # Default: FP16 = 2 bytes per param
+
+    if model_config:
+        qcfg = model_config.get('quantization_config', {})
+        quant_format = qcfg.get('format', '').lower()
+        quant_method = qcfg.get('quant_method', '').lower()
+
+        # Mixed-precision quantization: detect if using FP8 + NVFP4
+        if quant_format == 'mixed-precision' and quant_method == 'compressed-tensors':
+            config_groups = qcfg.get('config_groups', {})
+            has_fp8 = False
+            has_nvfp4 = False
+
+            for group_cfg in config_groups.values():
+                if isinstance(group_cfg, dict):
+                    for part in ['weights', 'input_activations']:
+                        part_cfg = group_cfg.get(part, {})
+                        if isinstance(part_cfg, dict):
+                            num_bits = part_cfg.get('num_bits')
+                            quant_type = part_cfg.get('type', '').lower()
+                            if num_bits == 8 and quant_type == 'float':
+                                has_fp8 = True
+                            elif num_bits == 4 and quant_type == 'float':
+                                has_nvfp4 = True
+
+            # Mixed FP8 + NVFP4: ~0.5-0.6x of FP16 (average 4-5 bits per param)
+            if has_fp8 and has_nvfp4:
+                weight_bytes_per_param = 0.75  # 4.8 bits average = 0.6 bytes per param
+            elif has_fp8:
+                weight_bytes_per_param = 1.0  # 8-bit = 1 byte per param
+            elif has_nvfp4:
+                weight_bytes_per_param = 0.5  # 4-bit = 0.5 bytes per param
+        elif quant_method in ('fp8', 'bitsandbytes', 'int8'):
+            weight_bytes_per_param = 1.0  # 8-bit quantization
+        elif 'int4' in quant_method or 'awq' in quant_method or 'gptq' in quant_method:
+            weight_bytes_per_param = 0.5  # 4-bit quantization
+
+    model_weights_gb = (model_size_b * 1e9 * weight_bytes_per_param) / (1024**3)
+    model_weights_per_gpu_gb = model_weights_gb / tensor_parallelism
+
     # 8. gpu_memory_utilization: give vLLM maximum safe allocation
     #
     # vLLM internally handles the breakdown: it loads the model, warms up CUDA graphs
@@ -158,6 +200,7 @@ def calculate_engine_memory_config(
     else:
         logger.info(f"  max_model_len: {max_model_len} (ISL={isl} + OSL={osl})")
     logger.info(f"  TP={tensor_parallelism}, Users={num_users}")
+    logger.info(f"  Model weights: {model_size_b:.0f}B params × {weight_bytes_per_param} bytes/param = {model_weights_gb:.1f}GB total → {model_weights_per_gpu_gb:.1f}GB per GPU")
     logger.info(f"  KV cache/seq ({max_model_len} tokens): {kv_cache_per_seq_gb:.3f} GB")
     logger.info(f"  KV for {estimated_batch_size} concurrent seqs: {kv_cache_for_batch_gb:.1f} GB")
     logger.info(f"  GPU: {gpu_vram_gb:.0f}GB → allocated {allocated_vram_gb:.1f}GB (OS reserve: {os_reserve_gb:.0f}GB)")
