@@ -341,3 +341,17 @@ document.getElementById('isl-input-mt').addEventListener('change', function() {
     var pct = parseInt(document.getElementById('prefix-pct-slider-mt').value) || 0;
     if (pct > 0) updateSharedPrefixPercentageMT(pct);
 });
+
+// Unique prefixes slider - Continuous
+function updatePrefixCount(val) {
+    config.prefix_count = parseInt(val);
+    document.getElementById('prefix-count-value').textContent = val;
+    saveConfig();
+}
+
+// Unique prefixes slider - Multi-Turn
+function updatePrefixCountMT(val) {
+    config.prefix_count = parseInt(val);
+    document.getElementById('prefix-count-value-mt').textContent = val;
+    saveConfig();
+}
