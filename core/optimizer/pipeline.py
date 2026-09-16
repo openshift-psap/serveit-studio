@@ -2219,10 +2219,9 @@ spec:
         if self._model_config:
             try:
                 result = self._estimate_weight_memory_from_config()
-                self.log(f"DEBUG _estimate_model_size_gb: from config = {result:.0f}GB")
                 return result
             except Exception as e:
-                self.log(f"DEBUG _estimate_model_size_gb: exception in config calculation: {e}")
+                pass
 
         params_b = self._model_size_b
         if self._model_dtype in ('fp4', 'int4'):
@@ -2377,8 +2376,6 @@ spec:
             self._model_dtype
         )
         self.log(f"Weight memory from config: {total_gb:.0f} GB ({quant_desc})")
-        self.log(f"  DEBUG: has_nvfp4={has_nvfp4}, has_fp8={has_fp8}, expert_bpp={expert_bpp}, non_expert_bpp={non_expert_bpp}")
-        self.log(f"  DEBUG: n_experts={n_experts}, n_shared={n_shared}, attn_count={attn_count}, moe_count={moe_count if moe_count > 0 else 0}")
         return total_gb
 
 
