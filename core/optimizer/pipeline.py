@@ -401,14 +401,9 @@ class RecipeOptimizer(
                 f"Reduce ISL, OSL, turns, or variance to fit within model capability."
             )
 
-        if self.config.max_model_len and self.config.max_model_len >= computed_max_model_len:
-            self.log(f"max_model_len: {self.config.max_model_len} (user-set, ≥ computed {computed_max_model_len})")
-        else:
-            if self.config.max_model_len and self.config.max_model_len < computed_max_model_len:
-                self.log(f"Adjusted max_model_len: {self.config.max_model_len} → {computed_max_model_len}"
-                         + (f" (includes stdev: ISL±{config.isl_stdev}, OSL±{config.osl_stdev})"
-                            if config.isl_stdev or config.osl_stdev else ""))
-            self.config.max_model_len = computed_max_model_len
+        # Always use computed max_model_len since default 8192 is not a user-provided value
+        self.config.max_model_len = computed_max_model_len
+        self.log(f"max_model_len: {computed_max_model_len} (from workload: isl={isl}±{isl_stdev}, osl={osl}±{osl_stdev})")
 
         # Reconcile first_prompt_tokens against the (possibly adjusted) max_model_len.
         # Turn-0 uses first_prompt_tokens (not isl), so it can exceed the model context
