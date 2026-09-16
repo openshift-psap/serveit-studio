@@ -392,9 +392,12 @@ class RecipeOptimizer(
 
         # Cap to model's actual max_position_embeddings from config
         model_max_pos = self._model_config.get('max_position_embeddings', 4096) if self._model_config else 4096
-        if computed_max_model_len > model_max_pos:
-            self.log(f"⚠️  max_model_len {computed_max_model_len} exceeds model's max_position_embeddings {model_max_pos}, capping")
-            computed_max_model_len = model_max_pos
+        # Only cap if workload need exceeds model's architectural limit
+        # Use the smaller of: what workload needs vs what model supports
+        final_max_model_len = min(computed_max_model_len, model_max_pos)
+        if final_max_model_len < computed_max_model_len:
+            self.log(f"⚠️  max_model_len {computed_max_model_len} exceeds model's max_position_embeddings {model_max_pos}, capping to {final_max_model_len}")
+        computed_max_model_len = final_max_model_len
 
         if self.config.max_model_len and self.config.max_model_len >= computed_max_model_len:
             self.log(f"max_model_len: {self.config.max_model_len} (user-set, ≥ computed {computed_max_model_len})")
