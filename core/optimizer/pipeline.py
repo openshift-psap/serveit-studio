@@ -400,10 +400,11 @@ class RecipeOptimizer(
 
         if self.config.max_model_len and self.config.max_model_len >= computed_max_model_len:
             self.log(f"max_model_len: {self.config.max_model_len} (user-set, ≥ computed {computed_max_model_len})")
-        elif computed_max_model_len != self.config.max_model_len:
-            self.log(f"Adjusted max_model_len: {self.config.max_model_len} → {computed_max_model_len}"
-                     + (f" (includes stdev: ISL±{config.isl_stdev}, OSL±{config.osl_stdev})"
-                        if config.isl_stdev or config.osl_stdev else ""))
+        else:
+            if self.config.max_model_len and self.config.max_model_len < computed_max_model_len:
+                self.log(f"Adjusted max_model_len: {self.config.max_model_len} → {computed_max_model_len}"
+                         + (f" (includes stdev: ISL±{config.isl_stdev}, OSL±{config.osl_stdev})"
+                            if config.isl_stdev or config.osl_stdev else ""))
             self.config.max_model_len = computed_max_model_len
 
         # Reconcile first_prompt_tokens against the (possibly adjusted) max_model_len.
