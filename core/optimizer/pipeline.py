@@ -370,7 +370,10 @@ class RecipeOptimizer(
             config.osl_max = max_out
             self.log(f"output_tokens_max set to {max_out} (osl={osl} + 4×stdev={out_stdev}) so samples fit max_model_len")
         ctx_margin = 512  # chat template markers + re-encode drift
-        fpt_needed = max(fpt, fpt_max) + prefix + max_out + ctx_margin
+        # Only use first_prompt_tokens if explicitly set by user (not stale from previous run)
+        fpt_needed = 0
+        if fpt or fpt_max:  # User explicitly set first_prompt_tokens
+            fpt_needed = max(fpt, fpt_max) + prefix + max_out + ctx_margin
         # For multi-turn, max_model_len only needs to fit the longest single turn
         # (not the entire conversation history). Number of turns affects data generation,
         # not context window requirement.
