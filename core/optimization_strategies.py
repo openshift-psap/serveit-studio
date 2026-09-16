@@ -1074,7 +1074,7 @@ class AggregatedOnlyStrategy(OptimizationStrategy):
 
         # Step 11: Calibrated load / Concurrency sweep
         if self.opt.config.calibrated_load_enabled and self.opt.aggregated_result:
-            self.opt._run_calibrated_load()
+            self.opt._validate_at_calibrated_load()
             self.opt.log("", 'info')
 
         self._run_speculative_if_enabled()
