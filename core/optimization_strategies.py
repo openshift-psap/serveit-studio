@@ -1055,6 +1055,7 @@ class AggregatedOnlyStrategy(OptimizationStrategy):
 
     Step 6: Search for best aggregated configuration across TP values
     Step 9: Latency-bounded throughput maximization (conditional)
+    Step 11: Calibrated load / Concurrency sweep (conditional)
     """
 
     def execute(self):
@@ -1069,6 +1070,11 @@ class AggregatedOnlyStrategy(OptimizationStrategy):
 
         if self.opt._should_run_latency_bounded_search():
             self.opt._run_latency_bounded_search()
+            self.opt.log("", 'info')
+
+        # Step 11: Calibrated load / Concurrency sweep
+        if self.opt.config.calibrated_load_enabled and self.opt.aggregated_result:
+            self.opt._run_calibrated_load()
             self.opt.log("", 'info')
 
         self._run_speculative_if_enabled()
