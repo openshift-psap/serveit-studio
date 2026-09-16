@@ -371,24 +371,22 @@ class RecipeOptimizer(
             self.log(f"output_tokens_max set to {max_out} (osl={osl} + 4×stdev={out_stdev}) so samples fit max_model_len")
         ctx_margin = 512  # chat template markers + re-encode drift
         fpt_needed = max(fpt, fpt_max) + prefix + max_out + ctx_margin
-        # Multi-turn: later requests carry the full history ((turns-1) prompt+output pairs),
-        # so the longest request grows with turn count.
-        turns = getattr(config, 'turns', 1) or 1
-        if turns > 1:
-            isl = config.isl or 0
-            isl_stdev = config.isl_stdev or 0
-            max_isl = isl + (4 * isl_stdev if isl_stdev else 0)
-            isl_cap = getattr(config, 'isl_max', None)
-            if isl_cap is not None:
-                max_isl = min(max_isl, isl_cap)
-            max_osl_hist = osl + (4 * osl_stdev if osl_stdev else 0)
-            hist_needed = prefix + (turns - 1) * (max_isl + max_osl_hist) + max_isl + max_out + ctx_margin
-            if hist_needed > fpt_needed:
-                fpt_needed = hist_needed
+        # For multi-turn, max_model_len only needs to fit the longest single turn
+        # (not the entire conversation history). Number of turns affects data generation,
+        # not context window requirement.
+        isl = config.isl or 0
+        isl_stdev = config.isl_stdev or 0
+        max_isl = isl + (4 * isl_stdev if isl_stdev else 0)
+        isl_cap = getattr(config, 'isl_max', None)
+        if isl_cap is not None:
+            max_isl = min(max_isl, isl_cap)
+        max_osl = osl + (4 * osl_stdev if osl_stdev else 0)
+        turn_needed = prefix + max_isl + max_osl + max_out + ctx_margin
+        if turn_needed > fpt_needed:
+            fpt_needed = turn_needed
         if fpt_needed > computed_max_model_len:
             computed_max_model_len = fpt_needed
-            self.log(f"max_model_len raised to fit workload: {fpt_needed} (fpt={fpt}, prefix={prefix}, "
-                     f"max_output={max_out}, turns={turns}, margin={ctx_margin})")
+            self.log(f"max_model_len raised to fit workload: {fpt_needed} (isl={isl}±{isl_stdev}, osl={osl}±{osl_stdev}, prefix={prefix}, margin={ctx_margin})")
 
         # Validate workload fits within model's architectural limit
         model_max_pos = self._model_config.get('max_position_embeddings', 4096) if self._model_config else 4096
