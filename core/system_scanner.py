@@ -176,7 +176,14 @@ class ClusterResources:
 
         tp = next_power_of_2(min_gpus)
 
-        return min(tp, self.max_gpus_per_node)
+        # Check if model fits in a single node
+        if tp > self.max_gpus_per_node:
+            raise ValueError(
+                f"Model requires TP={tp} but cluster only has {self.max_gpus_per_node} GPUs per node. "
+                f"Model is too large for this cluster."
+            )
+
+        return tp
 
 
 class SystemScanner:

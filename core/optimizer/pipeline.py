@@ -370,32 +370,40 @@ class RecipeOptimizer(
             config.osl_max = max_out
             self.log(f"output_tokens_max set to {max_out} (osl={osl} + 4×stdev={out_stdev}) so samples fit max_model_len")
         ctx_margin = 512  # chat template markers + re-encode drift
-        fpt_needed = max(fpt, fpt_max) + prefix + max_out + ctx_margin
-        # Multi-turn: later requests carry the full history ((turns-1) prompt+output pairs),
-        # so the longest request grows with turn count.
-        turns = getattr(config, 'turns', 1) or 1
-        if turns > 1:
-            isl = config.isl or 0
-            isl_stdev = config.isl_stdev or 0
-            max_isl = isl + (4 * isl_stdev if isl_stdev else 0)
-            isl_cap = getattr(config, 'isl_max', None)
-            if isl_cap is not None:
-                max_isl = min(max_isl, isl_cap)
-            max_osl_hist = osl + (4 * osl_stdev if osl_stdev else 0)
-            hist_needed = prefix + (turns - 1) * (max_isl + max_osl_hist) + max_isl + max_out + ctx_margin
-            if hist_needed > fpt_needed:
-                fpt_needed = hist_needed
+        # Only use first_prompt_tokens if explicitly set by user (not stale from previous run)
+        fpt_needed = 0
+        if fpt or fpt_max:  # User explicitly set first_prompt_tokens
+            fpt_needed = max(fpt, fpt_max) + prefix + max_out + ctx_margin
+        # For multi-turn, max_model_len only needs to fit the longest single turn
+        # (not the entire conversation history). Number of turns affects data generation,
+        # not context window requirement.
+        isl = config.isl or 0
+        isl_stdev = config.isl_stdev or 0
+        max_isl = isl + (4 * isl_stdev if isl_stdev else 0)
+        isl_cap = getattr(config, 'isl_max', None)
+        if isl_cap is not None:
+            max_isl = min(max_isl, isl_cap)
+        max_osl = osl + (4 * osl_stdev if osl_stdev else 0)
+        turn_needed = prefix + max_isl + max_osl + max_out + ctx_margin
+        if turn_needed > fpt_needed:
+            fpt_needed = turn_needed
         if fpt_needed > computed_max_model_len:
             computed_max_model_len = fpt_needed
-            self.log(f"max_model_len raised to fit workload: {fpt_needed} (fpt={fpt}, prefix={prefix}, "
-                     f"max_output={max_out}, turns={turns}, margin={ctx_margin})")
-        if self.config.max_model_len and self.config.max_model_len >= computed_max_model_len:
-            self.log(f"max_model_len: {self.config.max_model_len} (user-set, ≥ computed {computed_max_model_len})")
-        elif computed_max_model_len != self.config.max_model_len:
-            self.log(f"Adjusted max_model_len: {self.config.max_model_len} → {computed_max_model_len}"
-                     + (f" (includes stdev: ISL±{config.isl_stdev}, OSL±{config.osl_stdev})"
-                        if config.isl_stdev or config.osl_stdev else ""))
-            self.config.max_model_len = computed_max_model_len
+            self.log(f"max_model_len raised to fit workload: {fpt_needed} (isl={isl}±{isl_stdev}, osl={osl}±{osl_stdev}, prefix={prefix}, margin={ctx_margin})")
+
+        # Validate workload fits within model's architectural limit
+        model_max_pos = self._model_config.get('max_position_embeddings', 4096) if self._model_config else 4096
+        if computed_max_model_len > model_max_pos:
+            raise ValueError(
+                f"Workload OSL/ISL settings require {computed_max_model_len} tokens "
+                f"(isl={isl}±{isl_stdev}, osl={osl}±{osl_stdev}, prefix={prefix}, margin={ctx_margin}), "
+                f"but model only supports {model_max_pos} max_position_embeddings. "
+                f"Reduce ISL, OSL, variance, or prefix to fit within model capability."
+            )
+
+        # Always use computed max_model_len since default 8192 is not a user-provided value
+        self.config.max_model_len = computed_max_model_len
+        self.log(f"max_model_len: {computed_max_model_len} (from workload: isl={isl}±{isl_stdev}, osl={osl}±{osl_stdev})")
 
         # Reconcile first_prompt_tokens against the (possibly adjusted) max_model_len.
         # Turn-0 uses first_prompt_tokens (not isl), so it can exceed the model context
@@ -739,26 +747,20 @@ class RecipeOptimizer(
                 except Exception:
                     pass
         if error_pct > 2.0:
-            self.log(f"🚨 {errored}/{total} requests failed ({error_pct:.1f}%) — cluster overloaded (503 from EPP)", 'error')
-            self.log("   Results under heavy overload are unreliable for performance comparison.", 'error')
-            self.log("   To fix, start a new run with one of these options:", 'error')
-            self.log("   1. Lower the concurrent users in Workload Configuration", 'error')
-            self.log("   2. Enable 'Auto-Scale Concurrency' to let the optimizer find sustainable load", 'error')
+            self.log(f"⚠️  {errored}/{total} requests failed ({error_pct:.1f}%) — cluster overloaded (503 from EPP)", 'warning')
+            self.log("   Skipping this config (overloaded); continuing with next config...", 'warning')
+            # Mark config as skipped due to overload (but don't stop optimization)
             if self.db_manager and self.run_id:
                 try:
                     with self.db_manager.get_connection() as conn:
                         conn.execute(
-                            'UPDATE test_configurations SET status = ? WHERE run_id = ? AND config_name = ?',
-                            ('failed', self.run_id, test_config.test_id)
+                            'UPDATE test_configurations SET status = ?, quality = ? WHERE run_id = ? AND config_name = ?',
+                            ('skipped', 'discard', self.run_id, test_config.test_id)
                         )
                 except Exception:
                     pass
-            from core.pod_error_scanner import PodErrorsDetected
-            raise PodErrorsDetected(
-                scan_result={'request_error_rate': error_pct, 'errored': errored, 'total': total,
-                             'reason': 'overload_503'},
-                test_id=test_config.test_id
-            )
+            # Return instead of raising — continue with next config
+            return
         elif error_pct > 0.5:
             self.log(f"   ⚠️  {errored}/{total} requests errored ({error_pct:.1f}%) — "
                      f"minor overload, results may have inflated latency", 'warning')
@@ -2000,8 +2002,9 @@ spec:
             else:
                 min_conc = 1
             reserve_pct = getattr(self.config, 'memory_reserve_pct', 0.0)
+            model_size = self._estimate_model_size_gb()
             min_tp = self.cluster_resources.estimate_model_gpu_requirement(
-                model_size_gb=self._estimate_model_size_gb(),
+                model_size_gb=model_size,
                 dtype=self._model_dtype,
                 is_moe=self._is_moe,
                 model_config=self._model_config,
@@ -2209,7 +2212,8 @@ spec:
         """
         if self._model_config:
             try:
-                return self._estimate_weight_memory_from_config()
+                result = self._estimate_weight_memory_from_config()
+                return result
             except Exception:
                 pass
 
@@ -2366,8 +2370,6 @@ spec:
             self._model_dtype
         )
         self.log(f"Weight memory from config: {total_gb:.0f} GB ({quant_desc})")
-        self.log(f"  DEBUG: has_nvfp4={has_nvfp4}, has_fp8={has_fp8}, expert_bpp={expert_bpp}, non_expert_bpp={non_expert_bpp}")
-        self.log(f"  DEBUG: n_experts={n_experts}, n_shared={n_shared}, attn_count={attn_count}, moe_count={moe_count if moe_count > 0 else 0}")
         return total_gb
 
 

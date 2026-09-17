@@ -7,11 +7,7 @@ class SpeculativeMixin:
 
     def _should_run_speculative(self) -> bool:
         """Check if Step 12 should run."""
-        if self.config.speculative_config_enabled:
-            return True
-        if self.config.speculative_config_method:
-            return True
-        return getattr(self, '_supports_mtp', False)
+        return self.config.speculative_config_enabled
 
     def _get_speculative_method(self) -> str:
         if self.config.speculative_config_method:

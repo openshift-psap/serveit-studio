@@ -91,7 +91,7 @@ class ConfigBuilderMixin:
         test_id: str,
         use_concurrency: bool = False,
         concurrency_override: int = None,
-        pipeline_parallel_size: int = 1
+        pipeline_parallel_size: int = None
     ) -> TestConfig:
         """Create aggregated architecture test config.
 

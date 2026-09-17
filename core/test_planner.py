@@ -629,7 +629,7 @@ class TestPlanner:
         kv_cache_gb = None
         if model_config:
             kv_cache_gb = self.calculate_kv_cache_from_config(
-                model_config, isl, osl, byte_size
+                model_config, isl, osl, weight_bytes_per_param
             )
 
         # Fallback: Conservative estimate for modern LLMs with GQA
@@ -641,7 +641,7 @@ class TestPlanner:
             estimated_kv_heads = 8
             estimated_head_dim = 128
             kv_cache_elements = 2 * estimated_layers * estimated_kv_heads * estimated_head_dim * total_sequence_length
-            kv_cache_bytes = kv_cache_elements * byte_size
+            kv_cache_bytes = kv_cache_elements * 2  # KV cache is always float16 (2 bytes per value)
             kv_cache_gb = kv_cache_bytes / (1024**3)
 
         # Activations (relatively small, ~15% of weights for inference)
