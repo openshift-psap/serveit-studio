@@ -975,6 +975,9 @@ class SystemScanner:
                     pool_name = sc.get('parameters', {}).get('storagePool', '')
                     if pool_name:
                         local_path = f'/var/hpvolumes/{pool_name}'
+                # For no-provisioner (static PVs), read local_path from SC parameters
+                if is_local and not local_path:
+                    local_path = sc.get('parameters', {}).get('localPath', '')
 
                 sc_info = StorageClassInfo(
                     name=name,
