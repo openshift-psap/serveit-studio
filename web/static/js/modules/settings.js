@@ -99,7 +99,7 @@ function setLatencyPercentile(pctl) {
 }
 
 // Advanced vLLM settings
-var advValueFields = ['max-model-len','gpu-memory-utilization','max-num-seqs','max-num-batched-tokens','dtype','kv-cache-dtype','pipeline-parallel-size','block-size','tool-call-parser','reasoning-parser','chat-template-content-format','dbo-prefill-token-threshold','dbo-decode-token-threshold','moe-backend','all2all-backend','headroom','memory-reserve-pct','model-loader-extra-config','cpu-offload-gb','weight-cpu-offload-gb','disk-offload-kv','http-timeout-keep-alive','prefix-cache-retention','ssm-conv-state-layout','num-speculative-tokens','speculative-model','decode-context-parallel-size','override-generation-config'];
+var advValueFields = ['max-model-len','gpu-memory-utilization','max-num-seqs','max-num-batched-tokens','dtype','kv-cache-dtype','pipeline-parallel-size','block-size','tool-call-parser','reasoning-parser','chat-template-content-format','dbo-prefill-token-threshold','dbo-decode-token-threshold','moe-backend','all2all-backend','headroom','memory-reserve-pct','model-loader-extra-config','cpu-offload-gb','weight-cpu-offload-gb','disk-offload-kv','http-timeout-keep-alive','prefix-cache-retention','ssm-conv-state-layout','num-speculative-tokens','speculative-model','override-generation-config'];
 var advToggleFields = ['enable-prefix-caching','disable-custom-all-reduce','enable-auto-tool-choice','enable-expert-parallel','enable-dbo','enable-eplb','trust-remote-code','disable-log-requests','vllm-debug-logs','nccl-debug-logs','enable-bidirectional-kv'];
 
 function updateAdvVllm() {
@@ -170,6 +170,16 @@ function updateAdvVllm() {
             adv.speculative_model = { mode: 'auto', value: null };
         }
     }
+    // Context parallelism entries — editable flag name + number value
+    var ctxEntries = [];
+    ['prefill', 'decode'].forEach(function(role) {
+        var flag  = document.getElementById('ctx-' + role + '-flag');
+        var value = document.getElementById('ctx-' + role + '-value');
+        if (flag && value && flag.value.trim() && parseInt(value.value) > 0) {
+            ctxEntries.push({ flag: flag.value.trim(), value: parseInt(value.value) });
+        }
+    });
+    adv.context_parallel_entries = ctxEntries;
     // Attention config (prefill / decode) — driven by select dropdowns
     ['prefill', 'decode'].forEach(function(role) {
         var sel = document.getElementById('adv-' + role + '-attention-config-val');
@@ -259,6 +269,22 @@ function restoreAdvVllm() {
         var prefillSpecTokens = document.getElementById('adv-prefill-speculative-tokens-val');
         if (prefillSpecTokens && adv.prefill_speculative_num_tokens && adv.prefill_speculative_num_tokens.mode === 'custom' && adv.prefill_speculative_num_tokens.value != null) {
             prefillSpecTokens.value = adv.prefill_speculative_num_tokens.value;
+        }
+    }
+    // Restore context parallelism entries
+    var ctxPreset = config.ctx_parallel_preset || 'off';
+    var ctxPresetEl = document.getElementById('adv-ctx-parallel-preset');
+    if (ctxPresetEl) ctxPresetEl.value = ctxPreset;
+    if (ctxPreset !== 'off' && typeof applyCtxParallelPreset === 'function') {
+        applyCtxParallelPreset(ctxPreset);
+        if (adv && adv.context_parallel_entries) {
+            adv.context_parallel_entries.forEach(function(entry, i) {
+                var role = i === 0 ? 'prefill' : 'decode';
+                var flagEl  = document.getElementById('ctx-' + role + '-flag');
+                var valueEl = document.getElementById('ctx-' + role + '-value');
+                if (flagEl)  flagEl.value  = entry.flag;
+                if (valueEl) valueEl.value = entry.value;
+            });
         }
     }
     // Restore attention-config preset + select values

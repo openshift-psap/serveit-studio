@@ -643,6 +643,19 @@ class ConfigBuilderMixin:
                     val = float(val)
                 setattr(cfg, attr, val)
 
+        # Context parallelism — editable flag-name + value pairs from the UI
+        _ctx_flag_map = {
+            '--prefill-context-parallel-size': 'prefill_context_parallel_size',
+            '--decode-context-parallel-size':  'decode_context_parallel_size',
+            '--context-parallel-size':         'context_parallel_size',
+        }
+        for entry in adv.get('context_parallel_entries', []):
+            flag  = (entry.get('flag') or '').strip()
+            value = entry.get('value')
+            field = _ctx_flag_map.get(flag)
+            if field and value:
+                setattr(cfg, field, int(value))
+
         # Speculative decoding method (set by preset dropdown, not mode/value dict)
         spec_method = adv.get('speculative_method')
         if spec_method:
