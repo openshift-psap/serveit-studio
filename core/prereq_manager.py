@@ -31,7 +31,7 @@ class PrereqManager:
             namespace: Kubernetes namespace
             kubeconfig: Path to kubeconfig file
             kubectl_runner: Existing KubectlRunner to reuse (creates new if None)
-            scheduler_image: Custom EPP scheduler image (default: llm-d-router-endpoint-picker:v0.11.0)
+            scheduler_image: Custom EPP scheduler image (default: llm-d-router-endpoint-picker:v0.9.0)
         """
         self.namespace = namespace
         self.kubectl = kubectl_runner or KubectlRunner(kubeconfig=kubeconfig, namespace=namespace)
@@ -294,7 +294,7 @@ class PrereqManager:
             if epp_use_defaults:
                 # Detect version from scheduler image to pick correct defaults
                 sched_img = self.scheduler_image or ''
-                sched_tag = sched_img.split(':')[-1] if ':' in sched_img else 'v0.11.0'
+                sched_tag = sched_img.split(':')[-1] if ':' in sched_img else 'v0.9.0'
                 is_34 = sched_tag < 'v0.9'
                 suffix = '.3.4' if is_34 else ''
                 ver_label = sched_tag
