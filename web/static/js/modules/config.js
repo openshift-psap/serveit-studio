@@ -1597,7 +1597,7 @@ function applyWorkloadPreset(name) {
         'isl-min-input': 'isl_min', 'isl-max-input': 'isl_max',
         'osl-min-input': 'osl_min', 'osl-max-input': 'osl_max',
         'users-input': 'users',
-        'turns-input': 'turns',
+        'turns-input': 'turns', 'turns-input-mt': 'turns',
         'turn-delay-input': 'turn_delay', 'turn-delay-stdev-input': 'turn_delay_stdev',
         'turn-delay-min-input': 'turn_delay_min', 'turn-delay-max-input': 'turn_delay_max',
         'first-prompt-tokens-input': 'first_prompt_tokens',
@@ -1617,9 +1617,13 @@ function applyWorkloadPreset(name) {
         }
     }
 
-    // Set turns on/off
+    // Set workload type and turns
+    var isMultiTurn = !!(p.turns && p.turns > 1);
+    if (typeof setWorkloadType === 'function') {
+        setWorkloadType(isMultiTurn ? 'multiturn' : 'continuous');
+    }
     var turnsToggle = document.getElementById('multi-turn-toggle');
-    if (p.turns && p.turns > 1) {
+    if (isMultiTurn) {
         config.turns = p.turns;
         if (turnsToggle && !turnsToggle.classList.contains('active')) turnsToggle.click();
     } else {
