@@ -170,14 +170,11 @@ function updateAdvVllm() {
             adv.speculative_model = { mode: 'auto', value: null };
         }
     }
-    // Attention config (prefill / decode) — driven by toggle buttons, not mode selects
+    // Attention config (prefill / decode) — driven by select dropdowns
     ['prefill', 'decode'].forEach(function(role) {
-        var input = document.getElementById('adv-' + role + '-attention-config-val');
-        if (input && input.style.display !== 'none' && input.value.trim()) {
-            adv[role + '_attention_config'] = { mode: 'custom', value: input.value.trim() };
-        } else {
-            adv[role + '_attention_config'] = { mode: 'auto' };
-        }
+        var sel = document.getElementById('adv-' + role + '-attention-config-val');
+        var val = sel ? sel.value.trim() : '';
+        adv[role + '_attention_config'] = val ? { mode: 'custom', value: val } : { mode: 'auto' };
     });
     // Include raw text mode info
     adv._mode = config.advanced_vllm_mode || 'form';
@@ -264,19 +261,18 @@ function restoreAdvVllm() {
             prefillSpecTokens.value = adv.prefill_speculative_num_tokens.value;
         }
     }
-    // Restore attention-config preset + toggle state
+    // Restore attention-config preset + select values
     var attnPreset = config.attention_preset || 'off';
     var attnPresetEl = document.getElementById('adv-attention-preset');
     if (attnPresetEl) attnPresetEl.value = attnPreset;
     if (attnPreset !== 'off' && typeof applyAttentionPreset === 'function') {
         applyAttentionPreset(attnPreset);
-        // restore custom values if any
         if (adv) {
             ['prefill', 'decode'].forEach(function(role) {
                 var cfg = adv[role + '_attention_config'];
                 if (cfg && cfg.mode === 'custom' && cfg.value) {
-                    var input = document.getElementById('adv-' + role + '-attention-config-val');
-                    if (input) { input.value = cfg.value; }
+                    var sel = document.getElementById('adv-' + role + '-attention-config-val');
+                    if (sel) sel.value = cfg.value;
                 }
             });
         }
