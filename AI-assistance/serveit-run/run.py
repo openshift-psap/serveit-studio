@@ -56,7 +56,7 @@ def build_parser():
                    help='EPP routing preset')
     p.add_argument('--epp-benchmark', action='store_true', help='Benchmark EPP strategies')
     p.add_argument('--image', default='ghcr.io/llm-d/llm-d-cuda:v0.8.0', help='vLLM image')
-    p.add_argument('--scheduler-image', default='ghcr.io/llm-d/llm-d-router-endpoint-picker:v0.9.0',
+    p.add_argument('--scheduler-image', default='ghcr.io/llm-d/llm-d-router-endpoint-picker:v0.11.0',
                    help='EPP scheduler image')
     p.add_argument('--prefix-cache-pct', type=int, default=0, help='Prefix cache hit %% (0=off)')
     p.add_argument('--prefix-cache-mode', default='identical',

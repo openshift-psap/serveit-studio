@@ -897,7 +897,7 @@ def build_run_parser(parser):
     hw.add_argument('--nodes', type=str, default=None,
                     help='Comma-separated node names to pin tests to')
     hw.add_argument('--scheduler-image', type=str, default=None,
-                    help='EPP scheduler image (default: ghcr.io/llm-d/llm-d-router-endpoint-picker:v0.9.0)')
+                    help='EPP scheduler image (default: ghcr.io/llm-d/llm-d-router-endpoint-picker:v0.11.0)')
     hw.add_argument('--thanos-url', type=str, default=None,
                     help='Prometheus/Thanos URL for metrics collection (auto-detected if not set)')
     hw.add_argument('--extra-env-vars', type=str, default=None,
