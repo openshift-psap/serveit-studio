@@ -264,16 +264,22 @@ function restoreAdvVllm() {
             prefillSpecTokens.value = adv.prefill_speculative_num_tokens.value;
         }
     }
-    // Restore attention-config toggle state
-    if (adv) {
-        ['prefill', 'decode'].forEach(function(role) {
-            var cfg = adv[role + '_attention_config'];
-            if (cfg && cfg.mode === 'custom' && cfg.value) {
-                var input = document.getElementById('adv-' + role + '-attention-config-val');
-                if (input) { input.value = cfg.value; }
-                if (typeof setAttentionConfig === 'function') setAttentionConfig(role, 'on');
-            }
-        });
+    // Restore attention-config preset + toggle state
+    var attnPreset = config.attention_preset || 'off';
+    var attnPresetEl = document.getElementById('adv-attention-preset');
+    if (attnPresetEl) attnPresetEl.value = attnPreset;
+    if (attnPreset !== 'off' && typeof applyAttentionPreset === 'function') {
+        applyAttentionPreset(attnPreset);
+        // restore custom values if any
+        if (adv) {
+            ['prefill', 'decode'].forEach(function(role) {
+                var cfg = adv[role + '_attention_config'];
+                if (cfg && cfg.mode === 'custom' && cfg.value) {
+                    var input = document.getElementById('adv-' + role + '-attention-config-val');
+                    if (input) { input.value = cfg.value; }
+                }
+            });
+        }
     }
     // Restore raw text mode
     var advMode = config.advanced_vllm_mode || (adv && adv._mode) || 'form';

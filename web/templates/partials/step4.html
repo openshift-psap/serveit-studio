@@ -629,8 +629,19 @@
 
                                 <!-- Attention Config -->
                                 <div style="font-weight:600;color:#334155;font-size:0.9em;margin:20px 0 12px;text-transform:uppercase;letter-spacing:0.5px;">Attention Config</div>
-                                <div style="color:#6b7280;font-size:0.82em;margin-bottom:12px;">JSON attention backend configuration applied per pod role. Enable HiSparse decode for 1M-context models (e.g. GLM 5.3 with PCP) by setting <code>{"sparse_mla_force_mqa":true}</code> on the prefill pod. Prefill and decode can be configured independently.</div>
-                                <div id="attention-config-fields" style="display:flex;flex-direction:column;gap:10px;">
+                                <div style="color:#6b7280;font-size:0.82em;margin-bottom:12px;">Per-role JSON attention backend configuration. Select a preset or use Custom. Prefill and decode pods can be configured independently — e.g. HiSparse on prefill for 1M-context serving with PCP.</div>
+                                <div style="margin-bottom:12px;">
+                                    <label style="font-size:0.85em;font-weight:600;color:#374151;">Preset</label>
+                                    <select id="adv-attention-preset" style="width:100%;padding:8px 12px;border:2px solid #d1d5db;border-radius:8px;font-size:0.9em;" onchange="applyAttentionPreset(this.value)">
+                                        <option value="off">Off — No attention config</option>
+                                        <optgroup label="HiSparse (sparse MLA)">
+                                            <option value="hisparse-prefill">HiSparse — Prefill only (GLM 5.3 PCP)</option>
+                                            <option value="hisparse-both">HiSparse — Prefill + Decode</option>
+                                        </optgroup>
+                                        <option value="custom">Custom</option>
+                                    </select>
+                                </div>
+                                <div id="attention-config-fields" style="display:none;flex-direction:column;gap:10px;">
                                     <div style="display:flex;align-items:center;gap:10px;">
                                         <span style="width:60px;font-size:0.88em;font-weight:600;color:#374151;flex-shrink:0;">Prefill</span>
                                         <button id="attn-prefill-off-btn" onclick="setAttentionConfig('prefill','off')" style="padding:5px 12px;border-radius:6px;border:1px solid #d1d5db;background:#f1f5f9;color:#374151;cursor:pointer;font-size:0.85em;">Disabled</button>
@@ -645,6 +656,32 @@
                                     </div>
                                 </div>
                                 <script>
+                                function applyAttentionPreset(preset) {
+                                    var fields = document.getElementById('attention-config-fields');
+                                    var HISPARSE = '{"sparse_mla_force_mqa":true}';
+                                    if (preset === 'off') {
+                                        fields.style.display = 'none';
+                                        setAttentionConfig('prefill', 'off');
+                                        setAttentionConfig('decode', 'off');
+                                        config.attention_preset = 'off';
+                                        saveConfig(); updateAdvVllm(); return;
+                                    }
+                                    fields.style.display = 'flex';
+                                    if (preset === 'hisparse-prefill') {
+                                        setAttentionConfig('prefill', 'on');
+                                        document.getElementById('adv-prefill-attention-config-val').value = HISPARSE;
+                                        setAttentionConfig('decode', 'off');
+                                    } else if (preset === 'hisparse-both') {
+                                        setAttentionConfig('prefill', 'on');
+                                        document.getElementById('adv-prefill-attention-config-val').value = HISPARSE;
+                                        setAttentionConfig('decode', 'on');
+                                        document.getElementById('adv-decode-attention-config-val').value = HISPARSE;
+                                    } else {
+                                        // custom — show fields, leave values as-is
+                                    }
+                                    config.attention_preset = preset;
+                                    saveConfig(); updateAdvVllm();
+                                }
                                 function setAttentionConfig(role, state) {
                                     var onBtn  = document.getElementById('attn-' + role + '-on-btn');
                                     var offBtn = document.getElementById('attn-' + role + '-off-btn');
@@ -657,10 +694,10 @@
                                     offBtn.style.color       = '#374151';
                                     offBtn.style.borderColor = '#d1d5db';
                                     input.style.display = enabled ? 'block' : 'none';
+                                    if (!enabled) input.value = '';
                                     updateAdvVllm();
                                 }
                                 </script>
-
                                 <!-- Toggle Flags -->
                                 <div style="font-weight:600;color:#334155;font-size:0.9em;margin-bottom:12px;text-transform:uppercase;letter-spacing:0.5px;">Toggle Flags</div>
                                 <table style="width:100%;border-collapse:collapse;font-size:0.9em;">
