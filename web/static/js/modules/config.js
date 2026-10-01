@@ -1593,17 +1593,21 @@ function applyWorkloadPreset(name) {
 
     var fields = {
         'isl-input': 'isl', 'osl-input': 'osl',
+        'isl-input-mt': 'isl', 'osl-input-mt': 'osl',
         'isl-stdev-input': 'isl_stdev', 'osl-stdev-input': 'osl_stdev',
+        'isl-stdev-input-mt': 'isl_stdev', 'osl-stdev-input-mt': 'osl_stdev',
         'isl-min-input': 'isl_min', 'isl-max-input': 'isl_max',
         'osl-min-input': 'osl_min', 'osl-max-input': 'osl_max',
         'users-input': 'users',
         'turns-input': 'turns', 'turns-input-mt': 'turns',
-        'turn-delay-input': 'turn_delay', 'turn-delay-stdev-input': 'turn_delay_stdev',
-        'turn-delay-min-input': 'turn_delay_min', 'turn-delay-max-input': 'turn_delay_max',
-        'first-prompt-tokens-input': 'first_prompt_tokens',
-        'first-prompt-tokens-stdev-input': 'first_prompt_tokens_stdev',
-        'first-prompt-tokens-min-input': 'first_prompt_tokens_min',
-        'first-prompt-tokens-max-input': 'first_prompt_tokens_max',
+        'turn-delay-input': 'turn_delay', 'turn-delay-input-mt': 'turn_delay',
+        'turn-delay-stdev-input': 'turn_delay_stdev', 'turn-delay-stdev-input-mt': 'turn_delay_stdev',
+        'turn-delay-min-input': 'turn_delay_min', 'turn-delay-min-input-mt': 'turn_delay_min',
+        'turn-delay-max-input': 'turn_delay_max', 'turn-delay-max-input-mt': 'turn_delay_max',
+        'first-prompt-tokens-input': 'first_prompt_tokens', 'first-prompt-tokens-input-mt': 'first_prompt_tokens',
+        'first-prompt-tokens-stdev-input': 'first_prompt_tokens_stdev', 'first-prompt-tokens-stdev-input-mt': 'first_prompt_tokens_stdev',
+        'first-prompt-tokens-min-input': 'first_prompt_tokens_min', 'first-prompt-tokens-min-input-mt': 'first_prompt_tokens_min',
+        'first-prompt-tokens-max-input': 'first_prompt_tokens_max', 'first-prompt-tokens-max-input-mt': 'first_prompt_tokens_max',
         'prefix-tokens-input': 'prefix_tokens', 'prefix-count-input': 'prefix_count',
     };
 
@@ -1651,20 +1655,42 @@ function applyWorkloadPreset(name) {
         if (groupsValue) groupsValue.textContent = p.prefix_cache_groups;
     }
 
-    // Open/close collapsible sections based on preset
-    var sections = [
-        { toggle: 'length-variation-switch', body: 'length-variation-body', open: !!(p.isl_stdev || p.osl_stdev) },
-        { toggle: 'multi-turn-toggle', body: 'multi-turn-body', open: !!(p.turns && p.turns > 1) },
-        { toggle: 'prefix-cache-switch', body: 'prefix-cache-body', open: !!(p.prefix_cache_hit_pct > 0) },
-    ];
-    sections.forEach(function(s) {
-        var toggle = document.getElementById(s.toggle);
-        var body = document.getElementById(s.body);
-        if (!toggle) return;
-        var isOpen = toggle.classList.contains('active');
-        if (s.open && !isOpen) toggle.click();
-        else if (!s.open && isOpen) toggle.click();
-    });
+    // Open/close collapsible sections — handle both continuous and MT variants
+    function setToggle(switchId, bodyId, open) {
+        var sw = document.getElementById(switchId);
+        var body = document.getElementById(bodyId);
+        if (!sw || !body) return;
+        var checkbox = sw.previousElementSibling || document.querySelector('[id$="-enabled"]');
+        var isOpen = body.style.display !== 'none';
+        if (open && !isOpen) {
+            body.style.display = 'block';
+            sw.style.background = '#15803d';
+            var knob = sw.querySelector('span');
+            if (knob) knob.style.transform = 'translateX(18px)';
+            var cb = document.getElementById(switchId.replace('-switch', '-enabled').replace('-mt-switch', '-mt-enabled'));
+            if (cb) cb.checked = true;
+        } else if (!open && isOpen) {
+            body.style.display = 'none';
+            sw.style.background = '#ccc';
+            var knob2 = sw.querySelector('span');
+            if (knob2) knob2.style.transform = 'translateX(0)';
+            var cb2 = document.getElementById(switchId.replace('-switch', '-enabled').replace('-mt-switch', '-mt-enabled'));
+            if (cb2) cb2.checked = false;
+        }
+    }
+    var hasVariation = !!(p.isl_stdev || p.osl_stdev);
+    var hasDelay = !!(p.turn_delay);
+    var hasFirstPrompt = !!(p.first_prompt_tokens);
+    var hasPrefixCache = !!(p.prefix_cache_hit_pct > 0);
+    var isMT = isMultiTurn;
+    // Continuous sections
+    setToggle('length-variation-switch', 'length-variation-body', hasVariation && !isMT);
+    setToggle('prefix-cache-switch', 'prefix-cache-body', hasPrefixCache && !isMT);
+    // Multi-turn sections
+    setToggle('length-variation-mt-switch', 'length-variation-mt-body', hasVariation && isMT);
+    setToggle('turn-delay-mt-switch', 'turn-delay-mt-body', hasDelay && isMT);
+    setToggle('first-prompt-mt-switch', 'first-prompt-mt-body', hasFirstPrompt && isMT);
+    setToggle('prefix-cache-switch', 'prefix-cache-body', hasPrefixCache && !isMT);
 
     // Highlight selected preset button
     var presetBtns = document.querySelectorAll('[onclick^="applyWorkloadPreset"]');
