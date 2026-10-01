@@ -288,8 +288,12 @@ class TemplateManager:
 
         vars_dict = self._prepare_template_vars(config)
 
+        # Prefill pods handle context encoding only — speculative decoding runs
+        # on the decode pod, so suppress it from the prefill manifest.
+        prefill_vars = {**vars_dict, 'speculative_config_json': None}
+
         # Render both templates
-        prefill_yaml = prefill_template.render(**vars_dict)
+        prefill_yaml = prefill_template.render(**prefill_vars)
         decode_yaml = decode_template.render(**vars_dict)
 
         # Determine deployment order based on GPU requirements

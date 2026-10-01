@@ -533,6 +533,10 @@
                                             <option value="deepseek-v4">DeepSeek-V4 Flash (NVFP4-FP8)</option>
                                             <option value="deepseek-r1">DeepSeek-R1</option>
                                         </optgroup>
+                                        <optgroup label="DeepSeek (DSpark — vLLM ≥ 0.29)">
+                                            <option value="deepseek-v4-flash-dspark">DeepSeek-V4 Flash DSpark</option>
+                                            <option value="deepseek-v41-dspark">DeepSeek-V4.1 (built-in DSpark)</option>
+                                        </optgroup>
                                         <optgroup label="Qwen (Built-in MTP)">
                                             <option value="qwen3">Qwen 3 — dense (Qwen3ForCausalLM)</option>
                                             <option value="qwen3next">Qwen 3 Next — hybrid (Qwen3NextForCausalLM)</option>
@@ -555,7 +559,7 @@
                                 <div id="speculative-fields" style="display:none;">
                                     <table style="width:100%;border-collapse:collapse;font-size:0.9em;">
                                         <tr style="background:#f8fafc;"><th style="text-align:left;padding:8px 12px;border-bottom:2px solid #e2e8f0;">Setting</th><th style="text-align:left;padding:8px 12px;border-bottom:2px solid #e2e8f0;">Description</th><th style="text-align:left;padding:8px 12px;border-bottom:2px solid #e2e8f0;width:280px;">Value</th></tr>
-                                        <tr><td>Method</td><td style="font-weight:normal;color:#6b7280;font-size:0.9em;">Speculative decoding method.</td><td><select id="adv-speculative-method-val" onchange="updateAdvVllm()" style="width:100%;"><option value="mtp">mtp</option><option value="deepseek_mtp">deepseek_mtp</option><option value="nemotron_h_mtp">nemotron_h_mtp</option><option value="eagle3">eagle3</option><option value="eagle">eagle</option><option value="draft_model">draft_model</option></select></td></tr>
+                                        <tr><td>Method</td><td style="font-weight:normal;color:#6b7280;font-size:0.9em;">Speculative decoding method.</td><td><select id="adv-speculative-method-val" onchange="updateAdvVllm()" style="width:100%;"><option value="mtp">mtp</option><option value="deepseek_mtp">deepseek_mtp</option><option value="nemotron_h_mtp">nemotron_h_mtp</option><option value="dspark">dspark</option><option value="eagle3">eagle3</option><option value="eagle">eagle</option><option value="draft_model">draft_model</option></select></td></tr>
                                         <tr><td>Draft Model</td><td style="font-weight:normal;color:#6b7280;font-size:0.9em;">HuggingFace model path for the draft/assistant model. Leave empty for models with built-in MTP (uses main model).</td><td><input type="text" id="adv-speculative-model-val" placeholder="Leave empty for built-in MTP (self-draft)" style="width:100%;font-size:0.85em;padding:6px 8px;border:1px solid #d1d5db;border-radius:4px;" oninput="updateAdvVllm()"></td></tr>
                                         <tr><td>Tokens per Step</td><td style="font-weight:normal;color:#6b7280;font-size:0.9em;">Number of tokens predicted per speculative step. Higher = more aggressive speculation but lower acceptance rate.</td><td><input type="number" id="adv-num-speculative-tokens-val" value="3" min="1" max="10" step="1" style="width:80px;padding:6px 8px;border:1px solid #d1d5db;border-radius:4px;" oninput="updateAdvVllm()"></td></tr>
                                     </table>
@@ -574,9 +578,11 @@
                                         'gemma4-12b':         {method:'mtp', model:'google/gemma-4-12B-it-assistant', tokens:3},
                                         'gemma4-26b':         {method:'mtp', model:'google/gemma-4-26B-A4B-it-assistant', tokens:3},
                                         'gemma4-31b':         {method:'mtp', model:'google/gemma-4-31B-it-assistant', tokens:3},
-                                        'deepseek-v3':        {method:'deepseek_mtp', model:'', tokens:1},
-                                        'deepseek-v4':        {method:'mtp', model:'', tokens:1},
-                                        'deepseek-r1':        {method:'deepseek_mtp', model:'', tokens:1},
+                                        'deepseek-v3':              {method:'deepseek_mtp', model:'', tokens:1},
+                                        'deepseek-v4':              {method:'mtp', model:'', tokens:1},
+                                        'deepseek-r1':              {method:'deepseek_mtp', model:'', tokens:1},
+                                        'deepseek-v4-flash-dspark': {method:'dspark', model:'deepseek-ai/DeepSeek-V4-Flash-DSpark', tokens:7},
+                                        'deepseek-v41-dspark':      {method:'dspark', model:'', tokens:7},
                                         'qwen35':             {method:'mtp', model:'', tokens:1},  // legacy alias → qwen3
                                         'qwen3':              {method:'mtp', model:'', tokens:1},
                                         'qwen3next':          {method:'mtp', model:'', tokens:1},
