@@ -4,6 +4,8 @@ ServeIt Studio Core Modules
 Core optimization engine for finding optimal LLM inference configurations.
 """
 
+__version__ = "0.11.0"
+
 from .metrics_collector import MetricsCollector, MetricsConfig
 from .metrics_analyzer import MetricsAnalyzer, AnalyzedMetrics, PodMetrics
 from .system_scanner import SystemScanner, ClusterResources, NodeResources, StorageClassInfo, NetworkInterface

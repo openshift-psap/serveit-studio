@@ -18,6 +18,8 @@ from datetime import timedelta
 from flask import Flask
 from flask_socketio import SocketIO
 
+from core import __version__ as SERVEIT_VERSION
+
 logger = logging.getLogger(__name__)
 
 # ── Path Constants ───────────────────────────────────────────────────────────
@@ -61,6 +63,7 @@ def _get_secret_key():
 app = Flask(__name__, template_folder='templates')
 app.config['TEMPLATES_AUTO_RELOAD'] = True
 app.config['SECRET_KEY'] = _get_secret_key()
+app.jinja_env.globals['SERVEIT_VERSION'] = SERVEIT_VERSION
 app.config['SESSION_COOKIE_HTTPONLY'] = True
 app.config['SESSION_COOKIE_SAMESITE'] = 'Lax'
 app.config['PERMANENT_SESSION_LIFETIME'] = timedelta(hours=24)
