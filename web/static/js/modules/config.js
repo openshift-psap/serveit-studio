@@ -1561,7 +1561,7 @@ var WORKLOAD_PRESETS = {
     agentic_full: {
         isl: 1500, osl: 425, isl_stdev: 1200, osl_stdev: 825,
         isl_min: 100, isl_max: 10000, osl_min: 50, osl_max: 10000,
-        users: 30, turns: 540,
+        users: 30, turns: 300,
         turn_delay: 15, turn_delay_stdev: 55, turn_delay_min: 1, turn_delay_max: 100,
         first_prompt_tokens: 160000, first_prompt_tokens_stdev: 233600,
         first_prompt_tokens_min: 10000, first_prompt_tokens_max: 990000,
@@ -1687,7 +1687,7 @@ function applyWorkloadPreset(name) {
         rag: '📄 <strong>RAG / Document QA</strong> — Retrieved documents + question, summarization, knowledge base queries. Long prompts (4000 tokens), short responses (500 tokens), 100 users, 60% cache across 5 groups.',
         multiturn_chat: '🔄 <strong>Multi-turn Chat</strong> — Conversational assistant with history. Customer support, tutoring, therapy bots. 10 turns per session, 2K shared system prompt, 50 concurrent users.',
         agentic_light: '🤖 <strong>Agentic (Light)</strong> — Tool-calling agent with 30 turns per session. Simulates tool call latency (15s avg), 10K first-turn context, 3K shared system prompt, 30 concurrent sessions.',
-        agentic_full: '🧠 <strong>Agentic (Full)</strong> — Long agentic coding sessions based on the Nemotron guide workload. 540 turns, 160K first-turn context (repo/tool definitions), 3K shared system prompt, 15s tool call delay, 30 concurrent sessions.',
+        agentic_full: '🧠 <strong>Agentic (Full)</strong> — Long agentic coding sessions based on the Nemotron guide workload. 300 turns, 160K first-turn context (repo/tool definitions), 3K shared system prompt, 15s tool call delay, 30 concurrent sessions.',
         batch: '📦 <strong>Batch / Pipeline</strong> — Offline processing, large documents, CI/CD pipelines. Long prompts and responses (4000 tokens each), 200 concurrent requests for maximum throughput.',
     };
     var descEl = document.getElementById('preset-description');
