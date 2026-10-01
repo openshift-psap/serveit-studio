@@ -2450,8 +2450,13 @@ def handle_setup_storage(data):
             node_nfs_pvcs = data.get('node_nfs_pvcs') or saved.get('node_nfs_pvcs', [])
 
             if not node_nfs_pvcs:
-                raise Exception('Per-node storage enabled but no NFS PVC mapping found')
+                # No NFS per-node mapping — shared RWX storage (VAST, CephFS, Weka, etc.).
+                # Fall through to the single shared PVC path below.
+                log_to_ui(f'📦 Shared RWX storage ({storage_class}) — single PVC accessible from all nodes', 'info')
+                per_node_storage = False
 
+        if per_node_storage:
+            # NFS per-node path — only when node_nfs_pvcs is populated
             log_to_ui(f'📦 Per-node NFS storage: downloading model to {len(node_nfs_pvcs)} nodes', 'info')
 
             # Create per-node NFS PVCs before launching download job

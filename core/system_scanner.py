@@ -959,10 +959,14 @@ class SystemScanner:
                 RWX_PROVISIONERS = {'nfs', 'example.com/nfs', 'nfs.csi.k8s.io',
                     'openshift-storage.cephfs.csi.ceph.com', 'efs.csi.aws.com',
                     'file.csi.azure.com', 'filestore.csi.storage.gke.io',
-                    'ibm.io/ibmc-file', 'ibm-spectrum-scale-csi'}
+                    'ibm.io/ibmc-file', 'ibm-spectrum-scale-csi',
+                    'csi.vastdata.com',  # VAST — shared NVMe-over-fabric, native RWX
+                }
                 access_mode = 'ReadWriteMany' if (provisioner in RWX_PROVISIONERS or
                     'nfs' in provisioner.lower() or 'file' in provisioner.lower() or
-                    'cephfs' in provisioner.lower() or 'spectrum-scale' in provisioner.lower()
+                    'cephfs' in provisioner.lower() or 'spectrum-scale' in provisioner.lower() or
+                    'vast' in provisioner.lower() or 'weka' in provisioner.lower() or
+                    'lustre' in provisioner.lower() or 'gpfs' in provisioner.lower()
                 ) else 'ReadWriteOnce'
 
                 # Detect hostPath base for local provisioners
