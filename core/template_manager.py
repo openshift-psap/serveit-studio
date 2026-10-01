@@ -160,6 +160,7 @@ class TemplateManager:
         vars_dict['pipeline_parallel_size'] = getattr(config, 'pipeline_parallel_size', None) or 0
         vars_dict['context_parallel_size'] = getattr(config, 'context_parallel_size', None)
         vars_dict['prefill_context_parallel_size'] = getattr(config, 'prefill_context_parallel_size', None)
+        vars_dict['decode_context_parallel_size'] = getattr(config, 'decode_context_parallel_size', None)
         vars_dict['override_generation_config'] = getattr(config, 'override_generation_config', None)
         vars_dict['prefill_attention_config'] = getattr(config, 'prefill_attention_config', None)
         vars_dict['decode_attention_config'] = getattr(config, 'decode_attention_config', None)

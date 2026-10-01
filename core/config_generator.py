@@ -65,8 +65,9 @@ class TestConfig:
     dtype: Optional[str] = None  # None = vLLM auto-detects
     kv_cache_dtype: Optional[str] = None  # None = auto
     pipeline_parallel_size: Optional[int] = None  # None = 1 (default)
-    context_parallel_size: Optional[int] = None  # None = disabled (decode only)
-    prefill_context_parallel_size: Optional[int] = None  # None = disabled (prefill only)
+    context_parallel_size: Optional[int] = None           # --context-parallel-size (aggregated)
+    prefill_context_parallel_size: Optional[int] = None   # --prefill-context-parallel-size
+    decode_context_parallel_size: Optional[int] = None    # --decode-context-parallel-size
     override_generation_config: Optional[str] = None  # JSON config to override generation parameters
     prefill_attention_config: Optional[str] = None  # JSON attention config for prefill pod, e.g. '{"sparse_mla_force_mqa":true}'
     decode_attention_config: Optional[str] = None   # JSON attention config for decode pod (and aggregated)

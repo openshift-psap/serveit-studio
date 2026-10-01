@@ -605,6 +605,7 @@ class ConfigBuilderMixin:
             'pipeline_parallel_size': 'pipeline_parallel_size',
             'context_parallel_size': 'context_parallel_size',
             'prefill_context_parallel_size': 'prefill_context_parallel_size',
+            'decode_context_parallel_size': 'decode_context_parallel_size',
             'override_generation_config': 'override_generation_config',
             'prefill_attention_config': 'prefill_attention_config',
             'decode_attention_config': 'decode_attention_config',
@@ -635,7 +636,7 @@ class ConfigBuilderMixin:
             elif setting.get('mode') == 'custom' and setting.get('value') is not None:
                 val = setting['value']
                 if attr in ('max_model_len', 'max_num_seqs', 'max_num_batched_tokens', 'pipeline_parallel_size', 'context_parallel_size',
-                            'prefill_context_parallel_size', 'block_size', 'cpu_offload_gb', 'weight_cpu_offload_gb', 'http_timeout_keep_alive',
+                            'prefill_context_parallel_size', 'decode_context_parallel_size', 'block_size', 'cpu_offload_gb', 'weight_cpu_offload_gb', 'http_timeout_keep_alive',
                             'prefix_cache_retention', 'speculative_num_tokens', 'prefill_speculative_num_tokens'):
                     val = int(val)
                 elif attr == 'gpu_memory_utilization':
@@ -728,6 +729,7 @@ class ConfigBuilderMixin:
             '--pipeline-parallel-size': ('pipeline_parallel_size', int),
             '--context-parallel-size': ('context_parallel_size', int),
             '--prefill-context-parallel-size': ('prefill_context_parallel_size', int),
+            '--decode-context-parallel-size': ('decode_context_parallel_size', int),
             '--override-generation-config': ('override_generation_config', str),
             '--prefill-attention-config': ('prefill_attention_config', str),
             '--decode-attention-config': ('decode_attention_config', str),
