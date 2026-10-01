@@ -99,7 +99,7 @@ function setLatencyPercentile(pctl) {
 }
 
 // Advanced vLLM settings
-var advValueFields = ['max-model-len','gpu-memory-utilization','max-num-seqs','max-num-batched-tokens','dtype','kv-cache-dtype','pipeline-parallel-size','block-size','tool-call-parser','reasoning-parser','chat-template-content-format','dbo-prefill-token-threshold','dbo-decode-token-threshold','moe-backend','all2all-backend','headroom','memory-reserve-pct','model-loader-extra-config','cpu-offload-gb','weight-cpu-offload-gb','disk-offload-kv','http-timeout-keep-alive','prefix-cache-retention','ssm-conv-state-layout','num-speculative-tokens','speculative-model','override-generation-config','prefill-attention-config','decode-attention-config'];
+var advValueFields = ['max-model-len','gpu-memory-utilization','max-num-seqs','max-num-batched-tokens','dtype','kv-cache-dtype','pipeline-parallel-size','block-size','tool-call-parser','reasoning-parser','chat-template-content-format','dbo-prefill-token-threshold','dbo-decode-token-threshold','moe-backend','all2all-backend','headroom','memory-reserve-pct','model-loader-extra-config','cpu-offload-gb','weight-cpu-offload-gb','disk-offload-kv','http-timeout-keep-alive','prefix-cache-retention','ssm-conv-state-layout','num-speculative-tokens','speculative-model','override-generation-config'];
 var advToggleFields = ['enable-prefix-caching','disable-custom-all-reduce','enable-auto-tool-choice','enable-expert-parallel','enable-dbo','enable-eplb','trust-remote-code','disable-log-requests','vllm-debug-logs','nccl-debug-logs','enable-bidirectional-kv'];
 
 function updateAdvVllm() {
@@ -170,6 +170,15 @@ function updateAdvVllm() {
             adv.speculative_model = { mode: 'auto', value: null };
         }
     }
+    // Attention config (prefill / decode) — driven by toggle buttons, not mode selects
+    ['prefill', 'decode'].forEach(function(role) {
+        var input = document.getElementById('adv-' + role + '-attention-config-val');
+        if (input && input.style.display !== 'none' && input.value.trim()) {
+            adv[role + '_attention_config'] = { mode: 'custom', value: input.value.trim() };
+        } else {
+            adv[role + '_attention_config'] = { mode: 'auto' };
+        }
+    });
     // Include raw text mode info
     adv._mode = config.advanced_vllm_mode || 'form';
     adv._raw_text = config.advanced_vllm_raw || '';
@@ -254,6 +263,17 @@ function restoreAdvVllm() {
         if (prefillSpecTokens && adv.prefill_speculative_num_tokens && adv.prefill_speculative_num_tokens.mode === 'custom' && adv.prefill_speculative_num_tokens.value != null) {
             prefillSpecTokens.value = adv.prefill_speculative_num_tokens.value;
         }
+    }
+    // Restore attention-config toggle state
+    if (adv) {
+        ['prefill', 'decode'].forEach(function(role) {
+            var cfg = adv[role + '_attention_config'];
+            if (cfg && cfg.mode === 'custom' && cfg.value) {
+                var input = document.getElementById('adv-' + role + '-attention-config-val');
+                if (input) { input.value = cfg.value; }
+                if (typeof setAttentionConfig === 'function') setAttentionConfig(role, 'on');
+            }
+        });
     }
     // Restore raw text mode
     var advMode = config.advanced_vllm_mode || (adv && adv._mode) || 'form';
