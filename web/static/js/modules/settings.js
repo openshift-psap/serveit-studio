@@ -157,9 +157,12 @@ function updateAdvVllm() {
             var specMethodVal = document.getElementById('adv-speculative-method-val');
             var specModelVal = document.getElementById('adv-speculative-model-val');
             var specTokensVal = document.getElementById('adv-num-speculative-tokens-val');
+            var prefillSpecTokensVal = document.getElementById('adv-prefill-speculative-tokens-val');
             adv.speculative_method = specMethodVal ? specMethodVal.value : null;
             var specTokens = specTokensVal ? parseInt(specTokensVal.value, 10) : 0;
             adv.num_speculative_tokens = (specTokens > 0) ? { mode: 'custom', value: specTokens } : { mode: 'off', value: null };
+            var prefillSpecTokens = prefillSpecTokensVal ? parseInt(prefillSpecTokensVal.value, 10) : 0;
+            adv.prefill_speculative_num_tokens = (prefillSpecTokens > 0) ? { mode: 'custom', value: prefillSpecTokens } : { mode: 'off', value: null };
             adv.speculative_model = (specModelVal && specModelVal.value) ? { mode: 'custom', value: specModelVal.value } : { mode: 'auto' };
         } else {
             adv.speculative_method = null;
@@ -246,6 +249,10 @@ function restoreAdvVllm() {
             var tokVal = (adv.num_speculative_tokens && adv.num_speculative_tokens.mode === 'custom' && adv.num_speculative_tokens.value != null)
                 ? adv.num_speculative_tokens.value : 3;
             specTokens.value = tokVal;
+        }
+        var prefillSpecTokens = document.getElementById('adv-prefill-speculative-tokens-val');
+        if (prefillSpecTokens && adv.prefill_speculative_num_tokens && adv.prefill_speculative_num_tokens.mode === 'custom' && adv.prefill_speculative_num_tokens.value != null) {
+            prefillSpecTokens.value = adv.prefill_speculative_num_tokens.value;
         }
     }
     // Restore raw text mode

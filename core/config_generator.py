@@ -168,6 +168,7 @@ class TestConfig:
     speculative_method: Optional[str] = None  # 'mtp', 'draft', None
     speculative_num_tokens: Optional[int] = None
     speculative_model: Optional[str] = None  # MTP assistant model (e.g., google/gemma-4-26B-A4B-it-assistant)
+    prefill_speculative_num_tokens: Optional[int] = None  # PD/EP split only — prefill pod override
 
     # Model-specific flags
     reasoning_parser: Optional[str] = None

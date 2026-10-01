@@ -621,6 +621,7 @@ class ConfigBuilderMixin:
             'prefix_cache_retention': 'prefix_cache_retention',
             'ssm_conv_state_layout': 'ssm_conv_state_layout',
             'num_speculative_tokens': 'speculative_num_tokens',
+            'prefill_speculative_num_tokens': 'prefill_speculative_num_tokens',
             'speculative_model': 'speculative_model',
         }
         for key, attr in val_fields.items():
@@ -633,7 +634,7 @@ class ConfigBuilderMixin:
                 val = setting['value']
                 if attr in ('max_model_len', 'max_num_seqs', 'max_num_batched_tokens', 'pipeline_parallel_size', 'context_parallel_size',
                             'prefill_context_parallel_size', 'block_size', 'cpu_offload_gb', 'weight_cpu_offload_gb', 'http_timeout_keep_alive',
-                            'prefix_cache_retention', 'speculative_num_tokens'):
+                            'prefix_cache_retention', 'speculative_num_tokens', 'prefill_speculative_num_tokens'):
                     val = int(val)
                 elif attr == 'gpu_memory_utilization':
                     val = float(val)

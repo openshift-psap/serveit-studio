@@ -228,16 +228,22 @@ class TemplateManager:
         vars_dict['nvshmem_symmetric_size'] = getattr(config, 'nvshmem_symmetric_size', None)
         vars_dict['num_redundant_experts'] = getattr(config, 'num_redundant_experts', None)
 
-        # Build speculative config JSON for --speculative-config flag
-        # Example: Gemma 4 MTP uses a separate assistant model:
-        #   speculative_method='mtp', speculative_num_tokens=1,
-        #   speculative_model='google/gemma-4-26B-A4B-it-assistant'
+        # Build speculative config JSON for --speculative-config flag.
+        # speculative_config_json  → decode pod (and aggregated pod)
+        # prefill_speculative_config_json → prefill pod only (PD/EP split); None suppresses it
         spec = {}
         if config.speculative_num_tokens:
             spec['method'] = config.speculative_method or 'mtp'
             spec['model'] = getattr(config, 'speculative_model', None) or config.model_name
             spec['num_speculative_tokens'] = config.speculative_num_tokens
         vars_dict['speculative_config_json'] = json.dumps(spec) if spec else None
+
+        prefill_tokens = getattr(config, 'prefill_speculative_num_tokens', None)
+        if spec and prefill_tokens:
+            prefill_spec = {**spec, 'num_speculative_tokens': prefill_tokens}
+            vars_dict['prefill_speculative_config_json'] = json.dumps(prefill_spec)
+        else:
+            vars_dict['prefill_speculative_config_json'] = None
 
         return vars_dict
 
@@ -288,9 +294,9 @@ class TemplateManager:
 
         vars_dict = self._prepare_template_vars(config)
 
-        # Prefill pods handle context encoding only — speculative decoding runs
-        # on the decode pod, so suppress it from the prefill manifest.
-        prefill_vars = {**vars_dict, 'speculative_config_json': None}
+        # Prefill pods use their own speculative config (prefill_speculative_num_tokens)
+        # when set; otherwise no speculative decoding on prefill.
+        prefill_vars = {**vars_dict, 'speculative_config_json': vars_dict['prefill_speculative_config_json']}
 
         # Render both templates
         prefill_yaml = prefill_template.render(**prefill_vars)
