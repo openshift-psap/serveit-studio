@@ -6,6 +6,18 @@ allowed-tools: Bash(curl *), Bash(kubectl *), Bash(oc *), Bash(python3 deploymen
 
 # ServeIt Studio — Run Optimization
 
+## Quick Navigation
+- [Step 1: Ask the user](#step-1-ask-the-user)
+- [Step 2: Deploy & Setup](#step-2-deploy--setup-skip-if-instance-already-exists)
+- [Step 3: Model & Workload](#step-3-model--workload-selection)
+  - [3a. HuggingFace token](#3a-huggingface-token)
+  - [3b. Model selection](#3b-which-model)
+  - [3c. Workload type](#3c-workload-type--configuration)
+  - [3d. Optimization mode](#3d-what-matters-most)
+  - [3e. Prefix cache](#3e-do-you-expect-prefix-cache-hits)
+  - [3f. Advanced settings](#3f-any-advanced-settings)
+- [Steps 4–11: Run & Results](#step-4-authentication)
+
 ## Introduction
 
 When this skill is invoked, start by explaining to the user what ServeIt Studio does:
@@ -501,24 +513,13 @@ Ask these in plain language:
 
 **"How long are the prompts your users will send?"**
 - This is the Input Sequence Length (ISL) — the length of text a user types, pastes, or sends to the model (including system prompts, code snippets, context). Measured in tokens
-- A token is roughly 4 characters of English text, or about ¾ of a word. So:
-  - 100 tokens ≈ 75 words ≈ a short paragraph
-  - 500 tokens ≈ 375 words ≈ about 1 page of text
-  - 2,000 tokens ≈ 1,500 words ≈ about 4 pages of text
-  - 8,000 tokens ≈ 6,000 words ≈ about 15 pages of text
-- For code, tokens map differently — code has more special characters, so 1 token ≈ 3 characters of code
-- Real-world examples:
-  - A short code question: ~100-300 tokens (~400-1,200 characters)
-  - A code file with context: ~1,000-2,000 tokens (~4,000-8,000 characters)
-  - A large codebase context / RAG: ~4,000-8,000 tokens (~16,000-32,000 characters)
+- A token ≈ 4 characters of English text (~¾ of a word). Code ≈ 3 characters/token.
+- Examples: short question ~100–300t, code file ~1–2K t, large codebase/RAG ~4–8K t
 - Default: 3,000 tokens (input), 100 tokens (output)
 
 **"How long should the model's responses be?"**
 - This is the Output Sequence Length (OSL) — the length of text the model generates back to the user
-- Real-world examples:
-  - A one-liner fix or short answer: ~50-100 tokens (~200-400 characters)
-  - A function with explanation: ~200-500 tokens (~800-2,000 characters)
-  - A full class or module: ~500-2,000 tokens (~2,000-8,000 characters)
+- Examples: short answer ~50–100t, function ~200–500t, full module ~500–2K t
 - Default: 100 tokens
 
 After the user picks ISL/OSL, ask about variation:
@@ -919,48 +920,15 @@ If the user wants to see all options, print these tables:
 | `vllm-debug-logs` | Verbose vLLM engine logs. Very noisy, only for troubleshooting. | Off |
 | `nccl-debug-logs` | Verbose NCCL communication logs. Very noisy, only for multi-GPU networking issues. | Off |
 
-Let the user override specific values. **Validate overrides before applying:**
-- `gpu-memory-utilization` must be between 0.5 and 0.99. Below 0.5 wastes GPU. Above 0.99 will OOM.
-- `max-model-len` must be at least ISL + OSL. Setting it too high wastes memory.
-- `max-num-seqs` should not exceed concurrent users by more than 2x — oversized values cause OOM.
-- `pipeline-parallel-size` must evenly divide the number of GPUs.
-- `block-size` must be a power of 2 (8, 16, 32, 64, 128, 256).
-- `dtype` must match what the model supports — FP8 models can't run in float32.
+**Validate overrides before applying:**
+- `gpu-memory-utilization` must be 0.5–0.99
+- `max-model-len` must be ≥ ISL + OSL
+- `max-num-seqs` should not exceed concurrent users by more than 2×
+- `pipeline-parallel-size` must evenly divide GPU count
+- `block-size` must be a power of 2 (8–512)
+- `dtype` must match what the model supports
 
-Most users should let auto-tune handle everything. Only offer overrides if the user asks. The key settings a user might want to override:
-
-- **max-model-len** — max total text length (input + output) per request. Larger = more GPU memory reserved, fewer concurrent users. Auto = calculated from ISL + OSL.
-- **gpu-memory-utilization** — fraction of GPU memory the engine can use (0.0-0.99). Higher = more room for concurrent requests, less safety margin. Auto = calculated from model size and GPU VRAM.
-- **dtype** — precision for model weights (auto, float16, bfloat16). Lower precision = less memory but slightly lower quality. Auto = detected from model config.
-- **kv-cache-dtype** — precision for KV cache. FP8 halves cache memory, fitting more concurrent users. Auto = same as model dtype.
-- **block-size** — tokens per KV cache block. Larger blocks reduce overhead for long sequences and improve NIXL transfer efficiency in P/D mode. Auto = calculated from sequence length.
-- **tool-call-parser** — needed if the app uses function/tool calling (e.g., hermes, mistral). Auto = disabled.
-- **reasoning-parser** — needed for reasoning models (DeepSeek-R1, Qwen3 thinking mode). Auto = disabled.
-
-Advanced settings most users should NOT touch (only mention if asked):
-- `pipeline-parallel-size` — splitting model across GPU groups in sequence. Only for models too large for TP alone.
-- `max-num-seqs` — max simultaneous requests. Auto-calculated.
-- `max-num-batched-tokens` — max tokens per batch. Auto-calculated.
-- `headroom` — safety margin for throughput calculation. Default 1.3 (30% headroom).
-- `memory-reserve-pct` — extra GPU memory reserve for OOM safety. Default 0%.
-- `cpu-offload-gb` — offload KV cache to CPU RAM for long agentic sessions. Only for PD mode.
-- `weight-cpu-offload-gb` — offload model weights to CPU. For models that barely fit in GPU.
-- `http-timeout-keep-alive` — increase for long-running agentic requests that idle between tool calls.
-- MoE-specific: `dbo-prefill-token-threshold`, `dbo-decode-token-threshold`, `moe-backend`, `all2all-backend` — auto-detected for MoE models.
-- Nemotron-specific: `prefix-cache-retention`, `ssm-conv-state-layout` — only for Mamba-hybrid models.
-- `model-loader-extra-config` — multi-threaded loading for 550B+ models.
-
-Toggle flags (auto-managed, only mention if asked):
-- `enable-prefix-caching` — auto on. Reuses computation for shared prompt prefixes.
-- `enable-expert-parallel` — auto on when MoE model detected. Splits experts across GPUs.
-- `enable-dbo` — auto on for MoE. Overlaps communication with compute.
-- `enable-eplb` — auto on for MoE. Balances expert load across GPUs.
-- `trust-remote-code` — auto on. Required by some models.
-- `disable-log-requests` — auto on. Reduces log noise during benchmarks.
-- `enable-auto-tool-choice` — auto off. Enable for tool-calling apps.
-- `enable-bidirectional-kv` — auto off. Required for Nemotron and agentic serving.
-- `disable-custom-all-reduce` — auto off. Only enable if NCCL errors occur.
-- Debug: `vllm-debug-logs`, `nccl-debug-logs` — auto off. Very verbose, only for troubleshooting.
+Most users should let auto-tune handle everything. The tables above cover all available settings — only surface them if the user asks.
 
 #### Infrastructure & Deployment
 
