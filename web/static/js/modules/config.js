@@ -1660,21 +1660,24 @@ function applyWorkloadPreset(name) {
         var sw = document.getElementById(switchId);
         var body = document.getElementById(bodyId);
         if (!sw || !body) return;
-        var checkbox = sw.previousElementSibling || document.querySelector('[id$="-enabled"]');
+        var innerId = bodyId.replace('-body', '-inner');
+        var inner = document.getElementById(innerId);
+        var cbId = switchId.replace(/-mt-switch$/, '-mt-enabled').replace(/-switch$/, '-enabled');
+        var cb = document.getElementById(cbId);
         var isOpen = body.style.display !== 'none';
         if (open && !isOpen) {
             body.style.display = 'block';
+            if (inner) inner.style.opacity = '1';
             sw.style.background = '#15803d';
             var knob = sw.querySelector('span');
             if (knob) knob.style.transform = 'translateX(18px)';
-            var cb = document.getElementById(switchId.replace('-switch', '-enabled').replace('-mt-switch', '-mt-enabled'));
             if (cb) cb.checked = true;
         } else if (!open && isOpen) {
             body.style.display = 'none';
+            if (inner) inner.style.opacity = '0.4';
             sw.style.background = '#ccc';
             var knob2 = sw.querySelector('span');
             if (knob2) knob2.style.transform = 'translateX(0)';
-            var cb2 = document.getElementById(switchId.replace('-switch', '-enabled').replace('-mt-switch', '-mt-enabled'));
             if (cb2) cb2.checked = false;
         }
     }
