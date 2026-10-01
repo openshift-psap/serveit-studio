@@ -270,6 +270,7 @@ spec:
 {% endif %}{% if weight_cpu_offload_gb %}                  --cpu-offload-gb {{ weight_cpu_offload_gb }} \
 {% endif %}{% if model_loader_extra_config %}                  --model-loader-extra-config '{{ model_loader_extra_config }}' \
 {% endif %}{% if override_generation_config %}                  --override-generation-config '{{ override_generation_config }}' \
+{% endif %}{% if attention_config %}                  --attention-config '{{ attention_config }}' \
 {% endif %}{% if extra_vllm_args %}                  {{ extra_vllm_args }} \
 {% endif %}
                   || sleep infinity

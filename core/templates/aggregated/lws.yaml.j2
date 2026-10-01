@@ -222,6 +222,7 @@ spec:
 {% endif %}{% if disk_offload_kv_path %}                  --kv-transfer-config '{"kv_connector":"OffloadingConnector","kv_role":"kv_both","kv_connector_extra_config":{"spec_name":"TieringOffloadingSpec","block_size":16,"eviction_policy":"lru","secondary_tiers":[{"type":"fs","root_dir":"{{ disk_offload_kv_path }}","n_read_threads":{{ disk_offload_kv_read_threads | default(32) }},"n_write_threads":{{ disk_offload_kv_write_threads | default(16) }}}]}}' \
 {% endif %}{% if model_loader_extra_config %}                  --model-loader-extra-config '{{ model_loader_extra_config }}' \
 {% endif %}{% if override_generation_config %}                  --override-generation-config '{{ override_generation_config }}' \
+{% endif %}{% if attention_config %}                  --attention-config '{{ attention_config }}' \
 {% endif %}{% if extra_vllm_args %}                  {{ extra_vllm_args }} \
 {% endif %}
                   || sleep infinity
@@ -524,6 +525,7 @@ spec:
 {% endif %}{% if all2all_backend %}                  --all2all-backend {{ all2all_backend }} \
 {% endif %}{% if model_loader_extra_config %}                  --model-loader-extra-config '{{ model_loader_extra_config }}' \
 {% endif %}{% if override_generation_config %}                  --override-generation-config '{{ override_generation_config }}' \
+{% endif %}{% if attention_config %}                  --attention-config '{{ attention_config }}' \
 {% endif %}{% if extra_vllm_args %}                  {{ extra_vllm_args }} \
 {% endif %}
                   || sleep infinity

@@ -161,6 +161,7 @@ class TemplateManager:
         vars_dict['context_parallel_size'] = getattr(config, 'context_parallel_size', None)
         vars_dict['prefill_context_parallel_size'] = getattr(config, 'prefill_context_parallel_size', None)
         vars_dict['override_generation_config'] = getattr(config, 'override_generation_config', None)
+        vars_dict['attention_config'] = getattr(config, 'attention_config', None)
 
         # vLLM access-log flag — version-aware across upstream vllm AND llm-d images
         vars_dict['vllm_log_request_flag'] = resolve_vllm_log_request_flag(
