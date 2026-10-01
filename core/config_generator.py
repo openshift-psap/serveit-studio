@@ -68,7 +68,8 @@ class TestConfig:
     context_parallel_size: Optional[int] = None  # None = disabled (decode only)
     prefill_context_parallel_size: Optional[int] = None  # None = disabled (prefill only)
     override_generation_config: Optional[str] = None  # JSON config to override generation parameters
-    attention_config: Optional[str] = None  # JSON attention config, e.g. '{"sparse_mla_force_mqa":true}' for HiSparse
+    prefill_attention_config: Optional[str] = None  # JSON attention config for prefill pod, e.g. '{"sparse_mla_force_mqa":true}'
+    decode_attention_config: Optional[str] = None   # JSON attention config for decode pod (and aggregated)
     block_size: int = 16  # KV cache block size (auto-tuned from ISL+OSL)
     trust_remote_code: bool = True
     disable_log_requests: bool = True

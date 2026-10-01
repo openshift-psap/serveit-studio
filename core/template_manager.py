@@ -161,7 +161,10 @@ class TemplateManager:
         vars_dict['context_parallel_size'] = getattr(config, 'context_parallel_size', None)
         vars_dict['prefill_context_parallel_size'] = getattr(config, 'prefill_context_parallel_size', None)
         vars_dict['override_generation_config'] = getattr(config, 'override_generation_config', None)
-        vars_dict['attention_config'] = getattr(config, 'attention_config', None)
+        vars_dict['prefill_attention_config'] = getattr(config, 'prefill_attention_config', None)
+        vars_dict['decode_attention_config'] = getattr(config, 'decode_attention_config', None)
+        # aggregated template uses attention_config = decode side
+        vars_dict['attention_config'] = vars_dict['decode_attention_config']
 
         # vLLM access-log flag — version-aware across upstream vllm AND llm-d images
         vars_dict['vllm_log_request_flag'] = resolve_vllm_log_request_flag(
@@ -295,9 +298,14 @@ class TemplateManager:
 
         vars_dict = self._prepare_template_vars(config)
 
-        # Prefill pods use their own speculative config (prefill_speculative_num_tokens)
-        # when set; otherwise no speculative decoding on prefill.
-        prefill_vars = {**vars_dict, 'speculative_config_json': vars_dict['prefill_speculative_config_json']}
+        # Prefill pods use their own speculative and attention configs.
+        prefill_vars = {
+            **vars_dict,
+            'speculative_config_json': vars_dict['prefill_speculative_config_json'],
+            'attention_config': vars_dict['prefill_attention_config'],
+        }
+        # Decode pod uses decode_attention_config.
+        vars_dict['attention_config'] = vars_dict['decode_attention_config']
 
         # Render both templates
         prefill_yaml = prefill_template.render(**prefill_vars)
