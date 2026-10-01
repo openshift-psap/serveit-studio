@@ -528,12 +528,12 @@
                                         <tr>
                                             <td><input type="text" id="ctx-prefill-flag" value="--prefill-context-parallel-size" style="width:100%;font-size:0.85em;padding:5px 8px;border:1px solid #d1d5db;border-radius:4px;font-family:monospace;" oninput="updateAdvVllm()"></td>
                                             <td style="font-weight:normal;color:#6b7280;font-size:0.9em;">Prefill pod — split long input sequences across GPUs (PCP). Required when ISL &gt; 16K for 1M-context.</td>
-                                            <td><input type="number" id="ctx-prefill-value" min="1" max="64" placeholder="off" style="width:70px;padding:6px 8px;border:1px solid #d1d5db;border-radius:4px;" oninput="updateAdvVllm()"></td>
+                                            <td><select id="ctx-prefill-mode" onchange="document.getElementById('ctx-prefill-value').style.display=this.value==='custom'?'inline-block':'none';updateAdvVllm()" style="width:70px;padding:6px 4px;border:1px solid #d1d5db;border-radius:4px;"><option value="auto">Auto</option><option value="custom">Custom</option></select><input type="number" id="ctx-prefill-value" min="1" max="64" style="display:none;width:55px;padding:6px 8px;border:1px solid #d1d5db;border-radius:4px;margin-left:4px;" oninput="updateAdvVllm()"></td>
                                         </tr>
                                         <tr>
                                             <td><input type="text" id="ctx-decode-flag" value="--decode-context-parallel-size" style="width:100%;font-size:0.85em;padding:5px 8px;border:1px solid #d1d5db;border-radius:4px;font-family:monospace;" oninput="updateAdvVllm()"></td>
                                             <td style="font-weight:normal;color:#6b7280;font-size:0.9em;">Decode pod — split KV cache attention across GPUs (DCP). Required when serving 1M-context with large KV cache.</td>
-                                            <td><input type="number" id="ctx-decode-value" min="1" max="64" placeholder="off" style="width:70px;padding:6px 8px;border:1px solid #d1d5db;border-radius:4px;" oninput="updateAdvVllm()"></td>
+                                            <td><select id="ctx-decode-mode" onchange="document.getElementById('ctx-decode-value').style.display=this.value==='custom'?'inline-block':'none';updateAdvVllm()" style="width:70px;padding:6px 4px;border:1px solid #d1d5db;border-radius:4px;"><option value="auto">Auto</option><option value="custom">Custom</option></select><input type="number" id="ctx-decode-value" min="1" max="64" style="display:none;width:55px;padding:6px 8px;border:1px solid #d1d5db;border-radius:4px;margin-left:4px;" oninput="updateAdvVllm()"></td>
                                         </tr>
                                     </table>
                                 </div>

@@ -643,18 +643,27 @@ class ConfigBuilderMixin:
                     val = float(val)
                 setattr(cfg, attr, val)
 
-        # Context parallelism — editable flag-name + value pairs from the UI
+        # Context parallelism — editable flag-name + value pairs from the UI.
+        # value=None means "auto": set to the pod's TP at deploy time (prefill_tp / decode_tp).
         _ctx_flag_map = {
-            '--prefill-context-parallel-size': 'prefill_context_parallel_size',
-            '--decode-context-parallel-size':  'decode_context_parallel_size',
-            '--context-parallel-size':         'context_parallel_size',
+            '--prefill-context-parallel-size': ('prefill_context_parallel_size', 'prefill_tp'),
+            '--decode-context-parallel-size':  ('decode_context_parallel_size',  'decode_tp'),
+            '--context-parallel-size':         ('context_parallel_size',         'tensor_parallelism'),
         }
         for entry in adv.get('context_parallel_entries', []):
             flag  = (entry.get('flag') or '').strip()
             value = entry.get('value')
-            field = _ctx_flag_map.get(flag)
-            if field and value:
+            mapping = _ctx_flag_map.get(flag)
+            if not mapping:
+                continue
+            field, tp_attr = mapping
+            if value:
                 setattr(cfg, field, int(value))
+            else:
+                # auto: use the pod's TP (set after TestConfig is fully built)
+                tp_val = getattr(cfg, tp_attr, None) or getattr(cfg, 'tensor_parallelism', None)
+                if tp_val:
+                    setattr(cfg, field, int(tp_val))
 
         # Speculative decoding method (set by preset dropdown, not mode/value dict)
         spec_method = adv.get('speculative_method')

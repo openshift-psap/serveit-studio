@@ -170,13 +170,16 @@ function updateAdvVllm() {
             adv.speculative_model = { mode: 'auto', value: null };
         }
     }
-    // Context parallelism entries — editable flag name + number value
+    // Context parallelism entries — editable flag name + auto/custom value
     var ctxEntries = [];
     ['prefill', 'decode'].forEach(function(role) {
         var flag  = document.getElementById('ctx-' + role + '-flag');
+        var mode  = document.getElementById('ctx-' + role + '-mode');
         var value = document.getElementById('ctx-' + role + '-value');
-        if (flag && value && flag.value.trim() && parseInt(value.value) > 0) {
-            ctxEntries.push({ flag: flag.value.trim(), value: parseInt(value.value) });
+        if (flag && flag.value.trim()) {
+            var isCustom = mode && mode.value === 'custom';
+            var numVal = isCustom && value ? parseInt(value.value) : null;
+            ctxEntries.push({ flag: flag.value.trim(), value: (isCustom && numVal > 0) ? numVal : null });
         }
     });
     adv.context_parallel_entries = ctxEntries;
@@ -281,9 +284,14 @@ function restoreAdvVllm() {
             adv.context_parallel_entries.forEach(function(entry, i) {
                 var role = i === 0 ? 'prefill' : 'decode';
                 var flagEl  = document.getElementById('ctx-' + role + '-flag');
+                var modeEl  = document.getElementById('ctx-' + role + '-mode');
                 var valueEl = document.getElementById('ctx-' + role + '-value');
-                if (flagEl)  flagEl.value  = entry.flag;
-                if (valueEl) valueEl.value = entry.value;
+                if (flagEl) flagEl.value = entry.flag;
+                if (entry.value && modeEl && valueEl) {
+                    modeEl.value = 'custom';
+                    valueEl.style.display = 'inline-block';
+                    valueEl.value = entry.value;
+                }
             });
         }
     }
