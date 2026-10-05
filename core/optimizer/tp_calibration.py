@@ -30,21 +30,16 @@ class TPCalibrationMixin:
         decode_candidates = []
         prefill_candidates = []
 
-        import math as _math
-
         def _calibration_max_requests(safe_c, seq_len, tp):
-            """Calculate max requests: 7000 * tp / sqrt(seq_len).
+            """Calibration needs ~200 measurement requests for reliable p90 metrics.
 
-            Scales inversely with sqrt of sequence length so both short
-            (decode ISL=1) and long (prefill ISL=100K) tests run ~5-7 min.
-            Adds warmup budget: warmup requests count toward the limit so we
-            add streams × warmup_seconds as overhead to ensure measurement completes.
+            Uses safe_c * 5 (≈200 at typical concurrencies) + warmup budget.
+            Warmup consumes ~safe_c * 6 requests (60s ÷ 10s avg per req).
+            Total runtime target: ~2-3 minutes per TP value.
             """
-            reqs = max(tp * 3, int(7000 * tp / _math.sqrt(max(seq_len, 1))))
-            # Warmup budget: ~60s of warmup at safe_c streams, assuming ~10s per request.
-            # This ensures warmup requests don't exhaust the count limit.
-            warmup_budget = safe_c * 60 // 10  # ≈ safe_c × 6 requests
-            return reqs + warmup_budget
+            measurement = max(tp * 3, safe_c * 5)   # ≥100 measurement requests
+            warmup_budget = safe_c * 6               # 60s warmup at ~10s/req
+            return measurement + warmup_budget
 
         # Pre-compute max requests and KV cap across all TPs to size calibration datasets
         # Pool must be larger than KV cap to prevent full-cache hits from skewing results
