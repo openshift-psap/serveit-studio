@@ -125,8 +125,12 @@ def sync_code(cmd: str, namespace: str, pod_name: str):
     print(f"📦 Syncing code to pod {pod_name}...", file=sys.stderr)
 
     # Try git pull on PVC first (/mnt/storage/app/), then legacy /app/
+    # Also ensure origin points to the canonical repo (not a personal fork)
     r = kubectl_run(cmd, ['exec', '-n', namespace, pod_name, '--',
-                          'bash', '-c', 'cd /mnt/storage/app 2>/dev/null || cd /app; git fetch origin && git reset --hard origin/main 2>&1'])
+                          'bash', '-c',
+                          'cd /mnt/storage/app 2>/dev/null || cd /app; '
+                          'git remote set-url origin https://github.com/openshift-psap/serveit-studio.git 2>/dev/null; '
+                          'git fetch origin && git reset --hard origin/main 2>&1'])
     if r.returncode == 0:
         print(f"   {r.stdout.strip()}", file=sys.stderr)
     else:
