@@ -41,7 +41,9 @@ class TPCalibrationMixin:
             add streams × warmup_seconds as overhead to ensure measurement completes.
             """
             reqs = max(tp * 3, int(7000 * tp / _math.sqrt(max(seq_len, 1))))
-            warmup_budget = safe_c * 60  # 60s warmup × concurrent streams
+            # Warmup budget: ~60s of warmup at safe_c streams, assuming ~10s per request.
+            # This ensures warmup requests don't exhaust the count limit.
+            warmup_budget = safe_c * 60 // 10  # ≈ safe_c × 6 requests
             return reqs + warmup_budget
 
         # Pre-compute max requests and KV cap across all TPs to size calibration datasets
