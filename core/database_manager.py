@@ -151,6 +151,7 @@ class DatabaseManager:
                 ('test_configurations', 'architecture', 'TEXT'),
                 ('test_configurations', 'decode_tp', 'INTEGER'),
                 ('test_configurations', 'guidellm_raw_json', 'TEXT'),
+                ('test_configurations', 'guidellm_command', 'TEXT'),
                 ('test_configurations', 'test_config_json', 'TEXT'),
             ]
             for table, col, col_type in _migrations:
@@ -598,8 +599,8 @@ class DatabaseManager:
                  itl_p50, itl_p90, itl_p95, itl_p99,
                  throughput_p50, throughput_p90, throughput_p95, throughput_p99,
                  gpu_utilization, kv_cache_usage, started_at, completed_at, metrics_json,
-                 manifests_yaml, architecture, decode_tp, test_config_json)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                 manifests_yaml, architecture, decode_tp, guidellm_command, test_config_json)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             ''', (
                 run_id,
                 test_config.test_id,
@@ -627,6 +628,7 @@ class DatabaseManager:
                 manifests_yaml,
                 architecture,
                 getattr(test_config, 'decode_tp', None),
+                getattr(test_config, '_guidellm_command', None),
                 test_config_json,
             ))
 

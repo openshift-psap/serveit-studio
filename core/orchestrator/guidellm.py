@@ -679,6 +679,15 @@ class GuidellmMixin:
             if column_mapper:
                 cmd.extend(['--data-column-mapper', column_mapper])
 
+            # Log and store the full guidellm command
+            cmd_str = ' \\\n  '.join(cmd)
+            logger.info(f'guidellm command:\n  {cmd_str}')
+            if log_callback:
+                log_callback(f'🔧 guidellm command:\n  {cmd_str}')
+            # Store on config object for DB persistence
+            if hasattr(config, '__dict__'):
+                config._guidellm_command = cmd_str
+
             # Start guidellm in background
             logger.debug('Starting guidellm...')
 
