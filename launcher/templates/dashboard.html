@@ -881,7 +881,8 @@ function loadInstances(clusterId, isRefresh, userId, forceRefresh){
                 '<button class="btn" style="background:#475569;color:white;font-size:0.75em;padding:5px 8px;width:100%" onclick="event.stopPropagation();backupInstance('+inst.id+',\''+((inst.display_name||inst.name).replace(/'/g,"\\'"))+'\')">&#128190; Backup</button>' +
                 '<button class="btn" style="background:#f59e0b;color:white;font-size:0.75em;padding:5px 8px;width:100%" onclick="event.stopPropagation();cleanupInstance('+inst.id+',\''+((inst.display_name||inst.name).replace(/'/g,"\\'"))+'\')">&#128465; Cleanup</button>' +
                 '<button class="btn btn-danger" style="font-size:0.75em;padding:5px 8px;width:100%;display:flex;align-items:center;justify-content:center;gap:3px" onclick="deleteInstance('+inst.id+',\''+((inst.display_name||inst.name).replace(/'/g,"\\'"))+'\')">&#9888; Delete</button>' +
-                (IS_ADMIN ? '<button class="btn btn-cancel" style="font-size:0.75em;padding:5px 8px;width:100%;display:flex;align-items:center;justify-content:center;gap:3px" onclick="showAssignModal('+inst.id+',\''+((inst.display_name||inst.name).replace(/'/g,"\\'"))+'\')">&#128101; Users</button>' : '')) +
+                (IS_ADMIN ? '<button class="btn btn-cancel" style="font-size:0.75em;padding:5px 8px;width:100%;display:flex;align-items:center;justify-content:center;gap:3px" onclick="showAssignModal('+inst.id+',\''+((inst.display_name||inst.name).replace(/'/g,"\\'"))+'\')">&#128101; Users</button>' : '') +
+                (inst.auto_login_token ? '<button class="btn" style="background:#0f766e;color:white;font-size:0.75em;padding:5px 8px;width:100%;display:flex;align-items:center;justify-content:center;gap:3px" onclick="event.stopPropagation();copyCmd(this,\''+inst.auto_login_token+'\')">&#128273; Copy API Key</button>' : '')) +
                 '</div>' +
                 connectBar;
             list.appendChild(card);
