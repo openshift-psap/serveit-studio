@@ -193,6 +193,8 @@ spec:
                   --data-parallel-multi-port-external-lb \
                   --data-parallel-start-rank $(( ${LWS_WORKER_INDEX:-0} * {{ data_parallel_size_local | default(data_parallelism) }} )) \
 {% endif %}{% if (pipeline_parallel_size or 0) > 1 %}                  --pipeline-parallel-size {{ pipeline_parallel_size }} \
+{% endif %}{% if context_parallel_size and context_parallel_size > 1 %}                  --context-parallel-size {{ context_parallel_size }} \
+{% endif %}{% if prefill_context_parallel_size and prefill_context_parallel_size > 1 %}                  --prefill-context-parallel-size {{ prefill_context_parallel_size }} \
 {% endif %}{% if block_size %}                  --block-size {{ block_size }} \
 {% endif %}
 {% if max_model_len %}                  --max-model-len {{ max_model_len }} \
@@ -219,6 +221,8 @@ spec:
 {% endif %}{% if weight_cpu_offload_gb %}                  --cpu-offload-gb {{ weight_cpu_offload_gb }} \
 {% endif %}{% if disk_offload_kv_path %}                  --kv-transfer-config '{"kv_connector":"OffloadingConnector","kv_role":"kv_both","kv_connector_extra_config":{"spec_name":"TieringOffloadingSpec","block_size":16,"eviction_policy":"lru","secondary_tiers":[{"type":"fs","root_dir":"{{ disk_offload_kv_path }}","n_read_threads":{{ disk_offload_kv_read_threads | default(32) }},"n_write_threads":{{ disk_offload_kv_write_threads | default(16) }}}]}}' \
 {% endif %}{% if model_loader_extra_config %}                  --model-loader-extra-config '{{ model_loader_extra_config }}' \
+{% endif %}{% if override_generation_config %}                  --override-generation-config '{{ override_generation_config }}' \
+{% endif %}{% if attention_config %}                  --attention-config '{{ attention_config }}' \
 {% endif %}{% if extra_vllm_args %}                  {{ extra_vllm_args }} \
 {% endif %}
                   || sleep infinity
@@ -520,6 +524,8 @@ spec:
 {% endif %}{% if moe_backend %}                  --moe-backend {{ moe_backend }} \
 {% endif %}{% if all2all_backend %}                  --all2all-backend {{ all2all_backend }} \
 {% endif %}{% if model_loader_extra_config %}                  --model-loader-extra-config '{{ model_loader_extra_config }}' \
+{% endif %}{% if override_generation_config %}                  --override-generation-config '{{ override_generation_config }}' \
+{% endif %}{% if attention_config %}                  --attention-config '{{ attention_config }}' \
 {% endif %}{% if extra_vllm_args %}                  {{ extra_vllm_args }} \
 {% endif %}
                   || sleep infinity

@@ -176,7 +176,14 @@ class ClusterResources:
 
         tp = next_power_of_2(min_gpus)
 
-        return min(tp, self.max_gpus_per_node)
+        # Check if model fits in a single node
+        if tp > self.max_gpus_per_node:
+            raise ValueError(
+                f"Model requires TP={tp} but cluster only has {self.max_gpus_per_node} GPUs per node. "
+                f"Model is too large for this cluster."
+            )
+
+        return tp
 
 
 class SystemScanner:
@@ -952,10 +959,14 @@ class SystemScanner:
                 RWX_PROVISIONERS = {'nfs', 'example.com/nfs', 'nfs.csi.k8s.io',
                     'openshift-storage.cephfs.csi.ceph.com', 'efs.csi.aws.com',
                     'file.csi.azure.com', 'filestore.csi.storage.gke.io',
-                    'ibm.io/ibmc-file', 'ibm-spectrum-scale-csi'}
+                    'ibm.io/ibmc-file', 'ibm-spectrum-scale-csi',
+                    'csi.vastdata.com',  # VAST — shared NVMe-over-fabric, native RWX
+                }
                 access_mode = 'ReadWriteMany' if (provisioner in RWX_PROVISIONERS or
                     'nfs' in provisioner.lower() or 'file' in provisioner.lower() or
-                    'cephfs' in provisioner.lower() or 'spectrum-scale' in provisioner.lower()
+                    'cephfs' in provisioner.lower() or 'spectrum-scale' in provisioner.lower() or
+                    'vast' in provisioner.lower() or 'weka' in provisioner.lower() or
+                    'lustre' in provisioner.lower() or 'gpfs' in provisioner.lower()
                 ) else 'ReadWriteOnce'
 
                 # Detect hostPath base for local provisioners
@@ -964,6 +975,9 @@ class SystemScanner:
                     pool_name = sc.get('parameters', {}).get('storagePool', '')
                     if pool_name:
                         local_path = f'/var/hpvolumes/{pool_name}'
+                # For no-provisioner (static PVs), read local_path from SC parameters
+                if is_local and not local_path:
+                    local_path = sc.get('parameters', {}).get('localPath', '')
 
                 sc_info = StorageClassInfo(
                     name=name,

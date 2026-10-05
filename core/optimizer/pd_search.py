@@ -565,7 +565,7 @@ class PDSearchMixin:
         if (gpu_node_count >= 2 and not has_rdma):
             # Check if model supports Pipeline Parallelism before testing
             if not self._supports_pp:
-                self.log(f"⚠️  Skipping PP tests — model does not support Pipeline Parallelism", 'warning')
+                self.log("⚠️  Skipping PP tests — model does not support Pipeline Parallelism", 'warning')
                 self.log(f"    Use Tensor Parallelism (TP) for {gpu_node_count}-node scaling", 'info')
             else:
                 self.log(f"Testing aggregated PP variants (no RDMA, {gpu_node_count} nodes):", 'info')

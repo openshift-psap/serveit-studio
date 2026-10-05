@@ -157,7 +157,7 @@ def handle_take_over():
     import time as _time
     from flask import request as flask_request
     sid = flask_request.sid
-    username = session.get('user', 'unknown')
+    username = session.get('user') or flask_request.args.get('username') or 'API client'
     tab_id = flask_request.args.get('tab_id', '')
 
     with _session_lock:
@@ -991,7 +991,7 @@ def handle_scan_cluster(data):
                 }
                 for sc in resources.storage_classes
                 if not any(blk in sc.name.lower() for blk in ('block', 'raw', 'iscsi-block'))
-                and sc.provisioner != 'kubernetes.io/no-provisioner'
+                and (sc.provisioner != 'kubernetes.io/no-provisioner' or sc.gpu_nodes_covered > 0)
             ],
             # Provider and network information
             'provider': provider_name,
@@ -2372,17 +2372,46 @@ def handle_setup_storage(data):
                 pass
 
             # Get GPU node names for per-node download jobs
+            # Prefer user-selected nodes; fall back to all GPU nodes
+            selected_nodes = data.get('selected_nodes') or saved.get('selected_nodes', [])
             gpu_nodes = []
-            try:
-                kubectl = KubectlRunner(namespace=namespace)
-                r = kubectl.run([
-                    'get', 'nodes', '-l', 'nvidia.com/gpu.present=true',
-                    '-o', 'jsonpath={range .items[*]}{.metadata.name}{"\\n"}{end}'
-                ], check=False)
-                if r.returncode == 0:
-                    gpu_nodes = [n.strip() for n in r.stdout.strip().splitlines() if n.strip()]
-            except Exception:
-                pass
+            if selected_nodes:
+                # Filter out cordoned nodes from user selection
+                try:
+                    kubectl_tmp = KubectlRunner(namespace=namespace)
+                    r_tmp = kubectl_tmp.run([
+                        'get', 'nodes',
+                        '-o', 'jsonpath={range .items[*]}{.metadata.name}{"\\t"}{.spec.unschedulable}{"\\n"}{end}'
+                    ], check=False)
+                    cordoned = set()
+                    if r_tmp.returncode == 0:
+                        for line in r_tmp.stdout.strip().splitlines():
+                            parts = line.strip().split('\t')
+                            if len(parts) > 1 and parts[1].strip().lower() == 'true':
+                                cordoned.add(parts[0].strip())
+                except Exception:
+                    cordoned = set()
+                gpu_nodes = [n for n in selected_nodes if n and n not in cordoned]
+                skipped = [n for n in selected_nodes if n in cordoned]
+                if skipped:
+                    log_to_ui(f'   ⚠️ Skipping {len(skipped)} cordoned node(s): {", ".join(skipped)}', 'warning')
+                log_to_ui(f'   Using {len(gpu_nodes)} schedulable selected nodes', 'info')
+            if not gpu_nodes:
+                try:
+                    kubectl = KubectlRunner(namespace=namespace)
+                    r = kubectl.run([
+                        'get', 'nodes', '-l', 'nvidia.com/gpu.present=true',
+                        '-o', 'jsonpath={range .items[*]}{.metadata.name}{"\\t"}{.spec.unschedulable}{"\\n"}{end}'
+                    ], check=False)
+                    if r.returncode == 0:
+                        for line in r.stdout.strip().splitlines():
+                            parts = line.strip().split('\t')
+                            name = parts[0].strip()
+                            cordoned = parts[1].strip().lower() == 'true' if len(parts) > 1 else False
+                            if name and not cordoned:
+                                gpu_nodes.append(name)
+                except Exception:
+                    pass
 
             if not gpu_nodes:
                 raise Exception('No GPU nodes found for local disk download')
@@ -2398,7 +2427,8 @@ def handle_setup_storage(data):
                     'prereq/model-cache-pvc.yaml.j2',
                     pvc_name='serveit-cache', namespace=namespace,
                     test_id='serveit-cache', model_name=model,
-                    storage_class=storage_class or 'gp2', storage_size=50,
+                    storage_class=storage_class or '',
+                    storage_size=50,
                     pvc_access_mode='ReadWriteMany',
                 )
                 subprocess.run(['kubectl', 'apply', '-f', '-'], input=_pvc_yaml.encode(), capture_output=True, timeout=30)
@@ -2450,8 +2480,13 @@ def handle_setup_storage(data):
             node_nfs_pvcs = data.get('node_nfs_pvcs') or saved.get('node_nfs_pvcs', [])
 
             if not node_nfs_pvcs:
-                raise Exception('Per-node storage enabled but no NFS PVC mapping found')
+                # No NFS per-node mapping — shared RWX storage (VAST, CephFS, Weka, etc.).
+                # Fall through to the single shared PVC path below.
+                log_to_ui(f'📦 Shared RWX storage ({storage_class}) — single PVC accessible from all nodes', 'info')
+                per_node_storage = False
 
+        if per_node_storage:
+            # NFS per-node path — only when node_nfs_pvcs is populated
             log_to_ui(f'📦 Per-node NFS storage: downloading model to {len(node_nfs_pvcs)} nodes', 'info')
 
             # Create per-node NFS PVCs before launching download job

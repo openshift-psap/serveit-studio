@@ -751,7 +751,8 @@ function restoreClusterResources() {
         // Hide internal backing SCs (LSO local-nvme is internal to HPP)
         const hiddenSCs = new Set();
         data.storage_classes.forEach(sc => {
-            if (sc.provisioner === 'kubernetes.io/no-provisioner') hiddenSCs.add(sc.name);
+            // Hide no-provisioner SCs unless they have PVs covering GPU nodes (e.g. serveit-local)
+            if (sc.provisioner === 'kubernetes.io/no-provisioner' && sc.gpu_nodes_covered === 0) hiddenSCs.add(sc.name);
         });
         data.storage_classes.forEach(sc => {
             if (hiddenSCs.has(sc.name)) return;
@@ -1561,7 +1562,7 @@ var WORKLOAD_PRESETS = {
     agentic_full: {
         isl: 1500, osl: 425, isl_stdev: 1200, osl_stdev: 825,
         isl_min: 100, isl_max: 10000, osl_min: 50, osl_max: 10000,
-        users: 30, turns: 540,
+        users: 30, turns: 300,
         turn_delay: 15, turn_delay_stdev: 55, turn_delay_min: 1, turn_delay_max: 100,
         first_prompt_tokens: 160000, first_prompt_tokens_stdev: 233600,
         first_prompt_tokens_min: 10000, first_prompt_tokens_max: 990000,
@@ -1593,17 +1594,21 @@ function applyWorkloadPreset(name) {
 
     var fields = {
         'isl-input': 'isl', 'osl-input': 'osl',
+        'isl-input-mt': 'isl', 'osl-input-mt': 'osl',
         'isl-stdev-input': 'isl_stdev', 'osl-stdev-input': 'osl_stdev',
+        'isl-stdev-input-mt': 'isl_stdev', 'osl-stdev-input-mt': 'osl_stdev',
         'isl-min-input': 'isl_min', 'isl-max-input': 'isl_max',
         'osl-min-input': 'osl_min', 'osl-max-input': 'osl_max',
         'users-input': 'users',
-        'turns-input': 'turns',
-        'turn-delay-input': 'turn_delay', 'turn-delay-stdev-input': 'turn_delay_stdev',
-        'turn-delay-min-input': 'turn_delay_min', 'turn-delay-max-input': 'turn_delay_max',
-        'first-prompt-tokens-input': 'first_prompt_tokens',
-        'first-prompt-tokens-stdev-input': 'first_prompt_tokens_stdev',
-        'first-prompt-tokens-min-input': 'first_prompt_tokens_min',
-        'first-prompt-tokens-max-input': 'first_prompt_tokens_max',
+        'turns-input': 'turns', 'turns-input-mt': 'turns',
+        'turn-delay-input': 'turn_delay', 'turn-delay-input-mt': 'turn_delay',
+        'turn-delay-stdev-input': 'turn_delay_stdev', 'turn-delay-stdev-input-mt': 'turn_delay_stdev',
+        'turn-delay-min-input': 'turn_delay_min', 'turn-delay-min-input-mt': 'turn_delay_min',
+        'turn-delay-max-input': 'turn_delay_max', 'turn-delay-max-input-mt': 'turn_delay_max',
+        'first-prompt-tokens-input': 'first_prompt_tokens', 'first-prompt-tokens-input-mt': 'first_prompt_tokens',
+        'first-prompt-tokens-stdev-input': 'first_prompt_tokens_stdev', 'first-prompt-tokens-stdev-input-mt': 'first_prompt_tokens_stdev',
+        'first-prompt-tokens-min-input': 'first_prompt_tokens_min', 'first-prompt-tokens-min-input-mt': 'first_prompt_tokens_min',
+        'first-prompt-tokens-max-input': 'first_prompt_tokens_max', 'first-prompt-tokens-max-input-mt': 'first_prompt_tokens_max',
         'prefix-tokens-input': 'prefix_tokens', 'prefix-count-input': 'prefix_count',
     };
 
@@ -1617,9 +1622,13 @@ function applyWorkloadPreset(name) {
         }
     }
 
-    // Set turns on/off
+    // Set workload type and turns
+    var isMultiTurn = !!(p.turns && p.turns > 1);
+    if (typeof setWorkloadType === 'function') {
+        setWorkloadType(isMultiTurn ? 'multiturn' : 'continuous');
+    }
     var turnsToggle = document.getElementById('multi-turn-toggle');
-    if (p.turns && p.turns > 1) {
+    if (isMultiTurn) {
         config.turns = p.turns;
         if (turnsToggle && !turnsToggle.classList.contains('active')) turnsToggle.click();
     } else {
@@ -1647,20 +1656,45 @@ function applyWorkloadPreset(name) {
         if (groupsValue) groupsValue.textContent = p.prefix_cache_groups;
     }
 
-    // Open/close collapsible sections based on preset
-    var sections = [
-        { toggle: 'length-variation-switch', body: 'length-variation-body', open: !!(p.isl_stdev || p.osl_stdev) },
-        { toggle: 'multi-turn-toggle', body: 'multi-turn-body', open: !!(p.turns && p.turns > 1) },
-        { toggle: 'prefix-cache-switch', body: 'prefix-cache-body', open: !!(p.prefix_cache_hit_pct > 0) },
-    ];
-    sections.forEach(function(s) {
-        var toggle = document.getElementById(s.toggle);
-        var body = document.getElementById(s.body);
-        if (!toggle) return;
-        var isOpen = toggle.classList.contains('active');
-        if (s.open && !isOpen) toggle.click();
-        else if (!s.open && isOpen) toggle.click();
-    });
+    // Open/close collapsible sections — handle both continuous and MT variants
+    function setToggle(switchId, bodyId, open) {
+        var sw = document.getElementById(switchId);
+        var body = document.getElementById(bodyId);
+        if (!sw || !body) return;
+        var innerId = bodyId.replace('-body', '-inner');
+        var inner = document.getElementById(innerId);
+        var cbId = switchId.replace(/-mt-switch$/, '-mt-enabled').replace(/-switch$/, '-enabled');
+        var cb = document.getElementById(cbId);
+        var isOpen = body.style.display !== 'none';
+        if (open && !isOpen) {
+            body.style.display = 'block';
+            if (inner) inner.style.opacity = '1';
+            sw.style.background = '#15803d';
+            var knob = sw.querySelector('span');
+            if (knob) knob.style.transform = 'translateX(18px)';
+            if (cb) cb.checked = true;
+        } else if (!open && isOpen) {
+            body.style.display = 'none';
+            if (inner) inner.style.opacity = '0.4';
+            sw.style.background = '#ccc';
+            var knob2 = sw.querySelector('span');
+            if (knob2) knob2.style.transform = 'translateX(0)';
+            if (cb2) cb2.checked = false;
+        }
+    }
+    var hasVariation = !!(p.isl_stdev || p.osl_stdev);
+    var hasDelay = !!(p.turn_delay);
+    var hasFirstPrompt = !!(p.first_prompt_tokens);
+    var hasPrefixCache = !!(p.prefix_cache_hit_pct > 0);
+    var isMT = isMultiTurn;
+    // Continuous sections
+    setToggle('length-variation-switch', 'length-variation-body', hasVariation && !isMT);
+    setToggle('prefix-cache-switch', 'prefix-cache-body', hasPrefixCache && !isMT);
+    // Multi-turn sections
+    setToggle('length-variation-mt-switch', 'length-variation-mt-body', hasVariation && isMT);
+    setToggle('turn-delay-mt-switch', 'turn-delay-mt-body', hasDelay && isMT);
+    setToggle('first-prompt-mt-switch', 'first-prompt-mt-body', hasFirstPrompt && isMT);
+    setToggle('prefix-cache-switch', 'prefix-cache-body', hasPrefixCache && !isMT);
 
     // Highlight selected preset button
     var presetBtns = document.querySelectorAll('[onclick^="applyWorkloadPreset"]');
@@ -1683,7 +1717,7 @@ function applyWorkloadPreset(name) {
         rag: '📄 <strong>RAG / Document QA</strong> — Retrieved documents + question, summarization, knowledge base queries. Long prompts (4000 tokens), short responses (500 tokens), 100 users, 60% cache across 5 groups.',
         multiturn_chat: '🔄 <strong>Multi-turn Chat</strong> — Conversational assistant with history. Customer support, tutoring, therapy bots. 10 turns per session, 2K shared system prompt, 50 concurrent users.',
         agentic_light: '🤖 <strong>Agentic (Light)</strong> — Tool-calling agent with 30 turns per session. Simulates tool call latency (15s avg), 10K first-turn context, 3K shared system prompt, 30 concurrent sessions.',
-        agentic_full: '🧠 <strong>Agentic (Full)</strong> — Long agentic coding sessions based on the Nemotron guide workload. 540 turns, 160K first-turn context (repo/tool definitions), 3K shared system prompt, 15s tool call delay, 30 concurrent sessions.',
+        agentic_full: '🧠 <strong>Agentic (Full)</strong> — Long agentic coding sessions based on the Nemotron guide workload. 300 turns, 160K first-turn context (repo/tool definitions), 3K shared system prompt, 15s tool call delay, 30 concurrent sessions.',
         batch: '📦 <strong>Batch / Pipeline</strong> — Offline processing, large documents, CI/CD pipelines. Long prompts and responses (4000 tokens each), 200 concurrent requests for maximum throughput.',
     };
     var descEl = document.getElementById('preset-description');

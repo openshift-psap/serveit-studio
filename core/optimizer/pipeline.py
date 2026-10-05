@@ -251,6 +251,17 @@ class RecipeOptimizer(
                     self._supports_mtp = True
                     self.log(f"MTP support detected (architecture: {model_archs[0]})")
 
+        # Inject mask_token_id into model_config for parallel MTP drafting.
+        # GLM models use [gMASK] as the mask token; its ID = vocab_size - special_count.
+        # vLLM requires this for num_speculative_tokens=1 with method=mtp (parallel drafting).
+        if self._model_config and self._supports_mtp:
+            if not self._model_config.get('mask_token_id'):
+                arch = (self._model_config.get('architectures') or [''])[0]
+                if 'Glm' in arch:
+                    # GLM-5.3: [gMASK] is the last-defined special token
+                    # tokenizer reports it as 154822 (vocab_size=154880, offset -58)
+                    self._model_config['mask_token_id'] = self._model_config.get('vocab_size', 154880) - 58
+
         # Detect hybrid attention (mixed attention types across layers)
         self._has_hybrid_attention = False
         if self._model_config:
@@ -370,32 +381,54 @@ class RecipeOptimizer(
             config.osl_max = max_out
             self.log(f"output_tokens_max set to {max_out} (osl={osl} + 4×stdev={out_stdev}) so samples fit max_model_len")
         ctx_margin = 512  # chat template markers + re-encode drift
-        fpt_needed = max(fpt, fpt_max) + prefix + max_out + ctx_margin
-        # Multi-turn: later requests carry the full history ((turns-1) prompt+output pairs),
-        # so the longest request grows with turn count.
-        turns = getattr(config, 'turns', 1) or 1
-        if turns > 1:
-            isl = config.isl or 0
-            isl_stdev = config.isl_stdev or 0
-            max_isl = isl + (4 * isl_stdev if isl_stdev else 0)
-            isl_cap = getattr(config, 'isl_max', None)
-            if isl_cap is not None:
-                max_isl = min(max_isl, isl_cap)
-            max_osl_hist = osl + (4 * osl_stdev if osl_stdev else 0)
-            hist_needed = prefix + (turns - 1) * (max_isl + max_osl_hist) + max_isl + max_out + ctx_margin
-            if hist_needed > fpt_needed:
-                fpt_needed = hist_needed
+        # Only use first_prompt_tokens if explicitly set by user (not stale from previous run)
+        fpt_needed = 0
+        if fpt or fpt_max:  # User explicitly set first_prompt_tokens
+            fpt_needed = max(fpt, fpt_max) + prefix + max_out + ctx_margin
+        # For multi-turn, max_model_len only needs to fit the longest single turn
+        # (not the entire conversation history). Number of turns affects data generation,
+        # not context window requirement.
+        isl = config.isl or 0
+        isl_stdev = config.isl_stdev or 0
+        max_isl = isl + (4 * isl_stdev if isl_stdev else 0)
+        isl_cap = getattr(config, 'isl_max', None)
+        if isl_cap is not None:
+            max_isl = min(max_isl, isl_cap)
+        max_osl = osl + (4 * osl_stdev if osl_stdev else 0)
+        turn_needed = prefix + max_isl + max_osl + max_out + ctx_margin
+        if turn_needed > fpt_needed:
+            fpt_needed = turn_needed
         if fpt_needed > computed_max_model_len:
             computed_max_model_len = fpt_needed
-            self.log(f"max_model_len raised to fit workload: {fpt_needed} (fpt={fpt}, prefix={prefix}, "
-                     f"max_output={max_out}, turns={turns}, margin={ctx_margin})")
-        if self.config.max_model_len and self.config.max_model_len >= computed_max_model_len:
-            self.log(f"max_model_len: {self.config.max_model_len} (user-set, ≥ computed {computed_max_model_len})")
-        elif computed_max_model_len != self.config.max_model_len:
-            self.log(f"Adjusted max_model_len: {self.config.max_model_len} → {computed_max_model_len}"
-                     + (f" (includes stdev: ISL±{config.isl_stdev}, OSL±{config.osl_stdev})"
-                        if config.isl_stdev or config.osl_stdev else ""))
-            self.config.max_model_len = computed_max_model_len
+            self.log(f"max_model_len raised to fit workload: {fpt_needed} (isl={isl}±{isl_stdev}, osl={osl}±{osl_stdev}, prefix={prefix}, margin={ctx_margin})")
+
+        # Validate workload fits within model's architectural limit
+        model_max_pos = self._model_config.get('max_position_embeddings', 4096) if self._model_config else 4096
+        if computed_max_model_len > model_max_pos:
+            raise ValueError(
+                f"Workload OSL/ISL settings require {computed_max_model_len} tokens "
+                f"(isl={isl}±{isl_stdev}, osl={osl}±{osl_stdev}, prefix={prefix}, margin={ctx_margin}), "
+                f"but model only supports {model_max_pos} max_position_embeddings. "
+                f"Reduce ISL, OSL, variance, or prefix to fit within model capability."
+            )
+
+        # Store KV cache sizing info for per-config validation at test time.
+        # Each TP value has a different VRAM budget — checked in _check_kv_budget_for_tp().
+        try:
+            kv_cfg = self._model_config or {}
+            self._kv_bytes_per_token = (
+                2 *
+                kv_cfg.get('num_hidden_layers', 32) *
+                kv_cfg.get('num_key_value_heads', kv_cfg.get('num_attention_heads', 32)) *
+                kv_cfg.get('head_dim', kv_cfg.get('hidden_size', 4096) // max(kv_cfg.get('num_attention_heads', 32), 1)) *
+                1  # FP8 = 1 byte/value
+            )
+        except Exception:
+            self._kv_bytes_per_token = 0
+
+        # Always use computed max_model_len since default 8192 is not a user-provided value
+        self.config.max_model_len = computed_max_model_len
+        self.log(f"max_model_len: {computed_max_model_len} (from workload: isl={isl}±{isl_stdev}, osl={osl}±{osl_stdev})")
 
         # Reconcile first_prompt_tokens against the (possibly adjusted) max_model_len.
         # Turn-0 uses first_prompt_tokens (not isl), so it can exceed the model context
@@ -739,26 +772,20 @@ class RecipeOptimizer(
                 except Exception:
                     pass
         if error_pct > 2.0:
-            self.log(f"🚨 {errored}/{total} requests failed ({error_pct:.1f}%) — cluster overloaded (503 from EPP)", 'error')
-            self.log("   Results under heavy overload are unreliable for performance comparison.", 'error')
-            self.log("   To fix, start a new run with one of these options:", 'error')
-            self.log("   1. Lower the concurrent users in Workload Configuration", 'error')
-            self.log("   2. Enable 'Auto-Scale Concurrency' to let the optimizer find sustainable load", 'error')
+            self.log(f"⚠️  {errored}/{total} requests failed ({error_pct:.1f}%) — cluster overloaded (503 from EPP)", 'warning')
+            self.log("   Skipping this config (overloaded); continuing with next config...", 'warning')
+            # Mark config as skipped due to overload (but don't stop optimization)
             if self.db_manager and self.run_id:
                 try:
                     with self.db_manager.get_connection() as conn:
                         conn.execute(
-                            'UPDATE test_configurations SET status = ? WHERE run_id = ? AND config_name = ?',
-                            ('failed', self.run_id, test_config.test_id)
+                            'UPDATE test_configurations SET status = ?, quality = ? WHERE run_id = ? AND config_name = ?',
+                            ('skipped', 'discard', self.run_id, test_config.test_id)
                         )
                 except Exception:
                     pass
-            from core.pod_error_scanner import PodErrorsDetected
-            raise PodErrorsDetected(
-                scan_result={'request_error_rate': error_pct, 'errored': errored, 'total': total,
-                             'reason': 'overload_503'},
-                test_id=test_config.test_id
-            )
+            # Return instead of raising — continue with next config
+            return
         elif error_pct > 0.5:
             self.log(f"   ⚠️  {errored}/{total} requests errored ({error_pct:.1f}%) — "
                      f"minor overload, results may have inflated latency", 'warning')
@@ -1551,6 +1578,34 @@ class RecipeOptimizer(
             pass
         return None
 
+    def _check_kv_budget(self, tp: int, context_parallel_size: int = 1, label: str = '') -> None:
+        """Raise ValueError if max_model_len exceeds the KV cache VRAM budget for this TP.
+
+        Context parallelism multiplies the effective KV budget (each GPU holds 1/CPS of the cache
+        per token, but CPS GPUs share the work), so PD+HiSparse configs can serve longer contexts.
+        Aggregated configs have CPS=1 and must fit the full KV cache on their TP GPUs.
+        """
+        kv_bpt = getattr(self, '_kv_bytes_per_token', 0)
+        if not kv_bpt:
+            return
+        weight_gb = self._estimate_model_size_gb()
+        vram_gb = self._gpu_vram_gb or 80
+        available_kv_gb = max(0, tp * vram_gb * 0.90 - weight_gb)
+        # CPS multiplies usable context: each token's KV is split across CPS GPUs
+        effective_kv_gb = available_kv_gb * context_parallel_size
+        vram_limit = int(effective_kv_gb * 1024 ** 3 / kv_bpt) if kv_bpt else 0
+        max_model_len = self.config.max_model_len or 8192
+        if vram_limit > 0 and max_model_len > vram_limit:
+            msg = (
+                f"Skipping {label}: max_model_len={max_model_len} requires ~"
+                f"{max_model_len * kv_bpt / 1024**3:.0f}GB KV cache but only "
+                f"{effective_kv_gb:.0f}GB available after {weight_gb:.0f}GB weights "
+                f"(TP={tp}, CPS={context_parallel_size}). "
+                f"Use PD split + HiSparse (context parallelism) to serve {max_model_len//1000}K context."
+            )
+            self.log(f"⚠️  {msg}", 'warning')
+            raise ValueError(msg)
+
     def _get_pod_resources(self, tp: int, total_pods: int) -> tuple:
         """
         Calculate memory and CPU per pod for a specific deployment.
@@ -1718,16 +1773,40 @@ class RecipeOptimizer(
                 logger.debug(f"Could not query node resources: {e}")
 
         if not mem_override:
+            # Base memory = 16 GiB + offloads + multi-threaded loading overhead.
+            # Multi-threaded model loading pins CPU memory per thread (~2 GB each).
+            # Production GLM-5.3 uses 79Gi; use num_threads × 2 as loading buffer.
+            cpu_offload = getattr(self.config, 'cpu_offload_gb', None) or 0
+            weight_offload = getattr(self.config, 'weight_cpu_offload_gb', None) or 0
+            # Base memory scales with per-GPU weight size to fit multi-threaded loading buffers.
+            # Each GPU holds weight_gb/tp of weights; loading needs ~15% as CPU transfer buffers.
+            # num_threads in _auto_tune_model_loader is then derived from this memory allocation.
+            weight_gb = self._estimate_model_size_gb()
+            per_gpu_weight_gb = weight_gb / max(tp, 1)
+            # ~1 GB per 4 GB of weights handles multi-threaded loading buffers safely
+            loading_buffer_gb = max(16, int(per_gpu_weight_gb * 0.25))
+            memory_per_pod_gb = loading_buffer_gb + int(cpu_offload) + int(weight_offload)
+
+            # Validate against actual free memory — warn and cap if needed.
             if self._cached_free_mem_gb:
-                usable_memory_gb = self._cached_free_mem_gb * 0.80
-            else:
-                avg_node_memory_gb = sum(n.memory_gb for n in gpu_nodes) / num_gpu_nodes
-                usable_memory_gb = avg_node_memory_gb * 0.85
-            memory_per_pod_gb = int(usable_memory_gb / pods_per_node)
-            # TP fills entire node — give the pod all usable node memory
-            if tp >= max_gpus_per_node and pods_per_node == 1:
-                node_mem_gb = min(n.memory_gb for n in gpu_nodes)
-                memory_per_pod_gb = max(memory_per_pod_gb, int(node_mem_gb * 0.85))
+                free_per_pod_gb = int(self._cached_free_mem_gb / pods_per_node * 0.90)
+                if memory_per_pod_gb > free_per_pod_gb:
+                    self.log(
+                        f"⚠️  Pod memory request ({memory_per_pod_gb}Gi) exceeds free node memory "
+                        f"({self._cached_free_mem_gb:.0f}Gi free, {free_per_pod_gb}Gi per pod). "
+                        f"Capping to {free_per_pod_gb}Gi.", 'warning'
+                    )
+                    memory_per_pod_gb = free_per_pod_gb
+                if memory_per_pod_gb < 8:
+                    self.log(
+                        f"❌ Insufficient node memory: only {self._cached_free_mem_gb:.0f}Gi free "
+                        f"({free_per_pod_gb}Gi per pod) — skipping this config.", 'error'
+                    )
+                    raise RuntimeError(
+                        f"Insufficient node memory ({self._cached_free_mem_gb:.0f}Gi free) — "
+                        f"skipping config"
+                    )
+
             mem_str = f"{memory_per_pod_gb}Gi"
         else:
             mem_str = mem_override
@@ -1943,10 +2022,20 @@ spec:
                 strategy.execute()
                 return self._build_results()
 
-            # Steps 2-3: Combined TP sweep (decode + prefill, single deploy per TP)
+            # Steps 2-3: Combined TP sweep (decode + prefill, single deploy per TP).
+            # Calibration uses short sequences — cap max_model_len to ISL+OSL+margin
+            # so pods don't OOM pre-allocating KV cache for the full context window.
+            # The full max_model_len is restored for steps 4+ (real PD/EP tests).
+            _saved_max_model_len = self.config.max_model_len
+            _cal_max = (self.config.isl or 1500) + (self.config.osl or 425) + 1024
+            if self.config.max_model_len and self.config.max_model_len > _cal_max:
+                self.config.max_model_len = _cal_max
+                self.log(f"Steps 2-3: max_model_len capped to {_cal_max} for calibration "
+                         f"(full {_saved_max_model_len} restored for PD tests)", 'info')
             self.log("STEPS 2-3: Combined TP Sweep (Decode + Prefill)", 'decision')
             self.log("-" * 80, 'info')
             self._optimize_tp_combined()
+            self.config.max_model_len = _saved_max_model_len
             self.log("", 'info')
             if self._should_stop():
                 return self._build_results()
@@ -2000,8 +2089,9 @@ spec:
             else:
                 min_conc = 1
             reserve_pct = getattr(self.config, 'memory_reserve_pct', 0.0)
+            model_size = self._estimate_model_size_gb()
             min_tp = self.cluster_resources.estimate_model_gpu_requirement(
-                model_size_gb=self._estimate_model_size_gb(),
+                model_size_gb=model_size,
                 dtype=self._model_dtype,
                 is_moe=self._is_moe,
                 model_config=self._model_config,
@@ -2209,9 +2299,10 @@ spec:
         """
         if self._model_config:
             try:
-                return self._estimate_weight_memory_from_config()
-            except Exception:
-                pass
+                result = self._estimate_weight_memory_from_config()
+                return result
+            except Exception as e:
+                self.log(f"  ⚠️ _estimate_weight_memory_from_config failed: {e} — using fallback", 'warning')
 
         params_b = self._model_size_b
         if self._model_dtype in ('fp4', 'int4'):
@@ -2236,6 +2327,11 @@ spec:
         vocab = cfg.get('vocab_size', 0)
         if not hidden or not vocab:
             raise ValueError("Missing hidden_size or vocab_size")
+        n_experts_dbg = cfg.get('n_routed_experts') or cfg.get('num_local_experts') or cfg.get('num_experts') or 1
+        moe_int_dbg = cfg.get('moe_intermediate_size', cfg.get('intermediate_size', 0))
+        blocks_dbg = cfg.get('layers_block_type', []) or cfg.get('layer_types', [])
+        num_layers_dbg = len(blocks_dbg) or cfg.get('num_hidden_layers', 0)
+        self.log(f"  [DBG] hidden={hidden} vocab={vocab} layers={num_layers_dbg} n_experts={n_experts_dbg} moe_int={moe_int_dbg} blocks_len={len(blocks_dbg)}", 'info')
 
         blocks = cfg.get('layers_block_type', []) or cfg.get('layer_types', [])
         num_layers = len(blocks) or cfg.get('num_hidden_layers', 0)
@@ -2313,10 +2409,19 @@ spec:
             mamba_params = 4 * hidden * hidden  # in_proj + out_proj + conv + dt
             total_bytes += mamba_params * non_expert_bpp * mamba_count
 
-        # Attention layers
+        # Attention layers: attention is present in ALL transformer layers.
+        # block_counts may use FFN-type keys (dense/sparse/moe) rather than 'attention'.
+        # Fall back to num_layers when no attention-specific block type is found.
         attn_count = block_counts.get('attention', 0) if blocks else num_layers
-        # Also count sliding_attention and full_attention (Gemma 4 layer_types)
-        attn_count += block_counts.get('sliding_attention', 0) + block_counts.get('full_attention', 0)
+        attn_count += (
+            block_counts.get('sliding_attention', 0) +
+            block_counts.get('full_attention', 0) +
+            block_counts.get('compressed_sparse_attention', 0) +
+            block_counts.get('heavily_compressed_attention', 0)
+        )
+        # If blocks exist but no attention type found, all layers still have attention
+        if blocks and attn_count == 0:
+            attn_count = num_layers
         attn_params = hidden * (num_heads * head_dim + 2 * num_kv_heads * head_dim) + num_heads * head_dim * hidden
 
         if attn_count > 0 and n_experts <= 1:
@@ -2324,13 +2429,18 @@ spec:
             ffn_params = hidden * intermediate * 3
             total_bytes += (attn_params + ffn_params) * non_expert_bpp * attn_count
         elif attn_count > 0:
-            # MoE model with no separate MoE block type — every layer has attention + MoE FFN
+            # MoE model — attention only here; FFN handled in MoE section below
             total_bytes += attn_params * non_expert_bpp * attn_count
+            # Dense FFN layers (e.g. GLM-5.3 has 3 dense + 75 sparse)
+            dense_ffn_count = block_counts.get('dense', 0)
+            if dense_ffn_count > 0 and intermediate:
+                total_bytes += hidden * intermediate * 3 * non_expert_bpp * dense_ffn_count
 
-        # MoE layers — either explicit 'moe' blocks, or all attention layers when no separate block type
-        moe_count = block_counts.get('moe', 0)
-        if moe_count == 0 and n_experts > 1 and attn_count > 0:
-            moe_count = attn_count
+        # MoE layers — 'moe', 'sparse', explicit moe count, or fallback to all layers
+        moe_count = (block_counts.get('moe', 0) +
+                     block_counts.get('sparse', 0))
+        if moe_count == 0 and n_experts > 1:
+            moe_count = attn_count  # all layers are MoE when block type is not specified
         if moe_count > 0 and n_experts > 1:
             if moe_latent > 0:
                 # LatentMoE: experts operate in latent dim
@@ -2361,8 +2471,6 @@ spec:
             self._model_dtype
         )
         self.log(f"Weight memory from config: {total_gb:.0f} GB ({quant_desc})")
-        self.log(f"  DEBUG: has_nvfp4={has_nvfp4}, has_fp8={has_fp8}, expert_bpp={expert_bpp}, non_expert_bpp={non_expert_bpp}")
-        self.log(f"  DEBUG: n_experts={n_experts}, n_shared={n_shared}, attn_count={attn_count}, moe_count={moe_count if moe_count > 0 else 0}")
         return total_gb
 
 

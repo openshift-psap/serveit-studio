@@ -99,7 +99,7 @@ function setLatencyPercentile(pctl) {
 }
 
 // Advanced vLLM settings
-var advValueFields = ['max-model-len','gpu-memory-utilization','max-num-seqs','max-num-batched-tokens','dtype','kv-cache-dtype','pipeline-parallel-size','block-size','tool-call-parser','reasoning-parser','chat-template-content-format','dbo-prefill-token-threshold','dbo-decode-token-threshold','moe-backend','all2all-backend','headroom','memory-reserve-pct','model-loader-extra-config','cpu-offload-gb','weight-cpu-offload-gb','disk-offload-kv','http-timeout-keep-alive','prefix-cache-retention','ssm-conv-state-layout','num-speculative-tokens','speculative-model'];
+var advValueFields = ['max-model-len','gpu-memory-utilization','max-num-seqs','max-num-batched-tokens','dtype','kv-cache-dtype','pipeline-parallel-size','block-size','tool-call-parser','reasoning-parser','chat-template-content-format','dbo-prefill-token-threshold','dbo-decode-token-threshold','moe-backend','all2all-backend','headroom','memory-reserve-pct','model-loader-extra-config','cpu-offload-gb','weight-cpu-offload-gb','disk-offload-kv','http-timeout-keep-alive','prefix-cache-retention','ssm-conv-state-layout','num-speculative-tokens','speculative-model','override-generation-config'];
 var advToggleFields = ['enable-prefix-caching','disable-custom-all-reduce','enable-auto-tool-choice','enable-expert-parallel','enable-dbo','enable-eplb','trust-remote-code','disable-log-requests','vllm-debug-logs','nccl-debug-logs','enable-bidirectional-kv'];
 
 function updateAdvVllm() {
@@ -157,9 +157,12 @@ function updateAdvVllm() {
             var specMethodVal = document.getElementById('adv-speculative-method-val');
             var specModelVal = document.getElementById('adv-speculative-model-val');
             var specTokensVal = document.getElementById('adv-num-speculative-tokens-val');
+            var prefillSpecTokensVal = document.getElementById('adv-prefill-speculative-tokens-val');
             adv.speculative_method = specMethodVal ? specMethodVal.value : null;
             var specTokens = specTokensVal ? parseInt(specTokensVal.value, 10) : 0;
             adv.num_speculative_tokens = (specTokens > 0) ? { mode: 'custom', value: specTokens } : { mode: 'off', value: null };
+            var prefillSpecTokens = prefillSpecTokensVal ? parseInt(prefillSpecTokensVal.value, 10) : 0;
+            adv.prefill_speculative_num_tokens = (prefillSpecTokens > 0) ? { mode: 'custom', value: prefillSpecTokens } : { mode: 'off', value: null };
             adv.speculative_model = (specModelVal && specModelVal.value) ? { mode: 'custom', value: specModelVal.value } : { mode: 'auto' };
         } else {
             adv.speculative_method = null;
@@ -167,6 +170,24 @@ function updateAdvVllm() {
             adv.speculative_model = { mode: 'auto', value: null };
         }
     }
+    // Context parallelism entries — editable flag name + auto/custom value
+    var ctxEntries = [];
+    ['prefill', 'decode'].forEach(function(role) {
+        var flag  = document.getElementById('ctx-' + role + '-flag');
+        var mode  = document.getElementById('ctx-' + role + '-mode');
+        var value = document.getElementById('ctx-' + role + '-value');
+        if (!flag || !flag.value.trim() || (mode && mode.value === 'disabled')) return;
+        var isCustom = mode && mode.value === 'custom';
+        var numVal = isCustom && value ? parseInt(value.value) : null;
+        ctxEntries.push({ flag: flag.value.trim(), value: (isCustom && numVal > 0) ? numVal : null });
+    });
+    adv.context_parallel_entries = ctxEntries;
+    // Attention config (prefill / decode) — driven by select dropdowns
+    ['prefill', 'decode'].forEach(function(role) {
+        var sel = document.getElementById('adv-' + role + '-attention-config-val');
+        var val = sel ? sel.value.trim() : '';
+        adv[role + '_attention_config'] = val ? { mode: 'custom', value: val } : { mode: 'auto' };
+    });
     // Include raw text mode info
     adv._mode = config.advanced_vllm_mode || 'form';
     adv._raw_text = config.advanced_vllm_raw || '';
@@ -247,6 +268,49 @@ function restoreAdvVllm() {
                 ? adv.num_speculative_tokens.value : 3;
             specTokens.value = tokVal;
         }
+        var prefillSpecTokens = document.getElementById('adv-prefill-speculative-tokens-val');
+        if (prefillSpecTokens && adv.prefill_speculative_num_tokens && adv.prefill_speculative_num_tokens.mode === 'custom' && adv.prefill_speculative_num_tokens.value != null) {
+            prefillSpecTokens.value = adv.prefill_speculative_num_tokens.value;
+        }
+    }
+    // Restore context parallelism entries — populate inputs FIRST, then show section
+    var ctxPreset = config.ctx_parallel_preset || 'off';
+    var ctxPresetEl = document.getElementById('adv-ctx-parallel-preset');
+    if (ctxPresetEl) ctxPresetEl.value = ctxPreset;
+    if (ctxPreset !== 'off') {
+        // Populate input fields before calling applyCtxParallelPreset so updateAdvVllm
+        // reads the correct values when it runs inside applyCtxParallelPreset.
+        if (adv && adv.context_parallel_entries) {
+            adv.context_parallel_entries.forEach(function(entry, i) {
+                var role = i === 0 ? 'prefill' : 'decode';
+                var flagEl  = document.getElementById('ctx-' + role + '-flag');
+                var modeEl  = document.getElementById('ctx-' + role + '-mode');
+                var valueEl = document.getElementById('ctx-' + role + '-value');
+                if (flagEl) flagEl.value = entry.flag;
+                if (entry.value && modeEl && valueEl) {
+                    modeEl.value = 'custom';
+                    valueEl.style.display = 'inline-block';
+                    valueEl.value = entry.value;
+                }
+            });
+        }
+        if (typeof applyCtxParallelPreset === 'function') applyCtxParallelPreset(ctxPreset);
+    }
+    // Restore attention-config preset + select values — same pattern: values first, then preset
+    var attnPreset = config.attention_preset || 'off';
+    var attnPresetEl = document.getElementById('adv-attention-preset');
+    if (attnPresetEl) attnPresetEl.value = attnPreset;
+    if (attnPreset !== 'off') {
+        if (adv) {
+            ['prefill', 'decode'].forEach(function(role) {
+                var cfg = adv[role + '_attention_config'];
+                if (cfg && cfg.mode === 'custom' && cfg.value) {
+                    var sel = document.getElementById('adv-' + role + '-attention-config-val');
+                    if (sel) sel.value = cfg.value;
+                }
+            });
+        }
+        if (typeof applyAttentionPreset === 'function') applyAttentionPreset(attnPreset);
     }
     // Restore raw text mode
     var advMode = config.advanced_vllm_mode || (adv && adv._mode) || 'form';

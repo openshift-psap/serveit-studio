@@ -158,6 +158,14 @@ class TemplateManager:
 
         # Pipeline parallelism: normalize None -> 0 so templates can compare safely
         vars_dict['pipeline_parallel_size'] = getattr(config, 'pipeline_parallel_size', None) or 0
+        vars_dict['context_parallel_size'] = getattr(config, 'context_parallel_size', None)
+        vars_dict['prefill_context_parallel_size'] = getattr(config, 'prefill_context_parallel_size', None)
+        vars_dict['decode_context_parallel_size'] = getattr(config, 'decode_context_parallel_size', None)
+        vars_dict['override_generation_config'] = getattr(config, 'override_generation_config', None)
+        vars_dict['prefill_attention_config'] = getattr(config, 'prefill_attention_config', None)
+        vars_dict['decode_attention_config'] = getattr(config, 'decode_attention_config', None)
+        # aggregated template uses attention_config = decode side
+        vars_dict['attention_config'] = vars_dict['decode_attention_config']
 
         # vLLM access-log flag — version-aware across upstream vllm AND llm-d images
         vars_dict['vllm_log_request_flag'] = resolve_vllm_log_request_flag(
@@ -225,16 +233,26 @@ class TemplateManager:
         vars_dict['nvshmem_symmetric_size'] = getattr(config, 'nvshmem_symmetric_size', None)
         vars_dict['num_redundant_experts'] = getattr(config, 'num_redundant_experts', None)
 
-        # Build speculative config JSON for --speculative-config flag
-        # Example: Gemma 4 MTP uses a separate assistant model:
-        #   speculative_method='mtp', speculative_num_tokens=1,
-        #   speculative_model='google/gemma-4-26B-A4B-it-assistant'
+        # Build speculative config JSON for --speculative-config flag.
+        # speculative_config_json  → decode pod (and aggregated pod)
+        # prefill_speculative_config_json → prefill pod only (PD/EP split); None suppresses it
         spec = {}
         if config.speculative_num_tokens:
             spec['method'] = config.speculative_method or 'mtp'
             spec['model'] = getattr(config, 'speculative_model', None) or config.model_name
             spec['num_speculative_tokens'] = config.speculative_num_tokens
         vars_dict['speculative_config_json'] = json.dumps(spec) if spec else None
+
+        prefill_tokens = getattr(config, 'prefill_speculative_num_tokens', None)
+        if spec and prefill_tokens:
+            prefill_spec = {**spec, 'num_speculative_tokens': prefill_tokens}
+            # Add mask_token_id for parallel drafting (MTP with n=1 on GLM-style models)
+            mask_token_id = getattr(config, 'speculative_mask_token_id', None)
+            if mask_token_id is not None:
+                prefill_spec['mask_token_id'] = mask_token_id
+            vars_dict['prefill_speculative_config_json'] = json.dumps(prefill_spec)
+        else:
+            vars_dict['prefill_speculative_config_json'] = None
 
         return vars_dict
 
@@ -285,8 +303,17 @@ class TemplateManager:
 
         vars_dict = self._prepare_template_vars(config)
 
+        # Prefill pods use their own speculative and attention configs.
+        prefill_vars = {
+            **vars_dict,
+            'speculative_config_json': vars_dict['prefill_speculative_config_json'],
+            'attention_config': vars_dict['prefill_attention_config'],
+        }
+        # Decode pod uses decode_attention_config.
+        vars_dict['attention_config'] = vars_dict['decode_attention_config']
+
         # Render both templates
-        prefill_yaml = prefill_template.render(**vars_dict)
+        prefill_yaml = prefill_template.render(**prefill_vars)
         decode_yaml = decode_template.render(**vars_dict)
 
         # Determine deployment order based on GPU requirements

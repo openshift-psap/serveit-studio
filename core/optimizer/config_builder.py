@@ -91,7 +91,7 @@ class ConfigBuilderMixin:
         test_id: str,
         use_concurrency: bool = False,
         concurrency_override: int = None,
-        pipeline_parallel_size: int = 1
+        pipeline_parallel_size: int = None
     ) -> TestConfig:
         """Create aggregated architecture test config.
 
@@ -105,6 +105,10 @@ class ConfigBuilderMixin:
             concurrency = concurrency_override
         else:
             concurrency = self.effective_concurrency if use_concurrency else int(self.config.qps)
+
+        # Validate max_model_len fits KV cache budget for this TP.
+        # Aggregated pods have no context parallelism — skip if it won't fit.
+        self._check_kv_budget(tp=tp, context_parallel_size=1, label=f"aggregated TP={tp}")
 
         gpu_memory_utilization = self._compute_gpu_mem_util(tp)
         allocated_gb = self._gpu_vram_gb * gpu_memory_utilization
@@ -225,6 +229,11 @@ class ConfigBuilderMixin:
         )
         cfg = self._apply_advanced_vllm(cfg)
         cfg = self._auto_tune_model_loader(cfg)
+        # Set mask_token_id for parallel MTP drafting (needed for GLM-style models)
+        if self._model_config and cfg.speculative_method == 'mtp':
+            _mask_id = self._model_config.get('mask_token_id')
+            if _mask_id is not None:
+                cfg.speculative_mask_token_id = int(_mask_id)
         if is_calibration:
             # Keep calibration runs clean UNLESS the user explicitly configured
             # speculative decoding (MTP / EAGLE / draft model) in advanced_vllm.
@@ -603,6 +612,12 @@ class ConfigBuilderMixin:
             'dtype': 'dtype',
             'kv_cache_dtype': 'kv_cache_dtype',
             'pipeline_parallel_size': 'pipeline_parallel_size',
+            'context_parallel_size': 'context_parallel_size',
+            'prefill_context_parallel_size': 'prefill_context_parallel_size',
+            'decode_context_parallel_size': 'decode_context_parallel_size',
+            'override_generation_config': 'override_generation_config',
+            'prefill_attention_config': 'prefill_attention_config',
+            'decode_attention_config': 'decode_attention_config',
             'tool_call_parser': 'tool_call_parser',
             'block_size': 'block_size',
             'reasoning_parser': 'reasoning_parser',
@@ -618,6 +633,7 @@ class ConfigBuilderMixin:
             'prefix_cache_retention': 'prefix_cache_retention',
             'ssm_conv_state_layout': 'ssm_conv_state_layout',
             'num_speculative_tokens': 'speculative_num_tokens',
+            'prefill_speculative_num_tokens': 'prefill_speculative_num_tokens',
             'speculative_model': 'speculative_model',
         }
         for key, attr in val_fields.items():
@@ -628,13 +644,46 @@ class ConfigBuilderMixin:
                 setattr(cfg, attr, None)
             elif setting.get('mode') == 'custom' and setting.get('value') is not None:
                 val = setting['value']
-                if attr in ('max_model_len', 'max_num_seqs', 'max_num_batched_tokens', 'pipeline_parallel_size', 'block_size',
-                            'cpu_offload_gb', 'weight_cpu_offload_gb', 'http_timeout_keep_alive', 'prefix_cache_retention',
-                            'speculative_num_tokens'):
+                if attr in ('max_model_len', 'max_num_seqs', 'max_num_batched_tokens', 'pipeline_parallel_size', 'context_parallel_size',
+                            'prefill_context_parallel_size', 'decode_context_parallel_size', 'block_size', 'cpu_offload_gb', 'weight_cpu_offload_gb', 'http_timeout_keep_alive',
+                            'prefix_cache_retention', 'speculative_num_tokens', 'prefill_speculative_num_tokens'):
                     val = int(val)
                 elif attr == 'gpu_memory_utilization':
                     val = float(val)
                 setattr(cfg, attr, val)
+
+        # Context parallelism — editable flag-name + value pairs from the UI.
+        # value=None means "auto": set to the pod's TP at deploy time (prefill_tp / decode_tp).
+        _ctx_flag_map = {
+            '--prefill-context-parallel-size': ('prefill_context_parallel_size', 'prefill_tp'),
+            '--decode-context-parallel-size':  ('decode_context_parallel_size',  'decode_tp'),
+            '--context-parallel-size':         ('context_parallel_size',         'tensor_parallelism'),
+        }
+        gpus_per_node = getattr(cfg, 'gpus_per_node', None) or 8
+        for entry in adv.get('context_parallel_entries', []):
+            flag  = (entry.get('flag') or '').strip()
+            value = entry.get('value')
+            mapping = _ctx_flag_map.get(flag)
+            if not mapping:
+                continue
+            field, tp_attr = mapping
+            # --prefill/decode-context-parallel-size are PD split flags; skip for aggregated
+            if cfg.architecture == 'aggregated' and flag in (
+                '--prefill-context-parallel-size', '--decode-context-parallel-size'
+            ):
+                continue
+            tp_val = getattr(cfg, tp_attr, None) or getattr(cfg, 'tensor_parallelism', 1) or 1
+            if value:
+                cps = int(value)
+            else:
+                # auto: TP × CPS must not exceed gpus per pod
+                cps = max(1, gpus_per_node // tp_val)
+            # Safety cap: TP × CPS ≤ gpus_per_node
+            max_cps = max(1, gpus_per_node // tp_val)
+            if cps > max_cps:
+                cps = max_cps
+            if cps > 1:
+                setattr(cfg, field, cps)
 
         # Speculative decoding method (set by preset dropdown, not mode/value dict)
         spec_method = adv.get('speculative_method')
@@ -691,10 +740,38 @@ class ConfigBuilderMixin:
 
     @staticmethod
     def _auto_tune_model_loader(cfg: TestConfig) -> TestConfig:
-        """Set model loader threads to match pod CPU allocation when not explicitly configured."""
-        if not cfg.model_loader_extra_config and cfg.cpu_limit:
+        """Set model loader threads based on loading-only RAM, capped at pod CPU count.
+
+        Each loader thread pins ~2 GiB of CPU memory for GPU transfer.
+        Threads = min(cpu_cores, floor(loading_ram / 2))
+        loading_ram = pod_ram - offload_ram - overhead (only RAM for actual loading)
+        """
+        if not cfg.model_loader_extra_config and cfg.memory_request:
             import json as _json
-            num_threads = int(cfg.cpu_limit)
+            import re as _re
+            m = _re.match(r'(\d+(?:\.\d+)?)\s*(Gi|Mi|G|M)?', str(cfg.memory_request), _re.IGNORECASE)
+            if m:
+                val = float(m.group(1))
+                unit = (m.group(2) or 'Gi').upper()
+                pod_ram_gb = val if unit in ('GI', 'G') else val / 1024
+            else:
+                pod_ram_gb = 16.0
+            # Subtract offload allocations — those are not available for loading buffers
+            cpu_offload = getattr(cfg, 'cpu_offload_gb', 0) or 0
+            weight_offload = getattr(cfg, 'weight_cpu_offload_gb', 0) or 0
+            loading_ram_gb = max(0, pod_ram_gb - int(cpu_offload) - int(weight_offload) - 8)
+            ram_based_threads = max(1, int(loading_ram_gb / 2))
+            cpu_cores = int(float(cfg.cpu_limit)) if cfg.cpu_limit else 1
+            # For small models, RAM allows many threads but we're bounded by CPU count.
+            # For large models, RAM is the binding constraint — don't exceed it.
+            # Final: min(cpu_cores, max(ram_based, cpu_cores//2)) but cap at ram_based
+            # if RAM is the bottleneck (loading_ram < cpu_cores * 2).
+            if loading_ram_gb >= cpu_cores * 2:
+                # Plenty of RAM — use up to cpu_cores threads
+                num_threads = cpu_cores
+            else:
+                # RAM is the bottleneck — use RAM-based count, floor at cpu_cores//4
+                num_threads = min(cpu_cores, max(ram_based_threads, max(1, cpu_cores // 4)))
             cfg.model_loader_extra_config = _json.dumps({
                 "enable_multithread_load": True,
                 "num_threads": num_threads
@@ -720,6 +797,12 @@ class ConfigBuilderMixin:
             '--max-num-seqs': ('max_num_seqs', int),
             '--max-num-batched-tokens': ('max_num_batched_tokens', int),
             '--pipeline-parallel-size': ('pipeline_parallel_size', int),
+            '--context-parallel-size': ('context_parallel_size', int),
+            '--prefill-context-parallel-size': ('prefill_context_parallel_size', int),
+            '--decode-context-parallel-size': ('decode_context_parallel_size', int),
+            '--override-generation-config': ('override_generation_config', str),
+            '--prefill-attention-config': ('prefill_attention_config', str),
+            '--decode-attention-config': ('decode_attention_config', str),
             '--gpu-memory-utilization': ('gpu_memory_utilization', float),
             '--dtype': ('dtype', str),
             '--kv-cache-dtype': ('kv_cache_dtype', str),
@@ -915,6 +998,10 @@ class ConfigBuilderMixin:
         cfg = self._apply_advanced_vllm(cfg)
         cfg = self._auto_tune_model_loader(cfg)
         cfg = self._auto_enable_bidirectional_kv(cfg)
+        if self._model_config and cfg.speculative_method == 'mtp':
+            _mask_id = self._model_config.get('mask_token_id')
+            if _mask_id is not None:
+                cfg.speculative_mask_token_id = int(_mask_id)
         return cfg
 
     def _create_ep_config(self, split: 'FeasibleSplit') -> TestConfig:

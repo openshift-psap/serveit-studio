@@ -238,6 +238,8 @@ spec:
                   --data-parallel-supervisor-port=8208 \
                   --data-parallel-start-rank $(( ${LWS_WORKER_INDEX:-0} * DP_SIZE_LOCAL )) \
 {% endif %}{% if pipeline_parallel_size %}                  --pipeline-parallel-size {{ pipeline_parallel_size }} \
+{% endif %}{% if context_parallel_size and context_parallel_size > 1 %}                  --context-parallel-size {{ context_parallel_size }} \
+{% endif %}{% if decode_context_parallel_size and decode_context_parallel_size > 1 %}                  --decode-context-parallel-size {{ decode_context_parallel_size }} \
 {% endif %}
 {% if block_size %}                  --block-size {{ block_size }} \
 {% endif %}
@@ -268,6 +270,8 @@ spec:
 {% endif %}{% if chat_template_content_format %}                  --chat-template-content-format {{ chat_template_content_format }} \
 {% endif %}{% if weight_cpu_offload_gb %}                  --cpu-offload-gb {{ weight_cpu_offload_gb }} \
 {% endif %}{% if model_loader_extra_config %}                  --model-loader-extra-config '{{ model_loader_extra_config }}' \
+{% endif %}{% if override_generation_config %}                  --override-generation-config '{{ override_generation_config }}' \
+{% endif %}{% if attention_config %}                  --attention-config '{{ attention_config }}' \
 {% endif %}{% if extra_vllm_args %}                  {{ extra_vllm_args }} \
 {% endif %}
                   || sleep infinity

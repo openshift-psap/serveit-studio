@@ -65,6 +65,12 @@ class TestConfig:
     dtype: Optional[str] = None  # None = vLLM auto-detects
     kv_cache_dtype: Optional[str] = None  # None = auto
     pipeline_parallel_size: Optional[int] = None  # None = 1 (default)
+    context_parallel_size: Optional[int] = None           # --context-parallel-size (aggregated)
+    prefill_context_parallel_size: Optional[int] = None   # --prefill-context-parallel-size
+    decode_context_parallel_size: Optional[int] = None    # --decode-context-parallel-size
+    override_generation_config: Optional[str] = None  # JSON config to override generation parameters
+    prefill_attention_config: Optional[str] = None  # JSON attention config for prefill pod, e.g. '{"sparse_mla_force_mqa":true}'
+    decode_attention_config: Optional[str] = None   # JSON attention config for decode pod (and aggregated)
     block_size: int = 16  # KV cache block size (auto-tuned from ISL+OSL)
     trust_remote_code: bool = True
     disable_log_requests: bool = True
@@ -163,8 +169,10 @@ class TestConfig:
 
     # Speculative decoding
     speculative_method: Optional[str] = None  # 'mtp', 'draft', None
+    speculative_mask_token_id: Optional[int] = None  # mask token for parallel drafting (MTP n=1)
     speculative_num_tokens: Optional[int] = None
     speculative_model: Optional[str] = None  # MTP assistant model (e.g., google/gemma-4-26B-A4B-it-assistant)
+    prefill_speculative_num_tokens: Optional[int] = None  # PD/EP split only — prefill pod override
 
     # Model-specific flags
     reasoning_parser: Optional[str] = None

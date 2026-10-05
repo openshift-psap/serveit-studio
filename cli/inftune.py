@@ -486,7 +486,7 @@ def resume_run(args, db, kubeconfig_path=None):
         'latency_constraint_enabled': bool(row.get('latency_constraint_enabled', 0)),
         'latency_constraint_ms': row.get('latency_constraint_ms', 500),
         'latency_constraint_percentile': row.get('latency_constraint_percentile', 'p99'),
-        'image': saved_config.get('image', 'ghcr.io/llm-d/llm-d-cuda:v0.8.0'),
+        'image': saved_config.get('image', 'ghcr.io/llm-d/llm-d-cuda:v0.10.0'),
         'pvc_name': saved_config.get('pvc_name', 'serveit-cache'),
         'nccl_ib_hca': saved_config.get('nccl_ib_hca', 'mlx'),
         'hf_token': saved_config.get('hf_token') or os.environ.get('HF_TOKEN'),
@@ -873,7 +873,7 @@ def build_run_parser(parser):
     hw.add_argument('--gpus', type=int, default=16, help='Total GPUs to use (default: 16)')
     hw.add_argument('--tp-options', type=str, default='1,2,4,8',
                     help='Comma-separated TP values to explore (default: 1,2,4,8)')
-    hw.add_argument('--image', type=str, default='ghcr.io/llm-d/llm-d-cuda:v0.8.0',
+    hw.add_argument('--image', type=str, default='ghcr.io/llm-d/llm-d-cuda:v0.10.0',
                     help='vLLM container image')
     hw.add_argument('--namespace', type=str, default=None,
                     help='Kubernetes namespace (default: from cluster or serveit)')
@@ -897,7 +897,7 @@ def build_run_parser(parser):
     hw.add_argument('--nodes', type=str, default=None,
                     help='Comma-separated node names to pin tests to')
     hw.add_argument('--scheduler-image', type=str, default=None,
-                    help='EPP scheduler image (default: ghcr.io/llm-d/llm-d-router-endpoint-picker:v0.9.0)')
+                    help='EPP scheduler image (default: ghcr.io/llm-d/llm-d-router-endpoint-picker:v0.11.0)')
     hw.add_argument('--thanos-url', type=str, default=None,
                     help='Prometheus/Thanos URL for metrics collection (auto-detected if not set)')
     hw.add_argument('--extra-env-vars', type=str, default=None,

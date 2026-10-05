@@ -103,7 +103,7 @@ def api_scan_cluster():
                  'access_mode': getattr(sc, 'access_mode', 'ReadWriteOnce'),
                  'local_path': getattr(sc, 'local_path', '')}
                 for sc in resources.storage_classes
-                if sc.provisioner != 'kubernetes.io/no-provisioner'
+                if sc.provisioner != 'kubernetes.io/no-provisioner' or sc.gpu_nodes_covered > 0
             ],
             'provider': provider_name,
             'network_type': network_type,

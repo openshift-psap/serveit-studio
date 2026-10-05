@@ -104,39 +104,69 @@ class TPCalibrationMixin:
                     self.log("    ⏩ Decode: resuming from DB (already completed)", 'info')
                 else:
                     safe_c = self._estimate_safe_concurrency(tp, isl=1, osl=self.config.osl)
-                    decode_config = self._create_aggregated_config(
-                        tp=tp, num_gpus=tp, isl=1, osl=self.config.osl,
-                        test_id=decode_test_id,
-                        use_concurrency=True, concurrency_override=safe_c
-                    )
-                    decode_config.stop_mode = 'max_requests'
-                    decode_config.max_requests = _calibration_max_requests(safe_c, 1 + self.config.osl, tp)
-                    if decode_dataset:
-                        decode_config.workload_mode = 'dataset'
-                        decode_config.dataset_source = decode_dataset
-                        decode_config.dataset_column = 'prompt'
-                        decode_config.dataset_max_output = self.config.osl
+                    try:
+                        if self.config.objective == 'pd_only':
+                            # pd_only: use 1P+1D PD pod so no aggregated pods run.
+                            # Cap max_model_len to ISL+OSL+margin so pods don't OOM.
+                            from core.optimizer.config import FeasibleSplit, OptimalTP
+                            _saved_mml = self.config.max_model_len
+                            _cal_mml = (self.config.isl or 1500) + (self.config.osl or 425) + 1024
+                            if _saved_mml and _saved_mml > _cal_mml:
+                                self.config.max_model_len = _cal_mml
+                            _tmp = OptimalTP(tp=tp, tpsg=100.0, ttft_p90=None)
+                            _prev_ptp = getattr(self, 'optimal_prefill_tp', None)
+                            _prev_dtp = getattr(self, 'optimal_decode_tp', None)
+                            self.optimal_prefill_tp = _tmp
+                            self.optimal_decode_tp  = _tmp
+                            _split = FeasibleSplit(
+                                prefill_pods=1, decode_pods=1,
+                                prefill_tp=tp, decode_tp=tp,
+                                prefill_gpus=tp, decode_gpus=tp,
+                                total_gpus=tp * 2, prefill_pct=0.5,
+                            )
+                            decode_config = self._create_pd_config(_split)
+                            decode_config.max_model_len = _cal_mml  # force cap after advanced overrides
+                            decode_config.speculative_method = None
+                            decode_config.speculative_num_tokens = None
+                            decode_config.prefill_speculative_num_tokens = None
+                            decode_config.cpu_offload_gb = None
+                            decode_config.weight_cpu_offload_gb = None
+                            self.config.max_model_len = _saved_mml  # restore
+                            if _prev_ptp: self.optimal_prefill_tp = _prev_ptp
+                            if _prev_dtp: self.optimal_decode_tp  = _prev_dtp
+                            decode_config.test_id = decode_test_id
+                            decode_config.isl = 1
+                            decode_config.osl = self.config.osl
+                            decode_config.num_users = safe_c
+                        else:
+                            decode_config = self._create_aggregated_config(
+                                tp=tp, num_gpus=tp, isl=1, osl=self.config.osl,
+                                test_id=decode_test_id,
+                                use_concurrency=True, concurrency_override=safe_c
+                            )
+                        # Disable speculative decoding and CPU offloading for all calibration configs
+                        if decode_config is not None:
+                            decode_config.speculative_method = None
+                            decode_config.speculative_num_tokens = None
+                            decode_config.prefill_speculative_num_tokens = None
+                            decode_config.cpu_offload_gb = None
+                            decode_config.weight_cpu_offload_gb = None
+                    except (ValueError, TypeError) as e:
+                        self.log(f"  ⏭️  Skipping TP={tp} decode: {e}", 'warning')
+                        run_decode = False
+                        decode_result = None
+                        decode_config = None
+                    if decode_config is not None:
+                        decode_config.stop_mode = 'max_requests'
+                        decode_config.max_requests = _calibration_max_requests(safe_c, 1 + self.config.osl, tp)
+                        if decode_dataset:
+                            decode_config.workload_mode = 'dataset'
+                            decode_config.dataset_source = decode_dataset
+                            decode_config.dataset_column = 'prompt'
+                            decode_config.dataset_max_output = self.config.osl
 
-                    # Keep deployment alive for prefill test
-                    needs_prefill_after = run_prefill and not prefill_cached
-                    decode_result = self.orchestrator.run_test(
-                        decode_config,
-                        cleanup=not needs_prefill_after,
-                        log_callback=lambda msg: self.log(msg, 'info'),
-                        stop_check=self._should_stop
-                    )
-                    deployed = needs_prefill_after and decode_result and decode_result.guidellm_success
-
-                    self.all_test_results.append((decode_config, decode_result))
-                    self._save_test_to_database(decode_config, decode_result)
-
-                    if not decode_result or not decode_result.guidellm_success:
-                        if self._is_memory_failure(decode_result):
-                            self.log(f"    ⚠️  Decode TP={tp} OOM — skipping prefill too", 'warning')
-                            continue
-                        # Retry once after restarting infra (gateway/EPP cert rotation)
-                        err = getattr(decode_result, 'error_message', '') or ''
-                        self.log(f"    ⚠️  Decode TP={tp} failed ({err[:80]}) — restarting infra and retrying", 'warning')
+                        # Keep deployment alive for prefill test
+                        needs_prefill_after = run_prefill and not prefill_cached
                         decode_result = self.orchestrator.run_test(
                             decode_config,
                             cleanup=not needs_prefill_after,
@@ -144,19 +174,38 @@ class TPCalibrationMixin:
                             stop_check=self._should_stop
                         )
                         deployed = needs_prefill_after and decode_result and decode_result.guidellm_success
+
                         self.all_test_results.append((decode_config, decode_result))
                         self._save_test_to_database(decode_config, decode_result)
+
                         if not decode_result or not decode_result.guidellm_success:
-                            raise RuntimeError(f"Test {decode_test_id} failed after retry - stopping optimization")
+                            if self._is_memory_failure(decode_result):
+                                self.log(f"    ⚠️  Decode TP={tp} OOM — skipping prefill too", 'warning')
+                                continue
+                            # Retry once after restarting infra (gateway/EPP cert rotation)
+                            err = getattr(decode_result, 'error_message', '') or ''
+                            self.log(f"    ⚠️  Decode TP={tp} failed ({err[:80]}) — restarting infra and retrying", 'warning')
+                            decode_result = self.orchestrator.run_test(
+                                decode_config,
+                                cleanup=not needs_prefill_after,
+                                log_callback=lambda msg: self.log(msg, 'info'),
+                                stop_check=self._should_stop
+                            )
+                            deployed = needs_prefill_after and decode_result and decode_result.guidellm_success
+                            self.all_test_results.append((decode_config, decode_result))
+                            self._save_test_to_database(decode_config, decode_result)
+                            if not decode_result or not decode_result.guidellm_success:
+                                raise RuntimeError(f"Test {decode_test_id} failed after retry - stopping optimization")
 
-                    self._check_pod_errors(decode_config, decode_result)
-                    self._check_request_errors(decode_config, decode_result)
+                        self._check_pod_errors(decode_config, decode_result)
+                        self._check_request_errors(decode_config, decode_result)
 
-                # Accumulate decode candidate
-                tpsg, ttft = self._extract_tpsg_ttft(decode_result, self.config.osl, tp)
-                if tpsg is not None:
-                    self._log_candidate('Decode', tp, tpsg, ttft, use_ttft)
-                    decode_candidates.append((tp, tpsg, ttft, decode_result.throughput_p90))
+                # Accumulate decode candidate (skip if result is None due to KV budget skip)
+                if decode_result is not None:
+                    tpsg, ttft = self._extract_tpsg_ttft(decode_result, self.config.osl, tp)
+                    if tpsg is not None:
+                        self._log_candidate('Decode', tp, tpsg, ttft, use_ttft)
+                        decode_candidates.append((tp, tpsg, ttft, decode_result.throughput_p90))
 
             # ── Prefill test ────────────────────────────────────────────
             if run_prefill:
@@ -173,57 +222,103 @@ class TPCalibrationMixin:
                     self.log("    ⏩ Prefill: resuming from DB (already completed)", 'info')
                 else:
                     safe_c = self._estimate_safe_concurrency(tp, isl=self.config.isl, osl=1)
-                    prefill_config = self._create_aggregated_config(
-                        tp=tp, num_gpus=tp, isl=self.config.isl, osl=1,
-                        test_id=prefill_test_id,
-                        use_concurrency=True, concurrency_override=safe_c
-                    )
-                    prefill_config.stop_mode = 'max_requests'
-                    prefill_config.max_requests = _calibration_max_requests(safe_c, self.config.isl + 1, tp)
-                    if prefill_dataset:
-                        prefill_config.workload_mode = 'dataset'
-                        prefill_config.dataset_source = prefill_dataset
-                        prefill_config.dataset_column = 'prompt'
-                        prefill_config.dataset_max_output = 1
-
-                    prefill_result = self.orchestrator.run_test(
-                        prefill_config,
-                        cleanup=False,
-                        skip_deploy=deployed,
-                        skip_prereqs=deployed,
-                        log_callback=lambda msg: self.log(msg, 'info'),
-                        stop_check=self._should_stop
-                    )
-
-                    self.all_test_results.append((prefill_config, prefill_result))
-                    self._save_test_to_database(prefill_config, prefill_result)
-
-                    if not prefill_result or not prefill_result.guidellm_success:
-                        if self._is_memory_failure(prefill_result):
-                            self.log(f"    ⚠️  Prefill TP={tp} OOM — skipping", 'warning')
-                        else:
-                            err = getattr(prefill_result, 'error_message', '') or ''
-                            self.log(f"    ⚠️  Prefill TP={tp} failed ({err[:80]}) — restarting infra and retrying", 'warning')
-                            self._restart_infra_pods()
-                            import time as _time; _time.sleep(15)
-                            prefill_result = self.orchestrator.run_test(
-                                prefill_config,
-                                cleanup=False,
-                                skip_deploy=deployed,
-                                skip_prereqs=deployed,
-                                log_callback=lambda msg: self.log(msg, 'info'),
-                                stop_check=self._should_stop
+                    try:
+                        if self.config.objective == 'pd_only':
+                            from core.optimizer.config import FeasibleSplit, OptimalTP
+                            _saved_mml = self.config.max_model_len
+                            _cal_mml = (self.config.isl or 1500) + (self.config.osl or 425) + 1024
+                            if _saved_mml and _saved_mml > _cal_mml:
+                                self.config.max_model_len = _cal_mml
+                            _tmp = OptimalTP(tp=tp, tpsg=100.0, ttft_p90=None)
+                            _prev_ptp = getattr(self, 'optimal_prefill_tp', None)
+                            _prev_dtp = getattr(self, 'optimal_decode_tp', None)
+                            self.optimal_prefill_tp = _tmp
+                            self.optimal_decode_tp  = _tmp
+                            _split = FeasibleSplit(
+                                prefill_pods=1, decode_pods=1,
+                                prefill_tp=tp, decode_tp=tp,
+                                prefill_gpus=tp, decode_gpus=tp,
+                                total_gpus=tp * 2, prefill_pct=0.5,
                             )
-                            self.all_test_results.append((prefill_config, prefill_result))
-                            self._save_test_to_database(prefill_config, prefill_result)
-                            if not prefill_result or not prefill_result.guidellm_success:
-                                if deployed and decode_config:
-                                    self.orchestrator.cleanup_deployment(decode_config,
-                                        log_callback=lambda msg: self.log(msg, 'info'))
-                                raise RuntimeError(f"Test {prefill_test_id} failed after retry - stopping optimization")
-                    else:
-                        self._check_pod_errors(prefill_config, prefill_result)
-                        self._check_request_errors(prefill_config, prefill_result)
+                            prefill_config = self._create_pd_config(_split)
+                            prefill_config.max_model_len = _cal_mml  # force cap after advanced overrides
+                            prefill_config.speculative_method = None
+                            prefill_config.speculative_num_tokens = None
+                            prefill_config.prefill_speculative_num_tokens = None
+                            prefill_config.cpu_offload_gb = None
+                            prefill_config.weight_cpu_offload_gb = None
+                            self.config.max_model_len = _saved_mml  # restore
+                            if _prev_ptp: self.optimal_prefill_tp = _prev_ptp
+                            if _prev_dtp: self.optimal_decode_tp  = _prev_dtp
+                            prefill_config.test_id = prefill_test_id
+                            prefill_config.isl = self.config.isl
+                            prefill_config.osl = 1
+                            prefill_config.num_users = safe_c
+                        else:
+                            prefill_config = self._create_aggregated_config(
+                                tp=tp, num_gpus=tp, isl=self.config.isl, osl=1,
+                                test_id=prefill_test_id,
+                                use_concurrency=True, concurrency_override=safe_c
+                            )
+                        # Disable speculative decoding and CPU offloading for all calibration configs
+                        if prefill_config is not None:
+                            prefill_config.speculative_method = None
+                            prefill_config.speculative_num_tokens = None
+                            prefill_config.prefill_speculative_num_tokens = None
+                            prefill_config.cpu_offload_gb = None
+                            prefill_config.weight_cpu_offload_gb = None
+                    except (ValueError, TypeError) as e:
+                        self.log(f"  ⏭️  Skipping TP={tp} prefill: {e}", 'warning')
+                        run_prefill = False
+                        prefill_result = None
+                        prefill_config = None
+                    if prefill_config is not None:
+                        prefill_config.stop_mode = 'max_requests'
+                        prefill_config.max_requests = _calibration_max_requests(safe_c, self.config.isl + 1, tp)
+                        if prefill_dataset:
+                            prefill_config.workload_mode = 'dataset'
+                            prefill_config.dataset_source = prefill_dataset
+                            prefill_config.dataset_column = 'prompt'
+                            prefill_config.dataset_max_output = 1
+
+                        prefill_result = self.orchestrator.run_test(
+                            prefill_config,
+                            cleanup=False,
+                            skip_deploy=deployed,
+                            skip_prereqs=deployed,
+                            log_callback=lambda msg: self.log(msg, 'info'),
+                            stop_check=self._should_stop
+                        )
+
+                        self.all_test_results.append((prefill_config, prefill_result))
+                        self._save_test_to_database(prefill_config, prefill_result)
+
+                        if not prefill_result or not prefill_result.guidellm_success:
+                            if self._is_memory_failure(prefill_result):
+                                self.log(f"    ⚠️  Prefill TP={tp} OOM — skipping", 'warning')
+                            else:
+                                err = getattr(prefill_result, 'error_message', '') or ''
+                                self.log(f"    ⚠️  Prefill TP={tp} failed ({err[:80]}) — restarting infra and retrying", 'warning')
+                                self._restart_infra_pods()
+                                import time as _time; _time.sleep(15)
+                                prefill_result = self.orchestrator.run_test(
+                                    prefill_config,
+                                    cleanup=False,
+                                    skip_deploy=deployed,
+                                    skip_prereqs=deployed,
+                                    log_callback=lambda msg: self.log(msg, 'info'),
+                                    stop_check=self._should_stop
+                                )
+                                self.all_test_results.append((prefill_config, prefill_result))
+                                self._save_test_to_database(prefill_config, prefill_result)
+                                if not prefill_result or not prefill_result.guidellm_success:
+                                    if deployed and decode_config:
+                                        self.orchestrator.cleanup_deployment(decode_config,
+                                            log_callback=lambda msg: self.log(msg, 'info'))
+                                    raise RuntimeError(f"Test {prefill_test_id} failed after retry - stopping optimization")
+                        else:
+                            self._check_pod_errors(prefill_config, prefill_result)
+                            self._check_request_errors(prefill_config, prefill_result)
 
                 # Accumulate prefill candidate
                 if prefill_result and prefill_result.guidellm_success:

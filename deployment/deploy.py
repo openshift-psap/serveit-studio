@@ -326,7 +326,7 @@ def main():
         epilog=__doc__,
     )
 
-    p.add_argument('--mode', choices=['local', 'launcher'], default='launcher',
+    p.add_argument('--mode', choices=['local', 'launcher'], default='local',
                    help='Deploy mode: local (single instance) or launcher (multi-user control plane)')
     p.add_argument('-n', '--namespace', default='serveit', help='Kubernetes namespace (default: llm-d)')
     p.add_argument('-i', '--image', default='quay.io/bbenshab/serveit-studio:server', help='Container image')
@@ -334,7 +334,7 @@ def main():
     sg = p.add_argument_group('Storage')
     sg.add_argument('-p', '--pvc-name', help='Use existing PVC (skips PVC creation)')
     sg.add_argument('-s', '--storage-class', help='Create new PVC with this storage class')
-    sg.add_argument('--storage-size', default='10Gi', help='PVC size (default: 10Gi)')
+    sg.add_argument('--storage-size', default='10', help='PVC size in Gi (default: 10). Provide a number only — Gi is appended automatically.')
 
     dg = p.add_argument_group('Dev Options')
     dg.add_argument('--dev', action='store_true', help='Dev mode (auto-sync code, auto-restart)')
@@ -401,6 +401,9 @@ def main():
         sync_code(cmd, args.namespace, pod)
         print("\n   Code synced. Server will auto-restart and pick up changes.", file=sys.stderr)
         print("   To force restart: python3 deployment/deploy.py --restart-server", file=sys.stderr)
+        svc_name = 'serveit-launcher-ui' if args.mode == 'launcher' else 'serveit-optimizer-ui'
+        if not openshift:
+            start_port_forward(cmd, args.namespace, args.local_port, svc_name=svc_name)
         return
 
     # ── Determine PVC strategy ──
@@ -425,7 +428,7 @@ def main():
         image=args.image,
         pvc_name=pvc_name,
         storage_class=args.storage_class or '',
-        storage_size=args.storage_size,
+        storage_size=args.storage_size if args.storage_size.endswith(('Gi', 'Mi', 'Ti', 'G', 'M', 'T')) else f'{args.storage_size}Gi',
         create_pvc=create_pvc,
         dev_mode=args.dev,
         force_nad=args.force_nad,

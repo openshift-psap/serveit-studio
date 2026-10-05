@@ -8,6 +8,7 @@ dense_models:
   - MistralForCausalLM
   - PhiForCausalLM
   - QwenForCausalLM
+  - Qwen3ForCausalLM
   - GemmaForCausalLM
   - GLMForCausalLM
   - GPT2LMHeadModel

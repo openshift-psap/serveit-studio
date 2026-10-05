@@ -629,7 +629,7 @@ class TestPlanner:
         kv_cache_gb = None
         if model_config:
             kv_cache_gb = self.calculate_kv_cache_from_config(
-                model_config, isl, osl, byte_size
+                model_config, isl, osl, weight_bytes_per_param
             )
 
         # Fallback: Conservative estimate for modern LLMs with GQA
@@ -641,7 +641,7 @@ class TestPlanner:
             estimated_kv_heads = 8
             estimated_head_dim = 128
             kv_cache_elements = 2 * estimated_layers * estimated_kv_heads * estimated_head_dim * total_sequence_length
-            kv_cache_bytes = kv_cache_elements * byte_size
+            kv_cache_bytes = kv_cache_elements * 2  # KV cache is always float16 (2 bytes per value)
             kv_cache_gb = kv_cache_bytes / (1024**3)
 
         # Activations (relatively small, ~15% of weights for inference)
@@ -691,11 +691,6 @@ class TestPlanner:
         # Extract model size from name
         model_size_b = self.extract_model_size_from_name(model_name)
 
-        if model_size_b is None:
-            # Fallback: assume medium-large model if we can't extract size
-            logger.warning(f"Could not determine model size for {model_name}, assuming 70B")
-            model_size_b = 70.0
-
         # Detect dtype from model name
         dtype = self.detect_dtype_from_name(model_name)
 
@@ -707,6 +702,47 @@ class TestPlanner:
         else:
             # Try to fetch from HuggingFace (with token if provided)
             model_config = self.fetch_model_config(model_name, hf_token)
+
+        # If name parsing failed, derive model size from config.json
+        if model_size_b is None and model_config:
+            num_params = model_config.get('num_parameters')
+            if num_params:
+                model_size_b = num_params / 1e9
+                logger.info(f"Derived model size from config.json num_parameters: {model_size_b:.1f}B")
+            else:
+                # Estimate from architecture fields (handles MoE models like GLM-5.3)
+                try:
+                    h = model_config.get('hidden_size', 0)
+                    layers = model_config.get('num_hidden_layers', 0)
+                    vocab = model_config.get('vocab_size', 0)
+                    n_experts = model_config.get('n_routed_experts', 0)
+                    moe_intermediate = model_config.get('moe_intermediate_size', 0)
+                    dense_intermediate = model_config.get('intermediate_size', 0)
+                    mlp_types = model_config.get('mlp_layer_types', [])
+                    n_dense = mlp_types.count('dense') if mlp_types else layers
+                    n_sparse = mlp_types.count('sparse') if mlp_types else 0
+                    if not mlp_types:
+                        n_dense = layers
+                    # Attention: 4 × h² per layer
+                    attn_params = layers * 4 * h * h
+                    # Dense FFN: 3 × h × intermediate per dense layer
+                    dense_params = n_dense * 3 * h * dense_intermediate
+                    # MoE FFN: n_experts × 3 × h × moe_intermediate per sparse layer
+                    moe_params = n_sparse * n_experts * 3 * h * moe_intermediate if n_experts and moe_intermediate else 0
+                    # Embedding
+                    embed_params = vocab * h
+                    total = attn_params + dense_params + moe_params + embed_params
+                    if total > 0:
+                        model_size_b = total / 1e9
+                        logger.info(f"Estimated model size from architecture: {model_size_b:.1f}B params "
+                                    f"(attn={attn_params/1e9:.0f}B dense={dense_params/1e9:.0f}B "
+                                    f"moe={moe_params/1e9:.0f}B embed={embed_params/1e9:.0f}B)")
+                except Exception as e:
+                    logger.warning(f"Failed to estimate model size from architecture: {e}")
+
+        if model_size_b is None:
+            logger.warning(f"Could not determine model size for {model_name}, assuming 70B")
+            model_size_b = 70.0
 
         # Store config for later access (e.g., for detailed logging)
         self._last_model_config = model_config

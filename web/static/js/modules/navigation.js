@@ -68,7 +68,19 @@ window.handleStorageClassChange = function(selectedOption) {
         config.local_disk_path = null;
         perNodeGroup.style.pointerEvents = 'auto';
         perNodeGroup.title = '';
-        if (descEl) descEl.textContent = 'Each node gets its own NFS-backed PVC for model caching. Pods are automatically linked to their node\'s local NFS share via symlink. The model is downloaded once per node and shared by all pods on that node.';
+        var isRWX = sc && sc.access_mode === 'ReadWriteMany';
+        var isNFS = sc && (sc.provisioner || '').toLowerCase().indexOf('nfs') !== -1;
+        var desc;
+        if (isRWX && !isNFS) {
+            desc = 'Shared RWX storage — a single PVC is created and all nodes access it simultaneously. ' +
+                   'The model is downloaded once and instantly available on every node. ' +
+                   'When enabled, ServeIT Studio creates one shared PVC instead of per-node volumes.';
+        } else {
+            desc = 'Each node gets its own NFS-backed PVC for model caching. Pods are automatically linked ' +
+                   'to their node\'s local NFS share via symlink. The model is downloaded once per node and ' +
+                   'shared by all pods on that node.';
+        }
+        if (descEl) descEl.textContent = desc;
     }
     saveConfig();
 };
