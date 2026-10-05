@@ -30,15 +30,23 @@ class TPCalibrationMixin:
         decode_candidates = []
         prefill_candidates = []
 
-        def _calibration_max_requests(safe_c, seq_len, tp):
-            """Calibration needs ~200 measurement requests for reliable p90 metrics.
+        def _calibration_max_requests(safe_c, isl, osl, tp):
+            """Target ~2 minutes of measurement per TP calibration run.
 
-            Uses safe_c * 5 (≈200 at typical concurrencies) + warmup budget.
-            Warmup consumes ~safe_c * 6 requests (60s ÷ 10s avg per req).
-            Total runtime target: ~2-3 minutes per TP value.
+            Estimates request time:
+              prefill_time = ISL / (tp * 2000)   (~0.5ms/token/GPU)
+              decode_time  = OSL * 0.015          (~15ms/token, sequential)
+              req_time     = prefill + decode
+            count = throughput * target_duration + warmup_budget
             """
-            measurement = max(tp * 3, safe_c * 5)   # ≥100 measurement requests
-            warmup_budget = safe_c * 6               # 60s warmup at ~10s/req
+            target_secs = 120  # 2 minutes of measurement
+            prefill_t = isl / max(tp * 2000, 1)
+            decode_t = osl * 0.015
+            req_time = max(0.5, prefill_t + decode_t)
+            throughput = safe_c / req_time
+            measurement = int(throughput * target_secs)
+            measurement = max(tp * 5, measurement)
+            warmup_budget = safe_c * 6
             return measurement + warmup_budget
 
         # Pre-compute max requests and KV cap across all TPs to size calibration datasets
@@ -53,7 +61,7 @@ class TPCalibrationMixin:
             avail = gpu_vram - model_gb / tp - 5.0
             if tp in decode_tps:
                 c = self._estimate_safe_concurrency(tp, isl=1, osl=self.config.osl)
-                max_decode_reqs = max(max_decode_reqs, _calibration_max_requests(c, 1 + self.config.osl, tp))
+                max_decode_reqs = max(max_decode_reqs, _calibration_max_requests(c, 1, self.config.osl, tp))
                 kv_hpg = max(1, (self._model_config or {}).get('num_key_value_heads', 8) // tp)
                 head_dim = (self._model_config or {}).get('head_dim', 256)
                 n_layers = (self._model_config or {}).get('num_hidden_layers', 32)
@@ -61,7 +69,7 @@ class TPCalibrationMixin:
                 max_decode_kvcap = max(max_decode_kvcap, int(avail / kv_seq) if kv_seq > 0 else 0)
             if tp in prefill_tps:
                 c = self._estimate_safe_concurrency(tp, isl=self.config.isl, osl=1)
-                max_prefill_reqs = max(max_prefill_reqs, _calibration_max_requests(c, self.config.isl + 1, tp))
+                max_prefill_reqs = max(max_prefill_reqs, _calibration_max_requests(c, self.config.isl, 1, tp))
                 kv_hpg = max(1, (self._model_config or {}).get('num_key_value_heads', 8) // tp)
                 head_dim = (self._model_config or {}).get('head_dim', 256)
                 n_layers = (self._model_config or {}).get('num_hidden_layers', 32)
@@ -158,7 +166,7 @@ class TPCalibrationMixin:
                         decode_config = None
                     if decode_config is not None:
                         decode_config.stop_mode = 'max_requests'
-                        decode_config.max_requests = _calibration_max_requests(safe_c, 1 + self.config.osl, tp)
+                        decode_config.max_requests = _calibration_max_requests(safe_c, 1, self.config.osl, tp)
                         if decode_dataset:
                             decode_config.workload_mode = 'dataset'
                             decode_config.dataset_source = decode_dataset
@@ -274,7 +282,7 @@ class TPCalibrationMixin:
                         prefill_config = None
                     if prefill_config is not None:
                         prefill_config.stop_mode = 'max_requests'
-                        prefill_config.max_requests = _calibration_max_requests(safe_c, self.config.isl + 1, tp)
+                        prefill_config.max_requests = _calibration_max_requests(safe_c, self.config.isl, 1, tp)
                         if prefill_dataset:
                             prefill_config.workload_mode = 'dataset'
                             prefill_config.dataset_source = prefill_dataset
