@@ -703,7 +703,7 @@ def run_optimization_background(data):
 
         # Parse configuration — _get() falls back to ui_session_state for
         # any field the caller omitted (e.g. stale browser JS cache)
-        model = data.get('model')
+        model = data.get('model') or _saved.get('model')
         length_unit = _get('length_unit', 'tokens')
         isl = int(_get('isl', 3000))
         osl = int(_get('osl', 100))
