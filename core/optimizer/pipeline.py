@@ -1783,8 +1783,8 @@ class RecipeOptimizer(
             # num_threads in _auto_tune_model_loader is then derived from this memory allocation.
             weight_gb = self._estimate_model_size_gb()
             per_gpu_weight_gb = weight_gb / max(tp, 1)
-            # ~1 GB per 4 GB of weights handles multi-threaded loading buffers safely
-            loading_buffer_gb = max(16, int(per_gpu_weight_gb * 0.25))
+            # ~90% of per-GPU weights as CPU loading buffer (production GLM-5.3 uses 79Gi for 89GB/GPU)
+            loading_buffer_gb = max(16, int(per_gpu_weight_gb * 0.9))
             memory_per_pod_gb = loading_buffer_gb + int(cpu_offload) + int(weight_offload)
 
             # Validate against actual free memory — warn and cap if needed.

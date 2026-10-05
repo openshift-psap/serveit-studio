@@ -770,8 +770,8 @@ class ConfigBuilderMixin:
                 # Plenty of RAM — use up to cpu_cores threads
                 num_threads = cpu_cores
             else:
-                # RAM is the bottleneck — use RAM-based count, floor at cpu_cores//4
-                num_threads = min(cpu_cores, max(ram_based_threads, max(1, cpu_cores // 4)))
+                # RAM is the bottleneck — never allocate more threads than RAM can support
+                num_threads = min(cpu_cores, ram_based_threads)
             cfg.model_loader_extra_config = _json.dumps({
                 "enable_multithread_load": True,
                 "num_threads": num_threads
