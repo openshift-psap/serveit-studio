@@ -302,6 +302,7 @@ class GuidellmMixin:
             if request_profile == 'sweep':
                 rate_label = 'sweep (auto-discover rates)'
             log_callback(f'🏃 Running guidellm on pod {self._guidellm_pod_name}')
+            log_callback(f'🔧 guidellm command: guidellm run --backend "{backend_arg}" --tokenizer "kind=huggingface_auto,model={config.model_name}" --data \'{data_arg}\' --profile "{profile_arg}" --constraint "{constraint_arg}" --output "kind=json,path={output_path}"{column_args}')
             log_callback(f'   Target: {endpoint}')
             log_callback(f'   Load: {rate_label}')
 
