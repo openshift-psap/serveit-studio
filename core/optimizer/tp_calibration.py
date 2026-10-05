@@ -30,7 +30,7 @@ class TPCalibrationMixin:
         decode_candidates = []
         prefill_candidates = []
 
-        def _calibration_max_requests(safe_c, isl, osl, tp):
+        def _calibration_max_requests(safe_c, isl, osl, tp, actual_streams=None):
             """Target ~2 minutes of measurement per TP calibration run.
 
             Estimates request time:
@@ -40,13 +40,14 @@ class TPCalibrationMixin:
             count = throughput * target_duration + warmup_budget
             """
             target_secs = 120  # 2 minutes of measurement
-            prefill_t = isl * 0.0005          # ~0.5ms per input token (prefill latency)
-            decode_t = osl * 0.015             # ~15ms per output token (decode latency)
+            prefill_t = isl * 0.0005           # ~0.5ms per input token
+            decode_t = osl * 0.015              # ~15ms per output token
             req_time = max(0.1, prefill_t + decode_t)
-            throughput = safe_c / req_time
+            streams = actual_streams or safe_c  # use actual guidellm concurrency
+            throughput = streams / req_time
             measurement = int(throughput * target_secs)
             measurement = max(tp * 5, measurement)
-            warmup_budget = safe_c * 6
+            warmup_budget = streams * 6
             return measurement + warmup_budget
 
         # Pre-compute max requests and KV cap across all TPs to size calibration datasets
@@ -146,6 +147,7 @@ class TPCalibrationMixin:
                             decode_config.isl = 1
                             decode_config.osl = self.config.osl
                             decode_config.num_users = safe_c
+                            decode_config.request_rate = safe_c
                         else:
                             decode_config = self._create_aggregated_config(
                                 tp=tp, num_gpus=tp, isl=1, osl=self.config.osl,
@@ -262,6 +264,7 @@ class TPCalibrationMixin:
                             prefill_config.isl = self.config.isl
                             prefill_config.osl = 1
                             prefill_config.num_users = safe_c
+                            prefill_config.request_rate = safe_c
                         else:
                             prefill_config = self._create_aggregated_config(
                                 tp=tp, num_gpus=tp, isl=self.config.isl, osl=1,
