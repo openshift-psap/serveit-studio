@@ -10,9 +10,16 @@ URL="https://serveit-admin-kermit-kermit-ui-inftune.apps.ocp4.intlab.redhat.com"
 
 ## 1. Login
 
+Option A — username/password:
 ```bash
 curl -sk -c /tmp/sck -X POST "$URL/login" \
   -d "username=admin&password=serveit123" -L -o /dev/null
+```
+
+Option B — API key (copy from launcher → 🔑 Copy API Key button):
+```bash
+TOKEN="<paste token from launcher>"
+curl -sk -c /tmp/sck "$URL/auto-login?token=$TOKEN" -L -o /dev/null
 ```
 
 ---
@@ -97,7 +104,8 @@ curl -sk -b /tmp/sck -X POST "$URL/api/setup_storage" \
 ## 5. Start Optimization
 
 ```bash
-curl -sk -b /tmp/sck -X POST "$URL/api/start" | python3 -c "
+curl -sk -b /tmp/sck -X POST "$URL/api/start_optimization" \
+  -H 'Content-Type: application/json' -d '{}' | python3 -c "
 import json, sys; print(json.load(sys.stdin))
 "
 ```
