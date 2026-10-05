@@ -284,8 +284,10 @@ class DatasetMixin:
             if exists:
                 self.log(f"   Reusing calibration dataset ({label}): {os.path.basename(dataset_path)}", 'info')
             else:
-                mode = self._dataset_mode()
-                self.log(f"   Generating calibration dataset ({label}, {mode}): {pool_size} rows, ISL={isl}, OSL={osl}", 'info')
+                # Calibration always uses synthetic (random) mode — corpus mode
+                # fails for very short ISL (e.g. ISL=1 for decode calibration).
+                mode = 'random'
+                self.log(f"   Generating calibration dataset ({label}, synthetic): {pool_size} rows, ISL={isl}, OSL={osl}", 'info')
                 cmd = (
                     f'generate_dataset'
                     f' --model "{self.config.model_name}"'
