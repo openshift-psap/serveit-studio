@@ -40,9 +40,9 @@ class TPCalibrationMixin:
             count = throughput * target_duration + warmup_budget
             """
             target_secs = 120  # 2 minutes of measurement
-            prefill_t = isl / max(tp * 2000, 1)
-            decode_t = osl * 0.015
-            req_time = max(0.5, prefill_t + decode_t)
+            prefill_t = isl * 0.0005          # ~0.5ms per input token (prefill latency)
+            decode_t = osl * 0.015             # ~15ms per output token (decode latency)
+            req_time = max(0.1, prefill_t + decode_t)
             throughput = safe_c / req_time
             measurement = int(throughput * target_secs)
             measurement = max(tp * 5, measurement)
