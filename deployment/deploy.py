@@ -386,15 +386,18 @@ def main():
             return
 
         # --sync: single pod (launcher or optimizer)
-        app_label = 'serveit-launcher' if args.mode == 'launcher' else 'serveit-optimizer'
-        r = kubectl_run(cmd, ['get', 'pod', '-n', args.namespace, '-l', f'app={app_label}',
-                              '-o', 'jsonpath={.items[0].metadata.name}'])
-        pod = r.stdout.strip()
-        if not pod:
-            r = kubectl_run(cmd, ['get', 'pod', '-n', args.namespace,
-                                  '-l', 'app in (serveit-optimizer,serveit-launcher,inftune-optimizer,inftune-launcher)',
+        # Try both serveit- and inftune- prefixed labels
+        if args.mode == 'launcher':
+            label_candidates = ['serveit-launcher', 'inftune-launcher']
+        else:
+            label_candidates = ['serveit-optimizer', 'inftune-optimizer']
+        pod = ''
+        for label in label_candidates:
+            r = kubectl_run(cmd, ['get', 'pod', '-n', args.namespace, '-l', f'app={label}',
                                   '-o', 'jsonpath={.items[0].metadata.name}'])
             pod = r.stdout.strip()
+            if pod:
+                break
         if not pod:
             print("❌ No ServeIt Studio pod found. Deploy first.", file=sys.stderr)
             sys.exit(1)
