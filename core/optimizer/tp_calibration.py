@@ -37,9 +37,12 @@ class TPCalibrationMixin:
 
             Scales inversely with sqrt of sequence length so both short
             (decode ISL=1) and long (prefill ISL=100K) tests run ~5-7 min.
+            Adds warmup budget: warmup requests count toward the limit so we
+            add streams × warmup_seconds as overhead to ensure measurement completes.
             """
             reqs = max(tp * 3, int(7000 * tp / _math.sqrt(max(seq_len, 1))))
-            return reqs
+            warmup_budget = safe_c * 60  # 60s warmup × concurrent streams
+            return reqs + warmup_budget
 
         # Pre-compute max requests and KV cap across all TPs to size calibration datasets
         # Pool must be larger than KV cap to prevent full-cache hits from skewing results
