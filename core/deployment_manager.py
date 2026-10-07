@@ -31,6 +31,8 @@ class DeploymentStatus:
     ready: bool
     pods_running: int
     pods_expected: int
+    total_pods_running: int = 0   # includes lws_size workers (display only)
+    total_pods_expected: int = 0  # includes lws_size workers (display only)
     error_message: Optional[str] = None
 
 
@@ -386,6 +388,8 @@ class DeploymentManager:
                 ready = prefill_status['ready'] and decode_status['ready']
                 pods_running = prefill_status['pods_running'] + decode_status['pods_running']
                 pods_expected = prefill_status['pods_expected'] + decode_status['pods_expected']
+                total_pods_running = prefill_status.get('total_pods_running', pods_running) + decode_status.get('total_pods_running', pods_running)
+                total_pods_expected = prefill_status.get('total_pods_expected', pods_expected) + decode_status.get('total_pods_expected', pods_expected)
 
                 return DeploymentStatus(
                     test_id=test_id,
@@ -393,7 +397,9 @@ class DeploymentManager:
                     deployed=deployed,
                     ready=ready,
                     pods_running=pods_running,
-                    pods_expected=pods_expected
+                    pods_expected=pods_expected,
+                    total_pods_running=total_pods_running,
+                    total_pods_expected=total_pods_expected,
                 )
             else:
                 # For aggregated: try test_id-based name, fallback to per_node_storage name
@@ -454,15 +460,14 @@ class DeploymentManager:
             # For PD sequential deployment: use actual replica count (running pods)
             # not ready replicas, since prefill pods can't be ready without decode
             actual_replicas = status.get('replicas', 0)
-            # Total pods = replicas × lws_size (leader + workers per group)
-            total_pods_expected = replicas * lws_size
-            total_pods_running = actual_replicas * lws_size  # approximate running pods
 
             return {
                 'deployed': True,
                 'ready': ready_replicas == replicas and replicas > 0,
-                'pods_running': total_pods_running,
-                'pods_expected': total_pods_expected
+                'pods_running': actual_replicas,   # LWS leader-level running count (for readiness logic)
+                'pods_expected': replicas,          # LWS leader-level expected (for readiness logic)
+                'total_pods_running': actual_replicas * lws_size,   # display only
+                'total_pods_expected': replicas * lws_size,          # display only
             }
 
         except Exception:
@@ -621,8 +626,10 @@ class DeploymentManager:
                 else:
                     ready_label = "Running (waiting for readiness)"
                 elapsed_suffix = f" ({elapsed}s)" if elapsed > 0 else ""
+                display_running = status.total_pods_running or status.pods_running
+                display_expected = status.total_pods_expected or status.pods_expected
                 log_callback(
-                    f"📊 Status: {status.pods_running}/{status.pods_expected} {'pod' if status.pods_expected == 1 else 'pods'} {ready_label}{elapsed_suffix}"
+                    f"📊 Status: {display_running}/{display_expected} {'pod' if display_expected == 1 else 'pods'} {ready_label}{elapsed_suffix}"
                 )
                 last_status = status
                 last_progress_log = time.time()
