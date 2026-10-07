@@ -23,42 +23,56 @@ def _fix_worker_template(yaml_str: str) -> str:
 
     Worker pods run as headless distributed compute workers — they don't serve
     HTTP. The worker uses a simplified command: just 'vllm serve model --headless'.
-    The leader broadcasts configuration to workers; workers only need --headless
-    plus the connection info (LWS_WORKER_INDEX, LWS_LEADER_ADDRESS from env).
+
+    IMPORTANT: PyYAML resolves YAML anchors (spec: *pod_spec) as shared Python
+    object references, not deep copies. We must deep-copy the workerTemplate spec
+    before modifying to avoid accidentally modifying the leaderTemplate too.
     """
-    import re as _re
+    import re as _re, copy as _copy
     try:
         docs = list(_yaml.safe_load_all(yaml_str))
         for doc in docs:
             if not doc or doc.get('kind') != 'LeaderWorkerSet':
                 continue
-            wt = (doc.get('spec', {})
-                     .get('leaderWorkerTemplate', {})
-                     .get('workerTemplate', {}))
-            for container in (wt.get('spec', {}) or {}).get('containers', []) or []:
-                # Remove HTTP probes — workers don't serve requests
+            lwt = doc.get('spec', {}).get('leaderWorkerTemplate', {})
+            wt = lwt.get('workerTemplate', {})
+
+            # Extract model name from the LEADER's spec (before we touch anything)
+            leader_containers = (lwt.get('leaderTemplate', {})
+                                    .get('spec', {})
+                                    .get('containers', []) or [])
+            model_name = None
+            for lc in leader_containers:
+                largs = lc.get('args', [])
+                if largs:
+                    m = _re.search(r'/tmp/_vllm_patched serve ([^\s\\]+)', largs[0])
+                    if m:
+                        model_name = m.group(1)
+                        break
+
+            if not model_name:
+                continue
+
+            # Deep-copy the workerTemplate spec so we don't corrupt the leaderTemplate
+            # (PyYAML aliases resolve to shared references, not copies)
+            wt_spec = _copy.deepcopy(wt.get('spec', {}))
+            wt['spec'] = wt_spec
+
+            for container in (wt_spec.get('containers', []) or []):
                 container.pop('startupProbe', None)
                 container.pop('readinessProbe', None)
                 container.pop('livenessProbe', None)
-                # Replace the full leader command with a simplified headless script.
-                # Full command with all flags fails in headless mode; simple --headless works.
-                args = container.get('args')
-                if args and isinstance(args, list):
-                    # Extract model name from leader's vllm serve command
-                    full_cmd = args[0] if args else ''
-                    model_match = _re.search(r'/tmp/_vllm_patched serve ([^\s\\]+)', full_cmd)
-                    if model_match:
-                        model_name = model_match.group(1)
-                        container['args'] = [
-                            f'# Worker node: headless distributed compute (no HTTP server)\n'
-                            f'rm -f /dev/shm/vllm* /dev/shm/psm_* 2>/dev/null || true\n'
-                            f'ulimit -l unlimited || true\n'
-                            f'/tmp/_vllm_patched serve {model_name} '
-                            f'--nnodes ${{LWS_REPLICA_SIZE:-2}} '
-                            f'--node-rank ${{LWS_WORKER_INDEX:-0}} '
-                            f'--master-addr ${{LWS_LEADER_ADDRESS}} '
-                            f'--headless || sleep infinity\n'
-                        ]
+                container['args'] = [
+                    f'# Worker node: headless distributed compute (no HTTP server)\n'
+                    f'rm -f /dev/shm/vllm* /dev/shm/psm_* 2>/dev/null || true\n'
+                    f'ulimit -l unlimited || true\n'
+                    f'/tmp/_vllm_patched serve {model_name} '
+                    f'--nnodes ${{LWS_REPLICA_SIZE:-2}} '
+                    f'--node-rank ${{LWS_WORKER_INDEX:-0}} '
+                    f'--master-addr ${{LWS_LEADER_ADDRESS}} '
+                    f'--headless || sleep infinity\n'
+                ]
+
         return _yaml.dump_all(docs, default_flow_style=False, allow_unicode=True)
     except Exception:
         return yaml_str  # fall back to original if parsing fails
