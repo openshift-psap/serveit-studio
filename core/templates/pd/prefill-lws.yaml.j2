@@ -215,7 +215,7 @@ spec:
 {% if lws_size | default(1) > 1 %}                  --nnodes {{ lws_size }} \
                   --node-rank ${LWS_WORKER_INDEX:-0} \
                   --master-addr ${LWS_LEADER_ADDRESS} \
-                  $([ "${LWS_WORKER_INDEX:-0}" != "0" ] && echo "--headless \\" || true)
+                  $([ "${LWS_WORKER_INDEX:-0}" != "0" ] && echo "--headless" || true)
 {% endif %}{% if data_parallelism > 1 %}                  --data-parallel-size ${DP_SIZE} \
                   --data-parallel-size-local ${DP_SIZE_LOCAL} \
                   --data-parallel-multi-port-external-lb \
