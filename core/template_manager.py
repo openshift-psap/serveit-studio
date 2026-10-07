@@ -66,6 +66,29 @@ def _fix_worker_template(yaml_str: str) -> str:
                     '# Worker node: headless distributed compute (no HTTP server)\n'
                     'rm -f /dev/shm/vllm* /dev/shm/psm_* 2>/dev/null || true\n'
                     'ulimit -l unlimited || true\n'
+                    # Pin to allocated GPUs (privileged pods see all host GPUs) —
+                    # same block as the leader and the aggregated multi-node worker.
+                    'if [ -d /var/run/nvidia-container-devices ]; then\n'
+                    '  GPU_INDICES=""\n'
+                    '  for uuid in $(ls /var/run/nvidia-container-devices/); do\n'
+                    '    idx=$(nvidia-smi --query-gpu=index,uuid --format=csv,noheader | grep "$uuid" | cut -d\',\' -f1 | tr -d \' \')\n'
+                    '    [ -n "$idx" ] && GPU_INDICES="${GPU_INDICES:+$GPU_INDICES,}$idx"\n'
+                    '  done\n'
+                    '  if [ -n "$GPU_INDICES" ]; then\n'
+                    '    export CUDA_VISIBLE_DEVICES="$GPU_INDICES"\n'
+                    '    echo "--- CUDA_VISIBLE_DEVICES=$CUDA_VISIBLE_DEVICES ---"\n'
+                    '  fi\n'
+                    'fi\n'
+                    # Source the RDMA discovery script — REQUIRED for cross-node NCCL.
+                    # Without it NCCL_IB_HCA stays the generic template value ("mlx"),
+                    # which selects RoCE HCAs with no valid GIDs and the multi-node
+                    # TP allreduce fails with "NCCL error: internal error".
+                    'if [ -f /scripts/discover_ib_hca.sh ]; then\n'
+                    '  source /scripts/discover_ib_hca.sh\n'
+                    '  echo "--- NCCL_SOCKET_IFNAME: ${NCCL_SOCKET_IFNAME:-not set} ---"\n'
+                    '  echo "--- UCX_NET_DEVICES: ${UCX_NET_DEVICES:-not set} ---"\n'
+                    '  echo "--- Loaded RDMA environment ---"\n'
+                    'fi\n'
                     '_MOE_FILE=$(python3 -c "import vllm; print(vllm.__path__[0])" 2>/dev/null)/model_executor/layers/fused_moe/moe_permute_unpermute.py\n'
                     'if [ -f "$_MOE_FILE" ] && grep -q \'a1q_scale\\[permuted_idx.clamp\' "$_MOE_FILE"; then\n'
                     '  sed -i \'s|a1q_scale = a1q_scale\\[permuted_idx.clamp(max=n_token \\* topk - 1) // topk\\]|scale_idx = permuted_idx.clamp(max=n_token * topk - 1) // topk; scale_idx = scale_idx.clamp(max=a1q_scale.shape[0] - 1); a1q_scale = a1q_scale[scale_idx]|\' "$_MOE_FILE"\n'
