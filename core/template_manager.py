@@ -66,7 +66,7 @@ def _fix_worker_template(yaml_str: str) -> str:
                     f'# Worker node: headless distributed compute (no HTTP server)\n'
                     f'rm -f /dev/shm/vllm* /dev/shm/psm_* 2>/dev/null || true\n'
                     f'ulimit -l unlimited || true\n'
-                    f'/tmp/_vllm_patched serve {model_name} '
+                    f'python3 /opt/vllm-source/vllm/entrypoints/cli/main.py serve {model_name} '
                     f'--nnodes ${{LWS_REPLICA_SIZE:-2}} '
                     f'--node-rank ${{LWS_WORKER_INDEX:-0}} '
                     f'--master-addr ${{LWS_LEADER_ADDRESS}} '
