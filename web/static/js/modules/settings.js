@@ -182,6 +182,42 @@ function updateAdvVllm() {
         ctxEntries.push({ flag: flag.value.trim(), value: (isCustom && numVal > 0) ? numVal : null });
     });
     adv.context_parallel_entries = ctxEntries;
+    // Extra speculative config fields — checkbox-gated, dropdown key + free-text fallback
+    var specExtraEnabled = document.getElementById('spec-extra-enabled');
+    var specExtraEntries = [];
+    if (specExtraEnabled && specExtraEnabled.checked) {
+        [0, 1].forEach(function(i) {
+            var sel = document.getElementById('spec-extra-key-' + i);
+            var txt = document.getElementById('spec-extra-key-' + i + '-txt');
+            var valEl = document.getElementById('spec-extra-val-' + i);
+            if (!sel || !valEl) return;
+            var key = (sel.value === '__custom__') ? (txt ? txt.value.trim() : '') : sel.value.trim();
+            if (!key || valEl.value.trim() === '') return;
+            var raw = valEl.value.trim();
+            var parsed;
+            var asInt = parseInt(raw, 10);
+            if (!isNaN(asInt) && String(asInt) === raw) {
+                parsed = asInt;
+            } else {
+                try { parsed = JSON.parse(raw); } catch(e) { parsed = raw; }
+            }
+            specExtraEntries.push({ key: key, value: parsed });
+        });
+    }
+    adv.speculative_extra_config = specExtraEntries;
+    // CPU KV Offload / dev/shm preset
+    var kvOffloadPreset = document.getElementById('adv-kv-offload-preset');
+    var shmSizeMode = document.getElementById('adv-shm-size-mode');
+    var shmSizeVal = document.getElementById('adv-shm-size-val');
+    if (kvOffloadPreset) {
+        var kvPreset = kvOffloadPreset.value;
+        adv.host_ipc = (kvPreset === 'hostipc');
+        if (kvPreset === 'shm' && shmSizeMode && shmSizeMode.value === 'custom' && shmSizeVal && shmSizeVal.value) {
+            adv.shm_size_gb = { mode: 'custom', value: parseInt(shmSizeVal.value, 10) };
+        } else {
+            adv.shm_size_gb = { mode: 'auto' };
+        }
+    }
     // Attention config (prefill / decode) — driven by select dropdowns
     ['prefill', 'decode'].forEach(function(role) {
         var sel = document.getElementById('adv-' + role + '-attention-config-val');
@@ -295,6 +331,42 @@ function restoreAdvVllm() {
             });
         }
         if (typeof applyCtxParallelPreset === 'function') applyCtxParallelPreset(ctxPreset);
+    }
+    // Restore extra speculative config fields
+    if (adv) {
+        var extraSpec = adv.speculative_extra_config || [];
+        var hasExtra = extraSpec.length > 0;
+        var toggleEl = document.getElementById('spec-extra-enabled');
+        if (toggleEl) { toggleEl.checked = hasExtra; if (typeof toggleSpecExtra === 'function') toggleSpecExtra(hasExtra); }
+        [0, 1].forEach(function(i) {
+            var sel = document.getElementById('spec-extra-key-' + i);
+            var txt = document.getElementById('spec-extra-key-' + i + '-txt');
+            var valEl = document.getElementById('spec-extra-val-' + i);
+            var entry = extraSpec[i];
+            var key = (entry && entry.key) ? entry.key : '';
+            if (sel) {
+                var known = Array.from(sel.options).some(function(o) { return o.value === key && o.value !== '' && o.value !== '__custom__'; });
+                if (key && known) { sel.value = key; if (txt) txt.style.display = 'none'; }
+                else if (key) { sel.value = '__custom__'; if (txt) { txt.style.display = 'block'; txt.value = key; } }
+                else { sel.value = ''; if (txt) { txt.style.display = 'none'; txt.value = ''; } }
+            }
+            if (valEl) valEl.value = (entry && entry.value !== undefined) ? String(entry.value) : '';
+        });
+    }
+    // Restore CPU KV Offload preset
+    var kvOffloadPresetEl = document.getElementById('adv-kv-offload-preset');
+    if (kvOffloadPresetEl && adv) {
+        var kvPreset = 'off';
+        if (adv.host_ipc) kvPreset = 'hostipc';
+        else if (adv.shm_size_gb && adv.shm_size_gb.mode === 'custom') kvPreset = 'shm';
+        kvOffloadPresetEl.value = kvPreset;
+        if (typeof applyKvOffloadPreset === 'function') applyKvOffloadPreset(kvPreset);
+        if (kvPreset === 'shm' && adv.shm_size_gb && adv.shm_size_gb.mode === 'custom') {
+            var shmModeEl = document.getElementById('adv-shm-size-mode');
+            var shmValEl = document.getElementById('adv-shm-size-val');
+            if (shmModeEl) shmModeEl.value = 'custom';
+            if (shmValEl) { shmValEl.style.display = 'inline-block'; shmValEl.value = adv.shm_size_gb.value || ''; }
+        }
     }
     // Restore attention-config preset + select values — same pattern: values first, then preset
     var attnPreset = config.attention_preset || 'off';

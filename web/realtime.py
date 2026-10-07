@@ -1270,7 +1270,10 @@ def handle_generate_test_plan(data):
                     if row and row['config_json']:
                         session_config = json.loads(row['config_json'])
                         pvc_name = session_config.get('pvc_name') or session_config.get('existing_pvc_name')
-                        if pvc_name:
+                        # Skip fake "Nx local-disk" names (per-node hostPath storage, not real PVCs)
+                        if pvc_name and 'local-disk' in str(pvc_name):
+                            pvc_name = None
+                        if pvc_name and not session_config.get('local_disk_path'):
                             log_to_ui(f'📦 Auto-detected PVC from session: {pvc_name}', 'info')
                             model_config = read_config_from_pvc(pvc_name, model)
                             if model_config:
@@ -2438,26 +2441,38 @@ def handle_setup_storage(data):
             test_id = f'serveit-setup-{timestamp}'
             template_mgr = TemplateManager()
 
-            # Launch one download job per GPU node using hostPath
-            download_job_names = []
-            for node in gpu_nodes:
-                short = node.split('.')[-1] if '.' in node else node[-5:]
-                jn = f'serveit-download-{short}-{timestamp}'
-                job_yaml = template_mgr.render_template(
-                    'prereq/model-download-job.yaml.j2',
-                    job_name=jn, namespace=namespace, test_id=test_id,
-                    model_name=model, hf_token=hf_token,
-                    local_disk_path=local_disk_path, target_node=node,
-                )
-                cmd = ['kubectl', 'apply', '-f', '-']
-                proc = subprocess.run(cmd, input=job_yaml.encode(), capture_output=True, timeout=30)
-                if proc.returncode == 0:
-                    download_job_names.append(jn)
-                    log_to_ui(f'   ✅ Download job started on {node}', 'info')
-                else:
-                    log_to_ui(f'   ⚠️  Failed to start download on {node}: {proc.stderr.decode()[:100]}', 'warning')
+            # Determine if a draft model also needs downloading (e.g. DSpark)
+            _adv = saved.get('advanced_vllm', {})
+            _spec_model = (_adv.get('speculative_model') or {}).get('value') if isinstance(_adv.get('speculative_model'), dict) else _adv.get('speculative_model')
+            _spec_method = _adv.get('speculative_method')
+            _draft_model = _spec_model if _spec_model and _spec_model != model else None
+            _models_to_download = [model] + ([_draft_model] if _draft_model else [])
 
-            log_to_ui(f'✅ {len(download_job_names)} parallel download jobs started (one per GPU node)', 'success')
+            # Launch one download job per GPU node per model using hostPath
+            download_job_names = []
+            for dl_model in _models_to_download:
+                if dl_model != model:
+                    log_to_ui(f'📥 Also downloading draft model: {dl_model}', 'info')
+                for node in gpu_nodes:
+                    short = node.split('.')[-1] if '.' in node else node[-5:]
+                    mdl_suffix = 'draft' if dl_model != model else 'main'
+                    jn = f'serveit-download-{short}-{mdl_suffix}-{timestamp}'
+                    job_yaml = template_mgr.render_template(
+                        'prereq/model-download-job.yaml.j2',
+                        job_name=jn, namespace=namespace, test_id=test_id,
+                        model_name=dl_model, hf_token=hf_token,
+                        local_disk_path=local_disk_path, target_node=node,
+                    )
+                    cmd = ['kubectl', 'apply', '-f', '-']
+                    proc = subprocess.run(cmd, input=job_yaml.encode(), capture_output=True, timeout=30)
+                    if proc.returncode == 0:
+                        download_job_names.append(jn)
+                        if dl_model == model:
+                            log_to_ui(f'   ✅ Download job started on {node}', 'info')
+                    else:
+                        log_to_ui(f'   ⚠️  Failed to start download on {node}: {proc.stderr.decode()[:100]}', 'warning')
+
+            log_to_ui(f'✅ {len(download_job_names)} parallel download jobs started (one per GPU node{" + draft model" if _draft_model else ""})', 'success')
             log_to_ui('⏳ Each node downloads the model independently to local NVMe...', 'info')
 
             emit('storage_setup_result', {
@@ -2621,8 +2636,14 @@ def handle_setup_storage(data):
         else:
             log_to_ui(f'✅ PVC {pvc_name} already exists (reusing)', 'success')
 
-        # Create model download job
+        # Determine if a draft model also needs downloading (e.g. DSpark)
+        _adv = saved.get('advanced_vllm', {})
+        _spec_model = (_adv.get('speculative_model') or {}).get('value') if isinstance(_adv.get('speculative_model'), dict) else _adv.get('speculative_model')
+        _draft_model = _spec_model if _spec_model and _spec_model != model else None
+
+        # Create model download job(s)
         log_to_ui(f'📥 Starting model download: {model}', 'info')
+        all_download_jobs = [job_name]
 
         # Render job template (uses lightweight Red Hat UBI Python image by default)
         job_yaml = template_mgr.render_template(
@@ -2642,6 +2663,27 @@ def handle_setup_storage(data):
             raise Exception(f"Job creation failed: {proc.stderr.decode()}")
 
         log_to_ui(f'✅ Model download job {job_name} started', 'success')
+
+        # Download draft model if DSpark (or other methods with separate draft)
+        if _draft_model:
+            draft_job_name = job_name.replace('serveit-download', 'serveit-download-draft', 1) if 'serveit-download' in job_name else f'{job_name}-draft'
+            log_to_ui(f'📥 Also downloading draft model: {_draft_model}', 'info')
+            draft_yaml = template_mgr.render_template(
+                'prereq/model-download-job.yaml.j2',
+                job_name=draft_job_name,
+                namespace=namespace,
+                test_id=test_id,
+                model_name=_draft_model,
+                pvc_name=pvc_name,
+                hf_token=hf_token
+            )
+            dp = subprocess.run(['kubectl', 'apply', '-f', '-'], input=draft_yaml.encode(), capture_output=True, timeout=30)
+            if dp.returncode == 0:
+                all_download_jobs.append(draft_job_name)
+                log_to_ui(f'✅ Draft model download job {draft_job_name} started', 'success')
+            else:
+                log_to_ui(f'⚠️  Draft model download failed: {dp.stderr.decode()[:100]}', 'warning')
+
         log_to_ui('⏳ Streaming download progress...', 'info')
 
         emit('storage_setup_result', {
@@ -2654,8 +2696,9 @@ def handle_setup_storage(data):
             'existing': False
         })
 
-        # Start background task to stream job logs
-        spawn(stream_job_logs, job_name, namespace)
+        # Start background task to stream job logs (target + draft if applicable)
+        for _djn in all_download_jobs:
+            spawn(stream_job_logs, _djn, namespace)
 
     except Exception as e:
         error_msg = f"Storage setup failed: {str(e)}"

@@ -39,7 +39,7 @@ class TPCalibrationMixin:
               req_time     = prefill + decode
             count = throughput * target_duration + warmup_budget
             """
-            target_secs = 120  # 2 minutes of measurement
+            target_secs = 60   # 1 minute of measurement
             prefill_t = isl * 0.0005           # ~0.5ms per input token
             decode_t = osl * 0.015              # ~15ms per output token
             req_time = max(0.1, prefill_t + decode_t)

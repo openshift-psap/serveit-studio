@@ -12,9 +12,45 @@ from pathlib import Path
 from typing import Dict, List, Optional
 from dataclasses import asdict
 from jinja2 import Environment, FileSystemLoader, TemplateNotFound
+import yaml as _yaml
 
 from .config_generator import TestConfig
 from .networking import compute_network_values
+
+
+def _fix_worker_template(yaml_str: str) -> str:
+    """Fix workerTemplate for multi-node LWS pods (rank >= 1).
+
+    Worker pods run as headless distributed compute workers — they don't serve
+    HTTP. Changes applied vs. the copied leader spec:
+      - Add --headless to the vLLM serve command (suppresses API server startup)
+      - Remove startup/readiness/liveness probes (workers don't serve HTTP)
+    """
+    try:
+        docs = list(_yaml.safe_load_all(yaml_str))
+        for doc in docs:
+            if not doc or doc.get('kind') != 'LeaderWorkerSet':
+                continue
+            wt = (doc.get('spec', {})
+                     .get('leaderWorkerTemplate', {})
+                     .get('workerTemplate', {}))
+            for container in (wt.get('spec', {}) or {}).get('containers', []) or []:
+                # Remove HTTP probes — workers don't serve requests
+                container.pop('startupProbe', None)
+                container.pop('readinessProbe', None)
+                container.pop('livenessProbe', None)
+                # Inject --headless into the vLLM serve command so the worker
+                # runs as a distributed compute node without an API server
+                args = container.get('args')
+                if args and isinstance(args, list):
+                    container['args'] = [
+                        a.replace('--master-addr ${LWS_LEADER_ADDRESS}',
+                                  '--master-addr ${LWS_LEADER_ADDRESS} \\\n                  --headless')
+                        for a in args
+                    ]
+        return _yaml.dump_all(docs, default_flow_style=False, allow_unicode=True)
+    except Exception:
+        return yaml_str  # fall back to original if parsing fails
 
 # Configure logging
 logging.basicConfig(
@@ -167,6 +203,22 @@ class TemplateManager:
         # aggregated template uses attention_config = decode side
         vars_dict['attention_config'] = vars_dict['decode_attention_config']
 
+        # KV cache and weight offloading
+        vars_dict['cpu_offload_gb'] = getattr(config, 'cpu_offload_gb', None)
+        vars_dict['weight_cpu_offload_gb'] = getattr(config, 'weight_cpu_offload_gb', None)
+        vars_dict['disk_offload_kv_path'] = getattr(config, 'disk_offload_kv_path', None)
+        vars_dict['disk_offload_kv_read_threads'] = getattr(config, 'disk_offload_kv_read_threads', 32)
+        vars_dict['disk_offload_kv_write_threads'] = getattr(config, 'disk_offload_kv_write_threads', 16)
+        # hostIPC or /dev/shm sizing for CPU KV offload
+        vars_dict['host_ipc'] = bool(getattr(config, 'host_ipc', False))
+        _shm = getattr(config, 'shm_size_gb', None)
+        if not vars_dict['host_ipc']:
+            if not _shm and vars_dict.get('cpu_offload_gb'):
+                _shm = int(vars_dict['cpu_offload_gb']) + 210  # auto: cpu_offload_gb + 210 for CUDA/NIXL overhead
+            vars_dict['shm_size_gb'] = _shm or 2
+        else:
+            vars_dict['shm_size_gb'] = 2  # irrelevant when hostIPC is used
+
         # vLLM access-log flag — version-aware across upstream vllm AND llm-d images
         vars_dict['vllm_log_request_flag'] = resolve_vllm_log_request_flag(
             vars_dict.get('image') or '',
@@ -241,15 +293,22 @@ class TemplateManager:
             spec['method'] = config.speculative_method or 'mtp'
             spec['model'] = getattr(config, 'speculative_model', None) or config.model_name
             spec['num_speculative_tokens'] = config.speculative_num_tokens
+            # Inject extra speculative config fields (user-configurable, e.g. parallel_drafting for GLM MTP)
+            for entry in (getattr(config, 'speculative_extra_config', None) or []):
+                k, v = entry.get('key'), entry.get('value')
+                if k and v is not None:
+                    if isinstance(v, str):
+                        if v.lower() == 'true': v = True
+                        elif v.lower() == 'false': v = False
+                        else:
+                            try: v = int(v)
+                            except ValueError: pass
+                    spec[k] = v
         vars_dict['speculative_config_json'] = json.dumps(spec) if spec else None
 
         prefill_tokens = getattr(config, 'prefill_speculative_num_tokens', None)
         if spec and prefill_tokens:
             prefill_spec = {**spec, 'num_speculative_tokens': prefill_tokens}
-            # Add mask_token_id for parallel drafting (MTP with n=1 on GLM-style models)
-            mask_token_id = getattr(config, 'speculative_mask_token_id', None)
-            if mask_token_id is not None:
-                prefill_spec['mask_token_id'] = mask_token_id
             vars_dict['prefill_speculative_config_json'] = json.dumps(prefill_spec)
         else:
             vars_dict['prefill_speculative_config_json'] = None
@@ -315,6 +374,13 @@ class TemplateManager:
         # Render both templates
         prefill_yaml = prefill_template.render(**prefill_vars)
         decode_yaml = decode_template.render(**vars_dict)
+
+        # For multi-node LWS (lws_size > 1), worker pods don't serve HTTP so strip
+        # startup/readiness/liveness probes from the workerTemplate containers.
+        lws_size = getattr(config, 'lws_size', None) or 1
+        if lws_size > 1:
+            prefill_yaml = _fix_worker_template(prefill_yaml)
+            decode_yaml = _fix_worker_template(decode_yaml)
 
         # Determine deployment order based on GPU requirements
         prefill_tp = config.prefill_tp or config.tensor_parallelism

@@ -251,17 +251,6 @@ class RecipeOptimizer(
                     self._supports_mtp = True
                     self.log(f"MTP support detected (architecture: {model_archs[0]})")
 
-        # Inject mask_token_id into model_config for parallel MTP drafting.
-        # GLM models use [gMASK] as the mask token; its ID = vocab_size - special_count.
-        # vLLM requires this for num_speculative_tokens=1 with method=mtp (parallel drafting).
-        if self._model_config and self._supports_mtp:
-            if not self._model_config.get('mask_token_id'):
-                arch = (self._model_config.get('architectures') or [''])[0]
-                if 'Glm' in arch:
-                    # GLM-5.3: [gMASK] is the last-defined special token
-                    # tokenizer reports it as 154822 (vocab_size=154880, offset -58)
-                    self._model_config['mask_token_id'] = self._model_config.get('vocab_size', 154880) - 58
-
         # Detect hybrid attention (mixed attention types across layers)
         self._has_hybrid_attention = False
         if self._model_config:
@@ -2101,7 +2090,9 @@ spec:
                 gpu_memory_utilization=gmu
             )
             tp_options = [tp for tp in tp_options if tp >= min_tp]
-            tp_options = [tp for tp in tp_options if tp <= min(self.config.total_gpus, max_tp)]
+            # pd_only calibration runs 1P+1D per TP, consuming 2×TP GPUs
+            gpu_budget = self.config.total_gpus // 2 if getattr(self.config, 'objective', None) == 'pd_only' else self.config.total_gpus
+            tp_options = [tp for tp in tp_options if tp <= min(gpu_budget, max_tp)]
         else:
             tp_options = list(self.config.tp_options)
 

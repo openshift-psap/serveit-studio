@@ -1027,6 +1027,10 @@ data:
                       workload_mode, dataset_source, dataset_column, dataset_max_output,
                       rate_type, prefix_cache_hit_pct, run_description or None))
                 run_id = cursor.lastrowid
+                # Save raw UI config so "Apply Settings" can restore it exactly
+                conn.execute(
+                    'UPDATE optimization_runs SET ui_config_json = ? WHERE id = ?',
+                    (json.dumps(_saved), run_id))
 
         # Step 1: Choose optimization approach
         log_to_ui("\n📋 Step 1: Selecting optimization approach...", 'info')

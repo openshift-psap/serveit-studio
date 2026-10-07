@@ -30,8 +30,10 @@ spec:
         annotations:
           k8s.v1.cni.cncf.io/networks: '{{ rdma_network_annotation }}'
 {% endif %}
-      spec:
+      spec: &prefill_pod_spec
         serviceAccountName: llm-d-modelserver
+{% if host_ipc %}        hostIPC: true  # User-selected hostIPC mode for /dev/shm unlimited access
+{% endif %}
         {% if use_anti_affinity or selected_nodes %}
         affinity:
           {% if use_anti_affinity %}
@@ -73,7 +75,7 @@ spec:
           - name: dshm
             emptyDir:
               medium: Memory
-              sizeLimit: 2Gi
+              sizeLimit: {{ shm_size_gb }}Gi
 {% if local_disk_path %}
           - name: hf-cache
             hostPath:
@@ -149,6 +151,8 @@ spec:
               - -c
             args:
               - |
+                # Clear stale /dev/shm from previous container crashes (OffloadingConnector leaves large files)
+                rm -f /dev/shm/vllm* /dev/shm/psm_* /dev/shm/cuda* 2>/dev/null || true
                 ulimit -l unlimited || true
 
                 # Pin to allocated GPUs (privileged pods see all host GPUs)
@@ -196,6 +200,13 @@ spec:
                 printf '#!/usr/bin/env python3\ntry:\n import transformers.integrations.heterogeneity.configuration_utils as _hc\n _p=_hc.HeterogeneousConfigMixin.allow_global_per_layer_attribute_access\n _hc.HeterogeneousConfigMixin.allow_global_per_layer_attribute_access=property(lambda s:s.__dict__.get("allow_global_per_layer_attribute_access",True),_p.fset)\nexcept Exception:\n pass\nif __name__=="__main__":\n import sys;sys.argv[0]="vllm"\n from vllm.entrypoints.cli.main import main;main()\n' > /tmp/_vllm_patched && chmod +x /tmp/_vllm_patched
                 echo "--- Patched transformers per-layer attribute access ---"
 
+                # KV cache check patch disabled - not needed when max_model_len fits GPU budget
+                # (Re-enable if using cpu_offload_gb for 1M+ context)
+                #_KV_FILE=$(python3 -c "import vllm; print(vllm.__path__[0])" 2>/dev/null)/v1/core/kv_cache_utils.py
+                #if [ -f "$_KV_FILE" ] && grep -q '_check_enough_kv_cache_memory' "$_KV_FILE"; then
+                #  echo "..." | base64 -d | python3
+                #fi
+
                 /tmp/_vllm_patched serve {{ model_name }} \
                   --port 8000 \
                   --trust-remote-code \
@@ -204,6 +215,7 @@ spec:
 {% if lws_size | default(1) > 1 %}                  --nnodes {{ lws_size }} \
                   --node-rank ${LWS_WORKER_INDEX:-0} \
                   --master-addr ${LWS_LEADER_ADDRESS} \
+                  $([ "${LWS_WORKER_INDEX:-0}" != "0" ] && echo "--headless \\" || true)
 {% endif %}{% if data_parallelism > 1 %}                  --data-parallel-size ${DP_SIZE} \
                   --data-parallel-size-local ${DP_SIZE_LOCAL} \
                   --data-parallel-multi-port-external-lb \
@@ -400,5 +412,9 @@ spec:
 {% endfor %}
 {% endif %}
     workerTemplate:
+{% if lws_size | default(1) > 1 %}
+      spec: *prefill_pod_spec
+{% else %}
       spec:
         containers: []
+{% endif %}

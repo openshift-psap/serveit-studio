@@ -320,6 +320,7 @@ def init_db():
         ('max_requests', 'INTEGER'),
         ('speculative_method', 'TEXT'),
         ('speculative_num_tokens', 'INTEGER'),
+        ('ui_config_json', 'TEXT'),
     ]:
         try:
             cursor.execute(f'ALTER TABLE optimization_runs ADD COLUMN {col} {typ}')

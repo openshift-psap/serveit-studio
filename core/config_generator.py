@@ -169,7 +169,8 @@ class TestConfig:
 
     # Speculative decoding
     speculative_method: Optional[str] = None  # 'mtp', 'draft', None
-    speculative_mask_token_id: Optional[int] = None  # mask token for parallel drafting (MTP n=1)
+    speculative_mask_token_id: Optional[int] = None  # kept for backward compat; use speculative_extra_config
+    speculative_extra_config: Optional[list] = None  # extra --speculative-config JSON fields: [{key, value}]
     speculative_num_tokens: Optional[int] = None
     speculative_model: Optional[str] = None  # MTP assistant model (e.g., google/gemma-4-26B-A4B-it-assistant)
     prefill_speculative_num_tokens: Optional[int] = None  # PD/EP split only — prefill pod override
@@ -180,6 +181,8 @@ class TestConfig:
     model_loader_extra_config: Optional[str] = None
     cpu_offload_gb: Optional[int] = None  # OffloadingConnector CPU KV cache (NIXL)
     weight_cpu_offload_gb: Optional[int] = None  # vLLM --cpu-offload-gb (model weights to CPU)
+    shm_size_gb: Optional[int] = None           # /dev/shm size in GiB (default 2, increase for CPU KV offload)
+    host_ipc: Optional[bool] = None             # use host IPC namespace for /dev/shm (unlimited)
     disk_offload_kv_path: Optional[str] = None  # NVMe/disk KV cache offload path
     disk_offload_kv_read_threads: int = 32
     disk_offload_kv_write_threads: int = 16

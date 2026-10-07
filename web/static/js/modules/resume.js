@@ -112,7 +112,8 @@ function loadResumeRuns() {
                 } else if (run.status === 'completed') {
                     html += `<span style="color: #059669; font-weight: 600; font-size: 0.85em;">✓ Done</span> `;
                 }
-                html += `<button class="restart-run-btn" data-run-id="${run.id}" data-run-name="${run.run_name || ''}" title="Restart run #${run.id} from beginning" style="font-size:0.85em;padding:2px 6px;background:none;border:1px solid #d1d5db;border-radius:4px;cursor:pointer;">🔄</button> `;
+                html += `<button class="restart-run-btn" data-run-id="${run.id}" data-run-name="${run.run_name || ''}" title="Restart run #${run.id} from beginning" style="font-size:0.85em;padding:2px 8px;background:none;border:1px solid #d1d5db;border-radius:4px;cursor:pointer;">🔄 Rerun</button> `;
+                html += `<button class="apply-settings-btn" data-run-id="${run.id}" title="Apply settings from run #${run.id} to the UI without starting" style="font-size:0.85em;padding:2px 8px;background:#f0fdf4;color:#16a34a;border:1px solid #bbf7d0;border-radius:4px;cursor:pointer;">⚙️ Apply Settings</button> `;
                 html += `<button class="recreate-storage-btn" data-run-id="${run.id}" title="Recreate PVCs and download model" style="font-size:0.8em;padding:2px 8px;background:#f0f9ff;color:#0284c7;border:1px solid #bae6fd;border-radius:4px;cursor:pointer;">💾 Storage</button> `;
                 html += `<button class="delete-run-btn" data-run-id="${run.id}" title="Delete run #${run.id}" style="font-size:0.85em;padding:2px 6px;background:none;border:1px solid #fecaca;border-radius:4px;cursor:pointer;color:#dc2626;">🗑</button>`;
                 html += `</td>`;
@@ -163,6 +164,14 @@ function loadResumeRuns() {
                             })
                             .catch(err => logToConsole(`Failed to restart run #${runId}: ${err.message}`, 'error'));
                     }, { once: true });
+                });
+            });
+
+            // Attach click handlers to Apply Settings buttons
+            content.querySelectorAll('.apply-settings-btn').forEach(btn => {
+                btn.addEventListener('click', () => {
+                    const runId = parseInt(btn.dataset.runId);
+                    applyRunSettings(runId, btn);
                 });
             });
 
@@ -325,10 +334,42 @@ function resumeRun(runId, runName) {
     document.getElementById('start-optimization').style.display = 'none';
     document.getElementById('stop-optimization').style.display = 'block';
 
-    // Emit resume_optimization — loads config from DB, no test plan needed
-    socket.emit('resume_optimization', {
-        run_id: runId,
-        hf_token: config.hf_token
-    });
+    // Fetch the run's saved config from DB and populate the UI immediately
+    fetch('/api/runs/' + runId + '/config')
+        .then(function(r) { return r.json(); })
+        .then(function(runConfig) {
+            if (runConfig && !runConfig.error) {
+                config = Object.assign({}, config, runConfig);
+                if (typeof updateUIFromConfig === 'function') updateUIFromConfig();
+            }
+        })
+        .catch(function() {})
+        .finally(function() {
+            // Emit resume_optimization — loads config from DB for the optimizer
+            socket.emit('resume_optimization', {
+                run_id: runId,
+                hf_token: config.hf_token
+            });
+        });
+}
+
+function applyRunSettings(runId, btn) {
+    var origText = btn ? btn.textContent : '';
+    if (btn) { btn.textContent = '⏳ Applying…'; btn.disabled = true; }
+    fetch('/api/runs/' + runId + '/config')
+        .then(function(r) { return r.json(); })
+        .then(function(runConfig) {
+            if (runConfig && !runConfig.error) {
+                config = Object.assign({}, config, runConfig);
+                if (typeof updateUIFromConfig === 'function') updateUIFromConfig();
+                document.getElementById('resume-overlay').classList.remove('active');
+                goToStep(3);
+                logToConsole('⚙️ Applied settings from Run #' + runId + ' — review and start when ready', 'success');
+            } else {
+                logToConsole('Failed to load settings for Run #' + runId, 'error');
+            }
+        })
+        .catch(function(err) { logToConsole('Failed to apply settings: ' + err.message, 'error'); })
+        .finally(function() { if (btn) { btn.textContent = origText; btn.disabled = false; } });
 }
 

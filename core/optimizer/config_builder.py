@@ -229,11 +229,6 @@ class ConfigBuilderMixin:
         )
         cfg = self._apply_advanced_vllm(cfg)
         cfg = self._auto_tune_model_loader(cfg)
-        # Set mask_token_id for parallel MTP drafting (needed for GLM-style models)
-        if self._model_config and cfg.speculative_method == 'mtp':
-            _mask_id = self._model_config.get('mask_token_id')
-            if _mask_id is not None:
-                cfg.speculative_mask_token_id = int(_mask_id)
         if is_calibration:
             # Keep calibration runs clean UNLESS the user explicitly configured
             # speculative decoding (MTP / EAGLE / draft model) in advanced_vllm.
@@ -629,6 +624,8 @@ class ConfigBuilderMixin:
             'model_loader_extra_config': 'model_loader_extra_config',
             'cpu_offload_gb': 'cpu_offload_gb',
             'weight_cpu_offload_gb': 'weight_cpu_offload_gb',
+            'shm_size_gb': 'shm_size_gb',
+            'host_ipc': 'host_ipc',
             'http_timeout_keep_alive': 'http_timeout_keep_alive',
             'prefix_cache_retention': 'prefix_cache_retention',
             'ssm_conv_state_layout': 'ssm_conv_state_layout',
@@ -646,11 +643,15 @@ class ConfigBuilderMixin:
                 val = setting['value']
                 if attr in ('max_model_len', 'max_num_seqs', 'max_num_batched_tokens', 'pipeline_parallel_size', 'context_parallel_size',
                             'prefill_context_parallel_size', 'decode_context_parallel_size', 'block_size', 'cpu_offload_gb', 'weight_cpu_offload_gb', 'http_timeout_keep_alive',
-                            'prefix_cache_retention', 'speculative_num_tokens', 'prefill_speculative_num_tokens'):
+                            'prefix_cache_retention', 'speculative_num_tokens', 'prefill_speculative_num_tokens', 'shm_size_gb'):
                     val = int(val)
                 elif attr == 'gpu_memory_utilization':
                     val = float(val)
                 setattr(cfg, attr, val)
+
+        # host_ipc — plain bool from UI (not mode/value dict)
+        if adv.get('host_ipc') is True:
+            cfg.host_ipc = True
 
         # Context parallelism — editable flag-name + value pairs from the UI.
         # value=None means "auto": set to the pod's TP at deploy time (prefill_tp / decode_tp).
@@ -689,6 +690,11 @@ class ConfigBuilderMixin:
         spec_method = adv.get('speculative_method')
         if spec_method:
             cfg.speculative_method = spec_method
+
+        # Extra speculative config fields — user-configurable key/value pairs injected into --speculative-config
+        spec_extra = adv.get('speculative_extra_config')
+        if spec_extra:
+            cfg.speculative_extra_config = [e for e in spec_extra if e.get('key') and e.get('value') is not None] or None
 
         # Disk KV cache offloading — only when local_disk_path is set (hostPath NVMe)
         disk_offload = adv.get('disk_offload_kv') or adv.get('disk-offload-kv')
@@ -998,10 +1004,6 @@ class ConfigBuilderMixin:
         cfg = self._apply_advanced_vllm(cfg)
         cfg = self._auto_tune_model_loader(cfg)
         cfg = self._auto_enable_bidirectional_kv(cfg)
-        if self._model_config and cfg.speculative_method == 'mtp':
-            _mask_id = self._model_config.get('mask_token_id')
-            if _mask_id is not None:
-                cfg.speculative_mask_token_id = int(_mask_id)
         return cfg
 
     def _create_ep_config(self, split: 'FeasibleSplit') -> TestConfig:

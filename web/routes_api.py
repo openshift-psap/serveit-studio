@@ -496,6 +496,31 @@ def get_resumable_run_api():
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 
+@app.route('/api/runs/<int:run_id>/config')
+def get_run_config(run_id):
+    """Return the raw UI config for a specific run (for Apply Settings)."""
+    try:
+        with get_db() as conn:
+            row = conn.execute('SELECT ui_config_json, config_json FROM optimization_runs WHERE id=?', (run_id,)).fetchone()
+            if not row:
+                return jsonify({'error': 'Run not found'}), 404
+            # Prefer ui_config_json (exact UI state); fall back to config_json with field mapping
+            if row['ui_config_json']:
+                return jsonify(json.loads(row['ui_config_json']))
+            if row['config_json']:
+                rc = json.loads(row['config_json'])
+                # Map optimizer field names → UI field names
+                ui = dict(rc)
+                if 'model_name' in rc: ui['model'] = rc['model_name']
+                if 'qps' in rc: ui['users'] = rc['qps']
+                if 'objective' in rc: ui['goal'] = rc['objective']
+                if 'total_gpus' in rc: ui['max_gpus'] = rc['total_gpus']
+                return jsonify(ui)
+            return jsonify({'error': 'No config saved for this run'}), 404
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+
 @app.route('/api/runs/<int:run_id>/notes', methods=['PUT'])
 def update_run_notes(run_id):
     """Update the description/notes for a run."""
