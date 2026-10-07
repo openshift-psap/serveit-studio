@@ -309,6 +309,45 @@ class DeploymentManager:
             elif not self.deploy_manifest(manifest_content, log_callback):
                 return False
 
+            # For multi-node (lws_size>1): patch workerTemplate to use simplified headless command.
+            # Python YAML round-trip in _fix_worker_template is unreliable for complex manifests;
+            # direct kubectl patch is guaranteed to reach the LWS object.
+            lws_size = getattr(config, 'lws_size', 1) or 1
+            if lws_size > 1 and ('prefill' in manifest_name or 'decode' in manifest_name):
+                component = 'prefill' if 'prefill' in manifest_name else 'decode'
+                lws_name_for_patch = f"{config.test_id}-{component}"
+                model = getattr(config, 'model_name', 'model')
+                headless_script = (
+                    f"# Worker node: headless distributed compute (no HTTP server)\\n"
+                    f"rm -f /dev/shm/vllm* /dev/shm/psm_* 2>/dev/null || true\\n"
+                    f"ulimit -l unlimited || true\\n"
+                    f"/tmp/_vllm_patched serve {model} "
+                    f"--nnodes ${{LWS_REPLICA_SIZE:-{lws_size}}} "
+                    f"--node-rank ${{LWS_WORKER_INDEX:-0}} "
+                    f"--master-addr ${{LWS_LEADER_ADDRESS}} "
+                    f"--headless || sleep infinity\\n"
+                )
+                import json as _json
+                patch = _json.dumps([{
+                    "op": "replace",
+                    "path": "/spec/leaderWorkerTemplate/workerTemplate/spec/containers/0/args/0",
+                    "value": headless_script.replace('\\n', '\n')
+                }])
+                self.kubectl.run(
+                    ['patch', 'lws', lws_name_for_patch, '-n', self.namespace,
+                     '--type=json', f'-p={patch}'],
+                    check=False
+                )
+                # Also remove probes from worker
+                for probe in ['startupProbe', 'readinessProbe', 'livenessProbe']:
+                    self.kubectl.run(
+                        ['patch', 'lws', lws_name_for_patch, '-n', self.namespace,
+                         '--type=json', f'-p=[{{"op":"remove","path":"/spec/leaderWorkerTemplate/workerTemplate/spec/containers/0/{probe}"}}]'],
+                        check=False
+                    )
+                if log_callback:
+                    log_callback(f"   🔧 Patched {lws_name_for_patch} worker to use headless script")
+
             # Wait for this component's pods to be running before deploying next
             # This ensures high-GPU pods claim nodes before low-GPU pods can spread
             if 'prefill' in manifest_name or 'decode' in manifest_name:
