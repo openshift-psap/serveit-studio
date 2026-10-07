@@ -69,6 +69,7 @@ def _fix_worker_template(yaml_str: str) -> str:
                     "printf '#!/usr/bin/env python3\\nimport sys\\nsys.argv[0]=\"vllm\"\\nfrom vllm.entrypoints.cli.main import main;main()\\n'"
                     ' > /tmp/_vllm_patched && chmod +x /tmp/_vllm_patched\n'
                     f'/tmp/_vllm_patched serve {model_name} '
+                    '--tensor-parallel-size ${TP_SIZE} '
                     '--nnodes ${LWS_REPLICA_SIZE:-2} '
                     '--node-rank ${LWS_WORKER_INDEX:-0} '
                     '--master-addr ${LWS_LEADER_ADDRESS} '
