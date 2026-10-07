@@ -449,16 +449,20 @@ class DeploymentManager:
             status = lws_data.get('status', {})
 
             replicas = spec.get('replicas', 0)
+            lws_size = spec.get('leaderWorkerTemplate', {}).get('size', 1)
             ready_replicas = status.get('readyReplicas', 0)
             # For PD sequential deployment: use actual replica count (running pods)
             # not ready replicas, since prefill pods can't be ready without decode
             actual_replicas = status.get('replicas', 0)
+            # Total pods = replicas × lws_size (leader + workers per group)
+            total_pods_expected = replicas * lws_size
+            total_pods_running = actual_replicas * lws_size  # approximate running pods
 
             return {
                 'deployed': True,
                 'ready': ready_replicas == replicas and replicas > 0,
-                'pods_running': actual_replicas,  # Running pods, not ready pods
-                'pods_expected': replicas
+                'pods_running': total_pods_running,
+                'pods_expected': total_pods_expected
             }
 
         except Exception:
