@@ -19,16 +19,41 @@ from .networking import compute_network_values
 
 
 def _fix_worker_template(yaml_str: str) -> str:
-    """Fix workerTemplate for multi-node LWS pods (rank >= 1).
+    """Fix workerTemplate (and leader) for multi-node LWS pods (lws_size > 1).
 
     Worker pods run as headless distributed compute workers — they don't serve
-    HTTP. The worker uses a simplified command: just 'vllm serve model --headless'.
+    HTTP. Applied fixes, validated live on the kermit cluster (driver 595.71.05,
+    NCCL 2.28.3, H200):
+
+    1. Worker runs a guarded ``/tmp/_vllm_patched`` script (multiprocessing
+       spawn re-imports it as ``__mp_main__`` in each rank process).
+    2. Worker pins CUDA_VISIBLE_DEVICES and sources the RDMA discovery script —
+       without it NCCL_IB_HCA stays the template default ("mlx") and cross-node
+       NCCL fails with "internal error".
+    3. Worker serve command carries the LEADER's full config flags (block size,
+       kv-cache-dtype, attention-config, ...). The headless worker builds its
+       own VllmConfig from its CLI: with defaults only, its KV cache specs
+       diverge from the leader's and engine init dies with "The KV cache specs
+       for the same layer are different across workers".
+    4. Worker memory limit raised to 200Gi: the 8 spawned rank processes hold
+       ~6.4Gi RSS each (~52Gi total) and get OOMKilled at the template's 40Gi.
+    5. Flashinfer allreduce disabled on both sides: the auto-selected mnnvl
+       one-shot kernel spins forever on non-NVLink fabrics (its workspace setup
+       succeeds over IB but the data path never completes).
+    6. NCCL forced to Ring/Simple with GPUDirect RDMA off, CUDA_LAUNCH_BLOCKING
+       set, and --enforce-eager added on the leader (worker inherits it via the
+       flag copy): async-launched NCCL collectives racing triton/cuBLAS kernel
+       lazy-loads deadlock inside cuModuleLoadData/cuKernelSetAttribute on this
+       driver. Synchronous launches are correct; CUDA graph capture is
+       incompatible with CUDA_LAUNCH_BLOCKING, hence eager mode. These are
+       workarounds — revisit once the driver/NCCL interaction is fixed.
 
     IMPORTANT: PyYAML resolves YAML anchors (spec: *pod_spec) as shared Python
     object references, not deep copies. We must deep-copy the workerTemplate spec
     before modifying to avoid accidentally modifying the leaderTemplate too.
     """
-    import re as _re, copy as _copy
+    import copy as _copy
+    import shlex as _shlex
     try:
         docs = list(_yaml.safe_load_all(yaml_str))
         for doc in docs:
@@ -37,18 +62,72 @@ def _fix_worker_template(yaml_str: str) -> str:
             lwt = doc.get('spec', {}).get('leaderWorkerTemplate', {})
             wt = lwt.get('workerTemplate', {})
 
-            # Extract model name from the LEADER's spec (before we touch anything)
+            # ---- Leader-side surgery (before worker flag extraction) ----
             leader_containers = (lwt.get('leaderTemplate', {})
                                     .get('spec', {})
                                     .get('containers', []) or [])
             model_name = None
             for lc in leader_containers:
                 largs = lc.get('args', [])
-                if largs:
-                    m = _re.search(r'/tmp/_vllm_patched serve ([^\s\\]+)', largs[0])
+                if largs and '/tmp/_vllm_patched serve' in largs[0]:
+                    lbody = largs[0]
+                    _serve_at = lbody.find('/tmp/_vllm_patched serve')
+
+                    # Disable the flashinfer fused/standalone allreduce (fix 5).
+                    _fi_patch = (
+                        'import vllm.distributed.device_communicators.'
+                        'flashinfer_all_reduce as _fia;_fia.fi_ar_available=False\\n'
+                        'import vllm.models.common.ops.fused_allreduce_rms_norm '
+                        'as _far;_far.flashinfer_trtllm_fused_allreduce_norm=None;'
+                        '_far.get_fi_ar_workspace=None\\n'
+                    )
+                    _guard = 'if __name__=="__main__":\\n'
+                    if _guard in lbody and '_fia.fi_ar_available' not in lbody:
+                        lbody = lbody.replace(_guard, _fi_patch + _guard, 1)
+
+                    # --enforce-eager on the leader (fix 6); worker inherits it.
+                    if '--enforce-eager' not in lbody:
+                        _sleep_at = lbody.find('|| sleep infinity', _serve_at)
+                        if _sleep_at > 0:
+                            _head = lbody[:_sleep_at].rstrip().rstrip('\\').rstrip()
+                            lbody = (_head + ' \\\n  --enforce-eager \\\n  '
+                                     + lbody[_sleep_at:])
+
+                    m = re.search(r'/tmp/_vllm_patched serve ([^\s\\]+)', lbody)
                     if m:
                         model_name = m.group(1)
-                        break
+
+                    # Extract the leader's config flags for the worker (fix 3).
+                    _j = lbody.find('|| sleep infinity', _serve_at)
+                    if _j < 0:
+                        _j = len(lbody)
+                    _block = lbody[_serve_at:_j].replace('\\\n', ' ').replace('\n', ' ')
+                    try:
+                        _toks = _shlex.split(_block)
+                    except ValueError:
+                        _toks = _block.split()
+                    _skip_val = {'--port', '--tensor-parallel-size', '--nnodes',
+                                 '--node-rank', '--master-addr'}
+                    _skip_bool = {'--headless'}
+                    _kept, _i = [], 0
+                    while _i < len(_toks):
+                        _t = _toks[_i]
+                        if _t in _skip_val:
+                            _i += 2
+                            continue
+                        if _t in _skip_bool:
+                            _i += 1
+                            continue
+                        _kept.append(_t)
+                        _i += 1
+                    _leader_flags = ' '.join(_kept[_kept.index('serve') + 2:]) if 'serve' in _kept else ''
+
+                    largs[0] = lbody
+                    # Leader env (fix 6) on the vllm container only.
+                    _ensure_container_env(lc, 'NCCL_ALGO', 'Ring')
+                    _ensure_container_env(lc, 'NCCL_PROTO', 'Simple')
+                    _ensure_container_env(lc, 'NCCL_IB_GDR', '0')
+                    _ensure_container_env(lc, 'CUDA_LAUNCH_BLOCKING', '1')
 
             if not model_name:
                 continue
@@ -62,6 +141,22 @@ def _fix_worker_template(yaml_str: str) -> str:
                 container.pop('startupProbe', None)
                 container.pop('readinessProbe', None)
                 container.pop('livenessProbe', None)
+
+                # Worker memory bump (fix 4): 8 spawned ranks ≈ 52Gi RSS.
+                _res = container.get('resources') or {}
+                for _k in ('requests', 'limits'):
+                    _side = _res.get(_k) or {}
+                    if 'memory' in _side:
+                        _side['memory'] = '200Gi'
+                        _res[_k] = _side
+                container['resources'] = _res
+
+                # Worker env (fix 6) — same as leader.
+                _ensure_container_env(container, 'NCCL_ALGO', 'Ring')
+                _ensure_container_env(container, 'NCCL_PROTO', 'Simple')
+                _ensure_container_env(container, 'NCCL_IB_GDR', '0')
+                _ensure_container_env(container, 'CUDA_LAUNCH_BLOCKING', '1')
+
                 container['args'] = [
                     '# Worker node: headless distributed compute (no HTTP server)\n'
                     'rm -f /dev/shm/vllm* /dev/shm/psm_* 2>/dev/null || true\n'
@@ -98,20 +193,37 @@ def _fix_worker_template(yaml_str: str) -> str:
                     # MultiprocExecutor spawns per-GPU processes via multiprocessing
                     # "spawn", which re-imports this script as __mp_main__ in each
                     # child. Without the guard, children re-run main() during
-                    # bootstrapping and crash with RuntimeError.
-                    "printf '#!/usr/bin/env python3\\ntry:\\n import transformers.integrations.heterogeneity.configuration_utils as _hc\\n _p=_hc.HeterogeneousConfigMixin.allow_global_per_layer_attribute_access\\n _hc.HeterogeneousConfigMixin.allow_global_per_layer_attribute_access=property(lambda s:s.__dict__.get(\\\"allow_global_per_layer_attribute_access\\\",True),_p.fset)\\nexcept Exception:\\n pass\\nif __name__==\\\"__main__\\\":\\n import sys;sys.argv[0]=\\\"vllm\\\"\\n from vllm.entrypoints.cli.main import main;main()\\n'"
+                    # bootstrapping and crash with RuntimeError. The flashinfer
+                    # allreduce disable above the guard is module-level so the
+                    # spawned ranks apply it too.
+                    "printf '#!/usr/bin/env python3\\ntry:\\n import transformers.integrations.heterogeneity.configuration_utils as _hc\\n _p=_hc.HeterogeneousConfigMixin.allow_global_per_layer_attribute_access\\n _hc.HeterogeneousConfigMixin.allow_global_per_layer_attribute_access=property(lambda s:s.__dict__.get(\\\"allow_global_per_layer_attribute_access\\\",True),_p.fset)\\nexcept Exception:\\n pass\\n"
+                    'import vllm.distributed.device_communicators.flashinfer_all_reduce as _fia;_fia.fi_ar_available=False\\n'
+                    'import vllm.models.common.ops.fused_allreduce_rms_norm as _far;_far.flashinfer_trtllm_fused_allreduce_norm=None;_far.get_fi_ar_workspace=None\\n'
+                    "if __name__==\\\"__main__\\\":\\n import sys;sys.argv[0]=\\\"vllm\\\"\\n from vllm.entrypoints.cli.main import main;main()\\n'"
                     ' > /tmp/_vllm_patched && chmod +x /tmp/_vllm_patched\n'
                     f'/tmp/_vllm_patched serve {model_name} '
                     '--tensor-parallel-size ${TP_SIZE} '
                     '--nnodes ${LWS_GROUP_SIZE:-2} '
                     '--node-rank ${LWS_WORKER_INDEX:-0} '
                     '--master-addr ${LWS_LEADER_ADDRESS} '
-                    '--headless || sleep infinity\n'
+                    f'--headless {_leader_flags} || sleep infinity\n'
                 ]
 
         return _yaml.dump_all(docs, default_flow_style=False, allow_unicode=True)
     except Exception:
         return yaml_str  # fall back to original if parsing fails
+
+
+def _ensure_container_env(container: dict, name: str, value: str) -> None:
+    """Idempotently set an env var on a container spec (vllm containers only
+    should be passed — callers pick the right container)."""
+    env = container.get('env') or []
+    for e in env:
+        if e.get('name') == name:
+            e['value'] = value
+            return
+    env.append({'name': name, 'value': value})
+    container['env'] = env
 
 # Configure logging
 logging.basicConfig(
