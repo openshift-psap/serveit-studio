@@ -496,6 +496,7 @@ def handle_resume_optimization(data):
         saved_epp_config = None
         saved_prefix_cache_mode = 'identical'
         saved_prefix_cache_groups = 5
+        saved_cfg = None  # initialize before conditional so line 548 `if saved_cfg` works
         if run.get('config_json'):
             try:
                 import json as _json
