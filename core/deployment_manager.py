@@ -558,7 +558,7 @@ class DeploymentManager:
                 if log_callback:
                     log_callback(
                         f"   🔄 Restarting stuck pod {pod_name} "
-                        f"(Pending for {mins}m, DRA re-allocation)"
+                        f"(Pending for {mins}m, resource re-allocation)"
                     )
                 try:
                     self.kubectl.run(
