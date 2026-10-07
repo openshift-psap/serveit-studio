@@ -63,14 +63,16 @@ def _fix_worker_template(yaml_str: str) -> str:
                 container.pop('readinessProbe', None)
                 container.pop('livenessProbe', None)
                 container['args'] = [
-                    f'# Worker node: headless distributed compute (no HTTP server)\n'
-                    f'rm -f /dev/shm/vllm* /dev/shm/psm_* 2>/dev/null || true\n'
-                    f'ulimit -l unlimited || true\n'
-                    f'python3 /opt/vllm-source/vllm/entrypoints/cli/main.py serve {model_name} '
-                    f'--nnodes ${{LWS_REPLICA_SIZE:-2}} '
-                    f'--node-rank ${{LWS_WORKER_INDEX:-0}} '
-                    f'--master-addr ${{LWS_LEADER_ADDRESS}} '
-                    f'--headless || sleep infinity\n'
+                    '# Worker node: headless distributed compute (no HTTP server)\n'
+                    'rm -f /dev/shm/vllm* /dev/shm/psm_* 2>/dev/null || true\n'
+                    'ulimit -l unlimited || true\n'
+                    "printf '#!/usr/bin/env python3\\nimport sys\\nsys.argv[0]=\"vllm\"\\nfrom vllm.entrypoints.cli.main import main;main()\\n'"
+                    ' > /tmp/_vllm_patched && chmod +x /tmp/_vllm_patched\n'
+                    f'/tmp/_vllm_patched serve {model_name} '
+                    '--nnodes ${LWS_REPLICA_SIZE:-2} '
+                    '--node-rank ${LWS_WORKER_INDEX:-0} '
+                    '--master-addr ${LWS_LEADER_ADDRESS} '
+                    '--headless || sleep infinity\n'
                 ]
 
         return _yaml.dump_all(docs, default_flow_style=False, allow_unicode=True)
