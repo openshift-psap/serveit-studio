@@ -66,11 +66,21 @@ def _fix_worker_template(yaml_str: str) -> str:
                     '# Worker node: headless distributed compute (no HTTP server)\n'
                     'rm -f /dev/shm/vllm* /dev/shm/psm_* 2>/dev/null || true\n'
                     'ulimit -l unlimited || true\n'
-                    "printf '#!/usr/bin/env python3\\nimport sys\\nsys.argv[0]=\"vllm\"\\nfrom vllm.entrypoints.cli.main import main;main()\\n'"
+                    '_MOE_FILE=$(python3 -c "import vllm; print(vllm.__path__[0])" 2>/dev/null)/model_executor/layers/fused_moe/moe_permute_unpermute.py\n'
+                    'if [ -f "$_MOE_FILE" ] && grep -q \'a1q_scale\\[permuted_idx.clamp\' "$_MOE_FILE"; then\n'
+                    '  sed -i \'s|a1q_scale = a1q_scale\\[permuted_idx.clamp(max=n_token \\* topk - 1) // topk\\]|scale_idx = permuted_idx.clamp(max=n_token * topk - 1) // topk; scale_idx = scale_idx.clamp(max=a1q_scale.shape[0] - 1); a1q_scale = a1q_scale[scale_idx]|\' "$_MOE_FILE"\n'
+                    '  echo "--- Applied vllm#43396 FP8 MoE patch ---"\n'
+                    'fi\n'
+                    # The if __name__=="__main__" guard is REQUIRED: vLLM's
+                    # MultiprocExecutor spawns per-GPU processes via multiprocessing
+                    # "spawn", which re-imports this script as __mp_main__ in each
+                    # child. Without the guard, children re-run main() during
+                    # bootstrapping and crash with RuntimeError.
+                    "printf '#!/usr/bin/env python3\\ntry:\\n import transformers.integrations.heterogeneity.configuration_utils as _hc\\n _p=_hc.HeterogeneousConfigMixin.allow_global_per_layer_attribute_access\\n _hc.HeterogeneousConfigMixin.allow_global_per_layer_attribute_access=property(lambda s:s.__dict__.get(\\\"allow_global_per_layer_attribute_access\\\",True),_p.fset)\\nexcept Exception:\\n pass\\nif __name__==\\\"__main__\\\":\\n import sys;sys.argv[0]=\\\"vllm\\\"\\n from vllm.entrypoints.cli.main import main;main()\\n'"
                     ' > /tmp/_vllm_patched && chmod +x /tmp/_vllm_patched\n'
                     f'/tmp/_vllm_patched serve {model_name} '
                     '--tensor-parallel-size ${TP_SIZE} '
-                    '--nnodes ${LWS_REPLICA_SIZE:-2} '
+                    '--nnodes ${LWS_GROUP_SIZE:-2} '
                     '--node-rank ${LWS_WORKER_INDEX:-0} '
                     '--master-addr ${LWS_LEADER_ADDRESS} '
                     '--headless || sleep infinity\n'
