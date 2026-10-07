@@ -208,9 +208,6 @@ spec:
                 #fi
 
                 # Set --headless flag for multi-node worker nodes (LWS_WORKER_INDEX > 0)
-{% if lws_size | default(1) > 1 %}                _HEADLESS_FLAG=""
-                [ "${LWS_WORKER_INDEX:-0}" != "0" ] && _HEADLESS_FLAG="--headless"
-{% endif %}
                 /tmp/_vllm_patched serve {{ model_name }} \
                   --port 8000 \
                   --trust-remote-code \
@@ -219,7 +216,6 @@ spec:
 {% if lws_size | default(1) > 1 %}                  --nnodes {{ lws_size }} \
                   --node-rank ${LWS_WORKER_INDEX:-0} \
                   --master-addr ${LWS_LEADER_ADDRESS} \
-                  ${_HEADLESS_FLAG:+${_HEADLESS_FLAG}} \
 {% endif %}{% if data_parallelism > 1 %}                  --data-parallel-size ${DP_SIZE} \
                   --data-parallel-size-local ${DP_SIZE_LOCAL} \
                   --data-parallel-multi-port-external-lb \

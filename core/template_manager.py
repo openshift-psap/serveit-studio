@@ -22,10 +22,11 @@ def _fix_worker_template(yaml_str: str) -> str:
     """Fix workerTemplate for multi-node LWS pods (rank >= 1).
 
     Worker pods run as headless distributed compute workers — they don't serve
-    HTTP. Changes applied vs. the copied leader spec:
-      - Add --headless to the vLLM serve command (suppresses API server startup)
-      - Remove startup/readiness/liveness probes (workers don't serve HTTP)
+    HTTP. The worker uses a simplified command: just 'vllm serve model --headless'.
+    The leader broadcasts configuration to workers; workers only need --headless
+    plus the connection info (LWS_WORKER_INDEX, LWS_LEADER_ADDRESS from env).
     """
+    import re as _re
     try:
         docs = list(_yaml.safe_load_all(yaml_str))
         for doc in docs:
@@ -39,15 +40,25 @@ def _fix_worker_template(yaml_str: str) -> str:
                 container.pop('startupProbe', None)
                 container.pop('readinessProbe', None)
                 container.pop('livenessProbe', None)
-                # Inject --headless into the vLLM serve command so the worker
-                # runs as a distributed compute node without an API server
+                # Replace the full leader command with a simplified headless script.
+                # Full command with all flags fails in headless mode; simple --headless works.
                 args = container.get('args')
                 if args and isinstance(args, list):
-                    container['args'] = [
-                        a.replace('--master-addr ${LWS_LEADER_ADDRESS}',
-                                  '--master-addr ${LWS_LEADER_ADDRESS} \\\n                  --headless')
-                        for a in args
-                    ]
+                    # Extract model name from leader's vllm serve command
+                    full_cmd = args[0] if args else ''
+                    model_match = _re.search(r'/tmp/_vllm_patched serve ([^\s\\]+)', full_cmd)
+                    if model_match:
+                        model_name = model_match.group(1)
+                        container['args'] = [
+                            f'# Worker node: headless distributed compute (no HTTP server)\n'
+                            f'rm -f /dev/shm/vllm* /dev/shm/psm_* 2>/dev/null || true\n'
+                            f'ulimit -l unlimited || true\n'
+                            f'/tmp/_vllm_patched serve {model_name} '
+                            f'--nnodes ${{LWS_REPLICA_SIZE:-2}} '
+                            f'--node-rank ${{LWS_WORKER_INDEX:-0}} '
+                            f'--master-addr ${{LWS_LEADER_ADDRESS}} '
+                            f'--headless || sleep infinity\n'
+                        ]
         return _yaml.dump_all(docs, default_flow_style=False, allow_unicode=True)
     except Exception:
         return yaml_str  # fall back to original if parsing fails
