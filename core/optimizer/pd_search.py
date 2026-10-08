@@ -46,11 +46,15 @@ class PDSearchMixin:
         allow_asymmetric = getattr(self.config, 'allow_asymmetric_tp', False)
         allow_decode_gt = getattr(self.config, 'asymmetric_allow_decode_gt_prefill', True)
         allow_prefill_gt = getattr(self.config, 'asymmetric_allow_prefill_gt_decode', True)
+        skip_tp16 = getattr(self.config, 'skip_tp16', True)
         all_pairs = [primary] + [(ptp, dtp) for ptp in top_prefill for dtp in top_decode if (ptp, dtp) != primary]
         for ptp, dtp in all_pairs:
             if (ptp, dtp) in seen:
                 continue
             seen.add((ptp, dtp))
+            if skip_tp16 and (ptp == 16 or dtp == 16):
+                skipped.append((ptp, dtp))
+                continue
             if ptp != dtp:
                 if not allow_asymmetric:
                     skipped.append((ptp, dtp))
@@ -65,9 +69,10 @@ class PDSearchMixin:
 
         if skipped:
             skipped_str = ', '.join(f'(PTP={p}, DTP={d})' for p, d in skipped)
-            self.log(f"  ⚠️  Skipped {len(skipped)} asymmetric TP pairs", 'warning')
+            self.log(f"  ⚠️  Skipped {len(skipped)} TP pairs", 'warning')
             self.log(f"     Affected: [{skipped_str}]", 'warning')
-            self.log("     Enable 'Allow Asymmetric TP' in Test Config to override", 'warning')
+            self.log("     Pairs skipped by 'Skip TP16' or asymmetric TP filters "
+                     "(adjust in Test Config to override)", 'warning')
 
         # Fall back to symmetric if everything was filtered
         if not self._selected_tp_pairs:

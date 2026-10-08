@@ -381,3 +381,62 @@ def test_bump_memory_floor():
     assert _bump_memory_floor('1Ti', 200) == '1Ti'
     assert _bump_memory_floor(None, 200) is None
     assert _bump_memory_floor('weird', 200) == 'weird'
+
+
+# ---- Skip TP16 option ------------------------------------------------------
+
+def _make_optimizer_stub(skip_tp16=True, allow_asymmetric=True):
+    """Minimal RecipeOptimizer stand-in for exercising PDSearchMixin."""
+    from types import SimpleNamespace
+    from core.optimizer.pipeline import RecipeOptimizer
+
+    opt = RecipeOptimizer.__new__(RecipeOptimizer)
+    opt.config = SimpleNamespace(
+        objective='balanced',
+        tp_pair_top_n=4,
+        allow_asymmetric_tp=allow_asymmetric,
+        asymmetric_allow_decode_gt_prefill=True,
+        asymmetric_allow_prefill_gt_decode=True,
+        skip_tp16=skip_tp16,
+    )
+    opt.prefill_tp_results = [{'tp': 16, 'tpsg': 9.0, 'ttft_p90': 1.0},
+                              {'tp': 8, 'tpsg': 5.0, 'ttft_p90': 2.0}]
+    opt.decode_tp_results = [{'tp': 16, 'tpsg': 9.0},
+                             {'tp': 8, 'tpsg': 5.0}]
+    opt._logs = []
+    opt.log = lambda msg, level='info', **kw: opt._logs.append(msg)
+    return opt
+
+
+def test_select_tp_pairs_skips_tp16_when_enabled():
+    opt = _make_optimizer_stub(skip_tp16=True)
+    opt._select_tp_pairs()
+    pairs = opt._selected_tp_pairs
+    assert pairs, 'expected at least one pair'
+    assert all(ptp != 16 and dtp != 16 for ptp, dtp in pairs)
+    assert (8, 8) in pairs
+    assert any('TP16' in m or 'TP pairs' in m for m in opt._logs)
+
+
+def test_select_tp_pairs_includes_tp16_when_disabled():
+    opt = _make_optimizer_stub(skip_tp16=False)
+    opt._select_tp_pairs()
+    assert (16, 16) in opt._selected_tp_pairs
+
+
+def test_get_valid_tp_options_skips_tp16_when_enabled():
+    from types import SimpleNamespace
+    from core.optimizer.pipeline import RecipeOptimizer
+
+    opt = RecipeOptimizer.__new__(RecipeOptimizer)
+    opt.config = SimpleNamespace(tp_options=[1, 2, 4, 8, 16], skip_tp16=True)
+    opt.cluster_resources = None
+    opt._model_config = None
+    opt.log = lambda *a, **k: None
+    tps = opt._get_valid_tp_options()
+    assert 16 not in tps
+    assert 8 in tps
+
+    opt.config.skip_tp16 = False
+    tps = opt._get_valid_tp_options()
+    assert 16 in tps

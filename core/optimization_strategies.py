@@ -218,6 +218,8 @@ class ThroughputStrategy(OptimizationStrategy):
         has_rdma = bool(self.opt.cluster_resources and self.opt.cluster_resources.has_rdma)
         if has_rdma and self.opt.cluster_resources and self.opt.cluster_resources.gpu_node_count >= 2:
             multi_tp = self.opt.cluster_resources.get_multi_node_tp_options()
+            if getattr(self.opt.config, 'skip_tp16', True):
+                multi_tp = [tp for tp in multi_tp if tp != 16]
             for tp in multi_tp:
                 if tp <= total_gpus and tp not in valid_tp:
                     valid_tp.append(tp)

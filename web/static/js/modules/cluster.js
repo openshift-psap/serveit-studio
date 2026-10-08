@@ -195,6 +195,7 @@ document.getElementById('start-optimization').addEventListener('click', () => {
         latency_constraint_percentile: config.latency_constraint_percentile || 'p90',
         tp_pair_top_n: config.tp_pair_top_n || 4,
         allow_asymmetric_tp: !!config.allow_asymmetric_tp,
+        skip_tp16: config.skip_tp16 !== false,
         pd_search_mode: config.pd_search_mode || 'smart',
         selected_nodes: config.selected_nodes || [],
         workload_mode: config.workload_mode || 'synthetic',

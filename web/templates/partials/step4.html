@@ -111,6 +111,17 @@
                                         <span>Allow Prefill TP &gt; Decode TP <span style="color:#a16207;font-size:0.9em;">(e.g., Prefill TP8 / Decode TP4)</span></span>
                                     </label>
                                 </div>
+                                <!-- Skip TP16 toggle -->
+                                <div style="margin-top:12px;display:flex;align-items:center;justify-content:space-between;gap:12px;padding:10px 14px;background:#fff1f2;border:1px solid #fecdd3;border-radius:8px;cursor:pointer;" onclick="var on=!document.getElementById('skip-tp16').checked;document.getElementById('skip-tp16').checked=on;config.skip_tp16=on;var sw=document.getElementById('skip-tp16-switch');sw.style.background=on?'#e11d48':'#ccc';sw.querySelector('span').style.transform=on?'translateX(18px)':'translateX(0)';saveConfig();">
+                                    <div>
+                                        <div style="font-weight:600;font-size:0.9em;color:#9f1239;">Skip TP16 Configurations</div>
+                                        <div style="font-size:0.8em;color:#be123c;margin-top:2px;">Skip any TP16 configuration during testing, including the TP sweep (Steps 2-3) and P/D pair combinations. On 8-GPU-per-node clusters TP16 always spans two nodes per pod group and requires full-node capacity. <strong>Note:</strong> Explicitly requested Single Tests are not affected.</div>
+                                    </div>
+                                    <input type="checkbox" id="skip-tp16" checked style="display:none;">
+                                    <div id="skip-tp16-switch" style="width:40px;height:22px;background:#e11d48;border-radius:11px;position:relative;transition:background-color 0.2s;flex-shrink:0;margin-left:16px;">
+                                        <span style="position:absolute;top:2px;left:2px;width:18px;height:18px;background:white;border-radius:50%;transition:transform 0.2s;box-shadow:0 1px 3px rgba(0,0,0,0.2);display:block;"></span>
+                                    </div>
+                                </div>
                             </div>
                         </div>
 

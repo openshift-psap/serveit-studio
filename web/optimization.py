@@ -322,6 +322,7 @@ def stream_job_logs(job_name: str, namespace: str):
                     'latency_constraint_percentile': saved_config.get('latency_constraint_percentile', 'p90'),
                     'tp_pair_top_n': saved_config.get('tp_pair_top_n', 4),
                     'allow_asymmetric_tp': saved_config.get('allow_asymmetric_tp', False),
+                    'skip_tp16': saved_config.get('skip_tp16', True),
                     'pd_search_mode': saved_config.get('pd_search_mode', 'smart'),
                     'calibrated_load_enabled': saved_config.get('calibrated_load_enabled', False),
                     'inferencex_sweep_enabled': saved_config.get('inferencex_sweep_enabled', False),
@@ -814,6 +815,7 @@ def run_optimization_background(data):
         latency_constraint_percentile = _get('latency_constraint_percentile', 'p90')
         tp_pair_top_n = int(_get('tp_pair_top_n', 4))
         allow_asymmetric_tp = _get('allow_asymmetric_tp', False)
+        skip_tp16 = _get('skip_tp16', True)
         asymmetric_allow_decode_gt_prefill = _get('asymmetric_allow_decode_gt_prefill', True)
         asymmetric_allow_prefill_gt_decode = _get('asymmetric_allow_prefill_gt_decode', True)
         pd_search_mode = _get('pd_search_mode', 'smart')
@@ -1150,6 +1152,7 @@ data:
                 max_pd_splits=0,  # 0 = full coverage (test all valid splits)
                 tp_pair_top_n=tp_pair_top_n,
                 allow_asymmetric_tp=allow_asymmetric_tp,
+                skip_tp16=skip_tp16,
                 asymmetric_allow_decode_gt_prefill=asymmetric_allow_decode_gt_prefill,
                 asymmetric_allow_prefill_gt_decode=asymmetric_allow_prefill_gt_decode,
                 pd_search_mode=pd_search_mode,

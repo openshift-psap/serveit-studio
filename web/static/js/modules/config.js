@@ -235,6 +235,17 @@ function updateUIFromConfig() {
         if (pgd) pgd.checked = config.asymmetric_allow_prefill_gt_decode !== false;
     }
 
+    // Restore Skip TP16 toggle (default: skip)
+    if (document.getElementById('skip-tp16')) {
+        var s16On = config.skip_tp16 !== false;
+        document.getElementById('skip-tp16').checked = s16On;
+        var s16Sw = document.getElementById('skip-tp16-switch');
+        if (s16Sw) {
+            s16Sw.style.background = s16On ? '#e11d48' : '#ccc';
+            s16Sw.querySelector('span').style.transform = s16On ? 'translateX(18px)' : 'translateX(0)';
+        }
+    }
+
     // Restore calibrated load toggles
     if (document.getElementById('calibrated-load-enabled')) {
         var clOn = config.calibrated_load_enabled === true;
@@ -1033,6 +1044,8 @@ function restoreConfigSummary() {
     }
     const atpEl = document.getElementById('config-summary-asymmetric-tp');
     if (atpEl) atpEl.textContent = config.allow_asymmetric_tp ? 'Enabled' : 'Disabled';
+    const s16El = document.getElementById('config-summary-skip-tp16');
+    if (s16El) s16El.textContent = config.skip_tp16 !== false ? 'Yes (skip multi-node TP16)' : 'No (include TP16)';
     const clEl = document.getElementById('config-summary-calibrated-load');
     if (clEl) clEl.textContent = config.calibrated_load_enabled ? (config.inferencex_sweep_enabled ? 'Enabled + Concurrency Sweep' : 'Enabled') : 'Disabled';
     const ixEl = document.getElementById('config-summary-inferencex-sweep');
@@ -1368,6 +1381,7 @@ function applyReportConfig(recId) {
     config.pd_search_mode = ts.pd_search_mode || 'smart';
     config.use_achievable_qps = !!ts.use_achievable_qps;
     config.allow_asymmetric_tp = !!ts.allow_asymmetric_tp;
+    config.skip_tp16 = ts.skip_tp16 != null ? !!ts.skip_tp16 : true;
     config.cache_sweep_enabled = !!ts.cache_sweep_enabled;
     config.cache_sweep_use_calibrated = !!ts.cache_sweep_use_calibrated;
     config.cache_sweep_mode = ts.cache_sweep_mode || 'identical';

@@ -2096,6 +2096,13 @@ spec:
         else:
             tp_options = list(self.config.tp_options)
 
+        # Skip TP16 when enabled (default): on 8-GPU-per-node clusters TP16
+        # always spans two nodes. Applies to the TP sweep and every config
+        # derived from it; explicit Single Tests are not affected.
+        if getattr(self.config, 'skip_tp16', True) and 16 in tp_options:
+            self.log("  Skipping TP16 configurations (skip TP16 enabled in Test Config)", 'warning')
+            tp_options = [tp for tp in tp_options if tp != 16]
+
         max_tp_fp8 = self._fp8_max_tp()
         if max_tp_fp8 < 9999:
             before = len(tp_options)

@@ -1147,6 +1147,7 @@ function _renderChartsImpl(data, runId, content) {
                 ['TP Pair Breadth', 'Top-' + (rc.tp_pair_top_n || 4)],
                 ['P/D Ratio Search', rc.pd_search_mode === 'exhaustive' ? 'Exhaustive' : 'Adaptive'],
                 ['Asymmetric TP', rc.allow_asymmetric_tp ? 'Yes' : 'No'],
+                ['Skip TP16', rc.skip_tp16 !== false ? 'Yes' : 'No'],
                 ['Auto-Scale Concurrency', rc.use_achievable_qps ? 'Yes' : 'No'],
                 ['Headroom', (rc.headroom || 1.3) + 'x'],
                 ['Latency SLA', rc.latency_constraint_enabled ? rc.latency_constraint_ms + 'ms @ ' + rc.latency_constraint_percentile : 'Disabled'],

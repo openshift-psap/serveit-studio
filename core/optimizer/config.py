@@ -136,6 +136,10 @@ class RecipeOptimizerConfig:
     allow_asymmetric_tp: bool = False
     asymmetric_allow_decode_gt_prefill: bool = True
     asymmetric_allow_prefill_gt_decode: bool = True
+    # Skip TP16 configs everywhere (TP sweeps, P/D pairs, multi-node combos).
+    # On 8-GPU-per-node clusters TP16 always spans 2 nodes and needs full-node
+    # capacity — skipped by default; uncheck in Test Config to include it.
+    skip_tp16: bool = True
 
     # Optimization objective for Step 7
     objective: str = 'balanced'  # 'ttft', 'throughput', or 'balanced'
