@@ -60,14 +60,13 @@ def _fix_worker_template(yaml_str: str) -> str:
     5. Flashinfer allreduce disabled on both sides: the auto-selected mnnvl
        one-shot kernel spins forever on non-NVLink fabrics (its workspace setup
        succeeds over IB but the data path never completes).
-     6. NCCL forced to Ring/Simple with GPUDirect RDMA off, and --enforce-eager
-        added on the leader (worker inherits it via the flag copy): CUDA graph
-        capture deadlocks at cuKernelSetAttribute on driver 595.71.05, and
-        auto-selected cross-node NVLS heads hang over IB. Eager mode keeps
-        async launches safe, so CUDA_LAUNCH_BLOCKING is deliberately NOT set —
-        it was only a diagnostic and costs a synchronous launch on every kernel.
-        These are workarounds — revisit once the driver/NCCL interaction is
-        fixed upstream.
+     6. NCCL forced to Ring/Simple with GPUDirect RDMA off: auto-selected
+        cross-node NVLS heads hang over IB on this fabric. CUDA graphs stay
+        ENABLED — no --enforce-eager and no CUDA_LAUNCH_BLOCKING: the
+        multi-node capture-phase deadlocks observed during debugging all
+        predated the worker config-parity fix (item 3), and single-node
+        capture works on this driver. If capture hangs return on multi-node,
+        debug the root cause instead of disabling graphs.
 
     IMPORTANT: PyYAML resolves YAML anchors (spec: *pod_spec) as shared Python
     object references, not deep copies. We must deep-copy the workerTemplate spec
@@ -105,14 +104,6 @@ def _fix_worker_template(yaml_str: str) -> str:
                     _guard = 'if __name__=="__main__":\\n'
                     if _guard in lbody and '_fia.fi_ar_available' not in lbody:
                         lbody = lbody.replace(_guard, _fi_patch + _guard, 1)
-
-                    # --enforce-eager on the leader (fix 6); worker inherits it.
-                    if '--enforce-eager' not in lbody:
-                        _sleep_at = lbody.find('|| sleep infinity', _serve_at)
-                        if _sleep_at > 0:
-                            _head = lbody[:_sleep_at].rstrip().rstrip('\\').rstrip()
-                            lbody = (_head + ' \\\n  --enforce-eager \\\n  '
-                                     + lbody[_sleep_at:])
 
                     m = re.search(r'/tmp/_vllm_patched serve ([^\s\\]+)', lbody)
                     if m:

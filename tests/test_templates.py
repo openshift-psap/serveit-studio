@@ -235,6 +235,14 @@ def _assert_no_launch_blocking(container, role, side):
     assert _env_map(container).get('CUDA_LAUNCH_BLOCKING') is None, (role, side)
 
 
+def _assert_cuda_graphs_enabled(container, role, side):
+    """--enforce-eager must NEVER be applied: this product's core is multi-node
+    serving, and disabling CUDA graphs there would wreck decode performance.
+    The capture-phase hangs observed during debugging predated the worker
+    config-parity fix; single-node capture works on the same driver."""
+    assert '--enforce-eager' not in container['args'][0], (role, side)
+
+
 def _make_config(**over):
     from core.config_generator import TestConfig
     base = dict(
@@ -291,9 +299,10 @@ def test_multinode_pd_renders_all_fixes(tm):
                 assert _env_map(cont).get(k) == v, (role, side, k)
             # no synchronous-launch penalty in the serving config
             _assert_no_launch_blocking(cont, role, side)
-            # eager mode + flashinfer allreduce disable + spawn guard
+            # CUDA graphs stay enabled — never enforce eager
+            _assert_cuda_graphs_enabled(cont, role, side)
+            # flashinfer allreduce disable + spawn guard
             # (worker printf quotes are backslash-escaped, so match the prefix)
-            assert '--enforce-eager' in cont['args'][0], (role, side)
             assert '_fia.fi_ar_available=False' in cont['args'][0], (role, side)
             assert 'if __name__==' in cont['args'][0], (role, side)
             # memory floor
@@ -351,7 +360,7 @@ def test_multinode_aggregated_renders_all_fixes(tm):
         for k, v in NCCL_WORKAROUNDS.items():
             assert _env_map(cont).get(k) == v, (side, k)
         _assert_no_launch_blocking(cont, role='aggregated', side=side)
-        assert '--enforce-eager' in cont['args'][0], side
+        _assert_cuda_graphs_enabled(cont, role='aggregated', side=side)
         assert '_fia.fi_ar_available=False' in cont['args'][0], side
         assert cont['resources']['requests']['memory'] == '200Gi', side
     # Worker keeps config flags for KV spec parity
