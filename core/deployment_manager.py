@@ -571,6 +571,29 @@ class DeploymentManager:
 
         return restarted
 
+    def _count_pod_phases(self, test_id: str) -> Dict[str, int]:
+        """Count pods by actual phase for a test deployment.
+
+        LWS ``status.replicas`` counts created leader pod objects — a
+        Pending-unschedulable pod still counts as a replica there, which
+        made the wait loop report "pods Running" while nothing scheduled.
+        This counts real pod phases instead.
+        """
+        counts = {'Running': 0, 'Pending': 0, 'Other': 0}
+        try:
+            result = self.kubectl.run(
+                ['get', 'pods', '-n', self.namespace,
+                 '-l', f'llm-d.ai/test-id={test_id}', '-o', 'json'],
+                check=False
+            )
+            if result.returncode == 0 and result.stdout.strip():
+                for pod in json.loads(result.stdout).get('items', []):
+                    phase = pod.get('status', {}).get('phase', 'Unknown')
+                    counts[phase if phase in counts else 'Other'] += 1
+        except Exception as e:
+            logger.warning(f"Failed to count pod phases: {e}")
+        return counts
+
     def wait_for_ready(
         self,
         test_id: str,
@@ -614,6 +637,7 @@ class DeploymentManager:
                 return False
 
             status = self.get_deployment_status(test_id, architecture)
+            phases = self._count_pod_phases(test_id)
             elapsed = int(time.time() - start_time)
 
             # Log status changes or periodic progress
@@ -621,15 +645,18 @@ class DeploymentManager:
             time_for_progress = (time.time() - last_progress_log) >= progress_log_interval
 
             if log_callback and (status_changed or time_for_progress):
-                if status.ready:
-                    ready_label = "Ready"
-                else:
-                    ready_label = "Running (waiting for readiness)"
-                elapsed_suffix = f" ({elapsed}s)" if elapsed > 0 else ""
-                display_running = status.total_pods_running or status.pods_running
                 display_expected = status.total_pods_expected or status.pods_expected
+                elapsed_suffix = f" ({elapsed}s)" if elapsed > 0 else ""
+                if status.ready:
+                    label = "Ready"
+                elif phases['Pending'] > 0:
+                    label = "Pending — waiting for GPU capacity (nodes full)"
+                else:
+                    label = "Running (waiting for readiness)"
+                pending_suffix = f", {phases['Pending']} Pending" if phases['Pending'] else ""
                 log_callback(
-                    f"📊 Status: {display_running}/{display_expected} {'pod' if display_expected == 1 else 'pods'} {ready_label}{elapsed_suffix}"
+                    f"📊 Status: {phases['Running']}/{display_expected} pods Running"
+                    f"{pending_suffix} — {label}{elapsed_suffix}"
                 )
                 last_status = status
                 last_progress_log = time.time()
@@ -643,9 +670,14 @@ class DeploymentManager:
                     return True
                 else:
                     if log_callback and status_changed:
-                        log_callback(
-                            "   ⏳ Pods running but not yet serving — waiting for model load..."
-                        )
+                        if phases['Running'] > 0:
+                            log_callback(
+                                "   ⏳ Pods running but not yet serving — waiting for model load..."
+                            )
+                        elif phases['Pending'] > 0:
+                            log_callback(
+                                "   ⏳ Pods Pending — not scheduled yet (no free GPU capacity)"
+                            )
 
             # Periodically check for pods stuck in Pending (DRA allocation failure)
             now = time.time()
