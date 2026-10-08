@@ -147,6 +147,45 @@
                             </div>
                         </div>
 
+                        <!-- LoRA Adapters (collapsible) -->
+                        <div id="sweep-lora-section" style="border:2px solid #4f46e5;border-radius:12px;overflow:hidden;margin-bottom:20px;">
+                            <div style="background:linear-gradient(135deg,#eef2ff,#e0e7ff);padding:14px 20px;cursor:pointer;display:flex;align-items:center;justify-content:space-between;" onclick="var b=document.getElementById('lora-body');var a=document.getElementById('lora-arrow');if(b.style.display==='none'){b.style.display='block';a.textContent='▾';}else{b.style.display='none';a.textContent='▸';}">
+                                <div>
+                                    <div style="font-weight:700;color:#3730a3;font-size:1.05em;">🎛️ LoRA Adapters</div>
+                                    <div style="color:#4338ca;font-size:0.92em;margin-top:4px;">Serve LoRA adapters (multi-LoRA endpoint) during the tests — every pod mounts the same adapter set and requests can target any adapter by name.</div>
+                                </div>
+                                <div id="lora-arrow" style="font-size:1.4em;color:#4f46e5;font-weight:700;">▸</div>
+                            </div>
+                            <div id="lora-body" style="display:none;padding:16px 20px;">
+                                <div style="display:flex;align-items:center;justify-content:space-between;gap:12px;padding:10px 14px;background:#eef2ff;border:1px solid #c7d2fe;border-radius:8px;cursor:pointer;" onclick="var on=!document.getElementById('lora-enabled').checked;document.getElementById('lora-enabled').checked=on;config.lora_enabled=on;var sw=document.getElementById('lora-enabled-switch');sw.style.background=on?'#4f46e5':'#ccc';sw.querySelector('span').style.transform=on?'translateX(18px)':'translateX(0)';document.getElementById('lora-options').style.display=on?'block':'none';saveConfig();">
+                                    <div>
+                                        <div style="font-weight:600;font-size:0.9em;color:#3730a3;">Enable LoRA Serving</div>
+                                        <div style="font-size:0.8em;color:#4338ca;margin-top:2px;">Mounts <span style="font-family:var(--font-mono);">agent-01 … agent-N</span> as <span style="font-family:var(--font-mono);">--lora-modules</span> on every serving pod (identical set on all ranks and on both P/D roles — required for multi-node and PD correctness).</div>
+                                    </div>
+                                    <input type="checkbox" id="lora-enabled" style="display:none;">
+                                    <div id="lora-enabled-switch" style="width:40px;height:22px;background:#ccc;border-radius:11px;position:relative;transition:background-color 0.2s;flex-shrink:0;margin-left:16px;">
+                                        <span style="position:absolute;top:2px;left:2px;width:18px;height:18px;background:white;border-radius:50%;transition:transform 0.2s;box-shadow:0 1px 3px rgba(0,0,0,0.2);display:block;"></span>
+                                    </div>
+                                </div>
+                                <div id="lora-options" style="display:none;padding:14px;background:#f8fafc;border:1px solid #e2e8f0;border-top:none;border-radius:0 0 8px 8px;margin-top:0;">
+                                    <div class="input-group" style="max-width:280px;">
+                                        <label>Number of Adapters (N)</label>
+                                        <input type="number" id="lora-num-adapters" value="20" min="1" max="1000" onclick="event.stopPropagation();" onchange="config.lora_num_adapters=Math.max(1,Math.min(1000,parseInt(this.value)||20));this.value=config.lora_num_adapters;updateLoraEstimate();saveConfig();">
+                                        <div class="help-text">Adapters are served as <span style="font-family:var(--font-mono);">agent-01=/adapters/agent-01</span> up to <span style="font-family:var(--font-mono);">agent-N=/adapters/agent-N</span>. Stage the adapter files at that path on the model-cache volume before the run.</div>
+                                    </div>
+                                    <div id="lora-estimate" style="background:#eef2ff;border:1px solid #c7d2fe;border-radius:6px;padding:10px 12px;font-size:0.8em;color:#3730a3;line-height:1.6;margin-top:10px;">
+                                        CPU staging: 20 adapters &times; ~320MB (rank 16) &asymp; 6Gi + headroom — automatically added to pod memory requests (never shrinks a higher user-set value).
+                                    </div>
+                                    <div style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:6px;padding:10px 12px;font-size:0.8em;color:#475569;line-height:1.6;margin-top:8px;">
+                                        Warm on GPU: <span style="font-family:var(--font-mono);color:#0369a1;">max-loras 4</span> adapters resident in GPU memory (LRU evicts beyond that); all N staged in host RAM (<span style="font-family:var(--font-mono);">--max-cpu-loras N</span>) so swaps never touch disk. Route requests to an adapter with <span style="font-family:var(--font-mono);">"model": "agent-07"</span>.
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        <script>
+                        function updateLoraEstimate(){var n=(window.config&&config.lora_num_adapters)||20;var el=document.getElementById('lora-estimate');if(el){var gib=Math.ceil(n*320/1024)+4;el.innerHTML='CPU staging: '+n+' adapters &times; ~320MB (rank 16) &asymp; '+gib+'Gi + headroom &mdash; automatically added to pod memory requests (never shrinks a higher user-set value).';}}
+                        </script>
+
                         <!-- Response Time Guarantee — hidden in single_test mode -->
                         <div id="sweep-latency-section" style="border:2px solid #d97706;border-radius:12px;overflow:hidden;margin-bottom:20px;">
                             <div id="latency-sla-toggle" style="background:linear-gradient(135deg,#fffbeb,#fef3c7);padding:14px 20px;cursor:pointer;display:flex;align-items:center;justify-content:space-between;" onclick="var on=!document.getElementById('latency-constraint-enabled').checked;document.getElementById('latency-constraint-enabled').checked=on;config.latency_constraint_enabled=on;document.getElementById('latency-sla-body').style.display=on?'block':'none';document.getElementById('latency-sla-inner').style.opacity=on?'1':'0.4';var sw=document.getElementById('latency-sla-switch');sw.style.background=on?'#d97706':'#ccc';sw.querySelector('span').style.transform=on?'translateX(18px)':'translateX(0)';saveConfig();">
@@ -482,8 +521,7 @@
 # VLLM_RANDOMIZE_DP_DUMMY_INPUTS=1
 # VLLM_SKIP_P2P_CHECK=1
 # VLLM_LOGGING_LEVEL=DEBUG
-# NCCL_DEBUG=INFO
-# CUDA_LAUNCH_BLOCKING=1</textarea>
+# NCCL_DEBUG=INFO</textarea>
                                     </div>
                                 </div>
 

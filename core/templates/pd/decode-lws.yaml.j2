@@ -96,6 +96,12 @@ spec:
 {% endif %}
           - name: jit-cache
             emptyDir: {}
+{% if lora_enabled %}
+          - name: lora-adapters
+            hostPath:
+              path: {{ lora_adapters_host_path }}
+              type: DirectoryOrCreate
+{% endif %}
           - name: rdma-script
             configMap:
               name: rdma-discovery-script
@@ -284,6 +290,11 @@ spec:
 {% endif %}{% if model_loader_extra_config %}                  --model-loader-extra-config '{{ model_loader_extra_config }}' \
 {% endif %}{% if override_generation_config %}                  --override-generation-config '{{ override_generation_config }}' \
 {% endif %}{% if attention_config %}                  --attention-config '{{ attention_config }}' \
+{% endif %}{% if lora_enabled %}                  --enable-lora \
+                  --max-lora-rank {{ lora_max_rank }} \
+                  --max-loras {{ lora_max_loras }} \
+                  --max-cpu-loras {{ lora_max_cpu_loras }} \
+                  --lora-modules {{ lora_modules_arg }} \
 {% endif %}{% if extra_vllm_args %}                  {{ extra_vllm_args }} \
 {% endif %}
                   || sleep infinity
@@ -465,6 +476,10 @@ spec:
                 mountPath: /model-cache
               - name: jit-cache
                 mountPath: /var/cache/vllm
+{% if lora_enabled %}
+              - name: lora-adapters
+                mountPath: /adapters
+{% endif %}
               - name: rdma-script
                 mountPath: /scripts
               - name: dev-infiniband

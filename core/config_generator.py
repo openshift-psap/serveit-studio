@@ -62,6 +62,13 @@ class TestConfig:
     disable_custom_all_reduce: bool = False
     enable_auto_tool_choice: bool = False
     tool_call_parser: Optional[str] = None
+    # LoRA serving: identical adapter set (agent-01..agent-N at /adapters) on
+    # every rank and role — parity is mandatory for multi-node/PD serving.
+    lora_enabled: bool = False
+    lora_num_adapters: int = 0  # 0/None = disabled; N = agent-01..agent-N
+    lora_max_rank: int = 16     # acceptance ceiling for adapter rank (sizes GPU workspace)
+    lora_max_loras: int = 4     # GPU-resident warm cap (LRU evicts beyond this)
+    lora_adapter_size_mb: Optional[int] = None  # None = auto (rank x 20MB); user override for CPU staging math
     dtype: Optional[str] = None  # None = vLLM auto-detects
     kv_cache_dtype: Optional[str] = None  # None = auto
     pipeline_parallel_size: Optional[int] = None  # None = 1 (default)

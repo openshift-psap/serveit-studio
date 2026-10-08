@@ -323,6 +323,9 @@ def stream_job_logs(job_name: str, namespace: str):
                     'tp_pair_top_n': saved_config.get('tp_pair_top_n', 4),
                     'allow_asymmetric_tp': saved_config.get('allow_asymmetric_tp', False),
                     'skip_tp16': saved_config.get('skip_tp16', True),
+                    'lora_enabled': saved_config.get('lora_enabled', False),
+                    'lora_num_adapters': saved_config.get('lora_num_adapters', 20),
+                    'lora_adapter_size_mb': saved_config.get('lora_adapter_size_mb'),
                     'pd_search_mode': saved_config.get('pd_search_mode', 'smart'),
                     'calibrated_load_enabled': saved_config.get('calibrated_load_enabled', False),
                     'inferencex_sweep_enabled': saved_config.get('inferencex_sweep_enabled', False),
@@ -816,6 +819,9 @@ def run_optimization_background(data):
         tp_pair_top_n = int(_get('tp_pair_top_n', 4))
         allow_asymmetric_tp = _get('allow_asymmetric_tp', False)
         skip_tp16 = _get('skip_tp16', True)
+        lora_enabled = _get('lora_enabled', False)
+        lora_num_adapters = int(_get('lora_num_adapters', 20) or 20)
+        lora_adapter_size_mb = _get('lora_adapter_size_mb')
         asymmetric_allow_decode_gt_prefill = _get('asymmetric_allow_decode_gt_prefill', True)
         asymmetric_allow_prefill_gt_decode = _get('asymmetric_allow_prefill_gt_decode', True)
         pd_search_mode = _get('pd_search_mode', 'smart')
@@ -1153,6 +1159,9 @@ data:
                 tp_pair_top_n=tp_pair_top_n,
                 allow_asymmetric_tp=allow_asymmetric_tp,
                 skip_tp16=skip_tp16,
+                lora_enabled=lora_enabled,
+                lora_num_adapters=lora_num_adapters,
+                lora_adapter_size_mb=lora_adapter_size_mb,
                 asymmetric_allow_decode_gt_prefill=asymmetric_allow_decode_gt_prefill,
                 asymmetric_allow_prefill_gt_decode=asymmetric_allow_prefill_gt_decode,
                 pd_search_mode=pd_search_mode,

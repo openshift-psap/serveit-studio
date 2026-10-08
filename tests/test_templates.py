@@ -440,3 +440,130 @@ def test_get_valid_tp_options_skips_tp16_when_enabled():
     opt.config.skip_tp16 = False
     tps = opt._get_valid_tp_options()
     assert 16 in tps
+
+
+# ---- LoRA serving -----------------------------------------------------------
+
+def _lora_flags(args_str):
+    """Extract the contiguous LoRA flag block from a serve command string."""
+    import re
+    m = re.search(r'--enable-lora.*?(?=\\?\n)', args_str, re.S)
+    return m.group(0) if m else ''
+
+
+def _has_volume(pod_spec, name, mount_path=None):
+    vols = pod_spec.get('volumes', [])
+    if not any(v.get('name') == name for v in vols):
+        return False
+    if mount_path:
+        for c in pod_spec.get('containers', []):
+            for m in c.get('volumeMounts', []):
+                if m.get('name') == name and m.get('mountPath') == mount_path:
+                    return True
+        return False
+    return True
+
+
+def test_lora_disabled_by_default(tm):
+    """Default config renders no LoRA flags, volumes, or mounts anywhere."""
+    out = tm.render_pd(_make_config())
+    doc = _lws_doc(tm.render_aggregated(
+        _make_config(architecture='aggregated')))
+    renders = [out['prefill'], out['decode'], _render_doc(doc)]
+    for r in renders:
+        assert '--enable-lora' not in r
+        assert 'lora-adapters' not in r
+        assert '/adapters' not in r
+
+
+def _render_doc(doc):
+    return yaml.safe_dump(doc)
+
+
+def test_lora_renders_module_list_and_parity(tm):
+    """Enabled LoRA renders agent-01..agent-N identically on all sides."""
+    cfg = _make_config(lora_enabled=True, lora_num_adapters=20)
+    out = tm.render_pd(cfg)
+    lora_blocks = {}
+    for role in ('prefill', 'decode'):
+        lwt = _lws_doc(out[role])['spec']['leaderWorkerTemplate']
+        leader = _vllm_container(lwt['leaderTemplate']['spec'])
+        worker = _vllm_container(lwt['workerTemplate']['spec'])
+        for cont, side in ((leader, 'leader'), (worker, 'worker')):
+            a = cont['args'][0]
+            assert '--enable-lora' in a, (role, side)
+            assert '--max-lora-rank 16' in a, (role, side)
+            assert '--max-loras 4' in a, (role, side)
+            assert '--max-cpu-loras 20' in a, (role, side)
+            assert 'agent-01=/adapters/agent-01' in a, (role, side)
+            assert 'agent-20=/adapters/agent-20' in a, (role, side)
+            assert 'agent-21' not in a, (role, side)
+            # volume + mount present on both leader and worker pods
+            pod_spec = (lwt['leaderTemplate'] if side == 'leader'
+                        else lwt['workerTemplate'])['spec']
+            assert _has_volume(pod_spec, 'lora-adapters', '/adapters'), (role, side)
+            lora_blocks[(role, side)] = _lora_flags(a)
+    # PD parity: prefill and decode serve the IDENTICAL adapter set
+    assert lora_blocks[('prefill', 'leader')] == lora_blocks[('decode', 'leader')]
+
+    # Aggregated multi-node: leader and worker both carry the adapter set
+    doc = _lws_doc(tm.render_aggregated(
+        _make_config(architecture='aggregated',
+                     lora_enabled=True, lora_num_adapters=20)))
+    lwt = doc['spec']['leaderWorkerTemplate']
+    for tpl, side in ((lwt['leaderTemplate'], 'leader'),
+                      (lwt['workerTemplate'], 'worker')):
+        cont = _vllm_container(tpl['spec'])
+        a = cont['args'][0]
+        assert '--enable-lora' in a and 'agent-20=/adapters/agent-20' in a, side
+        assert _has_volume(tpl['spec'], 'lora-adapters', '/adapters'), side
+
+
+def test_lora_max_loras_capped_at_module_count(tm):
+    """Warm cap can't exceed the number of declared adapters."""
+    cfg = _make_config(lora_enabled=True, lora_num_adapters=2)
+    out = tm.render_pd(cfg)
+    lwt = _lws_doc(out['prefill'])['spec']['leaderWorkerTemplate']
+    a = _vllm_container(lwt['leaderTemplate']['spec'])['args'][0]
+    assert '--max-loras 2' in a
+    assert '--max-cpu-loras 2' in a
+    assert 'agent-02=/adapters/agent-02' in a
+    assert 'agent-03' not in a
+
+
+def test_lora_cpu_staging_memory_accounting(tm):
+    """Pod memory grows with adapter staging; never reduced; override respected."""
+    # Single-node baseline is 40Gi; staging = ceil(20*320/1024)+4 = 11Gi
+    base = dict(lws_size=1, tensor_parallelism=8, prefill_tp=8, decode_tp=8)
+    out = tm.render_pd(_make_config(**base))
+    lwt = _lws_doc(out['prefill'])['spec']['leaderWorkerTemplate']
+    mem = _vllm_container(lwt['leaderTemplate']['spec'])['resources']['requests']['memory']
+    assert mem == '40Gi'
+
+    out = tm.render_pd(_make_config(lora_enabled=True, lora_num_adapters=20, **base))
+    lwt = _lws_doc(out['prefill'])['spec']['leaderWorkerTemplate']
+    mem = _vllm_container(lwt['leaderTemplate']['spec'])['resources']['requests']['memory']
+    assert mem == '51Gi', '40Gi base + 11Gi staging (20 x ~320MB + headroom)'
+
+    # Per-adapter size override shrinks the estimate: ceil(20*100/1024)+4 = 6Gi
+    out = tm.render_pd(_make_config(lora_enabled=True, lora_num_adapters=20,
+                                    lora_adapter_size_mb=100, **base))
+    lwt = _lws_doc(out['prefill'])['spec']['leaderWorkerTemplate']
+    mem = _vllm_container(lwt['leaderTemplate']['spec'])['resources']['requests']['memory']
+    assert mem == '46Gi'
+
+    # Multi-node: floor (200Gi) applies first, staging adds on top (211Gi)
+    out = tm.render_pd(_make_config(lora_enabled=True, lora_num_adapters=20))
+    lwt = _lws_doc(out['prefill'])['spec']['leaderWorkerTemplate']
+    mem = _vllm_container(lwt['leaderTemplate']['spec'])['resources']['requests']['memory']
+    assert mem == '211Gi'
+
+
+def test_add_memory_gib():
+    from core.template_manager import _add_memory_gib
+    assert _add_memory_gib('40Gi', 11) == '51Gi'
+    assert _add_memory_gib('512Gi', 11) == '523Gi'
+    assert _add_memory_gib('40Gi', 0) == '40Gi'
+    assert _add_memory_gib(None, 11) is None
+    assert _add_memory_gib('weird', 11) == 'weird'
+    assert _add_memory_gib('2048Mi', 1) == '3Gi'  # 2Gi + 1Gi

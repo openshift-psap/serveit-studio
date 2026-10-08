@@ -141,6 +141,16 @@ class RecipeOptimizerConfig:
     # capacity — skipped by default; uncheck in Test Config to include it.
     skip_tp16: bool = True
 
+    # LoRA serving: mount N adapters (agent-01..agent-N) on every serving pod.
+    # Deployment-level capability — identical adapter set on all ranks/roles
+    # (adapter-list mismatch across ranks breaks multi-node serving).
+    lora_enabled: bool = False
+    lora_num_adapters: int = 20
+    # Per-adapter CPU staging size in MB. None = auto-estimate from rank
+    # (rank x 20MB, calibrated for GLM-5.3-class attention-only adapters).
+    # Override when serving smaller bases or fatter adapters.
+    lora_adapter_size_mb: Optional[int] = None
+
     # Optimization objective for Step 7
     objective: str = 'balanced'  # 'ttft', 'throughput', or 'balanced'
 

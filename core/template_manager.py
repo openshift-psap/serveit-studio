@@ -37,6 +37,24 @@ def _bump_memory_floor(memory: Optional[str], floor_gib: int) -> Optional[str]:
     return memory if gib >= floor_gib else f'{floor_gib}Gi'
 
 
+def _add_memory_gib(memory: Optional[str], add_gib: float) -> Optional[str]:
+    """Add ``add_gib`` Gi on top of a k8s memory quantity (never reduce).
+
+    Used for LoRA CPU staging: --max-cpu-loras holds every adapter in host
+    RAM, so pod memory must grow with adapter count. Bump-only-up semantics:
+    a user-set value above the computed floor is left untouched.
+    """
+    if not memory or add_gib <= 0:
+        return memory
+    m = re.fullmatch(r'(\d+(?:\.\d+)?)\s*(Ki|Mi|Gi|Ti)?', str(memory).strip())
+    if not m:
+        return memory
+    unit = m.group(2) or 'Gi'  # ServeIt configs are Gi-denominated
+    gib = float(m.group(1)) * {'Ki': 1 / (1024 ** 2), 'Mi': 1 / 1024,
+                               'Gi': 1, 'Ti': 1024}[unit]
+    return f'{gib + add_gib:g}Gi'
+
+
 def _fix_worker_template(yaml_str: str) -> str:
     """Fix workerTemplate (and leader) for multi-node LWS pods (lws_size > 1).
 
@@ -394,6 +412,40 @@ class TemplateManager:
         if vars_dict['lws_size'] > 1:
             vars_dict['memory_limit'] = _bump_memory_floor(
                 vars_dict.get('memory_limit'), 200)
+
+        # LoRA: build the --lora-modules list (agent-01..agent-N at /adapters).
+        # The SAME list must reach every rank and both PD roles — adapter-set
+        # parity is mandatory (mismatched ranks fail engine init / PD produces
+        # KV the decode role cannot use).
+        lora_n = int(getattr(config, 'lora_num_adapters', 0) or 0)
+        if getattr(config, 'lora_enabled', False) and lora_n > 0:
+            lora_rank = int(getattr(config, 'lora_max_rank', 16) or 16)
+            vars_dict['lora_enabled'] = True
+            vars_dict['lora_modules_arg'] = ' '.join(
+                f'agent-{i:02d}=/adapters/agent-{i:02d}' for i in range(1, lora_n + 1)
+            )
+            vars_dict['lora_max_rank'] = lora_rank
+            vars_dict['lora_max_loras'] = min(int(getattr(config, 'lora_max_loras', 4) or 4), lora_n)
+            vars_dict['lora_max_cpu_loras'] = lora_n  # stage all adapters in host RAM
+            vars_dict['lora_adapters_host_path'] = (
+                (vars_dict.get('local_disk_path') or '/mnt/local/serveit-model-cache').rstrip('/')
+                + '/lora-adapters'
+            )
+            # CPU staging accounting: --max-cpu-loras holds all N adapters in
+            # host RAM. Auto-estimate = rank x 20MB (GLM-5.3-class attention-
+            # only adapter); lora_adapter_size_mb overrides the estimate.
+            # +4Gi headroom for safetensors load-time copies.
+            est_mb = getattr(config, 'lora_adapter_size_mb', None) or (lora_rank * 20)
+            staging_gib = (lora_n * est_mb + 1023) // 1024 + 4
+            for key in ('memory_request', 'memory_limit'):
+                vars_dict[key] = _add_memory_gib(vars_dict.get(key), staging_gib)
+            logger.info(
+                f"LoRA: {lora_n} adapters (rank<={lora_rank}, ~{est_mb}MB each) — "
+                f"+{staging_gib}Gi CPU staging memory added to pod requests"
+            )
+        else:
+            vars_dict['lora_enabled'] = False
+            vars_dict['lora_modules_arg'] = None
 
         # Pipeline parallelism: normalize None -> 0 so templates can compare safely
         vars_dict['pipeline_parallel_size'] = getattr(config, 'pipeline_parallel_size', None) or 0

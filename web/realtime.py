@@ -2325,6 +2325,8 @@ def handle_setup_storage(data):
                 'image': data.get('image') or saved.get('image'),
                 'scheduler_image': data.get('scheduler_image') or saved.get('scheduler_image'),
                 'skip_tp16': data.get('skip_tp16'),
+                'lora_enabled': data.get('lora_enabled'),
+                'lora_num_adapters': data.get('lora_num_adapters'),
                 'single_test_architecture': data.get('single_test_architecture'),
                 'single_test_tp': data.get('single_test_tp'),
                 'single_test_replicas': data.get('single_test_replicas'),

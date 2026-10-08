@@ -246,6 +246,24 @@ function updateUIFromConfig() {
         }
     }
 
+    // Restore LoRA toggle + adapter count
+    if (document.getElementById('lora-enabled')) {
+        var loraOn = config.lora_enabled === true;
+        document.getElementById('lora-enabled').checked = loraOn;
+        var loraSw = document.getElementById('lora-enabled-switch');
+        if (loraSw) {
+            loraSw.style.background = loraOn ? '#4f46e5' : '#ccc';
+            loraSw.querySelector('span').style.transform = loraOn ? 'translateX(18px)' : 'translateX(0)';
+        }
+        var loraOpts = document.getElementById('lora-options');
+        if (loraOpts) loraOpts.style.display = loraOn ? 'block' : 'none';
+        var loraN = document.getElementById('lora-num-adapters');
+        if (loraN) {
+            loraN.value = config.lora_num_adapters || 20;
+            if (typeof updateLoraEstimate === 'function') updateLoraEstimate();
+        }
+    }
+
     // Restore calibrated load toggles
     if (document.getElementById('calibrated-load-enabled')) {
         var clOn = config.calibrated_load_enabled === true;
@@ -1046,6 +1064,8 @@ function restoreConfigSummary() {
     if (atpEl) atpEl.textContent = config.allow_asymmetric_tp ? 'Enabled' : 'Disabled';
     const s16El = document.getElementById('config-summary-skip-tp16');
     if (s16El) s16El.textContent = config.skip_tp16 !== false ? 'Yes (skip multi-node TP16)' : 'No (include TP16)';
+    const loraEl = document.getElementById('config-summary-lora');
+    if (loraEl) loraEl.textContent = config.lora_enabled ? (config.lora_num_adapters || 20) + ' adapters (agent-01…agent-' + String(config.lora_num_adapters || 20).padStart(2, '0') + ')' : 'Disabled';
     const clEl = document.getElementById('config-summary-calibrated-load');
     if (clEl) clEl.textContent = config.calibrated_load_enabled ? (config.inferencex_sweep_enabled ? 'Enabled + Concurrency Sweep' : 'Enabled') : 'Disabled';
     const ixEl = document.getElementById('config-summary-inferencex-sweep');
@@ -1382,6 +1402,8 @@ function applyReportConfig(recId) {
     config.use_achievable_qps = !!ts.use_achievable_qps;
     config.allow_asymmetric_tp = !!ts.allow_asymmetric_tp;
     config.skip_tp16 = ts.skip_tp16 != null ? !!ts.skip_tp16 : true;
+    config.lora_enabled = !!ts.lora_enabled;
+    config.lora_num_adapters = ts.lora_num_adapters || 20;
     config.cache_sweep_enabled = !!ts.cache_sweep_enabled;
     config.cache_sweep_use_calibrated = !!ts.cache_sweep_use_calibrated;
     config.cache_sweep_mode = ts.cache_sweep_mode || 'identical';
