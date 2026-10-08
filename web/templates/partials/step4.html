@@ -174,7 +174,7 @@
                                         <div class="help-text">Adapters are served as <span style="font-family:var(--font-mono);">agent-01=/adapters/agent-01</span> up to <span style="font-family:var(--font-mono);">agent-N=/adapters/agent-N</span>. Stage the adapter files at that path on the model-cache volume before the run.</div>
                                     </div>
                                     <div id="lora-estimate" style="background:#eef2ff;border:1px solid #c7d2fe;border-radius:6px;padding:10px 12px;font-size:0.8em;color:#3730a3;line-height:1.6;margin-top:10px;">
-                                        CPU staging: 20 adapters &times; ~320MB (rank 16) &asymp; 6Gi + headroom — automatically added to pod memory requests (never shrinks a higher user-set value).
+                                        CPU staging: 20 adapters &times; ~320MB (rank 16) &asymp; 11Gi total (incl. load headroom) &mdash; automatically added to pod memory requests (never shrinks a higher user-set value).
                                     </div>
                                     <div style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:6px;padding:10px 12px;font-size:0.8em;color:#475569;line-height:1.6;margin-top:8px;">
                                         Warm on GPU: <span style="font-family:var(--font-mono);color:#0369a1;">max-loras 4</span> adapters resident in GPU memory (LRU evicts beyond that); all N staged in host RAM (<span style="font-family:var(--font-mono);">--max-cpu-loras N</span>) so swaps never touch disk. Route requests to an adapter with <span style="font-family:var(--font-mono);">"model": "agent-07"</span>.
@@ -183,7 +183,7 @@
                             </div>
                         </div>
                         <script>
-                        function updateLoraEstimate(){var n=(window.config&&config.lora_num_adapters)||20;var el=document.getElementById('lora-estimate');if(el){var gib=Math.ceil(n*320/1024)+4;el.innerHTML='CPU staging: '+n+' adapters &times; ~320MB (rank 16) &asymp; '+gib+'Gi + headroom &mdash; automatically added to pod memory requests (never shrinks a higher user-set value).';}}
+                        function updateLoraEstimate(){var n=(window.config&&config.lora_num_adapters)||20;var el=document.getElementById('lora-estimate');if(el){var gib=Math.ceil(n*320/1024)+4;el.innerHTML='CPU staging: '+n+' adapters &times; ~320MB (rank 16) &asymp; '+gib+'Gi total (incl. load headroom) &mdash; automatically added to pod memory requests (never shrinks a higher user-set value).';}}
                         </script>
 
                         <!-- Response Time Guarantee — hidden in single_test mode -->
