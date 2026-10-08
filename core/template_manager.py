@@ -60,13 +60,14 @@ def _fix_worker_template(yaml_str: str) -> str:
     5. Flashinfer allreduce disabled on both sides: the auto-selected mnnvl
        one-shot kernel spins forever on non-NVLink fabrics (its workspace setup
        succeeds over IB but the data path never completes).
-    6. NCCL forced to Ring/Simple with GPUDirect RDMA off, CUDA_LAUNCH_BLOCKING
-       set, and --enforce-eager added on the leader (worker inherits it via the
-       flag copy): async-launched NCCL collectives racing triton/cuBLAS kernel
-       lazy-loads deadlock inside cuModuleLoadData/cuKernelSetAttribute on this
-       driver. Synchronous launches are correct; CUDA graph capture is
-       incompatible with CUDA_LAUNCH_BLOCKING, hence eager mode. These are
-       workarounds — revisit once the driver/NCCL interaction is fixed.
+     6. NCCL forced to Ring/Simple with GPUDirect RDMA off, and --enforce-eager
+        added on the leader (worker inherits it via the flag copy): CUDA graph
+        capture deadlocks at cuKernelSetAttribute on driver 595.71.05, and
+        auto-selected cross-node NVLS heads hang over IB. Eager mode keeps
+        async launches safe, so CUDA_LAUNCH_BLOCKING is deliberately NOT set —
+        it was only a diagnostic and costs a synchronous launch on every kernel.
+        These are workarounds — revisit once the driver/NCCL interaction is
+        fixed upstream.
 
     IMPORTANT: PyYAML resolves YAML anchors (spec: *pod_spec) as shared Python
     object references, not deep copies. We must deep-copy the workerTemplate spec
@@ -143,11 +144,12 @@ def _fix_worker_template(yaml_str: str) -> str:
                     _leader_flags = ' '.join(_kept[_kept.index('serve') + 2:]) if 'serve' in _kept else ''
 
                     largs[0] = lbody
-                    # Leader env (fix 6) on the vllm container only.
+                    # Leader env (fix 6) on the vllm container only. No
+                    # CUDA_LAUNCH_BLOCKING: eager mode makes it unnecessary and
+                    # it serializes every kernel launch (heavy runtime cost).
                     _ensure_container_env(lc, 'NCCL_ALGO', 'Ring')
                     _ensure_container_env(lc, 'NCCL_PROTO', 'Simple')
                     _ensure_container_env(lc, 'NCCL_IB_GDR', '0')
-                    _ensure_container_env(lc, 'CUDA_LAUNCH_BLOCKING', '1')
 
                     # Leader memory floor (fix 4): the leader runs the same
                     # rank-per-GPU process tree as the worker.
@@ -186,7 +188,6 @@ def _fix_worker_template(yaml_str: str) -> str:
                 _ensure_container_env(container, 'NCCL_ALGO', 'Ring')
                 _ensure_container_env(container, 'NCCL_PROTO', 'Simple')
                 _ensure_container_env(container, 'NCCL_IB_GDR', '0')
-                _ensure_container_env(container, 'CUDA_LAUNCH_BLOCKING', '1')
 
                 container['args'] = [
                     '# Worker node: headless distributed compute (no HTTP server)\n'

@@ -321,17 +321,15 @@ spec:
                 value: "eth0"
 {% if lws_size | default(1) > 1 %}
               # Multi-node NCCL workarounds (validated on H200 + driver 595.71.05,
-              # NCCL 2.28.3): Ring/Simple avoids cross-node NVLS heads, GDR off +
-              # synchronous launches avoid deadlocks between async collectives and
-              # triton/cuBLAS kernel lazy-loads.
+              # NCCL 2.28.3): Ring/Simple avoids cross-node NVLS heads; GDR off
+              # avoids RDMA failures on this fabric. NOTE: no CUDA_LAUNCH_BLOCKING —
+              # with --enforce-eager there is no capture and async launches are safe.
               - name: NCCL_ALGO
                 value: "Ring"
               - name: NCCL_PROTO
                 value: "Simple"
               - name: NCCL_IB_GDR
                 value: "0"
-              - name: CUDA_LAUNCH_BLOCKING
-                value: "1"
 {% endif %}
 {% if use_deep_gemm is not none %}
               - name: VLLM_USE_DEEP_GEMM

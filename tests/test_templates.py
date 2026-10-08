@@ -226,8 +226,13 @@ NCCL_WORKAROUNDS = {
     'NCCL_ALGO': 'Ring',
     'NCCL_PROTO': 'Simple',
     'NCCL_IB_GDR': '0',
-    'CUDA_LAUNCH_BLOCKING': '1',
 }
+
+
+def _assert_no_launch_blocking(container, role, side):
+    """CUDA_LAUNCH_BLOCKING must NOT be set — eager mode makes it unnecessary
+    and it serializes every kernel launch (validated combo didn't use it)."""
+    assert _env_map(container).get('CUDA_LAUNCH_BLOCKING') is None, (role, side)
 
 
 def _make_config(**over):
@@ -284,6 +289,8 @@ def test_multinode_pd_renders_all_fixes(tm):
             # NCCL workaround env
             for k, v in NCCL_WORKAROUNDS.items():
                 assert _env_map(cont).get(k) == v, (role, side, k)
+            # no synchronous-launch penalty in the serving config
+            _assert_no_launch_blocking(cont, role, side)
             # eager mode + flashinfer allreduce disable + spawn guard
             # (worker printf quotes are backslash-escaped, so match the prefix)
             assert '--enforce-eager' in cont['args'][0], (role, side)
@@ -343,6 +350,7 @@ def test_multinode_aggregated_renders_all_fixes(tm):
     for cont, side in ((leader, 'leader'), (worker, 'worker')):
         for k, v in NCCL_WORKAROUNDS.items():
             assert _env_map(cont).get(k) == v, (side, k)
+        _assert_no_launch_blocking(cont, role='aggregated', side=side)
         assert '--enforce-eager' in cont['args'][0], side
         assert '_fia.fi_ar_available=False' in cont['args'][0], side
         assert cont['resources']['requests']['memory'] == '200Gi', side
