@@ -13,7 +13,7 @@ metadata:
     test-id: {{ test_id }}
     architecture: aggregated
 spec:
-  replicas: {{ replicas }}
+  replicas: {{ replicas or 1 }}
   leaderWorkerTemplate:
     size: {{ lws_size | default(1) }}
     leaderTemplate:
@@ -176,7 +176,7 @@ spec:
                 # RUN vLLM aggregated server
                 #################
                 # Patch transformers 5.15+ AmbiguousGlobalPerLayerAttributeError for heterogeneous models (Gemma 4)
-                printf '#!/usr/bin/env python3\ntry:\n import transformers.integrations.heterogeneity.configuration_utils as _hc\n _p=_hc.HeterogeneousConfigMixin.allow_global_per_layer_attribute_access\n _hc.HeterogeneousConfigMixin.allow_global_per_layer_attribute_access=property(lambda s:s.__dict__.get("allow_global_per_layer_attribute_access",True),_p.fset)\nexcept Exception:\n pass\nif __name__=="__main__":\n import sys;sys.argv[0]="vllm"\n from vllm.entrypoints.cli.main import main;main()\n' > /tmp/_vllm_patched && chmod +x /tmp/_vllm_patched
+                printf '#!/usr/bin/env python3\ntry:\n import transformers.integrations.heterogeneity.configuration_utils as _hc\n _p=_hc.HeterogeneousConfigMixin.allow_global_per_layer_attribute_access\n _hc.HeterogeneousConfigMixin.allow_global_per_layer_attribute_access=property(lambda s:s.__dict__.get("allow_global_per_layer_attribute_access",True),_p.fset)\nexcept Exception:\n pass\n{% if lws_size | default(1) > 1 %}try:\n import vllm.distributed.device_communicators.flashinfer_all_reduce as _fia\n _fia.fi_ar_available=False\nexcept Exception:\n pass\ntry:\n import vllm.models.common.ops.fused_allreduce_rms_norm as _far\n _far.flashinfer_trtllm_fused_allreduce_norm=None\n _far.get_fi_ar_workspace=None\nexcept Exception:\n pass\n{% endif %}if __name__=="__main__":\n import sys;sys.argv[0]="vllm"\n from vllm.entrypoints.cli.main import main;main()\n' > /tmp/_vllm_patched && chmod +x /tmp/_vllm_patched
                 echo "--- Patched transformers per-layer attribute access ---"
 
                 exec /tmp/_vllm_patched serve \
@@ -188,6 +188,7 @@ spec:
 {% if lws_size | default(1) > 1 %}                  --nnodes {{ lws_size }} \
                   --node-rank ${LWS_WORKER_INDEX:-0} \
                   --master-addr ${LWS_LEADER_ADDRESS} \
+                  --enforce-eager \
 {% endif %}{% if data_parallelism | default(1) > 1 %}                  --data-parallel-size {{ data_parallelism }} \
                   --data-parallel-size-local {{ data_parallel_size_local | default(data_parallelism) }} \
                   --data-parallel-multi-port-external-lb \
@@ -244,6 +245,20 @@ spec:
                 value: "eth0"
               - name: GLOO_SOCKET_IFNAME
                 value: "eth0"
+{% if lws_size | default(1) > 1 %}
+              # Multi-node NCCL workarounds (validated on H200 + driver 595.71.05,
+              # NCCL 2.28.3): Ring/Simple avoids cross-node NVLS heads, GDR off +
+              # synchronous launches avoid deadlocks between async collectives and
+              # triton/cuBLAS kernel lazy-loads.
+              - name: NCCL_ALGO
+                value: "Ring"
+              - name: NCCL_PROTO
+                value: "Simple"
+              - name: NCCL_IB_GDR
+                value: "0"
+              - name: CUDA_LAUNCH_BLOCKING
+                value: "1"
+{% endif %}
               - name: VLLM_SKIP_P2P_CHECK
                 value: "1"
 {% if use_deep_gemm is not none %}
@@ -492,7 +507,7 @@ spec:
                 fi
 
                 # Patch transformers 5.15+ AmbiguousGlobalPerLayerAttributeError for heterogeneous models (Gemma 4)
-                printf '#!/usr/bin/env python3\ntry:\n import transformers.integrations.heterogeneity.configuration_utils as _hc\n _p=_hc.HeterogeneousConfigMixin.allow_global_per_layer_attribute_access\n _hc.HeterogeneousConfigMixin.allow_global_per_layer_attribute_access=property(lambda s:s.__dict__.get("allow_global_per_layer_attribute_access",True),_p.fset)\nexcept Exception:\n pass\nif __name__=="__main__":\n import sys;sys.argv[0]="vllm"\n from vllm.entrypoints.cli.main import main;main()\n' > /tmp/_vllm_patched && chmod +x /tmp/_vllm_patched
+                printf '#!/usr/bin/env python3\ntry:\n import transformers.integrations.heterogeneity.configuration_utils as _hc\n _p=_hc.HeterogeneousConfigMixin.allow_global_per_layer_attribute_access\n _hc.HeterogeneousConfigMixin.allow_global_per_layer_attribute_access=property(lambda s:s.__dict__.get("allow_global_per_layer_attribute_access",True),_p.fset)\nexcept Exception:\n pass\n{% if lws_size | default(1) > 1 %}try:\n import vllm.distributed.device_communicators.flashinfer_all_reduce as _fia\n _fia.fi_ar_available=False\nexcept Exception:\n pass\ntry:\n import vllm.models.common.ops.fused_allreduce_rms_norm as _far\n _far.flashinfer_trtllm_fused_allreduce_norm=None\n _far.get_fi_ar_workspace=None\nexcept Exception:\n pass\n{% endif %}if __name__=="__main__":\n import sys;sys.argv[0]="vllm"\n from vllm.entrypoints.cli.main import main;main()\n' > /tmp/_vllm_patched && chmod +x /tmp/_vllm_patched
                 echo "--- Patched transformers per-layer attribute access ---"
 
                 exec /tmp/_vllm_patched serve \
@@ -500,6 +515,7 @@ spec:
                   --port 8000 \
                   --trust-remote-code \
                   --headless \
+                  --enforce-eager \
                   --tensor-parallel-size {{ tensor_parallelism }} \
                   --nnodes {{ lws_size }} \
                   --node-rank ${LWS_WORKER_INDEX:-0} \
@@ -546,6 +562,20 @@ spec:
                 value: "eth0"
               - name: GLOO_SOCKET_IFNAME
                 value: "eth0"
+{% if lws_size | default(1) > 1 %}
+              # Multi-node NCCL workarounds (validated on H200 + driver 595.71.05,
+              # NCCL 2.28.3): Ring/Simple avoids cross-node NVLS heads, GDR off +
+              # synchronous launches avoid deadlocks between async collectives and
+              # triton/cuBLAS kernel lazy-loads.
+              - name: NCCL_ALGO
+                value: "Ring"
+              - name: NCCL_PROTO
+                value: "Simple"
+              - name: NCCL_IB_GDR
+                value: "0"
+              - name: CUDA_LAUNCH_BLOCKING
+                value: "1"
+{% endif %}
               - name: VLLM_SKIP_P2P_CHECK
                 value: "1"
 {% if use_deep_gemm is not none %}

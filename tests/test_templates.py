@@ -214,5 +214,153 @@ def test_du_does_not_crash_on_permission_errors(tm):
     """Download job du command should have || true to avoid crash."""
     result = tm.render_template('prereq/model-download-job.yaml.j2',
         job_name='test', namespace='serveit', test_id='test',
-        model_name='test', pvc_name='my-pvc', hf_token='test')
+        model_name='test', hf_token='test', pvc_name='my-pvc')
     assert '|| true' in result or '2>/dev/null' in result
+
+
+# ---- Multi-node (lws_size > 1) regression tests ---------------------------
+# All validated live on the kermit cluster (TP16 GLM-5.3 across 2 LWS pods,
+# H200, driver 595.71.05, NCCL 2.28.3). See _fix_worker_template docstring.
+
+NCCL_WORKAROUNDS = {
+    'NCCL_ALGO': 'Ring',
+    'NCCL_PROTO': 'Simple',
+    'NCCL_IB_GDR': '0',
+    'CUDA_LAUNCH_BLOCKING': '1',
+}
+
+
+def _make_config(**over):
+    from core.config_generator import TestConfig
+    base = dict(
+        test_id='tptest',
+        architecture='pd',
+        model_name='Qwen/Qwen3-32B',
+        namespace='serveit',
+        tensor_parallelism=16,
+        isl=8192,
+        osl=1024,
+        num_users=16,
+        replicas=1,
+        prefill_tp=16,
+        decode_tp=16,
+        lws_size=2,
+        block_size=128,
+        kv_cache_dtype='fp8',
+        prefill_attention_config='{"sparse_mla_force_mqa":true}',
+        decode_attention_config='{"sparse_mla_force_mqa":true}',
+        memory_limit='40Gi',
+        network_type='eth0',
+    )
+    base.update(over)
+    return TestConfig(**base)
+
+
+def _lws_doc(yaml_str):
+    return next(d for d in yaml.safe_load_all(yaml_str)
+                if d and d.get('kind') == 'LeaderWorkerSet')
+
+
+def _vllm_container(pod_spec):
+    for c in pod_spec.get('containers', []):
+        if c.get('name') == 'vllm':
+            return c
+    raise AssertionError('no vllm container in pod spec')
+
+
+def _env_map(container):
+    return {e['name']: e.get('value') for e in container.get('env', [])}
+
+
+def test_multinode_pd_renders_all_fixes(tm):
+    """PD multi-node render must carry every validated fix on both sides."""
+    out = tm.render_pd(_make_config())
+    for role in ('prefill', 'decode'):
+        lwt = _lws_doc(out[role])['spec']['leaderWorkerTemplate']
+        leader = _vllm_container(lwt['leaderTemplate']['spec'])
+        worker = _vllm_container(lwt['workerTemplate']['spec'])
+
+        for cont, side in ((leader, 'leader'), (worker, 'worker')):
+            # NCCL workaround env
+            for k, v in NCCL_WORKAROUNDS.items():
+                assert _env_map(cont).get(k) == v, (role, side, k)
+            # eager mode + flashinfer allreduce disable + spawn guard
+            # (worker printf quotes are backslash-escaped, so match the prefix)
+            assert '--enforce-eager' in cont['args'][0], (role, side)
+            assert '_fia.fi_ar_available=False' in cont['args'][0], (role, side)
+            assert 'if __name__==' in cont['args'][0], (role, side)
+            # memory floor
+            assert cont['resources']['requests']['memory'] == '200Gi', (role, side)
+            assert cont['resources']['limits']['memory'] == '200Gi', (role, side)
+
+        # Worker is headless but keeps the leader's config flags (KV spec parity)
+        wargs = worker['args'][0]
+        assert '--headless' in wargs
+        assert '--block-size 128' in wargs
+        assert '--kv-cache-dtype fp8' in wargs
+        assert 'sparse_mla_force_mqa' in wargs
+        assert '${TP_SIZE}' in wargs
+        assert '${LWS_LEADER_ADDRESS}' in wargs
+        # Worker pods don't serve HTTP — no probes
+        assert 'startupProbe' not in worker
+        assert 'readinessProbe' not in worker
+
+
+def test_multinode_pd_memory_floor_never_shrinks(tm):
+    """A deliberately larger memory_limit must survive the multi-node floor."""
+    out = tm.render_pd(_make_config(memory_limit='512Gi'))
+    lwt = _lws_doc(out['prefill'])['spec']['leaderWorkerTemplate']
+    leader = _vllm_container(lwt['leaderTemplate']['spec'])
+    worker = _vllm_container(lwt['workerTemplate']['spec'])
+    assert leader['resources']['requests']['memory'] == '512Gi'
+    assert worker['resources']['requests']['memory'] == '512Gi'
+
+
+def test_single_node_pd_has_no_multinode_workarounds(tm):
+    """Single-node keeps the fast path: no eager, no NCCL env, no worker."""
+    cfg = _make_config(lws_size=1, tensor_parallelism=8,
+                       prefill_tp=8, decode_tp=8)
+    out = tm.render_pd(cfg)
+    for role in ('prefill', 'decode'):
+        lwt = _lws_doc(out[role])['spec']['leaderWorkerTemplate']
+        leader = _vllm_container(lwt['leaderTemplate']['spec'])
+        assert not lwt['workerTemplate']['spec'].get('containers')
+        env = _env_map(leader)
+        assert 'NCCL_ALGO' not in env
+        assert 'CUDA_LAUNCH_BLOCKING' not in env
+        assert '--enforce-eager' not in leader['args'][0]
+        assert '_fia.fi_ar_available' not in leader['args'][0]
+        assert leader['resources']['requests']['memory'] == '40Gi'
+
+
+def test_multinode_aggregated_renders_all_fixes(tm):
+    """Aggregated multi-node renders the same fixes natively in-template."""
+    doc = _lws_doc(tm.render_aggregated(
+        _make_config(architecture='aggregated')))
+    lwt = doc['spec']['leaderWorkerTemplate']
+    leader = _vllm_container(lwt['leaderTemplate']['spec'])
+    worker = _vllm_container(lwt['workerTemplate']['spec'])
+    for cont, side in ((leader, 'leader'), (worker, 'worker')):
+        for k, v in NCCL_WORKAROUNDS.items():
+            assert _env_map(cont).get(k) == v, (side, k)
+        assert '--enforce-eager' in cont['args'][0], side
+        assert '_fia.fi_ar_available=False' in cont['args'][0], side
+        assert cont['resources']['requests']['memory'] == '200Gi', side
+    # Worker keeps config flags for KV spec parity
+    wargs = worker['args'][0]
+    assert '--headless' in wargs
+    assert '--block-size 128' in wargs
+    assert '--kv-cache-dtype fp8' in wargs
+
+
+def test_bump_memory_floor():
+    from core.template_manager import _bump_memory_floor
+    assert _bump_memory_floor('40Gi', 200) == '200Gi'
+    assert _bump_memory_floor('64Gi', 200) == '200Gi'
+    assert _bump_memory_floor('200Gi', 200) == '200Gi'
+    assert _bump_memory_floor('512Gi', 200) == '512Gi'
+    assert _bump_memory_floor('204800Mi', 200) == '204800Mi'  # exactly 200Gi
+    assert _bump_memory_floor('102400Mi', 200) == '200Gi'     # 100Gi
+    assert _bump_memory_floor('1Ti', 200) == '1Ti'
+    assert _bump_memory_floor(None, 200) is None
+    assert _bump_memory_floor('weird', 200) == 'weird'

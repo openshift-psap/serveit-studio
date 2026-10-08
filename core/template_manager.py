@@ -18,6 +18,25 @@ from .config_generator import TestConfig
 from .networking import compute_network_values
 
 
+def _bump_memory_floor(memory: Optional[str], floor_gib: int) -> Optional[str]:
+    """Raise a k8s memory quantity to at least ``floor_gib`` Gi (never shrink).
+
+    Multi-node LWS pods spawn one rank process per GPU on every replica;
+    peak RSS during cold shard load (~6.5Gi per rank, 8 ranks ≈ 52Gi on a
+    TP16 worker) far exceeds the single-node baseline, so multi-node pods
+    need a memory floor or the workers get OOMKilled mid-load.
+    """
+    if not memory:
+        return memory
+    m = re.fullmatch(r'(\d+(?:\.\d+)?)\s*(Ki|Mi|Gi|Ti)?', str(memory).strip())
+    if not m:
+        return memory
+    unit = m.group(2) or 'Gi'  # ServeIt configs are Gi-denominated
+    gib = float(m.group(1)) * {'Ki': 1 / (1024 ** 2), 'Mi': 1 / 1024,
+                               'Gi': 1, 'Ti': 1024}[unit]
+    return memory if gib >= floor_gib else f'{floor_gib}Gi'
+
+
 def _fix_worker_template(yaml_str: str) -> str:
     """Fix workerTemplate (and leader) for multi-node LWS pods (lws_size > 1).
 
@@ -35,8 +54,9 @@ def _fix_worker_template(yaml_str: str) -> str:
        own VllmConfig from its CLI: with defaults only, its KV cache specs
        diverge from the leader's and engine init dies with "The KV cache specs
        for the same layer are different across workers".
-    4. Worker memory limit raised to 200Gi: the 8 spawned rank processes hold
-       ~6.4Gi RSS each (~52Gi total) and get OOMKilled at the template's 40Gi.
+     4. Worker and leader memory floored at 200Gi (never shrunk): the 8
+        spawned rank processes hold ~6.4Gi RSS each (~52Gi total) and get
+        OOMKilled at the template's 40Gi.
     5. Flashinfer allreduce disabled on both sides: the auto-selected mnnvl
        one-shot kernel spins forever on non-NVLink fabrics (its workspace setup
        succeeds over IB but the data path never completes).
@@ -129,6 +149,16 @@ def _fix_worker_template(yaml_str: str) -> str:
                     _ensure_container_env(lc, 'NCCL_IB_GDR', '0')
                     _ensure_container_env(lc, 'CUDA_LAUNCH_BLOCKING', '1')
 
+                    # Leader memory floor (fix 4): the leader runs the same
+                    # rank-per-GPU process tree as the worker.
+                    _lres = lc.get('resources') or {}
+                    for _k in ('requests', 'limits'):
+                        _lside = _lres.get(_k) or {}
+                        if _lside.get('memory'):
+                            _lside['memory'] = _bump_memory_floor(_lside['memory'], 200)
+                            _lres[_k] = _lside
+                    lc['resources'] = _lres
+
             if not model_name:
                 continue
 
@@ -142,12 +172,13 @@ def _fix_worker_template(yaml_str: str) -> str:
                 container.pop('readinessProbe', None)
                 container.pop('livenessProbe', None)
 
-                # Worker memory bump (fix 4): 8 spawned ranks ≈ 52Gi RSS.
+                # Worker memory floor (fix 4): 8 spawned ranks ≈ 52Gi RSS.
+                # Only raise — never shrink a deliberately larger config.
                 _res = container.get('resources') or {}
                 for _k in ('requests', 'limits'):
                     _side = _res.get(_k) or {}
-                    if 'memory' in _side:
-                        _side['memory'] = '200Gi'
+                    if _side.get('memory'):
+                        _side['memory'] = _bump_memory_floor(_side['memory'], 200)
                         _res[_k] = _side
                 container['resources'] = _res
 
@@ -364,6 +395,13 @@ class TemplateManager:
         vars_dict['lws_size'] = getattr(config, 'lws_size', None) or 1
         vars_dict['data_parallelism'] = getattr(config, 'data_parallel_size', None) or 1
         vars_dict['data_parallel_size_local'] = getattr(config, 'data_parallel_size_local', None) or vars_dict['data_parallelism']
+
+        # Multi-node pods run the same rank-per-GPU process tree on every
+        # replica (leader included) — raise the pod memory floor so neither
+        # side gets OOMKilled during cold model loading.
+        if vars_dict['lws_size'] > 1:
+            vars_dict['memory_limit'] = _bump_memory_floor(
+                vars_dict.get('memory_limit'), 200)
 
         # Pipeline parallelism: normalize None -> 0 so templates can compare safely
         vars_dict['pipeline_parallel_size'] = getattr(config, 'pipeline_parallel_size', None) or 0
