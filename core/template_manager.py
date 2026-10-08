@@ -150,7 +150,20 @@ def _fix_worker_template(yaml_str: str) -> str:
                             continue
                         _kept.append(_t)
                         _i += 1
-                    _leader_flags = ' '.join(_kept[_kept.index('serve') + 2:]) if 'serve' in _kept else ''
+
+                    # Re-quote shell-special tokens when rejoining. shlex.split
+                    # CONSUMES the single quotes around JSON-valued flags
+                    # (--kv-transfer-config '{"..."}' etc.); rejoining bare
+                    # tokens lets bash brace-expand/word-split the JSON inside
+                    # the worker script, and vLLM dies at startup with
+                    # "Invalid JSON ... kv_connector:NixlConnector". Tokens
+                    # holding $VAR references stay raw so bash still expands
+                    # them (${DP_SIZE} etc.).
+                    def _requote(_t: str) -> str:
+                        return _t if '$' in _t else _shlex.quote(_t)
+
+                    _flags = _kept[_kept.index('serve') + 2:] if 'serve' in _kept else []
+                    _leader_flags = ' '.join(_requote(_t) for _t in _flags)
 
                     largs[0] = lbody
                     # Leader env (fix 6) on the vllm container only. No

@@ -332,6 +332,36 @@ def test_multinode_pd_memory_floor_never_shrinks(tm):
     assert worker['resources']['requests']['memory'] == '512Gi'
 
 
+def test_multinode_worker_flags_keep_json_quoting(tm):
+    """Worker serve command must keep shell-quoting on JSON-valued flags.
+
+    _fix_worker_template rebuilds the worker flags via shlex.split + join;
+    shlex CONSUMES the single quotes around --kv-transfer-config '{"..."}',
+    and rejoining bare tokens let bash brace-expand the JSON — vLLM died at
+    worker startup with "Invalid JSON ... kv_connector:NixlConnector"
+    (TP16 run, 2026-10-08). Regression guard: the JSON must arrive
+    single-quoted AND round-trip through a real shell parse as valid JSON.
+    """
+    import json as _json
+    import re as _re
+    import shlex as _shlex
+
+    out = tm.render_pd(_make_config())
+    for role in ('prefill', 'decode'):
+        lwt = _lws_doc(out[role])['spec']['leaderWorkerTemplate']
+        worker = _vllm_container(lwt['workerTemplate']['spec'])
+        a = worker['args'][0]
+        # JSON value must be single-quoted in the bash script...
+        assert "--kv-transfer-config '{\"kv_connector\":" in a, role
+        # ...and must survive a real shell tokenization as ONE valid JSON arg
+        m = _re.search(r'--kv-transfer-config (\S+)', a)
+        toks = _shlex.split(m.group(0))
+        parsed = _json.loads(toks[1])  # raises if quoting was mangled
+        assert parsed.get('kv_connector') == 'NixlConnector', role
+        # bash would still expand $VAR references (not quoted away)
+        assert '${TP_SIZE}' in a and '${LWS_LEADER_ADDRESS}' in a, role
+
+
 def test_single_node_pd_has_no_multinode_workarounds(tm):
     """Single-node keeps the fast path: no eager, no NCCL env, no worker."""
     cfg = _make_config(lws_size=1, tensor_parallelism=8,
