@@ -183,6 +183,8 @@ class TestConfig:
     data_parallel_size_local: Optional[int] = None  # per-node DP count (--data-parallel-size-local)
     nnodes: Optional[int] = None                   # number of nodes for multi-node TP (--nnodes)
     lws_size: Optional[int] = None                 # LWS leaderWorkerTemplate.size (pods per group)
+    prefill_lws_size: Optional[int] = None         # per-role LWS group size (prefill); falls back to lws_size
+    decode_lws_size: Optional[int] = None          # per-role LWS group size (decode); falls back to lws_size
     gpus_per_pod: Optional[int] = None             # GPU count per pod (when != TP, e.g. multi-node)
 
     # Decode KV cache memory control

@@ -416,6 +416,8 @@ class TemplateManager:
 
         # Multi-node / data parallelism
         vars_dict['lws_size'] = getattr(config, 'lws_size', None) or 1
+        vars_dict['prefill_lws_size'] = getattr(config, 'prefill_lws_size', None) or vars_dict['lws_size']
+        vars_dict['decode_lws_size'] = getattr(config, 'decode_lws_size', None) or vars_dict['lws_size']
         vars_dict['data_parallelism'] = getattr(config, 'data_parallel_size', None) or 1
         vars_dict['data_parallel_size_local'] = getattr(config, 'data_parallel_size_local', None) or vars_dict['data_parallelism']
 
@@ -646,19 +648,23 @@ class TemplateManager:
             **vars_dict,
             'speculative_config_json': vars_dict['prefill_speculative_config_json'],
             'attention_config': vars_dict['prefill_attention_config'],
+            # Per-role LWS group size: a TP8 prefill must not inherit decode's
+            # multi-node size (spurious pending workers + --nnodes rendezvous hang).
+            'lws_size': vars_dict['prefill_lws_size'],
         }
-        # Decode pod uses decode_attention_config.
+        # Decode pod uses decode_attention_config and its own LWS group size.
         vars_dict['attention_config'] = vars_dict['decode_attention_config']
+        vars_dict['lws_size'] = vars_dict['decode_lws_size']
 
         # Render both templates
         prefill_yaml = prefill_template.render(**prefill_vars)
         decode_yaml = decode_template.render(**vars_dict)
 
-        # For multi-node LWS (lws_size > 1), worker pods don't serve HTTP so strip
-        # startup/readiness/liveness probes from the workerTemplate containers.
-        lws_size = getattr(config, 'lws_size', None) or 1
-        if lws_size > 1:
+        # For multi-node LWS groups, worker pods run --headless and don't serve
+        # HTTP — strip startup/readiness/liveness probes from the workerTemplate.
+        if prefill_vars['lws_size'] > 1:
             prefill_yaml = _fix_worker_template(prefill_yaml)
+        if vars_dict['lws_size'] > 1:
             decode_yaml = _fix_worker_template(decode_yaml)
 
         # Determine deployment order based on GPU requirements
