@@ -93,6 +93,36 @@ def handle_connect():
     _replay_state_to_client()
 
 
+def _run_greenlet_alive():
+    """True if the optimization run is provably still alive.
+
+    The state entry (_optimization_greenlet) is the fast path, but it can go
+    stale while the actual work greenlet is still running (a second spawn
+    overwriting the entry, an in-memory state reset, or a bookkeeping race).
+    Before force-stopping a run we also look for recent run activity in
+    console_logs — the run writes logs at least once a minute while active
+    (pod waits, load polls, benchmark monitor). Only when BOTH the greenlet
+    entry is dead AND there has been no run activity for 10 minutes do we
+    consider the run dead.
+    """
+    greenlet = state.get('_optimization_greenlet')
+    if greenlet is not None and not greenlet.dead:
+        return True
+    try:
+        with get_db() as conn:
+            row = conn.execute(
+                'SELECT timestamp FROM console_logs ORDER BY id DESC LIMIT 1'
+            ).fetchone()
+        if row and row['timestamp']:
+            from datetime import datetime, timedelta
+            ts = datetime.fromisoformat(row['timestamp'])
+            if (datetime.now() - ts) < timedelta(minutes=10):
+                return True
+    except Exception:
+        pass
+    return False
+
+
 def _replay_state_to_client():
     """Send current optimization status and recent logs to the calling client."""
     optimization_running = state['optimization_running']
@@ -109,8 +139,7 @@ def _replay_state_to_client():
         print(f"Warning: Could not load optimization_running from database: {e}")
 
     if optimization_running:
-        greenlet = state.get('_optimization_greenlet')
-        if greenlet is None or greenlet.dead:
+        if not _run_greenlet_alive():
             optimization_running = False
             with state_lock:
                 state['optimization_running'] = False
@@ -121,6 +150,10 @@ def _replay_state_to_client():
                     conn.execute("UPDATE optimization_runs SET status = 'stopped' WHERE status = 'running'")
             except Exception:
                 pass
+    elif _run_greenlet_alive():
+        # Flag says stopped but the run is provably alive (stale flag from a
+        # bookkeeping race) — report the true state so the UI shows Stop.
+        optimization_running = True
 
     emit('status_update', {
         'running': optimization_running,
@@ -272,14 +305,19 @@ def handle_load_config():
             is_running = bool(running_opt)
 
             if is_running:
-                greenlet = state.get('_optimization_greenlet')
-                if greenlet is None or greenlet.dead:
+                if not _run_greenlet_alive():
                     is_running = False
                     with state_lock:
                         state['optimization_running'] = False
                         save_state()
                     conn.execute('UPDATE ui_session_state SET optimization_running = 0 WHERE id = 1')
                     conn.execute("UPDATE optimization_runs SET status = 'stopped' WHERE status = 'running'")
+            elif _run_greenlet_alive():
+                # No 'running' row but the work greenlet is provably alive
+                # (run row wrongly marked stopped mid-run) — show the true
+                # state so the UI offers Stop instead of a Start that would
+                # kill the live run.
+                is_running = True
 
             if row:
                 config = json.loads(row['config_json']) if row['config_json'] else {}

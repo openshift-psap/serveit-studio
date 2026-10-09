@@ -363,8 +363,16 @@ def stream_job_logs(job_name: str, namespace: str):
                     'advanced_vllm': saved_config.get('advanced_vllm'),
                 }
 
-                # Start optimization in background
-                state['_optimization_greenlet'] = spawn(run_optimization_background, optimization_data)
+                # Start optimization in background — but never silently replace
+                # a live optimization greenlet: overwriting the state entry
+                # makes the run look dead to liveness checks while it keeps
+                # executing (UI flips to "Start", results stop persisting).
+                _existing = state.get('_optimization_greenlet')
+                if _existing is not None and not _existing.dead:
+                    log_to_ui('⚠️ Optimization already running — skipping auto-start after download',
+                              'warning', job_name=job_name)
+                else:
+                    state['_optimization_greenlet'] = spawn(run_optimization_background, optimization_data)
             else:
                 log_to_ui('⚠️ Could not determine model name for deployment', 'warning', job_name=job_name)
                 log_to_ui('   CURRENT_TEST_PLAN is None or has no model_name', 'warning', job_name=job_name)
