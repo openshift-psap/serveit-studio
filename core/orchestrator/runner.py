@@ -707,10 +707,10 @@ class TestOrchestrator(ParserMixin, GuidellmMixin):
             # Use kubectl exec on workload pod to reach the gateway (works for both local and remote clusters)
             try:
                 models_url = endpoint.rstrip('/') + '/v1/models'
-                curl_cmd = f"curl -s -o /dev/null -w '%{{http_code}}' --connect-timeout 5 '{models_url}'"
+                curl_cmd = f"curl -s -o /dev/null -w '%{{http_code}}' --connect-timeout 5 --max-time 15 '{models_url}'"
                 r = self.deployment_manager.kubectl.run(
                     ['exec', self._guidellm_pod_name, '-n', self.namespace, '--', 'bash', '-c', curl_cmd],
-                    check=False
+                    check=False, timeout=30
                 )
                 http_code = r.stdout.strip() if r.returncode == 0 else '000'
                 if http_code != '200':
@@ -749,10 +749,10 @@ class TestOrchestrator(ParserMixin, GuidellmMixin):
                         "max_tokens": 1,
                         "temperature": 0.0
                     })
-                curl_cmd = f"curl -s -w '\\n%{{http_code}}' --connect-timeout 10 -X POST -H 'Content-Type: application/json' -d '{payload_json}' '{completion_url}'"
+                curl_cmd = f"curl -s -w '\\n%{{http_code}}' --connect-timeout 10 --max-time 60 -X POST -H 'Content-Type: application/json' -d '{payload_json}' '{completion_url}'"
                 r = self.deployment_manager.kubectl.run(
                     ['exec', self._guidellm_pod_name, '-n', self.namespace, '--', 'bash', '-c', curl_cmd],
-                    check=False
+                    check=False, timeout=90
                 )
                 lines = r.stdout.strip().split('\n') if r.returncode == 0 else []
                 http_code = lines[-1] if lines else '000'
@@ -1539,6 +1539,15 @@ class TestOrchestrator(ParserMixin, GuidellmMixin):
                     if guidellm_attempt > 1:
                         if log_callback:
                             log_callback(f"\n🔄 Retrying guidellm (attempt {guidellm_attempt}/{max_guidellm_retries}) — pods still running")
+
+                    # Smoke-test the gateway path before every attempt: a wedged
+                    # EPP still serves /v1/models but hangs completions, which
+                    # otherwise turns the load test into a dead multi-minute run.
+                    if not self._smoke_test_gateway(endpoint, config, log_callback=log_callback):
+                        result.error_message = "Gateway smoke test failed — gateway is not completing requests"
+                        if log_callback:
+                            log_callback("❌ Gateway is not completing requests — aborting guidellm (check EPP/gateway pods)")
+                        return result
 
                     if log_callback:
                         log_callback("\n🧪 Step 5: Running guidellm load test...")

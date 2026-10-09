@@ -1,6 +1,7 @@
 """Guidellm execution — persistent pod management and benchmark running."""
 
 import os
+import json
 import time
 import subprocess
 import logging
@@ -136,6 +137,59 @@ class GuidellmMixin:
         except Exception:
             pass
         return getattr(config, 'pvc_name', None) or 'serveit-cache'
+
+    def _smoke_test_gateway(
+        self,
+        endpoint: str,
+        config: TestConfig,
+        log_callback: Optional[Callable[[str], None]] = None,
+        timeout: int = 60,
+        attempts: int = 3,
+    ) -> bool:
+        """Send one tiny completion through the gateway before the load test.
+
+        The models endpoint alone is not enough: a wedged EPP still serves
+        /v1/models but hangs real completions, which turns the load test
+        into a multi-minute dead run. The curl uses a total-time cap so a
+        hung gateway fails fast instead of blocking forever.
+        """
+        turns = getattr(config, 'turns', 1) or 1
+        if turns > 1:
+            url = f"{endpoint.rstrip('/')}/v1/chat/completions"
+            payload = {"model": config.model_name,
+                       "messages": [{"role": "user", "content": "Hello"}],
+                       "max_tokens": 1, "temperature": 0.0}
+        else:
+            url = f"{endpoint.rstrip('/')}/v1/completions"
+            payload = {"model": config.model_name, "prompt": "Hello",
+                       "max_tokens": 1, "temperature": 0.0}
+        payload_json = json.dumps(payload)
+        curl_cmd = (
+            f"curl -s -o /dev/null -w '%{{http_code}}' --max-time {timeout} "
+            f"-X POST -H 'Content-Type: application/json' -d '{payload_json}' '{url}'"
+        )
+        for attempt in range(1, attempts + 1):
+            try:
+                r = self.deployment_manager.kubectl.run(
+                    ['exec', self._guidellm_pod_name, '-n', self.namespace,
+                     '--', 'bash', '-c', curl_cmd],
+                    check=False, timeout=timeout + 30
+                )
+                code = r.stdout.strip() if r.returncode == 0 else '000'
+            except Exception as e:
+                code = f'000 ({str(e)[:40]})'
+            if code == '200':
+                if log_callback:
+                    log_callback('   ✅ Gateway smoke test passed (completion returned 200)')
+                return True
+            if log_callback:
+                hint = ('request hung — gateway/EPP not completing requests'
+                        if code.startswith('000') else 'non-200 response')
+                log_callback(f'   ⚠️  Gateway smoke test attempt {attempt}/{attempts}: '
+                             f'HTTP {code} ({hint})')
+            if attempt < attempts:
+                time.sleep(15)
+        return False
 
     def _run_guidellm_job(
         self,
@@ -311,62 +365,117 @@ class GuidellmMixin:
         monitor_timeout = 3600 if max_requests else config.test_duration
         monitor_timeout += warmup + 1800
 
-        try:
-            # Launch kubectl exec as a subprocess to stream output
-            exec_full_cmd = [
-                kubectl.kubectl_cmd, 'exec', self._guidellm_pod_name,
-                '-n', self.namespace, '--', 'bash', '-c', exec_cmd
-            ]
-            env = os.environ.copy()
-            env['KUBECONFIG'] = os.path.expanduser(kubectl.kubeconfig)
+        # Run guidellm detached on the workload pod and poll for completion
+        # with short-lived execs. Holding one kubectl exec stream open for
+        # the whole benchmark is fragile: proxies can drop the exec
+        # websocket after ~30 minutes, which fakes a guidellm failure while
+        # the remote process keeps running — and a retry then stacks a
+        # second benchmark on top of the first.
+        script_path = f'/mnt/storage/tmp/guidellm-run-{config.test_id}.sh'
+        log_path = f'/mnt/storage/tmp/guidellm-{config.test_id}.log'
+        exit_path = f'/mnt/storage/tmp/guidellm-{config.test_id}.exit'
 
-            process = subprocess.Popen(
-                exec_full_cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
-                text=True, bufsize=1, env=env
+        def _remote_exec(cmd, timeout=30):
+            return kubectl.run(
+                ['exec', self._guidellm_pod_name, '-n', self.namespace,
+                 '--', 'bash', '-c', cmd],
+                check=False, timeout=timeout
             )
 
-            benchmark_success = True
+        # Bracket form so pkill never matches its own wrapper shell
+        kill_cmd = ("pkill -f 'guidellm[ ]run' 2>/dev/null; sleep 1; "
+                    "pkill -9 -f 'guidellm[ ]run' 2>/dev/null; true")
+
+        try:
+            # Kill stale guidellm from a previous attempt or run so retries
+            # never stack two benchmarks against the same endpoint.
+            _remote_exec(kill_cmd)
+
+            # Write the run script via stdin (avoids nested quoting) and
+            # launch it detached; the script records guidellm's exit code
+            # in a file the poll loop below watches for.
+            script = exec_cmd + f'\necho $? > {exit_path}'
+            write_r = kubectl.run(
+                ['exec', '-i', self._guidellm_pod_name, '-n', self.namespace,
+                 '--', 'bash', '-c', f'cat > {script_path}'],
+                input_data=script, check=False, timeout=60
+            )
+            if write_r.returncode != 0:
+                if log_callback:
+                    log_callback(f'❌ Failed to stage guidellm script on workload pod: {write_r.stderr[:150]}')
+                return False, None, None
+
+            launch_r = _remote_exec(
+                f'rm -f {exit_path} {log_path}; '
+                f'nohup bash {script_path} > {log_path} 2>&1 & '
+                'echo launched'
+            )
+            if launch_r.returncode != 0:
+                if log_callback:
+                    log_callback(f'❌ Failed to launch guidellm on workload pod: {launch_r.stderr[:150]}')
+                return False, None, None
+            if log_callback:
+                log_callback(f'🚀 Guidellm launched detached on {self._guidellm_pod_name} (log: {log_path})')
+
+            benchmark_success = False
+            seen_log_lines = set()
+            last_log_check = benchmark_start
             last_pod_check = benchmark_start
+            poll_failures = 0
 
             while time.time() - benchmark_start < monitor_timeout:
                 if stop_check and stop_check():
                     if log_callback:
                         log_callback('   Stopping guidellm...')
-                    process.kill()
-                    # Kill the remote guidellm process on the workload pod
-                    subprocess.run(
-                        ['kubectl', 'exec', self._guidellm_pod_name,
-                         '-n', self.namespace, '--', 'pkill', '-f', 'guidellm run'],
-                        capture_output=True, timeout=10, check=False, env=env
-                    )
+                    _remote_exec(kill_cmd, timeout=15)
                     return False, None, None
 
-                if process.poll() is not None:
-                    if process.returncode == 0:
+                # Poll exit status with a short-lived exec (no long streams)
+                status_r = _remote_exec(
+                    f'if [ -f {exit_path} ]; then cat {exit_path}; else echo RUNNING; fi',
+                    timeout=20
+                )
+                if status_r.returncode != 0:
+                    poll_failures += 1
+                    if poll_failures >= 12:
                         if log_callback:
-                            elapsed = int(time.time() - benchmark_start)
-                            log_callback(f'ℹ️  Guidellm completed ({elapsed}s)')
-                    else:
-                        remaining = process.stdout.read() if process.stdout else ''
-                        if log_callback:
-                            log_callback(f'❌ Guidellm exited with code {process.returncode}')
-                            if remaining:
-                                for line in remaining.strip().splitlines()[-10:]:
-                                    log_callback(f'   {line.strip()[:200]}')
-                        benchmark_success = False
-                    break
+                            log_callback('❌ Lost contact with workload pod while polling guidellm')
+                        _remote_exec(kill_cmd, timeout=15)
+                        return False, None, None
+                else:
+                    poll_failures = 0
+                    status = status_r.stdout.strip()
+                    if status != 'RUNNING':
+                        guidellm_exit = int(status) if status.lstrip('-').isdigit() else -1
+                        elapsed = int(time.time() - benchmark_start)
+                        if guidellm_exit == 0:
+                            if log_callback:
+                                log_callback(f'ℹ️  Guidellm completed ({elapsed}s)')
+                            benchmark_success = True
+                        else:
+                            if log_callback:
+                                log_callback(f'❌ Guidellm exited with code {guidellm_exit} ({elapsed}s)')
+                                tail_r = _remote_exec(f'tail -n 10 {log_path} 2>/dev/null', timeout=20)
+                                if tail_r.returncode == 0 and tail_r.stdout.strip():
+                                    for line in tail_r.stdout.strip().splitlines():
+                                        log_callback(f'   {line.strip()[:200]}')
+                        break
 
-                # Read output (non-blocking)
-                try:
-                    import select
-                    if select.select([process.stdout], [], [], 0)[0]:
-                        line = process.stdout.readline()
-                        if line and log_callback:
-                            stripped = line.strip()
-                            if stripped and ('error' in stripped.lower() or 'warning' in stripped.lower()):
-                                log_callback(f'   Guidellm: {stripped[:100]}')
-                except Exception:
-                    pass
+                # Surface new error/warning lines from the guidellm log
+                if time.time() - last_log_check >= 30:
+                    last_log_check = time.time()
+                    tail_r = _remote_exec(f'tail -n 200 {log_path} 2>/dev/null', timeout=20)
+                    if tail_r.returncode == 0:
+                        for raw in tail_r.stdout.splitlines():
+                            stripped = raw.strip()
+                            if not stripped or stripped in seen_log_lines:
+                                continue
+                            if 'error' in stripped.lower() or 'warning' in stripped.lower():
+                                if len(seen_log_lines) > 2000:
+                                    seen_log_lines.clear()
+                                seen_log_lines.add(stripped)
+                                if log_callback:
+                                    log_callback(f'   Guidellm: {stripped[:100]}')
 
                 # Check inference pod health
                 if monitor_pods and time.time() - last_pod_check >= 30:
@@ -375,7 +484,7 @@ class GuidellmMixin:
                         benchmark_start, config.test_duration, 30, log_callback)
                     if pod_error:
                         benchmark_success = False
-                        process.kill()
+                        _remote_exec(kill_cmd, timeout=15)
                         break
                     last_pod_check = time.time()
 
@@ -383,15 +492,12 @@ class GuidellmMixin:
             else:
                 if log_callback:
                     log_callback(f'   ⚠️  Guidellm timed out after {int(monitor_timeout)}s')
-                process.kill()
+                _remote_exec(kill_cmd, timeout=15)
                 benchmark_success = False
-
-            if process.poll() is None:
-                process.wait(timeout=10)
 
             elapsed_total = int(time.time() - benchmark_start)
 
-            if benchmark_success and process.returncode == 0:
+            if benchmark_success:
                 if log_callback:
                     log_callback(f'✅ Benchmark completed ({elapsed_total}s)')
 
