@@ -115,3 +115,54 @@ class TestWorkerTemplateFixGating:
         # Single-node prefill: never passed through _fix_worker_template, so
         # its leader memory is NOT floored to the multi-node 200Gi minimum
         assert not re.search(r'leaderTemplate:.*?memory: 200Gi', rendered['prefill'], re.DOTALL)
+
+
+class TestBidirectionalKvGuard:
+    """Bidirectional NIXL + multi-node LWS groups hangs the first request
+    (validated live on kermit: TP16/TP16 PD hangs with true, serves in ~1.6s
+    with false). Auto-enable must skip multi-node configs."""
+
+    def _make_stub(self, turns, **cfg_kwargs):
+        import types
+        from core.optimizer.config_builder import ConfigBuilderMixin
+        stub = types.SimpleNamespace(
+            config=types.SimpleNamespace(turns=turns),
+            logs=[],
+        )
+        stub.log = lambda msg, level='info': stub.logs.append(msg)
+        stub._auto_enable_bidirectional_kv = (
+            ConfigBuilderMixin._auto_enable_bidirectional_kv.__get__(stub))
+        from core.config_generator import TestConfig
+        cfg = TestConfig(
+            test_id='t', architecture='pd', model_name='m', namespace='ns',
+            isl=1000, osl=100, num_users=5, tensor_parallelism=8, replicas=2,
+            prefill_replicas=1, decode_replicas=1, prefill_tp=8, decode_tp=8,
+            **cfg_kwargs)
+        return stub, cfg
+
+    def test_single_node_multi_turn_auto_enables(self):
+        stub, cfg = self._make_stub(turns=300)
+        cfg = stub._auto_enable_bidirectional_kv(cfg)
+        assert cfg.enable_bidirectional_kv is True
+
+    def test_multi_node_prefill_blocks_auto_enable(self):
+        stub, cfg = self._make_stub(turns=300, prefill_lws_size=2, decode_lws_size=1)
+        cfg = stub._auto_enable_bidirectional_kv(cfg)
+        assert not cfg.enable_bidirectional_kv
+        assert any('NOT auto-enabled' in m for m in stub.logs)
+
+    def test_multi_node_decode_blocks_auto_enable(self):
+        stub, cfg = self._make_stub(turns=300, prefill_lws_size=1, decode_lws_size=2)
+        cfg = stub._auto_enable_bidirectional_kv(cfg)
+        assert not cfg.enable_bidirectional_kv
+
+    def test_single_turn_not_enabled(self):
+        stub, cfg = self._make_stub(turns=1)
+        cfg = stub._auto_enable_bidirectional_kv(cfg)
+        assert not cfg.enable_bidirectional_kv
+
+    def test_explicit_setting_preserved(self):
+        stub, cfg = self._make_stub(turns=300, enable_bidirectional_kv=True,
+                                    prefill_lws_size=2, decode_lws_size=2)
+        cfg = stub._auto_enable_bidirectional_kv(cfg)
+        assert cfg.enable_bidirectional_kv is True

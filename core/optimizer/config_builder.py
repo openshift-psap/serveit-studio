@@ -846,6 +846,21 @@ class ConfigBuilderMixin:
             return cfg
         turns = getattr(self.config, 'turns', 1) or 1
         if turns > 1 and cfg.architecture in ('pd', 'ep'):
+            # Multi-node LWS groups + bidirectional NIXL transfer hangs the
+            # first request: the prefill-side pull_worker (only active when
+            # bidirectional) receives ops for requests its local registry
+            # doesn't know, and the decode side waits for KV forever.
+            # Validated live on kermit: TP16/TP16 PD with bidirectional=false
+            # serves requests in ~1.6s; with true it hangs indefinitely.
+            p_lws = getattr(cfg, 'prefill_lws_size', None) or 1
+            d_lws = getattr(cfg, 'decode_lws_size', None) or 1
+            if p_lws > 1 or d_lws > 1:
+                self.log(
+                    f"   Bidirectional KV transfer NOT auto-enabled: multi-node LWS groups "
+                    f"(prefill={p_lws}, decode={d_lws} pods/group) + bidirectional NIXL transfer "
+                    f"hangs the first request in this vLLM build. Multi-turn prefix reuse "
+                    f"between P and D roles will be limited.", 'warning')
+                return cfg
             cfg.enable_bidirectional_kv = True
             self.log(f"   Bidirectional KV transfer auto-enabled (multi-turn on {cfg.architecture.upper()}). "
                      f"If this causes issues with your model, disable it in Advanced Settings.", 'warning')
