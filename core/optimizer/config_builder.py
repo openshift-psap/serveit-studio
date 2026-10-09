@@ -5,8 +5,26 @@ from typing import List, Tuple, Optional
 
 
 from core.optimizer.config import FeasibleSplit
-from core.config_generator import TestConfig
+from core.config_generator import TestConfig, DRAFT_HF_SPEC_KEYS
 from core.test_orchestrator import TestResult
+
+# External DSpark draft models by target-model family. DSpark requires a
+# small external draft model; when 'Speculative model' is left on auto the
+# template would otherwise fall back to the TARGET model as the draft
+# (a full-size "draft" that cannot load alongside the target).
+DSPARK_DRAFT_MODELS = {
+    'glm-5.3': 'RedHatAI/GLM-5.3-speculator.dspark',
+}
+
+
+def _dspark_draft_for_target(model_name: str) -> Optional[str]:
+    """Resolve the known DSpark draft model for a target model, if any."""
+    target = (model_name or '').lower()
+    for family, draft in DSPARK_DRAFT_MODELS.items():
+        if family in target:
+            return draft
+    return None
+
 
 class ConfigBuilderMixin:
     """Mixin providing config creation methods for RecipeOptimizer."""
@@ -698,6 +716,41 @@ class ConfigBuilderMixin:
         spec_extra = adv.get('speculative_extra_config')
         if spec_extra:
             cfg.speculative_extra_config = [e for e in spec_extra if e.get('key') and e.get('value') is not None] or None
+
+        # Drop draft-model HF attributes from the extra spec config — they
+        # are not SpeculativeConfig fields and crash vLLM at startup. The
+        # draft model's own config.json must carry them.
+        if cfg.speculative_extra_config:
+            _kept = [e for e in cfg.speculative_extra_config
+                     if e.get('key') not in DRAFT_HF_SPEC_KEYS]
+            _dropped = [e['key'] for e in cfg.speculative_extra_config
+                        if e.get('key') in DRAFT_HF_SPEC_KEYS]
+            if _dropped:
+                cfg.speculative_extra_config = _kept or None
+                self.log(f"   ⚠️  Dropped draft-HF keys from speculative config "
+                         f"(not SpeculativeConfig fields; draft model config "
+                         f"must provide them): {_dropped}", 'warning')
+
+        if getattr(cfg, 'speculative_method', None) == 'dspark':
+            # DSpark needs the external draft model. Resolve known families
+            # when the user left 'Speculative model' on auto — otherwise the
+            # template falls back to the target model as draft.
+            if not getattr(cfg, 'speculative_model', None):
+                draft = _dspark_draft_for_target(cfg.model_name)
+                if draft:
+                    cfg.speculative_model = draft
+                    self.log(f"   DSpark draft model: {draft} (auto-resolved for {cfg.model_name})", 'info')
+                else:
+                    self.log("   ⚠️  DSpark requires an external draft model — set "
+                             "'Speculative model' in Advanced vLLM settings", 'warning')
+            # DSpark drafts crash with fp8 KV cache. Default the spec-level
+            # KV dtype to bfloat16 unless the user set one explicitly
+            # (same default the GLM-5.3 DSpark preset uses).
+            extra = list(cfg.speculative_extra_config or [])
+            if not any(e.get('key') == 'kv_cache_dtype' for e in extra):
+                extra.append({'key': 'kv_cache_dtype', 'value': 'bfloat16'})
+                cfg.speculative_extra_config = extra
+                self.log("   DSpark draft KV cache dtype: bfloat16 (fp8 KV crashes the draft)", 'info')
 
         # Disk KV cache offloading — only when local_disk_path is set (hostPath NVMe)
         disk_offload = adv.get('disk_offload_kv') or adv.get('disk-offload-kv')

@@ -22,6 +22,20 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 
+# Speculative-config keys that belong to the DRAFT model's HF config, not the
+# top-level vLLM SpeculativeConfig. vLLM's pydantic SpeculativeConfig rejects
+# unknown top-level keys at startup (crashlooping every serving pod), and it
+# has no spec-level override hook for draft HF attributes — the draft model's
+# own config.json must carry them. Used to filter user extra-config entries.
+DRAFT_HF_SPEC_KEYS = frozenset({
+    'mask_token_id',
+    'dspark_noise_token_id',
+    'pard_token',
+    'ptd_token_id',
+    'dflash_config',
+})
+
+
 @dataclass
 class TestConfig:
     """Configuration for a single test run."""

@@ -14,7 +14,7 @@ from dataclasses import asdict
 from jinja2 import Environment, FileSystemLoader, TemplateNotFound
 import yaml as _yaml
 
-from .config_generator import TestConfig
+from .config_generator import TestConfig, DRAFT_HF_SPEC_KEYS
 from .networking import compute_network_values
 
 
@@ -571,6 +571,17 @@ class TemplateManager:
                         else:
                             try: v = int(v)
                             except ValueError: pass
+                    if k in DRAFT_HF_SPEC_KEYS:
+                        # Draft-model HF config attribute, not a
+                        # SpeculativeConfig field — passing it top-level
+                        # fails pydantic validation and crashloops every
+                        # serving pod. The draft model's own config.json
+                        # must carry it; drop with a warning.
+                        logger.warning(
+                            "Dropping draft-HF speculative key %r — not a "
+                            "SpeculativeConfig field; the draft model's "
+                            "config must provide it", k)
+                        continue
                     spec[k] = v
         vars_dict['speculative_config_json'] = json.dumps(spec) if spec else None
 
