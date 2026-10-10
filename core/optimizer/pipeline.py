@@ -254,6 +254,15 @@ class RecipeOptimizer(
         # Detect hybrid attention (mixed attention types across layers)
         self._has_hybrid_attention = False
         if self._model_config:
+            # MLA detection (kv_lora_rank > 0, e.g. DeepSeek/GLM-DSA models):
+            # latent KV is replicated across TP ranks, which makes
+            # heterogeneous P/D TP pairs impossible (NIXL handshake asserts
+            # equal engine-level KV sizes — see pd_search._select_tp_pairs).
+            self._is_mla_model = bool(self._model_config.get('kv_lora_rank'))
+            if self._is_mla_model:
+                self.log(f"MLA attention detected (kv_lora_rank="
+                         f"{self._model_config['kv_lora_rank']}) — asymmetric P/D TP "
+                         f"pairs will be excluded from the PD search")
             has_chunk = self._model_config.get('attention_chunk_size') is not None
             hybrid_archs = ['Qwen3NextForCausalLM', 'Llama4ForConditionalGeneration',
                             'Qwen3_5ForCausalLM', 'Qwen3_5ForConditionalGeneration',

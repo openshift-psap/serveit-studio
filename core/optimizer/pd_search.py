@@ -47,6 +47,13 @@ class PDSearchMixin:
         allow_decode_gt = getattr(self.config, 'asymmetric_allow_decode_gt_prefill', True)
         allow_prefill_gt = getattr(self.config, 'asymmetric_allow_prefill_gt_decode', True)
         skip_tp16 = getattr(self.config, 'skip_tp16', True)
+        # MLA models (kv_lora_rank, e.g. DeepSeek/GLM-DSA) replicate the latent
+        # KV across TP ranks: per-engine KV size = per-GPU blocks x TP, so a
+        # heterogeneous P/D TP pair can never satisfy the NIXL handshake
+        # assertion ("KV cache sizes must match between P and D when
+        # replicated") — the engine core dies on the first transfer.
+        # Hard exclusion, validated live on kermit (GLM-5.3 TP8 P + TP16 D).
+        is_mla = getattr(self, '_is_mla_model', False)
         all_pairs = [primary] + [(ptp, dtp) for ptp in top_prefill for dtp in top_decode if (ptp, dtp) != primary]
         for ptp, dtp in all_pairs:
             if (ptp, dtp) in seen:
@@ -56,6 +63,9 @@ class PDSearchMixin:
                 skipped.append((ptp, dtp))
                 continue
             if ptp != dtp:
+                if is_mla:
+                    skipped.append((ptp, dtp))
+                    continue
                 if not allow_asymmetric:
                     skipped.append((ptp, dtp))
                     continue
@@ -71,6 +81,10 @@ class PDSearchMixin:
             skipped_str = ', '.join(f'(PTP={p}, DTP={d})' for p, d in skipped)
             self.log(f"  ⚠️  Skipped {len(skipped)} TP pairs", 'warning')
             self.log(f"     Affected: [{skipped_str}]", 'warning')
+            if is_mla:
+                self.log("     Asymmetric pairs are excluded for MLA models (kv_lora_rank): "
+                         "replicated latent KV makes heterogeneous P/D TP sizes "
+                         "incompatible with NIXL transfer (engine dies on first request)", 'warning')
             self.log("     Pairs skipped by 'Skip TP16' or asymmetric TP filters "
                      "(adjust in Test Config to override)", 'warning')
 
