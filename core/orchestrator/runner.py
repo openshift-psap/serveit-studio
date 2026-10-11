@@ -1722,21 +1722,30 @@ class TestOrchestrator(ParserMixin, GuidellmMixin):
 
                 result.cleanup_time = datetime.now().isoformat()
             elif cleanup and not result.guidellm_success:
-                if log_callback:
-                    log_callback("\n⚠️  Test failed — cleaning up deployment...")
+                if self._should_stop():
+                    # User requested stop: leave the (broken) deployment in
+                    # place — the next run's reuse logic cleans it up on
+                    # redeploy ("not all pods serving -> cleanup"). Nothing is
+                    # deleted as part of stopping.
+                    if log_callback:
+                        log_callback("\nℹ️  Stop requested — skipping failure cleanup; "
+                                     "pods left for the next run to reconcile")
+                else:
+                    if log_callback:
+                        log_callback("\n⚠️  Test failed — cleaning up deployment...")
 
-                self.deployment_manager.delete_deployment(
-                    config.test_id,
-                    config.architecture,
-                    log_callback=log_callback
-                )
-                self.deployment_manager.wait_for_pods_terminated(
-                    config.test_id,
-                    timeout=300,
-                    log_callback=log_callback
-                )
+                    self.deployment_manager.delete_deployment(
+                        config.test_id,
+                        config.architecture,
+                        log_callback=log_callback
+                    )
+                    self.deployment_manager.wait_for_pods_terminated(
+                        config.test_id,
+                        timeout=300,
+                        log_callback=log_callback
+                    )
 
-                result.cleanup_time = datetime.now().isoformat()
+                    result.cleanup_time = datetime.now().isoformat()
 
         # Final summary
         if log_callback:
