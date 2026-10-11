@@ -53,6 +53,7 @@ def clean_state(app):
     state['_optimization_greenlet'] = None
     with get_db() as conn:
         conn.execute('DELETE FROM console_logs')
+        conn.execute('DELETE FROM optimization_runs')
     yield state
     state['_optimization_greenlet'] = None
 
@@ -63,6 +64,15 @@ def _add_log(timestamp):
         conn.execute(
             'INSERT INTO console_logs (timestamp, log_type, message) VALUES (?, ?, ?)',
             (timestamp, 'info', 'test log line'))
+
+
+def _add_run(status):
+    from web.database import get_db
+    with get_db() as conn:
+        conn.execute(
+            "INSERT INTO optimization_runs (run_name, model, isl, osl, num_users, status, created_at) "
+            "VALUES ('test-run', 'test/model', 100, 10, 1, ?, datetime('now'))",
+            (status,))
 
 
 def test_no_greenlet_no_activity_is_dead(app, clean_state):
@@ -108,3 +118,29 @@ def test_killed_greenlet_with_no_activity_is_dead(app, clean_state):
     gevent.sleep(0)
     clean_state['_optimization_greenlet'] = gl
     assert _run_greenlet_alive() is False
+
+
+def test_completed_run_with_recent_logs_is_dead(app, clean_state):
+    """A normally-completed run's final logs must not keep the UI showing
+    Stop for 10 minutes after completion (regression: liveness heuristic
+    treated the completion messages as ongoing activity)."""
+    from web.realtime import _run_greenlet_alive
+    _add_run('completed')
+    _add_log(datetime.now().isoformat())
+    assert _run_greenlet_alive() is False
+
+
+def test_stopped_run_with_recent_logs_is_alive(app, clean_state):
+    """The zombie-flag case is preserved: a run marked stopped while work
+    provably continues (recent logs) still counts as alive."""
+    from web.realtime import _run_greenlet_alive
+    _add_run('stopped')
+    _add_log(datetime.now().isoformat())
+    assert _run_greenlet_alive() is True
+
+
+def test_running_run_with_recent_logs_is_alive(app, clean_state):
+    from web.realtime import _run_greenlet_alive
+    _add_run('running')
+    _add_log(datetime.now().isoformat())
+    assert _run_greenlet_alive() is True

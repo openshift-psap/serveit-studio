@@ -1114,6 +1114,16 @@ class PDOnlyStrategy(OptimizationStrategy):
             self.opt._run_latency_bounded_search()
             self.opt.log("", 'info')
 
+        # Step 11: Calibrated load / Concurrency sweep (user-controlled).
+        # Mirrors the recipe strategy — without this, a pd_only run with the
+        # Concurrency Sweep enabled silently skips it.
+        if self.opt.config.calibrated_load_enabled and len(self.opt.pareto_results) > 0:
+            self.opt._recalculate_achievable_concurrency()
+            self.opt.log("STEP 11: Calibrated Load Validation", 'decision')
+            self.opt.log("-" * 80, 'info')
+            self.opt._validate_at_calibrated_load()
+            self.opt.log("", 'info')
+
         self._run_speculative_if_enabled()
         self._run_cache_sweep_if_enabled()
 
@@ -1147,6 +1157,16 @@ class EPOnlyStrategy(OptimizationStrategy):
 
         if self.opt._should_run_latency_bounded_search():
             self.opt._run_latency_bounded_search()
+            self.opt.log("", 'info')
+
+        # Step 11: Calibrated load / Concurrency sweep (user-controlled).
+        # Mirrors ThroughputStrategy — without this, an ep_only run with the
+        # Concurrency Sweep enabled silently skips it.
+        if self.opt.config.calibrated_load_enabled and len(self.opt.ep_results) > 0:
+            self.opt._recalculate_achievable_concurrency()
+            self.opt.log("STEP 11: Calibrated Load Validation", 'decision')
+            self.opt.log("-" * 80, 'info')
+            ep_strategy._validate_ep_at_calibrated_load()
             self.opt.log("", 'info')
 
         self._run_speculative_if_enabled()

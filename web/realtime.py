@@ -104,12 +104,20 @@ def _run_greenlet_alive():
     (pod waits, load polls, benchmark monitor). Only when BOTH the greenlet
     entry is dead AND there has been no run activity for 10 minutes do we
     consider the run dead.
+
+    A run whose latest DB row is 'completed' is definitively finished — its
+    completion logs are recent but must NOT keep the UI in the running state.
     """
     greenlet = state.get('_optimization_greenlet')
     if greenlet is not None and not greenlet.dead:
         return True
     try:
         with get_db() as conn:
+            run_row = conn.execute(
+                'SELECT status FROM optimization_runs ORDER BY id DESC LIMIT 1'
+            ).fetchone()
+            if run_row and run_row['status'] == 'completed':
+                return False
             row = conn.execute(
                 'SELECT timestamp FROM console_logs ORDER BY id DESC LIMIT 1'
             ).fetchone()
