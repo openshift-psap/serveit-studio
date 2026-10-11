@@ -1167,6 +1167,7 @@ function _renderChartsImpl(data, runId, content) {
                 adv.tool_call_parser && adv.tool_call_parser.mode === 'custom' ? ['Tool Call Parser', adv.tool_call_parser.value] : null,
                 adv.reasoning_parser && adv.reasoning_parser.mode === 'custom' ? ['Reasoning Parser', adv.reasoning_parser.value] : null,
                 ['Bidirectional KV', advToggle('enable_bidirectional_kv', 'Off')],
+                ['Skip Asymmetric MLA TP', advToggle('skip_asymmetric_mla_tp', 'Off')],
                 adv.cpu_offload_gb && adv.cpu_offload_gb.mode === 'custom' ? ['CPU KV Offload', adv.cpu_offload_gb.value + ' GB'] : null,
                 adv.prefix_cache_retention && adv.prefix_cache_retention.mode === 'custom' ? ['Prefix Cache Retention', adv.prefix_cache_retention.value] : null,
                 adv.ssm_conv_state_layout && adv.ssm_conv_state_layout.mode === 'custom' ? ['SSM Conv State Layout', adv.ssm_conv_state_layout.value] : null,

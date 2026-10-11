@@ -171,10 +171,12 @@ class TestBidirectionalKvGuard:
 class TestMlaAsymmetricExclusion:
     """MLA models replicate latent KV across TP: engine KV = per-GPU blocks x TP,
     so heterogeneous P/D TP pairs fail the NIXL handshake assertion ("KV cache
-    sizes must match between P and D when replicated") and the engine core dies
-    on the first transfer. Asymmetric pairs must be excluded for MLA models."""
+    sizes must match between P and D when replicated") on upstream vLLM images
+    (engine core dies on first transfer). Asymmetric pairs are ALLOWED by
+    default (for images with heterogeneous MLA TP support) and skipped only
+    when the user opts in via Advanced Settings -> skip_asymmetric_mla_tp."""
 
-    def _make_stub(self, mla, **cfg_kwargs):
+    def _make_stub(self, mla, skip_setting=None, **cfg_kwargs):
         import types
         from core.optimizer.pd_search import PDSearchMixin
         defaults = dict(objective='throughput', tp_pair_top_n=2,
@@ -182,6 +184,8 @@ class TestMlaAsymmetricExclusion:
                         asymmetric_allow_decode_gt_prefill=True,
                         asymmetric_allow_prefill_gt_decode=True)
         defaults.update(cfg_kwargs)
+        if skip_setting is not None:
+            defaults['advanced_vllm'] = {'skip_asymmetric_mla_tp': {'mode': skip_setting}}
         stub = types.SimpleNamespace(
             config=types.SimpleNamespace(**defaults),
             prefill_tp_results=[{'tp': 16, 'tpsg': 437, 'ttft_p90': 100},
@@ -196,23 +200,46 @@ class TestMlaAsymmetricExclusion:
         stub._select_tp_pairs = PDSearchMixin._select_tp_pairs.__get__(stub)
         return stub
 
-    def test_mla_excludes_asymmetric(self):
+    def test_mla_asymmetric_allowed_by_default(self):
         stub = self._make_stub(mla=True)
+        stub._select_tp_pairs()
+        pairs = getattr(stub, '_selected_tp_pairs', [])
+        assert (16, 8) in pairs
+        assert (8, 16) in pairs
+        assert any('heterogeneous MLA TP support' in m for m in stub.logs)
+
+    def test_mla_skip_when_setting_on(self):
+        stub = self._make_stub(mla=True, skip_setting='on')
         stub._select_tp_pairs()
         pairs = getattr(stub, '_selected_tp_pairs', [])
         assert (16, 8) not in pairs
         assert (8, 16) not in pairs
         assert (16, 16) in pairs
         assert (8, 8) in pairs
+        assert any('skip-asymmetric-mla-tp' in m for m in stub.logs)
 
-    def test_non_mla_keeps_asymmetric(self):
-        stub = self._make_stub(mla=False)
+    def test_mla_setting_off_allows_asymmetric(self):
+        stub = self._make_stub(mla=True, skip_setting='off')
         stub._select_tp_pairs()
         pairs = getattr(stub, '_selected_tp_pairs', [])
         assert (16, 8) in pairs
-        assert (8, 16) in pairs
 
-    def test_mla_warning_logged(self):
-        stub = self._make_stub(mla=True)
+    def test_non_mla_unaffected_by_setting(self):
+        stub = self._make_stub(mla=False, skip_setting='on')
         stub._select_tp_pairs()
-        assert any('MLA' in m for m in stub.logs)
+        pairs = getattr(stub, '_selected_tp_pairs', [])
+        assert (16, 8) in pairs
+
+    def test_mla_no_setting_no_advanced_vllm(self):
+        import types
+        from core.optimizer.pd_search import PDSearchMixin
+        stub = self._make_stub(mla=True)
+        stub.config = types.SimpleNamespace(
+            objective='throughput', tp_pair_top_n=2,
+            allow_asymmetric_tp=True, skip_tp16=False,
+            asymmetric_allow_decode_gt_prefill=True,
+            asymmetric_allow_prefill_gt_decode=True)
+        stub._select_tp_pairs = PDSearchMixin._select_tp_pairs.__get__(stub)
+        stub._select_tp_pairs()
+        pairs = getattr(stub, '_selected_tp_pairs', [])
+        assert (16, 8) in pairs

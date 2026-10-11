@@ -261,8 +261,10 @@ class RecipeOptimizer(
             self._is_mla_model = bool(self._model_config.get('kv_lora_rank'))
             if self._is_mla_model:
                 self.log(f"MLA attention detected (kv_lora_rank="
-                         f"{self._model_config['kv_lora_rank']}) — asymmetric P/D TP "
-                         f"pairs will be excluded from the PD search")
+                         f"{self._model_config['kv_lora_rank']}) — asymmetric P/D TP pairs "
+                         f"require a vLLM image with heterogeneous MLA TP support "
+                         f"(quay.io/bbenshab/vllm:llm-d-cuda-asym-mla); control via "
+                         f"Advanced Settings → skip-asymmetric-mla-tp")
             has_chunk = self._model_config.get('attention_chunk_size') is not None
             hybrid_archs = ['Qwen3NextForCausalLM', 'Llama4ForConditionalGeneration',
                             'Qwen3_5ForCausalLM', 'Qwen3_5ForConditionalGeneration',

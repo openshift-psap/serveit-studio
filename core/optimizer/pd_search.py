@@ -48,12 +48,16 @@ class PDSearchMixin:
         allow_prefill_gt = getattr(self.config, 'asymmetric_allow_prefill_gt_decode', True)
         skip_tp16 = getattr(self.config, 'skip_tp16', True)
         # MLA models (kv_lora_rank, e.g. DeepSeek/GLM-DSA) replicate the latent
-        # KV across TP ranks: per-engine KV size = per-GPU blocks x TP, so a
-        # heterogeneous P/D TP pair can never satisfy the NIXL handshake
-        # assertion ("KV cache sizes must match between P and D when
-        # replicated") — the engine core dies on the first transfer.
-        # Hard exclusion, validated live on kermit (GLM-5.3 TP8 P + TP16 D).
+        # KV across TP ranks: per-engine KV = per-GPU blocks x TP, so a
+        # heterogeneous P/D TP pair fails the NIXL handshake assertion
+        # ("KV cache sizes must match between P and D when replicated") on
+        # upstream vLLM images — the engine core dies on the first transfer.
+        # Allowed by default for images with heterogeneous MLA TP support
+        # (e.g. quay.io/bbenshab/vllm:llm-d-cuda-asym-mla); opt back into the
+        # skip via Advanced Settings -> skip-asymmetric-mla-tp.
         is_mla = getattr(self, '_is_mla_model', False)
+        adv = getattr(self.config, 'advanced_vllm', None) or {}
+        skip_asym_mla = (adv.get('skip_asymmetric_mla_tp') or {}).get('mode') == 'on'
         all_pairs = [primary] + [(ptp, dtp) for ptp in top_prefill for dtp in top_decode if (ptp, dtp) != primary]
         for ptp, dtp in all_pairs:
             if (ptp, dtp) in seen:
@@ -63,7 +67,7 @@ class PDSearchMixin:
                 skipped.append((ptp, dtp))
                 continue
             if ptp != dtp:
-                if is_mla:
+                if is_mla and skip_asym_mla:
                     skipped.append((ptp, dtp))
                     continue
                 if not allow_asymmetric:
@@ -81,12 +85,19 @@ class PDSearchMixin:
             skipped_str = ', '.join(f'(PTP={p}, DTP={d})' for p, d in skipped)
             self.log(f"  ⚠️  Skipped {len(skipped)} TP pairs", 'warning')
             self.log(f"     Affected: [{skipped_str}]", 'warning')
-            if is_mla:
-                self.log("     Asymmetric pairs are excluded for MLA models (kv_lora_rank): "
-                         "replicated latent KV makes heterogeneous P/D TP sizes "
-                         "incompatible with NIXL transfer (engine dies on first request)", 'warning')
+            if is_mla and skip_asym_mla:
+                self.log("     Asymmetric pairs skipped for MLA model (kv_lora_rank): "
+                         "upstream vLLM images crash the decode engine on the first "
+                         "NIXL transfer. Disable 'skip-asymmetric-mla-tp' in Advanced "
+                         "Settings when using an image with heterogeneous MLA TP "
+                         "support (e.g. quay.io/bbenshab/vllm:llm-d-cuda-asym-mla).", 'warning')
             self.log("     Pairs skipped by 'Skip TP16' or asymmetric TP filters "
                      "(adjust in Test Config to override)", 'warning')
+        if is_mla and not skip_asym_mla:
+            self.log("  ℹ️  MLA model with asymmetric P/D TP pairs allowed — requires a "
+                     "vLLM image with heterogeneous MLA TP support "
+                     "(quay.io/bbenshab/vllm:llm-d-cuda-asym-mla); upstream images "
+                     "crash on the first KV transfer.", 'info')
 
         # Fall back to symmetric if everything was filtered
         if not self._selected_tp_pairs:
