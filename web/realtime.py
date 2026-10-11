@@ -630,7 +630,7 @@ def handle_stop_optimization():
         greenlet = state.get('_optimization_greenlet')
         save_state()
 
-    # 2. Kill remote guidellm + clean up test deployments
+    # 2. Kill remote guidellm (stop the benchmark; keep test pods running)
     ns = state.get('current_config', {}).get('namespace') or TARGET_NAMESPACE
     try:
         r = subprocess.run(
@@ -644,13 +644,11 @@ def handle_stop_optimization():
                 capture_output=True, timeout=10, check=False)
     except Exception:
         pass
-    # Delete test LWS deployments so greenlet can't redeploy
-    try:
-        subprocess.run(
-            ['kubectl', 'delete', 'lws', '--all', '-n', ns, '--ignore-not-found'],
-            capture_output=True, timeout=15, check=False)
-    except Exception:
-        pass
+    # Test pods (LWS deployments) are intentionally LEFT RUNNING: a resume
+    # reuses them when all pods are serving (runner Step 1a reuse logic) and
+    # cleans them up only when the same test redeploys with not-ready pods.
+    # This preserves expensive model loads (13+ min each) and scarce GPU
+    # scheduling across stop/resume cycles.
 
     # 3. Kill local kubectl subprocesses (except port-forward)
     def _kill_kubectl():
@@ -697,6 +695,8 @@ def handle_stop_optimization():
 
     socketio.emit('status_update', {'running': False, 'message': 'Optimization stopped'})
     socketio.emit('console_log', {'type': 'warning', 'message': '🛑 Optimization stopped by user'})
+    socketio.emit('console_log', {'type': 'info',
+                                  'message': 'ℹ️  Test pods left running — Resume will reuse them if serving'})
 
 @socketio.on('cleanup_deployment')
 def handle_cleanup_deployment(data):
