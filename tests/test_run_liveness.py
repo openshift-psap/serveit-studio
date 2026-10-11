@@ -103,6 +103,16 @@ def test_dead_greenlet_with_stale_activity_is_dead(app, clean_state):
     assert _run_greenlet_alive() is False
 
 
+def test_stopped_run_with_aged_logs_is_dead(app, clean_state):
+    """A user-stopped run whose cleanup finished a few minutes ago must not
+    report as running on refresh (regression: 10-minute activity window kept
+    showing Stop long after the stop)."""
+    from web.realtime import _run_greenlet_alive
+    _add_run('stopped')
+    _add_log((datetime.now() - timedelta(minutes=3)).isoformat())
+    assert _run_greenlet_alive() is False
+
+
 def test_dead_greenlet_beats_stale_activity(app, clean_state):
     """A dead state entry with recent logs still counts as alive (recency wins)."""
     from web.realtime import _run_greenlet_alive

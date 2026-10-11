@@ -100,10 +100,10 @@ def _run_greenlet_alive():
     stale while the actual work greenlet is still running (a second spawn
     overwriting the entry, an in-memory state reset, or a bookkeeping race).
     Before force-stopping a run we also look for recent run activity in
-    console_logs — the run writes logs at least once a minute while active
-    (pod waits, load polls, benchmark monitor). Only when BOTH the greenlet
-    entry is dead AND there has been no run activity for 10 minutes do we
-    consider the run dead.
+    console_logs — an actively working run writes logs at least every ~35s
+    (pod waits, load polls, benchmark monitor). The window is deliberately
+    SHORT (2 minutes): a user-stopped run also has recent logs while its
+    cleanup winds down, and must not keep reporting as running on refresh.
 
     A run whose latest DB row is 'completed' is definitively finished — its
     completion logs are recent but must NOT keep the UI in the running state.
@@ -124,7 +124,7 @@ def _run_greenlet_alive():
         if row and row['timestamp']:
             from datetime import datetime, timedelta
             ts = datetime.fromisoformat(row['timestamp'])
-            if (datetime.now() - ts) < timedelta(minutes=10):
+            if (datetime.now() - ts) < timedelta(minutes=2):
                 return True
     except Exception:
         pass
