@@ -1722,7 +1722,7 @@ class TestOrchestrator(ParserMixin, GuidellmMixin):
 
                 result.cleanup_time = datetime.now().isoformat()
             elif cleanup and not result.guidellm_success:
-                if self._should_stop():
+                if stop_check and stop_check():
                     # User requested stop: leave the (broken) deployment in
                     # place — the next run's reuse logic cleans it up on
                     # redeploy ("not all pods serving -> cleanup"). Nothing is
