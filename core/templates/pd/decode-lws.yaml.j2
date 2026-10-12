@@ -283,9 +283,10 @@ spec:
 {% endif %}{% if dtype %}                  --dtype {{ dtype }} \
 {% endif %}{% if kv_cache_dtype %}                  --kv-cache-dtype {{ kv_cache_dtype }} \
 {% endif %}{% if speculative_config_json %}                  --speculative-config '{{ speculative_config_json }}' \
-{% endif %}{% if enable_scale_out %}                  --enable-scale-out \
+{% endif %}{% if decode_enable_scale_out %}                  --enable-scale-out \
                   --safetensors-load-strategy lazy \
                   --long-prefill-token-threshold {{ long_prefill_token_threshold | default(2048) }} \
+{% endif %}{% if decode_compilation_config %}                  --compilation-config '{{ decode_compilation_config }}' \
 {% endif %}{% if enable_auto_tool_choice %}                  --enable-auto-tool-choice \
 {% endif %}{% if tool_call_parser %}                  --tool-call-parser {{ tool_call_parser }} \
 {% endif %}{% if reasoning_parser %}                  --reasoning-parser {{ reasoning_parser }} \

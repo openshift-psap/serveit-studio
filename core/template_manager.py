@@ -542,6 +542,13 @@ class TemplateManager:
             vars_dict['enable_ep_weight_filter'] = True
         else:
             vars_dict['enable_ep_weight_filter'] = False
+
+        # Per-role scale_out (production: prefill-only; None = use shared enable_scale_out)
+        _scale_out = getattr(config, 'enable_scale_out', False)
+        _pf_scale = getattr(config, 'prefill_enable_scale_out', None)
+        _dc_scale = getattr(config, 'decode_enable_scale_out', None)
+        vars_dict['prefill_enable_scale_out'] = _pf_scale if _pf_scale is not None else _scale_out
+        vars_dict['decode_enable_scale_out'] = _dc_scale if _dc_scale is not None else _scale_out
         vars_dict['prefill_enable_eplb'] = config.enable_eplb and prefill_tp > 1
         vars_dict['decode_enable_eplb'] = config.enable_eplb and decode_tp > 1
         vars_dict['prefill_enable_dbo'] = config.enable_dbo and prefill_tp > 1

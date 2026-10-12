@@ -676,6 +676,8 @@ class ConfigBuilderMixin:
                     val = int(val)
                 elif attr in ('gpu_memory_utilization', 'prefill_gpu_memory_utilization', 'decode_gpu_memory_utilization'):
                     val = float(val)
+                elif attr == 'prefill_kv_cache_memory_bytes':
+                    val = int(val)
                 setattr(cfg, attr, val)
 
         # host_ipc — plain bool from UI (not mode/value dict)
@@ -784,6 +786,11 @@ class ConfigBuilderMixin:
             'nccl_debug_logs': 'nccl_debug_logs',
             'enable_bidirectional_kv': 'enable_bidirectional_kv',
             'enable_scale_out': 'enable_scale_out',
+            'prefill_enable_scale_out': 'prefill_enable_scale_out',
+            'decode_enable_scale_out': 'decode_enable_scale_out',
+            'decode_compilation_config': 'decode_compilation_config',
+            'prefill_kernel_config': 'prefill_kernel_config',
+            'prefill_kv_cache_memory_bytes': 'prefill_kv_cache_memory_bytes',
         }
         for key, attr in toggle_fields.items():
             setting = adv.get(key)

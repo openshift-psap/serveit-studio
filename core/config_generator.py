@@ -178,6 +178,11 @@ class TestConfig:
     prefill_all2all_backend: Optional[str] = None  # For PD prefill pods
     decode_all2all_backend: Optional[str] = None   # For PD decode pods
     enable_scale_out: bool = False  # KV scale-out + lazy loading + long-prefill threshold (production DPEP flags)
+    prefill_enable_scale_out: Optional[bool] = None  # per-role override (None = use enable_scale_out)
+    decode_enable_scale_out: Optional[bool] = None   # per-role override (None = use enable_scale_out)
+    decode_compilation_config: Optional[str] = None  # decode-only compilation config (e.g. cudagraph_mode)
+    prefill_kernel_config: Optional[str] = None      # prefill-only kernel config (e.g. disable flashinfer autotune)
+    prefill_kv_cache_memory_bytes: Optional[int] = None  # prefill-only fixed KV cache size
     moe_dp_chunk_size: Optional[int] = None  # MoE dispatch chunk size (default 256, upstream uses 384 for decode)
     nvshmem_symmetric_size: Optional[str] = None  # e.g. '6G' — computed from model architecture
     num_redundant_experts: Optional[int] = None  # EPLB redundant experts per EP rank
