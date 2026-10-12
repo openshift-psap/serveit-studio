@@ -360,12 +360,18 @@ function applyRunSettings(runId, btn) {
         .then(function(r) { return r.json(); })
         .then(function(runConfig) {
             if (runConfig && !runConfig.error) {
+                // Mark config as received to prevent the socket's
+                // load_config_result from overwriting our applied settings
+                window._serverConfigReceived = true;
                 config = Object.assign({}, config, runConfig);
                 document.getElementById('resume-overlay').classList.remove('active');
                 goToStep(3, true);
                 // Apply UI AFTER step navigation so the step-3 form elements
                 // are visible and any step-transition side effects have run.
                 if (typeof updateUIFromConfig === 'function') updateUIFromConfig();
+                // Save the applied config to the server so a page refresh
+                // doesn't lose it
+                saveConfig();
                 logToConsole('⚙️ Applied settings from Run #' + runId + ' — review and start when ready', 'success');
             } else {
                 logToConsole('Failed to load settings for Run #' + runId, 'error');
