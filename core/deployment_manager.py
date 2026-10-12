@@ -520,9 +520,24 @@ class DeploymentManager:
                 created_dt = datetime.fromisoformat(creation.replace('Z', '+00:00'))
                 now = datetime.now(timezone.utc)
                 pending_seconds = (now - created_dt).total_seconds()
+
+                # Extract the scheduling failure reason (capacity vs other)
+                capacity_blocked = False
+                for cond in pod.get('status', {}).get('conditions', []):
+                    if (cond.get('type') == 'PodScheduled'
+                            and cond.get('status') == 'False'
+                            and cond.get('reason') == 'Unschedurable'):
+                        msg = cond.get('message', '')
+                        if ('Insufficient nvidia.com/gpu' in msg
+                                or 'Insufficient cpu' in msg
+                                or 'Insufficient memory' in msg
+                                or 'nodes are available' in msg):
+                            capacity_blocked = True
+
                 pending_pods.append({
                     'name': pod_name,
-                    'pending_seconds': pending_seconds
+                    'pending_seconds': pending_seconds,
+                    'capacity_blocked': capacity_blocked
                 })
             return pending_pods
 
@@ -554,6 +569,17 @@ class DeploymentManager:
         for pod in pending_pods:
             if pod['pending_seconds'] > pending_timeout:
                 pod_name = pod['name']
+                # Capacity-blocked pods are waiting for other workloads to
+                # free resources — deleting and recreating them doesn't help
+                # (the cluster is still full). Keep waiting indefinitely.
+                if pod.get('capacity_blocked'):
+                    if log_callback:
+                        mins = int(pod['pending_seconds'] // 60)
+                        log_callback(
+                            f"   ⏳ {pod_name}: Pending {mins}m for GPU capacity "
+                            f"— waiting for resources to free up (no restart)"
+                        )
+                    continue
                 mins = int(pod['pending_seconds'] // 60)
                 if log_callback:
                     log_callback(
@@ -697,9 +723,19 @@ class DeploymentManager:
                         # Reset last_status to force a fresh status log after restart
                         last_status = None
                 elif total_pod_restarts >= max_pod_restarts:
-                    # Check if pods are still stuck — if so, give up
+                    # Check if pods are still stuck — if so, give up.
+                    # EXCEPTION: capacity-blocked pods (Insufficient nvidia.com/gpu)
+                    # wait indefinitely — the cluster will eventually free up.
                     pending = self._get_pending_pods(test_id)
-                    stuck = [p for p in pending if p['pending_seconds'] > 180]
+                    stuck = [p for p in pending if p['pending_seconds'] > 180 and not p.get('capacity_blocked')]
+                    if not stuck and pending:
+                        # All remaining Pending pods are capacity-blocked — keep waiting
+                        if log_callback and time_for_progress:
+                            cap_pods = [p['name'] for p in pending if p.get('capacity_blocked')]
+                            log_callback(
+                                f"   ⏳ {len(cap_pods)} pod(s) waiting for GPU capacity — "
+                                f"will wait indefinitely (cluster resources will free up)"
+                            )
                     if stuck:
                         if log_callback:
                             log_callback(
