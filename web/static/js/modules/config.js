@@ -125,53 +125,51 @@ function updateUIFromConfig() {
         setWorkloadType(config.workload_type);
     }
 
-    if (document.getElementById('multi-turn-enabled')) {
-        if (config.turns && config.turns > 1) {
-            document.getElementById('multi-turn-enabled').checked = true;
-            document.getElementById('turns-input').value = config.turns;
-            var mtBody = document.getElementById('multi-turn-body');
-            if (mtBody) mtBody.style.display = 'block';
-            var mtInner = document.getElementById('multi-turn-inner');
-            if (mtInner) mtInner.style.opacity = '1';
-            var mtSw = document.getElementById('multi-turn-switch');
-            if (mtSw) { mtSw.style.background = '#15803d'; mtSw.querySelector('span').style.transform = 'translateX(18px)'; }
-            toggleMultiTurn();
+    // Restore multi-turn sub-sections when the workload is multiturn
+    // (the old multi-turn-enabled checkbox was replaced by the workload
+    // type selector — setWorkloadType above handles the toggle)
+    if (config.workload_type === 'multiturn' || (config.turns && config.turns > 1)) {
+        // Ensure the multiturn settings panel is visible
+        var mtSettings = document.getElementById('multiturn-settings');
+        if (mtSettings) mtSettings.style.display = 'block';
+        var turnsInputEl = document.getElementById('turns-input-mt');
+        if (turnsInputEl && config.turns) turnsInputEl.value = config.turns;
 
-            // Inter-Turn Delay sub-section
-            if (config.turn_delay) {
-                var tdCb = document.getElementById('turn-delay-enabled-mt');
-                var tdBody = document.getElementById('turn-delay-mt-body');
-                var tdSw = document.getElementById('turn-delay-mt-switch');
-                if (tdCb) { tdCb.checked = true; }
-                if (tdBody) tdBody.style.display = 'block';
-                if (tdSw) { tdSw.style.background = '#15803d'; var tdSpan = tdSw.querySelector('span'); if (tdSpan) tdSpan.style.transform = 'translateX(18px)'; }
-                var tdInput = document.getElementById('turn-delay-input-mt');
-                if (tdInput) tdInput.value = config.turn_delay;
-                var tdSdInput = document.getElementById('turn-delay-stdev-input-mt');
-                if (tdSdInput && config.turn_delay_stdev) tdSdInput.value = config.turn_delay_stdev;
-                var tdMinInput = document.getElementById('turn-delay-min-input-mt');
-                if (tdMinInput && config.turn_delay_min) tdMinInput.value = config.turn_delay_min;
-                var tdMaxInput = document.getElementById('turn-delay-max-input-mt');
-                if (tdMaxInput && config.turn_delay_max) tdMaxInput.value = config.turn_delay_max;
-            }
+        // Inter-Turn Delay sub-section
+        if (config.turn_delay) {
+            var tdCb = document.getElementById('turn-delay-enabled-mt');
+            var tdBody = document.getElementById('turn-delay-mt-body');
+            var tdSw = document.getElementById('turn-delay-mt-switch');
+            if (tdCb) { tdCb.checked = true; }
+            if (tdBody) tdBody.style.display = 'block';
+            if (tdSw) { tdSw.style.background = '#15803d'; var tdSpan = tdSw.querySelector('span'); if (tdSpan) tdSpan.style.transform = 'translateX(18px)'; }
+            var tdInput = document.getElementById('turn-delay-input-mt');
+            if (tdInput) tdInput.value = config.turn_delay;
+            var tdSdInput = document.getElementById('turn-delay-stdev-input-mt');
+            if (tdSdInput && config.turn_delay_stdev) tdSdInput.value = config.turn_delay_stdev;
+            var tdMinInput = document.getElementById('turn-delay-min-input-mt');
+            if (tdMinInput && config.turn_delay_min) tdMinInput.value = config.turn_delay_min;
+            var tdMaxInput = document.getElementById('turn-delay-max-input-mt');
+            if (tdMaxInput && config.turn_delay_max) tdMaxInput.value = config.turn_delay_max;
+        }
 
-            // First Turn Prompt Override sub-section
-            if (config.first_prompt_tokens) {
-                var fpCb = document.getElementById('first-prompt-enabled-mt');
-                var fpBody = document.getElementById('first-prompt-mt-body');
-                var fpSw = document.getElementById('first-prompt-mt-switch');
-                if (fpCb) { fpCb.checked = true; }
-                if (fpBody) fpBody.style.display = 'block';
-                if (fpSw) { fpSw.style.background = '#15803d'; var fpSpan = fpSw.querySelector('span'); if (fpSpan) fpSpan.style.transform = 'translateX(18px)'; }
-                var fpInput = document.getElementById('first-prompt-tokens-input-mt');
-                if (fpInput) fpInput.value = config.first_prompt_tokens;
-                var fpSdInput = document.getElementById('first-prompt-tokens-stdev-input-mt');
-                if (fpSdInput && config.first_prompt_tokens_stdev) fpSdInput.value = config.first_prompt_tokens_stdev;
-                var fpMinInput = document.getElementById('first-prompt-tokens-min-input-mt');
-                if (fpMinInput && config.first_prompt_tokens_min) fpMinInput.value = config.first_prompt_tokens_min;
-                var fpMaxInput = document.getElementById('first-prompt-tokens-max-input-mt');
-                if (fpMaxInput && config.first_prompt_tokens_max) fpMaxInput.value = config.first_prompt_tokens_max;
-            }
+        // First Turn Prompt Override sub-section
+        if (config.first_prompt_tokens) {
+            var fpCb = document.getElementById('first-prompt-enabled-mt');
+            var fpBody = document.getElementById('first-prompt-mt-body');
+            var fpSw = document.getElementById('first-prompt-mt-switch');
+            if (fpCb) { fpCb.checked = true; }
+            if (fpBody) fpBody.style.display = 'block';
+            if (fpSw) { fpSw.style.background = '#15803d'; var fpSpan = fpSw.querySelector('span'); if (fpSpan) fpSpan.style.transform = 'translateX(18px)'; }
+            var fpInput = document.getElementById('first-prompt-tokens-input-mt');
+            if (fpInput) fpInput.value = config.first_prompt_tokens;
+            var fpSdInput = document.getElementById('first-prompt-tokens-stdev-input-mt');
+            if (fpSdInput && config.first_prompt_tokens_stdev) fpSdInput.value = config.first_prompt_tokens_stdev;
+            var fpMinInput = document.getElementById('first-prompt-tokens-min-input-mt');
+            if (fpMinInput && config.first_prompt_tokens_min) fpMinInput.value = config.first_prompt_tokens_min;
+            var fpMaxInput = document.getElementById('first-prompt-tokens-max-input-mt');
+            if (fpMaxInput && config.first_prompt_tokens_max) fpMaxInput.value = config.first_prompt_tokens_max;
+        }
 
             if (config.prefix_cache_hit_pct > 0) {
                 var pcMtCb = document.getElementById('prefix-cache-enabled-mt');
@@ -191,7 +189,6 @@ function updateUIFromConfig() {
                 if (pcGroupsSlider && config.prefix_cache_groups) pcGroupsSlider.value = config.prefix_cache_groups;
                 if (pcGroupsVal && config.prefix_cache_groups) pcGroupsVal.textContent = config.prefix_cache_groups;
             }
-        }
     }
     if (config.max_requests && document.getElementById('max-requests-input')) {
         document.getElementById('max-requests-input').value = config.max_requests;
