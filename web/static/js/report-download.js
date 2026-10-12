@@ -154,8 +154,8 @@ function buildRecSection(runId, data, rec, summary, best, allRes) {
 
     // Goal banner
     if (rec.goal_info) {
-        const gColors = { ttft: '#3b82f6', throughput: '#f59e0b', balanced: '#10b981', aggregated_only: '#64748b', pd_only: '#8b5cf6', ep_only: '#0ea5e9' };
-        const gIcons = { ttft: '&#9201;', throughput: '&#9889;', balanced: '&#9878;', aggregated_only: '&#9634;', pd_only: '&#8644;', ep_only: '&#9881;' };
+        const gColors = { ttft: '#3b82f6', throughput: '#f59e0b', balanced: '#10b981', aggregated_only: '#64748b', pd_only: '#8b5cf6', ep_only: '#0ea5e9', dpep_only: '#14b8a6' };
+        const gIcons = { ttft: '&#9201;', throughput: '&#9889;', balanced: '&#9878;', aggregated_only: '&#9634;', pd_only: '&#8644;', ep_only: '&#9881;', dpep_only: '&#9635;' };
         const gc = gColors[rec.goal] || '#10b981';
         s += `<div style="border:3px solid ${gc};border-left:8px solid ${gc};border-radius:10px;margin:20px 0;overflow:hidden;">`;
         s += `<div style="background:${gc};color:white;padding:14px 20px;font-size:1.3em;font-weight:800;">Deployment Recommendation <span style="font-size:0.7em;font-weight:400;opacity:0.85;">&mdash; ${rec.goal_info.name}</span></div>`;

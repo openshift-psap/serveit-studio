@@ -1053,7 +1053,7 @@ data:
         log_to_ui(f"   Optimization goal: {optimization_goal}", 'info')
 
         # Use Recipe-based optimization for all goals
-        if optimization_goal in ('ttft', 'throughput', 'balanced', 'full_coverage', 'aggregated_only', 'pd_only', 'ep_only', 'single_test'):
+        if optimization_goal in ('ttft', 'throughput', 'balanced', 'full_coverage', 'aggregated_only', 'pd_only', 'ep_only', 'dpep_only', 'single_test'):
             goal_descriptions = {
                 'ttft': {
                     'label': 'Response Time Priority (PD vs Aggregated)',
@@ -1103,6 +1103,14 @@ data:
                         "Steps 2-3: Find optimal TP (exhaustive sweep)",
                         "Steps 4-5: EP configuration space enumeration",
                         "Step 7: Test EP configurations at full workload",
+                    ]
+                },
+                'dpep_only': {
+                    'label': 'DP + Expert Parallel Only',
+                    'steps': [
+                        "Step 2: Validate DPEP resource fit (experts per GPU)",
+                        "Steps 4-5: DPEP configuration space (DP sizes, pod counts)",
+                        "Step 7: Test DPEP configurations at full workload",
                     ]
                 },
                 'single_test': {

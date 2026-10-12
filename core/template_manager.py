@@ -532,6 +532,16 @@ class TemplateManager:
         ep = config.enable_expert_parallel
         vars_dict['prefill_enable_expert_parallel'] = ep and prefill_tp > 1
         vars_dict['decode_enable_expert_parallel'] = ep and decode_tp > 1
+        # DPEP: enable EP even at TP=1, and add the weight filter so each
+        # GPU only loads its assigned experts (not the full model)
+        dp_size = getattr(config, 'data_parallel_size', None) or 1
+        ep_weight_filter = getattr(config, 'enable_ep_weight_filter', False)
+        if ep_weight_filter and dp_size > 1:
+            vars_dict['prefill_enable_expert_parallel'] = True
+            vars_dict['decode_enable_expert_parallel'] = True
+            vars_dict['enable_ep_weight_filter'] = True
+        else:
+            vars_dict['enable_ep_weight_filter'] = False
         vars_dict['prefill_enable_eplb'] = config.enable_eplb and prefill_tp > 1
         vars_dict['decode_enable_eplb'] = config.enable_eplb and decode_tp > 1
         vars_dict['prefill_enable_dbo'] = config.enable_dbo and prefill_tp > 1

@@ -166,6 +166,7 @@ class TestConfig:
 
     # MoE / Expert Parallel
     enable_expert_parallel: bool = False
+    enable_ep_weight_filter: bool = False  # DPEP: each GPU loads only its assigned experts
     enable_dbo: bool = False
     dbo_prefill_token_threshold: int = 32
     dbo_decode_token_threshold: int = 32

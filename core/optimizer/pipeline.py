@@ -26,6 +26,7 @@ from core.optimizer.epp_tuning import EPPTuningMixin
 from core.optimizer.dataset import DatasetMixin
 from core.optimizer.speculative import SpeculativeMixin
 from core.optimizer.cache_sweep import CacheSweepMixin
+from core.optimizer.dpep_search import DPEPSearchMixin
 
 logger = logging.getLogger(__name__)
 
@@ -38,6 +39,7 @@ class RecipeOptimizer(
     DatasetMixin,
     SpeculativeMixin,
     CacheSweepMixin,
+    DPEPSearchMixin,
 ):
     """
     Recipe-based exhaustive optimizer.
@@ -551,7 +553,7 @@ class RecipeOptimizer(
         from core.optimization_strategies import (
             TTFTStrategy, ThroughputStrategy, BalancedStrategy,
             AggregatedOnlyStrategy, PDOnlyStrategy, EPOnlyStrategy,
-            SingleTestStrategy,
+            SingleTestStrategy, DPEPOnlyStrategy,
         )
         strategies = {
             'ttft': TTFTStrategy,
@@ -561,6 +563,7 @@ class RecipeOptimizer(
             'aggregated_only': AggregatedOnlyStrategy,
             'pd_only': PDOnlyStrategy,
             'ep_only': EPOnlyStrategy,
+            'dpep_only': DPEPOnlyStrategy,
             'single_test': SingleTestStrategy,
         }
         # Without RDMA, PD and EP are not valid: KV transfer (NIXL) and expert

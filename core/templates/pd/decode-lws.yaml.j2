@@ -270,6 +270,7 @@ spec:
 {% endif %}{% if has_hybrid_attention %}                  --no-disable-hybrid-kv-cache-manager \
 {% endif %}{% if kv_cache_memory_bytes %}                  --kv-cache-memory-bytes={{ kv_cache_memory_bytes }} \
 {% endif %}{% if decode_enable_expert_parallel %}                  --enable-expert-parallel \
+{% endif %}{% if enable_ep_weight_filter %}                  --enable-ep-weight-filter \
 {% endif %}{% if decode_enable_dbo %}                  --enable-dbo \
                   --dbo-decode-token-threshold {{ dbo_decode_token_threshold | default(32) }} \
 {% endif %}{% if decode_enable_eplb %}                  --enable-eplb \

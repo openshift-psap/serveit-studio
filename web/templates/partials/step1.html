@@ -65,6 +65,14 @@
                                     <strong>Architecture:</strong> <span>Expert Parallelism (EP)</span>
                                 </div>
                             </div>
+
+                            <div class="arch-card" data-goal="dpep_only">
+                                <h4>DP + Expert Parallel Only</h4>
+                                <p>Independent GPU workers with distributed experts (TP=1). No TP all-reduce — each GPU handles its own requests' attention locally. Best for MoE models with lightweight attention (MLA).</p>
+                                <div class="best-for">
+                                    <strong>Architecture:</strong> <span>Data Parallel + Expert Parallel (DPEP)</span>
+                                </div>
+                            </div>
                         </div>
 
                         <div style="text-align: center; margin: 24px 0 16px; color: var(--rh-gray-500); font-weight: 700; font-size: 0.95em;">— OR run a specific configuration —</div>

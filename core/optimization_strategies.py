@@ -1171,3 +1171,49 @@ class EPOnlyStrategy(OptimizationStrategy):
 
         self._run_speculative_if_enabled()
         self._run_cache_sweep_if_enabled()
+
+
+class DPEPOnlyStrategy(OptimizationStrategy):
+    """DP + EP Only: Independent GPU workers with distributed experts (TP=1).
+
+    Each GPU runs an independent vLLM instance with full attention weights
+    replicated locally and only its assigned subset of MoE experts. No TP
+    all-reduce — communication is only the expert all-to-all. Best for MoE
+    models with lightweight attention (MLA, DSA).
+
+    Steps 4-5: Enumerate DPEP configurations (DP size per pod × pod count)
+    Step 7: Test DPEP configurations at full workload
+    Step 11: Calibrated load / Concurrency sweep (user-controlled)
+    """
+
+    def execute(self):
+        self.opt.log("STEPS 4-5: DPEP Configuration Space", 'decision')
+        self.opt.log("-" * 80, 'info')
+        self.opt._calculate_dpep_configs()
+        self.opt.log("", 'info')
+        if self.opt._should_stop():
+            return
+
+        self.opt.log("STEP 7: DPEP Configuration Testing (Throughput)", 'decision')
+        self.opt.log("-" * 80, 'info')
+        self.opt._test_dpep_configs()
+        self.opt.log("", 'info')
+        if self.opt._should_stop():
+            return
+
+        self._run_epp_tuning_if_enabled()
+
+        if self.opt._should_run_latency_bounded_search():
+            self.opt._run_latency_bounded_search()
+            self.opt.log("", 'info')
+
+        # Step 11: Calibrated load / Concurrency sweep
+        if self.opt.config.calibrated_load_enabled and len(self.opt.ep_results) > 0:
+            self.opt._recalculate_achievable_concurrency()
+            self.opt.log("STEP 11: Calibrated Load Validation", 'decision')
+            self.opt.log("-" * 80, 'info')
+            self.opt.log("   (DPEP uses the EP calibrated-load path)")
+            self.opt.log("", 'info')
+
+        self._run_speculative_if_enabled()
+        self._run_cache_sweep_if_enabled()
