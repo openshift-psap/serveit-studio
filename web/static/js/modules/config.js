@@ -145,10 +145,14 @@ function updateUIFromConfig() {
                 if (tdCb) { tdCb.checked = true; }
                 if (tdBody) tdBody.style.display = 'block';
                 if (tdSw) { tdSw.style.background = '#15803d'; var tdSpan = tdSw.querySelector('span'); if (tdSpan) tdSpan.style.transform = 'translateX(18px)'; }
-                if (document.getElementById('turn-delay-input')) document.getElementById('turn-delay-input').value = config.turn_delay;
-                if (config.turn_delay_stdev && document.getElementById('turn-delay-stdev-input')) document.getElementById('turn-delay-stdev-input').value = config.turn_delay_stdev;
-                if (config.turn_delay_min && document.getElementById('turn-delay-min-input')) document.getElementById('turn-delay-min-input').value = config.turn_delay_min;
-                if (config.turn_delay_max && document.getElementById('turn-delay-max-input')) document.getElementById('turn-delay-max-input').value = config.turn_delay_max;
+                var tdInput = document.getElementById('turn-delay-input-mt');
+                if (tdInput) tdInput.value = config.turn_delay;
+                var tdSdInput = document.getElementById('turn-delay-stdev-input-mt');
+                if (tdSdInput && config.turn_delay_stdev) tdSdInput.value = config.turn_delay_stdev;
+                var tdMinInput = document.getElementById('turn-delay-min-input-mt');
+                if (tdMinInput && config.turn_delay_min) tdMinInput.value = config.turn_delay_min;
+                var tdMaxInput = document.getElementById('turn-delay-max-input-mt');
+                if (tdMaxInput && config.turn_delay_max) tdMaxInput.value = config.turn_delay_max;
             }
 
             // First Turn Prompt Override sub-section
@@ -159,16 +163,16 @@ function updateUIFromConfig() {
                 if (fpCb) { fpCb.checked = true; }
                 if (fpBody) fpBody.style.display = 'block';
                 if (fpSw) { fpSw.style.background = '#15803d'; var fpSpan = fpSw.querySelector('span'); if (fpSpan) fpSpan.style.transform = 'translateX(18px)'; }
-                if (document.getElementById('first-prompt-tokens-input')) document.getElementById('first-prompt-tokens-input').value = config.first_prompt_tokens;
-                if (config.first_prompt_tokens_stdev && document.getElementById('first-prompt-tokens-stdev-input')) document.getElementById('first-prompt-tokens-stdev-input').value = config.first_prompt_tokens_stdev;
-                if (config.first_prompt_tokens_min && document.getElementById('first-prompt-tokens-min-input')) document.getElementById('first-prompt-tokens-min-input').value = config.first_prompt_tokens_min;
-                if (config.first_prompt_tokens_max && document.getElementById('first-prompt-tokens-max-input')) document.getElementById('first-prompt-tokens-max-input').value = config.first_prompt_tokens_max;
+                var fpInput = document.getElementById('first-prompt-tokens-input-mt');
+                if (fpInput) fpInput.value = config.first_prompt_tokens;
+                var fpSdInput = document.getElementById('first-prompt-tokens-stdev-input-mt');
+                if (fpSdInput && config.first_prompt_tokens_stdev) fpSdInput.value = config.first_prompt_tokens_stdev;
+                var fpMinInput = document.getElementById('first-prompt-tokens-min-input-mt');
+                if (fpMinInput && config.first_prompt_tokens_min) fpMinInput.value = config.first_prompt_tokens_min;
+                var fpMaxInput = document.getElementById('first-prompt-tokens-max-input-mt');
+                if (fpMaxInput && config.first_prompt_tokens_max) fpMaxInput.value = config.first_prompt_tokens_max;
             }
 
-            if (config.prefix_tokens && document.getElementById('prefix-tokens-input')) document.getElementById('prefix-tokens-input').value = config.prefix_tokens;
-            if (config.prefix_count && document.getElementById('prefix-count-input')) document.getElementById('prefix-count-input').value = config.prefix_count;
-
-            // Prefix Cache sub-section (multi-turn variant)
             if (config.prefix_cache_hit_pct > 0) {
                 var pcMtCb = document.getElementById('prefix-cache-enabled-mt');
                 var pcMtBody = document.getElementById('prefix-cache-body-mt');
@@ -182,6 +186,10 @@ function updateUIFromConfig() {
                 var pcMtVal = document.getElementById('prefix-cache-value-mt');
                 if (pcMtSlider) pcMtSlider.value = config.prefix_cache_hit_pct;
                 if (pcMtVal) pcMtVal.textContent = config.prefix_cache_hit_pct + '%';
+                var pcGroupsSlider = document.getElementById('prefix-cache-groups-slider-mt');
+                var pcGroupsVal = document.getElementById('prefix-cache-groups-value-mt');
+                if (pcGroupsSlider && config.prefix_cache_groups) pcGroupsSlider.value = config.prefix_cache_groups;
+                if (pcGroupsVal && config.prefix_cache_groups) pcGroupsVal.textContent = config.prefix_cache_groups;
             }
         }
     }
@@ -413,6 +421,9 @@ function updateUIFromConfig() {
             ucEl.checked = true;
             var ucSw = document.getElementById('use-corpus-switch');
             if (ucSw) { ucSw.style.background = '#15803d'; ucSw.querySelector('span').style.transform = 'translateX(18px)'; }
+            // Hide the structured-prefix wrapper (corpus replaces synthetic prefixes)
+            var spw = document.getElementById('structured-prefix-wrapper');
+            if (spw) spw.style.display = 'none';
         }
     }
     if (config.speculative_preset && config.speculative_preset !== 'off') {
