@@ -273,6 +273,8 @@ spec:
                 valueFrom:
                   fieldRef:
                     fieldPath: status.podIP
+              - name: VLLM_METRICS_PORT
+                value: "8000"
 {% if selected_dra_classes %}
               - name: RDMA_NETWORK_MODE
                 value: "dra-net"

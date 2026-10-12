@@ -361,9 +361,11 @@ function applyRunSettings(runId, btn) {
         .then(function(runConfig) {
             if (runConfig && !runConfig.error) {
                 config = Object.assign({}, config, runConfig);
-                if (typeof updateUIFromConfig === 'function') updateUIFromConfig();
                 document.getElementById('resume-overlay').classList.remove('active');
-                goToStep(3);
+                goToStep(3, true);
+                // Apply UI AFTER step navigation so the step-3 form elements
+                // are visible and any step-transition side effects have run.
+                if (typeof updateUIFromConfig === 'function') updateUIFromConfig();
                 logToConsole('⚙️ Applied settings from Run #' + runId + ' — review and start when ready', 'success');
             } else {
                 logToConsole('Failed to load settings for Run #' + runId, 'error');
