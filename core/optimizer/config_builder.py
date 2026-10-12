@@ -783,6 +783,7 @@ class ConfigBuilderMixin:
             'vllm_debug_logs': 'vllm_debug_logs',
             'nccl_debug_logs': 'nccl_debug_logs',
             'enable_bidirectional_kv': 'enable_bidirectional_kv',
+            'enable_scale_out': 'enable_scale_out',
         }
         for key, attr in toggle_fields.items():
             setting = adv.get(key)

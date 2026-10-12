@@ -177,6 +177,7 @@ class TestConfig:
     all2all_backend: Optional[str] = None  # 'deepep_high_throughput', 'deepep_low_latency', 'nccl', None
     prefill_all2all_backend: Optional[str] = None  # For PD prefill pods
     decode_all2all_backend: Optional[str] = None   # For PD decode pods
+    enable_scale_out: bool = False  # KV scale-out + lazy loading + long-prefill threshold (production DPEP flags)
     moe_dp_chunk_size: Optional[int] = None  # MoE dispatch chunk size (default 256, upstream uses 384 for decode)
     nvshmem_symmetric_size: Optional[str] = None  # e.g. '6G' — computed from model architecture
     num_redundant_experts: Optional[int] = None  # EPLB redundant experts per EP rank
