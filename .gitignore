@@ -67,3 +67,4 @@ skills-lock.json
 .git-deploy-key
 docker/.git-deploy-key
 .kube/
+inference-playbooks/
