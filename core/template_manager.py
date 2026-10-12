@@ -551,7 +551,17 @@ class TemplateManager:
         # Upstream llm-d uses different all2all backends per role:
         # prefill = deepep_high_throughput (optimized for batch prefill)
         # decode = deepep_low_latency (optimized for per-token decode)
-        if config.all2all_backend:
+        # Per-role overrides (prefill_all2all_backend / decode_all2all_backend)
+        # take precedence over the shared all2all_backend.
+        _prefill_a2a = getattr(config, 'prefill_all2all_backend', None)
+        _decode_a2a = getattr(config, 'decode_all2all_backend', None)
+        if _prefill_a2a or _decode_a2a:
+            # Explicit per-role override
+            vars_dict['prefill_all2all_backend'] = (_prefill_a2a
+                if _prefill_a2a and prefill_tp > 1 else None)
+            vars_dict['decode_all2all_backend'] = (_decode_a2a
+                if _decode_a2a and decode_tp > 1 else None)
+        elif config.all2all_backend:
             vars_dict['prefill_all2all_backend'] = config.all2all_backend if prefill_tp > 1 else None
             if config.all2all_backend == 'deepep_high_throughput':
                 vars_dict['decode_all2all_backend'] = 'deepep_low_latency' if decode_tp > 1 else None

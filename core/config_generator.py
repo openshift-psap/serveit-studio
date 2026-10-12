@@ -70,6 +70,8 @@ class TestConfig:
     prefill_max_num_seqs: Optional[int] = None  # For PD prefill pods
     decode_max_num_seqs: Optional[int] = None   # For PD decode pods
     max_num_batched_tokens: Optional[int] = None  # Limits tokens per forward pass
+    prefill_max_num_batched_tokens: Optional[int] = None  # For PD prefill pods
+    decode_max_num_batched_tokens: Optional[int] = None   # For PD decode pods
     # Advanced vLLM flags
     enable_chunked_prefill: bool = False
     enable_prefix_caching: bool = True
@@ -173,6 +175,8 @@ class TestConfig:
     enable_eplb: bool = False
     moe_backend: Optional[str] = None  # 'deep_gemm', 'cutlass', None
     all2all_backend: Optional[str] = None  # 'deepep_high_throughput', 'deepep_low_latency', 'nccl', None
+    prefill_all2all_backend: Optional[str] = None  # For PD prefill pods
+    decode_all2all_backend: Optional[str] = None   # For PD decode pods
     moe_dp_chunk_size: Optional[int] = None  # MoE dispatch chunk size (default 256, upstream uses 384 for decode)
     nvshmem_symmetric_size: Optional[str] = None  # e.g. '6G' — computed from model architecture
     num_redundant_experts: Optional[int] = None  # EPLB redundant experts per EP rank
