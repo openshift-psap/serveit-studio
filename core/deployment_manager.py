@@ -521,18 +521,21 @@ class DeploymentManager:
                 now = datetime.now(timezone.utc)
                 pending_seconds = (now - created_dt).total_seconds()
 
-                # Extract the scheduling failure reason (capacity vs other)
-                capacity_blocked = False
+                # Extract the scheduling failure reason.
+                # Default: an unschedulable pod is capacity-blocked (nodes
+                # full — in DRA clusters the message is e.g. "resource
+                # scheduling failed", not "Insufficient nvidia.com/gpu").
+                # Only a DRA allocation-failure message makes a pod
+                # restart-worthy (recreating retries the allocation).
+                capacity_blocked = True
                 for cond in pod.get('status', {}).get('conditions', []):
                     if (cond.get('type') == 'PodScheduled'
                             and cond.get('status') == 'False'
                             and cond.get('reason') == 'Unschedurable'):
                         msg = cond.get('message', '')
-                        if ('Insufficient nvidia.com/gpu' in msg
-                                or 'Insufficient cpu' in msg
-                                or 'Insufficient memory' in msg
-                                or 'nodes are available' in msg):
-                            capacity_blocked = True
+                        if ('allocation failed' in msg
+                                or 'Failed to prepare ResourceClaim' in msg):
+                            capacity_blocked = False
 
                 pending_pods.append({
                     'name': pod_name,
@@ -549,7 +552,8 @@ class DeploymentManager:
         self,
         test_id: str,
         pending_timeout: int = 180,
-        log_callback: Optional[Callable[[str], None]] = None
+        log_callback: Optional[Callable[[str], None]] = None,
+        max_restarts: int = 0
     ) -> int:
         """
         Delete pods stuck in Pending state beyond the timeout.
@@ -559,6 +563,7 @@ class DeploymentManager:
             test_id: Test ID
             pending_timeout: Seconds before a Pending pod is considered stuck
             log_callback: Optional callback for logging
+            max_restarts: Remaining restart budget — stops once exhausted
 
         Returns:
             Number of pods restarted
@@ -567,6 +572,8 @@ class DeploymentManager:
         restarted = 0
 
         for pod in pending_pods:
+            if restarted >= max_restarts:
+                break
             if pod['pending_seconds'] > pending_timeout:
                 pod_name = pod['name']
                 # Capacity-blocked pods are waiting for other workloads to
@@ -712,7 +719,8 @@ class DeploymentManager:
                     restarted = self._restart_stuck_pods(
                         test_id,
                         pending_timeout=180,
-                        log_callback=log_callback
+                        log_callback=log_callback,
+                        max_restarts=max_pod_restarts - total_pod_restarts
                     )
                     if restarted > 0:
                         total_pod_restarts += restarted
