@@ -246,10 +246,20 @@ class DPEPSearchMixin:
             moe_backend='deep_gemm' if getattr(self, '_use_deep_gemm', None) else None,
         )
 
-        # Apply advanced vLLM overrides, then clear weight offload —
-        # DPEP pods have distributed experts (~34GB/GPU), not TP-split weights
+        # Apply advanced vLLM overrides, then correct for DPEP semantics:
+        # - No weight offload — pods hold distributed experts (~34GB/GPU)
+        # - No CPU KV offload — that's a PD-prefix-cache feature
+        # - Production per-role all2all backends unless the user set them:
+        #   prefill = deepep_high_throughput, decode = deepep_low_latency
         cfg = self._apply_advanced_vllm(cfg)
-        cfg.cpu_offload_gb = 0  # no weight offload needed with ep-weight-filter
+        cfg.cpu_offload_gb = 0
+        cfg.weight_cpu_offload_gb = 0
+        if not cfg.prefill_all2all_backend:
+            cfg.prefill_all2all_backend = 'deepep_high_throughput'
+        if not cfg.decode_all2all_backend:
+            cfg.decode_all2all_backend = 'deepep_low_latency'
+        if not cfg.moe_backend:
+            cfg.moe_backend = 'deep_gemm'
         cfg = self._auto_tune_model_loader(cfg)
 
         return cfg

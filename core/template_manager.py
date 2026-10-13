@@ -526,19 +526,21 @@ class TemplateManager:
 
         vars_dict.update(network_vals)
 
-        # Per-role EP flags: only enable on roles with TP > 1
+        # Per-role EP flags: enable on roles with EP ranks > 1.
+        # EP ranks = TP x DP — DPEP pods run TP=1 with DP>1, so the DP
+        # dimension counts too (production wide-EP sets these at TP=1).
         prefill_tp = vars_dict['prefill_tp']
         decode_tp = vars_dict['decode_tp']
         ep = config.enable_expert_parallel
-        vars_dict['prefill_enable_expert_parallel'] = ep and prefill_tp > 1
-        vars_dict['decode_enable_expert_parallel'] = ep and decode_tp > 1
-        # DPEP: enable EP even at TP=1, and add the weight filter so each
-        # GPU only loads its assigned experts (not the full model)
         dp_size = getattr(config, 'data_parallel_size', None) or 1
+        prefill_ep = ep and (prefill_tp > 1 or dp_size > 1)
+        decode_ep = ep and (decode_tp > 1 or dp_size > 1)
+        vars_dict['prefill_enable_expert_parallel'] = prefill_ep
+        vars_dict['decode_enable_expert_parallel'] = decode_ep
+        # DPEP: add the weight filter so each GPU only loads its assigned
+        # experts (not the full model)
         ep_weight_filter = getattr(config, 'enable_ep_weight_filter', False)
         if ep_weight_filter and dp_size > 1:
-            vars_dict['prefill_enable_expert_parallel'] = True
-            vars_dict['decode_enable_expert_parallel'] = True
             vars_dict['enable_ep_weight_filter'] = True
         else:
             vars_dict['enable_ep_weight_filter'] = False
@@ -553,8 +555,8 @@ class TemplateManager:
         vars_dict['decode_enable_eplb'] = config.enable_eplb and decode_tp > 1
         vars_dict['prefill_enable_dbo'] = config.enable_dbo and prefill_tp > 1
         vars_dict['decode_enable_dbo'] = config.enable_dbo and decode_tp > 1
-        vars_dict['prefill_moe_backend'] = config.moe_backend if prefill_tp > 1 else None
-        vars_dict['decode_moe_backend'] = config.moe_backend if decode_tp > 1 else None
+        vars_dict['prefill_moe_backend'] = config.moe_backend if (prefill_tp > 1 or dp_size > 1) else None
+        vars_dict['decode_moe_backend'] = config.moe_backend if (decode_tp > 1 or dp_size > 1) else None
         # Upstream llm-d uses different all2all backends per role:
         # prefill = deepep_high_throughput (optimized for batch prefill)
         # decode = deepep_low_latency (optimized for per-token decode)
@@ -565,15 +567,15 @@ class TemplateManager:
         if _prefill_a2a or _decode_a2a:
             # Explicit per-role override
             vars_dict['prefill_all2all_backend'] = (_prefill_a2a
-                if _prefill_a2a and prefill_tp > 1 else None)
+                if _prefill_a2a and (prefill_tp > 1 or dp_size > 1) else None)
             vars_dict['decode_all2all_backend'] = (_decode_a2a
-                if _decode_a2a and decode_tp > 1 else None)
+                if _decode_a2a and (decode_tp > 1 or dp_size > 1) else None)
         elif config.all2all_backend:
-            vars_dict['prefill_all2all_backend'] = config.all2all_backend if prefill_tp > 1 else None
+            vars_dict['prefill_all2all_backend'] = config.all2all_backend if (prefill_tp > 1 or dp_size > 1) else None
             if config.all2all_backend == 'deepep_high_throughput':
-                vars_dict['decode_all2all_backend'] = 'deepep_low_latency' if decode_tp > 1 else None
+                vars_dict['decode_all2all_backend'] = 'deepep_low_latency' if (decode_tp > 1 or dp_size > 1) else None
             else:
-                vars_dict['decode_all2all_backend'] = config.all2all_backend if decode_tp > 1 else None
+                vars_dict['decode_all2all_backend'] = config.all2all_backend if (decode_tp > 1 or dp_size > 1) else None
         else:
             vars_dict['prefill_all2all_backend'] = None
             vars_dict['decode_all2all_backend'] = None
