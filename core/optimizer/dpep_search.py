@@ -28,7 +28,7 @@ class DPEPSearchMixin:
         attention_gb = self._estimate_attention_weight_gb()
         expert_gb = model_weight_gb - attention_gb
 
-        self.log(f"  DPEP model analysis:", 'info')
+        self.log("  DPEP model analysis:", 'info')
         self.log(f"    Total weights: {model_weight_gb:.0f} GB (fp8)", 'info')
         self.log(f"    Attention (replicated per GPU): ~{attention_gb:.0f} GB", 'info')
         self.log(f"    Experts (distributed): ~{expert_gb:.0f} GB", 'info')
@@ -122,7 +122,7 @@ class DPEPSearchMixin:
             # Skip if already completed (resume support)
             existing = self._check_completed_test(test_id)
             if existing:
-                self.log(f"    ⏩ Resuming from DB (already completed)", 'info')
+                self.log("    ⏩ Resuming from DB (already completed)", 'info')
                 result = existing
             else:
                 test_config = self._create_dpep_test_config(
@@ -130,7 +130,7 @@ class DPEPSearchMixin:
                     concurrency=concurrency,
                 )
                 if test_config is None:
-                    self.log(f"    ⚠️  Config creation failed, skipping", 'warning')
+                    self.log("    ⚠️  Config creation failed, skipping", 'warning')
                     continue
 
                 result = self.orchestrator.run_test(
@@ -300,7 +300,6 @@ class DPEPSearchMixin:
 
     def _check_completed_test(self, test_id):
         """Check if a test already completed (for resume support)."""
-        from core.config_generator import TestConfig
         for cfg, result in self.all_test_results:
             if cfg.test_id == test_id and result and result.guidellm_success:
                 return result
