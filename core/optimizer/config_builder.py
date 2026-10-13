@@ -666,7 +666,8 @@ class ConfigBuilderMixin:
             setting = adv.get(key)
             if not setting:
                 continue
-            if setting.get('mode') == 'off':
+            if setting.get('mode') in ('off', 'default'):
+                # 'off'/'default': feature disabled / vLLM default — don't set
                 setattr(cfg, attr, None)
             elif setting.get('mode') == 'custom' and setting.get('value') is not None:
                 val = setting['value']

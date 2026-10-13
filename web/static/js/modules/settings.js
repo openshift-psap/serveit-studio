@@ -115,11 +115,11 @@ function updateAdvVllm() {
         if (f === 'disk-offload-kv') {
             var readEl = document.getElementById('adv-disk-offload-kv-read-threads');
             var writeEl = document.getElementById('adv-disk-offload-kv-write-threads');
-            var isAuto = (mode === 'auto');
-            readEl.disabled = isAuto;
-            writeEl.disabled = isAuto;
-            if (isAuto) { readEl.value = ''; writeEl.value = ''; }
-            if (mode === 'custom') {
+            var isCustom = (mode === 'custom');
+            readEl.disabled = !isCustom;
+            writeEl.disabled = !isCustom;
+            if (!isCustom) { readEl.value = ''; writeEl.value = ''; }
+            if (isCustom) {
                 adv[key] = { mode: mode, value: { enabled: true, read_threads: readEl.value ? parseInt(readEl.value) : 32, write_threads: writeEl.value ? parseInt(writeEl.value) : 16 } };
             } else {
                 adv[key] = { mode: mode, value: null };
@@ -127,8 +127,9 @@ function updateAdvVllm() {
             return;
         }
 
-        valEl.disabled = (mode === 'auto');
-        if (mode === 'auto') valEl.value = '';
+        // Value input enabled only in Custom mode (Auto = computed, Default/Off = not set)
+        valEl.disabled = (mode !== 'custom');
+        if (mode !== 'custom') valEl.value = '';
         var txtEl = document.getElementById('adv-' + f + '-txt');
         var effectiveValue = null;
         if (mode === 'custom') {
@@ -240,7 +241,12 @@ function restoreAdvVllm() {
         if (!setting) return;
         var modeEl = document.getElementById('adv-' + f + '-mode');
         var valEl = document.getElementById('adv-' + f + '-val');
-        if (modeEl) modeEl.value = setting.mode || 'auto';
+        if (modeEl) {
+            modeEl.value = setting.mode || 'auto';
+            // Legacy sessions saved mode 'auto' on fields that no longer offer
+            // it (now Default/Disabled) — fall back to the field's default
+            if (modeEl.selectedIndex === -1) modeEl.selectedIndex = 0;
+        }
 
         // Special handling for disk-offload-kv (on/off + thread counts)
         if (f === 'disk-offload-kv') {
@@ -398,7 +404,8 @@ function resetAdvVllm() {
     advValueFields.forEach(function(f) {
         var modeEl = document.getElementById('adv-' + f + '-mode');
         var valEl = document.getElementById('adv-' + f + '-val');
-        if (modeEl) modeEl.value = 'auto';
+        // First option is the field's default mode (Auto / Default / Disabled)
+        if (modeEl) modeEl.selectedIndex = 0;
         if (valEl) { valEl.disabled = true; valEl.value = ''; }
         if (f === 'disk-offload-kv') {
             var readEl = document.getElementById('adv-disk-offload-kv-read-threads');
