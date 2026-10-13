@@ -237,6 +237,7 @@ spec:
 {% else %}                  --kv-transfer-config '{"kv_connector":"{{ kv_connector }}","kv_role":"kv_both","kv_load_failure_policy":"fail"{% if enable_bidirectional_kv %},"kv_connector_extra_config":{"bidirectional_kv_xfer":true}{% endif %}}' \
 {% endif %}{% if has_hybrid_attention %}                  --no-disable-hybrid-kv-cache-manager \
 {% endif %}{% if prefill_enable_expert_parallel %}                  --enable-expert-parallel \
+{% endif %}{% if enable_ep_weight_filter %}                  --enable-ep-weight-filter \
 {% endif %}{% if prefill_enable_dbo %}                  --enable-dbo \
                   --dbo-prefill-token-threshold {{ dbo_prefill_token_threshold | default(32) }} \
 {% endif %}{% if prefill_enable_eplb %}                  --enable-eplb \
@@ -361,7 +362,7 @@ spec:
               - name: DP_SIZE
                 value: "{{ data_parallelism }}"
               - name: DP_SIZE_LOCAL
-                value: "{{ data_parallelism }}"
+                value: "{{ data_parallel_size_local | default(data_parallelism) }}"
 {% if http_timeout_keep_alive %}
               - name: VLLM_HTTP_TIMEOUT_KEEP_ALIVE
                 value: "{{ http_timeout_keep_alive }}"

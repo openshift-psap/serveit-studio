@@ -34,10 +34,13 @@ class DPEPSearchMixin:
         self.log(f"    Experts (distributed): ~{expert_gb:.0f} GB", 'info')
         self.log(f"    GPU VRAM: {self._gpu_vram_gb} GB", 'info')
 
-        # Valid DP sizes: must fit on a single GPU with expert distribution
+        # Valid DP sizes: single-node DP groups only (multi-node DP groups are
+        # not supported by the templates or the production architecture).
         valid_dp_sizes = []
-        for dp in [gpus_per_node, gpus_per_node * 2, 4, 8, 16, 32]:
-            if dp > total_gpus or dp in valid_dp_sizes:
+        for dp in sorted({gpus_per_node, 4, 8, 16, 32}):
+            if dp > gpus_per_node:
+                continue  # multi-node DP group — unsupported
+            if dp > total_gpus:
                 continue
             # Per-GPU: attention (replicated) + experts/DP + overhead
             per_gpu_gb = attention_gb + expert_gb / dp + 7  # 7GB overhead
@@ -57,16 +60,33 @@ class DPEPSearchMixin:
             self._dpep_candidates = []
             return
 
-        # Generate candidates: each DP size with feasible pod counts
+        # Generate candidates: each DP size with feasible pod counts.
+        # Each candidate deploys num_pods prefill pods + num_pods decode pods,
+        # each pod holding dp_size GPUs → 2 × dp_size × num_pods GPUs total.
+        from core.optimizer.config import FeasibleSplit
         self._dpep_candidates = []
         for dp_size in valid_dp_sizes:
-            max_pods = total_gpus // dp_size
+            max_pods = total_gpus // (2 * dp_size)
             for num_pods in range(1, max_pods + 1):
-                gpus_used = dp_size * num_pods
+                gpus_used = 2 * dp_size * num_pods
+                split = FeasibleSplit(
+                    prefill_pods=num_pods,
+                    decode_pods=num_pods,
+                    prefill_tp=1,
+                    decode_tp=1,
+                    prefill_gpus=num_pods * dp_size,
+                    decode_gpus=num_pods * dp_size,
+                    total_gpus=gpus_used,
+                    prefill_pct=50,
+                )
+                # Tag the split so _create_ep_config can delegate DPEP rebuilds
+                # (Step 11 calibrated load, concurrency sweep)
+                split.dpep_dp_size = dp_size
                 self._dpep_candidates.append({
                     'dp_size': dp_size,
                     'num_pods': num_pods,
                     'gpus_used': gpus_used,
+                    'split': split,
                 })
 
         self.log(f"\n  DPEP candidates ({len(self._dpep_candidates)}):", 'info')
@@ -127,9 +147,28 @@ class DPEPSearchMixin:
                 tput = result.throughput_mean or 0
                 self.log(f"    ✅ {label}: TTFT p90={ttft:.0f}ms, "
                          f"Throughput={tput:.3f} req/s", 'success')
-                self.ep_results.append((candidate, result))
+                self.ep_results.append((candidate['split'], result))
             else:
                 self.log(f"    ❌ {label}: test failed", 'warning')
+
+        # Select best DPEP config (by throughput) — downstream Step 11 /
+        # sweep / reporting all read best_ep_config + ep_results splits
+        if self.ep_results:
+            best_split, best_result = max(
+                self.ep_results,
+                key=lambda x: x[1].throughput_p90 if x[1].throughput_p90 else 0.0
+            )
+            self.best_ep_config = best_split
+            self.best_ep_result = best_result
+            best_dp = best_split.dpep_dp_size
+            best_ttft = best_result.ttft_p90 or best_result.ttft_p50 or 0
+            best_tput = best_result.throughput_mean or best_result.throughput_p90 or 0
+            self.log("", 'info')
+            self.log("✅ Best DPEP Configuration (by throughput):", 'success')
+            self.log(f"  {best_split.prefill_pods}×DP{best_dp} prefill + "
+                     f"{best_split.decode_pods}×DP{best_dp} decode "
+                     f"({best_split.total_gpus} GPUs)", 'info')
+            self.log(f"  TTFT p90: {best_ttft:.1f}ms, Throughput mean: {best_tput:.2f} req/s", 'info')
 
     def _create_dpep_test_config(self, dp_size, num_pods, test_id, concurrency):
         """Create a TestConfig for a DPEP configuration."""
@@ -137,31 +176,6 @@ class DPEPSearchMixin:
 
         gpus_per_node = (self.cluster_resources.max_gpus_per_node
                          if self.cluster_resources else 8)
-
-        # Resource calculation for DPEP
-        model_weight_gb = self._estimate_model_size_gb()
-        attention_gb = self._estimate_attention_weight_gb()
-        expert_gb = model_weight_gb - attention_gb
-        per_gpu_weights = attention_gb + expert_gb / dp_size
-
-        # Estimate pod memory: weights per GPU + overhead + KV space
-        pod_mem_gb = min(
-            per_gpu_weights + 30,  # 30GB for KV + working memory
-            self._gpu_vram_gb * 0.92,
-        )
-
-        # Pod resources: one pod per DP group (or per node if DP fits in a node)
-        if dp_size <= gpus_per_node:
-            # Single-node pods
-            pods_per_node = gpus_per_node // dp_size
-            real_pods = num_pods
-        else:
-            # Multi-node pods (DP spans nodes)
-            nodes_per_pod = (dp_size + gpus_per_node - 1) // gpus_per_node
-            real_pods = num_pods
-            pods_per_node = 1
-
-        total_real_pods = real_pods
 
         # Pod resources: compute DPEP-specific (experts distributed, not TP-split)
         # The shared _get_pod_resources assumes TP-split weights, which breaks for DPEP.
@@ -173,17 +187,7 @@ class DPEPSearchMixin:
         # Pod memory: per-GPU weights + KV + overhead, capped at VRAM
         pod_mem_gb = min(per_gpu_weights + 30, self._gpu_vram_gb * 0.92)
         mem = pod_mem_gb
-        cpu = 32
-        cpu_per_pod = getattr(self.config, 'cpu_per_pod', None)
-        if cpu_per_pod:
-            cpu = cpu_per_pod
-        else:
-            try:
-                gpus_per_node = self.cluster_resources.max_gpus_per_node if self.cluster_resources else 8
-                node_cores = 64
-                cpu = max(19, node_cores // max(1, dp_size // gpus_per_node) if dp_size > gpus_per_node else node_cores)
-            except Exception:
-                cpu = 32
+        cpu = getattr(self.config, 'cpu_per_pod', None) or 32
 
         cfg = TestConfig(
             test_id=test_id,
@@ -210,6 +214,9 @@ class DPEPSearchMixin:
             decode_tp=1,
             prefill_replicas=num_pods,
             decode_replicas=num_pods,
+
+            # Each pod requests dp_size GPUs (DP workers inside, TP=1)
+            gpus_per_pod=dp_size,
 
             max_model_len=self.config.max_model_len,
             gpu_memory_utilization=0.92,

@@ -1111,6 +1111,17 @@ class ConfigBuilderMixin:
         Same template structure as PD but with --enable-expert-parallel,
         --enable-eplb, --moe-backend, --all2all-backend, and NVSHMEM env vars.
         """
+        # DPEP splits are tagged with dpep_dp_size — delegate to the DPEP
+        # builder so Step 11 / concurrency-sweep rebuilds keep TP=1 + DP.
+        dpep_dp = getattr(split, 'dpep_dp_size', None)
+        if dpep_dp:
+            return self._create_dpep_test_config(
+                dp_size=dpep_dp,
+                num_pods=split.prefill_pods,
+                test_id=f"step9-dpep-{split.prefill_pods}xdp{dpep_dp}",
+                concurrency=self.effective_concurrency,
+            )
+
         concurrency = self.effective_concurrency
 
         # Compute moe_dp_chunk_size
