@@ -553,8 +553,12 @@ class TemplateManager:
         vars_dict['decode_enable_scale_out'] = _dc_scale if _dc_scale is not None else _scale_out
         vars_dict['prefill_enable_eplb'] = config.enable_eplb and prefill_tp > 1
         vars_dict['decode_enable_eplb'] = config.enable_eplb and decode_tp > 1
-        vars_dict['prefill_enable_dbo'] = config.enable_dbo and prefill_tp > 1
-        vars_dict['decode_enable_dbo'] = config.enable_dbo and decode_tp > 1
+        vars_dict['prefill_enable_dbo'] = config.enable_dbo and (prefill_tp > 1 or dp_size > 1)
+        vars_dict['decode_enable_dbo'] = config.enable_dbo and (decode_tp > 1 or dp_size > 1)
+        # DBO thresholds: None (Disabled) -> upstream default 32. Jinja's
+        # default() only covers undefined vars, not None.
+        vars_dict['dbo_prefill_token_threshold'] = config.dbo_prefill_token_threshold or 32
+        vars_dict['dbo_decode_token_threshold'] = config.dbo_decode_token_threshold or 32
         vars_dict['prefill_moe_backend'] = config.moe_backend if (prefill_tp > 1 or dp_size > 1) else None
         vars_dict['decode_moe_backend'] = config.moe_backend if (decode_tp > 1 or dp_size > 1) else None
         # Upstream llm-d uses different all2all backends per role:

@@ -261,10 +261,12 @@ spec:
 {% endif %}
 {% if block_size %}                  --block-size {{ block_size }} \
 {% endif %}
-                  --gpu-memory-utilization {{ decode_gpu_memory_utilization or 0.9 }} \
-{% if max_num_batched_tokens %}                  --max-num-batched-tokens {{ max_num_batched_tokens }} \
+{% if decode_gpu_memory_utilization %}                  --gpu-memory-utilization {{ decode_gpu_memory_utilization }} \
 {% endif %}
-                  --max-num-seqs {{ decode_max_num_seqs or 256 }} \
+{% if decode_max_num_batched_tokens or max_num_batched_tokens %}                  --max-num-batched-tokens {{ decode_max_num_batched_tokens or max_num_batched_tokens }} \
+{% endif %}
+{% if decode_max_num_seqs or max_num_seqs %}                  --max-num-seqs {{ decode_max_num_seqs or max_num_seqs }} \
+{% endif %}
 {% if cpu_offload_gb or disk_offload_kv_path %}                  --kv-transfer-config '{"kv_connector":"MultiConnector","kv_role":"kv_both","kv_load_failure_policy":"fail","kv_connector_extra_config":{"connectors":[{"kv_connector":"NixlConnector","kv_role":"kv_consumer","kv_connector_extra_config":{"bidirectional_kv_xfer":{{ "true" if enable_bidirectional_kv else "false" }}}},{"kv_connector":"OffloadingConnector","kv_role":"kv_both","kv_connector_extra_config":{% if disk_offload_kv_path %}{"spec_name":"TieringOffloadingSpec","block_size":16,"eviction_policy":"lru","secondary_tiers":[{"type":"fs","root_dir":"{{ disk_offload_kv_path }}","n_read_threads":{{ disk_offload_kv_read_threads | default(32) }},"n_write_threads":{{ disk_offload_kv_write_threads | default(16) }}}]}{% else %}{"cpu_bytes_to_use":{{ cpu_offload_gb * 1073741824 }},"lazy_offload":true}{% endif %}}]}}' \
 {% else %}                  --kv-transfer-config '{"kv_connector":"{{ kv_connector }}","kv_role":"kv_both","kv_load_failure_policy":"fail"{% if enable_bidirectional_kv %},"kv_connector_extra_config":{"bidirectional_kv_xfer":true}{% endif %}}' \
 {% endif %}{% if has_hybrid_attention %}                  --no-disable-hybrid-kv-cache-manager \

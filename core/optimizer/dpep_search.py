@@ -254,11 +254,21 @@ class DPEPSearchMixin:
         cfg = self._apply_advanced_vllm(cfg)
         cfg.cpu_offload_gb = 0
         cfg.weight_cpu_offload_gb = 0
-        if not cfg.prefill_all2all_backend:
+        # Production defaults for DPEP — only when the user hasn't explicitly
+        # Disabled the setting (mode 'off' means "leave to vLLM default")
+        adv = getattr(self.config, 'advanced_vllm', None) or {}
+
+        def _disabled(key):
+            s = adv.get(key)
+            return bool(s and s.get('mode') == 'off')
+
+        if not cfg.prefill_all2all_backend and not _disabled('all2all_backend') \
+                and not _disabled('prefill_all2all_backend'):
             cfg.prefill_all2all_backend = 'deepep_high_throughput'
-        if not cfg.decode_all2all_backend:
+        if not cfg.decode_all2all_backend and not _disabled('all2all_backend') \
+                and not _disabled('decode_all2all_backend'):
             cfg.decode_all2all_backend = 'deepep_low_latency'
-        if not cfg.moe_backend:
+        if not cfg.moe_backend and not _disabled('moe_backend'):
             cfg.moe_backend = 'deep_gemm'
         cfg = self._auto_tune_model_loader(cfg)
 
