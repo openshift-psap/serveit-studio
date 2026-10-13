@@ -584,7 +584,7 @@ class DeploymentManager:
                         mins = int(pod['pending_seconds'] // 60)
                         log_callback(
                             f"   ⏳ {pod_name}: Pending {mins}m for GPU capacity "
-                            f"— waiting for resources to free up (no restart)"
+                            f"— waiting for resources to free up"
                         )
                     continue
                 mins = int(pod['pending_seconds'] // 60)
