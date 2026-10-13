@@ -229,14 +229,14 @@ class DPEPSearchMixin:
 
             block_size=self._resolve_block_size(),
 
-            memory_per_pod=mem,
-            cpu_per_pod=cpu,
+            memory_request=mem,
+            memory_limit=mem,
+            cpu_request=cpu,
+            cpu_limit=cpu,
             all2all_backend='deepep_high_throughput'
             if getattr(self, '_network_type', '') == 'shared_device'
             else None,
             moe_backend='deep_gemm' if getattr(self, '_use_deep_gemm', None) else None,
-
-            test_config_json={'dpep': True, 'dp_size': dp_size},
         )
 
         # Apply advanced vLLM overrides, then clear weight offload —
