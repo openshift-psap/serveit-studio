@@ -182,7 +182,40 @@
         }
 
         .console-panel {
-            border-left: 1px solid var(--rh-gray-300);
+            border-left: none;
+        }
+
+        /* Draggable divider between wizard and console */
+        .panel-resizer {
+            flex: 0 0 6px;
+            cursor: col-resize;
+            background: transparent;
+            position: relative;
+            z-index: 5;
+            transition: background 0.15s ease;
+        }
+
+        .panel-resizer::after {
+            content: '';
+            position: absolute;
+            top: 0;
+            bottom: 0;
+            left: 50%;
+            width: 1px;
+            transform: translateX(-50%);
+            background: var(--rh-gray-300);
+            transition: background 0.15s ease, width 0.15s ease;
+        }
+
+        .panel-resizer:hover,
+        .panel-resizer.dragging {
+            background: rgba(14, 165, 233, 0.12);
+        }
+
+        .panel-resizer:hover::after,
+        .panel-resizer.dragging::after {
+            background: #0ea5e9;
+            width: 2px;
         }
 
         .panel {

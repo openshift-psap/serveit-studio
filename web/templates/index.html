@@ -135,10 +135,75 @@
                 </div>
 
                 <!-- Console Panel (right, fills remaining space) -->
+                <div class="panel-resizer" id="panel-resizer" title="Drag to resize — double-click to reset"></div>
                 {% include 'partials/console.html' %}
             </div>
         </div>
     </div>
+
+    <script>
+    // Draggable divider between wizard and console panels.
+    // Header row (breadcrumb / console toolbar) moves with the body panels
+    // so the console header stays aligned with the console panel.
+    (function() {
+        const resizer = document.getElementById('panel-resizer');
+        const wizard = document.querySelector('.wizard-panel');
+        const console_ = document.querySelector('.console-panel');
+        const breadcrumb = document.querySelector('.header-row .breadcrumb-bar');
+        if (!resizer || !wizard || !console_) return;
+
+        const STORAGE_KEY = 'serveit.panel.split';
+        const MIN_PCT = 20, MAX_PCT = 80;
+
+        function setSplit(pct) {
+            pct = Math.min(MAX_PCT, Math.max(MIN_PCT, pct));
+            wizard.style.flex = '0 0 ' + pct + '%';
+            console_.style.flex = '1 1 0%';
+            if (breadcrumb) {
+                // +3px = half the 6px resizer, aligning the header boundary
+                // with the divider line in the body
+                breadcrumb.style.width = 'calc(' + pct + '% + 3px)';
+            }
+            try { localStorage.setItem(STORAGE_KEY, pct); } catch (e) {}
+        }
+
+        // Restore saved split (or default 50/50 aligned)
+        let saved = null;
+        try { saved = parseFloat(localStorage.getItem(STORAGE_KEY)); } catch (e) {}
+        setSplit(saved || 50);
+
+        let dragging = false;
+
+        resizer.addEventListener('mousedown', function(e) {
+            e.preventDefault();
+            dragging = true;
+            resizer.classList.add('dragging');
+            document.body.style.cursor = 'col-resize';
+            document.body.style.userSelect = 'none';
+        });
+
+        document.addEventListener('mousemove', function(e) {
+            if (!dragging) return;
+            const area = document.querySelector('.content-area');
+            const rect = area.getBoundingClientRect();
+            const pct = ((e.clientX - rect.left) / rect.width) * 100;
+            setSplit(pct);
+        });
+
+        document.addEventListener('mouseup', function() {
+            if (!dragging) return;
+            dragging = false;
+            resizer.classList.remove('dragging');
+            document.body.style.cursor = '';
+            document.body.style.userSelect = '';
+        });
+
+        // Double-click resets to 50/50
+        resizer.addEventListener('dblclick', function() {
+            setSplit(50);
+        });
+    })();
+    </script>
 
     {% include 'partials/overlays.html' %}
 
