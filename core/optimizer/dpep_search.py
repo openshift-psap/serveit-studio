@@ -163,10 +163,27 @@ class DPEPSearchMixin:
 
         total_real_pods = real_pods
 
-        # Get pod resources (memory, CPU)
-        mem, cpu = self._get_pod_resources(tp=1, total_pods=total_real_pods)
-        if mem is None:
-            mem = pod_mem_gb
+        # Pod resources: compute DPEP-specific (experts distributed, not TP-split)
+        # The shared _get_pod_resources assumes TP-split weights, which breaks for DPEP.
+        # With ep-weight-filter, per-GPU weights are ~34GB (not 713/TP). Skip the TP-based check.
+        model_weight_gb = self._estimate_model_size_gb()
+        attention_gb = self._estimate_attention_weight_gb()
+        expert_gb = model_weight_gb - attention_gb
+        per_gpu_weights = attention_gb + expert_gb / dp_size
+        # Pod memory: per-GPU weights + KV + overhead, capped at VRAM
+        pod_mem_gb = min(per_gpu_weights + 30, self._gpu_vram_gb * 0.92)
+        mem = pod_mem_gb
+        cpu = 32
+        cpu_per_pod = getattr(self.config, 'cpu_per_pod', None)
+        if cpu_per_pod:
+            cpu = cpu_per_pod
+        else:
+            try:
+                gpus_per_node = self.cluster_resources.max_gpus_per_node if self.cluster_resources else 8
+                node_cores = 64
+                cpu = max(19, node_cores // max(1, dp_size // gpus_per_node) if dp_size > gpus_per_node else node_cores)
+            except Exception:
+                cpu = 32
 
         cfg = TestConfig(
             test_id=test_id,
@@ -228,8 +245,10 @@ class DPEPSearchMixin:
             test_config_json={'dpep': True, 'dp_size': dp_size},
         )
 
-        # Apply advanced vLLM overrides
+        # Apply advanced vLLM overrides, then clear weight offload —
+        # DPEP pods have distributed experts (~34GB/GPU), not TP-split weights
         cfg = self._apply_advanced_vllm(cfg)
+        cfg.cpu_offload_gb = 0  # no weight offload needed with ep-weight-filter
         cfg = self._auto_tune_model_loader(cfg)
 
         return cfg
