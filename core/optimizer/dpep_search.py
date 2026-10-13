@@ -227,13 +227,7 @@ class DPEPSearchMixin:
             prefix_tokens=getattr(self.config, 'prefix_tokens', None),
             prefix_count=getattr(self.config, 'prefix_count', None),
 
-            block_size=self.config.block_size or 128,
-            kv_cache_dtype=self.config.kv_cache_dtype,
-            speculative_method=self.config.speculative_method,
-            speculative_num_tokens=self.config.speculative_num_tokens,
-            speculative_model=self.config.speculative_model,
-            speculative_extra_config=getattr(
-                self.config, 'speculative_extra_config', None),
+            block_size=self._resolve_block_size(),
 
             memory_per_pod=mem,
             cpu_per_pod=cpu,
