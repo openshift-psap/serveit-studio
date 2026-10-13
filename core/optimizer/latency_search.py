@@ -269,7 +269,8 @@ class LatencySearchMixin:
         if itl and itl > 0:
             generation_time = osl * itl / 1000.0
         else:
-            decode_tpsg = self.optimal_decode_tp.tpsg if self.optimal_decode_tp else None
+            decode_tpsg = getattr(self, 'optimal_decode_tp', None)
+            decode_tpsg = decode_tpsg.tpsg if decode_tpsg else None
             if decode_tpsg and decode_tpsg > 0:
                 generation_time = osl / decode_tpsg
             else:

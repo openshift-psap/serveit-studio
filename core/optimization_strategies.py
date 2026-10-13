@@ -1207,12 +1207,16 @@ class DPEPOnlyStrategy(OptimizationStrategy):
             self.opt._run_latency_bounded_search()
             self.opt.log("", 'info')
 
-        # Step 11: Calibrated load / Concurrency sweep
+        # Step 11: Calibrated load / Concurrency sweep (user-controlled).
+        # Same full path as PDOnlyStrategy — _validate_at_calibrated_load
+        # sweeps ep_results (which carry the DPEP splits) and skips the
+        # empty pd/agg branches. DPEP config rebuilds go through
+        # _create_ep_config's dpep_dp_size delegation.
         if self.opt.config.calibrated_load_enabled and len(self.opt.ep_results) > 0:
             self.opt._recalculate_achievable_concurrency()
-            self.opt.log("STEP 11: Calibrated Load Validation", 'decision')
+            self.opt.log("STEP 11: Calibrated Load Validation & Concurrency Sweep", 'decision')
             self.opt.log("-" * 80, 'info')
-            self.opt.log("   (DPEP uses the EP calibrated-load path)")
+            self.opt._validate_at_calibrated_load()
             self.opt.log("", 'info')
 
         self._run_speculative_if_enabled()
