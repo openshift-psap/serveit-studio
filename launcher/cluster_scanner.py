@@ -71,50 +71,12 @@ def scan_cluster_resources(cluster: Dict, namespace: str = 'serveit', proxy: str
             }
 
         # Check for missing infrastructure components (using the scanner's kubectl which respects kubeconfig)
-        warnings = []
-        try:
-            r = scanner.kubectl.run(['get', 'crd', 'leaderworkersets.leaderworkerset.x-k8s.io',
-                                     '--ignore-not-found', '--no-headers'], check=False)
-            if r.returncode != 0 or not r.stdout.strip():
-                warnings.append('LeaderWorkerSet (LWS) not installed — required for vLLM pod deployment')
-        except Exception:
-            pass
-        try:
-            r = scanner.kubectl.run(['get', 'crd', 'virtualservices.networking.istio.io',
-                                     '--ignore-not-found', '--no-headers'], check=False)
-            if r.returncode != 0 or not r.stdout.strip():
-                warnings.append('Istio not found — required for inference gateway routing')
-        except Exception:
-            pass
+        from core.cluster_scan_service import get_infra_warnings
+        warnings = get_infra_warnings(scanner.kubectl)
 
         # Count GPUs in use (device plugin + DRA ResourceClaims)
-        gpus_in_use = 0
-        try:
-            import json as _json
-            # Device plugin: count nvidia.com/gpu requests on running pods
-            r = scanner.kubectl.run(['get', 'pods', '--all-namespaces', '-o', 'json'], check=False)
-            if r.returncode == 0:
-                pods = _json.loads(r.stdout)
-                for pod in pods.get('items', []):
-                    if pod.get('status', {}).get('phase') != 'Running':
-                        continue
-                    for container in pod.get('spec', {}).get('containers', []):
-                        reqs = container.get('resources', {}).get('requests', {})
-                        gpu_req = reqs.get('nvidia.com/gpu', 0)
-                        if gpu_req and str(gpu_req) != '0':
-                            gpus_in_use += int(gpu_req)
-            # DRA: count allocated GPU devices from ResourceClaims
-            r = scanner.kubectl.run(['get', 'resourceclaim', '--all-namespaces', '-o', 'json'], check=False)
-            if r.returncode == 0:
-                claims = _json.loads(r.stdout)
-                for item in claims.get('items', []):
-                    alloc = item.get('status', {}).get('allocation', {})
-                    for dev in alloc.get('devices', {}).get('results', []):
-                        driver = dev.get('driver', '')
-                        if 'nvidia' in driver.lower() or 'gpu' in driver.lower():
-                            gpus_in_use += 1
-        except Exception:
-            pass
+        from core.cluster_scan_service import count_gpus_in_use
+        gpus_in_use = count_gpus_in_use(scanner.kubectl)
 
         nodes = []
         for n in resources.nodes:
@@ -151,26 +113,15 @@ def scan_cluster_resources(cluster: Dict, namespace: str = 'serveit', proxy: str
             result['infra_warnings'] = warnings
 
         # Scan infrastructure component versions
-        try:
-            from core.version_scanner import scan_versions
-            versions = scan_versions(scanner.kubectl)
-            if versions:
-                result['infra_versions'] = versions
-        except Exception:
-            versions = {}
+        from core.cluster_scan_service import scan_versions_safe, zero_gpu_warning
+        versions = scan_versions_safe(scanner.kubectl)
+        if versions:
+            result['infra_versions'] = versions
 
         # GPU warning
-        if resources.total_gpus == 0:
-            if versions.get('gpu_operator'):
-                result['summary']['gpu_warning'] = (
-                    f"GPU Operator {versions['gpu_operator']} is installed but no GPUs are detected. "
-                    f"Check that GPU nodes exist, the ClusterPolicy is applied, and either the device plugin "
-                    f"or DRA driver pods are running."
-                )
-            else:
-                result['summary']['gpu_warning'] = (
-                    "No GPU Operator installed. Install the NVIDIA GPU Operator to enable GPU resources on this cluster."
-                )
+        gpu_warning = zero_gpu_warning(resources.total_gpus, versions)
+        if gpu_warning:
+            result['summary']['gpu_warning'] = gpu_warning
 
         return result
     finally:

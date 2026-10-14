@@ -865,32 +865,11 @@ def handle_scan_cluster(data):
         # Scan cluster
         resources = scanner.scan_cluster()
 
-        # Calculate currently used GPUs
-        gpus_in_use = 0
-        try:
-            import json
-            pods_result = scanner.kubectl.run(['get', 'pods', '--all-namespaces', '-o', 'json'], check=False)
-            if pods_result.returncode == 0:
-                pods_data = json.loads(pods_result.stdout)
-                for pod in pods_data.get('items', []):
-                    # Only count Running pods (skip Pending, Succeeded, Failed, etc.)
-                    if pod.get('status', {}).get('phase') != 'Running':
-                        continue
-                    # Sum GPU requests from all containers
-                    for container in pod.get('spec', {}).get('containers', []):
-                        container_resources = container.get('resources', {})
-                        if container_resources:
-                            requests = container_resources.get('requests', {})
-                            if requests and 'nvidia.com/gpu' in requests:
-                                gpu_count = requests['nvidia.com/gpu']
-                                # Handle both string and int values
-                                if gpu_count and str(gpu_count) != '0':
-                                    gpus_in_use += int(gpu_count)
-        except Exception as e:
-            log_to_ui(f'⚠️ Could not calculate GPU usage: {e}', 'warning')
-            print(f"GPU usage calculation error: {e}")
-            import traceback
-            traceback.print_exc()
+        # Calculate currently used GPUs — shared with the launcher scanner
+        # (device-plugin pod requests + DRA ResourceClaims; the old inline
+        # version missed DRA and undercounted on DRA clusters)
+        from core.cluster_scan_service import count_gpus_in_use
+        gpus_in_use = count_gpus_in_use(scanner.kubectl)
 
         # Detect provider and network type from actual cluster resources
         provider_name = 'unknown'
@@ -946,16 +925,12 @@ def handle_scan_cluster(data):
                 'nics': node_nics
             })
 
-        # Scan infrastructure component versions
-        infra_versions = {}
-        try:
-            from core.version_scanner import scan_versions
-            infra_versions = scan_versions(scanner.kubectl)
-            if infra_versions:
-                ver_summary = ', '.join(f'{k}={v}' for k, v in sorted(infra_versions.items()))
-                log_to_ui(f'🔍 Infrastructure versions: {ver_summary}', 'info')
-        except Exception as ver_err:
-            print(f"Version scan error: {ver_err}")
+        # Scan infrastructure component versions — shared with the launcher scanner
+        from core.cluster_scan_service import scan_versions_safe
+        infra_versions = scan_versions_safe(scanner.kubectl)
+        if infra_versions:
+            ver_summary = ', '.join(f'{k}={v}' for k, v in sorted(infra_versions.items()))
+            log_to_ui(f'🔍 Infrastructure versions: {ver_summary}', 'info')
 
         # Save hardware scan to database
         try:
