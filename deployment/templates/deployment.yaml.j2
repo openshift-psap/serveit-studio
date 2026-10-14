@@ -61,6 +61,8 @@ spec:
               value: "{{ dev_mode }}"
             - name: GUIDELLM_IMAGE
               value: "{{ guidellm_image | default('quay.io/bbenshab/serveit-studio:workload-lora') }}"
+            - name: DOWNLOAD_TOLERATE_ALL_TAINTS
+              value: "{{ download_tolerate_all_taints | default('true') }}"
 {% if serveit_mode is defined and serveit_mode %}
             - name: INFTUNE_MODE
               value: "{{ serveit_mode }}"
