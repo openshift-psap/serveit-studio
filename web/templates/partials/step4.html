@@ -177,22 +177,22 @@
                                         <div class="input-group">
                                             <label>GPU-Resident (max-loras)</label>
                                             <div style="display:flex;gap:6px;">
-                                                <select id="lora-max-loras-mode" onchange="var c=this.value==='custom'?document.getElementById('lora-max-loras-val'):null;if(c){c.disabled=false;}else{document.getElementById('lora-max-loras-val').disabled=true;document.getElementById('lora-max-loras-val').value='';config.lora_max_loras=null;}saveConfig();" style="flex:1;">
+                                                <select id="lora-max-loras-mode" onchange="var c=this.value==='custom'?document.getElementById('lora-max-loras-val'):null;if(c){c.disabled=false;}else{document.getElementById('lora-max-loras-val').disabled=true;document.getElementById('lora-max-loras-val').value='';config.lora_max_loras=null;}saveConfig();" style="width:88px;flex-shrink:0;">
                                                     <option value="auto">Auto</option>
                                                     <option value="custom">Custom</option>
                                                 </select>
-                                                <input type="number" id="lora-max-loras-val" disabled placeholder="auto" min="1" style="width:70px;" onchange="config.lora_max_loras=Math.max(1,parseInt(this.value)||1);this.value=config.lora_max_loras;saveConfig();">
+                                                <input type="number" id="lora-max-loras-val" disabled placeholder="auto" min="1" style="flex:1;min-width:0;" onchange="config.lora_max_loras=Math.max(1,parseInt(this.value)||1);this.value=config.lora_max_loras;saveConfig();">
                                             </div>
                                             <div class="help-text">Auto = from free VRAM. Custom pins residency — below N forces LRU swapping (stress).</div>
                                         </div>
                                         <div class="input-group">
                                             <label>Max Rank (max-lora-rank)</label>
                                             <div style="display:flex;gap:6px;">
-                                                <select id="lora-max-rank-mode" onchange="var c=this.value==='custom'?document.getElementById('lora-max-rank-val'):null;if(c){c.disabled=false;}else{document.getElementById('lora-max-rank-val').disabled=true;document.getElementById('lora-max-rank-val').value='';config.lora_max_rank=null;}saveConfig();" style="flex:1;">
+                                                <select id="lora-max-rank-mode" onchange="var c=this.value==='custom'?document.getElementById('lora-max-rank-val'):null;if(c){c.disabled=false;}else{document.getElementById('lora-max-rank-val').disabled=true;document.getElementById('lora-max-rank-val').value='';config.lora_max_rank=null;}saveConfig();" style="width:88px;flex-shrink:0;">
                                                     <option value="auto">Auto</option>
                                                     <option value="custom">Custom</option>
                                                 </select>
-                                                <input type="number" id="lora-max-rank-val" disabled placeholder="16" min="1" max="256" style="width:70px;" onchange="config.lora_max_rank=Math.max(1,parseInt(this.value)||16);this.value=config.lora_max_rank;saveConfig();">
+                                                <input type="number" id="lora-max-rank-val" disabled placeholder="16" min="1" max="256" style="flex:1;min-width:0;" onchange="config.lora_max_rank=Math.max(1,parseInt(this.value)||16);this.value=config.lora_max_rank;saveConfig();">
                                             </div>
                                             <div class="help-text">Auto = 16 (matches generated adapters). Raise only for higher-rank adapters.</div>
                                         </div>
