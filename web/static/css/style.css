@@ -1481,6 +1481,30 @@
             box-shadow: 0 0 0 3px rgba(42, 123, 136, 0.1);
         }
 
+        .input-group select {
+            width: 100%;
+            padding: 16px;
+            background: #FAFAFA;
+            border: 2px solid var(--rh-gray-300);
+            border-radius: 4px;
+            font-size: 1.2em;
+            font-family: var(--font-mono);
+            text-align: center;
+            text-align-last: center;
+            font-weight: 800;
+            color: var(--rh-red-primary);
+            transition: all 0.3s ease;
+            cursor: pointer;
+            appearance: none;
+            -webkit-appearance: none;
+        }
+
+        .input-group select:focus {
+            outline: none;
+            border-color: var(--rh-red-primary);
+            box-shadow: 0 0 0 3px rgba(42, 123, 136, 0.1);
+        }
+
         .input-group .help-text {
             font-size: 0.86em;
             color: var(--rh-gray-700);
