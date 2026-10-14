@@ -229,6 +229,7 @@ class ConfigBuilderMixin:
             cpu_limit=cpu,
             lora_enabled=self.config.lora_enabled,
             lora_num_adapters=self.config.lora_num_adapters,
+            lora_max_loras=self._compute_lora_max_loras(tp),
             lora_adapter_size_mb=self.config.lora_adapter_size_mb,
             selected_nodes=self.config.selected_nodes or [],
             workload_mode='synthetic' if is_calibration else (self.config.workload_mode or 'synthetic'),
@@ -283,6 +284,34 @@ class ConfigBuilderMixin:
                     and getattr(config, 'tensor_parallelism', None) == tp):
                 return result.vllm_fixed_overhead_gb
         return None
+
+    def _compute_lora_max_loras(self, tp: int) -> int:
+        """GPU-resident LoRA adapter count from available VRAM.
+
+        Budget: up to 10% of the VRAM left after model weights (within the
+        computed gpu-memory-utilization) is dedicated to LoRA residency —
+        the rest stays for KV cache. Per-adapter GPU cost is the adapter
+        size (user override or rank x 20MB estimate). Clamped to
+        [1, num_adapters]; 0 when LoRA is off.
+
+        Examples (GLM-5.3 fp8, H200 140GB):
+        - TP8: ~40GB free x 10% / 320MB = 13 resident (all 6 mounted)
+        - TP16: ~68GB free x 10% / 320MB = 21 resident
+        """
+        n = int(getattr(self.config, 'lora_num_adapters', 0) or 0)
+        if not getattr(self.config, 'lora_enabled', False) or n <= 0:
+            return 0
+        rank = int(getattr(self.config, 'lora_max_rank', 16) or 16)
+        per_adapter_mb = getattr(self.config, 'lora_adapter_size_mb', None) or (rank * 20)
+        try:
+            vram_mb = float(self._gpu_vram_gb) * 1024
+            weights_mb = self._estimate_model_size_gb() * 1024 / max(tp, 1)
+            gmu = self._compute_gpu_mem_util(tp, log=False)
+            free_mb = vram_mb * gmu - weights_mb
+            budget_mb = max(free_mb, 0) * 0.10
+            return max(1, min(n, int(budget_mb // max(per_adapter_mb, 1))))
+        except Exception:
+            return min(4, n)
 
     def _compute_gpu_mem_util(self, tp: int, log: bool = True) -> float:
         """Compute gpu_memory_utilization per TP.
@@ -1076,6 +1105,7 @@ class ConfigBuilderMixin:
             cpu_limit=cpu,
             lora_enabled=self.config.lora_enabled,
             lora_num_adapters=self.config.lora_num_adapters,
+            lora_max_loras=self._compute_lora_max_loras(split.prefill_tp),
             lora_adapter_size_mb=self.config.lora_adapter_size_mb,
             selected_nodes=self.config.selected_nodes or [],
             workload_mode=self.config.workload_mode or 'synthetic',
@@ -1297,6 +1327,7 @@ class ConfigBuilderMixin:
             cpu_limit=cpu,
             lora_enabled=self.config.lora_enabled,
             lora_num_adapters=self.config.lora_num_adapters,
+            lora_max_loras=self._compute_lora_max_loras(split.prefill_tp),
             lora_adapter_size_mb=self.config.lora_adapter_size_mb,
             selected_nodes=self.config.selected_nodes or [],
             workload_mode=self.config.workload_mode or 'synthetic',
