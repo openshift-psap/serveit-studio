@@ -218,6 +218,13 @@ class DPEPSearchMixin:
             # Each pod requests dp_size GPUs (DP workers inside, TP=1)
             gpus_per_pod=dp_size,
 
+            # LoRA (same fields as the aggregated/PD/EP builders)
+            lora_enabled=getattr(self.config, 'lora_enabled', False),
+            lora_num_adapters=getattr(self.config, 'lora_num_adapters', 0),
+            lora_max_rank=getattr(self.config, 'lora_max_rank', 16),
+            lora_max_loras=getattr(self.config, 'lora_max_loras', 4),
+            lora_adapter_size_mb=getattr(self.config, 'lora_adapter_size_mb', None),
+
             max_model_len=self.config.max_model_len,
             gpu_memory_utilization=0.92,
             gpu_vram_gb=self._gpu_vram_gb,
