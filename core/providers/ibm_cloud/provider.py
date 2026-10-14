@@ -241,21 +241,3 @@ class IBMCloudProvider(BaseProvider):
         # Standard IBM Cloud: constraints already validated in base class
         # No additional custom validation needed
         return True, ""
-
-    def get_recommended_pd_ratios(self) -> list[str]:
-        """
-        Get recommended PD ratios based on profile.
-
-        Returns:
-            List of recommended PD ratios
-        """
-        return self.profile.config.get('recommended_ratios', ['1:1'])
-
-    def is_dranet_enabled(self) -> bool:
-        """
-        Check if DRANET is enabled in the current profile.
-
-        Returns:
-            True if DRANET is enabled
-        """
-        return self.profile.config.get('dranet_enabled', False)

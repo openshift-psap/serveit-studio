@@ -538,33 +538,3 @@ function fmtSI(v, decimals) {
     return v.toFixed(d);
 }
 
-function arrowAnnotations(xs, ys, opts) {
-    const color = (opts && opts.color) || '#333';
-    const decimals = opts && opts.decimals != null ? opts.decimals : 1;
-    const suffix = (opts && opts.suffix) || '';
-    const yref = (opts && opts.yref) || 'y';
-    const s = (opts && opts.spread) || 30;
-    const offsets = [
-        { ax: 0,          ay: -s        },
-        { ax:  s * 0.9,   ay:  s * 0.7  },
-        { ax: -s * 0.8,   ay: -s * 1.2  },
-        { ax:  s * 1.1,   ay: -s * 0.5  },
-        { ax: 0,          ay:  s * 1.1   },
-        { ax: -s,         ay:  s * 0.8   },
-        { ax:  s * 1.3,   ay: -s * 1.3   },
-        { ax: -s * 1.2,   ay:  s * 1.3   },
-    ];
-    return ys.map((v, i) => {
-        if (v == null) return null;
-        const o = offsets[i % offsets.length];
-        return {
-            x: xs[i], y: v, xref: 'x', yref: yref,
-            text: fmtSI(v, decimals) + suffix,
-            showarrow: true, arrowhead: 0, arrowwidth: 1, arrowcolor: '#94a3b8',
-            ax: o.ax, ay: o.ay,
-            font: { size: 13, color: color },
-            borderpad: 2,
-        };
-    }).filter(Boolean);
-}
-

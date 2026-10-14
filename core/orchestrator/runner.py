@@ -297,62 +297,6 @@ class TestOrchestrator(ParserMixin, GuidellmMixin):
             log_callback=log_callback
         )
 
-    def _get_pod_ip(
-        self,
-        test_id: str,
-        architecture: str,
-        log_callback: Optional[Callable[[str], None]] = None
-    ) -> Optional[str]:
-        """
-        Get pod IP directly when service is not available.
-
-        Args:
-            test_id: Test ID
-            architecture: Architecture type
-            log_callback: Optional callback for logging
-
-        Returns:
-            Pod IP endpoint URL or None if not found
-        """
-        try:
-            # Get pods by label
-            result = self.deployment_manager.kubectl.run(
-                [
-                    'get', 'pods',
-                    '-l', f'llm-d.ai/test-id={test_id}',
-                    '-n', self.namespace,
-                    '-o', 'json'
-                ],
-                check=False
-            )
-
-            if result.returncode != 0:
-                return None
-
-            pods_data = json.loads(result.stdout)
-            items = pods_data.get('items', [])
-
-            if not items:
-                return None
-
-            # Get first running pod IP
-            for pod in items:
-                status = pod.get('status', {})
-                phase = status.get('phase')
-                pod_ip = status.get('podIP')
-
-                if phase == 'Running' and pod_ip:
-                    endpoint = f"http://{pod_ip}:8000/v1"
-                    if log_callback:
-                        log_callback(f"✅ Pod endpoint: {endpoint}")
-                    return endpoint
-
-            return None
-
-        except Exception as e:
-            logger.error(f"Failed to get pod IP: {e}")
-            return None
-
     def _run_curl_test(
         self,
         endpoint: str,

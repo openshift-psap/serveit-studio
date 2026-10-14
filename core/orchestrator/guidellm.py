@@ -96,17 +96,6 @@ class GuidellmMixin:
             log_callback('❌ Guidellm pod did not start within 10 minutes')
         return False
 
-    def teardown_guidellm_pod(self, log_callback=None):
-        """Delete the workload deployment."""
-        try:
-            self.deployment_manager.kubectl.run(
-                ['delete', 'deployment', 'serveit-workload', '-n', self.namespace,
-                 '--ignore-not-found=true'], check=False)
-            if log_callback:
-                log_callback('🧹 Guidellm deployment cleaned up')
-        except Exception:
-            pass
-
     def _get_storage_pvc_name(self, config):
         """Get the PVC name for guidellm pod — must be RWX for multi-pod access."""
         kubectl = self.deployment_manager.kubectl

@@ -125,12 +125,6 @@ def api_scan_cluster():
         return jsonify({'error': str(e)}), 500
 
 
-def _emit_socketio_event(event_name, data):
-    """Emit a Socket.IO event server-side, triggering the same handler as if a client sent it.
-    This bridges REST calls to Socket.IO event handlers."""
-    socketio.emit(event_name, data)
-
-
 @app.route('/api/config/lock', methods=['POST'])
 def api_lock_config():
     """Lock config to prevent UI from overwriting it. Use before saving config via REST."""

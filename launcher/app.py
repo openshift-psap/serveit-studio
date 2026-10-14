@@ -37,13 +37,6 @@ def create_app():
 
     register_auth_routes(app)
 
-    @app.after_request
-    def add_no_cache(response):
-        if 'text/html' in response.content_type:
-            response.headers['Cache-Control'] = 'no-cache, no-store, must-revalidate'
-            response.headers['Pragma'] = 'no-cache'
-        return response
-
     namespace = os.environ.get('TARGET_NAMESPACE', 'serveit')
     image = os.environ.get('INFTUNE_IMAGE', 'quay.io/bbenshab/serveit-studio:server')
 

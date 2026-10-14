@@ -45,13 +45,6 @@ def reset_password(user_id, new_password):
     conn.close()
 
 
-def clear_must_reset(user_id):
-    conn = sqlite3.connect(DB_PATH)
-    conn.execute('UPDATE users SET must_reset = 0 WHERE id = ?', (user_id,))
-    conn.commit()
-    conn.close()
-
-
 def change_own_password(user_id, new_password):
     conn = sqlite3.connect(DB_PATH)
     conn.execute(

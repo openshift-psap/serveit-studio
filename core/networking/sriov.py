@@ -204,13 +204,3 @@ def ensure_sriov_networks(
         return json.dumps(nad_refs)
     return None
 
-
-def ensure_sriov_network(
-    kubectl_runner,
-    target_namespace: str,
-    policy_resource_name: str = None,
-    same_subnet: bool = False,
-) -> Optional[str]:
-    """Convenience wrapper — ensure networks and return annotation string."""
-    names = [policy_resource_name] if policy_resource_name else None
-    return ensure_sriov_networks(kubectl_runner, target_namespace, names, same_subnet=same_subnet)

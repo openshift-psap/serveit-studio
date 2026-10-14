@@ -83,12 +83,6 @@ class ProviderRegistry:
         return cls._load_providers()
 
     @classmethod
-    def get_provider_names(cls) -> List[str]:
-        """Get list of all provider IDs."""
-        providers = cls.get_all_providers()
-        return [p("default").get_provider_id() for p in providers]
-
-    @classmethod
     def get_provider_by_id(
         cls,
         provider_id: str,
@@ -196,27 +190,3 @@ class ProviderRegistry:
             raise RuntimeError(
                 "No providers available! At minimum, baremetal provider is required."
             )
-
-    @classmethod
-    def list_available_providers(cls) -> List[dict]:
-        """
-        List all available providers with their profiles.
-
-        Returns:
-            List of dicts with provider info: [{'id': 'ibm_cloud', 'name': 'IBM Cloud', 'profiles': [...]}]
-        """
-        providers = cls.get_all_providers()
-        result = []
-
-        for provider_class in providers:
-            try:
-                instance = provider_class()
-                result.append({
-                    'id': instance.get_provider_id(),
-                    'name': instance.get_display_name(),
-                    'profiles': instance.get_available_profiles()
-                })
-            except Exception as e:
-                logger.debug(f"Error listing {provider_class.__name__}: {e}")
-
-        return result

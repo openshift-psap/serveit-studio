@@ -264,12 +264,3 @@ class NADNetworkCreator(BaseNetworkCreator):
             Empty list (NAD uses annotations, not resourceClaims)
         """
         return []
-
-    def get_dhcp_daemon_required(self) -> bool:
-        """
-        Check if DHCP daemon is required.
-
-        Returns:
-            True if IPAM type is DHCP
-        """
-        return self.config.ipam_type == "dhcp"

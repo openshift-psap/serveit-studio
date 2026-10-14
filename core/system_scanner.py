@@ -723,27 +723,6 @@ class SystemScanner:
         logger.warning(f"Unknown GPU type {gpu_type}, assuming 80GB VRAM per GPU")
         return 80000 * gpu_count
 
-    def _get_hardware_info_from_configmap(self, node_name: str) -> Optional[Dict]:
-        """
-        Read hardware info from ConfigMap created by hardware-discovery DaemonSet.
-
-        Args:
-            node_name: Name of the node
-
-        Returns:
-            Hardware info dict or None if not found
-        """
-        try:
-            configmap_name = f"hardware-info-{node_name}"
-            result = self.kubectl.run_json(['get', 'configmap', configmap_name, '-n', self.namespace])
-
-            if result and 'data' in result:
-                hardware_json = result['data'].get('hardware.json', '{}')
-                return json.loads(hardware_json)
-        except Exception as e:
-            logger.debug(f"Could not read hardware info for node {node_name}: {e}")
-            return None
-
     def scan_nodes(self) -> List[NodeResources]:
         """
         Scan all nodes in the cluster for GPU and RDMA resources.
@@ -761,61 +740,14 @@ class SystemScanner:
             node_name = node_data['metadata']['name']
             labels = node_data['metadata'].get('labels', {})
 
-            # Try to get hardware info from ConfigMap (created by DaemonSet)
-            hw_info = self._get_hardware_info_from_configmap(node_name)
-
-            if hw_info:
-                logger.info(f"Using hardware discovery data for node {node_name}")
-
-                gpus = hw_info.get('gpus', [])
-                if gpus:
-                    gpu_info = gpus[0]
-                    gpu_count = gpu_info.get('count', 0)
-                    gpu_vendor = gpu_info.get('vendor', 'unknown')
-                    gpu_model = gpu_info.get('model', 'unknown')
-                    gpu_memory_mb = gpu_info.get('memory_mb', 0)
-                    gpu_type = f"{gpu_vendor.lower()}.com/gpu"
-                else:
-                    # Hardware discovery exists but no GPUs detected
-                    # Fall back to node allocatable in case discovery missed them (e.g., nvidia-smi not available)
-                    gpu_count, gpu_type, gpu_vendor, gpu_model = self._get_gpu_count(node_data)
-                    gpu_memory_mb = self._estimate_gpu_memory(gpu_type, gpu_count, labels)
-
-                cpu_info = hw_info.get('cpu', {})
-                cpu_cores = cpu_info.get('cores', 0)
-                cpu_model = cpu_info.get('model', self._get_cpu_model(node_data))
-                numa_nodes = cpu_info.get('numa_nodes', 1)
-
-                mem_info = hw_info.get('memory', {})
-                memory_gb = mem_info.get('total_gb', 0)
-
-                nics = hw_info.get('nics', [])
-                network_interfaces = []
-                has_rdma = False
-                rdma_devices = []
-
-                for nic in nics:
-                    network_interfaces.append(NetworkInterface(
-                        name=nic.get('name', 'unknown'),
-                        type=nic.get('type', 'unknown'),
-                        vendor=nic.get('vendor', 'unknown'),
-                        model=nic.get('model', 'unknown'),
-                        count=1,
-                        speed_gbps=float(nic.get('speed_gbps', 0))
-                    ))
-                    if nic.get('type') in ['RDMA', 'RoCE', 'InfiniBand']:
-                        has_rdma = True
-                        rdma_devices.append(nic.get('name', 'unknown'))
-
-            else:
-                logger.info(f"Using node allocatable resources for node {node_name} (hardware discovery not available)")
-
-                gpu_count, gpu_type, gpu_vendor, gpu_model = self._get_gpu_count(node_data)
-                cpu_cores, memory_gb = self._get_cpu_memory(node_data)
-                cpu_model = self._get_cpu_model(node_data)
-                gpu_memory_mb = self._estimate_gpu_memory(gpu_type, gpu_count, labels)
-                has_rdma, rdma_devices = self._check_rdma_support(node_data)
-                network_interfaces = self._detect_network_interfaces(node_data)
+            # Node allocatable + GPU-operator labels (the hardware-discovery
+            # DaemonSet ConfigMap path was never wired up and has been removed)
+            gpu_count, gpu_type, gpu_vendor, gpu_model = self._get_gpu_count(node_data)
+            cpu_cores, memory_gb = self._get_cpu_memory(node_data)
+            cpu_model = self._get_cpu_model(node_data)
+            gpu_memory_mb = self._estimate_gpu_memory(gpu_type, gpu_count, labels)
+            has_rdma, rdma_devices = self._check_rdma_support(node_data)
+            network_interfaces = self._detect_network_interfaces(node_data)
 
             # Extract node status from conditions
             node_status = 'Unknown'
@@ -834,7 +766,7 @@ class SystemScanner:
                 cpu_cores=cpu_cores,
                 cpu_model=cpu_model,
                 memory_gb=memory_gb,
-                numa_nodes=locals().get('numa_nodes', 1),
+                numa_nodes=1,
                 has_rdma=has_rdma,
                 rdma_devices=rdma_devices,
                 network_interfaces=network_interfaces,
@@ -860,16 +792,6 @@ class SystemScanner:
                 f"VRAM: {gpu_memory_mb}MB, CPU: {cpu_cores} cores, RAM: {memory_gb}GB, "
                 f"RDMA: {has_rdma}, {nic_summary}"
             )
-
-        # Clean up hardware-discovery DaemonSet now that we've read the data
-        try:
-            self.kubectl.run(
-                ['delete', 'daemonset', 'hardware-discovery', '-n', self.namespace, '--ignore-not-found=true'],
-                check=False
-            )
-            logger.info("Cleaned up hardware-discovery DaemonSet")
-        except Exception as e:
-            logger.debug(f"Could not clean up hardware-discovery DaemonSet: {e}")
 
         return nodes
 
@@ -1176,42 +1098,6 @@ class SystemScanner:
         logger.info("=" * 60)
 
         return cluster_resources
-
-    def get_available_gpus(self) -> Dict[str, int]:
-        """
-        Get currently available (unallocated) GPUs per node.
-
-        TODO: Query running pods and subtract allocated GPUs for precise availability.
-
-        Returns:
-            Dictionary of node_name -> available_gpu_count
-        """
-        resources = self.scan_cluster()
-        return resources.gpus_per_node
-
-    def detect_rdma_nics(self, node_name: Optional[str] = None) -> Dict[str, List[str]]:
-        """
-        Detect RDMA NICs on nodes.
-
-        Args:
-            node_name: Specific node to check (None for all nodes)
-
-        Returns:
-            Dictionary of node_name -> list of RDMA device names
-        """
-        resources = self.scan_cluster()
-
-        if node_name:
-            node = next((n for n in resources.nodes if n.name == node_name), None)
-            if node:
-                return {node.name: node.rdma_devices}
-            return {}
-
-        return {
-            node.name: node.rdma_devices
-            for node in resources.nodes
-            if node.has_rdma
-        }
 
     def to_json(self, cluster_resources: ClusterResources) -> str:
         """

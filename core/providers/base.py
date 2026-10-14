@@ -230,10 +230,6 @@ class BaseProvider(ABC):
         """Get constraints for the current profile."""
         return self.profile.constraints
 
-    def get_network_config(self) -> NetworkConfig:
-        """Get network configuration for the current profile."""
-        return self.profile.network
-
     # ============================================================================
     # CONSTRAINT VALIDATION (Current Feature)
     # ============================================================================
@@ -317,73 +313,9 @@ class BaseProvider(ABC):
     # TEMPLATE MANAGEMENT
     # ============================================================================
 
-    def get_template_path(self, architecture: str, component: str) -> Optional[Path]:
-        """
-        Get path to provider-specific template.
-
-        Args:
-            architecture: 'aggregated', 'pd', or 'ep'
-            component: 'prefill', 'decode', or 'worker'
-
-        Returns:
-            Path to template file, or None to use default
-        """
-        template_dir = self.provider_dir / "templates" / architecture
-        template_file = template_dir / f"{component}.yaml.j2"
-
-        if template_file.exists():
-            return template_file
-        return None
-
-    def get_template_variables(self, architecture: str) -> Dict[str, Any]:
-        """
-        Get provider-specific template variables.
-
-        Args:
-            architecture: Architecture type
-
-        Returns:
-            Dictionary of template variables
-        """
-        return self.profile.template_overrides.get(architecture, {})
-
     # ============================================================================
     # FUTURE: METRICS COLLECTION
     # ============================================================================
-
-    def get_metrics_config(self) -> Optional[MetricsConfig]:
-        """
-        Get metrics collection configuration (FUTURE).
-
-        Returns:
-            MetricsConfig if configured, None otherwise
-        """
-        return self.profile.metrics
-
-    def get_metric_queries(self) -> Dict[str, str]:
-        """
-        Get provider-specific Prometheus/Thanos queries (FUTURE).
-
-        Returns:
-            Dictionary of metric_name -> PromQL query
-        """
-        if self.profile.metrics:
-            return self.profile.metrics.custom_queries
-        return {}
-
-    def parse_metrics(self, raw_metrics: Dict[str, Any]) -> Dict[str, float]:
-        """
-        Parse provider-specific metrics (FUTURE).
-
-        Override this to handle provider-specific metric formats.
-
-        Args:
-            raw_metrics: Raw metrics from Prometheus/Thanos
-
-        Returns:
-            Parsed metrics dictionary
-        """
-        return raw_metrics
 
     # ============================================================================
     # FUTURE: COST ANALYSIS
@@ -398,75 +330,6 @@ class BaseProvider(ABC):
         """
         return self.profile.cost_model
 
-    def calculate_cost(
-        self,
-        num_gpus: int,
-        test_duration_seconds: int,
-        network_transfer_gb: float = 0.0
-    ) -> float:
-        """
-        Calculate estimated cost for a test run (FUTURE).
-
-        Args:
-            num_gpus: Number of GPUs used
-            test_duration_seconds: Test duration
-            network_transfer_gb: Network data transfer in GB
-
-        Returns:
-            Estimated cost in USD
-        """
-        cost_model = self.get_cost_model()
-        if not cost_model or not cost_model.gpu_cost_per_hour:
-            return 0.0
-
-        # GPU cost
-        hours = test_duration_seconds / 3600.0
-        gpu_cost = num_gpus * cost_model.gpu_cost_per_hour * hours
-
-        # Network cost
-        network_cost = 0.0
-        if cost_model.network_cost_per_gb:
-            network_cost = network_transfer_gb * cost_model.network_cost_per_gb
-
-        return gpu_cost + network_cost
-
     # ============================================================================
     # FUTURE: SEARCH SPACE INTEGRATION
     # ============================================================================
-
-    def get_search_space(self) -> Optional[SearchSpace]:
-        """
-        Get search space constraints (FUTURE).
-
-        Returns:
-            SearchSpace if configured, None otherwise
-        """
-        return self.profile.search_space
-
-    def suggest_pd_ratios(self) -> List[str]:
-        """
-        Suggest PD ratios to test based on provider constraints (FUTURE).
-
-        Returns:
-            List of recommended PD ratios
-        """
-        if self.profile.search_space:
-            return self.profile.search_space.allowed_pd_ratios
-        return ["1:1", "1:2", "1:4", "2:1"]
-
-    def suggest_tp_values(self, max_gpus: int) -> List[int]:
-        """
-        Suggest TP values to test based on provider constraints (FUTURE).
-
-        Args:
-            max_gpus: Maximum available GPUs
-
-        Returns:
-            List of recommended TP values
-        """
-        if self.profile.search_space and self.profile.search_space.allowed_tp_values:
-            # Filter to values within max_gpus
-            return [tp for tp in self.profile.search_space.allowed_tp_values if tp <= max_gpus]
-
-        # Default: powers of 2 up to max_gpus
-        return [tp for tp in [1, 2, 4, 8] if tp <= max_gpus]

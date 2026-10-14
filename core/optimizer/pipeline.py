@@ -843,20 +843,6 @@ class RecipeOptimizer(
             self.achievable_concurrency = measured_concurrency
             self.log(f"  📊 Computed achievable concurrency from measured throughput: {measured_concurrency}", 'info')
 
-    def _save_constraint_notes(self):
-        """Save constraint notes to the database immediately so they persist even if the run fails."""
-        if self.db_manager and self.run_id and self.constraint_notes:
-            try:
-                import json as _json
-                notes_json = _json.dumps(self.constraint_notes)
-                with self.db_manager.get_connection() as conn:
-                    conn.execute(
-                        'UPDATE optimization_runs SET constraint_notes = ? WHERE id = ?',
-                        (notes_json, self.run_id)
-                    )
-            except Exception as e:
-                self.log(f"  ⚠️  Failed to save constraint notes: {e}", 'warning')
-
     def _load_completed_tests(self):
         """
         Load completed tests from the database for resume capability.

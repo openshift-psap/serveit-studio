@@ -332,11 +332,6 @@ function _renderChartsImpl(data, runId, content) {
             }
         }
 
-        // Grab test_settings from the first available P90 recommendation for EPP cards
-        const _baseTestSettings = (rec.recommendations.response_time || rec.recommendations.throughput || {}).config?.test_settings || {};
-        const _baseEppConfig = (rec.recommendations.response_time || rec.recommendations.throughput || {}).config?.epp_config || null;
-
-
         html += '</div></div>';
 
     } // end Deployment Recommendation card
@@ -1827,12 +1822,6 @@ function _renderChartsImpl(data, runId, content) {
         });
         var pctColors = { ttft_p90: '#3b82f6', ttft_p95: '#f59e0b', ttft_p99: '#ef4444' };
         var archIdx = 0;
-        function sweepColor(key) {
-            if (key.startsWith('pd')) return '#10b981';
-            if (key.startsWith('agg')) return '#6366f1';
-            if (key.startsWith('ep')) return '#f59e0b';
-            return '#888';
-        }
         function sweepLabel(key) {
             if (key.startsWith('pd')) return 'PD';
             if (key.startsWith('agg')) return 'AG';
@@ -4380,19 +4369,6 @@ function _renderChartsImpl(data, runId, content) {
         const vllmLayout = { ...plotlyLayout, margin: { ...plotlyLayout.margin, b: 100 }, showlegend: true, legend: { x: 0, y: 1.15, orientation: 'h' } };
         const pColors = { p50: '#60a5fa', p90: '#3b82f6', p95: '#f59e0b', p99: '#ef4444' };
         const pctiles = ['P50', 'P90', 'P95', 'P99'];
-
-        function makePercentileLines(data, unit) {
-            return [
-                { x: vllm.configs, y: data.p50, name: 'P50', mode: 'markers', marker: { size: 10, color: pColors.p50 },
-                  hovertemplate: '<b>%{x}</b><br>P50: %{y:,.0f} ' + unit + '<extra></extra>' },
-                { x: vllm.configs, y: data.p90, name: 'P90', mode: 'markers', marker: { size: 12, color: pColors.p90 },
-                  hovertemplate: '<b>%{x}</b><br>P90: %{y:,.0f} ' + unit + '<extra></extra>' },
-                { x: vllm.configs, y: data.p95, name: 'P95', mode: 'markers', marker: { size: 10, color: pColors.p95 },
-                  hovertemplate: '<b>%{x}</b><br>P95: %{y:,.0f} ' + unit + '<extra></extra>' },
-                { x: vllm.configs, y: data.p99, name: 'P99', mode: 'markers', marker: { size: 10, color: pColors.p99 },
-                  hovertemplate: '<b>%{x}</b><br>P99: %{y:,.0f} ' + unit + '<extra></extra>' },
-            ];
-        }
 
         // Sort configs by architecture group then P90 value
         function sortedIndices(p90arr, cfgs) {

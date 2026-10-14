@@ -310,20 +310,6 @@ class NetworkIntegrator:
                 self.logger.error(f"Failed to apply {resource.name}: {e}")
                 raise
 
-    def cleanup_network(self, namespace: str, resource_names: List[str], network_type: NetworkType = None) -> None:
-        for name in resource_names:
-            try:
-                if network_type == NetworkType.DRA:
-                    self.kubectl.run(['delete', 'resourceclaimtemplate', name, '-n', namespace, '--ignore-not-found'])
-                elif network_type == NetworkType.NAD:
-                    self.kubectl.run(['delete', 'nad', name, '-n', namespace, '--ignore-not-found'])
-                else:
-                    self.kubectl.run(['delete', 'nad', name, '-n', namespace, '--ignore-not-found'], check=False)
-                    self.kubectl.run(['delete', 'resourceclaimtemplate', name, '-n', namespace, '--ignore-not-found'], check=False)
-            except Exception as e:
-                self.logger.warning(f"Failed to delete {name}: {e}")
-
-
 # ---------------------------------------------------------------------------
 # Base generator
 # ---------------------------------------------------------------------------

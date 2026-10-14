@@ -75,12 +75,6 @@ document.getElementById('use-achievable-qps').addEventListener('change', (e) => 
 });
 
 // Latency constraint
-function toggleLatencyConstraint() {
-    const enabled = document.getElementById('latency-constraint-enabled').checked;
-    config.latency_constraint_enabled = enabled;
-    saveConfig();
-}
-
 function setLatencyPercentile(pctl) {
     config.latency_constraint_percentile = pctl;
     ['p50', 'p90', 'p95', 'p99'].forEach(p => {
@@ -692,15 +686,6 @@ function updateEppCustom() {
         config.epp_config.lruCapacityPerServer = parseInt(lruEl.value) || 4000000;
     }
     saveConfig();
-}
-
-function resetEppParams() {
-    ['epp-max-prefix-blocks', 'epp-lru-capacity', 'epp-non-cached-tokens'].forEach(id => {
-        var el = document.getElementById(id);
-        if (el) delete el.dataset.userEdited;
-    });
-    updateEppAutoSuggestion();
-    updateEppParams();
 }
 
 function updateEppParams() {

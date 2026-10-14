@@ -19,11 +19,6 @@ function selectNetwork(netId) {
     saveConfig();
 }
 
-function selectNad(nadName, nadNamespace) {
-    config.rdma_network_annotation = JSON.stringify([{"name": nadName, "namespace": nadNamespace}]);
-    saveConfig();
-}
-
 function toggleNad(nadName, nadNamespace, checked) {
     var current = [];
     try { current = JSON.parse(config.rdma_network_annotation || '[]'); } catch(e) {}

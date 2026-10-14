@@ -1489,18 +1489,6 @@ class ReportAnalyzer:
                     pass
         return all_results
 
-    @staticmethod
-    def _is_run_finished(run_id, loader):
-        try:
-            row = loader.conn.execute(
-                'SELECT status, completed_at FROM optimization_runs WHERE id = ?', (run_id,)
-            ).fetchone()
-            if not row:
-                return False
-            return row[0] in ('completed', 'stopped', 'failed', 'error_stopped', 'interrupted') or bool(row[1])
-        except Exception:
-            return False
-
     def build_full_report_data(self, run_id, loader):
         """
         Build all data needed for the /api/runs/<id>/charts endpoint.

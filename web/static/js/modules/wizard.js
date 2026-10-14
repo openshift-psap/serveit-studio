@@ -181,15 +181,6 @@ function handleDatasetUpload(input) {
         });
 }
 
-function toggleMultiTurn() {
-    const enabled = document.getElementById('multi-turn-enabled').checked;
-    if (enabled) {
-        config.turns = Math.max(2, parseInt(document.getElementById('turns-input').value) || 3);
-    } else {
-        config.turns = 1;
-    }
-    saveConfig();
-}
 var turnsInput = document.getElementById('turns-input');
 if (turnsInput) {
     turnsInput.addEventListener('change', (e) => {

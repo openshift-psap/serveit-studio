@@ -16,40 +16,6 @@ logger = logging.getLogger(__name__)
 _cached_kubectl_cmd: Optional[str] = None
 
 
-def detect_kubectl_command() -> str:
-    """Detect whether to use kubectl or oc CLI.
-
-    Returns:
-        'oc' if OpenShift CLI is available, otherwise 'kubectl'
-
-    Raises:
-        RuntimeError: If neither kubectl nor oc is found
-    """
-    global _cached_kubectl_cmd
-    if _cached_kubectl_cmd is not None:
-        return _cached_kubectl_cmd
-
-    # Check if this is an OpenShift cluster (not just if oc binary exists)
-    try:
-        r = subprocess.run(['kubectl', 'api-resources', '--api-group=route.openshift.io'],
-                          capture_output=True, text=True, timeout=15)
-        if r.returncode == 0 and 'Route' in r.stdout:
-            logger.info("Using OpenShift CLI (oc)")
-            _cached_kubectl_cmd = 'oc'
-            return 'oc'
-    except (subprocess.CalledProcessError, FileNotFoundError, subprocess.TimeoutExpired):
-        pass
-
-    # Check if kubectl is available
-    try:
-        subprocess.run(['kubectl', 'version', '--client'], capture_output=True, timeout=10)
-        logger.info("Using Kubernetes CLI (kubectl)")
-        _cached_kubectl_cmd = 'kubectl'
-        return 'kubectl'
-    except (FileNotFoundError, subprocess.TimeoutExpired):
-        raise RuntimeError("Neither kubectl nor oc found. Please install Kubernetes CLI.")
-
-
 class KubectlRunner:
     """Shared kubectl/oc command executor with consistent error handling."""
 
@@ -134,27 +100,6 @@ class KubectlRunner:
             logger.error(f"Failed to parse kubectl JSON output: {e}")
             logger.error(f"Output was: {result.stdout[:500]}")
             raise
-
-    def get_resource(self, resource_type: str, name: str, namespace: Optional[str] = None) -> Optional[Dict]:
-        """Get a Kubernetes resource by type and name.
-
-        Args:
-            resource_type: Resource type (e.g., 'pod', 'service', 'deployment')
-            name: Resource name
-            namespace: Namespace (uses default if None)
-
-        Returns:
-            Resource as dict, or None if not found
-        """
-        ns = namespace or self.namespace
-        result = self.run(
-            ['get', resource_type, name, '-n', ns, '-o', 'json'],
-            check=False
-        )
-
-        if result.returncode == 0:
-            return json.loads(result.stdout)
-        return None
 
     def apply(self, manifest: str, namespace: Optional[str] = None) -> bool:
         """Apply a Kubernetes manifest.

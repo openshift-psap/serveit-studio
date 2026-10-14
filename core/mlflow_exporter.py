@@ -23,11 +23,6 @@ def _register_workspace_header(workspace):
         _serveit_workspace = True
         def __init__(self):
             self._workspace = workspace
-        def in_context(self):
-            return True
-        def request_headers(self):
-            return {'X-Mlflow-Workspace': self._workspace}
-
     _request_header_provider_registry.register(_Provider)
 
 

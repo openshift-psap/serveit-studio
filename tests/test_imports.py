@@ -38,7 +38,6 @@ MODULES_NEED_INFRA = [
     'core.pod_error_scanner',
     'core.report_analysis',
     'core.report_data',
-    'core.report_generator',
     'core.report_renderer',
     'core.recipe_optimizer',
     'core.user_defined_tuning',

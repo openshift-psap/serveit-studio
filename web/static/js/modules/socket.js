@@ -35,11 +35,6 @@ socket.on('connect', function() {
 // Heartbeat — prove we're alive every 5 seconds
 setInterval(function() { socket.emit('heartbeat'); }, 5000);
 
-function toggleTestConfig(rowId) {
-    var row = document.getElementById(rowId);
-    if (row) row.style.display = row.style.display === 'none' ? '' : 'none';
-}
-
 function sortReportTable(tableId, colIdx, type) {
     var table = document.getElementById(tableId);
     if (!table) return;
@@ -194,11 +189,6 @@ function getTestPlanConfigSignature() {
         use_existing_pvc: config.use_existing_pvc || false,
         existing_pvc_name: config.existing_pvc_name || null
     };
-}
-
-function configSignaturesMatch(sig1, sig2) {
-    if (!sig1 || !sig2) return false;
-    return JSON.stringify(sig1) === JSON.stringify(sig2);
 }
 
 // Helper function to log to console

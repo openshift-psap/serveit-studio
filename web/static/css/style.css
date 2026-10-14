@@ -227,9 +227,7 @@
             transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
         }
 
-        .panel-header {
-            display: none;
-        }
+
 
         .panel-content {
             padding: 0;
@@ -1045,9 +1043,9 @@
         .estimator-table td { padding: 9px 14px; border-bottom: 1px solid #f1f5f9; }
         .estimator-best td:nth-child(5) { color: #16a34a; font-weight: 700; }
         .arch-badge { padding: 2px 8px; border-radius: 4px; font-size: 0.82em; font-weight: 600; }
-        .arch-badge.arch-pd { background: #dbeafe; color: #1d4ed8; }
-        .arch-badge.arch-aggregated { background: #dcfce7; color: #15803d; }
-        .arch-badge.arch-ep { background: #f3e8ff; color: #7e22ce; }
+
+
+
 
         /* Report subtabs (pill-style within each report panel) */
         .report-subtabs-container .report-subtab-pane { display: block; }
@@ -1571,20 +1569,7 @@
             box-shadow: none;
         }
 
-        .console-header {
-            background: var(--rh-white);
-            padding: 20px 28px;
-            border-bottom: 2px solid var(--rh-gray-400);
-            color: var(--rh-black);
-            font-weight: 800;
-            font-family: var(--font-display);
-            font-size: 0.95em;
-            letter-spacing: 0.08em;
-            text-transform: uppercase;
-            display: flex;
-            justify-content: center;
-            align-items: center;
-        }
+
 
         .console-content {
             padding: 28px;
@@ -1704,25 +1689,11 @@
         }
 
         /* Review & Run Section Styles */
-        .review-header {
-            background: linear-gradient(135deg, #2A7B88 0%, #1B5E6B 100%);
-            color: white;
-            padding: 32px;
-            border-radius: 8px;
-            margin-bottom: 24px;
-            box-shadow: 0 4px 12px rgba(42, 123, 136, 0.15);
-        }
 
-        .review-header h3 {
-            font-size: 28px;
-            font-weight: 700;
-            margin-bottom: 6px;
-        }
 
-        .review-header .description {
-            opacity: 0.95;
-            margin-bottom: 0;
-        }
+
+
+
 
         .config-grid {
             display: grid;
@@ -1751,41 +1722,15 @@
             color: #151515;
         }
 
-        .test-plan-header {
-            background: linear-gradient(135deg, #f0f0f0 0%, #e5e5e5 100%);
-            padding: 24px;
-            border-radius: 8px;
-            margin-bottom: 16px;
-            border: 2px solid #d5d5d5;
-        }
 
-        .test-plan-stats {
-            display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-            gap: 16px;
-        }
 
-        .stat-item {
-            display: flex;
-            align-items: center;
-            gap: 12px;
-        }
 
-        .stat-icon {
-            font-size: 24px;
-            width: 40px;
-            height: 40px;
-            background: white;
-            border-radius: 8px;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
-        }
 
-        .stat-content {
-            flex: 1;
-        }
+
+
+
+
+
 
         .stat-label {
             font-size: 12px;
@@ -1799,46 +1744,17 @@
             color: #151515;
         }
 
-        .ready-badge {
-            background: linear-gradient(135deg, #10b981 0%, #059669 100%);
-            color: white;
-            padding: 16px 24px;
-            border-radius: 8px;
-            text-align: center;
-            font-weight: 600;
-            box-shadow: 0 4px 12px rgba(16, 185, 129, 0.2);
-        }
 
-        .ready-badge-title {
-            font-size: 18px;
-            margin-bottom: 4px;
-        }
 
-        .ready-badge-subtitle {
-            font-size: 14px;
-            opacity: 0.95;
-        }
 
-        .recipe-intro {
-            background: linear-gradient(135deg, #fef3c7 0%, #fde68a 100%);
-            border-left: 4px solid #f59e0b;
-            padding: 20px 24px;
-            border-radius: 8px;
-            margin-bottom: 24px;
-        }
 
-        .recipe-intro h4 {
-            font-size: 17px;
-            font-weight: 700;
-            color: #92400e;
-            margin-bottom: 8px;
-        }
 
-        .recipe-intro p {
-            color: #78350f;
-            font-size: 15px;
-            margin: 0;
-        }
+
+
+
+
+
+
 
         .steps-container {
             display: grid;
@@ -1929,251 +1845,70 @@
             line-height: 1.6;
         }
 
-        .convergence-box {
-            background: #fef3c7;
-            border-left: 4px solid #f59e0b;
-            padding: 16px;
-            border-radius: 6px;
-            margin: 12px 0;
-        }
 
-        .convergence-box h5 {
-            font-size: 14px;
-            font-weight: 700;
-            color: #92400e;
-            margin-bottom: 8px;
-        }
 
-        .convergence-box ul {
-            list-style: none;
-            font-size: 13px;
-            color: #78350f;
-            padding-left: 0;
-        }
 
-        .convergence-box li {
-            padding: 4px 0 4px 20px;
-            position: relative;
-        }
 
-        .convergence-box li::before {
-            content: "✓";
-            position: absolute;
-            left: 0;
-            color: #f59e0b;
-            font-weight: 700;
-        }
 
-        .execution-flow {
-            background: linear-gradient(135deg, #eff6ff 0%, #dbeafe 100%);
-            border: 2px solid #3b82f6;
-            border-radius: 12px;
-            padding: 28px;
-            margin-top: 20px;
-        }
 
-        .execution-flow h4 {
-            font-size: 20px;
-            font-weight: 700;
-            color: #1e3a8a;
-            margin-bottom: 20px;
-            display: flex;
-            align-items: center;
-            gap: 12px;
-        }
 
-        .execution-flow h4::before {
-            content: "🚀";
-            font-size: 28px;
-        }
 
-        .phase-section {
-            margin-bottom: 20px;
-        }
 
-        .phase-section:last-child {
-            margin-bottom: 0;
-        }
 
-        .phase-title {
-            font-size: 15px;
-            font-weight: 700;
-            color: #1e40af;
-            margin-bottom: 12px;
-            padding-bottom: 8px;
-            border-bottom: 2px solid #93c5fd;
-        }
 
-        .execution-steps {
-            list-style: none;
-            counter-reset: execution;
-            padding-left: 0;
-        }
 
-        .execution-steps li {
-            counter-increment: execution;
-            padding: 10px 0 10px 48px;
-            position: relative;
-            font-size: 14px;
-            color: #1e40af;
-            border-left: 2px solid #93c5fd;
-            margin-left: 20px;
-        }
 
-        .execution-steps li::before {
-            content: counter(execution);
-            position: absolute;
-            left: -21px;
-            width: 40px;
-            height: 40px;
-            background: linear-gradient(135deg, #3b82f6 0%, #2563eb 100%);
-            color: white;
-            border-radius: 50%;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            font-weight: 700;
-            font-size: 15px;
-            box-shadow: 0 2px 8px rgba(59, 130, 246, 0.3);
-        }
 
-        .sub-steps {
-            list-style: none;
-            margin-top: 8px;
-            margin-left: 0;
-            padding-left: 0;
-            border-left: none;
-        }
 
-        .sub-steps li {
-            padding: 5px 0 5px 24px;
-            font-size: 13px;
-            color: #1e40af;
-            position: relative;
-            border-left: none;
-            counter-increment: none;
-        }
 
-        .sub-steps li::before {
-            content: "→";
-            position: static;
-            width: auto;
-            height: auto;
-            background: none;
-            color: #3b82f6;
-            border-radius: 0;
-            box-shadow: none;
-            font-size: 14px;
-            display: inline;
-            margin-right: 8px;
-        }
 
-        .total-summary {
-            background: linear-gradient(135deg, #f0fdf4 0%, #dcfce7 100%);
-            border: 3px solid #10b981;
-            border-radius: 12px;
-            padding: 24px;
-            margin-top: 20px;
-        }
 
-        .total-summary h4 {
-            font-size: 19px;
-            font-weight: 700;
-            color: #065f46;
-            margin-bottom: 16px;
-        }
 
-        .summary-grid {
-            display: grid;
-            grid-template-columns: 1fr 1fr;
-            gap: 16px;
-        }
 
-        .summary-item {
-            background: white;
-            padding: 16px;
-            border-radius: 8px;
-            border: 2px solid #6ee7b7;
-        }
 
-        .summary-item h5 {
-            font-size: 13px;
-            font-weight: 600;
-            color: #065f46;
-            margin-bottom: 8px;
-            text-transform: uppercase;
-            letter-spacing: 0.5px;
-        }
 
-        .summary-item .value {
-            font-size: 24px;
-            font-weight: 700;
-            color: #059669;
-        }
 
-        .summary-item ul {
-            list-style: none;
-            margin-top: 12px;
-            font-size: 14px;
-            color: #047857;
-            padding-left: 0;
-        }
 
-        .summary-item li {
-            padding: 4px 0 4px 20px;
-            position: relative;
-        }
 
-        .summary-item li::before {
-            content: "•";
-            position: absolute;
-            left: 0;
-            color: #10b981;
-            font-weight: 700;
-        }
 
-        .savings-badge {
-            background: linear-gradient(135deg, #10b981 0%, #059669 100%);
-            color: white;
-            padding: 12px 20px;
-            border-radius: 8px;
-            text-align: center;
-            font-size: 17px;
-            font-weight: 700;
-            margin-top: 16px;
-            box-shadow: 0 4px 12px rgba(16, 185, 129, 0.3);
-        }
 
-        .benefit-list {
-            margin-top: 16px;
-        }
 
-        .benefit-item {
-            background: white;
-            padding: 12px 16px;
-            border-radius: 6px;
-            margin-bottom: 8px;
-            border-left: 4px solid #10b981;
-            font-size: 14px;
-            color: #065f46;
-            display: flex;
-            align-items: center;
-            gap: 12px;
-        }
 
-        .benefit-item::before {
-            content: "✓";
-            font-size: 18px;
-            font-weight: 700;
-            color: #10b981;
-        }
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
         @media (max-width: 768px) {
             .config-grid,
             .test-plan-stats,
-            .summary-grid {
-                grid-template-columns: 1fr;
-            }
+
 
             .step-content {
                 margin-left: 0;

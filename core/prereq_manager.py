@@ -773,31 +773,6 @@ class PrereqManager:
                 except Exception:
                     pass
 
-    def _check_prereqs_ready(self, gaie_name: str, log_callback=None) -> bool:
-        """Check if prerequisites are ready."""
-        def log(msg):
-            if log_callback:
-                log_callback(msg)
-
-        # Check GAIE deployment
-        result = self.kubectl.run_json([
-            'get', 'deployment', gaie_name, '-n', self.namespace, '-o', 'json'
-        ])
-
-        if not result:
-            return False
-
-        status = result.get('status', {})
-        ready_replicas = status.get('readyReplicas', 0)
-        replicas = status.get('replicas', 1)
-
-        if ready_replicas == replicas:
-            log('   ✅ GAIE deployment ready')
-            return True
-        else:
-            log(f'   ⏳ GAIE deployment not ready ({ready_replicas}/{replicas})')
-            return False
-
     def _wait_for_deployment_ready(self, deployment_name: str, timeout: int = 300, log_callback=None) -> bool:
         """
         Wait for a deployment to be ready, with image pull error detection.

@@ -216,15 +216,6 @@ class RecipeOptimizerConfig:
                 d[f.name] = v
         return d
 
-    @classmethod
-    def from_dict(cls, d: dict) -> 'RecipeOptimizerConfig':
-        """Reconstruct config from saved dict. Unknown keys are ignored."""
-        from dataclasses import fields as dc_fields
-        valid = {f.name for f in dc_fields(cls)}
-        filtered = {k: v for k, v in d.items() if k in valid and k != 'hf_token'}
-        return cls(**filtered)
-
-
 @dataclass
 class OptimalTP:
     """Result from TP optimization."""

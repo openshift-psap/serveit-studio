@@ -316,15 +316,6 @@ class DatabaseManager:
                 datetime.now().isoformat()
             ))
 
-    def get_pod_errors(self, run_id: int) -> List[Dict[str, Any]]:
-        """Get all pod error logs for a run."""
-        with self.get_connection() as conn:
-            rows = conn.execute(
-                'SELECT * FROM pod_error_logs WHERE run_id = ? ORDER BY created_at DESC',
-                (run_id,)
-            ).fetchall()
-            return [dict(row) for row in rows]
-
     def create_optimization_run(
         self,
         run_name: str,
@@ -632,79 +623,6 @@ class DatabaseManager:
                 test_config_json,
             ))
 
-    def update_run_status(
-        self,
-        run_id: int,
-        status: str,
-        optimal_config: Optional[str] = None,
-        notes: Optional[str] = None
-    ):
-        """
-        Update optimization run status.
-
-        Args:
-            run_id: ID of the run
-            status: Status ('running', 'completed', 'failed')
-            optimal_config: JSON string of optimal configuration
-            notes: Additional notes
-        """
-        with self.get_connection() as conn:
-            cursor = conn.cursor()
-
-            if status in ('completed', 'failed'):
-                cursor.execute('''
-                    UPDATE optimization_runs
-                    SET status = ?, completed_at = ?, optimal_config = ?, notes = ?
-                    WHERE id = ?
-                ''', (status, datetime.now().isoformat(), optimal_config, notes, run_id))
-            else:
-                cursor.execute('''
-                    UPDATE optimization_runs
-                    SET status = ?, notes = ?
-                    WHERE id = ?
-                ''', (status, notes, run_id))
-
-    def get_test_results(self, run_id: int) -> List[Dict[str, Any]]:
-        """
-        Get all test results for a run.
-
-        Args:
-            run_id: ID of the run
-
-        Returns:
-            List of test result dictionaries
-        """
-        with self.get_connection() as conn:
-            cursor = conn.cursor()
-            cursor.execute('''
-                SELECT * FROM test_configurations
-                WHERE run_id = ?
-                ORDER BY id ASC
-            ''', (run_id,))
-
-            rows = cursor.fetchall()
-            return [dict(row) for row in rows]
-
-    def get_run_info(self, run_id: int) -> Optional[Dict[str, Any]]:
-        """
-        Get optimization run information.
-
-        Args:
-            run_id: ID of the run
-
-        Returns:
-            Run information dictionary or None
-        """
-        with self.get_connection() as conn:
-            cursor = conn.cursor()
-            cursor.execute('''
-                SELECT * FROM optimization_runs
-                WHERE id = ?
-            ''', (run_id,))
-
-            row = cursor.fetchone()
-            return dict(row) if row else None
-
     def insert_optuna_trial(
         self,
         run_id: int,
@@ -803,17 +721,6 @@ class DatabaseManager:
                     ORDER BY optimization_step, trial_number ASC
                 ''', (run_id,))
             return [dict(row) for row in cursor.fetchall()]
-
-    def get_optuna_study(self, run_id: int, optimization_step: str) -> Optional[Dict[str, Any]]:
-        """Get Optuna study summary for a run and step."""
-        with self.get_connection() as conn:
-            cursor = conn.cursor()
-            cursor.execute('''
-                SELECT * FROM optuna_studies
-                WHERE run_id = ? AND optimization_step = ?
-            ''', (run_id, optimization_step))
-            row = cursor.fetchone()
-            return dict(row) if row else None
 
     def insert_latency_search_trial(
         self,

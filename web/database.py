@@ -5,7 +5,7 @@ import json
 import sqlite3
 import logging
 from datetime import datetime
-from typing import Optional, Dict, List
+from typing import Optional, Dict
 
 from web.app_context import DB_PATH, STATE_DIR, STATE_FILE, TARGET_NAMESPACE, get_db, state, state_lock
 
@@ -689,28 +689,6 @@ def get_deployment_template(model_name: str, architecture: str, role: Optional[s
         return None
 
 
-def save_test_state(run_id: int, test_index: int, test_config_json: str, pods_deployed: List[str], deployment_status: str = 'deploying'):
-    """
-    Save current test state to database for crash recovery.
-
-    Args:
-        run_id: Optimization run ID
-        test_index: Index of current test in the plan
-        test_config_json: JSON serialized TestConfig
-        pods_deployed: List of pod names that were deployed
-        deployment_status: 'deploying', 'running', 'crashed', 'completed'
-    """
-    with get_db() as conn:
-        conn.execute('''
-            UPDATE optimization_runs
-            SET current_test_index = ?,
-                last_deployed_config = ?,
-                deployment_status = ?,
-                pods_deployed = ?
-            WHERE id = ?
-        ''', (test_index, test_config_json, deployment_status, json.dumps(pods_deployed), run_id))
-
-
 def get_resumable_run() -> Optional[Dict]:
     """
     Check if there's a run that can be resumed.
@@ -737,32 +715,6 @@ def get_resumable_run() -> Optional[Dict]:
         if result:
             return dict(result)
         return None
-
-
-def check_pods_exist(namespace: str, pod_names: List[str]) -> Dict[str, bool]:
-    """
-    Check which pods still exist in the cluster.
-
-    Args:
-        namespace: Kubernetes namespace
-        pod_names: List of pod names to check
-
-    Returns:
-        Dict mapping pod_name -> exists (bool)
-    """
-    from core.k8s_utils import KubectlRunner
-
-    kubectl = KubectlRunner(namespace=namespace)
-    pod_status = {}
-
-    for pod_name in pod_names:
-        try:
-            result = kubectl.run(['get', 'pod', pod_name, '-n', namespace], check=False)
-            pod_status[pod_name] = result.returncode == 0
-        except Exception:
-            pod_status[pod_name] = False
-
-    return pod_status
 
 
 def cleanup_stale_optimizations():

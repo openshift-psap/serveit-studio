@@ -722,17 +722,6 @@ class TemplateManager:
 
         return rendered
 
-    def render_ep(self, config: TestConfig) -> Dict[str, str]:
-        """
-        Render EP architecture templates (uses PD prefill/decode split).
-
-        EP reuses PD templates — the EP-specific flags (expert parallel, EPLB,
-        MoE backend) are set in the config and rendered via PD template conditionals.
-        """
-        if config.architecture != 'ep':
-            raise ValueError(f"Expected ep architecture, got {config.architecture}")
-        return self.render_pd(config)
-
     def render_config(self, config: TestConfig) -> Dict[str, str]:
         """
         Render template(s) for any architecture type.
