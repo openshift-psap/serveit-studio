@@ -2,39 +2,38 @@
                     <div class="step-section" id="step1-section" style="display: block;">
                         <h3>What's your priority?</h3>
                         <p class="description">
-                            Pick what matters most to you. ServeIt Studio will automatically test different server configurations to find the best one for your needs.
+                            ServeIt Studio benchmarks real deployments on your cluster and
+                            recommends the best configuration for your model and workload.
+                            Start from what you want to optimize — or jump straight to a
+                            known architecture below.
                         </p>
-
-                        <div class="info-box">
-                            <h4>🎯 How it works</h4>
-                            <p><strong>Throughput Priority:</strong> Tests different server setups to find the one that handles the most requests at once -- like finding the highway lane configuration that moves the most cars per hour.</p>
-                            <p><strong>Response Time Priority:</strong> Tests different server setups to find the one that starts replying fastest -- like finding the checkout lane that begins scanning your items soonest.</p>
-                            <p><strong>Full Coverage:</strong> Tests all available architectures including multi-node TEP (Tensor + Expert Parallelism) to find the best overall winner.</p>
-                            <p><strong>Single Architecture:</strong> Already know which architecture you want? Pick Aggregated Only, PD Only, or EP Only to skip the comparison and go straight to optimizing that architecture.</p>
-                        </div>
 
                         <div class="architecture-grid">
                             <div class="arch-card" data-goal="throughput">
-                                <h4>Throughput Priority</h4>
-                                <p>Finds the setup that handles the most requests per second for your specific model and workload. Tests Aggregated and EP (including multi-node TEP when multiple nodes are available), picks whichever wins.</p>
+                                <h4>Maximize Throughput</h4>
+                                <p>Find the configuration that serves the most requests
+                                per second. Best when serving many concurrent users.</p>
                                 <div class="best-for">
-                                    <strong>Compares:</strong> <span>Aggregated vs EP/TEP — best config from each is compared</span>
+                                    <strong>Tests:</strong> <span>Aggregated vs Expert Parallel (EP), including multi-node when available — the winner is recommended</span>
                                 </div>
                             </div>
 
                             <div class="arch-card" data-goal="ttft">
-                                <h4>Response Time Priority</h4>
-                                <p>Finds the fastest first-reply time for your specific model and workload. Aggregated can beat PD in some cases, so we test both and pick the winner.</p>
+                                <h4>Minimize Response Time</h4>
+                                <p>Find the configuration with the fastest time-to-first-token.
+                                Best for interactive and agentic workloads where users wait
+                                for the first reply.</p>
                                 <div class="best-for">
-                                    <strong>Compares:</strong> <span>Aggregated vs Prefill/Decode (PD) — best config from each is compared</span>
+                                    <strong>Tests:</strong> <span>Aggregated vs Prefill/Decode split (PD) — the winner is recommended</span>
                                 </div>
                             </div>
 
                             <div class="arch-card" data-goal="balanced">
                                 <h4>Full Coverage</h4>
-                                <p>Tests every possible architecture for your model and workload — Aggregated, PD, EP/TEP (single and multi-node), and PD-EP (disaggregated with Expert Parallelism). Picks the best overall winner.</p>
+                                <p>Test every TP-based architecture and compare them all —
+                                the most thorough (and longest) option.</p>
                                 <div class="best-for">
-                                    <strong>Compares:</strong> <span>Aggregated vs PD vs EP/TEP vs PD-EP — best config from each is compared</span>
+                                    <strong>Tests:</strong> <span>Aggregated, PD, and EP — three-way comparison picks the overall winner. DPEP is tested separately (below)</span>
                                 </div>
                             </div>
                         </div>
@@ -44,7 +43,9 @@
                         <div class="architecture-grid">
                             <div class="arch-card" data-goal="aggregated_only">
                                 <h4>Aggregated Only</h4>
-                                <p>Test only the aggregated setup where all GPUs share the same workload. Fastest option — no architecture comparison.</p>
+                                <p>One engine replicated across all GPUs — the simplest
+                                architecture. Fastest option to test: no architecture
+                                comparison, just the best TP size.</p>
                                 <div class="best-for">
                                     <strong>Architecture:</strong> <span>Aggregated</span>
                                 </div>
@@ -52,7 +53,9 @@
 
                             <div class="arch-card" data-goal="pd_only">
                                 <h4>Prefill/Decode Only</h4>
-                                <p>Test only the P/D split architecture where separate GPU groups handle input processing and text generation.</p>
+                                <p>Separate GPU groups for input processing (prefill) and
+                                token generation (decode), with KV-cache transfer between
+                                them. Skips the Aggregated baseline.</p>
                                 <div class="best-for">
                                     <strong>Architecture:</strong> <span>Prefill/Decode (PD)</span>
                                 </div>
@@ -60,15 +63,19 @@
 
                             <div class="arch-card" data-goal="ep_only">
                                 <h4>Expert Parallelism Only</h4>
-                                <p>Test only the EP architecture where MoE expert layers are distributed across GPUs. For Mixture-of-Experts models only.</p>
+                                <p>PD split with MoE expert layers distributed across GPUs
+                                instead of replicated. For Mixture-of-Experts models only.</p>
                                 <div class="best-for">
                                     <strong>Architecture:</strong> <span>Expert Parallelism (EP)</span>
                                 </div>
                             </div>
 
                             <div class="arch-card" data-goal="dpep_only">
-                                <h4>DP + Expert Parallel Only</h4>
-                                <p>Independent GPU workers with distributed experts (TP=1). No TP all-reduce — each GPU handles its own requests' attention locally. Best for MoE models with lightweight attention (MLA).</p>
+                                <h4>DPEP Only</h4>
+                                <p>Independent GPU workers, each holding the full attention
+                                weights and a slice of the MoE experts (TP=1). No TP
+                                all-reduce. Matches production deployments for large MLA
+                                MoE models (e.g. GLM-5.3).</p>
                                 <div class="best-for">
                                     <strong>Architecture:</strong> <span>Data Parallel + Expert Parallel (DPEP)</span>
                                 </div>
@@ -80,7 +87,9 @@
                         <div class="architecture-grid">
                             <div class="arch-card" data-goal="single_test">
                                 <h4>Single Test</h4>
-                                <p>Run one test with an exact configuration you specify — architecture, TP, and pod count. No sweeps, no optimization — just deploy, benchmark, and report.</p>
+                                <p>Deploy one exact configuration — architecture, TP, and
+                                pod count — benchmark it, and report. No sweeps, no
+                                optimization.</p>
                                 <div class="best-for">
                                     <strong>Best For:</strong> <span>Validating a known-good config or re-testing a recommendation</span>
                                 </div>
