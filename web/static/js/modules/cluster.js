@@ -123,6 +123,8 @@ document.getElementById('start-optimization').addEventListener('click', () => {
         lora_enabled: !!config.lora_enabled,
         lora_num_adapters: config.lora_num_adapters || 20,
         lora_adapter_size_mb: config.lora_adapter_size_mb || null,
+        lora_max_loras: config.lora_max_loras || null,
+        lora_max_rank: config.lora_max_rank || null,
         pd_search_mode: config.pd_search_mode || 'smart',
         selected_nodes: config.selected_nodes || [],
         workload_mode: config.workload_mode || 'synthetic',

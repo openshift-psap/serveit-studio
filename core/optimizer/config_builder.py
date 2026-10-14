@@ -229,6 +229,7 @@ class ConfigBuilderMixin:
             cpu_limit=cpu,
             lora_enabled=self.config.lora_enabled,
             lora_num_adapters=self.config.lora_num_adapters,
+            lora_max_rank=getattr(self.config, 'lora_max_rank', None),
             lora_max_loras=self._compute_lora_max_loras(tp),
             lora_adapter_size_mb=self.config.lora_adapter_size_mb,
             selected_nodes=self.config.selected_nodes or [],
@@ -301,7 +302,12 @@ class ConfigBuilderMixin:
         n = int(getattr(self.config, 'lora_num_adapters', 0) or 0)
         if not getattr(self.config, 'lora_enabled', False) or n <= 0:
             return 0
-        rank = int(getattr(self.config, 'lora_max_rank', 16) or 16)
+        # User bypass: a pinned residency (e.g. forcing LRU swapping in a
+        # worst-case stress test) wins over the VRAM-derived value.
+        pinned = getattr(self.config, 'lora_max_loras', None)
+        if pinned:
+            return max(1, min(int(pinned), n))
+        rank = int(getattr(self.config, 'lora_max_rank', None) or 16)
         per_adapter_mb = getattr(self.config, 'lora_adapter_size_mb', None) or (rank * 20)
         try:
             vram_mb = float(self._gpu_vram_gb) * 1024
@@ -1105,6 +1111,7 @@ class ConfigBuilderMixin:
             cpu_limit=cpu,
             lora_enabled=self.config.lora_enabled,
             lora_num_adapters=self.config.lora_num_adapters,
+            lora_max_rank=getattr(self.config, 'lora_max_rank', None),
             lora_max_loras=self._compute_lora_max_loras(split.prefill_tp),
             lora_adapter_size_mb=self.config.lora_adapter_size_mb,
             selected_nodes=self.config.selected_nodes or [],
@@ -1327,6 +1334,7 @@ class ConfigBuilderMixin:
             cpu_limit=cpu,
             lora_enabled=self.config.lora_enabled,
             lora_num_adapters=self.config.lora_num_adapters,
+            lora_max_rank=getattr(self.config, 'lora_max_rank', None),
             lora_max_loras=self._compute_lora_max_loras(split.prefill_tp),
             lora_adapter_size_mb=self.config.lora_adapter_size_mb,
             selected_nodes=self.config.selected_nodes or [],

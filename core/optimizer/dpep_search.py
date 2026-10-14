@@ -223,7 +223,7 @@ class DPEPSearchMixin:
             # + experts/dp_size), not the TP-based estimate.
             lora_enabled=getattr(self.config, 'lora_enabled', False),
             lora_num_adapters=getattr(self.config, 'lora_num_adapters', 0),
-            lora_max_rank=getattr(self.config, 'lora_max_rank', 16),
+            lora_max_rank=getattr(self.config, 'lora_max_rank', None),
             lora_max_loras=self._compute_dpep_lora_max_loras(dp_size),
             lora_adapter_size_mb=getattr(self.config, 'lora_adapter_size_mb', None),
 
@@ -293,7 +293,10 @@ class DPEPSearchMixin:
         n = int(getattr(self.config, 'lora_num_adapters', 0) or 0)
         if not getattr(self.config, 'lora_enabled', False) or n <= 0:
             return 0
-        rank = int(getattr(self.config, 'lora_max_rank', 16) or 16)
+        pinned = getattr(self.config, 'lora_max_loras', None)
+        if pinned:
+            return max(1, min(int(pinned), n))
+        rank = int(getattr(self.config, 'lora_max_rank', None) or 16)
         per_adapter_mb = getattr(self.config, 'lora_adapter_size_mb', None) or (rank * 20)
         try:
             weights_gb = self._estimate_model_size_gb() - self._estimate_attention_weight_gb()

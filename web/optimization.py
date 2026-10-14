@@ -326,6 +326,8 @@ def stream_job_logs(job_name: str, namespace: str):
                     'lora_enabled': saved_config.get('lora_enabled', False),
                     'lora_num_adapters': saved_config.get('lora_num_adapters', 20),
                     'lora_adapter_size_mb': saved_config.get('lora_adapter_size_mb'),
+                    'lora_max_loras': saved_config.get('lora_max_loras'),
+                    'lora_max_rank': saved_config.get('lora_max_rank'),
                     'pd_search_mode': saved_config.get('pd_search_mode', 'smart'),
                     'calibrated_load_enabled': saved_config.get('calibrated_load_enabled', False),
                     'inferencex_sweep_enabled': saved_config.get('inferencex_sweep_enabled', False),
@@ -555,6 +557,10 @@ def run_optimization_background(data):
         lora_enabled = _get('lora_enabled', False)
         lora_num_adapters = int(_get('lora_num_adapters', 20) or 20)
         lora_adapter_size_mb = _get('lora_adapter_size_mb')
+        lora_max_loras_raw = _get('lora_max_loras')
+        lora_max_loras = int(lora_max_loras_raw) if lora_max_loras_raw else None
+        lora_max_rank_raw = _get('lora_max_rank')
+        lora_max_rank = int(lora_max_rank_raw) if lora_max_rank_raw else None
         asymmetric_allow_decode_gt_prefill = _get('asymmetric_allow_decode_gt_prefill', True)
         asymmetric_allow_prefill_gt_decode = _get('asymmetric_allow_prefill_gt_decode', True)
         pd_search_mode = _get('pd_search_mode', 'smart')
@@ -903,6 +909,8 @@ data:
                 lora_enabled=lora_enabled,
                 lora_num_adapters=lora_num_adapters,
                 lora_adapter_size_mb=lora_adapter_size_mb,
+                lora_max_loras=lora_max_loras,
+                lora_max_rank=lora_max_rank,
                 asymmetric_allow_decode_gt_prefill=asymmetric_allow_decode_gt_prefill,
                 asymmetric_allow_prefill_gt_decode=asymmetric_allow_prefill_gt_decode,
                 pd_search_mode=pd_search_mode,

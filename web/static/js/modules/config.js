@@ -262,6 +262,20 @@ function updateUIFromConfig() {
         }
         var loraOpts = document.getElementById('lora-options');
         if (loraOpts) loraOpts.style.display = loraOn ? 'block' : 'none';
+        var loraMlMode = document.getElementById('lora-max-loras-mode');
+        if (loraMlMode) {
+            var pinned = config.lora_max_loras ? parseInt(config.lora_max_loras) : null;
+            loraMlMode.value = pinned ? 'custom' : 'auto';
+            var loraMlVal = document.getElementById('lora-max-loras-val');
+            if (loraMlVal) { loraMlVal.disabled = !pinned; loraMlVal.value = pinned || ''; }
+        }
+        var loraMrMode = document.getElementById('lora-max-rank-mode');
+        if (loraMrMode) {
+            var rank = config.lora_max_rank ? parseInt(config.lora_max_rank) : null;
+            loraMrMode.value = rank ? 'custom' : 'auto';
+            var loraMrVal = document.getElementById('lora-max-rank-val');
+            if (loraMrVal) { loraMrVal.disabled = !rank; loraMrVal.value = rank || ''; }
+        }
         var loraN = document.getElementById('lora-num-adapters');
         if (loraN) {
             loraN.value = config.lora_num_adapters || 20;

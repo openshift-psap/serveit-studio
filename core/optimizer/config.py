@@ -150,6 +150,14 @@ class RecipeOptimizerConfig:
     # (rank x 20MB, calibrated for GLM-5.3-class attention-only adapters).
     # Override when serving smaller bases or fatter adapters.
     lora_adapter_size_mb: Optional[int] = None
+    # GPU-resident adapter cap (--max-loras). None = auto-size from free
+    # VRAM (10% of what is left after model weights). Override to pin the
+    # residency (e.g. force LRU swapping for worst-case stress tests).
+    lora_max_loras: Optional[int] = None
+    # Adapter rank ceiling (--max-lora-rank). None = 16 (matches the
+    # rank-16 adapters ServeIt generates). Override when mounting adapters
+    # with a higher rank.
+    lora_max_rank: Optional[int] = None
 
     # Optimization objective for Step 7
     objective: str = 'balanced'  # 'ttft', 'throughput', or 'balanced'
