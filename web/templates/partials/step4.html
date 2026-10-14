@@ -168,33 +168,33 @@
                                     </div>
                                 </div>
                                 <div id="lora-options" style="display:none;padding:14px;background:#f8fafc;border:1px solid #e2e8f0;border-top:none;border-radius:0 0 8px 8px;margin-top:0;">
-                                    <div class="input-group" style="max-width:280px;">
-                                        <label>Number of Adapters (N)</label>
-                                        <input type="number" id="lora-num-adapters" value="20" min="1" max="1000" onclick="event.stopPropagation();" onchange="config.lora_num_adapters=Math.max(1,Math.min(1000,parseInt(this.value)||20));this.value=config.lora_num_adapters;updateLoraEstimate();saveConfig();">
-                                        <div class="help-text">Adapters are served as <span style="font-family:var(--font-mono);">agent-01=/adapters/agent-01</span> up to <span style="font-family:var(--font-mono);">agent-N=/adapters/agent-N</span>. Stage the adapter files at that path on the model-cache volume before the run.</div>
-                                    </div>
-                                    <div style="display:flex;gap:16px;flex-wrap:wrap;margin-top:10px;">
-                                        <div class="input-group" style="max-width:220px;">
-                                            <label>GPU-Resident Adapters (max-loras)</label>
-                                            <div style="display:flex;gap:6px;">
-                                                <select id="lora-max-loras-mode" onchange="var c=this.value==='custom'?document.getElementById('lora-max-loras-val'):null;if(c){c.disabled=false;}else{document.getElementById('lora-max-loras-val').disabled=true;document.getElementById('lora-max-loras-val').value='';config.lora_max_loras=null;}saveConfig();" style="width:110px;">
-                                                    <option value="auto">Auto</option>
-                                                    <option value="custom">Custom</option>
-                                                </select>
-                                                <input type="number" id="lora-max-loras-val" disabled placeholder="auto" min="1" style="width:80px;" onchange="config.lora_max_loras=Math.max(1,parseInt(this.value)||1);this.value=config.lora_max_loras;saveConfig();">
-                                            </div>
-                                            <div class="help-text">Auto = sized from free VRAM (10% of what's left after model weights). Custom pins the residency — set it below the adapter count to force LRU swapping (worst-case stress).</div>
+                                    <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:16px;">
+                                        <div class="input-group">
+                                            <label>Number of Adapters (N)</label>
+                                            <input type="number" id="lora-num-adapters" value="20" min="1" max="1000" onclick="event.stopPropagation();" onchange="config.lora_num_adapters=Math.max(1,Math.min(1000,parseInt(this.value)||20));this.value=config.lora_num_adapters;updateLoraEstimate();saveConfig();">
+                                            <div class="help-text">Adapters served as <span style="font-family:var(--font-mono);">agent-01 … agent-N</span>. Stage the adapter files at that path on the model-cache volume before the run.</div>
                                         </div>
-                                        <div class="input-group" style="max-width:220px;">
-                                            <label>Max Adapter Rank (max-lora-rank)</label>
+                                        <div class="input-group">
+                                            <label>GPU-Resident (max-loras)</label>
                                             <div style="display:flex;gap:6px;">
-                                                <select id="lora-max-rank-mode" onchange="var c=this.value==='custom'?document.getElementById('lora-max-rank-val'):null;if(c){c.disabled=false;}else{document.getElementById('lora-max-rank-val').disabled=true;document.getElementById('lora-max-rank-val').value='';config.lora_max_rank=null;}saveConfig();" style="width:110px;">
+                                                <select id="lora-max-loras-mode" onchange="var c=this.value==='custom'?document.getElementById('lora-max-loras-val'):null;if(c){c.disabled=false;}else{document.getElementById('lora-max-loras-val').disabled=true;document.getElementById('lora-max-loras-val').value='';config.lora_max_loras=null;}saveConfig();" style="flex:1;">
                                                     <option value="auto">Auto</option>
                                                     <option value="custom">Custom</option>
                                                 </select>
-                                                <input type="number" id="lora-max-rank-val" disabled placeholder="16" min="1" max="256" style="width:80px;" onchange="config.lora_max_rank=Math.max(1,parseInt(this.value)||16);this.value=config.lora_max_rank;saveConfig();">
+                                                <input type="number" id="lora-max-loras-val" disabled placeholder="auto" min="1" style="width:70px;" onchange="config.lora_max_loras=Math.max(1,parseInt(this.value)||1);this.value=config.lora_max_loras;saveConfig();">
                                             </div>
-                                            <div class="help-text">Auto = 16 (matches the rank-16 adapters ServeIt generates). Raise only when mounting higher-rank adapters — workspace cost scales with it.</div>
+                                            <div class="help-text">Auto = from free VRAM. Custom pins residency — below N forces LRU swapping (stress).</div>
+                                        </div>
+                                        <div class="input-group">
+                                            <label>Max Rank (max-lora-rank)</label>
+                                            <div style="display:flex;gap:6px;">
+                                                <select id="lora-max-rank-mode" onchange="var c=this.value==='custom'?document.getElementById('lora-max-rank-val'):null;if(c){c.disabled=false;}else{document.getElementById('lora-max-rank-val').disabled=true;document.getElementById('lora-max-rank-val').value='';config.lora_max_rank=null;}saveConfig();" style="flex:1;">
+                                                    <option value="auto">Auto</option>
+                                                    <option value="custom">Custom</option>
+                                                </select>
+                                                <input type="number" id="lora-max-rank-val" disabled placeholder="16" min="1" max="256" style="width:70px;" onchange="config.lora_max_rank=Math.max(1,parseInt(this.value)||16);this.value=config.lora_max_rank;saveConfig();">
+                                            </div>
+                                            <div class="help-text">Auto = 16 (matches generated adapters). Raise only for higher-rank adapters.</div>
                                         </div>
                                     </div>
                                     <div id="lora-estimate" style="background:#eef2ff;border:1px solid #c7d2fe;border-radius:6px;padding:10px 12px;font-size:0.8em;color:#3730a3;line-height:1.6;margin-top:10px;">
