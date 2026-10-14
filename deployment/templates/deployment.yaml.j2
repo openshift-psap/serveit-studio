@@ -59,6 +59,8 @@ spec:
               value: "{{ force_nad }}"
             - name: DEV_MODE
               value: "{{ dev_mode }}"
+            - name: GUIDELLM_IMAGE
+              value: "{{ guidellm_image | default('quay.io/bbenshab/serveit-studio:workload-lora') }}"
 {% if serveit_mode is defined and serveit_mode %}
             - name: INFTUNE_MODE
               value: "{{ serveit_mode }}"
