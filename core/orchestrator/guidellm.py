@@ -28,6 +28,64 @@ class GuidellmMixin:
 
     _guidellm_pod_name = 'serveit-workload'
 
+    def _ensure_lora_router(self, endpoint, config, log_callback=None):
+        """Start the LoRA round-robin router in the workload pod.
+
+        guidellm resolves a single ``model`` per run, so a LoRA-enabled
+        server would never see adapter requests. The router (shipped at
+        core/benchmark/lora_router.py, staged onto the storage PVC) rewrites
+        the model field per request across base + adapters and streams the
+        response back. Returns the router URL to point guidellm at.
+        """
+        kubectl = self.deployment_manager.kubectl
+        pod = self._resolve_guidellm_pod_name()
+        adapters = ','.join(f'agent-{i:02d}'
+                            for i in range(1, int(config.lora_num_adapters) + 1))
+        env = (f'LORA_UPSTREAM={endpoint} '
+               f'LORA_BASE_MODEL={config.model_name} '
+               f'LORA_ADAPTERS={adapters} '
+               'LORA_PORT=8010')
+
+        def run(cmd, **kw):
+            return kubectl.run(['exec', pod, '-n', self.namespace, '--'] + cmd,
+                               check=False, **kw)
+
+        # Already running and pointed at this endpoint?
+        r = run(['curl', '-s', '--max-time', '3',
+                 'http://localhost:8010/lora-router/health'])
+        if r.returncode == 0 and '"ok": true' in (r.stdout or ''):
+            try:
+                import json as _json
+                health = _json.loads(r.stdout)
+                if health.get('upstream') == endpoint:
+                    return 'http://localhost:8010'
+            except Exception:
+                pass
+
+        # (Re)start: kill any stale instance, launch the in-image router
+        run(['pkill', '-f', 'lora-router'])
+        run(['bash', '-c',
+             f'nohup env {env} python3 /usr/local/bin/lora-router '
+             f'> /mnt/storage/lora-router.log 2>&1 &'])
+
+        # Wait for it to come up
+        for _ in range(30):
+            r = run(['curl', '-s', '--max-time', '2',
+                     'http://localhost:8010/lora-router/health'])
+            if r.returncode == 0 and '"ok": true' in (r.stdout or ''):
+                if log_callback:
+                    log_callback(f'🔀 LoRA router active: round-robin over base + '
+                                 f'{config.lora_num_adapters} adapters '
+                                 f'(upstream {endpoint})', 'info')
+                return 'http://localhost:8010'
+            import time as _time
+            _time.sleep(1)
+
+        if log_callback:
+            log_callback('⚠️ LoRA router failed to start — falling back to base model',
+                         'warning')
+        return endpoint
+
     def _resolve_guidellm_pod_name(self):
         """Find the actual pod name from the workload deployment."""
         kubectl = self.deployment_manager.kubectl
@@ -651,6 +709,13 @@ class GuidellmMixin:
                     config.architecture,
                     log_callback
                 )
+
+            # LoRA: guidellm sends one fixed model per run, so it can never
+            # exercise the adapters on its own. Start the round-robin router
+            # in the workload pod and point guidellm at it instead.
+            lora_n = int(getattr(config, 'lora_num_adapters', 0) or 0)
+            if getattr(config, 'lora_enabled', False) and lora_n > 0:
+                endpoint = self._ensure_lora_router(endpoint, config, log_callback)
 
             request_profile = getattr(config, 'request_type', 'constant')
             request_rate = getattr(config, 'request_rate', 1)
