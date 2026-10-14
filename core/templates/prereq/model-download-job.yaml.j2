@@ -28,12 +28,24 @@ spec:
         kubernetes.io/hostname: {{ target_node }}
 {% endif %}
 {% endif %}
-      # Download jobs are infrastructure work (CPU + local disk only, no
-      # GPUs) pinned to a specific node — they must run on that node even
-      # when tenant workloads have tainted it (e.g. dedicated-tenant
-      # NoSchedule taints) or the node is under memory/disk pressure.
+{% if tolerate_all_taints is defined and tolerate_all_taints %}
+      # Opt-in (DOWNLOAD_TOLERATE_ALL_TAINTS=true): tolerate every taint,
+      # including tenant reservation taints — for shared clusters where
+      # node-local model caches must be staged on tenant-dedicated nodes.
       tolerations:
         - operator: Exists
+{% else %}
+      # Default: tolerate transient node-condition taints only. A short
+      # CPU+disk download job should ride out pressure states rather than
+      # pile up Pending, but tenant reservation taints are respected.
+      tolerations:
+        - key: node.kubernetes.io/memory-pressure
+          operator: Exists
+          effect: NoSchedule
+        - key: node.kubernetes.io/disk-pressure
+          operator: Exists
+          effect: NoSchedule
+{% endif %}
       containers:
         - name: model-downloader
           image: {{ image | default('registry.access.redhat.com/ubi9/python-311:latest') }}

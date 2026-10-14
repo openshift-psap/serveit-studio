@@ -16,6 +16,12 @@ from flask_socketio import emit as _socketio_emit
 from gevent import spawn, sleep as gsleep
 
 
+
+# Cluster policy: tolerate ALL node taints (incl. tenant reservations) for
+# per-node model-download jobs. Set DOWNLOAD_TOLERATE_ALL_TAINTS=true on the
+# server for shared clusters where caches must be staged on tainted nodes.
+_DOWNLOAD_TOLERATE_ALL = os.environ.get('DOWNLOAD_TOLERATE_ALL_TAINTS', '').lower() in ('1', 'true', 'yes')
+
 def emit(event, *args, **kwargs):
     """Emit a Socket.IO event. Uses flask_socketio.emit when in a Socket.IO request context,
     falls back to socketio.emit (broadcast) when called from REST or background tasks."""
@@ -2075,7 +2081,8 @@ def handle_recreate_storage(data):
                 job_name = f'model-download-{nfs["suffix"]}-{run_id}'
                 job_yaml = tm.render_template('prereq/model-download-job.yaml.j2',
                     job_name=job_name, namespace=namespace, test_id=test_id,
-                    model_name=model_name, pvc_name=nfs['pvc_name'], hf_token=hf_token)
+                    model_name=model_name, pvc_name=nfs['pvc_name'], hf_token=hf_token,
+                    tolerate_all_taints=_DOWNLOAD_TOLERATE_ALL,)
                 subprocess.run([kubectl_cmd, 'delete', 'job', job_name, '-n', namespace, '--ignore-not-found'],
                               capture_output=True, text=True, timeout=15, check=False)
                 subprocess.run([kubectl_cmd, 'apply', '-f', '-', '-n', namespace],
@@ -2145,7 +2152,8 @@ def handle_recreate_storage(data):
             job_name = f'model-download-recreate-{run_id}'
             job_yaml = tm.render_template('prereq/model-download-job.yaml.j2',
                 job_name=job_name, namespace=namespace, test_id=test_id,
-                model_name=model_name, pvc_name=pvc_name, hf_token=hf_token)
+                model_name=model_name, pvc_name=pvc_name, hf_token=hf_token,
+                    tolerate_all_taints=_DOWNLOAD_TOLERATE_ALL,)
             subprocess.run([kubectl_cmd, 'delete', 'job', job_name, '-n', namespace, '--ignore-not-found'],
                           capture_output=True, text=True, timeout=15, check=False)
             subprocess.run([kubectl_cmd, 'apply', '-f', '-', '-n', namespace],
@@ -2487,7 +2495,8 @@ def handle_setup_storage(data):
                         job_name=jn, namespace=namespace, test_id=test_id,
                         model_name=dl_model, hf_token=hf_token,
                         local_disk_path=local_disk_path, target_node=node,
-                    )
+                    
+                    tolerate_all_taints=_DOWNLOAD_TOLERATE_ALL,)
                     cmd = ['kubectl', 'apply', '-f', '-']
                     proc = subprocess.run(cmd, input=job_yaml.encode(), capture_output=True, timeout=30)
                     if proc.returncode == 0:
@@ -2582,7 +2591,8 @@ def handle_setup_storage(data):
                     'prereq/model-download-job.yaml.j2',
                     job_name=jn, namespace=namespace, test_id=test_id,
                     model_name=model, pvc_name=nfs['pvc_name'], hf_token=hf_token,
-                )
+                
+                    tolerate_all_taints=_DOWNLOAD_TOLERATE_ALL,)
                 cmd = ['kubectl', 'apply', '-f', '-']
                 proc = subprocess.run(cmd, input=job_yaml.encode(), capture_output=True, timeout=30)
                 if proc.returncode == 0:
@@ -2679,7 +2689,8 @@ def handle_setup_storage(data):
             model_name=model,
             pvc_name=pvc_name,
             hf_token=hf_token
-        )
+        ,
+                    tolerate_all_taints=_DOWNLOAD_TOLERATE_ALL,)
 
         cmd = ['kubectl', 'apply', '-f', '-']
         proc = subprocess.run(cmd, input=job_yaml.encode(), capture_output=True, timeout=30)
@@ -2701,7 +2712,8 @@ def handle_setup_storage(data):
                 model_name=_draft_model,
                 pvc_name=pvc_name,
                 hf_token=hf_token
-            )
+            ,
+                    tolerate_all_taints=_DOWNLOAD_TOLERATE_ALL,)
             dp = subprocess.run(['kubectl', 'apply', '-f', '-'], input=draft_yaml.encode(), capture_output=True, timeout=30)
             if dp.returncode == 0:
                 all_download_jobs.append(draft_job_name)
