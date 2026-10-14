@@ -28,6 +28,12 @@ spec:
         kubernetes.io/hostname: {{ target_node }}
 {% endif %}
 {% endif %}
+      # Download jobs are infrastructure work (CPU + local disk only, no
+      # GPUs) pinned to a specific node — they must run on that node even
+      # when tenant workloads have tainted it (e.g. dedicated-tenant
+      # NoSchedule taints) or the node is under memory/disk pressure.
+      tolerations:
+        - operator: Exists
       containers:
         - name: model-downloader
           image: {{ image | default('registry.access.redhat.com/ubi9/python-311:latest') }}
