@@ -30,50 +30,38 @@ function renderRecipes(recipes) {
         content.innerHTML = `<div class="resume-empty">${allRecipes.length ? 'No recipes match your search.' : 'No recipes found. Add YAML files to the recipes/ directory or load one from a file.'}</div>`;
         return;
     }
-    const goalColors = {
-        ttft: '#2563eb', throughput: '#059669', balanced: '#4f46e5',
-        pd_only: '#7c3aed', ep_only: '#0891b2', dpep_only: '#be185d',
-        aggregated_only: '#d97706', single_test: '#ea580c',
-    };
     let html = '';
     recipes.forEach(r => {
-        const gc = goalColors[r.goal] || '#64748b';
-        const avail = r.available;
-        const headerBg = avail
-            ? `background:linear-gradient(135deg,${gc},${gc}cc);`
-            : 'background:linear-gradient(135deg,#94a3b8,#64748b);';
-        const badge = (txt, bg, fg) =>
-            `<span style="background:${bg};color:${fg};border-radius:4px;padding:2px 8px;font-size:0.78em;font-weight:600;white-space:nowrap;">${txt}</span>`;
+        const avail = r.available
+            ? '<span style="background:#f0fdf4;color:#16a34a;border:1px solid #bbf7d0;border-radius:4px;padding:1px 8px;font-size:0.85em;">✓ Available</span>'
+            : '<span style="background:#fef2f2;color:#dc2626;border:1px solid #fecaca;border-radius:4px;padding:1px 8px;font-size:0.85em;">✗ Unavailable</span>';
+        const reasons = (r.unavailable_reasons || [])
+            .map(x => `<div style="color:#dc2626;font-size:0.85em;">• ${x}</div>`).join('');
         const ev = r.evidence || {};
         const evBits = [];
-        if (ev.tested_on) evBits.push(`Tested on ${ev.tested_on}`);
-        if (ev.results) evBits.push(typeof ev.results === 'object'
-            ? Object.entries(ev.results).map(([k, v]) => `${k}: ${v}`).join(' · ') : ev.results);
-        if (ev.source) evBits.push(ev.source);
-        const usage = r.times_applied
-            ? `applied ${r.times_applied}×` + (r.last_applied_at ? ` · last ${r.last_applied_at.slice(0, 10)}` : '')
-            : 'never applied';
+        if (ev.tested_on) evBits.push(`Tested: ${ev.tested_on}`);
+        if (ev.source) evBits.push(`Source: ${ev.source}`);
+        if (ev.results) evBits.push(`Results: ${JSON.stringify(ev.results)}`);
+        const usage = r.times_applied ? `applied ${r.times_applied}×` : 'never applied';
         html += `
-        <div style="background:white;border-radius:10px;box-shadow:0 2px 8px rgba(0,0,0,0.08);margin-bottom:14px;overflow:hidden;${avail ? `border-left:6px solid ${gc};` : 'border-left:6px solid #94a3b8;opacity:0.85;'}">
-            <div style="${headerBg}padding:12px 18px;display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap;">
-                <div style="color:white;">
-                    <div style="font-weight:700;font-size:1.02em;">${r.name}</div>
-                    <div style="display:flex;gap:6px;margin-top:6px;flex-wrap:wrap;">
-                        ${badge(r.model || '?', 'rgba(255,255,255,0.2)', 'white')}
-                        ${badge(r.goal, 'rgba(255,255,255,0.2)', 'white')}
-                        ${r.min_gpus ? badge(`≥${r.min_gpus} GPUs`, 'rgba(255,255,255,0.2)', 'white') : ''}
+        <div style="border:1px solid #e2e8f0;border-radius:10px;padding:16px 18px;margin-bottom:12px;background:${r.available ? '#ffffff' : '#fafafa'};">
+            <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:16px;">
+                <div style="flex:1;">
+                    <div style="font-weight:700;font-size:1.05em;color:#1e293b;">${r.name}</div>
+                    <div style="color:#64748b;font-size:0.88em;margin-top:4px;line-height:1.5;">${r.description || ''}</div>
+                    <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:8px;">
+                        <span style="background:#eff6ff;color:#1d4ed8;border-radius:4px;padding:1px 8px;font-size:0.82em;">${r.model || '?'}</span>
+                        <span style="background:#f5f3ff;color:#6d28d9;border-radius:4px;padding:1px 8px;font-size:0.82em;">goal: ${r.goal}</span>
+                        ${r.min_gpus ? `<span style="background:#fff7ed;color:#c2410c;border-radius:4px;padding:1px 8px;font-size:0.82em;">≥${r.min_gpus} GPUs</span>` : ''}
+                        <span style="color:#94a3b8;font-size:0.8em;align-self:center;">${usage}</span>
                     </div>
+                    ${evBits.length ? `<div style="color:#059669;font-size:0.82em;margin-top:6px;">${evBits.join(' · ')}</div>` : ''}
+                    ${reasons}
                 </div>
-                <button class="apply-recipe-btn" data-recipe-id="${r.recipe_id}" ${avail ? '' : 'disabled title="Cluster does not meet requirements"'}
-                    style="font-size:0.9em;padding:8px 22px;background:${avail ? 'rgba(255,255,255,0.95)' : 'rgba(255,255,255,0.5)'};color:${avail ? gc : '#94a3b8'};border:none;border-radius:6px;cursor:${avail ? 'pointer' : 'not-allowed'};font-weight:700;white-space:nowrap;box-shadow:${avail ? '0 2px 6px rgba(0,0,0,0.15)' : 'none'};">
-                    ${avail ? '⚙️ Apply' : '✗ Unavailable'}
+                <button class="apply-recipe-btn" data-recipe-id="${r.recipe_id}" ${r.available ? '' : 'disabled title="Cluster does not meet requirements"'}
+                    style="font-size:0.9em;padding:6px 16px;background:${r.available ? '#f0fdf4' : '#f5f5f5'};color:${r.available ? '#16a34a' : '#94a3b8'};border:1px solid ${r.available ? '#bbf7d0' : '#e2e8f0'};border-radius:6px;cursor:${r.available ? 'pointer' : 'not-allowed'};white-space:nowrap;">
+                    ⚙️ Apply
                 </button>
-            </div>
-            <div style="padding:14px 18px;color:#475569;font-size:0.9em;line-height:1.6;">
-                ${r.description || ''}
-                ${(r.unavailable_reasons || []).map(x => `<div style="color:#dc2626;font-size:0.85em;margin-top:4px;">✗ ${x}</div>`).join('')}
-                ${evBits.length ? `<div style="color:#059669;font-size:0.83em;margin-top:8px;border-top:1px dashed #e2e8f0;padding-top:8px;">🔬 ${evBits.join(' · ')}</div>` : ''}
-                <div style="color:#94a3b8;font-size:0.78em;margin-top:6px;text-align:right;">${usage}</div>
             </div>
         </div>`;
     });
