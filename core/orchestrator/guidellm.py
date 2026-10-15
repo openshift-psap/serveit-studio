@@ -665,20 +665,17 @@ class GuidellmMixin:
             # lora_benchmark_mode controls whether guidellm targets adapters:
             #   round_robin — cycle across base + all adapters (stress test)
             #   base_only/off — all traffic hits base (LoRA overhead baseline)
-            lora_model_list = None
-            lora_n = int(getattr(config, 'lora_num_adapters', 0) or 0)
-            lora_mode = getattr(config, 'lora_benchmark_mode', 'round_robin') or 'round_robin'
-            if (getattr(config, 'lora_enabled', False) and lora_n > 0
-                    and lora_mode == 'round_robin'):
-                adapters = [f'agent-{i:02d}' for i in range(1, lora_n + 1)]
-                lora_model_list = ','.join([config.model_name] + adapters)
-                if log_callback:
-                    log_callback(f'🔀 LoRA round-robin: {lora_n} adapters + base '
-                                 f'via native guidellm multi-model', 'info')
-            elif getattr(config, 'lora_enabled', False) and lora_n > 0:
-                if log_callback:
-                    log_callback(f'🔌 LoRA server-side only ({lora_n} adapters mounted, '
-                                 f'benchmark mode: {lora_mode}) — traffic hits base model', 'info')
+            _lora_n = int(getattr(config, 'lora_num_adapters', 0) or 0)
+            _lora_mode = getattr(config, 'lora_benchmark_mode', 'round_robin') or 'round_robin'
+            if getattr(config, 'lora_enabled', False) and _lora_n > 0:
+                if _lora_mode == 'round_robin':
+                    if log_callback:
+                        log_callback(f'🔀 LoRA round-robin: {_lora_n} adapters + base '
+                                     f'via native guidellm multi-model', 'info')
+                else:
+                    if log_callback:
+                        log_callback(f'🔌 LoRA server-side only ({_lora_n} adapters mounted, '
+                                     f'benchmark mode: {_lora_mode}) — traffic hits base model', 'info')
 
             # Auto-discover Istio gateway if endpoint not provided
             if endpoint is None:
@@ -689,7 +686,10 @@ class GuidellmMixin:
                     log_callback
                 )
 
-            # (lora_model_list constructed above, before the exec builder)
+            request_profile = getattr(config, 'request_type', 'constant')
+            request_rate = getattr(config, 'request_rate', 1)
+
+            if log_callback:
                 log_callback(f'   Target: {endpoint}')
                 rate_label = f'{request_rate} concurrent users' if request_profile == 'concurrent' else f'{request_rate} req/s ({request_profile})'
                 if request_profile == 'sweep':
