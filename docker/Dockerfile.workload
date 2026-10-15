@@ -29,7 +29,6 @@ RUN python3.11 -m pip install --no-cache-dir \
     transformers \
     requests \
     httpx \
-    aiohttp \
     PyYAML \
     huggingface_hub \
     && rm -f /tmp/guidellm-main.zip
@@ -61,10 +60,6 @@ RUN chmod +x /usr/local/bin/generate_dataset
 COPY docker/scripts/generate_turn_dataset.py /usr/local/bin/generate_turn_dataset
 RUN chmod +x /usr/local/bin/generate_turn_dataset
 
-# LoRA round-robin router — rewrites the request model field across base +
-# adapters so guidellm benchmarks exercise real mixed-adapter serving.
-COPY core/benchmark/lora_router.py /usr/local/bin/lora-router
-RUN chmod +x /usr/local/bin/lora-router
 
 # Keep alive — the server does kubectl exec to run guidellm commands
 CMD ["sleep", "infinity"]

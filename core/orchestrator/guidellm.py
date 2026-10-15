@@ -28,64 +28,6 @@ class GuidellmMixin:
 
     _guidellm_pod_name = 'serveit-workload'
 
-    def _ensure_lora_router(self, endpoint, config, log_callback=None):
-        """Start the LoRA round-robin router in the workload pod.
-
-        guidellm resolves a single ``model`` per run, so a LoRA-enabled
-        server would never see adapter requests. The router (shipped at
-        core/benchmark/lora_router.py, staged onto the storage PVC) rewrites
-        the model field per request across base + adapters and streams the
-        response back. Returns the router URL to point guidellm at.
-        """
-        kubectl = self.deployment_manager.kubectl
-        pod = self._resolve_guidellm_pod_name()
-        adapters = ','.join(f'agent-{i:02d}'
-                            for i in range(1, int(config.lora_num_adapters) + 1))
-        env = (f'LORA_UPSTREAM={endpoint} '
-               f'LORA_BASE_MODEL={config.model_name} '
-               f'LORA_ADAPTERS={adapters} '
-               'LORA_PORT=8010')
-
-        def run(cmd, **kw):
-            return kubectl.run(['exec', pod, '-n', self.namespace, '--'] + cmd,
-                               check=False, **kw)
-
-        # Already running and pointed at this endpoint?
-        r = run(['curl', '-s', '--max-time', '3',
-                 'http://localhost:8010/lora-router/health'])
-        if r.returncode == 0 and '"ok": true' in (r.stdout or ''):
-            try:
-                import json as _json
-                health = _json.loads(r.stdout)
-                if health.get('upstream') == endpoint:
-                    return 'http://localhost:8010'
-            except Exception:
-                pass
-
-        # (Re)start: kill any stale instance, launch the in-image router
-        run(['pkill', '-f', 'lora-router'])
-        run(['bash', '-c',
-             f'nohup env {env} python3 /usr/local/bin/lora-router '
-             f'> /mnt/storage/lora-router.log 2>&1 &'])
-
-        # Wait for it to come up
-        for _ in range(30):
-            r = run(['curl', '-s', '--max-time', '2',
-                     'http://localhost:8010/lora-router/health'])
-            if r.returncode == 0 and '"ok": true' in (r.stdout or ''):
-                if log_callback:
-                    log_callback(f'🔀 LoRA router active: round-robin over base + '
-                                 f'{config.lora_num_adapters} adapters '
-                                 f'(upstream {endpoint})', 'info')
-                return 'http://localhost:8010'
-            import time as _time
-            _time.sleep(1)
-
-        if log_callback:
-            log_callback('⚠️ LoRA router failed to start — falling back to base model',
-                         'warning')
-        return endpoint
-
     def _resolve_guidellm_pod_name(self):
         """Find the actual pod name from the workload deployment."""
         kubectl = self.deployment_manager.kubectl
@@ -375,8 +317,24 @@ class GuidellmMixin:
         else:
             constraint_arg = f'kind=max_duration,seconds={config.test_duration}'
 
-        # Backend argument
-        backend_arg = f'kind=openai_http,target={endpoint},model={config.model_name},request_format={request_format},http2=false,timeout=300'
+        # Backend argument — LoRA model list from config (same logic as
+        # _run_guidellm_test, built locally since this is a separate function)
+        lora_model_list = None
+        _lora_n = int(getattr(config, 'lora_num_adapters', 0) or 0)
+        if getattr(config, 'lora_enabled', False) and _lora_n > 0:
+            _adapters = [f'agent-{i:02d}' for i in range(1, _lora_n + 1)]
+            lora_model_list = ','.join([config.model_name] + _adapters)
+        if lora_model_list:
+            # Comma-separated model list breaks key=value CLI parsing — use JSON
+            import json as _json
+            backend_arg = _json.dumps({
+                'kind': 'openai_http', 'target': endpoint,
+                'model': lora_model_list,
+                'request_format': request_format,
+                'http2': False, 'timeout': 300,
+            })
+        else:
+            backend_arg = f'kind=openai_http,target={endpoint},model={config.model_name},request_format={request_format},http2=false,timeout=300'
 
         # Output path on the workload pod — use PVC to avoid node disk pressure
         output_path = f'/mnt/storage/tmp/guidellm-{config.test_id}.json'
@@ -701,6 +659,18 @@ class GuidellmMixin:
                 else:
                     log_callback(f'🏃 Running guidellm benchmark for {config.test_duration}s...')
 
+            # LoRA: guidellm natively round-robins across a comma-separated
+            # model list (assigned at request-generation time in the scheduler,
+            # immune to multiprocessing). Build the list: base + all adapters.
+            lora_model_list = None
+            lora_n = int(getattr(config, 'lora_num_adapters', 0) or 0)
+            if getattr(config, 'lora_enabled', False) and lora_n > 0:
+                adapters = [f'agent-{i:02d}' for i in range(1, lora_n + 1)]
+                lora_model_list = ','.join([config.model_name] + adapters)
+                if log_callback:
+                    log_callback(f'🔀 LoRA round-robin: {lora_n} adapters + base '
+                                 f'via native guidellm multi-model', 'info')
+
             # Auto-discover Istio gateway if endpoint not provided
             if endpoint is None:
                 endpoint = self._discover_istio_gateway(
@@ -710,17 +680,7 @@ class GuidellmMixin:
                     log_callback
                 )
 
-            # LoRA: guidellm sends one fixed model per run, so it can never
-            # exercise the adapters on its own. Start the round-robin router
-            # in the workload pod and point guidellm at it instead.
-            lora_n = int(getattr(config, 'lora_num_adapters', 0) or 0)
-            if getattr(config, 'lora_enabled', False) and lora_n > 0:
-                endpoint = self._ensure_lora_router(endpoint, config, log_callback)
-
-            request_profile = getattr(config, 'request_type', 'constant')
-            request_rate = getattr(config, 'request_rate', 1)
-
-            if log_callback:
+            # (lora_model_list constructed above, before the exec builder)
                 log_callback(f'   Target: {endpoint}')
                 rate_label = f'{request_rate} concurrent users' if request_profile == 'concurrent' else f'{request_rate} req/s ({request_profile})'
                 if request_profile == 'sweep':
@@ -826,9 +786,23 @@ class GuidellmMixin:
             # Build guidellm 0.7.x command
             # http2=false is critical for PD deployments:
             # Istio ext_proc (EPP) cannot unmarshal HTTP/2 streamed request bodies
+            # LoRA: comma-separated model list via JSON (breaks key=value parsing)
+            _lora_n = int(getattr(config, 'lora_num_adapters', 0) or 0)
+            if getattr(config, 'lora_enabled', False) and _lora_n > 0:
+                _adapters = [f'agent-{i:02d}' for i in range(1, _lora_n + 1)]
+                _model_list = ','.join([config.model_name] + _adapters)
+                import json as _json
+                _backend_arg = _json.dumps({
+                    'kind': 'openai_http', 'target': endpoint,
+                    'model': _model_list,
+                    'request_format': request_format,
+                    'http2': False, 'timeout': 300,
+                })
+            else:
+                _backend_arg = f'kind=openai_http,target={endpoint},model={config.model_name},request_format={request_format},http2=false,timeout=300'
             cmd = [
                 'guidellm', 'run',
-                '--backend', f'kind=openai_http,target={endpoint},model={config.model_name},request_format={request_format},http2=false,timeout=300',
+                '--backend', _backend_arg,
                 '--tokenizer', f'kind=huggingface_auto,model={config.model_name}',
                 '--data', data_arg,
                 '--profile', profile_arg,
