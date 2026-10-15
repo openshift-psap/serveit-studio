@@ -202,7 +202,7 @@
                                             <div style="font-weight:600;font-size:0.85em;color:#3730a3;">🔀 LoRA Adapter Sweep</div>
                                             <input type="checkbox" id="lora-sweep-enabled" style="display:none;">
                                             <div style="display:flex;align-items:center;gap:8px;">
-                                                <div id="lora-sweep-switch" onclick="event.stopPropagation();var on=!document.getElementById('lora-sweep-enabled').checked;document.getElementById('lora-sweep-enabled').checked=on;config.lora_sweep_enabled=on;var sw=document.getElementById('lora-sweep-switch');sw.style.background=on?'#4f46e5':'#ccc';sw.querySelector('span').style.transform=on?'translateX(18px)':'translateX(0)';document.getElementById('lora-sweep-opts').style.opacity=on?'1':'0.4';saveConfig();" style="width:36px;height:20px;background:#ccc;border-radius:10px;position:relative;transition:background-color 0.2s;flex-shrink:0;">
+                                                <div id="lora-sweep-switch" onclick="event.stopPropagation();var on=!document.getElementById('lora-sweep-enabled').checked;document.getElementById('lora-sweep-enabled').checked=on;config.lora_sweep_enabled=on;var sw=document.getElementById('lora-sweep-switch');sw.style.background=on?'#4f46e5':'#ccc';sw.querySelector('span').style.transform=on?'translateX(18px)':'translateX(0)';document.getElementById('lora-sweep-count').disabled=!on&&!config.lora_sweep_levels;document.getElementById('lora-sweep-levels').disabled=!on;saveConfig();" style="width:36px;height:20px;background:#ccc;border-radius:10px;position:relative;transition:background-color 0.2s;flex-shrink:0;">
                                                     <span style="position:absolute;top:2px;left:2px;width:16px;height:16px;background:white;border-radius:50%;transition:transform 0.2s;box-shadow:0 1px 3px rgba(0,0,0,0.2);display:block;"></span>
                                                 </div>
                                                 <span id="lora-sweep-arrow" style="font-size:1.1em;color:#4f46e5;font-weight:700;">▸</span>
@@ -210,15 +210,15 @@
                                         </div>
                                         <div id="lora-sweep-body" style="display:none;padding:12px;background:#f8fafc;font-size:0.8em;color:#475569;line-height:1.6;">
                                             After finding the best configuration, re-test it at multiple adapter counts to map the multi-tenant scaling curve — each level is one benchmark run with requests round-robined across base + N adapters, showing exactly where LRU swapping starts to degrade performance.
-                                            <div id="lora-sweep-opts" style="display:flex;gap:16px;flex-wrap:wrap;margin-top:8px;opacity:0.4;">
+                                            <div id="lora-sweep-opts" style="display:flex;gap:16px;flex-wrap:wrap;margin-top:8px;">
                                                 <div class="input-group" style="max-width:140px;">
                                                     <label>Number of Levels</label>
-                                                    <input type="number" id="lora-sweep-count" value="5" min="2" max="10" onchange="config.lora_sweep_count=Math.max(2,Math.min(10,parseInt(this.value)||5));this.value=config.lora_sweep_count;config.lora_sweep_levels=null;saveConfig();">
+                                                    <input type="number" id="lora-sweep-count" value="5" min="2" max="10" disabled onchange="config.lora_sweep_count=Math.max(2,Math.min(10,parseInt(this.value)||5));this.value=config.lora_sweep_count;config.lora_sweep_levels=null;saveConfig();">
                                                     <div class="help-text">Doubling from 1: 1, 2, 4, 8…</div>
                                                 </div>
                                                 <div class="input-group" style="max-width:220px;">
                                                     <label>Or: Explicit Levels</label>
-                                                    <input type="text" id="lora-sweep-levels" placeholder="e.g. 1, 4, 16, 64" onchange="var v=this.value.trim();config.lora_sweep_levels=v?v.split(',').map(function(x){return parseInt(x.trim());}).filter(function(x){return x>0;}):null;if(!config.lora_sweep_levels){document.getElementById('lora-sweep-count').disabled=false;}else{document.getElementById('lora-sweep-count').disabled=true;}saveConfig();">
+                                                    <input type="text" id="lora-sweep-levels" placeholder="e.g. 1, 4, 16, 64" disabled onchange="var v=this.value.trim();config.lora_sweep_levels=v?v.split(',').map(function(x){return parseInt(x.trim());}).filter(function(x){return x>0;}):null;if(!config.lora_sweep_levels){document.getElementById('lora-sweep-count').disabled=false;}else{document.getElementById('lora-sweep-count').disabled=true;}saveConfig();">
                                                     <div class="help-text">Comma-separated adapter counts. Overrides the level count.</div>
                                                 </div>
                                             </div>

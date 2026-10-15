@@ -271,13 +271,12 @@ function updateUIFromConfig() {
                 sweepSw.style.background = sweepOn ? '#4f46e5' : '#ccc';
                 sweepSw.querySelector('span').style.transform = sweepOn ? 'translateX(18px)' : 'translateX(0)';
             }
-            var sweepOpts = document.getElementById('lora-sweep-opts');
-            if (sweepOpts) sweepOpts.style.opacity = sweepOn ? '1' : '0.4';
             var sweepCount = document.getElementById('lora-sweep-count');
             if (sweepCount) sweepCount.value = config.lora_sweep_count || 5;
             var sweepLevels = document.getElementById('lora-sweep-levels');
             if (sweepLevels) sweepLevels.value = (config.lora_sweep_levels || []).join(', ');
-            if (sweepCount) sweepCount.disabled = !!(config.lora_sweep_levels && config.lora_sweep_levels.length);
+            if (sweepCount) sweepCount.disabled = !sweepOn || !!(config.lora_sweep_levels && config.lora_sweep_levels.length);
+            if (sweepLevels) sweepLevels.disabled = !sweepOn;
         }
         var loraMlMode = document.getElementById('lora-max-loras-mode');
         if (loraMlMode) {
