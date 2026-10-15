@@ -11,13 +11,43 @@ Each GPU runs an independent vLLM instance (TP=1) with:
 class DPEPSearchMixin:
     """Mixin providing DPEP configuration search for RecipeOptimizer."""
 
+    # Architectures that support DeepEP all-to-all (the communication
+    # backend DPEP depends on). DeepEP hooks into the DeepSeek-style MoE
+    # kernel path; other MoE implementations (Gemma fused MoE, Mixtral,
+    # Qwen MoE) use NCCL all-reduce and don't support it.
+    _DEEPEP_SUPPORTED_ARCHS = (
+        'DeepseekV2ForCausalLM',
+        'DeepseekV3ForCausalLM',
+        'DeepseekV2ForCausalLM'.replace('V2', 'V32Moe'),  # DeepseekV32Moe
+        'GlmMoeDsaForCausalLM',
+        'GlmMoeForCausalLM',
+    )
+
     def _calculate_dpep_configs(self):
         """Steps 4-5: Enumerate DPEP configurations.
 
         Explores DP sizes (GPUs per pod) and pod counts within the GPU budget.
         Resource calculation accounts for expert distribution: each GPU holds
         attention (~small) + experts/DP_size, not the full model.
+
+        Skipped for models whose MoE implementation doesn't support DeepEP
+        (detected from the model's config.json architectures field).
         """
+        # Model architecture gate: DPEP requires DeepEP all-to-all, which
+        # only works on DeepSeek-architecture MoE models.
+        model_archs = (self._model_config or {}).get('architectures', [])
+        if model_archs and not any(
+                arch in self._DEEPEP_SUPPORTED_ARCHS for arch in model_archs):
+            self.log("  ⚠️  DPEP skipped — model architecture does not support "
+                     "DeepEP all-to-all", 'warning')
+            self.log(f"    Model: {', '.join(model_archs)}", 'info')
+            self.log("    DPEP requires DeepSeek-architecture MoE models "
+                     "(DeepSeek-V2/V3, GLM-5.3)", 'info')
+            self.log("    Other MoE models (Gemma, Mixtral, Qwen) use NCCL "
+                     "all-reduce and don't support DeepEP", 'info')
+            self._dpep_candidates = []
+            return
+
         total_gpus = self.config.total_gpus
         gpus_per_node = (self.cluster_resources.max_gpus_per_node
                          if self.cluster_resources else 8)
