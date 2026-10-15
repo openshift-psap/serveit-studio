@@ -50,14 +50,16 @@
                     <p>Validated configurations from real benchmark runs — apply one to pre-fill the wizard, then review and start</p>
                 </div>
                 <div style="display:flex;gap:8px;align-items:center;">
-                    <input type="text" id="recipe-search" placeholder="Search by model or workload…" oninput="filterRecipes();"
-                        style="padding:6px 12px;border:1px solid #d1d5db;border-radius:6px;font-size:0.9em;width:260px;">
-                    <label class="action-button" style="margin:0;padding:6px 14px;font-size:0.85em;cursor:pointer;">
-                        📂 Load from File
-                        <input type="file" id="recipe-import-input" accept=".json,.yaml,.yml" style="display:none;">
-                    </label>
                     <button class="charts-close" id="recipes-close">&#x2715; Close</button>
                 </div>
+            </div>
+            <div style="padding:12px 20px;border-bottom:1px solid #e2e8f0;background:#f8fafc;display:flex;gap:12px;align-items:center;flex-wrap:wrap;">
+                <input type="text" id="recipe-search" placeholder="Search by model or workload…" oninput="filterRecipes();"
+                    style="padding:8px 14px;border:1px solid #d1d5db;border-radius:6px;font-size:0.9em;width:280px;background:#ffffff;">
+                <label class="action-button" style="margin:0;padding:6px 14px;font-size:0.85em;cursor:pointer;">
+                    📂 Load settings from file
+                    <input type="file" id="recipe-import-input" accept=".json,.yaml,.yml" style="display:none;">
+                </label>
             </div>
             <div class="resume-table-wrap" id="recipes-content">
                 <div class="resume-empty">Loading recipes...</div>
