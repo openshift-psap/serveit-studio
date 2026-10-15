@@ -50,6 +50,14 @@
                     <p>Validated configurations from real benchmark runs — apply one to pre-fill the wizard, then review and start</p>
                 </div>
                 <div style="display:flex;gap:8px;align-items:center;">
+                    <input type="text" id="recipe-search" placeholder="Search recipes…" oninput="filterRecipes();"
+                        style="padding:6px 12px;border:1px solid #d1d5db;border-radius:6px;font-size:0.9em;width:220px;">
+                    <select id="recipe-sort" onchange="filterRecipes();" style="padding:6px 10px;border:1px solid #d1d5db;border-radius:6px;font-size:0.85em;">
+                        <option value="name">Sort: Name</option>
+                        <option value="used">Sort: Most Used</option>
+                        <option value="recent">Sort: Recently Applied</option>
+                        <option value="gpus">Sort: GPUs Required</option>
+                    </select>
                     <label class="action-button" style="margin:0;padding:6px 14px;font-size:0.85em;cursor:pointer;">
                         📂 Load from File
                         <input type="file" id="recipe-import-input" accept=".json,.yaml,.yml" style="display:none;">

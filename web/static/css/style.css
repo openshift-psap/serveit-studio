@@ -482,6 +482,30 @@
             display: none !important;
         }
 
+        .recipes-icon {
+            width: 48px;
+            height: 48px;
+            border-radius: 50%;
+            background: linear-gradient(135deg, #06b6d4 0%, #0891b2 100%);
+            border: 2px solid #06b6d4;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 1.6em;
+            color: white;
+            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+            box-shadow: 0 4px 12px rgba(6, 182, 212, 0.3);
+        }
+
+        .recipes-indicator:hover .recipes-icon {
+            transform: scale(1.08);
+            box-shadow: 0 6px 18px rgba(6, 182, 212, 0.4);
+        }
+
+        .recipes-indicator::after {
+            display: none !important;
+        }
+
         .report-icon {
             width: 48px;
             height: 48px;

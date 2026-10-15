@@ -6,17 +6,32 @@ function loadRecipes() {
         .then(r => r.json())
         .then(data => {
             if (data.error) throw new Error(data.error);
-            renderRecipes(data.recipes || []);
+            allRecipes = data.recipes || [];
+            filterRecipes();
         })
         .catch(err => {
             content.innerHTML = `<div class="resume-empty">Failed to load recipes: ${err.message}</div>`;
         });
 }
 
+let allRecipes = [];
+
+function filterRecipes() {
+    const q = (document.getElementById('recipe-search').value || '').toLowerCase();
+    const sort = document.getElementById('recipe-sort').value;
+    let list = allRecipes.filter(r =>
+        !q || (r.name + ' ' + (r.model || '') + ' ' + (r.description || '') + ' ' + r.goal).toLowerCase().includes(q));
+    if (sort === 'name') list.sort((a, b) => a.name.localeCompare(b.name));
+    else if (sort === 'used') list.sort((a, b) => (b.times_applied || 0) - (a.times_applied || 0));
+    else if (sort === 'recent') list.sort((a, b) => (b.last_applied_at || '').localeCompare(a.last_applied_at || ''));
+    else if (sort === 'gpus') list.sort((a, b) => (b.min_gpus || 0) - (a.min_gpus || 0));
+    renderRecipes(list);
+}
+
 function renderRecipes(recipes) {
     const content = document.getElementById('recipes-content');
     if (!recipes.length) {
-        content.innerHTML = '<div class="resume-empty">No recipes found. Add YAML files to the recipes/ directory or load one from a file.</div>';
+        content.innerHTML = `<div class="resume-empty">${allRecipes.length ? 'No recipes match your search.' : 'No recipes found. Add YAML files to the recipes/ directory or load one from a file.'}</div>`;
         return;
     }
     let html = '';
