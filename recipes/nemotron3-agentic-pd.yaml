@@ -1,0 +1,67 @@
+recipe_id: nemotron3-agentic-pd
+name: "Nemotron-3-Ultra 550B \u2014 agentic multi-turn PD"
+description: 'Prefill/Decode split (3P+1D, TP8 each) for the multi-user agentic workload: 540-turn conversations
+  over a 160K project context, CPU KV offload for prefix-cache extension, Mamba-hybrid tweaks (prefix
+  cache retention 0, DS conv layout). Matches the openshift-psap/inference-playbooks deployment.'
+model: RedHatAI/NVIDIA-Nemotron-3-Ultra-550B-A55B-FP8-block
+goal: single_test
+requires:
+  min_gpus: 32
+  gpu_memory_gb: 130
+evidence:
+  tested_on: H200 8-GPU nodes x4
+  source: 'inference-playbooks PR #23'
+config:
+  goal: single_test
+  single_test_architecture: pd
+  single_test_prefill_tp: 8
+  single_test_decode_tp: 8
+  single_test_prefill_pods: 3
+  single_test_decode_pods: 1
+  model: RedHatAI/NVIDIA-Nemotron-3-Ultra-550B-A55B-FP8-block
+  isl: 1500
+  osl: 425
+  isl_stdev: 1200
+  osl_stdev: 825
+  isl_min: 100
+  isl_max: 10000
+  osl_min: 50
+  osl_max: 10000
+  first_prompt_tokens: 160000
+  first_prompt_tokens_stdev: 233600
+  first_prompt_tokens_min: 10000
+  first_prompt_tokens_max: 990000
+  prefix_tokens: 3000
+  prefix_count: 1
+  users: 30
+  turns: 540
+  stop_mode: requests
+  max_requests: 100
+  turn_delay: 15
+  turn_delay_stdev: 55
+  turn_delay_min: 1
+  turn_delay_max: 100
+  max_gpus: 32
+  image: vllm/vllm-openai:v0.26.0
+  advanced_vllm:
+    max_model_len:
+      mode: custom
+      value: 262144
+    block_size:
+      mode: default
+    kv_cache_dtype:
+      mode: custom
+      value: fp8
+    cpu_offload_gb:
+      mode: custom
+      value: 200
+    enable_expert_parallel:
+      mode: 'on'
+    enable_bidirectional_kv:
+      mode: 'on'
+    prefix_cache_retention:
+      mode: custom
+      value: 0
+    ssm_conv_state_layout:
+      mode: custom
+      value: DS

@@ -81,6 +81,10 @@
                     <div class="step-label">Upload</div>
                 </div>
                 <input type="file" id="upload-db-input" accept=".db,.sqlite,.sqlite3,.gz" style="display: none;">
+                <div class="step-indicator recipes-indicator" id="recipes-indicator">
+                    <div class="recipes-icon">🧪</div>
+                    <div class="step-label">Recipes</div>
+                </div>
                 <div class="step-indicator report-indicator" id="report-indicator">
                     <div class="report-icon">📊</div>
                     <div class="step-label">Analytics</div>
@@ -215,6 +219,7 @@
     <script src="{{ url_for('static', filename='js/modules/cluster.js') }}?v={{ range(10000,99999) | random }}"></script>
     <script src="{{ url_for('static', filename='js/modules/navigation.js') }}?v={{ range(10000,99999) | random }}"></script>
     <script src="{{ url_for('static', filename='js/modules/resume.js') }}?v={{ range(10000,99999) | random }}"></script>
+    <script src="{{ url_for('static', filename='js/modules/recipes.js') }}?v={{ range(10000,99999) | random }}"></script>
     <script src="{{ url_for('static', filename='js/modules/report.js') }}?v={{ range(10000,99999) | random }}"></script>
     <script src="{{ url_for('static', filename='js/modules/charts.js') }}?v={{ range(10000,99999) | random }}"></script>
     <script src="{{ url_for('static', filename='js/modules/ui-helpers.js') }}?v={{ range(10000,99999) | random }}"></script>

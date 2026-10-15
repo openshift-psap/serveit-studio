@@ -41,6 +41,28 @@
         </div>
     </div>
 
+    <!-- Tested Recipes Overlay -->
+    <div class="resume-overlay" id="recipes-overlay">
+        <div class="resume-container">
+            <div class="resume-header">
+                <div>
+                    <h2>🧪 Tested Recipes</h2>
+                    <p>Validated configurations from real benchmark runs — apply one to pre-fill the wizard, then review and start</p>
+                </div>
+                <div style="display:flex;gap:8px;align-items:center;">
+                    <label class="action-button" style="margin:0;padding:6px 14px;font-size:0.85em;cursor:pointer;">
+                        📂 Load from File
+                        <input type="file" id="recipe-import-input" accept=".json,.yaml,.yml" style="display:none;">
+                    </label>
+                    <button class="charts-close" id="recipes-close">&#x2715; Close</button>
+                </div>
+            </div>
+            <div class="resume-table-wrap" id="recipes-content">
+                <div class="resume-empty">Loading recipes...</div>
+            </div>
+        </div>
+    </div>
+
     <!-- MLflow Export Dialog -->
     <div id="mlflow-overlay" style="display:none;position:fixed;top:0;left:0;right:0;bottom:0;z-index:9999;background:rgba(0,0,0,0.6);align-items:center;justify-content:center;">
         <div style="width:calc(100vw - 120px);max-height:85vh;background:white;border-radius:12px;box-shadow:0 20px 60px rgba(0,0,0,0.3);overflow:hidden;display:flex;flex-direction:column;margin-left:60px;">

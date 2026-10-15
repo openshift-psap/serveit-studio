@@ -1,0 +1,68 @@
+recipe_id: glm53-1m-context-pd
+name: "GLM-5.3 1M-context PD \u2014 HiSparse + PCP + MTP"
+description: 'Prefill/Decode split for 1M-token agentic contexts: sparse MLA (HiSparse) on prefill with
+  Prefill Context Parallelism (PCP = prefill TP), FP8 KV cache, MTP speculation (1 prefill / 3 decode
+  tokens), 160K first-turn context with 300-turn multi-user sessions at 60% multi-group prefix cache.
+  Engine image pinned to the validated llm-d build.'
+model: zai-org/GLM-5.3
+goal: pd_only
+requires:
+  min_gpus: 24
+  gpu_memory_gb: 140
+  network:
+  - rdma
+evidence:
+  tested_on: kermit / rits-roce-h100-class clusters
+  source: ServeIt runbook (AI-assistance/serveit-run)
+  notes: PCP requires prefill TP >= 2 nodes for 1M KV; HiSparse is prefill-only
+config:
+  goal: pd_only
+  model: zai-org/GLM-5.3
+  isl: 7000
+  osl: 500
+  isl_stdev: 3000
+  osl_stdev: 500
+  first_prompt_tokens: 160000
+  first_prompt_tokens_stdev: 233600
+  first_prompt_tokens_min: 10000
+  first_prompt_tokens_max: 990000
+  users: 30
+  turns: 300
+  turn_delay: 15
+  turn_delay_stdev: 55
+  turn_delay_min: 1
+  turn_delay_max: 100
+  prefix_cache_hit_pct: 60
+  prefix_cache_mode: multi_group
+  prefix_cache_groups: 10
+  use_corpus: true
+  workload_mode: dataset
+  max_gpus: 32
+  image: quay.io/llm-d/llm-d-cuda-ubuntu@sha256:38fbb9970ecaaef364a62c2119b96c6b9b135f186f9e64ee9aa9e19bc22de7f5
+  advanced_vllm:
+    max_model_len:
+      mode: custom
+      value: 1000000
+    block_size:
+      mode: custom
+      value: 128
+    kv_cache_dtype:
+      mode: custom
+      value: fp8
+    enable_expert_parallel:
+      mode: 'on'
+    enable_prefix_caching:
+      mode: 'on'
+    speculative_method: mtp
+    num_speculative_tokens:
+      mode: custom
+      value: 3
+    prefill_speculative_num_tokens:
+      mode: custom
+      value: 1
+    prefill_attention_config:
+      mode: custom
+      value: '{"sparse_mla_force_mqa":true}'
+    context_parallel_entries:
+    - flag: --prefill-context-parallel-size
+      value: null

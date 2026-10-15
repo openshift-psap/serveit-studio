@@ -352,6 +352,48 @@ def get_runs():
         return jsonify({'error': str(e)}), 500
 
 
+@app.route('/api/recipes')
+def api_list_recipes():
+    """Tested recipe library with cluster-availability gating."""
+    try:
+        from core.recipe_manager import list_recipes_with_availability
+        with get_db() as conn:
+            recipes = list_recipes_with_availability(conn)
+        return jsonify({'recipes': recipes})
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+
+@app.route('/api/recipes/apply/<recipe_id>', methods=['POST'])
+def api_apply_recipe(recipe_id):
+    """Apply a recipe's config to the session (client merges + re-renders)."""
+    try:
+        from core.recipe_manager import apply_recipe
+        with get_db() as conn:
+            config = apply_recipe(conn, recipe_id)
+        if config is None:
+            return jsonify({'error': f'recipe not found: {recipe_id}'}), 404
+        return jsonify({'config': config})
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+
+@app.route('/api/recipes/import', methods=['POST'])
+def api_import_recipe_file():
+    """Load settings from an uploaded JSON/YAML file (bare wizard config or
+    full recipe). Returns the config payload for the client to apply."""
+    try:
+        from core.recipe_manager import import_recipe_file
+        if 'file' not in request.files:
+            return jsonify({'error': 'no file uploaded (field name: file)'}), 400
+        config = import_recipe_file(request.files['file'])
+        return jsonify({'config': config})
+    except ValueError as e:
+        return jsonify({'error': str(e)}), 400
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+
 @app.route('/api/runs_for_resume')
 def get_runs_for_resume():
     """Get all optimization runs with step-level progress for resume overlay."""

@@ -1,0 +1,275 @@
+recipe_id: glm53-pd-asymmetric
+name: "GLM-5.3 asymmetric P/D — TP16 prefill / TP8 decode"
+description: >
+  Prefill/Decode disaggregation with heterogeneous TP: compute-bound
+  prefill at TP16 (two nodes) and latency-bound decode at TP8. Requires
+  a vLLM image with heterogeneous MLA TP support (mixed MLA + DSA
+  indexer models crash the default image on the first KV transfer) —
+  the image is pinned in the config. 68% throughput improvement over
+  the best symmetric split in validation.
+model: zai-org/GLM-5.3
+goal: pd_only
+requires:
+  min_gpus: 24
+  gpu_memory_gb: 140
+  network: [rdma]
+evidence:
+  tested_on: "kermit — 8xH200 per node"
+  results:
+    best_config: "1P x TP16 + 2D x TP8"
+    throughput: "0.81 req/s (vs 0.48 best symmetric, +68%)"
+    ttft_p90_ms: 2724
+  source: "ServeIt run #48; vllm PR #61581"
+config:
+  advanced_vllm:
+    _mode: form
+    _raw_text: ''
+    all2all_backend:
+      mode: auto
+      value: null
+    block_size:
+      mode: custom
+      value: null
+    chat_template_content_format:
+      mode: auto
+      value: null
+    context_parallel_entries:
+    - flag: --prefill-context-parallel-size
+      value: null
+    - flag: --decode-context-parallel-size
+      value: null
+    cpu_offload_gb:
+      mode: custom
+      value: '200'
+    dbo_decode_token_threshold:
+      mode: auto
+      value: null
+    dbo_prefill_token_threshold:
+      mode: auto
+      value: null
+    decode_attention_config:
+      mode: auto
+    disable_custom_all_reduce:
+      mode: auto
+    disable_log_requests:
+      mode: auto
+    disk_offload_kv:
+      mode: auto
+      value: null
+    dtype:
+      mode: auto
+      value: null
+    enable_auto_tool_choice:
+      mode: auto
+    enable_bidirectional_kv:
+      mode: 'off'
+    enable_dbo:
+      mode: auto
+    enable_eplb:
+      mode: auto
+    enable_expert_parallel:
+      mode: 'on'
+    enable_prefix_caching:
+      mode: 'on'
+    gpu_memory_utilization:
+      mode: auto
+      value: null
+    headroom:
+      mode: auto
+      value: null
+    host_ipc: false
+    http_timeout_keep_alive:
+      mode: auto
+      value: null
+    kv_cache_dtype:
+      mode: custom
+      value: fp8
+    max_model_len:
+      mode: custom
+      value: '400000'
+    max_num_batched_tokens:
+      mode: auto
+      value: null
+    max_num_seqs:
+      mode: auto
+      value: null
+    memory_reserve_pct:
+      mode: auto
+      value: null
+    model_loader_extra_config:
+      mode: auto
+      value: null
+    moe_backend:
+      mode: auto
+      value: null
+    nccl_debug_logs:
+      mode: auto
+    num_speculative_tokens:
+      mode: custom
+      value: 3
+    override_generation_config:
+      mode: auto
+      value: null
+    pipeline_parallel_size:
+      mode: auto
+      value: null
+    prefill_attention_config:
+      mode: custom
+      value: '{"sparse_mla_force_mqa":true}'
+    prefill_speculative_num_tokens:
+      mode: custom
+      value: 1
+    prefix_cache_retention:
+      mode: auto
+      value: null
+    reasoning_parser:
+      mode: auto
+      value: null
+    shm_size_gb:
+      mode: auto
+    skip_asymmetric_mla_tp:
+      mode: auto
+    speculative_extra_config:
+    - key: mask_token_id
+      value: 154822
+    speculative_method: dspark
+    speculative_model:
+      mode: auto
+    ssm_conv_state_layout:
+      mode: auto
+      value: null
+    tool_call_parser:
+      mode: auto
+      value: null
+    trust_remote_code:
+      mode: auto
+    vllm_debug_logs:
+      mode: auto
+    weight_cpu_offload_gb:
+      mode: auto
+      value: null
+  advanced_vllm_custom_enabled: true
+  allow_asymmetric_tp: true
+  asymmetric_allow_decode_gt_prefill: true
+  asymmetric_allow_prefill_gt_decode: true
+  cache_sweep_all_configs: false
+  cache_sweep_count: null
+  cache_sweep_enabled: false
+  cache_sweep_groups: 5
+  cache_sweep_levels: null
+  cache_sweep_max_configs: null
+  cache_sweep_mode: identical
+  cache_sweep_selection_mode: architecture_aware
+  cache_sweep_step_pct: 10
+  cache_sweep_use_calibrated: false
+  calibrated_load_enabled: true
+  concurrency_sweep_all_configs: false
+  concurrency_sweep_count: 5
+  concurrency_sweep_levels: null
+  concurrency_sweep_max_configs: null
+  concurrency_sweep_mode: architecture_aware
+  concurrency_sweep_step_pct: 20
+  concurrency_sweep_use_epp_tuned: false
+  cpu_per_pod: null
+  dataset_column: null
+  dataset_max_output: 256
+  dataset_source: null
+  dra_gpu_resource_key: null
+  epp_benchmark: false
+  epp_config: null
+  epp_custom_enabled: true
+  epp_preset: cache_optimized
+  exclusive_pf: false
+  extra_env_vars: null
+  first_output_tokens: null
+  first_output_tokens_stdev: null
+  first_prompt_tokens: 10000
+  first_prompt_tokens_max: null
+  first_prompt_tokens_min: null
+  first_prompt_tokens_stdev: null
+  gateway_class: istio
+  gpu_memory_utilization: 0.95
+  headroom: 1.3
+  hf_token: ''
+  image: quay.io/bbenshab/vllm:llm-d-cuda-asym-mla-v12
+  inferencex_sweep_enabled: true
+  isl: 2500
+  isl_max: 10000
+  isl_min: 100
+  isl_stdev: 500
+  kubeconfig: null
+  latency_constraint_enabled: false
+  latency_constraint_ms: 500
+  latency_constraint_percentile: p90
+  length_unit: tokens
+  local_disk_path: /mnt/local/serveit-model-cache
+  lora_adapter_size_mb: null
+  lora_enabled: false
+  lora_num_adapters: 20
+  max_model_len: 12012
+  max_pd_splits: 0
+  max_requests: null
+  memory_per_pod: null
+  memory_reserve_pct: 0.0
+  model_name: zai-org/GLM-5.3
+  nccl_ib_hca: mlx
+  network_type: shared_device
+  node_nfs_pvcs: []
+  objective: pd_only
+  osl: 300
+  osl_max: 10000
+  osl_min: 50
+  osl_stdev: 300
+  pd_search_mode: smart
+  per_node_storage: true
+  prefix_cache_groups: 10
+  prefix_cache_hit_pct: 50
+  prefix_cache_mode: shared_prefix
+  prefix_cache_seed: null
+  prefix_count: 1
+  prefix_tokens: null
+  pvc_name: serveit-cache
+  pvc_size: 2048Gi
+  qps: 5.0
+  rate_type: concurrent
+  rdma_device_resources: []
+  rdma_network_annotation: null
+  rdma_nics_per_node: 8
+  scheduler_image: ghcr.io/llm-d/llm-d-router-endpoint-picker@sha256:873179822ab0895a37ea09f2112ca39a6ae50a26612561c8bfad7f9a8c5af6f5
+  selected_dra_classes: []
+  selected_nodes: []
+  selected_shared_device: rdma/ib
+  selected_sriov_policies: []
+  single_test_architecture: null
+  single_test_decode_pods: null
+  single_test_decode_tp: null
+  single_test_pipeline_parallelism: null
+  single_test_prefill_pods: null
+  single_test_prefill_tp: null
+  single_test_replicas: null
+  single_test_tp: null
+  skip_tp16: false
+  speculative_config_enabled: false
+  speculative_config_method: null
+  speculative_config_num_tokens: 3
+  sriov_same_subnet: false
+  stop_mode: duration
+  storage_class: serveit-local
+  structured_prefix: false
+  test_duration: 300
+  thanos_url: null
+  total_gpus: 32
+  tp_options:
+  - 1
+  - 2
+  - 4
+  - 8
+  tp_pair_top_n: 2
+  turn_delay: 15.0
+  turn_delay_max: 100.0
+  turn_delay_min: 1.0
+  turn_delay_stdev: 55.0
+  turns: 10
+  use_achievable_qps: false
+  use_corpus: true
+  workload_mode: synthetic
