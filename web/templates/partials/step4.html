@@ -214,7 +214,7 @@
                                                 <div class="input-group" style="width:130px;">
                                                     <label>Number of Levels</label>
                                                     <input type="number" id="lora-sweep-count" value="5" min="2" max="10" disabled onchange="config.lora_sweep_count=Math.max(2,Math.min(10,parseInt(this.value)||5));this.value=config.lora_sweep_count;config.lora_sweep_levels=null;saveConfig();">
-                                                    <div class="help-text">Doubling from 1</div>
+                                                    <div class="help-text">Evenly spaced up to N</div>
                                                 </div>
                                                 <div class="input-group" style="width:220px;">
                                                     <label>Or: Explicit Levels</label>

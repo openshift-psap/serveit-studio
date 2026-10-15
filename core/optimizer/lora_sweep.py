@@ -46,6 +46,17 @@ class LoraSweepMixin:
             if levels:
                 return sorted(levels)
         count = int(getattr(self.config, 'lora_sweep_count', 5) or 5)
+        # When N is known and large, generate evenly-spaced levels as
+        # fractions of N (N/count, 2N/count, ..., N). Doubling from 1
+        # (1, 2, 4, 8...) never reaches the interesting range for
+        # large adapter counts.
+        if n_total and n_total >= count * 2:
+            step = n_total // count
+            levels = [step * (i + 1) for i in range(count)]
+            # Ensure the last level is exactly N
+            levels[-1] = n_total
+            return levels
+        # Small N (or N unknown): doubling from 1
         levels = [1]
         while len(levels) < count:
             levels.append(levels[-1] * 2)
