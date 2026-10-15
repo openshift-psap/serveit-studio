@@ -88,6 +88,18 @@ function applyRecipe(recipeId, btn) {
 // Shared apply path — also used by file import
 function applyLoadedConfig(loadedConfig, successMsg) {
     window._serverConfigReceived = true;
+    // Reset advanced-vLLM + preset-driven sections to defaults BEFORE the
+    // merge: older templates predate current options, and absent fields
+    // must fall back to defaults — not keep stale values from whatever was
+    // applied earlier in this session.
+    if (typeof resetAdvVllm === 'function') resetAdvVllm();
+    ['speculative_preset', 'attention_preset', 'ctx_parallel_preset', 'kv_offload_preset']
+        .forEach(function(k) { if (!(k in loadedConfig)) config[k] = 'off'; });
+    ['lora_enabled', 'lora_sweep_enabled']
+        .forEach(function(k) { if (!(k in loadedConfig)) config[k] = false; });
+    ['lora_num_adapters', 'lora_max_loras', 'lora_max_rank',
+     'lora_adapter_size_mb', 'lora_sweep_levels', 'lora_sweep_count']
+        .forEach(function(k) { if (!(k in loadedConfig)) config[k] = null; });
     config = Object.assign({}, config, loadedConfig);
     document.getElementById('recipes-overlay').classList.remove('active');
     goToStep(3, true);
