@@ -210,16 +210,16 @@
                                         </div>
                                         <div id="lora-sweep-body" style="display:none;padding:12px;background:#f8fafc;font-size:0.8em;color:#475569;line-height:1.6;">
                                             After finding the best configuration, re-test it at multiple adapter counts to map the multi-tenant scaling curve — each level is one benchmark run with requests round-robined across base + N adapters, showing exactly where LRU swapping starts to degrade performance.
-                                            <div id="lora-sweep-opts" style="display:flex;gap:16px;flex-wrap:wrap;margin-top:8px;">
-                                                <div class="input-group" style="max-width:140px;">
+                                            <div id="lora-sweep-opts" style="display:flex;gap:16px;flex-wrap:wrap;margin-top:8px;align-items:flex-start;">
+                                                <div class="input-group" style="width:130px;">
                                                     <label>Number of Levels</label>
                                                     <input type="number" id="lora-sweep-count" value="5" min="2" max="10" disabled onchange="config.lora_sweep_count=Math.max(2,Math.min(10,parseInt(this.value)||5));this.value=config.lora_sweep_count;config.lora_sweep_levels=null;saveConfig();">
-                                                    <div class="help-text">Doubling from 1: 1, 2, 4, 8…</div>
+                                                    <div class="help-text">Doubling from 1</div>
                                                 </div>
-                                                <div class="input-group" style="max-width:220px;">
+                                                <div class="input-group" style="width:220px;">
                                                     <label>Or: Explicit Levels</label>
-                                                    <input type="text" id="lora-sweep-levels" placeholder="e.g. 100, 400, 1000 or 20%, 40%, 100%" disabled onchange="var v=this.value.trim();config.lora_sweep_levels=v?v.split(',').map(function(x){return x.trim();}).filter(function(x){return x;}):null;if(!config.lora_sweep_levels){document.getElementById('lora-sweep-count').disabled=false;}else{document.getElementById('lora-sweep-count').disabled=true;}saveConfig();">
-                                                    <div class="help-text">Comma-separated counts or % of N (e.g. 20%,40%,100% → 200,400,1000 when N=1000).</div>
+                                                    <input type="text" id="lora-sweep-levels" placeholder="e.g. 20%, 40%, 100%" disabled onchange="var v=this.value.trim();config.lora_sweep_levels=v?v.split(',').map(function(x){return x.trim();}).filter(function(x){return x;}):null;if(!config.lora_sweep_levels){document.getElementById('lora-sweep-count').disabled=false;}else{document.getElementById('lora-sweep-count').disabled=true;}saveConfig();">
+                                                    <div class="help-text">Counts or % of N (20%,40%,100% → 200,400,1000 when N=1000)</div>
                                                 </div>
                                             </div>
                                         </div>
