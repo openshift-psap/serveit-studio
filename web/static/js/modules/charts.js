@@ -2285,6 +2285,34 @@ function _renderChartsImpl(data, runId, content) {
 
     // CACHE HIT SWEEP CHARTS (Step 13)
     // ============================================================
+    if (data.lora_sweep) {
+        var lsweep = data.lora_sweep;
+        Object.keys(lsweep).forEach(function(skey) {
+            var pts = lsweep[skey];
+            if (!pts || !pts.length) return;
+            var lbl = pts[0].config_label || skey;
+            var rows = pts.map(function(p) {
+                var swap = p.lru_swapping ? ' <span style="color:#ef4444;">⚠️ LRU</span>' : '';
+                return '<tr>' +
+                    '<td style="text-align:center;font-weight:700;">' + p.adapter_count + '</td>' +
+                    '<td style="text-align:center;">' + (p.gpu_resident || '—') + swap + '</td>' +
+                    '<td style="text-align:center;">' + (p.ttft_p90 || 0).toFixed(0) + ' ms</td>' +
+                    '<td style="text-align:center;">' + (p.throughput_mean || 0).toFixed(3) + ' req/s</td>' +
+                    '<td style="text-align:center;">' + (p.itl_p90 || 0).toFixed(1) + ' ms</td>' +
+                    '<td style="text-align:center;">' + (p.output_tps_mean || 0).toFixed(0) + ' tok/s</td>' +
+                    '</tr>';
+            }).join('');
+            html += '<div class="chart-card" style="border-left:6px solid #4f46e5;">' +
+                '<div class="chart-card-header" style="background:linear-gradient(135deg,#4f46e5,#818cf8); color:white;">LoRA Adapter Sweep — ' + lbl + '</div>' +
+                '<div style="padding:12px 20px; color:#1e293b; font-size:0.93em; line-height:1.6;">' +
+                'Multi-tenant scaling curve: the best configuration re-tested at increasing <strong>adapter counts</strong>, ' +
+                'with benchmark requests round-robined across the base model and all adapters. GPU residency is auto-sized from free VRAM — ' +
+                'once the adapter count exceeds it, LRU swapping begins (⚠️) and latency degrades.' +
+                '<table style="width:100%;border-collapse:collapse;margin-top:10px;font-size:0.9em;">' +
+                '<tr style="background:#eef2ff;"><th style="padding:6px;">Adapters</th><th style="padding:6px;">GPU-Resident</th><th style="padding:6px;">TTFT p90</th><th style="padding:6px;">Throughput</th><th style="padding:6px;">ITL p90</th><th style="padding:6px;">Output</th></tr>' +
+                rows + '</table></div></div>';
+        });
+    }
     if (data.cache_sweep) {
         html += '<div class="chart-card" style="border-left:6px solid #7c3aed;">' +
             '<div class="chart-card-header" style="background:linear-gradient(135deg,#7c3aed,#a78bfa); color:white;">Cache Hit Sweep</div>' +

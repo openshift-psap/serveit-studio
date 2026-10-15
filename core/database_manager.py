@@ -621,6 +621,8 @@ class DatabaseManager:
                 getattr(test_config, 'decode_tp', None),
                 getattr(test_config, '_guidellm_command', None),
                 test_config_json,
+                test_config.lora_num_adapters if getattr(test_config, 'lora_enabled', False) else None,
+                getattr(test_config, 'lora_max_loras', None),
             ))
 
     def insert_optuna_trial(

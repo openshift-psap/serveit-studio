@@ -308,6 +308,15 @@ def init_db():
     except sqlite3.OperationalError:
         pass
 
+    # Migration: queryable LoRA columns on test_configurations (the full
+    # TestConfig incl. LoRA fields is already persisted in test_config_json;
+    # these support direct SQL filtering for the adapter-count sweep)
+    for col in [('lora_num_adapters', 'INTEGER'), ('lora_max_loras', 'INTEGER')]:
+        try:
+            cursor.execute(f'ALTER TABLE test_configurations ADD COLUMN {col[0]} {col[1]}')
+        except sqlite3.OperationalError:
+            pass
+
     for col, typ in [
         ('workload_mode', 'TEXT'),
         ('dataset_source', 'TEXT'),

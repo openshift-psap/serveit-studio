@@ -158,6 +158,13 @@ class RecipeOptimizerConfig:
     # rank-16 adapters ServeIt generates). Override when mounting adapters
     # with a higher rank.
     lora_max_rank: Optional[int] = None
+    # LoRA adapter-count sweep (Step 14): re-test the best configuration
+    # at multiple adapter counts to map the multi-tenant scaling curve.
+    lora_sweep_enabled: bool = False
+    # Explicit adapter counts (e.g. [1, 4, 16, 64]); None = doubling from 1
+    # for lora_sweep_count levels.
+    lora_sweep_levels: Optional[list] = None
+    lora_sweep_count: int = 5
 
     # Optimization objective for Step 7
     objective: str = 'balanced'  # 'ttft', 'throughput', or 'balanced'

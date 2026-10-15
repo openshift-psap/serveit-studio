@@ -561,6 +561,10 @@ def run_optimization_background(data):
         lora_max_loras = int(lora_max_loras_raw) if lora_max_loras_raw else None
         lora_max_rank_raw = _get('lora_max_rank')
         lora_max_rank = int(lora_max_rank_raw) if lora_max_rank_raw else None
+        lora_sweep_levels_raw = _get('lora_sweep_levels')
+        lora_sweep_levels = ([int(x) for x in lora_sweep_levels_raw
+                              if str(x).strip() and int(x) > 0]
+                             if lora_sweep_levels_raw else None)
         asymmetric_allow_decode_gt_prefill = _get('asymmetric_allow_decode_gt_prefill', True)
         asymmetric_allow_prefill_gt_decode = _get('asymmetric_allow_prefill_gt_decode', True)
         pd_search_mode = _get('pd_search_mode', 'smart')
@@ -911,6 +915,9 @@ data:
                 lora_adapter_size_mb=lora_adapter_size_mb,
                 lora_max_loras=lora_max_loras,
                 lora_max_rank=lora_max_rank,
+                lora_sweep_enabled=bool(_get('lora_sweep_enabled', False)),
+                lora_sweep_levels=lora_sweep_levels,
+                lora_sweep_count=int(_get('lora_sweep_count', 5) or 5),
                 asymmetric_allow_decode_gt_prefill=asymmetric_allow_decode_gt_prefill,
                 asymmetric_allow_prefill_gt_decode=asymmetric_allow_prefill_gt_decode,
                 pd_search_mode=pd_search_mode,

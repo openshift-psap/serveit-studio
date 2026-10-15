@@ -26,6 +26,7 @@ from core.optimizer.epp_tuning import EPPTuningMixin
 from core.optimizer.dataset import DatasetMixin
 from core.optimizer.speculative import SpeculativeMixin
 from core.optimizer.cache_sweep import CacheSweepMixin
+from core.optimizer.lora_sweep import LoraSweepMixin
 from core.optimizer.dpep_search import DPEPSearchMixin
 
 logger = logging.getLogger(__name__)
@@ -39,6 +40,7 @@ class RecipeOptimizer(
     DatasetMixin,
     SpeculativeMixin,
     CacheSweepMixin,
+    LoraSweepMixin,
     DPEPSearchMixin,
 ):
     """
@@ -672,6 +674,8 @@ class RecipeOptimizer(
                     opt['concurrency_sweep'] = self.concurrency_sweep_results
                 if hasattr(self, 'cache_sweep_results') and self.cache_sweep_results:
                     opt['cache_sweep'] = self.cache_sweep_results
+                if hasattr(self, 'lora_sweep_results') and self.lora_sweep_results:
+                    opt['lora_sweep'] = self.lora_sweep_results
                 conn.execute('UPDATE optimization_runs SET optimal_config=? WHERE id=?',
                              (_json.dumps(opt), self.run_id))
         except Exception:
@@ -2618,6 +2622,7 @@ spec:
             } if self.calibrated_agg_result else None,
             'concurrency_sweep': getattr(self, 'concurrency_sweep_results', None),
             'cache_sweep': getattr(self, 'cache_sweep_results', None),
+            'lora_sweep': getattr(self, 'lora_sweep_results', None),
             'skipped_tests': getattr(self, '_skipped_tests', 0),
             # EP results (populated by ThroughputStrategy/BalancedStrategy)
             'ep_configurations': [

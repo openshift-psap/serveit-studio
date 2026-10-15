@@ -286,20 +286,23 @@ class ConfigBuilderMixin:
                 return result.vllm_fixed_overhead_gb
         return None
 
-    def _compute_lora_max_loras(self, tp: int) -> int:
+    def _compute_lora_max_loras(self, tp: int, n_override: int = None) -> int:
         """GPU-resident LoRA adapter count from available VRAM.
 
         Budget: up to 10% of the VRAM left after model weights (within the
         computed gpu-memory-utilization) is dedicated to LoRA residency —
         the rest stays for KV cache. Per-adapter GPU cost is the adapter
         size (user override or rank x 20MB estimate). Clamped to
-        [1, num_adapters]; 0 when LoRA is off.
+        [1, num_adapters]; 0 when LoRA is off. ``n_override`` lets the
+        adapter-count sweep clamp against the level's count rather than
+        the run-level setting.
 
         Examples (GLM-5.3 fp8, H200 140GB):
         - TP8: ~40GB free x 10% / 320MB = 13 resident (all 6 mounted)
         - TP16: ~68GB free x 10% / 320MB = 21 resident
         """
-        n = int(getattr(self.config, 'lora_num_adapters', 0) or 0)
+        n = int(n_override if n_override is not None
+                else getattr(self.config, 'lora_num_adapters', 0) or 0)
         if not getattr(self.config, 'lora_enabled', False) or n <= 0:
             return 0
         # User bypass: a pinned residency (e.g. forcing LRU swapping in a
