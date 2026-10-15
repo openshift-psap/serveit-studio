@@ -319,17 +319,23 @@ class GuidellmMixin:
 
         # Backend argument — LoRA model list from config (same logic as
         # _run_guidellm_test, built locally since this is a separate function)
-        lora_model_list = None
-        _lora_n = int(getattr(config, 'lora_num_adapters', 0) or 0)
-        if getattr(config, 'lora_enabled', False) and _lora_n > 0:
-            _adapters = [f'agent-{i:02d}' for i in range(1, _lora_n + 1)]
-            lora_model_list = ','.join([config.model_name] + _adapters)
-        if lora_model_list:
-            # Comma-separated model list breaks key=value CLI parsing — use JSON
+
+        lora_adapters_list = None
+        _ln = int(getattr(config, 'lora_num_adapters', 0) or 0)
+        _lm = getattr(config, 'lora_benchmark_mode', 'round_robin') or 'round_robin'
+        if (getattr(config, 'lora_enabled', False) and _ln > 0
+                and _lm == 'round_robin'):
+            lora_adapters_list = [f'agent-{i:02d}' for i in range(1, _ln + 1)]
+            if log_callback:
+                log_callback(f'🔀 LoRA round-robin: {_ln} adapters via '
+                             f'native guidellm lora_adapters', 'info')
+
+        if lora_adapters_list:
             import json as _json
             backend_arg = _json.dumps({
                 'kind': 'openai_http', 'target': endpoint,
-                'model': lora_model_list,
+                'model': config.model_name,
+                'lora_adapters': lora_adapters_list,
                 'request_format': request_format,
                 'http2': False, 'timeout': 300,
             })
@@ -801,11 +807,11 @@ class GuidellmMixin:
             if (getattr(config, 'lora_enabled', False) and _lora_n > 0
                     and _lora_mode == 'round_robin'):
                 _adapters = [f'agent-{i:02d}' for i in range(1, _lora_n + 1)]
-                _model_list = ','.join([config.model_name] + _adapters)
                 import json as _json
                 _backend_arg = _json.dumps({
                     'kind': 'openai_http', 'target': endpoint,
-                    'model': _model_list,
+                    'model': config.model_name,
+                    'lora_adapters': _adapters,
                     'request_format': request_format,
                     'http2': False, 'timeout': 300,
                 })
