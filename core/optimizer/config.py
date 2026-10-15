@@ -146,6 +146,15 @@ class RecipeOptimizerConfig:
     # (adapter-list mismatch across ranks breaks multi-node serving).
     lora_enabled: bool = False
     lora_num_adapters: int = 20
+    # How guidellm targets adapters when LoRA is enabled on the server:
+    #   'round_robin' — requests cycle across base + all adapters (default,
+    #                   the multi-tenant stress pattern)
+    #   'base_only'   — all requests hit the base model; adapters are mounted
+    #                   but idle. Measures the overhead of LoRA being enabled
+    #                   (GPU workspace reservation) without adapter traffic.
+    #   'off'         — guidellm ignores LoRA entirely (same as base_only for
+    #                   benchmarking, explicit for clarity)
+    lora_benchmark_mode: str = 'round_robin'
     # Per-adapter CPU staging size in MB. None = auto-estimate from rank
     # (rank x 20MB, calibrated for GLM-5.3-class attention-only adapters).
     # Override when serving smaller bases or fatter adapters.

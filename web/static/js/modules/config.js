@@ -278,6 +278,8 @@ function updateUIFromConfig() {
             if (sweepCount) sweepCount.disabled = !sweepOn || !!(config.lora_sweep_levels && config.lora_sweep_levels.length);
             if (sweepLevels) sweepLevels.disabled = !sweepOn;
         }
+        var loraBmMode = document.getElementById('lora-benchmark-mode');
+        if (loraBmMode) loraBmMode.value = config.lora_benchmark_mode || 'round_robin';
         var loraMlMode = document.getElementById('lora-max-loras-mode');
         if (loraMlMode) {
             var pinned = config.lora_max_loras ? parseInt(config.lora_max_loras) : null;

@@ -125,6 +125,7 @@ document.getElementById('start-optimization').addEventListener('click', () => {
         lora_adapter_size_mb: config.lora_adapter_size_mb || null,
         lora_max_loras: config.lora_max_loras || null,
         lora_max_rank: config.lora_max_rank || null,
+        lora_benchmark_mode: config.lora_benchmark_mode || 'round_robin',
         lora_sweep_enabled: !!config.lora_sweep_enabled,
         lora_sweep_levels: config.lora_sweep_levels || null,
         lora_sweep_count: config.lora_sweep_count || 5,

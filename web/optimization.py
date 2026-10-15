@@ -918,6 +918,7 @@ data:
                 lora_sweep_enabled=bool(_get('lora_sweep_enabled', False)),
                 lora_sweep_levels=lora_sweep_levels,
                 lora_sweep_count=int(_get('lora_sweep_count', 5) or 5),
+                lora_benchmark_mode=_get('lora_benchmark_mode', 'round_robin'),
                 asymmetric_allow_decode_gt_prefill=asymmetric_allow_decode_gt_prefill,
                 asymmetric_allow_prefill_gt_decode=asymmetric_allow_prefill_gt_decode,
                 pd_search_mode=pd_search_mode,

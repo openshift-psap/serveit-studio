@@ -224,6 +224,14 @@
                                             </div>
                                         </div>
                                     </div>
+                                    <div class="input-group" style="max-width:320px;margin-top:8px;">
+                                        <label>Benchmark Mode</label>
+                                        <select id="lora-benchmark-mode" onchange="config.lora_benchmark_mode=this.value;saveConfig();" style="width:100%;">
+                                            <option value="round_robin">Round-robin: base + all adapters (multi-tenant stress)</option>
+                                            <option value="base_only">Base only: adapters mounted but idle (LoRA overhead baseline)</option>
+                                        </select>
+                                        <div class="help-text">Round-robin distributes requests across base + adapters via guidellm's native multi-model support. Base-only enables LoRA on the server (GPU workspace reserved) but sends all traffic to the base model — isolates the cost of having LoRA enabled.</div>
+                                    </div>
                                     <div id="lora-estimate" style="background:#eef2ff;border:1px solid #c7d2fe;border-radius:6px;padding:10px 12px;font-size:0.8em;color:#3730a3;line-height:1.6;margin-top:10px;">
                                         CPU staging: 20 adapters &times; ~320MB (rank 16) &asymp; 11Gi total (incl. load headroom) &mdash; automatically added to pod memory requests (never shrinks a higher user-set value).
                                     </div>

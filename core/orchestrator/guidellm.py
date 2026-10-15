@@ -662,14 +662,23 @@ class GuidellmMixin:
             # LoRA: guidellm natively round-robins across a comma-separated
             # model list (assigned at request-generation time in the scheduler,
             # immune to multiprocessing). Build the list: base + all adapters.
+            # lora_benchmark_mode controls whether guidellm targets adapters:
+            #   round_robin — cycle across base + all adapters (stress test)
+            #   base_only/off — all traffic hits base (LoRA overhead baseline)
             lora_model_list = None
             lora_n = int(getattr(config, 'lora_num_adapters', 0) or 0)
-            if getattr(config, 'lora_enabled', False) and lora_n > 0:
+            lora_mode = getattr(config, 'lora_benchmark_mode', 'round_robin') or 'round_robin'
+            if (getattr(config, 'lora_enabled', False) and lora_n > 0
+                    and lora_mode == 'round_robin'):
                 adapters = [f'agent-{i:02d}' for i in range(1, lora_n + 1)]
                 lora_model_list = ','.join([config.model_name] + adapters)
                 if log_callback:
                     log_callback(f'🔀 LoRA round-robin: {lora_n} adapters + base '
                                  f'via native guidellm multi-model', 'info')
+            elif getattr(config, 'lora_enabled', False) and lora_n > 0:
+                if log_callback:
+                    log_callback(f'🔌 LoRA server-side only ({lora_n} adapters mounted, '
+                                 f'benchmark mode: {lora_mode}) — traffic hits base model', 'info')
 
             # Auto-discover Istio gateway if endpoint not provided
             if endpoint is None:
@@ -788,7 +797,9 @@ class GuidellmMixin:
             # Istio ext_proc (EPP) cannot unmarshal HTTP/2 streamed request bodies
             # LoRA: comma-separated model list via JSON (breaks key=value parsing)
             _lora_n = int(getattr(config, 'lora_num_adapters', 0) or 0)
-            if getattr(config, 'lora_enabled', False) and _lora_n > 0:
+            _lora_mode = getattr(config, 'lora_benchmark_mode', 'round_robin') or 'round_robin'
+            if (getattr(config, 'lora_enabled', False) and _lora_n > 0
+                    and _lora_mode == 'round_robin'):
                 _adapters = [f'agent-{i:02d}' for i in range(1, _lora_n + 1)]
                 _model_list = ','.join([config.model_name] + _adapters)
                 import json as _json
