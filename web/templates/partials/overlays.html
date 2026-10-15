@@ -53,13 +53,13 @@
                     <button class="charts-close" id="recipes-close">&#x2715; Close</button>
                 </div>
             </div>
-            <div style="padding:12px 20px;background:linear-gradient(135deg,#ecfeff 0%,#f0f9ff 100%);border-bottom:1px solid #e2e8f0;display:flex;gap:14px;align-items:center;flex-wrap:wrap;">
-                <div style="position:relative;flex:1;min-width:240px;max-width:420px;">
+            <div style="padding:12px 20px;background:linear-gradient(135deg,#ecfeff 0%,#f0f9ff 100%);border-bottom:1px solid #e2e8f0;display:flex;gap:14px;align-items:center;">
+                <div style="position:relative;flex:1;min-width:0;">
                     <span style="position:absolute;left:12px;top:50%;transform:translateY(-50%);color:#94a3b8;font-size:0.95em;">🔍</span>
                     <input type="text" id="recipe-search" placeholder="Search by model or workload…" oninput="filterRecipes();"
-                        style="padding:9px 14px 9px 36px;border:1px solid #c7d2fe;border-radius:8px;font-size:0.92em;width:100%;background:#ffffff;box-shadow:0 1px 3px rgba(0,0,0,0.04);">
+                        style="padding:9px 14px 9px 36px;border:1px solid #c7d2fe;border-radius:8px;font-size:0.92em;width:100%;background:#ffffff;box-shadow:0 1px 3px rgba(0,0,0,0.04);box-sizing:border-box;">
                 </div>
-                <label style="padding:8px 16px;background:white;border:1px solid #06b6d4;border-radius:8px;font-size:0.85em;font-weight:600;color:#0e7490;cursor:pointer;box-shadow:0 1px 3px rgba(0,0,0,0.06);white-space:nowrap;">
+                <label style="flex-shrink:0;padding:8px 16px;background:white;border:1px solid #06b6d4;border-radius:8px;font-size:0.85em;font-weight:600;color:#0e7490;cursor:pointer;box-shadow:0 1px 3px rgba(0,0,0,0.06);white-space:nowrap;">
                     📂 Load settings from file
                     <input type="file" id="recipe-import-input" accept=".json,.yaml,.yml" style="display:none;">
                 </label>
