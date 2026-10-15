@@ -147,6 +147,7 @@ config:
   allow_asymmetric_tp: true
   asymmetric_allow_decode_gt_prefill: true
   asymmetric_allow_prefill_gt_decode: true
+  attention_preset: hisparse
   cache_sweep_all_configs: false
   cache_sweep_count: null
   cache_sweep_enabled: false
@@ -158,6 +159,448 @@ config:
   cache_sweep_step_pct: 10
   cache_sweep_use_calibrated: false
   calibrated_load_enabled: true
+  cluster_resources:
+    available_networks:
+    - available: true
+      description: "Standard Kubernetes pod networking. No RDMA \u2014 uses TCP for GPU communication."
+      id: eth0
+      name: Pod Network (TCP)
+      rdma: false
+      reason: ''
+    - available: false
+      description: Network Attachment Definitions via Multus. Supports SR-IOV, host-device, and macvlan
+        plugins for RDMA.
+      id: nad
+      name: NAD (Multus CNI)
+      rdma: false
+      reason: Multus CNI not installed
+    - available: false
+      description: Dynamic Resource Allocation with GPU+NIC PCIe affinity.
+      device_classes:
+      - extendedResourceName: ''
+        kind: unknown
+        name: compute-domain-daemon.nvidia.com
+      - extendedResourceName: ''
+        kind: unknown
+        name: compute-domain-default-channel.nvidia.com
+      id: dra
+      name: DRA (DRANET)
+      rdma: true
+      reason: No DRA device classes found
+    - available: true
+      description: RDMA via pre-configured device plugin. Pods request RDMA resources directly.
+      id: shared_device
+      name: Shared Device Plugin
+      rdma: true
+      reason: ''
+      shared_resources:
+      - rdma/ib
+    - available: false
+      description: RoCE RDMA via SR-IOV. Creates network interfaces per pod for GPU-aware RDMA routing.
+      id: sriov_multinic
+      name: SR-IOV
+      rdma: true
+      reason: No SR-IOV NADs or policies found
+    - available: false
+      description: RDMA via kubernetes-nmstate. Configures host network interfaces declaratively.
+      id: nmstate
+      name: NMState
+      rdma: true
+      reason: kubernetes-nmstate API not found
+    cpu_model: Intel Xeon (128 cores)
+    dranet_available: false
+    gateway_class: istio
+    gpu_memory_per_gpu_mb: 143771
+    gpu_model: H200
+    gpu_node_count: 17
+    gpu_type: nvidia.com/gpu
+    gpu_vendor: NVIDIA
+    gpus_available: 53
+    gpus_in_use: 83
+    gpus_per_node:
+      g104218: 0
+      g11bab6: 8
+      g11d5e0: 8
+      g121e9c: 8
+      g1238bc: 8
+      g124002: 8
+      g12463e: 8
+      g124daa: 8
+      g1251ac: 8
+      g12987a: 8
+      g134dfa: 8
+      g13bc90: 8
+      g13d42a: 8
+      g49fc0a: 0
+      g801c7a: 0
+      gc37cba: 8
+      gc37d06: 8
+      gd86486: 0
+      gf27fec: 8
+      gf2a19e: 8
+      gf2ac9a: 8
+    has_rdma: true
+    host_model: gd-8xh200ib-i128 (PowerEdge-XE9680)
+    lws_supports_vct: true
+    max_gpus_per_node: 8
+    min_gpus_per_node: 8
+    network_interfaces_by_type:
+      InfiniBand: 136
+    network_interfaces_by_vendor:
+      NVIDIA/Mellanox: 136
+    network_type: shared_device
+    nic_models:
+    - ConnectX-7
+    nic_speeds:
+      rdma/ib: 400
+    node_count: 21
+    node_nfs_classes: []
+    nodes_detail:
+    - cpu_cores: 191
+      cpu_model: Intel Epyc (192 cores)
+      gpu_memory_mb: 0
+      gpu_model: unknown
+      gpu_vendor: unknown
+      gpus: 0
+      has_rdma: true
+      memory_gb: 1509
+      name: g104218
+      nics: []
+    - cpu_cores: 127
+      cpu_model: Intel Xeon (128 cores)
+      gpu_memory_mb: 1150168
+      gpu_model: H200
+      gpu_vendor: NVIDIA
+      gpus: 8
+      has_rdma: true
+      memory_gb: 2013
+      name: g11bab6
+      nics:
+      - count: 8
+        model: ConnectX-7
+        name: rdma/ib
+        speed_gbps: 400
+        type: InfiniBand
+        vendor: NVIDIA/Mellanox
+    - cpu_cores: 127
+      cpu_model: Intel Xeon (128 cores)
+      gpu_memory_mb: 1150168
+      gpu_model: H200
+      gpu_vendor: NVIDIA
+      gpus: 8
+      has_rdma: true
+      memory_gb: 2013
+      name: g11d5e0
+      nics:
+      - count: 8
+        model: ConnectX-7
+        name: rdma/ib
+        speed_gbps: 400
+        type: InfiniBand
+        vendor: NVIDIA/Mellanox
+    - cpu_cores: 127
+      cpu_model: Intel Xeon (128 cores)
+      gpu_memory_mb: 1150168
+      gpu_model: H200
+      gpu_vendor: NVIDIA
+      gpus: 8
+      has_rdma: true
+      memory_gb: 2013
+      name: g121e9c
+      nics:
+      - count: 8
+        model: ConnectX-7
+        name: rdma/ib
+        speed_gbps: 400
+        type: InfiniBand
+        vendor: NVIDIA/Mellanox
+    - cpu_cores: 127
+      cpu_model: Intel Xeon (128 cores)
+      gpu_memory_mb: 1150168
+      gpu_model: H200
+      gpu_vendor: NVIDIA
+      gpus: 8
+      has_rdma: true
+      memory_gb: 2013
+      name: g1238bc
+      nics:
+      - count: 8
+        model: ConnectX-7
+        name: rdma/ib
+        speed_gbps: 400
+        type: InfiniBand
+        vendor: NVIDIA/Mellanox
+    - cpu_cores: 127
+      cpu_model: Intel Xeon (128 cores)
+      gpu_memory_mb: 1150168
+      gpu_model: H200
+      gpu_vendor: NVIDIA
+      gpus: 8
+      has_rdma: true
+      memory_gb: 2013
+      name: g124002
+      nics:
+      - count: 8
+        model: ConnectX-7
+        name: rdma/ib
+        speed_gbps: 400
+        type: InfiniBand
+        vendor: NVIDIA/Mellanox
+    - cpu_cores: 127
+      cpu_model: Intel Xeon (128 cores)
+      gpu_memory_mb: 1150168
+      gpu_model: H200
+      gpu_vendor: NVIDIA
+      gpus: 8
+      has_rdma: true
+      memory_gb: 2013
+      name: g12463e
+      nics:
+      - count: 8
+        model: ConnectX-7
+        name: rdma/ib
+        speed_gbps: 400
+        type: InfiniBand
+        vendor: NVIDIA/Mellanox
+    - cpu_cores: 127
+      cpu_model: Intel Xeon (128 cores)
+      gpu_memory_mb: 1150168
+      gpu_model: H200
+      gpu_vendor: NVIDIA
+      gpus: 8
+      has_rdma: true
+      memory_gb: 2013
+      name: g124daa
+      nics:
+      - count: 8
+        model: ConnectX-7
+        name: rdma/ib
+        speed_gbps: 400
+        type: InfiniBand
+        vendor: NVIDIA/Mellanox
+    - cpu_cores: 127
+      cpu_model: Intel Xeon (128 cores)
+      gpu_memory_mb: 1150168
+      gpu_model: H200
+      gpu_vendor: NVIDIA
+      gpus: 8
+      has_rdma: true
+      memory_gb: 2013
+      name: g1251ac
+      nics:
+      - count: 8
+        model: ConnectX-7
+        name: rdma/ib
+        speed_gbps: 400
+        type: InfiniBand
+        vendor: NVIDIA/Mellanox
+    - cpu_cores: 127
+      cpu_model: Intel Xeon (128 cores)
+      gpu_memory_mb: 1150168
+      gpu_model: H200
+      gpu_vendor: NVIDIA
+      gpus: 8
+      has_rdma: true
+      memory_gb: 2013
+      name: g12987a
+      nics:
+      - count: 8
+        model: ConnectX-7
+        name: rdma/ib
+        speed_gbps: 400
+        type: InfiniBand
+        vendor: NVIDIA/Mellanox
+    - cpu_cores: 127
+      cpu_model: Intel Xeon (128 cores)
+      gpu_memory_mb: 1150168
+      gpu_model: H200
+      gpu_vendor: NVIDIA
+      gpus: 8
+      has_rdma: true
+      memory_gb: 2013
+      name: g134dfa
+      nics:
+      - count: 8
+        model: ConnectX-7
+        name: rdma/ib
+        speed_gbps: 400
+        type: InfiniBand
+        vendor: NVIDIA/Mellanox
+    - cpu_cores: 127
+      cpu_model: Intel Xeon (128 cores)
+      gpu_memory_mb: 1150168
+      gpu_model: H200
+      gpu_vendor: NVIDIA
+      gpus: 8
+      has_rdma: true
+      memory_gb: 2013
+      name: g13bc90
+      nics:
+      - count: 8
+        model: ConnectX-7
+        name: rdma/ib
+        speed_gbps: 400
+        type: InfiniBand
+        vendor: NVIDIA/Mellanox
+    - cpu_cores: 127
+      cpu_model: Intel Xeon (128 cores)
+      gpu_memory_mb: 1150168
+      gpu_model: H200
+      gpu_vendor: NVIDIA
+      gpus: 8
+      has_rdma: true
+      memory_gb: 2013
+      name: g13d42a
+      nics:
+      - count: 8
+        model: ConnectX-7
+        name: rdma/ib
+        speed_gbps: 400
+        type: InfiniBand
+        vendor: NVIDIA/Mellanox
+    - cpu_cores: 191
+      cpu_model: Intel Epyc (192 cores)
+      gpu_memory_mb: 0
+      gpu_model: unknown
+      gpu_vendor: unknown
+      gpus: 0
+      has_rdma: true
+      memory_gb: 1509
+      name: g49fc0a
+      nics: []
+    - cpu_cores: 191
+      cpu_model: Intel Epyc (192 cores)
+      gpu_memory_mb: 0
+      gpu_model: unknown
+      gpu_vendor: unknown
+      gpus: 0
+      has_rdma: true
+      memory_gb: 1509
+      name: g801c7a
+      nics: []
+    - cpu_cores: 127
+      cpu_model: Intel Xeon (128 cores)
+      gpu_memory_mb: 1150168
+      gpu_model: H200
+      gpu_vendor: NVIDIA
+      gpus: 8
+      has_rdma: true
+      memory_gb: 2013
+      name: gc37cba
+      nics:
+      - count: 8
+        model: ConnectX-7
+        name: rdma/ib
+        speed_gbps: 400
+        type: InfiniBand
+        vendor: NVIDIA/Mellanox
+    - cpu_cores: 127
+      cpu_model: Intel Xeon (128 cores)
+      gpu_memory_mb: 1150168
+      gpu_model: H200
+      gpu_vendor: NVIDIA
+      gpus: 8
+      has_rdma: true
+      memory_gb: 2013
+      name: gc37d06
+      nics:
+      - count: 8
+        model: ConnectX-7
+        name: rdma/ib
+        speed_gbps: 400
+        type: InfiniBand
+        vendor: NVIDIA/Mellanox
+    - cpu_cores: 191
+      cpu_model: Intel Epyc (192 cores)
+      gpu_memory_mb: 0
+      gpu_model: unknown
+      gpu_vendor: unknown
+      gpus: 0
+      has_rdma: true
+      memory_gb: 1509
+      name: gd86486
+      nics: []
+    - cpu_cores: 127
+      cpu_model: Intel Xeon (128 cores)
+      gpu_memory_mb: 1150168
+      gpu_model: H200
+      gpu_vendor: NVIDIA
+      gpus: 8
+      has_rdma: true
+      memory_gb: 2013
+      name: gf27fec
+      nics:
+      - count: 8
+        model: ConnectX-7
+        name: rdma/ib
+        speed_gbps: 400
+        type: InfiniBand
+        vendor: NVIDIA/Mellanox
+    - cpu_cores: 127
+      cpu_model: Intel Xeon (128 cores)
+      gpu_memory_mb: 1150168
+      gpu_model: H200
+      gpu_vendor: NVIDIA
+      gpus: 8
+      has_rdma: true
+      memory_gb: 2013
+      name: gf2a19e
+      nics:
+      - count: 8
+        model: ConnectX-7
+        name: rdma/ib
+        speed_gbps: 400
+        type: InfiniBand
+        vendor: NVIDIA/Mellanox
+    - cpu_cores: 127
+      cpu_model: Intel Xeon (128 cores)
+      gpu_memory_mb: 1150168
+      gpu_model: H200
+      gpu_vendor: NVIDIA
+      gpus: 8
+      has_rdma: true
+      memory_gb: 2013
+      name: gf2ac9a
+      nics:
+      - count: 8
+        model: ConnectX-7
+        name: rdma/ib
+        speed_gbps: 400
+        type: InfiniBand
+        vendor: NVIDIA/Mellanox
+    preset_max_gpus: null
+    preset_nodes: null
+    provider: coreweave
+    rdma_capable_nodes: 21
+    storage_classes:
+    - access_mode: ReadWriteOnce
+      allow_volume_expansion: false
+      gpu_nodes_covered: 15
+      is_local: true
+      local_path: /mnt/local/serveit-model-cache
+      name: serveit-local
+      provisioner: kubernetes.io/no-provisioner
+      reclaim_policy: Retain
+      volume_binding_mode: WaitForFirstConsumer
+    - access_mode: ReadWriteMany
+      allow_volume_expansion: true
+      gpu_nodes_covered: 0
+      is_local: false
+      local_path: ''
+      name: shared-vast
+      provisioner: csi.vastdata.com
+      reclaim_policy: Retain
+      volume_binding_mode: Immediate
+    total_cpu_cores: 2923
+    total_gpu_memory_gb: 19094
+    total_gpus: 136
+    total_memory_gb: 40257
+    total_network_interfaces: 136
+    tp_options:
+    - 1
+    - 2
+    - 4
+    - 8
   concurrency_sweep_all_configs: false
   concurrency_sweep_count: 5
   concurrency_sweep_levels: null
@@ -166,10 +609,13 @@ config:
   concurrency_sweep_step_pct: 20
   concurrency_sweep_use_epp_tuned: false
   cpu_per_pod: null
+  ctx_parallel_preset: 'on'
   dataset_column: null
   dataset_max_output: 256
   dataset_source: null
+  download_job: serveit-download-1bab6-main-20261012-190053
   dra_gpu_resource_key: null
+  duration: 300
   epp_benchmark: false
   epp_config: null
   epp_custom_enabled: true
@@ -179,60 +625,70 @@ config:
   first_output_tokens: null
   first_output_tokens_stdev: null
   first_prompt_tokens: 10000
-  first_prompt_tokens_max: null
-  first_prompt_tokens_min: null
-  first_prompt_tokens_stdev: null
+  first_prompt_tokens_max: 0
+  first_prompt_tokens_min: 0
+  first_prompt_tokens_stdev: 0
   gateway_class: istio
+  goal: dpep_only
   gpu_memory_utilization: 0.95
   headroom: 1.3
   hf_token: ''
   image: quay.io/bbenshab/vllm:llm-d-cuda-asym-mla-v12
+  inference_gateway: http://infra-ep-inference-gateway-istio.serveit-admin-kermit-kermit.svc.cluster.local:80
   inferencex_sweep_enabled: true
   isl: 2500
   isl_max: 10000
   isl_min: 100
   isl_stdev: 500
   kubeconfig: null
+  kv_offload_preset: 'off'
   latency_constraint_enabled: false
   latency_constraint_ms: 500
   latency_constraint_percentile: p90
   length_unit: tokens
   local_disk_path: /mnt/local/serveit-model-cache
-  lora_adapter_size_mb: null
   lora_enabled: false
   lora_num_adapters: 20
-  max_model_len: 12012
+  max_gpus: 32
+  max_model_len: 993012
   max_pd_splits: 0
   max_requests: null
+  max_test_duration: 300
   memory_per_pod: null
-  memory_reserve_pct: 0.0
+  memory_reserve_pct: 0
+  model: zai-org/GLM-5.3
   model_name: zai-org/GLM-5.3
+  namespace: serveit-admin-kermit-kermit
   nccl_ib_hca: mlx
   network_type: shared_device
   node_nfs_pvcs: []
-  objective: dpep_only
+  num_users: 100
+  objective: pd_only
+  optimization_metric: balanced
   osl: 300
   osl_max: 10000
   osl_min: 50
   osl_stdev: 300
   pd_search_mode: smart
   per_node_storage: true
+  prefill_decode_ratios: 1:1,1:2,1:4,2:1
   prefix_cache_groups: 10
   prefix_cache_hit_pct: 50
   prefix_cache_mode: shared_prefix
   prefix_cache_seed: null
   prefix_count: 1
   prefix_tokens: null
-  pvc_name: serveit-cache
-  pvc_size: 2048Gi
-  qps: 5.0
+  pvc_name: 16x local-disk
+  pvc_size: 2048
+  qps: 30
   rate_type: concurrent
   rdma_device_resources: []
   rdma_network_annotation: null
   rdma_nics_per_node: 8
+  run_description: ''
   scheduler_image: ghcr.io/llm-d/llm-d-router-endpoint-picker@sha256:873179822ab0895a37ea09f2112ca39a6ae50a26612561c8bfad7f9a8c5af6f5
   selected_dra_classes: []
-  selected_nodes: []
+  selected_nodes: null
   selected_shared_device: rdma/ib
   selected_sriov_policies: []
   single_test_architecture: null
@@ -247,24 +703,90 @@ config:
   speculative_config_enabled: false
   speculative_config_method: null
   speculative_config_num_tokens: 3
+  speculative_preset: glm53
   sriov_same_subnet: false
   stop_mode: duration
+  storage_access_mode: ReadWriteOnce
   storage_class: serveit-local
   structured_prefix: false
   test_duration: 300
+  test_plan:
+    can_proceed: true
+    error_message: null
+    max_gpus_to_use: 32
+    model_name: zai-org/GLM-5.3
+    model_requirements:
+      activations_gb: 103.1231689453125
+      cuda_overhead_gb: 34.3743896484375
+      dtype: fp16
+      estimated_vram_gb: 103.96001815795898
+      gpu_memory_utilization: 0.95
+      gpu_vram_gb: 140.4013671875
+      isl: 7000
+      kv_cache_gb: 6.694793701171875
+      min_gpus: 6
+      min_tp: 8
+      model_name: zai-org/GLM-5.3
+      model_size_b: 738.1843968
+      osl: 500
+      recommended_tp_options:
+      - 8
+      total_vram_gb: 831.6801452636719
+    optimization_goal: pd_only
+    tests:
+    - architecture: aggregated
+      decode_pods: 0
+      description: "Decode-focused: aggregated, ISL=1, OSL=500, TP=8\xD74 = 32 GPUs"
+      ep_pods: 4
+      gpus_required: 32
+      pp: 1
+      prefill_pods: 0
+      test_name: 'Step 2: Decode Pareto - TP=8'
+      tp: 8
+    - architecture: aggregated
+      decode_pods: 0
+      description: "Prefill-focused: aggregated, ISL=7000, OSL=1, TP=8\xD74 = 32 GPUs"
+      ep_pods: 4
+      gpus_required: 32
+      pp: 1
+      prefill_pods: 0
+      test_name: 'Step 3: Prefill Efficiency - TP=8'
+      tp: 8
+    - architecture: aggregated
+      decode_pods: 0
+      description: Mathematical resource sizing - no tests needed
+      ep_pods: 0
+      gpus_required: 0
+      pp: 1
+      prefill_pods: 0
+      test_name: 'Steps 4-5: Analytical Resource Sizing'
+      tp: 0
+    - architecture: pd
+      decode_pods: 0
+      description: End-to-end validation - tests generated after resource sizing
+      ep_pods: 0
+      gpus_required: 0
+      pp: 1
+      prefill_pods: 0
+      test_name: 'Step 7: P/D Validation'
+      tp: 0
+    total_gpus_available: 32
   thanos_url: null
-  total_gpus: 32
+  total_gpus: 16
   tp_options:
   - 1
   - 2
   - 4
   - 8
   tp_pair_top_n: 2
-  turn_delay: 15.0
-  turn_delay_max: 100.0
-  turn_delay_min: 1.0
-  turn_delay_stdev: 55.0
+  tp_values: 1,2,4,8
+  turn_delay: 15
+  turn_delay_max: 100
+  turn_delay_min: 1
+  turn_delay_stdev: 55
   turns: 10
   use_achievable_qps: false
   use_corpus: true
+  users: 5
   workload_mode: synthetic
+  workload_type: multiturn

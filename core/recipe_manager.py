@@ -238,6 +238,8 @@ def normalize_config_payload(data: Dict) -> Dict:
         data['model'] = data.pop('model_name')
     if 'objective' in data and 'goal' not in data:
         data['goal'] = data.pop('objective')
+    if 'qps' in data and 'users' not in data:
+        data['users'] = data.pop('qps')
     for k in ('namespace', 'run_id'):
         data.pop(k, None)
     return {k: v for k, v in data.items() if not k.startswith('_')}
