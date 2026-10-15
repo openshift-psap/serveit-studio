@@ -52,10 +52,15 @@ class LoraSweepMixin:
         # large adapter counts.
         if n_total and n_total >= count * 2:
             step = n_total // count
-            levels = [step * (i + 1) for i in range(count)]
-            # Ensure the last level is exactly N
-            levels[-1] = n_total
-            return levels
+            levels = []
+            for i in range(count):
+                if i == count - 1:
+                    levels.append(n_total)
+                else:
+                    # Round to nearest 5 for clean, readable levels
+                    val = step * (i + 1)
+                    levels.append(max(1, round(val / 5) * 5))
+            return sorted(set(levels))
         # Small N (or N unknown): doubling from 1
         levels = [1]
         while len(levels) < count:
