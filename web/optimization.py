@@ -562,8 +562,10 @@ def run_optimization_background(data):
         lora_max_rank_raw = _get('lora_max_rank')
         lora_max_rank = int(lora_max_rank_raw) if lora_max_rank_raw else None
         lora_sweep_levels_raw = _get('lora_sweep_levels')
-        lora_sweep_levels = ([int(x) for x in lora_sweep_levels_raw
-                              if str(x).strip() and int(x) > 0]
+        # Levels may be absolute ints or percentage strings ("20%") —
+        # pass through as-is; the sweep engine parses both.
+        lora_sweep_levels = ([str(x).strip() for x in lora_sweep_levels_raw
+                              if str(x).strip()]
                              if lora_sweep_levels_raw else None)
         asymmetric_allow_decode_gt_prefill = _get('asymmetric_allow_decode_gt_prefill', True)
         asymmetric_allow_prefill_gt_decode = _get('asymmetric_allow_prefill_gt_decode', True)

@@ -21,10 +21,30 @@ class LoraSweepMixin:
     """Mixin providing the LoRA adapter-count sweep for RecipeOptimizer."""
 
     def _get_lora_sweep_levels(self) -> List[int]:
-        """Adapter counts to test: explicit list, or doubling from 1."""
+        """Adapter counts to test: explicit list, percentage list, or doubling.
+
+        Explicit levels may be absolute counts (100, 400, 1000) or
+        percentages of the total adapter count (20%, 40%, 100%) —
+        with N=1000, "20%,40%,100%" becomes [200, 400, 1000].
+        Percentages are relative to config.lora_num_adapters.
+        """
+        n_total = int(getattr(self.config, 'lora_num_adapters', 0) or 0)
         explicit = getattr(self.config, 'lora_sweep_levels', None)
         if explicit:
-            return sorted({int(x) for x in explicit if int(x) > 0})
+            levels = set()
+            for entry in explicit:
+                entry = str(entry).strip()
+                if entry.endswith('%'):
+                    if not n_total:
+                        continue
+                    pct = float(entry[:-1].strip())
+                    levels.add(max(1, round(n_total * pct / 100)))
+                else:
+                    val = int(entry)
+                    if val > 0:
+                        levels.add(val)
+            if levels:
+                return sorted(levels)
         count = int(getattr(self.config, 'lora_sweep_count', 5) or 5)
         levels = [1]
         while len(levels) < count:

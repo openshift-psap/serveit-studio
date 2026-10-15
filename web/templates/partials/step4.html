@@ -218,8 +218,8 @@
                                                 </div>
                                                 <div class="input-group" style="max-width:220px;">
                                                     <label>Or: Explicit Levels</label>
-                                                    <input type="text" id="lora-sweep-levels" placeholder="e.g. 1, 4, 16, 64" disabled onchange="var v=this.value.trim();config.lora_sweep_levels=v?v.split(',').map(function(x){return parseInt(x.trim());}).filter(function(x){return x>0;}):null;if(!config.lora_sweep_levels){document.getElementById('lora-sweep-count').disabled=false;}else{document.getElementById('lora-sweep-count').disabled=true;}saveConfig();">
-                                                    <div class="help-text">Comma-separated adapter counts. Overrides the level count.</div>
+                                                    <input type="text" id="lora-sweep-levels" placeholder="e.g. 100, 400, 1000 or 20%, 40%, 100%" disabled onchange="var v=this.value.trim();config.lora_sweep_levels=v?v.split(',').map(function(x){return x.trim();}).filter(function(x){return x;}):null;if(!config.lora_sweep_levels){document.getElementById('lora-sweep-count').disabled=false;}else{document.getElementById('lora-sweep-count').disabled=true;}saveConfig();">
+                                                    <div class="help-text">Comma-separated counts or % of N (e.g. 20%,40%,100% → 200,400,1000 when N=1000).</div>
                                                 </div>
                                             </div>
                                         </div>

@@ -170,8 +170,9 @@ class RecipeOptimizerConfig:
     # LoRA adapter-count sweep (Step 14): re-test the best configuration
     # at multiple adapter counts to map the multi-tenant scaling curve.
     lora_sweep_enabled: bool = False
-    # Explicit adapter counts (e.g. [1, 4, 16, 64]); None = doubling from 1
-    # for lora_sweep_count levels.
+    # Explicit adapter counts (e.g. [1, 4, 16, 64]) or percentages of
+    # lora_num_adapters (e.g. ['20%', '40%', '100%']); None = doubling
+    # from 1 for lora_sweep_count levels.
     lora_sweep_levels: Optional[list] = None
     lora_sweep_count: int = 5
 
