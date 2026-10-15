@@ -1,12 +1,13 @@
 recipe_id: glm53-dpep-production
 name: "GLM-5.3 DPEP — production parity"
 description: >
-  Data Parallel + Expert Parallel (TP=1, DP per node, EP with
-  --enable-ep-weight-filter) matching the production rits-roce-h100
-  deployment architecture. Each GPU holds full attention weights plus a
-  slice of the MoE experts; per-role DeepEP all-to-all backends
-  (high-throughput prefill / low-latency decode), MTP speculation.
-  Validated on kermit (8xH200 nodes, shared-device RDMA).
+  GLM-5.3 with Data Parallel + Expert Parallel (TP=1, DP per node, EP
+  with --enable-ep-weight-filter), matching the production
+  rits-roce-h100 deployment. Workload: short prompts (ISL 2500 / OSL
+  300), low concurrency (5 users) — throughput-oriented. Each GPU holds
+  full attention weights plus a slice of the MoE experts; per-role
+  DeepEP all-to-all backends, MTP speculation. Best for MLA MoE models
+  on RDMA clusters.
 model: zai-org/GLM-5.3
 goal: dpep_only
 requires:

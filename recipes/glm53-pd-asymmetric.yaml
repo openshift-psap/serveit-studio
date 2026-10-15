@@ -1,12 +1,13 @@
 recipe_id: glm53-pd-asymmetric
 name: "GLM-5.3 asymmetric P/D — TP16 prefill / TP8 decode"
 description: >
-  Prefill/Decode disaggregation with heterogeneous TP: compute-bound
-  prefill at TP16 (two nodes) and latency-bound decode at TP8. Requires
-  a vLLM image with heterogeneous MLA TP support (mixed MLA + DSA
-  indexer models crash the default image on the first KV transfer) —
-  the image is pinned in the config. 68% throughput improvement over
-  the best symmetric split in validation.
+  GLM-5.3 prefill/decode disaggregation with heterogeneous TP:
+  compute-bound prefill at TP16 (two nodes), latency-bound decode at
+  TP8. Workload: short prompts (ISL 2500 / OSL 300), low concurrency —
+  TTFT/latency-oriented. 68% throughput improvement over the best
+  symmetric split. Requires the pinned vLLM image with heterogeneous
+  MLA TP support (the default image crashes on the first KV transfer
+  for mixed MLA + DSA indexer models).
 model: zai-org/GLM-5.3
 goal: pd_only
 requires:

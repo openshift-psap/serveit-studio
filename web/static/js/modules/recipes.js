@@ -17,14 +17,10 @@ function loadRecipes() {
 let allRecipes = [];
 
 function filterRecipes() {
-    const q = (document.getElementById('recipe-search').value || '').toLowerCase();
-    const sort = document.getElementById('recipe-sort').value;
+    const q = (document.getElementById('recipe-search').value || '').toLowerCase().trim();
     let list = allRecipes.filter(r =>
-        !q || (r.name + ' ' + (r.model || '') + ' ' + (r.description || '') + ' ' + r.goal).toLowerCase().includes(q));
-    if (sort === 'name') list.sort((a, b) => a.name.localeCompare(b.name));
-    else if (sort === 'used') list.sort((a, b) => (b.times_applied || 0) - (a.times_applied || 0));
-    else if (sort === 'recent') list.sort((a, b) => (b.last_applied_at || '').localeCompare(a.last_applied_at || ''));
-    else if (sort === 'gpus') list.sort((a, b) => (b.min_gpus || 0) - (a.min_gpus || 0));
+        !q || ((r.name || '') + ' ' + (r.model || '') + ' ' + (r.description || '')).toLowerCase().includes(q));
+    list.sort((a, b) => a.name.localeCompare(b.name));
     renderRecipes(list);
 }
 

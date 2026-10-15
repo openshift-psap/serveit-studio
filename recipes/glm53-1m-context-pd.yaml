@@ -1,9 +1,9 @@
 recipe_id: glm53-1m-context-pd
-name: "GLM-5.3 1M-context PD \u2014 HiSparse + PCP + MTP"
-description: 'Prefill/Decode split for 1M-token agentic contexts: sparse MLA (HiSparse) on prefill with
-  Prefill Context Parallelism (PCP = prefill TP), FP8 KV cache, MTP speculation (1 prefill / 3 decode
-  tokens), 160K first-turn context with 300-turn multi-user sessions at 60% multi-group prefix cache.
-  Engine image pinned to the validated llm-d build.'
+name: GLM-5.3 1M-context PD — HiSparse + PCP + MTP
+description: 'GLM-5.3 for very long contexts and agentic workloads: 1M-token context window, long prefix
+  (160K first-turn project context), 300-turn multi-turn sessions, high user counts (30 users) with 15s
+  turn delays, 60% multi-group prefix cache reuse. Sparse MLA (HiSparse) on prefill with Prefill Context
+  Parallelism, FP8 KV cache, MTP speculation. Engine image pinned to the validated llm-d build.'
 model: zai-org/GLM-5.3
 goal: pd_only
 requires:
