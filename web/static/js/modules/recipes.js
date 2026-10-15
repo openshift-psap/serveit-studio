@@ -42,7 +42,6 @@ function renderRecipes(recipes) {
         if (ev.tested_on) evBits.push(`Tested: ${ev.tested_on}`);
         if (ev.source) evBits.push(`Source: ${ev.source}`);
         if (ev.results) evBits.push(`Results: ${JSON.stringify(ev.results)}`);
-        const usage = r.times_applied ? `applied ${r.times_applied}×` : 'never applied';
         html += `
         <div style="border:1px solid #e2e8f0;border-radius:10px;padding:16px 18px;margin-bottom:12px;background:${r.available ? '#ffffff' : '#fafafa'};">
             <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:16px;">
@@ -53,7 +52,6 @@ function renderRecipes(recipes) {
                         <span style="background:#eff6ff;color:#1d4ed8;border-radius:4px;padding:1px 8px;font-size:0.82em;">${r.model || '?'}</span>
                         <span style="background:#f5f3ff;color:#6d28d9;border-radius:4px;padding:1px 8px;font-size:0.82em;">goal: ${r.goal}</span>
                         ${r.min_gpus ? `<span style="background:#fff7ed;color:#c2410c;border-radius:4px;padding:1px 8px;font-size:0.82em;">≥${r.min_gpus} GPUs</span>` : ''}
-                        <span style="color:#94a3b8;font-size:0.8em;align-self:center;">${usage}</span>
                     </div>
                     ${evBits.length ? `<div style="color:#059669;font-size:0.82em;margin-top:6px;">${evBits.join(' · ')}</div>` : ''}
                     ${reasons}

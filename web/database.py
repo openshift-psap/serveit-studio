@@ -317,6 +317,13 @@ def init_db():
         except sqlite3.OperationalError:
             pass
 
+    # Recipes live only as YAML files in recipes/ (directory = source of
+    # truth) — drop the old DB index if a previous version created it.
+    try:
+        cursor.execute('DROP TABLE IF EXISTS recipes')
+    except sqlite3.OperationalError:
+        pass
+
     for col, typ in [
         ('workload_mode', 'TEXT'),
         ('dataset_source', 'TEXT'),

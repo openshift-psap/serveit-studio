@@ -20,7 +20,6 @@ import hashlib
 import json
 import logging
 import os
-from datetime import datetime
 from typing import Dict, List, Optional, Tuple
 
 import yaml
@@ -76,66 +75,6 @@ def scan_recipes() -> List[Dict]:
     return recipes
 
 
-def sync_recipes_db(conn) -> int:
-    """Upsert the recipes directory into the DB index.
-
-    Files are the source of truth: rows are inserted/updated to match,
-    rows for deleted files are removed. Usage counters are preserved.
-    Returns the number of indexed recipes.
-    """
-    conn.execute('''
-        CREATE TABLE IF NOT EXISTS recipes (
-            recipe_id TEXT PRIMARY KEY,
-            name TEXT NOT NULL,
-            description TEXT,
-            file_path TEXT NOT NULL,
-            model TEXT,
-            goal TEXT,
-            min_gpus INTEGER,
-            requires_json TEXT,
-            config_json TEXT NOT NULL,
-            evidence_json TEXT,
-            file_mtime REAL,
-            times_applied INTEGER DEFAULT 0,
-            last_applied_at TEXT
-        )
-    ''')
-    recipes = scan_recipes()
-    seen_ids = set()
-    for r in recipes:
-        requires = r.get('requires') or {}
-        conn.execute('''
-            INSERT INTO recipes (recipe_id, name, description, file_path, model,
-                                 goal, min_gpus, requires_json, config_json,
-                                 evidence_json, file_mtime)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-            ON CONFLICT(recipe_id) DO UPDATE SET
-                name=excluded.name, description=excluded.description,
-                file_path=excluded.file_path, model=excluded.model,
-                goal=excluded.goal, min_gpus=excluded.min_gpus,
-                requires_json=excluded.requires_json,
-                config_json=excluded.config_json,
-                evidence_json=excluded.evidence_json,
-                file_mtime=excluded.file_mtime
-        ''', (
-            r['recipe_id'], r['name'], r.get('description', ''),
-            r['_file'], r.get('model') or r['config'].get('model'),
-            r['goal'], requires.get('min_gpus'),
-            json.dumps(requires), json.dumps(r['config']),
-            json.dumps(r.get('evidence') or {}), r['_mtime'],
-        ))
-        seen_ids.add(r['recipe_id'])
-    # Remove rows whose files disappeared
-    if seen_ids:
-        conn.execute(
-            f"DELETE FROM recipes WHERE recipe_id NOT IN ({','.join('?' * len(seen_ids))})",
-            tuple(seen_ids))
-    else:
-        conn.execute('DELETE FROM recipes')
-    conn.commit()
-    return len(recipes)
-
-
 def check_availability(recipe: Dict, hw: Optional[Dict]) -> Tuple[bool, List[str]]:
     """Evaluate a recipe's ``requires`` against a hardware scan dict.
 
@@ -189,41 +128,43 @@ def get_latest_hw_scan(conn) -> Optional[Dict]:
 
 
 def list_recipes_with_availability(conn) -> List[Dict]:
-    """All indexed recipes + availability + usage, for the UI."""
-    sync_recipes_db(conn)
+    """All recipes from the directory + availability, for the UI.
+
+    Pure file scan — the directory is the only source of truth. ``conn``
+    is used solely to read the latest hardware scan for gating.
+    """
     hw = get_latest_hw_scan(conn)
     out = []
-    for row in conn.execute(
-            'SELECT recipe_id, name, description, model, goal, min_gpus, '
-            'requires_json, evidence_json, times_applied, last_applied_at, '
-            'file_path FROM recipes ORDER BY name'):
-        recipe = {
-            'recipe_id': row[0], 'name': row[1], 'description': row[2],
-            'model': row[3], 'goal': row[4], 'min_gpus': row[5],
-            'evidence': json.loads(row[7]) if row[7] else {},
-            'times_applied': row[8], 'last_applied': row[9],
+    for recipe in scan_recipes():
+        requires = recipe.get('requires') or {}
+        entry = {
+            'recipe_id': recipe['recipe_id'], 'name': recipe['name'],
+            'description': recipe.get('description', ''),
+            'model': recipe.get('model') or recipe['config'].get('model'),
+            'goal': recipe['goal'], 'min_gpus': requires.get('min_gpus'),
+            'evidence': recipe.get('evidence') or {},
         }
-        requires = json.loads(row[6]) if row[6] else {}
         available, reasons = check_availability(
-            {**recipe, 'requires': requires}, hw)
-        recipe['available'] = available
-        recipe['unavailable_reasons'] = reasons
-        recipe['hw_scan_present'] = hw is not None
-        out.append(recipe)
+            {**entry, 'requires': requires}, hw)
+        entry['available'] = available
+        entry['unavailable_reasons'] = reasons
+        entry['hw_scan_present'] = hw is not None
+        out.append(entry)
+    out.sort(key=lambda r: r['name'])
     return out
 
 
 def apply_recipe(conn, recipe_id: str) -> Optional[Dict]:
-    """Fetch a recipe's config payload + bump usage counters."""
-    row = conn.execute(
-        'SELECT config_json FROM recipes WHERE recipe_id=?', (recipe_id,)).fetchone()
-    if not row:
-        return None
-    conn.execute(
-        'UPDATE recipes SET times_applied=times_applied+1, last_applied_at=? '
-        'WHERE recipe_id=?', (datetime.now().isoformat(), recipe_id))
-    conn.commit()
-    return normalize_config_payload(json.loads(row[0]))
+    """Fetch a recipe's config payload straight from its file.
+
+    The recipes directory is the only source of truth — no DB read, no
+    usage counters.
+    """
+    for path in _recipe_files():
+        recipe = load_recipe_file(path)
+        if recipe and recipe.get('recipe_id') == recipe_id:
+            return normalize_config_payload(recipe['config'])
+    return None
 
 
 def normalize_config_payload(data: Dict) -> Dict:
