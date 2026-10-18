@@ -1232,6 +1232,31 @@ spec:
         return None
 
 @socketio.on('generate_test_plan')
+
+def _detect_pvc_access_mode(storage_class):
+    """Detect the access mode supported by the storage class.
+
+    TopoLVM/LVMS storage classes only support ReadWriteOnce (RWO).
+    NFS and shared filesystems support ReadWriteMany (RWX).
+    Returns the first supported mode from the SC's provisioner.
+    """
+    if not storage_class:
+        return 'ReadWriteMany'
+    # Storage classes that only support RWO
+    rwo_only_provisioners = ['topolvm.io', 'rancher.io/local-path', 'kubernetes.io/no-provisioner']
+    try:
+        import subprocess as _sp
+        r = _sp.run(['kubectl', 'get', 'sc', storage_class, '-o', 'jsonpath={.provisioner}'],
+                    capture_output=True, text=True, timeout=10)
+        provisioner = r.stdout.strip() if r.returncode == 0 else ''
+        for p in rwo_only_provisioners:
+            if p in provisioner:
+                return 'ReadWriteOnce'
+    except Exception:
+        pass
+    return 'ReadWriteMany'
+
+
 def handle_generate_test_plan(data):
     """Generate test plan based on model and resources."""
 
@@ -2065,7 +2090,7 @@ def handle_recreate_storage(data):
                 pvc_yaml = tm.render_template('prereq/model-cache-pvc.yaml.j2',
                     pvc_name=pvc_name, namespace=namespace, test_id=test_id,
                     model_name=model_name, storage_class=storage_class,
-                    storage_size=pvc_size, pvc_access_mode='ReadWriteMany')
+                    storage_size=pvc_size, pvc_access_mode=_detect_pvc_access_mode(storage_class))
                 r_pvc = subprocess.run([kubectl_cmd, 'apply', '-f', '-', '-n', namespace],
                               input=pvc_yaml, capture_output=True, text=True, timeout=30, check=False)
                 if r_pvc.returncode == 0:
@@ -2138,7 +2163,7 @@ def handle_recreate_storage(data):
                 pvc_yaml = tm.render_template('prereq/model-cache-pvc.yaml.j2',
                     pvc_name=pvc_name, namespace=namespace, test_id=test_id,
                     model_name=model_name, storage_class=storage_class,
-                    storage_size=pvc_size, pvc_access_mode='ReadWriteMany')
+                    storage_size=pvc_size, pvc_access_mode=_detect_pvc_access_mode(storage_class))
                 r_pvc = subprocess.run([kubectl_cmd, 'apply', '-f', '-', '-n', namespace],
                               input=pvc_yaml, capture_output=True, text=True, timeout=30, check=False)
                 if r_pvc.returncode == 0:
@@ -2465,7 +2490,7 @@ def handle_setup_storage(data):
                     test_id='serveit-cache', model_name=model,
                     storage_class=storage_class or '',
                     storage_size=50,
-                    pvc_access_mode='ReadWriteMany',
+                    pvc_access_mode=_detect_pvc_access_mode(storage_class),
                 )
                 subprocess.run(['kubectl', 'apply', '-f', '-'], input=_pvc_yaml.encode(), capture_output=True, timeout=30)
                 log_to_ui('   ✅ Created serveit-cache PVC (benchmark results)', 'info')
@@ -2573,7 +2598,7 @@ def handle_setup_storage(data):
                         pvc_name='serveit-cache', namespace=namespace,
                         test_id='serveit-cache', model_name=model,
                         storage_class=_sc, storage_size=50,
-                        pvc_access_mode='ReadWriteMany',
+                        pvc_access_mode=_detect_pvc_access_mode(storage_class),
                     )
                     subprocess.run(['kubectl', 'apply', '-f', '-'], input=_pvc_yaml.encode(), capture_output=True, timeout=30)
                     log_to_ui('   ✅ Created serveit-cache PVC (benchmark results)', 'info')
