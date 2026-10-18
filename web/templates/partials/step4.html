@@ -189,6 +189,18 @@
                                         <div class="help-text">Auto = 16 (matches generated adapters).</div>
                                     </div>
                                 </div>
+                                
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="input-group" style="max-width:560px;margin-top:8px;">
+                                    <label>Benchmark Mode</label>
+                                    <select id="lora-benchmark-mode" onchange="config.lora_benchmark_mode=this.value;saveConfig();" style="width:100%;">
+                                        <option value="round_robin">Round-robin: base + all adapters (multi-tenant stress)</option>
+                                        <option value="base_only">Base only: adapters mounted but idle (LoRA overhead baseline)</option>
+                                    </select>
+                                    <div class="help-text">Round-robin distributes requests across base + adapters. Base-only isolates the cost of having LoRA enabled.</div>
+                                <div style="border-top:1px solid #e2e8f0;margin-top:12px;"></div>
                                 <div style="display:flex;align-items:center;gap:8px;margin-top:12px;padding-top:10px;border-top:1px solid #e2e8f0;">
                                     <input type="checkbox" id="lora-sweep-enabled" style="display:none;">
                                     <div id="lora-sweep-switch" onclick="var on=!document.getElementById('lora-sweep-enabled').checked;document.getElementById('lora-sweep-enabled').checked=on;config.lora_sweep_enabled=on;this.style.background=on?'#4f46e5':'#ccc';this.querySelector('span').style.transform=on?'translateX(18px)':'translateX(0)';document.getElementById('lora-sweep-count').disabled=!on&&!config.lora_sweep_levels;document.getElementById('lora-sweep-levels').disabled=!on;document.getElementById('lora-sweep-body').style.display=on?'block':'none';saveConfig();" style="width:36px;height:20px;background:#ccc;border-radius:10px;position:relative;transition:background-color 0.2s;flex-shrink:0;cursor:pointer;">
@@ -207,16 +219,6 @@
                                             <label>Or: Explicit Levels</label>
                                             <input type="text" id="lora-sweep-levels" placeholder="e.g. 20%, 40%, 100%" disabled onchange="var v=this.value.trim();config.lora_sweep_levels=v?v.split(',').map(function(x){return x.trim();}).filter(function(x){return x;}):null;if(!config.lora_sweep_levels){document.getElementById('lora-sweep-count').disabled=false;}else{document.getElementById('lora-sweep-count').disabled=true;}saveConfig();">
                                             <div class="help-text">Counts or % of N</div>
-                                        </div>
-                                    </div>
-                                </div>
-                                <div class="input-group" style="max-width:560px;margin-top:8px;">
-                                    <label>Benchmark Mode</label>
-                                    <select id="lora-benchmark-mode" onchange="config.lora_benchmark_mode=this.value;saveConfig();" style="width:100%;">
-                                        <option value="round_robin">Round-robin: base + all adapters (multi-tenant stress)</option>
-                                        <option value="base_only">Base only: adapters mounted but idle (LoRA overhead baseline)</option>
-                                    </select>
-                                    <div class="help-text">Round-robin distributes requests across base + adapters. Base-only isolates the cost of having LoRA enabled.</div>
                                 </div>
                                 <div id="lora-estimate" style="background:#eef2ff;border:1px solid #c7d2fe;border-radius:6px;padding:10px 12px;font-size:0.8em;color:#3730a3;line-height:1.6;margin-top:10px;">
                                     CPU staging: 20 adapters × ~320MB (rank 16) ≈ 11Gi total (incl. load headroom) — automatically added to pod memory requests (never shrinks a higher user-set value).
