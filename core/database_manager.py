@@ -590,8 +590,9 @@ class DatabaseManager:
                  itl_p50, itl_p90, itl_p95, itl_p99,
                  throughput_p50, throughput_p90, throughput_p95, throughput_p99,
                  gpu_utilization, kv_cache_usage, started_at, completed_at, metrics_json,
-                 manifests_yaml, architecture, decode_tp, guidellm_command, test_config_json)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                 manifests_yaml, architecture, decode_tp, guidellm_command, test_config_json,
+                 lora_num_adapters, lora_max_loras)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             ''', (
                 run_id,
                 test_config.test_id,
