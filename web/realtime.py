@@ -1236,23 +1236,28 @@ spec:
 def _detect_pvc_access_mode(storage_class):
     """Detect the access mode supported by the storage class.
 
-    TopoLVM/LVMS storage classes only support ReadWriteOnce (RWO).
+    Queries the target cluster (via the server pod's kubectl, which
+    has the target cluster's kubeconfig) for the SC's provisioner.
+    TopoLVM/LVMS provisioners only support ReadWriteOnce (RWO).
     NFS and shared filesystems support ReadWriteMany (RWX).
-    Matches on the storage class name — the server pod may not have
-    kubectl access to the target cluster where the SC lives.
     """
     if not storage_class:
         return 'ReadWriteMany'
-    sc = storage_class.lower()
-    # TopoLVM / LVMS / local-path / hostpath — block storage, RWO only
-    if any(p in sc for p in ('topolvm', 'lvms', 'local-path', 'local-path-provisioner', 'hostpath')):
-        return 'ReadWriteOnce'
-    # Explicit no-provisioner (local disks)
-    if 'no-provisioner' in sc:
-        return 'ReadWriteOnce'
-    # Block storage CSI drivers that are RWO-only
-    if any(p in sc for p in ('ebs', 'pd', 'disk', 'block', 'vpc-block')):
-        return 'ReadWriteOnce'
+    rwo_provisioners = ('topolvm.io', 'rancher.io/local-path',
+                         'kubernetes.io/no-provisioner')
+    try:
+        import subprocess as _sp
+        r = _sp.run(
+            ['kubectl', 'get', 'sc', storage_class,
+             '-o', 'jsonpath={.provisioner}'],
+            capture_output=True, text=True, timeout=10)
+        if r.returncode == 0:
+            provisioner = r.stdout.strip()
+            for p in rwo_provisioners:
+                if p in provisioner:
+                    return 'ReadWriteOnce'
+    except Exception:
+        pass
     return 'ReadWriteMany'
 
 
