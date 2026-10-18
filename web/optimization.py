@@ -503,6 +503,8 @@ def run_optimization_background(data):
         turn_delay_max = _get('turn_delay_max')
         num_users = int(_get('num_users', 100, ui_key='users'))
         optimization_goal = _get('optimization_metric', 'ttft', ui_key='goal') or 'ttft'
+        if optimization_goal == 'balanced':
+            optimization_goal = 'full_coverage'  # legacy rename
         stop_mode = _get('stop_mode', 'duration')
         test_duration = int(_get('max_test_duration', 300, ui_key='duration'))
         max_requests = _get('max_requests')
@@ -790,7 +792,7 @@ data:
         log_to_ui(f"   Optimization goal: {optimization_goal}", 'info')
 
         # Use Recipe-based optimization for all goals
-        if optimization_goal in ('ttft', 'throughput', 'balanced', 'full_coverage', 'aggregated_only', 'pd_only', 'ep_only', 'dpep_only', 'single_test'):
+        if optimization_goal in ('ttft', 'throughput', 'full_coverage', 'aggregated_only', 'pd_only', 'ep_only', 'dpep_only', 'single_test'):
             goal_descriptions = {
                 'ttft': {
                     'label': 'Response Time Priority (PD vs Aggregated)',
@@ -810,7 +812,7 @@ data:
                         "Step 8: Validate best EP vs equivalent Aggregated",
                     ]
                 },
-                'balanced': {
+                'full_coverage': {
                     'label': 'Full Coverage (PD + EP + PD-EP + Aggregated)',
                     'steps': [
                         "Steps 2-3: Find optimal TP (exhaustive sweep)",
@@ -857,7 +859,7 @@ data:
                     ]
                 },
             }
-            goal_info = goal_descriptions.get(optimization_goal) or goal_descriptions['balanced']
+            goal_info = goal_descriptions.get(optimization_goal) or goal_descriptions['full_coverage']
             log_to_ui("", 'info')
             log_to_ui(f"✨ Using Recipe-based optimization — {goal_info['label']}", 'success')
             for step_desc in goal_info['steps']:

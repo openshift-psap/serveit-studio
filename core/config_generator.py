@@ -382,7 +382,7 @@ class ConfigGenerator:
         Determine which architectures to test based on optimization goal.
 
         Args:
-            optimization_goal: 'throughput', 'response_time', or 'balanced'
+            optimization_goal: 'throughput', 'response_time', or 'full_coverage'
 
         Returns:
             List of architecture names to test
@@ -602,7 +602,7 @@ class ConfigGenerator:
         isl: int,
         osl: int,
         num_users: int,
-        optimization_goal: str = 'balanced',
+        optimization_goal: str = 'full_coverage',
         tp_values: Optional[List[int]] = None,
         pd_ratios: Optional[List[str]] = None,
         max_model_len: int = 8192,
@@ -619,7 +619,7 @@ class ConfigGenerator:
             isl: Input sequence length
             osl: Output sequence length
             num_users: Number of concurrent users
-            optimization_goal: 'throughput', 'response_time', or 'balanced'
+            optimization_goal: 'throughput', 'response_time', or 'full_coverage'
             tp_values: List of TP values to test (auto-detected if None)
             pd_ratios: List of prefill:decode ratios for PD (default: ['1:1', '1:2', '1:4', '2:1'])
             max_model_len: Maximum model sequence length
@@ -740,8 +740,8 @@ def main():
     parser.add_argument('--users', type=int, required=True, help='Number of concurrent users')
     parser.add_argument(
         '--goal',
-        choices=['throughput', 'response_time', 'balanced'],
-        default='balanced',
+        choices=['throughput', 'response_time', 'full_coverage'],
+        default='full_coverage',
         help='Optimization goal'
     )
     parser.add_argument('--namespace', default='serveit', help='Kubernetes namespace')

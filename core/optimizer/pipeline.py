@@ -560,8 +560,10 @@ class RecipeOptimizer(
         strategies = {
             'ttft': TTFTStrategy,
             'throughput': ThroughputStrategy,
-            'balanced': BalancedStrategy,
             'full_coverage': BalancedStrategy,
+            'balanced': BalancedStrategy,  # legacy alias
+            'full_coverage': BalancedStrategy,
+            'balanced': BalancedStrategy,  # legacy alias
             'aggregated_only': AggregatedOnlyStrategy,
             'pd_only': PDOnlyStrategy,
             'ep_only': EPOnlyStrategy,
@@ -1459,7 +1461,7 @@ class RecipeOptimizer(
         raw = math.sqrt(seq_len)
         from core.utils import next_power_of_2
         bs = next_power_of_2(max(1, int(raw)))
-        pd_goals = ('ttft', 'balanced', 'full_coverage', 'pd_only')
+        pd_goals = ('ttft', 'full_coverage', 'pd_only')
         floor = 128 if self.config.objective in pd_goals else 8
         return max(floor, min(512, bs))
 

@@ -177,7 +177,7 @@ class RecipeOptimizerConfig:
     lora_sweep_count: int = 5
 
     # Optimization objective for Step 7
-    objective: str = 'balanced'  # 'ttft', 'throughput', or 'balanced'
+    objective: str = 'full_coverage'  # 'ttft', 'throughput', or 'full_coverage'
 
     # If True, scale down concurrent users to achievable concurrency when cluster capacity is insufficient
     use_achievable_qps: bool = False

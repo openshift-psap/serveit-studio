@@ -1251,7 +1251,7 @@ def handle_generate_test_plan(data):
         _cfg = lambda k, default=None: data.get(k) or saved_cfg.get(k) or (state.get('current_config') or {}).get(k) or default
 
         model = _cfg('model')
-        optimization_goal = _cfg('optimization_goal', _cfg('goal', 'balanced'))
+        optimization_goal = _cfg('optimization_goal', _cfg('goal', 'full_coverage'))
         max_gpus = _cfg('max_gpus')
         isl = _cfg('isl', 2048)
         osl = _cfg('osl', 512)

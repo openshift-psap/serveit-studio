@@ -882,7 +882,7 @@ class TestPlanner:
 
         Args:
             model_name: HuggingFace model name
-            optimization_goal: 'throughput', 'ttft', 'balanced'
+            optimization_goal: 'throughput', 'ttft', 'full_coverage'
             max_gpus_to_use: Maximum GPUs user wants to use
             gpu_vram_gb: VRAM per GPU in GB
             isl: Input sequence length (prompt tokens)

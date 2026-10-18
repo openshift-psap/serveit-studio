@@ -522,7 +522,7 @@ def load_state():
                             # Reconstruct TestPlan
                             test_plan = TestPlan(
                                 model_name=tp_data.get('model_name', ''),
-                                optimization_goal=tp_data.get('optimization_goal', 'balanced'),
+                                optimization_goal=tp_data.get('optimization_goal', 'full_coverage'),
                                 model_requirements=model_req,
                                 tests=tests,
                                 can_proceed=True,
@@ -545,7 +545,7 @@ def get_default_config():
         'num_users': int(os.environ.get('NUM_USERS', '100')),
         'prefill_decode_ratios': os.environ.get('PREFILL_DECODE_RATIOS', '1:1,1:2,1:4,2:1'),
         'tp_values': os.environ.get('TP_VALUES', '1,2,4,8'),
-        'optimization_metric': os.environ.get('OPTIMIZATION_METRIC', 'balanced'),
+        'optimization_metric': os.environ.get('OPTIMIZATION_METRIC', 'full_coverage'),
         'max_test_duration': int(os.environ.get('MAX_TEST_DURATION', '300')),
     }
 

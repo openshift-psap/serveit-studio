@@ -26,7 +26,8 @@ def index():
 @app.route('/api/status')
 def get_status():
     """Get current optimization status."""
-    _goal_labels = {'balanced': 'full_coverage', 'ttft': 'ttft', 'throughput': 'throughput',
+    _goal_labels = {'full_coverage': 'full_coverage', 'ttft': 'ttft', 'throughput': 'throughput',
+                    'balanced': 'full_coverage',  # legacy
                     'aggregated_only': 'aggregated_only', 'pd_only': 'pd_only',
                     'ep_only': 'ep_only', 'dpep_only': 'dpep_only', 'single_test': 'single_test'}
     with state_lock:
