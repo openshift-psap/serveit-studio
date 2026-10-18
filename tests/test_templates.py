@@ -557,7 +557,7 @@ def test_lora_max_loras_capped_at_module_count(tm):
     a = _vllm_container(lwt['leaderTemplate']['spec'])['args'][0]
     assert '--max-loras 2' in a
     assert '--max-cpu-loras 2' in a
-    assert 'agent-02=/adapters/agent-02' in a
+    assert 'agent-0002=/adapters/agent-0002' in a
     assert 'agent-03' not in a
 
 
