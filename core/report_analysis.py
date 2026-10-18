@@ -1142,6 +1142,9 @@ class ReportAnalyzer:
         request_state = {'running': [], 'waiting': [], 'kv_cache': []}
         time_breakdown = {'prefill': [], 'decode': [], 'queue': [], 'preemptions': [], 'waiting': []}
         network = {'pod_tx': [], 'pod_rx': [], 'ib_rx': [], 'nixl_tx': []}
+        # LoRA / hot-pod routing signals (0 when LoRA not in use)
+        lora = {'ttft_p99_pod_spread_ms': [], 'adapter_churn': [], 'adapters_per_pod': [],
+                'waiting_cv': []}
 
         for r in successful:
             if not r.metrics_json:
@@ -1218,6 +1221,31 @@ class ReportAnalyzer:
                 nixl_gbps = round(pod_tx_raw / 1_000_000_000, 2) if (is_pd_ep and pod_tx_raw) else 0
             network['nixl_tx'].append(nixl_gbps)
 
+            # LoRA / routing signals: TTFT p99 spread across pods (hot-hit vs
+            # cold-swap delta in ms), adapter churn, adapters per pod, queue CV
+            per_pod_p99 = prom.get('vllm_ttft_p99_per_pod')
+            if (isinstance(per_pod_p99, dict)
+                    and per_pod_p99.get('max') is not None
+                    and per_pod_p99.get('min') is not None):
+                lora['ttft_p99_pod_spread_ms'].append(
+                    round((per_pod_p99['max'] - per_pod_p99['min']) * 1000, 2))
+            else:
+                lora['ttft_p99_pod_spread_ms'].append(0)
+
+            lora_info = prom.get('vllm_lora_adapter_info')
+            if isinstance(lora_info, dict) and lora_info.get('pods'):
+                pods_info = lora_info['pods']
+                lora['adapter_churn'].append(
+                    sum(p.get('residency_set_changes', 0) for p in pods_info.values()))
+                counts = [len(p.get('running_adapters_distinct', [])) for p in pods_info.values()]
+                lora['adapters_per_pod'].append(
+                    round(sum(counts) / len(counts), 1) if counts else 0)
+            else:
+                lora['adapter_churn'].append(0)
+                lora['adapters_per_pod'].append(0)
+
+            lora['waiting_cv'].append(get_avg('vllm_waiting_cv'))
+
         if not configs:
             return None
 
@@ -1230,6 +1258,7 @@ class ReportAnalyzer:
             'request_state': request_state,
             'time_breakdown': time_breakdown,
             'network': network,
+            'lora': lora,
         }
 
     def _build_calibrated_qps_data(self, step10_results, recommendation,

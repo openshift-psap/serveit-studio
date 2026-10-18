@@ -337,6 +337,48 @@ class MetricsCollector:
 
         return metrics
 
+    def collect_lora_metrics(
+        self,
+        start_time: int,
+        end_time: int,
+        rate_window: str
+    ) -> Dict[str, Any]:
+        """Collect LoRA adapter and hot-pod routing metrics.
+
+        vLLM only emits vllm:lora_requests_info when --enable-lora is set;
+        on non-LoRA tests these queries return empty (harmless). The gauge
+        value is a scrape timestamp (set_to_current_time) — the signal lives
+        in the labels: max_lora, running_lora_adapters, waiting_lora_adapters
+        (comma-joined adapter lists; each label-set change creates a new
+        series, so churn is visible as distinct label-sets in the result).
+        """
+        logger.info("--- Collecting LoRA / routing metrics ---")
+
+        ns = self.config.namespace
+        lora_queries = [
+            # Per-pod adapter residency: which adapters are running/waiting on
+            # each pod, plus the max_loras budget. Adapter-pod affinity evidence
+            # for routing validation (RFE-2527): requests for adapter X should
+            # land on pods where X appears in running_lora_adapters.
+            f'vllm:lora_requests_info{{namespace="{ns}"}}',
+            # Per-pod TTFT quantiles — a misrouted request (adapter not
+            # GPU-resident on that pod) pays CPU->GPU adapter swap-in, showing
+            # up as TTFT spread/bimodality across pods. min/max of the per-pod
+            # series = hot-hit vs cold-swap latency delta.
+            f'histogram_quantile(0.99, sum by(pod, le) (rate(vllm:time_to_first_token_seconds_bucket{{namespace="{ns}"}}[{rate_window}])))',
+            f'histogram_quantile(0.50, sum by(pod, le) (rate(vllm:time_to_first_token_seconds_bucket{{namespace="{ns}"}}[{rate_window}])))',
+            # Waiting-queue imbalance across pods: hot-pod overload queues
+            # while cold pods idle (0 = perfect balance, >1 = severe).
+            f'stddev(vllm:num_requests_waiting{{namespace="{ns}"}}) / clamp_min(avg(vllm:num_requests_waiting{{namespace="{ns}"}}), 0.01)',
+        ]
+
+        metrics = {}
+        for query in lora_queries:
+            result = self._query_prometheus(query, start_time, end_time)
+            metrics[query] = result
+
+        return metrics
+
     def collect_inference_metrics(
         self,
         start_time: int,
@@ -473,6 +515,11 @@ class MetricsCollector:
         # vLLM metrics
         all_metrics['metrics'].update(
             self.collect_vllm_metrics(start_unix, end_unix, rate_window)
+        )
+
+        # LoRA / hot-pod routing metrics (empty on non-LoRA tests)
+        all_metrics['metrics'].update(
+            self.collect_lora_metrics(start_unix, end_unix, rate_window)
         )
 
         # Inference gateway metrics

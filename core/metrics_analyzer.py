@@ -328,6 +328,71 @@ class MetricsAnalyzer:
         return pod_metrics_list
 
     @staticmethod
+    def _extract_lora_adapter_info(query_result: Dict[str, Any]) -> Optional[Dict[str, Any]]:
+        """Extract adapter residency/affinity from vllm:lora_requests_info.
+
+        The gauge value is a scrape timestamp (meaningless); the signal is in
+        the labels. Each distinct running_lora_adapters label-set is a separate
+        time series, so the number of distinct sets per pod = adapter churn
+        (LRU evictions / swap-ins). Returns per-pod residency plus an
+        adapter -> pods affinity map (routing-correctness evidence: with
+        adapter-aware routing, each adapter should concentrate on its hot
+        pods; with random LB, adapters spread across all pods).
+        """
+        result = query_result.get('data', {}).get('result', [])
+        if not result:
+            return None
+
+        pods = {}
+        affinity = {}
+        for series in result:
+            m = series.get('metric', {})
+            pod = m.get('pod', 'unknown')
+            running = [a for a in m.get('running_lora_adapters', '').split(',') if a]
+            waiting = [a for a in m.get('waiting_lora_adapters', '').split(',') if a]
+            p = pods.setdefault(pod, {
+                'max_lora': None,
+                'running_sets': set(),
+                'last_ts': -1.0,
+                'last_running': [],
+                'last_waiting': [],
+            })
+            try:
+                p['max_lora'] = int(m['max_lora'])
+            except (KeyError, ValueError, TypeError):
+                pass
+            p['running_sets'].add(tuple(sorted(running)))
+            for adapter in running:
+                affinity.setdefault(adapter, set()).add(pod)
+            values = series.get('values', [])
+            if values:
+                last_ts = float(values[-1][0])
+                if last_ts >= p['last_ts']:
+                    p['last_ts'] = last_ts
+                    p['last_running'] = running
+                    p['last_waiting'] = waiting
+
+        out_pods = {}
+        for pod, p in pods.items():
+            distinct = set()
+            for s in p['running_sets']:
+                distinct.update(s)
+            out_pods[pod] = {
+                'max_lora': p['max_lora'],
+                'running_adapters_distinct': sorted(distinct),
+                'running_adapters_last': sorted(p['last_running']),
+                'waiting_adapters_last': sorted(p['last_waiting']),
+                # Distinct residency sets seen over the window: churn from
+                # LRU evictions or misrouted requests forcing swap-ins.
+                'residency_set_changes': len(p['running_sets']),
+            }
+
+        return {
+            'pods': out_pods,
+            'adapter_pod_affinity': {a: sorted(ps) for a, ps in sorted(affinity.items())},
+        }
+
+    @staticmethod
     def extract_prometheus_summaries(metrics_json_path: Path) -> Dict[str, Any]:
         """
         Extract summary statistics from all Prometheus metrics in a metrics JSON file.
@@ -439,6 +504,15 @@ class MetricsAnalyzer:
             ('istio_request_duration_milliseconds_bucket', '0.50'): 'istio_request_duration_p50',
         }
 
+        # Per-pod quantile queries (sum by(pod, le)) — must match before the
+        # namespace-aggregated quantile patterns above since they contain the
+        # same metric substrings. min/max across the per-pod series is the
+        # hot-pod vs cold-pod latency spread (routing signal).
+        per_pod_quantile_patterns = {
+            ('time_to_first_token_seconds_bucket', '0.99'): 'vllm_ttft_p99_per_pod',
+            ('time_to_first_token_seconds_bucket', '0.50'): 'vllm_ttft_p50_per_pod',
+        }
+
         # RDMA network queries have interface!="eth0" — must match before generic network patterns
         rdma_patterns = {
             ('network_transmit_bytes_total', 'interface!="eth0"'): 'rdma_network_tx_rate',
@@ -449,11 +523,30 @@ class MetricsAnalyzer:
             # Determine the short name for this query
             short_name = None
 
-            # Check histogram quantile patterns first
-            for (bucket_substr, quantile_val), name in quantile_patterns.items():
-                if bucket_substr in query_str and f'histogram_quantile({quantile_val}' in query_str:
+            # LoRA adapter info first — the gauge value is a scrape timestamp
+            # (meaningless); the signal is in the labels (adapter lists).
+            if 'vllm:lora_requests_info' in query_str:
+                summaries['vllm_lora_adapter_info'] = MetricsAnalyzer._extract_lora_adapter_info(
+                    query_result
+                )
+                continue
+
+            # Check per-pod quantile patterns (before aggregated quantile
+            # patterns — same metric substrings, distinguished by the
+            # `by(pod, le)` grouping)
+            for (bucket_substr, quantile_val), name in per_pod_quantile_patterns.items():
+                if (bucket_substr in query_str
+                        and f'histogram_quantile({quantile_val}' in query_str
+                        and 'pod, le' in query_str):
                     short_name = name
                     break
+
+            # Check histogram quantile patterns
+            if not short_name:
+                for (bucket_substr, quantile_val), name in quantile_patterns.items():
+                    if bucket_substr in query_str and f'histogram_quantile({quantile_val}' in query_str:
+                        short_name = name
+                        break
 
             # Check RDMA network patterns (before generic network match)
             if not short_name:
@@ -468,6 +561,10 @@ class MetricsAnalyzer:
                     short_name = 'vllm_routing_imbalance'
                 elif 'stddev(' in query_str and 'num_requests_running' in query_str:
                     short_name = 'vllm_routing_cv'
+                elif 'stddev(' in query_str and 'num_requests_waiting' in query_str:
+                    # Waiting-queue imbalance CV: hot-pod overload queues
+                    # while cold pods idle (LoRA affinity routing signal)
+                    short_name = 'vllm_waiting_cv'
 
             # Check regular metric patterns
             if not short_name:
