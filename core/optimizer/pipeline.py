@@ -1598,6 +1598,55 @@ class RecipeOptimizer(
             )
             self.log(f"⚠️  {msg}", 'warning')
             raise ValueError(msg)
+    def _probe_lora_adapter_size_mb(self) -> Optional[int]:
+        """Measure actual per-adapter size from the staged LoRA adapters.
+
+        The rank x 20MB fallback is calibrated for GLM-5.3-scale models;
+        Gemma-4 rank-16 adapters are ~22MB vs the 320MB estimate, which
+        inflated CPU staging 14x and left pods Pending (run 51). Adapters
+        live on shared storage visible from the workload pod.
+        """
+        if getattr(self, '_probed_lora_adapter_mb', None):
+            return self._probed_lora_adapter_mb
+        try:
+            import subprocess
+            self.orchestrator.ensure_guidellm_pod(
+                self.config, log_callback=lambda msg: self.log(msg, 'info'))
+            pod = self.orchestrator._guidellm_pod_name
+            r = subprocess.run(
+                ['kubectl', 'exec', pod, '-n', self.config.namespace, '--',
+                 'du', '-sm', '/mnt/storage/lora-adapters/agent-0001'],
+                capture_output=True, text=True, timeout=60, check=False
+            )
+            if r.returncode == 0 and r.stdout.strip():
+                size_mb = int(r.stdout.strip().split()[0])
+                if 1 <= size_mb <= 4096:
+                    self._probed_lora_adapter_mb = size_mb
+                    return size_mb
+                self.log(f"⚠️  Probed LoRA adapter size {size_mb}MB out of range — using estimate", 'warning')
+        except Exception:
+            pass
+        return None
+
+    def _lora_staging_gib(self) -> int:
+        """LoRA CPU staging memory per pod (--max-cpu-loras holds all N
+        adapters in host RAM).
+
+        Mirrors template_manager's staging formula — keep in sync. Uses the
+        measured adapter size when available, config override next, rank x
+        20MB estimate last. Uses run-level lora_num_adapters (the max) so
+        sweep levels with fewer adapters validate conservatively.
+        """
+        if not getattr(self.config, 'lora_enabled', False):
+            return 0
+        lora_n = int(getattr(self.config, 'lora_num_adapters', 0) or 0)
+        if lora_n <= 0:
+            return 0
+        est_mb = (getattr(self.config, 'lora_adapter_size_mb', None)
+                  or self._probe_lora_adapter_size_mb()
+                  or (int(getattr(self.config, 'lora_max_rank', 16) or 16) * 20))
+        return (lora_n * est_mb + 1023) // 1024 + 4
+
     def _effective_offload_settings(self, tp: int = 1) -> tuple:
         """Resolve effective CPU offload / weight offload / hostIPC / shm settings.
 
@@ -1838,32 +1887,43 @@ class RecipeOptimizer(
                 shm_need_gb = shm_gb if shm_gb else int(cpu_offload)
             memory_per_pod_gb = loading_buffer_gb + worker_overhead_gb + int(weight_offload) + shm_need_gb
 
+            # LoRA CPU staging (--max-cpu-loras holds every adapter in host
+            # RAM) is ADDED to the pod spec by template_manager at render
+            # time. Validate the TOTAL against the free pool here so the
+            # deployed request never exceeds what the node can schedule
+            # (run 51: 26Gi validated, 343Gi deployed, pods stuck Pending).
+            # mem_str below stays base-only; template_manager adds staging.
+            lora_staging_gb = self._lora_staging_gib()
+            total_with_staging_gb = memory_per_pod_gb + lora_staging_gb
+
             # Validate against actual free memory — warn and cap if needed.
             if self._cached_free_mem_gb:
                 free_per_pod_gb = int(self._cached_free_mem_gb / pods_per_node * 0.90)
                 # Hard floor: the CPU KV offload region must fit inside the pod
                 # memory limit (kubelet caps the shm tmpfs at the limit and tmpfs
                 # pages are cgroup-charged) — below this the pod cannot start.
-                hard_floor_gb = loading_buffer_gb + worker_overhead_gb + int(weight_offload) + int(cpu_offload)
+                hard_floor_gb = (loading_buffer_gb + worker_overhead_gb
+                                 + int(weight_offload) + int(cpu_offload) + lora_staging_gb)
                 if free_per_pod_gb < hard_floor_gb:
                     self.log(
-                        f"❌ Insufficient node memory for CPU KV offload: {free_per_pod_gb}Gi per pod "
+                        f"❌ Insufficient node memory: {free_per_pod_gb}Gi per pod "
                         f"free but {hard_floor_gb}Gi required (loading {loading_buffer_gb}Gi + "
-                        f"offload {int(cpu_offload) + int(weight_offload)}Gi) — skipping this config.",
-                        'error'
+                        f"offload {int(cpu_offload) + int(weight_offload)}Gi + "
+                        f"LoRA staging {lora_staging_gb}Gi) — skipping this config.", 'error'
                     )
                     raise RuntimeError(
                         f"Insufficient node memory for cpu_offload_gb={int(cpu_offload)} "
                         f"({free_per_pod_gb}Gi free per pod, {hard_floor_gb}Gi required) — "
                         f"skipping config"
                     )
-                if memory_per_pod_gb > free_per_pod_gb:
+                if total_with_staging_gb > free_per_pod_gb:
                     self.log(
-                        f"⚠️  Pod memory request ({memory_per_pod_gb}Gi) exceeds free node memory "
+                        f"⚠️  Pod memory request ({total_with_staging_gb}Gi incl. "
+                        f"{lora_staging_gb}Gi LoRA staging) exceeds free node memory "
                         f"({self._cached_free_mem_gb:.0f}Gi free, {free_per_pod_gb}Gi per pod). "
-                        f"Capping to {free_per_pod_gb}Gi.", 'warning'
+                        f"Capping base to {free_per_pod_gb - lora_staging_gb}Gi.", 'warning'
                     )
-                    memory_per_pod_gb = free_per_pod_gb
+                    memory_per_pod_gb = free_per_pod_gb - lora_staging_gb
                 if memory_per_pod_gb < 8:
                     self.log(
                         f"❌ Insufficient node memory: only {self._cached_free_mem_gb:.0f}Gi free "
@@ -2055,6 +2115,21 @@ spec:
         else:
             self.log("Mode: FRESH START", 'info')
         self.log("", 'info')
+
+        # LoRA: measure the actual per-adapter size from the staged adapters
+        # on shared storage. The rank x 20MB estimate is calibrated for
+        # GLM-5.3-scale models and overestimates small-model adapters ~14x
+        # (Gemma-4: 320MB estimated vs 22MB actual), inflating CPU staging
+        # memory and blocking pod scheduling.
+        if getattr(self.config, 'lora_enabled', False) \
+                and not getattr(self.config, 'lora_adapter_size_mb', None):
+            measured_mb = self._probe_lora_adapter_size_mb()
+            if measured_mb:
+                self.config.lora_adapter_size_mb = measured_mb
+                self.log(
+                    f"📏 LoRA adapter size: measured {measured_mb}MB/adapter from "
+                    f"staged adapters (overrides rank-based estimate)", 'info'
+                )
 
         # Ensure workload PVC exists (serveit-cache — used for datasets, results, tmp)
         self._ensure_workload_pvc()
