@@ -610,9 +610,12 @@ class DeploymentManager:
         LWS ``status.replicas`` counts created leader pod objects — a
         Pending-unschedulable pod still counts as a replica there, which
         made the wait loop report "pods Running" while nothing scheduled.
-        This counts real pod phases instead.
+        This counts real pod phases instead. Also distinguishes
+        Pending-scheduled (pulling images) from Pending-unscheduled
+        (capacity blocked).
         """
-        counts = {'Running': 0, 'Pending': 0, 'Other': 0}
+        counts = {'Running': 0, 'Pending': 0, 'Other': 0,
+                  'PendingScheduled': 0, 'PendingUnscheduled': 0}
         try:
             result = self.kubectl.run(
                 ['get', 'pods', '-n', self.namespace,
@@ -623,6 +626,14 @@ class DeploymentManager:
                 for pod in json.loads(result.stdout).get('items', []):
                     phase = pod.get('status', {}).get('phase', 'Unknown')
                     counts[phase if phase in counts else 'Other'] += 1
+                    if phase == 'Pending':
+                        sched = next(
+                            (c.get('status') for c in pod.get('status', {}).get('conditions', [])
+                             if c.get('type') == 'PodScheduled'), None)
+                        if sched == 'True':
+                            counts['PendingScheduled'] += 1
+                        else:
+                            counts['PendingUnscheduled'] += 1
         except Exception as e:
             logger.warning(f"Failed to count pod phases: {e}")
         return counts
@@ -682,8 +693,10 @@ class DeploymentManager:
                 elapsed_suffix = f" ({elapsed}s)" if elapsed > 0 else ""
                 if status.ready:
                     label = "Ready"
-                elif phases['Pending'] > 0:
+                elif phases.get('PendingUnscheduled', 0) > 0:
                     label = "Pending — waiting for GPU capacity (nodes full)"
+                elif phases.get('PendingScheduled', 0) > 0:
+                    label = "Pending — pulling images / initializing containers"
                 else:
                     label = "Running (waiting for readiness)"
                 pending_suffix = f", {phases['Pending']} Pending" if phases['Pending'] else ""
