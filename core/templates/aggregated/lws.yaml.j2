@@ -70,10 +70,17 @@ spec:
           - name: jit-cache
             emptyDir: {}
 {% if lora_enabled %}
+{% if lora_adapters_use_pvc %}
+          - name: lora-adapters
+            persistentVolumeClaim:
+              claimName: {{ pvc_name | default('serveit-cache') }}
+              readOnly: false
+{% else %}
           - name: lora-adapters
             hostPath:
               path: {{ lora_adapters_host_path }}
               type: DirectoryOrCreate
+{% endif %}
 {% endif %}
           - name: rdma-script
             configMap:
@@ -361,6 +368,9 @@ spec:
 {% if lora_enabled %}
               - name: lora-adapters
                 mountPath: /adapters
+{% if lora_adapters_use_pvc %}
+                subPath: lora-adapters
+{% endif %}
 {% endif %}
               - name: rdma-script
                 mountPath: /scripts
@@ -420,10 +430,17 @@ spec:
           - name: jit-cache
             emptyDir: {}
 {% if lora_enabled %}
+{% if lora_adapters_use_pvc %}
+          - name: lora-adapters
+            persistentVolumeClaim:
+              claimName: {{ pvc_name | default('serveit-cache') }}
+              readOnly: false
+{% else %}
           - name: lora-adapters
             hostPath:
               path: {{ lora_adapters_host_path }}
               type: DirectoryOrCreate
+{% endif %}
 {% endif %}
           - name: rdma-script
             configMap:
@@ -681,6 +698,9 @@ spec:
 {% if lora_enabled %}
               - name: lora-adapters
                 mountPath: /adapters
+{% if lora_adapters_use_pvc %}
+                subPath: lora-adapters
+{% endif %}
 {% endif %}
               - name: rdma-script
                 mountPath: /scripts

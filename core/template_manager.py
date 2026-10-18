@@ -442,10 +442,20 @@ class TemplateManager:
             vars_dict['lora_max_rank'] = lora_rank
             vars_dict['lora_max_loras'] = min(int(getattr(config, 'lora_max_loras', 4) or 4), lora_n)
             vars_dict['lora_max_cpu_loras'] = lora_n  # stage all adapters in host RAM
-            vars_dict['lora_adapters_host_path'] = (
-                (vars_dict.get('local_disk_path') or '/mnt/local/serveit-model-cache').rstrip('/')
-                + '/lora-adapters'
-            )
+            # Adapter path follows the storage: local disk -> hostPath, NFS -> PVC subPath on the model cache PVC. When local_disk_path is set (local
+            # NVMe), adapters live on the node's local disk. When unset
+            # (NFS/PVC storage), adapters live on the same volume as the
+            # model cache — mounted as a subPath on the model cache PVC
+            # so they're visible on any node that can mount the share.
+            _ldp = vars_dict.get('local_disk_path')
+            if _ldp:
+                vars_dict['lora_adapters_host_path'] = _ldp.rstrip('/') + '/lora-adapters'
+                vars_dict['lora_adapters_use_pvc'] = False
+            else:
+                # NFS/PVC storage: adapters live on the model cache share
+                # at lora-adapters/ under the model cache root
+                vars_dict['lora_adapters_host_path'] = 'lora-adapters'
+                vars_dict['lora_adapters_use_pvc'] = True
             # CPU staging accounting: --max-cpu-loras holds all N adapters in
             # host RAM. Auto-estimate = rank x 20MB (GLM-5.3-class attention-
             # only adapter); lora_adapter_size_mb overrides the estimate.
