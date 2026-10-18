@@ -23,10 +23,10 @@ spec:
       restartPolicy: OnFailure
 {% if local_disk_path is defined and local_disk_path %}
       serviceAccountName: llm-d-modelserver
+{% endif %}
 {% if target_node is defined and target_node %}
       nodeSelector:
         kubernetes.io/hostname: {{ target_node }}
-{% endif %}
 {% endif %}
 {% if tolerate_all_taints is defined and tolerate_all_taints %}
       # Opt-in (DOWNLOAD_TOLERATE_ALL_TAINTS=true): tolerate every taint,
