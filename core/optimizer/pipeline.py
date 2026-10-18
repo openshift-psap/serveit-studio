@@ -562,8 +562,6 @@ class RecipeOptimizer(
             'throughput': ThroughputStrategy,
             'full_coverage': BalancedStrategy,
             'balanced': BalancedStrategy,  # legacy alias
-            'full_coverage': BalancedStrategy,
-            'balanced': BalancedStrategy,  # legacy alias
             'aggregated_only': AggregatedOnlyStrategy,
             'pd_only': PDOnlyStrategy,
             'ep_only': EPOnlyStrategy,
