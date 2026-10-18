@@ -525,7 +525,7 @@ def test_lora_renders_module_list_and_parity(tm):
             assert '--max-lora-rank 16' in a, (role, side)
             assert '--max-loras 4' in a, (role, side)
             assert '--max-cpu-loras 20' in a, (role, side)
-            assert 'agent-01=/adapters/agent-01' in a, (role, side)
+            assert 'agent-0001=/adapters/agent-0001' in a, (role, side)
             assert 'agent-20=/adapters/agent-20' in a, (role, side)
             assert 'agent-21' not in a, (role, side)
             # volume + mount present on both leader and worker pods
