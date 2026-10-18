@@ -325,7 +325,7 @@ class GuidellmMixin:
         _lm = getattr(config, 'lora_benchmark_mode', 'round_robin') or 'round_robin'
         if (getattr(config, 'lora_enabled', False) and _ln > 0
                 and _lm == 'round_robin'):
-            lora_adapters_list = [f'agent-{i:02d}' for i in range(1, _ln + 1)]
+            lora_adapters_list = [f'agent-{i:04d}' for i in range(1, _ln + 1)]
             if log_callback:
                 log_callback(f'🔀 LoRA round-robin: {_ln} adapters via '
                              f'native guidellm lora_adapters', 'info')
@@ -806,7 +806,7 @@ class GuidellmMixin:
             _lora_mode = getattr(config, 'lora_benchmark_mode', 'round_robin') or 'round_robin'
             if (getattr(config, 'lora_enabled', False) and _lora_n > 0
                     and _lora_mode == 'round_robin'):
-                _adapters = [f'agent-{i:02d}' for i in range(1, _lora_n + 1)]
+                _adapters = [f'agent-{i:04d}' for i in range(1, _lora_n + 1)]
                 import json as _json
                 _backend_arg = _json.dumps({
                     'kind': 'openai_http', 'target': endpoint,

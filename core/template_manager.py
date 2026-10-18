@@ -437,7 +437,7 @@ class TemplateManager:
             lora_rank = int(getattr(config, 'lora_max_rank', 16) or 16)
             vars_dict['lora_enabled'] = True
             vars_dict['lora_modules_arg'] = ' '.join(
-                f'agent-{i:02d}=/adapters/agent-{i:02d}' for i in range(1, lora_n + 1)
+                f'agent-{i:04d}=/adapters/agent-{i:04d}' for i in range(1, lora_n + 1)
             )
             vars_dict['lora_max_rank'] = lora_rank
             vars_dict['lora_max_loras'] = min(int(getattr(config, 'lora_max_loras', 4) or 4), lora_n)
