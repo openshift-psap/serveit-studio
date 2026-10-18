@@ -94,7 +94,16 @@ class TestEffectiveOffloadSettings:
     def test_no_offload_anywhere(self):
         stub = _make_stub(advanced={})
         cpu, weight, _, shm = stub._effective_offload_settings()
-        assert cpu == 0 and weight == 0 and shm == 0
+        assert cpu == 0 and weight == 0 and shm == 2  # min floor at tp=1
+
+    def test_shm_autoscales_with_tp(self):
+        # No offload, no override: shm mirrors template_manager's TP-rank
+        # autoscaling (1 GiB per rank, min 2) instead of a fixed 2 GiB.
+        stub = _make_stub(advanced={})
+        _, _, _, shm = stub._effective_offload_settings(tp=4)
+        assert shm == 4
+        _, _, _, shm = stub._effective_offload_settings(tp=16)
+        assert shm == 16
 
     def test_advanced_off_mode_ignored(self):
         stub = _make_stub(advanced={'cpu_offload_gb': {'mode': 'off'}},
@@ -107,11 +116,11 @@ class TestEffectiveOffloadSettings:
 class TestPodMemorySizing:
     def test_memory_includes_offload_and_shm(self):
         # GLM-5.3 TP8: per-GPU weights ~89GB -> loading buffer 80Gi;
-        # cpu_offload 200 -> shm 410 -> memory = 80 + 410 = 490Gi.
+        # cpu_offload 200 -> shm 410; workers 16 -> memory = 80+16+410 = 506Gi.
         stub = _make_stub(advanced={'cpu_offload_gb': {'mode': 'custom', 'value': '200'}},
                           pool_mem=2000.0, pool_cpu=100.0)
         mem, _ = stub._get_pod_resources(tp=8, total_pods=4)
-        assert mem == '490Gi'
+        assert mem == '506Gi'
 
     def test_memory_capped_to_free_pool(self):
         # Run-41-like pool: 408Gi min-free node -> 367Gi per pod after 0.90.
@@ -129,21 +138,32 @@ class TestPodMemorySizing:
             stub._get_pod_resources(tp=8, total_pods=4)
         assert any('Insufficient node memory for CPU KV offload' in m for m in stub.logs)
 
-    def test_memory_without_offload_unchanged(self):
-        # Regression: no offload -> loading buffer only (80Gi for GLM-5.3 TP8).
+    def test_memory_without_offload_scales_with_tp(self):
+        # No offload: loading buffer (80Gi for GLM-5.3 TP8) + worker process
+        # overhead (2 GiB/rank = 16Gi) + autoscaled shm (8Gi) = 104Gi.
         stub = _make_stub(advanced={}, pool_mem=408.2, pool_cpu=33.86)
         mem, _ = stub._get_pod_resources(tp=8, total_pods=4)
-        assert mem == '80Gi'
+        assert mem == '104Gi'
+
+    def test_small_model_tp4_memory_covers_workers(self):
+        # Regression for the psap-fire-athena crash loop: Gemma-4 26B TP4 has
+        # small per-GPU weights (16Gi loading floor) — the old formula gave
+        # 16Gi total and pods were OOMKilled during CUDA graph capture.
+        # Now: 16 loading + 8 workers + 4 shm = 28Gi.
+        stub = _make_stub(advanced={}, pool_mem=2000.0, pool_cpu=100.0,
+                          model_gb=26.0)
+        mem, _ = stub._get_pod_resources(tp=4, total_pods=1)
+        assert mem == '28Gi'
 
     def test_host_ipc_memory_covers_offload_without_shm_headroom(self):
         # hostIPC: region lives in host /dev/shm, still cgroup-charged but
-        # no tmpfs cap applies — memory = loading + offload (no +210).
+        # no tmpfs cap applies — memory = loading + workers + offload (no +210).
         stub = _make_stub(advanced={
             'cpu_offload_gb': {'mode': 'custom', 'value': '200'},
             'host_ipc': True,
         }, pool_mem=2000.0, pool_cpu=100.0)
         mem, _ = stub._get_pod_resources(tp=8, total_pods=4)
-        assert mem == '280Gi'
+        assert mem == '296Gi'
 
     def test_custom_shm_memory_covers_custom_shm(self):
         stub = _make_stub(advanced={
@@ -151,7 +171,7 @@ class TestPodMemorySizing:
             'shm_size_gb': {'mode': 'custom', 'value': '600'},
         }, pool_mem=2000.0, pool_cpu=100.0)
         mem, _ = stub._get_pod_resources(tp=8, total_pods=4)
-        assert mem == '680Gi'  # 80 loading + 600 custom shm
+        assert mem == '696Gi'  # 80 loading + 16 workers + 600 custom shm
 
     def test_weight_offload_added_to_memory(self):
         stub = _make_stub(advanced={
@@ -159,4 +179,4 @@ class TestPodMemorySizing:
             'weight_cpu_offload_gb': {'mode': 'custom', 'value': '50'},
         }, pool_mem=2000.0, pool_cpu=100.0)
         mem, _ = stub._get_pod_resources(tp=8, total_pods=4)
-        assert mem == '440Gi'  # 80 loading + 50 weight + 310 shm (100+210)
+        assert mem == '456Gi'  # 80 loading + 16 workers + 50 weight + 310 shm (100+210)

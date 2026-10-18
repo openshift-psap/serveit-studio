@@ -495,7 +495,17 @@ class TemplateManager:
         if not vars_dict['host_ipc']:
             if not _shm and vars_dict.get('cpu_offload_gb'):
                 _shm = int(vars_dict['cpu_offload_gb']) + 210  # auto: cpu_offload_gb + 210 for CUDA/NIXL overhead
-            vars_dict['shm_size_gb'] = _shm or 2
+            if not _shm:
+                # Autoscale with the TP ranks sharing the pod's /dev/shm:
+                # each rank publishes psm broadcast buffers, and NCCL falls
+                # back to SHM transport when GPU P2P is unavailable (~1 GiB
+                # per rank). Memory-medium tmpfs only charges used pages, so
+                # the cap is cheap headroom (measured ~200 MiB at TP4 with
+                # P2P available).
+                _tp_ranks = max(vars_dict.get('prefill_tp') or 1,
+                                vars_dict.get('decode_tp') or 1)
+                _shm = max(2, _tp_ranks)
+            vars_dict['shm_size_gb'] = _shm
         else:
             vars_dict['shm_size_gb'] = 2  # irrelevant when hostIPC is used
 

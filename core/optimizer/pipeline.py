@@ -1598,8 +1598,7 @@ class RecipeOptimizer(
             )
             self.log(f"⚠️  {msg}", 'warning')
             raise ValueError(msg)
-
-    def _effective_offload_settings(self) -> tuple:
+    def _effective_offload_settings(self, tp: int = 1) -> tuple:
         """Resolve effective CPU offload / weight offload / hostIPC / shm settings.
 
         The run-level config attributes (cpu_offload_gb etc.) are usually None —
@@ -1609,8 +1608,10 @@ class RecipeOptimizer(
         use, otherwise memory is sized without the offload region.
 
         Returns (cpu_offload_gb, weight_cpu_offload_gb, host_ipc, shm_size_gb)
-        with shm mirroring template_manager's auto-sizing (cpu_offload + 210).
+        with shm mirroring template_manager's auto-sizing: cpu_offload + 210
+        when offloading, otherwise 1 GiB per TP rank (min 2 GiB).
         """
+
         adv = getattr(self.config, 'advanced_vllm', None)
         adv = adv if isinstance(adv, dict) else {}
 
@@ -1636,6 +1637,9 @@ class RecipeOptimizer(
             shm_gb = int(getattr(self.config, 'shm_size_gb', None) or 0)
         if not host_ipc and not shm_gb and cpu_offload:
             shm_gb = cpu_offload + 210  # same formula as template_manager
+        elif not host_ipc and not shm_gb:
+            # Mirror template_manager's TP-rank autoscaling (1 GiB/rank, min 2)
+            shm_gb = max(2, tp)
         return cpu_offload, weight_offload, host_ipc, shm_gb
 
     def _get_pod_resources(self, tp: int, total_pods: int) -> tuple:
@@ -1808,7 +1812,7 @@ class RecipeOptimizer(
             # Base memory = 16 GiB + offloads + multi-threaded loading overhead.
             # Multi-threaded model loading pins CPU memory per thread (~2 GB each).
             # Production GLM-5.3 uses 79Gi; use num_threads × 2 as loading buffer.
-            cpu_offload, weight_offload, host_ipc, shm_gb = self._effective_offload_settings()
+            cpu_offload, weight_offload, host_ipc, shm_gb = self._effective_offload_settings(tp)
             # Base memory scales with per-GPU weight size to fit multi-threaded loading buffers.
             # Each GPU holds weight_gb/tp of weights; loading needs ~15% as CPU transfer buffers.
             # num_threads in _auto_tune_model_loader is then derived from this memory allocation.
@@ -1816,16 +1820,23 @@ class RecipeOptimizer(
             per_gpu_weight_gb = weight_gb / max(tp, 1)
             # ~90% of per-GPU weights as CPU loading buffer (production GLM-5.3 uses 79Gi for 89GB/GPU)
             loading_buffer_gb = max(16, int(per_gpu_weight_gb * 0.9))
+            # Each TP rank runs as its own worker process (torch runtime +
+            # CUDA context ≈ 2 GiB host, plus transient cutlass JIT spikes
+            # during CUDA graph capture) — the pod limit must cover all
+            # ranks, not just the weight loading buffers. Without this, TP4
+            # pods with small per-GPU weights (26B model) sit at the 16 GiB
+            # floor and get OOMKilled during graph capture.
+            worker_overhead_gb = 2 * max(tp, 1)
             # Pod memory must cover the CPU KV offload /dev/shm region: kubelet caps
             # Memory-medium emptyDir tmpfs at the container memory limit, and tmpfs
             # pages are charged to the container cgroup. Mirror the template's shm
-            # sizing (cpu_offload + 210 for CUDA/NIXL shm overhead) so the shm
+            # sizing (cpu_offload + 210, or 1 GiB/rank autoscale) so the shm
             # volume is never larger than the container limit.
             if host_ipc:
                 shm_need_gb = int(cpu_offload)
             else:
                 shm_need_gb = shm_gb if shm_gb else int(cpu_offload)
-            memory_per_pod_gb = loading_buffer_gb + int(weight_offload) + shm_need_gb
+            memory_per_pod_gb = loading_buffer_gb + worker_overhead_gb + int(weight_offload) + shm_need_gb
 
             # Validate against actual free memory — warn and cap if needed.
             if self._cached_free_mem_gb:
@@ -1833,7 +1844,7 @@ class RecipeOptimizer(
                 # Hard floor: the CPU KV offload region must fit inside the pod
                 # memory limit (kubelet caps the shm tmpfs at the limit and tmpfs
                 # pages are cgroup-charged) — below this the pod cannot start.
-                hard_floor_gb = loading_buffer_gb + int(weight_offload) + int(cpu_offload)
+                hard_floor_gb = loading_buffer_gb + worker_overhead_gb + int(weight_offload) + int(cpu_offload)
                 if free_per_pod_gb < hard_floor_gb:
                     self.log(
                         f"❌ Insufficient node memory for CPU KV offload: {free_per_pod_gb}Gi per pod "

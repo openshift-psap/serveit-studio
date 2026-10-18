@@ -215,7 +215,7 @@ class TestConfig:
     model_loader_extra_config: Optional[str] = None
     cpu_offload_gb: Optional[int] = None  # OffloadingConnector CPU KV cache (NIXL)
     weight_cpu_offload_gb: Optional[int] = None  # vLLM --cpu-offload-gb (model weights to CPU)
-    shm_size_gb: Optional[int] = None           # /dev/shm size in GiB (default 2, increase for CPU KV offload)
+    shm_size_gb: Optional[int] = None           # /dev/shm GiB (auto: 1/TP-rank min 2, cpu-offload+210 when offloading)
     host_ipc: Optional[bool] = None             # use host IPC namespace for /dev/shm (unlimited)
     disk_offload_kv_path: Optional[str] = None  # NVMe/disk KV cache offload path
     disk_offload_kv_read_threads: int = 32
