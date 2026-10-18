@@ -356,8 +356,8 @@ class GuidellmMixin:
             f' --tokenizer "kind=huggingface_auto,model={config.model_name}"'
             f" --data '{data_arg}'"
             f' --profile "{profile_arg}"'
-            f' --constraint "{constraint_arg}"'
-            f' --output "kind=json,path={output_path}"'
+            f' --constraints "{constraint_arg}"'
+            f' --outputs "kind=json,path={output_path}"'
             f' --metrics "kind=generative,sample_size=50"'
             f'{column_args}'
         )
@@ -367,7 +367,7 @@ class GuidellmMixin:
             if request_profile == 'sweep':
                 rate_label = 'sweep (auto-discover rates)'
             log_callback(f'🏃 Running guidellm on pod {self._guidellm_pod_name}')
-            log_callback(f'🔧 guidellm command: guidellm run --backend "{backend_arg}" --tokenizer "kind=huggingface_auto,model={config.model_name}" --data \'{data_arg}\' --profile "{profile_arg}" --constraint "{constraint_arg}" --output "kind=json,path={output_path}"{column_args}')
+            log_callback(f'🔧 guidellm command: guidellm run --backend "{backend_arg}" --tokenizer "kind=huggingface_auto,model={config.model_name}" --data \'{data_arg}\' --profile "{profile_arg}" --constraints "{constraint_arg}" --outputs "kind=json,path={output_path}"{column_args}')
             log_callback(f'   Target: {endpoint}')
             log_callback(f'   Load: {rate_label}')
 
@@ -823,8 +823,8 @@ class GuidellmMixin:
                 '--tokenizer', f'kind=huggingface_auto,model={config.model_name}',
                 '--data', data_arg,
                 '--profile', profile_arg,
-                '--constraint', constraint_arg,
-                '--output', f'kind=json,path={output_file}',
+                '--constraints', constraint_arg,
+                '--outputs', f'kind=json,path={output_file}',
                 '--metrics', 'kind=generative,sample_size=20',
             ]
 
