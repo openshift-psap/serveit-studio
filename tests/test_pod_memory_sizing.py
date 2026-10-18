@@ -234,3 +234,56 @@ class TestLoraStagingValidation:
         with pytest.raises(RuntimeError, match='Insufficient node memory'):
             stub._get_pod_resources(tp=8, total_pods=4)
         assert any('LoRA staging 317Gi' in m for m in stub.logs)
+
+
+class TestLoraGpuSlotCost:
+    """Run-52 regression: max_loras sized by adapter FILE size (22MB probe)
+    hit 465 slots — vLLM pre-allocates per-expert MoE B-weight buffers per
+    slot and CUDA-OOMed (single torch.zeros of exactly 5.00 GiB =
+    465 x 128 experts x rank 16 x hidden 2816 x 2B). The GPU slot cost is
+    architecture-driven, not file-driven."""
+
+    def _slot_stub(self, model_config=None, num_experts=0, model_gb=712.0, **kw):
+        top = dict(lora_enabled=True, lora_num_adapters=1000,
+                   lora_adapter_size_mb=None, lora_max_rank=16)
+        top.update(kw)
+        stub = _make_stub(top_level=top, model_gb=model_gb)
+        stub._model_config = model_config or {}
+        stub._num_experts = num_experts
+        stub._lora_gpu_slot_cost_mb = RecipeOptimizer._lora_gpu_slot_cost_mb.__get__(stub)
+        return stub
+
+    def test_moe_slot_cost_gemma4(self):
+        # Gemma-4: 128 experts, 30 layers, hidden 2816, rank 16
+        # 1.25 x 2 projs x 2B x 128 x 16 x 2816 x 30 = ~862MB per slot
+        cfg = {'num_local_experts': 128, 'num_hidden_layers': 30, 'hidden_size': 2816}
+        stub = self._slot_stub(model_config=cfg, num_experts=128)
+        assert stub._lora_gpu_slot_cost_mb() == 865
+
+    def test_slot_cost_ignores_file_size(self):
+        # The probed file size (22MB) must NOT shrink the slot cost
+        cfg = {'num_local_experts': 128, 'num_hidden_layers': 30, 'hidden_size': 2816}
+        stub = self._slot_stub(model_config=cfg, num_experts=128,
+                               lora_adapter_size_mb=22)
+        assert stub._lora_gpu_slot_cost_mb() == 865
+
+    def test_dense_fallback_rank_heuristic(self):
+        # Dense model (no experts): rank x 20MB heuristic
+        cfg = {'num_hidden_layers': 32, 'hidden_size': 4096}
+        stub = self._slot_stub(model_config=cfg, num_experts=0)
+        assert stub._lora_gpu_slot_cost_mb() == 320
+
+    def test_no_config_fallback(self):
+        stub = self._slot_stub(model_config=None, num_experts=0)
+        assert stub._lora_gpu_slot_cost_mb() == 320
+
+    def test_max_loras_sizing_gemma4_tp1(self):
+        # Budget = (141GB x 0.89 - 26GB) x 10% ~ 9.9GB; slot 865MB
+        # -> 11 resident (was 465 with the file-size bug -> CUDA OOM)
+        from core.optimizer.config_builder import ConfigBuilderMixin
+        cfg = {'num_local_experts': 128, 'num_hidden_layers': 30, 'hidden_size': 2816}
+        stub = self._slot_stub(model_config=cfg, num_experts=128, model_gb=26.0)
+        stub._gpu_vram_gb = 143771 / 1024  # H200 from cluster scan
+        stub._compute_gpu_mem_util = lambda tp, log=True: 0.89
+        stub._compute_lora_max_loras = ConfigBuilderMixin._compute_lora_max_loras.__get__(stub)
+        assert stub._compute_lora_max_loras(tp=1) == 11

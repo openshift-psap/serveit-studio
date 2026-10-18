@@ -1628,6 +1628,42 @@ class RecipeOptimizer(
             pass
         return None
 
+    def _lora_gpu_slot_cost_mb(self) -> int:
+        """GPU memory cost per max_loras slot (vLLM pre-allocation).
+
+        vLLM creates LoRA weight buffers for every LoRA-supporting layer
+        x max_loras slots at engine init. For FusedMoE layers the B-weights
+        are per-expert: [max_loras, experts, rank, hidden] bf16 per
+        projection — so the slot cost is architecture-driven, NOT the
+        adapter file size. A 22MB attention-only adapter on Gemma-4 still
+        costs ~690MB/slot (2 projections x 128 experts x rank 16 x hidden
+        2816 x 30 layers x 2 bytes). Crash evidence: max_loras=465 made
+        vLLM try to allocate exactly 5.00 GiB per buffer
+        (= 465 x 128 x 16 x 2816 x 2B). The adapter file size is only the
+        CPU staging cost (--max-cpu-loras).
+
+        Falls back to the rank x 20MB heuristic for dense models or when
+        the model config is unavailable.
+        """
+        rank = int(getattr(self.config, 'lora_max_rank', 16) or 16)
+        fallback = rank * 20
+        cfg = self._model_config or {}
+        experts = (self._num_experts
+                   or cfg.get('num_local_experts')
+                   or cfg.get('n_routed_experts')
+                   or cfg.get('num_experts') or 0)
+        layers = cfg.get('num_hidden_layers') or 0
+        hidden = cfg.get('hidden_size') or 0
+        if experts and experts > 1 and layers and hidden:
+            try:
+                # 2 MoE projections (gate/down) with per-expert B-weights,
+                # bf16; +25% for A-weights and attention LoRA buffers
+                slot_mb = int(1.25 * 2 * 2 * experts * rank * hidden * int(layers) / 1e6)
+                return max(slot_mb, fallback)
+            except (TypeError, ValueError):
+                pass
+        return fallback
+
     def _lora_staging_gib(self) -> int:
         """LoRA CPU staging memory per pod (--max-cpu-loras holds all N
         adapters in host RAM).

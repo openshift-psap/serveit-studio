@@ -291,15 +291,16 @@ class ConfigBuilderMixin:
 
         Budget: up to 10% of the VRAM left after model weights (within the
         computed gpu-memory-utilization) is dedicated to LoRA residency —
-        the rest stays for KV cache. Per-adapter GPU cost is the adapter
-        size (user override or rank x 20MB estimate). Clamped to
-        [1, num_adapters]; 0 when LoRA is off. ``n_override`` lets the
-        adapter-count sweep clamp against the level's count rather than
-        the run-level setting.
+        the rest stays for KV cache. Per-slot GPU cost is
+        architecture-aware (vLLM pre-allocates per-expert MoE B-weight
+        buffers per slot — see _lora_gpu_slot_cost_mb; the adapter FILE
+        size is only the CPU staging cost and must not be used here).
+        Clamped to [1, num_adapters]; 0 when LoRA is off. ``n_override``
+        lets the adapter-count sweep clamp against the level's count
+        rather than the run-level setting.
 
-        Examples (GLM-5.3 fp8, H200 140GB):
-        - TP8: ~40GB free x 10% / 320MB = 13 resident (all 6 mounted)
-        - TP16: ~68GB free x 10% / 320MB = 21 resident
+        Examples (Gemma-4 26B fp8, H200 140GB, TP1):
+        - ~99GB free x 10% / ~860MB slot = 11 resident
         """
         n = int(n_override if n_override is not None
                 else getattr(self.config, 'lora_num_adapters', 0) or 0)
@@ -310,8 +311,9 @@ class ConfigBuilderMixin:
         pinned = getattr(self.config, 'lora_max_loras', None)
         if pinned:
             return max(1, min(int(pinned), n))
-        rank = int(getattr(self.config, 'lora_max_rank', None) or 16)
-        per_adapter_mb = getattr(self.config, 'lora_adapter_size_mb', None) or (rank * 20)
+        # Architecture-aware GPU slot cost (per-expert MoE buffers) — NOT
+        # the adapter file size, which is only the CPU staging cost
+        per_adapter_mb = self._lora_gpu_slot_cost_mb()
         try:
             vram_mb = float(self._gpu_vram_gb) * 1024
             weights_mb = self._estimate_model_size_gb() * 1024 / max(tp, 1)

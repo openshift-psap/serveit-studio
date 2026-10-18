@@ -326,8 +326,9 @@ class DPEPSearchMixin:
         pinned = getattr(self.config, 'lora_max_loras', None)
         if pinned:
             return max(1, min(int(pinned), n))
-        rank = int(getattr(self.config, 'lora_max_rank', None) or 16)
-        per_adapter_mb = getattr(self.config, 'lora_adapter_size_mb', None) or (rank * 20)
+        # Architecture-aware GPU slot cost (per-expert MoE buffers) — NOT
+        # the adapter file size, which is only the CPU staging cost
+        per_adapter_mb = self._lora_gpu_slot_cost_mb()
         try:
             weights_gb = self._estimate_model_size_gb() - self._estimate_attention_weight_gb()
             per_gpu_mb = (self._estimate_attention_weight_gb() + weights_gb / max(dp_size, 1)) * 1024
