@@ -140,8 +140,8 @@ function _renderChartsImpl(data, runId, content) {
     // GOAL BANNER — what was this run optimizing for
     // ============================================================
     if (rec && rec.goal_info) {
-        const gColors = { ttft: '#3b82f6', throughput: '#f59e0b', balanced: '#10b981', aggregated_only: '#64748b', pd_only: '#8b5cf6', ep_only: '#0ea5e9' };
-        const gIcons = { ttft: '&#9201;', throughput: '&#9889;', balanced: '&#9878;', aggregated_only: '&#9634;', pd_only: '&#8644;', ep_only: '&#9881;' };
+        const gColors = { ttft: '#3b82f6', throughput: '#f59e0b', full_coverage: '#10b981', balanced: '#10b981', aggregated_only: '#64748b', pd_only: '#8b5cf6', ep_only: '#0ea5e9' };
+        const gIcons = { ttft: '&#9201;', throughput: '&#9889;', full_coverage: '&#9878;', balanced: '&#9878;', aggregated_only: '&#9634;', pd_only: '&#8644;', ep_only: '&#9881;' };
         const gc = gColors[rec.goal] || '#10b981';
         html += `<div class="chart-card" style="border: 3px solid ${gc}; border-left: 8px solid ${gc};">`;
         html += `<div class="chart-card-header" style="background: ${gc}; color: white; font-size: 1.3em;">`;
