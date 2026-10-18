@@ -893,6 +893,17 @@ class PrereqManager:
                 log(f'   ⚠️  No storage class for node {node} (suffix {suffix})')
                 continue
 
+            # Detect the access mode supported by this storage class
+            access_mode = 'ReadWriteMany'
+            r_prov = self.kubectl.run(
+                ['get', 'sc', sc, '-o', 'jsonpath={.provisioner}'], check=False)
+            if r_prov.returncode == 0:
+                provisioner = r_prov.stdout.strip()
+                if any(p in provisioner for p in (
+                        'topolvm.io', 'rancher.io/local-path',
+                        'kubernetes.io/no-provisioner')):
+                    access_mode = 'ReadWriteOnce'
+
             pvc_yaml = json.dumps({
                 'apiVersion': 'v1',
                 'kind': 'PersistentVolumeClaim',
@@ -902,7 +913,7 @@ class PrereqManager:
                     'labels': {'app': 'serveit-cache', 'node-suffix': suffix}
                 },
                 'spec': {
-                    'accessModes': ['ReadWriteMany'],
+                    'accessModes': [access_mode],
                     'storageClassName': sc,
                     'resources': {'requests': {'storage': pvc_size}}
                 }
