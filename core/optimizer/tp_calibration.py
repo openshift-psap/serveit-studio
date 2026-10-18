@@ -228,6 +228,11 @@ class TPCalibrationMixin:
                             decode_config.speculative_num_tokens = None
                             decode_config.prefill_speculative_num_tokens = None
                             decode_config.cpu_offload_gb = None
+                            # LoRA is irrelevant for TP calibration — adapters
+                            # add load time, memory overhead, and skew the TP
+                            # recommendation. LoRA is enabled for steps 4-7.
+                            decode_config.lora_enabled = False
+                            decode_config.lora_num_adapters = 0
                             decode_config.weight_cpu_offload_gb = None
                     except (ValueError, TypeError) as e:
                         self.log(f"  ⏭️  Skipping TP={tp} decode: {e}", 'warning')
@@ -348,6 +353,11 @@ class TPCalibrationMixin:
                             prefill_config.prefill_speculative_num_tokens = None
                             prefill_config.cpu_offload_gb = None
                             prefill_config.weight_cpu_offload_gb = None
+                            # LoRA is irrelevant for TP calibration — adapters
+                            # add load time, memory overhead, and skew the TP
+                            # recommendation. LoRA is enabled for steps 4-7.
+                            prefill_config.lora_enabled = False
+                            prefill_config.lora_num_adapters = 0
                     except (ValueError, TypeError) as e:
                         self.log(f"  ⏭️  Skipping TP={tp} prefill: {e}", 'warning')
                         run_prefill = False
