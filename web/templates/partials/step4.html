@@ -207,8 +207,8 @@
                                 </div>
                                 <div id="lora-sweep-body" style="display:none;padding:8px 0 0 44px;font-size:0.8em;color:#475569;line-height:1.6;">
                                     <div id="lora-sweep-opts" style="display:flex;gap:16px;flex-wrap:wrap;align-items:flex-start;">
-                                        <div class="input-group" style="width:160px;">
-                                            <label>Number of Levels</label>
+                                        <div class="input-group" style="width:120px;">
+                                            <label>Levels</label>
                                             <input type="number" id="lora-sweep-count" value="5" min="2" max="10" disabled onchange="config.lora_sweep_count=Math.max(2,Math.min(10,parseInt(this.value)||5));this.value=config.lora_sweep_count;config.lora_sweep_levels=null;saveConfig();">
                                             <div class="help-text">Evenly spaced up to N</div>
                                         </div>
