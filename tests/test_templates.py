@@ -526,7 +526,7 @@ def test_lora_renders_module_list_and_parity(tm):
             assert '--max-loras 4' in a, (role, side)
             assert '--max-cpu-loras 20' in a, (role, side)
             assert 'agent-0001=/adapters/agent-0001' in a, (role, side)
-            assert 'agent-20=/adapters/agent-20' in a, (role, side)
+            assert 'agent-0020=/adapters/agent-0020' in a, (role, side)
             assert 'agent-21' not in a, (role, side)
             # volume + mount present on both leader and worker pods
             pod_spec = (lwt['leaderTemplate'] if side == 'leader'
@@ -545,7 +545,7 @@ def test_lora_renders_module_list_and_parity(tm):
                       (lwt['workerTemplate'], 'worker')):
         cont = _vllm_container(tpl['spec'])
         a = cont['args'][0]
-        assert '--enable-lora' in a and 'agent-20=/adapters/agent-20' in a, side
+        assert '--enable-lora' in a and 'agent-0020=/adapters/agent-0020' in a, side
         assert _has_volume(tpl['spec'], 'lora-adapters', '/adapters'), side
 
 
