@@ -1968,12 +1968,13 @@ class RecipeOptimizer(
             # Pod memory must cover the CPU KV offload /dev/shm region: kubelet caps
             # Memory-medium emptyDir tmpfs at the container memory limit, and tmpfs
             # pages are charged to the container cgroup. Mirror the template's shm
-            # sizing (cpu_offload + 210, or 1 GiB/rank autoscale) so the shm
-            # volume is never larger than the container limit.
+            # sizing (4 GiB/rank autoscale — kernel OOM evidence: shmem-rss ~15GiB
+            # per TP4 worker on vLLM v0.31; memfd shm bypasses the dshm sizeLimit)
+            # so the shm volume is never larger than the container limit.
             if host_ipc:
                 shm_need_gb = int(cpu_offload)
             else:
-                shm_need_gb = shm_gb if shm_gb else int(cpu_offload)
+                shm_need_gb = shm_gb if shm_gb else max(2, 4 * tp)
             memory_per_pod_gb = loading_buffer_gb + worker_overhead_gb + int(weight_offload) + shm_need_gb
 
             # LoRA CPU staging (--max-cpu-loras holds every adapter in host

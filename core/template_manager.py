@@ -502,13 +502,16 @@ class TemplateManager:
             if not _shm:
                 # Autoscale with the TP ranks sharing the pod's /dev/shm:
                 # each rank publishes psm broadcast buffers, and NCCL falls
-                # back to SHM transport when GPU P2P is unavailable (~1 GiB
-                # per rank). Memory-medium tmpfs only charges used pages, so
-                # the cap is cheap headroom (measured ~200 MiB at TP4 with
-                # P2P available).
+                # back to SHM transport when GPU P2P is unavailable.
+                # Evidence-based floor: a TP4 Gemma-4 pod on vLLM v0.31
+                # showed shmem-rss ~15GiB per worker in the kernel OOM report
+                # (run-53 step6-agg-tp4-2r, memory.oom.group kill at 81Gi —
+                # shm can be memfd-backed and bypass the dshm sizeLimit).
+                # 4 GiB/rank covers psm + NCCL SHM + CUDA IPC; tmpfs only
+                # charges used pages, so the cap is cheap headroom.
                 _tp_ranks = max(vars_dict.get('prefill_tp') or 1,
                                 vars_dict.get('decode_tp') or 1)
-                _shm = max(2, _tp_ranks)
+                _shm = max(2, 4 * _tp_ranks)
             vars_dict['shm_size_gb'] = _shm
         else:
             vars_dict['shm_size_gb'] = 2  # irrelevant when hostIPC is used
