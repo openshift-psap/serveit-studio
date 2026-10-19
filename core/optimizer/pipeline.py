@@ -1939,8 +1939,19 @@ class RecipeOptimizer(
             # num_threads in _auto_tune_model_loader is then derived from this memory allocation.
             weight_gb = self._estimate_model_size_gb()
             per_gpu_weight_gb = weight_gb / max(tp, 1)
-            # ~90% of per-GPU weights as CPU loading buffer (production GLM-5.3 uses 79Gi for 89GB/GPU)
-            loading_buffer_gb = max(16, int(per_gpu_weight_gb * 0.9))
+            # ~90% of per-GPU weights as CPU loading buffer (production GLM-5.3 uses 79Gi for 89GB/GPU).
+            # For SMALL models the host-side cost is TP-independent: the pod
+            # streams the whole weight file through page cache and the
+            # multithread loader pins thread buffers regardless of how the
+            # shards split across ranks. A TP2 26B pod OOMKilled at the 16Gi
+            # floor during adapter staging while TP1 (whole-model term, 53Gi
+            # total) passed — cap the whole-model term at 32GB so large-model
+            # behavior (per-GPU shard dominates) is unchanged.
+            loading_buffer_gb = max(
+                16,
+                int(per_gpu_weight_gb * 0.9),
+                int(min(weight_gb, 32) * 0.9),
+            )
             # Each TP rank runs as its own worker process (torch runtime +
             # CUDA context ≈ 2 GiB host, plus transient cutlass JIT spikes
             # during CUDA graph capture) — the pod limit must cover all

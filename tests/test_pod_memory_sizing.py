@@ -149,13 +149,15 @@ class TestPodMemorySizing:
 
     def test_small_model_tp4_memory_covers_workers(self):
         # Regression for the psap-fire-athena crash loop: Gemma-4 26B TP4 has
-        # small per-GPU weights (16Gi loading floor) — the old formula gave
-        # 16Gi total and pods were OOMKilled during CUDA graph capture.
-        # Now: 16 loading + 8 workers + 4 shm = 28Gi.
+        # small per-GPU weights — the old formula gave 16Gi total and pods
+        # were OOMKilled during CUDA graph capture. Worker overhead raised it
+        # to 28Gi; the whole-model streaming term (small-model host cost is
+        # TP-independent) raises it further to 23 loading + 8 workers +
+        # 4 shm = 35Gi.
         stub = _make_stub(advanced={}, pool_mem=2000.0, pool_cpu=100.0,
                           model_gb=26.0)
         mem, _ = stub._get_pod_resources(tp=4, total_pods=1)
-        assert mem == '28Gi'
+        assert mem == '35Gi'
 
     def test_host_ipc_memory_covers_offload_without_shm_headroom(self):
         # hostIPC: region lives in host /dev/shm, still cgroup-charged but
