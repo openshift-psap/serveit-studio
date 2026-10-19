@@ -327,8 +327,7 @@ class GuidellmMixin:
                 and _lm == 'round_robin'):
             lora_adapters_list = [f'agent-{i:04d}' for i in range(1, _ln + 1)]
             if log_callback:
-                log_callback(f'🔀 LoRA round-robin: {_ln} adapters via '
-                             f'native guidellm lora_adapters', 'info')
+                log_callback(f'🔀 LoRA round-robin: {_ln} adapters via native guidellm lora_adapters')
 
         if lora_adapters_list:
             import json as _json
