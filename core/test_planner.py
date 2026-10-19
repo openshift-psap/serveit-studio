@@ -28,7 +28,9 @@ def calculate_engine_memory_config(
     model_config: Optional[Dict] = None,
     model_name: Optional[str] = None,
     isl_stdev: Optional[int] = None,
-    osl_stdev: Optional[int] = None
+    osl_stdev: Optional[int] = None,
+    turns: Optional[int] = None,
+    prefix_tokens: Optional[int] = None
 ) -> Tuple[int, float]:
     """
     Calculate max_model_len and gpu_memory_utilization together.
@@ -80,31 +82,56 @@ def calculate_engine_memory_config(
         logger.info(f"Length variation: ISL {isl}–{effective_isl} (+{isl_stdev or 0}), "
                     f"OSL {osl}–{effective_osl} (+{osl_stdev or 0})")
 
+    # 2b. Multi-turn context accumulation and prefix buckets.
+    # guidellm synthetic_text adds ~prompt_tokens of user content EVERY turn
+    # (turn 0 included when first_prompt_tokens is unset) plus the assistant
+    # output to the history, and prefix_buckets tokens are ADDED ON TOP of
+    # prompt_tokens (not included in it). The final turn of a turns-deep
+    # conversation therefore needs:
+    #   turns x prompt + (turns-1) x output + prefix + template overhead
+    # (run-53: isl=3000, osl=300, turns=10, prefix=1800 needed ~34.5k but
+    # max_model_len was 4112 — every request 400'd on context length).
+    turns_n = max(1, int(turns or 1))
+    prefix_n = int(prefix_tokens or 0)
+    if turns_n > 1 or prefix_n:
+        logger.info(f"Multi-turn context: {turns_n} turns x {effective_isl} prompt "
+                    f"+ {turns_n - 1} x {effective_osl} output + {prefix_n} prefix")
+
     # 3. Validate against model's absolute max context length
     CHAT_TEMPLATE_OVERHEAD = 500
 
     if model_config:
-        model_max_position_embeddings = model_config.get('max_position_embeddings', 4096)
+        # None (unset in config, e.g. Gemma-4) means no known cap — do not
+        # fall back to a conservative 4096 and silently truncate the workload
+        model_max_position_embeddings = model_config.get('max_position_embeddings') or None
 
-        total_tokens_needed = effective_isl + effective_osl + CHAT_TEMPLATE_OVERHEAD
-        if total_tokens_needed > model_max_position_embeddings:
+        total_tokens_needed = (turns_n * effective_isl
+                               + (turns_n - 1) * effective_osl
+                               + prefix_n + CHAT_TEMPLATE_OVERHEAD)
+        if (model_max_position_embeddings
+                and total_tokens_needed > model_max_position_embeddings):
             raise ValueError(
                 f"Workload exceeds model's maximum context length!\n"
-                f"  Requested: ISL={effective_isl} + OSL={effective_osl} + overhead={CHAT_TEMPLATE_OVERHEAD} = {total_tokens_needed} tokens\n"
-                f"  (ISL includes +2*stdev={isl_stdev or 0}, OSL includes +2*stdev={osl_stdev or 0})\n"
+                f"  Requested: {turns_n} turns x ISL={effective_isl} + {turns_n - 1} x OSL={effective_osl} "
+                f"+ prefix={prefix_n} + overhead={CHAT_TEMPLATE_OVERHEAD} = {total_tokens_needed} tokens\n"
                 f"  Model max: {model_max_position_embeddings} tokens (from max_position_embeddings)\n"
                 f"  Exceeds by: {total_tokens_needed - model_max_position_embeddings} tokens\n"
-                f"  Solution: Reduce ISL/OSL or stdev to fit within {model_max_position_embeddings - CHAT_TEMPLATE_OVERHEAD} tokens total"
+                f"  Solution: Reduce ISL/OSL, turns, or prefix-cache size to fit within "
+                f"{model_max_position_embeddings - CHAT_TEMPLATE_OVERHEAD} tokens total"
             )
 
-        logger.info(f"✓ Workload validation: {total_tokens_needed} tokens <= {model_max_position_embeddings} model max")
+        logger.info(f"✓ Workload validation: {total_tokens_needed} tokens "
+                    f"<= {model_max_position_embeddings or 'uncapped'} model max")
 
     # 4. Calculate max_model_len using stdev-adjusted values, capped at max_position_embeddings
     # 5% headroom accounts for chat template tokens and guidellm synthetic text
-    max_model_len = int((effective_isl + effective_osl) * 1.05)
+    max_model_len = int((turns_n * effective_isl
+                         + (turns_n - 1) * effective_osl
+                         + prefix_n) * 1.05)
     if model_config:
-        model_max = model_config.get('max_position_embeddings', 4096)
-        max_model_len = min(max_model_len, model_max)
+        model_max = model_config.get('max_position_embeddings') or None
+        if model_max:
+            max_model_len = min(max_model_len, model_max)
 
     # 5. Get model architecture parameters
     if model_config:

@@ -387,7 +387,9 @@ class RecipeOptimizer(
             model_config=self._model_config,
             tensor_parallelism=1,  # max_model_len is independent of TP
             isl_stdev=config.isl_stdev,
-            osl_stdev=config.osl_stdev
+            osl_stdev=config.osl_stdev,
+            turns=getattr(config, 'turns', 1),
+            prefix_tokens=getattr(config, 'prefix_tokens', None)
         )
         # Also account for first_prompt_tokens — turn-0 uses this instead of isl,
         # so max_model_len must be large enough to fit the first prompt + output + margin.
@@ -409,13 +411,6 @@ class RecipeOptimizer(
             config.osl_max = max_out
             self.log(f"output_tokens_max set to {max_out} (osl={osl} + 4×stdev={out_stdev}) so samples fit max_model_len")
         ctx_margin = 512  # chat template markers + re-encode drift
-        # Only use first_prompt_tokens if explicitly set by user (not stale from previous run)
-        fpt_needed = 0
-        if fpt or fpt_max:  # User explicitly set first_prompt_tokens
-            fpt_needed = max(fpt, fpt_max) + prefix + max_out + ctx_margin
-        # For multi-turn, max_model_len only needs to fit the longest single turn
-        # (not the entire conversation history). Number of turns affects data generation,
-        # not context window requirement.
         isl = config.isl or 0
         isl_stdev = config.isl_stdev or 0
         max_isl = isl + (4 * isl_stdev if isl_stdev else 0)
@@ -423,36 +418,53 @@ class RecipeOptimizer(
         if isl_cap is not None:
             max_isl = min(max_isl, isl_cap)
         max_osl = osl + (4 * osl_stdev if osl_stdev else 0)
-        turn_needed = prefix + max_isl + max_osl + max_out + ctx_margin
-        if turn_needed > fpt_needed:
-            fpt_needed = turn_needed
-        if fpt_needed > computed_max_model_len:
-            computed_max_model_len = fpt_needed
-            self.log(f"max_model_len raised to fit workload: {fpt_needed} (isl={isl}±{isl_stdev}, osl={osl}±{osl_stdev}, prefix={prefix}, margin={ctx_margin})")
+        turns_n = max(1, int(getattr(config, 'turns', 1) or 1))
+        # guidellm synthetic conversations carry the FULL history on every
+        # chat-completions request: each turn adds ~prompt_tokens of user
+        # content (turn 0 uses first_prompt_tokens when set) plus the
+        # assistant output, and prefix_buckets tokens are ADDED ON TOP of
+        # prompt_tokens. The final turn's request therefore needs
+        #   prefix + first + (turns-1) x (prompt + output) + output tail
+        #   + template margin
+        # (run-53: 10 turns x 3000 + 9 x 300 + 1800 prefix needed ~34.5k
+        # but max_model_len was 4112 — every request 400'd on context
+        # length; the old "longest single turn" assumption is wrong for
+        # chat-completions history accumulation).
+        first_prompt = max(fpt, fpt_max) if (fpt or fpt_max) else max_isl
+        ctx_needed = (prefix + first_prompt
+                      + (turns_n - 1) * (max_isl + max_osl)
+                      + max(max_out, max_osl) + ctx_margin)
+        if ctx_needed > computed_max_model_len:
+            computed_max_model_len = ctx_needed
+            self.log(f"max_model_len raised to fit workload: {ctx_needed} "
+                     f"({turns_n} turns × isl={isl}±{isl_stdev}, osl={osl}±{osl_stdev}, "
+                     f"prefix={prefix}, margin={ctx_margin})")
 
         # Validate workload fits within model's architectural limit
-        model_max_pos = self._model_config.get('max_position_embeddings', 4096) if self._model_config else 4096
-        if computed_max_model_len > model_max_pos:
+        model_max_pos = (self._model_config.get('max_position_embeddings') or None) \
+            if self._model_config else None
+        if model_max_pos and computed_max_model_len > model_max_pos:
             raise ValueError(
-                f"Workload OSL/ISL settings require {computed_max_model_len} tokens "
-                f"(isl={isl}±{isl_stdev}, osl={osl}±{osl_stdev}, prefix={prefix}, margin={ctx_margin}), "
+                f"Workload settings require {computed_max_model_len} tokens "
+                f"({turns_n} turns × isl={isl}±{isl_stdev}, osl={osl}±{osl_stdev}, "
+                f"prefix={prefix}, margin={ctx_margin}), "
                 f"but model only supports {model_max_pos} max_position_embeddings. "
-                f"Reduce ISL, OSL, variance, or prefix to fit within model capability."
+                f"Reduce ISL, OSL, turns, variance, or prefix to fit within model capability."
             )
 
         # Store KV cache sizing info for per-config validation at test time.
         # Each TP value has a different VRAM budget — checked in _check_kv_budget_for_tp().
         try:
-            kv_cfg = self._model_config or {}
-            self._kv_bytes_per_token = (
-                2 *
-                kv_cfg.get('num_hidden_layers', 32) *
-                kv_cfg.get('num_key_value_heads', kv_cfg.get('num_attention_heads', 32)) *
-                kv_cfg.get('head_dim', kv_cfg.get('hidden_size', 4096) // max(kv_cfg.get('num_attention_heads', 32), 1)) *
-                1  # FP8 = 1 byte/value
-            )
+           kv_cfg = self._model_config or {}
+           self._kv_bytes_per_token = (
+               2 *
+               kv_cfg.get('num_hidden_layers', 32) *
+               kv_cfg.get('num_key_value_heads', kv_cfg.get('num_attention_heads', 32)) *
+               kv_cfg.get('head_dim', kv_cfg.get('hidden_size', 4096) // max(kv_cfg.get('num_attention_heads', 32), 1)) *
+               1  # FP8 = 1 byte/value
+           )
         except Exception:
-            self._kv_bytes_per_token = 0
+           self._kv_bytes_per_token = 0
 
         # Always use computed max_model_len since default 8192 is not a user-provided value
         self.config.max_model_len = computed_max_model_len
@@ -465,23 +477,23 @@ class RecipeOptimizer(
         max_model_len = self.config.max_model_len or 8192
         fpt_ceiling = max(0, max_model_len - prefix - max_out - ctx_margin)
         if fpt_ceiling > 0:
-            for attr, label in [
-                ('first_prompt_tokens', 'first_prompt_tokens'),
-                ('first_prompt_tokens_min', 'first_prompt_tokens_min'),
-                ('first_prompt_tokens_max', 'first_prompt_tokens_max'),
-            ]:
-                val = getattr(config, attr, None)
-                if val is not None and int(val) > fpt_ceiling:
-                    self.log(f"Clamped {label}: {val} → {fpt_ceiling} (fits max_model_len={max_model_len}, prefix={prefix}, max_output={max_out})", 'warning')
-                    setattr(config, attr, fpt_ceiling)
-            # Also clamp stdev: mean + 2*stdev must not exceed ceiling
-            fpt_mean = getattr(config, 'first_prompt_tokens', None)
-            fpt_stdev = getattr(config, 'first_prompt_tokens_stdev', None)
-            if fpt_mean is not None and fpt_stdev is not None:
-                max_stdev = max(0, (fpt_ceiling - int(fpt_mean)) / 2)
-                if int(fpt_stdev) > max_stdev:
-                    self.log(f"Clamped first_prompt_tokens_stdev: {fpt_stdev} → {int(max_stdev)} (mean + 2*stdev ≤ {fpt_ceiling})", 'warning')
-                    config.first_prompt_tokens_stdev = int(max_stdev)
+           for attr, label in [
+               ('first_prompt_tokens', 'first_prompt_tokens'),
+               ('first_prompt_tokens_min', 'first_prompt_tokens_min'),
+               ('first_prompt_tokens_max', 'first_prompt_tokens_max'),
+           ]:
+               val = getattr(config, attr, None)
+               if val is not None and int(val) > fpt_ceiling:
+                   self.log(f"Clamped {label}: {val} → {fpt_ceiling} (fits max_model_len={max_model_len}, prefix={prefix}, max_output={max_out})", 'warning')
+                   setattr(config, attr, fpt_ceiling)
+           # Also clamp stdev: mean + 2*stdev must not exceed ceiling
+           fpt_mean = getattr(config, 'first_prompt_tokens', None)
+           fpt_stdev = getattr(config, 'first_prompt_tokens_stdev', None)
+           if fpt_mean is not None and fpt_stdev is not None:
+               max_stdev = max(0, (fpt_ceiling - int(fpt_mean)) / 2)
+               if int(fpt_stdev) > max_stdev:
+                   self.log(f"Clamped first_prompt_tokens_stdev: {fpt_stdev} → {int(max_stdev)} (mean + 2*stdev ≤ {fpt_ceiling})", 'warning')
+                   config.first_prompt_tokens_stdev = int(max_stdev)
 
         # Results storage
         self.optimal_decode_tp: Optional[OptimalTP] = None
@@ -533,7 +545,7 @@ class RecipeOptimizer(
         # Resume: load completed tests from DB
         self.completed_tests: Dict[str, Dict[str, Any]] = {}
         if self.db_manager and self.run_id:
-            self._load_completed_tests()
+           self._load_completed_tests()
 
     def _load_pp_supported_architectures(self) -> List[str]:
         """Load PP-supported model architectures from config file."""
