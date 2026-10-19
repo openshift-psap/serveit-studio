@@ -457,15 +457,16 @@ class TemplateManager:
                 vars_dict['lora_adapters_host_path'] = 'lora-adapters'
                 vars_dict['lora_adapters_use_pvc'] = True
             # CPU staging accounting: --max-cpu-loras holds all N adapters in
-            # host RAM. Auto-estimate = rank x 20MB (GLM-5.3-class attention-
-            # only adapter); lora_adapter_size_mb overrides the estimate.
-            # Per-adapter cost is 2x on-disk size: vLLM keeps the deserialized
-            # tensor AND a pinned copy (.pin_memory()) — 1000 x 22MB adapters
-            # consume ~44GiB (run-53 TP2 OOMKilled at 54Gi with 42.5GiB
-            # observed mid-staging). +4Gi headroom for safetensors load-time
-            # copies. Keep in sync with pipeline._lora_staging_gib.
+            # host RAM, ONE PRIVATE SHM COPY PER TP RANK (measured run-53:
+            # per-worker RssShmem 25.7 GiB = 22 adapters + 3.7 psm; cgroup
+            # charge = RSS sum, not shared). Auto-estimate = rank x 20MB
+            # (GLM-5.3-class attention-only adapter); lora_adapter_size_mb
+            # overrides the estimate. Keep in sync with
+            # pipeline._lora_staging_gib.
             est_mb = getattr(config, 'lora_adapter_size_mb', None) or (lora_rank * 20)
-            staging_gib = (lora_n * est_mb * 2 + 1023) // 1024 + 4
+            _staging_tp = max(vars_dict.get('prefill_tp') or 1,
+                              vars_dict.get('decode_tp') or 1)
+            staging_gib = (lora_n * est_mb * _staging_tp + 1023) // 1024 + 4
             for key in ('memory_request', 'memory_limit'):
                 vars_dict[key] = _add_memory_gib(vars_dict.get(key), staging_gib)
             logger.info(

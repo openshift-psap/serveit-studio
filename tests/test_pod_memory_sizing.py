@@ -200,7 +200,7 @@ class TestLoraStagingValidation:
         # 1000 adapters x 22MB (probed Gemma-4 reality) = 22 + 4 = 26Gi,
         # not the rank x 20MB estimate (320MB -> 317Gi).
         stub = self._lora_stub(lora_adapter_size_mb=22)
-        assert stub._lora_staging_gib() == 47
+        assert stub._lora_staging_gib() == 26
 
     def test_staging_zero_when_lora_disabled(self):
         stub = _make_stub(advanced={})
@@ -210,31 +210,32 @@ class TestLoraStagingValidation:
         # No override, no probe (orchestrator absent -> probe fails) ->
         # rank 16 x 20MB = 320MB per adapter -> (320000+1023)//1024+4 = 317Gi
         stub = self._lora_stub()
-        assert stub._lora_staging_gib() == 629
+        assert stub._lora_staging_gib() == 317
 
     def test_staging_included_in_free_pool_validation(self):
         # Base 80Gi + staging 26Gi = 106Gi total; free 408Gi -> 367Gi/pod:
         # fits, no cap. Without staging in the math this passed trivially.
         stub = self._lora_stub(lora_adapter_size_mb=22, pool_mem=408.2, pool_cpu=33.86)
         mem, _ = stub._get_pod_resources(tp=8, total_pods=4)
-        assert mem == '128Gi'  # base only; template_manager adds the 47Gi
+        assert mem == '146Gi'  # base only; template_manager adds the 176Gi (per-rank x8)
 
     def test_staging_over_free_pool_caps_base(self):
-        # Hard floor = 80+16+47 = 143Gi fits (free 144Gi/pod from 160Gi
-        # pool), but total 151 > 144: base capped to 144 - 47 = 97Gi so
-        # the DEPLOYED total (base + template_manager staging) fits.
-        stub = self._lora_stub(pool_mem=160.0, pool_cpu=33.86, lora_adapter_size_mb=22)
+        # Per-rank staging at tp=8: (1000x22x8)//1024+4 = 176Gi. Hard floor
+        # = 80+16+176 = 272Gi fits (free 297Gi/pod from 330Gi pool at 1
+        # pod/node), but total with headroom 322 > 297: base capped to
+        # 297 - 176 = 121Gi so the DEPLOYED total fits.
+        stub = self._lora_stub(pool_mem=330.0, pool_cpu=33.86, lora_adapter_size_mb=22)
         mem, _ = stub._get_pod_resources(tp=8, total_pods=4)
-        assert mem == '97Gi'
-        assert any('Capping base to 97Gi' in m for m in stub.logs)
+        assert mem == '121Gi'
+        assert any('Capping base to 121Gi' in m for m in stub.logs)
 
     def test_staging_hard_floor_skips_config(self):
-        # Free per pod (90Gi) < loading 80 + workers 16 + staging 629:
+        # Free per pod (90Gi) < loading 80 + workers 16 + per-rank staging:
         # skip instead of deploying doomed pods.
         stub = self._lora_stub(pool_mem=100.0, pool_cpu=33.0)
         with pytest.raises(RuntimeError, match='Insufficient node memory'):
             stub._get_pod_resources(tp=8, total_pods=4)
-        assert any('LoRA staging 629Gi' in m for m in stub.logs)
+        assert any('LoRA staging 2504Gi' in m for m in stub.logs)
 
 
 class TestLoraGpuSlotCost:

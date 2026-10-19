@@ -1700,20 +1700,20 @@ class RecipeOptimizer(
                 pass
         return fallback
 
-    def _lora_staging_gib(self) -> int:
+    def _lora_staging_gib(self, tp: int = 1) -> int:
         """LoRA CPU staging memory per pod (--max-cpu-loras holds all N
         adapters in host RAM).
 
-        Mirrors template_manager's staging formula — keep in sync. Uses the
-        measured adapter size when available, config override next, rank x
-        20MB estimate last. Uses run-level lora_num_adapters (the max) so
-        sweep levels with fewer adapters validate conservatively.
+        EACH TP RANK HOLDS A PRIVATE SHM COPY of every staged adapter.
+        Measured (run-53, 1000 x 22MB Gemma-4 adapters, vLLM v0.31):
+        per-worker RssShmem 25.7 GiB = 22 adapters + 3.7 psm; cgroup
+        charge equals the process-RSS sum (not shared). Totals: TP2=67,
+        TP4=129 GiB steady state; TP4 under 30-user load +0.1 GiB.
+        The earlier 2x-pinned theory was the TP2 coincidence (2 ranks).
 
-        The per-adapter cost is 2x the on-disk size: vLLM's from_lora_tensors
-        keeps the deserialized tensor AND a pinned copy (.pin_memory()), so
-        1000 x 22MB adapters consume ~44GiB of cgroup memory, not 22 (run-53
-        TP2: OOMKilled at 54Gi with 42.5GiB observed mid-staging and still
-        climbing; TP1 at 53Gi passed only by luck of timing).
+        Uses the measured adapter size when available, config override
+        next, rank x 20MB estimate last. Run-level lora_num_adapters (the
+        max) so sweep levels validate conservatively.
         """
         if not getattr(self.config, 'lora_enabled', False):
             return 0
@@ -1723,7 +1723,7 @@ class RecipeOptimizer(
         est_mb = (getattr(self.config, 'lora_adapter_size_mb', None)
                   or self._probe_lora_adapter_size_mb()
                   or (int(getattr(self.config, 'lora_max_rank', 16) or 16) * 20))
-        return (lora_n * est_mb * 2 + 1023) // 1024 + 4
+        return (lora_n * est_mb * max(tp, 1) + 1023) // 1024 + 4
 
     def _effective_offload_settings(self, tp: int = 1) -> tuple:
         """Resolve effective CPU offload / weight offload / hostIPC / shm settings.
@@ -1978,15 +1978,22 @@ class RecipeOptimizer(
                 shm_need_gb = int(cpu_offload)
             else:
                 shm_need_gb = shm_gb if shm_gb else max(2, 4 * tp)
-            memory_per_pod_gb = loading_buffer_gb + worker_overhead_gb + int(weight_offload) + shm_need_gb
-
             # LoRA CPU staging (--max-cpu-loras holds every adapter in host
-            # RAM) is ADDED to the pod spec by template_manager at render
-            # time. Validate the TOTAL against the free pool here so the
-            # deployed request never exceeds what the node can schedule
-            # (run 51: 26Gi validated, 343Gi deployed, pods stuck Pending).
-            # mem_str below stays base-only; template_manager adds staging.
-            lora_staging_gb = self._lora_staging_gib()
+            # RAM, one private shm copy per TP rank) is ADDED to the pod
+            # spec by template_manager at render time. Validate the TOTAL
+            # against the free pool here so the deployed request never
+            # exceeds what the node can schedule (run 51: 26Gi validated,
+            # 343Gi deployed, pods stuck Pending). mem_str below stays
+            # base-only; template_manager adds staging.
+            lora_staging_gb = self._lora_staging_gib(tp)
+            memory_per_pod_gb = loading_buffer_gb + worker_overhead_gb + int(weight_offload) + shm_need_gb
+            if lora_staging_gb:
+                # Pressure headroom on the FULL total (base + staging):
+                # staging transients exceed the steady-state plateau — TP4
+                # peaked at 130.7 GiB process RSS vs 128.5 steady, +0.1 under
+                # 30-user load. 6% covers transient + load variance. The
+                # headroom is folded into the base (template adds staging).
+                memory_per_pod_gb = int((memory_per_pod_gb + lora_staging_gb) * 1.06) - lora_staging_gb
             total_with_staging_gb = memory_per_pod_gb + lora_staging_gb
 
             # Validate against actual free memory — warn and cap if needed.
