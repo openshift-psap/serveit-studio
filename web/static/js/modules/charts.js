@@ -2302,16 +2302,142 @@ function _renderChartsImpl(data, runId, content) {
                     '<td style="text-align:center;">' + (p.output_tps_mean || 0).toFixed(0) + ' tok/s</td>' +
                     '</tr>';
             }).join('');
+            var sweepChartId = 'lora-sweep-chart-' + skey.replace(/[^a-z0-9]/gi, '-');
             html += '<div class="chart-card" style="border-left:6px solid #4f46e5;">' +
                 '<div class="chart-card-header" style="background:linear-gradient(135deg,#4f46e5,#818cf8); color:white;">LoRA Adapter Sweep — ' + lbl + '</div>' +
                 '<div style="padding:12px 20px; color:#1e293b; font-size:0.93em; line-height:1.6;">' +
                 'Multi-tenant scaling curve: the best configuration re-tested at increasing <strong>adapter counts</strong>, ' +
                 'with benchmark requests round-robined across the base model and all adapters. GPU residency is auto-sized from free VRAM — ' +
-                'once the adapter count exceeds it, LRU swapping begins (⚠️) and latency degrades.' +
+                'once the adapter count exceeds it, LRU swapping begins (red shading) and latency degrades.' +
+                '<div id="' + sweepChartId + '" style="width:100%;height:520px;margin-top:10px;"></div>' +
                 '<table style="width:100%;border-collapse:collapse;margin-top:10px;font-size:0.9em;">' +
                 '<tr style="background:#eef2ff;"><th style="padding:6px;">Adapters</th><th style="padding:6px;">GPU-Resident</th><th style="padding:6px;">TTFT p90</th><th style="padding:6px;">Throughput</th><th style="padding:6px;">ITL p90</th><th style="padding:6px;">Output</th></tr>' +
                 rows + '</table></div></div>';
+
+            (function(pts, chartId) {
+                chartQueue.push(function() {
+                    var x = pts.map(function(p) { return p.adapter_count; });
+                    var traces = [
+                        {
+                            x: x, y: pts.map(function(p) { return p.ttft_p90 || 0; }),
+                            name: 'TTFT P90', type: 'scatter', mode: 'lines+markers',
+                            line: { color: '#3b82f6', width: 3 }, marker: { size: 8 },
+                            hovertemplate: 'Adapters: %{x}<br>TTFT P90: %{y:.0f} ms<extra></extra>'
+                        },
+                        {
+                            x: x, y: pts.map(function(p) { return p.itl_p90 || 0; }),
+                            name: 'ITL P90', type: 'scatter', mode: 'lines+markers',
+                            line: { color: '#f59e0b', width: 3 }, marker: { size: 8 },
+                            hovertemplate: 'Adapters: %{x}<br>ITL P90: %{y:.1f} ms<extra></extra>'
+                        },
+                        {
+                            x: x, y: pts.map(function(p) { return p.throughput_mean || 0; }),
+                            name: 'Throughput', type: 'scatter', mode: 'lines+markers', yaxis: 'y2',
+                            line: { color: '#10b981', width: 3, dash: 'dot' }, marker: { size: 8, symbol: 'diamond' },
+                            hovertemplate: 'Adapters: %{x}<br>Throughput: %{y:.3f} req/s<extra></extra>'
+                        }
+                    ];
+                    // Shade the LRU-swapping region (adapters > GPU-resident)
+                    var shapes = [];
+                    var firstLru = -1;
+                    for (var li = 0; li < pts.length; li++) {
+                        if (pts[li].lru_swapping) { firstLru = li; break; }
+                    }
+                    if (firstLru > 0) {
+                        var boundary = (pts[firstLru - 1].adapter_count + pts[firstLru].adapter_count) / 2;
+                        shapes.push({
+                            type: 'line', x0: boundary, x1: boundary, yref: 'paper', y0: 0, y1: 1,
+                            line: { color: '#ef4444', width: 2, dash: 'dash' }
+                        });
+                        shapes.push({
+                            type: 'rect', x0: boundary, x1: x[x.length - 1] * 1.03, yref: 'paper', y0: 0, y1: 1,
+                            fillcolor: 'rgba(239,68,68,0.08)', line: { width: 0 }
+                        });
+                    }
+                    var resident = pts[0].gpu_resident;
+                    var annotations = resident ? [{
+                        x: resident, y: 1, yref: 'paper', xanchor: 'left', yanchor: 'top',
+                        text: 'GPU-resident: ' + resident, showarrow: false,
+                        font: { color: '#64748b', size: 11 },
+                        bgcolor: 'rgba(255,255,255,0.8)'
+                    }] : [];
+                    Plotly.newPlot(chartId, traces, {
+                        margin: { l: 60, r: 60, t: 30, b: 45 },
+                        xaxis: { title: 'Adapter Count', gridcolor: '#f1f5f9' },
+                        yaxis: { title: 'Latency (ms)', gridcolor: '#f1f5f9' },
+                        yaxis2: { title: 'req/s', overlaying: 'y', side: 'right' },
+                        shapes: shapes, annotations: annotations,
+                        legend: { orientation: 'h', y: 1.12 },
+                        hovermode: 'x unified'
+                    }, { displayModeBar: false, responsive: true });
+                });
+            })(pts, sweepChartId);
         });
+    }
+
+    // LoRA routing & residency signals (vllm:lora_requests_info + per-pod TTFT)
+    if (charts.vllm && charts.vllm.lora && charts.vllm.configs && charts.vllm.configs.length) {
+        var loraSig = charts.vllm.lora;
+        var hasLoraData = (loraSig.ttft_p99_pod_spread_ms || []).some(function(v) { return v > 0; }) ||
+                          (loraSig.adapter_churn || []).some(function(v) { return v > 0; }) ||
+                          (loraSig.adapters_per_pod || []).some(function(v) { return v > 0; });
+        if (hasLoraData) {
+            var cfgLabels = charts.vllm.configs;
+            html += '<div class="chart-card" style="border-left:6px solid #7c3aed;">' +
+                '<div class="chart-card-header" style="background:linear-gradient(135deg,#7c3aed,#a78bfa); color:white;">LoRA Routing &amp; Residency</div>' +
+                '<div style="padding:12px 20px; color:#1e293b; font-size:0.93em; line-height:1.6;">' +
+                'Per-configuration LoRA serving signals from vLLM Prometheus metrics. ' +
+                '<strong>TTFT P99 spread across pods</strong> — the hot-pod vs cold-pod latency delta; misrouted requests pay a CPU&rarr;GPU adapter swap-in and show up as a large spread. ' +
+                '<strong>Adapter churn</strong> — residency set changes from LRU evictions; high churn with few adapters means request scattering. ' +
+                '<strong>Adapters per pod</strong> — how many distinct adapters each pod served (concentrated = adapter-aware routing; uniform spread across all pods = random load balancing). ' +
+                '<strong>Waiting queue CV</strong> — queue-depth imbalance across pods; a hot-pod overload queues while cold pods idle.' +
+                '<div id="lora-routing-chart" style="width:100%;height:640px;margin-top:10px;"></div></div></div>';
+
+            chartQueue.push(function() {
+                var cfgCount = cfgLabels.length;
+                var dom = [
+                    { x: [0, 0.47], y: [0.58, 1] },
+                    { x: [0.53, 1], y: [0.58, 1] },
+                    { x: [0, 0.47], y: [0.06, 0.48] },
+                    { x: [0.53, 1], y: [0.06, 0.48] }
+                ];
+                function subplot(series, color, name, ytitle, idx, yaxisNum) {
+                    return {
+                        x: cfgLabels, y: series, name: name, type: 'bar',
+                        marker: { color: color },
+                        xaxis: 'x' + (idx > 1 ? idx : ''), yaxis: 'y' + yaxisNum,
+                        hovertemplate: '%{x}<br>' + name + ': %{y}<extra></extra>'
+                    };
+                }
+                var t1 = subplot(loraSig.ttft_p99_pod_spread_ms || [], '#3b82f6', 'TTFT spread', 'ms', 1, 1);
+                var t2 = subplot(loraSig.adapter_churn || [], '#ef4444', 'Churn', 'sets', 2, 2);
+                var t3 = subplot(loraSig.adapters_per_pod || [], '#7c3aed', 'Adapters/pod', 'count', 3, 3);
+                var t4 = subplot(loraSig.waiting_cv || [], '#f59e0b', 'Queue CV', 'σ/μ', 4, 4);
+                var layout = {
+                    margin: { l: 55, r: 20, t: 30, b: 90 },
+                    showlegend: false, hovermode: 'closest',
+                    xaxis: { domain: dom[0].x, anchor: 'y', tickangle: -35, automargin: true },
+                    yaxis: { domain: dom[0].y, anchor: 'x', title: { text: 'TTFT P99 spread (ms)' } },
+                    xaxis2: { domain: dom[1].x, anchor: 'y2', tickangle: -35, automargin: true },
+                    yaxis2: { domain: dom[1].y, anchor: 'x2', title: { text: 'Residency changes' } },
+                    xaxis3: { domain: dom[2].x, anchor: 'y3', tickangle: -35, automargin: true },
+                    yaxis3: { domain: dom[2].y, anchor: 'x3', title: { text: 'Adapters per pod' } },
+                    xaxis4: { domain: dom[3].x, anchor: 'y4', tickangle: -35, automargin: true },
+                    yaxis4: { domain: dom[3].y, anchor: 'x4', title: { text: 'Waiting CV' } },
+                    annotations: [
+                        { xref: 'paper', yref: 'paper', x: 0.23, y: 1.03, showarrow: false, text: 'Routing cost — hot vs cold pod TTFT delta', font: { size: 12, color: '#3b82f6' } },
+                        { xref: 'paper', yref: 'paper', x: 0.77, y: 1.03, showarrow: false, text: 'LRU churn — residency set changes', font: { size: 12, color: '#ef4444' } },
+                        { xref: 'paper', yref: 'paper', x: 0.23, y: 0.51, showarrow: false, text: 'Adapter concentration per pod', font: { size: 12, color: '#7c3aed' } },
+                        { xref: 'paper', yref: 'paper', x: 0.77, y: 0.51, showarrow: false, text: 'Queue imbalance (0 = perfect)', font: { size: 12, color: '#f59e0b' } }
+                    ]
+                };
+                if (cfgCount > 8) {
+                    layout.xaxis.tickmode = 'array';
+                    layout.xaxis.tickvals = cfgLabels.filter(function(_, i) { return i % Math.ceil(cfgCount / 8) === 0; });
+                }
+                Plotly.newPlot('lora-routing-chart', [t1, t2, t3, t4], layout, { displayModeBar: false, responsive: true });
+            });
+        }
     }
     if (data.cache_sweep) {
         html += '<div class="chart-card" style="border-left:6px solid #7c3aed;">' +
