@@ -1765,8 +1765,11 @@ class RecipeOptimizer(
         if not host_ipc and not shm_gb and cpu_offload:
             shm_gb = cpu_offload + 210  # same formula as template_manager
         elif not host_ipc and not shm_gb:
-            # Mirror template_manager's TP-rank autoscaling (1 GiB/rank, min 2)
-            shm_gb = max(2, tp)
+            # Mirror template_manager's TP-rank autoscaling (4 GiB/rank,
+            # min 2 — kernel OOM evidence: shmem-rss ~15GiB per TP4 worker).
+            # Must stay in sync with _get_pod_resources and template_manager:
+            # this value shadows the fallback there when truthy.
+            shm_gb = max(2, 4 * tp)
         return cpu_offload, weight_offload, host_ipc, shm_gb
 
     def _get_pod_resources(self, tp: int, total_pods: int) -> tuple:
