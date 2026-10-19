@@ -341,10 +341,34 @@ class RecipeOptimizer(
                 self._use_deep_gemm = True
                 self.log("  DeepGemm: enabled (per-tensor FP8 quantization)")
 
-        # Scale model load timeout by model size: 10s per 1B params, min 600s
+        # Scale model load timeout by model size: 10s per 1B params, min 600s.
+        # Additive allowances for the startup phases the base formula ignores
+        # (run-53 failures: v0.31.0 + LoRA + MTP loads in ~10-11 min — the
+        # 600s floor killed healthy deployments mid-load):
+        # - LoRA: vLLM eagerly loads every --lora-modules adapter at engine
+        #   init (serial init_static_loras), ~0.2-0.4s per adapter
+        # - MTP/speculative: draft model load + extra graph capture
+        # - Multi-pod: DRA batch scaling staggers replicas and parallel
+        #   JIT compilation contends on CPU, stretching the slowest pod
         model_load_timeout = max(600, int(self._model_size_b * 10))
+        _timeout_parts = [f"base {model_load_timeout}s"]
+        _lora_n = int(getattr(self.config, 'lora_num_adapters', 0) or 0) \
+            if getattr(self.config, 'lora_enabled', False) else 0
+        if _lora_n:
+            _lora_allow = max(240, int(_lora_n * 0.4))
+            model_load_timeout += _lora_allow
+            _timeout_parts.append(f"lora({_lora_n}) +{_lora_allow}s")
+        if getattr(self.config, 'speculative_config_method', None) or \
+                (getattr(self.config, 'advanced_vllm', None) or {}).get('speculative_method'):
+            model_load_timeout += 240
+            _timeout_parts.append("mtp +240s")
+        _extra_pods = max(0, int(getattr(self.config, 'total_gpus', 0) or 0) - 1)
+        if _extra_pods:
+            _pod_allow = min(480, 45 * _extra_pods)
+            model_load_timeout += _pod_allow
+            _timeout_parts.append(f"pods({self.config.total_gpus}) +{_pod_allow}s")
         self.orchestrator.deployment_timeout = model_load_timeout
-        self.log(f"Model load timeout: {model_load_timeout}s ({self._model_size_b:.0f}B × 10s/B)")
+        self.log(f"Model load timeout: {model_load_timeout}s ({', '.join(_timeout_parts)})")
 
         # Set HF_TOKEN in process environment so guidellm and other subprocesses inherit it
         if self.config.hf_token and not os.environ.get('HF_TOKEN'):
