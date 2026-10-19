@@ -161,10 +161,9 @@ spec:
             imagePullPolicy: Always
             args:
               - --port=8000
-              - --vllm-port=8200
+              - --model-server-port=8200
               - {{ sidecar_connector_flag | default('--kv-connector') }}=nixlv2
               - --zap-log-level=1
-              - --secure-proxy=false
               - --enable-prefiller-sampling
 {% if data_parallelism > 1 %}
               - --data-parallel-size={{ data_parallelism }}
