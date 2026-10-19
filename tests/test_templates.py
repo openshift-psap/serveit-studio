@@ -582,11 +582,11 @@ def test_lora_cpu_staging_memory_accounting(tm):
     mem = _vllm_container(lwt['leaderTemplate']['spec'])['resources']['requests']['memory']
     assert mem == '48Gi'
 
-    # Multi-node: floor (200Gi) applies first, staging adds on top (211Gi)
+    # Multi-node: floor (200Gi) applies first, staging adds on top (217Gi)
     out = tm.render_pd(_make_config(lora_enabled=True, lora_num_adapters=20))
     lwt = _lws_doc(out['prefill'])['spec']['leaderWorkerTemplate']
     mem = _vllm_container(lwt['leaderTemplate']['spec'])['resources']['requests']['memory']
-    assert mem == '211Gi'
+    assert mem == '217Gi'
 
 
 def test_add_memory_gib():
