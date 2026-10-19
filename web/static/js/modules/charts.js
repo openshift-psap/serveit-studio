@@ -23,7 +23,7 @@ function _renderChartsImpl(data, runId, content) {
     }
 
     let html = '';
-    let secRec = '', secTP = '', secCfg = '', secCmp = '', secStep9 = '', secCal = '', secCacheSweep = '', secVLLM = '', secTestCfg = '', secEppTuning = '', secDeployTiming = '', secPareto = '', secTraffic = '';
+    let secRec = '', secTP = '', secCfg = '', secCmp = '', secStep9 = '', secCal = '', secCacheSweep = '', secVLLM = '', secTestCfg = '', secEppTuning = '', secDeployTiming = '', secPareto = '', secTraffic = '', secLora = '';
 
     // Lookup from test_id/config_name to all_results entry (used across multiple sections)
     const _allResLookup = {};
@@ -2437,8 +2437,55 @@ function _renderChartsImpl(data, runId, content) {
                 }
                 Plotly.newPlot('lora-routing-chart', [t1, t2, t3, t4], layout, { displayModeBar: false, responsive: true });
             });
+
+            // Per-pod LoRA residency breakdown — which adapters each pod
+            // actually served, GPU-resident cap, churn, and queue state
+            (charts.vllm.lora_pod_details || []).forEach(function(pd) {
+                if (!pd || !pd.pods) return;
+                var podNames = Object.keys(pd.pods);
+                if (!podNames.length) return;
+                var podRows = podNames.map(function(pod) {
+                    var p = pd.pods[pod];
+                    var distinct = (p.running_adapters_distinct || []).length;
+                    var last = p.running_adapters_last || [];
+                    var lastStr = last.length
+                        ? last.length + ' (' + last.slice(0, 5).join(', ') + (last.length > 5 ? ', …' : '') + ')'
+                        : '—';
+                    var wait = (p.waiting_adapters_last || []).length;
+                    return '<tr>' +
+                        '<td style="font-family:monospace;font-size:0.85em;">' + pod + '</td>' +
+                        '<td style="text-align:center;">' + (p.max_lora != null ? p.max_lora : '—') + '</td>' +
+                        '<td style="text-align:center;font-weight:600;">' + distinct + '</td>' +
+                        '<td style="text-align:center;">' + (p.residency_set_changes || 0) + '</td>' +
+                        '<td style="font-size:0.82em;color:#64748b;">' + lastStr + '</td>' +
+                        '<td style="text-align:center;">' + (wait || '—') + '</td>' +
+                        '</tr>';
+                }).join('');
+                var affTotal = pd.total_adapters || 0;
+                var affPct = affTotal ? Math.round(100 * (pd.concentrated || 0) / affTotal) : 0;
+                var affLine = affTotal
+                    ? '<div style="margin:8px 0 4px;font-size:0.88em;">🔀 <strong>Adapter affinity:</strong> ' +
+                      '<span style="color:#059669;font-weight:600;">' + (pd.concentrated || 0) + '</span> of ' + affTotal +
+                      ' adapters (' + affPct + '%) served by a single pod — ' +
+                      (affPct >= 80 ? 'concentrated (adapter-aware routing)' :
+                       affPct >= 50 ? 'partially concentrated' :
+                       'scattered across pods (random load balancing)') +
+                      '; <span style="color:#ef4444;">' + (pd.scattered || 0) + '</span> served by multiple pods.</div>'
+                    : '';
+                html += '<div style="margin-top:16px;border:1.5px solid #e2e8f0;border-radius:8px;overflow:hidden;">' +
+                    '<div style="background:#f8fafc;padding:8px 14px;font-weight:600;color:#334155;font-size:0.95em;border-bottom:1px solid #e2e8f0;">' +
+                    'Pod Breakdown — ' + pd.config + '</div>' +
+                    affLine +
+                    '<table style="width:100%;border-collapse:collapse;font-size:0.88em;">' +
+                    '<tr style="background:#eef2ff;"><th style="padding:6px 10px;text-align:left;">Pod</th><th style="padding:6px 8px;">GPU-Resident Cap</th><th style="padding:6px 8px;">Distinct Adapters Served</th><th style="padding:6px 8px;">Residency Changes</th><th style="padding:6px 8px;text-align:left;">Last Running Set</th><th style="padding:6px 8px;">Waiting</th></tr>' +
+                    podRows + '</table></div>';
+            });
         }
     }
+
+    // Flush LoRA section
+    secLora = html; html = '';
+
     if (data.cache_sweep) {
         html += '<div class="chart-card" style="border-left:6px solid #7c3aed;">' +
             '<div class="chart-card-header" style="background:linear-gradient(135deg,#7c3aed,#a78bfa); color:white;">Cache Hit Sweep</div>' +
@@ -3241,6 +3288,7 @@ function _renderChartsImpl(data, runId, content) {
     if (secStep9) subtabDefs.push({ id: 'latency-search', label: 'Latency Search', icon: '&#128269;' });
     if (secCal) subtabDefs.push({ id: 'calibrated-load', label: 'Concurrency Sweep', icon: '&#9878;' });
     if (secCacheSweep) subtabDefs.push({ id: 'cache-sweep', label: 'Cache Sweep', icon: '&#128451;' });
+    if (secLora) subtabDefs.push({ id: 'lora-serving', label: 'LoRA Serving', icon: '&#127919;' });
     if (secDeployTiming) subtabDefs.push({ id: 'deploy-timing', label: 'Deploy Timing', icon: '&#9202;' });
     if (secVLLM) subtabDefs.push({ id: 'vllm-metrics', label: 'vLLM Metrics', icon: '&#9889;' });
     if (secEppTuning) subtabDefs.push({ id: 'epp-tuning', label: 'EPP Tuning', icon: '&#9881;' });
@@ -3253,6 +3301,7 @@ function _renderChartsImpl(data, runId, content) {
         'recommendation': secRec, 'tp-calibration': secTP, 'configurations': secCfg,
         'test-settings': secTestCfg, 'comparison': secCmp, 'latency-search': secStep9,
         'calibrated-load': secCal, 'cache-sweep': secCacheSweep, 'deploy-timing': secDeployTiming, 'vllm-metrics': secVLLM, 'epp-tuning': secEppTuning,
+        'lora-serving': secLora,
         'pareto-frontier': secPareto, 'traffic': secTraffic, 'estimator': secEst
     };
 

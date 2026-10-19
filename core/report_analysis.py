@@ -1145,6 +1145,9 @@ class ReportAnalyzer:
         # LoRA / hot-pod routing signals (0 when LoRA not in use)
         lora = {'ttft_p99_pod_spread_ms': [], 'adapter_churn': [], 'adapters_per_pod': [],
                 'waiting_cv': []}
+        # Per-pod LoRA residency detail (vllm:lora_requests_info summaries),
+        # aligned with configs — None entries for tests without LoRA data
+        lora_pod_details = []
 
         for r in successful:
             if not r.metrics_json:
@@ -1161,6 +1164,20 @@ class ReportAnalyzer:
                 continue
 
             configs.append(r.display_label)
+
+            # Per-pod LoRA residency detail (aligned with configs)
+            lora_info = prom.get('vllm_lora_adapter_info')
+            if isinstance(lora_info, dict) and lora_info.get('pods'):
+                aff = lora_info.get('adapter_pod_affinity') or {}
+                lora_pod_details.append({
+                    'config': r.display_label,
+                    'pods': lora_info['pods'],
+                    'concentrated': sum(1 for v in aff.values() if len(v) == 1),
+                    'scattered': sum(1 for v in aff.values() if len(v) > 1),
+                    'total_adapters': len(aff),
+                })
+            else:
+                lora_pod_details.append(None)
 
             def get_avg(key, multiplier=1):
                 val = prom.get(key)
@@ -1259,6 +1276,7 @@ class ReportAnalyzer:
             'time_breakdown': time_breakdown,
             'network': network,
             'lora': lora,
+            'lora_pod_details': lora_pod_details,
         }
 
     def _build_calibrated_qps_data(self, step10_results, recommendation,
