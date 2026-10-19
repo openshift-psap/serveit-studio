@@ -573,14 +573,14 @@ def test_lora_cpu_staging_memory_accounting(tm):
     out = tm.render_pd(_make_config(lora_enabled=True, lora_num_adapters=20, **base))
     lwt = _lws_doc(out['prefill'])['spec']['leaderWorkerTemplate']
     mem = _vllm_container(lwt['leaderTemplate']['spec'])['resources']['requests']['memory']
-    assert mem == '51Gi', '40Gi base + 11Gi staging (20 x ~320MB + headroom)'
+    assert mem == '57Gi', '40Gi base + 17Gi staging (20 x ~320MB x 2 pinned+source + headroom)'
 
-    # Per-adapter size override shrinks the estimate: ceil(20*100/1024)+4 = 6Gi
+    # Per-adapter size override shrinks the estimate: ceil(20*100*2/1024)+4 = 8Gi
     out = tm.render_pd(_make_config(lora_enabled=True, lora_num_adapters=20,
                                     lora_adapter_size_mb=100, **base))
     lwt = _lws_doc(out['prefill'])['spec']['leaderWorkerTemplate']
     mem = _vllm_container(lwt['leaderTemplate']['spec'])['resources']['requests']['memory']
-    assert mem == '46Gi'
+    assert mem == '48Gi'
 
     # Multi-node: floor (200Gi) applies first, staging adds on top (211Gi)
     out = tm.render_pd(_make_config(lora_enabled=True, lora_num_adapters=20))

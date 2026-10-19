@@ -1708,6 +1708,12 @@ class RecipeOptimizer(
         measured adapter size when available, config override next, rank x
         20MB estimate last. Uses run-level lora_num_adapters (the max) so
         sweep levels with fewer adapters validate conservatively.
+
+        The per-adapter cost is 2x the on-disk size: vLLM's from_lora_tensors
+        keeps the deserialized tensor AND a pinned copy (.pin_memory()), so
+        1000 x 22MB adapters consume ~44GiB of cgroup memory, not 22 (run-53
+        TP2: OOMKilled at 54Gi with 42.5GiB observed mid-staging and still
+        climbing; TP1 at 53Gi passed only by luck of timing).
         """
         if not getattr(self.config, 'lora_enabled', False):
             return 0
@@ -1717,7 +1723,7 @@ class RecipeOptimizer(
         est_mb = (getattr(self.config, 'lora_adapter_size_mb', None)
                   or self._probe_lora_adapter_size_mb()
                   or (int(getattr(self.config, 'lora_max_rank', 16) or 16) * 20))
-        return (lora_n * est_mb + 1023) // 1024 + 4
+        return (lora_n * est_mb * 2 + 1023) // 1024 + 4
 
     def _effective_offload_settings(self, tp: int = 1) -> tuple:
         """Resolve effective CPU offload / weight offload / hostIPC / shm settings.
