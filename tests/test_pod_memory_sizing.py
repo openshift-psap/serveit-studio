@@ -96,16 +96,16 @@ class TestEffectiveOffloadSettings:
     def test_no_offload_anywhere(self):
         stub = _make_stub(advanced={})
         cpu, weight, _, shm = stub._effective_offload_settings()
-        assert cpu == 0 and weight == 0 and shm == 2  # min floor at tp=1
+        assert cpu == 0 and weight == 0 and shm == 4  # 4 GiB/rank floor at tp=1
 
     def test_shm_autoscales_with_tp(self):
         # No offload, no override: shm mirrors template_manager's TP-rank
         # autoscaling (1 GiB per rank, min 2) instead of a fixed 2 GiB.
         stub = _make_stub(advanced={})
         _, _, _, shm = stub._effective_offload_settings(tp=4)
-        assert shm == 4
-        _, _, _, shm = stub._effective_offload_settings(tp=16)
         assert shm == 16
+        _, _, _, shm = stub._effective_offload_settings(tp=16)
+        assert shm == 64
 
     def test_advanced_off_mode_ignored(self):
         stub = _make_stub(advanced={'cpu_offload_gb': {'mode': 'off'}},
@@ -145,19 +145,18 @@ class TestPodMemorySizing:
         # overhead (2 GiB/rank = 16Gi) + autoscaled shm (8Gi) = 104Gi.
         stub = _make_stub(advanced={}, pool_mem=408.2, pool_cpu=33.86)
         mem, _ = stub._get_pod_resources(tp=8, total_pods=4)
-        assert mem == '104Gi'
+        assert mem == '128Gi'
 
     def test_small_model_tp4_memory_covers_workers(self):
         # Regression for the psap-fire-athena crash loop: Gemma-4 26B TP4 has
         # small per-GPU weights — the old formula gave 16Gi total and pods
         # were OOMKilled during CUDA graph capture. Worker overhead raised it
-        # to 28Gi; the whole-model streaming term (small-model host cost is
-        # TP-independent) raises it further to 23 loading + 8 workers +
-        # 4 shm = 35Gi.
+        # to 28Gi; the whole-model streaming term raises it to 22 loading;
+        # 4 GiB/rank shm adds 16: 22 + 8 workers + 16 shm = 46Gi.
         stub = _make_stub(advanced={}, pool_mem=2000.0, pool_cpu=100.0,
                           model_gb=26.0)
         mem, _ = stub._get_pod_resources(tp=4, total_pods=1)
-        assert mem == '35Gi'
+        assert mem == '47Gi'
 
     def test_host_ipc_memory_covers_offload_without_shm_headroom(self):
         # hostIPC: region lives in host /dev/shm, still cgroup-charged but
@@ -218,7 +217,7 @@ class TestLoraStagingValidation:
         # fits, no cap. Without staging in the math this passed trivially.
         stub = self._lora_stub(lora_adapter_size_mb=22, pool_mem=408.2, pool_cpu=33.86)
         mem, _ = stub._get_pod_resources(tp=8, total_pods=4)
-        assert mem == '104Gi'  # base only; template_manager adds the 26Gi
+        assert mem == '128Gi'  # base only; template_manager adds the 47Gi
 
     def test_staging_over_free_pool_caps_base(self):
         # Hard floor = 80+16+47 = 143Gi fits (free 144Gi/pod from 160Gi
