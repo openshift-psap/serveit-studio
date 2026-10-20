@@ -603,10 +603,12 @@ class PrereqManager:
         # ── 2. KV cache weight ──
         # Long context relative to what a pod can hold = more KV pressure
         est_kv_per_seq = isl + osl
-        est_pod_kv_capacity = max_seqs * est_kv_per_seq * 1.5  # rough: pod can hold ~1.5× max_seqs × avg_ctx
-        kv_pressure = min(1.0, (concurrency * est_kv_per_seq) / max(est_pod_kv_capacity, 1))
+        # Realistic KV capacity is ~0.5× max_seqs × avg context — the KV-cache
+        # VRAM fraction, not max_seqs, is the true limit
+        est_pod_capacity = int(max_seqs * est_kv_per_seq * 0.5)
+        kv_pressure = min(1.0, (concurrency * est_kv_per_seq) / max(est_pod_capacity, 1))
         w_kv = round(min(5.0, 1.0 + kv_pressure * 2.5), 1)
-        reasons.append(f"kv: {concurrency}×{est_kv_per_seq}t ctx vs ~{est_pod_capacity_fmt(est_pod_kv_capacity)} capacity → pressure={kv_pressure:.2f}")
+        reasons.append(f"kv: {concurrency}×{est_kv_per_seq}t ctx vs ~{est_pod_capacity_fmt(est_pod_capacity)} capacity → pressure={kv_pressure:.2f}")
 
         # ── 3. Queue weight ──
         # High concurrency per pod = queue pressure

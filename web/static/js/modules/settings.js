@@ -682,7 +682,7 @@ function updateAutoEppPreview() {
     var cachePct = parseInt(config.prefix_cache_hit_pct) || 0;
     var cacheMode = config.prefix_cache_mode || 'identical';
     var groups = parseInt(config.prefix_cache_groups) || 1;
-    var concurrency = parseInt(config.qps) || 10;
+    var concurrency = parseInt(config.users) || parseInt(config.qps) || 10;
     var turns = parseInt(config.turns) || 1;
     var useCorpus = !!config.use_corpus;
     var hasSla = !!config.latency_constraint_enabled;
@@ -706,10 +706,10 @@ function updateAutoEppPreview() {
 
     // 2. KV cache weight
     var estKvPerSeq = isl + osl;
-    var estPodCapacity = maxSeqs * estKvPerSeq * 1.5;
+    var estPodCapacity = maxSeqs * estKvPerSeq * 0.5;
     var kvPressure = Math.min(1.0, (concurrency * estKvPerSeq) / Math.max(estPodCapacity, 1));
     var wKv = Math.min(5.0, Math.round((1.0 + kvPressure * 2.5) * 10) / 10);
-    reasons.push('kv: ' + concurrency + '×' + estKvPerSeq + 't ctx → pressure=' + kvPressure.toFixed(2));
+    reasons.push('kv: ' + concurrency + '×' + estKvPerSeq + 't ctx vs ~' + Math.round(estPodCapacity / 1000) + 'K capacity → pressure=' + kvPressure.toFixed(2));
 
     // 3. Queue weight
     var estPods = Math.max(1, Math.floor(totalGpus / Math.max(1, Math.min(8, Math.floor(totalGpus / 4) || 1))));
