@@ -32,6 +32,7 @@ spec:
 {% endif %}
       spec: &prefill_pod_spec
         serviceAccountName: llm-d-modelserver
+        hostPID: true
 {% if host_ipc %}        hostIPC: true  # User-selected hostIPC mode for /dev/shm unlimited access
 {% endif %}
         {% if use_anti_affinity or selected_nodes %}
@@ -221,16 +222,26 @@ spec:
                 #fi
 
                 # Wait for the GPU to drain before launching vLLM — a previous
-                # container's orphaned EngineCore can hold ~126GiB briefly after
+                # container's orphaned EngineCore can hold ~126GiB after
                 # RecreateGroupOnPodRestart replaces the pod; starting against it
                 # fails init_device ("Free memory ... less than desired") and
-                # crash-loops. Poll the minimum free MiB across visible GPUs.
+                # crash-loops. This pod owns its DRA-claimed GPU, so any OTHER
+                # process on it is a leftover from a deleted container — kill it
+                # (requires hostPID) instead of waiting for a holder that never
+                # exits. Poll the minimum free MiB across visible GPUs.
                 if command -v nvidia-smi >/dev/null 2>&1; then
                   _gpu_wait=0
                   while [ "$_gpu_wait" -lt 180 ]; do
                     _free=$(nvidia-smi --query-gpu=memory.free --format=csv,noheader,nounits 2>/dev/null | sort -n | head -1 | tr -d ' ')
                     if [ -n "$_free" ] && [ "$_free" -ge 120000 ]; then
                       break
+                    fi
+                    if [ $((_gpu_wait % 60)) -eq 0 ]; then
+                      for _hp in $(nvidia-smi --query-compute-apps=pid --format=csv,noheader 2>/dev/null | tr -d ' ' | sort -u); do
+                        if [ -n "$_hp" ] && [ "$_hp" != "$$" ] && kill -0 "$_hp" 2>/dev/null; then
+                          kill -9 "$_hp" 2>/dev/null && echo "--- Killed leftover GPU holder pid $_hp ---"
+                        fi
+                      done
                     fi
                     echo "--- Waiting for GPU to drain (${_free:-?} MiB free, ${_gpu_wait}s) ---"
                     sleep 5
