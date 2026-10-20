@@ -4,6 +4,42 @@ import os
 import hashlib
 
 
+def apply_multi_turn_prefix_config(config, log=None):
+    """Derive prefix_tokens/prefix_count for multi-turn synthetic workloads.
+
+    Pure config mapping (no dataset I/O). MUST run before max_model_len is
+    computed: guidellm adds prefix_buckets tokens ON TOP of prompt_tokens,
+    so the final turn of an N-turn conversation needs
+    prefix + N*isl + (N-1)*osl tokens of context. When this ran only at
+    dataset-prep time (after max_model_len), the prefix was missing from
+    the context budget and late-turn requests 400'd on context length
+    (run-56: prefix 1800 needed, only 1635 headroom in the 5% multiplier).
+
+    Idempotent: skips when prefix_tokens is already set. Returns True when
+    the config was updated.
+    """
+    if int(getattr(config, 'turns', 1) or 1) <= 1:
+        return False
+    if getattr(config, 'prefix_tokens', None):
+        return False
+    hit_pct = int(getattr(config, 'prefix_cache_hit_pct', 0) or 0)
+    if hit_pct <= 0:
+        return False
+    isl = int(config.isl or 0)
+    cache_mode = getattr(config, 'prefix_cache_mode', 'identical') or 'identical'
+    prefix_tokens = int(isl * hit_pct / 100)
+    if cache_mode == 'multi_group':
+        groups = int(getattr(config, 'prefix_cache_groups', 5) or 5)
+    else:
+        groups = 1
+    config.prefix_tokens = prefix_tokens
+    config.prefix_count = groups
+    if log:
+        log(f"   Multi-turn prefix cache: {cache_mode}, {hit_pct}% → "
+            f"prefix_tokens={prefix_tokens}, prefix_count={groups}", 'info')
+    return True
+
+
 class DatasetMixin:
     """Mixin providing dataset generation methods for RecipeOptimizer."""
 
@@ -191,19 +227,10 @@ class DatasetMixin:
         # conversation_turns JSONL (see pipeline.py TODO). The prefix buckets are
         # plumbed into the synthetic data args by the orchestrator.
         if is_multi_turn:
-            cache_mode = self.config.prefix_cache_mode or 'identical'
-            prefix_tokens = int(isl * hit_pct / 100)
-            if cache_mode == 'identical':
-                self.config.prefix_tokens = prefix_tokens
-                self.config.prefix_count = 1
-            elif cache_mode == 'shared_prefix':
-                self.config.prefix_tokens = prefix_tokens
-                self.config.prefix_count = 1
-            elif cache_mode == 'multi_group':
-                groups = int(self.config.prefix_cache_groups or 5)
-                self.config.prefix_tokens = prefix_tokens
-                self.config.prefix_count = groups
-            self.log(f"   Multi-turn prefix cache: {cache_mode}, {hit_pct}% → prefix_tokens={prefix_tokens}, prefix_count={self.config.prefix_count}", 'info')
+            # Derivation lives in apply_multi_turn_prefix_config (also runs
+            # pre-max_model_len in the pipeline); call for the log line and
+            # any config not yet derived.
+            apply_multi_turn_prefix_config(self.config, log=self.log)
             self.log("   Multi-turn workload stays in synthetic mode — guidellm handles turns, delays, and prefix buckets natively", 'info')
             return
 

@@ -374,6 +374,13 @@ class RecipeOptimizer(
         if self.config.hf_token and not os.environ.get('HF_TOKEN'):
             os.environ['HF_TOKEN'] = self.config.hf_token
 
+        # Derive multi-turn prefix settings BEFORE max_model_len: guidellm
+        # adds prefix_buckets on top of prompt_tokens, so the context budget
+        # must include the prefix (run-56: derived late, 1800-token prefix
+        # exceeded the 5% headroom, late-turn requests 400'd on context).
+        from core.optimizer.dataset import apply_multi_turn_prefix_config
+        apply_multi_turn_prefix_config(self.config, log=self.log)
+
         # Compute stdev-adjusted max_model_len so vLLM can handle the longest sequences
         # guidellm generates (mean + 2*stdev covers 97.7% of the distribution).
         # Only bump UP if current value is too small — never override a larger user-set value.
