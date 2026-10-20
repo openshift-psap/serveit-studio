@@ -726,10 +726,15 @@ function updateAutoEppPreview() {
     else reasons.push('active: single-turn → load=' + activeLoad.toFixed(2));
 
     // 5. LoRA adjustment
+    var sessionAware = false, sessionAwareW = 0;
+    var headerLabelAffinity = false, headerLabelW = 0;
     if (loraN > 20) {
         wPrefix = Math.round(wPrefix * 0.7 * 10) / 10;
         wActive = Math.round(Math.min(5.0, wActive * 1.3) * 10) / 10;
+        sessionAware = true; sessionAwareW = 3.0;
+        headerLabelAffinity = true; headerLabelW = 3.0;
         reasons.push('lora: ' + loraN + ' adapters → prefix ×0.7, active ×1.3 (adapter residency > cache affinity)');
+        reasons.push('lora: → session-affinity(3.0) + header-label-affinity(3.0) = route by adapter identity (RFE-2527)');
     }
 
     // 6. SLO
@@ -740,8 +745,12 @@ function updateAutoEppPreview() {
 
     var weightsEl = document.getElementById('epp-auto-weights');
     if (weightsEl) {
-        weightsEl.textContent = 'prefix=' + wPrefix + '  kv=' + (kvEnabled ? wKv : 'off') + '  queue=' + wQueue +
-            '  active=' + (activeEnabled ? wActive : 'off') + (hasSla ? '  slo=3.0' : '');
+        var wText = 'prefix=' + wPrefix + '  kv=' + (kvEnabled ? wKv : 'off') + '  queue=' + wQueue +
+            '  active=' + (activeEnabled ? wActive : 'off');
+        if (hasSla) wText += '  slo=3.0';
+        if (sessionAware) wText += '  session-affinity=3.0';
+        if (headerLabelAffinity) wText += '  header-label-affinity=3.0';
+        weightsEl.textContent = wText;
     }
     var reasonsEl = document.getElementById('epp-auto-reasons');
     if (reasonsEl) reasonsEl.innerHTML = reasons.map(function(r) { return '• ' + r; }).join('<br>');
@@ -757,6 +766,7 @@ function updateEppCustom() {
         active_request: { enabled: document.getElementById('epp-plugin-active-request').checked, weight: parseFloat(document.getElementById('epp-weight-active-request').value) },
         no_hit_lru: { enabled: document.getElementById('epp-plugin-no-hit-lru').checked, weight: parseFloat(document.getElementById('epp-weight-no-hit-lru').value) },
         session_aware: { enabled: document.getElementById('epp-plugin-session-aware').checked, weight: parseFloat(document.getElementById('epp-weight-session-aware').value) },
+        header_label_affinity: { enabled: document.getElementById('epp-plugin-header-label-affinity') ? document.getElementById('epp-plugin-header-label-affinity').checked : false, weight: document.getElementById('epp-weight-header-label-affinity') ? parseFloat(document.getElementById('epp-weight-header-label-affinity').value) : 3 },
         token_load: { enabled: document.getElementById('epp-plugin-token-load').checked, weight: parseFloat(document.getElementById('epp-weight-token-load').value) },
     };
     var affinityEl = document.getElementById('epp-plugin-prefix-cache-affinity');

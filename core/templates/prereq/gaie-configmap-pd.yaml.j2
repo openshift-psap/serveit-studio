@@ -53,6 +53,11 @@ data:
 {% if session_aware_enabled | default(false) %}
       - type: session-affinity-scorer
 {% endif %}
+{% if header_label_affinity_enabled | default(false) %}
+      - type: header-label-affinity-scorer
+        parameters:
+          headerName: "{{ header_label_name | default('x-llm-d-adapter') }}"
+{% endif %}
     schedulingProfiles:
       - name: prefill
         plugins:
@@ -83,6 +88,10 @@ data:
 {% if session_aware_enabled | default(false) %}
           - pluginRef: session-affinity-scorer
             weight: {{ session_aware_weight | default(2.0) }}
+{% endif %}
+{% if header_label_affinity_enabled | default(false) %}
+          - pluginRef: header-label-affinity-scorer
+            weight: {{ header_label_affinity_weight | default(3.0) }}
 {% endif %}
       - name: decode
         plugins:

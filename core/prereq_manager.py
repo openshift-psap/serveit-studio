@@ -212,6 +212,8 @@ class PrereqManager:
                     'no_hit_lru_weight': plugins.get('no_hit_lru', {}).get('weight', 1.0) if plugins.get('no_hit_lru', {}).get('enabled', False) else 0,
                     'session_aware_enabled': plugins.get('session_aware', {}).get('enabled', False),
                     'session_aware_weight': plugins.get('session_aware', {}).get('weight', 2.0) if plugins.get('session_aware', {}).get('enabled', False) else 0,
+                    'header_label_affinity_enabled': plugins.get('header_label_affinity', {}).get('enabled', False),
+                    'header_label_affinity_weight': plugins.get('header_label_affinity', {}).get('weight', 3.0) if plugins.get('header_label_affinity', {}).get('enabled', False) else 0,
                 }
             else:
                 epp_weights = epp_presets.get(epp_preset, epp_presets['balanced'])
@@ -223,6 +225,8 @@ class PrereqManager:
                 epp_weights.setdefault('no_hit_lru_weight', 0)
                 epp_weights.setdefault('session_aware_enabled', False)
                 epp_weights.setdefault('session_aware_weight', 0)
+                epp_weights.setdefault('header_label_affinity_enabled', False)
+                epp_weights.setdefault('header_label_affinity_weight', 0)
 
             # Check if user wants llm-d default EPP (no custom config)
             epp_use_defaults = not epp.get('preset') or epp.get('preset') == 'default'
@@ -258,6 +262,9 @@ class PrereqManager:
                 'no_hit_lru_weight': epp_weights['no_hit_lru_weight'],
                 'session_aware_enabled': epp_weights['session_aware_enabled'],
                 'session_aware_weight': epp_weights['session_aware_weight'],
+                'header_label_affinity_enabled': epp_weights.get('header_label_affinity_enabled', False),
+                'header_label_affinity_weight': epp_weights.get('header_label_affinity_weight', 3.0),
+                'header_label_name': 'x-llm-d-adapter',
                 'max_prefix_blocks': epp.get('maxPrefixBlocksToMatch', 256),
                 'lru_capacity': epp.get('lruCapacityPerServer', 4000000),
                 'non_cached_tokens': epp.get('nonCachedTokens', 16),
@@ -613,12 +620,30 @@ class PrereqManager:
             reasons.append(f"active: single-turn → load={active_load:.2f}")
 
         # ── 5. LoRA adjustment ──
+        # When many adapters are served, adapter residency routing matters
+        # more than prefix-cache affinity. Two mechanisms:
+        # a) weight rebalance: prefix ×0.7, active ×1.3
+        # b) enable affinity scorers: session-affinity (sticky by adapter
+        #    name in session) + header-label-affinity (route by adapter
+        #    header — the RFE-2527 mechanism)
         if lora_enabled and lora_n > 20:
-            # Many adapters: routing by adapter residency (active-request)
-            # matters more than prefix-cache affinity
             w_prefix = round(w_prefix * 0.7, 1)
             w_active = round(min(5.0, w_active * 1.3), 1)
             reasons.append(f"lora: {lora_n} adapters → prefix ×0.7, active ×1.3 (adapter residency > cache affinity)")
+
+            # Enable adapter affinity routing when adapters outnumber
+            # GPU-resident slots (thrashing regime — affinity reduces swap-ins)
+            session_aware = True
+            session_aware_w = 3.0
+            header_label_affinity = True
+            header_label_w = 3.0
+            reasons.append(f"lora: {lora_n} adapters → session-affinity(3.0) + header-label-affinity(3.0) "
+                           f"= route by adapter identity (RFE-2527 mechanism)")
+        else:
+            session_aware = False
+            session_aware_w = 0
+            header_label_affinity = False
+            header_label_w = 0
 
         # ── 6. SLO ──
         slo_w = 3.0 if has_sla else 0
@@ -641,6 +666,10 @@ class PrereqManager:
             'decode_active_request_weight': round(w_active * 1.2, 1),
             'slo_enabled': has_sla,
             'slo_weight': slo_w,
+            'session_aware_enabled': session_aware,
+            'session_aware_weight': session_aware_w,
+            'header_label_affinity_enabled': header_label_affinity,
+            'header_label_affinity_weight': header_label_w,
         }
 
         if log:
@@ -649,7 +678,9 @@ class PrereqManager:
                 log(f'     {r}')
             log(f'     → prefix={w_prefix}, kv={result["kv_cache_weight"]}, '
                 f'queue={w_queue}, active={result["active_request_weight"]}'
-                f'{", slo=3.0" if has_sla else ""}')
+                f'{", slo=3.0" if has_sla else ""}'
+                f'{", session-affinity=3.0" if session_aware else ""}'
+                f'{", header-label-affinity=3.0" if header_label_affinity else ""}')
 
         return result
 

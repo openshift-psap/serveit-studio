@@ -35,6 +35,12 @@ data:
 {% if session_aware_enabled | default(false) %}
       - type: session-affinity-scorer
 {% endif %}
+{% if header_label_affinity_enabled | default(false) %}
+      - type: header-label-affinity-scorer
+        parameters:
+          headerName: "{{ header_label_name | default('x-llm-d-adapter') }}"
+          headerValue: "{{ header_label_value | default('') }}"
+{% endif %}
       - type: max-score-picker
     schedulingProfiles:
       - name: default
@@ -64,6 +70,10 @@ data:
 {% if session_aware_enabled | default(false) %}
           - pluginRef: session-affinity-scorer
             weight: {{ session_aware_weight | default(2.0) }}
+{% endif %}
+{% if header_label_affinity_enabled | default(false) %}
+          - pluginRef: header-label-affinity-scorer
+            weight: {{ header_label_affinity_weight | default(3.0) }}
 {% endif %}
 {% if slo_enabled | default(false) %}
       - name: slo
