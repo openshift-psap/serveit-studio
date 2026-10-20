@@ -70,12 +70,12 @@ spec:
           - name: jit-cache
             emptyDir: {}
 {% if lora_enabled %}
-{% if lora_adapters_use_pvc and not per_node_storage %}
+{% if lora_adapters_use_pvc %}
           - name: lora-adapters
             persistentVolumeClaim:
               claimName: {{ pvc_name | default('serveit-cache') }}
               readOnly: false
-{% elif not lora_adapters_use_pvc %}
+{% else %}
           - name: lora-adapters
             hostPath:
               path: {{ lora_adapters_host_path }}
@@ -112,7 +112,7 @@ spec:
                 echo "Node: $NODE_NAME"
                 case "$NODE_NAME" in
 {% for nfs in node_nfs_pvcs %}
-                  *{{ nfs.suffix }}*) ln -sf /nfs-{{ nfs.suffix }}/huggingface /model-cache/huggingface;{% if lora_enabled %} ln -sfn /adapters-{{ nfs.suffix }} /model-cache/adapters;{% endif %} echo "Linked to nfs-{{ nfs.suffix }}/huggingface" ;;
+                  *{{ nfs.suffix }}*) ln -sf /nfs-{{ nfs.suffix }}/huggingface /model-cache/huggingface; echo "Linked to nfs-{{ nfs.suffix }}/huggingface" ;;
 {% endfor %}
                   *) echo "ERROR: No NFS mount matches node $NODE_NAME"; ls -d /nfs-* 2>/dev/null; exit 1 ;;
                 esac
@@ -366,19 +366,10 @@ spec:
               - name: jit-cache
                 mountPath: /var/cache/vllm
 {% if lora_enabled %}
-{% if lora_adapters_use_pvc and per_node_storage %}
-{% for nfs in node_nfs_pvcs %}
-              - name: nfs-{{ nfs.suffix }}
-                mountPath: /adapters-{{ nfs.suffix }}
-                subPath: lora-adapters
-                readOnly: false
-{% endfor %}
-{% else %}
               - name: lora-adapters
                 mountPath: /adapters
 {% if lora_adapters_use_pvc %}
                 subPath: lora-adapters
-{% endif %}
 {% endif %}
 {% endif %}
               - name: rdma-script
@@ -439,12 +430,12 @@ spec:
           - name: jit-cache
             emptyDir: {}
 {% if lora_enabled %}
-{% if lora_adapters_use_pvc and not per_node_storage %}
+{% if lora_adapters_use_pvc %}
           - name: lora-adapters
             persistentVolumeClaim:
               claimName: {{ pvc_name | default('serveit-cache') }}
               readOnly: false
-{% elif not lora_adapters_use_pvc %}
+{% else %}
           - name: lora-adapters
             hostPath:
               path: {{ lora_adapters_host_path }}
@@ -481,7 +472,7 @@ spec:
                 echo "Node: $NODE_NAME"
                 case "$NODE_NAME" in
 {% for nfs in node_nfs_pvcs %}
-                  *{{ nfs.suffix }}*) ln -sf /nfs-{{ nfs.suffix }}/huggingface /model-cache/huggingface;{% if lora_enabled %} ln -sfn /adapters-{{ nfs.suffix }} /model-cache/adapters;{% endif %} echo "Linked to nfs-{{ nfs.suffix }}/huggingface" ;;
+                  *{{ nfs.suffix }}*) ln -sf /nfs-{{ nfs.suffix }}/huggingface /model-cache/huggingface; echo "Linked to nfs-{{ nfs.suffix }}/huggingface" ;;
 {% endfor %}
                   *) echo "ERROR: No NFS mount matches node $NODE_NAME"; ls -d /nfs-* 2>/dev/null; exit 1 ;;
                 esac
@@ -705,19 +696,10 @@ spec:
               - name: jit-cache
                 mountPath: /var/cache/vllm
 {% if lora_enabled %}
-{% if lora_adapters_use_pvc and per_node_storage %}
-{% for nfs in node_nfs_pvcs %}
-              - name: nfs-{{ nfs.suffix }}
-                mountPath: /adapters-{{ nfs.suffix }}
-                subPath: lora-adapters
-                readOnly: false
-{% endfor %}
-{% else %}
               - name: lora-adapters
                 mountPath: /adapters
 {% if lora_adapters_use_pvc %}
                 subPath: lora-adapters
-{% endif %}
 {% endif %}
 {% endif %}
               - name: rdma-script
