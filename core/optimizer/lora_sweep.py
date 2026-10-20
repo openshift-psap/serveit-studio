@@ -21,12 +21,20 @@ class LoraSweepMixin:
     """Mixin providing the LoRA adapter-count sweep for RecipeOptimizer."""
 
     def _get_lora_sweep_levels(self) -> List[int]:
-        """Adapter counts to test: explicit list, percentage list, or doubling.
+        """Adapter counts to test: explicit list, step mode, or evenly spaced.
 
-        Explicit levels may be absolute counts (100, 400, 1000) or
-        percentages of the total adapter count (20%, 40%, 100%) —
-        with N=1000, "20%,40%,100%" becomes [200, 400, 1000].
-        Percentages are relative to config.lora_num_adapters.
+        Three mutually exclusive modes (explicit wins, then step, then even):
+
+        1. Explicit levels — absolute counts (100, 400, 1000) or percentages
+           of N (20%, 40%, 100%): with N=1000, "20%,40%,100%" becomes
+           [200, 400, 1000].
+        2. Step mode — lora_sweep_step is a count ("25") or % of N ("50%").
+           Generates `lora_sweep_count` levels starting at 0:
+           N=100, count=5, step=50% -> [0, 50, 100, 150, 200]. Levels may
+           exceed N (mounts the max level; requires that many adapters on
+           disk). Level 0 = base model only (LoRA overhead baseline).
+        3. Even (default) — count levels evenly spaced up to N:
+           N/count, 2N/count, ..., N.
         """
         n_total = int(getattr(self.config, 'lora_num_adapters', 0) or 0)
         explicit = getattr(self.config, 'lora_sweep_levels', None)
@@ -46,6 +54,20 @@ class LoraSweepMixin:
             if levels:
                 return sorted(levels)
         count = int(getattr(self.config, 'lora_sweep_count', 5) or 5)
+        step_raw = getattr(self.config, 'lora_sweep_step', None)
+        if step_raw:
+            step_raw = str(step_raw).strip()
+            if step_raw.endswith('%'):
+                if not n_total:
+                    logger.warning("lora_sweep_step=%s but lora_num_adapters unknown — ignoring", step_raw)
+                else:
+                    pct = float(step_raw[:-1].strip())
+                    step = max(1, round(n_total * pct / 100))
+                    return [i * step for i in range(count)]
+            else:
+                step = int(step_raw)
+                if step > 0:
+                    return [i * step for i in range(count)]
         # When N is known and large, generate evenly-spaced levels as
         # fractions of N (N/count, 2N/count, ..., N). Doubling from 1
         # (1, 2, 4, 8...) never reaches the interesting range for

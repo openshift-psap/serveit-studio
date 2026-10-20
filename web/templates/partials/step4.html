@@ -163,7 +163,7 @@
                                 <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:16px;">
                                     <div class="input-group">
                                         <label>Number of Adapters (N)</label>
-                                        <input type="number" id="lora-num-adapters" value="20" min="1" max="1000" onclick="event.stopPropagation();" onchange="config.lora_num_adapters=Math.max(1,Math.min(1000,parseInt(this.value)||20));this.value=config.lora_num_adapters;updateLoraEstimate();saveConfig();">
+                                        <input type="number" id="lora-num-adapters" value="20" min="1" max="1000" onclick="event.stopPropagation();" onchange="config.lora_num_adapters=Math.max(1,Math.min(1000,parseInt(this.value)||20));this.value=config.lora_num_adapters;updateLoraEstimate();if(typeof updateSweepPreview==='function')updateSweepPreview();saveConfig();">
                                         <div class="help-text">Adapters served as <span style="font-family:var(--font-mono);">agent-01 … agent-N</span>. Stage the adapter files at that path on the model-cache volume before the run.</div>
                                     </div>
                                     <div class="input-group">
@@ -200,25 +200,78 @@
                                 <div style="border-top:1px solid #e2e8f0;margin-top:12px;"></div>
                                 <div style="display:flex;align-items:center;gap:8px;margin-top:12px;">
                                     <input type="checkbox" id="lora-sweep-enabled" style="display:none;">
-                                    <div id="lora-sweep-switch" onclick="var on=!document.getElementById('lora-sweep-enabled').checked;document.getElementById('lora-sweep-enabled').checked=on;config.lora_sweep_enabled=on;this.style.background=on?'#4f46e5':'#ccc';this.querySelector('span').style.transform=on?'translateX(18px)':'translateX(0)';document.getElementById('lora-sweep-count').disabled=!on&&!config.lora_sweep_levels;document.getElementById('lora-sweep-levels').disabled=!on;document.getElementById('lora-sweep-body').style.display=on?'block':'none';saveConfig();" style="width:36px;height:20px;background:#ccc;border-radius:10px;position:relative;transition:background-color 0.2s;flex-shrink:0;cursor:pointer;">
+                                    <div id="lora-sweep-switch" onclick="var on=!document.getElementById('lora-sweep-enabled').checked;document.getElementById('lora-sweep-enabled').checked=on;config.lora_sweep_enabled=on;this.style.background=on?'#4f46e5':'#ccc';this.querySelector('span').style.transform=on?'translateX(18px)':'translateX(0)';var lv=!!(config.lora_sweep_levels&&config.lora_sweep_levels.length);var st=!!config.lora_sweep_step;document.getElementById('lora-sweep-count').disabled=!on||lv;document.getElementById('lora-sweep-step').disabled=!on||lv;document.getElementById('lora-sweep-levels').disabled=!on||st;document.getElementById('lora-sweep-body').style.display=on?'block':'none';updateSweepPreview();saveConfig();" style="width:36px;height:20px;background:#ccc;border-radius:10px;position:relative;transition:background-color 0.2s;flex-shrink:0;cursor:pointer;">
                                         <span style="position:absolute;top:2px;left:2px;width:16px;height:16px;background:white;border-radius:50%;transition:transform 0.2s;box-shadow:0 1px 3px rgba(0,0,0,0.2);display:block;"></span>
                                     </div>
                                     <span style="font-weight:600;font-size:0.85em;color:#3730a3;cursor:pointer;" onclick="document.getElementById('lora-sweep-switch').click();">🔀 LoRA Adapter Sweep</span>
                                 </div>
                                 <div id="lora-sweep-body" style="display:none;padding:8px 0 0 44px;font-size:0.8em;color:#475569;line-height:1.6;">
                                     <div id="lora-sweep-opts" style="display:flex;gap:16px;flex-wrap:wrap;align-items:flex-start;">
-                                        <div class="input-group" style="width:200px;">
+                                        <div class="input-group" style="width:130px;">
                                             <label>Number of Levels</label>
-                                            <input type="number" id="lora-sweep-count" value="5" min="2" max="10" disabled onchange="config.lora_sweep_count=Math.max(2,Math.min(10,parseInt(this.value)||5));this.value=config.lora_sweep_count;config.lora_sweep_levels=null;saveConfig();">
-                                            <div class="help-text">Evenly spaced up to N</div>
+                                            <input type="number" id="lora-sweep-count" value="5" min="2" max="10" disabled onchange="config.lora_sweep_count=Math.max(2,Math.min(10,parseInt(this.value)||5));this.value=config.lora_sweep_count;if(config.lora_sweep_levels||config.lora_sweep_step)return;saveConfig();">
+                                            <div class="help-text">Points on the curve</div>
+                                        </div>
+                                        <div class="input-group" style="width:170px;">
+                                            <label>Level Step</label>
+                                            <input type="text" id="lora-sweep-step" placeholder="auto (even to N)" disabled onchange="var v=this.value.trim();config.lora_sweep_step=v||null;if(v){config.lora_sweep_levels=null;document.getElementById('lora-sweep-levels').value='';document.getElementById('lora-sweep-levels').disabled=true;updateSweepPreview();}else{document.getElementById('lora-sweep-levels').disabled=false;updateSweepPreview();}saveConfig();" oninput="updateSweepPreview();">
+                                            <div class="help-text">Count or % of N — e.g. 50% &rarr; 0, 50, 100, 150, 200</div>
                                         </div>
                                         <div class="input-group" style="width:200px;">
                                             <label>Or: Explicit Levels</label>
-                                            <input type="text" id="lora-sweep-levels" placeholder="e.g. 20%, 40%, 100%" disabled onchange="var v=this.value.trim();config.lora_sweep_levels=v?v.split(',').map(function(x){return x.trim();}).filter(function(x){return x;}):null;if(!config.lora_sweep_levels){document.getElementById('lora-sweep-count').disabled=false;}else{document.getElementById('lora-sweep-count').disabled=true;}saveConfig();">
-                                            <div class="help-text">Counts or % of N</div>
+                                            <input type="text" id="lora-sweep-levels" placeholder="e.g. 20%, 40%, 100%" disabled onchange="var v=this.value.trim();config.lora_sweep_levels=v?v.split(',').map(function(x){return x.trim();}).filter(function(x){return x;}):null;if(config.lora_sweep_levels){config.lora_sweep_step=null;document.getElementById('lora-sweep-step').value='';document.getElementById('lora-sweep-step').disabled=true;}else{document.getElementById('lora-sweep-step').disabled=false;}updateSweepPreview();saveConfig();">
+                                            <div class="help-text">Counts or % of N — overrides the other two</div>
                                         </div>
                                     </div>
+                                    <div id="lora-sweep-preview" style="font-size:0.78em;color:#0369a1;background:#e0f2fe;border:1px solid #bae6fd;border-radius:6px;padding:6px 10px;margin-top:8px;display:none;"></div>
                                 </div>
+                                <script>
+                                function updateSweepPreview() {
+                                    var el = document.getElementById('lora-sweep-preview');
+                                    if (!el) return;
+                                    var on = document.getElementById('lora-sweep-enabled').checked;
+                                    if (!on) { el.style.display = 'none'; return; }
+                                    var n = parseInt((config.lora_num_adapters || 0)) || 0;
+                                    var count = parseInt(document.getElementById('lora-sweep-count').value) || 5;
+                                    var step = (config.lora_sweep_step || '').trim();
+                                    var expl = (config.lora_sweep_levels || []).filter(function(x){return x;});
+                                    var levels = null;
+                                    if (expl.length) {
+                                        levels = expl.map(function(e){
+                                            e = String(e).trim();
+                                            if (e.indexOf('%') === e.length - 1 && n) {
+                                                return Math.max(1, Math.round(n * parseFloat(e) / 100));
+                                            }
+                                            return parseInt(e) || 0;
+                                        }).filter(function(v){return v > 0;});
+                                        levels.sort(function(a,b){return a-b;});
+                                    } else if (step) {
+                                        var s;
+                                        if (step.indexOf('%') === step.length - 1 && n) {
+                                            s = Math.max(1, Math.round(n * parseFloat(step) / 100));
+                                        } else {
+                                            s = parseInt(step) || 0;
+                                        }
+                                        if (s > 0) {
+                                            levels = [];
+                                            for (var i = 0; i < count; i++) levels.push(i * s);
+                                        }
+                                    } else if (n && n >= count * 2) {
+                                        levels = [];
+                                        var st = Math.round(n / count);
+                                        for (var i2 = 1; i2 <= count; i2++) {
+                                            levels.push(i2 === count ? n : Math.max(1, Math.round(st * i2 / 5) * 5));
+                                        }
+                                    }
+                                    if (levels && levels.length) {
+                                        el.textContent = 'Levels: ' + levels.join(', ') + (n ? '  (N=' + n + ')' : '');
+                                        el.style.display = 'block';
+                                    } else {
+                                        el.textContent = n ? 'Levels: evenly spaced up to N=' + n : 'Levels: (set Number of Adapters)';
+                                        el.style.display = 'block';
+                                    }
+                                }
+                                </script>
                                 <div id="lora-estimate" style="background:#eef2ff;border:1px solid #c7d2fe;border-radius:6px;padding:10px 12px;font-size:0.8em;color:#3730a3;line-height:1.6;margin-top:10px;">
                                     CPU staging: 20 adapters × ~320MB (rank 16) ≈ 11Gi total (incl. load headroom) — automatically added to pod memory requests (never shrinks a higher user-set value).
                                 </div>

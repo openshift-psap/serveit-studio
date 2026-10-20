@@ -569,6 +569,9 @@ def run_optimization_background(data):
         lora_sweep_levels = ([str(x).strip() for x in lora_sweep_levels_raw
                               if str(x).strip()]
                              if lora_sweep_levels_raw else None)
+        lora_sweep_step_raw = _get('lora_sweep_step')
+        lora_sweep_step = (str(lora_sweep_step_raw).strip()
+                           if lora_sweep_step_raw else None)
         asymmetric_allow_decode_gt_prefill = _get('asymmetric_allow_decode_gt_prefill', True)
         asymmetric_allow_prefill_gt_decode = _get('asymmetric_allow_prefill_gt_decode', True)
         pd_search_mode = _get('pd_search_mode', 'smart')
@@ -922,6 +925,7 @@ data:
                 lora_sweep_enabled=bool(_get('lora_sweep_enabled', False)),
                 lora_sweep_levels=lora_sweep_levels,
                 lora_sweep_count=int(_get('lora_sweep_count', 5) or 5),
+                lora_sweep_step=lora_sweep_step,
                 lora_benchmark_mode=_get('lora_benchmark_mode', 'round_robin'),
                 asymmetric_allow_decode_gt_prefill=asymmetric_allow_decode_gt_prefill,
                 asymmetric_allow_prefill_gt_decode=asymmetric_allow_prefill_gt_decode,

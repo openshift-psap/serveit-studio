@@ -273,10 +273,16 @@ function updateUIFromConfig() {
             }
             var sweepCount = document.getElementById('lora-sweep-count');
             if (sweepCount) sweepCount.value = config.lora_sweep_count || 5;
+            var sweepStep = document.getElementById('lora-sweep-step');
+            if (sweepStep) sweepStep.value = config.lora_sweep_step || '';
             var sweepLevels = document.getElementById('lora-sweep-levels');
             if (sweepLevels) sweepLevels.value = (config.lora_sweep_levels || []).join(', ');
-            if (sweepCount) sweepCount.disabled = !sweepOn || !!(config.lora_sweep_levels && config.lora_sweep_levels.length);
-            if (sweepLevels) sweepLevels.disabled = !sweepOn;
+            var hasExplicit = !!(config.lora_sweep_levels && config.lora_sweep_levels.length);
+            var hasStep = !!config.lora_sweep_step;
+            if (sweepCount) sweepCount.disabled = !sweepOn || hasExplicit;
+            if (sweepStep) sweepStep.disabled = !sweepOn || hasExplicit;
+            if (sweepLevels) sweepLevels.disabled = !sweepOn || hasStep;
+            if (typeof updateSweepPreview === 'function') updateSweepPreview();
         }
         // Main LoRA knob: restore visual + body visibility
         var loraBody = document.getElementById('lora-body');

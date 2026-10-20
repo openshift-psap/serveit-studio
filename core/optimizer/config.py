@@ -175,6 +175,9 @@ class RecipeOptimizerConfig:
     # from 1 for lora_sweep_count levels.
     lora_sweep_levels: Optional[list] = None
     lora_sweep_count: int = 5
+    # Step mode: count ("25") or % of N ("50%") — generates count levels
+    # from 0 (N=100, count=5, step=50% -> [0, 50, 100, 150, 200]).
+    lora_sweep_step: Optional[str] = None
 
     # Optimization objective for Step 7
     objective: str = 'full_coverage'  # 'ttft', 'throughput', or 'full_coverage'
