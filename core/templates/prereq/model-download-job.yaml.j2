@@ -181,6 +181,89 @@ spec:
                   sys.exit(1)
               PYTHON_EOF
 
+{% if lora_generate_adapters %}
+              echo ""
+              echo "🧩 Generating {{ lora_num_adapters }} LoRA adapters (rank {{ lora_rank | default(16) }}) on this PVC..."
+              pip3 install --quiet safetensors numpy
+              python3 -u <<'LORA_EOF'
+              import json, sys
+              from pathlib import Path
+              import numpy as np
+              from safetensors.numpy import save_file
+
+              n = {{ lora_num_adapters }}
+              rank = {{ lora_rank | default(16) }}
+              model_id = '{{ model_name }}'
+              out_root = Path('/model-cache/lora-adapters')
+
+              # Derive adapter shapes from the downloaded model's config.json
+              cfg_name = 'models--' + model_id.replace('/', '--')
+              snaps = sorted((Path('/model-cache/huggingface') / cfg_name / 'snapshots').glob('*/config.json'))
+              if not snaps:
+                  print('❌ No model config found on cache — cannot derive adapter shapes', flush=True)
+                  sys.exit(1)
+              cfg = json.loads(snaps[0].read_text())
+              tc = cfg.get('text_config', cfg)
+              L = tc['num_hidden_layers']
+              H = tc['hidden_size']
+              heads = tc.get('num_attention_heads') or 1
+              hd = tc.get('head_dim') or (H // heads)
+              kv = tc.get('num_key_value_heads') or heads
+              kv_out = max(kv * hd,
+                           (tc.get('num_global_key_value_heads') or 0) * (tc.get('global_head_dim') or 0))
+              prefix = 'base_model.model.language_model' if 'text_config' in cfg else 'base_model.model.model'
+
+              meta_path = out_root / '.meta.json'
+              if meta_path.exists():
+                  try:
+                      m = json.loads(meta_path.read_text())
+                      if m.get('num_adapters') == n and m.get('rank') == rank and m.get('model') == model_id:
+                          print(f'⏭️  {n} adapters (rank {rank}) already present — skipping generation', flush=True)
+                          sys.exit(0)
+                  except Exception:
+                      pass
+
+              rng = np.random.default_rng(42)
+              shapes = {}
+              for layer in range(L):
+                  for m_name, out_d in (('q_proj', heads * hd), ('k_proj', kv_out),
+                                        ('v_proj', kv_out), ('o_proj', H)):
+                      shapes[f'{prefix}.layers.{layer}.self_attn.{m_name}.lora_A.weight'] = (rank, H)
+                      shapes[f'{prefix}.layers.{layer}.self_attn.{m_name}.lora_B.weight'] = (out_d, rank)
+
+              adapter_cfg = {
+                  'alpha_pattern': {}, 'auto_mapping': None,
+                  'base_model_name_or_path': model_id, 'bias': 'none',
+                  'fan_in_fan_out': False, 'inference_mode': True,
+                  'init_lora_weights': True, 'layer_replication': None,
+                  'layers_pattern': None, 'layers_to_transform': None,
+                  'loftq_config': {}, 'lora_alpha': rank * 2, 'lora_dropout': 0.0,
+                  'megatron_config': None, 'megatron_core': 'megatron.core',
+                  'modules_to_save': None, 'peft_type': 'LORA', 'r': rank,
+                  'rank_pattern': {}, 'revision': None,
+                  'target_modules': ['q_proj', 'k_proj', 'v_proj', 'o_proj'],
+                  'task_type': 'CAUSAL_LM', 'use_dora': False, 'use_rslora': False,
+              }
+
+              out_root.mkdir(parents=True, exist_ok=True)
+              size_bytes = 0
+              for i in range(1, n + 1):
+                  d = out_root / f'agent-{i:04d}'
+                  d.mkdir(exist_ok=True)
+                  (d / 'adapter_config.json').write_text(json.dumps(adapter_cfg))
+                  data = {k: rng.standard_normal(s).astype(np.float16) for k, s in shapes.items()}
+                  save_file(data, str(d / 'adapter_model.safetensors'))
+                  size_bytes = (d / 'adapter_model.safetensors').stat().st_size
+                  if i == 1 or i % 50 == 0 or i == n:
+                      print(f'🧩 Generated adapter {i}/{n}', flush=True)
+
+              meta_path.write_text(json.dumps({
+                  'num_adapters': n, 'rank': rank, 'model': model_id,
+                  'adapter_size_mb': round(size_bytes / 1e6, 1)}))
+              print(f"✅ {n} LoRA adapters generated (rank {rank}, ~{round(size_bytes / 1e6, 1)}MB each)", flush=True)
+              LORA_EOF
+{% endif %}
+
               echo ""
               echo "📊 Cache directory size:"
               du -sh /model-cache 2>/dev/null || true

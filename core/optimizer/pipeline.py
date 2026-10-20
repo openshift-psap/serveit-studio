@@ -1649,16 +1649,22 @@ class RecipeOptimizer(
             self.orchestrator.ensure_guidellm_pod(
                 self.config, log_callback=lambda msg: self.log(msg, 'info'))
             pod = self.orchestrator._guidellm_pod_name
-            r = subprocess.run(
-                ['kubectl', 'exec', pod, '-n', self.config.namespace, '--',
-                 'du', '-sm', '/mnt/storage/lora-adapters/agent-0001'],
-                capture_output=True, text=True, timeout=60, check=False
-            )
-            if r.returncode == 0 and r.stdout.strip():
-                size_mb = int(r.stdout.strip().split()[0])
-                if 1 <= size_mb <= 4096:
-                    self._probed_lora_adapter_mb = size_mb
-                    return size_mb
+            # Adapters live on the model-cache PVCs (per-node NFS) — visible
+            # from the workload pod at /nfs-<suffix>. Legacy setups staged them
+            # on the workload pod's own storage at /mnt/storage/lora-adapters.
+            for probe_cmd in (
+                ['sh', '-c', 'du -sm /nfs-*/lora-adapters/agent-0001 2>/dev/null | head -1'],
+                ['du', '-sm', '/mnt/storage/lora-adapters/agent-0001'],
+            ):
+                r = subprocess.run(
+                    ['kubectl', 'exec', pod, '-n', self.config.namespace, '--'] + probe_cmd,
+                    capture_output=True, text=True, timeout=60, check=False
+                )
+                if r.returncode == 0 and r.stdout.strip():
+                    size_mb = int(r.stdout.strip().split()[0])
+                    if 1 <= size_mb <= 4096:
+                        self._probed_lora_adapter_mb = size_mb
+                        return size_mb
                 self.log(f"⚠️  Probed LoRA adapter size {size_mb}MB out of range — using estimate", 'warning')
         except Exception:
             pass

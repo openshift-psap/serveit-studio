@@ -436,8 +436,16 @@ class TemplateManager:
         if getattr(config, 'lora_enabled', False) and lora_n > 0:
             lora_rank = int(getattr(config, 'lora_max_rank', 16) or 16)
             vars_dict['lora_enabled'] = True
+            # Adapter path follows the storage mode:
+            # - per-node NFS: /model-cache/adapters (initContainer symlinks
+            #   it to the node's own nfs-<suffix> lora-adapters subPath)
+            # - single shared PVC or local disk: /adapters
+            _per_node_nfs = (bool(getattr(config, 'per_node_storage', False))
+                             and bool(getattr(config, 'node_nfs_pvcs', None)))
+            vars_dict['lora_adapters_path'] = '/model-cache/adapters' if _per_node_nfs else '/adapters'
+            _adapters_path = vars_dict['lora_adapters_path']
             vars_dict['lora_modules_arg'] = ' '.join(
-                f'agent-{i:04d}=/adapters/agent-{i:04d}' for i in range(1, lora_n + 1)
+                f'agent-{i:04d}={_adapters_path}/agent-{i:04d}' for i in range(1, lora_n + 1)
             )
             vars_dict['lora_max_rank'] = lora_rank
             vars_dict['lora_max_loras'] = min(int(getattr(config, 'lora_max_loras', 4) or 4), lora_n)
@@ -449,7 +457,9 @@ class TemplateManager:
             # so they're visible on any node that can mount the share.
             _ldp = vars_dict.get('local_disk_path')
             if _ldp:
-                vars_dict['lora_adapters_host_path'] = _ldp.rstrip('/') + '/lora-adapters'
+                # Under the model-cache root: the download job generates
+                # adapters at <local_disk_path>/model-cache/lora-adapters
+                vars_dict['lora_adapters_host_path'] = _ldp.rstrip('/') + '/model-cache/lora-adapters'
                 vars_dict['lora_adapters_use_pvc'] = False
             else:
                 # NFS/PVC storage: adapters live on the model cache share

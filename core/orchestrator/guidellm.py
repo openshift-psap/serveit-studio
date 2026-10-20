@@ -67,6 +67,7 @@ class GuidellmMixin:
             image=os.environ.get('GUIDELLM_IMAGE', 'quay.io/bbenshab/serveit-studio:workload'),
             pvc_name=self._get_storage_pvc_name(config),
             hf_token=os.environ.get('HF_TOKEN', ''),
+            node_nfs_pvcs=getattr(config, 'node_nfs_pvcs', None) or [],
         )
 
         result = kubectl.run(['apply', '-f', '-', '-n', self.namespace], input_data=deploy_yaml)

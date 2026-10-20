@@ -61,7 +61,17 @@ spec:
         volumeMounts:
         - name: storage
           mountPath: /mnt/storage
+{% for nfs in node_nfs_pvcs | default([]) %}
+        - name: nfs-{{ nfs.suffix }}
+          mountPath: /nfs-{{ nfs.suffix }}
+          readOnly: true
+{% endfor %}
       volumes:
       - name: storage
         persistentVolumeClaim:
           claimName: {{ pvc_name }}
+{% for nfs in node_nfs_pvcs | default([]) %}
+      - name: nfs-{{ nfs.suffix }}
+        persistentVolumeClaim:
+          claimName: {{ nfs.pvc_name }}
+{% endfor %}
