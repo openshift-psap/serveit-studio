@@ -1,0 +1,55 @@
+recipe_id: gemma4-lora-200-full-coverage
+name: Gemma-4 26B — 200 LoRA Full Coverage + Adapter Sweep
+description: >-
+  Gemma-4 26B FP8 with 200 LoRA adapters (rank 16, ~22MB each), 10-turn conversations
+  at 3K ISL / 300 OSL, 60% prefix cache hit across 20 groups, MTP speculative decoding.
+  Full Coverage goal: TP calibration → aggregated + PD + EP search → EPP tuning → concurrency
+  sweep → LoRA adapter sweep (10 levels at 20% step) to find the residency cliff.
+  Sized for 16× H200 (2 nodes, 8 GPUs each). Pod memory auto-scales per-rank staging
+  (N × size × TP). Recommended starting point for multi-tenant LoRA sizing.
+model: RedHatAI/gemma-4-26B-A4B-it-FP8-Dynamic
+goal: full_coverage
+requires:
+  min_gpus: 16
+  gpu_memory_gb: 130
+  gpu_model: H200
+evidence:
+  tested_on: psap-fire-aaabc (2× H200 8-GPU nodes)
+  source: 'run #53 (runs 51-53 investigation, gemma4-lora-multi-adapter-investigation.md)'
+config:
+  goal: full_coverage
+  model: RedHatAI/gemma-4-26B-A4B-it-FP8-Dynamic
+  isl: 3000
+  osl: 300
+  users: 30
+  turns: 10
+  stop_mode: duration
+  prefix_cache_hit_pct: 60
+  prefix_cache_mode: multi_group
+  prefix_cache_groups: 20
+  use_corpus: true
+  max_gpus: 16
+  image: docker.io/vllm/vllm-openai:v0.31.0
+  network_type: dra
+  storage_class: nfs-rwx
+  lora_enabled: true
+  lora_num_adapters: 200
+  lora_max_rank: 16
+  lora_sweep_enabled: true
+  lora_sweep_count: 10
+  lora_sweep_step: 20%
+  lora_benchmark_mode: round_robin
+  epp_preset: auto
+  epp_benchmark: true
+  speculative_preset: gemma4-26b
+  speculative_method: mtp
+  speculative_model: google/gemma-4-26B-A4B-it-assistant
+  advanced_vllm:
+    speculative_num_tokens:
+      mode: custom
+      value: 3
+    enable_prefix_caching:
+      mode: 'on'
+    disable_log_requests:
+      mode: 'on'
+  kv_offload_preset: 'off'
