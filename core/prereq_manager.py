@@ -262,10 +262,10 @@ class PrereqManager:
                 'decode_prefix_cache_weight': epp_weights.get('decode_prefix_cache_weight', 2.0),
                 'decode_queue_weight': epp_weights.get('decode_queue_weight', 1.0),
                 'decode_active_request_weight': epp_weights.get('decode_active_request_weight', 2.0),
-                'no_hit_lru_enabled': epp_weights['no_hit_lru_enabled'],
-                'no_hit_lru_weight': epp_weights['no_hit_lru_weight'],
-                'session_aware_enabled': epp_weights['session_aware_enabled'],
-                'session_aware_weight': epp_weights['session_aware_weight'],
+                'no_hit_lru_enabled': epp_weights.get('no_hit_lru_enabled', False),
+                'no_hit_lru_weight': epp_weights.get('no_hit_lru_weight', 1.0),
+                'session_aware_enabled': epp_weights.get('session_aware_enabled', False),
+                'session_aware_weight': epp_weights.get('session_aware_weight', 2.0),
                 'header_label_affinity_enabled': epp_weights.get('header_label_affinity_enabled', False),
                 'header_label_affinity_weight': epp_weights.get('header_label_affinity_weight', 3.0),
                 'header_label_name': 'x-llm-d-adapter',
@@ -653,7 +653,15 @@ class PrereqManager:
             header_label_affinity = False
             header_label_w = 0
 
-        # ── 6. SLO ──
+        # ── 6. no-hit LRU ──
+        # When prefix cache matters, route no-hit requests to the
+        # least-recently-used pod to spread cache population
+        no_hit_lru = cache_pct > 0
+        no_hit_lru_w = round(1.0 + routing_value, 1) if no_hit_lru else 0
+        if no_hit_lru:
+            reasons.append(f"no-hit-lru: {cache_pct}% cache → spread misses across pods ({no_hit_lru_w})")
+
+        # ── 7. SLO ──
         slo_w = 3.0 if has_sla else 0
         if has_sla:
             reasons.append("slo: latency constraint enabled → weight 3.0")
@@ -678,6 +686,8 @@ class PrereqManager:
             'session_aware_weight': session_aware_w,
             'header_label_affinity_enabled': header_label_affinity,
             'header_label_affinity_weight': header_label_w,
+            'no_hit_lru_enabled': no_hit_lru,
+            'no_hit_lru_weight': no_hit_lru_w if no_hit_lru else 1.0,
         }
 
         if log:
