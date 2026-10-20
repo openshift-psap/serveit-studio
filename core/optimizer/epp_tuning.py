@@ -95,6 +95,37 @@ class EPPTuningMixin:
 
         return kv_pressure, queue_pressure
 
+    def _merge_auto_plugins(self, core_plugins: Dict) -> Dict:
+        """Carry forward Auto EPP plugin decisions into Smart EPP configs.
+
+        Smart EPP refines the four core weight values (prefix, kv, queue,
+        active) based on measured metrics. But the Auto derivation also makes
+        binary enable/disable decisions for adapter-affinity scorers
+        (session-affinity, header-label-affinity for LoRA routing) and
+        optional scorers (no-hit-lru, load-aware). Without this merge, every
+        Smart EPP config rewrite silently drops those plugins.
+
+        The core weights are always taken from `core_plugins` (the refined
+        values). The affinity/optional plugins are carried forward from the
+        Auto derivation stored on config.epp_auto_weights.
+        """
+        auto = getattr(self.config, 'epp_auto_weights', None) or {}
+        merged = dict(core_plugins)
+        plugin_map = {
+            'session_aware': 'session_aware',
+            'header_label_affinity': 'header_label_affinity',
+            'no_hit_lru': 'no_hit_lru',
+            'load_aware': 'load_aware',
+            'token_load': 'token_load',
+        }
+        for auto_key, plugin_key in plugin_map.items():
+            if auto.get(f'{auto_key}_enabled'):
+                merged[plugin_key] = {
+                    'enabled': True,
+                    'weight': auto.get(f'{auto_key}_weight', 2.0),
+                }
+        return merged
+
     def _get_user_baseline_weights(self) -> Dict:
         """Get the user's selected EPP preset weights as the starting point."""
         presets = {
@@ -562,13 +593,13 @@ class EPPTuningMixin:
                     'maxPrefixBlocksToMatch': base.get('maxPrefixBlocksToMatch', 256),
                     'lruCapacityPerServer': base.get('lruCapacityPerServer', 31250),
                     'nonCachedTokens': base.get('nonCachedTokens', 16),
-                    'plugins': {
+                    'plugins': self._merge_auto_plugins({
                         'prefix_cache': {'enabled': True, 'weight': weights['prefix_cache_weight']},
                         'kv_cache': {'enabled': True, 'weight': weights['kv_cache_weight']},
                         'queue': {'enabled': True, 'weight': weights['queue_weight']},
                         'active_request': {'enabled': True, 'weight': weights.get('active_request_weight', 2)},
                         'slo': {'enabled': weights.get('slo_enabled', False), 'weight': weights.get('slo_weight', 0)},
-                    },
+                    }),
                 }
 
                 success = prereq_mgr.update_epp_config(
@@ -720,13 +751,13 @@ class EPPTuningMixin:
                             'maxPrefixBlocksToMatch': base.get('maxPrefixBlocksToMatch', 256),
                             'lruCapacityPerServer': base.get('lruCapacityPerServer', 31250),
                             'nonCachedTokens': base.get('nonCachedTokens', 16),
-                            'plugins': {
+                            'plugins': self._merge_auto_plugins({
                                 'prefix_cache': {'enabled': True, 'weight': rweights['prefix_cache_weight']},
                                 'kv_cache': {'enabled': True, 'weight': rweights['kv_cache_weight']},
                                 'queue': {'enabled': True, 'weight': rweights['queue_weight']},
                                 'active_request': {'enabled': True, 'weight': rweights.get('active_request_weight', 2)},
                                 'slo': {'enabled': rweights.get('slo_enabled', False), 'weight': rweights.get('slo_weight', 0)},
-                            },
+                            }),
                         }
                         rsuccess = prereq_mgr.update_epp_config(architecture=arch, epp_config=repp_cfg,
                                                                  log_callback=lambda msg: self.log(msg, 'info'))
@@ -796,13 +827,13 @@ class EPPTuningMixin:
                         'maxPrefixBlocksToMatch': base.get('maxPrefixBlocksToMatch', 256),
                         'lruCapacityPerServer': base.get('lruCapacityPerServer', 31250),
                         'nonCachedTokens': base.get('nonCachedTokens', 16),
-                        'plugins': {
+                        'plugins': self._merge_auto_plugins({
                             'prefix_cache': {'enabled': True, 'weight': 2.0},
                             'kv_cache': {'enabled': True, 'weight': 2.0},
                             'queue': {'enabled': True, 'weight': 2.0},
                             'active_request': {'enabled': True, 'weight': 2.0},
                             'slo': {'enabled': has_sla, 'weight': 3.0 if has_sla else 0},
-                        },
+                        }),
                     }
                     try:
                         self.orchestrator.deployment_manager.kubectl.run(
@@ -906,13 +937,13 @@ class EPPTuningMixin:
                      f"queue={best_weights['queue_weight']}) — TTFT {epp_ttft:.0f}ms vs baseline {baseline_ttft:.0f}ms", 'success')
             epp_config = {
                 'preset': 'custom',
-                'plugins': {
+                'plugins': self._merge_auto_plugins({
                     'prefix_cache': {'enabled': True, 'weight': best_weights['prefix_cache_weight']},
                     'kv_cache': {'enabled': True, 'weight': best_weights['kv_cache_weight']},
                     'queue': {'enabled': True, 'weight': best_weights['queue_weight']},
                     'active_request': {'enabled': True, 'weight': best_weights.get('active_request_weight', 2)},
                     'slo': {'enabled': False},
-                }
+                })
             }
             from core import PrereqManager
             mgr = PrereqManager(
