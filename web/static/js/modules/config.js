@@ -277,12 +277,7 @@ function updateUIFromConfig() {
             if (sweepStep) sweepStep.value = config.lora_sweep_step || '';
             var sweepLevels = document.getElementById('lora-sweep-levels');
             if (sweepLevels) sweepLevels.value = (config.lora_sweep_levels || []).join(', ');
-            var hasExplicit = !!(config.lora_sweep_levels && config.lora_sweep_levels.length);
-            var hasStep = !!config.lora_sweep_step;
-            if (sweepCount) sweepCount.disabled = !sweepOn || hasExplicit;
-            if (sweepStep) sweepStep.disabled = !sweepOn || hasExplicit;
-            if (sweepLevels) sweepLevels.disabled = !sweepOn || hasStep;
-            if (typeof updateSweepPreview === 'function') updateSweepPreview();
+            if (typeof _applySweepExclusivity === 'function') _applySweepExclusivity();
         }
         // Main LoRA knob: restore visual + body visibility
         var loraBody = document.getElementById('lora-body');
