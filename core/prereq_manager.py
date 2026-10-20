@@ -692,16 +692,6 @@ class PrereqManager:
 
         return result
 
-
-def est_pod_capacity_fmt(tokens):
-    """Format a token count for human-readable output."""
-    if tokens >= 1_000_000:
-        return f'{tokens / 1_000_000:.1f}M'
-    if tokens >= 1_000:
-        return f'{tokens / 1_000:.0f}K'
-    return str(tokens)
-
-
     def _ensure_modelserver_rbac(self, log_callback=None):
         """Create llm-d-modelserver ServiceAccount + Role + RoleBinding if missing."""
         def log(msg):
@@ -1220,6 +1210,15 @@ def est_pod_capacity_fmt(tokens):
         except Exception as e:
             log(f'❌ Cleanup failed: {str(e)}')
             return False
+
+
+def est_pod_capacity_fmt(tokens):
+    """Format a token count for human-readable output."""
+    if tokens >= 1_000_000:
+        return f'{tokens / 1_000_000:.1f}M'
+    if tokens >= 1_000:
+        return f'{tokens / 1_000:.0f}K'
+    return str(tokens)
 
 
 def main():
