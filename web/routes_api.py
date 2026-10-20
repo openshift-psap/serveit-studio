@@ -41,6 +41,18 @@ def get_status():
             'config': cfg
         })
 
+@app.route('/api/presets')
+def api_presets():
+    """Current launcher GPU/node allocation (PRESET_* env vars).
+
+    Lets the UI refresh preset values when the cached cluster scan goes
+    stale after the launcher re-allocates GPUs or nodes.
+    """
+    return jsonify({
+        'preset_max_gpus': int(os.environ.get('PRESET_MAX_GPUS', 0)) or None,
+        'preset_nodes': os.environ.get('PRESET_NODES', '').split(',') if os.environ.get('PRESET_NODES') else None,
+    })
+
 @app.route('/api/scan', methods=['POST'])
 def api_scan_cluster():
     """Trigger a cluster scan and return results (REST alternative to Socket.IO scan_cluster)."""

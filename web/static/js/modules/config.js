@@ -681,6 +681,31 @@ function restoreClusterResources() {
     // Apply GPU/node presets immediately from cached data
     applyGpuPresets(data);
 
+    // Launcher presets can change after the scan was cached (e.g. GPU
+    // re-allocation) — refresh from the server and re-apply if different
+    if (data.preset_max_gpus || (data.preset_nodes && data.preset_nodes.length)) {
+        fetch('/api/presets').then(function(r) { return r.json(); }).then(function(live) {
+            var liveGpus = live.preset_max_gpus || null;
+            var liveNodes = (live.preset_nodes && live.preset_nodes.length) ? live.preset_nodes : null;
+            var cachedGpus = data.preset_max_gpus || null;
+            var cachedNodes = (data.preset_nodes && data.preset_nodes.length) ? data.preset_nodes : null;
+            if (liveGpus === cachedGpus && JSON.stringify(liveNodes) === JSON.stringify(cachedNodes)) return;
+            if (!liveGpus && !liveNodes) {
+                // Presets removed — rebuild interactive GPU/node selection
+                socket.emit('scan_cluster', {});
+                return;
+            }
+            data.preset_max_gpus = liveGpus;
+            data.preset_nodes = liveNodes;
+            if (liveGpus) config.max_gpus = liveGpus;
+            if (liveNodes) config.selected_nodes = liveNodes;
+            saveConfig();
+            applyGpuPresets(data);
+            logToConsole('🎛️ Launcher allocation updated: ' + (liveGpus || 'all') + ' GPUs' +
+                (liveNodes ? ', ' + liveNodes.length + ' node(s)' : ''), 'info');
+        }).catch(function() {});
+    }
+
     // Build network interfaces display
     let nicDisplay = 'None';
     if (data.total_network_interfaces > 0) {
