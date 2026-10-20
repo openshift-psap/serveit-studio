@@ -767,6 +767,7 @@ function updateEppCustom() {
         no_hit_lru: { enabled: document.getElementById('epp-plugin-no-hit-lru').checked, weight: parseFloat(document.getElementById('epp-weight-no-hit-lru').value) },
         session_aware: { enabled: document.getElementById('epp-plugin-session-aware').checked, weight: parseFloat(document.getElementById('epp-weight-session-aware').value) },
         header_label_affinity: { enabled: document.getElementById('epp-plugin-header-label-affinity') ? document.getElementById('epp-plugin-header-label-affinity').checked : false, weight: document.getElementById('epp-weight-header-label-affinity') ? parseFloat(document.getElementById('epp-weight-header-label-affinity').value) : 3 },
+        load_aware: { enabled: document.getElementById('epp-plugin-load-aware') ? document.getElementById('epp-plugin-load-aware').checked : false, weight: document.getElementById('epp-weight-load-aware') ? parseFloat(document.getElementById('epp-weight-load-aware').value) : 1 },
         token_load: { enabled: document.getElementById('epp-plugin-token-load').checked, weight: parseFloat(document.getElementById('epp-weight-token-load').value) },
     };
     var affinityEl = document.getElementById('epp-plugin-prefix-cache-affinity');

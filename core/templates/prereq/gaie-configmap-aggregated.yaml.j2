@@ -41,6 +41,9 @@ data:
           headerName: "{{ header_label_name | default('x-llm-d-adapter') }}"
           headerValue: "{{ header_label_value | default('') }}"
 {% endif %}
+{% if load_aware_enabled | default(false) %}
+      - type: load-aware-scorer
+{% endif %}
       - type: max-score-picker
     schedulingProfiles:
       - name: default
@@ -74,6 +77,10 @@ data:
 {% if header_label_affinity_enabled | default(false) %}
           - pluginRef: header-label-affinity-scorer
             weight: {{ header_label_affinity_weight | default(3.0) }}
+{% endif %}
+{% if load_aware_enabled | default(false) %}
+          - pluginRef: load-aware-scorer
+            weight: {{ load_aware_weight | default(1.0) }}
 {% endif %}
 {% if slo_enabled | default(false) %}
       - name: slo
