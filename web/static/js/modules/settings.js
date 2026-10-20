@@ -652,8 +652,13 @@ function setEppPreset(preset) {
     config.epp_preset = preset;
     document.querySelectorAll('[data-epp]').forEach(el => {
         if (el.dataset.epp === preset) {
-            el.style.borderColor = 'var(--rh-red-primary)';
-            el.style.background = 'linear-gradient(135deg,#fef2f2,#fee2e2)';
+            if (preset === 'auto') {
+                el.style.borderColor = '#7c3aed';
+                el.style.background = 'linear-gradient(135deg,#faf5ff,#f3e8ff)';
+            } else {
+                el.style.borderColor = 'var(--rh-red-primary)';
+                el.style.background = 'linear-gradient(135deg,#fef2f2,#fee2e2)';
+            }
         } else {
             el.style.borderColor = '#cbd5e1';
             el.style.background = '#fafafa';
@@ -661,7 +666,85 @@ function setEppPreset(preset) {
     });
     var editor = document.getElementById('epp-custom-editor');
     if (editor) editor.style.display = preset === 'custom' ? 'block' : 'none';
+    updateAutoEppPreview();
     saveConfig();
+}
+
+function updateAutoEppPreview() {
+    var el = document.getElementById('epp-auto-preview');
+    if (!el) return;
+    var isAuto = config.epp_preset === 'auto';
+    el.style.display = isAuto ? 'block' : 'none';
+    if (!isAuto) return;
+
+    var isl = parseInt(config.isl) || 1000;
+    var osl = parseInt(config.osl) || 100;
+    var cachePct = parseInt(config.prefix_cache_hit_pct) || 0;
+    var cacheMode = config.prefix_cache_mode || 'identical';
+    var groups = parseInt(config.prefix_cache_groups) || 1;
+    var concurrency = parseInt(config.qps) || 10;
+    var turns = parseInt(config.turns) || 1;
+    var useCorpus = !!config.use_corpus;
+    var hasSla = !!config.latency_constraint_enabled;
+    var loraN = config.lora_enabled ? (parseInt(config.lora_num_adapters) || 0) : 0;
+    var totalGpus = parseInt(config.total_gpus) || 1;
+    var maxSeqs = 256;
+
+    var reasons = [];
+
+    // 1. Prefix cache weight
+    var routingValue;
+    if (cachePct === 0) { routingValue = 0.0; reasons.push('prefix: no cache hits (0%) → routing has zero effect'); }
+    else if (cacheMode === 'identical') { routingValue = 0.1; reasons.push('prefix: identical prompts → routing is a commodity'); }
+    else if (cacheMode === 'shared_prefix') { routingValue = 0.3; reasons.push('prefix: shared prefix → modest routing gains'); }
+    else if (cacheMode === 'multi_group') { routingValue = Math.min(0.7, 0.3 + groups * 0.04); reasons.push('prefix: ' + groups + ' groups → routing value ' + routingValue.toFixed(2)); }
+    else { routingValue = 0.3; reasons.push('prefix: moderate routing value'); }
+
+    if (useCorpus) { routingValue *= 0.8; reasons.push('prefix: real corpus → −20% routing value (more diversity)'); }
+
+    var wPrefix = Math.min(5.0, Math.round((2.0 + (cachePct / 100) * routingValue * 3.0) * 10) / 10);
+
+    // 2. KV cache weight
+    var estKvPerSeq = isl + osl;
+    var estPodCapacity = maxSeqs * estKvPerSeq * 1.5;
+    var kvPressure = Math.min(1.0, (concurrency * estKvPerSeq) / Math.max(estPodCapacity, 1));
+    var wKv = Math.min(5.0, Math.round((1.0 + kvPressure * 2.5) * 10) / 10);
+    reasons.push('kv: ' + concurrency + '×' + estKvPerSeq + 't ctx → pressure=' + kvPressure.toFixed(2));
+
+    // 3. Queue weight
+    var estPods = Math.max(1, Math.floor(totalGpus / Math.max(1, Math.min(8, Math.floor(totalGpus / 4) || 1))));
+    var concPerPod = concurrency / estPods;
+    var queuePressure = Math.min(1.0, concPerPod / maxSeqs);
+    var wQueue = Math.min(5.0, Math.round((1.0 + queuePressure * 2.0) * 10) / 10);
+    reasons.push('queue: ' + Math.round(concPerPod) + ' users/pod → pressure=' + queuePressure.toFixed(2));
+
+    // 4. Active request weight
+    var activeMult = 1.0 + (turns - 1) * 0.15;
+    var activeLoad = Math.min(1.0, (concPerPod / maxSeqs) * activeMult);
+    var wActive = Math.min(5.0, Math.round((1.0 + activeLoad * 2.0) * 10) / 10);
+    if (turns > 1) reasons.push('active: ' + turns + ' turns ×' + activeMult.toFixed(1) + ' → load=' + activeLoad.toFixed(2));
+    else reasons.push('active: single-turn → load=' + activeLoad.toFixed(2));
+
+    // 5. LoRA adjustment
+    if (loraN > 20) {
+        wPrefix = Math.round(wPrefix * 0.7 * 10) / 10;
+        wActive = Math.round(Math.min(5.0, wActive * 1.3) * 10) / 10;
+        reasons.push('lora: ' + loraN + ' adapters → prefix ×0.7, active ×1.3 (adapter residency > cache affinity)');
+    }
+
+    // 6. SLO
+    if (hasSla) reasons.push('slo: latency constraint enabled → weight 3.0');
+
+    var kvEnabled = wKv >= 1.5;
+    var activeEnabled = wActive >= 1.5;
+
+    var weightsEl = document.getElementById('epp-auto-weights');
+    if (weightsEl) {
+        weightsEl.textContent = 'prefix=' + wPrefix + '  kv=' + (kvEnabled ? wKv : 'off') + '  queue=' + wQueue +
+            '  active=' + (activeEnabled ? wActive : 'off') + (hasSla ? '  slo=3.0' : '');
+    }
+    var reasonsEl = document.getElementById('epp-auto-reasons');
+    if (reasonsEl) reasonsEl.innerHTML = reasons.map(function(r) { return '• ' + r; }).join('<br>');
 }
 
 function updateEppCustom() {

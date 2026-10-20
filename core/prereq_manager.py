@@ -186,7 +186,18 @@ class PrereqManager:
                 'latency_aware': {'prefix_cache_weight': 2.0, 'queue_weight': 1.0, 'kv_cache_enabled': False, 'active_request_enabled': False, 'decode_prefix_cache_weight': 2.0, 'decode_queue_weight': 1.0, 'slo_enabled': True, 'slo_weight': 3.0},
             }
             plugins = epp.get('plugins') or epp
-            if epp_preset == 'custom' and (epp.get('plugins') or epp.get('prefix_cache') or epp.get('active_request')):
+            if epp_preset == 'auto' and optimizer_config:
+                # Workload-aware auto derivation: compute weights from the
+                # user's actual workload inputs (ISL, OSL, cache %, mode,
+                # groups, concurrency, turns, corpus, LoRA, SLA)
+                auto_w = self._derive_auto_epp_weights(optimizer_config, log)
+                # Persist on config so Smart EPP (Step 9) uses these as baseline
+                try:
+                    optimizer_config.epp_auto_weights = auto_w
+                except Exception:
+                    pass
+                epp_weights = auto_w
+            elif epp_preset == 'custom' and (epp.get('plugins') or epp.get('prefix_cache') or epp.get('active_request')):
                 epp_weights = {
                     'prefix_cache_weight': plugins.get('prefix_cache', {}).get('weight', 3.0) if plugins.get('prefix_cache', {}).get('enabled', True) else 0,
                     'kv_cache_weight': plugins.get('kv_cache', {}).get('weight', 2.0) if plugins.get('kv_cache', {}).get('enabled', True) else 0,
@@ -514,6 +525,143 @@ class PrereqManager:
         except Exception as e:
             log(f'❌ Failed to update EPP config: {e}')
             return False
+
+    def _derive_auto_epp_weights(self, cfg, log=None) -> dict:
+        """Derive EPP scoring weights from the user's workload inputs.
+
+        Uses the actual configuration (ISL, OSL, prefix cache %, cache mode,
+        groups, concurrency, turns, corpus mode, LoRA, SLA, GPU count) to
+        compute initial weights — no measured metrics needed. Smart EPP
+        (Step 9) refines these with real Prometheus data later.
+
+        The derivation is transparent: each weight traces to specific
+        workload inputs so the user can see WHY each value was chosen.
+        """
+        def g(attr, default=None):
+            return getattr(cfg, attr, default)
+
+        isl = int(g('isl', 1000) or 1000)
+        osl = int(g('osl', 100) or 100)
+        cache_pct = int(g('prefix_cache_hit_pct', 0) or 0)
+        cache_mode = g('prefix_cache_mode', 'identical') or 'identical'
+        groups = int(g('prefix_cache_groups', 1) or 1)
+        concurrency = int(g('qps', 10) or 10)
+        turns = int(g('turns', 1) or 1)
+        use_corpus = bool(g('use_corpus', False))
+        total_gpus = int(g('total_gpus', 1) or 1)
+        has_sla = bool(g('latency_constraint_enabled', False))
+        lora_enabled = bool(g('lora_enabled', False))
+        lora_n = int(g('lora_num_adapters', 0) or 0)
+        max_seqs = int(g('max_num_seqs', 256) or 256)
+
+        # Estimate pod count (aggregated: total_gpus / TP; use a
+        # conservative estimate since TP isn't decided yet at prereq time)
+        est_tp = max(1, min(8, total_gpus // 4)) if total_gpus > 4 else 1
+        est_pods = max(1, total_gpus // est_tp)
+
+        reasons = []
+
+        # ── 1. Prefix cache weight ──
+        # How much can ROUTING improve cache hits?
+        if cache_pct == 0:
+            routing_value = 0.0
+            reasons.append("prefix: no cache hits (0%) → routing has zero effect")
+        elif cache_mode == 'identical':
+            routing_value = 0.1
+            reasons.append("prefix: identical prompts → routing is a commodity (any pod has it)")
+        elif cache_mode == 'shared_prefix':
+            routing_value = 0.3
+            reasons.append("prefix: shared prefix → modest routing gains")
+        elif cache_mode == 'multi_group':
+            # more groups = more distinct prompt clusters = more routing value
+            routing_value = min(0.7, 0.3 + groups * 0.04)
+            reasons.append(f"prefix: {groups} groups → routing has real value ({routing_value:.1f})")
+        else:
+            routing_value = 0.3
+            reasons.append("prefix: unknown cache mode → moderate routing value")
+
+        if use_corpus:
+            routing_value *= 0.8  # real text has more variation
+            reasons.append("prefix: real corpus → −20% routing value (more diversity)")
+
+        # Base weight 2.0 + cache% × routing_value × 3.0 (max ~5)
+        w_prefix = round(min(5.0, 2.0 + (cache_pct / 100.0) * routing_value * 3.0), 1)
+
+        # ── 2. KV cache weight ──
+        # Long context relative to what a pod can hold = more KV pressure
+        est_kv_per_seq = isl + osl
+        est_pod_kv_capacity = max_seqs * est_kv_per_seq * 1.5  # rough: pod can hold ~1.5× max_seqs × avg_ctx
+        kv_pressure = min(1.0, (concurrency * est_kv_per_seq) / max(est_pod_kv_capacity, 1))
+        w_kv = round(min(5.0, 1.0 + kv_pressure * 2.5), 1)
+        reasons.append(f"kv: {concurrency}×{est_kv_per_seq}t ctx vs ~{est_pod_capacity_fmt(est_pod_kv_capacity)} capacity → pressure={kv_pressure:.2f}")
+
+        # ── 3. Queue weight ──
+        # High concurrency per pod = queue pressure
+        conc_per_pod = concurrency / max(est_pods, 1)
+        queue_pressure = min(1.0, conc_per_pod / max(max_seqs, 1))
+        w_queue = round(min(5.0, 1.0 + queue_pressure * 2.0), 1)
+        reasons.append(f"queue: {conc_per_pod:.0f} users/pod vs {max_seqs} slots → pressure={queue_pressure:.2f}")
+
+        # ── 4. Active request weight ──
+        # Multi-turn sessions hold requests longer → active load matters more
+        active_multiplier = 1.0 + (turns - 1) * 0.15
+        active_load = min(1.0, (conc_per_pod / max(max_seqs, 1)) * active_multiplier)
+        w_active = round(min(5.0, 1.0 + active_load * 2.0), 1)
+        if turns > 1:
+            reasons.append(f"active: {turns} turns × {active_multiplier:.1f} multiplier → load={active_load:.2f}")
+        else:
+            reasons.append(f"active: single-turn → load={active_load:.2f}")
+
+        # ── 5. LoRA adjustment ──
+        if lora_enabled and lora_n > 20:
+            # Many adapters: routing by adapter residency (active-request)
+            # matters more than prefix-cache affinity
+            w_prefix = round(w_prefix * 0.7, 1)
+            w_active = round(min(5.0, w_active * 1.3), 1)
+            reasons.append(f"lora: {lora_n} adapters → prefix ×0.7, active ×1.3 (adapter residency > cache affinity)")
+
+        # ── 6. SLO ──
+        slo_w = 3.0 if has_sla else 0
+        if has_sla:
+            reasons.append("slo: latency constraint enabled → weight 3.0")
+
+        # Enable scorers that have non-trivial weight
+        kv_enabled = w_kv >= 1.5
+        active_enabled = w_active >= 1.5
+
+        result = {
+            'prefix_cache_weight': w_prefix,
+            'queue_weight': w_queue,
+            'kv_cache_enabled': kv_enabled,
+            'kv_cache_weight': w_kv if kv_enabled else 1.0,
+            'active_request_enabled': active_enabled,
+            'active_request_weight': w_active if active_enabled else 1.0,
+            'decode_prefix_cache_weight': round(w_prefix * 0.5, 1),
+            'decode_queue_weight': w_queue,
+            'decode_active_request_weight': round(w_active * 1.2, 1),
+            'slo_enabled': has_sla,
+            'slo_weight': slo_w,
+        }
+
+        if log:
+            log('  🧮 Auto EPP weights derived from workload:')
+            for r in reasons:
+                log(f'     {r}')
+            log(f'     → prefix={w_prefix}, kv={result["kv_cache_weight"]}, '
+                f'queue={w_queue}, active={result["active_request_weight"]}'
+                f'{", slo=3.0" if has_sla else ""}')
+
+        return result
+
+
+def est_pod_capacity_fmt(tokens):
+    """Format a token count for human-readable output."""
+    if tokens >= 1_000_000:
+        return f'{tokens / 1_000_000:.1f}M'
+    if tokens >= 1_000:
+        return f'{tokens / 1_000:.0f}K'
+    return str(tokens)
+
 
     def _ensure_modelserver_rbac(self, log_callback=None):
         """Create llm-d-modelserver ServiceAccount + Role + RoleBinding if missing."""

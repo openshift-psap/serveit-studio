@@ -500,8 +500,13 @@ function updateUIFromConfig() {
     if (config.epp_preset && document.querySelector('[data-epp]')) {
         document.querySelectorAll('[data-epp]').forEach(function(el) {
             if (el.dataset.epp === config.epp_preset) {
-                el.style.borderColor = 'var(--rh-red-primary)';
-                el.style.background = 'linear-gradient(135deg,#fef2f2,#fee2e2)';
+                if (config.epp_preset === 'auto') {
+                    el.style.borderColor = '#7c3aed';
+                    el.style.background = 'linear-gradient(135deg,#faf5ff,#f3e8ff)';
+                } else {
+                    el.style.borderColor = 'var(--rh-red-primary)';
+                    el.style.background = 'linear-gradient(135deg,#fef2f2,#fee2e2)';
+                }
             } else {
                 el.style.borderColor = '#cbd5e1';
                 el.style.background = '#fafafa';
@@ -509,6 +514,7 @@ function updateUIFromConfig() {
         });
         var editor = document.getElementById('epp-custom-editor');
         if (editor) editor.style.display = config.epp_preset === 'custom' ? 'block' : 'none';
+        if (typeof updateAutoEppPreview === 'function') updateAutoEppPreview();
     }
     if (document.getElementById('epp-benchmark-enabled')) {
         var eppCb = document.getElementById('epp-benchmark-enabled');
@@ -1094,7 +1100,7 @@ function restoreConfigSummary() {
     if (atEl) atEl.textContent = config.advanced_vllm_custom_enabled ? 'Enabled' : 'Upstream Default';
     const eppEl = document.getElementById('config-summary-epp');
     if (eppEl) {
-        const presetNames = { balanced: 'Balanced (3:2:2)', cache_optimized: 'Cache Optimized (5:1:2)', queue_balanced: 'Queue Balanced (2:2:3)', custom: 'Custom' };
+        const presetNames = { auto: 'Auto (Workload-Aware)', balanced: 'Balanced (3:2:2)', cache_optimized: 'Cache Optimized (5:1:2)', queue_balanced: 'Queue Balanced (2:2:3)', custom: 'Custom' };
         eppEl.textContent = config.epp_custom_enabled ? (presetNames[config.epp_preset] || config.epp_preset) : 'Upstream Default';
     }
     const eppSmartEl = document.getElementById('config-summary-epp-smart');

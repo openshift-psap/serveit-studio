@@ -93,7 +93,7 @@ class RecipeOptimizerConfig:
 
     # EPP configuration
     epp_custom_enabled: bool = True  # False = use llm-d default EPP config
-    epp_preset: str = 'balanced'  # 'balanced', 'cache_optimized', 'queue_balanced', 'latency_aware', 'custom'
+    epp_preset: str = 'balanced'  # 'auto', 'balanced', 'cache_optimized', 'queue_balanced', 'latency_aware', 'custom'
     epp_benchmark: bool = False  # Benchmark multiple EPP strategies
     epp_config: Optional[Dict] = None  # Custom plugin weights and parameters
 

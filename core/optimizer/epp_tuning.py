@@ -104,6 +104,28 @@ class EPPTuningMixin:
             'latency_aware': {'prefix_cache_weight': 3.0, 'kv_cache_weight': 2.0, 'queue_weight': 2.0, 'active_request_weight': 2.0},
         }
         preset = getattr(self.config, 'epp_preset', 'balanced') or 'balanced'
+        if preset == 'auto':
+            # Auto: use the workload-derived weights (computed at prereq time
+            # and stored on the config by _derive_auto_epp_weights)
+            auto = getattr(self.config, 'epp_auto_weights', None)
+            if auto:
+                return {
+                    'prefix_cache_weight': auto.get('prefix_cache_weight', 3.0),
+                    'kv_cache_weight': auto.get('kv_cache_weight', 2.0),
+                    'queue_weight': auto.get('queue_weight', 2.0),
+                    'active_request_weight': auto.get('active_request_weight', 2.0),
+                }
+            # Fallback if auto weights weren't pre-computed (e.g. resume from
+            # older config) — derive now
+            from core.prereq_manager import PrerequisiteManager
+            pm = PrerequisiteManager.__new__(PrerequisiteManager)
+            derived = pm._derive_auto_epp_weights(self.config)
+            return {
+                'prefix_cache_weight': derived['prefix_cache_weight'],
+                'kv_cache_weight': derived['kv_cache_weight'],
+                'queue_weight': derived['queue_weight'],
+                'active_request_weight': derived['active_request_weight'],
+            }
         if preset == 'custom' and self.config.epp_config:
             plugins = self.config.epp_config.get('plugins', {})
             return {
