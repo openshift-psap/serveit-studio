@@ -2238,7 +2238,7 @@ def handle_setup_storage(data):
                      'concurrency_sweep_all_configs', 'concurrency_sweep_max_configs',
                      'concurrency_sweep_step_pct', 'concurrency_sweep_use_epp_tuned',
                      'max_requests', 'hf_token']
-        _opt_data = {k: data[k] for k in _opt_keys if k in data}
+        _opt_data = {k: data[k] for k in _opt_keys if k in data and data[k] is not None}
         if _opt_data:
             try:
                 with get_db() as conn:
