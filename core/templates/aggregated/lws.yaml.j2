@@ -192,6 +192,24 @@ spec:
                 printf '#!/usr/bin/env python3\ntry:\n import transformers.integrations.heterogeneity.configuration_utils as _hc\n _p=_hc.HeterogeneousConfigMixin.allow_global_per_layer_attribute_access\n _hc.HeterogeneousConfigMixin.allow_global_per_layer_attribute_access=property(lambda s:s.__dict__.get("allow_global_per_layer_attribute_access",True),_p.fset)\nexcept Exception:\n pass\n{% if lws_size | default(1) > 1 %}try:\n import vllm.distributed.device_communicators.flashinfer_all_reduce as _fia\n _fia.fi_ar_available=False\nexcept Exception:\n pass\ntry:\n import vllm.models.common.ops.fused_allreduce_rms_norm as _far\n _far.flashinfer_trtllm_fused_allreduce_norm=None\n _far.get_fi_ar_workspace=None\nexcept Exception:\n pass\n{% endif %}if __name__=="__main__":\n import sys;sys.argv[0]="vllm"\n from vllm.entrypoints.cli.main import main;main()\n' > /tmp/_vllm_patched && chmod +x /tmp/_vllm_patched
                 echo "--- Patched transformers per-layer attribute access ---"
 
+                # Wait for the GPU to drain before launching vLLM — a previous
+                # container's orphaned EngineCore can hold ~126GiB briefly after
+                # RecreateGroupOnPodRestart replaces the pod; starting against it
+                # fails init_device ("Free memory ... less than desired") and
+                # crash-loops. Poll the minimum free MiB across visible GPUs.
+                if command -v nvidia-smi >/dev/null 2>&1; then
+                  _gpu_wait=0
+                  while [ "$_gpu_wait" -lt 180 ]; do
+                    _free=$(nvidia-smi --query-gpu=memory.free --format=csv,noheader,nounits 2>/dev/null | sort -n | head -1 | tr -d ' ')
+                    if [ -n "$_free" ] && [ "$_free" -ge 120000 ]; then
+                      break
+                    fi
+                    echo "--- Waiting for GPU to drain (${_free:-?} MiB free, ${_gpu_wait}s) ---"
+                    sleep 5
+                    _gpu_wait=$((_gpu_wait+5))
+                  done
+                fi
+
                 exec /tmp/_vllm_patched serve \
                   {{ model_name }} \
                   --port 8000 \
@@ -556,6 +574,24 @@ spec:
                 # Patch transformers 5.15+ AmbiguousGlobalPerLayerAttributeError for heterogeneous models (Gemma 4)
                 printf '#!/usr/bin/env python3\ntry:\n import transformers.integrations.heterogeneity.configuration_utils as _hc\n _p=_hc.HeterogeneousConfigMixin.allow_global_per_layer_attribute_access\n _hc.HeterogeneousConfigMixin.allow_global_per_layer_attribute_access=property(lambda s:s.__dict__.get("allow_global_per_layer_attribute_access",True),_p.fset)\nexcept Exception:\n pass\n{% if lws_size | default(1) > 1 %}try:\n import vllm.distributed.device_communicators.flashinfer_all_reduce as _fia\n _fia.fi_ar_available=False\nexcept Exception:\n pass\ntry:\n import vllm.models.common.ops.fused_allreduce_rms_norm as _far\n _far.flashinfer_trtllm_fused_allreduce_norm=None\n _far.get_fi_ar_workspace=None\nexcept Exception:\n pass\n{% endif %}if __name__=="__main__":\n import sys;sys.argv[0]="vllm"\n from vllm.entrypoints.cli.main import main;main()\n' > /tmp/_vllm_patched && chmod +x /tmp/_vllm_patched
                 echo "--- Patched transformers per-layer attribute access ---"
+
+                # Wait for the GPU to drain before launching vLLM — a previous
+                # container's orphaned EngineCore can hold ~126GiB briefly after
+                # RecreateGroupOnPodRestart replaces the pod; starting against it
+                # fails init_device ("Free memory ... less than desired") and
+                # crash-loops. Poll the minimum free MiB across visible GPUs.
+                if command -v nvidia-smi >/dev/null 2>&1; then
+                  _gpu_wait=0
+                  while [ "$_gpu_wait" -lt 180 ]; do
+                    _free=$(nvidia-smi --query-gpu=memory.free --format=csv,noheader,nounits 2>/dev/null | sort -n | head -1 | tr -d ' ')
+                    if [ -n "$_free" ] && [ "$_free" -ge 120000 ]; then
+                      break
+                    fi
+                    echo "--- Waiting for GPU to drain (${_free:-?} MiB free, ${_gpu_wait}s) ---"
+                    sleep 5
+                    _gpu_wait=$((_gpu_wait+5))
+                  done
+                fi
 
                 exec /tmp/_vllm_patched serve \
                   {{ model_name }} \

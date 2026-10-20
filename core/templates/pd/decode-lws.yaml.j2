@@ -249,6 +249,24 @@ spec:
                 #fi
 
                 # Set --headless flag for multi-node worker nodes (LWS_WORKER_INDEX > 0)
+                # Wait for the GPU to drain before launching vLLM — a previous
+                # container's orphaned EngineCore can hold ~126GiB briefly after
+                # RecreateGroupOnPodRestart replaces the pod; starting against it
+                # fails init_device ("Free memory ... less than desired") and
+                # crash-loops. Poll the minimum free MiB across visible GPUs.
+                if command -v nvidia-smi >/dev/null 2>&1; then
+                  _gpu_wait=0
+                  while [ "$_gpu_wait" -lt 180 ]; do
+                    _free=$(nvidia-smi --query-gpu=memory.free --format=csv,noheader,nounits 2>/dev/null | sort -n | head -1 | tr -d ' ')
+                    if [ -n "$_free" ] && [ "$_free" -ge 120000 ]; then
+                      break
+                    fi
+                    echo "--- Waiting for GPU to drain (${_free:-?} MiB free, ${_gpu_wait}s) ---"
+                    sleep 5
+                    _gpu_wait=$((_gpu_wait+5))
+                  done
+                fi
+
                 /tmp/_vllm_patched serve {{ model_name }} \
                   --port 8200 \
                   --trust-remote-code \
