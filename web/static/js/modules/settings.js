@@ -727,14 +727,14 @@ function updateAutoEppPreview() {
 
     // 5. LoRA adjustment
     var sessionAware = false, sessionAwareW = 0;
-    var headerLabelAffinity = false, headerLabelW = 0;
+    var loraAffinity = false, loraAffinityW = 0;
     if (loraN > 20) {
         wPrefix = Math.round(wPrefix * 0.7 * 10) / 10;
         wActive = Math.round(Math.min(5.0, wActive * 1.3) * 10) / 10;
         sessionAware = true; sessionAwareW = 3.0;
-        headerLabelAffinity = true; headerLabelW = 3.0;
+        loraAffinity = true; loraAffinityW = 3.0;
         reasons.push('lora: ' + loraN + ' adapters → prefix ×0.7, active ×1.3 (adapter residency > cache affinity)');
-        reasons.push('lora: → session-affinity(3.0) + header-label-affinity(3.0) = route by adapter identity (RFE-2527)');
+        reasons.push('lora: → session-affinity(3.0) + lora-affinity(3.0) = route by adapter locality (model field → per-pod ActiveModels)');
     }
 
     // 6. SLO
@@ -749,7 +749,7 @@ function updateAutoEppPreview() {
             '  active=' + (activeEnabled ? wActive : 'off');
         if (hasSla) wText += '  slo=3.0';
         if (sessionAware) wText += '  session-affinity=3.0';
-        if (headerLabelAffinity) wText += '  header-label-affinity=3.0';
+        if (loraAffinity) wText += '  lora-affinity=3.0';
         weightsEl.textContent = wText;
     }
     var reasonsEl = document.getElementById('epp-auto-reasons');
