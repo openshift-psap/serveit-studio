@@ -266,6 +266,8 @@ class PrereqManager:
                 'no_hit_lru_weight': epp_weights.get('no_hit_lru_weight', 1.0),
                 'session_aware_enabled': epp_weights.get('session_aware_enabled', False),
                 'session_aware_weight': epp_weights.get('session_aware_weight', 2.0),
+                'lora_affinity_enabled': epp_weights.get('lora_affinity_enabled', False),
+                'lora_affinity_weight': epp_weights.get('lora_affinity_weight', 3.0),
                 'header_label_affinity_enabled': epp_weights.get('header_label_affinity_enabled', False),
                 'header_label_affinity_weight': epp_weights.get('header_label_affinity_weight', 3.0),
                 'header_label_name': 'x-llm-d-adapter',
