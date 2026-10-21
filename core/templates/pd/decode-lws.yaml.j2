@@ -278,6 +278,79 @@ spec:
                   done
                 fi
 
+{% if lora_enabled %}
+                # Dynamically ensure adapter files exist for this level's count —
+                # the sweep may mount more than setup generated. Seeded RNG, so
+                # every pod generates identical bytes; flock + atomic rename
+                # serialize concurrent generation on the shared storage.
+                python3 - <<'LORA_GEN_EOF'
+                import json, os, sys, fcntl
+                from pathlib import Path
+                import numpy as np
+                from safetensors.numpy import save_file
+
+                n = {{ lora_adapter_count }}
+                rank = {{ lora_max_rank }}
+                model_id = '{{ model_name }}'
+                out_root = Path('{{ lora_adapters_path }}')
+
+                cfg_name = 'models--' + model_id.replace('/', '--')
+                snaps = sorted((Path('/model-cache/huggingface') / cfg_name / 'snapshots').glob('*/config.json'))
+                if not snaps:
+                    print('LORA_GEN: no model config found — cannot derive adapter shapes', flush=True)
+                    sys.exit(1)
+                cfg = json.loads(snaps[0].read_text())
+                tc = cfg.get('text_config', cfg)
+                L = tc['num_hidden_layers']
+                H = tc['hidden_size']
+                heads = tc.get('num_attention_heads') or 1
+                hd = tc.get('head_dim') or (H // heads)
+                kv = tc.get('num_key_value_heads') or heads
+                kv_out = max(kv * hd,
+                             (tc.get('num_global_key_value_heads') or 0) * (tc.get('global_head_dim') or 0))
+                prefix = 'base_model.model.language_model' if 'text_config' in cfg else 'base_model.model.model'
+
+                missing = [i for i in range(1, n + 1)
+                           if not (out_root / f'agent-{i:04d}' / 'adapter_model.safetensors').exists()]
+                if not missing:
+                    print(f'LORA_GEN: all {n} adapters present', flush=True)
+                else:
+                    print(f'LORA_GEN: generating {len(missing)} missing adapters (of {n})', flush=True)
+                    rng = np.random.default_rng(42)
+                    shapes = {}
+                    for layer in range(L):
+                        for m_name, out_d in (('q_proj', heads * hd), ('k_proj', kv_out),
+                                              ('v_proj', kv_out), ('o_proj', H)):
+                            shapes[f'{prefix}.layers.{layer}.self_attn.{m_name}.lora_A.weight'] = (rank, H)
+                            shapes[f'{prefix}.layers.{layer}.self_attn.{m_name}.lora_B.weight'] = (out_d, rank)
+                    adapter_cfg = json.dumps({
+                        'peft_type': 'LORA', 'r': rank, 'lora_alpha': rank * 2,
+                        'target_modules': ['q_proj', 'k_proj', 'v_proj', 'o_proj'],
+                        'task_type': 'CAUSAL_LM', 'base_model_name_or_path': model_id,
+                        'bias': 'none', 'inference_mode': True, 'init_lora_weights': True,
+                        'lora_dropout': 0.0, 'fan_in_fan_out': False,
+                        'use_dora': False, 'use_rslora': False})
+                    out_root.mkdir(parents=True, exist_ok=True)
+                    with open(out_root / '.gen.lock', 'w') as lf:
+                        fcntl.flock(lf, fcntl.LOCK_EX)
+                        try:
+                            for i in missing:
+                                d = out_root / f'agent-{i:04d}'
+                                d.mkdir(exist_ok=True)
+                                (d / 'adapter_config.json').write_text(adapter_cfg)
+                                data = {k: rng.standard_normal(s).astype(np.float16)
+                                        for k, s in shapes.items()}
+                                tmp = d / '.adapter_model.tmp'
+                                save_file(data, str(tmp))
+                                os.replace(tmp, d / 'adapter_model.safetensors')
+                                if i % 100 == 0 or i == missing[-1]:
+                                    print(f'LORA_GEN: {i}/{n}', flush=True)
+                        finally:
+                            fcntl.flock(lf, fcntl.LOCK_UN)
+                    print(f'LORA_GEN: done — {n} adapters ready', flush=True)
+                LORA_GEN_EOF
+
+{% endif %}
                 /tmp/_vllm_patched serve {{ model_name }} \
                   --port 8200 \
                   --trust-remote-code \

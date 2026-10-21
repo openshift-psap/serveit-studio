@@ -444,6 +444,7 @@ class TemplateManager:
                              and bool(getattr(config, 'node_nfs_pvcs', None)))
             vars_dict['lora_adapters_path'] = '/model-cache/adapters' if _per_node_nfs else '/adapters'
             _adapters_path = vars_dict['lora_adapters_path']
+            vars_dict['lora_adapter_count'] = lora_n
             vars_dict['lora_modules_arg'] = ' '.join(
                 f'agent-{i:04d}={_adapters_path}/agent-{i:04d}' for i in range(1, lora_n + 1)
             )
