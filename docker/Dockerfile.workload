@@ -24,6 +24,7 @@ RUN \
 # Python deps — guidellm + tokenizer (for dataset generation)
 # guidellm from main branch (first_prompt_tokens, prefix_buckets, branches support)
 COPY docker/guidellm-main.zip /tmp/guidellm-main.zip
+COPY docker/scripts/patch_guidellm_corpus.py /tmp/patch_guidellm_corpus.py
 RUN python3.11 -m pip install --no-cache-dir \
     /tmp/guidellm-main.zip \
     transformers \
@@ -31,7 +32,8 @@ RUN python3.11 -m pip install --no-cache-dir \
     httpx \
     PyYAML \
     huggingface_hub \
-    && rm -f /tmp/guidellm-main.zip
+    && python3.11 /tmp/patch_guidellm_corpus.py \
+    && rm -f /tmp/guidellm-main.zip /tmp/patch_guidellm_corpus.py
 
 # kubectl (multi-arch)
 RUN KUBECTL_VERSION="1.30.2" && \

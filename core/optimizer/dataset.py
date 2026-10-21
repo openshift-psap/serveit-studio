@@ -231,7 +231,10 @@ class DatasetMixin:
             # pre-max_model_len in the pipeline); call for the log line and
             # any config not yet derived.
             apply_multi_turn_prefix_config(self.config, log=self.log)
-            self.log("   Multi-turn workload stays in synthetic mode — guidellm handles turns, delays, and prefix buckets natively", 'info')
+            self.log("   Multi-turn workload uses guidellm synthetic mode with real "
+                     "corpus text (wikitext-103 baked into the workload image, patched "
+                     "into the text generator) — turns, delays, and prefix buckets "
+                     "stay native", 'info')
             return
 
         cache_mode = self.config.prefix_cache_mode or 'identical'
