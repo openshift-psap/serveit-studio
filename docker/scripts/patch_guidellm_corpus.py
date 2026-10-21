@@ -26,28 +26,47 @@ CORPUS_PATCH = '''
     def _load_corpus_pool(cls, processor):
         """Load and pre-tokenize a corpus pool (lazy, once per process).
 
-        Uses the first ~2M tokens of paragraph text — plenty of diversity
-        for benchmark prompts while keeping pre-encoding under a few
-        seconds.
+        Streams a bounded 24MB text window (~5M tokens) instead of reading
+        the whole ~500MB corpus file — loading it whole OOMs the workload
+        pod. The pool keeps the first ~2M tokens of paragraph text: plenty
+        of diversity for benchmark prompts while keeping pre-encoding
+        under a few seconds.
         """
         if cls._corpus_state is not None:
             return cls._corpus_state
         try:
             with open(cls._CORPUS_PATH, encoding="utf-8", errors="ignore") as f:
-                text = f.read()
-            paragraphs = [p.strip() for p in text.split("\\n\\n") if len(p.strip()) > 200]
-            if not paragraphs:
+                text = f.read(24 * 1024 * 1024)
+            # The corpus file is line-oriented (one wikitext paragraph per
+            # line, no blank-line separators). Group short lines into
+            # ~1.2k-char chunks so pool entries are diverse and reasonably
+            # sized.
+            lines = [ln.strip() for ln in text.split("\\n") if len(ln.strip()) >= 80]
+            del text
+            chunks = []
+            cur, cur_len = [], 0
+            for ln in lines:
+                cur.append(ln)
+                cur_len += len(ln)
+                if cur_len >= 1200:
+                    chunks.append(" ".join(cur))
+                    cur, cur_len = [], 0
+            if cur:
+                chunks.append(" ".join(cur))
+            del lines
+            if not chunks:
                 cls._corpus_state = ([], None)
                 return cls._corpus_state
             pool = []
             total = 0
             budget = 2_000_000
-            for p in paragraphs:
-                ids = processor.encode(p)
+            for chunk in chunks:
+                ids = processor.encode(chunk)
                 pool.append(ids)
                 total += len(ids)
                 if total >= budget:
                     break
+            del chunks
             cls._corpus_state = (pool, Random(20261021))
         except Exception:
             cls._corpus_state = ([], None)
