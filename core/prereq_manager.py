@@ -377,6 +377,19 @@ class PrereqManager:
 
                 log(f'   ✅ {resource_type} created')
 
+                # The EPP loads its config ONCE at startup — a configmap
+                # update alone is never picked up by the running pods. When
+                # the GAIE config changes between tests (e.g. calibration
+                # derives no affinity scorers, then the full-workload test
+                # derives lora-affinity), restart the EPP so the new
+                # config takes effect.
+                if resource_type == 'ConfigMap' and 'gaie' in template_path:
+                    r_restart = self.kubectl.run(
+                        ['rollout', 'restart', 'deployment', context['gaie_name'],
+                         '-n', self.namespace], check=False)
+                    if r_restart.returncode == 0:
+                        log('   🔄 EPP restarted to load updated config')
+
             log('')
             log('⏳ Waiting for GAIE deployment to be ready...')
 
