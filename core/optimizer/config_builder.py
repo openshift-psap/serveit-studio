@@ -733,6 +733,15 @@ class ConfigBuilderMixin:
             '--context-parallel-size':         ('context_parallel_size',         'tensor_parallelism'),
         }
         gpus_per_node = getattr(cfg, 'gpus_per_node', None) or 8
+        # vLLM context parallelism shards KV heads across TP ranks and
+        # validates tp_size > num_kv_heads at engine startup. Models with
+        # many KV heads (Gemma-4: 8) reject DCP/PCP at TP <= num_kv_heads
+        # with a hard ValueError — every PD/EP pod crash-looped (run-56
+        # step7). Skip the flag when the model can't shard at this TP.
+        _ctx_num_kv_heads = None
+        if getattr(self, '_model_config', None):
+            _ctx_num_kv_heads = self._model_config.get('num_key_value_heads') \
+                or self._model_config.get('num_attention_heads')
         for entry in adv.get('context_parallel_entries', []):
             flag  = (entry.get('flag') or '').strip()
             value = entry.get('value')
@@ -755,6 +764,9 @@ class ConfigBuilderMixin:
             max_cps = max(1, gpus_per_node // tp_val)
             if cps > max_cps:
                 cps = max_cps
+            # Model guard: DCP/PCP require tp > num_kv_heads
+            if cps > 1 and _ctx_num_kv_heads and tp_val <= _ctx_num_kv_heads:
+                continue
             if cps > 1:
                 setattr(cfg, field, cps)
 
