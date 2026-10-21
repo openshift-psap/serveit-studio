@@ -1131,7 +1131,13 @@ function _renderChartsImpl(data, runId, content) {
                 ['Test Duration', (rc.test_duration || 300) + 's'],
                 ['Stop Mode', rc.stop_mode || 'duration'],
                 rc.max_requests ? ['Max Requests', rc.max_requests] : null,
-                ['Workload Mode', rc.workload_mode || 'synthetic'],
+                ['Workload Mode', (function() {
+                    if (rc.workload_mode === 'dataset')
+                        return 'Dataset file' + (rc.dataset_source ? ' (' + rc.dataset_source + ')' : '');
+                    if (rc.use_corpus)
+                        return 'Real corpus (wikitext-103) — native multi-turn generator';
+                    return 'Synthetic text';
+                })()],
                 rc.dataset_source ? ['Dataset', '<span style="word-break:break-all;font-size:0.9em;">' + rc.dataset_source + '</span>'] : null,
                 rc.prefix_cache_hit_pct > 0 ? ['Prefix Cache Hit', rc.prefix_cache_hit_pct + '% (' + (rc.prefix_cache_mode || 'identical') + (rc.prefix_cache_groups > 1 ? ', ' + rc.prefix_cache_groups + ' groups' : '') + ')'] : null,
             ]},
