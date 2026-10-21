@@ -1079,14 +1079,29 @@ class TestOrchestrator(ParserMixin, GuidellmMixin):
                      'md5sum', remote_path], check=False)
                 remote_md5 = md5_r.stdout.strip().split()[0] if md5_r.returncode == 0 else None
 
-                max_retries = 3
+                max_retries = 5
                 for attempt in range(max_retries):
-                    _sp.run(
-                        [kubectl.kubectl_cmd, 'cp',
-                         f'{self._guidellm_pod_name}:{remote_path}',
-                         str(local_raw), '-n', self.namespace],
-                        env=env, check=False, timeout=120
-                    )
+                    # Use exec+cat instead of kubectl cp (tar-based) — kubectl cp
+                    # corrupts large files on NFS-backed volumes across clusters,
+                    # causing persistent MD5 mismatches (run 61: 7.7MB file failed
+                    # all 3 retries while smaller files succeeded intermittently).
+                    # Falls back to base64 on the last attempt for network paths
+                    # that mangle raw binary streams (proxies, SPDY issues).
+                    if attempt < 3:
+                        cat_r = _sp.run(
+                            [kubectl.kubectl_cmd, 'exec', self._guidellm_pod_name,
+                             '-n', self.namespace, '--', 'cat', remote_path],
+                            env=env, capture_output=True, timeout=180, check=False)
+                        if cat_r.returncode == 0 and cat_r.stdout:
+                            local_raw.write_bytes(cat_r.stdout)
+                    else:
+                        import base64 as _b64
+                        b64_r = _sp.run(
+                            [kubectl.kubectl_cmd, 'exec', self._guidellm_pod_name,
+                             '-n', self.namespace, '--', 'base64', '-w0', remote_path],
+                            env=env, capture_output=True, timeout=300, check=False)
+                        if b64_r.returncode == 0 and b64_r.stdout:
+                            local_raw.write_bytes(_b64.b64decode(b64_r.stdout))
                     if not local_raw.exists() or local_raw.stat().st_size == 0:
                         continue
 
