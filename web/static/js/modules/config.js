@@ -558,14 +558,26 @@ function updateUIFromConfig() {
         document.getElementById('adv-extra-env-text').value = config.extra_env_vars.map(function(e) { return e.name + '=' + e.value; }).join('\n');
     }
 
-    // Restore scheduler image
-    if (config.scheduler_image && document.getElementById('scheduler-image-input')) {
-        document.getElementById('scheduler-image-input').value = config.scheduler_image;
+    // Restore scheduler image — UI defaults win: when the config has no
+    // explicit value, adopt the input field's default so what the user
+    // SEES is what gets deployed (previously a null config fell back to
+    // a digest-pinned backend default, deploying a different EPP than
+    // the UI displayed)
+    if (document.getElementById('scheduler-image-input')) {
+        if (config.scheduler_image) {
+            document.getElementById('scheduler-image-input').value = config.scheduler_image;
+        } else {
+            config.scheduler_image = document.getElementById('scheduler-image-input').value;
+        }
     }
 
-    // Restore sidecar image
-    if (config.sidecar_image && document.getElementById('sidecar-image-input')) {
-        document.getElementById('sidecar-image-input').value = config.sidecar_image;
+    // Restore sidecar image — same UI-wins adoption
+    if (document.getElementById('sidecar-image-input')) {
+        if (config.sidecar_image) {
+            document.getElementById('sidecar-image-input').value = config.sidecar_image;
+        } else {
+            config.sidecar_image = document.getElementById('sidecar-image-input').value;
+        }
     }
 
     // Restore run description
