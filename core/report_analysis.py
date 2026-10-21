@@ -1646,6 +1646,18 @@ class ReportAnalyzer:
         except Exception:
             pass
 
+        # LoRA adapter sweep (Step 14) — from optimal_config when the run
+        # completed, otherwise rebuilt from the step14 test rows
+        lora_sweep = None
+        try:
+            if row and row['optimal_config']:
+                import json as _json
+                lora_sweep = _json.loads(row['optimal_config']).get('lora_sweep')
+        except Exception:
+            pass
+        if not lora_sweep:
+            lora_sweep = self._build_lora_sweep_from_results(results)
+
         # Load latency search trials (Step 9) if any
         latency_search_data = None
         try:
@@ -1996,4 +2008,44 @@ class ReportAnalyzer:
             'epp_tuning': epp_tuning_data,
             'concurrency_sweep': concurrency_sweep,
             'cache_sweep': cache_sweep,
+            'lora_sweep': lora_sweep,
         }
+
+    def _build_lora_sweep_from_results(self, results):
+        """Rebuild the LoRA adapter-sweep series from step14 test rows.
+
+        Matches the shape the pipeline stores in optimal_config.lora_sweep
+        (and charts.js renders): { sweep_key: [points sorted by count] }.
+        Used when optimal_config wasn't written (interrupted runs) or lacks
+        the sweep — the test rows carry the same metrics.
+        """
+        import re
+        sweep = {}
+        for r in results:
+            m = re.match(r'step14-lora-(.+)-n(\d+)$', r.config_name or '')
+            if not m or not r.is_successful:
+                continue
+            skey, n = m.group(1), int(m.group(2))
+            gpu_resident = None
+            try:
+                import json as _j
+                if r.test_config_json:
+                    gpu_resident = _j.loads(r.test_config_json).get('lora_max_loras')
+            except Exception:
+                pass
+            sweep.setdefault(skey, []).append({
+                'adapter_count': n,
+                'gpu_resident': gpu_resident,
+                'lru_swapping': bool(gpu_resident and n > gpu_resident),
+                'throughput_mean': round(r.throughput_mean or r.throughput_p90 or 0, 3),
+                'output_tps_mean': round(self._get_output_tps(r) or 0, 1),
+                'ttft_p50': round(r.ttft_p50 or 0, 1),
+                'ttft_p90': round(r.ttft_p90 or 0, 1),
+                'itl_p90': round(r.itl_p90 or 0, 1),
+                'gpus': r.total_gpus,
+                'config_label': skey.replace('-', ' ').upper(),
+                'test_id': r.config_name,
+            })
+        for pts in sweep.values():
+            pts.sort(key=lambda p: p['adapter_count'])
+        return sweep or None

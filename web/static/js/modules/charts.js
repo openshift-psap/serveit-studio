@@ -2310,7 +2310,7 @@ function _renderChartsImpl(data, runId, content) {
                 'with benchmark requests round-robined across the base model and all adapters. GPU residency is auto-sized from free VRAM — ' +
                 'once the adapter count exceeds it, LRU swapping begins (red shading) and latency degrades.' +
                 '<div id="' + sweepChartId + '" style="width:100%;height:520px;margin-top:10px;"></div>' +
-                '<table style="width:100%;border-collapse:collapse;margin-top:10px;font-size:0.9em;">' +
+                '<table style="width:100%;border-collapse:collapse;margin-top:10px;font-size:0.9em;background:#fff;">' +
                 '<tr style="background:#eef2ff;"><th style="padding:6px;">Adapters</th><th style="padding:6px;">GPU-Resident</th><th style="padding:6px;">TTFT p90</th><th style="padding:6px;">Throughput</th><th style="padding:6px;">ITL p90</th><th style="padding:6px;">Output</th></tr>' +
                 rows + '</table></div></div>';
 
@@ -2472,11 +2472,11 @@ function _renderChartsImpl(data, runId, content) {
                        'scattered across pods (random load balancing)') +
                       '; <span style="color:#ef4444;">' + (pd.scattered || 0) + '</span> served by multiple pods.</div>'
                     : '';
-                html += '<div style="margin-top:16px;border:1.5px solid #e2e8f0;border-radius:8px;overflow:hidden;">' +
+                html += '<div style="margin-top:16px;border:1.5px solid #e2e8f0;border-radius:8px;overflow:hidden;background:#fff;">' +
                     '<div style="background:#f8fafc;padding:8px 14px;font-weight:600;color:#334155;font-size:0.95em;border-bottom:1px solid #e2e8f0;">' +
                     'Pod Breakdown — ' + pd.config + '</div>' +
                     affLine +
-                    '<table style="width:100%;border-collapse:collapse;font-size:0.88em;">' +
+                    '<table style="width:100%;border-collapse:collapse;font-size:0.88em;background:#fff;">' +
                     '<tr style="background:#eef2ff;"><th style="padding:6px 10px;text-align:left;">Pod</th><th style="padding:6px 8px;">GPU-Resident Cap</th><th style="padding:6px 8px;">Distinct Adapters Served</th><th style="padding:6px 8px;">Residency Changes</th><th style="padding:6px 8px;text-align:left;">Last Running Set</th><th style="padding:6px 8px;">Waiting</th></tr>' +
                     podRows + '</table></div>';
             });
