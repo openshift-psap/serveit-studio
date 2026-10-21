@@ -340,6 +340,8 @@ spec:
                 value: /var/cache/vllm/flashinfer
               - name: HF_HUB_CACHE
                 value: /model-cache/huggingface
+              - name: HF_HUB_OFFLINE
+                value: "1"
               - name: HF_HOME
                 value: /model-cache/huggingface
               - name: RAYON_NUM_THREADS
@@ -720,6 +722,8 @@ spec:
                 value: /var/cache/vllm/flashinfer
               - name: HF_HUB_CACHE
                 value: /model-cache/huggingface
+              - name: HF_HUB_OFFLINE
+                value: "1"
               - name: HF_HOME
                 value: /model-cache/huggingface
               - name: RAYON_NUM_THREADS
