@@ -207,20 +207,20 @@
                                 </div>
                                 <div id="lora-sweep-body" style="display:none;padding:8px 0 0 44px;font-size:0.8em;color:#475569;line-height:1.6;">
                                     <div id="lora-sweep-opts" style="display:flex;gap:14px;flex-wrap:wrap;align-items:flex-start;">
-                                        <div class="input-group" style="width:150px;flex-shrink:0;">
+                                        <div class="input-group" style="width:170px;flex-shrink:0;">
                                             <label style="white-space:nowrap;">Number of Levels</label>
                                             <input type="number" id="lora-sweep-count" value="5" min="2" max="10" disabled onchange="onSweepCountChange();" oninput="onSweepCountChange();">
                                             <div class="help-text">Points on the curve</div>
                                         </div>
-                                        <div class="input-group" style="width:230px;flex-shrink:0;">
+                                        <div class="input-group" style="width:320px;flex-shrink:0;">
                                             <label style="white-space:nowrap;">Level Step</label>
                                             <input type="text" id="lora-sweep-step" placeholder="auto (even to N)" disabled oninput="onSweepStepInput();">
                                             <div class="help-text">Count or % of N — e.g. 50% &rarr; 0, 50, 100, 150, 200</div>
                                         </div>
-                                        <div class="input-group" style="width:230px;flex-shrink:0;">
+                                        <div class="input-group" style="width:320px;flex-shrink:0;">
                                             <label style="white-space:nowrap;">Or: Explicit Levels</label>
-                                            <input type="text" id="lora-sweep-levels" placeholder="e.g. 20%, 40%, 100%" disabled oninput="onSweepExplicitInput();">
-                                            <div class="help-text">Counts or % of N — overrides the other two</div>
+                                            <input type="text" id="lora-sweep-levels" placeholder="e.g. 20%, 40%, 100% or 300, 400, 500" disabled oninput="onSweepExplicitInput();">
+                                            <div class="help-text">Counts or % of N — typing here clears Level Step</div>
                                         </div>
                                     </div>
                                     <div id="lora-sweep-preview" style="font-size:0.78em;color:#0369a1;background:#e0f2fe;border:1px solid #bae6fd;border-radius:6px;padding:6px 10px;margin-top:8px;display:none;"></div>
@@ -238,10 +238,14 @@
                                     var on = document.getElementById('lora-sweep-enabled').checked;
                                     var hasExplicit = !!(config.lora_sweep_levels && config.lora_sweep_levels.length);
                                     var hasStep = !!config.lora_sweep_step;
-                                    // Explicit wins: count+step disabled AND visually cleared
+                                    // Soft exclusivity: step and levels stay editable whenever the
+                                    // sweep is on — their input handlers clear the conflicting
+                                    // field on every keystroke. Hard-disabling the levels box
+                                    // while a restored step value existed made it untypeable
+                                    // (the enabling handler could never fire).
                                     f.count.disabled = !on || hasExplicit;
-                                    f.step.disabled = !on || hasExplicit;
-                                    f.levels.disabled = !on || (hasStep && !hasExplicit);
+                                    f.step.disabled = !on;
+                                    f.levels.disabled = !on;
                                     if (hasExplicit) {
                                         config.lora_sweep_step = null;
                                         f.step.value = '';
