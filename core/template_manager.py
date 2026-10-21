@@ -606,18 +606,31 @@ class TemplateManager:
         # take precedence over the shared all2all_backend.
         _prefill_a2a = getattr(config, 'prefill_all2all_backend', None)
         _decode_a2a = getattr(config, 'decode_all2all_backend', None)
+        _shared_a2a = config.all2all_backend
+        # vLLM v0.31: Fused-MoE LoRA with expert parallel ONLY supports
+        # allgather_reducescatter — deepep backends crash at model load
+        # ("Fused MoE LoRA with EP currently only supports
+        # allgather_reducescatter, got 'deepep_low_latency'"). When LoRA is
+        # served, force the compatible backend on every role that would
+        # otherwise use deepep.
+        _lora_on = (bool(getattr(config, 'lora_enabled', False))
+                    and int(getattr(config, 'lora_num_adapters', 0) or 0) > 0)
+        if _lora_on and (_shared_a2a or _prefill_a2a or _decode_a2a):
+            _shared_a2a = _shared_a2a and 'allgather_reducescatter'
+            _prefill_a2a = _prefill_a2a and 'allgather_reducescatter'
+            _decode_a2a = _decode_a2a and 'allgather_reducescatter'
         if _prefill_a2a or _decode_a2a:
             # Explicit per-role override
             vars_dict['prefill_all2all_backend'] = (_prefill_a2a
                 if _prefill_a2a and (prefill_tp > 1 or dp_size > 1) else None)
             vars_dict['decode_all2all_backend'] = (_decode_a2a
                 if _decode_a2a and (decode_tp > 1 or dp_size > 1) else None)
-        elif config.all2all_backend:
-            vars_dict['prefill_all2all_backend'] = config.all2all_backend if (prefill_tp > 1 or dp_size > 1) else None
-            if config.all2all_backend == 'deepep_high_throughput':
+        elif _shared_a2a:
+            vars_dict['prefill_all2all_backend'] = _shared_a2a if (prefill_tp > 1 or dp_size > 1) else None
+            if _shared_a2a == 'deepep_high_throughput':
                 vars_dict['decode_all2all_backend'] = 'deepep_low_latency' if (decode_tp > 1 or dp_size > 1) else None
             else:
-                vars_dict['decode_all2all_backend'] = config.all2all_backend if (decode_tp > 1 or dp_size > 1) else None
+                vars_dict['decode_all2all_backend'] = _shared_a2a if (decode_tp > 1 or dp_size > 1) else None
         else:
             vars_dict['prefill_all2all_backend'] = None
             vars_dict['decode_all2all_backend'] = None
