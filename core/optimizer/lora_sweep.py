@@ -49,7 +49,9 @@ class LoraSweepMixin:
                     levels.add(max(1, round(n_total * pct / 100)))
                 else:
                     val = int(entry)
-                    if val > 0:
+                    # 0 = base-model-only level (LoRA overhead baseline),
+                    # same as step mode's first level — allow it
+                    if val >= 0:
                         levels.add(val)
             if levels:
                 return sorted(levels)
