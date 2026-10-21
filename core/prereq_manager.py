@@ -643,6 +643,15 @@ class PrereqManager:
             # GPU-resident slots (thrashing regime — affinity reduces swap-ins)
             session_aware = True
             session_aware_w = 3.0
+            # lora-affinity-scorer: routes by the request's model field
+            # (extracted from the body by the EPP director) against
+            # per-pod ActiveModels from vllm:lora_requests_info — the
+            # actual adapter-locality mechanism (the header-label scorer
+            # matches pod labels, which cannot hold adapter names).
+            # Enable for ANY adapter count: locality beats random routing
+            # even below the thrashing threshold.
+            lora_affinity = True
+            lora_affinity_w = 3.0
             header_label_affinity = True
             header_label_w = 3.0
             reasons.append(f"lora: {lora_n} adapters → session-affinity(3.0) + header-label-affinity(3.0) "
@@ -652,6 +661,8 @@ class PrereqManager:
             session_aware_w = 0
             header_label_affinity = False
             header_label_w = 0
+            lora_affinity = False
+            lora_affinity_w = 0
 
         # ── 6. no-hit LRU ──
         # When prefix cache matters, route no-hit requests to the
@@ -684,6 +695,8 @@ class PrereqManager:
             'slo_weight': slo_w,
             'session_aware_enabled': session_aware,
             'session_aware_weight': session_aware_w,
+            'lora_affinity_enabled': lora_affinity,
+            'lora_affinity_weight': lora_affinity_w,
             'header_label_affinity_enabled': header_label_affinity,
             'header_label_affinity_weight': header_label_w,
             'no_hit_lru_enabled': no_hit_lru,
@@ -698,6 +711,7 @@ class PrereqManager:
                 f'queue={w_queue}, active={result["active_request_weight"]}'
                 f'{", slo=3.0" if has_sla else ""}'
                 f'{", session-affinity=3.0" if session_aware else ""}'
+                f'{", lora-affinity=3.0" if lora_affinity else ""}'
                 f'{", header-label-affinity=3.0" if header_label_affinity else ""}')
 
         return result

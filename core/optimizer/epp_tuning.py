@@ -114,6 +114,7 @@ class EPPTuningMixin:
         plugin_map = {
             'session_aware': 'session_aware',
             'header_label_affinity': 'header_label_affinity',
+            'lora_affinity': 'lora_affinity',
             'no_hit_lru': 'no_hit_lru',
             'load_aware': 'load_aware',
             'token_load': 'token_load',
