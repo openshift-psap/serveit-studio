@@ -1159,6 +1159,49 @@ class ConfigBuilderMixin:
         cfg = self._auto_enable_bidirectional_kv(cfg)
         return cfg
 
+    # Hidden sizes the deepep_low_latency kernels are compiled for
+    # (vllm/model_executor/layers/fused_moe/prepare_finalize/deepep_ll.py,
+    # v0.31). Other sizes get padded up to the next entry.
+    _DEEPEP_HIDDEN_SIZES = (2048, 2560, 3072, 4096, 5120, 6144, 7168, 8192)
+
+    def _select_ep_all2all_backend(self, split: 'FeasibleSplit') -> Optional[str]:
+        """Pick the EP all2all backend the MODEL can actually run.
+
+        Pre-flight capability check instead of deploy-and-crash: returns
+        None (vLLM default allgather_reducescatter) with a logged reason
+        when deepep is unusable for this model. Checks:
+        - LoRA is served: Fused-MoE LoRA + EP only supports
+          allgather_reducescatter (hard assert in vLLM v0.31)
+        - hidden size natively compiled for the deepep kernels (others
+          pad up — wasted dispatch bandwidth)
+        - deep_gemm available for the FP8 fast path (disabled for
+          compressed-tensors per-channel quant)
+        """
+        if max(split.prefill_tp, split.decode_tp) <= 1:
+            return None
+
+        if (getattr(self.config, 'lora_enabled', False)
+                and int(getattr(self.config, 'lora_num_adapters', 0) or 0) > 0):
+            self.log("   EP a2a: allgather_reducescatter (LoRA + Fused-MoE EP "
+                     "only supports allgather in vLLM v0.31)", 'info')
+            return None
+
+        reasons = []
+        hidden = (self._model_config or {}).get('hidden_size') \
+            if getattr(self, '_model_config', None) else None
+        if hidden and hidden not in self._DEEPEP_HIDDEN_SIZES:
+            reasons.append(f"hidden {hidden} not natively compiled for deepep "
+                           f"(pads to next of {self._DEEPEP_HIDDEN_SIZES})")
+        if getattr(self, '_use_deep_gemm', None) is False:
+            reasons.append("deep_gemm disabled (compressed-tensors per-channel FP8) — "
+                           "no FP8 fast path")
+        if reasons:
+            self.log("   EP a2a: allgather_reducescatter — deepep unusable: "
+                     + "; ".join(reasons), 'warning')
+            return None
+
+        return 'deepep_high_throughput'
+
     def _create_ep_config(self, split: 'FeasibleSplit') -> TestConfig:
         """Create EP (Expert Parallelism) architecture test config.
 
@@ -1369,7 +1412,7 @@ class ConfigBuilderMixin:
             enable_eplb=(max(split.prefill_tp, split.decode_tp) > 1),
             num_redundant_experts=num_redundant,
             moe_backend=None,
-            all2all_backend='deepep_high_throughput' if max(split.prefill_tp, split.decode_tp) > 1 else None,
+            all2all_backend=self._select_ep_all2all_backend(split),
             moe_dp_chunk_size=chunk_size if self._is_moe else None,
             nvshmem_symmetric_size=nvshmem_size,
             use_deep_gemm=getattr(self, '_use_deep_gemm', None),
