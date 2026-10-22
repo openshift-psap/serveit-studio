@@ -12,11 +12,11 @@ data:
     apiVersion: llm-d.ai/v1alpha1
     kind: EndpointPickerConfig
     plugins:
-      - type: disagg-headers-handler
       - type: always-disagg-pd-decider
       - type: disagg-profile-handler
         parameters:
-          deciderPluginName: always-disagg-pd-decider
+          deciders:
+            prefill: always-disagg-pd-decider
 {% if use_prefix_based_decider | default(true) %}
       - type: prefix-based-pd-decider
         parameters:
@@ -44,7 +44,6 @@ data:
       - type: kv-cache-utilization-scorer
 {% endif %}
 {% if slo_enabled | default(false) %}
-      - type: slo-request-tracker
       - type: latency-scorer
 {% endif %}
 {% if no_hit_lru_enabled | default(false) %}

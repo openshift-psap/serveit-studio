@@ -14,7 +14,6 @@ data:
     plugins:
 {% if slo_enabled | default(false) %}
       - type: slo-aware-profile-handler
-      - type: slo-request-tracker
 {% else %}
       - type: single-profile-handler
 {% endif %}
@@ -61,7 +60,6 @@ data:
             weight: {{ kv_cache_weight | default(2.0) }}
 {% endif %}
 {% if slo_enabled | default(false) %}
-          - pluginRef: slo-request-tracker
           - pluginRef: latency-scorer
             weight: {{ slo_weight | default(3.0) }}
 {% endif %}
@@ -94,7 +92,6 @@ data:
         plugins:
           - pluginRef: prefix-cache-scorer
             weight: 0
-          - pluginRef: slo-request-tracker
           - pluginRef: latency-scorer
           - pluginRef: max-score-picker
 {% endif %}
