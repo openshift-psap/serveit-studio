@@ -2444,6 +2444,59 @@ function _renderChartsImpl(data, runId, content) {
                 Plotly.newPlot('lora-routing-chart', [t1, t2, t3, t4], layout, { displayModeBar: false, responsive: true });
             });
 
+            // Adapter affinity summary — one row per config, aggregated from
+            // the per-pod breakdowns below
+            var affDetails = (charts.vllm.lora_pod_details || []).filter(function(pd) {
+                return pd && pd.pods && Object.keys(pd.pods).length && (pd.total_adapters || 0) > 0;
+            });
+            if (affDetails.length) {
+                var affRows = affDetails.map(function(pd) {
+                    var total = pd.total_adapters || 0;
+                    var conc = pd.concentrated || 0;
+                    var scat = pd.scattered || 0;
+                    var concPct = total ? Math.round(100 * conc / total) : 0;
+                    var scatPct = total ? Math.round(100 * scat / total) : 0;
+                    var verdict = concPct >= 80 ? 'adapter-aware' : (concPct >= 50 ? 'partial' : 'random');
+                    var verdictColor = concPct >= 80 ? '#059669' : (concPct >= 50 ? '#f59e0b' : '#ef4444');
+                    return '<tr>' +
+                        '<td style="padding:6px 10px;font-weight:600;">' + pd.config + '</td>' +
+                        '<td style="padding:6px 8px;text-align:center;">' + total + '</td>' +
+                        '<td style="padding:6px 8px;text-align:center;color:#059669;font-weight:600;">' + conc + ' (' + concPct + '%)</td>' +
+                        '<td style="padding:6px 8px;text-align:center;color:#ef4444;">' + scat + ' (' + scatPct + '%)</td>' +
+                        '<td style="padding:6px 8px;text-align:center;color:' + verdictColor + ';font-weight:600;">' + verdict + '</td>' +
+                        '</tr>';
+                }).join('');
+                html += '<div class="chart-card" style="border-left:6px solid #059669;">' +
+                    '<div class="chart-card-header" style="background:linear-gradient(135deg,#059669,#34d399); color:white;">Adapter Affinity Summary</div>' +
+                    '<div style="padding:12px 20px; color:#1e293b; font-size:0.93em; line-height:1.6;">' +
+                    'How consistently each configuration routes an adapter\u2019s requests to a single pod. ' +
+                    '<strong>Single-pod</strong> — the adapter was served entirely by one pod (adapter-aware routing; no cold-pod swap-ins). ' +
+                    '<strong>Multi-pod</strong> — the adapter\u2019s requests were scattered across pods (random load balancing; scattered requests pay a CPU\u2192GPU adapter swap-in on cold pods).' +
+                    '<div id="lora-affinity-summary-chart" style="width:100%;height:360px;margin-top:10px;"></div>' +
+                    '<table style="width:100%;border-collapse:collapse;margin-top:10px;font-size:0.9em;background:#fff;">' +
+                    '<tr style="background:#eef2ff;"><th style="padding:6px 10px;text-align:left;">Configuration</th><th style="padding:6px 8px;">Adapters</th><th style="padding:6px 8px;">Single-Pod</th><th style="padding:6px 8px;">Multi-Pod</th><th style="padding:6px 8px;">Routing Behavior</th></tr>' +
+                    affRows + '</table></div></div>';
+
+                chartQueue.push(function() {
+                    var cfgs = affDetails.map(function(pd) { return pd.config; });
+                    var concCounts = affDetails.map(function(pd) { return pd.concentrated || 0; });
+                    var scatCounts = affDetails.map(function(pd) { return pd.scattered || 0; });
+                    Plotly.newPlot('lora-affinity-summary-chart', [
+                        { x: cfgs, y: concCounts, name: 'Single-pod', type: 'bar', marker: { color: '#059669' },
+                          hovertemplate: '%{x}<br>Single-pod: %{y} adapters<extra></extra>' },
+                        { x: cfgs, y: scatCounts, name: 'Multi-pod', type: 'bar', marker: { color: '#ef4444' },
+                          hovertemplate: '%{x}<br>Multi-pod: %{y} adapters<extra></extra>' }
+                    ], {
+                        barmode: 'stack',
+                        margin: { l: 60, r: 20, t: 20, b: 90 },
+                        xaxis: { tickangle: -35, automargin: true },
+                        yaxis: { title: 'Adapters', gridcolor: '#f1f5f9' },
+                        legend: { orientation: 'h', y: 1.1 },
+                        hovermode: 'closest'
+                    }, { displayModeBar: false, responsive: true });
+                });
+            }
+
             // Per-pod LoRA residency breakdown — which adapters each pod
             // actually served, GPU-resident cap, churn, and queue state
             (charts.vllm.lora_pod_details || []).forEach(function(pd) {

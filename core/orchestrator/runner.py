@@ -694,10 +694,10 @@ class TestOrchestrator(ParserMixin, GuidellmMixin):
                         "max_tokens": 1,
                         "temperature": 0.0
                     })
-                curl_cmd = f"curl -s -w '\\n%{{http_code}}' --connect-timeout 10 --max-time 60 -X POST -H 'Content-Type: application/json' -d '{payload_json}' '{completion_url}'"
+                curl_cmd = f"curl -s -w '\\n%{{http_code}}' --connect-timeout 10 --max-time 30 -X POST -H 'Content-Type: application/json' -d '{payload_json}' '{completion_url}'"
                 r = self.deployment_manager.kubectl.run(
                     ['exec', self._guidellm_pod_name, '-n', self.namespace, '--', 'bash', '-c', curl_cmd],
-                    check=False, timeout=90
+                    check=False, timeout=45
                 )
                 lines = r.stdout.strip().split('\n') if r.returncode == 0 else []
                 http_code = lines[-1] if lines else '000'
@@ -732,6 +732,26 @@ class TestOrchestrator(ParserMixin, GuidellmMixin):
         if log_callback:
             p = 'pod' if expected_pods == 1 else 'pods'
             log_callback(f"   ⏱️ Timeout after {elapsed}s waiting for EPP pool registration ({last_ready_count}/{expected_pods} {p})")
+        try:
+            arch = getattr(config, 'architecture', 'pd') or 'pd'
+            epp_name = f'gaie-{arch}-epp'
+            r = self.deployment_manager.kubectl.run(
+                ['logs', f'deployment/{epp_name}', '-n', self.namespace,
+                 '--since=10m', '--tail=300'],
+                check=False, timeout=60
+            )
+            if r.returncode == 0 and r.stdout:
+                keep = []
+                for line in r.stdout.splitlines():
+                    low = line.lower()
+                    if any(k in low for k in ('error', 'warn', 'endpoint', 'picker', 'no ready', 'fail')):
+                        keep.append(line.strip()[:400])
+                if keep and log_callback:
+                    log_callback('   📋 EPP log tail at failure (filtered):')
+                    for line in keep[-25:]:
+                        log_callback(f'      {line}')
+        except Exception:
+            pass
         return False
 
     def _discover_istio_gateway(
@@ -1256,6 +1276,13 @@ class TestOrchestrator(ParserMixin, GuidellmMixin):
                         result.error_message = "Failed to deploy prerequisite infrastructure"
                         return result
 
+                    applied_epp_cm = getattr(prereq_mgr, 'last_epp_configmap_yaml', None)
+                    if applied_epp_cm:
+                        try:
+                            config._epp_configmap_yaml = applied_epp_cm
+                        except Exception:
+                            pass
+
                     if log_callback:
                         log_callback('')
                         log_callback('ℹ️  Note: Gateway typically takes 1-2 minutes to become fully healthy')
@@ -1441,9 +1468,32 @@ class TestOrchestrator(ParserMixin, GuidellmMixin):
                     endpoint=endpoint,
                     config=config,
                     expected_pods=expected_pods,
-                    timeout=300,
+                    timeout=120,
                     log_callback=log_callback
                 )
+
+                if not gateway_ready:
+                    arch = config.architecture or 'pd'
+                    epp_name = f'gaie-{arch}-epp'
+                    if log_callback:
+                        log_callback(f"🔄 EPP failed to register pods — restarting {epp_name} only (inference pods kept)")
+                    r_restart = self.deployment_manager.kubectl.run(
+                        ['rollout', 'restart', 'deployment', epp_name, '-n', self.namespace],
+                        check=False, timeout=60)
+                    if r_restart.returncode == 0:
+                        self.deployment_manager.kubectl.run(
+                            ['rollout', 'status', 'deployment', epp_name, '-n', self.namespace,
+                             '--timeout=180s'], check=False, timeout=200)
+                        time.sleep(10)
+                        if log_callback:
+                            log_callback("   ✅ EPP restarted — re-checking pool registration")
+                        gateway_ready = self._wait_for_gateway_ready(
+                            endpoint=endpoint,
+                            config=config,
+                            expected_pods=expected_pods,
+                            timeout=90,
+                            log_callback=log_callback
+                        )
 
                 if not gateway_ready:
                     result.error_message = "Gateway did not register all pods in time"

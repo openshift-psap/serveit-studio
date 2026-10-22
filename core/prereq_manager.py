@@ -38,6 +38,7 @@ class PrereqManager:
         self.template_mgr = TemplateManager()
         self.scheduler_image = scheduler_image
         self.gateway_class = gateway_class or self._detect_gateway_class()
+        self.last_epp_configmap_yaml = None
 
     def _detect_gateway_class(self) -> str:
         """Detect the best available GatewayClass from the cluster."""
@@ -387,6 +388,7 @@ class PrereqManager:
                 # derives lora-affinity), restart the EPP so the new
                 # config takes effect.
                 if resource_type == 'ConfigMap' and 'gaie' in template_path:
+                    self.last_epp_configmap_yaml = manifest
                     r_restart = self.kubectl.run(
                         ['rollout', 'restart', 'deployment', context['gaie_name'],
                          '-n', self.namespace], check=False)

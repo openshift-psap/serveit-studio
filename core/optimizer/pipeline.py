@@ -655,14 +655,18 @@ class RecipeOptimizer(
             }
             w = presets.get(epp_preset, presets['balanced'])
             ns = test_config.namespace or 'serveit'
-            manifests['epp-configmap'] = (
-                f"apiVersion: v1\nkind: ConfigMap\nmetadata:\n  name: scheduler-config\n  namespace: {ns}\ndata:\n  config.yaml: |\n"
-                f"    prefixCacheWeight: {w['pcw']}\n    kvCacheWeight: {w['kvw']}\n    queueWeight: {w['qw']}\n"
-                f"    activeRequestWeight: {w['arw']}\n    sloWeight: {w['sw']}\n"
-                f"    maxPrefixBlocksToMatch: {epp_cfg.get('maxPrefixBlocksToMatch', 256)}\n"
-                f"    lruCapacityPerServer: {epp_cfg.get('lruCapacityPerServer', 31250)}\n"
-                f"    nonCachedTokens: {epp_cfg.get('nonCachedTokens', 16)}\n"
-            )
+            applied_epp_cm = getattr(test_config, '_epp_configmap_yaml', None)
+            if applied_epp_cm:
+                manifests['epp-configmap'] = applied_epp_cm
+            else:
+                manifests['epp-configmap'] = (
+                    f"apiVersion: v1\nkind: ConfigMap\nmetadata:\n  name: scheduler-config\n  namespace: {ns}\ndata:\n  config.yaml: |\n"
+                    f"    prefixCacheWeight: {w['pcw']}\n    kvCacheWeight: {w['kvw']}\n    queueWeight: {w['qw']}\n"
+                    f"    activeRequestWeight: {w['arw']}\n    sloWeight: {w['sw']}\n"
+                    f"    maxPrefixBlocksToMatch: {epp_cfg.get('maxPrefixBlocksToMatch', 256)}\n"
+                    f"    lruCapacityPerServer: {epp_cfg.get('lruCapacityPerServer', 31250)}\n"
+                    f"    nonCachedTokens: {epp_cfg.get('nonCachedTokens', 16)}\n"
+                )
             return json.dumps(manifests)
         except Exception as e:
             self.log(f"  ⚠️  Failed to render templates for DB: {e}", 'warning')
