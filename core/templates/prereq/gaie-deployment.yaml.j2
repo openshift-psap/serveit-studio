@@ -32,7 +32,9 @@ spec:
             - {{ namespace }}
             - --pool-group
             - inference.networking.k8s.io
+{% if epp_v011_plus | default(true) %}
             - --allow-experimental-plugins
+{% endif %}
             - --zap-encoder
             - json
             - --config-file

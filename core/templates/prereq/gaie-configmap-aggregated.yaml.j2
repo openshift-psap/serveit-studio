@@ -13,6 +13,9 @@ data:
     kind: EndpointPickerConfig
     plugins:
 {% if slo_enabled | default(false) %}
+{% if not epp_v011_plus | default(true) %}
+      - type: slo-request-tracker
+{% endif %}
       - type: slo-aware-profile-handler
 {% else %}
       - type: single-profile-handler

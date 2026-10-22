@@ -536,6 +536,10 @@ class TemplateManager:
 
         # Routing proxy image — derive from scheduler image
         sched_image = vars_dict.get('scheduler_image') or getattr(config, 'scheduler_image', '') or 'ghcr.io/llm-d/llm-d-router-endpoint-picker@sha256:873179822ab0895a37ea09f2112ca39a6ae50a26612561c8bfad7f9a8c5af6f5'
+        # EPP version compatibility flag — controls sidecar flag format,
+        # plugin availability, and parameter naming in PD templates
+        from core.prereq_manager import is_epp_v011_plus
+        vars_dict.setdefault('epp_v011_plus', is_epp_v011_plus(sched_image))
         # Extract tag; digest refs (image@sha256:...) have no usable tag — fall back to 'main'
         if '@sha256:' in sched_image:
             sched_tag = 'main'

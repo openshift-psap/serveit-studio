@@ -247,6 +247,7 @@ class PrereqManager:
                 'config_file': 'default-plugins.yaml' if epp_use_defaults else config['config_file'],
                 'gaie_replicas': 1,
                 'gaie_image': self.scheduler_image or 'ghcr.io/llm-d/llm-d-router-endpoint-picker@sha256:873179822ab0895a37ea09f2112ca39a6ae50a26612561c8bfad7f9a8c5af6f5',
+                'epp_v011_plus': is_epp_v011_plus(self.scheduler_image or 'ghcr.io/llm-d/llm-d-router-endpoint-picker@sha256:873179822ab0895a37ea09f2112ca39a6ae50a26612561c8bfad7f9a8c5af6f5'),
                 'gateway_name': config['gateway_name'],
                 'gateway_class': self.gateway_class,
                 'prefix_cache_weight': epp_weights.get('prefix_cache_weight', 2.0),
@@ -1311,3 +1312,31 @@ def main():
 
 if __name__ == '__main__':
     main()
+
+
+def is_epp_v011_plus(image: str) -> bool:
+    """Check if the EPP image is v0.11.0 or newer (new plugin format).
+
+    Version-specific differences (v0.11.0 vs earlier):
+    - session-affinity-scorer marked Alpha → requires --allow-experimental-plugins
+    - disagg-headers-handler removed from PD templates
+    - slo-request-tracker replaced by flow-control layer
+    - disagg-profile-handler: deciderPluginName → deciders.prefill
+    - Sidecar: --secure-serving flag removed
+
+    The known pre-v0.11.0 digest pin is treated as legacy. Version tags
+    v0.11+ are modern. Unknown digests default to modern.
+    """
+    if not image:
+        return True  # default image is v0.11.0
+    # Known pre-v0.11.0 digest pin (63+ days old)
+    if '873179822ab0895a37ea09f2112ca39a6ae50a26612561c8bfad7f9a8c5af6f5' in image:
+        return False
+    # Parse version tag (e.g., :v0.11.0, :v0.12.0)
+    import re
+    m = re.search(r':v(\d+)\.(\d+)', image)
+    if m:
+        major, minor = int(m.group(1)), int(m.group(2))
+        return (major, minor) >= (0, 11)
+    # Other digests or tags → assume modern
+    return True
