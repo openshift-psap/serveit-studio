@@ -700,11 +700,18 @@ class ReportAnalyzer:
 
         # --- Aggregated baseline (best across all aggregated results) ---
         aggregated_baseline = None
+        aggregated_throughput = None
         agg_tests = all_agg_tests if all_agg_tests else (step6_agg_tests if step6_agg_tests else step8_tests)
         if agg_tests:
             agg = min(agg_tests, key=lambda r: r.ttft_p90 if r.ttft_p90 else 1000000.0)
             aggregated_baseline = _config_dict(agg)
             aggregated_baseline['replicas'] = agg.total_gpus // agg.tensor_parallelism
+            # Throughput recommendation needs the HIGHEST-throughput config,
+            # not the lowest-TTFT one (16×TP1 at 9.87 req/s loses to 4×TP4
+            # at 6.63 req/s when TTFT is the selection key)
+            agg_tput = max(agg_tests, key=lambda r: (r.throughput_mean or r.throughput_p90 or 0))
+            aggregated_throughput = _config_dict(agg_tput)
+            aggregated_throughput['replicas'] = agg_tput.total_gpus // agg_tput.tensor_parallelism
 
         # --- Best config per percentile per architecture ---
         def _pctl_entry(r, ttft_field, tput_field):
@@ -847,12 +854,12 @@ class ReportAnalyzer:
                 'metric_name': 'Throughput Mean',
                 'architecture': 'EP',
             }))
-        if aggregated_baseline:
-            tput_mean = aggregated_baseline.get('throughput_mean') or aggregated_baseline['throughput_p90']
+        if aggregated_throughput:
+            tput_mean = aggregated_throughput.get('throughput_mean') or aggregated_throughput['throughput_p90']
             throughput_candidates.append(('Aggregated', tput_mean, {
                 'goal': 'Throughput (maximize req/s)',
-                'config': aggregated_baseline,
-                'deploy': f"{aggregated_baseline['replicas']} Aggregated pods, TP={aggregated_baseline['tp']}",
+                'config': aggregated_throughput,
+                'deploy': f"{aggregated_throughput['replicas']} Aggregated pods, TP={aggregated_throughput['tp']}",
                 'metric_value': f"{tput_mean} req/s",
                 'metric_name': 'Throughput Mean',
                 'architecture': 'Aggregated',
