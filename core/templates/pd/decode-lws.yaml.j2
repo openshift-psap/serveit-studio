@@ -165,8 +165,8 @@ spec:
               - --model-server-port=8200
               - {{ sidecar_connector_flag | default('--kv-connector') }}=nixlv2
               - --zap-log-level=1
-{% if not epp_v011_plus | default(true) %}
-              - --secure-serving=false
+{% if epp_v011_plus | default(true) %}
+              - --secure-proxy=false
 {% endif %}
               - --enable-prefiller-sampling
 {% if data_parallelism > 1 %}
