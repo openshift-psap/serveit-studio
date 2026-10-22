@@ -149,8 +149,8 @@ class EPPTuningMixin:
                 }
             # Fallback if auto weights weren't pre-computed (e.g. resume from
             # older config) — derive now
-            from core.prereq_manager import PrerequisiteManager
-            pm = PrerequisiteManager.__new__(PrerequisiteManager)
+            from core.prereq_manager import PrereqManager
+            pm = PrereqManager.__new__(PrereqManager)
             derived = pm._derive_auto_epp_weights(self.config)
             return {
                 'prefix_cache_weight': derived['prefix_cache_weight'],
