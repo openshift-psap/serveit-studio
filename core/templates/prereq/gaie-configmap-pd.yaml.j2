@@ -128,3 +128,7 @@ data:
           - pluginRef: queue-scorer
             weight: {{ decode_queue_weight | default(1.0) }}
 {% endif %}
+{% if lora_affinity_enabled | default(false) %}
+          - pluginRef: lora-affinity-scorer
+            weight: {{ lora_affinity_weight | default(3.0) }}
+{% endif %}

@@ -215,6 +215,8 @@ class PrereqManager:
                     'session_aware_weight': plugins.get('session_aware', {}).get('weight', 2.0) if plugins.get('session_aware', {}).get('enabled', False) else 0,
                     'header_label_affinity_enabled': plugins.get('header_label_affinity', {}).get('enabled', False),
                     'header_label_affinity_weight': plugins.get('header_label_affinity', {}).get('weight', 3.0) if plugins.get('header_label_affinity', {}).get('enabled', False) else 0,
+                    'lora_affinity_enabled': plugins.get('lora_affinity', {}).get('enabled', False),
+                    'lora_affinity_weight': plugins.get('lora_affinity', {}).get('weight', 3.0) if plugins.get('lora_affinity', {}).get('enabled', False) else 0,
                     'load_aware_enabled': plugins.get('load_aware', {}).get('enabled', False),
                     'load_aware_weight': plugins.get('load_aware', {}).get('weight', 1.0) if plugins.get('load_aware', {}).get('enabled', False) else 0,
                 }
@@ -230,6 +232,8 @@ class PrereqManager:
                 epp_weights.setdefault('session_aware_weight', 0)
                 epp_weights.setdefault('header_label_affinity_enabled', False)
                 epp_weights.setdefault('header_label_affinity_weight', 0)
+                epp_weights.setdefault('lora_affinity_enabled', False)
+                epp_weights.setdefault('lora_affinity_weight', 0)
                 epp_weights.setdefault('load_aware_enabled', False)
                 epp_weights.setdefault('load_aware_weight', 0)
 

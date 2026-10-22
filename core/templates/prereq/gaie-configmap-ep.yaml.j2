@@ -28,6 +28,9 @@ data:
         parameters:
           deciders:
             prefill: prefix-based-pd-decider
+{% if lora_affinity_enabled | default(false) %}
+      - type: lora-affinity-scorer
+{% endif %}
     schedulingProfiles:
       - name: prefill
         plugins:
@@ -37,6 +40,10 @@ data:
             weight: 2
           - pluginRef: queue-scorer
             weight: 1
+{% if lora_affinity_enabled | default(false) %}
+          - pluginRef: lora-affinity-scorer
+            weight: {{ lora_affinity_weight | default(3.0) }}
+{% endif %}
       - name: decode
         plugins:
           - pluginRef: decode-filter
@@ -45,3 +52,7 @@ data:
             weight: 2
           - pluginRef: queue-scorer
             weight: 1
+{% if lora_affinity_enabled | default(false) %}
+          - pluginRef: lora-affinity-scorer
+            weight: {{ lora_affinity_weight | default(3.0) }}
+{% endif %}

@@ -697,10 +697,13 @@ class EPPTuningMixin:
                         import json as _json
                         tmgr = TemplateManager()
                         cm_template = f'prereq/gaie-configmap-{arch}.yaml.j2'
+                        auto_w = getattr(self.config, 'epp_auto_weights', None) or {}
+                        from core.prereq_manager import is_epp_v011_plus
                         cm_yaml = tmgr.render_template(cm_template, **{
                             'namespace': self.config.namespace,
                             'gaie_name': f'gaie-{arch}-epp',
                             'config_file': f'{arch}-config.yaml',
+                            'epp_v011_plus': is_epp_v011_plus(getattr(self.config, 'scheduler_image', '') or ''),
                             'prefix_cache_weight': weights['prefix_cache_weight'],
                             'kv_cache_weight': weights['kv_cache_weight'],
                             'queue_weight': weights['queue_weight'],
@@ -708,6 +711,10 @@ class EPPTuningMixin:
                             'active_request_weight': weights.get('active_request_weight', 2),
                             'slo_enabled': weights.get('slo_enabled', False),
                             'slo_weight': weights.get('slo_weight', 0),
+                            'session_aware_enabled': bool(auto_w.get('session_aware_enabled')),
+                            'session_aware_weight': auto_w.get('session_aware_weight', 2.0),
+                            'lora_affinity_enabled': bool(auto_w.get('lora_affinity_enabled')),
+                            'lora_affinity_weight': auto_w.get('lora_affinity_weight', 3.0),
                             'max_prefix_blocks': epp_cfg.get('maxPrefixBlocksToMatch', 256),
                             'lru_capacity': epp_cfg.get('lruCapacityPerServer', 31250),
                             'non_cached_tokens': epp_cfg.get('nonCachedTokens', 16),
