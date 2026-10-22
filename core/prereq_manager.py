@@ -673,10 +673,38 @@ class PrereqManager:
             # NOTE: header-label-affinity-scorer deliberately NOT emitted:
             # it matches pod labels (which cannot hold adapter names) and
             # is not registered in EPP v0.9.0 (crashes on restart).
-            lora_affinity = True
-            lora_affinity_w = 3.0
-            reasons.append(f"lora: {lora_n} adapters → session-affinity(3.0) + lora-affinity(3.0) "
-                           f"= route by adapter locality (model field → per-pod ActiveModels)")
+            #
+            # Regime-aware weight: the scorer's 1.0 signal only fires
+            # when the adapter is resident somewhere, so the weight
+            # scales with the fraction of the working set that fits in
+            # total GPU-resident slots (pods × max_loras). All-resident
+            # → full 3.0; overflow → partial signal, floored at 1.5.
+            arch = g('architecture', 'aggregated') or 'aggregated'
+            if arch in ('pd', 'ep'):
+                adapter_pods = int(g('decode_replicas', 0) or 0)
+            else:
+                adapter_pods = int(g('replicas', 0) or 0)
+            max_loras_v = int(g('lora_max_loras', 0) or 0)
+            total_slots = adapter_pods * max_loras_v if (adapter_pods > 0 and max_loras_v > 0) else 0
+            if total_slots and lora_n <= total_slots:
+                lora_affinity = True
+                lora_affinity_w = 3.0
+                reasons.append(f"lora: {lora_n} adapters ≤ {adapter_pods} pods × "
+                               f"{max_loras_v} slots = {total_slots} → all-resident "
+                               f"(stable homes) → lora-affinity(3.0)")
+            elif total_slots:
+                coverage = total_slots / max(lora_n, 1)
+                lora_affinity = True
+                lora_affinity_w = round(max(1.5, min(3.0, 3.0 * coverage)), 1)
+                reasons.append(f"lora: {lora_n} adapters > {total_slots} slots "
+                               f"({adapter_pods} pods × {max_loras_v}) → coverage "
+                               f"{coverage:.0%} → lora-affinity({lora_affinity_w}) "
+                               f"partial signal (floor 1.5)")
+            else:
+                lora_affinity = True
+                lora_affinity_w = 3.0
+                reasons.append(f"lora: {lora_n} adapters → session-affinity(3.0) + lora-affinity(3.0) "
+                               f"= route by adapter locality (model field → per-pod ActiveModels)")
         else:
             session_aware = False
             session_aware_w = 0
@@ -730,7 +758,7 @@ class PrereqManager:
                 f'queue={w_queue}, active={result["active_request_weight"]}'
                 f'{", slo=3.0" if has_sla else ""}'
                 f'{", session-affinity=3.0" if session_aware else ""}'
-                f'{", lora-affinity=3.0" if lora_affinity else ""}')
+                f'{f", lora-affinity={lora_affinity_w}" if lora_affinity else ""}')
 
         return result
 
