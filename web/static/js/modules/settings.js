@@ -732,9 +732,29 @@ function updateAutoEppPreview() {
         wPrefix = Math.round(wPrefix * 0.7 * 10) / 10;
         wActive = Math.round(Math.min(5.0, wActive * 1.3) * 10) / 10;
         sessionAware = true; sessionAwareW = 3.0;
-        loraAffinity = true; loraAffinityW = 3.0;
+        loraAffinity = true;
         reasons.push('lora: ' + loraN + ' adapters → prefix ×0.7, active ×1.3 (adapter residency > cache affinity)');
-        reasons.push('lora: → session-affinity(3.0) + lora-affinity(3.0) = route by adapter locality (model field → per-pod ActiveModels)');
+        // Regime-aware weight (mirrors the backend derivation): the config
+        // builder sizes max_loras to hold ALL adapters when VRAM allows
+        // (affinity-stable sizing), so the expected regime is all-resident.
+        // The scorer outputs 1.0 (resident) / 0.8 (free slot) / 0.0 (full),
+        // and the load scorers are min-max normalized per request (swing
+        // ~1-3 between pods) — so the weight must be dominant for the
+        // 0.2 differential to decide routing. Final value is derived per
+        // test from the actual pods × slots.
+        var estSlots = Math.ceil(loraN / Math.max(estPods, 1));
+        if (estSlots * estPods >= loraN) {
+            loraAffinityW = 15.0;
+            reasons.push('lora: ' + loraN + ' adapters ≈ ' + estPods + ' pods × ' + estSlots +
+                         ' slots → all-resident (stable homes) → lora-affinity(15.0) dominant —' +
+                         ' the 0.2×W differential must beat the min-max load-scorer swing');
+        } else {
+            var coverage = (estSlots * estPods) / loraN;
+            loraAffinityW = Math.round(Math.max(1.5, Math.min(3.0, 3.0 * coverage)) * 10) / 10;
+            reasons.push('lora: ' + loraN + ' adapters > ' + (estSlots * estPods) + ' slots → coverage ' +
+                         Math.round(coverage * 100) + '% → lora-affinity(' + loraAffinityW + ') partial signal');
+        }
+        reasons.push('lora: final weight derived per test from actual pods × max_loras');
     }
 
     // 6. SLO
@@ -748,8 +768,8 @@ function updateAutoEppPreview() {
         var wText = 'prefix=' + wPrefix + '  kv=' + (kvEnabled ? wKv : 'off') + '  queue=' + wQueue +
             '  active=' + (activeEnabled ? wActive : 'off');
         if (hasSla) wText += '  slo=3.0';
-        if (sessionAware) wText += '  session-affinity=3.0';
-        if (loraAffinity) wText += '  lora-affinity=3.0';
+        if (sessionAware) wText += '  session-affinity=' + sessionAwareW;
+        if (loraAffinity) wText += '  lora-affinity=' + loraAffinityW;
         weightsEl.textContent = wText;
     }
     var reasonsEl = document.getElementById('epp-auto-reasons');
