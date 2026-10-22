@@ -707,10 +707,18 @@ class PrereqManager:
             total_slots = adapter_pods * max_loras_v if (adapter_pods > 0 and max_loras_v > 0) else 0
             if total_slots and lora_n <= total_slots:
                 lora_affinity = True
-                lora_affinity_w = 3.0
+                # The scorer outputs 1.0 (adapter resident), 0.8 (free slot),
+                # 0.0 (full, not resident). The load scorers are min-max
+                # normalized to [0,1] across candidates per request, so they
+                # swing by their summed weights (~6.7) between pods even under
+                # uniform load. For the resident-vs-free differential
+                # (0.2 x W) to decide routing, W must dominate: 15.0 gives a
+                # 3.0 differential vs free pods and 15.0 vs full pods.
+                lora_affinity_w = 15.0
                 reasons.append(f"lora: {lora_n} adapters ≤ {adapter_pods} pods × "
                                f"{max_loras_v} slots = {total_slots} → all-resident "
-                               f"(stable homes) → lora-affinity(3.0)")
+                               f"(stable homes) → lora-affinity(15.0) dominant — the "
+                               f"0.2×W differential must beat min-max load-scorer swing")
             elif total_slots:
                 coverage = total_slots / max(lora_n, 1)
                 lora_affinity = True
