@@ -489,6 +489,12 @@ class PrereqManager:
                 'no_hit_lru_weight': plugins.get('no_hit_lru', {}).get('weight', 1.0) if plugins.get('no_hit_lru', {}).get('enabled', False) else 0,
                 'session_aware_enabled': plugins.get('session_aware', {}).get('enabled', False),
                 'session_aware_weight': plugins.get('session_aware', {}).get('weight', 2.0) if plugins.get('session_aware', {}).get('enabled', False) else 0,
+                'header_label_affinity_enabled': plugins.get('header_label_affinity', {}).get('enabled', False),
+                'header_label_affinity_weight': plugins.get('header_label_affinity', {}).get('weight', 3.0) if plugins.get('header_label_affinity', {}).get('enabled', False) else 0,
+                'lora_affinity_enabled': plugins.get('lora_affinity', {}).get('enabled', False),
+                'lora_affinity_weight': plugins.get('lora_affinity', {}).get('weight', 3.0) if plugins.get('lora_affinity', {}).get('enabled', False) else 0,
+                'load_aware_enabled': plugins.get('load_aware', {}).get('enabled', False),
+                'load_aware_weight': plugins.get('load_aware', {}).get('weight', 1.0) if plugins.get('load_aware', {}).get('enabled', False) else 0,
             }
         else:
             epp_weights = epp_presets.get(epp_preset, epp_presets['balanced'])
@@ -500,6 +506,12 @@ class PrereqManager:
             epp_weights.setdefault('no_hit_lru_weight', 0)
             epp_weights.setdefault('session_aware_enabled', False)
             epp_weights.setdefault('session_aware_weight', 0)
+            epp_weights.setdefault('header_label_affinity_enabled', False)
+            epp_weights.setdefault('header_label_affinity_weight', 0)
+            epp_weights.setdefault('lora_affinity_enabled', False)
+            epp_weights.setdefault('lora_affinity_weight', 0)
+            epp_weights.setdefault('load_aware_enabled', False)
+            epp_weights.setdefault('load_aware_weight', 0)
 
         context = {
             'namespace': self.namespace,
@@ -518,6 +530,13 @@ class PrereqManager:
             'no_hit_lru_weight': epp_weights['no_hit_lru_weight'],
             'session_aware_enabled': epp_weights['session_aware_enabled'],
             'session_aware_weight': epp_weights['session_aware_weight'],
+            'header_label_affinity_enabled': epp_weights.get('header_label_affinity_enabled', False),
+            'header_label_affinity_weight': epp_weights.get('header_label_affinity_weight', 3.0),
+            'lora_affinity_enabled': epp_weights.get('lora_affinity_enabled', False),
+            'lora_affinity_weight': epp_weights.get('lora_affinity_weight', 3.0),
+            'load_aware_enabled': epp_weights.get('load_aware_enabled', False),
+            'load_aware_weight': epp_weights.get('load_aware_weight', 1.0),
+            'epp_v011_plus': is_epp_v011_plus(self.scheduler_image or ''),
             'max_prefix_blocks': epp.get('maxPrefixBlocksToMatch', 256),
             'lru_capacity': epp.get('lruCapacityPerServer', 4000000),
             'non_cached_tokens': epp.get('nonCachedTokens', 16),

@@ -341,13 +341,248 @@ class EPPTuningMixin:
 
         self.log(f"    → Refined weights: prefix={w_prefix}, kv={w_kv}, queue={w_queue}, active={w_active}", 'success')
 
-        return {
+        result = {
             'prefix_cache_weight': float(w_prefix),
             'kv_cache_weight': float(w_kv),
             'queue_weight': float(w_queue),
             'active_request_weight': float(w_active),
             'slo_enabled': False,
         }
+
+        # LoRA-affinity feedback: read the test's own adapter-routing
+        # telemetry (vllm_lora_adapter_info) and adjust the weight by the
+        # regime the measurements actually show:
+        #   churn high            -> capacity problem, weight can't help
+        #   full residency + low
+        #   affinity              -> signal not biting, raise the weight
+        #   high affinity + hot-pod
+        #   waiting queues        -> over-concentration, lower the weight
+        if getattr(self.config, 'lora_enabled', False):
+            lora_info = prom.get('vllm_lora_adapter_info') or {}
+            aff = lora_info.get('adapter_pod_affinity') or {}
+            lpods = lora_info.get('pods') or {}
+            if aff and lpods:
+                total = len(aff)
+                conc = sum(1 for v in aff.values() if len(v) == 1)
+                affinity_pct = 100.0 * conc / max(total, 1)
+                churn_vals = [p.get('residency_set_changes', 0) for p in lpods.values()]
+                avg_churn = sum(churn_vals) / max(len(churn_vals), 1)
+                waiting = sum(len(p.get('waiting_adapters_last', []) or []) for p in lpods.values())
+                self.log(f"    LoRA routing: affinity={affinity_pct:.0f}% single-pod, "
+                         f"churn={avg_churn:.0f}/pod, waiting-queue={waiting}", 'info')
+                auto_w = getattr(self.config, 'epp_auto_weights', None) or {}
+                cur_w = float(auto_w.get('lora_affinity_weight', 3.0) or 3.0)
+                if avg_churn > 20:
+                    self.log("    → adapter churn high — residency is thrashing (capacity); "
+                             "lora-affinity weight cannot fix this, keeping", 'warning')
+                elif affinity_pct < 50 and cur_w < 5:
+                    result['lora_affinity_weight'] = min(5.0, cur_w + 1.0)
+                    self.log(f"    → full residency but affinity low — signal not biting; "
+                             f"lora-affinity {cur_w} → {result['lora_affinity_weight']}", 'info')
+                elif affinity_pct > 90 and waiting > max(2, total // 4):
+                    result['lora_affinity_weight'] = max(1.0, cur_w - 1.0)
+                    self.log(f"    → over-concentration (hot-pod adapter waiting queues); "
+                             f"lora-affinity {cur_w} → {result['lora_affinity_weight']}", 'info')
+
+        return result
+
+    def _epp_objective(self, test_result) -> float:
+        """Objective for comparing EPP variants.
+
+        LoRA runs optimize TTFT p99 — adapter swap-ins are a tail event
+        (misrouted requests pay the CPU→GPU swap-in tax) and vanish from
+        the p90. Non-LoRA runs keep the p90 objective.
+        """
+        if not test_result:
+            return float('inf')
+        if getattr(self.config, 'lora_enabled', False):
+            return test_result.ttft_p99 or test_result.ttft_p90 or float('inf')
+        return test_result.ttft_p90 or float('inf')
+
+    def _build_variant_plugins(self, weights: Dict) -> Dict:
+        """Build the plugin dict for an EPP variant.
+
+        Core weights (prefix/kv/queue/active/slo) come from ``weights``;
+        affinity/optional plugins carry forward from the Auto derivation
+        via _merge_auto_plugins. LoRA-affinity overrides ride in the
+        weights dict itself so the 3-tuple result shape is unchanged:
+
+        - weights['lora_affinity_weight']  -> override the weight
+        - weights['lora_affinity_enabled'] is False -> scorer disabled
+        - neither key                      -> auto-derived value (default)
+        """
+        plugins = self._merge_auto_plugins({
+            'prefix_cache': {'enabled': True, 'weight': weights['prefix_cache_weight']},
+            'kv_cache': {'enabled': True, 'weight': weights['kv_cache_weight']},
+            'queue': {'enabled': True, 'weight': weights['queue_weight']},
+            'active_request': {'enabled': True, 'weight': weights.get('active_request_weight', 2)},
+            'slo': {'enabled': weights.get('slo_enabled', False), 'weight': weights.get('slo_weight', 0)},
+        })
+        if weights.get('lora_affinity_enabled') is False:
+            plugins.pop('lora_affinity', None)
+        elif weights.get('lora_affinity_weight') is not None:
+            plugins['lora_affinity'] = {
+                'enabled': True,
+                'weight': float(weights['lora_affinity_weight']),
+            }
+        return plugins
+
+    def _run_epp_variant(self, prereq_mgr, arch: str, base_cfg, concurrency: int,
+                         name: str, weights: Dict, base_epp: Dict = None,
+                         baseline_ttft: float = None):
+        """Deploy one EPP weight variant, benchmark it, save to DB.
+
+        Returns the TestResult on success, None on failure/skip.
+        """
+        base_epp = base_epp or {}
+        test_id = f"step11-epp-{arch}-{name}"
+        lora_str = ''
+        if weights.get('lora_affinity_enabled') is False:
+            lora_str = ', lora-affinity=off'
+        elif weights.get('lora_affinity_weight') is not None:
+            lora_str = f", lora-affinity={weights['lora_affinity_weight']}"
+        self.log(f"  Testing: {name} (cache={weights['prefix_cache_weight']}, "
+                 f"kv={weights['kv_cache_weight']}, queue={weights['queue_weight']}{lora_str})", 'info')
+
+        epp_cfg = {
+            'preset': 'custom',
+            'maxPrefixBlocksToMatch': base_epp.get('maxPrefixBlocksToMatch', 256),
+            'lruCapacityPerServer': base_epp.get('lruCapacityPerServer', 31250),
+            'nonCachedTokens': base_epp.get('nonCachedTokens', 16),
+            'plugins': self._build_variant_plugins(weights),
+        }
+
+        success = prereq_mgr.update_epp_config(
+            architecture=arch,
+            epp_config=epp_cfg,
+            log_callback=lambda msg: self.log(msg, 'info')
+        )
+        if not success:
+            self.log(f"  ❌ Failed to update EPP config for {name}", 'error')
+            return None
+
+        epp_test_config = TestConfig(
+            test_id=test_id,
+            architecture=base_cfg.architecture,
+            model_name=base_cfg.model_name,
+            namespace=base_cfg.namespace,
+            isl=base_cfg.isl, osl=base_cfg.osl,
+            num_users=concurrency,
+            tensor_parallelism=base_cfg.tensor_parallelism,
+            replicas=base_cfg.replicas,
+            prefill_replicas=base_cfg.prefill_replicas,
+            decode_replicas=base_cfg.decode_replicas,
+            prefill_tp=base_cfg.prefill_tp,
+            decode_tp=base_cfg.decode_tp,
+            max_model_len=base_cfg.max_model_len,
+            gpu_memory_utilization=base_cfg.gpu_memory_utilization,
+            image=base_cfg.image,
+            pvc_name=base_cfg.pvc_name,
+            request_type=base_cfg.request_type,
+            request_rate=concurrency,
+            test_duration=base_cfg.test_duration,
+            workload_mode=base_cfg.workload_mode,
+            dataset_source=base_cfg.dataset_source,
+            block_size=base_cfg.block_size,
+            network_type=base_cfg.network_type,
+            nccl_ib_hca=base_cfg.nccl_ib_hca,
+            rdma_device_resources=base_cfg.rdma_device_resources,
+            rdma_nics_per_node=base_cfg.rdma_nics_per_node,
+            memory_request=base_cfg.memory_request,
+            memory_limit=base_cfg.memory_limit,
+            cpu_request=base_cfg.cpu_request,
+            cpu_limit=base_cfg.cpu_limit,
+            lora_enabled=base_cfg.lora_enabled,
+            lora_num_adapters=base_cfg.lora_num_adapters,
+            lora_adapter_size_mb=base_cfg.lora_adapter_size_mb,
+            max_num_seqs=base_cfg.max_num_seqs,
+            prefill_max_num_seqs=base_cfg.prefill_max_num_seqs,
+            decode_max_num_seqs=base_cfg.decode_max_num_seqs,
+            max_num_batched_tokens=base_cfg.max_num_batched_tokens,
+            prefill_gpu_memory_utilization=base_cfg.prefill_gpu_memory_utilization,
+            decode_gpu_memory_utilization=base_cfg.decode_gpu_memory_utilization,
+            selected_nodes=base_cfg.selected_nodes,
+            prefill_decode_ratio=base_cfg.prefill_decode_ratio,
+            epp_config=epp_cfg,
+            selected_dra_classes=getattr(base_cfg, 'selected_dra_classes', None) or getattr(self.config, 'selected_dra_classes', []),
+            dra_gpu_resource_key=getattr(base_cfg, 'dra_gpu_resource_key', None) or getattr(self.config, 'dra_gpu_resource_key', None),
+            gateway_class=getattr(base_cfg, 'gateway_class', None) or getattr(self.config, 'gateway_class', 'istio'),
+            per_node_storage=getattr(base_cfg, 'per_node_storage', None) or getattr(self.config, 'per_node_storage', False),
+            node_nfs_pvcs=getattr(base_cfg, 'node_nfs_pvcs', None) or getattr(self.config, 'node_nfs_pvcs', []),
+            storage_class=getattr(base_cfg, 'storage_class', None) or getattr(self.config, 'storage_class', None),
+            pvc_size=getattr(base_cfg, 'pvc_size', None) or getattr(self.config, 'pvc_size', None),
+            local_disk_path=getattr(base_cfg, 'local_disk_path', None) or getattr(self.config, 'local_disk_path', None),
+            rdma_network_annotation=getattr(base_cfg, 'rdma_network_annotation', None) or getattr(self.config, 'rdma_network_annotation', None),
+            exclusive_pf=getattr(base_cfg, 'exclusive_pf', False) or getattr(self.config, 'exclusive_pf', False),
+            scheduler_image=getattr(base_cfg, 'scheduler_image', None) or getattr(self.config, 'scheduler_image', None),
+        )
+
+        result = self.orchestrator.run_test(
+            epp_test_config,
+            cleanup=True,
+            log_callback=lambda msg: self.log(msg, 'info'),
+            stop_check=self._should_stop,
+        )
+
+        if not (result and result.guidellm_success):
+            self.log(f"  ❌ {name}: benchmark failed", 'error')
+            return None
+
+        obj = self._epp_objective(result)
+        obj_label = 'p99' if getattr(self.config, 'lora_enabled', False) else 'p90'
+        tput = result.throughput_p90 or 0
+        if baseline_ttft:
+            if obj > baseline_ttft * 1.5:
+                self.log(f"  ⚠️  {name}: TTFT {obj:.0f}ms is {obj/baseline_ttft:.1f}x worse than "
+                         f"baseline ({baseline_ttft:.0f}ms) — EPP weights degraded performance", 'warning')
+            else:
+                improvement = ((baseline_ttft - obj) / baseline_ttft * 100) if baseline_ttft else 0
+                self.log(f"  ✅ {name}: TTFT {obj_label}={obj:.1f}ms ({improvement:+.1f}% vs baseline), "
+                         f"Throughput p90={tput:.2f} req/s", 'success')
+        else:
+            self.log(f"  ✅ {name}: TTFT {obj_label}={obj:.1f}ms, Throughput p90={tput:.2f} req/s", 'success')
+
+        self.all_test_results.append((epp_test_config, result))
+
+        try:
+            import json as _json
+            tmgr = TemplateManager()
+            cm_template = f'prereq/gaie-configmap-{arch}.yaml.j2'
+            auto_w = getattr(self.config, 'epp_auto_weights', None) or {}
+            from core.prereq_manager import is_epp_v011_plus
+            cm_yaml = tmgr.render_template(cm_template, **{
+                'namespace': self.config.namespace,
+                'gaie_name': f'gaie-{arch}-epp',
+                'config_file': f'{arch}-config.yaml',
+                'epp_v011_plus': is_epp_v011_plus(getattr(self.config, 'scheduler_image', '') or ''),
+                'prefix_cache_weight': weights['prefix_cache_weight'],
+                'kv_cache_weight': weights['kv_cache_weight'],
+                'queue_weight': weights['queue_weight'],
+                'active_request_enabled': True,
+                'active_request_weight': weights.get('active_request_weight', 2),
+                'slo_enabled': weights.get('slo_enabled', False),
+                'slo_weight': weights.get('slo_weight', 0),
+                'session_aware_enabled': bool(auto_w.get('session_aware_enabled')),
+                'session_aware_weight': auto_w.get('session_aware_weight', 2.0),
+                'lora_affinity_enabled': (False if weights.get('lora_affinity_enabled') is False
+                                          else bool(auto_w.get('lora_affinity_enabled'))),
+                'lora_affinity_weight': (weights.get('lora_affinity_weight')
+                                         if weights.get('lora_affinity_weight') is not None
+                                         else auto_w.get('lora_affinity_weight', 3.0)),
+                'max_prefix_blocks': base_epp.get('maxPrefixBlocksToMatch', 256),
+                'lru_capacity': base_epp.get('lruCapacityPerServer', 31250),
+                'non_cached_tokens': base_epp.get('nonCachedTokens', 16),
+            })
+            manifests = {'epp-configmap': cm_yaml}
+            lws_manifests = tmgr.render_config(base_cfg)
+            for mk, mv in lws_manifests.items():
+                if 'service' not in mk:
+                    manifests[mk] = mv
+            epp_test_config._epp_manifests = _json.dumps(manifests)
+        except Exception:
+            epp_test_config._epp_manifests = None
+        self._save_epp_test_to_database(epp_test_config, result)
+        return result
 
     def _benchmark_epp_strategies(self):
         """Step 9: EPP Tuning — smart weight derivation + validation.
@@ -551,18 +786,37 @@ class EPPTuningMixin:
                          f"{base_w['queue_weight']}:{base_w.get('active_request_weight', 2)}", 'info')
                 self.log(f"  Derived: {smart_weights['prefix_cache_weight']}:{smart_weights['kv_cache_weight']}:"
                          f"{smart_weights['queue_weight']}:{smart_weights.get('active_request_weight', 2)}", 'info')
+
+                # LoRA-affinity A/B: directly measure the adapter-locality
+                # mechanism (RFE-2527). Same core weights, three lora-affinity
+                # settings — derived weight, half weight, scorer disabled.
+                auto_w = getattr(self.config, 'epp_auto_weights', None) or {}
+                lora_ab_active = (bool(getattr(self.config, 'lora_enabled', False))
+                                  and int(getattr(self.config, 'lora_num_adapters', 0) or 0) > 20
+                                  and bool(auto_w.get('lora_affinity_enabled')))
+                if lora_ab_active:
+                    derived_lora_w = float(auto_w.get('lora_affinity_weight', 3.0) or 3.0)
+                    self.log(f"  🔀 LoRA A/B: lora-affinity {derived_lora_w} vs "
+                             f"{max(1.0, round(derived_lora_w / 2, 1))} vs off — measuring adapter-locality routing", 'decision')
+
                 weights_unchanged = (
                     smart_weights['prefix_cache_weight'] == base_w['prefix_cache_weight'] and
                     smart_weights['kv_cache_weight'] == base_w['kv_cache_weight'] and
                     smart_weights['queue_weight'] == base_w['queue_weight'] and
                     smart_weights.get('active_request_weight', 2) == base_w.get('active_request_weight', 2)
                 )
-                if weights_unchanged:
+                if weights_unchanged and not lora_ab_active:
                     self.log(f"  ✅ Smart-derived weights match user preset — skipping EPP test for {arch}.", 'success')
                     self.epp_benchmark_results[arch] = [('_skipped_weights_match', base_w, None)]
                     continue
                 self.log(f"  ↔ Weights differ from preset — running EPP test for {arch}", 'info')
                 weight_combos = [('smart-derived', smart_weights)]
+                if lora_ab_active:
+                    derived_lora_w = float(auto_w.get('lora_affinity_weight', 3.0) or 3.0)
+                    weight_combos.append(('lora-affinity-half',
+                                          {**smart_weights, 'lora_affinity_weight': max(1.0, round(derived_lora_w / 2, 1))}))
+                    weight_combos.append(('lora-affinity-off',
+                                          {**smart_weights, 'lora_affinity_enabled': False}))
             else:
                 self.log("  ⚠️  Smart weight derivation returned None — using fallback combos", 'warning')
                 weight_combos = list(fallback_combos)
@@ -586,150 +840,12 @@ class EPPTuningMixin:
                 except Exception:
                     pass
 
-                test_id = f"step11-epp-{arch}-{name}"
-                self.log(f"  Testing: {name} (cache={weights['prefix_cache_weight']}, kv={weights['kv_cache_weight']}, queue={weights['queue_weight']})", 'info')
-
-                epp_cfg = {
-                    'preset': 'custom',
-                    'maxPrefixBlocksToMatch': base.get('maxPrefixBlocksToMatch', 256),
-                    'lruCapacityPerServer': base.get('lruCapacityPerServer', 31250),
-                    'nonCachedTokens': base.get('nonCachedTokens', 16),
-                    'plugins': self._merge_auto_plugins({
-                        'prefix_cache': {'enabled': True, 'weight': weights['prefix_cache_weight']},
-                        'kv_cache': {'enabled': True, 'weight': weights['kv_cache_weight']},
-                        'queue': {'enabled': True, 'weight': weights['queue_weight']},
-                        'active_request': {'enabled': True, 'weight': weights.get('active_request_weight', 2)},
-                        'slo': {'enabled': weights.get('slo_enabled', False), 'weight': weights.get('slo_weight', 0)},
-                    }),
-                }
-
-                success = prereq_mgr.update_epp_config(
-                    architecture=arch,
-                    epp_config=epp_cfg,
-                    log_callback=lambda msg: self.log(msg, 'info')
+                result = self._run_epp_variant(
+                    prereq_mgr, arch, base_cfg, concurrency, name, weights,
+                    base_epp=base, baseline_ttft=baseline_ttft,
                 )
-                if not success:
-                    self.log(f"  ❌ Failed to update EPP config for {name}", 'error')
-                    continue
-
-                epp_test_config = TestConfig(
-                    test_id=test_id,
-                    architecture=base_cfg.architecture,
-                    model_name=base_cfg.model_name,
-                    namespace=base_cfg.namespace,
-                    isl=base_cfg.isl, osl=base_cfg.osl,
-                    num_users=concurrency,
-                    tensor_parallelism=base_cfg.tensor_parallelism,
-                    replicas=base_cfg.replicas,
-                    prefill_replicas=base_cfg.prefill_replicas,
-                    decode_replicas=base_cfg.decode_replicas,
-                    prefill_tp=base_cfg.prefill_tp,
-                    decode_tp=base_cfg.decode_tp,
-                    max_model_len=base_cfg.max_model_len,
-                    gpu_memory_utilization=base_cfg.gpu_memory_utilization,
-                    image=base_cfg.image,
-                    pvc_name=base_cfg.pvc_name,
-                    request_type=base_cfg.request_type,
-                    request_rate=concurrency,
-                    test_duration=base_cfg.test_duration,
-                    workload_mode=base_cfg.workload_mode,
-                    dataset_source=base_cfg.dataset_source,
-                    block_size=base_cfg.block_size,
-                    network_type=base_cfg.network_type,
-                    nccl_ib_hca=base_cfg.nccl_ib_hca,
-                    rdma_device_resources=base_cfg.rdma_device_resources,
-                    rdma_nics_per_node=base_cfg.rdma_nics_per_node,
-                    memory_request=base_cfg.memory_request,
-                    memory_limit=base_cfg.memory_limit,
-                    cpu_request=base_cfg.cpu_request,
-                    cpu_limit=base_cfg.cpu_limit,
-                    lora_enabled=base_cfg.lora_enabled,
-                    lora_num_adapters=base_cfg.lora_num_adapters,
-                    lora_adapter_size_mb=base_cfg.lora_adapter_size_mb,
-                    max_num_seqs=base_cfg.max_num_seqs,
-                    prefill_max_num_seqs=base_cfg.prefill_max_num_seqs,
-                    decode_max_num_seqs=base_cfg.decode_max_num_seqs,
-                    max_num_batched_tokens=base_cfg.max_num_batched_tokens,
-                    prefill_gpu_memory_utilization=base_cfg.prefill_gpu_memory_utilization,
-                    decode_gpu_memory_utilization=base_cfg.decode_gpu_memory_utilization,
-                    selected_nodes=base_cfg.selected_nodes,
-                    prefill_decode_ratio=base_cfg.prefill_decode_ratio,
-                    epp_config=epp_cfg,
-                    selected_dra_classes=getattr(base_cfg, 'selected_dra_classes', None) or getattr(self.config, 'selected_dra_classes', []),
-                    dra_gpu_resource_key=getattr(base_cfg, 'dra_gpu_resource_key', None) or getattr(self.config, 'dra_gpu_resource_key', None),
-                    gateway_class=getattr(base_cfg, 'gateway_class', None) or getattr(self.config, 'gateway_class', 'istio'),
-                    per_node_storage=getattr(base_cfg, 'per_node_storage', None) or getattr(self.config, 'per_node_storage', False),
-                    node_nfs_pvcs=getattr(base_cfg, 'node_nfs_pvcs', None) or getattr(self.config, 'node_nfs_pvcs', []),
-                    storage_class=getattr(base_cfg, 'storage_class', None) or getattr(self.config, 'storage_class', None),
-                    pvc_size=getattr(base_cfg, 'pvc_size', None) or getattr(self.config, 'pvc_size', None),
-                    local_disk_path=getattr(base_cfg, 'local_disk_path', None) or getattr(self.config, 'local_disk_path', None),
-                    rdma_network_annotation=getattr(base_cfg, 'rdma_network_annotation', None) or getattr(self.config, 'rdma_network_annotation', None),
-                    exclusive_pf=getattr(base_cfg, 'exclusive_pf', False) or getattr(self.config, 'exclusive_pf', False),
-                    scheduler_image=getattr(base_cfg, 'scheduler_image', None) or getattr(self.config, 'scheduler_image', None),
-                )
-
-                result = self.orchestrator.run_test(
-                    epp_test_config,
-                    cleanup=True,
-                    log_callback=lambda msg: self.log(msg, 'info'),
-                    stop_check=self._should_stop,
-                )
-
-                if result and result.guidellm_success:
-                    ttft = result.ttft_p90 or 0
-                    tput = result.throughput_p90 or 0
-                    # Compare against Step 6/7 baseline
-                    baseline_ttft = None
-                    if arch == 'pd' and self.pareto_results:
-                        baseline_ttft = min((r.ttft_p90 for _, r in self.pareto_results if r.ttft_p90), default=None)
-                    elif arch == 'ep' and hasattr(self, 'ep_results') and self.ep_results:
-                        baseline_ttft = min((r.ttft_p90 for _, r in self.ep_results if r.ttft_p90), default=None)
-                    elif arch == 'aggregated' and self.aggregated_result:
-                        baseline_ttft = self.aggregated_result.ttft_p90
-                    if baseline_ttft and ttft > baseline_ttft * 1.5:
-                        self.log(f"  ⚠️  {name}: TTFT {ttft:.0f}ms is {ttft/baseline_ttft:.1f}x worse than baseline ({baseline_ttft:.0f}ms) — EPP weights degraded performance", 'warning')
-                    else:
-                        improvement = ((baseline_ttft - ttft) / baseline_ttft * 100) if baseline_ttft else 0
-                        self.log(f"  ✅ {name}: TTFT p90={ttft:.1f}ms ({improvement:+.1f}% vs baseline), Throughput p90={tput:.2f} req/s", 'success')
+                if result:
                     arch_results.append((name, weights, result))
-                    self.all_test_results.append((epp_test_config, result))
-                    try:
-                        import json as _json
-                        tmgr = TemplateManager()
-                        cm_template = f'prereq/gaie-configmap-{arch}.yaml.j2'
-                        auto_w = getattr(self.config, 'epp_auto_weights', None) or {}
-                        from core.prereq_manager import is_epp_v011_plus
-                        cm_yaml = tmgr.render_template(cm_template, **{
-                            'namespace': self.config.namespace,
-                            'gaie_name': f'gaie-{arch}-epp',
-                            'config_file': f'{arch}-config.yaml',
-                            'epp_v011_plus': is_epp_v011_plus(getattr(self.config, 'scheduler_image', '') or ''),
-                            'prefix_cache_weight': weights['prefix_cache_weight'],
-                            'kv_cache_weight': weights['kv_cache_weight'],
-                            'queue_weight': weights['queue_weight'],
-                            'active_request_enabled': True,
-                            'active_request_weight': weights.get('active_request_weight', 2),
-                            'slo_enabled': weights.get('slo_enabled', False),
-                            'slo_weight': weights.get('slo_weight', 0),
-                            'session_aware_enabled': bool(auto_w.get('session_aware_enabled')),
-                            'session_aware_weight': auto_w.get('session_aware_weight', 2.0),
-                            'lora_affinity_enabled': bool(auto_w.get('lora_affinity_enabled')),
-                            'lora_affinity_weight': auto_w.get('lora_affinity_weight', 3.0),
-                            'max_prefix_blocks': epp_cfg.get('maxPrefixBlocksToMatch', 256),
-                            'lru_capacity': epp_cfg.get('lruCapacityPerServer', 31250),
-                            'non_cached_tokens': epp_cfg.get('nonCachedTokens', 16),
-                        })
-                        manifests = {'epp-configmap': cm_yaml}
-                        lws_manifests = tmgr.render_config(base_cfg)
-                        for mk, mv in lws_manifests.items():
-                            if 'service' not in mk:
-                                manifests[mk] = mv
-                        epp_test_config._epp_manifests = _json.dumps(manifests)
-                    except Exception:
-                        epp_test_config._epp_manifests = None
-                    self._save_epp_test_to_database(epp_test_config, result)
-                else:
-                    self.log(f"  ❌ {name}: benchmark failed", 'error')
 
             # Smart EPP: try to refine from measured metrics after first test
             if smart_weights and arch_results and not self._should_stop():
@@ -738,111 +854,10 @@ class EPPTuningMixin:
                 refined = self._refine_epp_from_metrics(first_result, arch=arch, base_weights=smart_weights)
                 if refined and (refined['prefix_cache_weight'] != smart_weights['prefix_cache_weight'] or
                                 refined['kv_cache_weight'] != smart_weights['kv_cache_weight'] or
-                                refined['queue_weight'] != smart_weights['queue_weight']):
+                                refined['queue_weight'] != smart_weights['queue_weight'] or
+                                refined.get('lora_affinity_weight') != smart_weights.get('lora_affinity_weight') or
+                                refined.get('lora_affinity_enabled') != smart_weights.get('lora_affinity_enabled')):
                     self.log("  Weights changed — running validation test", 'info')
-                    # Run the refined combo through the same test loop
-                    refined_combos = [('smart-refined', refined)]
-                    for rname, rweights in refined_combos:
-                        if self._should_stop():
-                            break
-                        try:
-                            self.orchestrator.deployment_manager.kubectl.run(
-                                ['delete', 'lws', '-l', 'component=serveit-test',
-                                 '-n', self.config.namespace, '--ignore-not-found=true'], check=False)
-                            time.sleep(5)
-                        except Exception:
-                            pass
-                        rtest_id = f"step11-epp-{arch}-{rname}"
-                        self.log(f"  Testing: {rname} (cache={rweights['prefix_cache_weight']}, kv={rweights['kv_cache_weight']}, queue={rweights['queue_weight']})", 'info')
-                        repp_cfg = {
-                            'preset': 'custom',
-                            'maxPrefixBlocksToMatch': base.get('maxPrefixBlocksToMatch', 256),
-                            'lruCapacityPerServer': base.get('lruCapacityPerServer', 31250),
-                            'nonCachedTokens': base.get('nonCachedTokens', 16),
-                            'plugins': self._merge_auto_plugins({
-                                'prefix_cache': {'enabled': True, 'weight': rweights['prefix_cache_weight']},
-                                'kv_cache': {'enabled': True, 'weight': rweights['kv_cache_weight']},
-                                'queue': {'enabled': True, 'weight': rweights['queue_weight']},
-                                'active_request': {'enabled': True, 'weight': rweights.get('active_request_weight', 2)},
-                                'slo': {'enabled': rweights.get('slo_enabled', False), 'weight': rweights.get('slo_weight', 0)},
-                            }),
-                        }
-                        rsuccess = prereq_mgr.update_epp_config(architecture=arch, epp_config=repp_cfg,
-                                                                 log_callback=lambda msg: self.log(msg, 'info'))
-                        if rsuccess:
-                            rtest_config = TestConfig(
-                                test_id=rtest_id, architecture=base_cfg.architecture,
-                                model_name=base_cfg.model_name, namespace=base_cfg.namespace,
-                                isl=base_cfg.isl, osl=base_cfg.osl, num_users=concurrency,
-                                tensor_parallelism=base_cfg.tensor_parallelism, replicas=base_cfg.replicas,
-                                prefill_replicas=base_cfg.prefill_replicas, decode_replicas=base_cfg.decode_replicas,
-                                prefill_tp=base_cfg.prefill_tp, decode_tp=base_cfg.decode_tp,
-                                max_model_len=base_cfg.max_model_len, gpu_memory_utilization=base_cfg.gpu_memory_utilization,
-                                image=base_cfg.image, pvc_name=base_cfg.pvc_name,
-                                request_type=base_cfg.request_type, request_rate=concurrency,
-                                test_duration=base_cfg.test_duration, workload_mode=base_cfg.workload_mode,
-                                dataset_source=base_cfg.dataset_source, block_size=base_cfg.block_size,
-                                network_type=base_cfg.network_type, nccl_ib_hca=base_cfg.nccl_ib_hca,
-                                rdma_device_resources=base_cfg.rdma_device_resources,
-                                rdma_nics_per_node=base_cfg.rdma_nics_per_node,
-                                memory_request=base_cfg.memory_request, memory_limit=base_cfg.memory_limit,
-                                cpu_request=base_cfg.cpu_request, cpu_limit=base_cfg.cpu_limit,
-                                lora_enabled=base_cfg.lora_enabled,
-                                lora_num_adapters=base_cfg.lora_num_adapters,
-                                lora_adapter_size_mb=base_cfg.lora_adapter_size_mb,
-                                max_num_seqs=base_cfg.max_num_seqs,
-                                prefill_max_num_seqs=base_cfg.prefill_max_num_seqs,
-                                decode_max_num_seqs=base_cfg.decode_max_num_seqs,
-                                max_num_batched_tokens=base_cfg.max_num_batched_tokens,
-                                prefill_gpu_memory_utilization=base_cfg.prefill_gpu_memory_utilization,
-                                decode_gpu_memory_utilization=base_cfg.decode_gpu_memory_utilization,
-                                selected_nodes=base_cfg.selected_nodes,
-                                prefill_decode_ratio=base_cfg.prefill_decode_ratio, epp_config=repp_cfg,
-                                selected_dra_classes=getattr(base_cfg, 'selected_dra_classes', None) or getattr(self.config, 'selected_dra_classes', []),
-                                dra_gpu_resource_key=getattr(base_cfg, 'dra_gpu_resource_key', None) or getattr(self.config, 'dra_gpu_resource_key', None),
-                                gateway_class=getattr(base_cfg, 'gateway_class', None) or getattr(self.config, 'gateway_class', 'istio'),
-                                per_node_storage=getattr(base_cfg, 'per_node_storage', None) or getattr(self.config, 'per_node_storage', False),
-                                node_nfs_pvcs=getattr(base_cfg, 'node_nfs_pvcs', None) or getattr(self.config, 'node_nfs_pvcs', []),
-                                storage_class=getattr(base_cfg, 'storage_class', None) or getattr(self.config, 'storage_class', None),
-                                pvc_size=getattr(base_cfg, 'pvc_size', None) or getattr(self.config, 'pvc_size', None),
-                    local_disk_path=getattr(base_cfg, 'local_disk_path', None) or getattr(self.config, 'local_disk_path', None),
-                                rdma_network_annotation=getattr(base_cfg, 'rdma_network_annotation', None) or getattr(self.config, 'rdma_network_annotation', None),
-                                exclusive_pf=getattr(base_cfg, 'exclusive_pf', False) or getattr(self.config, 'exclusive_pf', False),
-                                scheduler_image=getattr(base_cfg, 'scheduler_image', None) or getattr(self.config, 'scheduler_image', None),
-                            )
-                            rresult = self.orchestrator.run_test(rtest_config, cleanup=True,
-                                                                 log_callback=lambda msg: self.log(msg, 'info'),
-                                                                 stop_check=self._should_stop)
-                            if rresult and rresult.guidellm_success:
-                                self.log(f"  ✅ {rname}: TTFT p90={rresult.ttft_p90:.1f}ms, Throughput p90={rresult.throughput_p90:.2f} req/s", 'success')
-                                arch_results.append((rname, rweights, rresult))
-                                self.all_test_results.append((rtest_config, rresult))
-                                self._save_epp_test_to_database(rtest_config, rresult)
-                            else:
-                                self.log(f"  ❌ {rname}: benchmark failed", 'error')
-                else:
-                    self.log("  Metrics confirm derived weights — no refinement needed", 'success')
-
-            # A/B guardrail: if smart-derived is worse than Step 6/7 baseline, test balanced
-            if (baseline_ttft and arch_results and not self._should_stop()):
-                best_smart_ttft = min(r[2].ttft_p90 or float('inf') for r in arch_results)
-                if best_smart_ttft > baseline_ttft * 1.05:
-                    self.log(f"\n  ⚠️  Smart TTFT ({best_smart_ttft:.0f}ms) > baseline ({baseline_ttft:.0f}ms) — testing balanced fallback", 'warning')
-                    balanced_w = {'prefix_cache_weight': 2.0, 'kv_cache_weight': 2.0, 'queue_weight': 2.0, 'slo_enabled': False}
-                    fb_test_id = f"step11-epp-{arch}-balanced-fallback"
-                    fb_epp_cfg = {
-                        'preset': 'custom',
-                        'maxPrefixBlocksToMatch': base.get('maxPrefixBlocksToMatch', 256),
-                        'lruCapacityPerServer': base.get('lruCapacityPerServer', 31250),
-                        'nonCachedTokens': base.get('nonCachedTokens', 16),
-                        'plugins': self._merge_auto_plugins({
-                            'prefix_cache': {'enabled': True, 'weight': 2.0},
-                            'kv_cache': {'enabled': True, 'weight': 2.0},
-                            'queue': {'enabled': True, 'weight': 2.0},
-                            'active_request': {'enabled': True, 'weight': 2.0},
-                            'slo': {'enabled': has_sla, 'weight': 3.0 if has_sla else 0},
-                        }),
-                    }
                     try:
                         self.orchestrator.deployment_manager.kubectl.run(
                             ['delete', 'lws', '-l', 'component=serveit-test',
@@ -850,64 +865,40 @@ class EPPTuningMixin:
                         time.sleep(5)
                     except Exception:
                         pass
-                    prereq_mgr.update_epp_config(architecture=arch, epp_config=fb_epp_cfg,
-                                                  log_callback=lambda msg: self.log(msg, 'info'))
-                    fb_config = TestConfig(
-                        test_id=fb_test_id, architecture=base_cfg.architecture,
-                        model_name=base_cfg.model_name, namespace=base_cfg.namespace,
-                        isl=base_cfg.isl, osl=base_cfg.osl, num_users=concurrency,
-                        tensor_parallelism=base_cfg.tensor_parallelism, replicas=base_cfg.replicas,
-                        prefill_replicas=base_cfg.prefill_replicas, decode_replicas=base_cfg.decode_replicas,
-                        prefill_tp=base_cfg.prefill_tp, decode_tp=base_cfg.decode_tp,
-                        max_model_len=base_cfg.max_model_len, gpu_memory_utilization=base_cfg.gpu_memory_utilization,
-                        image=base_cfg.image, pvc_name=base_cfg.pvc_name,
-                        request_type=base_cfg.request_type, request_rate=concurrency,
-                        test_duration=base_cfg.test_duration, workload_mode=base_cfg.workload_mode,
-                        dataset_source=base_cfg.dataset_source, block_size=base_cfg.block_size,
-                        network_type=base_cfg.network_type, nccl_ib_hca=base_cfg.nccl_ib_hca,
-                        rdma_device_resources=base_cfg.rdma_device_resources,
-                        rdma_nics_per_node=base_cfg.rdma_nics_per_node,
-                        memory_request=base_cfg.memory_request, memory_limit=base_cfg.memory_limit,
-                        cpu_request=base_cfg.cpu_request, cpu_limit=base_cfg.cpu_limit,
-                        lora_enabled=base_cfg.lora_enabled,
-                        lora_num_adapters=base_cfg.lora_num_adapters,
-                        lora_adapter_size_mb=base_cfg.lora_adapter_size_mb,
-                        max_num_seqs=base_cfg.max_num_seqs,
-                        prefill_max_num_seqs=base_cfg.prefill_max_num_seqs,
-                        decode_max_num_seqs=base_cfg.decode_max_num_seqs,
-                        max_num_batched_tokens=base_cfg.max_num_batched_tokens,
-                        prefill_gpu_memory_utilization=base_cfg.prefill_gpu_memory_utilization,
-                        decode_gpu_memory_utilization=base_cfg.decode_gpu_memory_utilization,
-                        selected_nodes=base_cfg.selected_nodes,
-                        prefill_decode_ratio=base_cfg.prefill_decode_ratio, epp_config=fb_epp_cfg,
-                        selected_dra_classes=getattr(base_cfg, 'selected_dra_classes', None) or getattr(self.config, 'selected_dra_classes', []),
-                        dra_gpu_resource_key=getattr(base_cfg, 'dra_gpu_resource_key', None) or getattr(self.config, 'dra_gpu_resource_key', None),
-                        gateway_class=getattr(base_cfg, 'gateway_class', None) or getattr(self.config, 'gateway_class', 'istio'),
-                        per_node_storage=getattr(base_cfg, 'per_node_storage', None) or getattr(self.config, 'per_node_storage', False),
-                        node_nfs_pvcs=getattr(base_cfg, 'node_nfs_pvcs', None) or getattr(self.config, 'node_nfs_pvcs', []),
-                        storage_class=getattr(base_cfg, 'storage_class', None) or getattr(self.config, 'storage_class', None),
-                        pvc_size=getattr(base_cfg, 'pvc_size', None) or getattr(self.config, 'pvc_size', None),
-                    local_disk_path=getattr(base_cfg, 'local_disk_path', None) or getattr(self.config, 'local_disk_path', None),
-                        rdma_network_annotation=getattr(base_cfg, 'rdma_network_annotation', None) or getattr(self.config, 'rdma_network_annotation', None),
-                        exclusive_pf=getattr(base_cfg, 'exclusive_pf', False) or getattr(self.config, 'exclusive_pf', False),
-                        scheduler_image=getattr(base_cfg, 'scheduler_image', None) or getattr(self.config, 'scheduler_image', None),
+                    rresult = self._run_epp_variant(
+                        prereq_mgr, arch, base_cfg, concurrency, 'smart-refined', refined,
+                        base_epp=base, baseline_ttft=None,
                     )
-                    fb_result = self.orchestrator.run_test(fb_config, cleanup=True,
-                                                           log_callback=lambda msg: self.log(msg, 'info'),
-                                                           stop_check=self._should_stop)
-                    if fb_result and fb_result.guidellm_success:
-                        self.log(f"  ✅ balanced-fallback: TTFT p90={fb_result.ttft_p90:.1f}ms, Throughput p90={fb_result.throughput_p90:.2f} req/s", 'success')
+                    if rresult:
+                        arch_results.append(('smart-refined', refined, rresult))
+                else:
+                    self.log("  Metrics confirm derived weights — no refinement needed", 'success')
+
+            # A/B guardrail: if smart-derived is worse than Step 6/7 baseline, test balanced
+            if (baseline_ttft and arch_results and not self._should_stop()):
+                best_smart = min(self._epp_objective(r[2]) for r in arch_results)
+                if best_smart > baseline_ttft * 1.05:
+                    self.log(f"\n  ⚠️  Smart TTFT ({best_smart:.0f}ms) > baseline ({baseline_ttft:.0f}ms) — testing balanced fallback", 'warning')
+                    try:
+                        self.orchestrator.deployment_manager.kubectl.run(
+                            ['delete', 'lws', '-l', 'component=serveit-test',
+                             '-n', self.config.namespace, '--ignore-not-found=true'], check=False)
+                        time.sleep(5)
+                    except Exception:
+                        pass
+                    balanced_w = {'prefix_cache_weight': 2.0, 'kv_cache_weight': 2.0, 'queue_weight': 2.0, 'slo_enabled': False}
+                    fb_result = self._run_epp_variant(
+                        prereq_mgr, arch, base_cfg, concurrency, 'balanced-fallback', balanced_w,
+                        base_epp=base, baseline_ttft=None,
+                    )
+                    if fb_result:
                         arch_results.append(('balanced-fallback', balanced_w, fb_result))
-                        self.all_test_results.append((fb_config, fb_result))
-                        self._save_epp_test_to_database(fb_config, fb_result)
-                    else:
-                        self.log("  ❌ balanced-fallback: benchmark failed", 'error')
 
             self.epp_benchmark_results[arch] = arch_results
 
             valid_arch = [r for r in arch_results if r[2] is not None]
             if valid_arch:
-                best_name = min(valid_arch, key=lambda x: x[2].ttft_p90 or float('inf'))[0]
+                best_name = min(valid_arch, key=lambda x: self._epp_objective(x[2]))[0]
                 self.log(f"  Best {arch}: {best_name}", 'success')
 
     def _apply_best_epp_config(self):
@@ -919,7 +910,7 @@ class EPPTuningMixin:
             valid = [r for r in results if r[2] is not None]
             if not valid:
                 continue
-            best_name, best_weights, best_result = min(valid, key=lambda x: x[2].ttft_p90 or float('inf'))
+            best_name, best_weights, best_result = min(valid, key=lambda x: self._epp_objective(x[2]))
 
             # Compare against Step 6/7 baseline — only apply if EPP result is better
             baseline_ttft = None
@@ -933,25 +924,24 @@ class EPPTuningMixin:
             if not baseline_ttft:
                 prom = self._get_best_result_prom(arch)
                 if not prom:
-                    baseline_ttft = best_result.ttft_p90
+                    baseline_ttft = self._epp_objective(best_result)
 
-            epp_ttft = best_result.ttft_p90 or float('inf')
+            epp_ttft = self._epp_objective(best_result)
             if baseline_ttft and epp_ttft >= baseline_ttft:
                 self.log(f"  ⏩ Keeping original preset for {arch} — smart-derived TTFT {epp_ttft:.0f}ms >= baseline {baseline_ttft:.0f}ms", 'info')
                 continue
 
+            lora_str = ''
+            if best_weights.get('lora_affinity_enabled') is False:
+                lora_str = ', lora-affinity=off'
+            elif best_weights.get('lora_affinity_weight') is not None:
+                lora_str = f", lora-affinity={best_weights['lora_affinity_weight']}"
             self.log(f"  Applying best EPP config for {arch}: {best_name} "
                      f"(cache={best_weights['prefix_cache_weight']}, kv={best_weights['kv_cache_weight']}, "
-                     f"queue={best_weights['queue_weight']}) — TTFT {epp_ttft:.0f}ms vs baseline {baseline_ttft:.0f}ms", 'success')
+                     f"queue={best_weights['queue_weight']}{lora_str}) — TTFT {epp_ttft:.0f}ms vs baseline {baseline_ttft:.0f}ms", 'success')
             epp_config = {
                 'preset': 'custom',
-                'plugins': self._merge_auto_plugins({
-                    'prefix_cache': {'enabled': True, 'weight': best_weights['prefix_cache_weight']},
-                    'kv_cache': {'enabled': True, 'weight': best_weights['kv_cache_weight']},
-                    'queue': {'enabled': True, 'weight': best_weights['queue_weight']},
-                    'active_request': {'enabled': True, 'weight': best_weights.get('active_request_weight', 2)},
-                    'slo': {'enabled': False},
-                })
+                'plugins': self._build_variant_plugins(best_weights),
             }
             from core import PrereqManager
             mgr = PrereqManager(
