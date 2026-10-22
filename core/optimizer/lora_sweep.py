@@ -213,8 +213,10 @@ class LoraSweepMixin:
                 # against the run-level adapter count)
                 tp_for_calc = (payload.prefill_tp if kind in ('pd', 'ep')
                                else payload)
+                sweep_pods = (payload.decode_pods if kind in ('pd', 'ep')
+                              else max(1, gpus // max(payload or 1, 1)))
                 cfg.lora_max_loras = self._compute_lora_max_loras(
-                    tp_for_calc, n_override=n_adapters)
+                    tp_for_calc, n_override=n_adapters, num_pods=sweep_pods)
                 cfg.num_users = int(concurrency)
                 cfg.request_rate = int(concurrency)
 
@@ -244,8 +246,10 @@ class LoraSweepMixin:
                 try:
                     tp_for_calc = (payload.prefill_tp if kind in ('pd', 'ep')
                                    else payload)
+                    sweep_pods = (payload.decode_pods if kind in ('pd', 'ep')
+                                  else max(1, gpus // max(payload or 1, 1)))
                     max_loras = self._compute_lora_max_loras(
-                        tp_for_calc, n_override=n_adapters)
+                        tp_for_calc, n_override=n_adapters, num_pods=sweep_pods)
                 except Exception:
                     max_loras = None
             swapping = bool(max_loras and n_adapters > max_loras)

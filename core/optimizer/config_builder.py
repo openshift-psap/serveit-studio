@@ -230,7 +230,7 @@ class ConfigBuilderMixin:
             lora_enabled=self.config.lora_enabled,
             lora_num_adapters=self.config.lora_num_adapters,
             lora_max_rank=getattr(self.config, 'lora_max_rank', None),
-            lora_max_loras=self._compute_lora_max_loras(tp),
+            lora_max_loras=self._compute_lora_max_loras(tp, num_pods=total_pods),
             lora_adapter_size_mb=self.config.lora_adapter_size_mb,
             selected_nodes=self.config.selected_nodes or [],
             workload_mode='synthetic' if is_calibration else (self.config.workload_mode or 'synthetic'),
@@ -286,7 +286,8 @@ class ConfigBuilderMixin:
                 return result.vllm_fixed_overhead_gb
         return None
 
-    def _compute_lora_max_loras(self, tp: int, n_override: int = None) -> int:
+    def _compute_lora_max_loras(self, tp: int, n_override: int = None,
+                                num_pods: int = None) -> int:
         """GPU-resident LoRA adapter count from available VRAM.
 
         Budget: up to 10% of the VRAM left after model weights (within the
@@ -299,8 +300,17 @@ class ConfigBuilderMixin:
         lets the adapter-count sweep clamp against the level's count
         rather than the run-level setting.
 
+        Affinity-stable sizing: when ``num_pods`` is given, the budget
+        expands (up to 40% of free VRAM) to reach ceil(n / num_pods)
+        slots per pod so ALL adapters can stay GPU-resident — each
+        adapter keeps a home pod, the EPP lora-affinity signal always
+        fires, and LRU swapping disappears. Falls back to the 10% budget
+        whenever the stable count doesn't fit (e.g. too many adapters,
+        too few pods).
+
         Examples (Gemma-4 26B fp8, H200 140GB, TP1):
-        - ~99GB free x 10% / ~860MB slot = 11 resident
+        - ~99GB free x 10% / ~860MB slot = 11 resident (default)
+        - 16 pods, 200 adapters → 13 needed → 13 resident (stable)
         """
         n = int(n_override if n_override is not None
                 else getattr(self.config, 'lora_num_adapters', 0) or 0)
@@ -320,7 +330,19 @@ class ConfigBuilderMixin:
             gmu = self._compute_gpu_mem_util(tp, log=False)
             free_mb = vram_mb * gmu - weights_mb
             budget_mb = max(free_mb, 0) * 0.10
-            return max(1, min(n, int(budget_mb // max(per_adapter_mb, 1))))
+            slots = int(budget_mb // max(per_adapter_mb, 1))
+            if num_pods and num_pods > 0:
+                needed = math.ceil(n / num_pods)
+                if needed > slots:
+                    stable_budget_mb = max(free_mb, 0) * 0.40
+                    stable_slots = int(stable_budget_mb // max(per_adapter_mb, 1))
+                    if needed <= stable_slots:
+                        slots = needed
+                        self.log(f"   LoRA residency: {slots} slots/pod x "
+                                 f"{num_pods} pods = {slots * num_pods} — all "
+                                 f"{n} adapters GPU-resident (no LRU swapping)",
+                                 'info')
+            return max(1, min(n, slots))
         except Exception:
             return min(4, n)
 
@@ -1129,7 +1151,7 @@ class ConfigBuilderMixin:
             lora_enabled=self.config.lora_enabled,
             lora_num_adapters=self.config.lora_num_adapters,
             lora_max_rank=getattr(self.config, 'lora_max_rank', None),
-            lora_max_loras=self._compute_lora_max_loras(split.prefill_tp),
+            lora_max_loras=self._compute_lora_max_loras(split.prefill_tp, num_pods=split.decode_pods),
             lora_adapter_size_mb=self.config.lora_adapter_size_mb,
             selected_nodes=self.config.selected_nodes or [],
             workload_mode=self.config.workload_mode or 'synthetic',
@@ -1395,7 +1417,7 @@ class ConfigBuilderMixin:
             lora_enabled=self.config.lora_enabled,
             lora_num_adapters=self.config.lora_num_adapters,
             lora_max_rank=getattr(self.config, 'lora_max_rank', None),
-            lora_max_loras=self._compute_lora_max_loras(split.prefill_tp),
+            lora_max_loras=self._compute_lora_max_loras(split.prefill_tp, num_pods=split.decode_pods),
             lora_adapter_size_mb=self.config.lora_adapter_size_mb,
             selected_nodes=self.config.selected_nodes or [],
             workload_mode=self.config.workload_mode or 'synthetic',
