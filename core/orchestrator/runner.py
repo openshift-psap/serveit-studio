@@ -683,7 +683,8 @@ class TestOrchestrator(ParserMixin, GuidellmMixin):
                         "model": config.model_name,
                         "messages": [{"role": "user", "content": "Hello"}],
                         "max_tokens": 1,
-                        "temperature": 0.0
+                        "temperature": 0.0,
+                        "stream": False
                     })
                 else:
                     completion_url = endpoint.rstrip('/') + '/v1/completions'
