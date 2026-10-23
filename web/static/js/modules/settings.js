@@ -694,7 +694,9 @@ function updateAutoEppPreview() {
         total_gpus: parseInt(config.total_gpus) || 16,
         architecture: 'aggregated',
         replicas: parseInt(config.total_gpus) || 16,
-        lora_max_loras: null,
+        lora_max_loras: config.lora_enabled
+            ? Math.ceil((parseInt(config.lora_num_adapters) || 0) / (parseInt(config.total_gpus) || 16))
+            : null,
     };
 
     fetch('/api/epp/preview', {
