@@ -898,17 +898,24 @@ class SingleTestStrategy(OptimizationStrategy):
 
             # Smart EPP Tuning (Step 9): benchmark EPP weight variants
             # (incl. the lora-affinity A/B) against this single config.
-            # Publish the baseline result the tuner compares against.
-            if getattr(cfg, 'epp_benchmark', False) and not self.opt._should_stop():
-                if arch == 'pd':
+            # Publish the baseline result the downstream steps compare
+            # against (Smart EPP tuning, calibrated load, LoRA sweep)
+            if arch == 'pd':
+                if not self.opt.pareto_results:
                     self.opt.pareto_results = [(split, result)]
-                elif arch == 'ep':
+            elif arch == 'ep':
+                if not getattr(self.opt, 'best_ep_result', None):
                     self.opt.best_ep_result = result
-                else:
+            else:
+                if not self.opt.aggregated_result:
                     self.opt.aggregated_tp = tp
                     self.opt.aggregated_pp = cfg.single_test_pipeline_parallelism or None
                     self.opt.aggregated_gpus = num_gpus
                     self.opt.aggregated_result = result
+
+            # Smart EPP Tuning (Step 9): benchmark EPP weight variants
+            # (incl. the lora-affinity A/B) against this single config.
+            if getattr(cfg, 'epp_benchmark', False) and not self.opt._should_stop():
                 self.opt._benchmark_epp_strategies()
                 self.opt._apply_best_epp_config()
 
@@ -932,6 +939,16 @@ class SingleTestStrategy(OptimizationStrategy):
                     self.opt.aggregated_gpus = num_gpus
                     self.opt.aggregated_result = result
                 self.opt._validate_at_calibrated_load()
+
+            # LoRA adapter sweep (Step 14): re-test this configuration at
+            # increasing adapter counts when the sweep is enabled. The
+            # sweep picks its base from the published result above and
+            # deploys each level fresh (per-level max_loras sizing).
+            if (getattr(cfg, 'lora_enabled', False)
+                    and getattr(cfg, 'lora_sweep_enabled', False)
+                    and not self.opt._should_stop()):
+                self.opt.log("", 'info')
+                self.opt._run_lora_adapter_sweep()
         else:
             self.opt.log("❌ Test failed", 'error')
 

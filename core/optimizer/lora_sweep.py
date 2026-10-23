@@ -141,8 +141,10 @@ class LoraSweepMixin:
         if not candidates:
             return None
         _, kind, payload = max(candidates, key=lambda c: c[0])
+        # Prefer the tested aggregated config's own GPU count over the
+        # cluster total — single tests may use a subset of the cluster
         gpus = (payload.total_gpus if kind in ('pd', 'ep')
-                else self.config.total_gpus)
+                else (getattr(self, 'aggregated_gpus', None) or self.config.total_gpus))
         label = (f"{payload.prefill_pods}P+{payload.decode_pods}D"
                  if kind in ('pd', 'ep') else f"TP{payload}")
         return kind, payload, int(self.config.qps), gpus, label
