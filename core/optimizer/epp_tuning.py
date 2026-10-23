@@ -736,6 +736,19 @@ class EPPTuningMixin:
         if not self.epp_benchmark_results:
             self.epp_benchmark_results = {}
 
+        # The auto-derived weights (lora-affinity, demoted load scorers) are
+        # stored on the TEST config by deploy_prereqs — the run config never
+        # sees them, so variants would fall back to a slot-blind re-derivation
+        # and silently drop the affinity scorers. Adopt the most recent
+        # deployed test's weights before building any variant.
+        if not getattr(self.config, 'epp_auto_weights', None):
+            for cfg, _r in reversed(self.all_test_results):
+                if getattr(cfg, 'epp_auto_weights', None):
+                    self.config.epp_auto_weights = cfg.epp_auto_weights
+                    self.log("  📋 Adopted auto EPP weights from the deployed test config "
+                             "(lora-affinity and demotions carry into variants)", 'info')
+                    break
+
         from core import PrereqManager
         prereq_mgr = PrereqManager(
             namespace=self.config.namespace,
