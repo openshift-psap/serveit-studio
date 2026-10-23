@@ -1178,6 +1178,7 @@ class ReportAnalyzer:
                 aff = lora_info.get('adapter_pod_affinity') or {}
                 lora_pod_details.append({
                     'config': r.display_label,
+                    'test_id': getattr(r, 'test_id', None),
                     'pods': lora_info['pods'],
                     'concentrated': sum(1 for v in aff.values() if len(v) == 1),
                     'scattered': sum(1 for v in aff.values() if len(v) > 1),

@@ -2309,6 +2309,28 @@ function _renderChartsImpl(data, runId, content) {
                     '</tr>';
             }).join('');
             var sweepChartId = 'lora-sweep-chart-' + skey.replace(/[^a-z0-9]/gi, '-');
+            var affChartId = 'lora-sweep-aff-chart-' + skey.replace(/[^a-z0-9]/gi, '-');
+            // Sweep levels joined to their adapter-affinity measurements
+            // (by test_id) — levels without affinity data are skipped
+            var affByTest = {};
+            (charts.vllm.lora_pod_details || []).forEach(function(pd) {
+                if (pd && pd.test_id) affByTest[pd.test_id] = pd;
+            });
+            var affPts = [];
+            pts.forEach(function(p) {
+                var pd = affByTest[p.test_id];
+                if (pd && (pd.total_adapters || 0) > 0) {
+                    affPts.push({
+                        adapter_count: p.adapter_count,
+                        pct: Math.round(100 * (pd.concentrated || 0) / pd.total_adapters),
+                        single: pd.concentrated || 0,
+                        total: pd.total_adapters
+                    });
+                }
+            });
+            var affChartHtml = affPts.length >= 2
+                ? '<div id="' + affChartId + '" style="width:100%;height:340px;margin-top:18px;"></div>'
+                : '';
             html += '<div class="chart-card" style="border-left:6px solid #4f46e5;">' +
                 '<div class="chart-card-header" style="background:linear-gradient(135deg,#4f46e5,#818cf8); color:white;">LoRA Adapter Sweep — ' + lbl + '</div>' +
                 '<div style="padding:12px 20px; color:#1e293b; font-size:0.93em; line-height:1.6;">' +
@@ -2316,9 +2338,44 @@ function _renderChartsImpl(data, runId, content) {
                 'with benchmark requests round-robined across the base model and all adapters. GPU residency is auto-sized from free VRAM — ' +
                 'once the adapter count exceeds it, LRU swapping begins (red shading) and latency degrades.' +
                 '<div id="' + sweepChartId + '" style="width:100%;height:520px;margin-top:10px;"></div>' +
+                affChartHtml +
                 '<table style="width:100%;border-collapse:collapse;margin-top:10px;font-size:0.9em;background:#fff;">' +
                 '<tr style="background:#eef2ff;"><th style="padding:6px;">Adapters</th><th style="padding:6px;">GPU-Resident</th><th style="padding:6px;">TTFT p90</th><th style="padding:6px;">Throughput</th><th style="padding:6px;">ITL p90</th><th style="padding:6px;">Output</th></tr>' +
                 rows + '</table></div></div>';
+
+            if (affPts.length >= 2) {
+                (function(affPts, chartId) {
+                    chartQueue.push(function() {
+                        var annotations = affPts.map(function(p) {
+                            var col = p.pct >= 80 ? '#059669' : (p.pct >= 50 ? '#d97706' : '#dc2626');
+                            return {
+                                x: p.adapter_count, y: p.pct, xref: 'x', yref: 'y',
+                                text: p.pct + '%', showarrow: true, arrowhead: 2, arrowsize: 0.8,
+                                arrowwidth: 1.2, arrowcolor: col, ax: 0, ay: -22,
+                                font: { color: col, size: 10 },
+                                bgcolor: 'rgba(255,255,255,0.85)', bordercolor: col, borderwidth: 1, borderpad: 1
+                            };
+                        });
+                        Plotly.newPlot(chartId, [
+                            {
+                                x: affPts.map(function(p) { return p.adapter_count; }),
+                                y: affPts.map(function(p) { return p.pct; }),
+                                name: 'Single-pod', type: 'scatter', mode: 'lines+markers',
+                                line: { color: '#059669', width: 3 },
+                                marker: { color: '#059669', size: 9 },
+                                hovertemplate: 'Adapters: %{x}<br>Single-pod: %{y}%<extra></extra>'
+                            }
+                        ], {
+                            margin: { l: 60, r: 20, t: 20, b: 55 },
+                            xaxis: { title: 'Adapters', gridcolor: '#f1f5f9', zeroline: false },
+                            yaxis: { title: '% adapters served by a single pod', range: [0, 108], gridcolor: '#f1f5f9' },
+                            showlegend: false,
+                            hovermode: 'closest',
+                            annotations: annotations
+                        }, { displayModeBar: false, responsive: true });
+                    });
+                })(affPts, affChartId);
+            }
 
             (function(pts, chartId) {
                 chartQueue.push(function() {
