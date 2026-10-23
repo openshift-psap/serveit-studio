@@ -707,28 +707,28 @@ class PrereqManager:
             total_slots = adapter_pods * max_loras_v if (adapter_pods > 0 and max_loras_v > 0) else 0
             if total_slots and lora_n <= total_slots:
                 lora_affinity = True
-                # The scorer outputs 1.0 (adapter resident), 0.8 (free slot),
-                # 0.0 (full, not resident). The load scorers are min-max
-                # normalized to [0,1] across candidates per request, so their
-                # summed weights are the maximum swing a best-loaded pod can
-                # gain over the resident pod. Run 65 proved the invariant the
-                # hard way: lora weight 15 (differential 0.2x15=3.0) still
-                # lost to the ~7.0 summed load swing (TTFT 1256ms, churn
-                # 570/pod, 0% affinity). In the all-resident regime the load
-                # IS balanced by the adapter partition itself (~n/pods homes
-                # per pod), so the load scorers are demoted to tie-breakers:
-                # scale them to ~25-30% so their summed swing (~1.6) sits
-                # safely under the locality differential (3.0).
-                lora_affinity_w = 15.0
+                # Session-affinity (session_id strategy) is the PRIMARY
+                # adapter-locality mechanism: it pins each adapter's requests
+                # to one pod via the EPP's own state (x-session-id header),
+                # independent of vLLM's in-flight-only lora metric. It must
+                # dominate: its weight (15) must beat the lora scorer's
+                # free-slot bonus (0.8 x lora_w). With lora at 5.0, the
+                # free-slot bonus is 4.0 — session (15) wins by 11.
+                # The lora-affinity scorer stays as a secondary signal for
+                # requests without a session binding.
+                lora_affinity_w = 5.0
+                session_aware_w = 15.0
+                # The load scorers are min-max normalized per request; demote
+                # them to tie-breakers so locality dominates
                 w_prefix = round(max(0.3, w_prefix * 0.25), 1)
                 w_kv = round(max(0.3, w_kv * 0.25), 1)
                 w_queue = round(max(0.3, w_queue * 0.3), 1)
                 w_active = round(max(0.3, w_active * 0.3), 1)
                 reasons.append(f"lora: {lora_n} adapters ≤ {adapter_pods} pods × "
                                f"{max_loras_v} slots = {total_slots} → all-resident "
-                               f"(stable homes) → lora-affinity(15.0) dominant + load "
-                               f"scorers demoted ×0.25-0.3 (locality differential 3.0 "
-                               f"must beat their summed swing, was ~7.0 at full weight)")
+                               f"→ session-affinity(15.0) primary locality + "
+                               f"lora-affinity(5.0) secondary + load scorers demoted "
+                               f"(session binding must beat the lora free-slot bonus)")
             elif total_slots:
                 coverage = total_slots / max(lora_n, 1)
                 lora_affinity = True
