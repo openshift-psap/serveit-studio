@@ -726,9 +726,9 @@ class PrereqManager:
                 w_active = round(max(0.3, w_active * 0.3), 1)
                 reasons.append(f"lora: {lora_n} adapters ≤ {adapter_pods} pods × "
                                f"{max_loras_v} slots = {total_slots} → all-resident "
-                               f"→ session-affinity(15.0) primary locality + "
-                               f"lora-affinity(5.0) secondary + load scorers demoted "
-                               f"(session binding must beat the lora free-slot bonus)")
+                               f"→ session-affinity-filter (hard pin by x-session-id) "
+                               f"+ lora-affinity({lora_affinity_w}) secondary + "
+                               f"load scorers demoted to tie-breakers")
             elif total_slots:
                 coverage = total_slots / max(lora_n, 1)
                 lora_affinity = True
