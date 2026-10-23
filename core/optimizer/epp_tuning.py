@@ -194,8 +194,14 @@ class EPPTuningMixin:
         decode_tpsg = self.optimal_decode_tp.tpsg if self.optimal_decode_tp else None
 
         if not prefill_tpsg or not decode_tpsg:
-            self.log("🚨 BUG: TPSG data missing — Steps 2-3 should always produce this. "
-                     f"prefill_tpsg={prefill_tpsg}, decode_tpsg={decode_tpsg}", 'error')
+            if getattr(self.config, 'objective', '') == 'single_test':
+                # Single test mode skips calibration (Steps 2-3) — no TPSG
+                # data is expected. max_seqs falls back to 256.
+                self.log("  ℹ️  No TPSG calibration data (single test mode) — "
+                         "using max_seqs fallback", 'info')
+            else:
+                self.log("🚨 BUG: TPSG data missing — Steps 2-3 should always produce this. "
+                         f"prefill_tpsg={prefill_tpsg}, decode_tpsg={decode_tpsg}", 'error')
 
         tp = self.optimal_decode_tp.tp if self.optimal_decode_tp else 1
         max_seqs = self._compute_max_num_seqs(tp) or 256
