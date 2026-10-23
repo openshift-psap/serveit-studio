@@ -1139,7 +1139,8 @@ class ReportAnalyzer:
         import json
         successful = [r for r in successful
                       if getattr(r, 'quality', 'ok') != 'discard'
-                      and not r.config_name.startswith(('step2-', 'step3-', 'step11-', 'step12-', 'step13-'))]
+                      and not r.config_name.startswith(('step2-', 'step3-', 'step12-', 'step13-'))
+                      and not (r.config_name.startswith('step11-') and not r.config_name.startswith('step11-epp-'))]
 
         configs = []
         ttft = {'p50': [], 'p90': [], 'p95': [], 'p99': []}

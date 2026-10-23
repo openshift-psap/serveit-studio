@@ -502,6 +502,8 @@ class EPPTuningMixin:
             lora_enabled=base_cfg.lora_enabled,
             lora_num_adapters=base_cfg.lora_num_adapters,
             lora_adapter_size_mb=base_cfg.lora_adapter_size_mb,
+            lora_max_loras=getattr(base_cfg, 'lora_max_loras', None),
+            lora_max_rank=getattr(base_cfg, 'lora_max_rank', None),
             max_num_seqs=base_cfg.max_num_seqs,
             prefill_max_num_seqs=base_cfg.prefill_max_num_seqs,
             decode_max_num_seqs=base_cfg.decode_max_num_seqs,
