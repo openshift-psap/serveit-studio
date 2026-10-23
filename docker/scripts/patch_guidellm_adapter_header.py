@@ -22,6 +22,12 @@ ANCHOR = """        request_kwargs: dict[str, Any] = {
 PATCH = """        # ServeIt: RFE-2527 client-side contract — set the adapter routing
         # header when the request targets a LoRA adapter so the llm-d EPP's
         # header-label-affinity scorer can route by adapter locality.
+        # The x-session-id header (set to the adapter name) engages the
+        # EPP session-affinity-scorer's session_id strategy: every request
+        # for the same adapter carries the same session id and sticks to
+        # one pod — the adapter stays GPU-cached there (adapter locality
+        # without relying on the in-flight-only lora_requests_info metric).
+        # Base-model requests get no session id and round-robin freely.
         _adapters = set(getattr(self._args, "lora_adapters", None) or [])
         _model = (arguments.body or {}).get("model") \\
             if isinstance(arguments.body, dict) else None
@@ -29,6 +35,7 @@ PATCH = """        # ServeIt: RFE-2527 client-side contract — set the adapter 
             arguments.headers = {
                 **(arguments.headers or {}),
                 "x-llm-d-adapter": _model,
+                "x-session-id": _model,
             }
 
 """
@@ -46,7 +53,7 @@ def main() -> int:
     )
     src = target.read_text()
 
-    if "x-llm-d-adapter" in src:
+    if "x-session-id" in src:
         print(f"{target} already patched")
         return 0
 

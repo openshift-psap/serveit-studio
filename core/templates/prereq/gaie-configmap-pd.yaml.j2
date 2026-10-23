@@ -61,6 +61,8 @@ data:
 {% endif %}
 {% if session_aware_enabled | default(false) %}
       - type: session-affinity-scorer
+        parameters:
+          strategy: session_id
 {% endif %}
 {% if lora_affinity_enabled | default(false) %}
       - type: lora-affinity-scorer
