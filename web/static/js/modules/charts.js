@@ -2515,11 +2515,17 @@ function _renderChartsImpl(data, runId, content) {
                     affDetails.forEach(function(pd) {
                         labelCount[pd.config] = (labelCount[pd.config] || 0) + 1;
                     });
+                    var used = {};
                     var cfgs = affDetails.map(function(pd) {
+                        var lbl = pd.config;
                         if (labelCount[pd.config] > 1) {
-                            return pd.config + ' ·n' + (pd.total_adapters || 0);
+                            lbl = pd.config + ' ·n' + (pd.total_adapters || 0);
                         }
-                        return pd.config;
+                        used[lbl] = (used[lbl] || 0) + 1;
+                        if (used[lbl] > 1) {
+                            lbl = lbl + ' #' + used[lbl];
+                        }
+                        return lbl;
                     });
                     var y = affDetails.map(function(pd) {
                         return pd.total_adapters ? Math.round(100 * (pd.concentrated || 0) / pd.total_adapters) : 0;
