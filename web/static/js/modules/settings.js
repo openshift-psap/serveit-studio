@@ -677,112 +677,60 @@ function updateAutoEppPreview() {
     el.style.display = isAuto ? 'block' : 'none';
     if (!isAuto) return;
 
-    var isl = parseInt(config.isl) || 1000;
-    var osl = parseInt(config.osl) || 100;
-    var cachePct = parseInt(config.prefix_cache_hit_pct) || 0;
-    var cacheMode = config.prefix_cache_mode || 'identical';
-    var groups = parseInt(config.prefix_cache_groups) || 1;
-    var concurrency = parseInt(config.users) || parseInt(config.qps) || 10;
-    var turns = parseInt(config.turns) || 1;
-    var useCorpus = !!config.use_corpus;
-    var hasSla = !!config.latency_constraint_enabled;
-    var loraN = config.lora_enabled ? (parseInt(config.lora_num_adapters) || 0) : 0;
-    var totalGpus = parseInt(config.total_gpus) || 1;
-    var maxSeqs = 256;
+    // Delegate to the backend derivation — always matches the real run
+    var payload = {
+        isl: parseInt(config.isl) || 1000,
+        osl: parseInt(config.osl) || 100,
+        prefix_cache_hit_pct: parseInt(config.prefix_cache_hit_pct) || 0,
+        prefix_cache_mode: config.prefix_cache_mode || 'identical',
+        prefix_cache_groups: parseInt(config.prefix_cache_groups) || 1,
+        qps: parseInt(config.users) || parseInt(config.qps) || 10,
+        turns: parseInt(config.turns) || 1,
+        use_corpus: !!config.use_corpus,
+        latency_constraint_enabled: !!config.latency_constraint_enabled,
+        lora_enabled: !!config.lora_enabled,
+        lora_num_adapters: config.lora_enabled ? (parseInt(config.lora_num_adapters) || 0) : 0,
+        max_num_seqs: 256,
+        total_gpus: parseInt(config.total_gpus) || 16,
+        architecture: 'aggregated',
+        replicas: parseInt(config.total_gpus) || 16,
+        lora_max_loras: null,
+    };
 
-    var reasons = [];
-
-    // 1. Prefix cache weight
-    var routingValue;
-    if (cachePct === 0) { routingValue = 0.0; reasons.push('prefix: no cache hits (0%) → routing has zero effect'); }
-    else if (cacheMode === 'identical') { routingValue = 0.1; reasons.push('prefix: identical prompts → routing is a commodity'); }
-    else if (cacheMode === 'shared_prefix') { routingValue = 0.3; reasons.push('prefix: shared prefix → modest routing gains'); }
-    else if (cacheMode === 'multi_group') { routingValue = Math.min(0.7, 0.3 + groups * 0.04); reasons.push('prefix: ' + groups + ' groups → routing value ' + routingValue.toFixed(2)); }
-    else { routingValue = 0.3; reasons.push('prefix: moderate routing value'); }
-
-    if (useCorpus) { routingValue *= 0.8; reasons.push('prefix: real corpus → −20% routing value (more diversity)'); }
-
-    var wPrefix = Math.min(5.0, Math.round((2.0 + (cachePct / 100) * routingValue * 3.0) * 10) / 10);
-
-    // 2. KV cache weight
-    var estKvPerSeq = isl + osl;
-    var estPodCapacity = maxSeqs * estKvPerSeq * 0.5;
-    var kvPressure = Math.min(1.0, (concurrency * estKvPerSeq) / Math.max(estPodCapacity, 1));
-    var wKv = Math.min(5.0, Math.round((1.0 + kvPressure * 2.5) * 10) / 10);
-    reasons.push('kv: ' + concurrency + '×' + estKvPerSeq + 't ctx vs ~' + Math.round(estPodCapacity / 1000) + 'K capacity → pressure=' + kvPressure.toFixed(2));
-
-    // 3. Queue weight
-    var estPods = Math.max(1, Math.floor(totalGpus / Math.max(1, Math.min(8, Math.floor(totalGpus / 4) || 1))));
-    var concPerPod = concurrency / estPods;
-    var queuePressure = Math.min(1.0, concPerPod / maxSeqs);
-    var wQueue = Math.min(5.0, Math.round((1.0 + queuePressure * 2.0) * 10) / 10);
-    reasons.push('queue: ' + Math.round(concPerPod) + ' users/pod → pressure=' + queuePressure.toFixed(2));
-
-    // 4. Active request weight
-    var activeMult = 1.0 + (turns - 1) * 0.15;
-    var activeLoad = Math.min(1.0, (concPerPod / maxSeqs) * activeMult);
-    var wActive = Math.min(5.0, Math.round((1.0 + activeLoad * 2.0) * 10) / 10);
-    if (turns > 1) reasons.push('active: ' + turns + ' turns ×' + activeMult.toFixed(1) + ' → load=' + activeLoad.toFixed(2));
-    else reasons.push('active: single-turn → load=' + activeLoad.toFixed(2));
-
-    // 5. LoRA adjustment
-    var sessionAware = false, sessionAwareW = 0;
-    var loraAffinity = false, loraAffinityW = 0;
-    if (loraN > 20) {
-        wPrefix = Math.round(wPrefix * 0.7 * 10) / 10;
-        wActive = Math.round(Math.min(5.0, wActive * 1.3) * 10) / 10;
-        sessionAware = true; sessionAwareW = 3.0;
-        loraAffinity = true;
-        reasons.push('lora: ' + loraN + ' adapters → prefix ×0.7, active ×1.3 (adapter residency > cache affinity)');
-        // Regime-aware weight (mirrors the backend derivation): the config
-        // builder sizes max_loras to hold ALL adapters when VRAM allows
-        // (affinity-stable sizing), so the expected regime is all-resident.
-        // The scorer outputs 1.0 (resident) / 0.8 (free slot) / 0.0 (full),
-        // and the load scorers are min-max normalized per request (swing
-        // ~1-3 between pods) — so the weight must be dominant for the
-        // 0.2 differential to decide routing. Final value is derived per
-        // test from the actual pods × slots.
-        var estSlots = Math.ceil(loraN / Math.max(estPods, 1));
-        if (estSlots * estPods >= loraN) {
-            loraAffinityW = 15.0;
-            // Mirror the backend demotion: in the all-resident regime the
-            // load scorers become tie-breakers (summed swing must sit under
-            // the 0.2 x 15 = 3.0 locality differential)
-            wPrefix = Math.max(0.3, Math.round(wPrefix * 0.25 * 10) / 10);
-            wKv = Math.max(0.3, Math.round(wKv * 0.25 * 10) / 10);
-            wQueue = Math.max(0.3, Math.round(wQueue * 0.3 * 10) / 10);
-            wActive = Math.max(0.3, Math.round(wActive * 0.3 * 10) / 10);
-            reasons.push('lora: ' + loraN + ' adapters ≈ ' + estPods + ' pods × ' + estSlots +
-                         ' slots → all-resident (stable homes) → lora-affinity(15.0) dominant' +
-                         ' + load scorers demoted ×0.25-0.3 (locality differential 3.0 must beat' +
-                         ' their summed swing)');
-        } else {
-            var coverage = (estSlots * estPods) / loraN;
-            loraAffinityW = Math.round(Math.max(1.5, Math.min(3.0, 3.0 * coverage)) * 10) / 10;
-            reasons.push('lora: ' + loraN + ' adapters > ' + (estSlots * estPods) + ' slots → coverage ' +
-                         Math.round(coverage * 100) + '% → lora-affinity(' + loraAffinityW + ') partial signal');
+    fetch('/api/epp/preview', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+    })
+    .then(function(r) { return r.json(); })
+    .then(function(d) {
+        if (!d.success) return;
+        var w = d.weights;
+        var weightsEl = document.getElementById('epp-auto-weights');
+        if (weightsEl) {
+            var kvEnabled = (w.kv_cache_weight || 0) >= 1.5;
+            var activeEnabled = (w.active_request_weight || 0) >= 1.5;
+            var wText = 'prefix=' + w.prefix_cache_weight +
+                '  kv=' + (kvEnabled ? w.kv_cache_weight : 'off') +
+                '  queue=' + w.queue_weight +
+                '  active=' + (activeEnabled ? w.active_request_weight : 'off');
+            if (w.slo_enabled) wText += '  slo=' + w.slo_weight;
+            if (w.session_aware_enabled) wText += '  session-affinity=' + w.session_aware_weight;
+            if (w.lora_affinity_enabled) wText += '  lora-affinity=' + w.lora_affinity_weight;
+            weightsEl.textContent = wText;
         }
-        reasons.push('lora: final weight derived per test from actual pods × max_loras');
-    }
-
-    // 6. SLO
-    if (hasSla) reasons.push('slo: latency constraint enabled → weight 3.0');
-
-    var kvEnabled = wKv >= 1.5;
-    var activeEnabled = wActive >= 1.5;
-
-    var weightsEl = document.getElementById('epp-auto-weights');
-    if (weightsEl) {
-        var wText = 'prefix=' + wPrefix + '  kv=' + (kvEnabled ? wKv : 'off') + '  queue=' + wQueue +
-            '  active=' + (activeEnabled ? wActive : 'off');
-        if (hasSla) wText += '  slo=3.0';
-        if (sessionAware) wText += '  session-affinity=' + sessionAwareW;
-        if (loraAffinity) wText += '  lora-affinity=' + loraAffinityW;
-        weightsEl.textContent = wText;
-    }
-    var reasonsEl = document.getElementById('epp-auto-reasons');
-    if (reasonsEl) reasonsEl.innerHTML = reasons.map(function(r) { return '• ' + r; }).join('<br>');
+        var reasonsEl = document.getElementById('epp-auto-reasons');
+        if (reasonsEl) {
+            reasonsEl.innerHTML = d.reasons.map(function(r) {
+                return '• ' + r.replace(/^\s+/, '');
+            }).join('<br>');
+        }
+    })
+    .catch(function(e) {
+        console.warn('EPP preview fetch failed:', e);
+    });
 }
+
 
 function updateEppCustom() {
     config.epp_config = {

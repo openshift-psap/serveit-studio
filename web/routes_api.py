@@ -257,6 +257,25 @@ def api_list_pvcs():
         return jsonify({'success': False, 'pvcs': [], 'error': str(e)}), 500
 
 
+@app.route('/api/epp/preview', methods=['POST'])
+def epp_preview():
+    """Run the Auto EPP derivation on the submitted config and return weights + reasons.
+
+    The Settings preview calls this instead of duplicating the derivation
+    logic in JavaScript — it always matches the backend exactly."""
+    try:
+        data = request.json or {}
+        from core.prereq_manager import PrereqManager
+        pm = PrereqManager.__new__(PrereqManager)
+        reasons = []
+        result = pm._derive_auto_epp_weights(
+            type('Cfg', (), data), log=lambda msg, level='info': reasons.append(msg))
+        # Flatten reasons — the derivation log lines contain the bullet text
+        return jsonify({'success': True, 'weights': result, 'reasons': reasons})
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+
 @app.route('/api/config', methods=['GET', 'POST'])
 def handle_config():
     """Get or update configuration. POST saves to both in-memory state AND database."""
