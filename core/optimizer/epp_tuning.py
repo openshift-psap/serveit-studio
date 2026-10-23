@@ -250,10 +250,10 @@ class EPPTuningMixin:
         adj_queue = max(-1, min(1, round(queue_signal * 3)))
         adj_active = max(-1, min(1, round(active_signal * 2)))
 
-        w_prefix = max(1, min(5, w_prefix + adj_prefix))
-        w_kv = max(1, min(5, w_kv + adj_kv))
-        w_queue = max(1, min(5, w_queue + adj_queue))
-        w_active = max(1, min(5, w_active + adj_active))
+        w_prefix = max(0.1, min(5, w_prefix + adj_prefix))
+        w_kv = max(0.1, min(5, w_kv + adj_kv))
+        w_queue = max(0.1, min(5, w_queue + adj_queue))
+        w_active = max(0.1, min(5, w_active + adj_active))
 
         has_sla = getattr(self.config, 'latency_constraint_enabled', False)
 
@@ -341,10 +341,10 @@ class EPPTuningMixin:
 
         # Apply adjustments to the smart-derived weights from the first test
         bw = base_weights or self._get_user_baseline_weights()
-        w_prefix = max(1, min(5, bw['prefix_cache_weight'] + adj_prefix))
-        w_kv = max(1, min(5, bw['kv_cache_weight'] + adj_kv))
-        w_queue = max(1, min(5, bw['queue_weight'] + adj_queue))
-        w_active = max(1, min(5, bw.get('active_request_weight', 2) + adj_active))
+        w_prefix = max(0.1, min(5, bw['prefix_cache_weight'] + adj_prefix))
+        w_kv = max(0.1, min(5, bw['kv_cache_weight'] + adj_kv))
+        w_queue = max(0.1, min(5, bw['queue_weight'] + adj_queue))
+        w_active = max(0.1, min(5, bw.get('active_request_weight', 2) + adj_active))
 
         self.log(f"    → Refined weights: prefix={w_prefix}, kv={w_kv}, queue={w_queue}, active={w_active}", 'success')
 
