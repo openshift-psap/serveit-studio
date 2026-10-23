@@ -709,16 +709,26 @@ class PrereqManager:
                 lora_affinity = True
                 # The scorer outputs 1.0 (adapter resident), 0.8 (free slot),
                 # 0.0 (full, not resident). The load scorers are min-max
-                # normalized to [0,1] across candidates per request, so they
-                # swing by their summed weights (~6.7) between pods even under
-                # uniform load. For the resident-vs-free differential
-                # (0.2 x W) to decide routing, W must dominate: 15.0 gives a
-                # 3.0 differential vs free pods and 15.0 vs full pods.
+                # normalized to [0,1] across candidates per request, so their
+                # summed weights are the maximum swing a best-loaded pod can
+                # gain over the resident pod. Run 65 proved the invariant the
+                # hard way: lora weight 15 (differential 0.2x15=3.0) still
+                # lost to the ~7.0 summed load swing (TTFT 1256ms, churn
+                # 570/pod, 0% affinity). In the all-resident regime the load
+                # IS balanced by the adapter partition itself (~n/pods homes
+                # per pod), so the load scorers are demoted to tie-breakers:
+                # scale them to ~25-30% so their summed swing (~1.6) sits
+                # safely under the locality differential (3.0).
                 lora_affinity_w = 15.0
+                w_prefix = round(max(0.3, w_prefix * 0.25), 1)
+                w_kv = round(max(0.3, w_kv * 0.25), 1)
+                w_queue = round(max(0.3, w_queue * 0.3), 1)
+                w_active = round(max(0.3, w_active * 0.3), 1)
                 reasons.append(f"lora: {lora_n} adapters ≤ {adapter_pods} pods × "
                                f"{max_loras_v} slots = {total_slots} → all-resident "
-                               f"(stable homes) → lora-affinity(15.0) dominant — the "
-                               f"0.2×W differential must beat min-max load-scorer swing")
+                               f"(stable homes) → lora-affinity(15.0) dominant + load "
+                               f"scorers demoted ×0.25-0.3 (locality differential 3.0 "
+                               f"must beat their summed swing, was ~7.0 at full weight)")
             elif total_slots:
                 coverage = total_slots / max(lora_n, 1)
                 lora_affinity = True
