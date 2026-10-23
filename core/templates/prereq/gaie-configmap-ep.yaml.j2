@@ -32,7 +32,7 @@ data:
       - type: lora-affinity-scorer
 {% endif %}
 {% if session_aware_enabled | default(false) %}
-      - type: session-affinity-scorer
+      - type: session-affinity-filter
         parameters:
           strategy: session_id
 {% endif %}
@@ -49,10 +49,7 @@ data:
           - pluginRef: lora-affinity-scorer
             weight: {{ lora_affinity_weight | default(3.0) }}
 {% endif %}
-{% if session_aware_enabled | default(false) %}
-          - pluginRef: session-affinity-scorer
-            weight: {{ session_aware_weight | default(2.0) }}
-{% endif %}
+
       - name: decode
         plugins:
           - pluginRef: decode-filter
@@ -65,7 +62,4 @@ data:
           - pluginRef: lora-affinity-scorer
             weight: {{ lora_affinity_weight | default(3.0) }}
 {% endif %}
-{% if session_aware_enabled | default(false) %}
-          - pluginRef: session-affinity-scorer
-            weight: {{ session_aware_weight | default(2.0) }}
-{% endif %}
+

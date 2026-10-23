@@ -337,10 +337,16 @@ class ConfigBuilderMixin:
                     stable_budget_mb = max(free_mb, 0) * 0.40
                     stable_slots = int(stable_budget_mb // max(per_adapter_mb, 1))
                     if needed <= stable_slots:
-                        slots = needed
+                        # 30% cold-start headroom: during the initial adapter
+                        # loading burst (all n adapters assigned within ~30s),
+                        # the distribution is uneven — some pods get more than
+                        # their fair share. Headroom absorbs the imbalance
+                        # without triggering the eviction cascade that
+                        # exact-fit capacity causes.
+                        slots = min(needed + max(1, needed // 3), stable_slots)
                         self.log(f"   LoRA residency: {slots} slots/pod x "
-                                 f"{num_pods} pods = {slots * num_pods} — all "
-                                 f"{n} adapters GPU-resident (no LRU swapping)",
+                                 f"{num_pods} pods = {slots * num_pods} (all "
+                                 f"{n} adapters resident + cold-start headroom)",
                                  'info')
             return max(1, min(n, slots))
         except Exception:
