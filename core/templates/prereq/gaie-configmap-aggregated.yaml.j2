@@ -55,6 +55,9 @@ data:
     schedulingProfiles:
       - name: default
         plugins:
+{% if session_aware_enabled | default(false) %}
+          - pluginRef: session-affinity-filter
+{% endif %}
           - pluginRef: max-score-picker
           - pluginRef: prefix-cache-scorer
             weight: {{ prefix_cache_weight | default(2.0) }}
@@ -95,5 +98,8 @@ data:
           - pluginRef: prefix-cache-scorer
             weight: 0
           - pluginRef: latency-scorer
+{% if session_aware_enabled | default(false) %}
+          - pluginRef: session-affinity-filter
+{% endif %}
           - pluginRef: max-score-picker
 {% endif %}

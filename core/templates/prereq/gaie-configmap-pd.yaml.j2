@@ -79,6 +79,9 @@ data:
       - name: prefill
         plugins:
           - pluginRef: prefill-filter
+{% if session_aware_enabled | default(false) %}
+          - pluginRef: session-affinity-filter
+{% endif %}
           - pluginRef: max-score-picker
 {% if prefix_cache_affinity_enabled | default(false) %}
           - pluginRef: token-load-scorer
@@ -118,6 +121,9 @@ data:
       - name: decode
         plugins:
           - pluginRef: decode-filter
+{% if session_aware_enabled | default(false) %}
+          - pluginRef: session-affinity-filter
+{% endif %}
           - pluginRef: max-score-picker
           - pluginRef: active-request-scorer
             weight: {{ decode_active_request_weight | default(1.0) }}
