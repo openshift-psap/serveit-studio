@@ -2653,7 +2653,7 @@ function _renderChartsImpl(data, runId, content) {
                     '<div style="background:#f8fafc;padding:8px 14px;font-weight:600;color:#334155;font-size:0.95em;border-bottom:1px solid #e2e8f0;">' +
                     'Pod Breakdown — ' + pd.config + ((pd.total_adapters || 0) > 0 ? ' · n=' + pd.total_adapters : '') + '</div>' +
                     affLine +
-                    '<table style="width:100%;border-collapse:collapse;font-size:0.88em;background:#fff;">' +
+                    '<table class="pod-bd-table" style="width:100%;border-collapse:collapse;font-size:0.88em;background:#fff;">' +
                     '<tr style="background:#eef2ff;"><th style="padding:6px 10px;text-align:left;">Pod</th><th style="padding:6px 8px;">GPU-Resident Cap</th><th style="padding:6px 8px;">Distinct Adapters Served</th><th style="padding:6px 8px;">Residency Changes</th><th style="padding:6px 8px;text-align:left;">Last Running Set</th><th style="padding:6px 8px;">Waiting</th></tr>' +
                     podRows + '</table></div>';
             });
@@ -3507,6 +3507,14 @@ function _renderChartsImpl(data, runId, content) {
         '#charts-content tr:nth-child(even) td { background: #f8fafc !important; }' +
         '#charts-content tr:hover td { background: #eef2ff !important; }' +
         '#charts-content td[style*="monospace"] { white-space: nowrap; }' +
+        '#charts-content .pod-bd-table { table-layout: fixed !important; }' +
+        '#charts-content .pod-bd-table th { white-space: normal !important; }' +
+        '#charts-content .pod-bd-table th:nth-child(1), #charts-content .pod-bd-table td:nth-child(1) { width: 16%; }' +
+        '#charts-content .pod-bd-table th:nth-child(2), #charts-content .pod-bd-table td:nth-child(2) { width: 10%; }' +
+        '#charts-content .pod-bd-table th:nth-child(3), #charts-content .pod-bd-table td:nth-child(3) { width: 12%; }' +
+        '#charts-content .pod-bd-table th:nth-child(4), #charts-content .pod-bd-table td:nth-child(4) { width: 12%; }' +
+        '#charts-content .pod-bd-table th:nth-child(5), #charts-content .pod-bd-table td:nth-child(5) { width: 41%; }' +
+        '#charts-content .pod-bd-table th:nth-child(6), #charts-content .pod-bd-table td:nth-child(6) { width: 9%; }' +
         '</style>' + html;
 
     content.innerHTML = html;
