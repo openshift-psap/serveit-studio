@@ -1254,7 +1254,7 @@ function updateSingleTestVisibility() {
     if (el) {
         el.style.display = isSingle ? 'block' : 'none';
     }
-    ['sweep-tp-section', 'sweep-pd-section', 'sweep-epp-section', 'sweep-latency-section'].forEach(function(id) {
+    ['sweep-tp-section', 'sweep-pd-section', 'sweep-latency-section'].forEach(function(id) {
         var s = document.getElementById(id);
         if (s) s.style.display = isSingle ? 'none' : '';
     });

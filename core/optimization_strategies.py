@@ -896,6 +896,22 @@ class SingleTestStrategy(OptimizationStrategy):
             throughput = result.throughput_mean or result.throughput_p90 or 0
             self.opt.log(f"✅ TTFT p90: {ttft:.1f}ms, Throughput mean: {throughput:.2f} req/s", 'success')
 
+            # Smart EPP Tuning (Step 9): benchmark EPP weight variants
+            # (incl. the lora-affinity A/B) against this single config.
+            # Publish the baseline result the tuner compares against.
+            if getattr(cfg, 'epp_benchmark', False) and not self.opt._should_stop():
+                if arch == 'pd':
+                    self.opt.pareto_results = [(split, result)]
+                elif arch == 'ep':
+                    self.opt.best_ep_result = result
+                else:
+                    self.opt.aggregated_tp = tp
+                    self.opt.aggregated_pp = cfg.single_test_pipeline_parallelism or None
+                    self.opt.aggregated_gpus = num_gpus
+                    self.opt.aggregated_result = result
+                self.opt._benchmark_epp_strategies()
+                self.opt._apply_best_epp_config()
+
             # Run calibrated load / concurrency sweep if enabled
             if cfg.calibrated_load_enabled and result:
                 # Clean up the single test deployment before sweep deploys new pods

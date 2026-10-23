@@ -18,14 +18,21 @@ class EPPTuningMixin:
             return None
 
         step_prefix = 'step6-' if arch == 'aggregated' else ('step7-ep-' if arch == 'ep' else 'step7-')
+        # Single test runs store their one config under a single-* test id —
+        # fall back to it when the recipe steps produced no rows
+        prefixes = [step_prefix, 'single-']
         try:
             with self.db_manager.get_connection() as conn:
-                row = conn.execute('''
-                    SELECT metrics_json FROM test_configurations
-                    WHERE run_id = ? AND architecture = ? AND status = 'completed'
-                      AND config_name LIKE ? AND ttft_p90 IS NOT NULL AND ttft_p90 > 0
-                    ORDER BY ttft_p90 ASC LIMIT 1
-                ''', (self.run_id, arch, f'{step_prefix}%')).fetchone()
+                row = None
+                for prefix in prefixes:
+                    row = conn.execute('''
+                        SELECT metrics_json FROM test_configurations
+                        WHERE run_id = ? AND architecture = ? AND status = 'completed'
+                          AND config_name LIKE ? AND ttft_p90 IS NOT NULL AND ttft_p90 > 0
+                        ORDER BY ttft_p90 ASC LIMIT 1
+                    ''', (self.run_id, arch, f'{prefix}%')).fetchone()
+                    if row and row[0]:
+                        break
                 if row and row[0]:
                     full = _json.loads(row[0])
                     prom = full.get('prometheus_metrics', {})
@@ -638,8 +645,9 @@ class EPPTuningMixin:
             except Exception:
                 return None
 
-        # Best PD config from step7 DB results
-        pd_row = _best_from_db('pd', 'step7-')
+        # Best PD config from step7 DB results (single-test runs store their
+        # one config under a single-* id — fall back to it)
+        pd_row = _best_from_db('pd', 'step7-') or _best_from_db('pd', 'single-')
         if pd_row:
             tc_raw = pd_row[8]
             tc = _json.loads(tc_raw) if tc_raw else {}
@@ -657,8 +665,8 @@ class EPPTuningMixin:
             configs_to_test.append(('pd', pd_cfg, default_concurrency))
             self.log(f"  PD: {split.prefill_pods}P×TP{split.prefill_tp} + {split.decode_pods}D×TP{split.decode_tp} at c={default_concurrency}", 'info')
 
-        # Best Aggregated config from step6 DB results
-        agg_row = _best_from_db('aggregated', 'step6-')
+        # Best Aggregated config from step6 DB results (single-test fallback)
+        agg_row = _best_from_db('aggregated', 'step6-') or _best_from_db('aggregated', 'single-')
         if agg_row:
             agg_tp = agg_row[1]
             agg_pp = None
@@ -681,8 +689,8 @@ class EPPTuningMixin:
             pp_str = f"xPP={agg_pp} " if agg_pp and agg_pp > 1 else ""
             self.log(f"  Aggregated: {self.config.total_gpus // (agg_tp * (agg_pp or 1))}×TP{agg_tp}{pp_str}at c={default_concurrency}", 'info')
 
-        # Best EP config from step7-ep DB results
-        ep_row = _best_from_db('ep', 'step7-ep-')
+        # Best EP config from step7-ep DB results (single-test fallback)
+        ep_row = _best_from_db('ep', 'step7-ep-') or _best_from_db('ep', 'single-')
         if ep_row:
             tc_raw = ep_row[8]
             tc = _json.loads(tc_raw) if tc_raw else {}
