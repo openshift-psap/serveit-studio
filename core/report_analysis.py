@@ -1809,6 +1809,8 @@ class ReportAnalyzer:
                             'kv_cache': plugins.get('kv_cache', {}).get('weight', '?'),
                             'queue': plugins.get('queue', {}).get('weight', '?'),
                             'active_request': plugins.get('active_request', {}).get('weight', 0),
+                            'lora_affinity': plugins.get('lora_affinity', {}).get('weight', 0),
+                            'session_affinity': plugins.get('session_aware', {}).get('weight', 0),
                         }
                     except (_json2.JSONDecodeError, TypeError):
                         pass
@@ -1853,10 +1855,14 @@ class ReportAnalyzer:
                     target_ms = run_config.get('latency_constraint_ms')
                     target_pct = run_config.get('latency_constraint_percentile', 'p99')
 
-            # Find baseline results (best from Step 6/7) and add as comparison row
+            # Find baseline results (best main-config test) and add as
+            # comparison row. Sweep levels (step12/13/14) are excluded —
+            # e.g. the n=0 adapter level has no LoRA requests and would
+            # masquerade as an implausibly fast "baseline".
             baselines = {}
             non_epp = [r for r in results if not r.config_name.startswith('step11-epp-')
-                       and not r.config_name.startswith(('step2', 'step3', 'step9', 'step10'))
+                       and not r.config_name.startswith(('step2', 'step3', 'step9', 'step10',
+                                                         'step12', 'step13', 'step14'))
                        and r.is_successful]
             for arch_key in by_arch:
                 if arch_key == 'pd':
@@ -1875,9 +1881,54 @@ class ReportAnalyzer:
                         'throughput_p95': round(best.throughput_p95, 2) if best.throughput_p95 else None,
                         'throughput_p99': round(best.throughput_p99, 2) if best.throughput_p99 else None,
                     }
-                    # Insert baseline as first row in EPP table for comparison
+                    # Insert baseline as first row in EPP table for comparison.
+                    # Weights: parsed from the baseline's archived EPP
+                    # configmap (what actually ran), then its stored
+                    # epp_config, then legacy preset defaults.
+                    baseline_weights = {'prefix_cache': 3, 'kv_cache': 2, 'queue': 2, 'active_request': 2}
+                    weights_source = 'default'
+                    try:
+                        import yaml as _yaml
+                        _mans = _json2.loads(best.manifests_yaml) if best.manifests_yaml else {}
+                        _cm_text = _mans.get('epp-configmap', '')
+                        if _cm_text:
+                            _cm = _yaml.safe_load(_cm_text)
+                            _cfg = _yaml.safe_load(_cm['data'][list(_cm['data'].keys())[0]])
+                            _w = {}
+                            for _prof in (_cfg or {}).get('schedulingProfiles', []):
+                                for _p in _prof.get('plugins', []):
+                                    if _p.get('weight') is not None:
+                                        _w[_p.get('pluginRef')] = _p['weight']
+                            if _w:
+                                baseline_weights = {
+                                    'prefix_cache': _w.get('prefix-cache-scorer', 0),
+                                    'kv_cache': _w.get('kv-cache-utilization-scorer', 0),
+                                    'queue': _w.get('queue-scorer', 0),
+                                    'active_request': _w.get('active-request-scorer', 0),
+                                    'lora_affinity': _w.get('lora-affinity-scorer', 0),
+                                    'session_affinity': _w.get('session-affinity-scorer', 0),
+                                }
+                                weights_source = 'as-run'
+                    except Exception:
+                        pass
+                    if weights_source == 'default' and best.test_config_json:
+                        try:
+                            _tc = _json2.loads(best.test_config_json)
+                            _plugins = (_tc.get('epp_config') or {}).get('plugins') or {}
+                            if _plugins:
+                                baseline_weights = {
+                                    'prefix_cache': _plugins.get('prefix_cache', {}).get('weight', 3),
+                                    'kv_cache': _plugins.get('kv_cache', {}).get('weight', 2),
+                                    'queue': _plugins.get('queue', {}).get('weight', 2),
+                                    'active_request': _plugins.get('active_request', {}).get('weight', 2),
+                                    'lora_affinity': _plugins.get('lora_affinity', {}).get('weight', 0),
+                                    'session_affinity': _plugins.get('session_aware', {}).get('weight', 0),
+                                }
+                                weights_source = 'as-run'
+                        except Exception:
+                            pass
                     baseline_entry = {
-                        'name': 'baseline (default)',
+                        'name': f'baseline ({weights_source})',
                         'test_id': best.config_name,
                         'config_name': best.display_label,
                         'ttft_p50': round(best.ttft_p50, 2) if best.ttft_p50 else None,
@@ -1890,7 +1941,7 @@ class ReportAnalyzer:
                         'throughput_p95': round(best.throughput_p95, 2) if best.throughput_p95 else None,
                         'throughput_p99': round(best.throughput_p99, 2) if best.throughput_p99 else None,
                         'itl_p90': round(best.itl_p90, 2) if best.itl_p90 else None,
-                        'weights': {'prefix_cache': 3, 'kv_cache': 2, 'queue': 2, 'active_request': 2},
+                        'weights': baseline_weights,
                         'manifest_types': [],
                         'is_baseline': True,
                         'prefill_pods': best.prefill_pods,

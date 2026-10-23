@@ -3129,7 +3129,7 @@ function _renderChartsImpl(data, runId, content) {
             eppHtml += `<div style="background:#f8fafc; border-radius:10px; padding:16px; text-align:center; border:1px solid #e2e8f0;"><div style="font-size:1.5em; font-weight:800; color:#1e293b;">${bestTrial.ttft_p90 || 'N/A'} <span style="font-size:0.5em; color:#64748b;">ms</span></div><div style="color:#64748b; font-size:0.82em; margin-top:4px;">TTFT P90</div></div>`;
             eppHtml += `<div style="background:#f8fafc; border-radius:10px; padding:16px; text-align:center; border:1px solid #e2e8f0;"><div style="font-size:1.5em; font-weight:800; color:#1e293b;">${bestTrial.throughput_p90 || 'N/A'}</div><div style="color:#64748b; font-size:0.82em; margin-top:4px;">Throughput P90 (req/s)</div></div>`;
             const bw = bestTrial.weights || {};
-            const weightsStr = `${bw.prefix_cache || 0}:${bw.kv_cache || 0}:${bw.queue || 0}:${bw.active_request || 0}`;
+            const weightsStr = `${bw.prefix_cache || 0}:${bw.kv_cache || 0}:${bw.queue || 0}:${bw.active_request || 0}` + (bw.lora_affinity ? ` +lora${bw.lora_affinity}` : '');
             eppHtml += `<div style="background:#f8fafc; border-radius:10px; padding:16px; text-align:center; border:1px solid #e2e8f0;"><div style="font-size:1.2em; font-weight:800; color:#1e293b;">${weightsStr}</div><div style="color:#64748b; font-size:0.82em; margin-top:4px;">EPP Weights (Cache:KV:Queue:Active)</div></div>`;
             eppHtml += '</div>';
 
@@ -3158,7 +3158,7 @@ function _renderChartsImpl(data, runId, content) {
                     }
                     const icon = t === bestTrial && !t.is_baseline ? '⭐' : (t.is_baseline ? '📊' : '🔧');
                     const w = t.weights || {};
-                    const wStr = `${w.prefix_cache || '?'}:${w.kv_cache || '?'}:${w.queue || '?'}:${w.active_request || 0}`;
+                    const wStr = `${w.prefix_cache || '?'}:${w.kv_cache || '?'}:${w.queue || '?'}:${w.active_request || 0}` + (w.lora_affinity ? ` +lora${w.lora_affinity}` : (w.lora_affinity === 0 && t.name && t.name.indexOf('off') >= 0 ? ' +lora-off' : ''));
                     eppHtml += `<div>${icon} <strong>${t.name}</strong> (${wStr}): TTFT ${pctl.label}=${ttft}${ttftDelta}, Throughput=${tput} req/s${tputDelta}</div>`;
                 });
                 eppHtml += '</div>';
@@ -3172,7 +3172,7 @@ function _renderChartsImpl(data, runId, content) {
                 const isBase = e.is_baseline;
                 const cls = isBest ? ' class="pareto-row"' : (isBase ? ' style="background:#f8fafc;color:#64748b;font-style:italic;"' : '');
                 const w = e.weights || {};
-                const wStr = `${w.prefix_cache || '?'}:${w.kv_cache || '?'}:${w.queue || '?'}:${w.active_request || 0}`;
+                const wStr = `${w.prefix_cache || '?'}:${w.kv_cache || '?'}:${w.queue || '?'}:${w.active_request || 0}` + (w.lora_affinity ? ` +lora${w.lora_affinity}` : '');
                 const na = 'N/A';
                 let ml = '-';
                 if (e.manifest_types && e.manifest_types.length > 0) {
