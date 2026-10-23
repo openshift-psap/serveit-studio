@@ -2651,7 +2651,7 @@ function _renderChartsImpl(data, runId, content) {
                     : '';
                 html += '<div style="margin-top:16px;border:1.5px solid #e2e8f0;border-radius:8px;overflow:hidden;background:#fff;">' +
                     '<div style="background:#f8fafc;padding:8px 14px;font-weight:600;color:#334155;font-size:0.95em;border-bottom:1px solid #e2e8f0;">' +
-                    'Pod Breakdown — ' + pd.config + '</div>' +
+                    'Pod Breakdown — ' + pd.config + ((pd.total_adapters || 0) > 0 ? ' · n=' + pd.total_adapters : '') + '</div>' +
                     affLine +
                     '<table style="width:100%;border-collapse:collapse;font-size:0.88em;background:#fff;">' +
                     '<tr style="background:#eef2ff;"><th style="padding:6px 10px;text-align:left;">Pod</th><th style="padding:6px 8px;">GPU-Resident Cap</th><th style="padding:6px 8px;">Distinct Adapters Served</th><th style="padding:6px 8px;">Residency Changes</th><th style="padding:6px 8px;text-align:left;">Last Running Set</th><th style="padding:6px 8px;">Waiting</th></tr>' +
@@ -3496,6 +3496,18 @@ function _renderChartsImpl(data, runId, content) {
     } else {
         for (const sec of Object.values(sectionMap)) html += sec;
     }
+
+    // Global report-table stylesheet — normalizes every table in the report
+    // (width, padding, alignment, borders, zebra striping) regardless of the
+    // inline styles they were built with
+    html = '<style>' +
+        '#charts-content table { width: 100% !important; border-collapse: collapse !important; margin: 10px 0 0 0 !important; font-size: 0.9em !important; background: #fff !important; }' +
+        '#charts-content th { background: #eef2ff !important; color: #334155 !important; padding: 7px 10px !important; text-align: left !important; border-top: 1px solid #c7d2fe !important; border-bottom: 2px solid #c7d2fe !important; white-space: nowrap !important; font-weight: 600 !important; }' +
+        '#charts-content td { padding: 6px 10px !important; text-align: left !important; border-bottom: 1px solid #e2e8f0 !important; vertical-align: top !important; }' +
+        '#charts-content tr:nth-child(even) td { background: #f8fafc !important; }' +
+        '#charts-content tr:hover td { background: #eef2ff !important; }' +
+        '#charts-content td[style*="monospace"] { white-space: nowrap; }' +
+        '</style>' + html;
 
     content.innerHTML = html;
 
