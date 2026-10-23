@@ -745,9 +745,17 @@ function updateAutoEppPreview() {
         var estSlots = Math.ceil(loraN / Math.max(estPods, 1));
         if (estSlots * estPods >= loraN) {
             loraAffinityW = 15.0;
+            // Mirror the backend demotion: in the all-resident regime the
+            // load scorers become tie-breakers (summed swing must sit under
+            // the 0.2 x 15 = 3.0 locality differential)
+            wPrefix = Math.max(0.3, Math.round(wPrefix * 0.25 * 10) / 10);
+            wKv = Math.max(0.3, Math.round(wKv * 0.25 * 10) / 10);
+            wQueue = Math.max(0.3, Math.round(wQueue * 0.3 * 10) / 10);
+            wActive = Math.max(0.3, Math.round(wActive * 0.3 * 10) / 10);
             reasons.push('lora: ' + loraN + ' adapters ≈ ' + estPods + ' pods × ' + estSlots +
-                         ' slots → all-resident (stable homes) → lora-affinity(15.0) dominant —' +
-                         ' the 0.2×W differential must beat the min-max load-scorer swing');
+                         ' slots → all-resident (stable homes) → lora-affinity(15.0) dominant' +
+                         ' + load scorers demoted ×0.25-0.3 (locality differential 3.0 must beat' +
+                         ' their summed swing)');
         } else {
             var coverage = (estSlots * estPods) / loraN;
             loraAffinityW = Math.round(Math.max(1.5, Math.min(3.0, 3.0 * coverage)) * 10) / 10;
