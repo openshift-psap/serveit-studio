@@ -119,18 +119,19 @@ class TestResult:
     @property
     def display_label(self) -> str:
         """Human-readable label for charts (e.g. '3P×TP8 + 1D×TP8')."""
+        prefix = 'Single · ' if self.config_name.startswith('single-') else ''
         if self.architecture in ('pd', 'ep'):
             ptp = self.prefill_tp or self.tensor_parallelism
             dtp = self.decode_tp or self.tensor_parallelism
             tag = 'EP' if self.architecture == 'ep' else 'PD'
-            return f"{self.prefill_pods}P×TP{ptp} + {self.decode_pods}D×TP{dtp} ({tag})"
+            return f"{prefix}{self.prefill_pods}P×TP{ptp} + {self.decode_pods}D×TP{dtp} ({tag})"
         else:
             total_pods = self.prefill_pods + self.decode_pods
             pp = self.pipeline_parallelism
             if pp and pp > 1:
                 total_pods *= pp
-                return f"{total_pods}×TP{self.tensor_parallelism} (AG PPx{pp})"
-            return f"{total_pods}×TP{self.tensor_parallelism} (AG)"
+                return f"{prefix}{total_pods}×TP{self.tensor_parallelism} (AG PPx{pp})"
+            return f"{prefix}{total_pods}×TP{self.tensor_parallelism} (AG)"
 
     @property
     def pipeline_parallelism(self) -> Optional[int]:
