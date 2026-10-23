@@ -794,7 +794,7 @@ class PrereqManager:
             log(f'     → prefix={w_prefix}, kv={result["kv_cache_weight"]}, '
                 f'queue={w_queue}, active={result["active_request_weight"]}'
                 f'{", slo=3.0" if has_sla else ""}'
-                f'{", session-affinity=3.0" if session_aware else ""}'
+                f'{f", session-affinity={session_aware_w}" if session_aware else ""}'
                 f'{f", lora-affinity={lora_affinity_w}" if lora_affinity else ""}')
 
         return result
