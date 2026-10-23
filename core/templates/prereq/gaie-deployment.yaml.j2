@@ -39,6 +39,7 @@ spec:
             - json
             - --config-file
             - /config/{{ config_file | default('default-plugins.yaml') }}
+            - --refresh-metrics-interval=5s
             - --v
             - "1"
             - --tracing=false
