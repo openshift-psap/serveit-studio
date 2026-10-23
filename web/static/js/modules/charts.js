@@ -2507,21 +2507,53 @@ function _renderChartsImpl(data, runId, content) {
                     affRows + '</table></div></div>';
 
                 chartQueue.push(function() {
-                    var cfgs = affDetails.map(function(pd) { return pd.config; });
-                    var concCounts = affDetails.map(function(pd) { return pd.concentrated || 0; });
-                    var scatCounts = affDetails.map(function(pd) { return pd.scattered || 0; });
-                    Plotly.newPlot('lora-affinity-summary-chart', [
-                        { x: cfgs, y: concCounts, name: 'Single-pod', type: 'bar', marker: { color: '#059669' },
-                          hovertemplate: '%{x}<br>Single-pod: %{y} adapters<extra></extra>' },
-                        { x: cfgs, y: scatCounts, name: 'Multi-pod', type: 'bar', marker: { color: '#ef4444' },
-                          hovertemplate: '%{x}<br>Multi-pod: %{y} adapters<extra></extra>' }
-                    ], {
-                        barmode: 'stack',
-                        margin: { l: 60, r: 20, t: 20, b: 90 },
-                        xaxis: { tickangle: -35, automargin: true },
-                        yaxis: { title: 'Adapters', gridcolor: '#f1f5f9' },
-                        legend: { orientation: 'h', y: 1.1 },
-                        hovermode: 'closest'
+                    // One line per config family over adapter count (sweep
+                    // families become curves; single-point configs become
+                    // lone markers), with floating % labels colored by the
+                    // routing verdict thresholds
+                    var groups = {};
+                    affDetails.forEach(function(pd) {
+                        (groups[pd.config] = groups[pd.config] || []).push(pd);
+                    });
+                    var palette = ['#4f46e5', '#0891b2', '#059669', '#d97706', '#db2777', '#7c3aed', '#2563eb', '#65a30d'];
+                    var traces = [];
+                    var annotations = [];
+                    var gi = 0;
+                    Object.keys(groups).forEach(function(cfg) {
+                        var ptsG = groups[cfg].slice().sort(function(a, b) { return (a.total_adapters || 0) - (b.total_adapters || 0); });
+                        var color = palette[gi % palette.length];
+                        var x = ptsG.map(function(pd) { return pd.total_adapters || 0; });
+                        var y = ptsG.map(function(pd) {
+                            return pd.total_adapters ? Math.round(100 * (pd.concentrated || 0) / pd.total_adapters) : 0;
+                        });
+                        traces.push({
+                            x: x, y: y, name: cfg, type: 'scatter',
+                            mode: ptsG.length > 1 ? 'lines+markers' : 'markers',
+                            line: { color: color, width: 3 },
+                            marker: { color: color, size: 9, symbol: ptsG.length > 1 ? 'circle' : 'diamond' },
+                            hovertemplate: cfg + '<br>Adapters: %{x}<br>Single-pod: %{y}%<extra></extra>'
+                        });
+                        // Stagger label offsets so configs sharing an x don't overlap
+                        var ay = -20 - (gi % 4) * 15;
+                        ptsG.forEach(function(pd, i) {
+                            var col = y[i] >= 80 ? '#059669' : (y[i] >= 50 ? '#d97706' : '#dc2626');
+                            annotations.push({
+                                x: x[i], y: y[i], xref: 'x', yref: 'y',
+                                text: y[i] + '%', showarrow: true, arrowhead: 2, arrowsize: 0.8,
+                                arrowwidth: 1.2, arrowcolor: col, ax: 0, ay: ay,
+                                font: { color: col, size: 10 },
+                                bgcolor: 'rgba(255,255,255,0.85)', bordercolor: col, borderwidth: 1, borderpad: 1
+                            });
+                        });
+                        gi++;
+                    });
+                    Plotly.newPlot('lora-affinity-summary-chart', traces, {
+                        margin: { l: 60, r: 20, t: 20, b: 70 },
+                        xaxis: { title: 'Adapters', gridcolor: '#f1f5f9', zeroline: false },
+                        yaxis: { title: '% adapters served by a single pod', range: [0, 108], gridcolor: '#f1f5f9' },
+                        legend: { orientation: 'h', y: 1.12 },
+                        hovermode: 'closest',
+                        annotations: annotations
                     }, { displayModeBar: false, responsive: true });
                 });
             }
