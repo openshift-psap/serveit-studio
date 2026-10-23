@@ -2323,6 +2323,34 @@ function _renderChartsImpl(data, runId, content) {
             (function(pts, chartId) {
                 chartQueue.push(function() {
                     var x = pts.map(function(p) { return p.adapter_count; });
+
+                    // Throughput delta vs the 0-adapter baseline — floating
+                    // labels on the throughput line (red = degradation,
+                    // green = improvement)
+                    var basePt = null;
+                    for (var bi = 0; bi < pts.length; bi++) {
+                        if (pts[bi].adapter_count === 0 && (pts[bi].throughput_mean || 0) > 0) { basePt = pts[bi]; break; }
+                    }
+                    var deltaLabels = pts.map(function() { return ''; });
+                    var deltaAnns = [];
+                    if (basePt) {
+                        var baseTp = basePt.throughput_mean;
+                        pts.forEach(function(p, i) {
+                            if (p.adapter_count === 0 || !(p.throughput_mean > 0)) return;
+                            var delta = (p.throughput_mean - baseTp) / baseTp * 100;
+                            var txt = (delta > 0 ? '+' : '') + delta.toFixed(0) + '%';
+                            deltaLabels[i] = '<br>Δ vs 0 adapters: ' + txt;
+                            var col = delta > 0.5 ? '#059669' : (delta < -0.5 ? '#dc2626' : '#64748b');
+                            deltaAnns.push({
+                                x: p.adapter_count, y: p.throughput_mean, xref: 'x', yref: 'y2',
+                                text: txt, showarrow: true, arrowhead: 2, arrowsize: 0.9, arrowwidth: 1.5,
+                                arrowcolor: col, ax: 0, ay: -32,
+                                font: { color: col, size: 11 },
+                                bgcolor: 'rgba(255,255,255,0.88)', bordercolor: col, borderwidth: 1, borderpad: 2
+                            });
+                        });
+                    }
+
                     var traces = [
                         {
                             x: x, y: pts.map(function(p) { return p.ttft_p90 || 0; }),
@@ -2340,7 +2368,8 @@ function _renderChartsImpl(data, runId, content) {
                             x: x, y: pts.map(function(p) { return p.throughput_mean || 0; }),
                             name: 'Throughput', type: 'scatter', mode: 'lines+markers', yaxis: 'y2',
                             line: { color: '#10b981', width: 3, dash: 'dot' }, marker: { size: 8, symbol: 'diamond' },
-                            hovertemplate: 'Adapters: %{x}<br>Throughput: %{y:.3f} req/s<extra></extra>'
+                            customdata: deltaLabels,
+                            hovertemplate: 'Adapters: %{x}<br>Throughput: %{y:.3f} req/s%{customdata}<extra></extra>'
                         }
                     ];
                     // Shade the LRU-swapping region (adapters > GPU-resident)
@@ -2372,7 +2401,7 @@ function _renderChartsImpl(data, runId, content) {
                         xaxis: { title: 'Adapter Count', gridcolor: '#f1f5f9' },
                         yaxis: { title: 'Latency (ms)', gridcolor: '#f1f5f9' },
                         yaxis2: { title: 'req/s', overlaying: 'y', side: 'right' },
-                        shapes: shapes, annotations: annotations,
+                        shapes: shapes, annotations: annotations.concat(deltaAnns),
                         legend: { orientation: 'h', y: 1.12 },
                         hovermode: 'x unified'
                     }, { displayModeBar: false, responsive: true });
