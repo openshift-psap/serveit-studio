@@ -312,6 +312,7 @@ class PrereqManager:
                 'load_aware_enabled': epp_weights.get('load_aware_enabled', False),
                 'load_aware_weight': epp_weights.get('load_aware_weight', 1.0),
                 'max_prefix_blocks': epp.get('maxPrefixBlocksToMatch', 256),
+                'epp_log_verbosity': int(epp.get('logVerbosity', 1) or 1),
                 'lru_capacity': epp.get('lruCapacityPerServer', 4000000),
                 'non_cached_tokens': epp.get('nonCachedTokens', 16),
                 'prefix_cache_affinity_enabled': epp.get('prefixCacheAffinityEnabled', False),
