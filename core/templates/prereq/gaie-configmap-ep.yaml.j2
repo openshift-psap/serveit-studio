@@ -32,16 +32,27 @@ data:
       - type: lora-affinity-scorer
 {% endif %}
 {% if session_aware_enabled | default(false) %}
+{% if session_affinity_mode | default('filter') == 'scorer' %}
+      - type: session-affinity-scorer
+        parameters:
+          strategy: session_id
+{% else %}
       - type: session-affinity-filter
         parameters:
           strategy: session_id
+{% endif %}
 {% endif %}
     schedulingProfiles:
       - name: prefill
         plugins:
           - pluginRef: prefill-filter
 {% if session_aware_enabled | default(false) %}
+{% if session_affinity_mode | default('filter') == 'scorer' %}
+          - pluginRef: session-affinity-scorer
+            weight: {{ session_aware_weight | default(5.0) }}
+{% else %}
           - pluginRef: session-affinity-filter
+{% endif %}
 {% endif %}
           - pluginRef: max-score-picker
           - pluginRef: prefix-cache-scorer
@@ -57,7 +68,12 @@ data:
         plugins:
           - pluginRef: decode-filter
 {% if session_aware_enabled | default(false) %}
+{% if session_affinity_mode | default('filter') == 'scorer' %}
+          - pluginRef: session-affinity-scorer
+            weight: {{ session_aware_weight | default(5.0) }}
+{% else %}
           - pluginRef: session-affinity-filter
+{% endif %}
 {% endif %}
           - pluginRef: max-score-picker
           - pluginRef: prefix-cache-scorer

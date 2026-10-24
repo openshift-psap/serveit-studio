@@ -109,9 +109,15 @@
                                             <td style="text-align:center;"><input type="number" id="epp-weight-no-hit-lru" value="1" min="0" max="10" step="0.5" style="width:60px;text-align:center;padding:4px;border:1px solid #d1d5db;border-radius:4px;" onchange="updateEppCustom()"></td>
                                         </tr>
                                         <tr style="border-bottom:1px solid #f1f5f9;">
-                                            <td style="padding:8px;"><strong>session-affinity-scorer</strong><br><span style="color:#64748b;font-size:0.85em;">Routes requests from the same session/user to the same pod for better cache reuse across a conversation. For LoRA: keeps adapter requests on the pod that has that adapter resident.</span></td>
+                                            <td style="padding:8px;"><strong>session-affinity</strong><br><span style="color:#64748b;font-size:0.85em;">Routes requests from the same session to the same pod. For LoRA: keeps adapter requests on their home pod.<br><strong style="color:#7c3aed;">Filter</strong> = hard pin (100% locality, no load deflection) · <strong style="color:#0891b2;">Scorer</strong> = soft preference (load-aware, allows deflection under pressure)</span></td>
                                             <td style="text-align:center;"><input type="checkbox" id="epp-plugin-session-aware" onchange="updateEppCustom()"></td>
-                                            <td style="text-align:center;"><input type="number" id="epp-weight-session-aware" value="2" min="0" max="10" step="0.5" style="width:60px;text-align:center;padding:4px;border:1px solid #d1d5db;border-radius:4px;" onchange="updateEppCustom()"></td>
+                                            <td style="text-align:center;">
+                                                <select id="epp-session-affinity-mode" onchange="updateEppCustom()" style="padding:4px;border:1px solid #d1d5db;border-radius:4px;font-size:0.85em;">
+                                                    <option value="filter" selected>Filter (force)</option>
+                                                    <option value="scorer">Scorer (load-aware)</option>
+                                                </select><br>
+                                                <input type="number" id="epp-weight-session-aware" value="2" min="0" max="10" step="0.5" style="width:60px;text-align:center;padding:4px;border:1px solid #d1d5db;border-radius:4px;margin-top:4px;" onchange="updateEppCustom()">
+                                            </td>
                                         </tr>
                                         <tr style="border-bottom:1px solid #f1f5f9;">
                                             <td style="padding:8px;"><strong>header-label-affinity-scorer</strong> <span style="color:#7c3aed;font-size:0.8em;">NEW</span><br><span style="color:#64748b;font-size:0.85em;">Routes requests by a request header's label value. For LoRA: routes by the <code>x-llm-d-adapter</code> header (adapter name) so requests for the same adapter land on the same pod — the RFE-2527 mechanism.</span></td>
