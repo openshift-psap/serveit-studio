@@ -140,10 +140,11 @@
                                             <td style="text-align:center;"><input type="number" id="epp-param-peak-prefill-throughput" value="9866" min="0" max="100000" step="1" style="width:80px;text-align:center;padding:4px;border:1px solid #d1d5db;border-radius:4px;" onchange="updateEppCustom()" title="peakPrefillThroughput"></td>
                                         </tr>
                                     </table>
-                                    <div style="margin-top:12px;padding:10px;background:#f8fafc;border-radius:6px;">
-                                        <label style="font-weight:600;font-size:0.85em;color:#374151;">LRU Capacity Per Server</label>
-                                        <input type="number" id="epp-param-lru-capacity" value="4000000" min="1000" max="100000000" step="1000" style="width:120px;margin-left:8px;padding:4px 8px;border:1px solid #d1d5db;border-radius:4px;font-size:0.9em;" onchange="updateEppCustom()">
-                                        <span style="font-size:0.8em;color:#64748b;margin-left:4px;">blocks (approx-prefix-cache-producer)</span>
+                                    <div style="margin-top:12px;padding:10px;background:#f8fafc;border-radius:6px;display:flex;align-items:center;gap:8px;">
+                                        <input type="checkbox" id="epp-param-lru-capacity-enabled" onchange="updateEppCustom()" style="width:16px;height:16px;cursor:pointer;">
+                                        <label style="font-weight:600;font-size:0.85em;color:#374151;cursor:pointer;" for="epp-param-lru-capacity-enabled">LRU Capacity Per Server</label>
+                                        <input type="number" id="epp-param-lru-capacity" value="4000000" min="1000" max="100000000" step="1000" style="width:120px;margin-left:4px;padding:4px 8px;border:1px solid #d1d5db;border-radius:4px;font-size:0.9em;" onchange="updateEppCustom()">
+                                        <span style="font-size:0.8em;color:#64748b;">blocks (approx-prefix-cache-producer)</span>
                                     </div>
                                 </div>
                             </div>

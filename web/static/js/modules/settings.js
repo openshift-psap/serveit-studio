@@ -734,6 +734,21 @@ function populateCustomFromAuto() {
         // Also set the session-affinity mode dropdown
         var modeEl = document.getElementById('epp-session-affinity-mode');
         if (modeEl) modeEl.value = w.session_affinity_mode || 'filter';
+        // Set LRU capacity checkbox
+        var lruCb = document.getElementById('epp-param-lru-capacity-enabled');
+        var lruInput = document.getElementById('epp-param-lru-capacity');
+        if (lruCb && lruInput) {
+            var hasLru = w.no_hit_lru_enabled;
+            lruCb.checked = !!hasLru;
+            if (hasLru) {
+                lruInput.value = w.no_hit_lru_weight ? 4000000 : 4000000;
+                lruInput.disabled = false;
+                lruInput.style.opacity = '1';
+            } else {
+                lruInput.disabled = true;
+                lruInput.style.opacity = '0.5';
+            }
+        }
         // Trigger save so the config picks up the populated values
         updateEppCustom();
     })
@@ -829,8 +844,15 @@ function updateEppCustom() {
         config.epp_config.peakPrefillThroughput = parseInt(document.getElementById('epp-param-peak-prefill-throughput').value) || 9866;
     }
     var lruEl = document.getElementById('epp-param-lru-capacity');
-    if (lruEl) {
-        config.epp_config.lruCapacityPerServer = parseInt(lruEl.value) || 4000000;
+    var lruEnabled = document.getElementById('epp-param-lru-capacity-enabled');
+    if (lruEl && lruEnabled) {
+        if (lruEnabled.checked) {
+            config.epp_config.lruCapacityPerServer = parseInt(lruEl.value) || 4000000;
+        } else {
+            delete config.epp_config.lruCapacityPerServer;
+        }
+        lruEl.disabled = !lruEnabled.checked;
+        lruEl.style.opacity = lruEnabled.checked ? '1' : '0.5';
     }
     saveConfig();
 }

@@ -534,6 +534,16 @@ function updateUIFromConfig() {
                 if (wEl) wEl.value = ec[keys[pi]].weight || 0;
             }
         }
+        // Restore LRU capacity checkbox + value
+        var lruCb = document.getElementById('epp-param-lru-capacity-enabled');
+        var lruInput = document.getElementById('epp-param-lru-capacity');
+        if (lruCb && lruInput) {
+            var hasLru = ec.lruCapacityPerServer !== undefined && ec.lruCapacityPerServer !== null;
+            lruCb.checked = hasLru;
+            lruInput.value = hasLru ? ec.lruCapacityPerServer : 4000000;
+            lruInput.disabled = !hasLru;
+            lruInput.style.opacity = hasLru ? '1' : '0.5';
+        }
     }
 
     // Restore image selection (single input with full path)
