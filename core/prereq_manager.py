@@ -40,6 +40,36 @@ class PrereqManager:
         self.gateway_class = gateway_class or self._detect_gateway_class()
         self.last_epp_configmap_yaml = None
 
+    def _epp_configmap_changed(self, gaie_name: str, new_manifest: str) -> bool:
+        """Check if the EPP configmap on the cluster differs from the new one.
+
+        Compares the data payload (not metadata/annotations) so a re-apply
+        of an identical config is detected as unchanged — preserving the
+        running EPP and enabling pod recycling on resume.
+        """
+        try:
+            r = self.kubectl.run(
+                ['get', 'configmap', gaie_name, '-n', self.namespace,
+                 '-o', 'jsonpath={.data}'],
+                check=False, timeout=15)
+            if r.returncode != 0 or not r.stdout.strip():
+                return True
+            import json as _json
+            live_data = _json.loads(r.stdout)
+            # Extract the data from the new manifest (first data key)
+            import yaml as _yaml
+            doc = _yaml.safe_load(new_manifest)
+            new_data = doc.get('data', {})
+            # Normalize: compare the YAML content of each key
+            for key in set(list(live_data.keys()) + list(new_data.keys())):
+                live_val = live_data.get(key, '')
+                new_val = new_data.get(key, '')
+                if str(live_val).strip() != str(new_val).strip():
+                    return True
+            return False
+        except Exception:
+            return True
+
     def _detect_gateway_class(self) -> str:
         """Detect the best available GatewayClass from the cluster."""
         try:
@@ -388,18 +418,23 @@ class PrereqManager:
                 log(f'   ✅ {resource_type} created')
 
                 # The EPP loads its config ONCE at startup — a configmap
-                # update alone is never picked up by the running pods. When
-                # the GAIE config changes between tests (e.g. calibration
-                # derives no affinity scorers, then the full-workload test
-                # derives lora-affinity), restart the EPP so the new
-                # config takes effect.
+                # update alone is never picked up by the running pods.
+                # Only restart when the config actually CHANGED — an
+                # unconditional restart on resume breaks pod recycling:
+                # the EPP goes down, pool registration times out, and
+                # the runner falls back to a full redeploy even though
+                # the vLLM pods were up and serving.
                 if resource_type == 'ConfigMap' and 'gaie' in template_path:
-                    self.last_epp_configmap_yaml = manifest
-                    r_restart = self.kubectl.run(
-                        ['rollout', 'restart', 'deployment', context['gaie_name'],
-                         '-n', self.namespace], check=False)
-                    if r_restart.returncode == 0:
-                        log('   🔄 EPP restarted to load updated config')
+                    config_changed = self._epp_configmap_changed(
+                        context['gaie_name'], manifest)
+                    if config_changed:
+                        r_restart = self.kubectl.run(
+                            ['rollout', 'restart', 'deployment', context['gaie_name'],
+                             '-n', self.namespace], check=False)
+                        if r_restart.returncode == 0:
+                            log('   🔄 EPP config changed — restarting to load new config')
+                    else:
+                        log('   ✅ EPP config unchanged — skipping restart (pod recycling preserved)')
 
             log('')
             log('⏳ Waiting for GAIE deployment to be ready...')
@@ -553,20 +588,25 @@ class PrereqManager:
         try:
             template = f'prereq/gaie-configmap-{architecture}.yaml.j2'
             manifest = self.template_mgr.render_template(template, **context)
+            config_changed = self._epp_configmap_changed(
+                config['gaie_name'], manifest)
             result = self.kubectl.run(['apply', '-f', '-', '-n', self.namespace], input_data=manifest)
             if result.returncode != 0:
                 log(f'❌ Failed to update EPP configmap: {result.stderr}')
                 return False
             log(f'✅ EPP configmap updated ({epp_preset})')
 
-            result = self.kubectl.run(
-                ['rollout', 'restart', f'deployment/{config["gaie_name"]}', '-n', self.namespace],
-                check=False
-            )
-            if result.returncode == 0:
-                log('✅ EPP pod restarting...')
+            if config_changed:
+                result = self.kubectl.run(
+                    ['rollout', 'restart', f'deployment/{config["gaie_name"]}', '-n', self.namespace],
+                    check=False
+                )
+                if result.returncode == 0:
+                    log('✅ EPP config changed — pod restarting...')
+                else:
+                    log(f'⚠️  Could not restart EPP pod: {result.stderr}')
             else:
-                log(f'⚠️  Could not restart EPP pod: {result.stderr}')
+                log('✅ EPP config unchanged — skipping restart (pod recycling preserved)')
 
             # Wait for rollout to complete (new EPP pod ready with updated configmap)
             rollout_result = self.kubectl.run(
