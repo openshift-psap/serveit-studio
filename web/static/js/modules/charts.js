@@ -2308,8 +2308,8 @@ function _renderChartsImpl(data, runId, content) {
                     '<td style="text-align:center;">' + (p.output_tps_mean || 0).toFixed(0) + ' tok/s</td>' +
                     '</tr>';
             }).join('');
-            var sweepChartId = 'lora-sweep-chart-' + skey.replace(/[^a-z0-9]/gi, '-');
-            var affChartId = 'lora-sweep-aff-chart-' + skey.replace(/[^a-z0-9]/gi, '-');
+            var sweepChartId = 'lora-sweep-chart-' + skey.replace(/[^a-z0-9]/gi, '-') + _chartSuffix;
+            var affChartId = 'lora-sweep-aff-chart-' + skey.replace(/[^a-z0-9]/gi, '-') + _chartSuffix;
             // Sweep levels joined to their adapter-affinity measurements
             // (by test_id) — levels without affinity data are skipped
             var affByTest = {};
@@ -2487,7 +2487,7 @@ function _renderChartsImpl(data, runId, content) {
                 '<strong>Adapter churn</strong> — residency set changes from LRU evictions; high churn with few adapters means request scattering. ' +
                 '<strong>Adapters per pod</strong> — how many distinct adapters each pod served (concentrated = adapter-aware routing; uniform spread across all pods = random load balancing). ' +
                 '<strong>Waiting queue CV</strong> — queue-depth imbalance across pods; a hot-pod overload queues while cold pods idle.' +
-                '<div id="lora-routing-chart" style="width:100%;height:640px;margin-top:10px;"></div></div></div>';
+                '<div id="lora-routing-chart' + _chartSuffix + '" style="width:100%;height:640px;margin-top:10px;"></div></div></div>';
 
             chartQueue.push(function() {
                 var cfgCount = cfgLabels.length;
@@ -2531,7 +2531,7 @@ function _renderChartsImpl(data, runId, content) {
                     layout.xaxis.tickmode = 'array';
                     layout.xaxis.tickvals = cfgLabels.filter(function(_, i) { return i % Math.ceil(cfgCount / 8) === 0; });
                 }
-                Plotly.newPlot('lora-routing-chart', [t1, t2, t3, t4], layout, { displayModeBar: false, responsive: true });
+                Plotly.newPlot('lora-routing-chart' + _chartSuffix, [t1, t2, t3, t4], layout, { displayModeBar: false, responsive: true });
             });
 
             // Adapter affinity summary — one row per config, aggregated from
@@ -2563,7 +2563,7 @@ function _renderChartsImpl(data, runId, content) {
                     'How consistently each configuration routes an adapter\u2019s requests to a single pod. ' +
                     '<strong>Single-pod</strong> — the adapter was served entirely by one pod (adapter-aware routing; no cold-pod swap-ins). ' +
                     '<strong>Multi-pod</strong> — the adapter\u2019s requests were scattered across pods (random load balancing; scattered requests pay a CPU\u2192GPU adapter swap-in on cold pods).' +
-                    '<div id="lora-affinity-summary-chart" style="width:100%;height:360px;margin-top:10px;"></div>' +
+                    '<div id="lora-affinity-summary-chart' + _chartSuffix + '" style="width:100%;height:360px;margin-top:10px;"></div>' +
                     '<table style="width:100%;border-collapse:collapse;margin-top:10px;font-size:0.9em;background:#fff;">' +
                     '<tr style="background:#eef2ff;"><th style="padding:6px 10px;text-align:left;">Configuration</th><th style="padding:6px 8px;">Adapters</th><th style="padding:6px 8px;">Single-Pod</th><th style="padding:6px 8px;">Multi-Pod</th><th style="padding:6px 8px;">Routing Behavior</th></tr>' +
                     affRows + '</table></div></div>';
@@ -2602,7 +2602,7 @@ function _renderChartsImpl(data, runId, content) {
                             bgcolor: 'rgba(255,255,255,0.85)', bordercolor: col, borderwidth: 1, borderpad: 1
                         };
                     });
-                    Plotly.newPlot('lora-affinity-summary-chart', [
+                    Plotly.newPlot('lora-affinity-summary-chart' + _chartSuffix, [
                         {
                             x: cfgs, y: y, name: 'Single-pod', type: 'scatter', mode: 'lines+markers',
                             line: { color: '#059669', width: 3 },
