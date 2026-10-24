@@ -844,8 +844,7 @@ class PrereqManager:
                 log(f'     {r}')
             kv_str = str(result['kv_cache_weight']) if kv_enabled else 'off'
             active_str = str(result['active_request_weight']) if active_enabled else 'off'
-            sess_str = ('filter' if getattr(self, '_session_affinity_mode', 'filter') == 'filter'
-                        else str(session_aware_w))
+            sess_str = str(session_aware_w) if session_affinity_mode == 'scorer' else 'filter'
             log(f'     → prefix={w_prefix}, kv={kv_str}, '
                 f'queue={w_queue}, active={active_str}'
                 f'{", slo=3.0" if has_sla else ""}'
