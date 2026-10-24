@@ -441,23 +441,11 @@
                                                     <div style="font-size:0.75em;color:#047857;margin-top:2px;">Sweep every configuration that produced valid results. Thorough but time-intensive.</div>
                                                 </div>
                                             </label>
-                                        </div>
-                                    </div>
-                                    <div id="sweep-epp-tuned-row" style="margin-top:10px;padding-top:10px;border-top:1px solid #bbf7d0;">
-                                        <div style="display:flex;align-items:center;justify-content:space-between;gap:12px;padding:8px 12px;background:#f0fdf4;border:1px solid #bbf7d0;border-radius:8px;cursor:pointer;" onclick="var on=!document.getElementById('sweep-epp-tuned').checked;document.getElementById('sweep-epp-tuned').checked=on;config.concurrency_sweep_use_epp_tuned=on;var sw=document.getElementById('sweep-epp-switch');sw.style.background=on?'#059669':'#ccc';sw.querySelector('span').style.transform=on?'translateX(18px)':'translateX(0)';saveConfig();">
-                                            <div>
-                                                <div style="font-weight:600;font-size:0.85em;color:#065f46;">Use EPP-Tuned Weights</div>
-                                                <div style="font-size:0.75em;color:#047857;margin-top:2px;">If Step 9 found better EPP weights, re-run the sweep configs with tuned weights to compare against the baseline sweep.</div>
-                                            </div>
-                                            <input type="checkbox" id="sweep-epp-tuned" style="display:none;">
-                                            <div id="sweep-epp-switch" style="width:40px;height:22px;background:#ccc;border-radius:11px;position:relative;transition:background-color 0.2s;flex-shrink:0;">
-                                                <span style="position:absolute;top:2px;left:2px;width:18px;height:18px;background:white;border-radius:50%;transition:transform 0.2s;box-shadow:0 1px 3px rgba(0,0,0,0.2);display:block;"></span>
-                                            </div>
-                                        </div>
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
+                                         </div>
+                                     </div>
+                                 </div>
+                             </div>
+                         </div>
 
                         <!-- Cache Hit Sweep -->
                         <div id="sweep-cache-section" style="border:2px solid #7c3aed;border-radius:12px;overflow:hidden;margin-bottom:20px;">

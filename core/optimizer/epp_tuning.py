@@ -987,7 +987,8 @@ class EPPTuningMixin:
             # weights. Without this, the next test's deploy_prereqs
             # re-derives auto weights from scratch and overwrites the
             # EPP tuning result. User can disable via epp_apply_tuned.
-            if getattr(self.config, 'epp_apply_tuned', True):
+            if getattr(self.config, 'epp_apply_tuned',
+                       getattr(self.config, 'concurrency_sweep_use_epp_tuned', True)):
                 self.config.epp_preset = 'custom'
                 self.config.epp_custom_enabled = True
                 self.config.epp_config = epp_config
