@@ -2533,7 +2533,8 @@ function _renderChartsImpl(data, runId, content) {
             // Adapter affinity summary — one row per config, aggregated from
             // the per-pod breakdowns below
             var affDetails = (charts.vllm.lora_pod_details || []).filter(function(pd) {
-                return pd && pd.pods && Object.keys(pd.pods).length && (pd.total_adapters || 0) > 0;
+                return pd && pd.pods && Object.keys(pd.pods).length && (pd.total_adapters || 0) > 0
+                    && !(pd.test_id || '').startsWith('step11-epp-');
             });
             if (affDetails.length) {
                 var affRows = affDetails.map(function(pd) {
