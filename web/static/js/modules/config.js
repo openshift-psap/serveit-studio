@@ -516,7 +516,11 @@ function updateUIFromConfig() {
         var eppInner = document.getElementById('epp-benchmark-inner');
         if (eppInner) eppInner.style.opacity = eppCb.checked ? '1' : '0.5';
         var eppTuned = document.getElementById('epp-apply-tuned');
-        if (eppTuned) eppTuned.checked = config.epp_apply_tuned !== false;
+        if (eppTuned) {
+            eppTuned.checked = (config.epp_apply_tuned !== undefined && config.epp_apply_tuned !== null)
+                ? !!config.epp_apply_tuned
+                : (config.concurrency_sweep_use_epp_tuned !== false);
+        }
     }
     if (config.epp_config && document.getElementById('epp-plugin-prefix-cache')) {
         var ec = config.epp_config;
