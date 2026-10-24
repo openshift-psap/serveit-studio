@@ -728,6 +728,7 @@ class PrereqManager:
             # GPU-resident slots (thrashing regime — affinity reduces swap-ins)
             session_aware = True
             session_aware_w = 3.0
+            session_affinity_mode = 'scorer'
             # lora-affinity-scorer: routes by the request's model field
             # (extracted from the body by the EPP director) against
             # per-pod ActiveModels from vllm:lora_requests_info — the
@@ -751,28 +752,33 @@ class PrereqManager:
             total_slots = adapter_pods * max_loras_v if (adapter_pods > 0 and max_loras_v > 0) else 0
             if total_slots and lora_n <= total_slots:
                 lora_affinity = True
-                # Session-affinity (session_id strategy) is the PRIMARY
-                # adapter-locality mechanism: it pins each adapter's requests
-                # to one pod via the EPP's own state (x-session-id header),
-                # independent of vLLM's in-flight-only lora metric. It must
-                # dominate: its weight (15) must beat the lora scorer's
-                # free-slot bonus (0.8 x lora_w). With lora at 5.0, the
-                # free-slot bonus is 4.0 — session (15) wins by 11.
-                # The lora-affinity scorer stays as a secondary signal for
-                # requests without a session binding.
+                # Session-affinity SCORER (session_id strategy): soft
+                # preference for the bound pod — prefers adapter locality
+                # but allows load-aware deflection under pressure. Empirical
+                # evidence (runs 71 vs 63): the filter's hard pin gave
+                # 100% affinity but WORSE performance (TTFT 3.5s vs 0.9s,
+                # throughput 6.8 vs 7.1 req/s) because it creates hot pods
+                # and destroys prefix-cache locality for multi-turn. The
+                # scorer at weight 5 prefers the bound pod (5 > 0.8 × lora_w
+                # = 4.0 for free-slot pods) but the queue-scorer can still
+                # deflect when the bound pod is severely overloaded.
+                # The filter remains available as a user-selectable option.
                 lora_affinity_w = 5.0
-                session_aware_w = 15.0
-                # The load scorers are min-max normalized per request; demote
-                # them to tie-breakers so locality dominates
+                session_aware_w = 5.0
+                session_affinity_mode = 'scorer'
+                # The load scorers are demoted but NOT crushed — they
+                # provide the load-aware deflection that makes the scorer
+                # approach work. prefix/queue at ~0.3 allow meaningful
+                # tie-breaking among candidate pods.
                 w_prefix = round(max(0.3, w_prefix * 0.25), 1)
                 w_kv = round(max(0.3, w_kv * 0.25), 1)
                 w_queue = round(max(0.3, w_queue * 0.3), 1)
                 w_active = round(max(0.3, w_active * 0.3), 1)
                 reasons.append(f"lora: {lora_n} adapters ≤ {adapter_pods} pods × "
                                f"{max_loras_v} slots = {total_slots} → all-resident "
-                               f"→ session-affinity-filter (hard pin by x-session-id) "
+                               f"→ session-affinity-scorer(5.0) load-aware pin "
                                f"+ lora-affinity({lora_affinity_w}) secondary + "
-                               f"load scorers demoted to tie-breakers")
+                               f"load scorers as tie-breakers (filter available as option)")
             elif total_slots:
                 coverage = total_slots / max(lora_n, 1)
                 lora_affinity = True
@@ -823,7 +829,7 @@ class PrereqManager:
             'slo_weight': slo_w,
             'session_aware_enabled': session_aware,
             'session_aware_weight': session_aware_w,
-            'session_affinity_mode': 'filter',
+            'session_affinity_mode': session_affinity_mode if lora_enabled and lora_n > 20 else 'filter',
             'lora_affinity_enabled': lora_affinity,
             'lora_affinity_weight': lora_affinity_w,
             'header_label_affinity_enabled': False,

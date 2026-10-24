@@ -666,8 +666,78 @@ function setEppPreset(preset) {
     });
     var editor = document.getElementById('epp-custom-editor');
     if (editor) editor.style.display = preset === 'custom' ? 'block' : 'none';
+    if (preset === 'custom') populateCustomFromAuto();
     updateAutoEppPreview();
     saveConfig();
+}
+
+function populateCustomFromAuto() {
+    // Fetch the auto-derived weights and pre-fill the custom editor so the
+    // user starts from the workload-aware values, not hardcoded defaults
+    var payload = {
+        isl: parseInt(config.isl) || 1000,
+        osl: parseInt(config.osl) || 100,
+        prefix_cache_hit_pct: parseInt(config.prefix_cache_hit_pct) || 0,
+        prefix_cache_mode: config.prefix_cache_mode || 'identical',
+        prefix_cache_groups: parseInt(config.prefix_cache_groups) || 1,
+        qps: parseInt(config.users) || parseInt(config.qps) || 10,
+        turns: parseInt(config.turns) || 1,
+        use_corpus: !!config.use_corpus,
+        latency_constraint_enabled: !!config.latency_constraint_enabled,
+        lora_enabled: !!config.lora_enabled,
+        lora_num_adapters: config.lora_enabled ? (parseInt(config.lora_num_adapters) || 0) : 0,
+        max_num_seqs: 256,
+        total_gpus: parseInt(config.total_gpus) || 16,
+        architecture: 'aggregated',
+        replicas: parseInt(config.total_gpus) || 16,
+        lora_max_loras: config.lora_enabled
+            ? Math.ceil((parseInt(config.lora_num_adapters) || 0) / (parseInt(config.total_gpus) || 16))
+            : null,
+    };
+
+    fetch('/api/epp/preview', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+    })
+    .then(function(r) { return r.json(); })
+    .then(function(d) {
+        if (!d.success) return;
+        var w = d.weights;
+        var fields = {
+            'epp-plugin-prefix-cache': w.prefix_cache_weight > 0,
+            'epp-weight-prefix-cache': w.prefix_cache_weight || 3,
+            'epp-plugin-kv-cache': w.kv_cache_enabled,
+            'epp-weight-kv-cache': w.kv_cache_weight || 2,
+            'epp-plugin-queue': w.queue_weight > 0,
+            'epp-weight-queue': w.queue_weight || 2,
+            'epp-plugin-active-request': w.active_request_enabled,
+            'epp-weight-active-request': w.active_request_weight || 2,
+            'epp-plugin-session-aware': w.session_aware_enabled,
+            'epp-weight-session-aware': w.session_aware_weight || 5,
+        };
+        // LoRA affinity is a custom-only plugin (not in the standard auto result keys)
+        if (w.lora_affinity_enabled) {
+            fields['epp-plugin-load-aware'] = false;
+        }
+        Object.keys(fields).forEach(function(id) {
+            var el = document.getElementById(id);
+            if (!el) return;
+            if (el.type === 'checkbox') {
+                el.checked = !!fields[id];
+            } else {
+                el.value = fields[id];
+            }
+        });
+        // Also set the session-affinity mode dropdown
+        var modeEl = document.getElementById('epp-session-affinity-mode');
+        if (modeEl) modeEl.value = w.session_affinity_mode || 'filter';
+        // Trigger save so the config picks up the populated values
+        updateEppCustom();
+    })
+    .catch(function(e) {
+        console.warn('Could not pre-fill custom EPP from auto:', e);
+    });
 }
 
 function updateAutoEppPreview() {
