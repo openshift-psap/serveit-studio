@@ -825,6 +825,7 @@ function updateAutoEppPreview() {
 
 
 function updateEppCustom() {
+    var prevEppConfig = config.epp_config || {};
     config.epp_config = {
         prefix_cache: { enabled: document.getElementById('epp-plugin-prefix-cache').checked, weight: parseFloat(document.getElementById('epp-weight-prefix-cache').value) },
         kv_cache: { enabled: document.getElementById('epp-plugin-kv-cache').checked, weight: parseFloat(document.getElementById('epp-weight-kv-cache').value) },
@@ -838,6 +839,9 @@ function updateEppCustom() {
         load_aware: { enabled: document.getElementById('epp-plugin-load-aware') ? document.getElementById('epp-plugin-load-aware').checked : false, weight: document.getElementById('epp-weight-load-aware') ? parseFloat(document.getElementById('epp-weight-load-aware').value) : 1 },
         token_load: { enabled: document.getElementById('epp-plugin-token-load').checked, weight: parseFloat(document.getElementById('epp-weight-token-load').value) },
     };
+    if (prevEppConfig.logVerbosity) {
+        config.epp_config.logVerbosity = prevEppConfig.logVerbosity;
+    }
     var affinityEl = document.getElementById('epp-plugin-prefix-cache-affinity');
     if (affinityEl) {
         config.epp_config.prefixCacheAffinityEnabled = affinityEl.checked;

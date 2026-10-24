@@ -2387,7 +2387,7 @@ def handle_setup_storage(data):
                 'epp_custom_enabled': data.get('epp_custom_enabled', True),
                 'epp_preset': data.get('epp_preset', 'balanced'),
                 'epp_benchmark': data.get('epp_benchmark', False),
-                'epp_config': data.get('epp_config'),
+                'epp_config': data.get('epp_config') or saved.get('epp_config'),
                 'selected_nodes': data.get('selected_nodes') or [],
                 'workload_mode': data.get('workload_mode', 'synthetic'),
                 'dataset_source': data.get('dataset_source'),
