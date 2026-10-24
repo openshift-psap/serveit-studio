@@ -1252,6 +1252,7 @@ function _renderChartsImpl(data, runId, content) {
                 try { tc = typeof r.test_config === 'string' ? JSON.parse(r.test_config) : r.test_config; } catch(e) {}
             }
             if (tc) {
+                if (r.epp_deployed) tc.epp_deployed = r.epp_deployed;
                 const arch = (r.architecture || '').toUpperCase();
                 allConfigs.push({ label: _tagLabel(r.config_name, r.architecture), arch: arch, tc: tc, ttft: r.ttft_p90 || 1e9 });
             }
