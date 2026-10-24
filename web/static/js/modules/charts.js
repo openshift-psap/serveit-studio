@@ -2411,15 +2411,19 @@ function _renderChartsImpl(data, runId, content) {
                     var traces = [
                         {
                             x: x, y: pts.map(function(p) { return p.output_tps_mean || 0; }),
-                            name: 'Throughput', type: 'scatter', mode: 'lines+markers',
+                            name: 'Throughput', type: 'scatter', mode: 'lines+markers+text',
                             line: { color: '#10b981', width: 3, dash: 'dot' }, marker: { size: 8, symbol: 'diamond' },
+                            text: pts.map(function(p) { return p.output_tps_mean ? Math.round(p.output_tps_mean).toLocaleString() : ''; }),
+                            textposition: 'top center', textfont: { color: '#059669', size: 10 },
                             customdata: deltaLabels,
                             hovertemplate: 'Adapters: %{x}<br>Throughput: %{y:,.0f} tok/s%{customdata}<extra></extra>'
                         },
                         {
                             x: x, y: pts.map(function(p) { return p.ttft_p90 || 0; }),
-                            name: 'TTFT P90', type: 'scatter', mode: 'lines+markers', yaxis: 'y2',
+                            name: 'TTFT P90', type: 'scatter', mode: 'lines+markers+text', yaxis: 'y2',
                             line: { color: '#3b82f6', width: 3 }, marker: { size: 8 },
+                            text: pts.map(function(p) { return p.ttft_p90 ? Math.round(p.ttft_p90) + 'ms' : ''; }),
+                            textposition: 'bottom center', textfont: { color: '#3b82f6', size: 9 },
                             hovertemplate: 'Adapters: %{x}<br>TTFT P90: %{y:.0f} ms<extra></extra>'
                         },
                         {
@@ -2456,9 +2460,7 @@ function _renderChartsImpl(data, runId, content) {
                     Plotly.newPlot(chartId, traces, {
                         margin: { l: 70, r: 70, t: 30, b: 45 },
                         xaxis: { title: 'Adapter Count', gridcolor: '#f1f5f9' },
-                        yaxis: { title: 'Tokens per second', gridcolor: '#f1f5f9',
-                                 autorange: false,
-                                 range: [Math.max(0, Math.min.apply(null, pts.map(function(p) { return p.output_tps_mean || 0; }).filter(function(v) { return v > 0; })) * 0.3), null] },
+                        yaxis: { title: 'Tokens per second', gridcolor: '#f1f5f9' },
                         yaxis2: { title: 'Latency (ms)', overlaying: 'y', side: 'right' },
                         shapes: shapes, annotations: annotations.concat(deltaAnns),
                         legend: { orientation: 'h', y: 1.12 },
