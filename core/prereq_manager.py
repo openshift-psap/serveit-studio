@@ -409,6 +409,26 @@ class PrereqManager:
                 log(f'   Applying {resource_type}...')
                 manifest = self.template_mgr.render_template(template_path, **context)
 
+                # The EPP loads its config ONCE at startup — a configmap
+                # update alone is never picked up by the running pods.
+                # Compare BEFORE applying: the live configmap still holds
+                # the previous config at this point. (Comparing after the
+                # apply always matched and the restart never fired, so the
+                # EPP silently kept running stale configs across runs.)
+                # Only restart when the config actually CHANGED — an
+                # unconditional restart on resume breaks pod recycling:
+                # the EPP goes down, pool registration times out, and
+                # the runner falls back to a full redeploy even though
+                # the vLLM pods were up and serving.
+                config_changed = None
+                if resource_type == 'ConfigMap' and 'gaie' in template_path:
+                    # Capture the actually-rendered configmap so tests archive
+                    # what was deployed (not a legacy stub) and the report can
+                    # show real deployed weights.
+                    self.last_epp_configmap_yaml = manifest
+                    config_changed = self._epp_configmap_changed(
+                        context['gaie_name'], manifest)
+
                 # Apply manifest
                 result = self.kubectl.run(['apply', '-f', '-', '-n', self.namespace], input_data=manifest)
 
@@ -418,16 +438,7 @@ class PrereqManager:
 
                 log(f'   ✅ {resource_type} created')
 
-                # The EPP loads its config ONCE at startup — a configmap
-                # update alone is never picked up by the running pods.
-                # Only restart when the config actually CHANGED — an
-                # unconditional restart on resume breaks pod recycling:
-                # the EPP goes down, pool registration times out, and
-                # the runner falls back to a full redeploy even though
-                # the vLLM pods were up and serving.
-                if resource_type == 'ConfigMap' and 'gaie' in template_path:
-                    config_changed = self._epp_configmap_changed(
-                        context['gaie_name'], manifest)
+                if config_changed is not None:
                     if config_changed:
                         r_restart = self.kubectl.run(
                             ['rollout', 'restart', 'deployment', context['gaie_name'],
