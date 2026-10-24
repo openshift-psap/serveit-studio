@@ -2456,7 +2456,9 @@ function _renderChartsImpl(data, runId, content) {
                     Plotly.newPlot(chartId, traces, {
                         margin: { l: 70, r: 70, t: 30, b: 45 },
                         xaxis: { title: 'Adapter Count', gridcolor: '#f1f5f9' },
-                        yaxis: { title: 'Tokens per second', gridcolor: '#f1f5f9', rangemode: 'tozero', autorange: false, range: [0, null] },
+                        yaxis: { title: 'Tokens per second', gridcolor: '#f1f5f9',
+                                 autorange: false,
+                                 range: [Math.max(0, Math.min.apply(null, pts.map(function(p) { return p.output_tps_mean || 0; }).filter(function(v) { return v > 0; })) * 0.6), null] },
                         yaxis2: { title: 'Latency (ms)', overlaying: 'y', side: 'right' },
                         shapes: shapes, annotations: annotations.concat(deltaAnns),
                         legend: { orientation: 'h', y: 1.12 },
