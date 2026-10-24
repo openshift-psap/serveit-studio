@@ -543,7 +543,8 @@ class EPPTuningMixin:
 
         result = self.orchestrator.run_test(
             epp_test_config,
-            cleanup=True,
+            cleanup=False,
+            skip_deploy=True,
             log_callback=lambda msg: self.log(msg, 'info'),
             stop_check=self._should_stop,
         )
@@ -897,9 +898,7 @@ class EPPTuningMixin:
                                 refined.get('lora_affinity_enabled') != smart_weights.get('lora_affinity_enabled')):
                     self.log("  Weights changed — running validation test", 'info')
                     try:
-                        self.orchestrator.deployment_manager.kubectl.run(
-                            ['delete', 'lws', '-l', 'component=serveit-test',
-                             '-n', self.config.namespace, '--ignore-not-found=true'], check=False)
+                        pass  # pods kept — EPP-only swap
                         time.sleep(5)
                     except Exception:
                         pass
@@ -918,9 +917,7 @@ class EPPTuningMixin:
                 if best_smart > baseline_ttft * 1.05:
                     self.log(f"\n  ⚠️  Smart TTFT ({best_smart:.0f}ms) > baseline ({baseline_ttft:.0f}ms) — testing balanced fallback", 'warning')
                     try:
-                        self.orchestrator.deployment_manager.kubectl.run(
-                            ['delete', 'lws', '-l', 'component=serveit-test',
-                             '-n', self.config.namespace, '--ignore-not-found=true'], check=False)
+                        pass  # pods kept — EPP-only swap
                         time.sleep(5)
                     except Exception:
                         pass
@@ -938,6 +935,18 @@ class EPPTuningMixin:
             if valid_arch:
                 best_name = min(valid_arch, key=lambda x: self._epp_objective(x[2]))[0]
                 self.log(f"  Best {arch}: {best_name}", 'success')
+
+            # Clean up the reused deployment after all variants for this arch
+            self.log("  🧹 Cleaning up deployment after EPP tuning variants", 'info')
+            try:
+                self.orchestrator.deployment_manager.delete_deployment(
+                    base_cfg.test_id, base_cfg.architecture, log_callback=lambda msg: self.log(msg, 'info')
+                )
+                self.orchestrator.deployment_manager.wait_for_pods_terminated(
+                    base_cfg.test_id, timeout=300, log_callback=lambda msg: self.log(msg, 'info')
+                )
+            except Exception:
+                pass
 
     def _apply_best_epp_config(self):
         """After EPP tuning, deploy the best-performing EPP weights for subsequent steps.

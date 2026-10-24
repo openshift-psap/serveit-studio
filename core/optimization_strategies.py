@@ -873,7 +873,12 @@ class SingleTestStrategy(OptimizationStrategy):
             return
 
         self.opt.log("", 'info')
-        sweep_after = cfg.calibrated_load_enabled or getattr(cfg, 'concurrency_sweep_count', None) or getattr(cfg, 'concurrency_sweep_levels', None)
+        sweep_after = (cfg.calibrated_load_enabled
+                       or getattr(cfg, 'concurrency_sweep_count', None)
+                       or getattr(cfg, 'concurrency_sweep_levels', None)
+                       or getattr(cfg, 'epp_benchmark', False)
+                       or (getattr(cfg, 'lora_sweep_enabled', False)
+                           and getattr(cfg, 'lora_enabled', False)))
 
         # Check if already completed (resume case)
         if test_config.test_id in self.opt.completed_tests:
