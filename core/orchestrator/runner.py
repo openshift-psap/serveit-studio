@@ -2,6 +2,7 @@
 
 import os
 import json
+import re
 import time
 import socket
 import logging
@@ -712,6 +713,18 @@ class TestOrchestrator(ParserMixin, GuidellmMixin):
                         return json.loads(self._body)
                 resp = _RemoteResp(http_code, resp_body)
                 if resp.status_code == 200:
+                    # Step 4: verify the EPP's metrics-fresh endpoint pool.
+                    # Steps 1-3 pass once a single endpoint routes, but the
+                    # benchmark needs ALL endpoints in the EPP's candidate
+                    # set (pods the EPP polls successfully). During pod
+                    # transitions the pool lags K8s readiness — dying pods
+                    # fail metrics polls and fresh pods need a first scrape —
+                    # and requests scheduled against a shrunken pool deflect
+                    # session-affinity bindings to other pods.
+                    self._wait_for_epp_endpoint_pool(
+                        config, expected_pods,
+                        deadline=start_time + timeout,
+                        log_callback=log_callback)
                     elapsed = int(time.time() - start_time)
                     if log_callback:
                         p = 'pod' if ready_count == 1 else 'pods'
@@ -753,6 +766,68 @@ class TestOrchestrator(ParserMixin, GuidellmMixin):
         except Exception:
             pass
         return False
+
+    def _wait_for_epp_endpoint_pool(
+        self,
+        config: TestConfig,
+        expected_pods: int,
+        deadline: float,
+        budget: int = 90,
+        log_callback: Optional[Callable[[str], None]] = None
+    ) -> bool:
+        """Wait until the EPP's metrics-fresh endpoint pool covers all pods.
+
+        Soft gate: if the EPP's metrics endpoint cannot be scraped or the
+        pool does not fill within the budget, log and proceed anyway — the
+        benchmark still runs, just with a possibly shrunken candidate set.
+        """
+        arch = getattr(config, 'architecture', 'pd') or 'pd'
+        epp_name = f'gaie-{arch}-epp'
+        pool_name = f'gaie-{arch}'
+        end = min(time.time() + budget, deadline)
+        last_count = -1
+        while time.time() < end:
+            ready = self._query_epp_ready_endpoints(epp_name, pool_name)
+            if ready is None:
+                if log_callback:
+                    log_callback('   ⚠️  Cannot scrape EPP metrics endpoint — skipping pool freshness check')
+                return True
+            if ready != last_count:
+                if log_callback:
+                    log_callback(f'   EPP endpoint pool: {ready}/{expected_pods} endpoints with fresh metrics')
+                last_count = ready
+            if ready >= expected_pods:
+                return True
+            time.sleep(5)
+        if log_callback and last_count >= 0:
+            log_callback(f'   ⚠️  EPP endpoint pool still at {last_count}/{expected_pods} '
+                         f'after {budget}s — proceeding anyway')
+        return True
+
+    def _query_epp_ready_endpoints(self, epp_name: str, pool_name: str) -> Optional[int]:
+        """Scrape the EPP's /metrics for llm_d_epp_ready_endpoints.
+
+        Returns the gauge value, or None when the endpoint cannot be
+        reached or parsed.
+        """
+        try:
+            tr = self.deployment_manager.kubectl.run(
+                ['create', 'token', epp_name, '-n', self.namespace, '--duration=5m'],
+                check=False, timeout=15)
+            if tr.returncode != 0 or not tr.stdout.strip():
+                return None
+            token = tr.stdout.strip()
+            curl_cmd = (f"curl -s -m 10 -H 'Authorization: Bearer {token}' "
+                        f"http://{epp_name}.{self.namespace}.svc:9090/metrics")
+            r = self.deployment_manager.kubectl.run(
+                ['exec', self._guidellm_pod_name, '-n', self.namespace, '--', 'bash', '-c', curl_cmd],
+                check=False, timeout=30)
+            if r.returncode != 0 or not r.stdout:
+                return None
+            m = re.search(rf'^llm_d_epp_ready_endpoints{{name="{pool_name}"}}\s+(\d+)', r.stdout, re.M)
+            return int(m.group(1)) if m else None
+        except Exception:
+            return None
 
     def _discover_istio_gateway(
         self,
