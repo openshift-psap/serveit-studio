@@ -334,7 +334,14 @@ class ConfigBuilderMixin:
             if num_pods and num_pods > 0:
                 needed = math.ceil(n / num_pods)
                 if needed > slots:
-                    stable_budget_mb = max(free_mb, 0) * 0.40
+                    # 20% budget: enough to hold the working set in most
+                    # configs, without starving KV cache or making pods
+                    # unschedulable at high adapter counts (800+). The
+                    # session-affinity-filter provides adapter locality
+                    # independently of VRAM residency — the expansion is a
+                    # performance optimization (avoids swap-ins), not a
+                    # correctness requirement.
+                    stable_budget_mb = max(free_mb, 0) * 0.20
                     stable_slots = int(stable_budget_mb // max(per_adapter_mb, 1))
                     if needed <= stable_slots:
                         # 30% cold-start headroom: during the initial adapter
