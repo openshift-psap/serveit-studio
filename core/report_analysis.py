@@ -1798,20 +1798,52 @@ class ReportAnalyzer:
                         manifest_types = list(_json2.loads(r.manifests_yaml).keys())
                     except (_json2.JSONDecodeError, TypeError):
                         pass
+                # Parse weights from the ARCHIVED configmap (what actually
+                # ran), not the stored config dict (which has placeholder
+                # values for disabled scorers). Falls back to test_config_json.
                 weights = {}
-                if r.test_config_json:
+                weights_source = 'config'
+                try:
+                    import yaml as _yaml4
+                    _mans_v = _json2.loads(r.manifests_yaml) if r.manifests_yaml else {}
+                    _cm_v = _mans_v.get('epp-configmap', '')
+                    if _cm_v:
+                        _cm_doc = _yaml4.safe_load(_cm_v)
+                        _cfg_v = _yaml4.safe_load(_cm_doc['data'][list(_cm_doc['data'].keys())[0]])
+                        _w_v = {}
+                        _plugins_v = set()
+                        for _p in _cfg_v.get('plugins', []):
+                            _plugins_v.add(_p.get('type'))
+                        for _prof in _cfg_v.get('schedulingProfiles', []):
+                            for _p in _prof.get('plugins', []):
+                                if _p.get('weight') is not None:
+                                    _w_v[_p['pluginRef']] = _p['weight']
+                        weights = {
+                            'prefix_cache': _w_v.get('prefix-cache-scorer', 0),
+                            'kv_cache': _w_v.get('kv-cache-utilization-scorer', 0),
+                            'queue': _w_v.get('queue-scorer', 0),
+                            'active_request': _w_v.get('active-request-scorer', 0),
+                            'lora_affinity': _w_v.get('lora-affinity-scorer', 0),
+                            'session_affinity': ('filter' if 'session-affinity-filter' in _plugins_v
+                                                 else _w_v.get('session-affinity-scorer', 0)),
+                        }
+                        weights_source = 'as-run'
+                except Exception:
+                    pass
+                if weights_source == 'config' and r.test_config_json:
                     try:
                         tc = _json2.loads(r.test_config_json)
                         epp = tc.get('epp_config') or {}
                         plugins = epp.get('plugins') or {}
-                        weights = {
-                            'prefix_cache': plugins.get('prefix_cache', {}).get('weight', '?'),
-                            'kv_cache': plugins.get('kv_cache', {}).get('weight', '?'),
-                            'queue': plugins.get('queue', {}).get('weight', '?'),
-                            'active_request': plugins.get('active_request', {}).get('weight', 0),
-                            'lora_affinity': plugins.get('lora_affinity', {}).get('weight', 0),
-                            'session_affinity': plugins.get('session_aware', {}).get('weight', 0),
-                        }
+                        if plugins:
+                            weights = {
+                                'prefix_cache': plugins.get('prefix_cache', {}).get('weight', '?'),
+                                'kv_cache': plugins.get('kv_cache', {}).get('weight', '?'),
+                                'queue': plugins.get('queue', {}).get('weight', '?'),
+                                'active_request': plugins.get('active_request', {}).get('weight', 0),
+                                'lora_affinity': plugins.get('lora_affinity', {}).get('weight', 0),
+                                'session_affinity': plugins.get('session_aware', {}).get('weight', 0),
+                            }
                     except (_json2.JSONDecodeError, TypeError):
                         pass
                 entry = {

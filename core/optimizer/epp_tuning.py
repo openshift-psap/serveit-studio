@@ -145,14 +145,21 @@ class EPPTuningMixin:
         preset = getattr(self.config, 'epp_preset', 'balanced') or 'balanced'
         if preset == 'auto':
             # Auto: use the workload-derived weights (computed at prereq time
-            # and stored on the config by _derive_auto_epp_weights)
+            # and stored on the config by _derive_auto_epp_weights).
+            # IMPORTANT: check the _enabled flags — the weight values for
+            # disabled scorers are placeholders (1.0), NOT real weights.
+            # Returning the placeholder causes the smart tuner to "enable"
+            # the scorer via adjustment, deploying configs the baseline
+            # didn't have.
             auto = getattr(self.config, 'epp_auto_weights', None)
             if auto:
                 return {
                     'prefix_cache_weight': auto.get('prefix_cache_weight', 3.0),
-                    'kv_cache_weight': auto.get('kv_cache_weight', 2.0),
+                    'kv_cache_weight': (auto.get('kv_cache_weight', 2.0)
+                                         if auto.get('kv_cache_enabled') else 0),
                     'queue_weight': auto.get('queue_weight', 2.0),
-                    'active_request_weight': auto.get('active_request_weight', 2.0),
+                    'active_request_weight': (auto.get('active_request_weight', 2.0)
+                                              if auto.get('active_request_enabled') else 0),
                 }
             # Fallback if auto weights weren't pre-computed (e.g. resume from
             # older config) — derive now
@@ -257,9 +264,10 @@ class EPPTuningMixin:
         adj_active = max(-1, min(1, round(active_signal * 2)))
 
         w_prefix = max(0.1, min(5, w_prefix + adj_prefix))
-        w_kv = max(0.1, min(5, w_kv + adj_kv))
+        # Scorers at 0 are DISABLED — do not adjust or re-enable them
+        w_kv = (max(0.1, min(5, w_kv + adj_kv)) if w_kv > 0 else 0)
         w_queue = max(0.1, min(5, w_queue + adj_queue))
-        w_active = max(0.1, min(5, w_active + adj_active))
+        w_active = (max(0.1, min(5, w_active + adj_active)) if w_active > 0 else 0)
 
         has_sla = getattr(self.config, 'latency_constraint_enabled', False)
 
@@ -345,12 +353,13 @@ class EPPTuningMixin:
         adj_queue = max(-1, min(1, round(queue_signal * 3)))
         adj_active = max(-1, min(1, round(active_signal * 2)))
 
-        # Apply adjustments to the smart-derived weights from the first test
+        # Apply adjustments to the smart-derived weights from the first test.
+        # Scorers at 0 are DISABLED — do not adjust or re-enable them.
         bw = base_weights or self._get_user_baseline_weights()
         w_prefix = max(0.1, min(5, bw['prefix_cache_weight'] + adj_prefix))
-        w_kv = max(0.1, min(5, bw['kv_cache_weight'] + adj_kv))
+        w_kv = (max(0.1, min(5, bw['kv_cache_weight'] + adj_kv)) if bw['kv_cache_weight'] > 0 else 0)
         w_queue = max(0.1, min(5, bw['queue_weight'] + adj_queue))
-        w_active = max(0.1, min(5, bw.get('active_request_weight', 2) + adj_active))
+        w_active = (max(0.1, min(5, bw.get('active_request_weight', 2) + adj_active)) if bw.get('active_request_weight', 2) > 0 else 0)
 
         self.log(f"    → Refined weights: prefix={w_prefix}, kv={w_kv}, queue={w_queue}, active={w_active}", 'success')
 
@@ -972,6 +981,30 @@ class EPPTuningMixin:
                 'preset': 'custom',
                 'plugins': self._build_variant_plugins(best_weights),
             }
+
+            # PERSIST the winning profile on the run config so all
+            # subsequent tests (sweeps, calibrated load) use the tuned
+            # weights. Without this, the next test's deploy_prereqs
+            # re-derives auto weights from scratch and overwrites the
+            # EPP tuning result.
+            self.config.epp_preset = 'custom'
+            self.config.epp_custom_enabled = True
+            self.config.epp_config = epp_config
+            self.config.epp_auto_weights = {
+                'prefix_cache_weight': best_weights.get('prefix_cache_weight', 3.0),
+                'kv_cache_weight': best_weights.get('kv_cache_weight', 0),
+                'kv_cache_enabled': (best_weights.get('kv_cache_weight', 0) or 0) > 0,
+                'queue_weight': best_weights.get('queue_weight', 2.0),
+                'active_request_weight': best_weights.get('active_request_weight', 0),
+                'active_request_enabled': (best_weights.get('active_request_weight', 0) or 0) > 0,
+                'lora_affinity_enabled': bool(best_weights.get('lora_affinity_weight')),
+                'lora_affinity_weight': best_weights.get('lora_affinity_weight', 0),
+                'session_aware_enabled': True,
+                'session_aware_weight': best_weights.get('session_aware_weight', 5.0),
+            }
+            self.log("  💾 Tuned EPP profile persisted — subsequent tests will use "
+                     "it instead of re-deriving auto weights", 'success')
+
             from core import PrereqManager
             mgr = PrereqManager(
                 namespace=self.config.namespace,
