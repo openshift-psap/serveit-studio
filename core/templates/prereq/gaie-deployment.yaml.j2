@@ -40,6 +40,7 @@ spec:
             - --config-file
             - /config/{{ config_file | default('default-plugins.yaml') }}
             - --refresh-metrics-interval=1s
+            - --metrics-staleness-threshold={{ epp_metrics_staleness_threshold | default('30s') }}
             - --v
             - "{{ epp_log_verbosity | default(1) }}"
             - --tracing=false

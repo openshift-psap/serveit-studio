@@ -313,6 +313,12 @@ class PrereqManager:
                 'load_aware_weight': epp_weights.get('load_aware_weight', 1.0),
                 'max_prefix_blocks': epp.get('maxPrefixBlocksToMatch', 256),
                 'epp_log_verbosity': int(epp.get('logVerbosity', 1) or 1),
+                # vLLM's lora_requests_info series leak makes /metrics slow
+                # under LoRA traffic; the EPP's 2s default staleness threshold
+                # then drops healthy pods from the candidate pool and breaks
+                # session-affinity routing. 30s tolerates slow scrapes while
+                # still excluding genuinely dead pods.
+                'epp_metrics_staleness_threshold': epp.get('metricsStalenessThreshold', '30s'),
                 'lru_capacity': epp.get('lruCapacityPerServer', 4000000),
                 'non_cached_tokens': epp.get('nonCachedTokens', 16),
                 'prefix_cache_affinity_enabled': epp.get('prefixCacheAffinityEnabled', False),
