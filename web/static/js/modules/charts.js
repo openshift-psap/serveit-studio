@@ -2386,20 +2386,20 @@ function _renderChartsImpl(data, runId, content) {
                     // green = improvement)
                     var basePt = null;
                     for (var bi = 0; bi < pts.length; bi++) {
-                        if (pts[bi].adapter_count === 0 && (pts[bi].throughput_mean || 0) > 0) { basePt = pts[bi]; break; }
+                        if (pts[bi].adapter_count === 0 && (pts[bi].output_tps_mean || 0) > 0) { basePt = pts[bi]; break; }
                     }
                     var deltaLabels = pts.map(function() { return ''; });
                     var deltaAnns = [];
                     if (basePt) {
-                        var baseTp = basePt.throughput_mean;
+                        var baseTps = basePt.output_tps_mean;
                         pts.forEach(function(p, i) {
-                            if (p.adapter_count === 0 || !(p.throughput_mean > 0)) return;
-                            var delta = (p.throughput_mean - baseTp) / baseTp * 100;
+                            if (p.adapter_count === 0 || !(p.output_tps_mean > 0)) return;
+                            var delta = (p.output_tps_mean - baseTps) / baseTps * 100;
                             var txt = (delta > 0 ? '+' : '') + delta.toFixed(0) + '%';
                             deltaLabels[i] = '<br>Δ vs 0 adapters: ' + txt;
                             var col = delta > 0.5 ? '#059669' : (delta < -0.5 ? '#dc2626' : '#64748b');
                             deltaAnns.push({
-                                x: p.adapter_count, y: p.throughput_mean, xref: 'x', yref: 'y2',
+                                x: p.adapter_count, y: p.output_tps_mean, xref: 'x', yref: 'y',
                                 text: txt, showarrow: true, arrowhead: 2, arrowsize: 0.9, arrowwidth: 1.5,
                                 arrowcolor: col, ax: 0, ay: -32,
                                 font: { color: col, size: 11 },
@@ -2410,23 +2410,23 @@ function _renderChartsImpl(data, runId, content) {
 
                     var traces = [
                         {
+                            x: x, y: pts.map(function(p) { return p.output_tps_mean || 0; }),
+                            name: 'Throughput', type: 'scatter', mode: 'lines+markers',
+                            line: { color: '#10b981', width: 3, dash: 'dot' }, marker: { size: 8, symbol: 'diamond' },
+                            customdata: deltaLabels,
+                            hovertemplate: 'Adapters: %{x}<br>Throughput: %{y:,.0f} tok/s%{customdata}<extra></extra>'
+                        },
+                        {
                             x: x, y: pts.map(function(p) { return p.ttft_p90 || 0; }),
-                            name: 'TTFT P90', type: 'scatter', mode: 'lines+markers',
+                            name: 'TTFT P90', type: 'scatter', mode: 'lines+markers', yaxis: 'y2',
                             line: { color: '#3b82f6', width: 3 }, marker: { size: 8 },
                             hovertemplate: 'Adapters: %{x}<br>TTFT P90: %{y:.0f} ms<extra></extra>'
                         },
                         {
                             x: x, y: pts.map(function(p) { return p.itl_p90 || 0; }),
-                            name: 'ITL P90', type: 'scatter', mode: 'lines+markers',
+                            name: 'ITL P90', type: 'scatter', mode: 'lines+markers', yaxis: 'y2',
                             line: { color: '#f59e0b', width: 3 }, marker: { size: 8 },
                             hovertemplate: 'Adapters: %{x}<br>ITL P90: %{y:.1f} ms<extra></extra>'
-                        },
-                        {
-                            x: x, y: pts.map(function(p) { return p.throughput_mean || 0; }),
-                            name: 'Throughput', type: 'scatter', mode: 'lines+markers', yaxis: 'y2',
-                            line: { color: '#10b981', width: 3, dash: 'dot' }, marker: { size: 8, symbol: 'diamond' },
-                            customdata: deltaLabels,
-                            hovertemplate: 'Adapters: %{x}<br>Throughput: %{y:.3f} req/s%{customdata}<extra></extra>'
                         }
                     ];
                     // Shade the LRU-swapping region (adapters > GPU-resident)
@@ -2454,10 +2454,10 @@ function _renderChartsImpl(data, runId, content) {
                         bgcolor: 'rgba(255,255,255,0.8)'
                     }] : [];
                     Plotly.newPlot(chartId, traces, {
-                        margin: { l: 60, r: 60, t: 30, b: 45 },
+                        margin: { l: 70, r: 70, t: 30, b: 45 },
                         xaxis: { title: 'Adapter Count', gridcolor: '#f1f5f9' },
-                        yaxis: { title: 'Latency (ms)', gridcolor: '#f1f5f9' },
-                        yaxis2: { title: 'req/s', overlaying: 'y', side: 'right' },
+                        yaxis: { title: 'Tokens per second', gridcolor: '#f1f5f9' },
+                        yaxis2: { title: 'Latency (ms)', overlaying: 'y', side: 'right' },
                         shapes: shapes, annotations: annotations.concat(deltaAnns),
                         legend: { orientation: 'h', y: 1.12 },
                         hovermode: 'x unified'
