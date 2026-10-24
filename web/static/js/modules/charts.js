@@ -2339,8 +2339,14 @@ function _renderChartsImpl(data, runId, content) {
                 'once the adapter count exceeds it, LRU swapping begins (red shading) and latency degrades.' +
                 '<div id="' + sweepChartId + '" style="width:100%;height:520px;margin-top:10px;"></div>' +
                 affChartHtml +
-                '<table style="width:100%;border-collapse:collapse;margin-top:10px;font-size:0.9em;background:#fff;">' +
-                '<tr style="background:#eef2ff;"><th style="padding:6px;">Adapters</th><th style="padding:6px;">GPU-Resident</th><th style="padding:6px;">TTFT p90</th><th style="padding:6px;">Throughput</th><th style="padding:6px;">ITL p90</th><th style="padding:6px;">Output</th></tr>' +
+                '<table id="lora-sweep-table-' + skey + _chartSuffix + '" style="width:100%;border-collapse:collapse;margin-top:10px;font-size:0.9em;background:#fff;">' +
+                '<tr style="background:#eef2ff;">' +
+                    '<th style="padding:6px;cursor:pointer;" onclick="sortReportTable(\'lora-sweep-table-' + skey + _chartSuffix + '\',0,\'num\')">Adapters ⇅</th>' +
+                    '<th style="padding:6px;cursor:pointer;" onclick="sortReportTable(\'lora-sweep-table-' + skey + _chartSuffix + '\',1,\'num\')">GPU-Resident ⇅</th>' +
+                    '<th style="padding:6px;cursor:pointer;" onclick="sortReportTable(\'lora-sweep-table-' + skey + _chartSuffix + '\',2,\'num\')">TTFT p90 ⇅</th>' +
+                    '<th style="padding:6px;cursor:pointer;" onclick="sortReportTable(\'lora-sweep-table-' + skey + _chartSuffix + '\',3,\'num\')">Throughput ⇅</th>' +
+                    '<th style="padding:6px;cursor:pointer;" onclick="sortReportTable(\'lora-sweep-table-' + skey + _chartSuffix + '\',4,\'num\')">ITL p90 ⇅</th>' +
+                    '<th style="padding:6px;cursor:pointer;" onclick="sortReportTable(\'lora-sweep-table-' + skey + _chartSuffix + '\',5,\'num\')">Output ⇅</th></tr>' +
                 rows + '</table></div></div>';
 
             if (affPts.length >= 2) {
@@ -2564,8 +2570,13 @@ function _renderChartsImpl(data, runId, content) {
                     '<strong>Single-pod</strong> — the adapter was served entirely by one pod (adapter-aware routing; no cold-pod swap-ins). ' +
                     '<strong>Multi-pod</strong> — the adapter\u2019s requests were scattered across pods (random load balancing; scattered requests pay a CPU\u2192GPU adapter swap-in on cold pods).' +
                     '<div id="lora-affinity-summary-chart' + _chartSuffix + '" style="width:100%;height:360px;margin-top:10px;"></div>' +
-                    '<table style="width:100%;border-collapse:collapse;margin-top:10px;font-size:0.9em;background:#fff;">' +
-                    '<tr style="background:#eef2ff;"><th style="padding:6px 10px;text-align:left;">Configuration</th><th style="padding:6px 8px;">Adapters</th><th style="padding:6px 8px;">Single-Pod</th><th style="padding:6px 8px;">Multi-Pod</th><th style="padding:6px 8px;">Routing Behavior</th></tr>' +
+                    '<table id="lora-aff-table' + _chartSuffix + '" style="width:100%;border-collapse:collapse;margin-top:10px;font-size:0.9em;background:#fff;">' +
+                    '<tr style="background:#eef2ff;">' +
+                    '<th style="padding:6px 10px;text-align:left;cursor:pointer;" onclick="sortReportTable(\'lora-aff-table' + _chartSuffix + '\',0,\'str\')">Configuration ⇅</th>' +
+                    '<th style="padding:6px 8px;cursor:pointer;" onclick="sortReportTable(\'lora-aff-table' + _chartSuffix + '\',1,\'num\')">Adapters ⇅</th>' +
+                    '<th style="padding:6px 8px;cursor:pointer;" onclick="sortReportTable(\'lora-aff-table' + _chartSuffix + '\',2,\'num\')">Single-Pod ⇅</th>' +
+                    '<th style="padding:6px 8px;cursor:pointer;" onclick="sortReportTable(\'lora-aff-table' + _chartSuffix + '\',3,\'num\')">Multi-Pod ⇅</th>' +
+                    '<th style="padding:6px 8px;cursor:pointer;" onclick="sortReportTable(\'lora-aff-table' + _chartSuffix + '\',4,\'str\')">Routing Behavior ⇅</th></tr>' +
                     affRows + '</table></div></div>';
 
                 chartQueue.push(function() {
@@ -2654,12 +2665,19 @@ function _renderChartsImpl(data, runId, content) {
                        'scattered across pods (random load balancing)') +
                       '; <span style="color:#ef4444;">' + (pd.scattered || 0) + '</span> served by multiple pods.</div>'
                     : '';
+                var bdId = 'lora-pod-bd-' + pd.config.replace(/[^a-z0-9]/gi, '-') + '-n' + (pd.total_adapters || 0) + _chartSuffix;
                 html += '<div style="margin-top:16px;border:1.5px solid #e2e8f0;border-radius:8px;overflow:hidden;background:#fff;">' +
                     '<div style="background:#f8fafc;padding:8px 14px;font-weight:600;color:#334155;font-size:0.95em;border-bottom:1px solid #e2e8f0;">' +
                     'Pod Breakdown — ' + pd.config + ((pd.total_adapters || 0) > 0 ? ' · n=' + pd.total_adapters : '') + '</div>' +
                     affLine +
-                    '<table class="pod-bd-table" style="width:100%;border-collapse:collapse;font-size:0.88em;background:#fff;">' +
-                    '<tr style="background:#eef2ff;"><th style="padding:6px 10px;text-align:left;">Pod</th><th style="padding:6px 8px;">GPU-Resident Cap</th><th style="padding:6px 8px;">Distinct Adapters Served</th><th style="padding:6px 8px;">Residency Changes</th><th style="padding:6px 8px;text-align:left;">Last Running Set</th><th style="padding:6px 8px;">Waiting</th></tr>' +
+                    '<table id="' + bdId + '" class="pod-bd-table" style="width:100%;border-collapse:collapse;font-size:0.88em;background:#fff;">' +
+                    '<tr style="background:#eef2ff;">' +
+                    '<th style="padding:6px 10px;text-align:left;cursor:pointer;" onclick="sortReportTable(\'' + bdId + '\',0,\'str\')">Pod ⇅</th>' +
+                    '<th style="padding:6px 8px;cursor:pointer;" onclick="sortReportTable(\'' + bdId + '\',1,\'num\')">GPU-Resident Cap ⇅</th>' +
+                    '<th style="padding:6px 8px;cursor:pointer;" onclick="sortReportTable(\'' + bdId + '\',2,\'num\')">Distinct Adapters Served ⇅</th>' +
+                    '<th style="padding:6px 8px;cursor:pointer;" onclick="sortReportTable(\'' + bdId + '\',3,\'num\')">Residency Changes ⇅</th>' +
+                    '<th style="padding:6px 8px;text-align:left;">Last Running Set</th>' +
+                    '<th style="padding:6px 8px;cursor:pointer;" onclick="sortReportTable(\'' + bdId + '\',5,\'num\')">Waiting ⇅</th></tr>' +
                     podRows + '</table></div>';
             });
         }
