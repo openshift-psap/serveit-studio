@@ -231,7 +231,9 @@ class ConfigBuilderMixin:
             lora_num_adapters=self.config.lora_num_adapters,
             lora_max_rank=getattr(self.config, 'lora_max_rank', None),
             lora_max_loras=self._compute_lora_max_loras(tp, num_pods=total_pods),
-            lora_adapter_size_mb=self.config.lora_adapter_size_mb,
+            lora_adapter_size_mb=(self.config.lora_adapter_size_mb
+                                  or self._probe_lora_adapter_size_mb()
+                                  or 22),
             selected_nodes=self.config.selected_nodes or [],
             workload_mode='synthetic' if is_calibration else (self.config.workload_mode or 'synthetic'),
             dataset_source=None if is_calibration else self.config.dataset_source,
