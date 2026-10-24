@@ -173,6 +173,12 @@
                                         <strong>Note:</strong> On OpenShift with Prometheus, weights are derived from actual measured cache hit rates and per-pod KV/queue metrics — highest accuracy. On vanilla Kubernetes without Prometheus, weights are estimated from the configured prefix cache percentage — still better than preset guessing, but less precise.
                                     </div>
                                     <div style="margin-top:8px;color:#92400e;">The winning weights are automatically applied before the latency search (Step 10) so throughput results reflect optimal routing.</div>
+                                    <div style="margin-top:10px;padding:8px 12px;background:#f0fdf4;border-left:3px solid #059669;border-radius:4px;">
+                                        <label style="display:flex;align-items:center;gap:8px;cursor:pointer;">
+                                            <input type="checkbox" id="epp-apply-tuned" style="width:16px;height:16px;cursor:pointer;" onchange="config.epp_apply_tuned=this.checked;saveConfig();" checked>
+                                            <span style="font-size:0.95em;color:#166534;"><strong>Use tuned profile for subsequent tests</strong> — persist the winning EPP weights as the run's routing profile, so the LoRA sweep and calibrated load tests run with optimal routing instead of re-deriving from workload inputs. Uncheck to keep the auto-derived profile for all tests.</span>
+                                        </label>
+                                    </div>
                                 </div>
                             </div>
                         </div>

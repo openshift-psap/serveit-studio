@@ -986,24 +986,28 @@ class EPPTuningMixin:
             # subsequent tests (sweeps, calibrated load) use the tuned
             # weights. Without this, the next test's deploy_prereqs
             # re-derives auto weights from scratch and overwrites the
-            # EPP tuning result.
-            self.config.epp_preset = 'custom'
-            self.config.epp_custom_enabled = True
-            self.config.epp_config = epp_config
-            self.config.epp_auto_weights = {
-                'prefix_cache_weight': best_weights.get('prefix_cache_weight', 3.0),
-                'kv_cache_weight': best_weights.get('kv_cache_weight', 0),
-                'kv_cache_enabled': (best_weights.get('kv_cache_weight', 0) or 0) > 0,
-                'queue_weight': best_weights.get('queue_weight', 2.0),
-                'active_request_weight': best_weights.get('active_request_weight', 0),
-                'active_request_enabled': (best_weights.get('active_request_weight', 0) or 0) > 0,
-                'lora_affinity_enabled': bool(best_weights.get('lora_affinity_weight')),
-                'lora_affinity_weight': best_weights.get('lora_affinity_weight', 0),
-                'session_aware_enabled': True,
-                'session_aware_weight': best_weights.get('session_aware_weight', 5.0),
-            }
-            self.log("  💾 Tuned EPP profile persisted — subsequent tests will use "
-                     "it instead of re-deriving auto weights", 'success')
+            # EPP tuning result. User can disable via epp_apply_tuned.
+            if getattr(self.config, 'epp_apply_tuned', True):
+                self.config.epp_preset = 'custom'
+                self.config.epp_custom_enabled = True
+                self.config.epp_config = epp_config
+                self.config.epp_auto_weights = {
+                    'prefix_cache_weight': best_weights.get('prefix_cache_weight', 3.0),
+                    'kv_cache_weight': best_weights.get('kv_cache_weight', 0),
+                    'kv_cache_enabled': (best_weights.get('kv_cache_weight', 0) or 0) > 0,
+                    'queue_weight': best_weights.get('queue_weight', 2.0),
+                    'active_request_weight': best_weights.get('active_request_weight', 0),
+                    'active_request_enabled': (best_weights.get('active_request_weight', 0) or 0) > 0,
+                    'lora_affinity_enabled': bool(best_weights.get('lora_affinity_weight')),
+                    'lora_affinity_weight': best_weights.get('lora_affinity_weight', 0),
+                    'session_aware_enabled': True,
+                    'session_aware_weight': best_weights.get('session_aware_weight', 5.0),
+                }
+                self.log("  💾 Tuned EPP profile persisted — subsequent tests will use "
+                         "it instead of re-deriving auto weights", 'success')
+            else:
+                self.log("  ⏩ Tuned profile NOT persisted (disabled by user) — "
+                         "subsequent tests will re-derive auto weights", 'info')
 
             from core import PrereqManager
             mgr = PrereqManager(
