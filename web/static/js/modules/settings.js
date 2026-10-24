@@ -715,6 +715,8 @@ function populateCustomFromAuto() {
             'epp-weight-active-request': w.active_request_weight || 2,
             'epp-plugin-session-aware': w.session_aware_enabled,
             'epp-weight-session-aware': w.session_aware_weight || 5,
+            'epp-plugin-no-hit-lru': w.no_hit_lru_enabled,
+            'epp-weight-no-hit-lru': w.no_hit_lru_weight || 1,
         };
         // LoRA affinity is a custom-only plugin (not in the standard auto result keys)
         if (w.lora_affinity_enabled) {
