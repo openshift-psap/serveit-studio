@@ -1478,20 +1478,24 @@ class ReportAnalyzer:
                 import json as _json3
                 _m = _json3.loads(r.manifests_yaml) if r.manifests_yaml else {}
                 _cm = _m.get('epp-configmap', '')
-                _cm = _m.get('epp-configmap', '')
                 if _cm:
                     _doc = _yaml3.safe_load(_cm)
                     _cfg = _yaml3.safe_load(_doc['data'][list(_doc['data'].keys())[0]])
                     _w = {}
+                    _w_decode = {}
                     for _prof in _cfg.get('schedulingProfiles', []):
+                        _target = _w_decode if _prof.get('name') == 'decode' else _w
                         for _p in _prof.get('plugins', []):
                             if _p.get('weight') is not None:
-                                _w[_p['pluginRef']] = _p['weight']
+                                _target[_p['pluginRef']] = _p['weight']
+                    # For AG (single "default" profile), decode weights = prefill
                     epp_deployed = {
                         'prefix_cache_weight': _w.get('prefix-cache-scorer'),
                         'kv_cache_weight': _w.get('kv-cache-utilization-scorer'),
                         'queue_weight': _w.get('queue-scorer'),
                         'active_request_weight': _w.get('active-request-scorer'),
+                        'decode_prefix_cache_weight': _w_decode.get('prefix-cache-scorer', _w.get('prefix-cache-scorer')),
+                        'decode_active_request_weight': _w_decode.get('active-request-scorer', _w.get('active-request-scorer')),
                         'lora_affinity_weight': _w.get('lora-affinity-scorer'),
                         'session_affinity': ('filter' if any(p.get('type') == 'session-affinity-filter' for p in _cfg.get('plugins', []))
                                              else _w.get('session-affinity-scorer')),

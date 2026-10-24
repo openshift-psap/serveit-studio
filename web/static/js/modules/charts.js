@@ -1362,8 +1362,8 @@ function getVal(tc, key) { return tc[key] != null ? String(tc[key]) : null; }
                         if (param.ep_only && cfg.arch !== 'EP') { html += `<td style="text-align:center;">${na}</td>`; continue; }
                         if (param.pd_only && cfg.arch === 'AGGREGATED') { html += `<td style="text-align:center;">${na}</td>`; continue; }
                         const val = param.get(tc);
-                        const display = val || param.def;
-                        const changed = val && val !== param.def && val !== 'null';
+                        const display = (val === null || val === 'null' || val === undefined) ? 'off' : (val || param.def);
+                        const changed = val && val !== param.def && val !== 'null' && val !== undefined;
                         const style = changed ? 'font-weight:700;color:#059669;' : '';
                         html += `<td style="text-align:center;${style}">${display}</td>`;
                     }
