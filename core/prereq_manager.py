@@ -795,6 +795,7 @@ class PrereqManager:
         else:
             session_aware = False
             session_aware_w = 0
+            session_affinity_mode = 'filter'
             lora_affinity = False
             lora_affinity_w = 0
 
@@ -829,7 +830,7 @@ class PrereqManager:
             'slo_weight': slo_w,
             'session_aware_enabled': session_aware,
             'session_aware_weight': session_aware_w,
-            'session_affinity_mode': session_affinity_mode if lora_enabled and lora_n > 20 else 'filter',
+            'session_affinity_mode': session_affinity_mode,
             'lora_affinity_enabled': lora_affinity,
             'lora_affinity_weight': lora_affinity_w,
             'header_label_affinity_enabled': False,
