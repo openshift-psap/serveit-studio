@@ -717,7 +717,10 @@ function updateAutoEppPreview() {
                 '  queue=' + w.queue_weight +
                 '  active=' + (activeEnabled ? w.active_request_weight : 'off');
             if (w.slo_enabled) wText += '  slo=' + w.slo_weight;
-            if (w.session_aware_enabled) wText += '  session-affinity=' + w.session_aware_weight;
+            if (w.session_aware_enabled) {
+                wText += '  session-affinity=';
+                wText += (w.session_affinity_mode === 'scorer') ? w.session_aware_weight : 'filter';
+            }
             if (w.lora_affinity_enabled) wText += '  lora-affinity=' + w.lora_affinity_weight;
             weightsEl.textContent = wText;
         }

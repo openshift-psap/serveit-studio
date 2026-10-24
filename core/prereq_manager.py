@@ -823,6 +823,7 @@ class PrereqManager:
             'slo_weight': slo_w,
             'session_aware_enabled': session_aware,
             'session_aware_weight': session_aware_w,
+            'session_affinity_mode': 'filter',
             'lora_affinity_enabled': lora_affinity,
             'lora_affinity_weight': lora_affinity_w,
             'header_label_affinity_enabled': False,
@@ -835,10 +836,14 @@ class PrereqManager:
             log('  🧮 Auto EPP weights derived from workload:')
             for r in reasons:
                 log(f'     {r}')
-            log(f'     → prefix={w_prefix}, kv={result["kv_cache_weight"]}, '
-                f'queue={w_queue}, active={result["active_request_weight"]}'
+            kv_str = str(result['kv_cache_weight']) if kv_enabled else 'off'
+            active_str = str(result['active_request_weight']) if active_enabled else 'off'
+            sess_str = ('filter' if getattr(self, '_session_affinity_mode', 'filter') == 'filter'
+                        else str(session_aware_w))
+            log(f'     → prefix={w_prefix}, kv={kv_str}, '
+                f'queue={w_queue}, active={active_str}'
                 f'{", slo=3.0" if has_sla else ""}'
-                f'{f", session-affinity={session_aware_w}" if session_aware else ""}'
+                f'{f", session-affinity={sess_str}" if session_aware else ""}'
                 f'{f", lora-affinity={lora_affinity_w}" if lora_affinity else ""}')
 
         return result
