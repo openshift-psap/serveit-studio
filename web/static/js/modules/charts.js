@@ -1277,12 +1277,15 @@ function _renderChartsImpl(data, runId, content) {
                 latency_aware: {prefix_cache_weight:3, kv_cache_weight:2, queue_weight:2, active_request_weight:2, decode_prefix_cache_weight:1, decode_active_request_weight:3},
             };
             function _eppW(tc) {
+                // Use the ARCHIVED configmap weights (what actually deployed)
+                if (tc.epp_deployed && tc.epp_deployed.prefix_cache_weight !== undefined) {
+                    return tc.epp_deployed;
+                }
                 if (!tc.epp_config) return null;
                 const preset = tc.epp_config.preset || rc.epp_preset || 'balanced';
                 return _eppPresets[preset] || _eppPresets.balanced;
             }
-
-            function getVal(tc, key) { return tc[key] != null ? String(tc[key]) : null; }
+function getVal(tc, key) { return tc[key] != null ? String(tc[key]) : null; }
             function pdVal(tc, pKey, dKey) {
                 const p = tc[pKey], d = tc[dKey];
                 if (p != null && d != null && p !== d) return `P=${p} D=${d}`;

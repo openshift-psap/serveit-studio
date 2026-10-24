@@ -1471,10 +1471,39 @@ class ReportAnalyzer:
                 except (json.JSONDecodeError, TypeError):
                     pass
 
+            # Parse EPP weights from the archived configmap for display
+            epp_deployed = None
+            try:
+                import yaml as _yaml3
+                import json as _json3
+                _m = _json3.loads(r.manifests_yaml) if r.manifests_yaml else {}
+                _cm = _m.get('epp-configmap', '')
+                _cm = _m.get('epp-configmap', '')
+                if _cm:
+                    _doc = _yaml3.safe_load(_cm)
+                    _cfg = _yaml3.safe_load(_doc['data'][list(_doc['data'].keys())[0]])
+                    _w = {}
+                    for _prof in _cfg.get('schedulingProfiles', []):
+                        for _p in _prof.get('plugins', []):
+                            if _p.get('weight') is not None:
+                                _w[_p['pluginRef']] = _p['weight']
+                    epp_deployed = {
+                        'prefix_cache_weight': _w.get('prefix-cache-scorer'),
+                        'kv_cache_weight': _w.get('kv-cache-utilization-scorer'),
+                        'queue_weight': _w.get('queue-scorer'),
+                        'active_request_weight': _w.get('active-request-scorer'),
+                        'lora_affinity_weight': _w.get('lora-affinity-scorer'),
+                        'session_affinity': ('filter' if any(p.get('type') == 'session-affinity-filter' for p in _cfg.get('plugins', []))
+                                             else _w.get('session-affinity-scorer')),
+                    }
+            except Exception:
+                pass
+
             all_results.append({
                 'config_name': r.display_label,
                 'test_id': r.config_name,
                 'architecture': (r.architecture or 'unknown').upper(),
+                'epp_deployed': epp_deployed,
                 'ttft_p50': round(r.ttft_p50, 2) if r.ttft_p50 else None,
                 'ttft_p90': round(r.ttft_p90, 2),
                 'ttft_p95': round(r.ttft_p95, 2) if r.ttft_p95 else None,
