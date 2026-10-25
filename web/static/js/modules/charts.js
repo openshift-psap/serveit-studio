@@ -3719,12 +3719,14 @@ function getVal(tc, key) { return tc[key] != null ? String(tc[key]) : null; }
         '#charts-content td[style*="monospace"] { white-space: nowrap; }' +
         '#charts-content .pod-bd-table { table-layout: fixed !important; }' +
         '#charts-content .pod-bd-table th { white-space: normal !important; }' +
-        '#charts-content .pod-bd-table th:nth-child(1), #charts-content .pod-bd-table td:nth-child(1) { width: 16%; }' +
-        '#charts-content .pod-bd-table th:nth-child(2), #charts-content .pod-bd-table td:nth-child(2) { width: 10%; }' +
-        '#charts-content .pod-bd-table th:nth-child(3), #charts-content .pod-bd-table td:nth-child(3) { width: 12%; }' +
-        '#charts-content .pod-bd-table th:nth-child(4), #charts-content .pod-bd-table td:nth-child(4) { width: 12%; }' +
-        '#charts-content .pod-bd-table th:nth-child(5), #charts-content .pod-bd-table td:nth-child(5) { width: 41%; }' +
-        '#charts-content .pod-bd-table th:nth-child(6), #charts-content .pod-bd-table td:nth-child(6) { width: 9%; }' +
+        '#charts-content .pod-bd-table th:nth-child(1), #charts-content .pod-bd-table td:nth-child(1) { width: 13%; }' +
+        '#charts-content .pod-bd-table th:nth-child(2), #charts-content .pod-bd-table td:nth-child(2) { width: 7%; }' +
+        '#charts-content .pod-bd-table th:nth-child(3), #charts-content .pod-bd-table td:nth-child(3) { width: 9%; }' +
+        '#charts-content .pod-bd-table th:nth-child(4), #charts-content .pod-bd-table td:nth-child(4) { width: 9%; }' +
+        '#charts-content .pod-bd-table th:nth-child(5), #charts-content .pod-bd-table td:nth-child(5) { width: 6%; }' +
+        '#charts-content .pod-bd-table th:nth-child(6), #charts-content .pod-bd-table td:nth-child(6) { width: 6%; }' +
+        '#charts-content .pod-bd-table th:nth-child(7), #charts-content .pod-bd-table td:nth-child(7) { width: 41%; }' +
+        '#charts-content .pod-bd-table th:nth-child(8), #charts-content .pod-bd-table td:nth-child(8) { width: 9%; }' +
         '</style>' + html;
 
     content.innerHTML = html;
