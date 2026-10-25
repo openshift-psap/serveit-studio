@@ -2337,8 +2337,12 @@ function getVal(tc, key) { return tc[key] != null ? String(tc[key]) : null; }
             (charts.vllm.lora_pod_details || []).forEach(function(pd) {
                 if (pd && pd.test_id) affByTest[pd.test_id] = pd;
             });
+            var _baseOnly = ((data.run_config || {}).lora_benchmark_mode === 'base_only');
             var rows = pts.map(function(p) {
-                var swap = p.lru_swapping ? ' <span style="color:#ef4444;">⚠️ LRU</span>' : '';
+                // Capacity-prediction flag: working set exceeds pool
+                // residency. Meaningless in base-only mode — no request
+                // targets an adapter, so nothing ever loads or swaps.
+                var swap = (p.lru_swapping && !_baseOnly) ? ' <span style="color:#ef4444;">⚠️ LRU</span>' : '';
                 var aff = loraAffCells(affByTest[p.test_id]);
                 var evict = p.adapter_evictions;
                 var evictCell = (evict === undefined || evict === null) ? '—'
@@ -2414,7 +2418,7 @@ function getVal(tc, key) { return tc[key] != null ? String(tc[key]) : null; }
                 '<table id="lora-sweep-table-' + skey + _chartSuffix + '" style="width:100%;border-collapse:collapse;margin-top:10px;font-size:0.9em;background:#fff;">' +
                 '<tr style="background:#eef2ff;">' +
                     '<th style="padding:6px;cursor:pointer;" onclick="sortReportTable(\'lora-sweep-table-' + skey + _chartSuffix + '\',0,\'num\')">Adapters ⇅</th>' +
-                    '<th style="padding:6px;cursor:pointer;" onclick="sortReportTable(\'lora-sweep-table-' + skey + _chartSuffix + '\',1,\'num\')">GPU-Resident ⇅</th>' +
+                    '<th style="padding:6px;cursor:pointer;" onclick="sortReportTable(\'lora-sweep-table-' + skey + _chartSuffix + '\',1,\'num\')">Resident Slots ⇅</th>' +
                     '<th style="padding:6px;cursor:pointer;" onclick="sortReportTable(\'lora-sweep-table-' + skey + _chartSuffix + '\',2,\'num\')">TTFT p90 ⇅</th>' +
                     '<th style="padding:6px;cursor:pointer;" onclick="sortReportTable(\'lora-sweep-table-' + skey + _chartSuffix + '\',3,\'num\')">Throughput ⇅</th>' +
                     '<th style="padding:6px;cursor:pointer;" onclick="sortReportTable(\'lora-sweep-table-' + skey + _chartSuffix + '\',4,\'num\')">ITL p90 ⇅</th>' +
@@ -2424,7 +2428,13 @@ function getVal(tc, key) { return tc[key] != null ? String(tc[key]) : null; }
                     '<th style="padding:6px;cursor:pointer;" onclick="sortReportTable(\'lora-sweep-table-' + skey + _chartSuffix + '\',8,\'num\')">Single-Pod ⇅</th>' +
                     '<th style="padding:6px;cursor:pointer;" onclick="sortReportTable(\'lora-sweep-table-' + skey + _chartSuffix + '\',9,\'num\')">Multi-Pod ⇅</th>' +
                     '<th style="padding:6px;cursor:pointer;" onclick="sortReportTable(\'lora-sweep-table-' + skey + _chartSuffix + '\',10,\'str\')">Routing Behavior ⇅</th></tr>' +
-                rows + '</table></div></div>' + evictChartHtml;
+                rows + '</table>' +
+                '<div style="font-size:0.85em;color:#64748b;margin-top:8px;line-height:1.7;">' +
+                '<strong>Resident slots</strong> — adapter slots per pod × serving pods (13×8 = 13 slots on each of 8 pods = 104 total pool residency). ' +
+                '<strong>⚠️ LRU</strong> — the adapter working set exceeds total pool residency, so vLLM must evict a least-recently-used adapter to load each new one; the Evictions column measures how often that happened. ' +
+                '<strong>Cache-hit</strong> — prefix-cache hit rate: vLLM keys cache blocks by (prefix, adapter), so spreading requests across adapters multiplies the key space and collapses the hit rate — every miss re-prefills the full prompt. ' +
+                '<strong>Evictions</strong> — estimated LRU removals (vLLM exposes no counter; replayed from the per-pod in-flight sequences).' +
+                '</div></div></div>' + evictChartHtml;
 
             if (affPts.length >= 2) {
                 (function(affPts, chartId) {
