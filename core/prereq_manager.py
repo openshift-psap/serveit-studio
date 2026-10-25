@@ -731,13 +731,16 @@ class PrereqManager:
             reasons.append(f"active: single-turn → load={active_load:.2f}")
 
         # ── 5. LoRA adjustment ──
-        # When many adapters are served, adapter residency routing matters
-        # more than prefix-cache affinity. Two mechanisms:
+        # When LoRA is enabled, adapter residency routing always matters
+        # (avoid redundant adapter loads across pods; preserve prefix-cache
+        # locality for multi-turn conversations on the same adapter):
         # a) weight rebalance: prefix ×0.7, active ×1.3
         # b) enable affinity scorers: session-affinity (sticky by adapter
         #    name in session) + header-label-affinity (route by adapter
         #    header — the RFE-2527 mechanism)
-        if lora_enabled and lora_n > 20:
+        # The scorer (not the filter) keeps load scorers as tie-breakers,
+        # so stickiness does not create hot pods at low adapter counts.
+        if lora_enabled:
             w_prefix = round(w_prefix * 0.7, 1)
             w_active = round(min(5.0, w_active * 1.3), 1)
             reasons.append(f"lora: {lora_n} adapters → prefix ×0.7, active ×1.3 (adapter residency > cache affinity)")

@@ -831,7 +831,6 @@ class EPPTuningMixin:
                 # settings — derived weight, half weight, scorer disabled.
                 auto_w = getattr(self.config, 'epp_auto_weights', None) or {}
                 lora_ab_active = (bool(getattr(self.config, 'lora_enabled', False))
-                                  and int(getattr(self.config, 'lora_num_adapters', 0) or 0) > 20
                                   and bool(auto_w.get('lora_affinity_enabled')))
                 if lora_ab_active:
                     derived_lora_w = float(auto_w.get('lora_affinity_weight', 3.0) or 3.0)
