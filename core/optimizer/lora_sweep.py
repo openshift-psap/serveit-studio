@@ -272,6 +272,7 @@ class LoraSweepMixin:
             # in-flight sequences (metrics_analyzer).
             evictions = 0
             adapter_loads = 0
+            cache_hit_pct = None
             try:
                 import json as _j
                 _prom = (_j.loads(result.metrics_json or '{}')
@@ -283,6 +284,13 @@ class LoraSweepMixin:
                                 for p in _pods.values())
                 adapter_loads = sum(int(p.get('estimated_adapter_loads') or 0)
                                     for p in _pods.values())
+                # Prefix-cache hit rate (hits/queries rate ratio) — the
+                # dominant TTFT factor: the cache is keyed by (prefix,
+                # adapter), so adapter traffic multiplies the key space.
+                _q = (_prom.get('vllm_prefix_cache_queries_rate') or {}).get('avg') or 0
+                _h = (_prom.get('vllm_prefix_cache_hits_rate') or {}).get('avg') or 0
+                if _q:
+                    cache_hit_pct = round(100.0 * _h / _q, 1)
             except Exception:
                 pass
 
@@ -297,6 +305,7 @@ class LoraSweepMixin:
                 'total_slots': total_slots or None,
                 'adapter_evictions': evictions,
                 'adapter_loads': adapter_loads,
+                'cache_hit_pct': cache_hit_pct,
                 'throughput_mean': round(tput, 3),
                 'output_tps_mean': round(result.output_tps_mean or 0, 1),
                 'ttft_p50': round(result.ttft_p50 or 0, 1),

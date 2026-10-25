@@ -2318,6 +2318,13 @@ function getVal(tc, key) { return tc[key] != null ? String(tc[key]) : null; }
         };
     }
 
+    // Cache-hit cell: null -> em-dash, else colored percentage
+    function cacheCell(pct) {
+        if (pct === undefined || pct === null) return '—';
+        var color = pct >= 20 ? '#059669' : (pct >= 5 ? '#f59e0b' : '#ef4444');
+        return '<span style="color:' + color + ';font-weight:600;">' + pct.toFixed(1) + '%</span>';
+    }
+
     if (data.lora_sweep) {
         var lsweep = data.lora_sweep;
         Object.keys(lsweep).forEach(function(skey) {
@@ -2345,6 +2352,7 @@ function getVal(tc, key) { return tc[key] != null ? String(tc[key]) : null; }
                     '<td style="text-align:center;">' + (p.ttft_p90 || 0).toFixed(0) + ' ms</td>' +
                     '<td style="text-align:center;">' + (p.throughput_mean || 0).toFixed(3) + ' req/s</td>' +
                     '<td style="text-align:center;">' + (p.itl_p90 || 0).toFixed(1) + ' ms</td>' +
+                    '<td style="text-align:center;">' + cacheCell(p.cache_hit_pct) + '</td>' +
                     '<td style="text-align:center;">' + (p.output_tps_mean || 0).toFixed(0) + ' tok/s</td>' +
                     '<td style="text-align:center;">' + evictCell + '</td>' +
                     '<td style="text-align:center;color:#059669;">' + aff.single + '</td>' +
@@ -2410,11 +2418,12 @@ function getVal(tc, key) { return tc[key] != null ? String(tc[key]) : null; }
                     '<th style="padding:6px;cursor:pointer;" onclick="sortReportTable(\'lora-sweep-table-' + skey + _chartSuffix + '\',2,\'num\')">TTFT p90 ⇅</th>' +
                     '<th style="padding:6px;cursor:pointer;" onclick="sortReportTable(\'lora-sweep-table-' + skey + _chartSuffix + '\',3,\'num\')">Throughput ⇅</th>' +
                     '<th style="padding:6px;cursor:pointer;" onclick="sortReportTable(\'lora-sweep-table-' + skey + _chartSuffix + '\',4,\'num\')">ITL p90 ⇅</th>' +
-                    '<th style="padding:6px;cursor:pointer;" onclick="sortReportTable(\'lora-sweep-table-' + skey + _chartSuffix + '\',5,\'num\')">Output ⇅</th>' +
-                    '<th style="padding:6px;cursor:pointer;" onclick="sortReportTable(\'lora-sweep-table-' + skey + _chartSuffix + '\',6,\'num\')">Evictions ⇅</th>' +
-                    '<th style="padding:6px;cursor:pointer;" onclick="sortReportTable(\'lora-sweep-table-' + skey + _chartSuffix + '\',7,\'num\')">Single-Pod ⇅</th>' +
-                    '<th style="padding:6px;cursor:pointer;" onclick="sortReportTable(\'lora-sweep-table-' + skey + _chartSuffix + '\',8,\'num\')">Multi-Pod ⇅</th>' +
-                    '<th style="padding:6px;cursor:pointer;" onclick="sortReportTable(\'lora-sweep-table-' + skey + _chartSuffix + '\',9,\'str\')">Routing Behavior ⇅</th></tr>' +
+                    '<th style="padding:6px;cursor:pointer;" onclick="sortReportTable(\'lora-sweep-table-' + skey + _chartSuffix + '\',5,\'num\')">Cache-Hit ⇅</th>' +
+                    '<th style="padding:6px;cursor:pointer;" onclick="sortReportTable(\'lora-sweep-table-' + skey + _chartSuffix + '\',6,\'num\')">Output ⇅</th>' +
+                    '<th style="padding:6px;cursor:pointer;" onclick="sortReportTable(\'lora-sweep-table-' + skey + _chartSuffix + '\',7,\'num\')">Evictions ⇅</th>' +
+                    '<th style="padding:6px;cursor:pointer;" onclick="sortReportTable(\'lora-sweep-table-' + skey + _chartSuffix + '\',8,\'num\')">Single-Pod ⇅</th>' +
+                    '<th style="padding:6px;cursor:pointer;" onclick="sortReportTable(\'lora-sweep-table-' + skey + _chartSuffix + '\',9,\'num\')">Multi-Pod ⇅</th>' +
+                    '<th style="padding:6px;cursor:pointer;" onclick="sortReportTable(\'lora-sweep-table-' + skey + _chartSuffix + '\',10,\'str\')">Routing Behavior ⇅</th></tr>' +
                 rows + '</table></div></div>' + evictChartHtml;
 
             if (affPts.length >= 2) {

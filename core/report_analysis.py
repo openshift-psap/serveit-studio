@@ -2189,6 +2189,7 @@ class ReportAnalyzer:
             # the pod in-flight sequences (see metrics_analyzer).
             evictions = 0
             adapter_loads = 0
+            cache_hit_pct = None
             try:
                 import json as _j
                 _prom = (_j.loads(r.metrics_json or '{}')
@@ -2199,6 +2200,14 @@ class ReportAnalyzer:
                                 for p in _pods.values())
                 adapter_loads = sum(int(p.get('estimated_adapter_loads') or 0)
                                     for p in _pods.values())
+                # Prefix-cache hit rate: hits/queries rate ratio. The cache
+                # is keyed by (prefix, adapter), so adapter-targeted traffic
+                # multiplies the key space — this is the dominant TTFT
+                # factor, more than adapter swap costs.
+                _q = (_prom.get('vllm_prefix_cache_queries_rate') or {}).get('avg') or 0
+                _h = (_prom.get('vllm_prefix_cache_hits_rate') or {}).get('avg') or 0
+                if _q:
+                    cache_hit_pct = round(100.0 * _h / _q, 1)
             except Exception:
                 pass
             sweep.setdefault(skey, []).append({
@@ -2208,6 +2217,7 @@ class ReportAnalyzer:
                 'total_slots': total_slots or None,
                 'adapter_evictions': evictions,
                 'adapter_loads': adapter_loads,
+                'cache_hit_pct': cache_hit_pct,
                 'throughput_mean': round(r.throughput_mean or r.throughput_p90 or 0, 3),
                 'output_tps_mean': round(self._get_output_tps(r) or 0, 1),
                 'ttft_p50': round(r.ttft_p50 or 0, 1),
