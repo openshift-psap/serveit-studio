@@ -1759,12 +1759,19 @@ class TestOrchestrator(ParserMixin, GuidellmMixin):
                         result.pod_errors_json = scan_result.to_json()
                         if scan_result.has_critical_errors:
                             result.pod_errors_detected = True
+                            # Critical pod errors invalidate the benchmark:
+                            # fail the test. Metrics are preserved (already
+                            # collected) so the failure is investigable.
+                            result.success = False
+                            result.error_message = (f"Critical pod errors detected: "
+                                                    f"{scan_result.summary}")
                             if log_callback:
                                 log_callback(f"🚨 CRITICAL POD ERRORS DETECTED: {scan_result.summary}")
                                 for report in scan_result.pod_reports:
                                     log_callback(f"   Pod: {report.pod_name}")
                                     for err in report.errors[:5]:
                                         log_callback(f"      [{err.pattern_name}] {err.line[:150]}")
+                                log_callback("   ❌ Test marked as failed — metrics preserved for investigation")
                                 log_callback("\n⚠️  Pods left running for investigation:")
                                 log_callback(f"   kubectl logs -n {self.namespace} -l llm-d.ai/test-id={config.test_id} -c vllm")
                         else:
