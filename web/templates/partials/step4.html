@@ -192,10 +192,11 @@
                                 <div class="input-group" style="max-width:560px;margin-top:12px;">
                                     <label>Benchmark Mode</label>
                                     <select id="lora-benchmark-mode" onchange="config.lora_benchmark_mode=this.value;saveConfig();" style="width:100%;">
-                                        <option value="round_robin">All adapters: each request picks the next adapter (multi-tenant)</option>
+                                        <option value="round_robin">All adapters: each request picks the next adapter (worst-case spread)</option>
+                                        <option value="session_pinned">Session-pinned: each conversation keeps its adapter (realistic tenants)</option>
                                         <option value="base_only">Base model only: no adapter requested (LoRA overhead baseline)</option>
                                     </select>
-                                    <div class="help-text">All adapters: no request asks for a specific adapter — traffic rotates across base + every mounted adapter, like many tenants sharing the model. Base model only: requests never use an adapter — measures what merely having them mounted costs.</div>
+                                    <div class="help-text">All adapters: every request picks the next adapter — maximum spread, defeats the prefix cache (worst case). Session-pinned: every turn of a conversation targets the same adapter — realistic multi-tenant traffic; the conversation's history and document stay cacheable and session routing can pin it to one backend. Base model only: requests never use an adapter — measures what merely having them mounted costs.</div>
                                 </div>
                                 <div style="border-top:1px solid #e2e8f0;margin-top:12px;"></div>
                                 <div style="display:flex;align-items:center;gap:8px;margin-top:12px;">

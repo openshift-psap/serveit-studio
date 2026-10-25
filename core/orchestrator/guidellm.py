@@ -324,21 +324,32 @@ class GuidellmMixin:
         lora_adapters_list = None
         _ln = int(getattr(config, 'lora_num_adapters', 0) or 0)
         _lm = getattr(config, 'lora_benchmark_mode', 'round_robin') or 'round_robin'
+        _session_pinned = _lm == 'session_pinned'
         if (getattr(config, 'lora_enabled', False) and _ln > 0
-                and _lm == 'round_robin'):
+                and _lm in ('round_robin', 'session_pinned')):
             lora_adapters_list = [f'agent-{i:04d}' for i in range(1, _ln + 1)]
             if log_callback:
-                log_callback(f'🔀 LoRA round-robin: {_ln} adapters via native guidellm lora_adapters')
+                if _session_pinned:
+                    log_callback(f'🎯 LoRA session-pinned: each conversation keeps one of {_ln} adapters')
+                else:
+                    log_callback(f'🔀 LoRA round-robin: {_ln} adapters via native guidellm lora_adapters')
 
         if lora_adapters_list:
             import json as _json
-            backend_arg = _json.dumps({
+            _backend = {
                 'kind': 'openai_http', 'target': endpoint,
                 'model': config.model_name,
                 'lora_adapters': lora_adapters_list,
                 'request_format': request_format,
                 'http2': False, 'timeout': 300,
-            })
+            }
+            if _session_pinned:
+                # One model per conversation, kept for all of its turns —
+                # the conversation's history stays cacheable under a single
+                # model key and session-affinity routing can pin the whole
+                # conversation to one backend.
+                _backend['model_assignment'] = 'conversation'
+            backend_arg = _json.dumps(_backend)
         else:
             backend_arg = f'kind=openai_http,target={endpoint},model={config.model_name},request_format={request_format},http2=false,timeout=300'
 
@@ -670,6 +681,7 @@ class GuidellmMixin:
             # immune to multiprocessing). Build the list: base + all adapters.
             # lora_benchmark_mode controls whether guidellm targets adapters:
             #   round_robin — cycle across base + all adapters (stress test)
+            #   session_pinned — each conversation keeps one adapter
             #   base_only/off — all traffic hits base (LoRA overhead baseline)
             _lora_n = int(getattr(config, 'lora_num_adapters', 0) or 0)
             _lora_mode = getattr(config, 'lora_benchmark_mode', 'round_robin') or 'round_robin'
@@ -678,6 +690,11 @@ class GuidellmMixin:
                     if log_callback:
                         log_callback(f'🔀 LoRA round-robin: {_lora_n} adapters + base '
                                      f'via native guidellm multi-model', 'info')
+                elif _lora_mode == 'session_pinned':
+                    if log_callback:
+                        log_callback(f'🎯 LoRA session-pinned: each conversation keeps '
+                                     f'one of {_lora_n} adapters (conversation cacheable, '
+                                     f'session-affinity routable)', 'info')
                 else:
                     if log_callback:
                         log_callback(f'🔌 LoRA server-side only ({_lora_n} adapters mounted, '
@@ -805,16 +822,19 @@ class GuidellmMixin:
             _lora_n = int(getattr(config, 'lora_num_adapters', 0) or 0)
             _lora_mode = getattr(config, 'lora_benchmark_mode', 'round_robin') or 'round_robin'
             if (getattr(config, 'lora_enabled', False) and _lora_n > 0
-                    and _lora_mode == 'round_robin'):
+                    and _lora_mode in ('round_robin', 'session_pinned')):
                 _adapters = [f'agent-{i:04d}' for i in range(1, _lora_n + 1)]
                 import json as _json
-                _backend_arg = _json.dumps({
+                _backend = {
                     'kind': 'openai_http', 'target': endpoint,
                     'model': config.model_name,
                     'lora_adapters': _adapters,
                     'request_format': request_format,
                     'http2': False, 'timeout': 300,
-                })
+                }
+                if _lora_mode == 'session_pinned':
+                    _backend['model_assignment'] = 'conversation'
+                _backend_arg = _json.dumps(_backend)
             else:
                 _backend_arg = f'kind=openai_http,target={endpoint},model={config.model_name},request_format={request_format},http2=false,timeout=300'
             cmd = [
