@@ -516,6 +516,7 @@ class EPPTuningMixin:
             cpu_limit=base_cfg.cpu_limit,
             lora_enabled=base_cfg.lora_enabled,
             lora_num_adapters=base_cfg.lora_num_adapters,
+            lora_benchmark_mode=getattr(base_cfg, 'lora_benchmark_mode', 'round_robin'),
             lora_adapter_size_mb=base_cfg.lora_adapter_size_mb,
             lora_max_loras=getattr(base_cfg, 'lora_max_loras', None),
             lora_max_rank=getattr(base_cfg, 'lora_max_rank', None),

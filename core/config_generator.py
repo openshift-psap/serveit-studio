@@ -82,6 +82,10 @@ class TestConfig:
     # every rank and role — parity is mandatory for multi-node/PD serving.
     lora_enabled: bool = False
     lora_num_adapters: int = 0  # 0/None = disabled; N = agent-01..agent-N
+    # Whether the benchmark targets adapters: round_robin = cycle across
+    # base + all adapters; base_only = traffic hits the base model (LoRA
+    # serving overhead baseline — adapters stay mounted on the pods).
+    lora_benchmark_mode: str = 'round_robin'
     lora_max_rank: int = 16     # acceptance ceiling for adapter rank (sizes GPU workspace)
     lora_max_loras: int = 4     # GPU-resident warm cap (LRU evicts beyond this)
     lora_adapter_size_mb: Optional[int] = None  # None = auto (rank x 20MB); user override for CPU staging math

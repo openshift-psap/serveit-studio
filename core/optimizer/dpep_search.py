@@ -253,6 +253,7 @@ class DPEPSearchMixin:
             # + experts/dp_size), not the TP-based estimate.
             lora_enabled=getattr(self.config, 'lora_enabled', False),
             lora_num_adapters=getattr(self.config, 'lora_num_adapters', 0),
+            lora_benchmark_mode=getattr(self.config, 'lora_benchmark_mode', 'round_robin'),
             lora_max_rank=getattr(self.config, 'lora_max_rank', None),
             lora_max_loras=self._compute_dpep_lora_max_loras(dp_size),
             lora_adapter_size_mb=getattr(self.config, 'lora_adapter_size_mb', None),

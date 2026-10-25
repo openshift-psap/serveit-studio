@@ -229,6 +229,7 @@ class ConfigBuilderMixin:
             cpu_limit=cpu,
             lora_enabled=self.config.lora_enabled,
             lora_num_adapters=self.config.lora_num_adapters,
+            lora_benchmark_mode=getattr(self.config, 'lora_benchmark_mode', 'round_robin'),
             lora_max_rank=getattr(self.config, 'lora_max_rank', None),
             lora_max_loras=self._compute_lora_max_loras(tp, num_pods=total_pods),
             lora_adapter_size_mb=(self.config.lora_adapter_size_mb
@@ -1165,6 +1166,7 @@ class ConfigBuilderMixin:
             cpu_limit=cpu,
             lora_enabled=self.config.lora_enabled,
             lora_num_adapters=self.config.lora_num_adapters,
+            lora_benchmark_mode=getattr(self.config, 'lora_benchmark_mode', 'round_robin'),
             lora_max_rank=getattr(self.config, 'lora_max_rank', None),
             lora_max_loras=self._compute_lora_max_loras(split.prefill_tp, num_pods=split.decode_pods),
             lora_adapter_size_mb=self.config.lora_adapter_size_mb,
@@ -1431,6 +1433,7 @@ class ConfigBuilderMixin:
             cpu_limit=cpu,
             lora_enabled=self.config.lora_enabled,
             lora_num_adapters=self.config.lora_num_adapters,
+            lora_benchmark_mode=getattr(self.config, 'lora_benchmark_mode', 'round_robin'),
             lora_max_rank=getattr(self.config, 'lora_max_rank', None),
             lora_max_loras=self._compute_lora_max_loras(split.prefill_tp, num_pods=split.decode_pods),
             lora_adapter_size_mb=self.config.lora_adapter_size_mb,
