@@ -2411,8 +2411,11 @@ function getVal(tc, key) { return tc[key] != null ? String(tc[key]) : null; }
                 '<div class="chart-card-header" style="background:linear-gradient(135deg,#4f46e5,#818cf8); color:white;">LoRA Adapter Sweep — ' + lbl + '</div>' +
                 '<div style="padding:12px 20px; color:#1e293b; font-size:0.93em; line-height:1.6;">' +
                 'Multi-tenant scaling curve: the best configuration re-tested at increasing <strong>adapter counts</strong>, ' +
-                'with benchmark requests round-robined across the base model and all adapters. GPU residency is auto-sized from free VRAM — ' +
-                'once the adapter count exceeds it, LRU swapping begins (red shading) and latency degrades.' +
+                'with benchmark requests round-robined across the base model and all adapters. ' +
+                '<strong>Reading the chart:</strong> ' +
+                '<strong>dotted green line</strong> — throughput (tokens/s, left axis; dotted to distinguish it from the latency traces on the right axis). ' +
+                '<strong>Δ% labels</strong> — throughput change vs the 0-adapter baseline (green = improvement, red = degradation). ' +
+                '<strong>Red dashed vertical line + shaded region</strong> — the LRU overflow boundary: right of it the adapter working set exceeds total pool residency (Resident Slots product below), so vLLM must swap adapters in and out and latency degrades; the Evictions column measures how much.' +
                 '<div id="' + sweepChartId + '" style="width:100%;height:520px;margin-top:10px;"></div>' +
                 affChartHtml +
                 '<table id="lora-sweep-table-' + skey + _chartSuffix + '" style="width:100%;border-collapse:collapse;margin-top:10px;font-size:0.9em;background:#fff;">' +
