@@ -36,6 +36,10 @@ FALSE_POSITIVE_PATTERNS = [
     re.compile(r'error_code.*OK', re.IGNORECASE),
     re.compile(r'WARNING.*deprecated', re.IGNORECASE),
     re.compile(r'InsecureRequestWarning'),
+    # Pod entrypoint node hygiene (hostPID): kills stale processes from
+    # deleted containers that still hold GPU memory. Contains "Killed",
+    # which the OOM_KILLED pattern matches.
+    re.compile(r'Killed leftover GPU holder'),
 ]
 
 
