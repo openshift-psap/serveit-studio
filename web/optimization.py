@@ -574,6 +574,7 @@ def run_optimization_background(data):
                            if lora_sweep_step_raw else None)
         asymmetric_allow_decode_gt_prefill = _get('asymmetric_allow_decode_gt_prefill', True)
         asymmetric_allow_prefill_gt_decode = _get('asymmetric_allow_prefill_gt_decode', True)
+        workload_type = _get('workload_type', 'continuous')
         pd_search_mode = _get('pd_search_mode', 'smart')
         calibrated_load_enabled = _get('calibrated_load_enabled', False)
         inferencex_sweep_enabled = _get('inferencex_sweep_enabled', False)
@@ -971,6 +972,7 @@ data:
                 latency_constraint_percentile=latency_constraint_percentile,
                 selected_nodes=selected_nodes,
                 workload_mode=workload_mode,
+                workload_type=workload_type,
                 dataset_source=dataset_source,
                 dataset_column=dataset_column,
                 dataset_max_output=dataset_max_output,

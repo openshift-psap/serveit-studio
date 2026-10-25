@@ -120,9 +120,13 @@ function updateUIFromConfig() {
     }
     if (config.length_unit) setLengthUnit(config.length_unit, true);
 
-    // Restore workload type selection
+    // Restore workload type selection. Runs saved before the workload_type
+    // field existed in run configs don't carry it — infer from turns (>1
+    // turns = the multi-turn conversation workload was selected).
     if (config.workload_type) {
         setWorkloadType(config.workload_type);
+    } else if (config.turns && config.turns > 1) {
+        setWorkloadType('multiturn');
     }
 
     // Restore multi-turn sub-sections when the workload is multiturn

@@ -166,6 +166,7 @@ class TestConfig:
 
     # Dataset workload (alternative to synthetic ISL/OSL)
     workload_mode: str = 'synthetic'  # 'synthetic' or 'dataset'
+    workload_type: str = 'continuous'  # UI workload selector: 'continuous' or 'multiturn'
     dataset_source: Optional[str] = None  # HF dataset ID or file path
     dataset_column: Optional[str] = None  # Column name for prompt text
     dataset_max_output: int = 256  # Max output tokens when using dataset
