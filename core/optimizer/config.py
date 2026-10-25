@@ -195,6 +195,9 @@ class RecipeOptimizerConfig:
 
     # Dataset workload (alternative to synthetic ISL/OSL)
     workload_mode: str = 'synthetic'
+    # UI workload selector: 'continuous' or 'multiturn' — persisted so
+    # Apply Settings restores the exact selector state
+    workload_type: str = 'continuous'
     dataset_source: Optional[str] = None
     dataset_column: Optional[str] = None
     dataset_max_output: int = 256
