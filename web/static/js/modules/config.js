@@ -126,9 +126,9 @@ function updateUIFromConfig() {
     // it started (the selector postdates the turns/delay fields), and
     // runs saved before workload_type existed don't carry it at all.
     if ((config.turns && config.turns > 1) || config.workload_type === 'multiturn') {
-        setWorkloadType('multiturn');
+        setWorkloadType('multiturn', true);
     } else if (config.workload_type) {
-        setWorkloadType(config.workload_type);
+        setWorkloadType(config.workload_type, true);
     }
 
     // Restore multi-turn sub-sections when the workload is multiturn
@@ -1830,7 +1830,7 @@ function applyWorkloadPreset(name) {
     // Set workload type and turns
     var isMultiTurn = !!(p.turns && p.turns > 1);
     if (typeof setWorkloadType === 'function') {
-        setWorkloadType(isMultiTurn ? 'multiturn' : 'continuous');
+        setWorkloadType(isMultiTurn ? 'multiturn' : 'continuous', true);
     }
     var turnsToggle = document.getElementById('multi-turn-toggle');
     if (isMultiTurn) {

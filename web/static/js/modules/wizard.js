@@ -192,10 +192,15 @@ if (turnsInput) {
 // Workload Type Selector (Continuous vs Multi-Turn)
 var workloadType = config.workload_type || 'continuous';
 
-function setWorkloadType(type) {
+function setWorkloadType(type, skipSave) {
     workloadType = type;
     config.workload_type = type;
-    saveConfig();
+    // Restore paths (updateUIFromConfig, presets) pass skipSave — saving
+    // from there echoes a config_updated broadcast back to this tab,
+    // whose handler re-runs updateUIFromConfig + goToStep: a save/render
+    // feedback loop that flickers the whole UI on every step move or
+    // Apply Settings. Only explicit user clicks save.
+    if (!skipSave) saveConfig();
 
     const continuousBtn = document.getElementById('workload-type-continuous');
     const multiturnBtn = document.getElementById('workload-type-multiturn');
