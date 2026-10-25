@@ -807,27 +807,39 @@ class TestOrchestrator(ParserMixin, GuidellmMixin):
     def _query_epp_ready_endpoints(self, epp_name: str, pool_name: str) -> Optional[int]:
         """Scrape the EPP's /metrics for llm_d_epp_ready_endpoints.
 
+        The deployment template serves the endpoint unauthenticated
+        (--metrics-endpoint-auth=false, ClusterIP-only); older deployments
+        still authenticate, so a token scrape is tried as fallback.
+
         Returns the gauge value, or None when the endpoint cannot be
         reached or parsed.
         """
+        metrics_url = f"http://{epp_name}.{self.namespace}.svc:9090/metrics"
+        curl_plain = f"curl -s -m 10 '{metrics_url}'"
         try:
             tr = self.deployment_manager.kubectl.run(
                 ['create', 'token', epp_name, '-n', self.namespace, '--duration=5m'],
                 check=False, timeout=15)
-            if tr.returncode != 0 or not tr.stdout.strip():
-                return None
-            token = tr.stdout.strip()
-            curl_cmd = (f"curl -s -m 10 -H 'Authorization: Bearer {token}' "
-                        f"http://{epp_name}.{self.namespace}.svc:9090/metrics")
-            r = self.deployment_manager.kubectl.run(
-                ['exec', self._guidellm_pod_name, '-n', self.namespace, '--', 'bash', '-c', curl_cmd],
-                check=False, timeout=30)
-            if r.returncode != 0 or not r.stdout:
-                return None
-            m = re.search(rf'^llm_d_epp_ready_endpoints{{name="{pool_name}"}}\s+(\d+)', r.stdout, re.M)
-            return int(m.group(1)) if m else None
+            token = tr.stdout.strip() if tr.returncode == 0 else ''
         except Exception:
-            return None
+            token = ''
+        curl_authed = (f"curl -s -m 10 -H 'Authorization: Bearer {token}' '{metrics_url}'"
+                       if token else None)
+        for curl_cmd in (curl_plain, curl_authed):
+            if not curl_cmd:
+                continue
+            try:
+                r = self.deployment_manager.kubectl.run(
+                    ['exec', self._guidellm_pod_name, '-n', self.namespace, '--', 'bash', '-c', curl_cmd],
+                    check=False, timeout=30)
+                if r.returncode != 0 or not r.stdout:
+                    continue
+                m = re.search(rf'^llm_d_epp_ready_endpoints{{name="{pool_name}"}}\s+(\d+)', r.stdout, re.M)
+                if m:
+                    return int(m.group(1))
+            except Exception:
+                continue
+        return None
 
     def _discover_istio_gateway(
         self,
