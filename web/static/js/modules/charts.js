@@ -2380,7 +2380,20 @@ function getVal(tc, key) { return tc[key] != null ? String(tc[key]) : null; }
                 return p.adapter_evictions !== undefined && p.adapter_evictions !== null;
             });
             var evictChartHtml = evictPts.length >= 2
-                ? '<div id="' + evictChartId + '" style="width:100%;height:340px;margin-top:18px;"></div>'
+                ? '<div class="chart-card" style="border-left:6px solid #b91c1c;margin-top:18px;">' +
+                    '<div class="chart-card-header" style="background:linear-gradient(135deg,#b91c1c,#ef4444); color:white;">Adapter Evictions — ' + lbl + '</div>' +
+                    '<div style="padding:12px 20px; color:#1e293b; font-size:0.93em; line-height:1.6;">' +
+                    'How often a serving pod had to <strong>drop a GPU-resident adapter to make room for another one</strong> (LRU eviction) during each sweep level. ' +
+                    'Adapter weights occupy residency slots (<code>max_loras</code> per pod); loading a new adapter once all slots are taken evicts the least-recently-used one, and the evicted adapter\u2019s next request pays a disk reload (~100\u2013300ms). ' +
+                    'vLLM exposes no eviction counter, so this is <strong>estimated by replaying vLLM\u2019s LRU policy</strong> over each pod\u2019s in-flight adapter sequence (<code>vllm:lora_requests_info</code>, 5s scrape resolution — a lower bound).<br>' +
+                    '<strong>Gray bar (loads)</strong> — adapter activations from disk. ' +
+                    '<strong>Red bar (evictions)</strong> — LRU removals under capacity pressure. ' +
+                    '<strong>Dashed line</strong> — pool residency capacity (pods × slots per pod). ' +
+                    'Healthy sticky routing keeps <strong>red at zero left of the line</strong> (each adapter lives on one pod, working set = adapters/pods). ' +
+                    'Red bars <em>left</em> of the line mean a routing leak — adapters scattered across pods inflated every pod\u2019s working set past its slots. ' +
+                    'Red rising <em>right</em> of the line is genuine pool overflow: the working set no longer fits, and every miss thrashes.' +
+                    '<div id="' + evictChartId + '" style="width:100%;height:340px;margin-top:10px;"></div>' +
+                    '</div></div>'
                 : '';
             html += '<div class="chart-card" style="border-left:6px solid #4f46e5;">' +
                 '<div class="chart-card-header" style="background:linear-gradient(135deg,#4f46e5,#818cf8); color:white;">LoRA Adapter Sweep — ' + lbl + '</div>' +
@@ -2390,7 +2403,6 @@ function getVal(tc, key) { return tc[key] != null ? String(tc[key]) : null; }
                 'once the adapter count exceeds it, LRU swapping begins (red shading) and latency degrades.' +
                 '<div id="' + sweepChartId + '" style="width:100%;height:520px;margin-top:10px;"></div>' +
                 affChartHtml +
-                evictChartHtml +
                 '<table id="lora-sweep-table-' + skey + _chartSuffix + '" style="width:100%;border-collapse:collapse;margin-top:10px;font-size:0.9em;background:#fff;">' +
                 '<tr style="background:#eef2ff;">' +
                     '<th style="padding:6px;cursor:pointer;" onclick="sortReportTable(\'lora-sweep-table-' + skey + _chartSuffix + '\',0,\'num\')">Adapters ⇅</th>' +
@@ -2403,7 +2415,7 @@ function getVal(tc, key) { return tc[key] != null ? String(tc[key]) : null; }
                     '<th style="padding:6px;cursor:pointer;" onclick="sortReportTable(\'lora-sweep-table-' + skey + _chartSuffix + '\',7,\'num\')">Single-Pod ⇅</th>' +
                     '<th style="padding:6px;cursor:pointer;" onclick="sortReportTable(\'lora-sweep-table-' + skey + _chartSuffix + '\',8,\'num\')">Multi-Pod ⇅</th>' +
                     '<th style="padding:6px;cursor:pointer;" onclick="sortReportTable(\'lora-sweep-table-' + skey + _chartSuffix + '\',9,\'str\')">Routing Behavior ⇅</th></tr>' +
-                rows + '</table></div></div>';
+                rows + '</table></div></div>' + evictChartHtml;
 
             if (affPts.length >= 2) {
                 (function(affPts, chartId) {
