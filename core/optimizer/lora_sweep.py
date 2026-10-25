@@ -254,16 +254,49 @@ class LoraSweepMixin:
                         tp_for_calc, n_override=n_adapters, num_pods=sweep_pods)
                 except Exception:
                     max_loras = None
-            swapping = bool(max_loras and n_adapters > max_loras)
+            # Total pool residency: pods x slots per pod. LRU swapping only
+            # begins when the adapter working set exceeds the pool total —
+            # comparing n against per-pod slots flags every level past the
+            # first even when all adapters fit across the pods.
+            sweep_pods_count = None
+            try:
+                if kind in ('pd', 'ep'):
+                    sweep_pods_count = payload.decode_pods
+                else:
+                    sweep_pods_count = max(1, gpus // max(payload or 1, 1))
+            except Exception:
+                sweep_pods_count = None
+            total_slots = (max_loras or 0) * (sweep_pods_count or 0)
+            swapping = bool(total_slots and n_adapters > total_slots)
+            # Estimated adapter evictions: vLLM LRU replayed over the pod
+            # in-flight sequences (metrics_analyzer).
+            evictions = 0
+            adapter_loads = 0
+            try:
+                import json as _j
+                _prom = (_j.loads(result.metrics_json or '{}')
+                         .get('prometheus_metrics') or {}) \
+                    if isinstance(result.metrics_json, str) else (result.metrics_json or {}).get('prometheus_metrics', {})
+                _pods = ((_prom.get('vllm_lora_adapter_info') or {})
+                         .get('pods') or {})
+                evictions = sum(int(p.get('estimated_adapter_evictions') or 0)
+                                for p in _pods.values())
+                adapter_loads = sum(int(p.get('estimated_adapter_loads') or 0)
+                                    for p in _pods.values())
+            except Exception:
+                pass
 
             self.log(f"  ✅ n={n_adapters}: TTFT p90={ttft:.0f}ms, "
                      f"Throughput={tput:.3f} req/s"
-                     f"{f', resident={max_loras} (LRU swapping)' if swapping else ''}",
+                     f"{f', resident={max_loras}x{sweep_pods_count}={total_slots} slots (LRU swapping, ~{evictions} evictions)' if swapping else ''}",
                      'success')
             results.append({
                 'adapter_count': n_adapters,
                 'gpu_resident': max_loras,
                 'lru_swapping': swapping,
+                'total_slots': total_slots or None,
+                'adapter_evictions': evictions,
+                'adapter_loads': adapter_loads,
                 'throughput_mean': round(tput, 3),
                 'output_tps_mean': round(result.output_tps_mean or 0, 1),
                 'ttft_p50': round(result.ttft_p50 or 0, 1),

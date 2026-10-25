@@ -2172,16 +2172,42 @@ class ReportAnalyzer:
                 continue
             skey, n = m.group(1), int(m.group(2))
             gpu_resident = None
+            replicas = None
             try:
                 import json as _j
                 if r.test_config_json:
-                    gpu_resident = _j.loads(r.test_config_json).get('lora_max_loras')
+                    _tc = _j.loads(r.test_config_json)
+                    gpu_resident = _tc.get('lora_max_loras')
+                    replicas = _tc.get('replicas')
+            except Exception:
+                pass
+            # Total pool residency: pods x slots per pod. LRU swapping only
+            # begins when the adapter working set exceeds it — comparing n
+            # against per-pod slots flags every level past the first.
+            total_slots = (gpu_resident or 0) * (replicas or 0)
+            # Estimated adapter evictions per level: replayed vLLM LRU over
+            # the pod in-flight sequences (see metrics_analyzer).
+            evictions = 0
+            adapter_loads = 0
+            try:
+                import json as _j
+                _prom = (_j.loads(r.metrics_json or '{}')
+                         .get('prometheus_metrics') or {})
+                _pods = ((_prom.get('vllm_lora_adapter_info') or {})
+                         .get('pods') or {})
+                evictions = sum(int(p.get('estimated_adapter_evictions') or 0)
+                                for p in _pods.values())
+                adapter_loads = sum(int(p.get('estimated_adapter_loads') or 0)
+                                    for p in _pods.values())
             except Exception:
                 pass
             sweep.setdefault(skey, []).append({
                 'adapter_count': n,
                 'gpu_resident': gpu_resident,
-                'lru_swapping': bool(gpu_resident and n > gpu_resident),
+                'lru_swapping': bool(total_slots and n > total_slots),
+                'total_slots': total_slots or None,
+                'adapter_evictions': evictions,
+                'adapter_loads': adapter_loads,
                 'throughput_mean': round(r.throughput_mean or r.throughput_p90 or 0, 3),
                 'output_tps_mean': round(self._get_output_tps(r) or 0, 1),
                 'ttft_p50': round(r.ttft_p50 or 0, 1),

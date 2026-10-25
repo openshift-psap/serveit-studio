@@ -416,6 +416,41 @@ class MetricsAnalyzer:
                     pod_eps[pod] = pod_eps.get(pod, 0) + 1
                 prev = ts
 
+        # Estimate adapter evictions per pod by replaying vLLM's LRU over
+        # the in-flight touch sequence. vLLM evicts in activate_adapter():
+        # activating a non-resident adapter while len(active) >= lora_slots
+        # removes the least-recently-used one. Adapter present in a pod's
+        # running set = active there; the max_lora label is the capacity.
+        # Scrape resolution (5s) merges sub-window bursts, so the estimate
+        # is a lower bound on true evictions.
+        pod_touches = {}
+        for (adapter, pod), ts_list in samples.items():
+            for ts in ts_list:
+                pod_touches.setdefault(pod, []).append((ts, adapter))
+
+        def _simulate_lru(touches, capacity):
+            resident = {}
+            evictions = loads = 0
+            for ts, adapter in sorted(touches):
+                if adapter in resident:
+                    resident[adapter] = ts
+                    continue
+                loads += 1
+                if capacity and len(resident) >= capacity:
+                    oldest = min(resident, key=resident.get)
+                    del resident[oldest]
+                    evictions += 1
+                resident[adapter] = ts
+            return evictions, loads
+
+        for pod, touches in pod_touches.items():
+            capacity = (pods.get(pod) or {}).get('max_lora') or 0
+            evictions, loads = _simulate_lru(touches, capacity)
+            if pod in out_pods:
+                out_pods[pod]['estimated_adapter_evictions'] = evictions
+                out_pods[pod]['estimated_adapter_loads'] = loads
+                out_pods[pod]['distinct_adapters_served'] = len({a for _, a in touches})
+
         stats = {'adapters_total': len(adapter_episodes), 'adapters_measured': 0,
                  'single_pod': 0, 'multi_pod': 0, 'top_pod_share_mean': None}
         shares = []

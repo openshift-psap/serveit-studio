@@ -2333,13 +2333,20 @@ function getVal(tc, key) { return tc[key] != null ? String(tc[key]) : null; }
             var rows = pts.map(function(p) {
                 var swap = p.lru_swapping ? ' <span style="color:#ef4444;">⚠️ LRU</span>' : '';
                 var aff = loraAffCells(affByTest[p.test_id]);
+                var evict = p.adapter_evictions;
+                var evictCell = (evict === undefined || evict === null) ? '—'
+                    : (evict > 0 ? '<span style="color:#ef4444;font-weight:600;">' + evict + '</span>' : '0');
+                var resident = (p.gpu_resident || p.gpu_resident === 0)
+                    ? (p.total_slots ? p.gpu_resident + '×' + (p.total_slots / (p.gpu_resident || 1) === Math.round(p.total_slots / (p.gpu_resident || 1)) ? (p.total_slots / (p.gpu_resident || 1)) : '?') : String(p.gpu_resident))
+                    : '—';
                 return '<tr>' +
                     '<td style="text-align:center;font-weight:700;">' + p.adapter_count + '</td>' +
-                    '<td style="text-align:center;">' + (p.gpu_resident || '—') + swap + '</td>' +
+                    '<td style="text-align:center;">' + resident + swap + '</td>' +
                     '<td style="text-align:center;">' + (p.ttft_p90 || 0).toFixed(0) + ' ms</td>' +
                     '<td style="text-align:center;">' + (p.throughput_mean || 0).toFixed(3) + ' req/s</td>' +
                     '<td style="text-align:center;">' + (p.itl_p90 || 0).toFixed(1) + ' ms</td>' +
                     '<td style="text-align:center;">' + (p.output_tps_mean || 0).toFixed(0) + ' tok/s</td>' +
+                    '<td style="text-align:center;">' + evictCell + '</td>' +
                     '<td style="text-align:center;color:#059669;">' + aff.single + '</td>' +
                     '<td style="text-align:center;color:#ef4444;">' + aff.multi + '</td>' +
                     '<td style="text-align:center;color:' + aff.color + ';font-weight:600;">' + aff.verdict + '</td>' +
@@ -2365,6 +2372,16 @@ function getVal(tc, key) { return tc[key] != null ? String(tc[key]) : null; }
             var affChartHtml = affPts.length >= 2
                 ? '<div id="' + affChartId + '" style="width:100%;height:340px;margin-top:18px;"></div>'
                 : '';
+            // Adapter eviction chart: estimated loads vs evictions per level
+            // (vLLM LRU replayed over the per-pod in-flight sequences). Only
+            // when eviction data exists for at least one level.
+            var evictChartId = 'lora-sweep-evict-chart-' + skey.replace(/[^a-z0-9]/gi, '-') + _chartSuffix;
+            var evictPts = pts.filter(function(p) {
+                return p.adapter_evictions !== undefined && p.adapter_evictions !== null;
+            });
+            var evictChartHtml = evictPts.length >= 2
+                ? '<div id="' + evictChartId + '" style="width:100%;height:340px;margin-top:18px;"></div>'
+                : '';
             html += '<div class="chart-card" style="border-left:6px solid #4f46e5;">' +
                 '<div class="chart-card-header" style="background:linear-gradient(135deg,#4f46e5,#818cf8); color:white;">LoRA Adapter Sweep — ' + lbl + '</div>' +
                 '<div style="padding:12px 20px; color:#1e293b; font-size:0.93em; line-height:1.6;">' +
@@ -2373,6 +2390,7 @@ function getVal(tc, key) { return tc[key] != null ? String(tc[key]) : null; }
                 'once the adapter count exceeds it, LRU swapping begins (red shading) and latency degrades.' +
                 '<div id="' + sweepChartId + '" style="width:100%;height:520px;margin-top:10px;"></div>' +
                 affChartHtml +
+                evictChartHtml +
                 '<table id="lora-sweep-table-' + skey + _chartSuffix + '" style="width:100%;border-collapse:collapse;margin-top:10px;font-size:0.9em;background:#fff;">' +
                 '<tr style="background:#eef2ff;">' +
                     '<th style="padding:6px;cursor:pointer;" onclick="sortReportTable(\'lora-sweep-table-' + skey + _chartSuffix + '\',0,\'num\')">Adapters ⇅</th>' +
@@ -2381,9 +2399,10 @@ function getVal(tc, key) { return tc[key] != null ? String(tc[key]) : null; }
                     '<th style="padding:6px;cursor:pointer;" onclick="sortReportTable(\'lora-sweep-table-' + skey + _chartSuffix + '\',3,\'num\')">Throughput ⇅</th>' +
                     '<th style="padding:6px;cursor:pointer;" onclick="sortReportTable(\'lora-sweep-table-' + skey + _chartSuffix + '\',4,\'num\')">ITL p90 ⇅</th>' +
                     '<th style="padding:6px;cursor:pointer;" onclick="sortReportTable(\'lora-sweep-table-' + skey + _chartSuffix + '\',5,\'num\')">Output ⇅</th>' +
-                    '<th style="padding:6px;cursor:pointer;" onclick="sortReportTable(\'lora-sweep-table-' + skey + _chartSuffix + '\',6,\'num\')">Single-Pod ⇅</th>' +
-                    '<th style="padding:6px;cursor:pointer;" onclick="sortReportTable(\'lora-sweep-table-' + skey + _chartSuffix + '\',7,\'num\')">Multi-Pod ⇅</th>' +
-                    '<th style="padding:6px;cursor:pointer;" onclick="sortReportTable(\'lora-sweep-table-' + skey + _chartSuffix + '\',8,\'str\')">Routing Behavior ⇅</th></tr>' +
+                    '<th style="padding:6px;cursor:pointer;" onclick="sortReportTable(\'lora-sweep-table-' + skey + _chartSuffix + '\',6,\'num\')">Evictions ⇅</th>' +
+                    '<th style="padding:6px;cursor:pointer;" onclick="sortReportTable(\'lora-sweep-table-' + skey + _chartSuffix + '\',7,\'num\')">Single-Pod ⇅</th>' +
+                    '<th style="padding:6px;cursor:pointer;" onclick="sortReportTable(\'lora-sweep-table-' + skey + _chartSuffix + '\',8,\'num\')">Multi-Pod ⇅</th>' +
+                    '<th style="padding:6px;cursor:pointer;" onclick="sortReportTable(\'lora-sweep-table-' + skey + _chartSuffix + '\',9,\'str\')">Routing Behavior ⇅</th></tr>' +
                 rows + '</table></div></div>';
 
             if (affPts.length >= 2) {
@@ -2511,6 +2530,59 @@ function getVal(tc, key) { return tc[key] != null ? String(tc[key]) : null; }
                     }, { displayModeBar: false, responsive: true });
                 });
             })(pts, sweepChartId);
+
+            // Adapter loads vs evictions per sweep level — the thrashing
+            // curve. Bars: gray = adapter loads (activations), red =
+            // evictions (LRU removals). Vertical dashed line = pool
+            // residency capacity (pods x slots); left of it a sticky
+            // working set needs no loads past the first touch.
+            (function(pts, chartId) {
+                if (pts.length < 2) return;
+                chartQueue.push(function() {
+                    var x = pts.map(function(p) { return p.adapter_count; });
+                    var loads = pts.map(function(p) { return p.adapter_loads !== undefined && p.adapter_loads !== null ? p.adapter_loads : null; });
+                    var evictions = pts.map(function(p) { return p.adapter_evictions; });
+                    var capacity = null;
+                    pts.forEach(function(p) {
+                        if (p.total_slots) capacity = p.total_slots;
+                    });
+                    var traces = [
+                        {
+                            x: x, y: loads, name: 'Adapter loads', type: 'bar',
+                            marker: { color: 'rgba(100,116,139,0.55)' },
+                            hovertemplate: '%{x} adapters<br>Loads: %{y}<extra></extra>'
+                        },
+                        {
+                            x: x, y: evictions, name: 'Evictions', type: 'bar',
+                            marker: { color: 'rgba(220,38,38,0.85)' },
+                            hovertemplate: '%{x} adapters<br>Evictions: %{y}<extra></extra>'
+                        }
+                    ];
+                    var shapes = [];
+                    var annotations = [];
+                    if (capacity) {
+                        shapes.push({
+                            type: 'line', x0: capacity, x1: capacity, y0: 0, y1: 1, yref: 'paper',
+                            line: { color: '#b91c1c', width: 2, dash: 'dash' }
+                        });
+                        annotations.push({
+                            x: capacity, y: 1, yref: 'paper', xanchor: 'left', yanchor: 'top',
+                            text: 'pool capacity: ' + capacity + ' slots', showarrow: false,
+                            font: { color: '#b91c1c', size: 11 },
+                            bgcolor: 'rgba(255,255,255,0.85)'
+                        });
+                    }
+                    Plotly.newPlot(chartId, traces, {
+                        barmode: 'group',
+                        margin: { l: 60, r: 20, t: 30, b: 50 },
+                        xaxis: { title: 'Adapter count', gridcolor: '#f1f5f9' },
+                        yaxis: { title: 'Adapter loads / evictions', gridcolor: '#f1f5f9' },
+                        shapes: shapes, annotations: annotations,
+                        legend: { orientation: 'h', y: 1.08 },
+                        hovermode: 'x unified'
+                    }, { displayModeBar: false, responsive: true });
+                });
+            })(evictPts, evictChartId);
         });
     }
 
@@ -2716,11 +2788,18 @@ function getVal(tc, key) { return tc[key] != null ? String(tc[key]) : null; }
                         ? last.length + ' (' + last.slice(0, 5).join(', ') + (last.length > 5 ? ', …' : '') + ')'
                         : '—';
                     var wait = (p.waiting_adapters_last || []).length;
+                    var evict = p.estimated_adapter_evictions;
+                    var evictCell = (evict === undefined || evict === null) ? '—'
+                        : (evict > 0 ? '<span style="color:#ef4444;font-weight:600;">' + evict + '</span>' : '0');
+                    var loadCell = (p.estimated_adapter_loads === undefined || p.estimated_adapter_loads === null)
+                        ? '—' : p.estimated_adapter_loads;
                     return '<tr>' +
                         '<td style="font-family:monospace;font-size:0.85em;">' + pod + '</td>' +
                         '<td style="text-align:center;">' + (p.max_lora != null ? p.max_lora : '—') + '</td>' +
                         '<td style="text-align:center;font-weight:600;">' + distinct + '</td>' +
                         '<td style="text-align:center;">' + (p.residency_set_changes || 0) + '</td>' +
+                        '<td style="text-align:center;">' + loadCell + '</td>' +
+                        '<td style="text-align:center;">' + evictCell + '</td>' +
                         '<td style="font-size:0.82em;color:#64748b;">' + lastStr + '</td>' +
                         '<td style="text-align:center;">' + (wait || '—') + '</td>' +
                         '</tr>';
@@ -2747,8 +2826,10 @@ function getVal(tc, key) { return tc[key] != null ? String(tc[key]) : null; }
                     '<th style="padding:6px 8px;cursor:pointer;" onclick="sortReportTable(\'' + bdId + '\',1,\'num\')">GPU-Resident Cap ⇅</th>' +
                     '<th style="padding:6px 8px;cursor:pointer;" onclick="sortReportTable(\'' + bdId + '\',2,\'num\')">Distinct Adapters Served ⇅</th>' +
                     '<th style="padding:6px 8px;cursor:pointer;" onclick="sortReportTable(\'' + bdId + '\',3,\'num\')">Residency Changes ⇅</th>' +
+                    '<th style="padding:6px 8px;cursor:pointer;" onclick="sortReportTable(\'' + bdId + '\',4,\'num\')">Loads ⇅</th>' +
+                    '<th style="padding:6px 8px;cursor:pointer;" onclick="sortReportTable(\'' + bdId + '\',5,\'num\')">Evictions ⇅</th>' +
                     '<th style="padding:6px 8px;text-align:left;">Last Running Set</th>' +
-                    '<th style="padding:6px 8px;cursor:pointer;" onclick="sortReportTable(\'' + bdId + '\',5,\'num\')">Waiting ⇅</th></tr>' +
+                    '<th style="padding:6px 8px;cursor:pointer;" onclick="sortReportTable(\'' + bdId + '\',7,\'num\')">Waiting ⇅</th></tr>' +
                     podRows + '</table></div>';
             });
         }
