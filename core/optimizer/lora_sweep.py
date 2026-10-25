@@ -268,16 +268,23 @@ class LoraSweepMixin:
                 sweep_pods_count = None
             total_slots = (max_loras or 0) * (sweep_pods_count or 0)
             swapping = bool(total_slots and n_adapters > total_slots)
-            # Estimated adapter evictions: vLLM LRU replayed over the pod
-            # in-flight sequences (metrics_analyzer).
+            # Estimated adapter evictions and cache-hit rate: analyzed
+            # metrics land on the DATABASE row (TestResult carries only the
+            # raw metrics_file), so read the row back after the save above.
             evictions = 0
             adapter_loads = 0
             cache_hit_pct = None
             try:
                 import json as _j
-                _prom = (_j.loads(result.metrics_json or '{}')
-                         .get('prometheus_metrics') or {}) \
-                    if isinstance(result.metrics_json, str) else (result.metrics_json or {}).get('prometheus_metrics', {})
+                _prom = {}
+                if self.db_manager and self.run_id:
+                    with self.db_manager.get_connection() as _conn:
+                        _row = _conn.execute(
+                            'SELECT metrics_json FROM test_configurations '
+                            'WHERE run_id=? AND config_name=?',
+                            (self.run_id, test_id)).fetchone()
+                    if _row and _row[0]:
+                        _prom = (_j.loads(_row[0]).get('prometheus_metrics') or {})
                 _pods = ((_prom.get('vllm_lora_adapter_info') or {})
                          .get('pods') or {})
                 evictions = sum(int(p.get('estimated_adapter_evictions') or 0)
