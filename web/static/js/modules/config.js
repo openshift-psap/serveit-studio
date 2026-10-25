@@ -120,13 +120,15 @@ function updateUIFromConfig() {
     }
     if (config.length_unit) setLengthUnit(config.length_unit, true);
 
-    // Restore workload type selection. Runs saved before the workload_type
-    // field existed in run configs don't carry it — infer from turns (>1
-    // turns = the multi-turn conversation workload was selected).
-    if (config.workload_type) {
-        setWorkloadType(config.workload_type);
-    } else if (config.turns && config.turns > 1) {
+    // Restore workload type selection. Turns > 1 wins over the stored
+    // selector: a run configured with multi-turn values ran real
+    // conversations regardless of which selector button was active when
+    // it started (the selector postdates the turns/delay fields), and
+    // runs saved before workload_type existed don't carry it at all.
+    if ((config.turns && config.turns > 1) || config.workload_type === 'multiturn') {
         setWorkloadType('multiturn');
+    } else if (config.workload_type) {
+        setWorkloadType(config.workload_type);
     }
 
     // Restore multi-turn sub-sections when the workload is multiturn
