@@ -2295,14 +2295,44 @@ function getVal(tc, key) { return tc[key] != null ? String(tc[key]) : null; }
 
     // CACHE HIT SWEEP CHARTS (Step 13)
     // ============================================================
+    // Shared per-test affinity cells: single/multi counts (measured adapters
+    // only, >=2 requests) and the routing verdict, preferring the
+    // request-weighted top-pod share over the single-pod percentage.
+    function loraAffCells(pd) {
+        if (!pd || !(pd.total_adapters > 0)) {
+            return { single: '—', multi: '—', share: '—', verdict: '—', color: '#64748b' };
+        }
+        var total = pd.total_adapters;
+        var conc = pd.concentrated || 0, scat = pd.scattered || 0;
+        var concPct = Math.round(100 * conc / total), scatPct = Math.round(100 * scat / total);
+        var share = pd.top_pod_share;
+        var verdict = (share === null || share === undefined)
+            ? (concPct >= 80 ? 'adapter-aware' : (concPct >= 50 ? 'partial' : 'random'))
+            : (share >= 0.9 ? 'adapter-aware' : (share >= 0.5 ? 'partial' : 'random'));
+        var color = verdict === 'adapter-aware' ? '#059669' : (verdict === 'partial' ? '#f59e0b' : '#ef4444');
+        return {
+            single: conc + ' (' + concPct + '%)',
+            multi: scat + ' (' + scatPct + '%)',
+            share: (share === null || share === undefined) ? '—' : Math.round(100 * share) + '%',
+            verdict: verdict, color: color
+        };
+    }
+
     if (data.lora_sweep) {
         var lsweep = data.lora_sweep;
         Object.keys(lsweep).forEach(function(skey) {
             var pts = lsweep[skey];
             if (!pts || !pts.length) return;
             var lbl = pts[0].config_label || skey;
+            // Sweep levels joined to their adapter-affinity measurements
+            // (by test_id) for the Single/Multi-Pod table columns
+            var affByTest = {};
+            (charts.vllm.lora_pod_details || []).forEach(function(pd) {
+                if (pd && pd.test_id) affByTest[pd.test_id] = pd;
+            });
             var rows = pts.map(function(p) {
                 var swap = p.lru_swapping ? ' <span style="color:#ef4444;">⚠️ LRU</span>' : '';
+                var aff = loraAffCells(affByTest[p.test_id]);
                 return '<tr>' +
                     '<td style="text-align:center;font-weight:700;">' + p.adapter_count + '</td>' +
                     '<td style="text-align:center;">' + (p.gpu_resident || '—') + swap + '</td>' +
@@ -2310,16 +2340,16 @@ function getVal(tc, key) { return tc[key] != null ? String(tc[key]) : null; }
                     '<td style="text-align:center;">' + (p.throughput_mean || 0).toFixed(3) + ' req/s</td>' +
                     '<td style="text-align:center;">' + (p.itl_p90 || 0).toFixed(1) + ' ms</td>' +
                     '<td style="text-align:center;">' + (p.output_tps_mean || 0).toFixed(0) + ' tok/s</td>' +
+                    '<td style="text-align:center;color:#059669;">' + aff.single + '</td>' +
+                    '<td style="text-align:center;color:#ef4444;">' + aff.multi + '</td>' +
+                    '<td style="text-align:center;color:' + aff.color + ';font-weight:600;">' + aff.verdict + '</td>' +
                     '</tr>';
             }).join('');
             var sweepChartId = 'lora-sweep-chart-' + skey.replace(/[^a-z0-9]/gi, '-') + _chartSuffix;
             var affChartId = 'lora-sweep-aff-chart-' + skey.replace(/[^a-z0-9]/gi, '-') + _chartSuffix;
             // Sweep levels joined to their adapter-affinity measurements
-            // (by test_id) — levels without affinity data are skipped
-            var affByTest = {};
-            (charts.vllm.lora_pod_details || []).forEach(function(pd) {
-                if (pd && pd.test_id) affByTest[pd.test_id] = pd;
-            });
+            // (by test_id, joined above) — levels without affinity data
+            // are skipped
             var affPts = [];
             pts.forEach(function(p) {
                 var pd = affByTest[p.test_id];
@@ -2350,7 +2380,10 @@ function getVal(tc, key) { return tc[key] != null ? String(tc[key]) : null; }
                     '<th style="padding:6px;cursor:pointer;" onclick="sortReportTable(\'lora-sweep-table-' + skey + _chartSuffix + '\',2,\'num\')">TTFT p90 ⇅</th>' +
                     '<th style="padding:6px;cursor:pointer;" onclick="sortReportTable(\'lora-sweep-table-' + skey + _chartSuffix + '\',3,\'num\')">Throughput ⇅</th>' +
                     '<th style="padding:6px;cursor:pointer;" onclick="sortReportTable(\'lora-sweep-table-' + skey + _chartSuffix + '\',4,\'num\')">ITL p90 ⇅</th>' +
-                    '<th style="padding:6px;cursor:pointer;" onclick="sortReportTable(\'lora-sweep-table-' + skey + _chartSuffix + '\',5,\'num\')">Output ⇅</th></tr>' +
+                    '<th style="padding:6px;cursor:pointer;" onclick="sortReportTable(\'lora-sweep-table-' + skey + _chartSuffix + '\',5,\'num\')">Output ⇅</th>' +
+                    '<th style="padding:6px;cursor:pointer;" onclick="sortReportTable(\'lora-sweep-table-' + skey + _chartSuffix + '\',6,\'num\')">Single-Pod ⇅</th>' +
+                    '<th style="padding:6px;cursor:pointer;" onclick="sortReportTable(\'lora-sweep-table-' + skey + _chartSuffix + '\',7,\'num\')">Multi-Pod ⇅</th>' +
+                    '<th style="padding:6px;cursor:pointer;" onclick="sortReportTable(\'lora-sweep-table-' + skey + _chartSuffix + '\',8,\'str\')">Routing Behavior ⇅</th></tr>' +
                 rows + '</table></div></div>';
 
             if (affPts.length >= 2) {
@@ -2545,10 +2578,14 @@ function getVal(tc, key) { return tc[key] != null ? String(tc[key]) : null; }
             });
 
             // Adapter affinity summary — one row per config, aggregated from
-            // the per-pod breakdowns below
+            // the per-pod breakdowns below. Non-sweep tests only: sweep
+            // levels (step14-lora-*) show their affinity columns in the
+            // LoRA Adapter Sweep table above, and EPP tuning variants are
+            // excluded entirely.
             var affDetails = (charts.vllm.lora_pod_details || []).filter(function(pd) {
                 return pd && pd.pods && Object.keys(pd.pods).length && (pd.total_adapters || 0) > 0
-                    && !(pd.test_id || '').startsWith('step11-epp-');
+                    && !(pd.test_id || '').startsWith('step11-epp-')
+                    && !(pd.test_id || '').startsWith('step14-lora-');
             });
             if (affDetails.length) {
                 var affRows = affDetails.map(function(pd) {
@@ -2584,7 +2621,7 @@ function getVal(tc, key) { return tc[key] != null ? String(tc[key]) : null; }
                 html += '<div class="chart-card" style="border-left:6px solid #059669;">' +
                     '<div class="chart-card-header" style="background:linear-gradient(135deg,#059669,#34d399); color:white;">Adapter Affinity Summary</div>' +
                     '<div style="padding:12px 20px; color:#1e293b; font-size:0.93em; line-height:1.6;">' +
-                    'How consistently each configuration routes an adapter\u2019s requests to a single pod. ' +
+                    'How consistently each configuration routes an adapter\u2019s requests to a single pod (non-sweep tests; sweep levels appear in the LoRA Adapter Sweep table). ' +
                     'Counts include only adapters with <strong>≥2 requests</strong> (adapters served once are trivially single-pod — the Adapters column shows measured/seen). ' +
                     '<strong>Single-pod</strong> — the adapter was served entirely by one pod (adapter-aware routing; no cold-pod swap-ins). ' +
                     '<strong>Multi-pod</strong> — the adapter\u2019s requests were scattered across pods (random load balancing; scattered requests pay a CPU\u2192GPU adapter swap-in on cold pods). ' +
