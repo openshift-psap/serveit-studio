@@ -2557,13 +2557,27 @@ function getVal(tc, key) { return tc[key] != null ? String(tc[key]) : null; }
                     var scat = pd.scattered || 0;
                     var concPct = total ? Math.round(100 * conc / total) : 0;
                     var scatPct = total ? Math.round(100 * scat / total) : 0;
-                    var verdict = concPct >= 80 ? 'adapter-aware' : (concPct >= 50 ? 'partial' : 'random');
-                    var verdictColor = concPct >= 80 ? '#059669' : (concPct >= 50 ? '#f59e0b' : '#ef4444');
+                    var share = pd.top_pod_share;
+                    // Verdict prefers the request-weighted top-pod share:
+                    // single-pod % degrades when adapters get few requests.
+                    var verdict, verdictColor;
+                    if (share === null || share === undefined) {
+                        verdict = concPct >= 80 ? 'adapter-aware' : (concPct >= 50 ? 'partial' : 'random');
+                        verdictColor = concPct >= 80 ? '#059669' : (concPct >= 50 ? '#f59e0b' : '#ef4444');
+                    } else {
+                        verdict = share >= 0.9 ? 'adapter-aware' : (share >= 0.5 ? 'partial' : 'random');
+                        verdictColor = share >= 0.9 ? '#059669' : (share >= 0.5 ? '#f59e0b' : '#ef4444');
+                    }
+                    var shareCell = (share === null || share === undefined) ? '—' : Math.round(100 * share) + '%';
+                    var shareColor = (share === null || share === undefined) ? '#64748b'
+                        : (share >= 0.9 ? '#059669' : (share >= 0.5 ? '#f59e0b' : '#ef4444'));
+                    var seen = (pd.adapters_seen && pd.adapters_seen !== total) ? total + '/' + pd.adapters_seen : String(total);
                     return '<tr>' +
                         '<td style="padding:6px 10px;font-weight:600;">' + pd.config + '</td>' +
-                        '<td style="padding:6px 8px;text-align:center;">' + total + '</td>' +
+                        '<td style="padding:6px 8px;text-align:center;">' + seen + '</td>' +
                         '<td style="padding:6px 8px;text-align:center;color:#059669;font-weight:600;">' + conc + ' (' + concPct + '%)</td>' +
                         '<td style="padding:6px 8px;text-align:center;color:#ef4444;">' + scat + ' (' + scatPct + '%)</td>' +
+                        '<td style="padding:6px 8px;text-align:center;color:' + shareColor + ';font-weight:600;">' + shareCell + '</td>' +
                         '<td style="padding:6px 8px;text-align:center;color:' + verdictColor + ';font-weight:600;">' + verdict + '</td>' +
                         '</tr>';
                 }).join('');
@@ -2571,8 +2585,10 @@ function getVal(tc, key) { return tc[key] != null ? String(tc[key]) : null; }
                     '<div class="chart-card-header" style="background:linear-gradient(135deg,#059669,#34d399); color:white;">Adapter Affinity Summary</div>' +
                     '<div style="padding:12px 20px; color:#1e293b; font-size:0.93em; line-height:1.6;">' +
                     'How consistently each configuration routes an adapter\u2019s requests to a single pod. ' +
+                    'Counts include only adapters with <strong>≥2 requests</strong> (adapters served once are trivially single-pod — the Adapters column shows measured/seen). ' +
                     '<strong>Single-pod</strong> — the adapter was served entirely by one pod (adapter-aware routing; no cold-pod swap-ins). ' +
-                    '<strong>Multi-pod</strong> — the adapter\u2019s requests were scattered across pods (random load balancing; scattered requests pay a CPU\u2192GPU adapter swap-in on cold pods).' +
+                    '<strong>Multi-pod</strong> — the adapter\u2019s requests were scattered across pods (random load balancing; scattered requests pay a CPU\u2192GPU adapter swap-in on cold pods). ' +
+                    '<strong>Top-pod share</strong> — request-weighted fraction of each adapter\u2019s requests served by its main pod (100% = fully sticky).' +
                     '<div id="lora-affinity-summary-chart' + _chartSuffix + '" style="width:100%;height:360px;margin-top:10px;"></div>' +
                     '<table id="lora-aff-table' + _chartSuffix + '" style="width:100%;border-collapse:collapse;margin-top:10px;font-size:0.9em;background:#fff;">' +
                     '<tr style="background:#eef2ff;">' +
@@ -2580,7 +2596,8 @@ function getVal(tc, key) { return tc[key] != null ? String(tc[key]) : null; }
                     '<th style="padding:6px 8px;cursor:pointer;" onclick="sortReportTable(\'lora-aff-table' + _chartSuffix + '\',1,\'num\')">Adapters ⇅</th>' +
                     '<th style="padding:6px 8px;cursor:pointer;" onclick="sortReportTable(\'lora-aff-table' + _chartSuffix + '\',2,\'num\')">Single-Pod ⇅</th>' +
                     '<th style="padding:6px 8px;cursor:pointer;" onclick="sortReportTable(\'lora-aff-table' + _chartSuffix + '\',3,\'num\')">Multi-Pod ⇅</th>' +
-                    '<th style="padding:6px 8px;cursor:pointer;" onclick="sortReportTable(\'lora-aff-table' + _chartSuffix + '\',4,\'str\')">Routing Behavior ⇅</th></tr>' +
+                    '<th style="padding:6px 8px;cursor:pointer;" onclick="sortReportTable(\'lora-aff-table' + _chartSuffix + '\',4,\'num\')">Top-Pod Share ⇅</th>' +
+                    '<th style="padding:6px 8px;cursor:pointer;" onclick="sortReportTable(\'lora-aff-table' + _chartSuffix + '\',5,\'str\')">Routing Behavior ⇅</th></tr>' +
                     affRows + '</table></div></div>';
 
                 chartQueue.push(function() {

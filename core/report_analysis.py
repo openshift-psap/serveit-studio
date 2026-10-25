@@ -1177,14 +1177,34 @@ class ReportAnalyzer:
             lora_info = prom.get('vllm_lora_adapter_info')
             if isinstance(lora_info, dict) and lora_info.get('pods'):
                 aff = lora_info.get('adapter_pod_affinity') or {}
-                lora_pod_details.append({
-                    'config': r.display_label,
-                    'test_id': r.config_name,
-                    'pods': lora_info['pods'],
-                    'concentrated': sum(1 for v in aff.values() if len(v) == 1),
-                    'scattered': sum(1 for v in aff.values() if len(v) > 1),
-                    'total_adapters': len(aff),
-                })
+                # Request-aware stats: single/multi-pod counted only over
+                # adapters with >= 2 request episodes, so the numbers are
+                # not trivially "single-pod" when each adapter gets one
+                # request (high adapter counts with a fixed request budget).
+                st = lora_info.get('affinity_stats') or {}
+                if st.get('adapters_measured'):
+                    entry = {
+                        'config': r.display_label,
+                        'test_id': r.config_name,
+                        'pods': lora_info['pods'],
+                        'concentrated': st.get('single_pod', 0),
+                        'scattered': st.get('multi_pod', 0),
+                        'total_adapters': st.get('adapters_measured', 0),
+                        'adapters_seen': st.get('adapters_total', len(aff)),
+                        'top_pod_share': st.get('top_pod_share_mean'),
+                    }
+                else:
+                    entry = {
+                        'config': r.display_label,
+                        'test_id': r.config_name,
+                        'pods': lora_info['pods'],
+                        'concentrated': sum(1 for v in aff.values() if len(v) == 1),
+                        'scattered': sum(1 for v in aff.values() if len(v) > 1),
+                        'total_adapters': len(aff),
+                        'adapters_seen': len(aff),
+                        'top_pod_share': None,
+                    }
+                lora_pod_details.append(entry)
             else:
                 lora_pod_details.append(None)
 

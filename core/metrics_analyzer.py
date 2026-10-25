@@ -331,13 +331,20 @@ class MetricsAnalyzer:
     def _extract_lora_adapter_info(query_result: Dict[str, Any]) -> Optional[Dict[str, Any]]:
         """Extract adapter residency/affinity from vllm:lora_requests_info.
 
-        The gauge value is a scrape timestamp (meaningless); the signal is in
-        the labels. Each distinct running_lora_adapters label-set is a separate
-        time series, so the number of distinct sets per pod = adapter churn
-        (LRU evictions / swap-ins). Returns per-pod residency plus an
-        adapter -> pods affinity map (routing-correctness evidence: with
-        adapter-aware routing, each adapter should concentrate on its hot
-        pods; with random LB, adapters spread across all pods).
+        The gauge value is the timestamp at which that label-set state was
+        last refreshed; the signal is in the labels. Each distinct
+        running_lora_adapters label-set is a separate time series, so the
+        number of distinct sets per pod = adapter churn (LRU evictions /
+        swap-ins). vLLM never removes old series (see the exposition leak),
+        so only samples whose gauge value is close to the scrape timestamp
+        reflect CURRENT in-flight state — older frozen series are skipped.
+
+        Returns per-pod residency plus request-aware affinity stats:
+        consecutive fresh samples of an adapter on one pod collapse into
+        one episode (~ one request), so adapters are only counted as
+        single/multi-pod when they have enough episodes for the answer to
+        be meaningful, and top-pod share measures stickiness independently
+        of how many requests each adapter happened to receive.
         """
         result = query_result.get('data', {}).get('result', [])
         if not result:
@@ -345,6 +352,8 @@ class MetricsAnalyzer:
 
         pods = {}
         affinity = {}
+        # (adapter, pod) -> sorted fresh sample timestamps
+        samples = {}
         for series in result:
             m = series.get('metric', {})
             pod = m.get('pod', 'unknown')
@@ -371,6 +380,13 @@ class MetricsAnalyzer:
                     p['last_ts'] = last_ts
                     p['last_running'] = running
                     p['last_waiting'] = waiting
+            for ts, v in values:
+                ts_f = float(ts)
+                # Fresh state only: gauge value tracks the scrape time while
+                # the state persists; frozen series keep an old value.
+                if abs(float(v) - ts_f) <= 10.0:
+                    for adapter in running:
+                        samples.setdefault((adapter, pod), []).append(ts_f)
 
         out_pods = {}
         for pod, p in pods.items():
@@ -387,9 +403,41 @@ class MetricsAnalyzer:
                 'residency_set_changes': len(p['running_sets']),
             }
 
+        # Collapse consecutive same-pod samples (gap <= 25s, ~ one request
+        # spans several scrapes) into episodes, per adapter per pod.
+        episode_gap = 25.0
+        adapter_episodes = {}
+        for (adapter, pod), ts_list in samples.items():
+            ts_list.sort()
+            pod_eps = adapter_episodes.setdefault(adapter, {})
+            prev = None
+            for ts in ts_list:
+                if prev is None or ts - prev > episode_gap:
+                    pod_eps[pod] = pod_eps.get(pod, 0) + 1
+                prev = ts
+
+        stats = {'adapters_total': len(adapter_episodes), 'adapters_measured': 0,
+                 'single_pod': 0, 'multi_pod': 0, 'top_pod_share_mean': None}
+        shares = []
+        for adapter, pod_eps in adapter_episodes.items():
+            total_eps = sum(pod_eps.values())
+            if total_eps < 2:
+                continue
+            stats['adapters_measured'] += 1
+            if len(pod_eps) == 1:
+                stats['single_pod'] += 1
+            else:
+                stats['multi_pod'] += 1
+            shares.append(max(pod_eps.values()) / total_eps)
+        if shares:
+            stats['top_pod_share_mean'] = round(sum(shares) / len(shares), 3)
+
         return {
             'pods': out_pods,
             'adapter_pod_affinity': {a: sorted(ps) for a, ps in sorted(affinity.items())},
+            'adapter_episode_counts': {a: {p: n for p, n in sorted(pod_eps.items())}
+                                       for a, pod_eps in sorted(adapter_episodes.items())},
+            'affinity_stats': stats,
         }
 
     @staticmethod
