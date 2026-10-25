@@ -2687,10 +2687,23 @@ function getVal(tc, key) { return tc[key] != null ? String(tc[key]) : null; }
                         annotations: annotations
                     }, { displayModeBar: false, responsive: true });
                 });
+            } else if ((charts.vllm.lora_pod_details || []).some(function(pd) { return pd && pd.pods; })) {
+                // LoRA pods deployed but no measurable affinity — base_only
+                // benchmark mode sends no adapter requests, so there is no
+                // routing to measure. Explain instead of silently vanishing.
+                var _bmMode = (data.run_config || {}).lora_benchmark_mode || 'round_robin';
+                html += '<div class="chart-card" style="border-left:6px solid #94a3b8;">' +
+                    '<div class="chart-card-header" style="background:linear-gradient(135deg,#64748b,#94a3b8); color:white;">Adapter Affinity Summary</div>' +
+                    '<div style="padding:16px 20px; color:#1e293b; font-size:0.95em; line-height:1.6;">' +
+                    'No adapter affinity to show' +
+                    (_bmMode === 'base_only'
+                        ? ' — this run\u2019s Benchmark Mode is <strong>base model only</strong>: every request targets the base model, ' +
+                          'so adapter routing is never exercised (the sweep\u2019s Single-Pod columns show \u2014). ' +
+                          'The adapters stay mounted on the pods; this run is the LoRA-infrastructure baseline. ' +
+                          'Run the same configuration with Benchmark Mode = round-robin for the adapter-targeted side of the comparison.'
+                        : ' — no adapter traffic was observed in the collected metrics.') +
+                    '</div></div>';
             }
-
-            // Per-pod LoRA residency breakdown — which adapters each pod
-            // actually served, GPU-resident cap, churn, and queue state
             (charts.vllm.lora_pod_details || []).forEach(function(pd) {
                 if (!pd || !pd.pods) return;
                 var podNames = Object.keys(pd.pods);
