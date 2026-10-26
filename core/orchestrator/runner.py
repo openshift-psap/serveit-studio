@@ -668,6 +668,17 @@ class TestOrchestrator(ParserMixin, GuidellmMixin):
                     models_ok = True
                     if log_callback:
                         log_callback("   EPP gateway check: models endpoint OK, verifying routing...")
+                    # Step 3.5: wait for the EPP's endpoint pool BEFORE the
+                    # smoke test. After an EPP restart (EPP tuning variants),
+                    # the EPP responds to API calls (models endpoint 200) but
+                    # hasn't registered the model pods in its scheduling pool
+                    # yet — the smoke test gets 503 and the runner aborts
+                    # before the pool check (which was Step 4, only reached
+                    # after a successful smoke test).
+                    self._wait_for_epp_endpoint_pool(
+                        config, expected_pods,
+                        deadline=start_time + timeout,
+                        log_callback=log_callback)
             except Exception as e:
                 if log_callback and not getattr(self, '_gw_wait_logged', False):
                     log_callback(f"   EPP gateway check: waiting for gateway... (error: {e})")
