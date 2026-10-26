@@ -437,6 +437,13 @@ def handle_start_optimization(data):
         return
 
     with state_lock:
+        # Always regenerate the test plan — a cached plan from a previous
+        # run carries stale parameters (ISL/OSL/QPS/goal), silently running
+        # the wrong workload even when the user changed every field in the UI.
+        # The plan is cheap to regenerate from the current saved config.
+        if state.get('current_test_plan'):
+            state['current_test_plan'] = None
+            log_to_ui('🔄 Test plan regenerated from current config (cached plan cleared)', 'info')
         # If no test plan, auto-generate one if network/storage are already configured
         if not state['current_test_plan'] or not state['current_test_plan'].can_proceed:
             saved_cfg = {}
