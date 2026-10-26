@@ -250,6 +250,8 @@ class PrereqManager:
                     'lora_affinity_weight': plugins.get('lora_affinity', {}).get('weight', 3.0) if plugins.get('lora_affinity', {}).get('enabled', False) else 0,
                     'load_aware_enabled': plugins.get('load_aware', {}).get('enabled', False),
                     'load_aware_weight': plugins.get('load_aware', {}).get('weight', 1.0) if plugins.get('load_aware', {}).get('enabled', False) else 0,
+                    'token_load_enabled': plugins.get('token_load', {}).get('enabled', False),
+                    'token_load_weight': plugins.get('token_load', {}).get('weight', 1.0) if plugins.get('token_load', {}).get('enabled', False) else 0,
                 }
             else:
                 epp_weights = epp_presets.get(epp_preset, epp_presets['balanced'])
@@ -267,6 +269,8 @@ class PrereqManager:
                 epp_weights.setdefault('lora_affinity_weight', 0)
                 epp_weights.setdefault('load_aware_enabled', False)
                 epp_weights.setdefault('load_aware_weight', 0)
+                epp_weights.setdefault('token_load_enabled', False)
+                epp_weights.setdefault('token_load_weight', 0)
 
             # Check if user wants llm-d default EPP (no custom config)
             epp_use_defaults = not epp.get('preset') or epp.get('preset') == 'default'
@@ -311,6 +315,8 @@ class PrereqManager:
                 'header_label_name': 'x-llm-d-adapter',
                 'load_aware_enabled': epp_weights.get('load_aware_enabled', False),
                 'load_aware_weight': epp_weights.get('load_aware_weight', 1.0),
+                'token_load_enabled': epp_weights.get('token_load_enabled', False),
+                'token_load_weight': epp_weights.get('token_load_weight', 1.0),
                 'max_prefix_blocks': epp.get('maxPrefixBlocksToMatch', 256),
                 'epp_log_verbosity': int(epp.get('logVerbosity', 1) or 1),
                 # vLLM's lora_requests_info series leak makes /metrics slow
@@ -551,6 +557,8 @@ class PrereqManager:
                 'lora_affinity_weight': plugins.get('lora_affinity', {}).get('weight', 3.0) if plugins.get('lora_affinity', {}).get('enabled', False) else 0,
                 'load_aware_enabled': plugins.get('load_aware', {}).get('enabled', False),
                 'load_aware_weight': plugins.get('load_aware', {}).get('weight', 1.0) if plugins.get('load_aware', {}).get('enabled', False) else 0,
+                'token_load_enabled': plugins.get('token_load', {}).get('enabled', False),
+                'token_load_weight': plugins.get('token_load', {}).get('weight', 1.0) if plugins.get('token_load', {}).get('enabled', False) else 0,
             }
         else:
             epp_weights = epp_presets.get(epp_preset, epp_presets['balanced'])
@@ -568,6 +576,8 @@ class PrereqManager:
             epp_weights.setdefault('lora_affinity_weight', 0)
             epp_weights.setdefault('load_aware_enabled', False)
             epp_weights.setdefault('load_aware_weight', 0)
+            epp_weights.setdefault('token_load_enabled', False)
+            epp_weights.setdefault('token_load_weight', 0)
 
         context = {
             'namespace': self.namespace,
@@ -593,6 +603,8 @@ class PrereqManager:
             'lora_affinity_weight': epp_weights.get('lora_affinity_weight', 3.0),
             'load_aware_enabled': epp_weights.get('load_aware_enabled', False),
             'load_aware_weight': epp_weights.get('load_aware_weight', 1.0),
+            'token_load_enabled': epp_weights.get('token_load_enabled', False),
+            'token_load_weight': epp_weights.get('token_load_weight', 1.0),
             'epp_v011_plus': is_epp_v011_plus(self.scheduler_image or ''),
             'max_prefix_blocks': epp.get('maxPrefixBlocksToMatch', 256),
             'lru_capacity': epp.get('lruCapacityPerServer', 4000000),

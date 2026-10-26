@@ -22,6 +22,22 @@ data:
 {% endif %}
       - type: prefix-cache-scorer
       - type: queue-scorer
+{% if token_load_enabled | default(false) or prefix_cache_affinity_enabled | default(false) %}
+      - type: approx-prefix-cache-producer
+        parameters:
+          autoTune: {{ prefix_cache_auto_tune | default('false') }}
+          maxPrefixBlocksToMatch: {{ max_prefix_blocks | default(256) }}
+          lruCapacityPerServer: {{ lru_capacity | default(4000000) }}
+      - type: inflight-load-producer
+{% endif %}
+{% if token_load_enabled | default(false) %}
+      - type: token-load-scorer
+{% endif %}
+{% if prefix_cache_affinity_enabled | default(false) %}
+      - type: prefix-cache-affinity-filter
+        parameters:
+          peakPrefillThroughput: {{ peak_prefill_throughput | default(9866) }}
+{% endif %}
 {% if kv_cache_enabled | default(false) %}
       - type: kv-cache-utilization-scorer
 {% endif %}
@@ -102,6 +118,13 @@ data:
 {% if load_aware_enabled | default(false) %}
           - pluginRef: load-aware-scorer
             weight: {{ load_aware_weight | default(1.0) }}
+{% endif %}
+{% if token_load_enabled | default(false) %}
+          - pluginRef: token-load-scorer
+            weight: {{ token_load_weight | default(1.0) }}
+{% endif %}
+{% if prefix_cache_affinity_enabled | default(false) %}
+          - pluginRef: prefix-cache-affinity-filter
 {% endif %}
 {% if slo_enabled | default(false) %}
       - name: slo
