@@ -542,10 +542,25 @@ class EPPTuningMixin:
             scheduler_image=getattr(base_cfg, 'scheduler_image', None) or getattr(self.config, 'scheduler_image', None),
         )
 
+        # Only skip deployment if model pods are actually running — after a
+        # resume (previous EPP tuning cleaned up), the pods are gone and the
+        # variant gets 503 on the smoke test.
+        _pods_running = False
+        try:
+            _lbl = f'llm-d.ai/test-id={base_cfg.test_id}'
+            _r = self.orchestrator.deployment_manager.kubectl.run(
+                ['get', 'pods', '-n', self.orchestrator.namespace, '-l', _lbl, '-o', 'jsonpath={.items[?(@.status.phase=="Running")].metadata.name'],
+                check=False, timeout=10)
+            _pods_running = bool(_r.returncode == 0 and _r.stdout.strip())
+        except Exception:
+            pass
+        if not _pods_running:
+            self.log(f"  📦 No running pods for {base_cfg.test_id} — deploying for EPP variant", 'info')
+
         result = self.orchestrator.run_test(
             epp_test_config,
             cleanup=False,
-            skip_deploy=True,
+            skip_deploy=_pods_running,
             log_callback=lambda msg: self.log(msg, 'info'),
             stop_check=self._should_stop,
         )
