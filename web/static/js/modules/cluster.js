@@ -87,6 +87,24 @@ document.getElementById('start-optimization').addEventListener('click', () => {
     const storageClass = document.getElementById('storage-class-select').value;
     const pvcSize = parseInt(document.getElementById('pvc-size-input').value);
 
+    // Sync config from DOM before starting — the config object can carry
+    // stale values from Apply Settings or a previous run's page load, even
+    // though the form fields display the correct values. Re-read the fields
+    // the user can see so what's displayed is what actually runs.
+    var _domSync = [
+        ['isl-input', 'isl', parseInt], ['isl-input-mt', 'isl', parseInt],
+        ['osl-input', 'osl', parseInt], ['osl-input-mt', 'osl', parseInt],
+        ['isl-min-input', 'isl_min', parseInt], ['isl-max-input', 'isl_max', parseInt],
+        ['users-input', 'users', parseInt], ['turns-input-mt', 'turns', parseInt],
+    ];
+    _domSync.forEach(function(pair) {
+        var el = document.getElementById(pair[0]);
+        if (el && el.value !== '' && !isNaN(el.value)) {
+            var val = pair[2](el.value);
+            if (val > 0) config[pair[1]] = val;
+        }
+    });
+
     // Save config to database before starting — ensures backend reads latest toggle states
     saveConfig();
 
