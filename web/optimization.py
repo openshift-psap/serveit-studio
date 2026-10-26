@@ -502,6 +502,18 @@ def run_optimization_background(data):
         turn_delay_min = _get('turn_delay_min')
         turn_delay_max = _get('turn_delay_max')
         num_users = int(_get('num_users', 100, ui_key='users'))
+        # For constant-rate workloads, the actual request rate lives in the
+        # 'qps' field, NOT in 'users'/'num_users' — the recipe config was
+        # using num_users as the rate, silently reverting to whatever the
+        # users field carried (e.g. 1 from a previous validation run).
+        rate_type_raw = _get('rate_type', 'concurrent')
+        if rate_type_raw == 'constant':
+            qps_val = _get('qps', None)
+            if qps_val is not None:
+                try:
+                    num_users = int(float(qps_val))
+                except (ValueError, TypeError):
+                    pass
         optimization_goal = _get('optimization_metric', 'ttft', ui_key='goal') or 'ttft'
         if optimization_goal == 'balanced':
             optimization_goal = 'full_coverage'  # legacy rename

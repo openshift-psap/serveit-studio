@@ -2262,7 +2262,7 @@ def handle_setup_storage(data):
         # Persist optimization params from the request to DB so auto-start picks them up
         _opt_keys = ['model', 'isl', 'osl', 'isl_stdev', 'osl_stdev',
                      'isl_min', 'isl_max', 'osl_min', 'osl_max',
-                     'users', 'num_users',
+                     'users', 'num_users', 'qps', 'rate_type',
                      'goal', 'optimization_goal', 'max_gpus', 'duration', 'stop_mode',
                      'storage_class', 'per_node_storage', 'local_disk_path',
                      'advanced_vllm_custom_enabled', 'epp_custom_enabled', 'epp_preset',
