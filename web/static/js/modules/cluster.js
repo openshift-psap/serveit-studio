@@ -95,7 +95,7 @@ document.getElementById('start-optimization').addEventListener('click', () => {
         ['isl-input', 'isl', parseInt], ['isl-input-mt', 'isl', parseInt],
         ['osl-input', 'osl', parseInt], ['osl-input-mt', 'osl', parseInt],
         ['isl-min-input', 'isl_min', parseInt], ['isl-max-input', 'isl_max', parseInt],
-        ['users-input', 'users', parseInt], ['turns-input-mt', 'turns', parseInt],
+        ['users-input', 'users', parseInt],
     ];
     _domSync.forEach(function(pair) {
         var el = document.getElementById(pair[0]);
@@ -104,6 +104,21 @@ document.getElementById('start-optimization').addEventListener('click', () => {
             if (val > 0) config[pair[1]] = val;
         }
     });
+    // Workload type from the visible selector determines turns — do NOT
+    // read the turns field directly (it's in the multi-turn panel which
+    // may be hidden with a stale value).
+    var _wtBtn = document.getElementById('workload-type-multiturn');
+    var _isMultiturn = _wtBtn && _wtBtn.style.background.includes('3b82f6');
+    if (!_isMultiturn) {
+        config.turns = 1;
+        config.workload_type = 'continuous';
+    } else {
+        config.workload_type = 'multiturn';
+        var _turnsEl = document.getElementById('turns-input-mt');
+        if (_turnsEl && _turnsEl.value && !isNaN(_turnsEl.value)) {
+            config.turns = parseInt(_turnsEl.value);
+        }
+    }
 
     // Save config to database before starting — ensures backend reads latest toggle states
     saveConfig();
