@@ -1313,6 +1313,24 @@ class TestOrchestrator(ParserMixin, GuidellmMixin):
                 log_callback(f"   TP: {config.tensor_parallelism}")
             log_callback(f"{'='*70}\n")
 
+        # Guard: a None model means the download was skipped and vLLM will
+        # crash-loop with LocalEntryNotFoundError (offline, HF_HUB_OFFLINE=1)
+        if not config.model_name or config.model_name == 'None':
+            if log_callback:
+                log_callback('❌ Test aborted: model_name is empty — the model was never '
+                             'downloaded to the PVC. Select a model on Step 1 and restart.', 'error')
+            result = TestResult(
+                test_id=config.test_id,
+                architecture=config.architecture,
+                deployment_success=False,
+                deployment_ready=False,
+                guidellm_success=False,
+                metrics_collected=False,
+                deployment_start_time=datetime.now().isoformat(),
+                error_message='model_name is empty — model not downloaded',
+            )
+            return result
+
         result = TestResult(
             test_id=config.test_id,
             architecture=config.architecture,

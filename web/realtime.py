@@ -415,6 +415,27 @@ def handle_start_optimization(data):
     if state['optimization_running'] or (_gl and not _gl.dead):
         _kill_existing_run()
 
+    # Guard: a run without a model silently skips the model download and
+    # crash-loops at deploy with LocalEntryNotFoundError (vLLM is offline,
+    # HF_HUB_OFFLINE=1). Fail fast with an actionable message.
+    _start_model = None
+    with state_lock:
+        _start_model = (state.get('current_config') or {}).get('model') or data.get('model')
+    if not _start_model:
+        _saved_model = None
+        try:
+            with get_db() as conn:
+                row = conn.execute('SELECT config_json FROM ui_session_state WHERE id = 1').fetchone()
+                if row and row['config_json']:
+                    _saved_model = json.loads(row['config_json']).get('model')
+        except Exception:
+            pass
+        _start_model = _start_model or _saved_model
+    if not _start_model:
+        log_to_ui('❌ Cannot start: no model selected. Choose a model on Step 1 before starting.', 'error')
+        socketio.emit('status_update', {'running': False, 'message': 'No model selected'})
+        return
+
     with state_lock:
         # If no test plan, auto-generate one if network/storage are already configured
         if not state['current_test_plan'] or not state['current_test_plan'].can_proceed:
