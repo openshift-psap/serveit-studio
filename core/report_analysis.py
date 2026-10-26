@@ -1890,9 +1890,9 @@ class ReportAnalyzer:
                         plugins = epp.get('plugins') or {}
                         if plugins:
                             weights = {
-                                'prefix_cache': plugins.get('prefix_cache', {}).get('weight', '?'),
-                                'kv_cache': plugins.get('kv_cache', {}).get('weight', '?'),
-                                'queue': plugins.get('queue', {}).get('weight', '?'),
+                                'prefix_cache': plugins.get('prefix_cache', {}).get('weight', 'off'),
+                                'kv_cache': plugins.get('kv_cache', {}).get('weight', 'off'),
+                                'queue': plugins.get('queue', {}).get('weight', 'off'),
                                 'active_request': plugins.get('active_request', {}).get('weight', 0),
                                 'lora_affinity': plugins.get('lora_affinity', {}).get('weight', 0),
                                 'session_affinity': plugins.get('session_aware', {}).get('weight', 0),
