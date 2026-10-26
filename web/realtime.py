@@ -455,17 +455,6 @@ def handle_start_optimization(data):
             except Exception:
                 pass
             merged = {**saved_cfg, **data}
-            # The UI's config object can carry stale values (a page loaded
-            # before an API/Apply Settings change, or form state not synced
-            # to the config object). For workload parameters, the saved DB
-            # config is authoritative — the UI payload only fills gaps.
-            _workload_keys = ['model', 'isl', 'osl', 'isl_min', 'isl_max', 'osl_min', 'osl_max',
-                              'qps', 'rate_type', 'users', 'num_users', 'duration', 'stop_mode',
-                              'turns', 'turn_delay', 'prefix_tokens', 'prefix_count',
-                              'max_model_len', 'goal', 'optimization_goal', 'max_gpus']
-            for k in _workload_keys:
-                if saved_cfg.get(k) is not None:
-                    merged[k] = saved_cfg[k]
             has_model = merged.get('model')
             has_infra = merged.get('storage_class') or merged.get('existing_pvc_name')
 
@@ -2407,34 +2396,24 @@ def handle_setup_storage(data):
             log_to_ui('', 'info')
             log_to_ui('🚀 Starting optimization...', 'info')
 
-            # Prepare optimization data — saved DB config is authoritative for
-            # workload parameters (the UI's config object can carry stale values
-            # from a page loaded before an API/Apply Settings change). UI data
-            # only fills gaps.
+            # Prepare optimization data from client config
             resume_run_id = data.get('resume_run_id')
-            def _sv(key, default=None):
-                """Saved-config-first value; falls back to UI data, then default."""
-                if saved.get(key) is not None:
-                    return saved[key]
-                if data.get(key) is not None:
-                    return data[key]
-                return default
             optimization_data = {
-                'model': _sv('model') or model,
-                'isl': _sv('isl', 2000),
-                'osl': _sv('osl', 2000),
-                'isl_stdev': _sv('isl_stdev'),
-                'osl_stdev': _sv('osl_stdev'),
-                'isl_min': _sv('isl_min'),
-                'isl_max': _sv('isl_max'),
-                'osl_min': _sv('osl_min'),
-                'osl_max': _sv('osl_max'),
-                'turns': _sv('turns', 1),
-                'num_users': _sv('users') or _sv('num_users', 100),
-                'optimization_metric': _sv('goal', 'ttft'),
-                'max_test_duration': _sv('duration', 300),
-                'stop_mode': _sv('stop_mode', 'duration'),
-                'max_requests': _sv('max_requests'),
+                'model': model,
+                'isl': data.get('isl') or saved.get('isl', 2000),
+                'osl': data.get('osl') or saved.get('osl', 2000),
+                'isl_stdev': data.get('isl_stdev') or saved.get('isl_stdev'),
+                'osl_stdev': data.get('osl_stdev') or saved.get('osl_stdev'),
+                'isl_min': data.get('isl_min') or saved.get('isl_min'),
+                'isl_max': data.get('isl_max') or saved.get('isl_max'),
+                'osl_min': data.get('osl_min') or saved.get('osl_min'),
+                'osl_max': data.get('osl_max') or saved.get('osl_max'),
+                'turns': data.get('turns') or saved.get('turns', 1),
+                'num_users': data.get('num_users') or saved.get('users', 100),
+                'optimization_metric': data.get('optimization_goal') or saved.get('goal', 'ttft'),
+                'max_test_duration': data.get('duration') or saved.get('duration', 300),
+                'stop_mode': data.get('stop_mode') or saved.get('stop_mode', 'duration'),
+                'max_requests': data.get('max_requests') or saved.get('max_requests'),
                 'hf_token': hf_token,
                 'max_gpus': data.get('max_gpus') or saved.get('max_gpus', 16),
                 'use_achievable_qps': data.get('use_achievable_qps', False),
