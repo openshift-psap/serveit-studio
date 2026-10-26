@@ -3370,7 +3370,7 @@ function getVal(tc, key) { return tc[key] != null ? String(tc[key]) : null; }
                     }
                     const icon = t === bestTrial && !t.is_baseline ? '⭐' : (t.is_baseline ? '📊' : '🔧');
                     const w = t.weights || {};
-                    const wStr = `${w.prefix_cache || '?'}:${w.kv_cache || '?'}:${w.queue || '?'}:${w.active_request || 0}` + (w.lora_affinity ? ` +lora${w.lora_affinity}` : (w.lora_affinity === 0 && t.name && t.name.indexOf('off') >= 0 ? ' +lora-off' : ''));
+                    const wStr = `${w.prefix_cache ?? '?'}:${w.kv_cache == null ? 'off' : w.kv_cache}:${w.queue ?? '?'}:${w.active_request ?? 0}` + (w.lora_affinity ? ` +lora${w.lora_affinity}` : (w.lora_affinity === 0 && t.name && t.name.indexOf('off') >= 0 ? ' +lora-off' : ''));
                     eppHtml += `<div>${icon} <strong>${t.name}</strong> (${wStr}): TTFT ${pctl.label}=${ttft}${ttftDelta}, Throughput=${tput} req/s${tputDelta}</div>`;
                 });
                 eppHtml += '</div>';
@@ -3384,7 +3384,7 @@ function getVal(tc, key) { return tc[key] != null ? String(tc[key]) : null; }
                 const isBase = e.is_baseline;
                 const cls = isBest ? ' class="pareto-row"' : (isBase ? ' style="background:#f8fafc;color:#64748b;font-style:italic;"' : '');
                 const w = e.weights || {};
-                const wStr = `${w.prefix_cache || '?'}:${w.kv_cache || '?'}:${w.queue || '?'}:${w.active_request || 0}` + (w.lora_affinity ? ` +lora${w.lora_affinity}` : '');
+                const wStr = `${w.prefix_cache ?? '?'}:${w.kv_cache == null ? 'off' : w.kv_cache}:${w.queue ?? '?'}:${w.active_request ?? 0}` + (w.lora_affinity ? ` +lora${w.lora_affinity}` : '');
                 const na = 'N/A';
                 let ml = '-';
                 if (e.manifest_types && e.manifest_types.length > 0) {
