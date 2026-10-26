@@ -90,6 +90,23 @@ document.getElementById('start-optimization').addEventListener('click', () => {
     // Save config to database before starting — ensures backend reads latest toggle states
     saveConfig();
 
+    // Guard: without a model the storage setup silently skips the download
+    // and every vLLM pod crash-loops with LocalEntryNotFoundError (offline).
+    // Try the model-card selection and the saved DB config before giving up.
+    if (!config.model) {
+        var _sel = document.querySelector('.model-card.selected');
+        if (_sel && _sel.dataset.model) {
+            config.model = _sel.dataset.model;
+            logToConsole('📦 Recovered model from card selection: ' + config.model, 'info');
+        }
+    }
+    if (!config.model) {
+        logToConsole('❌ Cannot start: no model selected. Choose a model on Step 1 first.', 'error');
+        document.getElementById('start-optimization').style.display = 'block';
+        document.getElementById('stop-optimization').style.display = 'none';
+        return;
+    }
+
     if (useExistingPvc) {
         logToConsole('\n📦 Using existing PVC...', 'info');
     } else {

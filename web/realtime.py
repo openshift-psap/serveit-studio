@@ -2312,6 +2312,18 @@ def handle_setup_storage(data):
         if not model and saved.get('model'):
             model = saved['model']
 
+        # Guard: without a model the download is silently skipped and every
+        # vLLM pod crash-loops with LocalEntryNotFoundError (HF_HUB_OFFLINE=1
+        # prevents the fallback download). Fail fast before any PVC work.
+        if not model:
+            log_to_ui('❌ Cannot set up storage: no model selected. '
+                      'Choose a model on Step 1 before starting.', 'error')
+            socketio.emit('storage_setup_result', {
+                'success': False,
+                'error': 'No model selected — choose a model on Step 1 before starting.',
+            })
+            return
+
         # Per-node storage check BEFORE existing_pvc (per-node has its own download flow)
         per_node_storage = data.get('per_node_storage') or saved.get('per_node_storage', False)
         local_disk_path = data.get('local_disk_path') or saved.get('local_disk_path')
