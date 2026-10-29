@@ -138,6 +138,11 @@ function setWorkloadType(type, skipSave) {
     // Apply Settings. Only explicit user clicks save.
     if (!skipSave) saveConfig();
 
+    // Workload-1 extras: sit right under the active mode's ISL/OSL grid;
+    // per-workload prefix fields only apply to single-turn shapes
+    if (typeof placeWorkload1Extras === 'function') placeWorkload1Extras();
+    if (typeof renderExtraWorkloads === 'function') renderExtraWorkloads();
+
     const continuousBtn = document.getElementById('workload-type-continuous');
     const multiturnBtn = document.getElementById('workload-type-multiturn');
     const continuousSettings = document.getElementById('continuous-settings');

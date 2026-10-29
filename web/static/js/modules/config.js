@@ -1998,6 +1998,20 @@ function setExtraWorkloadField(i, field, value) {
     saveConfig();
 }
 
+function placeWorkload1Extras() {
+    var extras = document.getElementById('workload1-extras');
+    if (!extras) return;
+    var isMt = config.workload_type === 'multiturn';
+    var block = document.getElementById(isMt ? 'multiturn-settings' : 'continuous-settings');
+    if (!block) return;
+    var grid = block.querySelector('.input-grid');
+    if (grid && grid.parentNode) {
+        grid.parentNode.insertBefore(extras, grid.nextSibling);
+    }
+    var pf = document.getElementById('workload1-prefix-fields');
+    if (pf) pf.style.display = isMt ? 'none' : 'contents';
+}
+
 function updateWorkloadModeUI() {
     var multi = !!(config.parallel_workloads && config.parallel_workloads.length);
     var extras = document.getElementById('extra-workloads-body');
@@ -2006,6 +2020,7 @@ function updateWorkloadModeUI() {
     if (note) note.style.display = multi ? 'block' : 'none';
     // workload-1's load & prefix row is always visible — the values persist
     // and take effect when additional workloads are added
+    placeWorkload1Extras();
 }
 
 function renderWorkload1Extras() {
@@ -2072,8 +2087,9 @@ function renderExtraWorkloads() {
                         '<option value="poisson"' + (rateType === 'poisson' ? ' selected' : '') + '>Poisson</option>' +
                     '</select>' +
                     '<div class="help-text">How this workload issues requests.</div></div>' +
-                grp('prefix_tokens', 'Shared Prefix (tokens)', w.prefix_tokens, 'e.g. 256', 'Prefix reused across this workload\'s requests.') +
-                grp('prefix_count', 'Prefixes', w.prefix_count, 'e.g. 1', 'Number of distinct prefix variants.') +
+                (config.workload_type === 'multiturn' ? '' :
+                    grp('prefix_tokens', 'Shared Prefix (tokens)', w.prefix_tokens, 'e.g. 256', 'Prefix reused across this workload' + String.fromCharCode(39) + 's requests.') +
+                    grp('prefix_count', 'Prefixes', w.prefix_count, 'e.g. 1', 'Number of distinct prefix variants.'))
             '</div>' +
         '</div>';
     });
