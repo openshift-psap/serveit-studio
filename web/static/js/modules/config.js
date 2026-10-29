@@ -2098,15 +2098,20 @@ function renderExtraWorkloads() {
 
 function restoreWorkloadsUI() {
     var multi = !!(config.parallel_workloads && config.parallel_workloads.length);
-    if (multi && !config.workload1) {
+    if (multi) {
         var w0 = config.parallel_workloads[0] || {};
-        config.workload1 = {
-            name: w0.name || 'workload-1',
-            concurrency: w0.concurrency || config.users || 10,
-            rate_type: w0.rate_type || null,
-            prefix_tokens: w0.prefix_tokens || null,
-            prefix_count: w0.prefix_count || null
-        };
+        if (!config.workload1) {
+            config.workload1 = {};
+        }
+        // Backfill null/missing values from the workload's stored data —
+        // a stale session state can hold a workload1 with nulls (saved
+        // before this apply), and w0 is what actually ran. Existing
+        // (user-edited) values are preserved.
+        config.workload1.name = config.workload1.name || w0.name || 'workload-1';
+        config.workload1.concurrency = config.workload1.concurrency || w0.concurrency || config.users || 10;
+        config.workload1.rate_type = config.workload1.rate_type || w0.rate_type || null;
+        config.workload1.prefix_tokens = config.workload1.prefix_tokens != null ? config.workload1.prefix_tokens : (w0.prefix_tokens != null ? w0.prefix_tokens : null);
+        config.workload1.prefix_count = config.workload1.prefix_count != null ? config.workload1.prefix_count : (w0.prefix_count != null ? w0.prefix_count : null);
     }
     updateWorkloadModeUI();
     renderWorkload1Extras();
