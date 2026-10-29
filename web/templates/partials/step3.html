@@ -214,6 +214,42 @@
                                                         <div class="help-text" id="osl-help-mt">How long is the reply the AI generates per turn?</div>
                                                     </div>
                                                 </div>
+                                                <!-- Length variation & ranges per turn (always visible) -->
+                                                <div class="input-grid">
+                                                    <div class="input-group compact">
+                                                        <label>Input Variation (σ)</label>
+                                                        <input type="number" id="isl-stdev-input-mt" value="" min="0" max="32000" placeholder="e.g. 500" oninput="config.isl_stdev=this.value?parseInt(this.value):null;saveConfig();">
+                                                        <div class="help-text">Standard deviation around ISL per turn.</div>
+                                                    </div>
+                                                    <div class="input-group compact">
+                                                        <label>Output Variation (σ)</label>
+                                                        <input type="number" id="osl-stdev-input-mt" value="" min="0" max="8000" placeholder="e.g. 100" oninput="config.osl_stdev=this.value?parseInt(this.value):null;saveConfig();">
+                                                        <div class="help-text">Standard deviation around OSL per turn.</div>
+                                                    </div>
+                                                    <div class="input-group compact">
+                                                        <label>Input Length Range</label>
+                                                        <div style="display:flex;gap:8px;align-items:center;">
+                                                            <div style="flex:1;"><div style="font-size:0.75em;color:#64748b;margin-bottom:2px;">Minimum</div>
+                                                                <input type="number" value="" min="1" max="1000000" placeholder="—" style="width:100%;" oninput="config.isl_min=this.value?parseInt(this.value):null;saveConfig();"></div>
+                                                            <div style="flex:1;"><div style="font-size:0.75em;color:#64748b;margin-bottom:2px;">Maximum</div>
+                                                                <input type="number" value="" min="1" max="1000000" placeholder="—" style="width:100%;" oninput="config.isl_max=this.value?parseInt(this.value):null;saveConfig();"></div>
+                                                        </div>
+                                                        <div class="help-text">Hard limits on input tokens per turn. Leave empty for no limits.</div>
+                                                    </div>
+                                                    <div class="input-group compact">
+                                                        <label>Output Length Range</label>
+                                                        <div style="display:flex;gap:8px;align-items:center;">
+                                                            <div style="flex:1;"><div style="font-size:0.75em;color:#64748b;margin-bottom:2px;">Minimum</div>
+                                                                <input type="number" value="" min="1" max="1000000" placeholder="—" style="width:100%;" oninput="config.osl_min=this.value?parseInt(this.value):null;saveConfig();"></div>
+                                                            <div style="flex:1;"><div style="font-size:0.75em;color:#64748b;margin-bottom:2px;">Maximum</div>
+                                                                <input type="number" value="" min="1" max="1000000" placeholder="—" style="width:100%;" oninput="config.osl_max=this.value?parseInt(this.value):null;saveConfig();"></div>
+                                                        </div>
+                                                        <div class="help-text">Hard limits on output tokens per turn. Leave empty for no limits.</div>
+                                                    </div>
+                                                </div>
+
+
+
 
 
 
@@ -369,38 +405,7 @@
                                                     </div>
                                                 </div>
 
-                                                <!-- Length Variation for Multi-Turn -->
-                                                <div style="border-top:1px solid #dcfce7;margin-top:16px;">
-                                                    <div style="padding:12px 20px;cursor:pointer;display:flex;align-items:center;justify-content:space-between;margin:-16px -20px 0 -20px;" onclick="var on=!document.getElementById('length-variation-mt-enabled').checked;document.getElementById('length-variation-mt-enabled').checked=on;document.getElementById('length-variation-mt-body').style.display=on?'block':'none';document.getElementById('length-variation-mt-inner').style.opacity=on?'1':'0.4';var sw=document.getElementById('length-variation-mt-switch');sw.style.background=on?'#15803d':'#ccc';sw.querySelector('span').style.transform=on?'translateX(18px)':'translateX(0)';if(!on){document.getElementById('isl-stdev-input-mt').value='';document.getElementById('osl-stdev-input-mt').value='';config.isl_stdev=null;config.osl_stdev=null;saveConfig();}">
-                                                        <div style="display:flex;align-items:center;gap:10px;padding:12px 20px;">
-                                                            <div style="font-size:1.3em;flex-shrink:0;">📊</div>
-                                                            <div>
-                                                                <div style="font-weight:600;color:#15803d;font-size:0.95em;">Length Variation (per turn)</div>
-                                                                <div style="color:#166534;font-size:0.82em;margin-top:2px;">Add randomness to input/output lengths</div>
-                                                            </div>
-                                                        </div>
-                                                        <input type="checkbox" id="length-variation-mt-enabled" style="display:none;">
-                                                        <div id="length-variation-mt-switch" style="width:40px;height:22px;background:#ccc;border-radius:11px;position:relative;transition:background-color 0.2s;flex-shrink:0;margin-right:20px;">
-                                                            <span style="position:absolute;top:2px;left:2px;width:18px;height:18px;background:white;border-radius:50%;transition:transform 0.2s;box-shadow:0 1px 3px rgba(0,0,0,0.2);display:block;"></span>
-                                                        </div>
-                                                    </div>
-                                                    <div id="length-variation-mt-body" style="display:none;padding-top:12px;">
-                                                        <div id="length-variation-mt-inner" style="opacity:0.4;transition:all 0.2s;padding:0 20px 16px;">
-                                                        <div class="input-grid">
-                                                            <div class="input-group">
-                                                                <label>Input Length Variation (stdev)</label>
-                                                                <input type="number" id="isl-stdev-input-mt" value="" min="0" max="32000" placeholder="e.g. 500" oninput="config.isl_stdev=this.value?parseInt(this.value):null;saveConfig();">
-                                                                <div class="help-text">Standard deviation around ISL per turn.</div>
-                                                            </div>
-                                                            <div class="input-group">
-                                                                <label>Output Length Variation (stdev)</label>
-                                                                <input type="number" id="osl-stdev-input-mt" value="" min="0" max="8000" placeholder="e.g. 100" oninput="config.osl_stdev=this.value?parseInt(this.value):null;saveConfig();">
-                                                                <div class="help-text">Standard deviation around OSL per turn.</div>
-                                                            </div>
-                                                        </div>
-                                                        </div>
-                                                    </div>
-                                                </div>
+
 
                                                 <!-- Inter-Turn Delay toggle -->
                                                 <div style="border-top:1px solid #dcfce7;margin-top:16px;">
