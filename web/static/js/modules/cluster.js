@@ -202,6 +202,8 @@ document.getElementById('start-optimization').addEventListener('click', () => {
         epp_preset: config.epp_preset || 'balanced',
         epp_benchmark: config.epp_benchmark || false,
         epp_config: config.epp_config || null,
+        epp_max_evals: config.epp_max_evals || 12,
+        parallel_workloads: (config.parallel_workloads && config.parallel_workloads.length) ? config.parallel_workloads : null,
         advanced_vllm_custom_enabled: config.advanced_vllm_custom_enabled === true,
         advanced_vllm: config.advanced_vllm || null,
         image: config.image || null,

@@ -28,11 +28,11 @@ class TestOrchestrator(ParserMixin, GuidellmMixin):
 
     def __init__(
         self,
-        namespace: str = 'serveit',
+        namespace: str = "serveit",
         kubeconfig: Optional[str] = None,
         thanos_url: Optional[str] = None,
         deployment_timeout: int = 3600,
-        test_duration: int = 300
+        test_duration: int = 300,
     ):
         """
         Initialize TestOrchestrator.
@@ -49,16 +49,13 @@ class TestOrchestrator(ParserMixin, GuidellmMixin):
         self.test_duration = test_duration
         self._pf_process = None
 
-        self.deployment_manager = DeploymentManager(
-            namespace=namespace,
-            kubeconfig=kubeconfig
-        )
+        self.deployment_manager = DeploymentManager(namespace=namespace, kubeconfig=kubeconfig)
 
         # Enable namespace monitoring for metrics collection (OpenShift only)
         self._enable_namespace_monitoring(namespace)
 
         # Auto-discover Thanos/Prometheus URL if not provided
-        is_remote = kubeconfig or os.environ.get('KUBECONFIG')
+        is_remote = kubeconfig or os.environ.get("KUBECONFIG")
         if thanos_url is None and not is_remote:
             thanos_url = self._get_thanos_url()
 
@@ -71,13 +68,15 @@ class TestOrchestrator(ParserMixin, GuidellmMixin):
             logger.info(f"Initializing MetricsCollector with Thanos URL: {thanos_url}")
 
             # Use bearer token from port-forward setup if available, or create one
-            token = getattr(self, '_prom_bearer', None)
-            if not token and not thanos_url.startswith('http://localhost'):
+            token = getattr(self, "_prom_bearer", None)
+            if not token and not thanos_url.startswith("http://localhost"):
                 # Best: create a token for the instance namespace SA (has monitoring RBAC)
                 try:
                     r = subprocess.run(
-                        ['kubectl', 'create', 'token', 'default', '-n', namespace, '--duration=24h'],
-                        capture_output=True, text=True, timeout=10
+                        ["kubectl", "create", "token", "default", "-n", namespace, "--duration=24h"],
+                        capture_output=True,
+                        text=True,
+                        timeout=10,
                     )
                     if r.returncode == 0 and r.stdout.strip():
                         token = r.stdout.strip()
@@ -88,8 +87,10 @@ class TestOrchestrator(ParserMixin, GuidellmMixin):
                 if not token:
                     try:
                         r = subprocess.run(
-                            ['kubectl', 'config', 'view', '--raw', '-o', 'jsonpath={.users[0].user.token}'],
-                            capture_output=True, text=True, timeout=5
+                            ["kubectl", "config", "view", "--raw", "-o", "jsonpath={.users[0].user.token}"],
+                            capture_output=True,
+                            text=True,
+                            timeout=5,
                         )
                         if r.returncode == 0 and r.stdout.strip():
                             token = r.stdout.strip()
@@ -98,21 +99,17 @@ class TestOrchestrator(ParserMixin, GuidellmMixin):
                         pass
                 # Last resort: local SA token
                 if not token:
-                    token_file = '/run/secrets/kubernetes.io/serviceaccount/token'
+                    token_file = "/run/secrets/kubernetes.io/serviceaccount/token"
                     if os.path.exists(token_file):
                         try:
-                            with open(token_file, 'r') as f:
+                            with open(token_file, "r") as f:
                                 token = f.read().strip()
                             logger.info("Loaded local SA token for Thanos authentication")
                         except Exception as e:
                             logger.warning(f"Failed to read service account token: {e}")
 
             metrics_config = MetricsConfig(
-                thanos_url=thanos_url,
-                namespace=namespace,
-                pod_name_pattern='',
-                step_seconds=5,
-                token=token
+                thanos_url=thanos_url, namespace=namespace, pod_name_pattern="", step_seconds=5, token=token
             )
             self.metrics_collector = MetricsCollector(metrics_config)
         else:
@@ -120,16 +117,16 @@ class TestOrchestrator(ParserMixin, GuidellmMixin):
 
     def _start_prometheus_port_forward(self, kubeconfig: Optional[str]) -> Optional[str]:
         """Start kubectl port-forward to Prometheus. Works with explicit kubeconfig or in-cluster SA."""
-        kubeconfig = kubeconfig or os.environ.get('KUBECONFIG')
+        kubeconfig = kubeconfig or os.environ.get("KUBECONFIG")
 
         s = socket.socket()
-        s.bind(('', 0))
+        s.bind(("", 0))
         port = s.getsockname()[1]
         s.close()
 
         env = os.environ.copy()
         if kubeconfig:
-            env['KUBECONFIG'] = os.path.expanduser(kubeconfig)
+            env["KUBECONFIG"] = os.path.expanduser(kubeconfig)
 
         # Auto-discover Prometheus/Thanos services and port-forward
         import urllib.request, ssl, json as _json
@@ -138,27 +135,35 @@ class TestOrchestrator(ParserMixin, GuidellmMixin):
         prom_services = []
         try:
             r = subprocess.run(
-                ['kubectl', 'get', 'svc', '-A', '-o', 'json'],
-                capture_output=True, text=True, timeout=15, env=env, check=False
+                ["kubectl", "get", "svc", "-A", "-o", "json"],
+                capture_output=True,
+                text=True,
+                timeout=15,
+                env=env,
+                check=False,
             )
             if r.returncode == 0:
                 svcs = _json.loads(r.stdout)
-                for svc in svcs.get('items', []):
-                    name = svc['metadata']['name']
-                    ns = svc['metadata']['namespace']
-                    if 'thanos-querier' in name or 'prometheus' in name:
-                        for p in svc.get('spec', {}).get('ports', []):
-                            prom_services.append((ns, name, p['port'], p.get('name', '')))
+                for svc in svcs.get("items", []):
+                    name = svc["metadata"]["name"]
+                    ns = svc["metadata"]["namespace"]
+                    if "thanos-querier" in name or "prometheus" in name:
+                        for p in svc.get("spec", {}).get("ports", []):
+                            prom_services.append((ns, name, p["port"], p.get("name", "")))
         except Exception:
             pass
 
         # Prioritize: thanos-querier first, then user-workload prometheus, then platform, then vanilla
         def _sort_key(entry):
             ns, name, port_num, port_name = entry
-            if 'thanos-querier' in name: return (0, port_num)
-            if 'user-workload' in ns: return (1, port_num)
-            if 'openshift-monitoring' in ns: return (2, port_num)
+            if "thanos-querier" in name:
+                return (0, port_num)
+            if "user-workload" in ns:
+                return (1, port_num)
+            if "openshift-monitoring" in ns:
+                return (2, port_num)
             return (3, port_num)
+
         prom_services.sort(key=_sort_key)
 
         if prom_services:
@@ -168,8 +173,12 @@ class TestOrchestrator(ParserMixin, GuidellmMixin):
         bearer = None
         try:
             token_r = subprocess.run(
-                ['kubectl', 'create', 'token', 'default', '-n', self.namespace, '--duration=12h'],
-                capture_output=True, text=True, timeout=10, env=env, check=False
+                ["kubectl", "create", "token", "default", "-n", self.namespace, "--duration=12h"],
+                capture_output=True,
+                text=True,
+                timeout=10,
+                env=env,
+                check=False,
             )
             if token_r.returncode == 0:
                 bearer = token_r.stdout.strip()
@@ -182,16 +191,16 @@ class TestOrchestrator(ParserMixin, GuidellmMixin):
 
         # First try direct in-cluster connection (no port-forward needed)
         for svc_ns, svc_name, svc_port, port_name in prom_services:
-            for scheme in ('http', 'https'):
+            for scheme in ("http", "https"):
                 try:
-                    direct_url = f'{scheme}://{svc_name}.{svc_ns}.svc:{svc_port}'
+                    direct_url = f"{scheme}://{svc_name}.{svc_ns}.svc:{svc_port}"
                     req = urllib.request.Request(
-                        f'{direct_url}/api/v1/query?query=up',
-                        headers={'Authorization': f'Bearer {bearer}'} if bearer else {}
+                        f"{direct_url}/api/v1/query?query=up",
+                        headers={"Authorization": f"Bearer {bearer}"} if bearer else {},
                     )
-                    kw = {'timeout': 3}
-                    if scheme == 'https':
-                        kw['context'] = ctx
+                    kw = {"timeout": 3}
+                    if scheme == "https":
+                        kw["context"] = ctx
                     r = urllib.request.urlopen(req, **kw)
                     if r.status == 200:
                         if bearer:
@@ -205,9 +214,10 @@ class TestOrchestrator(ParserMixin, GuidellmMixin):
         for svc_ns, svc_name, svc_port, port_name in prom_services:
             try:
                 self._pf_process = subprocess.Popen(
-                    ['kubectl', 'port-forward', '-n', svc_ns,
-                     f'svc/{svc_name}', f'{port}:{svc_port}'],
-                    stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, env=env
+                    ["kubectl", "port-forward", "-n", svc_ns, f"svc/{svc_name}", f"{port}:{svc_port}"],
+                    stdout=subprocess.DEVNULL,
+                    stderr=subprocess.DEVNULL,
+                    env=env,
                 )
                 time.sleep(2)
                 if self._pf_process.poll() is not None:
@@ -215,23 +225,22 @@ class TestOrchestrator(ParserMixin, GuidellmMixin):
                     continue
 
                 for scheme, headers in [
-                    ('https', {'Authorization': f'Bearer {bearer}'} if bearer else {}),
-                    ('https', {}),
-                    ('http', {}),
+                    ("https", {"Authorization": f"Bearer {bearer}"} if bearer else {}),
+                    ("https", {}),
+                    ("http", {}),
                 ]:
                     try:
                         req = urllib.request.Request(
-                            f'{scheme}://localhost:{port}/api/v1/query?query=up',
-                            headers=headers
+                            f"{scheme}://localhost:{port}/api/v1/query?query=up", headers=headers
                         )
-                        kw = {'timeout': 3}
-                        if scheme == 'https':
-                            kw['context'] = ctx
+                        kw = {"timeout": 3}
+                        if scheme == "https":
+                            kw["context"] = ctx
                         r = urllib.request.urlopen(req, **kw)
                         if r.status == 200:
-                            if bearer and 'Authorization' in headers:
+                            if bearer and "Authorization" in headers:
                                 self._prom_bearer = bearer
-                            url = f'{scheme}://localhost:{port}'
+                            url = f"{scheme}://localhost:{port}"
                             logger.info(f"Port-forwarding to {svc_ns}/{svc_name}:{svc_port} at {url}")
                             return url
                     except Exception:
@@ -262,22 +271,11 @@ class TestOrchestrator(ParserMixin, GuidellmMixin):
         """Clean up a test deployment (LWS + services). Used by sweeps to clean up after all levels."""
         if log_callback:
             log_callback(f"🧹 Cleaning up deployment: {config.test_id}")
-        self.deployment_manager.delete_deployment(
-            config.test_id,
-            config.architecture,
-            log_callback=log_callback
-        )
-        self.deployment_manager.wait_for_pods_terminated(
-            config.test_id,
-            timeout=300,
-            log_callback=log_callback
-        )
+        self.deployment_manager.delete_deployment(config.test_id, config.architecture, log_callback=log_callback)
+        self.deployment_manager.wait_for_pods_terminated(config.test_id, timeout=300, log_callback=log_callback)
 
     def _get_service_endpoint(
-        self,
-        test_id: str,
-        architecture: str,
-        log_callback: Optional[Callable[[str], None]] = None
+        self, test_id: str, architecture: str, log_callback: Optional[Callable[[str], None]] = None
     ) -> Optional[str]:
         """
         Get service endpoint for a deployed configuration via Istio gateway.
@@ -292,17 +290,11 @@ class TestOrchestrator(ParserMixin, GuidellmMixin):
         """
         # Always use gateway discovery - NEVER use direct pod/service IPs
         return self._discover_istio_gateway(
-            namespace=self.namespace,
-            test_id=test_id,
-            architecture=architecture,
-            log_callback=log_callback
+            namespace=self.namespace, test_id=test_id, architecture=architecture, log_callback=log_callback
         )
 
     def _run_curl_test(
-        self,
-        endpoint: str,
-        config: TestConfig,
-        log_callback: Optional[Callable[[str], None]] = None
+        self, endpoint: str, config: TestConfig, log_callback: Optional[Callable[[str], None]] = None
     ) -> bool:
         """
         Run a curl test via the workload pod to verify the gateway endpoint.
@@ -312,23 +304,22 @@ class TestOrchestrator(ParserMixin, GuidellmMixin):
             if log_callback:
                 log_callback(f"🔍 Testing endpoint: {endpoint}")
 
-            def _remote_curl(url, method='GET', data=None, timeout=10):
+            def _remote_curl(url, method="GET", data=None, timeout=10):
                 if data:
                     cmd = f"curl -s -o /dev/null -w '%{{http_code}}' --connect-timeout {timeout} -X {method} -H 'Content-Type: application/json' -d '{data}' '{url}'"
                 else:
                     cmd = f"curl -s -o /dev/null -w '%{{http_code}}' --connect-timeout {timeout} '{url}'"
                 r = self.deployment_manager.kubectl.run(
-                    ['exec', self._guidellm_pod_name, '-n', self.namespace, '--', 'bash', '-c', cmd],
-                    check=False
+                    ["exec", self._guidellm_pod_name, "-n", self.namespace, "--", "bash", "-c", cmd], check=False
                 )
-                return r.stdout.strip() if r.returncode == 0 else '000'
+                return r.stdout.strip() if r.returncode == 0 else "000"
 
             # Try models endpoint
             models_url = f"{endpoint}/models"
             if log_callback:
                 log_callback(f"   Checking models endpoint: {models_url}")
             code = _remote_curl(models_url)
-            if code == '200':
+            if code == "200":
                 if log_callback:
                     log_callback(f"   ✅ Models endpoint passed: {code}")
                 return True
@@ -336,11 +327,11 @@ class TestOrchestrator(ParserMixin, GuidellmMixin):
                 log_callback(f"   ⚠️  Models endpoint returned: {code}")
 
             # Try health endpoint
-            health_url = endpoint.replace('/v1', '/health')
+            health_url = endpoint.replace("/v1", "/health")
             if log_callback:
                 log_callback(f"   Checking health endpoint: {health_url}")
             code = _remote_curl(health_url)
-            if code == '200':
+            if code == "200":
                 if log_callback:
                     log_callback(f"   ✅ Health check passed: {code}")
                 return True
@@ -362,7 +353,7 @@ class TestOrchestrator(ParserMixin, GuidellmMixin):
         timeout: int = 3600,
         log_callback: Optional[Callable[[str], None]] = None,
         stop_check: Optional[Callable[[], bool]] = None,
-        config=None
+        config=None,
     ) -> int:
         """Wait for vLLM pods to finish loading the model by checking logs
         for 'Application startup complete'. For multi-node (lws_size > 1),
@@ -377,14 +368,25 @@ class TestOrchestrator(ParserMixin, GuidellmMixin):
                 return -1
 
             try:
-                label_selector = f'llm-d.ai/test-id={test_id}'
-                if config and getattr(config, 'lws_size', None) and config.lws_size > 1:
-                    label_selector += ',leaderworkerset.sigs.k8s.io/worker-index=0'
+                label_selector = f"llm-d.ai/test-id={test_id}"
+                if config and getattr(config, "lws_size", None) and config.lws_size > 1:
+                    label_selector += ",leaderworkerset.sigs.k8s.io/worker-index=0"
                 result = subprocess.run(
-                    ['kubectl', 'get', 'pods', '-n', self.namespace,
-                     '-l', label_selector,
-                     '-o', 'jsonpath={range .items[*]}{.metadata.name}{" "}{end}'],
-                    capture_output=True, text=True, timeout=15, check=False
+                    [
+                        "kubectl",
+                        "get",
+                        "pods",
+                        "-n",
+                        self.namespace,
+                        "-l",
+                        label_selector,
+                        "-o",
+                        'jsonpath={range .items[*]}{.metadata.name}{" "}{end}',
+                    ],
+                    capture_output=True,
+                    text=True,
+                    timeout=15,
+                    check=False,
                 )
                 pod_names = result.stdout.strip().split()
                 pod_names = [p for p in pod_names if p]
@@ -400,20 +402,36 @@ class TestOrchestrator(ParserMixin, GuidellmMixin):
                     # Primary: check logs for startup message (use large tail so
                     # metrics scrape lines don't push the startup message out)
                     log_result = subprocess.run(
-                        ['kubectl', 'logs', pod_name, '-n', self.namespace,
-                         '-c', 'vllm', '--tail=2000'],
-                        capture_output=True, text=True, timeout=30, check=False
+                        ["kubectl", "logs", pod_name, "-n", self.namespace, "-c", "vllm", "--tail=2000"],
+                        capture_output=True,
+                        text=True,
+                        timeout=30,
+                        check=False,
                     )
-                    startup_in_logs = 'Application startup complete' in log_result.stdout
+                    startup_in_logs = "Application startup complete" in log_result.stdout
 
                     # Fallback: if log scraping missed it, query /health directly
                     if not startup_in_logs:
                         health_result = subprocess.run(
-                            ['kubectl', 'exec', pod_name, '-n', self.namespace,
-                             '-c', 'vllm', '--',
-                             'curl', '-sf', '--max-time', '5',
-                             'http://localhost:8000/health'],
-                            capture_output=True, text=True, timeout=15, check=False
+                            [
+                                "kubectl",
+                                "exec",
+                                pod_name,
+                                "-n",
+                                self.namespace,
+                                "-c",
+                                "vllm",
+                                "--",
+                                "curl",
+                                "-sf",
+                                "--max-time",
+                                "5",
+                                "http://localhost:8000/health",
+                            ],
+                            capture_output=True,
+                            text=True,
+                            timeout=15,
+                            check=False,
                         )
                         startup_in_logs = health_result.returncode == 0
 
@@ -434,18 +452,47 @@ class TestOrchestrator(ParserMixin, GuidellmMixin):
                     if pod_name in ready_pods:
                         continue
                     phase_r = subprocess.run(
-                        ['kubectl', 'get', 'pod', pod_name, '-n', self.namespace,
-                         '-o', 'jsonpath={.status.containerStatuses[0].state.waiting.reason}'],
-                        capture_output=True, text=True, timeout=10, check=False)
+                        [
+                            "kubectl",
+                            "get",
+                            "pod",
+                            pod_name,
+                            "-n",
+                            self.namespace,
+                            "-o",
+                            "jsonpath={.status.containerStatuses[0].state.waiting.reason}",
+                        ],
+                        capture_output=True,
+                        text=True,
+                        timeout=10,
+                        check=False,
+                    )
                     reason = phase_r.stdout.strip()
-                    if reason in ('CrashLoopBackOff', 'Error'):
+                    if reason in ("CrashLoopBackOff", "Error"):
                         crash_logs = subprocess.run(
-                            ['kubectl', 'logs', pod_name, '-n', self.namespace,
-                             '-c', 'vllm', '--previous', '--tail=50'],
-                            capture_output=True, text=True, timeout=15, check=False)
-                        crash_text = crash_logs.stdout or ''
-                        oom_keywords = ['out of memory', 'no available memory for the cache blocks',
-                                        'cuda out of memory', 'oom']
+                            [
+                                "kubectl",
+                                "logs",
+                                pod_name,
+                                "-n",
+                                self.namespace,
+                                "-c",
+                                "vllm",
+                                "--previous",
+                                "--tail=50",
+                            ],
+                            capture_output=True,
+                            text=True,
+                            timeout=15,
+                            check=False,
+                        )
+                        crash_text = crash_logs.stdout or ""
+                        oom_keywords = [
+                            "out of memory",
+                            "no available memory for the cache blocks",
+                            "cuda out of memory",
+                            "oom",
+                        ]
                         if any(k in crash_text.lower() for k in oom_keywords):
                             if log_callback:
                                 log_callback(f"   {pod_name}: OOM during model loading")
@@ -469,23 +516,31 @@ class TestOrchestrator(ParserMixin, GuidellmMixin):
         try:
             import json as _json
             from pathlib import Path
+
             if Path(guidellm_output).exists():
                 with open(guidellm_output) as f:
                     data = _json.load(f)
             else:
                 data = _json.loads(guidellm_output)
-            for bm in data.get('benchmarks', []):
-                reqs = bm.get('requests', {})
-                errored = reqs.get('errored', [])
+            for bm in data.get("benchmarks", []):
+                reqs = bm.get("requests", {})
+                errored = reqs.get("errored", [])
                 if not errored:
                     return True
-                overload_patterns = ['503', 'service unavailable', 'disconnect',
-                                     'jsondecodeerror', 'unterminated string',
-                                     'remotedisconnected', 'readtimeout',
-                                     '400', 'bad request']
+                overload_patterns = [
+                    "503",
+                    "service unavailable",
+                    "disconnect",
+                    "jsondecodeerror",
+                    "unterminated string",
+                    "remotedisconnected",
+                    "readtimeout",
+                    "400",
+                    "bad request",
+                ]
                 for e in errored:
-                    info = e.get('info', {})
-                    err = str(info.get('error', '')).lower()
+                    info = e.get("info", {})
+                    err = str(info.get("error", "")).lower()
                     if not any(p in err for p in overload_patterns):
                         return False
                 return True
@@ -497,14 +552,15 @@ class TestOrchestrator(ParserMixin, GuidellmMixin):
         try:
             import json as _json
             from pathlib import Path
+
             if Path(guidellm_output).exists():
                 with open(guidellm_output) as f:
                     data = _json.load(f)
             else:
                 data = _json.loads(guidellm_output)
-            for bm in data.get('benchmarks', []):
-                for e in bm.get('requests', {}).get('errored', []):
-                    return str(e.get('info', {}).get('error', ''))[:200]
+            for bm in data.get("benchmarks", []):
+                for e in bm.get("requests", {}).get("errored", []):
+                    return str(e.get("info", {}).get("error", ""))[:200]
         except Exception:
             pass
         return None
@@ -516,57 +572,65 @@ class TestOrchestrator(ParserMixin, GuidellmMixin):
         to compute how long each pod took from creation to serving.
         """
         from datetime import datetime as _dt
+
         kubectl = self.deployment_manager.kubectl
         try:
             r = kubectl.run(
-                ['get', 'pods', '-n', self.namespace,
-                 '-l', f'llm-d.ai/test-id={test_id}',
-                 '-o', 'jsonpath={range .items[*]}{.metadata.name}|{.status.startTime}\\n{end}'],
-                check=False
+                [
+                    "get",
+                    "pods",
+                    "-n",
+                    self.namespace,
+                    "-l",
+                    f"llm-d.ai/test-id={test_id}",
+                    "-o",
+                    "jsonpath={range .items[*]}{.metadata.name}|{.status.startTime}\\n{end}",
+                ],
+                check=False,
             )
             if r.returncode != 0 or not r.stdout.strip():
                 return None
 
             pod_starts = {}
             for line in r.stdout.strip().splitlines():
-                parts = line.split('|')
+                parts = line.split("|")
                 if len(parts) == 2 and parts[0] and parts[1]:
                     pod_starts[parts[0]] = parts[1]
 
             timings = {}
             for pod_name, start_str in pod_starts.items():
-                start_time = _dt.fromisoformat(start_str.replace('Z', '+00:00'))
+                start_time = _dt.fromisoformat(start_str.replace("Z", "+00:00"))
 
                 log_r = kubectl.run(
-                    ['logs', pod_name, '-n', self.namespace,
-                     '-c', 'vllm', '--timestamps', '--tail=200'],
-                    check=False
+                    ["logs", pod_name, "-n", self.namespace, "-c", "vllm", "--timestamps", "--tail=200"], check=False
                 )
                 model_ready_time = None
                 if log_r.returncode == 0:
                     for log_line in log_r.stdout.splitlines():
-                        if 'Application startup complete' in log_line:
-                            ts = log_line.split(' ')[0].rstrip('Z')
+                        if "Application startup complete" in log_line:
+                            ts = log_line.split(" ")[0].rstrip("Z")
                             try:
-                                if '.' in ts and len(ts.split('.')[-1]) > 6:
-                                    ts = ts[:ts.index('.') + 7]
-                                model_ready_time = _dt.fromisoformat(ts + '+00:00')
+                                if "." in ts and len(ts.split(".")[-1]) > 6:
+                                    ts = ts[: ts.index(".") + 7]
+                                model_ready_time = _dt.fromisoformat(ts + "+00:00")
                             except Exception:
                                 pass
                             break
 
-                pod_info = {'start_time': start_str}
+                pod_info = {"start_time": start_str}
                 if model_ready_time:
                     load_s = int((model_ready_time - start_time).total_seconds())
-                    pod_info['model_load_s'] = load_s
-                    pod_info['ready_time'] = model_ready_time.isoformat()
+                    pod_info["model_load_s"] = load_s
+                    pod_info["ready_time"] = model_ready_time.isoformat()
 
                 timings[pod_name] = pod_info
 
             if timings and log_callback:
-                load_times = [v['model_load_s'] for v in timings.values() if 'model_load_s' in v]
+                load_times = [v["model_load_s"] for v in timings.values() if "model_load_s" in v]
                 if load_times:
-                    log_callback(f"   📊 Pod load times: min={min(load_times)}s, max={max(load_times)}s, avg={sum(load_times)//len(load_times)}s ({len(load_times)} pods)")
+                    log_callback(
+                        f"   📊 Pod load times: min={min(load_times)}s, max={max(load_times)}s, avg={sum(load_times) // len(load_times)}s ({len(load_times)} pods)"
+                    )
 
             return timings
         except Exception as e:
@@ -579,7 +643,7 @@ class TestOrchestrator(ParserMixin, GuidellmMixin):
         config: TestConfig,
         expected_pods: int,
         timeout: int = 300,
-        log_callback: Optional[Callable[[str], None]] = None
+        log_callback: Optional[Callable[[str], None]] = None,
     ) -> bool:
         """
         Wait for the gateway to have all expected pods registered and serving.
@@ -600,7 +664,9 @@ class TestOrchestrator(ParserMixin, GuidellmMixin):
             True if gateway is ready with all pods
         """
         if log_callback:
-            log_callback(f"🔄 Waiting for EPP to register {'1 pod' if expected_pods == 1 else f'all {expected_pods} pods'} in the inference pool...")
+            log_callback(
+                f"🔄 Waiting for EPP to register {'1 pod' if expected_pods == 1 else f'all {expected_pods} pods'} in the inference pool..."
+            )
 
         start_time = time.time()
         last_ready_count = -1
@@ -615,27 +681,25 @@ class TestOrchestrator(ParserMixin, GuidellmMixin):
             # Step 1: Count Ready pods matching the test-id label
             try:
                 result = self.deployment_manager.kubectl.run(
-                    ['get', 'pods', '-n', self.namespace,
-                     '-l', f'llm-d.ai/test-id={config.test_id}',
-                     '-o', 'json'],
-                    check=False
+                    ["get", "pods", "-n", self.namespace, "-l", f"llm-d.ai/test-id={config.test_id}", "-o", "json"],
+                    check=False,
                 )
 
                 ready_count = 0
                 total_count = 0
                 if result.returncode == 0 and result.stdout.strip():
                     pods_data = json.loads(result.stdout)
-                    for pod in pods_data.get('items', []):
+                    for pod in pods_data.get("items", []):
                         total_count += 1
-                        conditions = pod.get('status', {}).get('conditions', [])
+                        conditions = pod.get("status", {}).get("conditions", [])
                         for cond in conditions:
-                            if cond.get('type') == 'Ready' and cond.get('status') == 'True':
+                            if cond.get("type") == "Ready" and cond.get("status") == "True":
                                 ready_count += 1
                                 break
 
                 if ready_count != last_ready_count:
                     if log_callback:
-                        p = 'pod' if expected_pods == 1 else 'pods'
+                        p = "pod" if expected_pods == 1 else "pods"
                         log_callback(f"   EPP pod discovery: {ready_count}/{expected_pods} {p} ready in K8s")
                     last_ready_count = ready_count
 
@@ -651,15 +715,16 @@ class TestOrchestrator(ParserMixin, GuidellmMixin):
             # Step 2: All pods Ready in K8s — verify gateway routing works
             # Use kubectl exec on workload pod to reach the gateway (works for both local and remote clusters)
             try:
-                models_url = endpoint.rstrip('/') + '/v1/models'
+                models_url = endpoint.rstrip("/") + "/v1/models"
                 curl_cmd = f"curl -s -o /dev/null -w '%{{http_code}}' --connect-timeout 5 --max-time 15 '{models_url}'"
                 r = self.deployment_manager.kubectl.run(
-                    ['exec', self._guidellm_pod_name, '-n', self.namespace, '--', 'bash', '-c', curl_cmd],
-                    check=False, timeout=30
+                    ["exec", self._guidellm_pod_name, "-n", self.namespace, "--", "bash", "-c", curl_cmd],
+                    check=False,
+                    timeout=30,
                 )
-                http_code = r.stdout.strip() if r.returncode == 0 else '000'
-                if http_code != '200':
-                    if log_callback and not getattr(self, '_pool_wait_logged', False):
+                http_code = r.stdout.strip() if r.returncode == 0 else "000"
+                if http_code != "200":
+                    if log_callback and not getattr(self, "_pool_wait_logged", False):
                         log_callback(f"   EPP gateway check: waiting for pool registration... (HTTP {http_code})")
                         self._pool_wait_logged = True
                     time.sleep(5)
@@ -676,11 +741,10 @@ class TestOrchestrator(ParserMixin, GuidellmMixin):
                     # before the pool check (which was Step 4, only reached
                     # after a successful smoke test).
                     self._wait_for_epp_endpoint_pool(
-                        config, expected_pods,
-                        deadline=start_time + timeout,
-                        log_callback=log_callback)
+                        config, expected_pods, deadline=start_time + timeout, log_callback=log_callback
+                    )
             except Exception as e:
-                if log_callback and not getattr(self, '_gw_wait_logged', False):
+                if log_callback and not getattr(self, "_gw_wait_logged", False):
                     log_callback(f"   EPP gateway check: waiting for gateway... (error: {e})")
                     self._gw_wait_logged = True
                 time.sleep(5)
@@ -688,40 +752,42 @@ class TestOrchestrator(ParserMixin, GuidellmMixin):
 
             # Step 3: Send a test completion to verify full routing through the pool
             try:
-                turns = getattr(config, 'turns', 1) or 1
+                turns = getattr(config, "turns", 1) or 1
                 if turns > 1:
-                    completion_url = endpoint.rstrip('/') + '/v1/chat/completions'
-                    payload_json = json.dumps({
-                        "model": config.model_name,
-                        "messages": [{"role": "user", "content": "Hello"}],
-                        "max_tokens": 1,
-                        "temperature": 0.0,
-                        "stream": False
-                    })
+                    completion_url = endpoint.rstrip("/") + "/v1/chat/completions"
+                    payload_json = json.dumps(
+                        {
+                            "model": config.model_name,
+                            "messages": [{"role": "user", "content": "Hello"}],
+                            "max_tokens": 1,
+                            "temperature": 0.0,
+                            "stream": False,
+                        }
+                    )
                 else:
-                    completion_url = endpoint.rstrip('/') + '/v1/completions'
-                    payload_json = json.dumps({
-                        "model": config.model_name,
-                        "prompt": "Hello",
-                        "max_tokens": 1,
-                        "temperature": 0.0
-                    })
+                    completion_url = endpoint.rstrip("/") + "/v1/completions"
+                    payload_json = json.dumps(
+                        {"model": config.model_name, "prompt": "Hello", "max_tokens": 1, "temperature": 0.0}
+                    )
                 curl_cmd = f"curl -s -w '\\n%{{http_code}}' --connect-timeout 10 --max-time 30 -X POST -H 'Content-Type: application/json' -d '{payload_json}' '{completion_url}'"
                 r = self.deployment_manager.kubectl.run(
-                    ['exec', self._guidellm_pod_name, '-n', self.namespace, '--', 'bash', '-c', curl_cmd],
-                    check=False, timeout=45
+                    ["exec", self._guidellm_pod_name, "-n", self.namespace, "--", "bash", "-c", curl_cmd],
+                    check=False,
+                    timeout=45,
                 )
-                lines = r.stdout.strip().split('\n') if r.returncode == 0 else []
-                http_code = lines[-1] if lines else '000'
-                resp_body = '\n'.join(lines[:-1]) if len(lines) > 1 else ''
+                lines = r.stdout.strip().split("\n") if r.returncode == 0 else []
+                http_code = lines[-1] if lines else "000"
+                resp_body = "\n".join(lines[:-1]) if len(lines) > 1 else ""
 
                 # Simulate response object for downstream code
                 class _RemoteResp:
                     def __init__(self, code, body):
                         self.status_code = int(code) if code.isdigit() else 0
                         self._body = body
+
                     def json(self):
                         return json.loads(self._body)
+
                 resp = _RemoteResp(http_code, resp_body)
                 if resp.status_code == 200:
                     # Step 4: verify the EPP's metrics-fresh endpoint pool.
@@ -733,47 +799,50 @@ class TestOrchestrator(ParserMixin, GuidellmMixin):
                     # and requests scheduled against a shrunken pool deflect
                     # session-affinity bindings to other pods.
                     self._wait_for_epp_endpoint_pool(
-                        config, expected_pods,
-                        deadline=start_time + timeout,
-                        log_callback=log_callback)
+                        config, expected_pods, deadline=start_time + timeout, log_callback=log_callback
+                    )
                     elapsed = int(time.time() - start_time)
                     if log_callback:
-                        p = 'pod' if ready_count == 1 else 'pods'
+                        p = "pod" if ready_count == 1 else "pods"
                         log_callback(f"   ✅ EPP ready — {ready_count} {p} registered in inference pool ({elapsed}s)")
                     return True
                 else:
                     elapsed = int(time.time() - start_time)
                     if log_callback and elapsed % 30 < 6:
-                        log_callback(f"   EPP pool registration: pods not yet routable (HTTP {resp.status_code}, {elapsed}s elapsed)")
+                        log_callback(
+                            f"   EPP pool registration: pods not yet routable (HTTP {resp.status_code}, {elapsed}s elapsed)"
+                        )
                     time.sleep(5)
             except Exception as e:
-                if log_callback and not getattr(self, '_routing_wait_logged', False):
+                if log_callback and not getattr(self, "_routing_wait_logged", False):
                     log_callback(f"   EPP pool registration: routing test failed ({e}), waiting...")
                     self._routing_wait_logged = True
                 time.sleep(5)
 
         elapsed = int(time.time() - start_time)
         if log_callback:
-            p = 'pod' if expected_pods == 1 else 'pods'
-            log_callback(f"   ⏱️ Timeout after {elapsed}s waiting for EPP pool registration ({last_ready_count}/{expected_pods} {p})")
+            p = "pod" if expected_pods == 1 else "pods"
+            log_callback(
+                f"   ⏱️ Timeout after {elapsed}s waiting for EPP pool registration ({last_ready_count}/{expected_pods} {p})"
+            )
         try:
-            arch = getattr(config, 'architecture', 'pd') or 'pd'
-            epp_name = f'gaie-{arch}-epp'
+            arch = getattr(config, "architecture", "pd") or "pd"
+            epp_name = f"gaie-{arch}-epp"
             r = self.deployment_manager.kubectl.run(
-                ['logs', f'deployment/{epp_name}', '-n', self.namespace,
-                 '--since=10m', '--tail=300'],
-                check=False, timeout=60
+                ["logs", f"deployment/{epp_name}", "-n", self.namespace, "--since=10m", "--tail=300"],
+                check=False,
+                timeout=60,
             )
             if r.returncode == 0 and r.stdout:
                 keep = []
                 for line in r.stdout.splitlines():
                     low = line.lower()
-                    if any(k in low for k in ('error', 'warn', 'endpoint', 'picker', 'no ready', 'fail')):
+                    if any(k in low for k in ("error", "warn", "endpoint", "picker", "no ready", "fail")):
                         keep.append(line.strip()[:400])
                 if keep and log_callback:
-                    log_callback('   📋 EPP log tail at failure (filtered):')
+                    log_callback("   📋 EPP log tail at failure (filtered):")
                     for line in keep[-25:]:
-                        log_callback(f'      {line}')
+                        log_callback(f"      {line}")
         except Exception:
             pass
         return False
@@ -784,7 +853,7 @@ class TestOrchestrator(ParserMixin, GuidellmMixin):
         expected_pods: int,
         deadline: float,
         budget: int = 90,
-        log_callback: Optional[Callable[[str], None]] = None
+        log_callback: Optional[Callable[[str], None]] = None,
     ) -> bool:
         """Wait until the EPP's metrics-fresh endpoint pool covers all pods.
 
@@ -792,27 +861,28 @@ class TestOrchestrator(ParserMixin, GuidellmMixin):
         pool does not fill within the budget, log and proceed anyway — the
         benchmark still runs, just with a possibly shrunken candidate set.
         """
-        arch = getattr(config, 'architecture', 'pd') or 'pd'
-        epp_name = f'gaie-{arch}-epp'
-        pool_name = f'gaie-{arch}'
+        arch = getattr(config, "architecture", "pd") or "pd"
+        epp_name = f"gaie-{arch}-epp"
+        pool_name = f"gaie-{arch}"
         end = min(time.time() + budget, deadline)
         last_count = -1
         while time.time() < end:
             ready = self._query_epp_ready_endpoints(epp_name, pool_name)
             if ready is None:
                 if log_callback:
-                    log_callback('   ⚠️  Cannot scrape EPP metrics endpoint — skipping pool freshness check')
+                    log_callback("   ⚠️  Cannot scrape EPP metrics endpoint — skipping pool freshness check")
                 return True
             if ready != last_count:
                 if log_callback:
-                    log_callback(f'   EPP endpoint pool: {ready}/{expected_pods} endpoints with fresh metrics')
+                    log_callback(f"   EPP endpoint pool: {ready}/{expected_pods} endpoints with fresh metrics")
                 last_count = ready
             if ready >= expected_pods:
                 return True
             time.sleep(5)
         if log_callback and last_count >= 0:
-            log_callback(f'   ⚠️  EPP endpoint pool still at {last_count}/{expected_pods} '
-                         f'after {budget}s — proceeding anyway')
+            log_callback(
+                f"   ⚠️  EPP endpoint pool still at {last_count}/{expected_pods} after {budget}s — proceeding anyway"
+            )
         return True
 
     def _query_epp_ready_endpoints(self, epp_name: str, pool_name: str) -> Optional[int]:
@@ -829,20 +899,21 @@ class TestOrchestrator(ParserMixin, GuidellmMixin):
         curl_plain = f"curl -s -m 10 '{metrics_url}'"
         try:
             tr = self.deployment_manager.kubectl.run(
-                ['create', 'token', epp_name, '-n', self.namespace, '--duration=5m'],
-                check=False, timeout=15)
-            token = tr.stdout.strip() if tr.returncode == 0 else ''
+                ["create", "token", epp_name, "-n", self.namespace, "--duration=5m"], check=False, timeout=15
+            )
+            token = tr.stdout.strip() if tr.returncode == 0 else ""
         except Exception:
-            token = ''
-        curl_authed = (f"curl -s -m 10 -H 'Authorization: Bearer {token}' '{metrics_url}'"
-                       if token else None)
+            token = ""
+        curl_authed = f"curl -s -m 10 -H 'Authorization: Bearer {token}' '{metrics_url}'" if token else None
         for curl_cmd in (curl_plain, curl_authed):
             if not curl_cmd:
                 continue
             try:
                 r = self.deployment_manager.kubectl.run(
-                    ['exec', self._guidellm_pod_name, '-n', self.namespace, '--', 'bash', '-c', curl_cmd],
-                    check=False, timeout=30)
+                    ["exec", self._guidellm_pod_name, "-n", self.namespace, "--", "bash", "-c", curl_cmd],
+                    check=False,
+                    timeout=30,
+                )
                 if r.returncode != 0 or not r.stdout:
                     continue
                 m = re.search(rf'^llm_d_epp_ready_endpoints{{name="{pool_name}"}}\s+(\d+)', r.stdout, re.M)
@@ -853,11 +924,7 @@ class TestOrchestrator(ParserMixin, GuidellmMixin):
         return None
 
     def _discover_istio_gateway(
-        self,
-        namespace: str,
-        test_id: str,
-        architecture: str,
-        log_callback: Optional[Callable[[str], None]] = None
+        self, namespace: str, test_id: str, architecture: str, log_callback: Optional[Callable[[str], None]] = None
     ) -> str:
         """
         Discover Istio gateway endpoint or fallback to direct service.
@@ -871,66 +938,60 @@ class TestOrchestrator(ParserMixin, GuidellmMixin):
         Returns:
             Service URL
         """
-        logger.debug('Discovering Istio gateway endpoint...')
+        logger.debug("Discovering Istio gateway endpoint...")
 
         # Query for Gateway API gateways in namespace
         # Map architecture to expected gateway prefix
-        gateway_mapping = {
-            'pd': 'infra-pd',
-            'ep': 'infra-ep',
-            'aggregated': 'infra-aggregated'
-        }
+        gateway_mapping = {"pd": "infra-pd", "ep": "infra-ep", "aggregated": "infra-aggregated"}
 
-        gateway_prefix = gateway_mapping.get(architecture, 'infra-aggregated')
-        logger.debug(f'Architecture: {architecture} -> gateway prefix: {gateway_prefix}')
+        gateway_prefix = gateway_mapping.get(architecture, "infra-aggregated")
+        logger.debug(f"Architecture: {architecture} -> gateway prefix: {gateway_prefix}")
 
         try:
             # Query all gateways in namespace
-            result = self.deployment_manager.kubectl.run(
-                ['get', 'gateway', '-n', namespace, '-o', 'json'],
-                check=False
-            )
+            result = self.deployment_manager.kubectl.run(["get", "gateway", "-n", namespace, "-o", "json"], check=False)
 
             if result.returncode == 0 and result.stdout.strip():
                 import json
+
                 gateways = json.loads(result.stdout)
 
-                available = [gw['metadata']['name'] for gw in gateways.get('items', [])]
-                logger.debug(f'Available gateways: {", ".join(available) if available else "none"}')
+                available = [gw["metadata"]["name"] for gw in gateways.get("items", [])]
+                logger.debug(f"Available gateways: {', '.join(available) if available else 'none'}")
 
                 # Find gateway matching architecture
-                for gateway in gateways.get('items', []):
-                    gateway_name = gateway['metadata']['name']
+                for gateway in gateways.get("items", []):
+                    gateway_name = gateway["metadata"]["name"]
                     if gateway_name.startswith(gateway_prefix):
-                        gateway_class = gateway.get('spec', {}).get('gatewayClassName', 'istio')
-                        if gateway_class == 'istio':
+                        gateway_class = gateway.get("spec", {}).get("gatewayClassName", "istio")
+                        if gateway_class == "istio":
                             # Upstream Istio: creates service in same namespace with -istio suffix
-                            svc = f'{gateway_name}-istio.{namespace}.svc.cluster.local'
+                            svc = f"{gateway_name}-istio.{namespace}.svc.cluster.local"
                         else:
                             # Other gateway controllers (data-science, openshift-default):
                             # create service in same namespace as the Gateway resource
-                            svc = f'{gateway_name}-{gateway_class}.{namespace}.svc.cluster.local'
-                        service_url = f'http://{svc}'
-                        logger.debug(f'Using gateway: {svc} (class: {gateway_class})')
+                            svc = f"{gateway_name}-{gateway_class}.{namespace}.svc.cluster.local"
+                        service_url = f"http://{svc}"
+                        logger.debug(f"Using gateway: {svc} (class: {gateway_class})")
                         return service_url
             else:
                 error_msg = f"kubectl get gateway failed: {result.stderr}"
                 logger.error(error_msg)
                 if log_callback:
-                    log_callback(f'   ❌ {error_msg}')
+                    log_callback(f"   ❌ {error_msg}")
                 raise RuntimeError(error_msg)
         except Exception as e:
             error_msg = f"Failed to query gateways: {e}"
             logger.error(error_msg)
             if log_callback:
-                log_callback(f'   ❌ {error_msg}')
+                log_callback(f"   ❌ {error_msg}")
             raise RuntimeError(error_msg)
 
         # Gateway not found - fail the test
         error_msg = f"No gateway found with prefix '{gateway_prefix}' in namespace {namespace} for architecture '{architecture}'"
         logger.error(error_msg)
         if log_callback:
-            log_callback(f'   ❌ {error_msg}')
+            log_callback(f"   ❌ {error_msg}")
         raise RuntimeError(error_msg)
 
     def _monitor_pods_during_benchmark(
@@ -941,7 +1002,7 @@ class TestOrchestrator(ParserMixin, GuidellmMixin):
         benchmark_start: float,
         test_duration: int,
         check_interval: int,
-        log_callback: Optional[Callable[[str], None]] = None
+        log_callback: Optional[Callable[[str], None]] = None,
     ) -> Optional[str]:
         """
         Monitor pods for crashes during benchmark.
@@ -962,12 +1023,17 @@ class TestOrchestrator(ParserMixin, GuidellmMixin):
             # Get current pod status
             result = self.deployment_manager.kubectl.run(
                 [
-                    'get', 'pods', '-n', namespace,
-                    '-l', f'test-id={test_id}',
-                    '-o', 'jsonpath={range .items[*]}{.metadata.name}:{.status.phase}:{.status.containerStatuses[0].restartCount}{"\\n"}{end}'
+                    "get",
+                    "pods",
+                    "-n",
+                    namespace,
+                    "-l",
+                    f"test-id={test_id}",
+                    "-o",
+                    'jsonpath={range .items[*]}{.metadata.name}:{.status.phase}:{.status.containerStatuses[0].restartCount}{"\\n"}{end}',
                 ],
                 check=False,
-                timeout=10
+                timeout=10,
             )
 
             if result.returncode != 0:
@@ -977,13 +1043,13 @@ class TestOrchestrator(ParserMixin, GuidellmMixin):
             restarted_pods = []
             current_pods = []
 
-            for line in result.stdout.strip().split('\n'):
-                if line and ':' in line:
-                    parts = line.split(':')
+            for line in result.stdout.strip().split("\n"):
+                if line and ":" in line:
+                    parts = line.split(":")
                     if len(parts) >= 3:
                         pod_name, phase, restart_count = parts[0], parts[1], parts[2]
                         current_pods.append(pod_name)
-                        if phase != 'Running':
+                        if phase != "Running":
                             crashed_pods.append(f"{pod_name} ({phase})")
                         elif int(restart_count) > 0:
                             restarted_pods.append(f"{pod_name} (restarts: {restart_count})")
@@ -996,37 +1062,48 @@ class TestOrchestrator(ParserMixin, GuidellmMixin):
 
             if crashed_pods:
                 if log_callback:
-                    log_callback('❌ Pod crashes detected:')
+                    log_callback("❌ Pod crashes detected:")
                     for pod in crashed_pods:
-                        log_callback(f'   {pod}')
-                    log_callback('🛑 Stopping test - pods crashed during benchmark')
+                        log_callback(f"   {pod}")
+                    log_callback("🛑 Stopping test - pods crashed during benchmark")
                 return f"Pods crashed: {', '.join(crashed_pods)}"
 
             if restarted_pods and log_callback:
-                log_callback('⚠️  Pod restarts detected:')
+                log_callback("⚠️  Pod restarts detected:")
                 for pod in restarted_pods:
-                    log_callback(f'   {pod}')
+                    log_callback(f"   {pod}")
 
             # Log progress
             elapsed = int(time.time() - benchmark_start)
             if log_callback:
-                log_callback(f'   [{elapsed}s/{test_duration}s] All {current_pod_count} pods healthy')
+                log_callback(f"   [{elapsed}s/{test_duration}s] All {current_pod_count} pods healthy")
 
             return None
 
         except Exception as e:
             if log_callback:
-                log_callback(f'⚠️  Warning: Pod health check failed: {str(e)[:100]}')
+                log_callback(f"⚠️  Warning: Pod health check failed: {str(e)[:100]}")
             return None
 
     def _clear_gpu_cache(self, test_id: str, log_callback=None):
         """Clear GPU cache on all serving pods for a test (parallel)."""
         try:
             result = subprocess.run(
-                ['kubectl', 'get', 'pods', '-n', self.namespace,
-                 '-l', f'llm-d.ai/test-id={test_id}',
-                 '-o', 'jsonpath={range .items[*]}{.metadata.name}{" "}{end}'],
-                capture_output=True, text=True, timeout=15, check=False
+                [
+                    "kubectl",
+                    "get",
+                    "pods",
+                    "-n",
+                    self.namespace,
+                    "-l",
+                    f"llm-d.ai/test-id={test_id}",
+                    "-o",
+                    'jsonpath={range .items[*]}{.metadata.name}{" "}{end}',
+                ],
+                capture_output=True,
+                text=True,
+                timeout=15,
+                check=False,
             )
             pod_names = [p for p in result.stdout.strip().split() if p]
             if not pod_names:
@@ -1035,10 +1112,21 @@ class TestOrchestrator(ParserMixin, GuidellmMixin):
             procs = []
             for pod_name in pod_names:
                 p = subprocess.Popen(
-                    ['kubectl', 'exec', pod_name, '-n', self.namespace,
-                     '-c', 'vllm', '--',
-                     'python3', '-c', 'import torch; torch.cuda.empty_cache()'],
-                    stdout=subprocess.DEVNULL, stderr=subprocess.PIPE
+                    [
+                        "kubectl",
+                        "exec",
+                        pod_name,
+                        "-n",
+                        self.namespace,
+                        "-c",
+                        "vllm",
+                        "--",
+                        "python3",
+                        "-c",
+                        "import torch; torch.cuda.empty_cache()",
+                    ],
+                    stdout=subprocess.DEVNULL,
+                    stderr=subprocess.PIPE,
                 )
                 procs.append((pod_name, p))
 
@@ -1054,13 +1142,8 @@ class TestOrchestrator(ParserMixin, GuidellmMixin):
 
     # ── Persistent guidellm pod management ─────────────────────────────────
 
-
     def _collect_metrics(
-        self,
-        config: TestConfig,
-        start_time: str,
-        end_time: str,
-        log_callback: Optional[Callable[[str], None]] = None
+        self, config: TestConfig, start_time: str, end_time: str, log_callback: Optional[Callable[[str], None]] = None
     ) -> Optional[str]:
         """
         Collect metrics from Prometheus/Thanos.
@@ -1089,38 +1172,39 @@ class TestOrchestrator(ParserMixin, GuidellmMixin):
 
             # Convert ISO format strings to datetime objects
             from datetime import datetime
+
             start_dt = datetime.fromisoformat(start_time)
             end_dt = datetime.fromisoformat(end_time)
 
             # Reconnect port-forward if it died (e.g., server restart during run)
             if not self._pf_process:
                 logger.warning("No port-forward process — establishing connection")
-                kubeconfig_path = os.environ.get('KUBECONFIG')
+                kubeconfig_path = os.environ.get("KUBECONFIG")
                 new_url = self._start_prometheus_port_forward(kubeconfig_path)
                 if new_url and self.metrics_collector:
                     self.metrics_collector.config.thanos_url = new_url
-                    token = getattr(self, '_prom_bearer', None)
+                    token = getattr(self, "_prom_bearer", None)
                     if token:
-                        self.metrics_collector.session.headers['Authorization'] = f'Bearer {token}'
+                        self.metrics_collector.session.headers["Authorization"] = f"Bearer {token}"
                     logger.info(f"Prometheus connected at {new_url}")
             elif self._pf_process and self._pf_process.poll() is not None:
                 logger.warning("Prometheus port-forward died — reconnecting")
                 self._pf_process = None
-                kubeconfig_path = os.environ.get('KUBECONFIG')
+                kubeconfig_path = os.environ.get("KUBECONFIG")
                 new_url = self._start_prometheus_port_forward(kubeconfig_path)
                 if new_url and self.metrics_collector:
                     self.metrics_collector.config.thanos_url = new_url
-                    token = getattr(self, '_prom_bearer', None)
+                    token = getattr(self, "_prom_bearer", None)
                     if token:
-                        self.metrics_collector.session.headers['Authorization'] = f'Bearer {token}'
+                        self.metrics_collector.session.headers["Authorization"] = f"Bearer {token}"
                     logger.info(f"Prometheus reconnected at {new_url}")
 
             # Update the pod_name_pattern — per_node_storage uses stable LWS names
-            if getattr(config, 'per_node_storage', False):
-                if config.architecture == 'aggregated':
-                    self.metrics_collector.config.pod_name_pattern = f'aggregated-tp{config.tensor_parallelism}'
+            if getattr(config, "per_node_storage", False):
+                if config.architecture == "aggregated":
+                    self.metrics_collector.config.pod_name_pattern = f"aggregated-tp{config.tensor_parallelism}"
                 else:
-                    self.metrics_collector.config.pod_name_pattern = f'(prefill-tp{getattr(config, "prefill_tp", config.tensor_parallelism)}|decode-tp{getattr(config, "decode_tp", config.tensor_parallelism)})'
+                    self.metrics_collector.config.pod_name_pattern = f"(prefill-tp{getattr(config, 'prefill_tp', config.tensor_parallelism)}|decode-tp{getattr(config, 'decode_tp', config.tensor_parallelism)})"
             else:
                 self.metrics_collector.config.pod_name_pattern = config.test_id
 
@@ -1129,9 +1213,7 @@ class TestOrchestrator(ParserMixin, GuidellmMixin):
 
             # Collect metrics
             self.metrics_collector.collect_all_metrics(
-                start_time=start_dt,
-                end_time=end_dt,
-                output_file=str(output_file)
+                start_time=start_dt, end_time=end_dt, output_file=str(output_file)
             )
 
             if log_callback:
@@ -1140,17 +1222,20 @@ class TestOrchestrator(ParserMixin, GuidellmMixin):
             # Check if any vLLM metrics were actually collected
             try:
                 import json as _mj
+
                 with open(output_file) as _mf:
                     saved = _mj.load(_mf)
                 # Metrics can be at top level or under 'metrics' key
-                check = saved.get('metrics', saved)
+                check = saved.get("metrics", saved)
                 if isinstance(check, dict):
-                    vllm_vals = [k for k in check if 'vllm' in k.lower() and check[k]]
+                    vllm_vals = [k for k in check if "vllm" in k.lower() and check[k]]
                 else:
                     vllm_vals = []
                 if not vllm_vals:
                     if log_callback:
-                        log_callback("⚠️  Prometheus returned no vLLM metrics for this test (pods may have terminated before scrape)")
+                        log_callback(
+                            "⚠️  Prometheus returned no vLLM metrics for this test (pods may have terminated before scrape)"
+                        )
             except Exception:
                 pass
 
@@ -1163,16 +1248,12 @@ class TestOrchestrator(ParserMixin, GuidellmMixin):
                 log_callback(f"❌ {error_msg}")
             return None
 
-    def _archive_test_artifacts(
-        self,
-        config: TestConfig,
-        result,
-        log_callback: Optional[Callable[[str], None]] = None
-    ):
+    def _archive_test_artifacts(self, config: TestConfig, result, log_callback: Optional[Callable[[str], None]] = None):
         """Copy all test artifacts to an organized directory on the instance PVC.
 
         Structure: /mnt/storage/test-artifacts/{run_name}/{test_id}/
             guidellm-raw.json      — Raw guidellm output from workload pod
+            guidellm-raw-w{i}.json — Per-workload outputs (parallel runs)
             metrics-prometheus.json — Prometheus/Thanos metrics (if collected)
             test-config.json       — Full TestConfig used for this test
             test-result.json       — Parsed results summary
@@ -1182,106 +1263,72 @@ class TestOrchestrator(ParserMixin, GuidellmMixin):
             artifact_dir = Path(f"/mnt/storage/test-artifacts/{config.test_id}")
             artifact_dir.mkdir(parents=True, exist_ok=True)
 
-            # 1. Copy guidellm raw JSON from workload pod with MD5 verification
-            remote_path = f"/mnt/storage/tmp/guidellm-{config.test_id}.json"
-            local_raw = artifact_dir / "guidellm-raw.json"
-            try:
-                kubectl = self.deployment_manager.kubectl
-                env = os.environ.copy()
-                env['KUBECONFIG'] = os.path.expanduser(kubectl.kubeconfig)
-                import subprocess as _sp
-                import hashlib
+            # 1. Copy guidellm raw JSON(s) from workload pod with MD5
+            #    verification. Parallel workloads write one file per shape
+            #    (-w0, -w1, ...); archive every remote output that exists.
+            kubectl = self.deployment_manager.kubectl
+            env = os.environ.copy()
+            env["KUBECONFIG"] = os.path.expanduser(kubectl.kubeconfig)
 
-                # Get remote MD5
-                md5_r = kubectl.run(
-                    ['exec', self._guidellm_pod_name, '-n', self.namespace, '--',
-                     'md5sum', remote_path], check=False)
-                remote_md5 = md5_r.stdout.strip().split()[0] if md5_r.returncode == 0 else None
-
-                max_retries = 5
-                for attempt in range(max_retries):
-                    # Use exec+cat instead of kubectl cp (tar-based) — kubectl cp
-                    # corrupts large files on NFS-backed volumes across clusters,
-                    # causing persistent MD5 mismatches (run 61: 7.7MB file failed
-                    # all 3 retries while smaller files succeeded intermittently).
-                    # Falls back to base64 on the last attempt for network paths
-                    # that mangle raw binary streams (proxies, SPDY issues).
-                    if attempt < 3:
-                        cat_r = _sp.run(
-                            [kubectl.kubectl_cmd, 'exec', self._guidellm_pod_name,
-                             '-n', self.namespace, '--', 'cat', remote_path],
-                            env=env, capture_output=True, timeout=180, check=False)
-                        if cat_r.returncode == 0 and cat_r.stdout:
-                            local_raw.write_bytes(cat_r.stdout)
-                    else:
-                        import base64 as _b64
-                        b64_r = _sp.run(
-                            [kubectl.kubectl_cmd, 'exec', self._guidellm_pod_name,
-                             '-n', self.namespace, '--', 'base64', '-w0', remote_path],
-                            env=env, capture_output=True, timeout=300, check=False)
-                        if b64_r.returncode == 0 and b64_r.stdout:
-                            local_raw.write_bytes(_b64.b64decode(b64_r.stdout))
-                    if not local_raw.exists() or local_raw.stat().st_size == 0:
-                        continue
-
-                    if remote_md5:
-                        local_md5 = hashlib.md5(local_raw.read_bytes()).hexdigest()
-                        if local_md5 == remote_md5:
-                            if log_callback:
-                                log_callback(f"   📁 Archived guidellm raw output ({local_raw.stat().st_size // 1024}KB, MD5 verified)")
-                            break
-                        else:
-                            if log_callback:
-                                log_callback(f"   ⚠️  MD5 mismatch (attempt {attempt+1}/{max_retries}), retrying copy...")
-                            local_raw.unlink(missing_ok=True)
-                    else:
-                        if log_callback:
-                            log_callback(f"   📁 Archived guidellm raw output ({local_raw.stat().st_size // 1024}KB)")
-                        break
-                else:
-                    if log_callback:
-                        log_callback(f"   ❌ Failed to copy guidellm output after {max_retries} attempts")
-                    local_raw.unlink(missing_ok=True)
-            except Exception:
-                pass
+            if getattr(config, "parallel_workloads", None):
+                remote_outputs = [
+                    (f"/mnt/storage/tmp/guidellm-{config.test_id}-w{i}.json", artifact_dir / f"guidellm-raw-w{i}.json")
+                    for i in range(len(config.parallel_workloads))
+                ]
+            else:
+                remote_outputs = [
+                    (f"/mnt/storage/tmp/guidellm-{config.test_id}.json", artifact_dir / "guidellm-raw.json")
+                ]
+            for _rpath, _lpath in remote_outputs:
+                self._copy_guidellm_remote(kubectl, env, _rpath, _lpath, log_callback)
 
             # 2. Copy Prometheus metrics if collected
             if result.metrics_file and Path(result.metrics_file).exists():
                 import shutil
+
                 shutil.copy2(result.metrics_file, artifact_dir / "metrics-prometheus.json")
 
             # 3. Save test config
             from dataclasses import asdict
+
             tc_dict = asdict(config)
-            for key in ('hf_token', 'selected_nodes'):
+            for key in ("hf_token", "selected_nodes"):
                 tc_dict.pop(key, None)
-            with open(artifact_dir / "test-config.json", 'w') as f:
+            with open(artifact_dir / "test-config.json", "w") as f:
                 json.dump(tc_dict, f, indent=2, default=str)
 
             # 4. Save parsed results summary
             result_summary = {
-                'test_id': config.test_id,
-                'architecture': config.architecture,
-                'ttft_p50': result.ttft_p50, 'ttft_p90': result.ttft_p90,
-                'ttft_p95': result.ttft_p95, 'ttft_p99': result.ttft_p99,
-                'throughput_p50': result.throughput_p50, 'throughput_p90': result.throughput_p90,
-                'throughput_p95': result.throughput_p95, 'throughput_p99': result.throughput_p99,
-                'itl_p50': result.itl_p50, 'itl_p90': result.itl_p90,
-                'tpot_p50': result.tpot_p50, 'tpot_p90': result.tpot_p90,
-                'request_total': result.request_total,
-                'request_successful': result.request_successful,
-                'request_errored': result.request_errored,
-                'guidellm_success': result.guidellm_success,
-                'error_message': result.error_message,
-                'test_start_time': result.test_start_time,
-                'test_end_time': result.test_end_time,
+                "test_id": config.test_id,
+                "architecture": config.architecture,
+                "ttft_p50": result.ttft_p50,
+                "ttft_p90": result.ttft_p90,
+                "ttft_p95": result.ttft_p95,
+                "ttft_p99": result.ttft_p99,
+                "throughput_p50": result.throughput_p50,
+                "throughput_p90": result.throughput_p90,
+                "throughput_p95": result.throughput_p95,
+                "throughput_p99": result.throughput_p99,
+                "itl_p50": result.itl_p50,
+                "itl_p90": result.itl_p90,
+                "tpot_p50": result.tpot_p50,
+                "tpot_p90": result.tpot_p90,
+                "request_total": result.request_total,
+                "request_successful": result.request_successful,
+                "request_errored": result.request_errored,
+                "guidellm_success": result.guidellm_success,
+                "error_message": result.error_message,
+                "test_start_time": result.test_start_time,
+                "test_end_time": result.test_end_time,
             }
-            with open(artifact_dir / "test-result.json", 'w') as f:
+            if getattr(result, "workloads", None):
+                result_summary["workloads"] = result.workloads
+            with open(artifact_dir / "test-result.json", "w") as f:
                 json.dump(result_summary, f, indent=2, default=str)
 
             # 5. Save manifests
-            if hasattr(result, 'manifests') and result.manifests:
-                with open(artifact_dir / "manifests.yaml", 'w') as f:
+            if hasattr(result, "manifests") and result.manifests:
+                with open(artifact_dir / "manifests.yaml", "w") as f:
                     if isinstance(result.manifests, dict):
                         for name, yaml_content in result.manifests.items():
                             f.write(f"---\n# {name}\n{yaml_content}\n")
@@ -1291,6 +1338,116 @@ class TestOrchestrator(ParserMixin, GuidellmMixin):
         except Exception as e:
             logger.warning(f"Failed to archive test artifacts: {e}")
 
+    def _copy_guidellm_remote(self, kubectl, env, remote_path, local_raw, log_callback):
+        """Copy one guidellm output from the workload pod with MD5 verify.
+
+        A missing remote output logs a warning and returns — a failed
+        parallel workload must not sink the whole archive.
+        """
+        try:
+            import hashlib
+            import subprocess as _sp
+            import time as _time
+
+            max_retries = 5
+            for attempt in range(max_retries):
+                # Fresh remote hash every attempt: a hash taken while the
+                # remote file (or its NFS view) was still settling must not
+                # poison every retry against a copy that is actually fine.
+                md5_r = kubectl.run(
+                    ["exec", self._guidellm_pod_name, "-n", self.namespace, "--", "md5sum", remote_path], check=False
+                )
+                remote_md5 = md5_r.stdout.strip().split()[0] if md5_r.returncode == 0 else None
+                if not remote_md5:
+                    if log_callback:
+                        log_callback(f"   \u26a0\ufe0f  No guidellm output at {remote_path}")
+                    return
+
+                if attempt < 3:
+                    cat_r = _sp.run(
+                        [
+                            kubectl.kubectl_cmd,
+                            "exec",
+                            self._guidellm_pod_name,
+                            "-n",
+                            self.namespace,
+                            "--",
+                            "cat",
+                            remote_path,
+                        ],
+                        env=env,
+                        capture_output=True,
+                        timeout=180,
+                        check=False,
+                    )
+                    if cat_r.returncode == 0 and cat_r.stdout:
+                        local_raw.write_bytes(cat_r.stdout)
+                        # hash the bytes we just wrote — an NFS read-back
+                        # can serve a stale page and fail a perfect copy
+                        local_md5 = hashlib.md5(cat_r.stdout).hexdigest()
+                else:
+                    import base64 as _b64
+
+                    b64_r = _sp.run(
+                        [
+                            kubectl.kubectl_cmd,
+                            "exec",
+                            self._guidellm_pod_name,
+                            "-n",
+                            self.namespace,
+                            "--",
+                            "base64",
+                            "-w0",
+                            remote_path,
+                        ],
+                        env=env,
+                        capture_output=True,
+                        timeout=300,
+                        check=False,
+                    )
+                    if b64_r.returncode == 0 and b64_r.stdout:
+                        _decoded = _b64.b64decode(b64_r.stdout)
+                        local_raw.write_bytes(_decoded)
+                        local_md5 = hashlib.md5(_decoded).hexdigest()
+                if not local_raw.exists() or local_raw.stat().st_size == 0:
+                    continue
+
+                if remote_md5:
+                    if local_md5 == remote_md5:
+                        if log_callback:
+                            log_callback(
+                                f"   \U0001f4c1 Archived guidellm raw output ({local_raw.stat().st_size // 1024}KB, MD5 verified)"
+                            )
+                        break
+                    else:
+                        if log_callback:
+                            log_callback(
+                                f"   \u26a0\ufe0f  MD5 mismatch (attempt {attempt + 1}/{max_retries}), retrying copy..."
+                            )
+                        local_raw.unlink(missing_ok=True)
+                        _time.sleep(2)
+                else:
+                    if log_callback:
+                        log_callback(
+                            f"   \U0001f4c1 Archived guidellm raw output ({local_raw.stat().st_size // 1024}KB)"
+                        )
+                    break
+            else:
+                if log_callback:
+                    log_callback(f"   \u274c Failed to copy guidellm output after {max_retries} attempts")
+                # keep the last copy for post-hoc analysis instead of losing it
+                if local_raw.exists():
+                    _unv = local_raw.with_suffix(".unverified")
+                    try:
+                        local_raw.rename(_unv)
+                        if log_callback:
+                            log_callback(f"   \u274c Last copy kept at {_unv.name}")
+                    except Exception:
+                        local_raw.unlink(missing_ok=True)
+                local_raw.unlink(missing_ok=True)
+        except Exception as e:
+            logger.warning(f"Failed to copy guidellm output {remote_path}: {e}")
+
     def run_test(
         self,
         config: TestConfig,
@@ -1299,7 +1456,7 @@ class TestOrchestrator(ParserMixin, GuidellmMixin):
         skip_workload: bool = False,
         stop_check: Optional[Callable[[], bool]] = None,
         skip_prereqs: bool = False,
-        skip_deploy: bool = False
+        skip_deploy: bool = False,
     ) -> TestResult:
         """
         Run a complete test for a single configuration.
@@ -1313,23 +1470,28 @@ class TestOrchestrator(ParserMixin, GuidellmMixin):
             TestResult with test outcome
         """
         if log_callback:
-            log_callback(f"\n{'='*70}")
+            log_callback(f"\n{'=' * 70}")
             log_callback(f"🚀 Starting Test: {config.test_id}")
             log_callback(f"   Architecture: {config.architecture}")
             log_callback(f"   Model: {config.model_name}")
-            if config.architecture in ('pd', 'ep') and (config.prefill_tp or config.decode_tp):
-                log_callback(f"   Prefill TP: {config.prefill_tp or config.tensor_parallelism}, Decode TP: {config.decode_tp or config.tensor_parallelism}")
+            if config.architecture in ("pd", "ep") and (config.prefill_tp or config.decode_tp):
+                log_callback(
+                    f"   Prefill TP: {config.prefill_tp or config.tensor_parallelism}, Decode TP: {config.decode_tp or config.tensor_parallelism}"
+                )
                 log_callback(f"   Prefill Pods: {config.prefill_replicas}, Decode Pods: {config.decode_replicas}")
             else:
                 log_callback(f"   TP: {config.tensor_parallelism}")
-            log_callback(f"{'='*70}\n")
+            log_callback(f"{'=' * 70}\n")
 
         # Guard: a None model means the download was skipped and vLLM will
         # crash-loop with LocalEntryNotFoundError (offline, HF_HUB_OFFLINE=1)
-        if not config.model_name or config.model_name == 'None':
+        if not config.model_name or config.model_name == "None":
             if log_callback:
-                log_callback('❌ Test aborted: model_name is empty — the model was never '
-                             'downloaded to the PVC. Select a model on Step 1 and restart.', 'error')
+                log_callback(
+                    "❌ Test aborted: model_name is empty — the model was never "
+                    "downloaded to the PVC. Select a model on Step 1 and restart.",
+                    "error",
+                )
             result = TestResult(
                 test_id=config.test_id,
                 architecture=config.architecture,
@@ -1338,7 +1500,7 @@ class TestOrchestrator(ParserMixin, GuidellmMixin):
                 guidellm_success=False,
                 metrics_collected=False,
                 deployment_start_time=datetime.now().isoformat(),
-                error_message='model_name is empty — model not downloaded',
+                error_message="model_name is empty — model not downloaded",
             )
             return result
 
@@ -1349,7 +1511,7 @@ class TestOrchestrator(ParserMixin, GuidellmMixin):
             deployment_ready=False,
             guidellm_success=False,
             metrics_collected=False,
-            deployment_start_time=datetime.now().isoformat()
+            deployment_start_time=datetime.now().isoformat(),
         )
 
         try:
@@ -1363,36 +1525,37 @@ class TestOrchestrator(ParserMixin, GuidellmMixin):
             # Step 0: Check/Deploy prerequisite infrastructure
             if not skip_prereqs and not skip_deploy:
                 if log_callback:
-                    log_callback('')
-                    log_callback('=' * 60)
-                    log_callback('📋 Step 1: Deploying Prerequisite Infrastructure')
-                    log_callback('=' * 60)
+                    log_callback("")
+                    log_callback("=" * 60)
+                    log_callback("📋 Step 1: Deploying Prerequisite Infrastructure")
+                    log_callback("=" * 60)
 
                 from core import PrereqManager
+
                 prereq_mgr = PrereqManager(
                     namespace=self.namespace,
                     kubectl_runner=self.deployment_manager.kubectl,
-                    scheduler_image=getattr(config, 'scheduler_image', None),
-                    gateway_class=getattr(config, 'gateway_class', 'istio'),
+                    scheduler_image=getattr(config, "scheduler_image", None),
+                    gateway_class=getattr(config, "gateway_class", "istio"),
                 )
 
                 try:
                     success = prereq_mgr.deploy_prereqs(
                         architecture=config.architecture,
                         log_callback=lambda msg: log_callback(msg) if log_callback else None,
-                        epp_config=getattr(config, 'epp_config', None),
-                        optimizer_config=config
+                        epp_config=getattr(config, "epp_config", None),
+                        optimizer_config=config,
                     )
 
                     if not success:
                         if log_callback:
-                            log_callback('')
-                            log_callback('❌ Failed to deploy prerequisite infrastructure')
-                            log_callback('')
+                            log_callback("")
+                            log_callback("❌ Failed to deploy prerequisite infrastructure")
+                            log_callback("")
                         result.error_message = "Failed to deploy prerequisite infrastructure"
                         return result
 
-                    applied_epp_cm = getattr(prereq_mgr, 'last_epp_configmap_yaml', None)
+                    applied_epp_cm = getattr(prereq_mgr, "last_epp_configmap_yaml", None)
                     if applied_epp_cm:
                         try:
                             config._epp_configmap_yaml = applied_epp_cm
@@ -1400,14 +1563,14 @@ class TestOrchestrator(ParserMixin, GuidellmMixin):
                             pass
 
                     if log_callback:
-                        log_callback('')
-                        log_callback('ℹ️  Note: Gateway typically takes 1-2 minutes to become fully healthy')
-                        log_callback('   Waiting for gateway to be ready before proceeding...')
+                        log_callback("")
+                        log_callback("ℹ️  Note: Gateway typically takes 1-2 minutes to become fully healthy")
+                        log_callback("   Waiting for gateway to be ready before proceeding...")
                 except Exception as e:
                     if log_callback:
-                        log_callback('')
-                        log_callback(f'❌ Failed to deploy prerequisites: {str(e)}')
-                        log_callback('')
+                        log_callback("")
+                        log_callback(f"❌ Failed to deploy prerequisites: {str(e)}")
+                        log_callback("")
                     result.error_message = f"Failed to deploy prerequisites: {str(e)}"
                     return result
 
@@ -1419,44 +1582,57 @@ class TestOrchestrator(ParserMixin, GuidellmMixin):
 
             if skip_deploy:
                 if log_callback:
-                    log_callback('⏩ Reusing existing deployment (sweep mode)')
+                    log_callback("⏩ Reusing existing deployment (sweep mode)")
                 result.deployment_success = True
                 result.deployment_ready = True
 
             if not skip_deploy:
                 if log_callback:
-                    log_callback('')
+                    log_callback("")
                     if skip_prereqs:
-                        log_callback('⏩ Skipping prerequisite deployment (reusing existing)')
+                        log_callback("⏩ Skipping prerequisite deployment (reusing existing)")
                     else:
-                        log_callback('▶️  Prerequisites ready, continuing with inference pod deployment...')
-                    log_callback('')
-                    log_callback('=' * 60)
-                    log_callback('📋 Step 2: Deploying Inference Pods')
-                    log_callback('=' * 60)
-                    log_callback('')
+                        log_callback("▶️  Prerequisites ready, continuing with inference pod deployment...")
+                    log_callback("")
+                    log_callback("=" * 60)
+                    log_callback("📋 Step 2: Deploying Inference Pods")
+                    log_callback("=" * 60)
+                    log_callback("")
 
             # Step 1a: Check if existing deployment is already serving
             # Reuse running pods to avoid 30+ min model reload on large models
             if not skip_deploy:
-                existing = self.deployment_manager.get_deployment_status(
-                    config.test_id, config.architecture
-                )
+                existing = self.deployment_manager.get_deployment_status(config.test_id, config.architecture)
                 if existing.deployed:
                     # Check if ALL pods are serving
                     r = subprocess.run(
-                        ['kubectl', 'get', 'pods', '-n', self.namespace,
-                         '-l', f'llm-d.ai/test-id={config.test_id}',
-                         '-o', 'jsonpath={range .items[*]}{.metadata.name}{" "}{end}'],
-                        capture_output=True, text=True, timeout=15, check=False)
+                        [
+                            "kubectl",
+                            "get",
+                            "pods",
+                            "-n",
+                            self.namespace,
+                            "-l",
+                            f"llm-d.ai/test-id={config.test_id}",
+                            "-o",
+                            'jsonpath={range .items[*]}{.metadata.name}{" "}{end}',
+                        ],
+                        capture_output=True,
+                        text=True,
+                        timeout=15,
+                        check=False,
+                    )
                     pod_names = [p for p in r.stdout.strip().split() if p]
                     all_serving = len(pod_names) > 0
                     for pn in pod_names:
                         log_r = subprocess.run(
-                            ['kubectl', 'logs', pn, '-n', self.namespace,
-                             '-c', 'vllm', '--tail=2000'],
-                            capture_output=True, text=True, timeout=30, check=False)
-                        if 'Application startup complete' not in log_r.stdout:
+                            ["kubectl", "logs", pn, "-n", self.namespace, "-c", "vllm", "--tail=2000"],
+                            capture_output=True,
+                            text=True,
+                            timeout=30,
+                            check=False,
+                        )
+                        if "Application startup complete" not in log_r.stdout:
                             all_serving = False
                             break
 
@@ -1470,22 +1646,15 @@ class TestOrchestrator(ParserMixin, GuidellmMixin):
                         if log_callback:
                             log_callback(f"🧹 Cleaning up leftover deployment (not all pods serving): {config.test_id}")
                         self.deployment_manager.delete_deployment(
-                            config.test_id,
-                            config.architecture,
-                            log_callback=log_callback
+                            config.test_id, config.architecture, log_callback=log_callback
                         )
                         self.deployment_manager.wait_for_pods_terminated(
-                            config.test_id,
-                            timeout=300,
-                            log_callback=log_callback
+                            config.test_id, timeout=300, log_callback=log_callback
                         )
 
             if not skip_deploy:
                 deploy_start_time = time.time()
-                deployment_success = self.deployment_manager.deploy_config(
-                    config,
-                    log_callback=log_callback
-                )
+                deployment_success = self.deployment_manager.deploy_config(config, log_callback=log_callback)
 
                 result.deployment_success = deployment_success
 
@@ -1507,7 +1676,7 @@ class TestOrchestrator(ParserMixin, GuidellmMixin):
                     config.architecture,
                     timeout=self.deployment_timeout,
                     log_callback=log_callback,
-                    stop_check=stop_check
+                    stop_check=stop_check,
                 )
 
                 result.deployment_ready = ready
@@ -1525,7 +1694,7 @@ class TestOrchestrator(ParserMixin, GuidellmMixin):
                     timeout=self.deployment_timeout,
                     log_callback=log_callback,
                     stop_check=stop_check,
-                    config=config
+                    config=config,
                 )
 
                 if model_load_time == -2:
@@ -1542,21 +1711,14 @@ class TestOrchestrator(ParserMixin, GuidellmMixin):
                 if pod_timings:
                     result.pod_timings = pod_timings
 
-                gpu_mem_util = getattr(config, 'gpu_memory_utilization', 0.95)
-                gpu_vram = getattr(config, 'gpu_vram_gb', None)
+                gpu_mem_util = getattr(config, "gpu_memory_utilization", 0.95)
+                gpu_vram = getattr(config, "gpu_vram_gb", None)
                 if gpu_vram:
-                    self._profile_vllm_memory(
-                        config.test_id, gpu_mem_util, gpu_vram, result,
-                        log_callback=log_callback
-                )
+                    self._profile_vllm_memory(config.test_id, gpu_mem_util, gpu_vram, result, log_callback=log_callback)
 
             # Step 4: Get service endpoint
 
-            endpoint = self._get_service_endpoint(
-                config.test_id,
-                config.architecture,
-                log_callback=log_callback
-            )
+            endpoint = self._get_service_endpoint(config.test_id, config.architecture, log_callback=log_callback)
 
             result.service_endpoint = endpoint
 
@@ -1570,14 +1732,14 @@ class TestOrchestrator(ParserMixin, GuidellmMixin):
             # Step 4b: Wait for gateway to register all pods in EPP (skip if reusing deployment)
             if skip_deploy:
                 expected_pods = 0
-            elif config.architecture == 'pd':
+            elif config.architecture == "pd":
                 expected_pods = (config.prefill_replicas or 0) + (config.decode_replicas or 0)
             else:
                 expected_pods = config.replicas
 
             if expected_pods > 0:
                 if log_callback:
-                    p = 'pod' if expected_pods == 1 else 'pods'
+                    p = "pod" if expected_pods == 1 else "pods"
                     log_callback(f"\n🔄 Step 4b: Waiting for {expected_pods} {p} to register in EPP inference pool...")
 
                 gateway_ready = self._wait_for_gateway_ready(
@@ -1585,21 +1747,25 @@ class TestOrchestrator(ParserMixin, GuidellmMixin):
                     config=config,
                     expected_pods=expected_pods,
                     timeout=120,
-                    log_callback=log_callback
+                    log_callback=log_callback,
                 )
 
                 if not gateway_ready:
-                    arch = config.architecture or 'pd'
-                    epp_name = f'gaie-{arch}-epp'
+                    arch = config.architecture or "pd"
+                    epp_name = f"gaie-{arch}-epp"
                     if log_callback:
-                        log_callback(f"🔄 EPP failed to register pods — restarting {epp_name} only (inference pods kept)")
+                        log_callback(
+                            f"🔄 EPP failed to register pods — restarting {epp_name} only (inference pods kept)"
+                        )
                     r_restart = self.deployment_manager.kubectl.run(
-                        ['rollout', 'restart', 'deployment', epp_name, '-n', self.namespace],
-                        check=False, timeout=60)
+                        ["rollout", "restart", "deployment", epp_name, "-n", self.namespace], check=False, timeout=60
+                    )
                     if r_restart.returncode == 0:
                         self.deployment_manager.kubectl.run(
-                            ['rollout', 'status', 'deployment', epp_name, '-n', self.namespace,
-                             '--timeout=180s'], check=False, timeout=200)
+                            ["rollout", "status", "deployment", epp_name, "-n", self.namespace, "--timeout=180s"],
+                            check=False,
+                            timeout=200,
+                        )
                         time.sleep(10)
                         if log_callback:
                             log_callback("   ✅ EPP restarted — re-checking pool registration")
@@ -1608,7 +1774,7 @@ class TestOrchestrator(ParserMixin, GuidellmMixin):
                             config=config,
                             expected_pods=expected_pods,
                             timeout=90,
-                            log_callback=log_callback
+                            log_callback=log_callback,
                         )
 
                 if not gateway_ready:
@@ -1631,11 +1797,7 @@ class TestOrchestrator(ParserMixin, GuidellmMixin):
                 result.test_start_time = datetime.now().isoformat()
 
                 # Simple curl test to verify endpoint is responding
-                curl_success = self._run_curl_test(
-                    endpoint,
-                    config,
-                    log_callback=log_callback
-                )
+                curl_success = self._run_curl_test(endpoint, config, log_callback=log_callback)
 
                 result.test_end_time = datetime.now().isoformat()
                 result.guidellm_success = curl_success
@@ -1664,7 +1826,9 @@ class TestOrchestrator(ParserMixin, GuidellmMixin):
 
                     if guidellm_attempt > 1:
                         if log_callback:
-                            log_callback(f"\n🔄 Retrying guidellm (attempt {guidellm_attempt}/{max_guidellm_retries}) — pods still running")
+                            log_callback(
+                                f"\n🔄 Retrying guidellm (attempt {guidellm_attempt}/{max_guidellm_retries}) — pods still running"
+                            )
 
                     # Smoke-test the gateway path before every attempt: a wedged
                     # EPP still serves /v1/models but hangs completions, which
@@ -1672,7 +1836,9 @@ class TestOrchestrator(ParserMixin, GuidellmMixin):
                     if not self._smoke_test_gateway(endpoint, config, log_callback=log_callback):
                         result.error_message = "Gateway smoke test failed — gateway is not completing requests"
                         if log_callback:
-                            log_callback("❌ Gateway is not completing requests — aborting guidellm (check EPP/gateway pods)")
+                            log_callback(
+                                "❌ Gateway is not completing requests — aborting guidellm (check EPP/gateway pods)"
+                            )
                         return result
 
                     if log_callback:
@@ -1680,15 +1846,19 @@ class TestOrchestrator(ParserMixin, GuidellmMixin):
 
                     result.test_start_time = datetime.now().isoformat()
 
-                    use_job = os.environ.get('GUIDELLM_USE_JOB', 'true').lower() == 'true'
+                    use_job = os.environ.get("GUIDELLM_USE_JOB", "true").lower() == "true"
                     if use_job:
                         guidellm_success, guidellm_output, metrics_output = self._run_guidellm_job(
-                            endpoint, config, log_callback=log_callback,
+                            endpoint,
+                            config,
+                            log_callback=log_callback,
                             stop_check=stop_check,
                         )
                     else:
                         guidellm_success, guidellm_output, metrics_output = self._run_guidellm_test(
-                            endpoint, config, log_callback=log_callback,
+                            endpoint,
+                            config,
+                            log_callback=log_callback,
                         )
 
                     result.test_end_time = datetime.now().isoformat()
@@ -1705,7 +1875,9 @@ class TestOrchestrator(ParserMixin, GuidellmMixin):
                             return result
                         if guidellm_attempt < max_guidellm_retries:
                             if log_callback:
-                                log_callback(f"⚠️  guidellm failed ({result.request_successful or 0} completed requests) — retrying ({guidellm_attempt}/{max_guidellm_retries})")
+                                log_callback(
+                                    f"⚠️  guidellm failed ({result.request_successful or 0} completed requests) — retrying ({guidellm_attempt}/{max_guidellm_retries})"
+                                )
                             # Wait for pods to be ready before retrying
                             if log_callback:
                                 log_callback("   ⏳ Waiting for inference pods to be ready...")
@@ -1713,7 +1885,11 @@ class TestOrchestrator(ParserMixin, GuidellmMixin):
                                 if stop_check and stop_check():
                                     result.error_message = "Stopped by user"
                                     return result
-                                expected_pods = (config.prefill_replicas or 0) + (config.decode_replicas or 0) or config.replicas or 1
+                                expected_pods = (
+                                    (config.prefill_replicas or 0) + (config.decode_replicas or 0)
+                                    or config.replicas
+                                    or 1
+                                )
                                 if self.deployment_manager._verify_pods_ready(config.test_id, expected_pods):
                                     break
                                 time.sleep(5)
@@ -1733,13 +1909,17 @@ class TestOrchestrator(ParserMixin, GuidellmMixin):
                             # Check if errors are all overload/disconnection (503, DC)
                             if self._are_overload_errors(guidellm_output):
                                 if log_callback:
-                                    log_callback(f"⚠️  Error rate {error_pct:.1f}% ({errored}/{total}) — all 503/disconnect errors, config at capacity")
+                                    log_callback(
+                                        f"⚠️  Error rate {error_pct:.1f}% ({errored}/{total}) — all 503/disconnect errors, config at capacity"
+                                    )
                                 result.guidellm_retries = guidellm_attempt - 1
                                 break
                             sample_err = self._get_first_error(guidellm_output)
                             if log_callback:
                                 if sample_err:
-                                    log_callback(f"⚠️  Error rate {error_pct:.1f}% ({errored}/{total}) — sample: {sample_err[:150]}")
+                                    log_callback(
+                                        f"⚠️  Error rate {error_pct:.1f}% ({errored}/{total}) — sample: {sample_err[:150]}"
+                                    )
                                 log_callback(f"⚠️  Error rate {error_pct:.1f}% ({errored}/{total}) — retrying guidellm")
                             result.guidellm_retries = guidellm_attempt
                             continue
@@ -1756,10 +1936,7 @@ class TestOrchestrator(ParserMixin, GuidellmMixin):
                         log_callback("\n📊 Step 6: Collecting metrics...")
 
                     metrics_file = self._collect_metrics(
-                        config,
-                        result.test_start_time,
-                        result.test_end_time,
-                        log_callback=log_callback
+                        config, result.test_start_time, result.test_end_time, log_callback=log_callback
                     )
 
                     result.metrics_file = metrics_file
@@ -1779,6 +1956,7 @@ class TestOrchestrator(ParserMixin, GuidellmMixin):
                 # Scan pod logs for critical errors
                 try:
                     from core.pod_error_scanner import scan_pod_logs
+
                     if log_callback:
                         log_callback("\n🔍 Scanning pod logs for critical errors...")
                     scan_result = scan_pod_logs(self.namespace, config.test_id)
@@ -1792,8 +1970,7 @@ class TestOrchestrator(ParserMixin, GuidellmMixin):
                             # fail the test. Metrics are preserved (already
                             # collected) so the failure is investigable.
                             result.success = False
-                            result.error_message = (f"Critical pod errors detected: "
-                                                    f"{scan_result.summary}")
+                            result.error_message = f"Critical pod errors detected: {scan_result.summary}"
                             if log_callback:
                                 log_callback(f"🚨 CRITICAL POD ERRORS DETECTED: {scan_result.summary}")
                                 for report in scan_result.pod_reports:
@@ -1802,12 +1979,16 @@ class TestOrchestrator(ParserMixin, GuidellmMixin):
                                         log_callback(f"      [{err.pattern_name}] {err.line[:150]}")
                                 log_callback("   ❌ Test marked as failed — metrics preserved for investigation")
                                 log_callback("\n⚠️  Pods left running for investigation:")
-                                log_callback(f"   kubectl logs -n {self.namespace} -l llm-d.ai/test-id={config.test_id} -c vllm")
+                                log_callback(
+                                    f"   kubectl logs -n {self.namespace} -l llm-d.ai/test-id={config.test_id} -c vllm"
+                                )
                         else:
                             if log_callback:
                                 log_callback(f"⚠️  Pod warnings: {scan_result.summary}")
                                 if scan_result.nixl_error_count > 0:
-                                    log_callback(f"   NIXL transfer errors: {scan_result.nixl_error_count} (non-critical, vLLM retries automatically)")
+                                    log_callback(
+                                        f"   NIXL transfer errors: {scan_result.nixl_error_count} (non-critical, vLLM retries automatically)"
+                                    )
                 except ImportError:
                     pass
 
@@ -1816,6 +1997,7 @@ class TestOrchestrator(ParserMixin, GuidellmMixin):
 
         except Exception as e:
             import traceback
+
             tb = traceback.format_exc()
             error_msg = f"Test execution failed: {e}"
             logger.error(f"{error_msg}\n{tb}")
@@ -1832,26 +2014,26 @@ class TestOrchestrator(ParserMixin, GuidellmMixin):
             if result.pod_errors_detected:
                 if log_callback:
                     log_callback("\n⚠️  Skipping cleanup — pods left running due to critical errors")
-                    log_callback(f"🧹 Manual cleanup: kubectl delete lws -n {self.namespace} -l test-id={config.test_id}")
+                    log_callback(
+                        f"🧹 Manual cleanup: kubectl delete lws -n {self.namespace} -l test-id={config.test_id}"
+                    )
             elif high_error_rate:
                 if log_callback:
-                    log_callback(f"\n⚠️  Skipping cleanup — high request error rate ({result.request_errored}/{result.request_total} errored)")
+                    log_callback(
+                        f"\n⚠️  Skipping cleanup — high request error rate ({result.request_errored}/{result.request_total} errored)"
+                    )
                     log_callback("   Pods left running for investigation.")
-                    log_callback(f"🧹 Manual cleanup: kubectl delete lws -n {self.namespace} -l test-id={config.test_id}")
+                    log_callback(
+                        f"🧹 Manual cleanup: kubectl delete lws -n {self.namespace} -l test-id={config.test_id}"
+                    )
             elif cleanup and result.guidellm_success:
                 if log_callback:
                     log_callback("\n🧹 Step 7: Cleaning up deployment...")
 
                 self.deployment_manager.delete_deployment(
-                    config.test_id,
-                    config.architecture,
-                    log_callback=log_callback
+                    config.test_id, config.architecture, log_callback=log_callback
                 )
-                self.deployment_manager.wait_for_pods_terminated(
-                    config.test_id,
-                    timeout=300,
-                    log_callback=log_callback
-                )
+                self.deployment_manager.wait_for_pods_terminated(config.test_id, timeout=300, log_callback=log_callback)
 
                 result.cleanup_time = datetime.now().isoformat()
             elif cleanup and not result.guidellm_success:
@@ -1861,35 +2043,32 @@ class TestOrchestrator(ParserMixin, GuidellmMixin):
                     # redeploy ("not all pods serving -> cleanup"). Nothing is
                     # deleted as part of stopping.
                     if log_callback:
-                        log_callback("\nℹ️  Stop requested — skipping failure cleanup; "
-                                     "pods left for the next run to reconcile")
+                        log_callback(
+                            "\nℹ️  Stop requested — skipping failure cleanup; pods left for the next run to reconcile"
+                        )
                 else:
                     if log_callback:
                         log_callback("\n⚠️  Test failed — cleaning up deployment...")
 
                     self.deployment_manager.delete_deployment(
-                        config.test_id,
-                        config.architecture,
-                        log_callback=log_callback
+                        config.test_id, config.architecture, log_callback=log_callback
                     )
                     self.deployment_manager.wait_for_pods_terminated(
-                        config.test_id,
-                        timeout=300,
-                        log_callback=log_callback
+                        config.test_id, timeout=300, log_callback=log_callback
                     )
 
                     result.cleanup_time = datetime.now().isoformat()
 
         # Final summary
         if log_callback:
-            log_callback(f"\n{'='*70}")
+            log_callback(f"\n{'=' * 70}")
             if result.guidellm_success and result.deployment_success:
                 log_callback(f"✅ Test completed successfully: {config.test_id}")
             else:
                 log_callback(f"❌ Test failed: {config.test_id}")
                 if result.error_message:
                     log_callback(f"   Error: {result.error_message}")
-            log_callback(f"{'='*70}\n")
+            log_callback(f"{'=' * 70}\n")
 
         return result
 
@@ -1897,7 +2076,7 @@ class TestOrchestrator(ParserMixin, GuidellmMixin):
         self,
         plan: OptimizationPlan,
         log_callback: Optional[Callable[[str], None]] = None,
-        cleanup_between_tests: bool = True
+        cleanup_between_tests: bool = True,
     ) -> List[TestResult]:
         """
         Run all tests in an optimization plan.
@@ -1911,11 +2090,11 @@ class TestOrchestrator(ParserMixin, GuidellmMixin):
             List of TestResult objects
         """
         if log_callback:
-            log_callback(f"\n{'#'*70}")
+            log_callback(f"\n{'#' * 70}")
             log_callback(f"# Optimization Run: {plan.run_name}")
             log_callback(f"# Model: {plan.model_name}")
             log_callback(f"# Total Tests: {len(plan.test_configs)}")
-            log_callback(f"{'#'*70}\n")
+            log_callback(f"{'#' * 70}\n")
 
         results = []
 
@@ -1927,18 +2106,14 @@ class TestOrchestrator(ParserMixin, GuidellmMixin):
             "Failed to deploy prerequisite infrastructure",
             "Failed to get service endpoint",
             "Gateway did not register all pods",
-            "OOM: No available memory for the cache blocks"
+            "OOM: No available memory for the cache blocks",
         }
 
         for i, config in enumerate(plan.test_configs, 1):
             if log_callback:
                 log_callback(f"\n>>> Test {i}/{len(plan.test_configs)} <<<\n")
 
-            result = self.run_test(
-                config,
-                log_callback=log_callback,
-                cleanup=cleanup_between_tests
-            )
+            result = self.run_test(config, log_callback=log_callback, cleanup=cleanup_between_tests)
 
             results.append(result)
 
@@ -1958,10 +2133,10 @@ class TestOrchestrator(ParserMixin, GuidellmMixin):
         # Final summary
         if log_callback:
             successful = sum(1 for r in results if r.guidellm_success)
-            log_callback(f"\n{'#'*70}")
+            log_callback(f"\n{'#' * 70}")
             log_callback("# Optimization Run Complete")
             log_callback(f"# Successful Tests: {successful}/{len(results)}")
-            log_callback(f"{'#'*70}\n")
+            log_callback(f"{'#' * 70}\n")
 
         return results
 
@@ -1970,60 +2145,48 @@ def main():
     """Main entry point for standalone execution."""
     import argparse
 
-    parser = argparse.ArgumentParser(
-        description='Run ServeIt Studio test orchestration'
-    )
-    parser.add_argument('--plan-file', required=True,
-                        help='Path to optimization plan JSON file')
-    parser.add_argument('--namespace', default='serveit',
-                        help='Kubernetes namespace')
-    parser.add_argument('--thanos-url',
-                        help='Thanos/Prometheus URL for metrics collection')
-    parser.add_argument('--no-cleanup', action='store_true',
-                        help='Do not cleanup deployments after tests')
+    parser = argparse.ArgumentParser(description="Run ServeIt Studio test orchestration")
+    parser.add_argument("--plan-file", required=True, help="Path to optimization plan JSON file")
+    parser.add_argument("--namespace", default="serveit", help="Kubernetes namespace")
+    parser.add_argument("--thanos-url", help="Thanos/Prometheus URL for metrics collection")
+    parser.add_argument("--no-cleanup", action="store_true", help="Do not cleanup deployments after tests")
 
     args = parser.parse_args()
 
     # Load optimization plan
-    with open(args.plan_file, 'r') as f:
+    with open(args.plan_file, "r") as f:
         plan_dict = json.load(f)
 
     # Reconstruct plan
     from core.config_generator import TestConfig, OptimizationPlan, ClusterResources
-    test_configs = [TestConfig(**cfg) for cfg in plan_dict['test_configs']]
-    cluster_resources = ClusterResources(**plan_dict['cluster_resources'])
+
+    test_configs = [TestConfig(**cfg) for cfg in plan_dict["test_configs"]]
+    cluster_resources = ClusterResources(**plan_dict["cluster_resources"])
 
     plan = OptimizationPlan(
-        run_name=plan_dict['run_name'],
-        model_name=plan_dict['model_name'],
-        isl=plan_dict['isl'],
-        osl=plan_dict['osl'],
-        num_users=plan_dict['num_users'],
-        optimization_goal=plan_dict['optimization_goal'],
+        run_name=plan_dict["run_name"],
+        model_name=plan_dict["model_name"],
+        isl=plan_dict["isl"],
+        osl=plan_dict["osl"],
+        num_users=plan_dict["num_users"],
+        optimization_goal=plan_dict["optimization_goal"],
         test_configs=test_configs,
         cluster_resources=cluster_resources,
-        created_at=plan_dict['created_at']
+        created_at=plan_dict["created_at"],
     )
 
     # Run orchestration
-    orchestrator = TestOrchestrator(
-        namespace=args.namespace,
-        thanos_url=args.thanos_url
-    )
+    orchestrator = TestOrchestrator(namespace=args.namespace, thanos_url=args.thanos_url)
 
-    results = orchestrator.run_optimization_plan(
-        plan,
-        log_callback=print,
-        cleanup_between_tests=not args.no_cleanup
-    )
+    results = orchestrator.run_optimization_plan(plan, log_callback=print, cleanup_between_tests=not args.no_cleanup)
 
     # Save results
     results_file = f"results/{plan.run_name}_results.json"
-    with open(results_file, 'w') as f:
+    with open(results_file, "w") as f:
         json.dump([asdict(r) for r in results], f, indent=2)
 
     print(f"\n✅ Results saved to {results_file}")
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     main()

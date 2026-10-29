@@ -573,6 +573,7 @@ def handle_resume_optimization(data):
         saved_epp_custom_enabled = True
         saved_epp_preset = 'balanced'
         saved_epp_benchmark = False
+        saved_epp_max_evals = 12
         saved_epp_config = None
         saved_prefix_cache_mode = 'identical'
         saved_prefix_cache_groups = 5
@@ -588,6 +589,7 @@ def handle_resume_optimization(data):
                 saved_epp_custom_enabled = saved_cfg.get('epp_custom_enabled', True)
                 saved_epp_preset = saved_cfg.get('epp_preset', 'balanced')
                 saved_epp_benchmark = saved_cfg.get('epp_benchmark', False)
+                saved_epp_max_evals = saved_cfg.get('epp_max_evals', 12)
                 saved_epp_config = saved_cfg.get('epp_config')
                 saved_prefix_cache_mode = saved_cfg.get('prefix_cache_mode', 'identical')
                 saved_prefix_cache_groups = saved_cfg.get('prefix_cache_groups', 5)
@@ -635,6 +637,7 @@ def handle_resume_optimization(data):
             'epp_custom_enabled': saved_epp_custom_enabled,
             'epp_preset': saved_epp_preset,
             'epp_benchmark': saved_epp_benchmark,
+            'epp_max_evals': saved_epp_max_evals,
             'epp_config': saved_epp_config,
             'advanced_vllm': saved_advanced_vllm,
             'resume_run_id': run_id
@@ -1355,8 +1358,10 @@ def handle_generate_test_plan(data):
                     if row and row['config_json']:
                         session_config = json.loads(row['config_json'])
                         pvc_name = session_config.get('pvc_name') or session_config.get('existing_pvc_name')
-                        # Skip fake "Nx local-disk" names (per-node hostPath storage, not real PVCs)
-                        if pvc_name and 'local-disk' in str(pvc_name):
+                        # Skip fake display summaries emitted for per-node storage
+                        # ("Nx local-disk", "Nx per-node") — they are not PVC names,
+                        # and mounting them leaves the config reader Pending forever
+                        if pvc_name and ('local-disk' in str(pvc_name) or 'per-node' in str(pvc_name)):
                             pvc_name = None
                         if pvc_name and not session_config.get('local_disk_path'):
                             log_to_ui(f'📦 Auto-detected PVC from session: {pvc_name}', 'info')
@@ -2266,6 +2271,8 @@ def handle_setup_storage(data):
                      'goal', 'optimization_goal', 'max_gpus', 'duration', 'stop_mode',
                      'storage_class', 'per_node_storage', 'local_disk_path',
                      'advanced_vllm_custom_enabled', 'epp_custom_enabled', 'epp_preset',
+                     'epp_benchmark', 'epp_max_evals', 'parallel_workloads',
+                     'parallel_workloads_enabled',
                      'image', 'scheduler_image', 'network_type', 'selected_dra_classes',
                      'prefix_cache_hit_pct', 'prefix_cache_mode', 'prefix_cache_groups',
                      'tp_pair_top_n', 'pd_search_mode', 'calibrated_load_enabled',
@@ -2427,6 +2434,7 @@ def handle_setup_storage(data):
                 'epp_custom_enabled': data.get('epp_custom_enabled', True),
                 'epp_preset': data.get('epp_preset', 'balanced'),
                 'epp_benchmark': data.get('epp_benchmark', False),
+                'epp_max_evals': data.get('epp_max_evals', 12),
                 'epp_config': data.get('epp_config') or saved.get('epp_config'),
                 'selected_nodes': data.get('selected_nodes') or [],
                 'workload_mode': data.get('workload_mode', 'synthetic'),
@@ -2693,7 +2701,10 @@ def handle_setup_storage(data):
             _sc_display = storage_class or ('nfs-' + node_nfs_pvcs[0]['suffix'] if node_nfs_pvcs else 'unknown')
             emit('storage_setup_result', {
                 'success': True,
-                'pvc_name': f'{len(node_nfs_pvcs)}x per-node',
+                # real PVC name for config flows; the display summary rides
+                # pvc_display so it can never leak into a mount spec
+                'pvc_name': (node_nfs_pvcs[0].get('pvc_name') if node_nfs_pvcs else ''),
+                'pvc_display': f'{len(node_nfs_pvcs)}x per-node',
                 'pvc_size': pvc_size,
                 'storage_class': _sc_display,
                 'model': model,

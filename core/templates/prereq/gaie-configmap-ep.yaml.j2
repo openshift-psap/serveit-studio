@@ -11,6 +11,8 @@ data:
   {{ config_file | default('ep-config.yaml') }}: |
     apiVersion: llm-d.ai/v1alpha1
     kind: EndpointPickerConfig
+{% if spec_mode | default(false) %}
+{{ spec_body_yaml }}{% else %}
     plugins:
       - type: approx-prefix-cache-producer
         parameters:
@@ -85,3 +87,4 @@ data:
             weight: {{ lora_affinity_weight | default(3.0) }}
 {% endif %}
 
+{% endif %}

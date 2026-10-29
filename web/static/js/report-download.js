@@ -336,7 +336,10 @@ function buildRecSection(runId, data, rec, summary, best, allRes) {
                 [{ key: 'aggregated', goalLabel: '&#9201; TTFT', archLabel: 'AGGREGATED' },
                  { key: 'pd', goalLabel: '&#9889; THROUGHPUT', archLabel: 'PD' }].forEach(({ key, goalLabel, archLabel }) => {
                     const trials = eppArch[key] || [];
-                    const b = trials.length ? trials.reduce((a, c) => ((a[`ttft_${p}`] || Infinity) < (c[`ttft_${p}`] || Infinity)) ? a : c) : null;
+                    // recommend a VARIANT — the as-run baseline is the reference, not the tuned result
+                    const _cands = trials.filter(t => !t.is_baseline);
+                    const _pool = _cands.length ? _cands : trials;
+                    const b = _pool.length ? _pool.reduce((a, c) => ((a[`ttft_${p}`] || Infinity) < (c[`ttft_${p}`] || Infinity)) ? a : c) : null;
                     if (b && b[`ttft_${p}`]) {
                         const w = b.weights || {};
                         s += `<div style="background:white;border:2px solid #7c3aed40;border-radius:10px;padding:16px;">`;
@@ -1037,7 +1040,9 @@ function buildEppTuningSection(runId, data) {
         const trials = eppData.by_architecture[arch];
         if (!trials || !trials.length) return;
         const archLabel = arch.toUpperCase();
-        const bestTrial = trials.reduce((a, b) => (a.ttft_p90 || Infinity) < (b.ttft_p90 || Infinity) ? a : b);
+        // Best VARIANT — the as-run baseline is the reference row, not a candidate
+        const _variants = trials.filter(t => !t.is_baseline);
+        const bestTrial = (_variants.length ? _variants : trials).reduce((a, b) => (a.ttft_p90 || Infinity) < (b.ttft_p90 || Infinity) ? a : b);
 
         s += `<div class="chart-box" style="border-left:4px solid #7c3aed;">`;
         s += `<h3 style="color:#7c3aed;">Step 9: EPP Tuning &mdash; ${archLabel}</h3>`;
@@ -1047,7 +1052,7 @@ function buildEppTuningSection(runId, data) {
         s += '<div style="display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:16px;">';
         s += `<div style="background:#f0fdf4;border-radius:10px;padding:16px;text-align:center;border:1px solid #bbf7d0;"><div style="font-size:1.5em;font-weight:800;color:#059669;">${bestTrial.name}</div><div style="color:#64748b;font-size:0.82em;margin-top:4px;">Best Strategy</div></div>`;
         s += `<div style="background:#f8fafc;border-radius:10px;padding:16px;text-align:center;border:1px solid #e2e8f0;"><div style="font-size:1.5em;font-weight:800;color:#1e293b;">${bestTrial.ttft_p90 || 'N/A'} <span style="font-size:0.5em;color:#64748b;">ms</span></div><div style="color:#64748b;font-size:0.82em;margin-top:4px;">TTFT P90</div></div>`;
-        s += `<div style="background:#f8fafc;border-radius:10px;padding:16px;text-align:center;border:1px solid #e2e8f0;"><div style="font-size:1.5em;font-weight:800;color:#1e293b;">${bestTrial.throughput_p90 || 'N/A'}</div><div style="color:#64748b;font-size:0.82em;margin-top:4px;">Throughput P90 (req/s)</div></div>`;
+        s += `<div style="background:#f8fafc;border-radius:10px;padding:16px;text-align:center;border:1px solid #e2e8f0;"><div style="font-size:1.5em;font-weight:800;color:#1e293b;">${(bestTrial.structure && bestTrial.structure.tokens_per_second) ? Math.round(bestTrial.structure.tokens_per_second) : (bestTrial.throughput_p90 || 'N/A')}</div><div style="color:#64748b;font-size:0.82em;margin-top:4px;">Tokens/s</div></div>`;
         s += `<div style="background:#f8fafc;border-radius:10px;padding:16px;text-align:center;border:1px solid #e2e8f0;"><div style="font-size:1.5em;font-weight:800;color:#1e293b;">${trials.length}</div><div style="color:#64748b;font-size:0.82em;margin-top:4px;">Strategies Tested</div></div>`;
         s += '</div>';
 
@@ -1056,19 +1061,44 @@ function buildEppTuningSection(runId, data) {
             s += `<div id="dl-epp-${arch}-${pctl}" style="height:850px;background:#fff;border-radius:8px;border:1px solid #e2e8f0;margin-top:8px;"></div>`;
         });
 
+        s += `<div id="dl-epp-${arch}-wl-e2e" style="height:600px;background:#fff;border-radius:8px;border:1px solid #e2e8f0;margin-top:8px;"></div>`;
+        s += '<div style="padding:4px 2px 12px;font-size:0.85em;line-height:1.7;color:#1e293b;">E2E P90 per workload (guidellm) &mdash; each shape&rsquo;s own request duration, per strategy. W1 (3K-token outputs) sits ~15&times; above W3.</div>';
+        s += '<div style="padding:4px 2px 12px;font-size:0.85em;line-height:1.7;color:#1e293b;">E2E request latency (first token + all decoded tokens) per strategy. Long-output workloads (W1: 3K tokens) dominate this metric &mdash; differences between strategies reflect routing&rsquo;s effect on total request time, including queueing and decode slowdowns under load.</div>';
+
         // Results table
-        s += '<table style="margin-top:12px;"><tr><th>Strategy</th><th>Weights (C:K:Q)</th><th>TTFT P50</th><th>TTFT P90</th><th>TTFT P95</th><th>TTFT P99</th><th>Tput P90</th><th>ITL P90</th></tr>';
+        const na = 'N/A';
+        s += '<table style="margin-top:12px;"><tr><th>Strategy</th><th>Routing Composition</th><th>&Delta; vs Baseline</th><th>Tok/s</th><th>TTFT P50</th><th>TTFT P90</th><th>TTFT P95</th><th>TTFT P99</th><th>ITL P90</th></tr>';
         trials.forEach(e => {
-            const isBest = e === bestTrial;
-            const cls = isBest ? ' class="pareto"' : '';
+            const isBest = e === bestTrial && !e.is_baseline;
+            const cls = isBest ? ' class="pareto"' : (e.is_baseline ? ' style="color:#64748b;font-style:italic;"' : '');
             const w = e.weights || {};
-            const wStr = `${w.prefix_cache || '?'}:${w.kv_cache || '?'}:${w.queue || '?'}`;
-            const na = 'N/A';
-            s += `<tr${cls}><td><strong>${e.name}</strong>${isBest ? ' *' : ''}</td><td>${wStr}</td>`;
+            const st = e.structure || {};
+            let wStr;
+            if (st.affinity_filter) {
+                wStr = 'affinity-filter + ' + (w.token_load ? `token-load&times;${w.token_load}` : (w.active_request ? `active-req&times;${w.active_request}` : 'load'));
+            } else {
+                wStr = `${w.prefix_cache ?? '?'}:${!w.kv_cache ? 'off' : w.kv_cache}:${w.queue ?? '?'}:${w.active_request ?? 0}` + (w.token_load ? ` +tl${w.token_load}` : '');
+            }
+            let pickerBadge = '';
+            if (st.picker === 'weighted-random-picker') pickerBadge = ' <span style="background:#0891b2;color:white;font-size:0.7em;padding:1px 5px;border-radius:3px;" title="weighted-random-picker: picks a pod randomly, weighted by score">w-rand pick</span>';
+            else if (st.picker === 'max-score-picker') pickerBadge = ' <span style="background:#475569;color:white;font-size:0.7em;padding:1px 5px;border-radius:3px;" title="max-score-picker: always picks the highest-scored pod">max pick</span>';
+            const deltaStr = (e.delta_vs_baseline && !e.is_baseline) ? `<span style="color:#7c3aed;font-size:0.85em;">[${e.delta_vs_baseline}]</span>` : '';
+            const tokVal = (st.tokens_per_second) ? Math.round(st.tokens_per_second) : na;
+            s += `<tr${cls}><td>${e.is_baseline ? '&#128202; ' : ''}<strong>${e.name}</strong></td><td>${wStr}${pickerBadge}</td><td>${deltaStr}</td><td>${tokVal}</td>`;
             s += `<td>${e.ttft_p50 ?? na}</td><td>${e.ttft_p90 ?? na}</td><td>${e.ttft_p95 ?? na}</td><td>${e.ttft_p99 ?? na}</td>`;
-            s += `<td>${e.throughput_p90 != null ? parseFloat(e.throughput_p90).toFixed(2) : na}</td><td>${e.itl_p90 != null ? parseFloat(e.itl_p90).toFixed(2) : na}</td></tr>`;
+            s += `<td>${e.itl_p90 != null ? parseFloat(e.itl_p90).toFixed(2) : na}</td></tr>`;
         });
-        s += '</table></div>';
+        s += '</table>';
+        // Legend (best variant is the highlighted row — no star marker)
+        s += `<div style="padding:10px 16px;margin-top:8px;font-size:0.78em;line-height:1.8;color:#64748b;background:#f8fafc;border:1px solid #e2e8f0;border-radius:6px;">
+            <div style="font-weight:600;color:#475569;margin-bottom:2px;">Legend</div>
+            <div><b>Icons:</b> &#128202; your config as-run (reference row) &nbsp;&middot;&nbsp; highlighted row = best variant (lowest objective TTFT)</div>
+            <div><b>Phases:</b> screen = short ranking run &nbsp;&middot;&nbsp; ablate = plugin added/removed from the winner &nbsp;&middot;&nbsp; weight = scorer weight moved &nbsp;&middot;&nbsp; final = full-duration validation of the winner</div>
+            <div><b>Composition:</b> "affinity-filter + scorer&times;W" &mdash; the prefix-cache-affinity-filter gates requests to cache-warm pods, then the scorer ranks survivors with weight W (omitted W = 1.0; "load" = token-load-scorer)</div>
+            <div><b>Picker</b> (final stage, chooses the pod): <b>max pick</b> = max-score-picker, always takes the highest-scored pod &nbsp;&middot;&nbsp; <b>w-rand pick</b> = weighted-random-picker, random pick weighted by score</div>
+            <div><b>Weighted stack:</b> "a:b:c:d" = prefix-cache : kv-cache : queue : active-request scorer weights ("off" = disabled)</div>
+            <div><b>Tok/s:</b> total tokens (prompt+output) &divide; benchmark elapsed time &mdash; window-exact and comparable across all rows</div>
+        </div></div>`;
     });
 
     // Skipped architectures
@@ -2008,6 +2038,15 @@ function buildChartScript(data, charts, allRes) {
         s += '    if(tgtMs){shapes.push({type:"line",x0:-0.5,x1:xLabels.length-0.5,y0:tgtMs,y1:tgtMs,yref:"y",line:{color:"#ef4444",width:2,dash:"dash"}});annotations.push({x:xLabels.length-1,y:tgtMs,yref:"y",text:"SLA: "+tgtMs+"ms",showarrow:false,font:{color:"#ef4444",size:11},xanchor:"right",yanchor:"bottom",yshift:5,bgcolor:"rgba(255,255,255,0.85)"});}';
         s += '    Plotly.newPlot(el,traces,{...lo,height:850,margin:{t:30,b:80,l:60,r:60},xaxis:{title:"EPP Strategy"},yaxis:{title:"TTFT "+pctl.l+" (ms)",side:"left",titlefont:{color:pctl.c},tickfont:{color:pctl.c}},yaxis2:{title:"Throughput "+pctl.l+" (req/s)",side:"right",overlaying:"y",titlefont:{color:"#f59e0b"},tickfont:{color:"#f59e0b"}},showlegend:true,legend:{x:0,y:1.18,orientation:"h"},shapes:shapes,annotations:annotations},co);';
         s += '  });';
+        // E2E per workload (guidellm)
+        s += '  var wlE2eEl=document.getElementById("dl-epp-"+arch+"-wl-e2e");if(wlE2eEl){';
+        s += '    var wn=[];trials.forEach(function(t){(t.workloads||[]).forEach(function(w){if(wn.indexOf(w.name)<0)wn.push(w.name)})});';
+        s += '    var wc=["#3b82f6","#dc2626","#059669","#f59e0b","#7c3aed"];';
+        s += '    var wtr=wn.map(function(wl,i){var vs=trials.map(function(t){var w=(t.workloads||[]).filter(function(x){return x.name===wl})[0];return w&&w.e2e_latency_p90!=null?w.e2e_latency_p90:null});';
+        s += '      return {x:trials.map(function(t){return t.name}),y:vs,name:wl,type:"scatter",mode:"lines+markers+text",text:vs.map(function(v){return v!=null?v.toFixed(1)+"s":""}),textposition:"top center",textfont:{size:11,color:wc[i%wc.length]},line:{color:wc[i%wc.length],width:3},marker:{color:wc[i%wc.length],size:9},hovertemplate:"<b>%{x}</b><br>"+wl+" E2E P90: %{y:.1f}s<extra></extra>",connectgaps:true};';
+        s += '    }).filter(function(tr){return tr.y.some(function(v){return v!=null})});';
+        s += '    if(wtr.length){Plotly.newPlot(wlE2eEl,wtr,{...lo,height:600,margin:{t:30,b:90,l:60,r:40},xaxis:{title:"EPP Strategy",tickangle:-25},yaxis:{title:"E2E P90 (s)",tickformat:",.1f"},showlegend:true,legend:{x:0,y:1.12,orientation:"h"}},co);}';
+        s += '  }';
         s += '});';
     }
 

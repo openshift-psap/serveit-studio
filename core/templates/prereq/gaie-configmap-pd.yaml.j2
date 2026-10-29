@@ -11,6 +11,8 @@ data:
   pd-config.yaml: |
     apiVersion: llm-d.ai/v1alpha1
     kind: EndpointPickerConfig
+{% if spec_mode | default(false) %}
+{{ spec_body_yaml }}{% else %}
     plugins:
 {% if not epp_v011_plus | default(true) %}
       - type: disagg-headers-handler
@@ -152,4 +154,5 @@ data:
 {% if lora_affinity_enabled | default(false) %}
           - pluginRef: lora-affinity-scorer
             weight: {{ lora_affinity_weight | default(3.0) }}
+{% endif %}
 {% endif %}

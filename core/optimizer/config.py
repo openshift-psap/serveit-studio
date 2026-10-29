@@ -28,22 +28,27 @@ logger = logging.getLogger(__name__)
 @dataclass
 class RecipeOptimizerConfig:
     """Configuration for recipe-based exhaustive optimization."""
+
     # Model and workload
     model_name: str
     namespace: str
     isl: int  # Input Sequence Length
     osl: int  # Output Sequence Length
     qps: float  # Concurrency or requests-per-second depending on rate_type
-    rate_type: str = 'concurrent'  # 'concurrent', 'constant', or 'poisson'
+    rate_type: str = "concurrent"  # 'concurrent', 'constant', or 'poisson'
 
     # Resources
     total_gpus: int = 16
     max_model_len: int = 8192
     gpu_memory_utilization: float = 0.95  # Dynamic, calculated based on max_model_len
     test_duration: int = 300
-    stop_mode: str = 'duration'  # 'duration' or 'max_requests'
+    stop_mode: str = "duration"  # 'duration' or 'max_requests'
     max_requests: Optional[int] = None  # Alternative to test_duration
     isl_stdev: Optional[int] = None  # ISL standard deviation (for guidellm)
+    # Parallel workloads: N shapes run simultaneously on one deployment
+    # (single-test / soak runs). Each entry: {name, isl, osl, isl_stdev,
+    # osl_stdev, isl_min/max, osl_min/max, concurrency, rate_type}.
+    parallel_workloads: Optional[list] = None
     osl_stdev: Optional[int] = None  # OSL standard deviation (for guidellm)
     isl_min: Optional[int] = None  # ISL minimum (prompt_tokens_min for guidellm)
     isl_max: Optional[int] = None  # ISL maximum (prompt_tokens_max for guidellm)
@@ -66,7 +71,7 @@ class RecipeOptimizerConfig:
     # Step 7: P/D split search
     max_pd_splits: int = 0  # 0 = full coverage, >0 = limit splits
     tp_pair_top_n: int = 4  # Top-N prefill/decode TPs to cross-product (1=fast, 4=full)
-    pd_search_mode: str = 'smart'  # 'smart' (calculated ~3/pair) or 'exhaustive' (all splits)
+    pd_search_mode: str = "smart"  # 'smart' (calculated ~3/pair) or 'exhaustive' (all splits)
 
     # Step 11: Calibrated load / Concurrency sweep
     calibrated_load_enabled: bool = False  # Re-test best configs at sustainable concurrency
@@ -76,33 +81,35 @@ class RecipeOptimizerConfig:
     concurrency_sweep_step_pct: int = 20  # Step as % of calibrated load
     concurrency_sweep_all_configs: bool = False  # Legacy — mapped to sweep_mode='all'
     concurrency_sweep_max_configs: Optional[int] = None  # Legacy — ignored
-    concurrency_sweep_mode: str = 'architecture_aware'  # 'architecture_aware' | 'all_recommendations' | 'all'
+    concurrency_sweep_mode: str = "architecture_aware"  # 'architecture_aware' | 'all_recommendations' | 'all'
     concurrency_sweep_use_epp_tuned: bool = False  # Re-run sweep with EPP-tuned weights if Step 9 improved
 
     # Step 13: Cache hit sweep
     cache_sweep_enabled: bool = False  # Sweep cache hit levels at user-defined concurrency
     cache_sweep_use_calibrated: bool = False  # Sweep cache hit levels at calibrated concurrency
-    cache_sweep_mode: str = 'identical'  # 'identical' | 'shared_prefix' | 'multi_group'
+    cache_sweep_mode: str = "identical"  # 'identical' | 'shared_prefix' | 'multi_group'
     cache_sweep_levels: Optional[List[int]] = None  # Explicit levels; None = auto
     cache_sweep_count: Optional[int] = None  # Number of levels to generate
     cache_sweep_step_pct: int = 10  # Step in percentage points
     cache_sweep_groups: int = 5  # Groups for multi_group mode
     cache_sweep_all_configs: bool = False  # Legacy — mapped to selection_mode='all'
     cache_sweep_max_configs: Optional[int] = None  # Legacy — ignored
-    cache_sweep_selection_mode: str = 'architecture_aware'  # 'architecture_aware' | 'all_recommendations' | 'all'
+    cache_sweep_selection_mode: str = "architecture_aware"  # 'architecture_aware' | 'all_recommendations' | 'all'
 
     # EPP configuration
     epp_custom_enabled: bool = True  # False = use llm-d default EPP config
-    epp_preset: str = 'balanced'  # 'auto', 'balanced', 'cache_optimized', 'queue_balanced', 'latency_aware', 'custom'
+    epp_preset: str = "balanced"  # 'auto', 'balanced', 'cache_optimized', 'queue_balanced', 'latency_aware', 'custom'
     epp_benchmark: bool = False  # Benchmark multiple EPP strategies
     epp_config: Optional[Dict] = None  # Custom plugin weights and parameters
+    epp_max_evals: int = 12  # EPP search budget: benchmark evals per architecture
+    epp_screen_seconds: int = 0  # Screening run duration (0 = auto: min(150, duration/2))
 
     # Infrastructure
     thanos_url: Optional[str] = None
-    image: str = 'vllm/vllm-openai:v0.26.0'
-    scheduler_image: str = ''
-    pvc_name: str = 'serveit-cache'
-    nccl_ib_hca: str = 'mlx'
+    image: str = "vllm/vllm-openai:v0.26.0"
+    scheduler_image: str = ""
+    pvc_name: str = "serveit-cache"
+    nccl_ib_hca: str = "mlx"
     hf_token: Optional[str] = None
 
     # Networking (auto-detected if not set)
@@ -116,7 +123,7 @@ class RecipeOptimizerConfig:
     selected_shared_device: Optional[str] = None  # Selected shared RDMA resource key
     selected_dra_classes: Optional[List[str]] = None  # User-selected DRA device classes
     dra_gpu_resource_key: Optional[str] = None  # extendedResourceName from selected DeviceClass
-    gateway_class: str = 'istio'  # GatewayClass name (detected from cluster)
+    gateway_class: str = "istio"  # GatewayClass name (detected from cluster)
     per_node_storage: bool = False  # Use per-node NFS PVCs with symlink
     node_nfs_pvcs: Optional[list] = None  # [{suffix, pvc_name}] per-node NFS PVC mapping
     storage_class: Optional[str] = None  # Storage class for per-node PVCs
@@ -154,7 +161,7 @@ class RecipeOptimizerConfig:
     #                   (GPU workspace reservation) without adapter traffic.
     #   'off'         — guidellm ignores LoRA entirely (same as base_only for
     #                   benchmarking, explicit for clarity)
-    lora_benchmark_mode: str = 'round_robin'
+    lora_benchmark_mode: str = "round_robin"
     # Per-adapter CPU staging size in MB. None = auto-estimate from rank
     # (rank x 20MB, calibrated for GLM-5.3-class attention-only adapters).
     # Override when serving smaller bases or fatter adapters.
@@ -180,7 +187,7 @@ class RecipeOptimizerConfig:
     lora_sweep_step: Optional[str] = None
 
     # Optimization objective for Step 7
-    objective: str = 'full_coverage'  # 'ttft', 'throughput', or 'full_coverage'
+    objective: str = "full_coverage"  # 'ttft', 'throughput', or 'full_coverage'
 
     # If True, scale down concurrent users to achievable concurrency when cluster capacity is insufficient
     use_achievable_qps: bool = False
@@ -188,23 +195,23 @@ class RecipeOptimizerConfig:
     # Latency-bounded throughput maximization (Step 10)
     latency_constraint_enabled: bool = False
     latency_constraint_ms: int = 500
-    latency_constraint_percentile: str = 'p90'  # p50, p90, p95, p99
+    latency_constraint_percentile: str = "p90"  # p50, p90, p95, p99
 
     # Node pinning (optional)
     selected_nodes: List[str] = field(default_factory=list)
 
     # Dataset workload (alternative to synthetic ISL/OSL)
-    workload_mode: str = 'synthetic'
+    workload_mode: str = "synthetic"
     # UI workload selector: 'continuous' or 'multiturn' — persisted so
     # Apply Settings restores the exact selector state
-    workload_type: str = 'continuous'
+    workload_type: str = "continuous"
     dataset_source: Optional[str] = None
     dataset_column: Optional[str] = None
     dataset_max_output: int = 256
 
     # Prefix cache simulation (0 = disabled, 1-100 = hit ratio percentage)
     prefix_cache_hit_pct: int = 0
-    prefix_cache_mode: str = 'identical'  # 'identical' = N% same prompt, 'shared_prefix' = all prompts share N% prefix, 'multi_group' = N groups
+    prefix_cache_mode: str = "identical"  # 'identical' = N% same prompt, 'shared_prefix' = all prompts share N% prefix, 'multi_group' = N groups
     prefix_cache_groups: int = 5  # Number of distinct prompt groups for multi_group mode
     prefix_cache_seed: Optional[int] = None  # Deterministic seed, stored in DB for reproducibility
     structured_prefix: bool = False  # Generate shared prefix + unique suffix instead of random tokens
@@ -238,18 +245,21 @@ class RecipeOptimizerConfig:
     def to_dict(self) -> dict:
         """Serialize config to dict for DB persistence (excludes secrets)."""
         from dataclasses import fields as dc_fields
+
         d = {}
         for f in dc_fields(self):
             v = getattr(self, f.name)
-            if f.name == 'kubeconfig':
-                d[f.name] = '***' if v else None
+            if f.name == "kubeconfig":
+                d[f.name] = "***" if v else None
             else:
                 d[f.name] = v
         return d
 
+
 @dataclass
 class OptimalTP:
     """Result from TP optimization."""
+
     tp: int
     tpsg: float  # Tokens per second per GPU
     ttft_p90: Optional[float] = None
@@ -260,6 +270,7 @@ class OptimalTP:
 @dataclass
 class FeasibleSplit:
     """A feasible P/D split configuration."""
+
     prefill_pods: int
     decode_pods: int
     prefill_tp: int
@@ -273,7 +284,7 @@ class FeasibleSplit:
 @dataclass
 class EPConfig:
     """An EP (Expert Parallelism) configuration."""
+
     tp: int
     replicas: int
     total_gpus: int
-

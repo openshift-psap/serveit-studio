@@ -170,6 +170,9 @@ var config = {
     epp_preset: 'balanced',
     epp_benchmark: false,
     epp_config: null,
+    epp_max_evals: 12,
+    parallel_workloads: null,
+    parallel_workloads_enabled: false,
     advanced_vllm: null
 };
 

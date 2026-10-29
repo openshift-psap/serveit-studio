@@ -193,32 +193,119 @@ spec:
                 printf '#!/usr/bin/env python3\ntry:\n import transformers.integrations.heterogeneity.configuration_utils as _hc\n _p=_hc.HeterogeneousConfigMixin.allow_global_per_layer_attribute_access\n _hc.HeterogeneousConfigMixin.allow_global_per_layer_attribute_access=property(lambda s:s.__dict__.get("allow_global_per_layer_attribute_access",True),_p.fset)\nexcept Exception:\n pass\n{% if lws_size | default(1) > 1 %}try:\n import vllm.distributed.device_communicators.flashinfer_all_reduce as _fia\n _fia.fi_ar_available=False\nexcept Exception:\n pass\ntry:\n import vllm.models.common.ops.fused_allreduce_rms_norm as _far\n _far.flashinfer_trtllm_fused_allreduce_norm=None\n _far.get_fi_ar_workspace=None\nexcept Exception:\n pass\n{% endif %}if __name__=="__main__":\n import sys;sys.argv[0]="vllm"\n from vllm.entrypoints.cli.main import main;main()\n' > /tmp/_vllm_patched && chmod +x /tmp/_vllm_patched
                 echo "--- Patched transformers per-layer attribute access ---"
 
-                # Wait for the GPU to drain before launching vLLM — a previous
-                # container's orphaned EngineCore can hold ~126GiB after
-                # RecreateGroupOnPodRestart replaces the pod; starting against it
-                # fails init_device ("Free memory ... less than desired") and
-                # crash-loops. This pod owns its DRA-claimed GPU, so any OTHER
-                # process on it is a leftover from a deleted container — kill it
-                # (requires hostPID) instead of waiting for a holder that never
-                # exits. Poll the minimum free MiB across visible GPUs.
-                if command -v nvidia-smi >/dev/null 2>&1; then
-                  _gpu_wait=0
-                  while [ "$_gpu_wait" -lt 180 ]; do
-                    _free=$(nvidia-smi --query-gpu=memory.free --format=csv,noheader,nounits 2>/dev/null | sort -n | head -1 | tr -d ' ')
-                    if [ -n "$_free" ] && [ "$_free" -ge 120000 ]; then
-                      break
-                    fi
-                    if [ $((_gpu_wait % 60)) -eq 0 ]; then
-                      for _hp in $(nvidia-smi --query-compute-apps=pid --format=csv,noheader 2>/dev/null | tr -d ' ' | sort -u); do
-                        if [ -n "$_hp" ] && [ "$_hp" != "$" ] && kill -0 "$_hp" 2>/dev/null; then
-                          kill -9 "$_hp" 2>/dev/null && echo "--- Killed leftover GPU holder pid $_hp ---"
-                        fi
-                      done
-                    fi
-                    echo "--- Waiting for GPU to drain (${_free:-?} MiB free, ${_gpu_wait}s) ---"
-                    sleep 5
-                    _gpu_wait=$((_gpu_wait+5))
+                # GPU pinning — privileged pods see ALL host GPUs and CUDA
+                # defaults to device 0, so unpinned engines pile up on GPU 0
+                # and corrupt siblings' memory profiling. LWS pods have stable
+                # ordinals (<name>-<ordinal>): on a single node, pod ordinal K
+                # deterministically owns GPUs [K*tp, (K+1)*tp). Race-free under
+                # concurrent starts, stable across RecreateGroupOnPodRestart.
+                # Any process on our GPUs at startup is a leftover from a dead
+                # container — wait for it to drain, then kill it (hostPID).
+                # Never run unpinned: fail loudly instead.
+                _tp_size={{ tensor_parallelism | default(1) }}
+                _nnodes={{ lws_size | default(1) }}
+                if command -v nvidia-smi >/dev/null 2>&1 && [ -z "${CUDA_VISIBLE_DEVICES:-}" ]; then
+                  _tot=$(nvidia-smi --query-gpu=memory.total --format=csv,noheader,nounits 2>/dev/null | sort -n | head -1 | tr -d ' ')
+                  [ -n "$_tot" ] || _tot=143155
+                  _min_free=$(( _tot * {{ ((gpu_memory_utilization or 0.9) * 100) | round(0, 'floor') | int }} / 100 + 1024 ))
+                  _gpu_free_min() {
+                    nvidia-smi --query-gpu=index,memory.free --format=csv,noheader,nounits 2>/dev/null \
+                      | awk -F, -v devs="$1" 'BEGIN{n=split(devs,a,",");for(i=1;i<=n;i++)want[a[i]]=1} want[$1]{gsub(/ /,"",$2);print $2}' | sort -n | head -1
+                  }
+                  _gpu_pids() {
+                    _u=$(nvidia-smi --query-gpu=index,uuid --format=csv,noheader 2>/dev/null \
+                      | awk -F, -v devs="$1" 'BEGIN{n=split(devs,a,",");for(i=1;i<=n;i++)want[a[i]]=1} want[$1]{gsub(/ /,"",$2);print $2}')
+                    nvidia-smi --query-compute-apps=gpu_uuid,pid --format=csv,noheader 2>/dev/null \
+                      | awk -F, -v u="$_u" 'BEGIN{n=split(u,a," ");for(i=1;i<=n;i++)want[a[i]]=1} want[$1]{gsub(/ /,"",$2);print $2}' | sort -u
+                  }
+                  _drain_gpus() {
+                    _w=0
+                    while [ "$_w" -lt 180 ]; do
+                      _fr=$(_gpu_free_min "$1")
+                      [ -n "$_fr" ] && [ "$_fr" -ge "$_min_free" ] && return 0
+                      if [ $((_w % 60)) -eq 0 ]; then
+                        for _hp in $(_gpu_pids "$1"); do
+                          if [ -n "$_hp" ] && [ "$_hp" != "$" ] && [ "$_hp" != "$PPID" ] && kill -0 "$_hp" 2>/dev/null; then
+                            kill -9 "$_hp" 2>/dev/null && echo "--- Killed leftover GPU holder pid $_hp on GPU(s) $1 ---"
+                          fi
+                        done
+                      fi
+                      echo "--- Waiting for GPU(s) $1 to drain (${_fr:-?} MiB free, need $_min_free, ${_w}s) ---"
+                      sleep 5
+                      _w=$((_w+5))
+                    done
+                    return 1
+                  }
+{% if (lws_size | default(1)) == 1 %}
+                  _ord=$(hostname | sed 's/^.*-\([0-9][0-9]*\)$/\1/')
+                  case "$_ord" in
+                    *[!0-9]*|'') echo "--- FATAL: cannot derive pod ordinal from hostname '$(hostname)'"; exit 1 ;;
+                  esac
+                  _ord=$((10#$_ord))
+                  _base=$((_ord * _tp_size))
+                  _picked=""
+                  _k=0
+                  while [ "$_k" -lt "$_tp_size" ]; do
+                    _gi=$((_base + _k))
+                    [ -e "/dev/nvidia$_gi" ] && _picked="${_picked:+$_picked,}$_gi"
+                    _k=$((_k+1))
                   done
+                  if [ -z "$_picked" ]; then
+                    echo "--- FATAL: ordinal GPU(s) $_base..$((_base + _tp_size - 1)) not present on node"
+                    exit 1
+                  fi
+                  export CUDA_VISIBLE_DEVICES="$_picked"
+                  echo "--- CUDA_VISIBLE_DEVICES=$_picked (ordinal pin: $(hostname) ordinal $_ord)"
+                  if ! _drain_gpus "$CUDA_VISIBLE_DEVICES"; then
+                    echo "--- FATAL: ordinal GPU(s) $CUDA_VISIBLE_DEVICES did not drain within 180s"
+                    exit 1
+                  fi
+{% else %}
+                  # Multi-node: ordinals are not unique per node across groups —
+                  # claim instead with a VERIFIED flock: the marker file is
+                  # written only while the lock is actually held AND memory is
+                  # free, so a claim can never be double-counted. (The old
+                  # kill -0 heuristic treated a flock process stalled in
+                  # open() as "acquired" and stacked engines on one GPU.)
+                  _claim_gpu() {
+                    _gi=$1; _mk="/dev/shm/.gpu${_gi}.ok.$"
+                    rm -f "$_mk"
+                    ( exec 9<"/dev/nvidia$_gi" || exit 1
+                      flock -n 9 || exit 1
+                      _f=$(nvidia-smi -i "$_gi" --query-gpu=memory.free --format=csv,noheader,nounits 2>/dev/null | tr -d ' ')
+                      [ -n "$_f" ] && [ "$_f" -ge "$_min_free" ] || exit 1
+                      : > "$_mk"
+                      while :; do sleep 60; done ) &
+                    _lk=$!; _w=0
+                    while [ "$_w" -lt 30 ]; do
+                      [ -f "$_mk" ] && return 0
+                      kill -0 "$_lk" 2>/dev/null || return 1
+                      sleep 0.5; _w=$((_w+1))
+                    done
+                    kill "$_lk" 2>/dev/null
+                    return 1
+                  }
+                  _need=$(( _tp_size / _nnodes ))
+                  [ "$_need" -ge 1 ] || _need=1
+                  _picked=""
+                  for _d in /dev/nvidia[0-9]*; do
+                    [ -e "$_d" ] || continue
+                    _gi=${_d#/dev/nvidia}
+                    [ "$_need" -eq 0 ] && break
+                    if _claim_gpu "$_gi"; then
+                      _picked="${_picked:+$_picked,}$_gi"
+                      _need=$((_need-1))
+                      echo "--- Claimed GPU $_gi (flock-verified)"
+                    fi
+                  done
+                  if [ -z "$_picked" ] || [ "$_need" -ne 0 ]; then
+                    echo "--- FATAL: could not claim $_tp_size GPU(s) via flock"
+                    exit 1
+                  fi
+                  export CUDA_VISIBLE_DEVICES="$_picked"
+                  echo "--- CUDA_VISIBLE_DEVICES=$CUDA_VISIBLE_DEVICES (flock-verified)"
+                  _drain_gpus "$CUDA_VISIBLE_DEVICES" || true
+{% endif %}
                 fi
 
 {% if lora_enabled %}
@@ -662,32 +749,119 @@ spec:
                 printf '#!/usr/bin/env python3\ntry:\n import transformers.integrations.heterogeneity.configuration_utils as _hc\n _p=_hc.HeterogeneousConfigMixin.allow_global_per_layer_attribute_access\n _hc.HeterogeneousConfigMixin.allow_global_per_layer_attribute_access=property(lambda s:s.__dict__.get("allow_global_per_layer_attribute_access",True),_p.fset)\nexcept Exception:\n pass\n{% if lws_size | default(1) > 1 %}try:\n import vllm.distributed.device_communicators.flashinfer_all_reduce as _fia\n _fia.fi_ar_available=False\nexcept Exception:\n pass\ntry:\n import vllm.models.common.ops.fused_allreduce_rms_norm as _far\n _far.flashinfer_trtllm_fused_allreduce_norm=None\n _far.get_fi_ar_workspace=None\nexcept Exception:\n pass\n{% endif %}if __name__=="__main__":\n import sys;sys.argv[0]="vllm"\n from vllm.entrypoints.cli.main import main;main()\n' > /tmp/_vllm_patched && chmod +x /tmp/_vllm_patched
                 echo "--- Patched transformers per-layer attribute access ---"
 
-                # Wait for the GPU to drain before launching vLLM — a previous
-                # container's orphaned EngineCore can hold ~126GiB after
-                # RecreateGroupOnPodRestart replaces the pod; starting against it
-                # fails init_device ("Free memory ... less than desired") and
-                # crash-loops. This pod owns its DRA-claimed GPU, so any OTHER
-                # process on it is a leftover from a deleted container — kill it
-                # (requires hostPID) instead of waiting for a holder that never
-                # exits. Poll the minimum free MiB across visible GPUs.
-                if command -v nvidia-smi >/dev/null 2>&1; then
-                  _gpu_wait=0
-                  while [ "$_gpu_wait" -lt 180 ]; do
-                    _free=$(nvidia-smi --query-gpu=memory.free --format=csv,noheader,nounits 2>/dev/null | sort -n | head -1 | tr -d ' ')
-                    if [ -n "$_free" ] && [ "$_free" -ge 120000 ]; then
-                      break
-                    fi
-                    if [ $((_gpu_wait % 60)) -eq 0 ]; then
-                      for _hp in $(nvidia-smi --query-compute-apps=pid --format=csv,noheader 2>/dev/null | tr -d ' ' | sort -u); do
-                        if [ -n "$_hp" ] && [ "$_hp" != "$" ] && kill -0 "$_hp" 2>/dev/null; then
-                          kill -9 "$_hp" 2>/dev/null && echo "--- Killed leftover GPU holder pid $_hp ---"
-                        fi
-                      done
-                    fi
-                    echo "--- Waiting for GPU to drain (${_free:-?} MiB free, ${_gpu_wait}s) ---"
-                    sleep 5
-                    _gpu_wait=$((_gpu_wait+5))
+                # GPU pinning — privileged pods see ALL host GPUs and CUDA
+                # defaults to device 0, so unpinned engines pile up on GPU 0
+                # and corrupt siblings' memory profiling. LWS pods have stable
+                # ordinals (<name>-<ordinal>): on a single node, pod ordinal K
+                # deterministically owns GPUs [K*tp, (K+1)*tp). Race-free under
+                # concurrent starts, stable across RecreateGroupOnPodRestart.
+                # Any process on our GPUs at startup is a leftover from a dead
+                # container — wait for it to drain, then kill it (hostPID).
+                # Never run unpinned: fail loudly instead.
+                _tp_size={{ tensor_parallelism | default(1) }}
+                _nnodes={{ lws_size | default(1) }}
+                if command -v nvidia-smi >/dev/null 2>&1 && [ -z "${CUDA_VISIBLE_DEVICES:-}" ]; then
+                  _tot=$(nvidia-smi --query-gpu=memory.total --format=csv,noheader,nounits 2>/dev/null | sort -n | head -1 | tr -d ' ')
+                  [ -n "$_tot" ] || _tot=143155
+                  _min_free=$(( _tot * {{ ((gpu_memory_utilization or 0.9) * 100) | round(0, 'floor') | int }} / 100 + 1024 ))
+                  _gpu_free_min() {
+                    nvidia-smi --query-gpu=index,memory.free --format=csv,noheader,nounits 2>/dev/null \
+                      | awk -F, -v devs="$1" 'BEGIN{n=split(devs,a,",");for(i=1;i<=n;i++)want[a[i]]=1} want[$1]{gsub(/ /,"",$2);print $2}' | sort -n | head -1
+                  }
+                  _gpu_pids() {
+                    _u=$(nvidia-smi --query-gpu=index,uuid --format=csv,noheader 2>/dev/null \
+                      | awk -F, -v devs="$1" 'BEGIN{n=split(devs,a,",");for(i=1;i<=n;i++)want[a[i]]=1} want[$1]{gsub(/ /,"",$2);print $2}')
+                    nvidia-smi --query-compute-apps=gpu_uuid,pid --format=csv,noheader 2>/dev/null \
+                      | awk -F, -v u="$_u" 'BEGIN{n=split(u,a," ");for(i=1;i<=n;i++)want[a[i]]=1} want[$1]{gsub(/ /,"",$2);print $2}' | sort -u
+                  }
+                  _drain_gpus() {
+                    _w=0
+                    while [ "$_w" -lt 180 ]; do
+                      _fr=$(_gpu_free_min "$1")
+                      [ -n "$_fr" ] && [ "$_fr" -ge "$_min_free" ] && return 0
+                      if [ $((_w % 60)) -eq 0 ]; then
+                        for _hp in $(_gpu_pids "$1"); do
+                          if [ -n "$_hp" ] && [ "$_hp" != "$" ] && [ "$_hp" != "$PPID" ] && kill -0 "$_hp" 2>/dev/null; then
+                            kill -9 "$_hp" 2>/dev/null && echo "--- Killed leftover GPU holder pid $_hp on GPU(s) $1 ---"
+                          fi
+                        done
+                      fi
+                      echo "--- Waiting for GPU(s) $1 to drain (${_fr:-?} MiB free, need $_min_free, ${_w}s) ---"
+                      sleep 5
+                      _w=$((_w+5))
+                    done
+                    return 1
+                  }
+{% if (lws_size | default(1)) == 1 %}
+                  _ord=$(hostname | sed 's/^.*-\([0-9][0-9]*\)$/\1/')
+                  case "$_ord" in
+                    *[!0-9]*|'') echo "--- FATAL: cannot derive pod ordinal from hostname '$(hostname)'"; exit 1 ;;
+                  esac
+                  _ord=$((10#$_ord))
+                  _base=$((_ord * _tp_size))
+                  _picked=""
+                  _k=0
+                  while [ "$_k" -lt "$_tp_size" ]; do
+                    _gi=$((_base + _k))
+                    [ -e "/dev/nvidia$_gi" ] && _picked="${_picked:+$_picked,}$_gi"
+                    _k=$((_k+1))
                   done
+                  if [ -z "$_picked" ]; then
+                    echo "--- FATAL: ordinal GPU(s) $_base..$((_base + _tp_size - 1)) not present on node"
+                    exit 1
+                  fi
+                  export CUDA_VISIBLE_DEVICES="$_picked"
+                  echo "--- CUDA_VISIBLE_DEVICES=$_picked (ordinal pin: $(hostname) ordinal $_ord)"
+                  if ! _drain_gpus "$CUDA_VISIBLE_DEVICES"; then
+                    echo "--- FATAL: ordinal GPU(s) $CUDA_VISIBLE_DEVICES did not drain within 180s"
+                    exit 1
+                  fi
+{% else %}
+                  # Multi-node: ordinals are not unique per node across groups —
+                  # claim instead with a VERIFIED flock: the marker file is
+                  # written only while the lock is actually held AND memory is
+                  # free, so a claim can never be double-counted. (The old
+                  # kill -0 heuristic treated a flock process stalled in
+                  # open() as "acquired" and stacked engines on one GPU.)
+                  _claim_gpu() {
+                    _gi=$1; _mk="/dev/shm/.gpu${_gi}.ok.$"
+                    rm -f "$_mk"
+                    ( exec 9<"/dev/nvidia$_gi" || exit 1
+                      flock -n 9 || exit 1
+                      _f=$(nvidia-smi -i "$_gi" --query-gpu=memory.free --format=csv,noheader,nounits 2>/dev/null | tr -d ' ')
+                      [ -n "$_f" ] && [ "$_f" -ge "$_min_free" ] || exit 1
+                      : > "$_mk"
+                      while :; do sleep 60; done ) &
+                    _lk=$!; _w=0
+                    while [ "$_w" -lt 30 ]; do
+                      [ -f "$_mk" ] && return 0
+                      kill -0 "$_lk" 2>/dev/null || return 1
+                      sleep 0.5; _w=$((_w+1))
+                    done
+                    kill "$_lk" 2>/dev/null
+                    return 1
+                  }
+                  _need=$(( _tp_size / _nnodes ))
+                  [ "$_need" -ge 1 ] || _need=1
+                  _picked=""
+                  for _d in /dev/nvidia[0-9]*; do
+                    [ -e "$_d" ] || continue
+                    _gi=${_d#/dev/nvidia}
+                    [ "$_need" -eq 0 ] && break
+                    if _claim_gpu "$_gi"; then
+                      _picked="${_picked:+$_picked,}$_gi"
+                      _need=$((_need-1))
+                      echo "--- Claimed GPU $_gi (flock-verified)"
+                    fi
+                  done
+                  if [ -z "$_picked" ] || [ "$_need" -ne 0 ]; then
+                    echo "--- FATAL: could not claim $_tp_size GPU(s) via flock"
+                    exit 1
+                  fi
+                  export CUDA_VISIBLE_DEVICES="$_picked"
+                  echo "--- CUDA_VISIBLE_DEVICES=$CUDA_VISIBLE_DEVICES (flock-verified)"
+                  _drain_gpus "$CUDA_VISIBLE_DEVICES" || true
+{% endif %}
                 fi
 
 {% if lora_enabled %}

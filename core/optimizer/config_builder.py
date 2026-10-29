@@ -13,13 +13,13 @@ from core.test_orchestrator import TestResult
 # template would otherwise fall back to the TARGET model as the draft
 # (a full-size "draft" that cannot load alongside the target).
 DSPARK_DRAFT_MODELS = {
-    'glm-5.3': 'RedHatAI/GLM-5.3-speculator.dspark',
+    "glm-5.3": "RedHatAI/GLM-5.3-speculator.dspark",
 }
 
 
 def _dspark_draft_for_target(model_name: str) -> Optional[str]:
     """Resolve the known DSpark draft model for a target model, if any."""
-    target = (model_name or '').lower()
+    target = (model_name or "").lower()
     for family, draft in DSPARK_DRAFT_MODELS.items():
         if family in target:
             return draft
@@ -37,13 +37,13 @@ class ConfigBuilderMixin:
           - 'auto': use ServeIt auto-computed value
           - 'default': None — let vLLM use its own default
         """
-        adv = getattr(self.config, 'advanced_vllm', None) or {}
-        bs_setting = adv.get('block_size', {})
+        adv = getattr(self.config, "advanced_vllm", None) or {}
+        bs_setting = adv.get("block_size", {})
         if isinstance(bs_setting, dict):
-            mode = bs_setting.get('mode', 'auto')
-            if mode == 'custom' and bs_setting.get('value') is not None:
-                return int(bs_setting['value'])
-            if mode == 'default':
+            mode = bs_setting.get("mode", "auto")
+            if mode == "custom" and bs_setting.get("value") is not None:
+                return int(bs_setting["value"])
+            if mode == "default":
                 return None
         return self._compute_block_size()
 
@@ -55,22 +55,28 @@ class ConfigBuilderMixin:
         would fail on every first prompt (vLLM context-length rejection).
         Mirrors the prompt_tokens_max margin used for ISL.
         """
-        value = getattr(self.config, 'first_prompt_tokens', None)
+        value = getattr(self.config, "first_prompt_tokens", None)
         if value is None:
             return None
         value = int(value)
-        max_model_len = getattr(self.config, 'max_model_len', 0) or 0
+        max_model_len = getattr(self.config, "max_model_len", 0) or 0
         if max_model_len:
             ceiling = max(0, max_model_len - osl - 200)
             if ceiling <= 0:
-                self.log(f"   ⚠️  max_model_len={max_model_len} too small for osl={osl}+200 margin; first_prompt_tokens cleared", 'warning')
+                self.log(
+                    f"   ⚠️  max_model_len={max_model_len} too small for osl={osl}+200 margin; first_prompt_tokens cleared",
+                    "warning",
+                )
                 return None
             if value > ceiling:
-                self.log(f"   ⚠️  first_prompt_tokens={value} exceeds model context (max_model_len={max_model_len}), clamped to {ceiling}", 'warning')
+                self.log(
+                    f"   ⚠️  first_prompt_tokens={value} exceeds model context (max_model_len={max_model_len}), clamped to {ceiling}",
+                    "warning",
+                )
                 value = ceiling
         return value
 
-    def _find_pareto_front(self) -> List[Tuple[FeasibleSplit, 'TestResult']]:
+    def _find_pareto_front(self) -> List[Tuple[FeasibleSplit, "TestResult"]]:
         """
         Find Pareto front from P/D split results.
 
@@ -109,7 +115,7 @@ class ConfigBuilderMixin:
         test_id: str,
         use_concurrency: bool = False,
         concurrency_override: int = None,
-        pipeline_parallel_size: int = None
+        pipeline_parallel_size: int = None,
     ) -> TestConfig:
         """Create aggregated architecture test config.
 
@@ -131,8 +137,10 @@ class ConfigBuilderMixin:
         gpu_memory_utilization = self._compute_gpu_mem_util(tp)
         allocated_gb = self._gpu_vram_gb * gpu_memory_utilization
         reserve_gb = self._gpu_vram_gb - allocated_gb
-        self.log(f"   Memory: gpu_memory_utilization={gpu_memory_utilization:.4f} "
-                 f"→ {allocated_gb:.0f}GB allocated, {reserve_gb:.0f}GB reserved for overhead (per GPU)")
+        self.log(
+            f"   Memory: gpu_memory_utilization={gpu_memory_utilization:.4f} "
+            f"→ {allocated_gb:.0f}GB allocated, {reserve_gb:.0f}GB reserved for overhead (per GPU)"
+        )
 
         # Multi-node: if TP > gpus_per_node, use LWS multi-pod groups.
         # PP: one pod per pipeline stage, sitting on its own node with node-local TP.
@@ -155,14 +163,14 @@ class ConfigBuilderMixin:
         # Only apply stdev when using the full workload ISL/OSL (Steps 7-8),
         # not for calibration tests (Steps 2-3) where ISL or OSL is fixed to 1
         is_calibration = (isl != self.config.isl) or (osl != self.config.osl)
-        max_batched = None if is_calibration else self._compute_max_num_batched_tokens(tp, role='aggregated')
+        max_batched = None if is_calibration else self._compute_max_num_batched_tokens(tp, role="aggregated")
         enable_chunked = not is_calibration and max_batched is not None and self.config.max_model_len > max_batched
 
         first_prompt_tokens = self._clamp_first_prompt_tokens(isl, osl)
 
         cfg = TestConfig(
             test_id=test_id,
-            architecture='aggregated',
+            architecture="aggregated",
             model_name=self.config.model_name,
             tensor_parallelism=tp,
             replicas=replicas,
@@ -170,7 +178,7 @@ class ConfigBuilderMixin:
             isl=isl,
             osl=osl,
             num_users=concurrency,
-            request_type=self.config.rate_type if use_concurrency else 'constant',
+            request_type=self.config.rate_type if use_concurrency else "constant",
             request_rate=concurrency if use_concurrency else 1,
             test_duration=self.config.test_duration,
             stop_mode=self.config.stop_mode,
@@ -179,23 +187,28 @@ class ConfigBuilderMixin:
             enable_chunked_prefill=enable_chunked,
             isl_stdev=None if is_calibration else self.config.isl_stdev,
             osl_stdev=None if is_calibration else self.config.osl_stdev,
-            isl_min=None if is_calibration else getattr(self.config, 'isl_min', None),
-            isl_max=None if is_calibration else getattr(self.config, 'isl_max', None),
-            osl_min=None if is_calibration else getattr(self.config, 'osl_min', None),
-            osl_max=None if is_calibration else getattr(self.config, 'osl_max', None),
+            parallel_workloads=(None if is_calibration else getattr(self.config, "parallel_workloads", None)),
+            isl_min=None if is_calibration else getattr(self.config, "isl_min", None),
+            isl_max=None if is_calibration else getattr(self.config, "isl_max", None),
+            osl_min=None if is_calibration else getattr(self.config, "osl_min", None),
+            osl_max=None if is_calibration else getattr(self.config, "osl_max", None),
             turns=1 if is_calibration else self.config.turns,
             first_prompt_tokens=None if is_calibration else first_prompt_tokens,
-            first_prompt_tokens_stdev=None if is_calibration else getattr(self.config, 'first_prompt_tokens_stdev', None),
-            first_prompt_tokens_min=None if is_calibration else getattr(self.config, 'first_prompt_tokens_min', None),
-            first_prompt_tokens_max=None if is_calibration else getattr(self.config, 'first_prompt_tokens_max', None),
-            first_output_tokens=None if is_calibration else getattr(self.config, 'first_output_tokens', None),
-            first_output_tokens_stdev=None if is_calibration else getattr(self.config, 'first_output_tokens_stdev', None),
-            prefix_tokens=None if is_calibration else getattr(self.config, 'prefix_tokens', None),
-            prefix_count=None if is_calibration else getattr(self.config, 'prefix_count', None),
-            turn_delay=None if is_calibration else getattr(self.config, 'turn_delay', None),
-            turn_delay_stdev=None if is_calibration else getattr(self.config, 'turn_delay_stdev', None),
-            turn_delay_min=None if is_calibration else getattr(self.config, 'turn_delay_min', None),
-            turn_delay_max=None if is_calibration else getattr(self.config, 'turn_delay_max', None),
+            first_prompt_tokens_stdev=None
+            if is_calibration
+            else getattr(self.config, "first_prompt_tokens_stdev", None),
+            first_prompt_tokens_min=None if is_calibration else getattr(self.config, "first_prompt_tokens_min", None),
+            first_prompt_tokens_max=None if is_calibration else getattr(self.config, "first_prompt_tokens_max", None),
+            first_output_tokens=None if is_calibration else getattr(self.config, "first_output_tokens", None),
+            first_output_tokens_stdev=None
+            if is_calibration
+            else getattr(self.config, "first_output_tokens_stdev", None),
+            prefix_tokens=None if is_calibration else getattr(self.config, "prefix_tokens", None),
+            prefix_count=None if is_calibration else getattr(self.config, "prefix_count", None),
+            turn_delay=None if is_calibration else getattr(self.config, "turn_delay", None),
+            turn_delay_stdev=None if is_calibration else getattr(self.config, "turn_delay_stdev", None),
+            turn_delay_min=None if is_calibration else getattr(self.config, "turn_delay_min", None),
+            turn_delay_max=None if is_calibration else getattr(self.config, "turn_delay_max", None),
             image=self.config.image,
             scheduler_image=self.config.scheduler_image,
             pvc_name=self.config.pvc_name,
@@ -209,34 +222,33 @@ class ConfigBuilderMixin:
             gpu_memory_utilization=gpu_memory_utilization,
             gpu_vram_gb=self._gpu_vram_gb,
             max_num_seqs=max_num_seqs,
-            optimization_goal='ttft',
+            optimization_goal="ttft",
             network_type=self.config.network_type,
             rdma_device_resources=self.config.rdma_device_resources or [],
             rdma_nics_per_node=self.config.rdma_nics_per_node or 0,
             rdma_network_annotation=self.config.rdma_network_annotation,
             selected_dra_classes=self.config.selected_dra_classes or [],
-            dra_gpu_resource_key=getattr(self.config, 'dra_gpu_resource_key', None),
+            dra_gpu_resource_key=getattr(self.config, "dra_gpu_resource_key", None),
             gateway_class=self.config.gateway_class,
-            exclusive_pf=getattr(self.config, 'exclusive_pf', False),
+            exclusive_pf=getattr(self.config, "exclusive_pf", False),
             lws_size=agg_lws_size if agg_lws_size > 1 else None,
             gpus_per_pod=agg_gpus_per_pod,
             nnodes=agg_lws_size if agg_lws_size > 1 else None,
-            pipeline_parallel_size=pipeline_parallel_size if pipeline_parallel_size and pipeline_parallel_size > 1 else None,
-
+            pipeline_parallel_size=pipeline_parallel_size
+            if pipeline_parallel_size and pipeline_parallel_size > 1
+            else None,
             memory_request=mem,
             memory_limit=mem,
             cpu_request=cpu,
             cpu_limit=cpu,
             lora_enabled=self.config.lora_enabled,
             lora_num_adapters=self.config.lora_num_adapters,
-            lora_benchmark_mode=getattr(self.config, 'lora_benchmark_mode', 'round_robin'),
-            lora_max_rank=getattr(self.config, 'lora_max_rank', None),
+            lora_benchmark_mode=getattr(self.config, "lora_benchmark_mode", "round_robin"),
+            lora_max_rank=getattr(self.config, "lora_max_rank", None),
             lora_max_loras=self._compute_lora_max_loras(tp, num_pods=total_pods),
-            lora_adapter_size_mb=(self.config.lora_adapter_size_mb
-                                  or self._probe_lora_adapter_size_mb()
-                                  or 22),
+            lora_adapter_size_mb=(self.config.lora_adapter_size_mb or self._probe_lora_adapter_size_mb() or 22),
             selected_nodes=self.config.selected_nodes or [],
-            workload_mode='synthetic' if is_calibration else (self.config.workload_mode or 'synthetic'),
+            workload_mode="synthetic" if is_calibration else (self.config.workload_mode or "synthetic"),
             dataset_source=None if is_calibration else self.config.dataset_source,
             dataset_column=None if is_calibration else self.config.dataset_column,
             dataset_max_output=self.config.dataset_max_output or 256,
@@ -245,21 +257,23 @@ class ConfigBuilderMixin:
             extra_env_vars=self.config.extra_env_vars,
             enable_expert_parallel=False,
             enable_dbo=False,
-            dbo_prefill_token_threshold=getattr(self, '_dbo_threshold', 32),
-            dbo_decode_token_threshold=getattr(self, '_dbo_threshold', 32),
+            dbo_prefill_token_threshold=getattr(self, "_dbo_threshold", 32),
+            dbo_decode_token_threshold=getattr(self, "_dbo_threshold", 32),
             enable_eplb=False,
             moe_backend=None,
             all2all_backend=None,
-            use_deep_gemm=getattr(self, '_use_deep_gemm', None),
-            has_hybrid_attention=getattr(self, '_has_hybrid_attention', False),
+            use_deep_gemm=getattr(self, "_use_deep_gemm", None),
+            has_hybrid_attention=getattr(self, "_has_hybrid_attention", False),
         )
         cfg = self._apply_advanced_vllm(cfg)
         cfg = self._auto_tune_model_loader(cfg)
         if is_calibration:
             # Keep calibration runs clean UNLESS the user explicitly configured
             # speculative decoding (MTP / EAGLE / draft model) in advanced_vllm.
-            _adv = getattr(self.config, 'advanced_vllm', None) or {}
-            _spec_explicit = bool(_adv.get('speculative_method')) or _adv.get('num_speculative_tokens', {}).get('mode') == 'custom'
+            _adv = getattr(self.config, "advanced_vllm", None) or {}
+            _spec_explicit = (
+                bool(_adv.get("speculative_method")) or _adv.get("num_speculative_tokens", {}).get("mode") == "custom"
+            )
             if not _spec_explicit:
                 cfg.speculative_num_tokens = None
                 cfg.speculative_model = None
@@ -274,23 +288,20 @@ class ConfigBuilderMixin:
         Returns None if no profile data available for this TP.
         """
         for config, result in self.all_test_results:
-            if (result.vllm_available_kv_gb is not None
-                    and getattr(config, 'tensor_parallelism', None) == tp):
+            if result.vllm_available_kv_gb is not None and getattr(config, "tensor_parallelism", None) == tp:
                 # vllm_available_kv_gb is per-GPU; multiply by TP for per-pod total
                 total_kv_gb = result.vllm_available_kv_gb * tp
-                return int(total_kv_gb * (1024 ** 3))
+                return int(total_kv_gb * (1024**3))
         return None
 
     def _get_measured_overhead(self, tp: int) -> Optional[float]:
         """Get measured vLLM fixed overhead from Steps 2-3 results for a given TP."""
         for config, result in self.all_test_results:
-            if (result.vllm_fixed_overhead_gb is not None
-                    and getattr(config, 'tensor_parallelism', None) == tp):
+            if result.vllm_fixed_overhead_gb is not None and getattr(config, "tensor_parallelism", None) == tp:
                 return result.vllm_fixed_overhead_gb
         return None
 
-    def _compute_lora_max_loras(self, tp: int, n_override: int = None,
-                                num_pods: int = None) -> int:
+    def _compute_lora_max_loras(self, tp: int, n_override: int = None, num_pods: int = None) -> int:
         """GPU-resident LoRA adapter count from available VRAM.
 
         Budget: up to 10% of the VRAM left after model weights (within the
@@ -315,13 +326,12 @@ class ConfigBuilderMixin:
         - ~99GB free x 10% / ~860MB slot = 11 resident (default)
         - 16 pods, 200 adapters → 13 needed → 13 resident (stable)
         """
-        n = int(n_override if n_override is not None
-                else getattr(self.config, 'lora_num_adapters', 0) or 0)
-        if not getattr(self.config, 'lora_enabled', False) or n <= 0:
+        n = int(n_override if n_override is not None else getattr(self.config, "lora_num_adapters", 0) or 0)
+        if not getattr(self.config, "lora_enabled", False) or n <= 0:
             return 0
         # User bypass: a pinned residency (e.g. forcing LRU swapping in a
         # worst-case stress test) wins over the VRAM-derived value.
-        pinned = getattr(self.config, 'lora_max_loras', None)
+        pinned = getattr(self.config, "lora_max_loras", None)
         if pinned:
             return max(1, min(int(pinned), n))
         # Architecture-aware GPU slot cost (per-expert MoE buffers) — NOT
@@ -354,10 +364,12 @@ class ConfigBuilderMixin:
                         # without triggering the eviction cascade that
                         # exact-fit capacity causes.
                         slots = min(needed + max(1, needed // 3), stable_slots)
-                        self.log(f"   LoRA residency: {slots} slots/pod x "
-                                 f"{num_pods} pods = {slots * num_pods} (all "
-                                 f"{n} adapters resident + cold-start headroom)",
-                                 'info')
+                        self.log(
+                            f"   LoRA residency: {slots} slots/pod x "
+                            f"{num_pods} pods = {slots * num_pods} (all "
+                            f"{n} adapters resident + cold-start headroom)",
+                            "info",
+                        )
             return max(1, min(n, slots))
         except Exception:
             return min(4, n)
@@ -377,8 +389,10 @@ class ConfigBuilderMixin:
                 u = round(safe_budget / self._gpu_vram_gb, 2)
                 u = min(u, 0.95)
                 if log:
-                    self.log(f"   gpu_memory_utilization={u} (profiled: measured overhead={measured:.1f}GB, "
-                             f"usable={safe_budget:.0f}/{self._gpu_vram_gb:.0f}GB)")
+                    self.log(
+                        f"   gpu_memory_utilization={u} (profiled: measured overhead={measured:.1f}GB, "
+                        f"usable={safe_budget:.0f}/{self._gpu_vram_gb:.0f}GB)"
+                    )
                 return u
 
         gpus_per_node = 8
@@ -391,13 +405,15 @@ class ConfigBuilderMixin:
         reserve_gb = max(self._gpu_vram_gb * reserve_pct, 5.0)
         u = round((self._gpu_vram_gb - reserve_gb) / self._gpu_vram_gb, 2)
         if log:
-            self.log(f"   gpu_memory_utilization={u} (estimated: {pods_per_node} pods/node, "
-                     f"reserving {reserve_gb:.1f}GB for overhead)")
+            self.log(
+                f"   gpu_memory_utilization={u} (estimated: {pods_per_node} pods/node, "
+                f"reserving {reserve_gb:.1f}GB for overhead)"
+            )
         return u
 
-    def _compute_max_num_seqs(self, tp: int, role: str = 'aggregated',
-                              gpu_mem_util_override: float = None,
-                              num_pods: int = 1) -> Optional[int]:
+    def _compute_max_num_seqs(
+        self, tp: int, role: str = "aggregated", gpu_mem_util_override: float = None, num_pods: int = 1
+    ) -> Optional[int]:
         """Compute max_num_seqs by evaluating four competing constraints.
 
         max_num_seqs = min(S_activation, S_kv, S_concurrency, 512)
@@ -411,44 +427,49 @@ class ConfigBuilderMixin:
         512:          Hard cap for CUDA graph compilation.
         """
         if self._model_config:
-            num_layers = self._model_config.get('num_hidden_layers', 32)
-            num_kv_heads = self._model_config.get('num_key_value_heads')
+            num_layers = self._model_config.get("num_hidden_layers", 32)
+            num_kv_heads = self._model_config.get("num_key_value_heads")
             if num_kv_heads is None:
-                num_kv_heads = self._model_config.get('num_attention_heads', 32)
-            hidden_size = self._model_config.get('hidden_size', 4096)
-            num_attention_heads = self._model_config.get('num_attention_heads', 32)
+                num_kv_heads = self._model_config.get("num_attention_heads", 32)
+            hidden_size = self._model_config.get("hidden_size", 4096)
+            num_attention_heads = self._model_config.get("num_attention_heads", 32)
             head_dim = hidden_size // num_attention_heads
         else:
             num_layers, num_kv_heads, head_dim = 32, 8, 128
 
-        dtype_bytes = 1 if getattr(self, '_model_dtype', 'fp16') == 'fp8' else 2
+        dtype_bytes = 1 if getattr(self, "_model_dtype", "fp16") == "fp8" else 2
         gpu_vram = self._gpu_vram_gb
 
         # --- S_activation: compute slot scale ---
         slot_weight = num_layers * num_kv_heads * head_dim * dtype_bytes
         effective_weight = slot_weight / tp
-        if gpu_vram >= 120: arch_coeff = 1.2
-        elif gpu_vram >= 70: arch_coeff = 1.0
-        elif gpu_vram >= 40: arch_coeff = 0.8
-        else: arch_coeff = 0.6
-        s_activation = int((gpu_vram * (1024 ** 3) * arch_coeff) / effective_weight)
+        if gpu_vram >= 120:
+            arch_coeff = 1.2
+        elif gpu_vram >= 70:
+            arch_coeff = 1.0
+        elif gpu_vram >= 40:
+            arch_coeff = 0.8
+        else:
+            arch_coeff = 0.6
+        s_activation = int((gpu_vram * (1024**3) * arch_coeff) / effective_weight)
 
         # --- S_kv: KV cache capacity ---
         gpu_mem_util = gpu_mem_util_override or self._compute_gpu_mem_util(tp, log=False)
         model_weight_gb = self._estimate_model_size_gb() / tp
         overhead_gb = 4.0
         available_kv_gb = max(0, gpu_vram * gpu_mem_util - model_weight_gb - overhead_gb)
-        kv_per_seq_bytes = (2 * num_layers * (num_kv_heads // max(tp, 1)) * head_dim
-                           * self.config.max_model_len * dtype_bytes)
-        s_kv = int(available_kv_gb * (1024 ** 3) / kv_per_seq_bytes) if kv_per_seq_bytes > 0 else 512
+        kv_per_seq_bytes = (
+            2 * num_layers * (num_kv_heads // max(tp, 1)) * head_dim * self.config.max_model_len * dtype_bytes
+        )
+        s_kv = int(available_kv_gb * (1024**3) / kv_per_seq_bytes) if kv_per_seq_bytes > 0 else 512
 
         # --- S_concurrency: role-dependent ---
-        concurrency = getattr(self, 'effective_concurrency', int(self.config.qps))
-        if role == 'prefill':
+        concurrency = getattr(self, "effective_concurrency", int(self.config.qps))
+        if role == "prefill":
             # Prefill only handles active prefills — a fraction of total users.
             # At any time, only concurrency/prefill_pods users are prefilling per pod.
             s_concurrency = max(64, int(concurrency / max(num_pods, 1) * 2.0))
-        elif role == 'decode':
+        elif role == "decode":
             # Decode holds ALL sequences that completed prefill.
             # Needs capacity for full concurrency across fewer decode pods.
             s_concurrency = max(64, int(concurrency / max(num_pods, 1) * 3.0))
@@ -460,9 +481,11 @@ class ConfigBuilderMixin:
         raw = min(s_activation, s_kv, s_concurrency, 512)
         max_seqs = max(64, (raw // 32) * 32 or 64)
 
-        self.log(f"   max_num_seqs(TP={tp}, {role}): {max_seqs} "
-                 f"(S_act={s_activation}, S_kv={s_kv}, S_conc={s_concurrency}, cap=512, "
-                 f"model_len={self.config.max_model_len}, VRAM={gpu_vram:.0f}GB)")
+        self.log(
+            f"   max_num_seqs(TP={tp}, {role}): {max_seqs} "
+            f"(S_act={s_activation}, S_kv={s_kv}, S_conc={s_concurrency}, cap=512, "
+            f"model_len={self.config.max_model_len}, VRAM={gpu_vram:.0f}GB)"
+        )
         return max_seqs
 
     def _compute_moe_dp_chunk_size(self, tp: int, max_num_seqs: int = None) -> Optional[int]:
@@ -487,7 +510,7 @@ class ConfigBuilderMixin:
             return None
 
         num_experts = self._num_experts or 8
-        top_k = self._model_config.get('num_experts_per_tok', 2)
+        top_k = self._model_config.get("num_experts_per_tok", 2)
 
         # S_sequences: bound by max_num_seqs (already balances 4 constraints)
         s_sequences = max_num_seqs or self._compute_max_num_seqs(tp)
@@ -496,9 +519,10 @@ class ConfigBuilderMixin:
         # Each dispatched token activates top_k experts. Per expert, the token
         # passes through gate_proj (up) and down_proj: intermediate_size * 2 * dtype_bytes.
         # Activation budget ≈ (VRAM - model_weights - KV_reserved - overhead) / num_experts
-        intermediate = self._model_config.get('moe_intermediate_size',
-                       self._model_config.get('intermediate_size', 14336))
-        dtype_bytes = 1 if getattr(self, '_model_dtype', 'fp16') == 'fp8' else 2
+        intermediate = self._model_config.get(
+            "moe_intermediate_size", self._model_config.get("intermediate_size", 14336)
+        )
+        dtype_bytes = 1 if getattr(self, "_model_dtype", "fp16") == "fp8" else 2
         act_per_token_per_expert = intermediate * 2 * dtype_bytes
         model_weight_gb = self._estimate_model_size_gb() / tp
         overhead_gb = 4.0
@@ -517,14 +541,22 @@ class ConfigBuilderMixin:
         raw = min(s_sequences, s_expert_capacity, s_dispatch, 512)
         chunk = max(128, (raw // 64) * 64 or 128)
 
-        winner = ('S_seq' if raw == s_sequences else
-                  'S_expert' if raw == s_expert_capacity else
-                  'S_dispatch' if raw == s_dispatch else 'cap')
+        winner = (
+            "S_seq"
+            if raw == s_sequences
+            else "S_expert"
+            if raw == s_expert_capacity
+            else "S_dispatch"
+            if raw == s_dispatch
+            else "cap"
+        )
 
-        self.log(f"   moe_dp_chunk_size(TP={tp}): {chunk} "
-                 f"(S_seq={s_sequences}, S_expert={s_expert_capacity}, "
-                 f"S_dispatch={s_dispatch}, cap=512, "
-                 f"experts={num_experts}, top_k={top_k}, bound={winner})")
+        self.log(
+            f"   moe_dp_chunk_size(TP={tp}): {chunk} "
+            f"(S_seq={s_sequences}, S_expert={s_expert_capacity}, "
+            f"S_dispatch={s_dispatch}, cap=512, "
+            f"experts={num_experts}, top_k={top_k}, bound={winner})"
+        )
         return chunk
 
     def _compute_ep_memory_gb(self, max_num_batched_tokens: int) -> tuple:
@@ -539,9 +571,9 @@ class ConfigBuilderMixin:
         The EP reserve must account for the full RDMA + NVL allocation.
         """
         if not self._model_config:
-            return '16G', 20.0
+            return "16G", 20.0
 
-        hidden = self._model_config.get('hidden_size', 4096)
+        hidden = self._model_config.get("hidden_size", 4096)
         num_experts = self._num_experts or 8
         max_tokens = max_num_batched_tokens or self.config.max_model_len
         num_scales = hidden // 128
@@ -549,10 +581,8 @@ class ConfigBuilderMixin:
         dispatch_msg = 16 + max(hidden * 2, hidden + num_scales * 4)
         combine_msg = num_scales * 4 + hidden * 2
 
-        send_buf = max(max_tokens * dispatch_msg,
-                       num_experts * max_tokens * combine_msg)
-        recv_buf = max(num_experts * max_tokens * dispatch_msg,
-                       num_experts * max_tokens * combine_msg)
+        send_buf = max(max_tokens * dispatch_msg, num_experts * max_tokens * combine_msg)
+        recv_buf = max(num_experts * max_tokens * dispatch_msg, num_experts * max_tokens * combine_msg)
         signal_buf = ((num_experts * 4 + 127) // 128) * 128
 
         rdma_gb = (send_buf + recv_buf + signal_buf) * 2 / (1024**3)
@@ -566,12 +596,14 @@ class ConfigBuilderMixin:
         # Total EP memory: actual RDMA + NVL + overhead
         total_gb = rdma_gb + nvl_gb + 2.0
 
-        self.log(f"   EP memory: RDMA={rdma_gb:.1f}GB + NVL={nvl_gb:.0f}GB + overhead=2GB "
-                 f"= {total_gb:.1f}GB (NVSHMEM_SYMMETRIC_SIZE={nvshmem_env_gb}G, "
-                 f"hidden={hidden}, experts={num_experts}, batch={max_tokens})")
-        return f'{nvshmem_env_gb}G', total_gb
+        self.log(
+            f"   EP memory: RDMA={rdma_gb:.1f}GB + NVL={nvl_gb:.0f}GB + overhead=2GB "
+            f"= {total_gb:.1f}GB (NVSHMEM_SYMMETRIC_SIZE={nvshmem_env_gb}G, "
+            f"hidden={hidden}, experts={num_experts}, batch={max_tokens})"
+        )
+        return f"{nvshmem_env_gb}G", total_gb
 
-    def _compute_max_num_batched_tokens(self, tp: int, role: str = 'aggregated') -> Optional[int]:
+    def _compute_max_num_batched_tokens(self, tp: int, role: str = "aggregated") -> Optional[int]:
         """Compute max_num_batched_tokens tuned for ISL/OSL and architecture role.
 
         For PD prefill: process the entire prompt in as few iterations as possible.
@@ -595,20 +627,20 @@ class ConfigBuilderMixin:
         # Floor: must be >= vLLM's max_tokens_per_mm_item for multimodal models
         floor = 2048
         if self._model_config:
-            vcfg = self._model_config.get('vision_config') or self._model_config.get('visual')
+            vcfg = self._model_config.get("vision_config") or self._model_config.get("visual")
             if vcfg and isinstance(vcfg, dict):
-                patch = vcfg.get('patch_size', 16)
-                img_size = vcfg.get('image_size', 0) or vcfg.get('resolution', 0)
+                patch = vcfg.get("patch_size", 16)
+                img_size = vcfg.get("image_size", 0) or vcfg.get("resolution", 0)
                 if img_size > 0:
                     floor = max(floor, (img_size // patch) ** 2)
                 else:
-                    default_out = vcfg.get('default_output_length', 0)
+                    default_out = vcfg.get("default_output_length", 0)
                     if default_out > 0:
                         floor = max(floor, default_out * 10)
                     else:
                         floor = max(floor, 4096)
 
-        if role == 'prefill':
+        if role == "prefill":
             # PD prefill: cap at optimal GEMM saturation point for inter-request interleaving.
             # Setting this to ISL defeats chunked prefill — the scheduler does one monolithic
             # pass instead of interleaving chunks from multiple requests.
@@ -622,11 +654,17 @@ class ConfigBuilderMixin:
             gemm_cap = 16384  # fixed per scheduler step — TP splits heads, not sequence length
             kv_bytes = self._get_profiled_kv_cache_bytes(tp)
             if kv_bytes:
-                num_layers = self._model_config.get('num_hidden_layers', 32) if self._model_config else 32
-                num_kv_heads = (self._model_config.get('num_key_value_heads', 32) if self._model_config else 32)
-                head_dim = (self._model_config.get('head_dim',
-                            self._model_config.get('hidden_size', 4096) //
-                            self._model_config.get('num_attention_heads', 32)) if self._model_config else 128)
+                num_layers = self._model_config.get("num_hidden_layers", 32) if self._model_config else 32
+                num_kv_heads = self._model_config.get("num_key_value_heads", 32) if self._model_config else 32
+                head_dim = (
+                    self._model_config.get(
+                        "head_dim",
+                        self._model_config.get("hidden_size", 4096)
+                        // self._model_config.get("num_attention_heads", 32),
+                    )
+                    if self._model_config
+                    else 128
+                )
                 kv_heads_per_gpu = max(1, num_kv_heads // tp)
                 bytes_per_token = 2 * num_layers * kv_heads_per_gpu * head_dim * 2
                 kv_cap_tokens = int(kv_bytes / bytes_per_token) if bytes_per_token > 0 else isl
@@ -639,15 +677,16 @@ class ConfigBuilderMixin:
             else:
                 result = max(floor, min(gemm_cap, mem_budget, self.config.max_model_len))
 
-            self.log(f"   max_num_batched_tokens(TP={tp}, prefill): {result} "
-                     f"(ISL={isl}, gemm_cap={gemm_cap}, mem_budget={mem_budget}, floor={floor})")
+            self.log(
+                f"   max_num_batched_tokens(TP={tp}, prefill): {result} "
+                f"(ISL={isl}, gemm_cap={gemm_cap}, mem_budget={mem_budget}, floor={floor})"
+            )
             return result
 
-        elif role == 'decode':
+        elif role == "decode":
             # PD decode: small batches, optimize for decode throughput
             result = max(floor, min(osl * 64, self.config.max_model_len))
-            self.log(f"   max_num_batched_tokens(TP={tp}, decode): {result} "
-                     f"(OSL={osl})")
+            self.log(f"   max_num_batched_tokens(TP={tp}, decode): {result} (OSL={osl})")
             return result
 
         else:
@@ -666,9 +705,11 @@ class ConfigBuilderMixin:
             # a large prefill enters the shared engine
             agg_cap = 16384
             result = max(floor, min(budget, agg_cap, self.config.max_model_len))
-            self.log(f"   max_num_batched_tokens(TP={tp}, aggregated): {result} "
-                     f"(TPSG={tpsg:.0f} × TP={tp} × {target_s:.1f}s = {budget}, "
-                     f"cap={agg_cap}, ISL={isl}, floor={floor})")
+            self.log(
+                f"   max_num_batched_tokens(TP={tp}, aggregated): {result} "
+                f"(TPSG={tpsg:.0f} × TP={tp} × {target_s:.1f}s = {budget}, "
+                f"cap={agg_cap}, ISL={isl}, floor={floor})"
+            )
             return result
 
     def _apply_advanced_vllm(self, cfg: TestConfig) -> TestConfig:
@@ -679,7 +720,7 @@ class ConfigBuilderMixin:
         # max_position_embeddings (e.g., 40960) which wastes 95%+ of KV
         # cache memory on empty slots, making it impossible to serve the
         # user's workload at their requested concurrency.
-        if not getattr(self.config, 'advanced_vllm_custom_enabled', True):
+        if not getattr(self.config, "advanced_vllm_custom_enabled", True):
             cfg.gpu_memory_utilization = None
             cfg.max_num_seqs = None
             cfg.prefill_max_num_seqs = None
@@ -694,105 +735,129 @@ class ConfigBuilderMixin:
 
         # Raw text mode: parse flags from text, set known ones on TestConfig,
         # put unknown ones in extra_vllm_args. Skip form fields entirely.
-        if adv.get('_mode') == 'raw' and adv.get('_raw_text'):
-            return self._apply_raw_vllm_args(cfg, adv['_raw_text'])
+        if adv.get("_mode") == "raw" and adv.get("_raw_text"):
+            return self._apply_raw_vllm_args(cfg, adv["_raw_text"])
 
         # Form mode: apply structured overrides
         val_fields = {
-            'max_model_len': 'max_model_len',
-            'gpu_memory_utilization': 'gpu_memory_utilization',
-            'max_num_seqs': 'max_num_seqs',
-            'max_num_batched_tokens': 'max_num_batched_tokens',
-            'dtype': 'dtype',
-            'kv_cache_dtype': 'kv_cache_dtype',
-            'pipeline_parallel_size': 'pipeline_parallel_size',
-            'context_parallel_size': 'context_parallel_size',
-            'prefill_context_parallel_size': 'prefill_context_parallel_size',
-            'decode_context_parallel_size': 'decode_context_parallel_size',
-            'override_generation_config': 'override_generation_config',
-            'prefill_attention_config': 'prefill_attention_config',
-            'decode_attention_config': 'decode_attention_config',
-            'tool_call_parser': 'tool_call_parser',
-            'block_size': 'block_size',
-            'reasoning_parser': 'reasoning_parser',
-            'chat_template_content_format': 'chat_template_content_format',
-            'moe_backend': 'moe_backend',
-            'all2all_backend': 'all2all_backend',
-            'dbo_prefill_token_threshold': 'dbo_prefill_token_threshold',
-            'dbo_decode_token_threshold': 'dbo_decode_token_threshold',
-            'model_loader_extra_config': 'model_loader_extra_config',
-            'cpu_offload_gb': 'cpu_offload_gb',
-            'weight_cpu_offload_gb': 'weight_cpu_offload_gb',
-            'shm_size_gb': 'shm_size_gb',
-            'host_ipc': 'host_ipc',
-            'http_timeout_keep_alive': 'http_timeout_keep_alive',
-            'prefix_cache_retention': 'prefix_cache_retention',
-            'ssm_conv_state_layout': 'ssm_conv_state_layout',
-            'num_speculative_tokens': 'speculative_num_tokens',
-            'prefill_speculative_num_tokens': 'prefill_speculative_num_tokens',
-            'speculative_model': 'speculative_model',
-            'prefill_max_num_seqs': 'prefill_max_num_seqs',
-            'decode_max_num_seqs': 'decode_max_num_seqs',
-            'prefill_all2all_backend': 'prefill_all2all_backend',
-            'decode_all2all_backend': 'decode_all2all_backend',
-            'prefill_gpu_memory_utilization': 'prefill_gpu_memory_utilization',
-            'decode_gpu_memory_utilization': 'decode_gpu_memory_utilization',
-            'prefill_max_num_batched_tokens': 'prefill_max_num_batched_tokens',
-            'decode_max_num_batched_tokens': 'decode_max_num_batched_tokens',
+            "max_model_len": "max_model_len",
+            "gpu_memory_utilization": "gpu_memory_utilization",
+            "max_num_seqs": "max_num_seqs",
+            "max_num_batched_tokens": "max_num_batched_tokens",
+            "dtype": "dtype",
+            "kv_cache_dtype": "kv_cache_dtype",
+            "pipeline_parallel_size": "pipeline_parallel_size",
+            "context_parallel_size": "context_parallel_size",
+            "prefill_context_parallel_size": "prefill_context_parallel_size",
+            "decode_context_parallel_size": "decode_context_parallel_size",
+            "override_generation_config": "override_generation_config",
+            "prefill_attention_config": "prefill_attention_config",
+            "decode_attention_config": "decode_attention_config",
+            "tool_call_parser": "tool_call_parser",
+            "block_size": "block_size",
+            "reasoning_parser": "reasoning_parser",
+            "chat_template_content_format": "chat_template_content_format",
+            "moe_backend": "moe_backend",
+            "all2all_backend": "all2all_backend",
+            "dbo_prefill_token_threshold": "dbo_prefill_token_threshold",
+            "dbo_decode_token_threshold": "dbo_decode_token_threshold",
+            "model_loader_extra_config": "model_loader_extra_config",
+            "cpu_offload_gb": "cpu_offload_gb",
+            "weight_cpu_offload_gb": "weight_cpu_offload_gb",
+            "shm_size_gb": "shm_size_gb",
+            "host_ipc": "host_ipc",
+            "http_timeout_keep_alive": "http_timeout_keep_alive",
+            "prefix_cache_retention": "prefix_cache_retention",
+            "ssm_conv_state_layout": "ssm_conv_state_layout",
+            "num_speculative_tokens": "speculative_num_tokens",
+            "prefill_speculative_num_tokens": "prefill_speculative_num_tokens",
+            "speculative_model": "speculative_model",
+            "prefill_max_num_seqs": "prefill_max_num_seqs",
+            "decode_max_num_seqs": "decode_max_num_seqs",
+            "prefill_all2all_backend": "prefill_all2all_backend",
+            "decode_all2all_backend": "decode_all2all_backend",
+            "prefill_gpu_memory_utilization": "prefill_gpu_memory_utilization",
+            "decode_gpu_memory_utilization": "decode_gpu_memory_utilization",
+            "prefill_max_num_batched_tokens": "prefill_max_num_batched_tokens",
+            "decode_max_num_batched_tokens": "decode_max_num_batched_tokens",
         }
         for key, attr in val_fields.items():
             setting = adv.get(key)
             if not setting:
                 continue
-            if setting.get('mode') in ('off', 'default'):
+            if setting.get("mode") in ("off", "default"):
                 # 'off'/'default': feature disabled / vLLM default — don't set
                 setattr(cfg, attr, None)
-            elif setting.get('mode') == 'custom' and setting.get('value') is not None:
-                val = setting['value']
-                if attr in ('max_model_len', 'max_num_seqs', 'max_num_batched_tokens', 'prefill_max_num_seqs', 'decode_max_num_seqs', 'prefill_max_num_batched_tokens', 'decode_max_num_batched_tokens', 'pipeline_parallel_size', 'context_parallel_size',
-                            'prefill_context_parallel_size', 'decode_context_parallel_size', 'block_size', 'cpu_offload_gb', 'weight_cpu_offload_gb', 'http_timeout_keep_alive',
-                            'prefix_cache_retention', 'speculative_num_tokens', 'prefill_speculative_num_tokens', 'shm_size_gb'):
+            elif setting.get("mode") == "custom" and setting.get("value") is not None:
+                val = setting["value"]
+                if attr in (
+                    "max_model_len",
+                    "max_num_seqs",
+                    "max_num_batched_tokens",
+                    "prefill_max_num_seqs",
+                    "decode_max_num_seqs",
+                    "prefill_max_num_batched_tokens",
+                    "decode_max_num_batched_tokens",
+                    "pipeline_parallel_size",
+                    "context_parallel_size",
+                    "prefill_context_parallel_size",
+                    "decode_context_parallel_size",
+                    "block_size",
+                    "cpu_offload_gb",
+                    "weight_cpu_offload_gb",
+                    "http_timeout_keep_alive",
+                    "prefix_cache_retention",
+                    "speculative_num_tokens",
+                    "prefill_speculative_num_tokens",
+                    "shm_size_gb",
+                ):
                     val = int(val)
-                elif attr in ('gpu_memory_utilization', 'prefill_gpu_memory_utilization', 'decode_gpu_memory_utilization'):
+                elif attr in (
+                    "gpu_memory_utilization",
+                    "prefill_gpu_memory_utilization",
+                    "decode_gpu_memory_utilization",
+                ):
                     val = float(val)
-                elif attr == 'prefill_kv_cache_memory_bytes':
+                elif attr == "prefill_kv_cache_memory_bytes":
                     val = int(val)
                 setattr(cfg, attr, val)
 
         # host_ipc — plain bool from UI (not mode/value dict)
-        if adv.get('host_ipc') is True:
+        if adv.get("host_ipc") is True:
             cfg.host_ipc = True
 
         # Context parallelism — editable flag-name + value pairs from the UI.
         # value=None means "auto": set to the pod's TP at deploy time (prefill_tp / decode_tp).
         _ctx_flag_map = {
-            '--prefill-context-parallel-size': ('prefill_context_parallel_size', 'prefill_tp'),
-            '--decode-context-parallel-size':  ('decode_context_parallel_size',  'decode_tp'),
-            '--context-parallel-size':         ('context_parallel_size',         'tensor_parallelism'),
+            "--prefill-context-parallel-size": ("prefill_context_parallel_size", "prefill_tp"),
+            "--decode-context-parallel-size": ("decode_context_parallel_size", "decode_tp"),
+            "--context-parallel-size": ("context_parallel_size", "tensor_parallelism"),
         }
-        gpus_per_node = getattr(cfg, 'gpus_per_node', None) or 8
+        gpus_per_node = getattr(cfg, "gpus_per_node", None) or 8
         # vLLM context parallelism shards KV heads across TP ranks and
         # validates tp_size > num_kv_heads at engine startup. Models with
         # many KV heads (Gemma-4: 8) reject DCP/PCP at TP <= num_kv_heads
         # with a hard ValueError — every PD/EP pod crash-looped (run-56
         # step7). Skip the flag when the model can't shard at this TP.
         _ctx_num_kv_heads = None
-        if getattr(self, '_model_config', None):
-            _ctx_num_kv_heads = self._model_config.get('num_key_value_heads') \
-                or self._model_config.get('num_attention_heads')
-        for entry in adv.get('context_parallel_entries', []):
-            flag  = (entry.get('flag') or '').strip()
-            value = entry.get('value')
+        if getattr(self, "_model_config", None):
+            _ctx_num_kv_heads = self._model_config.get("num_key_value_heads") or self._model_config.get(
+                "num_attention_heads"
+            )
+        for entry in adv.get("context_parallel_entries", []):
+            flag = (entry.get("flag") or "").strip()
+            value = entry.get("value")
             mapping = _ctx_flag_map.get(flag)
             if not mapping:
                 continue
             field, tp_attr = mapping
             # --prefill/decode-context-parallel-size are PD split flags; skip for aggregated
-            if cfg.architecture == 'aggregated' and flag in (
-                '--prefill-context-parallel-size', '--decode-context-parallel-size'
+            if cfg.architecture == "aggregated" and flag in (
+                "--prefill-context-parallel-size",
+                "--decode-context-parallel-size",
             ):
                 continue
-            tp_val = getattr(cfg, tp_attr, None) or getattr(cfg, 'tensor_parallelism', 1) or 1
+            tp_val = getattr(cfg, tp_attr, None) or getattr(cfg, "tensor_parallelism", 1) or 1
             if value:
                 cps = int(value)
             else:
@@ -809,89 +874,95 @@ class ConfigBuilderMixin:
                 setattr(cfg, field, cps)
 
         # Speculative decoding method (set by preset dropdown, not mode/value dict)
-        spec_method = adv.get('speculative_method')
+        spec_method = adv.get("speculative_method")
         if spec_method:
             cfg.speculative_method = spec_method
 
         # Extra speculative config fields — user-configurable key/value pairs injected into --speculative-config
-        spec_extra = adv.get('speculative_extra_config')
+        spec_extra = adv.get("speculative_extra_config")
         if spec_extra:
-            cfg.speculative_extra_config = [e for e in spec_extra if e.get('key') and e.get('value') is not None] or None
+            cfg.speculative_extra_config = [
+                e for e in spec_extra if e.get("key") and e.get("value") is not None
+            ] or None
 
         # Drop draft-model HF attributes from the extra spec config — they
         # are not SpeculativeConfig fields and crash vLLM at startup. The
         # draft model's own config.json must carry them.
         if cfg.speculative_extra_config:
-            _kept = [e for e in cfg.speculative_extra_config
-                     if e.get('key') not in DRAFT_HF_SPEC_KEYS]
-            _dropped = [e['key'] for e in cfg.speculative_extra_config
-                        if e.get('key') in DRAFT_HF_SPEC_KEYS]
+            _kept = [e for e in cfg.speculative_extra_config if e.get("key") not in DRAFT_HF_SPEC_KEYS]
+            _dropped = [e["key"] for e in cfg.speculative_extra_config if e.get("key") in DRAFT_HF_SPEC_KEYS]
             if _dropped:
                 cfg.speculative_extra_config = _kept or None
-                self.log(f"   ⚠️  Dropped draft-HF keys from speculative config "
-                         f"(not SpeculativeConfig fields; draft model config "
-                         f"must provide them): {_dropped}", 'warning')
+                self.log(
+                    f"   ⚠️  Dropped draft-HF keys from speculative config "
+                    f"(not SpeculativeConfig fields; draft model config "
+                    f"must provide them): {_dropped}",
+                    "warning",
+                )
 
-        if getattr(cfg, 'speculative_method', None) == 'dspark':
+        if getattr(cfg, "speculative_method", None) == "dspark":
             # DSpark needs the external draft model. Resolve known families
             # when the user left 'Speculative model' on auto — otherwise the
             # template falls back to the target model as draft.
-            if not getattr(cfg, 'speculative_model', None):
+            if not getattr(cfg, "speculative_model", None):
                 draft = _dspark_draft_for_target(cfg.model_name)
                 if draft:
                     cfg.speculative_model = draft
-                    self.log(f"   DSpark draft model: {draft} (auto-resolved for {cfg.model_name})", 'info')
+                    self.log(f"   DSpark draft model: {draft} (auto-resolved for {cfg.model_name})", "info")
                 else:
-                    self.log("   ⚠️  DSpark requires an external draft model — set "
-                             "'Speculative model' in Advanced vLLM settings", 'warning')
+                    self.log(
+                        "   ⚠️  DSpark requires an external draft model — set "
+                        "'Speculative model' in Advanced vLLM settings",
+                        "warning",
+                    )
             # DSpark drafts crash with fp8 KV cache. Default the spec-level
             # KV dtype to bfloat16 unless the user set one explicitly
             # (same default the GLM-5.3 DSpark preset uses).
             extra = list(cfg.speculative_extra_config or [])
-            if not any(e.get('key') == 'kv_cache_dtype' for e in extra):
-                extra.append({'key': 'kv_cache_dtype', 'value': 'bfloat16'})
+            if not any(e.get("key") == "kv_cache_dtype" for e in extra):
+                extra.append({"key": "kv_cache_dtype", "value": "bfloat16"})
                 cfg.speculative_extra_config = extra
-                self.log("   DSpark draft KV cache dtype: bfloat16 (fp8 KV crashes the draft)", 'info')
+                self.log("   DSpark draft KV cache dtype: bfloat16 (fp8 KV crashes the draft)", "info")
 
         # Disk KV cache offloading — only when local_disk_path is set (hostPath NVMe)
-        disk_offload = adv.get('disk_offload_kv') or adv.get('disk-offload-kv')
-        local_disk = getattr(self.config, 'local_disk_path', None)
-        if disk_offload and disk_offload.get('mode') == 'custom' and local_disk:
-            val = disk_offload.get('value', {})
+        disk_offload = adv.get("disk_offload_kv") or adv.get("disk-offload-kv")
+        local_disk = getattr(self.config, "local_disk_path", None)
+        if disk_offload and disk_offload.get("mode") == "custom" and local_disk:
+            val = disk_offload.get("value", {})
             cfg.disk_offload_kv_path = f"{local_disk}/kv-cache"
             if isinstance(val, dict):
-                cfg.disk_offload_kv_read_threads = int(val.get('read_threads', 32))
-                cfg.disk_offload_kv_write_threads = int(val.get('write_threads', 16))
+                cfg.disk_offload_kv_read_threads = int(val.get("read_threads", 32))
+                cfg.disk_offload_kv_write_threads = int(val.get("write_threads", 16))
 
         toggle_fields = {
-            'enable_prefix_caching': 'enable_prefix_caching',
-            'enable_chunked_prefill': 'enable_chunked_prefill',
-            'disable_custom_all_reduce': 'disable_custom_all_reduce',
-            'enable_auto_tool_choice': 'enable_auto_tool_choice',
-            'enable_expert_parallel': 'enable_expert_parallel',
-            'enable_dbo': 'enable_dbo',
-            'enable_eplb': 'enable_eplb',
-            'trust_remote_code': 'trust_remote_code',
-            'disable_log_requests': 'disable_log_requests',
-            'vllm_debug_logs': 'vllm_debug_logs',
-            'nccl_debug_logs': 'nccl_debug_logs',
-            'enable_bidirectional_kv': 'enable_bidirectional_kv',
-            'enable_scale_out': 'enable_scale_out',
-            'prefill_enable_scale_out': 'prefill_enable_scale_out',
-            'decode_enable_scale_out': 'decode_enable_scale_out',
-            'decode_compilation_config': 'decode_compilation_config',
-            'prefill_kernel_config': 'prefill_kernel_config',
-            'prefill_kv_cache_memory_bytes': 'prefill_kv_cache_memory_bytes',
+            "enable_prefix_caching": "enable_prefix_caching",
+            "enable_chunked_prefill": "enable_chunked_prefill",
+            "disable_custom_all_reduce": "disable_custom_all_reduce",
+            "enable_auto_tool_choice": "enable_auto_tool_choice",
+            "enable_expert_parallel": "enable_expert_parallel",
+            "enable_dbo": "enable_dbo",
+            "enable_eplb": "enable_eplb",
+            "trust_remote_code": "trust_remote_code",
+            "disable_log_requests": "disable_log_requests",
+            "vllm_debug_logs": "vllm_debug_logs",
+            "nccl_debug_logs": "nccl_debug_logs",
+            "enable_bidirectional_kv": "enable_bidirectional_kv",
+            "enable_scale_out": "enable_scale_out",
+            "prefill_enable_scale_out": "prefill_enable_scale_out",
+            "decode_enable_scale_out": "decode_enable_scale_out",
+            "decode_compilation_config": "decode_compilation_config",
+            "prefill_kernel_config": "prefill_kernel_config",
+            "prefill_kv_cache_memory_bytes": "prefill_kv_cache_memory_bytes",
         }
         for key, attr in toggle_fields.items():
             setting = adv.get(key)
-            if setting and setting.get('mode') in ('on', 'off'):
-                setattr(cfg, attr, setting['mode'] == 'on')
+            if setting and setting.get("mode") in ("on", "off"):
+                setattr(cfg, attr, setting["mode"] == "on")
 
         # EP requires TP > 1 and a MoE model (for aggregated configs only).
         # For PD configs, the template_manager handles per-role EP filtering
         # based on prefill_tp/decode_tp independently.
-        if not cfg.architecture or cfg.architecture == 'aggregated':
+        if not cfg.architecture or cfg.architecture == "aggregated":
             if cfg.tensor_parallelism <= 1 or not self._is_moe:
                 cfg.enable_expert_parallel = False
                 cfg.enable_eplb = False
@@ -901,9 +972,9 @@ class ConfigBuilderMixin:
         # Only override if user left it on Auto (mode != 'custom').
         # If user explicitly set a value, respect their choice.
         if self._requires_fp8_kv_cache:
-            kv_setting = adv.get('kv_cache_dtype') if adv else None
-            if not kv_setting or kv_setting.get('mode') != 'custom':
-                cfg.kv_cache_dtype = 'fp8'
+            kv_setting = adv.get("kv_cache_dtype") if adv else None
+            if not kv_setting or kv_setting.get("mode") != "custom":
+                cfg.kv_cache_dtype = "fp8"
 
         return cfg
 
@@ -918,16 +989,17 @@ class ConfigBuilderMixin:
         if not cfg.model_loader_extra_config and cfg.memory_request:
             import json as _json
             import re as _re
-            m = _re.match(r'(\d+(?:\.\d+)?)\s*(Gi|Mi|G|M)?', str(cfg.memory_request), _re.IGNORECASE)
+
+            m = _re.match(r"(\d+(?:\.\d+)?)\s*(Gi|Mi|G|M)?", str(cfg.memory_request), _re.IGNORECASE)
             if m:
                 val = float(m.group(1))
-                unit = (m.group(2) or 'Gi').upper()
-                pod_ram_gb = val if unit in ('GI', 'G') else val / 1024
+                unit = (m.group(2) or "Gi").upper()
+                pod_ram_gb = val if unit in ("GI", "G") else val / 1024
             else:
                 pod_ram_gb = 16.0
             # Subtract offload allocations — those are not available for loading buffers
-            cpu_offload = getattr(cfg, 'cpu_offload_gb', 0) or 0
-            weight_offload = getattr(cfg, 'weight_cpu_offload_gb', 0) or 0
+            cpu_offload = getattr(cfg, "cpu_offload_gb", 0) or 0
+            weight_offload = getattr(cfg, "weight_cpu_offload_gb", 0) or 0
             loading_ram_gb = max(0, pod_ram_gb - int(cpu_offload) - int(weight_offload) - 8)
             ram_based_threads = max(1, int(loading_ram_gb / 2))
             cpu_cores = int(float(cfg.cpu_limit)) if cfg.cpu_limit else 1
@@ -941,82 +1013,84 @@ class ConfigBuilderMixin:
             else:
                 # RAM is the bottleneck — never allocate more threads than RAM can support
                 num_threads = min(cpu_cores, ram_based_threads)
-            cfg.model_loader_extra_config = _json.dumps({
-                "enable_multithread_load": True,
-                "num_threads": num_threads
-            })
+            cfg.model_loader_extra_config = _json.dumps({"enable_multithread_load": True, "num_threads": num_threads})
         return cfg
 
     def _auto_enable_bidirectional_kv(self, cfg: TestConfig) -> TestConfig:
         """Auto-enable bidirectional KV transfer for multi-turn PD/EP configs."""
         if cfg.enable_bidirectional_kv:
             return cfg
-        turns = getattr(self.config, 'turns', 1) or 1
-        if turns > 1 and cfg.architecture in ('pd', 'ep'):
+        turns = getattr(self.config, "turns", 1) or 1
+        if turns > 1 and cfg.architecture in ("pd", "ep"):
             # Multi-node LWS groups + bidirectional NIXL transfer hangs the
             # first request: the prefill-side pull_worker (only active when
             # bidirectional) receives ops for requests its local registry
             # doesn't know, and the decode side waits for KV forever.
             # Validated live on kermit: TP16/TP16 PD with bidirectional=false
             # serves requests in ~1.6s; with true it hangs indefinitely.
-            p_lws = getattr(cfg, 'prefill_lws_size', None) or 1
-            d_lws = getattr(cfg, 'decode_lws_size', None) or 1
+            p_lws = getattr(cfg, "prefill_lws_size", None) or 1
+            d_lws = getattr(cfg, "decode_lws_size", None) or 1
             if p_lws > 1 or d_lws > 1:
                 self.log(
                     f"   Bidirectional KV transfer NOT auto-enabled: multi-node LWS groups "
                     f"(prefill={p_lws}, decode={d_lws} pods/group) + bidirectional NIXL transfer "
                     f"hangs the first request in this vLLM build. Multi-turn prefix reuse "
-                    f"between P and D roles will be limited.", 'warning')
+                    f"between P and D roles will be limited.",
+                    "warning",
+                )
                 return cfg
             cfg.enable_bidirectional_kv = True
-            self.log(f"   Bidirectional KV transfer auto-enabled (multi-turn on {cfg.architecture.upper()}). "
-                     f"If this causes issues with your model, disable it in Advanced Settings.", 'warning')
+            self.log(
+                f"   Bidirectional KV transfer auto-enabled (multi-turn on {cfg.architecture.upper()}). "
+                f"If this causes issues with your model, disable it in Advanced Settings.",
+                "warning",
+            )
         return cfg
 
     def _apply_raw_vllm_args(self, cfg: TestConfig, raw_text: str) -> TestConfig:
         """Parse raw text flags: set known flags on TestConfig, extras go to extra_vllm_args."""
         known_flags = {
-            '--max-model-len': ('max_model_len', int),
-            '--block-size': ('block_size', int),
-            '--max-num-seqs': ('max_num_seqs', int),
-            '--max-num-batched-tokens': ('max_num_batched_tokens', int),
-            '--pipeline-parallel-size': ('pipeline_parallel_size', int),
-            '--context-parallel-size': ('context_parallel_size', int),
-            '--prefill-context-parallel-size': ('prefill_context_parallel_size', int),
-            '--decode-context-parallel-size': ('decode_context_parallel_size', int),
-            '--override-generation-config': ('override_generation_config', str),
-            '--prefill-attention-config': ('prefill_attention_config', str),
-            '--decode-attention-config': ('decode_attention_config', str),
-            '--gpu-memory-utilization': ('gpu_memory_utilization', float),
-            '--dtype': ('dtype', str),
-            '--kv-cache-dtype': ('kv_cache_dtype', str),
-            '--tool-call-parser': ('tool_call_parser', str),
-            '--reasoning-parser': ('reasoning_parser', str),
-            '--chat-template-content-format': ('chat_template_content_format', str),
-            '--moe-backend': ('moe_backend', str),
-            '--all2all-backend': ('all2all_backend', str),
-            '--dbo-prefill-token-threshold': ('dbo_prefill_token_threshold', int),
-            '--dbo-decode-token-threshold': ('dbo_decode_token_threshold', int),
-            '--speculative-config.num_speculative_tokens': ('speculative_num_tokens', int),
+            "--max-model-len": ("max_model_len", int),
+            "--block-size": ("block_size", int),
+            "--max-num-seqs": ("max_num_seqs", int),
+            "--max-num-batched-tokens": ("max_num_batched_tokens", int),
+            "--pipeline-parallel-size": ("pipeline_parallel_size", int),
+            "--context-parallel-size": ("context_parallel_size", int),
+            "--prefill-context-parallel-size": ("prefill_context_parallel_size", int),
+            "--decode-context-parallel-size": ("decode_context_parallel_size", int),
+            "--override-generation-config": ("override_generation_config", str),
+            "--prefill-attention-config": ("prefill_attention_config", str),
+            "--decode-attention-config": ("decode_attention_config", str),
+            "--gpu-memory-utilization": ("gpu_memory_utilization", float),
+            "--dtype": ("dtype", str),
+            "--kv-cache-dtype": ("kv_cache_dtype", str),
+            "--tool-call-parser": ("tool_call_parser", str),
+            "--reasoning-parser": ("reasoning_parser", str),
+            "--chat-template-content-format": ("chat_template_content_format", str),
+            "--moe-backend": ("moe_backend", str),
+            "--all2all-backend": ("all2all_backend", str),
+            "--dbo-prefill-token-threshold": ("dbo_prefill_token_threshold", int),
+            "--dbo-decode-token-threshold": ("dbo_decode_token_threshold", int),
+            "--speculative-config.num_speculative_tokens": ("speculative_num_tokens", int),
         }
         known_toggles = {
-            '--enable-prefix-caching': ('enable_prefix_caching', True),
-            '--disable-custom-all-reduce': ('disable_custom_all_reduce', True),
-            '--enable-auto-tool-choice': ('enable_auto_tool_choice', True),
-            '--enable-expert-parallel': ('enable_expert_parallel', True),
-            '--enable-dbo': ('enable_dbo', True),
-            '--enable-eplb': ('enable_eplb', True),
-            '--trust-remote-code': ('trust_remote_code', True),
-            '--disable-log-requests': ('disable_log_requests', True),
+            "--enable-prefix-caching": ("enable_prefix_caching", True),
+            "--disable-custom-all-reduce": ("disable_custom_all_reduce", True),
+            "--enable-auto-tool-choice": ("enable_auto_tool_choice", True),
+            "--enable-expert-parallel": ("enable_expert_parallel", True),
+            "--enable-dbo": ("enable_dbo", True),
+            "--enable-eplb": ("enable_eplb", True),
+            "--trust-remote-code": ("trust_remote_code", True),
+            "--disable-log-requests": ("disable_log_requests", True),
         }
         # Disable all toggles first — only enable what's in the raw text
         for _, (attr, _) in known_toggles.items():
             setattr(cfg, attr, False)
 
         extra = []
-        for line in raw_text.strip().split('\n'):
+        for line in raw_text.strip().split("\n"):
             line = line.strip()
-            if not line or line.startswith('#'):
+            if not line or line.startswith("#"):
                 continue
             parts = line.split(None, 1)
             flag = parts[0]
@@ -1035,7 +1109,7 @@ class ConfigBuilderMixin:
                 extra.append(line)
 
         if extra:
-            cfg.extra_vllm_args = ' \\\n                  '.join(extra)
+            cfg.extra_vllm_args = " \\\n                  ".join(extra)
 
         return cfg
 
@@ -1054,16 +1128,18 @@ class ConfigBuilderMixin:
         decode_gmu = max(decode_gmu, 0.80)  # floor at 0.80
 
         self.log(f"   Prefill gpu_memory_utilization={prefill_gmu:.2f}")
-        self.log(f"   Decode  gpu_memory_utilization={decode_gmu:.2f} "
-                 f"(base={decode_gmu_raw:.2f} - {nixl_reserve:.0%} NIXL reserve)")
+        self.log(
+            f"   Decode  gpu_memory_utilization={decode_gmu:.2f} "
+            f"(base={decode_gmu_raw:.2f} - {nixl_reserve:.0%} NIXL reserve)"
+        )
 
         prefill_max_num_seqs = self._compute_max_num_seqs(
-            split.prefill_tp, role='prefill',
-            gpu_mem_util_override=prefill_gmu, num_pods=split.prefill_pods)
+            split.prefill_tp, role="prefill", gpu_mem_util_override=prefill_gmu, num_pods=split.prefill_pods
+        )
         decode_max_num_seqs = self._compute_max_num_seqs(
-            split.decode_tp, role='decode',
-            gpu_mem_util_override=decode_gmu, num_pods=split.decode_pods)
-        max_batched = self._compute_max_num_batched_tokens(split.prefill_tp, role='prefill')
+            split.decode_tp, role="decode", gpu_mem_util_override=decode_gmu, num_pods=split.decode_pods
+        )
+        max_batched = self._compute_max_num_batched_tokens(split.prefill_tp, role="prefill")
 
         # vLLM requires chunked prefill when max_model_len > max_num_batched_tokens
         enable_chunked = max_batched is not None and self.config.max_model_len > max_batched
@@ -1087,29 +1163,24 @@ class ConfigBuilderMixin:
 
         cfg = TestConfig(
             test_id=f"step7-{split.prefill_pods}p{split.decode_pods}d-ptp{split.prefill_tp}-dtp{split.decode_tp}",
-            architecture='pd',
+            architecture="pd",
             model_name=self.config.model_name,
-
             # Workload
             namespace=self.config.namespace,
             isl=self.config.isl,
             osl=self.config.osl,
             num_users=concurrency,
-
             request_type=self.config.rate_type,
             request_rate=concurrency,
-
             # TP and replicas (use prefill_tp as default for backward compatibility)
             tensor_parallelism=split.prefill_tp,
             replicas=total_pods,
             prefill_replicas=split.prefill_pods,
             decode_replicas=split.decode_pods,
             prefill_decode_ratio=f"{split.prefill_pods}:{split.decode_pods}",
-
             # PD-specific TP values (different for prefill and decode)
             prefill_tp=split.prefill_tp,
             decode_tp=split.decode_tp,
-
             # Infrastructure
             max_model_len=self.config.max_model_len,
             gpu_memory_utilization=prefill_gmu,
@@ -1123,23 +1194,24 @@ class ConfigBuilderMixin:
             kv_cache_memory_bytes=self._get_profiled_kv_cache_bytes(split.decode_tp),
             isl_stdev=self.config.isl_stdev,
             osl_stdev=self.config.osl_stdev,
-            isl_min=getattr(self.config, 'isl_min', None),
-            isl_max=getattr(self.config, 'isl_max', None),
-            osl_min=getattr(self.config, 'osl_min', None),
-            osl_max=getattr(self.config, 'osl_max', None),
+            parallel_workloads=getattr(self.config, "parallel_workloads", None),
+            isl_min=getattr(self.config, "isl_min", None),
+            isl_max=getattr(self.config, "isl_max", None),
+            osl_min=getattr(self.config, "osl_min", None),
+            osl_max=getattr(self.config, "osl_max", None),
             turns=self.config.turns,
             first_prompt_tokens=self._clamp_first_prompt_tokens(self.config.isl, self.config.osl),
-            first_prompt_tokens_stdev=getattr(self.config, 'first_prompt_tokens_stdev', None),
-            first_prompt_tokens_min=getattr(self.config, 'first_prompt_tokens_min', None),
-            first_prompt_tokens_max=getattr(self.config, 'first_prompt_tokens_max', None),
-            first_output_tokens=getattr(self.config, 'first_output_tokens', None),
-            first_output_tokens_stdev=getattr(self.config, 'first_output_tokens_stdev', None),
-            prefix_tokens=getattr(self.config, 'prefix_tokens', None),
-            prefix_count=getattr(self.config, 'prefix_count', None),
-            turn_delay=getattr(self.config, 'turn_delay', None),
-            turn_delay_stdev=getattr(self.config, 'turn_delay_stdev', None),
-            turn_delay_min=getattr(self.config, 'turn_delay_min', None),
-            turn_delay_max=getattr(self.config, 'turn_delay_max', None),
+            first_prompt_tokens_stdev=getattr(self.config, "first_prompt_tokens_stdev", None),
+            first_prompt_tokens_min=getattr(self.config, "first_prompt_tokens_min", None),
+            first_prompt_tokens_max=getattr(self.config, "first_prompt_tokens_max", None),
+            first_output_tokens=getattr(self.config, "first_output_tokens", None),
+            first_output_tokens_stdev=getattr(self.config, "first_output_tokens_stdev", None),
+            prefix_tokens=getattr(self.config, "prefix_tokens", None),
+            prefix_count=getattr(self.config, "prefix_count", None),
+            turn_delay=getattr(self.config, "turn_delay", None),
+            turn_delay_stdev=getattr(self.config, "turn_delay_stdev", None),
+            turn_delay_min=getattr(self.config, "turn_delay_min", None),
+            turn_delay_max=getattr(self.config, "turn_delay_max", None),
             image=self.config.image,
             scheduler_image=self.config.scheduler_image,
             pvc_name=self.config.pvc_name,
@@ -1149,29 +1221,28 @@ class ConfigBuilderMixin:
             pvc_size=getattr(self.config, "pvc_size", None),
             local_disk_path=getattr(self.config, "local_disk_path", None),
             nccl_ib_hca=self.config.nccl_ib_hca,
-            optimization_goal='ttft',
+            optimization_goal="ttft",
             test_duration=self.config.test_duration,
             network_type=self.config.network_type,
             rdma_device_resources=self.config.rdma_device_resources or [],
             rdma_nics_per_node=self.config.rdma_nics_per_node or 0,
             rdma_network_annotation=self.config.rdma_network_annotation,
             selected_dra_classes=self.config.selected_dra_classes or [],
-            dra_gpu_resource_key=getattr(self.config, 'dra_gpu_resource_key', None),
+            dra_gpu_resource_key=getattr(self.config, "dra_gpu_resource_key", None),
             gateway_class=self.config.gateway_class,
-            exclusive_pf=getattr(self.config, 'exclusive_pf', False),
-
+            exclusive_pf=getattr(self.config, "exclusive_pf", False),
             memory_request=mem,
             memory_limit=mem,
             cpu_request=cpu,
             cpu_limit=cpu,
             lora_enabled=self.config.lora_enabled,
             lora_num_adapters=self.config.lora_num_adapters,
-            lora_benchmark_mode=getattr(self.config, 'lora_benchmark_mode', 'round_robin'),
-            lora_max_rank=getattr(self.config, 'lora_max_rank', None),
+            lora_benchmark_mode=getattr(self.config, "lora_benchmark_mode", "round_robin"),
+            lora_max_rank=getattr(self.config, "lora_max_rank", None),
             lora_max_loras=self._compute_lora_max_loras(split.prefill_tp, num_pods=split.decode_pods),
             lora_adapter_size_mb=self.config.lora_adapter_size_mb,
             selected_nodes=self.config.selected_nodes or [],
-            workload_mode=self.config.workload_mode or 'synthetic',
+            workload_mode=self.config.workload_mode or "synthetic",
             dataset_source=self.config.dataset_source,
             dataset_column=self.config.dataset_column,
             dataset_max_output=self.config.dataset_max_output or 256,
@@ -1180,13 +1251,13 @@ class ConfigBuilderMixin:
             extra_env_vars=self.config.extra_env_vars,
             enable_expert_parallel=False,
             enable_dbo=False,
-            dbo_prefill_token_threshold=getattr(self, '_dbo_threshold', 32),
-            dbo_decode_token_threshold=getattr(self, '_dbo_threshold', 32),
+            dbo_prefill_token_threshold=getattr(self, "_dbo_threshold", 32),
+            dbo_decode_token_threshold=getattr(self, "_dbo_threshold", 32),
             enable_eplb=False,
             moe_backend=None,
             all2all_backend=None,
-            use_deep_gemm=getattr(self, '_use_deep_gemm', None),
-            has_hybrid_attention=getattr(self, '_has_hybrid_attention', False),
+            use_deep_gemm=getattr(self, "_use_deep_gemm", None),
+            has_hybrid_attention=getattr(self, "_has_hybrid_attention", False),
             lws_size=pd_lws_size if pd_lws_size > 1 else None,
             prefill_lws_size=prefill_lws,
             decode_lws_size=decode_lws,
@@ -1203,7 +1274,7 @@ class ConfigBuilderMixin:
     # v0.31). Other sizes get padded up to the next entry.
     _DEEPEP_HIDDEN_SIZES = (2048, 2560, 3072, 4096, 5120, 6144, 7168, 8192)
 
-    def _select_ep_all2all_backend(self, split: 'FeasibleSplit') -> Optional[str]:
+    def _select_ep_all2all_backend(self, split: "FeasibleSplit") -> Optional[str]:
         """Pick the EP all2all backend the MODEL can actually run.
 
         Pre-flight capability check instead of deploy-and-crash: returns
@@ -1219,29 +1290,27 @@ class ConfigBuilderMixin:
         if max(split.prefill_tp, split.decode_tp) <= 1:
             return None
 
-        if (getattr(self.config, 'lora_enabled', False)
-                and int(getattr(self.config, 'lora_num_adapters', 0) or 0) > 0):
-            self.log("   EP a2a: allgather_reducescatter (LoRA + Fused-MoE EP "
-                     "only supports allgather in vLLM v0.31)", 'info')
+        if getattr(self.config, "lora_enabled", False) and int(getattr(self.config, "lora_num_adapters", 0) or 0) > 0:
+            self.log(
+                "   EP a2a: allgather_reducescatter (LoRA + Fused-MoE EP only supports allgather in vLLM v0.31)", "info"
+            )
             return None
 
         reasons = []
-        hidden = (self._model_config or {}).get('hidden_size') \
-            if getattr(self, '_model_config', None) else None
+        hidden = (self._model_config or {}).get("hidden_size") if getattr(self, "_model_config", None) else None
         if hidden and hidden not in self._DEEPEP_HIDDEN_SIZES:
-            reasons.append(f"hidden {hidden} not natively compiled for deepep "
-                           f"(pads to next of {self._DEEPEP_HIDDEN_SIZES})")
-        if getattr(self, '_use_deep_gemm', None) is False:
-            reasons.append("deep_gemm disabled (compressed-tensors per-channel FP8) — "
-                           "no FP8 fast path")
+            reasons.append(
+                f"hidden {hidden} not natively compiled for deepep (pads to next of {self._DEEPEP_HIDDEN_SIZES})"
+            )
+        if getattr(self, "_use_deep_gemm", None) is False:
+            reasons.append("deep_gemm disabled (compressed-tensors per-channel FP8) — no FP8 fast path")
         if reasons:
-            self.log("   EP a2a: allgather_reducescatter — deepep unusable: "
-                     + "; ".join(reasons), 'warning')
+            self.log("   EP a2a: allgather_reducescatter — deepep unusable: " + "; ".join(reasons), "warning")
             return None
 
-        return 'deepep_high_throughput'
+        return "deepep_high_throughput"
 
-    def _create_ep_config(self, split: 'FeasibleSplit') -> TestConfig:
+    def _create_ep_config(self, split: "FeasibleSplit") -> TestConfig:
         """Create EP (Expert Parallelism) architecture test config.
 
         EP uses the PD prefill/decode split with EP-specific flags enabled.
@@ -1250,7 +1319,7 @@ class ConfigBuilderMixin:
         """
         # DPEP splits are tagged with dpep_dp_size — delegate to the DPEP
         # builder so Step 11 / concurrency-sweep rebuilds keep TP=1 + DP.
-        dpep_dp = getattr(split, 'dpep_dp_size', None)
+        dpep_dp = getattr(split, "dpep_dp_size", None)
         if dpep_dp:
             return self._create_dpep_test_config(
                 dp_size=dpep_dp,
@@ -1263,11 +1332,16 @@ class ConfigBuilderMixin:
 
         # Compute moe_dp_chunk_size
         decode_max_num_seqs_prelim = self._compute_max_num_seqs(
-            split.decode_tp, role='decode', num_pods=split.decode_pods)
-        chunk_size = self._compute_moe_dp_chunk_size(split.decode_tp, decode_max_num_seqs_prelim) if self._is_moe else 384
+            split.decode_tp, role="decode", num_pods=split.decode_pods
+        )
+        chunk_size = (
+            self._compute_moe_dp_chunk_size(split.decode_tp, decode_max_num_seqs_prelim) if self._is_moe else 384
+        )
 
         # Compute NVSHMEM symmetric heap from model architecture.
-        max_batched = self._compute_max_num_batched_tokens(split.prefill_tp, role='prefill') or self.config.max_model_len
+        max_batched = (
+            self._compute_max_num_batched_tokens(split.prefill_tp, role="prefill") or self.config.max_model_len
+        )
         nvshmem_size, ep_mem_gb = self._compute_ep_memory_gb(max_batched)
 
         # EPLB redundant experts: must equal ep_ranks for divisibility
@@ -1275,11 +1349,12 @@ class ConfigBuilderMixin:
         num_redundant = ep_ranks
         eplb_gb = 0.5
         if self._model_config:
-            num_layers = self._model_config.get('num_hidden_layers', 32)
-            intermediate = self._model_config.get('moe_intermediate_size',
-                           self._model_config.get('intermediate_size', 14336))
-            hidden = self._model_config.get('hidden_size', 4096)
-            dtype_bytes = 1 if getattr(self, '_model_dtype', 'fp16') == 'fp8' else 2
+            num_layers = self._model_config.get("num_hidden_layers", 32)
+            intermediate = self._model_config.get(
+                "moe_intermediate_size", self._model_config.get("intermediate_size", 14336)
+            )
+            hidden = self._model_config.get("hidden_size", 4096)
+            dtype_bytes = 1 if getattr(self, "_model_dtype", "fp16") == "fp8" else 2
             bytes_per_expert = 3 * hidden * intermediate * dtype_bytes
             eplb_gb = max(num_layers * bytes_per_expert * num_redundant / max(ep_ranks, 1) / (1024**3), 0.5)
 
@@ -1290,8 +1365,8 @@ class ConfigBuilderMixin:
         # Savings = expert_weight × (1/TP - 1/EP) per GPU — positive when EP > TP.
         expert_weight_gb = 0.0
         if self._model_config and self._num_experts > 1:
-            num_layers_cfg = self._model_config.get('num_hidden_layers', 32)
-            interleave = self._model_config.get('interleave_moe_layer_step', 1)
+            num_layers_cfg = self._model_config.get("num_hidden_layers", 32)
+            interleave = self._model_config.get("interleave_moe_layer_step", 1)
             moe_layers = num_layers_cfg // interleave if interleave > 1 else num_layers_cfg
             expert_weight_gb = moe_layers * self._num_experts * bytes_per_expert / (1024**3)
 
@@ -1316,25 +1391,35 @@ class ConfigBuilderMixin:
         decode_gmu = round(max(decode_gmu_raw - decode_ep_overhead_pct - nixl_reserve + decode_ep_savings_pct, 0.70), 2)
         decode_gmu = min(decode_gmu, 0.95)
 
-        self.log(f"   EPLB: {num_redundant} redundant experts "
-                 f"(expert={bytes_per_expert / 1024**2:.0f}MB, ep_ranks={ep_ranks})")
-        self.log(f"   Decode EP overhead: {ep_mem_gb + eplb_gb:.1f}GB = {decode_ep_overhead_pct:.0%} "
-                 f"(RDMA={ep_mem_gb:.1f}GB + EPLB={eplb_gb:.1f}GB)")
-        self.log(f"   Prefill EP overhead: {prefill_ep_overhead_gb:.1f}GB = {prefill_ep_overhead_pct:.0%} "
-                 f"(NVL=1GB + EPLB={eplb_gb:.1f}GB)")
-        self.log(f"   EP weight savings (decode): {decode_ep_savings:.1f}GB = +{decode_ep_savings_pct:.0%} "
-                 f"(experts={expert_weight_gb:.0f}GB, 1/{split.decode_tp} → 1/{ep_ranks})")
+        self.log(
+            f"   EPLB: {num_redundant} redundant experts "
+            f"(expert={bytes_per_expert / 1024**2:.0f}MB, ep_ranks={ep_ranks})"
+        )
+        self.log(
+            f"   Decode EP overhead: {ep_mem_gb + eplb_gb:.1f}GB = {decode_ep_overhead_pct:.0%} "
+            f"(RDMA={ep_mem_gb:.1f}GB + EPLB={eplb_gb:.1f}GB)"
+        )
+        self.log(
+            f"   Prefill EP overhead: {prefill_ep_overhead_gb:.1f}GB = {prefill_ep_overhead_pct:.0%} "
+            f"(NVL=1GB + EPLB={eplb_gb:.1f}GB)"
+        )
+        self.log(
+            f"   EP weight savings (decode): {decode_ep_savings:.1f}GB = +{decode_ep_savings_pct:.0%} "
+            f"(experts={expert_weight_gb:.0f}GB, 1/{split.decode_tp} → 1/{ep_ranks})"
+        )
         self.log(f"   Prefill gmu={prefill_gmu:.2f} (base={prefill_gmu_raw:.2f} - {prefill_ep_overhead_pct:.0%} EP)")
-        self.log(f"   Decode  gmu={decode_gmu:.2f} (base={decode_gmu_raw:.2f} - {decode_ep_overhead_pct:.0%} EP "
-                 f"- {nixl_reserve:.0%} NIXL + {decode_ep_savings_pct:.0%} savings)")
+        self.log(
+            f"   Decode  gmu={decode_gmu:.2f} (base={decode_gmu_raw:.2f} - {decode_ep_overhead_pct:.0%} EP "
+            f"- {nixl_reserve:.0%} NIXL + {decode_ep_savings_pct:.0%} savings)"
+        )
 
         prefill_max_num_seqs = self._compute_max_num_seqs(
-            split.prefill_tp, role='prefill',
-            gpu_mem_util_override=prefill_gmu, num_pods=split.prefill_pods)
+            split.prefill_tp, role="prefill", gpu_mem_util_override=prefill_gmu, num_pods=split.prefill_pods
+        )
         decode_max_num_seqs = self._compute_max_num_seqs(
-            split.decode_tp, role='decode',
-            gpu_mem_util_override=decode_gmu, num_pods=split.decode_pods)
-        self._compute_max_num_batched_tokens(split.prefill_tp, role='prefill')
+            split.decode_tp, role="decode", gpu_mem_util_override=decode_gmu, num_pods=split.decode_pods
+        )
+        self._compute_max_num_batched_tokens(split.prefill_tp, role="prefill")
 
         total_pods = split.prefill_pods + split.decode_pods
         min_tp = min(split.prefill_tp, split.decode_tp)
@@ -1347,28 +1432,26 @@ class ConfigBuilderMixin:
         real_pods = split.prefill_pods * prefill_lws_size + split.decode_pods * decode_lws_size
         mem, cpu = self._get_pod_resources(tp=min_tp, total_pods=real_pods)
 
-        dbo_threshold = getattr(self, '_dbo_threshold', 32)
+        dbo_threshold = getattr(self, "_dbo_threshold", 32)
 
         # EP needs extra max_model_len headroom for routing metadata overhead
         ep_max_model_len = min(
             int(self.config.max_model_len * 1.10),
-            self._model_config.get('max_position_embeddings', 1048576) if self._model_config else 1048576
+            self._model_config.get("max_position_embeddings", 1048576) if self._model_config else 1048576,
         )
 
         gpus_per_pod = min(split.prefill_tp, gpus_per_node) if ep_lws_size > 1 else None
 
         cfg = TestConfig(
             test_id=f"step7-ep-{split.prefill_pods}p{split.decode_pods}d-ptp{split.prefill_tp}-dtp{split.decode_tp}",
-            architecture='ep',
+            architecture="ep",
             model_name=self.config.model_name,
-
             namespace=self.config.namespace,
             isl=self.config.isl,
             osl=self.config.osl,
             num_users=concurrency,
             request_type=self.config.rate_type,
             request_rate=concurrency,
-
             tensor_parallelism=split.prefill_tp,
             replicas=total_pods,
             prefill_replicas=split.prefill_pods,
@@ -1376,7 +1459,6 @@ class ConfigBuilderMixin:
             prefill_decode_ratio=f"{split.prefill_pods}:{split.decode_pods}",
             prefill_tp=split.prefill_tp,
             decode_tp=split.decode_tp,
-
             max_model_len=ep_max_model_len,
             gpu_memory_utilization=prefill_gmu,
             prefill_gpu_memory_utilization=prefill_gmu,
@@ -1388,23 +1470,24 @@ class ConfigBuilderMixin:
             kv_cache_memory_bytes=self._get_profiled_kv_cache_bytes(split.decode_tp),
             isl_stdev=self.config.isl_stdev,
             osl_stdev=self.config.osl_stdev,
-            isl_min=getattr(self.config, 'isl_min', None),
-            isl_max=getattr(self.config, 'isl_max', None),
-            osl_min=getattr(self.config, 'osl_min', None),
-            osl_max=getattr(self.config, 'osl_max', None),
+            parallel_workloads=getattr(self.config, "parallel_workloads", None),
+            isl_min=getattr(self.config, "isl_min", None),
+            isl_max=getattr(self.config, "isl_max", None),
+            osl_min=getattr(self.config, "osl_min", None),
+            osl_max=getattr(self.config, "osl_max", None),
             turns=self.config.turns,
             first_prompt_tokens=self._clamp_first_prompt_tokens(self.config.isl, self.config.osl),
-            first_prompt_tokens_stdev=getattr(self.config, 'first_prompt_tokens_stdev', None),
-            first_prompt_tokens_min=getattr(self.config, 'first_prompt_tokens_min', None),
-            first_prompt_tokens_max=getattr(self.config, 'first_prompt_tokens_max', None),
-            first_output_tokens=getattr(self.config, 'first_output_tokens', None),
-            first_output_tokens_stdev=getattr(self.config, 'first_output_tokens_stdev', None),
-            prefix_tokens=getattr(self.config, 'prefix_tokens', None),
-            prefix_count=getattr(self.config, 'prefix_count', None),
-            turn_delay=getattr(self.config, 'turn_delay', None),
-            turn_delay_stdev=getattr(self.config, 'turn_delay_stdev', None),
-            turn_delay_min=getattr(self.config, 'turn_delay_min', None),
-            turn_delay_max=getattr(self.config, 'turn_delay_max', None),
+            first_prompt_tokens_stdev=getattr(self.config, "first_prompt_tokens_stdev", None),
+            first_prompt_tokens_min=getattr(self.config, "first_prompt_tokens_min", None),
+            first_prompt_tokens_max=getattr(self.config, "first_prompt_tokens_max", None),
+            first_output_tokens=getattr(self.config, "first_output_tokens", None),
+            first_output_tokens_stdev=getattr(self.config, "first_output_tokens_stdev", None),
+            prefix_tokens=getattr(self.config, "prefix_tokens", None),
+            prefix_count=getattr(self.config, "prefix_count", None),
+            turn_delay=getattr(self.config, "turn_delay", None),
+            turn_delay_stdev=getattr(self.config, "turn_delay_stdev", None),
+            turn_delay_min=getattr(self.config, "turn_delay_min", None),
+            turn_delay_max=getattr(self.config, "turn_delay_max", None),
             image=self.config.image,
             scheduler_image=self.config.scheduler_image,
             pvc_name=self.config.pvc_name,
@@ -1414,7 +1497,7 @@ class ConfigBuilderMixin:
             pvc_size=getattr(self.config, "pvc_size", None),
             local_disk_path=getattr(self.config, "local_disk_path", None),
             nccl_ib_hca=self.config.nccl_ib_hca,
-            optimization_goal='throughput',
+            optimization_goal="throughput",
             test_duration=self.config.test_duration,
             stop_mode=self.config.stop_mode,
             max_requests=self.config.max_requests,
@@ -1423,22 +1506,21 @@ class ConfigBuilderMixin:
             rdma_nics_per_node=self.config.rdma_nics_per_node or 0,
             rdma_network_annotation=self.config.rdma_network_annotation,
             selected_dra_classes=self.config.selected_dra_classes or [],
-            dra_gpu_resource_key=getattr(self.config, 'dra_gpu_resource_key', None),
+            dra_gpu_resource_key=getattr(self.config, "dra_gpu_resource_key", None),
             gateway_class=self.config.gateway_class,
-            exclusive_pf=getattr(self.config, 'exclusive_pf', False),
-
+            exclusive_pf=getattr(self.config, "exclusive_pf", False),
             memory_request=mem,
             memory_limit=mem,
             cpu_request=cpu,
             cpu_limit=cpu,
             lora_enabled=self.config.lora_enabled,
             lora_num_adapters=self.config.lora_num_adapters,
-            lora_benchmark_mode=getattr(self.config, 'lora_benchmark_mode', 'round_robin'),
-            lora_max_rank=getattr(self.config, 'lora_max_rank', None),
+            lora_benchmark_mode=getattr(self.config, "lora_benchmark_mode", "round_robin"),
+            lora_max_rank=getattr(self.config, "lora_max_rank", None),
             lora_max_loras=self._compute_lora_max_loras(split.prefill_tp, num_pods=split.decode_pods),
             lora_adapter_size_mb=self.config.lora_adapter_size_mb,
             selected_nodes=self.config.selected_nodes or [],
-            workload_mode=self.config.workload_mode or 'synthetic',
+            workload_mode=self.config.workload_mode or "synthetic",
             dataset_source=self.config.dataset_source,
             dataset_column=self.config.dataset_column,
             dataset_max_output=self.config.dataset_max_output or 256,
@@ -1455,8 +1537,8 @@ class ConfigBuilderMixin:
             all2all_backend=self._select_ep_all2all_backend(split),
             moe_dp_chunk_size=chunk_size if self._is_moe else None,
             nvshmem_symmetric_size=nvshmem_size,
-            use_deep_gemm=getattr(self, '_use_deep_gemm', None),
-            has_hybrid_attention=getattr(self, '_has_hybrid_attention', False),
+            use_deep_gemm=getattr(self, "_use_deep_gemm", None),
+            has_hybrid_attention=getattr(self, "_has_hybrid_attention", False),
             lws_size=ep_lws_size if ep_lws_size > 1 else None,
             prefill_lws_size=prefill_lws_size,
             decode_lws_size=decode_lws_size,
@@ -1467,4 +1549,3 @@ class ConfigBuilderMixin:
         cfg = self._auto_tune_model_loader(cfg)
         cfg = self._auto_enable_bidirectional_kv(cfg)
         return cfg
-

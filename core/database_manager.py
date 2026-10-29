@@ -15,6 +15,21 @@ from .test_orchestrator import TestResult
 from .metrics_analyzer import MetricsAnalyzer
 
 
+def _attempt_is_better(p99_a, tps_a, p99_b, tps_b):
+    """True if attempt A beats attempt B.
+
+    Criterion: lower TTFT p99 wins; exact tie broken by higher
+    window-exact tokens_per_second. A missing p99 never wins.
+    """
+    if p99_a is None:
+        return p99_b is None and (tps_a or 0) > (tps_b or 0)
+    if p99_b is None:
+        return True
+    if abs(p99_a - p99_b) > 1e-9:
+        return p99_a < p99_b
+    return (tps_a or 0) > (tps_b or 0)
+
+
 class DatabaseManager:
     """
     Manages database operations for ServeIt Studio optimization runs.
@@ -496,6 +511,7 @@ class DatabaseManager:
         # Serialize full metrics as JSON (includes all guidellm + Prometheus data)
         metrics_json = json.dumps({
             'success': test_result.guidellm_success,
+            'workloads': getattr(test_result, 'workloads', None),
             'deployment_success': test_result.deployment_success,
             'deployment_ready': test_result.deployment_ready,
             # TTFT (ms)
@@ -545,6 +561,8 @@ class DatabaseManager:
             # Token counts
             'prompt_tokens_mean': getattr(test_result, 'prompt_tokens_mean', None),
             'output_tokens_mean': getattr(test_result, 'output_tokens_mean', None),
+            # Window-exact total token throughput (comparable across tests)
+            'tokens_per_second': getattr(test_result, 'tokens_per_second', None),
             # Concurrency
             'concurrency_mean': getattr(test_result, 'concurrency_mean', None),
             'concurrency_p50': getattr(test_result, 'concurrency_p50', None),
@@ -583,6 +601,54 @@ class DatabaseManager:
 
         with self.get_connection() as conn:
             cursor = conn.cursor()
+            # Every attempt is preserved, and the main table keeps the BEST
+            # result found for a config: min TTFT p99 (tie: max tok/s).
+            # A worse re-run must not clobber the best measurement — it is
+            # appended to test_configurations_history instead, and the
+            # winning attempt is restored to the main table.
+            _keep_old = False
+            _prev_cols = None
+            _prev_row = None
+            try:
+                cursor.execute(
+                    """
+                    CREATE TABLE IF NOT EXISTS test_configurations_history AS
+                    SELECT datetime('now') AS archived_at, * FROM test_configurations WHERE 0
+                    """
+                )
+                _prev_cols = [r[1] for r in cursor.execute("PRAGMA table_info(test_configurations)")]
+                _prev = cursor.execute(
+                    "SELECT * FROM test_configurations WHERE run_id = ? AND config_name = ?",
+                    (run_id, test_config.test_id),
+                ).fetchone()
+                if _prev is not None:
+                    _prev_row = dict(zip(_prev_cols, _prev))
+                    if _prev_row.get("status") == "completed" and status == "completed":
+                        try:
+                            prev_tps = json.loads(_prev_row.get("metrics_json") or "{}").get("tokens_per_second")
+                        except Exception:
+                            prev_tps = None
+                        try:
+                            new_tps = json.loads(metrics_json).get("tokens_per_second")
+                        except Exception:
+                            new_tps = None
+                        _keep_old = _attempt_is_better(
+                            _prev_row.get("ttft_p99"), prev_tps, test_result.ttft_p99, new_tps
+                        )
+                    if not _keep_old:
+                        # this attempt supersedes the previous one — preserve it
+                        cursor.execute(
+                            """
+                            INSERT INTO test_configurations_history
+                            SELECT datetime('now'), * FROM test_configurations
+                            WHERE run_id = ? AND config_name = ?
+                            """,
+                            (run_id, test_config.test_id),
+                        )
+            except Exception as e:
+                import logging
+
+                logging.getLogger(__name__).warning(f"Failed to archive previous result: {e}")
             cursor.execute('''
                 INSERT OR REPLACE INTO test_configurations
                 (run_id, config_name, prefill_pods, decode_pods, tensor_parallelism,
@@ -625,6 +691,28 @@ class DatabaseManager:
                 test_config.lora_num_adapters if getattr(test_config, 'lora_enabled', False) else None,
                 getattr(test_config, 'lora_max_loras', None),
             ))
+            if _keep_old and _prev_row is not None and _prev_cols:
+                # The previous attempt was better: preserve this new attempt
+                # in history and restore the winner to the main table.
+                try:
+                    cursor.execute(
+                        """
+                        INSERT INTO test_configurations_history
+                        SELECT datetime('now'), * FROM test_configurations
+                        WHERE run_id = ? AND config_name = ?
+                        """,
+                        (run_id, test_config.test_id),
+                    )
+                    collist = ", ".join(_prev_cols)
+                    placeholders = ", ".join("?" * len(_prev_cols))
+                    cursor.execute(
+                        f"INSERT OR REPLACE INTO test_configurations ({collist}) VALUES ({placeholders})",
+                        tuple(_prev_row[c] for c in _prev_cols),
+                    )
+                except Exception as e:
+                    import logging
+
+                    logging.getLogger(__name__).warning(f"Failed to restore best attempt: {e}")
 
     def insert_optuna_trial(
         self,

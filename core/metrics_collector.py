@@ -13,16 +13,14 @@ import requests
 from urllib.parse import quote
 
 # Configure logging
-logging.basicConfig(
-    level=logging.INFO,
-    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
-)
+logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(name)s - %(levelname)s - %(message)s")
 logger = logging.getLogger(__name__)
 
 
 @dataclass
 class MetricsConfig:
     """Configuration for metrics collection."""
+
     thanos_url: str
     namespace: str
     pod_name_pattern: str
@@ -32,25 +30,25 @@ class MetricsConfig:
     gateway_pod_pattern: Optional[str] = None
 
     @classmethod
-    def from_env(cls) -> 'MetricsConfig':
+    def from_env(cls) -> "MetricsConfig":
         """Create config from environment variables."""
         # Try to get token from env var, fallback to service account token file
-        token = os.environ.get('THANOS_TOKEN')
+        token = os.environ.get("THANOS_TOKEN")
         if not token:
-            token_file = '/run/secrets/kubernetes.io/serviceaccount/token'
+            token_file = "/run/secrets/kubernetes.io/serviceaccount/token"
             if os.path.exists(token_file):
                 try:
-                    with open(token_file, 'r') as f:
+                    with open(token_file, "r") as f:
                         token = f.read().strip()
                 except Exception:
                     pass
 
         return cls(
-            thanos_url=os.environ.get('THANOS_URL', ''),
-            namespace=os.environ.get('TARGET_NAMESPACE', 'serveit'),
-            pod_name_pattern=os.environ.get('POD_NAME_PATTERN', 'wide-ep-'),
-            step_seconds=int(os.environ.get('METRIC_STEP_SECONDS', '5')),
-            token=token
+            thanos_url=os.environ.get("THANOS_URL", ""),
+            namespace=os.environ.get("TARGET_NAMESPACE", "serveit"),
+            pod_name_pattern=os.environ.get("POD_NAME_PATTERN", "wide-ep-"),
+            step_seconds=int(os.environ.get("METRIC_STEP_SECONDS", "5")),
+            token=token,
         )
 
 
@@ -61,16 +59,11 @@ class MetricsCollector:
         self.config = config
         self.session = requests.Session()
         if config.token:
-            self.session.headers['Authorization'] = f'Bearer {config.token}'
-        if config.thanos_url and config.thanos_url.startswith('https'):
+            self.session.headers["Authorization"] = f"Bearer {config.token}"
+        if config.thanos_url and config.thanos_url.startswith("https"):
             self.session.verify = False
 
-    def _query_prometheus(
-        self,
-        query: str,
-        start_time: int,
-        end_time: int
-    ) -> Dict[str, Any]:
+    def _query_prometheus(self, query: str, start_time: int, end_time: int) -> Dict[str, Any]:
         """
         Execute a Prometheus query over a time range.
 
@@ -112,9 +105,9 @@ class MetricsCollector:
         pattern = self.config.gateway_pod_pattern
         if not pattern and self.config.architecture:
             # EPP pod naming convention: gaie-{arch}-epp
-            pattern = f'gaie-{self.config.architecture}-epp.*'
+            pattern = f"gaie-{self.config.architecture}-epp.*"
         if not pattern:
-            return ''
+            return ""
         return f'pod=~"{pattern}", '
 
     def _get_istio_gateway_filter(self) -> str:
@@ -134,11 +127,11 @@ class MetricsCollector:
         if self.config.namespace:
             filters.append(f'namespace="{self.config.namespace}"')
         if self.config.architecture:
-            gateway_name = f'infra-{self.config.architecture}-inference-gateway'
+            gateway_name = f"infra-{self.config.architecture}-inference-gateway"
             filters.append(f'gateway_name="{gateway_name}"')
         if filters:
-            return ', '.join(filters) + ', '
-        return ''
+            return ", ".join(filters) + ", "
+        return ""
 
     def _get_rate_window(self, start_time: int, end_time: int) -> str:
         """
@@ -158,40 +151,31 @@ class MetricsCollector:
         logger.info(f"Benchmark duration: {duration}s, using rate window: {rate_window}s")
         return f"{rate_window}s"
 
-    def collect_gpu_metrics(
-        self,
-        start_time: int,
-        end_time: int
-    ) -> Dict[str, Any]:
+    def collect_gpu_metrics(self, start_time: int, end_time: int) -> Dict[str, Any]:
         """Collect DCGM GPU metrics."""
         logger.info("--- Collecting DCGM GPU metrics ---")
 
         metrics = {}
         gpu_metric_names = [
-            'DCGM_FI_DEV_GPU_UTIL',
-            'DCGM_FI_DEV_MEM_COPY_UTIL',
-            'DCGM_FI_DEV_FB_USED',
-            'DCGM_FI_DEV_POWER_USAGE'
+            "DCGM_FI_DEV_GPU_UTIL",
+            "DCGM_FI_DEV_MEM_COPY_UTIL",
+            "DCGM_FI_DEV_FB_USED",
+            "DCGM_FI_DEV_POWER_USAGE",
         ]
 
         for metric_name in gpu_metric_names:
             query = (
-                f'{metric_name}{{'
+                f"{metric_name}{{"
                 f'exported_namespace="{self.config.namespace}", '
                 f'exported_pod=~"{self.config.pod_name_pattern}.*"'
-                f'}}'
+                f"}}"
             )
             result = self._query_prometheus(query, start_time, end_time)
             metrics[query] = result
 
         return metrics
 
-    def collect_pod_metrics(
-        self,
-        start_time: int,
-        end_time: int,
-        rate_window: str
-    ) -> Dict[str, Any]:
+    def collect_pod_metrics(self, start_time: int, end_time: int, rate_window: str) -> Dict[str, Any]:
         """Collect pod-level metrics (CPU, memory, network)."""
         logger.info("--- Collecting Pod CPU, Memory, Network metrics ---")
 
@@ -199,15 +183,12 @@ class MetricsCollector:
         pod_queries = [
             # CPU
             f'irate(container_cpu_usage_seconds_total{{pod=~"{self.config.pod_name_pattern}.*", namespace="{self.config.namespace}"}}[{rate_window}])',
-
             # Memory
             f'container_memory_working_set_bytes{{pod=~"{self.config.pod_name_pattern}.*", namespace="{self.config.namespace}"}}',
-
             # Network — eth0 only (management traffic, excludes RDMA/DRA interfaces)
             f'sum by (pod) (irate(container_network_transmit_bytes_total{{pod=~"{self.config.pod_name_pattern}.*", namespace="{self.config.namespace}", interface="eth0"}}[{rate_window}]))',
             f'sum by (pod) (irate(container_network_receive_bytes_total{{pod=~"{self.config.pod_name_pattern}.*", namespace="{self.config.namespace}", interface="eth0"}}[{rate_window}]))',
             f'sum by (pod) (irate(container_network_receive_bytes_total{{pod=~"{self.config.pod_name_pattern}.*", namespace="{self.config.namespace}", interface="eth0"}}[{rate_window}]) + irate(container_network_transmit_bytes_total{{pod=~"{self.config.pod_name_pattern}.*", namespace="{self.config.namespace}", interface="eth0"}}[{rate_window}]))',
-
             # RDMA/NIXL network — non-eth0 interfaces (DRA-injected enp* NICs)
             f'sum by (pod) (irate(container_network_transmit_bytes_total{{pod=~"{self.config.pod_name_pattern}.*", namespace="{self.config.namespace}", interface!="eth0"}}[{rate_window}]))',
             f'sum by (pod) (irate(container_network_receive_bytes_total{{pod=~"{self.config.pod_name_pattern}.*", namespace="{self.config.namespace}", interface!="eth0"}}[{rate_window}]))',
@@ -219,19 +200,14 @@ class MetricsCollector:
 
         return metrics
 
-    def collect_infiniband_metrics(
-        self,
-        start_time: int,
-        end_time: int,
-        rate_window: str
-    ) -> Dict[str, Any]:
+    def collect_infiniband_metrics(self, start_time: int, end_time: int, rate_window: str) -> Dict[str, Any]:
         """Collect InfiniBand network metrics."""
         logger.info("--- Collecting InfiniBand metrics ---")
 
         metrics = {}
         ib_queries = [
-            f'sum by (instance) (rate(node_infiniband_port_data_transmitted_bytes_total[{rate_window}]))',
-            f'sum by (instance) (rate(node_infiniband_port_data_received_bytes_total[{rate_window}]))',
+            f"sum by (instance) (rate(node_infiniband_port_data_transmitted_bytes_total[{rate_window}]))",
+            f"sum by (instance) (rate(node_infiniband_port_data_received_bytes_total[{rate_window}]))",
         ]
 
         for query in ib_queries:
@@ -240,12 +216,7 @@ class MetricsCollector:
 
         return metrics
 
-    def collect_vllm_metrics(
-        self,
-        start_time: int,
-        end_time: int,
-        rate_window: str
-    ) -> Dict[str, Any]:
+    def collect_vllm_metrics(self, start_time: int, end_time: int, rate_window: str) -> Dict[str, Any]:
         """Collect vLLM-specific metrics."""
         logger.info("--- Collecting vLLM metrics ---")
 
@@ -326,9 +297,14 @@ class MetricsCollector:
 
         # Collect all vLLM metrics
         all_queries = (
-            ttft_queries + itl_queries + e2e_queries +
-            timing_queries + scheduler_queries + throughput_queries +
-            success_queries + extra_queries
+            ttft_queries
+            + itl_queries
+            + e2e_queries
+            + timing_queries
+            + scheduler_queries
+            + throughput_queries
+            + success_queries
+            + extra_queries
         )
 
         for query in all_queries:
@@ -337,12 +313,7 @@ class MetricsCollector:
 
         return metrics
 
-    def collect_lora_metrics(
-        self,
-        start_time: int,
-        end_time: int,
-        rate_window: str
-    ) -> Dict[str, Any]:
+    def collect_lora_metrics(self, start_time: int, end_time: int, rate_window: str) -> Dict[str, Any]:
         """Collect LoRA adapter and hot-pod routing metrics.
 
         vLLM only emits vllm:lora_requests_info when --enable-lora is set;
@@ -379,12 +350,7 @@ class MetricsCollector:
 
         return metrics
 
-    def collect_inference_metrics(
-        self,
-        start_time: int,
-        end_time: int,
-        rate_window: str
-    ) -> Dict[str, Any]:
+    def collect_inference_metrics(self, start_time: int, end_time: int, rate_window: str) -> Dict[str, Any]:
         """Collect inference gateway/GAIE metrics."""
         logger.info("--- Collecting Inference Gateway metrics ---")
 
@@ -415,14 +381,22 @@ class MetricsCollector:
             result = self._query_prometheus(query, start_time, end_time)
             metrics[query] = result
 
+        # EPP plugin telemetry: affinity-filter decision outcomes (sticky /
+        # no_match / load_override / exploration / not_applicable) and the
+        # inflight-load-producer gauges. These drive filter-composition
+        # tuning (threshold moves, queueThresholdTokens calibration).
+        epp_queries = [
+            f'sum by (outcome) (increase(llm_d_epp_prefix_cache_affinity_filter_decisions_total{{namespace="{self.config.namespace}"}}[{rate_window}]))',
+            f'max(llm_d_epp_inflight_tokens{{namespace="{self.config.namespace}"}})',
+            f'avg(llm_d_epp_inflight_tokens{{namespace="{self.config.namespace}"}})',
+        ]
+        for query in epp_queries:
+            result = self._query_prometheus(query, start_time, end_time)
+            metrics[query] = result
+
         return metrics
 
-    def collect_gateway_network_metrics(
-        self,
-        start_time: int,
-        end_time: int,
-        rate_window: str
-    ) -> Dict[str, Any]:
+    def collect_gateway_network_metrics(self, start_time: int, end_time: int, rate_window: str) -> Dict[str, Any]:
         """Collect network/TCP-level latency to the inference gateways.
 
         Covers two sources:
@@ -441,13 +415,13 @@ class MetricsCollector:
         # Istio gateway request duration (histogram, ms) — scoped to the active
         # architecture's gateway so other gateways in the namespace don't leak in.
         istio_queries = [
-            f'sum(rate(istio_request_duration_milliseconds_bucket{{{istio_filter}}}[{rate_window}])) by (le)',
-            f'sum(rate(istio_request_duration_milliseconds_sum{{{istio_filter}}}[{rate_window}]))',
-            f'sum(rate(istio_request_duration_milliseconds_count{{{istio_filter}}}[{rate_window}]))',
-            f'histogram_quantile(0.99, sum by(le) (rate(istio_request_duration_milliseconds_bucket{{{istio_filter}}}[{rate_window}])))',
-            f'histogram_quantile(0.95, sum by(le) (rate(istio_request_duration_milliseconds_bucket{{{istio_filter}}}[{rate_window}])))',
-            f'histogram_quantile(0.90, sum by(le) (rate(istio_request_duration_milliseconds_bucket{{{istio_filter}}}[{rate_window}])))',
-            f'histogram_quantile(0.50, sum by(le) (rate(istio_request_duration_milliseconds_bucket{{{istio_filter}}}[{rate_window}])))',
+            f"sum(rate(istio_request_duration_milliseconds_bucket{{{istio_filter}}}[{rate_window}])) by (le)",
+            f"sum(rate(istio_request_duration_milliseconds_sum{{{istio_filter}}}[{rate_window}]))",
+            f"sum(rate(istio_request_duration_milliseconds_count{{{istio_filter}}}[{rate_window}]))",
+            f"histogram_quantile(0.99, sum by(le) (rate(istio_request_duration_milliseconds_bucket{{{istio_filter}}}[{rate_window}])))",
+            f"histogram_quantile(0.95, sum by(le) (rate(istio_request_duration_milliseconds_bucket{{{istio_filter}}}[{rate_window}])))",
+            f"histogram_quantile(0.90, sum by(le) (rate(istio_request_duration_milliseconds_bucket{{{istio_filter}}}[{rate_window}])))",
+            f"histogram_quantile(0.50, sum by(le) (rate(istio_request_duration_milliseconds_bucket{{{istio_filter}}}[{rate_window}])))",
         ]
 
         for query in istio_queries:
@@ -457,8 +431,8 @@ class MetricsCollector:
         # OpenShift network diagnostics — TCP connect latency gauge (ms).
         # Cluster-wide; no namespace scoping (lives in openshift-network-diagnostics).
         tcp_queries = [
-            'pod_network_connectivity_check_tcp_connect_latency_gauge',
-            'sum by (checkName) (pod_network_connectivity_check_tcp_connect_latency_gauge)',
+            "pod_network_connectivity_check_tcp_connect_latency_gauge",
+            "sum by (checkName) (pod_network_connectivity_check_tcp_connect_latency_gauge)",
         ]
 
         for query in tcp_queries:
@@ -467,12 +441,7 @@ class MetricsCollector:
 
         return metrics
 
-    def collect_all_metrics(
-        self,
-        start_time: datetime,
-        end_time: datetime,
-        output_file: str
-    ) -> Dict[str, Any]:
+    def collect_all_metrics(self, start_time: datetime, end_time: datetime, output_file: str) -> Dict[str, Any]:
         """
         Collect all metrics and save to file.
 
@@ -491,49 +460,31 @@ class MetricsCollector:
         logger.info(f"Collecting metrics from {start_time} to {end_time}")
 
         # Collect all metric categories
-        all_metrics = {
-            'benchmark_start': start_time.isoformat(),
-            'benchmark_end': end_time.isoformat(),
-            'metrics': {}
-        }
+        all_metrics = {"benchmark_start": start_time.isoformat(), "benchmark_end": end_time.isoformat(), "metrics": {}}
 
         # GPU metrics
-        all_metrics['metrics'].update(
-            self.collect_gpu_metrics(start_unix, end_unix)
-        )
+        all_metrics["metrics"].update(self.collect_gpu_metrics(start_unix, end_unix))
 
         # Pod metrics
-        all_metrics['metrics'].update(
-            self.collect_pod_metrics(start_unix, end_unix, rate_window)
-        )
+        all_metrics["metrics"].update(self.collect_pod_metrics(start_unix, end_unix, rate_window))
 
         # InfiniBand metrics
-        all_metrics['metrics'].update(
-            self.collect_infiniband_metrics(start_unix, end_unix, rate_window)
-        )
+        all_metrics["metrics"].update(self.collect_infiniband_metrics(start_unix, end_unix, rate_window))
 
         # vLLM metrics
-        all_metrics['metrics'].update(
-            self.collect_vllm_metrics(start_unix, end_unix, rate_window)
-        )
+        all_metrics["metrics"].update(self.collect_vllm_metrics(start_unix, end_unix, rate_window))
 
         # LoRA / hot-pod routing metrics (empty on non-LoRA tests)
-        all_metrics['metrics'].update(
-            self.collect_lora_metrics(start_unix, end_unix, rate_window)
-        )
+        all_metrics["metrics"].update(self.collect_lora_metrics(start_unix, end_unix, rate_window))
 
         # Inference gateway metrics
-        all_metrics['metrics'].update(
-            self.collect_inference_metrics(start_unix, end_unix, rate_window)
-        )
+        all_metrics["metrics"].update(self.collect_inference_metrics(start_unix, end_unix, rate_window))
 
         # Gateway network latency metrics (Istio + TCP connect)
-        all_metrics['metrics'].update(
-            self.collect_gateway_network_metrics(start_unix, end_unix, rate_window)
-        )
+        all_metrics["metrics"].update(self.collect_gateway_network_metrics(start_unix, end_unix, rate_window))
 
         # Save to file
-        with open(output_file, 'w') as f:
+        with open(output_file, "w") as f:
             json.dump(all_metrics, f, indent=2)
 
         logger.info(f"--- Metrics collection complete. Data saved to {output_file} ---")
@@ -545,15 +496,13 @@ def main():
     import argparse
     from dateutil import parser as date_parser
 
-    arg_parser = argparse.ArgumentParser(
-        description='Collect Prometheus/Thanos metrics for LLM inference benchmarking'
-    )
-    arg_parser.add_argument('--start-time', required=True, help='Start time (ISO format or parseable string)')
-    arg_parser.add_argument('--end-time', required=True, help='End time (ISO format or parseable string)')
-    arg_parser.add_argument('--output', required=True, help='Output JSON file path')
-    arg_parser.add_argument('--thanos-url', help='Thanos URL (overrides env var)')
-    arg_parser.add_argument('--namespace', help='Target namespace (overrides env var)')
-    arg_parser.add_argument('--pod-pattern', help='Pod name pattern (overrides env var)')
+    arg_parser = argparse.ArgumentParser(description="Collect Prometheus/Thanos metrics for LLM inference benchmarking")
+    arg_parser.add_argument("--start-time", required=True, help="Start time (ISO format or parseable string)")
+    arg_parser.add_argument("--end-time", required=True, help="End time (ISO format or parseable string)")
+    arg_parser.add_argument("--output", required=True, help="Output JSON file path")
+    arg_parser.add_argument("--thanos-url", help="Thanos URL (overrides env var)")
+    arg_parser.add_argument("--namespace", help="Target namespace (overrides env var)")
+    arg_parser.add_argument("--pod-pattern", help="Pod name pattern (overrides env var)")
 
     args = arg_parser.parse_args()
 
@@ -575,5 +524,5 @@ def main():
     collector.collect_all_metrics(start_time, end_time, args.output)
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     main()

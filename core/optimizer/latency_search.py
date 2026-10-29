@@ -832,9 +832,7 @@ class LatencySearchMixin:
                     valid_epp = [r for r in results if r[2] is not None]
                     if not valid_epp:
                         continue
-                    best_name, best_weights, best_epp_result = min(
-                        valid_epp, key=lambda x: x[2].ttft_p90 or float('inf')
-                    )
+                    best_name, best_weights, best_epp_result = self._epp_best_entry(valid_epp)
 
                     if arch == 'pd' and pd_configs:
                         best_split = pd_configs[0][0]
@@ -846,14 +844,7 @@ class LatencySearchMixin:
                         epp_config.test_id = epp_test_id
                         epp_config.num_users = int(cal_results[0]['concurrency']) if cal_results else int(self.config.qps)
                         epp_config.request_rate = epp_config.num_users
-                        epp_config.epp_config = {
-                            'preset': 'custom',
-                            'plugins': {
-                                'prefix_cache': {'enabled': True, 'weight': best_weights['prefix_cache_weight']},
-                                'kv_cache': {'enabled': True, 'weight': best_weights['kv_cache_weight']},
-                                'queue': {'enabled': True, 'weight': best_weights['queue_weight']},
-                            }
-                        }
+                        epp_config.epp_config = self._epp_tuned_config_for(arch, best_weights)
                     elif arch == 'aggregated' and self.aggregated_tp:
                         epp_test_id = f"step10-epp-aggregated-tp{self.aggregated_tp}"
                         if epp_test_id in self.completed_tests:
@@ -871,14 +862,7 @@ class LatencySearchMixin:
                         cal_conc = cal_agg_results[0]['concurrency'] if cal_agg_results else int(self.config.qps)
                         epp_config.num_users = int(cal_conc)
                         epp_config.request_rate = int(cal_conc)
-                        epp_config.epp_config = {
-                            'preset': 'custom',
-                            'plugins': {
-                                'prefix_cache': {'enabled': True, 'weight': best_weights['prefix_cache_weight']},
-                                'kv_cache': {'enabled': True, 'weight': best_weights['kv_cache_weight']},
-                                'queue': {'enabled': True, 'weight': best_weights['queue_weight']},
-                            }
-                        }
+                        epp_config.epp_config = self._epp_tuned_config_for(arch, best_weights)
                     else:
                         continue
 

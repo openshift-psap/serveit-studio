@@ -229,24 +229,66 @@ spec:
                 # process on it is a leftover from a deleted container — kill it
                 # (requires hostPID) instead of waiting for a holder that never
                 # exits. Poll the minimum free MiB across visible GPUs.
+                # Pin the drain check to THIS pod's claimed GPUs. Privileged
+                # pods see every GPU on the node — an unfiltered minimum-free
+                # check reads sibling pods' engines as "leftovers" once the
+                # node fills up, and the kill loop then murders them
+                # (observed at 8xTP1: every newly started pod killed an
+                # established engine every 60s — mutual destruction).
+                _own_gpu_memfree() {
+                  # CUDA_VISIBLE_DEVICES holds the DRA-pinned indices
+                  if [ -n "${CUDA_VISIBLE_DEVICES:-}" ]; then
+                    nvidia-smi --query-gpu=index,memory.free --format=csv,noheader,nounits 2>/dev/null \
+                      | awk -F, -v devs="$CUDA_VISIBLE_DEVICES" 'BEGIN{n=split(devs,a,",");for(i=1;i<=n;i++)want[a[i]]=1} want[$1]{gsub(/ /,"",$2);print $2}'
+                  else
+                    nvidia-smi --query-gpu=memory.free --format=csv,noheader,nounits 2>/dev/null | tr -d ' '
+                  fi
+                }
+                _own_gpu_pids() {
+                  # compute apps whose GPU UUID belongs to one of OUR GPUs
+                  if [ -n "${CUDA_VISIBLE_DEVICES:-}" ]; then
+                    _uuids=$(nvidia-smi --query-gpu=index,uuid --format=csv,noheader 2>/dev/null \
+                      | awk -F, -v devs="$CUDA_VISIBLE_DEVICES" 'BEGIN{n=split(devs,a,",");for(i=1;i<=n;i++)want[a[i]]=1} want[$1]{gsub(/ /,"",$2);print $2}')
+                    nvidia-smi --query-compute-apps=gpu_uuid,pid --format=csv,noheader 2>/dev/null \
+                      | awk -F, -v u="$_uuids" 'BEGIN{n=split(u,a," ");for(i=1;i<=n;i++)want[a[i]]=1} want[$1]{gsub(/ /,"",$2);print $2}'
+                  else
+                    nvidia-smi --query-compute-apps=pid --format=csv,noheader 2>/dev/null | tr -d ' '
+                  fi
+                }
                 if command -v nvidia-smi >/dev/null 2>&1; then
-                  _gpu_wait=0
-                  while [ "$_gpu_wait" -lt 180 ]; do
-                    _free=$(nvidia-smi --query-gpu=memory.free --format=csv,noheader,nounits 2>/dev/null | sort -n | head -1 | tr -d ' ')
-                    if [ -n "$_free" ] && [ "$_free" -ge 120000 ]; then
-                      break
-                    fi
-                    if [ $((_gpu_wait % 60)) -eq 0 ]; then
-                      for _hp in $(nvidia-smi --query-compute-apps=pid --format=csv,noheader 2>/dev/null | tr -d ' ' | sort -u); do
-                        if [ -n "$_hp" ] && [ "$_hp" != "$$" ] && kill -0 "$_hp" 2>/dev/null; then
-                          kill -9 "$_hp" 2>/dev/null && echo "--- Killed leftover GPU holder pid $_hp ---"
-                        fi
-                      done
-                    fi
-                    echo "--- Waiting for GPU to drain (${_free:-?} MiB free, ${_gpu_wait}s) ---"
-                    sleep 5
-                    _gpu_wait=$((_gpu_wait+5))
-                  done
+                  # Killing is only safe with PROVEN ownership (CUDA_VISIBLE_DEVICES
+                  # pinned by the device plugin). DRA pods don't get that pinning;
+                  # without it: wait only, never signal.
+                  if [ -z "${CUDA_VISIBLE_DEVICES:-}" ]; then
+                    _gpu_wait=0
+                    while [ "$_gpu_wait" -lt 120 ]; do
+                      _free=$(nvidia-smi --query-gpu=memory.free --format=csv,noheader,nounits 2>/dev/null | sort -n | head -1 | tr -d ' ')
+                      if [ -n "$_free" ] && [ "$_free" -ge 120000 ]; then
+                        break
+                      fi
+                      echo "--- Waiting for GPU memory (no pinning; observing only): ${_free:-?} MiB free, ${_gpu_wait}s ---"
+                      sleep 10
+                      _gpu_wait=$((_gpu_wait+10))
+                    done
+                  else
+                    _gpu_wait=0
+                    while [ "$_gpu_wait" -lt 180 ]; do
+                      _free=$(_own_gpu_memfree | sort -n | head -1)
+                      if [ -n "$_free" ] && [ "$_free" -ge 120000 ]; then
+                        break
+                      fi
+                      if [ $((_gpu_wait % 60)) -eq 0 ]; then
+                        for _hp in $(_own_gpu_pids | sort -u); do
+                          if [ -n "$_hp" ] && [ "$_hp" != "$$" ] && kill -0 "$_hp" 2>/dev/null; then
+                            kill -9 "$_hp" 2>/dev/null && echo "--- Killed leftover GPU holder pid $_hp ---"
+                          fi
+                        done
+                      fi
+                      echo "--- Waiting for GPU to drain (${_free:-?} MiB free, ${_gpu_wait}s) ---"
+                      sleep 5
+                      _gpu_wait=$((_gpu_wait+5))
+                    done
+                  fi
                 fi
 
                 # Set --headless flag for multi-node worker nodes (LWS_WORKER_INDEX > 0)

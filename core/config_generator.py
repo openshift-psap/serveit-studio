@@ -15,10 +15,7 @@ from .resource_calculator import calculate_pod_resources
 from .networking import detect_rdma_device_resources
 
 # Configure logging
-logging.basicConfig(
-    level=logging.INFO,
-    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
-)
+logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(name)s - %(levelname)s - %(message)s")
 logger = logging.getLogger(__name__)
 
 
@@ -27,18 +24,21 @@ logger = logging.getLogger(__name__)
 # unknown top-level keys at startup (crashlooping every serving pod), and it
 # has no spec-level override hook for draft HF attributes — the draft model's
 # own config.json must carry them. Used to filter user extra-config entries.
-DRAFT_HF_SPEC_KEYS = frozenset({
-    'mask_token_id',
-    'dspark_noise_token_id',
-    'pard_token',
-    'ptd_token_id',
-    'dflash_config',
-})
+DRAFT_HF_SPEC_KEYS = frozenset(
+    {
+        "mask_token_id",
+        "dspark_noise_token_id",
+        "pard_token",
+        "ptd_token_id",
+        "dflash_config",
+    }
+)
 
 
 @dataclass
 class TestConfig:
     """Configuration for a single test run."""
+
     test_id: str
     architecture: str  # 'aggregated', 'pd', 'ep'
     model_name: str
@@ -58,20 +58,20 @@ class TestConfig:
     decode_replicas: Optional[int] = None
     prefill_decode_ratio: Optional[str] = None
     prefill_tp: Optional[int] = None  # Separate TP for prefill pods
-    decode_tp: Optional[int] = None   # Separate TP for decode pods
+    decode_tp: Optional[int] = None  # Separate TP for decode pods
 
     # Resource parameters
     max_model_len: Optional[int] = None  # None = let vLLM use model's max_position_embeddings
     gpu_memory_utilization: Optional[float] = None  # None = vLLM default (0.90)
     gpu_vram_gb: Optional[float] = None  # GPU VRAM in GiB (for memory profiling)
     prefill_gpu_memory_utilization: Optional[float] = None  # For PD prefill pods
-    decode_gpu_memory_utilization: Optional[float] = None   # For PD decode pods
+    decode_gpu_memory_utilization: Optional[float] = None  # For PD decode pods
     max_num_seqs: Optional[int] = None  # For aggregated/EP
     prefill_max_num_seqs: Optional[int] = None  # For PD prefill pods
-    decode_max_num_seqs: Optional[int] = None   # For PD decode pods
+    decode_max_num_seqs: Optional[int] = None  # For PD decode pods
     max_num_batched_tokens: Optional[int] = None  # Limits tokens per forward pass
     prefill_max_num_batched_tokens: Optional[int] = None  # For PD prefill pods
-    decode_max_num_batched_tokens: Optional[int] = None   # For PD decode pods
+    decode_max_num_batched_tokens: Optional[int] = None  # For PD decode pods
     # Advanced vLLM flags
     enable_chunked_prefill: bool = False
     enable_prefix_caching: bool = True
@@ -85,44 +85,46 @@ class TestConfig:
     # Whether the benchmark targets adapters: round_robin = cycle across
     # base + all adapters; base_only = traffic hits the base model (LoRA
     # serving overhead baseline — adapters stay mounted on the pods).
-    lora_benchmark_mode: str = 'round_robin'
-    lora_max_rank: int = 16     # acceptance ceiling for adapter rank (sizes GPU workspace)
-    lora_max_loras: int = 4     # GPU-resident warm cap (LRU evicts beyond this)
+    lora_benchmark_mode: str = "round_robin"
+    lora_max_rank: int = 16  # acceptance ceiling for adapter rank (sizes GPU workspace)
+    lora_max_loras: int = 4  # GPU-resident warm cap (LRU evicts beyond this)
     lora_adapter_size_mb: Optional[int] = None  # None = auto (rank x 20MB); user override for CPU staging math
     dtype: Optional[str] = None  # None = vLLM auto-detects
     kv_cache_dtype: Optional[str] = None  # None = auto
     pipeline_parallel_size: Optional[int] = None  # None = 1 (default)
-    context_parallel_size: Optional[int] = None           # --context-parallel-size (aggregated)
-    prefill_context_parallel_size: Optional[int] = None   # --prefill-context-parallel-size
-    decode_context_parallel_size: Optional[int] = None    # --decode-context-parallel-size
+    context_parallel_size: Optional[int] = None  # --context-parallel-size (aggregated)
+    prefill_context_parallel_size: Optional[int] = None  # --prefill-context-parallel-size
+    decode_context_parallel_size: Optional[int] = None  # --decode-context-parallel-size
     override_generation_config: Optional[str] = None  # JSON config to override generation parameters
-    prefill_attention_config: Optional[str] = None  # JSON attention config for prefill pod, e.g. '{"sparse_mla_force_mqa":true}'
-    decode_attention_config: Optional[str] = None   # JSON attention config for decode pod (and aggregated)
+    prefill_attention_config: Optional[str] = (
+        None  # JSON attention config for prefill pod, e.g. '{"sparse_mla_force_mqa":true}'
+    )
+    decode_attention_config: Optional[str] = None  # JSON attention config for decode pod (and aggregated)
     block_size: int = 16  # KV cache block size (auto-tuned from ISL+OSL)
     trust_remote_code: bool = True
     disable_log_requests: bool = True
     vllm_debug_logs: bool = False
     nccl_debug_logs: bool = False
-    memory_request: str = '64Gi'  # System RAM per pod (overridden by dynamic calculation)
-    memory_limit: str = '64Gi'  # System RAM per pod (overridden by dynamic calculation)
-    cpu_request: str = '16'  # CPUs per pod (overridden by dynamic calculation)
+    memory_request: str = "64Gi"  # System RAM per pod (overridden by dynamic calculation)
+    memory_limit: str = "64Gi"  # System RAM per pod (overridden by dynamic calculation)
+    cpu_request: str = "16"  # CPUs per pod (overridden by dynamic calculation)
     cpu_limit: Optional[str] = None  # CPU limit (defaults to cpu_request if not set)
 
     # Infrastructure
-    image: str = 'vllm/vllm-openai:v0.26.0'
-    scheduler_image: str = 'ghcr.io/llm-d/llm-d-router-endpoint-picker@sha256:873179822ab0895a37ea09f2112ca39a6ae50a26612561c8bfad7f9a8c5af6f5'
-    pvc_name: str = 'model-cache'
-    nccl_ib_hca: str = 'mlx'
-    kv_connector: str = 'NixlConnector'
+    image: str = "vllm/vllm-openai:v0.26.0"
+    scheduler_image: str = "ghcr.io/llm-d/llm-d-router-endpoint-picker@sha256:873179822ab0895a37ea09f2112ca39a6ae50a26612561c8bfad7f9a8c5af6f5"
+    pvc_name: str = "model-cache"
+    nccl_ib_hca: str = "mlx"
+    kv_connector: str = "NixlConnector"
 
     # Networking
-    network_type: str = 'dra'  # 'dra', 'nad', 'shared_device', 'sriov_multinic', 'eth0'
+    network_type: str = "dra"  # 'dra', 'nad', 'shared_device', 'sriov_multinic', 'eth0'
     rdma_device_resources: List[str] = field(default_factory=list)  # RDMA resource keys from node allocatable
     rdma_nics_per_node: int = 0  # Physical NICs per node (from scanner, for RDMA request count)
     rdma_network_annotation: Optional[str] = None  # Multus NAD annotation JSON for sriov_multinic
     selected_dra_classes: Optional[List[str]] = None  # User-selected DRA device classes
     dra_gpu_resource_key: Optional[str] = None  # extendedResourceName from selected DeviceClass
-    gateway_class: str = 'istio'  # GatewayClass name (detected from cluster)
+    gateway_class: str = "istio"  # GatewayClass name (detected from cluster)
     exclusive_pf: bool = False  # 1 VF per PF — each pod gets dedicated NICs
 
     # Per-node storage (one NFS PVC per node, symlinked at runtime)
@@ -133,16 +135,22 @@ class TestConfig:
     local_disk_path: Optional[str] = None  # hostPath mount for local-disk storage (e.g. '/mnt/local-storage')
 
     # Benchmark load parameters
-    request_type: str = 'constant'  # 'constant', 'concurrent', 'throughput', 'poisson'
+    request_type: str = "constant"  # 'constant', 'concurrent', 'throughput', 'poisson'
     request_rate: int = 1  # Requests per second (constant) or concurrent users (concurrent)
 
     # Test metadata
-    optimization_goal: str = 'balanced'  # 'throughput', 'response_time', 'balanced'
+    optimization_goal: str = "balanced"  # 'throughput', 'response_time', 'balanced'
     test_duration: int = 300
-    stop_mode: str = 'duration'  # 'duration' or 'max_requests'
+    stop_mode: str = "duration"  # 'duration' or 'max_requests'
     max_requests: Optional[int] = None  # Alternative to test_duration
     isl_stdev: Optional[int] = None  # ISL standard deviation
     osl_stdev: Optional[int] = None  # OSL standard deviation
+    # Parallel workloads: N guidellm shapes run simultaneously against the
+    # same serving stack (one EPP/pool/gateway). Each entry:
+    # {name, isl, osl, isl_stdev, osl_stdev, isl_min/max, osl_min/max,
+    #  concurrency, rate_type}. None/absent = single workload from the
+    # main fields (backward compatible).
+    parallel_workloads: Optional[list] = None
     isl_min: Optional[int] = None  # ISL minimum (prompt_tokens_min)
     isl_max: Optional[int] = None  # ISL maximum (prompt_tokens_max)
     osl_min: Optional[int] = None  # OSL minimum (output_tokens_min)
@@ -165,8 +173,8 @@ class TestConfig:
     selected_nodes: List[str] = field(default_factory=list)
 
     # Dataset workload (alternative to synthetic ISL/OSL)
-    workload_mode: str = 'synthetic'  # 'synthetic' or 'dataset'
-    workload_type: str = 'continuous'  # UI workload selector: 'continuous' or 'multiturn'
+    workload_mode: str = "synthetic"  # 'synthetic' or 'dataset'
+    workload_type: str = "continuous"  # UI workload selector: 'continuous' or 'multiturn'
     dataset_source: Optional[str] = None  # HF dataset ID or file path
     dataset_column: Optional[str] = None  # Column name for prompt text
     dataset_max_output: int = 256  # Max output tokens when using dataset
@@ -181,12 +189,12 @@ class TestConfig:
     moe_backend: Optional[str] = None  # 'deep_gemm', 'cutlass', None
     all2all_backend: Optional[str] = None  # 'deepep_high_throughput', 'deepep_low_latency', 'nccl', None
     prefill_all2all_backend: Optional[str] = None  # For PD prefill pods
-    decode_all2all_backend: Optional[str] = None   # For PD decode pods
+    decode_all2all_backend: Optional[str] = None  # For PD decode pods
     enable_scale_out: bool = False  # KV scale-out + lazy loading + long-prefill threshold (production DPEP flags)
     prefill_enable_scale_out: Optional[bool] = None  # per-role override (None = use enable_scale_out)
-    decode_enable_scale_out: Optional[bool] = None   # per-role override (None = use enable_scale_out)
+    decode_enable_scale_out: Optional[bool] = None  # per-role override (None = use enable_scale_out)
     decode_compilation_config: Optional[str] = None  # decode-only compilation config (e.g. cudagraph_mode)
-    prefill_kernel_config: Optional[str] = None      # prefill-only kernel config (e.g. disable flashinfer autotune)
+    prefill_kernel_config: Optional[str] = None  # prefill-only kernel config (e.g. disable flashinfer autotune)
     prefill_kv_cache_memory_bytes: Optional[int] = None  # prefill-only fixed KV cache size
     moe_dp_chunk_size: Optional[int] = None  # MoE dispatch chunk size (default 256, upstream uses 384 for decode)
     nvshmem_symmetric_size: Optional[str] = None  # e.g. '6G' — computed from model architecture
@@ -195,13 +203,13 @@ class TestConfig:
     has_hybrid_attention: bool = False  # Model uses mixed attention types (chunked/GDN + full)
 
     # Multi-node parallelism
-    data_parallel_size: Optional[int] = None       # total DP world size (--data-parallel-size)
+    data_parallel_size: Optional[int] = None  # total DP world size (--data-parallel-size)
     data_parallel_size_local: Optional[int] = None  # per-node DP count (--data-parallel-size-local)
-    nnodes: Optional[int] = None                   # number of nodes for multi-node TP (--nnodes)
-    lws_size: Optional[int] = None                 # LWS leaderWorkerTemplate.size (pods per group)
-    prefill_lws_size: Optional[int] = None         # per-role LWS group size (prefill); falls back to lws_size
-    decode_lws_size: Optional[int] = None          # per-role LWS group size (decode); falls back to lws_size
-    gpus_per_pod: Optional[int] = None             # GPU count per pod (when != TP, e.g. multi-node)
+    nnodes: Optional[int] = None  # number of nodes for multi-node TP (--nnodes)
+    lws_size: Optional[int] = None  # LWS leaderWorkerTemplate.size (pods per group)
+    prefill_lws_size: Optional[int] = None  # per-role LWS group size (prefill); falls back to lws_size
+    decode_lws_size: Optional[int] = None  # per-role LWS group size (decode); falls back to lws_size
+    gpus_per_pod: Optional[int] = None  # GPU count per pod (when != TP, e.g. multi-node)
 
     # Decode KV cache memory control
     kv_cache_memory_bytes: Optional[str] = None  # e.g. '10GiB' — explicit KV cache budget for decode
@@ -220,8 +228,8 @@ class TestConfig:
     model_loader_extra_config: Optional[str] = None
     cpu_offload_gb: Optional[int] = None  # OffloadingConnector CPU KV cache (NIXL)
     weight_cpu_offload_gb: Optional[int] = None  # vLLM --cpu-offload-gb (model weights to CPU)
-    shm_size_gb: Optional[int] = None           # /dev/shm GiB (auto: 1/TP-rank min 2, cpu-offload+210 when offloading)
-    host_ipc: Optional[bool] = None             # use host IPC namespace for /dev/shm (unlimited)
+    shm_size_gb: Optional[int] = None  # /dev/shm GiB (auto: 1/TP-rank min 2, cpu-offload+210 when offloading)
+    host_ipc: Optional[bool] = None  # use host IPC namespace for /dev/shm (unlimited)
     disk_offload_kv_path: Optional[str] = None  # NVMe/disk KV cache offload path
     disk_offload_kv_read_threads: int = 32
     disk_offload_kv_write_threads: int = 16
@@ -242,6 +250,7 @@ class TestConfig:
 @dataclass
 class OptimizationPlan:
     """Complete optimization plan with all test configurations."""
+
     run_name: str
     model_name: str
     isl: int
@@ -256,11 +265,7 @@ class OptimizationPlan:
 class ConfigGenerator:
     """Generates test configurations based on user inputs and cluster resources."""
 
-    def __init__(
-        self,
-        namespace: str = 'serveit',
-        kubeconfig: Optional[str] = None
-    ):
+    def __init__(self, namespace: str = "serveit", kubeconfig: Optional[str] = None):
         """
         Initialize ConfigGenerator.
 
@@ -273,11 +278,7 @@ class ConfigGenerator:
         self.cluster_resources = None
 
     def _generate_test_id(
-        self,
-        architecture: str,
-        tp: int,
-        ratio: Optional[str] = None,
-        timestamp: Optional[str] = None
+        self, architecture: str, tp: int, ratio: Optional[str] = None, timestamp: Optional[str] = None
     ) -> str:
         """
         Generate a unique test ID.
@@ -292,11 +293,11 @@ class ConfigGenerator:
             Unique test ID
         """
         if timestamp is None:
-            timestamp = datetime.now().strftime('%Y%m%d-%H%M%S')
+            timestamp = datetime.now().strftime("%Y%m%d-%H%M%S")
 
-        if architecture == 'pd' and ratio:
+        if architecture == "pd" and ratio:
             # For PD: test-pd-1-2-tp4-20240326-120000
-            ratio_str = ratio.replace(':', '-')
+            ratio_str = ratio.replace(":", "-")
             return f"test-{architecture}-{ratio_str}-tp{tp}-{timestamp}"
         else:
             # For aggregated/ep: test-aggregated-tp8-20240326-120000
@@ -312,7 +313,7 @@ class ConfigGenerator:
         Returns:
             Tuple of (prefill_count, decode_count)
         """
-        parts = ratio_str.split(':')
+        parts = ratio_str.split(":")
         if len(parts) != 2:
             raise ValueError(f"Invalid ratio format: {ratio_str}. Expected 'X:Y'")
 
@@ -333,29 +334,27 @@ class ConfigGenerator:
         import os
 
         # Check for manual override
-        force_nad = os.getenv('INFTUNE_FORCE_NAD', 'false').lower() == 'true'
+        force_nad = os.getenv("INFTUNE_FORCE_NAD", "false").lower() == "true"
         if force_nad:
             logger.info("Forcing NAD network type via INFTUNE_FORCE_NAD env var")
-            return 'nad'
+            return "nad"
 
         # Detect from cluster resources (cloud_provider is an Enum)
         if self.cluster_resources:
             if self.cluster_resources.cloud_provider == CloudProvider.IBM_CLOUD:
                 logger.info("Detected IBM Cloud → Using DRA (DRANET) network type")
-                return 'dra'
+                return "dra"
             if self.cluster_resources.cloud_provider == CloudProvider.COREWEAVE:
                 logger.info("Detected CoreWeave → Using SharedDevice (rdma/ib) network type")
-                return 'shared_device'
+                return "shared_device"
 
         logger.info("Non-IBM Cloud or unknown provider → Using NAD network type")
-        return 'nad'
+        return "nad"
 
     def _detect_rdma_device_resources(self) -> List[str]:
         if not self.cluster_resources:
             return []
-        return detect_rdma_device_resources(
-            self.cluster_resources.nodes, self._detect_network_type()
-        )
+        return detect_rdma_device_resources(self.cluster_resources.nodes, self._detect_network_type())
 
     def _detect_rdma_nics_per_node(self) -> int:
         """
@@ -372,7 +371,7 @@ class ConfigGenerator:
             if not node.has_rdma:
                 continue
             for nic in node.network_interfaces:
-                if nic.type in ('InfiniBand', 'RoCE', 'RDMA'):
+                if nic.type in ("InfiniBand", "RoCE", "RDMA"):
                     if min_nics is None or nic.count < min_nics:
                         min_nics = nic.count
 
@@ -392,19 +391,19 @@ class ConfigGenerator:
         Returns:
             List of architecture names to test
         """
-        if optimization_goal == 'throughput':
+        if optimization_goal == "throughput":
             # Throughput optimization: Test Aggregated vs EP
-            architectures = ['aggregated', 'ep']
+            architectures = ["aggregated", "ep"]
             logger.info("Optimization goal: Throughput → Testing Aggregated vs EP")
 
-        elif optimization_goal == 'response_time':
+        elif optimization_goal == "response_time":
             # Response time optimization: Test Aggregated vs PD
-            architectures = ['aggregated', 'pd']
+            architectures = ["aggregated", "pd"]
             logger.info("Optimization goal: Response Time → Testing Aggregated vs PD")
 
         else:  # balanced or any other
             # Balanced: Test all three
-            architectures = ['aggregated', 'pd', 'ep']
+            architectures = ["aggregated", "pd", "ep"]
             logger.info("Optimization goal: Balanced → Testing Aggregated, PD, and EP")
 
         return architectures
@@ -419,7 +418,7 @@ class ConfigGenerator:
         optimization_goal: str,
         max_model_len: int,
         test_duration: int,
-        timestamp: str
+        timestamp: str,
     ) -> List[TestConfig]:
         """Generate configurations for aggregated architecture."""
         configs = []
@@ -430,7 +429,7 @@ class ConfigGenerator:
         rdma_nics_per_node = self._detect_rdma_nics_per_node()
 
         for tp in tp_values:
-            test_id = self._generate_test_id('aggregated', tp, timestamp=timestamp)
+            test_id = self._generate_test_id("aggregated", tp, timestamp=timestamp)
 
             # Calculate resources for this specific TP and replica count
             replicas = 1  # Single replica for aggregated calibration
@@ -438,7 +437,7 @@ class ConfigGenerator:
 
             config = TestConfig(
                 test_id=test_id,
-                architecture='aggregated',
+                architecture="aggregated",
                 model_name=model_name,
                 namespace=self.namespace,
                 isl=isl,
@@ -455,7 +454,7 @@ class ConfigGenerator:
                 memory_request=memory_per_pod,
                 memory_limit=memory_per_pod,
                 cpu_request=cpu_per_pod,
-                cpu_limit=cpu_per_pod
+                cpu_limit=cpu_per_pod,
             )
             configs.append(config)
             logger.info(f"Generated config: {test_id} (TP={tp}, Memory={memory_per_pod})")
@@ -473,7 +472,7 @@ class ConfigGenerator:
         optimization_goal: str,
         max_model_len: int,
         test_duration: int,
-        timestamp: str
+        timestamp: str,
     ) -> List[TestConfig]:
         """Generate configurations for PD (Prefill/Decode) architecture."""
         configs = []
@@ -486,7 +485,7 @@ class ConfigGenerator:
         for tp in tp_values:
             for ratio_str in pd_ratios:
                 prefill_count, decode_count = self._parse_pd_ratio(ratio_str)
-                test_id = self._generate_test_id('pd', tp, ratio=ratio_str, timestamp=timestamp)
+                test_id = self._generate_test_id("pd", tp, ratio=ratio_str, timestamp=timestamp)
 
                 # Calculate resources for this PD configuration
                 total_pods = prefill_count + decode_count
@@ -494,7 +493,7 @@ class ConfigGenerator:
 
                 config = TestConfig(
                     test_id=test_id,
-                    architecture='pd',
+                    architecture="pd",
                     model_name=model_name,
                     namespace=self.namespace,
                     isl=isl,
@@ -514,7 +513,7 @@ class ConfigGenerator:
                     memory_request=memory_per_pod,
                     memory_limit=memory_per_pod,
                     cpu_request=cpu_per_pod,
-                    cpu_limit=cpu_per_pod
+                    cpu_limit=cpu_per_pod,
                 )
                 configs.append(config)
                 logger.info(f"Generated config: {test_id} (TP={tp}, Ratio={ratio_str}, Memory={memory_per_pod})")
@@ -532,7 +531,7 @@ class ConfigGenerator:
         max_model_len: int,
         test_duration: int,
         timestamp: str,
-        max_gpus: Optional[int] = None
+        max_gpus: Optional[int] = None,
     ) -> List[TestConfig]:
         """
         Generate configurations for EP (Expert Parallelism) architecture.
@@ -549,7 +548,7 @@ class ConfigGenerator:
             # Then scale up to total available
             max_gpus = min(
                 self.cluster_resources.total_gpus,
-                self.cluster_resources.max_gpus_per_node * 2  # Use 2 nodes by default
+                self.cluster_resources.max_gpus_per_node * 2,  # Use 2 nodes by default
             )
 
         # Detect network type and RDMA resource once
@@ -567,7 +566,7 @@ class ConfigGenerator:
             else:
                 replicas = 1  # Fallback if no cluster info
 
-            test_id = self._generate_test_id('ep', tp, timestamp=timestamp)
+            test_id = self._generate_test_id("ep", tp, timestamp=timestamp)
 
             total_gpus = replicas * tp
 
@@ -576,7 +575,7 @@ class ConfigGenerator:
 
             config = TestConfig(
                 test_id=test_id,
-                architecture='ep',
+                architecture="ep",
                 model_name=model_name,
                 namespace=self.namespace,
                 isl=isl,
@@ -593,10 +592,12 @@ class ConfigGenerator:
                 memory_request=memory_per_pod,
                 memory_limit=memory_per_pod,
                 cpu_request=cpu_per_pod,
-                cpu_limit=cpu_per_pod
+                cpu_limit=cpu_per_pod,
             )
             configs.append(config)
-            logger.info(f"Generated config: {test_id} (TP={tp}, Replicas={replicas}, Total GPUs={total_gpus}, Memory={memory_per_pod})")
+            logger.info(
+                f"Generated config: {test_id} (TP={tp}, Replicas={replicas}, Total GPUs={total_gpus}, Memory={memory_per_pod})"
+            )
 
         return configs
 
@@ -607,13 +608,13 @@ class ConfigGenerator:
         isl: int,
         osl: int,
         num_users: int,
-        optimization_goal: str = 'full_coverage',
+        optimization_goal: str = "full_coverage",
         tp_values: Optional[List[int]] = None,
         pd_ratios: Optional[List[str]] = None,
         max_model_len: int = 8192,
         test_duration: int = 300,
         scan_cluster: bool = True,
-        max_gpus: Optional[int] = None
+        max_gpus: Optional[int] = None,
     ) -> OptimizationPlan:
         """
         Generate a complete optimization plan with all test configurations.
@@ -659,7 +660,7 @@ class ConfigGenerator:
 
         # Set default PD ratios
         if pd_ratios is None:
-            pd_ratios = ['1:1', '1:2', '1:4', '2:1']
+            pd_ratios = ["1:1", "1:2", "1:4", "2:1"]
             logger.info(f"Using default PD ratios: {pd_ratios}")
         else:
             logger.info(f"Using provided PD ratios: {pd_ratios}")
@@ -668,31 +669,53 @@ class ConfigGenerator:
         architectures = self._determine_architectures(optimization_goal)
 
         # Generate timestamp for this run (all tests will share it)
-        timestamp = datetime.now().strftime('%Y%m%d-%H%M%S')
+        timestamp = datetime.now().strftime("%Y%m%d-%H%M%S")
 
         # Generate configurations for each architecture
         all_configs = []
 
         for arch in architectures:
-            if arch == 'aggregated':
+            if arch == "aggregated":
                 configs = self._generate_aggregated_configs(
-                    tp_values, model_name, isl, osl, num_users,
-                    optimization_goal, max_model_len, test_duration, timestamp
+                    tp_values,
+                    model_name,
+                    isl,
+                    osl,
+                    num_users,
+                    optimization_goal,
+                    max_model_len,
+                    test_duration,
+                    timestamp,
                 )
                 all_configs.extend(configs)
 
-            elif arch == 'pd':
+            elif arch == "pd":
                 configs = self._generate_pd_configs(
-                    tp_values, pd_ratios, model_name, isl, osl, num_users,
-                    optimization_goal, max_model_len, test_duration, timestamp
+                    tp_values,
+                    pd_ratios,
+                    model_name,
+                    isl,
+                    osl,
+                    num_users,
+                    optimization_goal,
+                    max_model_len,
+                    test_duration,
+                    timestamp,
                 )
                 all_configs.extend(configs)
 
-            elif arch == 'ep':
+            elif arch == "ep":
                 configs = self._generate_ep_configs(
-                    tp_values, model_name, isl, osl, num_users,
-                    optimization_goal, max_model_len, test_duration, timestamp,
-                    max_gpus=max_gpus
+                    tp_values,
+                    model_name,
+                    isl,
+                    osl,
+                    num_users,
+                    optimization_goal,
+                    max_model_len,
+                    test_duration,
+                    timestamp,
+                    max_gpus=max_gpus,
                 )
                 all_configs.extend(configs)
 
@@ -706,7 +729,7 @@ class ConfigGenerator:
             optimization_goal=optimization_goal,
             test_configs=all_configs,
             cluster_resources=self.cluster_resources,
-            created_at=datetime.now().isoformat()
+            created_at=datetime.now().isoformat(),
         )
 
         logger.info("=" * 70)
@@ -715,7 +738,7 @@ class ConfigGenerator:
         logger.info(f"Total configurations: {len(all_configs)}")
         logger.info(f"Architectures: {', '.join(architectures)}")
         logger.info(f"TP values: {tp_values}")
-        if 'pd' in architectures:
+        if "pd" in architectures:
             logger.info(f"PD ratios: {pd_ratios}")
         logger.info(f"Estimated total test time: {len(all_configs) * test_duration / 60:.1f} minutes")
         logger.info("=" * 70)
@@ -726,7 +749,7 @@ class ConfigGenerator:
         """Convert OptimizationPlan to dictionary."""
         plan_dict = asdict(plan)
         # Convert cluster_resources separately
-        plan_dict['cluster_resources'] = asdict(plan.cluster_resources)
+        plan_dict["cluster_resources"] = asdict(plan.cluster_resources)
         return plan_dict
 
 
@@ -735,22 +758,20 @@ def main():
     import argparse
     import json
 
-    parser = argparse.ArgumentParser(
-        description='Generate ServeIt Studio optimization plan'
-    )
-    parser.add_argument('--run-name', required=True, help='Name for this optimization run')
-    parser.add_argument('--model', required=True, help='HuggingFace model name')
-    parser.add_argument('--isl', type=int, required=True, help='Input sequence length')
-    parser.add_argument('--osl', type=int, required=True, help='Output sequence length')
-    parser.add_argument('--users', type=int, required=True, help='Number of concurrent users')
+    parser = argparse.ArgumentParser(description="Generate ServeIt Studio optimization plan")
+    parser.add_argument("--run-name", required=True, help="Name for this optimization run")
+    parser.add_argument("--model", required=True, help="HuggingFace model name")
+    parser.add_argument("--isl", type=int, required=True, help="Input sequence length")
+    parser.add_argument("--osl", type=int, required=True, help="Output sequence length")
+    parser.add_argument("--users", type=int, required=True, help="Number of concurrent users")
     parser.add_argument(
-        '--goal',
-        choices=['throughput', 'response_time', 'full_coverage'],
-        default='full_coverage',
-        help='Optimization goal'
+        "--goal",
+        choices=["throughput", "response_time", "full_coverage"],
+        default="full_coverage",
+        help="Optimization goal",
     )
-    parser.add_argument('--namespace', default='serveit', help='Kubernetes namespace')
-    parser.add_argument('--output', help='Output JSON file path')
+    parser.add_argument("--namespace", default="serveit", help="Kubernetes namespace")
+    parser.add_argument("--output", help="Output JSON file path")
 
     args = parser.parse_args()
 
@@ -762,7 +783,7 @@ def main():
         isl=args.isl,
         osl=args.osl,
         num_users=args.users,
-        optimization_goal=args.goal
+        optimization_goal=args.goal,
     )
 
     # Output results
@@ -770,12 +791,12 @@ def main():
     output_json = json.dumps(plan_dict, indent=2)
 
     if args.output:
-        with open(args.output, 'w') as f:
+        with open(args.output, "w") as f:
             f.write(output_json)
         logger.info(f"Plan saved to {args.output}")
     else:
         print(output_json)
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     main()

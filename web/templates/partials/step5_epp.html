@@ -156,28 +156,35 @@
                         <div id="sweep-epp-section" style="border:2px solid #d97706;border-radius:12px;overflow:hidden;margin-bottom:20px;">
                             <div style="background:linear-gradient(135deg,#fffbeb,#fef3c7);padding:14px 20px;cursor:pointer;display:flex;align-items:center;justify-content:space-between;" onclick="var cb=document.getElementById('epp-benchmark-enabled');cb.checked=!cb.checked;config.epp_benchmark=cb.checked;var inner=document.getElementById('epp-benchmark-inner');inner.style.opacity=cb.checked?'1':'0.5';saveConfig();">
                                 <div>
-                                    <div style="font-weight:700;color:#92400e;font-size:1.05em;">Smart EPP Tuning</div>
-                                    <div style="color:#a16207;font-size:0.92em;margin-top:4px;">Mathematically derive optimal routing weights from your workload profile and measured cache hit rates. Typically 1-2 tests instead of 3-4.</div>
+                                    <div style="font-weight:700;color:#92400e;font-size:1.05em;">EPP Routing Search</div>
+                                    <div style="color:#a16207;font-size:0.92em;margin-top:4px;">Search the routing configuration space — plugin composition, picker strategy, affinity filter and scorer weights — instead of only nudging weights. Screening runs are short; winners are re-validated at full duration.</div>
                                 </div>
                                 <input type="checkbox" id="epp-benchmark-enabled" style="width:20px;height:20px;cursor:pointer;" onclick="event.stopPropagation();config.epp_benchmark=this.checked;document.getElementById('epp-benchmark-inner').style.opacity=this.checked?'1':'0.5';saveConfig();">
                             </div>
                             <div id="epp-benchmark-inner" style="padding:12px 20px;opacity:0.5;">
                                 <div style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:6px;padding:12px;font-size:0.82em;color:#475569;line-height:1.6;">
-                                    Derives EPP routing weights from calibration data and actual benchmark metrics. Each weight is proportional to the time impact of optimal routing on that dimension (prefix cache, KV memory, queue depth).<br><br>
+                                    Explores three routing philosophies and refines the winner: the llm-d optimized-baseline composition (prefix-cache-affinity-filter + single load scorer), the weighted multi-scorer stack with deterministic or probabilistic picking, and your preset as control. Producers are wired automatically from each scorer's dependencies, and the affinity filter's <code>peakPrefillThroughput</code> is measured from your deployment's prefill throughput.
+                                    <br><br>
                                     <strong>How it works:</strong>
                                     <table style="width:100%;margin-top:8px;font-size:0.95em;border-collapse:collapse;">
-                                        <tr style="background:#f1f5f9;"><td style="padding:6px 8px;font-weight:600;">1. Derive</td><td style="padding:6px 8px;">Compute weights from ISL/OSL, TP calibration data, and measured cache hit rates from Step 6/7</td></tr>
-                                        <tr><td style="padding:6px 8px;font-weight:600;">2. Test</td><td style="padding:6px 8px;">Run one benchmark with the derived weights (only gateway configmap swap, no pod redeployment)</td></tr>
-                                        <tr style="background:#f1f5f9;"><td style="padding:6px 8px;font-weight:600;">3. Refine</td><td style="padding:6px 8px;">On OpenShift: read actual metrics, adjust weights if needed, validate with one more test</td></tr>
+                                        <tr style="background:#f1f5f9;"><td style="padding:6px 8px;font-weight:600;">1. Screen</td><td style="padding:6px 8px;">Benchmark the routing archetypes on short runs (~2 min each, gateway configmap swap only — pods stay up)</td></tr>
+                                        <tr><td style="padding:6px 8px;font-weight:600;">2. Ablate</td><td style="padding:6px 8px;">Add/remove workload-relevant scorers on the winner: session-affinity for multi-turn, no-hit-lru for cache reuse, kv-cache distribution, LoRA-affinity A/B</td></tr>
+                                        <tr style="background:#f1f5f9;"><td style="padding:6px 8px;font-weight:600;">3. Weight</td><td style="padding:6px 8px;">Coordinate-descent on the top scorer weights (or affinity threshold / load weight for filter compositions), informed by measured metrics</td></tr>
+                                        <tr><td style="padding:6px 8px;font-weight:600;">4. Validate</td><td style="padding:6px 8px;">Re-run the best variant at full duration for an apples-to-apples comparison against the baseline</td></tr>
                                     </table>
+                                    <div style="margin-top:10px;display:flex;align-items:center;gap:10px;flex-wrap:wrap;">
+                                        <label style="font-weight:600;color:#92400e;">Eval budget per architecture:</label>
+                                        <input type="number" id="epp-max-evals" min="4" max="30" step="1" style="width:70px;padding:4px 8px;border:1px solid #d97706;border-radius:4px;" onchange="config.epp_max_evals=parseInt(this.value)||12;saveConfig();">
+                                        <span style="color:#a16207;">benchmark evals (default 12 — each short run &asymp;2-3 min, final validation at full duration)</span>
+                                    </div>
                                     <div style="margin-top:10px;padding:8px 12px;background:#fffbeb;border-left:3px solid #d97706;border-radius:4px;color:#92400e;font-size:0.95em;">
                                         <strong>Note:</strong> On OpenShift with Prometheus, weights are derived from actual measured cache hit rates and per-pod KV/queue metrics — highest accuracy. On vanilla Kubernetes without Prometheus, weights are estimated from the configured prefix cache percentage — still better than preset guessing, but less precise.
                                     </div>
-                                    <div style="margin-top:8px;color:#92400e;">The winning weights are automatically applied before the latency search (Step 10) so throughput results reflect optimal routing.</div>
+                                    <div style="margin-top:8px;color:#92400e;">The winning configuration is automatically applied before the latency search (Step 10) so throughput results reflect optimal routing.</div>
                                     <div style="margin-top:10px;padding:8px 12px;background:#f0fdf4;border-left:3px solid #059669;border-radius:4px;">
                                         <label style="display:flex;align-items:center;gap:8px;cursor:pointer;">
                                             <input type="checkbox" id="epp-apply-tuned" style="width:16px;height:16px;cursor:pointer;" onchange="config.epp_apply_tuned=this.checked;saveConfig();" checked>
-                                            <span style="font-size:0.95em;color:#166534;"><strong>Use tuned profile for subsequent tests</strong> — persist the winning EPP weights as the run's routing profile, so the LoRA sweep and calibrated load tests run with optimal routing instead of re-deriving from workload inputs. Uncheck to keep the auto-derived profile for all tests.</span>
+                                            <span style="font-size:0.95em;color:#166534;"><strong>Use tuned profile for subsequent tests</strong> — persist the winning EPP configuration as the run's routing profile, so the LoRA sweep and calibrated load tests run with optimal routing instead of re-deriving from workload inputs. Uncheck to keep the auto-derived profile for all tests.</span>
                                         </label>
                                     </div>
                                 </div>

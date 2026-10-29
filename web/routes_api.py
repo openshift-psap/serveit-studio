@@ -641,7 +641,11 @@ def get_run_charts(run_id):
             data = analyzer.build_full_report_data(run_id, loader)
             if not data:
                 return jsonify({'error': 'No results found for this run'}), 404
-            return jsonify(data)
+            resp = jsonify(data)
+            # report data is regenerated per request and must never be
+            # served from browser heuristic cache
+            resp.headers['Cache-Control'] = 'no-store'
+            return resp
 
     except Exception as e:
         import traceback

@@ -11,6 +11,8 @@ data:
   aggregated-config.yaml: |
     apiVersion: llm-d.ai/v1alpha1
     kind: EndpointPickerConfig
+{% if spec_mode | default(false) %}
+{{ spec_body_yaml }}{% else %}
     plugins:
 {% if slo_enabled | default(false) %}
 {% if not epp_v011_plus | default(true) %}
@@ -121,7 +123,9 @@ data:
 {% endif %}
 {% if token_load_enabled | default(false) %}
           - pluginRef: token-load-scorer
+{% if token_load_weight is not none %}
             weight: {{ token_load_weight | default(1.0) }}
+{% endif %}
 {% endif %}
 {% if prefix_cache_affinity_enabled | default(false) %}
           - pluginRef: prefix-cache-affinity-filter
@@ -141,4 +145,5 @@ data:
 {% endif %}
 {% endif %}
           - pluginRef: max-score-picker
+{% endif %}
 {% endif %}

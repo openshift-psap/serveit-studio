@@ -93,6 +93,10 @@ class TestResult:
     prompt_tokens_mean: Optional[float] = None
     output_tokens_mean: Optional[float] = None
 
+    # Window-exact total token throughput (prompt+output over the
+    # benchmark's own elapsed window) — comparable across tests
+    tokens_per_second: Optional[float] = None
+
     # Concurrency
     concurrency_mean: Optional[float] = None
     concurrency_p50: Optional[float] = None
@@ -133,5 +137,11 @@ class TestResult:
 
     # Prefix cache hit rate (from Prometheus metrics)
     cache_hit_pct: Optional[float] = None
+
+    # Parallel workloads: per-workload results when a test ran multiple
+    # guidellm shapes simultaneously (same serving stack). The main
+    # percentile fields carry the request-weighted combined view; each
+    # entry carries {name, isl, osl, concurrency, percentiles, throughput}.
+    workloads: Optional[list] = None
 
 

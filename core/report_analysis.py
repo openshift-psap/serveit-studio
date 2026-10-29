@@ -223,8 +223,16 @@ class ReportAnalyzer:
             vllm_prompt = (pm.get('vllm_prompt_tokens_rate') or {}).get('avg', 0)
             vllm_gen = (pm.get('vllm_generation_tokens_rate') or {}).get('avg', 0)
             vllm_tps = round(vllm_prompt + vllm_gen) if (vllm_prompt + vllm_gen) > 0 else None
+            workloads = None
+            if r.metrics_json:
+                try:
+                    _mj = _cj.loads(r.metrics_json) if isinstance(r.metrics_json, str) else r.metrics_json
+                    workloads = (_mj or {}).get('workloads') if isinstance(_mj, dict) else None
+                except Exception:
+                    workloads = None
 
             entry = {
+                'workloads': workloads,
                 'name': r.display_label, 'architecture': r.architecture,
                 'config_name': r.config_name, 'test_id': r.config_name,
                 'ttft_p50': round(r.ttft_p50, 1) if getattr(r, 'ttft_p50', None) else None,
@@ -1836,9 +1844,30 @@ class ReportAnalyzer:
         epp_tuning_data = None
         has_post_step9 = any(r.config_name.startswith(('step10', 'step11', 'step12', 'step13')) for r in results)
         epp_results = [r for r in results if r.config_name.startswith('step11-epp-') and r.is_successful]
+        def _prom_tokens_per_second(prom_dict):
+            pt = prom_dict.get('vllm_prompt_tokens_rate')
+            gn = prom_dict.get('vllm_generation_tokens_rate')
+            pt = pt.get('avg', 0) if isinstance(pt, dict) else (pt or 0)
+            gn = gn.get('avg', 0) if isinstance(gn, dict) else (gn or 0)
+            total = pt + gn
+            return round(total) if total > 0 else None
+
+        def _metric_tokens_per_second(metrics_json_str):
+            """Window-exact guidellm tok/s (total tokens ÷ elapsed). Prefers
+            this over Prometheus window averages, which dilute by deploy/
+            model-load idle time and aren't comparable across tests."""
+            if not metrics_json_str:
+                return None
+            try:
+                v = _json2.loads(metrics_json_str).get('tokens_per_second')
+                return round(v) if v and v > 0 else None
+            except Exception:
+                return None
+
         if epp_results:
             import json as _json2
             by_arch = {}
+            winner_specs = {}
             for r in sorted(epp_results, key=lambda x: x.ttft_p90 or float('inf')):
                 full_name = r.config_name.replace('step11-epp-', '')
                 # Parse arch from name: "pd-cache-heavy" → arch="pd", name="cache-heavy"
@@ -1856,6 +1885,7 @@ class ReportAnalyzer:
                 # values for disabled scorers). Falls back to test_config_json.
                 weights = {}
                 weights_source = 'config'
+                structure = {}
                 try:
                     import yaml as _yaml4
                     _mans_v = _json2.loads(r.manifests_yaml) if r.manifests_yaml else {}
@@ -1876,10 +1906,25 @@ class ReportAnalyzer:
                             'kv_cache': _w_v.get('kv-cache-utilization-scorer', 0),
                             'queue': _w_v.get('queue-scorer', 0),
                             'active_request': _w_v.get('active-request-scorer', 0),
+                            'token_load': _w_v.get('token-load-scorer', 0),
                             'lora_affinity': _w_v.get('lora-affinity-scorer', 0),
                             'session_affinity': ('filter' if 'session-affinity-filter' in _plugins_v
                                                  else _w_v.get('session-affinity-scorer', 0)),
                         }
+                        structure = {
+                            'picker': ('weighted-random-picker' if 'weighted-random-picker' in _plugins_v
+                                       else 'max-score-picker'),
+                            'affinity_filter': 'prefix-cache-affinity-filter' in _plugins_v,
+                        }
+                        # tokens/s: window-exact guidellm value first, then
+                        # Prometheus rates as a fallback
+                        _pr = _json2.loads(r.metrics_json).get('prometheus_metrics', {}) if r.metrics_json else {}
+                        _pt_rate = (_pr.get('vllm_prompt_tokens_rate') or {}).get('avg', 0) if isinstance(_pr.get('vllm_prompt_tokens_rate'), dict) else (_pr.get('vllm_prompt_tokens_rate') or 0)
+                        _gn_rate = (_pr.get('vllm_generation_tokens_rate') or {}).get('avg', 0) if isinstance(_pr.get('vllm_generation_tokens_rate'), dict) else (_pr.get('vllm_generation_tokens_rate') or 0)
+                        structure['tokens_per_second'] = (
+                            _metric_tokens_per_second(r.metrics_json)
+                            or (round(_pt_rate + _gn_rate) if (_pt_rate + _gn_rate) > 0 else None)
+                        )
                         weights_source = 'as-run'
                 except Exception:
                     pass
@@ -1887,6 +1932,11 @@ class ReportAnalyzer:
                     try:
                         tc = _json2.loads(r.test_config_json)
                         epp = tc.get('epp_config') or {}
+                        if epp.get('spec'):
+                            structure = {
+                                'picker': epp['spec'].get('picker', 'max-score-picker'),
+                                'affinity_filter': bool(epp['spec'].get('affinity_filter')),
+                            }
                         plugins = epp.get('plugins') or {}
                         if plugins:
                             weights = {
@@ -1894,25 +1944,52 @@ class ReportAnalyzer:
                                 'kv_cache': plugins.get('kv_cache', {}).get('weight', 'off'),
                                 'queue': plugins.get('queue', {}).get('weight', 'off'),
                                 'active_request': plugins.get('active_request', {}).get('weight', 0),
+                                'token_load': plugins.get('token_load', {}).get('weight', 0),
                                 'lora_affinity': plugins.get('lora_affinity', {}).get('weight', 0),
                                 'session_affinity': plugins.get('session_aware', {}).get('weight', 0),
                             }
                     except (_json2.JSONDecodeError, TypeError):
                         pass
+                phase = 'screen'
+                if name.startswith('abl-'):
+                    phase = 'ablate'
+                elif name.startswith('w-'):
+                    phase = 'weight'
+                elif name.startswith('final-'):
+                    phase = 'final'
+                # Prometheus TTFT fallback: guidellm's TTFT measurement
+                # is broken for some EPP configs (count=0). Use Prometheus
+                # vllm_ttft_p90 (seconds→ms) when the guidellm value is 0.
+                _pr_all = {}
+                try:
+                    import json as _prj
+                    _pr_all = _prj.loads(r.metrics_json).get('prometheus_metrics', {}) if r.metrics_json else {}
+                except Exception:
+                    pass
+                _prom_ttft_p90 = _pr_all.get('vllm_ttft_p90')
+                _prom_ttft_p90 = _prom_ttft_p90.get('avg') if isinstance(_prom_ttft_p90, dict) else _prom_ttft_p90
+                _prom_ttft_ms = round(_prom_ttft_p90 * 1000, 2) if _prom_ttft_p90 and _prom_ttft_p90 > 0 else None
                 entry = {
                     'name': name,
+                    'phase': phase,
+                    'structure': structure,
                     'test_id': r.config_name,
                     'config_name': r.display_label,
-                    'ttft_p50': round(r.ttft_p50, 2) if r.ttft_p50 else None,
-                    'ttft_p90': round(r.ttft_p90, 2) if r.ttft_p90 else None,
-                    'ttft_p95': round(r.ttft_p95, 2) if r.ttft_p95 else None,
-                    'ttft_p99': round(r.ttft_p99, 2) if r.ttft_p99 else None,
+                    'ttft_p50': round(r.ttft_p50, 2) if r.ttft_p50 else _prom_ttft_ms,
+                    'ttft_p90': round(r.ttft_p90, 2) if r.ttft_p90 else _prom_ttft_ms,
+                    'ttft_p95': round(r.ttft_p95, 2) if r.ttft_p95 else _prom_ttft_ms,
+                    'ttft_p99': round(r.ttft_p99, 2) if r.ttft_p99 else _prom_ttft_ms,
                     'throughput_mean': round(r.throughput_mean, 2) if r.throughput_mean else None,
                     'throughput_p50': round(r.throughput_p50, 2) if r.throughput_p50 else None,
                     'throughput_p90': round(r.throughput_p90, 2) if r.throughput_p90 else None,
                     'throughput_p95': round(r.throughput_p95, 2) if r.throughput_p95 else None,
                     'throughput_p99': round(r.throughput_p99, 2) if r.throughput_p99 else None,
                     'itl_p90': round(r.itl_p90, 2) if r.itl_p90 else None,
+                    # E2E request latency (stored in seconds — charted in ms)
+                    'e2e_p50': round(r.e2e_latency_p50 * 1000, 1) if getattr(r, 'e2e_latency_p50', None) else None,
+                    'e2e_p90': round(r.e2e_latency_p90 * 1000, 1) if getattr(r, 'e2e_latency_p90', None) else None,
+                    'e2e_p95': round(r.e2e_latency_p95 * 1000, 1) if getattr(r, 'e2e_latency_p95', None) else None,
+                    'e2e_p99': round(r.e2e_latency_p99 * 1000, 1) if getattr(r, 'e2e_latency_p99', None) else None,
                     'manifest_types': manifest_types,
                     'weights': weights,
                 }
@@ -1920,6 +1997,7 @@ class ReportAnalyzer:
                     try:
                         _tc = _json2.loads(r.test_config_json)
                         entry['concurrency'] = _tc.get('num_users')
+                        entry['duration'] = _tc.get('test_duration')
                         entry['epp_config'] = _tc.get('epp_config')
                         entry['tp'] = _tc.get('tensor_parallelism')
                         entry['prefill_tp'] = _tc.get('prefill_tp')
@@ -1928,9 +2006,31 @@ class ReportAnalyzer:
                         entry['decode_pods'] = _tc.get('decode_replicas')
                         entry['replicas'] = _tc.get('replicas')
                         entry['gpus'] = r.total_gpus
+                        # per-workload stats for parallel (mixed-shape) runs
+                        if r.metrics_json:
+                            try:
+                                _mjj = _json2.loads(r.metrics_json) if isinstance(r.metrics_json, str) else r.metrics_json
+                                if _mjj.get('workloads'):
+                                    entry['workloads'] = _mjj['workloads']
+                            except Exception:
+                                pass
                     except Exception:
                         pass
                 by_arch.setdefault(arch, []).append(entry)
+                # Track the winner's as-run configmap for a deployable spec
+                if entry.get('ttft_p90') is not None and r.manifests_yaml:
+                    try:
+                        import yaml as _yaml5
+                        _cm_w = _json2.loads(r.manifests_yaml).get('epp-configmap', '')
+                        if _cm_w:
+                            _cm_doc_w = _yaml5.safe_load(_cm_w)
+                            _body_w = _yaml5.safe_load(
+                                _cm_doc_w['data'][list(_cm_doc_w['data'].keys())[0]])
+                            cur = winner_specs.get(arch)
+                            if cur is None or (entry['ttft_p90'] or 1e18) < cur[0]:
+                                winner_specs[arch] = (entry['ttft_p90'], _body_w, name)
+                    except Exception:
+                        pass
 
             # Get run config for SLA target info
             target_ms = None
@@ -1971,6 +2071,7 @@ class ReportAnalyzer:
                     # configmap (what actually ran), then its stored
                     # epp_config, then legacy preset defaults.
                     baseline_weights = {'prefix_cache': 3, 'kv_cache': 2, 'queue': 2, 'active_request': 2}
+                    baseline_structure = {}
                     weights_source = 'default'
                     try:
                         import yaml as _yaml
@@ -1980,22 +2081,61 @@ class ReportAnalyzer:
                             _cm = _yaml.safe_load(_cm_text)
                             _cfg = _yaml.safe_load(_cm['data'][list(_cm['data'].keys())[0]])
                             _w = {}
+                            _types = set()
+                            for _p in (_cfg or {}).get('plugins', []):
+                                _types.add(_p.get('type'))
                             for _prof in (_cfg or {}).get('schedulingProfiles', []):
                                 for _p in _prof.get('plugins', []):
                                     if _p.get('weight') is not None:
                                         _w[_p.get('pluginRef')] = _p['weight']
-                            if _w:
+                            if _w or _types:
                                 baseline_weights = {
                                     'prefix_cache': _w.get('prefix-cache-scorer', 0),
                                     'kv_cache': _w.get('kv-cache-utilization-scorer', 0),
                                     'queue': _w.get('queue-scorer', 0),
                                     'active_request': _w.get('active-request-scorer', 0),
+                                    'token_load': _w.get('token-load-scorer', 0),
                                     'lora_affinity': _w.get('lora-affinity-scorer', 0),
                                     'session_affinity': _w.get('session-affinity-scorer', 0),
+                                }
+                                baseline_structure = {
+                                    'picker': ('weighted-random-picker' if 'weighted-random-picker' in _types
+                                               else 'max-score-picker'),
+                                    'affinity_filter': 'prefix-cache-affinity-filter' in _types,
                                 }
                                 weights_source = 'as-run'
                     except Exception:
                         pass
+                    if weights_source == 'default' and best.test_config_json:
+                        try:
+                            _tc = _json2.loads(best.test_config_json)
+                            _epp = _tc.get('epp_config') or {}
+                            if _epp.get('spec'):
+                                _spec = _epp['spec']
+                                baseline_structure = {
+                                    'picker': _spec.get('picker', 'max-score-picker'),
+                                    'affinity_filter': bool(_spec.get('affinity_filter')),
+                                }
+                            elif _epp.get('prefixCacheAffinityEnabled'):
+                                # flat custom config: the filter is structural
+                                baseline_structure = {
+                                    'picker': _epp.get('picker', 'max-score-picker'),
+                                    'affinity_filter': True,
+                                }
+                            _plugins = _epp.get('plugins') or {}
+                            if _plugins:
+                                baseline_weights = {
+                                    'prefix_cache': _plugins.get('prefix_cache', {}).get('weight', 0),
+                                    'kv_cache': _plugins.get('kv_cache', {}).get('weight', 0),
+                                    'queue': _plugins.get('queue', {}).get('weight', 0),
+                                    'active_request': _plugins.get('active_request', {}).get('weight', 0),
+                                    'token_load': _plugins.get('token_load', {}).get('weight', 0),
+                                    'lora_affinity': _plugins.get('lora_affinity', {}).get('weight', 0),
+                                    'session_affinity': _plugins.get('session_aware', {}).get('weight', 0),
+                                }
+                                weights_source = 'as-run'
+                        except Exception:
+                            pass
                     if weights_source == 'default' and best.test_config_json:
                         try:
                             _tc = _json2.loads(best.test_config_json)
@@ -2012,6 +2152,19 @@ class ReportAnalyzer:
                                 weights_source = 'as-run'
                         except Exception:
                             pass
+                    _bl_prom = {}
+                    try:
+                        import json as _blj
+                        _bl_prom = _blj.loads(best.metrics_json).get('prometheus_metrics', {}) if best.metrics_json else {}
+                    except Exception:
+                        pass
+                    _baseline_manifest_types = []
+                    if getattr(best, 'manifests_yaml', None):
+                        try:
+                            import json as _bmj
+                            _baseline_manifest_types = list(_bmj.loads(best.manifests_yaml).keys())
+                        except Exception:
+                            pass
                     baseline_entry = {
                         'name': f'baseline ({weights_source})',
                         'test_id': best.config_name,
@@ -2026,8 +2179,20 @@ class ReportAnalyzer:
                         'throughput_p95': round(best.throughput_p95, 2) if best.throughput_p95 else None,
                         'throughput_p99': round(best.throughput_p99, 2) if best.throughput_p99 else None,
                         'itl_p90': round(best.itl_p90, 2) if best.itl_p90 else None,
+                        # E2E request latency (stored in seconds — charted in ms)
+                        'e2e_p50': round(best.e2e_latency_p50 * 1000, 1) if getattr(best, 'e2e_latency_p50', None) else None,
+                        'e2e_p90': round(best.e2e_latency_p90 * 1000, 1) if getattr(best, 'e2e_latency_p90', None) else None,
+                        'e2e_p95': round(best.e2e_latency_p95 * 1000, 1) if getattr(best, 'e2e_latency_p95', None) else None,
+                        'e2e_p99': round(best.e2e_latency_p99 * 1000, 1) if getattr(best, 'e2e_latency_p99', None) else None,
                         'weights': baseline_weights,
-                        'manifest_types': [],
+                        'structure': {
+                            **baseline_structure,
+                            'tokens_per_second': (
+                                _metric_tokens_per_second(getattr(best, 'metrics_json', None))
+                                or _prom_tokens_per_second(_bl_prom)
+                            ),
+                        },
+                        'manifest_types': _baseline_manifest_types,
                         'is_baseline': True,
                         'prefill_pods': best.prefill_pods,
                         'decode_pods': best.decode_pods,
@@ -2035,7 +2200,24 @@ class ReportAnalyzer:
                         'replicas': best.total_gpus // best.tensor_parallelism if best.tensor_parallelism else None,
                         'gpus': best.total_gpus,
                     }
+                    try:
+                        _bmj = _json2.loads(best.metrics_json) if getattr(best, 'metrics_json', None) else {}
+                        if _bmj.get('workloads'):
+                            baseline_entry['workloads'] = _bmj['workloads']
+                    except Exception:
+                        pass
                     by_arch[arch_key].insert(0, baseline_entry)
+                    # 'what changed' diff for every variant vs the baseline
+                    try:
+                        from core.optimizer.epp_search import describe_config_delta
+                        for _entry in by_arch[arch_key]:
+                            if _entry.get('is_baseline'):
+                                continue
+                            _entry['delta_vs_baseline'] = describe_config_delta(
+                                baseline_entry.get('weights'), baseline_entry.get('structure'),
+                                _entry.get('weights'), _entry.get('structure'))
+                    except Exception:
+                        pass
 
             # Detect skipped architectures — only if pipeline reached past Step 9
             skipped = []
@@ -2097,6 +2279,10 @@ class ReportAnalyzer:
                 'baselines': baselines,
                 'target_ms': target_ms,
                 'target_percentile': target_pct,
+                'winner_specs': {
+                    arch: {'name': w[2], 'ttft_p90': w[0], 'spec': w[1]}
+                    for arch, w in winner_specs.items()
+                },
             }
         elif run_config and run_config.get('epp_benchmark') and has_post_step9:
             skipped = []

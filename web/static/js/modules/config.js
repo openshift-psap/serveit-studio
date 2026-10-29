@@ -521,6 +521,9 @@ function updateUIFromConfig() {
         eppCb.checked = !!config.epp_benchmark;
         var eppInner = document.getElementById('epp-benchmark-inner');
         if (eppInner) eppInner.style.opacity = eppCb.checked ? '1' : '0.5';
+        var eppBudget = document.getElementById('epp-max-evals');
+        if (eppBudget) eppBudget.value = config.epp_max_evals || 12;
+        if (typeof restoreParallelWorkloadsUI === 'function') restoreParallelWorkloadsUI();
         var eppTuned = document.getElementById('epp-apply-tuned');
         if (eppTuned) {
             eppTuned.checked = (config.epp_apply_tuned !== undefined && config.epp_apply_tuned !== null)
@@ -1400,6 +1403,7 @@ function confirmSingleTest() {
     if (ts.latency_constraint_percentile) config.latency_constraint_percentile = ts.latency_constraint_percentile;
     if (ts.epp_preset) config.epp_preset = ts.epp_preset;
     if (ts.epp_benchmark != null) config.epp_benchmark = ts.epp_benchmark;
+    if (ts.epp_max_evals != null) config.epp_max_evals = ts.epp_max_evals;
 
     // Set deployment config
     document.querySelectorAll('[data-goal]').forEach(function(c) { c.classList.remove('selected'); });
@@ -1520,6 +1524,7 @@ function applyReportConfig(recId) {
     config.epp_preset = ts.epp_preset || 'balanced';
     config.epp_custom_enabled = ts.epp_custom_enabled != null ? !!ts.epp_custom_enabled : (rc.epp_config && rc.epp_config.preset !== 'default' ? true : false);
     config.epp_benchmark = ts.epp_benchmark != null ? !!ts.epp_benchmark : false;
+    if (ts.epp_max_evals != null) config.epp_max_evals = ts.epp_max_evals;
 
     // Step 6: Infrastructure
     config.scheduler_image = null;
@@ -1937,3 +1942,94 @@ function applyWorkloadPreset(name) {
 
 // Load models from API
 var allModels = [];
+
+// ── Parallel Workloads editor ──────────────────────────────────────────────
+
+function toggleParallelWorkloads(enabled) {
+    config.parallel_workloads_enabled = enabled;
+    document.getElementById('parallel-workloads-inner').style.display = enabled ? 'block' : 'none';
+    if (enabled && (!config.parallel_workloads || !config.parallel_workloads.length)) {
+        // initialize row 1 from the main fields
+        config.parallel_workloads = [{
+            name: 'workload-1',
+            isl: parseInt(document.getElementById('isl-input').value) || 3000,
+            osl: parseInt(document.getElementById('osl-input').value) || 100,
+            isl_stdev: config.isl_stdev || null,
+            osl_stdev: config.osl_stdev || null,
+            concurrency: config.users || 10
+        }];
+    }
+    if (!enabled) {
+        config.parallel_workloads = null;
+    }
+    renderParallelWorkloads();
+    saveConfig();
+}
+
+function addParallelWorkloadRow() {
+    if (!config.parallel_workloads) config.parallel_workloads = [];
+    config.parallel_workloads.push({
+        name: 'workload-' + (config.parallel_workloads.length + 1),
+        isl: 3000, osl: 100, isl_stdev: null, osl_stdev: null, concurrency: 10
+    });
+    renderParallelWorkloads();
+    saveConfig();
+}
+
+function removeParallelWorkloadRow(i) {
+    if (!config.parallel_workloads) return;
+    config.parallel_workloads.splice(i, 1);
+    if (!config.parallel_workloads.length) {
+        document.getElementById('parallel-workloads-enabled').checked = false;
+        toggleParallelWorkloads(false);
+        return;
+    }
+    renderParallelWorkloads();
+    saveConfig();
+}
+
+function setParallelWorkloadField(i, field, value) {
+    if (!config.parallel_workloads || !config.parallel_workloads[i]) return;
+    if (field === 'name') {
+        config.parallel_workloads[i].name = value;
+    } else {
+        config.parallel_workloads[i][field] = value === '' || isNaN(value) ? null : parseInt(value);
+    }
+    saveConfig();
+}
+
+function renderParallelWorkloads() {
+    var body = document.getElementById('parallel-workloads-body');
+    if (!body) return;
+    var rows = config.parallel_workloads || [];
+    var html = '';
+    rows.forEach(function (w, i) {
+        var cell = function (field, value, placeholder, width) {
+            return '<td style="padding:4px 6px;">' +
+                '<input type="' + (field === 'name' ? 'text' : 'number') + '" value="' + (value == null ? '' : value) + '" ' +
+                'placeholder="' + placeholder + '" style="width:' + width + ';padding:5px 7px;border:1px solid #d8b4fe;border-radius:6px;" ' +
+                'onchange="setParallelWorkloadField(' + i + ', \'' + field + '\', this.value)"></td>';
+        };
+        html += '<tr style="border-bottom:1px solid #ede9fe;">' +
+            cell('name', w.name, 'name', '110px') +
+            cell('isl', w.isl, '3000', '80px') +
+            cell('osl', w.osl, '100', '80px') +
+            cell('isl_stdev', w.isl_stdev, '—', '80px') +
+            cell('osl_stdev', w.osl_stdev, '—', '80px') +
+            cell('concurrency', w.concurrency, '10', '90px') +
+            '<td style="padding:4px 6px;"><button type="button" onclick="removeParallelWorkloadRow(' + i + ')" ' +
+            'style="background:#fee2e2;border:1px solid #fca5a5;border-radius:6px;color:#b91c1c;cursor:pointer;padding:4px 9px;">✕</button></td>' +
+            '</tr>';
+    });
+    body.innerHTML = html;
+}
+
+function restoreParallelWorkloadsUI() {
+    var cb = document.getElementById('parallel-workloads-enabled');
+    var inner = document.getElementById('parallel-workloads-inner');
+    if (!cb || !inner) return;
+    var enabled = !!(config.parallel_workloads && config.parallel_workloads.length);
+    cb.checked = enabled;
+    inner.style.display = enabled ? 'block' : 'none';
+    renderParallelWorkloads();
+}
