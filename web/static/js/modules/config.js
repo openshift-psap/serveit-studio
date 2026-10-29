@@ -2046,7 +2046,7 @@ function renderExtraWorkloads() {
                 '</div>';
         };
         var rateType = w.rate_type || '';
-        html += '<div style="margin-bottom:4px;">' +
+        html += '<div style="border:2px solid var(--rh-black);border-radius:8px;padding:16px;margin-bottom:16px;">' +
             '<div style="display:flex;align-items:center;gap:12px;margin-bottom:12px;">' +
                 '<span style="font-weight:800;color:var(--rh-black);font-size:1em;">Workload ' + (i + 2) + '</span>' +
                 '<input type="text" value="' + (w.name || '') + '" placeholder="workload name" ' +
