@@ -132,6 +132,10 @@
 
                                             <!-- Continuous Workload Settings -->
                                             <div id="continuous-settings">
+                                                <div style="display:flex;align-items:center;gap:10px;margin-bottom:10px;">
+                                                    <span style="font-weight:700;color:#1e293b;font-size:0.95em;">Workload 1</span>
+                                                    <input type="text" id="workload1-name-input" placeholder="workload-1" style="padding:4px 10px;border:1px solid #d8b4fe;border-radius:6px;font-weight:600;color:#5b21b6;max-width:200px;font-size:0.9em;" onchange="setWorkload1Extra('name', this.value)">
+                                                </div>
                                                 <div class="input-grid">
                                                     <div class="input-group">
                                                         <label id="isl-label">Input Length (ISL)</label>
@@ -205,6 +209,41 @@
                                                         </div>
                                                     </div>
                                                 </div>
+
+                                                <!-- Workload 1 per-shape load (multi-workload mode only) -->
+                                                <div id="workload1-extras" style="display:none;border:1.5px dashed #c4b5fd;border-radius:10px;padding:10px 14px;margin-top:12px;background:#faf5ff;">
+                                                    <div style="font-size:0.78em;color:#6d28d9;font-weight:700;margin-bottom:8px;">Workload 1 — load &amp; prefix (applies when running multiple workloads)</div>
+                                                    <div style="display:flex;flex-wrap:wrap;gap:10px;align-items:flex-end;">
+                                                        <div style="display:flex;flex-direction:column;gap:2px;">
+                                                            <span style="font-size:0.72em;color:#6d28d9;font-weight:600;">Concurrency</span>
+                                                            <input type="number" id="workload1-concurrency-input" placeholder="10" style="width:90px;padding:5px 7px;border:1px solid #d8b4fe;border-radius:6px;font-size:0.9em;" onchange="setWorkload1Extra('concurrency', this.value)">
+                                                        </div>
+                                                        <div style="display:flex;flex-direction:column;gap:2px;">
+                                                            <span style="font-size:0.72em;color:#6d28d9;font-weight:600;">Rate type</span>
+                                                            <select id="workload1-rate-select" style="padding:5px 7px;border:1px solid #d8b4fe;border-radius:6px;font-size:0.9em;background:white;" onchange="setWorkload1Extra('rate_type', this.value)">
+                                                                <option value="">inherit global</option>
+                                                                <option value="concurrent">concurrent</option>
+                                                                <option value="constant">constant</option>
+                                                                <option value="poisson">poisson</option>
+                                                            </select>
+                                                        </div>
+                                                        <div style="display:flex;flex-direction:column;gap:2px;">
+                                                            <span style="font-size:0.72em;color:#6d28d9;font-weight:600;">Shared prefix (tokens)</span>
+                                                            <input type="number" id="workload1-prefix-input" placeholder="—" style="width:105px;padding:5px 7px;border:1px solid #d8b4fe;border-radius:6px;font-size:0.9em;" onchange="setWorkload1Extra('prefix_tokens', this.value)">
+                                                        </div>
+                                                        <div style="display:flex;flex-direction:column;gap:2px;">
+                                                            <span style="font-size:0.72em;color:#6d28d9;font-weight:600;">Prefixes</span>
+                                                            <input type="number" id="workload1-prefix-count-input" placeholder="—" style="width:70px;padding:5px 7px;border:1px solid #d8b4fe;border-radius:6px;font-size:0.9em;" onchange="setWorkload1Extra('prefix_count', this.value)">
+                                                        </div>
+                                                    </div>
+                                                </div>
+
+                                                <!-- Additional workloads -->
+                                                <div style="margin-top:12px;">
+                                                    <button type="button" onclick="addExtraWorkload()" style="padding:6px 14px;font-size:0.85em;background:#f5f3ff;border:1.5px solid #c4b5fd;border-radius:8px;cursor:pointer;color:#5b21b6;font-weight:600;">+ Add another workload</button>
+                                                </div>
+                                                <div id="extra-workloads-body" style="display:none;margin-top:10px;"></div>
+                                                <div id="multi-workload-note" style="display:none;margin-top:8px;font-size:0.8em;color:#6b7280;">Each workload runs simultaneously against the same deployment with its own shape and concurrency. A workload that sets its own ISL/OSL does not inherit the global variation/prefix — set them per card. Remove all extra workloads to return to a single shape.</div>
 
                                                 <!-- Corpus Dataset toggle -->
                                                 <div style="border-top:1px solid #dcfce7;margin-top:16px;">
@@ -570,22 +609,6 @@
                                     </div>
                                 </div>
 
-                        </div>
-
-                        <!-- Parallel Workloads: N shapes on one deployment -->
-                        <div id="parallel-workloads-card" style="border:2px solid #7c3aed;border-radius:12px;overflow:hidden;margin-bottom:20px;">
-                            <div style="background:linear-gradient(135deg,#f5f3ff,#ede9fe);padding:14px 20px;cursor:pointer;display:flex;align-items:center;justify-content:space-between;" onclick="var cb=document.getElementById('parallel-workloads-enabled');cb.checked=!cb.checked;toggleParallelWorkloads(cb.checked);">
-                                <div>
-                                    <div style="font-weight:700;color:#5b21b6;font-size:1.05em;">🧵 Parallel Workloads</div>
-                                    <div style="color:#6d28d9;font-size:0.92em;margin-top:4px;">Run multiple workload shapes simultaneously against one deployment (same EPP/pool/gateway) — each with its own ISL/OSL and concurrency. Duration, model, turns and LoRA settings stay global.</div>
-                                </div>
-                                <input type="checkbox" id="parallel-workloads-enabled" style="width:20px;height:20px;cursor:pointer;" onclick="event.stopPropagation();toggleParallelWorkloads(this.checked);">
-                            </div>
-                            <div id="parallel-workloads-inner" style="padding:12px 20px;display:none;">
-                                <div id="parallel-workloads-body"></div>
-                                <button type="button" onclick="addParallelWorkloadRow()" style="margin-top:10px;padding:6px 14px;font-size:0.85em;background:#f5f3ff;border:1.5px solid #c4b5fd;border-radius:8px;cursor:pointer;color:#5b21b6;font-weight:600;">+ Add Workload</button>
-                                <div style="margin-top:8px;font-size:0.8em;color:#6b7280;">When enabled, these rows fully define the benchmark load (the main ISL/OSL/Users above remain the defaults for optimization steps that search a single shape). A row that sets its own ISL/OSL does <strong>not</strong> inherit the global stdev/min-max/prefix — set them per row if you want variation or shared prefixes.</div>
-                            </div>
                         </div>
 
                         <button class="action-button" id="next-step3">Continue to Test Config →</button>

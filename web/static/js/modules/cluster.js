@@ -203,7 +203,17 @@ document.getElementById('start-optimization').addEventListener('click', () => {
         epp_benchmark: config.epp_benchmark || false,
         epp_config: config.epp_config || null,
         epp_max_evals: config.epp_max_evals || 12,
-        parallel_workloads: (config.parallel_workloads && config.parallel_workloads.length) ? config.parallel_workloads : null,
+        parallel_workloads: (function (wl) {
+            if (!wl || !wl.length) return null;
+            // workload-1's card is the global shape fields — refresh from them at send time
+            var w0 = Object.assign({}, wl[0], {
+                isl: config.isl, osl: config.osl,
+                isl_stdev: config.isl_stdev || null, osl_stdev: config.osl_stdev || null,
+                isl_min: config.isl_min || null, isl_max: config.isl_max || null,
+                osl_min: config.osl_min || null, osl_max: config.osl_max || null
+            });
+            return [w0].concat(wl.slice(1));
+        })(config.parallel_workloads),
         advanced_vllm_custom_enabled: config.advanced_vllm_custom_enabled === true,
         advanced_vllm: config.advanced_vllm || null,
         image: config.image || null,

@@ -1,6 +1,10 @@
 // config.js — Configuration save/load, wizard UI state restoration
 
 function saveConfig() {
+    // Multi-workload mode: workload-1's card mirrors the global shape fields
+    if (config.parallel_workloads && config.parallel_workloads.length) {
+        config.parallel_workloads[0] = workload1FromGlobals();
+    }
     socket.emit('save_config', {
         config: config,
         current_step: currentStep
@@ -523,7 +527,7 @@ function updateUIFromConfig() {
         if (eppInner) eppInner.style.opacity = eppCb.checked ? '1' : '0.5';
         var eppBudget = document.getElementById('epp-max-evals');
         if (eppBudget) eppBudget.value = config.epp_max_evals || 12;
-        if (typeof restoreParallelWorkloadsUI === 'function') restoreParallelWorkloadsUI();
+        if (typeof restoreWorkloadsUI === 'function') restoreWorkloadsUI();
         var eppTuned = document.getElementById('epp-apply-tuned');
         if (eppTuned) {
             eppTuned.checked = (config.epp_apply_tuned !== undefined && config.epp_apply_tuned !== null)
@@ -1943,37 +1947,46 @@ function applyWorkloadPreset(name) {
 // Load models from API
 var allModels = [];
 
-// ── Parallel Workloads editor ──────────────────────────────────────────────
+// ── Workloads editor ────────────────────────────────────────────────────────
+// Workload 1 IS the main shape fields above (ISL/OSL/variation). "+" adds
+// more workloads; config.parallel_workloads always holds the FULL list
+// (workload 1 first, mirrored from the globals) so the backend contract
+// is unchanged. null = single-workload mode.
 
-function toggleParallelWorkloads(enabled) {
-    config.parallel_workloads_enabled = enabled;
-    document.getElementById('parallel-workloads-inner').style.display = enabled ? 'block' : 'none';
-    if (enabled && (!config.parallel_workloads || !config.parallel_workloads.length)) {
-        // initialize row 1 from the main fields
-        config.parallel_workloads = [{
-            name: 'workload-1',
-            isl: parseInt(document.getElementById('isl-input').value) || 3000,
-            osl: parseInt(document.getElementById('osl-input').value) || 100,
-            isl_stdev: config.isl_stdev || null,
-            osl_stdev: config.osl_stdev || null,
-            isl_min: config.isl_min || null,
-            isl_max: config.isl_max || null,
-            osl_min: config.osl_min || null,
-            osl_max: config.osl_max || null,
-            prefix_tokens: config.prefix_tokens || null,
-            prefix_count: config.prefix_count || null,
-            concurrency: config.users || 10
-        }];
+function workload1FromGlobals() {
+    var islEl = document.getElementById('isl-input');
+    var oslEl = document.getElementById('osl-input');
+    return {
+        name: (config.workload1 && config.workload1.name) || 'workload-1',
+        isl: (islEl ? parseInt(islEl.value) : null) || config.isl || 3000,
+        osl: (oslEl ? parseInt(oslEl.value) : null) || config.osl || 100,
+        isl_stdev: config.isl_stdev || null, osl_stdev: config.osl_stdev || null,
+        isl_min: config.isl_min || null, isl_max: config.isl_max || null,
+        osl_min: config.osl_min || null, osl_max: config.osl_max || null,
+        concurrency: (config.workload1 && config.workload1.concurrency) || config.users || 10,
+        rate_type: (config.workload1 && config.workload1.rate_type) || null,
+        prefix_tokens: (config.workload1 && config.workload1.prefix_tokens) || null,
+        prefix_count: (config.workload1 && config.workload1.prefix_count) || null
+    };
+}
+
+function setWorkload1Extra(field, value) {
+    if (!config.workload1) config.workload1 = { name: 'workload-1', concurrency: null, rate_type: null, prefix_tokens: null, prefix_count: null };
+    if (field === 'name' || field === 'rate_type') {
+        config.workload1[field] = value || null;
+    } else {
+        config.workload1[field] = value === '' || isNaN(value) ? null : parseInt(value);
     }
-    if (!enabled) {
-        config.parallel_workloads = null;
-    }
-    renderParallelWorkloads();
     saveConfig();
 }
 
-function addParallelWorkloadRow() {
-    if (!config.parallel_workloads) config.parallel_workloads = [];
+function addExtraWorkload() {
+    if (!config.parallel_workloads || !config.parallel_workloads.length) {
+        if (!config.workload1) {
+            config.workload1 = { name: 'workload-1', concurrency: config.users || 10, rate_type: null, prefix_tokens: null, prefix_count: null };
+        }
+        config.parallel_workloads = [workload1FromGlobals()];
+    }
     config.parallel_workloads.push({
         name: 'workload-' + (config.parallel_workloads.length + 1),
         isl: 3000, osl: 100,
@@ -1982,36 +1995,58 @@ function addParallelWorkloadRow() {
         prefix_tokens: null, prefix_count: null,
         concurrency: 10, rate_type: null
     });
-    renderParallelWorkloads();
+    updateWorkloadModeUI();
+    renderWorkload1Extras();
+    renderExtraWorkloads();
     saveConfig();
 }
 
-function removeParallelWorkloadRow(i) {
+function removeExtraWorkload(i) {
     if (!config.parallel_workloads) return;
-    config.parallel_workloads.splice(i, 1);
-    if (!config.parallel_workloads.length) {
-        document.getElementById('parallel-workloads-enabled').checked = false;
-        toggleParallelWorkloads(false);
-        return;
+    config.parallel_workloads.splice(i + 1, 1);
+    if (config.parallel_workloads.length <= 1) {
+        config.parallel_workloads = null;
     }
-    renderParallelWorkloads();
+    updateWorkloadModeUI();
+    renderExtraWorkloads();
     saveConfig();
 }
 
-function setParallelWorkloadField(i, field, value) {
-    if (!config.parallel_workloads || !config.parallel_workloads[i]) return;
+function setExtraWorkloadField(i, field, value) {
+    if (!config.parallel_workloads || !config.parallel_workloads[i + 1]) return;
     if (field === 'name' || field === 'rate_type') {
-        config.parallel_workloads[i][field] = value || null;
+        config.parallel_workloads[i + 1][field] = value || null;
     } else {
-        config.parallel_workloads[i][field] = value === '' || isNaN(value) ? null : parseInt(value);
+        config.parallel_workloads[i + 1][field] = value === '' || isNaN(value) ? null : parseInt(value);
     }
     saveConfig();
 }
 
-function renderParallelWorkloads() {
-    var body = document.getElementById('parallel-workloads-body');
+function updateWorkloadModeUI() {
+    var multi = !!(config.parallel_workloads && config.parallel_workloads.length);
+    var extras = document.getElementById('extra-workloads-body');
+    var w1x = document.getElementById('workload1-extras');
+    var note = document.getElementById('multi-workload-note');
+    if (extras) extras.style.display = multi ? 'block' : 'none';
+    if (w1x) w1x.style.display = multi ? 'block' : 'none';
+    if (note) note.style.display = multi ? 'block' : 'none';
+}
+
+function renderWorkload1Extras() {
+    var w = config.workload1 || {};
+    var set = function (id, v) { var el = document.getElementById(id); if (el) el.value = v == null ? '' : v; };
+    set('workload1-name-input', w.name || 'workload-1');
+    set('workload1-concurrency-input', w.concurrency);
+    set('workload1-prefix-input', w.prefix_tokens);
+    set('workload1-prefix-count-input', w.prefix_count);
+    var sel = document.getElementById('workload1-rate-select');
+    if (sel) sel.value = w.rate_type || '';
+}
+
+function renderExtraWorkloads() {
+    var body = document.getElementById('extra-workloads-body');
     if (!body) return;
-    var rows = config.parallel_workloads || [];
+    var rows = (config.parallel_workloads || []).slice(1); // workload 1 is the globals
     var html = '';
     rows.forEach(function (w, i) {
         var inp = function (field, label, value, ph, width) {
@@ -2019,19 +2054,18 @@ function renderParallelWorkloads() {
                 '<span style="font-size:0.72em;color:#6d28d9;font-weight:600;">' + label + '</span>' +
                 '<input type="number" value="' + (value == null ? '' : value) + '" placeholder="' + ph + '" ' +
                 'style="width:' + width + ';padding:5px 7px;border:1px solid #d8b4fe;border-radius:6px;font-size:0.9em;" ' +
-                'onchange="setParallelWorkloadField(' + i + ', \'' + field + '\', this.value)"></div>';
+                'onchange="setExtraWorkloadField(' + i + ', \'' + field + '\', this.value)"></div>';
         };
         var rateType = w.rate_type || '';
         html += '<div style="border:1.5px solid #ddd6fe;border-radius:10px;padding:10px 14px;margin-bottom:10px;background:white;">' +
-            // header: name + remove
             '<div style="display:flex;align-items:center;gap:10px;margin-bottom:8px;">' +
+                '<span style="font-weight:700;color:#5b21b6;font-size:0.9em;">Workload ' + (i + 2) + '</span>' +
                 '<input type="text" value="' + (w.name || '') + '" placeholder="workload name" ' +
                 'style="flex:1;padding:6px 10px;border:1.5px solid #c4b5fd;border-radius:6px;font-weight:600;color:#5b21b6;" ' +
-                'onchange="setParallelWorkloadField(' + i + ', \'name\', this.value)">' +
-                '<button type="button" onclick="removeParallelWorkloadRow(' + i + ')" ' +
+                'onchange="setExtraWorkloadField(' + i + ', \'' + "name" + '\', this.value)">' +
+                '<button type="button" onclick="removeExtraWorkload(' + i + ')" ' +
                 'style="background:#fee2e2;border:1px solid #fca5a5;border-radius:6px;color:#b91c1c;cursor:pointer;padding:5px 10px;">✕</button>' +
             '</div>' +
-            // prompt shape
             '<div style="display:flex;flex-wrap:wrap;gap:10px;margin-bottom:6px;">' +
                 inp('isl', 'ISL (prompt tokens)', w.isl, '3000', '95px') +
                 inp('isl_stdev', 'ISL σ', w.isl_stdev, '—', '70px') +
@@ -2044,12 +2078,11 @@ function renderParallelWorkloads() {
                 inp('osl_min', 'OSL min', w.osl_min, '—', '80px') +
                 inp('osl_max', 'OSL max', w.osl_max, '—', '80px') +
             '</div>' +
-            // load + prefix
             '<div style="display:flex;flex-wrap:wrap;gap:10px;align-items:flex-end;">' +
                 inp('concurrency', 'Concurrency', w.concurrency, '10', '90px') +
                 '<div style="display:flex;flex-direction:column;gap:2px;">' +
                     '<span style="font-size:0.72em;color:#6d28d9;font-weight:600;">Rate type</span>' +
-                    '<select onchange="setParallelWorkloadField(' + i + ', \'rate_type\', this.value)" ' +
+                    '<select onchange="setExtraWorkloadField(' + i + ', \'' + 'rate_type' + '\', this.value)" ' +
                         'style="padding:5px 7px;border:1px solid #d8b4fe;border-radius:6px;font-size:0.9em;background:white;">' +
                         '<option value=""' + (rateType === '' ? ' selected' : '') + '>inherit global</option>' +
                         '<option value="concurrent"' + (rateType === 'concurrent' ? ' selected' : '') + '>concurrent</option>' +
@@ -2065,12 +2098,20 @@ function renderParallelWorkloads() {
     body.innerHTML = html;
 }
 
-function restoreParallelWorkloadsUI() {
-    var cb = document.getElementById('parallel-workloads-enabled');
-    var inner = document.getElementById('parallel-workloads-inner');
-    if (!cb || !inner) return;
-    var enabled = !!(config.parallel_workloads && config.parallel_workloads.length);
-    cb.checked = enabled;
-    inner.style.display = enabled ? 'block' : 'none';
-    renderParallelWorkloads();
+function restoreWorkloadsUI() {
+    var multi = !!(config.parallel_workloads && config.parallel_workloads.length);
+    if (multi && !config.workload1) {
+        var w0 = config.parallel_workloads[0] || {};
+        config.workload1 = {
+            name: w0.name || 'workload-1',
+            concurrency: w0.concurrency || config.users || 10,
+            rate_type: w0.rate_type || null,
+            prefix_tokens: w0.prefix_tokens || null,
+            prefix_count: w0.prefix_count || null
+        };
+    }
+    updateWorkloadModeUI();
+    renderWorkload1Extras();
+    renderExtraWorkloads();
 }
+
