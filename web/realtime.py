@@ -489,7 +489,9 @@ def handle_start_optimization(data):
                 return
 
         state['optimization_running'] = True
-        state['current_config'] = data
+        # Merge over the existing config — a start payload that only carries
+        # a subset (e.g. REST {model}) must not wipe the rest
+        state['current_config'] = {**(state.get('current_config') or {}), **(data or {})}
         save_state()
 
         # Update database to reflect optimization running
