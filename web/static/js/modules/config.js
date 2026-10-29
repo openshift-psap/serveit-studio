@@ -2001,11 +2001,11 @@ function setExtraWorkloadField(i, field, value) {
 function updateWorkloadModeUI() {
     var multi = !!(config.parallel_workloads && config.parallel_workloads.length);
     var extras = document.getElementById('extra-workloads-body');
-    var w1x = document.getElementById('workload1-extras');
     var note = document.getElementById('multi-workload-note');
     if (extras) extras.style.display = multi ? 'block' : 'none';
-    if (w1x) w1x.style.display = multi ? 'block' : 'none';
     if (note) note.style.display = multi ? 'block' : 'none';
+    // workload-1's load & prefix row is always visible — the values persist
+    // and take effect when additional workloads are added
 }
 
 function renderWorkload1Extras() {
