@@ -2089,7 +2089,7 @@ function renderExtraWorkloads() {
                     '<div class="help-text">How this workload issues requests.</div></div>' +
                 (config.workload_type === 'multiturn' ? '' :
                     grp('prefix_tokens', 'Shared Prefix (tokens)', w.prefix_tokens, 'e.g. 256', 'Prefix reused across this workload' + String.fromCharCode(39) + 's requests.') +
-                    grp('prefix_count', 'Prefixes', w.prefix_count, 'e.g. 1', 'Number of distinct prefix variants.'))
+                    grp('prefix_count', 'Prefixes', w.prefix_count, 'e.g. 1', 'Number of distinct prefix variants.')) +
             '</div>' +
         '</div>';
     });
