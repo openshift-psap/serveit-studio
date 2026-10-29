@@ -54,11 +54,12 @@ function _renderChartsImpl(data, runId, content) {
     }
 
     let html = '';
+    let secWorkloads = '';
     let secRec = '', secTP = '', secCfg = '', secCmp = '', secStep9 = '', secCal = '', secCacheSweep = '', secVLLM = '', secTestCfg = '', secEppTuning = '', secDeployTiming = '', secPareto = '', secTraffic = '', secLora = '';
 
     // Parallel workloads card: per-workload results for mixed-shape runs
     try {
-        const wlEntries = (data.all_results || []).filter(r => r.workloads && r.workloads.length);
+        const wlEntries = (data.all_results || []).filter(r => r.workloads && r.workloads.length && !(r.config_name || '').startsWith('step11-epp-'));
         if (wlEntries.length) {
             let wlHtml = '<div class="chart-card" style="border:2px solid #7c3aed;border-left:6px solid #7c3aed;">';
             wlHtml += '<div class="chart-card-header" style="background:linear-gradient(135deg,#7c3aed,#8b5cf6);">🧵 Parallel Workloads — per-shape results</div>';
@@ -95,32 +96,24 @@ function _renderChartsImpl(data, runId, content) {
                 const chartRenders = window._wlChartRenders || (window._wlChartRenders = []);
                 chartRenders.push(() => {
                     const el = document.getElementById(chartId);
-                    if (!el || typeof echarts === 'undefined') return;
+                    if (!el || typeof Plotly === 'undefined') return;
                     const rows = e.workloads.concat([{name: 'combined', ttft_p50: e.ttft_p50, ttft_p90: e.ttft_p90, ttft_p99: e.ttft_p99}]);
                     const names = rows.map(w => w.name);
-                    const chart = echarts.init(el);
-                    chart.setOption({
-                        title: {text: 'TTFT by workload', left: 'center', textStyle: {fontSize: 13}},
-                        tooltip: {trigger: 'axis', valueFormatter: v => v != null ? Math.round(v) + ' ms' : '—'},
-                        legend: {bottom: 0},
-                        grid: {left: 90, right: 20, top: 40, bottom: 40},
-                        xAxis: {type: 'value', name: 'ms'},
-                        yAxis: {type: 'category', data: names},
-                        series: [
-                            {name: 'P50', type: 'bar', data: rows.map(w => w.ttft_p50), itemStyle: {color: '#3b82f6'}},
-                            {name: 'P90', type: 'bar', data: rows.map(w => w.ttft_p90), itemStyle: {color: '#f59e0b'}},
-                            {name: 'P99', type: 'bar', data: rows.map(w => w.ttft_p99), itemStyle: {color: '#dc2626'}},
-                        ]
-                    });
+                    Plotly.newPlot(el, ['p50', 'p90', 'p99'].map((k, ci) => ({
+                        x: names, y: rows.map(w => w['ttft_' + k]), name: k.toUpperCase(), type: 'bar', orientation: 'h',
+                        marker: {color: ['#3b82f6', '#f59e0b', '#dc2626'][ci]},
+                    })), {
+                        barmode: 'group', height: Math.max(240, (rows.length + 1) * 60), margin: {t: 30, b: 30, l: 110, r: 20},
+                        xaxis: {title: 'TTFT (ms)'},
+                        showlegend: true, legend: {x: 0, y: 1.15, orientation: 'h'},
+                        title: {text: 'TTFT by workload', font: {size: 13}},
+                    }, {displayModeBar: false});
                 });
             });
             wlHtml += '</div>';
-            const container = document.querySelector('.charts-container') || document.querySelector('#charts') || document.body;
-            container.insertAdjacentHTML('afterbegin', wlHtml);
-            (window._wlChartRenders || []).forEach(fn => { try { fn(); } catch (e) {} });
-            window._wlChartRenders = [];
+            secWorkloads = wlHtml;
         }
-    } catch (e) { console.warn('parallel workloads card failed:', e); }
+    } catch (e) { console.warn('parallel workloads section failed:', e); }
 
     // Lookup from test_id/config_name to all_results entry (used across multiple sections)
     const _allResLookup = {};
@@ -3882,13 +3875,14 @@ const deltaTag = (t.delta_vs_baseline && !t.is_baseline) ? ` <span style="color:
     if (secTraffic) subtabDefs.push({ id: 'traffic', label: 'Traffic', icon: '&#128678;' });
     if (secTestCfg) subtabDefs.push({ id: 'test-settings', label: 'Test Settings', icon: '&#9881;' });
     subtabDefs.push({ id: 'estimator', label: 'Estimator', icon: '&#128200;' });
+    if (secWorkloads) subtabDefs.push({ id: 'parallel-workloads', label: '&#129522; Workloads', icon: '&#129522;' });
 
     const sectionMap = {
         'recommendation': secRec, 'tp-calibration': secTP, 'configurations': secCfg,
         'test-settings': secTestCfg, 'comparison': secCmp, 'latency-search': secStep9,
         'calibrated-load': secCal, 'cache-sweep': secCacheSweep, 'deploy-timing': secDeployTiming, 'vllm-metrics': secVLLM, 'epp-tuning': secEppTuning,
         'lora-serving': secLora,
-        'pareto-frontier': secPareto, 'traffic': secTraffic, 'estimator': secEst
+        'pareto-frontier': secPareto, 'traffic': secTraffic, 'estimator': secEst, 'parallel-workloads': secWorkloads
     };
 
     if (subtabDefs.length > 1) {
@@ -3940,6 +3934,12 @@ const deltaTag = (t.delta_vs_baseline && !t.is_baseline) ? ` <span style="color:
     if (window._eppChartRenders && window._eppChartRenders.length) {
         window._eppChartRenders.forEach(fn => fn());
         window._eppChartRenders = [];
+    }
+
+    // Render parallel-workload charts
+    if (window._wlChartRenders && window._wlChartRenders.length) {
+        window._wlChartRenders.forEach(fn => { try { fn(); } catch (e) {} });
+        window._wlChartRenders = [];
     }
 
     // Render estimator methodology explanation

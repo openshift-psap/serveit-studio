@@ -582,22 +582,9 @@
                                 <input type="checkbox" id="parallel-workloads-enabled" style="width:20px;height:20px;cursor:pointer;" onclick="event.stopPropagation();toggleParallelWorkloads(this.checked);">
                             </div>
                             <div id="parallel-workloads-inner" style="padding:12px 20px;display:none;">
-                                <table style="width:100%;border-collapse:collapse;font-size:0.88em;">
-                                    <thead>
-                                        <tr style="background:#f5f3ff;color:#5b21b6;text-align:left;">
-                                            <th style="padding:6px 8px;">Name</th>
-                                            <th style="padding:6px 8px;">ISL</th>
-                                            <th style="padding:6px 8px;">OSL</th>
-                                            <th style="padding:6px 8px;">ISL stdev</th>
-                                            <th style="padding:6px 8px;">OSL stdev</th>
-                                            <th style="padding:6px 8px;">Concurrency</th>
-                                            <th style="padding:6px 8px;"></th>
-                                        </tr>
-                                    </thead>
-                                    <tbody id="parallel-workloads-body"></tbody>
-                                </table>
+                                <div id="parallel-workloads-body"></div>
                                 <button type="button" onclick="addParallelWorkloadRow()" style="margin-top:10px;padding:6px 14px;font-size:0.85em;background:#f5f3ff;border:1.5px solid #c4b5fd;border-radius:8px;cursor:pointer;color:#5b21b6;font-weight:600;">+ Add Workload</button>
-                                <div style="margin-top:8px;font-size:0.8em;color:#6b7280;">When enabled, these rows fully define the benchmark load (the main ISL/OSL/Users above remain the defaults for optimization steps that search a single shape).</div>
+                                <div style="margin-top:8px;font-size:0.8em;color:#6b7280;">When enabled, these rows fully define the benchmark load (the main ISL/OSL/Users above remain the defaults for optimization steps that search a single shape). A row that sets its own ISL/OSL does <strong>not</strong> inherit the global stdev/min-max/prefix — set them per row if you want variation or shared prefixes.</div>
                             </div>
                         </div>
 

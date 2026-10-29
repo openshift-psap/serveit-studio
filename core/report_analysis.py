@@ -1575,6 +1575,9 @@ class ReportAnalyzer:
                 try:
                     _mj = json.loads(r.metrics_json) if isinstance(r.metrics_json, str) else r.metrics_json
                     all_results[-1]['request_total'] = _mj.get('request_total')
+                    # per-workload stats for parallel (mixed-shape) runs
+                    if _mj.get('workloads'):
+                        all_results[-1]['workloads'] = _mj['workloads']
                     all_results[-1]['request_errored'] = _mj.get('request_errored')
                     all_results[-1]['nixl_errors'] = _mj.get('nixl_errors', 0)
                     all_results[-1]['nixl_degraded'] = _mj.get('nixl_degraded', False)

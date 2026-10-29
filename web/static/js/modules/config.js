@@ -1956,6 +1956,12 @@ function toggleParallelWorkloads(enabled) {
             osl: parseInt(document.getElementById('osl-input').value) || 100,
             isl_stdev: config.isl_stdev || null,
             osl_stdev: config.osl_stdev || null,
+            isl_min: config.isl_min || null,
+            isl_max: config.isl_max || null,
+            osl_min: config.osl_min || null,
+            osl_max: config.osl_max || null,
+            prefix_tokens: config.prefix_tokens || null,
+            prefix_count: config.prefix_count || null,
             concurrency: config.users || 10
         }];
     }
@@ -1970,7 +1976,11 @@ function addParallelWorkloadRow() {
     if (!config.parallel_workloads) config.parallel_workloads = [];
     config.parallel_workloads.push({
         name: 'workload-' + (config.parallel_workloads.length + 1),
-        isl: 3000, osl: 100, isl_stdev: null, osl_stdev: null, concurrency: 10
+        isl: 3000, osl: 100,
+        isl_stdev: null, osl_stdev: null,
+        isl_min: null, isl_max: null, osl_min: null, osl_max: null,
+        prefix_tokens: null, prefix_count: null,
+        concurrency: 10, rate_type: null
     });
     renderParallelWorkloads();
     saveConfig();
@@ -1990,8 +2000,8 @@ function removeParallelWorkloadRow(i) {
 
 function setParallelWorkloadField(i, field, value) {
     if (!config.parallel_workloads || !config.parallel_workloads[i]) return;
-    if (field === 'name') {
-        config.parallel_workloads[i].name = value;
+    if (field === 'name' || field === 'rate_type') {
+        config.parallel_workloads[i][field] = value || null;
     } else {
         config.parallel_workloads[i][field] = value === '' || isNaN(value) ? null : parseInt(value);
     }
@@ -2004,22 +2014,53 @@ function renderParallelWorkloads() {
     var rows = config.parallel_workloads || [];
     var html = '';
     rows.forEach(function (w, i) {
-        var cell = function (field, value, placeholder, width) {
-            return '<td style="padding:4px 6px;">' +
-                '<input type="' + (field === 'name' ? 'text' : 'number') + '" value="' + (value == null ? '' : value) + '" ' +
-                'placeholder="' + placeholder + '" style="width:' + width + ';padding:5px 7px;border:1px solid #d8b4fe;border-radius:6px;" ' +
-                'onchange="setParallelWorkloadField(' + i + ', \'' + field + '\', this.value)"></td>';
+        var inp = function (field, label, value, ph, width) {
+            return '<div style="display:flex;flex-direction:column;gap:2px;">' +
+                '<span style="font-size:0.72em;color:#6d28d9;font-weight:600;">' + label + '</span>' +
+                '<input type="number" value="' + (value == null ? '' : value) + '" placeholder="' + ph + '" ' +
+                'style="width:' + width + ';padding:5px 7px;border:1px solid #d8b4fe;border-radius:6px;font-size:0.9em;" ' +
+                'onchange="setParallelWorkloadField(' + i + ', \'' + field + '\', this.value)"></div>';
         };
-        html += '<tr style="border-bottom:1px solid #ede9fe;">' +
-            cell('name', w.name, 'name', '110px') +
-            cell('isl', w.isl, '3000', '80px') +
-            cell('osl', w.osl, '100', '80px') +
-            cell('isl_stdev', w.isl_stdev, '—', '80px') +
-            cell('osl_stdev', w.osl_stdev, '—', '80px') +
-            cell('concurrency', w.concurrency, '10', '90px') +
-            '<td style="padding:4px 6px;"><button type="button" onclick="removeParallelWorkloadRow(' + i + ')" ' +
-            'style="background:#fee2e2;border:1px solid #fca5a5;border-radius:6px;color:#b91c1c;cursor:pointer;padding:4px 9px;">✕</button></td>' +
-            '</tr>';
+        var rateType = w.rate_type || '';
+        html += '<div style="border:1.5px solid #ddd6fe;border-radius:10px;padding:10px 14px;margin-bottom:10px;background:white;">' +
+            // header: name + remove
+            '<div style="display:flex;align-items:center;gap:10px;margin-bottom:8px;">' +
+                '<input type="text" value="' + (w.name || '') + '" placeholder="workload name" ' +
+                'style="flex:1;padding:6px 10px;border:1.5px solid #c4b5fd;border-radius:6px;font-weight:600;color:#5b21b6;" ' +
+                'onchange="setParallelWorkloadField(' + i + ', \'name\', this.value)">' +
+                '<button type="button" onclick="removeParallelWorkloadRow(' + i + ')" ' +
+                'style="background:#fee2e2;border:1px solid #fca5a5;border-radius:6px;color:#b91c1c;cursor:pointer;padding:5px 10px;">✕</button>' +
+            '</div>' +
+            // prompt shape
+            '<div style="display:flex;flex-wrap:wrap;gap:10px;margin-bottom:6px;">' +
+                inp('isl', 'ISL (prompt tokens)', w.isl, '3000', '95px') +
+                inp('isl_stdev', 'ISL σ', w.isl_stdev, '—', '70px') +
+                inp('isl_min', 'ISL min', w.isl_min, '—', '80px') +
+                inp('isl_max', 'ISL max', w.isl_max, '—', '80px') +
+            '</div>' +
+            '<div style="display:flex;flex-wrap:wrap;gap:10px;margin-bottom:6px;">' +
+                inp('osl', 'OSL (output tokens)', w.osl, '100', '95px') +
+                inp('osl_stdev', 'OSL σ', w.osl_stdev, '—', '70px') +
+                inp('osl_min', 'OSL min', w.osl_min, '—', '80px') +
+                inp('osl_max', 'OSL max', w.osl_max, '—', '80px') +
+            '</div>' +
+            // load + prefix
+            '<div style="display:flex;flex-wrap:wrap;gap:10px;align-items:flex-end;">' +
+                inp('concurrency', 'Concurrency', w.concurrency, '10', '90px') +
+                '<div style="display:flex;flex-direction:column;gap:2px;">' +
+                    '<span style="font-size:0.72em;color:#6d28d9;font-weight:600;">Rate type</span>' +
+                    '<select onchange="setParallelWorkloadField(' + i + ', \'rate_type\', this.value)" ' +
+                        'style="padding:5px 7px;border:1px solid #d8b4fe;border-radius:6px;font-size:0.9em;background:white;">' +
+                        '<option value=""' + (rateType === '' ? ' selected' : '') + '>inherit global</option>' +
+                        '<option value="concurrent"' + (rateType === 'concurrent' ? ' selected' : '') + '>concurrent</option>' +
+                        '<option value="constant"' + (rateType === 'constant' ? ' selected' : '') + '>constant</option>' +
+                        '<option value="poisson"' + (rateType === 'poisson' ? ' selected' : '') + '>poisson</option>' +
+                    '</select>' +
+                '</div>' +
+                inp('prefix_tokens', 'Shared prefix (tokens)', w.prefix_tokens, '—', '105px') +
+                inp('prefix_count', 'Prefixes', w.prefix_count, '—', '70px') +
+            '</div>' +
+        '</div>';
     });
     body.innerHTML = html;
 }
