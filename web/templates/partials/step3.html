@@ -129,13 +129,14 @@
                                                 <span id="length-unit-hint" style="font-size:0.78em;color:#9ca3af;">1 token ≈ 4 characters</span>
                                             </div>
 
-                                            <!-- Continuous Workload Settings -->
-                                            <div id="continuous-settings">
-                                              <div style="border:2px solid var(--rh-black);border-radius:8px;padding:16px;margin-bottom:16px;">
                                                 <div style="display:flex;align-items:center;gap:12px;margin-bottom:12px;">
                                                     <span style="font-weight:800;color:var(--rh-black);font-size:1em;">Workload 1</span>
                                                     <input type="text" id="workload1-name-input" placeholder="workload-1" style="padding:8px 12px;background:#FAFAFA;border:2px solid var(--rh-gray-300);border-radius:4px;font-family:var(--font-mono);font-weight:800;color:var(--rh-red-primary);max-width:240px;" onchange="setWorkload1Extra('name', this.value)">
                                                 </div>
+
+                                            <!-- Continuous Workload Settings -->
+                                            <div id="continuous-settings">
+                                              <div style="border:2px solid var(--rh-black);border-radius:8px;padding:16px;margin-bottom:16px;">
                                                 <div class="input-grid">
                                                     <div class="input-group">
                                                         <label id="isl-label">Input Length (ISL)</label>
@@ -192,45 +193,6 @@
                                                         </div>
 
 
-                                                <!-- Workload 1 per-shape load (multi-workload mode only) -->
-                                                <div id="workload1-extras" style="display:none;">
-                                                    <div class="input-grid">
-                                                        <div class="input-group compact">
-                                                            <label>Concurrency</label>
-                                                            <input type="number" id="workload1-concurrency-input" placeholder="e.g. 10" onchange="setWorkload1Extra('concurrency', this.value)">
-                                                            <div class="help-text">Simultaneous requests for this workload. Defaults to the global users.</div>
-                                                        </div>
-                                                        <div class="input-group compact">
-                                                            <label>Rate Type</label>
-                                                            <select id="workload1-rate-select" onchange="setWorkload1Extra('rate_type', this.value)">
-                                                                <option value="">inherit global</option>
-                                                                <option value="concurrent">Concurrent</option>
-                                                                <option value="constant">Constant</option>
-                                                                <option value="poisson">Poisson</option>
-                                                            </select>
-                                                            <div class="help-text">How this workload issues requests.</div>
-                                                        </div>
-                                                        <div class="input-group compact">
-                                                            <label>Shared Prefix (tokens)</label>
-                                                            <input type="number" id="workload1-prefix-input" placeholder="e.g. 256" onchange="setWorkload1Extra('prefix_tokens', this.value)">
-                                                            <div class="help-text">Prefix reused across this workload's requests.</div>
-                                                        </div>
-                                                        <div class="input-group compact">
-                                                            <label>Prefixes</label>
-                                                            <input type="number" id="workload1-prefix-count-input" placeholder="e.g. 1" onchange="setWorkload1Extra('prefix_count', this.value)">
-                                                            <div class="help-text">Number of distinct prefix variants.</div>
-                                                        </div>
-                                                    </div>
-                                                </div>
-
-                                              </div>
-
-                                                <!-- Additional workloads -->
-                                                <div style="margin-top:12px;">
-                                                    <button type="button" onclick="addExtraWorkload()" style="padding:10px 18px;background:#F5F5F5;border:2px solid var(--rh-gray-300);border-radius:4px;cursor:pointer;color:var(--rh-black);font-weight:800;font-size:0.9em;transition:border-color 0.3s ease;" onmouseover="this.style.borderColor='var(--rh-red-primary)'" onmouseout="this.style.borderColor='var(--rh-gray-300)'">+ Add another workload</button>
-                                                </div>
-                                                <div id="extra-workloads-body" style="display:none;"></div>
-                                                <div id="multi-workload-note" style="display:none;margin-top:8px;font-size:0.8em;color:#6b7280;">Each workload runs simultaneously against the same deployment with its own shape and concurrency. A workload that sets its own ISL/OSL does not inherit the global variation/prefix — set them per card. Remove all extra workloads to return to a single shape.</div>
 
                                                 <!-- Corpus Dataset toggle -->
                                                 <div style="border-top:1px solid #dcfce7;margin-top:16px;">
@@ -310,7 +272,7 @@
                                             </div>
 
                                             <!-- Multi-Turn Conversation Settings -->
-                                            <div id="multiturn-settings" style="display:none;">
+                                            <div id="multiturn-settings" style="display:none;border:2px solid var(--rh-black);border-radius:8px;padding:16px;margin-bottom:16px;">
                                                 <div class="input-grid">
                                                     <div class="input-group">
                                                         <label id="isl-label-mt">Input Length per Turn (ISL)</label>
@@ -546,6 +508,46 @@
                                                 </div>
 
                                             </div>
+                                                <!-- Workload 1 per-shape load (multi-workload mode only) -->
+                                                <div id="workload1-extras" style="display:none;">
+                                                    <div class="input-grid">
+                                                        <div class="input-group compact">
+                                                            <label>Concurrency</label>
+                                                            <input type="number" id="workload1-concurrency-input" placeholder="e.g. 10" onchange="setWorkload1Extra('concurrency', this.value)">
+                                                            <div class="help-text">Simultaneous requests for this workload. Defaults to the global users.</div>
+                                                        </div>
+                                                        <div class="input-group compact">
+                                                            <label>Rate Type</label>
+                                                            <select id="workload1-rate-select" onchange="setWorkload1Extra('rate_type', this.value)">
+                                                                <option value="">inherit global</option>
+                                                                <option value="concurrent">Concurrent</option>
+                                                                <option value="constant">Constant</option>
+                                                                <option value="poisson">Poisson</option>
+                                                            </select>
+                                                            <div class="help-text">How this workload issues requests.</div>
+                                                        </div>
+                                                        <div class="input-group compact">
+                                                            <label>Shared Prefix (tokens)</label>
+                                                            <input type="number" id="workload1-prefix-input" placeholder="e.g. 256" onchange="setWorkload1Extra('prefix_tokens', this.value)">
+                                                            <div class="help-text">Prefix reused across this workload's requests.</div>
+                                                        </div>
+                                                        <div class="input-group compact">
+                                                            <label>Prefixes</label>
+                                                            <input type="number" id="workload1-prefix-count-input" placeholder="e.g. 1" onchange="setWorkload1Extra('prefix_count', this.value)">
+                                                            <div class="help-text">Number of distinct prefix variants.</div>
+                                                        </div>
+                                                    </div>
+                                                </div>
+
+                                              </div>
+
+                                                <!-- Additional workloads -->
+                                                <div style="margin-top:12px;">
+                                                    <button type="button" onclick="addExtraWorkload()" style="padding:10px 18px;background:#F5F5F5;border:2px solid var(--rh-gray-300);border-radius:4px;cursor:pointer;color:var(--rh-black);font-weight:800;font-size:0.9em;transition:border-color 0.3s ease;" onmouseover="this.style.borderColor='var(--rh-red-primary)'" onmouseout="this.style.borderColor='var(--rh-gray-300)'">+ Add another workload</button>
+                                                </div>
+                                                <div id="extra-workloads-body" style="display:none;"></div>
+                                                <div id="multi-workload-note" style="display:none;margin-top:8px;font-size:0.8em;color:#6b7280;">Each workload runs simultaneously against the same deployment with its own shape and concurrency. A workload that sets its own ISL/OSL does not inherit the global variation/prefix — set them per card. Remove all extra workloads to return to a single shape.</div>
+
                                         </div>
                                     </div>
                                 </div>
