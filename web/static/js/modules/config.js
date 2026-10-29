@@ -397,27 +397,12 @@ function updateUIFromConfig() {
         document.getElementById('pvc-size-input').value = config.pvc_size;
     }
 
-    // Restore workload mode — only switch to Custom Dataset panel for user-provided
-    // dataset paths. Auto-generated corpus paths (/mnt/storage/prefix-cache-datasets/)
-    // are internal and should stay in Synthetic mode so ISL/OSL remain configurable.
-    var isUserDataset = config.workload_mode === 'dataset' &&
-        config.dataset_source &&
-        config.dataset_source.indexOf('/prefix-cache-datasets/') === -1 &&
-        config.dataset_source.indexOf('calibration-') === -1;
-    // Auto-generated corpus paths are internal — reset to synthetic so validation passes
-    if (config.workload_mode === 'dataset' && !isUserDataset) {
+    // Dataset mode is internal-only (the prefix-cache simulation switches
+    // the backend config to a generated dataset); the wizard always shows
+    // the synthetic panel and the backend re-derives datasets as needed.
+    if (config.workload_mode === 'dataset') {
         config.workload_mode = 'synthetic';
         config.dataset_source = null;
-    }
-    if (isUserDataset) {
-        document.getElementById('synthetic-workload-panel').style.display = 'none';
-        document.getElementById('dataset-workload-panel').style.display = 'block';
-        if (document.getElementById('dataset-source-input'))
-            document.getElementById('dataset-source-input').value = config.dataset_source;
-        if (config.dataset_column && document.getElementById('dataset-column-input'))
-            document.getElementById('dataset-column-input').value = config.dataset_column;
-        if (config.dataset_max_output && document.getElementById('dataset-max-output-input'))
-            document.getElementById('dataset-max-output-input').value = config.dataset_max_output;
     }
 
     // Restore prefix cache toggle + slider

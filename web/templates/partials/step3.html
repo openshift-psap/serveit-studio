@@ -111,13 +111,12 @@
                                 <!-- Synthetic Workload (front) -->
                                 <div id="synthetic-workload-panel">
                                     <div style="border:2px solid #22c55e;border-radius:12px;overflow:hidden;">
-                                        <div style="background:linear-gradient(135deg,#f0fdf4,#dcfce7);padding:16px 20px;cursor:pointer;" onclick="toggleWorkloadMode()">
+                                        <div style="background:linear-gradient(135deg,#f0fdf4,#dcfce7);padding:16px 20px;">
                                             <div style="display:flex;align-items:center;justify-content:space-between;">
                                                 <div>
                                                     <div style="font-weight:700;color:#15803d;font-size:1.05em;">⚡ Synthetic Workload</div>
                                                     <div style="color:#166534;font-size:0.92em;margin-top:4px;">Generate fake test prompts with the sizes you specify, to simulate your real traffic.</div>
                                                 </div>
-                                                <div style="color:#15803d;font-size:0.8em;font-weight:600;padding:4px 12px;border:1px solid #86efac;border-radius:20px;white-space:nowrap;">Click to switch to Dataset →</div>
                                             </div>
                                         </div>
                                         <div style="padding:16px 20px;">
@@ -543,52 +542,6 @@
                                                     </div>
                                                 </div>
 
-                                            </div>
-                                        </div>
-                                    </div>
-                                </div>
-
-                                <!-- Dataset Workload (back, hidden by default) -->
-                                <div id="dataset-workload-panel" style="display:none;">
-                                    <div style="border:2px solid #8b5cf6;border-radius:12px;overflow:hidden;">
-                                        <div style="background:linear-gradient(135deg,#f5f3ff,#ede9fe);padding:16px 20px;cursor:pointer;" onclick="toggleWorkloadMode()">
-                                            <div style="display:flex;align-items:center;justify-content:space-between;">
-                                                <div>
-                                                    <div style="font-weight:700;color:#5b21b6;font-size:1.05em;">📊 Custom Dataset</div>
-                                                    <div style="color:#6d28d9;font-size:0.92em;margin-top:4px;">Use real prompts from an existing dataset or file instead of generating fake test data.</div>
-                                                </div>
-                                                <div style="color:#5b21b6;font-size:0.8em;font-weight:600;padding:4px 12px;border:1px solid #c4b5fd;border-radius:20px;white-space:nowrap;">Click to switch to Synthetic →</div>
-                                            </div>
-                                        </div>
-                                        <div style="padding:16px 20px;">
-                                            <div class="input-group" style="margin-bottom:16px;">
-                                                <label>Dataset Source</label>
-                                                <input type="text" id="dataset-source-input" placeholder="e.g. openai/gsm8k or /path/to/data.jsonl" style="width:100%;padding:12px 16px;border:2px solid #d1d5db;border-radius:8px;font-size:15px;">
-                                                <div class="help-text">Enter a HuggingFace dataset name (e.g., "openai/gsm8k"), a URL, or a file path on the server.</div>
-                                            </div>
-
-                                            <div class="input-grid">
-                                                <div class="input-group">
-                                                    <label>Prompt Column Name (optional)</label>
-                                                    <input type="text" id="dataset-column-input" placeholder="e.g. prompt, text, question" style="padding:12px 16px;border:2px solid #d1d5db;border-radius:8px;font-size:15px;">
-                                                    <div class="help-text">If your dataset has multiple columns, specify which one contains the prompts. Leave empty to auto-detect.</div>
-                                                </div>
-                                                <div class="input-group">
-                                                    <label>Max Reply Length</label>
-                                                    <input type="number" id="dataset-max-output-input" value="256" min="1" max="8000" style="padding:12px 16px;border:2px solid #d1d5db;border-radius:8px;font-size:15px;">
-                                                    <div class="help-text">The longest reply the AI is allowed to generate for each prompt. A word is roughly 1.3 tokens. For example, a 200-word reply is about 260 tokens.</div>
-                                                </div>
-                                            </div>
-
-                                            <div class="input-group" style="margin-top:16px;">
-                                                <label>Dataset File Upload (optional)</label>
-                                                <div style="border:2px dashed #d1d5db;border-radius:8px;padding:24px;text-align:center;cursor:pointer;transition:border-color 0.2s;" id="dataset-upload-zone" onclick="document.getElementById('dataset-file-input').click();">
-                                                    <div style="font-size:2em;margin-bottom:8px;">📁</div>
-                                                    <div style="font-weight:600;color:#374151;">Drop file here or click to upload</div>
-                                                    <div style="font-size:0.85em;color:#6b7280;margin-top:4px;">Supports CSV, JSON, JSONL, TXT</div>
-                                                    <div id="dataset-upload-status" style="margin-top:8px;font-size:0.9em;color:#059669;display:none;"></div>
-                                                </div>
-                                                <input type="file" id="dataset-file-input" accept=".csv,.json,.jsonl,.txt" style="display:none;" onchange="handleDatasetUpload(this)">
                                             </div>
                                         </div>
                                     </div>
