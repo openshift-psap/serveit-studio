@@ -1932,17 +1932,22 @@ var allModels = [];
 function workload1FromGlobals() {
     var islEl = document.getElementById('isl-input');
     var oslEl = document.getElementById('osl-input');
+    // Fall back to the stored workload-1 entry — an unseeded workload1
+    // must never degrade [0] (the poisoning loop: mirror wrote nulls
+    // into [0], the session fed them back on every subsequent save).
+    var w0 = (config.parallel_workloads || [])[0] || {};
+    var w1 = config.workload1 || {};
     return {
-        name: (config.workload1 && config.workload1.name) || 'workload-1',
+        name: w1.name || w0.name || 'workload-1',
         isl: (islEl ? parseInt(islEl.value) : null) || config.isl || 3000,
         osl: (oslEl ? parseInt(oslEl.value) : null) || config.osl || 100,
         isl_stdev: config.isl_stdev || null, osl_stdev: config.osl_stdev || null,
         isl_min: config.isl_min || null, isl_max: config.isl_max || null,
         osl_min: config.osl_min || null, osl_max: config.osl_max || null,
-        concurrency: (config.workload1 && config.workload1.concurrency) || config.users || 10,
-        rate_type: (config.workload1 && config.workload1.rate_type) || null,
-        prefix_tokens: (config.workload1 && config.workload1.prefix_tokens) || null,
-        prefix_count: (config.workload1 && config.workload1.prefix_count) || null
+        concurrency: w1.concurrency || w0.concurrency || config.users || 10,
+        rate_type: w1.rate_type || w0.rate_type || null,
+        prefix_tokens: w1.prefix_tokens != null ? w1.prefix_tokens : (w0.prefix_tokens != null ? w0.prefix_tokens : null),
+        prefix_count: w1.prefix_count != null ? w1.prefix_count : (w0.prefix_count != null ? w0.prefix_count : null)
     };
 }
 
