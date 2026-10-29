@@ -59,7 +59,7 @@ function _renderChartsImpl(data, runId, content) {
 
     // Parallel workloads card: per-workload results for mixed-shape runs
     try {
-        const wlEntries = (data.all_results || []).filter(r => r.workloads && r.workloads.length && !(r.config_name || '').startsWith('step11-epp-'));
+        const wlEntries = (data.all_results || []).filter(r => r.workloads && r.workloads.length && !(r.test_id || r.config_name || '').startsWith('step11-epp-'));
         if (wlEntries.length) {
             let wlHtml = '<div class="chart-card" style="border:2px solid #7c3aed;border-left:6px solid #7c3aed;">';
             wlHtml += '<div class="chart-card-header" style="background:linear-gradient(135deg,#7c3aed,#8b5cf6);">🧵 Parallel Workloads — per-shape results</div>';
