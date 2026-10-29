@@ -574,7 +574,19 @@ def get_run_config(run_id):
                 return jsonify({'error': 'Run not found'}), 404
             # Prefer ui_config_json (exact UI state); fall back to config_json with field mapping
             if row['ui_config_json']:
-                return jsonify(json.loads(row['ui_config_json']))
+                ui = json.loads(row['ui_config_json'])
+                # The UI snapshot can go stale (written before workloads were
+                # configured, or overwritten by a later save_config). The
+                # recipe config is frozen at run creation and authoritative
+                # for what actually ran — backfill the workload list from it.
+                if row['config_json']:
+                    try:
+                        rc = json.loads(row['config_json'])
+                        if rc.get('parallel_workloads') and not ui.get('parallel_workloads'):
+                            ui['parallel_workloads'] = rc['parallel_workloads']
+                    except Exception:
+                        pass
+                return jsonify(ui)
             if row['config_json']:
                 rc = json.loads(row['config_json'])
                 # Map optimizer field names → UI field names
