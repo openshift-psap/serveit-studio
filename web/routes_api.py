@@ -583,7 +583,22 @@ def get_run_config(run_id):
                     try:
                         rc = json.loads(row['config_json'])
                         if rc.get('parallel_workloads') and not ui.get('parallel_workloads'):
-                            ui['parallel_workloads'] = rc['parallel_workloads']
+                            wl = rc['parallel_workloads']
+                            ui['parallel_workloads'] = wl
+                            # The UI stores workload 1's shape in the global fields —
+                            # seed them (and its prefix/users) from the first entry,
+                            # which is what actually ran, overriding stale snapshot
+                            # defaults.
+                            w0 = wl[0] if wl else {}
+                            for k in ('isl', 'osl', 'isl_stdev', 'osl_stdev',
+                                      'isl_min', 'isl_max', 'osl_min', 'osl_max'):
+                                if w0.get(k) is not None:
+                                    ui[k] = w0[k]
+                            if w0.get('prefix_tokens') is not None:
+                                ui['prefix_tokens'] = w0['prefix_tokens']
+                                ui['prefix_count'] = w0.get('prefix_count')
+                            if w0.get('concurrency'):
+                                ui['users'] = w0['concurrency']
                     except Exception:
                         pass
                 return jsonify(ui)
