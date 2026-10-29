@@ -340,6 +340,7 @@ function resumeRun(runId, runName) {
         .then(function(runConfig) {
             if (runConfig && !runConfig.error) {
                 config = Object.assign({}, config, runConfig);
+                delete config.workload1;  // re-seed from the run's workload 1
                 if (typeof updateUIFromConfig === 'function') updateUIFromConfig();
             }
         })
@@ -364,6 +365,7 @@ function applyRunSettings(runId, btn) {
                 // load_config_result from overwriting our applied settings
                 window._serverConfigReceived = true;
                 config = Object.assign({}, config, runConfig);
+                delete config.workload1;  // the applied run's workload 1 is authoritative
                 document.getElementById('resume-overlay').classList.remove('active');
                 goToStep(3, true);
                 // Apply UI AFTER step navigation so the step-3 form elements

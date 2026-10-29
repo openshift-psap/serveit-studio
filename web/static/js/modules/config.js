@@ -2107,7 +2107,9 @@ function restoreWorkloadsUI() {
         // a stale session state can hold a workload1 with nulls (saved
         // before this apply), and w0 is what actually ran. Existing
         // (user-edited) values are preserved.
-        config.workload1.name = config.workload1.name || w0.name || 'workload-1';
+        if (!config.workload1.name || config.workload1.name === 'workload-1') {
+            config.workload1.name = w0.name || 'workload-1';
+        }
         config.workload1.concurrency = config.workload1.concurrency || w0.concurrency || config.users || 10;
         config.workload1.rate_type = config.workload1.rate_type || w0.rate_type || null;
         config.workload1.prefix_tokens = config.workload1.prefix_tokens != null ? config.workload1.prefix_tokens : (w0.prefix_tokens != null ? w0.prefix_tokens : null);
