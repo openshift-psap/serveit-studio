@@ -132,9 +132,9 @@
 
                                             <!-- Continuous Workload Settings -->
                                             <div id="continuous-settings">
-                                                <div style="display:flex;align-items:center;gap:10px;margin-bottom:10px;">
-                                                    <span style="font-weight:700;color:#1e293b;font-size:0.95em;">Workload 1</span>
-                                                    <input type="text" id="workload1-name-input" placeholder="workload-1" style="padding:4px 10px;border:1px solid #d8b4fe;border-radius:6px;font-weight:600;color:#5b21b6;max-width:200px;font-size:0.9em;" onchange="setWorkload1Extra('name', this.value)">
+                                                <div style="display:flex;align-items:center;gap:12px;margin-bottom:12px;">
+                                                    <span style="font-weight:800;color:var(--rh-black);font-size:1em;">Workload 1</span>
+                                                    <input type="text" id="workload1-name-input" placeholder="workload-1" style="padding:8px 12px;background:#FAFAFA;border:2px solid var(--rh-gray-300);border-radius:4px;font-family:var(--font-mono);font-weight:800;color:var(--rh-red-primary);max-width:240px;" onchange="setWorkload1Extra('name', this.value)">
                                                 </div>
                                                 <div class="input-grid">
                                                     <div class="input-group">
@@ -149,24 +149,8 @@
                                                     </div>
                                                 </div>
 
-                                                <!-- Length Variation toggle -->
-                                                <div style="border-top:1px solid #dcfce7;margin-top:16px;">
-                                                    <div style="padding:12px 20px;cursor:pointer;display:flex;align-items:center;justify-content:space-between;margin:-16px -20px 0 -20px;" onclick="var on=!document.getElementById('length-variation-enabled').checked;document.getElementById('length-variation-enabled').checked=on;document.getElementById('length-variation-body').style.display=on?'block':'none';document.getElementById('length-variation-inner').style.opacity=on?'1':'0.4';var sw=document.getElementById('length-variation-switch');sw.style.background=on?'#15803d':'#ccc';sw.querySelector('span').style.transform=on?'translateX(18px)':'translateX(0)';if(!on){document.getElementById('isl-stdev-input').value='';document.getElementById('osl-stdev-input').value='';config.isl_stdev=null;config.osl_stdev=null;saveConfig();}">
-                                                        <div style="display:flex;align-items:center;gap:10px;padding:12px 20px;">
-                                                            <div style="font-size:1.3em;flex-shrink:0;">📊</div>
-                                                            <div>
-                                                                <div style="font-weight:600;color:#15803d;font-size:0.95em;">Length Variation</div>
-                                                                <div style="color:#166534;font-size:0.82em;margin-top:2px;">Add randomness to input/output lengths to simulate realistic traffic</div>
-                                                            </div>
-                                                        </div>
-                                                        <input type="checkbox" id="length-variation-enabled" style="display:none;">
-                                                        <div id="length-variation-switch" style="width:40px;height:22px;background:#ccc;border-radius:11px;position:relative;transition:background-color 0.2s;flex-shrink:0;margin-right:20px;">
-                                                            <span style="position:absolute;top:2px;left:2px;width:18px;height:18px;background:white;border-radius:50%;transition:transform 0.2s;box-shadow:0 1px 3px rgba(0,0,0,0.2);display:block;"></span>
-                                                        </div>
-                                                    </div>
-                                                    <div id="length-variation-body" style="display:none;padding-top:12px;">
-                                                        <div id="length-variation-inner" style="opacity:0.4;transition:all 0.2s;padding:0 20px 16px;">
-                                                        <div class="input-grid">
+                                                <!-- Length variation & ranges (always visible) -->
+<div class="input-grid">
                                                             <div class="input-group">
                                                                 <label id="isl-var-label">Input Length Variation (stdev)</label>
                                                                 <input type="number" id="isl-stdev-input" value="" min="0" max="32000" placeholder="e.g. 3000" oninput="config.isl_stdev=this.value?parseInt(this.value):null;saveConfig();">
@@ -206,43 +190,44 @@
                                                                 <div class="help-text">Hard limits on output token count. Responses shorter than min or longer than max are clamped. Leave empty for no limits.</div>
                                                             </div>
                                                         </div>
-                                                        </div>
-                                                    </div>
-                                                </div>
+
 
                                                 <!-- Workload 1 per-shape load (multi-workload mode only) -->
-                                                <div id="workload1-extras" style="display:none;border:1.5px dashed #c4b5fd;border-radius:10px;padding:10px 14px;margin-top:12px;background:#faf5ff;">
-                                                    <div style="font-size:0.78em;color:#6d28d9;font-weight:700;margin-bottom:8px;">Workload 1 — load &amp; prefix (applies when running multiple workloads)</div>
-                                                    <div style="display:flex;flex-wrap:wrap;gap:10px;align-items:flex-end;">
-                                                        <div style="display:flex;flex-direction:column;gap:2px;">
-                                                            <span style="font-size:0.72em;color:#6d28d9;font-weight:600;">Concurrency</span>
-                                                            <input type="number" id="workload1-concurrency-input" placeholder="10" style="width:90px;padding:5px 7px;border:1px solid #d8b4fe;border-radius:6px;font-size:0.9em;" onchange="setWorkload1Extra('concurrency', this.value)">
+                                                <div id="workload1-extras" style="display:none;">
+                                                    <div class="input-grid">
+                                                        <div class="input-group compact">
+                                                            <label>Concurrency</label>
+                                                            <input type="number" id="workload1-concurrency-input" placeholder="e.g. 10" onchange="setWorkload1Extra('concurrency', this.value)">
+                                                            <div class="help-text">Simultaneous requests for this workload. Defaults to the global users.</div>
                                                         </div>
-                                                        <div style="display:flex;flex-direction:column;gap:2px;">
-                                                            <span style="font-size:0.72em;color:#6d28d9;font-weight:600;">Rate type</span>
-                                                            <select id="workload1-rate-select" style="padding:5px 7px;border:1px solid #d8b4fe;border-radius:6px;font-size:0.9em;background:white;" onchange="setWorkload1Extra('rate_type', this.value)">
+                                                        <div class="input-group compact">
+                                                            <label>Rate Type</label>
+                                                            <select id="workload1-rate-select" onchange="setWorkload1Extra('rate_type', this.value)">
                                                                 <option value="">inherit global</option>
-                                                                <option value="concurrent">concurrent</option>
-                                                                <option value="constant">constant</option>
-                                                                <option value="poisson">poisson</option>
+                                                                <option value="concurrent">Concurrent</option>
+                                                                <option value="constant">Constant</option>
+                                                                <option value="poisson">Poisson</option>
                                                             </select>
+                                                            <div class="help-text">How this workload issues requests.</div>
                                                         </div>
-                                                        <div style="display:flex;flex-direction:column;gap:2px;">
-                                                            <span style="font-size:0.72em;color:#6d28d9;font-weight:600;">Shared prefix (tokens)</span>
-                                                            <input type="number" id="workload1-prefix-input" placeholder="—" style="width:105px;padding:5px 7px;border:1px solid #d8b4fe;border-radius:6px;font-size:0.9em;" onchange="setWorkload1Extra('prefix_tokens', this.value)">
+                                                        <div class="input-group compact">
+                                                            <label>Shared Prefix (tokens)</label>
+                                                            <input type="number" id="workload1-prefix-input" placeholder="e.g. 256" onchange="setWorkload1Extra('prefix_tokens', this.value)">
+                                                            <div class="help-text">Prefix reused across this workload's requests.</div>
                                                         </div>
-                                                        <div style="display:flex;flex-direction:column;gap:2px;">
-                                                            <span style="font-size:0.72em;color:#6d28d9;font-weight:600;">Prefixes</span>
-                                                            <input type="number" id="workload1-prefix-count-input" placeholder="—" style="width:70px;padding:5px 7px;border:1px solid #d8b4fe;border-radius:6px;font-size:0.9em;" onchange="setWorkload1Extra('prefix_count', this.value)">
+                                                        <div class="input-group compact">
+                                                            <label>Prefixes</label>
+                                                            <input type="number" id="workload1-prefix-count-input" placeholder="e.g. 1" onchange="setWorkload1Extra('prefix_count', this.value)">
+                                                            <div class="help-text">Number of distinct prefix variants.</div>
                                                         </div>
                                                     </div>
                                                 </div>
 
                                                 <!-- Additional workloads -->
                                                 <div style="margin-top:12px;">
-                                                    <button type="button" onclick="addExtraWorkload()" style="padding:6px 14px;font-size:0.85em;background:#f5f3ff;border:1.5px solid #c4b5fd;border-radius:8px;cursor:pointer;color:#5b21b6;font-weight:600;">+ Add another workload</button>
+                                                    <button type="button" onclick="addExtraWorkload()" style="padding:10px 18px;background:#F5F5F5;border:2px solid var(--rh-gray-300);border-radius:4px;cursor:pointer;color:var(--rh-black);font-weight:800;font-size:0.9em;transition:border-color 0.3s ease;" onmouseover="this.style.borderColor='var(--rh-red-primary)'" onmouseout="this.style.borderColor='var(--rh-gray-300)'">+ Add another workload</button>
                                                 </div>
-                                                <div id="extra-workloads-body" style="display:none;margin-top:10px;"></div>
+                                                <div id="extra-workloads-body" style="display:none;"></div>
                                                 <div id="multi-workload-note" style="display:none;margin-top:8px;font-size:0.8em;color:#6b7280;">Each workload runs simultaneously against the same deployment with its own shape and concurrency. A workload that sets its own ISL/OSL does not inherit the global variation/prefix — set them per card. Remove all extra workloads to return to a single shape.</div>
 
                                                 <!-- Corpus Dataset toggle -->

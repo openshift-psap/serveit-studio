@@ -93,34 +93,25 @@ function updateUIFromConfig() {
     if (document.getElementById('duration-input')) {
         document.getElementById('duration-input').value = config.duration;
     }
-    if (document.getElementById('length-variation-enabled')) {
-        var hasVariation = (config.isl_stdev && config.isl_stdev > 0) || (config.osl_stdev && config.osl_stdev > 0) || config.isl_min || config.isl_max || config.osl_min || config.osl_max;
-        document.getElementById('length-variation-enabled').checked = hasVariation;
-        if (hasVariation) {
-            // Single-turn inputs
-            if (config.isl_stdev && document.getElementById('isl-stdev-input')) document.getElementById('isl-stdev-input').value = config.isl_stdev;
-            if (config.osl_stdev && document.getElementById('osl-stdev-input')) document.getElementById('osl-stdev-input').value = config.osl_stdev;
-            if (config.isl_min && document.getElementById('isl-min-input')) document.getElementById('isl-min-input').value = config.isl_min;
-            if (config.isl_max && document.getElementById('isl-max-input')) document.getElementById('isl-max-input').value = config.isl_max;
-            if (config.osl_min && document.getElementById('osl-min-input')) document.getElementById('osl-min-input').value = config.osl_min;
-            if (config.osl_max && document.getElementById('osl-max-input')) document.getElementById('osl-max-input').value = config.osl_max;
-            // Multi-turn inputs (separate IDs)
-            if (config.isl_stdev && document.getElementById('isl-stdev-input-mt')) document.getElementById('isl-stdev-input-mt').value = config.isl_stdev;
-            if (config.osl_stdev && document.getElementById('osl-stdev-input-mt')) document.getElementById('osl-stdev-input-mt').value = config.osl_stdev;
-            var lvBody = document.getElementById('length-variation-body');
-            if (lvBody) lvBody.style.display = 'block';
-            var lvInner = document.getElementById('length-variation-inner');
-            if (lvInner) lvInner.style.opacity = '1';
-            var lvSw = document.getElementById('length-variation-switch');
-            if (lvSw) { lvSw.style.background = '#15803d'; lvSw.querySelector('span').style.transform = 'translateX(18px)'; }
-            // Multi-turn variation toggle
-            var lvMtCb = document.getElementById('length-variation-mt-enabled');
-            var lvMtBody = document.getElementById('length-variation-mt-body');
-            var lvMtSw = document.getElementById('length-variation-mt-switch');
-            if (lvMtCb) { lvMtCb.checked = true; }
-            if (lvMtBody) lvMtBody.style.display = 'block';
-            if (lvMtSw) { lvMtSw.style.background = '#15803d'; var lvMtSpan = lvMtSw.querySelector('span'); if (lvMtSpan) lvMtSpan.style.transform = 'translateX(18px)'; }
-        }
+    // Variation fields are always visible (single-turn); always populate
+    if (document.getElementById('isl-stdev-input')) {
+        document.getElementById('isl-stdev-input').value = config.isl_stdev || '';
+        document.getElementById('osl-stdev-input').value = config.osl_stdev || '';
+        document.getElementById('isl-min-input').value = config.isl_min || '';
+        document.getElementById('isl-max-input').value = config.isl_max || '';
+        document.getElementById('osl-min-input').value = config.osl_min || '';
+        document.getElementById('osl-max-input').value = config.osl_max || '';
+    }
+    // Multi-turn variation toggle (that block still collapses)
+    if (config.isl_stdev || config.osl_stdev) {
+        var lvMtCb2 = document.getElementById('length-variation-mt-enabled');
+        var lvMtBody2 = document.getElementById('length-variation-mt-body');
+        var lvMtSw2 = document.getElementById('length-variation-mt-switch');
+        if (lvMtCb2) { lvMtCb2.checked = true; }
+        if (lvMtBody2) lvMtBody2.style.display = 'block';
+        if (lvMtSw2) { lvMtSw2.style.background = '#15803d'; var s2 = lvMtSw2.querySelector('span'); if (s2) s2.style.transform = 'translateX(18px)'; }
+        if (config.isl_stdev && document.getElementById('isl-stdev-input-mt')) document.getElementById('isl-stdev-input-mt').value = config.isl_stdev;
+        if (config.osl_stdev && document.getElementById('osl-stdev-input-mt')) document.getElementById('osl-stdev-input-mt').value = config.osl_stdev;
     }
     if (config.length_unit) setLengthUnit(config.length_unit, true);
 
@@ -2049,49 +2040,55 @@ function renderExtraWorkloads() {
     var rows = (config.parallel_workloads || []).slice(1); // workload 1 is the globals
     var html = '';
     rows.forEach(function (w, i) {
-        var inp = function (field, label, value, ph, width) {
-            return '<div style="display:flex;flex-direction:column;gap:2px;">' +
-                '<span style="font-size:0.72em;color:#6d28d9;font-weight:600;">' + label + '</span>' +
+        var grp = function (field, label, value, ph, help) {
+            return '<div class="input-group compact">' +
+                '<label>' + label + '</label>' +
                 '<input type="number" value="' + (value == null ? '' : value) + '" placeholder="' + ph + '" ' +
-                'style="width:' + width + ';padding:5px 7px;border:1px solid #d8b4fe;border-radius:6px;font-size:0.9em;" ' +
-                'onchange="setExtraWorkloadField(' + i + ', \'' + field + '\', this.value)"></div>';
+                'onchange="setExtraWorkloadField(' + i + ', \'' + field + '\', this.value)">' +
+                (help ? '<div class="help-text">' + help + '</div>' : '') +
+                '</div>';
+        };
+        var range = function (minF, maxF, label, minV, maxV, help) {
+            return '<div class="input-group compact">' +
+                '<label>' + label + '</label>' +
+                '<div style="display:flex;gap:8px;align-items:center;">' +
+                    '<div style="flex:1;"><div style="font-size:0.75em;color:#64748b;margin-bottom:2px;">Minimum</div>' +
+                    '<input type="number" value="' + (minV == null ? '' : minV) + '" placeholder="—" style="width:100%;" onchange="setExtraWorkloadField(' + i + ', \'' + minF + '\', this.value)"></div>' +
+                    '<div style="flex:1;"><div style="font-size:0.75em;color:#64748b;margin-bottom:2px;">Maximum</div>' +
+                    '<input type="number" value="' + (maxV == null ? '' : maxV) + '" placeholder="—" style="width:100%;" onchange="setExtraWorkloadField(' + i + ', \'' + maxF + '\', this.value)"></div>' +
+                '</div>' +
+                (help ? '<div class="help-text">' + help + '</div>' : '') +
+                '</div>';
         };
         var rateType = w.rate_type || '';
-        html += '<div style="border:1.5px solid #ddd6fe;border-radius:10px;padding:10px 14px;margin-bottom:10px;background:white;">' +
-            '<div style="display:flex;align-items:center;gap:10px;margin-bottom:8px;">' +
-                '<span style="font-weight:700;color:#5b21b6;font-size:0.9em;">Workload ' + (i + 2) + '</span>' +
+        html += '<div style="margin-bottom:4px;">' +
+            '<div style="display:flex;align-items:center;gap:12px;margin-bottom:12px;">' +
+                '<span style="font-weight:800;color:var(--rh-black);font-size:1em;">Workload ' + (i + 2) + '</span>' +
                 '<input type="text" value="' + (w.name || '') + '" placeholder="workload name" ' +
-                'style="flex:1;padding:6px 10px;border:1.5px solid #c4b5fd;border-radius:6px;font-weight:600;color:#5b21b6;" ' +
-                'onchange="setExtraWorkloadField(' + i + ', \'' + "name" + '\', this.value)">' +
+                    'style="flex:1;max-width:260px;padding:8px 12px;background:#FAFAFA;border:2px solid var(--rh-gray-300);border-radius:4px;font-family:var(--font-mono);font-weight:800;color:var(--rh-red-primary);" ' +
+                    'onchange="setExtraWorkloadField(' + i + ', \'' + 'name' + '\', this.value)">' +
                 '<button type="button" onclick="removeExtraWorkload(' + i + ')" ' +
-                'style="background:#fee2e2;border:1px solid #fca5a5;border-radius:6px;color:#b91c1c;cursor:pointer;padding:5px 10px;">✕</button>' +
+                    'style="background:#F5F5F5;border:2px solid var(--rh-gray-300);border-radius:4px;color:var(--rh-black);cursor:pointer;padding:8px 14px;font-weight:800;transition:border-color 0.3s ease;" ' +
+                    'onmouseover="this.style.borderColor=\'var(--rh-red-primary)\'" onmouseout="this.style.borderColor=\'var(--rh-gray-300)\'">✕ Remove</button>' +
             '</div>' +
-            '<div style="display:flex;flex-wrap:wrap;gap:10px;margin-bottom:6px;">' +
-                inp('isl', 'ISL (prompt tokens)', w.isl, '3000', '95px') +
-                inp('isl_stdev', 'ISL σ', w.isl_stdev, '—', '70px') +
-                inp('isl_min', 'ISL min', w.isl_min, '—', '80px') +
-                inp('isl_max', 'ISL max', w.isl_max, '—', '80px') +
-            '</div>' +
-            '<div style="display:flex;flex-wrap:wrap;gap:10px;margin-bottom:6px;">' +
-                inp('osl', 'OSL (output tokens)', w.osl, '100', '95px') +
-                inp('osl_stdev', 'OSL σ', w.osl_stdev, '—', '70px') +
-                inp('osl_min', 'OSL min', w.osl_min, '—', '80px') +
-                inp('osl_max', 'OSL max', w.osl_max, '—', '80px') +
-            '</div>' +
-            '<div style="display:flex;flex-wrap:wrap;gap:10px;align-items:flex-end;">' +
-                inp('concurrency', 'Concurrency', w.concurrency, '10', '90px') +
-                '<div style="display:flex;flex-direction:column;gap:2px;">' +
-                    '<span style="font-size:0.72em;color:#6d28d9;font-weight:600;">Rate type</span>' +
-                    '<select onchange="setExtraWorkloadField(' + i + ', \'' + 'rate_type' + '\', this.value)" ' +
-                        'style="padding:5px 7px;border:1px solid #d8b4fe;border-radius:6px;font-size:0.9em;background:white;">' +
+            '<div class="input-grid">' +
+                grp('isl', 'Input Length (ISL)', w.isl, 'e.g. 3000', 'Average prompt tokens for this shape.') +
+                grp('osl', 'Output Length (OSL)', w.osl, 'e.g. 100', 'Average reply tokens for this shape.') +
+                grp('isl_stdev', 'Input Variation (σ)', w.isl_stdev, 'e.g. 1000', 'Standard deviation around the average input length.') +
+                grp('osl_stdev', 'Output Variation (σ)', w.osl_stdev, 'e.g. 64', 'Standard deviation around the average output length.') +
+                range('isl_min', 'isl_max', 'Input Length Range', w.isl_min, w.isl_max, 'Hard limits on input tokens. Leave empty for no limits.') +
+                range('osl_min', 'osl_max', 'Output Length Range', w.osl_min, w.osl_max, 'Hard limits on output tokens. Leave empty for no limits.') +
+                grp('concurrency', 'Concurrency', w.concurrency, 'e.g. 10', 'Simultaneous requests for this workload.') +
+                '<div class="input-group compact"><label>Rate Type</label>' +
+                    '<select onchange="setExtraWorkloadField(' + i + ', \'rate_type\', this.value)" style="width:100%;">' +
                         '<option value=""' + (rateType === '' ? ' selected' : '') + '>inherit global</option>' +
-                        '<option value="concurrent"' + (rateType === 'concurrent' ? ' selected' : '') + '>concurrent</option>' +
-                        '<option value="constant"' + (rateType === 'constant' ? ' selected' : '') + '>constant</option>' +
-                        '<option value="poisson"' + (rateType === 'poisson' ? ' selected' : '') + '>poisson</option>' +
+                        '<option value="concurrent"' + (rateType === 'concurrent' ? ' selected' : '') + '>Concurrent</option>' +
+                        '<option value="constant"' + (rateType === 'constant' ? ' selected' : '') + '>Constant</option>' +
+                        '<option value="poisson"' + (rateType === 'poisson' ? ' selected' : '') + '>Poisson</option>' +
                     '</select>' +
-                '</div>' +
-                inp('prefix_tokens', 'Shared prefix (tokens)', w.prefix_tokens, '—', '105px') +
-                inp('prefix_count', 'Prefixes', w.prefix_count, '—', '70px') +
+                    '<div class="help-text">How this workload issues requests.</div></div>' +
+                grp('prefix_tokens', 'Shared Prefix (tokens)', w.prefix_tokens, 'e.g. 256', 'Prefix reused across this workload\'s requests.') +
+                grp('prefix_count', 'Prefixes', w.prefix_count, 'e.g. 1', 'Number of distinct prefix variants.') +
             '</div>' +
         '</div>';
     });

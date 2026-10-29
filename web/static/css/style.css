@@ -1505,6 +1505,20 @@
             box-shadow: 0 0 0 3px rgba(42, 123, 136, 0.1);
         }
 
+        .input-group.compact {
+            padding: 14px;
+        }
+
+        .input-group.compact label {
+            font-size: 0.78em;
+            margin-bottom: 8px;
+        }
+
+        .input-group.compact input, .input-group.compact select {
+            padding: 10px;
+            font-size: 0.95em;
+        }
+
         .input-group select {
             width: 100%;
             padding: 16px;
