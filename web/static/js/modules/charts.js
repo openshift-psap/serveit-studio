@@ -3875,7 +3875,7 @@ const deltaTag = (t.delta_vs_baseline && !t.is_baseline) ? ` <span style="color:
     if (secTraffic) subtabDefs.push({ id: 'traffic', label: 'Traffic', icon: '&#128678;' });
     if (secTestCfg) subtabDefs.push({ id: 'test-settings', label: 'Test Settings', icon: '&#9881;' });
     subtabDefs.push({ id: 'estimator', label: 'Estimator', icon: '&#128200;' });
-    if (secWorkloads) subtabDefs.push({ id: 'parallel-workloads', label: '&#129522; Workloads', icon: '&#129522;' });
+    if (secWorkloads) subtabDefs.push({ id: 'parallel-workloads', label: 'Workloads', icon: '&#128203;' });
 
     const sectionMap = {
         'recommendation': secRec, 'tp-calibration': secTP, 'configurations': secCfg,
