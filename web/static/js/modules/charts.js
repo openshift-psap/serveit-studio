@@ -100,7 +100,7 @@ function _renderChartsImpl(data, runId, content) {
                     const rows = e.workloads.concat([{name: 'combined', ttft_p50: e.ttft_p50, ttft_p90: e.ttft_p90, ttft_p99: e.ttft_p99}]);
                     const names = rows.map(w => w.name);
                     Plotly.newPlot(el, ['p50', 'p90', 'p99'].map((k, ci) => ({
-                        x: names, y: rows.map(w => w['ttft_' + k]), name: k.toUpperCase(), type: 'bar', orientation: 'h',
+                        y: names, x: rows.map(w => w['ttft_' + k]), name: k.toUpperCase(), type: 'bar', orientation: 'h',
                         marker: {color: ['#3b82f6', '#f59e0b', '#dc2626'][ci]},
                     })), {
                         barmode: 'group', height: Math.max(240, (rows.length + 1) * 60), margin: {t: 30, b: 30, l: 110, r: 20},
