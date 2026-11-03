@@ -63,18 +63,23 @@ class ProfileCollector:
         """Spawn a detached capture subprocess writing stdout to a staging file.
 
         Runs independently of the gevent event loop; finish_captures()
-        reaps it. Returns {proc, outfile, timeout_s, started}.
+        reaps it. Returns {proc, outfile, errfile, timeout_s, started}.
         """
         fd, outfile = tempfile.mkstemp(prefix="serveit-pprof-", suffix=".bin")
         os.close(fd)
+        fd, errfile = tempfile.mkstemp(prefix="serveit-pprof-err-", suffix=".txt")
+        os.close(fd)
         out = open(outfile, "wb")
+        errf = open(errfile, "wb")
         proc = subprocess.Popen(
-            cmd, stdout=out, stderr=subprocess.DEVNULL,
-            env=self._kubectl_env(),
+            cmd, stdout=out, stderr=errf, env=self._kubectl_env(),
         )
-        return {"proc": proc, "outfile": outfile, "timeout_s": timeout_s, "started": time.time()}
+        out.close()
+        errf.close()
+        return {"proc": proc, "outfile": outfile, "errfile": errfile,
+                "timeout_s": timeout_s, "started": time.time()}
 
-    def _reap_capture(self, cap: Dict) -> Optional[bytes]:
+    def _reap_capture(self, cap: Dict, label: str = "") -> Optional[bytes]:
         """Wait for a spawned capture to finish and read its staged output."""
         try:
             elapsed = time.time() - cap["started"]
@@ -84,19 +89,35 @@ class ProfileCollector:
                 proc.wait(timeout=max(5, remaining))
             except subprocess.TimeoutExpired:
                 proc.kill()
+                logger.warning(f"profile capture {label}: timed out after {elapsed:.0f}s")
                 return None
-            if proc.returncode != 0:
+            size = 0
+            try:
+                size = Path(cap["outfile"]).stat().st_size
+            except OSError:
+                pass
+            if proc.returncode != 0 or size == 0:
+                stderr_txt = ""
+                try:
+                    stderr_txt = Path(cap["errfile"]).read_text()[:200]
+                except OSError:
+                    pass
+                logger.warning(
+                    f"profile capture {label}: rc={proc.returncode} size={size} "
+                    f"stderr={stderr_txt!r}"
+                )
                 return None
             data = Path(cap["outfile"]).read_bytes()
             return data if data else None
         except Exception as e:
-            logger.debug(f"capture reap failed: {e}")
+            logger.warning(f"profile capture reap failed ({label}): {e}")
             return None
         finally:
-            try:
-                os.unlink(cap["outfile"])
-            except OSError:
-                pass
+            for f in ("outfile", "errfile"):
+                try:
+                    os.unlink(cap[f])
+                except (OSError, KeyError):
+                    pass
 
     # ── pod discovery ───────────────────────────────────────────────────────
 
@@ -242,16 +263,29 @@ class ProfileCollector:
         # 1. Reap the EPP CPU capture subprocess
         spawn = handle.get("epp_spawn")
         if spawn:
-            data = self._reap_capture(spawn)
+            data = self._reap_capture(spawn, label="epp-cpu")
             if data:
                 cpu_captures.append({"kind": "epp", "pod": spawn["pod"],
                                      "port": spawn["port"], "ptype": "cpu", "data": data})
-            elif log_callback:
-                log_callback("   ⚠️  EPP CPU profile capture returned no data")
+            else:
+                # Retry synchronously with a short window — better a short
+                # profile than none. The load window has passed, but the
+                # retry still catches post-benchmark state.
+                epp_now = self.discover_epp_pod(config.architecture)
+                if epp_now and self.workload_pod:
+                    url = f"http://{epp_now['ip']}:{epp_now['port']}/debug/pprof/profile?seconds=15"
+                    retry = self._fetch_via_workload_pod(url, 45)
+                    if retry:
+                        if log_callback:
+                            log_callback("   ⚠️  EPP CPU profile captured via post-benchmark retry (15s window)")
+                        cpu_captures.append({"kind": "epp", "pod": epp_now["name"],
+                                             "port": epp_now["port"], "ptype": "cpu", "data": retry})
+                if not cpu_captures and log_callback:
+                    log_callback("   ⚠️  EPP CPU profile capture returned no data")
 
         # 2. Reap vLLM CPU capture subprocesses
         for spawn in handle.get("vllm_spawns", []):
-            data = self._reap_capture(spawn)
+            data = self._reap_capture(spawn, label=f"vllm-cpu-{spawn['pod']}")
             if data:
                 cpu_captures.append({"kind": "vllm", "pod": spawn["pod"],
                                      "port": spawn["port"], "ptype": "cpu", "data": data})
