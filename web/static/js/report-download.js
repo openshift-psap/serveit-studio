@@ -67,6 +67,9 @@ function buildFullReport(runId, data, charts, rec, summary, best, allRes, hasPD,
     const secTraffic = buildTrafficSection(data, allRes);
     const secDeploy = buildDeployTimingSection(data, allRes);
     const secPareto = buildParetoFrontierSection(data, allRes);
+    const secLora = buildLoraSection(data, charts);
+    const secEst = buildEstimatorSection(data);
+    const secWorkloads = buildWorkloadsSection(allRes);
 
     const dlTabs = [];
     if (secRec) dlTabs.push({ id: 'rec', label: '&#9733; Recommendation', html: secRec });
@@ -77,12 +80,15 @@ function buildFullReport(runId, data, charts, rec, summary, best, allRes, hasPD,
     if (secCal) dlTabs.push({ id: 'cal', label: '&#9878; Calibrated Load', html: secCal });
     if (secSweep) dlTabs.push({ id: 'sweep', label: '&#128200; Concurrency Sweep', html: secSweep });
     if (secCacheSweep) dlTabs.push({ id: 'cachesweep', label: '&#128203; Cache Sweep', html: secCacheSweep });
+    if (secLora) dlTabs.push({ id: 'lora', label: '&#127919; LoRA Serving', html: secLora });
     if (secVLLM) dlTabs.push({ id: 'vllm', label: '&#9889; vLLM Metrics', html: secVLLM });
     if (secEpp) dlTabs.push({ id: 'epp', label: '&#9881; EPP Tuning', html: secEpp });
     if (secPareto) dlTabs.push({ id: 'pareto', label: '&#128200; Pareto Frontier', html: secPareto });
     if (secTraffic) dlTabs.push({ id: 'traffic', label: '&#128230; Traffic', html: secTraffic });
     if (secDeploy) dlTabs.push({ id: 'deploy', label: '&#9202; Deploy Timing', html: secDeploy });
     if (secTestCfg) dlTabs.push({ id: 'settings', label: '&#9881; Test Settings', html: secTestCfg });
+    if (secEst) dlTabs.push({ id: 'estimator', label: '&#128200; Estimator', html: secEst });
+    if (secWorkloads) dlTabs.push({ id: 'workloads', label: '&#128203; Workloads', html: secWorkloads });
 
     let out = buildHead(runId);
     out += `<h1>ServeIt Studio Optimization Report &mdash; Run #${runId}</h1>`;
@@ -478,8 +484,76 @@ function buildTPSection(rec, charts) {
 function buildCfgSection(runId, data, charts, allRes, hasPD) {
     if (!allRes || !allRes.length) return '';
     let s = '';
+
+    // Configuration Selection — Top 5 per Architecture (from best_by_percentile)
+    const rec = data.recommendation;
+    if (rec && rec.best_by_percentile && rec.best_by_percentile.p90) {
+        const _bbpSel = rec.best_by_percentile.p90;
+        const _recLabel = {};
+        if (rec.recommendations) {
+            const _rtCfg = rec.recommendations.response_time && rec.recommendations.response_time.config;
+            const _tpCfg = rec.recommendations.throughput    && rec.recommendations.throughput.config;
+            if (_rtCfg) _recLabel[_rtCfg.config_name] = '&#9733; Primary TTFT recommendation';
+            if (_tpCfg) _recLabel[_tpCfg.config_name] = '&#9733; Primary throughput recommendation';
+        }
+        const _fmtMs = v => v == null ? '—' : (v >= 1000 ? (v/1000).toFixed(1)+'s' : Math.round(v)+'ms');
+        const _fmtTput = v => v == null ? '—' : v.toFixed(2)+' req/s';
+        const _archDefs = [
+            { key: 'pd',         label: 'PD',         color: '#0ea5e9', bg: '#f0f9ff' },
+            { key: 'ep',         label: 'EP',         color: '#10b981', bg: '#f0fdf4' },
+            { key: 'aggregated', label: 'Aggregated', color: '#6366f1', bg: '#eef2ff' }
+        ];
+        const _catDefs = [
+            { key: 'balanced',       label: 'Best balanced'   },
+            { key: 'lowest_ttft',    label: 'Best TTFT'       },
+            { key: 'highest_tput',   label: 'Best throughput' },
+            { key: 'most_efficient', label: 'Most efficient'  },
+            { key: 'lowest_itl',     label: 'Best ITL'        }
+        ];
+        if (_archDefs.some(a => !!_bbpSel[a.key])) {
+            s += '<div class="chart-box"><h3>Configuration Selection — Top 5 per Architecture</h3>';
+            s += '<p style="color:#64748b;font-size:0.82em;margin:0 0 10px;">The optimizer selects up to 5 configurations per architecture for the concurrency sweep — one per category. &#9733; = final primary recommendation.</p>';
+            _archDefs.forEach(arch => {
+                const ad = _bbpSel[arch.key];
+                if (!ad) return;
+                s += '<div style="margin-bottom:18px;">';
+                s += `<div style="font-weight:700;font-size:0.85em;color:${arch.color};text-transform:uppercase;letter-spacing:0.06em;border-bottom:2px solid ${arch.color};padding-bottom:4px;margin-bottom:6px;">${arch.label} Architecture</div>`;
+                s += '<table style="width:100%;font-size:0.83em;table-layout:fixed;"><colgroup><col style="width:28%"><col style="width:22%"><col style="width:13%"><col style="width:11%"><col style="width:15%"><col style="width:11%"></colgroup>';
+                s += '<tr><th>Category</th><th>Config</th><th>TTFT P90</th><th>ITL P90</th><th>Throughput</th><th>GPUs</th></tr>';
+                const _seen = {}, _deduped = [];
+                _catDefs.forEach(cat => {
+                    const e = ad[cat.key];
+                    if (!e) return;
+                    const cn = e.config_name;
+                    if (_seen[cn]) { _seen[cn].cats.push(cat.label); }
+                    else { _seen[cn] = { entry: e, cats: [cat.label] }; _deduped.push(cn); }
+                });
+                _deduped.forEach(cn => {
+                    const e = _seen[cn].entry;
+                    const recLbl = _recLabel[cn];
+                    const isRec = !!recLbl;
+                    const catBadges = _seen[cn].cats.map(lbl =>
+                        `<span style="display:inline-block;background:${arch.bg};color:${arch.color};font-size:0.78em;font-weight:600;padding:1px 7px;border-radius:8px;margin:1px 2px 1px 0;">${lbl}</span>`).join('');
+                    const recBadge = isRec ? ` <span style="display:inline-block;background:#fef3c7;color:#b45309;font-size:0.78em;font-weight:700;padding:1px 7px;border-radius:8px;">${recLbl}</span>` : '';
+                    s += `<tr${isRec ? ' style="background:#fffbeb;"' : ''}><td>${catBadges}${recBadge}</td>` +
+                        `<td style="font-weight:${isRec ? '700' : '400'};">${cn}</td>` +
+                        `<td>${_fmtMs(e.ttft)}</td><td>${_fmtMs(e.itl)}</td>` +
+                        `<td>${_fmtTput(e.throughput_mean || e.throughput)}</td>` +
+                        `<td>${e.gpus != null ? e.gpus : '—'}</td></tr>`;
+                });
+                s += '</table></div>';
+            });
+            s += '</div>';
+        }
+    }
+
     s += '<div class="grid2"><div class="chart-box"><h3>Throughput vs Latency</h3><div id="p2" style="height:850px"></div></div>';
     s += '<div class="chart-box"><h3>GPU Efficiency</h3><div id="p3" style="height:850px"></div></div></div>';
+    if (charts.per_user_efficiency && charts.per_user_efficiency.configs.length) {
+        s += '<div class="chart-box"><h3>Per-User Token Throughput (tokens/s per user)</h3>';
+        s += '<p style="color:#64748b;font-size:0.9em;margin:0 0 8px;">Shows how many output tokens each concurrent user receives per second. <strong>Higher = faster streaming for each user.</strong></p>';
+        s += '<div id="dl-cfg-per-user" style="height:850px"></div></div>';
+    }
     s += '<div class="chart-box"><h3>Architecture Comparison</h3><div id="p4" style="height:850px"></div></div>';
 
     // Cache hit rate chart
@@ -488,6 +562,13 @@ function buildCfgSection(runId, data, charts, allRes, hasPD) {
         s += '<div class="chart-box"><h3>Prefix Cache Hit Rate per Configuration</h3>';
         s += '<p style="color:#64748b;font-size:0.9em;margin:0 0 8px;">Actual prefix cache hit percentage measured by vLLM during each test.</p>';
         s += '<div id="dl-cfg-cache-hit" style="height:850px"></div></div>';
+    }
+
+    // Aggregated configurations chart (all percentiles in one chart)
+    if (allRes.filter(r => r.quality !== 'discard' && r.architecture === 'AGGREGATED').length > 1) {
+        s += '<div class="chart-box"><h3>Aggregated Configurations — TTFT &amp; Throughput (P90 / P95 / P99)</h3>';
+        s += '<p style="color:#64748b;font-size:0.9em;margin:0 0 8px;">All aggregated configurations with <strong style="color:#3b82f6">TTFT</strong> (bars, lower is better) and <strong style="color:#f59e0b">Throughput Mean</strong> (line, right axis, higher is better) across percentiles.</p>';
+        s += '<div id="dl-cfg-agg-ttft" style="height:850px"></div></div>';
     }
 
     // Per-percentile PD charts
@@ -499,9 +580,18 @@ function buildCfgSection(runId, data, charts, allRes, hasPD) {
 
     // Pareto optimal table
     if (charts.pareto.pareto_table.length) {
-        s += '<div class="chart-box"><h3>Pareto Optimal Configurations</h3><table><tr><th>Config</th><th>Metric</th><th>P50</th><th>P90</th><th>P95</th><th>P99</th><th>GPUs</th><th>Efficiency</th></tr>';
+        const mlbl = { lws: 'LWS', prefill: 'Prefill LWS', decode: 'Decode LWS', 'epp-configmap': 'EPP Config' };
+        const _mtByTest = {};
+        allRes.forEach(r => { if (r.test_id && r.manifest_types) _mtByTest[r.test_id] = r.manifest_types; });
+        s += '<div class="chart-box"><h3>Pareto Optimal Configurations</h3><table><tr><th>Config</th><th>Metric</th><th>P50</th><th>P90</th><th>P95</th><th>P99</th><th>GPUs</th><th>Efficiency</th><th>Manifests</th></tr>';
         charts.pareto.pareto_table.forEach((p, idx) => {
             const bt = idx > 0 ? ' border-top:2px solid #cbd5e1;' : '';
+            let mLinks = '-';
+            const mtypes = p.test_id ? _mtByTest[p.test_id] : null;
+            if (mtypes && mtypes.length) {
+                mLinks = mtypes.filter(t => !t.includes('service')).map(t =>
+                    `<a href="#" onclick="dlManifest('${p.test_id}','${t}');return false;" title="Download ${t}.yaml" style="color:#0ea5e9;text-decoration:none;font-size:11px;padding:2px 6px;background:#f0f9ff;border-radius:4px;border:1px solid #bae6fd;display:inline-block;margin:1px;cursor:pointer;">${mlbl[t] || t} &#8595;</a>`).join(' ');
+            }
             [{name:'TTFT (ms)',p50:p.ttft_p50,p90:p.ttft_p90,p95:p.ttft_p95,p99:p.ttft_p99},
              {name:'ITL (ms)',p50:p.itl_p50,p90:p.itl_p90,p95:p.itl_p95,p99:p.itl_p99},
              {name:'Throughput (req/s)',p50:p.throughput_p50,p90:p.throughput_p90,p95:p.throughput_p95,p99:p.throughput_p99}
@@ -515,7 +605,7 @@ function buildCfgSection(runId, data, charts, allRes, hasPD) {
                 const fmtV = v => v == null ? '-' : mi === 1 ? parseFloat(v).toFixed(2) : (mi === 2 ? parseFloat(v).toFixed(2) : Math.round(v).toLocaleString());
                 s += `<td style="color:#64748b;${bs}">${m.name}</td>`;
                 s += `<td style="${bs}">${fmtV(m.p50)}</td><td style="${bs}">${fmtV(m.p90)}</td><td style="${bs}">${fmtV(m.p95)}</td><td style="${bs}">${fmtV(m.p99)}</td>`;
-                if (mi === 0) s += `<td rowspan="3" style="vertical-align:middle;${bs}">${p.gpus}</td><td rowspan="3" style="vertical-align:middle;${bs}">${p.efficiency}</td>`;
+                if (mi === 0) s += `<td rowspan="3" style="vertical-align:middle;${bs}">${p.gpus}</td><td rowspan="3" style="vertical-align:middle;${bs}">${p.efficiency}</td><td rowspan="3" style="vertical-align:middle;${bs}">${mLinks}</td>`;
                 s += '</tr>';
             });
         });
@@ -610,12 +700,13 @@ function buildCfgSection(runId, data, charts, allRes, hasPD) {
         s += `<th style="cursor:pointer;" onclick="sortReportTable('${tid}',0,'str')">Configuration &#x21C5;</th>`;
         s += `<th style="cursor:pointer;" onclick="sortReportTable('${tid}',1,'str')">Architecture &#x21C5;</th>`;
         s += `<th style="cursor:pointer;" onclick="sortReportTable('${tid}',2,'num')">TTFT P90 &#x21C5;</th>`;
-        s += `<th style="cursor:pointer;" onclick="sortReportTable('${tid}',3,'num')">TTFT P95 &#x21C5;</th>`;
-        s += `<th style="cursor:pointer;" onclick="sortReportTable('${tid}',4,'num')">TTFT P99 &#x21C5;</th>`;
-        s += `<th style="cursor:pointer;" onclick="sortReportTable('${tid}',5,'num')">Tput Mean &#x21C5;</th>`;
-        s += `<th style="cursor:pointer;" onclick="sortReportTable('${tid}',6,'num')">ITL P90 &#x21C5;</th>`;
-        s += `<th style="cursor:pointer;" onclick="sortReportTable('${tid}',7,'num')">GPUs &#x21C5;</th>`;
-        s += `<th style="cursor:pointer;" onclick="sortReportTable('${tid}',8,'num')">Efficiency &#x21C5;<br><span style="font-weight:400;font-size:0.75em;color:#64748b;">req/s per GPU</span></th>`;
+        s += `<th style="cursor:pointer;" onclick="sortReportTable('${tid}',3,'num')">E2E P90 &#x21C5;</th>`;
+        s += `<th style="cursor:pointer;" onclick="sortReportTable('${tid}',4,'num')">TTFT P95 &#x21C5;</th>`;
+        s += `<th style="cursor:pointer;" onclick="sortReportTable('${tid}',5,'num')">TTFT P99 &#x21C5;</th>`;
+        s += `<th style="cursor:pointer;" onclick="sortReportTable('${tid}',6,'num')">Tput Mean &#x21C5;</th>`;
+        s += `<th style="cursor:pointer;" onclick="sortReportTable('${tid}',7,'num')">ITL P90 &#x21C5;</th>`;
+        s += `<th style="cursor:pointer;" onclick="sortReportTable('${tid}',8,'num')">GPUs &#x21C5;</th>`;
+        s += `<th style="cursor:pointer;" onclick="sortReportTable('${tid}',9,'num')">Efficiency &#x21C5;<br><span style="font-weight:400;font-size:0.75em;color:#64748b;">req/s per GPU</span></th>`;
         s += `<th>Manifests</th>`;
         s += '</tr>';
         const mlabels = { lws: 'LWS', prefill: 'Prefill LWS', decode: 'Decode LWS', 'epp-configmap': 'EPP Config' };
@@ -630,7 +721,8 @@ function buildCfgSection(runId, data, charts, allRes, hasPD) {
                 }).join(' ');
             }
             const tputMean = r.throughput_mean ?? r.throughput_p90 ?? na;
-            s += `<tr${cls}><td>${r.config_name}${eppBadge}</td><td>${r.architecture}</td><td data-val="${r.ttft_p90}">${r.ttft_p90}</td><td data-val="${r.ttft_p95 ?? ''}">${r.ttft_p95 ?? na}</td><td data-val="${r.ttft_p99 ?? ''}">${r.ttft_p99 ?? na}</td><td data-val="${tputMean}">${tputMean}</td><td data-val="${r.itl_p90 ?? ''}">${r.itl_p90 != null ? parseFloat(r.itl_p90).toFixed(2) : na}</td><td data-val="${r.gpus}">${r.gpus}</td><td data-val="${r.efficiency}">${r.efficiency}</td><td>${manifestLinks}</td></tr>`;
+            const e2eP90 = r.e2e_latency_p90 != null ? (r.e2e_latency_p90 >= 1000 ? (r.e2e_latency_p90/1000).toFixed(1) + 's' : Math.round(r.e2e_latency_p90) + 'ms') : na;
+            s += `<tr${cls}><td>${r.config_name}${eppBadge}</td><td>${r.architecture}</td><td data-val="${r.ttft_p90}">${r.ttft_p90}</td><td data-val="${r.e2e_latency_p90 ?? ''}">${e2eP90}</td><td data-val="${r.ttft_p95 ?? ''}">${r.ttft_p95 ?? na}</td><td data-val="${r.ttft_p99 ?? ''}">${r.ttft_p99 ?? na}</td><td data-val="${tputMean}">${tputMean}</td><td data-val="${r.itl_p90 ?? ''}">${r.itl_p90 != null ? parseFloat(r.itl_p90).toFixed(2) : na}</td><td data-val="${r.gpus}">${r.gpus}</td><td data-val="${r.efficiency}">${r.efficiency}</td><td>${manifestLinks}</td></tr>`;
         });
         s += '</table></div>';
     }
@@ -658,7 +750,11 @@ function buildCmpSection(runId, rec, data) {
         s += '<div style="background:linear-gradient(135deg,#6366f1,#8b5cf6);padding:12px 20px;color:white;font-weight:700;">PD vs Aggregated Comparison</div>';
         s += '<table><tr><th>Metric</th><th>PD (best)</th><th>Aggregated</th><th>Winner</th></tr>';
         s += `<tr><td><strong>TTFT P90</strong></td><td>${cmp.pd.ttft_p90} ms</td><td>${cmp.aggregated.ttft_p90} ms</td><td style="color:${ttC};font-weight:700;">${cmp.ttft_winner} (${cmp.ttft_diff_pct}% better)</td></tr>`;
-        s += `<tr><td><strong>Throughput P90</strong></td><td>${cmp.pd.throughput_p90} req/s</td><td>${cmp.aggregated.throughput_p90} req/s</td><td style="color:${tpC};font-weight:700;">${cmp.throughput_winner} (${cmp.throughput_diff_pct}% better)</td></tr>`;
+        s += `<tr><td><strong>Throughput Mean</strong></td><td>${cmp.pd.throughput_mean || cmp.pd.throughput_p90} req/s</td><td>${cmp.aggregated.throughput_mean || cmp.aggregated.throughput_p90} req/s</td><td style="color:${tpC};font-weight:700;">${cmp.throughput_winner} (${cmp.throughput_diff_pct}% better)</td></tr>`;
+        if (cmp.pd.ttft_p99 && cmp.aggregated.ttft_p99) {
+            const p99Color = cmp.ttft_p99_winner === 'PD' ? '#10b981' : '#f59e0b';
+            s += `<tr style="border-top:2px solid #e2e8f0;"><td><strong>TTFT P99 (tail)</strong></td><td>${cmp.pd.ttft_p99} ms</td><td>${cmp.aggregated.ttft_p99} ms</td><td style="color:${p99Color};font-weight:700;">${cmp.ttft_p99_winner} (${cmp.ttft_p99_diff_pct}% better)</td></tr>`;
+        }
         s += '</table>';
 
         // % change table: all PD configs vs baseline
@@ -771,13 +867,44 @@ function buildStep9Section(data) {
 
         // Trial table
         const sorted = [...trials].sort((a, b) => a.concurrency - b.concurrency);
-        s += '<div style="margin-top:12px;overflow-x:auto;"><table style="font-size:0.85em;"><tr><th>Concurrency</th><th>TTFT P50</th><th>TTFT P90</th><th>TTFT P95</th><th>TTFT P99</th><th>Throughput P90</th><th>SLA</th></tr>';
+        s += '<div style="margin-top:12px;overflow-x:auto;"><table style="font-size:0.85em;"><tr><th>Concurrency</th><th>TTFT P50</th><th>TTFT P90</th><th>TTFT P95</th><th>TTFT P99</th><th>Throughput P90</th><th>SLA</th><th>Manifests</th></tr>';
         sorted.forEach(t => {
             const sla = t.meets_sla ? '<span style="color:#059669;">Yes</span>' : '<span style="color:#dc2626;">No</span>';
-            s += `<tr><td style="font-weight:700;">${t.concurrency}</td><td>${dlFmt(t.ttft_p50)}</td><td>${dlFmt(t.ttft_p90)}</td><td>${dlFmt(t.ttft_p95)}</td><td>${dlFmt(t.ttft_p99)}</td><td>${dlFmt(t.throughput_p90, 2)}</td><td>${sla}</td></tr>`;
+            let mLinks = '-';
+            if (t.test_id && t.manifest_types && t.manifest_types.length) {
+                mLinks = t.manifest_types.filter(mt => !mt.includes('service')).map(mt =>
+                    `<a href="#" onclick="dlManifest('${t.test_id}','${mt}');return false;" title="Download ${mt}.yaml" style="color:#0ea5e9;text-decoration:none;font-size:12px;padding:2px 6px;background:#f0f9ff;border-radius:4px;border:1px solid #bae6fd;margin:1px;display:inline-block;cursor:pointer;">${mt} &#8595;</a>`).join(' ');
+            }
+            s += `<tr><td style="font-weight:700;">${t.concurrency}</td><td>${dlFmt(t.ttft_p50)}</td><td>${dlFmt(t.ttft_p90)}</td><td>${dlFmt(t.ttft_p95)}</td><td>${dlFmt(t.ttft_p99)}</td><td>${dlFmt(t.throughput_p90, 2)}</td><td>${sla}</td><td>${mLinks}</td></tr>`;
         });
         s += '</table></div></div>';
     });
+
+    // All trials table — every trial with search phase info
+    if (!ls.trials.some(t => t.meets_sla)) {
+        s += '<div style="margin:12px 20px;padding:12px 16px;background:#fef2f2;border:1px solid #fecaca;border-radius:8px;color:#991b1b;font-size:0.92em;">&#9888; No concurrency level met the SLA target in this search.</div>';
+    }
+    s += '<div style="padding:12px 20px 4px;font-weight:700;font-size:0.95em;color:#1e293b;border-top:1px solid #e2e8f0;margin-top:8px;">All Trials</div>';
+    s += '<div style="padding:0 20px 16px;overflow-x:auto;"><table style="font-size:0.85em;">';
+    const s9TblTputKey = 'throughput_' + targetPct;
+    s += `<tr><th>Arch</th><th>#</th><th>Phase</th><th>Concurrency</th><th>TTFT ${targetPct.toUpperCase()}</th><th>Throughput ${targetPct.toUpperCase()}</th><th>Meets SLA</th><th>Manifests</th></tr>`;
+    ls.trials.forEach(t => {
+        const latVal = t[metricKey] != null ? t[metricKey].toFixed(1) + ' ms' : '-';
+        const s9TputRaw = t[s9TblTputKey] != null ? t[s9TblTputKey] : t.throughput_p90;
+        const tputVal = s9TputRaw != null ? s9TputRaw.toFixed(2) + ' req/s' : '-';
+        const slaStyle = t.meets_sla ? 'color:#059669; font-weight:700;' : 'color:#dc2626; font-weight:700;';
+        let mLinks = '-';
+        if (t.test_id && t.manifest_types && t.manifest_types.length) {
+            mLinks = t.manifest_types.filter(mt => !mt.includes('service')).map(mt =>
+                `<a href="#" onclick="dlManifest('${t.test_id}','${mt}');return false;" title="Download ${mt}.yaml" style="color:#0ea5e9;text-decoration:none;font-size:12px;padding:2px 6px;background:#f0f9ff;border-radius:4px;border:1px solid #bae6fd;margin:1px;display:inline-block;cursor:pointer;">${mt} &#8595;</a>`).join(' ');
+        }
+        s += `<tr><td>${t.architecture}</td><td>${t.trial_number}</td><td>${t.search_phase}</td>`;
+        s += `<td style="font-weight:700;">${t.concurrency}</td>`;
+        s += `<td>${latVal}</td><td>${tputVal}</td>`;
+        s += `<td style="${slaStyle}">${t.meets_sla ? 'Yes' : 'No'}</td>`;
+        s += `<td>${mLinks}</td></tr>`;
+    });
+    s += '</table></div>';
 
     s += '</div>';
     return s;
@@ -1000,16 +1127,62 @@ function buildCalSection(data) {
         s += '</table></div>';
     }
 
-    // Overload impact
-    const primary = cal ? (cal.pd || cal.ep) : null;
-    const primaryLabel = cal && cal.pd ? 'PD' : 'EP';
-    const dlOverload = cal ? (cal.overloaded_pd || cal.overloaded_ep) : null;
-    if (dlOverload && primary) {
-        s += `<div class="chart-box"><h3>Overload Impact: ${primaryLabel} at Calibrated vs Overloaded Load</h3>`;
-        s += '<table><tr><th>Configuration</th><th>Load</th><th>TTFT P90</th><th>Throughput P90</th></tr>';
-        s += `<tr><td><strong>${primaryLabel} (calibrated)</strong></td><td>${dlRequestedRps != null ? Math.round(dlRequestedRps) + ' concurrent' : '-'}</td><td style="color:#059669;font-weight:700;">${primary.ttft_p90} ms</td><td style="color:#059669;font-weight:700;">${primary.throughput_p90} req/s</td></tr>`;
-        s += `<tr><td><strong>${primaryLabel} (overloaded)</strong></td><td>${cal && cal.concurrency != null ? cal.concurrency + ' concurrent' : '-'}</td><td style="color:#94a3b8;">${dlOverload.ttft_p90} ms</td><td style="color:#94a3b8;">${dlOverload.throughput_p90} req/s</td></tr>`;
-        s += '</table></div>';
+    // Fallback banner when there's no gpu_sizing but capacity info exists
+    if (cal && !cal.gpu_sizing && cal.total_gpus_available && cal.requested_rps) {
+        s += `<div style="padding:10px 20px;background:#ecfdf5;border:1px solid #6ee7b7;border-radius:8px;margin-bottom:16px;font-size:0.9em;color:#065f46;">&#128202; Cluster can sustain <strong>${cal.requested_rps} req/s</strong> with <strong>${cal.total_gpus_available} GPUs</strong>.</div>`;
+    }
+
+    // Load Analysis per architecture (Little's law, from measured Step 7 data)
+    if (cal && cal.calibration_analysis) {
+        const ca = cal.calibration_analysis;
+        s += '<div class="chart-box"><h3>Load Analysis (from measured Step 7 data)</h3>';
+        s += '<table><tr><th>Architecture</th><th>Throughput</th><th>Response Time</th><th>Service Time</th><th>Queue Time</th><th>Utilization</th><th>Calibrated Load</th></tr>';
+        ['pd', 'aggregated'].forEach(arch => {
+            const a = ca[arch];
+            if (!a) return;
+            const label = arch === 'pd' ? 'PD' : 'Aggregated';
+            const queuePct = a.queue_pct || 0;
+            const queueColor = queuePct > 80 ? '#dc2626' : (queuePct > 50 ? '#d97706' : '#059669');
+            s += `<tr>`;
+            s += `<td style="font-weight:700;">${label}</td>`;
+            s += `<td>${a.throughput_mean} req/s <span style="color:#94a3b8;">@ c=${a.concurrency_tested}</span></td>`;
+            s += `<td>${(a.response_time_s * 1000).toFixed(0)}ms</td>`;
+            s += `<td>${a.service_time_ms.toFixed(0)}ms</td>`;
+            s += `<td style="color:${queueColor};font-weight:600;">${a.queue_time_ms.toFixed(0)}ms (${queuePct}%)</td>`;
+            s += `<td>${a.utilization_pct}%</td>`;
+            s += `<td style="font-weight:700;color:#059669;">${a.calibrated_concurrency} users</td>`;
+            s += `</tr>`;
+        });
+        s += '</table>';
+        s += '<p style="padding:4px 0 0;font-size:0.82em;color:#64748b;">At the tested concurrency, most time is spent in queue — requests wait for GPU availability rather than being processed. The calibrated load reduces concurrency until queue time is reasonable (~2× service time).</p></div>';
+    }
+
+    // Overload impact — grouped by architecture family (PD + EPP-tuned, Aggregated + EPP-tuned)
+    if (cal) {
+        const origConcurrency = cal.concurrency != null ? `${cal.concurrency} concurrent` : '-';
+        const calConcurrency = cal.requested_rps != null ? `${Math.round(cal.requested_rps)} concurrent` : '-';
+        const overloadGroups = [];
+        if (cal.pd && cal.overloaded_pd) {
+            const group = { title: 'PD', rows: [{ label: 'PD', cal: cal.pd, over: cal.overloaded_pd }] };
+            if (cal.epp_pd) group.rows.push({ label: 'PD (EPP Tuned)', cal: cal.epp_pd, over: cal.overloaded_pd });
+            overloadGroups.push(group);
+        }
+        if (cal.aggregated && cal.overloaded_agg) {
+            const group = { title: 'Aggregated', rows: [{ label: 'Aggregated', cal: cal.aggregated, over: cal.overloaded_agg }] };
+            if (cal.epp_agg) group.rows.push({ label: 'Aggregated (EPP Tuned)', cal: cal.epp_agg, over: cal.overloaded_agg });
+            overloadGroups.push(group);
+        }
+        overloadGroups.forEach(group => {
+            s += `<div class="chart-box"><h3>Overload Impact: ${group.title}</h3>`;
+            s += '<table><tr><th>Configuration</th><th>Load</th><th>TTFT P90</th><th>Throughput Mean</th></tr>';
+            group.rows.forEach(row => {
+                const calTputMean = row.cal.throughput_mean || row.cal.throughput_p50 || '-';
+                const overTputMean = row.over.throughput_mean || row.over.throughput_p90 || '-';
+                s += `<tr><td><strong>${row.label} (calibrated)</strong></td><td>${calConcurrency}</td><td style="color:#059669;font-weight:700;">${row.cal.ttft_p90} ms</td><td style="color:#059669;font-weight:700;">${calTputMean} req/s</td></tr>`;
+                s += `<tr><td><strong>${row.label} (overloaded)</strong></td><td>${origConcurrency}</td><td style="color:#94a3b8;">${row.over.ttft_p90} ms</td><td style="color:#94a3b8;">${overTputMean} req/s</td></tr>`;
+            });
+            s += '</table></div>';
+        });
     }
 
     return s;
@@ -1048,6 +1221,18 @@ function buildEppTuningSection(runId, data) {
         s += `<h3 style="color:#7c3aed;">Step 9: EPP Tuning &mdash; ${archLabel}</h3>`;
         s += '<p style="font-size:0.9em;color:#475569;">Same deployment, different EPP scoring weights. Each test swapped only the gateway configmap (~10s) to isolate the impact of request routing.</p>';
 
+        // Strategy glossary
+        s += '<div style="padding:8px 0 12px;font-size:0.82em;color:#64748b;">' +
+            '<table style="width:100%;font-size:1em;">' +
+            '<tr><td style="padding:4px 12px 4px 0;vertical-align:top;white-space:nowrap;font-weight:600;color:#1e293b;">opt-baseline <span style="font-weight:400;color:#94a3b8;">(screen)</span></td><td style="padding:4px 0;">llm-d optimized-baseline guide: prefix-cache-affinity-filter gates candidates to sticky endpoints, a single load scorer (token-load for prefill-bound, active-request for decode-bound) ranks the survivors.</td></tr>' +
+            '<tr><td style="padding:4px 12px 4px 0;vertical-align:top;white-space:nowrap;font-weight:600;color:#1e293b;">weighted-max <span style="font-weight:400;color:#94a3b8;">(screen)</span></td><td style="padding:4px 0;">Weighted multi-scorer stack with smart-derived weights and the deterministic max-score picker.</td></tr>' +
+            '<tr><td style="padding:4px 12px 4px 0;vertical-align:top;white-space:nowrap;font-weight:600;color:#1e293b;">weighted-rand <span style="font-weight:400;color:#94a3b8;">(screen)</span></td><td style="padding:4px 0;">Same weighted stack with the probabilistic weighted-random picker &mdash; spreads load instead of always picking the argmax.</td></tr>' +
+            '<tr><td style="padding:4px 12px 4px 0;vertical-align:top;white-space:nowrap;font-weight:600;color:#1e293b;">preset <span style="font-weight:400;color:#94a3b8;">(screen)</span></td><td style="padding:4px 0;">The user-selected preset structure &mdash; control arm for the screening phase.</td></tr>' +
+            '<tr><td style="padding:4px 12px 4px 0;vertical-align:top;white-space:nowrap;font-weight:600;color:#1e293b;">abl-* <span style="font-weight:400;color:#94a3b8;">(ablate)</span></td><td style="padding:4px 0;">One-at-a-time plugin add/remove on the screening winner. Removals come first (abl-filter-off, abl-session-off &mdash; does the winner\'s defining structure actually pay?); then additions (session-affinity, no-hit-lru, kv-cache, LoRA-affinity A/B).</td></tr>' +
+            '<tr><td style="padding:4px 12px 4px 0;vertical-align:top;white-space:nowrap;font-weight:600;color:#1e293b;">w-* <span style="font-weight:400;color:#94a3b8;">(weight)</span></td><td style="padding:4px 0;">Coordinate-descent moves: &plusmn;1 on the top scorer weights, or the affinity threshold / load weight for filter compositions.</td></tr>' +
+            '<tr><td style="padding:4px 12px 4px 0;vertical-align:top;white-space:nowrap;font-weight:600;color:#1e293b;">final-* <span style="font-weight:400;color:#94a3b8;">(final)</span></td><td style="padding:4px 0;">Full-duration validation of the best variant &mdash; the apples-to-apples comparison against the baseline.</td></tr>' +
+            '</table></div>';
+
         // Summary cards
         s += '<div style="display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:16px;">';
         s += `<div style="background:#f0fdf4;border-radius:10px;padding:16px;text-align:center;border:1px solid #bbf7d0;"><div style="font-size:1.5em;font-weight:800;color:#059669;">${bestTrial.name}</div><div style="color:#64748b;font-size:0.82em;margin-top:4px;">Best Strategy</div></div>`;
@@ -1056,9 +1241,52 @@ function buildEppTuningSection(runId, data) {
         s += `<div style="background:#f8fafc;border-radius:10px;padding:16px;text-align:center;border:1px solid #e2e8f0;"><div style="font-size:1.5em;font-weight:800;color:#1e293b;">${trials.length}</div><div style="color:#64748b;font-size:0.82em;margin-top:4px;">Strategies Tested</div></div>`;
         s += '</div>';
 
-        // Chart divs for P90/P95/P99
+        // Chart divs for P90/P95/P99 with per-percentile textual summary under each
+        const baselineTrial = trials.find(t => t.is_baseline);
         ['p90', 'p95', 'p99'].forEach(pctl => {
             s += `<div id="dl-epp-${arch}-${pctl}" style="height:850px;background:#fff;border-radius:8px;border:1px solid #e2e8f0;margin-top:8px;"></div>`;
+            s += `<div style="padding:4px 2px 12px;font-size:0.85em;line-height:1.7;color:#1e293b;">`;
+            trials.forEach(t => {
+                const ttftKey = `ttft_${pctl}`;
+                const ttft = t[ttftKey] != null ? t[ttftKey].toFixed(0) + 'ms' : 'N/A';
+                const tput = t.throughput_mean != null ? t.throughput_mean.toFixed(1) : (t.throughput_p90 != null ? t.throughput_p90.toFixed(1) : 'N/A');
+                let ttftDelta = '', tputDelta = '';
+                if (baselineTrial && !t.is_baseline && baselineTrial[ttftKey] && t[ttftKey]) {
+                    const ttftPct = ((t[ttftKey] - baselineTrial[ttftKey]) / baselineTrial[ttftKey] * 100);
+                    if (ttftPct < -0.5) ttftDelta = ` <span style="color:#059669;">(${Math.abs(ttftPct).toFixed(1)}% faster)</span>`;
+                    else if (ttftPct > 0.5) ttftDelta = ` <span style="color:#dc2626;">(+${ttftPct.toFixed(1)}% slower)</span>`;
+                    else ttftDelta = ` <span style="color:#6b7280;">(0%)</span>`;
+                }
+                if (baselineTrial && !t.is_baseline) {
+                    const bt = baselineTrial.structure && baselineTrial.structure.tokens_per_second;
+                    const tt = t.structure && t.structure.tokens_per_second;
+                    if (bt && tt) {
+                        const tokPct = ((tt - bt) / bt * 100);
+                        if (tokPct > 0.5) tputDelta = ` <span style="color:#059669;">(+${tokPct.toFixed(1)}%)</span>`;
+                        else if (tokPct < -0.5) tputDelta = ` <span style="color:#dc2626;">(${tokPct.toFixed(1)}%)</span>`;
+                        else tputDelta = ` <span style="color:#6b7280;">(&plusmn;0%)</span>`;
+                    } else if (baselineTrial.throughput_mean && t.throughput_mean) {
+                        const tputPct = ((t.throughput_mean - baselineTrial.throughput_mean) / baselineTrial.throughput_mean * 100);
+                        if (tputPct > 0.5) tputDelta = ` <span style="color:#059669;">(+${tputPct.toFixed(1)}% req/s)</span>`;
+                        else if (tputPct < -0.5) tputDelta = ` <span style="color:#dc2626;">(${tputPct.toFixed(1)}% req/s)</span>`;
+                        else tputDelta = ` <span style="color:#6b7280;">(0%)</span>`;
+                    }
+                }
+                const icon = t.is_baseline ? '&#128202;' : '&#128295;';
+                const w = t.weights || {};
+                const st = t.structure || {};
+                let wStr;
+                if (st.affinity_filter) {
+                    wStr = 'affinity-filter + ' + (w.token_load ? `token-load&times;${w.token_load}` : (w.active_request ? `active-req&times;${w.active_request}` : 'load'));
+                } else {
+                    wStr = `${w.prefix_cache ?? '?'}:${!w.kv_cache ? 'off' : w.kv_cache}:${w.queue ?? '?'}:${w.active_request ?? 0}` + (w.token_load ? ` +tl${w.token_load}` : '') + (w.lora_affinity ? ` +lora${w.lora_affinity}` : '');
+                }
+                if (st.picker === 'weighted-random-picker') wStr += ' [wr]';
+                const durTag = t.duration ? ` <span style="color:#94a3b8;">(${t.duration}s)</span>` : '';
+                const deltaTag = (t.delta_vs_baseline && !t.is_baseline) ? ` <span style="color:#7c3aed;font-size:0.85em;">[${t.delta_vs_baseline}]</span>` : '';
+                s += `<div>${icon} <strong>${t.name}</strong> <span style="color:#94a3b8;font-size:0.85em;">[${t.phase || 'screen'}]</span> (${wStr})${durTag}${deltaTag}: TTFT ${pctl.toUpperCase()}=${ttft}${ttftDelta}, ${(t.structure && t.structure.tokens_per_second) ? Math.round(t.structure.tokens_per_second) + ' tok/s' : tput + ' req/s'}${tputDelta}</div>`;
+            });
+            s += '</div>';
         });
 
         s += `<div id="dl-epp-${arch}-wl-e2e" style="height:600px;background:#fff;border-radius:8px;border:1px solid #e2e8f0;margin-top:8px;"></div>`;
@@ -1067,7 +1295,7 @@ function buildEppTuningSection(runId, data) {
 
         // Results table
         const na = 'N/A';
-        s += '<table style="margin-top:12px;"><tr><th>Strategy</th><th>Routing Composition</th><th>&Delta; vs Baseline</th><th>Tok/s</th><th>TTFT P50</th><th>TTFT P90</th><th>TTFT P95</th><th>TTFT P99</th><th>ITL P90</th></tr>';
+        s += '<table style="margin-top:12px;"><tr><th>Strategy</th><th>Phase</th><th>Routing Composition</th><th>&Delta; vs Baseline</th><th>Tok/s</th><th>TTFT P50</th><th>TTFT P90</th><th>TTFT P95</th><th>TTFT P99</th><th>ITL P90</th><th>EPP Config</th></tr>';
         trials.forEach(e => {
             const isBest = e === bestTrial && !e.is_baseline;
             const cls = isBest ? ' class="pareto"' : (e.is_baseline ? ' style="color:#64748b;font-style:italic;"' : '');
@@ -1077,16 +1305,23 @@ function buildEppTuningSection(runId, data) {
             if (st.affinity_filter) {
                 wStr = 'affinity-filter + ' + (w.token_load ? `token-load&times;${w.token_load}` : (w.active_request ? `active-req&times;${w.active_request}` : 'load'));
             } else {
-                wStr = `${w.prefix_cache ?? '?'}:${!w.kv_cache ? 'off' : w.kv_cache}:${w.queue ?? '?'}:${w.active_request ?? 0}` + (w.token_load ? ` +tl${w.token_load}` : '');
+                wStr = `${w.prefix_cache ?? '?'}:${!w.kv_cache ? 'off' : w.kv_cache}:${w.queue ?? '?'}:${w.active_request ?? 0}` + (w.token_load ? ` +tl${w.token_load}` : '') + (w.lora_affinity ? ` +lora${w.lora_affinity}` : '');
             }
             let pickerBadge = '';
             if (st.picker === 'weighted-random-picker') pickerBadge = ' <span style="background:#0891b2;color:white;font-size:0.7em;padding:1px 5px;border-radius:3px;" title="weighted-random-picker: picks a pod randomly, weighted by score">w-rand pick</span>';
             else if (st.picker === 'max-score-picker') pickerBadge = ' <span style="background:#475569;color:white;font-size:0.7em;padding:1px 5px;border-radius:3px;" title="max-score-picker: always picks the highest-scored pod">max pick</span>';
+            const phaseColors = { screen: '#7c3aed', ablate: '#d97706', weight: '#0891b2', final: '#059669' };
+            const phaseColor = phaseColors[e.phase] || '#64748b';
+            const phaseBadge = e.phase ? `<span style="background:${phaseColor};color:white;font-size:0.7em;padding:1px 6px;border-radius:3px;">${e.phase}</span>` : '&mdash;';
+            let ml = '-';
+            if (e.manifest_types && e.manifest_types.length > 0 && e.test_id) {
+                ml = e.manifest_types.map(t => `<a href="#" onclick="dlManifest('${e.test_id}','${t}');return false;" title="Download ${t}.yaml" style="color:#7c3aed;text-decoration:none;font-size:11px;padding:2px 6px;background:#f5f3ff;border-radius:4px;border:1px solid #c4b5fd;display:inline-block;margin:1px;cursor:pointer;">${t} &#8595;</a>`).join(' ');
+            }
             const deltaStr = (e.delta_vs_baseline && !e.is_baseline) ? `<span style="color:#7c3aed;font-size:0.85em;">[${e.delta_vs_baseline}]</span>` : '';
             const tokVal = (st.tokens_per_second) ? Math.round(st.tokens_per_second) : na;
-            s += `<tr${cls}><td>${e.is_baseline ? '&#128202; ' : ''}<strong>${e.name}</strong></td><td>${wStr}${pickerBadge}</td><td>${deltaStr}</td><td>${tokVal}</td>`;
+            s += `<tr${cls}><td>${e.is_baseline ? '&#128202; ' : ''}<strong>${e.name}</strong></td><td>${phaseBadge}</td><td>${wStr}${pickerBadge}</td><td>${deltaStr}</td><td>${tokVal}</td>`;
             s += `<td>${e.ttft_p50 ?? na}</td><td>${e.ttft_p90 ?? na}</td><td>${e.ttft_p95 ?? na}</td><td>${e.ttft_p99 ?? na}</td>`;
-            s += `<td>${e.itl_p90 != null ? parseFloat(e.itl_p90).toFixed(2) : na}</td></tr>`;
+            s += `<td>${e.itl_p90 != null ? parseFloat(e.itl_p90).toFixed(2) : na}</td><td>${ml}</td></tr>`;
         });
         s += '</table>';
         // Legend (best variant is the highlighted row — no star marker)
@@ -1175,6 +1410,11 @@ function buildTestSettingsSection(data) {
             ['TP Pair Breadth', 'Top-' + (rc.tp_pair_top_n || 4)],
             ['P/D Ratio Search', rc.pd_search_mode === 'exhaustive' ? 'Exhaustive' : 'Adaptive'],
             ['Asymmetric TP', rc.allow_asymmetric_tp ? 'Yes' : 'No'],
+            ['Skip TP16', rc.skip_tp16 !== false ? 'Yes' : 'No'],
+            ['LoRA Serving', rc.lora_enabled ? 'Enabled' : 'Disabled'],
+            ['LoRA Adapters', rc.lora_enabled ? (rc.lora_num_adapters || 20) + ' (agent-01…agent-' + String(rc.lora_num_adapters || 20).padStart(2, '0') + ')' : '—'],
+            ['LoRA Benchmark Mode', rc.lora_enabled ? ({'round_robin': 'All adapters (round-robin per request)', 'session_pinned': 'Session-pinned (one adapter per conversation)', 'base_only': 'Base model only (no adapter traffic)'}[rc.lora_benchmark_mode] || 'All adapters (round-robin per request)') : '—'],
+            ['LoRA Sweep', rc.lora_sweep_enabled ? 'Enabled — levels [' + (rc.lora_sweep_levels || []).join(', ') + ']' : 'Disabled'],
             ['Auto-Scale Concurrency', rc.use_achievable_qps ? 'Yes' : 'No'],
             ['Headroom', (rc.headroom || 1.3) + 'x'],
             ['Latency SLA', rc.latency_constraint_enabled ? rc.latency_constraint_ms + 'ms @ ' + rc.latency_constraint_percentile : 'Disabled'],
@@ -1221,7 +1461,7 @@ function buildTestSettingsSection(data) {
         ]},
         { title: 'EPP Configuration', color: '#6d28d9', rows: (function() {
             var rows = [
-                ['Scoring Preset', eppLabels[rc.epp_preset] || rc.epp_preset || 'Balanced'],
+                ['Scoring Preset', (rc.epp_custom_enabled !== false) ? (eppLabels[rc.epp_preset] || rc.epp_preset || 'Balanced') : 'llm-d upstream'],
                 ['EPP Tuning', rc.epp_benchmark ? 'Enabled' : 'Disabled'],
             ];
             var ec = rc.epp_config || {};
@@ -1288,6 +1528,10 @@ function buildTestSettingsSection(data) {
             latency_aware: {prefix_cache_weight:3, kv_cache_weight:2, queue_weight:2, active_request_weight:2, decode_prefix_cache_weight:1, decode_active_request_weight:3},
         };
         function _eppW(tc) {
+            // Use the ARCHIVED configmap weights (what actually deployed)
+            if (tc.epp_deployed && tc.epp_deployed.prefix_cache_weight !== undefined) {
+                return tc.epp_deployed;
+            }
             if (!tc.epp_config) return null;
             const preset = tc.epp_config.preset || rc.epp_preset || 'balanced';
             return _eppPresets[preset] || _eppPresets.balanced;
@@ -1432,6 +1676,21 @@ function buildConcurrencySweepSection(data) {
     s += '<p style="color:#64748b;font-size:0.85em;margin:0 0 4px;">Trade-off between time to first token (X, lower is better) and GPU throughput efficiency (Y). Top-left is ideal.</p>';
     s += '<div id="dl-sweep-pareto-ttft" style="height:850px"></div></div>';
 
+    // vLLM Token Throughput vs Concurrency (server total vs output only)
+    if (configKeys.some(k => sweep[k].some(p => p.vllm_tps))) {
+        s += '<div class="chart-box"><h3>vLLM Token Throughput vs Concurrency</h3>';
+        s += '<p style="color:#64748b;font-size:0.85em;margin:0 0 4px;"><strong>Solid line:</strong> Server total (prompt + generation from Prometheus). <strong>Dashed line:</strong> Output tokens only (generation). The gap reflects prefix cache efficiency — cached prompt tokens inflate the server total.</p>';
+        s += '<div id="dl-sweep-vllm-tps" style="height:850px"></div></div>';
+    }
+
+    // Architecture comparison charts
+    s += '<div class="chart-box"><h3>Best Envelope — PD vs Aggregated</h3>';
+    s += '<p style="color:#64748b;font-size:0.85em;margin:0 0 4px;">Pareto frontier of each architecture\'s best throughput/GPU at each concurrency level. The higher curve is the better architecture.</p>';
+    s += '<div id="dl-sweep-envelope" style="height:850px"></div></div>';
+    s += '<div class="chart-box"><h3>Architecture Comparison — Overlaid</h3>';
+    s += '<p style="color:#64748b;font-size:0.85em;margin:0 0 4px;">Combined view: frontier lines for each architecture plus markers showing which won at each concurrency level.</p>';
+    s += '<div id="dl-sweep-overlaid" style="height:850px"></div></div>';
+
     const tid = 'dl-sweep-table';
     s += `<div class="chart-box"><h3>All Sweep Data Points</h3>`;
     s += `<table id="${tid}"><tr>`;
@@ -1573,8 +1832,8 @@ function buildTrafficSection(data, allRes) {
     const hasTraffic = allRes.some(r => r.request_total != null || r.request_errored != null);
     if (!hasTraffic) return '';
 
-    const trafficPrefixes = ['step11-sweep', 'step13', 'step9', 'step7', 'step6', 'step3', 'step2'];
-    const trafficLabelMap = {'tp-cal':'TP Calibration','step6':'Aggregated','step7':'PD/EP','step9':'EPP Tuning','step11-sweep':'Concurrency Sweep','step13':'Cache Sweep','other':'Other'};
+    const trafficPrefixes = ['step11-sweep', 'step13', 'step11-epp', 'step9', 'step7', 'step6', 'step3', 'step2'];
+    const trafficLabelMap = {'tp-cal':'TP Calibration','step6':'Aggregated','step7':'PD/EP','step9':'EPP Tuning','step11-epp':'EPP Tuning','step11-sweep':'Concurrency Sweep','step13':'Cache Sweep','other':'Other'};
     const groups = {};
     allRes.forEach(r => {
         if (!r.test_id) return;
@@ -1589,6 +1848,10 @@ function buildTrafficSection(data, allRes) {
         groups['tp-cal'] = (groups['step2'] || []).concat(groups['step3'] || []);
         delete groups['step2'];
         delete groups['step3'];
+    }
+    if (groups['step11-epp']) {
+        groups['step9'] = (groups['step9'] || []).concat(groups['step11-epp']);
+        delete groups['step11-epp'];
     }
 
     const groupOrder = ['tp-cal', 'step6', 'step7', 'step9', 'step11-sweep', 'step13', 'other'];
@@ -1629,7 +1892,26 @@ function buildTrafficSection(data, allRes) {
 
     groupKeys.forEach(gk => {
         const label = trafficLabelMap[gk] || gk;
-        s += `<div class="chart-box"><h3>Traffic: ${label}</h3><div id="dl-traffic-${gk}" style="height:850px"></div></div>`;
+        const results = groups[gk];
+        const hasErrors = results.some(r => (r.request_errored || 0) > 0 || (r.nixl_errors || 0) > 0);
+        if (gk === 'step11-sweep') {
+            // Per-config charts with c=N labels and error badges (like live)
+            const byConfig = {};
+            results.forEach(r => {
+                const cfgKey = (r.test_id || '').replace('step11-sweep-', '').replace(/-c\d+$/, '');
+                const lbl = r.config_name || cfgKey;
+                if (!byConfig[cfgKey]) byConfig[cfgKey] = { label: lbl, results: [] };
+                byConfig[cfgKey].results.push(r);
+            });
+            Object.keys(byConfig).sort().forEach(cfgKey => {
+                const cfg = byConfig[cfgKey];
+                const cfgErr = cfg.results.some(r => (r.request_errored || 0) > 0 || (r.nixl_errors || 0) > 0);
+                const cid = 'dl-traffic-sweep-' + cfgKey.replace(/[^a-z0-9]/g, '-');
+                s += `<div class="chart-box"${cfgErr ? ' style="border-left:4px solid #dc2626;"' : ''}><h3>Sweep: ${cfg.label}${cfgErr ? ' <span style="color:#dc2626;font-size:0.8em;">&#9888; errors</span>' : ''}</h3><div id="${cid}" style="height:850px"></div></div>`;
+            });
+        } else {
+            s += `<div class="chart-box"${hasErrors ? ' style="border-left:4px solid #dc2626;"' : ''}><h3>Traffic: ${label}${hasErrors ? ' <span style="color:#dc2626;font-size:0.8em;">&#9888; errors detected</span>' : ''}</h3><div id="dl-traffic-${gk}" style="height:850px"></div></div>`;
+        }
     });
 
     const tid = 'dl-traffic-table';
@@ -1667,13 +1949,26 @@ function buildTrafficSection(data, allRes) {
 function buildDeployTimingSection(data, allRes) {
     const timings = [];
     allRes.forEach(r => {
+        // Primary source (matches live report): model_load_time_s from metrics_json
+        const mj = r.metrics_json ? (typeof r.metrics_json === 'string' ? JSON.parse(r.metrics_json) : r.metrics_json) : {};
+        const loadTime = mj.model_load_time_s;
+        if (loadTime != null && loadTime > 0) {
+            timings.push({
+                config: r.config_name || r.test_id || 'Unknown',
+                arch: r.architecture || '-',
+                pods: (r.prefill_pods || 0) + (r.decode_pods || 0) || r.replicas || 0,
+                load_s: loadTime
+            });
+            return;
+        }
+        // Fallback: explicit deploy_timing struct
         const dt = r.deploy_timing || (r.test_config && r.test_config.deploy_timing);
         if (dt && (dt.pod_creation_s != null || dt.model_load_s != null)) {
             timings.push({
                 config: r.config_name || r.test_id || 'Unknown',
-                pod_creation_s: dt.pod_creation_s || 0,
-                model_load_s: dt.model_load_s || 0,
-                total_s: (dt.pod_creation_s || 0) + (dt.model_load_s || 0)
+                arch: r.architecture || '-',
+                pods: (r.prefill_pods || 0) + (r.decode_pods || 0) || r.replicas || 0,
+                load_s: (dt.model_load_s || 0)
             });
         }
     });
@@ -1682,24 +1977,32 @@ function buildDeployTimingSection(data, allRes) {
     let s = '';
     s += '<div style="border-radius:10px;overflow:hidden;border:2px solid #f59e0b;border-left:6px solid #f59e0b;margin-bottom:20px;">';
     s += '<div style="background:linear-gradient(135deg,#f59e0b,#fbbf24);padding:12px 20px;color:white;font-weight:700;">Deploy Timing</div>';
-    s += '<div style="padding:12px 20px;font-size:0.95em;">Time taken for pod creation and model loading per configuration.</div>';
+    s += '<div style="padding:12px 20px;font-size:0.95em;">Time from pod deployment to model fully loaded and serving. Includes scheduling, image pull, model weight loading, and CUDA graph capture.</div>';
 
-    const avgTotal = timings.reduce((a, t) => a + t.total_s, 0) / timings.length;
-    const minTotal = Math.min(...timings.map(t => t.total_s));
-    const maxTotal = Math.max(...timings.map(t => t.total_s));
+    const avgTotal = timings.reduce((a, t) => a + t.load_s, 0) / timings.length;
+    const minTotal = Math.min(...timings.map(t => t.load_s));
+    const maxTotal = Math.max(...timings.map(t => t.load_s));
     s += '<div class="stats">';
     s += dlStatCard(timings.length, 'Deployments');
-    s += dlStatCard(dlFmt(avgTotal, 0) + 's', 'Avg Deploy Time');
-    s += dlStatCard(dlFmt(minTotal, 0) + 's', 'Fastest Deploy');
-    s += dlStatCard(dlFmt(maxTotal, 0) + 's', 'Slowest Deploy');
+    s += dlStatCard(dlFmt(avgTotal, 0) + 's', 'Avg Load Time');
+    s += dlStatCard(dlFmt(minTotal, 0) + 's', 'Fastest');
+    s += dlStatCard(dlFmt(maxTotal, 0) + 's', 'Slowest');
     s += '</div>';
 
-    s += '<div class="chart-box"><h3>Deploy Time per Configuration</h3><div id="dl-deploy-timing" style="height:850px"></div></div>';
+    s += '<div class="chart-box"><h3>Model Load Time per Configuration</h3><div id="dl-deploy-timing" style="height:850px"></div></div>';
 
+    const ttid = 'dl-deploy-timing-tbl';
     s += '<div class="chart-box"><h3>Deploy Timing Details</h3>';
-    s += '<table><tr><th>Configuration</th><th>Pod Creation (s)</th><th>Model Load (s)</th><th>Total (s)</th></tr>';
-    [...timings].sort((a, b) => a.total_s - b.total_s).forEach(t => {
-        s += `<tr><td>${t.config}</td><td>${dlFmt(t.pod_creation_s, 1)}</td><td>${dlFmt(t.model_load_s, 1)}</td><td><strong>${dlFmt(t.total_s, 1)}</strong></td></tr>`;
+    s += `<table id="${ttid}">`;
+    s += `<th style="cursor:pointer;" onclick="sortReportTable('${ttid}',0,'str')">Configuration &#x21C5;</th>`;
+    s += `<th style="cursor:pointer;" onclick="sortReportTable('${ttid}',1,'str')">Architecture &#x21C5;</th>`;
+    s += `<th style="cursor:pointer;" onclick="sortReportTable('${ttid}',2,'num')">Pods &#x21C5;</th>`;
+    s += `<th style="cursor:pointer;" onclick="sortReportTable('${ttid}',3,'num')">Model Load Time &#x21C5;</th>`;
+    [...timings].sort((a, b) => a.load_s - b.load_s).forEach(t => {
+        const mins = Math.floor(t.load_s / 60);
+        const secs = Math.round(t.load_s % 60);
+        const timeStr = mins > 0 ? mins + 'm ' + secs + 's' : secs + 's';
+        s += `<tr><td>${t.config}</td><td>${t.arch}</td><td data-val="${t.pods}">${t.pods}</td><td data-val="${t.load_s}"><strong>${timeStr}</strong></td></tr>`;
     });
     s += '</table></div>';
 
@@ -1726,6 +2029,334 @@ function buildParetoFrontierSection(data, allRes) {
     s += '<div class="chart-box"><h3>Pareto &mdash; Throughput vs ITL</h3>';
     s += '<p style="color:#64748b;font-size:0.9em;margin:0 0 4px;">Lower ITL (X) means faster token streaming. Higher throughput/GPU (Y) is better. Top-left is ideal.</p>';
     s += '<div id="dl-pareto-itl" style="height:850px"></div></div>';
+    return s;
+}
+
+// ── Parallel Workloads Tab ──────────────────────────────────────────────────
+function buildWorkloadsSection(allRes) {
+    const wlEntries = (allRes || []).filter(r => r.workloads && r.workloads.length && !(r.test_id || r.config_name || '').startsWith('step11-epp-'));
+    if (!wlEntries.length) return '';
+    let s = '<div class="chart-box" style="border:2px solid #7c3aed;">';
+    s += '<h3>Parallel Workloads — per-shape results</h3>';
+    s += '<p style="color:#64748b;font-size:0.9em;">Multiple workload shapes ran simultaneously against one deployment. Combined percentiles are request-weighted; the per-workload rows show each shape\'s own latency distribution.</p>';
+    wlEntries.forEach(e => {
+        const na = '—';
+        s += `<div style="margin:14px 0;"><strong style="color:#3730a3;">${e.name}</strong>`;
+        s += '<table class="results-table" style="margin-top:8px;"><tr><th>Workload</th><th>ISL</th><th>OSL</th><th>Requests</th><th>TTFT P50</th><th>TTFT P90</th><th>TTFT P99</th><th>E2E P90</th><th>E2E P99</th><th>Tput (req/s)</th></tr>';
+        (e.workloads || []).forEach(w => {
+            s += `<tr><td><strong>${w.name || na}</strong></td><td>${Math.round(w.isl) || na}</td><td>${Math.round(w.osl) || na}</td>` +
+                `<td>${w.request_successful != null ? w.request_successful : na}${w.request_total ? ' / ' + w.request_total : ''}</td>` +
+                `<td>${w.ttft_p50 != null ? Math.round(w.ttft_p50) + 'ms' : na}</td>` +
+                `<td>${w.ttft_p90 != null ? Math.round(w.ttft_p90) + 'ms' : na}</td>` +
+                `<td>${w.ttft_p99 != null ? Math.round(w.ttft_p99) + 'ms' : na}</td>` +
+                `<td>${w.e2e_latency_p90 != null ? w.e2e_latency_p90.toFixed(2) + 's' : na}</td>` +
+                `<td>${w.e2e_latency_p99 != null ? w.e2e_latency_p99.toFixed(2) + 's' : na}</td>` +
+                `<td>${w.throughput_mean != null ? w.throughput_mean.toFixed(2) : na}</td></tr>`;
+        });
+        s += `<tr style="background:#f5f3ff;font-weight:600;"><td>combined (weighted)</td><td>—</td><td>—</td>` +
+            `<td>${e.request_successful != null ? e.request_successful : '—'}</td>` +
+            `<td>${e.ttft_p50 != null ? Math.round(e.ttft_p50) + 'ms' : '—'}</td>` +
+            `<td>${e.ttft_p90 != null ? Math.round(e.ttft_p90) + 'ms' : '—'}</td>` +
+            `<td>${e.ttft_p99 != null ? Math.round(e.ttft_p99) + 'ms' : '—'}</td>` +
+            `<td>${e.e2e_latency_p90 != null ? e.e2e_latency_p90.toFixed(2) + 's' : '—'}</td>` +
+            `<td>${e.e2e_latency_p99 != null ? e.e2e_latency_p99.toFixed(2) + 's' : '—'}</td>` +
+            `<td>${e.throughput_mean != null ? e.throughput_mean.toFixed(2) : '—'}</td></tr>`;
+        s += '</table>';
+        const chartId = `dl-wl-ttft-${(e.test_id || e.config_name || 'x').replace(/[^a-z0-9]/gi, '')}`;
+        s += `<div id="${chartId}" style="height:${Math.max(240, (e.workloads.length + 1) * 60)}px;margin:10px 0;"></div>`;
+        s += '</div>';
+    });
+    s += '</div>';
+    return s;
+}
+
+// ── LoRA Serving Tab ────────────────────────────────────────────────────────
+function _dlLoraAffCells(pd) {
+    if (!pd || !(pd.total_adapters > 0)) {
+        return { single: '—', multi: '—', share: '—', verdict: '—', color: '#64748b' };
+    }
+    const total = pd.total_adapters;
+    const conc = pd.concentrated || 0, scat = pd.scattered || 0;
+    const concPct = Math.round(100 * conc / total), scatPct = Math.round(100 * scat / total);
+    const share = pd.top_pod_share;
+    const verdict = (share === null || share === undefined)
+        ? (concPct >= 80 ? 'adapter-aware' : (concPct >= 50 ? 'partial' : 'random'))
+        : (share >= 0.9 ? 'adapter-aware' : (share >= 0.5 ? 'partial' : 'random'));
+    const color = verdict === 'adapter-aware' ? '#059669' : (verdict === 'partial' ? '#f59e0b' : '#ef4444');
+    return {
+        single: conc + ' (' + concPct + '%)',
+        multi: scat + ' (' + scatPct + '%)',
+        share: (share === null || share === undefined) ? '—' : Math.round(100 * share) + '%',
+        verdict, color
+    };
+}
+
+function _dlCacheCell(pct) {
+    if (pct === undefined || pct === null) return '—';
+    const color = pct >= 20 ? '#059669' : (pct >= 5 ? '#f59e0b' : '#ef4444');
+    return '<span style="color:' + color + ';font-weight:600;">' + pct.toFixed(1) + '%</span>';
+}
+
+function buildLoraSection(data, charts) {
+    let s = '';
+    const vllmCharts = charts && charts.vllm ? charts.vllm : {};
+
+    // 1) LoRA Adapter Sweep (per sweep series)
+    const lsweep = data.lora_sweep || {};
+    Object.keys(lsweep).forEach(skey => {
+        const pts = lsweep[skey];
+        if (!pts || !pts.length) return;
+        const lbl = pts[0].config_label || skey;
+        const affByTest = {};
+        (vllmCharts.lora_pod_details || []).forEach(pd => {
+            if (pd && pd.test_id) affByTest[pd.test_id] = pd;
+        });
+        const _baseOnly = ((data.run_config || {}).lora_benchmark_mode === 'base_only');
+        const rows = pts.map(p => {
+            const swap = (p.lru_swapping && !_baseOnly) ? ' <span style="color:#ef4444;">&#9888; LRU</span>' : '';
+            const aff = _dlLoraAffCells(affByTest[p.test_id]);
+            const evict = p.adapter_evictions;
+            const evictCell = (evict === undefined || evict === null) ? '—'
+                : (evict > 0 ? '<span style="color:#ef4444;font-weight:600;">' + evict + '</span>' : '0');
+            const resident = (p.gpu_resident || p.gpu_resident === 0)
+                ? (p.total_slots ? p.gpu_resident + '×' + (p.total_slots / (p.gpu_resident || 1) === Math.round(p.total_slots / (p.gpu_resident || 1)) ? (p.total_slots / (p.gpu_resident || 1)) : '?') : String(p.gpu_resident))
+                : '—';
+            return '<tr>' +
+                '<td style="text-align:center;font-weight:700;">' + p.adapter_count + '</td>' +
+                '<td style="text-align:center;">' + resident + swap + '</td>' +
+                '<td style="text-align:center;">' + (p.ttft_p90 || 0).toFixed(0) + ' ms</td>' +
+                '<td style="text-align:center;">' + (p.throughput_mean || 0).toFixed(3) + ' req/s</td>' +
+                '<td style="text-align:center;">' + (p.itl_p90 || 0).toFixed(1) + ' ms</td>' +
+                '<td style="text-align:center;">' + _dlCacheCell(p.cache_hit_pct) + '</td>' +
+                '<td style="text-align:center;">' + (p.output_tps_mean || 0).toFixed(0) + ' tok/s</td>' +
+                '<td style="text-align:center;">' + evictCell + '</td>' +
+                '<td style="text-align:center;color:#059669;">' + aff.single + '</td>' +
+                '<td style="text-align:center;color:#ef4444;">' + aff.multi + '</td>' +
+                '<td style="text-align:center;color:' + aff.color + ';font-weight:600;">' + aff.verdict + '</td>' +
+                '</tr>';
+        }).join('');
+        const sweepChartId = 'dl-lora-sweep-chart-' + skey.replace(/[^a-z0-9]/gi, '-');
+        const affChartId = 'dl-lora-sweep-aff-chart-' + skey.replace(/[^a-z0-9]/gi, '-');
+        const affPts = [];
+        pts.forEach(p => {
+            const pd = affByTest[p.test_id];
+            if (pd && (pd.total_adapters || 0) > 0) {
+                affPts.push({
+                    adapter_count: p.adapter_count,
+                    pct: Math.round(100 * (pd.concentrated || 0) / pd.total_adapters),
+                });
+            }
+        });
+        const affChartHtml = affPts.length >= 2
+            ? '<div id="' + affChartId + '" style="width:100%;height:340px;margin-top:18px;"></div>'
+            : '';
+        const evictChartId = 'dl-lora-sweep-evict-chart-' + skey.replace(/[^a-z0-9]/gi, '-');
+        const evictPts = pts.filter(p => p.adapter_evictions !== undefined && p.adapter_evictions !== null);
+        const evictChartHtml = evictPts.length >= 2
+            ? '<div class="chart-box" style="border-left:6px solid #b91c1c;margin-top:18px;"><h3>Adapter Evictions — ' + lbl + '</h3>' +
+                '<p style="color:#64748b;font-size:0.85em;line-height:1.6;">How often a serving pod had to <strong>drop a GPU-resident adapter to make room for another one</strong> (LRU eviction) during each sweep level. ' +
+                'Adapter weights occupy residency slots (<code>max_loras</code> per pod); loading a new adapter once all slots are taken evicts the least-recently-used one. ' +
+                'vLLM exposes no eviction counter, so this is <strong>estimated by replaying vLLM\'s LRU policy</strong> over each pod\'s in-flight adapter sequence (a lower bound). ' +
+                '<strong>Gray bar (loads)</strong> — adapter activations from disk. <strong>Red bar (evictions)</strong> — LRU removals under capacity pressure. ' +
+                '<strong>Dashed line</strong> — pool residency capacity (pods × slots per pod).</p>' +
+                '<div id="' + evictChartId + '" style="width:100%;height:340px;margin-top:10px;"></div></div>'
+            : '';
+        s += '<div class="chart-box" style="border-left:6px solid #4f46e5;"><h3>LoRA Adapter Sweep — ' + lbl + '</h3>' +
+            '<p style="color:#64748b;font-size:0.9em;line-height:1.6;">Multi-tenant scaling curve: the best configuration re-tested at increasing <strong>adapter counts</strong>, ' +
+            'with benchmark requests round-robined across the base model and all adapters. ' +
+            '<strong>Dotted green line</strong> — throughput (tokens/s, left axis). ' +
+            '<strong>&Delta;% labels</strong> — throughput change vs the 0-adapter baseline. ' +
+            '<strong>Red dashed vertical line + shaded region</strong> — the LRU overflow boundary: right of it the adapter working set exceeds total pool residency, so vLLM must swap adapters in and out.</p>' +
+            '<div id="' + sweepChartId + '" style="width:100%;height:520px;margin-top:10px;"></div>' +
+            affChartHtml +
+            '<table id="dl-lora-sweep-table-' + skey + '" style="width:100%;font-size:0.9em;margin-top:10px;">' +
+            '<tr><th style="cursor:pointer;" onclick="sortReportTable(\'dl-lora-sweep-table-' + skey + '\',0,\'num\')">Adapters &#x21C5;</th>' +
+            '<th style="cursor:pointer;" onclick="sortReportTable(\'dl-lora-sweep-table-' + skey + '\',1,\'num\')">Resident Slots &#x21C5;</th>' +
+            '<th style="cursor:pointer;" onclick="sortReportTable(\'dl-lora-sweep-table-' + skey + '\',2,\'num\')">TTFT p90 &#x21C5;</th>' +
+            '<th style="cursor:pointer;" onclick="sortReportTable(\'dl-lora-sweep-table-' + skey + '\',3,\'num\')">Throughput &#x21C5;</th>' +
+            '<th style="cursor:pointer;" onclick="sortReportTable(\'dl-lora-sweep-table-' + skey + '\',4,\'num\')">ITL p90 &#x21C5;</th>' +
+            '<th style="cursor:pointer;" onclick="sortReportTable(\'dl-lora-sweep-table-' + skey + '\',5,\'num\')">Cache-Hit &#x21C5;</th>' +
+            '<th style="cursor:pointer;" onclick="sortReportTable(\'dl-lora-sweep-table-' + skey + '\',6,\'num\')">Output &#x21C5;</th>' +
+            '<th style="cursor:pointer;" onclick="sortReportTable(\'dl-lora-sweep-table-' + skey + '\',7,\'num\')">Evictions &#x21C5;</th>' +
+            '<th style="cursor:pointer;" onclick="sortReportTable(\'dl-lora-sweep-table-' + skey + '\',8,\'num\')">Single-Pod &#x21C5;</th>' +
+            '<th style="cursor:pointer;" onclick="sortReportTable(\'dl-lora-sweep-table-' + skey + '\',9,\'num\')">Multi-Pod &#x21C5;</th>' +
+            '<th style="cursor:pointer;" onclick="sortReportTable(\'dl-lora-sweep-table-' + skey + '\',10,\'str\')">Routing Behavior &#x21C5;</th></tr>' +
+            rows + '</table>' +
+            '<p style="font-size:0.85em;color:#64748b;margin-top:8px;line-height:1.7;">' +
+            '<strong>Resident slots</strong> — adapter slots per pod × serving pods. ' +
+            '<strong>&#9888; LRU</strong> — the adapter working set exceeds total pool residency, so vLLM must evict a least-recently-used adapter to load each new one. ' +
+            '<strong>Cache-hit</strong> — prefix-cache hit rate: vLLM keys cache blocks by (prefix, adapter), so spreading requests across adapters multiplies the key space and collapses the hit rate.</p></div>' + evictChartHtml;
+    });
+
+    // 2) LoRA routing & residency signals
+    if (vllmCharts.lora && vllmCharts.configs && vllmCharts.configs.length) {
+        const loraSig = vllmCharts.lora;
+        const hasLoraData = (loraSig.ttft_p99_pod_spread_ms || []).some(v => v > 0) ||
+            (loraSig.adapter_churn || []).some(v => v > 0) ||
+            (loraSig.adapters_per_pod || []).some(v => v > 0);
+        if (hasLoraData) {
+            s += '<div class="chart-box" style="border-left:6px solid #7c3aed;"><h3>LoRA Routing &amp; Residency</h3>' +
+                '<p style="color:#64748b;font-size:0.9em;line-height:1.6;">Per-configuration LoRA serving signals from vLLM Prometheus metrics. ' +
+                '<strong>TTFT P99 spread across pods</strong> — the hot-pod vs cold-pod latency delta; misrouted requests pay a CPU&rarr;GPU adapter swap-in and show up as a large spread. ' +
+                '<strong>Adapter churn</strong> — residency set changes from LRU evictions; high churn with few adapters means request scattering. ' +
+                '<strong>Adapters per pod</strong> — how many distinct adapters each pod served (concentrated = adapter-aware routing; uniform spread = random load balancing). ' +
+                '<strong>Waiting queue CV</strong> — queue-depth imbalance across pods.</p>' +
+                '<div id="dl-lora-routing-chart" style="width:100%;height:640px;margin-top:10px;"></div></div>';
+
+            // 3) Adapter affinity summary (non-sweep tests)
+            const affDetails = (vllmCharts.lora_pod_details || []).filter(pd => {
+                return pd && pd.pods && Object.keys(pd.pods).length && (pd.total_adapters || 0) > 0
+                    && !(pd.test_id || '').startsWith('step11-epp-')
+                    && !(pd.test_id || '').startsWith('step14-lora-');
+            });
+            if (affDetails.length) {
+                const affRows = affDetails.map(pd => {
+                    const total = pd.total_adapters || 0;
+                    const conc = pd.concentrated || 0;
+                    const scat = pd.scattered || 0;
+                    const concPct = total ? Math.round(100 * conc / total) : 0;
+                    const scatPct = total ? Math.round(100 * scat / total) : 0;
+                    const share = pd.top_pod_share;
+                    let verdict, verdictColor;
+                    if (share === null || share === undefined) {
+                        verdict = concPct >= 80 ? 'adapter-aware' : (concPct >= 50 ? 'partial' : 'random');
+                        verdictColor = concPct >= 80 ? '#059669' : (concPct >= 50 ? '#f59e0b' : '#ef4444');
+                    } else {
+                        verdict = share >= 0.9 ? 'adapter-aware' : (share >= 0.5 ? 'partial' : 'random');
+                        verdictColor = share >= 0.9 ? '#059669' : (share >= 0.5 ? '#f59e0b' : '#ef4444');
+                    }
+                    const shareCell = (share === null || share === undefined) ? '—' : Math.round(100 * share) + '%';
+                    const shareColor = (share === null || share === undefined) ? '#64748b'
+                        : (share >= 0.9 ? '#059669' : (share >= 0.5 ? '#f59e0b' : '#ef4444'));
+                    const seen = (pd.adapters_seen && pd.adapters_seen !== total) ? total + '/' + pd.adapters_seen : String(total);
+                    return '<tr>' +
+                        '<td style="font-weight:600;">' + pd.config + '</td>' +
+                        '<td style="text-align:center;">' + seen + '</td>' +
+                        '<td style="text-align:center;color:#059669;font-weight:600;">' + conc + ' (' + concPct + '%)</td>' +
+                        '<td style="text-align:center;color:#ef4444;">' + scat + ' (' + scatPct + '%)</td>' +
+                        '<td style="text-align:center;color:' + shareColor + ';font-weight:600;">' + shareCell + '</td>' +
+                        '<td style="text-align:center;color:' + verdictColor + ';font-weight:600;">' + verdict + '</td>' +
+                        '</tr>';
+                }).join('');
+                s += '<div class="chart-box" style="border-left:6px solid #059669;"><h3>Adapter Affinity Summary</h3>' +
+                    '<p style="color:#64748b;font-size:0.9em;line-height:1.6;">How consistently each configuration routes an adapter\'s requests to a single pod (non-sweep tests). ' +
+                    'Counts include only adapters with <strong>&ge;2 requests</strong>. ' +
+                    '<strong>Single-pod</strong> — the adapter was served entirely by one pod (adapter-aware routing). ' +
+                    '<strong>Multi-pod</strong> — the adapter\'s requests were scattered across pods (random load balancing). ' +
+                    '<strong>Top-pod share</strong> — request-weighted fraction of each adapter\'s requests served by its main pod (100% = fully sticky).</p>' +
+                    '<div id="dl-lora-affinity-summary-chart" style="width:100%;height:360px;margin-top:10px;"></div>' +
+                    '<table id="dl-lora-aff-table" style="width:100%;font-size:0.9em;margin-top:10px;">' +
+                    '<tr><th style="cursor:pointer;" onclick="sortReportTable(\'dl-lora-aff-table\',0,\'str\')">Configuration &#x21C5;</th>' +
+                    '<th style="cursor:pointer;" onclick="sortReportTable(\'dl-lora-aff-table\',1,\'num\')">Adapters &#x21C5;</th>' +
+                    '<th style="cursor:pointer;" onclick="sortReportTable(\'dl-lora-aff-table\',2,\'num\')">Single-Pod &#x21C5;</th>' +
+                    '<th style="cursor:pointer;" onclick="sortReportTable(\'dl-lora-aff-table\',3,\'num\')">Multi-Pod &#x21C5;</th>' +
+                    '<th style="cursor:pointer;" onclick="sortReportTable(\'dl-lora-aff-table\',4,\'num\')">Top-Pod Share &#x21C5;</th>' +
+                    '<th style="cursor:pointer;" onclick="sortReportTable(\'dl-lora-aff-table\',5,\'str\')">Routing Behavior &#x21C5;</th></tr>' +
+                    affRows + '</table></div>';
+            } else if ((vllmCharts.lora_pod_details || []).some(pd => pd && pd.pods)) {
+                const _bmMode = (data.run_config || {}).lora_benchmark_mode || 'round_robin';
+                s += '<div class="chart-box"><h3>Adapter Affinity Summary</h3>' +
+                    '<p style="color:#64748b;font-size:0.95em;line-height:1.6;">No adapter affinity to show' +
+                    (_bmMode === 'base_only'
+                        ? ' — this run\'s Benchmark Mode is <strong>base model only</strong>: every request targets the base model, so adapter routing is never exercised. Run the same configuration with Benchmark Mode = round-robin for the adapter-targeted side of the comparison.'
+                        : ' — no adapter traffic was observed in the collected metrics.') +
+                    '</p></div>';
+            }
+
+            // 4) Per-pod breakdowns
+            (vllmCharts.lora_pod_details || []).forEach(pd => {
+                if (!pd || !pd.pods) return;
+                const podNames = Object.keys(pd.pods);
+                if (!podNames.length) return;
+                const podRows = podNames.map(pod => {
+                    const p = pd.pods[pod];
+                    const distinct = (p.running_adapters_distinct || []).length;
+                    const last = p.running_adapters_last || [];
+                    const lastStr = last.length
+                        ? last.length + ' (' + last.slice(0, 5).join(', ') + (last.length > 5 ? ', …' : '') + ')'
+                        : '—';
+                    const wait = (p.waiting_adapters_last || []).length;
+                    const evict = p.estimated_adapter_evictions;
+                    const evictCell = (evict === undefined || evict === null) ? '—'
+                        : (evict > 0 ? '<span style="color:#ef4444;font-weight:600;">' + evict + '</span>' : '0');
+                    const loadCell = (p.estimated_adapter_loads === undefined || p.estimated_adapter_loads === null)
+                        ? '—' : p.estimated_adapter_loads;
+                    return '<tr>' +
+                        '<td style="font-family:monospace;font-size:0.85em;">' + pod + '</td>' +
+                        '<td style="text-align:center;">' + (p.max_lora != null ? p.max_lora : '—') + '</td>' +
+                        '<td style="text-align:center;font-weight:600;">' + distinct + '</td>' +
+                        '<td style="text-align:center;">' + (p.residency_set_changes || 0) + '</td>' +
+                        '<td style="text-align:center;">' + loadCell + '</td>' +
+                        '<td style="text-align:center;">' + evictCell + '</td>' +
+                        '<td style="font-size:0.82em;color:#64748b;">' + lastStr + '</td>' +
+                        '<td style="text-align:center;">' + (wait || '—') + '</td>' +
+                        '</tr>';
+                }).join('');
+                const affTotal = pd.total_adapters || 0;
+                const affPct = affTotal ? Math.round(100 * (pd.concentrated || 0) / affTotal) : 0;
+                const affLine = affTotal
+                    ? '<div style="margin:8px 0 4px;font-size:0.88em;"><strong>Adapter affinity:</strong> ' +
+                      '<span style="color:#059669;font-weight:600;">' + (pd.concentrated || 0) + '</span> of ' + affTotal +
+                      ' adapters (' + affPct + '%) served by a single pod — ' +
+                      (affPct >= 80 ? 'concentrated (adapter-aware routing)' :
+                       affPct >= 50 ? 'partially concentrated' :
+                       'scattered across pods (random load balancing)') +
+                      '; <span style="color:#ef4444;">' + (pd.scattered || 0) + '</span> served by multiple pods.</div>'
+                    : '';
+                const bdId = 'dl-lora-pod-bd-' + pd.config.replace(/[^a-z0-9]/gi, '-') + '-n' + (pd.total_adapters || 0);
+                s += '<div style="margin-top:16px;border:1.5px solid #e2e8f0;border-radius:8px;overflow:hidden;background:#fff;">' +
+                    '<div style="background:#f8fafc;padding:8px 14px;font-weight:600;color:#334155;font-size:0.95em;border-bottom:1px solid #e2e8f0;">' +
+                    'Pod Breakdown — ' + pd.config + ((pd.total_adapters || 0) > 0 ? ' · n=' + pd.total_adapters : '') + '</div>' +
+                    affLine +
+                    '<table id="' + bdId + '" style="width:100%;font-size:0.88em;">' +
+                    '<tr><th style="cursor:pointer;" onclick="sortReportTable(\'' + bdId + '\',0,\'str\')">Pod &#x21C5;</th>' +
+                    '<th style="cursor:pointer;" onclick="sortReportTable(\'' + bdId + '\',1,\'num\')">GPU-Resident Cap &#x21C5;</th>' +
+                    '<th style="cursor:pointer;" onclick="sortReportTable(\'' + bdId + '\',2,\'num\')">Distinct Adapters Served &#x21C5;</th>' +
+                    '<th style="cursor:pointer;" onclick="sortReportTable(\'' + bdId + '\',3,\'num\')">Residency Changes &#x21C5;</th>' +
+                    '<th style="cursor:pointer;" onclick="sortReportTable(\'' + bdId + '\',4,\'num\')">Loads &#x21C5;</th>' +
+                    '<th style="cursor:pointer;" onclick="sortReportTable(\'' + bdId + '\',5,\'num\')">Evictions &#x21C5;</th>' +
+                    '<th>Last Running Set</th>' +
+                    '<th style="cursor:pointer;" onclick="sortReportTable(\'' + bdId + '\',7,\'num\')">Waiting &#x21C5;</th></tr>' +
+                    podRows + '</table></div>';
+            });
+        }
+    }
+    return s;
+}
+
+// ── Estimator Tab ───────────────────────────────────────────────────────────
+function buildEstimatorSection(data) {
+    const wl = data.recommendation ? data.recommendation.workload : {};
+    let wlDesc = 'Tested with <strong>' + (wl.users || '?') + ' users</strong>, ISL <strong>' + (wl.isl || '?') + '</strong>';
+    if (wl.isl_stdev) wlDesc += '&plusmn;' + wl.isl_stdev;
+    wlDesc += ', OSL <strong>' + (wl.osl || '?') + '</strong>';
+    if (wl.osl_stdev) wlDesc += '&plusmn;' + wl.osl_stdev;
+    if (wl.turns > 1) wlDesc += ', <strong>' + wl.turns + ' turns</strong>';
+    wlDesc += '.';
+    let s = '<div class="chart-box" style="border:2px solid #d97706;">';
+    s += '<h3>GPU Estimator</h3>';
+    s += '<p style="color:#1e293b;font-size:0.95em;">Estimate how many GPUs/replicas are needed to meet your SLA targets using the measured performance data. ' + wlDesc + '</p>';
+    s += '<div style="display:flex;gap:24px;flex-wrap:wrap;align-items:flex-end;margin:12px 0;">';
+    s += '<div><div style="font-weight:700;font-size:0.85em;color:#64748b;margin-bottom:6px;">Throughput SLA</div>' +
+        '<label style="display:block;font-size:0.85em;color:#475569;">Target Throughput ' +
+        '<input type="number" id="dl-est-tput-target" value="100" min="1" step="1" style="padding:8px 10px;border:2px solid #e2e8f0;border-radius:8px;font-size:0.95em;background:#f8fafc;width:110px;"> req/s</label></div>';
+    s += '<div><div style="font-weight:700;font-size:0.85em;color:#64748b;margin-bottom:6px;">TTFT SLA</div>' +
+        '<label style="display:block;font-size:0.85em;color:#475569;">Max TTFT ' +
+        '<input type="number" id="dl-est-ttft-target" value="500" min="1" step="1" style="padding:8px 10px;border:2px solid #e2e8f0;border-radius:8px;font-size:0.95em;background:#f8fafc;width:100px;"> ms</label>' +
+        '<label style="display:block;font-size:0.85em;color:#475569;margin-top:6px;">Percentile ' +
+        '<select id="dl-est-ttft-pctl" style="padding:8px 10px;border:2px solid #e2e8f0;border-radius:8px;font-size:0.95em;background:#f8fafc;">' +
+        '<option value="p90">P90</option><option value="p95">P95</option><option value="p99" selected>P99</option></select></label></div>';
+    s += '<div><div style="font-weight:700;font-size:0.85em;color:#64748b;margin-bottom:6px;">ITL SLA</div>' +
+        '<label style="display:block;font-size:0.85em;color:#475569;">Max ITL ' +
+        '<input type="number" id="dl-est-itl-target" value="20" min="0.1" step="0.1" style="padding:8px 10px;border:2px solid #e2e8f0;border-radius:8px;font-size:0.95em;background:#f8fafc;width:100px;"> ms</label>' +
+        '<label style="display:block;font-size:0.85em;color:#475569;margin-top:6px;">Percentile ' +
+        '<select id="dl-est-itl-pctl" style="padding:8px 10px;border:2px solid #e2e8f0;border-radius:8px;font-size:0.95em;background:#f8fafc;">' +
+        '<option value="p90" selected>P90</option><option value="p95">P95</option><option value="p99">P99</option></select></label></div>';
+    s += '<button onclick="dlRunEstimator()" style="padding:10px 28px;font-size:0.95em;border-radius:8px;background:linear-gradient(135deg,#d97706,#b45309);border:none;color:white;cursor:pointer;font-weight:600;">Estimate</button>';
+    s += '</div>';
+    s += '<div id="dl-est-results"></div>';
+    s += '<div id="dl-est-chart" style="width:100%;margin-top:16px;"></div>';
+    s += '</div>';
     return s;
 }
 
@@ -1766,6 +2397,7 @@ function buildChartScript(data, charts, allRes) {
         copy._avg_running_max = (pm.vllm_requests_running || {}).max || null;
         copy._avg_running_min = (pm.vllm_requests_running || {}).min || null;
         copy._routing_cv = (pm.vllm_routing_cv || {}).avg || null;
+        copy._model_load_time_s = mj.model_load_time_s || null;
         delete copy.metrics_json;
         delete copy.manifests;
         delete copy.test_config;
@@ -1861,23 +2493,52 @@ function buildChartScript(data, charts, allRes) {
     s += '  }';
     s += '}';
 
-    // Token throughput chart
+    // Token throughput chart — 3 series like live: GPU computed / server total / client
     s += 'if(document.getElementById("dl-token-tput-chart")){';
     s += '  var tkRes=ar.filter(function(r){var tid=r.test_id||"";return tid.indexOf("step2-")!==0&&tid.indexOf("step3-")!==0&&tid.indexOf("step11-")!==0&&tid.indexOf("step12-")!==0&&tid.indexOf("step13-")!==0&&(r._gen_tps_avg||r.output_tps_mean);});';
     s += '  if(tkRes.length){';
     s += '    var tkLabels=tkRes.map(function(r){return _tL(r.config_name,r.architecture)});';
-    s += '    var tkVllmTotal=[],tkGuidellmTotal=[];';
+    s += '    var tkComputed=[],tkVllmTotal=[],tkGuidellmTotal=[];';
     s += '    tkRes.forEach(function(r){';
-    s += '      tkVllmTotal.push(Math.round((r._prompt_tps_avg||0)+(r._gen_tps_avg||0)));';
-    s += '      var tput=r.throughput_mean||0;';
+    s += '      var pAvg=r._prompt_tps_avg||0,gAvg=r._gen_tps_avg||0;';
+    s += '      tkVllmTotal.push(Math.round(pAvg+gAvg));';
+    s += '      var cacheHits=r._cache_hits_avg||0,cacheQueries=r._cache_queries_avg||0;';
+    s += '      var cacheHitRate=cacheQueries>0?cacheHits/cacheQueries:0;';
+    s += '      tkComputed.push(Math.round(pAvg*(1-cacheHitRate))+Math.round(gAvg));';
+    s += '      var tput=r.throughput_mean||r._throughput_mean_mj||0;';
     s += '      tkGuidellmTotal.push(Math.round((r._prompt_tokens_mean||0)*tput+(r._output_tokens_mean||0)*tput));';
     s += '    });';
     s += '    Plotly.newPlot("dl-token-tput-chart",[';
-    s += '      {x:tkLabels,y:tkVllmTotal,name:"vLLM — computed tok/s",type:"bar",marker:{color:"#3b82f6"},text:tkVllmTotal.map(function(v){return v.toLocaleString()}),textposition:"outside",textfont:{size:14,color:"#1e293b"}},';
-    s += '      {x:tkLabels,y:tkGuidellmTotal,name:"guidellm — all tok/s (incl. cached)",type:"bar",marker:{color:"#f59e0b"},text:tkGuidellmTotal.map(function(v){return v.toLocaleString()}),textposition:"outside",textfont:{size:14,color:"#1e293b"}}';
+    s += '      {x:tkLabels,y:tkComputed,name:"GPU computed",type:"bar",marker:{color:"#3b82f6"},text:tkComputed.map(function(v){return v.toLocaleString()}),textposition:"outside",textfont:{size:13,color:"#1e293b"}},';
+    s += '      {x:tkLabels,y:tkVllmTotal,name:"Server total (incl. cached)",type:"bar",marker:{color:"#93c5fd"},text:tkVllmTotal.map(function(v){return v.toLocaleString()}),textposition:"outside",textfont:{size:13,color:"#1e293b"}},';
+    s += '      {x:tkLabels,y:tkGuidellmTotal,name:"Client (guidellm)",type:"bar",marker:{color:"#f59e0b"},text:tkGuidellmTotal.map(function(v){return v.toLocaleString()}),textposition:"outside",textfont:{size:13,color:"#1e293b"}}';
     s += '    ],{...lo,height:850,barmode:"group",margin:{t:30,b:160,l:60,r:20},xaxis:{tickangle:-45},yaxis:{title:"Total Tokens/s (Prompt + Generation)"},showlegend:true,legend:{x:0,y:1.15,orientation:"h"}},co);';
     s += '  }';
     s += '}';
+
+    // Per-User Token Throughput chart
+    s += 'if(document.getElementById("dl-cfg-per-user")){';
+    s += '  var pu=cd.per_user_efficiency;';
+    s += '  if(pu&&pu.configs&&pu.configs.length){';
+    s += '    Plotly.newPlot("dl-cfg-per-user",[{x:pu.configs,y:pu.values,type:"bar",marker:{color:pu.colors},text:pu.values.map(function(v){return v!=null?v.toFixed(1):""}),textposition:"outside",textfont:{size:14,color:"#333"},cliponaxis:false,constraintext:"none",hovertemplate:"<b>%{x}</b><br>%{y:.1f} tokens/s/user<extra></extra>"}],{...lo,margin:{t:30,b:120,l:60,r:20},xaxis:{tickangle:-45},yaxis:{title:"Output tokens/s per concurrent user - higher is better"}},co);';
+    s += '  }';
+    s += '}';
+
+    // Aggregated configurations — TTFT bars + throughput line (+ ITL y3)
+    s += '(function(){var el=document.getElementById("dl-cfg-agg-ttft");if(!el)return;';
+    s += '  var agg=ar.filter(function(r){if(r.quality==="discard")return false;return r.architecture==="AGGREGATED"&&r.ttft_p90;});';
+    s += '  if(agg.length<2)return;';
+    s += '  var aggSorted=agg.slice().sort(function(a,b){return(a.tp||1)-(b.tp||1)});';
+    s += '  var aggLabels=aggSorted.map(function(r){return(r.replicas||Math.floor(r.gpus/(r.tp||1)))+"×TP"+(r.tp||"?")+((r.pp&&r.pp>1)?" PPx"+r.pp:"")});';
+    s += '  var aggColors={p90:"#3b82f6",p95:"#dc2626",p99:"#7c3aed"};';
+    s += '  var traces=[];';
+    s += '  ["p90","p95","p99"].forEach(function(p){traces.push({x:aggLabels,y:aggSorted.map(function(r){return r["ttft_"+p]}),name:"TTFT "+p.toUpperCase(),type:"bar",marker:{color:aggColors[p],opacity:0.85},hovertemplate:"%{x}<br>TTFT "+p.toUpperCase()+": %{y:.1f} ms<extra></extra>"});});';
+    s += '  traces.push({x:aggLabels,y:aggSorted.map(function(r){return r.throughput_mean||r.throughput_p90}),name:"Throughput Mean",type:"scatter",mode:"lines+markers",yaxis:"y2",line:{color:"#f59e0b",width:3,shape:"spline"},marker:{color:"#f59e0b",size:10,symbol:"diamond",line:{width:2,color:"white"}},hovertemplate:"Throughput Mean: %{y:.2f} req/s<extra></extra>"});';
+    s += '  var itlDashes={p90:"solid",p95:"dash",p99:"dot"};var itlSymbols={p90:"square",p95:"square-open",p99:"square-open-dot"};';
+    s += '  var hasAggItl=aggSorted.some(function(r){return r.itl_p90!=null;});';
+    s += '  if(hasAggItl){["p90","p95","p99"].forEach(function(p){traces.push({x:aggLabels,y:aggSorted.map(function(r){return r["itl_"+p]}),name:"ITL "+p.toUpperCase(),type:"scatter",mode:"lines+markers",yaxis:"y3",line:{color:"#ef4444",width:2,dash:itlDashes[p]},marker:{color:"#ef4444",size:7,symbol:itlSymbols[p]},hovertemplate:"ITL "+p.toUpperCase()+": %{y:.2f} ms<extra></extra>",connectgaps:true});});}';
+    s += '  Plotly.newPlot(el,traces,{...lo,height:850,barmode:"group",margin:{t:30,b:80,l:60,r:hasAggItl?110:60},xaxis:{title:"Aggregated Configuration",domain:hasAggItl?[0,0.96]:[0,1]},yaxis:{title:"TTFT (ms) — lower is better",side:"left",tickformat:".2s"},yaxis2:{title:"Throughput Mean (req/s)",side:"right",overlaying:"y",anchor:hasAggItl?"free":"x",position:hasAggItl?0.97:1,titlefont:{color:"#f59e0b"},tickfont:{color:"#f59e0b"}},showlegend:true,legend:{x:0,y:1.18,orientation:"h"}},co);';
+    s += '})();';
 
 
     // Per-percentile PD charts
@@ -2273,6 +2934,54 @@ function buildChartScript(data, charts, allRes) {
     s += '    plot_bgcolor:"white",paper_bgcolor:"white",';
     s += '    showlegend:true,legend:{x:1,y:1,xanchor:"right",bgcolor:"rgba(255,255,255,0.95)",bordercolor:"#e2e8f0",borderwidth:1},';
     s += '    margin:{t:40,b:70,l:70,r:160}},co);';
+     s += '})();';
+
+    // vLLM Token Throughput vs Concurrency (server total vs output only)
+    s += '(function(){var el=document.getElementById("dl-sweep-vllm-tps");if(!el||!csData)return;';
+    s += '  var hasVllm=false;Object.keys(csData).forEach(function(k){csData[k].forEach(function(p){if(p.vllm_tps)hasVllm=true;});});';
+    s += '  if(!hasVllm)return;';
+    s += '  var ci=0;var traces=[];';
+    s += '  Object.keys(csData).forEach(function(cfgKey){';
+    s += '    var pts=[].concat(csData[cfgKey]).sort(function(a,b){return a.concurrency-b.concurrency});';
+    s += '    var color=csColors[ci%csColors.length];ci++;';
+    s += '    var label=pts[0]&&pts[0].config_label?pts[0].config_label:cfgKey;';
+    s += '    traces.push({x:pts.map(function(p){return p.concurrency}),y:pts.map(function(p){return p.vllm_tps||0}),name:label+" (server total)",mode:"lines+markers",line:{color:color,width:3},marker:{size:8,color:color},hovertemplate:"<b>"+label+"</b><br>%{x} users<br>Server: %{y:,.0f} tok/s<extra></extra>"});';
+    s += '    traces.push({x:pts.map(function(p){return p.concurrency}),y:pts.map(function(p){return p.output_tps_mean||0}),name:label+" (output only)",mode:"lines+markers",line:{color:color,width:2,dash:"dot"},marker:{size:6,color:color},hovertemplate:"<b>"+label+"</b><br>%{x} users<br>Output: %{y:,.0f} tok/s<extra></extra>",showlegend:false});';
+    s += '  });';
+    s += '  Plotly.newPlot(el,traces,{xaxis:{title:"Concurrent Users",gridcolor:"#e2e8f0"},yaxis:{title:"Total Tokens/s",gridcolor:"#e2e8f0"},plot_bgcolor:"#f8fafc",paper_bgcolor:"#fff",margin:{t:20,b:60,l:70,r:20},legend:{x:0,y:1,bgcolor:"rgba(255,255,255,0.9)"},hovermode:"closest"},co);';
+    s += '})();';
+
+    // Best Envelope + Overlaid architecture comparison (needs ≥2 arch config keys)
+    s += '(function(){var envEl=document.getElementById("dl-sweep-envelope");var olEl=document.getElementById("dl-sweep-overlaid");';
+    s += '  if(!envEl&&!olEl)return;';
+    s += '  var archKeys=Object.keys(csData||{});if(archKeys.length<2)return;';
+    s += '  var envColorList=["#3b82f6","#10b981","#f59e0b","#ef4444","#8b5cf6","#0ea5e9","#ec4899","#14b8a6"];var envColorMap={};var envCIdx=0;';
+    s += '  function getEnvColor(label){if(!envColorMap[label]){envColorMap[label]=envColorList[envCIdx%envColorList.length];envCIdx++;}return envColorMap[label];}';
+    s += '  function sweepArchLabel(key){if(key.indexOf("pd")===0)return "PD";if(key.indexOf("agg")===0)return "AGGREGATED";if(key.indexOf("ep")===0)return "EP";return key.toUpperCase();}';
+    s += '  var bestByConc={},bestOverall={};';
+    s += '  archKeys.forEach(function(arch){var pts=csData[arch];if(!pts)return;';
+    s += '    var archLabel=sweepArchLabel(arch);var isDisagg=arch.indexOf("pd")===0||arch.indexOf("ep")===0;';
+    s += '    pts.forEach(function(p){var c=p.concurrency;if(!bestByConc[c])bestByConc[c]={};';
+    s += '      var cat=isDisagg?"disagg":"agg";';
+    s += '      if(!bestByConc[c][cat]||p.throughput_per_gpu>bestByConc[c][cat].tputGpu){';
+    s += '        var _lbl=p.config_label||archLabel;var _at2=arch.indexOf("pd")===0?" (PD)":(arch.indexOf("ep")===0?" (EP)":" (AG)");if(_lbl.indexOf("(")<0)_lbl+=_at2;';
+    s += '        bestByConc[c][cat]={tputGpu:p.throughput_per_gpu,ttft:p.ttft_p90,label:_lbl,conc:c};}';
+    s += '      var tputGpu=p.throughput_per_gpu||0;var label=p.config_label||archLabel;';
+    s += '      if(!bestOverall[c]||tputGpu>bestOverall[c].tputGpu){bestOverall[c]={tputGpu:tputGpu,label:label,conc:c};}';
+    s += '    });});';
+    s += '  if(envEl){var concs=Object.keys(bestOverall).map(Number).sort(function(a,b){return a-b;});';
+    s += '    var xs=[],ys=[],colors=[],texts=[];concs.forEach(function(c){var b=bestOverall[c];xs.push(c);ys.push(b.tputGpu);colors.push(getEnvColor(b.label));texts.push(b.label+"<br>c="+c+"<br>"+b.tputGpu.toFixed(0)+" tok/s/GPU");});';
+    s += '    var anns=[];concs.forEach(function(c,i){var b=bestOverall[c];var angles=[[-70,-20],[70,-20],[-50,-40],[50,-40],[-80,-10],[80,-10],[-60,-50],[60,-50]];var a=angles[i%angles.length];';
+    s += '      anns.push({x:c,y:b.tputGpu,text:b.label,showarrow:true,arrowhead:0,arrowwidth:1,arrowcolor:getEnvColor(b.label),ax:a[0],ay:a[1],font:{size:13,color:getEnvColor(b.label)},bgcolor:"rgba(255,255,255,0)",borderpad:2});});';
+    s += '    Plotly.newPlot(envEl,[{x:xs,y:ys,text:texts,name:"Best Config",mode:"lines+markers",line:{color:"#475569",width:2},marker:{color:colors,size:14,line:{color:"#fff",width:2}},hovertemplate:"<b>%{text}</b><extra></extra>"}],{...lo,height:850,xaxis:{title:"Concurrent Users",gridcolor:"#d1d5db",tickmode:"array",tickvals:concs},yaxis:{title:"Best Throughput per GPU (tok/s/GPU)",gridcolor:"#d1d5db"},showlegend:false,margin:{t:40,b:70,l:70,r:40},plot_bgcolor:"white",paper_bgcolor:"white",annotations:anns},co);}';
+    s += '  if(olEl){var olConcs=Object.keys(bestOverall).map(Number).sort(function(a,b){return a-b;});';
+    s += '    var olXs=[],olYs=[],olColors=[];olConcs.forEach(function(c){var b=bestOverall[c];olXs.push(c);olYs.push(b.tputGpu);olColors.push(getEnvColor(b.label));});';
+    s += '    var olTraces=[{x:olXs,y:olYs,text:olConcs.map(function(c){return bestOverall[c].label}),name:"Best Config",mode:"lines+markers",line:{color:"#475569",width:2},marker:{color:olColors,size:14,line:{color:"#fff",width:2}},hovertemplate:"<b>%{text}</b><br>c=%{x}<br>%{y:.0f} tok/s/GPU<extra></extra>"}];';
+    s += '    ["agg","disagg"].forEach(function(cat){var eColor=cat==="agg"?"#dc2626":"#2563eb";var eName=cat==="agg"?"Aggregated — Best":"PD/EP — Best";var exs=[],eys=[];';
+    s += '      Object.keys(bestByConc).sort(function(a,b){return a-b}).forEach(function(c){if(bestByConc[c][cat]){exs.push(parseInt(c));eys.push(bestByConc[c][cat].tputGpu);}});';
+    s += '      if(exs.length>1){olTraces.push({x:exs,y:eys,name:eName,mode:"lines",line:{color:eColor,width:2,dash:"dot"},showlegend:true});}});';
+    s += '    var olAnns=[];olConcs.forEach(function(c,i){var b=bestOverall[c];var side=i%2===0?1:-1;olAnns.push({x:c,y:b.tputGpu,text:b.label,showarrow:true,arrowhead:0,arrowwidth:1,arrowcolor:getEnvColor(b.label),ax:60*side,ay:-25-(i%3)*15,font:{size:13,color:getEnvColor(b.label)},bgcolor:"rgba(255,255,255,0)",borderpad:2});});';
+    s += '    Plotly.newPlot(olEl,olTraces,{...lo,height:850,xaxis:{title:"Concurrent Users",gridcolor:"#d1d5db",tickmode:"array",tickvals:olConcs},yaxis:{title:"Throughput per GPU (tok/s/GPU)",gridcolor:"#d1d5db"},showlegend:true,legend:{x:0.02,y:0.98,bgcolor:"rgba(255,255,255,0.9)",bordercolor:"#e2e8f0",borderwidth:1},plot_bgcolor:"white",paper_bgcolor:"white",annotations:olAnns},co);}';
     s += '})();';
 
     // Cache Sweep charts — per config
@@ -2331,7 +3040,7 @@ function buildChartScript(data, charts, allRes) {
         const hasTraffic = allRes.some(r => r.request_total != null || r.request_errored != null);
         if (hasTraffic) {
             const trafficGroupMap = {};
-            const trafficPrefixes = ['step11-sweep', 'step13', 'step9', 'step7', 'step6', 'step3', 'step2'];
+            const trafficPrefixes = ['step11-sweep', 'step13', 'step11-epp', 'step9', 'step7', 'step6', 'step3', 'step2'];
             allRes.forEach(r => {
                 if (!r.test_id) return;
                 let gk = 'other';
@@ -2340,10 +3049,11 @@ function buildChartScript(data, charts, allRes) {
                 }
                 if (!trafficGroupMap[gk]) trafficGroupMap[gk] = [];
                 trafficGroupMap[gk].push({
-                    label: r.config_name || r.test_id || '?',
+                    label: (r.config_name || r.test_id || '?') + (r.concurrency != null && (r.test_id || '').startsWith('step11-sweep') ? ' (c=' + r.concurrency + ')' : ''),
                     request_total: r.request_total || 0,
                     request_errored: r.request_errored || 0,
-                    nixl_errors: r.nixl_errors || 0
+                    nixl_errors: r.nixl_errors || 0,
+                    nixl_degraded: r.nixl_degraded || 0
                 });
             });
             if (trafficGroupMap['step2'] || trafficGroupMap['step3']) {
@@ -2351,10 +3061,15 @@ function buildChartScript(data, charts, allRes) {
                 delete trafficGroupMap['step2'];
                 delete trafficGroupMap['step3'];
             }
+            if (trafficGroupMap['step11-epp']) {
+                trafficGroupMap['step9'] = (trafficGroupMap['step9'] || []).concat(trafficGroupMap['step11-epp']);
+                delete trafficGroupMap['step11-epp'];
+            }
             const trafficLabelMap = {'tp-cal':'TP Calibration','step6':'Aggregated','step7':'PD/EP','step9':'EPP Tuning','step11-sweep':'Concurrency Sweep','step13':'Cache Sweep','other':'Other'};
             s += 'var trafGrps=' + JSON.stringify(trafficGroupMap) + ';';
             s += 'var trafLabels=' + JSON.stringify(trafficLabelMap) + ';';
-            s += '["tp-cal","step6","step7","step9","step11-sweep","step13","other"].forEach(function(gk){';
+            // Group chart renderer (incl. NIXL-degraded markers)
+            s += '["tp-cal","step6","step7","step9","step13","other"].forEach(function(gk){';
             s += '  if(!trafGrps[gk])return;';
             s += '  var el=document.getElementById("dl-traffic-"+gk);if(!el)return;';
             s += '  var pts=trafGrps[gk];';
@@ -2363,20 +3078,118 @@ function buildChartScript(data, charts, allRes) {
             s += '    {x:labels,y:pts.map(function(r){return r.request_errored}),name:"Errors",type:"bar",marker:{color:"#ef4444"}}];';
             s += '  var hasNixl=pts.some(function(r){return r.nixl_errors>0});';
             s += '  if(hasNixl){traces.push({x:labels,y:pts.map(function(r){return r.nixl_errors}),name:"NIXL Retries",type:"bar",marker:{color:"#f59e0b"}});}';
+            s += '  var nixlDegAnns=[];pts.forEach(function(r,i){if(r.nixl_degraded>0){nixlDegAnns.push({x:labels[i],y:r.request_total,yref:"y",text:"<b>NIXL DEGRADED</b>",showarrow:true,arrowhead:0,arrowwidth:1,arrowcolor:"#b45309",ax:0,ay:-30,font:{size:11,color:"white"},bgcolor:"#b45309",borderpad:3,bordercolor:"#b45309",borderwidth:1});}});';
             s += '  var label=trafLabels[gk]||gk;';
-            s += '  Plotly.newPlot(el,traces,{...lo,height:850,barmode:"group",margin:{...lo.margin,b:100},xaxis:{tickangle:-35},yaxis:{title:"Count"},showlegend:true,legend:{x:0,y:1.15,orientation:"h"},title:{text:"Traffic: "+label}},co);';
+            s += '  Plotly.newPlot(el,traces,{...lo,height:850,barmode:"group",margin:{...lo.margin,b:100},xaxis:{tickangle:-35},yaxis:{title:"Count"},showlegend:true,legend:{x:0,y:1.15,orientation:"h"},title:{text:"Traffic: "+label},annotations:nixlDegAnns},co);';
             s += '});';
+            // Per-config sweep charts (with c=N labels)
+            s += '(function(){if(!trafGrps["step11-sweep"])return;';
+            s += '  var byCfg={};trafGrps["step11-sweep"].forEach(function(r){var m=r.label.match(/^(.*?) \\(c=(\\d+)\\)$/);var cfgKey=m?m[1]:r.label;if(!byCfg[cfgKey])byCfg[cfgKey]=[];byCfg[cfgKey].push(r);});';
+            s += '  Object.keys(byCfg).forEach(function(cfgKey){';
+            s += '    var cid="dl-traffic-sweep-"+cfgKey.replace(/[^a-z0-9]/g,"-");var el=document.getElementById(cid);if(!el)return;';
+            s += '    var pts=byCfg[cfgKey].sort(function(a,b){var ma=parseInt((a.label.match(/c=(\\d+)\\)/)||[0,0])[1]);var mb=parseInt((b.label.match(/c=(\\d+)\\)/)||[0,0])[1]);return ma-mb;});';
+            s += '    var labels=pts.map(function(r){return r.label});';
+            s += '    var traces=[{x:labels,y:pts.map(function(r){return r.request_total}),name:"Requests",type:"bar",marker:{color:"#3b82f6"}},';
+            s += '      {x:labels,y:pts.map(function(r){return r.request_errored}),name:"Errors",type:"bar",marker:{color:"#ef4444"}}];';
+            s += '    var hasNixl=pts.some(function(r){return r.nixl_errors>0});';
+            s += '    if(hasNixl){traces.push({x:labels,y:pts.map(function(r){return r.nixl_errors}),name:"NIXL Retries",type:"bar",marker:{color:"#f59e0b"}});}';
+            s += '    var nixlDegAnns=[];pts.forEach(function(r,i){if(r.nixl_degraded>0){nixlDegAnns.push({x:labels[i],y:r.request_total,yref:"y",text:"<b>NIXL DEGRADED</b>",showarrow:true,arrowhead:0,arrowwidth:1,arrowcolor:"#b45309",ax:0,ay:-30,font:{size:11,color:"white"},bgcolor:"#b45309",borderpad:3,bordercolor:"#b45309",borderwidth:1});}});';
+            s += '    Plotly.newPlot(el,traces,{...lo,height:850,barmode:"group",margin:{...lo.margin,b:100},xaxis:{tickangle:-35},yaxis:{title:"Count"},showlegend:true,legend:{x:0,y:1.15,orientation:"h"},annotations:nixlDegAnns},co);';
+            s += '  });';
+            s += '})();';
         }
     }
 
-    // Deploy Timing chart
+    // Deploy Timing chart — model load time per config, colored by architecture
     s += '(function(){var el=document.getElementById("dl-deploy-timing");if(!el)return;';
-    s += '  var timings=[];ar.forEach(function(r){var dt=r.deploy_timing;if(dt&&(dt.pod_creation_s!=null||dt.model_load_s!=null)){timings.push({config:r.config_name||r.test_id||"Unknown",pod:dt.pod_creation_s||0,model:dt.model_load_s||0});}});';
+    s += '  var timings=[];ar.forEach(function(r){var lt=r._model_load_time_s;if(lt!=null&&lt>0){timings.push({config:r.config_name||r.test_id||"Unknown",load:lt,arch:r.architecture||"-"})}else{var dt=r.deploy_timing;if(dt&&dt.model_load_s!=null){timings.push({config:r.config_name||r.test_id||"Unknown",load:dt.model_load_s||0,arch:r.architecture||"-"})}}});';
     s += '  if(!timings.length)return;';
-    s += '  timings.sort(function(a,b){return(a.pod+a.model)-(b.pod+b.model)});';
-    s += '  var labels=timings.map(function(t){return t.config});';
-    s += '  Plotly.newPlot(el,[{x:labels,y:timings.map(function(t){return t.pod}),name:"Pod Creation",type:"bar",marker:{color:"#3b82f6"}},{x:labels,y:timings.map(function(t){return t.model}),name:"Model Load",type:"bar",marker:{color:"#f59e0b"}}],{...vl,barmode:"stack",title:{text:"Deploy Time per Configuration"},xaxis:{tickangle:-45},yaxis:{title:"Time (seconds)"}},co);';
+    s += '  timings.sort(function(a,b){return b.load-a.load});';
+    s += '  var archC={AGGREGATED:"#6366f1",PD:"#10b981",EP:"#f59e0b"};';
+    s += '  Plotly.newPlot(el,[{x:timings.map(function(t){return t.config}),y:timings.map(function(t){return t.load}),type:"bar",marker:{color:timings.map(function(t){return archC[t.arch]||"#94a3b8"})},text:timings.map(function(t){return Math.round(t.load)+"s"}),textposition:"outside",textfont:{size:13,color:"#334155"},cliponaxis:false,constraintext:"none",hovertemplate:"<b>%{x}</b><br>Load time: %{y}s<extra></extra>"}],{height:850,xaxis:{tickangle:-35},yaxis:{title:"Model Load Time (seconds)"},margin:{t:20,b:120,l:70,r:20},plot_bgcolor:"#f8fafc",paper_bgcolor:"#fff"},co);';
     s += '})();';
+
+    // Parallel Workloads — TTFT by workload (grouped horizontal bars)
+    s += '(function(){ar.forEach(function(e){if(!e.workloads||!e.workloads.length)return;';
+    s += '  var cid="dl-wl-ttft-"+(e.test_id||e.config_name||"x").replace(/[^a-z0-9]/gi,"");var el=document.getElementById(cid);if(!el)return;';
+    s += '  var rows=e.workloads.concat([{name:"combined",ttft_p50:e.ttft_p50,ttft_p90:e.ttft_p90,ttft_p99:e.ttft_p99}]);';
+    s += '  var names=rows.map(function(w){return w.name});';
+    s += '  Plotly.newPlot(el,["p50","p90","p99"].map(function(k,ci){return{y:names,x:rows.map(function(w){return w["ttft_"+k]}),name:k.toUpperCase(),type:"bar",orientation:"h",marker:{color:["#3b82f6","#f59e0b","#dc2626"][ci]}};}),{barmode:"group",height:Math.max(240,(rows.length+1)*60),margin:{t:30,b:30,l:110,r:20},xaxis:{title:"TTFT (ms)"},showlegend:true,legend:{x:0,y:1.15,orientation:"h"},title:{text:"TTFT by workload",font:{size:13}}},{displayModeBar:false});';
+    s += '});})();';
+
+    // LoRA Serving charts
+    s += 'var lsw=' + safeJson(data.lora_sweep || {}) + ';';
+    s += '(function(){';
+    // Adapter sweep chart: throughput + TTFT + ITL dual axis, LRU shading
+    s += '  Object.keys(lsw).forEach(function(skey){var pts=lsw[skey];if(!pts||!pts.length)return;';
+    s += '    var chartId="dl-lora-sweep-chart-"+skey.replace(/[^a-z0-9]/gi,"-");var el=document.getElementById(chartId);if(!el)return;';
+    s += '    var x=pts.map(function(p){return p.adapter_count});';
+    s += '    var basePt=null;for(var bi=0;bi<pts.length;bi++){if(pts[bi].adapter_count===0&&(pts[bi].output_tps_mean||0)>0){basePt=pts[bi];break;}}';
+    s += '    var deltaAnns=[];if(basePt){var baseTps=basePt.output_tps_mean;pts.forEach(function(p){if(p.adapter_count===0||!(p.output_tps_mean>0))return;var delta=(p.output_tps_mean-baseTps)/baseTps*100;var txt=(delta>0?"+":"")+delta.toFixed(0)+"%";var col=delta>0.5?"#059669":(delta<-0.5?"#dc2626":"#64748b");deltaAnns.push({x:p.adapter_count,y:p.output_tps_mean,xref:"x",yref:"y",text:txt,showarrow:true,arrowhead:2,arrowsize:0.9,arrowwidth:1.5,arrowcolor:col,ax:0,ay:-32,font:{color:col,size:11},bgcolor:"rgba(255,255,255,0.88)",bordercolor:col,borderwidth:1,borderpad:2});});}';
+    s += '    var traces=[{x:x,y:pts.map(function(p){return p.output_tps_mean||0}),name:"Throughput",type:"scatter",mode:"lines+markers+text",line:{color:"#10b981",width:3,dash:"dot"},marker:{size:8,symbol:"diamond"},text:pts.map(function(p){return p.output_tps_mean?Math.round(p.output_tps_mean).toLocaleString():""}),textposition:"top center",textfont:{color:"#059669",size:10},hovertemplate:"Adapters: %{x}<br>Throughput: %{y:,.0f} tok/s<extra></extra>"},';
+    s += '    {x:x,y:pts.map(function(p){return p.ttft_p90||0}),name:"TTFT P90",type:"scatter",mode:"lines+markers+text",yaxis:"y2",line:{color:"#3b82f6",width:3},marker:{size:8},text:pts.map(function(p){return p.ttft_p90?Math.round(p.ttft_p90)+"ms":""}),textposition:"bottom center",textfont:{color:"#3b82f6",size:9},hovertemplate:"Adapters: %{x}<br>TTFT P90: %{y:.0f} ms<extra></extra>"},';
+    s += '    {x:x,y:pts.map(function(p){return p.itl_p90||0}),name:"ITL P90",type:"scatter",mode:"lines+markers",yaxis:"y2",line:{color:"#f59e0b",width:3},marker:{size:8},hovertemplate:"Adapters: %{x}<br>ITL P90: %{y:.1f} ms<extra></extra>"}];';
+    s += '    var shapes=[];var firstLru=-1;for(var li=0;li<pts.length;li++){if(pts[li].lru_swapping){firstLru=li;break;}}';
+    s += '    if(firstLru>0){var boundary=(pts[firstLru-1].adapter_count+pts[firstLru].adapter_count)/2;shapes.push({type:"line",x0:boundary,x1:boundary,yref:"paper",y0:0,y1:1,line:{color:"#ef4444",width:2,dash:"dash"}});shapes.push({type:"rect",x0:boundary,x1:x[x.length-1]*1.03,yref:"paper",y0:0,y1:1,fillcolor:"rgba(239,68,68,0.08)",line:{width:0}});}';
+    s += '    var resident=pts[0].gpu_resident;var anns=resident?[{x:resident,y:1,yref:"paper",xanchor:"left",yanchor:"top",text:"GPU-resident: "+resident,showarrow:false,font:{color:"#64748b",size:11},bgcolor:"rgba(255,255,255,0.8)"}]:[];';
+    s += '    Plotly.newPlot(el,traces,{margin:{l:70,r:70,t:30,b:45},xaxis:{title:"Adapter Count",gridcolor:"#f1f5f9",tickmode:"array",tickvals:x},yaxis:{title:"Tokens per second",gridcolor:"#f1f5f9"},yaxis2:{title:"Latency (ms)",overlaying:"y",side:"right"},shapes:shapes,annotations:anns.concat(deltaAnns),legend:{orientation:"h",y:1.12},hovermode:"x unified"},{displayModeBar:false,responsive:true});';
+    // Sweep affinity chart
+    s += '    var affChartId="dl-lora-sweep-aff-chart-"+skey.replace(/[^a-z0-9]/gi,"-");var affEl=document.getElementById(affChartId);';
+    s += '    if(affEl){var affByTest={};((cd.vllm&&cd.vllm.lora_pod_details)||[]).forEach(function(pd){if(pd&&pd.test_id)affByTest[pd.test_id]=pd;});';
+    s += '      var affPts=[];pts.forEach(function(p){var pd=affByTest[p.test_id];if(pd&&(pd.total_adapters||0)>0){affPts.push({adapter_count:p.adapter_count,pct:Math.round(100*(pd.concentrated||0)/pd.total_adapters)});}});';
+    s += '      if(affPts.length>=2){var aAnns=affPts.map(function(p){var col=p.pct>=80?"#059669":(p.pct>=50?"#d97706":"#dc2626");return{x:p.adapter_count,y:p.pct,xref:"x",yref:"y",text:p.pct+"%",showarrow:true,arrowhead:2,arrowsize:0.8,arrowwidth:1.2,arrowcolor:col,ax:0,ay:-22,font:{color:col,size:10},bgcolor:"rgba(255,255,255,0.85)",bordercolor:col,borderwidth:1,borderpad:1};});';
+    s += '        Plotly.newPlot(affEl,[{x:affPts.map(function(p){return p.adapter_count}),y:affPts.map(function(p){return p.pct}),name:"Single-pod",type:"scatter",mode:"lines+markers",line:{color:"#059669",width:3},marker:{color:"#059669",size:9},hovertemplate:"Adapters: %{x}<br>Single-pod: %{y}%<extra></extra>"}],{margin:{l:60,r:20,t:20,b:55},xaxis:{title:"Adapters",gridcolor:"#f1f5f9"},yaxis:{title:"% adapters served by a single pod",range:[0,108],gridcolor:"#f1f5f9"},showlegend:false,hovermode:"closest",annotations:aAnns},{displayModeBar:false,responsive:true});}}';
+    // Evictions chart
+    s += '    var evictChartId="dl-lora-sweep-evict-chart-"+skey.replace(/[^a-z0-9]/gi,"-");var evEl=document.getElementById(evictChartId);';
+    s += '    if(evEl){var evictPts=pts.filter(function(p){return p.adapter_evictions!==undefined&&p.adapter_evictions!==null;});if(evictPts.length>=2){';
+    s += '      var ex=evictPts.map(function(p){return p.adapter_count});var loads=evictPts.map(function(p){return p.adapter_loads!==undefined&&p.adapter_loads!==null?p.adapter_loads:null});var evictions=evictPts.map(function(p){return p.adapter_evictions});var capacity=null;evictPts.forEach(function(p){if(p.total_slots)capacity=p.total_slots;});';
+    s += '      var eShapes=[];var eAnns=[];if(capacity){eShapes.push({type:"line",x0:capacity,x1:capacity,y0:0,y1:1,yref:"paper",line:{color:"#b91c1c",width:2,dash:"dash"}});eAnns.push({x:capacity,y:1,yref:"paper",xanchor:"left",yanchor:"top",text:"pool capacity: "+capacity+" slots",showarrow:false,font:{color:"#b91c1c",size:11},bgcolor:"rgba(255,255,255,0.85)"});}';
+    s += '      Plotly.newPlot(evEl,[{x:ex,y:loads,name:"Adapter loads",type:"bar",marker:{color:"rgba(100,116,139,0.55)"},hovertemplate:"%{x} adapters<br>Loads: %{y}<extra></extra>"},{x:ex,y:evictions,name:"Evictions",type:"bar",marker:{color:"rgba(220,38,38,0.85)"},hovertemplate:"%{x} adapters<br>Evictions: %{y}<extra></extra>"}],{barmode:"group",margin:{l:60,r:20,t:30,b:50},xaxis:{title:"Adapter count",gridcolor:"#f1f5f9"},yaxis:{title:"Adapter loads / evictions",gridcolor:"#f1f5f9"},shapes:eShapes,annotations:eAnns,legend:{orientation:"h",y:1.08},hovermode:"x unified"},{displayModeBar:false,responsive:true});}}';
+    s += '  });';
+    // LoRA routing & residency 4-subplot chart
+    s += '  var loraSig=cd.vllm&&cd.vllm.lora;if(loraSig&&cd.vllm.configs&&cd.vllm.configs.length){var rEl=document.getElementById("dl-lora-routing-chart");';
+    s += '    var hasData=(loraSig.ttft_p99_pod_spread_ms||[]).some(function(v){return v>0;})||(loraSig.adapter_churn||[]).some(function(v){return v>0;})||(loraSig.adapters_per_pod||[]).some(function(v){return v>0;});';
+    s += '    if(rEl&&hasData){var cfgLabels=cd.vllm.configs;var dom=[{x:[0,0.47],y:[0.58,1]},{x:[0.53,1],y:[0.58,1]},{x:[0,0.47],y:[0.06,0.48]},{x:[0.53,1],y:[0.06,0.48]}];';
+    s += '      function sub(series,color,name,idx,yaxisNum){return{x:cfgLabels,y:series,name:name,type:"bar",marker:{color:color},xaxis:"x"+(idx>1?idx:""),yaxis:"y"+yaxisNum,hovertemplate:"%{x}<br>"+name+": %{y}<extra></extra>"};}';
+    s += '      var layout={margin:{l:55,r:20,t:30,b:90},showlegend:false,hovermode:"closest",xaxis:{domain:dom[0].x,anchor:"y",tickangle:-35,automargin:true},yaxis:{domain:dom[0].y,anchor:"x",title:{text:"TTFT P99 spread (ms)"}},xaxis2:{domain:dom[1].x,anchor:"y2",tickangle:-35,automargin:true},yaxis2:{domain:dom[1].y,anchor:"x2",title:{text:"Residency changes"}},xaxis3:{domain:dom[2].x,anchor:"y3",tickangle:-35,automargin:true},yaxis3:{domain:dom[2].y,anchor:"x3",title:{text:"Adapters per pod"}},xaxis4:{domain:dom[3].x,anchor:"y4",tickangle:-35,automargin:true},yaxis4:{domain:dom[3].y,anchor:"x4",title:{text:"Waiting CV"}},annotations:[{xref:"paper",yref:"paper",x:0.23,y:1.03,showarrow:false,text:"Routing cost — hot vs cold pod TTFT delta",font:{size:12,color:"#3b82f6"}},{xref:"paper",yref:"paper",x:0.77,y:1.03,showarrow:false,text:"LRU churn — residency set changes",font:{size:12,color:"#ef4444"}},{xref:"paper",yref:"paper",x:0.23,y:0.51,showarrow:false,text:"Adapter concentration per pod",font:{size:12,color:"#7c3aed"}},{xref:"paper",yref:"paper",x:0.77,y:0.51,showarrow:false,text:"Queue imbalance (0 = perfect)",font:{size:12,color:"#f59e0b"}}]};';
+    s += '      var cfgCount=cfgLabels.length;if(cfgCount>8){layout.xaxis.tickmode="array";layout.xaxis.tickvals=cfgLabels.filter(function(_,i){return i%Math.ceil(cfgCount/8)===0;});}';
+    s += '      Plotly.newPlot(rEl,[sub(loraSig.ttft_p99_pod_spread_ms||[],"#3b82f6","TTFT spread",1,1),sub(loraSig.adapter_churn||[],"#ef4444","Churn",2,2),sub(loraSig.adapters_per_pod||[],"#7c3aed","Adapters/pod",3,3),sub(loraSig.waiting_cv||[],"#f59e0b","Queue CV",4,4)],layout,{displayModeBar:false,responsive:true});}}';
+    // Affinity summary chart
+    s += '  var affSumEl=document.getElementById("dl-lora-affinity-summary-chart");';
+    s += '  if(affSumEl){var affDetails=((cd.vllm&&cd.vllm.lora_pod_details)||[]).filter(function(pd){return pd&&pd.pods&&Object.keys(pd.pods).length&&(pd.total_adapters||0)>0&&!(pd.test_id||"").startsWith("step11-epp-")&&!(pd.test_id||"").startsWith("step14-lora-");});';
+    s += '    if(affDetails.length){var labelCount={};affDetails.forEach(function(pd){labelCount[pd.config]=(labelCount[pd.config]||0)+1;});var used={};var cfgs=affDetails.map(function(pd){var lbl=pd.config;if(labelCount[pd.config]>1){lbl=pd.config+" ·n"+(pd.total_adapters||0);}used[lbl]=(used[lbl]||0)+1;if(used[lbl]>1){lbl=lbl+" #"+used[lbl];}return lbl;});';
+    s += '      var y=affDetails.map(function(pd){return pd.total_adapters?Math.round(100*(pd.concentrated||0)/pd.total_adapters):0;});';
+    s += '      var annotations=affDetails.map(function(pd,i){var col=y[i]>=80?"#059669":(y[i]>=50?"#d97706":"#dc2626");return{x:cfgs[i],y:y[i],xref:"x",yref:"y",text:y[i]+"%",showarrow:true,arrowhead:2,arrowsize:0.8,arrowwidth:1.2,arrowcolor:col,ax:0,ay:-22,font:{color:col,size:10},bgcolor:"rgba(255,255,255,0.85)",bordercolor:col,borderwidth:1,borderpad:1};});';
+    s += '      Plotly.newPlot(affSumEl,[{x:cfgs,y:y,name:"Single-pod",type:"scatter",mode:"lines+markers",line:{color:"#059669",width:3},marker:{color:"#059669",size:9},hovertemplate:"%{x}<br>Single-pod: %{y}%<extra></extra>"}],{margin:{l:60,r:20,t:20,b:100},xaxis:{tickangle:-35,automargin:true},yaxis:{title:"% adapters served by a single pod",range:[0,108],gridcolor:"#f1f5f9"},showlegend:false,hovermode:"closest",annotations:annotations},{displayModeBar:false,responsive:true});}}';
+    s += '})();';
+
+    // Estimator — runs client-side against embedded results
+    s += 'function dlRunEstimator(){';
+    s += '  var targetTput=parseFloat(document.getElementById("dl-est-tput-target").value)||100;';
+    s += '  var ttftTarget=parseFloat(document.getElementById("dl-est-ttft-target").value)||500;';
+    s += '  var ttftPctl=document.getElementById("dl-est-ttft-pctl").value||"p99";';
+    s += '  var itlTarget=parseFloat(document.getElementById("dl-est-itl-target").value)||20;';
+    s += '  var itlPctl=document.getElementById("dl-est-itl-pctl").value||"p90";';
+    s += '  var allResults=ar.filter(function(r){return r.quality!=="discard"&&r.gpus>0&&(r.throughput_mean>0||r.throughput_p90>0);});';
+    s += '  var bestByConfig={};allResults.forEach(function(r){var tid=r.test_id||"";if(tid.indexOf("step2-")===0||tid.indexOf("step3-")===0)return;var key=r.config_name||tid;var tput=r.throughput_mean||r.throughput_p90||0;if(!bestByConfig[key]||tput>(bestByConfig[key].throughput_mean||bestByConfig[key].throughput_p90||0)){bestByConfig[key]=r;}});';
+    s += '  var results=[];Object.keys(bestByConfig).forEach(function(key){var r=bestByConfig[key];var tput=r.throughput_mean||r.throughput_p90||0;if(tput<=0)return;var replicas=Math.ceil(targetTput/tput);var totalGpus=replicas*r.gpus;';
+    s += '    var ttftVal=ttftPctl==="p90"?r.ttft_p90:(ttftPctl==="p95"?r.ttft_p95:r.ttft_p99);var ttftMeets=ttftVal!=null?ttftVal<=ttftTarget:null;';
+    s += '    var itlVal=itlPctl==="p90"?r.itl_p90:(itlPctl==="p95"?r.itl_p95:r.itl_p99);var itlMeets=itlVal!=null&&itlVal>0?itlVal<=itlTarget:null;';
+    s += '    results.push({config_name:key,architecture:(r.architecture||"UNKNOWN").toUpperCase(),gpus_per_replica:r.gpus,replicas:replicas,total_gpus:totalGpus,measured_tput:tput,target_tput:targetTput,ttft_val:ttftVal,ttft_meets:ttftMeets,ttft_target:ttftTarget,ttft_pctl:ttftPctl,itl_val:itlVal,itl_meets:itlMeets,itl_target:itlTarget,itl_pctl:itlPctl});});';
+    s += '  results.sort(function(a,b){return a.total_gpus-b.total_gpus;});';
+    s += '  var box=document.getElementById("dl-est-results");var chartEl=document.getElementById("dl-est-chart");';
+    s += '  if(!results.length){box.innerHTML="<p style=\\"color:#6b7280;padding:16px;\\">No valid configurations to estimate.</p>";return;}';
+    s += '  var bestGpus=results[0].total_gpus;var sep="border-left:3px solid #e2e8f0;";var fmtMs=function(v){return v!=null?Math.round(v).toLocaleString():"-";};';
+    s += '  var t="<table><thead><tr><th>Configuration</th><th>Arch</th><th>GPUs/replica</th><th>Measured req/s</th><th style=\\""+sep+"\\">Replicas</th><th><strong>Total GPUs</strong></th><th style=\\""+sep+"\\">TTFT "+results[0].ttft_pctl.toUpperCase()+"</th><th>ITL "+results[0].itl_pctl.toUpperCase()+"</th><th style=\\""+sep+"\\">SLA Status</th></tr></thead><tbody>";';
+    s += '  results.forEach(function(r){var isBest=r.total_gpus===bestGpus&&r.ttft_meets!==false&&r.itl_meets!==false;';
+    s += '    var ttftColor=r.ttft_meets===true?"#059669":(r.ttft_meets===false?"#ef4444":"#64748b");var itlColor=r.itl_meets===true?"#059669":(r.itl_meets===false?"#ef4444":"#64748b");';
+    s += '    var slaStatus="";if(r.ttft_meets===false&&r.itl_meets===false){slaStatus="<span style=\\"color:#ef4444;font-weight:700;\\">TTFT + ITL FAIL</span>";}else if(r.ttft_meets===false){slaStatus="<span style=\\"color:#ef4444;font-weight:700;\\">TTFT FAIL</span>";}else if(r.itl_meets===false){slaStatus="<span style=\\"color:#ef4444;font-weight:700;\\">ITL FAIL</span>";}else{slaStatus="<span style=\\"color:#059669;font-weight:700;\\">PASS</span>";}';
+    s += '    t+="<tr style=\\""+(isBest?"background:#f0fdf4;font-weight:600;":"")+(r.ttft_meets===false||r.itl_meets===false?"opacity:0.6;":"")+"\\"><td>"+r.config_name+"</td><td>"+r.architecture+"</td><td>"+r.gpus_per_replica+"</td><td>"+r.measured_tput.toFixed(2)+"</td><td>"+r.replicas+"</td><td><strong>"+r.total_gpus.toLocaleString()+"</strong></td><td style=\\"color:"+ttftColor+";font-weight:600;\\">"+fmtMs(r.ttft_val)+" ms</td><td style=\\"color:"+itlColor+";font-weight:600;\\">"+(r.itl_val!=null?r.itl_val.toFixed(2):"-")+" ms</td><td>"+slaStatus+"</td></tr>";});';
+    s += '  t+="</tbody></table>";box.innerHTML=t;';
+    s += '  var labels=results.map(function(r){return r.config_name});var barColors=results.map(function(r){var passes=r.ttft_meets!==false&&r.itl_meets!==false;if(r.total_gpus===bestGpus&&passes)return "#059669";if(!passes)return "#ef4444";return "#d97706";});';
+    s += '  Plotly.newPlot(chartEl,[{type:"bar",orientation:"h",y:labels,x:results.map(function(r){return r.total_gpus}),text:results.map(function(r){var t2=r.total_gpus.toLocaleString()+" GPUs ("+r.replicas+" replicas)";if(r.ttft_meets===false)t2+=" [TTFT FAIL]";if(r.itl_meets===false)t2+=" [ITL FAIL]";return t2;}),textposition:"outside",marker:{color:barColors},hovertemplate:"<b>%{y}</b><br>%{x} GPUs<br>%{text}<extra></extra>"}],{title:{text:"GPUs needed for "+results[0].target_tput+" req/s",font:{size:15}},xaxis:{title:"Total GPUs"},yaxis:{automargin:true},margin:{l:200,r:180,t:50,b:40},height:Math.max(600,results.length*60+80)},{responsive:true,displayModeBar:false});';
+    s += '}';
+
 
     // Pareto Frontier charts
     s += '(function(){';
