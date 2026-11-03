@@ -108,6 +108,14 @@ class ProfileCollector:
                 )
                 return None
             data = Path(cap["outfile"]).read_bytes()
+            if data and data[:2] != b'\x1f\x8b':
+                # Not a gzipped pprof — Go's handler returns a plain-text
+                # error body ("Could not enable CPU profiling: ... already
+                # in progress") when another capture is active.
+                logger.warning(
+                    f"profile capture {label}: non-pprof response: {data[:120]!r}"
+                )
+                return None
             return data if data else None
         except Exception as e:
             logger.warning(f"profile capture reap failed ({label}): {e}")
@@ -269,17 +277,26 @@ class ProfileCollector:
                                      "port": spawn["port"], "ptype": "cpu", "data": data})
             else:
                 # Retry synchronously with a short window — better a short
-                # profile than none. The load window has passed, but the
-                # retry still catches post-benchmark state.
+                # profile than none. Another capture may still be winding
+                # down (Go pprof allows one CPU profile at a time), so
+                # wait-and-retry on the "already in progress" collision.
                 epp_now = self.discover_epp_pod(config.architecture)
                 if epp_now and self.workload_pod:
-                    url = f"http://{epp_now['ip']}:{epp_now['port']}/debug/pprof/profile?seconds=15"
-                    retry = self._fetch_via_workload_pod(url, 45)
-                    if retry:
-                        if log_callback:
-                            log_callback("   ⚠️  EPP CPU profile captured via post-benchmark retry (15s window)")
-                        cpu_captures.append({"kind": "epp", "pod": epp_now["name"],
-                                             "port": epp_now["port"], "ptype": "cpu", "data": retry})
+                    for attempt in range(3):
+                        url = f"http://{epp_now['ip']}:{epp_now['port']}/debug/pprof/profile?seconds=15"
+                        retry = self._fetch_via_workload_pod(url, 45)
+                        if retry and retry[:2] == b'\x1f\x8b':
+                            if log_callback:
+                                log_callback("   ⚠️  EPP CPU profile captured via post-benchmark retry (15s window)")
+                            cpu_captures.append({"kind": "epp", "pod": epp_now["name"],
+                                                 "port": epp_now["port"], "ptype": "cpu", "data": retry})
+                            break
+                        if retry and b'already in progress' in retry[:200]:
+                            if log_callback:
+                                log_callback("   ⏳ Another CPU profile still active on EPP — waiting 15s before retry...")
+                            time.sleep(15)
+                            continue
+                        break
                 if not cpu_captures and log_callback:
                     log_callback("   ⚠️  EPP CPU profile capture returned no data")
 
