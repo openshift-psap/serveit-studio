@@ -602,8 +602,9 @@ class DatabaseManager:
                 blob_map = {}
                 for entry in ([profiles_summary.get('epp')] if profiles_summary.get('epp') else []) + \
                             (profiles_summary.get('vllm') or []):
+                    # Parsed CPU summaries carry the raw profile as 'blob'
                     if entry and entry.get('blob'):
-                        blob_map[f"{entry['pod']}-{entry['ptype']}.prof"] = entry.pop('blob')
+                        blob_map[f"{entry['pod']}-cpu.prof"] = entry.pop('blob')
                 if blob_map:
                     profiles_blob = json.dumps(blob_map)
                 metrics_json = json.loads(metrics_json)
