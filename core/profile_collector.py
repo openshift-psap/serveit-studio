@@ -1,13 +1,16 @@
 """Per-pod pprof profile collection for ServeIt tests.
 
 Collects Go pprof profiles from the EPP (always available, port 9090)
-and — when the run opts in — from vLLM pods (requires --enable-pprof,
-served on the vLLM API port: 8000 aggregated/prefill, 8200 decode).
+and — when the run opts in — from vLLM pods (requires a vLLM image that
+serves /debug/pprof on the API port: 8000 aggregated/prefill, 8200
+decode; probed per pod).
 
-CPU profiles are captured DURING the benchmark load (background
-threads started right before guidellm launches; the blocking
-?seconds=N fetch self-terminates inside the window). Heap and
-goroutine snapshots are taken once the benchmark finishes.
+CPU profiles are captured DURING the benchmark load: the blocking
+?seconds=N fetch runs as a DETACHED SUBPROCESS started right before
+guidellm launches (the server runs under gevent — capture "threads"
+would be starved greenlets, so Popen + on-disk staging files is the only
+reliable mechanism). Heap and goroutine snapshots are fetched once the
+benchmark finishes.
 
 All raw files land in /mnt/storage/test-artifacts/{test_id}/profiles/
 (MLflow export picks them up automatically). A parsed summary (via
@@ -18,7 +21,7 @@ import base64
 import logging
 import os
 import subprocess
-import threading
+import tempfile
 import time
 from pathlib import Path
 from typing import Callable, Dict, Optional
@@ -42,19 +45,60 @@ class ProfileCollector:
         self.namespace = namespace
         self.workload_pod = workload_pod
 
-    # ── pod discovery ───────────────────────────────────────────────────────
+    # ── subprocess plumbing ─────────────────────────────────────────────────
 
-    def _run_kubectl(self, args, timeout=30, binary=False):
+    def _kubectl_env(self):
         env = os.environ.copy()
         env["KUBECONFIG"] = os.path.expanduser(self.kubectl.kubeconfig)
+        return env
+
+    def _run_kubectl(self, args, timeout=30):
         return subprocess.run(
             ["kubectl"] + args,
-            capture_output=True,
-            text=not binary,
-            timeout=timeout,
-            check=False,
-            env=env,
+            capture_output=True, text=True, timeout=timeout, check=False,
+            env=self._kubectl_env(),
         )
+
+    def _spawn_capture(self, cmd: list, timeout_s: int) -> Dict:
+        """Spawn a detached capture subprocess writing stdout to a staging file.
+
+        Runs independently of the gevent event loop; finish_captures()
+        reaps it. Returns {proc, outfile, timeout_s, started}.
+        """
+        fd, outfile = tempfile.mkstemp(prefix="serveit-pprof-", suffix=".bin")
+        os.close(fd)
+        out = open(outfile, "wb")
+        proc = subprocess.Popen(
+            cmd, stdout=out, stderr=subprocess.DEVNULL,
+            env=self._kubectl_env(),
+        )
+        return {"proc": proc, "outfile": outfile, "timeout_s": timeout_s, "started": time.time()}
+
+    def _reap_capture(self, cap: Dict) -> Optional[bytes]:
+        """Wait for a spawned capture to finish and read its staged output."""
+        try:
+            elapsed = time.time() - cap["started"]
+            remaining = cap["timeout_s"] + 60 - elapsed
+            proc = cap["proc"]
+            try:
+                proc.wait(timeout=max(5, remaining))
+            except subprocess.TimeoutExpired:
+                proc.kill()
+                return None
+            if proc.returncode != 0:
+                return None
+            data = Path(cap["outfile"]).read_bytes()
+            return data if data else None
+        except Exception as e:
+            logger.debug(f"capture reap failed: {e}")
+            return None
+        finally:
+            try:
+                os.unlink(cap["outfile"])
+            except OSError:
+                pass
+
+    # ── pod discovery ───────────────────────────────────────────────────────
 
     def discover_epp_pod(self, architecture: str) -> Optional[Dict[str, str]]:
         """Find the EPP pod (name + IP) for an architecture's EPP deployment."""
@@ -100,35 +144,17 @@ class ProfileCollector:
                 return port
         return None
 
-    # ── profile fetch primitives ────────────────────────────────────────────
+    # ── direct fetch (short, blocking — snapshots) ──────────────────────────
 
     def _fetch_via_workload_pod(self, url: str, timeout_s: int) -> Optional[bytes]:
         """Fetch a URL from inside the cluster via the persistent workload pod."""
         if not self.workload_pod:
             return None
-        env = os.environ.copy()
-        env["KUBECONFIG"] = os.path.expanduser(self.kubectl.kubeconfig)
         r = subprocess.run(
             ["kubectl", "exec", self.workload_pod, "-n", self.namespace, "--",
              "curl", "-s", "--max-time", str(timeout_s), url],
-            capture_output=True, timeout=timeout_s + 30, check=False, env=env,
-        )
-        if r.returncode != 0 or not r.stdout:
-            return None
-        return r.stdout
-
-    def _fetch_via_pod_python(self, pod: str, port: int, path: str, timeout_s: int) -> Optional[bytes]:
-        """Fetch http://localhost:{port}{path} inside a pod's vllm container."""
-        env = os.environ.copy()
-        env["KUBECONFIG"] = os.path.expanduser(self.kubectl.kubeconfig)
-        code = (
-            "import urllib.request,sys\n"
-            f"sys.stdout.buffer.write(urllib.request.urlopen('http://localhost:{port}{path}', timeout={timeout_s}).read())\n"
-        )
-        r = subprocess.run(
-            ["kubectl", "exec", pod, "-n", self.namespace, "-c", "vllm", "--",
-             "python3", "-c", code],
-            capture_output=True, timeout=timeout_s + 60, check=False, env=env,
+            capture_output=True, timeout=timeout_s + 30, check=False,
+            env=self._kubectl_env(),
         )
         if r.returncode != 0 or not r.stdout:
             return None
@@ -141,7 +167,7 @@ class ProfileCollector:
 
         Called right before the guidellm benchmark launches. CPU profile
         fetches block for the requested window (?seconds=N), so they run
-        in daemon threads and are joined by finish_captures().
+        as detached subprocesses and are reaped by finish_captures().
         """
         test_id = config.test_id
         window = min(MAX_CPU_WINDOW_S, max(30, getattr(config, "test_duration", 300) or 300))
@@ -150,26 +176,25 @@ class ProfileCollector:
             "test_id": test_id,
             "window_s": window,
             "enable_vllm": enable_vllm,
-            "threads": [],
-            "captures": [],   # {kind, pod, port, ptype, data} filled by threads
             "started": time.time(),
+            "epp_spawn": None,     # EPP CPU capture subprocess
+            "vllm_spawns": [],     # vLLM CPU capture subprocesses
         }
 
         # EPP (always)
         epp = self.discover_epp_pod(config.architecture)
-        if epp:
+        if epp and self.workload_pod:
             url = f"http://{epp['ip']}:{epp['port']}/debug/pprof/profile?seconds={window}"
-            t = threading.Thread(target=self._capture_worker, args=(
-                handle, "epp", epp["name"], epp["port"], "cpu",
-                lambda: self._fetch_via_workload_pod(url, window + 30),
-            ), daemon=True)
-            handle["threads"].append(t)
-            t.start()
+            cmd = ["kubectl", "exec", self.workload_pod, "-n", self.namespace, "--",
+                   "curl", "-s", "--max-time", str(window + 30), url]
+            handle["epp_spawn"] = dict(
+                self._spawn_capture(cmd, window + 30),
+                kind="epp", pod=epp["name"], port=epp["port"], ptype="cpu")
             if log_callback:
                 log_callback(f"   🔬 EPP CPU profile capture started ({window}s window, pod {epp['name']})")
         else:
             if log_callback:
-                log_callback("   ⚠️  EPP pod not found — skipping EPP profile capture")
+                log_callback("   ⚠️  EPP pod/workload pod not found — skipping EPP profile capture")
 
         # vLLM pods (opt-in)
         if enable_vllm:
@@ -182,28 +207,22 @@ class ProfileCollector:
                         log_callback(f"   ⚠️  No pprof endpoint on {pod} (vLLM image does not serve /debug/pprof — skipping)")
                     continue
                 probed += 1
-                path = f"/debug/pprof/profile?seconds={window}"
-                t = threading.Thread(target=self._capture_worker, args=(
-                    handle, "vllm", pod, port, "cpu",
-                    lambda p=pod, pt=port: self._fetch_via_pod_python(p, pt, path, window + 30),
-                ), daemon=True)
-                handle["threads"].append(t)
-                t.start()
+                code = (
+                    "import urllib.request,sys\n"
+                    f"sys.stdout.buffer.write(urllib.request.urlopen('http://localhost:{port}/debug/pprof/profile?seconds={window}', timeout={window + 30}).read())\n"
+                )
+                cmd = ["kubectl", "exec", pod, "-n", self.namespace, "-c", "vllm", "--",
+                       "python3", "-c", code]
+                handle["vllm_spawns"].append(dict(
+                    self._spawn_capture(cmd, window + 60),
+                    kind="vllm", pod=pod, port=port, ptype="cpu"))
             if log_callback:
                 log_callback(f"   🔬 vLLM CPU profile capture started on {probed}/{len(pods)} pod(s) ({window}s window)")
 
         return handle
 
-    def _capture_worker(self, handle, kind, pod, port, ptype, fetch_fn):
-        try:
-            data = fetch_fn()
-            if data:
-                handle["captures"].append({"kind": kind, "pod": pod, "port": port, "ptype": ptype, "data": data})
-        except Exception as e:
-            logger.debug(f"profile capture failed ({kind}/{pod}/{ptype}): {e}")
-
     def finish_captures(self, handle: Dict, config, log_callback: Optional[Callable[[str], None]] = None) -> Optional[Dict]:
-        """Join CPU threads, snapshot heap/goroutine, write files, build summary.
+        """Reap CPU capture subprocesses, snapshot heap/goroutine, write files.
 
         Returns the pprof summary dict for the report:
         {epp: {...}, vllm: [{pod, ...}], files: [{path, kind, pod, ptype}]}
@@ -218,15 +237,30 @@ class ProfileCollector:
             logger.warning(f"cannot create profile artifact dir: {e}")
             return None
 
-        # 1. Join CPU capture threads
-        for t in handle.get("threads", []):
-            t.join(timeout=30)
-        cpu_captures = handle.get("captures", [])
+        cpu_captures = []
+
+        # 1. Reap the EPP CPU capture subprocess
+        spawn = handle.get("epp_spawn")
+        if spawn:
+            data = self._reap_capture(spawn)
+            if data:
+                cpu_captures.append({"kind": "epp", "pod": spawn["pod"],
+                                     "port": spawn["port"], "ptype": "cpu", "data": data})
+            elif log_callback:
+                log_callback("   ⚠️  EPP CPU profile capture returned no data")
+
+        # 2. Reap vLLM CPU capture subprocesses
+        for spawn in handle.get("vllm_spawns", []):
+            data = self._reap_capture(spawn)
+            if data:
+                cpu_captures.append({"kind": "vllm", "pod": spawn["pod"],
+                                     "port": spawn["port"], "ptype": "cpu", "data": data})
+
         if not cpu_captures and not handle.get("enable_vllm"):
             if log_callback:
                 log_callback("   ⚠️  No CPU profiles captured")
 
-        # 2. Heap + goroutine snapshots (post-load, point-in-time)
+        # 3. Heap + goroutine snapshots (post-load, point-in-time)
         snapshots = []
         epp = self.discover_epp_pod(config.architecture)
         if epp:
@@ -235,17 +269,8 @@ class ProfileCollector:
                 data = self._fetch_via_workload_pod(url, 30)
                 if data:
                     snapshots.append({"kind": "epp", "pod": epp["name"], "port": epp["port"], "ptype": ptype, "data": data})
-        if handle.get("enable_vllm"):
-            for pod in self.discover_vllm_pods(test_id):
-                port = self._probe_vllm_port(pod)
-                if not port:
-                    continue
-                for ptype in ("heap", "goroutine"):
-                    data = self._fetch_via_pod_python(pod, port, f"/debug/pprof/{ptype}", 30)
-                    if data:
-                        snapshots.append({"kind": "vllm", "pod": pod, "port": port, "ptype": ptype, "data": data})
 
-        # 3. Write raw files to the artifact dir
+        # 4. Write raw files to the artifact dir
         all_captures = cpu_captures + snapshots
         written = []
         for cap in all_captures:
@@ -261,7 +286,7 @@ class ProfileCollector:
             except Exception as e:
                 logger.warning(f"failed writing profile {out}: {e}")
 
-        # 4. Build the report summary (CPU profiles parsed; others listed)
+        # 5. Build the report summary (CPU profiles parsed; others listed)
         summary = {"files": [], "epp": None, "vllm": []}
         embed_budget = MAX_EMBED_BYTES
         for cap, meta in zip(all_captures, written):
