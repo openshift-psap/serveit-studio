@@ -51,6 +51,14 @@ class TestOrchestrator(ParserMixin, GuidellmMixin):
 
         self.deployment_manager = DeploymentManager(namespace=namespace, kubeconfig=kubeconfig)
 
+        # Pod pprof profiling (EPP always; vLLM when enable_pprof is set)
+        from core.profile_collector import ProfileCollector
+
+        self.profile_collector = ProfileCollector(
+            self.deployment_manager.kubectl, namespace,
+            workload_pod=getattr(self, "_guidellm_pod_name", "serveit-workload"),
+        )
+
         # Enable namespace monitoring for metrics collection (OpenShift only)
         self._enable_namespace_monitoring(namespace)
 
@@ -1469,6 +1477,10 @@ class TestOrchestrator(ParserMixin, GuidellmMixin):
         Returns:
             TestResult with test outcome
         """
+        # Run-level vLLM profiling opt-in applies to every test config
+        if getattr(self, "enable_pprof", False):
+            config.enable_pprof = True
+
         if log_callback:
             log_callback(f"\n{'=' * 70}")
             log_callback(f"🚀 Starting Test: {config.test_id}")
@@ -1846,6 +1858,17 @@ class TestOrchestrator(ParserMixin, GuidellmMixin):
 
                     result.test_start_time = datetime.now().isoformat()
 
+                    # Start pod CPU profile captures on the first attempt so
+                    # the capture window covers the benchmark load
+                    if guidellm_attempt == 1:
+                        try:
+                            self._profile_handle = self.profile_collector.start_cpu_captures(
+                                config, log_callback=log_callback
+                            )
+                        except Exception as e:
+                            logger.warning(f"profile capture start failed: {e}")
+                            self._profile_handle = None
+
                     use_job = os.environ.get("GUIDELLM_USE_JOB", "true").lower() == "true"
                     if use_job:
                         guidellm_success, guidellm_output, metrics_output = self._run_guidellm_job(
@@ -1929,6 +1952,20 @@ class TestOrchestrator(ParserMixin, GuidellmMixin):
                 if stop_check and stop_check():
                     result.error_message = "Stopped by user"
                     return result
+
+                # Finish pod profile collection: join CPU threads, snapshot
+                # heap/goroutines, write files, build the report summary
+                if getattr(self, "_profile_handle", None):
+                    try:
+                        if log_callback:
+                            log_callback("\n🔬 Collecting pod profiles...")
+                        result.profiles = self.profile_collector.finish_captures(
+                            self._profile_handle, config, log_callback=log_callback
+                        )
+                    except Exception as e:
+                        logger.warning(f"profile collection failed: {e}")
+                    finally:
+                        self._profile_handle = None
 
                 # Step 6: Collect metrics (if configured)
                 if self.metrics_collector and result.test_start_time and result.test_end_time:

@@ -93,6 +93,10 @@ class RecipeOptimizerConfig:
     cache_sweep_step_pct: int = 10  # Step in percentage points
     cache_sweep_groups: int = 5  # Groups for multi_group mode
     cache_sweep_all_configs: bool = False  # Legacy — mapped to selection_mode='all'
+
+    # Pod profiling: EPP pprof always collected; this additionally passes
+    # --enable-pprof to vLLM pods and captures their profiles
+    enable_pprof: bool = False
     cache_sweep_max_configs: Optional[int] = None  # Legacy — ignored
     cache_sweep_selection_mode: str = "architecture_aware"  # 'architecture_aware' | 'all_recommendations' | 'all'
 

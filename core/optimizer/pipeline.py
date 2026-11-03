@@ -94,6 +94,8 @@ class RecipeOptimizer(
             deployment_timeout=3600,  # Updated after model config is loaded
             test_duration=config.test_duration,
         )
+        # Run-level profiling opt-in applies to every test config
+        self.orchestrator.enable_pprof = bool(getattr(config, 'enable_pprof', False))
 
         # Scan cluster
         self.cluster_resources = self.scanner.scan_cluster()

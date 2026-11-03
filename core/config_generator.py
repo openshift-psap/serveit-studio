@@ -243,6 +243,11 @@ class TestConfig:
     # Raw extra env vars (list of {name, value} dicts, added to pod env)
     extra_env_vars: Optional[List[Dict[str, str]]] = None
 
+    # Pod profiling: collect pprof profiles during the benchmark.
+    # EPP profiles are always collected (no flag needed); this toggle
+    # additionally passes --enable-pprof to vLLM and captures pod profiles.
+    enable_pprof: bool = False
+
     # EPP configuration (passed to prereq_manager for configmap generation)
     epp_config: Optional[Dict] = None
 

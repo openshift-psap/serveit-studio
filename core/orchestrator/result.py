@@ -144,4 +144,10 @@ class TestResult:
     # entry carries {name, isl, osl, concurrency, percentiles, throughput}.
     workloads: Optional[list] = None
 
+    # Pod pprof profiles collected during the benchmark:
+    # {epp: {pod, cpu_pct, functions[...]}, vllm: [{pod, ...}],
+    #  files: [{kind, pod, ptype, path, size}]} — blobs ride along as
+    # base64 in each CPU entry for report downloads.
+    profiles: Optional[dict] = None
+
 

@@ -3337,6 +3337,191 @@ function getVal(tc, key) { return tc[key] != null ? String(tc[key]) : null; }
     // Flush vLLM metrics
     secVLLM = html; html = '';
 
+    // === Build Pod Profiles section (EPP + vLLM pprof) ===
+    let secProfiles = '';
+    try {
+        const profEntries = (data.all_results || []).filter(r => r.pprof && (r.pprof.epp || (r.pprof.vllm && r.pprof.vllm.length)));
+        if (profEntries.length) {
+            secProfiles += '<div class="chart-card" style="margin-top:16px; border-left:6px solid #0891b2;">' +
+                '<div class="chart-card-header" style="background:linear-gradient(135deg,#0891b2,#22d3ee);">🔬 Pod Profiles — pprof captures during benchmark load</div>' +
+                '<div style="padding:12px 20px 4px; color:#1e293b; font-size:0.93em; line-height:1.6;">' +
+                'CPU profiles captured from the serving pods <strong>during the benchmark load window</strong> (Go pprof, 10ms sample resolution), plus heap and goroutine snapshots after the run. ' +
+                'EPP profiles are always collected; vLLM pod profiles require the profiling toggle. ' +
+                'Click a function name in the tables or download the raw <code>.prof</code> files for deep analysis with <code>go tool pprof</code>.' +
+                '</div></div>';
+
+            profEntries.forEach(e => {
+                const pp = e.pprof;
+                secProfiles += `<div style="margin-top:16px; border:1.5px solid #e2e8f0; border-radius:8px; overflow:hidden; background:#fff;">`;
+                secProfiles += `<div style="background:#f0f9ff; padding:10px 14px; font-weight:700; color:#0c4a6e; border-bottom:1px solid #e2e8f0;">${e.name} <span style="font-weight:400;color:#64748b;font-size:0.85em;">(${e.architecture})</span></div>`;
+
+                // ── EPP card ──
+                if (pp.epp) {
+                    const ep = pp.epp;
+                    const chartId = 'pprof-epp-' + (e.test_id || e.config_name || 'x').replace(/[^a-z0-9]/gi, '') + _chartSuffix;
+                    const tblId = 'pprof-epp-tbl-' + (e.test_id || e.config_name || 'x').replace(/[^a-z0-9]/gi, '') + _chartSuffix;
+                    secProfiles += `<div style="margin:14px; border-left:4px solid #7c3aed; padding-left:12px;">`;
+                    secProfiles += `<div style="font-weight:700; color:#7c3aed; font-size:0.95em;">EPP — ${ep.pod || 'endpoint-picker'}</div>`;
+                    secProfiles += `<div style="display:flex; gap:16px; flex-wrap:wrap; margin:8px 0; font-size:0.88em; color:#475569;">`;
+                    if (ep.cpu_pct != null) secProfiles += `<span>CPU during load: <strong style="color:${ep.cpu_pct > 50 ? '#dc2626' : ep.cpu_pct > 20 ? '#d97706' : '#059669'};">${ep.cpu_pct}%</strong></span>`;
+                    if (ep.cpu_time_ms != null) secProfiles += `<span>Total CPU: <strong>${(ep.cpu_time_ms / 1000).toFixed(1)}s</strong></span>`;
+                    if (ep.duration_s) secProfiles += `<span>Window: <strong>${ep.duration_s}s</strong></span>`;
+                    if (ep.sample_count) secProfiles += `<span>Samples: <strong>${ep.sample_count.toLocaleString()}</strong></span>`;
+                    secProfiles += `</div>`;
+                    secProfiles += `<div id="${chartId}" style="width:100%; height:420px; margin:6px 0;"></div>`;
+                    // top functions table
+                    if (ep.functions && ep.functions.length) {
+                        secProfiles += `<table class="results-table" id="${tblId}" style="font-size:0.85em;">` +
+                            `<tr><th style="cursor:pointer;" onclick="sortReportTable('${tblId}',0,'str')">Function &#x21C5;</th>` +
+                            `<th style="cursor:pointer;" onclick="sortReportTable('${tblId}',1,'num')">Flat ms &#x21C5;</th>` +
+                            `<th style="cursor:pointer;" onclick="sortReportTable('${tblId}',2,'num')">Flat % &#x21C5;</th>` +
+                            `<th style="cursor:pointer;" onclick="sortReportTable('${tblId}',3,'num')">Cum ms &#x21C5;</th>` +
+                            `<th style="cursor:pointer;" onclick="sortReportTable('${tblId}',4,'num')">Cum % &#x21C5;</th></tr>`;
+                        ep.functions.slice(0, 15).forEach(f => {
+                            secProfiles += `<tr><td style="font-family:monospace;font-size:0.85em;word-break:break-all;">${f.name}</td>` +
+                                `<td data-val="${f.flat_ms}">${f.flat_ms.toFixed(1)}</td>` +
+                                `<td data-val="${f.flat_pct}">${f.flat_pct.toFixed(2)}%</td>` +
+                                `<td data-val="${f.cum_ms}">${f.cum_ms.toFixed(1)}</td>` +
+                                `<td data-val="${f.cum_pct}" style="font-weight:600;">${f.cum_pct.toFixed(2)}%</td></tr>`;
+                        });
+                        secProfiles += `</table>`;
+                    }
+                    // raw file download buttons
+                    const eFiles = (pp.files || []).filter(f => f.kind === 'epp');
+                    if (eFiles.length) {
+                        secProfiles += `<div style="margin-top:8px; display:flex; gap:6px; flex-wrap:wrap;">`;
+                        eFiles.forEach(f => {
+                            const key = f.pod + '-' + f.ptype + '.prof';
+                            secProfiles += `<a href="/api/run/${runId}/config/${e.test_id || e.config_name}/profile/${encodeURIComponent(key)}" title="Download ${key} (${(f.size / 1024).toFixed(0)} KB)" style="color:#0e7490; text-decoration:none; font-size:11px; padding:3px 8px; background:#ecfeff; border-radius:4px; border:1px solid #a5f3fc; display:inline-block; cursor:pointer;">${f.ptype}.prof &#8595; (${(f.size / 1024).toFixed(0)}KB)</a>`;
+                        });
+                        secProfiles += `</div>`;
+                    }
+                    secProfiles += `</div>`;
+                    // render chart
+                    (function(ep, chartId) {
+                        chartQueue.push(function() {
+                            const el = document.getElementById(chartId);
+                            if (!el || typeof Plotly === 'undefined') return;
+                            const fns = (ep.functions || []).slice(0, 12);
+                            Plotly.newPlot(el, [{
+                                y: fns.map(f => f.name.length > 55 ? f.name.slice(0, 52) + '…' : f.name).reverse(),
+                                x: fns.map(f => f.cum_ms).reverse(),
+                                type: 'bar', orientation: 'h',
+                                marker: { color: fns.map(f => f.cum_pct > 20 ? '#7c3aed' : f.cum_pct > 10 ? '#a78bfa' : '#c4b5fd').reverse() },
+                                text: fns.map(f => f.cum_ms.toFixed(0) + 'ms (' + f.cum_pct.toFixed(1) + '%)').reverse(),
+                                textposition: 'outside', textfont: { size: 11, color: '#334155' },
+                                cliponaxis: false, constraintext: 'none',
+                                hovertemplate: '<b>%{y}</b><br>cum: %{x:.1f} ms<extra></extra>'
+                            }], {
+                                margin: { l: 320, r: 90, t: 10, b: 40 },
+                                xaxis: { title: 'Cumulative CPU (ms)' },
+                                yaxis: { automargin: false, tickfont: { size: 10, family: 'monospace' } },
+                                height: Math.max(280, fns.length * 30 + 60),
+                                plot_bgcolor: '#fafafa'
+                            }, { displayModeBar: false, responsive: true });
+                        });
+                    })(ep, chartId);
+                }
+
+                // ── vLLM pods cards ──
+                (pp.vllm || []).forEach((vp, vi) => {
+                    const chartId = 'pprof-vllm-' + (e.test_id || e.config_name || 'x').replace(/[^a-z0-9]/gi, '') + '-' + vi + _chartSuffix;
+                    const tblId = 'pprof-vllm-tbl-' + (e.test_id || e.config_name || 'x').replace(/[^a-z0-9]/gi, '') + '-' + vi + _chartSuffix;
+                    secProfiles += `<div style="margin:14px; border-left:4px solid #10b981; padding-left:12px;">`;
+                    secProfiles += `<div style="font-weight:700; color:#047857; font-size:0.95em;">vLLM — ${vp.pod} <span style="font-weight:400;color:#94a3b8;font-size:0.85em;">:${vp.port || 8000}</span></div>`;
+                    secProfiles += `<div style="display:flex; gap:16px; flex-wrap:wrap; margin:8px 0; font-size:0.88em; color:#475569;">`;
+                    if (vp.cpu_pct != null) secProfiles += `<span>CPU during load: <strong>${vp.cpu_pct}%</strong></span>`;
+                    if (vp.cpu_time_ms != null) secProfiles += `<span>Total CPU: <strong>${(vp.cpu_time_ms / 1000).toFixed(1)}s</strong></span>`;
+                    if (vp.duration_s) secProfiles += `<span>Window: <strong>${vp.duration_s}s</strong></span>`;
+                    secProfiles += `</div>`;
+                    secProfiles += `<div id="${chartId}" style="width:100%; height:420px; margin:6px 0;"></div>`;
+                    if (vp.functions && vp.functions.length) {
+                        secProfiles += `<table class="results-table" id="${tblId}" style="font-size:0.85em;">` +
+                            `<tr><th style="cursor:pointer;" onclick="sortReportTable('${tblId}',0,'str')">Function &#x21C5;</th>` +
+                            `<th style="cursor:pointer;" onclick="sortReportTable('${tblId}',1,'num')">Flat ms &#x21C5;</th>` +
+                            `<th style="cursor:pointer;" onclick="sortReportTable('${tblId}',2,'num')">Flat % &#x21C5;</th>` +
+                            `<th style="cursor:pointer;" onclick="sortReportTable('${tblId}',3,'num')">Cum ms &#x21C5;</th>` +
+                            `<th style="cursor:pointer;" onclick="sortReportTable('${tblId}',4,'num')">Cum % &#x21C5;</th></tr>`;
+                        vp.functions.slice(0, 15).forEach(f => {
+                            secProfiles += `<tr><td style="font-family:monospace;font-size:0.85em;word-break:break-all;">${f.name}</td>` +
+                                `<td data-val="${f.flat_ms}">${f.flat_ms.toFixed(1)}</td>` +
+                                `<td data-val="${f.flat_pct}">${f.flat_pct.toFixed(2)}%</td>` +
+                                `<td data-val="${f.cum_ms}">${f.cum_ms.toFixed(1)}</td>` +
+                                `<td data-val="${f.cum_pct}" style="font-weight:600;">${f.cum_pct.toFixed(2)}%</td></tr>`;
+                        });
+                        secProfiles += `</table>`;
+                    }
+                    const vFiles = (pp.files || []).filter(f => f.kind === 'vllm' && f.pod === vp.pod);
+                    if (vFiles.length) {
+                        secProfiles += `<div style="margin-top:8px; display:flex; gap:6px; flex-wrap:wrap;">`;
+                        vFiles.forEach(f => {
+                            const key = f.pod + '-' + f.ptype + '.prof';
+                            secProfiles += `<a href="/api/run/${runId}/config/${e.test_id || e.config_name}/profile/${encodeURIComponent(key)}" title="Download ${key} (${(f.size / 1024).toFixed(0)} KB)" style="color:#0e7490; text-decoration:none; font-size:11px; padding:3px 8px; background:#ecfeff; border-radius:4px; border:1px solid #a5f3fc; display:inline-block; cursor:pointer;">${f.ptype}.prof &#8595; (${(f.size / 1024).toFixed(0)}KB)</a>`;
+                        });
+                        secProfiles += `</div>`;
+                    }
+                    secProfiles += `</div>`;
+                    (function(vp, chartId) {
+                        chartQueue.push(function() {
+                            const el = document.getElementById(chartId);
+                            if (!el || typeof Plotly === 'undefined') return;
+                            const fns = (vp.functions || []).slice(0, 12);
+                            Plotly.newPlot(el, [{
+                                y: fns.map(f => f.name.length > 55 ? f.name.slice(0, 52) + '…' : f.name).reverse(),
+                                x: fns.map(f => f.cum_ms).reverse(),
+                                type: 'bar', orientation: 'h',
+                                marker: { color: fns.map(f => f.cum_pct > 20 ? '#059669' : f.cum_pct > 10 ? '#34d399' : '#a7f3d0').reverse() },
+                                text: fns.map(f => f.cum_ms.toFixed(0) + 'ms (' + f.cum_pct.toFixed(1) + '%)').reverse(),
+                                textposition: 'outside', textfont: { size: 11, color: '#334155' },
+                                cliponaxis: false, constraintext: 'none',
+                                hovertemplate: '<b>%{y}</b><br>cum: %{x:.1f} ms<extra></extra>'
+                            }], {
+                                margin: { l: 320, r: 90, t: 10, b: 40 },
+                                xaxis: { title: 'Cumulative CPU (ms)' },
+                                yaxis: { automargin: false, tickfont: { size: 10, family: 'monospace' } },
+                                height: Math.max(280, fns.length * 30 + 60),
+                                plot_bgcolor: '#fafafa'
+                            }, { displayModeBar: false, responsive: true });
+                        });
+                    })(vp, chartId);
+                });
+
+                secProfiles += `</div>`;
+            });
+
+            // Cross-test EPP CPU% comparison
+            const eppTests = profEntries.filter(e => e.pprof.epp && e.pprof.epp.cpu_pct != null);
+            if (eppTests.length >= 2) {
+                const xId = 'pprof-epp-cmp' + _chartSuffix;
+                secProfiles += `<div class="chart-card" style="margin-top:16px; border-left:6px solid #0891b2;">` +
+                    `<div class="chart-card-header" style="background:linear-gradient(135deg,#0891b2,#22d3ee);">EPP CPU% Across Tests</div>` +
+                    `<div style="padding:12px 20px 4px; color:#1e293b; font-size:0.93em;">EPP router CPU utilization during the load window per test — spot routing-stack regressions at a glance.</div>` +
+                    `<div id="${xId}" style="width:100%; height:${Math.max(300, eppTests.length * 44 + 80)}px;"></div></div>`;
+                (function(eppTests, xId) {
+                    chartQueue.push(function() {
+                        const el = document.getElementById(xId);
+                        if (!el || typeof Plotly === 'undefined') return;
+                        const sorted = eppTests.slice().sort((a, b) => (a.pprof.epp.cpu_pct || 0) - (b.pprof.epp.cpu_pct || 0));
+                        Plotly.newPlot(el, [{
+                            y: sorted.map(e => e.name).reverse(),
+                            x: sorted.map(e => e.pprof.epp.cpu_pct).reverse(),
+                            type: 'bar', orientation: 'h',
+                            marker: { color: sorted.map(e => { const c = e.pprof.epp.cpu_pct; return c > 50 ? '#dc2626' : c > 20 ? '#d97706' : '#0891b2'; }).reverse() },
+                            text: sorted.map(e => e.pprof.epp.cpu_pct + '%').reverse(),
+                            textposition: 'outside', textfont: { size: 12 },
+                            cliponaxis: false, constraintext: 'none',
+                            hovertemplate: '<b>%{y}</b><br>EPP CPU: %{x:.1f}%<extra></extra>'
+                        }], {
+                            margin: { l: 260, r: 60, t: 10, b: 40 },
+                            xaxis: { title: 'EPP CPU during load (%)' },
+                            height: Math.max(300, sorted.length * 44 + 80)
+                        }, { displayModeBar: false, responsive: true });
+                    });
+                })(eppTests, xId);
+            }
+        }
+    } catch (err) { console.warn('pod profiles section failed:', err); }
+
     // === Build Estimator section ===
     const wl = data.recommendation ? data.recommendation.workload : {};
     const estSuffix = _chartSuffix;
@@ -3874,6 +4059,7 @@ const deltaTag = (t.delta_vs_baseline && !t.is_baseline) ? ` <span style="color:
     if (secPareto) subtabDefs.push({ id: 'pareto-frontier', label: 'Pareto Frontier', icon: '&#128200;' });
     if (secTraffic) subtabDefs.push({ id: 'traffic', label: 'Traffic', icon: '&#128678;' });
     if (secTestCfg) subtabDefs.push({ id: 'test-settings', label: 'Test Settings', icon: '&#9881;' });
+    if (secProfiles) subtabDefs.push({ id: 'pod-profiles', label: 'Pod Profiles', icon: '&#128300;' });
     subtabDefs.push({ id: 'estimator', label: 'Estimator', icon: '&#128200;' });
     if (secWorkloads) subtabDefs.push({ id: 'parallel-workloads', label: 'Workloads', icon: '&#128203;' });
 
@@ -3882,7 +4068,8 @@ const deltaTag = (t.delta_vs_baseline && !t.is_baseline) ? ` <span style="color:
         'test-settings': secTestCfg, 'comparison': secCmp, 'latency-search': secStep9,
         'calibrated-load': secCal, 'cache-sweep': secCacheSweep, 'deploy-timing': secDeployTiming, 'vllm-metrics': secVLLM, 'epp-tuning': secEppTuning,
         'lora-serving': secLora,
-        'pareto-frontier': secPareto, 'traffic': secTraffic, 'estimator': secEst, 'parallel-workloads': secWorkloads
+        'pareto-frontier': secPareto, 'traffic': secTraffic, 'estimator': secEst, 'parallel-workloads': secWorkloads,
+        'pod-profiles': secProfiles
     };
 
     if (subtabDefs.length > 1) {

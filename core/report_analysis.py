@@ -1605,8 +1605,20 @@ class ReportAnalyzer:
                     _q_avg = _queries.get('avg', 0) if isinstance(_queries, dict) else 0
                     if _q_avg > 0:
                         all_results[-1]['cache_hit_pct'] = round(_h_avg / _q_avg * 100, 1)
+                    # Pod pprof profiles (EPP + vLLM CPU summaries)
+                    if _mj.get('pprof'):
+                        _pp = _mj['pprof']
+                        # Strip blobs — they ride the profiles_blob column
+                        _pp_lite = json.loads(json.dumps(_pp))
+                        for _entry in ([_pp_lite.get('epp')] if _pp_lite.get('epp') else []) + (_pp_lite.get('vllm') or []):
+                            if _entry and 'blob' in _entry:
+                                _entry.pop('blob')
+                        all_results[-1]['pprof'] = _pp_lite
                 except Exception:
                     pass
+            # Raw profile files (base64) for report downloads
+            if getattr(r, 'profiles_blob', None):
+                all_results[-1]['profiles_blob'] = r.profiles_blob
         return all_results
 
     def build_full_report_data(self, run_id, loader):

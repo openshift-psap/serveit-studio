@@ -53,6 +53,7 @@ class TestResult:
     manifests_yaml: Optional[str]
     test_config_json: Optional[str] = None
     quality: str = 'ok'  # 'ok', 'warning', 'discard'
+    profiles_blob: Optional[str] = None
 
     @property
     def throughput_mean(self) -> Optional[float]:
@@ -259,6 +260,10 @@ class ReportDataLoader:
                 quality = row['quality'] or 'ok'
             except (IndexError, KeyError):
                 quality = 'ok'
+            try:
+                profiles_blob = row['profiles_blob']
+            except (IndexError, KeyError):
+                profiles_blob = None
 
             results.append(TestResult(
                 id=row['id'],
@@ -289,7 +294,8 @@ class ReportDataLoader:
                 metrics_json=row['metrics_json'],
                 manifests_yaml=manifests_yaml,
                 test_config_json=test_config_json,
-                quality=quality
+                quality=quality,
+                profiles_blob=profiles_blob
             ))
 
         return results

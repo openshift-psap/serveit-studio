@@ -592,6 +592,27 @@ class DatabaseManager:
             'pod_timings': getattr(test_result, 'pod_timings', None),
         })
 
+        # Pod pprof profiles: summary rides in metrics_json (top functions,
+        # cpu_pct); raw-file base64 blobs go to their own column so the
+        # report (live + downloaded) can serve the original .prof files.
+        profiles_blob = None
+        profiles_summary = getattr(test_result, 'profiles', None)
+        if profiles_summary:
+            try:
+                blob_map = {}
+                for entry in ([profiles_summary.get('epp')] if profiles_summary.get('epp') else []) + \
+                            (profiles_summary.get('vllm') or []):
+                    if entry and entry.get('blob'):
+                        blob_map[f"{entry['pod']}-{entry['ptype']}.prof"] = entry.pop('blob')
+                if blob_map:
+                    profiles_blob = json.dumps(blob_map)
+                metrics_json = json.loads(metrics_json)
+                metrics_json['pprof'] = profiles_summary
+                metrics_json = json.dumps(metrics_json)
+            except Exception as e:
+                import logging
+                logging.getLogger(__name__).warning(f"Failed to persist profiles: {e}")
+
         # Serialize full TestConfig for report detail view
         from dataclasses import asdict
         tc_dict = asdict(test_config)
@@ -657,8 +678,8 @@ class DatabaseManager:
                  throughput_p50, throughput_p90, throughput_p95, throughput_p99,
                  gpu_utilization, kv_cache_usage, started_at, completed_at, metrics_json,
                  manifests_yaml, architecture, decode_tp, guidellm_command, test_config_json,
-                 lora_num_adapters, lora_max_loras)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                 lora_num_adapters, lora_max_loras, profiles_blob)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             ''', (
                 run_id,
                 test_config.test_id,
@@ -690,6 +711,7 @@ class DatabaseManager:
                 test_config_json,
                 test_config.lora_num_adapters if getattr(test_config, 'lora_enabled', False) else None,
                 getattr(test_config, 'lora_max_loras', None),
+                profiles_blob,
             ))
             if _keep_old and _prev_row is not None and _prev_cols:
                 # The previous attempt was better: preserve this new attempt

@@ -296,6 +296,12 @@ def init_db():
     except sqlite3.OperationalError:
         pass
 
+    # Pod pprof profiles (JSON: {relpath: base64} for raw-file downloads)
+    try:
+        cursor.execute('ALTER TABLE test_configurations ADD COLUMN profiles_blob TEXT')
+    except sqlite3.OperationalError:
+        pass
+
     # quality: 'ok' (default), 'warning' (1-3% errors), 'discard' (>3% errors)
     try:
         cursor.execute("ALTER TABLE test_configurations ADD COLUMN quality TEXT DEFAULT 'ok'")

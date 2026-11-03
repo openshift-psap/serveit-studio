@@ -366,6 +366,7 @@ def stream_job_logs(job_name: str, namespace: str):
                     "concurrency_sweep_use_epp_tuned": saved_config.get("concurrency_sweep_use_epp_tuned", False),
                     "concurrency_sweep_max_configs": saved_config.get("concurrency_sweep_max_configs", None),
                     "cache_sweep_enabled": saved_config.get("cache_sweep_enabled", False),
+                    "enable_pprof": saved_config.get("enable_pprof", False),
                     "cache_sweep_use_calibrated": saved_config.get("cache_sweep_use_calibrated", False),
                     "cache_sweep_mode": saved_config.get("cache_sweep_mode", "identical"),
                     "cache_sweep_levels": saved_config.get("cache_sweep_levels", None),
@@ -649,6 +650,7 @@ def run_optimization_background(data):
                 int(concurrency_sweep_max_configs) if concurrency_sweep_max_configs else None
             )
         cache_sweep_enabled = _get("cache_sweep_enabled", False)
+        enable_pprof = _get("enable_pprof", False)
         cache_sweep_use_calibrated = _get("cache_sweep_use_calibrated", False)
         cache_sweep_mode = _get("cache_sweep_mode", "identical")
         cache_sweep_levels = _get("cache_sweep_levels", None)
@@ -1059,6 +1061,7 @@ data:
                 concurrency_sweep_use_epp_tuned=concurrency_sweep_use_epp_tuned,
                 concurrency_sweep_max_configs=concurrency_sweep_max_configs,
                 cache_sweep_enabled=cache_sweep_enabled,
+                enable_pprof=enable_pprof,
                 cache_sweep_use_calibrated=cache_sweep_use_calibrated,
                 cache_sweep_mode=cache_sweep_mode,
                 cache_sweep_levels=cache_sweep_levels,

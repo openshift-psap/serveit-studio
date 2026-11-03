@@ -3336,6 +3336,51 @@ def download_manifest(run_id, config_name, manifest_type):
         return jsonify({'error': str(e)}), 500
 
 
+@app.route('/api/run/<int:run_id>/config/<config_name>/profile/<path:profile_name>')
+def download_profile(run_id, config_name, profile_name):
+    """Download a raw pprof profile file for a specific test configuration.
+
+    Args:
+        run_id: Optimization run ID
+        config_name: Test config name (test_id)
+        profile_name: Profile file key (e.g. "gaie-aggregated-epp-xxxx-cpu.prof")
+    """
+    try:
+        import json
+        import base64
+        from flask import Response
+
+        with get_db() as conn:
+            row = conn.execute(
+                'SELECT profiles_blob FROM test_configurations WHERE run_id = ? AND config_name = ?',
+                (run_id, config_name)
+            ).fetchone()
+
+        if not row or not row['profiles_blob']:
+            return jsonify({'error': 'No profiles found for this configuration'}), 404
+
+        profiles = json.loads(row['profiles_blob'])
+
+        if profile_name not in profiles:
+            return jsonify({
+                'error': f'Profile "{profile_name}" not found',
+                'available': list(profiles.keys())
+            }), 404
+
+        data = base64.b64decode(profiles[profile_name])
+        filename = f"{config_name}-{profile_name}"
+
+        return Response(
+            data,
+            mimetype='application/octet-stream',
+            headers={'Content-Disposition': f'attachment; filename="{filename}"'}
+        )
+
+    except Exception as e:
+        print(f"ERROR downloading profile: {e}")
+        return jsonify({'error': str(e)}), 500
+
+
 @app.route('/api/run/<int:run_id>/config/<config_name>/manifests')
 def get_manifest_list(run_id, config_name):
     """List available manifests for a test configuration."""
