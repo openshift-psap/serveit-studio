@@ -277,7 +277,7 @@ function buildRecSection(runId, data, rec, summary, best, allRes) {
             const _dlOutputTps = _dlMj.output_tps_mean || _dlResEntry.output_tps_mean || null;
             if (_dlVllmTps > 0) {
                 s += `<div style="font-size:0.8em;color:#475569;margin-bottom:4px;">`;
-                s += `<span>vLLM: <strong style="color:#3b82f6;">${Math.round(_dlVllmTps).toLocaleString()} tok/s</strong> <span style="font-size:0.85em;color:#94a3b8;">(computed)</span></span>`;
+                s += `<span>vLLM: <strong style="color:#3b82f6;">${Math.round(_dlVllmTps).toLocaleString()} tok/s</strong> <span style="font-size:0.85em;color:#94a3b8;">(server total)</span></span>`;
                 s += '</div>';
             }
             // Percentile table — P50 from raw metrics (not in best_by_percentile)
@@ -380,9 +380,9 @@ function buildRecFooter(rec, summary, best) {
         s += dlStatCard(summary.discarded_tests, 'Discarded Tests (not viable)');
     }
     if (best.lowest_latency) {
-        s += dlStatCard(best.lowest_latency.ttft_p90.toFixed(1) + ' ms', 'Best TTFT P90');
-        if (best.lowest_latency.ttft_p95) s += dlStatCard(best.lowest_latency.ttft_p95.toFixed(1) + ' ms', 'Best TTFT P95');
-        if (best.lowest_latency.ttft_p99) s += dlStatCard(best.lowest_latency.ttft_p99.toFixed(1) + ' ms', 'Best TTFT P99');
+        s += dlStatCard(best.lowest_latency.ttft_p90.toFixed(1) + ' ms', 'Best TTFT P90' + (best.lowest_latency.name ? '<br><span style="font-size:0.7em;font-weight:400;color:#94a3b8;">' + best.lowest_latency.name + '</span>' : ''));
+        if (best.lowest_latency.ttft_p95) s += dlStatCard(best.lowest_latency.ttft_p95.toFixed(1) + ' ms', 'Best TTFT P95' + (best.lowest_latency.name ? '<br><span style="font-size:0.7em;font-weight:400;color:#94a3b8;">' + best.lowest_latency.name + '</span>' : ''));
+        if (best.lowest_latency.ttft_p99) s += dlStatCard(best.lowest_latency.ttft_p99.toFixed(1) + ' ms', 'Best TTFT P99' + (best.lowest_latency.name ? '<br><span style="font-size:0.7em;font-weight:400;color:#94a3b8;">' + best.lowest_latency.name + '</span>' : ''));
     }
     if (best.lowest_itl) {
         s += dlStatCard(best.lowest_itl.itl_p90.toFixed(2) + ' ms', `Best ITL P90 (${best.lowest_itl.name})`);
@@ -403,7 +403,7 @@ function buildRecFooter(rec, summary, best) {
         const hasPrimary = primaryRec && primaryRec.config && primaryRec.config.percentiles;
         const hasAgg = aggBase && aggBase.percentiles && (!primaryRec || aggBase.config_name !== (primaryRec.config || {}).config_name);
 
-        if (hasPrimary && primaryArch !== 'Aggregated') {
+        if (hasPrimary && primaryArch.toUpperCase() !== 'AGGREGATED') {
             const p = primaryRec.config.percentiles;
             const a = hasAgg ? aggBase.percentiles : null;
             s += `<div class="chart-box"><h3>Percentile Breakdown: ${primaryArch} vs Aggregated</h3>`;
@@ -457,22 +457,25 @@ function buildTPSection(rec, charts) {
     const calRows = [];
     if (hasDecodeTP) {
         rec.decode_tp_all.forEach(d => {
-            calRows.push({ role: 'Decode', tp: d.tp, isl: d.cal_isl, osl: d.cal_osl, conc: d.cal_concurrency, reqs: d.cal_max_requests, result: d.tpsg ? d.tpsg.toLocaleString() + ' tok/s/GPU' : '-' });
+            calRows.push({ role: 'Decode', tp: d.tp, isl: d.cal_isl, osl: d.cal_osl, conc: d.cal_concurrency, reqs: d.cal_max_requests, tspg: d.tpsg != null ? d.tpsg : null, ttft: null, itl: d.itl_p90 != null ? d.itl_p90 : null });
         });
     }
     if (hasPrefillTP) {
         rec.prefill_tp_all.forEach(d => {
-            calRows.push({ role: 'Prefill', tp: d.tp, isl: d.cal_isl, osl: d.cal_osl, conc: d.cal_concurrency, reqs: d.cal_max_requests, result: d.ttft_p90 != null ? d.ttft_p90.toLocaleString() + ' ms TTFT' : '-' });
+            calRows.push({ role: 'Prefill', tp: d.tp, isl: d.cal_isl, osl: d.cal_osl, conc: d.cal_concurrency, reqs: d.cal_max_requests, tspg: d.tpsg != null ? d.tpsg : null, ttft: d.ttft_p90 != null ? d.ttft_p90 : null, itl: null });
         });
     }
     if (calRows.length) {
         s += '<div style="margin:16px 0;padding:16px 20px;background:#f8fafc;border:1px solid #e2e8f0;border-radius:8px;">';
         s += '<div style="font-weight:700;font-size:0.95em;color:#1e293b;margin-bottom:8px;">Calibration Test Parameters</div>';
         s += '<p style="color:#64748b;font-size:0.82em;margin:0 0 10px;">Each TP value is tested with isolated workloads: <strong>ISL=1</strong> for decode (measures pure token generation) and <strong>OSL=1</strong> for prefill (measures pure prompt processing). Concurrency is estimated from KV cache capacity to avoid OOM.</p>';
-        s += '<table style="width:100%;font-size:0.85em;text-align:center;"><tr><th style="text-align:center">Role</th><th style="text-align:center">TP</th><th style="text-align:center">ISL</th><th style="text-align:center">OSL</th><th style="text-align:center">Concurrency</th><th style="text-align:center">Max Requests</th><th style="text-align:center">Result</th></tr>';
+        s += '<table style="width:100%;font-size:0.85em;text-align:center;"><tr><th>Role</th><th>TP</th><th>ISL</th><th>OSL</th><th>Concurrency</th><th>Max Requests</th><th>TSPG (tok/s/GPU)</th><th>ITL P90</th><th>TTFT P90</th></tr>';
         calRows.forEach(r => {
             const cls = r.role === 'Decode' ? ' style="color:#6366f1;text-align:center;"' : ' style="color:#0d9488;text-align:center;"';
-            s += `<tr><td${cls}><strong>${r.role}</strong></td><td>${r.tp}</td><td>${r.isl != null ? r.isl.toLocaleString() : '-'}</td><td>${r.osl != null ? r.osl.toLocaleString() : '-'}</td><td>${r.conc || '-'}</td><td>${r.reqs || '-'}</td><td>${r.result}</td></tr>`;
+            const tspgStr = r.tspg != null ? r.tspg.toLocaleString() : '-';
+            const ttftStr = r.ttft != null ? r.ttft.toLocaleString() + ' ms' : '-';
+            const itlStr = r.itl != null ? r.itl.toFixed(2) + ' ms' : '-';
+            s += `<tr><td${cls}><strong>${r.role}</strong></td><td>${r.tp}</td><td>${r.isl != null ? r.isl.toLocaleString() : '-'}</td><td>${r.osl != null ? r.osl.toLocaleString() : '-'}</td><td>${r.conc || '-'}</td><td>${r.reqs || '-'}</td><td>${tspgStr}</td><td>${itlStr}</td><td>${ttftStr}</td></tr>`;
         });
         s += '</table></div>';
     }
@@ -614,6 +617,7 @@ function buildCfgSection(runId, data, charts, allRes, hasPD) {
 
     // Token Throughput table (exclude calibration/sweep tests)
     const tokenRes = allRes.filter(r => {
+        if (r.quality === 'discard') return false;
         const tid = r.test_id || '';
         if (tid.indexOf('step2-') === 0 || tid.indexOf('step3-') === 0 ||
             tid.indexOf('step11-') === 0 || tid.indexOf('step12-') === 0 || tid.indexOf('step13-') === 0) return false;
@@ -761,6 +765,7 @@ function buildCmpSection(runId, rec, data) {
         if (rec.aggregated_baseline && data.all_results && data.all_results.length > 1) {
             const bl = rec.aggregated_baseline;
             const configs = data.all_results.filter(r => {
+                if (r.quality === 'discard') return false;
                 if (r.architecture !== 'PD' || !r.ttft_p90 || !r.throughput_p90) return false;
                 const tid = r.test_id || '';
                 return tid.indexOf('step11-') !== 0 && tid.indexOf('step12-') !== 0 && tid.indexOf('step13-') !== 0;
@@ -797,7 +802,7 @@ function buildCmpSection(runId, rec, data) {
         s += '<div style="background:linear-gradient(135deg,#6366f1,#8b5cf6);padding:12px 20px;color:white;font-weight:700;">EP vs Aggregated Comparison</div>';
         s += '<table><tr><th>Metric</th><th>EP (best)</th><th>Aggregated</th><th>Winner</th></tr>';
         s += `<tr><td><strong>TTFT P90</strong></td><td>${cmp.ep.ttft_p90} ms</td><td>${cmp.aggregated.ttft_p90} ms</td><td style="color:${ttC};font-weight:700;">${cmp.ttft_winner} (${cmp.ttft_diff_pct}% better)</td></tr>`;
-        s += `<tr><td><strong>Throughput P90</strong></td><td>${cmp.ep.throughput_p90} req/s</td><td>${cmp.aggregated.throughput_p90} req/s</td><td style="color:${tpC};font-weight:700;">${cmp.throughput_winner} (${cmp.throughput_diff_pct}% better)</td></tr>`;
+        s += `<tr><td><strong>Throughput Mean</strong></td><td>${cmp.ep.throughput_mean || cmp.ep.throughput_p90} req/s</td><td>${cmp.aggregated.throughput_mean || cmp.aggregated.throughput_p90} req/s</td><td style="color:${tpC};font-weight:700;">${cmp.throughput_winner} (${cmp.throughput_diff_pct}% better)</td></tr>`;
         s += '</table>';
 
         if (rec.aggregated_baseline && rec.ep_all_configs && rec.ep_all_configs.length) {
@@ -858,6 +863,8 @@ function buildStep9Section(data) {
             s += `<div style="background:#f8fafc;border-radius:10px;padding:16px;text-align:center;border:1px solid #e2e8f0;"><div style="font-size:2em;font-weight:800;color:#1e293b;">${tputVal}</div><div style="color:#64748b;font-size:0.82em;margin-top:4px;">Throughput ${targetPct.toUpperCase()} (req/s)</div></div>`;
             s += `<div style="background:#f8fafc;border-radius:10px;padding:16px;text-align:center;border:1px solid #e2e8f0;"><div style="font-size:2em;font-weight:800;color:#1e293b;">${trials.length}</div><div style="color:#64748b;font-size:0.82em;margin-top:4px;">Tests Run</div></div>`;
             s += '</div>';
+        } else {
+            s += '<div style="margin:8px 0 12px;padding:10px 14px;background:#fef2f2;border:1px solid #fecaca;border-radius:8px;color:#991b1b;font-size:0.9em;">&#9888; No concurrency level met the SLA target for ' + arch.toUpperCase() + '.</div>';
         }
 
         // Per-percentile chart divs
@@ -1279,7 +1286,7 @@ function buildEppTuningSection(runId, data) {
                 if (st.affinity_filter) {
                     wStr = 'affinity-filter + ' + (w.token_load ? `token-load&times;${w.token_load}` : (w.active_request ? `active-req&times;${w.active_request}` : 'load'));
                 } else {
-                    wStr = `${w.prefix_cache ?? '?'}:${!w.kv_cache ? 'off' : w.kv_cache}:${w.queue ?? '?'}:${w.active_request ?? 0}` + (w.token_load ? ` +tl${w.token_load}` : '') + (w.lora_affinity ? ` +lora${w.lora_affinity}` : '');
+                    wStr = `${w.prefix_cache ?? '?'}:${!w.kv_cache ? 'off' : w.kv_cache}:${w.queue ?? '?'}:${w.active_request ?? 0}` + (w.token_load ? ` +tl${w.token_load}` : '') + (w.lora_affinity ? ` +lora${w.lora_affinity}` : (w.lora_affinity === 0 && t.name && t.name.indexOf('off') >= 0 ? ' +lora-off' : ''));
                 }
                 if (st.picker === 'weighted-random-picker') wStr += ' [wr]';
                 const durTag = t.duration ? ` <span style="color:#94a3b8;">(${t.duration}s)</span>` : '';
@@ -1346,8 +1353,9 @@ function buildEppTuningSection(runId, data) {
             'not_tested': { title: 'EPP tuning not run', desc: 'This architecture was not tested during EPP tuning.' },
         };
         eppData.skipped_architectures.forEach(skip => {
-            const archLabel = (skip.arch || '').toUpperCase();
-            const info = reasonLabels[skip.reason] || reasonLabels['not_tested'];
+            const skipObj = (typeof skip === 'string') ? { arch: skip, reason: 'not_tested' } : skip;
+            const archLabel = ((skipObj && skipObj.arch) || '').toUpperCase();
+            const info = reasonLabels[(skipObj && skipObj.reason) || ''] || reasonLabels['not_tested'];
             s += `<div class="chart-box" style="border-left:4px solid #7c3aed;">`;
             s += `<h3 style="color:#7c3aed;">Step 9: EPP Tuning &mdash; ${archLabel}</h3>`;
             s += `<div style="background:#f0fdf4;border-radius:10px;padding:16px;border:1px solid #bbf7d0;">`;
@@ -1400,7 +1408,13 @@ function buildTestSettingsSection(data) {
             ['Test Duration', (rc.test_duration || 300) + 's'],
             ['Stop Mode', rc.stop_mode || 'duration'],
             rc.max_requests ? ['Max Requests', rc.max_requests] : null,
-            ['Workload Mode', rc.workload_mode || 'synthetic'],
+            ['Workload Mode', (function() {
+                if (rc.workload_mode === 'dataset')
+                    return 'Dataset file' + (rc.dataset_source ? ' (' + rc.dataset_source + ')' : '');
+                if (rc.use_corpus)
+                    return 'Real corpus (wikitext-103) — native multi-turn generator';
+                return 'Synthetic text';
+            })()],
             rc.dataset_source ? ['Dataset', '<span style="word-break:break-all;font-size:0.9em;">' + rc.dataset_source + '</span>'] : null,
             rc.prefix_cache_hit_pct > 0 ? ['Prefix Cache Hit', rc.prefix_cache_hit_pct + '% (' + (rc.prefix_cache_mode || 'identical') + (rc.prefix_cache_groups > 1 ? ', ' + rc.prefix_cache_groups + ' groups' : '') + ')'] : null,
         ]},
@@ -1508,6 +1522,8 @@ function buildTestSettingsSection(data) {
         if (typeof tc === 'string') try { tc = JSON.parse(tc); } catch(e) { continue; }
         if (tc && typeof tc === 'object') {
             const arch = (r.architecture || '').toUpperCase();
+            // Archived configmap weights (what actually deployed) — used by _eppW
+            if (r.epp_deployed) tc.epp_deployed = r.epp_deployed;
             allCfgs.push({ label: r.config_name, arch, tc, ttft: r.ttft_p90 || 1e9 });
         }
     }
@@ -1836,10 +1852,11 @@ function buildTrafficSection(data, allRes) {
     const trafficLabelMap = {'tp-cal':'TP Calibration','step6':'Aggregated','step7':'PD/EP','step9':'EPP Tuning','step11-epp':'EPP Tuning','step11-sweep':'Concurrency Sweep','step13':'Cache Sweep','other':'Other'};
     const groups = {};
     allRes.forEach(r => {
-        if (!r.test_id) return;
+        const tid = r.test_id || r.config_name || '';
+        if (!tid) return;
         let gk = 'other';
         for (const p of trafficPrefixes) {
-            if (r.test_id.startsWith(p)) { gk = p; break; }
+            if (tid.startsWith(p)) { gk = p; break; }
         }
         if (!groups[gk]) groups[gk] = [];
         groups[gk].push(r);
@@ -1961,14 +1978,16 @@ function buildDeployTimingSection(data, allRes) {
             });
             return;
         }
-        // Fallback: explicit deploy_timing struct
-        const dt = r.deploy_timing || (r.test_config && r.test_config.deploy_timing);
-        if (dt && (dt.pod_creation_s != null || dt.model_load_s != null)) {
+        // Fallback: explicit deploy_timing struct (model load only — skip entries without it)
+        let dt = r.deploy_timing;
+        if (!dt && typeof r.test_config === 'string') { try { dt = JSON.parse(r.test_config).deploy_timing; } catch(e) {} }
+        if (!dt && r.test_config && typeof r.test_config === 'object') dt = r.test_config.deploy_timing;
+        if (dt && dt.model_load_s != null && dt.model_load_s > 0) {
             timings.push({
                 config: r.config_name || r.test_id || 'Unknown',
                 arch: r.architecture || '-',
                 pods: (r.prefill_pods || 0) + (r.decode_pods || 0) || r.replicas || 0,
-                load_s: (dt.model_load_s || 0)
+                load_s: dt.model_load_s
             });
         }
     });
@@ -2454,7 +2473,22 @@ function buildChartScript(data, charts, allRes) {
     s += '}';
 
     // Pareto + scatter + efficiency + architecture charts
-    s += 'if(cd.pareto&&cd.pareto.traces&&cd.pareto.traces.length){var pxv=[...new Set(cd.pareto.traces.flatMap(function(t){return t.x}))].sort(function(a,b){return a-b});Plotly.newPlot("p1",cd.pareto.traces.map(function(t){return{x:t.x,y:t.y,text:t.text,name:t.name,mode:"markers+lines",marker:{size:14,color:t.color,symbol:"diamond",line:{width:2,color:"white"}},line:{width:2,dash:"dot"},hovertemplate:"<b>%{text}</b><extra></extra>"}}),{...lo,xaxis:{title:"GPUs",tickvals:pxv},yaxis:{title:"TTFT P90 (ms)"},showlegend:true},co);}';
+    // TP Calibration (Pareto) — TPSG bars + TTFT P90 line (log, y2), matching live
+    s += '(function(){if(!cd.pareto||!cd.pareto.traces||!cd.pareto.traces.length)return;';
+    s += '  var tpsgLookup={};';
+    s += '  (recData.decode_tp_all||[]).forEach(function(d){tpsgLookup["decode-"+d.tp]=d.tpsg;});';
+    s += '  (recData.prefill_tp_all||[]).forEach(function(d){tpsgLookup["prefill-"+d.tp]=d.tpsg;});';
+    s += '  var traces=[];var roleColors={decode:"#3b82f6",prefill:"#f59e0b"};';
+    s += '  cd.pareto.traces.forEach(function(t){';
+    s += '    if(t.yaxis==="y2")return;';
+    s += '    var role=t.name.toLowerCase().indexOf("decode")>=0?"decode":"prefill";var color=roleColors[role];';
+    s += '    var tpsgVals=t.x.map(function(tp){return tpsgLookup[role+"-"+tp]||0;});';
+    s += '    traces.push({x:t.x,y:tpsgVals,name:role.charAt(0).toUpperCase()+role.slice(1)+" TPSG",type:"bar",marker:{color:color},text:tpsgVals.map(function(v){return v>0?Math.round(v).toLocaleString():""}),textposition:"outside",textfont:{size:13,color:color},cliponaxis:false,constraintext:"none",hovertemplate:"<b>TP=%{x}</b><br>TPSG: %{y:,.0f} tok/s/GPU<extra></extra>"});';
+    s += '    traces.push({x:t.x,y:t.y,name:role.charAt(0).toUpperCase()+role.slice(1)+" TTFT",yaxis:"y2",mode:"markers+lines+text",text:t.text,customdata:t.y.map(function(v){return v>=1000?(v/1000).toFixed(1)+"s":Math.round(v)+"ms";}),texttemplate:"%{customdata}",textposition:"top center",textfont:{size:13,color:"#1e293b"},marker:{size:10,color:color,symbol:"circle",line:{width:2,color:"white"}},line:{width:2,dash:"dash",color:color},hovertemplate:"<b>%{text}</b><extra></extra>"});';
+    s += '  });';
+    s += '  var paretoXvals=[];cd.pareto.traces.filter(function(t){return t.yaxis!=="y2";}).forEach(function(t){t.x.forEach(function(v){if(paretoXvals.indexOf(v)<0)paretoXvals.push(v);});});paretoXvals.sort(function(a,b){return a-b});';
+    s += '  Plotly.newPlot("p1",traces,{...lo,margin:{...lo.margin,r:60,t:30},barmode:"group",xaxis:{title:"Total GPUs (= TP)",tickvals:paretoXvals},yaxis:{title:"TPSG (tok/s/GPU) — higher is better",side:"left",tickformat:",.0f"},yaxis2:{title:"TTFT P90 (ms) — lower is better",side:"right",overlaying:"y",type:"log"},showlegend:true},co);';
+    s += '})();';
     s += 'if(cd.scatter.traces.length){Plotly.newPlot("p2",cd.scatter.traces.map(function(t){return{x:t.x,y:t.y,text:t.text,name:t.name,mode:"markers",marker:{size:t.sizes,color:t.color,opacity:0.7,line:{width:1,color:"white"}},hovertemplate:"<b>%{text}</b><extra></extra>"}}),{...lo,xaxis:{title:"TTFT P90 (ms)"},yaxis:{title:"Throughput P90 (req/s)"},showlegend:true},co);}';
     s += 'if(cd.efficiency.configs.length){Plotly.newPlot("p3",[{x:cd.efficiency.configs,y:cd.efficiency.values,type:"bar",marker:{color:cd.efficiency.colors},text:cd.efficiency.values.map(function(v){return v!=null?v.toFixed(3):""}),textposition:"outside",textfont:{size:14,color:"#333"},cliponaxis:false,constraintext:"none"}],{...lo,margin:{...lo.margin,b:120},xaxis:{tickangle:-45},yaxis:{title:"req/s/GPU"}},co);}';
     s += 'if(cd.architecture.architectures.length){var a=cd.architecture;Plotly.newPlot("p4",[{x:a.architectures,y:a.avg_ttft,type:"bar",marker:{color:"#3b82f6"},text:a.avg_ttft.map(function(v){return fmtSI(v)+" ms"}),textposition:"auto",name:"Avg TTFT P90",xaxis:"x",yaxis:"y"},{x:a.architectures,y:a.best_ttft,type:"bar",marker:{color:"#93c5fd"},text:a.best_ttft.map(function(v){return fmtSI(v)+" ms"}),textposition:"auto",name:"Best TTFT P90",xaxis:"x",yaxis:"y"},{x:a.architectures,y:a.avg_throughput,type:"bar",marker:{color:"#f59e0b"},text:a.avg_throughput.map(function(v){return v.toFixed(2)+" req/s"}),textposition:"auto",name:"Avg Throughput P90",xaxis:"x2",yaxis:"y2"}],{...lo,margin:{t:30,b:50,l:60,r:60},barmode:"group",showlegend:true,legend:{x:0,y:1.18,orientation:"h"},xaxis:{domain:[0,0.45]},yaxis:{title:"TTFT (ms)",titlefont:{color:"#3b82f6"},tickformat:".2s"},xaxis2:{domain:[0.55,1],anchor:"y2"},yaxis2:{title:"Throughput (req/s)",anchor:"x2",titlefont:{color:"#f59e0b"}}},co);}';
@@ -2495,7 +2529,7 @@ function buildChartScript(data, charts, allRes) {
 
     // Token throughput chart — 3 series like live: GPU computed / server total / client
     s += 'if(document.getElementById("dl-token-tput-chart")){';
-    s += '  var tkRes=ar.filter(function(r){var tid=r.test_id||"";return tid.indexOf("step2-")!==0&&tid.indexOf("step3-")!==0&&tid.indexOf("step11-")!==0&&tid.indexOf("step12-")!==0&&tid.indexOf("step13-")!==0&&(r._gen_tps_avg||r.output_tps_mean);});';
+    s += '  var tkRes=ar.filter(function(r){if(r.quality==="discard")return false;var tid=r.test_id||"";return tid.indexOf("step2-")!==0&&tid.indexOf("step3-")!==0&&tid.indexOf("step11-")!==0&&tid.indexOf("step12-")!==0&&tid.indexOf("step13-")!==0&&(r._gen_tps_avg||r.output_tps_mean);});';
     s += '  if(tkRes.length){';
     s += '    var tkLabels=tkRes.map(function(r){return _tL(r.config_name,r.architecture)});';
     s += '    var tkComputed=[],tkVllmTotal=[],tkGuidellmTotal=[];';
@@ -2542,7 +2576,7 @@ function buildChartScript(data, charts, allRes) {
 
 
     // Per-percentile PD charts
-    s += 'var pd=ar.filter(function(r){if(r.architecture!=="PD")return false;var tid=r.test_id||"";return tid.indexOf("step2-")!==0&&tid.indexOf("step3-")!==0&&tid.indexOf("step11-")!==0&&tid.indexOf("step12-")!==0&&tid.indexOf("step13-")!==0});';
+    s += 'var pd=ar.filter(function(r){if(r.quality==="discard")return false;if(r.architecture!=="PD")return false;var tid=r.test_id||"";return tid.indexOf("step2-")!==0&&tid.indexOf("step3-")!==0&&tid.indexOf("step11-")!==0&&tid.indexOf("step12-")!==0&&tid.indexOf("step13-")!==0});';
     s += 'if(pd.length){';
     s += '  pd.sort(function(a,b){return a.prefill_pods-b.prefill_pods});';
     s += '  var lbls=pd.map(function(r){return r.prefill_pods+"P : "+r.decode_pods+"D"});';
@@ -2723,7 +2757,7 @@ function buildChartScript(data, charts, allRes) {
         s += '    var cx=pts.map(function(p){return p.concurrency});';
         s += '    var lats=pts.map(function(p){return p["ttft_"+pctl.k]});';
         s += '    var color=csColors[ci%csColors.length];ci++;';
-        s += '    var label=pts[0]&&pts[0].config_label?pts[0].config_label:cfgKey;';
+        s += '    var label=pts[0]&&pts[0].config_label?pts[0].config_label:cfgKey;var _at=cfgKey.indexOf("pd")===0?" (PD)":(cfgKey.indexOf("ep")===0?" (EP)":" (AG)");if(label.indexOf("(")<0)label+=_at;';
         s += '    traces.push({x:cx,y:lats,name:label,type:"scatter",mode:"lines+markers+text",';
         s += '      text:lats.map(function(v){return v?Math.round(v).toLocaleString():""}),';
         s += '      textposition:"top center",textfont:{size:13,color:color},';
@@ -2747,7 +2781,7 @@ function buildChartScript(data, charts, allRes) {
         s += '    var cx=pts.map(function(p){return p.concurrency});';
         s += '    var tpg=pts.map(function(p){return p.throughput_per_gpu});';
         s += '    var color=csColors[ci%csColors.length];ci++;';
-        s += '    var label=pts[0]&&pts[0].config_label?pts[0].config_label:cfgKey;';
+        s += '    var label=pts[0]&&pts[0].config_label?pts[0].config_label:cfgKey;var _at=cfgKey.indexOf("pd")===0?" (PD)":(cfgKey.indexOf("ep")===0?" (EP)":" (AG)");if(label.indexOf("(")<0)label+=_at;';
         s += '    traces.push({x:cx,y:tpg,name:label,type:"scatter",mode:"lines+markers+text",';
         s += '      text:tpg.map(function(v){return v?Math.round(v).toLocaleString():""}),';
         s += '      textposition:"top center",textfont:{size:13,color:color},';
@@ -2944,7 +2978,7 @@ function buildChartScript(data, charts, allRes) {
     s += '  Object.keys(csData).forEach(function(cfgKey){';
     s += '    var pts=[].concat(csData[cfgKey]).sort(function(a,b){return a.concurrency-b.concurrency});';
     s += '    var color=csColors[ci%csColors.length];ci++;';
-    s += '    var label=pts[0]&&pts[0].config_label?pts[0].config_label:cfgKey;';
+    s += '    var label=pts[0]&&pts[0].config_label?pts[0].config_label:cfgKey;var _at=cfgKey.indexOf("pd")===0?" (PD)":(cfgKey.indexOf("ep")===0?" (EP)":" (AG)");if(label.indexOf("(")<0)label+=_at;';
     s += '    traces.push({x:pts.map(function(p){return p.concurrency}),y:pts.map(function(p){return p.vllm_tps||0}),name:label+" (server total)",mode:"lines+markers",line:{color:color,width:3},marker:{size:8,color:color},hovertemplate:"<b>"+label+"</b><br>%{x} users<br>Server: %{y:,.0f} tok/s<extra></extra>"});';
     s += '    traces.push({x:pts.map(function(p){return p.concurrency}),y:pts.map(function(p){return p.output_tps_mean||0}),name:label+" (output only)",mode:"lines+markers",line:{color:color,width:2,dash:"dot"},marker:{size:6,color:color},hovertemplate:"<b>"+label+"</b><br>%{x} users<br>Output: %{y:,.0f} tok/s<extra></extra>",showlegend:false});';
     s += '  });';
@@ -3042,14 +3076,17 @@ function buildChartScript(data, charts, allRes) {
             const trafficGroupMap = {};
             const trafficPrefixes = ['step11-sweep', 'step13', 'step11-epp', 'step9', 'step7', 'step6', 'step3', 'step2'];
             allRes.forEach(r => {
-                if (!r.test_id) return;
+                const rid = r.test_id || r.config_name || '';
+                if (!rid) return;
                 let gk = 'other';
                 for (const p of trafficPrefixes) {
-                    if (r.test_id.startsWith(p)) { gk = p; break; }
+                    if (rid.startsWith(p)) { gk = p; break; }
                 }
                 if (!trafficGroupMap[gk]) trafficGroupMap[gk] = [];
                 trafficGroupMap[gk].push({
-                    label: (r.config_name || r.test_id || '?') + (r.concurrency != null && (r.test_id || '').startsWith('step11-sweep') ? ' (c=' + r.concurrency + ')' : ''),
+                    label: (r.config_name || r.test_id || '?') + (r.concurrency != null && rid.startsWith('step11-sweep') ? ' (c=' + r.concurrency + ')' : ''),
+                    cfgKey: rid.replace('step11-sweep-', '').replace(/-c\d+$/, ''),
+                    conc: r.concurrency != null ? r.concurrency : null,
                     request_total: r.request_total || 0,
                     request_errored: r.request_errored || 0,
                     nixl_errors: r.nixl_errors || 0,
@@ -3082,12 +3119,12 @@ function buildChartScript(data, charts, allRes) {
             s += '  var label=trafLabels[gk]||gk;';
             s += '  Plotly.newPlot(el,traces,{...lo,height:850,barmode:"group",margin:{...lo.margin,b:100},xaxis:{tickangle:-35},yaxis:{title:"Count"},showlegend:true,legend:{x:0,y:1.15,orientation:"h"},title:{text:"Traffic: "+label},annotations:nixlDegAnns},co);';
             s += '});';
-            // Per-config sweep charts (with c=N labels)
+            // Per-config sweep charts (key = test_id-derived cfgKey, matching the builder)
             s += '(function(){if(!trafGrps["step11-sweep"])return;';
-            s += '  var byCfg={};trafGrps["step11-sweep"].forEach(function(r){var m=r.label.match(/^(.*?) \\(c=(\\d+)\\)$/);var cfgKey=m?m[1]:r.label;if(!byCfg[cfgKey])byCfg[cfgKey]=[];byCfg[cfgKey].push(r);});';
+            s += '  var byCfg={};trafGrps["step11-sweep"].forEach(function(r){if(!byCfg[r.cfgKey])byCfg[r.cfgKey]=[];byCfg[r.cfgKey].push(r);});';
             s += '  Object.keys(byCfg).forEach(function(cfgKey){';
             s += '    var cid="dl-traffic-sweep-"+cfgKey.replace(/[^a-z0-9]/g,"-");var el=document.getElementById(cid);if(!el)return;';
-            s += '    var pts=byCfg[cfgKey].sort(function(a,b){var ma=parseInt((a.label.match(/c=(\\d+)\\)/)||[0,0])[1]);var mb=parseInt((b.label.match(/c=(\\d+)\\)/)||[0,0])[1]);return ma-mb;});';
+            s += '    var pts=byCfg[cfgKey].sort(function(a,b){return(a.conc||0)-(b.conc||0);});';
             s += '    var labels=pts.map(function(r){return r.label});';
             s += '    var traces=[{x:labels,y:pts.map(function(r){return r.request_total}),name:"Requests",type:"bar",marker:{color:"#3b82f6"}},';
             s += '      {x:labels,y:pts.map(function(r){return r.request_errored}),name:"Errors",type:"bar",marker:{color:"#ef4444"}}];';
@@ -3195,7 +3232,7 @@ function buildChartScript(data, charts, allRes) {
     s += '(function(){';
     s += '  var runOsl=' + JSON.stringify((data.recommendation && data.recommendation.workload) ? data.recommendation.workload.osl : 100) + ';';
     s += '  function getVT(r){var pA=r._prompt_tps_avg||0;var gA=r._gen_tps_avg||0;return(pA+gA>0)?(pA+gA):0;}';
-    s += '  var paretoResults=ar.filter(function(r){var tid=r.test_id||r.config_name||"";return tid.indexOf("step2-")!==0&&tid.indexOf("step3-")!==0&&r.ttft_p90>0&&(r.throughput_mean>0||r.throughput_p90>0)});';
+    s += '  var paretoResults=ar.filter(function(r){if(r.quality==="discard")return false;var tid=r.test_id||r.config_name||"";return tid.indexOf("step2-")!==0&&tid.indexOf("step3-")!==0&&r.ttft_p90>0&&(r.throughput_mean>0||r.throughput_p90>0)});';
     s += '  if(paretoResults.length<2)return;';
 
     // Throughput vs TTFT
