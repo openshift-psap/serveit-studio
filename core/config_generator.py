@@ -245,7 +245,8 @@ class TestConfig:
 
     # Pod profiling: collect pprof profiles during the benchmark.
     # EPP profiles are always collected (no flag needed); this toggle
-    # additionally passes --enable-pprof to vLLM and captures pod profiles.
+    # additionally probes vLLM pods for pprof endpoints (skips pods
+    # whose vLLM image does not serve /debug/pprof).
     enable_pprof: bool = False
 
     # EPP configuration (passed to prereq_manager for configmap generation)

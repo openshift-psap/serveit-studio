@@ -423,7 +423,6 @@ spec:
                   --max-loras {{ lora_max_loras }} \
                   --max-cpu-loras {{ lora_max_cpu_loras }} \
                   --lora-modules {{ lora_modules_arg }} \
-{% endif %}{% if enable_pprof %}                  --enable-pprof \
 {% endif %}{% if extra_vllm_args %}                  {{ extra_vllm_args }} \
 {% endif %}
                   || sleep infinity
