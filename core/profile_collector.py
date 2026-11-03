@@ -107,7 +107,7 @@ class ProfileCollector:
         if not self.workload_pod:
             return None
         env = os.environ.copy()
-        env["KUBECONFIG"] = os.environ.expanduser(self.kubectl.kubeconfig)
+        env["KUBECONFIG"] = os.path.expanduser(self.kubectl.kubeconfig)
         r = subprocess.run(
             ["kubectl", "exec", self.workload_pod, "-n", self.namespace, "--",
              "curl", "-s", "--max-time", str(timeout_s), url],
@@ -120,7 +120,7 @@ class ProfileCollector:
     def _fetch_via_pod_python(self, pod: str, port: int, path: str, timeout_s: int) -> Optional[bytes]:
         """Fetch http://localhost:{port}{path} inside a pod's vllm container."""
         env = os.environ.copy()
-        env["KUBECONFIG"] = os.environ.expanduser(self.kubectl.kubeconfig)
+        env["KUBECONFIG"] = os.path.expanduser(self.kubectl.kubeconfig)
         code = (
             "import urllib.request,sys\n"
             f"sys.stdout.buffer.write(urllib.request.urlopen('http://localhost:{port}{path}', timeout={timeout_s}).read())\n"
@@ -174,12 +174,14 @@ class ProfileCollector:
         # vLLM pods (opt-in)
         if enable_vllm:
             pods = self.discover_vllm_pods(test_id)
+            probed = 0
             for pod in pods:
                 port = self._probe_vllm_port(pod)
                 if not port:
                     if log_callback:
-                        log_callback(f"   ⚠️  No pprof endpoint on {pod} (is --enable-pprof set?)")
+                        log_callback(f"   ⚠️  No pprof endpoint on {pod} (vLLM image does not serve /debug/pprof — skipping)")
                     continue
+                probed += 1
                 path = f"/debug/pprof/profile?seconds={window}"
                 t = threading.Thread(target=self._capture_worker, args=(
                     handle, "vllm", pod, port, "cpu",
@@ -188,7 +190,7 @@ class ProfileCollector:
                 handle["threads"].append(t)
                 t.start()
             if log_callback:
-                log_callback(f"   🔬 vLLM CPU profile capture started on {len(pods)} pod(s) ({window}s window)")
+                log_callback(f"   🔬 vLLM CPU profile capture started on {probed}/{len(pods)} pod(s) ({window}s window)")
 
         return handle
 
