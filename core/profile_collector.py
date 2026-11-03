@@ -45,6 +45,29 @@ class ProfileCollector:
         self.namespace = namespace
         self.workload_pod = workload_pod
 
+    def _resolve_workload_pod(self) -> Optional[str]:
+        """Resolve the actual workload pod name by label.
+
+        The constructor may receive the bare deployment name
+        ("serveit-workload"); the real pod has a replicaset hash suffix
+        (e.g. serveit-workload-74459d9f7f-pd4g8). Always resolve fresh —
+        the pod is recreated on redeploy.
+        """
+        if self.workload_pod and "-" in self.workload_pod.strip("serveit-workload-"):
+            # Looks like a fully-qualified pod name already — but verify it
+            # exists; fall through to label resolution if it doesn't.
+            r = self._run_kubectl(["get", "pod", self.workload_pod, "-n", self.namespace, "-o", "name"])
+            if r.returncode == 0:
+                return self.workload_pod
+        r = self._run_kubectl([
+            "get", "pods", "-l", "app=serveit-workload", "-n", self.namespace,
+            "-o", "jsonpath={.items[0].metadata.name}",
+        ])
+        if r.returncode == 0 and r.stdout.strip():
+            self.workload_pod = r.stdout.strip()
+            return self.workload_pod
+        return self.workload_pod
+
     # ── subprocess plumbing ─────────────────────────────────────────────────
 
     def _kubectl_env(self):
@@ -201,6 +224,7 @@ class ProfileCollector:
         test_id = config.test_id
         window = min(MAX_CPU_WINDOW_S, max(30, getattr(config, "test_duration", 300) or 300))
         enable_vllm = bool(getattr(config, "enable_pprof", False))
+        self._resolve_workload_pod()  # bare names fail: pods "serveit-workload" not found
         handle = {
             "test_id": test_id,
             "window_s": window,
@@ -258,6 +282,7 @@ class ProfileCollector:
         """
         if not handle:
             return None
+        self._resolve_workload_pod()
         test_id = handle.get("test_id") or config.test_id
         artifact_dir = Path(f"/mnt/storage/test-artifacts/{test_id}/profiles")
         try:
