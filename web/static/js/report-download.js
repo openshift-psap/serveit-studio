@@ -46,6 +46,8 @@ async function downloadHTMLReport(runId, data) {
         '/static/report/tabs/traffic.js',
         '/static/report/tabs/vllm-metrics.js',
         '/static/report/tabs/estimator.js',
+        '/static/report/tabs/lora.js',
+        '/static/report/tabs/epp-tuning.js',
     ].map(async (f) => {
         try {
             const r = await fetch(f, { cache: 'reload' });
@@ -95,14 +97,14 @@ function buildFullReport(runId, data, charts, rec, summary, best, allRes, hasPD,
     const secStep9 = buildStep9Section(data);
     const secCal = buildCalSection(data);
     const secVLLM = _tabSection('vllm-metrics', data, runId);
-    const secEpp = buildEppTuningSection(runId, data);
+    const secEpp = _tabSection('epp-tuning', data, runId);
     const secTestCfg = _tabSection('test-settings', data, runId);
     const secSweep = buildConcurrencySweepSection(data);
     const secCacheSweep = buildCacheSweepSection(data, allRes);
     const secTraffic = _tabSection('traffic', data, runId);
     const secDeploy = _tabSection('deploy-timing', data, runId);
     const secPareto = _tabSection('pareto-frontier', data, runId);
-    const secLora = buildLoraSection(data, charts);
+    const secLora = _tabSection('lora-serving', data, runId);
     const secEst = _tabSection('estimator', data, runId);
     const secWorkloads = _tabSection('workloads', data, runId);
     // Modular tab: pod-profiles (web/static/report/tabs/) — one implementation
