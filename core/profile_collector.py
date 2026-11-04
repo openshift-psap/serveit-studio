@@ -331,61 +331,133 @@ class ProfileCollector:
     # ── torch profiler ──────────────────────────────────────────────────────
 
     def start_torch_profiles(self, test_id, window_s, log_callback=None):
-        """Start torch profiler on all vLLM pods via /start_profile API."""
+        """Start torch profiler on all vLLM pods via /start_profile API.
+
+        Uses curl from the workload pod (like Go pprof) — the endpoint
+        responds slowly, so fire-and-forget with short timeout.
+        """
+        self._resolve_workload_pod()
         pods = self.discover_vllm_pods(test_id)
-        procs = []
+        results = []
         for pod in pods:
             pod_name = pod["name"] if isinstance(pod, dict) else pod
-            script = PYSPY_PROFILE_SCRIPT.replace("__ACTION__", "start").replace("__DURATION__", str(window_s))
-            cmd = ["kubectl", "exec", pod_name, "-n", self.namespace, "-c", "vllm",
-                   "--", "python3", "-c", script]
-            fd, outfile = tempfile.mkstemp(prefix="torch-prof-", suffix=".out")
-            os.close(fd)
-            p = subprocess.Popen(cmd, stdout=open(outfile, "wb"),
-                                 stderr=subprocess.DEVNULL,
-                                 env=self._kubectl_env())
-            procs.append({"pod": pod_name, "proc": p, "outfile": outfile, "window_s": window_s})
-        if log_callback and procs:
-            log_callback(f"   \U0001f52c Torch profiler started on {len(procs)} pod(s) via /start_profile ({window_s}s window)")
-        return procs
+            if not self.workload_pod:
+                continue
+            r = self._run_kubectl(["get", "pod", pod_name, "-n", self.namespace,
+                                    "-o", "jsonpath={.status.podIP}"])
+            if r.returncode != 0 or not r.stdout.strip():
+                continue
+            pod_ip = r.stdout.strip()
+            started = False
+            for port in [8000, 8200]:
+                try:
+                    url = f"http://{pod_ip}:{port}/start_profile"
+                    resp = self._fetch_via_workload_pod(url, 8)
+                    if resp is not None:
+                        started = True
+                        break
+                except Exception:
+                    continue
+            results.append({"pod": pod_name, "started": started, "ip": pod_ip})
+        if log_callback and results:
+            n_started = sum(1 for r in results if r.get("started"))
+            log_callback(f"   \U0001f52c Torch profiler started on {n_started}/{len(results)} pod(s)")
+        return results
 
-    def collect_torch_profiles(self, procs, log_callback=None, written=None):
-        """Stop torch profilers via /stop_profile and collect summaries with CUDA data."""
+    def collect_torch_profiles(self, results, log_callback=None, written=None, test_id=None):
+        """Stop torch profilers via /stop_profile and collect traces."""
         if written is None:
             written = []
-        results = []
-        for entry in procs:
-            pod_name = entry["pod"]
-            try:
-                # Wait for the start process (it just calls the endpoint and returns)
-                entry["proc"].wait(timeout=30)
+        torch_results = []
+        for entry in results:
+            pod_name = entry.get("pod")
+            if not pod_name or not entry.get("started"):
+                continue
+            if not self.workload_pod:
+                continue
 
-                # Call /stop_profile — this also waits for traces and parses them
-                stop_script = PYSPY_PROFILE_SCRIPT.replace("__ACTION__", "stop").replace("__DURATION__", "0")
-                r = subprocess.run(
-                    ["kubectl", "exec", pod_name, "-n", self.namespace, "-c", "vllm",
-                     "--", "python3", "-c", stop_script],
-                    capture_output=True, text=True, timeout=300,
-                    env=self._kubectl_env())
-                if r.returncode == 0:
-                    for line in r.stdout.split("\n"):
-                        if line.startswith("SUMMARY_JSON:"):
-                            summary = json.loads(line[len("SUMMARY_JSON:"):])
-                            summary["pod"] = pod_name
-                            results.append(summary)
-                            break
-                else:
-                    logger.warning(f"torch profile stop failed for {pod_name}: {r.stderr[:200]}")
+            # Call /stop_profile
+            try:
+                url = f"http://{entry.get('ip')}:{8000}/stop_profile"
+                self._fetch_via_workload_pod(url, 60)
+            except Exception:
+                pass
+
+            # Wait for traces to be written
+            time.sleep(15)
+
+            # List trace files
+            try:
+                ls_result = self._run_kubectl(
+                    ["exec", pod_name, "-n", self.namespace, "-c", "vllm",
+                     "--", "ls", "-lh", "/tmp/torch_traces/"], timeout=30)
+                trace_files = []
+                if ls_result.returncode == 0:
+                    for line in ls_result.stdout.split("\n"):
+                        parts = line.split()
+                        if len(parts) >= 9 and parts[-1] != "total" and not parts[0].startswith("d"):
+                            fname = parts[-1]
+                            size_str = parts[4]
+                            size = 0
+                            try:
+                                if size_str.endswith("G"):
+                                    size = int(float(size_str[:-1]) * 1024 * 1024 * 1024)
+                                elif size_str.endswith("M"):
+                                    size = int(float(size_str[:-1]) * 1024 * 1024)
+                                elif size_str.endswith("K"):
+                                    size = int(float(size_str[:-1]) * 1024)
+                                else:
+                                    size = int(size_str)
+                            except ValueError:
+                                pass
+                            trace_files.append({
+                                "name": fname,
+                                "size": size,
+                                "path": f"/tmp/torch_traces/{fname}"
+                            })
+
+                summary = {
+                    "profiler": "torch",
+                    "pod": pod_name,
+                    "status": "stopped",
+                    "trace_files": trace_files,
+                    "operators": [],
+                    "total_cpu_ms": 0,
+                    "total_cuda_ms": 0,
+                    "operator_count": 0,
+                }
+
+                # Copy traces to artifact dir
+                if test_id:
+                    for tf in trace_files[:3]:
+                        try:
+                            copy_result = subprocess.run(
+                                ["kubectl", "exec", pod_name, "-n", self.namespace, "-c", "vllm",
+                                 "--", "cat", tf["path"]],
+                                capture_output=True, timeout=300,
+                                env=self._kubectl_env())
+                            if copy_result.returncode == 0 and copy_result.stdout:
+                                trace_out = Path(f"/mnt/storage/test-artifacts/{test_id}/profiles/torch/{pod_name}/{tf['name']}")
+                                trace_out.parent.mkdir(parents=True, exist_ok=True)
+                                trace_out.write_bytes(copy_result.stdout)
+                                written.append({
+                                    "kind": "torch", "pod": pod_name, "port": 0,
+                                    "ptype": "trace", "path": str(trace_out),
+                                    "size": len(copy_result.stdout)
+                                })
+                        except Exception as e:
+                            logger.warning(f"trace copy failed {pod_name}: {e}")
+
+                torch_results.append(summary)
+                if log_callback:
+                    log_callback(f"   \U0001f52c {pod_name}: {len(trace_files)} trace file(s)")
+
             except Exception as e:
                 logger.warning(f"torch profile collection failed for {pod_name}: {e}")
-            finally:
-                try:
-                    os.unlink(entry["outfile"])
-                except OSError:
-                    pass
-        if log_callback and results:
-            log_callback(f"   \U0001f52c Torch profiles collected from {len(results)} pod(s)")
-        return results
+
+        if log_callback and torch_results:
+            log_callback(f"   \U0001f52c Torch profiles collected from {len(torch_results)} pod(s)")
+        return torch_results
 
     # ── resolve workload pod ────────────────────────────────────────────────
 
@@ -456,7 +528,7 @@ class ProfileCollector:
         # 3. Collect torch profiler summaries
         torch_results = []
         if handle.get("torch_procs"):
-            torch_results = self.collect_torch_profiles(handle["torch_procs"], log_callback)
+            torch_results = self.collect_torch_profiles(handle["torch_procs"], log_callback, written, test_id)
 
         # 3b. Copy torch trace files from pods to artifact dir
         for tr in torch_results:
