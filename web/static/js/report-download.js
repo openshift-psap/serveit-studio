@@ -51,6 +51,10 @@ async function downloadHTMLReport(runId, data) {
         '/static/report/tabs/tp-calibration.js',
         '/static/report/tabs/comparison.js',
         '/static/report/tabs/latency-search.js',
+        '/static/report/tabs/cache-sweep.js',
+        '/static/report/tabs/concurrency-sweep.js',
+        '/static/report/tabs/configurations.js',
+        '/static/report/tabs/recommendation.js',
     ].map(async (f) => {
         try {
             const r = await fetch(f, { cache: 'reload' });
@@ -86,7 +90,7 @@ function _tabSection(tabId, data, runId) {
 }
 
 function buildFullReport(runId, data, charts, rec, summary, best, allRes, hasPD, hasVLLM, moduleSources) {
-    let secRec = buildRecSection(runId, data, rec, summary, best, allRes);
+    let secRec = _tabSection('recommendation', data, runId);
     // Append calibrated load recommendations to the Recommendation tab
     const calRecCards = buildCalRecCards(data);
     if (calRecCards) secRec += calRecCards;
@@ -95,15 +99,15 @@ function buildFullReport(runId, data, charts, rec, summary, best, allRes, hasPD,
     // Stat cards and percentile breakdown go at the very bottom of the rec tab
     secRec += buildRecFooter(rec, summary, best);
     const secTP = _tabSection('tp-calibration', data, runId);
-    const secCfg = buildCfgSection(runId, data, charts, allRes, hasPD);
+    const secCfg = _tabSection('configurations', data, runId);
     const secCmp = _tabSection('comparison', data, runId);
     const secStep9 = _tabSection('latency-search', data, runId);
-    const secCal = buildCalSection(data);
+    const secCal = _tabSection('calibrated-load', data, runId);
     const secVLLM = _tabSection('vllm-metrics', data, runId);
     const secEpp = _tabSection('epp-tuning', data, runId);
     const secTestCfg = _tabSection('test-settings', data, runId);
-    const secSweep = buildConcurrencySweepSection(data);
-    const secCacheSweep = buildCacheSweepSection(data, allRes);
+    const secSweep = _tabSection('concurrency-sweep', data, runId);
+    const secCacheSweep = _tabSection('cache-sweep', data, runId);
     const secTraffic = _tabSection('traffic', data, runId);
     const secDeploy = _tabSection('deploy-timing', data, runId);
     const secPareto = _tabSection('pareto-frontier', data, runId);
