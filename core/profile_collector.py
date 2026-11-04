@@ -139,6 +139,36 @@ elif action == 'stop':
 
 
 
+def _parse_ls_lh(output: str) -> list:
+    """Parse `ls -lh` output into [{name, size, path}] entries.
+
+    Only counts regular files with 9+ whitespace-separated columns
+    (perms, links, owner, group, size, month, day, time, name).
+    """
+    files = []
+    for line in output.split("\n"):
+        parts = line.split()
+        if len(parts) < 9 or parts[-1] == "total" or parts[0].startswith("d"):
+            continue
+        fname = parts[-1]
+        size_str = parts[4]
+        size = 0
+        try:
+            if size_str.endswith("G"):
+                size = int(float(size_str[:-1]) * 1024 * 1024 * 1024)
+            elif size_str.endswith("M"):
+                size = int(float(size_str[:-1]) * 1024 * 1024)
+            elif size_str.endswith("K"):
+                size = int(float(size_str[:-1]) * 1024)
+            else:
+                size = int(size_str)
+        except ValueError:
+            pass
+        files.append({"name": fname, "size": size,
+                      "path": f"/tmp/torch_traces/{fname}"})
+    return files
+
+
 class ProfileCollector:
     """Collects pprof profiles from EPP and vLLM pods for one test."""
 
@@ -351,15 +381,11 @@ class ProfileCollector:
             started = False
             started_port = None
             for port in [8000, 8200]:
-                try:
-                    url = f"http://{pod_ip}:{port}/start_profile"
-                    resp = self._fetch_via_workload_pod(url, 8)
-                    if resp is not None:
-                        started = True
-                        started_port = port
-                        break
-                except Exception:
-                    continue
+                url = f"http://{pod_ip}:{port}/start_profile"
+                if self._post_via_workload_pod(url, 15):
+                    started = True
+                    started_port = port
+                    break
             results.append({"pod": pod_name, "started": started, "ip": pod_ip,
                             "port": started_port or 8000})
         if log_callback and results:
@@ -379,46 +405,25 @@ class ProfileCollector:
             if not self.workload_pod:
                 continue
 
-            # Call /stop_profile on the port that worked during start
-            try:
-                url = f"http://{entry.get('ip')}:{entry.get('port') or 8000}/stop_profile"
-                self._fetch_via_workload_pod(url, 60)
-            except Exception:
-                pass
+            # Call /stop_profile on the port that worked during start.
+            # The flush of a 120s window can produce 100MB+ of trace data,
+            # so allow a long curl timeout.
+            stop_url = f"http://{entry.get('ip')}:{entry.get('port') or 8000}/stop_profile"
+            self._post_via_workload_pod(stop_url, 120)
 
-            # Wait for traces to be written
-            time.sleep(15)
-
-            # List trace files
-            try:
+            # List trace files — retry while empty (flush is asynchronous
+            # and can lag the stop_profile 200 response by tens of seconds)
+            trace_files = []
+            for attempt_i in range(6):
+                time.sleep(10 if attempt_i else 15)
                 ls_result = self._run_kubectl(
                     ["exec", pod_name, "-n", self.namespace, "-c", "vllm",
                      "--", "ls", "-lh", "/tmp/torch_traces/"], timeout=30)
-                trace_files = []
                 if ls_result.returncode == 0:
-                    for line in ls_result.stdout.split("\n"):
-                        parts = line.split()
-                        if len(parts) >= 9 and parts[-1] != "total" and not parts[0].startswith("d"):
-                            fname = parts[-1]
-                            size_str = parts[4]
-                            size = 0
-                            try:
-                                if size_str.endswith("G"):
-                                    size = int(float(size_str[:-1]) * 1024 * 1024 * 1024)
-                                elif size_str.endswith("M"):
-                                    size = int(float(size_str[:-1]) * 1024 * 1024)
-                                elif size_str.endswith("K"):
-                                    size = int(float(size_str[:-1]) * 1024)
-                                else:
-                                    size = int(size_str)
-                            except ValueError:
-                                pass
-                            trace_files.append({
-                                "name": fname,
-                                "size": size,
-                                "path": f"/tmp/torch_traces/{fname}"
-                            })
-
+                    trace_files = _parse_ls_lh(ls_result.stdout)
+                    if trace_files:
+                        break
+            try:
                 summary = {
                     "profiler": "torch",
                     "pod": pod_name,
@@ -497,6 +502,31 @@ class ProfileCollector:
         if r.returncode != 0 or not r.stdout:
             return None
         return r.stdout
+
+    def _post_via_workload_pod(self, url: str, timeout_s: int) -> bool:
+        """POST JSON {} to url from the workload pod; True on HTTP 2xx.
+
+        Unlike _fetch_via_workload_pod (GET, returns body), this checks the
+        HTTP status code — vLLM's /start_profile and /stop_profile return
+        200 with an EMPTY body, so body-presence checks are meaningless.
+        """
+        if not self.workload_pod:
+            return False
+        r = subprocess.run(
+            ["kubectl", "exec", self.workload_pod, "-n", self.namespace, "--",
+             "curl", "-s", "-o", "/dev/null", "-w", "%{http_code}",
+             "-X", "POST", "-H", "Content-Type: application/json",
+             "-d", "{}", "--max-time", str(timeout_s), url],
+            capture_output=True, timeout=timeout_s + 30, check=False,
+            env=self._kubectl_env(),
+        )
+        if r.returncode != 0:
+            return False
+        try:
+            code = int(r.stdout.decode("utf-8", "replace").strip().splitlines()[-1])
+        except (ValueError, IndexError):
+            return False
+        return 200 <= code < 300
 
     def finish_captures(self, handle: Dict, config, log_callback: Optional[Callable[[str], None]] = None) -> Optional[Dict]:
         if not handle:
