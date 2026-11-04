@@ -43,11 +43,13 @@ MAX_EMBED_BYTES = 2 * 1024 * 1024
 # only mounted when --profiler-config is passed to vLLM serve.
 # __DURATION__ is replaced with the actual profiling window in seconds.
 # __ACTION__ is either 'start' or 'stop'.
+# Inline torch profiler control script — runs inside vLLM pods.
+# Uses vLLM's /start_profile and /stop_profile API endpoints.
+# __ACTION__ is 'start' or 'stop'.
 PYSPY_PROFILE_SCRIPT = """\
 import os, json, subprocess, sys, time, urllib.request
 
 def find_our_port():
-    # Find our pod's vLLM port via cgroup matching
     with open('/proc/self/cgroup') as f:
         our_cgroup = f.read().strip()
     for pid in os.listdir('/proc'):
@@ -63,7 +65,6 @@ def find_our_port():
                     break
         except (OSError, IOError):
             pass
-    # vLLM serves on 8000 (aggregated/prefill) or 8200 (decode)
     for port in [8000, 8200]:
         try:
             req = urllib.request.Request(f'http://localhost:{port}/health')
@@ -80,7 +81,6 @@ output_dir = '/tmp/torch_traces'
 os.makedirs(output_dir, exist_ok=True)
 
 if action == 'start':
-    # Call /start_profile
     try:
         req = urllib.request.Request(
             f'http://localhost:{port}/start_profile',
@@ -92,91 +92,50 @@ if action == 'start':
         print(json.dumps({'status': 'error', 'error': str(e), 'port': port}))
 
 elif action == 'stop':
-    # Call /stop_profile, then wait for traces to be written
     try:
         req = urllib.request.Request(
             f'http://localhost:{port}/stop_profile',
             method='POST', data=b'{}',
             headers={'Content-Type': 'application/json'})
-        resp = urllib.request.urlopen(req, timeout=30)
-        # Wait for trace files to be written (they're written asynchronously)
-        time.sleep(5)
+        resp = urllib.request.urlopen(req, timeout=60)
+        # Brief wait for trace files to be written
+        time.sleep(10)
 
-        # List trace files
+        # List trace files (NO parsing — just sizes)
         trace_files = []
         if os.path.exists(output_dir):
-            for f in os.listdir(output_dir):
-                if f.endswith('.json') or f.endswith('.gz'):
+            for f in sorted(os.listdir(output_dir)):
+                if f.endswith('.json') or f.endswith('.gz') or f.endswith('.trace'):
                     fp = os.path.join(output_dir, f)
-                    trace_files.append({
-                        'name': f,
-                        'size': os.path.getsize(fp),
-                        'path': fp
-                    })
+                    try:
+                        trace_files.append({
+                            'name': f,
+                            'size': os.path.getsize(fp),
+                            'path': fp
+                        })
+                    except OSError:
+                        pass
 
-        # Parse for summary (top functions)
-        summary = {'profiler': 'torch', 'operators': [], 'trace_files': trace_files}
-        total_cpu_us = 0
-        total_cuda_us = 0
+        summary = {
+            'profiler': 'torch',
+            'status': 'stopped',
+            'port': port,
+            'trace_files': trace_files,
+            'operators': [],
+            'total_cpu_ms': 0,
+            'total_cuda_ms': 0,
+            'operator_count': 0,
+        }
 
-        for tf in trace_files[:1]:  # Parse the first (main) trace
-            try:
-                if tf['path'].endswith('.gz'):
-                    import gzip
-                    with gzip.open(tf['path'], 'rt') as f:
-                        data = json.load(f)
-                else:
-                    with open(tf['path']) as f:
-                        data = json.load(f)
-
-                # Chrome trace format: events with name, ts, dur, cat
-                events = data if isinstance(data, list) else data.get('traceEvents', [])
-                from collections import defaultdict
-                func_stats = defaultdict(lambda: {'cpu_us': 0, 'cuda_us': 0, 'count': 0})
-                for evt in events:
-                    if evt.get('ph') != 'X':
-                        continue
-                    name = evt.get('name', 'unknown')
-                    dur_us = evt.get('dur', 0)
-                    cat = evt.get('cat', '')
-                    stats = func_stats[name]
-                    stats['count'] += 1
-                    if 'cuda' in cat.lower() or 'gpu' in cat.lower() or 'kernel' in cat.lower():
-                        stats['cuda_us'] += dur_us
-                        total_cuda_us += dur_us
-                    else:
-                        stats['cpu_us'] += dur_us
-                        total_cpu_us += dur_us
-
-                # Sort by total time, keep top 25
-                sorted_funcs = sorted(func_stats.items(),
-                                     key=lambda x: x[1]['cpu_us'] + x[1]['cuda_us'],
-                                     reverse=True)[:25]
-                for name, stats in sorted_funcs:
-                    total_us = stats['cpu_us'] + stats['cuda_us']
-                    summary['operators'].append({
-                        'name': name,
-                        'cpu_total_ms': round(stats['cpu_us'] / 1000.0, 2),
-                        'cuda_total_ms': round(stats['cuda_us'] / 1000.0, 2),
-                        'self_cpu_ms': round(stats['cpu_us'] / 1000.0, 2),
-                        'self_cuda_ms': round(stats['cuda_us'] / 1000.0, 2),
-                        'calls': stats['count'],
-                        'sample_pct': round(100 * total_us / max(total_cpu_us + total_cuda_us, 1), 1)
-                    })
-                summary['total_cpu_ms'] = round(total_cpu_us / 1000.0, 1)
-                summary['total_cuda_ms'] = round(total_cuda_us / 1000.0, 1)
-                summary['operator_count'] = len(summary['operators'])
-            except Exception as e:
-                summary['parse_error'] = str(e)
-
-        # Save summary
+        # Save summary (without parsing)
         with open(os.path.join(output_dir, 'summary.json'), 'w') as f:
             json.dump(summary, f)
         print('SUMMARY_JSON:' + json.dumps(summary))
 
     except Exception as e:
-        print(json.dumps({'status': 'error', 'error': str(e)}))
+        print(json.dumps({'status': 'error', 'error': str(e), 'port': port}))
 """
+
 
 
 
@@ -406,7 +365,7 @@ class ProfileCollector:
                 r = subprocess.run(
                     ["kubectl", "exec", pod_name, "-n", self.namespace, "-c", "vllm",
                      "--", "python3", "-c", stop_script],
-                    capture_output=True, text=True, timeout=180,
+                    capture_output=True, text=True, timeout=300,
                     env=self._kubectl_env())
                 if r.returncode == 0:
                     for line in r.stdout.split("\n"):
