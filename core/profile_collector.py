@@ -38,10 +38,16 @@ MAX_EMBED_BYTES = 2 * 1024 * 1024
 
 # Inline torch profiling script — runs inside vLLM pods.
 # __DURATION__ is replaced with the actual profiling window in seconds.
+# Inline torch profiler control script — runs inside vLLM pods.
+# Uses vLLM's /start_profile and /stop_profile API endpoints, which are
+# only mounted when --profiler-config is passed to vLLM serve.
+# __DURATION__ is replaced with the actual profiling window in seconds.
+# __ACTION__ is either 'start' or 'stop'.
 PYSPY_PROFILE_SCRIPT = """\
-import os, json, subprocess, sys, time
+import os, json, subprocess, sys, time, urllib.request
 
-def find_vllm_pid():
+def find_our_port():
+    # Find our pod's vLLM port via cgroup matching
     with open('/proc/self/cgroup') as f:
         our_cgroup = f.read().strip()
     for pid in os.listdir('/proc'):
@@ -54,80 +60,124 @@ def find_vllm_pid():
                 with open(f'/proc/{pid}/cmdline') as f:
                     cmd = f.read()
                 if 'vllm_patched' in cmd and pid != str(os.getpid()):
-                    return int(pid)
+                    break
         except (OSError, IOError):
             pass
-    return None
+    # vLLM serves on 8000 (aggregated/prefill) or 8200 (decode)
+    for port in [8000, 8200]:
+        try:
+            req = urllib.request.Request(f'http://localhost:{port}/health')
+            resp = urllib.request.urlopen(req, timeout=3)
+            if resp.status == 200:
+                return port
+        except Exception:
+            pass
+    return 8000
 
-vllm_pid = find_vllm_pid()
-if not vllm_pid:
-    print(json.dumps({'error': 'vLLM process not found'}))
-    sys.exit(0)
-
-try:
-    subprocess.run(['py-spy', '--version'], capture_output=True, timeout=5)
-except (FileNotFoundError, subprocess.TimeoutExpired):
-    subprocess.run(['pip', 'install', '-q', 'py-spy'], capture_output=True, timeout=60)
-
-duration = __DURATION__
-output_dir = '/tmp/torch_profiles'
+port = find_our_port()
+action = '__ACTION__'
+output_dir = '/tmp/torch_traces'
 os.makedirs(output_dir, exist_ok=True)
 
-trace_path = os.path.join(output_dir, 'trace.json')
-r = subprocess.run([
-    'py-spy', 'record',
-    '--pid', str(vllm_pid),
-    '--duration', str(duration),
-    '--rate', '50',
-    '--format', 'speedscope',
-    '--output', trace_path,
-    '--nonblocking'
-], capture_output=True, text=True, timeout=duration + 60)
+if action == 'start':
+    # Call /start_profile
+    try:
+        req = urllib.request.Request(
+            f'http://localhost:{port}/start_profile',
+            method='POST', data=b'{}',
+            headers={'Content-Type': 'application/json'})
+        resp = urllib.request.urlopen(req, timeout=10)
+        print(json.dumps({'status': 'started', 'port': port}))
+    except Exception as e:
+        print(json.dumps({'status': 'error', 'error': str(e), 'port': port}))
 
-if r.returncode != 0:
-    print(json.dumps({'error': f'py-spy failed: {r.stderr[:200]}'}))
-    sys.exit(0)
+elif action == 'stop':
+    # Call /stop_profile, then wait for traces to be written
+    try:
+        req = urllib.request.Request(
+            f'http://localhost:{port}/stop_profile',
+            method='POST', data=b'{}',
+            headers={'Content-Type': 'application/json'})
+        resp = urllib.request.urlopen(req, timeout=30)
+        # Wait for trace files to be written (they're written asynchronously)
+        time.sleep(5)
 
-trace_size = os.path.getsize(trace_path) if os.path.exists(trace_path) else 0
+        # List trace files
+        trace_files = []
+        if os.path.exists(output_dir):
+            for f in os.listdir(output_dir):
+                if f.endswith('.json') or f.endswith('.gz'):
+                    fp = os.path.join(output_dir, f)
+                    trace_files.append({
+                        'name': f,
+                        'size': os.path.getsize(fp),
+                        'path': fp
+                    })
 
-summary = {'profiler': 'py-spy', 'duration_s': duration,
-           'trace_size_bytes': trace_size, 'operators': []}
-try:
-    with open(trace_path) as f:
-        data = json.load(f)
-    frames = data.get('shared', {}).get('frames', [])
-    profiles = data.get('profiles', [])
-    from collections import Counter
-    func_counts = Counter()
-    total_samples = 0
-    for prof in profiles:
-        for sample in prof.get('samples', []):
-            if sample:
-                leaf = frames[sample[-1]]['name'] if sample[-1] < len(frames) else 'unknown'
-                func_counts[leaf] += 1
-                total_samples += 1
-    for name, count in func_counts.most_common(25):
-        pct = round(100 * count / max(total_samples, 1), 1)
-        summary['operators'].append({
-            'name': name,
-            'cpu_total_ms': round(count * 20, 1),
-            'cuda_total_ms': 0,
-            'self_cpu_ms': round(count * 20, 1),
-            'self_cuda_ms': 0,
-            'calls': count,
-            'sample_pct': pct
-        })
-    summary['total_cpu_ms'] = round(total_samples * 20, 1)
-    summary['total_cuda_ms'] = 0
-    summary['operator_count'] = len(summary['operators'])
-    summary['total_samples'] = total_samples
-except Exception as e:
-    summary['parse_error'] = str(e)
+        # Parse for summary (top functions)
+        summary = {'profiler': 'torch', 'operators': [], 'trace_files': trace_files}
+        total_cpu_us = 0
+        total_cuda_us = 0
 
-with open(os.path.join(output_dir, 'summary.json'), 'w') as f:
-    json.dump(summary, f)
-print('SUMMARY_JSON:' + json.dumps(summary))
+        for tf in trace_files[:1]:  # Parse the first (main) trace
+            try:
+                if tf['path'].endswith('.gz'):
+                    import gzip
+                    with gzip.open(tf['path'], 'rt') as f:
+                        data = json.load(f)
+                else:
+                    with open(tf['path']) as f:
+                        data = json.load(f)
+
+                # Chrome trace format: events with name, ts, dur, cat
+                events = data if isinstance(data, list) else data.get('traceEvents', [])
+                from collections import defaultdict
+                func_stats = defaultdict(lambda: {'cpu_us': 0, 'cuda_us': 0, 'count': 0})
+                for evt in events:
+                    if evt.get('ph') != 'X':
+                        continue
+                    name = evt.get('name', 'unknown')
+                    dur_us = evt.get('dur', 0)
+                    cat = evt.get('cat', '')
+                    stats = func_stats[name]
+                    stats['count'] += 1
+                    if 'cuda' in cat.lower() or 'gpu' in cat.lower() or 'kernel' in cat.lower():
+                        stats['cuda_us'] += dur_us
+                        total_cuda_us += dur_us
+                    else:
+                        stats['cpu_us'] += dur_us
+                        total_cpu_us += dur_us
+
+                # Sort by total time, keep top 25
+                sorted_funcs = sorted(func_stats.items(),
+                                     key=lambda x: x[1]['cpu_us'] + x[1]['cuda_us'],
+                                     reverse=True)[:25]
+                for name, stats in sorted_funcs:
+                    total_us = stats['cpu_us'] + stats['cuda_us']
+                    summary['operators'].append({
+                        'name': name,
+                        'cpu_total_ms': round(stats['cpu_us'] / 1000.0, 2),
+                        'cuda_total_ms': round(stats['cuda_us'] / 1000.0, 2),
+                        'self_cpu_ms': round(stats['cpu_us'] / 1000.0, 2),
+                        'self_cuda_ms': round(stats['cuda_us'] / 1000.0, 2),
+                        'calls': stats['count'],
+                        'sample_pct': round(100 * total_us / max(total_cpu_us + total_cuda_us, 1), 1)
+                    })
+                summary['total_cpu_ms'] = round(total_cpu_us / 1000.0, 1)
+                summary['total_cuda_ms'] = round(total_cuda_us / 1000.0, 1)
+                summary['operator_count'] = len(summary['operators'])
+            except Exception as e:
+                summary['parse_error'] = str(e)
+
+        # Save summary
+        with open(os.path.join(output_dir, 'summary.json'), 'w') as f:
+            json.dump(summary, f)
+        print('SUMMARY_JSON:' + json.dumps(summary))
+
+    except Exception as e:
+        print(json.dumps({'status': 'error', 'error': str(e)}))
 """
+
 
 
 class ProfileCollector:
@@ -322,12 +372,12 @@ class ProfileCollector:
     # ── torch profiler ──────────────────────────────────────────────────────
 
     def start_torch_profiles(self, test_id, window_s, log_callback=None):
-        """Start torch profiler on all vLLM pods via background kubectl exec."""
+        """Start torch profiler on all vLLM pods via /start_profile API."""
         pods = self.discover_vllm_pods(test_id)
         procs = []
         for pod in pods:
             pod_name = pod["name"] if isinstance(pod, dict) else pod
-            script = PYSPY_PROFILE_SCRIPT.replace("__DURATION__", str(window_s))
+            script = PYSPY_PROFILE_SCRIPT.replace("__ACTION__", "start").replace("__DURATION__", str(window_s))
             cmd = ["kubectl", "exec", pod_name, "-n", self.namespace, "-c", "vllm",
                    "--", "python3", "-c", script]
             fd, outfile = tempfile.mkstemp(prefix="torch-prof-", suffix=".out")
@@ -335,35 +385,38 @@ class ProfileCollector:
             p = subprocess.Popen(cmd, stdout=open(outfile, "wb"),
                                  stderr=subprocess.DEVNULL,
                                  env=self._kubectl_env())
-            procs.append({"pod": pod_name, "proc": p, "outfile": outfile})
+            procs.append({"pod": pod_name, "proc": p, "outfile": outfile, "window_s": window_s})
         if log_callback and procs:
-            log_callback(f"   \U0001f52c Torch profiler started on {len(procs)} pod(s) ({window_s}s window)")
+            log_callback(f"   \U0001f52c Torch profiler started on {len(procs)} pod(s) via /start_profile ({window_s}s window)")
         return procs
 
-    def collect_torch_profiles(self, procs, log_callback=None):
-        """Wait for torch profilers and collect their summaries."""
+    def collect_torch_profiles(self, procs, log_callback=None, written=None):
+        """Stop torch profilers via /stop_profile and collect summaries with CUDA data."""
+        if written is None:
+            written = []
         results = []
         for entry in procs:
             pod_name = entry["pod"]
             try:
-                entry["proc"].wait(timeout=300)
-                out = open(entry["outfile"], "rb").read().decode("utf-8", "replace")
-                for line in out.split("\n"):
-                    if line.startswith("SUMMARY_JSON:"):
-                        summary = json.loads(line[len("SUMMARY_JSON:"):])
-                        summary["pod"] = pod_name
-                        results.append(summary)
-                        break
+                # Wait for the start process (it just calls the endpoint and returns)
+                entry["proc"].wait(timeout=30)
+
+                # Call /stop_profile — this also waits for traces and parses them
+                stop_script = PYSPY_PROFILE_SCRIPT.replace("__ACTION__", "stop").replace("__DURATION__", "0")
+                r = subprocess.run(
+                    ["kubectl", "exec", pod_name, "-n", self.namespace, "-c", "vllm",
+                     "--", "python3", "-c", stop_script],
+                    capture_output=True, text=True, timeout=180,
+                    env=self._kubectl_env())
+                if r.returncode == 0:
+                    for line in r.stdout.split("\n"):
+                        if line.startswith("SUMMARY_JSON:"):
+                            summary = json.loads(line[len("SUMMARY_JSON:"):])
+                            summary["pod"] = pod_name
+                            results.append(summary)
+                            break
                 else:
-                    r = subprocess.run(
-                        ["kubectl", "exec", pod_name, "-n", self.namespace, "-c", "vllm",
-                         "--", "cat", "/tmp/torch_profiles/summary.json"],
-                        capture_output=True, text=True, timeout=30,
-                        env=self._kubectl_env())
-                    if r.returncode == 0 and r.stdout.strip():
-                        summary = json.loads(r.stdout)
-                        summary["pod"] = pod_name
-                        results.append(summary)
+                    logger.warning(f"torch profile stop failed for {pod_name}: {r.stderr[:200]}")
             except Exception as e:
                 logger.warning(f"torch profile collection failed for {pod_name}: {e}")
             finally:

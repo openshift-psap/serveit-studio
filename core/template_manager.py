@@ -388,7 +388,15 @@ class TemplateManager:
         Templates receive a flat dict with no fallback logic needed.
         """
         vars_dict = asdict(config)
-
+        # Pre-computed profiler config JSON (avoids Jinja2 brace escaping issues)
+        if getattr(config, 'enable_pprof', False):
+            vars_dict['profiler_config_json'] = json.dumps({
+                'profiler': 'torch',
+                'torch_profiler_dir': '/tmp/torch_traces',
+                'torch_profiler_activities': ['CPU', 'CUDA']
+            })
+        else:
+            vars_dict['profiler_config_json'] = ''
         vars_dict['deployment_name'] = f"{config.architecture}-{config.test_id}"
         vars_dict['model_name_label'] = config.model_name.replace('/', '-') if config.model_name else 'unknown'
         vars_dict['nccl_ib_hca_prefix'] = config.nccl_ib_hca.split('_')[0] if config.nccl_ib_hca else 'mlx'
