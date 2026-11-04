@@ -38,54 +38,94 @@ MAX_EMBED_BYTES = 2 * 1024 * 1024
 
 # Inline torch profiling script — runs inside vLLM pods.
 # __DURATION__ is replaced with the actual profiling window in seconds.
-TORCH_PROFILE_SCRIPT = """\
-import torch, time, os, json
-from torch.profiler import profile, ProfilerActivity
+PYSPY_PROFILE_SCRIPT = """\
+import os, json, subprocess, sys, time
+
+def find_vllm_pid():
+    with open('/proc/self/cgroup') as f:
+        our_cgroup = f.read().strip()
+    for pid in os.listdir('/proc'):
+        if not pid.isdigit():
+            continue
+        try:
+            with open(f'/proc/{pid}/cgroup') as f:
+                cg = f.read().strip()
+            if cg == our_cgroup:
+                with open(f'/proc/{pid}/cmdline') as f:
+                    cmd = f.read()
+                if 'vllm_patched' in cmd and pid != str(os.getpid()):
+                    return int(pid)
+        except (OSError, IOError):
+            pass
+    return None
+
+vllm_pid = find_vllm_pid()
+if not vllm_pid:
+    print(json.dumps({'error': 'vLLM process not found'}))
+    sys.exit(0)
+
+try:
+    subprocess.run(['py-spy', '--version'], capture_output=True, timeout=5)
+except (FileNotFoundError, subprocess.TimeoutExpired):
+    subprocess.run(['pip', 'install', '-q', 'py-spy'], capture_output=True, timeout=60)
 
 duration = __DURATION__
 output_dir = '/tmp/torch_profiles'
 os.makedirs(output_dir, exist_ok=True)
 
-prof = profile(activities=[ProfilerActivity.CPU, ProfilerActivity.CUDA],
-               record_shapes=False, profile_memory=True, with_stack=False)
-prof.start()
-time.sleep(duration)
-prof.stop()
-
 trace_path = os.path.join(output_dir, 'trace.json')
-prof.export_chrome_trace(trace_path)
-trace_size = os.path.getsize(trace_path)
+r = subprocess.run([
+    'py-spy', 'record',
+    '--pid', str(vllm_pid),
+    '--duration', str(duration),
+    '--rate', '50',
+    '--format', 'speedscope',
+    '--output', trace_path,
+    '--nonblocking'
+], capture_output=True, text=True, timeout=duration + 60)
 
-summary = {'profiler': 'torch', 'torch_version': torch.__version__,
-           'duration_s': duration, 'trace_size_bytes': trace_size, 'operators': []}
-total_cpu_us = 0
-total_cuda_us = 0
+if r.returncode != 0:
+    print(json.dumps({'error': f'py-spy failed: {r.stderr[:200]}'}))
+    sys.exit(0)
+
+trace_size = os.path.getsize(trace_path) if os.path.exists(trace_path) else 0
+
+summary = {'profiler': 'py-spy', 'duration_s': duration,
+           'trace_size_bytes': trace_size, 'operators': []}
 try:
-    for evt in prof.key_averages():
-        cpu_ms = evt.cpu_time_total / 1000.0
-        cuda_ms = evt.cuda_time_total / 1000.0
-        total_cpu_us += evt.cpu_time_total
-        total_cuda_us += evt.cuda_time_total
+    with open(trace_path) as f:
+        data = json.load(f)
+    frames = data.get('shared', {}).get('frames', [])
+    profiles = data.get('profiles', [])
+    from collections import Counter
+    func_counts = Counter()
+    total_samples = 0
+    for prof in profiles:
+        for sample in prof.get('samples', []):
+            if sample:
+                leaf = frames[sample[-1]]['name'] if sample[-1] < len(frames) else 'unknown'
+                func_counts[leaf] += 1
+                total_samples += 1
+    for name, count in func_counts.most_common(25):
+        pct = round(100 * count / max(total_samples, 1), 1)
         summary['operators'].append({
-            'name': evt.key,
-            'cpu_total_ms': round(cpu_ms, 2),
-            'cuda_total_ms': round(cuda_ms, 2),
-            'self_cpu_ms': round(evt.self_cpu_time_total / 1000.0, 2),
-            'self_cuda_ms': round(evt.self_cuda_time_total / 1000.0, 2),
-            'cpu_mem_bytes': evt.cpu_memory_usage,
-            'calls': evt.count})
+            'name': name,
+            'cpu_total_ms': round(count * 20, 1),
+            'cuda_total_ms': 0,
+            'self_cpu_ms': round(count * 20, 1),
+            'self_cuda_ms': 0,
+            'calls': count,
+            'sample_pct': pct
+        })
+    summary['total_cpu_ms'] = round(total_samples * 20, 1)
+    summary['total_cuda_ms'] = 0
+    summary['operator_count'] = len(summary['operators'])
+    summary['total_samples'] = total_samples
 except Exception as e:
-    print('SUMMARY_ERROR', e)
-
-summary['operators'].sort(key=lambda o: o['cpu_total_ms'], reverse=True)
-summary['operators'] = summary['operators'][:25]
-summary['total_cpu_ms'] = round(total_cpu_us / 1000.0, 1)
-summary['total_cuda_ms'] = round(total_cuda_us / 1000.0, 1)
-summary['operator_count'] = len(summary['operators'])
+    summary['parse_error'] = str(e)
 
 with open(os.path.join(output_dir, 'summary.json'), 'w') as f:
     json.dump(summary, f)
-print('PROFILE_DONE trace=%dB ops=%d' % (trace_size, summary['operator_count']))
 print('SUMMARY_JSON:' + json.dumps(summary))
 """
 
@@ -277,7 +317,7 @@ class ProfileCollector:
         procs = []
         for pod in pods:
             pod_name = pod["name"] if isinstance(pod, dict) else pod
-            script = TORCH_PROFILE_SCRIPT.replace("__DURATION__", str(window_s))
+            script = PYSPY_PROFILE_SCRIPT.replace("__DURATION__", str(window_s))
             cmd = ["kubectl", "exec", pod_name, "-n", self.namespace, "-c", "vllm",
                    "--", "python3", "-c", script]
             fd, outfile = tempfile.mkstemp(prefix="torch-prof-", suffix=".out")
