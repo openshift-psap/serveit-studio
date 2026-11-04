@@ -431,7 +431,7 @@ spec:
                   --max-loras {{ lora_max_loras }} \
                   --max-cpu-loras {{ lora_max_cpu_loras }} \
                   --lora-modules {{ lora_modules_arg }} \
-{% endif %}{% if enable_pprof %}                  --profiler-config '{{ profiler_config_json }}' \\n{% endif %}{% if enable_pprof %}                  --profiler-config '{{ profiler_config_json }}' \
+{% endif %}{% if enable_pprof %}                  --profiler-config '{{ profiler_config_json }}' \
 {% endif %}{% if extra_vllm_args %}                  {{ extra_vllm_args }} \
 {% endif %}
                   || sleep infinity
@@ -975,7 +975,7 @@ spec:
                   --max-loras {{ lora_max_loras }} \
                   --max-cpu-loras {{ lora_max_cpu_loras }} \
                   --lora-modules {{ lora_modules_arg }} \
-{% endif %}{% if enable_pprof %}                  --profiler-config '{{ profiler_config_json }}' \\n{% endif %}{% if enable_pprof %}                  --profiler-config '{{ profiler_config_json }}' \
+{% endif %}{% if enable_pprof %}                  --profiler-config '{{ profiler_config_json }}' \
 {% endif %}{% if extra_vllm_args %}                  {{ extra_vllm_args }} \
 {% endif %}
                   || sleep infinity
