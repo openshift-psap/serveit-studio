@@ -64,7 +64,7 @@
 
         // ── Header card ──
         s += '<div class="chart-card" style="margin-top:16px; border-left:6px solid #0891b2;">' +
-            '<div class="chart-card-header" style="background:linear-gradient(135deg,#0891b2,#22d3ee);">🔬 Pod Profiles — pprof captures during benchmark load</div>' +
+            '<div class="chart-card-header" style="background:linear-gradient(135deg,#0891b2,#22d3ee);">🔬 EPP Profiles — pprof captures during benchmark load</div>' +
             '<div style="padding:12px 20px 4px; color:#1e293b; font-size:0.93em; line-height:1.6;">' +
             'CPU profiles captured from serving pods <strong>during the benchmark load window</strong> (Go pprof, 10ms sample resolution), plus heap and goroutine snapshots after the run. ' +
             'EPP profiles are always collected; vLLM pod profiles require the profiling toggle. ' +
@@ -481,7 +481,7 @@
 
     ReportTabs.register({
         id: 'pod-profiles',
-        label: 'Pod Profiles',
+        label: 'EPP Profiles',
         icon: '&#128300;',
         position: 'before:estimator',
         build: build,
