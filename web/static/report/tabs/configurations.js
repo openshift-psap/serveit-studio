@@ -1,6 +1,15 @@
 // tabs/configurations.js — Configurations report tab. One implementation for live + offline.
 (function() {
     var _renders = [];
+
+    function _tagLabel(name, arch) {
+        if (!name || name.indexOf('(') >= 0) return name || '';
+        var a = (arch || '').toUpperCase();
+        if (a === 'PD') return name + ' (PD)';
+        if (a === 'EP') return name + ' (EP)';
+        return name + ' (AG)';
+    }
+
     function chartCardLocal(title, desc, id) {
         return '<div class="chart-card"><div class="chart-card-header">' + title + '</div>' +
             '<div style="padding:8px 20px 0; color:#1e293b; font-size:0.92em; line-height:1.5;">' + desc + '</div>' +
@@ -159,7 +168,7 @@
                 });
             });
             Plotly.newPlot('chart-cfg-cache-hit' + _sfx, traces, {
-                ...plotlyLayout, height: 850, barmode: 'group',
+                height: 850, barmode: 'group',
                 xaxis: { tickangle: -35, gridcolor: '#e2e8f0' },
                 yaxis: { title: 'Cache Hit %', gridcolor: '#e2e8f0', range: [0, 100] },
                 showlegend: true, legend: { x: 0, y: 1, bgcolor: 'rgba(255,255,255,0.9)' },
