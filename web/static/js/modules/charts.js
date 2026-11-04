@@ -3152,8 +3152,7 @@ const deltaTag = (t.delta_vs_baseline && !t.is_baseline) ? ` <span style="color:
         'recommendation': secRec, 'tp-calibration': secTP, 'configurations': secCfg,
         'comparison': secCmp, 'latency-search': secStep9,
         'calibrated-load': secCal, 'cache-sweep': secCacheSweep, 'epp-tuning': secEppTuning,
-        'lora-serving': secLora,
-        'estimator': secEst
+        'lora-serving': secLora
     };
 
     // ── Modular tabs (web/static/report/tabs/) ── injected by position ──
