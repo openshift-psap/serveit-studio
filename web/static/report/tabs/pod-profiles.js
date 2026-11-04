@@ -408,7 +408,21 @@
         var el = document.getElementById(ctx.chartId('pprof-epp-cmp'));
         if (!el) return;
         var sorted = eppTests.slice().sort(function(a, b) { return (a.pprof.epp.cpu_pct || 0) - (b.pprof.epp.cpu_pct || 0); });
-        var labels = sorted.map(function(e) { return e.config_name || e.name || e.test_id; }).reverse();
+        // Differentiate duplicate config names by appending the test_id suffix —
+        // Plotly merges bars with identical y values (sums them into one bar)
+        var labelCount = {};
+        sorted.forEach(function(e) {
+            var n = e.config_name || e.name || e.test_id;
+            labelCount[n] = (labelCount[n] || 0) + 1;
+        });
+        var labels = sorted.map(function(e) {
+            var n = e.config_name || e.name || e.test_id;
+            if (labelCount[n] > 1) {
+                var tid = (e.test_id || '').replace('step11-epp-aggregated-', '');
+                return n + ' (' + tid + ')';
+            }
+            return n;
+        }).reverse();
         var lMargin = H.leftMarginFor(labels, 8, 50);
         Plotly.newPlot(el, [{
             y: labels,
